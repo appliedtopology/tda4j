@@ -13,7 +13,7 @@
 	<property name="matlab.lib.dir" value="src/matlab/for_distribution/lib" />
 	<property name="test.dir" value="${build.dir}/test" />
 	<property name="project.name" value="tda4j" />
-	<property name="runnable.jar" value="${dist.dir}/${project.name}-${version.num}.jar" />
+	<property name="versioned.jar" value="${dist.dir}/${project.name}-${version.num}.jar" />
 	<property name="basic.jar" value="${temp.dir}/${project.name}.jar" />
 	<property name="tests.jar" value="${temp.dir}/tests.jar" />
 	<property name="source.tarball" value="${dist.dir}/${project.name}-src-${version.num}.tar.gz" />
@@ -94,7 +94,7 @@
 	</target>
 
 	<!--Distribution targets-->
-	<target name="dist" depends="clean_dist,runnable_jar,doc_tar,source_dist,matlab_dist,processing_dist" />
+	<target name="dist" depends="clean_dist,basic_jar,doc_tar,source_dist,matlab_dist,processing_dist" />
 
 	<target name="doc_tar">
 		<tar destfile="${doc.tarball}" compression="gzip">
@@ -131,7 +131,7 @@
 	</target>
 
 	<target name="matlab_dist" depends="basic_jar">
-		<copy file="${runnable.jar}" tofile="${matlab.lib.dir}/tda4j.jar" />
+		<copy file="${versioned.jar}" tofile="${matlab.lib.dir}/tda4j.jar" />
 		<tar destfile="${matlab.tarball}" compression="gzip">
 			<tarfileset dir="src/matlab/for_distribution" prefix="matlab_examples" preserveLeadingSlashes="true">
 				<include name="**" />
@@ -146,7 +146,7 @@
 
 	<target name="processing_dist" depends="basic_jar">
 		<mkdir dir="${processing.build.dir}" />
-		<copy file="${runnable.jar}" tofile="${processing.jar}" />
+		<copy file="${versioned.jar}" tofile="${processing.jar}" />
 		<copy todir="${processing.build.dir}">
 			<fileset dir="${processing.src.dir}" />
 			<filterset>
@@ -169,6 +169,8 @@
 	<!--Basic Jar file-->
 	<target name="basic_jar" depends="classes">
 		<jar destfile="${basic.jar}" basedir="${bin.dir}">
+		</jar>
+		<jar destfile="${versioned.jar}" basedir="${bin.dir}">
 		</jar>
 	</target>
 
@@ -219,7 +221,7 @@
 		<mkdir dir="${app.dir}" />
 		<mkdir dir="${app.lib.dir}" />
 		<copy file="${lib.dir}/core.jar" todir="${app.lib.dir}" />
-		<copy file="${runnable.jar}" tofile="${app.lib.dir}/tda4j.jar" />
+		<copy file="${versioned.jar}" tofile="${app.lib.dir}/tda4j.jar" />
 		<jar destfile="${app.dir}/homviz.jar">
 			<fileset dir="bin/org/appliedtopology/tda4j/visualization">
 				<include name="**/*.class" />
