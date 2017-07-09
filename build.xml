@@ -171,6 +171,12 @@
 		<jar destfile="${basic.jar}" basedir="${bin.dir}">
 		</jar>
 		<jar destfile="${versioned.jar}" basedir="${bin.dir}">
+			<zipfileset excludes="META-INF/*.SF" src="${lib.dir}/colt.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="${lib.dir}/jai_codec.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="${lib.dir}/trove-2.1.0.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="${lib.dir}/velocity-1.6.4-dep.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="${lib.dir}/commons-math-2.1.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="${lib.dir}/junit-4.9b1.jar" />
 		</jar>
 	</target>
 
