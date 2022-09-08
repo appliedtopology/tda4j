@@ -1,9 +1,7 @@
-import Dependencies._
-import Settings._
+name := "TDA4j"
 
-lazy val tda4j = (project in file(".")).
-  settings(Settings.settings: _*).
-  settings(Settings.sonatypeSettings: _*).
-  //settings(Settings.tda4jSettings: _*).
-  configs(Test)
+version := "0.0.1"
 
+libraryDependencies += "org.specs2" %% "specs2-core" % "5.0.7" % "test"
+
+scalaVersion := "3.2.0"
