@@ -15,3 +15,5 @@ jobs:
       - uses: actions/checkout@v2
       - name: Run tests
         run: sbt clean test
+      - name: Binary Compatibility Checks
+        run: sbt mimaReportBinaryIssues
