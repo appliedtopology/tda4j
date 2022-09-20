@@ -1,4 +1,4 @@
-name: scala
+name: Test and Lint
 
 on:
   push:
