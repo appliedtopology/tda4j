@@ -1,4 +1,5 @@
-[![test and lint](https://github.com/appliedtopology/tda4j/actions/workflows/scala.yml/badge.svg?branch=scala)](https://github.com/appliedtopology/tda4j/actions)
+[![test](https://github.com/appliedtopology/tda4j/actions/workflows/test.yml/badge.svg?branch=scala)](https://github.com/appliedtopology/tda4j/actions)
+[![lint](https://github.com/appliedtopology/tda4j/actions/workflows/lint.yml/badge.svg?branch=scala)](https://github.com/appliedtopology/tda4j/actions)
 [![codecov](https://codecov.io/gh/appliedtopology/tda4j/branch/scala/graph/badge.svg?token=Y9R94VJG2K)](https://codecov.io/gh/appliedtopology/tda4j)
 
 

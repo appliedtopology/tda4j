@@ -1,0 +1,17 @@
+name: Lint
+
+on:
+  push:
+    branches:
+      - scala
+  pull_request:
+    branches:
+      - scala
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Formatting
+        run: sbt scalafmtSbtCheck scalafmtCheck

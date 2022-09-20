@@ -1,4 +1,4 @@
-name: Test and Lint
+name: Code Coverage
 
 on:
   push:
@@ -15,15 +15,9 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Run tests
-        run: sbt clean coverage test coverageReport
+        run: sbt clean coverage coverageReport
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v2
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Formatting
-        run: sbt scalafmtSbtCheck scalafmtCheck
