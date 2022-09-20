@@ -4,14 +4,12 @@ on:
   push:
     branches:
       - scala
-  pull_request:
-    branches:
-      - scala
 
 jobs:
-  test:
+  docs:
     runs-on: ubuntu-latest
+    if: github.ref != 'refs/heads/gh-pages' && github.ref != 'gh-pages'
     steps:
       - uses: actions/checkout@v2
       - name: Compile and publish docs
-        run: sbt makeSite ghpagesPushSite
+        run: sbt makeSite publishToGitHubPages

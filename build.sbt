@@ -25,7 +25,10 @@ lazy val root = (project in file(".")).
     Compile / paradoxMaterialTheme ~= {
       _.withRepository(uri("https://github.com/appliedtopology/tda4j"))
     },
-    ghpagesNoJekyll := true
+    //ghpagesNoJekyll := true
+    gitHubPagesOrgName := "appliedtopology",
+    gitHubPagesRepoName := "tda4j",
+    gitHubPagesSiteDir := baseDirectory.value / "target/site"
   )
 
 git.remoteRepo := "git@github.com:appliedtopology/tda4j.git"
