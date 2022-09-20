@@ -30,5 +30,3 @@ lazy val root = (project in file(".")).
     gitHubPagesRepoName := "tda4j",
     gitHubPagesSiteDir := baseDirectory.value / "target/site"
   )
-
-git.remoteRepo := "git@github.com:appliedtopology/tda4j.git"
