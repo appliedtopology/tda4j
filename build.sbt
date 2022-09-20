@@ -7,7 +7,7 @@ libraryDependencies += "org.specs2" %% "specs2-core" % "5.0.7" % "test"
 scalaVersion := "3.2.0"
 
 lazy val root = (project in file(".")).
-  enablePlugins(SiteScaladocPlugin,ParadoxSitePlugin,ParadoxMaterialThemePlugin,GhpagesPlugin).
+  enablePlugins(SiteScaladocPlugin,ParadoxSitePlugin,ParadoxMaterialThemePlugin,GitHubPagesPlugin).
   settings(
     name := "TDA4j",
     Compile / paradoxProperties ++= Map(
