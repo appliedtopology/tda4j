@@ -11,6 +11,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    environment: codecov
     steps:
       - uses: actions/checkout@v2
       - name: Run tests
