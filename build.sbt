@@ -6,9 +6,14 @@ libraryDependencies += "org.specs2" %% "specs2-core" % "5.0.7" % "test"
 
 scalaVersion := "3.2.0"
 
-lazy val root = (project in file(".")).
-  enablePlugins(SiteScaladocPlugin,ParadoxSitePlugin,ParadoxMaterialThemePlugin,GitHubPagesPlugin).
-  settings(
+lazy val root = (project in file("."))
+  .enablePlugins(
+    SiteScaladocPlugin,
+    ParadoxSitePlugin,
+    ParadoxMaterialThemePlugin,
+    GitHubPagesPlugin
+  )
+  .settings(
     name := "TDA4j",
     Compile / paradoxMaterialTheme := {
       ParadoxMaterialTheme()
@@ -26,12 +31,12 @@ lazy val root = (project in file(".")).
       _.withColor("indigo", "blue")
     },
     Compile / paradoxMaterialTheme ~= {
-        _.withCopyright("MIT License © Mikael Vejdemo-Johansson, Daniel Bosah")
+      _.withCopyright("MIT License © Mikael Vejdemo-Johansson, Daniel Bosah")
     },
     Compile / paradoxMaterialTheme ~= {
       _.withRepository(uri("https://github.com/appliedtopology/tda4j"))
     },
-    //ghpagesNoJekyll := true
+    // ghpagesNoJekyll := true
     gitHubPagesOrgName := "appliedtopology",
     gitHubPagesRepoName := "tda4j",
     gitHubPagesSiteDir := baseDirectory.value / "target/site"
