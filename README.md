@@ -1,3 +1,7 @@
+[![test and lint](https://github.com/appliedtopology/tda4j/actions/workflows/scala.yml/badge.svg?branch=scala)](https://github.com/appliedtopology/tda4j/actions)
+[![codecov](https://codecov.io/gh/appliedtopology/tda4j/branch/scala/graph/badge.svg?token=Y9R94VJG2K)](https://codecov.io/gh/appliedtopology/tda4j)
+
+
 # TDA4j
 
 ## Persistent Homology and Topological Data Analysis Library 
