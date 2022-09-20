@@ -1,0 +1,17 @@
+name: Docs
+
+on:
+  push:
+    branches:
+      - scala
+  pull_request:
+    branches:
+      - scala
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Compile and publish docs
+        run: sbt makeSite ghpagesPushSite
