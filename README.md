@@ -1,5 +1,6 @@
 [![test](https://github.com/appliedtopology/tda4j/actions/workflows/test.yml/badge.svg?branch=scala)](https://github.com/appliedtopology/tda4j/actions)
 [![lint](https://github.com/appliedtopology/tda4j/actions/workflows/lint.yml/badge.svg?branch=scala)](https://github.com/appliedtopology/tda4j/actions)
+[![docs](https://github.com/appliedtopology/tda4j/actions/workflows/docs.yml/badge.svg?branch=scala)](https://github.com/appliedtopology/tda4j/actions)
 
 
 # TDA4j

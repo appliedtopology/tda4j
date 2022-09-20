@@ -10,12 +10,18 @@ lazy val root = (project in file(".")).
   enablePlugins(SiteScaladocPlugin,ParadoxSitePlugin,ParadoxMaterialThemePlugin,GitHubPagesPlugin).
   settings(
     name := "TDA4j",
+    Compile / paradoxMaterialTheme := {
+      ParadoxMaterialTheme()
+    },
     Compile / paradoxProperties ++= Map(
       "project.url" -> "https://appliedtopology.github.io/tda4j",
       "github.base_url" -> s"https://github.com/appliedtopology/tda4j/tree/${version.value}",
       "scaladoc.base_url" -> s"latest/api",
       "scaladoc.tda4j.base_url" -> s"latest/api"
     ),
+    Compile / paradoxMaterialTheme ~= {
+      _.withoutSearch()
+    },
     Compile / paradoxMaterialTheme ~= {
       _.withColor("indigo", "blue")
     },
