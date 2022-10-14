@@ -31,7 +31,7 @@ lazy val root = (project in file("."))
       _.withColor("indigo", "blue")
     },
     Compile / paradoxMaterialTheme ~= {
-      _.withCopyright("MIT License © Mikael Vejdemo-Johansson, Daniel Bosah")
+      _.withCopyright("MIT License © Mikael Vejdemo-Johansson, Daniel Hope")
     },
     Compile / paradoxMaterialTheme ~= {
       _.withRepository(uri("https://github.com/appliedtopology/tda4j"))
