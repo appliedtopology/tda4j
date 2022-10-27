@@ -4,7 +4,8 @@ import org.appliedtopology.tda4j.SimplexSpec.{beGreaterThan, contain, s2}
 import org.specs2.Specification
 import org.specs2.execute.Result
 
-object SimplexSpec extends Specification:
+class SimplexSpec extends Specification {
+
   def is =
     s2"""
 Checking the `Simplex` class properties.
@@ -20,3 +21,5 @@ A `Simplex` should
 
   def e2: Result =
     s.boundary() must contain(Simplex(1, 2), Simplex(1, 3), Simplex(2, 3))
+
+}
