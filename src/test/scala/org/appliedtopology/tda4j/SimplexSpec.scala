@@ -28,7 +28,7 @@ A `Simplex` should
   def sAdd4: Simplex = s.incl(4)
   def sDel2: Simplex = s.excl(2)
 
-  def e1: Result = s.size must beGreaterThan(0)
+  def e1: Result = s.size must beGreaterThan[Int](0)
 
   def e2: Result =
     s.boundary() must contain(Simplex(1, 2), Simplex(1, 3), Simplex(2, 3))
