@@ -3,7 +3,6 @@ package org.appliedtopology.tda4j
 import scala.collection.immutable.{SortedSet, TreeSet}
 import scala.math.Ordering.IntOrdering
 
-
 class Simplex(vertices: Int*) extends SortedSet[Int] {
   private val vertexSet = TreeSet[Int](vertices: _*)
 
@@ -26,8 +25,8 @@ class Simplex(vertices: Int*) extends SortedSet[Int] {
 
   override def contains(elem: Int): Boolean = vertexSet.contains(elem)
 
-  //override def rangeImpl(from: Option[Int], until: Option[Int]): Simplex =
-   // Simplex()
+  override def rangeImpl(from: Option[Int], until: Option[Int]): Simplex =
+    new Simplex()
 
   override def iteratorFrom(start: Int): Iterator[Int] =
     vertexSet.iteratorFrom(start)
