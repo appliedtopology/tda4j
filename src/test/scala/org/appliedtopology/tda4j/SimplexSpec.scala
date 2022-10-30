@@ -7,7 +7,7 @@ import org.appliedtopology.tda4j.SimplexSpec.{
   contain,
   s2
 }
-import org.specs2.Specification
+import org.specs2.{mutable, Specification}
 import org.specs2.execute.Result
 
 object SimplexSpec extends Specification {
@@ -38,4 +38,64 @@ A `Simplex` should
 
   def eRemoveVertex: Result =
     sDel2.contains(2) must beFalse
+}
+
+class SimplexTypeSpec extends mutable.Specification {
+  "This is a specification for the type level interactions of the `Simplex` class".txt
+
+  "The `Simplex` type should" >> {
+    val s = new Simplex(1, 2, 3)
+    val t = new Simplex(2, 3, 4)
+    "be the return type of the Simplex constructor" >> {
+      s must haveClass[Simplex]
+    }
+    "be the return type of the result of adding a vertex" >> {
+      (s + 4) must haveClass[Simplex]
+    }
+    "be the return type of the result of removing a vertex" >> {
+      (s - 2) must haveClass[Simplex]
+    }
+    "be the return type of intersecting two simplices" >> {
+      (s & t) must haveClass[Simplex]
+    }
+    "be the return type of empty" >> {
+      s.empty must haveClass[Simplex]
+    }
+    "be the return type of filter" >> {
+      (s.filter(_ % 2 != 0)) must haveClass[Simplex]
+    }
+    "be the return type of init" >> {
+      s.init must haveClass[Simplex]
+    }
+    "be the return type of flatMap" >> {
+      (s.flatMap(Simplex(_, 10))) must haveClass[Simplex]
+    }
+    "be the content type of grouped" >> {
+      s.grouped(2).next must haveClass[Simplex]
+    }
+    "be the return type of partition" >> {
+      (s.partition(_ % 2 == 0)) must haveClass[(Simplex, Simplex)]
+    }
+    "be the return type of range, rangeFrom, rangeTo" >> {
+      (s.range(0, 2)) must haveClass[Simplex]
+      (s.rangeFrom(1)) must haveClass[Simplex]
+      (s.rangeTo(2)) must haveClass[Simplex]
+    }
+    "be the return type of slice" >> {
+      (s.slice(1, 2)) must haveClass[Simplex]
+    }
+    "be the element type of sliding" >> {
+      (s.sliding(2).next) must haveClass[Simplex]
+    }
+    "be the element type of span" >> {
+      (s.span(_ < 2)) must haveClass[(Simplex, Simplex)]
+    }
+    "be the element type of splitAt" >> {
+      (s.splitAt(1)) must haveClass[(Simplex, Simplex)]
+    }
+    "be the element type of subsets" >> {
+      (s.subsets().next) must haveClass[Simplex]
+      (s.subsets(2).next) must haveClass[Simplex]
+    }
+  }
 }

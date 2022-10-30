@@ -1,33 +1,72 @@
 package org.appliedtopology.tda4j
 
-import scala.collection.immutable.{SortedSet, TreeSet}
+import scala.collection.{
+  mutable,
+  SortedIterableFactory,
+  SortedSetFactoryDefaults,
+  StrictOptimizedSortedSetOps
+}
+import scala.collection.immutable.{SortedSet, SortedSetOps, TreeSet}
 import scala.math.Ordering.IntOrdering
 
-class Simplex(vertices: Int*) extends SortedSet[Int] {
-  private val vertexSet = TreeSet[Int](vertices: _*)
+type Simplex = AbstractSimplex[Int]
 
-  def boundary(): List[Simplex] =
-    vertexSet.toList.map[Simplex](elem =>
-      new Simplex((vertexSet - elem).toSeq: _*)
-    )
+object Simplex extends AbstractSimplex[Int] {
+  def apply(vertices: Int*) = new Simplex(vertices: _*)
+}
 
-  override def iterator: Iterator[Int] = vertexSet.iterator
+class AbstractSimplex[A](vertices: A*)(implicit val ordering: Ordering[A])
+    extends SortedSet[A]
+    with SortedSetOps[A, AbstractSimplex, AbstractSimplex[A]]
+    with SortedSetFactoryDefaults[A, AbstractSimplex, Set]
+    {
+  self =>
 
-  override def ordering: Ordering[Int] = vertexSet.ordering
+  private val vertexSet = TreeSet[A](vertices: _*)(ordering)
 
-  override def excl(elem: Int): Simplex = new Simplex(
+  /** Simplex specific operations */
+  def boundary(): List[AbstractSimplex[A]] =
+    self.subsets(self.size - 1).to(List)
+
+  /** Overriding for inheriting and extending standard library constructions */
+  override def className = "AbstractSimplex"
+
+  override def iterator: Iterator[A] = vertexSet.iterator
+
+  override def excl(elem: A): AbstractSimplex[A] = new AbstractSimplex[A](
     vertexSet.excl(elem).toSeq: _*
   )
 
-  override def incl(elem: Int): Simplex = new Simplex(
+  override def incl(elem: A): AbstractSimplex[A] = new AbstractSimplex[A](
     vertexSet.excl(elem).toSeq: _*
   )
 
-  override def contains(elem: Int): Boolean = vertexSet.contains(elem)
+  override def contains(elem: A): Boolean = vertexSet.contains(elem)
 
-  override def rangeImpl(from: Option[Int], until: Option[Int]): Simplex =
-    new Simplex()
+  override def rangeImpl(
+    from: Option[A],
+    until: Option[A]
+  ): AbstractSimplex[A] =
+    new AbstractSimplex[A](vertexSet.rangeImpl(from, until).toSeq: _*)
 
-  override def iteratorFrom(start: Int): Iterator[Int] =
+  override def iteratorFrom(start: A): Iterator[A] =
     vertexSet.iteratorFrom(start)
+
+  override def sortedIterableFactory: SortedIterableFactory[AbstractSimplex] =
+    AbstractSimplex
+}
+
+/** Simplex companion object with factory methods
+  */
+object AbstractSimplex extends SortedIterableFactory[AbstractSimplex] {
+  override def empty[A: Ordering]: AbstractSimplex[A] = new AbstractSimplex[A]()
+
+  override def from[A: Ordering](source: IterableOnce[A]): AbstractSimplex[A] =
+    (newBuilder[A] ++= source).result()
+
+  override def newBuilder[A: Ordering]: mutable.Builder[A, AbstractSimplex[A]] =
+    new mutable.ImmutableBuilder[A, AbstractSimplex[A]](empty) {
+      def addOne(elem: A): this.type =
+        elems += elem; this
+    }
 }
