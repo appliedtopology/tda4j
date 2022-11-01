@@ -20,7 +20,7 @@ class AbstractSimplex[A](vertices: A*)(implicit val ordering: Ordering[A])
     with SortedSetOps[A, AbstractSimplex, AbstractSimplex[A]]
     with SortedSetFactoryDefaults[A, AbstractSimplex, Set]
     {
-  self =>
+  self => //gives methods access to the object that's calling it in the first place
 
   private val vertexSet = TreeSet[A](vertices: _*)(ordering)
 
@@ -38,7 +38,7 @@ class AbstractSimplex[A](vertices: A*)(implicit val ordering: Ordering[A])
   )
 
   override def incl(elem: A): AbstractSimplex[A] = new AbstractSimplex[A](
-    vertexSet.excl(elem).toSeq: _*
+    vertexSet.incl(elem).toSeq: _*
   )
 
   override def contains(elem: A): Boolean = vertexSet.contains(elem)
