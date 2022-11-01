@@ -13,4 +13,4 @@ The library is based on previous libraries from the Computational Topology workg
 
 For persistent homology and its capabilities, we recommend the survey article [Topology and Data](http://www.ams.org/journals/bull/2009-46-02/S0273-0979-09-01249-X/S0273-0979-09-01249-X.pdf) by Gunnar Carlsson.
 
-On this site we include a fully compiled @scaladoc[ScalaDoc](tda4j.index) documentation.
+On this site we include a fully compiled @scaladoc[ScalaDoc](org.appliedtopology.tda4j) documentation.
