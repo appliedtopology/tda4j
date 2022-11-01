@@ -1,7 +1,7 @@
 @@@ index
 
 * [Tutorials](tutorials/index.md)
-* @scaladoc[ScalaDoc](tda4j.index)
+* @scaladoc[ScalaDoc](org.appliedtopology.tda4j)
 
 @@@
 
