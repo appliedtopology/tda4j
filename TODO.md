@@ -12,9 +12,9 @@
 ## JavaPlex in Scala
 
 - [ ] Sketch out class hierarchy to duplicate JavaPlex with particular attention to simple calling interfaces
-  - [ ] Superclass `Simplex` to a `FilteredSimplex` that carries a filtration value (of some ordered type) with it
-  - [ ] Create an implicit `Ordering[FilteredSimplex]` that orders by filtration value first, by dimension second, 
-  and finally by lexicographic ordering
+  - [ ] Create a `FilteredSimplex` class that implements an implicit ordering
+      - [ ] Create an implicit `Ordering[FilteredSimplex]` that orders by filtration value first, by dimension second,
+       and finally by lexicographic ordering
   - [ ] Explore how to create a `Stream[FilteredSimplex]` from a selection of "maximal" simplices, or an incomplete
   selection of simplices (this will involve figuring out which _additional_ simplices to add)
 - [ ] Write relevant tests to specify required behaviour
