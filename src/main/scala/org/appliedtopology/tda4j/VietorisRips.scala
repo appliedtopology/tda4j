@@ -32,18 +32,18 @@ object BronKerbosch {
    *
    * @param metricSpace The [[MetricSpace]] instance that carries the metric information about the data.
    * @param maxFiltrationValue Optional: when to stop generating simplices. Default is ∞.
-   * @tparam V Vertex type for the simplicial complex
+   * @tparam VertexT Vertex type for the simplicial complex
    * @return Vietoris-Rips complex in increasing order of filtration values, and increasing order of dimension,
    *         with lexicographic sorting for equal filtration value and dimension.
    */
-  def apply[V : Ordering](
-    metricSpace: FiniteMetricSpace[V],
-    maxFiltrationValue: Double = Double.PositiveInfinity
-  ): Seq[FilteredAbstractSimplex[V, Double]] = {
+  def apply[VertexT](
+                      metricSpace: FiniteMetricSpace[VertexT],
+                      maxFiltrationValue: Double = Double.PositiveInfinity
+  )(implicit ord : Ordering[VertexT]): Seq[FilteredAbstractSimplex[VertexT, Double]] = {
     /**
      * First, construct all the edges with edge length less than the maxFiltrationValue
      */
-    val edges : Graph[V, edge.WUnDiEdge] = Graph.from(metricSpace.elements,
+    val edges : Graph[VertexT, edge.WUnDiEdge] = Graph.from(metricSpace.elements,
       metricSpace.elements.flatMap(v =>
         metricSpace.elements
           .filter(_ > v)
@@ -66,8 +66,8 @@ object BronKerbosch {
      */
 
     // First, create a degeneracy ordering of the vertices
-    val queryGraph : gmutable.Graph[V, edge.WUnDiEdge] = gmutable.Graph.from(edges.nodes, edges.edges)
-    val degeneracyOrderedVertices = mutable.Queue[V]()
+    val queryGraph : gmutable.Graph[VertexT, edge.WUnDiEdge] = gmutable.Graph.from(edges.nodes, edges.edges)
+    val degeneracyOrderedVertices = mutable.Queue[VertexT]()
     while(queryGraph.order > 0) {
       val (o, vs) = queryGraph.degreeNodesMap.head
       val v = vs.head
@@ -76,9 +76,9 @@ object BronKerbosch {
     }
 
     // Now, recursive calls to Bron-Kerbosch:
-    val cliqueSet = mutable.Set[Set[V]]()
-    val bkTaskStack : mutable.Stack[(mutable.Set[V],mutable.Set[V],mutable.Set[V])] =
-      mutable.Stack((mutable.Set[V](), edges.nodes.map(_.toOuter).to(mutable.Set), mutable.Set[V]()))
+    val cliqueSet = mutable.Set[Set[VertexT]]()
+    val bkTaskStack : mutable.Stack[(mutable.Set[VertexT],mutable.Set[VertexT],mutable.Set[VertexT])] =
+      mutable.Stack((mutable.Set[VertexT](), edges.nodes.map(_.toOuter).to(mutable.Set), mutable.Set[VertexT]()))
 
 
     while(!bkTaskStack.isEmpty) {
@@ -98,13 +98,13 @@ object BronKerbosch {
 
     // Well, we have our simplices generated and ready for us.
     // Let's look up maximum edge weights and sort them to create a stream
-    def maxFiltrationValueOfSimplex(spx : Set[V]) : Double = (edges filter (edges having
+    def maxFiltrationValueOfSimplex(spx : Set[VertexT]) : Double = (edges filter (edges having
         (node = (n: edges.NodeT) =>
           spx.contains(n.toOuter)))).edges.map(_.toOuter.weight).maxOption.getOrElse(0)
 
     val weightedSimplices = Sorting.stableSort(cliqueSet filter (spx => !spx.isEmpty) map
-      ((spx : Set[V]) => (maxFiltrationValueOfSimplex(spx),spx.size,(spx to Seq).sorted)) to Seq)
+      ((spx : Set[VertexT]) => (maxFiltrationValueOfSimplex(spx),spx.size,(spx to Seq).sorted)) to Seq)
 
-    weightedSimplices.map((w,_,spx) => FilteredAbstractSimplex[V,Double](w, spx.toSeq : _*))
+    weightedSimplices.map((w,_,spx) => new FilteredAbstractSimplex[VertexT,Double](w, spx.toSeq : _*))
   }
 }
