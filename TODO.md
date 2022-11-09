@@ -12,11 +12,13 @@
 ## JavaPlex in Scala
 
 - [ ] Sketch out class hierarchy to duplicate JavaPlex with particular attention to simple calling interfaces
-  - [ ] Create a `FilteredSimplex` class that implements an implicit ordering
+  - [x] Create a `FilteredSimplex` class that implements an implicit ordering
+  - [ ] Rename type variables in `Simplex.scala` for better understanding
       - [ ] Create an implicit `Ordering[FilteredSimplex]` that orders by filtration value first, by dimension second,
        and finally by lexicographic ordering
       - [ ] Explore how to create a `Stream[FilteredSimplex]` from a selection of "maximal" simplices, or an incomplete
       selection of simplices (this will involve figuring out which _additional_ simplices to add)
+      - [ ] Add Chain (needs to access `Numeric` to get `+ , - , *`). `SortedMap` could work for this, but looking for alternatives.  Want `Chain[C <: Cell,F]` to extend (ie inherit from) `C => F`(so that it contains an apply`(queryCell : C) : F` that returns the coefficient at `queryCell`
 - [ ] Write relevant tests to specify required behaviour
 - [ ] Write code to duplicate JavaPlex's computations and analyses of persistent homology
 
