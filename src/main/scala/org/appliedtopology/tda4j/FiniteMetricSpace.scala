@@ -6,10 +6,10 @@ import util.chaining.scalaUtilChainingOps
 
 /** Interface for being a finite metric space
   *
-  * @tparam M
+  * @tparam PointIndexT
   *   Type of the vertex indices for the metric space
   */
-trait FiniteMetricSpace[M] {
+trait FiniteMetricSpace[PointIndexT] {
 
   /** Distance in the metric space. Takes two indices and returns a non-negative
     * real number.
@@ -20,7 +20,7 @@ trait FiniteMetricSpace[M] {
     * @return
     *   Distance between x and y
     */
-  def distance(x: M, y: M): Double
+  def distance(x: PointIndexT, y: PointIndexT): Double
 
   /** Number of points represented by this metric space.
     * @return
@@ -34,7 +34,7 @@ trait FiniteMetricSpace[M] {
     * @return
     *   Iterable that returns all points in the metric space
     */
-  def elements: Iterable[M]
+  def elements: Iterable[PointIndexT]
 }
 
 /** Takes in an explicit distance matrix, and performs lookups in this distance
