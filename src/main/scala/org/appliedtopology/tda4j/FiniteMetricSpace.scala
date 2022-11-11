@@ -6,10 +6,10 @@ import util.chaining.scalaUtilChainingOps
 
 /** Interface for being a finite metric space
   *
-  * @tparam PointIndexT
+  * @tparam VertexT
   *   Type of the vertex indices for the metric space
   */
-trait FiniteMetricSpace[PointIndexT] {
+trait FiniteMetricSpace[VertexT] {
 
   /** Distance in the metric space. Takes two indices and returns a non-negative
     * real number.
@@ -20,7 +20,7 @@ trait FiniteMetricSpace[PointIndexT] {
     * @return
     *   Distance between x and y
     */
-  def distance(x: PointIndexT, y: PointIndexT): Double
+  def distance(x: VertexT, y: VertexT): Double
 
   /** Number of points represented by this metric space.
     * @return
@@ -34,7 +34,9 @@ trait FiniteMetricSpace[PointIndexT] {
     * @return
     *   Iterable that returns all points in the metric space
     */
-  def elements: Iterable[PointIndexT]
+  def elements: Iterable[VertexT]
+
+  def contains(x : VertexT) : Boolean
 }
 
 /** Takes in an explicit distance matrix, and performs lookups in this distance
@@ -54,6 +56,7 @@ class ExplicitMetricSpace(val dist: Seq[Seq[Double]])
   def distance(x: Int, y: Int) = dist(x)(y)
   def size = dist.size
   def elements = Range(0, size)
+  override def contains(x: Int): Boolean = 0 <= x & x < size
 }
 
 /** Takes in an point cloud and computes the Euclidean distance on demand.
@@ -73,4 +76,5 @@ class EuclideanMetricSpace(val pts: Seq[Seq[Double]])
   }
   def size = pts.size
   def elements = Range(0, size)
+  override def contains(x: Int): Boolean = 0 <= x & x < size
 }

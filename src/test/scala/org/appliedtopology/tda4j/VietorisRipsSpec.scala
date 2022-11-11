@@ -14,12 +14,12 @@ class VietorisRipsSpec extends s2mutable.Specification {
   "Vietoris-Rips streams should" >> {
     val pts: Seq[Seq[Double]] = Range(0, 10).map(i => Seq(cos(i / 10.0), sin(i / 10.0)))
     val metricSpace: FiniteMetricSpace[Int] = EuclideanMetricSpace(pts)
-    val simplexStream: Seq[FilteredSimplex] = VietorisRips[Int](metricSpace, 0.75)
+    val simplexStream: SimplexStream[Int, Double] = VietorisRips[Int](metricSpace, 0.75)
     "have simplices" >> {
-      simplexStream.size must beGreaterThan(0)
+      simplexStream.length must beGreaterThan(0)
     }
     "have simplices appear in filtration order" >> {
-      simplexStream.map(_.filtrationValue) must beSorted
+      simplexStream.map(simplexStream.filtrationValue) must beSorted
     }
     "have subsimplices appear before supersimplices" >> {
       val seen : mutable.Set[AbstractSimplex[Int]] = mutable.Set(AbstractSimplex())

@@ -13,9 +13,40 @@ import scala.util.Sorting
  * Convenience definition to allow us to choose a specific implementation.
  *
  * @return A function-like object with the signature
- *         `VietorisRips : (MetricSpace[V], Double) => Seq[FilteredAbstractSimplex[V,Double]]`
+ *         `VietorisRips : (MetricSpace[VertexT], Double) => Seq[FilteredAbstractSimplex[VertexT,Double]]`
  */
-def VietorisRips = BronKerbosch
+class VietorisRips[VertexT]
+  (val metricSpace: FiniteMetricSpace[VertexT],
+   val maxFiltrationValue : Double = Double.PositiveInfinity)
+  (using ordering : Ordering[VertexT])
+  extends SimplexStream[VertexT, Double] {
+  self =>
+
+  val simplices = BronKerbosch(metricSpace, maxFiltrationValue)(ordering).map((f,s) => s)
+
+  val filtrationValue : PartialFunction[AbstractSimplex[VertexT], Double] =
+    new PartialFunction[AbstractSimplex[VertexT], Double] {
+      def isDefinedAt(spx : AbstractSimplex[VertexT]) : Boolean =
+        spx.forall(v => metricSpace.contains(v))
+
+      def apply(spx : AbstractSimplex[VertexT]) : Double = {
+        if(spx.size <= 1) return 0.0
+        spx.flatMap(v =>
+          spx.filter(_>v).map(w =>
+            metricSpace.distance(v,w)
+          )
+        ).max
+      }
+    }
+
+  // Members declared in scala.collection.IterableOnce
+  def iterator: Iterator[org.appliedtopology.tda4j.AbstractSimplex[VertexT]] = simplices.iterator
+
+  // Members declared in scala.collection.SeqOps
+  def apply(i: Int): org.appliedtopology.tda4j.AbstractSimplex[VertexT] = simplices(i)
+
+  def length: Int = simplices.length
+}
 
 /**
  * `BronKerbosch` implements the creation of a Vietoris-Rips complex by running the
@@ -39,7 +70,7 @@ object BronKerbosch {
   def apply[VertexT](
                       metricSpace: FiniteMetricSpace[VertexT],
                       maxFiltrationValue: Double = Double.PositiveInfinity
-  )(implicit ord : Ordering[VertexT]): Seq[FilteredAbstractSimplex[VertexT, Double]] = {
+  )(implicit ord : Ordering[VertexT]): Seq[(Double, AbstractSimplex[VertexT])] = {
     /**
      * First, construct all the edges with edge length less than the maxFiltrationValue
      */
@@ -105,6 +136,6 @@ object BronKerbosch {
     val weightedSimplices = Sorting.stableSort(cliqueSet filter (spx => !spx.isEmpty) map
       ((spx : Set[VertexT]) => (maxFiltrationValueOfSimplex(spx),spx.size,(spx to Seq).sorted)) to Seq)
 
-    weightedSimplices.map((w,_,spx) => new FilteredAbstractSimplex[VertexT,Double](w, spx.toSeq : _*))
+    weightedSimplices.map((w,_,spx) => (w, new AbstractSimplex[VertexT](spx.toSeq : _*)))
   }
 }
