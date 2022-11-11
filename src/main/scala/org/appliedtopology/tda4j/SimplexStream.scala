@@ -8,6 +8,15 @@ trait Filtration[VertexT, FiltrationT:Ordering] {
   def filtrationValue : PartialFunction[AbstractSimplex[VertexT], FiltrationT]
 }
 
+/**
+ * Abstract trait for representing a sequence of simplices.
+ *
+ * @tparam VertexT Type of vertices of the contained simplices.
+ * @tparam FiltrationT Type of the filtration values.
+ *
+ * @todo We may want to change this to inherit instead from `IterableOnce[AbstractSimplex[VertexT]]`,
+ *       so that a lazy computed simplex stream can be created and fit in the type hierarchy.
+ */
 trait SimplexStream[VertexT, FiltrationT]
   extends Filtration[VertexT, FiltrationT]
   with Seq[AbstractSimplex[VertexT]]
@@ -63,5 +72,18 @@ class ExplicitStreamBuilder[VertexT:Ordering, FiltrationT](implicit ordering: Or
     filtrationValues(elem._2) = elem._1
     simplices += elem
     self
+  }
+}
+
+class FilteredSimplexOrdering[VertexT, FiltrationT]
+  (val filtration : Filtration[VertexT, FiltrationT])
+  (using vertexOrdering : Ordering[VertexT])
+  (using filtrationOrdering : Ordering[FiltrationT])
+  extends Ordering[AbstractSimplex[VertexT]] {
+  def compare(x: AbstractSimplex[VertexT], y: AbstractSimplex[VertexT]) = {
+    if(filtrationOrdering.compare(filtration.filtrationValue(x), filtration.filtrationValue(y)) == 0)
+      return Ordering.Implicits.seqOrdering[Seq,VertexT](vertexOrdering).compare(x.to(Seq), y.to(Seq))
+    else
+      return filtrationOrdering.compare(filtration.filtrationValue(x), filtration.filtrationValue(y))
   }
 }

@@ -10,7 +10,7 @@ class SimplexStreamSpec extends mutable.Specification {
 
   var esb : ExplicitStreamBuilder[Int, Double] = ExplicitStreamBuilder[Int, Double]()
 
-  esb ++= Seq(
+  val simplexSeq : Seq[(Double, Simplex)] = Seq(
     (0.0, Simplex(1)),
     (0.0, Simplex(2)),
     (0.0, Simplex(3)),
@@ -22,6 +22,8 @@ class SimplexStreamSpec extends mutable.Specification {
     (4.0, Simplex(1,4)),
     (6.0, Simplex(1,2,3)),
   )
+
+  esb ++= simplexSeq
 
   val simplexStream : ExplicitStream[Int, Double] = esb.result()
 
@@ -56,6 +58,22 @@ class SimplexStreamSpec extends mutable.Specification {
     "be able to compute filtration values" >> {
       simplexStream.filtrationValue(Simplex(1,2)) must be_==(1.0)
       simplexStream.filtrationValue(Simplex(1,2,3)) must be_==(6.0)
+    }
+  }
+
+  "A SimplexStream induced FilteredSimplexOrdering should" >> {
+    given filteredSimplexOrdering : Ordering[AbstractSimplex[Int]] =
+      new FilteredSimplexOrdering[Int, Double](simplexStream)
+    val sortedSimplexSeq = simplexSeq.map((f,s) => s).sorted
+    "have filtration values in ascending order" >> {
+      sortedSimplexSeq.map(simplexStream.filtrationValue) must beSorted
+    }
+    "have subsimplices appear before supersimplices" >> {
+      val seen: cmutable.Set[AbstractSimplex[Int]] = cmutable.Set(AbstractSimplex())
+      sortedSimplexSeq.foreach(spx => {
+        seen += spx
+        spx.to(AbstractSimplex).subsets().foreach(face => seen must contain(face))
+      })
     }
   }
 }
