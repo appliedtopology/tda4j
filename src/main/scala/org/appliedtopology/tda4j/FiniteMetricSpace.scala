@@ -3,6 +3,7 @@ package org.appliedtopology.tda4j
 import math.{pow, sqrt}
 import collection.immutable.Range
 import util.chaining.scalaUtilChainingOps
+import math.Ordering.Implicits._
 
 /** Interface for being a finite metric space
   *
@@ -37,6 +38,34 @@ trait FiniteMetricSpace[VertexT] {
   def elements: Iterable[VertexT]
 
   def contains(x : VertexT) : Boolean
+}
+
+/**
+ * Convenience functionality for metric spaces.
+ */
+object FiniteMetricSpace {
+  /**
+   * Creates a filtration value partial function implementing the functionality of a [[Filtration]]
+   * for a filtration generated from a metric space, where the filtration value is the maximum distance
+   * between vertices (or the diameter) of a simplex.
+   *
+   * @param finiteMetricSpace An instance of a finite metric space.
+   * @tparam VertexT Type of vertex indices / indices into the metric space
+   */
+  class MaximumDistanceFiltrationValue[VertexT:Ordering](val metricSpace: FiniteMetricSpace[VertexT])
+    extends PartialFunction[AbstractSimplex[VertexT], Double] {
+      def isDefinedAt(spx: AbstractSimplex[VertexT]): Boolean =
+        spx.forall(v => metricSpace.contains(v))
+
+      def apply(spx: AbstractSimplex[VertexT]): Double = {
+        if (spx.size <= 1) return 0.0
+        spx.flatMap(v =>
+          spx.filter(_ > v).map(w =>
+            metricSpace.distance(v, w)
+          )
+        ).max
+      }
+    }
 }
 
 /** Takes in an explicit distance matrix, and performs lookups in this distance

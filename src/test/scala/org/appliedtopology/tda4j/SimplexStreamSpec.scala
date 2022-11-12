@@ -29,20 +29,21 @@ class SimplexStreamSpec extends mutable.Specification {
 
   "An ExplicitStream should" >> {
     "have simplices" >> {
-      simplexStream.size must beGreaterThan(0)
+      simplexStream.iterator.size must beGreaterThan(0)
     }
     "have simplices appear in filtration order" >> {
-      simplexStream.map(simplexStream.filtrationValue) must beSorted
+      given Ordering[Int] = Ordering.Int
+      simplexStream.iterator.map(simplexStream.filtrationValue).to(Seq) must beSorted
     }
     "have subsimplices appear before supersimplices" >> {
       val seen: cmutable.Set[AbstractSimplex[Int]] = cmutable.Set(AbstractSimplex())
-      simplexStream.foreach(spx => {
+      simplexStream.iterator.foreach(spx => {
         seen += spx
         spx.to(AbstractSimplex).subsets().foreach(face => seen must contain(face))
       })
     }
     "have all simplices, in order" >> {
-      simplexStream must contain(exactly(
+      simplexStream.iterator.to(Seq) must contain(exactly(
         === (new Simplex(1)),
         === (new Simplex(2)),
         === (new Simplex(3)),

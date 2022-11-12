@@ -19,7 +19,7 @@ trait Filtration[VertexT, FiltrationT:Ordering] {
  */
 trait SimplexStream[VertexT, FiltrationT]
   extends Filtration[VertexT, FiltrationT]
-  with Seq[AbstractSimplex[VertexT]]
+  with IterableOnce[AbstractSimplex[VertexT]]
 {
 
 }
@@ -81,9 +81,12 @@ class FilteredSimplexOrdering[VertexT, FiltrationT]
   (using filtrationOrdering : Ordering[FiltrationT])
   extends Ordering[AbstractSimplex[VertexT]] {
   def compare(x: AbstractSimplex[VertexT], y: AbstractSimplex[VertexT]) = {
-    if(filtrationOrdering.compare(filtration.filtrationValue(x), filtration.filtrationValue(y)) == 0)
-      return Ordering.Implicits.seqOrdering[Seq,VertexT](vertexOrdering).compare(x.to(Seq), y.to(Seq))
-    else
+    if(filtrationOrdering.compare(filtration.filtrationValue(x), filtration.filtrationValue(y)) == 0) {
+      if(Ordering.Int.compare(x.size, y.size) == 0)
+        return Ordering.Implicits.seqOrdering[Seq,VertexT](vertexOrdering).compare(x.to(Seq), y.to(Seq))
+      else
+        return Ordering.Int.compare(x.size, y.size)
+    } else
       return filtrationOrdering.compare(filtration.filtrationValue(x), filtration.filtrationValue(y))
   }
 }
