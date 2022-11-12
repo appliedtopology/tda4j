@@ -8,7 +8,7 @@ import scala.collection.mutable as cmutable
 class SimplexStreamSpec extends mutable.Specification {
   "Test suite for the abstraction and implementations of `SimplexStream`".txt
 
-  var esb : ExplicitStreamBuilder[Int, Double] = ExplicitStreamBuilder[Int, Double]()
+  val esb: ExplicitStreamBuilder[Int, Double] = ExplicitStreamBuilder[Int, Double]()
 
   val simplexSeq : Seq[(Double, Simplex)] = Seq(
     (0.0, Simplex(1)),
@@ -65,7 +65,7 @@ class SimplexStreamSpec extends mutable.Specification {
   "A SimplexStream induced FilteredSimplexOrdering should" >> {
     given filteredSimplexOrdering : Ordering[AbstractSimplex[Int]] =
       new FilteredSimplexOrdering[Int, Double](simplexStream)
-    val sortedSimplexSeq = simplexSeq.map((f,s) => s).sorted
+    val sortedSimplexSeq = simplexSeq.map((_,s) => s).sorted
     "have filtration values in ascending order" >> {
       sortedSimplexSeq.map(simplexStream.filtrationValue) must beSorted
     }

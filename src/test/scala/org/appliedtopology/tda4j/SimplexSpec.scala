@@ -33,6 +33,7 @@ A `Simplex` should
     sDel2.contains(2) must beFalse
 }
 
+//noinspection ScalaFileName
 class SimplexTypeSpec extends mutable.Specification {
   "This is a specification for the type level interactions of the `Simplex` class".txt
 
