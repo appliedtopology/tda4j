@@ -43,17 +43,17 @@ class SimplexStreamSpec extends mutable.Specification {
       })
     }
     "have all simplices, in order" >> {
-      simplexStream.iterator.to(Seq) must contain(exactly(
-        === (new Simplex(1)),
-        === (new Simplex(2)),
-        === (new Simplex(3)),
-        === (new Simplex(4)),
-        === (new Simplex(1,2)),
-        === (new Simplex(1,3)),
-        === (new Simplex(2,3)),
-        === (new Simplex(1,4)),
-        === (new Simplex(2,4)),
-        === (new Simplex(1,2,3))
+      simplexStream.iterator.to(Seq) must contain[Simplex](exactly(
+        === (Simplex(1)),
+        === (Simplex(2)),
+        === (Simplex(3)),
+        === (Simplex(4)),
+        === (Simplex(1,2)),
+        === (Simplex(1,3)),
+        === (Simplex(2,3)),
+        === (Simplex(1,4)),
+        === (Simplex(2,4)),
+        === (Simplex(1,2,3))
       ).inOrder)
     }
     "be able to compute filtration values" >> {

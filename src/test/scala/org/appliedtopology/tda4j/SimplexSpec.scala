@@ -37,8 +37,8 @@ class SimplexTypeSpec extends mutable.Specification {
   "This is a specification for the type level interactions of the `Simplex` class".txt
 
   "The `Simplex` type should" >> {
-    val s = new Simplex(1, 2, 3)
-    val t = new Simplex(2, 3, 4)
+    val s = Simplex(1, 2, 3)
+    val t = Simplex(2, 3, 4)
     "be the return type of the Simplex constructor" >> {
       s must haveClass[Simplex]
     }

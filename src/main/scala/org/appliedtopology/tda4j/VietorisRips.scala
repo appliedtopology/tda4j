@@ -141,7 +141,7 @@ class BronKerbosch[VertexT : Ordering] extends CliqueFinder[VertexT] {
     // Well, we have our simplices generated and ready for us.
     // Let's sort them to create a stream
     val simplices : Seq[AbstractSimplex[VertexT]] =
-      cliqueSet filter (spx => spx.nonEmpty) map (spx => new AbstractSimplex[VertexT](spx.to(Seq) : _*)) to(Seq)
+      cliqueSet filter (spx => spx.nonEmpty) map (spx => AbstractSimplex[VertexT](spx.to(Seq) : _*)) to(Seq)
     val filtration = new FiniteMetricSpace.MaximumDistanceFiltrationValue[VertexT](metricSpace)
     val simplexOrdering = FilteredSimplexOrdering[VertexT, Double](new Filtration[VertexT, Double]{
       def filtrationValue : PartialFunction[AbstractSimplex[VertexT], Double] = filtration

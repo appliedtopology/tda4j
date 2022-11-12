@@ -28,8 +28,8 @@ trait Cell {
  */
 type Simplex = AbstractSimplex[Int]
 
-object Simplex extends AbstractSimplex[Int] {
-  def apply(vertices: Int*) = new Simplex(vertices: _*)
+object Simplex {
+  def apply(vertices: Int*) = new Simplex(TreeSet[Int](vertices: _*))
 }
 
 /**
@@ -45,15 +45,13 @@ object Simplex extends AbstractSimplex[Int] {
  * @param ordering Ordering of the vertex type
  * @tparam VertexT Vertex type
  */
-class AbstractSimplex[VertexT](vertices: VertexT*)(implicit val ordering: Ordering[VertexT])
+class AbstractSimplex[VertexT](protected val vertexSet : SortedSet[VertexT])(using val ordering: Ordering[VertexT])
     extends SortedSet[VertexT]
     with SortedSetOps[VertexT, AbstractSimplex, AbstractSimplex[VertexT]]
     with SortedSetFactoryDefaults[VertexT, AbstractSimplex, Set]
     with Cell
     {
   self => //gives methods access to the object that's calling it in the first place
-
-  protected val vertexSet = TreeSet[VertexT](vertices: _*)(ordering)
 
   // ***** Simplex specific operations
 
@@ -73,11 +71,11 @@ class AbstractSimplex[VertexT](vertices: VertexT*)(implicit val ordering: Orderi
   override def iterator: Iterator[VertexT] = vertexSet.iterator
 
   override def excl(elem: VertexT): AbstractSimplex[VertexT] = new AbstractSimplex[VertexT](
-    vertexSet.excl(elem).toSeq: _*
+    vertexSet.excl(elem)
   )
 
   override def incl(elem: VertexT): AbstractSimplex[VertexT] = new AbstractSimplex[VertexT](
-    vertexSet.incl(elem).toSeq: _*
+    vertexSet.incl(elem)
   )
 
   override def contains(elem: VertexT): Boolean = vertexSet.contains(elem)
@@ -86,7 +84,7 @@ class AbstractSimplex[VertexT](vertices: VertexT*)(implicit val ordering: Orderi
                           from: Option[VertexT],
                           until: Option[VertexT]
   ): AbstractSimplex[VertexT] =
-    new AbstractSimplex[VertexT](vertexSet.rangeImpl(from, until).toSeq: _*)
+    new AbstractSimplex[VertexT](vertexSet.rangeImpl(from, until))
 
   override def iteratorFrom(start: VertexT): Iterator[VertexT] =
     vertexSet.iteratorFrom(start)
@@ -98,14 +96,24 @@ class AbstractSimplex[VertexT](vertices: VertexT*)(implicit val ordering: Orderi
 /** Simplex companion object with factory methods
   */
 object AbstractSimplex extends SortedIterableFactory[AbstractSimplex] {
-  override def empty[VertexT: Ordering]: AbstractSimplex[VertexT] = new AbstractSimplex[VertexT]()
+  override def apply[VertexT:Ordering](vertices : VertexT*) =
+    new AbstractSimplex[VertexT](TreeSet[VertexT](vertices : _*))
+  override def empty[VertexT: Ordering]: AbstractSimplex[VertexT] =
+    new AbstractSimplex[VertexT](TreeSet[VertexT]())
 
   override def from[VertexT: Ordering](source: IterableOnce[VertexT]): AbstractSimplex[VertexT] =
     (newBuilder[VertexT] ++= source).result()
 
   override def newBuilder[VertexT: Ordering]: mutable.Builder[VertexT, AbstractSimplex[VertexT]] =
-    new mutable.ImmutableBuilder[VertexT, AbstractSimplex[VertexT]](empty) {
+    new mutable.ReusableBuilder[VertexT, AbstractSimplex[VertexT]] {
+      var elems = mutable.Set[VertexT]()
+
+      override def clear(): Unit = elems.clear()
+
       def addOne(elem: VertexT): this.type =
         elems += elem; this
+
+      override def result(): AbstractSimplex[VertexT] =
+        new AbstractSimplex[VertexT](TreeSet[VertexT](elems.to(Seq) : _*))
     }
 }
