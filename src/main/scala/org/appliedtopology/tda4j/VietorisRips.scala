@@ -4,19 +4,20 @@ import scala.collection.immutable.{LazyList, SortedSet}
 import scala.math.Ordering.Implicits.*
 import Simplex.*
 import org.appliedtopology.tda4j.FiniteMetricSpace.MaximumDistanceFiltrationValue
-import scalax.collection.{edge, Graph}
+import scalax.collection.{Graph, edge, mutable as gmutable}
 import scalax.collection.edge.Implicits.*
-import scalax.collection.mutable as gmutable
+import scalax.collection.edge.WUnDiEdge
 
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.util.Sorting
 import scala.util.control.*
+import scala.util.chaining._
 
 /** Convenience definition to allow us to choose a specific implementation.
   *
   * @return
-  *   A function-like object with the signature 
+  *   A function-like object with the signature
   *   `VietorisRips : (MetricSpace[VertexT], Double) => Seq[FilteredAbstractSimplex[VertexT,Double]]`
   */
 class VietorisRips[VertexT](using ordering: Ordering[VertexT])(
@@ -93,6 +94,41 @@ object CliqueFinder {
           metricSpace
         )
     })
+
+  def BronKerboschAlgorithm[VertexT: Ordering](maxDimension: Int, edges: Graph[VertexT, WUnDiEdge]):
+    mutable.Set[Set[VertexT]] = {
+    // Now, recursive calls to Bron-Kerbosch:
+    val cliqueSet = mutable.Set[Set[VertexT]]()
+    val bkTaskStack: mutable.Stack[
+      (Set[VertexT], mutable.Set[VertexT], mutable.Set[VertexT])
+    ] =
+      mutable.Stack(
+        (
+          Set[VertexT](),
+          edges.nodes.map(_.toOuter).to(mutable.Set),
+          mutable.Set[VertexT]()
+        )
+      )
+
+    while (bkTaskStack.nonEmpty) {
+      val task = bkTaskStack.pop()
+      val R = task._1
+      val P = task._2
+      val X = task._3
+      if (R.size <= maxDimension + 1) {
+        cliqueSet += R.to(Set)
+        while (P.nonEmpty) {
+          val v = P.head
+          val Nv = edges.get(v).neighbors.map(_.toOuter)
+          bkTaskStack.push((R + v, P & Nv, X & Nv))
+          P -= v
+          X += v
+        }
+      }
+    }
+    cliqueSet
+  }
+
 }
 
 /** `BronKerbosch` implements the creation of a Vietoris-Rips complex by running
@@ -136,7 +172,7 @@ class BronKerbosch[VertexT: Ordering] extends CliqueFinder[VertexT] {
       */
 
     // First, create a degeneracy ordering of the vertices
-    val queryGraph: gmutable.Graph[VertexT, edge.WUnDiEdge] =
+    val queryGraph: gmutable.Graph[VertexT, WUnDiEdge] =
       gmutable.Graph.from(edges.nodes, edges.edges)
     val degeneracyOrderedVertices = mutable.Queue[VertexT]()
     while (queryGraph.order > 0) {
@@ -146,35 +182,7 @@ class BronKerbosch[VertexT: Ordering] extends CliqueFinder[VertexT] {
       queryGraph -= v
     }
 
-    // Now, recursive calls to Bron-Kerbosch:
-    val cliqueSet = mutable.Set[Set[VertexT]]()
-    val bkTaskStack: mutable.Stack[
-      (Set[VertexT], mutable.Set[VertexT], mutable.Set[VertexT])
-    ] =
-      mutable.Stack(
-        (
-          Set[VertexT](),
-          edges.nodes.map(_.toOuter).to(mutable.Set),
-          mutable.Set[VertexT]()
-        )
-      )
-
-    while (bkTaskStack.nonEmpty) {
-      val task = bkTaskStack.pop()
-      val R = task._1
-      val P = task._2
-      val X = task._3
-      if (R.size <= maxDimension + 1) {
-        cliqueSet += R.to(Set)
-        while (P.nonEmpty) {
-          val v = P.head
-          val Nv = edges.get(v).neighbors.map(_.toOuter)
-          bkTaskStack.push((R + v, P & Nv, X & Nv))
-          P -= v
-          X += v
-        }
-      }
-    }
+    val cliqueSet: mutable.Set[Set[VertexT]] = CliqueFinder.BronKerboschAlgorithm[VertexT](maxDimension, edges)
 
     // Well, we have our simplices generated and ready for us.
     // Let's sort them to create a stream
@@ -183,7 +191,7 @@ class BronKerbosch[VertexT: Ordering] extends CliqueFinder[VertexT] {
         .filter(spx => spx.nonEmpty)
         .map(spx => AbstractSimplex[VertexT](spx.to(Seq): _*)) to Seq
     val filtration =
-      new FiniteMetricSpace.MaximumDistanceFiltrationValue[VertexT](metricSpace)
+      new MaximumDistanceFiltrationValue[VertexT](metricSpace)
     val simplexOrdering =
       FilteredSimplexOrdering[VertexT, Double](new Filtration[VertexT, Double] {
         def filtrationValue: PartialFunction[AbstractSimplex[VertexT], Double] =
@@ -231,5 +239,92 @@ class ZomorodianIncremental[VertexT: Ordering] extends CliqueFinder[VertexT] {
     }
 
     V.to(Seq)
+  }
+}
+
+
+
+object LazyVietorisRips {
+  self =>
+
+  def apply[VertexT: Ordering](metricSpace: FiniteMetricSpace[VertexT],
+                               maxFiltrationValue : Double,
+                               maxDimension: Int): LazyList[AbstractSimplex[VertexT]] = {
+    given Ordering[AbstractSimplex[VertexT]] = CliqueFinder.simplexOrdering(metricSpace)
+
+    val edges = CliqueFinder.weightedEdges(metricSpace, Double.PositiveInfinity)
+
+    case class FoldState(G: Graph[VertexT, WUnDiEdge],
+                         retLL: LazyList[AbstractSimplex[VertexT]],
+                         knownSize: Int)
+
+    def processNextEdge(state: FoldState, nextEdge: WUnDiEdge[VertexT]): FoldState = state match {
+      case FoldState(g, retLL, n) => {
+        val endpoints: Seq[VertexT] = nextEdge.to(Seq)
+        //val neighbors: Seq[Set[VertexT]] =
+        //  endpoints.map[Set[VertexT]]((v: VertexT) => (g get v).neighbors map (_.toOuter) filter (_ < v))
+        //val NN = neighbors.reduce(_ & _)
+
+/*        val cliqueSet: mutable.Set[Set[VertexT]] =
+          CliqueFinder.BronKerboschAlgorithm[VertexT](
+            maxDimension - 2,
+            (g filter edges.having(node = NN.contains(_)))
+          )
+          */
+
+
+        def lowerNeighbors(v: VertexT): SortedSet[VertexT] =
+          g.get(v).neighbors.map(_.toOuter).filter(_ < v).to(SortedSet)
+
+        val neighbors : Seq[SortedSet[VertexT]] =
+          endpoints.map[SortedSet[VertexT]]((v:VertexT) => lowerNeighbors(v))
+
+        val V = mutable.SortedSet[AbstractSimplex[VertexT]]()
+        val tasks = mutable.Stack[(SortedSet[VertexT], SortedSet[VertexT])](
+          (SortedSet[VertexT](endpoints : _*), neighbors.reduce(_&_))
+        )
+
+        while (tasks.nonEmpty) {
+          val task = tasks.pop()
+          val tau = task._1
+          val N = task._2
+          V += AbstractSimplex.from(tau)
+          if (tau.size < maxDimension) {
+            N.foreach { v =>
+              val sigma = tau + v
+              val M = N & lowerNeighbors(v)
+              tasks.push((sigma, M))
+            }
+          }
+        }
+
+
+        val newSimplices: SortedSet[AbstractSimplex[VertexT]] =
+          V.map(spx => AbstractSimplex.from(spx)).map(spx => spx ++ endpoints).to(SortedSet)
+
+        FoldState(
+          g + nextEdge,
+          retLL #::: newSimplices.to(LazyList),
+          V.size
+        )
+      }
+    }
+
+    val simplices = edges.nodes.to(Seq).map(_.toOuter).map(spx => AbstractSimplex(spx)).sorted.to(LazyList) #::: ({
+      val edgesLL: LazyList[WUnDiEdge[VertexT]] =
+        (edges filter edges.having(edge = _.weight<maxFiltrationValue)).
+          edges.toSeq.map(_.toOuter).sortBy(_.weight).to(LazyList)
+      val startingState = FoldState(
+        edges filter edges.having(edge = _ => false, node = _ => true),
+        LazyList[AbstractSimplex[VertexT]](),
+        edges.order // because we seeded `simplices` with the vertices
+      )
+      val foldedState = edgesLL.foldLeft[FoldState](startingState)(processNextEdge)
+
+      foldedState match {
+        case FoldState(_, retLL, _) => retLL
+      }
+    })
+    simplices
   }
 }

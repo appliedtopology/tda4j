@@ -10,26 +10,40 @@ import scala.math.{cos,sin}
 
 
 class VietorisRipsSpec extends s2mutable.Specification {
-  "This is a specification of the Vietoris-Rips simplex stream implementation".txt
+  "This is a specification of the Vietoris-Rips simplex stream implementation\n\n".txt
+
+  val N = 50
+  val maxF = 0.75
+  val maxD = 3
+
+  given Ordering[Int] = Ordering.Int
 
   Fragment.foreach(List(new BronKerbosch[Int](), new ZomorodianIncremental[Int]()) : List[CliqueFinder[Int]])(method =>
     s"Vietoris-Rips streams with ${method.className} should" >> {
-    val pts: Seq[Seq[Double]] = Range(0, 10).map(i => Seq(cos(i / 10.0), sin(i / 10.0)))
+    val pts: Seq[Seq[Double]] = Range(0, N).map(i => Seq(cos(i / N.toDouble), sin(i / N.toDouble)))
     val metricSpace: FiniteMetricSpace[Int] = EuclideanMetricSpace(pts)
-    val simplexStream: SimplexStream[Int, Double] = VietorisRips[Int](metricSpace, 0.75, cliqueFinder=method)
+    val simplexStream: SimplexStream[Int, Double] = VietorisRips[Int](metricSpace, maxF, maxD, cliqueFinder=method)
+    given Ordering[AbstractSimplex[Int]] = CliqueFinder.simplexOrdering(metricSpace)
+
     "have simplices" >> {
       simplexStream.iterator.length must beGreaterThan(0)
     }
     "have simplices appear in filtration order" >> {
-      given Ordering[Int] = Ordering.Int
-      simplexStream.iterator.map(simplexStream.filtrationValue).to(Seq) must beSorted
-    }
-    "have subsimplices appear before supersimplices" >> {
-      val seen : mutable.Set[AbstractSimplex[Int]] = mutable.Set(AbstractSimplex())
-      simplexStream.iterator.take(100).foreach(spx => {
-        seen += spx
-        spx.to(AbstractSimplex).subsets().foreach(face => seen must contain(face))
-      })
+      simplexStream.iterator.to(Seq) must beSorted
     }
   })
+
+  s"Lazy Vietoris-Rips streams should" >> {
+    val pts: Seq[Seq[Double]] = Range(0, N).map(i => Seq(cos(i / N.toDouble), sin(i / N.toDouble)))
+    val metricSpace: FiniteMetricSpace[Int] = EuclideanMetricSpace(pts)
+    given Ordering[AbstractSimplex[Int]] = CliqueFinder.simplexOrdering(metricSpace)
+    val lazyStream: LazyList[AbstractSimplex[Int]] =
+      LazyVietorisRips[Int](metricSpace, maxF, maxD)
+    "have simplices" >> {
+      lazyStream.iterator.length must beGreaterThan(0)
+    }
+    "have simplices appear in filtration order" >> {
+      lazyStream.iterator.to(Seq) must beSorted
+    }
+  }
 }
