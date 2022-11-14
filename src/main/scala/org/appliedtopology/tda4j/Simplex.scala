@@ -11,6 +11,7 @@ import scala.math.Ordering.Double.IeeeOrdering
 import scala.math.Ordering.IntOrdering
 
 
+
 /**
  * The Chain class is a representation of a formal linear combination of the n cells in a cell complex.
  * Note that CellT is a type parameter subtype of Cell, a trait in this library. We have Scala look for
