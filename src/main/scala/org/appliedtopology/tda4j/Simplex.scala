@@ -14,7 +14,7 @@ import scala.math.Ordering.IntOrdering
 /**
  * The Chain class is a representation of a formal linear combination of the n cells in a cell complex.
  * Note that CellT is a type parameter subtype of Cell, a trait in this library. We have Scala look for
- * a type parameter of cellOrdering that matches as best as possible an Ordering on CellT
+ * a type parameter of cellOrdering that matches as best as possible an Ordering on CellT.
  *
  * (Note: write a fully fleshed out explaination in comments after code def. write up)
  *
