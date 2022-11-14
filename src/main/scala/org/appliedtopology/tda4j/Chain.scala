@@ -16,10 +16,7 @@ package org.appliedtopology.tda4j
  *
  *
  */
-class Chain[CellT <: Cell, CoefficientT: Fractional[T]](using cellOrdering : Ordering[CellT])
-
-
-{
+class Chain[CellT <: Cell, CoefficientT: Fractional[T]](using cellOrdering : Ordering[CellT]) {
 
 }
 
