@@ -7,8 +7,9 @@ import scala.collection.{
   StrictOptimizedSortedSetOps
 }
 import scala.collection.immutable.{SortedSet, SortedSetOps, TreeSet, SortedMap}
-import scala.math.Ordering.Double.IeeeOrdering
 import scala.math.Ordering.IntOrdering
+import scala.math.Ordering.Double.IeeeOrdering
+import math.Ordering.Implicits.sortedSetOrdering
 
 /** Type alias creating `Simplex` as the type representing
   * `AbstractSimplex[Int]`
@@ -49,10 +50,10 @@ object Simplex {
   */
 class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])(
   using val ordering: Ordering[VertexT]
-) extends SortedSet[VertexT]
+) extends Cell[AbstractSimplex[VertexT]]
+    with SortedSet[VertexT]
     with SortedSetOps[VertexT, AbstractSimplex, AbstractSimplex[VertexT]]
-    with SortedSetFactoryDefaults[VertexT, AbstractSimplex, Set]
-    with Cell {
+    with SortedSetFactoryDefaults[VertexT, AbstractSimplex, Set] {
   self => // gives methods access to the object that's calling it in the first place
 
   // ***** Simplex specific operations
@@ -65,8 +66,10 @@ class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])(
     * @todo
     *   Change `List` to `Chain` once we have an implementation of `Chain`
     */
-  override def boundary(): List[AbstractSimplex[VertexT]] =
-    self.subsets(self.size - 1).to(List)
+  override def boundary[CoefficientT](using fr : Fractional[CoefficientT]): Chain[AbstractSimplex[VertexT], CoefficientT] =
+    Chain[AbstractSimplex[VertexT], CoefficientT](
+      self.to(Seq).map(vtx => self-vtx).zip(Iterator.unfold(fr.one)(s => Some((s,fr.negate(s))))) : _*
+    )
 
   // ***** Overriding for inheriting and extending standard library constructions
   override def className = "AbstractSimplex"

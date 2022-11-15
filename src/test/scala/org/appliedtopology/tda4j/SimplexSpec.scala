@@ -3,6 +3,8 @@ package org.appliedtopology.tda4j
 import org.specs2.{mutable, Specification}
 import org.specs2.execute.Result
 
+import math.Ordering.Implicits.sortedSetOrdering
+
 object SimplexSpec extends Specification {
 
   def is =
@@ -23,8 +25,9 @@ A `Simplex` should
 
   def e1: Result = s.size must beGreaterThan[Int](0)
 
-  def e2: Result =
-    s.boundary() must contain(Simplex(1, 2), Simplex(1, 3), Simplex(2, 3))
+  given Fractional[Double] = Numeric.DoubleIsFractional
+  def e2: Result = s.boundary must be_==(Chain[Simplex, Double](
+    Simplex(2, 3) -> 1.0, Simplex(1, 3) -> -1.0, Simplex(1, 2) -> 1.0))
 
   def eAddVertex: Result =
     sAdd4.contains(4) must beTrue
