@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j
 
 import collection.immutable.SortedMap
+import math.Ordering.Implicits.sortedSetOrdering
 
 /**
  * The Chain class is a representation of a formal linear combination of the n cells in a cell complex.
@@ -17,14 +18,33 @@ import collection.immutable.SortedMap
  *
  *
  */
-class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT : Fractional]
-  (val chainMap : SortedMap[CellT, CoefficientT]) {
+class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT]
+  (val chainMap : SortedMap[CellT, CoefficientT])(using fr : Fractional[CoefficientT]) {
 
+  def negate : Chain[CellT,CoefficientT] = new Chain(chainMap.transform((k,v) => fr.negate(v)))
+  def unary_- = negate
+
+  def scalarMultiply(c : CoefficientT) : Chain[CellT, CoefficientT] =
+    new Chain(chainMap.transform((k,v) => fr.times(v,c)))
+  def *: = scalarMultiply
+
+  def add(that : Chain[CellT, CoefficientT]) : Chain[CellT, CoefficientT] =
+    Chain((chainMap.keySet | that.chainMap.keySet).map(k =>
+      (k, fr.plus(chainMap.getOrElse(k, fr.zero), that.chainMap.getOrElse(k, fr.zero)))).toSeq*)
+  def + = add
+
+  def subtract(that : Chain[CellT, CoefficientT]) : Chain[CellT, CoefficientT] = this + (-that)
+  def - = subtract
+  override def toString: String = chainMap.map((k,v) => s"${v.toString} *: ${k.toString}").mkString(" + ")
 }
 object Chain {
   def apply[CellT <: Cell[CellT] : Ordering, CoefficientT : Fractional](items : (CellT, CoefficientT)*) =
     new Chain[CellT, CoefficientT](SortedMap.from(items))
+
+  def apply[CellT <: Cell[CellT] : Ordering, CoefficientT](cell : CellT)(using fr : Fractional[CoefficientT]) =
+    new Chain[CellT, CoefficientT](SortedMap.from(List(cell -> fr.one)))
 }
+
 
 /** Lightweight trait to define what it means to be a topological "Cell".
  *
