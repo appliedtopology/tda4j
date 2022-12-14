@@ -30,7 +30,6 @@
 - [ ] work on `extends Equals` to implement `canEquals` and `equals`
 - [ ] For `add()` in `Chain` : investigate use of Dynamic Programming for caching purposes/fast access to Simplexes after iterator corrections
 
-- [ ] NOTE - look for further optimizations for add() in chain (use of iterators recommended)
 - [ ] FUTURE NOTE - run Library to check for bottlenecks when done (use of profiler needed)
 
 
