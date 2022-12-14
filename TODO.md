@@ -19,9 +19,17 @@
       - [ ] Explore how to create a `Stream[FilteredSimplex]` from a selection of "maximal" simplices, or an incomplete
       selection of simplices (this will involve figuring out which _additional_ simplices to add)
       - [ ] Add Chain (needs to access `Numeric` to get `+ , - , *`). `SortedMap` could work for this, but looking for alternatives.  Want `Chain[C <: Cell,F]` to extend (ie inherit from) `C => F`(so that it contains an apply`(queryCell : C) : F` that returns the coefficient at `queryCell`
+
 - [ ] Write Perisitent Homology Algos
 - [ ] Write relevant tests to specify required behaviour
 - [ ] Write code to duplicate JavaPlex's computations and analyses of persistent homology
+
+- [ ] Write up Test Suite for Chain class
+- [ ] Write up ScalaDocs for Chain
+- [ ] implicit conversion from Cell to Chain
+
+- [ ] NOTE - look for further optimizations for add() in chain (use of iterators recommended)
+- [ ] FUTURE NOTE - run Library to check for bottlenecks when done (use of profiler needed)
 
 ## Ripser on the JRE
 

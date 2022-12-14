@@ -48,8 +48,8 @@ object Simplex {
   * @tparam VertexT
   *   Vertex type
   */
-class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])(
-  using val ordering: Ordering[VertexT]
+class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])( //vertexSet variable defined here
+  using val ordering: Ordering[VertexT] //ordering definied here
 ) extends Cell[AbstractSimplex[VertexT]]
     with SortedSet[VertexT]
     with SortedSetOps[VertexT, AbstractSimplex, AbstractSimplex[VertexT]]

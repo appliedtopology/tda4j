@@ -5,7 +5,7 @@ import collection.immutable.SortedMap
 /**
  * The Chain class is a representation of a formal linear combination of the n cells in a cell complex.
  * Note that CellT is a type parameter subtype of Cell, a trait in this library. We have Scala look for
- * a type parameter of cellOrdering that matches as best as possible an Ordering on CellT
+ * a type parameter of cellOrdering that matches as best as possible an Ordering on CellT.
  *
  * (Note: write a fully fleshed out explanation in comments after code def. write up)
  *
@@ -19,6 +19,17 @@ import collection.immutable.SortedMap
  */
 class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT : Fractional]
   (val chainMap : SortedMap[CellT, CoefficientT]) {
+
+
+
+  def negate() : this.type = new Chain(chainMap.transform(_._2))                                  //this.type refers to whatever type this object already has
+                                                                          //make a new Chain - pass in chainmap.transform on coeff (for tuples, ._2 picks second field))
+                                                                          //_ = compact way of saying input
+                                                                          // - in
+
+  //def scalarMultiply()
+//  def add()
+    // note - implement Numeric methods as +,-,/, etc here then push to see if on right track
 
 }
 object Chain {
