@@ -39,6 +39,9 @@
 
 
 - [ ] END OF LIBRARY IMPLEMENTATION TASK: Look to do a pull-request for RedBlackTree.scala for merging 2 red-black trees (which are the under the hood algorithms for TreeMap, which SortedMap (which is used by chainMap))
+(Noted important links :https://github.com/scala/scala/blob/4905801fc161300ba20bae4f7adf045b1698e831/src/library/scala/collection/immutable/RedBlackTree.scala#L1201
+and 
+https://github.com/scala/scala/blob/4905801fc161300ba20bae4f7adf045b1698e831/src/library/scala/collection/immutable/RedBlackTree.scala#L943)
 
 ## Ripser on the JRE
 
