@@ -28,10 +28,17 @@
 - [ ] Write up ScalaDocs for Chain
 - [ ] implicit conversion from Cell to Chain
 - [ ] work on `extends Equals` to implement `canEquals` and `equals`
-- [ ] For `add()` in `Chain` : investigate use of Dynamic Programming for caching purposes/fast access to Simplexes after iterator corrections
+
+
+
 
 - [ ] FUTURE NOTE - run Library to check for bottlenecks when done (use of profiler needed)
 
+
+
+
+
+- [ ] END OF LIBRARY IMPLEMENTATION TASK: Look to do a pull-request for RedBlackTree.scala for merging 2 red-black trees (which are the under the hood algorithms for TreeMap, which SortedMap (which is used by chainMap))
 
 ## Ripser on the JRE
 
