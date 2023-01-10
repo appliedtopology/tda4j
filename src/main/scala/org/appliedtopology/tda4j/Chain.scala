@@ -19,12 +19,37 @@ import math.Ordering.Implicits.sortedSetOrdering
  *
  */
 class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT]
+/**
+ * chainMap is an immutable variable that uses Scala's SortedMap to make a key-valueunary pairing of an CellT as the key and a
+ * CoefficientT type as the value. Here, we'll use the Using keyword to check for any relevant types for CoefficientT
+ */
   (val chainMap : SortedMap[CellT, CoefficientT])(using fr : Fractional[CoefficientT]) {
 
-
+  /**
+   * Negate takes in a Chain instance and outputs a new Chain instance which takes in a chainMap (remember chainMap
+   * is using SortedMap 'under the hood', thus already has a key/value pair). transform() is used on this function's
+   * instance of chainMap to transform the key/value pairings in chainMap to the negative versions of the values
+   * in the value pairs.
+    * @return
+   */
   def negate: Chain[CellT, CoefficientT] = new Chain(chainMap.transform((k, v) => fr.negate(v)))
 
+  /**
+   *
+   * @return
+   */
+
+  /**
+   * Unary uses negate() for unary negation
+    * @return
+   */
   def unary_- = negate
+
+  /**
+   * scalarMultiply returns a new chain containing chainMap and its key/value pairing. In the chainMap,
+   * transform() is used on the value of the key/value pairing. On the value, it is transformed by multiplying
+   * each key by the CoefficientT, using the times() method of the Fractional trait, extending the Numeric library
+   */
 
   def scalarMultiply(c: CoefficientT): Chain[CellT, CoefficientT] =
     new Chain(chainMap.transform((k, v) => fr.times(v, c)))
@@ -45,10 +70,10 @@ class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT]
 
 }
 object Chain {
-  def apply[CellT <: Cell[CellT] : Ordering, CoefficientT : Fractional](items : (CellT, CoefficientT)*) =
+  def apply[CellT <: Cell[CellT] : Ordering, CoefficientT : Fractional] (items : (CellT, CoefficientT)*) =
     new Chain[CellT, CoefficientT](SortedMap.from(items))
 
-  def apply[CellT <: Cell[CellT] : Ordering, CoefficientT](cell : CellT)(using fr : Fractional[CoefficientT]) =
+  def apply[CellT <: Cell[CellT] : Ordering, CoefficientT] (cell : CellT)(using fr : Fractional[CoefficientT]) =
     new Chain[CellT, CoefficientT](SortedMap.from(List(cell -> fr.one)))
 }
 
