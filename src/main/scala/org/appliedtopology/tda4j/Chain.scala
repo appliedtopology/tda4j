@@ -20,8 +20,8 @@ import math.Ordering.Implicits.sortedSetOrdering
  */
 class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT]
 /**
- * chainMap is an immutable variable that uses Scala's SortedMap to make a key-valueunary pairing of an CellT as the key and a
- * CoefficientT type as the value. Here, we'll use the Using keyword to check for any relevant types for CoefficientT
+ * chainMap is an immutable variable that uses Scala's SortedMap to make a key-value pairing of an CellT as the key and a
+ * CoefficientT type as the value. Here, we'll use the Using keyword to check for any relevant types for CoefficientT.
  */
   (val chainMap : SortedMap[CellT, CoefficientT])(using fr : Fractional[CoefficientT]) {
 
@@ -30,25 +30,23 @@ class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT]
    * is using SortedMap 'under the hood', thus already has a key/value pair). transform() is used on this function's
    * instance of chainMap to transform the key/value pairings in chainMap to the negative versions of the values
    * in the value pairs.
-    * @return
+    * @return new Chain of negated values in key/value pairs
    */
   def negate: Chain[CellT, CoefficientT] = new Chain(chainMap.transform((k, v) => fr.negate(v)))
 
-  /**
-   *
-   * @return
-   */
 
   /**
    * Unary uses negate() for unary negation
-    * @return
+    * @return negation
    */
   def unary_- = negate
 
   /**
    * scalarMultiply returns a new chain containing chainMap and its key/value pairing. In the chainMap,
    * transform() is used on the value of the key/value pairing. On the value, it is transformed by multiplying
-   * each key by the CoefficientT, using the times() method of the Fractional trait, extending the Numeric library
+   * each key by the CoefficientT, using the times() method of the Fractional trait, extending the Numeric library.
+   * @param c: method instance of CoefficientT
+   * @return new Chain with values in key/value pairing multiplied by c
    */
 
   def scalarMultiply(c: CoefficientT): Chain[CellT, CoefficientT] =
