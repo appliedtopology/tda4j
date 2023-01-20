@@ -54,6 +54,13 @@ class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT]
 
   def *: = scalarMultiply
 
+  /**
+   * add() adds the method instance of the keys of a chainMap to the classes chainMap keys.
+   * It then adds the result of this to a map which maps that key to the values of the class
+   * and the instance method's chainMap.
+   * @param that: Chain object composed of a Cell/Coefficient pair
+   * @return Chain object composed of a Cell/Coefficient pair
+   */
   def add(that: Chain[CellT, CoefficientT]): Chain[CellT, CoefficientT] =
     Chain((chainMap.keySet | that.chainMap.keySet).map(k =>
       (k, fr.plus(chainMap.getOrElse(k, fr.zero), that.chainMap.getOrElse(k, fr.zero)))).toSeq *)
