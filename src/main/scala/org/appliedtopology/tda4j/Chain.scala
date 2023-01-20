@@ -20,7 +20,7 @@ import math.Ordering.Implicits.sortedSetOrdering
  */
 class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT]
 /**
- * chainMap is an immutable variable that uses Scala's SortedMap to make a key-value pairing of an CellT as the key and a
+ * chainMap is an immutable variable and constructor that uses Scala's SortedMap to make a key-value pairing of an CellT as the key and a
  * CoefficientT type as the value. Here, we'll use the Using keyword to check for any relevant types for CoefficientT.
  */
   (val chainMap : SortedMap[CellT, CoefficientT])(using fr : Fractional[CoefficientT]) {
@@ -68,6 +68,29 @@ class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT]
 
 }
 object Chain {
+
+  // for first apply: he first `apply` takes a sequence of coefficient/cell pairs and creates a sorted map that fits the constructor to let us create chains that way.
+  /**
+   * Both apply() functions assist in constructor execution.
+   *
+   *
+   * The 1st apply() is used to take Cell/Coefficient pairs, and converts it to a sorted map using the Chain
+   * chainMap constructor. Why? So it works with the constructor so we can create chains.
+   *
+   * Here,the 2nd apply() works as a implicit cast function. Simply ,it is used to take a cell
+   * and transform it to a chain.
+   * In depth, the Chain chainMap constructor is called to create a new Chain object, as indicated by 'new' followed by Chain.
+   * The constructor then requires a Cell/Coefficient pair.
+   * The "List(cell -> fr.one)" creates a list with at least a single key-value of a Cell/Coefficient pair
+   * ready to be inserted into the chainMap. The key will then product the value 1. Why 1? The Chain has to produce at
+   * least a value of 1. Think of this as the 'base case' for Chain values.
+   *
+   *
+   *
+   *
+   *
+   */
+
   def apply[CellT <: Cell[CellT] : Ordering, CoefficientT : Fractional] (items : (CellT, CoefficientT)*) =
     new Chain[CellT, CoefficientT](SortedMap.from(items))
 
