@@ -98,10 +98,10 @@ object Chain {
    *
    */
 
-  def apply[CellT <: Cell[CellT] : Ordering, CoefficientT : Fractional] (items : (CellT, CoefficientT)*) =
+  def apply[CellT <: Cell[CellT] : Ordering, CoefficientT : Fractional] (items : (CellT, CoefficientT)*) : Chain[CellT, CoefficientT] =
     new Chain[CellT, CoefficientT](SortedMap.from(items))
 
-  def apply[CellT <: Cell[CellT] : Ordering, CoefficientT] (cell : CellT)(using fr : Fractional[CoefficientT]) =
+  def apply[CellT <: Cell[CellT] : Ordering, CoefficientT] (cell : CellT)(using fr : Fractional[CoefficientT]) : Chain[CellT, CoefficientT] =
     new Chain[CellT, CoefficientT](SortedMap.from(List(cell -> fr.one)))
 }
 
