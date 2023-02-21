@@ -12,7 +12,7 @@ import math.Ordering.Implicits.sortedSetOrdering
  *
  *
  * @tparam CellT Type of the cells in the chain complex. For example `AbstractSimplex[Int]` etc.
- * @tparam CoefficientT Type of the coefficients of the chain complex. For example `Double` or `IntModp`
+ * @tparam CoefficientT Type of the coefficients of the chain complex. For example `Double` or `Int`
  * @param chainMap Internal storage of the sorted map of the elements
  *
  *
@@ -52,7 +52,7 @@ class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT]
   def scalarMultiply(c: CoefficientT): Chain[CellT, CoefficientT] =
     new Chain(chainMap.transform((k, v) => fr.times(v, c)))
 
-  def *: = scalarMultiply
+  def * = scalarMultiply
 
   /**
    * add() adds the method instance of the keys of a chainMap to the classes chainMap keys.
@@ -81,10 +81,10 @@ object Chain {
    * Both apply() functions assist in constructor execution.
    *
    *
-   * The 1st apply() is used to take Cell/Coefficient pairs, and converts it to a sorted map using the Chain
-   * chainMap constructor. Why? So it works with the constructor so we can create chains.
+   * The 1st apply() is used to take Cell/Coefficient pairs, and converts them to a sorted map using the Chain
+   * chainMap constructor. Why? So it works with the constructor, so we can create chains.
    *
-   * Here,the 2nd apply() works as a implicit cast function. Simply ,it is used to take a cell
+   * Here,the 2nd apply() works as a implicit cast function. Simply, it is used to take a cell
    * and transform it to a chain.
    * In depth, the Chain chainMap constructor is called to create a new Chain object, as indicated by 'new' followed by Chain.
    * The constructor then requires a Cell/Coefficient pair.
