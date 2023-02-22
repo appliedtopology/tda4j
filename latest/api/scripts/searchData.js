@@ -10,7 +10,7 @@ pages = [{"l":"index.html#","e":false,"i":"","n":"TDA4j","t":"TDA4j","d":"","k":
 {"l":"org/appliedtopology/tda4j/Cell.html#","e":false,"i":"","n":"Cell","t":"Cell[CellT <: Cell[CellT]]","d":"org.appliedtopology.tda4j","k":"trait"},
 {"l":"org/appliedtopology/tda4j/Cell.html#boundary-7d4","e":false,"i":"","n":"boundary","t":"boundary[CoefficientT : Fractional]: Chain[CellT, CoefficientT]","d":"org.appliedtopology.tda4j.Cell","k":"def"},
 {"l":"org/appliedtopology/tda4j/Chain.html#","e":false,"i":"","n":"Chain","t":"Chain[CellT <: Cell[CellT], CoefficientT](val chainMap: SortedMap[CellT, CoefficientT])(implicit evidence$1: Ordering[CellT], fr: Fractional[CoefficientT])","d":"org.appliedtopology.tda4j","k":"class"},
-{"l":"org/appliedtopology/tda4j/Chain.html#*-0","e":false,"i":"","n":"*","t":"*: CoefficientT => Chain[CellT, CoefficientT]","d":"org.appliedtopology.tda4j.Chain","k":"def"},
+{"l":"org/appliedtopology/tda4j/Chain.html#*:-0","e":false,"i":"","n":"*:","t":"*:: CoefficientT => Chain[CellT, CoefficientT]","d":"org.appliedtopology.tda4j.Chain","k":"def"},
 {"l":"org/appliedtopology/tda4j/Chain.html#+-0","e":false,"i":"","n":"+","t":"+: Chain[CellT, CoefficientT] => Chain[CellT, CoefficientT]","d":"org.appliedtopology.tda4j.Chain","k":"def"},
 {"l":"org/appliedtopology/tda4j/Chain.html#--0","e":false,"i":"","n":"-","t":"-: Chain[CellT, CoefficientT] => Chain[CellT, CoefficientT]","d":"org.appliedtopology.tda4j.Chain","k":"def"},
 {"l":"org/appliedtopology/tda4j/Chain.html#add-640","e":false,"i":"","n":"add","t":"add(that: Chain[CellT, CoefficientT]): Chain[CellT, CoefficientT]","d":"org.appliedtopology.tda4j.Chain","k":"def"},
