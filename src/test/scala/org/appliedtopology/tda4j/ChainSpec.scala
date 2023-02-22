@@ -19,6 +19,11 @@ class ChainSpec extends mutable.Specification {
   "The `Chain` type should" >> {
     val z1 = Chain(Simplex(1, 2, 3))
     val z2 = Chain(Simplex(1, 2) -> 1.0, Simplex(1, 3) -> -1.0, Simplex(2, 3) -> 1.0)
+    val z3 = Chain(Simplex(1, 2, 5))
+    val z4 = Chain(Simplex(1, 4, 8))
+    val z5 = Chain(Simplex(1, 2) -> - 1.0, Simplex(1, 4) -> 1.0, Simplex(2, 3) -> -1.0)
+    //val z6 = Chain(Simplex(1, 2, 6, 7))
+
     "be the return type of Chain applied to a single simplex" >> {
       z1 must haveClass[Chain[Simplex, Double]]
     }
@@ -38,8 +43,8 @@ class ChainSpec extends mutable.Specification {
 
       def e1 = {
         val chain = z1
-        val expectedResult = Chain(Simplex(2, 4, 6))
-        val result = chain * 2
+        val expectedResult = Chain(Simplex(1, 2, 3))
+        val result = 2 *: chain
 
         result must beEqualTo(expectedResult)
       }
@@ -47,15 +52,21 @@ class ChainSpec extends mutable.Specification {
       def e2 = {
         val chain1 = z1
         val chain2 = z2
-        val expectedResult = Chain(Simplex(4, 4, 4))
-        val result = chain1 + chain2
+        val chain3 = z5
 
-        result must beEqualTo(expectedResult)
+        val result1 = chain1 + chain2
+        val result2 = chain2 + chain3
+        val expectedResult1 = Chain(Simplex(1, 2, 3) -> 1.0, Simplex(1, 2) -> 1.0, Simplex(1, 3) -> -1.0, Simplex(2, 3) -> 1.0)
+        val expectedResult2 = Chain(Simplex(1, 2) -> 0.0, Simplex(1, 3) -> 0.0, Simplex(1, 4) -> 0.0, Simplex(2, 3) -> 0.0)
+        //note - check up on expectedResult2 after conferring with prof in github
+
+        result1 must beEqualTo(expectedResult)
+        result2 must beEqualTo(expectedResult2)
       }
 
       def e3 = {
         val chain = z1
-        val expectedResult = Chain(Simplex(-1, -2, -3))
+        val expectedResult = Chain(Simplex(1, 2, 3) -> -1.0)
         val result = -chain
 
         result must beEqualTo(expectedResult)
@@ -64,7 +75,7 @@ class ChainSpec extends mutable.Specification {
       def e4 = {
         val chain1 = z1
         val chain2 = z2
-        val expectedResult = Chain(Simplex(-2, 0, 2))
+        val expectedResult = Chain(Simplex(1, 2, 3) -> 1.0, Simplex(1, 2) -> -1.0, Simplex(1, 3) -> 1.0, Simplex(2, 3) -> -1.0)
         val result = chain1 - chain2
 
         result must beEqualTo(expectedResult)

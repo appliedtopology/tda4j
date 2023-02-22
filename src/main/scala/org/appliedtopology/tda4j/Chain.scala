@@ -12,7 +12,7 @@ import math.Ordering.Implicits.sortedSetOrdering
  *
  *
  * @tparam CellT Type of the cells in the chain complex. For example `AbstractSimplex[Int]` etc.
- * @tparam CoefficientT Type of the coefficients of the chain complex. For example `Double` or `Int`
+ * @tparam CoefficientT Type of the coefficients of the chain complex. For example `Double` or an  implicit 'IntModp : Fractional[Int]'
  * @param chainMap Internal storage of the sorted map of the elements
  *
  *
@@ -52,7 +52,7 @@ class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT]
   def scalarMultiply(c: CoefficientT): Chain[CellT, CoefficientT] =
     new Chain(chainMap.transform((k, v) => fr.times(v, c)))
 
-  def * = scalarMultiply
+  def *: = scalarMultiply
 
   /**
    * add() adds the method instance of the keys of a chainMap to the classes chainMap keys.
