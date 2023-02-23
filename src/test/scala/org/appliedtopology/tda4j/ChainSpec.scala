@@ -60,7 +60,7 @@ class ChainSpec extends mutable.Specification {
         val expectedResult2 = Chain(Simplex(1, 2) -> 0.0, Simplex(1, 3) -> 0.0, Simplex(1, 4) -> 0.0, Simplex(2, 3) -> 0.0)
         //note - check up on expectedResult2 after conferring with prof in github
 
-        result1 must beEqualTo(expectedResult)
+        result1 must beEqualTo(expectedResult1)
         result2 must beEqualTo(expectedResult2)
       }
 
