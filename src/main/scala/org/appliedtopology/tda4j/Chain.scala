@@ -73,6 +73,20 @@ class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT]
 
   override def toString: String = chainMap.map((k, v) => s"${v.toString} *: ${k.toString}").mkString(" + ")
 
+  //Define equality between chains.
+  //an override of the equals method from the Any class.
+  override def equals(other: Any): Boolean = {
+    //pattern matching block that checks the type of the "other" object.
+    other match {
+      //if it's a chain, check the chainMap is the same
+      case that: Chain[CellT, CoefficientT] =>
+        this.chainMap == that.chainMap // Compare chainMap contents.
+      //else they can't be equal!
+      case _ => false
+    }
+  }
+  //Overriding the hashcode so both of our objects have the same one, buncha good reasons for this.
+  override def hashCode(): Int = chainMap.hashCode()
 }
 object Chain {
 

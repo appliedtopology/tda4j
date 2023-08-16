@@ -127,4 +127,5 @@ object AbstractSimplex extends SortedIterableFactory[AbstractSimplex] {
       override def result(): AbstractSimplex[VertexT] =
         new AbstractSimplex[VertexT](TreeSet[VertexT](elems.to(Seq): _*))
     }
+
 }
