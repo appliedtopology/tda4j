@@ -35,7 +35,8 @@
 
 
 
-- [ ] FUTURE NOTE - run Library to check for bottlenecks when done (use of profiler needed)
+- [ ] FUTURE NOTE - Micheal Robinson to ask for TDA Mathlab api implementation
+Ex. question: "What can you envision using this library for?"
 
 
 
