@@ -113,7 +113,13 @@ object Chain {
    */
 
   def apply[CellT <: Cell[CellT] : Ordering, CoefficientT : Fractional] (items : (CellT, CoefficientT)*) : Chain[CellT, CoefficientT] =
-    new Chain[CellT, CoefficientT](SortedMap.from(items))
+
+    //Filter out terms with zero coefficients during construction
+    val filteredItems = items.filter { case (_, coefficient) => coefficient != 0 }
+    new Chain[CellT, CoefficientT](SortedMap.from(filteredItems))
+
+    //Original apply innards
+    //new Chain[CellT, CoefficientT](SortedMap.from(items))
 
   def apply[CellT <: Cell[CellT] : Ordering, CoefficientT] (cell : CellT)(using fr : Fractional[CoefficientT]) : Chain[CellT, CoefficientT] =
     new Chain[CellT, CoefficientT](SortedMap.from(List(cell -> fr.one)))

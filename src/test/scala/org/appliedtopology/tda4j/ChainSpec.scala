@@ -22,6 +22,8 @@ class ChainSpec extends mutable.Specification {
     val z3 = Chain(Simplex(1, 2, 5))
     val z4 = Chain(Simplex(1, 4, 8))
     val z5 = Chain(Simplex(1, 2) -> - 1.0, Simplex(1, 4) -> 1.0, Simplex(2, 3) -> -1.0)
+    val z6 = Chain(Simplex(1, 2) -> 1.0, Simplex(2 , 3) -> 1.0, Simplex(1 , 3) -> -1.0)
+    val z7 = Chain(Simplex(1, 2) -> 1.0, Simplex(1, 3) -> -1.0, Simplex(2, 3) -> 1.0, Simplex(3,4) -> 0.0)
     //val z6 = Chain(Simplex(1, 2, 6, 7))
 
     "be the return type of Chain applied to a single simplex" >> {
@@ -29,6 +31,12 @@ class ChainSpec extends mutable.Specification {
     }
     "be the return type of Chain applied to several simplex/coefficient pairs" >> {
       z2 must haveClass[Chain[Simplex, Double]]
+    }
+    "maintain it's equality when its component simplex-coefficient pairs are permuted" >> {
+      z2 must beEqualTo(z6)
+    }
+    "maintain equality to itself after the addition of simplices with 0-valued coefficient " >> {
+      z2 must beEqualTo(z7)
     }
     "should be able to 'add', 'subtract', and 'multiply'" >> {
 

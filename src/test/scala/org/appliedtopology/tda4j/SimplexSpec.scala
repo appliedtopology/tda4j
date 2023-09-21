@@ -30,28 +30,6 @@ A `Simplex` should
   def e2: Result = s.boundary must be_==(Chain[Simplex, Double](
     Simplex(2, 3) -> 1.0, Simplex(1, 3) -> -1.0, Simplex(1, 2) -> 1.0))
 
-    val EqualityCheck = (Simplex(1,2) == Simplex(1,2))
-    println(s"Value of EqualityCheck: $EqualityCheck")
-
-    val Test1 = Chain[Simplex, Double](Simplex(2, 3) -> 1.0, Simplex(1, 3) -> -1.0, Simplex(1, 2) -> 1.0)
-    val Test2 = Chain[Simplex, Double](Simplex(1, 3) -> -1.0, Simplex(2, 3) -> 1.0, Simplex(1, 2) -> 1.0)
-    val Test3 = Chain[Simplex, Double](Simplex(2, 3) -> 1.0, Simplex(1, 2) -> 1.0, Simplex(1, 3) -> -1.0)
-
-    val PermutationCheck1 = (Test1 == Test2)
-    val PermutationCheck2 = (Test1 == Test3)
-
-    val NegTest1 = Chain[Simplex, Double](Simplex(2, 3) -> -1.0, Simplex(1, 3) -> 1.0, Simplex(1, 2) -> -1.0)
-    val NegTest2 = Chain[Simplex, Double](Simplex(2, 3) -> -1.0, Simplex(1, 3) -> 1.0, Simplex(1, 2) -> 1.0)
-
-    val NegPermutationCheck1 = (Test1 == NegTest1)
-    val NegPermutationCheck2 = (Test1 == NegTest2)
-
-    println(s"Value of PermutationCheck1: $PermutationCheck1")
-    println(s"Value of PermutationCheck2: $PermutationCheck2")
-
-    println(s"Value of NegPermutationCheck1: $NegPermutationCheck1")
-    println(s"Value of NegPermutationCheck2: $NegPermutationCheck2")
-
   def eAddVertex: Result =
     sAdd4.contains(4) must beTrue
 
