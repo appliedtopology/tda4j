@@ -31,7 +31,32 @@ It then adds the result of this to a map which maps that key to the values of th
 and the instance method's chainMap.</p>
 </div><dl class="attributes"><dt>Value parameters:</dt><dd><dl class="attributes"><dt>that:</dt><dd><p>Chain object composed of a Cell/Coefficient pair</p>
 </dd></dl></dd><dt>Returns:</dt><dd><p>Chain object composed of a Cell/Coefficient pair</p>
-</dd></dl></div></div></div></div></div><div class="documentableElement" id="negate-0"><a link="Chain.html#negate-0" class="documentableAnchor"></a><div><span class="annotations monospace"></span></div><div class="header monospace"><div class="signature"><span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Chain.html#negate-0" class="documentableName ">negate</a><span>: <a href="Chain.html" t="t">Chain</a>[<span t="t">CellT</span>, <span t="t">CoefficientT</span>]</span></div></div><div class="docs"><span class="modifiers"></span><div><div class="originInfo"></div><div class="memberDocumentation"><div class="documentableBrief doc"><p>Negate takes in a Chain instance and outputs a new Chain instance which takes in a chainMap (remember chainMap
+</dd></dl></div></div></div></div></div><div class="documentableElement" id="equals-4ad" data-f-keywords="override"><a link="Chain.html#equals-4ad" class="documentableAnchor"></a><div><span class="annotations monospace"></span></div><div class="header monospace"><div class="signature"><span class="modifiers"><span t="k">override </span></span><span class="kind"><span t="k">def </span></span><a href="Chain.html#equals-4ad" class="documentableName ">equals</a><span>(<span t="k"></span><span t="k"></span>other: <span data-unresolved-link="" t="t">Any</span>): <span data-unresolved-link="" t="t">Boolean</span></span></div></div><div class="docs"><span class="modifiers"></span><div><div class="originInfo"></div><div class="memberDocumentation"><div class="documentableBrief doc"><p>Compares the receiver object (<code>this</code>) with the argument object (<code>that</code>) for equivalence.</p>
+</div><div class="cover"><div class="doc"><p>Compares the receiver object (<code>this</code>) with the argument object (<code>that</code>) for equivalence.</p>
+<p>Any implementation of this method should be an <a href="https://en.wikipedia.org/wiki/Equivalence_relation">equivalence relation</a>:</p>
+<ul>
+<li>It is reflexive: for any instance <code>x</code> of type <code>Any</code>, <code>x.equals(x)</code> should return <code>true</code>.</li>
+<li>It is symmetric: for any instances <code>x</code> and <code>y</code> of type <code>Any</code>, <code>x.equals(y)</code> should return <code>true</code> if and
+only if <code>y.equals(x)</code> returns <code>true</code>.</li>
+<li>It is transitive: for any instances <code>x</code>, <code>y</code>, and <code>z</code> of type <code>Any</code> if <code>x.equals(y)</code> returns <code>true</code> and
+<code>y.equals(z)</code> returns <code>true</code>, then <code>x.equals(z)</code> should return <code>true</code>.</li>
+</ul>
+<p>If you override this method, you should verify that your implementation remains an equivalence relation.
+Additionally, when overriding this method it is usually necessary to override <code>hashCode</code> to ensure that
+objects which are &quot;equal&quot; (<code>o1.equals(o2)</code> returns <code>true</code>) hash to the same <span data-unresolved-link="">scala.Int</span>.
+(<code>o1.hashCode.equals(o2.hashCode)</code>).</p>
+</div><dl class="attributes"><dt>Value parameters:</dt><dd><dl class="attributes"><dt>that</dt><dd><p>the object to compare against this object for equality.</p>
+</dd></dl></dd><dt>Returns:</dt><dd><p><code>true</code> if the receiver object is equivalent to the argument; <code>false</code> otherwise.</p>
+</dd><dt>Definition Classes</dt><dd><div><span data-unresolved-link="">Any</span></div></dd></dl></div></div></div></div></div><div class="documentableElement" id="hashCode-ffffff27" data-f-keywords="override"><a link="Chain.html#hashCode-ffffff27" class="documentableAnchor"></a><div><span class="annotations monospace"></span></div><div class="header monospace"><div class="signature"><span class="modifiers"><span t="k">override </span></span><span class="kind"><span t="k">def </span></span><a href="Chain.html#hashCode-ffffff27" class="documentableName ">hashCode</a><span>(): <span data-unresolved-link="" t="t">Int</span></span></div></div><div class="docs"><span class="modifiers"></span><div><div class="originInfo"></div><div class="memberDocumentation"><div class="documentableBrief doc"><p>Calculate a hash code value for the object.</p>
+</div><div class="cover"><div class="doc"><p>Calculate a hash code value for the object.</p>
+<p>The default hashing algorithm is platform dependent.</p>
+<p>Note that it is allowed for two objects to have identical hash codes (<code>o1.hashCode.equals(o2.hashCode)</code>) yet
+not be equal (<code>o1.equals(o2)</code> returns <code>false</code>).  A degenerate implementation could always return <code>0</code>.
+However, it is required that if two objects are equal (<code>o1.equals(o2)</code> returns <code>true</code>) that they have
+identical hash codes (<code>o1.hashCode.equals(o2.hashCode)</code>).  Therefore, when overriding this method, be sure
+to verify that the behavior is consistent with the <code>equals</code> method.</p>
+</div><dl class="attributes"><dt>Returns:</dt><dd><p>the hash code value for this object.</p>
+</dd><dt>Definition Classes</dt><dd><div><span data-unresolved-link="">Any</span></div></dd></dl></div></div></div></div></div><div class="documentableElement" id="negate-0"><a link="Chain.html#negate-0" class="documentableAnchor"></a><div><span class="annotations monospace"></span></div><div class="header monospace"><div class="signature"><span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Chain.html#negate-0" class="documentableName ">negate</a><span>: <a href="Chain.html" t="t">Chain</a>[<span t="t">CellT</span>, <span t="t">CoefficientT</span>]</span></div></div><div class="docs"><span class="modifiers"></span><div><div class="originInfo"></div><div class="memberDocumentation"><div class="documentableBrief doc"><p>Negate takes in a Chain instance and outputs a new Chain instance which takes in a chainMap (remember chainMap
 is using SortedMap 'under the hood', thus already has a key/value pair). transform() is used on this function's
 instance of chainMap to transform the key/value pairings in chainMap to the negative versions of the values
 in the value pairs.</p>
