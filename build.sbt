@@ -6,7 +6,7 @@ libraryDependencies += "org.specs2"       %% "specs2-core" % "5.0.7" % "test"
 libraryDependencies += ("org.scala-graph" %% "graph-core"  % "1.13.5").cross(
   CrossVersion.for3Use2_13
 )
-
+libraryDependencies += "org.openjdk.jol" % "jol-core" % "0.17"
 scalaVersion := "3.2.0"
 
 lazy val root = (project in file("."))
