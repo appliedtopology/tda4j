@@ -2,7 +2,7 @@ name := "TDA4j"
 
 version := "0.0.1"
 
-libraryDependencies += "org.specs2"       %% "specs2-core" % "5.0.7" % "test"
+libraryDependencies += "org.specs2"       %% "specs2-core" % "5.2.0" % "test"
 libraryDependencies += ("org.scala-graph" %% "graph-core"  % "1.13.5").cross(
   CrossVersion.for3Use2_13
 )

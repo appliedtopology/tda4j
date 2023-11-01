@@ -58,7 +58,7 @@ class ExpandList[VertexT : Ordering, KeyT](
   override def iterator: Iterator[AbstractSimplex[VertexT]] = new Iterator[AbstractSimplex[VertexT]] {
     var currentOrbitIx = 0
     var currentElement = 0
-    var currentOrbit = symmetry.orbit(representatives(currentOrbitIx))
+    var currentOrbit: Set[AbstractSimplex[VertexT]] = symmetry.orbit(representatives(currentOrbitIx))
 
     var _hasNext : Boolean = true
 
@@ -68,7 +68,7 @@ class ExpandList[VertexT : Ordering, KeyT](
       if(!hasNext()) {
         throw new NoSuchElementException("Iterator exhausted")
       }
-      var retval = currentOrbit.toList(currentElement)
+      val retval = currentOrbit.toList(currentElement)
       if(currentElement < currentOrbit.size-1) {
         // We can keep feeding elements from the current orbit
         currentElement += 1
@@ -167,8 +167,8 @@ class Permutations(elementCount: Int) {
   val size: Int = factorial(elementCount)
 
   def apply(n: Int): List[Int] = {
-    var source = ListBuffer(Range(0, elementCount).toList: _*)
-    var retval = ListBuffer[Int]()
+    val source = ListBuffer(Range(0, elementCount).toList: _*)
+    val retval = ListBuffer[Int]()
 
     var pos = n
     var div = 0
@@ -192,8 +192,8 @@ class Permutations(elementCount: Int) {
 //321
 
 class HyperCubeSymmetry(bitlength: Int) extends SymmetryGroup[Int, immutable.BitSet] {
-  val permutations = Permutations(bitlength)
-  val hypercube = HyperCube(bitlength)
+  val permutations: Permutations = Permutations(bitlength)
+  val hypercube: HyperCube = HyperCube(bitlength)
 
   override def keys: Iterable[Int] = Range(0, permutations.size)
 
@@ -201,7 +201,7 @@ class HyperCubeSymmetry(bitlength: Int) extends SymmetryGroup[Int, immutable.Bit
     permutations(permutationIndex)(k)
 
   def apply(permutationIndex: Int): (immutable.BitSet => immutable.BitSet) = bs => {
-    var pbs = hypercube.top.toList.map(permutations(permutationIndex)).map(bs)
+    val pbs = hypercube.top.toList.map(permutations(permutationIndex)).map(bs)
     pbs.indices.filter(pbs(_)).to(BitSet)
   }
 }

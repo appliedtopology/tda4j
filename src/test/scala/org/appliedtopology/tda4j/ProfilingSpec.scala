@@ -12,16 +12,16 @@ class ProfilingSpec extends mutable.Specification {
   sequential
   """This is a profiling script to measure performance of different implementations."""
 
-  val bitlength = 3
-  val symmetry = HyperCubeSymmetry(bitlength)
+  val bitlength: Int = 3
+  val symmetry: HyperCubeSymmetry = HyperCubeSymmetry(bitlength)
 
   class HyperCubeProfiling(vr : CliqueFinder[BitSet],
                            symmetry : HyperCubeSymmetry,
                            bitlength : Int) {
     pp(s"Measuring ${vr.className}")
-    var now = System.currentTimeMillis()
-    val sstream = vr(symmetry.hypercube, 10, 10)
-    var duration = System.currentTimeMillis() - now
+    var now: Long = System.currentTimeMillis()
+    val sstream: Seq[AbstractSimplex[BitSet]] = vr(symmetry.hypercube, 10, 10)
+    var duration: Long = System.currentTimeMillis() - now
     pp(s"Initialization: $duration ms")
     pp(s"Simplex Stream Size: ${sstream.size}")
 
@@ -37,9 +37,9 @@ class ProfilingSpec extends mutable.Specification {
 
   }
 
-  var bk = HyperCubeProfiling(BronKerbosch[BitSet](), symmetry, bitlength)
-  var zi = HyperCubeProfiling(ZomorodianIncremental[BitSet](), symmetry, bitlength)
-  var szi = HyperCubeProfiling(SymmetricZomorodianIncremental[BitSet, Int](symmetry), symmetry, bitlength)
+  var bk: HyperCubeProfiling = HyperCubeProfiling(BronKerbosch[BitSet](), symmetry, bitlength)
+  val zi: HyperCubeProfiling = HyperCubeProfiling(ZomorodianIncremental[BitSet](), symmetry, bitlength)
+  val szi: HyperCubeProfiling = HyperCubeProfiling(SymmetricZomorodianIncremental[BitSet, Int](symmetry), symmetry, bitlength)
 
   "Correct sizes" >> {
     zi.sstream.size === szi.sstream.size

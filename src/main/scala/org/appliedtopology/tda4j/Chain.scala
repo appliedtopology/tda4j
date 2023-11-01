@@ -2,6 +2,7 @@ package org.appliedtopology.tda4j
 
 import collection.immutable.SortedMap
 import math.Ordering.Implicits.sortedSetOrdering
+import scala.annotation.targetName
 
 /**
  * The Chain class is a representation of a formal linear combination of the n cells in a cell complex.
@@ -37,9 +38,10 @@ class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT]
 
   /**
    * Unary uses negate() for unary negation
-    * @return negation
+   *
+   * @return negation
    */
-  def unary_- = negate
+  def unary_- : Chain[CellT, CoefficientT] = negate
 
   /**
    * scalarMultiply returns a new chain containing chainMap and its key/value pairing. In the chainMap,
@@ -52,7 +54,7 @@ class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT]
   def scalarMultiply(c: CoefficientT): Chain[CellT, CoefficientT] =
     new Chain(chainMap.transform((k, v) => fr.times(v, c)))
 
-  def *: = scalarMultiply
+  def *: : CoefficientT => Chain[CellT, CoefficientT] = scalarMultiply
 
   /**
    * add() adds the method instance of the keys of a chainMap to the classes chainMap keys.
@@ -65,11 +67,11 @@ class Chain[CellT <: Cell[CellT] : Ordering , CoefficientT]
     Chain((chainMap.keySet | that.chainMap.keySet).map(k =>
       (k, fr.plus(chainMap.getOrElse(k, fr.zero), that.chainMap.getOrElse(k, fr.zero)))).toSeq *)
 
-  def + = add
+  def + : Chain[CellT, CoefficientT] => Chain[CellT, CoefficientT] = add
 
   def subtract(that: Chain[CellT, CoefficientT]): Chain[CellT, CoefficientT] = this + (-that)
 
-  def - = subtract
+  def - : Chain[CellT, CoefficientT] => Chain[CellT, CoefficientT] = subtract
 
   override def toString: String = chainMap.map((k, v) => s"${v.toString} *: ${k.toString}").mkString(" + ")
 

@@ -6,6 +6,7 @@ import org.specs2.execute.Result
 import scala.util.Random
 import scala.math.Fractional.Implicits._
 
+//noinspection ScalaRedundantConversion
 class IntModpSpec extends mutable.Specification {
   """This is the specification for unit testing of our
     |implementation of arithmetic mod p as a Fractional[Int]
@@ -28,6 +29,7 @@ class IntModpSpec extends mutable.Specification {
     val z = Intp(rand.between(-100, 100))
     if y == Intp(0) then y = Intp(rand.between(1, 100))
     "all operations stay within -p/2, p/2" >> {
+      //noinspection ScalaRedundantConversion
       eg((x * y).toInt must beBetween(-8, 8))
       eg((x + y).toInt must beBetween(-8, 8))
       eg((x - y).toInt must beBetween(-8, 8))

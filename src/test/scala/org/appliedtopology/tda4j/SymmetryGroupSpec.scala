@@ -17,7 +17,7 @@ class SymmetryGroupSpec extends mutable.Specification {
     |action interfaces and their usages.
     |""".stripMargin
 
-  var hc3s : HyperCubeSymmetry = HyperCubeSymmetry(3)
+  val hc3s: HyperCubeSymmetry = HyperCubeSymmetry(3)
 
   "In the 3 bit Hyper Cube symmetry group" >> {
     "[0,1] is representative" >> {
@@ -34,20 +34,20 @@ class SymmetryGroupSpec extends mutable.Specification {
     }
   }
 
-  var el : ExpandList[BitSet, Int] = ExpandList(Seq(
+  val el: ExpandList[BitSet, Int] = ExpandList(Seq(
     AbstractSimplex(BitSet()),
     AbstractSimplex(BitSet(0)),
-    AbstractSimplex(BitSet(0,1)),
-    AbstractSimplex(BitSet(0,1,2)),
+    AbstractSimplex(BitSet(0, 1)),
+    AbstractSimplex(BitSet(0, 1, 2)),
     AbstractSimplex(BitSet(), BitSet(0)),
-    AbstractSimplex(BitSet(), BitSet(0,1)),
-    AbstractSimplex(BitSet(), BitSet(0), BitSet(0,1))
+    AbstractSimplex(BitSet(), BitSet(0, 1)),
+    AbstractSimplex(BitSet(), BitSet(0), BitSet(0, 1))
   ), hc3s)
 
-  val it = el.iterator
+  val it: Iterator[AbstractSimplex[BitSet]] = el.iterator
 
-  val allsimplices = el.indices.map(el(_)).toList
-  var itallsimplices = collection.mutable.ListBuffer[AbstractSimplex[BitSet]]()
+  val allsimplices: List[AbstractSimplex[BitSet]] = el.indices.map(el(_)).toList
+  val itallsimplices: ListBuffer[AbstractSimplex[BitSet]] = collection.mutable.ListBuffer[AbstractSimplex[BitSet]]()
 
   "ExpandList Iterator does not throw exception while it has content" >> {
     el.indices.foreach(_ => itallsimplices.append(it.next()))
