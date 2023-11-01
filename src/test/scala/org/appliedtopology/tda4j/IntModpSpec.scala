@@ -15,6 +15,8 @@ class IntModpSpec extends mutable.Specification {
   val IntMod17 = new IntModp(17)
   import IntMod17.Intp
   import IntMod17.given
+  import IntMod17.IntpIsFractional.mkNumericOps
+  import IntMod17.IntpIsFractional.mkOrderingOps
 
   "Numbers mod p should" >> {
     "all have an inverse" >> {

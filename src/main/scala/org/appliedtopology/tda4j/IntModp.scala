@@ -2,7 +2,7 @@ package org.appliedtopology.tda4j
 
 import scala.math._
 import scala.math.Numeric.IntIsIntegral
-
+import math.Fractional.Implicits.infixFractionalOps
 
 class IntModp(val p: Int) {
   opaque type Intp = Int
@@ -13,7 +13,7 @@ class IntModp(val p: Int) {
     def unapply(a: Intp): Option[Int] = Some(a)
   }
 
-  given IntpIsFractional : Fractional[Intp] with {
+  given IntpIsFractional: Fractional[Intp] with {
     def inverse(a: Intp): Intp = {
       val Intp(aa): Int = a
       var u: Int = aa % p
@@ -42,15 +42,14 @@ class IntModp(val p: Int) {
         Range(-(p - 1), -1).map(j => (j -> -inverse(-j)))
     ) // fix this with actual implementation
 
-
     def norm(a: Intp): Intp = {
       val Intp(aa) = a
       val r: Int = aa % p
 
       return Intp(r match {
-        case rr: Int if (rr < -p2) => rr + p
-        case rr: Int if (rr > p2) => rr - p
-        case rr: Int => rr
+        case rr: Int if rr < -p2 => rr + p
+        case rr: Int if rr > p2  => rr - p
+        case rr: Int             => rr
       })
     }
 
@@ -62,7 +61,8 @@ class IntModp(val p: Int) {
 
     // Members declared in java.util.Comparator
     // Members declared in scala.math.Ordering
-    def compare(x: Intp, y: Intp): Int = Ordering.Int.compare(Intp.unapply(norm(x)).get, Intp.unapply(norm(y)).get)
+    def compare(x: Intp, y: Intp): Int =
+      Ordering.Int.compare(Intp.unapply(norm(x)).get, Intp.unapply(norm(y)).get)
 
     // Members declared in scala.math.Fractional
     def div(x: Intp, y: Intp): Intp = times(x, inverses(norm(y)))
