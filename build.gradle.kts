@@ -3,6 +3,8 @@ import org.jetbrains.dokka.gradle.DokkaTask
 plugins {
     kotlin("multiplatform") version "1.7.10"
     id("org.jetbrains.dokka") version "1.9.10"
+    id("io.kotest.multiplatform") version "5.7.2"
+    id("com.google.devtools.ksp") version "1.8.21-1.0.11"
 }
 
 group = "org.appliedtopology"
@@ -21,20 +23,25 @@ tasks.withType<DokkaTask>().configureEach {
     }
 }
 
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
+}
+
+
 kotlin {
     jvm {
         compilations.all {
-            kotlinOptions.jvmTarget = "1.8"
+            kotlinOptions.jvmTarget = "11"
         }
         withJava()
         testRuns["test"].executionTask.configure {
             useJUnitPlatform()
         }
     }
-    js(BOTH) {
+    js(IR) {
         browser {
             commonWebpackConfig {
-                cssSupport.enabled = true
+                //cssSupport.enabled = true
             }
         }
     }
@@ -49,11 +56,29 @@ kotlin {
 
     sourceSets {
         val commonMain by getting {
-
+            dependencies {
+                implementation(kotlin("script-runtime"))
+                implementation(platform("io.arrow-kt:arrow-stack:1.2.0"))
+                implementation("io.arrow-kt:arrow-core")
+                implementation("io.arrow-kt:arrow-fx-coroutines")
+                implementation("io.arrow-kt:arrow-optics")
+            }
         }
         val commonTest by getting {
             dependencies {
-                implementation(kotlin("test"))
+                implementation("io.kotest:kotest-framework-engine:5.7.2")
+                implementation("io.kotest:kotest-assertions-core:5.7.2")
+                implementation("io.kotest:kotest-property:5.7.2")
+            }
+        }
+        val jvmMain by getting {
+            dependencies {
+                implementation(kotlin("script-runtime"))
+            }
+        }
+        val jvmTest by getting {
+            dependencies {
+                implementation("io.kotest:kotest-runner-junit5:5.7.2")
             }
         }
     }
