@@ -19,10 +19,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
-
+  setup:
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
     - name: Set up JDK 11
@@ -30,17 +28,29 @@ jobs:
       with:
         java-version: '11'
         distribution: 'temurin'
+  build:
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
     - name: Build
       uses: gradle/gradle-build-action@v2 # v2.6.0
       with:
         gradle-version: 8.4
         arguments: build
-    - name: Test
+  lint:
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+    - name: KtLint
       uses: gradle/gradle-build-action@v2 # v2.6.0
       with:
         gradle-version: 8.4
-        arguments: test
-    - name: Javadoc
+        arguments: ktlintCheck
+  javadoc:
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+    - name: dokka
       uses: gradle/gradle-build-action@v2 # v2.6.0
       with:
         gradle-version: 8.4
