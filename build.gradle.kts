@@ -5,6 +5,7 @@ plugins {
     id("org.jetbrains.dokka") version "1.9.10"
     id("io.kotest.multiplatform") version "5.7.2"
     id("com.google.devtools.ksp") version "1.8.21-1.0.11"
+    id("org.jlleitschuh.gradle.ktlint") version "11.6.1"
 }
 
 group = "org.appliedtopology"
@@ -14,19 +15,16 @@ repositories {
     mavenCentral()
 }
 
-
 tasks.withType<DokkaTask>().configureEach {
     dependencies {
         dokkaPlugin("org.jetbrains.dokka:kotlin-as-java-plugin:1.9.10")
         dokkaPlugin("org.jetbrains.dokka:mathjax-plugin:1.9.10")
-        dokkaPlugin("com.glureau:html-mermaid-dokka-plugin:0.4.5")
     }
 }
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
 }
-
 
 kotlin {
     jvm {
@@ -41,7 +39,7 @@ kotlin {
     js(IR) {
         browser {
             commonWebpackConfig {
-                //cssSupport.enabled = true
+                // cssSupport.enabled = true
             }
         }
     }

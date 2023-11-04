@@ -10,7 +10,7 @@ import org.appliedtopology.tda4j.Simplex
 import org.appliedtopology.tda4j.simplexOf
 
 class SimplexSpec : FunSpec({
-    val simplex : Simplex = simplexOf(1,2,3)
+    val simplex: Simplex = simplexOf(1, 2, 3)
     test("A simplex has a non-zero size") {
         simplex.size shouldBeGreaterThan 0
     }
@@ -20,14 +20,14 @@ class SimplexSpec : FunSpec({
     }
 
     test("A non-zero simplex has a non-zero boundary") {
-        simplexOf(1,2,3).boundary<Double>().shouldNotBeEqual(Chain<Int,Double>())
+        simplexOf(1, 2, 3).boundary<Double>().shouldNotBeEqual(Chain<Int, Double>())
     }
 
     test("A simplex can receive an added vertex") {
-        (simplex + 4).containsAll(setOf(1,2,3,4)).shouldBeTrue()
+        (simplex + 4).containsAll(setOf(1, 2, 3, 4)).shouldBeTrue()
     }
 
     test("A simplex can remove a vertex") {
-        (simplex - 2).equals(listOf(1,3)).shouldBeTrue()
+        (simplex - 2).equals(listOf(1, 3)).shouldBeTrue()
     }
 })

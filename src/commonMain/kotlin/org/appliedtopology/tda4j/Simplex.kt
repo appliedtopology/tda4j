@@ -3,14 +3,14 @@ package org.appliedtopology.tda4j
 import arrow.core.padZip
 
 open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
-    private val _simplex : HashSet<VertexT> = HashSet()
+    private val _simplex: HashSet<VertexT> = HashSet()
 
     constructor() { }
 
     constructor(elements: HashSet<VertexT>) { _simplex.addAll(elements) }
     constructor(elements: Collection<VertexT>) { _simplex.addAll(elements) }
 
-    override operator fun contains(element : VertexT) : Boolean = _simplex.contains(element)
+    override operator fun contains(element: VertexT): Boolean = _simplex.contains(element)
 
     override fun isEmpty(): Boolean = _simplex.isEmpty()
 
@@ -21,26 +21,26 @@ open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
     override val size: Int
         get() = _simplex.size
 
-    fun <CoefficientT>boundary() : Chain<VertexT,CoefficientT> = Chain<VertexT,CoefficientT>()
+    fun <CoefficientT>boundary(): Chain<VertexT, CoefficientT> = Chain<VertexT, CoefficientT>()
 
-    fun plus(element: VertexT) : AbstractSimplex<VertexT> {
+    fun plus(element: VertexT): AbstractSimplex<VertexT> {
         val vertices = HashSet(_simplex)
         vertices.add(element)
         return AbstractSimplex<VertexT>(vertices)
     }
 
-    val vertices : List<VertexT> = _simplex.sortedBy { it }
+    val vertices: List<VertexT> = _simplex.sortedBy { it }
 
     companion object {
-        fun <VertexT : Comparable<VertexT>> compare(left : AbstractSimplex<VertexT>, right : AbstractSimplex<VertexT>) : Int {
-            for(lr in left.vertices.sorted().padZip(right.vertices.sorted())) {
+        fun <VertexT : Comparable<VertexT>> compare(left: AbstractSimplex<VertexT>, right: AbstractSimplex<VertexT>): Int {
+            for (lr in left.vertices.sorted().padZip(right.vertices.sorted())) {
                 val l = lr.first
                 val r = lr.second
-                if(l == null) return +1
-                if(r == null) return -1
-                val lv : VertexT = l!!
-                val rv : VertexT = r!!
-                if(lv.compareTo(rv) != 0) {
+                if (l == null) return +1
+                if (r == null) return -1
+                val lv: VertexT = l!!
+                val rv: VertexT = r!!
+                if (lv.compareTo(rv) != 0) {
                     return lv.compareTo(rv)
                 }
             }
@@ -48,7 +48,6 @@ open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
         }
     }
 }
-
 
 typealias Simplex = AbstractSimplex<Int>
 

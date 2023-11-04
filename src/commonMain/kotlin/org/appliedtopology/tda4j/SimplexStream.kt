@@ -1,22 +1,21 @@
 package org.appliedtopology.tda4j
 
 fun interface Filtered<VertexT : Comparable<VertexT>, FiltrationT : Comparable<FiltrationT>> {
-    fun filtrationValue(simplex : AbstractSimplex<VertexT>) : FiltrationT?
+    fun filtrationValue(simplex: AbstractSimplex<VertexT>): FiltrationT?
 }
 
 abstract class SimplexStream<VertexT : Comparable<VertexT>, FiltrationT : Comparable<FiltrationT>> :
     Filtered<VertexT, FiltrationT>, Iterable<AbstractSimplex<VertexT>> {
-    val comparator : Comparator<AbstractSimplex<VertexT>> =
+    val comparator: Comparator<AbstractSimplex<VertexT>> =
         compareBy<AbstractSimplex<VertexT>> { filtrationValue(it) }
-            .thenComparator({ a : AbstractSimplex<VertexT>, b : AbstractSimplex<VertexT> -> AbstractSimplex.compare(a,b) })
-
+            .thenComparator({ a: AbstractSimplex<VertexT>, b: AbstractSimplex<VertexT> -> AbstractSimplex.compare(a, b) })
 }
 
 class ExplicitStream<VertexT : Comparable<VertexT>, FiltrationT : Comparable<FiltrationT>> :
     SimplexStream<VertexT, FiltrationT>(), MutableMap<AbstractSimplex<VertexT>, FiltrationT> {
-    protected val filtrationValues : MutableMap<AbstractSimplex<VertexT>, FiltrationT> = HashMap()
+    protected val filtrationValues: MutableMap<AbstractSimplex<VertexT>, FiltrationT> = HashMap()
 
-    override fun filtrationValue(simplex : AbstractSimplex<VertexT>) : FiltrationT? = filtrationValues.get(simplex)
+    override fun filtrationValue(simplex: AbstractSimplex<VertexT>): FiltrationT? = filtrationValues.get(simplex)
 
     override fun iterator(): Iterator<AbstractSimplex<VertexT>> =
         (filtrationValues.keys.toList()).sortedBy { filtrationValues.get(it) }.iterator()

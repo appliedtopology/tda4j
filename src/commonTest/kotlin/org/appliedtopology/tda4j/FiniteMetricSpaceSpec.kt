@@ -20,7 +20,7 @@ class FiniteMetricSpaceSpec : FunSpec({
     }
 
     test("An explicit metric space has all points it was given") {
-        msX.elements.shouldContainExactly(0,1)
+        msX.elements.shouldContainExactly(0, 1)
     }
     test("A euclidean metric space has all points it was given") {
         msE.elements.shouldContainExactly(0, 1, 2, 3)
