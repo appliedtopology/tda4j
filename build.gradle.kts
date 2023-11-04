@@ -13,6 +13,7 @@ version = "1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
+    maven("https://maven.pkg.jetbrains.space/mipt-npm/p/sci/maven")
 }
 
 tasks.withType<DokkaTask>().configureEach {
@@ -43,14 +44,14 @@ kotlin {
             }
         }
     }
-    val hostOs = System.getProperty("os.name")
-    val isMingwX64 = hostOs.startsWith("Windows")
-    val nativeTarget = when {
-        hostOs == "Mac OS X" -> macosX64("native")
-        hostOs == "Linux" -> linuxX64("native")
-        isMingwX64 -> mingwX64("native")
-        else -> throw GradleException("Host OS is not supported in Kotlin/Native.")
-    }
+//    val hostOs = System.getProperty("os.name")
+//    val isMingwX64 = hostOs.startsWith("Windows")
+//    val nativeTarget = when {
+//        hostOs == "Mac OS X" -> macosX64("native")
+//        hostOs == "Linux" -> linuxX64("native")
+//        isMingwX64 -> mingwX64("native")
+//        else -> throw GradleException("Host OS is not supported in Kotlin/Native.")
+//    }
 
     sourceSets {
         val commonMain by getting {
@@ -60,6 +61,7 @@ kotlin {
                 implementation("io.arrow-kt:arrow-core")
                 implementation("io.arrow-kt:arrow-fx-coroutines")
                 implementation("io.arrow-kt:arrow-optics")
+                api("space.kscience:kmath-core:0.3.1")
             }
         }
         val commonTest by getting {
