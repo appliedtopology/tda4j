@@ -6,7 +6,7 @@ fun interface Filtered<VertexT : Comparable<VertexT>, FiltrationT : Comparable<F
 
 abstract class SimplexStream<VertexT : Comparable<VertexT>, FiltrationT : Comparable<FiltrationT>> :
     Filtered<VertexT, FiltrationT>, Iterable<AbstractSimplex<VertexT>> {
-    val comparator: Comparator<AbstractSimplex<VertexT>> =
+    open val comparator: Comparator<AbstractSimplex<VertexT>> =
         compareBy<AbstractSimplex<VertexT>> { filtrationValue(it) }
             .thenComparator({ a: AbstractSimplex<VertexT>, b: AbstractSimplex<VertexT> -> AbstractSimplex.compare(a, b) })
 }

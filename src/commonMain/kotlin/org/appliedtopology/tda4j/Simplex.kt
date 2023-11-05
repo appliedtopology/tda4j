@@ -18,6 +18,18 @@ open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
 
     override fun containsAll(elements: Collection<VertexT>): Boolean = _simplex.containsAll(elements)
 
+    override fun equals(other: Any?): Boolean {
+        val that: AbstractSimplex<VertexT>? = other as? AbstractSimplex<VertexT>
+        if (that == null) return false
+        val mine = this.vertices
+        val thine = that.vertices
+        return mine.containsAll(thine) and thine.containsAll(mine)
+    }
+
+    override fun hashCode(): Int {
+        return _simplex.hashCode()
+    }
+
     override val size: Int
         get() = _simplex.size
 
@@ -29,15 +41,22 @@ open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
         return AbstractSimplex<VertexT>(vertices)
     }
 
-    val vertices: List<VertexT> = _simplex.sortedBy { it }
+    val vertices: List<VertexT>
+        get() = _simplex.sorted()
+
+    override fun toString(): String = _simplex.joinToString(
+        ",",
+        "abstractSimplexOf(",
+        ")"
+    )
 
     companion object {
         fun <VertexT : Comparable<VertexT>> compare(left: AbstractSimplex<VertexT>, right: AbstractSimplex<VertexT>): Int {
-            for (lr in left.vertices.sorted().padZip(right.vertices.sorted())) {
+            for (lr in left.vertices.padZip(right.vertices)) {
                 val l = lr.first
                 val r = lr.second
-                if (l == null) return +1
-                if (r == null) return -1
+                if (l == null) return -1
+                if (r == null) return +1
                 val lv: VertexT = l!!
                 val rv: VertexT = r!!
                 if (lv.compareTo(rv) != 0) {
@@ -54,4 +73,9 @@ typealias Simplex = AbstractSimplex<Int>
 fun <VertexT : Comparable<VertexT>>abstractSimplexOf(vararg elements: VertexT): AbstractSimplex<VertexT> =
     AbstractSimplex(elements.toList())
 
+fun <VertexT : Comparable<VertexT>>abstractSimplexOf(elements: Collection<VertexT>): AbstractSimplex<VertexT> =
+    AbstractSimplex(elements.toList())
+
 fun simplexOf(vararg elements: Int): Simplex = Simplex(elements.toList())
+
+fun simplexOf(elements: Collection<Int>): Simplex = Simplex(elements.toList())

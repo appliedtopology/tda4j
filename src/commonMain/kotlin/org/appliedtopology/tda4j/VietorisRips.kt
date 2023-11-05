@@ -1,6 +1,6 @@
 package org.appliedtopology.tda4j
 
-open fun interface CliqueFinder<VertexT : Comparable<VertexT>> {
+fun interface CliqueFinder<VertexT : Comparable<VertexT>> {
     abstract fun cliques(
         metricSpace: FiniteMetricSpace<VertexT>,
         maxFiltrationValue: Double,
@@ -10,12 +10,12 @@ open fun interface CliqueFinder<VertexT : Comparable<VertexT>> {
     fun weightedEdges(
         metricSpace: FiniteMetricSpace<VertexT>,
         maxFiltrationValue: Double
-    ): Sequence<Pair<Double, Pair<VertexT, VertexT>>> {
+    ): Sequence<Pair<Double?, Pair<VertexT, VertexT>>> {
         return metricSpace.elements.flatMap({ v ->
             metricSpace.elements.filter({ v < it })
                 .map({ w -> Pair(metricSpace.distance(v, w), Pair(v, w)) })
                 .filter({ (d, _) -> (d != null) && (d <= maxFiltrationValue) })
-        }) as Sequence<Pair<Double, Pair<VertexT, VertexT>>>
+        }).asSequence()
     }
 }
 
@@ -31,6 +31,15 @@ open class VietorisRips<VertexT : Comparable<VertexT>>(
         cliqueFinder.cliques(metricSpace, maxFiltrationValue, maxDimension)
 
     override fun iterator(): Iterator<AbstractSimplex<VertexT>> = simplices.iterator()
+
+    override val comparator: Comparator<AbstractSimplex<VertexT>>
+        get() = getComparator(this)
+
+    companion object {
+        fun <VertexT : Comparable<VertexT>> getComparator(filtered: Filtered<VertexT, Double>): Comparator<AbstractSimplex<VertexT>> =
+            compareBy<AbstractSimplex<VertexT>> { filtered.filtrationValue(it) }
+                .thenComparator { x: AbstractSimplex<VertexT>, y: AbstractSimplex<VertexT> -> AbstractSimplex.compare(x, y) }
+    }
 }
 
 class ZomorodianIncremental<VertexT : Comparable<VertexT>> : CliqueFinder<VertexT> {
@@ -39,8 +48,8 @@ class ZomorodianIncremental<VertexT : Comparable<VertexT>> : CliqueFinder<Vertex
         maxFiltrationValue: Double,
         maxDimension: Int
     ): Sequence<AbstractSimplex<VertexT>> {
-        val edges: List<Pair<Double, Pair<VertexT, VertexT>>> =
-            weightedEdges(metricSpace, maxFiltrationValue).sortedBy { it.first }.toList()
+        val edges: List<Pair<Double?, Pair<VertexT, VertexT>>> =
+            weightedEdges(metricSpace, maxFiltrationValue).sortedBy { it.first ?: Double.POSITIVE_INFINITY }.toList()
         val lowerNeighbors = buildMap {
             edges.forEach {
                     dvw ->
@@ -56,7 +65,14 @@ class ZomorodianIncremental<VertexT : Comparable<VertexT>> : CliqueFinder<Vertex
         val V: MutableSet<AbstractSimplex<VertexT>> = HashSet(metricSpace.size + edges.size)
 
         val tasks: ArrayDeque<Pair<AbstractSimplex<VertexT>, Set<VertexT>>> = ArrayDeque(edges.size)
-        lowerNeighbors.forEach { entry -> tasks.addFirst(Pair(abstractSimplexOf(entry.key), entry.value)) }
+        metricSpace.elements.forEach { vertex ->
+            tasks.addFirst(
+                Pair(
+                    abstractSimplexOf(vertex),
+                    lowerNeighbors.getOrElse(vertex, { -> emptySet() })
+                )
+            )
+        }
 
         while (tasks.size > 0) {
             val task: Pair<AbstractSimplex<VertexT>, Set<VertexT>> = tasks.removeFirst()
@@ -65,15 +81,17 @@ class ZomorodianIncremental<VertexT : Comparable<VertexT>> : CliqueFinder<Vertex
             V.add(tau)
             if (tau.size < maxDimension) {
                 N.forEach { v: VertexT ->
-                    {
+                    run {
                         val sigma: AbstractSimplex<VertexT> = tau.plus(v)
-                        val M: Set<VertexT> = N.intersect(lowerNeighbors.get(v)?.asIterable() ?: emptySequence<VertexT>().asIterable())
+                        val M: Set<VertexT> =
+                            N.intersect(lowerNeighbors.get(v)?.asIterable() ?: emptySequence<VertexT>().asIterable())
                         tasks.addFirst(Pair(sigma, M))
                     }
                 }
             }
         }
 
-        return V.sortedWith(Comparator<AbstractSimplex<VertexT>> { a, b -> AbstractSimplex.compare(a, b) }).asSequence()
+        val filtered: Filtered<VertexT, Double> = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
+        return V.sortedWith(VietorisRips.getComparator(filtered)).asSequence()
     }
 }
