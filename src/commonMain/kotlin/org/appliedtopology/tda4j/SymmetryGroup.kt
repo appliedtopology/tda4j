@@ -20,7 +20,7 @@ interface SymmetryGroup<GroupT, VertexT : Comparable<VertexT>> {
     fun isRepresentative(simplex: AbstractSimplex<VertexT>): Boolean = simplex == representative(simplex)
 }
 
-class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
+open class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
     override val elements: Collection<Int> = (0..factorial(elementCount) - 1).toList()
 
     val permutations: List<Map<Int, Int>> = elements.map {
@@ -33,7 +33,7 @@ class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
             }
         }
     }
-    val knownRepresentatives: MutableSet<AbstractSimplex<Int>> = HashSet()
+    val knownRepresentatives: MutableSet<Simplex> = HashSet()
 
     fun permutation(n: Int): List<Int> = buildList(elementCount) {
         val source = (0..elementCount - 1).toMutableList()
@@ -63,7 +63,7 @@ class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
 
     override fun action(g: Int): (Int) -> Int = { permutations[g][it] ?: it }
 
-    override fun isRepresentative(simplex: AbstractSimplex<Int>): Boolean {
+    override fun isRepresentative(simplex: Simplex): Boolean {
         if (simplex in knownRepresentatives) return true
         val isR = super.isRepresentative(simplex)
         if (isR) knownRepresentatives.add(simplex)
@@ -74,6 +74,35 @@ class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
         fun factorial(n: Int, accum: Int = 1): Int {
             return if (n <= 1) accum else factorial(n - 1, n * accum)
         }
+    }
+}
+
+class HyperCubeSymmetryGenerators(elementCount: Int) : HyperCubeSymmetry(elementCount) {
+    val generators: List<Int> = (0..elementCount - 2)
+        .map { listOf((0..it - 1).toList(), listOf(it + 1, it), (it + 2..elementCount - 1).toList()).flatten() }
+        .map { permutationIndex(it) }
+
+    val pseudoRepresentatives: MutableMap<Simplex, Simplex> = HashMap()
+
+    override fun representative(simplex: Simplex): Simplex {
+        // First, check the cache
+        if (simplex in pseudoRepresentatives) return pseudoRepresentatives[simplex]!!
+
+        // Do it the hard way
+        return super.representative(simplex)
+    }
+    override fun isRepresentative(simplex: AbstractSimplex<Int>): Boolean {
+        // First, check the cache
+        if (simplex in pseudoRepresentatives) return simplex == pseudoRepresentatives[simplex]
+
+        // Second, do the cheap check - if it fails this couldn't possibly be a representative
+        if (!generators.all { g -> AbstractSimplex.compare(simplex, simplex.mapVertices(action(g))) <= 0 }) {
+            return false
+        }
+
+        // Finally, generate the orbit, save the true representative and move on
+        pseudoRepresentatives[simplex] = representative(simplex)
+        return simplex == pseudoRepresentatives[simplex]
     }
 }
 

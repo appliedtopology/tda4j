@@ -21,7 +21,7 @@ class ZomorodianProfilingSpec : FunSpec({
 
 class SymmetricZomorodianProfilingSpec : FunSpec({
     val hc4 = HyperCube(dimension)
-    val hcs4 = HyperCubeSymmetry(dimension)
+    val hcs4 = HyperCubeSymmetryGenerators(dimension)
 
     test("Time SymmetricVietorisRips construction") {
         val vr = VietorisRips<Int>(hc4, maxF, maxD, SymmetricZomorodianIncremental<Int>(hcs4))
