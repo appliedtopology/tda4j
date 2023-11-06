@@ -1,7 +1,6 @@
 package org.appliedtopology.tda4j
 
 import io.kotest.core.spec.style.FunSpec
-import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.equals.shouldBeEqual
 import io.kotest.matchers.equals.shouldNotBeEqual
@@ -23,11 +22,11 @@ class SimplexSpec : FunSpec({
     }
 
     test("A simplex can receive an added vertex") {
-        (simplex + 4).containsAll(setOf(1, 2, 3, 4)).shouldBeTrue()
+        (simplex + 4).shouldBeEqual(simplexOf(1, 2, 3, 4))
     }
 
     test("A simplex can remove a vertex") {
-        (simplex - 2).equals(listOf(1, 3)).shouldBeTrue()
+        (simplex - 2).shouldBeEqual(simplexOf(1, 3))
     }
 
     test("Two simplices can be equal") {
