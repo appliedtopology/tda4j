@@ -46,6 +46,21 @@ class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
         }
     }
 
+    fun permutationIndex(p: List<Int>): Int {
+        if (p.sorted() != (0..elementCount - 1).toList()) {
+            throw NoSuchElementException("Not a permutation of 0..${elementCount - 1}")
+        }
+
+        var pmut = p.toMutableList()
+        var pos = 0
+        while (pmut.isNotEmpty()) {
+            val i = pmut.removeFirst()
+            pmut = pmut.map { it - (if (it > i) 1 else 0) }.toMutableList()
+            pos += i * factorial(pmut.size)
+        }
+        return pos
+    }
+
     override fun action(g: Int): (Int) -> Int = { permutations[g][it] ?: it }
 
     override fun isRepresentative(simplex: AbstractSimplex<Int>): Boolean {

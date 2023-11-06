@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j
 
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.inspectors.shouldForAll
 import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainInOrder
@@ -24,6 +25,10 @@ class SymmetryGroupSpec : FunSpec({
                 listOf(2, 1, 0)
             )
         )
+    }
+
+    test("Permutations of 1,2,3 have the right reverse indices") {
+        hcs.elements.shouldForAll { hcs.permutationIndex(hcs.permutation(it)) shouldBeEqual it }
     }
 
     test("Permutations of 1,2,3 shift bits correctly") {
