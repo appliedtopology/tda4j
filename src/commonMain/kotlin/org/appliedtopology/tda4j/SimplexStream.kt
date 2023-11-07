@@ -50,7 +50,10 @@ class ExplicitStream<VertexT : Comparable<VertexT>, FiltrationT : Comparable<Fil
 
     override fun isEmpty(): Boolean = filtrationValues.isEmpty()
 
-    override fun put(key: AbstractSimplex<VertexT>, value: FiltrationT): FiltrationT? = filtrationValues.put(key, value)
+    override fun put(
+        key: AbstractSimplex<VertexT>,
+        value: FiltrationT,
+    ): FiltrationT? = filtrationValues.put(key, value)
 
     override fun putAll(from: Map<out AbstractSimplex<VertexT>, FiltrationT>) = filtrationValues.putAll(from)
 

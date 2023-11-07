@@ -4,12 +4,12 @@ fun interface CliqueFinder<VertexT : Comparable<VertexT>> {
     abstract fun cliques(
         metricSpace: FiniteMetricSpace<VertexT>,
         maxFiltrationValue: Double,
-        maxDimension: Int
+        maxDimension: Int,
     ): Sequence<AbstractSimplex<VertexT>>
 
     fun weightedEdges(
         metricSpace: FiniteMetricSpace<VertexT>,
-        maxFiltrationValue: Double
+        maxFiltrationValue: Double,
     ): Sequence<Pair<Double?, Pair<VertexT, VertexT>>> {
         return metricSpace.elements.flatMap({ v ->
             metricSpace.elements.filter({ v < it })
@@ -23,10 +23,10 @@ open class VietorisRips<VertexT : Comparable<VertexT>>(
     val metricSpace: FiniteMetricSpace<VertexT>,
     val maxFiltrationValue: Double,
     val maxDimension: Int,
-    val cliqueFinder: CliqueFinder<VertexT>
+    val cliqueFinder: CliqueFinder<VertexT>,
 ) :
     SimplexStream<VertexT, Double>(),
-    Filtered<VertexT, Double> by FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace) {
+        Filtered<VertexT, Double> by FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace) {
     val simplices: Sequence<AbstractSimplex<VertexT>> =
         cliqueFinder.cliques(metricSpace, maxFiltrationValue, maxDimension)
 
@@ -46,21 +46,22 @@ class ZomorodianIncremental<VertexT : Comparable<VertexT>> : CliqueFinder<Vertex
     override fun cliques(
         metricSpace: FiniteMetricSpace<VertexT>,
         maxFiltrationValue: Double,
-        maxDimension: Int
+        maxDimension: Int,
     ): Sequence<AbstractSimplex<VertexT>> {
         val edges: List<Pair<Double?, Pair<VertexT, VertexT>>> =
             weightedEdges(metricSpace, maxFiltrationValue).sortedBy { it.first ?: Double.POSITIVE_INFINITY }.toList()
-        val lowerNeighbors = buildMap {
-            edges.forEach {
-                    dvw ->
-                (
-                    getOrPut(
-                        dvw.second.second,
-                        defaultValue = { -> hashSetOf<VertexT>() }
-                    ) as MutableSet<VertexT>
+        val lowerNeighbors =
+            buildMap {
+                edges.forEach {
+                        dvw ->
+                    (
+                        getOrPut(
+                            dvw.second.second,
+                            defaultValue = { -> hashSetOf<VertexT>() },
+                        ) as MutableSet<VertexT>
                     ).add(dvw.second.first)
+                }
             }
-        }
 
         val V: MutableSet<AbstractSimplex<VertexT>> = HashSet(metricSpace.size + edges.size)
 
@@ -69,8 +70,8 @@ class ZomorodianIncremental<VertexT : Comparable<VertexT>> : CliqueFinder<Vertex
             tasks.addFirst(
                 Pair(
                     abstractSimplexOf(vertex),
-                    lowerNeighbors.getOrElse(vertex, { -> emptySet() })
-                )
+                    lowerNeighbors.getOrElse(vertex, { -> emptySet() }),
+                ),
             )
         }
 

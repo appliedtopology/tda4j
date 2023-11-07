@@ -14,7 +14,7 @@ class VietorisRipsSpec() : FunSpec({
             simplexOf(1, 3), simplexOf(2, 3),
             simplexOf(0, 3), simplexOf(1, 2),
             simplexOf(0, 1, 3), simplexOf(0, 2, 3),
-            simplexOf(0, 1, 2), simplexOf(1, 2, 3)
+            simplexOf(0, 1, 2), simplexOf(1, 2, 3),
         )
     }
 })

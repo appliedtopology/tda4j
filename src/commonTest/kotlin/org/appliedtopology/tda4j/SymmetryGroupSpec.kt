@@ -22,8 +22,8 @@ class SymmetryGroupSpec : FunSpec({
                 listOf(1, 0, 2),
                 listOf(1, 2, 0),
                 listOf(2, 0, 1),
-                listOf(2, 1, 0)
-            )
+                listOf(2, 1, 0),
+            ),
         )
     }
 
@@ -47,7 +47,7 @@ class SymmetryGroupSpec : FunSpec({
     test("Orbits work as expected") {
         hcs2.orbit(abstractSimplexOf(0, 1, 3)).shouldContainExactly(
             abstractSimplexOf(0, 1, 3),
-            abstractSimplexOf(0, 2, 3)
+            abstractSimplexOf(0, 2, 3),
         )
     }
 
@@ -64,7 +64,7 @@ class SymmetryGroupSpec : FunSpec({
             abstractSimplexOf(1, 3),
             abstractSimplexOf(0, 3),
             abstractSimplexOf(0, 1, 3),
-            abstractSimplexOf(0, 1, 2)
+            abstractSimplexOf(0, 1, 2),
         )
     }
 
@@ -83,7 +83,7 @@ class SymmetryGroupSpec : FunSpec({
             abstractSimplexOf(0, 1, 2),
             abstractSimplexOf(0, 1, 3),
             abstractSimplexOf(0, 2, 3),
-            abstractSimplexOf(1, 2, 3)
+            abstractSimplexOf(1, 2, 3),
         )
     }
 })

@@ -7,8 +7,12 @@ open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
 
     constructor() { }
 
-    constructor(elements: HashSet<VertexT>) { _simplex.addAll(elements) }
-    constructor(elements: Collection<VertexT>) { _simplex.addAll(elements) }
+    constructor(elements: HashSet<VertexT>) {
+        _simplex.addAll(elements)
+    }
+    constructor(elements: Collection<VertexT>) {
+        _simplex.addAll(elements)
+    }
 
     override operator fun contains(element: VertexT): Boolean = _simplex.contains(element)
 
@@ -33,10 +37,10 @@ open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
     override val size: Int
         get() = _simplex.size
 
-    fun <R : Comparable<R>>mapVertices(transform: (VertexT) -> R) =
+    fun <R : Comparable<R>> mapVertices(transform: (VertexT) -> R) =
         AbstractSimplex<R>(_simplex.mapTo(HashSet<R>(_simplex.size), transform))
 
-    fun <CoefficientT>boundary(): Chain<VertexT, CoefficientT> = Chain<VertexT, CoefficientT>()
+    fun <CoefficientT> boundary(): Chain<VertexT, CoefficientT> = Chain<VertexT, CoefficientT>()
 
     fun plus(element: VertexT): AbstractSimplex<VertexT> {
         val vertices = HashSet(_simplex)
@@ -47,14 +51,18 @@ open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
     val vertices: List<VertexT>
         get() = _simplex.sorted()
 
-    override fun toString(): String = _simplex.joinToString(
-        ",",
-        "abstractSimplexOf(",
-        ")"
-    )
+    override fun toString(): String =
+        _simplex.joinToString(
+            ",",
+            "abstractSimplexOf(",
+            ")",
+        )
 
     companion object {
-        fun <VertexT : Comparable<VertexT>> compare(left: AbstractSimplex<VertexT>, right: AbstractSimplex<VertexT>): Int {
+        fun <VertexT : Comparable<VertexT>> compare(
+            left: AbstractSimplex<VertexT>,
+            right: AbstractSimplex<VertexT>,
+        ): Int {
             for (lr in left.vertices.padZip(right.vertices)) {
                 val l = lr.first
                 val r = lr.second
@@ -73,10 +81,10 @@ open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
 
 typealias Simplex = AbstractSimplex<Int>
 
-fun <VertexT : Comparable<VertexT>>abstractSimplexOf(vararg elements: VertexT): AbstractSimplex<VertexT> =
+fun <VertexT : Comparable<VertexT>> abstractSimplexOf(vararg elements: VertexT): AbstractSimplex<VertexT> =
     AbstractSimplex(elements.toList())
 
-fun <VertexT : Comparable<VertexT>>abstractSimplexOf(elements: Collection<VertexT>): AbstractSimplex<VertexT> =
+fun <VertexT : Comparable<VertexT>> abstractSimplexOf(elements: Collection<VertexT>): AbstractSimplex<VertexT> =
     AbstractSimplex(elements.toList())
 
 fun simplexOf(vararg elements: Int): Simplex = Simplex(elements.toList())

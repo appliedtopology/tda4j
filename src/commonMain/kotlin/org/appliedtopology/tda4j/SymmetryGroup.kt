@@ -23,28 +23,30 @@ interface SymmetryGroup<GroupT, VertexT : Comparable<VertexT>> {
 open class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
     override val elements: Collection<Int> = (0..factorial(elementCount) - 1).toList()
 
-    val permutations: List<Map<Int, Int>> = elements.map {
-        run {
-            val p = permutation(it)
-            (0..(1 shl elementCount) - 1).associateWith { bits ->
-                (0..elementCount - 1)
-                    .map { ((bits and (1 shl it) shr it) shl p[it]) }
-                    .fold(0, { x, y -> x or y })
+    val permutations: List<Map<Int, Int>> =
+        elements.map {
+            run {
+                val p = permutation(it)
+                (0..(1 shl elementCount) - 1).associateWith { bits ->
+                    (0..elementCount - 1)
+                        .map { ((bits and (1 shl it) shr it) shl p[it]) }
+                        .fold(0, { x, y -> x or y })
+                }
             }
         }
-    }
     val knownRepresentatives: MutableSet<Simplex> = HashSet()
 
-    fun permutation(n: Int): List<Int> = buildList(elementCount) {
-        val source = (0..elementCount - 1).toMutableList()
-        var pos = n
+    fun permutation(n: Int): List<Int> =
+        buildList(elementCount) {
+            val source = (0..elementCount - 1).toMutableList()
+            var pos = n
 
-        while (source.isNotEmpty()) {
-            val div = pos.floorDiv(factorial(source.size - 1))
-            pos = pos.mod(factorial(source.size - 1))
-            add(source.removeAt(div))
+            while (source.isNotEmpty()) {
+                val div = pos.floorDiv(factorial(source.size - 1))
+                pos = pos.mod(factorial(source.size - 1))
+                add(source.removeAt(div))
+            }
         }
-    }
 
     fun permutationIndex(p: List<Int>): Int {
         if (p.sorted() != (0..elementCount - 1).toList()) {
@@ -71,16 +73,20 @@ open class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
     }
 
     companion object {
-        fun factorial(n: Int, accum: Int = 1): Int {
+        fun factorial(
+            n: Int,
+            accum: Int = 1,
+        ): Int {
             return if (n <= 1) accum else factorial(n - 1, n * accum)
         }
     }
 }
 
 class HyperCubeSymmetryGenerators(elementCount: Int) : HyperCubeSymmetry(elementCount) {
-    val generators: List<Int> = (0..elementCount - 2)
-        .map { listOf((0..it - 1).toList(), listOf(it + 1, it), (it + 2..elementCount - 1).toList()).flatten() }
-        .map { permutationIndex(it) }
+    val generators: List<Int> =
+        (0..elementCount - 2)
+            .map { listOf((0..it - 1).toList(), listOf(it + 1, it), (it + 2..elementCount - 1).toList()).flatten() }
+            .map { permutationIndex(it) }
 
     val pseudoRepresentatives: MutableMap<Simplex, Simplex> = HashMap()
 
@@ -91,6 +97,7 @@ class HyperCubeSymmetryGenerators(elementCount: Int) : HyperCubeSymmetry(element
         // Do it the hard way
         return super.representative(simplex)
     }
+
     override fun isRepresentative(simplex: AbstractSimplex<Int>): Boolean {
         // First, check the cache
         if (simplex in pseudoRepresentatives) return simplex == pseudoRepresentatives[simplex]
@@ -106,9 +113,9 @@ class HyperCubeSymmetryGenerators(elementCount: Int) : HyperCubeSymmetry(element
     }
 }
 
-class ExpandSequence<VertexT : Comparable<VertexT>> (
+class ExpandSequence<VertexT : Comparable<VertexT>>(
     val representatives: List<AbstractSimplex<VertexT>>,
-    val symmetryGroup: SymmetryGroup<*, VertexT>
+    val symmetryGroup: SymmetryGroup<*, VertexT>,
 ) : Sequence<AbstractSimplex<VertexT>> {
     val orbitSizes: List<Int> = representatives.map { symmetryGroup.orbit(it).size }
     val orbitRanges: List<Int> = orbitSizes.scan(0) { x, y -> x + y }
@@ -122,30 +129,32 @@ class ExpandSequence<VertexT : Comparable<VertexT>> (
 
     fun isEmpty(): Boolean = size == 0
 
-    override fun iterator(): Iterator<AbstractSimplex<VertexT>> = sequence {
-        representatives.forEach({ t -> yieldAll(symmetryGroup.orbit(t)) })
-    }.iterator()
+    override fun iterator(): Iterator<AbstractSimplex<VertexT>> =
+        sequence {
+            representatives.forEach({ t -> yieldAll(symmetryGroup.orbit(t)) })
+        }.iterator()
 }
 
 class SymmetricZomorodianIncremental<VertexT : Comparable<VertexT>>(val symmetryGroup: SymmetryGroup<*, VertexT>) : CliqueFinder<VertexT> {
     override fun cliques(
         metricSpace: FiniteMetricSpace<VertexT>,
         maxFiltrationValue: Double,
-        maxDimension: Int
+        maxDimension: Int,
     ): Sequence<AbstractSimplex<VertexT>> {
         val edges: List<Pair<Double?, Pair<VertexT, VertexT>>> =
             weightedEdges(metricSpace, maxFiltrationValue).sortedBy { it.first }.toList()
-        val lowerNeighbors = buildMap {
-            edges.forEach {
-                    dvw ->
-                (
-                    getOrPut(
-                        dvw.second.second,
-                        defaultValue = { -> hashSetOf<VertexT>() }
-                    ) as MutableSet<VertexT>
+        val lowerNeighbors =
+            buildMap {
+                edges.forEach {
+                        dvw ->
+                    (
+                        getOrPut(
+                            dvw.second.second,
+                            defaultValue = { -> hashSetOf<VertexT>() },
+                        ) as MutableSet<VertexT>
                     ).add(dvw.second.first)
+                }
             }
-        }
 
         val V: MutableSet<AbstractSimplex<VertexT>> = HashSet(metricSpace.size + edges.size)
 
@@ -154,8 +163,8 @@ class SymmetricZomorodianIncremental<VertexT : Comparable<VertexT>>(val symmetry
             tasks.addFirst(
                 Pair(
                     abstractSimplexOf(vertex),
-                    lowerNeighbors.getOrElse(vertex, { -> emptySet() })
-                )
+                    lowerNeighbors.getOrElse(vertex, { -> emptySet() }),
+                ),
             )
         }
 
@@ -177,6 +186,6 @@ class SymmetricZomorodianIncremental<VertexT : Comparable<VertexT>>(val symmetry
         }
 
         val filtered: Filtered<VertexT, Double> = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
-        return ExpandSequence<VertexT> (V.sortedWith(VietorisRips.getComparator(filtered)), symmetryGroup)
+        return ExpandSequence<VertexT>(V.sortedWith(VietorisRips.getComparator(filtered)), symmetryGroup)
     }
 }

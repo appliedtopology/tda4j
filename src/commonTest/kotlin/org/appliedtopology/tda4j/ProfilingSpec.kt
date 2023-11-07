@@ -6,6 +6,7 @@ import io.kotest.matchers.equals.shouldBeEqual
 val dimension: Int = 4
 val maxF = dimension.toDouble()
 val maxD = 1 shl dimension
+
 class ZomorodianProfilingSpec : FunSpec({
     val hc4 = HyperCube(dimension)
     val hcs4 = HyperCubeSymmetry(dimension)
