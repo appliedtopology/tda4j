@@ -27,6 +27,26 @@ tasks.withType<Test>().configureEach {
     useJUnitPlatform()
 }
 
+configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+    version.set("1.0.1")
+    debug.set(true)
+    verbose.set(true)
+    android.set(false)
+    outputToConsole.set(true)
+    outputColorName.set("RED")
+    ignoreFailures.set(true)
+    enableExperimentalRules.set(true)
+    additionalEditorconfig.set( // not supported until ktlint 0.49
+        mapOf(
+            "ktlint_standard_no-wildcard-imports" to "disabled",
+        ),
+    )
+    filter {
+        exclude("**/generated/**")
+        include("**/kotlin/**")
+    }
+}
+
 kotlin {
     jvm {
         compilations.all {
@@ -46,12 +66,13 @@ kotlin {
     }
     val hostOs = System.getProperty("os.name")
     val isMingwX64 = hostOs.startsWith("Windows")
-    val nativeTarget = when {
-        // hostOs == "Mac OS X" -> macosX64("native")
-        hostOs == "Linux" -> linuxX64("native")
-        isMingwX64 -> mingwX64("native")
-        else -> println("Host OS is not supported in Kotlin/Native.")
-    }
+    val nativeTarget =
+        when {
+            // hostOs == "Mac OS X" -> macosX64("native")
+            hostOs == "Linux" -> linuxX64("native")
+            isMingwX64 -> mingwX64("native")
+            else -> println("Host OS is not supported in Kotlin/Native.")
+        }
 
     sourceSets {
         val commonMain by getting {
@@ -62,6 +83,7 @@ kotlin {
                 implementation("io.arrow-kt:arrow-fx-coroutines")
                 implementation("io.arrow-kt:arrow-optics")
                 api("space.kscience:kmath-core:0.3.1")
+                api("space.kscience:kmath-tensors:0.3.1")
             }
         }
         val commonTest by getting {

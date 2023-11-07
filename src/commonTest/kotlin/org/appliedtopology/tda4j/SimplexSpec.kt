@@ -1,39 +1,48 @@
 package org.appliedtopology.tda4j
 
-import io.kotest.core.spec.style.FunSpec
+import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.equals.shouldBeEqual
 import io.kotest.matchers.equals.shouldNotBeEqual
 import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.types.shouldBeInstanceOf
+import io.kotest.property.Arb
+import io.kotest.property.arbitrary.element
+import io.kotest.property.arbitrary.list
+import io.kotest.property.arbitrary.map
 
-class SimplexSpec : FunSpec({
+fun <VertexT : Comparable<VertexT>> simplexArb(
+    vertices: Collection<VertexT>,
+    dimRange: IntRange = 0..vertices.size,
+): Arb<AbstractSimplex<VertexT>> = Arb.list(Arb.element(vertices), dimRange).map { vxs -> abstractSimplexOf(vxs) }
+
+class SimplexSpec : StringSpec({
     val simplex: Simplex = simplexOf(1, 2, 3)
-    test("A simplex has a non-zero size") {
+    "A simplex has a non-zero size" {
         simplex.size shouldBeGreaterThan 0
     }
 
-    test("A simplex has a boundary") {
+    "A simplex has a boundary" {
         simplex.boundary<Double>().shouldBeInstanceOf<Chain<Int, Double>>()
     }
 
-    test("A non-zero simplex has a non-zero boundary") {
+    "A non-zero simplex has a non-zero boundary" {
         simplexOf(1, 2, 3).boundary<Double>().shouldNotBeEqual(Chain<Int, Double>())
     }
 
-    test("A simplex can receive an added vertex") {
+    "A simplex can receive an added vertex" {
         (simplex + 4).shouldBeEqual(simplexOf(1, 2, 3, 4))
     }
 
-    test("A simplex can remove a vertex") {
+    "A simplex can remove a vertex" {
         (simplex - 2).shouldBeEqual(simplexOf(1, 3))
     }
 
-    test("Two simplices can be equal") {
+    "Two simplices can be equal" {
         simplexOf(0, 1, 2).shouldBeEqual(simplexOf(0, 1, 2))
     }
 
-    test("Lexicographic ordering works") {
+    "Lexicographic ordering works" {
         Simplex.compare(simplexOf(0, 1), simplexOf(0, 2)).shouldBeLessThan(0)
     }
 })
