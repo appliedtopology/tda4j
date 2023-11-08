@@ -32,3 +32,16 @@ class SymmetricZomorodianProfilingSpec : FunSpec({
         size.shouldBeEqual((1 shl (1 shl dimension)) - 1)
     }
 })
+
+class SimplexIndexingProfilingSpec : FunSpec({
+    val hc4 = HyperCube(dimension)
+    val hcs4 = HyperCubeSymmetryGenerators(dimension)
+
+    test("Time SimplexIndexing construction") {
+        val vr = VietorisRips<Int>(hc4, maxF, maxD, SimplexIndexCliqueFinder())
+        val sstream = vr.simplices
+        var size = 0
+        sstream.forEach { size += 1 }
+        size.shouldBeEqual((1 shl (1 shl dimension)) - 1)
+    }
+})

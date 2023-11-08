@@ -63,7 +63,9 @@ open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
             left: AbstractSimplex<VertexT>,
             right: AbstractSimplex<VertexT>,
         ): Int {
-            for (lr in left.vertices.padZip(right.vertices)) {
+            for (lr in left.vertices.reversed().padZip(
+                right.vertices.reversed(),
+            )) {
                 val l = lr.first
                 val r = lr.second
                 if (l == null) return -1

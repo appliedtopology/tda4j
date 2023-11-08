@@ -38,6 +38,7 @@ open class VietorisRips<VertexT : Comparable<VertexT>>(
     companion object {
         fun <VertexT : Comparable<VertexT>> getComparator(filtered: Filtered<VertexT, Double>): Comparator<AbstractSimplex<VertexT>> =
             compareBy<AbstractSimplex<VertexT>> { filtered.filtrationValue(it) }
+                .thenBy { it.size }
                 .thenComparator { x: AbstractSimplex<VertexT>, y: AbstractSimplex<VertexT> -> AbstractSimplex.compare(x, y) }
     }
 }
