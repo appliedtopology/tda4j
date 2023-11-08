@@ -58,19 +58,21 @@ kotlin {
         withJava()
         testRuns["test"].executionTask.configure {
             useJUnitPlatform()
-            if (hasProperty("server") and (property("server") == "smirnov")) {
-                // set heap size for the test JVM(s)
-                minHeapSize = "1024m"
-                maxHeapSize = "8192m"
+            if (hasProperty("server")) {
+                if (property("server") == "smirnov") {
+                    // set heap size for the test JVM(s)
+                    minHeapSize = "1024m"
+                    maxHeapSize = "8192m"
 
-                // set JVM arguments for the test JVM(s)
-                jvmArgs(
-                    listOf(
-                        "-XX:+HeapDumpOnOutOfMemoryError",
-                        "-XX:HeapDumpPath=heapdump.hprof",
-                        "-XX:StartFlightRecording=disk=true,dumponexit=true,filename=recording.jfr,maxsize=16384m,maxage=7d,settings=profile,path-to-gc-roots=true",
-                    ),
-                )
+                    // set JVM arguments for the test JVM(s)
+                    jvmArgs(
+                        listOf(
+                            "-XX:+HeapDumpOnOutOfMemoryError",
+                            "-XX:HeapDumpPath=heapdump.hprof",
+                            "-XX:StartFlightRecording=disk=true,dumponexit=true,filename=recording.jfr,maxsize=16384m,maxage=7d,settings=profile,path-to-gc-roots=true",
+                        ),
+                    )
+                }
             }
         }
     }
