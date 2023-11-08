@@ -1,11 +1,22 @@
 package org.appliedtopology.tda4j
 
-fun interface CliqueFinder<VertexT : Comparable<VertexT>> {
-    abstract fun cliques(
-        metricSpace: FiniteMetricSpace<VertexT>,
-        maxFiltrationValue: Double,
-        maxDimension: Int,
-    ): Sequence<AbstractSimplex<VertexT>>
+abstract class VietorisRips<VertexT : Comparable<VertexT>>(
+    val metricSpace: FiniteMetricSpace<VertexT>,
+    val maxFiltrationValue: Double,
+    val maxDimension: Int,
+) : SimplexStream<VertexT, Double>(),
+    Filtered<VertexT, Double> by FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace) {
+    abstract fun cliques(): Sequence<AbstractSimplex<VertexT>>
+
+    private var simplexCache: Sequence<AbstractSimplex<VertexT>>? = null
+
+    val simplices: Sequence<AbstractSimplex<VertexT>>
+        get() {
+            simplexCache = simplexCache ?: cliques()
+            return simplexCache ?: emptySequence()
+        }
+
+    fun simplicesInDimension(d: Int): Sequence<AbstractSimplex<VertexT>> = simplices.filter { simplex -> simplex.dimension == d }
 
     fun weightedEdges(
         metricSpace: FiniteMetricSpace<VertexT>,
@@ -17,18 +28,6 @@ fun interface CliqueFinder<VertexT : Comparable<VertexT>> {
                 .filter({ (d, _) -> (d != null) && (d <= maxFiltrationValue) })
         }).asSequence()
     }
-}
-
-open class VietorisRips<VertexT : Comparable<VertexT>>(
-    val metricSpace: FiniteMetricSpace<VertexT>,
-    val maxFiltrationValue: Double,
-    val maxDimension: Int,
-    val cliqueFinder: CliqueFinder<VertexT>,
-) :
-    SimplexStream<VertexT, Double>(),
-        Filtered<VertexT, Double> by FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace) {
-    val simplices: Sequence<AbstractSimplex<VertexT>> =
-        cliqueFinder.cliques(metricSpace, maxFiltrationValue, maxDimension)
 
     override fun iterator(): Iterator<AbstractSimplex<VertexT>> = simplices.iterator()
 
@@ -43,12 +42,12 @@ open class VietorisRips<VertexT : Comparable<VertexT>>(
     }
 }
 
-class ZomorodianIncremental<VertexT : Comparable<VertexT>> : CliqueFinder<VertexT> {
-    override fun cliques(
-        metricSpace: FiniteMetricSpace<VertexT>,
-        maxFiltrationValue: Double,
-        maxDimension: Int,
-    ): Sequence<AbstractSimplex<VertexT>> {
+class ZomorodianIncremental<VertexT : Comparable<VertexT>>(
+    metricSpace: FiniteMetricSpace<VertexT>,
+    maxFiltrationValue: Double,
+    maxDimension: Int,
+) : VietorisRips<VertexT>(metricSpace, maxFiltrationValue, maxDimension) {
+    override fun cliques(): Sequence<AbstractSimplex<VertexT>> {
         val edges: List<Pair<Double?, Pair<VertexT, VertexT>>> =
             weightedEdges(metricSpace, maxFiltrationValue).sortedBy { it.first ?: Double.POSITIVE_INFINITY }.toList()
         val lowerNeighbors =

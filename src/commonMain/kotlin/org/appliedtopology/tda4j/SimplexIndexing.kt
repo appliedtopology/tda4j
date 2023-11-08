@@ -36,30 +36,25 @@ class SimplexIndexing(val vertexCount: Int) {
     }
 }
 
-class SimplexIndexCliqueFinder : CliqueFinder<Int> {
-    override fun cliques(
-        metricSpace: FiniteMetricSpace<Int>,
-        maxFiltrationValue: Double,
-        maxDimension: Int,
-    ): Sequence<Simplex> =
-        with(SimplexIndexing(metricSpace.size)) {
-            cliquesByDimension(metricSpace, maxDimension)
-                .asSequence().flatten()
-                .filter { fs -> (fs.first <= maxFiltrationValue) }
-                .map { fs -> simplexAt(fs.second, fs.third) }
+class SimplexIndexVietorisRips(
+    metricSpace: FiniteMetricSpace<Int>,
+    maxFiltrationValue: Double,
+    maxDimension: Int,
+) : VietorisRips<Int>(metricSpace, maxFiltrationValue, maxDimension) {
+    override fun cliques(): Sequence<Simplex> =
+        sequence {
+            with(SimplexIndexing(metricSpace.size)) {
+                (0 until maxDimension).forEach { d ->
+                    yieldAll(cliquesByDimension(d).map { fsd -> simplexAt(fsd.second, fsd.third) })
+                }
+            }
         }
 
-    fun cliquesByDimension(
-        metricSpace: FiniteMetricSpace<Int>,
-        maxDimension: Int,
-    ): List<Sequence<Triple<Double, Int, Int>>> =
+    fun cliquesByDimension(d: Int): Sequence<Triple<Double, Int, Int>> =
         with(SimplexIndexing(metricSpace.size)) {
             val filtered = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
-
-            (1..maxDimension).map { d ->
-                (0 until Combinatorics.binomial(metricSpace.size, d)).map {
-                    Triple(filtered.filtrationValue(simplexAt(it, d)) ?: Double.POSITIVE_INFINITY, it, d)
-                }.sortedBy { it.first }.asSequence()
-            }
+            (0 until Combinatorics.binomial(metricSpace.size, d + 1)).map {
+                Triple(filtered.filtrationValue(simplexAt(it, d + 1)) ?: Double.POSITIVE_INFINITY, it, d + 1)
+            }.sortedBy { it.first }.asSequence()
         }
 }

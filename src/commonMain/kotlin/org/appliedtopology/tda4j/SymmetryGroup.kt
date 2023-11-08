@@ -164,12 +164,14 @@ class ExpandSequence<VertexT : Comparable<VertexT>>(
         }.iterator()
 }
 
-class SymmetricZomorodianIncremental<VertexT : Comparable<VertexT>>(val symmetryGroup: SymmetryGroup<*, VertexT>) : CliqueFinder<VertexT> {
-    override fun cliques(
-        metricSpace: FiniteMetricSpace<VertexT>,
-        maxFiltrationValue: Double,
-        maxDimension: Int,
-    ): Sequence<AbstractSimplex<VertexT>> {
+class SymmetricZomorodianIncremental<VertexT : Comparable<VertexT>>(
+    metricSpace: FiniteMetricSpace<VertexT>,
+    maxFiltrationValue: Double,
+    maxDimension: Int,
+    val symmetryGroup: SymmetryGroup<*, VertexT>,
+) :
+    VietorisRips<VertexT>(metricSpace, maxFiltrationValue, maxDimension) {
+    override fun cliques(): Sequence<AbstractSimplex<VertexT>> {
         val edges: List<Pair<Double?, Pair<VertexT, VertexT>>> =
             weightedEdges(metricSpace, maxFiltrationValue).sortedBy { it.first }.toList()
         val lowerNeighbors =

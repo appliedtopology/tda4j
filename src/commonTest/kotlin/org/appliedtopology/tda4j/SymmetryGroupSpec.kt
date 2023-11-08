@@ -61,7 +61,7 @@ class SymmetryGroupSpec : FunSpec({
 
     val hc2 = HyperCube(2)
     val hcs2 = HyperCubeSymmetry(2)
-    val sstream = VietorisRips(hc2, 3.0, 3, SymmetricZomorodianIncremental<Int>(hcs2))
+    val sstream = SymmetricZomorodianIncremental<Int>(hc2, 3.0, 3, hcs2)
     val expandseq = sstream.simplices as ExpandSequence<Int>
 
     test("An orbit can have a representative simplex") {

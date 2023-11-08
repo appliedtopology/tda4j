@@ -37,6 +37,9 @@ open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
     override val size: Int
         get() = _simplex.size
 
+    val dimension: Int
+        get() = size - 1
+
     fun <R : Comparable<R>> mapVertices(transform: (VertexT) -> R) =
         AbstractSimplex<R>(_simplex.mapTo(HashSet<R>(_simplex.size), transform))
 

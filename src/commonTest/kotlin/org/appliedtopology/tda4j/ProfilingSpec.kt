@@ -11,8 +11,8 @@ class ZomorodianProfilingSpec : FunSpec({
     val hc4 = HyperCube(dimension)
     val hcs4 = HyperCubeSymmetry(dimension)
 
-    test("Time VietorisRips construction") {
-        val vr = VietorisRips<Int>(hc4, maxF, maxD, ZomorodianIncremental<Int>())
+    test("!Time VietorisRips construction") {
+        val vr = ZomorodianIncremental<Int>(hc4, maxF, maxD)
         val sstream = vr.simplices
         var size = 0
         sstream.forEach { size += 1 }
@@ -25,7 +25,7 @@ class SymmetricZomorodianProfilingSpec : FunSpec({
     val hcs4 = HyperCubeSymmetryGenerators(dimension)
 
     test("Time SymmetricVietorisRips construction") {
-        val vr = VietorisRips<Int>(hc4, maxF, maxD, SymmetricZomorodianIncremental<Int>(hcs4))
+        val vr = SymmetricZomorodianIncremental<Int>(hc4, maxF, maxD, hcs4)
         val sstream = vr.simplices
         var size = 0
         sstream.forEach { size += 1 }
@@ -38,7 +38,7 @@ class SimplexIndexingProfilingSpec : FunSpec({
     val hcs4 = HyperCubeSymmetryGenerators(dimension)
 
     test("Time SimplexIndexing construction") {
-        val vr = VietorisRips<Int>(hc4, maxF, maxD, SimplexIndexCliqueFinder())
+        val vr = SimplexIndexVietorisRips(hc4, maxF, maxD)
         val sstream = vr.simplices
         var size = 0
         sstream.forEach { size += 1 }

@@ -60,11 +60,10 @@ class SimplexIndexingSpec : StringSpec({
     "SimplexIndexCliqueFinder finds the correct cliques" {
         val hc2 = HyperCube(2)
         val vr =
-            VietorisRips(
+            SimplexIndexVietorisRips(
                 hc2,
                 3.0,
                 3,
-                SimplexIndexCliqueFinder(),
             )
         vr.simplices.toList().shouldContainExactly(
             simplexOf(0), simplexOf(1), simplexOf(2), simplexOf(3),
