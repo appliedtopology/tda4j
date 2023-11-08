@@ -20,8 +20,43 @@ interface SymmetryGroup<GroupT, VertexT : Comparable<VertexT>> {
     fun isRepresentative(simplex: AbstractSimplex<VertexT>): Boolean = simplex == representative(simplex)
 }
 
+object Combinatorics {
+    tailrec fun factorial(
+        n: Int,
+        accum: Int = 1,
+    ): Int {
+        return if (n <= 1) accum else factorial(n - 1, n * accum)
+    }
+
+    /* See  https://en.wikipedia.org/wiki/Binomial_coefficient#In_programming_languages
+     * and in particular the C language implementation for details on this tail recursion
+     */
+    fun binomial(
+        n: Int,
+        k: Int,
+    ): Int {
+        if (k > n / 2) return binomial(n, n - k)
+        if (k < 0) return 0
+        if (k > n) return 0
+        if (k == 0) return 1
+        if (k == n) return 1
+        return (0 until k).fold(1) { c, i -> (c * (n - i)).floorDiv(i + 1) }
+    }
+
+    fun binomialDiagonal(k: Int): Sequence<Int> =
+        sequence {
+            var n = k
+            var accum = 1L
+            while (true) {
+                yield(accum.toInt())
+                n += 1
+                accum = (accum * n).floorDiv(n - k)
+            }
+        }
+}
+
 open class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
-    override val elements: Collection<Int> = (0..factorial(elementCount) - 1).toList()
+    override val elements: Collection<Int> = (0..Combinatorics.factorial(elementCount) - 1).toList()
 
     val permutations: List<Map<Int, Int>> =
         elements.map {
@@ -42,8 +77,8 @@ open class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
             var pos = n
 
             while (source.isNotEmpty()) {
-                val div = pos.floorDiv(factorial(source.size - 1))
-                pos = pos.mod(factorial(source.size - 1))
+                val div = pos.floorDiv(Combinatorics.factorial(source.size - 1))
+                pos = pos.mod(Combinatorics.factorial(source.size - 1))
                 add(source.removeAt(div))
             }
         }
@@ -58,7 +93,7 @@ open class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
         while (pmut.isNotEmpty()) {
             val i = pmut.removeFirst()
             pmut = pmut.map { it - (if (it > i) 1 else 0) }.toMutableList()
-            pos += i * factorial(pmut.size)
+            pos += i * Combinatorics.factorial(pmut.size)
         }
         return pos
     }
@@ -73,12 +108,6 @@ open class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
     }
 
     companion object {
-        fun factorial(
-            n: Int,
-            accum: Int = 1,
-        ): Int {
-            return if (n <= 1) accum else factorial(n - 1, n * accum)
-        }
     }
 }
 
