@@ -5,16 +5,16 @@ import space.kscience.kmath.tensors.core.DoubleTensorAlgebra
 import kotlin.math.pow
 
 interface FiniteMetricSpace<VertexT> {
-    abstract fun distance(
+    fun distance(
         x: VertexT,
         y: VertexT,
     ): Double
 
-    abstract val size: Int
+    val size: Int
 
-    abstract val elements: Iterable<VertexT>
+    val elements: Iterable<VertexT>
 
-    abstract fun contains(x: VertexT): Boolean
+    fun contains(x: VertexT): Boolean
 
     companion object {
         fun <VertexT : Comparable<VertexT>> MaximumDistanceFiltrationValue(
@@ -27,7 +27,7 @@ interface FiniteMetricSpace<VertexT> {
                     } else {
                         simplex.vertices.flatMap({ v ->
                             simplex.vertices.filter({ it > v }).map({ w -> metricSpace.distance(v, w) })
-                        }).maxOf { it ?: Double.POSITIVE_INFINITY }
+                        }).maxOf { it }
                     }
                 )
             }
