@@ -60,6 +60,8 @@ kotlin {
             useJUnitPlatform()
             if (hasProperty("server")) {
                 if (property("server") == "smirnov") {
+                    println("Executing on the smirnov compute server")
+
                     // set heap size for the test JVM(s)
                     minHeapSize = "1024m"
                     maxHeapSize = "8192m"
