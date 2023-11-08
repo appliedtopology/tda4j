@@ -8,7 +8,7 @@ interface FiniteMetricSpace<VertexT> {
     abstract fun distance(
         x: VertexT,
         y: VertexT,
-    ): Double?
+    ): Double
 
     abstract val size: Int
 
@@ -40,7 +40,7 @@ class ExplicitMetricSpace<VertexT>(val distances: Map<Pair<VertexT, VertexT>, Do
     override fun distance(
         x: VertexT,
         y: VertexT,
-    ): Double? = distances[Pair(x, y)]
+    ): Double = distances[Pair(x, y)] ?: Double.POSITIVE_INFINITY
 
     override val size: Int = elements.size
 
@@ -51,7 +51,7 @@ class EuclideanMetricSpace(val points: DoubleTensor2D) : FiniteMetricSpace<Int> 
     override fun distance(
         x: Int,
         y: Int,
-    ): Double? {
+    ): Double {
         with(DoubleTensorAlgebra) {
             val x_y = points.rowsByIndices(intArrayOf(x)) - points.rowsByIndices(intArrayOf(y))
             return x_y.dot(x_y.transposed()).get(intArrayOf(0, 0)).pow(0.5)
@@ -72,7 +72,7 @@ class HyperCube(val dimension: Int) : FiniteMetricSpace<Int> {
     override fun distance(
         x: Int,
         y: Int,
-    ): Double? = (x xor y).countOneBits().toDouble()
+    ): Double = (x xor y).countOneBits().toDouble()
 
     override val size: Int = (1 shl dimension)
 
