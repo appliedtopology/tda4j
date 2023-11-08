@@ -6,11 +6,35 @@ import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainInOrder
 import io.kotest.matchers.equals.shouldBeEqual
+import io.kotest.property.Arb
+import io.kotest.property.arbitrary.int
+import io.kotest.property.assume
+import io.kotest.property.checkAll
 
 class SymmetryGroupSpec : FunSpec({
     test("Factorial function computes correctly") {
-        (1..5).map({ HyperCubeSymmetry.factorial(it) })
+        (1..5).map { Combinatorics.factorial(it) }
             .shouldContainInOrder(listOf(1, 2, 6, 24, 120))
+    }
+
+    test("Binomial Coefficient computes correctly") {
+        (0..3).map { Combinatorics.binomial(3, it) }
+            .shouldContainInOrder(listOf(1, 3, 3, 1))
+        (0..4).map { Combinatorics.binomial(4, it) }
+            .shouldContainInOrder(listOf(1, 4, 6, 4, 1))
+        checkAll(Arb.int(2, 25), Arb.int(1, 25)) { a, b ->
+            val n = maxOf(a, b)
+            val k = minOf(a, b)
+            assume(n > 2)
+            assume(k > 1)
+            assume(k < n)
+            Combinatorics.binomial(n, 0).shouldBeEqual(1)
+            Combinatorics.binomial(n, n).shouldBeEqual(1)
+            Combinatorics.binomial(n, 1).shouldBeEqual(n)
+            Combinatorics.binomial(n, n - 1).shouldBeEqual(n)
+            (Combinatorics.binomial(n, k) + Combinatorics.binomial(n, k + 1))
+                .shouldBeEqual(Combinatorics.binomial(n + 1, k + 1))
+        }
     }
 
     val hcs = HyperCubeSymmetry(3)

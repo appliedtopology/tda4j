@@ -56,10 +56,10 @@ class FiniteMetricSpaceSpec : StringSpec({
             it.colNum shouldBeGreaterThan 0
             it.rowNum shouldBeGreaterThan 0
             collect("${it.colNum} columns")
-            collect("${it.colNum} rows")
+            collect("${it.rowNum} rows")
             Double.tensorAlgebra.withBroadcast {
                 val diff = it.rowsByIndices(intArrayOf(1)) - it.rowsByIndices(intArrayOf(2))
-                println(kotlin.math.sqrt(diff.dot(diff.transposed())[intArrayOf(0, 0)]))
+                collect(kotlin.math.floor(kotlin.math.sqrt(diff.dot(diff.transposed())[intArrayOf(0, 0)]) / 10.0))
             }
         }
     }

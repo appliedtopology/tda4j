@@ -16,6 +16,11 @@ fun <VertexT : Comparable<VertexT>> simplexArb(
     dimRange: IntRange = 0..vertices.size,
 ): Arb<AbstractSimplex<VertexT>> = Arb.list(Arb.element(vertices), dimRange).map { vxs -> abstractSimplexOf(vxs) }
 
+fun simplexArb(
+    vertices: IntRange,
+    dimRange: IntRange = 0..vertices.last(),
+): Arb<AbstractSimplex<Int>> = simplexArb(vertices.toList(), dimRange)
+
 class SimplexSpec : StringSpec({
     val simplex: Simplex = simplexOf(1, 2, 3)
     "A simplex has a non-zero size" {

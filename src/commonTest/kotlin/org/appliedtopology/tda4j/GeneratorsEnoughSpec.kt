@@ -1,10 +1,6 @@
 package org.appliedtopology.tda4j
 
 import io.kotest.core.spec.style.StringSpec
-import io.kotest.property.Arb
-import io.kotest.property.arbitrary.int
-import io.kotest.property.arbitrary.list
-import io.kotest.property.arbitrary.map
 import io.kotest.property.checkAll
 
 class GeneratorsEnoughSpec : StringSpec({
@@ -17,7 +13,6 @@ class GeneratorsEnoughSpec : StringSpec({
             sg.permutationIndex(listOf(1, 2, 4, 3, 5).map { it - 1 }),
             sg.permutationIndex(listOf(1, 2, 3, 5, 4).map { it - 1 }),
         )
-    val simplexGen = Arb.list(Arb.int(0..hc.top), 0..15).map { simplexOf(it) }
     "Checking group generators suffices for representative recognition" {
         checkAll<Simplex>(simplexArb((1..hc.top).toList(), 0..15)) { s ->
             collect(
