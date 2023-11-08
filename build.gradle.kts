@@ -1,15 +1,22 @@
 import org.jetbrains.dokka.gradle.DokkaTask
 
 plugins {
-    kotlin("multiplatform") version "1.7.10"
+    kotlin("multiplatform") version "1.9.20"
     id("org.jetbrains.dokka") version "1.9.10"
     id("io.kotest.multiplatform") version "5.7.2"
     id("com.google.devtools.ksp") version "1.8.21-1.0.11"
     id("org.jlleitschuh.gradle.ktlint") version "11.6.1"
+    `java-library-distribution`
 }
 
 group = "org.appliedtopology"
 version = "1.0-SNAPSHOT"
+
+distributions {
+    main {
+        distributionBaseName = "tda4j"
+    }
+}
 
 repositories {
     mavenCentral()
@@ -48,34 +55,16 @@ configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
 }
 
 kotlin {
-    jvmToolchain(11)
+    jvmToolchain(17)
     jvm {
         compilations.all {
             kotlinOptions {
-                jvmTarget = "11"
+                jvmTarget = "17"
             }
         }
         withJava()
         testRuns["test"].executionTask.configure {
             useJUnitPlatform()
-            if (hasProperty("server")) {
-                if (property("server") == "smirnov") {
-                    println("Executing on the smirnov compute server")
-
-                    // set heap size for the test JVM(s)
-                    minHeapSize = "1024m"
-                    maxHeapSize = "8192m"
-
-                    // set JVM arguments for the test JVM(s)
-                    jvmArgs(
-                        listOf(
-                            "-XX:+HeapDumpOnOutOfMemoryError",
-                            "-XX:HeapDumpPath=heapdump.hprof",
-                            "-XX:StartFlightRecording=disk=true,dumponexit=true,filename=recording.jfr,maxsize=16384m,maxage=7d,settings=profile,path-to-gc-roots=true",
-                        ),
-                    )
-                }
-            }
         }
     }
     js(IR) {
@@ -98,6 +87,7 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
+                api(kotlin("stdlib"))
                 implementation(kotlin("script-runtime"))
                 implementation(platform("io.arrow-kt:arrow-stack:1.2.0"))
                 implementation("io.arrow-kt:arrow-core")
