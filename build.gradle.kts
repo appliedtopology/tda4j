@@ -48,13 +48,30 @@ configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
 }
 
 kotlin {
+    jvmToolchain(11)
     jvm {
         compilations.all {
-            kotlinOptions.jvmTarget = "11"
+            kotlinOptions {
+                jvmTarget = "11"
+            }
         }
         withJava()
         testRuns["test"].executionTask.configure {
             useJUnitPlatform()
+            if (hasProperty("server") and (property("server") == "smirnov")) {
+                // set heap size for the test JVM(s)
+                minHeapSize = "1024m"
+                maxHeapSize = "8192m"
+
+                // set JVM arguments for the test JVM(s)
+                jvmArgs(
+                    listOf(
+                        "-XX:+HeapDumpOnOutOfMemoryError",
+                        "-XX:HeapDumpPath=heapdump.hprof",
+                        "-XX:StartFlightRecording=disk=true,dumponexit=true,filename=recording.jfr,maxsize=16384m,maxage=7d,settings=profile,path-to-gc-roots=true",
+                    ),
+                )
+            }
         }
     }
     js(IR) {
