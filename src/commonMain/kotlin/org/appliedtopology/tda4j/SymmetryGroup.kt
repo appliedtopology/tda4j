@@ -65,7 +65,7 @@ open class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
                 (0..(1 shl elementCount) - 1).associateWith { bits ->
                     (0..elementCount - 1)
                         .map { ((bits and (1 shl it) shr it) shl p[it]) }
-                        .fold(0, { x, y -> x or y })
+                        .fold(0) { x, y -> x or y }
                 }
             }
         }
@@ -107,8 +107,7 @@ open class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
         return isR
     }
 
-    companion object {
-    }
+    companion object
 }
 
 class HyperCubeSymmetryGenerators(elementCount: Int) : HyperCubeSymmetry(elementCount) {
@@ -160,7 +159,7 @@ class ExpandSequence<VertexT : Comparable<VertexT>>(
 
     override fun iterator(): Iterator<AbstractSimplex<VertexT>> =
         sequence {
-            representatives.forEach({ t -> yieldAll(symmetryGroup.orbit(t)) })
+            representatives.forEach { t -> yieldAll(symmetryGroup.orbit(t)) }
         }.iterator()
 }
 
@@ -181,7 +180,7 @@ class SymmetricZomorodianIncremental<VertexT : Comparable<VertexT>>(
                     (
                         getOrPut(
                             dvw.second.second,
-                            defaultValue = { -> hashSetOf<VertexT>() },
+                            defaultValue = { hashSetOf<VertexT>() },
                         ) as MutableSet<VertexT>
                     ).add(dvw.second.first)
                 }
@@ -194,7 +193,7 @@ class SymmetricZomorodianIncremental<VertexT : Comparable<VertexT>>(
             tasks.addFirst(
                 Pair(
                     abstractSimplexOf(vertex),
-                    lowerNeighbors.getOrElse(vertex, { -> emptySet() }),
+                    lowerNeighbors.getOrElse(vertex) { emptySet() },
                 ),
             )
         }
@@ -209,7 +208,7 @@ class SymmetricZomorodianIncremental<VertexT : Comparable<VertexT>>(
                     run {
                         val sigma: AbstractSimplex<VertexT> = tau.plus(v)
                         val M: Set<VertexT> =
-                            N.intersect(lowerNeighbors.get(v)?.asIterable() ?: emptySequence<VertexT>().asIterable())
+                            N.intersect(lowerNeighbors[v]?.asIterable() ?: emptySequence<VertexT>().asIterable())
                         tasks.addFirst(Pair(sigma, M))
                     }
                 }
@@ -217,6 +216,6 @@ class SymmetricZomorodianIncremental<VertexT : Comparable<VertexT>>(
         }
 
         val filtered: Filtered<VertexT, Double> = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
-        return ExpandSequence<VertexT>(V.sortedWith(VietorisRips.getComparator(filtered)), symmetryGroup)
+        return ExpandSequence<VertexT>(V.sortedWith(getComparator(filtered)), symmetryGroup)
     }
 }

@@ -79,8 +79,7 @@ class SymmetricSimplexIndexVietorisRips<GroupT>(
     private var dimensionRepresentatives: Array<Sequence<Triple<Double, Int, Int>>> =
         Array<Sequence<Triple<Double, Int, Int>>>(
             maxDimension,
-            { emptySequence<Triple<Double, Int, Int>>() },
-        )
+        ) { emptySequence<Triple<Double, Int, Int>>() }
 
     fun cliquesByDimension(d: Int): Sequence<Triple<Double, Int, Int>> {
         if (dimensionRepresentatives[d].none()) {

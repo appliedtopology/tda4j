@@ -5,8 +5,6 @@ import arrow.core.padZip
 open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
     private val _simplex: HashSet<VertexT> = HashSet()
 
-    constructor() { }
-
     constructor(elements: HashSet<VertexT>) {
         _simplex.addAll(elements)
     }
@@ -24,10 +22,9 @@ open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
 
     override fun equals(other: Any?): Boolean {
         val that: AbstractSimplex<VertexT>? = other as? AbstractSimplex<VertexT>
-        if (that == null) return false
         val mine = this.vertices
-        val thine = that.vertices
-        return mine.containsAll(thine) and thine.containsAll(mine)
+        val thine = that?.vertices
+        return mine.containsAll(thine ?: emptyList()) and (thine?.containsAll(mine) ?: false)
     }
 
     override fun hashCode(): Int {
@@ -73,8 +70,8 @@ open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
                 val r = lr.second
                 if (l == null) return -1
                 if (r == null) return +1
-                val lv: VertexT = l!!
-                val rv: VertexT = r!!
+                val lv: VertexT = l
+                val rv: VertexT = r
                 if (lv.compareTo(rv) != 0) {
                     return lv.compareTo(rv)
                 }

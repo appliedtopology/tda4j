@@ -3,7 +3,7 @@ package org.appliedtopology.tda4j
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldContainAll
 
-class VietorisRipsSpec() : FunSpec({
+class VietorisRipsSpec : FunSpec({
     val hc2 = HyperCube(2)
     val sstream = ZomorodianIncremental<Int>(hc2, 3.0, 3)
 

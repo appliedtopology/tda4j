@@ -8,17 +8,22 @@ abstract class SimplexStream<VertexT : Comparable<VertexT>, FiltrationT : Compar
     Filtered<VertexT, FiltrationT>, Iterable<AbstractSimplex<VertexT>> {
     open val comparator: Comparator<AbstractSimplex<VertexT>> =
         compareBy<AbstractSimplex<VertexT>> { filtrationValue(it) }
-            .thenComparator({ a: AbstractSimplex<VertexT>, b: AbstractSimplex<VertexT> -> AbstractSimplex.compare(a, b) })
+            .thenComparator { a: AbstractSimplex<VertexT>, b: AbstractSimplex<VertexT> ->
+                AbstractSimplex.compare(
+                    a,
+                    b,
+                )
+            }
 }
 
-class ExplicitStream<VertexT : Comparable<VertexT>, FiltrationT : Comparable<FiltrationT>> :
+open class ExplicitStream<VertexT : Comparable<VertexT>, FiltrationT : Comparable<FiltrationT>> :
     SimplexStream<VertexT, FiltrationT>(), MutableMap<AbstractSimplex<VertexT>, FiltrationT> {
     protected val filtrationValues: MutableMap<AbstractSimplex<VertexT>, FiltrationT> = HashMap()
 
-    override fun filtrationValue(simplex: AbstractSimplex<VertexT>): FiltrationT? = filtrationValues.get(simplex)
+    override fun filtrationValue(simplex: AbstractSimplex<VertexT>): FiltrationT? = filtrationValues[simplex]
 
     override fun iterator(): Iterator<AbstractSimplex<VertexT>> =
-        (filtrationValues.keys.toList()).sortedBy { filtrationValues.get(it) }.iterator()
+        (filtrationValues.keys.toList()).sortedBy { filtrationValues[it] }.iterator()
 
     override fun equals(other: Any?): Boolean = filtrationValues.equals(other)
 
@@ -46,7 +51,7 @@ class ExplicitStream<VertexT : Comparable<VertexT>, FiltrationT : Comparable<Fil
 
     override fun containsValue(value: FiltrationT): Boolean = filtrationValues.containsValue(value)
 
-    override fun get(key: AbstractSimplex<VertexT>): FiltrationT? = filtrationValues.get(key)
+    override fun get(key: AbstractSimplex<VertexT>): FiltrationT? = filtrationValues[key]
 
     override fun isEmpty(): Boolean = filtrationValues.isEmpty()
 

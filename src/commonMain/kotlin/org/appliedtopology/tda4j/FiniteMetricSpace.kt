@@ -25,9 +25,9 @@ interface FiniteMetricSpace<VertexT> {
                     if (simplex.size <= 1) {
                         0.0
                     } else {
-                        simplex.vertices.flatMap({ v ->
-                            simplex.vertices.filter({ it > v }).map({ w -> metricSpace.distance(v, w) })
-                        }).maxOf { it }
+                        simplex.vertices.flatMap { v ->
+                            simplex.vertices.filter { it > v }.map { w -> metricSpace.distance(v, w) }
+                        }.maxOf { it }
                     }
                 )
             }
@@ -35,7 +35,7 @@ interface FiniteMetricSpace<VertexT> {
 }
 
 class ExplicitMetricSpace<VertexT>(val distances: Map<Pair<VertexT, VertexT>, Double>) : FiniteMetricSpace<VertexT> {
-    override val elements: Set<VertexT> = distances.keys.map({ it.first }).toSet()
+    override val elements: Set<VertexT> = distances.keys.map { it.first }.toSet()
 
     override fun distance(
         x: VertexT,
@@ -54,7 +54,7 @@ class EuclideanMetricSpace(val points: DoubleTensor2D) : FiniteMetricSpace<Int> 
     ): Double {
         with(DoubleTensorAlgebra) {
             val x_y = points.rowsByIndices(intArrayOf(x)) - points.rowsByIndices(intArrayOf(y))
-            return x_y.dot(x_y.transposed()).get(intArrayOf(0, 0)).pow(0.5)
+            return x_y.dot(x_y.transposed())[intArrayOf(0, 0)].pow(0.5)
         }
     }
 

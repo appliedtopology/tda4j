@@ -22,11 +22,11 @@ abstract class VietorisRips<VertexT : Comparable<VertexT>>(
         metricSpace: FiniteMetricSpace<VertexT>,
         maxFiltrationValue: Double,
     ): Sequence<Pair<Double?, Pair<VertexT, VertexT>>> {
-        return metricSpace.elements.flatMap({ v ->
-            metricSpace.elements.filter({ v < it })
-                .map({ w -> Pair(metricSpace.distance(v, w), Pair(v, w)) })
-                .filter({ (d, _) -> (d != null) && (d <= maxFiltrationValue) })
-        }).asSequence()
+        return metricSpace.elements.flatMap { v ->
+            metricSpace.elements.filter { v < it }
+                .map { w -> Pair(metricSpace.distance(v, w), Pair(v, w)) }
+                .filter { (d, _) -> (d != null) && (d <= maxFiltrationValue) }
+        }.asSequence()
     }
 
     override fun iterator(): Iterator<AbstractSimplex<VertexT>> = simplices.iterator()
@@ -57,7 +57,7 @@ class ZomorodianIncremental<VertexT : Comparable<VertexT>>(
                     (
                         getOrPut(
                             dvw.second.second,
-                            defaultValue = { -> hashSetOf<VertexT>() },
+                            defaultValue = { hashSetOf<VertexT>() },
                         ) as MutableSet<VertexT>
                     ).add(dvw.second.first)
                 }
@@ -70,7 +70,7 @@ class ZomorodianIncremental<VertexT : Comparable<VertexT>>(
             tasks.addFirst(
                 Pair(
                     abstractSimplexOf(vertex),
-                    lowerNeighbors.getOrElse(vertex, { -> emptySet() }),
+                    lowerNeighbors.getOrElse(vertex) { emptySet() },
                 ),
             )
         }
@@ -85,7 +85,7 @@ class ZomorodianIncremental<VertexT : Comparable<VertexT>>(
                     run {
                         val sigma: AbstractSimplex<VertexT> = tau.plus(v)
                         val M: Set<VertexT> =
-                            N.intersect(lowerNeighbors.get(v)?.asIterable() ?: emptySequence<VertexT>().asIterable())
+                            N.intersect(lowerNeighbors[v]?.asIterable() ?: emptySequence<VertexT>().asIterable())
                         tasks.addFirst(Pair(sigma, M))
                     }
                 }
@@ -93,6 +93,6 @@ class ZomorodianIncremental<VertexT : Comparable<VertexT>>(
         }
 
         val filtered: Filtered<VertexT, Double> = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
-        return V.sortedWith(VietorisRips.getComparator(filtered)).asSequence()
+        return V.sortedWith(getComparator(filtered)).asSequence()
     }
 }

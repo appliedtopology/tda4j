@@ -2,7 +2,7 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
     kotlin("multiplatform") version "1.9.20"
-    `java`
+    java
     `java-library`
     `java-library-distribution`
     id("org.jetbrains.dokka") version "1.9.10"
