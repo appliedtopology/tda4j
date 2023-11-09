@@ -34,15 +34,14 @@ kotlin {
         // https://stackoverflow.com/questions/63426211/kotlin-multiplatform-shadowjar-gradle-plugin-creates-empty-jar
         compilations.named("main") {
             tasks {
-                val shadowJar =
-                    register<ShadowJar>("ShadowJar") {
-                        group = "distribution"
-                        from(output)
-                        configurations = listOf(runtimeDependencyFiles)
-                        archiveClassifier.set("all")
-                        dependsOn("jvmJar")
-                        dependsOn("jvmMainClasses")
-                    }
+                register<ShadowJar>("fatJar") {
+                    group = "distribution"
+                    from(output)
+                    configurations = listOf(runtimeDependencyFiles)
+                    archiveClassifier.set("all")
+                    dependsOn("jvmJar")
+                    dependsOn("jvmMainClasses")
+                }
             }
         }
     }
