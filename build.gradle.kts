@@ -62,6 +62,7 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
                 implementation("io.arrow-kt:arrow-core:1.2.0")
                 implementation("space.kscience:kmath-core:0.3.1")
                 implementation("space.kscience:kmath-tensors:0.3.1")

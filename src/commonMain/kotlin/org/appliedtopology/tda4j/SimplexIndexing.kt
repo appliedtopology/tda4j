@@ -1,5 +1,7 @@
 package org.appliedtopology.tda4j
 
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
 import kotlin.math.absoluteValue
 
 class SimplexIndexing(val vertexCount: Int) {
@@ -81,17 +83,26 @@ class SymmetricSimplexIndexVietorisRips<GroupT>(
             maxDimension,
         ) { emptySequence<Triple<Double, Int, Int>>() }
 
-    fun cliquesByDimension(d: Int): Sequence<Triple<Double, Int, Int>> {
-        if (dimensionRepresentatives[d].none()) {
-            val filtered = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
-            val si = SimplexIndexing(metricSpace.size)
-            dimensionRepresentatives[d] =
-                (0 until Combinatorics.binomial(metricSpace.size, d + 1))
-                    .filter { symmetryGroup.isRepresentative(si.simplexAt(it, d + 1)) }
-                    .map {
-                        Triple(filtered.filtrationValue(si.simplexAt(it, d + 1)) ?: Double.POSITIVE_INFINITY, it, d + 1)
-                    }.sortedBy { it.first }.asSequence()
+    fun cliquesByDimension(d: Int): Sequence<Triple<Double, Int, Int>> =
+        runBlocking(Dispatchers.Default) {
+            if (dimensionRepresentatives[d].none()) {
+                val filtered = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
+                val si = SimplexIndexing(metricSpace.size)
+                dimensionRepresentatives[d] =
+                    coroutineScope {
+                        (0 until Combinatorics.binomial(metricSpace.size, d + 1))
+                            .map { async { Pair(symmetryGroup.isRepresentative(si.simplexAt(it, d + 1)), it) } }
+                            .awaitAll()
+                            .filter { it.first }
+                            .map { it.second }
+                            .map {
+                                Triple(
+                                    filtered.filtrationValue(si.simplexAt(it, d + 1)) ?: Double.POSITIVE_INFINITY,
+                                    it, d + 1,
+                                )
+                            }.toList().sortedBy { it.first }.asSequence()
+                    }
+            }
+            dimensionRepresentatives[d]
         }
-        return dimensionRepresentatives[d]
-    }
 }
