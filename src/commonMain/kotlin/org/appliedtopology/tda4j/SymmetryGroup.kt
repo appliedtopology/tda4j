@@ -1,5 +1,10 @@
 package org.appliedtopology.tda4j
 
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
 interface SymmetryGroup<GroupT, VertexT : Comparable<VertexT>> {
     val elements: Collection<GroupT>
 
@@ -69,7 +74,6 @@ open class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
                 }
             }
         }
-    val knownRepresentatives: MutableSet<Simplex> = HashSet()
 
     fun permutation(n: Int): List<Int> =
         buildList(elementCount) {
@@ -99,15 +103,6 @@ open class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
     }
 
     override fun action(g: Int): (Int) -> Int = { permutations[g][it] ?: it }
-
-    override fun isRepresentative(simplex: Simplex): Boolean {
-        if (simplex in knownRepresentatives) return true
-        val isR = super.isRepresentative(simplex)
-        if (isR) knownRepresentatives.add(simplex)
-        return isR
-    }
-
-    companion object
 }
 
 class HyperCubeSymmetryGenerators(elementCount: Int) : HyperCubeSymmetry(elementCount) {
@@ -136,9 +131,17 @@ class HyperCubeSymmetryGenerators(elementCount: Int) : HyperCubeSymmetry(element
         }
 
         // Finally, generate the orbit, save the true representative and move on
-        pseudoRepresentatives[simplex] = representative(simplex)
+        runBlocking {
+            launch {
+                mutex.withLock {
+                    pseudoRepresentatives[simplex] = representative(simplex)
+                }
+            }
+        }
         return simplex == pseudoRepresentatives[simplex]
     }
+
+    val mutex = Mutex()
 }
 
 class ExpandSequence<VertexT : Comparable<VertexT>>(

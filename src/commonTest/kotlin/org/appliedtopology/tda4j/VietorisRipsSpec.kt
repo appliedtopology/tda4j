@@ -5,7 +5,7 @@ import io.kotest.matchers.collections.shouldContainAll
 
 class VietorisRipsSpec : FunSpec({
     val hc2 = HyperCube(2)
-    val sstream = ZomorodianIncremental<Int>(hc2, 3.0, 3)
+    val sstream = ZomorodianIncremental<Int>(hc2, 3.0, 4)
 
     test("HyperCube(2) generates the right simplices") {
         sstream.simplices.toList().shouldContainAll(
@@ -15,6 +15,7 @@ class VietorisRipsSpec : FunSpec({
             simplexOf(0, 3), simplexOf(1, 2),
             simplexOf(0, 1, 3), simplexOf(0, 2, 3),
             simplexOf(0, 1, 2), simplexOf(1, 2, 3),
+            simplexOf(0, 1, 2, 3),
         )
     }
 })

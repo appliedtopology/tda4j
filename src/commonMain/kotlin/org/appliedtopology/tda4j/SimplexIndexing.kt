@@ -1,10 +1,8 @@
 package org.appliedtopology.tda4j
 
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
 import kotlin.math.absoluteValue
 
-class SimplexIndexing(val vertexCount: Int) {
+open class SimplexIndexing(val vertexCount: Int) {
     val binomialTable =
         0.rangeTo(vertexCount).map { d ->
             Combinatorics.binomialDiagonal(d).take(vertexCount).toList()
@@ -38,21 +36,26 @@ class SimplexIndexing(val vertexCount: Int) {
     }
 }
 
-class SimplexIndexVietorisRips(
+open class SimplexIndexVietorisRips(
     metricSpace: FiniteMetricSpace<Int>,
     maxFiltrationValue: Double,
     maxDimension: Int,
 ) : VietorisRips<Int>(metricSpace, maxFiltrationValue, maxDimension) {
-    override fun cliques(): Sequence<Simplex> =
+    override fun cliques(): Sequence<AbstractSimplex<Int>> = simplices
+
+    override val simplices: Sequence<Simplex> =
+        sequence {
+            (0 until maxDimension).forEach { d -> yieldAll(simplicesByDimension(d)) }
+        }
+
+    open override fun simplicesByDimension(d: Int): Sequence<Simplex> =
         sequence {
             with(SimplexIndexing(metricSpace.size)) {
-                (0 until maxDimension).forEach { d ->
-                    yieldAll(cliquesByDimension(d).map { fsd -> simplexAt(fsd.second, fsd.third) })
-                }
+                yieldAll(cliquesByDimension(d).map { fsd -> simplexAt(fsd.second, fsd.third) })
             }
         }
 
-    fun cliquesByDimension(d: Int): Sequence<Triple<Double, Int, Int>> =
+    open fun cliquesByDimension(d: Int): Sequence<Triple<Double, Int, Int>> =
         with(SimplexIndexing(metricSpace.size)) {
             val filtered = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
             (0 until Combinatorics.binomial(metricSpace.size, d + 1)).map {
@@ -61,48 +64,40 @@ class SimplexIndexVietorisRips(
         }
 }
 
-class SymmetricSimplexIndexVietorisRips<GroupT>(
+open class SymmetricSimplexIndexVietorisRips<GroupT>(
     metricSpace: FiniteMetricSpace<Int>,
     maxFiltrationValue: Double,
     maxDimension: Int,
     val symmetryGroup: SymmetryGroup<GroupT, Int>,
-) : VietorisRips<Int>(metricSpace, maxFiltrationValue, maxDimension) {
-    override fun cliques(): Sequence<Simplex> =
-        sequence seq@{
-            with(SimplexIndexing(metricSpace.size)) si@{
-                for (d in (0 until maxDimension)) {
-                    for (fsd in cliquesByDimension(d)) {
-                        yieldAll(symmetryGroup.orbit(simplexAt(fsd.second, fsd.third)))
-                    }
+) : SimplexIndexVietorisRips(metricSpace, maxFiltrationValue, maxDimension) {
+    override fun simplicesByDimension(d: Int): Sequence<Simplex> =
+        sequence {
+            with(SimplexIndexing(metricSpace.size)) {
+                cliquesByDimension(d).forEach {
+                    yieldAll(symmetryGroup.orbit(simplexAt(it.second, it.third)))
                 }
             }
         }
 
-    private var dimensionRepresentatives: Array<Sequence<Triple<Double, Int, Int>>> =
+    var dimensionRepresentatives: Array<Sequence<Triple<Double, Int, Int>>> =
         Array<Sequence<Triple<Double, Int, Int>>>(
-            maxDimension,
+            maxDimension + 1,
         ) { emptySequence<Triple<Double, Int, Int>>() }
 
-    fun cliquesByDimension(d: Int): Sequence<Triple<Double, Int, Int>> =
-        runBlocking(Dispatchers.Default) {
-            if (dimensionRepresentatives[d].none()) {
-                val filtered = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
-                val si = SimplexIndexing(metricSpace.size)
-                dimensionRepresentatives[d] =
-                    coroutineScope {
-                        (0 until Combinatorics.binomial(metricSpace.size, d + 1))
-                            .map { async { Pair(symmetryGroup.isRepresentative(si.simplexAt(it, d + 1)), it) } }
-                            .awaitAll()
-                            .filter { it.first }
-                            .map { it.second }
-                            .map {
-                                Triple(
-                                    filtered.filtrationValue(si.simplexAt(it, d + 1)) ?: Double.POSITIVE_INFINITY,
-                                    it, d + 1,
-                                )
-                            }.toList().sortedBy { it.first }.asSequence()
-                    }
-            }
-            dimensionRepresentatives[d]
+    override fun cliquesByDimension(d: Int): Sequence<Triple<Double, Int, Int>> {
+        if (dimensionRepresentatives[d].none()) {
+            val filtered = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
+            val si = SimplexIndexing(metricSpace.size)
+            dimensionRepresentatives[d] =
+                (0 until Combinatorics.binomial(metricSpace.size, d + 1))
+                    .filter { symmetryGroup.isRepresentative(si.simplexAt(it, d + 1)) }
+                    .map {
+                        Triple(
+                            filtered.filtrationValue(si.simplexAt(it, d + 1)) ?: Double.POSITIVE_INFINITY,
+                            it, d + 1,
+                        )
+                    }.sortedBy { it.first }.asSequence()
         }
+        return dimensionRepresentatives[d]
+    }
 }

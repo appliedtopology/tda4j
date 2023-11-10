@@ -10,13 +10,13 @@ abstract class VietorisRips<VertexT : Comparable<VertexT>>(
 
     private var simplexCache: Sequence<AbstractSimplex<VertexT>>? = null
 
-    val simplices: Sequence<AbstractSimplex<VertexT>>
+    open val simplices: Sequence<AbstractSimplex<VertexT>>
         get() {
             simplexCache = simplexCache ?: cliques()
             return simplexCache ?: emptySequence()
         }
 
-    fun simplicesInDimension(d: Int): Sequence<AbstractSimplex<VertexT>> = simplices.filter { simplex -> simplex.dimension == d }
+    open fun simplicesByDimension(d: Int): Sequence<AbstractSimplex<VertexT>> = simplices.filter { simplex -> simplex.dimension == d }
 
     fun weightedEdges(
         metricSpace: FiniteMetricSpace<VertexT>,

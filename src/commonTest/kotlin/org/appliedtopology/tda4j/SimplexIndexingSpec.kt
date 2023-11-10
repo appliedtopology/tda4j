@@ -4,6 +4,7 @@ import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.equals.shouldBeEqual
+import io.kotest.matchers.sequences.shouldContainAll
 import io.kotest.property.Arb
 import io.kotest.property.arbitrary.int
 import io.kotest.property.checkAll
@@ -57,7 +58,7 @@ class SimplexIndexingSpec : StringSpec({
         }
     }
 
-    "SimplexIndexCliqueFinder finds the correct cliques" {
+    "SimplexIndexVietorisRips finds the correct cliques" {
         val hc2 = HyperCube(2)
         val vr =
             SimplexIndexVietorisRips(
@@ -75,7 +76,7 @@ class SimplexIndexingSpec : StringSpec({
         )
     }
 
-    "SymmetricSimplexIndexCliqueFinder finds the correct cliques" {
+    "SymmetricSimplexIndexVietorisRips finds the correct cliques" {
         val hc2 = HyperCube(2)
         val hcs2 = HyperCubeSymmetry(2)
         val vr = SymmetricSimplexIndexVietorisRips<Int>(hc2, 3.0, 3, hcs2)
@@ -88,4 +89,42 @@ class SimplexIndexingSpec : StringSpec({
             simplexOf(0, 2, 3), simplexOf(1, 2, 3),
         )
     }
+
+    fun siEQssi(d: Int) =
+        "SymmetricSimplexIndexVietorisRips and SimplexIndexVietorsRips agree on HyperCube($d)" {
+            val hc = HyperCube(d)
+            val hcs = HyperCubeSymmetry(d)
+            val vr = SimplexIndexVietorisRips(hc, d.toDouble(), (1 shl d))
+            val svr = SymmetricSimplexIndexVietorisRips(hc, d.toDouble(), (1 shl d), hcs)
+
+            svr.simplices.shouldContainAll(vr.simplices)
+            vr.simplices.shouldContainAll(svr.simplices)
+
+            (0..(1 shl d)).forEach {
+                svr.simplicesByDimension(it).shouldContainAll(vr.simplicesByDimension(it))
+                vr.simplicesByDimension(it).shouldContainAll(svr.simplicesByDimension(it))
+            }
+        }
+
+    siEQssi(2)
+    siEQssi(3)
+
+    fun siEQpssi(d: Int) =
+        "ParallelSymmetricSimplexIndexVietorisRips and SimplexIndexVietorsRips agree on HyperCube($d)" {
+            val hc = HyperCube(d)
+            val hcs = HyperCubeSymmetry(d)
+            val vr = SimplexIndexVietorisRips(hc, d.toDouble(), (1 shl d))
+            val psvr = ParallelSymmetricSimplexIndexVietorisRips(hc, d.toDouble(), (1 shl d), hcs)
+
+            psvr.simplices.shouldContainAll(vr.simplices)
+            vr.simplices.shouldContainAll(psvr.simplices)
+
+            (0..(1 shl d)).forEach {
+                psvr.simplicesByDimension(it).shouldContainAll(vr.simplicesByDimension(it))
+                vr.simplicesByDimension(it).shouldContainAll(psvr.simplicesByDimension(it))
+            }
+        }
+
+    siEQpssi(2)
+    siEQpssi(3)
 })
