@@ -58,7 +58,7 @@ class SymmetricSimplexIndexingProfilingSpec : FunSpec({
 
 class ParallelSymmetricSimplexIndexingProfilingSpec : FunSpec({
     val hc4 = HyperCube(dimension)
-    val hcs4 = HyperCubeSymmetryGenerators(dimension)
+    val hcs4 = ParallelHyperCubeSymmetryGenerators(dimension)
 
     test("Time ParallelSymmetricSimplexIndexing construction") {
         val vr = ParallelSymmetricSimplexIndexVietorisRips(hc4, maxF, maxD, hcs4)

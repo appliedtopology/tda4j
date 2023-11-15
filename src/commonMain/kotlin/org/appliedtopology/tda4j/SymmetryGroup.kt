@@ -1,10 +1,5 @@
 package org.appliedtopology.tda4j
 
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-
 interface SymmetryGroup<GroupT, VertexT : Comparable<VertexT>> {
     val elements: Collection<GroupT>
 
@@ -105,43 +100,21 @@ open class HyperCubeSymmetry(val elementCount: Int) : SymmetryGroup<Int, Int> {
     override fun action(g: Int): (Int) -> Int = { permutations[g][it] ?: it }
 }
 
-class HyperCubeSymmetryGenerators(elementCount: Int) : HyperCubeSymmetry(elementCount) {
+open class HyperCubeSymmetryGenerators(elementCount: Int) : HyperCubeSymmetry(elementCount) {
     val generators: List<Int> =
         (0..elementCount - 2)
             .map { listOf((0..it - 1).toList(), listOf(it + 1, it), (it + 2..elementCount - 1).toList()).flatten() }
             .map { permutationIndex(it) }
 
-    val pseudoRepresentatives: MutableMap<Simplex, Simplex> = HashMap()
-
-    override fun representative(simplex: Simplex): Simplex {
-        // First, check the cache
-        if (simplex in pseudoRepresentatives) return pseudoRepresentatives[simplex]!!
-
-        // Do it the hard way
-        return super.representative(simplex)
-    }
-
     override fun isRepresentative(simplex: AbstractSimplex<Int>): Boolean {
-        // First, check the cache
-        if (simplex in pseudoRepresentatives) return simplex == pseudoRepresentatives[simplex]
-
-        // Second, do the cheap check - if it fails this couldn't possibly be a representative
+        // First, do the cheap check - if it fails this couldn't possibly be a representative
         if (!generators.all { g -> AbstractSimplex.compare(simplex, simplex.mapVertices(action(g))) <= 0 }) {
             return false
         }
 
         // Finally, generate the orbit, save the true representative and move on
-        runBlocking {
-            launch {
-                mutex.withLock {
-                    pseudoRepresentatives[simplex] = representative(simplex)
-                }
-            }
-        }
-        return simplex == pseudoRepresentatives[simplex]
+        return simplex == representative(simplex)
     }
-
-    val mutex = Mutex()
 }
 
 class ExpandSequence<VertexT : Comparable<VertexT>>(
