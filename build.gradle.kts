@@ -75,11 +75,51 @@ kotlin {
                 implementation("io.kotest:kotest-property:5.7.2")
             }
         }
+        val jvmMain by getting {
+            dependencies {
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.7.3")
+            }
+        }
         val jvmTest by getting {
             dependencies {
                 implementation("io.kotest:kotest-runner-junit5:5.7.2")
             }
         }
+        val jsMain by getting {
+            dependencies {
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-js:1.7.3")
+            }
+        }
+//        val nativeMain by getting {
+//            dependencies {
+//                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-native:1.7.3")
+//            }
+//        }
+//        val mingwX64Main by getting {
+//            dependencies {
+//                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-mingwx64:1.7.3")
+//            }
+//        }
+//        val linuxX64Main by getting {
+//            dependencies {
+//                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-linuxx64:1.7.3")
+//            }
+//        }
+//        val linuxArm64Main by getting {
+//            dependencies {
+//                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-linuxarm64:1.7.3")
+//            }
+//        }
+//        val macOSX64Main by getting {
+//            dependencies {
+//                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-macosx64:1.7.3")
+//            }
+//        }
+//        val macOSArm64Main by getting {
+//            dependencies {
+//                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-macosarm64:1.7.3")
+//            }
+//        }
     }
 }
 
