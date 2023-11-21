@@ -3,7 +3,7 @@ package org.appliedtopology.tda4j
 import arrow.core.padZip
 
 open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
-    private val _simplex: HashSet<VertexT> = HashSet()
+    private val _simplex: MutableSortedSet<VertexT> = MutableSortedSet()
 
     constructor(elements: HashSet<VertexT>) {
         _simplex.addAll(elements)
@@ -49,7 +49,7 @@ open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
     }
 
     val vertices: List<VertexT>
-        get() = _simplex.sorted()
+        get() = _simplex.toList()
 
     override fun toString(): String =
         _simplex.joinToString(
