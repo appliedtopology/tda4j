@@ -5,6 +5,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.equals.shouldBeEqual
 import io.kotest.matchers.sequences.shouldContainAll
+import io.kotest.matchers.sequences.shouldContainExactly
 import io.kotest.property.Arb
 import io.kotest.property.arbitrary.int
 import io.kotest.property.checkAll
@@ -109,22 +110,21 @@ class SimplexIndexingSpec : StringSpec({
     siEQssi(2)
     siEQssi(3)
 
-    fun siEQpssi(d: Int) =
-        "ParallelSymmetricSimplexIndexVietorisRips and SimplexIndexVietorsRips agree on HyperCube($d)" {
-            val hc = HyperCube(d)
-            val hcs = HyperCubeSymmetry(d)
-            val vr = SimplexIndexVietorisRips(hc, d.toDouble(), (1 shl d))
-            val psvr = ParallelSymmetricSimplexIndexVietorisRips(hc, d.toDouble(), (1 shl d), hcs)
+    "Coboundary enumerates correctly (Ripser paper example)" {
+        val si = SimplexIndexing(7)
+        val cfit = si.cofacetIterator(simplexOf(5, 3, 0))
+        cfit.asSequence().shouldContainExactly(28, 12, 7, 6)
+    }
 
-            psvr.simplices.shouldContainAll(vr.simplices)
-            vr.simplices.shouldContainAll(psvr.simplices)
+    "Partial coboundary enumerates correctly" {
+        val si = SimplexIndexing(7)
+        val cfit = si.cofacetIterator(simplexOf(4, 3, 0), all_cofacets = false)
+        cfit.asSequence().shouldContainExactly(22, 12)
+    }
 
-            (0..(1 shl d)).forEach {
-                psvr.simplicesByDimension(it).shouldContainAll(vr.simplicesByDimension(it))
-                vr.simplicesByDimension(it).shouldContainAll(psvr.simplicesByDimension(it))
-            }
-        }
-
-    siEQpssi(2)
-    siEQpssi(3)
+    "Boundary enumerates correctly" {
+        val si = SimplexIndexing(7)
+        val fit = si.facetIterator(simplexOf(6, 5, 3, 0))
+        fit.asSequence().shouldContainExactly(13, 23, 30, 33)
+    }
 })

@@ -26,6 +26,54 @@ open class SimplexIndexing(val vertexCount: Int) {
         )
     }
 
+    fun cofacetIterator(
+        simplex: Simplex,
+        all_cofacets: Boolean = true,
+    ): Iterator<Int> = cofacetIterator(simplexIndex(simplex), simplex.size, simplex, all_cofacets)
+
+    fun cofacetIterator(
+        index: Int,
+        size: Int,
+        simplex: Simplex? = null,
+        all_cofacets: Boolean = true,
+    ): Iterator<Int> =
+        iterator {
+            val theSimplex = simplex ?: simplexAt(index, size)
+            var idx_below = index
+            var idx_above = 0
+            var k = size
+            loop@ for (j in (vertexCount - 1) downTo 0) {
+                if (j in theSimplex) {
+                    if (!all_cofacets) break@loop
+                    idx_below -= Combinatorics.binomial(j, k)
+                    idx_above += Combinatorics.binomial(j, k + 1)
+                    k -= 1
+                } else {
+                    yield(idx_below + Combinatorics.binomial(j, k + 1) + idx_above)
+                }
+            }
+        }
+
+    fun facetIterator(simplex: Simplex): Iterator<Int> = facetIterator(simplexIndex(simplex), simplex.size, simplex)
+
+    fun facetIterator(
+        index: Int,
+        size: Int,
+        simplex: Simplex? = null,
+    ): Iterator<Int> =
+        iterator {
+            val theSimplex = simplex ?: simplexAt(index, size)
+            var idx_below = index
+            var idx_above = 0
+
+            for (k in (size - 1 downTo 0)) {
+                val j = theSimplex.vertices[k]
+                idx_below -= Combinatorics.binomial(j, k + 1)
+                yield(idx_below + idx_above)
+                idx_above += Combinatorics.binomial(j, k)
+            }
+        }
+
     fun simplexIndex(simplex: Simplex): Int = Companion.simplexIndex(simplex)
 
     companion object {
@@ -79,7 +127,7 @@ open class SymmetricSimplexIndexVietorisRips<GroupT>(
             }
         }
 
-    var dimensionRepresentatives: Array<Sequence<Triple<Double, Int, Int>>> =
+    open var dimensionRepresentatives: Array<Sequence<Triple<Double, Int, Int>>> =
         Array<Sequence<Triple<Double, Int, Int>>>(
             maxDimension + 1,
         ) { emptySequence<Triple<Double, Int, Int>>() }
