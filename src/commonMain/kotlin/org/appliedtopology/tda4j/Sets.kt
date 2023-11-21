@@ -3,6 +3,7 @@ package org.appliedtopology.tda4j
 open class ArrayMutableSortedSet<T : Comparable<T>>(capacity: Int) : MutableSet<T> {
     constructor() : this(8)
 
+    @Suppress("ktlint:standard:property-naming")
     protected val _set: ArrayList<T> = ArrayList(capacity)
 
     override fun add(element: T): Boolean {
@@ -62,6 +63,7 @@ open class MutableBitSet(var capacity: Int) : MutableSet<Int> {
 
     fun addressOf(element: Int): Pair<Int, Int> = Pair(element.floorDiv(Int.SIZE_BITS), element.mod(Int.SIZE_BITS))
 
+    @Suppress("ktlint:standard:property-naming")
     var _size = 0
 
     override fun add(element: Int): Boolean {
@@ -127,6 +129,7 @@ open class MutableBitSet(var capacity: Int) : MutableSet<Int> {
 }
 
 class BitSet(val capacity: Int) : Set<Int> {
+    @Suppress("ktlint:standard:property-naming")
     protected val _set = MutableBitSet(capacity)
     override val size: Int
         get() = _set.size

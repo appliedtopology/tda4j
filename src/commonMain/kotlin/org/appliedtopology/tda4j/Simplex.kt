@@ -3,6 +3,7 @@ package org.appliedtopology.tda4j
 import arrow.core.padZip
 
 open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
+    @Suppress("ktlint:standard:property-naming")
     private val _simplex: MutableSortedSet<VertexT> = MutableSortedSet()
 
     constructor(elements: HashSet<VertexT>) {

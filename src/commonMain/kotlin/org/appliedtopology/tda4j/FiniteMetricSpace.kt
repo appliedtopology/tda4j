@@ -17,7 +17,7 @@ interface FiniteMetricSpace<VertexT> {
     fun contains(x: VertexT): Boolean
 
     companion object {
-        fun <VertexT : Comparable<VertexT>> MaximumDistanceFiltrationValue(
+        fun <VertexT : Comparable<VertexT>> maximumDistanceFiltrationValue(
             metricSpace: FiniteMetricSpace<VertexT>,
         ): Filtered<VertexT, Double> =
             Filtered { simplex: AbstractSimplex<VertexT> ->
@@ -52,6 +52,7 @@ class EuclideanMetricSpace(val points: DoubleTensor2D) : FiniteMetricSpace<Int> 
         x: Int,
         y: Int,
     ): Double {
+        @Suppress("ktlint:standard:property-naming")
         with(DoubleTensorAlgebra) {
             val x_y = points.rowsByIndices(intArrayOf(x)) - points.rowsByIndices(intArrayOf(y))
             return x_y.dot(x_y.transposed())[intArrayOf(0, 0)].pow(0.5)

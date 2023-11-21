@@ -162,7 +162,7 @@ class SymmetricZomorodianIncremental<VertexT : Comparable<VertexT>>(
                 }
             }
 
-        val V: MutableSet<AbstractSimplex<VertexT>> = HashSet(metricSpace.size + edges.size)
+        val returnValues: MutableSet<AbstractSimplex<VertexT>> = HashSet(metricSpace.size + edges.size)
 
         val tasks: ArrayDeque<Pair<AbstractSimplex<VertexT>, Set<VertexT>>> = ArrayDeque(edges.size)
         metricSpace.elements.forEach { vertex ->
@@ -177,21 +177,21 @@ class SymmetricZomorodianIncremental<VertexT : Comparable<VertexT>>(
         while (tasks.size > 0) {
             val task: Pair<AbstractSimplex<VertexT>, Set<VertexT>> = tasks.removeFirst()
             val tau: AbstractSimplex<VertexT> = task.first
-            val N: Set<VertexT> = task.second
-            if (symmetryGroup.isRepresentative(tau)) V.add(tau)
+            val lowerNeighborSet: Set<VertexT> = task.second
+            if (symmetryGroup.isRepresentative(tau)) returnValues.add(tau)
             if (tau.size < maxDimension) {
-                N.forEach { v: VertexT ->
+                lowerNeighborSet.forEach { v: VertexT ->
                     run {
                         val sigma: AbstractSimplex<VertexT> = tau.plus(v)
-                        val M: Set<VertexT> =
-                            N.intersect(lowerNeighbors[v]?.asIterable() ?: emptySequence<VertexT>().asIterable())
-                        tasks.addFirst(Pair(sigma, M))
+                        val lowerNeighborIntersection: Set<VertexT> =
+                            lowerNeighborSet.intersect(lowerNeighbors[v]?.asIterable() ?: emptySequence<VertexT>().asIterable())
+                        tasks.addFirst(Pair(sigma, lowerNeighborIntersection))
                     }
                 }
             }
         }
 
-        val filtered: Filtered<VertexT, Double> = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
-        return ExpandSequence<VertexT>(V.sortedWith(getComparator(filtered)), symmetryGroup)
+        val filtered: Filtered<VertexT, Double> = FiniteMetricSpace.maximumDistanceFiltrationValue(metricSpace)
+        return ExpandSequence<VertexT>(returnValues.sortedWith(getComparator(filtered)), symmetryGroup)
     }
 }

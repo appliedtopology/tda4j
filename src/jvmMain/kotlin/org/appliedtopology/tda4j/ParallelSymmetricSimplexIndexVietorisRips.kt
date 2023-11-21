@@ -17,7 +17,7 @@ open class ParallelSymmetricSimplexIndexVietorisRips<GroupT>(
 
     override fun cliquesByDimension(d: Int): Sequence<Triple<Double, Int, Int>> {
         while (dimensionRepresentatives[d].none()) {
-            val filtered = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
+            val filtered = FiniteMetricSpace.maximumDistanceFiltrationValue(metricSpace)
             val si = SimplexIndexing(metricSpace.size)
             dimensionRepresentatives[d] =
                 (0 until Combinatorics.binomial(metricSpace.size, d + 1))

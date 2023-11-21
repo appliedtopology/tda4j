@@ -39,17 +39,17 @@ open class SimplexIndexing(val vertexCount: Int) {
     ): Iterator<Int> =
         iterator {
             val theSimplex = simplex ?: simplexAt(index, size)
-            var idx_below = index
-            var idx_above = 0
+            var idxBelow = index
+            var idxAbove = 0
             var k = size
             loop@ for (j in (vertexCount - 1) downTo 0) {
                 if (j in theSimplex) {
                     if (!all_cofacets) break@loop
-                    idx_below -= Combinatorics.binomial(j, k)
-                    idx_above += Combinatorics.binomial(j, k + 1)
+                    idxBelow -= Combinatorics.binomial(j, k)
+                    idxAbove += Combinatorics.binomial(j, k + 1)
                     k -= 1
                 } else {
-                    yield(idx_below + Combinatorics.binomial(j, k + 1) + idx_above)
+                    yield(idxBelow + Combinatorics.binomial(j, k + 1) + idxAbove)
                 }
             }
         }
@@ -63,14 +63,14 @@ open class SimplexIndexing(val vertexCount: Int) {
     ): Iterator<Int> =
         iterator {
             val theSimplex = simplex ?: simplexAt(index, size)
-            var idx_below = index
-            var idx_above = 0
+            var idxBelow = index
+            var idxAbove = 0
 
             for (k in (size - 1 downTo 0)) {
                 val j = theSimplex.vertices[k]
-                idx_below -= Combinatorics.binomial(j, k + 1)
-                yield(idx_below + idx_above)
-                idx_above += Combinatorics.binomial(j, k)
+                idxBelow -= Combinatorics.binomial(j, k + 1)
+                yield(idxBelow + idxAbove)
+                idxAbove += Combinatorics.binomial(j, k)
             }
         }
 
@@ -105,7 +105,7 @@ open class SimplexIndexVietorisRips(
 
     open fun cliquesByDimension(d: Int): Sequence<Triple<Double, Int, Int>> =
         with(SimplexIndexing(metricSpace.size)) {
-            val filtered = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
+            val filtered = FiniteMetricSpace.maximumDistanceFiltrationValue(metricSpace)
             (0 until Combinatorics.binomial(metricSpace.size, d + 1)).map {
                 Triple(filtered.filtrationValue(simplexAt(it, d + 1)) ?: Double.POSITIVE_INFINITY, it, d + 1)
             }.sortedBy { it.first }.asSequence()
@@ -134,7 +134,7 @@ open class SymmetricSimplexIndexVietorisRips<GroupT>(
 
     override fun cliquesByDimension(d: Int): Sequence<Triple<Double, Int, Int>> {
         if (dimensionRepresentatives[d].none()) {
-            val filtered = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
+            val filtered = FiniteMetricSpace.maximumDistanceFiltrationValue(metricSpace)
             val si = SimplexIndexing(metricSpace.size)
             dimensionRepresentatives[d] =
                 (0 until Combinatorics.binomial(metricSpace.size, d + 1))

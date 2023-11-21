@@ -5,7 +5,7 @@ abstract class VietorisRips<VertexT : Comparable<VertexT>>(
     val maxFiltrationValue: Double,
     val maxDimension: Int,
 ) : SimplexStream<VertexT, Double>(),
-    Filtered<VertexT, Double> by FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace) {
+    Filtered<VertexT, Double> by FiniteMetricSpace.maximumDistanceFiltrationValue(metricSpace) {
     abstract fun cliques(): Sequence<AbstractSimplex<VertexT>>
 
     private var simplexCache: Sequence<AbstractSimplex<VertexT>>? = null
@@ -63,7 +63,7 @@ class ZomorodianIncremental<VertexT : Comparable<VertexT>>(
                 }
             }
 
-        val V: MutableSet<AbstractSimplex<VertexT>> = HashSet(metricSpace.size + edges.size)
+        val returnValues: MutableSet<AbstractSimplex<VertexT>> = HashSet(metricSpace.size + edges.size)
 
         val tasks: ArrayDeque<Pair<AbstractSimplex<VertexT>, Set<VertexT>>> = ArrayDeque(edges.size)
         metricSpace.elements.forEach { vertex ->
@@ -78,21 +78,21 @@ class ZomorodianIncremental<VertexT : Comparable<VertexT>>(
         while (tasks.size > 0) {
             val task: Pair<AbstractSimplex<VertexT>, Set<VertexT>> = tasks.removeFirst()
             val tau: AbstractSimplex<VertexT> = task.first
-            val N: Set<VertexT> = task.second
-            V.add(tau)
+            val lowerNeighborSet: Set<VertexT> = task.second
+            returnValues.add(tau)
             if (tau.size < maxDimension) {
-                N.forEach { v: VertexT ->
+                lowerNeighborSet.forEach { v: VertexT ->
                     run {
                         val sigma: AbstractSimplex<VertexT> = tau.plus(v)
-                        val M: Set<VertexT> =
-                            N.intersect(lowerNeighbors[v]?.asIterable() ?: emptySequence<VertexT>().asIterable())
-                        tasks.addFirst(Pair(sigma, M))
+                        val lowerNeighborIntersection: Set<VertexT> =
+                            lowerNeighborSet.intersect(lowerNeighbors[v]?.asIterable() ?: emptySequence<VertexT>().asIterable())
+                        tasks.addFirst(Pair(sigma, lowerNeighborIntersection))
                     }
                 }
             }
         }
 
-        val filtered: Filtered<VertexT, Double> = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
-        return V.sortedWith(getComparator(filtered)).asSequence()
+        val filtered: Filtered<VertexT, Double> = FiniteMetricSpace.maximumDistanceFiltrationValue(metricSpace)
+        return returnValues.sortedWith(getComparator(filtered)).asSequence()
     }
 }

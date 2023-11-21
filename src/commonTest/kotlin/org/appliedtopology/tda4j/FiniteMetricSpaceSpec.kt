@@ -10,7 +10,7 @@ import space.kscience.kmath.nd.ShapeND
 import space.kscience.kmath.structures.DoubleBuffer
 import space.kscience.kmath.tensors.core.*
 
-fun PointCloudArb(
+fun pointCloudArb(
     dimensions: Collection<Int> = (2..10).toList(),
     sizes: Collection<Int> = listOf(5, 10, 25, 50, 100, 500),
 ): Arb<DoubleTensor2D> =
@@ -52,7 +52,7 @@ class FiniteMetricSpaceSpec : StringSpec({
     }
 
     "Generate random Euclidean metric space" {
-        checkAll(PointCloudArb()) {
+        checkAll(pointCloudArb()) {
             it.colNum shouldBeGreaterThan 0
             it.rowNum shouldBeGreaterThan 0
             collect("${it.colNum} columns")

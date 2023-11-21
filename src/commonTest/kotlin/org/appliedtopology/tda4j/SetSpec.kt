@@ -45,7 +45,7 @@ class SetSpec : StringSpec({
         }
     }
 
-    "Timing test for HashSet<Int>" {
+    "!Timing test for HashSet<Int>" {
         val sets: MutableSet<HashSet<Int>> = HashSet()
         checkAll<List<Int>>(1_000) {
             val set = HashSet<Int>()
@@ -56,7 +56,7 @@ class SetSpec : StringSpec({
         }
     }
 
-    "Timing test for MutableSortedSet<Int>" {
+    "!Timing test for MutableSortedSet<Int>" {
         val sets: MutableSet<MutableSortedSet<Int>> = HashSet()
         checkAll<List<Int>>(1_000) {
             val set = MutableSortedSet<Int>()
