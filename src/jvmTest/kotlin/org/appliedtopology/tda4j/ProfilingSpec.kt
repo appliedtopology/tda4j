@@ -67,7 +67,7 @@ class ParallelSymmetricSimplexIndexingProfilingSpec : FunSpec({
             .shouldBeEqual((1 shl (1 shl dimension)) - 1)
     }
 
-    test("ParallelSymmetricSimplexIndexing produces the same simplices as SymmetricSimplexIndexing") {
+    test("!ParallelSymmetricSimplexIndexing produces the same simplices as SymmetricSimplexIndexing") {
         val psvr = ParallelSymmetricSimplexIndexVietorisRips(hc4, maxF, maxD, hcs4)
         val svr = SimplexIndexVietorisRips(hc4, maxF, maxD)
 
@@ -79,4 +79,23 @@ class ParallelSymmetricSimplexIndexingProfilingSpec : FunSpec({
         }
         size.shouldBeEqual((1 shl (1 shl dimension)) - 1)
     }
+
+    fun siEQpssi(d: Int) =
+        test("!ParallelSymmetricSimplexIndexVietorisRips and SimplexIndexVietorsRips agree on HyperCube($d)") {
+            val hc = HyperCube(d)
+            val hcs = HyperCubeSymmetry(d)
+            val vr = SimplexIndexVietorisRips(hc, d.toDouble(), (1 shl d))
+            val psvr = ParallelSymmetricSimplexIndexVietorisRips(hc, d.toDouble(), (1 shl d), hcs)
+
+            psvr.simplices.shouldContainAll(vr.simplices)
+            vr.simplices.shouldContainAll(psvr.simplices)
+
+            (0..(1 shl d)).forEach {
+                psvr.simplicesByDimension(it).shouldContainAll(vr.simplicesByDimension(it))
+                vr.simplicesByDimension(it).shouldContainAll(psvr.simplicesByDimension(it))
+            }
+        }
+
+    siEQpssi(2)
+    siEQpssi(3)
 })

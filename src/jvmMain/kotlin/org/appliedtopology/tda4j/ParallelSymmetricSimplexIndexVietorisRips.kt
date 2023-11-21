@@ -1,12 +1,8 @@
 package org.appliedtopology.tda4j
 
-import arrow.fx.coroutines.parMapNotNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.locks.ReentrantLock
 
 open class ParallelSymmetricSimplexIndexVietorisRips<GroupT>(
     metricSpace: FiniteMetricSpace<Int>,
@@ -16,46 +12,35 @@ open class ParallelSymmetricSimplexIndexVietorisRips<GroupT>(
 ) : SymmetricSimplexIndexVietorisRips<GroupT>(metricSpace, maxFiltrationValue, maxDimension, symmetryGroup) {
     val scope = CoroutineScope(Dispatchers.Default)
 
+    override var dimensionRepresentatives: Array<Sequence<Triple<Double, Int, Int>>> =
+        Array<Sequence<Triple<Double, Int, Int>>>(maxDimension + 1) { emptySequence() }
+
     override fun cliquesByDimension(d: Int): Sequence<Triple<Double, Int, Int>> {
-        runBlocking {
-            if (dimensionRepresentatives[d].none()) {
-                val filtered = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
-                val si = SimplexIndexing(metricSpace.size)
-                val dimensionRepresentativesJob =
-                    async {
-                        (0 until Combinatorics.binomial(metricSpace.size, d + 1))
-                            .parMapNotNull {
-                                if (symmetryGroup.isRepresentative(
-                                        si.simplexAt(
-                                            it,
-                                            d + 1,
-                                        ),
-                                    )
-                                ) {
-                                    it
-                                } else {
-                                    null
-                                }
-                            }
-                            .map { it: Int ->
-                                Triple(
-                                    filtered.filtrationValue(si.simplexAt(it, d + 1)) ?: Double.POSITIVE_INFINITY,
-                                    it,
-                                    d + 1,
-                                )
-                            }
-                            .sortedBy { it: Triple<Double, Int, Int> -> it.first }
-                            .asSequence()
+        while (dimensionRepresentatives[d].none()) {
+            val filtered = FiniteMetricSpace.MaximumDistanceFiltrationValue(metricSpace)
+            val si = SimplexIndexing(metricSpace.size)
+            dimensionRepresentatives[d] =
+                (0 until Combinatorics.binomial(metricSpace.size, d + 1))
+                    .toList()
+                    .parallelStream()
+                    .filter { symmetryGroup.isRepresentative(si.simplexAt(it, d + 1)) }
+                    .collect(java.util.stream.Collectors.toList())
+                    .map { it: Int ->
+                        Triple(
+                            filtered.filtrationValue(si.simplexAt(it, d + 1)) ?: Double.POSITIVE_INFINITY,
+                            it,
+                            d + 1,
+                        )
                     }
-                dimensionRepresentatives[d] = dimensionRepresentativesJob.await()
-            }
+                    .sortedBy { it: Triple<Double, Int, Int> -> it.first }
+                    .asSequence()
         }
         return dimensionRepresentatives[d]
     }
 }
 
 class ParallelHyperCubeSymmetryGenerators(elementCount: Int) : HyperCubeSymmetryGenerators(elementCount) {
-    val mutex: Mutex = Mutex(false)
+    val mutex: ReentrantLock = ReentrantLock()
     var representativesCache: MutableMap<Simplex, Simplex> = HashMap()
 
     override fun isRepresentative(simplex: AbstractSimplex<Int>): Boolean {
@@ -68,11 +53,13 @@ class ParallelHyperCubeSymmetryGenerators(elementCount: Int) : HyperCubeSymmetry
         }
 
         // Finally, generate the orbit, save the true representative and move on
-        runBlocking {
-            mutex.withLock {
-                representativesCache[simplex] = representative(simplex)
-            }
+        val rep = super.representative(simplex)
+        try {
+            mutex.lock()
+            representativesCache[simplex] = rep
+        } finally {
+            mutex.unlock()
         }
-        return simplex == representative(simplex)
+        return simplex == rep
     }
 }
