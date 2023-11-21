@@ -1,3 +1,5 @@
+@file:Suppress("LeakingThis")
+
 package org.appliedtopology.tda4j
 
 interface SymmetryGroup<GroupT, VertexT : Comparable<VertexT>> {

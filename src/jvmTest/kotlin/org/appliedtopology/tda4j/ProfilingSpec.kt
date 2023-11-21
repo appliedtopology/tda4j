@@ -1,3 +1,14 @@
+@file:Suppress(
+    "ForEachParameterNotUsed",
+    "ForEachParameterNotUsed",
+    "ForEachParameterNotUsed",
+    "ForEachParameterNotUsed",
+    "ForEachParameterNotUsed",
+    "ForEachParameterNotUsed",
+    "ForEachParameterNotUsed",
+    "ForEachParameterNotUsed",
+)
+
 package org.appliedtopology.tda4j
 
 import io.kotest.core.spec.style.FunSpec

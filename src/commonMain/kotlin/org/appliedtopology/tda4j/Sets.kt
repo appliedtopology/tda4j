@@ -136,7 +136,7 @@ class BitSet(val capacity: Int) : Set<Int> {
 
     override fun isEmpty(): Boolean = _set.isEmpty()
 
-    override fun iterator(): Iterator<Int> = _set.iterator() as Iterator<Int>
+    override fun iterator(): Iterator<Int> = _set.iterator()
 
     override fun containsAll(elements: Collection<Int>): Boolean = _set.containsAll(elements)
 

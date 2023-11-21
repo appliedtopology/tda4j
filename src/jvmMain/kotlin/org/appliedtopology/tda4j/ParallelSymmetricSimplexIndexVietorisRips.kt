@@ -1,7 +1,5 @@
 package org.appliedtopology.tda4j
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import java.util.concurrent.locks.ReentrantLock
 
 open class ParallelSymmetricSimplexIndexVietorisRips<GroupT>(
@@ -10,8 +8,6 @@ open class ParallelSymmetricSimplexIndexVietorisRips<GroupT>(
     maxDimension: Int,
     symmetryGroup: SymmetryGroup<GroupT, Int>,
 ) : SymmetricSimplexIndexVietorisRips<GroupT>(metricSpace, maxFiltrationValue, maxDimension, symmetryGroup) {
-    val scope = CoroutineScope(Dispatchers.Default)
-
     override var dimensionRepresentatives: Array<Sequence<Triple<Double, Int, Int>>> =
         Array<Sequence<Triple<Double, Int, Int>>>(maxDimension + 1) { emptySequence() }
 

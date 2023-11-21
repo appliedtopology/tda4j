@@ -96,7 +96,7 @@ open class SimplexIndexVietorisRips(
             (0 until maxDimension).forEach { d -> yieldAll(simplicesByDimension(d)) }
         }
 
-    open override fun simplicesByDimension(d: Int): Sequence<Simplex> =
+    override fun simplicesByDimension(d: Int): Sequence<Simplex> =
         sequence {
             with(SimplexIndexing(metricSpace.size)) {
                 yieldAll(cliquesByDimension(d).map { fsd -> simplexAt(fsd.second, fsd.third) })
