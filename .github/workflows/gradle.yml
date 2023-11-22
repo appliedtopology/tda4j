@@ -32,7 +32,8 @@ jobs:
       uses: gradle/gradle-build-action@v2 # v2.6.0
       with:
         gradle-version: 8.4
-        arguments: build
+    - name: Execute full build and test
+      run: ./gradlew build
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -42,11 +43,12 @@ jobs:
       with:
         java-version: '11'
         distribution: 'temurin'
-    - name: KtLint
+    - name: Gradle Built
       uses: gradle/gradle-build-action@v2 # v2.6.0
       with:
         gradle-version: 8.4
-        arguments: ktlintCheck
+    - name: Lint
+      run: ./gradlew ktlintCheck
   javadoc:
     runs-on: ubuntu-latest
     steps:
@@ -56,11 +58,12 @@ jobs:
       with:
         java-version: '11'
         distribution: 'temurin'
-    - name: dokka
+    - name: Gradle Built
       uses: gradle/gradle-build-action@v2 # v2.6.0
       with:
         gradle-version: 8.4
-        arguments: dokkaHtml
+    - name: dokkaHtml
+      run: ./gradlew dokkaHtml
     - name: Deploy 🚀
       uses: JamesIves/github-pages-deploy-action@v4
       with:
