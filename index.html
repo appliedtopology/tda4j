@@ -1,201 +1,101 @@
 <!DOCTYPE html>
-<html lang="en" class="no-js">
+<html class="no-js">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="x-ua-compatible" content="ie=edge">
-<meta name="description" content="TDA4j">
-<meta name="generator" content="Paradox, paradox-material-theme=0.6.0, mkdocs-material=3.0.3">
-
-<meta name="lang:clipboard.copy" content="Copy to clipboard">
-<meta name="lang:clipboard.copied" content="Copied to clipboard">
-<meta name="lang:search.language" content="">
-<meta name="lang:search.pipeline.stopwords" content="true">
-<meta name="lang:search.pipeline.trimmer" content="true">
-<meta name="lang:search.result.none" content="No matching documents">
-<meta name="lang:search.result.one" content="1 matching document">
-<meta name="lang:search.result.other" content="# matching documents">
-<meta name="lang:search.tokenizer" content="">
-
-
-<meta name="description" content="TDA4j">
-<link rel="shortcut icon" href="assets/images/favicon.png">
-<title>TDA4j</title>
-<link rel="stylesheet" href="assets/stylesheets/application.451f80e5.css">
-<link rel="stylesheet" href="assets/stylesheets/application-palette.22915126.css">
-<meta name="theme-color" content="#3f51b5" />
-<link rel="stylesheet" href="lib/material__tabs/dist/mdc.tabs.min.css">
-<link rel="stylesheet" href="lib/prettify/prettify.css">
-<script src="assets/javascripts/modernizr.1aa3b519.js"></script>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700|Roboto+Mono">
-<style>
-body,input{font-family:"Roboto","Helvetica Neue",Helvetica,Arial,sans-serif}
-code,kbd,pre{font-family:"Roboto Mono","Courier New",Courier,monospace}
-</style>
-<link rel="stylesheet" href="assets/fonts/font-awesome.css">
-<link rel="stylesheet" href="assets/fonts/material-icons.css">
-<link rel="stylesheet" href="assets/stylesheets/paradox-material-theme.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1" charset="UTF-8">
+    <title>tda4j</title>
+    <link href="images/logo-icon.svg" rel="icon" type="image/svg">
+    <script>var pathToRoot = "";</script>
+    <script>document.documentElement.classList.replace("no-js","js");</script>
+    <script>const storage = localStorage.getItem("dokka-dark-mode")
+    if (storage == null) {
+        const osDarkSchemePreferred = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+        if (osDarkSchemePreferred === true) {
+            document.getElementsByTagName("html")[0].classList.add("theme-dark")
+        }
+    } else {
+        const savedDarkMode = JSON.parse(storage)
+        if(savedDarkMode === true) {
+            document.getElementsByTagName("html")[0].classList.add("theme-dark")
+        }
+    }
+    </script>
+<script type="text/javascript" src="https://unpkg.com/kotlin-playground@1/dist/playground.min.js" async="async"></script>
+<script type="text/javascript" src="scripts/sourceset_dependencies.js" async="async"></script>
+<link href="styles/style.css" rel="Stylesheet">
+<link href="styles/main.css" rel="Stylesheet">
+<link href="styles/prism.css" rel="Stylesheet">
+<link href="styles/logo-styles.css" rel="Stylesheet">
+<link href="styles/font-jb-sans-auto.css" rel="Stylesheet">
+<script type="text/javascript" src="scripts/clipboard.js" async="async"></script>
+<script type="text/javascript" src="scripts/navigation-loader.js" async="async"></script>
+<script type="text/javascript" src="scripts/platform-content-handler.js" async="async"></script>
+<script type="text/javascript" src="scripts/main.js" defer="defer"></script>
+<script type="text/javascript" src="scripts/prism.js" async="async"></script>
+<script type="text/javascript" src="scripts/symbol-parameters-wrapper_deferred.js" defer="defer"></script>
 </head>
-<body
-data-md-color-primary="indigo"
-data-md-color-accent="blue"
->
-<input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
-<input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
-<label class="md-overlay" data-md-component="overlay" for="__drawer"></label>
-<header class="md-header" data-md-component="header">
-<nav class="md-header-nav md-grid">
-<div class="md-flex">
-<div class="md-flex__cell md-flex__cell--shrink">
-<a href="index.html" title="TDA4j" class="md-header-nav__button md-logo">
-<i class="md-icon">local_library</i>
-</a>
-</div>
-<div class="md-flex__cell md-flex__cell--shrink">
-<label class="md-icon md-icon--menu md-header-nav__button" for="__drawer"></label>
-</div>
-<div class="md-flex__cell md-flex__cell--stretch">
-<div class="md-flex__ellipsis md-header-nav__title" data-md-component="title">
-TDA4j
-</div>
-</div>
-<form name="search" style="display: none">
-<input type="text" name="query">
-</form>
-<div class="md-flex__cell md-flex__cell--shrink">
-<div class="md-header-nav__source">
-<a href="https://github.com/appliedtopology/tda4j"
-title="Go to repository"
-class="md-source"
-data-md-source="github">
-<div class="md-source__icon">
-<i class="fa fa-github"></i>
-</div>
-<div class="md-source__repository">
-appliedtopology/tda4j
-</div>
-</a>
-
-</div>
-</div>
-</div>
+<body>
+    <div class="root">
+<nav class="navigation" id="navigation-wrapper">
+    <div class="navigation--inner">
+        <div class="navigation-title">
+            <button class="menu-toggle" id="menu-toggle" type="button">toggle menu</button>
+            <div class="library-name">
+                    <a class="library-name--link" href="index.html">
+                            tda4j
+                    </a>
+            </div>
+            <div class="library-version">
+0.1-DEV            </div>
+        </div>
+        <div class="filter-section" id="filter-section">
+                <button class="platform-tag platform-selector common-like" data-active="" data-filter=":dokkaHtml/commonMain">common</button>
+                <button class="platform-tag platform-selector jvm-like" data-active="" data-filter=":dokkaHtml/jvmMain">jvm</button>
+        </div>
+    </div>
+    <div class="navigation-controls">
+        <button class="navigation-controls--btn navigation-controls--theme" id="theme-toggle-button" type="button">switch theme</button>
+        <div class="navigation-controls--btn navigation-controls--search" id="searchBar" role="button">search in API</div>
+    </div>
 </nav>
-</header>
-
-<div class="md-container">
-<main class="md-main">
-<div class="md-main__inner md-grid" data-md-component="container">
-<div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
-<div class="md-sidebar__scrollwrap">
-<div class="md-sidebar__inner">
-<nav class="md-nav md-nav--primary" data-md-level="0" style="visibility: hidden">
-<label class="md-nav__title md-nav__title--site" for="drawer">
-<a href="index.html" title="TDA4j" class="md-nav__button md-logo">
-<span class="md-nav__button md-logo">
-<i class="md-icon">local_library</i>
-</a>
-<a href="index.html" title="TDA4j">
-TDA4j
-</a>
-</label>
-<div class="md-nav__source">
-<a href="https://github.com/appliedtopology/tda4j"
-title="Go to repository"
-class="md-source"
-data-md-source="github">
-<div class="md-source__icon">
-<i class="fa fa-github"></i>
+        <div id="container">
+            <div class="sidebar" id="leftColumn">
+                <div class="sidebar--inner" id="sideMenu"></div>
+            </div>
+            <div id="main">
+<div class="main-content" id="content" pageIds="tda4j::////PointingToDeclaration//995916586">
+  <div class="breadcrumbs"></div>
+  <div class="cover ">
+    <h1 class="cover"><span><span>tda4j</span></span></h1>
+  </div>
+  <h2 class="">Packages</h2>
+  <div class="table"><a data-name="10699133%2FPackages%2F995916586" anchor-label="org.appliedtopology.tda4j" id="10699133%2FPackages%2F995916586" data-filterable-set=":dokkaHtml/commonMain,:dokkaHtml/jvmMain"></a>
+    <div class="table-row" data-filterable-current=":dokkaHtml/commonMain,:dokkaHtml/jvmMain" data-filterable-set=":dokkaHtml/commonMain,:dokkaHtml/jvmMain">
+      <div>
+        <div class="main-subrow ">
+          <div class=""><span class="inline-flex">
+              <div><a href="tda4j/org.appliedtopology.tda4j/index.html">org.appliedtopology.tda4j</a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="10699133%2FPackages%2F995916586"></span>
+                <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+              </span></span></div>
+          <div class="pull-right">
+            <div class="platform-tags no-gutters">
+              <div class="platform-tag common-like">common</div>
+              <div class="platform-tag jvm-like">jvm</div>
+            </div>
+          </div>
+        </div>
+        <div></div>
+      </div>
+    </div>
+  </div>
 </div>
-<div class="md-source__repository">
-appliedtopology/tda4j
-</div>
-</a>
-
-</div>
-<ul>
-  <li><a href="tutorials/index.html" class="page">Tutorials for TDA4j</a></li>
-</ul>
-<nav class="md-nav md-nav--secondary">
-</nav>
-
-</nav>
-<ul style="display: none">
-<li class="md-nav__item md-version" id="project.version">
-<label class="md-nav__link" for="__version">
-<i class="md-icon" title="Version">label_outline</i> 0.0.1
-</label>
-</li>
-</ul>
-</div>
-</div>
-</div>
-<div class="md-content">
-<article class="md-content__inner md-typeset">
-<div class="md-content__searchable">
-<h1><a href="#tda4j" name="tda4j" class="anchor"><span class="anchor-link"></span></a>TDA4j</h1>
-<p>The <code>TDA4j</code> library implements persistent homology and related techniques from computational and applied topology, in a library designed for ease of use, ease of access from Matlab and java-based systems, and ease of extensions for further research projects and approaches.</p>
-<p>The library is based on previous libraries from the Computational Topology workgroup at Stanford University.</p>
-<p>For persistent homology and its capabilities, we recommend the survey article <a href="http://www.ams.org/journals/bull/2009-46-02/S0273-0979-09-01249-X/S0273-0979-09-01249-X.pdf">Topology and Data</a> by Gunnar Carlsson.</p>
-<p>On this site we include a fully compiled <a href="latest/api/org/appliedtopology/tda4j.html" title="org.appliedtopology.tda4j"><code>ScalaDoc</code></a> documentation.</p>
-</div>
-<div>
-<a href="https://github.com/appliedtopology/tda4j/tree/0.0.1/src/main/paradox/index.md" title="Edit this page" class="md-source-file md-edit">
-Edit this page
-</a>
-</div>
-<div class="print-only">
-<span class="md-source-file md-version">
-0.0.1
-</span>
-</div>
-</article>
-</div>
-</div>
-</main>
-<footer class="md-footer">
-<div class="md-footer-nav">
-<nav class="md-footer-nav__inner md-grid">
-<a href="tutorials/index.html" title="Tutorials for TDA4j" class="md-flex md-footer-nav__link md-footer-nav__link--next" rel="next">
-<div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
-<span class="md-flex__ellipsis">
-<span class="md-footer-nav__direction">
-Next
-</span>
-Tutorials for TDA4j
-</span>
-</div>
-<div class="md-flex__cell md-flex__cell--shrink">
-<i class="md-icon md-icon--arrow-forward md-footer-nav__button"></i>
-</div>
-</a>
-</nav>
-</div>
-<div class="md-footer-meta md-typeset">
-<div class="md-footer-meta__inner md-grid">
-<div class="md-footer-copyright">
-<div class="md-footer-copyright__highlight">
-MIT License © Mikael Vejdemo-Johansson, Daniel Hope
-</div>
-Powered by
-<a href="https://github.com/lightbend/paradox">Paradox</a>
-and
-<a href="https://jonas.github.io/paradox-material-theme/">Paradox Material Theme</a>
-
-</div>
-</div>
-</div>
-</footer>
-
-</div>
-<script src="assets/javascripts/application.583bbe55.js"></script>
-<script src="assets/javascripts/paradox-material-theme.js"></script>
-<script>app.initialize({version:"0.17",url:{base:"."}})</script>
-<script type="text/javascript" src="lib/prettify/prettify.js"></script>
-<script type="text/javascript" src="lib/prettify/lang-scala.js"></script>
-<script type="text/javascript">
-document.addEventListener("DOMContentLoaded", function(event) {
-window.prettyPrint && prettyPrint();
-});
-</script>
+      <div class="footer">
+        <span class="go-to-top-icon"><a href="#content" id="go-to-top-link"></a></span><span>© 2023 Copyright</span><span
+                class="pull-right"><span>Generated by </span><a
+                href="https://github.com/Kotlin/dokka"><span>dokka</span><span class="padded-icon"></span></a></span>
+      </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
