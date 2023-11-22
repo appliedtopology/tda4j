@@ -1,6 +1,9 @@
-[![test](https://github.com/appliedtopology/tda4j/actions/workflows/test.yml/badge.svg?branch=scala)](https://github.com/appliedtopology/tda4j/actions)
-[![lint](https://github.com/appliedtopology/tda4j/actions/workflows/lint.yml/badge.svg?branch=scala)](https://github.com/appliedtopology/tda4j/actions)
-[![docs](https://github.com/appliedtopology/tda4j/actions/workflows/docs.yml/badge.svg?branch=scala)](https://github.com/appliedtopology/tda4j/actions)
+[![lint](https://github.com/appliedtopology/tda4j/actions/workflows/lint.yml/badge.svg?branch=kotlin)](https://github.com/appliedtopology/tda4j/actions)
+[![doc](https://github.com/appliedtopology/tda4j/actions/workflows/doc.yml/badge.svg?branch=kotlin)](https://github.com/appliedtopology/tda4j/actions)
+[![js-test](https://github.com/appliedtopology/tda4j/actions/workflows/js.yml/badge.svg?branch=kotlin)](https://github.com/appliedtopology/tda4j/actions)
+[![jvm-test](https://github.com/appliedtopology/tda4j/actions/workflows/jvm.yml/badge.svg?branch=kotlin)](https://github.com/appliedtopology/tda4j/actions)
+[![native-test](https://github.com/appliedtopology/tda4j/actions/workflows/native.yml/badge.svg?branch=kotlin)](https://github.com/appliedtopology/tda4j/actions)
+[![full-build](https://github.com/appliedtopology/tda4j/actions/workflows/fullbuild.yml/badge.svg?branch=kotlin)](https://github.com/appliedtopology/tda4j/actions)
 
 
 # TDA4j
