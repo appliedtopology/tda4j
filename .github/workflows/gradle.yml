@@ -30,6 +30,51 @@ jobs:
         gradle-version: 8.4
     - name: Execute full build and test
       run: ./gradlew build
+  jvm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+      - name: Build
+        uses: gradle/gradle-build-action@v2 # v2.6.0
+        with:
+          gradle-version: 8.4
+      - name: Execute JVM tests
+        run: ./gradlew jvmTest
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+      - name: Build
+        uses: gradle/gradle-build-action@v2 # v2.6.0
+        with:
+          gradle-version: 8.4
+      - name: Execute JS tests
+        run: ./gradlew jsTest
+  native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+      - name: Build
+        uses: gradle/gradle-build-action@v2 # v2.6.0
+        with:
+          gradle-version: 8.4
+      - name: Execute native tests
+        run: ./gradlew nativeTest
   lint:
     runs-on: ubuntu-latest
     steps:
