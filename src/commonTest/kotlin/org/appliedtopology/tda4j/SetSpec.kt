@@ -6,6 +6,9 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeSorted
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.property.Arb
+import io.kotest.property.arbitrary.int
+import io.kotest.property.arbitrary.list
 import io.kotest.property.assume
 import io.kotest.property.checkAll
 
@@ -28,7 +31,7 @@ class SetSpec : StringSpec({
     }
 
     "MutableSortedSet capabilities" {
-        checkAll<List<Int>> {
+        checkAll(Arb.list(Arb.int(-1024, 1024), 0..500)) {
             val set = MutableSortedSet<Int>(it.size)
             withClue("MutableSortedSet has everything we insert") {
                 set.addAll(it)
