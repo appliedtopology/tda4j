@@ -1,12 +1,10 @@
 package org.appliedtopology.tda4j
 
-open class ArrayMutableSortedSet<T : Comparable<T>>(capacity: Int) : MutableSet<T> {
-    constructor() : this(8)
-
+open class ArrayMutableSortedSetBase<T : Comparable<T>>(capacity: Int = 8) {
     @Suppress("ktlint:standard:property-naming")
     protected val _set: ArrayList<T> = ArrayList(capacity)
 
-    override fun add(element: T): Boolean {
+    fun add(element: T): Boolean {
         val index = _set.binarySearch(element)
         if (index >= 0) {
             return false
@@ -16,36 +14,26 @@ open class ArrayMutableSortedSet<T : Comparable<T>>(capacity: Int) : MutableSet<
         }
     }
 
-    override fun addAll(elements: Collection<T>): Boolean {
+    fun addAll(elements: Collection<T>): Boolean {
         return elements.fold(false) { r, t -> r or add(t) }
     }
 
-    override val size: Int
+    val size: Int
         get() = _set.size
 
-    override fun clear() = _set.clear()
+    fun clear() = _set.clear()
 
-    override fun isEmpty(): Boolean = _set.isEmpty()
+    fun isEmpty(): Boolean = _set.isEmpty()
 
-    override fun contains(element: T): Boolean = _set.binarySearch(element) >= 0
+    fun contains(element: T): Boolean = _set.binarySearch(element) >= 0
 
-    override fun containsAll(elements: Collection<T>): Boolean = elements.all { contains(it) }
+    fun containsAll(elements: Collection<T>): Boolean = elements.all { contains(it) }
 
-    override fun iterator(): MutableIterator<T> = _set.iterator()
+    fun iterator(): MutableIterator<T> = _set.iterator()
 
-    override fun retainAll(elements: Collection<T>): Boolean = _set.retainAll(elements)
+    fun retainAll(elements: Collection<T>): Boolean = _set.retainAll(elements)
 
-    override fun removeAll(elements: Collection<T>): Boolean = _set.removeAll(elements)
-
-    override fun remove(element: T): Boolean {
-        val index = _set.binarySearch(element)
-        if (index < 0) {
-            return false
-        } else {
-            _set.removeAt(index)
-            return true
-        }
-    }
+    fun removeAll(elements: Collection<T>): Boolean = _set.removeAll(elements)
 
     override fun equals(other: Any?): Boolean {
         return _set.equals(other)
@@ -56,7 +44,79 @@ open class ArrayMutableSortedSet<T : Comparable<T>>(capacity: Int) : MutableSet<
     }
 }
 
+class ArrayMutableSortedSet<T : Comparable<T>>(capacity: Int) : ArrayMutableSortedSetBase<T>(capacity), MutableSet<T> {
+    override fun remove(element: T): Boolean {
+        val index = _set.binarySearch(element)
+        if (index < 0) {
+            return false
+        } else {
+            _set.removeAt(index)
+            return true
+        }
+    }
+}
 typealias MutableSortedSet<V> = ArrayMutableSortedSet<V>
+
+open class ArrayMutableSortedMap<K : Comparable<K>, V>(capacity: Int = 8, defaultValue: V? = null) :
+    ArrayMutableSortedSetBase<K>(capacity), MutableMap<K, V> {
+    protected val _values: ArrayList<V> = ArrayList(capacity)
+
+    override fun containsKey(key: K): Boolean = _set.binarySearch(key) >= 0
+
+    override fun containsValue(value: V): Boolean = _values.contains(value)
+
+    override fun get(key: K): V? {
+        val idx = _set.binarySearch(key)
+        return if (idx >= 0) _values[idx] else null
+    }
+
+    class PairEntry<K, V>(override val key: K, override var value: V) : MutableMap.MutableEntry<K, V> {
+        override fun setValue(newValue: V): V {
+            value = newValue
+            return value
+        }
+    }
+
+    override val entries: MutableSet<MutableMap.MutableEntry<K, V>>
+        get() = _set.zip(_values).map { (k, v) -> PairEntry(k, v) }.toMutableSet()
+    override val keys: MutableSet<K>
+        get() = this as ArrayMutableSortedSet<K>
+
+    override val values: MutableCollection<V>
+        get() = _values.toMutableList()
+
+    override fun remove(key: K): V? {
+        val idx = _set.binarySearch(key)
+        if (idx >= 0) {
+            val retval = _values[idx]
+            _set.removeAt(idx)
+            _values.removeAt(idx)
+            return retval
+        } else {
+            return null
+        }
+    }
+
+    override fun putAll(from: Map<out K, V>) {
+        from.forEach { (k, v) -> put(k, v) }
+    }
+
+    override fun put(
+        key: K,
+        value: V,
+    ): V? {
+        val idx = _set.binarySearch(key)
+        if (idx >= 0) {
+            val retval = _values[idx]
+            _values[idx] = value
+            return retval
+        } else {
+            _set.add((-idx) - 1, key)
+            _values.add((-idx) - 1, value)
+            return null
+        }
+    }
+}
 
 open class MutableBitSet(var capacity: Int) : MutableSet<Int> {
     val bitStorage: IntArray = IntArray(capacity.floorDiv(Int.SIZE_BITS))
