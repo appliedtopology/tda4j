@@ -44,7 +44,7 @@ open class ArrayMutableSortedSetBase<T : Comparable<T>>(capacity: Int = 8) {
     }
 }
 
-class ArrayMutableSortedSet<T : Comparable<T>>(capacity: Int) : ArrayMutableSortedSetBase<T>(capacity), MutableSet<T> {
+class ArrayMutableSortedSet<T : Comparable<T>>(capacity: Int = 8) : ArrayMutableSortedSetBase<T>(capacity), MutableSet<T> {
     override fun remove(element: T): Boolean {
         val index = _set.binarySearch(element)
         if (index < 0) {
@@ -53,6 +53,10 @@ class ArrayMutableSortedSet<T : Comparable<T>>(capacity: Int) : ArrayMutableSort
             _set.removeAt(index)
             return true
         }
+    }
+
+    override fun toString(): String {
+        return "ArrayMutableSortedSet(${_set.joinToString()})"
     }
 }
 typealias MutableSortedSet<V> = ArrayMutableSortedSet<V>
@@ -75,12 +79,16 @@ open class ArrayMutableSortedMap<K : Comparable<K>, V>(capacity: Int = 8, defaul
             value = newValue
             return value
         }
+
+        override fun toString(): String {
+            return "PairEntry($key, $value)"
+        }
     }
 
     override val entries: MutableSet<MutableMap.MutableEntry<K, V>>
         get() = _set.zip(_values).map { (k, v) -> PairEntry(k, v) }.toMutableSet()
     override val keys: MutableSet<K>
-        get() = this as ArrayMutableSortedSet<K>
+        get() = _set.toMutableSet()
 
     override val values: MutableCollection<V>
         get() = _values.toMutableList()
@@ -115,6 +123,10 @@ open class ArrayMutableSortedMap<K : Comparable<K>, V>(capacity: Int = 8, defaul
             _values.add((-idx) - 1, value)
             return null
         }
+    }
+
+    override fun toString(): String {
+        return "ArrayMutableSortedMap(${entries.joinToString()})"
     }
 }
 
