@@ -24,6 +24,7 @@ $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedMap.PairEntry/ArrayM
 $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedMap.PairEntry/getKey/#/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-map/-pair-entry/get-key.html
 $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedMap.PairEntry/getValue/#/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-map/-pair-entry/get-value.html
 $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedMap.PairEntry/setValue/#TypeParam(bounds=[kotlin.Any?])/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-map/-pair-entry/set-value.html
+$dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedMap.PairEntry/toString/#/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-map/-pair-entry/to-string.html
 $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedMap///PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-map/index.html
 $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedMap/ArrayMutableSortedMap/#kotlin.Int#TypeParam(bounds=[kotlin.Any?])?/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-map/-array-mutable-sorted-map.html
 $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedMap/containsKey/#TypeParam(bounds=[kotlin.Comparable[^]])/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-map/contains-key.html
@@ -35,9 +36,11 @@ $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedMap/getValues/#/Poin
 $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedMap/put/#TypeParam(bounds=[kotlin.Comparable[^]])#TypeParam(bounds=[kotlin.Any?])/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-map/put.html
 $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedMap/putAll/#kotlin.collections.Map[TypeParam(bounds=[kotlin.Comparable[^]]),TypeParam(bounds=[kotlin.Any?])]/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-map/put-all.html
 $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedMap/remove/#TypeParam(bounds=[kotlin.Comparable[^]])/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-map/remove.html
+$dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedMap/toString/#/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-map/to-string.html
 $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedSet///PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-set/index.html
 $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedSet/ArrayMutableSortedSet/#kotlin.Int/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-set/-array-mutable-sorted-set.html
 $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedSet/remove/#TypeParam(bounds=[kotlin.Comparable[^]])/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-set/remove.html
+$dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedSet/toString/#/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-set/to-string.html
 $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedSetBase///PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-set-base/index.html
 $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedSetBase/ArrayMutableSortedSetBase/#kotlin.Int/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-set-base/-array-mutable-sorted-set-base.html
 $dokka.location:org.appliedtopology.tda4j/ArrayMutableSortedSetBase/add/#TypeParam(bounds=[kotlin.Comparable[^]])/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-array-mutable-sorted-set-base/add.html
