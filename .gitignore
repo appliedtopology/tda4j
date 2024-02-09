@@ -28,3 +28,4 @@ hs_err_pid*
 target/
 project/
 build/
+kotlin-js-store/
