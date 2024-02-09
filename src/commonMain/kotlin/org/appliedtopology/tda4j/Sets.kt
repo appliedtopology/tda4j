@@ -61,7 +61,7 @@ class ArrayMutableSortedSet<T : Comparable<T>>(capacity: Int = 8) : ArrayMutable
 }
 typealias MutableSortedSet<V> = ArrayMutableSortedSet<V>
 
-open class ArrayMutableSortedMap<K : Comparable<K>, V>(capacity: Int = 8, defaultValue: V? = null) :
+open class ArrayMutableSortedMap<K : Comparable<K>, V>(capacity: Int = 8, val defaultValue: V? = null) :
     ArrayMutableSortedSetBase<K>(capacity), MutableMap<K, V> {
     protected val _values: ArrayList<V> = ArrayList(capacity)
 
@@ -92,6 +92,32 @@ open class ArrayMutableSortedMap<K : Comparable<K>, V>(capacity: Int = 8, defaul
 
     override val values: MutableCollection<V>
         get() = _values.toMutableList()
+
+    fun ordinalKey(index: Int): K? = _set.getOrNull(index)
+
+    fun ordinalValue(index: Int): V? = _values.getOrElse(index) { i -> defaultValue }
+
+    fun ordinalItem(index: Int): MutableMap.MutableEntry<K, V>? {
+        val ok = ordinalKey(index)
+        val ov = ordinalValue(index)
+        if (ok == null || ov == null) {
+            return null
+        } else {
+            return PairEntry(ordinalKey(index)!!, ordinalValue(index)!!)
+        }
+    }
+
+    val headKey: K?
+        get() = ordinalKey(0)
+    val headValue: V?
+        get() = ordinalValue(0)
+    val headItem: MutableMap.MutableEntry<K, V>?
+        get() = ordinalItem(0)
+
+    fun replaceAllValues(transform: (V) -> V) {
+        for (idx in _values.indices)
+            _values[idx] = transform(_values[idx])
+    }
 
     override fun remove(key: K): V? {
         val idx = _set.binarySearch(key)

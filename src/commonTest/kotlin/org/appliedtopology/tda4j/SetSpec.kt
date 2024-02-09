@@ -6,6 +6,7 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeSorted
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.equals.shouldBeEqual
 import io.kotest.property.Arb
 import io.kotest.property.arbitrary.int
 import io.kotest.property.arbitrary.list
@@ -67,6 +68,37 @@ class SetSpec : StringSpec({
             sets.add(set)
             sets.contains(set)
             sets.forEach { AbstractSimplex.compare(simplexOf(it), simplexOf(set)) }
+        }
+    }
+})
+
+class MapSpec : StringSpec({
+    "Mutable Map can take keys and values" {
+        checkAll<List<Pair<Int, Int>>> {
+            val keys = it.map { (k, v) -> k }
+            val vals = it.map { (k, v) -> v }
+            val mmap = ArrayMutableSortedMap<Int, Int>(capacity = it.size, defaultValue = 0)
+            it.forEach { (k, v) -> mmap.put(k, v) }
+
+            val hv = mmap.headValue ?: 0
+
+            withClue("mmap has the right number of entries") {
+                mmap.size.shouldBeEqual(keys.toSet().size)
+            }
+            withClue("mmap has the right head key") {
+                assume(it.isNotEmpty())
+                mmap.headKey?.shouldBeEqual(keys.min())
+            }
+            withClue("mmap has a mapValues") {
+                assume(it.isNotEmpty())
+                val mmap2 = mmap.mapValues { (k, v) -> v * v }
+                mmap2[keys.min()] == hv * hv
+            }
+            withClue("mmap has a replaceAllValues to map values in place") {
+                assume(it.isNotEmpty())
+                mmap.replaceAllValues { v -> v * v }
+                (mmap.headValue ?: 0).shouldBeEqual(hv * hv)
+            }
         }
     }
 })

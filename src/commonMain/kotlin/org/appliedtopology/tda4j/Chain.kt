@@ -4,10 +4,15 @@ class Chain<VertexT : Comparable<VertexT>, CoefficientT : Number>(
     val chainMap: ArrayMutableSortedMap<AbstractSimplex<VertexT>, CoefficientT> = ArrayMutableSortedMap()
 ) {
 
+
+    // TODO: "instead of awkward constructors in the class we can build static constructors in the associated object." 
     //Need to fix this so Chain(simplexOf(1,2,3)) w/o specified coefficient is valid instance of chain.
+
+    //Supposed to handle Chain(simplexOf(1,2,3))
     constructor(simplexOf: AbstractSimplex<VertexT>) : this(){
         chainMap[simplexOf] = 1 as CoefficientT
     }
+    //Supposed to handle Chain(simplexOf(1,2,3) to 2) or Chain(simplexOf(1,2,3) to 2, simplexOf(4,5,6) to 3)
     constructor(vararg simplexCoefficients: Pair<AbstractSimplex<VertexT>, CoefficientT>) : this() {
         simplexCoefficients.forEach { (simplex, coefficient) ->
             chainMap[simplex] = coefficient
@@ -69,6 +74,7 @@ class Chain<VertexT : Comparable<VertexT>, CoefficientT : Number>(
         chainMap[simplex] = newCoefficient
     }
 
+    //Fix equality defintion... is wrong.
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is Chain<*, *>) return false
