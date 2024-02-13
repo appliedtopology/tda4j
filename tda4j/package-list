@@ -79,11 +79,12 @@ $dokka.location:org.appliedtopology.tda4j/Combinatorics/binomial/#kotlin.Int#kot
 $dokka.location:org.appliedtopology.tda4j/Combinatorics/binomialDiagonal/#kotlin.Int/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-combinatorics/binomial-diagonal.html
 $dokka.location:org.appliedtopology.tda4j/Combinatorics/factorial/#kotlin.Int#kotlin.Int/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-combinatorics/factorial.html
 $dokka.location:org.appliedtopology.tda4j/EuclideanMetricSpace///PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-euclidean-metric-space/index.html
-$dokka.location:org.appliedtopology.tda4j/EuclideanMetricSpace/EuclideanMetricSpace/#space.kscience.kmath.tensors.core.DoubleTensor2D/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-euclidean-metric-space/-euclidean-metric-space.html
+$dokka.location:org.appliedtopology.tda4j/EuclideanMetricSpace/EuclideanMetricSpace/#kotlin.collections.List[kotlin.DoubleArray]/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-euclidean-metric-space/-euclidean-metric-space.html
 $dokka.location:org.appliedtopology.tda4j/EuclideanMetricSpace/contains/#kotlin.Int/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-euclidean-metric-space/contains.html
 $dokka.location:org.appliedtopology.tda4j/EuclideanMetricSpace/distance/#kotlin.Int#kotlin.Int/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-euclidean-metric-space/distance.html
 $dokka.location:org.appliedtopology.tda4j/EuclideanMetricSpace/getElements/#/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-euclidean-metric-space/get-elements.html
 $dokka.location:org.appliedtopology.tda4j/EuclideanMetricSpace/getPoints/#/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-euclidean-metric-space/get-points.html
+$dokka.location:org.appliedtopology.tda4j/EuclideanMetricSpace/getPointsND/#/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-euclidean-metric-space/get-points-n-d.html
 $dokka.location:org.appliedtopology.tda4j/EuclideanMetricSpace/getSize/#/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-euclidean-metric-space/get-size.html
 $dokka.location:org.appliedtopology.tda4j/ExpandSequence///PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-expand-sequence/index.html
 $dokka.location:org.appliedtopology.tda4j/ExpandSequence/ExpandSequence/#kotlin.collections.List[org.appliedtopology.tda4j.AbstractSimplex[TypeParam(bounds=[kotlin.Comparable[^]])]]#org.appliedtopology.tda4j.SymmetryGroup[*,TypeParam(bounds=[kotlin.Comparable[^]])]/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-expand-sequence/-expand-sequence.html
