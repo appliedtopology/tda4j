@@ -96,3 +96,10 @@ class ZomorodianIncremental<VertexT : Comparable<VertexT>>(
         return returnValues.sortedWith(getComparator(filtered)).asSequence()
     }
 }
+
+// default choice
+fun <VertexT : Comparable<VertexT>> vietorisRips(
+    metricSpace: FiniteMetricSpace<VertexT>,
+    maxFiltrationValue: Double,
+    maxDimension: Int,
+) = ZomorodianIncremental(metricSpace, maxFiltrationValue, maxDimension)
