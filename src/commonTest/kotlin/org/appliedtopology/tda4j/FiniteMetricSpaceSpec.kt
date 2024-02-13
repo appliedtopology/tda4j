@@ -6,25 +6,22 @@ import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.property.Arb
 import io.kotest.property.arbitrary.*
 import io.kotest.property.checkAll
-import space.kscience.kmath.nd.ShapeND
-import space.kscience.kmath.structures.DoubleBuffer
-import space.kscience.kmath.tensors.core.*
 
 fun pointCloudArb(
     dimensions: Collection<Int> = (2..10).toList(),
     sizes: Collection<Int> = listOf(5, 10, 25, 50, 100, 500),
-): Arb<DoubleTensor2D> =
+): Arb<List<DoubleArray>> =
     arbitrary {
         val dim = Arb.element(dimensions).bind()
         val size = Arb.element(sizes).bind()
         val doubles =
-            Arb.doubleArray(
-                Arb.of(listOf(dim * size)),
-                Arb.double(-100.0, 100.0),
-            ).bind()
-        Double.tensorAlgebra.withBroadcast {
-            fromArray(ShapeND(size, dim), doubles).asDoubleTensor2D()
-        }
+            (1..size).map {
+                Arb.doubleArray(
+                    Arb.of(listOf(dim * size)),
+                    Arb.double(-100.0, 100.0),
+                ).bind()
+            }
+        doubles
     }
 
 class FiniteMetricSpaceSpec : StringSpec({
@@ -33,9 +30,7 @@ class FiniteMetricSpaceSpec : StringSpec({
             mapOf(Pair(0, 0) to 0.0, Pair(0, 1) to 1.0, Pair(1, 0) to 1.0, Pair(1, 1) to 0.0),
         )
     val msE: FiniteMetricSpace<Int> =
-        EuclideanMetricSpace(
-            DoubleTensor2D(2, 2, OffsetDoubleBuffer(DoubleBuffer(0.0, 1.0, 1.0, 0.0), 0, 4)),
-        )
+        EuclideanMetricSpace(listOf(doubleArrayOf(0.0, 1.0), doubleArrayOf(1.0, 0.0)))
 
     "An explicit metric space is non-empty" {
         (msX.size) shouldBeGreaterThan 0
@@ -52,15 +47,15 @@ class FiniteMetricSpaceSpec : StringSpec({
     }
 
     "Generate random Euclidean metric space" {
-        checkAll(pointCloudArb()) {
-            it.colNum shouldBeGreaterThan 0
-            it.rowNum shouldBeGreaterThan 0
-            collect("${it.colNum} columns")
-            collect("${it.rowNum} rows")
-            Double.tensorAlgebra.withBroadcast {
-                val diff = it.rowsByIndices(intArrayOf(1)) - it.rowsByIndices(intArrayOf(2))
-                collect(kotlin.math.floor(kotlin.math.sqrt(diff.dot(diff.transposed())[intArrayOf(0, 0)]) / 10.0))
-            }
+        checkAll(100, pointCloudArb()) {
+            val space = EuclideanMetricSpace(it)
+            space.pointsND
+
+            space.pointsND.colNum shouldBeGreaterThan 0
+            space.pointsND.rowNum shouldBeGreaterThan 0
+            collect("${space.pointsND.colNum} columns")
+            collect("${space.pointsND.rowNum} rows")
+            collect(space.distance(1, 2))
         }
     }
 })

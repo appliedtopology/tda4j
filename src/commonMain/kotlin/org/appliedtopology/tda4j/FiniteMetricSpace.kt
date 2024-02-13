@@ -1,7 +1,14 @@
 package org.appliedtopology.tda4j
 
-import space.kscience.kmath.tensors.core.DoubleTensor2D
-import space.kscience.kmath.tensors.core.DoubleTensorAlgebra
+import space.kscience.kmath.linear.Matrix
+import space.kscience.kmath.linear.asMatrix
+import space.kscience.kmath.linear.linearSpace
+import space.kscience.kmath.linear.transpose
+import space.kscience.kmath.nd.StructureND
+import space.kscience.kmath.nd.as2D
+import space.kscience.kmath.operations.algebra
+import kotlin.collections.component1
+import kotlin.collections.component2
 import kotlin.math.pow
 
 interface FiniteMetricSpace<VertexT> {
@@ -47,19 +54,26 @@ class ExplicitMetricSpace<VertexT>(val distances: Map<Pair<VertexT, VertexT>, Do
     override fun contains(x: VertexT): Boolean = elements.contains(x)
 }
 
-class EuclideanMetricSpace(val points: DoubleTensor2D) : FiniteMetricSpace<Int> {
+class EuclideanMetricSpace(val points: List<DoubleArray>) : FiniteMetricSpace<Int> {
+    val pointsND: Matrix<Double> =
+        with(Double.algebra.linearSpace) {
+            StructureND.auto(points.size, points[0].size) { (i, j) ->
+                points[i][j]
+            }
+        }.as2D()
+
     override fun distance(
         x: Int,
         y: Int,
     ): Double {
         @Suppress("ktlint:standard:property-naming")
-        with(DoubleTensorAlgebra) {
-            val x_y = points.rowsByIndices(intArrayOf(x)) - points.rowsByIndices(intArrayOf(y))
-            return x_y.dot(x_y.transposed())[intArrayOf(0, 0)].pow(0.5)
+        with(Double.algebra.linearSpace) {
+            val x_y: Matrix<Double> = (pointsND.rows[x] - pointsND.rows[y]).asMatrix()
+            return x_y.dot(x_y.transpose())[0, 0].pow(0.5)
         }
     }
 
-    override val size: Int = points.shape[0]
+    override val size: Int = pointsND.shape[0]
 
     override val elements: Iterable<Int>
         get() = IntRange(0, size - 1)
