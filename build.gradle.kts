@@ -123,6 +123,7 @@ kotlin {
     }
 }
 
+// Configure Dokka documentation generation
 tasks.withType<org.jetbrains.dokka.gradle.DokkaTask>().configureEach {
     dependencies {
         dokkaPlugin("org.jetbrains.dokka:kotlin-as-java-plugin:1.9.10")
@@ -130,8 +131,16 @@ tasks.withType<org.jetbrains.dokka.gradle.DokkaTask>().configureEach {
     }
 }
 
+// Enable JUnit
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+}
+
+// Switch on the Context Receivers feature
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+    compilerOptions {
+        freeCompilerArgs.add("-Xcontext-receivers")
+    }
 }
 
 configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
