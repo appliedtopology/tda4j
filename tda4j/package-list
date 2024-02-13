@@ -241,6 +241,8 @@ $dokka.location:org.appliedtopology.tda4j/VietorisRips/getSimplices/#/PointingTo
 $dokka.location:org.appliedtopology.tda4j/VietorisRips/iterator/#/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-vietoris-rips/iterator.html
 $dokka.location:org.appliedtopology.tda4j/VietorisRips/simplicesByDimension/#kotlin.Int/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-vietoris-rips/simplices-by-dimension.html
 $dokka.location:org.appliedtopology.tda4j/VietorisRips/weightedEdges/#org.appliedtopology.tda4j.FiniteMetricSpace[TypeParam(bounds=[kotlin.Comparable[^]])]#kotlin.Double/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-vietoris-rips/weighted-edges.html
+$dokka.location:org.appliedtopology.tda4j/VietorisRipsKt///PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-vietoris-rips-kt/index.html
+$dokka.location:org.appliedtopology.tda4j/VietorisRipsKt/vietorisRips/#org.appliedtopology.tda4j.FiniteMetricSpace[TypeParam(bounds=[kotlin.Comparable[^]])]#kotlin.Double#kotlin.Int/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-vietoris-rips-kt/vietoris-rips.html
 $dokka.location:org.appliedtopology.tda4j/ZomorodianIncremental///PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-zomorodian-incremental/index.html
 $dokka.location:org.appliedtopology.tda4j/ZomorodianIncremental/ZomorodianIncremental/#org.appliedtopology.tda4j.FiniteMetricSpace[TypeParam(bounds=[kotlin.Comparable[^]])]#kotlin.Double#kotlin.Int/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-zomorodian-incremental/-zomorodian-incremental.html
 $dokka.location:org.appliedtopology.tda4j/ZomorodianIncremental/cliques/#/PointingToDeclaration/tda4j/org.appliedtopology.tda4j/-zomorodian-incremental/cliques.html
