@@ -19,6 +19,8 @@ fun Chain<Int, Double>.isZero(): Boolean = false
 
 operator fun Chain<Int, Double>.times(other: Double): Chain<Int, Double> = this
 
+operator fun Chain<Int, Double>.minus(other: Chain<Int, Double>): Chain<Int, Double> = this
+
 class HomologySpec : StringSpec({
     "We should be able to use Chain to compute a simple persistent homology barcode" {
         checkAll<Tuple2<Double, Double>> {
