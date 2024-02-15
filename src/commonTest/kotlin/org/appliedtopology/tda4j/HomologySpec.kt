@@ -23,11 +23,11 @@ operator fun Chain<Int, Double>.minus(other: Chain<Int, Double>): Chain<Int, Dou
 
 class HomologySpec : StringSpec({
     "We should be able to use Chain to compute a simple persistent homology barcode" {
-        checkAll<Tuple2<Double, Double>> {
+        checkAll<Pair<Double, Double>> {
             // For a random pair of values a, b, we compute the Vietoris-Rips homology of the point set
             // { <0,0>, <0,a>, <b,0>
-            val a = it.a
-            val b = it.b
+            val a = it.first
+            val b = it.second
             val points =
                 listOf(
                     doubleArrayOf(0.0, 0.0),
