@@ -4,76 +4,42 @@ import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.equals.shouldBeEqual
 import io.kotest.property.checkAll
+import space.kscience.kmath.operations.Field
 import space.kscience.kmath.operations.algebra
 import kotlin.jvm.JvmInline
 import kotlin.math.roundToInt
 
 @JvmInline value class IntModP(val value: Int)
 
-interface FiniteFieldContext
+class FiniteField(val p: Int) : Field<IntModP> {
+    override fun divide(
+        left: IntModP,
+        right: IntModP,
+    ): IntModP {
+        TODO("Not yet implemented")
+    }
 
-inline operator fun <C : FiniteFieldContext, R> C.invoke(block: (C) -> R): R = block(this)
+    override val one: IntModP
+        get() = IntModP(1)
+    override val zero: IntModP
+        get() = IntModP(0)
 
-interface FieldOps<X> {
-    val one: X
-    val zero: X
+    override fun scale(
+        a: IntModP,
+        value: Double,
+    ): IntModP = IntModP((a.value.toDouble() * value).roundToInt())
 
-    fun plus(
-        left: X,
-        right: X,
-    ): X
+    override fun multiply(
+        left: IntModP,
+        right: IntModP,
+    ): IntModP = IntModP((left.value * right.value) % p)
 
-    fun minus(
-        left: X,
-        right: X,
-    ): X
+    override fun IntModP.unaryMinus(): IntModP = IntModP(p - (value % p))
 
-    fun times(
-        left: X,
-        right: X,
-    ): X
-
-    fun div(
-        left: X,
-        right: X,
-    ): X
-
-    fun compare(
-        left: X,
-        right: X,
-    ): Int
-
-    fun number(x: Int): X
-
-    fun number(x: Double): X
-
-    fun exportToInt(x: X): Int
-}
-
-class FieldC<X>(val delegate: FieldOps<X>) : FiniteFieldContext {
-    val one: X = delegate.one
-    val zero: X = delegate.zero
-
-    inline operator fun X.plus(other: X) = delegate.plus(this@plus, other)
-
-    inline operator fun X.minus(other: X) = delegate.minus(this@minus, other)
-
-    inline operator fun X.times(other: X) = delegate.times(this@times, other)
-
-    inline operator fun X.div(other: X) = delegate.div(this@div, other)
-
-    inline fun X.compareTo(other: X): Int = delegate.compare(this@compareTo, other)
-
-    inline fun number(x: Double): X = delegate.number(x)
-
-    inline fun number(x: Int): X = delegate.number(x)
-
-    inline fun X.toInt(): Int = delegate.exportToInt(this)
-}
-
-class FiniteField(val p: Int) : FieldOps<IntModP> {
-    override val one = IntModP(1)
-    override val zero = IntModP(0)
+    override fun add(
+        left: IntModP,
+        right: IntModP,
+    ): IntModP = IntModP((left.value + right.value) % p)
 
     fun canonical(x: Int): Int {
         var value = x % p
@@ -87,43 +53,17 @@ class FiniteField(val p: Int) : FieldOps<IntModP> {
         }
     }
 
-    override fun exportToInt(self: IntModP): Int = canonical(self.value)
+    fun exportToInt(self: IntModP): Int = canonical(self.value)
 
-    override fun plus(
-        left: IntModP,
-        right: IntModP,
-    ): IntModP = IntModP((left.value + right.value) % p)
+    fun IntModP.toInt(): Int = exportToInt(this@toInt)
 
-    override fun minus(
-        left: IntModP,
-        right: IntModP,
-    ): IntModP = IntModP((left.value - right.value) % p)
-
-    override fun times(
-        left: IntModP,
-        right: IntModP,
-    ): IntModP = IntModP((left.value * right.value) % p)
-
-    override fun div(
-        left: IntModP,
-        right: IntModP,
-    ): IntModP = IntModP((left.value / right.value) % p) // this is wrong
-
-    override fun compare(
-        left: IntModP,
-        right: IntModP,
-    ): Int = exportToInt(left).compareTo(exportToInt(right))
-
-    override fun number(x: Int): IntModP = IntModP(canonical(x))
-
-    override fun number(x: Double): IntModP = number(x.roundToInt())
+    override fun number(value: Number): IntModP {
+        return super.number(canonical(value.toInt()))
+    }
 }
 
-val FiniteField.algebra
-    get() = FieldC(this)
-
 // I'm not at all sure this is how to write a function for this
-fun <T, U : FieldC<T>> U.dosomething(
+fun <T, U : Field<T>> U.dosomething(
     a: T,
     b: T,
 ): T = a - b
@@ -153,16 +93,16 @@ class FieldArithmeticSpec : StringSpec({
 //            }
 
             withClue("Converting to a string should give the normalized range") {
-                (3 * one).toString().shouldBeEqual("3.0")
-                (-3 * one).toString().shouldBeEqual("-3.0")
-                (14 * one).toString().shouldBeEqual("14.0")
+                number(3).toString().shouldBeEqual("3.0")
+                number(-3).toString().shouldBeEqual("-3.0")
+                number(14).toString().shouldBeEqual("14.0")
             }
         }
     }
 
     "Computing with finite fields" {
         val ff17 = FiniteField(17)
-        with(ff17.algebra) {
+        with(ff17) {
             withClue("Should be commutative") {
                 checkAll<Pair<Int, Int>> {
                     val a = number(it.first)
