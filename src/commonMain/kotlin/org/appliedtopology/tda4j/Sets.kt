@@ -1,11 +1,11 @@
 package org.appliedtopology.tda4j
 
-open class ArrayMutableSortedSetBase<T : Comparable<T>>(capacity: Int = 8) {
+open class ArrayMutableSortedSetBaseWith<T>(capacity: Int = 8, val comparator: Comparator<T>) {
     @Suppress("ktlint:standard:property-naming")
     protected val _set: ArrayList<T> = ArrayList(capacity)
 
     fun add(element: T): Boolean {
-        val index = _set.binarySearch(element)
+        val index = _set.binarySearch(element, comparator)
         if (index >= 0) {
             return false
         } else {
@@ -25,7 +25,7 @@ open class ArrayMutableSortedSetBase<T : Comparable<T>>(capacity: Int = 8) {
 
     fun isEmpty(): Boolean = _set.isEmpty()
 
-    fun contains(element: T): Boolean = _set.binarySearch(element) >= 0
+    fun contains(element: T): Boolean = _set.binarySearch(element, comparator) >= 0
 
     fun containsAll(elements: Collection<T>): Boolean = elements.all { contains(it) }
 
@@ -44,9 +44,16 @@ open class ArrayMutableSortedSetBase<T : Comparable<T>>(capacity: Int = 8) {
     }
 }
 
-class ArrayMutableSortedSet<T : Comparable<T>>(capacity: Int = 8) : ArrayMutableSortedSetBase<T>(capacity), MutableSet<T> {
+open class ArrayMutableSortedSetBase<T : Comparable<T>>(capacity: Int = 8) :
+    ArrayMutableSortedSetBaseWith<T>(capacity, naturalOrder())
+
+open class ArrayMutableSortedSetWith<T>(
+    capacity: Int = 8,
+    comparator: Comparator<T>,
+) :
+    ArrayMutableSortedSetBaseWith<T>(capacity, comparator), MutableSet<T> {
     override fun remove(element: T): Boolean {
-        val index = _set.binarySearch(element)
+        val index = _set.binarySearch(element, comparator)
         if (index < 0) {
             return false
         } else {
@@ -59,18 +66,27 @@ class ArrayMutableSortedSet<T : Comparable<T>>(capacity: Int = 8) : ArrayMutable
         return "ArrayMutableSortedSet(${_set.joinToString()})"
     }
 }
+
+open class ArrayMutableSortedSet<T : Comparable<T>>(capacity: Int = 8) :
+    ArrayMutableSortedSetWith<T>(capacity, naturalOrder())
+
+typealias MutableSortedSetWith<V> = ArrayMutableSortedSetWith<V>
 typealias MutableSortedSet<V> = ArrayMutableSortedSet<V>
 
-open class ArrayMutableSortedMap<K : Comparable<K>, V>(capacity: Int = 8, val defaultValue: V? = null) :
-    ArrayMutableSortedSetBase<K>(capacity), MutableMap<K, V> {
+open class ArrayMutableSortedMapWith<K, V>(
+    capacity: Int = 8,
+    comparator: Comparator<K>,
+    val defaultValue: V? = null,
+) :
+    ArrayMutableSortedSetBaseWith<K>(capacity, comparator), MutableMap<K, V> {
     protected val _values: ArrayList<V> = ArrayList(capacity)
 
-    override fun containsKey(key: K): Boolean = _set.binarySearch(key) >= 0
+    override fun containsKey(key: K): Boolean = _set.binarySearch(key, comparator) >= 0
 
     override fun containsValue(value: V): Boolean = _values.contains(value)
 
     override fun get(key: K): V? {
-        val idx = _set.binarySearch(key)
+        val idx = _set.binarySearch(key, comparator)
         return if (idx >= 0) _values[idx] else null
     }
 
@@ -120,7 +136,7 @@ open class ArrayMutableSortedMap<K : Comparable<K>, V>(capacity: Int = 8, val de
     }
 
     override fun remove(key: K): V? {
-        val idx = _set.binarySearch(key)
+        val idx = _set.binarySearch(key, comparator)
         if (idx >= 0) {
             val retval = _values[idx]
             _set.removeAt(idx)
@@ -139,7 +155,7 @@ open class ArrayMutableSortedMap<K : Comparable<K>, V>(capacity: Int = 8, val de
         key: K,
         value: V,
     ): V? {
-        val idx = _set.binarySearch(key)
+        val idx = _set.binarySearch(key, comparator)
         if (idx >= 0) {
             val retval = _values[idx]
             _values[idx] = value
@@ -155,6 +171,12 @@ open class ArrayMutableSortedMap<K : Comparable<K>, V>(capacity: Int = 8, val de
         return "ArrayMutableSortedMap(${entries.joinToString()})"
     }
 }
+
+open class ArrayMutableSortedMap<K : Comparable<K>, V>(
+    capacity: Int = 8,
+    defaultValue: V? = null,
+) :
+    ArrayMutableSortedMapWith<K, V>(capacity, naturalOrder<K>(), defaultValue)
 
 open class MutableBitSet(var capacity: Int) : MutableSet<Int> {
     val bitStorage: IntArray = IntArray(capacity.floorDiv(Int.SIZE_BITS))
