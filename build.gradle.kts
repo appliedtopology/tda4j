@@ -26,6 +26,8 @@ repositories {
 }
 
 kotlin {
+    explicitApiWarning()
+
     jvmToolchain(17)
 
     jvm {
