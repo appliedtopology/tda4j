@@ -136,13 +136,6 @@ tasks.withType<Test>().configureEach {
     useJUnitPlatform()
 }
 
-// Switch on the Context Receivers feature
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    compilerOptions {
-        freeCompilerArgs.add("-Xcontext-receivers")
-    }
-}
-
 configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
     version.set("1.0.1")
     debug.set(true)
