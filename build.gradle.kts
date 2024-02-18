@@ -128,6 +128,7 @@ tasks.withType<org.jetbrains.dokka.gradle.DokkaTask>().configureEach {
     dependencies {
         dokkaPlugin("org.jetbrains.dokka:kotlin-as-java-plugin:1.9.10")
         dokkaPlugin("org.jetbrains.dokka:mathjax-plugin:1.9.10")
+        dokkaPlugin("com.glureau:html-mermaid-dokka-plugin:0.6.0")
     }
 }
 
