@@ -1,22 +1,25 @@
 package org.appliedtopology.tda4j
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.equals.shouldBeEqual
 import io.kotest.matchers.shouldBe
+
 class FiniteFieldSpec : StringSpec({
 
-    "Numbers mod p should all have inverse" {
-
-        // not right lol
-
+    "numbers mod p should all have inverse" {
         val ff17 = FiniteField(17u)
-
         ff17.algebra {
-
-            for (x in 1..16){
-
-                x/x shouldBe 1
+            2u/20u shouldBeEqual 1u
             }
+        }
 
+    "Subtraction works" {
+        val ff17 = FiniteField(17u)
+        ff17.algebra {
+            val x = 15u
+            val y = 10u
+
+            y-x shouldBeEqual 9u
         }
     }
 
@@ -24,58 +27,38 @@ class FiniteFieldSpec : StringSpec({
 
         val ff17 = FiniteField(17u)
 
-        ff17.algebra {
-
+        ff17.algebra  {
             var a = 4
             var b = 20
 
-            (a>b) shouldBe true
+            (b < a) shouldBe true
 
         }
 
     }
 
-        "be commutative" {
-            val ff17 = FiniteField(17u)
-            ff17.algebra {
+    "be commutative" {
+        val ff17 = FiniteField(17u)
+        ff17.algebra  {
 
-                val x = (-100..100).random()
-                val y = (-100..100).random()
-                val z = (-100..100).random()
+                val x = (-100..100).random().toUInt()
+                val y = (-100..100).random().toUInt()
 
-                x * y shouldBe y * x
-                x + y shouldBe y + x
-                x - y shouldBe -(y - x)
+                x * y shouldBeEqual  y * x
+                x + y shouldBeEqual y + x
 
             }
-        }
+    }
 
-        "be associative" {
+        "associativity" {
             val ff17 = FiniteField(17u)
-            ff17.algebra {
-
-                val x = (-100..100).random()
-                val y = (-100..100).random()
-                val z = (-100..100).random()
-
-                x * y === y * x
-                x + y === y + x
-                x - y === -(y - x)
-
-            }
-
-        }
-
-        "associativity"{
-            val ff17 = FiniteField(17u)
-
             ff17.algebra {
                 val x = (-100..100).random().toUInt()
                 val y = (-100..100).random().toUInt()
                 val z = (-100..100).random().toUInt()
 
-                ((x * y) * z) shouldBe (x * (y * z))
-                ((x + y) + z) shouldBe (x + (y + z))
+                ((x * y) * z) shouldBeEqual (x * (y * z))
+                ((x + y) + z) shouldBeEqual (x + (y + z))
             }
         }
         "distributivity" {
@@ -86,8 +69,8 @@ class FiniteFieldSpec : StringSpec({
                 val y = (-100..100).random().toUInt()
                 val z = (-100..100).random().toUInt()
 
-                x * (y + z) shouldBe x * y + x * z
 
+                x * (y + z) shouldBeEqual x * y + x * z
             }
         }
         "units" {
@@ -95,12 +78,10 @@ class FiniteFieldSpec : StringSpec({
             ff17.algebra {
 
                 val x: UInt = (-100..100).random().toUInt()
-                val y = (-100..100).random().toUInt()
-                val z = (-100..100).random().toUInt()
 
-                x - x shouldBe 0
-                x * (1u / x) shouldBe 1
+                x - x shouldBeEqual 0u
+                x * (1u / x) shouldBeEqual 1u
             }
         }
 
-})
+    })

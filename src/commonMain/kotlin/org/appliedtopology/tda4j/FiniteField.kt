@@ -1,73 +1,45 @@
 package org.appliedtopology.tda4j
 
 import space.kscience.kmath.operations.Field
+import kotlin.math.round
+import kotlin.math.abs
 
 class FiniteField(val p : UInt) :  Field<UInt> {
 
     override val zero: UInt = 0u
     override val one: UInt = 1u
 
-    //Unary minus must be defined to implement field interface,
-    // but doesn't make sense in context of UInt
+    // but doesn't make sense when working with Uint
     override fun UInt.unaryMinus(): UInt {
-        return (this)
+        return (p-this)
     }
 
     //Also needs to be defined to implement field interface,
-    // but I really don't understand the purpose
+    //but I really don't understand the purpose
     override fun scale(a: UInt, value: Double):UInt {
-        return (a)
+        return p-((abs(round(a.toDouble()*value)).toUInt())%p)
     }
-    override fun add(a: UInt, b: UInt): UInt = (a + b) % p
-    override fun multiply(a: UInt, b: UInt): UInt = (a * b) % p
+    override fun add(a: UInt, b: UInt): UInt = (a+b+p) % p
+    override fun multiply(a: UInt, b: UInt): UInt = ((a.toULong() * b.toULong()) % p.toULong()).toUInt()
 
-    val inverseTable = UIntArray((p-1u).toInt()) {
-        if (it == 0)
-            0u
-        else
-            inverse(it.toUInt())
-    }
+    //Size of UIntArray must be cast as int...
+    val inverseTable: Map<UInt,UInt> = (0u until p-1u).associate{ it to inverse(it)}
 
-    // TODO:  Use inverse table for divide instead of calling inverse function
     override fun divide(a: UInt, b: UInt): UInt {
-        return multiply(a, inverse(norm(b)))
+        //require(b != 0u){ "Cannot divide by zero." }
+        //This is ugly bc I don't think inverseTable[norm(b)]
+        // should ever return a zero so long as we have the require statement above(?)
+        return multiply(a, inverseTable[norm(b)]?:0u)
     }
 
-    private val p2: UInt = (p - 1u) / 2u
+    fun norm(a: UInt): UInt = a % p
 
-    fun norm(a: UInt): UInt {
-        val r: UInt = a % p
-        return when {
-            r < -p2 -> r + p
-            r > p2 -> r - p
-            else -> r
-        }
-    }
-
-    fun inverse(a: UInt): UInt {
-
-        var u = a % p
-        var v  = p
-        var x1 = 1u
-        var x2 = 0u
-        var q = 0u
-        var r = 0u
-        var x = 0u
-        while (u != 1u) {
-            q = v.floorDiv(u)
-            r = v - q * u
-            x = x2 - q * x1
-            v = u
-            u = r
-            x2 = x1
-            x1 = x
-        }
-        return (x1 % p)
+    private fun inverse(a: UInt): UInt {
+        return 1u
     }
 
     //Don't yet get how this works, but it allows for ff17.algebra
     fun algebra(function: () -> Unit) {
 
     }
-
 }

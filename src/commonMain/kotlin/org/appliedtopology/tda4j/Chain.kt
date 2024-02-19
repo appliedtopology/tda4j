@@ -1,69 +1,70 @@
 package org.appliedtopology.tda4j
 
-class Chain<VertexT : Comparable<VertexT>, CoefficientT : Number>(
+open class Chain<VertexT : Comparable<VertexT>, CoefficientT : Number>{
+
     val chainMap: ArrayMutableSortedMap<AbstractSimplex<VertexT>, CoefficientT> = ArrayMutableSortedMap()
-) {
 
-
-    // TODO: "instead of awkward constructors in the class we can build static constructors in the associated object." 
-    //Need to fix this so Chain(simplexOf(1,2,3)) w/o specified coefficient is valid instance of chain.
-
-    //Supposed to handle Chain(simplexOf(1,2,3))
-    constructor(simplexOf: AbstractSimplex<VertexT>) : this(){
-        chainMap[simplexOf] = 1 as CoefficientT
-    }
-    //Supposed to handle Chain(simplexOf(1,2,3) to 2) or Chain(simplexOf(1,2,3) to 2, simplexOf(4,5,6) to 3)
-    constructor(vararg simplexCoefficients: Pair<AbstractSimplex<VertexT>, CoefficientT>) : this() {
-        simplexCoefficients.forEach { (simplex, coefficient) ->
-            chainMap[simplex] = coefficient
+    companion object {
+        // Static factory method chainOf
+        fun <VertexT : Comparable<VertexT>, CoefficientT : Number> apply(vararg simplexCoefficients: Pair<AbstractSimplex<VertexT>, CoefficientT>): Chain<VertexT, CoefficientT> {
+            val chain = Chain<VertexT, CoefficientT>()
+            simplexCoefficients.filter { (_, coefficient) -> coefficient!= 0 as CoefficientT }.forEach { (simplex, coefficient) ->
+                chain.chainMap[simplex] = coefficient
+            }
+            return chain
         }
+        fun <VertexT : Comparable<VertexT>> apply(vararg simplex: AbstractSimplex<VertexT>): Chain<VertexT, Int> {
+            val chain = Chain<VertexT, Int>()
+            simplex.forEach { simplex ->
+                chain.chainMap[simplex] = 1
+            }
+            return chain
+        }
+
     }
 
-    operator fun unaryMinus(): Chain<VertexT, CoefficientT> {
-
-        val result = Chain(chainMap)
-
-        for ((simplex, coefficient) in chainMap.entries) {
-
-            result.chainMap[simplex] = negateCoefficient(coefficient)
-        }
-        return result
+    operator fun unaryMinus(): Chain<VertexT, CoefficientT>{
+        chainMap.replaceAllValues {v -> negateCoefficient(v)}
+        return this
     }
 
     operator fun plus(other: Chain<VertexT, CoefficientT>): Chain<VertexT, CoefficientT> {
-        val result = Chain(chainMap)
 
-        for ((simplex, coefficient) in other.chainMap.entries) {
-            if (result.chainMap.containsKey(simplex)) {
-                val currentCoefficient = result.chainMap[simplex]!!
-                result.chainMap[simplex] = addNumbers(currentCoefficient, coefficient)
-            } else {
-                result.chainMap[simplex] = coefficient
-            }
+        val result = Chain<VertexT, CoefficientT>()
+        val commonKeys = this.chainMap.keys.union(other.chainMap.keys)
+        for (key in commonKeys) {
+
+            result.chainMap[key] = addNumbers(this.chainMap[key]?:0 as CoefficientT,other.chainMap[key]?:0 as CoefficientT)
+
         }
+        return result
+    }
+    operator fun minus(other: Chain<VertexT, CoefficientT>): Chain<VertexT, CoefficientT> {
 
+        val result = Chain<VertexT, CoefficientT>()
+        val commonKeys = this.chainMap.keys.union(other.chainMap.keys)
+        for (key in commonKeys) {
+
+            result.chainMap[key] = addNumbers(this.chainMap[key]?:0 as CoefficientT,negateCoefficient(other.chainMap[key]?:0 as CoefficientT))
+
+        }
         return result
     }
 
-    operator fun minus(other: Chain<VertexT, CoefficientT>): Chain<VertexT, CoefficientT> {
-        val result = Chain(chainMap)
-
-        return this + (-other)
-    }
-
-
     operator fun times(scalar: CoefficientT): Chain<VertexT, CoefficientT> {
 
-        val result = Chain(chainMap)
-
+        val result = Chain<VertexT, CoefficientT>()
         for ((simplex, coefficient) in chainMap.entries) {
 
             result.chainMap[simplex] = multiplyCoefficient(scalar, coefficient)
         }
-
         return result
     }
 
+    fun getCoefficients(simplex: AbstractSimplex<VertexT>): CoefficientT {
+        // Retrieve the coefficient for the given simplex
+        return chainMap[simplex] ?: 0 as CoefficientT
+    }
     fun getCoefficients(simplices: Collection<AbstractSimplex<VertexT>>): Map<AbstractSimplex<VertexT>, CoefficientT> {
         // Retrieve the coefficients for the given simplices
         return chainMap.filterKeys { it in simplices }
@@ -76,16 +77,22 @@ class Chain<VertexT : Comparable<VertexT>, CoefficientT : Number>(
 
     //Fix equality defintion... is wrong.
     override fun equals(other: Any?): Boolean {
+
         if (this === other) return true
         if (other !is Chain<*, *>) return false
 
-        // Check if chain maps are equal based on common simplices
-        val commonSimplices = chainMap.keys.intersect(other.chainMap.keys)
+        // Check that all of the keys and values are the same
+        val commonKeys = this.chainMap.keys.union(other.chainMap.keys)
 
-        for (simplex in commonSimplices) {
-            if (chainMap[simplex] != other.chainMap[simplex]) return false
+        for (key in commonKeys) {
+
+            val thisValue = this.chainMap[key] ?: 0
+            val otherValue = other.chainMap[key] ?: 0
+
+            if (thisValue != otherValue) {
+                return false
+            }
         }
-
         return true
     }
 
@@ -134,5 +141,14 @@ class Chain<VertexT : Comparable<VertexT>, CoefficientT : Number>(
             else -> throw IllegalArgumentException("Unsupported number type")
         }
     }
+}
 
+fun <VertexT : Comparable<VertexT>, CoefficientT : Number> chainOf(vararg simplexCoefficients: Pair<AbstractSimplex<VertexT>, CoefficientT>): Chain<VertexT, CoefficientT> {
+    // Delegate to the companion object's chainOf function
+    return Chain.apply(*simplexCoefficients)
+}
+
+fun <VertexT : Comparable<VertexT>> chainOf(vararg simplex: AbstractSimplex<VertexT>): Chain<VertexT, Int> {
+    // Delegate to the companion object's chainOf function
+    return Chain.apply(*simplex)
 }
