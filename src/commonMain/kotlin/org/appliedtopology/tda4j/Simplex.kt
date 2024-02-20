@@ -4,7 +4,7 @@ import arrow.core.padZip
 
 open class AbstractSimplexWith<VertexT>(val vertexComparator: Comparator<VertexT>) : Set<VertexT> {
     @Suppress("ktlint:standard:property-naming")
-    protected val _simplex: MutableSortedSetWith<VertexT> = MutableSortedSetWith(comparator = vertexComparator)
+    internal val _simplex: MutableSortedSetWith<VertexT> = MutableSortedSetWith(comparator = vertexComparator)
 
     constructor(vertexComparator: Comparator<VertexT>, elements: HashSet<VertexT>) : this(vertexComparator) {
         _simplex.addAll(elements)

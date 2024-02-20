@@ -13,7 +13,7 @@ abstract class SimplexStream<VertexT : Comparable<VertexT>, FiltrationT : Compar
 
 open class ExplicitStream<VertexT : Comparable<VertexT>, FiltrationT : Comparable<FiltrationT>> :
     SimplexStream<VertexT, FiltrationT>(), MutableMap<AbstractSimplex<VertexT>, FiltrationT> {
-    protected val filtrationValues: MutableMap<AbstractSimplex<VertexT>, FiltrationT> = HashMap()
+    internal val filtrationValues: MutableMap<AbstractSimplex<VertexT>, FiltrationT> = HashMap()
 
     override fun filtrationValue(simplex: AbstractSimplex<VertexT>): FiltrationT? = filtrationValues[simplex]
 

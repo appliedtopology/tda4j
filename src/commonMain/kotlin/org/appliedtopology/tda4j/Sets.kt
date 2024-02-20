@@ -2,7 +2,7 @@ package org.appliedtopology.tda4j
 
 open class ArrayMutableSortedSetBaseWith<T>(capacity: Int = 8, val comparator: Comparator<T>) {
     @Suppress("ktlint:standard:property-naming")
-    protected val _set: ArrayList<T> = ArrayList(capacity)
+    internal val _set: ArrayList<T> = ArrayList(capacity)
 
     fun add(element: T): Boolean {
         val index = _set.binarySearch(element, comparator)
@@ -79,7 +79,7 @@ open class ArrayMutableSortedMapWith<K, V>(
     val defaultValue: V? = null,
 ) :
     ArrayMutableSortedSetBaseWith<K>(capacity, comparator), MutableMap<K, V> {
-    protected val _values: ArrayList<V> = ArrayList(capacity)
+    internal val _values: ArrayList<V> = ArrayList(capacity)
 
     override fun containsKey(key: K): Boolean = _set.binarySearch(key, comparator) >= 0
 
