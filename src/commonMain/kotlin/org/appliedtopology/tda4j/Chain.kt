@@ -6,7 +6,11 @@ import space.kscience.kmath.operations.Group
 import space.kscience.kmath.operations.NumericAlgebra
 import space.kscience.kmath.operations.Ring
 
-interface FieldContext<CoefficientT> : Ring<CoefficientT>, FieldOps<CoefficientT>, NumericAlgebra<CoefficientT>
+interface Equality<T> {
+    infix fun T.eq(other: Any?): Boolean
+}
+
+interface FieldContext<CoefficientT> : Ring<CoefficientT>, FieldOps<CoefficientT>, NumericAlgebra<CoefficientT>, Equality<CoefficientT>
 
 open class ChainWith<VertexT, CoefficientT>(
     val vertexComparator: Comparator<VertexT>,

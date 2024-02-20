@@ -1,82 +1,104 @@
 package org.appliedtopology.tda4j
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
-import io.kotest.matchers.equals.shouldBeEqual
+import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.comparables.shouldBeLessThan
+import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
+import io.kotest.matchers.ints.shouldBeLessThanOrEqual
+import io.kotest.matchers.should
+import io.kotest.matchers.string.startWith
 import io.kotest.property.Arb
 import io.kotest.property.arbitrary.arbitrary
 import io.kotest.property.checkAll
 
-val FiniteFieldArb: Arb<Fp> =
-    arbitrary {
-        Fp(it.random.nextInt())
+public val FiniteFieldContext.FiniteFieldArb: Arb<Fp>
+    get() =
+        arbitrary {
+            this@FiniteFieldArb.fp(it.random.nextInt())
+        }
+
+public class FiniteFieldSpec : StringSpec({
+    val ff17 = FiniteFieldContext(17)
+
+    "the finite field construction interface should do modulo directly" {
+        with(ff17) {
+            checkAll<Int> {
+                fp(it).toInt() shouldBeLessThanOrEqual 8
+                fp(it).toInt() shouldBeGreaterThanOrEqual -8
+                fp(it).x shouldBeLessThan 17
+            }
+        }
     }
 
-class FiniteFieldSpec : StringSpec({
-
     "numbers mod p should all have inverse" {
-        val ff17 = FiniteFieldContext(17)
         with(ff17) {
-            Fp(2) / Fp(20) shouldBeEqual Fp(1)
+            (fp(2) * fp(9) eq fp(1)).shouldBeTrue()
         }
     }
 
     "Subtraction works" {
-        val ff17 = FiniteFieldContext(17)
         with(ff17) {
-            val x = Fp(15)
-            val y = Fp(10)
+            val x = fp(15)
+            val y = fp(10)
 
-            y - x shouldBeEqual Fp(9)
+            ((y - x) eq fp(12)).shouldBeTrue()
         }
     }
 
     "xComparison should be right" {
-
-        val ff17 = FiniteFieldContext(17)
-
         with(ff17) {
-            var a = Fp(4)
-            var b = Fp(20)
+            var a = fp(4)
+            var b = fp(20)
 
             // (b < a) shouldBe true // SHOULD finite field have natural orders?
         }
     }
 
     "be commutative" {
-        val ff17 = FiniteFieldContext(17)
         with(ff17) {
-            checkAll<Pair<Fp, Fp>> { (x, y) ->
-                x * y shouldBeEqual y * x
-                x + y shouldBeEqual y + x
+            checkAll(ff17.FiniteFieldArb, ff17.FiniteFieldArb) { a, b ->
+                ((a * b) eq (b * a)).shouldBeTrue()
+                ((a + b) eq (b + a)).shouldBeTrue()
             }
         }
     }
-
+    /**
+     * 0) fp(1941174536)
+     * 1) fp(406594172)
+     * 2) fp(11244580)
+     *
+     */
     "associativity" {
-        val ff17 = FiniteFieldContext(17)
         with(ff17) {
-            checkAll<Triple<Fp, Fp, Fp>> { (x, y, z) ->
-                ((x * y) * z) shouldBeEqual (x * (y * z))
-                ((x + y) + z) shouldBeEqual (x + (y + z))
+            checkAll(ff17.FiniteFieldArb, ff17.FiniteFieldArb, ff17.FiniteFieldArb) { x, y, z ->
+                (((x * y) * z) eq (x * (y * z))).shouldBeTrue()
+                (((x + y) + z) eq (x + (y + z))).shouldBeTrue()
             }
         }
     }
 
     "distributivity" {
-        val ff17 = FiniteFieldContext(17)
         with(ff17) {
-            checkAll<Triple<Fp, Fp, Fp>> { (x, y, z) ->
-                x * (y + z) shouldBeEqual x * y + x * z
+            checkAll(ff17.FiniteFieldArb, ff17.FiniteFieldArb, ff17.FiniteFieldArb) { x, y, z ->
+                ((x * (y + z)) eq (x * y + x * z)).shouldBeTrue()
             }
         }
     }
 
     "units" {
-        val ff17 = FiniteFieldContext(17)
         with(ff17) {
-            checkAll<Fp> { x ->
-                x - x shouldBeEqual zero
-                x * (one / x) shouldBeEqual one
+            checkAll(ff17.FiniteFieldArb) { x ->
+                ((x - x) eq zero).shouldBeTrue()
+                if (x eq zero) {
+                    val exception =
+                        shouldThrow<IllegalArgumentException> {
+                            ((x * (one / x)) eq one)
+                        }
+                    exception.message should startWith("Cannot divide by zero.")
+                } else {
+                    ((x * (one / x)) eq one).shouldBeTrue()
+                }
             }
         }
     }

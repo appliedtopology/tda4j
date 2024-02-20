@@ -3,6 +3,8 @@
 package org.appliedtopology.tda4j
 
 import kotlin.jvm.JvmName
+import kotlin.math.abs
+import kotlin.math.ulp
 
 object DoubleContext : FieldContext<Double> {
     override fun divide(
@@ -28,6 +30,13 @@ object DoubleContext : FieldContext<Double> {
         left: Double,
         right: Double,
     ): Double = left + right
+
+    override fun Double.eq(other: Any?): Boolean =
+        if (other is Number) {
+            abs(this@eq - other.toDouble()) < this@eq.ulp
+        } else {
+            false
+        }
 }
 
 object Api {

@@ -1,21 +1,23 @@
 package org.appliedtopology.tda4j
 
-import kotlin.jvm.JvmInline
-
-@JvmInline
-value class Fp(val x: Int) {
-    override fun toString(): String {
-        return "Fp($x)"
-    }
+public open class Fp(val x: Int) {
+    public override fun toString(): String = "fp($x)"
 }
 
-open class FiniteFieldContext(val p: Int) : FieldContext<Fp> {
-    override val zero = Fp(0)
-    override val one = Fp(1)
+interface FpFactory {
+    fun fp(x: Number): Fp
+}
+
+public open class FiniteFieldContext(val p: Int) : FieldContext<Fp>, FpFactory {
+    // Make finite field elements
+    public override fun fp(x: Number): Fp = Fp(x.toInt() % p)
 
     override fun number(value: Number): Fp = Fp(value.toInt() % p)
 
-    // but doesn't make sense when working with Uint
+    override val zero = number(0)
+    override val one = number(1)
+
+    // Finite field arithmetic
     override fun Fp.unaryMinus(): Fp {
         return Fp(p - this.x)
     }
@@ -50,7 +52,10 @@ open class FiniteFieldContext(val p: Int) : FieldContext<Fp> {
         return (x1 % p)
     }
 
-    val inverseTable: Map<Fp, Fp> = (0 until p - 1).associate { Fp(it) to Fp(inverse(it)) }
+    // Using a Map here takes up unnecessarily large amounts of space and runtime complexity
+    // for what should be a simple Array lookup.
+    // Performance note: This runs every time the context is instantiated. Reuse context when possible.
+    val inverseTable: IntArray = IntArray(p) { if (it == 0) 0 else inverse(it) }
 
     override fun divide(
         left: Fp,
@@ -59,9 +64,10 @@ open class FiniteFieldContext(val p: Int) : FieldContext<Fp> {
         require((right.x % p) != 0) { "Cannot divide by zero." }
         // This is ugly bc I don't think inverseTable[norm(b)]
         // should ever return a zero so long as we have the require statement above(?)
-        return multiply(left, inverseTable[Fp(norm(right))] ?: zero)
+        return multiply(left, Fp(inverseTable[(norm(right))]))
     }
 
+    // Normalize, convert, print
     fun norm(a: Fp): Int =
         if (a.x % p < 0) {
             (a.x % p) + p
@@ -69,5 +75,16 @@ open class FiniteFieldContext(val p: Int) : FieldContext<Fp> {
             a.x % p
         }
 
+    fun Fp.normal(): Fp = Fp(norm(this))
+
     fun canonical(a: Fp): Int = norm(a) - (p - 1) / 2
+
+    fun Fp.toInt(): Int = canonical(this@toInt)
+
+    public override infix fun Fp.eq(other: Any?): Boolean =
+        if (other !is Fp) {
+            false
+        } else {
+            ((this@eq.x - other.x) % p) == 0
+        }
 }
