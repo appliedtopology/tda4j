@@ -2,7 +2,7 @@ package org.appliedtopology.tda4j
 
 import arrow.core.padZip
 
-open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
+open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT>, Comparable<AbstractSimplex<VertexT>> {
     @Suppress("ktlint:standard:property-naming")
     private val _simplex: MutableSortedSet<VertexT> = MutableSortedSet()
 
@@ -41,7 +41,7 @@ open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
     fun <R : Comparable<R>> mapVertices(transform: (VertexT) -> R) =
         AbstractSimplex<R>(_simplex.mapTo(HashSet<R>(_simplex.size), transform))
 
-    fun <CoefficientT> boundary(): Chain<VertexT, CoefficientT> = Chain<VertexT, CoefficientT>()
+    fun <CoefficientT : Number> boundary(): Chain<VertexT, CoefficientT> = Chain<VertexT, CoefficientT>()
 
     fun plus(element: VertexT): AbstractSimplex<VertexT> {
         val vertices = HashSet(_simplex)
@@ -58,6 +58,10 @@ open class AbstractSimplex<VertexT : Comparable<VertexT>> : Set<VertexT> {
             "abstractSimplexOf(",
             ")",
         )
+
+    override fun compareTo(other: AbstractSimplex<VertexT>): Int {
+        return compare(this, other)
+    }
 
     companion object {
         fun <VertexT : Comparable<VertexT>> compare(
