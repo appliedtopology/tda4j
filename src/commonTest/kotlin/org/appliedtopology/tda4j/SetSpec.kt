@@ -56,7 +56,7 @@ class SetSpec : StringSpec({
             set.addAll(it)
             sets.add(set)
             sets.contains(set)
-            sets.forEach { AbstractSimplex.compare(simplexOf(it), simplexOf(set)) }
+            sets.forEach { SimplexComparator<Int>().compare(simplexOf(it), simplexOf(set)) }
         }
     }
 
@@ -67,7 +67,7 @@ class SetSpec : StringSpec({
             set.addAll(it)
             sets.add(set)
             sets.contains(set)
-            sets.forEach { AbstractSimplex.compare(simplexOf(it), simplexOf(set)) }
+            sets.forEach { SimplexComparator<Int>().compare(simplexOf(it), simplexOf(set)) }
         }
     }
 })

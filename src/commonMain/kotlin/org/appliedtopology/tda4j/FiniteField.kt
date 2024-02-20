@@ -1,57 +1,73 @@
 package org.appliedtopology.tda4j
 
-import space.kscience.kmath.operations.Field
-import kotlin.math.abs
-import kotlin.math.round
+import kotlin.jvm.JvmInline
 
-class FiniteField(val p: UInt) : Field<UInt> {
-    override val zero: UInt = 0u
-    override val one: UInt = 1u
+@JvmInline
+value class Fp(val x: Int) {
+    override fun toString(): String {
+        return "Fp($x)"
+    }
+}
+
+open class FiniteFieldContext(val p: Int) : FieldContext<Fp> {
+    override val zero = Fp(0)
+    override val one = Fp(1)
+
+    override fun number(value: Number): Fp = Fp(value.toInt() % p)
 
     // but doesn't make sense when working with Uint
-    override fun UInt.unaryMinus(): UInt {
-        return (p - this)
-    }
-
-    // Also needs to be defined to implement field interface,
-    // but I really don't understand the purpose
-    override fun scale(
-        a: UInt,
-        value: Double,
-    ): UInt {
-        return p - ((abs(round(a.toDouble() * value)).toUInt()) % p)
+    override fun Fp.unaryMinus(): Fp {
+        return Fp(p - this.x)
     }
 
     override fun add(
-        a: UInt,
-        b: UInt,
-    ): UInt = (a + b + p) % p
+        left: Fp,
+        right: Fp,
+    ): Fp = Fp((left.x + right.x) % p)
 
     override fun multiply(
-        a: UInt,
-        b: UInt,
-    ): UInt = ((a.toULong() * b.toULong()) % p.toULong()).toUInt()
+        left: Fp,
+        right: Fp,
+    ): Fp = Fp((left.x.toLong() * right.x.toLong() % p.toLong()).toInt())
 
-    // Size of UIntArray must be cast as int...
-    val inverseTable: Map<UInt, UInt> = (0u until p - 1u).associate { it to inverse(it) }
+    fun inverse(a: Int): Int {
+        var u = a % p
+        var v = p
+        var x1 = 1
+        var x2 = 0
+        var q = 0
+        var r = 0
+        var x = 0
+        while (u != 1) {
+            q = v.floorDiv(u)
+            r = v - q * u
+            x = x2 - q * x1
+            v = u
+            u = r
+            x2 = x1
+            x1 = x
+        }
+        return (x1 % p)
+    }
+
+    val inverseTable: Map<Fp, Fp> = (0 until p - 1).associate { Fp(it) to Fp(inverse(it)) }
 
     override fun divide(
-        a: UInt,
-        b: UInt,
-    ): UInt {
-        // require(b != 0u){ "Cannot divide by zero." }
+        left: Fp,
+        right: Fp,
+    ): Fp {
+        require((right.x % p) != 0) { "Cannot divide by zero." }
         // This is ugly bc I don't think inverseTable[norm(b)]
         // should ever return a zero so long as we have the require statement above(?)
-        return multiply(a, inverseTable[norm(b)] ?: 0u)
+        return multiply(left, inverseTable[Fp(norm(right))] ?: zero)
     }
 
-    fun norm(a: UInt): UInt = a % p
+    fun norm(a: Fp): Int =
+        if (a.x % p < 0) {
+            (a.x % p) + p
+        } else {
+            a.x % p
+        }
 
-    private fun inverse(a: UInt): UInt {
-        return 1u
-    }
-
-    // Don't yet get how this works, but it allows for ff17.algebra
-    fun algebra(function: () -> Unit) {
-    }
+    fun canonical(a: Fp): Int = norm(a) - (p - 1) / 2
 }

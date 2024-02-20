@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.equals.shouldBeEqual
 import io.kotest.matchers.equals.shouldNotBeEqual
@@ -28,11 +29,15 @@ class SimplexSpec : StringSpec({
     }
 
     "A simplex has a boundary" {
-        simplex.boundary<Double>().shouldBeInstanceOf<Chain<Int, Double>>()
+        with(ChainContext<Int, Double>(DoubleContext)) {
+            simplex.boundary.shouldBeInstanceOf<Chain<Int, Double>>()
+        }
     }
 
     "A non-zero simplex has a non-zero boundary" {
-        simplexOf(1, 2, 3).boundary<Double>().shouldNotBeEqual(Chain<Int, Double>())
+        with(ChainContext<Int, Double>(DoubleContext)) {
+            simplexOf(1, 2, 3).boundary.shouldNotBeEqual(emptyChain)
+        }
     }
 
     "A simplex can receive an added vertex" {
@@ -48,6 +53,22 @@ class SimplexSpec : StringSpec({
     }
 
     "Lexicographic ordering works" {
-        Simplex.compare(simplexOf(0, 1), simplexOf(0, 2)).shouldBeLessThan(0)
+        SimplexComparator<Int>().compare(simplexOf(0, 1), simplexOf(0, 2)).shouldBeLessThan(0)
+    }
+
+    "Simplex context example" {
+        with(SimplexContext<Char>()) {
+            s('a', 'b', 'c').size shouldBeEqual 3
+            s('a', 'b', 'c') shouldContainExactly (setOf('a', 'b', 'c'))
+        }
+    }
+
+    "Chain context example (TODO: move to ChainSpec later)" {
+        with(ChainContext<Char, Double>(DoubleContext)) {
+            with(coefficientContext) {
+                s('a', 'b', 'c').boundary shouldBeEqual
+                    one * s('a', 'b') - one * s('a', 'c') + one * s('b', 'c')
+            }
+        }
     }
 })

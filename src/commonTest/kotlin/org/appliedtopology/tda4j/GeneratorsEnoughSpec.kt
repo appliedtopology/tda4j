@@ -16,7 +16,7 @@ class GeneratorsEnoughSpec : StringSpec({
     "Checking group generators suffices for representative recognition" {
         checkAll<Simplex>(simplexArb((1..hc.top).toList(), 0..15)) { s ->
             collect(
-                gens.all { g -> Simplex.compare(s, s.mapVertices(sg.action(g))) <= 0 } ==
+                gens.all { g -> SimplexComparator<Int>().compare(s, s.mapVertices(sg.action(g))) <= 0 } ==
                     sg.isRepresentative(s),
             )
         }

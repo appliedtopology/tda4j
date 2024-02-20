@@ -38,7 +38,7 @@ abstract class VietorisRips<VertexT : Comparable<VertexT>>(
         fun <VertexT : Comparable<VertexT>> getComparator(filtered: Filtered<VertexT, Double>): Comparator<AbstractSimplex<VertexT>> =
             compareBy<AbstractSimplex<VertexT>> { filtered.filtrationValue(it) }
                 .thenBy { it.size }
-                .thenComparator { x: AbstractSimplex<VertexT>, y: AbstractSimplex<VertexT> -> AbstractSimplex.compare(x, y) }
+                .thenComparator(SimplexComparator<VertexT>()::compare)
     }
 }
 
@@ -83,7 +83,7 @@ class ZomorodianIncremental<VertexT : Comparable<VertexT>>(
             if (tau.size < maxDimension) {
                 lowerNeighborSet.forEach { v: VertexT ->
                     run {
-                        val sigma: AbstractSimplex<VertexT> = tau.plus(v)
+                        val sigma: AbstractSimplex<VertexT> = tau.plus(v) as AbstractSimplex<VertexT>
                         val lowerNeighborIntersection: Set<VertexT> =
                             lowerNeighborSet.intersect(lowerNeighbors[v]?.asIterable() ?: emptySequence<VertexT>().asIterable())
                         tasks.addFirst(Pair(sigma, lowerNeighborIntersection))

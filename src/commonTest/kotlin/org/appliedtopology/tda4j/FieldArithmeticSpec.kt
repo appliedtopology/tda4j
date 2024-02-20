@@ -9,37 +9,37 @@ import space.kscience.kmath.operations.algebra
 import kotlin.jvm.JvmInline
 import kotlin.math.roundToInt
 
-@JvmInline value class IntModP(val value: Int)
+@JvmInline value class Fp(val value: Int)
 
-class FiniteField(val p: Int) : Field<IntModP> {
+class FiniteField(val p: Int) : Field<Fp> {
     override fun divide(
-        left: IntModP,
-        right: IntModP,
-    ): IntModP {
+        left: Fp,
+        right: Fp,
+    ): Fp {
         TODO("Not yet implemented")
     }
 
-    override val one: IntModP
-        get() = IntModP(1)
-    override val zero: IntModP
-        get() = IntModP(0)
+    override val one: Fp
+        get() = Fp(1)
+    override val zero: Fp
+        get() = Fp(0)
 
     override fun scale(
-        a: IntModP,
+        a: Fp,
         value: Double,
-    ): IntModP = IntModP((a.value.toDouble() * value).roundToInt())
+    ): Fp = Fp((a.value.toDouble() * value).roundToInt())
 
     override fun multiply(
-        left: IntModP,
-        right: IntModP,
-    ): IntModP = IntModP((left.value * right.value) % p)
+        left: Fp,
+        right: Fp,
+    ): Fp = Fp((left.value * right.value) % p)
 
-    override fun IntModP.unaryMinus(): IntModP = IntModP(p - (value % p))
+    override fun Fp.unaryMinus(): Fp = Fp(p - (value % p))
 
     override fun add(
-        left: IntModP,
-        right: IntModP,
-    ): IntModP = IntModP((left.value + right.value) % p)
+        left: Fp,
+        right: Fp,
+    ): Fp = Fp((left.value + right.value) % p)
 
     fun canonical(x: Int): Int {
         var value = x % p
@@ -53,11 +53,11 @@ class FiniteField(val p: Int) : Field<IntModP> {
         }
     }
 
-    fun exportToInt(self: IntModP): Int = canonical(self.value)
+    fun exportToInt(self: Fp): Int = canonical(self.value)
 
-    fun IntModP.toInt(): Int = exportToInt(this@toInt)
+    fun Fp.toInt(): Int = exportToInt(this@toInt)
 
-    override fun number(value: Number): IntModP {
+    override fun number(value: Number): Fp {
         return super.number(canonical(value.toInt()))
     }
 }
@@ -129,9 +129,9 @@ class FieldArithmeticSpec : StringSpec({
             }
 
             withClue("Converting to a string should give the normalized range") {
-                number(3).toString().shouldBeEqual("IntModP(value=3)")
-                number(-3).toString().shouldBeEqual("IntModP(value=-3)")
-                number(14).toString().shouldBeEqual("IntModP(value=-3)")
+                number(3).toString().shouldBeEqual("Fp(value=3)")
+                number(-3).toString().shouldBeEqual("Fp(value=-3)")
+                number(14).toString().shouldBeEqual("Fp(value=-3)")
             }
         }
     }

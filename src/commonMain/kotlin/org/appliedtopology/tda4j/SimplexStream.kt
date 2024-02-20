@@ -8,12 +8,7 @@ abstract class SimplexStream<VertexT : Comparable<VertexT>, FiltrationT : Compar
     Filtered<VertexT, FiltrationT>, Iterable<AbstractSimplex<VertexT>> {
     open val comparator: Comparator<AbstractSimplex<VertexT>> =
         compareBy<AbstractSimplex<VertexT>> { filtrationValue(it) }
-            .thenComparator { a: AbstractSimplex<VertexT>, b: AbstractSimplex<VertexT> ->
-                AbstractSimplex.compare(
-                    a,
-                    b,
-                )
-            }
+            .thenComparator(SimplexComparator<VertexT>()::compare)
 }
 
 open class ExplicitStream<VertexT : Comparable<VertexT>, FiltrationT : Comparable<FiltrationT>> :

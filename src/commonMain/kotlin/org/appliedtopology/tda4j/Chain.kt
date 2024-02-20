@@ -1,158 +1,152 @@
 package org.appliedtopology.tda4j
 
-open class Chain<VertexT : Comparable<VertexT>, CoefficientT : Number> {
+import arrow.core.padZip
+import space.kscience.kmath.operations.FieldOps
+import space.kscience.kmath.operations.Group
+import space.kscience.kmath.operations.NumericAlgebra
+import space.kscience.kmath.operations.Ring
 
-    val chainMap: ArrayMutableSortedMap<AbstractSimplex<VertexT>, CoefficientT> = ArrayMutableSortedMap()
+interface FieldContext<CoefficientT> : Ring<CoefficientT>, FieldOps<CoefficientT>, NumericAlgebra<CoefficientT>
 
-    companion object {
-        // Static factory method chainOf
-        fun <VertexT : Comparable<VertexT>, CoefficientT : Number> apply(
-            vararg simplexCoefficients: Pair<AbstractSimplex<VertexT>, CoefficientT>,
-        ): Chain<VertexT, CoefficientT> {
-            val chain = Chain<VertexT, CoefficientT>()
-            simplexCoefficients.filter { (_, coefficient) -> coefficient != 0 as CoefficientT }.forEach { (simplex, coefficient) ->
-                chain.chainMap[simplex] = coefficient
-            }
-            return chain
+open class ChainWith<VertexT, CoefficientT>(
+    val vertexComparator: Comparator<VertexT>,
+    val simplexComparator: Comparator<AbstractSimplexWith<VertexT>>,
+    val chainMap: MutableMap<AbstractSimplexWith<VertexT>, CoefficientT>,
+) {
+    constructor(vertexComparator: Comparator<VertexT>, simplexComparator: Comparator<AbstractSimplexWith<VertexT>>) :
+        this(vertexComparator, simplexComparator, mutableMapOf()) { }
+
+    fun <V> mapToChain(transform: (CoefficientT) -> V): ChainWith<VertexT, V> =
+        ChainWith(
+            this.vertexComparator,
+            this.simplexComparator,
+            mutableMapOf(*this.chainMap.map { (k, v) -> k to transform(v) }.toTypedArray()),
+        )
+
+    override fun toString(): String {
+        val retval: String =
+            chainMap.keys.sortedWith(simplexComparator).map { simplex ->
+                "${chainMap[simplex]}*$simplex"
+            }.joinToString(" + ")
+        if (retval != "") {
+            return (retval)
+        } else {
+            return ("0")
         }
-
-        fun <VertexT : Comparable<VertexT>> apply(vararg simplex: AbstractSimplex<VertexT>): Chain<VertexT, Int> {
-            val chain = Chain<VertexT, Int>()
-            simplex.forEach { simplex ->
-                chain.chainMap[simplex] = 1
-            }
-            return chain
-        }
     }
 
-    operator fun unaryMinus(): Chain<VertexT, CoefficientT>  {
-        chainMap.replaceAllValues { v -> negateCoefficient(v) }
-        return this
-    }
-
-    operator fun plus(other: Chain<VertexT, CoefficientT>): Chain<VertexT, CoefficientT> {
-        val result = Chain<VertexT, CoefficientT>()
-        val commonKeys = this.chainMap.keys.union(other.chainMap.keys)
-        for (key in commonKeys) {
-            result.chainMap[key] = addNumbers(this.chainMap[key] ?: 0 as CoefficientT, other.chainMap[key] ?: 0 as CoefficientT)
-        }
-        return result
-    }
-
-    operator fun minus(other: Chain<VertexT, CoefficientT>): Chain<VertexT, CoefficientT> {
-        val result = Chain<VertexT, CoefficientT>()
-        val commonKeys = this.chainMap.keys.union(other.chainMap.keys)
-        for (key in commonKeys) {
-            result.chainMap[key] = addNumbers(this.chainMap[key] ?: 0 as CoefficientT, negateCoefficient(other.chainMap[key] ?: 0 as CoefficientT))
-        }
-        return result
-    }
-
-    operator fun times(scalar: CoefficientT): Chain<VertexT, CoefficientT> {
-        val result = Chain<VertexT, CoefficientT>()
-        for ((simplex, coefficient) in chainMap.entries) {
-            result.chainMap[simplex] = multiplyCoefficient(scalar, coefficient)
-        }
-        return result
-    }
-
-    fun getCoefficients(simplex: AbstractSimplex<VertexT>): CoefficientT {
-        // Retrieve the coefficient for the given simplex
-        return chainMap[simplex] ?: 0 as CoefficientT
-    }
-
-    fun getCoefficients(simplices: Collection<AbstractSimplex<VertexT>>): Map<AbstractSimplex<VertexT>, CoefficientT> {
-        // Retrieve the coefficients for the given simplices
-        return chainMap.filterKeys { it in simplices }
-    }
-
-    fun updateCoefficient(
-        simplex: AbstractSimplex<VertexT>,
-        newCoefficient: CoefficientT,
+    operator fun set(
+        simplex: AbstractSimplexWith<VertexT>,
+        value: CoefficientT,
     ) {
-        // Update the coefficient for the given simplex
-        chainMap[simplex] = newCoefficient
+        chainMap[simplex] = value
     }
 
-    // Fix equality defintion... is wrong.
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is Chain<*, *>) return false
+    operator fun get(simplex: AbstractSimplexWith<VertexT>) = chainMap[simplex]
+}
 
-        // Check that all of the keys and values are the same
-        val commonKeys = this.chainMap.keys.union(other.chainMap.keys)
+class Chain<VertexT : Comparable<VertexT>, CoefficientT>(
+    chainMap: MutableMap<AbstractSimplex<VertexT>, CoefficientT>,
+) : ChainWith<VertexT, CoefficientT>(
+        naturalOrder(),
+        SimplexComparator(),
+        chainMap.mapKeysTo(
+            ArrayMutableSortedMapWith<AbstractSimplexWith<VertexT>, CoefficientT>(chainMap.size, SimplexComparator()),
+        ) { (s, c) -> AbstractSimplexWith(naturalOrder(), s.toList()) },
+    )
 
-        for (key in commonKeys) {
-            val thisValue = this.chainMap[key] ?: 0
-            val otherValue = other.chainMap[key] ?: 0
+open class ChainContextWith<VertexT, CoefficientT>(
+    vertexComparator: Comparator<VertexT>,
+    val coefficientContext: FieldContext<CoefficientT>,
+) :
+    Group<ChainWith<VertexT, CoefficientT>>,
+        SimplexContextWith<VertexT>(vertexComparator) {
+    fun ChainWith<VertexT, CoefficientT>.zipToChain(
+        other: ChainWith<VertexT, CoefficientT>,
+        operator: (CoefficientT, CoefficientT) -> CoefficientT,
+    ): ChainWith<VertexT, CoefficientT> {
+        val thismap = this@zipToChain.chainMap
+        val thatmap = other.chainMap
+        val mappings: List<Pair<AbstractSimplexWith<VertexT>, CoefficientT>> =
+            thismap.padZip(thatmap).map {
+                it.key to
+                    operator(
+                        (it.value.first ?: coefficientContext.zero),
+                        (it.value.second ?: coefficientContext.zero),
+                    )
+            }
+        val retmap = mutableMapOf(*mappings.toTypedArray())
+        return(ChainWith(this.vertexComparator, this.simplexComparator, retmap))
+    }
 
-            if (thisValue != otherValue) {
-                return false
+    override val zero: ChainWith<VertexT, CoefficientT>
+        get() = ChainWith(vertexComparator, SimplexComparatorWith(vertexComparator))
+
+    override fun ChainWith<VertexT, CoefficientT>.unaryMinus(): ChainWith<VertexT, CoefficientT> =
+        with(coefficientContext) {
+            this@unaryMinus.mapToChain { -it }
+        }
+
+    override fun add(
+        left: ChainWith<VertexT, CoefficientT>,
+        right: ChainWith<VertexT, CoefficientT>,
+    ): ChainWith<VertexT, CoefficientT> = left.zipToChain(right, coefficientContext::add)
+
+    operator fun CoefficientT.times(other: ChainWith<VertexT, CoefficientT>): ChainWith<VertexT, CoefficientT> =
+        other.mapToChain {
+            with(coefficientContext) {
+                this@times * it
             }
         }
-        return true
-    }
 
-    override fun hashCode(): Int {
-        return chainMap.hashCode()
-    }
+    operator fun CoefficientT.times(other: AbstractSimplexWith<VertexT>): ChainWith<VertexT, CoefficientT> = this@times * chainOf(other)
 
-    fun <VertexT : Comparable<VertexT>, CoefficientT : Number> Chain<VertexT, CoefficientT>.getLeadingTerm(): Pair<AbstractSimplex<VertexT>, CoefficientT>? {
-        return chainMap.entries.firstOrNull()?.let { entry ->
-            entry.key to entry.value
-        }
-    }
+    fun AbstractSimplexWith<VertexT>.plus(other: ChainWith<VertexT, CoefficientT>): ChainWith<VertexT, CoefficientT> =
+        other +
+            ChainWith(
+                other.vertexComparator, other.simplexComparator,
+                mutableMapOf(this@plus to coefficientContext.one),
+            )
 
-    fun <VertexT : Comparable<VertexT>, CoefficientT : Number> Chain<VertexT, CoefficientT>.getLeadingCoefficient(): CoefficientT? {
-        return chainMap.entries.maxByOrNull { it.key }?.value
-    }
+    val AbstractSimplexWith<VertexT>.boundary: ChainWith<VertexT, CoefficientT>
+        get() = this@boundary.boundary(coefficientContext)
 
-    // Need to find way to not use below methods using kmath?
-    private fun multiplyCoefficient(
-        scalar: CoefficientT,
-        coefficient: CoefficientT,
-    ): CoefficientT {
-        return when (coefficient) {
-            is Double -> (coefficient.toDouble() * scalar.toDouble()) as CoefficientT
-            is Float -> (coefficient.toFloat() * scalar.toFloat()) as CoefficientT
-            is Long -> (coefficient.toLong() * scalar.toLong()) as CoefficientT
-            is Int -> (coefficient.toInt() * scalar.toInt()) as CoefficientT
-            else -> throw IllegalArgumentException("Unsupported number type")
-        }
-    }
+    fun chainOf(simplex: AbstractSimplexWith<VertexT>) =
+        ChainWith(
+            vertexComparator,
+            SimplexComparatorWith(vertexComparator),
+            mutableMapOf(simplex to coefficientContext.one),
+        )
 
-    private fun negateCoefficient(coefficient: CoefficientT): CoefficientT {
-        return when (coefficient) {
-            is Double -> -coefficient
-            is Float -> -coefficient
-            is Long -> -coefficient
-            is Int -> -coefficient
-            else -> throw IllegalArgumentException("Unsupported number type")
-        } as CoefficientT
-    }
+    fun chainOf(vararg mappings: Pair<AbstractSimplexWith<VertexT>, CoefficientT>) =
+        ChainWith(
+            vertexComparator,
+            SimplexComparatorWith(vertexComparator),
+            mutableMapOf(*mappings.toList().toTypedArray()),
+        )
 
-    private fun addNumbers(
-        a: CoefficientT,
-        b: CoefficientT,
-    ): CoefficientT {
-        return when (a) {
-            is Double -> (a.toDouble() + b.toDouble()) as CoefficientT
-            is Float -> (a.toFloat() + b.toFloat()) as CoefficientT
-            is Long -> (a.toLong() + b.toLong()) as CoefficientT
-            is Int -> (a.toInt() + b.toInt()) as CoefficientT
-            else -> throw IllegalArgumentException("Unsupported number type")
-        }
-    }
+    val ChainWith<VertexT, CoefficientT>.boundary
+        get() =
+            this.chainMap.map { (simplex, coeff) ->
+                coeff * simplex.boundary
+            }.fold(zero, ::add)
+
+    val emptyChain: ChainWith<VertexT, CoefficientT> =
+        ChainWith(
+            vertexComparator,
+            SimplexComparatorWith(vertexComparator),
+            mutableMapOf(),
+        )
+
+    // TODO Implement these parts of the Chain interface!
+    fun ChainWith<VertexT, CoefficientT>.isZero(): Boolean = TODO()
+
+    val ChainWith<VertexT, CoefficientT>.leadingSimplex: AbstractSimplexWith<VertexT>
+        get() = TODO()
+    val ChainWith<VertexT, CoefficientT>.leadingCoefficient: CoefficientT
+        get() = TODO()
 }
 
-fun <VertexT : Comparable<VertexT>, CoefficientT : Number> chainOf(
-    vararg simplexCoefficients: Pair<AbstractSimplex<VertexT>, CoefficientT>,
-): Chain<VertexT, CoefficientT> {
-    // Delegate to the companion object's chainOf function
-    return Chain.apply(*simplexCoefficients)
-}
-
-fun <VertexT : Comparable<VertexT>> chainOf(vararg simplex: AbstractSimplex<VertexT>): Chain<VertexT, Int> {
-    // Delegate to the companion object's chainOf function
-    return Chain.apply(*simplex)
-}
+class ChainContext<VertexT : Comparable<VertexT>, CoefficientT>(
+    coefficientContext: FieldContext<CoefficientT>,
+) : ChainContextWith<VertexT, CoefficientT>(naturalOrder(), coefficientContext)

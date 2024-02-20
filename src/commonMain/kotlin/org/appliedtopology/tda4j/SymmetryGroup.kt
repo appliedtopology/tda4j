@@ -14,8 +14,7 @@ interface SymmetryGroup<GroupT, VertexT : Comparable<VertexT>> {
 
     fun representative(vertex: VertexT): VertexT = orbit(vertex).min()
 
-    fun representative(simplex: AbstractSimplex<VertexT>): AbstractSimplex<VertexT> =
-        orbit(simplex).minWith { left, right -> AbstractSimplex.compare(left, right) }
+    fun representative(simplex: AbstractSimplex<VertexT>): AbstractSimplex<VertexT> = orbit(simplex).minWith(SimplexComparator())
 
     fun isRepresentative(vertex: VertexT): Boolean = vertex == representative(vertex)
 
@@ -110,7 +109,7 @@ open class HyperCubeSymmetryGenerators(elementCount: Int) : HyperCubeSymmetry(el
 
     override fun isRepresentative(simplex: AbstractSimplex<Int>): Boolean {
         // First, do the cheap check - if it fails this couldn't possibly be a representative
-        if (!generators.all { g -> AbstractSimplex.compare(simplex, simplex.mapVertices(action(g))) <= 0 }) {
+        if (!generators.all { g -> SimplexComparator<Int>().compare(simplex, simplex.mapVertices(action(g))) <= 0 }) {
             return false
         }
 
@@ -184,7 +183,7 @@ class SymmetricZomorodianIncremental<VertexT : Comparable<VertexT>>(
             if (tau.size < maxDimension) {
                 lowerNeighborSet.forEach { v: VertexT ->
                     run {
-                        val sigma: AbstractSimplex<VertexT> = tau.plus(v)
+                        val sigma: AbstractSimplex<VertexT> = tau.plus(v) as AbstractSimplex<VertexT>
                         val lowerNeighborIntersection: Set<VertexT> =
                             lowerNeighborSet.intersect(lowerNeighbors[v]?.asIterable() ?: emptySequence<VertexT>().asIterable())
                         tasks.addFirst(Pair(sigma, lowerNeighborIntersection))

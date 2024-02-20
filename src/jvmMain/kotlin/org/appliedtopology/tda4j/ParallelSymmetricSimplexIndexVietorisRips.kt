@@ -44,7 +44,7 @@ class ParallelHyperCubeSymmetryGenerators(elementCount: Int) : HyperCubeSymmetry
         if (simplex in representativesCache) return simplex == representativesCache[simplex]
 
         // Second, do the cheap check - if it fails this couldn't possibly be a representative
-        if (!generators.all { g -> AbstractSimplex.compare(simplex, simplex.mapVertices(action(g))) <= 0 }) {
+        if (!generators.all { g -> SimplexComparator<Int>().compare(simplex, simplex.mapVertices(action(g))) <= 0 }) {
             return false
         }
 
