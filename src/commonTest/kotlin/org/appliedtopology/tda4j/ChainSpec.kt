@@ -61,9 +61,9 @@ class ChainSpec : StringSpec({
             val singleQueryNull = chain1[simplexOf(3, 4)]
             // val severalQuery = chain1[listOf(simplexOf(2, 3), simplexOf(1, 2))]
 
-            singleQuery?.shouldBeEqual(1.0)
+            singleQuery.shouldBeEqual(1.0)
 
-            singleQueryNull?.shouldBeEqual(0.0)
+            singleQueryNull.shouldBeEqual(0.0)
 
             // severalQuery shouldBeEqual mapOf(simplexOf(2, 3) to 1, simplexOf(1, 2) to 2)
         }

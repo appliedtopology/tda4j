@@ -37,9 +37,9 @@ public open class FiniteFieldContext(public val p: Int) : FieldContext<Fp>, FpFa
         var v = p
         var x1 = 1
         var x2 = 0
-        var q = 0
-        var r = 0
-        var x = 0
+        var q: Int
+        var r: Int
+        var x: Int
         while (u != 1) {
             q = v.floorDiv(u)
             r = v - q * u

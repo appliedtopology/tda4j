@@ -24,6 +24,8 @@ public object DoubleContext : FieldContext<Double> {
     override val zero: Double
         get() = 0.0
 
+    override fun Double.unaryMinus(): Double = this@unaryMinus.unaryMinus()
+
     override fun multiply(
         left: Double,
         right: Double,

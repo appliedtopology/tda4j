@@ -50,7 +50,7 @@ public open class Chain<VertexT, CoefficientT> protected constructor(
 
         public operator fun <VertexT : Comparable<VertexT>, CoefficientT> invoke(
             chainMap: MutableMap<AbstractSimplex<VertexT>, CoefficientT>,
-        ) = Chain(naturalOrder(), SimplexComparator(), chainMap)
+        ): Chain<VertexT, CoefficientT> = Chain(naturalOrder(), SimplexComparator(), chainMap)
 
         public operator fun <VertexT, CoefficientT> invoke(
             vertexComparator: Comparator<VertexT>,
@@ -159,7 +159,7 @@ public class ChainContext<VertexT, CoefficientT> protected constructor(
 
             public operator fun <VertexT : Comparable<VertexT>, CoefficientT> invoke(
                 coefficientContext: FieldContext<CoefficientT>,
-            ): ChainContext<VertexT, CoefficientT> = ChainContext(kotlin.comparisons.naturalOrder<VertexT>(), coefficientContext)
+            ): ChainContext<VertexT, CoefficientT> = ChainContext(naturalOrder(), coefficientContext)
 
             public operator fun <VertexT : Comparable<VertexT>> invoke(): ChainContext<VertexT, Double> =
                 ChainContext(naturalOrder(), DoubleContext)
