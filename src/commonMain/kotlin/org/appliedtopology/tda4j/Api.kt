@@ -4,8 +4,8 @@ package org.appliedtopology.tda4j
 
 import kotlin.jvm.JvmName
 
-object Api {
-    fun <VertexT : Comparable<VertexT>, CoefficientT, R> tdaWith(
+public object Api {
+    public fun <VertexT : Comparable<VertexT>, CoefficientT, R> tdaWith(
         fieldContext: FieldContext<CoefficientT>,
         chainContext: ChainContext<VertexT, CoefficientT>,
         block: ChainContext<VertexT, CoefficientT>.() -> R,

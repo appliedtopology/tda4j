@@ -1,21 +1,21 @@
 package org.appliedtopology.tda4j
 
-public open class Fp(val x: Int) {
+public open class Fp(public val x: Int) {
     public override fun toString(): String = "fp($x)"
 }
 
-interface FpFactory {
-    fun fp(x: Number): Fp
+public interface FpFactory {
+    public fun fp(x: Number): Fp
 }
 
-public open class FiniteFieldContext(val p: Int) : FieldContext<Fp>, FpFactory {
+public open class FiniteFieldContext(public val p: Int) : FieldContext<Fp>, FpFactory {
     // Make finite field elements
-    public override fun fp(x: Number): Fp = Fp(x.toInt() % p)
+    final override fun fp(x: Number): Fp = Fp(x.toInt() % p)
 
     override fun number(value: Number): Fp = Fp(value.toInt() % p)
 
-    override val zero = number(0)
-    override val one = number(1)
+    override val zero: Fp = fp(0)
+    override val one: Fp = fp(1)
 
     // Finite field arithmetic
     override fun Fp.unaryMinus(): Fp {
@@ -32,7 +32,7 @@ public open class FiniteFieldContext(val p: Int) : FieldContext<Fp>, FpFactory {
         right: Fp,
     ): Fp = Fp((left.x.toLong() * right.x.toLong() % p.toLong()).toInt())
 
-    fun inverse(a: Int): Int {
+    protected fun inverse(a: Int): Int {
         var u = a % p
         var v = p
         var x1 = 1
@@ -55,7 +55,7 @@ public open class FiniteFieldContext(val p: Int) : FieldContext<Fp>, FpFactory {
     // Using a Map here takes up unnecessarily large amounts of space and runtime complexity
     // for what should be a simple Array lookup.
     // Performance note: This runs every time the context is instantiated. Reuse context when possible.
-    val inverseTable: IntArray = IntArray(p) { if (it == 0) 0 else inverse(it) }
+    protected val inverseTable: IntArray = IntArray(p) { if (it == 0) 0 else inverse(it) }
 
     override fun divide(
         left: Fp,
@@ -68,18 +68,18 @@ public open class FiniteFieldContext(val p: Int) : FieldContext<Fp>, FpFactory {
     }
 
     // Normalize, convert, print
-    fun norm(a: Fp): Int =
+    public fun norm(a: Fp): Int =
         if (a.x % p < 0) {
             (a.x % p) + p
         } else {
             a.x % p
         }
 
-    fun Fp.normal(): Fp = Fp(norm(this))
+    public fun Fp.normal(): Fp = Fp(norm(this))
 
-    fun canonical(a: Fp): Int = norm(a) - (p - 1) / 2
+    public fun canonical(a: Fp): Int = norm(a) - (p - 1) / 2
 
-    fun Fp.toInt(): Int = canonical(this@toInt)
+    public fun Fp.toInt(): Int = canonical(this@toInt)
 
     public override infix fun Fp.eq(other: Any?): Boolean =
         if (other !is Fp) {

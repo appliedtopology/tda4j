@@ -3,7 +3,7 @@ package org.appliedtopology.tda4j
 import arrow.core.padZip
 
 public open class AbstractSimplex<VertexT>
-    protected constructor(val vertexComparator: Comparator<VertexT>) : Set<VertexT> {
+    protected constructor(public val vertexComparator: Comparator<VertexT>) : Set<VertexT> {
         @Suppress("ktlint:standard:property-naming")
         internal val _simplex: MutableSortedSet<VertexT> = MutableSortedSet(comparator = vertexComparator)
 
@@ -31,15 +31,16 @@ public open class AbstractSimplex<VertexT>
         override val size: Int
             get() = _simplex.size
 
-        val dimension: Int
+        public val dimension: Int
             get() = size - 1
 
-        fun <R> mapVerticesWith(
+        public fun <R> mapVerticesWith(
             rComparator: Comparator<R>,
             transform: (VertexT) -> R,
-        ) = AbstractSimplex<R>(rComparator, _simplex.mapTo(HashSet<R>(_simplex.size), transform))
+        ): AbstractSimplex<R> = AbstractSimplex<R>(rComparator, _simplex.mapTo(HashSet<R>(_simplex.size), transform))
 
-        fun <R : Comparable<R>> mapVertices(transform: (VertexT) -> R) = mapVerticesWith(naturalOrder(), transform)
+        public fun <R : Comparable<R>> mapVertices(transform: (VertexT) -> R): AbstractSimplex<R> =
+            mapVerticesWith(naturalOrder(), transform)
 
         private val alternatingSign: Iterator<Int>
             get() =
@@ -51,7 +52,7 @@ public open class AbstractSimplex<VertexT>
                     }
                 }
 
-        fun <CoefficientT> boundary(fieldContext: FieldContext<CoefficientT>): Chain<VertexT, CoefficientT> =
+        public fun <CoefficientT> boundary(fieldContext: FieldContext<CoefficientT>): Chain<VertexT, CoefficientT> =
             Chain(
                 vertexComparator,
                 SimplexComparator(vertexComparator),
@@ -65,13 +66,13 @@ public open class AbstractSimplex<VertexT>
                     },
             )
 
-        fun plus(element: VertexT): AbstractSimplex<VertexT> {
+        public fun plus(element: VertexT): AbstractSimplex<VertexT> {
             val vertices = HashSet(_simplex)
             vertices.add(element)
             return AbstractSimplex<VertexT>(vertexComparator, vertices)
         }
 
-        val vertices: List<VertexT>
+        public val vertices: List<VertexT>
             get() = _simplex.toList()
 
         override fun toString(): String =
@@ -104,14 +105,14 @@ public open class AbstractSimplex<VertexT>
         }
     }
 
-public open class Lexicographic<T> protected constructor(val comparator: Comparator<T>) :
+public open class Lexicographic<T> protected constructor(public val comparator: Comparator<T>) :
     Comparator<Collection<T>> {
         override fun compare(
-            left: Collection<T>,
-            right: Collection<T>,
+            a: Collection<T>,
+            b: Collection<T>,
         ): Int {
-            for (lr in left.reversed().padZip(
-                right.reversed(),
+            for (lr in a.reversed().padZip(
+                b.reversed(),
             )) {
                 val l = lr.first
                 val r = lr.second
@@ -134,11 +135,11 @@ public open class Lexicographic<T> protected constructor(val comparator: Compara
     }
 
 public open class SimplexComparator<VertexT>
-    protected constructor(val vertexComparator: Comparator<VertexT>) : Comparator<AbstractSimplex<VertexT>> {
+    protected constructor(public val vertexComparator: Comparator<VertexT>) : Comparator<AbstractSimplex<VertexT>> {
         override fun compare(
-            left: AbstractSimplex<VertexT>,
-            right: AbstractSimplex<VertexT>,
-        ) = Lexicographic(vertexComparator).compare(left.vertices, right.vertices)
+            a: AbstractSimplex<VertexT>,
+            b: AbstractSimplex<VertexT>,
+        ): Int = Lexicographic(vertexComparator).compare(a.vertices, b.vertices)
 
         public companion object {
             public operator fun <VertexT> invoke(vertexComparator: Comparator<VertexT>): SimplexComparator<VertexT> =
@@ -148,17 +149,17 @@ public open class SimplexComparator<VertexT>
         }
     }
 
-typealias Simplex = AbstractSimplex<Int>
+public typealias Simplex = AbstractSimplex<Int>
 
-fun <VertexT : Comparable<VertexT>> abstractSimplexOf(vararg elements: VertexT): AbstractSimplex<VertexT> =
+public fun <VertexT : Comparable<VertexT>> abstractSimplexOf(vararg elements: VertexT): AbstractSimplex<VertexT> =
     AbstractSimplex(elements.toList())
 
-fun <VertexT : Comparable<VertexT>> abstractSimplexOf(elements: Collection<VertexT>): AbstractSimplex<VertexT> =
+public fun <VertexT : Comparable<VertexT>> abstractSimplexOf(elements: Collection<VertexT>): AbstractSimplex<VertexT> =
     AbstractSimplex(elements.toList())
 
-fun simplexOf(vararg elements: Int): Simplex = Simplex(elements.toList())
+public fun simplexOf(vararg elements: Int): Simplex = Simplex(elements.toList())
 
-fun simplexOf(elements: Collection<Int>): Simplex = Simplex(elements.toList())
+public fun simplexOf(elements: Collection<Int>): Simplex = Simplex(elements.toList())
 
 /**
  * Use `with(SimplexContext<VertexT>()) { ... }` to get the notation `s(v1,v2,v3,...,vn)`
@@ -174,18 +175,19 @@ fun simplexOf(elements: Collection<Int>): Simplex = Simplex(elements.toList())
  * This is automatically included when using a [ChainContext] context to set up choices
  * of both vertex-types and coefficient-types.
  */
-open class SimplexContext<VertexT>
-    protected constructor(val vertexComparator: Comparator<VertexT>) {
-        fun s(vararg vs: VertexT): AbstractSimplex<VertexT> = AbstractSimplex(vertexComparator, vs.toList())
+public open class SimplexContext<VertexT>
+    protected constructor(public val vertexComparator: Comparator<VertexT>) {
+        public fun s(vararg vs: VertexT): AbstractSimplex<VertexT> = AbstractSimplex(vertexComparator, vs.toList())
 
-        operator fun AbstractSimplex.Companion.invoke(): AbstractSimplex<VertexT> = AbstractSimplex<VertexT>(vertexComparator)
+        public operator fun AbstractSimplex.Companion.invoke(): AbstractSimplex<VertexT> = AbstractSimplex<VertexT>(vertexComparator)
 
-        operator fun AbstractSimplex.Companion.invoke(vararg elements: VertexT): AbstractSimplex<VertexT> =
+        public operator fun AbstractSimplex.Companion.invoke(vararg elements: VertexT): AbstractSimplex<VertexT> =
             AbstractSimplex<VertexT>(vertexComparator, elements.toList())
 
-        companion object {
-            operator fun <VertexT> invoke(vertexComparator: Comparator<VertexT>): SimplexContext<VertexT> = SimplexContext(vertexComparator)
+        public companion object {
+            public operator fun <VertexT> invoke(vertexComparator: Comparator<VertexT>): SimplexContext<VertexT> =
+                SimplexContext(vertexComparator)
 
-            operator fun <VertexT : Comparable<VertexT>> invoke(): SimplexContext<VertexT> = SimplexContext(naturalOrder())
+            public operator fun <VertexT : Comparable<VertexT>> invoke(): SimplexContext<VertexT> = SimplexContext(naturalOrder())
         }
     }

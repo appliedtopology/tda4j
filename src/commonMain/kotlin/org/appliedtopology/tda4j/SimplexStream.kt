@@ -1,17 +1,17 @@
 package org.appliedtopology.tda4j
 
-fun interface Filtered<VertexT : Comparable<VertexT>, FiltrationT : Comparable<FiltrationT>> {
-    fun filtrationValue(simplex: AbstractSimplex<VertexT>): FiltrationT?
+public fun interface Filtered<VertexT : Comparable<VertexT>, FiltrationT : Comparable<FiltrationT>> {
+    public fun filtrationValue(simplex: AbstractSimplex<VertexT>): FiltrationT?
 }
 
-abstract class SimplexStream<VertexT : Comparable<VertexT>, FiltrationT : Comparable<FiltrationT>> :
+public abstract class SimplexStream<VertexT : Comparable<VertexT>, FiltrationT : Comparable<FiltrationT>> :
     Filtered<VertexT, FiltrationT>, Iterable<AbstractSimplex<VertexT>> {
-    open val comparator: Comparator<AbstractSimplex<VertexT>> =
+    public open val comparator: Comparator<AbstractSimplex<VertexT>> =
         compareBy<AbstractSimplex<VertexT>> { filtrationValue(it) }
             .thenComparator(SimplexComparator<VertexT>()::compare)
 }
 
-open class ExplicitStream<VertexT : Comparable<VertexT>, FiltrationT : Comparable<FiltrationT>> :
+public open class ExplicitStream<VertexT : Comparable<VertexT>, FiltrationT : Comparable<FiltrationT>> :
     SimplexStream<VertexT, FiltrationT>(), MutableMap<AbstractSimplex<VertexT>, FiltrationT> {
     internal val filtrationValues: MutableMap<AbstractSimplex<VertexT>, FiltrationT> = HashMap()
 
@@ -40,7 +40,7 @@ open class ExplicitStream<VertexT : Comparable<VertexT>, FiltrationT : Comparabl
     override val values: MutableCollection<FiltrationT>
         get() = filtrationValues.values
 
-    override fun clear() = filtrationValues.clear()
+    override fun clear(): Unit = filtrationValues.clear()
 
     override fun containsKey(key: AbstractSimplex<VertexT>): Boolean = filtrationValues.containsKey(key)
 
@@ -55,7 +55,7 @@ open class ExplicitStream<VertexT : Comparable<VertexT>, FiltrationT : Comparabl
         value: FiltrationT,
     ): FiltrationT? = filtrationValues.put(key, value)
 
-    override fun putAll(from: Map<out AbstractSimplex<VertexT>, FiltrationT>) = filtrationValues.putAll(from)
+    override fun putAll(from: Map<out AbstractSimplex<VertexT>, FiltrationT>): Unit = filtrationValues.putAll(from)
 
     override fun remove(key: AbstractSimplex<VertexT>): FiltrationT? = filtrationValues.remove(key)
 }

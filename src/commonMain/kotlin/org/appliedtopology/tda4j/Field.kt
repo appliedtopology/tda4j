@@ -31,8 +31,6 @@ public object DoubleContext : FieldContext<Double> {
 
     override fun number(value: Number): Double = value.toDouble()
 
-    override fun Double.unaryMinus(): Double = -this
-
     override fun add(
         left: Double,
         right: Double,

@@ -12,13 +12,13 @@ import io.kotest.property.Arb
 import io.kotest.property.arbitrary.arbitrary
 import io.kotest.property.checkAll
 
-public val FiniteFieldContext.FiniteFieldArb: Arb<Fp>
+val FiniteFieldContext.FiniteFieldArb: Arb<Fp>
     get() =
         arbitrary {
             this@FiniteFieldArb.fp(it.random.nextInt())
         }
 
-public class FiniteFieldSpec : StringSpec({
+class FiniteFieldSpec : StringSpec({
     val ff17 = FiniteFieldContext(17)
 
     "the finite field construction interface should do modulo directly" {

@@ -1,19 +1,19 @@
 package org.appliedtopology.tda4j
 
-open class ArrayMutableSortedSet<T>
-    protected constructor(capacity: Int = 8, val comparator: Comparator<T>) : MutableSet<T> {
+public open class ArrayMutableSortedSet<T>
+    protected constructor(capacity: Int = 8, protected val comparator: Comparator<T>) : MutableSet<T> {
         @Suppress("ktlint:standard:property-naming")
         internal val _set: ArrayList<T> = ArrayList(capacity)
 
-        fun index(element: T): Int = _set.binarySearch(element, comparator)
+        public fun index(element: T): Int = _set.binarySearch(element, comparator)
 
         override fun add(element: T): Boolean {
             val index = index(element)
-            if (index >= 0) {
-                return false
+            return if (index >= 0) {
+                false
             } else {
                 _set.add((-index) - 1, element)
-                return true
+                true
             }
         }
 
@@ -24,7 +24,7 @@ open class ArrayMutableSortedSet<T>
         override val size: Int
             get() = _set.size
 
-        override fun clear() = _set.clear()
+        override fun clear(): Unit = _set.clear()
 
         override fun isEmpty(): Boolean = _set.isEmpty()
 
@@ -52,11 +52,11 @@ open class ArrayMutableSortedSet<T>
 
         override fun remove(element: T): Boolean {
             val index = index(element)
-            if (index < 0) {
-                return false
+            return if (index < 0) {
+                false
             } else {
                 _set.removeAt(index)
-                return true
+                true
             }
         }
 
@@ -71,12 +71,12 @@ open class ArrayMutableSortedSet<T>
         }
     }
 
-typealias MutableSortedSet<V> = ArrayMutableSortedSet<V>
+public typealias MutableSortedSet<V> = ArrayMutableSortedSet<V>
 
-open class ArrayMutableSortedMap<K, V> protected constructor(
+public open class ArrayMutableSortedMap<K, V> protected constructor(
     capacity: Int = 8,
-    val comparator: Comparator<K>,
-    val defaultValue: V? = null,
+    protected val comparator: Comparator<K>,
+    public val defaultValue: V? = null,
 ) : MutableMap<K, V> {
     internal val _keys: ArrayMutableSortedSet<K> = ArrayMutableSortedSet(capacity, comparator)
     internal val _values: ArrayList<V> = ArrayList(capacity)
@@ -119,41 +119,41 @@ open class ArrayMutableSortedMap<K, V> protected constructor(
 
     override fun isEmpty(): Boolean = _keys.isEmpty()
 
-    fun ordinalKey(index: Int): K? = _keys._set.getOrNull(index)
+    public fun ordinalKey(index: Int): K? = _keys._set.getOrNull(index)
 
-    fun ordinalValue(index: Int): V? = _values.getOrElse(index) { i -> defaultValue }
+    public fun ordinalValue(index: Int): V? = _values.getOrElse(index) { i -> defaultValue }
 
-    fun ordinalItem(index: Int): MutableMap.MutableEntry<K, V>? {
+    public fun ordinalItem(index: Int): MutableMap.MutableEntry<K, V>? {
         val ok = ordinalKey(index)
         val ov = ordinalValue(index)
-        if (ok == null || ov == null) {
-            return null
+        return if (ok == null || ov == null) {
+            null
         } else {
-            return PairEntry(ordinalKey(index)!!, ordinalValue(index)!!)
+            PairEntry(ordinalKey(index)!!, ordinalValue(index)!!)
         }
     }
 
-    val headKey: K?
+    public val headKey: K?
         get() = ordinalKey(0)
-    val headValue: V?
+    public val headValue: V?
         get() = ordinalValue(0)
-    val headItem: MutableMap.MutableEntry<K, V>?
+    public val headItem: MutableMap.MutableEntry<K, V>?
         get() = ordinalItem(0)
 
-    fun replaceAllValues(transform: (V) -> V) {
+    public fun replaceAllValues(transform: (V) -> V) {
         for (idx in _values.indices)
             _values[idx] = transform(_values[idx])
     }
 
     override fun remove(key: K): V? {
         val idx = _keys.index(key)
-        if (idx >= 0) {
+        return if (idx >= 0) {
             val retval = _values[idx]
             _keys._set.removeAt(idx)
             _values.removeAt(idx)
-            return retval
+            retval
         } else {
-            return null
+            null
         }
     }
 
@@ -166,14 +166,14 @@ open class ArrayMutableSortedMap<K, V> protected constructor(
         value: V,
     ): V? {
         val idx = _keys.index(key)
-        if (idx >= 0) {
+        return if (idx >= 0) {
             val retval = _values[idx]
             _values[idx] = value
-            return retval
+            retval
         } else {
             _keys.add(key)
             _values.add((-idx) - 1, value)
-            return null
+            null
         }
     }
 
@@ -181,14 +181,14 @@ open class ArrayMutableSortedMap<K, V> protected constructor(
         return "ArrayMutableSortedMap(${entries.joinToString()})"
     }
 
-    companion object {
-        operator fun <K, V> invoke(
+    public companion object {
+        public operator fun <K, V> invoke(
             capacity: Int = 8,
             comparator: Comparator<K>,
             defaultValue: V? = null,
         ): ArrayMutableSortedMap<K, V> = ArrayMutableSortedMap(capacity, comparator, defaultValue)
 
-        operator fun <K : Comparable<K>, V> invoke(
+        public operator fun <K : Comparable<K>, V> invoke(
             capacity: Int = 8,
             defaultValue: V? = null,
         ): ArrayMutableSortedMap<K, V> = ArrayMutableSortedMap(capacity, naturalOrder(), defaultValue)
