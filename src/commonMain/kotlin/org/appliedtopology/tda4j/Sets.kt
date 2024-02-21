@@ -1,96 +1,96 @@
 package org.appliedtopology.tda4j
 
-open class ArrayMutableSortedSetBaseWith<T>(capacity: Int = 8, val comparator: Comparator<T>) {
-    @Suppress("ktlint:standard:property-naming")
-    internal val _set: ArrayList<T> = ArrayList(capacity)
+open class ArrayMutableSortedSet<T>
+    protected constructor(capacity: Int = 8, val comparator: Comparator<T>) : MutableSet<T> {
+        @Suppress("ktlint:standard:property-naming")
+        internal val _set: ArrayList<T> = ArrayList(capacity)
 
-    fun add(element: T): Boolean {
-        val index = _set.binarySearch(element, comparator)
-        if (index >= 0) {
-            return false
-        } else {
-            _set.add((-index) - 1, element)
-            return true
+        fun index(element: T): Int = _set.binarySearch(element, comparator)
+
+        override fun add(element: T): Boolean {
+            val index = index(element)
+            if (index >= 0) {
+                return false
+            } else {
+                _set.add((-index) - 1, element)
+                return true
+            }
+        }
+
+        override fun addAll(elements: Collection<T>): Boolean {
+            return elements.fold(false) { r, t -> r or add(t) }
+        }
+
+        override val size: Int
+            get() = _set.size
+
+        override fun clear() = _set.clear()
+
+        override fun isEmpty(): Boolean = _set.isEmpty()
+
+        override fun contains(element: T): Boolean = index(element) >= 0
+
+        override fun containsAll(elements: Collection<T>): Boolean = elements.all { contains(it) }
+
+        override fun iterator(): MutableIterator<T> = _set.iterator()
+
+        override fun retainAll(elements: Collection<T>): Boolean = _set.retainAll(elements)
+
+        override fun removeAll(elements: Collection<T>): Boolean = _set.removeAll(elements)
+
+        override fun equals(other: Any?): Boolean {
+            return _set.equals(other)
+        }
+
+        override fun hashCode(): Int {
+            return _set.hashCode()
+        }
+
+        override fun toString(): String {
+            return "ArrayMutableSortedSet(${_set.joinToString()})"
+        }
+
+        override fun remove(element: T): Boolean {
+            val index = index(element)
+            if (index < 0) {
+                return false
+            } else {
+                _set.removeAt(index)
+                return true
+            }
+        }
+
+        public companion object {
+            public operator fun <T> invoke(
+                capacity: Int = 8,
+                comparator: Comparator<T>,
+            ): ArrayMutableSortedSet<T> = ArrayMutableSortedSet(capacity, comparator)
+
+            public operator fun <T : Comparable<T>> invoke(capacity: Int = 8): ArrayMutableSortedSet<T> =
+                ArrayMutableSortedSet(capacity, naturalOrder())
         }
     }
 
-    fun addAll(elements: Collection<T>): Boolean {
-        return elements.fold(false) { r, t -> r or add(t) }
-    }
-
-    val size: Int
-        get() = _set.size
-
-    fun clear() = _set.clear()
-
-    fun isEmpty(): Boolean = _set.isEmpty()
-
-    fun contains(element: T): Boolean = _set.binarySearch(element, comparator) >= 0
-
-    fun containsAll(elements: Collection<T>): Boolean = elements.all { contains(it) }
-
-    fun iterator(): MutableIterator<T> = _set.iterator()
-
-    fun retainAll(elements: Collection<T>): Boolean = _set.retainAll(elements)
-
-    fun removeAll(elements: Collection<T>): Boolean = _set.removeAll(elements)
-
-    override fun equals(other: Any?): Boolean {
-        return _set.equals(other)
-    }
-
-    override fun hashCode(): Int {
-        return _set.hashCode()
-    }
-}
-
-open class ArrayMutableSortedSetBase<T : Comparable<T>>(capacity: Int = 8) :
-    ArrayMutableSortedSetBaseWith<T>(capacity, naturalOrder())
-
-open class ArrayMutableSortedSetWith<T>(
-    capacity: Int = 8,
-    comparator: Comparator<T>,
-) :
-    ArrayMutableSortedSetBaseWith<T>(capacity, comparator), MutableSet<T> {
-    override fun remove(element: T): Boolean {
-        val index = _set.binarySearch(element, comparator)
-        if (index < 0) {
-            return false
-        } else {
-            _set.removeAt(index)
-            return true
-        }
-    }
-
-    override fun toString(): String {
-        return "ArrayMutableSortedSet(${_set.joinToString()})"
-    }
-}
-
-open class ArrayMutableSortedSet<T : Comparable<T>>(capacity: Int = 8) :
-    ArrayMutableSortedSetWith<T>(capacity, naturalOrder())
-
-typealias MutableSortedSetWith<V> = ArrayMutableSortedSetWith<V>
 typealias MutableSortedSet<V> = ArrayMutableSortedSet<V>
 
-open class ArrayMutableSortedMapWith<K, V>(
+open class ArrayMutableSortedMap<K, V> protected constructor(
     capacity: Int = 8,
-    comparator: Comparator<K>,
+    val comparator: Comparator<K>,
     val defaultValue: V? = null,
-) :
-    ArrayMutableSortedSetBaseWith<K>(capacity, comparator), MutableMap<K, V> {
+) : MutableMap<K, V> {
+    internal val _keys: ArrayMutableSortedSet<K> = ArrayMutableSortedSet(capacity, comparator)
     internal val _values: ArrayList<V> = ArrayList(capacity)
 
-    override fun containsKey(key: K): Boolean = _set.binarySearch(key, comparator) >= 0
+    override fun containsKey(key: K): Boolean = _keys.contains(key)
 
     override fun containsValue(value: V): Boolean = _values.contains(value)
 
     override fun get(key: K): V? {
-        val idx = _set.binarySearch(key, comparator)
+        val idx = _keys.index(key)
         return if (idx >= 0) _values[idx] else null
     }
 
-    class PairEntry<K, V>(override val key: K, override var value: V) : MutableMap.MutableEntry<K, V> {
+    public class PairEntry<K, V>(override val key: K, override var value: V) : MutableMap.MutableEntry<K, V> {
         override fun setValue(newValue: V): V {
             value = newValue
             return value
@@ -102,14 +102,24 @@ open class ArrayMutableSortedMapWith<K, V>(
     }
 
     override val entries: MutableSet<MutableMap.MutableEntry<K, V>>
-        get() = _set.zip(_values).map { (k, v) -> PairEntry(k, v) }.toMutableSet()
+        get() = _keys.zip(_values).map { (k, v) -> PairEntry(k, v) }.toMutableSet()
     override val keys: MutableSet<K>
-        get() = _set.toMutableSet()
+        get() = _keys.toMutableSet()
+
+    override val size: Int
+        get() = _keys.size
 
     override val values: MutableCollection<V>
         get() = _values.toMutableList()
 
-    fun ordinalKey(index: Int): K? = _set.getOrNull(index)
+    override fun clear() {
+        _keys.clear()
+        _values.clear()
+    }
+
+    override fun isEmpty(): Boolean = _keys.isEmpty()
+
+    fun ordinalKey(index: Int): K? = _keys._set.getOrNull(index)
 
     fun ordinalValue(index: Int): V? = _values.getOrElse(index) { i -> defaultValue }
 
@@ -136,10 +146,10 @@ open class ArrayMutableSortedMapWith<K, V>(
     }
 
     override fun remove(key: K): V? {
-        val idx = _set.binarySearch(key, comparator)
+        val idx = _keys.index(key)
         if (idx >= 0) {
             val retval = _values[idx]
-            _set.removeAt(idx)
+            _keys._set.removeAt(idx)
             _values.removeAt(idx)
             return retval
         } else {
@@ -155,13 +165,13 @@ open class ArrayMutableSortedMapWith<K, V>(
         key: K,
         value: V,
     ): V? {
-        val idx = _set.binarySearch(key, comparator)
+        val idx = _keys.index(key)
         if (idx >= 0) {
             val retval = _values[idx]
             _values[idx] = value
             return retval
         } else {
-            _set.add((-idx) - 1, key)
+            _keys.add(key)
             _values.add((-idx) - 1, value)
             return null
         }
@@ -170,10 +180,17 @@ open class ArrayMutableSortedMapWith<K, V>(
     override fun toString(): String {
         return "ArrayMutableSortedMap(${entries.joinToString()})"
     }
-}
 
-open class ArrayMutableSortedMap<K : Comparable<K>, V>(
-    capacity: Int = 8,
-    defaultValue: V? = null,
-) :
-    ArrayMutableSortedMapWith<K, V>(capacity, naturalOrder<K>(), defaultValue)
+    companion object {
+        operator fun <K, V> invoke(
+            capacity: Int = 8,
+            comparator: Comparator<K>,
+            defaultValue: V? = null,
+        ): ArrayMutableSortedMap<K, V> = ArrayMutableSortedMap(capacity, comparator, defaultValue)
+
+        operator fun <K : Comparable<K>, V> invoke(
+            capacity: Int = 8,
+            defaultValue: V? = null,
+        ): ArrayMutableSortedMap<K, V> = ArrayMutableSortedMap(capacity, naturalOrder(), defaultValue)
+    }
+}
