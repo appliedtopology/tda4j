@@ -66,24 +66,24 @@
   <div class="breadcrumbs"><a href="../../../index.html">tda4j</a><span class="delimiter">/</span><a href="../index.html">org.appliedtopology.tda4j</a><span class="delimiter">/</span><span class="current">SimplexContext</span></div>
   <div class="cover ">
     <h1 class="cover"><span>Simplex</span><wbr></wbr><span><span>Context</span></span></h1>
-    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":dokkaHtml/commonMain"><div class="symbol monospace"><span class="token keyword">public </span><span class="token keyword"></span><span class="token keyword">class </span><a href="index.html">SimplexContext</a><span class="token operator">&lt;</span>VertexT<span class="token keyword"> extends </span><a href="https://docs.oracle.com/javase/8/docs/api/java/lang/Comparable.html">Comparable</a><span class="token operator">&lt;</span><span class="token keyword"></span><a href="index.html">VertexT</a><span class="token operator">&gt;</span><span class="token operator">&gt;</span><span class="token keyword"> extends </span><a href="../-simplex-context-with/index.html">SimplexContextWith</a><span class="token operator">&lt;</span><span class="token keyword"></span><a href="index.html">VertexT</a><span class="token operator">&gt;</span></div></div></div>
+    <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":dokkaHtml/commonMain"><div class="symbol monospace"><span class="token keyword">public </span><span class="token keyword"></span><span class="token keyword">class </span><a href="index.html">SimplexContext</a><span class="token operator">&lt;</span>VertexT<span class="token keyword"> extends </span><a href="https://docs.oracle.com/javase/8/docs/api/java/lang/Object.html">Object</a><span class="token operator">&gt;</span></div><p class="paragraph">Use <code class="lang-kotlin">with(SimplexContext&lt;VertexT&gt;()) { ... }</code> to get the notation <code class="lang-kotlin">s(v1,v2,v3,...,vn)</code> to define a simplex object with the specified vertex type directly.</p><p class="paragraph">For instance:</p><div class="sample-container"><pre><code class="block lang-kotlin" theme="idea">with(SimplexContext&lt;Char&gt;()) {<br>  s('a','b','c').boundary == s('a','b') - s('a','c') + s('b','c')<br>}</code></pre><span class="top-right-position"><span class="copy-icon"></span><div class="copy-popup-wrapper popup-to-left"><span class="copy-popup-icon"></span><span>Content copied to clipboard</span></div></span></div><p class="paragraph">This is automatically included when using a <a href="../-chain-context/index.html">ChainContext</a> context to set up choices of both vertex-types and coefficient-types.</p><h4 class="">Inheritors</h4><div class="table"><div class="table-row" data-filterable-current=":dokkaHtml/commonMain" data-filterable-set=":dokkaHtml/commonMain"><div class="main-subrow keyValue "><div class=""><span class="inline-flex"><div><a href="../-chain-context/index.html">ChainContext</a></div></span></div><div></div></div></div></div></div></div>
   </div>
   <div class="tabbedcontent">
     <div class="tabs-section" tabs-section="tabs-section"><button class="section-tab" data-active="" data-togglable="CONSTRUCTOR,TYPE,PROPERTY,FUNCTION">Members</button></div>
     <div class="tabs-section-body">
-      <div data-togglable="CONSTRUCTOR">
-        <h2 class="">Constructors</h2>
-        <div class="table"><a data-name="-2122403838%2FConstructors%2F788909594" anchor-label="SimplexContext" id="-2122403838%2FConstructors%2F788909594" data-filterable-set=":dokkaHtml/commonMain"></a>
-          <div class="table-row" data-togglable="CONSTRUCTOR" data-filterable-current=":dokkaHtml/commonMain" data-filterable-set=":dokkaHtml/commonMain">
+      <div data-togglable="TYPE">
+        <h2 class="">Types</h2>
+        <div class="table"><a data-name="-1915675082%2FClasslikes%2F788909594" anchor-label="Companion" id="-1915675082%2FClasslikes%2F788909594" data-filterable-set=":dokkaHtml/commonMain"></a>
+          <div class="table-row" data-filterable-current=":dokkaHtml/commonMain" data-filterable-set=":dokkaHtml/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
-                  <div><a href="-simplex-context.html"><span>Simplex</span><wbr></wbr><span><span>Context</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-2122403838%2FConstructors%2F788909594"></span>
+                  <div><a href="-companion/index.html"><span><span>Companion</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1915675082%2FClasslikes%2F788909594"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":dokkaHtml/commonMain"><div class="symbol monospace block"><span class="token keyword">public </span><span class="token keyword"></span><a href="index.html">SimplexContext</a><span class="token operator">&lt;</span><span class="token keyword"></span><a href="index.html">VertexT</a><span class="token operator">&gt;</span> <a href="-simplex-context.html"><span class="token function">SimplexContext</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":dokkaHtml/commonMain"><div class="symbol monospace"><span class="token keyword">public </span><span class="token keyword">class </span><a href="-companion/index.html">Companion</a></div></div></div>
                 </div>
               </div>
             </div>
@@ -92,17 +92,32 @@
       </div>
       <div data-togglable="PROPERTY">
         <h2 class="">Properties</h2>
-        <div class="table"><a data-name="1148489943%2FProperties%2F788909594" anchor-label="vertexComparator" id="1148489943%2FProperties%2F788909594" data-filterable-set=":dokkaHtml/commonMain"></a>
+        <div class="table"><a data-name="728366213%2FProperties%2F788909594" anchor-label="Companion" id="728366213%2FProperties%2F788909594" data-filterable-set=":dokkaHtml/commonMain"></a>
           <div class="table-row" data-filterable-current=":dokkaHtml/commonMain" data-filterable-set=":dokkaHtml/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
-                  <div><a href="index.html#1148489943%2FProperties%2F788909594"><span>vertex</span><wbr></wbr><span><span>Comparator</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1148489943%2FProperties%2F788909594"></span>
+                  <div><a href="index.html#728366213%2FProperties%2F788909594"><span><span>Companion</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="728366213%2FProperties%2F788909594"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":dokkaHtml/commonMain"><div class="symbol monospace block"><span class="token keyword">private </span><span class="token keyword">final </span><span class="token keyword"></span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-comparator/index.html">Comparator</a><span class="token operator">&lt;</span><span class="token keyword"></span><a href="index.html">VertexT</a><span class="token operator">&gt;</span> <a href="index.html#1148489943%2FProperties%2F788909594">vertexComparator</a></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":dokkaHtml/commonMain"><div class="symbol monospace block"><span class="token keyword">public </span><span class="token keyword">final </span><span class="token keyword">static </span><a href="-companion/index.html">SimplexContext.Companion</a> <a href="index.html#728366213%2FProperties%2F788909594">Companion</a></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="1481187825%2FProperties%2F788909594" anchor-label="vertexComparator" id="1481187825%2FProperties%2F788909594" data-filterable-set=":dokkaHtml/commonMain"></a>
+          <div class="table-row" data-filterable-current=":dokkaHtml/commonMain" data-filterable-set=":dokkaHtml/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="index.html#1481187825%2FProperties%2F788909594"><span>vertex</span><wbr></wbr><span><span>Comparator</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="1481187825%2FProperties%2F788909594"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":dokkaHtml/commonMain"><div class="symbol monospace block"><span class="token keyword">private </span><span class="token keyword">final </span><span class="token keyword"></span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-comparator/index.html">Comparator</a><span class="token operator">&lt;</span><span class="token keyword"></span><a href="index.html">VertexT</a><span class="token operator">&gt;</span> <a href="index.html#1481187825%2FProperties%2F788909594">vertexComparator</a></div></div></div>
                 </div>
               </div>
             </div>
@@ -111,32 +126,47 @@
       </div>
       <div data-togglable="FUNCTION">
         <h2 class="">Functions</h2>
-        <div class="table"><a data-name="771203769%2FFunctions%2F788909594" anchor-label="getVertexComparator" id="771203769%2FFunctions%2F788909594" data-filterable-set=":dokkaHtml/commonMain"></a>
+        <div class="table"><a data-name="-610712737%2FFunctions%2F788909594" anchor-label="getVertexComparator" id="-610712737%2FFunctions%2F788909594" data-filterable-set=":dokkaHtml/commonMain"></a>
           <div class="table-row" data-filterable-current=":dokkaHtml/commonMain" data-filterable-set=":dokkaHtml/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
-                  <div><a href="../-simplex-context-with/get-vertex-comparator.html"><span>get</span><wbr></wbr><span>Vertex</span><wbr></wbr><span><span>Comparator</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="771203769%2FFunctions%2F788909594"></span>
+                  <div><a href="get-vertex-comparator.html"><span>get</span><wbr></wbr><span>Vertex</span><wbr></wbr><span><span>Comparator</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-610712737%2FFunctions%2F788909594"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":dokkaHtml/commonMain"><div class="symbol monospace block"><span class="token keyword">public </span><span class="token keyword">final </span><span class="token keyword"></span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-comparator/index.html">Comparator</a><span class="token operator">&lt;</span><span class="token keyword"></span><a href="index.html">VertexT</a><span class="token operator">&gt;</span> <a href="../-simplex-context-with/get-vertex-comparator.html"><span class="token function">getVertexComparator</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":dokkaHtml/commonMain"><div class="symbol monospace block"><span class="token keyword">public </span><span class="token keyword">final </span><span class="token keyword"></span><a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin/-comparator/index.html">Comparator</a><span class="token operator">&lt;</span><span class="token keyword"></span><a href="index.html">VertexT</a><span class="token operator">&gt;</span> <a href="get-vertex-comparator.html"><span class="token function">getVertexComparator</span></a><span class="token punctuation">(</span><span class="token punctuation">)</span></div></div></div>
                 </div>
               </div>
             </div>
           </div>
-<a data-name="-1206907697%2FFunctions%2F788909594" anchor-label="s" id="-1206907697%2FFunctions%2F788909594" data-filterable-set=":dokkaHtml/commonMain"></a>
+<a data-name="-1122900466%2FFunctions%2F788909594" anchor-label="invoke" id="-1122900466%2FFunctions%2F788909594" data-filterable-set=":dokkaHtml/commonMain"></a>
           <div class="table-row" data-filterable-current=":dokkaHtml/commonMain" data-filterable-set=":dokkaHtml/commonMain">
             <div class="main-subrow keyValue ">
               <div class=""><span class="inline-flex">
-                  <div><a href="index.html#-1206907697%2FFunctions%2F788909594"><span><span>s</span></span></a></div>
-<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1206907697%2FFunctions%2F788909594"></span>
+                  <div><a href="invoke.html"><span><span>invoke</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="-1122900466%2FFunctions%2F788909594"></span>
                     <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
                   </span></span></div>
               <div>
                 <div class="title">
-                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":dokkaHtml/commonMain"><div class="symbol monospace block"><span class="token keyword">public </span><span class="token keyword">final </span><span class="token keyword"></span><a href="../-abstract-simplex-with/index.html">AbstractSimplexWith</a><span class="token operator">&lt;</span><span class="token keyword"></span><a href="index.html">VertexT</a><span class="token operator">&gt;</span> <a href="index.html#-1206907697%2FFunctions%2F788909594"><span class="token function">s</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword"></span><a href="index.html">VertexT</a> vs</span></span><span class="token punctuation">)</span></div></div></div>
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":dokkaHtml/commonMain"><div class="symbol monospace block"><span class="token keyword">public </span><span class="token keyword">final </span><span class="token keyword"></span><a href="../-abstract-simplex/index.html">AbstractSimplex</a><span class="token operator">&lt;</span><span class="token keyword"></span><a href="index.html">VertexT</a><span class="token operator">&gt;</span> <a href="invoke.html"><span class="token function">invoke</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword"></span><a href="../-abstract-simplex/-companion/index.html">AbstractSimplex.Companion</a> $self</span></span><span class="token punctuation">)</span></div><div class="symbol monospace block"><span class="token keyword">public </span><span class="token keyword">final </span><span class="token keyword"></span><a href="../-abstract-simplex/index.html">AbstractSimplex</a><span class="token operator">&lt;</span><span class="token keyword"></span><a href="index.html">VertexT</a><span class="token operator">&gt;</span> <a href="invoke.html"><span class="token function">invoke</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword"></span><a href="../-abstract-simplex/-companion/index.html">AbstractSimplex.Companion</a> $self<span class="token punctuation">, </span></span><span class="parameter "><span class="token keyword"></span><a href="index.html">VertexT</a> elements</span></span><span class="token punctuation">)</span></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+<a data-name="260194110%2FFunctions%2F788909594" anchor-label="s" id="260194110%2FFunctions%2F788909594" data-filterable-set=":dokkaHtml/commonMain"></a>
+          <div class="table-row" data-filterable-current=":dokkaHtml/commonMain" data-filterable-set=":dokkaHtml/commonMain">
+            <div class="main-subrow keyValue ">
+              <div class=""><span class="inline-flex">
+                  <div><a href="s.html"><span><span>s</span></span></a></div>
+<span class="anchor-wrapper"><span class="anchor-icon" pointing-to="260194110%2FFunctions%2F788909594"></span>
+                    <div class="copy-popup-wrapper "><span class="copy-popup-icon"></span><span>Link copied to clipboard</span></div>
+                  </span></span></div>
+              <div>
+                <div class="title">
+                  <div class="platform-hinted " data-platform-hinted="data-platform-hinted"><div class="content sourceset-dependent-content" data-active="" data-togglable=":dokkaHtml/commonMain"><div class="symbol monospace block"><span class="token keyword">public </span><span class="token keyword">final </span><span class="token keyword"></span><a href="../-abstract-simplex/index.html">AbstractSimplex</a><span class="token operator">&lt;</span><span class="token keyword"></span><a href="index.html">VertexT</a><span class="token operator">&gt;</span> <a href="s.html"><span class="token function">s</span></a><span class="token punctuation">(</span><span class="parameters "><span class="parameter "><span class="token keyword"></span><a href="index.html">VertexT</a> vs</span></span><span class="token punctuation">)</span></div></div></div>
                 </div>
               </div>
             </div>
