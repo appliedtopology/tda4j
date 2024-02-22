@@ -44,6 +44,5 @@ lazy val root = (project in file("."))
     gitHubPagesRepoName := "tda4j",
     gitHubPagesSiteDir := baseDirectory.value / "target/site"
   )
-scalacOptions ++= Seq("-Yno-predef")
 
 mimaPreviousArtifacts := Set.empty

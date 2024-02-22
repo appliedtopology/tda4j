@@ -31,7 +31,7 @@ class FiniteField(val p: Int) {
 
   given FpIsFractional: Fractional[Fp] with {
     def computeInverse(a: Fp): Fp = {
-      val aa: Int = a.toUInt()
+      val aa: Int = a.toUInt
       var u: Int = aa % p
       var v: Int = p
       var x1: Int = 1
@@ -40,7 +40,6 @@ class FiniteField(val p: Int) {
       var r: Int = 0
       var x: Int = 0
       while (u != 1) {
-        assert(u != 0)
         q = v / u
         r = v - q * u
         x = x2 - q * x1
@@ -60,7 +59,7 @@ class FiniteField(val p: Int) {
     )
 
     def inverse(fp: Fp): Fp = {
-      val ix: Int = fp.toUInt()
+      val ix: Int = fp.toUInt
       if (ix == 0)
         throw new ArithmeticException("Division by zero")
       else

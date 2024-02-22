@@ -6,7 +6,7 @@ import scala.collection.{
   SortedSetFactoryDefaults,
   StrictOptimizedSortedSetOps
 }
-import scala.collection.immutable.{SortedSet, SortedSetOps, TreeSet, SortedMap}
+import scala.collection.immutable.{Set, SortedSet, SortedSetOps, TreeSet, SortedMap}
 import scala.math.Ordering.IntOrdering
 import scala.math.Ordering.Double.IeeeOrdering
 import math.Ordering.Implicits.sortedSetOrdering
