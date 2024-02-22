@@ -67,15 +67,15 @@ class FiniteField(val p: Int) {
     }
 
     def op1(op: Int => Int): Fp => Fp =
-      a => norm(Fp(op(Fp.unapply(a).get)))
+      a => norm(Fp(op(a)))
 
     def op2(op: (x: Int, y: Int) => Int): (Fp, Fp) => Fp =
-      (a, b) => norm(Fp(op(Fp.unapply(a).get, Fp.unapply(b).get)))
+      (a, b) => norm(Fp(op(a, b)))
 
     // Members declared in java.util.Comparator
     // Members declared in scala.math.Ordering
     def compare(x: Fp, y: Fp): Int =
-      Ordering.Int.compare(Fp.unapply(norm(x)).get, Fp.unapply(norm(y)).get)
+      Ordering.Int.compare(x, y)
 
     // Members declared in scala.math.Fractional
     def div(x: Fp, y: Fp): Fp = times(x, inverse(y))
@@ -95,22 +95,22 @@ class FiniteField(val p: Int) {
     def times(x: Fp, y: Fp): Fp = op2(_ * _)(x, y)
 
     def toDouble(x: Fp): Double = {
-      val Fp(xx) = norm(x)
+      val xx = x
       IntIsIntegral.toDouble(xx)
     }
 
     def toFloat(x: Fp): Float = {
-      val Fp(xx) = norm(x)
+      val xx = x
       IntIsIntegral.toFloat(xx)
     }
 
     def toInt(x: Fp): Fp = {
-      val Fp(xx) = norm(x)
+      val xx = x
       IntIsIntegral.toInt(xx)
     }
 
     def toLong(x: Fp): Long = {
-      val Fp(xx) = norm(x)
+      val xx = x
       IntIsIntegral.toLong(xx)
     }
   }

@@ -40,6 +40,12 @@ class FiniteFieldSpec extends mutable.Specification {
       eg((x - y).toInt must beBetween(-8, 8))
       eg((x / y).toInt must beBetween(-8, 8))
       eg((-z).toInt must beBetween(-8, 8))
+
+      eg((x * y).toUInt must beBetween(0, 16))
+      eg((x + y).toUInt must beBetween(0, 16))
+      eg((x - y).toUInt must beBetween(0, 16))
+      eg((x / y).toUInt must beBetween(0, 16))
+      eg((-z).toUInt must beBetween(0, 16))
     }
     "commutativity" >> {
       eg(x * y === y * x)
