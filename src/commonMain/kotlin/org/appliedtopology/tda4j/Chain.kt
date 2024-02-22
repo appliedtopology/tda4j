@@ -1,7 +1,6 @@
 package org.appliedtopology.tda4j
 
 import arrow.core.padZip
-import space.kscience.kmath.operations.Group
 
 public open class Chain<VertexT, CoefficientT> protected constructor(
     public val vertexComparator: Comparator<VertexT>,
@@ -63,7 +62,8 @@ public class ChainContext<VertexT, CoefficientT> protected constructor(
     vertexComparator: Comparator<VertexT>,
     public val coefficientContext: FieldContext<CoefficientT>,
 ) :
-    Group<Chain<VertexT, CoefficientT>>,
+    FieldContext<CoefficientT> by coefficientContext,
+        VectorSpaceContext<CoefficientT, Chain<VertexT, CoefficientT>>,
         SimplexContext<VertexT>(vertexComparator) {
         public fun Chain<VertexT, CoefficientT>.zipToChain(
             other: Chain<VertexT, CoefficientT>,
@@ -83,25 +83,26 @@ public class ChainContext<VertexT, CoefficientT> protected constructor(
             return(Chain(this.vertexComparator, this.simplexComparator, retmap))
         }
 
-        override val zero: Chain<VertexT, CoefficientT>
+        override val origin: Chain<VertexT, CoefficientT>
             get() = Chain(vertexComparator, SimplexComparator(vertexComparator))
 
-        override fun Chain<VertexT, CoefficientT>.unaryMinus(): Chain<VertexT, CoefficientT> =
+        override fun vectorScale(
+            scalar: CoefficientT,
+            vector: Chain<VertexT, CoefficientT>,
+        ): Chain<VertexT, CoefficientT> =
             with(coefficientContext) {
-                this@unaryMinus.mapToChain { -it }
+                vector.mapToChain { scalar * it }
             }
 
-        override fun add(
+        override fun vectorNegate(v: Chain<VertexT, CoefficientT>): Chain<VertexT, CoefficientT> =
+            with(coefficientContext) {
+                v.mapToChain { -it }
+            }
+
+        override fun vectorAdd(
             left: Chain<VertexT, CoefficientT>,
             right: Chain<VertexT, CoefficientT>,
         ): Chain<VertexT, CoefficientT> = left.zipToChain(right, coefficientContext::add)
-
-        public operator fun CoefficientT.times(other: Chain<VertexT, CoefficientT>): Chain<VertexT, CoefficientT> =
-            other.mapToChain {
-                with(coefficientContext) {
-                    this@times * it
-                }
-            }
 
         public operator fun CoefficientT.times(other: AbstractSimplex<VertexT>): Chain<VertexT, CoefficientT> = this@times * Chain(other)
 
@@ -133,8 +134,8 @@ public class ChainContext<VertexT, CoefficientT> protected constructor(
         public val Chain<VertexT, CoefficientT>.boundary: Chain<VertexT, CoefficientT>
             get() =
                 this.chainMap.map { (simplex, coeff) ->
-                    coeff * simplex.boundary
-                }.fold(zero, ::add)
+                    vectorScale(coeff, simplex.boundary)
+                }.fold(origin, ::vectorAdd)
 
         public val emptyChain: Chain<VertexT, CoefficientT> =
             Chain(
