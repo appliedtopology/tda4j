@@ -30,7 +30,7 @@ jobs:
         gradle-version: 8.4
     - name: dokkaHtml
       run: ./gradlew dokkaHtml
-    - name: Deploy 🚀
-      uses: JamesIves/github-pages-deploy-action@v4
-      with:
-        folder: build/dokka/html # The folder the action should deploy.
+#    - name: Deploy 🚀
+#      uses: JamesIves/github-pages-deploy-action@v4
+#      with:
+#        folder: build/dokka/html # The folder the action should deploy.
