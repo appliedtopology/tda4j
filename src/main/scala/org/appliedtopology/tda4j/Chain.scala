@@ -13,7 +13,7 @@ import scala.annotation.targetName
  *
  *
  * @tparam CellT Type of the cells in the chain complex. For example `AbstractSimplex[Int]` etc.
- * @tparam CoefficientT Type of the coefficients of the chain complex. For example `Double` or an  implicit 'IntModp : Fractional[Int]'
+ * @tparam CoefficientT Type of the coefficients of the chain complex. For example `Double` or an  implicit 'FiniteField : Fractional[Int]'
  * @param chainMap Internal storage of the sorted map of the elements
  *
  *
