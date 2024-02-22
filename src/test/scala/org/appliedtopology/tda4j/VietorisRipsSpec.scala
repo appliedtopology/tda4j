@@ -1,13 +1,12 @@
 package org.appliedtopology.tda4j
 
-import org.specs2.{Specification, mutable as s2mutable}
+import org.specs2.{mutable as s2mutable, Specification}
 import org.specs2.specification.core.Fragment
 import org.specs2.execute.Result
 
 import scala.collection.immutable.{Seq, Set}
 import scala.collection.mutable
-import scala.math.{cos,sin}
-
+import scala.math.{cos, sin}
 
 class VietorisRipsSpec extends s2mutable.Specification {
   "This is a specification of the Vietoris-Rips simplex stream implementation\n\n".txt
@@ -18,25 +17,35 @@ class VietorisRipsSpec extends s2mutable.Specification {
 
   given Ordering[Int] = Ordering.Int
 
-  Fragment.foreach(List(new BronKerbosch[Int](), new ZomorodianIncremental[Int]()) : List[CliqueFinder[Int]])(method =>
+  Fragment.foreach(
+    List(new BronKerbosch[Int](), new ZomorodianIncremental[Int]()): List[
+      CliqueFinder[Int]
+    ]
+  )(method =>
     s"Vietoris-Rips streams with ${method.className} should" >> {
-    val pts: Seq[Seq[Double]] = Range(0, N).map(i => Seq(cos(i / N.toDouble), sin(i / N.toDouble)))
-    val metricSpace: FiniteMetricSpace[Int] = EuclideanMetricSpace(pts)
-    val simplexStream: SimplexStream[Int, Double] = VietorisRips[Int](metricSpace, maxF, maxD, cliqueFinder=method)
-    given Ordering[AbstractSimplex[Int]] = CliqueFinder.simplexOrdering(metricSpace)
+      val pts: Seq[Seq[Double]] =
+        Range(0, N).map(i => Seq(cos(i / N.toDouble), sin(i / N.toDouble)))
+      val metricSpace: FiniteMetricSpace[Int] = EuclideanMetricSpace(pts)
+      val simplexStream: SimplexStream[Int, Double] =
+        VietorisRips[Int](metricSpace, maxF, maxD, cliqueFinder = method)
+      given Ordering[AbstractSimplex[Int]] =
+        CliqueFinder.simplexOrdering(metricSpace)
 
-    "have simplices" >> {
-      simplexStream.iterator.length must beGreaterThan(0)
+      "have simplices" >> {
+        simplexStream.iterator.length must beGreaterThan(0)
+      }
+      "have simplices appear in filtration order" >> {
+        simplexStream.iterator.to(Seq) must beSorted
+      }
     }
-    "have simplices appear in filtration order" >> {
-      simplexStream.iterator.to(Seq) must beSorted
-    }
-  })
+  )
 
   s"Lazy Vietoris-Rips streams should" >> {
-    val pts: Seq[Seq[Double]] = Range(0, N).map(i => Seq(cos(i / N.toDouble), sin(i / N.toDouble)))
+    val pts: Seq[Seq[Double]] =
+      Range(0, N).map(i => Seq(cos(i / N.toDouble), sin(i / N.toDouble)))
     val metricSpace: FiniteMetricSpace[Int] = EuclideanMetricSpace(pts)
-    given Ordering[AbstractSimplex[Int]] = CliqueFinder.simplexOrdering(metricSpace)
+    given Ordering[AbstractSimplex[Int]] =
+      CliqueFinder.simplexOrdering(metricSpace)
     val lazyStream: LazyList[AbstractSimplex[Int]] =
       LazyVietorisRips[Int](metricSpace, maxF, maxD)
     "have simplices" >> {

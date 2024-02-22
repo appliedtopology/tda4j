@@ -19,9 +19,9 @@ class FiniteField(val p: Int) {
       val r: Int = aa % p
 
       Fp(r match {
-        case rr: Int if rr < -(p-1)/2 => rr + p
-        case rr: Int if rr > (p-1)/2 => rr - p
-        case rr: Int => rr
+        case rr: Int if rr < -(p - 1) / 2 => rr + p
+        case rr: Int if rr > (p - 1) / 2  => rr - p
+        case rr: Int                      => rr
       })
     }
     def toInt: Int = fp.norm
@@ -53,8 +53,8 @@ class FiniteField(val p: Int) {
 
     val p2: Int = (p - 1) / 2
 
-    val inverses: ArraySeq[Fp] = ArraySeq.tabulate(p) ( j =>
-      if(j==0) 0
+    val inverses: ArraySeq[Fp] = ArraySeq.tabulate(p)(j =>
+      if (j == 0) 0
       else computeInverse(Fp(j))
     )
 

@@ -4,7 +4,7 @@ import scala.collection.immutable.{LazyList, SortedSet}
 import scala.math.Ordering.Implicits.*
 import Simplex.*
 import org.appliedtopology.tda4j.FiniteMetricSpace.MaximumDistanceFiltrationValue
-import scalax.collection.{Graph, edge, mutable as gmutable}
+import scalax.collection.{edge, mutable as gmutable, Graph}
 import scalax.collection.edge.Implicits.*
 import scalax.collection.edge.WUnDiEdge
 
@@ -17,8 +17,9 @@ import scala.util.chaining._
 /** Convenience definition to allow us to choose a specific implementation.
   *
   * @return
-  *   A function-like object with the signature
-  *   `VietorisRips : (MetricSpace[VertexT], Double) => Seq[FilteredAbstractSimplex[VertexT,Double]]`
+  *   A function-like object with the signature `VietorisRips :
+  *   (MetricSpace[VertexT], Double) =>
+  *   Seq[FilteredAbstractSimplex[VertexT,Double]]`
   */
 class VietorisRips[VertexT](using ordering: Ordering[VertexT])(
   val metricSpace: FiniteMetricSpace[VertexT],
@@ -95,8 +96,10 @@ object CliqueFinder {
         )
     })
 
-  def BronKerboschAlgorithm[VertexT: Ordering](maxDimension: Int, edges: Graph[VertexT, WUnDiEdge]):
-    mutable.Set[Set[VertexT]] = {
+  def BronKerboschAlgorithm[VertexT: Ordering](
+    maxDimension: Int,
+    edges: Graph[VertexT, WUnDiEdge]
+  ): mutable.Set[Set[VertexT]] = {
     // Now, recursive calls to Bron-Kerbosch:
     val cliqueSet = mutable.Set[Set[VertexT]]()
     val bkTaskStack: mutable.Stack[
@@ -182,7 +185,8 @@ class BronKerbosch[VertexT: Ordering] extends CliqueFinder[VertexT] {
       queryGraph -= v
     }
 
-    val cliqueSet: mutable.Set[Set[VertexT]] = CliqueFinder.BronKerboschAlgorithm[VertexT](maxDimension, edges)
+    val cliqueSet: mutable.Set[Set[VertexT]] =
+      CliqueFinder.BronKerboschAlgorithm[VertexT](maxDimension, edges)
 
     // Well, we have our simplices generated and ready for us.
     // Let's sort them to create a stream
@@ -242,46 +246,51 @@ class ZomorodianIncremental[VertexT: Ordering] extends CliqueFinder[VertexT] {
   }
 }
 
-
-
 object LazyVietorisRips {
   self =>
 
-  def apply[VertexT: Ordering](metricSpace: FiniteMetricSpace[VertexT],
-                               maxFiltrationValue : Double,
-                               maxDimension: Int): LazyList[AbstractSimplex[VertexT]] = {
-    given Ordering[AbstractSimplex[VertexT]] = CliqueFinder.simplexOrdering(metricSpace)
+  def apply[VertexT: Ordering](
+    metricSpace: FiniteMetricSpace[VertexT],
+    maxFiltrationValue: Double,
+    maxDimension: Int
+  ): LazyList[AbstractSimplex[VertexT]] = {
+    given Ordering[AbstractSimplex[VertexT]] =
+      CliqueFinder.simplexOrdering(metricSpace)
 
     val edges = CliqueFinder.weightedEdges(metricSpace, Double.PositiveInfinity)
 
-    case class FoldState(G: Graph[VertexT, WUnDiEdge],
-                         retLL: LazyList[AbstractSimplex[VertexT]],
-                         knownSize: Int)
+    case class FoldState(
+      G: Graph[VertexT, WUnDiEdge],
+      retLL: LazyList[AbstractSimplex[VertexT]],
+      knownSize: Int
+    )
 
-    def processNextEdge(state: FoldState, nextEdge: WUnDiEdge[VertexT]): FoldState = state match {
-      case FoldState(g, retLL, n) => {
+    def processNextEdge(
+      state: FoldState,
+      nextEdge: WUnDiEdge[VertexT]
+    ): FoldState = state match {
+      case FoldState(g, retLL, n) =>
         val endpoints: Seq[VertexT] = nextEdge.to(Seq)
-        //val neighbors: Seq[Set[VertexT]] =
+        // val neighbors: Seq[Set[VertexT]] =
         //  endpoints.map[Set[VertexT]]((v: VertexT) => (g get v).neighbors map (_.toOuter) filter (_ < v))
-        //val NN = neighbors.reduce(_ & _)
+        // val NN = neighbors.reduce(_ & _)
 
-/*        val cliqueSet: mutable.Set[Set[VertexT]] =
+        /*        val cliqueSet: mutable.Set[Set[VertexT]] =
           CliqueFinder.BronKerboschAlgorithm[VertexT](
             maxDimension - 2,
             (g filter edges.having(node = NN.contains(_)))
           )
-          */
-
+         */
 
         def lowerNeighbors(v: VertexT): SortedSet[VertexT] =
           g.get(v).neighbors.map(_.toOuter).filter(_ < v).to(SortedSet)
 
-        val neighbors : Seq[SortedSet[VertexT]] =
-          endpoints.map[SortedSet[VertexT]]((v:VertexT) => lowerNeighbors(v))
+        val neighbors: Seq[SortedSet[VertexT]] =
+          endpoints.map[SortedSet[VertexT]]((v: VertexT) => lowerNeighbors(v))
 
         val V = mutable.SortedSet[AbstractSimplex[VertexT]]()
         val tasks = mutable.Stack[(SortedSet[VertexT], SortedSet[VertexT])](
-          (SortedSet[VertexT](endpoints : _*), neighbors.reduce(_&_))
+          (SortedSet[VertexT](endpoints: _*), neighbors.reduce(_ & _))
         )
 
         while (tasks.nonEmpty) {
@@ -298,28 +307,39 @@ object LazyVietorisRips {
           }
         }
 
-
         val newSimplices: SortedSet[AbstractSimplex[VertexT]] =
-          V.map(spx => AbstractSimplex.from(spx)).map(spx => spx ++ endpoints).to(SortedSet)
+          V.map(spx => AbstractSimplex.from(spx))
+            .map(spx => spx ++ endpoints)
+            .to(SortedSet)
 
         FoldState(
           g + nextEdge,
           retLL #::: newSimplices.to(LazyList),
           V.size
         )
-      }
     }
 
-    val simplices = edges.nodes.to(Seq).map(_.toOuter).map(spx => AbstractSimplex(spx)).sorted.to(LazyList) #::: ({
+    val simplices = edges.nodes
+      .to(Seq)
+      .map(_.toOuter)
+      .map(spx => AbstractSimplex(spx))
+      .sorted
+      .to(LazyList) #::: ({
       val edgesLL: LazyList[WUnDiEdge[VertexT]] =
-        (edges filter edges.having(edge = _.weight<maxFiltrationValue)).
-          edges.toSeq.map(_.toOuter).sortBy(_.weight).to(LazyList)
+        edges
+          .filter(edges.having(edge = _.weight < maxFiltrationValue))
+          .edges
+          .toSeq
+          .map(_.toOuter)
+          .sortBy(_.weight)
+          .to(LazyList)
       val startingState = FoldState(
-        edges filter edges.having(edge = _ => false, node = _ => true),
+        edges.filter(edges.having(edge = _ => false, node = _ => true)),
         LazyList[AbstractSimplex[VertexT]](),
         edges.order // because we seeded `simplices` with the vertices
       )
-      val foldedState = edgesLL.foldLeft[FoldState](startingState)(processNextEdge)
+      val foldedState =
+        edgesLL.foldLeft[FoldState](startingState)(processNextEdge)
 
       foldedState match {
         case FoldState(_, retLL, _) => retLL

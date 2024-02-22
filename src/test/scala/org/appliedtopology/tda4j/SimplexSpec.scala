@@ -27,8 +27,13 @@ A `Simplex` should
 
   given Fractional[Double] = Numeric.DoubleIsFractional
 
-  def e2: Result = s.boundary must be_==(Chain[Simplex, Double](
-    Simplex(2, 3) -> 1.0, Simplex(1, 3) -> -1.0, Simplex(1, 2) -> 1.0))
+  def e2: Result = s.boundary must be_==(
+    Chain[Simplex, Double](
+      Simplex(2, 3) -> 1.0,
+      Simplex(1, 3) -> -1.0,
+      Simplex(1, 2) -> 1.0
+    )
+  )
 
   def eAddVertex: Result =
     sAdd4.contains(4) must beTrue

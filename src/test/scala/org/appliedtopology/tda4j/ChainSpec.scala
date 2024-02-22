@@ -10,7 +10,8 @@ class ChainSpec extends mutable.Specification {
   """This is the specification for testing the Chain implementation.
     |""".stripMargin.txt
 
-  given Conversion[AbstractSimplex[Int], Chain[AbstractSimplex[Int], Double]] = Chain.apply
+  given Conversion[AbstractSimplex[Int], Chain[AbstractSimplex[Int], Double]] =
+    Chain.apply
 
   given Fractional[Double] = math.Numeric.DoubleIsFractional
 
@@ -18,13 +19,21 @@ class ChainSpec extends mutable.Specification {
 
   "The `Chain` type should" >> {
     val z1 = Chain(Simplex(1, 2, 3))
-    val z2 = Chain(Simplex(1, 2) -> 1.0, Simplex(1, 3) -> -1.0, Simplex(2, 3) -> 1.0)
+    val z2 =
+      Chain(Simplex(1, 2) -> 1.0, Simplex(1, 3) -> -1.0, Simplex(2, 3) -> 1.0)
     val z3 = Chain(Simplex(1, 2, 5))
     val z4 = Chain(Simplex(1, 4, 8))
-    val z5 = Chain(Simplex(1, 2) -> - 1.0, Simplex(1, 4) -> 1.0, Simplex(2, 3) -> -1.0)
-    val z6 = Chain(Simplex(1, 2) -> 1.0, Simplex(2 , 3) -> 1.0, Simplex(1 , 3) -> -1.0)
-    val z7 = Chain(Simplex(1, 2) -> 1.0, Simplex(1, 3) -> -1.0, Simplex(2, 3) -> 1.0, Simplex(3,4) -> 0.0)
-    //val z6 = Chain(Simplex(1, 2, 6, 7))
+    val z5 =
+      Chain(Simplex(1, 2) -> -1.0, Simplex(1, 4) -> 1.0, Simplex(2, 3) -> -1.0)
+    val z6 =
+      Chain(Simplex(1, 2) -> 1.0, Simplex(2, 3) -> 1.0, Simplex(1, 3) -> -1.0)
+    val z7 = Chain(
+      Simplex(1, 2) -> 1.0,
+      Simplex(1, 3) -> -1.0,
+      Simplex(2, 3) -> 1.0,
+      Simplex(3, 4) -> 0.0
+    )
+    // val z6 = Chain(Simplex(1, 2, 6, 7))
 
     "be the return type of Chain applied to a single simplex" >> {
       z1 must haveClass[Chain[Simplex, Double]]
@@ -64,9 +73,19 @@ class ChainSpec extends mutable.Specification {
 
         val result1 = chain1 + chain2
         val result2 = chain2 + chain3
-        val expectedResult1 = Chain(Simplex(1, 2, 3) -> 1.0, Simplex(1, 2) -> 1.0, Simplex(1, 3) -> -1.0, Simplex(2, 3) -> 1.0)
-        val expectedResult2 = Chain(Simplex(1, 2) -> 0.0, Simplex(1, 3) -> 0.0, Simplex(1, 4) -> 0.0, Simplex(2, 3) -> 0.0)
-        //note - check up on expectedResult2 after conferring with prof in github
+        val expectedResult1 = Chain(
+          Simplex(1, 2, 3) -> 1.0,
+          Simplex(1, 2) -> 1.0,
+          Simplex(1, 3) -> -1.0,
+          Simplex(2, 3) -> 1.0
+        )
+        val expectedResult2 = Chain(
+          Simplex(1, 2) -> 0.0,
+          Simplex(1, 3) -> 0.0,
+          Simplex(1, 4) -> 0.0,
+          Simplex(2, 3) -> 0.0
+        )
+        // note - check up on expectedResult2 after conferring with prof in github
 
         result1 must beEqualTo(expectedResult1)
         result2 must beEqualTo(expectedResult2)
@@ -83,17 +102,18 @@ class ChainSpec extends mutable.Specification {
       def e4 = {
         val chain1 = z1
         val chain2 = z2
-        val expectedResult = Chain(Simplex(1, 2, 3) -> 1.0, Simplex(1, 2) -> -1.0, Simplex(1, 3) -> 1.0, Simplex(2, 3) -> -1.0)
+        val expectedResult = Chain(
+          Simplex(1, 2, 3) -> 1.0,
+          Simplex(1, 2) -> -1.0,
+          Simplex(1, 3) -> 1.0,
+          Simplex(2, 3) -> -1.0
+        )
         val result = chain1 - chain2
 
         result must beEqualTo(expectedResult)
       }
     }
 
-
   }
 
-
 }
-
-

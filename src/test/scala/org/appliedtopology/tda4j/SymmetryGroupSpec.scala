@@ -10,7 +10,6 @@ import scala.collection.immutable.{BitSet, Range}
 import scala.collection.mutable.ListBuffer
 import math.Ordering.Implicits.*
 
-
 class SymmetryGroupSpec extends mutable.Specification {
   sequential
   """This is the specification for our expectations on the symmetry group
@@ -34,20 +33,24 @@ class SymmetryGroupSpec extends mutable.Specification {
     }
   }
 
-  val el: ExpandList[BitSet, Int] = ExpandList(Seq(
-    AbstractSimplex(BitSet()),
-    AbstractSimplex(BitSet(0)),
-    AbstractSimplex(BitSet(0, 1)),
-    AbstractSimplex(BitSet(0, 1, 2)),
-    AbstractSimplex(BitSet(), BitSet(0)),
-    AbstractSimplex(BitSet(), BitSet(0, 1)),
-    AbstractSimplex(BitSet(), BitSet(0), BitSet(0, 1))
-  ), hc3s)
+  val el: ExpandList[BitSet, Int] = ExpandList(
+    Seq(
+      AbstractSimplex(BitSet()),
+      AbstractSimplex(BitSet(0)),
+      AbstractSimplex(BitSet(0, 1)),
+      AbstractSimplex(BitSet(0, 1, 2)),
+      AbstractSimplex(BitSet(), BitSet(0)),
+      AbstractSimplex(BitSet(), BitSet(0, 1)),
+      AbstractSimplex(BitSet(), BitSet(0), BitSet(0, 1))
+    ),
+    hc3s
+  )
 
   val it: Iterator[AbstractSimplex[BitSet]] = el.iterator
 
   val allsimplices: List[AbstractSimplex[BitSet]] = el.indices.map(el(_)).toList
-  val itallsimplices: ListBuffer[AbstractSimplex[BitSet]] = collection.mutable.ListBuffer[AbstractSimplex[BitSet]]()
+  val itallsimplices: ListBuffer[AbstractSimplex[BitSet]] =
+    collection.mutable.ListBuffer[AbstractSimplex[BitSet]]()
 
   "ExpandList Iterator does not throw exception while it has content" >> {
     el.indices.foreach(_ => itallsimplices.append(it.next()))
