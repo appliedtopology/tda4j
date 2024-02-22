@@ -18,15 +18,15 @@ class FiniteField(val p: Int) {
       val aa: Int = fp
       val r: Int = aa % p
 
-      return Fp(r match {
+      Fp(r match {
         case rr: Int if rr < -(p-1)/2 => rr + p
         case rr: Int if rr > (p-1)/2 => rr - p
         case rr: Int => rr
       })
     }
-    def toInt(): Int = fp.norm
-    def toUInt(): Int = ((fp % p) + p) % p // Have to get to the interval (0,p-1)
-    def toString(): String = s"Fp(${fp.norm})"
+    def toInt: Int = fp.norm
+    def toUInt: Int = ((fp % p) + p) % p // Have to get to the interval (0,p-1)
+    def toString: String = s"Fp(${fp.norm})"
   }
 
   given FpIsFractional: Fractional[Fp] with {
@@ -49,7 +49,7 @@ class FiniteField(val p: Int) {
         x2 = x1
         x1 = x
       }
-      return Fp(x1 % p)
+      Fp(x1 % p)
     }
 
     val p2: Int = (p - 1) / 2
@@ -59,7 +59,7 @@ class FiniteField(val p: Int) {
       else computeInverse(Fp(j))
     )
 
-    def inverse(fp: Fp) = {
+    def inverse(fp: Fp): Fp = {
       val ix: Int = fp.toUInt()
       if (ix == 0)
         throw new ArithmeticException("Division by zero")
@@ -97,22 +97,22 @@ class FiniteField(val p: Int) {
 
     def toDouble(x: Fp): Double = {
       val Fp(xx) = norm(x)
-      return IntIsIntegral.toDouble(xx)
+      IntIsIntegral.toDouble(xx)
     }
 
     def toFloat(x: Fp): Float = {
       val Fp(xx) = norm(x)
-      return IntIsIntegral.toFloat(xx)
+      IntIsIntegral.toFloat(xx)
     }
 
     def toInt(x: Fp): Fp = {
       val Fp(xx) = norm(x)
-      return IntIsIntegral.toInt(xx)
+      IntIsIntegral.toInt(xx)
     }
 
     def toLong(x: Fp): Long = {
       val Fp(xx) = norm(x)
-      return IntIsIntegral.toLong(xx)
+      IntIsIntegral.toLong(xx)
     }
   }
 }
