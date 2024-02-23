@@ -18,6 +18,9 @@ A `Simplex` should
   be able to remove a vertex (and then not have that vertex) $eRemoveVertex
 """
 
+  given sc : SimplexContext[Int]()
+  import sc.Simplex
+
   def s: Simplex = Simplex(1, 2, 3)
 
   def sAdd4: Simplex = s.incl(4)
@@ -45,6 +48,9 @@ A `Simplex` should
 //noinspection ScalaFileName
 class SimplexTypeSpec extends mutable.Specification {
   "This is a specification for the type level interactions of the `Simplex` class".txt
+
+  given sc: SimplexContext[Int]()
+  import sc.Simplex
 
   "The `Simplex` type should" >> {
     val s = Simplex(1, 2, 3)
@@ -100,5 +106,17 @@ class SimplexTypeSpec extends mutable.Specification {
       (s.subsets().next) must haveClass[Simplex]
       (s.subsets(2).next) must haveClass[Simplex]
     }
+  }
+}
+
+class SimplexContextSpec extends mutable.Specification {
+  """Testing the implicit context approach to working with simplices"""
+
+  given sc : SimplexContext[Char]()
+  import sc.*
+
+  "we can create a simplex, and get the right type" >> {
+    s('a','b','c') must haveClass[Simplex]
+    s('a','b','c') must haveClass[AbstractSimplex[Char]]
   }
 }

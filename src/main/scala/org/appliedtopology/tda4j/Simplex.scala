@@ -17,6 +17,30 @@ import scala.math.Ordering.IntOrdering
 import scala.math.Ordering.Double.IeeeOrdering
 import math.Ordering.Implicits.sortedSetOrdering
 
+trait SimplexContext[VertexT : Ordering] {
+  type Simplex = AbstractSimplex[VertexT]
+
+  given Ordering[Simplex] = sortedSetOrdering[AbstractSimplex, VertexT]
+
+  object Simplex {
+    def apply(vertices: VertexT*): Simplex = AbstractSimplex[VertexT](vertices : _*)
+    def empty: Simplex = AbstractSimplex.empty
+    def from(iterableOnce: IterableOnce[VertexT]): Simplex =
+      AbstractSimplex.from(iterableOnce)
+    def newBuilder: mutable.Builder[VertexT, Simplex] = AbstractSimplex.newBuilder
+  }
+
+  object s {
+    def apply(vertices: VertexT*): Simplex = Simplex(vertices: _*)
+  }
+
+  extension (s: Simplex) {
+    def className = "Simplex"
+  }
+}
+
+
+
 /** Type alias creating `Simplex` as the type representing
   * `AbstractSimplex[Int]`
   *
@@ -25,11 +49,11 @@ import math.Ordering.Implicits.sortedSetOrdering
   *   and override everything to get the type to print out at `Simplex`
   *   everywhere instead of as the more verbose `AbstractSimplex`
   */
-type Simplex = AbstractSimplex[Int]
-
-object Simplex {
-  def apply(vertices: Int*) = new Simplex(TreeSet[Int](vertices: _*))
-}
+//type Simplex = AbstractSimplex[Int]
+//
+//object Simplex {
+//  def apply(vertices: Int*) = new Simplex(TreeSet[Int](vertices: _*))
+//}
 
 /** Class representing an abstract simplex. Abstract simplices are sets (of
   * totally ordered vertices) and thus are represented by a type that implements
@@ -139,3 +163,4 @@ object AbstractSimplex extends SortedIterableFactory[AbstractSimplex] {
     }
 
 }
+

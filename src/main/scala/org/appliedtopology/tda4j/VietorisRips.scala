@@ -1,10 +1,10 @@
 package org.appliedtopology.tda4j
 
+import org.appliedtopology.tda4j.FiniteMetricSpace.MaximumDistanceFiltrationValue
+
 import scala.collection.immutable.{LazyList, SortedSet}
 import scala.math.Ordering.Implicits.*
-import Simplex.*
-import org.appliedtopology.tda4j.FiniteMetricSpace.MaximumDistanceFiltrationValue
-import scalax.collection.{edge, mutable as gmutable, Graph}
+import scalax.collection.{Graph, edge, mutable as gmutable}
 import scalax.collection.edge.Implicits.*
 import scalax.collection.edge.WUnDiEdge
 
@@ -12,14 +12,16 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.util.Sorting
 import scala.util.control.*
-import scala.util.chaining._
+import scala.util.chaining.*
 
 /** Convenience definition to allow us to choose a specific implementation.
   *
   * @return
-  *   A function-like object with the signature `VietorisRips :
-  *   (MetricSpace[VertexT], Double) =>
-  *   Seq[FilteredAbstractSimplex[VertexT,Double]]`
+  * A function-like object with the signature
+  * {{{
+  *    VietorisRips : (MetricSpace[VertexT], Double) =>
+  *   Seq[FilteredAbstractSimplex[VertexT,Double]]
+  * }}}
   */
 class VietorisRips[VertexT](using ordering: Ordering[VertexT])(
   val metricSpace: FiniteMetricSpace[VertexT],
@@ -324,7 +326,7 @@ object LazyVietorisRips {
       .map(_.toOuter)
       .map(spx => AbstractSimplex(spx))
       .sorted
-      .to(LazyList) #::: ({
+      .to(LazyList) #::: {
       val edgesLL: LazyList[WUnDiEdge[VertexT]] =
         edges
           .filter(edges.having(edge = _.weight < maxFiltrationValue))
@@ -344,7 +346,7 @@ object LazyVietorisRips {
       foldedState match {
         case FoldState(_, retLL, _) => retLL
       }
-    })
+    }
     simplices
   }
 }

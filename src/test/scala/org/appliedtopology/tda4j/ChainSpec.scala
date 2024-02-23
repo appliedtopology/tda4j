@@ -10,12 +10,18 @@ class ChainSpec extends mutable.Specification {
   """This is the specification for testing the Chain implementation.
     |""".stripMargin.txt
 
-  given Conversion[AbstractSimplex[Int], Chain[AbstractSimplex[Int], Double]] =
+  given sc: SimplexContext[Int]()
+  import sc.*
+
+  given Conversion[Simplex, Chain[Simplex, Double]] =
     Chain.apply
 
   given Fractional[Double] = math.Numeric.DoubleIsFractional
 
   given Ordering[Int] = math.Ordering.Int
+
+  given rm : RingModule[Chain[Simplex, Double], Double] = ChainOps()
+  import rm.*
 
   "The `Chain` type should" >> {
     val z1 = Chain(Simplex(1, 2, 3))
@@ -61,7 +67,7 @@ class ChainSpec extends mutable.Specification {
       def e1 = {
         val chain = z1
         val expectedResult = Chain(Simplex(1, 2, 3))
-        val result = 2 *: chain
+        val result = 2 *> chain
 
         result must beEqualTo(expectedResult)
       }
@@ -116,4 +122,33 @@ class ChainSpec extends mutable.Specification {
 
   }
 
+  "The `Chain` type should be comfortable to write expressions with" >> {
+    val z1 = Chain(s(1,2,3))
+    val z2 : Chain[Simplex,Double] = s(1,2) - s(1,3) + s(2,3)
+    val z3 = 1.0 *> s(1, 2, 5)
+    val z4 : Chain[Simplex,Double] = Simplex(1, 4, 8) <* 1.0
+    val z5 : Chain[Simplex,Double] = -s(1,2) + s(1,4) - s(2,3)
+    val z6 : Chain[Simplex,Double] = s(1,2) + s(2,3) - s(1,3)
+    val z7 : Chain[Simplex,Double] = s(1,2) - s(1,3) + s(2,3) + 0.0 *> s(3,4)
+
+    z1 must haveClass[Chain[Simplex, Double]]
+    z2 must beEqualTo(z6)
+    z2 must beEqualTo(z7)
+
+    val expectedResult1 = Chain(
+      Simplex(1, 2, 3) -> 1.0,
+      Simplex(1, 2) -> 1.0,
+      Simplex(1, 3) -> -1.0,
+      Simplex(2, 3) -> 1.0
+    )
+    val expectedResult2 = Chain(
+      Simplex(1, 2) -> 0.0,
+      Simplex(1, 3) -> 0.0,
+      Simplex(1, 4) -> 0.0,
+      Simplex(2, 3) -> 0.0
+    )
+
+    z1 + z2 must beEqualTo(s(1,2,3) + s(1,2) - s(1,3) + s(2,3))
+    z2 - z6 must beEqualTo(summon[RingModule[Chain[Simplex,Double], Double]].zero)
+  }
 }
