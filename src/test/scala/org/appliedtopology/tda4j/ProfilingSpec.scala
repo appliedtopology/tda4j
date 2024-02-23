@@ -15,9 +15,11 @@ class ProfilingSpec extends mutable.Specification {
   val bitlength: Int = 3
   val symmetry: HyperCubeSymmetry = HyperCubeSymmetry(bitlength)
 
-  class HyperCubeProfiling(vr : CliqueFinder[BitSet],
-                           symmetry : HyperCubeSymmetry,
-                           bitlength : Int) {
+  class HyperCubeProfiling(
+    vr: CliqueFinder[BitSet],
+    symmetry: HyperCubeSymmetry,
+    bitlength: Int
+  ) {
     pp(s"Measuring ${vr.className}")
     var now: Long = System.currentTimeMillis()
     val sstream: Seq[AbstractSimplex[BitSet]] = vr(symmetry.hypercube, 10, 10)
@@ -37,9 +39,15 @@ class ProfilingSpec extends mutable.Specification {
 
   }
 
-  var bk: HyperCubeProfiling = HyperCubeProfiling(BronKerbosch[BitSet](), symmetry, bitlength)
-  val zi: HyperCubeProfiling = HyperCubeProfiling(ZomorodianIncremental[BitSet](), symmetry, bitlength)
-  val szi: HyperCubeProfiling = HyperCubeProfiling(SymmetricZomorodianIncremental[BitSet, Int](symmetry), symmetry, bitlength)
+  var bk: HyperCubeProfiling =
+    HyperCubeProfiling(BronKerbosch[BitSet](), symmetry, bitlength)
+  val zi: HyperCubeProfiling =
+    HyperCubeProfiling(ZomorodianIncremental[BitSet](), symmetry, bitlength)
+  val szi: HyperCubeProfiling = HyperCubeProfiling(
+    SymmetricZomorodianIncremental[BitSet, Int](symmetry),
+    symmetry,
+    bitlength
+  )
 
   "Correct sizes" >> {
     zi.sstream.size === szi.sstream.size

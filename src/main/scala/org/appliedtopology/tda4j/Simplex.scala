@@ -6,7 +6,13 @@ import scala.collection.{
   SortedSetFactoryDefaults,
   StrictOptimizedSortedSetOps
 }
-import scala.collection.immutable.{SortedSet, SortedSetOps, TreeSet, SortedMap}
+import scala.collection.immutable.{
+  Set,
+  SortedMap,
+  SortedSet,
+  SortedSetOps,
+  TreeSet
+}
 import scala.math.Ordering.IntOrdering
 import scala.math.Ordering.Double.IeeeOrdering
 import math.Ordering.Implicits.sortedSetOrdering
@@ -24,7 +30,6 @@ type Simplex = AbstractSimplex[Int]
 object Simplex {
   def apply(vertices: Int*) = new Simplex(TreeSet[Int](vertices: _*))
 }
-
 
 /** Class representing an abstract simplex. Abstract simplices are sets (of
   * totally ordered vertices) and thus are represented by a type that implements
@@ -49,7 +54,7 @@ object Simplex {
   *   Vertex type
   */
 class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])( //vertexSet variable defined here
-  using val ordering: Ordering[VertexT] //ordering definied here
+  using val ordering: Ordering[VertexT] // ordering definied here
 ) extends Cell[AbstractSimplex[VertexT]]
     with SortedSet[VertexT]
     with SortedSetOps[VertexT, AbstractSimplex, AbstractSimplex[VertexT]]
@@ -66,9 +71,14 @@ class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])( //v
     * @todo
     *   Change `List` to `Chain` once we have an implementation of `Chain`
     */
-  override def boundary[CoefficientT](using fr : Fractional[CoefficientT]): Chain[AbstractSimplex[VertexT], CoefficientT] =
+  override def boundary[CoefficientT](using
+    fr: Fractional[CoefficientT]
+  ): Chain[AbstractSimplex[VertexT], CoefficientT] =
     Chain[AbstractSimplex[VertexT], CoefficientT](
-      self.to(Seq).map(vtx => self-vtx).zip(Iterator.unfold(fr.one)(s => Some((s,fr.negate(s))))) : _*
+      self
+        .to(Seq)
+        .map(vtx => self - vtx)
+        .zip(Iterator.unfold(fr.one)(s => Some((s, fr.negate(s))))): _*
     )
 
   // ***** Overriding for inheriting and extending standard library constructions
