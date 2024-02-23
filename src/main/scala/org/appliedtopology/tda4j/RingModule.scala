@@ -22,7 +22,7 @@ trait RingModule[T, R] {
     def -(rhs: T): T = minus(t, rhs)
     @targetName("scalarMultiplyRight")
     def <*(rhs: R): T = scale(rhs, t)
-    def unary_- = negate(t)
+    def unary_- : T = negate(t)
   }
 
   extension (r: R) {
@@ -32,5 +32,5 @@ trait RingModule[T, R] {
 }
 
 object RingModule:
-  def apply[T,R](using rm: RingModule[T,R]) = rm
+  def apply[T,R](using rm: RingModule[T,R]) : RingModule[T,R] = rm
 

@@ -17,9 +17,11 @@ import scala.util.chaining.*
 /** Convenience definition to allow us to choose a specific implementation.
   *
   * @return
-  *   A function-like object with the signature `VietorisRips :
-  *   (MetricSpace[VertexT], Double) =>
-  *   Seq[FilteredAbstractSimplex[VertexT,Double]]`
+  * A function-like object with the signature
+  * {{{
+  *    VietorisRips : (MetricSpace[VertexT], Double) =>
+  *   Seq[FilteredAbstractSimplex[VertexT,Double]]
+  * }}}
   */
 class VietorisRips[VertexT](using ordering: Ordering[VertexT])(
   val metricSpace: FiniteMetricSpace[VertexT],
@@ -324,7 +326,7 @@ object LazyVietorisRips {
       .map(_.toOuter)
       .map(spx => AbstractSimplex(spx))
       .sorted
-      .to(LazyList) #::: ({
+      .to(LazyList) #::: {
       val edgesLL: LazyList[WUnDiEdge[VertexT]] =
         edges
           .filter(edges.having(edge = _.weight < maxFiltrationValue))
@@ -344,7 +346,7 @@ object LazyVietorisRips {
       foldedState match {
         case FoldState(_, retLL, _) => retLL
       }
-    })
+    }
     simplices
   }
 }
