@@ -30,9 +30,9 @@ class FiniteFieldSpec extends mutable.Specification {
 
     val rand = Random
     val x = Fp(rand.between(-100, 100))
-    var y = Fp(rand.between(-100, 100))
+    var y = Fp(rand.between(1, 100))
     val z = Fp(rand.between(-100, 100))
-    if y == Fp(0) then y = Fp(rand.between(1, 100))
+    //if y == Fp(0) then y = Fp(rand.between(1, 100))
     "all operations stay within -p/2, p/2" >> {
       // noinspection ScalaRedundantConversion
       eg((x * y).toInt must beBetween(-8, 8))

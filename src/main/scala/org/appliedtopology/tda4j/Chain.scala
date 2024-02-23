@@ -21,77 +21,10 @@ import scala.annotation.targetName
   * @param chainMap
   *   Internal storage of the sorted map of the elements
   */
-class Chain[CellT <: Cell[CellT]: Ordering, CoefficientT]
+class Chain[CellT <: Cell[CellT]: Ordering, CoefficientT : Fractional]
 /** chainMap is an immutable variable and constructor that uses Scala's SortedMap to make a key-value pairing of an CellT as the key and a
   * CoefficientT type as the value. Here, we'll use the Using keyword to check for any relevant types for CoefficientT.
-  */ (val chainMap: SortedMap[CellT, CoefficientT])(using
-  fr: Fractional[CoefficientT]
-) {
-
-  /** Negate takes in a Chain instance and outputs a new Chain instance which
-    * takes in a chainMap (remember chainMap is using SortedMap 'under the
-    * hood', thus already has a key/value pair). transform() is used on this
-    * function's instance of chainMap to transform the key/value pairings in
-    * chainMap to the negative versions of the values in the value pairs.
-    * @return
-    *   new Chain of negated values in key/value pairs
-    */
-  def negate: Chain[CellT, CoefficientT] = new Chain(
-    chainMap.transform((k, v) => fr.negate(v))
-  )
-
-  /** Unary uses negate() for unary negation
-    *
-    * @return
-    *   negation
-    */
-  def unary_- : Chain[CellT, CoefficientT] = negate
-
-  /** scalarMultiply returns a new chain containing chainMap and its key/value
-    * pairing. In the chainMap, transform() is used on the value of the
-    * key/value pairing. On the value, it is transformed by multiplying each key
-    * by the CoefficientT, using the times() method of the Fractional trait,
-    * extending the Numeric library.
-    * @param c:
-    *   method instance of CoefficientT
-    * @return
-    *   new Chain with values in key/value pairing multiplied by c
-    */
-
-  def scalarMultiply(c: CoefficientT): Chain[CellT, CoefficientT] =
-    new Chain(chainMap.transform((k, v) => fr.times(v, c)))
-
-  def *: : CoefficientT => Chain[CellT, CoefficientT] = scalarMultiply
-
-  /** add() adds the method instance of the keys of a chainMap to the classes
-    * chainMap keys. It then adds the result of this to a map which maps that
-    * key to the values of the class and the instance method's chainMap.
-    * @param that:
-    *   Chain object composed of a Cell/Coefficient pair
-    * @return
-    *   Chain object composed of a Cell/Coefficient pair
-    */
-  def add(that: Chain[CellT, CoefficientT]): Chain[CellT, CoefficientT] =
-    Chain(
-      (chainMap.keySet | that.chainMap.keySet)
-        .map(k =>
-          (
-            k,
-            fr.plus(
-              chainMap.getOrElse(k, fr.zero),
-              that.chainMap.getOrElse(k, fr.zero)
-            )
-          )
-        )
-        .toSeq*
-    )
-
-  def + : Chain[CellT, CoefficientT] => Chain[CellT, CoefficientT] = add
-
-  def subtract(that: Chain[CellT, CoefficientT]): Chain[CellT, CoefficientT] =
-    this + (-that)
-
-  def - : Chain[CellT, CoefficientT] => Chain[CellT, CoefficientT] = subtract
+  */ (val chainMap: SortedMap[CellT, CoefficientT]) {
 
   override def toString: String =
     chainMap.map((k, v) => s"${v.toString} *: ${k.toString}").mkString(" + ")
@@ -142,11 +75,36 @@ object Chain {
   // Original apply innards
   // new Chain[CellT, CoefficientT](SortedMap.from(items))
 
-  def apply[CellT <: Cell[CellT]: Ordering, CoefficientT](cell: CellT)(using
+  def apply[CellT <: Cell[CellT] : Ordering, CoefficientT](cell: CellT)(using
     fr: Fractional[CoefficientT]
   ): Chain[CellT, CoefficientT] =
     new Chain[CellT, CoefficientT](SortedMap.from(List(cell -> fr.one)))
 }
+
+
+class ChainOps[CellT <: Cell[CellT] : Ordering, CoefficientT : Fractional] extends RingModule[Chain[CellT, CoefficientT], CoefficientT] {
+  import Numeric.Implicits._
+
+  val zero: org.appliedtopology.tda4j.Chain[CellT, CoefficientT] = Chain()
+
+  def plus(x: Chain[CellT, CoefficientT], y: Chain[CellT, CoefficientT]): Chain[CellT, CoefficientT] =
+    Chain(
+      (for k <- (x.chainMap.keySet | y.chainMap.keySet)
+        yield {
+          val fr = summon[Fractional[CoefficientT]]
+          val xv : CoefficientT = x.chainMap.getOrElse(k, fr.zero)
+          val yv : CoefficientT = y.chainMap.getOrElse(k, fr.zero)
+          k -> fr.plus(xv,yv)
+        }).toSeq : _*
+    )
+
+  def scale(x: CoefficientT, y: Chain[CellT, CoefficientT]): Chain[CellT, CoefficientT] =
+    new Chain(y.chainMap.transform((k,v) => x*v))
+
+  override def negate(x: Chain[CellT, CoefficientT]): Chain[CellT, CoefficientT] =
+    new Chain(x.chainMap.transform((k, v) => -v))
+}
+
 
 /** Lightweight trait to define what it means to be a topological "Cell".
   *

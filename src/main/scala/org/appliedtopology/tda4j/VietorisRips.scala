@@ -1,10 +1,10 @@
 package org.appliedtopology.tda4j
 
+import org.appliedtopology.tda4j.FiniteMetricSpace.MaximumDistanceFiltrationValue
+
 import scala.collection.immutable.{LazyList, SortedSet}
 import scala.math.Ordering.Implicits.*
-import Simplex.*
-import org.appliedtopology.tda4j.FiniteMetricSpace.MaximumDistanceFiltrationValue
-import scalax.collection.{edge, mutable as gmutable, Graph}
+import scalax.collection.{Graph, edge, mutable as gmutable}
 import scalax.collection.edge.Implicits.*
 import scalax.collection.edge.WUnDiEdge
 
@@ -12,7 +12,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.util.Sorting
 import scala.util.control.*
-import scala.util.chaining._
+import scala.util.chaining.*
 
 /** Convenience definition to allow us to choose a specific implementation.
   *
