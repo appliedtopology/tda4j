@@ -45,4 +45,6 @@ lazy val root = (project in file("."))
     gitHubPagesSiteDir := baseDirectory.value / "target/site"
   )
 
+Compile / doc / scalacOptions := Seq("-diagrams")
+
 mimaPreviousArtifacts := Set.empty
