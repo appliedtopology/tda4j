@@ -10,7 +10,7 @@ class FiniteField(val p: Int) {
 
   object Fp {
     def apply(a: Int): Fp = a
-    def unapply(a: Fp): Option[Int] = Some(a)
+    def unapply(a: Fp): Some[Int] = Some(a)
   }
 
   extension (fp: Fp) {

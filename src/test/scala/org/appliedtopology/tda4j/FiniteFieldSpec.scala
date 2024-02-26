@@ -65,4 +65,10 @@ class FiniteFieldSpec extends mutable.Specification {
       eg(y * (Fp(1) / y) === Fp(1))
     }
   }
+
+  "Testing unapply and pattern matching for value declarations" >> {
+    val x : Fp = Fp(42)
+    val Fp(y) = x
+    eg(y == 42)
+  }
 }
