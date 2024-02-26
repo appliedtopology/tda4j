@@ -1,4 +1,4 @@
-pages = [{"l":"index.html#","e":false,"i":"","n":"TDA4j","t":"TDA4j","d":"","k":"static"},
+pages = [{"l":"index.html#","e":false,"i":"","n":"root","t":"root","d":"","k":"static"},
 {"l":"org/appliedtopology/tda4j.html#","e":false,"i":"","n":"org.appliedtopology.tda4j","t":"org.appliedtopology.tda4j","d":"","k":"package"},
 {"l":"org/appliedtopology/tda4j.html#orderingBitSet-0","e":false,"i":"","n":"orderingBitSet","t":"orderingBitSet: Ordering[BitSet]","d":"org.appliedtopology.tda4j","k":"given"},
 {"l":"org/appliedtopology/tda4j/AbstractSimplex.html#","e":false,"i":"","n":"AbstractSimplex","t":"AbstractSimplex[VertexT](val vertexSet: SortedSet[VertexT])(using val ordering: Ordering[VertexT]) extends Cell[AbstractSimplex[VertexT]] with SortedSet[VertexT] with SortedSetOps[VertexT, AbstractSimplex, AbstractSimplex[VertexT]] with SortedSetFactoryDefaults[VertexT, AbstractSimplex, Set]","d":"org.appliedtopology.tda4j","k":"class"},

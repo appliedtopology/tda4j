@@ -20,7 +20,7 @@
 
 <meta name="description" content="TDA4j">
 <link rel="shortcut icon" href="../assets/images/favicon.png">
-<title>Tutorials for TDA4j · TDA4j</title>
+<title>Developers Guide for TDA4j · TDA4j</title>
 <link rel="stylesheet" href="../assets/stylesheets/application.451f80e5.css">
 <link rel="stylesheet" href="../assets/stylesheets/application-palette.22915126.css">
 <meta name="theme-color" content="#3f51b5" />
@@ -60,7 +60,7 @@ data-md-color-accent="blue"
 TDA4j
 </span>
 <span class="md-header-nav__topic">
-Tutorials for TDA4j
+Developers Guide for TDA4j
 </span>
 </div>
 </div>
@@ -118,11 +118,19 @@ appliedtopology/tda4j
 
 </div>
 <ul>
-  <li><a href="../tutorials/index.html" class="active page">Tutorials for TDA4j</a></li>
+  <li><a href="../tutorials/index.html" class="page">Tutorials for TDA4j</a></li>
   <li><a href="../user-guide/index.html" class="page">User Guide for TDA4j</a></li>
-  <li><a href="../developers-guide/index.html" class="page">Developers Guide for TDA4j</a></li>
+  <li><a href="../developers-guide/index.html" class="active page">Developers Guide for TDA4j</a></li>
 </ul>
 <nav class="md-nav md-nav--secondary">
+<label class="md-nav__title" for="__toc">Table of contents</label>
+<ul>
+  <li><a href="../developers-guide/index.html#developers-guide-for-tda4j" class="header">Developers Guide for TDA4j</a>
+  <ul>
+    <li><a href="../developers-guide/index.html#fundamental-paradigm-context-driven-programming" class="header">Fundamental Paradigm: Context-driven programming</a></li>
+    <li><a href="../developers-guide/index.html#class-hierarchy" class="header">Class Hierarchy</a></li>
+  </ul></li>
+</ul>
 </nav>
 
 </nav>
@@ -136,14 +144,56 @@ appliedtopology/tda4j
 </div>
 </div>
 </div>
+<div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
+<div class="md-sidebar__scrollwrap">
+<div class="md-sidebar__inner">
+<nav class="md-nav md-nav--secondary">
+<label class="md-nav__title" for="__toc">Table of contents</label>
+<ul>
+  <li><a href="../developers-guide/index.html#developers-guide-for-tda4j" class="header">Developers Guide for TDA4j</a>
+  <ul>
+    <li><a href="../developers-guide/index.html#fundamental-paradigm-context-driven-programming" class="header">Fundamental Paradigm: Context-driven programming</a></li>
+    <li><a href="../developers-guide/index.html#class-hierarchy" class="header">Class Hierarchy</a></li>
+  </ul></li>
+</ul>
+</nav>
+
+</div>
+</div>
+</div>
 <div class="md-content">
 <article class="md-content__inner md-typeset">
 <div class="md-content__searchable">
-<h1><a href="#tutorials-for-tda4j" name="tutorials-for-tda4j" class="anchor"><span class="anchor-link"></span></a>Tutorials for TDA4j</h1>
-<p>TODO: We want to port Henry Adams&rsquo; excellent JavaPlex tutorials.</p>
+<h1><a href="#developers-guide-for-tda4j" name="developers-guide-for-tda4j" class="anchor"><span class="anchor-link"></span></a>Developers Guide for TDA4j</h1>
+<p>We intend the library to be a viable platform for algorithm development and research into topological data analysis. This guide is intended to demonstrate how to understand the abstractions and class hierarchies, and to understand how to extend the code to cover your use cases and fill your needs.</p>
+<h2><a href="#fundamental-paradigm-context-driven-programming" name="fundamental-paradigm-context-driven-programming" class="anchor"><span class="anchor-link"></span></a>Fundamental Paradigm: Context-driven programming</h2>
+<p>Drawing on experiences from the first year of the development work, a lot of the library is intended to work in a paradigm called <em>context-driven programming</em>, which can be seen in action in the Kotlin library kmath. The idea is that there are interfaces and objects that specify the <em>context</em> in which your computation takes place, and inside these contexts, symbols and functions are defined that make it natural to write the algebraic and arithmetic operations that you might need. The ideal end goal is that a user would need to run one or two lines of code to instantiate choices of what complexes they are building and what coefficients they want to use for computation, and to load the corresponding functionality into the current namespace. Currently, this might look something like this:</p>
+<pre class="prettyprint"><code class="language-scala 3">import org.appliedtopology.tda4j.*
+val tda = TDAContext[Char, Double]()
+import tda.*
+
+// now we are ready to write TDA code, and can create simplices and chains easily
+// This code creates the chain 2[1,2] - [2,3]
+val z = 2.0 *&gt; s(1,2) - s(2,3)
+</code></pre>
+<p>Currently, there are a few more lines needed to set up a finite field context, but we aim to streamline the top-level calling interface for this:</p>
+<pre class="prettyprint"><code class="language-scala 3">import org.appliedtopology.tda4j.*
+
+val ff: FiniteField = tda4j.FiniteField(17)
+import ff.{*,given}
+val tda = TDAContext[Char, FiniteField]()
+
+import tda.*
+
+// now we are ready to write TDA code, and can create simplices and chains easily
+// This code creates the chain 2[1,2] - [2,3]
+val z = Fp(2) *&gt; s(1,2) - s(2,3)
+</code></pre>
+<h2><a href="#class-hierarchy" name="class-hierarchy" class="anchor"><span class="anchor-link"></span></a>Class Hierarchy</h2>
+<p>Here is the current structure of defined classes and their inheritance relations.</p>
 </div>
 <div>
-<a href="https://github.com/appliedtopology/tda4j/tree/0.0.1/src/main/paradox/tutorials/index.md" title="Edit this page" class="md-source-file md-edit">
+<a href="https://github.com/appliedtopology/tda4j/tree/0.0.1/src/main/paradox/developers-guide/index.md" title="Edit this page" class="md-source-file md-edit">
 Edit this page
 </a>
 </div>
@@ -159,7 +209,7 @@ Edit this page
 <footer class="md-footer">
 <div class="md-footer-nav">
 <nav class="md-footer-nav__inner md-grid">
-<a href="../index.html" title="TDA4j" class="md-flex md-footer-nav__link md-footer-nav__link--prev" rel="prev">
+<a href="../user-guide/index.html" title="User Guide for TDA4j" class="md-flex md-footer-nav__link md-footer-nav__link--prev" rel="prev">
 <div class="md-flex__cell md-flex__cell--shrink">
 <i class="md-icon md-icon--arrow-back md-footer-nav__button"></i>
 </div>
@@ -168,21 +218,8 @@ Edit this page
 <span class="md-footer-nav__direction">
 Previous
 </span>
-TDA4j
-</span>
-</div>
-</a>
-<a href="../user-guide/index.html" title="User Guide for TDA4j" class="md-flex md-footer-nav__link md-footer-nav__link--next" rel="next">
-<div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
-<span class="md-flex__ellipsis">
-<span class="md-footer-nav__direction">
-Next
-</span>
 User Guide for TDA4j
 </span>
-</div>
-<div class="md-flex__cell md-flex__cell--shrink">
-<i class="md-icon md-icon--arrow-forward md-footer-nav__button"></i>
 </div>
 </a>
 </nav>
