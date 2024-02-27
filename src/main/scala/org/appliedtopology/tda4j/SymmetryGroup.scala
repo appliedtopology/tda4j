@@ -186,7 +186,7 @@ class ExpandList[VertexT: Ordering, KeyT](
         *
         * @return
         */
-      override def hasNext(): Boolean = return _hasNext
+      override def hasNext(): Boolean = _hasNext
 
       /** This method does all the work of the iterator. This code assumes that
         * the `ExpandList` is not empty. Any time an element is requested, the
@@ -217,7 +217,7 @@ class ExpandList[VertexT: Ordering, KeyT](
           // Hit the end of the line
           _hasNext = false
         }
-        return retval
+        retval
       }
     }
 
@@ -405,7 +405,7 @@ class Permutations(elementCount: Int) {
       point = source.remove(div.toInt)
       retval.append(point)
     }
-    return retval.toList
+    retval.toList
   }
 }
 

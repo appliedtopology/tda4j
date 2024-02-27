@@ -3,11 +3,13 @@ package org.appliedtopology.tda4j
 import scala.annotation.targetName
 
 /** Specifies what it means for the type `T` to be a module (or vector space)
- * over the [Numeric] (ie ring-like) type `R`.
- *
- * @tparam T Type of the module elements.
- * @tparam R Type of the ring coefficients
- */
+  * over the [Numeric] (ie ring-like) type `R`.
+  *
+  * @tparam T
+  *   Type of the module elements.
+  * @tparam R
+  *   Type of the ring coefficients
+  */
 trait RingModule[T, R] {
   val zero: T
   def plus(x: T, y: T): T
@@ -32,5 +34,4 @@ trait RingModule[T, R] {
 }
 
 object RingModule:
-  def apply[T,R](using rm: RingModule[T,R]) : RingModule[T,R] = rm
-
+  def apply[T, R](using rm: RingModule[T, R]): RingModule[T, R] = rm

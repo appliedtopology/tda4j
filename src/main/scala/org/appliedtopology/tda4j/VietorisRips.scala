@@ -4,7 +4,7 @@ import org.appliedtopology.tda4j.FiniteMetricSpace.MaximumDistanceFiltrationValu
 
 import scala.collection.immutable.{LazyList, SortedSet}
 import scala.math.Ordering.Implicits.*
-import scalax.collection.{Graph, edge, mutable as gmutable}
+import scalax.collection.{edge, mutable as gmutable, Graph}
 import scalax.collection.edge.Implicits.*
 import scalax.collection.edge.WUnDiEdge
 
@@ -17,9 +17,9 @@ import scala.util.chaining.*
 /** Convenience definition to allow us to choose a specific implementation.
   *
   * @return
-  * A function-like object with the signature
+  *   A function-like object with the signature
   * {{{
-  *    VietorisRips : (MetricSpace[VertexT], Double) =>
+  *     VietorisRips : (MetricSpace[VertexT], Double) =>
   *   Seq[FilteredAbstractSimplex[VertexT,Double]]
   * }}}
   */

@@ -17,17 +17,19 @@ import scala.math.Ordering.IntOrdering
 import scala.math.Ordering.Double.IeeeOrdering
 import math.Ordering.Implicits.sortedSetOrdering
 
-trait SimplexContext[VertexT : Ordering] {
+trait SimplexContext[VertexT: Ordering] {
   type Simplex = AbstractSimplex[VertexT]
 
   given Ordering[Simplex] = sortedSetOrdering[AbstractSimplex, VertexT]
 
   object Simplex {
-    def apply(vertices: VertexT*): Simplex = AbstractSimplex[VertexT](vertices : _*)
+    def apply(vertices: VertexT*): Simplex =
+      AbstractSimplex[VertexT](vertices: _*)
     def empty: Simplex = AbstractSimplex.empty
     def from(iterableOnce: IterableOnce[VertexT]): Simplex =
       AbstractSimplex.from(iterableOnce)
-    def newBuilder: mutable.Builder[VertexT, Simplex] = AbstractSimplex.newBuilder
+    def newBuilder: mutable.Builder[VertexT, Simplex] =
+      AbstractSimplex.newBuilder
   }
 
   object s {
@@ -38,8 +40,6 @@ trait SimplexContext[VertexT : Ordering] {
     def className = "Simplex"
   }
 }
-
-
 
 /** Type alias creating `Simplex` as the type representing
   * `AbstractSimplex[Int]`
@@ -163,4 +163,3 @@ object AbstractSimplex extends SortedIterableFactory[AbstractSimplex] {
     }
 
 }
-

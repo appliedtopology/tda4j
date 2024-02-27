@@ -8,7 +8,7 @@ import scala.collection.mutable as cmutable
 class SimplexStreamSpec extends mutable.Specification {
   "Test suite for the abstraction and implementations of `SimplexStream`".txt
 
-  given sc : SimplexContext[Int]()
+  given sc: SimplexContext[Int]()
   import sc.*
 
   val esb: ExplicitStreamBuilder[Int, Double] =

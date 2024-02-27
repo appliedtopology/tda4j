@@ -18,7 +18,7 @@ A `Simplex` should
   be able to remove a vertex (and then not have that vertex) $eRemoveVertex
 """
 
-  given sc : SimplexContext[Int]()
+  given sc: SimplexContext[Int]()
   import sc.Simplex
 
   def s: Simplex = Simplex(1, 2, 3)
@@ -112,11 +112,11 @@ class SimplexTypeSpec extends mutable.Specification {
 class SimplexContextSpec extends mutable.Specification {
   """Testing the implicit context approach to working with simplices"""
 
-  given sc : SimplexContext[Char]()
+  given sc: SimplexContext[Char]()
   import sc.*
 
   "we can create a simplex, and get the right type" >> {
-    s('a','b','c') must haveClass[Simplex]
-    s('a','b','c') must haveClass[AbstractSimplex[Char]]
+    s('a', 'b', 'c') must haveClass[Simplex]
+    s('a', 'b', 'c') must haveClass[AbstractSimplex[Char]]
   }
 }

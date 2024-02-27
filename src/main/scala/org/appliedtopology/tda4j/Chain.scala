@@ -21,7 +21,7 @@ import scala.annotation.targetName
   * @param chainMap
   *   Internal storage of the sorted map of the elements
   */
-class Chain[CellT <: Cell[CellT]: Ordering, CoefficientT : Fractional]
+class Chain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional]
 /** chainMap is an immutable variable and constructor that uses Scala's SortedMap to make a key-value pairing of an CellT as the key and a
   * CoefficientT type as the value. Here, we'll use the Using keyword to check for any relevant types for CoefficientT.
   */ (val chainMap: SortedMap[CellT, CoefficientT]) {
@@ -75,36 +75,43 @@ object Chain {
   // Original apply innards
   // new Chain[CellT, CoefficientT](SortedMap.from(items))
 
-  def apply[CellT <: Cell[CellT] : Ordering, CoefficientT](cell: CellT)(using
+  def apply[CellT <: Cell[CellT]: Ordering, CoefficientT](cell: CellT)(using
     fr: Fractional[CoefficientT]
   ): Chain[CellT, CoefficientT] =
     new Chain[CellT, CoefficientT](SortedMap.from(List(cell -> fr.one)))
 }
 
-
-class ChainOps[CellT <: Cell[CellT] : Ordering, CoefficientT : Fractional] extends RingModule[Chain[CellT, CoefficientT], CoefficientT] {
+class ChainOps[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional]
+    extends RingModule[Chain[CellT, CoefficientT], CoefficientT] {
   import Numeric.Implicits._
 
   val zero: org.appliedtopology.tda4j.Chain[CellT, CoefficientT] = Chain()
 
-  def plus(x: Chain[CellT, CoefficientT], y: Chain[CellT, CoefficientT]): Chain[CellT, CoefficientT] =
+  def plus(
+    x: Chain[CellT, CoefficientT],
+    y: Chain[CellT, CoefficientT]
+  ): Chain[CellT, CoefficientT] =
     Chain(
       (for k <- (x.chainMap.keySet | y.chainMap.keySet)
-        yield {
-          val fr = summon[Fractional[CoefficientT]]
-          val xv : CoefficientT = x.chainMap.getOrElse(k, fr.zero)
-          val yv : CoefficientT = y.chainMap.getOrElse(k, fr.zero)
-          k -> fr.plus(xv,yv)
-        }).toSeq : _*
+      yield {
+        val fr = summon[Fractional[CoefficientT]]
+        val xv: CoefficientT = x.chainMap.getOrElse(k, fr.zero)
+        val yv: CoefficientT = y.chainMap.getOrElse(k, fr.zero)
+        k -> fr.plus(xv, yv)
+      }).toSeq: _*
     )
 
-  def scale(x: CoefficientT, y: Chain[CellT, CoefficientT]): Chain[CellT, CoefficientT] =
-    new Chain(y.chainMap.transform((k,v) => x*v))
+  def scale(
+    x: CoefficientT,
+    y: Chain[CellT, CoefficientT]
+  ): Chain[CellT, CoefficientT] =
+    new Chain(y.chainMap.transform((k, v) => x * v))
 
-  override def negate(x: Chain[CellT, CoefficientT]): Chain[CellT, CoefficientT] =
+  override def negate(
+    x: Chain[CellT, CoefficientT]
+  ): Chain[CellT, CoefficientT] =
     new Chain(x.chainMap.transform((k, v) => -v))
 }
-
 
 /** Lightweight trait to define what it means to be a topological "Cell".
   *
