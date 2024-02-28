@@ -20,7 +20,7 @@ class ChainSpec extends mutable.Specification {
 
   given Ordering[Int] = math.Ordering.Int
 
-  given rm : RingModule[Chain[Simplex, Double], Double] = ChainOps()
+  given rm: RingModule[Chain[Simplex, Double], Double] = ChainOps()
   import rm.*
 
   "The `Chain` type should" >> {
@@ -123,13 +123,14 @@ class ChainSpec extends mutable.Specification {
   }
 
   "The `Chain` type should be comfortable to write expressions with" >> {
-    val z1 = Chain(s(1,2,3))
-    val z2 : Chain[Simplex,Double] = s(1,2) - s(1,3) + s(2,3)
+    val z1 = Chain(s(1, 2, 3))
+    val z2: Chain[Simplex, Double] = s(1, 2) - s(1, 3) + s(2, 3)
     val z3 = 1.0 *> s(1, 2, 5)
-    val z4 : Chain[Simplex,Double] = Simplex(1, 4, 8) <* 1.0
-    val z5 : Chain[Simplex,Double] = -s(1,2) + s(1,4) - s(2,3)
-    val z6 : Chain[Simplex,Double] = s(1,2) + s(2,3) - s(1,3)
-    val z7 : Chain[Simplex,Double] = s(1,2) - s(1,3) + s(2,3) + 0.0 *> s(3,4)
+    val z4: Chain[Simplex, Double] = Simplex(1, 4, 8) <* 1.0
+    val z5: Chain[Simplex, Double] = -s(1, 2) + s(1, 4) - s(2, 3)
+    val z6: Chain[Simplex, Double] = s(1, 2) + s(2, 3) - s(1, 3)
+    val z7: Chain[Simplex, Double] =
+      s(1, 2) - s(1, 3) + s(2, 3) + 0.0 *> s(3, 4)
 
     z1 must haveClass[Chain[Simplex, Double]]
     z2 must beEqualTo(z6)
@@ -148,7 +149,9 @@ class ChainSpec extends mutable.Specification {
       Simplex(2, 3) -> 0.0
     )
 
-    z1 + z2 must beEqualTo(s(1,2,3) + s(1,2) - s(1,3) + s(2,3))
-    z2 - z6 must beEqualTo(summon[RingModule[Chain[Simplex,Double], Double]].zero)
+    z1 + z2 must beEqualTo(s(1, 2, 3) + s(1, 2) - s(1, 3) + s(2, 3))
+    z2 - z6 must beEqualTo(
+      summon[RingModule[Chain[Simplex, Double], Double]].zero
+    )
   }
 }

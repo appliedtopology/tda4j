@@ -1,6 +1,8 @@
 @@@ index
 
 * [Tutorials](tutorials/index.md)
+* [User Guide](user-guide/index.md)
+* [Developers Guide](developers-guide/index.md)
 * @scaladoc[ScalaDoc](org.appliedtopology.tda4j)
 
 @@@

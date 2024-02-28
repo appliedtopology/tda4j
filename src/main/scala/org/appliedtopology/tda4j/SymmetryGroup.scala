@@ -5,6 +5,7 @@ import collection.immutable.{BitSet, SortedSet}
 import math.Ordering.Implicits.*
 import java.util.NoSuchElementException
 import scala.collection.mutable.ListBuffer
+import org.apache.commons.numbers.combinatorics.Factorial
 
 /** A `given` instance that allows us to automatically sort bitsets
   * lexicographically.
@@ -185,7 +186,7 @@ class ExpandList[VertexT: Ordering, KeyT](
         *
         * @return
         */
-      override def hasNext(): Boolean = return _hasNext
+      override def hasNext(): Boolean = _hasNext
 
       /** This method does all the work of the iterator. This code assumes that
         * the `ExpandList` is not empty. Any time an element is requested, the
@@ -216,7 +217,7 @@ class ExpandList[VertexT: Ordering, KeyT](
           // Hit the end of the line
           _hasNext = false
         }
-        return retval
+        retval
       }
     }
 
@@ -380,19 +381,9 @@ class HyperCube(bitlength: Int) extends FiniteMetricSpace[immutable.BitSet] {
   *   How many objects are permuted?
   */
 class Permutations(elementCount: Int) {
+  def factorial(n: Int): Long = Factorial.value(n)
 
-  /** Naive factorial implementation, to measure sizes of blocks when generating
-    * permutations.
-    *
-    * @param m
-    * @return
-    */
-  def factorial(m: Int): Int = m match {
-    case 0 => 1
-    case _ => m * factorial(m - 1)
-  }
-
-  val size: Int = factorial(elementCount)
+  val size: Long = factorial(elementCount)
 
   /** Find the `n`th permutation in an enumeration of all permutations.
     *
@@ -401,20 +392,20 @@ class Permutations(elementCount: Int) {
     *   Image of the permutation as a [[List]].
     */
   def apply(n: Int): List[Int] = {
-    val source = ListBuffer(Range(0, elementCount).toList: _*)
-    val retval = ListBuffer[Int]()
+    val source: ListBuffer[Int] = ListBuffer(Range(0, elementCount).toList: _*)
+    val retval: ListBuffer[Int] = ListBuffer[Int]()
 
-    var pos = n
-    var div = 0
-    var point = 0
+    var pos: Long = n.toLong
+    var div: Long = 0L
+    var point: Int = 0
 
     while (source.nonEmpty) {
       div = math.floorDiv(pos, factorial(source.size - 1))
       pos = math.floorMod(pos, factorial(source.size - 1))
-      point = source.remove(div)
+      point = source.remove(div.toInt)
       retval.append(point)
     }
-    return retval.toList
+    retval.toList
   }
 }
 
@@ -436,7 +427,7 @@ class HyperCubeSymmetry(bitlength: Int)
   val permutations: Permutations = Permutations(bitlength)
   val hypercube: HyperCube = HyperCube(bitlength)
 
-  override def keys: Iterable[Int] = Range(0, permutations.size)
+  override def keys: Iterable[Int] = Range(0, permutations.size.toInt)
 
   /** Picks out the `permutationIndex`th permutation from Sn and builds a
     * function that transforms integers out of the permutation.
