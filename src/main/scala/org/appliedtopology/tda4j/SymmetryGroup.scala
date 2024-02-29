@@ -485,21 +485,25 @@ class HyperCubeSymmetryGenerators(val bitlength: Int)
     * the group generators, we are expecting significant speedups over the case
     * where we keep traversing each orbit over and over again.
     */
-  val representatives: Map[AbstractSimplex[BitSet], AbstractSimplex[BitSet]] =
-    emptyMap
+  val representatives
+    : mutable.Map[AbstractSimplex[BitSet], AbstractSimplex[BitSet]] =
+    mutable.Map.empty
 
-  val generators: List[Bitset => Bitset] = (0 to bitlength)
-    .map(i -> (0 to i - 1).toList :: i + 1 :: i ++ (i + 2 to bitlength))
-    .map(img -> { bs -> bs.indices.map(bs(_)).to(BitSet) })
+  val generators: List[immutable.BitSet => immutable.BitSet] =
+    hypercube.top.toList.indices
+      .map(i => immutable.Map(i -> (i+1), (i+1) -> i))
+      .map(map => ((bs: immutable.BitSet) => bs.collect(map.orElse(identity(_)))) )
+      .toList
 
   override def isRepresentative(simplex: AbstractSimplex[BitSet]): Boolean =
-    if (simplex in representatives) {
+    if (representatives.contains(simplex)) {
       simplex == representatives(simplex)
     } else {
-      if (generators.forall(g -> simplex < simplex.map(s -> g(s)))) {
+      if (generators.forall(g => simplex < simplex.map(s => g(s)))) {
         // simplex is a pseudo-minimum
         // time to check the entire orbit
         representatives(simplex) = super.representative(simplex)
+        simplex == representatives(simplex)
       } else { // if it's not even a pseudo-minimum, definitely not a minimum
         false
       }
@@ -508,6 +512,6 @@ class HyperCubeSymmetryGenerators(val bitlength: Int)
   override def representative(
     simplex: AbstractSimplex[BitSet]
   ): AbstractSimplex[BitSet] =
-    if (simplex in representatives) representatives(simplex)
+    if (representatives.contains(simplex)) representatives(simplex)
     else super.representative(simplex)
 }
