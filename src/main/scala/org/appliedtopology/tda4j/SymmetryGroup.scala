@@ -451,3 +451,67 @@ class HyperCubeSymmetry(bitlength: Int)
       pbs.indices.filter(pbs(_)).to(BitSet)
     }
 }
+
+class HyperCubeSymmetryGenerators(val bitlength: Int)
+    extends SymmetryGroup[Int, immutable.BitSet] {
+  val permutations: Permutations = Permutations(bitlength)
+  val hypercube: HyperCube = HyperCube(bitlength)
+
+  override def keys: Iterable[Int] = Range(0, permutations.size.toInt)
+
+  /** Picks out the `permutationIndex`th permutation from Sn and builds a
+    * function that transforms integers out of the permutation.
+    *
+    * @param permutationIndex
+    * @return
+    */
+  def applyPermutation(permutationIndex: Int): (Int => Int) = k =>
+    permutations(permutationIndex)(k)
+
+  /** Picks out the `permutationIndex`th permutation from Sn and builds a
+    * function that permutes bits of a [[immutable.BitSet]] out of the
+    * permutation.
+    *
+    * @param permutationIndex
+    * @return
+    */
+  def apply(permutationIndex: Int): (immutable.BitSet => immutable.BitSet) =
+    bs => {
+      val pbs = hypercube.top.toList.map(permutations(permutationIndex)).map(bs)
+      pbs.indices.filter(pbs(_)).to(BitSet)
+    }
+
+  /** By maintaining a set of known representatives, and first testing against
+    * the group generators, we are expecting significant speedups over the case
+    * where we keep traversing each orbit over and over again.
+    */
+  val representatives
+    : mutable.Map[AbstractSimplex[BitSet], AbstractSimplex[BitSet]] =
+    mutable.Map.empty
+
+  val generators: List[immutable.BitSet => immutable.BitSet] =
+    hypercube.top.toList.indices
+      .map(i => immutable.Map(i -> (i+1), (i+1) -> i))
+      .map(map => ((bs: immutable.BitSet) => bs.collect(map.orElse(identity(_)))) )
+      .toList
+
+  override def isRepresentative(simplex: AbstractSimplex[BitSet]): Boolean =
+    if (representatives.contains(simplex)) {
+      simplex == representatives(simplex)
+    } else {
+      if (generators.forall(g => simplex < simplex.map(s => g(s)))) {
+        // simplex is a pseudo-minimum
+        // time to check the entire orbit
+        representatives(simplex) = super.representative(simplex)
+        simplex == representatives(simplex)
+      } else { // if it's not even a pseudo-minimum, definitely not a minimum
+        false
+      }
+    }
+
+  override def representative(
+    simplex: AbstractSimplex[BitSet]
+  ): AbstractSimplex[BitSet] =
+    if (representatives.contains(simplex)) representatives(simplex)
+    else super.representative(simplex)
+}
