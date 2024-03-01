@@ -453,33 +453,8 @@ class HyperCubeSymmetry(bitlength: Int)
 }
 
 class HyperCubeSymmetryGenerators(val bitlength: Int)
-    extends SymmetryGroup[Int, immutable.BitSet] {
-  val permutations: Permutations = Permutations(bitlength)
-  val hypercube: HyperCube = HyperCube(bitlength)
-
+    extends HyperCubeSymmetry(bitlength) {
   override def keys: Iterable[Int] = Range(0, permutations.size.toInt)
-
-  /** Picks out the `permutationIndex`th permutation from Sn and builds a
-    * function that transforms integers out of the permutation.
-    *
-    * @param permutationIndex
-    * @return
-    */
-  def applyPermutation(permutationIndex: Int): (Int => Int) = k =>
-    permutations(permutationIndex)(k)
-
-  /** Picks out the `permutationIndex`th permutation from Sn and builds a
-    * function that permutes bits of a [[immutable.BitSet]] out of the
-    * permutation.
-    *
-    * @param permutationIndex
-    * @return
-    */
-  def apply(permutationIndex: Int): (immutable.BitSet => immutable.BitSet) =
-    bs => {
-      val pbs = hypercube.top.toList.map(permutations(permutationIndex)).map(bs)
-      pbs.indices.filter(pbs(_)).to(BitSet)
-    }
 
   /** By maintaining a set of known representatives, and first testing against
     * the group generators, we are expecting significant speedups over the case
@@ -499,7 +474,7 @@ class HyperCubeSymmetryGenerators(val bitlength: Int)
     if (representatives.contains(simplex)) {
       simplex == representatives(simplex)
     } else {
-      if (generators.forall(g => simplex < simplex.map(s => g(s)))) {
+      if (generators.forall(g => simplex <= simplex.map(s => g(s)))) {
         // simplex is a pseudo-minimum
         // time to check the entire orbit
         representatives(simplex) = super.representative(simplex)
