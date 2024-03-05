@@ -12,6 +12,7 @@ import org.apache.commons.numbers.combinatorics.Factorial
 import scala.concurrent.{Future, Await}
 import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.{Failure, Success}
 
 /** A `given` instance that allows us to automatically sort bitsets
   * lexicographically.
@@ -66,10 +67,13 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
     keys.map(k => simplex.map(apply(k))).toSet
 
   def orbitPar(simplex: AbstractSimplex[VertexT]): Set[AbstractSimplex[VertexT]] = {
-    val futures = for(k <- keys) yield Future {
-      simplex.map(apply(k))
-    }
-    futures.map(Await.result(_, Duration.Inf)).toSet
+    val futures: Iterable[Future[AbstractSimplex[VertexT]]] =
+      for(k <- keys) yield Future {
+        simplex.map(apply(k))
+      }
+
+    val allfutures = Future.sequence(futures)
+    Await.result(allfutures, Duration.Inf).toSeq.toSet
   }
 
   def orbit = orbitPar
