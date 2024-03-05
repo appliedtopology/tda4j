@@ -8,6 +8,9 @@ libraryDependencies += ("org.scala-graph" %% "graph-core"  % "1.13.5").cross(
 )
 libraryDependencies += "org.openjdk.jol" % "jol-core" % "0.17"
 libraryDependencies += "org.apache.commons" % "commons-numbers-combinatorics" % "1.1"
+libraryDependencies +=
+  "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4"
+libraryDependencies += "org.typelevel" %% "cats-effect" % "3.5.3"
 
 scalaVersion := "3.2.0"
 

@@ -7,6 +7,12 @@ import java.util.NoSuchElementException
 import scala.collection.mutable.ListBuffer
 import org.apache.commons.numbers.combinatorics.Factorial
 
+
+//import scala.collection.parallel.CollectionConverters._
+import scala.concurrent.{Future, Await}
+import scala.concurrent.duration.Duration
+import scala.concurrent.ExecutionContext.Implicits.global
+
 /** A `given` instance that allows us to automatically sort bitsets
   * lexicographically.
   */
@@ -54,10 +60,19 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
     * @return
     *   A set of simplices in the orbit of `simplex`.
     */
-  def orbit(
+  def orbitSeq(
     simplex: AbstractSimplex[VertexT]
   ): Set[AbstractSimplex[VertexT]] =
     keys.map(k => simplex.map(apply(k))).toSet
+
+  def orbitPar(simplex: AbstractSimplex[VertexT]): Set[AbstractSimplex[VertexT]] = {
+    val futures = for(k <- keys) yield Future {
+      simplex.map(apply(k))
+    }
+    futures.map(Await.result(_, Duration.Inf)).toSet
+  }
+
+  def orbit = orbitPar
 
   /** Find the canonical representative for the orbit that contains `simplex`.
     *
@@ -454,8 +469,6 @@ class HyperCubeSymmetry(bitlength: Int)
 
 class HyperCubeSymmetryGenerators(val bitlength: Int)
     extends HyperCubeSymmetry(bitlength) {
-  override def keys: Iterable[Int] = Range(0, permutations.size.toInt)
-
   /** By maintaining a set of known representatives, and first testing against
     * the group generators, we are expecting significant speedups over the case
     * where we keep traversing each orbit over and over again.
