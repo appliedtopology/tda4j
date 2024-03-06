@@ -16,9 +16,9 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
     val symmetry: HyperCubeSymmetry = HyperCubeSymmetry(bitlength)
 
     class HyperCubeProfiling(
-                              vr: CliqueFinder[BitSet],
-                              symmetry: HyperCubeSymmetry,
-                              bitlength: Int
+                              val vr: CliqueFinder[BitSet],
+                              val symmetry: HyperCubeSymmetry,
+                              val bitlength: Int
                             ) {
       pp(s"Measuring ${vr.className}")
       var now: Long = System.currentTimeMillis()
@@ -51,8 +51,6 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
 
     pp("With symmetry group generators")
     val symmetry_gen: HyperCubeSymmetryGenerators = HyperCubeSymmetryGenerators(bitlength)
-    val zig: HyperCubeProfiling =
-      HyperCubeProfiling(ZomorodianIncremental[BitSet](), symmetry_gen, bitlength)
     val szig: HyperCubeProfiling =
       HyperCubeProfiling(
         SymmetricZomorodianIncremental[BitSet, Int](symmetry_gen),
@@ -65,7 +63,13 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
     }
 
     "With generators and pseudo-minimal elements" >> {
-      zig.sstream.size === szig.sstream.size
+      zi.sstream.size === szig.sstream.size
     }
+
+    pp("Counting pseudo-minimal elements")
+    pp(symmetry_gen.representatives.size)
+    pp(symmetry_gen.representatives.count { (k,v) => k != v })
+
+    eg(symmetry_gen.representatives.size === symmetry_gen.representatives.size)
   }
 }
