@@ -27,11 +27,8 @@
 - [ ] Write relevant tests to specify required behaviour
 - [ ] Write code to duplicate JavaPlex's computations and analyses of persistent homology
 
-- [x ] Write up Test Suite for Chain class
-- [x ] Write up ScalaDocs for Chain
-- [ ] implicit conversion from Cell to Chain
-- [ ] work on `extends Equals` to implement `canEquals` and `equals`
-
+- [ ] Write up HomologySpec
+  -  - [ ] Note: Leverage APISpec to write the block for "given instances and imports that specify the VertexT and coefficient type"
 
 
 
