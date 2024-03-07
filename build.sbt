@@ -1,8 +1,12 @@
 name := "TDA4j"
-
+organization := "org.appliedtopology"
 version := "0.0.1"
+scalaVersion := "3.3.0"
 
-libraryDependencies += "org.specs2"       %% "specs2-core" % "5.2.0" % "test"
+
+libraryDependencies += "org.specs2"       %% "specs2-core" % "5.5.1" % "test"
+libraryDependencies += "org.specs2"       %% "specs2-matcher-extra" % "5.5.1" % "test"
+libraryDependencies += "org.specs2"       %% "specs2-scalacheck" % "5.5.1" % "test"
 libraryDependencies += ("org.scala-graph" %% "graph-core"  % "1.13.5").cross(
   CrossVersion.for3Use2_13
 )
@@ -11,8 +15,8 @@ libraryDependencies += "org.apache.commons" % "commons-numbers-combinatorics" % 
 libraryDependencies +=
   "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4"
 libraryDependencies += "org.typelevel" %% "cats-effect" % "3.5.3"
+libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.17.0" % "test"
 
-scalaVersion := "3.2.0"
 
 lazy val root = (project in file("."))
   .enablePlugins(
@@ -22,7 +26,6 @@ lazy val root = (project in file("."))
     GitHubPagesPlugin
   )
   .settings(
-    name := "TDA4j",
     Compile / paradoxMaterialTheme := {
       ParadoxMaterialTheme()
     },

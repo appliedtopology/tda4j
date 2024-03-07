@@ -9,7 +9,7 @@ class FiniteField(val p: Int) {
   opaque type Fp = Int
 
   object Fp {
-    def apply(a: Int): Fp = a
+    def apply(a: Int): Fp = (a % p)
     def unapply(a: Fp): Some[Int] = Some(a)
   }
 
