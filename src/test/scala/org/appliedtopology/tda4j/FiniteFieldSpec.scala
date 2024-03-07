@@ -1,13 +1,16 @@
 package org.appliedtopology.tda4j
 
 import org.specs2.mutable
-import org.specs2.execute.Result
+import org.specs2.execute.{Result, AsResult}
+import org.specs2.ScalaCheck
 
 import scala.util.Random
 import scala.math.Fractional.Implicits._
 
+import org.scalacheck._
+
 //noinspection ScalaRedundantConversion
-class FiniteFieldSpec extends mutable.Specification {
+object FiniteFieldSpec extends mutable.Specification with ScalaCheck {
   """This is the specification for unit testing of our
     |implementation of arithmetic mod p as a Fractional[Int]
     |instance.
@@ -28,47 +31,137 @@ class FiniteFieldSpec extends mutable.Specification {
       calc must contain(be_==(Fp(1))).forall
     }
 
-    val rand = Random
-    val x = Fp(rand.between(-100, 100))
-    var y = Fp(rand.between(1, 100))
-    val z = Fp(rand.between(-100, 100))
-    // if y == Fp(0) then y = Fp(rand.between(1, 100))
-    "all operations stay within -p/2, p/2" >> {
-      // noinspection ScalaRedundantConversion
-      eg((x * y).toInt must beBetween(-8, 8))
-      eg((x + y).toInt must beBetween(-8, 8))
-      eg((x - y).toInt must beBetween(-8, 8))
-      eg((x / y).toInt must beBetween(-8, 8))
-      eg((-z).toInt must beBetween(-8, 8))
-
-      eg((x * y).toUInt must beBetween(0, 16))
-      eg((x + y).toUInt must beBetween(0, 16))
-      eg((x - y).toUInt must beBetween(0, 16))
-      eg((x / y).toUInt must beBetween(0, 16))
-      eg((-z).toUInt must beBetween(0, 16))
+    "all signed operations stay within -p/2, p/2" >> {
+      "*" >> {
+        AsResult {
+          prop { (x: Int, y: Int) =>
+            (-8 to 8).contains((Fp(x) * Fp(y)).toInt)
+          }
+        }
+      }
+      "+" >> {
+        AsResult {
+          prop { (x: Int, y: Int) =>
+            (-8 to 8).contains((Fp(x) + Fp(y)).toInt)
+          }
+        }
+      }
+      "-" >> {
+        AsResult {
+          prop { (x: Int, y: Int) =>
+            (-8 to 8).contains((Fp(x) - Fp(y)).toInt)
+          }
+        }
+      }
+      "/" >> {
+        AsResult {
+          prop { (x: Int, y: Int) =>
+            (y != 0) ==>
+              (-8 to 8).contains((Fp(x) * Fp(y)).toInt)
+          }
+        }
+      }
     }
+
+    "all unsigned operations stay within 0, p-1" >> {
+      "*" >> {
+        AsResult {
+          prop { (x: Int, y: Int) =>
+            (0 to 16).contains((Fp(x) * Fp(y)).toUInt)
+          }
+        }
+      }
+      "+" >> {
+        AsResult {
+          prop { (x: Int, y: Int) =>
+            (0 to 16).contains((Fp(x) + Fp(y)).toUInt)
+          }
+        }
+      }
+      "-" >> {
+        AsResult {
+          prop { (x: Int, y: Int) =>
+            (0 to 16).contains((Fp(x) - Fp(y)).toUInt)
+          }
+        }
+      }
+      "/" >> {
+        AsResult {
+          prop { (x: Int, y: Int) =>
+            (y != 0) ==>
+              (0 to 16).contains((Fp(x) * Fp(y)).toUInt)
+          }
+        }
+      }
+    }
+
     "commutativity" >> {
-      eg(x * y === y * x)
-      eg(x + y === y + x)
-      eg(x - y === -(y - x))
+      "*" >> {
+        AsResult {
+          prop { (x:Int, y:Int) =>
+            Fp(x)*Fp(y) === Fp(y)*Fp(x)
+          }
+        }
+      }
+      "+" >> {
+        AsResult {
+          prop { (x: Int, y: Int) =>
+            Fp(x) + Fp(y) === Fp(y) + Fp(x)
+          }
+        }
+      }
     }
     "associativity" >> {
-      eg((x * y) * z === x * (y * z))
-      eg((x + y) + z === x + (y + z))
-    }
+      "*" >> {
+        AsResult {
+          prop { (x: Int, y: Int, z:Int) =>
+            (Fp(x) * Fp(y)) * Fp(z) === Fp(y) * (Fp(x) * Fp(z))
+          }
+        }
+      }
+      "+" >> {
+        AsResult {
+          prop { (x: Int, y: Int, z: Int) =>
+            (Fp(x) + Fp(y)) + Fp(z) === Fp(y) + (Fp(x) + Fp(z))
+          }
+        }
+      }    }
     "distributivity" >> {
-      eg(x * (y + z) === x * y + x * z)
+      AsResult {
+        prop { (x: Int, y: Int, z: Int) =>
+          Fp(x) * (Fp(y) + Fp(z)) === Fp(x) * Fp(y) + Fp(x) * Fp(z)
+        }
+      }
     }
     "units" >> {
-      eg(x - x === Fp(0))
-      eg(x + (-x) === Fp(0))
-      eg(y * (Fp(1) / y) === Fp(1))
+      "x-x" >> {
+        AsResult {
+          prop { (x: Int) =>
+            x - x === Fp(0)
+          }
+        }
+      }
+      "x + (-x)" >> {
+        AsResult {
+          prop { (x: Int) =>
+            x + (-x) === Fp(0)
+          }
+        }
+      }
+      "x * (1/x)" >> {
+        AsResult {
+          prop { (y: Int) =>
+            (y % 17 != 0) ==>
+              (Fp(y) * (Fp(1) / Fp(y)) === Fp(1))
+          }
+        }
+      }
     }
   }
 
   "Testing unapply and pattern matching for value declarations" >> {
     val x: Fp = Fp(42)
     val Fp(y) = x
-    eg(y == 42)
+    eg(y == (42 % 17))
   }
 }
