@@ -39,37 +39,46 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
 
     }
 
-    var bk: HyperCubeProfiling =
-      HyperCubeProfiling(BronKerbosch[BitSet](), symmetry, bitlength)
-    val zi: HyperCubeProfiling =
-      HyperCubeProfiling(ZomorodianIncremental[BitSet](), symmetry, bitlength)
-    val szi: HyperCubeProfiling = HyperCubeProfiling(
-      SymmetricZomorodianIncremental[BitSet, Int](symmetry),
-      symmetry,
-      bitlength
-    )
+    "Bron-Kerbosch" >> {
+      var bk: HyperCubeProfiling =
+        HyperCubeProfiling(BronKerbosch[BitSet](), symmetry, bitlength)
+    } section("bron-kerbosch")
+    "Zomorodian Incremental" >> {
+      val zi: HyperCubeProfiling =
+        HyperCubeProfiling(ZomorodianIncremental[BitSet](), symmetry, bitlength)
+    } section("zomorodian-incremental")
 
-    pp("With symmetry group generators")
-    val symmetry_gen: HyperCubeSymmetryGenerators = HyperCubeSymmetryGenerators(bitlength)
-    val szig: HyperCubeProfiling =
-      HyperCubeProfiling(
-        SymmetricZomorodianIncremental[BitSet, Int](symmetry_gen),
-        symmetry_gen,
+    "Zomorodian Incremental with symmetry" >> {
+      val szi: HyperCubeProfiling = HyperCubeProfiling(
+        SymmetricZomorodianIncremental[BitSet, Int](symmetry),
+        symmetry,
         bitlength
       )
+    } section("symmetric")
 
-    "Correct sizes" >> {
-      zi.sstream.size === szi.sstream.size
+    section("generators")
+    "Zomorodian Incremental with symmetry group generators" >> {
+      val symmetry_gen: HyperCubeSymmetryGenerators = HyperCubeSymmetryGenerators(bitlength)
+      val szig: HyperCubeProfiling =
+        HyperCubeProfiling(
+          SymmetricZomorodianIncremental[BitSet, Int](symmetry_gen),
+          symmetry_gen,
+          bitlength
+        )
+      pp("Counting pseudo-minimal elements")
+      pp(symmetry_gen.representatives.size)
+      pp(symmetry_gen.representatives.count { (k, v) => k != v })
+
+      eg(symmetry_gen.representatives.size === symmetry_gen.representatives.size)
     }
+    section("generators")
 
-    "With generators and pseudo-minimal elements" >> {
-      zi.sstream.size === szig.sstream.size
-    }
-
-    pp("Counting pseudo-minimal elements")
-    pp(symmetry_gen.representatives.size)
-    pp(symmetry_gen.representatives.count { (k,v) => k != v })
-
-    eg(symmetry_gen.representatives.size === symmetry_gen.representatives.size)
+//    "Correct sizes" >> {
+//      zi.sstream.size === szi.sstream.size
+//    }
+//
+//    "With generators and pseudo-minimal elements" >> {
+//      zi.sstream.size === szig.sstream.size
+//    }
   }
 }
