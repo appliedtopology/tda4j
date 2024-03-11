@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j
 
 import org.specs2.mutable.Specification
+import org.specs2.specification.core.Fragment
 
 class SimplexIndexingSpec extends Specification {
   "Testing the simplex indexing code against Ulrich Bauer's paper examples" >> {
@@ -73,6 +74,35 @@ class SimplexIndexingSpec extends Specification {
 
 class RipserStreamSpec extends Specification {
   "RipserStream interface testing" >> {
+    given sc: SimplexContext[Int]()
+    import sc.*
 
+    val hc2: HyperCubeInt = HyperCubeInt(2)
+
+    val rs: RipserStream = RipserStream(hc2, 5.0, 5)
+
+    "0-dimensional" >> {
+      "contains the right simplices" ==> (rs.iteratorByDimension(0).toSeq must contain(s(0),s(1),s(2),s(3)))
+    }
+    "1-dimensional" >> {
+      "contains the right simplices" ==> (rs.iteratorByDimension(1).toSeq must contain(s(0,1), s(0,2), s(0,3), s(1,2), s(1,3), s(2,3)))
+    }
+    "2-dimensional" >> {
+      "contains the right simplices" ==> (rs.iteratorByDimension(2).toSeq must contain(s(0,1,2), s(0,1,3), s(0,2,3), s(1,2,3)))
+    }
+    "3-dimensional" >> {
+      "contains the right simplices" ==> (rs.iteratorByDimension(3).toSeq must contain(s(0,1,2,3)))
+    }
+    "4-dimensional" >> {
+      "contains the right simplices" ==> (rs.iteratorByDimension(4).toSeq must beEmpty)
+    }
+    "Check total orders of dimensions" >> {
+      Fragment.foreach(0 to hc2.size) { d =>
+        s"$d is sorted" ! { (rs.iteratorByDimension(d).map { s => rs.filtrationValue(s) }.toSeq must beSorted) }
+      }
+    }
+    "Full simplex stream gives the right number of elements" >> {
+      rs.iterator.toSeq must haveSize((1 << hc2.size) - 1)
+    }
   }
 }

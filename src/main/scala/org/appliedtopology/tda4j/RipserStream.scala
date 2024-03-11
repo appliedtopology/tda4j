@@ -84,14 +84,14 @@ class RipserStream(
   val maxDimension: Int = 2
 ) extends SimplexStream[Int, Double] {
   override def iterator: Iterator[Simplex] =
-    (for
+    for
       d <- (0 to maxDimension).iterator
       s <- iteratorByDimension(d)
-    yield s).iterator
+    yield s
 
-  def iteratorByDimension(d: Int): Iterator[Simplex] = {
-    val si: SimplexIndexing = SimplexIndexing(d+1)
-    (0 to binomial(metricSpace.size, d+1))
+  def iteratorByDimension(d: Int): Iterator[Simplex] = if (d > metricSpace.size) Iterator() else {
+    val si: SimplexIndexing = SimplexIndexing(metricSpace.size)
+    (0 until binomial(metricSpace.size, d+1))
       .toSeq
       .map { i => (filtrationValue(si(i, d+1)), i, d+1) }
       .sortBy { (f,i,s) => f }
@@ -104,7 +104,7 @@ class RipserStream(
       i <- simplex.iterator
       j <- simplex.iterator if (i != j)
     yield metricSpace.distance(i,j)
-      ).max
+      ).maxOption.getOrElse(Double.NegativeInfinity)
 }
 
 object RipserStream {}
