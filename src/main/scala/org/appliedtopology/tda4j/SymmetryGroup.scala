@@ -393,6 +393,21 @@ class HyperCube(bitlength: Int) extends FiniteMetricSpace[immutable.BitSet] {
       .map(k => immutable.BitSet.fromBitMask(Array(k.toLong)))
 }
 
+class HyperCubeInt(bitlength: Int) extends FiniteMetricSpace[Int] {
+  protected val hc: HyperCube = HyperCube(bitlength)
+
+  override def size: Int = hc.size
+
+  override def elements: Iterable[Int] = (0 to size-1)
+
+  override def distance(x: Int, y: Int): Double = 
+    hc.distance(
+      immutable.BitSet.fromBitMask(Array(x.toLong)),
+      immutable.BitSet.fromBitMask(Array(y.toLong))
+    )
+  override def contains(x: Int): Boolean = hc.contains(immutable.BitSet.fromBitMask(Array(x.toLong)))
+}
+
 /** This class enumerates permutations in order to allow permutations of
   * bit-positions to fill out the symmetry group of the hypercube.
   *
