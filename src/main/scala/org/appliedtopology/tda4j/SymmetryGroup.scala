@@ -400,7 +400,7 @@ class HyperCubeInt(bitlength: Int) extends FiniteMetricSpace[Int] {
 
   override def elements: Iterable[Int] = (0 to size-1)
 
-  override def distance(x: Int, y: Int): Double = 
+  override def distance(x: Int, y: Int): Double =
     hc.distance(
       immutable.BitSet.fromBitMask(Array(x.toLong)),
       immutable.BitSet.fromBitMask(Array(y.toLong))
@@ -486,6 +486,24 @@ class HyperCubeSymmetry(bitlength: Int)
     }
 }
 
+class HyperCubeSymmetryInt(bitlength: Int) extends SymmetryGroup[Int, Int] {
+  val permutations: Permutations = Permutations(bitlength)
+  val hypercube: HyperCubeInt = HyperCubeInt(bitlength)
+
+  override def keys: Iterable[Int] = (0 until permutations.size.toInt)
+
+  override def apply(groupElementKey: Int): Int => Int = point => {
+    (0 until bitlength)
+      .map { b => (point & (1 << b)) != 0 }
+      .zipWithIndex
+      .filter { _._1 }
+      .map { _._2 }
+      .map { permutations(groupElementKey)(_) }
+      .map { 1 << _ }
+      .sum
+  }
+}
+
 class HyperCubeSymmetryGenerators(val bitlength: Int)
     extends HyperCubeSymmetry(bitlength) {
   /** By maintaining a set of known representatives, and first testing against
@@ -521,4 +539,36 @@ class HyperCubeSymmetryGenerators(val bitlength: Int)
   ): AbstractSimplex[BitSet] =
     if (representatives.contains(simplex)) representatives(simplex)
     else super.representative(simplex)
+}
+
+class HyperCubeSymmetryGeneratorsInt(val bitlength: Int)
+  extends HyperCubeSymmetryInt(bitlength) {
+  given sc: SimplexContext[Int]()
+  import sc.*
+
+  val representatives
+  : mutable.Map[Simplex, Simplex] =
+    mutable.Map.empty
+
+  val generators: List[Int => Int] =
+    (0 until bitlength-1).toList
+      .map { i => { x => {
+        val xi = (x >> i) & 1
+        val xip = (x >> (i+1)) & 1
+        x ^ ((xi << (i+1)) | (xip << i))
+      }}}
+  
+  override def isRepresentative(simplex: Simplex): Boolean =
+    if (representatives.contains(simplex)) {
+      simplex == representatives(simplex)
+    } else {
+      if (generators.forall(g => simplex <= simplex.map(s => g(s)))) {
+        // simplex is a pseudo-minimum
+        // time to check the entire orbit
+        representatives(simplex) = super.representative(simplex)
+        simplex == representatives(simplex)
+      } else { // if it's not even a pseudo-minimum, definitely not a minimum
+        false
+      }
+    }
 }
