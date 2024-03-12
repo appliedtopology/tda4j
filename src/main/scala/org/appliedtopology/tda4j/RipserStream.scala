@@ -210,9 +210,9 @@ class MaskedSymmetricRipserStream[KeyT](
       s <- iteratorByDimension(d)
     yield s
 
-  def iteratorByDimension(d: Int): Iterator[Simplex] = {
+  def iteratorByDimension(d: Int): Iterator[Simplex] = if(d > metricSpace.size) Iterator() else {
     if (!finalized(d)) {
-      (0 to binomial(metricSpace.size, d + 1)).foreach { i =>
+      (0 until binomial(metricSpace.size, d + 1)).foreach { i =>
         if (!seen(d).contains(i)) {
           val simplex = si(i, d + 1)
           val orbit = symmetryGroup.orbit(simplex)
@@ -229,15 +229,12 @@ class MaskedSymmetricRipserStream[KeyT](
     filtrationValues(d)
       .zip(Iterator.from(0))
       .sortBy(_._1) // sort by filtrationvalue
-      .map {
-        _._2
-      } // extract simplex indices
+      .filter { _._1 <= maxFiltrationValue }
+      .map { _._2 } // extract simplex indices
       .iterator // lazy creation of actual simplices
-      .map { i =>
-        si(i, d + 1)
-      }
+      .map { i => si(i, d + 1) }
   }
-  
+
   override def filtrationValue: PartialFunction[Simplex, Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 }

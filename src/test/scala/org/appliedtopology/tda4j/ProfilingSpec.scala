@@ -14,7 +14,7 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
 
     val bitlength: Int = args.commandLine.intOr("bitlength", 3)
     val symmetry: HyperCubeSymmetry = HyperCubeSymmetry(bitlength)
-
+    
     class HyperCubeProfiling(
                               val vr: CliqueFinder[BitSet],
                               val symmetry: HyperCubeSymmetry,
@@ -38,7 +38,7 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
       pp(s"Lookups every 100: $duration ms")
 
     }
-
+    
     "Bron-Kerbosch" >> {
       var bk: HyperCubeProfiling =
         HyperCubeProfiling(BronKerbosch[BitSet](), symmetry, bitlength)
@@ -73,6 +73,35 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
     }
     section("generators")
 
+    section("ripser-gens")
+    "Ripser Stream with symmetry group generators" >> {
+      val symmetryGenInt = HyperCubeSymmetryGeneratorsInt(bitlength)
+      import symmetryGenInt.given
+      import symmetryGenInt.sc.*
+      
+      pp(s"Measuring MaskedSymmetricRipserStream")
+      var now: Long = System.currentTimeMillis()
+      val sstream: Seq[Simplex] = 
+        MaskedSymmetricRipserStream[Int](symmetryGenInt.hypercube, 10.0, 10,symmetryGenInt)
+          .iterator.toSeq
+      var duration: Long = System.currentTimeMillis() - now
+      pp(s"Initialization: $duration ms")
+      pp(s"Simplex Stream Size: ${sstream.size}")
+
+      now = System.currentTimeMillis()
+      (1 until sstream.size).foreach(k => sstream(k))
+      duration = System.currentTimeMillis() - now
+      pp(s"Traversal: $duration ms")
+
+      now = System.currentTimeMillis()
+      (1 until sstream.size by 100).foreach(k => sstream(k))
+      duration = System.currentTimeMillis() - now
+      pp(s"Lookups every 100: $duration ms")
+      
+      sstream.size === sstream.size
+    }
+    section("ripser-gens")
+    
 //    "Correct sizes" >> {
 //      zi.sstream.size === szi.sstream.size
 //    }
