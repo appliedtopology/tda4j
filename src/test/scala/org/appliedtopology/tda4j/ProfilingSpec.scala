@@ -10,8 +10,6 @@ import collection.immutable.BitSet
 
 class ProfilingSpec(args: Arguments) extends mutable.Specification {
   """This is a profiling script to measure performance of different implementations.""" >> {
-    sequential
-
     val bitlength: Int = args.commandLine.intOr("bitlength", 3)
     val symmetry: HyperCubeSymmetry = HyperCubeSymmetry(bitlength)
     
@@ -24,18 +22,18 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
       var now: Long = System.currentTimeMillis()
       val sstream: Seq[AbstractSimplex[BitSet]] = vr(symmetry.hypercube, 10, 10)
       var duration: Long = System.currentTimeMillis() - now
-      pp(s"Initialization: $duration ms")
-      pp(s"Simplex Stream Size: ${sstream.size}")
+      pp(s"${vr.className}\tInitialization: $duration ms")
+      pp(s"${vr.className}\tSimplex Stream Size: ${sstream.size}")
 
       now = System.currentTimeMillis()
       (1 until sstream.size).foreach(k => sstream(k))
       duration = System.currentTimeMillis() - now
-      pp(s"Traversal: $duration ms")
+      pp(s"${vr.className}\tTraversal: $duration ms")
 
       now = System.currentTimeMillis()
       (1 until sstream.size by 100).foreach(k => sstream(k))
       duration = System.currentTimeMillis() - now
-      pp(s"Lookups every 100: $duration ms")
+      pp(s"${vr.className}\tLookups every 100: $duration ms")
 
     }
     
@@ -69,7 +67,7 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
       pp(symmetry_gen.representatives.size)
       pp(symmetry_gen.representatives.count { (k, v) => k != v })
 
-      eg(symmetry_gen.representatives.size === symmetry_gen.representatives.size)
+      symmetry_gen.representatives.size === symmetry_gen.representatives.size
     }
     section("generators")
 
@@ -101,13 +99,5 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
       sstream.size === sstream.size
     }
     section("ripser-gens")
-    
-//    "Correct sizes" >> {
-//      zi.sstream.size === szi.sstream.size
-//    }
-//
-//    "With generators and pseudo-minimal elements" >> {
-//      zi.sstream.size === szig.sstream.size
-//    }
   }
 }
