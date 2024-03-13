@@ -77,7 +77,7 @@ class RipserStreamSpec extends Specification {
     given sc: SimplexContext[Int]()
     import sc.*
 
-    val hc2: HyperCubeInt = HyperCubeInt(2)
+    val hc2: HyperCube = HyperCube(2)
 
     val rs: RipserStream = RipserStream(hc2, 5.0, 5)
 
@@ -107,7 +107,7 @@ class RipserStreamSpec extends Specification {
   }
   
   "Ripser and Vietoris-Rips find the same simplices" >> {
-    val sG = HyperCubeSymmetryGeneratorsInt(4)
+    val sG = HyperCubeSymmetryGenerators(4)
 
     val vr = SymmetricZomorodianIncremental[Int, Int](sG)
     val ss = vr(sG.hypercube, 2.9, 10)

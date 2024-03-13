@@ -185,7 +185,14 @@ class SymmetricRipserStream[KeyT]
 }
 
 
+class MaskedSymmetricRipserVR[KeyT:Ordering](val symmetryGroup: SymmetryGroup[KeyT, Int])
+  extends CliqueFinder[Int] {
 
+  override val className: String = "MaskedSymmetricRipserVR"
+
+  override def apply(metricSpace: FiniteMetricSpace[Int], maxFiltrationValue: Double, maxDimension: Int): Seq[AbstractSimplex[Int]] =
+    MaskedSymmetricRipserStream[KeyT](metricSpace,maxFiltrationValue,maxDimension,symmetryGroup).iterator.toSeq
+}
 
 class MaskedSymmetricRipserStream[KeyT](
     val metricSpace: FiniteMetricSpace[Int],

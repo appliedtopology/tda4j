@@ -17,40 +17,42 @@ class SymmetryGroupSpec extends mutable.Specification {
     |""".stripMargin
 
   val hc3s: HyperCubeSymmetry = HyperCubeSymmetry(3)
-
+  given sc: SimplexContext[Int]()
+  import sc.*
+  
   "In the 3 bit Hyper Cube symmetry group" >> {
     "[0,1] is representative" >> {
-      val s = AbstractSimplex[BitSet](BitSet(), BitSet(0))
+      val s = Simplex(0,1)
       s === hc3s.orbit(s).min
       s === hc3s.representative(s)
       hc3s.isRepresentative(s) must beTrue
     }
     "[0,2] is not representative" >> {
-      val s = AbstractSimplex[BitSet](BitSet(), BitSet(1))
+      val s = Simplex(0,2)
       s !== hc3s.orbit(s).min
       s !== hc3s.representative(s)
       hc3s.isRepresentative(s) must beFalse
     }
   }
 
-  val el: ExpandList[BitSet, Int] = ExpandList(
+  val el: ExpandList[Int, Int] = ExpandList(
     Seq(
-      AbstractSimplex(BitSet()),
-      AbstractSimplex(BitSet(0)),
-      AbstractSimplex(BitSet(0, 1)),
-      AbstractSimplex(BitSet(0, 1, 2)),
-      AbstractSimplex(BitSet(), BitSet(0)),
-      AbstractSimplex(BitSet(), BitSet(0, 1)),
-      AbstractSimplex(BitSet(), BitSet(0), BitSet(0, 1))
+      Simplex(0),
+      Simplex(1),
+      Simplex(3),
+      Simplex(7),
+      Simplex(0, 1),
+      Simplex(0, 3),
+      Simplex(0, 1, 3)
     ),
     hc3s
   )
 
-  val it: Iterator[AbstractSimplex[BitSet]] = el.iterator
+  val it: Iterator[Simplex] = el.iterator
 
-  val allsimplices: List[AbstractSimplex[BitSet]] = el.indices.map(el(_)).toList
-  val itallsimplices: ListBuffer[AbstractSimplex[BitSet]] =
-    collection.mutable.ListBuffer[AbstractSimplex[BitSet]]()
+  val allsimplices: List[Simplex] = el.indices.map(el(_)).toList
+  val itallsimplices: ListBuffer[Simplex] =
+    collection.mutable.ListBuffer[Simplex]()
 
   "ExpandList Iterator does not throw exception while it has content" >> {
     el.indices.foreach(_ => itallsimplices.append(it.next()))

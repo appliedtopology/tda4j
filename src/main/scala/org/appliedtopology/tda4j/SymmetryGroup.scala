@@ -346,7 +346,7 @@ class SymmetricZomorodianIncremental[VertexT: Ordering, KeyT](
   * @param bitlength
   *   The dimension of the hypercube.
   */
-class HyperCube(bitlength: Int) extends FiniteMetricSpace[immutable.BitSet] {
+class HyperCubeBitSet(bitlength: Int) extends FiniteMetricSpace[immutable.BitSet] {
   val top: immutable.BitSet =
     immutable.BitSet.fromBitMask(Array((1L << bitlength) - 1))
 
@@ -394,8 +394,8 @@ class HyperCube(bitlength: Int) extends FiniteMetricSpace[immutable.BitSet] {
       .map(k => immutable.BitSet.fromBitMask(Array(k.toLong)))
 }
 
-class HyperCubeInt(bitlength: Int) extends FiniteMetricSpace[Int] {
-  protected val hc: HyperCube = HyperCube(bitlength)
+class HyperCube(bitlength: Int) extends FiniteMetricSpace[Int] {
+  protected val hc: HyperCubeBitSet = HyperCubeBitSet(bitlength)
 
   override def size: Int = hc.size
 
@@ -457,10 +457,10 @@ class Permutations(elementCount: Int) {
   * @param bitlength
   *   Dimension of the hypercube.
   */
-class HyperCubeSymmetry(bitlength: Int)
+class HyperCubeSymmetryBitSet(bitlength: Int)
     extends SymmetryGroup[Int, immutable.BitSet] {
   val permutations: Permutations = Permutations(bitlength)
-  val hypercube: HyperCube = HyperCube(bitlength)
+  val hypercube: HyperCubeBitSet = HyperCubeBitSet(bitlength)
 
   override def keys: Iterable[Int] = Range(0, permutations.size.toInt)
 
@@ -487,9 +487,9 @@ class HyperCubeSymmetry(bitlength: Int)
     }
 }
 
-class HyperCubeSymmetryInt(bitlength: Int) extends SymmetryGroup[Int, Int] {
+class HyperCubeSymmetry(bitlength: Int) extends SymmetryGroup[Int, Int] {
   val permutations: Permutations = Permutations(bitlength)
-  val hypercube: HyperCubeInt = HyperCubeInt(bitlength)
+  val hypercube: HyperCube = HyperCube(bitlength)
 
   override def keys: Iterable[Int] = (0 until permutations.size.toInt)
 
@@ -505,8 +505,8 @@ class HyperCubeSymmetryInt(bitlength: Int) extends SymmetryGroup[Int, Int] {
   }
 }
 
-class HyperCubeSymmetryGenerators(val bitlength: Int)
-    extends HyperCubeSymmetry(bitlength) {
+class HyperCubeSymmetryGeneratorsBitSet(val bitlength: Int)
+    extends HyperCubeSymmetryBitSet(bitlength) {
   /** By maintaining a set of known representatives, and first testing against
     * the group generators, we are expecting significant speedups over the case
     * where we keep traversing each orbit over and over again.
@@ -542,8 +542,8 @@ class HyperCubeSymmetryGenerators(val bitlength: Int)
     else super.representative(simplex)
 }
 
-class HyperCubeSymmetryGeneratorsInt(val bitlength: Int)
-  extends HyperCubeSymmetryInt(bitlength) {
+class HyperCubeSymmetryGenerators(val bitlength: Int)
+  extends HyperCubeSymmetry(bitlength) {
   given sc: SimplexContext[Int]()
   import sc.*
 

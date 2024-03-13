@@ -120,7 +120,7 @@ object CliqueFinder {
       val R = task._1
       val P = task._2
       val X = task._3
-      if (R.size < maxDimension + 1) {
+      if (R.size <= maxDimension + 1) {
         cliqueSet += R.to(Set)
         while (P.nonEmpty) {
           val v = P.head

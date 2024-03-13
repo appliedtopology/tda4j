@@ -14,43 +14,44 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
     val symmetry: HyperCubeSymmetry = HyperCubeSymmetry(bitlength)
     
     class HyperCubeProfiling(
-                              val vr: CliqueFinder[BitSet],
+                              val vr: CliqueFinder[Int],
                               val symmetry: HyperCubeSymmetry,
-                              val bitlength: Int
+                              val bitlength: Int,
+                              val tag: String,
                             ) {
       pp(s"Measuring ${vr.className}")
       var now: Long = System.currentTimeMillis()
-      val sstream: Seq[AbstractSimplex[BitSet]] = vr(symmetry.hypercube, 10, 10)
+      val sstream: Seq[AbstractSimplex[Int]] = vr(symmetry.hypercube, 10, 10)
       var duration: Long = System.currentTimeMillis() - now
-      pp(s"${vr.className}\tInitialization: $duration ms")
-      pp(s"${vr.className}\tSimplex Stream Size: ${sstream.size}")
+      pp(s"${tag}\tInitialization: $duration ms")
+      pp(s"${tag}\tSimplex Stream Size: ${sstream.size}")
 
       now = System.currentTimeMillis()
       (1 until sstream.size).foreach(k => sstream(k))
       duration = System.currentTimeMillis() - now
-      pp(s"${vr.className}\tTraversal: $duration ms")
+      pp(s"${tag}\tTraversal: $duration ms")
 
       now = System.currentTimeMillis()
       (1 until sstream.size by 100).foreach(k => sstream(k))
       duration = System.currentTimeMillis() - now
-      pp(s"${vr.className}\tLookups every 100: $duration ms")
+      pp(s"${tag}\tLookups every 100: $duration ms")
 
     }
     
     "Bron-Kerbosch" >> {
       var bk: HyperCubeProfiling =
-        HyperCubeProfiling(BronKerbosch[BitSet](), symmetry, bitlength)
+        HyperCubeProfiling(BronKerbosch[Int](), symmetry, bitlength, "BK")
     } section("bron-kerbosch")
     "Zomorodian Incremental" >> {
       val zi: HyperCubeProfiling =
-        HyperCubeProfiling(ZomorodianIncremental[BitSet](), symmetry, bitlength)
+        HyperCubeProfiling(ZomorodianIncremental[Int](), symmetry, bitlength, "ZI")
     } section("zomorodian-incremental")
 
     "Zomorodian Incremental with symmetry" >> {
       val szi: HyperCubeProfiling = HyperCubeProfiling(
-        SymmetricZomorodianIncremental[BitSet, Int](symmetry),
+        SymmetricZomorodianIncremental[Int, Int](symmetry),
         symmetry,
-        bitlength
+        bitlength, "SZI"
       )
     } section("symmetric")
 
@@ -59,9 +60,9 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
       val symmetry_gen: HyperCubeSymmetryGenerators = HyperCubeSymmetryGenerators(bitlength)
       val szig: HyperCubeProfiling =
         HyperCubeProfiling(
-          SymmetricZomorodianIncremental[BitSet, Int](symmetry_gen),
+          SymmetricZomorodianIncremental[Int, Int](symmetry_gen),
           symmetry_gen,
-          bitlength
+          bitlength, "SZIG"
         )
       pp("Counting pseudo-minimal elements")
       pp(symmetry_gen.representatives.size)
@@ -73,30 +74,18 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
 
     section("ripser-gens")
     "Ripser Stream with symmetry group generators" >> {
-      val symmetryGenInt = HyperCubeSymmetryGeneratorsInt(bitlength)
-      import symmetryGenInt.given
-      import symmetryGenInt.sc.*
-      
-      pp(s"Measuring MaskedSymmetricRipserStream")
-      var now: Long = System.currentTimeMillis()
-      val sstream: Seq[Simplex] = 
-        MaskedSymmetricRipserStream[Int](symmetryGenInt.hypercube, 10.0, 10,symmetryGenInt)
-          .iterator.toSeq
-      var duration: Long = System.currentTimeMillis() - now
-      pp(s"Initialization: $duration ms")
-      pp(s"Simplex Stream Size: ${sstream.size}")
+      val symmetry_gen: HyperCubeSymmetryGenerators = HyperCubeSymmetryGenerators(bitlength)
+      val rssg: HyperCubeProfiling =
+        HyperCubeProfiling(
+          MaskedSymmetricRipserVR[Int](symmetry_gen),
+          symmetry_gen,
+          bitlength, "RSSG"
+        )
+      pp("Counting pseudo-minimal elements")
+      pp(s"RSSG Pseudo-minimal: ${symmetry_gen.representatives.size}")
+      pp(s"RSSG Non-minimal: ${symmetry_gen.representatives.count { (k, v) => k != v }}")
 
-      now = System.currentTimeMillis()
-      (1 until sstream.size).foreach(k => sstream(k))
-      duration = System.currentTimeMillis() - now
-      pp(s"Traversal: $duration ms")
-
-      now = System.currentTimeMillis()
-      (1 until sstream.size by 100).foreach(k => sstream(k))
-      duration = System.currentTimeMillis() - now
-      pp(s"Lookups every 100: $duration ms")
-      
-      sstream.size === sstream.size
+      symmetry_gen.representatives.size === symmetry_gen.representatives.size
     }
     section("ripser-gens")
   }
