@@ -1,7 +1,7 @@
 package org.appliedtopology.tda4j
 
 import org.specs2.mutable
-import org.specs2.execute.{Result, AsResult}
+import org.specs2.execute.{AsResult, Result}
 import org.specs2.ScalaCheck
 
 import scala.util.Random
@@ -98,8 +98,8 @@ object FiniteFieldSpec extends mutable.Specification with ScalaCheck {
     "commutativity" >> {
       "*" >> {
         AsResult {
-          prop { (x:Int, y:Int) =>
-            Fp(x)*Fp(y) === Fp(y)*Fp(x)
+          prop { (x: Int, y: Int) =>
+            Fp(x) * Fp(y) === Fp(y) * Fp(x)
           }
         }
       }
@@ -114,7 +114,7 @@ object FiniteFieldSpec extends mutable.Specification with ScalaCheck {
     "associativity" >> {
       "*" >> {
         AsResult {
-          prop { (x: Int, y: Int, z:Int) =>
+          prop { (x: Int, y: Int, z: Int) =>
             (Fp(x) * Fp(y)) * Fp(z) === Fp(y) * (Fp(x) * Fp(z))
           }
         }
@@ -125,7 +125,8 @@ object FiniteFieldSpec extends mutable.Specification with ScalaCheck {
             (Fp(x) + Fp(y)) + Fp(z) === Fp(y) + (Fp(x) + Fp(z))
           }
         }
-      }    }
+      }
+    }
     "distributivity" >> {
       AsResult {
         prop { (x: Int, y: Int, z: Int) =>

@@ -1,5 +1,5 @@
 package org.appliedtopology.tda4j
-import org.specs2.{ScalaCheck, mutable}
+import org.specs2.{mutable, ScalaCheck}
 import org.specs2.execute.AsResult
 
 class RingModuleSpec extends mutable.Specification with ScalaCheck {
@@ -27,21 +27,21 @@ class RingModuleSpec extends mutable.Specification with ScalaCheck {
 
   "addition should work" >> {
     AsResult {
-      prop { (x:Int, y:Int, z:Int, w:Int) =>
-        (x,y) + (z,w) should be_== (x+z, y+w)
+      prop { (x: Int, y: Int, z: Int, w: Int) =>
+        (x, y) + (z, w) should be_==(x + z, y + w)
       }
     }
     "zero is a left zero" >> {
       AsResult {
-        prop { (x:Int, y:Int) =>
-          rm.zero + (x,y) should be_== (x,y)
+        prop { (x: Int, y: Int) =>
+          rm.zero + (x, y) should be_==(x, y)
         }
       }
     }
     "zero is a right zero" >> {
       AsResult {
         prop { (x: Int, y: Int) =>
-          (x, y)+rm.zero should be_==(x, y)
+          (x, y) + rm.zero should be_==(x, y)
         }
       }
     }
@@ -49,8 +49,8 @@ class RingModuleSpec extends mutable.Specification with ScalaCheck {
 
   "scalar multiplication should work" >> {
     AsResult {
-      prop { (x:Int, y:Int, r:Int) =>
-        (x,y) <* r should be_==(x*r, y*r)
+      prop { (x: Int, y: Int, r: Int) =>
+        (x, y) <* r should be_==(x * r, y * r)
 
       }
     }
@@ -58,8 +58,8 @@ class RingModuleSpec extends mutable.Specification with ScalaCheck {
 
   "scalar left-multiplication should work" >> {
     AsResult {
-      prop { (x:Int, y:Int, r:Int) =>
-        r *> (x,y) should be_== (x*r, y*r)
+      prop { (x: Int, y: Int, r: Int) =>
+        r *> (x, y) should be_==(x * r, y * r)
       }
     }
   }

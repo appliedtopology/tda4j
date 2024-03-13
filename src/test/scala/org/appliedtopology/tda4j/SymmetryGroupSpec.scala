@@ -19,16 +19,16 @@ class SymmetryGroupSpec extends mutable.Specification {
   val hc3s: HyperCubeSymmetry = HyperCubeSymmetry(3)
   given sc: SimplexContext[Int]()
   import sc.*
-  
+
   "In the 3 bit Hyper Cube symmetry group" >> {
     "[0,1] is representative" >> {
-      val s = Simplex(0,1)
+      val s = Simplex(0, 1)
       s === hc3s.orbit(s).min
       s === hc3s.representative(s)
       hc3s.isRepresentative(s) must beTrue
     }
     "[0,2] is not representative" >> {
-      val s = Simplex(0,2)
+      val s = Simplex(0, 2)
       s !== hc3s.orbit(s).min
       s !== hc3s.representative(s)
       hc3s.isRepresentative(s) must beFalse

@@ -7,9 +7,8 @@ import java.util.NoSuchElementException
 import scala.collection.mutable.ListBuffer
 import org.apache.commons.numbers.combinatorics.Factorial
 
-
 import scala.collection.parallel.CollectionConverters._
-import scala.concurrent.{Future, Await}
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success}
@@ -66,9 +65,11 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
   ): Set[AbstractSimplex[VertexT]] =
     keys.map(k => simplex.map(apply(k))).toSet
 
-  def orbitPar(simplex: AbstractSimplex[VertexT]): Set[AbstractSimplex[VertexT]] = {
+  def orbitPar(
+    simplex: AbstractSimplex[VertexT]
+  ): Set[AbstractSimplex[VertexT]] = {
     val futures: Iterable[Future[AbstractSimplex[VertexT]]] =
-      for(k <- keys) yield Future {
+      for (k <- keys) yield Future {
         simplex.map(apply(k))
       }
 
@@ -346,7 +347,8 @@ class SymmetricZomorodianIncremental[VertexT: Ordering, KeyT](
   * @param bitlength
   *   The dimension of the hypercube.
   */
-class HyperCubeBitSet(bitlength: Int) extends FiniteMetricSpace[immutable.BitSet] {
+class HyperCubeBitSet(bitlength: Int)
+    extends FiniteMetricSpace[immutable.BitSet] {
   val top: immutable.BitSet =
     immutable.BitSet.fromBitMask(Array((1L << bitlength) - 1))
 
@@ -399,14 +401,15 @@ class HyperCube(bitlength: Int) extends FiniteMetricSpace[Int] {
 
   override def size: Int = hc.size
 
-  override def elements: Iterable[Int] = (0 to size-1)
+  override def elements: Iterable[Int] = 0 to size - 1
 
   override def distance(x: Int, y: Int): Double =
     hc.distance(
       immutable.BitSet.fromBitMask(Array(x.toLong)),
       immutable.BitSet.fromBitMask(Array(y.toLong))
     )
-  override def contains(x: Int): Boolean = hc.contains(immutable.BitSet.fromBitMask(Array(x.toLong)))
+  override def contains(x: Int): Boolean =
+    hc.contains(immutable.BitSet.fromBitMask(Array(x.toLong)))
 }
 
 /** This class enumerates permutations in order to allow permutations of
@@ -491,22 +494,22 @@ class HyperCubeSymmetry(bitlength: Int) extends SymmetryGroup[Int, Int] {
   val permutations: Permutations = Permutations(bitlength)
   val hypercube: HyperCube = HyperCube(bitlength)
 
-  override def keys: Iterable[Int] = (0 until permutations.size.toInt)
+  override def keys: Iterable[Int] = 0 until permutations.size.toInt
 
-  override def apply(groupElementKey: Int): Int => Int = point => {
+  override def apply(groupElementKey: Int): Int => Int = point =>
     (0 until bitlength)
-      .map { b => (point & (1 << b)) != 0 }
+      .map(b => (point & (1 << b)) != 0)
       .zipWithIndex
-      .filter { _._1 }
-      .map { _._2 }
-      .map { permutations(groupElementKey)(_) }
-      .map { 1 << _ }
+      .filter(_._1)
+      .map(_._2)
+      .map(permutations(groupElementKey)(_))
+      .map(1 << _)
       .sum
-  }
 }
 
 class HyperCubeSymmetryGeneratorsBitSet(val bitlength: Int)
     extends HyperCubeSymmetryBitSet(bitlength) {
+
   /** By maintaining a set of known representatives, and first testing against
     * the group generators, we are expecting significant speedups over the case
     * where we keep traversing each orbit over and over again.
@@ -517,8 +520,10 @@ class HyperCubeSymmetryGeneratorsBitSet(val bitlength: Int)
 
   val generators: List[immutable.BitSet => immutable.BitSet] =
     hypercube.top.toList.indices
-      .map(i => immutable.Map(i -> (i+1), (i+1) -> i))
-      .map(map => ((bs: immutable.BitSet) => bs.collect(map.orElse(identity(_)))) )
+      .map(i => immutable.Map(i -> (i + 1), (i + 1) -> i))
+      .map(map =>
+        ((bs: immutable.BitSet) => bs.collect(map.orElse(identity(_))))
+      )
       .toList
 
   override def isRepresentative(simplex: AbstractSimplex[BitSet]): Boolean =
@@ -543,23 +548,24 @@ class HyperCubeSymmetryGeneratorsBitSet(val bitlength: Int)
 }
 
 class HyperCubeSymmetryGenerators(val bitlength: Int)
-  extends HyperCubeSymmetry(bitlength) {
+    extends HyperCubeSymmetry(bitlength) {
   given sc: SimplexContext[Int]()
   import sc.*
 
-  val representatives
-  : mutable.Map[Simplex, Simplex] =
+  val representatives: mutable.Map[Simplex, Simplex] =
     mutable.Map.empty
-    
+
   val generators: List[Int => Int] =
-    (0 until bitlength-1).toList
-      .map { bitpos => { vertex => {
-        val xi = (vertex & (1 << bitpos)) << 1
-        val xip = (vertex & (1 << (bitpos+1))) >> 1
-        val mip = ~((1 << bitpos) | (1 << (bitpos+1)))
-        (vertex & mip) ^ (xi | xip)
-      }}}
-  
+    (0 until bitlength - 1).toList
+      .map {
+        bitpos =>
+          vertex =>
+            val xi = (vertex & (1 << bitpos)) << 1
+            val xip = (vertex & (1 << (bitpos + 1))) >> 1
+            val mip = ~((1 << bitpos) | (1 << (bitpos + 1)))
+            (vertex & mip) ^ (xi | xip)
+      }
+
   override def isRepresentative(simplex: Simplex): Boolean =
     if (representatives.contains(simplex)) {
       simplex == representatives(simplex)

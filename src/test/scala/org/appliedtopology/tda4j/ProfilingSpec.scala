@@ -12,13 +12,13 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
   """This is a profiling script to measure performance of different implementations.""" >> {
     val bitlength: Int = args.commandLine.intOr("bitlength", 3)
     val symmetry: HyperCubeSymmetry = HyperCubeSymmetry(bitlength)
-    
+
     class HyperCubeProfiling(
-                              val vr: CliqueFinder[Int],
-                              val symmetry: HyperCubeSymmetry,
-                              val bitlength: Int,
-                              val tag: String,
-                            ) {
+      val vr: CliqueFinder[Int],
+      val symmetry: HyperCubeSymmetry,
+      val bitlength: Int,
+      val tag: String
+    ) {
       pp(s"Measuring ${vr.className}")
       var now: Long = System.currentTimeMillis()
       val sstream: Seq[AbstractSimplex[Int]] = vr(symmetry.hypercube, 10, 10)
@@ -37,36 +37,44 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
       pp(s"${tag}\tLookups every 100: $duration ms")
 
     }
-    
-    "Bron-Kerbosch" >> {
+
+    ("Bron-Kerbosch" >> {
       var bk: HyperCubeProfiling =
         HyperCubeProfiling(BronKerbosch[Int](), symmetry, bitlength, "BK")
-    } section("bron-kerbosch")
-    "Zomorodian Incremental" >> {
+    }).section("bron-kerbosch")
+    ("Zomorodian Incremental" >> {
       val zi: HyperCubeProfiling =
-        HyperCubeProfiling(ZomorodianIncremental[Int](), symmetry, bitlength, "ZI")
-    } section("zomorodian-incremental")
+        HyperCubeProfiling(
+          ZomorodianIncremental[Int](),
+          symmetry,
+          bitlength,
+          "ZI"
+        )
+    }).section("zomorodian-incremental")
 
-    "Zomorodian Incremental with symmetry" >> {
+    ("Zomorodian Incremental with symmetry" >> {
       val szi: HyperCubeProfiling = HyperCubeProfiling(
         SymmetricZomorodianIncremental[Int, Int](symmetry),
         symmetry,
-        bitlength, "SZI"
+        bitlength,
+        "SZI"
       )
-    } section("symmetric")
+    }).section("symmetric")
 
     section("generators")
     "Zomorodian Incremental with symmetry group generators" >> {
-      val symmetry_gen: HyperCubeSymmetryGenerators = HyperCubeSymmetryGenerators(bitlength)
+      val symmetry_gen: HyperCubeSymmetryGenerators =
+        HyperCubeSymmetryGenerators(bitlength)
       val szig: HyperCubeProfiling =
         HyperCubeProfiling(
           SymmetricZomorodianIncremental[Int, Int](symmetry_gen),
           symmetry_gen,
-          bitlength, "SZIG"
+          bitlength,
+          "SZIG"
         )
       pp("Counting pseudo-minimal elements")
       pp(symmetry_gen.representatives.size)
-      pp(symmetry_gen.representatives.count { (k, v) => k != v })
+      pp(symmetry_gen.representatives.count((k, v) => k != v))
 
       symmetry_gen.representatives.size === symmetry_gen.representatives.size
     }
@@ -74,16 +82,19 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
 
     section("ripser-gens")
     "Ripser Stream with symmetry group generators" >> {
-      val symmetry_gen: HyperCubeSymmetryGenerators = HyperCubeSymmetryGenerators(bitlength)
+      val symmetry_gen: HyperCubeSymmetryGenerators =
+        HyperCubeSymmetryGenerators(bitlength)
       val rssg: HyperCubeProfiling =
         HyperCubeProfiling(
           MaskedSymmetricRipserVR[Int](symmetry_gen),
           symmetry_gen,
-          bitlength, "RSSG"
+          bitlength,
+          "RSSG"
         )
       pp("Counting pseudo-minimal elements")
       pp(s"RSSG Pseudo-minimal: ${symmetry_gen.representatives.size}")
-      pp(s"RSSG Non-minimal: ${symmetry_gen.representatives.count { (k, v) => k != v }}")
+      pp(s"RSSG Non-minimal: ${symmetry_gen.representatives
+        .count((k, v) => k != v)}")
 
       symmetry_gen.representatives.size === symmetry_gen.representatives.size
     }

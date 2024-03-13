@@ -1,7 +1,7 @@
 package org.appliedtopology.tda4j
 
 import org.scalacheck.{Arbitrary, Gen}
-import org.specs2.{ScalaCheck, Specification, mutable}
+import org.specs2.{mutable, ScalaCheck, Specification}
 import org.specs2.execute.{AsResult, Result}
 
 import math.{cos, sin}
@@ -27,16 +27,16 @@ class MetricSpaceSpec extends mutable.Specification with ScalaCheck {
     }
     "distance from a point to itself must be 0" >> {
       AsResult {
-        prop { (x:Int) =>
-          metricSpace.distance(x, x) must be_== (0.0)
+        prop { (x: Int) =>
+          metricSpace.distance(x, x) must be_==(0.0)
         }
       }
     }
     "distances must follow triangle inequality" >> {
       AsResult {
-        prop { (x:Int, y:Int, z:Int) =>
-          metricSpace.distance(x, y) + metricSpace.distance(y,z) must
-            beGreaterThanOrEqualTo (metricSpace.distance(x,z))
+        prop { (x: Int, y: Int, z: Int) =>
+          metricSpace.distance(x, y) + metricSpace.distance(y, z) must
+            beGreaterThanOrEqualTo(metricSpace.distance(x, z))
         }
       }
     }
