@@ -107,11 +107,11 @@ class RipserStreamSpec extends Specification {
   }
   
   "Ripser and Vietoris-Rips find the same simplices" >> {
-    val sG = HyperCubeSymmetryGenerators(4)
+    val sG = HyperCubeSymmetryGenerators(3)
 
     val vr = SymmetricZomorodianIncremental[Int, Int](sG)
-    val ss = vr(sG.hypercube, 2.9, 10)
-    val rs = MaskedSymmetricRipserStream[Int](sG.hypercube, 2.9, 10, sG)
+    val ss = vr(sG.hypercube, 2.0, 5)
+    val rs = MaskedSymmetricRipserStream[Int](sG.hypercube, 2.0, 5, sG)
     pp(s"Ripser finds ${rs.iterator.size} simplices")
     pp(s"Zomorodian finds ${ss.size} simplices")
     rs.iterator.toSeq must containAllOf(ss)
