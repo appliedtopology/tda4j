@@ -120,7 +120,7 @@ object CliqueFinder {
       val R = task._1
       val P = task._2
       val X = task._3
-      if (R.size <= maxDimension + 1) {
+      if (R.size < maxDimension + 1) {
         cliqueSet += R.to(Set)
         while (P.nonEmpty) {
           val v = P.head
@@ -235,7 +235,7 @@ class ZomorodianIncremental[VertexT: Ordering] extends CliqueFinder[VertexT] {
       val tau = task._1
       val N = task._2
       V += AbstractSimplex.from(tau)
-      if (tau.size < maxDimension) {
+      if (tau.size <= maxDimension) {
         N.foreach { v =>
           val sigma = tau + v
           val M = N & lowerNeighbors(v)
@@ -300,7 +300,7 @@ object LazyVietorisRips {
           val tau = task._1
           val N = task._2
           V += AbstractSimplex.from(tau)
-          if (tau.size < maxDimension) {
+          if (tau.size <= maxDimension) {
             N.foreach { v =>
               val sigma = tau + v
               val M = N & lowerNeighbors(v)

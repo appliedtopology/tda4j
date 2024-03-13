@@ -8,7 +8,7 @@ import scala.collection.mutable.ListBuffer
 import org.apache.commons.numbers.combinatorics.Factorial
 
 
-//import scala.collection.parallel.CollectionConverters._
+import scala.collection.parallel.CollectionConverters._
 import scala.concurrent.{Future, Await}
 import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -318,9 +318,10 @@ class SymmetricZomorodianIncremental[VertexT: Ordering, KeyT](
       val tau = task._1
       val N = task._2
       val simplex = AbstractSimplex.from(tau)
-      if (symmetry.isRepresentative(simplex))
+      if (symmetry.isRepresentative(simplex)) {
         representatives += AbstractSimplex.from(tau)
-      if (tau.size < maxDimension) {
+      }
+      if (tau.size <= maxDimension) {
         N.foreach { v =>
           val sigma = tau + v
           val M = N & lowerNeighbors(v)
@@ -549,20 +550,21 @@ class HyperCubeSymmetryGeneratorsInt(val bitlength: Int)
   val representatives
   : mutable.Map[Simplex, Simplex] =
     mutable.Map.empty
-
+    
   val generators: List[Int => Int] =
     (0 until bitlength-1).toList
-      .map { i => { x => {
-        val xi = (x >> i) & 1
-        val xip = (x >> (i+1)) & 1
-        x ^ ((xi << (i+1)) | (xip << i))
+      .map { bitpos => { vertex => {
+        val xi = (vertex & (1 << bitpos)) << 1
+        val xip = (vertex & (1 << (bitpos+1))) >> 1
+        val mip = ~((1 << bitpos) | (1 << (bitpos+1)))
+        (vertex & mip) ^ (xi | xip)
       }}}
   
   override def isRepresentative(simplex: Simplex): Boolean =
     if (representatives.contains(simplex)) {
       simplex == representatives(simplex)
     } else {
-      if (generators.forall(g => simplex <= simplex.map(s => g(s)))) {
+      if (generators.par.forall(g => simplex <= simplex.map(s => g(s)))) {
         // simplex is a pseudo-minimum
         // time to check the entire orbit
         representatives(simplex) = super.representative(simplex)
