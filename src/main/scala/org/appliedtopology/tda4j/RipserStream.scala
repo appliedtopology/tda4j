@@ -6,6 +6,7 @@ import org.appliedtopology.tda4j
 
 import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.collection.parallel.CollectionConverters.*
 
 def binomial(n:Int,k:Int): Int = {
   if(n > 0 && k >= 0 && n >= k) combinatorics.BinomialCoefficient.value(n,k).toInt
@@ -212,7 +213,7 @@ class MaskedSymmetricRipserStream[KeyT](
 
   def iteratorByDimension(d: Int): Iterator[Simplex] = if(d > metricSpace.size) Iterator() else {
     if (!finalized(d)) {
-      (0 until binomial(metricSpace.size, d + 1)).foreach { i =>
+      (0 until binomial(metricSpace.size, d + 1)).toList.par.foreach { i =>
         if (!seen(d).contains(i)) {
           val simplex = si(i, d + 1)
           val orbit = symmetryGroup.orbit(simplex)
@@ -228,8 +229,8 @@ class MaskedSymmetricRipserStream[KeyT](
     }
     filtrationValues(d)
       .zip(Iterator.from(0))
+      .filter { _._1 < maxFiltrationValue }
       .sortBy(_._1) // sort by filtrationvalue
-      .filter { _._1 <= maxFiltrationValue }
       .map { _._2 } // extract simplex indices
       .iterator // lazy creation of actual simplices
       .map { i => si(i, d + 1) }
