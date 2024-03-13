@@ -557,13 +557,11 @@ class HyperCubeSymmetryGenerators(val bitlength: Int)
 
   val generators: List[Int => Int] =
     (0 until bitlength - 1).toList
-      .map {
-        bitpos =>
-          vertex =>
-            val xi = (vertex & (1 << bitpos)) << 1
-            val xip = (vertex & (1 << (bitpos + 1))) >> 1
-            val mip = ~((1 << bitpos) | (1 << (bitpos + 1)))
-            (vertex & mip) ^ (xi | xip)
+      .map { bitpos => vertex =>
+        val xi = (vertex & (1 << bitpos)) << 1
+        val xip = (vertex & (1 << (bitpos + 1))) >> 1
+        val mip = ~((1 << bitpos) | (1 << (bitpos + 1)))
+        (vertex & mip) ^ (xi | xip)
       }
 
   override def isRepresentative(simplex: Simplex): Boolean =
