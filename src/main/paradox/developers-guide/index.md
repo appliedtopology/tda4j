@@ -1,3 +1,8 @@
+@@@ index
+* [Class diagrams](class-diagrams.md)
+* [Programming Patterns](patterns.md)
+@@@
+
 # Developers Guide for TDA4j
 
 We intend the library to be a viable platform for algorithm development and research into topological data analysis.
@@ -42,14 +47,3 @@ import tda.*
 // This code creates the chain 2[1,2] - [2,3]
 val z = Fp(2) *> s(1,2) - s(2,3)
 ```
-
-## Class Hierarchy
-
-Here is the current structure of defined classes and their inheritance relations.
-[We provide an extensive class diagram network](class-diagrams.md) to help visualize classes and relations.
-
-
-## Code Patterns
-
-There are several programming patterns that we adopt extensively that merit a little bit more detailed 
-explanation. We try to give these explanations [here](patterns.md).
