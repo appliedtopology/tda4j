@@ -20,7 +20,7 @@
 
 <meta name="description" content="TDA4j">
 <link rel="shortcut icon" href="../assets/images/favicon.png">
-<title>Support for different coefficients · TDA4j</title>
+<title>Mapping the library: class- and type-diagrams · TDA4j</title>
 <link rel="stylesheet" href="../assets/stylesheets/application.451f80e5.css">
 <link rel="stylesheet" href="../assets/stylesheets/application-palette.22915126.css">
 <meta name="theme-color" content="#3f51b5" />
@@ -60,7 +60,7 @@ data-md-color-accent="blue"
 TDA4j
 </span>
 <span class="md-header-nav__topic">
-Support for different coefficients
+Mapping the library: class- and type-diagrams
 </span>
 </div>
 </div>
@@ -122,15 +122,16 @@ appliedtopology/tda4j
   <li><a href="../user-guide/index.html" class="page">User Guide for TDA4j</a></li>
   <li><a href="../developers-guide/index.html" class="page">Developers Guide for TDA4j</a>
   <ul>
-    <li><a href="../developers-guide/class-diagrams.html" class="active page">Support for different coefficients</a></li>
-    <li><a href="../developers-guide/patterns.html" class="page">Type Class Pattern</a></li>
+    <li><a href="../developers-guide/class-diagrams.html" class="active page">Mapping the library: class- and type-diagrams</a></li>
+    <li><a href="../developers-guide/patterns.html" class="page">Programming Patterns in use</a></li>
   </ul></li>
 </ul>
 <nav class="md-nav md-nav--secondary">
 <label class="md-nav__title" for="__toc">Table of contents</label>
 <ul>
-  <li><a href="../developers-guide/class-diagrams.html#support-for-different-coefficients" class="header">Support for different coefficients</a>
+  <li><a href="../developers-guide/class-diagrams.html#mapping-the-library-class-and-type-diagrams" class="header">Mapping the library: class- and type-diagrams</a>
   <ul>
+    <li><a href="../developers-guide/class-diagrams.html#support-for-different-coefficients" class="header">Support for different coefficients</a></li>
     <li><a href="../developers-guide/class-diagrams.html#how-do-we-describe-a-simplicial-complex-" class="header">How do we describe a Simplicial Complex?</a></li>
   </ul></li>
 </ul>
@@ -153,8 +154,9 @@ appliedtopology/tda4j
 <nav class="md-nav md-nav--secondary">
 <label class="md-nav__title" for="__toc">Table of contents</label>
 <ul>
-  <li><a href="../developers-guide/class-diagrams.html#support-for-different-coefficients" class="header">Support for different coefficients</a>
+  <li><a href="../developers-guide/class-diagrams.html#mapping-the-library-class-and-type-diagrams" class="header">Mapping the library: class- and type-diagrams</a>
   <ul>
+    <li><a href="../developers-guide/class-diagrams.html#support-for-different-coefficients" class="header">Support for different coefficients</a></li>
     <li><a href="../developers-guide/class-diagrams.html#how-do-we-describe-a-simplicial-complex-" class="header">How do we describe a Simplicial Complex?</a></li>
   </ul></li>
 </ul>
@@ -166,7 +168,8 @@ appliedtopology/tda4j
 <div class="md-content">
 <article class="md-content__inner md-typeset">
 <div class="md-content__searchable">
-<h1><a href="#support-for-different-coefficients" name="support-for-different-coefficients" class="anchor"><span class="anchor-link"></span></a>Support for different coefficients</h1>
+<h1><a href="#mapping-the-library-class-and-type-diagrams" name="mapping-the-library-class-and-type-diagrams" class="anchor"><span class="anchor-link"></span></a>Mapping the library: class- and type-diagrams</h1>
+<h2><a href="#support-for-different-coefficients" name="support-for-different-coefficients" class="anchor"><span class="anchor-link"></span></a>Support for different coefficients</h2>
 <p>We handle coefficient types by requiring a <code>Fractional</code> instance to be defined, which produces all the expected arithmetic operations on coefficients. <code>Fractional[Double]</code> already exists in Scala, and we also implement in the same way as is main-stream in the persistent homology library ecosystem finite field arithmetic with lookup tables for inverses.</p>
 <pre class="prettyprint"><code class="language-mermaid">classDiagram
     class FiniteField {
@@ -207,7 +210,7 @@ iterator : Iterator[VertexT]
 boundary() Chain[AbstractSimplex[VertexT],CoefficientT]
 }
 </code></pre>
-<h1><a href="#how-do-we-describe-a-simplicial-complex-" name="how-do-we-describe-a-simplicial-complex-" class="anchor"><span class="anchor-link"></span></a>How do we describe a Simplicial Complex?</h1>
+<h2><a href="#how-do-we-describe-a-simplicial-complex-" name="how-do-we-describe-a-simplicial-complex-" class="anchor"><span class="anchor-link"></span></a>How do we describe a Simplicial Complex?</h2>
 <pre class="prettyprint"><code class="language-mermaid">classDiagram
     `Cell[CellT]` --&gt; `AbstractSimplex[VertexT]`
     class `Cell[CellT]` {
@@ -292,13 +295,13 @@ Developers Guide for TDA4j
 </span>
 </div>
 </a>
-<a href="../developers-guide/patterns.html" title="Type Class Pattern" class="md-flex md-footer-nav__link md-footer-nav__link--next" rel="next">
+<a href="../developers-guide/patterns.html" title="Programming Patterns in use" class="md-flex md-footer-nav__link md-footer-nav__link--next" rel="next">
 <div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
 <span class="md-flex__ellipsis">
 <span class="md-footer-nav__direction">
 Next
 </span>
-Type Class Pattern
+Programming Patterns in use
 </span>
 </div>
 <div class="md-flex__cell md-flex__cell--shrink">

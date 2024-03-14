@@ -20,7 +20,7 @@
 
 <meta name="description" content="TDA4j">
 <link rel="shortcut icon" href="../assets/images/favicon.png">
-<title>Type Class Pattern · TDA4j</title>
+<title>Programming Patterns in use · TDA4j</title>
 <link rel="stylesheet" href="../assets/stylesheets/application.451f80e5.css">
 <link rel="stylesheet" href="../assets/stylesheets/application-palette.22915126.css">
 <meta name="theme-color" content="#3f51b5" />
@@ -60,7 +60,7 @@ data-md-color-accent="blue"
 TDA4j
 </span>
 <span class="md-header-nav__topic">
-Type Class Pattern
+Programming Patterns in use
 </span>
 </div>
 </div>
@@ -122,15 +122,16 @@ appliedtopology/tda4j
   <li><a href="../user-guide/index.html" class="page">User Guide for TDA4j</a></li>
   <li><a href="../developers-guide/index.html" class="page">Developers Guide for TDA4j</a>
   <ul>
-    <li><a href="../developers-guide/class-diagrams.html" class="page">Support for different coefficients</a></li>
-    <li><a href="../developers-guide/patterns.html" class="active page">Type Class Pattern</a></li>
+    <li><a href="../developers-guide/class-diagrams.html" class="page">Mapping the library: class- and type-diagrams</a></li>
+    <li><a href="../developers-guide/patterns.html" class="active page">Programming Patterns in use</a></li>
   </ul></li>
 </ul>
 <nav class="md-nav md-nav--secondary">
 <label class="md-nav__title" for="__toc">Table of contents</label>
 <ul>
-  <li><a href="../developers-guide/patterns.html#type-class-pattern" class="header">Type Class Pattern</a>
+  <li><a href="../developers-guide/patterns.html#programming-patterns-in-use" class="header">Programming Patterns in use</a>
   <ul>
+    <li><a href="../developers-guide/patterns.html#type-class-pattern" class="header">Type Class Pattern</a></li>
     <li><a href="../developers-guide/patterns.html#context-pattern" class="header">Context Pattern</a></li>
   </ul></li>
 </ul>
@@ -153,8 +154,9 @@ appliedtopology/tda4j
 <nav class="md-nav md-nav--secondary">
 <label class="md-nav__title" for="__toc">Table of contents</label>
 <ul>
-  <li><a href="../developers-guide/patterns.html#type-class-pattern" class="header">Type Class Pattern</a>
+  <li><a href="../developers-guide/patterns.html#programming-patterns-in-use" class="header">Programming Patterns in use</a>
   <ul>
+    <li><a href="../developers-guide/patterns.html#type-class-pattern" class="header">Type Class Pattern</a></li>
     <li><a href="../developers-guide/patterns.html#context-pattern" class="header">Context Pattern</a></li>
   </ul></li>
 </ul>
@@ -166,10 +168,20 @@ appliedtopology/tda4j
 <div class="md-content">
 <article class="md-content__inner md-typeset">
 <div class="md-content__searchable">
-<h1><a href="#type-class-pattern" name="type-class-pattern" class="anchor"><span class="anchor-link"></span></a>Type Class Pattern</h1>
+<h1><a href="#programming-patterns-in-use" name="programming-patterns-in-use" class="anchor"><span class="anchor-link"></span></a>Programming Patterns in use</h1>
+<div class="toc ">
+<ul>
+  <li><a href="../developers-guide/patterns.html#type-class-pattern" class="header">Type Class Pattern</a></li>
+  <li><a href="../developers-guide/patterns.html#context-pattern" class="header">Context Pattern</a>
+  <ul>
+    <li><a href="../developers-guide/patterns.html#finite-fields" class="header">Finite Fields</a></li>
+  </ul></li>
+</ul>
+</div>
+<h2><a href="#type-class-pattern" name="type-class-pattern" class="anchor"><span class="anchor-link"></span></a>Type Class Pattern</h2>
 <p>We draw extensively on Scala&rsquo;s capacity for type classes to introduce additional capabilities to (possibly pre-existing) classes. Thus, for instance, a <code>Chain</code> object is fundamentally handled as a map with keys from some type <code>CellT</code> and values from some type <code>CoefficientT</code>. By requiring <code>CellT</code> to implement the <code>Cell</code> type class and <code>CoefficientT</code> to have a <code>Fractional</code> implementation, we can guarantee that you can always call the <code>boundary</code> method on any cell and you can do any fractional arithmetic with any coefficients.</p>
 <p>Where appropriate, this is implemented with F-bounded types (<code>CellT</code> needs to implement the <code>Cell</code> typeclass; see <a href="https://tpolecat.github.io/2015/04/29/f-bounds.html">https://tpolecat.github.io/2015/04/29/f-bounds.html</a> and <a href="https://dotty.epfl.ch/3.0.0/docs/reference/contextual/type-classes.html">https://dotty.epfl.ch/3.0.0/docs/reference/contextual/type-classes.html</a>) - or with <code>given</code> instances following the Scala 3 pattern for implicit type classes (our <code>FiniteField</code> implementation comes with a <code>Fractional[Fp]</code> instance as an encapsulated <code>given</code> that can easily be imported).</p>
-<h1><a href="#context-pattern" name="context-pattern" class="anchor"><span class="anchor-link"></span></a>Context Pattern</h1>
+<h2><a href="#context-pattern" name="context-pattern" class="anchor"><span class="anchor-link"></span></a>Context Pattern</h2>
 <p>After seeing how Kotlin works we have also decided to draw extensively on <em>context-driven programming</em>; we provide a number of contexts that include specific choices of things that need to be chosen, and type aliases and notation to enable working with the chosen things. Hence, providing a <code>SimplexContext</code> with a type parameter determines how <code>VertexT</code> will work throughout, and defines <code>Simplex</code> as a type alias for <code>AbstractSimplex[VertexT]</code> as well as a convenience function <code>s</code> that allows the user to very easily write explicit simplex instances.</p>
 <p>Code that uses the simplex capabilities will likely want to start with the lines</p>
 <pre class="prettyprint"><code class="language-scala 3">given sc: SimplexContext[Int]()
@@ -183,7 +195,7 @@ import tdac.{given,*}
 <pre class="prettyprint"><code class="language-scala 3">1.0 *&gt; s(1,2) - 1.0 *&gt; s(1,3) + 1.0 *&gt; s(2,3)
 </code></pre>
 <p>This uses under the hood an implicit conversion from the <code>Simplex</code> type to the <code>Chain</code> type (a simplex is a one-simplex chain with coefficient <code>1</code>).</p>
-<h2><a href="#finite-fields" name="finite-fields" class="anchor"><span class="anchor-link"></span></a>Finite Fields</h2>
+<h3><a href="#finite-fields" name="finite-fields" class="anchor"><span class="anchor-link"></span></a>Finite Fields</h3>
 <p>We provide a finite field arithmetic implementation. To use this, create a <code>FiniteField</code> object and import it&rsquo;s internal opaque type and <code>given</code> instances, and then you can use <code>Fp</code> to create finite field elements. The resulting code looks something like:</p>
 <pre class="prettyprint"><code class="language-scala 3">val fp17 = FiniteField(17)
 import fp17.{given,*}
@@ -209,7 +221,7 @@ Edit this page
 <footer class="md-footer">
 <div class="md-footer-nav">
 <nav class="md-footer-nav__inner md-grid">
-<a href="../developers-guide/class-diagrams.html" title="Support for different coefficients" class="md-flex md-footer-nav__link md-footer-nav__link--prev" rel="prev">
+<a href="../developers-guide/class-diagrams.html" title="Mapping the library: class- and type-diagrams" class="md-flex md-footer-nav__link md-footer-nav__link--prev" rel="prev">
 <div class="md-flex__cell md-flex__cell--shrink">
 <i class="md-icon md-icon--arrow-back md-footer-nav__button"></i>
 </div>
@@ -218,7 +230,7 @@ Edit this page
 <span class="md-footer-nav__direction">
 Previous
 </span>
-Support for different coefficients
+Mapping the library: class- and type-diagrams
 </span>
 </div>
 </a>
