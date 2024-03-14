@@ -1,4 +1,6 @@
-# Support for different coefficients
+# Mapping the library: class- and type-diagrams
+
+## Support for different coefficients
 
 We handle coefficient types by requiring a `Fractional` instance to be defined, 
 which produces all the expected arithmetic operations on coefficients.
@@ -48,7 +50,7 @@ boundary() Chain[AbstractSimplex[VertexT],CoefficientT]
 ```
 
 
-# How do we describe a Simplicial Complex?
+## How do we describe a Simplicial Complex?
 
 ```mermaid
 classDiagram

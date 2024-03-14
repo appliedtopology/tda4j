@@ -1,4 +1,8 @@
-# Type Class Pattern
+# Programming Patterns in use
+
+@@ toc
+
+## Type Class Pattern
 
 We draw extensively on Scala's capacity for type classes to introduce additional capabilities to
 (possibly pre-existing) classes. Thus, for instance, a `Chain` object is fundamentally handled as
@@ -15,7 +19,7 @@ following the Scala 3 pattern for implicit type classes (our `FiniteField` imple
 
 
 
-# Context Pattern
+## Context Pattern
 
 After seeing how Kotlin works we have also decided to draw extensively on _context-driven programming_;
 we provide a number of contexts that include specific choices of things that need to be chosen, and
@@ -46,7 +50,7 @@ With all contexts in place (through the meta context), a user can write out an e
 This uses under the hood an implicit conversion from the `Simplex` type to the `Chain` type (a simplex is
 a one-simplex chain with coefficient `1`).
 
-## Finite Fields
+### Finite Fields
 
 We provide a finite field arithmetic implementation. To use this, create a `FiniteField` object and import
 it's internal opaque type and `given` instances, and then you can use `Fp` to create finite field elements.
