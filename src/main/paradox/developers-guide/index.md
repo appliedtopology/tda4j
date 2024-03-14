@@ -46,3 +46,4 @@ val z = Fp(2) *> s(1,2) - s(2,3)
 ## Class Hierarchy
 
 Here is the current structure of defined classes and their inheritance relations.
+[We provide an extensive class diagram network](class-diagrams.md) to help visualize classes and relations.
