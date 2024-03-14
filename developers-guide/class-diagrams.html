@@ -20,7 +20,7 @@
 
 <meta name="description" content="TDA4j">
 <link rel="shortcut icon" href="../assets/images/favicon.png">
-<title>User Guide for TDA4j · TDA4j</title>
+<title>Support for different coefficients · TDA4j</title>
 <link rel="stylesheet" href="../assets/stylesheets/application.451f80e5.css">
 <link rel="stylesheet" href="../assets/stylesheets/application-palette.22915126.css">
 <meta name="theme-color" content="#3f51b5" />
@@ -60,7 +60,7 @@ data-md-color-accent="blue"
 TDA4j
 </span>
 <span class="md-header-nav__topic">
-User Guide for TDA4j
+Support for different coefficients
 </span>
 </div>
 </div>
@@ -119,21 +119,19 @@ appliedtopology/tda4j
 </div>
 <ul>
   <li><a href="../tutorials/index.html" class="page">Tutorials for TDA4j</a></li>
-  <li><a href="../user-guide/index.html" class="active page">User Guide for TDA4j</a></li>
+  <li><a href="../user-guide/index.html" class="page">User Guide for TDA4j</a></li>
   <li><a href="../developers-guide/index.html" class="page">Developers Guide for TDA4j</a>
   <ul>
-    <li><a href="../developers-guide/class-diagrams.html" class="page">Support for different coefficients</a></li>
+    <li><a href="../developers-guide/class-diagrams.html" class="active page">Support for different coefficients</a></li>
     <li><a href="../developers-guide/patterns.html" class="page">Type Class Pattern</a></li>
   </ul></li>
 </ul>
 <nav class="md-nav md-nav--secondary">
 <label class="md-nav__title" for="__toc">Table of contents</label>
 <ul>
-  <li><a href="../user-guide/index.html#user-guide-for-tda4j" class="header">User Guide for TDA4j</a>
+  <li><a href="../developers-guide/class-diagrams.html#support-for-different-coefficients" class="header">Support for different coefficients</a>
   <ul>
-    <li><a href="../user-guide/index.html#quick-start-how-to-use-the-library-in-scala" class="header">Quick-start: how to use the library in Scala</a></li>
-    <li><a href="../user-guide/index.html#quick-start-how-to-use-the-library-from-modern-java" class="header">Quick-start: how to use the library from modern Java</a></li>
-    <li><a href="../user-guide/index.html#quick-start-how-to-use-the-library-from-matlab" class="header">Quick-start: how to use the library from Matlab</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#how-do-we-describe-a-simplicial-complex-" class="header">How do we describe a Simplicial Complex?</a></li>
   </ul></li>
 </ul>
 </nav>
@@ -155,11 +153,9 @@ appliedtopology/tda4j
 <nav class="md-nav md-nav--secondary">
 <label class="md-nav__title" for="__toc">Table of contents</label>
 <ul>
-  <li><a href="../user-guide/index.html#user-guide-for-tda4j" class="header">User Guide for TDA4j</a>
+  <li><a href="../developers-guide/class-diagrams.html#support-for-different-coefficients" class="header">Support for different coefficients</a>
   <ul>
-    <li><a href="../user-guide/index.html#quick-start-how-to-use-the-library-in-scala" class="header">Quick-start: how to use the library in Scala</a></li>
-    <li><a href="../user-guide/index.html#quick-start-how-to-use-the-library-from-modern-java" class="header">Quick-start: how to use the library from modern Java</a></li>
-    <li><a href="../user-guide/index.html#quick-start-how-to-use-the-library-from-matlab" class="header">Quick-start: how to use the library from Matlab</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#how-do-we-describe-a-simplicial-complex-" class="header">How do we describe a Simplicial Complex?</a></li>
   </ul></li>
 </ul>
 </nav>
@@ -170,16 +166,104 @@ appliedtopology/tda4j
 <div class="md-content">
 <article class="md-content__inner md-typeset">
 <div class="md-content__searchable">
-<h1><a href="#user-guide-for-tda4j" name="user-guide-for-tda4j" class="anchor"><span class="anchor-link"></span></a>User Guide for TDA4j</h1>
-<h2><a href="#quick-start-how-to-use-the-library-in-scala" name="quick-start-how-to-use-the-library-in-scala" class="anchor"><span class="anchor-link"></span></a>Quick-start: how to use the library in Scala</h2>
-<p>Here&rsquo;s how to get started using TDA4j:</p>
-<h2><a href="#quick-start-how-to-use-the-library-from-modern-java" name="quick-start-how-to-use-the-library-from-modern-java" class="anchor"><span class="anchor-link"></span></a>Quick-start: how to use the library from modern Java</h2>
-<p>The structures we use benefit from the language structure developed in Java from version 11 onwards. Here is how to get started in Java:</p>
-<h2><a href="#quick-start-how-to-use-the-library-from-matlab" name="quick-start-how-to-use-the-library-from-matlab" class="anchor"><span class="anchor-link"></span></a>Quick-start: how to use the library from Matlab</h2>
-<p>Some platforms, notably including Matlab, allow us to use Java and JVM libraries, but restrict the available syntax severely. In order to make it easy to get started with TDA from these platforms, we have included implementations of most of the tasks of immediate interest in the <code>Api</code> object&hellip;</p>
+<h1><a href="#support-for-different-coefficients" name="support-for-different-coefficients" class="anchor"><span class="anchor-link"></span></a>Support for different coefficients</h1>
+<p>We handle coefficient types by requiring a <code>Fractional</code> instance to be defined, which produces all the expected arithmetic operations on coefficients. <code>Fractional[Double]</code> already exists in Scala, and we also implement in the same way as is main-stream in the persistent homology library ecosystem finite field arithmetic with lookup tables for inverses.</p>
+<pre class="prettyprint"><code class="language-mermaid">classDiagram
+    class FiniteField {
+        val p: Int
+        type Fp
+        given val FpIsFractional: Fractional[Fp]
+        extension Fp.norm() Fp
+        extension Fp.toInt() Int
+        extension Fp.toString() String
+        extension Fp.toUInt() UInt
+    }
+    namespace Scala {
+        class Double {
+        }
+
+        class `DoubleIsFractional:Fractional[Double]` {
+        }
+    }
+    FiniteField -- Fractional
+
+    class `Chain[CellT: Cell, CoefficientT: Fractional]` {
+        ...
+    }
+
+    Double -- Fractional
+
+    Fractional *-- `Chain[CellT: Cell, CoefficientT: Fractional]`
+    `Cell[CellT]` *-- `Chain[CellT: Cell, CoefficientT: Fractional]`
+    `Cell[CellT]` --&gt; `AbstractSimplex[VertexT]`
+    class `Cell[CellT]` {
+&lt;&lt;interface Typeclass&gt;&gt;
+boundary() Chain[CellT, CoefficientT]
+}
+class `AbstractSimplex[VertexT]` {
+&lt;&lt;extends SortedSet, Cell&gt;&gt;
+size : Int
+iterator : Iterator[VertexT]
+boundary() Chain[AbstractSimplex[VertexT],CoefficientT]
+}
+</code></pre>
+<h1><a href="#how-do-we-describe-a-simplicial-complex-" name="how-do-we-describe-a-simplicial-complex-" class="anchor"><span class="anchor-link"></span></a>How do we describe a Simplicial Complex?</h1>
+<pre class="prettyprint"><code class="language-mermaid">classDiagram
+    `Cell[CellT]` --&gt; `AbstractSimplex[VertexT]`
+    class `Cell[CellT]` {
+&lt;&lt;interface Typeclass&gt;&gt;
+boundary() Chain[CellT, CoefficientT]
+}
+class `AbstractSimplex[VertexT]` {
+&lt;&lt;extends SortedSet, Cell&gt;&gt;
+size : Int
+iterator : Iterator[VertexT]
+boundary() Chain[AbstractSimplex[VertexT],CoefficientT]
+}
+class `SimplexContext[VertexT]` {
+&lt;&lt;interface Context&gt;&gt;
+type Simplex = AbstractSimplex[VertexT]
+given Ordering[Simplex]
+s(vs*: Simplex) Simplex
+}
+class `IterableOnce[T]` {
+iterator : Iterator[T]
+knownSize : Int
+}
+class `Filtration[VertexT,FiltrationT]` {
+filtrationValue(simplex: AbstractSimplex[VertexT]) FiltrationT
+}
+class `SimplexStream[VertexT,FiltrationT]` {
+&lt;&lt;extends Filtration[VertexT,FiltrationT], IterableOnce[AbstractSimplex[VertexT]]&gt;&gt;
+}
+`IterableOnce[T]` --&gt; `SimplexStream[VertexT,FiltrationT]` : inherits
+`Filtration[VertexT,FiltrationT]` --&gt; `SimplexStream[VertexT,FiltrationT]` : inherits
+`AbstractSimplex[VertexT]` &quot;*&quot; o-- &quot;1&quot; `SimplexStream[VertexT,FiltrationT]` : contains
+
+class `ExplicitStream[VertexT,FiltrationT]` {
+filtrationValues : Map[AbstractSimplex[VertexT],FiltrationT]
+simplices: Seq[AbstractSimplex[VertexT]]
+}
+class `VietorisRips[VertexT]` {
+metricSpace: FiniteMetricSpace[VertexT]
+maxDimension: Int
+maxFiltrationValue: Double
+cliqueFinder: CliqueFinder[VertexT]
+}
+`SimplexStream[VertexT,FiltrationT]` --&gt; `ExplicitStream[VertexT,FiltrationT]`: inherits
+`SimplexStream[VertexT,FiltrationT]` --&gt; `VietorisRips[VertexT]`: inherits FiltrationT=Double
+`VietorisRips[VertexT]` -- `CliqueFinder[VertexT]` : uses
+class `CliqueFinder[VertexT]` {
+&lt;&lt;interface&gt;&gt;
+apply(metricSpace, maxFiltrationValue, maxDimension) Seq[AbstractSimplex[VertexT]]
+    }
+`CliqueFinder[VertexT]` --&gt; BronKerbosch : implements
+`CliqueFinder[VertexT]` --&gt; ZomorodianIncremental : implements
+`CliqueFinder[VertexT]` --&gt; SymmetricZomorodianIncremental : implements
+</code></pre>
 </div>
 <div>
-<a href="https://github.com/appliedtopology/tda4j/tree/0.0.1/src/main/paradox/user-guide/index.md" title="Edit this page" class="md-source-file md-edit">
+<a href="https://github.com/appliedtopology/tda4j/tree/0.0.1/src/main/paradox/developers-guide/class-diagrams.md" title="Edit this page" class="md-source-file md-edit">
 Edit this page
 </a>
 </div>
@@ -195,7 +279,7 @@ Edit this page
 <footer class="md-footer">
 <div class="md-footer-nav">
 <nav class="md-footer-nav__inner md-grid">
-<a href="../tutorials/index.html" title="Tutorials for TDA4j" class="md-flex md-footer-nav__link md-footer-nav__link--prev" rel="prev">
+<a href="../developers-guide/index.html" title="Developers Guide for TDA4j" class="md-flex md-footer-nav__link md-footer-nav__link--prev" rel="prev">
 <div class="md-flex__cell md-flex__cell--shrink">
 <i class="md-icon md-icon--arrow-back md-footer-nav__button"></i>
 </div>
@@ -204,17 +288,17 @@ Edit this page
 <span class="md-footer-nav__direction">
 Previous
 </span>
-Tutorials for TDA4j
+Developers Guide for TDA4j
 </span>
 </div>
 </a>
-<a href="../developers-guide/index.html" title="Developers Guide for TDA4j" class="md-flex md-footer-nav__link md-footer-nav__link--next" rel="next">
+<a href="../developers-guide/patterns.html" title="Type Class Pattern" class="md-flex md-footer-nav__link md-footer-nav__link--next" rel="next">
 <div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
 <span class="md-flex__ellipsis">
 <span class="md-footer-nav__direction">
 Next
 </span>
-Developers Guide for TDA4j
+Type Class Pattern
 </span>
 </div>
 <div class="md-flex__cell md-flex__cell--shrink">
