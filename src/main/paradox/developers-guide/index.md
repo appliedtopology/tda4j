@@ -47,3 +47,9 @@ val z = Fp(2) *> s(1,2) - s(2,3)
 
 Here is the current structure of defined classes and their inheritance relations.
 [We provide an extensive class diagram network](class-diagrams.md) to help visualize classes and relations.
+
+
+## Code Patterns
+
+There are several programming patterns that we adopt extensively that merit a little bit more detailed 
+explanation. We try to give these explanations [here](patterns.md).
