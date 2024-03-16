@@ -38,6 +38,15 @@ trait FiniteMetricSpace[VertexT] {
   def elements: Iterable[VertexT]
 
   def contains(x: VertexT): Boolean
+  
+  /** Beyond this radius, the Vietoris-Rips complex is a cone
+   * and will have no further homological structure.
+   * See e.g. the Ripser paper, page 412.
+   */
+  lazy val minimumEnclosingRadius =
+    elements.map {x => 
+      elements.map { y => distance(x,y) }.max
+    }.min
 }
 
 /** Convenience functionality for metric spaces.
