@@ -253,15 +253,12 @@ class MaskedSymmetricRipserStream[KeyT](
   given sc: SimplexContext[Int]()
   import sc.*
   val si: SimplexIndexing = SimplexIndexing(metricSpace.size)
-
-  val finalized = new mutable.BitSet(maxDimension + 1)
-  val seen: mutable.IndexedSeq[mutable.BitSet] = (0 to maxDimension)
-    .map(d => new mutable.BitSet(binomial(metricSpace.size, d + 1)))
-    .to(mutable.IndexedSeq)
-
-  val filtrationValues: mutable.IndexedSeq[Array[Double]] = (0 to maxDimension)
-    .map(d => new Array[Double](binomial(metricSpace.size, d + 1)))
-    .to(mutable.IndexedSeq)
+  val distances: Set[Double] = Set.from(
+    for
+      x <- metricSpace.elements
+      y <- metricSpace.elements
+    yield metricSpace.distance(x,y)
+  )
 
   override def iterator: Iterator[Simplex] =
     for
@@ -272,27 +269,18 @@ class MaskedSymmetricRipserStream[KeyT](
   def iteratorByDimension(d: Int): Iterator[Simplex] = if (d > metricSpace.size)
     Iterator()
   else {
-    if (!finalized(d)) {
-      (0 until binomial(metricSpace.size, d + 1)).toList.par.foreach { i =>
-        if (!seen(d).contains(i)) {
-          val simplex = si(i, d + 1)
-          val orbit = symmetryGroup.orbit(simplex)
-          orbit.foreach { s =>
-            val sis = si(s)
-            seen(d).add(sis)
-            filtrationValues(d)(sis) = filtrationValue(s)
-          }
-        }
-      }
-      finalized.add(d)
-    }
-    filtrationValues(d)
-      .zip(Iterator.from(0))
-      .filter(_._1 < maxFiltrationValue)
-      .sortBy(_._1) // sort by filtrationvalue
-      .map(_._2) // extract simplex indices
-      .iterator // lazy creation of actual simplices
-      .map(i => si(i, d + 1))
+    val repmap: Map[Double, List[Simplex]] = List.from(
+      for {
+        i <- (0 until binomial(metricSpace.size, d + 1)).iterator
+        spx <- Seq(si(i, d + 1))
+        if (symmetryGroup.isRepresentative(spx))
+      } yield (filtrationValue(spx) -> spx)
+    ).groupMap(_._1)(_._2)
+    for {
+       dist <- repmap.keys.toSeq.sorted.iterator
+       spx <- repmap(dist).iterator
+       out <- symmetryGroup.orbit(spx).iterator
+    } yield out
   }
 
   override def filtrationValue: PartialFunction[Simplex, Double] =

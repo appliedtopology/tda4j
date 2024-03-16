@@ -73,8 +73,8 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
           "SZIG"
         )
       pp("Counting pseudo-minimal elements")
-      pp(symmetry_gen.representatives.size)
-      pp(symmetry_gen.representatives.count((k, v) => k != v))
+      pp(s"SZIG ${symmetry_gen.representatives.size}")
+      pp(s"SZIG ${symmetry_gen.representatives.count((k, v) => k != v)}")
 
       symmetry_gen.representatives.size === symmetry_gen.representatives.size
     }
