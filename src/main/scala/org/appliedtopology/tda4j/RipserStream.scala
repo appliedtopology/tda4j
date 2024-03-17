@@ -176,6 +176,7 @@ abstract class RipserStreamBase(
 
   def zeroPersistence[CoefficientT](): BarcodeGenerators[Double, Simplex, CoefficientT] =
     Kruskal(metricSpace)
+      .mstIterator
       .map { (b,d) => PersistenceBar[Double,Chain[Simplex,CoefficientT]](0, Some(0.0), Some(metricSpace.distance(b,d))) }
       .toList
 }
