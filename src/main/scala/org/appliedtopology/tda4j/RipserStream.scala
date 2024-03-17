@@ -147,6 +147,38 @@ abstract class RipserStreamBase(
 
   override def filtrationValue: PartialFunction[AbstractSimplex[Int], Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
+
+  def zeroPivotCofacet(index: Int, size: Int): Option[Int] = (
+    for {
+      cofacet <- si.cofacetIterator(index, size, false)
+      if(filtrationValue(si(cofacet, size+1)) == filtrationValue(si(index,size)))
+    } yield cofacet).maxOption
+
+  def zeroPivotFacet(index: Int, size: Int): Option[Int] = (
+    for {
+      facet <- si.facetIterator(index, size)
+      if(filtrationValue(si(facet, size-1)) == filtrationValue(si(index,size)))
+    } yield facet).maxOption
+
+  def zeroApparentCofacet(index: Int, size: Int): Option[Int] =
+    for {
+      cofacet <- zeroPivotCofacet(index,size)
+      facet <- zeroPivotFacet(cofacet, size+1)
+      if(facet == index)
+    } yield cofacet
+
+  def zeroApparentFacet(index: Int, size: Int): Option[Int] =
+    for {
+      facet <- zeroPivotFacet(index,size)
+      cofacet <- zeroPivotCofacet(facet, size-1)
+      if(facet == index)
+    } yield cofacet
+
+  def zeroPersistence[CoefficientT](): BarcodeGenerators[Double, Simplex, CoefficientT] =
+    Kruskal(metricSpace)
+      .mstIterator
+      .map { (b,d) => PersistenceBar[Double,Chain[Simplex,CoefficientT]](0, Some(0.0), Some(metricSpace.distance(b,d))) }
+      .toList
 }
 
 class RipserStream(
