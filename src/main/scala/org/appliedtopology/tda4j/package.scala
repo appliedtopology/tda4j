@@ -6,8 +6,8 @@ import math.Ordering.Implicits.sortedSetOrdering
   */
 package object tda4j {
   class TDAContext[VertexT: Ordering, CoefficientT: Fractional]
-      extends ChainOps[AbstractSimplex[VertexT], CoefficientT],
+      extends MapChainOps[AbstractSimplex[VertexT], CoefficientT],
         SimplexContext[VertexT] {
-    given Conversion[Simplex, Chain[Simplex, CoefficientT]] = Chain.apply
+    given Conversion[Simplex, MapChain[Simplex, CoefficientT]] = MapChain.apply
   }
 }
