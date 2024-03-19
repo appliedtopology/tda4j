@@ -6,11 +6,8 @@ import scala.annotation.targetName
 
 /** The Chain class is a representation of a formal linear combination of the n
   * cells in a cell complex. Note that CellT is a type parameter subtype of
-  * Cell, a trait in this library. We have Scala look for a type parameter of
-  * cellOrdering that matches as best as possible an Ordering on CellT.
-  *
-  * (Note: write a fully fleshed out explanation in comments after code def.
-  * write up)
+  * Cell, a trait in this library. CellT has a context bound that demands an implicit
+  * Ordering for CellT
   *
   * @tparam CellT
   *   Type of the cells in the chain complex. For example `AbstractSimplex[Int]`
@@ -23,7 +20,7 @@ import scala.annotation.targetName
   */
 class Chain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional]
 /** chainMap is an immutable variable and constructor that uses Scala's SortedMap to make a key-value pairing of an CellT as the key and a
-  * CoefficientT type as the value. Here, we'll use the Using keyword to check for any relevant types for CoefficientT.
+  * CoefficientT type as the value.
   */ (val chainMap: SortedMap[CellT, CoefficientT]) {
 
   override def toString: String =

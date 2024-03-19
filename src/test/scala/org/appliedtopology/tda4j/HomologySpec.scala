@@ -2,9 +2,11 @@ package org.appliedtopology.tda4j
 
 import org.specs2.matcher
 import org.specs2.mutable.Specification
+
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
 import scala.math
+import scala.runtime.Tuple2Zipped
 
 class HomologySpec extends Specification {
   """  HomologySpec """ should {
@@ -25,8 +27,38 @@ class HomologySpec extends Specification {
        val testValuesFormaxFiltrationValueEuclideanSpace = List[Double](scala.math.pow(computationsOfEuclideanSpaceSansSqrt,0.5)).max
        val simplices = VietorisRips[Int](metric,testValuesFormaxFiltrationValueEuclideanSpace,3)
 
-       //val boundaries = new ListBuffer[Chain[Int,Double]]
+       //what do I want to do here? Use given so I can use Chain class to specify coeff and VertexT
+       given chain_ctx: TDAContext[Int, Double] with {
+         import chain_ctx.{given,*} //used to import all functionality of variable (chain.ctx) that uses TDAContext
+         
+         val boundaries :  ListBuffer[Chain[Simplex,Double]] = ListBuffer[Chain[Simplex,Double]]() //empty list buffer created
+         val cycles :  ListBuffer[Chain[Simplex,Double]] = ListBuffer[Chain[Simplex,Double]]()
+         val intervals :  ListBuffer[(Simplex, Double)] = ListBuffer[(Simplex,Double)]() //returns tuple of interval
 
+         extension(chain: Chain[Simplex,Double]){
+           def reduceByBasis(basis: ListBuffer[Chain[Simplex,Double]]) : Chain[Simplex,Double] =
+             var changed : Boolean = true
+             var sigma = this
+             while(changed){
+               changed = false
+               for
+                 basisElement <- basis
+                 if(sigma.
+
+
+             }
+
+         }
+
+         
+
+      //TDAContext is great! Due to the context-driven paradigm, the tda package object extends ChainOps and SimplexOps,
+      //thus you don't have to keep on rewriting parameter names and function calls. Instead its assigned to a singular variable, that does all that in the backend
+      //of TDAContext, which itself goes into the backend of ChainOps and SimplexContext. SC sets up the functionality to work with simplexes in a practical matter
+
+
+
+       }
 
     }
 
