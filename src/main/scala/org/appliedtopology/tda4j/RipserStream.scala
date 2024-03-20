@@ -2,7 +2,11 @@ package org.appliedtopology.tda4j
 
 import scala.collection.Searching.{given, *}
 import org.apache.commons.numbers.combinatorics
-import org.appliedtopology.tda4j.barcode.{PersistenceBar,OpenEndpoint,ClosedEndpoint}
+import org.appliedtopology.tda4j.barcode.{
+  ClosedEndpoint,
+  OpenEndpoint,
+  PersistenceBar
+}
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -148,37 +152,41 @@ abstract class RipserStreamBase(
   override def filtrationValue: PartialFunction[AbstractSimplex[Int], Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 
-  def zeroPivotCofacet(index: Int, size: Int): Option[Int] = (
-    for {
-      cofacet <- si.cofacetIterator(index, size, false)
-      if(filtrationValue(si(cofacet, size+1)) == filtrationValue(si(index,size)))
-    } yield cofacet).maxOption
+  def zeroPivotCofacet(index: Int, size: Int): Option[Int] = (for {
+    cofacet <- si.cofacetIterator(index, size, false)
+    if filtrationValue(si(cofacet, size + 1)) == filtrationValue(
+      si(index, size)
+    )
+  } yield cofacet).maxOption
 
-  def zeroPivotFacet(index: Int, size: Int): Option[Int] = (
-    for {
-      facet <- si.facetIterator(index, size)
-      if(filtrationValue(si(facet, size-1)) == filtrationValue(si(index,size)))
-    } yield facet).maxOption
+  def zeroPivotFacet(index: Int, size: Int): Option[Int] = (for {
+    facet <- si.facetIterator(index, size)
+    if filtrationValue(si(facet, size - 1)) == filtrationValue(si(index, size))
+  } yield facet).maxOption
 
   def zeroApparentCofacet(index: Int, size: Int): Option[Int] =
     for {
-      cofacet <- zeroPivotCofacet(index,size)
-      facet <- zeroPivotFacet(cofacet, size+1)
-      if(facet == index)
+      cofacet <- zeroPivotCofacet(index, size)
+      facet <- zeroPivotFacet(cofacet, size + 1)
+      if facet == index
     } yield cofacet
 
   def zeroApparentFacet(index: Int, size: Int): Option[Int] =
     for {
-      facet <- zeroPivotFacet(index,size)
-      cofacet <- zeroPivotCofacet(facet, size-1)
-      if(facet == index)
+      facet <- zeroPivotFacet(index, size)
+      cofacet <- zeroPivotCofacet(facet, size - 1)
+      if facet == index
     } yield cofacet
 
-  def zeroPersistence[CoefficientT](): List[PersistenceBar[Double,Chain[Simplex,CoefficientT]]] =
-    Kruskal(metricSpace)
-      .mstIterator
-      .map { (b,d) => PersistenceBar[Double,Chain[Simplex,CoefficientT]](0, ClosedEndpoint(0.0), OpenEndpoint(metricSpace.distance(b,d))) }
-      .toList
+  def zeroPersistence[CoefficientT]()
+    : List[PersistenceBar[Double, Chain[Simplex, CoefficientT]]] =
+    Kruskal(metricSpace).mstIterator.map { (b, d) =>
+      PersistenceBar[Double, Chain[Simplex, CoefficientT]](
+        0,
+        ClosedEndpoint(0.0),
+        OpenEndpoint(metricSpace.distance(b, d))
+      )
+    }.toList
 }
 
 class RipserStream(
@@ -289,7 +297,7 @@ class MaskedSymmetricRipserStream[KeyT](
     for
       x <- metricSpace.elements
       y <- metricSpace.elements
-    yield metricSpace.distance(x,y)
+    yield metricSpace.distance(x, y)
   )
 
   override def iterator: Iterator[Simplex] =
@@ -301,17 +309,19 @@ class MaskedSymmetricRipserStream[KeyT](
   def iteratorByDimension(d: Int): Iterator[Simplex] = if (d > metricSpace.size)
     Iterator()
   else {
-    val repmap: Map[Double, List[Simplex]] = List.from(
-      for {
-        i <- (0 until binomial(metricSpace.size, d + 1)).iterator
-        spx <- Seq(si(i, d + 1))
-        if (symmetryGroup.isRepresentative(spx))
-      } yield (filtrationValue(spx) -> spx)
-    ).groupMap(_._1)(_._2)
+    val repmap: Map[Double, List[Simplex]] = List
+      .from(
+        for {
+          i <- (0 until binomial(metricSpace.size, d + 1)).iterator
+          spx <- Seq(si(i, d + 1))
+          if symmetryGroup.isRepresentative(spx)
+        } yield (filtrationValue(spx) -> spx)
+      )
+      .groupMap(_._1)(_._2)
     for {
-       dist <- repmap.keys.toSeq.sorted.iterator
-       spx <- repmap(dist).iterator
-       out <- symmetryGroup.orbit(spx).iterator
+      dist <- repmap.keys.toSeq.sorted.iterator
+      spx <- repmap(dist).iterator
+      out <- symmetryGroup.orbit(spx).iterator
     } yield out
   }
 

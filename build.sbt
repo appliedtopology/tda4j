@@ -17,9 +17,6 @@ libraryDependencies +=
 libraryDependencies += "org.typelevel" %% "cats-effect"                % "3.5.3"
 libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.17.0" % "test"
 
-
-
-
 lazy val root = (project in file("."))
   .enablePlugins(
     SiteScaladocPlugin,
