@@ -3,8 +3,9 @@ organization := "org.appliedtopology"
 version := "0.1.0-alpha"
 scalaVersion := "3.3.0"
 
+versionScheme := Some("semver-spec")
+
 pomIncludeRepository := { _ => false }
-publish / skip := true // change this when ready to go on Maven/Sonatype
 publishTo := sonatypePublishToBundle.value
 sonatypeCredentialHost := "s01.oss.sonatype.org"
 
