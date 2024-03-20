@@ -1,6 +1,6 @@
 package org.appliedtopology
 
-import barcode.{PersistenceBar,BarcodeEndpoint,PositiveInfinity,NegativeInfinity,OpenEndpoint,ClosedEndpoint}
+import org.appliedtopology.tda4j.barcode.{PersistenceBar,BarcodeEndpoint,PositiveInfinity,NegativeInfinity,OpenEndpoint,ClosedEndpoint}
 
 import math.Ordering.Implicits.sortedSetOrdering
 

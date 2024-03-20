@@ -2,7 +2,6 @@ package org.appliedtopology.tda4j
 
 import scala.collection.Searching.{given, *}
 import org.apache.commons.numbers.combinatorics
-import org.appliedtopology.tda4j
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -174,7 +173,7 @@ abstract class RipserStreamBase(
       if(facet == index)
     } yield cofacet
 
-  def zeroPersistence[CoefficientT](): BarcodeGenerators[Double, Simplex, CoefficientT] = 
+  def zeroPersistence[CoefficientT](): List[PersistenceBar[Double,Chain[Simplex,CoefficientT]]] = 
     Kruskal(metricSpace)
       .mstIterator
       .map { (b,d) => PersistenceBar[Double,Chain[Simplex,CoefficientT]](0, ClosedEndpoint(0.0), OpenEndpoint(metricSpace.distance(b,d))) }
