@@ -1,7 +1,10 @@
 name := "TDA4j"
 organization := "org.appliedtopology"
-version := "0.0.1"
+version := "0.1.0-alpha"
 scalaVersion := "3.3.0"
+
+publish / skip := true // change this when ready to go on Maven/Sonatype
+publishTo := None
 
 libraryDependencies += "org.specs2" %% "specs2-core"          % "5.5.1" % "test"
 libraryDependencies += "org.specs2" %% "specs2-matcher-extra" % "5.5.1" % "test"
