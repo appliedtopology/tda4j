@@ -7,6 +7,7 @@ import org.specs2.mutable.Specification
 import scala.collection.immutable.Seq
 
 import org.appliedtopology.tda4j.given
+import org.appliedtopology.tda4j.barcode.{*,given}
 
 class BarcodeAlgebraSpec extends Specification with ScalaCheck {
   "Comparing endpoints" >> {
