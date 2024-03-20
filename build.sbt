@@ -3,8 +3,10 @@ organization := "org.appliedtopology"
 version := "0.1.0-alpha"
 scalaVersion := "3.3.0"
 
+pomIncludeRepository := { _ => false }
 publish / skip := true // change this when ready to go on Maven/Sonatype
-publishTo := None
+publishTo := sonatypePublishToBundle.value
+sonatypeCredentialHost := "s01.oss.sonatype.org"
 
 libraryDependencies += "org.specs2" %% "specs2-core"          % "5.5.1" % "test"
 libraryDependencies += "org.specs2" %% "specs2-matcher-extra" % "5.5.1" % "test"
