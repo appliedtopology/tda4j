@@ -41,10 +41,14 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
 
     }
 
+    section("bron-kerbosch")
     ("Bron-Kerbosch" >> {
       var bk: HyperCubeProfiling =
         HyperCubeProfiling(BronKerbosch[Int](), symmetry, bitlength, "BK")
-    }).section("bron-kerbosch")
+    })
+    section("bron-kerbosch")
+    
+    section("zomorodian-incremental")
     ("Zomorodian Incremental" >> {
       val zi: HyperCubeProfiling =
         HyperCubeProfiling(
@@ -53,8 +57,10 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
           bitlength,
           "ZI"
         )
-    }).section("zomorodian-incremental")
+    })
+    section("zomorodian-incremental")
 
+    section("symmetric")
     ("Zomorodian Incremental with symmetry" >> {
       val szi: HyperCubeProfiling = HyperCubeProfiling(
         SymmetricZomorodianIncremental[Int, Int](symmetry),
@@ -62,7 +68,8 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
         bitlength,
         "SZI"
       )
-    }).section("symmetric")
+    })
+    section("symmetric")
 
     section("generators")
     "Zomorodian Incremental with symmetry group generators" >> {
