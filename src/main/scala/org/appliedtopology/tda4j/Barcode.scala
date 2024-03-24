@@ -164,120 +164,144 @@ class Barcode[FiltrationT: Ordering: Numeric, AnnotationT] {
       ).lower // target must be born before source dies
   )).forall(b => b)
 
-  def image(
+  def imageMatrix(
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
     matrix: RealMatrix
-  ): List[PersistenceBar[FiltrationT, AnnotationT]] = {
+  ): RealMatrix = {
     val matrixT = matrix.transpose()
     val births = source.map(_.lower)
     val deaths = target.map(_.upper)
     val birthOrder = births.zipWithIndex.sortBy(_._1).map(_._2)
     val deathOrder = deaths.zipWithIndex.sortBy(_._1).map(_._2)
-    val imageMatrix = MatrixUtils.createRealMatrix(births.size, deaths.size)
+    val imagematrix = MatrixUtils.createRealMatrix(births.size, deaths.size)
     for
       birth <- (0 until births.size)
       death <- (0 until deaths.size)
-    yield imageMatrix.setEntry(
+    yield imagematrix.setEntry(
       birth,
       death,
       matrixT.getEntry(birthOrder(birth), deathOrder(death))
     )
-    reduceMatrix(imageMatrix)
-    (for (birth, death) <- pivotsOf(imageMatrix)
-    yield PersistenceBar[FiltrationT, AnnotationT](
-      source(birth).dim,
-      births(birth),
-      deaths(death),
-      source(birth).annotation
-    )).toList
+    reduceMatrix(imagematrix)
   }
 
-  def kernel(
-    source: List[PersistenceBar[FiltrationT, AnnotationT]],
-    target: List[PersistenceBar[FiltrationT, AnnotationT]],
-    matrix: RealMatrix
-  )(using
-    ord: Ordering[FiltrationT]
-  ): List[PersistenceBar[FiltrationT, AnnotationT]] = {
-    val dualSource: List[PersistenceBar[FiltrationT, AnnotationT]] =
-      target.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
-    val dualTarget: List[PersistenceBar[FiltrationT, AnnotationT]] =
-      source.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
-    val cokernelIntervals =
-      cokernel(dualSource, dualTarget, matrix.transpose())(using
-        ord = ord.reverse
-      )
-    cokernelIntervals.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
-  }
-
-  def cokernel(
-    source: List[PersistenceBar[FiltrationT, AnnotationT]],
-    target: List[PersistenceBar[FiltrationT, AnnotationT]],
-    matrix: RealMatrix
-  )(using
-    ord: Ordering[FiltrationT]
-  ): List[PersistenceBar[FiltrationT, AnnotationT]] = {
-    val births = target.map(_.lower)
-    val deaths = source.map(_.lower.flip) ++ target.map(_.upper)
-    val birthOrder = births.zipWithIndex.sortBy(_._1).map(_._2)
-    val deathOrder = deaths.zipWithIndex.sortBy(_._1).map(_._2)
-    val cokernelMatrix = MatrixUtils.createRealMatrix(births.size, deaths.size)
-    for
-      s <- (0 until source.size)
-      t <- (0 until target.size)
-    yield cokernelMatrix.setEntry(
-      t,
-      s,
-      matrix.getEntry(birthOrder(t), deathOrder(s))
-    )
-    (0 until target.size).foreach { t =>
-      cokernelMatrix.setEntry(birthOrder(t), deathOrder(source.size + t), 1.0)
+    def image(
+               source: List[PersistenceBar[FiltrationT, AnnotationT]],
+               target: List[PersistenceBar[FiltrationT, AnnotationT]],
+               matrix: RealMatrix
+             ): List[PersistenceBar[FiltrationT, AnnotationT]] = {
+      val births = source.map(_.lower)
+      val deaths = target.map(_.upper)
+      val imagematrix = imageMatrix(source, target, matrix)
+      (for (birth, death) <- pivotsOf(imagematrix)
+        yield PersistenceBar[FiltrationT, AnnotationT](
+          source(birth).dim,
+          births(birth),
+          deaths(death),
+          source(birth).annotation
+        )).toList
     }
-    reduceMatrix(cokernelMatrix)
-    (for
-      (row, col) <- pivotsOf(cokernelMatrix)
-      birth <- List(birthOrder.indexOf(row))
-      death <- List(deathOrder.indexOf(col))
-    yield PersistenceBar[FiltrationT, AnnotationT](
-      target(birth).dim,
-      births(birth),
-      deaths(death),
-      target(birth).annotation
-    )).toList
-  }
 
-  def reduceMatrix(matrix: RealMatrix): RealMatrix = {
-    for
-      col <- (0 until matrix.getColumnDimension)
-      pivot <- List(matrix.getColumn(col).iterator.toSeq.lastIndexWhere(_ != 0))
-      if pivot >= 0
-      nextcol <- (col + 1 until matrix.getColumnDimension)
-      if matrix.getEntry(pivot, nextcol) != 0
-    yield matrix.setColumnMatrix(
-      nextcol,
-      matrix
-        .getColumnMatrix(nextcol)
-        .subtract(
+    def kernel(
+                source: List[PersistenceBar[FiltrationT, AnnotationT]],
+                target: List[PersistenceBar[FiltrationT, AnnotationT]],
+                matrix: RealMatrix
+              )(using
+                ord: Ordering[FiltrationT]
+              ): List[PersistenceBar[FiltrationT, AnnotationT]] = {
+      val dualSource: List[PersistenceBar[FiltrationT, AnnotationT]] =
+        target.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
+      val dualTarget: List[PersistenceBar[FiltrationT, AnnotationT]] =
+        source.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
+      val cokernelIntervals =
+        cokernel(dualSource, dualTarget, matrix.transpose())(using
+          ord = ord.reverse
+        )
+      cokernelIntervals.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
+    }
+
+    def cokernelMatrix(
+                        source: List[PersistenceBar[FiltrationT, AnnotationT]],
+                        target: List[PersistenceBar[FiltrationT, AnnotationT]],
+                        matrix: RealMatrix
+                      )(using
+                        ord: Ordering[FiltrationT]
+                      ): RealMatrix = {
+      val births = target.map(_.lower)
+      val deaths = source.map(_.lower.flip) ++ target.map(_.upper)
+      val birthOrder = births.zipWithIndex.sortBy(_._1).map(_._2)
+      val deathOrder = deaths.zipWithIndex.sortBy(_._1).map(_._2)
+      val cokernelmatrix = MatrixUtils.createRealMatrix(births.size, deaths.size)
+      for
+        s <- (0 until source.size)
+        t <- (0 until target.size)
+      yield cokernelmatrix.setEntry(
+        t,
+        s,
+        matrix.getEntry(birthOrder(t), deathOrder(s))
+      )
+      (0 until target.size).foreach { t =>
+        cokernelmatrix.setEntry(birthOrder(t), deathOrder(source.size + t), 1.0)
+      }
+      reduceMatrix(cokernelmatrix)
+    }
+
+      def cokernel(
+                          source: List[PersistenceBar[FiltrationT, AnnotationT]],
+                          target: List[PersistenceBar[FiltrationT, AnnotationT]],
+                          matrix: RealMatrix
+                        )(using
+                          ord: Ordering[FiltrationT]
+                        ): List[PersistenceBar[FiltrationT, AnnotationT]] = {
+        val births = target.map(_.lower)
+        val deaths = source.map(_.lower.flip) ++ target.map(_.upper)
+        val birthOrder = births.zipWithIndex.sortBy(_._1).map(_._2)
+        val deathOrder = deaths.zipWithIndex.sortBy(_._1).map(_._2)
+        val cokernelmatrix = cokernelMatrix(source, target, matrix)
+        (for
+          (row, col) <- pivotsOf(cokernelmatrix)
+          birth <- List(birthOrder.indexOf(row))
+          death <- List(deathOrder.indexOf(col))
+        yield PersistenceBar[FiltrationT, AnnotationT](
+          target(birth).dim,
+          births(birth),
+          deaths(death),
+          target(birth).annotation
+        )).toList
+      }
+
+      def reduceMatrix(matrix: RealMatrix): RealMatrix = {
+        for
+          col <- (0 until matrix.getColumnDimension)
+          pivot <- List(matrix.getColumn(col).iterator.toSeq.lastIndexWhere(_ != 0))
+          if pivot >= 0
+          nextcol <- (col + 1 until matrix.getColumnDimension)
+          if matrix.getEntry(pivot, nextcol) != 0
+        yield matrix.setColumnMatrix(
+          nextcol,
           matrix
-            .getColumnMatrix(col)
-            .scalarMultiply(
-              matrix.getEntry(pivot, nextcol) / matrix.getEntry(pivot, col)
+            .getColumnMatrix(nextcol)
+            .subtract(
+              matrix
+                .getColumnMatrix(col)
+                .scalarMultiply(
+                  matrix.getEntry(pivot, nextcol) / matrix.getEntry(pivot, col)
+                )
             )
         )
-    )
-    matrix
-  }
+        matrix
+      }
 
-  def pivotsOf(matrix: RealMatrix): Seq[(Int, Int)] =
-    for
-      col <- (0 until matrix.getColumnDimension)
-      pivot = matrix.getColumn(col).iterator.toSeq.lastIndexWhere(_ != 0)
-      if pivot >= 0
-    yield (pivot, col)
-}
+      def pivotsOf(matrix: RealMatrix): Seq[(Int, Int)] =
+        for
+          col <- (0 until matrix.getColumnDimension)
+          pivot = matrix.getColumn(col).iterator.toSeq.lastIndexWhere(_ != 0)
+          if pivot >= 0
+        yield (pivot, col)
+    }
 
-//type Barcode[FiltrationT] = List[PersistenceBar[FiltrationT, Nothing]]
+    //type Barcode[FiltrationT] = List[PersistenceBar[FiltrationT, Nothing]]
 
-type BarcodeGenerators[FiltrationT, CellT <: Cell[CellT], CoefficientT] =
-  List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]]
+    type BarcodeGenerators[FiltrationT, CellT <: Cell[CellT], CoefficientT] =
+      List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]]
