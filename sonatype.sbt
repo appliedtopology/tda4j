@@ -6,4 +6,6 @@ licenses := List("MIT" -> new URL("https://opensource.org/license/mit"))
 homepage := Some(url("https://appliedtopology.github.io/tda4j"))
 
 import xerial.sbt.Sonatype.*
-sonatypeProjectHosting := Some(GitHubHosting("appliedtopology", "tda4j", "mikael@johanssons.org"))
+sonatypeProjectHosting := Some(
+  GitHubHosting("appliedtopology", "tda4j", "mikael@johanssons.org")
+)
