@@ -11,6 +11,9 @@ import collection.immutable.BitSet
 class ProfilingSpec(args: Arguments) extends mutable.Specification {
   """This is a profiling script to measure performance of different implementations.""" >> {
     val bitlength: Int = args.commandLine.intOr("bitlength", 3)
+    val maxFVal: Double = args.commandLine.doubleOr("maxFVal", 7.0)
+    val maxDim: Int = args.commandLine.intOr("maxDim", 7)
+    
     val symmetry: HyperCubeSymmetry = HyperCubeSymmetry(bitlength)
 
     class HyperCubeProfiling(
@@ -21,7 +24,7 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
     ) {
       pp(s"Measuring ${vr.className}")
       var now: Long = System.currentTimeMillis()
-      val sstream: Seq[AbstractSimplex[Int]] = vr(symmetry.hypercube, 10, 10)
+      val sstream: Seq[AbstractSimplex[Int]] = vr(symmetry.hypercube, maxFVal, maxDim)
       var duration: Long = System.currentTimeMillis() - now
       pp(s"${tag}\tInitialization: $duration ms")
       pp(s"${tag}\tSimplex Stream Size: ${sstream.size}")
