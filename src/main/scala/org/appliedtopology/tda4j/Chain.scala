@@ -24,8 +24,11 @@ object Chain {
 
 /** The Chain class is a representation of a formal linear combination of the n
   * cells in a cell complex. Note that CellT is a type parameter subtype of
-  * Cell, a trait in this library. CellT has a context bound that demands an implicit
-  * Ordering for CellT
+  * Cell, a trait in this library. We have Scala look for a type parameter of
+  * cellOrdering that matches as best as possible an Ordering on CellT.
+  *
+  * (Note: write a fully fleshed out explanation in comments after code def.
+  * write up)
   *
   * @tparam CellT
   *   Type of the cells in the chain complex. For example `AbstractSimplex[Int]`
@@ -38,10 +41,6 @@ object Chain {
   */
 class MapChain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional]
 /** chainMap is an immutable variable and constructor that uses Scala's SortedMap to make a key-value pairing of an CellT as the key and a
-<<<<<<< HEAD
-  * CoefficientT type as the value.
-  */ (val chainMap: SortedMap[CellT, CoefficientT]) {
-=======
   * CoefficientT type as the value. Here, we'll use the Using keyword to check for any relevant types for CoefficientT.
   */ (val chainMap: SortedMap[CellT, CoefficientT])
     extends Chain[CellT, CoefficientT] {
@@ -50,7 +49,6 @@ class MapChain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional]
   // TODO: should probably fail more gracefully
   override def leadingTerm: (CellT, CoefficientT) =
     chainMap.head
->>>>>>> 489e77dd1e411eda3c28569c23dfdad784712781
 
   override def toString: String =
     chainMap.map((k, v) => s"${v.toString} *: ${k.toString}").mkString(" + ")
