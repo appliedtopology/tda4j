@@ -200,15 +200,15 @@ class HeapChain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional](
     chainHeap.addOne(head)
     chainHeap.head
   }
-  
+
   def toMap: Map[CellT, CoefficientT] =
     this.chainHeap.groupMapReduce[CellT, CoefficientT](_._1)(_._2)(
       _ + _
     ) // sum coefficients
-  
+
   def mapInPlace(
-                  f: ((CellT, CoefficientT)) => (CellT, CoefficientT)
-                ): this.type = {
+    f: ((CellT, CoefficientT)) => (CellT, CoefficientT)
+  ): this.type = {
     chainHeap.mapInPlace(f)
     this
   }
@@ -225,7 +225,7 @@ class HeapChain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional](
 
   override def toString: String =
     chainHeap.iterator
-      .map {(cell,coeff) => s"""${coeff} *> ${cell}"""} 
+      .map((cell, coeff) => s"""${coeff} *> ${cell}""")
       .mkString(" + ")
 }
 
@@ -266,8 +266,10 @@ class HeapChainOps[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional]
   ): HeapChain[CellT, CoefficientT] =
     y.clone().mapInPlace((cell, coeff) => (cell, coeff * x))
 
-  override def negate(x: HeapChain[CellT, CoefficientT]): HeapChain[CellT, CoefficientT] = {
-    val fr = summon[Fractional[CoefficientT]] 
+  override def negate(
+    x: HeapChain[CellT, CoefficientT]
+  ): HeapChain[CellT, CoefficientT] = {
+    val fr = summon[Fractional[CoefficientT]]
     scale(fr.negate(fr.one), x)
   }
 }

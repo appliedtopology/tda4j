@@ -2,7 +2,11 @@ package org.appliedtopology.tda4j
 
 import scala.collection.Searching.{given, *}
 import org.apache.commons.numbers.combinatorics
-import org.appliedtopology.tda4j
+import org.appliedtopology.tda4j.barcode.{
+  ClosedEndpoint,
+  OpenEndpoint,
+  PersistenceBar
+}
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -112,6 +116,105 @@ class RipserCliqueFinder extends CliqueFinder[Int] {
     RipserStream(metricSpace, maxFiltrationValue, maxDimension).iterator.toSeq
 }
 
+class RipserStreamSparse(
+  val metricSpace: FiniteMetricSpace[Int],
+  val maxFiltrationValue: Double,
+  val maxDimension: Int = 2
+) extends SimplexStream[Int, Double] {
+  given sc: SimplexContext[Int]()
+  import sc.*
+
+  // given Ordering[Simplex] = Ordering.by(filtrationValue).orElse(sc.given_Ordering_Simplex)
+  val doubleSimplexPairOrdering: Ordering[(Double, Simplex)] = {
+    (x: (Double, Simplex), y: (Double, Simplex)) =>
+      Ordering.Double.TotalOrdering.compare(x._1, y._1) match {
+        case 0      => sc.given_Ordering_Simplex.compare(x._2, y._2)
+        case c: Int => c
+      }
+  }
+
+  given Ordering[(Double, Simplex)] = doubleSimplexPairOrdering
+
+  val si = SimplexIndexing(metricSpace.size)
+
+  override def filtrationValue: PartialFunction[AbstractSimplex[Int], Double] =
+    FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
+
+  def zeroPivotCofacet(index: Int, size: Int): Option[Int] = (for {
+    cofacet <- si.cofacetIterator(index, size, false)
+    if filtrationValue(si(cofacet, size + 1)) == filtrationValue(
+      si(index, size)
+    )
+  } yield cofacet).maxOption
+
+  def zeroPivotFacet(index: Int, size: Int): Option[Int] = (for {
+    facet <- si.facetIterator(index, size)
+    if filtrationValue(si(facet, size - 1)) == filtrationValue(si(index, size))
+  } yield facet).maxOption
+
+  def zeroApparentCofacet(index: Int, size: Int): Option[Int] =
+    for {
+      cofacet <- zeroPivotCofacet(index, size)
+      facet <- zeroPivotFacet(cofacet, size + 1)
+      if facet == index
+    } yield cofacet
+
+  def zeroApparentFacet(index: Int, size: Int): Option[Int] =
+    for {
+      facet <- zeroPivotFacet(index, size)
+      cofacet <- zeroPivotCofacet(facet, size - 1)
+      if facet == index
+    } yield cofacet
+
+  lazy val kruskal = Kruskal(metricSpace)
+
+  def zeroPersistence[CoefficientT]()
+    : List[PersistenceBar[Double, Chain[Simplex, CoefficientT]]] =
+    kruskal.mstIterator.map { (b, d) =>
+      PersistenceBar[Double, Chain[Simplex, CoefficientT]](
+        0,
+        ClosedEndpoint(0.0),
+        OpenEndpoint(metricSpace.distance(b, d))
+      )
+    }.toList
+
+  var simplexCacheContains: Option[Int] = None
+  val simplexCache: mutable.SortedSet[(Double, Simplex)] = mutable.SortedSet()
+
+  def iteratorByDimension(d: Int): Iterator[Simplex] = d match {
+    case 0 => metricSpace.elements.iterator.map(Simplex(_))
+    case 1 => kruskal.cyclesIterator.map((i, j) => Simplex(i, j))
+    case dim: Int =>
+      { // this is where the real work happens
+        // This can get expensive if we are for any reason NOT traversing dimension by dimension
+        if (simplexCacheContains != Some(d - 1)) {
+          simplexCache.addAll(
+            iteratorByDimension(d - 1).map(s => (filtrationValue(s), s))
+          )
+        }
+        for
+          fV <- simplexCache.map(_._1).iterator
+          previousSimplex <- simplexCache.filter(_._1 < fV).iterator.map(_._2)
+          nextVertex <- metricSpace.elements
+            .filter(!previousSimplex.contains(_))
+            .filter(nV =>
+              previousSimplex.map(oV => metricSpace.distance(oV, nV)).max <= fV
+            )
+          simplex: Simplex <- List(previousSimplex + nextVertex)
+          if zeroApparentCofacet(si(simplex), simplex.size).isEmpty
+          if zeroApparentFacet(si(simplex), simplex.size).isEmpty
+        // also check if this is cleared?
+        yield simplex
+      }.iterator
+  }
+
+  override def iterator: Iterator[Simplex] =
+    for
+      d <- (0 until maxDimension).iterator
+      s <- iteratorByDimension(d)
+    yield s
+}
+
 abstract class RipserStreamBase(
   val metricSpace: FiniteMetricSpace[Int],
   val maxFiltrationValue: Double = Double.PositiveInfinity,
@@ -148,37 +251,41 @@ abstract class RipserStreamBase(
   override def filtrationValue: PartialFunction[AbstractSimplex[Int], Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 
-  def zeroPivotCofacet(index: Int, size: Int): Option[Int] = (
-    for {
-      cofacet <- si.cofacetIterator(index, size, false)
-      if(filtrationValue(si(cofacet, size+1)) == filtrationValue(si(index,size)))
-    } yield cofacet).maxOption
+  def zeroPivotCofacet(index: Int, size: Int): Option[Int] = (for {
+    cofacet <- si.cofacetIterator(index, size, false)
+    if filtrationValue(si(cofacet, size + 1)) == filtrationValue(
+      si(index, size)
+    )
+  } yield cofacet).maxOption
 
-  def zeroPivotFacet(index: Int, size: Int): Option[Int] = (
-    for {
-      facet <- si.facetIterator(index, size)
-      if(filtrationValue(si(facet, size-1)) == filtrationValue(si(index,size)))
-    } yield facet).maxOption
+  def zeroPivotFacet(index: Int, size: Int): Option[Int] = (for {
+    facet <- si.facetIterator(index, size)
+    if filtrationValue(si(facet, size - 1)) == filtrationValue(si(index, size))
+  } yield facet).maxOption
 
   def zeroApparentCofacet(index: Int, size: Int): Option[Int] =
     for {
-      cofacet <- zeroPivotCofacet(index,size)
-      facet <- zeroPivotFacet(cofacet, size+1)
-      if(facet == index)
+      cofacet <- zeroPivotCofacet(index, size)
+      facet <- zeroPivotFacet(cofacet, size + 1)
+      if facet == index
     } yield cofacet
 
   def zeroApparentFacet(index: Int, size: Int): Option[Int] =
     for {
-      facet <- zeroPivotFacet(index,size)
-      cofacet <- zeroPivotCofacet(facet, size-1)
-      if(facet == index)
+      facet <- zeroPivotFacet(index, size)
+      cofacet <- zeroPivotCofacet(facet, size - 1)
+      if facet == index
     } yield cofacet
 
-  def zeroPersistence[CoefficientT](): BarcodeGenerators[Double, Simplex, CoefficientT] =
-    Kruskal(metricSpace)
-      .mstIterator
-      .map { (b,d) => PersistenceBar[Double,Chain[Simplex,CoefficientT]](0, Some(0.0), Some(metricSpace.distance(b,d))) }
-      .toList
+  def zeroPersistence[CoefficientT]()
+    : List[PersistenceBar[Double, Chain[Simplex, CoefficientT]]] =
+    Kruskal(metricSpace).mstIterator.map { (b, d) =>
+      PersistenceBar[Double, Chain[Simplex, CoefficientT]](
+        0,
+        ClosedEndpoint(0.0),
+        OpenEndpoint(metricSpace.distance(b, d))
+      )
+    }.toList
 }
 
 class RipserStream(
@@ -289,7 +396,7 @@ class MaskedSymmetricRipserStream[KeyT](
     for
       x <- metricSpace.elements
       y <- metricSpace.elements
-    yield metricSpace.distance(x,y)
+    yield metricSpace.distance(x, y)
   )
 
   override def iterator: Iterator[Simplex] =
@@ -301,17 +408,19 @@ class MaskedSymmetricRipserStream[KeyT](
   def iteratorByDimension(d: Int): Iterator[Simplex] = if (d > metricSpace.size)
     Iterator()
   else {
-    val repmap: Map[Double, List[Simplex]] = List.from(
-      for {
-        i <- (0 until binomial(metricSpace.size, d + 1)).iterator
-        spx <- Seq(si(i, d + 1))
-        if (symmetryGroup.isRepresentative(spx))
-      } yield (filtrationValue(spx) -> spx)
-    ).groupMap(_._1)(_._2)
+    val repmap: Map[Double, List[Simplex]] = List
+      .from(
+        for {
+          i <- (0 until binomial(metricSpace.size, d + 1)).iterator
+          spx <- Seq(si(i, d + 1))
+          if symmetryGroup.isRepresentative(spx)
+        } yield (filtrationValue(spx) -> spx)
+      )
+      .groupMap(_._1)(_._2)
     for {
-       dist <- repmap.keys.toSeq.sorted.iterator
-       spx <- repmap(dist).iterator
-       out <- symmetryGroup.orbit(spx).iterator
+      dist <- repmap.keys.toSeq.sorted.iterator
+      spx <- repmap(dist).iterator
+      out <- symmetryGroup.orbit(spx).iterator
     } yield out
   }
 

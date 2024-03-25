@@ -41,20 +41,6 @@ trait SimplexContext[VertexT: Ordering] {
   }
 }
 
-/** Type alias creating `Simplex` as the type representing
-  * `AbstractSimplex[Int]`
-  *
-  * @todo
-  *   Figure out whether it would be better to make `Simplex` a class of its own
-  *   and override everything to get the type to print out at `Simplex`
-  *   everywhere instead of as the more verbose `AbstractSimplex`
-  */
-//type Simplex = AbstractSimplex[Int]
-//
-//object Simplex {
-//  def apply(vertices: Int*) = new Simplex(TreeSet[Int](vertices: _*))
-//}
-
 /** Class representing an abstract simplex. Abstract simplices are sets (of
   * totally ordered vertices) and thus are represented by a type that implements
   * the interface of a `SortedSet` fully, and also inherits from `Cell` so that
@@ -84,6 +70,9 @@ class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])( //v
     with SortedSetOps[VertexT, AbstractSimplex, AbstractSimplex[VertexT]]
     with SortedSetFactoryDefaults[VertexT, AbstractSimplex, Set] {
   self => // gives methods access to the object that's calling it in the first place
+
+  override def toString(): String =
+    vertexSet.mkString(s"$className(", ",", ")")
 
   // ***** Simplex specific operations
 

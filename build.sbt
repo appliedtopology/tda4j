@@ -1,7 +1,13 @@
 name := "TDA4j"
 organization := "org.appliedtopology"
-version := "0.0.1"
+version := "0.1.0-alpha"
 scalaVersion := "3.3.0"
+
+versionScheme := Some("semver-spec")
+
+pomIncludeRepository := { _ => false }
+publishTo := sonatypePublishToBundle.value
+sonatypeCredentialHost := "s01.oss.sonatype.org"
 
 libraryDependencies += "org.specs2" %% "specs2-core"          % "5.5.1" % "test"
 libraryDependencies += "org.specs2" %% "specs2-matcher-extra" % "5.5.1" % "test"
@@ -11,6 +17,7 @@ libraryDependencies += ("org.scala-graph" %% "graph-core" % "1.13.5").cross(
 )
 libraryDependencies += "org.openjdk.jol" % "jol-core" % "0.17"
 libraryDependencies += "org.apache.commons" % "commons-numbers-combinatorics" % "1.1"
+libraryDependencies += "org.apache.commons" % "commons-math3" % "3.6.1"
 libraryDependencies +=
   "org.scala-lang.modules"             %% "scala-parallel-collections" % "1.0.4"
 libraryDependencies += "org.typelevel" %% "cats-effect"                % "3.5.3"

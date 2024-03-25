@@ -21,19 +21,32 @@ class ChainSpec extends mutable.Specification {
 
   given Ordering[Int] = math.Ordering.Int
 
-  given rm: RingModule[MapChain[Simplex, Double], Double] = MapChainOps[Simplex,Double]()
+  given rm: RingModule[MapChain[Simplex, Double], Double] =
+    MapChainOps[Simplex, Double]()
   import rm.*
 
   "The `Chain` type should" >> {
     val z1 = MapChain(Simplex(1, 2, 3))
     val z2 =
-      MapChain(Simplex(1, 2) -> 1.0, Simplex(1, 3) -> -1.0, Simplex(2, 3) -> 1.0)
+      MapChain(
+        Simplex(1, 2) -> 1.0,
+        Simplex(1, 3) -> -1.0,
+        Simplex(2, 3) -> 1.0
+      )
     val z3 = MapChain(Simplex(1, 2, 5))
     val z4 = MapChain(Simplex(1, 4, 8))
     val z5 =
-      MapChain(Simplex(1, 2) -> -1.0, Simplex(1, 4) -> 1.0, Simplex(2, 3) -> -1.0)
+      MapChain(
+        Simplex(1, 2) -> -1.0,
+        Simplex(1, 4) -> 1.0,
+        Simplex(2, 3) -> -1.0
+      )
     val z6 =
-      MapChain(Simplex(1, 2) -> 1.0, Simplex(2, 3) -> 1.0, Simplex(1, 3) -> -1.0)
+      MapChain(
+        Simplex(1, 2) -> 1.0,
+        Simplex(2, 3) -> 1.0,
+        Simplex(1, 3) -> -1.0
+      )
     val z7 = MapChain(
       Simplex(1, 2) -> 1.0,
       Simplex(1, 3) -> -1.0,
@@ -157,35 +170,36 @@ class ChainSpec extends mutable.Specification {
   }
 }
 
-
 class HeapChainSpec extends mutable.Specification {
   given sc: SimplexContext[Int]()
-  import sc.{given,*}
-  
+  import sc.{given, *}
+
   "Heap-based chains should" >> {
     "be created from a sequence" >> {
-      val elts = Seq((s(1,2), 1.0), (s(1,3), -1.0))
-      val hc = HeapChain[Simplex,Double](elts)
-      "contains the right things" ==> 
+      val elts = Seq((s(1, 2), 1.0), (s(1, 3), -1.0))
+      val hc = HeapChain[Simplex, Double](elts)
+      "contains the right things" ==>
         (hc.chainHeap.toSeq must containTheSameElementsAs(elts))
     }
     "be created from varargs" >> {
-      val elts = Seq((s(1,2), 1.0), (s(1,3), -1.0))
-      val hc = HeapChain[Simplex,Double](elts: _*)
+      val elts = Seq((s(1, 2), 1.0), (s(1, 3), -1.0))
+      val hc = HeapChain[Simplex, Double](elts: _*)
       "contains the right things" ==>
         (hc.chainHeap.toSeq must containTheSameElementsAs(elts))
     }
     "be created from a single simplex" >> {
-      val hc = HeapChain[Simplex,Double](s(1,2,3))
+      val hc = HeapChain[Simplex, Double](s(1, 2, 3))
       "contains the right things" ==>
-        (hc.chainHeap.toSeq must containTheSameElementsAs(Seq((s(1,2,3),1.0))))
+        (hc.chainHeap.toSeq must containTheSameElementsAs(
+          Seq((s(1, 2, 3), 1.0))
+        ))
     }
     "be possible to add together" >> {
       given Conversion[Simplex, HeapChain[Simplex, Double]] = HeapChain.apply
-      given rm : RingModule[HeapChain[Simplex,Double], Double] = HeapChainOps()
-      import rm.{given,*}
-      val z1 = 1.0 *> s(1,2) + 2.0 *> s(1,3) - 1.0 *> s(2,3)
-      val z2 = 1.0 *> s(1,2) + 1.0 *> s(2,3)
+      given rm: RingModule[HeapChain[Simplex, Double], Double] = HeapChainOps()
+      import rm.{given, *}
+      val z1 = 1.0 *> s(1, 2) + 2.0 *> s(1, 3) - 1.0 *> s(2, 3)
+      val z2 = 1.0 *> s(1, 2) + 1.0 *> s(2, 3)
     }
   }
 }

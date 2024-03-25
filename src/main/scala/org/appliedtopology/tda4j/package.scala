@@ -1,5 +1,14 @@
 package org.appliedtopology
 
+import org.appliedtopology.tda4j.barcode.{
+  BarcodeEndpoint,
+  ClosedEndpoint,
+  NegativeInfinity,
+  OpenEndpoint,
+  PersistenceBar,
+  PositiveInfinity
+}
+
 import math.Ordering.Implicits.sortedSetOrdering
 
 /** Package for the Scala library TDA4j
