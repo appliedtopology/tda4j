@@ -33,3 +33,4 @@ ci/travis-key
 ci/secrets.tar
 
 .bsp/
+.Rproj.user

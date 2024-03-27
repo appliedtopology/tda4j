@@ -28,7 +28,7 @@ lazy val root = (project in file("."))
     SiteScaladocPlugin,
     ParadoxSitePlugin,
     ParadoxMaterialThemePlugin,
-    GitHubPagesPlugin
+    GhpagesPlugin
   )
   .settings(
     Compile / paradoxMaterialTheme := {
@@ -52,11 +52,18 @@ lazy val root = (project in file("."))
     Compile / paradoxMaterialTheme ~= {
       _.withRepository(uri("https://github.com/appliedtopology/tda4j"))
     },
-    // ghpagesNoJekyll := true
-    gitHubPagesOrgName := "appliedtopology",
-    gitHubPagesRepoName := "tda4j",
-    gitHubPagesSiteDir := baseDirectory.value / "target/site"
+    ghpagesNoJekyll := true,
+    git.remoteRepo := "git@github.com:appliedtopology/tda4j.git",
+    //gitHubPagesOrgName := "appliedtopology",
+    //gitHubPagesRepoName := "tda4j",
+    //gitHubPagesSiteDir := baseDirectory.value / "target/site"
   )
+
+// Workaround for XML versioning issues
+// See: https://github.com/scala/bug/issues/12632
+libraryDependencySchemes ++= Seq(
+  "org.scala-lang.modules" %% "scala-xml" % VersionScheme.Always
+)
 
 Compile / doc / scalacOptions := Seq("-diagrams")
 
