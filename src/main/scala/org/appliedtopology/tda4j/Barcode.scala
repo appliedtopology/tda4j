@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package barcode
 
 /** Barcode representation, operations and algebra
   *
@@ -7,6 +6,7 @@ package barcode
   * bars and barcodes, and also algebraic operations on finitely presented
   * persistence modules.
   */
+package barcode
 
 import org.apache.commons.math3.linear.*
 
