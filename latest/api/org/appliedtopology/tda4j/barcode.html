@@ -339,8 +339,28 @@
           <div>
            <div class="originInfo"></div>
            <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>A persistence bar has a lower and upper endpoint, where we assume (but do not enforce) that <code>lower &lt; upper</code> in the expected ordering on the filtration type; a dimension; and optionally some annotation (this will be used extensively to carry representative chains in homology computations)</p> 
+            </div>
             <div class="cover">
-             <div class="doc"></div>
+             <div class="doc">
+              <p>A persistence bar has a lower and upper endpoint, where we assume (but do not enforce) that <code>lower &lt; upper</code> in the expected ordering on the filtration type; a dimension; and optionally some annotation (this will be used extensively to carry representative chains in homology computations)</p> 
+             </div>
+             <h2 class="h200">Type parameters</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               AnnotationT
+              </dt>
+              <dd class="body-medium">
+               <p>Type of the annotation (we would expect this to be <a href="Chain.html">Chain</a>).</p> 
+              </dd>
+              <dt class="body-small">
+               FiltrationT
+              </dt>
+              <dd class="body-medium">
+               <p>Type of the filtration parameter</p> 
+              </dd>
+             </dl>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
               <dt class="body-small">
