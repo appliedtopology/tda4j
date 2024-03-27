@@ -15,4 +15,4 @@ jobs:
       - name: Compile and publish docs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: sbt makeSite ghpagesPushSite
+        run: sbt makeSite debug ghpagesPushSite
