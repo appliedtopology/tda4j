@@ -7,8 +7,58 @@ import math.Ordering.Implicits.sortedSetOrdering
 import scala.annotation.targetName
 import scala.collection.mutable
 
-object MatrixAlgebra{
+import math.Fractional.Implicits.given
 
+object MatrixAlgebra{
+  /** These givens and imports are good for when you write for a specific
+   * use case - however, this is in the middle of the library code and
+   * we need to parametrize by cell- and coefficient types.
+   * 
+   * You could do one of the following solution approaches:
+   * 1. Change the definition of `reduceBasis` to only work for
+   * `Chain[Simplex,Double]`, and we can generalize it later
+   * when the code is more mature.
+   * 2. Remove all these given instances. You could then write them
+   * in again inside the method - once you know what CellT and
+   * CoefficientT need to be. In order to do things like your
+   * `given Fractional[CoefficientT]` line here, you would want
+   * to use something like
+   * `given Fractional[Double] = summon[Fractional[Double]]`
+   * where `summon` is the keyword for "I know there is supposed to
+   * be a thing with this type out there. Give it to me now."
+   * 3. Import library implicits that fill in the blanks. This is
+   * what your compiler error is telling you when it is suggesting
+   * that you import things from `math.Fractional.Implicits`. All
+   * the `given` instances for Fractional to create `+`,`-`, etc all
+   * exist in the library, you just have to actually import those 
+   * definitions. I added an import at the top that does the job.
+   * 
+   * To figure out what exactly is going wrong with the compilations,
+   * it can be very helpful to add a bunch of type annotation to the code.
+   * Look at how I changed the lines inside the loop in `reduceBasis` to 
+   * see how that works; you can annotate any variable with what type you
+   * expect it to have - and the compiler will tell you when your understanding
+   * is different from the type inference.
+   * 
+   * Finally, when you call to `basis.updated`, this is a method that very
+   * much embraces the functional programming paradigm (Okasaki's book that
+   * Daniel borrowed is a good source for these ideas), where you consider
+   * creating new objects to be a cheap operation, often doable without actually
+   * moving memory around much at all, but you have strong preferences for
+   * things that don't change existing objects. You'd have immutable types,
+   * and instead of e.g. changing the thing in place you would just run a 
+   * function that builds the new thing and put that in its place.
+   * So `basis.updated` will leave basis unchanged, but its return value is
+   * what would have happened if you were to update `basis`.
+   * 
+   * For the kind of "I have this collection and I want to keep modifying it"
+   * programming that is more relevant here, you will want collection types
+   * from the `scala.collection.mutable` library and not the 
+   * `scala.collection.immutable` library. And if you have a mutable list,
+   * (really a `Buffer`) there is a function `.update(n: Int, new:T)` that
+   * will change a specific entry.
+   * Or you can just write `buffer(i) = newThing` and it will do the right things.
+    */ 
   given sc: SimplexContext[Int]()
   import sc.*
   given Conversion[Simplex, MapChain[Simplex, Double]] =
@@ -22,7 +72,7 @@ object MatrixAlgebra{
   //parameterized by cell and coefficient, returns list of chains....
   def reduceBasis[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional]
   (basis: List[Chain[CellT,CoefficientT]]): List[Chain[CellT,CoefficientT]] = {
-
+    
     //How many cols we workin with??
     val nCols = basis.length
 
@@ -30,10 +80,10 @@ object MatrixAlgebra{
     for (col <- 0 until nCols) {
 
       //Get current col/chain....
-      val current = basis(col)
+      val current: Chain[CellT,CoefficientT] = basis(col)
       //Get leading term & coeff (index & entry) of this col...
       //make sure leading term doesn't return things w coeff 0
-      var (term, coeff) = current.leadingTerm
+      var (term, coeff) : (CellT,CoefficientT) = current.leadingTerm
 
       //Use while loop to look ahead in "row" (look at coeffs in other chains for 'term')
       var lookAheadBy = 1
@@ -43,15 +93,15 @@ object MatrixAlgebra{
         var next = basis.apply(col + lookAheadBy)
         //Get coeff /matrix-entry at index of interest...
         //make sure that getCoeff returns 0 when term not present
-        var pivotSimpCoeff = next.getCoefficient(term)
+        var pivotSimpCoeff: CoefficientT = next.getCoefficient(term)
 
         //If there's a nonzero entry/collision
-        if (pivotSimpCoeff != 0) {
+        if (pivotSimpCoeff != 0) { // you want to use the Fractional[CoefficientT].zero here
 
           //Calculate scalar you'll need to "zero out" the problem column at the 'term' column index
-          var multBy = pivotSimpCoeff / coeff
+          var multBy: CoefficientT = pivotSimpCoeff / coeff
           //Preform elimination (forming a new chain)
-          var newChain = next - scale(multBy,current)
+          var newChain: CoefficientT = next - scale(multBy,current)
           //Replace problem column with new chain...
           basis.updated(col + lookAheadBy, newChain)
 
@@ -69,8 +119,7 @@ object MatrixAlgebra{
   //returns map(?)
   def invertMatrix[CellT <: Cell[CellT]:Ordering,CellS <: Cell[CellS]:Ordering,CoefficientT:Fractional]
   (basis: Map[CellS, Chain[CellT,CoefficientT]]): Map[CellT, Chain[CellS, CoefficientT]] = {
-
-
+    ??? // this is a placeholder to avoid compilation errors without having to actually figure out what you need to write.
   }
 
 
@@ -81,6 +130,7 @@ trait Chain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional] {
   def leadingCell: CellT = leadingTerm._1
   def leadingCoefficient: CoefficientT = leadingTerm._2
   def leadingTerm: (CellT, CoefficientT)
+  def getCoefficient(cell: CellT): CoefficientT
 }
 object Chain {
   def apply[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional](
@@ -120,6 +170,8 @@ class MapChain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional]
   override def leadingTerm: (CellT, CoefficientT) =
     chainMap.head
 
+  override def getCoefficient(cell: CellT): CoefficientT = chainMap(cell)
+  
   override def toString: String =
     chainMap.map((k, v) => s"${v.toString} *: ${k.toString}").mkString(" + ")
 
@@ -271,6 +323,15 @@ class HeapChain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional](
     chainHeap.head
   }
 
+  // this may be an expensive way to interact with a HeapChain.
+  override def getCoefficient(cell: CellT)(using fractional: Fractional[CoefficientT]): 
+    CoefficientT = 
+    chainHeap
+      .view
+      .filter(_._1 == cell)
+      .map(_._2)
+      .sum
+    
   def toMap: Map[CellT, CoefficientT] =
     this.chainHeap.groupMapReduce[CellT, CoefficientT](_._1)(_._2)(
       _ + _
