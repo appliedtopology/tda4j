@@ -7,6 +7,76 @@ import math.Ordering.Implicits.sortedSetOrdering
 import scala.annotation.targetName
 import scala.collection.mutable
 
+object MatrixAlgebra{
+
+  given sc: SimplexContext[Int]()
+  import sc.*
+  given Conversion[Simplex, MapChain[Simplex, Double]] =
+    MapChain.apply
+  given Fractional[Double] = math.Numeric.DoubleIsFractional
+  given Ordering[Int] = math.Ordering.Int
+  given rm: RingModule[MapChain[Simplex, Double], Double] =
+    MapChainOps[Simplex, Double]()
+  import rm.*
+
+  //parameterized by cell and coefficient, returns list of chains....
+  def reduceBasis[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional]
+  (basis: List[Chain[CellT,CoefficientT]]): List[Chain[CellT,CoefficientT]] = {
+
+    //How many cols we workin with??
+    val nCols = basis.length
+
+    //For each column.....
+    for (col <- 0 until nCols) {
+
+      //Get current col/chain....
+      val current = basis(col)
+      //Get leading term & coeff (index & entry) of this col...
+      //make sure leading term doesn't return things w coeff 0
+      var (term, coeff) = current.leadingTerm
+
+      //Use while loop to look ahead in "row" (look at coeffs in other chains for 'term')
+      var lookAheadBy = 1
+      while ((col + lookAheadBy) < nCols) {
+
+        //Select (col + lookAheadBy)th column
+        var next = basis.apply(col + lookAheadBy)
+        //Get coeff /matrix-entry at index of interest...
+        //make sure that getCoeff returns 0 when term not present
+        var pivotSimpCoeff = next.getCoefficient(term)
+
+        //If there's a nonzero entry/collision
+        if (pivotSimpCoeff != 0) {
+
+          //Calculate scalar you'll need to "zero out" the problem column at the 'term' column index
+          var multBy = pivotSimpCoeff / coeff
+          //Preform elimination (forming a new chain)
+          var newChain = next - scale(multBy,current)
+          //Replace problem column with new chain...
+          basis.updated(col + lookAheadBy, newChain)
+
+        }
+        //If not collision, look ahead....
+        else {
+          lookAheadBy += 1
+        }
+      }
+
+    }
+    basis
+  }
+
+  //returns map(?)
+  def invertMatrix[CellT <: Cell[CellT]:Ordering,CellS <: Cell[CellS]:Ordering,CoefficientT:Fractional]
+  (basis: Map[CellS, Chain[CellT,CoefficientT]]): Map[CellT, Chain[CellS, CoefficientT]] = {
+
+
+  }
+
+
+
+}
+
 trait Chain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional] {
   def leadingCell: CellT = leadingTerm._1
   def leadingCoefficient: CoefficientT = leadingTerm._2
