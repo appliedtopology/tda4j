@@ -40,21 +40,21 @@ given [FiltrationT](using
     x: BarcodeEndpoint[FiltrationT],
     y: BarcodeEndpoint[FiltrationT]
   ) = x match {
-    case NegativeInfinity[FiltrationT]() => -1
-    case PositiveInfinity[FiltrationT]() => +1
+    case NegativeInfinity() => -1
+    case PositiveInfinity() => +1
     case ClosedEndpoint(xvalue) =>
       y match {
-        case NegativeInfinity[FiltrationT]() => +1
-        case PositiveInfinity[FiltrationT]() => -1
-        case ClosedEndpoint(yvalue)          => ord.compare(xvalue, yvalue)
+        case NegativeInfinity()     => +1
+        case PositiveInfinity()     => -1
+        case ClosedEndpoint(yvalue) => ord.compare(xvalue, yvalue)
         case OpenEndpoint(yvalue) =>
           if (ord.compare(xvalue, yvalue) == 0) -1
           else ord.compare(xvalue, yvalue)
       }
     case OpenEndpoint(xvalue) =>
       y match {
-        case NegativeInfinity[FiltrationT]() => +1
-        case PositiveInfinity[FiltrationT]() => -1
+        case NegativeInfinity() => +1
+        case PositiveInfinity() => -1
         case ClosedEndpoint(yvalue) =>
           if (ord.compare(xvalue, yvalue) == 0) +1
           else ord.compare(xvalue, yvalue)
@@ -80,15 +80,16 @@ case class PersistenceBar[FiltrationT: Ordering, AnnotationT](
 ) {
   override def toString: String = {
     val open: String = lower match {
-      case PositiveInfinity[FiltrationT]() => "(∞" // should never happen
-      case OpenEndpoint(value)             => s"($value"
-      case ClosedEndpoint(value)           => s"[$value"
+      case PositiveInfinity()    => "(∞" // should never happen
+      case NegativeInfinity()    => "(-∞"
+      case OpenEndpoint(value)   => s"($value"
+      case ClosedEndpoint(value) => s"[$value"
     }
     val closed: String = upper match {
-      case PositiveInfinity[FiltrationT]() => "∞)"
-      case NegativeInfinity[FiltrationT]() => "-∞)" // should never happen
-      case OpenEndpoint(value)             => s"$value)"
-      case ClosedEndpoint(value)           => s"$value]"
+      case PositiveInfinity()    => "∞)"
+      case NegativeInfinity()    => "-∞)" // should never happen
+      case OpenEndpoint(value)   => s"$value)"
+      case ClosedEndpoint(value) => s"$value]"
     }
     val annotationString: String = (for annotationValue <- annotation
     yield s" $annotationValue").getOrElse("")
