@@ -4,7 +4,7 @@
 
 * Mikael Vejdemo-Johansson, GitHub:@michiexile
 * Jordan Matuszewski, GitHub: @jsmatuszewski
-* Daniel Hope, GitHub: @huhwhy
+* Daniel Hope, GitHub: @dhope-lab
 
 ## External contributions
 

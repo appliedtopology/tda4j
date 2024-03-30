@@ -66,6 +66,8 @@ class MapChain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional]
     }
   // Overriding the hashcode so both of our objects have the same one, buncha good reasons for this.
   override def hashCode(): Int = chainMap.hashCode()
+
+
 }
 object MapChain {
 

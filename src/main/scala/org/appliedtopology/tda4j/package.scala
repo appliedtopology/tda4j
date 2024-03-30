@@ -16,7 +16,9 @@ import math.Ordering.Implicits.sortedSetOrdering
 package object tda4j {
   class TDAContext[VertexT: Ordering, CoefficientT: Fractional]
       extends MapChainOps[AbstractSimplex[VertexT], CoefficientT],
-        SimplexContext[VertexT] {
+        SimplexContext[VertexT]{
+
     given Conversion[Simplex, MapChain[Simplex, CoefficientT]] = MapChain.apply
+    
   }
 }
