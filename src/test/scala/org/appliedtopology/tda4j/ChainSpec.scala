@@ -204,6 +204,10 @@ class HeapChainSpec extends mutable.Specification {
       import rm.{given, *}
       val z1 = 1.0 *> s(1, 2) + 2.0 *> s(1, 3) - 1.0 *> s(2, 3)
       val z2 = 1.0 *> s(1, 2) + 1.0 *> s(2, 3)
+      val z3 = (z2 + (-1.0 *> z2))
+
+      "subtracts to zero" ==>
+        (z3.isZero must beTrue)
     }
   }
 }

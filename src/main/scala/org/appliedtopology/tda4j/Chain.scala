@@ -8,11 +8,11 @@ package org.appliedtopology.tda4j {
   /** Trait that defines what it means to be a "Chain".
     */
   trait Chain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional] {
-    def leadingCell: CellT = leadingTerm._1
+    def leadingCell: Option[CellT] = leadingTerm._1
 
     def leadingCoefficient: CoefficientT = leadingTerm._2
 
-    def leadingTerm: (CellT, CoefficientT)
+    def leadingTerm: (Option[CellT], CoefficientT)
   }
 
   /** Lightweight trait to define what it means to be a topological "Cell".
@@ -81,8 +81,11 @@ package org.appliedtopology.tda4j {
 
       // Currently will throw errors around if `chainMap` is empty
       // TODO: should probably fail more gracefully
-      override def leadingTerm: (CellT, CoefficientT) =
-        chainMap.head
+      override def leadingTerm: (Option[CellT], CoefficientT) =
+        if (chainMap.isEmpty)
+          Tuple2(None, summon[Fractional[CoefficientT]].zero)
+        else
+          chainMap.head.copy(_1=Some(chainMap.head._1))
 
       override def toString: String =
         chainMap
@@ -199,10 +202,10 @@ package org.appliedtopology.tda4j {
       */
     class ChainElement[
       CellT <: Cell[CellT]: Ordering,
-      CoefficientT: Fractional
+      CoefficientT
     ](
       cc: IterableOnce[(CellT, CoefficientT)]
-    ) extends Chain[CellT, CoefficientT] {
+    )(using fr: Fractional[CoefficientT]) extends Chain[CellT, CoefficientT] {
 
       import Numeric.Implicits._
 
@@ -215,23 +218,27 @@ package org.appliedtopology.tda4j {
         mutable.PriorityQueue.from(cc)
       }
 
-      // Will collapse the actual head
-      override def leadingTerm: (CellT, CoefficientT) = {
-        def assembleHead() = {
-          var (headCell, headCoeff) = chainHeap.dequeue()
-          while (chainHeap.head._1 == headCell) {
-            val nextHead = chainHeap.dequeue()
-            headCoeff += nextHead._2
+      def collapseHead() = {
+        var headCoeff = fr.zero
+        var headCell = chainHeap.headOption.map(_._1)
+        while (chainHeap.nonEmpty & headCoeff == fr.zero) {
+          var headCell = chainHeap.headOption.map(_._1)
+          while (headCell.isDefined & headCell == chainHeap.headOption.map(_._1)) {
+            headCoeff += chainHeap.dequeue()._2
           }
-          (headCell, headCoeff)
         }
+        if (headCell.isDefined & headCoeff != fr.zero) {
+          chainHeap.addOne(headCell.get -> headCoeff)
+        }
+      }
 
-        var head: (CellT, CoefficientT) = assembleHead()
-        val fr = summon[Fractional[CoefficientT]]
-        while (head._2 == fr.zero)
-          head = assembleHead()
-        chainHeap.addOne(head)
-        chainHeap.head
+      // Will collapse the actual head
+      override def leadingTerm: (Option[CellT], CoefficientT) = {
+        collapseHead()
+        if (chainHeap.isEmpty)
+          Tuple2(None, summon[Fractional[CoefficientT]].zero)
+        else
+          chainHeap.head.copy(_1 = Some(chainHeap.head._1))
       }
 
       def toMap: Map[CellT, CoefficientT] =
@@ -244,6 +251,11 @@ package org.appliedtopology.tda4j {
       ): this.type = {
         chainHeap.mapInPlace(f)
         this
+      }
+
+      def isZero: Boolean = {
+        collapseHead()
+        chainHeap.isEmpty || chainHeap.head._2 == summon[Fractional[CoefficientT]].zero
       }
 
       override def equals(obj: Any): Boolean = obj match {
