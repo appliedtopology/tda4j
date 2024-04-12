@@ -10,7 +10,7 @@
 </div>
 <div class="main-signature mono-small-block">
  <div class="signature">
-  <span class="signature-short"><span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="ChainElement.html" t="n" class="documentableName ">ChainElement</a>[<span t="k"></span><span data-unresolved-link="" t="t">CellT</span><span t="k"> &lt;: </span><a href="../Cell.html" t="t">Cell</a>[<span t="t">CellT</span>], <span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">cc</span>: <span data-unresolved-link="" t="t">IterableOnce</span>[(<span data-unresolved-link="" t="t">CellT</span>, <span data-unresolved-link="" t="t">CoefficientT</span>)])(<span t="k">implicit </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$7</span>: <span data-unresolved-link="" t="t">Ordering</span>[<span data-unresolved-link="" t="t">CellT</span>], <span t="k"></span><span data-unresolved-link="" t="n">evidence$8</span>: <span data-unresolved-link="" t="t">Fractional</span>[<span data-unresolved-link="" t="t">CoefficientT</span>])<span t="k"> extends </span><a href="../Chain.html" t="t">Chain</a>[<span t="t">CellT</span>, <span t="t">CoefficientT</span>]</span><span class="signature-long"></span>
+  <span class="signature-short"><span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="ChainElement.html" t="n" class="documentableName ">ChainElement</a>[<span t="k"></span><span data-unresolved-link="" t="t">CellT</span><span t="k"> &lt;: </span><a href="../Cell.html" t="t">Cell</a>[<span t="t">CellT</span>], <span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">cc</span>: <span data-unresolved-link="" t="t">IterableOnce</span>[(<span data-unresolved-link="" t="t">CellT</span>, <span data-unresolved-link="" t="t">CoefficientT</span>)])(<span t="k">implicit </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$7</span>: <span data-unresolved-link="" t="t">Ordering</span>[<span data-unresolved-link="" t="t">CellT</span>], <span t="k"></span><span data-unresolved-link="" t="n">fr</span>: <span data-unresolved-link="" t="t">Fractional</span>[<span data-unresolved-link="" t="t">CoefficientT</span>])<span t="k"> extends </span><a href="../Chain.html" t="t">Chain</a>[<span t="t">CellT</span>, <span t="t">CoefficientT</span>]</span><span class="signature-long"></span>
  </div>
 </div>
 <div class="cover">
@@ -149,6 +149,15 @@ node4 -> node1;
           </div>
          </div>
         </div>
+        <div class="documentableElement" id="collapseHead-94c">
+         <div class="documentableElement-expander">
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="ChainElement.html#collapseHead-94c" t="n" class="documentableName ">collapseHead</a>(): <span data-unresolved-link="" t="t">Unit</span>
+           </div>
+          </div>
+         </div>
+        </div>
         <div class="documentableElement" id="equals-4ad" data-f-keywords="override">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
@@ -253,12 +262,21 @@ node4 -> node1;
           </div>
          </div>
         </div>
+        <div class="documentableElement" id="isZero-0">
+         <div class="documentableElement-expander">
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="ChainElement.html#isZero-0" t="n" class="documentableName ">isZero</a>: <span data-unresolved-link="" t="t">Boolean</span>
+           </div>
+          </div>
+         </div>
+        </div>
         <div class="documentableElement" id="leadingTerm-0" data-f-keywords="override">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="modifiers"><span t="k">override </span></span><span class="kind"><span t="k">def </span></span><a href="ChainElement.html#leadingTerm-0" t="n" class="documentableName ">leadingTerm</a>: (<span t="t">CellT</span>, <span t="t">CoefficientT</span>)
+            <span class="modifiers"><span t="k">override </span></span><span class="kind"><span t="k">def </span></span><a href="ChainElement.html#leadingTerm-0" t="n" class="documentableName ">leadingTerm</a>: (<span data-unresolved-link="" t="t">Option</span>[<span t="t">CellT</span>], <span t="t">CoefficientT</span>)
            </div>
           </div>
          </div>
@@ -360,7 +378,7 @@ node4 -> node1;
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="ChainElement.html#leadingCell-0" t="n" class="documentableName ">leadingCell</a>: <span t="t">CellT</span>
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="ChainElement.html#leadingCell-0" t="n" class="documentableName ">leadingCell</a>: <span data-unresolved-link="" t="t">Option</span>[<span t="t">CellT</span>]
            </div>
           </div>
          </div>
