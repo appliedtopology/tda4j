@@ -17,6 +17,7 @@ package object tda4j {
   class TDAContext[VertexT: Ordering, CoefficientT: Fractional]
       extends ChainOps[AbstractSimplex[VertexT], CoefficientT],
         SimplexContext[VertexT] {
-    given Conversion[Simplex, ChainElement[Simplex, CoefficientT]] = ChainElement.apply
+    given Conversion[Simplex, ChainElement[Simplex, CoefficientT]] =
+      ChainElement.apply
   }
 }

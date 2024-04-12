@@ -60,7 +60,7 @@ lazy val root = (project in file("."))
 // Workaround for XML versioning issues
 // See: https://github.com/scala/bug/issues/12632
 libraryDependencySchemes ++= Seq(
-  "org.scala-lang.modules" %% "scala-xml" % VersionScheme.Always,
+  "org.scala-lang.modules" %% "scala-xml" % VersionScheme.Always
 )
 
 Compile / doc / scalacOptions := Seq("-diagrams")

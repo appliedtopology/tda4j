@@ -173,8 +173,11 @@ class ChainSpec extends mutable.Specification {
 class HeapChainSpec extends mutable.Specification {
   given sc: SimplexContext[Int]()
   import sc.{given, *}
-  import org.appliedtopology.tda4j.heapchain.{ChainElement as HeapChain, ChainOps as HeapChainOps}
-  
+  import org.appliedtopology.tda4j.heapchain.{
+    ChainElement as HeapChain,
+    ChainOps as HeapChainOps
+  }
+
   "Heap-based chains should" >> {
     "be created from a sequence" >> {
       val elts = Seq((s(1, 2), 1.0), (s(1, 3), -1.0))
