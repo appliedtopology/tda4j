@@ -101,13 +101,13 @@ class FilteredSimplexOrdering[VertexT, FiltrationT](
       ) == 0
     ) {
       if (Ordering.Int.compare(x.size, y.size) == 0)
-        return Ordering.Implicits
+        Ordering.Implicits
           .seqOrdering[Seq, VertexT](vertexOrdering)
           .compare(x.to(Seq), y.to(Seq))
       else
         Ordering.Int.compare(x.size, y.size)
     } else
-      return filtrationOrdering.compare(
+      filtrationOrdering.compare(
         filtration.filtrationValue(x),
         filtration.filtrationValue(y)
       )
