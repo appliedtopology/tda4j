@@ -87,7 +87,7 @@ class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])( //v
   override def boundary[CoefficientT](using
     fr: Fractional[CoefficientT]
   ): Chain[AbstractSimplex[VertexT], CoefficientT] =
-    Chain[AbstractSimplex[VertexT], CoefficientT](
+    ChainElement[AbstractSimplex[VertexT], CoefficientT](
       self
         .to(Seq)
         .map(vtx => self - vtx)
