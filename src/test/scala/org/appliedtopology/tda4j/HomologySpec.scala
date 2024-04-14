@@ -16,7 +16,7 @@ class HomologySpec extends Specification {
     """ be able to use Chain to compute a simple persistent homology barcode""" in {
       val random = new Random
       val a = random.nextDouble() * Double.MaxValue * 2 - Double.MaxValue //these cover all possible values of Double
-      val b = random.nextDouble() * Double.MaxValue * 2 - Double.MaxValue
+      val b = random.nextDouble() * Double.MaxValue * 2 - Double.MaxValue // note: revise a and b definitions. too broad. refer to spec2 docs?
       val subPointSet1 = Seq[Double](0.0, 0.0) //setting up points for point set for VR Homology
       val subPointSet2 = Seq[Double](a, 0.0)
       val subPointSet3 = Seq[Double](0.0, b)
@@ -43,10 +43,10 @@ class HomologySpec extends Specification {
       val intervals: ListBuffer[(Simplex, Double)] = ListBuffer[(Simplex, Double)]() //returns tuple of interval
 
 
-      extension (chain: Chain[Simplex, Double]) {
+     // extension (chain: Chain[Simplex, Double]) {
         def reduceByBasis(basis: List[MapChain[Simplex, Double]]): Chain[Simplex, Double] = {
           var changed: Boolean = true
-          var sigma: MapChain[Simplex, Double] = sigma //working on current chain
+          var sigma = MapChain[Simplex, Double]()  //working on current chain. Here assigning sigma as an empty MapChain
           while (changed) {
             changed = false
             for (basisElement <- basis) {
@@ -61,7 +61,7 @@ class HomologySpec extends Specification {
           }
           sigma
         }
-      }
+     // }
 
       //TDAContext is great! Due to the context-driven paradigm, the tda package object extends ChainOps and SimplexOps,
       //thus you don't have to keep on rewriting parameter names and function calls. Instead its assigned to a singular variable, that does all that in the backend

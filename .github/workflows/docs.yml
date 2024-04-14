@@ -15,4 +15,5 @@ jobs:
       - name: Compile and publish docs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: sbt makeSite debug ghpagesPushSite
+          GITHUB_PAGES_PUBLISH_FORCE_PUSH: "Updating webpages."
+        run: sbt makeSite publishToGitHubPages

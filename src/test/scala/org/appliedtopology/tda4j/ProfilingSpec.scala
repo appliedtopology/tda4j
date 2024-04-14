@@ -13,7 +13,7 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
     val bitlength: Int = args.commandLine.intOr("bitlength", 3)
     val maxFVal: Double = args.commandLine.doubleOr("maxFVal", 7.0)
     val maxDim: Int = args.commandLine.intOr("maxDim", 7)
-    
+
     val symmetry: HyperCubeSymmetry = HyperCubeSymmetry(bitlength)
 
     class HyperCubeProfiling(
@@ -24,7 +24,8 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
     ) {
       pp(s"Measuring ${vr.className}")
       var now: Long = System.currentTimeMillis()
-      val sstream: Seq[AbstractSimplex[Int]] = vr(symmetry.hypercube, maxFVal, maxDim)
+      val sstream: Seq[AbstractSimplex[Int]] =
+        vr(symmetry.hypercube, maxFVal, maxDim)
       var duration: Long = System.currentTimeMillis() - now
       pp(s"${tag}\tInitialization: $duration ms")
       pp(s"${tag}\tSimplex Stream Size: ${sstream.size}")
@@ -47,7 +48,7 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
         HyperCubeProfiling(BronKerbosch[Int](), symmetry, bitlength, "BK")
     })
     section("bron-kerbosch")
-    
+
     section("zomorodian-incremental")
     ("Zomorodian Incremental" >> {
       val zi: HyperCubeProfiling =
