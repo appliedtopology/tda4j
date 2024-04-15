@@ -228,7 +228,11 @@ package org.appliedtopology.tda4j {
           }
         }
         if (headCell.isDefined & headCoeff != fr.zero) {
-          chainHeap.addOne(headCell.get -> headCoeff)
+          for
+            hc <- headCell
+          yield {
+              chainHeap.addOne(hc -> headCoeff)
+            }
         }
       }
 
@@ -236,7 +240,7 @@ package org.appliedtopology.tda4j {
       override def leadingTerm: (Option[CellT], CoefficientT) = {
         collapseHead()
         if (chainHeap.isEmpty)
-          Tuple2(None, summon[Fractional[CoefficientT]].zero)
+          Tuple2(None, fr.zero)
         else
           chainHeap.head.copy(_1 = Some(chainHeap.head._1))
       }
