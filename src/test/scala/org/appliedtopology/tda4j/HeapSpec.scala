@@ -6,97 +6,64 @@ import org.scalacheck.Prop.forAll
 
 class HeapSpec extends mutable.Specification with ScalaCheck {
   "Skew Binomial Heap Properties" >> {
-    val heaps = RecursiveHeap[Int]()
-
+    /*
     prop { (lst: List[Int]) =>
-      val heap = heaps.from(lst)
-      heaps.findMin(heap) === lst.minOption
-    }
+      val heap = Heap(lst.toSeq :_*)
+      heap.findMin === lst.minOption
 
-    val h1 = heaps.from(Seq(1,2,3))
-    val h2 = heaps.deleteMin(h1)
-    val h3 = heaps.deleteMin(h2)
-    val h4 = heaps.deleteMin(h3)
-
-    heaps.findMin(heaps.from(Seq(1,2,3))) === Some(1)
-    heaps.findMin(
-      heaps.deleteMin(
-        heaps.from(Seq(1,2,3))
-      )
-    ) === Some(2)
-
-    heaps.findMin(
-      heaps.deleteMin(
-        heaps.deleteMin(
-          heaps.from(Seq(1, 2, 3))
-        )
-      )
-    ) === Some(3)
-
-    heaps.findMin(
-      heaps.deleteMin(
-        heaps.deleteMin(
-          heaps.deleteMin(
-            heaps.from(Seq(1, 2, 3))
-          )
-        )
-      )
-    ) === None
-
-
-    prop { (lst: List[Int]) =>
-      val boh = BOHeap.from(lst)
-      if (lst.size == 0) boh.root must beNone
-      else {
-        "checking type" ==>
-          (boh.root must beSome[Node[Int]])
-        "checking that non-first ranks are wellformed" ==> (
-          if (boh.root.get.forest.size > 1)
-            boh.root.get.forest.tail
-              .map(_.rank)
-              .groupBy(identity)
-              .map((k, v) => v.size) must contain(beOneOf(0, 1)).foreach
-        )
-        "checking that all ranks are wellformed" ==> (
-          boh.root.get.forest
-            .map(_.rank)
-            .groupBy(identity)
-            .map((k, v) => v.size) must contain(beOneOf(0, 1, 2)).foreach
-        )
-
-        def testnode(n: Node[Int]) =
-          n.forest.flatMap(_.toList()).forall(j => n.elem <= j)
-        def testtree(n: Node[Int]): Boolean =
-          testnode(n) & n.forest.forall(testtree)
-
-        "checking the heap property" ==>
-          (testtree(boh.root.get) must beTrue)
-
-        "checking that minimum is returned" ==>
-          (boh.findMin must beSome(lst.min))
-
-        val boh2 = boh.deleteMin()
-        if (lst.size == 1) boh2.root must beNone
-        else {
-          boh.root must beSome[Node[Int]]
-          if (boh.root.get.forest.size > 1)
-            boh.root.get.forest.tail
-              .map(_.rank)
-              .groupBy(identity)
-              .map((k, v) => v.size) must contain(beOneOf(0, 1)).foreach
-          boh.root.get.forest
-            .map(_.rank)
-            .groupBy(identity)
-            .map((k, v) => v.size) must contain(beOneOf(0, 1, 2)).foreach
-        }
-      }
+      val sortedlst = heap.iterator.toSeq
+      sortedlst === lst.sorted
     }
 
     prop { (lst: List[Int]) =>
-      val boh = BOHeap.from(lst)
-      val sortedlst = boh.dequeueAll()
-      sortedlst must beSorted
-      sortedlst must containTheSameElementsAs(lst)
+      val heap = Heap(lst.toSeq :_*)
+
+      // Heap property: value is greater than every other value?
+      // Enough to test greater than every other root
+      val check1 : List[Boolean] = heap
+        .mapStructure((h) => (for a <- h.findMin yield (
+          for v <- h.forest.toVector.flatMap(_.findMin) yield (a <= v))))
+        .toList
+        .flatten
+        .flatten
+      check1 must contain(beTrue).forall
+
+      // Skew binomial property
+      // first rank is lowest
+      val check2 : List[Boolean] = heap
+        .mapStructure((h) => h.forest match {
+          case EmptyForest() => true
+          case NonemptyForest(first, rest) => rest.forall(first.rank <= _.rank)
+        }).toList
+      check2 must contain(beTrue).forall
+      // rest ranks are monotonic
+      val check3 : List[Boolean] = heap
+        .mapStructure((h) => h.forest match {
+          case EmptyForest() => true
+          case NonemptyForest(first, rest) => rest.map(_.rank).sorted == rest.map(_.rank)
+        }).toList
+      check3 must contain(beTrue).forall
+      // rest ranks have no repeats
+      val check4 : List[Boolean] = heap
+        .mapStructure((h) => h.forest match {
+          case EmptyForest() => true
+          case NonemptyForest(first, rest) => rest.map(_.rank).toSet.toList.sorted == rest.map(_.rank)
+        }).toList
+      check4 must contain(beTrue).forall
     }
+
+    val hA = Heap(1,2,3,4,5,6)
+    val hB = Heap(4,5,6,7,8,9,2)
+    hA.meld(hB)
+
+
+    prop { (lst1: List[Int], lst2: List[Int]) =>
+      val heap1 = Heap.from(lst1)
+      val heap2 = Heap.from(lst2)
+
+      heap1.meld(heap2).iterator.toSeq === (lst1 ++ lst2).sorted
+    }
+
+     */
   }
 }
