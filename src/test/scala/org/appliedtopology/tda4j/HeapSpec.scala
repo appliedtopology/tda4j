@@ -1,8 +1,10 @@
 package org.appliedtopology.tda4j
 
-import org.specs2.{mutable, ScalaCheck}
+import org.specs2.{ScalaCheck, mutable}
 import heap.*
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Prop.forAll
+import org.specs2.time.SimpleTimer
 
 class HeapSpec extends mutable.Specification with ScalaCheck {
   "Brodal-Okasaki Heap Properties" >> {
@@ -26,5 +28,6 @@ class HeapSpec extends mutable.Specification with ScalaCheck {
         "return all the elements" ==> (heap.iterator.toSeq === lst.sorted)
       }
     }
+
   }
 }
