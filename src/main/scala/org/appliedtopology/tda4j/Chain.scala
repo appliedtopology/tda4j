@@ -17,8 +17,7 @@ package org.appliedtopology.tda4j {
 
   /** Lightweight trait to define what it means to be a topological "Cell".
     *
-    * Using F-bounded types to ensure reflective typing. See
-    * https://tpolecat.github.io/2015/04/29/f-bounds.html See
+    * Using F-bounded types to ensure reflective typing. See https://tpolecat.github.io/2015/04/29/f-bounds.html See
     * https://dotty.epfl.ch/3.0.0/docs/reference/contextual/type-classes.html
     */
   trait Cell[CellT <: Cell[CellT]] {
@@ -29,8 +28,8 @@ package org.appliedtopology.tda4j {
       * @return
       *   A sequence of boundary cells.
       * @todo
-      *   When a `Chain` trait or class has been created, this should change to
-      *   return an appropriate `Chain` instead of the current `List`.
+      *   When a `Chain` trait or class has been created, this should change to return an appropriate `Chain` instead of
+      *   the current `List`.
       */
 
     def boundary[CoefficientT: Fractional]: Chain[CellT, CoefficientT]
@@ -55,21 +54,17 @@ package org.appliedtopology.tda4j {
       ): Chain[CellT, CoefficientT] = ChainElement(c)
     }
 
-    /** The Chain class is a representation of a formal linear combination of
-      * the n cells in a cell complex. Note that CellT is a type parameter
-      * subtype of Cell, a trait in this library. We have Scala look for a type
-      * parameter of cellOrdering that matches as best as possible an Ordering
-      * on CellT.
+    /** The Chain class is a representation of a formal linear combination of the n cells in a cell complex. Note that
+      * CellT is a type parameter subtype of Cell, a trait in this library. We have Scala look for a type parameter of
+      * cellOrdering that matches as best as possible an Ordering on CellT.
       *
-      * (Note: write a fully fleshed out explanation in comments after code def.
-      * write up)
+      * (Note: write a fully fleshed out explanation in comments after code def. write up)
       *
       * @tparam CellT
-      *   Type of the cells in the chain complex. For example
-      *   `AbstractSimplex[Int]` etc.
+      *   Type of the cells in the chain complex. For example `AbstractSimplex[Int]` etc.
       * @tparam CoefficientT
-      *   Type of the coefficients of the chain complex. For example `Double` or
-      *   an implicit 'FiniteField : Fractional[Int]'
+      *   Type of the coefficients of the chain complex. For example `Double` or an implicit 'FiniteField :
+      *   Fractional[Int]'
       * @param chainMap
       *   Internal storage of the sorted map of the elements
       */
@@ -85,7 +80,7 @@ package org.appliedtopology.tda4j {
         if (chainMap.isEmpty)
           Tuple2(None, summon[Fractional[CoefficientT]].zero)
         else
-          chainMap.head.copy(_1=Some(chainMap.head._1))
+          chainMap.head.copy(_1 = Some(chainMap.head._1))
 
       override def toString: String =
         chainMap
@@ -114,19 +109,15 @@ package org.appliedtopology.tda4j {
 
       /** Both apply() functions assist in constructor execution.
         *
-        * The 1st apply() is used to take Cell/Coefficient pairs, and converts
-        * them to a sorted map using the Chain chainMap constructor. Why? So it
-        * works with the constructor, so we can create chains.
+        * The 1st apply() is used to take Cell/Coefficient pairs, and converts them to a sorted map using the Chain
+        * chainMap constructor. Why? So it works with the constructor, so we can create chains.
         *
-        * Here,the 2nd apply() works as a implicit cast function. Simply, it is
-        * used to take a cell and transform it to a chain. In depth, the Chain
-        * chainMap constructor is called to create a new Chain object, as
-        * indicated by 'new' followed by Chain. The constructor then requires a
-        * Cell/Coefficient pair. The "List(cell -> fr.one)" creates a list with
-        * at least a single key-value of a Cell/Coefficient pair ready to be
-        * inserted into the chainMap. The key will then product the value 1. Why
-        * 1? The Chain has to produce at least a value of 1. Think of this as
-        * the 'base case' for Chain values.
+        * Here,the 2nd apply() works as a implicit cast function. Simply, it is used to take a cell and transform it to
+        * a chain. In depth, the Chain chainMap constructor is called to create a new Chain object, as indicated by
+        * 'new' followed by Chain. The constructor then requires a Cell/Coefficient pair. The "List(cell -> fr.one)"
+        * creates a list with at least a single key-value of a Cell/Coefficient pair ready to be inserted into the
+        * chainMap. The key will then product the value 1. Why 1? The Chain has to produce at least a value of 1. Think
+        * of this as the 'base case' for Chain values.
         */
 
       def apply[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional](
@@ -189,52 +180,58 @@ package org.appliedtopology.tda4j {
    */
   package heapchain {
 
-    import org.appliedtopology.tda4j.mapchain.ChainElement
+    import scalaz._
+    import Scalaz._
+    import scalaz.std.given
 
-    /** A heap-based chain class. Will delay accumulating and evaluating any
-      * actual arithmetic for as long as possible.
+    import collection.immutable
+
+    def chainEntryOrder[CellT <: Cell[CellT]: scala.math.Ordering, CoefficientT](): Order[(CellT, CoefficientT)] =
+      Order.orderBy[(CellT, CoefficientT), CellT](_._1)(Order.fromScalaOrdering[CellT])
+
+    /** A heap-based chain class. Will delay accumulating and evaluating any actual arithmetic for as long as possible.
       *
-      * NOTA BENE: both checking for equality and converting to string will
-      * force the entire heap while extracting leading terms and cells will only
-      * force the leading terms and cells. Algebraic operations force nothing:
-      * entries are just added to the heap without checking for any computations
-      * that they imply.
+      * NOTA BENE: both checking for equality and converting to string will force the entire heap while extracting
+      * leading terms and cells will only force the leading terms and cells. Algebraic operations force nothing: entries
+      * are just added to the heap without checking for any computations that they imply.
       */
     class ChainElement[
-      CellT <: Cell[CellT]: Ordering,
+      CellT <: Cell[CellT]: scala.math.Ordering,
       CoefficientT
-    ](
-      cc: IterableOnce[(CellT, CoefficientT)]
-    )(using fr: Fractional[CoefficientT]) extends Chain[CellT, CoefficientT] {
+    ](var chainHeap: scalaz.Heap[(CellT, CoefficientT)])(using fr: Fractional[CoefficientT])
+        extends Chain[CellT, CoefficientT] {
 
       import Numeric.Implicits._
 
-      /* The core storage of the `ChainElement` is a heap of pairs (cell, coefficient)
-       * that are only ordered by their cell entry.
-       */
-      val chainHeap: mutable.PriorityQueue[(CellT, CoefficientT)] = {
-        given Ordering[(CellT, CoefficientT)] = Ordering.by(_._1)
+      given Order[CellT] = Order.fromScalaOrdering[CellT]
+      given Order[(CellT, CoefficientT)] = chainEntryOrder()
 
-        mutable.PriorityQueue.from(cc)
-      }
+      val addCoefficientsSemigroup: Semigroup[(CellT, CoefficientT)] =
+        Semigroup.instance((x, get) => (x._1, x._2 + get._2))
 
-      def collapseHead() = {
-        var headCoeff = fr.zero
-        var headCell = chainHeap.headOption.map(_._1)
-        while (chainHeap.nonEmpty & headCoeff == fr.zero) {
-          var headCell = chainHeap.headOption.map(_._1)
-          while (headCell.isDefined & headCell == chainHeap.headOption.map(_._1)) {
-            headCoeff += chainHeap.dequeue()._2
-          }
-        }
-        if (headCell.isDefined & headCoeff != fr.zero) {
-          for
-            hc <- headCell
-          yield {
-              chainHeap.addOne(hc -> headCoeff)
+      def addCoefficientsMonoid(default: CellT): Monoid[(CellT, CoefficientT)] =
+        Monoid.instance(addCoefficientsSemigroup.append, (default, fr.zero))
+
+      def collapseHead(): ChainElement[CellT, CoefficientT] =
+        if (chainHeap.isEmpty) return ChainElement()
+        else {
+          def collapseHeap(heap: Heap[(CellT, CoefficientT)]): Heap[(CellT, CoefficientT)] = {
+            val (heads, tail) = heap.span { head =>
+              chainEntryOrder().order(head, heap.minimum) == Ordering.EQ
             }
+
+            if (heads.size > 0) {
+              val newHead = heads.suml(addCoefficientsMonoid(heads.minimum._1))
+              if (newHead._2 != fr.zero)
+                tail.insert(newHead)
+              else
+                collapseHeap(tail)
+            } else {
+              collapseHeap(tail)
+            }
+          }
+          new ChainElement(collapseHeap(chainHeap))
         }
-      }
 
       // Will collapse the actual head
       override def leadingTerm: (Option[CellT], CoefficientT) = {
@@ -242,24 +239,18 @@ package org.appliedtopology.tda4j {
         if (chainHeap.isEmpty)
           Tuple2(None, fr.zero)
         else
-          chainHeap.head.copy(_1 = Some(chainHeap.head._1))
+          chainHeap.minimum.copy(_1 = Some(chainHeap.minimum._1))
       }
 
-      def toMap: Map[CellT, CoefficientT] =
-        this.chainHeap.groupMapReduce[CellT, CoefficientT](_._1)(_._2)(
-          _ + _
-        ) // sum coefficients
-
-      def mapInPlace(
-        f: ((CellT, CoefficientT)) => (CellT, CoefficientT)
-      ): this.type = {
-        chainHeap.mapInPlace(f)
-        this
-      }
+      def toMap: immutable.Map[CellT, CoefficientT] =
+        this.chainHeap.foldRight(immutable.Map[CellT, CoefficientT]()) { (pair, map) =>
+          val (cell, x) = pair
+          map.updatedWith(cell)(coeff => Some(x + coeff.getOrElse(fr.zero)))
+        }
 
       def isZero: Boolean = {
         collapseHead()
-        chainHeap.isEmpty || chainHeap.head._2 == summon[Fractional[CoefficientT]].zero
+        chainHeap.isEmpty || chainHeap.minimum._2 == summon[Fractional[CoefficientT]].zero
       }
 
       override def equals(obj: Any): Boolean = obj match {
@@ -270,70 +261,73 @@ package org.appliedtopology.tda4j {
       override def hashCode(): Int = chainHeap.hashCode()
 
       override def clone(): ChainElement[CellT, CoefficientT] =
-        new ChainElement(chainHeap.iterator)
+        new ChainElement(chainHeap)
 
       override def toString: String =
-        chainHeap.iterator
+        chainHeap.toStream
           .map((cell, coeff) => s"""${coeff} *> ${cell}""")
           .mkString(" + ")
     }
 
     object ChainElement {
-      def from[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional](
-        cc: IterableOnce[(CellT, CoefficientT)]
-      ) =
-        new ChainElement(cc)
+      given [CellT <: Cell[CellT]: scala.math.Ordering, CoefficientT]: Order[(CellT, CoefficientT)] =
+        chainEntryOrder()
 
-      def apply[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional](
-        cc: IterableOnce[(CellT, CoefficientT)]
+      def from[CellT <: Cell[CellT]: scala.math.Ordering, CoefficientT: Fractional](
+        cc: List[(CellT, CoefficientT)]
+      ) = new ChainElement[CellT, CoefficientT](Heap.fromData(cc))
+
+      def apply[CellT <: Cell[CellT]: scala.math.Ordering, CoefficientT: Fractional](
+        cc: List[(CellT, CoefficientT)]
       ): ChainElement[CellT, CoefficientT] = from(cc)
 
-      def apply[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional](
+      def apply[CellT <: Cell[CellT]: scala.math.Ordering, CoefficientT: Fractional](
         cc: (CellT, CoefficientT)*
-      ): ChainElement[CellT, CoefficientT] = from(cc)
+      ): ChainElement[CellT, CoefficientT] = from(cc.toList)
 
-      def apply[CellT <: Cell[CellT]: Ordering, CoefficientT](c: CellT)(using
+      def apply[CellT <: Cell[CellT]: scala.math.Ordering, CoefficientT](c: CellT)(using
         fr: Fractional[CoefficientT]
-      ): ChainElement[CellT, CoefficientT] = from(Seq((c, fr.one)))
+      ): ChainElement[CellT, CoefficientT] = from(List(c -> fr.one))
     }
 
     object Chain {
-      def apply[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional](
+      def apply[CellT <: Cell[CellT]: scala.math.Ordering, CoefficientT: Fractional](
         cc: (CellT, CoefficientT)*
       ): Chain[CellT, CoefficientT] = ChainElement(cc: _*)
 
-      def apply[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional](
+      def apply[CellT <: Cell[CellT]: scala.math.Ordering, CoefficientT: Fractional](
         c: CellT
       ): Chain[CellT, CoefficientT] = ChainElement(c)
     }
 
-    class ChainOps[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional]
-        extends RingModule[ChainElement[CellT, CoefficientT], CoefficientT] {
+    class ChainOps[CellT <: Cell[CellT]: scala.math.Ordering, CoefficientT](using fr: Fractional[CoefficientT])
+        extends RingModule[ChainElement[CellT, CoefficientT], CoefficientT]
+        with Show[ChainElement[CellT, CoefficientT]] {
 
       import Numeric.Implicits._
 
-      override val zero: ChainElement[CellT, CoefficientT] = new ChainElement(
-        Seq()
-      )
+      override val zero: ChainElement[CellT, CoefficientT] = ChainElement()
 
       override def plus(
         x: ChainElement[CellT, CoefficientT],
         y: ChainElement[CellT, CoefficientT]
-      ): ChainElement[CellT, CoefficientT] =
-        ChainElement.from(Iterator.concat(x.chainHeap, y.chainHeap))
+      ): ChainElement[CellT, CoefficientT] = new ChainElement(x.chainHeap.union(y.chainHeap))
 
       override def scale(
         x: CoefficientT,
         y: ChainElement[CellT, CoefficientT]
       ): ChainElement[CellT, CoefficientT] =
-        y.clone().mapInPlace((cell, coeff) => (cell, coeff * x))
+        new ChainElement(y.chainHeap.map((cell, coeff) => (cell, x * coeff))(y.given_Order_CellT_CoefficientT))
 
       override def negate(
         x: ChainElement[CellT, CoefficientT]
-      ): ChainElement[CellT, CoefficientT] = {
-        val fr = summon[Fractional[CoefficientT]]
-        scale(fr.negate(fr.one), x)
-      }
+      ): ChainElement[CellT, CoefficientT] =
+        scale(-fr.one, x)
+
+      override def shows(x: ChainElement[CellT, CoefficientT]): String =
+        x.chainHeap.toList.map((cell, coeff) => s"${coeff.toString} *> ${cell.toString}").mkString(" + ")
+
+      override def show(x: ChainElement[CellT, CoefficientT]): Cord = Cord(shows(x))
     }
   }
 }

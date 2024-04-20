@@ -173,28 +173,25 @@ class ChainSpec extends mutable.Specification {
 class HeapChainSpec extends mutable.Specification {
   given sc: SimplexContext[Int]()
   import sc.{given, *}
-  import org.appliedtopology.tda4j.heapchain.{
-    ChainElement as HeapChain,
-    ChainOps as HeapChainOps
-  }
+  import org.appliedtopology.tda4j.heapchain.{ChainElement as HeapChain, ChainOps as HeapChainOps}
 
   "Heap-based chains should" >> {
     "be created from a sequence" >> {
-      val elts = Seq((s(1, 2), 1.0), (s(1, 3), -1.0))
+      val elts = List((s(1, 2), 1.0), (s(1, 3), -1.0))
       val hc = HeapChain[Simplex, Double](elts)
       "contains the right things" ==>
-        (hc.chainHeap.toSeq must containTheSameElementsAs(elts))
+        (hc.chainHeap.toList must containTheSameElementsAs(elts))
     }
     "be created from varargs" >> {
       val elts = Seq((s(1, 2), 1.0), (s(1, 3), -1.0))
       val hc = HeapChain[Simplex, Double](elts: _*)
       "contains the right things" ==>
-        (hc.chainHeap.toSeq must containTheSameElementsAs(elts))
+        (hc.chainHeap.toList must containTheSameElementsAs(elts))
     }
     "be created from a single simplex" >> {
       val hc = HeapChain[Simplex, Double](s(1, 2, 3))
       "contains the right things" ==>
-        (hc.chainHeap.toSeq must containTheSameElementsAs(
+        (hc.chainHeap.toList must containTheSameElementsAs(
           Seq((s(1, 2, 3), 1.0))
         ))
     }
@@ -204,7 +201,7 @@ class HeapChainSpec extends mutable.Specification {
       import rm.{given, *}
       val z1 = 1.0 *> s(1, 2) + 2.0 *> s(1, 3) - 1.0 *> s(2, 3)
       val z2 = 1.0 *> s(1, 2) + 1.0 *> s(2, 3)
-      val z3 = (z2 + (-1.0 *> z2))
+      val z3 = z2 + (-1.0 *> z2)
 
       "subtracts to zero" ==>
         (z3.isZero must beTrue)
