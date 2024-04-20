@@ -315,7 +315,11 @@ object MapChain {
           }
         }
         if (headCell.isDefined & headCoeff != fr.zero) {
-          chainHeap.addOne(headCell.get -> headCoeff)
+          for
+            hc <- headCell
+          yield {
+              chainHeap.addOne(hc -> headCoeff)
+            }
         }
       }
 
@@ -323,7 +327,7 @@ object MapChain {
       override def leadingTerm: (Option[CellT], CoefficientT) = {
         collapseHead()
         if (chainHeap.isEmpty)
-          Tuple2(None, summon[Fractional[CoefficientT]].zero)
+          Tuple2(None, fr.zero)
         else
           chainHeap.head.copy(_1 = Some(chainHeap.head._1))
       }

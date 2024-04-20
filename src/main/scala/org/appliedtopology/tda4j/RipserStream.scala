@@ -43,7 +43,7 @@ class SimplexIndexing(val vertexCount: Int) {
       case Found(foundIndex)              => foundIndex
       case InsertionPoint(insertionPoint) => insertionPoint - 1
     }
-    return apply(n - binomialTable(d)(id), d - 1, upperAccum + (id + d))
+    apply(n - binomialTable(d)(id), d - 1, upperAccum + (id + d))
   }
 
   def cofacetIterator(simplex: Simplex): Iterator[Int] =

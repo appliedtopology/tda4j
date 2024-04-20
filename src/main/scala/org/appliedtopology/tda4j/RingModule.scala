@@ -14,7 +14,7 @@ import scala.annotation.targetName
   *   Type of the ring coefficients
   */
 trait RingModule[T, R] {
-  val zero: T
+  def zero: T
   def plus(x: T, y: T): T
   def minus(x: T, y: T): T = plus(x, negate(y))
   def negate(x: T): T = minus(zero, x)

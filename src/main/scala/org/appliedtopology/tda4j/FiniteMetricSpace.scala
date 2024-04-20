@@ -69,10 +69,12 @@ object FiniteMetricSpace {
       spx.forall(v => metricSpace.contains(v))
 
     def apply(spx: AbstractSimplex[VertexT]): Double = {
-      if (spx.size <= 1) return 0.0
-      spx
-        .flatMap(v => spx.filter(_ > v).map(w => metricSpace.distance(v, w)))
-        .max
+      if (spx.size <= 1) 
+        0.0
+      else
+        spx
+          .flatMap(v => spx.filter(_ > v).map(w => metricSpace.distance(v, w)))
+          .max
     }
   }
 }
