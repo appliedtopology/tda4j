@@ -16,9 +16,8 @@ trait Filtration[VertexT, FiltrationT: Ordering] {
   *   Type of the filtration values.
   *
   * @todo
-  *   We may want to change this to inherit instead from
-  *   `IterableOnce[AbstractSimplex[VertexT]]`, so that a lazy computed simplex
-  *   stream can be created and fit in the type hierarchy.
+  *   We may want to change this to inherit instead from `IterableOnce[AbstractSimplex[VertexT]]`, so that a lazy
+  *   computed simplex stream can be created and fit in the type hierarchy.
   */
 trait SimplexStream[VertexT, FiltrationT]
     extends Filtration[VertexT, FiltrationT]
@@ -57,11 +56,9 @@ class ExplicitStreamBuilder[VertexT: Ordering, FiltrationT](implicit
     ] {
   self =>
 
-  protected val filtrationValues
-    : mutable.Map[AbstractSimplex[VertexT], FiltrationT] =
+  protected val filtrationValues: mutable.Map[AbstractSimplex[VertexT], FiltrationT] =
     new mutable.HashMap[AbstractSimplex[VertexT], FiltrationT]()
-  protected val simplices
-    : mutable.Queue[(FiltrationT, AbstractSimplex[VertexT])] =
+  protected val simplices: mutable.Queue[(FiltrationT, AbstractSimplex[VertexT])] =
     mutable.Queue[(FiltrationT, AbstractSimplex[VertexT])]()
 
   override def clear(): Unit = {

@@ -1,18 +1,7 @@
 package org.appliedtopology.tda4j
 
-import scala.collection.{
-  mutable,
-  SortedIterableFactory,
-  SortedSetFactoryDefaults,
-  StrictOptimizedSortedSetOps
-}
-import scala.collection.immutable.{
-  Set,
-  SortedMap,
-  SortedSet,
-  SortedSetOps,
-  TreeSet
-}
+import scala.collection.{mutable, SortedIterableFactory, SortedSetFactoryDefaults, StrictOptimizedSortedSetOps}
+import scala.collection.immutable.{Set, SortedMap, SortedSet, SortedSetOps, TreeSet}
 import scala.math.Ordering.IntOrdering
 import scala.math.Ordering.Double.IeeeOrdering
 import math.Ordering.Implicits.sortedSetOrdering
@@ -41,20 +30,16 @@ trait SimplexContext[VertexT: Ordering] {
   }
 }
 
-/** Class representing an abstract simplex. Abstract simplices are sets (of
-  * totally ordered vertices) and thus are represented by a type that implements
-  * the interface of a `SortedSet` fully, and also inherits from `Cell` so that
+/** Class representing an abstract simplex. Abstract simplices are sets (of totally ordered vertices) and thus are
+  * represented by a type that implements the interface of a `SortedSet` fully, and also inherits from `Cell` so that
   * the class has a `boundary` method.
   *
-  * With this `SortedSet` interface in place, there is scope for using
-  * `AbstractSimplex` for combinatorial algebraic topology tasks unrelated to
-  * persistence, and possibly for writing persistence algorithms more smoothly.
+  * With this `SortedSet` interface in place, there is scope for using `AbstractSimplex` for combinatorial algebraic
+  * topology tasks unrelated to persistence, and possibly for writing persistence algorithms more smoothly.
   *
-  * You should never have reason to use the constructor directly (...and if you
-  * do, you should make sure to give the internal `SortedSet` yourself) -
-  * instead use the factory method in the companion object. In code this means
-  * that instead of `new AbstractSimplex[T](a,b,c)` you would write
-  * `AbstractSimplex[T](a,b,c)`.
+  * You should never have reason to use the constructor directly (...and if you do, you should make sure to give the
+  * internal `SortedSet` yourself) - instead use the factory method in the companion object. In code this means that
+  * instead of `new AbstractSimplex[T](a,b,c)` you would write `AbstractSimplex[T](a,b,c)`.
   *
   * @param vertexSet
   *   Vertices of the simplex
@@ -76,8 +61,8 @@ class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])( //v
 
   // ***** Simplex specific operations
 
-  /** Implementation of the face enumeration for the simplicial boundary map:
-    * exclude one element at a time, and use alternating signs.
+  /** Implementation of the face enumeration for the simplicial boundary map: exclude one element at a time, and use
+    * alternating signs.
     *
     * @return
     *   A sequence of boundary cells.
@@ -137,8 +122,7 @@ object AbstractSimplex extends SortedIterableFactory[AbstractSimplex] {
   ): AbstractSimplex[VertexT] =
     (newBuilder[VertexT] ++= source).result()
 
-  override def newBuilder[VertexT: Ordering]
-    : mutable.Builder[VertexT, AbstractSimplex[VertexT]] =
+  override def newBuilder[VertexT: Ordering]: mutable.Builder[VertexT, AbstractSimplex[VertexT]] =
     new mutable.ReusableBuilder[VertexT, AbstractSimplex[VertexT]] {
       private val elems = mutable.Set[VertexT]()
 

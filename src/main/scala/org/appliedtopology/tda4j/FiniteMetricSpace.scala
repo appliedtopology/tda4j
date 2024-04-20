@@ -12,8 +12,7 @@ import math.Ordering.Implicits._
   */
 trait FiniteMetricSpace[VertexT] {
 
-  /** Distance in the metric space. Takes two indices and returns a non-negative
-    * real number.
+  /** Distance in the metric space. Takes two indices and returns a non-negative real number.
     * @param x
     *   Index of first point
     * @param y
@@ -28,10 +27,8 @@ trait FiniteMetricSpace[VertexT] {
     */
   def size: Int
 
-  /** Access to all points in the metric space. Implemented by eg
-    * `scala.collections.Range` for simple Int-indexed spaces, but this
-    * definition gives more space for different underlying possible
-    * representations.
+  /** Access to all points in the metric space. Implemented by eg `scala.collections.Range` for simple Int-indexed
+    * spaces, but this definition gives more space for different underlying possible representations.
     * @return
     *   Iterable that returns all points in the metric space
     */
@@ -39,8 +36,8 @@ trait FiniteMetricSpace[VertexT] {
 
   def contains(x: VertexT): Boolean
 
-  /** Beyond this radius, the Vietoris-Rips complex is a cone and will have no
-    * further homological structure. See e.g. the Ripser paper, page 412.
+  /** Beyond this radius, the Vietoris-Rips complex is a cone and will have no further homological structure. See e.g.
+    * the Ripser paper, page 412.
     */
   lazy val minimumEnclosingRadius =
     elements.map { x =>
@@ -52,9 +49,8 @@ trait FiniteMetricSpace[VertexT] {
   */
 object FiniteMetricSpace {
 
-  /** Creates a filtration value partial function implementing the functionality
-    * of a [[Filtration]] for a filtration generated from a metric space, where
-    * the filtration value is the maximum distance between vertices (or the
+  /** Creates a filtration value partial function implementing the functionality of a [[Filtration]] for a filtration
+    * generated from a metric space, where the filtration value is the maximum distance between vertices (or the
     * diameter) of a simplex.
     *
     * @param metricSpace
@@ -68,31 +64,27 @@ object FiniteMetricSpace {
     def isDefinedAt(spx: AbstractSimplex[VertexT]): Boolean =
       spx.forall(v => metricSpace.contains(v))
 
-    def apply(spx: AbstractSimplex[VertexT]): Double = {
-      if (spx.size <= 1) 
+    def apply(spx: AbstractSimplex[VertexT]): Double =
+      if (spx.size <= 1)
         0.0
       else
         spx
           .flatMap(v => spx.filter(_ > v).map(w => metricSpace.distance(v, w)))
           .max
-    }
   }
 }
 
-/** Takes in an explicit distance matrix, and performs lookups in this distance
-  * matrix.
+/** Takes in an explicit distance matrix, and performs lookups in this distance matrix.
   *
   * @param dist
-  *   Distance matrix represented as a `Seq[Seq[Double]]`. The class expects but
-  *   does not enforce:
+  *   Distance matrix represented as a `Seq[Seq[Double]]`. The class expects but does not enforce:
   *
   *   - `dist(x1).size == dist(x2).size` for all `x1,x2`
   *   - `dist(x).size == dist.size` for all `x`
   *   - `dist(x)(x) == 0` for all `x`
   *   - The triangle inequality
   */
-class ExplicitMetricSpace(val dist: Seq[Seq[Double]])
-    extends FiniteMetricSpace[Int] {
+class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricSpace[Int] {
   def distance(x: Int, y: Int): Double = dist(x)(y)
   def size: Int = dist.size
   def elements: Iterable[Int] = Range(0, size)
@@ -102,14 +94,12 @@ class ExplicitMetricSpace(val dist: Seq[Seq[Double]])
 /** Takes in an point cloud and computes the Euclidean distance on demand.
   *
   * @param pts
-  *   Point cloud matrix represented as a `Seq[Seq[Double]]`. The class expects
-  *   but does not enforce:
+  *   Point cloud matrix represented as a `Seq[Seq[Double]]`. The class expects but does not enforce:
   *
   *   - `pts(x1).size == pts(x2).size` for all `x1,x2`
   */
 
-class EuclideanMetricSpace(val pts: Seq[Seq[Double]])
-    extends FiniteMetricSpace[Int] {
+class EuclideanMetricSpace(val pts: Seq[Seq[Double]]) extends FiniteMetricSpace[Int] {
   def distance(x: Int, y: Int): Double = {
     val sqdist = pts(x).zip(pts(y)).map((x, y) => pow(x - y, 2))
     sqdist.sum.pipe(sqrt)

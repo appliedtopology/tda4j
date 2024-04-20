@@ -27,8 +27,7 @@ class VietorisRips[VertexT](using ordering: Ordering[VertexT])(
   val metricSpace: FiniteMetricSpace[VertexT],
   val maxFiltrationValue: Double = Double.PositiveInfinity,
   val maxDimension: Int = 2,
-  val cliqueFinder: CliqueFinder[VertexT] =
-    new ZomorodianIncremental[VertexT]()(ordering)
+  val cliqueFinder: CliqueFinder[VertexT] = new ZomorodianIncremental[VertexT]()(ordering)
 ) extends SimplexStream[VertexT, Double] {
   self =>
 
@@ -66,8 +65,7 @@ abstract class CliqueFinder[VertexT: Ordering]
 
 object CliqueFinder {
 
-  /** First, construct all the edges with edge length less than the
-    * maxFiltrationValue
+  /** First, construct all the edges with edge length less than the maxFiltrationValue
     */
   def weightedEdges[VertexT: Ordering](
     metricSpace: FiniteMetricSpace[VertexT],
@@ -136,31 +134,27 @@ object CliqueFinder {
 
 }
 
-/** `BronKerbosch` implements the creation of a Vietoris-Rips complex by running
-  * the Bron-Kerbosch clique finder algorithm and then sorting the resulting
-  * cliques before returning them in a `Seq[FilteredAbstractSimplex[V,Double]]`.
+/** `BronKerbosch` implements the creation of a Vietoris-Rips complex by running the Bron-Kerbosch clique finder
+  * algorithm and then sorting the resulting cliques before returning them in a
+  * `Seq[FilteredAbstractSimplex[V,Double]]`.
   *
-  * Implements `apply` so that you call the object with an appropriate metric
-  * space and optional maximum filtration value and receive a sequence of
-  * simplices back.
+  * Implements `apply` so that you call the object with an appropriate metric space and optional maximum filtration
+  * value and receive a sequence of simplices back.
   */
 class BronKerbosch[VertexT: Ordering] extends CliqueFinder[VertexT] {
   val className = "BronKerbosch"
 
-  /** Creates a Vietoris-Rips simplex sequence using the Bron-Kerbosch algorithm
-    * for clique finding.
+  /** Creates a Vietoris-Rips simplex sequence using the Bron-Kerbosch algorithm for clique finding.
     *
     * @param metricSpace
-    *   The [[MetricSpace]] instance that carries the metric information about
-    *   the data.
+    *   The [[MetricSpace]] instance that carries the metric information about the data.
     * @param maxFiltrationValue
     *   Optional: when to stop generating simplices. Default is ∞.
     * @param maxDimension
     *   Optional: what maximal dimension simplices to generate. Default is 2.
     * @return
-    *   Vietoris-Rips complex in increasing order of filtration values, and
-    *   increasing order of dimension, with lexicographic sorting for equal
-    *   filtration value and dimension.
+    *   Vietoris-Rips complex in increasing order of filtration values, and increasing order of dimension, with
+    *   lexicographic sorting for equal filtration value and dimension.
     */
   def apply(
     metricSpace: FiniteMetricSpace[VertexT],
@@ -169,11 +163,11 @@ class BronKerbosch[VertexT: Ordering] extends CliqueFinder[VertexT] {
   ): Seq[AbstractSimplex[VertexT]] = {
     val edges = CliqueFinder.weightedEdges(metricSpace, maxFiltrationValue)
 
-    /** Now that we have the a graph we want to run Bron-Kerbosch to find the
-      * cliques and sort them by their appearance time/
+    /** Now that we have the a graph we want to run Bron-Kerbosch to find the cliques and sort them by their appearance
+      * time/
       *
-      * By insertion into a mutable SortedMap we can generate and insert all
-      * subsimplices without worrying too much about saving duplicates.
+      * By insertion into a mutable SortedMap we can generate and insert all subsimplices without worrying too much
+      * about saving duplicates.
       */
 
     // First, create a degeneracy ordering of the vertices

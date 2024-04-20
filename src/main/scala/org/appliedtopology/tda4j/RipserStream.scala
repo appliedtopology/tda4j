@@ -2,11 +2,7 @@ package org.appliedtopology.tda4j
 
 import scala.collection.Searching.{given, *}
 import org.apache.commons.numbers.combinatorics
-import org.appliedtopology.tda4j.barcode.{
-  ClosedEndpoint,
-  OpenEndpoint,
-  PersistenceBar
-}
+import org.appliedtopology.tda4j.barcode.{ClosedEndpoint, OpenEndpoint, PersistenceBar}
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -23,9 +19,8 @@ class SimplexIndexing(val vertexCount: Int) {
 
   /** Table of binomial coefficients for fast lookups.
     *
-    * In order to make the simplex <-> index mapping work, this table encodes
-    * binomial coefficients (d+s \choose s) so that binary search along each
-    * such diagonal works.
+    * In order to make the simplex <-> index mapping work, this table encodes binomial coefficients (d+s \choose s) so
+    * that binary search along each such diagonal works.
     */
   val binomialTable = (0 to vertexCount).map { d =>
     (0 to vertexCount).map { s =>
@@ -85,15 +80,14 @@ class SimplexIndexing(val vertexCount: Int) {
       .map((os: Option[Int]) => os.get)
 
   def facetIterator(index: Int, size: Int): Iterator[Int] =
-    Iterator.unfold((apply(index, size).toSeq.sorted, index, 0, size - 1)) {
-      (s, iB, iA, k) =>
-        if (k < 0) None
-        else {
-          val j = s(k)
-          val iiB = iB - binomial(j, k + 1)
-          val iiA = iA + binomial(j, k)
-          Some((iiB + iA, (s, iiB, iiA, k - 1)))
-        }
+    Iterator.unfold((apply(index, size).toSeq.sorted, index, 0, size - 1)) { (s, iB, iA, k) =>
+      if (k < 0) None
+      else {
+        val j = s(k)
+        val iiB = iB - binomial(j, k + 1)
+        val iiA = iA + binomial(j, k)
+        Some((iiB + iA, (s, iiB, iiA, k - 1)))
+      }
     }
 
   def apply(simplex: Simplex): Int =
@@ -125,12 +119,11 @@ class RipserStreamSparse(
   import sc.*
 
   // given Ordering[Simplex] = Ordering.by(filtrationValue).orElse(sc.given_Ordering_Simplex)
-  val doubleSimplexPairOrdering: Ordering[(Double, Simplex)] = {
-    (x: (Double, Simplex), y: (Double, Simplex)) =>
-      Ordering.Double.TotalOrdering.compare(x._1, y._1) match {
-        case 0      => sc.given_Ordering_Simplex.compare(x._2, y._2)
-        case c: Int => c
-      }
+  val doubleSimplexPairOrdering: Ordering[(Double, Simplex)] = { (x: (Double, Simplex), y: (Double, Simplex)) =>
+    Ordering.Double.TotalOrdering.compare(x._1, y._1) match {
+      case 0      => sc.given_Ordering_Simplex.compare(x._2, y._2)
+      case c: Int => c
+    }
   }
 
   given Ordering[(Double, Simplex)] = doubleSimplexPairOrdering
@@ -168,8 +161,7 @@ class RipserStreamSparse(
 
   lazy val kruskal = Kruskal(metricSpace)
 
-  def zeroPersistence[CoefficientT]()
-    : List[PersistenceBar[Double, Chain[Simplex, CoefficientT]]] =
+  def zeroPersistence[CoefficientT](): List[PersistenceBar[Double, Chain[Simplex, CoefficientT]]] =
     kruskal.mstIterator.map { (b, d) =>
       PersistenceBar[Double, Chain[Simplex, CoefficientT]](
         0,
@@ -197,9 +189,7 @@ class RipserStreamSparse(
           previousSimplex <- simplexCache.filter(_._1 < fV).iterator.map(_._2)
           nextVertex <- metricSpace.elements
             .filter(!previousSimplex.contains(_))
-            .filter(nV =>
-              previousSimplex.map(oV => metricSpace.distance(oV, nV)).max <= fV
-            )
+            .filter(nV => previousSimplex.map(oV => metricSpace.distance(oV, nV)).max <= fV)
           simplex: Simplex <- List(previousSimplex + nextVertex)
           if zeroApparentCofacet(si(simplex), simplex.size).isEmpty
           if zeroApparentFacet(si(simplex), simplex.size).isEmpty
@@ -235,9 +225,7 @@ abstract class RipserStreamBase(
       s <- iteratorByDimension(d)
     yield s
 
-  def iteratorByDimension(d: Int): Iterator[AbstractSimplex[Int]] = if (
-    d > metricSpace.size
-  ) Iterator()
+  def iteratorByDimension(d: Int): Iterator[AbstractSimplex[Int]] = if (d > metricSpace.size) Iterator()
   else {
     (0 until binomial(metricSpace.size, d + 1)).iterator
       .filter(i => retain(i, d + 1))
@@ -277,8 +265,7 @@ abstract class RipserStreamBase(
       if facet == index
     } yield cofacet
 
-  def zeroPersistence[CoefficientT]()
-    : List[PersistenceBar[Double, Chain[Simplex, CoefficientT]]] =
+  def zeroPersistence[CoefficientT](): List[PersistenceBar[Double, Chain[Simplex, CoefficientT]]] =
     Kruskal(metricSpace).mstIterator.map { (b, d) =>
       PersistenceBar[Double, Chain[Simplex, CoefficientT]](
         0,
@@ -319,8 +306,7 @@ class RipserStreamOf[VertexT: Ordering](
   override def iterator: Iterator[AbstractSimplex[VertexT]] =
     rs.iterator.map(s => s.map(v => vertices(v)))
 
-  override def filtrationValue
-    : PartialFunction[AbstractSimplex[VertexT], Double] =
+  override def filtrationValue: PartialFunction[AbstractSimplex[VertexT], Double] =
     rs.filtrationValue.compose(s => s.map(v => vertices.indexOf(v)))
 }
 
@@ -405,8 +391,7 @@ class MaskedSymmetricRipserStream[KeyT](
       s <- iteratorByDimension(d)
     yield s
 
-  def iteratorByDimension(d: Int): Iterator[Simplex] = if (d > metricSpace.size)
-    Iterator()
+  def iteratorByDimension(d: Int): Iterator[Simplex] = if (d > metricSpace.size) Iterator()
   else {
     val repmap: Map[Double, List[Simplex]] = List
       .from(

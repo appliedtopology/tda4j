@@ -2,11 +2,10 @@ package org.appliedtopology.tda4j
 
 import scala.annotation.targetName
 
-/** Specifies what it means for the type `T` to be a module (or vector space)
-  * over the [Numeric] (ie ring-like) type `R`.
+/** Specifies what it means for the type `T` to be a module (or vector space) over the [Numeric] (ie ring-like) type
+  * `R`.
   *
-  * A minimal implementation of this trait will define `zero`, `plus`, `scale`,
-  * and at least one of `minus` and `negate`
+  * A minimal implementation of this trait will define `zero`, `plus`, `scale`, and at least one of `minus` and `negate`
   *
   * @tparam T
   *   Type of the module elements.

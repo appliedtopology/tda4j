@@ -13,23 +13,18 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success}
 
-/** A `given` instance that allows us to automatically sort bitsets
-  * lexicographically.
+/** A `given` instance that allows us to automatically sort bitsets lexicographically.
   */
 given orderingBitSet: Ordering[BitSet] = math.Ordering.by(bs => bs.toSeq)
 
-/** A trait encoding the interface for a group of symmetries acting on the
-  * vertex set of a simplicial complex. The group and its action needs to be
-  * fully known and implemented.
+/** A trait encoding the interface for a group of symmetries acting on the vertex set of a simplicial complex. The group
+  * and its action needs to be fully known and implemented.
   *
-  * This structure assumes that you can provide a group action on vertices, and
-  * will from that deduce a group action on simplices by acting pointwise:
-  * `g.[a,b,c] = [ga,gb,gc]`, collapsing any degeneracies.
+  * This structure assumes that you can provide a group action on vertices, and will from that deduce a group action on
+  * simplices by acting pointwise: `g.[a,b,c] = [ga,gb,gc]`, collapsing any degeneracies.
   *
-  * A fundamentally important part of the symmetry group action for our
-  * applications is to be able to pick out **canonical** representatives for
-  * each orbit, and to recognize when a simplex is such a canonical
-  * representative.
+  * A fundamentally important part of the symmetry group action for our applications is to be able to pick out
+  * **canonical** representatives for each orbit, and to recognize when a simplex is such a canonical representative.
   *
   * @tparam KeyT
   *   The type used to enumerate the group elements.
@@ -42,8 +37,7 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
   /** List of all keys that can be used to address individual group elements. */
   def keys: Iterable[KeyT]
 
-  /** Pulling out an element from the symmetry group produces a function that
-    * takes vertices to vertices.
+  /** Pulling out an element from the symmetry group produces a function that takes vertices to vertices.
     *
     * @param groupElementKey
     *   The key addressing the specific group element intended.
@@ -52,8 +46,7 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
     */
   def apply(groupElementKey: KeyT): (VertexT => VertexT)
 
-  /** Applies all group elements to a single starting simplex, thus tracing out
-    * the full orbit of that starting simplex.
+  /** Applies all group elements to a single starting simplex, thus tracing out the full orbit of that starting simplex.
     *
     * @param simplex
     *   Starting simplex.
@@ -102,12 +95,10 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
 
 }
 
-/** A symmetry-aware compressed indexed sequence container that keeps track of
-  * representatives of each orbit, and generates the rest of the orbit as and
-  * when needed, including an iterator structure that also only generates the
-  * rest of the orbit when needed, and a method for checking whether a
-  * particular simplex **is** an orbit representatives in a way that does not
-  * hold on to orbit elements (thus allowing them to get instantly garbage
+/** A symmetry-aware compressed indexed sequence container that keeps track of representatives of each orbit, and
+  * generates the rest of the orbit as and when needed, including an iterator structure that also only generates the
+  * rest of the orbit when needed, and a method for checking whether a particular simplex **is** an orbit
+  * representatives in a way that does not hold on to orbit elements (thus allowing them to get instantly garbage
   * collected).
   *
   * @param representatives
@@ -115,8 +106,8 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
   * @param symmetry
   *   A `SymmetryGroup` object carrying information about symmetries
   * @param ordering$VertexT$0
-  *   We depend on a total order of simplices, which we generate from a total
-  *   order of vertices. This carries that ordering.
+  *   We depend on a total order of simplices, which we generate from a total order of vertices. This carries that
+  *   ordering.
   * @tparam VertexT
   *   The type of the vertices.
   * @tparam KeyT
@@ -128,35 +119,29 @@ class ExpandList[VertexT: Ordering, KeyT](
 ) extends IndexedSeq[AbstractSimplex[VertexT]] {
   self =>
 
-  /** `orbitSizes` contains each representative paired with the size of its
-    * orbit, for fast lookup.
+  /** `orbitSizes` contains each representative paired with the size of its orbit, for fast lookup.
     */
   val orbitSizes: Map[AbstractSimplex[VertexT], Int] =
     Map.from(representatives.map(r => r -> symmetry.orbit(r).size))
 
-  /** `orbitRanges` contains accumulated indices of the starts of each new
-    * orbit.
+  /** `orbitRanges` contains accumulated indices of the starts of each new orbit.
     */
   val orbitRanges: Seq[Int] =
     representatives.map(orbitSizes(_)).scanLeft(0)(_ + _)
 
-  /** `repOrbitRanges` pairs the orbit start indices with their corresponding
-    * orbit representative.
+  /** `repOrbitRanges` pairs the orbit start indices with their corresponding orbit representative.
     */
   val repOrbitRanges: Seq[(AbstractSimplex[VertexT], Int)] =
     representatives.zip(orbitRanges)
 
-  /** `currentRepresentative` and `currentOrbit` carry the currently cached
-    * representative and orbit pair.
+  /** `currentRepresentative` and `currentOrbit` carry the currently cached representative and orbit pair.
     */
   var currentRepresentative: Option[AbstractSimplex[VertexT]] = None
   var currentOrbit: Option[Seq[AbstractSimplex[VertexT]]] = None
 
-  /** Apply for an `IndexedSeq` will pick out the `i`th element in the sequence.
-    * We do this by counting through the orbit sizes until we find the right
-    * orbit, then generating that orbit and returning the element. We do a kind
-    * of one-shot memoization - the most recently generated orbit stays in
-    * memory until a different orbit is needed.
+  /** Apply for an `IndexedSeq` will pick out the `i`th element in the sequence. We do this by counting through the
+    * orbit sizes until we find the right orbit, then generating that orbit and returning the element. We do a kind of
+    * one-shot memoization - the most recently generated orbit stays in memory until a different orbit is needed.
     *
     * @param i
     *   Index of the requested element
@@ -181,10 +166,9 @@ class ExpandList[VertexT: Ordering, KeyT](
     */
   override def length: Int = orbitSizes.values.sum
 
-  /** Returns an iterator that traverses the collection. Each call builds a new
-    * generator. The iterator maintains an internal state that tracks the
-    * current orbit, and traverses each orbit in the order that
-    * `SymmetryGroup.orbit` returns them in.
+  /** Returns an iterator that traverses the collection. Each call builds a new generator. The iterator maintains an
+    * internal state that tracks the current orbit, and traverses each orbit in the order that `SymmetryGroup.orbit`
+    * returns them in.
     *
     * @return
     *   Iterator that traverses the entire represented set.
@@ -196,26 +180,21 @@ class ExpandList[VertexT: Ordering, KeyT](
       var currentOrbit: Set[AbstractSimplex[VertexT]] =
         symmetry.orbit(representatives(currentOrbitIx))
 
-      /** Internal state tracking whether we have reason to believe we have
-        * exhausted the list.
+      /** Internal state tracking whether we have reason to believe we have exhausted the list.
         */
       var _hasNext: Boolean = true
 
-      /** Uses an internal Boolean state to track whether another element can be
-        * returned.
+      /** Uses an internal Boolean state to track whether another element can be returned.
         *
         * @return
         */
       override def hasNext(): Boolean = _hasNext
 
-      /** This method does all the work of the iterator. This code assumes that
-        * the `ExpandList` is not empty. Any time an element is requested, the
-        * internal state `_hasNext` is checked. If `false`, throw
-        * `NoSuchElementException`. If `true`, the current element is returned,
-        * the pointer advanced. If the pointer (composite with `currentOrbitIx`
-        * and `currentElement`) hits the end of an orbit, it generates the next
-        * orbit. If it hits the end of the last orbit, it sets the `_hasNext`
-        * bit.
+      /** This method does all the work of the iterator. This code assumes that the `ExpandList` is not empty. Any time
+        * an element is requested, the internal state `_hasNext` is checked. If `false`, throw `NoSuchElementException`.
+        * If `true`, the current element is returned, the pointer advanced. If the pointer (composite with
+        * `currentOrbitIx` and `currentElement`) hits the end of an orbit, it generates the next orbit. If it hits the
+        * end of the last orbit, it sets the `_hasNext` bit.
         *
         * @return
         *   The next element in the `ExpandList`.
@@ -241,16 +220,14 @@ class ExpandList[VertexT: Ordering, KeyT](
       }
     }
 
-  /** Printing that does not itself trigger a full traversal of the entire
-    * `ExpandList` just to print things out.
+  /** Printing that does not itself trigger a full traversal of the entire `ExpandList` just to print things out.
     * @return
     */
   override def toString(): String = s"ExpandList(${orbitSizes.toString()}"
 }
 
-/** Symmetry-aware version of Zomorodian's incremental algorithm for generating
-  * Vietoris-Rips complexes. The algorithm object needs access to a
-  * `SymmetryGroup` instance that encodes all we know about the symmetries.
+/** Symmetry-aware version of Zomorodian's incremental algorithm for generating Vietoris-Rips complexes. The algorithm
+  * object needs access to a `SymmetryGroup` instance that encodes all we know about the symmetries.
   *
   * @param symmetry
   *   Symmetry group details.
@@ -267,12 +244,10 @@ class SymmetricZomorodianIncremental[VertexT: Ordering, KeyT](
   self =>
   val className = "SymmetricZomorodianIncremental"
 
-  /** Executing the algorithm on a metric space on the vertices on which the
-    * symmetry group acts, with a chosen maximum filtration value and a chosen
-    * maximum homological dimension. Will go to some length (using `ExpandList`
-    * above) to make the sequence of simplices returned relatively lazy so that
-    * simplices can be seen and released and the garbage collector can keep
-    * overall memory pressure low throughout.
+  /** Executing the algorithm on a metric space on the vertices on which the symmetry group acts, with a chosen maximum
+    * filtration value and a chosen maximum homological dimension. Will go to some length (using `ExpandList` above) to
+    * make the sequence of simplices returned relatively lazy so that simplices can be seen and released and the garbage
+    * collector can keep overall memory pressure low throughout.
     *
     * Key difference from [[ZomorodianIncremental]] is the following lines:
     * {{{
@@ -280,13 +255,11 @@ class SymmetricZomorodianIncremental[VertexT: Ordering, KeyT](
     *   if (symmetry.isRepresentative(simplex))
     *   representatives += AbstractSimplex.from(tau)
     * }}}
-    * Here, each simplex that the algorithm generates is checked for whether it
-    * is representative for its own orbit, and only the simplices that are are
-    * retained (in the mutable list `representatives` for later access).
+    * Here, each simplex that the algorithm generates is checked for whether it is representative for its own orbit, and
+    * only the simplices that are are retained (in the mutable list `representatives` for later access).
     *
     * @param metricSpace
-    *   Metric space object on the vertices compatible with the symmetries on
-    *   the vertices.
+    *   Metric space object on the vertices compatible with the symmetries on the vertices.
     * @param maxFiltrationValue
     *   Maximum filtration value to consider.
     * @param maxDimension
@@ -337,18 +310,15 @@ class SymmetricZomorodianIncremental[VertexT: Ordering, KeyT](
 
 // Canonical example: hypercube with symmetries from permuting bit positions
 
-/** The `HyperCube` example of a symmetric point set. Vertices are all binary
-  * strings of length `bitlength`. Distances on the hypercube are Hamming
-  * distances between binary strings, ie how many bits differ between the two
-  * strings.
+/** The `HyperCube` example of a symmetric point set. Vertices are all binary strings of length `bitlength`. Distances
+  * on the hypercube are Hamming distances between binary strings, ie how many bits differ between the two strings.
   *
   * Binary strings are throughout represented as [[immutable.BitSet]].
   *
   * @param bitlength
   *   The dimension of the hypercube.
   */
-class HyperCubeBitSet(bitlength: Int)
-    extends FiniteMetricSpace[immutable.BitSet] {
+class HyperCubeBitSet(bitlength: Int) extends FiniteMetricSpace[immutable.BitSet] {
   val top: immutable.BitSet =
     immutable.BitSet.fromBitMask(Array((1L << bitlength) - 1))
 
@@ -366,9 +336,8 @@ class HyperCubeBitSet(bitlength: Int)
     xy.count(xy(_))
   }
 
-  /** Check whether an [[immutable.BitSet]] represents a point in the hypercube.
-    * In practice, checks that the bitset contains no entries above the
-    * bitlength.
+  /** Check whether an [[immutable.BitSet]] represents a point in the hypercube. In practice, checks that the bitset
+    * contains no entries above the bitlength.
     *
     * @param x
     * @return
@@ -412,8 +381,8 @@ class HyperCube(bitlength: Int) extends FiniteMetricSpace[Int] {
     hc.contains(immutable.BitSet.fromBitMask(Array(x.toLong)))
 }
 
-/** This class enumerates permutations in order to allow permutations of
-  * bit-positions to fill out the symmetry group of the hypercube.
+/** This class enumerates permutations in order to allow permutations of bit-positions to fill out the symmetry group of
+  * the hypercube.
   *
   * @param elementCount
   *   How many objects are permuted?
@@ -454,31 +423,27 @@ class Permutations(elementCount: Int) {
 //312
 //321
 
-/** Symmetry group of the hypercube under permutations of bit positions. No
-  * rotations of the hypercube included here.
+/** Symmetry group of the hypercube under permutations of bit positions. No rotations of the hypercube included here.
   *
   * @param bitlength
   *   Dimension of the hypercube.
   */
-class HyperCubeSymmetryBitSet(bitlength: Int)
-    extends SymmetryGroup[Int, immutable.BitSet] {
+class HyperCubeSymmetryBitSet(bitlength: Int) extends SymmetryGroup[Int, immutable.BitSet] {
   val permutations: Permutations = Permutations(bitlength)
   val hypercube: HyperCubeBitSet = HyperCubeBitSet(bitlength)
 
   override def keys: Iterable[Int] = Range(0, permutations.size.toInt)
 
-  /** Picks out the `permutationIndex`th permutation from Sn and builds a
-    * function that transforms integers out of the permutation.
+  /** Picks out the `permutationIndex`th permutation from Sn and builds a function that transforms integers out of the
+    * permutation.
     *
     * @param permutationIndex
     * @return
     */
-  def applyPermutation(permutationIndex: Int): (Int => Int) = k =>
-    permutations(permutationIndex)(k)
+  def applyPermutation(permutationIndex: Int): (Int => Int) = k => permutations(permutationIndex)(k)
 
-  /** Picks out the `permutationIndex`th permutation from Sn and builds a
-    * function that permutes bits of a [[immutable.BitSet]] out of the
-    * permutation.
+  /** Picks out the `permutationIndex`th permutation from Sn and builds a function that permutes bits of a
+    * [[immutable.BitSet]] out of the permutation.
     *
     * @param permutationIndex
     * @return
@@ -507,23 +472,18 @@ class HyperCubeSymmetry(bitlength: Int) extends SymmetryGroup[Int, Int] {
       .sum
 }
 
-class HyperCubeSymmetryGeneratorsBitSet(val bitlength: Int)
-    extends HyperCubeSymmetryBitSet(bitlength) {
+class HyperCubeSymmetryGeneratorsBitSet(val bitlength: Int) extends HyperCubeSymmetryBitSet(bitlength) {
 
-  /** By maintaining a set of known representatives, and first testing against
-    * the group generators, we are expecting significant speedups over the case
-    * where we keep traversing each orbit over and over again.
+  /** By maintaining a set of known representatives, and first testing against the group generators, we are expecting
+    * significant speedups over the case where we keep traversing each orbit over and over again.
     */
-  val representatives
-    : mutable.Map[AbstractSimplex[BitSet], AbstractSimplex[BitSet]] =
+  val representatives: mutable.Map[AbstractSimplex[BitSet], AbstractSimplex[BitSet]] =
     mutable.Map.empty
 
   val generators: List[immutable.BitSet => immutable.BitSet] =
     hypercube.top.toList.indices
       .map(i => immutable.Map(i -> (i + 1), (i + 1) -> i))
-      .map(map =>
-        ((bs: immutable.BitSet) => bs.collect(map.orElse(identity(_))))
-      )
+      .map(map => ((bs: immutable.BitSet) => bs.collect(map.orElse(identity(_)))))
       .toList
 
   override def isRepresentative(simplex: AbstractSimplex[BitSet]): Boolean =
@@ -547,8 +507,7 @@ class HyperCubeSymmetryGeneratorsBitSet(val bitlength: Int)
     else super.representative(simplex)
 }
 
-class HyperCubeSymmetryGenerators(val bitlength: Int)
-    extends HyperCubeSymmetry(bitlength) {
+class HyperCubeSymmetryGenerators(val bitlength: Int) extends HyperCubeSymmetry(bitlength) {
   given sc: SimplexContext[Int]()
   import sc.*
 
