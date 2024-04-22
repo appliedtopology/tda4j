@@ -385,7 +385,7 @@ package org.appliedtopology.tda4j {
         scale(-fr.one, x)
 
       override def shows(x: ChainElement[CellT, CoefficientT]): String =
-        x.chainHeap.toList.map((cell, coeff) => s"${coeff.toString} *> ${cell.toString}").mkString(" + ")
+        x.chainHeap.toList.map((cell, coeff) => s"${coeff.toString} ⊠ ${cell.toString}").mkString(" + ")
 
       override def show(x: ChainElement[CellT, CoefficientT]): Cord = Cord(shows(x))
     }

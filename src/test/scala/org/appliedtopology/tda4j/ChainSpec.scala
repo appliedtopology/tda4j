@@ -199,9 +199,9 @@ class HeapChainSpec extends mutable.Specification {
       given Conversion[Simplex, HeapChain[Simplex, Double]] = HeapChain.apply
       given rm: RingModule[HeapChain[Simplex, Double], Double] = HeapChainOps()
       import rm.{given, *}
-      val z1 = 1.0 *> s(1, 2) + 2.0 *> s(1, 3) - 1.0 *> s(2, 3)
-      val z2 = 1.0 *> s(1, 2) + 1.0 *> s(2, 3)
-      val z3 = z2 + (-1.0 *> z2)
+      val z1 : HeapChain[Simplex,Double] = 1.0 ⊠ s(1, 2) + (s(1, 3) mul 2.0) - 1.0 *> s(2, 3) + (5.2 scale s(1,4))
+      val z2 : HeapChain[Simplex,Double] = 1.0 ⊠ s(1, 2) + 1.0 ⊠ s(2, 3)
+      val z3 : HeapChain[Simplex,Double] = z2 + (-1.0 ⊠ z2)
 
       "subtracts to zero" ==>
         (z3.isZero must beTrue)
