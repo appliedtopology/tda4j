@@ -20,8 +20,9 @@ libraryDependencies += "org.apache.commons" % "commons-numbers-combinatorics" % 
 libraryDependencies += "org.apache.commons" % "commons-math3" % "3.6.1"
 libraryDependencies +=
   "org.scala-lang.modules"             %% "scala-parallel-collections" % "1.0.4"
-libraryDependencies += "org.typelevel" %% "cats-effect"                % "3.5.3"
 libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.17.0" % "test"
+libraryDependencies += "org.scalaz" %% "scalaz-core" % "7.3.6"
+libraryDependencies += "org.scalaz" %% "scalaz-scalacheck-binding" % "7.4.0-M14"
 
 lazy val root = (project in file("."))
   .enablePlugins(

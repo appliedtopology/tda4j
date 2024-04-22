@@ -2,9 +2,8 @@ package org.appliedtopology.tda4j
 
 /** Barcode representation, operations and algebra
   *
-  * This sub-package implements both a useful representation for persistence
-  * bars and barcodes, and also algebraic operations on finitely presented
-  * persistence modules.
+  * This sub-package implements both a useful representation for persistence bars and barcodes, and also algebraic
+  * operations on finitely presented persistence modules.
   */
 package barcode
 
@@ -15,20 +14,16 @@ sealed trait BarcodeEndpoint[FiltrationT: Ordering] {
   def flip: BarcodeEndpoint[FiltrationT]
 }
 
-case class PositiveInfinity[FiltrationT: Ordering]()
-    extends BarcodeEndpoint[FiltrationT] {
+case class PositiveInfinity[FiltrationT: Ordering]() extends BarcodeEndpoint[FiltrationT] {
   override def flip: BarcodeEndpoint[FiltrationT] = this
 }
-case class NegativeInfinity[FiltrationT: Ordering]()
-    extends BarcodeEndpoint[FiltrationT] {
+case class NegativeInfinity[FiltrationT: Ordering]() extends BarcodeEndpoint[FiltrationT] {
   override def flip: BarcodeEndpoint[FiltrationT] = this
 }
-case class OpenEndpoint[FiltrationT: Ordering](val value: FiltrationT)
-    extends BarcodeEndpoint[FiltrationT] {
+case class OpenEndpoint[FiltrationT: Ordering](val value: FiltrationT) extends BarcodeEndpoint[FiltrationT] {
   override def flip: BarcodeEndpoint[FiltrationT] = ClosedEndpoint(value)
 }
-case class ClosedEndpoint[FiltrationT: Ordering](val value: FiltrationT)
-    extends BarcodeEndpoint[FiltrationT] {
+case class ClosedEndpoint[FiltrationT: Ordering](val value: FiltrationT) extends BarcodeEndpoint[FiltrationT] {
   override def flip: BarcodeEndpoint[FiltrationT] = OpenEndpoint(value)
 }
 
@@ -62,10 +57,9 @@ given [FiltrationT](using
       }
   }
 
-/** A persistence bar has a lower and upper endpoint, where we assume (but do
-  * not enforce) that `lower < upper` in the expected ordering on the filtration
-  * type; a dimension; and optionally some annotation (this will be used
-  * extensively to carry representative chains in homology computations)
+/** A persistence bar has a lower and upper endpoint, where we assume (but do not enforce) that `lower < upper` in the
+  * expected ordering on the filtration type; a dimension; and optionally some annotation (this will be used extensively
+  * to carry representative chains in homology computations)
   *
   * @tparam FiltrationT
   *   Type of the filtration parameter
@@ -100,8 +94,8 @@ case class PersistenceBar[FiltrationT: Ordering, AnnotationT](
 
 /** Utility functions for working with persistence bars.
   *
-  * For any cases not covered by these simplistic factory method, the programmer
-  * gets to instantiate their own [[PersistenceBar]] object.
+  * For any cases not covered by these simplistic factory method, the programmer gets to instantiate their own
+  * [[PersistenceBar]] object.
   */
 object PersistenceBar {
 
@@ -114,8 +108,7 @@ object PersistenceBar {
       PositiveInfinity[FiltrationT]()
     )
 
-  /** If we only get a lower endpoint, produce the ordinary persistence bar
-    * $[\ell, \infty)$.
+  /** If we only get a lower endpoint, produce the ordinary persistence bar $[\ell, \infty)$.
     */
   def apply[FiltrationT: Ordering](dim: Int, lower: FiltrationT) =
     new PersistenceBar[FiltrationT, Nothing](
@@ -124,8 +117,7 @@ object PersistenceBar {
       PositiveInfinity[FiltrationT]()
     )
 
-  /** If we get a lower and an upper endpoint, produce the ordinary persistence
-    * bar $[\ell, u)$
+  /** If we get a lower and an upper endpoint, produce the ordinary persistence bar $[\ell, u)$
     */
   def apply[FiltrationT: Ordering](
     dim: Int,
@@ -144,8 +136,7 @@ class BarcodeContext[FiltrationT: Ordering]() {
 
   /** Trying to create comfortable notation for inputting explicit barcodes....
     *
-    * 3 dim 2 clop 5 3 dim 2 clcl 5 3 dim 2 opop 5 3 dim 2 opcl 5 3 dim infop 5
-    * 3 dim 2 clinf
+    * 3 dim 2 clop 5 3 dim 2 clcl 5 3 dim 2 opop 5 3 dim 2 opcl 5 3 dim infop 5 3 dim 2 clinf
     */
   class BarAssembly(
     val lower: BarcodeEndpoint[FiltrationT],
@@ -250,9 +241,7 @@ class Barcode[FiltrationT: Ordering: Numeric, AnnotationT] {
     val dualTarget: List[PersistenceBar[FiltrationT, AnnotationT]] =
       source.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
     val cokernelIntervals =
-      cokernel(dualSource, dualTarget, matrix.transpose())(using
-        ord = ord.reverse
-      )
+      cokernel(dualSource, dualTarget, matrix.transpose())(using ord = ord.reverse)
     cokernelIntervals.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
   }
 
