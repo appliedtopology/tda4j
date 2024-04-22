@@ -32,12 +32,12 @@ package org.appliedtopology.tda4j {
       *   the current `List`.
       */
 
-    def boundary[CoefficientT: Fractional]: Chain[CellT, CoefficientT]
+    def boundary[CoefficientT: Fractional]: ChainElement[CellT, CoefficientT]
   }
 
   // Here we choose the underlying chain implementation to use
 
-  export mapchain.{Chain, ChainElement, ChainOps}
+  export heapchain.{Chain, ChainElement, ChainOps}
 
   /*
   Implementation of the Chain trait using maps for internal storage.
@@ -262,11 +262,6 @@ package org.appliedtopology.tda4j {
       given Order[CellT] = Order.fromScalaOrdering[CellT]
       given Order[(CellT, CoefficientT)] = chainEntryOrder()
 
-      val addCoefficientsSemigroup: Semigroup[(CellT, CoefficientT)] =
-        Semigroup.instance((x, get) => (x._1, x._2 + get._2))
-
-      def addCoefficientsMonoid(default: CellT): Monoid[(CellT, CoefficientT)] =
-        Monoid.instance(addCoefficientsSemigroup.append, (default, fr.zero))
 
       def collapseHead(): ChainElement[CellT, CoefficientT] =
         if (chainHeap.isEmpty) return ChainElement()
@@ -277,7 +272,7 @@ package org.appliedtopology.tda4j {
             }
 
             if (heads.size > 0) {
-              val newHead = heads.suml(addCoefficientsMonoid(heads.minimum.get._1))
+              val newHead : (CellT,CoefficientT) = (heads.head._1, heads.map(_._2).sum)
               if (newHead._2 != fr.zero)
                 tail.insert(newHead)
               else
@@ -324,8 +319,8 @@ package org.appliedtopology.tda4j {
         new ChainElement(chainHeap)
 
       override def toString: String =
-        chainHeap.toStream
-          .map((cell, coeff) => s"""${coeff} *> ${cell}""")
+        chainHeap.toList
+          .map((cell, coeff) => s"""${coeff} ⊠ ${cell}""")
           .mkString(" + ")
     }
 

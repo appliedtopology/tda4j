@@ -121,7 +121,7 @@ class RipserStreamSparse(
   // given Ordering[Simplex] = Ordering.by(filtrationValue).orElse(sc.given_Ordering_Simplex)
   val doubleSimplexPairOrdering: Ordering[(Double, Simplex)] = { (x: (Double, Simplex), y: (Double, Simplex)) =>
     Ordering.Double.TotalOrdering.compare(x._1, y._1) match {
-      case 0      => sc.given_Ordering_Simplex.compare(x._2, y._2)
+      case 0      => sc.simplexOrdering.compare(x._2, y._2)
       case c: Int => c
     }
   }
