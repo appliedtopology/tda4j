@@ -180,14 +180,70 @@ package org.appliedtopology.tda4j {
    */
   package heapchain {
 
-    import scalaz._
-    import Scalaz._
+    import scalaz.*
+    import Scalaz.*
+    import scalaz.EphemeralStream.emptyEphemeralStream
     import scalaz.std.given
+    import scalaz.syntax.given
+    import scalaz.syntax.all.{*, given}
 
     import collection.immutable
 
     def chainEntryOrder[CellT <: Cell[CellT]: scala.math.Ordering, CoefficientT](): Order[(CellT, CoefficientT)] =
       Order.orderBy[(CellT, CoefficientT), CellT](_._1)(Order.fromScalaOrdering[CellT])
+
+    extension [A:Order] (heap: Heap[A]) {
+      /**
+       * More specialized version of `Heap.span` - this one accumulates the
+       * subforests that will need to be re-assembled, and then re-assembles them
+       * in one go.
+       *
+       * If the longest prefix satisfying the function `fun` has `k` elements,
+       * this will run in something like `O(k log (n-k))`, since extracting any
+       * root is in `O(1)`, taking a union is `O(1)`, and each of the `k` elements
+       * extracted may have `O(log (n-k))` or so trees in their subforests.
+       *
+       * This function also does not bother re-assembling the prefix into a heap.
+       */
+      def spanToList(fun: A => Boolean): (List[A], Heap[A]) = heap.size match {
+        case 0 => (List(), Heap.Empty.apply)
+        case i if i > 0 => {
+          import Heap.{Ranked}
+          import EphemeralStream.{##::}
+
+          def spanRecursion(
+                             queue: EphemeralStream[Tree[Ranked[A]]],
+                             output: EphemeralStream[A],
+                             pruned: EphemeralStream[Tree[Ranked[A]]]
+                           ): (EphemeralStream[A], EphemeralStream[Tree[Ranked[A]]]) =
+            if (queue.isEmpty)
+              (output, pruned)
+            else {
+              val headTree ##:: newQueue = queue
+              if (fun(headTree.rootLabel.value))
+                spanRecursion(
+                  newQueue ++ headTree.subForest,
+                  headTree.rootLabel.value ##:: output,
+                  pruned
+                )
+              else
+                spanRecursion(
+                  newQueue, output, headTree ##:: pruned
+                )
+            }
+
+          val Heap(rank, cmp, tree) = heap
+          val (outputEStream, forest) =
+            spanRecursion(tree ##:: emptyEphemeralStream, emptyEphemeralStream, emptyEphemeralStream)
+          // now just need to re-assemble everything again
+          val outputHeap = forest.foldLeft(Heap.Empty.apply: Heap[A]) { (heap, nextTree) =>
+            heap.union(Heap[A](nextTree.rootLabel.rank, cmp, nextTree))
+          }
+          (outputEStream.toList, outputHeap)
+        }
+      }
+    }
+
 
     /** A heap-based chain class. Will delay accumulating and evaluating any actual arithmetic for as long as possible.
       *
@@ -216,21 +272,25 @@ package org.appliedtopology.tda4j {
         if (chainHeap.isEmpty) return ChainElement()
         else {
           def collapseHeap(heap: Heap[(CellT, CoefficientT)]): Heap[(CellT, CoefficientT)] = {
-            val (heads, tail) = heap.span { head =>
+            val (heads, tail) = heap.spanToList { head =>
               chainEntryOrder().order(head, heap.minimum) == Ordering.EQ
             }
 
             if (heads.size > 0) {
-              val newHead = heads.suml(addCoefficientsMonoid(heads.minimum._1))
+              val newHead = heads.suml(addCoefficientsMonoid(heads.minimum.get._1))
               if (newHead._2 != fr.zero)
                 tail.insert(newHead)
               else
                 collapseHeap(tail)
             } else {
-              collapseHeap(tail)
+              if(tail.size > 0)
+                collapseHeap(tail)
+              else
+                Heap.fromData(List())
             }
           }
-          new ChainElement(collapseHeap(chainHeap))
+          chainHeap = collapseHeap(chainHeap)
+          this
         }
 
       // Will collapse the actual head
