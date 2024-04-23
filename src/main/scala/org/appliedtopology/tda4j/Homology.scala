@@ -9,6 +9,8 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
     with SimplexContext[VertexT]() {
 
   import barcode._
+  
+  given Ordering[Double] = math.Ordering.Double.TotalOrdering
 
   case class HomologyState(
     cycles: mutable.Map[Simplex, ChainElement[Simplex, CoefficientT]],
@@ -21,7 +23,7 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
     val simplexIterator = stream.iterator
     boundaries(Simplex()) = ChainElement(Simplex())
 
-    def barcodeAt(f: Double): List[(Int, Double, Double)] = {
+    def diagramAt(f: Double): List[(Int, Double, Double)] = {
       advanceTo(f)
       (for
         (dim, lower, oldUpper): (Int, Double, Double) <- barcode.toList
@@ -36,6 +38,13 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
       )
     }
 
+    def barcodeAt(f: Double): List[PersistenceBar[Double,Nothing]] =
+      diagramAt(f).map { (dim, l, u) =>
+        val lower : BarcodeEndpoint[Double] = if (l.isFinite) ClosedEndpoint(l) else NegativeInfinity()
+        val upper : BarcodeEndpoint[Double] = if (u.isFinite) OpenEndpoint(u) else PositiveInfinity()
+        new PersistenceBar(dim,lower,upper,None)
+      }
+    
     def reduceBy(
       z: ChainElement[Simplex, CoefficientT],
       basis: mutable.Map[Simplex, ChainElement[Simplex, CoefficientT]]
