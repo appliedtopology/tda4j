@@ -4,7 +4,7 @@ import org.appliedtopology.tda4j.barcode.PersistenceBar
 
 import collection.mutable
 import scala.annotation.tailrec
-import scalaz.{Ordering => _,_}, Scalaz._
+import scalaz.{Ordering => _, _}, Scalaz._
 
 given [T: Ordering]: Ordering[AbstractSimplex[T]] = (new SimplexContext[T] {}).simplexOrdering
 
@@ -18,10 +18,10 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
 
   case class HomologyState(
     cycles: mutable.Map[Simplex, ChainElement[Simplex, CoefficientT]],
-    cyclesBornBy: mutable.Map[Simplex,Simplex],
+    cyclesBornBy: mutable.Map[Simplex, Simplex],
     boundaries: mutable.Map[Simplex, ChainElement[Simplex, CoefficientT]],
     boundariesBornBy: mutable.Map[Simplex, Simplex],
-    coboundaries: mutable.Map[Simplex, ChainElement[Simplex,CoefficientT]],
+    coboundaries: mutable.Map[Simplex, ChainElement[Simplex, CoefficientT]],
     stream: SimplexStream[VertexT, FiltrationT],
     var current: FiltrationT,
     barcode: mutable.ArrayDeque[
@@ -30,28 +30,28 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
   ) {
     given Ordering[Simplex] = stream.filtrationOrdering
     given Order[Simplex] = Order.fromScalaOrdering(stream.filtrationOrdering)
-    given Order[(Simplex,CoefficientT)] = Order.orderBy(_._1)
+    given Order[(Simplex, CoefficientT)] = Order.orderBy(_._1)
 
     val simplexIterator = stream.iterator.buffered
     boundaries(Simplex()) = ChainElement(Simplex())
 
     def diagramAt(
-                   f: FiltrationT
-                 ): List[(Int, FiltrationT | NegativeInfinity[FiltrationT], FiltrationT | PositiveInfinity[FiltrationT])] = {
+      f: FiltrationT
+    ): List[(Int, FiltrationT | NegativeInfinity[FiltrationT], FiltrationT | PositiveInfinity[FiltrationT])] = {
       advanceTo(f)
       (for
         (dim, lowerQ, oldUpperQ): (
           Int,
-            FiltrationT | NegativeInfinity[FiltrationT],
-            FiltrationT | PositiveInfinity[FiltrationT]
-          ) <- barcode.toList
+          FiltrationT | NegativeInfinity[FiltrationT],
+          FiltrationT | PositiveInfinity[FiltrationT]
+        ) <- barcode.toList
         lower = lowerQ match {
           case NegativeInfinity() => Double.NegativeInfinity
-          case l: Double => l
+          case l: Double          => l
         }
         oldUpper = oldUpperQ match {
           case NegativeInfinity() => Double.NegativeInfinity
-          case l: Double => l
+          case l: Double          => l
         }
         if lower <= f
         upper = oldUpper.min(f)
@@ -61,36 +61,35 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
           dim = sigma.size - 1
           lower = stream.filtrationValue(sigma)
         yield (dim, lower, Double.PositiveInfinity)
-        )
+      )
     }
 
     def barcodeAt(f: FiltrationT): List[PersistenceBar[FiltrationT, Nothing]] =
       diagramAt(f).map { (dim, l, u) =>
         val lower: BarcodeEndpoint[FiltrationT] = l match {
           case NegativeInfinity() => NegativeInfinity()
-          case f: FiltrationT => ClosedEndpoint(f)
+          case f: FiltrationT     => ClosedEndpoint(f)
         }
         val upper: BarcodeEndpoint[FiltrationT] = u match {
           case PositiveInfinity() => PositiveInfinity()
-          case f: FiltrationT => OpenEndpoint(f)
+          case f: FiltrationT     => OpenEndpoint(f)
         }
         new PersistenceBar(dim, lower, upper, None)
       }
 
     @tailrec
     private def reduceBy(
-                  z: ChainElement[Simplex, CoefficientT],
-                  basis: mutable.Map[Simplex, ChainElement[Simplex, CoefficientT]],
-                  reductionLog: ChainElement[Simplex,CoefficientT] = ChainElement()
-                )(using fr: Fractional[CoefficientT]): (ChainElement[Simplex, CoefficientT], ChainElement[Simplex, CoefficientT]) =
+      z: ChainElement[Simplex, CoefficientT],
+      basis: mutable.Map[Simplex, ChainElement[Simplex, CoefficientT]],
+      reductionLog: ChainElement[Simplex, CoefficientT] = ChainElement()
+    )(using fr: Fractional[CoefficientT]): (ChainElement[Simplex, CoefficientT], ChainElement[Simplex, CoefficientT]) =
       z.leadingCell match {
-        case None => (z,reductionLog)
-        case Some(sigma) => {
-          if(basis.contains(sigma)) {
+        case None => (z, reductionLog)
+        case Some(sigma) =>
+          if (basis.contains(sigma)) {
             val redCoeff = fr.div(z.leadingCoefficient, basis(sigma).leadingCoefficient)
             reduceBy(z - redCoeff ⊠ basis(sigma), basis, reductionLog + redCoeff ⊠ ChainElement(sigma))
           } else (z, reductionLog)
-        }
       }
 
     def advanceOne(): Unit =
@@ -100,9 +99,9 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
         val dsigma: ChainElement[Simplex, CoefficientT] =
           sigma.boundary[CoefficientT]: ChainElement[Simplex, CoefficientT]
         val (dsigmaReduced, reduction) = reduceBy(dsigma, boundaries)
-        val coboundary = reduction.chainHeap.foldRight(fr.negate(fr.one) ⊠ ChainElement(sigma)) { (next,acc) =>
-          val (spx,coeff) = next
-          if(coboundaries.contains(spx))
+        val coboundary = reduction.chainHeap.foldRight(fr.negate(fr.one) ⊠ ChainElement(sigma)) { (next, acc) =>
+          val (spx, coeff) = next
+          if (coboundaries.contains(spx))
             acc + coeff ⊠ coboundaries(spx)
           else
             acc
@@ -119,7 +118,7 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
 
           val (_, cycleBasis) = reduceBy(dsigmaReduced, cycles)
           cycleBasis.leadingCell match {
-            case None => ()
+            case None       => ()
             case Some(cell) => cycles.remove(cell)
           }
 

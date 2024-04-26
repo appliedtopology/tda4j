@@ -266,14 +266,14 @@ package org.appliedtopology.tda4j {
         */
       def collapseHead(): ChainElement[CellT, CoefficientT] = chainHeap.minimumO match {
         case None => this
-        case Some((headCell,headCoeff)) =>
+        case Some((headCell, headCoeff)) =>
           var acc = headCoeff
           var tmpHeap = chainHeap.deleteMin
           while (tmpHeap.minimumO.map(_._1) == Some(headCell)) {
             acc += tmpHeap.minimum._2
             tmpHeap = tmpHeap.deleteMin
           }
-          if(acc != fr.zero) {
+          if (acc != fr.zero) {
             chainHeap = tmpHeap.insert((headCell, acc))
             this
           } else {

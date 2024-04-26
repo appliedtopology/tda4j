@@ -19,16 +19,16 @@ trait Filtration[VertexT, FiltrationT: Ordering] {
   *   We may want to change this to inherit instead from `IterableOnce[AbstractSimplex[VertexT]]`, so that a lazy
   *   computed simplex stream can be created and fit in the type hierarchy.
   */
-trait SimplexStream[VertexT:Ordering, FiltrationT:Ordering]
+trait SimplexStream[VertexT: Ordering, FiltrationT: Ordering]
     extends Filtration[VertexT, FiltrationT]
     with IterableOnce[AbstractSimplex[VertexT]] {
   val filtrationOrdering =
-    FilteredSimplexOrdering[VertexT,FiltrationT](this)(
-      using vertexOrdering=summon[Ordering[VertexT]])(
-      using filtrationOrdering=summon[Ordering[FiltrationT]].reverse)
+    FilteredSimplexOrdering[VertexT, FiltrationT](this)(using vertexOrdering = summon[Ordering[VertexT]])(using
+      filtrationOrdering = summon[Ordering[FiltrationT]].reverse
+    )
 }
 
-class ExplicitStream[VertexT:Ordering, FiltrationT](
+class ExplicitStream[VertexT: Ordering, FiltrationT](
   protected val filtrationValues: Map[AbstractSimplex[VertexT], FiltrationT],
   protected val simplices: Seq[AbstractSimplex[VertexT]]
 )(using ordering: Ordering[FiltrationT])
@@ -96,7 +96,7 @@ class FilteredSimplexOrdering[VertexT, FiltrationT](
   filtrationOrdering: Ordering[FiltrationT]
 ) extends Ordering[AbstractSimplex[VertexT]] {
   def compare(x: AbstractSimplex[VertexT], y: AbstractSimplex[VertexT]): Int = (x, y) match {
-    case (x, y) if (filtration.filtrationValue.isDefinedAt(x) && filtration.filtrationValue.isDefinedAt(y)) =>
+    case (x, y) if filtration.filtrationValue.isDefinedAt(x) && filtration.filtrationValue.isDefinedAt(y) =>
       filtrationOrdering.compare(filtration.filtrationValue(x), filtration.filtrationValue(y)) match {
         case 0 =>
           if (Ordering.Int.compare(x.size, y.size) == 0)
@@ -105,7 +105,7 @@ class FilteredSimplexOrdering[VertexT, FiltrationT](
               .compare(x.to(Seq), y.to(Seq))
           else
             Ordering.Int.compare(x.size, y.size)
-        case cmp if (cmp != 0) => cmp
+        case cmp if cmp != 0 => cmp
       }
     case (x, y) => // at least one does not have a filtration value defined; just go by dimension and lexicographic
       if (Ordering.Int.compare(x.size, y.size) == 0)

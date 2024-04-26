@@ -29,7 +29,7 @@ trait RingModule[T, R] {
     def -(rhs: T): T = minus(t, rhs)
     @targetName("scalarMultiplyRight")
     def <*(rhs: R): T = rmod.scale(rhs, t)
-    infix def mul(rhs: R): T = rmod.scale(rhs,t)
+    infix def mul(rhs: R): T = rmod.scale(rhs, t)
     def unary_- : T = negate(t)
   }
 
@@ -37,9 +37,9 @@ trait RingModule[T, R] {
     @targetName("scalarMultiplyLeft")
     def *>(t: T): T = rmod.scale(r, t)
     @targetName("scalarMultiplyLeft2")
-    def ⊠(t:T): T = rmod.scale(r,t) // unicode ⊠ for boxed times
+    def ⊠(t: T): T = rmod.scale(r, t) // unicode ⊠ for boxed times
     @targetName("infixScale")
-    infix def scale(t:T):T = rmod.scale(r,t)
+    infix def scale(t: T): T = rmod.scale(r, t)
   }
 }
 
