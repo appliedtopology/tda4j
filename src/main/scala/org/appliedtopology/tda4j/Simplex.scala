@@ -9,7 +9,7 @@ import math.Ordering.Implicits.sortedSetOrdering
 trait SimplexContext[VertexT: Ordering] {
   type Simplex = AbstractSimplex[VertexT]
 
-  given simplexOrdering : Ordering[Simplex] = sortedSetOrdering[AbstractSimplex, VertexT].reverse
+  given simplexOrdering : Ordering[Simplex] = sortedSetOrdering[AbstractSimplex, VertexT]
 
   object Simplex {
     def apply(vertices: VertexT*): Simplex =

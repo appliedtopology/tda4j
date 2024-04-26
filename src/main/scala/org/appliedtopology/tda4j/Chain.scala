@@ -185,39 +185,38 @@ package org.appliedtopology.tda4j {
     import scalaz.EphemeralStream.emptyEphemeralStream
     import scalaz.std.given
     import scalaz.syntax.given
-    import scalaz.syntax.all.{*, given}
+    import scalaz.syntax.all.{given, *}
 
     import collection.immutable
 
     def chainEntryOrder[CellT <: Cell[CellT]: scala.math.Ordering, CoefficientT](): Order[(CellT, CoefficientT)] =
       Order.orderBy[(CellT, CoefficientT), CellT](_._1)(Order.fromScalaOrdering[CellT])
 
-    extension [A:Order] (heap: Heap[A]) {
-      /**
-       * More specialized version of `Heap.span` - this one accumulates the
-       * subforests that will need to be re-assembled, and then re-assembles them
-       * in one go.
-       *
-       * If the longest prefix satisfying the function `fun` has `k` elements,
-       * this will run in something like `O(k log (n-k))`, since extracting any
-       * root is in `O(1)`, taking a union is `O(1)`, and each of the `k` elements
-       * extracted may have `O(log (n-k))` or so trees in their subforests.
-       *
-       * This function also does not bother re-assembling the prefix into a heap.
-       */
+    extension [A: Order](heap: Heap[A]) {
+
+      /** More specialized version of `Heap.span` - this one accumulates the subforests that will need to be
+        * re-assembled, and then re-assembles them in one go.
+        *
+        * If the longest prefix satisfying the function `fun` has `k` elements, this will run in something like `O(k log
+        * (n-k))`, since extracting any root is in `O(1)`, taking a union is `O(1)`, and each of the `k` elements
+        * extracted may have `O(log (n-k))` or so trees in their subforests.
+        *
+        * This function also does not bother re-assembling the prefix into a heap.
+        *
+        * TODO: This seems to not work properly; gives back bad results that corrupt computations.
+        */
       def spanToList(fun: A => Boolean): (List[A], Heap[A]) = heap.size match {
         case 0 => (List(), Heap.Empty.apply)
-        case i if i > 0 => {
-          import Heap.{Ranked}
-          import EphemeralStream.{##::}
+        case i if i > 0 =>
+          import Heap.Ranked
+          import EphemeralStream.##::
 
           def spanRecursion(
-                             queue: EphemeralStream[Tree[Ranked[A]]],
-                             output: EphemeralStream[A],
-                             pruned: EphemeralStream[Tree[Ranked[A]]]
-                           ): (EphemeralStream[A], EphemeralStream[Tree[Ranked[A]]]) =
-            if (queue.isEmpty)
-              (output, pruned)
+            queue: EphemeralStream[Tree[Ranked[A]]],
+            output: EphemeralStream[A],
+            pruned: EphemeralStream[Tree[Ranked[A]]]
+          ): (EphemeralStream[A], EphemeralStream[Tree[Ranked[A]]]) =
+            if (queue.isEmpty) (output, pruned)
             else {
               val headTree ##:: newQueue = queue
               if (fun(headTree.rootLabel.value))
@@ -228,7 +227,9 @@ package org.appliedtopology.tda4j {
                 )
               else
                 spanRecursion(
-                  newQueue, output, headTree ##:: pruned
+                  newQueue,
+                  output,
+                  headTree ##:: pruned
                 )
             }
 
@@ -240,10 +241,8 @@ package org.appliedtopology.tda4j {
             heap.union(Heap[A](nextTree.rootLabel.rank, cmp, nextTree))
           }
           (outputEStream.toList, outputHeap)
-        }
       }
     }
-
 
     /** A heap-based chain class. Will delay accumulating and evaluating any actual arithmetic for as long as possible.
       *
@@ -262,31 +261,26 @@ package org.appliedtopology.tda4j {
       given Order[CellT] = Order.fromScalaOrdering[CellT]
       given Order[(CellT, CoefficientT)] = chainEntryOrder()
 
-
-      def collapseHead(): ChainElement[CellT, CoefficientT] =
-        if (chainHeap.isEmpty) return ChainElement()
-        else {
-          def collapseHeap(heap: Heap[(CellT, CoefficientT)]): Heap[(CellT, CoefficientT)] = {
-            val (heads, tail) = heap.spanToList { head =>
-              chainEntryOrder().order(head, heap.minimum) == Ordering.EQ
-            }
-
-            if (heads.size > 0) {
-              val newHead : (CellT,CoefficientT) = (heads.head._1, heads.map(_._2).sum)
-              if (newHead._2 != fr.zero)
-                tail.insert(newHead)
-              else
-                collapseHeap(tail)
-            } else {
-              if(tail.size > 0)
-                collapseHeap(tail)
-              else
-                Heap.fromData(List())
-            }
+      /** My attempts at being clever lead to bad results. Let's try to be less clever.
+        * @return
+        */
+      def collapseHead(): ChainElement[CellT, CoefficientT] = chainHeap.minimumO match {
+        case None => this
+        case Some((headCell,headCoeff)) =>
+          var acc = headCoeff
+          var tmpHeap = chainHeap.deleteMin
+          while (tmpHeap.minimumO.map(_._1) == Some(headCell)) {
+            acc += tmpHeap.minimum._2
+            tmpHeap = tmpHeap.deleteMin
           }
-          chainHeap = collapseHeap(chainHeap)
-          this
-        }
+          if(acc != fr.zero) {
+            chainHeap = tmpHeap.insert((headCell, acc))
+            this
+          } else {
+            chainHeap = tmpHeap
+            collapseHead()
+          }
+      }
 
       // Will collapse the actual head
       override def leadingTerm: (Option[CellT], CoefficientT) = {
@@ -298,10 +292,12 @@ package org.appliedtopology.tda4j {
       }
 
       def toMap: immutable.Map[CellT, CoefficientT] =
-        this.chainHeap.foldRight(immutable.Map[CellT, CoefficientT]()) { (pair, map) =>
-          val (cell, x) = pair
-          map.updatedWith(cell)(coeff => Some(x + coeff.getOrElse(fr.zero)))
-        }
+        this.chainHeap
+          .foldRight(immutable.Map[CellT, CoefficientT]()) { (pair, map) =>
+            val (cell, x) = pair
+            map.updatedWith(cell)(coeff => Some(x + coeff.getOrElse(fr.zero)))
+          }
+          .filter((cell, coeff) => coeff != fr.zero)
 
       def isZero: Boolean = {
         collapseHead()

@@ -19,11 +19,16 @@ trait Filtration[VertexT, FiltrationT: Ordering] {
   *   We may want to change this to inherit instead from `IterableOnce[AbstractSimplex[VertexT]]`, so that a lazy
   *   computed simplex stream can be created and fit in the type hierarchy.
   */
-trait SimplexStream[VertexT, FiltrationT]
+trait SimplexStream[VertexT:Ordering, FiltrationT:Ordering]
     extends Filtration[VertexT, FiltrationT]
-    with IterableOnce[AbstractSimplex[VertexT]] {}
+    with IterableOnce[AbstractSimplex[VertexT]] {
+  val filtrationOrdering =
+    FilteredSimplexOrdering[VertexT,FiltrationT](this)(
+      using vertexOrdering=summon[Ordering[VertexT]])(
+      using filtrationOrdering=summon[Ordering[FiltrationT]].reverse)
+}
 
-class ExplicitStream[VertexT, FiltrationT](
+class ExplicitStream[VertexT:Ordering, FiltrationT](
   protected val filtrationValues: Map[AbstractSimplex[VertexT], FiltrationT],
   protected val simplices: Seq[AbstractSimplex[VertexT]]
 )(using ordering: Ordering[FiltrationT])
@@ -48,7 +53,7 @@ class ExplicitStream[VertexT, FiltrationT](
   def length: Int = simplices.length
 }
 
-class ExplicitStreamBuilder[VertexT: Ordering, FiltrationT](implicit
+class ExplicitStreamBuilder[VertexT: Ordering, FiltrationT](using
   ordering: Ordering[FiltrationT]
 ) extends mutable.ReusableBuilder[
       (FiltrationT, AbstractSimplex[VertexT]),
@@ -90,22 +95,24 @@ class FilteredSimplexOrdering[VertexT, FiltrationT](
 )(using vertexOrdering: Ordering[VertexT])(using
   filtrationOrdering: Ordering[FiltrationT]
 ) extends Ordering[AbstractSimplex[VertexT]] {
-  def compare(x: AbstractSimplex[VertexT], y: AbstractSimplex[VertexT]): Int =
-    if (
-      filtrationOrdering.compare(
-        filtration.filtrationValue(x),
-        filtration.filtrationValue(y)
-      ) == 0
-    ) {
+  def compare(x: AbstractSimplex[VertexT], y: AbstractSimplex[VertexT]): Int = (x, y) match {
+    case (x, y) if (filtration.filtrationValue.isDefinedAt(x) && filtration.filtrationValue.isDefinedAt(y)) =>
+      filtrationOrdering.compare(filtration.filtrationValue(x), filtration.filtrationValue(y)) match {
+        case 0 =>
+          if (Ordering.Int.compare(x.size, y.size) == 0)
+            Ordering.Implicits
+              .seqOrdering[Seq, VertexT](vertexOrdering)
+              .compare(x.to(Seq), y.to(Seq))
+          else
+            Ordering.Int.compare(x.size, y.size)
+        case cmp if (cmp != 0) => cmp
+      }
+    case (x, y) => // at least one does not have a filtration value defined; just go by dimension and lexicographic
       if (Ordering.Int.compare(x.size, y.size) == 0)
         Ordering.Implicits
           .seqOrdering[Seq, VertexT](vertexOrdering)
           .compare(x.to(Seq), y.to(Seq))
       else
         Ordering.Int.compare(x.size, y.size)
-    } else
-      filtrationOrdering.compare(
-        filtration.filtrationValue(x),
-        filtration.filtrationValue(y)
-      )
+  }
 }
