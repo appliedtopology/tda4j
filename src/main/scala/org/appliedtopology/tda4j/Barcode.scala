@@ -12,19 +12,24 @@ import org.apache.commons.math3.linear.*
 sealed trait BarcodeEndpoint[FiltrationT: Ordering] {
   // Exchange open and closed for finite barcode endpoints; do nothing for infinite ones.
   def flip: BarcodeEndpoint[FiltrationT]
+  def isFinite: Boolean
 }
 
 case class PositiveInfinity[FiltrationT: Ordering]() extends BarcodeEndpoint[FiltrationT] {
   override def flip: BarcodeEndpoint[FiltrationT] = this
+  override val isFinite = false
 }
 case class NegativeInfinity[FiltrationT: Ordering]() extends BarcodeEndpoint[FiltrationT] {
   override def flip: BarcodeEndpoint[FiltrationT] = this
+  override val isFinite = false
 }
 case class OpenEndpoint[FiltrationT: Ordering](val value: FiltrationT) extends BarcodeEndpoint[FiltrationT] {
   override def flip: BarcodeEndpoint[FiltrationT] = ClosedEndpoint(value)
+  override val isFinite = true
 }
 case class ClosedEndpoint[FiltrationT: Ordering](val value: FiltrationT) extends BarcodeEndpoint[FiltrationT] {
   override def flip: BarcodeEndpoint[FiltrationT] = OpenEndpoint(value)
+  override val isFinite = true
 }
 
 import math.Ordered.orderingToOrdered

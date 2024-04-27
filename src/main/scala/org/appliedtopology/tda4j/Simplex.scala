@@ -9,7 +9,7 @@ import math.Ordering.Implicits.sortedSetOrdering
 trait SimplexContext[VertexT: Ordering] {
   type Simplex = AbstractSimplex[VertexT]
 
-  given Ordering[Simplex] = sortedSetOrdering[AbstractSimplex, VertexT]
+  given simplexOrdering: Ordering[Simplex] = sortedSetOrdering[AbstractSimplex, VertexT]
 
   object Simplex {
     def apply(vertices: VertexT*): Simplex =
@@ -71,7 +71,7 @@ class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])( //v
     */
   override def boundary[CoefficientT](using
     fr: Fractional[CoefficientT]
-  ): Chain[AbstractSimplex[VertexT], CoefficientT] =
+  ): ChainElement[AbstractSimplex[VertexT], CoefficientT] =
     ChainElement[AbstractSimplex[VertexT], CoefficientT](
       self
         .to(Seq)
