@@ -44,9 +44,9 @@ class HomologySpec extends Specification {
 
 
      // extension (chain: Chain[Simplex, Double]) {
-        def reduceByBasis(basis: List[MapChain[Simplex, Double]]): Chain[Simplex, Double] = {
+        def reduceByBasis(basis: List[ChainElement[Simplex, Double]]): Chain[Simplex, Double] = {
           var changed: Boolean = true
-          var sigma = MapChain[Simplex, Double]()  //working on current chain. Here assigning sigma as an empty MapChain
+          var sigma = ChainElement[Simplex, Double]()  //working on current chain. Here assigning sigma as an empty ChainElement
           while (changed) {
             changed = false
             for (basisElement <- basis) {
