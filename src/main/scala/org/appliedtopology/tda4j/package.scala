@@ -15,8 +15,8 @@ import math.Ordering.Implicits.sortedSetOrdering
   */
 package object tda4j {
   class TDAContext[VertexT: Ordering, CoefficientT: Fractional]
-      extends ChainOps[AbstractSimplex[VertexT], CoefficientT],
-        SimplexContext[VertexT] {
+      extends SimplicialHomologyContext[VertexT, CoefficientT]() {
+    import scala.language.implicitConversions
     given Conversion[Simplex, ChainElement[Simplex, CoefficientT]] =
       ChainElement.apply
   }
