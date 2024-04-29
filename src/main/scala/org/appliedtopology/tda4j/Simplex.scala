@@ -79,6 +79,8 @@ class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])( //v
         .zip(Iterator.unfold(fr.one)(s => Some((s, fr.negate(s))))): _*
     )
 
+  def dim: Int = size - 1
+  
   // ***** Overriding for inheriting and extending standard library constructions
   override def className = "AbstractSimplex"
 
