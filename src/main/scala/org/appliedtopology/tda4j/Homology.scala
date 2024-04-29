@@ -148,9 +148,14 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
     def advanceTo(f: FiltrationT): Unit =
       while (simplexIterator.hasNext && f > stream.filtrationValue(simplexIterator.head))
         advanceOne()
+
+    def advanceAll(): Unit =
+      while(simplexIterator.hasNext)
+        advanceOne()
+
   }
 
-  def persistentHomology(stream: SimplexStream[VertexT, FiltrationT]): HomologyState =
+  def persistentHomology(stream: => SimplexStream[VertexT, FiltrationT]): HomologyState =
     HomologyState(
       mutable.Map.empty, // cycle basis
       mutable.Map.empty, // cycle born by

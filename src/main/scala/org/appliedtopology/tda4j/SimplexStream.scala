@@ -28,6 +28,18 @@ trait SimplexStream[VertexT: Ordering, FiltrationT: Ordering]
     )
 }
 
+object SimplexStream {
+  def from[VertexT:Ordering](stream: Seq[AbstractSimplex[VertexT]], metricSpace: FiniteMetricSpace[VertexT]):
+    SimplexStream[VertexT,Double] = new SimplexStream[VertexT,Double] {
+
+    override def filtrationValue: PartialFunction[AbstractSimplex[VertexT], Double] =
+      FiniteMetricSpace.MaximumDistanceFiltrationValue[VertexT](metricSpace)(using summon[Ordering[VertexT]])
+
+    override def iterator: Iterator[AbstractSimplex[VertexT]] =
+      stream.iterator
+  }
+}
+
 class ExplicitStream[VertexT: Ordering, FiltrationT](
   protected val filtrationValues: Map[AbstractSimplex[VertexT], FiltrationT],
   protected val simplices: Seq[AbstractSimplex[VertexT]]

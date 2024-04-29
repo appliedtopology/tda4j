@@ -55,4 +55,22 @@ class VietorisRipsSpec extends s2mutable.Specification {
       lazyStream.iterator.to(Seq) must beSorted
     }
   }
+
+  "First 100 simplices from Lazy and non-Lazy Vietoris-Rips streams should agree" >> {
+    val N = 50
+    val pts: Seq[Seq[Double]] =
+      Range(0, N).map(i => Seq(cos(i / N.toDouble), sin(i / N.toDouble)))
+    val metricSpace: FiniteMetricSpace[Int] = EuclideanMetricSpace(pts)
+    given Ordering[AbstractSimplex[Int]] =
+      CliqueFinder.simplexOrdering(metricSpace)
+    val lazyStream: LazyList[AbstractSimplex[Int]] =
+      LazyVietorisRips[Int](metricSpace, maxF, maxD)
+    val strictStream: SimplexStream[Int,Double] =
+      VietorisRips[Int](metricSpace, maxF, maxD, ZomorodianIncremental[Int]())
+
+    val lazy100 = lazyStream.take(100).toList
+    val strict100 = strictStream.iterator.take(100).toList
+
+    lazy100 should containTheSameElementsAs(strict100)
+  }
 }

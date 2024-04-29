@@ -28,7 +28,22 @@ class APISpec extends mutable.Specification {
       )
     )
 
+    val metricSpace = EuclideanMetricSpace(xys)
+    val lazyHomology = persistentHomology(
+      SimplexStream.from(
+        LazyVietorisRips(
+        metricSpace,
+        1.5, 4
+        ), metricSpace
+      )
+    )
+
     homology.advanceTo(0.15)
     homology.diagramAt(0.15) should not(beEmpty)
+
+    lazyHomology.advanceTo(0.15)
+    lazyHomology.diagramAt(0.15) should not(beEmpty)
+
+    lazyHomology.diagramAt(0.15) should containTheSameElementsAs(homology.diagramAt(0.15))
   }
 }
