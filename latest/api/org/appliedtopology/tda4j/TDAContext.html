@@ -7,7 +7,7 @@
 </div>
 <div class="main-signature mono-small-block">
  <div class="signature">
-  <span class="signature-short"><span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="TDAContext.html" t="n" class="documentableName ">TDAContext</a>[<span t="k"></span><span data-unresolved-link="" t="t">VertexT</span>, <span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>]<span t="k"> extends </span><a href="heapchain/ChainOps.html" t="t">ChainOps</a>[<a href="AbstractSimplex.html" t="t">AbstractSimplex</a>[<span t="t">VertexT</span>], <span t="t">CoefficientT</span>]<span t="k">, </span></span><span class="signature-long"><a href="SimplexContext.html" t="t">SimplexContext</a>[<span t="t">VertexT</span>]</span>
+  <span class="signature-short"><span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="TDAContext.html" t="n" class="documentableName ">TDAContext</a>[<span t="k"></span><span data-unresolved-link="" t="t">VertexT</span>, <span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>]<span t="k"> extends </span><a href="SimplicialHomologyContext.html" t="t">SimplicialHomologyContext</a>[<span t="t">VertexT</span>, <span t="t">CoefficientT</span>]</span><span class="signature-long"></span>
  </div>
 </div>
 <div class="cover">
@@ -24,26 +24,28 @@
      <svg id="graph"></svg>
      <script type="text/dot" id="dot"> digraph g {
  node0 [id=node0, label="<span style=\"color: #FFFFFF;\">class <a href=\"TDAContext.html\" t=\"n\">TDAContext</a>[<span t=\"t\">VertexT</span>, <span t=\"t\">CoefficientT</span>]</span>", class="class vertex"];
-node1 [id=node1, label="<span style=\"color: #FFFFFF;\">class <a href=\"heapchain/ChainOps.html\" t=\"n\">ChainOps</a>[<a href=\"AbstractSimplex.html\" t=\"t\">AbstractSimplex</a>[<span t=\"t\">VertexT</span>], <span t=\"t\">CoefficientT</span>]</span>", class="class vertex"];
-node2 [id=node2, label="<span style=\"color: #FFFFFF;\">class <span data-unresolved-link=\"\" t=\"n\">Object</span></span>", class="class vertex"];
-node3 [id=node3, label="<span style=\"color: #FFFFFF;\">class <span data-unresolved-link=\"\" t=\"n\">Any</span></span>", class="class vertex"];
-node4 [id=node4, label="<span style=\"color: #FFFFFF;\">trait <span data-unresolved-link=\"\" t=\"n\">Matchable</span></span>", class="trait vertex"];
-node5 [id=node5, label="<span style=\"color: #FFFFFF;\">trait <a href=\"RingModule.html\" t=\"n\">RingModule</a>[<a href=\"heapchain/ChainElement.html\" t=\"t\">ChainElement</a>[<span t=\"t\">CellT</span>, <span t=\"t\">CoefficientT</span>], <span t=\"t\">CoefficientT</span>]</span>", class="trait vertex"];
-node6 [id=node6, label="<span style=\"color: #FFFFFF;\">trait <span data-unresolved-link=\"\" t=\"n\">Show</span>[<a href=\"heapchain/ChainElement.html\" t=\"t\">ChainElement</a>[<span t=\"t\">CellT</span>, <span t=\"t\">CoefficientT</span>]]</span>", class="trait vertex"];
-node7 [id=node7, label="<span style=\"color: #FFFFFF;\">trait <a href=\"SimplexContext.html\" t=\"n\">SimplexContext</a>[<span t=\"t\">VertexT</span>]</span>", class="trait vertex"];
+node1 [id=node1, label="<span style=\"color: #FFFFFF;\">class <a href=\"SimplicialHomologyContext.html\" t=\"n\">SimplicialHomologyContext</a>[<span t=\"t\">VertexT</span>, <span t=\"t\">CoefficientT</span>]</span>", class="class vertex"];
+node2 [id=node2, label="<span style=\"color: #FFFFFF;\">class <a href=\"heapchain/ChainOps.html\" t=\"n\">ChainOps</a>[<a href=\"AbstractSimplex.html\" t=\"t\">AbstractSimplex</a>[<span t=\"t\">VertexT</span>], <span t=\"t\">CoefficientT</span>]</span>", class="class vertex"];
+node3 [id=node3, label="<span style=\"color: #FFFFFF;\">class <span data-unresolved-link=\"\" t=\"n\">Object</span></span>", class="class vertex"];
+node4 [id=node4, label="<span style=\"color: #FFFFFF;\">class <span data-unresolved-link=\"\" t=\"n\">Any</span></span>", class="class vertex"];
+node5 [id=node5, label="<span style=\"color: #FFFFFF;\">trait <span data-unresolved-link=\"\" t=\"n\">Matchable</span></span>", class="trait vertex"];
+node6 [id=node6, label="<span style=\"color: #FFFFFF;\">trait <a href=\"RingModule.html\" t=\"n\">RingModule</a>[<a href=\"heapchain/ChainElement.html\" t=\"t\">ChainElement</a>[<span t=\"t\">CellT</span>, <span t=\"t\">CoefficientT</span>], <span t=\"t\">CoefficientT</span>]</span>", class="trait vertex"];
+node7 [id=node7, label="<span style=\"color: #FFFFFF;\">trait <span data-unresolved-link=\"\" t=\"n\">Show</span>[<a href=\"heapchain/ChainElement.html\" t=\"t\">ChainElement</a>[<span t=\"t\">CellT</span>, <span t=\"t\">CoefficientT</span>]]</span>", class="trait vertex"];
+node8 [id=node8, label="<span style=\"color: #FFFFFF;\">trait <a href=\"SimplexContext.html\" t=\"n\">SimplexContext</a>[<span t=\"t\">VertexT</span>]</span>", class="trait vertex"];
 
 
  node0 -> node1;
 node1 -> node2;
 node2 -> node3;
-node2 -> node4;
-node4 -> node3;
-node1 -> node5;
-node5 -> node2;
-node1 -> node6;
-node6 -> node2;
-node0 -> node7;
-node7 -> node2;
+node3 -> node4;
+node3 -> node5;
+node5 -> node4;
+node2 -> node6;
+node6 -> node3;
+node2 -> node7;
+node7 -> node3;
+node1 -> node8;
+node8 -> node3;
 
 }
 </script>
@@ -54,6 +56,9 @@ node7 -> node2;
    </dt>
    <dd class="body-medium">
     <div class="mono-small-block supertypes">
+     <div>
+      class <a href="SimplicialHomologyContext.html" t="n">SimplicialHomologyContext</a>[<span t="t">VertexT</span>, <span t="t">CoefficientT</span>]
+     </div>
      <div>
       trait <a href="SimplexContext.html" t="n">SimplexContext</a>[<span t="t">VertexT</span>]
      </div>
@@ -99,6 +104,61 @@ node7 -> node2;
         <div class="documentableList-expander">
          <button class="icon-button show-content expand"></button>
          <h4 class="groupHeader h200">Inherited classlikes</h4>
+        </div>
+        <div class="documentableElement" data-f-keywords="case" data-f-inherited="SimplicialHomologyContext">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"><span t="k">case </span></span><span class="kind"><span t="k">class </span></span><a href="SimplicialHomologyContext$HomologyState.html" t="n" class="documentableName ">HomologyState</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">cycles</span>: <span data-unresolved-link="" t="t">Map</span>[<a href="SimplexContext.html#Simplex-0" t="t">Simplex</a>, <a href="heapchain/ChainElement.html" t="t">ChainElement</a>[<a href="SimplexContext.html#Simplex-0" t="t">Simplex</a>, <span t="t">CoefficientT</span>]], <span t="k"></span><span data-unresolved-link="" t="n">cyclesBornBy</span>: <span data-unresolved-link="" t="t">Map</span>[<a href="SimplexContext.html#Simplex-0" t="t">Simplex</a>, <a href="SimplexContext.html#Simplex-0" t="t">Simplex</a>], <span t="k"></span><span data-unresolved-link="" t="n">boundaries</span>: <span data-unresolved-link="" t="t">Map</span>[<a href="SimplexContext.html#Simplex-0" t="t">Simplex</a>, <a href="heapchain/ChainElement.html" t="t">ChainElement</a>[<a href="SimplexContext.html#Simplex-0" t="t">Simplex</a>, <span t="t">CoefficientT</span>]], <span t="k"></span><span data-unresolved-link="" t="n">boundariesBornBy</span>: <span data-unresolved-link="" t="t">Map</span>[<a href="SimplexContext.html#Simplex-0" t="t">Simplex</a>, <a href="SimplexContext.html#Simplex-0" t="t">Simplex</a>], <span t="k"></span><span data-unresolved-link="" t="n">coboundaries</span>: <span data-unresolved-link="" t="t">Map</span>[<a href="SimplexContext.html#Simplex-0" t="t">Simplex</a>, <a href="heapchain/ChainElement.html" t="t">ChainElement</a>[<a href="SimplexContext.html#Simplex-0" t="t">Simplex</a>, <span t="t">CoefficientT</span>]], <span t="k"></span><span data-unresolved-link="" t="n">stream</span>: <a href="SimplexStream.html" t="t">SimplexStream</a>[<span t="t">VertexT</span>, <a href="SimplicialHomologyContext.html#FiltrationT-0" t="t">FiltrationT</a>], <span t="k">var </span><span data-unresolved-link="" t="n">current</span>: <a href="SimplicialHomologyContext.html#FiltrationT-0" t="t">FiltrationT</a>, <span t="k"></span><span data-unresolved-link="" t="n">barcode</span>: <span data-unresolved-link="" t="t">ArrayDeque</span>[(<span data-unresolved-link="" t="t">Int</span>, <a href="SimplicialHomologyContext.html#FiltrationT-0" t="t">FiltrationT</a><span t="k"> | </span><a href="barcode/NegativeInfinity.html" t="t">NegativeInfinity</a>[<a href="SimplicialHomologyContext.html#FiltrationT-0" t="t">FiltrationT</a>], <a href="SimplicialHomologyContext.html#FiltrationT-0" t="t">FiltrationT</a><span t="k"> | </span><a href="barcode/PositiveInfinity.html" t="t">PositiveInfinity</a>[<a href="SimplicialHomologyContext.html#FiltrationT-0" t="t">FiltrationT</a>], <a href="heapchain/ChainElement.html" t="t">ChainElement</a>[<a href="SimplexContext.html#Simplex-0" t="t">Simplex</a>, <span t="t">CoefficientT</span>])])
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <a href="SimplicialHomologyContext$HomologyState.html">SimplicialHomologyContext</a>
+              </dd>
+              <dt class="body-small">
+               Supertypes
+              </dt>
+              <dd class="body-medium">
+               <div class="mono-small-block supertypes">
+                <div>
+                 trait <span data-unresolved-link="" t="n">Serializable</span>
+                </div>
+                <div>
+                 trait <span data-unresolved-link="" t="n">Product</span>
+                </div>
+                <div>
+                 trait <span data-unresolved-link="" t="n">Equals</span>
+                </div>
+                <div>
+                 class <span data-unresolved-link="" t="n">Object</span>
+                </div>
+                <div>
+                 trait <span data-unresolved-link="" t="n">Matchable</span>
+                </div>
+                <div>
+                 class <span data-unresolved-link="" t="n">Any</span>
+                </div><span class="show-all-code show-content text-button h100">Show all</span>
+               </div>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
         </div>
         <div class="documentableElement" data-f-inherited="SimplexContext">
          <div class="documentableElement-expander">
@@ -199,6 +259,36 @@ node7 -> node2;
         <div class="documentableList-expander">
          <button class="icon-button show-content expand"></button>
          <h4 class="groupHeader h200">Inherited types</h4>
+        </div>
+        <div class="documentableElement" id="FiltrationT-0" data-f-inherited="SimplicialHomologyContext">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">type </span></span><a href="TDAContext.html#FiltrationT-0" t="n" class="documentableName ">FiltrationT</a> = <span data-unresolved-link="" t="t">Double</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <a href="SimplicialHomologyContext.html#FiltrationT-0">SimplicialHomologyContext</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
         </div>
         <div class="documentableElement" id="Simplex-0" data-f-inherited="SimplexContext">
          <div class="documentableElement-expander">
@@ -306,6 +396,36 @@ node7 -> node2;
               </dt>
               <dd class="body-medium">
                <a href="heapchain/ChainOps.html#negate-fffff80e">ChainOps</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="persistentHomology-ae9" data-f-inherited="SimplicialHomologyContext">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="TDAContext.html#persistentHomology-ae9" t="n" class="documentableName ">persistentHomology</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">stream</span>: <a href="SimplexStream.html" t="t">SimplexStream</a>[<span t="t">VertexT</span>, <a href="SimplicialHomologyContext.html#FiltrationT-0" t="t">FiltrationT</a>]): <a href="SimplicialHomologyContext$HomologyState.html" t="t">HomologyState</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <a href="SimplicialHomologyContext.html#persistentHomology-ae9">SimplicialHomologyContext</a>
               </dd>
              </dl>
             </div>
