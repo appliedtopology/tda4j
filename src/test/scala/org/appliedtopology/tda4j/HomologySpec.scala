@@ -5,7 +5,7 @@ import org.specs2.mutable.Specification
 
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
-import scala.math
+import scala.math.max
 import scala.math.Numeric.DoubleIsFractional
 import scala.runtime.Tuple2Zipped
 
