@@ -25,14 +25,19 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
     stream: SimplexStream[VertexT, FiltrationT],
     var current: FiltrationT,
     barcode: mutable.ArrayDeque[
-      (Int, FiltrationT | NegativeInfinity[FiltrationT], FiltrationT | PositiveInfinity[FiltrationT])
+      (
+        Int,
+        FiltrationT | NegativeInfinity[FiltrationT],
+        FiltrationT | PositiveInfinity[FiltrationT],
+        ChainElement[Simplex, CoefficientT]
+      )
     ]
   ) {
     given Ordering[Simplex] = stream.filtrationOrdering
     given Order[Simplex] = Order.fromScalaOrdering(stream.filtrationOrdering)
     given Order[(Simplex, CoefficientT)] = Order.orderBy(_._1)
 
-    val simplexIterator = stream.iterator.buffered
+    val simplexIterator : collection.BufferedIterator[Simplex] = stream.iterator.buffered
     boundaries(Simplex()) = ChainElement(Simplex())
 
     def diagramAt(
@@ -40,10 +45,11 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
     ): List[(Int, FiltrationT | NegativeInfinity[FiltrationT], FiltrationT | PositiveInfinity[FiltrationT])] = {
       advanceTo(f)
       (for
-        (dim, lowerQ, oldUpperQ): (
+        (dim, lowerQ, oldUpperQ, cycle): (
           Int,
           FiltrationT | NegativeInfinity[FiltrationT],
-          FiltrationT | PositiveInfinity[FiltrationT]
+          FiltrationT | PositiveInfinity[FiltrationT],
+          ChainElement[Simplex, CoefficientT]
         ) <- barcode.toList
         lower = lowerQ match {
           case NegativeInfinity() => Double.NegativeInfinity
@@ -117,6 +123,10 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
           coboundaries(dsigmaReduced.leadingCell.get) = coboundary
 
           val (_, cycleBasis) = reduceBy(dsigmaReduced, cycles)
+          val representativeCycle: ChainElement[Simplex, CoefficientT] = cycleBasis.leadingCell match {
+            case None       => ChainElement()
+            case Some(cell) => cycles(cell)
+          }
           cycleBasis.leadingCell match {
             case None       => ()
             case Some(cell) => cycles.remove(cell)
@@ -130,7 +140,7 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
           val upper: FiltrationT | PositiveInfinity[FiltrationT] =
             stream.filtrationValue.orElse(_ => PositiveInfinity[FiltrationT]())(sigma)
 
-          barcode.append((sigma.size - 2, lower, upper))
+          barcode.append((sigma.size - 2, lower, upper, representativeCycle))
         }
         current = stream.filtrationValue(sigma)
       }
@@ -138,9 +148,14 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
     def advanceTo(f: FiltrationT): Unit =
       while (simplexIterator.hasNext && f > stream.filtrationValue(simplexIterator.head))
         advanceOne()
+
+    def advanceAll(): Unit =
+      while(simplexIterator.hasNext)
+        advanceOne()
+
   }
 
-  def persistentHomology(stream: SimplexStream[VertexT, FiltrationT]): HomologyState =
+  def persistentHomology(stream: => SimplexStream[VertexT, FiltrationT]): HomologyState =
     HomologyState(
       mutable.Map.empty, // cycle basis
       mutable.Map.empty, // cycle born by

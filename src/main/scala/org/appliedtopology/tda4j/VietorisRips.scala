@@ -9,7 +9,7 @@ import scalax.collection.edge.Implicits.*
 import scalax.collection.edge.WUnDiEdge
 
 import scala.annotation.tailrec
-import scala.collection.mutable
+import scala.collection.{immutable, mutable}
 import scala.util.Sorting
 import scala.util.control.*
 import scala.util.chaining.*
@@ -342,5 +342,92 @@ object LazyVietorisRips {
       }
     }
     simplices
+  }
+}
+
+object LazyStratifiedVietorisRips {
+  def apply[VertexT: Ordering](
+    metricSpace: FiniteMetricSpace[VertexT],
+    maxFiltrationValue: Double,
+    maxDimension: Int = 2) : Array[LazyList[AbstractSimplex[VertexT]]] =
+    this(metricSpace, Some(maxFiltrationValue), maxDimension)
+
+  def apply[VertexT: Ordering](
+    metricSpace: FiniteMetricSpace[VertexT],
+    maxFiltrationValue: Option[Double],
+    maxDimension: Int
+  ): Array[LazyList[AbstractSimplex[VertexT]]] = {
+
+    val filtrationValue = FiniteMetricSpace.MaximumDistanceFiltrationValue[VertexT](metricSpace)
+
+    val lazyLists: Array[LazyList[AbstractSimplex[VertexT]]] = Array.ofDim(maxDimension + 1)
+    lazyLists(0) = LazyList.from(metricSpace.elements.map(AbstractSimplex(_)))
+    (1 to maxDimension).foreach(lazyLists(_) = LazyList.empty)
+
+    def initStack: Vector[(AbstractSimplex[VertexT], (VertexT, VertexT))] =
+      metricSpace.elements.toList
+        .combinations(2)
+        .toVector
+        .sortBy { xys =>
+          val List(x, y) = xys; metricSpace.distance(x, y)
+        }
+        .map { xys =>
+          val List(src, tgt) = xys; (AbstractSimplex(src, tgt), (src, tgt))
+        }
+
+    def cofacets(
+      simplex: => AbstractSimplex[VertexT],
+      neighbors: => Map[VertexT, Set[VertexT]]
+    ): LazyList[AbstractSimplex[VertexT]] =
+      LazyList
+        .from(
+          simplex.tail
+            .foldRight(neighbors(simplex.head))((v, N) => N.intersect(neighbors(v)))
+        )
+        .map(v => simplex + v)
+
+    case class FoldState(
+      outputLists: Array[LazyList[AbstractSimplex[VertexT]]],
+      taskStack: Vector[(AbstractSimplex[VertexT], (VertexT, VertexT))],
+      neighbors: Map[VertexT, Set[VertexT]]
+    )
+    @tailrec def oneStep(foldState: FoldState): Array[LazyList[AbstractSimplex[VertexT]]] =
+      if (foldState.taskStack.isEmpty) foldState.outputLists
+      else if (foldState.taskStack.head._1.size > maxDimension)
+        oneStep(foldState.copy(taskStack = foldState.taskStack.tail))
+      else {
+        val (simplex, edge) = foldState.taskStack.head
+        val List(src, tgt) = edge.toList.sorted // ensure src < tgt
+        val neighbors: Map[VertexT, Set[VertexT]] = if (simplex.size == 2) { // new edge enters
+          foldState.neighbors
+            .updated(tgt, foldState.neighbors.getOrElse(tgt, Set()) + src)
+            .updated(src, foldState.neighbors.getOrElse(src, Set()) + tgt)
+        } else foldState.neighbors
+        val candidateCofacets = cofacets(simplex, neighbors)
+
+        // a cofacet stays if the edge is the last edge of its length
+        val newCofacets =
+          for
+            cofacet <- candidateCofacets
+            others = cofacet.toList
+              .combinations(simplex.size)
+              .filter(spx => filtrationValue(AbstractSimplex.from(spx)) == metricSpace.distance(src, tgt))
+              .toList
+              .sorted(math.Ordering.Implicits.seqOrdering)
+            if simplex.toList.sorted == others.last
+          yield cofacet
+
+        oneStep(
+          FoldState(
+            foldState.outputLists.updated(simplex.dim, foldState.outputLists(simplex.dim).appended(simplex)),
+            foldState.taskStack.tail.prependedAll(newCofacets.map((_, edge))),
+            neighbors
+          )
+        )
+      }
+
+    val startState = FoldState(lazyLists, initStack, Map.empty)
+
+    oneStep(startState)
   }
 }

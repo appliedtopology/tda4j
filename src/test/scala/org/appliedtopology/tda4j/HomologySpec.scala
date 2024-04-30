@@ -10,15 +10,17 @@ import scala.math.Numeric.DoubleIsFractional
 import scala.runtime.Tuple2Zipped
 
 import org.specs2.mutable
-import org.specs2.ScalaCheck
+//import org.specs2.ScalaCheck
+
+import scala.util.control.Breaks._
 
 
 class HomologySpec extends Specification {
   """  HomologySpec """ should {
     """ be able to use Chain to compute a simple persistent homology barcode""" in {
       val random = new Random
-      val a = random.nextDouble() * Double.MaxValue * 2 - Double.MaxValue //these cover all possible values of Double
-      val b = random.nextDouble() * Double.MaxValue * 2 - Double.MaxValue // note: revise a and b definitions. too broad. refer to spec2 docs?
+      val a = random.nextDouble() //* Double.MaxValue * 2 - Double.MaxValue //these cover all possible values of Double
+      val b = random.nextDouble() //* Double.MaxValue * 2 - Double.MaxValue // note: revise a and b definitions. too broad. refer to spec2 docs?
       val subPointSet1 = Seq[Double](0.0, 0.0) //setting up points for point set for VR Homology
       val subPointSet2 = Seq[Double](a, 0.0)
       val subPointSet3 = Seq[Double](0.0, b)
@@ -40,60 +42,80 @@ class HomologySpec extends Specification {
       //what do I want to do here? Use given so I can use Chain class to specify coeff and VertexT
 
 
-      val boundaries: ListBuffer[Chain[Simplex, Double]] = ListBuffer[Chain[Simplex, Double]]() //empty list buffer created
-      val cycles: ListBuffer[Chain[Simplex, Double]] = ListBuffer[Chain[Simplex, Double]]()
-      val intervals: ListBuffer[(Simplex, Double)] = ListBuffer[(Simplex, Double)]() //returns tuple of interval
+      val boundaries: ListBuffer[ChainElement[Simplex, Double]] = ListBuffer[ChainElement[Simplex, Double]]() //empty list buffer created
+      val cycles: ListBuffer[ChainElement[Simplex, Double]] = ListBuffer[ChainElement[Simplex, Double]]()
+      val intervals: ListBuffer[(Double, Double)] = ListBuffer[(Double, Double)]() //returns tuple of interval
 
 
-     // extension (chain: Chain[Simplex, Double]) {
-        def reduceByBasis(basis: List[ChainElement[Simplex, Double]]): Chain[Simplex, Double] = {
-          var changed: Boolean = true
-          var sigma = ChainElement[Simplex, Double]()  //working on current chain. Here assigning sigma as an empty ChainElement
-          while (changed) {
-            changed = false
-            for (basisElement <- basis) {
-              if (sigma.leadingCell == basisElement.leadingCell) {
-                val factor1: Double = basisElement.leadingCoefficient / sigma.leadingCoefficient //doing ops for boundary finding, just broken up to be easier to do
-                val factor2: Double = sigma.leadingCoefficient / basisElement.leadingCoefficient
-                sigma = scale(factor1, sigma) - scale(factor2, basisElement) //using Chain's scale to do multiplication of coeff and chain, since scala can't work with these datatypes natively
-                changed = true
+      def reduceByBasis(basis: ListBuffer[ChainElement[Simplex, Double]]): ChainElement[Simplex, Double] = {
+        var changed: Boolean = true
+        var sigma = ChainElement[Simplex, Double]() //working on current chain. Here assigning sigma as an empty ChainElement
+        while (changed) {
+          changed = false
+          for (basisElement <- basis) {
+            if (sigma.leadingCell == basisElement.leadingCell) {
+              val factor1: Double = basisElement.leadingCoefficient / sigma.leadingCoefficient //doing ops for boundary finding, just broken up to be easier to do
+              val factor2: Double = sigma.leadingCoefficient / basisElement.leadingCoefficient
+              sigma = scale(factor1, sigma) - scale(factor2, basisElement) //using Chain's scale to do multiplication of coeff and chain, since scala can't work with these datatypes natively
+              changed = true
 
-              }
             }
           }
-          sigma
         }
-     // }
+        sigma
+      }
+      // }
 
       //TDAContext is great! Due to the context-driven paradigm, the tda package object extends ChainOps and SimplexOps,
       //thus you don't have to keep on rewriting parameter names and function calls. Instead its assigned to a singular variable, that does all that in the backend
       //of TDAContext, which itself goes into the backend of ChainOps and SimplexContext. SC sets up the functionality to work with simplexes in a practical matter
 
+      //start of boundary check
+      for (simplex <- simplices ){
+        val boundary : ChainElement[Simplex, Double] = simplex.boundary
 
+        val reducedBoundary = reduceByBasis(boundaries)
+
+        var birthCycle : ChainElement[Simplex, Double] = null
+
+
+        if(reducedBoundary.isZero){
+          cycles += reducedBoundary
+        }else{
+           for (cycle <- cycles) {
+             if(reducedBoundary.leadingCell == simplex.leadingCell){
+               birthCycle = cycle
+               break //emulating functionatlity of cycle.first lambda method in kotlin version.
+           }
+        }
+          val newInterval: (Double, Double) = (
+            birthCycle.leadingCell.map(simplices.filtrationValue).getOrElse(Double.NegativeInfinity),
+            reducedBoundary.leadingCell.map(simplices.filtrationValue).getOrElse(Double.PositiveInfinity) )
+
+          intervals += newInterval
+
+          cycles -= birthCycle
+          boundaries += reducedBoundary
+
+
+          }
+
+
+
+        
+        }
+
+      cycles must haveSize(1) // connected component never dies
+      intervals must contain(
+        (0, a),
+        (0, b),
+        (max(a, b), max(a, b))
+      )
+
+      }
     }
 
 
   }
 
 
-
-class HomologySpec extends mutable.Specification with ScalaCheck {
-  given shc: SimplicialHomologyContext[Int, Double]()
-  import shc.{given, *}
-
-  "Homology of a triangle" >> {
-    val streamBuilder = ExplicitStreamBuilder[Int, Double]()
-    streamBuilder.addAll(List(1, 2, 3).map(i => (0.0, s(i))))
-    streamBuilder.addAll(List((1.0, s(1, 2)), (2.0, s(1, 3)), (3.0, s(2, 3)), (4.0, s(1, 2, 3))))
-    val stream = streamBuilder.result()
-    val homology = persistentHomology(stream)
-    homology.diagramAt(5.0) must containTheSameElementsAs(
-      List(
-        (0, 0.0, 1.0), // one 0-component dies when 1-2 shows up
-        (0, 0.0, 2.0), // one 0-component dies when 1-3 shows up
-        (0, 0.0, Double.PositiveInfinity), // one 0-component lives forever
-        (1, 3.0, 4.0) // one 1-component created from 2-3 and killed by 1-2-3.
-      )
-    )
-  }
-}
