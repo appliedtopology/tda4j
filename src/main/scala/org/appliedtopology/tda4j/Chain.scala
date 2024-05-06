@@ -352,8 +352,7 @@ package org.appliedtopology.tda4j {
     }
 
     class ChainOps[CellT <: Cell[CellT]: scala.math.Ordering, CoefficientT](using fr: Fractional[CoefficientT])
-        extends RingModule[ChainElement[CellT, CoefficientT], CoefficientT]
-        with Show[ChainElement[CellT, CoefficientT]] {
+        extends RingModule[ChainElement[CellT, CoefficientT], CoefficientT] {
 
       import Numeric.Implicits._
 
@@ -374,11 +373,6 @@ package org.appliedtopology.tda4j {
         x: ChainElement[CellT, CoefficientT]
       ): ChainElement[CellT, CoefficientT] =
         scale(-fr.one, x)
-
-      override def shows(x: ChainElement[CellT, CoefficientT]): String =
-        x.chainHeap.toList.map((cell, coeff) => s"${coeff.toString} ⊠ ${cell.toString}").mkString(" + ")
-
-      override def show(x: ChainElement[CellT, CoefficientT]): Cord = Cord(shows(x))
     }
   }
 }
