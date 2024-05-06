@@ -11,7 +11,7 @@ import collection.immutable.BitSet
 class ProfilingSpec(args: Arguments) extends mutable.Specification {
   """This is a profiling script to measure performance of different implementations.""" >> {
     val bitlength: Int = args.commandLine.intOr("bitlength", 3)
-    val maxFVal: Double = args.commandLine.doubleOr("maxFVal", 7.0)
+    val maxFVal: Double = args.commandLine.doubleOr("maxFVal", 4.0)
     val maxDim: Int = args.commandLine.intOr("maxDim", 7)
 
     val symmetry: HyperCubeSymmetry = HyperCubeSymmetry(bitlength)
@@ -110,5 +110,17 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
       symmetry_gen.representatives.size === symmetry_gen.representatives.size
     }
     section("ripser-gens")
+
+    section("lazy-stratified")
+    "Lazy Vietoris-Rips sorted by construction" >> {
+      val zi: HyperCubeProfiling =
+        HyperCubeProfiling(
+          LazyStratifiedCliqueFinder[Int](),
+          symmetry,
+          bitlength,
+          "LS"
+        )
+    }
+    section("lazy-stratified")
   }
 }

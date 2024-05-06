@@ -349,7 +349,8 @@ object LazyStratifiedVietorisRips {
   def apply[VertexT: Ordering](
     metricSpace: FiniteMetricSpace[VertexT],
     maxFiltrationValue: Double,
-    maxDimension: Int = 2) : Array[LazyList[AbstractSimplex[VertexT]]] =
+    maxDimension: Int = 2
+  ): Array[LazyList[AbstractSimplex[VertexT]]] =
     this(metricSpace, Some(maxFiltrationValue), maxDimension)
 
   def apply[VertexT: Ordering](
@@ -360,6 +361,9 @@ object LazyStratifiedVietorisRips {
 
     val filtrationValue = FiniteMetricSpace.MaximumDistanceFiltrationValue[VertexT](metricSpace)
 
+    inline def maxSize: Int = maxDimension + 1
+    val maxFVal = maxFiltrationValue.getOrElse(metricSpace.minimumEnclosingRadius)
+
     val lazyLists: Array[LazyList[AbstractSimplex[VertexT]]] = Array.ofDim(maxDimension + 1)
     lazyLists(0) = LazyList.from(metricSpace.elements.map(AbstractSimplex(_)))
     (1 to maxDimension).foreach(lazyLists(_) = LazyList.empty)
@@ -368,6 +372,9 @@ object LazyStratifiedVietorisRips {
       metricSpace.elements.toList
         .combinations(2)
         .toVector
+        .filter { xys =>
+          val List(x,y) = xys; metricSpace.distance(x,y) <= maxFVal
+        }
         .sortBy { xys =>
           val List(x, y) = xys; metricSpace.distance(x, y)
         }
@@ -393,8 +400,7 @@ object LazyStratifiedVietorisRips {
     )
     @tailrec def oneStep(foldState: FoldState): Array[LazyList[AbstractSimplex[VertexT]]] =
       if (foldState.taskStack.isEmpty) foldState.outputLists
-      else if (foldState.taskStack.head._1.size > maxDimension)
-        oneStep(foldState.copy(taskStack = foldState.taskStack.tail))
+      else if (foldState.taskStack.head._1.size > maxSize) oneStep(foldState.copy(taskStack = foldState.taskStack.tail))
       else {
         val (simplex, edge) = foldState.taskStack.head
         val List(src, tgt) = edge.toList.sorted // ensure src < tgt
@@ -430,4 +436,15 @@ object LazyStratifiedVietorisRips {
 
     oneStep(startState)
   }
+}
+
+class LazyStratifiedCliqueFinder[VertexT: Ordering]() extends CliqueFinder[VertexT] {
+  override val className: String = "LazyStratifiedCliqueFinder"
+  def apply(
+    metricSpace: FiniteMetricSpace[VertexT],
+    maxFiltrationValue: Double = Double.PositiveInfinity,
+    maxDimension: Int = 2
+  ): Seq[AbstractSimplex[VertexT]] =
+    LazyStratifiedVietorisRips(metricSpace, maxFiltrationValue, maxDimension)
+      .foldRight(LazyList[AbstractSimplex[VertexT]]())((lz, sq) => sq #::: lz)
 }
