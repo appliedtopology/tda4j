@@ -4,12 +4,14 @@ sealed trait ElementaryInterval extends Cell[ElementaryInterval] {
   def n: Int
 }
 case class DegenerateInterval(n: Int) extends ElementaryInterval {
-  override def boundary[CoefficientT: Fractional]: ChainElement[ElementaryInterval, CoefficientT] =
-    ChainElement()
+  override def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] =
+    Chain()
+  override def toString: String = s"[$n,$n]"
 }
 case class FullInterval(n: Int) extends ElementaryInterval {
-  override def boundary[CoefficientT: Fractional]: ChainElement[ElementaryInterval, CoefficientT] =
-    ChainOps[ElementaryInterval,CoefficientT]().minus(ChainElement(DegenerateInterval(n+1)),ChainElement(DegenerateInterval(n)))
+  override def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] =
+    ChainOps[ElementaryInterval,CoefficientT]().minus(Chain(DegenerateInterval(n+1)),Chain(DegenerateInterval(n)))
+  override def toString: String = s"[$n,${n+1}]"
 }
 
 import Ordering.Implicits.seqOrdering
@@ -18,32 +20,32 @@ given Ordering[ElementaryInterval] = Ordering.by { (i) => i.n }
 given Ordering[ElementaryCube] = Ordering.by { (c) => c.intervals }
 
 case class ElementaryCube(val intervals: List[ElementaryInterval]) extends Cell[ElementaryCube] {
-  override def boundary[CoefficientT: Fractional]: ChainElement[ElementaryCube, CoefficientT] = {
+  override def boundary[CoefficientT: Fractional]: Chain[ElementaryCube, CoefficientT] = {
     val chainOps = ChainOps[ElementaryCube, CoefficientT]()
     import chainOps.{*,given}
     val fr = summon[Fractional[CoefficientT]]
     import math.Fractional.Implicits.infixFractionalOps
-    
+
     // For a cube that decomposes as Q = I*P where I is a single interval, we define
     // ∂Q = ∂I * P + (-1)^{dim I} I * ∂P
-    
+
     // Given stuff-already-processed and an I*P decomposition, figure out whether this I changes the accumulated
     // sign, and produce the ∂I * P + sign pair
     def process(left: List[ElementaryInterval], current: ElementaryInterval, right: List[ElementaryInterval]):
-    (CoefficientT, ChainElement[ElementaryCube,CoefficientT]) = current match {
-      case DegenerateInterval(n) => (fr.one, ChainElement())
-      case FullInterval(n) => (fr.negate(fr.one), ChainElement(
+    (CoefficientT, Chain[ElementaryCube,CoefficientT]) = current match {
+      case DegenerateInterval(n) => (fr.one, Chain())
+      case FullInterval(n) => (fr.negate(fr.one), Chain(
         ElementaryCube(left ++ (DegenerateInterval(n+1) :: right)) -> fr.one,
         ElementaryCube(left ++ (DegenerateInterval(n) :: right)) -> fr.negate(fr.one),
       ))
     }
-    
+
     @tailrec
-    def boundaryOf(left: List[ElementaryInterval], 
-                   current: ElementaryInterval, 
+    def boundaryOf(left: List[ElementaryInterval],
+                   current: ElementaryInterval,
                    right: List[ElementaryInterval],
                    sign: CoefficientT,
-                   acc: ChainElement[ElementaryCube, CoefficientT]): ChainElement[ElementaryCube,CoefficientT] = {
+                   acc: Chain[ElementaryCube, CoefficientT]): Chain[ElementaryCube,CoefficientT] = {
       val (sgn, newchain) = process(left, current, right)
       right match {
         case Nil => {
@@ -56,8 +58,8 @@ case class ElementaryCube(val intervals: List[ElementaryInterval]) extends Cell[
       }
     }
     intervals match {
-      case Nil => ChainElement()
-      case (i::is) => boundaryOf(List.empty, i, is, fr.one, ChainElement())
+      case Nil => Chain()
+      case (i::is) => boundaryOf(List.empty, i, is, fr.one, Chain())
     }
   }
 
@@ -66,4 +68,7 @@ case class ElementaryCube(val intervals: List[ElementaryInterval]) extends Cell[
 
   infix def cubeProduct(left: ElementaryCube, right: ElementaryCube): ElementaryCube =
     ElementaryCube(left.intervals ++ right.intervals)
+
+  override def toString: String =
+    s"Cubical[${intervals.map(_.toString).mkString("x")}]"
 }
