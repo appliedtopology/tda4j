@@ -9,20 +9,20 @@ pomIncludeRepository := { _ => false }
 publishTo := sonatypePublishToBundle.value
 sonatypeCredentialHost := "s01.oss.sonatype.org"
 
-libraryDependencies += "org.specs2" %% "specs2-core"          % "5.5.1" % "test"
-libraryDependencies += "org.specs2" %% "specs2-matcher-extra" % "5.5.1" % "test"
-libraryDependencies += "org.specs2" %% "specs2-scalacheck"    % "5.5.1" % "test"
-libraryDependencies += ("org.scala-graph" %% "graph-core" % "1.13.5").cross(
+libraryDependencies += "org.specs2"       %% "specs2-core"          % "5.5.1" % "test"
+libraryDependencies += "org.specs2"       %% "specs2-matcher-extra" % "5.5.1" % "test"
+libraryDependencies += "org.specs2"       %% "specs2-scalacheck"    % "5.5.1" % "test"
+libraryDependencies += ("org.scala-graph" %% "graph-core"           % "1.13.5").cross(
   CrossVersion.for3Use2_13
 )
-libraryDependencies += "org.openjdk.jol" % "jol-core" % "0.17"
+libraryDependencies += "org.openjdk.jol"    % "jol-core"                      % "0.17"
 libraryDependencies += "org.apache.commons" % "commons-numbers-combinatorics" % "1.1"
-libraryDependencies += "org.apache.commons" % "commons-math3" % "3.6.1"
+libraryDependencies += "org.apache.commons" % "commons-math3"                 % "3.6.1"
 libraryDependencies +=
-  "org.scala-lang.modules"             %% "scala-parallel-collections" % "1.0.4"
-libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.17.0" % "test"
-libraryDependencies += "org.scalaz" %% "scalaz-core" % "7.3.6"
-libraryDependencies += "org.scalaz" %% "scalaz-scalacheck-binding" % "7.4.0-M14"
+  "org.scala-lang.modules"              %% "scala-parallel-collections" % "1.0.4"
+libraryDependencies += "org.scalacheck" %% "scalacheck"                 % "1.17.0" % "test"
+libraryDependencies += "org.scalaz"     %% "scalaz-core"                % "7.3.6"
+libraryDependencies += "org.scalaz"     %% "scalaz-scalacheck-binding"  % "7.4.0-M14"
 
 lazy val root = (project in file("."))
   .enablePlugins(
