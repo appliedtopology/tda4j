@@ -1,7 +1,5 @@
 package org.appliedtopology.tda4j
 
-import scalaz.Show
-
 import scala.annotation.targetName
 
 /** Specifies what it means for the type `T` to be a module (or vector space) over the [Numeric] (ie ring-like) type
@@ -17,11 +15,12 @@ import scala.annotation.targetName
 trait RingModule[T, R] {
   rmod =>
   def zero: T
+  def isZero(t: T): Boolean = (t == zero)
   def plus(x: T, y: T): T
   def minus(x: T, y: T): T = plus(x, negate(y))
   def negate(x: T): T = minus(zero, x)
   def scale(x: R, y: T): T
-
+  
   extension (t: T) {
     @targetName("add")
     def +(rhs: T): T = plus(t, rhs)

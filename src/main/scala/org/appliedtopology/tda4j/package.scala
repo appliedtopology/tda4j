@@ -17,7 +17,7 @@ package object tda4j {
   class TDAContext[VertexT: Ordering, CoefficientT: Fractional]
       extends SimplicialHomologyContext[VertexT, CoefficientT]() {
     import scala.language.implicitConversions
-    given Conversion[Simplex, ChainElement[Simplex, CoefficientT]] =
-      ChainElement.apply
+    given Conversion[Simplex, Chain[Simplex, CoefficientT]] =
+      Chain.apply
   }
 }

@@ -71,8 +71,8 @@ class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])( //v
     */
   override def boundary[CoefficientT](using
     fr: Fractional[CoefficientT]
-  ): ChainElement[AbstractSimplex[VertexT], CoefficientT] =
-    ChainElement[AbstractSimplex[VertexT], CoefficientT](
+  ): Chain[AbstractSimplex[VertexT], CoefficientT] =
+    Chain[AbstractSimplex[VertexT], CoefficientT](
       self
         .to(Seq)
         .map(vtx => self - vtx)
@@ -80,7 +80,7 @@ class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])( //v
     )
 
   def dim: Int = size - 1
-  
+
   // ***** Overriding for inheriting and extending standard library constructions
   override def className = "AbstractSimplex"
 

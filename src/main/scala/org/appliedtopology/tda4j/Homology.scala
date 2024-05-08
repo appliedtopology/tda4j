@@ -17,11 +17,11 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
   import barcode._
 
   case class HomologyState(
-    cycles: mutable.Map[Simplex, ChainElement[Simplex, CoefficientT]],
+    cycles: mutable.Map[Simplex, Chain[Simplex, CoefficientT]],
     cyclesBornBy: mutable.Map[Simplex, Simplex],
-    boundaries: mutable.Map[Simplex, ChainElement[Simplex, CoefficientT]],
+    boundaries: mutable.Map[Simplex, Chain[Simplex, CoefficientT]],
     boundariesBornBy: mutable.Map[Simplex, Simplex],
-    coboundaries: mutable.Map[Simplex, ChainElement[Simplex, CoefficientT]],
+    coboundaries: mutable.Map[Simplex, Chain[Simplex, CoefficientT]],
     stream: SimplexStream[VertexT, FiltrationT],
     var current: FiltrationT,
     barcode: mutable.ArrayDeque[
@@ -29,7 +29,7 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
         Int,
         FiltrationT | NegativeInfinity[FiltrationT],
         FiltrationT | PositiveInfinity[FiltrationT],
-        ChainElement[Simplex, CoefficientT]
+        Chain[Simplex, CoefficientT]
       )
     ]
   ) {
@@ -37,8 +37,8 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
     given Order[Simplex] = Order.fromScalaOrdering(stream.filtrationOrdering)
     given Order[(Simplex, CoefficientT)] = Order.orderBy(_._1)
 
-    val simplexIterator : collection.BufferedIterator[Simplex] = stream.iterator.buffered
-    boundaries(Simplex()) = ChainElement(Simplex())
+    val simplexIterator: collection.BufferedIterator[Simplex] = stream.iterator.buffered
+    boundaries(Simplex()) = Chain(Simplex())
 
     def diagramAt(
       f: FiltrationT
@@ -49,7 +49,7 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
           Int,
           FiltrationT | NegativeInfinity[FiltrationT],
           FiltrationT | PositiveInfinity[FiltrationT],
-          ChainElement[Simplex, CoefficientT]
+          Chain[Simplex, CoefficientT]
         ) <- barcode.toList
         lower = lowerQ match {
           case NegativeInfinity() => Double.NegativeInfinity
@@ -85,16 +85,16 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
 
     @tailrec
     private def reduceBy(
-      z: ChainElement[Simplex, CoefficientT],
-      basis: mutable.Map[Simplex, ChainElement[Simplex, CoefficientT]],
-      reductionLog: ChainElement[Simplex, CoefficientT] = ChainElement()
-    )(using fr: Fractional[CoefficientT]): (ChainElement[Simplex, CoefficientT], ChainElement[Simplex, CoefficientT]) =
+      z: Chain[Simplex, CoefficientT],
+      basis: mutable.Map[Simplex, Chain[Simplex, CoefficientT]],
+      reductionLog: Chain[Simplex, CoefficientT] = Chain()
+    )(using fr: Fractional[CoefficientT]): (Chain[Simplex, CoefficientT], Chain[Simplex, CoefficientT]) =
       z.leadingCell match {
         case None => (z, reductionLog)
         case Some(sigma) =>
           if (basis.contains(sigma)) {
             val redCoeff = fr.div(z.leadingCoefficient, basis(sigma).leadingCoefficient)
-            reduceBy(z - redCoeff ⊠ basis(sigma), basis, reductionLog + redCoeff ⊠ ChainElement(sigma))
+            reduceBy(z - redCoeff ⊠ basis(sigma), basis, reductionLog + redCoeff ⊠ Chain(sigma))
           } else (z, reductionLog)
       }
 
@@ -102,17 +102,17 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
       if (simplexIterator.hasNext) {
         val fr = summon[Fractional[CoefficientT]]
         val sigma: Simplex = simplexIterator.next()
-        val dsigma: ChainElement[Simplex, CoefficientT] =
-          sigma.boundary[CoefficientT]: ChainElement[Simplex, CoefficientT]
+        val dsigma: Chain[Simplex, CoefficientT] =
+          sigma.boundary[CoefficientT]: Chain[Simplex, CoefficientT]
         val (dsigmaReduced, reduction) = reduceBy(dsigma, boundaries)
-        val coboundary = reduction.chainHeap.foldRight(fr.negate(fr.one) ⊠ ChainElement(sigma)) { (next, acc) =>
+        val coboundary = reduction.items.foldRight(fr.negate(fr.one) ⊠ Chain(sigma)) { (next, acc) =>
           val (spx, coeff) = next
           if (coboundaries.contains(spx))
             acc + coeff ⊠ coboundaries(spx)
           else
             acc
         }
-        if (dsigmaReduced.isZero) {
+        if (dsigmaReduced.isZero()) {
           // adding a boundary to a boundary creates a new cycle as sigma + whatever whose boundary eliminated dsigma
           cycles(coboundary.leadingCell.get) = coboundary
           cyclesBornBy(coboundary.leadingCell.get) = sigma
@@ -123,8 +123,8 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
           coboundaries(dsigmaReduced.leadingCell.get) = coboundary
 
           val (_, cycleBasis) = reduceBy(dsigmaReduced, cycles)
-          val representativeCycle: ChainElement[Simplex, CoefficientT] = cycleBasis.leadingCell match {
-            case None       => ChainElement()
+          val representativeCycle: Chain[Simplex, CoefficientT] = cycleBasis.leadingCell match {
+            case None       => Chain()
             case Some(cell) => cycles(cell)
           }
           cycleBasis.leadingCell match {
@@ -150,7 +150,7 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional]()
         advanceOne()
 
     def advanceAll(): Unit =
-      while(simplexIterator.hasNext)
+      while (simplexIterator.hasNext)
         advanceOne()
 
   }
