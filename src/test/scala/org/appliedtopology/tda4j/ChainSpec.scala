@@ -81,7 +81,7 @@ class ChainSpec extends mutable.Specification {
       def e1 = {
         val chain = z1
         val expectedResult = ChainElement(Simplex(1, 2, 3))
-        val result = 2 *> chain
+        val result = 2 |*| chain
 
         result must beEqualTo(expectedResult)
       }
@@ -139,12 +139,12 @@ class ChainSpec extends mutable.Specification {
   "The `Chain` type should be comfortable to write expressions with" >> {
     val z1 = ChainElement(s(1, 2, 3))
     val z2: ChainElement[Simplex, Double] = s(1, 2) - s(1, 3) + s(2, 3)
-    val z3 = 1.0 *> s(1, 2, 5)
+    val z3 = 1.0 |*| s(1, 2, 5)
     val z4: ChainElement[Simplex, Double] = Simplex(1, 4, 8) <* 1.0
     val z5: ChainElement[Simplex, Double] = -s(1, 2) + s(1, 4) - s(2, 3)
     val z6: ChainElement[Simplex, Double] = s(1, 2) + s(2, 3) - s(1, 3)
     val z7: ChainElement[Simplex, Double] =
-      s(1, 2) - s(1, 3) + s(2, 3) + 0.0 *> s(3, 4)
+      s(1, 2) - s(1, 3) + s(2, 3) + (0.0 |*| s(3, 4))
 
     z1 must haveClass[ChainElement[Simplex, Double]]
     z2 must beEqualTo(z6)
@@ -199,7 +199,7 @@ class HeapChainSpec extends mutable.Specification {
       given Conversion[Simplex, HeapChain[Simplex, Double]] = HeapChain.apply
       given rm: RingModule[HeapChain[Simplex, Double], Double] = HeapChainOps()
       import rm.{given, *}
-      val z1: HeapChain[Simplex, Double] = 1.0 ⊠ s(1, 2) + (s(1, 3).mul(2.0)) - 1.0 *> s(2, 3) + (5.2.scale(s(1, 4)))
+      val z1: HeapChain[Simplex, Double] = 1.0 ⊠ s(1, 2) + (s(1, 3).mul(2.0)) - (1.0 |*| s(2, 3)) + (5.2.scale(s(1, 4)))
       val z2: HeapChain[Simplex, Double] = 1.0 ⊠ s(1, 2) + 1.0 ⊠ s(2, 3)
       val z3: HeapChain[Simplex, Double] = z2 + (-1.0 ⊠ z2)
 

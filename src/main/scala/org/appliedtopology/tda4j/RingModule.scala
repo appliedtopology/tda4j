@@ -35,7 +35,7 @@ trait RingModule[T, R] {
 
   extension (r: R) {
     @targetName("scalarMultiplyLeft")
-    def *>(t: T): T = rmod.scale(r, t)
+    def |*|(t: T): T = rmod.scale(r, t)
     @targetName("scalarMultiplyLeft2")
     def ⊠(t: T): T = rmod.scale(r, t) // unicode ⊠ for boxed times
     @targetName("infixScale")

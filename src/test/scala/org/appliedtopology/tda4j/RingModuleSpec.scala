@@ -59,7 +59,7 @@ class RingModuleSpec extends mutable.Specification with ScalaCheck {
   "scalar left-multiplication should work" >> {
     AsResult {
       prop { (x: Int, y: Int, r: Int) =>
-        r *> (x, y) should be_==(x * r, y * r)
+        (r |*| (x, y)) should be_==(x * r, y * r)
       }
     }
   }
