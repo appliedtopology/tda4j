@@ -373,7 +373,7 @@ object LazyStratifiedVietorisRips {
         .combinations(2)
         .toVector
         .filter { xys =>
-          val List(x,y) = xys; metricSpace.distance(x,y) <= maxFVal
+          val List(x, y) = xys; metricSpace.distance(x, y) <= maxFVal
         }
         .sortBy { xys =>
           val List(x, y) = xys; metricSpace.distance(x, y)

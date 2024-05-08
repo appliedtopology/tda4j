@@ -29,8 +29,10 @@ trait SimplexStream[VertexT: Ordering, FiltrationT: Ordering]
 }
 
 object SimplexStream {
-  def from[VertexT:Ordering](stream: Seq[AbstractSimplex[VertexT]], metricSpace: FiniteMetricSpace[VertexT]):
-    SimplexStream[VertexT,Double] = new SimplexStream[VertexT,Double] {
+  def from[VertexT: Ordering](
+    stream: Seq[AbstractSimplex[VertexT]],
+    metricSpace: FiniteMetricSpace[VertexT]
+  ): SimplexStream[VertexT, Double] = new SimplexStream[VertexT, Double] {
 
     override def filtrationValue: PartialFunction[AbstractSimplex[VertexT], Double] =
       FiniteMetricSpace.MaximumDistanceFiltrationValue[VertexT](metricSpace)(using summon[Ordering[VertexT]])

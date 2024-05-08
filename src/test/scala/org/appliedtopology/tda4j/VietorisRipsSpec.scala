@@ -2,7 +2,7 @@ package org.appliedtopology.tda4j
 
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
-import org.specs2.{ScalaCheck, Specification, mutable as s2mutable}
+import org.specs2.{mutable as s2mutable, ScalaCheck, Specification}
 import org.specs2.specification.core.Fragment
 import org.specs2.execute.Result
 
@@ -11,11 +11,11 @@ import scala.collection.mutable
 import scala.math.{cos, sin}
 import scala.reflect.ClassTag
 
-def matrixGen[T:ClassTag](g: Gen[T], dimension: Gen[Int], size: Gen[Int]): Gen[Array[Array[T]]] =
+def matrixGen[T: ClassTag](g: Gen[T], dimension: Gen[Int], size: Gen[Int]): Gen[Array[Array[T]]] =
   for
     dim <- dimension
     sz <- size
-    values <- Gen.listOfN(dim*sz, g)
+    values <- Gen.listOfN(dim * sz, g)
   yield values.toArray.grouped(dim).toArray
 
 class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck {
@@ -75,7 +75,7 @@ class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck {
       CliqueFinder.simplexOrdering(metricSpace)
     val lazyStream: LazyList[AbstractSimplex[Int]] =
       LazyVietorisRips[Int](metricSpace, 0.4, maxD)
-    val strictStream: SimplexStream[Int,Double] =
+    val strictStream: SimplexStream[Int, Double] =
       VietorisRips[Int](metricSpace, 0.4, maxD, ZomorodianIncremental[Int]())
 
     val lazy100 = lazyStream.take(100).toList
@@ -85,10 +85,7 @@ class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck {
   }
 
   s"Lazy Stratified Vietoris-Rips streams should" >> {
-    forAll(matrixGen[Double](
-      Gen.double,
-      Gen.chooseNum(1,10),
-      Gen.chooseNum(5,15))) { (pts : Array[Array[Double]]) =>
+    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(1, 10), Gen.chooseNum(5, 15))) { (pts: Array[Array[Double]]) =>
       val metricSpace: FiniteMetricSpace[Int] = EuclideanMetricSpace(pts.toSeq.map(_.toSeq))
 
       given Ordering[AbstractSimplex[Int]] =
@@ -98,17 +95,12 @@ class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck {
         FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 
       val lazyStreams: Array[LazyList[AbstractSimplex[Int]]] =
-        LazyStratifiedVietorisRips(
-          metricSpace,
-          0.4,
-          2)
+        LazyStratifiedVietorisRips(metricSpace, 0.4, 2)
 
-      lazyStreams.toSeq must contain((lz:LazyList[AbstractSimplex[Int]]) =>
+      lazyStreams.toSeq must contain((lz: LazyList[AbstractSimplex[Int]]) =>
         "must be in filtration order" ==>
           (lz.iterator.map(filtrationValue).toSeq must beSorted)
       )
     }
   }
 }
-
-

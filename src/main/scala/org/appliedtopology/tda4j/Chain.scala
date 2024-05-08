@@ -56,7 +56,7 @@ class Chain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional] private[td
     val cmp = entries.ord
     entries.headOption match {
       case None => ()
-      case Some(_) => {
+      case Some(_) =>
         val head = entries.dequeue
         val cell = head._1
         var acc = head._2
@@ -68,42 +68,39 @@ class Chain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional] private[td
           collapseHead()
         else
           entries.enqueue((cell, acc))
-      }
     }
   }
 
-  def collapseAll()(using fr: Fractional[CoefficientT]): Unit = {
+  def collapseAll()(using fr: Fractional[CoefficientT]): Unit =
     entries = mutable.PriorityQueue.from(
       entries
-        .groupMapReduce
-        (_._1) // group by cell
-        {(x) => x._2} // extract coefficient
+        .groupMapReduce(_._1) // group by cell
+        (x => x._2) // extract coefficient
         (fr.plus) // sum the coefficient parts
-        .filter {(c,x) => x != fr.zero}
+        .filter((c, x) => x != fr.zero)
         .iterator
-        .toSeq)
-  }
-  
+        .toSeq
+    )
+
   def isZero(): Boolean = {
     collapseHead()
     entries.isEmpty || (entries.head._2 == summon[Fractional[CoefficientT]].zero)
   }
-  
-  def items: Seq[(CellT,CoefficientT)] = entries.toSeq
+
+  def items: Seq[(CellT, CoefficientT)] = entries.toSeq
 
   /** WARNING - this is potentially an expensive operation
-   */
+    */
   override def equals(obj: Any): Boolean = obj match {
-    case other : Chain[CellT,CoefficientT] => {
+    case other: Chain[CellT, CoefficientT] =>
       collapseAll()
       other.collapseAll()
       entries.iterator.toList.sorted(using entries.ord) == other.entries.iterator.toList.sorted(using other.entries.ord)
-    }
     case _ => false
   }
 
   override def toString: String =
-    entries.iterator.map{(c,x) => s"${x.toString}⊠${c.toString}"}.mkString(" + ")
+    entries.iterator.map((c, x) => s"${x.toString}⊠${c.toString}").mkString(" + ")
 }
 
 object Chain {

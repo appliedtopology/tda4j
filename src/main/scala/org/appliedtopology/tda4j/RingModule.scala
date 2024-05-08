@@ -15,12 +15,12 @@ import scala.annotation.targetName
 trait RingModule[T, R] {
   rmod =>
   def zero: T
-  def isZero(t: T): Boolean = (t == zero)
+  def isZero(t: T): Boolean = t == zero
   def plus(x: T, y: T): T
   def minus(x: T, y: T): T = plus(x, negate(y))
   def negate(x: T): T = minus(zero, x)
   def scale(x: R, y: T): T
-  
+
   extension (t: T) {
     @targetName("add")
     def +(rhs: T): T = plus(t, rhs)

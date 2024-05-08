@@ -32,9 +32,11 @@ class APISpec extends mutable.Specification {
     val lazyHomology = persistentHomology(
       SimplexStream.from(
         LazyVietorisRips(
-        metricSpace,
-        1.5, 4
-        ), metricSpace
+          metricSpace,
+          1.5,
+          4
+        ),
+        metricSpace
       )
     )
 
