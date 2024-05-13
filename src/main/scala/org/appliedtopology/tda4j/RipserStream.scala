@@ -117,7 +117,7 @@ class RipserStreamSparse(
 ) extends SimplexStream[Int, Double] {
   given sc: SimplexContext[Int]()
   import sc.*
-
+    
   // given Ordering[Simplex] = Ordering.by(filtrationValue).orElse(sc.given_Ordering_Simplex)
   val doubleSimplexPairOrdering: Ordering[(Double, Simplex)] = { (x: (Double, Simplex), y: (Double, Simplex)) =>
     Ordering.Double.TotalOrdering.compare(x._1, y._1) match {
@@ -212,7 +212,6 @@ abstract class RipserStreamBase(
 ) extends SimplexStream[Int, Double] {
   given sc: SimplexContext[Int]()
   import sc.*
-
   def retain(index: Int, size: Int): Boolean = true
   def expand(filtrationValue: Double, index: Int, size: Int): Seq[Simplex] =
     Seq(si(index, size))

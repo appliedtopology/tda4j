@@ -89,7 +89,7 @@ object CliqueFinder {
   def simplexOrdering[VertexT: Ordering](
     metricSpace: FiniteMetricSpace[VertexT]
   ): Ordering[AbstractSimplex[VertexT]] =
-    FilteredSimplexOrdering[VertexT, Double](new Filtration[VertexT, Double] {
+    FilteredSimplexOrdering[VertexT, Double](new DoubleFiltration[AbstractSimplex[VertexT]] {
       def filtrationValue: PartialFunction[AbstractSimplex[VertexT], Double] =
         new FiniteMetricSpace.MaximumDistanceFiltrationValue[VertexT](
           metricSpace
@@ -193,7 +193,7 @@ class BronKerbosch[VertexT: Ordering] extends CliqueFinder[VertexT] {
     val filtration =
       new MaximumDistanceFiltrationValue[VertexT](metricSpace)
     val simplexOrdering =
-      FilteredSimplexOrdering[VertexT, Double](new Filtration[VertexT, Double] {
+      FilteredSimplexOrdering[VertexT, Double](new DoubleFiltration[AbstractSimplex[VertexT]] {
         def filtrationValue: PartialFunction[AbstractSimplex[VertexT], Double] =
           filtration
       })

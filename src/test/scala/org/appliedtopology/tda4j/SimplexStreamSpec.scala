@@ -12,7 +12,7 @@ class SimplexStreamSpec extends mutable.Specification {
   import sc.*
 
   val esb: ExplicitStreamBuilder[Int, Double] =
-    ExplicitStreamBuilder[Int, Double]()
+    ExplicitStreamBuilder[Int, Double]
 
   val simplexSeq: Seq[(Double, Simplex)] = Seq(
     (0.0, Simplex(1)),

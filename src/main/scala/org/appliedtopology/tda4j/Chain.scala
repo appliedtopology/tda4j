@@ -33,6 +33,7 @@ trait Cell[CellT <: Cell[CellT]] {
     */
 
   def boundary[CoefficientT: Fractional]: Chain[CellT, CoefficientT]
+  def dim: Int
 }
 
 /*

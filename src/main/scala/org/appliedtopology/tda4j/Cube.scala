@@ -7,11 +7,13 @@ case class DegenerateInterval(n: Int) extends ElementaryInterval {
   override def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] =
     Chain()
   override def toString: String = s"[$n,$n]"
+  val dim = 0
 }
 case class FullInterval(n: Int) extends ElementaryInterval {
   override def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] =
     ChainOps[ElementaryInterval, CoefficientT]().minus(Chain(DegenerateInterval(n + 1)), Chain(DegenerateInterval(n)))
   override def toString: String = s"[$n,${n + 1}]"
+  val dim = 1
 }
 
 import Ordering.Implicits.seqOrdering
@@ -79,4 +81,33 @@ case class ElementaryCube(val intervals: List[ElementaryInterval]) extends Cell[
 
   override def toString: String =
     s"Cubical[${intervals.map(_.toString).mkString("x")}]"
+}
+
+trait CubeStream[FiltrationT : Ordering]
+  extends Filtration[ElementaryCube,FiltrationT]
+  with IterableOnce[ElementaryCube]
+
+
+
+object Cubical {
+  def from[T:Filterable:Ordering](grid: Array[Array[T]]): CubeStream[T] = new CubeStream[T] {
+    val largest = summon[Filterable[T]].largest
+    val smallest =  summon[Filterable[T]].smallest
+
+    val cubes : Map[ElementaryCube,T] = Map.from((
+      for
+        (row,i) <- grid.zipWithIndex
+        (pixel,j) <- row.zipWithIndex
+        firstInterval <- Seq(FullInterval(i), DegenerateInterval(i))
+        secondInterval <- Seq(FullInterval(j), DegenerateInterval(j))
+      yield
+        ElementaryCube(List(firstInterval,secondInterval)) -> pixel
+    ).toList.sorted.reverse) // reversed so that the last element saved for any one cube is the one with lowest T-value
+
+    override def filtrationValue: PartialFunction[ElementaryCube, T] =
+      cubes.apply
+
+    override def iterator: Iterator[ElementaryCube] =
+      cubes.keys.toList.sorted(using Ordering.by(cubes.apply).orElseBy(_.dim)(using ord=Ordering.Int.reverse)).iterator
+  }
 }

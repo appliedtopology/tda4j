@@ -6,7 +6,7 @@ class APISpec extends mutable.Specification {
   """Test case class for developing the non-Scala facing API functionality
     |and the non-expert API functionality""".stripMargin
 
-  given ctx: TDAContext[Int, Double]()
+  given ctx: TDAContext[Int, Double, Double]()
   import ctx.{given, *}
 
   "we should be able to create and compute with chains" >> {

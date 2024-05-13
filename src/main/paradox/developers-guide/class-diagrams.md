@@ -75,14 +75,14 @@ class `IterableOnce[T]` {
 iterator : Iterator[T]
 knownSize : Int
 }
-class `Filtration[VertexT,FiltrationT]` {
+class `SimplexFiltration[VertexT,FiltrationT]` {
 filtrationValue(simplex: AbstractSimplex[VertexT]) FiltrationT
 }
 class `SimplexStream[VertexT,FiltrationT]` {
 <<extends Filtration[VertexT,FiltrationT], IterableOnce[AbstractSimplex[VertexT]]>>
 }
 `IterableOnce[T]` --> `SimplexStream[VertexT,FiltrationT]` : inherits
-`Filtration[VertexT,FiltrationT]` --> `SimplexStream[VertexT,FiltrationT]` : inherits
+`SimplexFiltration[VertexT,FiltrationT]` --> `SimplexStream[VertexT,FiltrationT]` : inherits
 `AbstractSimplex[VertexT]` "*" o-- "1" `SimplexStream[VertexT,FiltrationT]` : contains
 
 class `ExplicitStream[VertexT,FiltrationT]` {
