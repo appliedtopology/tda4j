@@ -101,7 +101,8 @@ class Chain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional] private[td
   }
 
   override def toString: String =
-    entries.iterator.map((c, x) => s"${x.toString}⊠${c.toString}").mkString(" + ")
+    if (entries.iterator.isEmpty) "Chain()"
+    else entries.iterator.map((c, x) => s"${x.toString}⊠${c.toString}").mkString(" + ")
 }
 
 object Chain {

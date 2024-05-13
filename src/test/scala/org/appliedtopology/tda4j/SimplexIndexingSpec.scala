@@ -6,9 +6,6 @@ import org.specs2.specification.core.Fragment
 class SimplexIndexingSpec extends Specification {
   "Testing the simplex indexing code against Ulrich Bauer's paper examples" >> {
 
-    given sc: SimplexContext[Int]()
-    import sc.*
-
     "Error Case" >> {
       val si: SimplexIndexing = SimplexIndexing(15)
       si(72, 5) must be_==(s(8, 6, 3, 1, 0))
@@ -81,9 +78,6 @@ class SimplexIndexingSpec extends Specification {
 
 class RipserStreamSpec extends Specification {
   "RipserStream interface testing" >> {
-    given sc: SimplexContext[Int]()
-    import sc.*
-
     val hc2: HyperCube = HyperCube(2)
 
     val rs: RipserStream = RipserStream(hc2, 5.0, 5)
@@ -153,11 +147,11 @@ class RipserStreamSpec extends Specification {
     val rs = RipserStream(ms, ms.minimumEnclosingRadius, 5)
 
     "[0,1,2] has zero pivot cofacet [0,1,2,3]" ==>
-      (rs.zeroPivotCofacet(rs.si(rs.sc.s(0, 1, 2)), 3)
-        must beSome(rs.si(rs.sc.s(0, 1, 2, 3))))
+      (rs.zeroPivotCofacet(rs.si(∆(0, 1, 2)), 3)
+        must beSome(rs.si(∆(0, 1, 2, 3))))
 
     "[0,1,3] has zero pivot facet [0,3]" ==>
-      (rs.zeroPivotFacet(rs.si(rs.sc.s(0, 1, 3)), 3)
-        must beSome(rs.si(rs.sc.s(0, 3))))
+      (rs.zeroPivotFacet(rs.si(∆(0, 1, 3)), 3)
+        must beSome(rs.si(∆(0, 3))))
   }
 }

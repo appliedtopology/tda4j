@@ -11,18 +11,15 @@ class ChainSpec extends mutable.Specification {
   """This is the specification for testing the Chain implementation.
     |""".stripMargin.txt
 
-  given sc: SimplexContext[Int]()
-  import sc.*
-
-  given Conversion[Simplex, Chain[Simplex, Double]] =
+  given Conversion[Simplex[Int], Chain[Simplex[Int], Double]] =
     Chain.apply
 
   given Fractional[Double] = math.Numeric.DoubleIsFractional
 
   given Ordering[Int] = math.Ordering.Int
 
-  given rm: RingModule[Chain[Simplex, Double], Double] =
-    ChainOps[Simplex, Double]()
+  given rm: RingModule[Chain[Simplex[Int], Double], Double] =
+    ChainOps[Simplex[Int], Double]()
   import rm.*
 
   "The `Chain` type should" >> {
@@ -56,10 +53,10 @@ class ChainSpec extends mutable.Specification {
     // val z6 = Chain(Simplex(1, 2, 6, 7))
 
     "be the return type of Chain applied to a single simplex" >> {
-      z1 must haveClass[Chain[Simplex, Double]]
+      z1 must haveClass[Chain[Simplex[Int], Double]]
     }
     "be the return type of Chain applied to several simplex/coefficient pairs" >> {
-      z2 must haveClass[Chain[Simplex, Double]]
+      z2 must haveClass[Chain[Simplex[Int], Double]]
     }
     "maintain it's equality when its component simplex-coefficient pairs are permuted" >> {
       z2 must beEqualTo(z6)
@@ -138,15 +135,15 @@ class ChainSpec extends mutable.Specification {
 
   "The `Chain` type should be comfortable to write expressions with" >> {
     val z1 = Chain(s(1, 2, 3))
-    val z2: Chain[Simplex, Double] = s(1, 2) - s(1, 3) + s(2, 3)
+    val z2: Chain[Simplex[Int], Double] = s(1, 2) - s(1, 3) + s(2, 3)
     val z3 = 1.0 |*| s(1, 2, 5)
-    val z4: Chain[Simplex, Double] = Simplex(1, 4, 8) <* 1.0
-    val z5: Chain[Simplex, Double] = -s(1, 2) + s(1, 4) - s(2, 3)
-    val z6: Chain[Simplex, Double] = s(1, 2) + s(2, 3) - s(1, 3)
-    val z7: Chain[Simplex, Double] =
+    val z4: Chain[Simplex[Int], Double] = Simplex(1, 4, 8) <* 1.0
+    val z5: Chain[Simplex[Int], Double] = -s(1, 2) + s(1, 4) - s(2, 3)
+    val z6: Chain[Simplex[Int], Double] = s(1, 2) + s(2, 3) - s(1, 3)
+    val z7: Chain[Simplex[Int], Double] =
       s(1, 2) - s(1, 3) + s(2, 3) + (0.0 |*| s(3, 4))
 
-    z1 must haveClass[Chain[Simplex, Double]]
+    z1 must haveClass[Chain[Simplex[Int], Double]]
     z2 must beEqualTo(z6)
     z2 must beEqualTo(z7)
 
@@ -165,42 +162,40 @@ class ChainSpec extends mutable.Specification {
 
     z1 + z2 must beEqualTo(s(1, 2, 3) + s(1, 2) - s(1, 3) + s(2, 3))
     z2 - z6 must beEqualTo(
-      summon[RingModule[Chain[Simplex, Double], Double]].zero
+      summon[RingModule[Chain[Simplex[Int], Double], Double]].zero
     )
   }
 }
 
 class HeapChainSpec extends mutable.Specification {
-  given sc: SimplexContext[Int]()
-  import sc.{given, *}
-
   "Heap-based chains should" >> {
     "be created from a sequence" >> {
       val elts = List((s(1, 2), 1.0), (s(1, 3), -1.0))
-      val hc = Chain.from[Simplex, Double](elts)
+      val hc = Chain.from[Simplex[Int], Double](elts)
       "contains the right things" ==>
         (hc.items.toList must containTheSameElementsAs(elts))
     }
     "be created from varargs" >> {
       val elts = Seq((s(1, 2), 1.0), (s(1, 3), -1.0))
-      val hc = Chain[Simplex, Double](elts: _*)
+      val hc = Chain[Simplex[Int], Double](elts: _*)
       "contains the right things" ==>
         (hc.items.toList must containTheSameElementsAs(elts))
     }
     "be created from a single simplex" >> {
-      val hc = Chain[Simplex, Double](s(1, 2, 3))
+      val hc = Chain[Simplex[Int], Double](s(1, 2, 3))
       "contains the right things" ==>
         (hc.items.toList must containTheSameElementsAs(
           Seq((s(1, 2, 3), 1.0))
         ))
     }
     "be possible to add together" >> {
-      given Conversion[Simplex, Chain[Simplex, Double]] = Chain.apply
-      given rm: RingModule[Chain[Simplex, Double], Double] = ChainOps()
+      given Conversion[Simplex[Int], Chain[Simplex[Int], Double]] = Chain.apply
+      given rm: RingModule[Chain[Simplex[Int], Double], Double] = ChainOps()
       import rm.{given, *}
-      val z1: Chain[Simplex, Double] = 1.0 ⊠ s(1, 2) + (s(1, 3).mul(2.0)) - (1.0 |*| s(2, 3)) + (5.2.scale(s(1, 4)))
-      val z2: Chain[Simplex, Double] = 1.0 ⊠ s(1, 2) + 1.0 ⊠ s(2, 3)
-      val z3: Chain[Simplex, Double] = z2 + (-1.0 ⊠ z2)
+      val z1: Chain[Simplex[Int], Double] =
+        1.0 ⊠ s(1, 2) + (s(1, 3).mul(2.0)) - (1.0 |*| s(2, 3)) + (5.2.scale(s(1, 4)))
+      val z2: Chain[Simplex[Int], Double] = 1.0 ⊠ s(1, 2) + 1.0 ⊠ s(2, 3)
+      val z3: Chain[Simplex[Int], Double] = z2 + (-1.0 ⊠ z2)
 
       "subtracts to zero" ==>
         (z3.isZero() must beTrue)

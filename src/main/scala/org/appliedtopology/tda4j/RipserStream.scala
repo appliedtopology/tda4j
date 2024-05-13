@@ -14,8 +14,6 @@ def binomial(n: Int, k: Int): Int =
   else 0
 
 class SimplexIndexing(val vertexCount: Int) {
-  given sc: SimplexContext[Int]()
-  import sc.*
 
   /** Table of binomial coefficients for fast lookups.
     *
@@ -29,7 +27,7 @@ class SimplexIndexing(val vertexCount: Int) {
   }
 
   @tailrec
-  final def apply(n: Int, d: Int, upperAccum: Set[Int] = Set()): Simplex = {
+  final def apply(n: Int, d: Int, upperAccum: Set[Int] = Set()): Simplex[Int] = {
     if (d < 0) return Simplex.from(upperAccum)
     if (n <= 0) return Simplex.from(upperAccum ++ (0 until d).toSet)
     if (d == 0) return Simplex.from(upperAccum + n)
@@ -41,9 +39,9 @@ class SimplexIndexing(val vertexCount: Int) {
     apply(n - binomialTable(d)(id), d - 1, upperAccum + (id + d))
   }
 
-  def cofacetIterator(simplex: Simplex): Iterator[Int] =
+  def cofacetIterator(simplex: Simplex[Int]): Iterator[Int] =
     cofacetIterator(apply(simplex), simplex.size, true)
-  def topCofacetIterator(simplex: Simplex): Iterator[Int] =
+  def topCofacetIterator(simplex: Simplex[Int]): Iterator[Int] =
     cofacetIterator(apply(simplex), simplex.size, false)
   def cofacetIterator(
     index: Int,
@@ -53,7 +51,7 @@ class SimplexIndexing(val vertexCount: Int) {
     Iterator
       .unfold(
         (apply(index, size), index, 0, size, vertexCount - 1): Tuple5[
-          Simplex,
+          Simplex[Int],
           Int,
           Int,
           Int,
@@ -90,7 +88,7 @@ class SimplexIndexing(val vertexCount: Int) {
       }
     }
 
-  def apply(simplex: Simplex): Int =
+  def apply(simplex: Simplex[Int]): Int =
     simplex.toSeq.sorted.reverse.zipWithIndex.map { (v, i) =>
       binomial(v, simplex.size - i)
     }.sum
@@ -99,14 +97,11 @@ class SimplexIndexing(val vertexCount: Int) {
 class RipserCliqueFinder extends CliqueFinder[Int] {
   override val className: String = "RipserCliqueFinder"
 
-  given sc: SimplexContext[Int]()
-  import sc.*
-
   override def apply(
     metricSpace: FiniteMetricSpace[Int],
     maxFiltrationValue: Double,
     maxDimension: Int
-  ): Seq[Simplex] =
+  ): Seq[Simplex[Int]] =
     RipserStream(metricSpace, maxFiltrationValue, maxDimension).iterator.toSeq
 }
 
@@ -115,22 +110,20 @@ class RipserStreamSparse(
   val maxFiltrationValue: Double,
   val maxDimension: Int = 2
 ) extends SimplexStream[Int, Double] {
-  given sc: SimplexContext[Int]()
-  import sc.*
-    
   // given Ordering[Simplex] = Ordering.by(filtrationValue).orElse(sc.given_Ordering_Simplex)
-  val doubleSimplexPairOrdering: Ordering[(Double, Simplex)] = { (x: (Double, Simplex), y: (Double, Simplex)) =>
-    Ordering.Double.TotalOrdering.compare(x._1, y._1) match {
-      case 0      => sc.simplexOrdering.compare(x._2, y._2)
-      case c: Int => c
-    }
+  val doubleSimplexPairOrdering: Ordering[(Double, Simplex[Int])] = {
+    (x: (Double, Simplex[Int]), y: (Double, Simplex[Int])) =>
+      Ordering.Double.TotalOrdering.compare(x._1, y._1) match {
+        case 0      => simplexOrdering[Int].compare(x._2, y._2)
+        case c: Int => c
+      }
   }
 
-  given Ordering[(Double, Simplex)] = doubleSimplexPairOrdering
+  given Ordering[(Double, Simplex[Int])] = doubleSimplexPairOrdering
 
   val si = SimplexIndexing(metricSpace.size)
 
-  override def filtrationValue: PartialFunction[AbstractSimplex[Int], Double] =
+  override def filtrationValue: PartialFunction[Simplex[Int], Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 
   def zeroPivotCofacet(index: Int, size: Int): Option[Int] = (for {
@@ -161,9 +154,9 @@ class RipserStreamSparse(
 
   lazy val kruskal = Kruskal(metricSpace)
 
-  def zeroPersistence[CoefficientT](): List[PersistenceBar[Double, Chain[Simplex, CoefficientT]]] =
+  def zeroPersistence[CoefficientT](): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     kruskal.mstIterator.map { (b, d) =>
-      PersistenceBar[Double, Chain[Simplex, CoefficientT]](
+      PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]](
         0,
         ClosedEndpoint(0.0),
         OpenEndpoint(metricSpace.distance(b, d))
@@ -171,9 +164,9 @@ class RipserStreamSparse(
     }.toList
 
   var simplexCacheContains: Option[Int] = None
-  val simplexCache: mutable.SortedSet[(Double, Simplex)] = mutable.SortedSet()
+  val simplexCache: mutable.SortedSet[(Double, Simplex[Int])] = mutable.SortedSet()
 
-  def iteratorByDimension(d: Int): Iterator[Simplex] = d match {
+  def iteratorByDimension(d: Int): Iterator[Simplex[Int]] = d match {
     case 0 => metricSpace.elements.iterator.map(Simplex(_))
     case 1 => kruskal.cyclesIterator.map((i, j) => Simplex(i, j))
     case dim: Int =>
@@ -190,7 +183,7 @@ class RipserStreamSparse(
           nextVertex <- metricSpace.elements
             .filter(!previousSimplex.contains(_))
             .filter(nV => previousSimplex.map(oV => metricSpace.distance(oV, nV)).max <= fV)
-          simplex: Simplex <- List(previousSimplex + nextVertex)
+          simplex: Simplex[Int] <- List(previousSimplex + nextVertex)
           if zeroApparentCofacet(si(simplex), simplex.size).isEmpty
           if zeroApparentFacet(si(simplex), simplex.size).isEmpty
         // also check if this is cleared?
@@ -198,7 +191,7 @@ class RipserStreamSparse(
       }.iterator
   }
 
-  override def iterator: Iterator[Simplex] =
+  override def iterator: Iterator[Simplex[Int]] =
     for
       d <- (0 until maxDimension).iterator
       s <- iteratorByDimension(d)
@@ -210,21 +203,19 @@ abstract class RipserStreamBase(
   val maxFiltrationValue: Double = Double.PositiveInfinity,
   val maxDimension: Int = 2
 ) extends SimplexStream[Int, Double] {
-  given sc: SimplexContext[Int]()
-  import sc.*
   def retain(index: Int, size: Int): Boolean = true
-  def expand(filtrationValue: Double, index: Int, size: Int): Seq[Simplex] =
+  def expand(filtrationValue: Double, index: Int, size: Int): Seq[Simplex[Int]] =
     Seq(si(index, size))
 
   val si: SimplexIndexing = SimplexIndexing(metricSpace.size)
 
-  override def iterator: Iterator[AbstractSimplex[Int]] =
+  override def iterator: Iterator[Simplex[Int]] =
     for
       d <- (0 to maxDimension).iterator
       s <- iteratorByDimension(d)
     yield s
 
-  def iteratorByDimension(d: Int): Iterator[AbstractSimplex[Int]] = if (d > metricSpace.size) Iterator()
+  def iteratorByDimension(d: Int): Iterator[Simplex[Int]] = if (d > metricSpace.size) Iterator()
   else {
     (0 until binomial(metricSpace.size, d + 1)).iterator
       .filter(i => retain(i, d + 1))
@@ -235,7 +226,7 @@ abstract class RipserStreamBase(
       .iterator
   }
 
-  override def filtrationValue: PartialFunction[AbstractSimplex[Int], Double] =
+  override def filtrationValue: PartialFunction[Simplex[Int], Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 
   def zeroPivotCofacet(index: Int, size: Int): Option[Int] = (for {
@@ -264,9 +255,9 @@ abstract class RipserStreamBase(
       if facet == index
     } yield cofacet
 
-  def zeroPersistence[CoefficientT](): List[PersistenceBar[Double, Chain[Simplex, CoefficientT]]] =
+  def zeroPersistence[CoefficientT](): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     Kruskal(metricSpace).mstIterator.map { (b, d) =>
-      PersistenceBar[Double, Chain[Simplex, CoefficientT]](
+      PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]](
         0,
         ClosedEndpoint(0.0),
         OpenEndpoint(metricSpace.distance(b, d))
@@ -302,26 +293,23 @@ class RipserStreamOf[VertexT: Ordering](
   protected val rs: RipserStream =
     RipserStream(intMetricSpace, maxFiltrationValue, maxDimension)
 
-  override def iterator: Iterator[AbstractSimplex[VertexT]] =
+  override def iterator: Iterator[Simplex[VertexT]] =
     rs.iterator.map(s => s.map(v => vertices(v)))
 
-  override def filtrationValue: PartialFunction[AbstractSimplex[VertexT], Double] =
+  override def filtrationValue: PartialFunction[Simplex[VertexT], Double] =
     rs.filtrationValue.compose(s => s.map(v => vertices.indexOf(v)))
 }
 
 class SymmetricRipserCliqueFinder[KeyT](
   val symmetryGroup: SymmetryGroup[KeyT, Int]
 ) extends CliqueFinder[Int] {
-  given sc: SimplexContext[Int]()
-  import sc.*
-
   override val className: String = "SymmetricRipserCliqueFinder"
 
   override def apply(
     metricSpace: FiniteMetricSpace[Int],
     maxFiltrationValue: Double,
     maxDimension: Int
-  ): Seq[Simplex] =
+  ): Seq[Simplex[Int]] =
     SymmetricRipserStream(
       metricSpace,
       maxFiltrationValue,
@@ -336,8 +324,6 @@ class SymmetricRipserStream[KeyT](
   maxDimension: Int = 2,
   val symmetryGroup: SymmetryGroup[KeyT, Int]
 ) extends RipserStream(metricSpace, maxFiltrationValue, maxDimension) {
-  import sc.*
-
   override def retain(index: Int, size: Int): Boolean =
     symmetryGroup.isRepresentative(si(index, size))
 
@@ -345,7 +331,7 @@ class SymmetricRipserStream[KeyT](
     filtrationValue: Double,
     index: Int,
     size: Int
-  ): Seq[Simplex] =
+  ): Seq[Simplex[Int]] =
     symmetryGroup.orbit(si(index, size)).toSeq
 }
 
@@ -359,7 +345,7 @@ class MaskedSymmetricRipserVR[KeyT: Ordering](
     metricSpace: FiniteMetricSpace[Int],
     maxFiltrationValue: Double,
     maxDimension: Int
-  ): Seq[AbstractSimplex[Int]] =
+  ): Seq[Simplex[Int]] =
     MaskedSymmetricRipserStream[KeyT](
       metricSpace,
       maxFiltrationValue,
@@ -374,8 +360,6 @@ class MaskedSymmetricRipserStream[KeyT](
   val maxDimension: Int,
   val symmetryGroup: SymmetryGroup[KeyT, Int]
 ) extends SimplexStream[Int, Double] {
-  given sc: SimplexContext[Int]()
-  import sc.*
   val si: SimplexIndexing = SimplexIndexing(metricSpace.size)
   val distances: Set[Double] = Set.from(
     for
@@ -384,15 +368,15 @@ class MaskedSymmetricRipserStream[KeyT](
     yield metricSpace.distance(x, y)
   )
 
-  override def iterator: Iterator[Simplex] =
+  override def iterator: Iterator[Simplex[Int]] =
     for
       d <- (0 to maxDimension).iterator
       s <- iteratorByDimension(d)
     yield s
 
-  def iteratorByDimension(d: Int): Iterator[Simplex] = if (d > metricSpace.size) Iterator()
+  def iteratorByDimension(d: Int): Iterator[Simplex[Int]] = if (d > metricSpace.size) Iterator()
   else {
-    val repmap: Map[Double, List[Simplex]] = List
+    val repmap: Map[Double, List[Simplex[Int]]] = List
       .from(
         for {
           i <- (0 until binomial(metricSpace.size, d + 1)).iterator
@@ -408,6 +392,6 @@ class MaskedSymmetricRipserStream[KeyT](
     } yield out
   }
 
-  override def filtrationValue: PartialFunction[Simplex, Double] =
+  override def filtrationValue: PartialFunction[Simplex[Int], Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 }

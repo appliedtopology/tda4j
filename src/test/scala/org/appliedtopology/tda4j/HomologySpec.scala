@@ -4,13 +4,14 @@ import org.specs2.mutable
 import org.specs2.ScalaCheck
 
 class HomologySpec extends mutable.Specification with ScalaCheck {
-  given shc: SimplicialHomologyContext[Int, Double, Double]()
-  import shc.{given, *}
 
   "Homology of a triangle" >> {
+    given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+    import shc.{*, given}
+
     val streamBuilder = ExplicitStreamBuilder[Int, Double]
-    streamBuilder.addAll(List(1, 2, 3).map(i => (0.0, s(i))))
-    streamBuilder.addAll(List((1.0, s(1, 2)), (2.0, s(1, 3)), (3.0, s(2, 3)), (4.0, s(1, 2, 3))))
+    streamBuilder.addAll(List(1, 2, 3).map(i => (0.0, ∆(i))))
+    streamBuilder.addAll(List((1.0, ∆(1, 2)), (2.0, ∆(1, 3)), (3.0, ∆(2, 3)), (4.0, ∆(1, 2, 3))))
     val stream = streamBuilder.result()
     val homology = persistentHomology(stream)
     homology.diagramAt(5.0) must containTheSameElementsAs(

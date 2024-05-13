@@ -17,8 +17,6 @@ class SymmetryGroupSpec extends mutable.Specification {
     |""".stripMargin
 
   val hc3s: HyperCubeSymmetry = HyperCubeSymmetry(3)
-  given sc: SimplexContext[Int]()
-  import sc.*
 
   "In the 3 bit Hyper Cube symmetry group" >> {
     "[0,1] is representative" >> {
@@ -48,11 +46,11 @@ class SymmetryGroupSpec extends mutable.Specification {
     hc3s
   )
 
-  val it: Iterator[Simplex] = el.iterator
+  val it: Iterator[Simplex[Int]] = el.iterator
 
-  val allsimplices: List[Simplex] = el.indices.map(el(_)).toList
-  val itallsimplices: ListBuffer[Simplex] =
-    collection.mutable.ListBuffer[Simplex]()
+  val allsimplices: List[Simplex[Int]] = el.indices.map(el(_)).toList
+  val itallsimplices: ListBuffer[Simplex[Int]] =
+    collection.mutable.ListBuffer[Simplex[Int]]()
 
   "ExpandList Iterator does not throw exception while it has content" >> {
     el.indices.foreach(_ => itallsimplices.append(it.next()))

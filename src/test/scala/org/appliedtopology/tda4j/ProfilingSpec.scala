@@ -24,7 +24,7 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
     ) {
       pp(s"Measuring ${vr.className}")
       var now: Long = System.currentTimeMillis()
-      val sstream: Seq[AbstractSimplex[Int]] =
+      val sstream: Seq[Simplex[Int]] =
         vr(symmetry.hypercube, maxFVal, maxDim)
       var duration: Long = System.currentTimeMillis() - now
       pp(s"${tag}\tInitialization: $duration ms")

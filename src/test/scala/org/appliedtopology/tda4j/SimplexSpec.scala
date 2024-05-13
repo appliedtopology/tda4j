@@ -18,20 +18,17 @@ A `Simplex` should
   be able to remove a vertex (and then not have that vertex) $eRemoveVertex
 """
 
-  given sc: SimplexContext[Int]()
-  import sc.Simplex
+  def s: Simplex[Int] = Simplex(1, 2, 3)
 
-  def s: Simplex = Simplex(1, 2, 3)
-
-  def sAdd4: Simplex = s.incl(4)
-  def sDel2: Simplex = s.excl(2)
+  def sAdd4: Simplex[Int] = s.incl(4)
+  def sDel2: Simplex[Int] = s.excl(2)
 
   def e1: Result = s.size must beGreaterThan[Int](0)
 
   given Fractional[Double] = Numeric.DoubleIsFractional
 
   def e2: Result = s.boundary must be_==(
-    Chain[Simplex, Double](
+    Chain[Simplex[Int], Double](
       Simplex(2, 3) -> 1.0,
       Simplex(1, 3) -> -1.0,
       Simplex(1, 2) -> 1.0
@@ -49,74 +46,63 @@ A `Simplex` should
 class SimplexTypeSpec extends mutable.Specification {
   "This is a specification for the type level interactions of the `Simplex` class".txt
 
-  given sc: SimplexContext[Int]()
-  import sc.Simplex
-
   "The `Simplex` type should" >> {
     val s = Simplex(1, 2, 3)
     val t = Simplex(2, 3, 4)
     "be the return type of the Simplex constructor" >> {
-      s must haveClass[Simplex]
+      s must haveClass[Simplex[Int]]
     }
     "be the return type of the result of adding a vertex" >> {
-      (s + 4) must haveClass[Simplex]
+      (s + 4) must haveClass[Simplex[Int]]
     }
     "be the return type of the result of removing a vertex" >> {
-      (s - 2) must haveClass[Simplex]
+      (s - 2) must haveClass[Simplex[Int]]
     }
     "be the return type of intersecting two simplices" >> {
-      (s & t) must haveClass[Simplex]
+      (s & t) must haveClass[Simplex[Int]]
     }
     "be the return type of empty" >> {
-      s.empty must haveClass[Simplex]
+      s.empty must haveClass[Simplex[Int]]
     }
     "be the return type of filter" >> {
-      (s.filter(_ % 2 != 0)) must haveClass[Simplex]
+      (s.filter(_ % 2 != 0)) must haveClass[Simplex[Int]]
     }
     "be the return type of init" >> {
-      s.init must haveClass[Simplex]
+      s.init must haveClass[Simplex[Int]]
     }
     "be the return type of flatMap" >> {
-      (s.flatMap(Simplex(_, 10))) must haveClass[Simplex]
+      (s.flatMap(Simplex(_, 10))) must haveClass[Simplex[Int]]
     }
     "be the content type of grouped" >> {
-      s.grouped(2).next must haveClass[Simplex]
+      s.grouped(2).next must haveClass[Simplex[Int]]
     }
     "be the return type of partition" >> {
-      (s.partition(_ % 2 == 0)) must haveClass[(Simplex, Simplex)]
+      (s.partition(_ % 2 == 0)) must haveClass[(Simplex[Int], Simplex[Int])]
     }
     "be the return type of range, rangeFrom, rangeTo" >> {
-      (s.range(0, 2)) must haveClass[Simplex]
-      (s.rangeFrom(1)) must haveClass[Simplex]
-      (s.rangeTo(2)) must haveClass[Simplex]
+      (s.range(0, 2)) must haveClass[Simplex[Int]]
+      (s.rangeFrom(1)) must haveClass[Simplex[Int]]
+      (s.rangeTo(2)) must haveClass[Simplex[Int]]
     }
     "be the return type of slice" >> {
-      (s.slice(1, 2)) must haveClass[Simplex]
+      (s.slice(1, 2)) must haveClass[Simplex[Int]]
     }
     "be the element type of sliding" >> {
-      (s.sliding(2).next) must haveClass[Simplex]
+      (s.sliding(2).next) must haveClass[Simplex[Int]]
     }
     "be the element type of span" >> {
-      (s.span(_ < 2)) must haveClass[(Simplex, Simplex)]
+      (s.span(_ < 2)) must haveClass[(Simplex[Int], Simplex[Int])]
     }
     "be the element type of splitAt" >> {
-      (s.splitAt(1)) must haveClass[(Simplex, Simplex)]
+      (s.splitAt(1)) must haveClass[(Simplex[Int], Simplex[Int])]
     }
     "be the element type of subsets" >> {
-      (s.subsets().next) must haveClass[Simplex]
-      (s.subsets(2).next) must haveClass[Simplex]
+      (s.subsets().next) must haveClass[Simplex[Int]]
+      (s.subsets(2).next) must haveClass[Simplex[Int]]
     }
   }
-}
-
-class SimplexContextSpec extends mutable.Specification {
-  """Testing the implicit context approach to working with simplices"""
-
-  given sc: SimplexContext[Char]()
-  import sc.*
-
   "we can create a simplex, and get the right type" >> {
-    s('a', 'b', 'c') must haveClass[Simplex]
-    s('a', 'b', 'c') must haveClass[AbstractSimplex[Char]]
+    ∆('a', 'b', 'c') must haveClass[Simplex[Char]]
+    ∆('a', 'b', 'c') must haveClass[Simplex[Char]]
   }
 }

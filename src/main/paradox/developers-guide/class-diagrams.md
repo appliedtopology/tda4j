@@ -36,12 +36,12 @@ classDiagram
 
     Fractional *-- `Chain[CellT: Cell, CoefficientT: Fractional]`
     `Cell[CellT]` *-- `Chain[CellT: Cell, CoefficientT: Fractional]`
-    `Cell[CellT]` --> `AbstractSimplex[VertexT]`
+    `Cell[CellT]` --> `Simplex[VertexT]`
     class `Cell[CellT]` {
 <<interface Typeclass>>
 boundary() Chain[CellT, CoefficientT]
 }
-class `AbstractSimplex[VertexT]` {
+class `Simplex[VertexT]` {
 <<extends SortedSet, Cell>>
 size : Int
 iterator : Iterator[VertexT]
@@ -54,12 +54,12 @@ boundary() Chain[AbstractSimplex[VertexT],CoefficientT]
 
 ```mermaid
 classDiagram
-    `Cell[CellT]` --> `AbstractSimplex[VertexT]`
+    `Cell[CellT]` --> `Simplex[VertexT]`
     class `Cell[CellT]` {
 <<interface Typeclass>>
 boundary() Chain[CellT, CoefficientT]
 }
-class `AbstractSimplex[VertexT]` {
+class `Simplex[VertexT]` {
 <<extends SortedSet, Cell>>
 size : Int
 iterator : Iterator[VertexT]
@@ -83,7 +83,7 @@ class `SimplexStream[VertexT,FiltrationT]` {
 }
 `IterableOnce[T]` --> `SimplexStream[VertexT,FiltrationT]` : inherits
 `SimplexFiltration[VertexT,FiltrationT]` --> `SimplexStream[VertexT,FiltrationT]` : inherits
-`AbstractSimplex[VertexT]` "*" o-- "1" `SimplexStream[VertexT,FiltrationT]` : contains
+`Simplex[VertexT]` "*" o-- "1" `SimplexStream[VertexT,FiltrationT]` : contains
 
 class `ExplicitStream[VertexT,FiltrationT]` {
 filtrationValues : Map[AbstractSimplex[VertexT],FiltrationT]

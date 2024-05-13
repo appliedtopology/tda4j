@@ -54,14 +54,14 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
     *   A set of simplices in the orbit of `simplex`.
     */
   def orbitSeq(
-    simplex: AbstractSimplex[VertexT]
-  ): Set[AbstractSimplex[VertexT]] =
+    simplex: Simplex[VertexT]
+  ): Set[Simplex[VertexT]] =
     keys.map(k => simplex.map(apply(k))).toSet
 
   def orbitPar(
-    simplex: AbstractSimplex[VertexT]
-  ): Set[AbstractSimplex[VertexT]] = {
-    val futures: Iterable[Future[AbstractSimplex[VertexT]]] =
+    simplex: Simplex[VertexT]
+  ): Set[Simplex[VertexT]] = {
+    val futures: Iterable[Future[Simplex[VertexT]]] =
       for (k <- keys) yield Future {
         simplex.map(apply(k))
       }
@@ -80,8 +80,8 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
     *   The canonical representative simplex of the orbit of `simplex`.
     */
   def representative(
-    simplex: AbstractSimplex[VertexT]
-  ): AbstractSimplex[VertexT] =
+    simplex: Simplex[VertexT]
+  ): Simplex[VertexT] =
     keys.map(k => simplex.map(apply(k))).min
 
   /** Check if `simplex` is the canonical representative of its own orbit.
@@ -90,7 +90,7 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
     *   Query simplex.
     * @return
     */
-  def isRepresentative(simplex: AbstractSimplex[VertexT]): Boolean =
+  def isRepresentative(simplex: Simplex[VertexT]): Boolean =
     simplex == representative(simplex)
 
 }
@@ -114,14 +114,14 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
   *   The type of the group element indices.
   */
 class ExpandList[VertexT: Ordering, KeyT](
-  val representatives: Seq[AbstractSimplex[VertexT]],
+  val representatives: Seq[Simplex[VertexT]],
   val symmetry: SymmetryGroup[KeyT, VertexT]
-) extends IndexedSeq[AbstractSimplex[VertexT]] {
+) extends IndexedSeq[Simplex[VertexT]] {
   self =>
 
   /** `orbitSizes` contains each representative paired with the size of its orbit, for fast lookup.
     */
-  val orbitSizes: Map[AbstractSimplex[VertexT], Int] =
+  val orbitSizes: Map[Simplex[VertexT], Int] =
     Map.from(representatives.map(r => r -> symmetry.orbit(r).size))
 
   /** `orbitRanges` contains accumulated indices of the starts of each new orbit.
@@ -131,13 +131,13 @@ class ExpandList[VertexT: Ordering, KeyT](
 
   /** `repOrbitRanges` pairs the orbit start indices with their corresponding orbit representative.
     */
-  val repOrbitRanges: Seq[(AbstractSimplex[VertexT], Int)] =
+  val repOrbitRanges: Seq[(Simplex[VertexT], Int)] =
     representatives.zip(orbitRanges)
 
   /** `currentRepresentative` and `currentOrbit` carry the currently cached representative and orbit pair.
     */
-  var currentRepresentative: Option[AbstractSimplex[VertexT]] = None
-  var currentOrbit: Option[Seq[AbstractSimplex[VertexT]]] = None
+  var currentRepresentative: Option[Simplex[VertexT]] = None
+  var currentOrbit: Option[Seq[Simplex[VertexT]]] = None
 
   /** Apply for an `IndexedSeq` will pick out the `i`th element in the sequence. We do this by counting through the
     * orbit sizes until we find the right orbit, then generating that orbit and returning the element. We do a kind of
@@ -148,7 +148,7 @@ class ExpandList[VertexT: Ordering, KeyT](
     * @return
     *   The element at position `i` among all the simplices represented.
     */
-  override def apply(i: Int): AbstractSimplex[VertexT] = {
+  override def apply(i: Int): Simplex[VertexT] = {
     val targetRepresentativeRange = repOrbitRanges.filter(_._2 <= i).last
     if (!currentRepresentative.contains(targetRepresentativeRange._1)) {
       currentRepresentative = Some(targetRepresentativeRange._1)
@@ -173,11 +173,11 @@ class ExpandList[VertexT: Ordering, KeyT](
     * @return
     *   Iterator that traverses the entire represented set.
     */
-  override def iterator: Iterator[AbstractSimplex[VertexT]] =
-    new Iterator[AbstractSimplex[VertexT]] {
+  override def iterator: Iterator[Simplex[VertexT]] =
+    new Iterator[Simplex[VertexT]] {
       var currentOrbitIx = 0
       var currentElement = 0
-      var currentOrbit: Set[AbstractSimplex[VertexT]] =
+      var currentOrbit: Set[Simplex[VertexT]] =
         symmetry.orbit(representatives(currentOrbitIx))
 
       /** Internal state tracking whether we have reason to believe we have exhausted the list.
@@ -199,7 +199,7 @@ class ExpandList[VertexT: Ordering, KeyT](
         * @return
         *   The next element in the `ExpandList`.
         */
-      override def next(): AbstractSimplex[VertexT] = {
+      override def next(): Simplex[VertexT] = {
         if (!hasNext()) {
           throw new NoSuchElementException("Iterator exhausted")
         }
@@ -251,9 +251,9 @@ class SymmetricZomorodianIncremental[VertexT: Ordering, KeyT](
     *
     * Key difference from [[ZomorodianIncremental]] is the following lines:
     * {{{
-    * val simplex = AbstractSimplex.from(tau)
+    * val simplex = Simplex.from(tau)
     *   if (symmetry.isRepresentative(simplex))
-    *   representatives += AbstractSimplex.from(tau)
+    *   representatives += Simplex.from(tau)
     * }}}
     * Here, each simplex that the algorithm generates is checked for whether it is representative for its own orbit, and
     * only the simplices that are are retained (in the mutable list `representatives` for later access).
@@ -270,18 +270,18 @@ class SymmetricZomorodianIncremental[VertexT: Ordering, KeyT](
     metricSpace: FiniteMetricSpace[VertexT],
     maxFiltrationValue: Double,
     maxDimension: Int
-  ): Seq[AbstractSimplex[VertexT]] = {
+  ): Seq[Simplex[VertexT]] = {
     val edges = CliqueFinder.weightedEdges(metricSpace, maxFiltrationValue)
 
     def lowerNeighbors(v: VertexT): SortedSet[VertexT] =
       edges.get(v).neighbors.map(_.toOuter).filter(_ < v).to(SortedSet)
 
-    given Ordering[AbstractSimplex[VertexT]] =
+    given Ordering[Simplex[VertexT]] =
       CliqueFinder.simplexOrdering(metricSpace)
 
-    // val V = mutable.SortedSet[AbstractSimplex[VertexT]]()
+    // val V = mutable.SortedSet[Simplex[VertexT]]()
     val tasks = mutable.Stack[(SortedSet[VertexT], SortedSet[VertexT])]()
-    val representatives = mutable.SortedSet[AbstractSimplex[VertexT]]()
+    val representatives = mutable.SortedSet[Simplex[VertexT]]()
 
     edges.nodes
       .map(_.toOuter)
@@ -291,9 +291,9 @@ class SymmetricZomorodianIncremental[VertexT: Ordering, KeyT](
       val task = tasks.pop()
       val tau = task._1
       val N = task._2
-      val simplex = AbstractSimplex.from(tau)
+      val simplex = Simplex.from(tau)
       if (symmetry.isRepresentative(simplex)) {
-        representatives += AbstractSimplex.from(tau)
+        representatives += Simplex.from(tau)
       }
       if (tau.size <= maxDimension) {
         N.foreach { v =>
@@ -477,7 +477,7 @@ class HyperCubeSymmetryGeneratorsBitSet(val bitlength: Int) extends HyperCubeSym
   /** By maintaining a set of known representatives, and first testing against the group generators, we are expecting
     * significant speedups over the case where we keep traversing each orbit over and over again.
     */
-  val representatives: mutable.Map[AbstractSimplex[BitSet], AbstractSimplex[BitSet]] =
+  val representatives: mutable.Map[Simplex[BitSet], Simplex[BitSet]] =
     mutable.Map.empty
 
   val generators: List[immutable.BitSet => immutable.BitSet] =
@@ -486,7 +486,7 @@ class HyperCubeSymmetryGeneratorsBitSet(val bitlength: Int) extends HyperCubeSym
       .map(map => ((bs: immutable.BitSet) => bs.collect(map.orElse(identity(_)))))
       .toList
 
-  override def isRepresentative(simplex: AbstractSimplex[BitSet]): Boolean =
+  override def isRepresentative(simplex: Simplex[BitSet]): Boolean =
     if (representatives.contains(simplex)) {
       simplex == representatives(simplex)
     } else {
@@ -501,17 +501,14 @@ class HyperCubeSymmetryGeneratorsBitSet(val bitlength: Int) extends HyperCubeSym
     }
 
   override def representative(
-    simplex: AbstractSimplex[BitSet]
-  ): AbstractSimplex[BitSet] =
+    simplex: Simplex[BitSet]
+  ): Simplex[BitSet] =
     if (representatives.contains(simplex)) representatives(simplex)
     else super.representative(simplex)
 }
 
 class HyperCubeSymmetryGenerators(val bitlength: Int) extends HyperCubeSymmetry(bitlength) {
-  given sc: SimplexContext[Int]()
-  import sc.*
-
-  val representatives: mutable.Map[Simplex, Simplex] =
+  val representatives: mutable.Map[Simplex[Int], Simplex[Int]] =
     mutable.Map.empty
 
   val generators: List[Int => Int] =
@@ -523,7 +520,7 @@ class HyperCubeSymmetryGenerators(val bitlength: Int) extends HyperCubeSymmetry(
         (vertex & mip) ^ (xi | xip)
       }
 
-  override def isRepresentative(simplex: Simplex): Boolean =
+  override def isRepresentative(simplex: Simplex[Int]): Boolean =
     if (representatives.contains(simplex)) {
       simplex == representatives(simplex)
     } else {

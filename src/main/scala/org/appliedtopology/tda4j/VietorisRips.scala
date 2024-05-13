@@ -31,18 +31,18 @@ class VietorisRips[VertexT](using ordering: Ordering[VertexT])(
 ) extends SimplexStream[VertexT, Double] {
   self =>
 
-  val simplices: Seq[AbstractSimplex[VertexT]] =
+  val simplices: Seq[Simplex[VertexT]] =
     cliqueFinder(metricSpace, maxFiltrationValue, maxDimension)
 
-  val filtrationValue: PartialFunction[AbstractSimplex[VertexT], Double] =
+  val filtrationValue: PartialFunction[Simplex[VertexT], Double] =
     new FiniteMetricSpace.MaximumDistanceFiltrationValue[VertexT](metricSpace)
 
   // Members declared in scala.collection.IterableOnce
-  def iterator: Iterator[org.appliedtopology.tda4j.AbstractSimplex[VertexT]] =
+  def iterator: Iterator[org.appliedtopology.tda4j.Simplex[VertexT]] =
     simplices.iterator
 
   // Members declared in scala.collection.SeqOps
-  // def apply(i: Int): org.appliedtopology.tda4j.AbstractSimplex[VertexT] = simplices(i)
+  // def apply(i: Int): org.appliedtopology.tda4j.Simplex[VertexT] = simplices(i)
 
   // def length: Int = simplices.length
 }
@@ -53,14 +53,14 @@ abstract class CliqueFinder[VertexT: Ordering]
         FiniteMetricSpace[VertexT],
         Double,
         Int
-      ) => Seq[AbstractSimplex[VertexT]]
+      ) => Seq[Simplex[VertexT]]
     ) {
   val className: String
   override def apply(
     metricSpace: FiniteMetricSpace[VertexT],
     maxFiltrationValue: Double,
     maxDimension: Int
-  ): Seq[AbstractSimplex[VertexT]]
+  ): Seq[Simplex[VertexT]]
 }
 
 object CliqueFinder {
@@ -88,9 +88,9 @@ object CliqueFinder {
 
   def simplexOrdering[VertexT: Ordering](
     metricSpace: FiniteMetricSpace[VertexT]
-  ): Ordering[AbstractSimplex[VertexT]] =
-    FilteredSimplexOrdering[VertexT, Double](new DoubleFiltration[AbstractSimplex[VertexT]] {
-      def filtrationValue: PartialFunction[AbstractSimplex[VertexT], Double] =
+  ): Ordering[Simplex[VertexT]] =
+    FilteredSimplexOrdering[VertexT, Double](new DoubleFiltration[Simplex[VertexT]] {
+      def filtrationValue: PartialFunction[Simplex[VertexT], Double] =
         new FiniteMetricSpace.MaximumDistanceFiltrationValue[VertexT](
           metricSpace
         )
@@ -160,7 +160,7 @@ class BronKerbosch[VertexT: Ordering] extends CliqueFinder[VertexT] {
     metricSpace: FiniteMetricSpace[VertexT],
     maxFiltrationValue: Double = Double.PositiveInfinity,
     maxDimension: Int = 2
-  ): Seq[AbstractSimplex[VertexT]] = {
+  ): Seq[Simplex[VertexT]] = {
     val edges = CliqueFinder.weightedEdges(metricSpace, maxFiltrationValue)
 
     /** Now that we have the a graph we want to run Bron-Kerbosch to find the cliques and sort them by their appearance
@@ -186,18 +186,18 @@ class BronKerbosch[VertexT: Ordering] extends CliqueFinder[VertexT] {
 
     // Well, we have our simplices generated and ready for us.
     // Let's sort them to create a stream
-    val simplices: Seq[AbstractSimplex[VertexT]] =
+    val simplices: Seq[Simplex[VertexT]] =
       cliqueSet
         .filter(spx => spx.nonEmpty)
-        .map(spx => AbstractSimplex[VertexT](spx.to(Seq): _*)) to Seq
+        .map(spx => Simplex[VertexT](spx.to(Seq): _*)) to Seq
     val filtration =
       new MaximumDistanceFiltrationValue[VertexT](metricSpace)
     val simplexOrdering =
-      FilteredSimplexOrdering[VertexT, Double](new DoubleFiltration[AbstractSimplex[VertexT]] {
-        def filtrationValue: PartialFunction[AbstractSimplex[VertexT], Double] =
+      FilteredSimplexOrdering[VertexT, Double](new DoubleFiltration[Simplex[VertexT]] {
+        def filtrationValue: PartialFunction[Simplex[VertexT], Double] =
           filtration
       })
-    given Ordering[AbstractSimplex[VertexT]] = simplexOrdering
+    given Ordering[Simplex[VertexT]] = simplexOrdering
     Sorting.stableSort(simplices).toSeq
   }
 }
@@ -208,16 +208,16 @@ class ZomorodianIncremental[VertexT: Ordering] extends CliqueFinder[VertexT] {
     metricSpace: FiniteMetricSpace[VertexT],
     maxFiltrationValue: Double,
     maxDimension: Int
-  ): Seq[AbstractSimplex[VertexT]] = {
+  ): Seq[Simplex[VertexT]] = {
     val edges = CliqueFinder.weightedEdges(metricSpace, maxFiltrationValue)
 
     def lowerNeighbors(v: VertexT): SortedSet[VertexT] =
       edges.get(v).neighbors.map(_.toOuter).filter(_ < v).to(SortedSet)
 
-    given Ordering[AbstractSimplex[VertexT]] =
+    given Ordering[Simplex[VertexT]] =
       CliqueFinder.simplexOrdering(metricSpace)
 
-    val V = mutable.SortedSet[AbstractSimplex[VertexT]]()
+    val V = mutable.SortedSet[Simplex[VertexT]]()
     val tasks = mutable.Stack[(SortedSet[VertexT], SortedSet[VertexT])]()
 
     edges.nodes
@@ -228,7 +228,7 @@ class ZomorodianIncremental[VertexT: Ordering] extends CliqueFinder[VertexT] {
       val task = tasks.pop()
       val tau = task._1
       val N = task._2
-      V += AbstractSimplex.from(tau)
+      V += Simplex.from(tau)
       if (tau.size <= maxDimension) {
         N.foreach { v =>
           val sigma = tau + v
@@ -249,15 +249,15 @@ object LazyVietorisRips {
     metricSpace: FiniteMetricSpace[VertexT],
     maxFiltrationValue: Double,
     maxDimension: Int
-  ): LazyList[AbstractSimplex[VertexT]] = {
-    given Ordering[AbstractSimplex[VertexT]] =
+  ): LazyList[Simplex[VertexT]] = {
+    given Ordering[Simplex[VertexT]] =
       CliqueFinder.simplexOrdering(metricSpace)
 
     val edges = CliqueFinder.weightedEdges(metricSpace, Double.PositiveInfinity)
 
     case class FoldState(
       G: Graph[VertexT, WUnDiEdge],
-      retLL: LazyList[AbstractSimplex[VertexT]],
+      retLL: LazyList[Simplex[VertexT]],
       knownSize: Int
     )
 
@@ -284,7 +284,7 @@ object LazyVietorisRips {
         val neighbors: Seq[SortedSet[VertexT]] =
           endpoints.map[SortedSet[VertexT]]((v: VertexT) => lowerNeighbors(v))
 
-        val V = mutable.SortedSet[AbstractSimplex[VertexT]]()
+        val V = mutable.SortedSet[Simplex[VertexT]]()
         val tasks = mutable.Stack[(SortedSet[VertexT], SortedSet[VertexT])](
           (SortedSet[VertexT](endpoints: _*), neighbors.reduce(_ & _))
         )
@@ -293,7 +293,7 @@ object LazyVietorisRips {
           val task = tasks.pop()
           val tau = task._1
           val N = task._2
-          V += AbstractSimplex.from(tau)
+          V += Simplex.from(tau)
           if (tau.size <= maxDimension) {
             N.foreach { v =>
               val sigma = tau + v
@@ -303,8 +303,8 @@ object LazyVietorisRips {
           }
         }
 
-        val newSimplices: SortedSet[AbstractSimplex[VertexT]] =
-          V.map(spx => AbstractSimplex.from(spx))
+        val newSimplices: SortedSet[Simplex[VertexT]] =
+          V.map(spx => Simplex.from(spx))
             .map(spx => spx ++ endpoints)
             .to(SortedSet)
 
@@ -318,7 +318,7 @@ object LazyVietorisRips {
     val simplices = edges.nodes
       .to(Seq)
       .map(_.toOuter)
-      .map(spx => AbstractSimplex(spx))
+      .map(spx => Simplex(spx))
       .sorted
       .to(LazyList) #::: {
       val edgesLL: LazyList[WUnDiEdge[VertexT]] =
@@ -331,7 +331,7 @@ object LazyVietorisRips {
           .to(LazyList)
       val startingState = FoldState(
         edges.filter(edges.having(edge = _ => false, node = _ => true)),
-        LazyList[AbstractSimplex[VertexT]](),
+        LazyList[Simplex[VertexT]](),
         edges.order // because we seeded `simplices` with the vertices
       )
       val foldedState =
@@ -350,25 +350,25 @@ object LazyStratifiedVietorisRips {
     metricSpace: FiniteMetricSpace[VertexT],
     maxFiltrationValue: Double,
     maxDimension: Int = 2
-  ): Array[LazyList[AbstractSimplex[VertexT]]] =
+  ): Array[LazyList[Simplex[VertexT]]] =
     this(metricSpace, Some(maxFiltrationValue), maxDimension)
 
   def apply[VertexT: Ordering](
     metricSpace: FiniteMetricSpace[VertexT],
     maxFiltrationValue: Option[Double],
     maxDimension: Int
-  ): Array[LazyList[AbstractSimplex[VertexT]]] = {
+  ): Array[LazyList[Simplex[VertexT]]] = {
 
     val filtrationValue = FiniteMetricSpace.MaximumDistanceFiltrationValue[VertexT](metricSpace)
 
     inline def maxSize: Int = maxDimension + 1
     val maxFVal = maxFiltrationValue.getOrElse(metricSpace.minimumEnclosingRadius)
 
-    val lazyLists: Array[LazyList[AbstractSimplex[VertexT]]] = Array.ofDim(maxDimension + 1)
-    lazyLists(0) = LazyList.from(metricSpace.elements.map(AbstractSimplex(_)))
+    val lazyLists: Array[LazyList[Simplex[VertexT]]] = Array.ofDim(maxDimension + 1)
+    lazyLists(0) = LazyList.from(metricSpace.elements.map(Simplex(_)))
     (1 to maxDimension).foreach(lazyLists(_) = LazyList.empty)
 
-    def initStack: Vector[(AbstractSimplex[VertexT], (VertexT, VertexT))] =
+    def initStack: Vector[(Simplex[VertexT], (VertexT, VertexT))] =
       metricSpace.elements.toList
         .combinations(2)
         .toVector
@@ -379,13 +379,13 @@ object LazyStratifiedVietorisRips {
           val List(x, y) = xys; metricSpace.distance(x, y)
         }
         .map { xys =>
-          val List(src, tgt) = xys; (AbstractSimplex(src, tgt), (src, tgt))
+          val List(src, tgt) = xys; (Simplex(src, tgt), (src, tgt))
         }
 
     def cofacets(
-      simplex: => AbstractSimplex[VertexT],
+      simplex: => Simplex[VertexT],
       neighbors: => Map[VertexT, Set[VertexT]]
-    ): LazyList[AbstractSimplex[VertexT]] =
+    ): LazyList[Simplex[VertexT]] =
       LazyList
         .from(
           simplex.tail
@@ -394,11 +394,11 @@ object LazyStratifiedVietorisRips {
         .map(v => simplex + v)
 
     case class FoldState(
-      outputLists: Array[LazyList[AbstractSimplex[VertexT]]],
-      taskStack: Vector[(AbstractSimplex[VertexT], (VertexT, VertexT))],
+      outputLists: Array[LazyList[Simplex[VertexT]]],
+      taskStack: Vector[(Simplex[VertexT], (VertexT, VertexT))],
       neighbors: Map[VertexT, Set[VertexT]]
     )
-    @tailrec def oneStep(foldState: FoldState): Array[LazyList[AbstractSimplex[VertexT]]] =
+    @tailrec def oneStep(foldState: FoldState): Array[LazyList[Simplex[VertexT]]] =
       if (foldState.taskStack.isEmpty) foldState.outputLists
       else if (foldState.taskStack.head._1.size > maxSize) oneStep(foldState.copy(taskStack = foldState.taskStack.tail))
       else {
@@ -417,7 +417,7 @@ object LazyStratifiedVietorisRips {
             cofacet <- candidateCofacets
             others = cofacet.toList
               .combinations(simplex.size)
-              .filter(spx => filtrationValue(AbstractSimplex.from(spx)) == metricSpace.distance(src, tgt))
+              .filter(spx => filtrationValue(Simplex.from(spx)) == metricSpace.distance(src, tgt))
               .toList
               .sorted(math.Ordering.Implicits.seqOrdering)
             if simplex.toList.sorted == others.last
@@ -444,7 +444,7 @@ class LazyStratifiedCliqueFinder[VertexT: Ordering]() extends CliqueFinder[Verte
     metricSpace: FiniteMetricSpace[VertexT],
     maxFiltrationValue: Double = Double.PositiveInfinity,
     maxDimension: Int = 2
-  ): Seq[AbstractSimplex[VertexT]] =
+  ): Seq[Simplex[VertexT]] =
     LazyStratifiedVietorisRips(metricSpace, maxFiltrationValue, maxDimension)
-      .foldRight(LazyList[AbstractSimplex[VertexT]]())((lz, sq) => sq #::: lz)
+      .foldRight(LazyList[Simplex[VertexT]]())((lz, sq) => sq #::: lz)
 }

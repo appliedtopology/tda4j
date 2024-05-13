@@ -5,17 +5,15 @@ import org.appliedtopology.tda4j.barcode.PersistenceBar
 import collection.mutable
 import scala.annotation.tailrec
 
-given [T: Ordering]: Ordering[AbstractSimplex[T]] = (new SimplexContext[T] {}).simplexOrdering
+//class ReducedSimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional, FiltrationT: Ordering]()
+//  extends CellularHomologyContext[Simplex[VertexT], CoefficientT, FiltrationT]() {}
 
-class ReducedSimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional, FiltrationT: Ordering]() 
-  extends CellularHomologyContext[AbstractSimplex[VertexT], CoefficientT, FiltrationT]()
-  with SimplexContext[VertexT]() {}
+class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional, FiltrationT: Ordering]()
+    extends CellularHomologyContext[Simplex[VertexT], CoefficientT, FiltrationT](Seq(Simplex[VertexT]())) {}
 
-class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional, FiltrationT : Ordering]() 
-  extends CellularHomologyContext[AbstractSimplex[VertexT], CoefficientT, FiltrationT](Seq(AbstractSimplex[VertexT]()))
-    with SimplexContext[VertexT]() {}
-
-class CellularHomologyContext[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional, FiltrationT : Ordering](val cellPrefix : Seq[CellT] = Seq()) extends ChainOps[CellT, CoefficientT]() {
+class CellularHomologyContext[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional, FiltrationT: Ordering](
+  val cellPrefix: Seq[CellT] = Seq()
+) extends ChainOps[CellT, CoefficientT]() {
 
   import barcode._
 
@@ -40,7 +38,7 @@ class CellularHomologyContext[CellT <: Cell[CellT]: Ordering, CoefficientT: Frac
     import Ordering.Implicits.infixOrderingOps
     given filtration: Filtration[CellT, FiltrationT] = stream
 
-    val CellIterator: collection.BufferedIterator[CellT] = 
+    val CellIterator: collection.BufferedIterator[CellT] =
       Iterator.concat(cellPrefix, stream.iterator.to(Iterable)).buffered
 
     def diagramAt(
@@ -60,7 +58,7 @@ class CellularHomologyContext[CellT <: Cell[CellT]: Ordering, CoefficientT: Frac
         for
           (sigma, z) <- cycles
           dim = sigma.dim
-          lower = stream.filtrationValue(sigma)
+          lower = stream.filtrationValue.applyOrElse(sigma, _ => filtration.smallest)
         yield (dim, lower, filtration.largest)
       )
     }
@@ -69,11 +67,11 @@ class CellularHomologyContext[CellT <: Cell[CellT]: Ordering, CoefficientT: Frac
       diagramAt(f).map { (dim, l, u) =>
         val lower: BarcodeEndpoint[FiltrationT] = l match {
           case i if i == filtration.smallest => NegativeInfinity()
-          case f: FiltrationT      => ClosedEndpoint(f)
+          case f: FiltrationT                => ClosedEndpoint(f)
         }
         val upper: BarcodeEndpoint[FiltrationT] = u match {
           case i if i == filtration.largest => PositiveInfinity()
-          case f: FiltrationT     => OpenEndpoint(f)
+          case f: FiltrationT               => OpenEndpoint(f)
         }
         new PersistenceBar(dim, lower, upper, None)
       }

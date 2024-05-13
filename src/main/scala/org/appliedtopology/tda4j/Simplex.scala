@@ -6,40 +6,18 @@ import scala.math.Ordering.IntOrdering
 import scala.math.Ordering.Double.IeeeOrdering
 import math.Ordering.Implicits.sortedSetOrdering
 
-trait SimplexContext[VertexT: Ordering] {
-  type Simplex = AbstractSimplex[VertexT]
-
-  given simplexOrdering: Ordering[Simplex] = sortedSetOrdering[AbstractSimplex, VertexT]
-
-  object Simplex {
-    def apply(vertices: VertexT*): Simplex =
-      AbstractSimplex[VertexT](vertices: _*)
-    def empty: Simplex = AbstractSimplex.empty
-    def from(iterableOnce: IterableOnce[VertexT]): Simplex =
-      AbstractSimplex.from(iterableOnce)
-    def newBuilder: mutable.Builder[VertexT, Simplex] =
-      AbstractSimplex.newBuilder
-  }
-
-  object s {
-    def apply(vertices: VertexT*): Simplex = Simplex(vertices: _*)
-  }
-
-  extension (s: Simplex) {
-    def className = "Simplex"
-  }
-}
+given simplexOrdering[VertexT: Ordering]: Ordering[Simplex[VertexT]] = sortedSetOrdering[Simplex, VertexT]
 
 /** Class representing an abstract simplex. Abstract simplices are sets (of totally ordered vertices) and thus are
   * represented by a type that implements the interface of a `SortedSet` fully, and also inherits from `Cell` so that
   * the class has a `boundary` method.
   *
-  * With this `SortedSet` interface in place, there is scope for using `AbstractSimplex` for combinatorial algebraic
-  * topology tasks unrelated to persistence, and possibly for writing persistence algorithms more smoothly.
+  * With this `SortedSet` interface in place, there is scope for using `Simplex` for combinatorial algebraic topology
+  * tasks unrelated to persistence, and possibly for writing persistence algorithms more smoothly.
   *
   * You should never have reason to use the constructor directly (...and if you do, you should make sure to give the
   * internal `SortedSet` yourself) - instead use the factory method in the companion object. In code this means that
-  * instead of `new AbstractSimplex[T](a,b,c)` you would write `AbstractSimplex[T](a,b,c)`.
+  * instead of `new Simplex[T](a,b,c)` you would write `Simplex[T](a,b,c)`.
   *
   * @param vertexSet
   *   Vertices of the simplex
@@ -48,16 +26,16 @@ trait SimplexContext[VertexT: Ordering] {
   * @tparam VertexT
   *   Vertex type
   */
-class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])( //vertexSet variable defined here
+class Simplex[VertexT](protected val vertexSet: SortedSet[VertexT])( //vertexSet variable defined here
   using val ordering: Ordering[VertexT] // ordering definied here
-) extends Cell[AbstractSimplex[VertexT]]
+) extends Cell[Simplex[VertexT]]
     with SortedSet[VertexT]
-    with SortedSetOps[VertexT, AbstractSimplex, AbstractSimplex[VertexT]]
-    with SortedSetFactoryDefaults[VertexT, AbstractSimplex, Set] {
+    with SortedSetOps[VertexT, Simplex, Simplex[VertexT]]
+    with SortedSetFactoryDefaults[VertexT, Simplex, Set] {
   self => // gives methods access to the object that's calling it in the first place
 
   override def toString(): String =
-    vertexSet.mkString(s"$className(", ",", ")")
+    vertexSet.mkString(s"∆(", ",", ")")
 
   // ***** Simplex specific operations
 
@@ -71,28 +49,30 @@ class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])( //v
     */
   override def boundary[CoefficientT](using
     fr: Fractional[CoefficientT]
-  ): Chain[AbstractSimplex[VertexT], CoefficientT] =
-    Chain[AbstractSimplex[VertexT], CoefficientT](
-      self
-        .to(Seq)
-        .map(vtx => self - vtx)
-        .zip(Iterator.unfold(fr.one)(s => Some((s, fr.negate(s))))): _*
-    )
+  ): Chain[Simplex[VertexT], CoefficientT] =
+    if (dim == 0) Chain()
+    else
+      Chain.from(
+        self
+          .to(Seq)
+          .map(vtx => self - vtx)
+          .zip(Iterator.unfold(fr.one)(s => Some((s, fr.negate(s)))))
+      )
 
   def dim: Int = size - 1
 
   // ***** Overriding for inheriting and extending standard library constructions
-  override def className = "AbstractSimplex"
+  override def className = "Simplex"
 
   override def iterator: Iterator[VertexT] = vertexSet.iterator
 
-  override def excl(elem: VertexT): AbstractSimplex[VertexT] =
-    new AbstractSimplex[VertexT](
+  override def excl(elem: VertexT): Simplex[VertexT] =
+    new Simplex[VertexT](
       vertexSet.excl(elem)
     )
 
-  override def incl(elem: VertexT): AbstractSimplex[VertexT] =
-    new AbstractSimplex[VertexT](
+  override def incl(elem: VertexT): Simplex[VertexT] =
+    new Simplex[VertexT](
       vertexSet.incl(elem)
     )
 
@@ -101,31 +81,44 @@ class AbstractSimplex[VertexT](protected val vertexSet: SortedSet[VertexT])( //v
   override def rangeImpl(
     from: Option[VertexT],
     until: Option[VertexT]
-  ): AbstractSimplex[VertexT] =
-    new AbstractSimplex[VertexT](vertexSet.rangeImpl(from, until))
+  ): Simplex[VertexT] =
+    new Simplex[VertexT](vertexSet.rangeImpl(from, until))
 
   override def iteratorFrom(start: VertexT): Iterator[VertexT] =
     vertexSet.iteratorFrom(start)
 
-  override def sortedIterableFactory: SortedIterableFactory[AbstractSimplex] =
-    AbstractSimplex
+  override def sortedIterableFactory: SortedIterableFactory[Simplex] =
+    Simplex
 }
+
+/** Convenience method for defining simplices
+  *
+  * The character ◊, used to avoid hogging `s`, is typed as Alt+Shift+V on Mac GB layout, and has Unicode code 0x25CA.
+  *
+  * The character ∆ is typed as Alt+J on Mac GB layout, and has unicode code 0x0394.
+  *
+  * The character σ has Windows Alt-code 229, and unicode code 0x03c3.
+  */
+def s[T: Ordering](ts: T*): Simplex[T] = Simplex.from(ts)
+def ◊[T: Ordering](ts: T*): Simplex[T] = Simplex.from(ts)
+def ∆[T: Ordering](ts: T*): Simplex[T] = Simplex.from(ts)
+def σ[T: Ordering](ts: T*): Simplex[T] = Simplex.from(ts)
 
 /** Simplex companion object with factory methods
   */
-object AbstractSimplex extends SortedIterableFactory[AbstractSimplex] {
+object Simplex extends SortedIterableFactory[Simplex] {
   override def apply[VertexT: Ordering](vertices: VertexT*) =
-    new AbstractSimplex[VertexT](TreeSet[VertexT](vertices: _*))
-  override def empty[VertexT: Ordering]: AbstractSimplex[VertexT] =
-    new AbstractSimplex[VertexT](TreeSet[VertexT]())
+    new Simplex[VertexT](TreeSet[VertexT](vertices: _*))
+  override def empty[VertexT: Ordering]: Simplex[VertexT] =
+    new Simplex[VertexT](TreeSet[VertexT]())
 
   override def from[VertexT: Ordering](
     source: IterableOnce[VertexT]
-  ): AbstractSimplex[VertexT] =
+  ): Simplex[VertexT] =
     (newBuilder[VertexT] ++= source).result()
 
-  override def newBuilder[VertexT: Ordering]: mutable.Builder[VertexT, AbstractSimplex[VertexT]] =
-    new mutable.ReusableBuilder[VertexT, AbstractSimplex[VertexT]] {
+  override def newBuilder[VertexT: Ordering]: mutable.Builder[VertexT, Simplex[VertexT]] =
+    new mutable.ReusableBuilder[VertexT, Simplex[VertexT]] {
       private val elems = mutable.Set[VertexT]()
 
       override def clear(): Unit = elems.clear()
@@ -133,8 +126,8 @@ object AbstractSimplex extends SortedIterableFactory[AbstractSimplex] {
       def addOne(elem: VertexT): this.type =
         elems += elem; this
 
-      override def result(): AbstractSimplex[VertexT] =
-        new AbstractSimplex[VertexT](TreeSet[VertexT](elems.to(Seq): _*))
+      override def result(): Simplex[VertexT] =
+        new Simplex[VertexT](TreeSet[VertexT](elems.to(Seq): _*))
     }
 
 }

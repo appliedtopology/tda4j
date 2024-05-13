@@ -49,9 +49,9 @@ trait FiniteMetricSpace[VertexT] {
   */
 object FiniteMetricSpace {
 
-  /** Creates a filtration value partial function implementing the functionality of a [[SimplexFiltration]] for a filtration
-    * generated from a metric space, where the filtration value is the maximum distance between vertices (or the
-    * diameter) of a simplex.
+  /** Creates a filtration value partial function implementing the functionality of a [[SimplexFiltration]] for a
+    * filtration generated from a metric space, where the filtration value is the maximum distance between vertices (or
+    * the diameter) of a simplex.
     *
     * @param metricSpace
     *   An instance of a finite metric space.
@@ -60,11 +60,11 @@ object FiniteMetricSpace {
     */
   class MaximumDistanceFiltrationValue[VertexT: Ordering](
     val metricSpace: FiniteMetricSpace[VertexT]
-  ) extends PartialFunction[AbstractSimplex[VertexT], Double] {
-    def isDefinedAt(spx: AbstractSimplex[VertexT]): Boolean =
+  ) extends PartialFunction[Simplex[VertexT], Double] {
+    def isDefinedAt(spx: Simplex[VertexT]): Boolean =
       spx.forall(v => metricSpace.contains(v))
 
-    def apply(spx: AbstractSimplex[VertexT]): Double =
+    def apply(spx: Simplex[VertexT]): Double =
       if (spx.size <= 1)
         0.0
       else

@@ -38,7 +38,7 @@ class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck {
       val metricSpace: FiniteMetricSpace[Int] = EuclideanMetricSpace(pts)
       val simplexStream: SimplexStream[Int, Double] =
         VietorisRips[Int](metricSpace, maxF, maxD, cliqueFinder = method)
-      given Ordering[AbstractSimplex[Int]] =
+      given Ordering[Simplex[Int]] =
         CliqueFinder.simplexOrdering(metricSpace)
 
       "have simplices" >> {
@@ -54,9 +54,9 @@ class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck {
     val pts: Seq[Seq[Double]] =
       Range(0, N).map(i => Seq(cos(i / N.toDouble), sin(i / N.toDouble)))
     val metricSpace: FiniteMetricSpace[Int] = EuclideanMetricSpace(pts)
-    given Ordering[AbstractSimplex[Int]] =
+    given Ordering[Simplex[Int]] =
       CliqueFinder.simplexOrdering(metricSpace)
-    val lazyStream: LazyList[AbstractSimplex[Int]] =
+    val lazyStream: LazyList[Simplex[Int]] =
       LazyVietorisRips[Int](metricSpace, maxF, maxD)
     "have simplices" >> {
       lazyStream.iterator.length must beGreaterThan(0)
@@ -71,9 +71,9 @@ class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck {
     val pts: Seq[Seq[Double]] =
       Range(0, N).map(i => Seq(cos(i / N.toDouble), sin(i / N.toDouble)))
     val metricSpace: FiniteMetricSpace[Int] = EuclideanMetricSpace(pts)
-    given Ordering[AbstractSimplex[Int]] =
+    given Ordering[Simplex[Int]] =
       CliqueFinder.simplexOrdering(metricSpace)
-    val lazyStream: LazyList[AbstractSimplex[Int]] =
+    val lazyStream: LazyList[Simplex[Int]] =
       LazyVietorisRips[Int](metricSpace, 0.4, maxD)
     val strictStream: SimplexStream[Int, Double] =
       VietorisRips[Int](metricSpace, 0.4, maxD, ZomorodianIncremental[Int]())
@@ -88,16 +88,16 @@ class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck {
     forAll(matrixGen[Double](Gen.double, Gen.chooseNum(1, 10), Gen.chooseNum(5, 15))) { (pts: Array[Array[Double]]) =>
       val metricSpace: FiniteMetricSpace[Int] = EuclideanMetricSpace(pts.toSeq.map(_.toSeq))
 
-      given Ordering[AbstractSimplex[Int]] =
+      given Ordering[Simplex[Int]] =
         CliqueFinder.simplexOrdering(metricSpace)
 
       val filtrationValue =
         FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 
-      val lazyStreams: Array[LazyList[AbstractSimplex[Int]]] =
+      val lazyStreams: Array[LazyList[Simplex[Int]]] =
         LazyStratifiedVietorisRips(metricSpace, 0.4, 2)
 
-      lazyStreams.toSeq must contain((lz: LazyList[AbstractSimplex[Int]]) =>
+      lazyStreams.toSeq must contain((lz: LazyList[Simplex[Int]]) =>
         "must be in filtration order" ==>
           (lz.iterator.map(filtrationValue).toSeq must beSorted)
       )
