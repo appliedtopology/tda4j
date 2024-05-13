@@ -182,10 +182,10 @@ class HeapChainSpec extends mutable.Specification {
         (hc.items.toList must containTheSameElementsAs(elts))
     }
     "be created from a single simplex" >> {
-      val hc = Chain[Simplex[Int], Double](s(1, 2, 3))
+      val hc = Chain[Simplex[Int], Double](∆(1, 2, 3))
       "contains the right things" ==>
         (hc.items.toList must containTheSameElementsAs(
-          Seq((s(1, 2, 3), 1.0))
+          Seq((∆(1, 2, 3), 1.0))
         ))
     }
     "be possible to add together" >> {
@@ -193,8 +193,8 @@ class HeapChainSpec extends mutable.Specification {
       given rm: RingModule[Chain[Simplex[Int], Double], Double] = ChainOps()
       import rm.{given, *}
       val z1: Chain[Simplex[Int], Double] =
-        1.0 ⊠ s(1, 2) + (s(1, 3).mul(2.0)) - (1.0 |*| s(2, 3)) + (5.2.scale(s(1, 4)))
-      val z2: Chain[Simplex[Int], Double] = 1.0 ⊠ s(1, 2) + 1.0 ⊠ s(2, 3)
+        1.0 ⊠ ∆(1, 2) + (∆(1, 3).mul(2.0)) - (1.0 |*| ∆(2, 3)) + (5.2.scale(∆(1, 4)))
+      val z2: Chain[Simplex[Int], Double] = 1.0 ⊠ ∆(1, 2) + 1.0 ⊠ ∆(2, 3)
       val z3: Chain[Simplex[Int], Double] = z2 + (-1.0 ⊠ z2)
 
       "subtracts to zero" ==>

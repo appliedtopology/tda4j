@@ -19,23 +19,29 @@ class CubicalSpec extends mutable.Specification with ScalaCheck {
         ElementaryCube(List(FullInterval(0), DegenerateInterval(0))) -> -1.0
       )
     )
-    
-    val smallPicture : Array[Array[Int]] = Array(
-      Array(0,0,0,1,1,1,0,0,0),
-      Array(0,0,1,1,1,1,1,0,0),
-      Array(0,1,1,1,0,1,1,1,0),
-      Array(1,1,1,0,0,0,1,1,1),
-      Array(1,1,0,0,0,0,0,1,1),
-      Array(1,1,1,0,0,0,1,1,1),
-      Array(0,1,1,1,0,1,1,1,0),
-      Array(0,0,1,1,1,1,1,0,0),
-      Array(0,0,0,1,1,1,0,0,0)
+
+    val smallPicture: Array[Array[Int]] = Array(
+      Array(0, 0, 0, 1, 1, 1, 0, 0, 0),
+      Array(0, 0, 1, 1, 1, 1, 1, 0, 0),
+      Array(0, 1, 1, 1, 0, 1, 1, 1, 0),
+      Array(1, 1, 1, 0, 0, 0, 1, 1, 1),
+      Array(1, 1, 0, 0, 0, 0, 0, 1, 1),
+      Array(1, 1, 1, 0, 0, 0, 1, 1, 1),
+      Array(0, 1, 1, 1, 0, 1, 1, 1, 0),
+      Array(0, 0, 1, 1, 1, 1, 1, 0, 0),
+      Array(0, 0, 0, 1, 1, 1, 0, 0, 0)
     )
-    
+
     val smallCubical = Cubical.from(smallPicture)
-    
+
     val smallCubes = smallCubical.iterator.toSeq
-    
+
     smallCubes.size must be_>(0)
+
+    val homologyContext = CellularHomologyContext[ElementaryCube,Double,Int]()
+    val pH = homologyContext.persistentHomology(smallCubical)
+    pH.diagramAt(2) must containTheSameElementsAs(Seq(
+
+    ))
   }
 }

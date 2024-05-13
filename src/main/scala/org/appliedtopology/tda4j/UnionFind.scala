@@ -28,17 +28,18 @@ class UnionFind[T](vertices: IterableOnce[T]) {
 /** This implementation of Kruskal's algorithm will return two iterators of vertex pairs: the first iterator is a
   * Minimal Spanning Tree in increasing weight order, while the second iterator gives all the non-included
   */
-class Kruskal[T](metricSpace: FiniteMetricSpace[T])(using
+
+class Kruskal[T](elements: Seq[T], distance: (T,T) => Double)(using
   orderingT: Ordering[T]
 ) {
-  val unionFind: UnionFind[T] = UnionFind(metricSpace.elements)
+  val unionFind: UnionFind[T] = UnionFind(elements)
 
   val sortedEdges: List[(Double, unionFind.UFSet, unionFind.UFSet)] =
     (for
       x <- unionFind.sets.keysIterator
       y <- unionFind.sets.keysIterator
       if orderingT.lt(x.label, y.label)
-    yield (metricSpace.distance(x.label, y.label), x, y)).toList.sortWith { (l, r) =>
+    yield (distance(x.label, y.label), x, y)).toList.sortWith { (l, r) =>
       l._1 < r._1
     }
 
@@ -53,6 +54,11 @@ class Kruskal[T](metricSpace: FiniteMetricSpace[T])(using
 
   val mstIterator: Iterator[(T, T)] = lrList._1.iterator
   val cyclesIterator: Iterator[(T, T)] = lrList._2.iterator
+}
+
+object Kruskal {
+  def apply[T:Ordering](metricSpace: FiniteMetricSpace[T]): Kruskal[T] =
+    new Kruskal(metricSpace.elements.toSeq, metricSpace.distance)
 }
 
 /*

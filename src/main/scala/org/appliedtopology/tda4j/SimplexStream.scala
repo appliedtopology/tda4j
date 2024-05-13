@@ -187,3 +187,17 @@ class FilteredSimplexOrdering[VertexT, FiltrationT](
         Ordering.Int.compare(x.size, y.size)
   }
 }
+
+
+
+trait StratifiedCellStream[CellT <: Cell[CellT] :Ordering,FiltrationT:Filterable] extends CellStream[CellT,FiltrationT] {
+  def iterateDimension : PartialFunction[Int, Iterator[CellT]]
+
+  override def iterator: Iterator[CellT] =
+    Iterator.from(0)
+      .filter(iterateDimension.isDefinedAt)
+      .map{ (dim:Int) => iterateDimension.applyOrElse(dim, (d:Int) => Iterator.empty) }
+      .fold(Iterator.empty:Iterator[CellT])((x,y) => x++y)
+}
+
+trait StratifiedSimplexStream[VertexT:Ordering, FiltrationT:Filterable] extends StratifiedCellStream[Simplex[VertexT],FiltrationT] { }

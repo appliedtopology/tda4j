@@ -2,6 +2,8 @@ package org.appliedtopology.tda4j
 
 import org.specs2.mutable
 
+import scala.math.Numeric.DoubleIsFractional
+
 class APISpec extends mutable.Specification {
   """Test case class for developing the non-Scala facing API functionality
     |and the non-expert API functionality""".stripMargin
