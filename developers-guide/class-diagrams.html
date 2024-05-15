@@ -198,12 +198,12 @@ appliedtopology/tda4j
 
     Fractional *-- `Chain[CellT: Cell, CoefficientT: Fractional]`
     `Cell[CellT]` *-- `Chain[CellT: Cell, CoefficientT: Fractional]`
-    `Cell[CellT]` --&gt; `AbstractSimplex[VertexT]`
+    `Cell[CellT]` --&gt; `Simplex[VertexT]`
     class `Cell[CellT]` {
 &lt;&lt;interface Typeclass&gt;&gt;
 boundary() Chain[CellT, CoefficientT]
 }
-class `AbstractSimplex[VertexT]` {
+class `Simplex[VertexT]` {
 &lt;&lt;extends SortedSet, Cell&gt;&gt;
 size : Int
 iterator : Iterator[VertexT]
@@ -212,12 +212,12 @@ boundary() Chain[AbstractSimplex[VertexT],CoefficientT]
 </code></pre>
 <h2><a href="#how-do-we-describe-a-simplicial-complex-" name="how-do-we-describe-a-simplicial-complex-" class="anchor"><span class="anchor-link"></span></a>How do we describe a Simplicial Complex?</h2>
 <pre class="prettyprint"><code class="language-mermaid">classDiagram
-    `Cell[CellT]` --&gt; `AbstractSimplex[VertexT]`
+    `Cell[CellT]` --&gt; `Simplex[VertexT]`
     class `Cell[CellT]` {
 &lt;&lt;interface Typeclass&gt;&gt;
 boundary() Chain[CellT, CoefficientT]
 }
-class `AbstractSimplex[VertexT]` {
+class `Simplex[VertexT]` {
 &lt;&lt;extends SortedSet, Cell&gt;&gt;
 size : Int
 iterator : Iterator[VertexT]
@@ -233,15 +233,15 @@ class `IterableOnce[T]` {
 iterator : Iterator[T]
 knownSize : Int
 }
-class `Filtration[VertexT,FiltrationT]` {
+class `SimplexFiltration[VertexT,FiltrationT]` {
 filtrationValue(simplex: AbstractSimplex[VertexT]) FiltrationT
 }
 class `SimplexStream[VertexT,FiltrationT]` {
 &lt;&lt;extends Filtration[VertexT,FiltrationT], IterableOnce[AbstractSimplex[VertexT]]&gt;&gt;
 }
 `IterableOnce[T]` --&gt; `SimplexStream[VertexT,FiltrationT]` : inherits
-`Filtration[VertexT,FiltrationT]` --&gt; `SimplexStream[VertexT,FiltrationT]` : inherits
-`AbstractSimplex[VertexT]` &quot;*&quot; o-- &quot;1&quot; `SimplexStream[VertexT,FiltrationT]` : contains
+`SimplexFiltration[VertexT,FiltrationT]` --&gt; `SimplexStream[VertexT,FiltrationT]` : inherits
+`Simplex[VertexT]` &quot;*&quot; o-- &quot;1&quot; `SimplexStream[VertexT,FiltrationT]` : contains
 
 class `ExplicitStream[VertexT,FiltrationT]` {
 filtrationValues : Map[AbstractSimplex[VertexT],FiltrationT]
