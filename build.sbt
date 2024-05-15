@@ -23,6 +23,10 @@ libraryDependencies +=
 libraryDependencies += "org.scalacheck" %% "scalacheck"                 % "1.17.0" % "test"
 libraryDependencies += "org.scalaz"     %% "scalaz-core"                % "7.3.6"
 libraryDependencies += "org.scalaz"     %% "scalaz-scalacheck-binding"  % "7.4.0-M14"
+libraryDependencies += "org.bitbucket.inkytonik.kiama" %% "kiama" % "2.5.1"
+libraryDependencies += "org.bitbucket.inkytonik.kiama" %% "kiama-extras" % "2.5.1"
+
+
 
 lazy val root = (project in file("."))
   .enablePlugins(
