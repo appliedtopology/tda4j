@@ -3319,12 +3319,12 @@
           </div>
          </div>
         </div>
-        <div class="documentableElement">
+        <div class="documentableElement" data-f-keywords="case">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="signature-short"><span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="tda4j/Simplex.html" t="n" class="documentableName ">Simplex</a>[<span t="k"></span><span data-unresolved-link="" t="t">VertexT</span>](<span t="k"></span><span t="k">val </span><span data-unresolved-link="" t="n">vertexSet</span>: <span data-unresolved-link="" t="t">SortedSet</span>[<span data-unresolved-link="" t="t">VertexT</span>])(<span t="k">using </span><span t="k">val </span><span data-unresolved-link="" t="n">ordering</span>: <span data-unresolved-link="" t="t">Ordering</span>[<span data-unresolved-link="" t="t">VertexT</span>])<span t="k"> extends </span><a href="tda4j/Cell.html" t="t">Cell</a>[<a href="tda4j/Simplex.html" t="t">Simplex</a>[<span t="t">VertexT</span>]]<span t="k">, </span></span><span class="signature-long"><span data-unresolved-link="" t="t">SortedSet</span>[<span t="t">VertexT</span>]<span t="k">, </span><span data-unresolved-link="" t="t">SortedSetOps</span>[<span t="t">VertexT</span>, <a href="tda4j/Simplex.html" t="t">Simplex</a>, <a href="tda4j/Simplex.html" t="t">Simplex</a>[<span t="t">VertexT</span>]]<span t="k">, </span><span data-unresolved-link="" t="t">SortedSetFactoryDefaults</span>[<span t="t">VertexT</span>, <a href="tda4j/Simplex.html" t="t">Simplex</a>, <span data-unresolved-link="" t="t">Set</span>]</span>
+            <span class="signature-short"><span class="modifiers"><span t="k">case </span></span><span class="kind"><span t="k">class </span></span><a href="tda4j/Simplex.html" t="n" class="documentableName ">Simplex</a>[<span t="k"></span><span data-unresolved-link="" t="t">VertexT</span>]<span t="k"> extends </span><a href="tda4j/Cell.html" t="t">Cell</a>[<a href="tda4j/Simplex.html" t="t">Simplex</a>[<span t="t">VertexT</span>]]</span><span class="signature-long"></span>
            </div>
           </div>
          </div>
@@ -3334,12 +3334,11 @@
            <div class="originInfo"></div>
            <div class="memberDocumentation">
             <div class="documentableBrief doc">
-             <p>Class representing an abstract simplex. Abstract simplices are sets (of totally ordered vertices) and thus are represented by a type that implements the interface of a <code>SortedSet</code> fully, and also inherits from <code>Cell</code> so that the class has a <code>boundary</code> method.</p> 
+             <p>Class representing an abstract simplex. Abstract simplices are given by sets (of totally ordered vertices) and inherit from <code>Cell</code> so that the class has a <code>boundary</code> and a <code>dim</code> method.</p> 
             </div>
             <div class="cover">
              <div class="doc">
-              <p>Class representing an abstract simplex. Abstract simplices are sets (of totally ordered vertices) and thus are represented by a type that implements the interface of a <code>SortedSet</code> fully, and also inherits from <code>Cell</code> so that the class has a <code>boundary</code> method.</p> 
-              <p>With this <code>SortedSet</code> interface in place, there is scope for using <code>Simplex</code> for combinatorial algebraic topology tasks unrelated to persistence, and possibly for writing persistence algorithms more smoothly.</p> 
+              <p>Class representing an abstract simplex. Abstract simplices are given by sets (of totally ordered vertices) and inherit from <code>Cell</code> so that the class has a <code>boundary</code> and a <code>dim</code> method.</p> 
               <p>You should never have reason to use the constructor directly (...and if you do, you should make sure to give the internal <code>SortedSet</code> yourself) - instead use the factory method in the companion object. In code this means that instead of <code>new Simplex[T](a,b,c)</code> you would write <code>Simplex[T](a,b,c)</code>.</p> 
              </div>
              <h2 class="h200">Type parameters</h2>
@@ -3360,7 +3359,7 @@
                <p>Ordering of the vertex type</p> 
               </dd>
               <dt class="body-small">
-               vertexSet
+               vertices
               </dt>
               <dd class="body-medium">
                <p>Vertices of the simplex</p> 
@@ -3380,58 +3379,13 @@
               <dd class="body-medium">
                <div class="mono-small-block supertypes">
                 <div>
-                 trait <span data-unresolved-link="" t="n">SortedSet</span>[<span t="t">VertexT</span>]
+                 trait <span data-unresolved-link="" t="n">Serializable</span>
                 </div>
                 <div>
-                 trait <span data-unresolved-link="" t="n">SortedSetOps</span>[<span t="t">VertexT</span>, <a href="tda4j/Simplex.html" t="t">Simplex</a>, <a href="tda4j/Simplex.html" t="t">Simplex</a>[<span t="t">VertexT</span>]]
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">SortedSet</span>[<span t="t">VertexT</span>]
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">SortedSetFactoryDefaults</span>[<span t="t">VertexT</span>, <a href="tda4j/Simplex.html" t="t">Simplex</a>, <span data-unresolved-link="" t="t">Set</span>]
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">SortedSetOps</span>[<span t="t">VertexT</span>, <a href="tda4j/Simplex.html" t="t">Simplex</a>, <a href="tda4j/Simplex.html" t="t">Simplex</a>[<span t="t">VertexT</span>]]
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">SortedOps</span>[<span t="t">VertexT</span>, <a href="tda4j/Simplex.html" t="t">Simplex</a>[<span t="t">VertexT</span>]]
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">Set</span>[<span t="t">VertexT</span>]
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">SetOps</span>[<span t="t">VertexT</span>, <span data-unresolved-link="" t="t">Set</span>, <a href="tda4j/Simplex.html" t="t">Simplex</a>[<span t="t">VertexT</span>]]
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">Set</span>[<span t="t">VertexT</span>]
+                 trait <span data-unresolved-link="" t="n">Product</span>
                 </div>
                 <div>
                  trait <span data-unresolved-link="" t="n">Equals</span>
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">SetOps</span>[<span t="t">VertexT</span>, <span data-unresolved-link="" t="t">Set</span>, <a href="tda4j/Simplex.html" t="t">Simplex</a>[<span t="t">VertexT</span>]]
-                </div>
-                <div>
-                 trait (<span t="t">VertexT</span>)<span t="k"> =&gt; </span><span data-unresolved-link="" t="t">Boolean</span>
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">Iterable</span>[<span t="t">VertexT</span>]
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">Iterable</span>[<span t="t">VertexT</span>]
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">IterableFactoryDefaults</span>[<span t="t">VertexT</span>, <span data-unresolved-link="" t="t">Set</span>]
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">IterableOps</span>[<span t="t">VertexT</span>, <span data-unresolved-link="" t="t">Set</span>, <a href="tda4j/Simplex.html" t="t">Simplex</a>[<span t="t">VertexT</span>]]
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">IterableOnceOps</span>[<span t="t">VertexT</span>, <span data-unresolved-link="" t="t">Set</span>, <a href="tda4j/Simplex.html" t="t">Simplex</a>[<span t="t">VertexT</span>]]
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">IterableOnce</span>[<span t="t">VertexT</span>]
                 </div>
                 <div>
                  trait <a href="tda4j/Cell.html" t="n">Cell</a>[<a href="tda4j/Simplex.html" t="t">Simplex</a>[<span t="t">VertexT</span>]]
@@ -3447,17 +3401,6 @@
                 </div><span class="show-all-code show-content text-button h100">Show all</span>
                </div>
               </dd>
-              <dt class="body-small">
-               Self type
-              </dt>
-              <dd class="body-medium">
-               <div class="mono-small-block supertypes">
-                <span></span>
-                <div>
-                 <a href="tda4j/Simplex.html" t="n">Simplex</a>[<span t="t">VertexT</span>]
-                </div>
-               </div>
-              </dd>
              </dl>
             </div>
            </div>
@@ -3469,7 +3412,7 @@
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="signature-short"><span class="modifiers"></span><span class="kind"><span t="k">object </span></span><a href="tda4j/Simplex$.html" t="n" class="documentableName ">Simplex</a><span t="k"> extends </span><span data-unresolved-link="" t="t">SortedIterableFactory</span>[<a href="tda4j/Simplex.html" t="t">Simplex</a>]</span><span class="signature-long"></span>
+            <span class="modifiers"></span><span class="kind"><span t="k">object </span></span><a href="tda4j/Simplex$.html" t="n" class="documentableName ">Simplex</a>
            </div>
           </div>
          </div>
@@ -3499,15 +3442,6 @@
               <dd class="body-medium">
                <div class="mono-small-block supertypes">
                 <div>
-                 trait <span data-unresolved-link="" t="n">SortedIterableFactory</span>[<a href="tda4j/Simplex.html" t="t">Simplex</a>]
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">EvidenceIterableFactory</span>[<a href="tda4j/Simplex.html" t="t">Simplex</a>, <span data-unresolved-link="" t="t">Ordering</span>]
-                </div>
-                <div>
-                 trait <span data-unresolved-link="" t="n">Serializable</span>
-                </div>
-                <div>
                  class <span data-unresolved-link="" t="n">Object</span>
                 </div>
                 <div>
@@ -3515,7 +3449,7 @@
                 </div>
                 <div>
                  class <span data-unresolved-link="" t="n">Any</span>
-                </div><span class="show-all-code show-content text-button h100">Show all</span>
+                </div><span></span>
                </div>
               </dd>
               <dt class="body-small">
@@ -4563,12 +4497,12 @@
           </div>
          </div>
         </div>
-        <div class="documentableElement" id="s-fffff5bd">
+        <div class="documentableElement" id="∆-fffff5bd">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="tda4j.html#s-fffff5bd" t="n" class="documentableName ">s</a>[<span t="k"></span><span data-unresolved-link="" t="t">T</span> : <span data-unresolved-link="" t="t">Ordering</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">ts</span>: <span t="t">T</span>*): <a href="tda4j/Simplex.html" t="t">Simplex</a>[<span data-unresolved-link="" t="t">T</span>]
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="tda4j.html#∆-fffff5bd" t="n" class="documentableName ">∆</a>[<span t="k"></span><span data-unresolved-link="" t="t">T</span> : <span data-unresolved-link="" t="t">Ordering</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">ts</span>: <span t="t">T</span>*): <a href="tda4j/Simplex.html" t="t">Simplex</a>[<span data-unresolved-link="" t="t">T</span>]
            </div>
           </div>
          </div>
@@ -4583,40 +4517,11 @@
             <div class="cover">
              <div class="doc">
               <p>Convenience method for defining simplices</p> 
-              <p>The character ◊, used to avoid hogging <code>s</code>, is typed as Alt+Shift+V on Mac GB layout, and has Unicode code 0x25CA.</p> 
               <p>The character ∆ is typed as Alt+J on Mac GB layout, and has unicode code 0x0394.</p> 
-              <p>The character σ has Windows Alt-code 229, and unicode code 0x03c3.</p> 
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small"></dl>
             </div>
-           </div>
-          </div>
-         </div>
-        </div>
-        <div class="documentableElement" id="σ-fffff5bd">
-         <div class="documentableElement-expander">
-          <div class="header monospace mono-medium">
-           <div class="signature">
-            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="tda4j.html#σ-fffff5bd" t="n" class="documentableName ">σ</a>[<span t="k"></span><span data-unresolved-link="" t="t">T</span> : <span data-unresolved-link="" t="t">Ordering</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">ts</span>: <span t="t">T</span>*): <a href="tda4j/Simplex.html" t="t">Simplex</a>[<span data-unresolved-link="" t="t">T</span>]
-           </div>
-          </div>
-         </div>
-        </div>
-        <div class="documentableElement" id="∆-fffff5bd">
-         <div class="documentableElement-expander">
-          <div class="header monospace mono-medium">
-           <div class="signature">
-            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="tda4j.html#∆-fffff5bd" t="n" class="documentableName ">∆</a>[<span t="k"></span><span data-unresolved-link="" t="t">T</span> : <span data-unresolved-link="" t="t">Ordering</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">ts</span>: <span t="t">T</span>*): <a href="tda4j/Simplex.html" t="t">Simplex</a>[<span data-unresolved-link="" t="t">T</span>]
-           </div>
-          </div>
-         </div>
-        </div>
-        <div class="documentableElement" id="◊-fffff5bd">
-         <div class="documentableElement-expander">
-          <div class="header monospace mono-medium">
-           <div class="signature">
-            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="tda4j.html#◊-fffff5bd" t="n" class="documentableName ">◊</a>[<span t="k"></span><span data-unresolved-link="" t="t">T</span> : <span data-unresolved-link="" t="t">Ordering</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">ts</span>: <span t="t">T</span>*): <a href="tda4j/Simplex.html" t="t">Simplex</a>[<span data-unresolved-link="" t="t">T</span>]
            </div>
           </div>
          </div>
