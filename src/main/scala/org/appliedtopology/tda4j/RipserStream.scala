@@ -40,9 +40,9 @@ class SimplexIndexing(val vertexCount: Int) {
   }
 
   def cofacetIterator(simplex: Simplex[Int]): Iterator[Int] =
-    cofacetIterator(apply(simplex), simplex.size, true)
+    cofacetIterator(apply(simplex), simplex.vertices.size, true)
   def topCofacetIterator(simplex: Simplex[Int]): Iterator[Int] =
-    cofacetIterator(apply(simplex), simplex.size, false)
+    cofacetIterator(apply(simplex), simplex.vertices.size, false)
   def cofacetIterator(
     index: Int,
     size: Int,
@@ -60,7 +60,7 @@ class SimplexIndexing(val vertexCount: Int) {
       ) { (s, iB, iA, k, j) =>
         if (j < 0) {
           None // end iteration when we're done
-        } else if (s.contains(j)) {
+        } else if (s.vertices.contains(j)) {
           if (!allCofacets)
             None
           else
@@ -78,7 +78,7 @@ class SimplexIndexing(val vertexCount: Int) {
       .map((os: Option[Int]) => os.get)
 
   def facetIterator(index: Int, size: Int): Iterator[Int] =
-    Iterator.unfold((apply(index, size).toSeq.sorted, index, 0, size - 1)) { (s, iB, iA, k) =>
+    Iterator.unfold((apply(index, size).vertices.toSeq.sorted, index, 0, size - 1)) { (s:Seq[Int], iB:Int, iA:Int, k:Int) =>
       if (k < 0) None
       else {
         val j = s(k)
@@ -89,8 +89,8 @@ class SimplexIndexing(val vertexCount: Int) {
     }
 
   def apply(simplex: Simplex[Int]): Int =
-    simplex.toSeq.sorted.reverse.zipWithIndex.map { (v, i) =>
-      binomial(v, simplex.size - i)
+    simplex.vertices.toSeq.sorted.reverse.zipWithIndex.map { (v, i) =>
+      binomial(v, simplex.vertices.size - i)
     }.sum
 }
 
@@ -181,11 +181,11 @@ class RipserStreamSparse(
           fV <- simplexCache.map(_._1).iterator
           previousSimplex <- simplexCache.filter(_._1 < fV).iterator.map(_._2)
           nextVertex <- metricSpace.elements
-            .filter(!previousSimplex.contains(_))
-            .filter(nV => previousSimplex.map(oV => metricSpace.distance(oV, nV)).max <= fV)
-          simplex: Simplex[Int] <- List(previousSimplex + nextVertex)
-          if zeroApparentCofacet(si(simplex), simplex.size).isEmpty
-          if zeroApparentFacet(si(simplex), simplex.size).isEmpty
+            .filter(!previousSimplex.vertices.contains(_))
+            .filter(nV => previousSimplex.vertices.map(oV => metricSpace.distance(oV, nV)).max <= fV)
+          simplex: Simplex[Int] = Simplex.from(previousSimplex.vertices.appended(nextVertex))
+          if zeroApparentCofacet(si(simplex), simplex.vertices.size).isEmpty
+          if zeroApparentFacet(si(simplex), simplex.vertices.size).isEmpty
         // also check if this is cleared?
         yield simplex
       }.iterator
@@ -294,10 +294,12 @@ class RipserStreamOf[VertexT: Ordering](
     RipserStream(intMetricSpace, maxFiltrationValue, maxDimension)
 
   override def iterator: Iterator[Simplex[VertexT]] =
-    rs.iterator.map(s => s.map(v => vertices(v)))
+    rs.iterator.map(s => Simplex.from(s.vertices.map(v => vertices(v))))
 
-  override def filtrationValue: PartialFunction[Simplex[VertexT], Double] =
-    rs.filtrationValue.compose(s => s.map(v => vertices.indexOf(v)))
+  override def filtrationValue: PartialFunction[Simplex[VertexT], Double] = { spx =>
+    val indices : Seq[Int] = spx.vertices.map(vertices.indexOf)
+    rs.filtrationValue(Simplex.from(indices))
+  }
 }
 
 class SymmetricRipserCliqueFinder[KeyT](

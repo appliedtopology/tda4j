@@ -56,14 +56,14 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
   def orbitSeq(
     simplex: Simplex[VertexT]
   ): Set[Simplex[VertexT]] =
-    keys.map(k => simplex.map(apply(k))).toSet
+    keys.map(k => Simplex.from(simplex.vertices.map(apply(k)))).toSet
 
   def orbitPar(
     simplex: Simplex[VertexT]
   ): Set[Simplex[VertexT]] = {
     val futures: Iterable[Future[Simplex[VertexT]]] =
       for (k <- keys) yield Future {
-        simplex.map(apply(k))
+        Simplex.from(simplex.vertices.map(apply(k)))
       }
 
     val allfutures = Future.sequence(futures)
@@ -82,7 +82,7 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
   def representative(
     simplex: Simplex[VertexT]
   ): Simplex[VertexT] =
-    keys.map(k => simplex.map(apply(k))).min
+    keys.map(k => Simplex.from(simplex.vertices.map(apply(k)))).min
 
   /** Check if `simplex` is the canonical representative of its own orbit.
     *
@@ -490,7 +490,7 @@ class HyperCubeSymmetryGeneratorsBitSet(val bitlength: Int) extends HyperCubeSym
     if (representatives.contains(simplex)) {
       simplex == representatives(simplex)
     } else {
-      if (generators.forall(g => simplex <= simplex.map(s => g(s)))) {
+      if (generators.forall(g => simplex <= Simplex.from(simplex.vertices.map(s => g(s))))) {
         // simplex is a pseudo-minimum
         // time to check the entire orbit
         representatives(simplex) = super.representative(simplex)
@@ -524,7 +524,7 @@ class HyperCubeSymmetryGenerators(val bitlength: Int) extends HyperCubeSymmetry(
     if (representatives.contains(simplex)) {
       simplex == representatives(simplex)
     } else {
-      if (generators.par.forall(g => simplex <= simplex.map(s => g(s)))) {
+      if (generators.par.forall(g => simplex <= Simplex.from(simplex.vertices.map(s => g(s))))) {
         // simplex is a pseudo-minimum
         // time to check the entire orbit
         representatives(simplex) = super.representative(simplex)

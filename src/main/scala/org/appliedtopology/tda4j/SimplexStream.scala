@@ -142,12 +142,11 @@ class ExplicitStreamBuilder[VertexT: Ordering, FiltrationT](using
   }
 
   override def result(): ExplicitStream[VertexT, FiltrationT] = {
-    def lt(
-      fs1: (FiltrationT, Simplex[VertexT]),
-      fs2: (FiltrationT, Simplex[VertexT])
-    ): Boolean =
-      (fs1._1, fs1._2.to(Seq)) < (fs2._1, fs2._2.to(Seq))
-    simplices.sortInPlaceWith(lt)
+    given filtrationOrdering : Ordering[(FiltrationT, Simplex[VertexT])] =
+      Ordering
+        .by[(FiltrationT,Simplex[VertexT]),FiltrationT]{(f:FiltrationT,s:Simplex[VertexT]) => f}(ordering)
+        .orElseBy{(f:FiltrationT,s:Simplex[VertexT]) => s}(simplexOrdering[VertexT])
+    simplices.sortInPlace
 
     new ExplicitStream(filtrationValues.toMap, simplices.map((_, s) => s).toSeq)(using filterable)
   }
@@ -170,21 +169,21 @@ class FilteredSimplexOrdering[VertexT, FiltrationT](
     case (x, y) if filtration.filtrationValue.isDefinedAt(x) && filtration.filtrationValue.isDefinedAt(y) =>
       filtrationOrdering.compare(filtration.filtrationValue(x), filtration.filtrationValue(y)) match {
         case 0 =>
-          if (Ordering.Int.compare(x.size, y.size) == 0)
+          if (Ordering.Int.compare(x.dim, y.dim) == 0)
             Ordering.Implicits
               .seqOrdering[Seq, VertexT](vertexOrdering)
-              .compare(x.to(Seq), y.to(Seq))
+              .compare(x.vertices, y.vertices)
           else
-            Ordering.Int.compare(x.size, y.size)
+            Ordering.Int.compare(x.dim, y.dim)
         case cmp if cmp != 0 => cmp
       }
     case (x, y) => // at least one does not have a filtration value defined; just go by dimension and lexicographic
-      if (Ordering.Int.compare(x.size, y.size) == 0)
+      if (Ordering.Int.compare(x.dim, y.dim) == 0)
         Ordering.Implicits
           .seqOrdering[Seq, VertexT](vertexOrdering)
-          .compare(x.to(Seq), y.to(Seq))
+          .compare(x.vertices, y.vertices)
       else
-        Ordering.Int.compare(x.size, y.size)
+        Ordering.Int.compare(x.dim, y.dim)
   }
 }
 

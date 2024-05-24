@@ -62,14 +62,15 @@ object FiniteMetricSpace {
     val metricSpace: FiniteMetricSpace[VertexT]
   ) extends PartialFunction[Simplex[VertexT], Double] {
     def isDefinedAt(spx: Simplex[VertexT]): Boolean =
-      spx.forall(v => metricSpace.contains(v))
+      spx.vertices.forall(v => metricSpace.contains(v))
 
     def apply(spx: Simplex[VertexT]): Double =
-      if (spx.size <= 1)
+      if (spx.dim <= 0)
         0.0
       else
         spx
-          .flatMap(v => spx.filter(_ > v).map(w => metricSpace.distance(v, w)))
+          .vertices
+          .flatMap(v => spx.vertices.filter(_ > v).map(w => metricSpace.distance(v, w)))
           .max
   }
 }

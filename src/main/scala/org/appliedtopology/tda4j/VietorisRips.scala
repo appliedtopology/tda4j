@@ -304,9 +304,9 @@ object LazyVietorisRips {
         }
 
         val newSimplices: SortedSet[Simplex[VertexT]] =
-          V.map(spx => Simplex.from(spx))
-            .map(spx => spx ++ endpoints)
-            .to(SortedSet)
+          V.map(spx => spx.vertices)
+           .map(spx => Simplex.from(spx ++ endpoints))
+           .to(SortedSet)
 
         FoldState(
           g + nextEdge,
@@ -388,10 +388,10 @@ object LazyStratifiedVietorisRips {
     ): LazyList[Simplex[VertexT]] =
       LazyList
         .from(
-          simplex.tail
-            .foldRight(neighbors(simplex.head))((v, N) => N.intersect(neighbors(v)))
+          simplex.vertices.tail
+            .foldRight(neighbors(simplex.vertices.head))((v, N) => N.intersect(neighbors(v)))
         )
-        .map(v => simplex + v)
+        .map(v => Simplex.from(simplex.vertices.appended(v)))
 
     case class FoldState(
       outputLists: Array[LazyList[Simplex[VertexT]]],
@@ -400,11 +400,11 @@ object LazyStratifiedVietorisRips {
     )
     @tailrec def oneStep(foldState: FoldState): Array[LazyList[Simplex[VertexT]]] =
       if (foldState.taskStack.isEmpty) foldState.outputLists
-      else if (foldState.taskStack.head._1.size > maxSize) oneStep(foldState.copy(taskStack = foldState.taskStack.tail))
+      else if (foldState.taskStack.head._1.dim > maxSize-1) oneStep(foldState.copy(taskStack = foldState.taskStack.tail))
       else {
         val (simplex, edge) = foldState.taskStack.head
-        val List(src, tgt) = edge.toList.sorted // ensure src < tgt
-        val neighbors: Map[VertexT, Set[VertexT]] = if (simplex.size == 2) { // new edge enters
+        val List(src, tgt) : List[VertexT] = List(edge._1,edge._2).sorted // ensure src < tgt
+        val neighbors: Map[VertexT, Set[VertexT]] = if (simplex.dim == 1) { // new edge enters
           foldState.neighbors
             .updated(tgt, foldState.neighbors.getOrElse(tgt, Set()) + src)
             .updated(src, foldState.neighbors.getOrElse(src, Set()) + tgt)
@@ -415,12 +415,12 @@ object LazyStratifiedVietorisRips {
         val newCofacets =
           for
             cofacet <- candidateCofacets
-            others = cofacet.toList
-              .combinations(simplex.size)
+            others = cofacet.vertices.toList
+              .combinations(simplex.dim+1)
               .filter(spx => filtrationValue(Simplex.from(spx)) == metricSpace.distance(src, tgt))
               .toList
               .sorted(math.Ordering.Implicits.seqOrdering)
-            if simplex.toList.sorted == others.last
+            if simplex.vertices.sorted == others.last
           yield cofacet
 
         oneStep(
