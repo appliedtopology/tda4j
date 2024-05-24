@@ -107,7 +107,7 @@ object Cubical {
     ) // reversed so that the last element saved for any one cube is the one with lowest T-value
 
     override def filtrationValue: PartialFunction[ElementaryCube, T] =
-      cubes.apply
+      cubes
 
     override def iterator: Iterator[ElementaryCube] =
       cubes.keys.toList
