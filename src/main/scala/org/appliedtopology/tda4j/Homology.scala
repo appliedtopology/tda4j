@@ -9,11 +9,9 @@ import scala.annotation.tailrec
 //  extends CellularHomologyContext[Simplex[VertexT], CoefficientT, FiltrationT]() {}
 
 class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional, FiltrationT: Ordering]()
-    extends CellularHomologyContext[Simplex[VertexT], CoefficientT, FiltrationT](Seq(Simplex[VertexT]())) {}
+    extends CellularHomologyContext[Simplex[VertexT], CoefficientT, FiltrationT] {}
 
-class CellularHomologyContext[CellT : OrderedCell, CoefficientT: Fractional, FiltrationT: Ordering](
-  val cellPrefix: Seq[CellT] = Seq()
-) extends ChainOps[CellT, CoefficientT]() {
+class CellularHomologyContext[CellT : OrderedCell, CoefficientT: Fractional, FiltrationT: Ordering] extends ChainOps[CellT, CoefficientT]() {
 
   import barcode._
 
@@ -38,8 +36,7 @@ class CellularHomologyContext[CellT : OrderedCell, CoefficientT: Fractional, Fil
     import Ordering.Implicits.infixOrderingOps
     given filtration: Filtration[CellT, FiltrationT] = stream
 
-    val CellIterator: collection.BufferedIterator[CellT] =
-      Iterator.concat(cellPrefix, stream.iterator.to(Iterable)).buffered
+    val CellIterator: collection.BufferedIterator[CellT] = stream.iterator.buffered
 
     def diagramAt(
       f: FiltrationT
