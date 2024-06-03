@@ -1,11 +1,12 @@
 package org.appliedtopology.tda4j
 
-import org.apache.commons.numbers.fraction.GeneralizedContinuedFraction.Coefficient
 import org.specs2.mutable
 import org.specs2.execute.Result
 
 import math.Ordering.Implicits.sortedSetOrdering
 import scala.math.Numeric.FloatIsFractional
+
+import scala.math.Fractional.Implicits.infixFractionalOps
 
 class ChainSpec extends mutable.Specification {
   """This is the specification for testing the Chain implementation.
@@ -19,7 +20,7 @@ class ChainSpec extends mutable.Specification {
   given Ordering[Int] = math.Ordering.Int
 
   given rm: RingModule[Chain[Simplex[Int], Double], Double] =
-    ChainOps[Simplex[Int], Double]()
+    ChainOps[Simplex[Int], Double]
   import rm.*
 
   "The `Chain` type should" >> {
@@ -110,7 +111,7 @@ class ChainSpec extends mutable.Specification {
 
       def e3 = {
         val chain = z1
-        val expectedResult = Chain(Simplex(1, 2, 3) -> -1.0)
+        val expectedResult: Chain[Simplex[Int], Double] = Chain(Simplex(1, 2, 3) -> -1.0)
         val result = -chain
 
         result must beEqualTo(expectedResult)

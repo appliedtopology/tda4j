@@ -5,9 +5,31 @@ import math.Ordering.Implicits.sortedSetOrdering
 import scala.annotation.{tailrec, targetName}
 import scala.collection.mutable
 
+
+/**
+ * Typeclass for having a boundary map
+ */
+trait HasBoundary[T] {
+  extension (t: T) {
+    def boundary[CoefficientT: Fractional]: Chain[T, CoefficientT]
+  }
+}
+
+trait HasDimension[T] {
+  extension (t:T) {
+    def dim: Int
+  }
+}
+
+trait Cell[T] extends HasBoundary[T] with HasDimension[T]
+
+trait OrderedCell[T] extends Cell[T] with Ordering[T]
+
+
+
 /** Trait that defines what it means to have an ordered basis
   */
-trait OrderedBasis[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional] {
+trait OrderedBasis[CellT : Ordering, CoefficientT: Fractional] {
   def leadingCell: Option[CellT] = leadingTerm._1
 
   def leadingCoefficient: CoefficientT = leadingTerm._2
@@ -15,32 +37,13 @@ trait OrderedBasis[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional] {
   def leadingTerm: (Option[CellT], CoefficientT)
 }
 
-/** Lightweight trait to define what it means to be a topological "Cell".
-  *
-  * Using F-bounded types to ensure reflective typing. See https://tpolecat.github.io/2015/04/29/f-bounds.html See
-  * https://dotty.epfl.ch/3.0.0/docs/reference/contextual/type-classes.html
-  */
-trait Cell[CellT <: Cell[CellT]] {
-  this: CellT =>
 
-  /** The boundary map of the cell.
-    *
-    * @return
-    *   A sequence of boundary cells.
-    * @todo
-    *   When a `Chain` trait or class has been created, this should change to return an appropriate `Chain` instead of
-    *   the current `List`.
-    */
-
-  def boundary[CoefficientT: Fractional]: Chain[CellT, CoefficientT]
-  def dim: Int
-}
 
 /*
 Implementation of the Chain trait using heaps for internal storage and deferred arithmetic.
  */
 
-class Chain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional] private[tda4j] (
+class Chain[CellT : OrderedCell, CoefficientT : Fractional] private[tda4j] (
   var entries: mutable.PriorityQueue[(CellT, CoefficientT)]
 ) extends OrderedBasis[CellT, CoefficientT] {
   override def leadingTerm: (Option[CellT], CoefficientT) = {
@@ -106,19 +109,19 @@ class Chain[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional] private[td
 }
 
 object Chain {
-  def apply[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional](
+  def apply[CellT : OrderedCell, CoefficientT: Fractional](
     cs: (CellT, CoefficientT)*
   ): Chain[CellT, CoefficientT] =
     from(cs)
-  def apply[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional](c: CellT): Chain[CellT, CoefficientT] =
+  def apply[CellT : OrderedCell, CoefficientT: Fractional](c: CellT): Chain[CellT, CoefficientT] =
     apply(c -> summon[Fractional[CoefficientT]].one)
-  def from[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional](
+  def from[CellT : OrderedCell, CoefficientT: Fractional](
     cs: Seq[(CellT, CoefficientT)]
   ): Chain[CellT, CoefficientT] =
     new Chain(mutable.PriorityQueue.from(cs)(using Ordering.by[(CellT, CoefficientT), CellT](_._1)))
 }
 
-class ChainOps[CellT <: Cell[CellT]: scala.math.Ordering, CoefficientT](using fr: Fractional[CoefficientT])
+class ChainOps[CellT : OrderedCell, CoefficientT](using fr: Fractional[CoefficientT])
     extends RingModule[Chain[CellT, CoefficientT], CoefficientT] {
 
   import Numeric.Implicits._

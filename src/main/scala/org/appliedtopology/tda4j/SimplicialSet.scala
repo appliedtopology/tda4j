@@ -110,7 +110,7 @@ object SimplicialSet {
  */
 
 def nSkeleton(n:Int)(ss: SimplicialSet) : SimplicialSet =
-  ss.copy(generators=ss.generators.filter(_.dim <= n))
+  SimplicialSet(ss.generators.filter(_.dim <= n), ss.faceMapping)
 
 case class DisjointUnion(left: SimplicialSet, right: SimplicialSet) extends SimplicialSetLike {
   override def generators: List[SimplicialSetElement] = left.generators ++ right.generators

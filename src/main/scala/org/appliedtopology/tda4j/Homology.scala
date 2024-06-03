@@ -11,7 +11,7 @@ import scala.annotation.tailrec
 class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional, FiltrationT: Ordering]()
     extends CellularHomologyContext[Simplex[VertexT], CoefficientT, FiltrationT](Seq(Simplex[VertexT]())) {}
 
-class CellularHomologyContext[CellT <: Cell[CellT]: Ordering, CoefficientT: Fractional, FiltrationT: Ordering](
+class CellularHomologyContext[CellT : OrderedCell, CoefficientT: Fractional, FiltrationT: Ordering](
   val cellPrefix: Seq[CellT] = Seq()
 ) extends ChainOps[CellT, CoefficientT]() {
 

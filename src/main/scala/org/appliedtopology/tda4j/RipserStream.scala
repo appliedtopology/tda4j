@@ -1,10 +1,11 @@
 package org.appliedtopology.tda4j
 
-import scala.collection.Searching.{given, *}
+import scala.collection.Searching.{*, given}
 import org.apache.commons.numbers.combinatorics
 import org.appliedtopology.tda4j.barcode.{ClosedEndpoint, OpenEndpoint, PersistenceBar}
 
 import scala.annotation.tailrec
+import scala.collection.immutable.SortedSet
 import scala.collection.mutable
 import scala.collection.parallel.CollectionConverters.*
 
@@ -183,7 +184,7 @@ class RipserStreamSparse(
           nextVertex <- metricSpace.elements
             .filter(!previousSimplex.vertices.contains(_))
             .filter(nV => previousSimplex.vertices.map(oV => metricSpace.distance(oV, nV)).max <= fV)
-          simplex: Simplex[Int] = Simplex.from(previousSimplex.vertices.appended(nextVertex))
+          simplex: Simplex[Int] = Simplex.from(previousSimplex.vertices + nextVertex)
           if zeroApparentCofacet(si(simplex), simplex.vertices.size).isEmpty
           if zeroApparentFacet(si(simplex), simplex.vertices.size).isEmpty
         // also check if this is cleared?
@@ -297,7 +298,7 @@ class RipserStreamOf[VertexT: Ordering](
     rs.iterator.map(s => Simplex.from(s.vertices.map(v => vertices(v))))
 
   override def filtrationValue: PartialFunction[Simplex[VertexT], Double] = { spx =>
-    val indices : Seq[Int] = spx.vertices.map(vertices.indexOf)
+    val indices : SortedSet[Int] = spx.vertices.map(vertices.indexOf)
     rs.filtrationValue(Simplex.from(indices))
   }
 }

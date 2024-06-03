@@ -391,7 +391,7 @@ object LazyStratifiedVietorisRips {
           simplex.vertices.tail
             .foldRight(neighbors(simplex.vertices.head))((v, N) => N.intersect(neighbors(v)))
         )
-        .map(v => Simplex.from(simplex.vertices.appended(v)))
+        .map(v => Simplex.from(simplex.vertices + v))
 
     case class FoldState(
       outputLists: Array[LazyList[Simplex[VertexT]]],
@@ -420,7 +420,7 @@ object LazyStratifiedVietorisRips {
               .filter(spx => filtrationValue(Simplex.from(spx)) == metricSpace.distance(src, tgt))
               .toList
               .sorted(math.Ordering.Implicits.seqOrdering)
-            if simplex.vertices.sorted == others.last
+            if simplex.vertices.toSeq == others.last
           yield cofacet
 
         oneStep(

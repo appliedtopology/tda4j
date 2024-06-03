@@ -4,10 +4,10 @@ import scala.collection.{mutable, SortedIterableFactory, SortedSetFactoryDefault
 import scala.collection.immutable.{Set, SortedMap, SortedSet, SortedSetOps, TreeSet}
 import scala.math.Ordering.IntOrdering
 import scala.math.Ordering.Double.IeeeOrdering
-import math.Ordering.Implicits.seqOrdering
+import math.Ordering.Implicits.sortedSetOrdering
 
 given simplexOrdering[VertexT: Ordering]: Ordering[Simplex[VertexT]] =
-  Ordering.by{(spx:Simplex[VertexT]) => spx.vertices}(seqOrdering[Seq, VertexT])
+  Ordering.by{(spx:Simplex[VertexT]) => spx.vertices}(sortedSetOrdering[SortedSet, VertexT])
 
 /** Class representing an abstract simplex. Abstract simplices are given by sets (of totally ordered vertices)
  * and inherit from `Cell` so that the class has a `boundary` and a `dim` method.
@@ -23,45 +23,47 @@ given simplexOrdering[VertexT: Ordering]: Ordering[Simplex[VertexT]] =
  * @tparam VertexT
  * Vertex type
  */
-case class Simplex[VertexT : Ordering] private (vertices : VertexT*) extends Cell[Simplex[VertexT]] {
+case class Simplex[VertexT : Ordering] private (vertices : SortedSet[VertexT]) {
   override def equals(obj: Any): Boolean = obj match {
     case other : Simplex[VertexT] => vertices == other.vertices
     case _ => super.equals(obj)
   }
 
-  override def dim: Int = vertices.size-1
-
   override def toString(): String =
     vertices.mkString(s"∆(", ",", ")")
 
-  override def boundary[CoefficientT](using
-                                      fr: Fractional[CoefficientT]
-                                     ): Chain[Simplex[VertexT], CoefficientT] =
-    if (dim <= 0) Chain()
-    else
-      Chain.from(
-        vertices
-          .to(Seq)
-          .zipWithIndex
-          .map((vtx,i) => Simplex.from(vertices.drop(i)))
-          .zip(Iterator.unfold(fr.one)(s => Some((s, fr.negate(s)))))
-      )
-
   def union(other: Simplex[VertexT]) =
     new Simplex(vertices.union(other.vertices))
+}
+
+given [VertexT : Ordering] : OrderedCell[Simplex[VertexT]] with {
+  given Ordering[Simplex[VertexT]] = simplexOrdering
+  extension (t: Simplex[VertexT]) {
+    override def boundary[CoefficientT](using fr: Fractional[CoefficientT]): Chain[Simplex[VertexT], CoefficientT] =
+      if(t.dim <= 0) Chain()
+      else Chain.from(
+        t.vertices
+          .to(Seq)
+          .zipWithIndex
+          .map((vtx,i) => Simplex.from(t.vertices.toSeq.patch(i,Seq.empty,1)))
+          .zip(Iterator.unfold(fr.one)(s => Some((s, fr.negate(s)))))
+      )
+    override def dim: Int = t.vertices.size - 1
+  }
+  override def compare(x: Simplex[VertexT], y: Simplex[VertexT]): Int = simplexOrdering[VertexT].compare(x,y)
 }
 
 /** Simplex companion object with factory methods
  */
 object Simplex {
   def apply[VertexT: Ordering](vertices: VertexT*) =
-    new Simplex[VertexT](Seq.from(vertices.sorted) : _*)
+    new Simplex[VertexT](SortedSet.from(vertices))
 
   def empty[VertexT: Ordering]: Simplex[VertexT] =
-    new Simplex[VertexT]()
+    new Simplex[VertexT](SortedSet.empty)
 
   def from[VertexT: Ordering](source: IterableOnce[VertexT]): Simplex[VertexT] =
-    new Simplex(Seq.from(source.iterator.toSeq.sorted) : _*)
+    new Simplex(SortedSet.from(source.iterator))
 }
 
 /** Convenience method for defining simplices

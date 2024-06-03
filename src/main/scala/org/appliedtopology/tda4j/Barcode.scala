@@ -332,5 +332,5 @@ class Barcode[FiltrationT: Ordering: Numeric, AnnotationT] {
 
 //type Barcode[FiltrationT] = List[PersistenceBar[FiltrationT, Nothing]]
 
-type BarcodeGenerators[FiltrationT, CellT <: Cell[CellT], CoefficientT] =
+type BarcodeGenerators[FiltrationT, CellT, CoefficientT] =
   List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]]

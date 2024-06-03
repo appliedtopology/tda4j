@@ -1,29 +1,42 @@
 package org.appliedtopology.tda4j
 
-sealed trait ElementaryInterval extends Cell[ElementaryInterval] {
-  def n: Int
-}
-case class DegenerateInterval(n: Int) extends ElementaryInterval {
-  override def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] =
-    Chain()
-  override def toString: String = s"[$n,$n]"
-  val dim = 0
-}
-case class FullInterval(n: Int) extends ElementaryInterval {
-  override def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] =
-    ChainOps[ElementaryInterval, CoefficientT]().minus(Chain(DegenerateInterval(n + 1)), Chain(DegenerateInterval(n)))
-  override def toString: String = s"[$n,${n + 1}]"
-  val dim = 1
-}
-
 import Ordering.Implicits.seqOrdering
 import scala.annotation.tailrec
-given Ordering[ElementaryInterval] = Ordering.by(i => i.n)
-given Ordering[ElementaryCube] = Ordering.by(c => c.intervals)
 
-case class ElementaryCube(val intervals: List[ElementaryInterval]) extends Cell[ElementaryCube] {
-  override def boundary[CoefficientT: Fractional]: Chain[ElementaryCube, CoefficientT] =
-    if(dim == 0) Chain()
+sealed trait ElementaryInterval {
+  def n: Int
+}
+
+given elementaryIntervalOrdering : Ordering[ElementaryInterval] = Ordering.by(i => i.n)
+
+case class DegenerateInterval(n: Int) extends ElementaryInterval {
+  def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] =
+    Chain[ElementaryInterval, CoefficientT]()
+  override def toString: String = s"[$n,$n]"
+}
+case class FullInterval(n: Int) extends ElementaryInterval {
+  def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] =
+    ChainOps[ElementaryInterval, CoefficientT]().minus(Chain(DegenerateInterval(n + 1)), Chain(DegenerateInterval(n)))
+  override def toString: String = s"[$n,${n + 1}]"
+}
+
+given OrderedCell[ElementaryInterval] with {
+  extension (t: ElementaryInterval)
+    override def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] = t match
+      case DegenerateInterval(n) => Chain()
+      case FullInterval(n) =>
+        ChainOps[ElementaryInterval, CoefficientT]().minus(Chain(DegenerateInterval(n + 1)), Chain(DegenerateInterval(n)))
+  extension (t: ElementaryInterval)
+    override def dim: Int = t match
+      case DegenerateInterval(n) => 0
+      case FullInterval(n) => 1
+
+  override def compare(x: ElementaryInterval, y: ElementaryInterval): Int = elementaryIntervalOrdering.compare(x,y)
+}
+
+case class ElementaryCube(val intervals: List[ElementaryInterval]) {
+  def boundaryImpl[CoefficientT: Fractional]: Chain[ElementaryCube, CoefficientT] =
+    if(this.dim == 0) Chain()
     else {
       val chainOps = ChainOps[ElementaryCube, CoefficientT]()
       import chainOps.{*, given}
@@ -76,13 +89,24 @@ case class ElementaryCube(val intervals: List[ElementaryInterval]) extends Cell[
     }
 
   def emb: Int = intervals.size
-  def dim: Int = intervals.count(i => i.isInstanceOf[FullInterval])
 
   infix def cubeProduct(left: ElementaryCube, right: ElementaryCube): ElementaryCube =
     ElementaryCube(left.intervals ++ right.intervals)
 
   override def toString: String =
     s"Cubical[${intervals.map(_.toString).mkString("x")}]"
+}
+
+given elementaryCubeOrdering : Ordering[ElementaryCube] = Ordering.by(c => c.intervals)
+
+given OrderedCell[ElementaryCube] with {
+  extension (t: ElementaryCube)
+    override def boundary[CoefficientT: Fractional]: Chain[ElementaryCube, CoefficientT] =
+      t.boundaryImpl
+  extension (t: ElementaryCube)
+    override def dim: Int = t.intervals.map(_.dim).sum
+
+  override def compare(x: ElementaryCube, y: ElementaryCube): Int = elementaryCubeOrdering.compare(x,y)
 }
 
 trait CubeStream[FiltrationT: Ordering] extends CellStream[ElementaryCube, FiltrationT]

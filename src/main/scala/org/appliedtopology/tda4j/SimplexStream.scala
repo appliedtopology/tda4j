@@ -1,8 +1,8 @@
 package org.appliedtopology.tda4j
 
 import scala.collection.mutable
-import scala.collection.immutable.{Map, Seq}
-import math.Ordering.Implicits._
+import scala.collection.immutable.{Map, Seq, SortedSet}
+import math.Ordering.Implicits.*
 
 trait Filterable[FiltrationT: Ordering] {
   def smallest: FiltrationT
@@ -34,16 +34,16 @@ given LongIsFilterable: Filterable[Long] = new Filterable[Long] {
   val largest = Long.MaxValue
 }
 
-trait Filtration[CellT <: Cell[CellT], FiltrationT: Ordering: Filterable] extends Filterable[FiltrationT] {
+trait Filtration[CellT : Cell, FiltrationT: Ordering: Filterable] extends Filterable[FiltrationT] {
   def filtrationValue: PartialFunction[CellT, FiltrationT]
 }
 
-trait DoubleFiltration[CellT <: Cell[CellT]] extends Filtration[CellT, Double] {
+trait DoubleFiltration[CellT : Cell] extends Filtration[CellT, Double] {
   val smallest = Double.NegativeInfinity
   val largest = Double.PositiveInfinity
 }
 
-trait CellStream[CellT <: Cell[CellT], FiltrationT: Ordering]
+trait CellStream[CellT : Cell, FiltrationT: Ordering]
     extends Filtration[CellT, FiltrationT]
     with IterableOnce[CellT] {
   def filtrationOrdering: Ordering[CellT]
@@ -169,27 +169,27 @@ class FilteredSimplexOrdering[VertexT, FiltrationT](
     case (x, y) if filtration.filtrationValue.isDefinedAt(x) && filtration.filtrationValue.isDefinedAt(y) =>
       filtrationOrdering.compare(filtration.filtrationValue(x), filtration.filtrationValue(y)) match {
         case 0 =>
-          if (Ordering.Int.compare(x.dim, y.dim) == 0)
+          if (Ordering.Int.compare(x.vertices.size, y.vertices.size) == 0)
             Ordering.Implicits
-              .seqOrdering[Seq, VertexT](vertexOrdering)
+              .sortedSetOrdering[SortedSet, VertexT](vertexOrdering)
               .compare(x.vertices, y.vertices)
           else
-            Ordering.Int.compare(x.dim, y.dim)
+            Ordering.Int.compare(x.vertices.size, y.vertices.size)
         case cmp if cmp != 0 => cmp
       }
     case (x, y) => // at least one does not have a filtration value defined; just go by dimension and lexicographic
-      if (Ordering.Int.compare(x.dim, y.dim) == 0)
+      if (Ordering.Int.compare(x.vertices.size, y.vertices.size) == 0)
         Ordering.Implicits
-          .seqOrdering[Seq, VertexT](vertexOrdering)
+          .sortedSetOrdering[SortedSet, VertexT](vertexOrdering)
           .compare(x.vertices, y.vertices)
       else
-        Ordering.Int.compare(x.dim, y.dim)
+        Ordering.Int.compare(x.vertices.size, y.vertices.size)
   }
 }
 
 
 
-trait StratifiedCellStream[CellT <: Cell[CellT] :Ordering,FiltrationT:Filterable] extends CellStream[CellT,FiltrationT] {
+trait StratifiedCellStream[CellT : OrderedCell,FiltrationT:Filterable] extends CellStream[CellT,FiltrationT] {
   def iterateDimension : PartialFunction[Int, Iterator[CellT]]
 
   override def iterator: Iterator[CellT] =

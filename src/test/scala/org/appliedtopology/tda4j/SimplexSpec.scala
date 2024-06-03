@@ -3,6 +3,8 @@ package org.appliedtopology.tda4j
 import org.specs2.{mutable, Specification}
 import org.specs2.execute.Result
 
+import org.appliedtopology.tda4j.given
+
 import math.Ordering.Implicits.sortedSetOrdering
 
 object SimplexSpec extends Specification {
