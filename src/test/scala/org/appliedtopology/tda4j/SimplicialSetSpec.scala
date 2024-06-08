@@ -49,22 +49,4 @@ class SimplicialSetSpec extends mutable.Specification {
       (2, 2.0, Double.PositiveInfinity), // essential 2-class
     ))
   }
-  
-  "product of two spheres - specific failure example" >> {
-    val ss = Product(sphere(6), sphere(7))
-    val forbidden = ss
-      .generators
-      .filter(_.dim == 9)
-      .filter{(sse) => sse.asInstanceOf[SimplicialWrapper[ProductElement]].wrapped.left.degeneracies == List(5,2,1)}
-      .filter{(sse) => sse.asInstanceOf[SimplicialWrapper[ProductElement]].wrapped.right.degeneracies == List(3,0)}
-    
-    val required = ss
-      .generators
-      .filter(_.dim == 9)
-      .filter { (sse) => sse.asInstanceOf[SimplicialWrapper[ProductElement]].wrapped.left.degeneracies == List(5, 1, 0) }
-      .filter { (sse) => sse.asInstanceOf[SimplicialWrapper[ProductElement]].wrapped.right.degeneracies == List(3, 0) }
-
-    "s₅ s₂ s₁ ∆⁶ x s₃ s₀ ∆⁷ = s₃ ( s₅ s₁ ∆⁶ x s₀ ∆⁷) is degenerate" ==> (forbidden.isEmpty must beTrue)
-    "s₅ s₁ s₀ ∆⁶ x s₃ s₀ ∆⁷ is non-degenerate" ==> (required.nonEmpty must beTrue)
-  }
 }

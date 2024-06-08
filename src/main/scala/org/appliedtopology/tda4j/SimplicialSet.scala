@@ -296,6 +296,14 @@ case class LazySimplicialSet(
 
 import math.Ordering.Implicits.sortedSetOrdering
 
+
+case class SimplicialMap(mapping : PartialFunction[SimplicialSetElement, SimplicialSetElement]) {
+  def apply(sse: SimplicialSetElement): SimplicialSetElement = sse match { 
+    case DegenerateSimplicialSetElement(base, degeneracies) if(mapping.isDefinedAt(base)) =>
+      DegenerateSimplicialSetElement(mapping(base), degeneracies).join()
+  }
+}
+
 /**
  * The Singular Simplicial Set of a simplicial complex (seen as a sequence of simplices).
  *
@@ -490,26 +498,16 @@ case class Product(left: SimplicialSet, right: SimplicialSet) extends Simplicial
       .flatMap { (gL, gR) =>
         val degeneracyIndexPool = (0 to dimension).reverse
         val totalCount = (dimension - gL.dim) + (dimension - gR.dim)
-        val leftCandidates = degeneracyIndexPool
-          .combinations(dimension - gL.dim)
-          .toSeq
-          .filter { (comb) => comb.reverse.zipWithIndex.forall { (c,i) => c <= gL.dim+i } }
-          .groupBy { (comb) => comb.zipWithIndex.map(_+_).toSet }
-        val rightCandidates = degeneracyIndexPool
-          .combinations(dimension - gR.dim)
-          .toSeq
-          .filter { (comb) => comb.reverse.zipWithIndex.forall { (c,i) => c <= gR.dim+i } }
-          .groupBy { (comb) => comb.zipWithIndex.map(_+_).toSet }
         for
-          (cL,ccL) <- leftCandidates
-          (cR,ccR) <- rightCandidates
-          if(cL.intersect(cR).isEmpty)
-          dL <- ccL
-          dR <- ccR
+          comb <- degeneracyIndexPool.combinations(totalCount)
+          combL <- comb.combinations(dimension - gL.dim)
+          combR = comb diff combL
+          if(combL.reverse.zipWithIndex.forall { (c,i) => c <= gL.dim+i })
+          if(combR.reverse.zipWithIndex.forall { (c,i) => c <= gR.dim+i })
         yield
           SimplicialWrapper(ProductElement(
-            DegenerateSimplicialSetElement(gL, dL.toList),
-            DegenerateSimplicialSetElement(gR, dR.toList)))
+            DegenerateSimplicialSetElement(gL, combL.toList),
+            DegenerateSimplicialSetElement(gR, combR.toList)))
       }
   val maxdim = (left.generators.map(_.dim).max) + (right.generators.map(_.dim).max)
   override def generators: Seq[SimplicialSetElement] =

@@ -4,7 +4,7 @@ import collection.immutable.SortedMap
 import math.Ordering.Implicits.sortedSetOrdering
 import scala.annotation.{tailrec, targetName}
 import scala.collection.mutable
-
+import math.Fractional.Implicits.infixFractionalOps
 
 /**
  * Typeclass for having a boundary map
@@ -94,7 +94,7 @@ class Chain[CellT : OrderedCell, CoefficientT : Fractional] private[tda4j] (
   def items: Seq[(CellT, CoefficientT)] = entries.toSeq
 
   /** WARNING - this is potentially an expensive operation
-    */
+   */
   override def equals(obj: Any): Boolean = obj match {
     case other: Chain[CellT, CoefficientT] =>
       collapseAll()
@@ -106,6 +106,19 @@ class Chain[CellT : OrderedCell, CoefficientT : Fractional] private[tda4j] (
   override def toString: String =
     if (entries.iterator.isEmpty) "Chain()"
     else entries.iterator.map((c, x) => s"${x.toString}⊠${c.toString}").mkString(" + ")
+
+  def chainBoundary: Chain[CellT, CoefficientT] =
+    Chain.from(entries
+      .iterator
+      .flatMap { (cellO, coeffO) =>
+        cellO
+          .boundary[CoefficientT]
+          .entries
+          .iterator
+          .map { (cellI, coeffI) => (cellI, coeffO * coeffI) }
+      }
+      .toSeq
+    )
 }
 
 object Chain {
