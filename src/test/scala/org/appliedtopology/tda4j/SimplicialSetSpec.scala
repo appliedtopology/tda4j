@@ -1,5 +1,6 @@
 package org.appliedtopology.tda4j
 
+import org.appliedtopology.tda4j.SimplicialSetExamples.sphere
 import org.specs2.mutable
 
 class SimplicialSetSpec extends mutable.Specification {

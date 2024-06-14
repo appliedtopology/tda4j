@@ -607,7 +607,7 @@ object SubSimplicialSet {
           SubSimplicialSetElement(g) -> (if (g.dim > 0)
             (0 to g.dim)
               .map { (i) => ambient.face(i)(g) }
-              .map { 
+              .map {
               case DegenerateSimplicialSetElement(base, degeneracies) =>
                 DegenerateSimplicialSetElement(SubSimplicialSetElement(base), degeneracies)
               case sse => DegenerateSimplicialSetElement(sse, List.empty)
@@ -642,7 +642,7 @@ object QuotientSimplicialSet {
   def from(superSet : SimplicialSet, collapses: Seq[Set[SimplicialSetElement]]): QuotientSimplicialSet = {
     assert(collapses.forall{ (collapse) => collapse.map(_.dim).toSet.size <= 1}) // homogenous collapse sets
     val collapseMap : Map[SimplicialSetElement, Set[SimplicialSetElement]] =
-      Map.from(collapses.map { (collapse) => 
+      Map.from(collapses.map { (collapse) =>
         DegenerateSimplicialSetElement(simplicialGenerator(0), (collapse.head.dim-1 to (0,-1)).toList) -> collapse})
     val projection : PartialFunction[SimplicialSetElement, SimplicialSetElement] =
       Map.from(collapseMap.flatMap{(basis, contents) => contents.map(_ -> basis)}).orElse(identity(_))
@@ -650,16 +650,16 @@ object QuotientSimplicialSet {
     val quotientGenerators = superSet.generators
       .filter(!removed.contains(_)) ++ collapseMap.keys
     QuotientSimplicialSet(
-      SimplicialSet(quotientGenerators.toList, 
+      SimplicialSet(quotientGenerators.toList,
                     {
                       case sse@DegenerateSimplicialSetElement(base, degeneracies) =>
                         if(!collapseMap.keySet.contains(base))
                           (0 to sse.dim).map(superSet.face(_)(sse)).toList
                         else
-                          (0 to sse.dim).map{(j) => 
-                            if(degeneracies.contains(j)) 
+                          (0 to sse.dim).map{(j) =>
+                            if(degeneracies.contains(j))
                               DegenerateSimplicialSetElement(
-                                base, 
+                                base,
                                 degeneracies.collect {
                                   case i if(i > j) => i-1
                                   case i if (i < j) => i
@@ -715,9 +715,38 @@ case class Pushout(
 /** ************** Examples
  */
 
-def sphere(dim: Int): SimplicialSet = {
-  val v0 = simplicialGenerator(0)
-  val wn = simplicialGenerator(dim)
-  val dv0 = DegenerateSimplicialSetElement(v0, (dim - 2).to(0, -1).toList)
-  SimplicialSet(List(v0, wn), Map(v0 -> List.empty, wn -> List.fill(dim + 1)(dv0)))
+object SimplicialSetExamples {
+  def sphere(dim: Int): SimplicialSet = {
+    val v0 = simplicialGenerator(0)
+    val wn = simplicialGenerator(dim)
+    val dv0 = DegenerateSimplicialSetElement(v0, (dim - 2).to(0, -1).toList)
+    SimplicialSet(List(v0, wn), Map(v0 -> List.empty, wn -> List.fill(dim + 1)(dv0)))
+  }
+
+  def simplex(dim: Int): SimplicialSet = {
+    val vertices = (0 to dim).map{(_) => simplicialGenerator(0)}
+    val generators : Seq[Map[Seq[Int], SimplicialSetElement]] =
+      Map.from(vertices.indices.map{(j) => Vector(j) -> vertices(j)}) ::
+      (1 to dim).toList.map { (d) =>
+      Map.from(for
+        combination <- vertices.indices.combinations(d+1).toList
+      yield
+        combination -> simplicialGenerator(d)
+      )
+    }
+    val allGeneratorKeys = generators.flatMap(_.keySet)
+    val allGenerators = allGeneratorKeys.toList.map{(k) => generators(k.size-1)(k)}
+    val reverseGeneratorLookup = Map.from(allGeneratorKeys.map{(k) => generators(k.size-1)(k) -> k})
+    val faceMapping = Map.from(
+      allGenerators.map{(generator) => 
+        val generatorKey = reverseGeneratorLookup(generator)
+        generator -> generatorKey
+          .indices
+          .toList
+          .map(generatorKey.patch(_, List.empty, 1))
+          .map(generators(generator.dim-1))
+      }
+    )
+    SimplicialSet(allGenerators, faceMapping)
+  }
 }
