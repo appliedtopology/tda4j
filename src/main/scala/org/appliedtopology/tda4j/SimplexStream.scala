@@ -43,11 +43,14 @@ trait DoubleFiltration[CellT : Cell] extends Filtration[CellT, Double] {
   val largest = Double.PositiveInfinity
 }
 
-trait CellStream[CellT : Cell, FiltrationT: Ordering]
-    extends Filtration[CellT, FiltrationT]
-    with IterableOnce[CellT] {
+trait FiltrationOrderable[CellT : Cell, FiltrationT : Ordering] 
+  extends Filtration[CellT, FiltrationT] {
   def filtrationOrdering: Ordering[CellT]
 }
+
+trait CellStream[CellT : Cell, FiltrationT: Ordering]
+    extends FiltrationOrderable[CellT, FiltrationT]
+    with IterableOnce[CellT] 
 
 /** Abstract trait for representing a sequence of simplices.
   *
