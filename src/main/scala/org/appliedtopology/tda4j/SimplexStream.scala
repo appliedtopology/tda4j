@@ -203,3 +203,36 @@ trait StratifiedCellStream[CellT : OrderedCell,FiltrationT:Filterable] extends C
 }
 
 trait StratifiedSimplexStream[VertexT:Ordering, FiltrationT:Filterable] extends StratifiedCellStream[Simplex[VertexT],FiltrationT] { }
+
+trait GradedCellStream[CellT: Cell, FiltrationT: Filterable] extends FiltrationOrderable[CellT, FiltrationT] {
+  def iterateDimension : PartialFunction[Int, Iterator[CellT]]
+
+}
+trait GradedSimplexStream[VertexT:Ordering, FiltrationT:Filterable:Ordering] extends GradedCellStream[Simplex[VertexT],FiltrationT] {
+
+  val filterable: Filterable[FiltrationT] = summon[Filterable[FiltrationT]]
+  export filterable.{largest, smallest}
+
+  val filtrationOrdering =
+    FilteredSimplexOrdering[VertexT, FiltrationT](this)(using vertexOrdering = summon[Ordering[VertexT]])(using
+      filtrationOrdering = summon[Ordering[FiltrationT]].reverse
+    )
+
+}
+
+object GradedSimplexStream{
+  def from[VertexT: Ordering](
+                             streams: Seq[Seq[Simplex[VertexT]]],
+                             metricSpace: FiniteMetricSpace[VertexT]
+                             ):
+  GradedSimplexStream[VertexT, Double] = new GradedSimplexStream[VertexT, Double]{
+
+    override def iterateDimension: PartialFunction[Int, Iterator[Simplex[VertexT]]] = streams.map(_.iterator)
+
+    override def filtrationValue: PartialFunction[Simplex[VertexT], Double] =
+      FiniteMetricSpace.MaximumDistanceFiltrationValue[VertexT](metricSpace)(using summon[Ordering[VertexT]])
+  }
+
+}
+
+

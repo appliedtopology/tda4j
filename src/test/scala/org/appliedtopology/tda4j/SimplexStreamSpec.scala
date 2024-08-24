@@ -1,6 +1,6 @@
 package org.appliedtopology.tda4j
 
-import org.specs2.{mutable, Specification}
+import org.specs2.{Specification, mutable}
 import org.specs2.execute.Result
 
 import scala.collection.mutable as cmutable
@@ -89,4 +89,54 @@ class SimplexStreamSpec extends mutable.Specification {
       }
     }
   }
+}
+
+class GradedSimplexStreamSpec extends mutable.Specification{
+
+  val metricSpace = EuclideanMetricSpace(Seq(Seq(0.0,0.0),Seq(1.0,1.0),Seq(0.0,1.0),Seq(1.0,0.0)))
+
+  val gradedSimplexStream = GradedSimplexStream.from(Seq(
+    // Dimension 0
+    Seq(
+      Simplex(0), Simplex(1), Simplex(2)
+    ),
+    // Dimension 1
+    Seq(
+      Simplex(0,1), Simplex(0,2), Simplex(1,2)
+    ),
+    // Dimension 2
+    Seq(
+      Simplex(0,1,2)
+    ),
+  ),metricSpace)
+
+  "Graded Simplex Stream can " >> {
+    "give the correct 1-simplices" >> {
+
+      gradedSimplexStream.iterateDimension(1).toSeq must containTheSameElementsAs(
+        Seq(
+          Simplex(0,1), Simplex(0,2), Simplex(1,2)
+        )
+      )
+
+    }
+    "give the correct 0-simplices" >> {
+
+      gradedSimplexStream.iterateDimension(0).toSeq must containTheSameElementsAs(
+        Seq(
+          Simplex(1), Simplex(2), Simplex(0)
+        )
+      )
+    }
+    "give the correct 2-simplices" >> {
+
+      gradedSimplexStream.iterateDimension(2).toSeq must containTheSameElementsAs(
+        Seq(
+          Simplex(0,1,2)
+        )
+      )
+
+    }
+  }
+
 }
