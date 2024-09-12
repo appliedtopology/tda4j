@@ -37,7 +37,7 @@ lazy val root = (project in file("."))
   )
   .settings(
     // these options make 3.5.0 use the given resolution algorithms planned for 3.7.x.
-    scalacOptions ++= List("-source:future-migration", "-language:experimental.modularity"),
+    scalacOptions ++= List("-source:future", "-language:experimental.modularity"),
     Compile / paradoxMaterialTheme := {
       ParadoxMaterialTheme()
     },

@@ -1,5 +1,7 @@
 package org.appliedtopology.tda4j
 
+import org.apache.commons.numbers.fraction.GeneralizedContinuedFraction.Coefficient
+
 import collection.immutable.SortedMap
 import math.Ordering.Implicits.sortedSetOrdering
 import scala.annotation.{tailrec, targetName}
@@ -9,33 +11,33 @@ import math.Fractional.Implicits.infixFractionalOps
 /**
  * Typeclass for having a boundary map
  */
-trait HasBoundary[T] {
-  extension (t: T) {
-    def boundary[CoefficientT: Fractional]: Chain[T, CoefficientT]
-  }
-}
 
-trait HasDimension[T] {
-  extension (t:T) {
+trait HasBoundary:
+  type Self : Ordering as ordering
+  extension (t: Self)
+    def boundary[CoefficientT : Fractional]: Chain[Self, CoefficientT]
+
+trait HasDimension:
+  type Self
+  extension (t: Self)
     def dim: Int
-  }
-}
 
-trait Cell[T] extends HasBoundary[T] with HasDimension[T]
+trait Cell extends HasBoundary with HasDimension
 
-trait OrderedCell[T] extends Cell[T] with Ordering[T]
+trait OrderedCell extends Cell
 
+given [CellT : OrderedCell as oCell] => Ordering[CellT] = oCell.ordering
 
 
 /** Trait that defines what it means to have an ordered basis
   */
-trait OrderedBasis[CellT : Ordering, CoefficientT: Fractional] {
-  def leadingCell: Option[CellT] = leadingTerm._1
+trait OrderedBasis[CellT : Ordering, CoefficientT: Fractional]:
+  type Self
+  extension(t: Self)
+    def leadingCell: Option[CellT] = leadingTerm._1
+    def leadingCoefficient: CoefficientT = leadingTerm._2
+    def leadingTerm: (Option[CellT], CoefficientT)
 
-  def leadingCoefficient: CoefficientT = leadingTerm._2
-
-  def leadingTerm: (Option[CellT], CoefficientT)
-}
 
 
 
@@ -45,15 +47,7 @@ Implementation of the Chain trait using heaps for internal storage and deferred 
 
 class Chain[CellT : OrderedCell, CoefficientT : Fractional] private[tda4j] (
   var entries: mutable.PriorityQueue[(CellT, CoefficientT)]
-) extends OrderedBasis[CellT, CoefficientT] {
-  override def leadingTerm: (Option[CellT], CoefficientT) = {
-    collapseHead()
-    { (x: (Option[CellT], Option[CoefficientT])) =>
-      x.copy(_2 = x._2.getOrElse(summon[Fractional[CoefficientT]].zero))
-    }
-      .apply(entries.headOption.unzip)
-  }
-
+) {
   @tailrec
   final def collapseHead(): Unit = {
     val fr = summon[Fractional[CoefficientT]]
@@ -132,6 +126,17 @@ object Chain {
     cs: Seq[(CellT, CoefficientT)]
   ): Chain[CellT, CoefficientT] =
     new Chain(mutable.PriorityQueue.from(cs)(using Ordering.by[(CellT, CoefficientT), CellT](_._1)))
+}
+
+given [CellT : OrderedCell, CoefficientT : Fractional] => Chain[CellT,CoefficientT] is OrderedBasis[CellT, CoefficientT] {
+  extension (self: Self)
+    def leadingTerm: (Option[CellT], CoefficientT) = {
+      self.collapseHead()
+      { (x: (Option[CellT], Option[CoefficientT])) =>
+        x.copy(_2 = x._2.getOrElse(summon[Fractional[CoefficientT]].zero))
+      }
+        .apply(self.entries.headOption.unzip)
+    }
 }
 
 class ChainOps[CellT : OrderedCell, CoefficientT](using fr: Fractional[CoefficientT])

@@ -20,7 +20,7 @@ case class FullInterval(n: Int) extends ElementaryInterval {
   override def toString: String = s"[$n,${n + 1}]"
 }
 
-given OrderedCell[ElementaryInterval] with {
+given ElementaryInterval is OrderedCell with {
   extension (t: ElementaryInterval)
     override def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] = t match
       case DegenerateInterval(n) => Chain()
@@ -31,7 +31,7 @@ given OrderedCell[ElementaryInterval] with {
       case DegenerateInterval(n) => 0
       case FullInterval(n) => 1
 
-  override def compare(x: ElementaryInterval, y: ElementaryInterval): Int = elementaryIntervalOrdering.compare(x,y)
+  def compare(x: ElementaryInterval, y: ElementaryInterval): Int = elementaryIntervalOrdering.compare(x,y)
 }
 
 case class ElementaryCube(val intervals: List[ElementaryInterval]) {
@@ -99,14 +99,14 @@ case class ElementaryCube(val intervals: List[ElementaryInterval]) {
 
 given elementaryCubeOrdering : Ordering[ElementaryCube] = Ordering.by(c => c.intervals)
 
-given OrderedCell[ElementaryCube] with {
+given ElementaryCube is OrderedCell with {
   extension (t: ElementaryCube)
     override def boundary[CoefficientT: Fractional]: Chain[ElementaryCube, CoefficientT] =
       t.boundaryImpl
   extension (t: ElementaryCube)
     override def dim: Int = t.intervals.map(_.dim).sum
 
-  override def compare(x: ElementaryCube, y: ElementaryCube): Int = elementaryCubeOrdering.compare(x,y)
+  def compare(x: ElementaryCube, y: ElementaryCube): Int = elementaryCubeOrdering.compare(x,y)
 }
 
 trait CubeStream[FiltrationT: Ordering] extends CellStream[ElementaryCube, FiltrationT]

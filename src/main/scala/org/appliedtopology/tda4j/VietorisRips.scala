@@ -189,7 +189,7 @@ class BronKerbosch[VertexT: Ordering] extends CliqueFinder[VertexT] {
     val simplices: Seq[Simplex[VertexT]] =
       cliqueSet
         .filter(spx => spx.nonEmpty)
-        .map(spx => Simplex[VertexT](spx.to(Seq): _*)) to Seq
+        .map(spx => Simplex[VertexT](spx.to(Seq)*)) to Seq
     val filtration =
       new MaximumDistanceFiltrationValue[VertexT](metricSpace)
     val simplexOrdering =
@@ -286,7 +286,7 @@ object LazyVietorisRips {
 
         val V = mutable.SortedSet[Simplex[VertexT]]()
         val tasks = mutable.Stack[(SortedSet[VertexT], SortedSet[VertexT])](
-          (SortedSet[VertexT](endpoints: _*), neighbors.reduce(_ & _))
+          (SortedSet[VertexT](endpoints*), neighbors.reduce(_ & _))
         )
 
         while (tasks.nonEmpty) {

@@ -5,9 +5,9 @@ import org.specs2.execute.{AsResult, Result}
 import org.specs2.ScalaCheck
 
 import scala.util.Random
-import scala.math.Fractional.Implicits._
+import scala.math.Fractional.Implicits.*
 
-import org.scalacheck._
+import org.scalacheck.*
 
 //noinspection ScalaRedundantConversion
 object FiniteFieldSpec extends mutable.Specification with ScalaCheck {

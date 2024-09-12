@@ -31,8 +31,8 @@ object SimplicialSetElement {
     override def degeneracies: List[Int] = List.empty
 }
 
-given HasDimension[SimplicialSetElement] with {
-  extension (t: SimplicialSetElement) override def dim = t.dimension
+given SimplicialSetElement is HasDimension with {
+  extension (t: SimplicialSetElement) def dim = t.dimension
 }
 
 /**
@@ -178,7 +178,7 @@ trait SimplicialSet {
   given sseOrdering: Ordering[SimplicialSetElement] =
     Ordering.by((sse: SimplicialSetElement) => sse.dim).orElseBy(_.hashCode())
 
-  given normalizedHomologyCell(using seOrd: Ordering[SimplicialSetElement])(using hasDim: HasDimension[SimplicialSetElement]): OrderedCell[SimplicialSetElement] with {
+  given normalizedHomologyCell(using seOrd: Ordering[SimplicialSetElement])(using hasDim: SimplicialSetElement is HasDimension): (SimplicialSetElement is OrderedCell) with {
     extension (t: SimplicialSetElement) {
       override def boundary[CoefficientT](using
                                           fr: Fractional[CoefficientT]
@@ -199,7 +199,7 @@ trait SimplicialSet {
       override def dim: Int = hasDim.dim(t.base) + t.degeneracies.size
     }
 
-    override def compare(x: SimplicialSetElement, y: SimplicialSetElement): Int =
+    def compare(x: SimplicialSetElement, y: SimplicialSetElement): Int =
       seOrd.compare(x, y)
   }
 
@@ -424,7 +424,7 @@ def normalizedCellStream[FiltrationT: Ordering : Filterable](
     }
     .orElseBy(_.dim)
 
-  given sseCell: Cell[SimplicialSetElement] = ss.normalizedHomologyCell
+  given sseCell: (SimplicialSetElement is OrderedCell) = ss.normalizedHomologyCell
 
   new CellStream[SimplicialSetElement, FiltrationT] {
     export filterable.{largest, smallest}
@@ -518,7 +518,7 @@ case class Product(left: SimplicialSet, right: SimplicialSet) extends Simplicial
       .by((pe: ProductElement) => pe.left)(left.sseOrdering)
       .orElseBy((pe: ProductElement) => pe.right)(right.sseOrdering)
 
-  given productCell: OrderedCell[ProductElement] with {
+  given productCell: (ProductElement is OrderedCell) with {
     extension (t: ProductElement)
       override def boundary[CoefficientT: Fractional]: Chain[ProductElement, CoefficientT] = {
         val leftBoundary: Chain[SimplicialSetElement, CoefficientT] = {
@@ -538,7 +538,7 @@ case class Product(left: SimplicialSet, right: SimplicialSet) extends Simplicial
 
     extension (t: ProductElement) override def dim: Int = t.left.dim
 
-    override def compare(x: ProductElement, y: ProductElement): Int =
+    def compare(x: ProductElement, y: ProductElement): Int =
       productOrdering.compare(x, y)
   }
 

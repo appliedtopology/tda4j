@@ -20,7 +20,7 @@ import math.Ordering.Implicits.sortedSetOrdering
  * @tparam VertexT
  * Vertex type
  */
-case class Simplex[VertexT : Ordering] private (vertices : SortedSet[VertexT]) {
+case class Simplex[VertexT : Ordering] private[tda4j] (vertices : SortedSet[VertexT]) {
   override def equals(obj: Any): Boolean = obj match {
     case other : Simplex[VertexT] => vertices == other.vertices
     case _ => super.equals(obj)
@@ -40,7 +40,7 @@ given [VertexT : Ordering] => Ordering[Simplex[VertexT]] = simplexOrdering
 
   //  Ordering.by{(spx: Simplex[VertexT]) => spx.vertices}(sortedSetOrdering[SortedSet, VertexT](vtxOrdering))
 
-given [VertexT : Ordering] : OrderedCell[Simplex[VertexT]] with {
+given [VertexT : Ordering] => Simplex[VertexT] is OrderedCell with {
   given Ordering[Simplex[VertexT]] = simplexOrdering
   extension (t: Simplex[VertexT]) {
     override def boundary[CoefficientT](using fr: Fractional[CoefficientT]): Chain[Simplex[VertexT], CoefficientT] =
@@ -54,7 +54,7 @@ given [VertexT : Ordering] : OrderedCell[Simplex[VertexT]] with {
       )
     override def dim: Int = t.vertices.size - 1
   }
-  override def compare(x: Simplex[VertexT], y: Simplex[VertexT]): Int = simplexOrdering[VertexT].compare(x,y)
+  def compare(x: Simplex[VertexT], y: Simplex[VertexT]): Int = simplexOrdering[VertexT].compare(x,y)
 }
 
 /** Simplex companion object with factory methods
