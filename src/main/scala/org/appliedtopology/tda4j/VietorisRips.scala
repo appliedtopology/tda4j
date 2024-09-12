@@ -27,7 +27,7 @@ class VietorisRips[VertexT](using ordering: Ordering[VertexT])(
   val metricSpace: FiniteMetricSpace[VertexT],
   val maxFiltrationValue: Double = Double.PositiveInfinity,
   val maxDimension: Int = 2,
-  val cliqueFinder: CliqueFinder[VertexT] = new ZomorodianIncremental[VertexT]()(ordering)
+  val cliqueFinder: CliqueFinder[VertexT] = new ZomorodianIncremental[VertexT](using ordering)
 ) extends SimplexStream[VertexT, Double] {
   self =>
 
@@ -305,8 +305,8 @@ object LazyVietorisRips {
 
         val newSimplices: SortedSet[Simplex[VertexT]] =
           V.map(spx => spx.vertices)
-           .map(spx => Simplex.from(spx ++ endpoints))
-           .to(SortedSet)
+            .map(spx => Simplex.from(spx ++ endpoints))
+            .to(SortedSet)
 
         FoldState(
           g + nextEdge,
@@ -400,10 +400,11 @@ object LazyStratifiedVietorisRips {
     )
     @tailrec def oneStep(foldState: FoldState): Array[LazyList[Simplex[VertexT]]] =
       if (foldState.taskStack.isEmpty) foldState.outputLists
-      else if (foldState.taskStack.head._1.dim > maxSize-1) oneStep(foldState.copy(taskStack = foldState.taskStack.tail))
+      else if (foldState.taskStack.head._1.dim > maxSize - 1)
+        oneStep(foldState.copy(taskStack = foldState.taskStack.tail))
       else {
         val (simplex, edge) = foldState.taskStack.head
-        val List(src, tgt) : List[VertexT] = List(edge._1,edge._2).sorted // ensure src < tgt
+        val List(src, tgt): List[VertexT] = List(edge._1, edge._2).sorted // ensure src < tgt
         val neighbors: Map[VertexT, Set[VertexT]] = if (simplex.dim == 1) { // new edge enters
           foldState.neighbors
             .updated(tgt, foldState.neighbors.getOrElse(tgt, Set()) + src)
@@ -416,7 +417,7 @@ object LazyStratifiedVietorisRips {
           for
             cofacet <- candidateCofacets
             others = cofacet.vertices.toList
-              .combinations(simplex.dim+1)
+              .combinations(simplex.dim + 1)
               .filter(spx => filtrationValue(Simplex.from(spx)) == metricSpace.distance(src, tgt))
               .toList
               .sorted(math.Ordering.Implicits.seqOrdering)

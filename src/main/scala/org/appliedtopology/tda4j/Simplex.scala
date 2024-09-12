@@ -6,9 +6,6 @@ import scala.math.Ordering.IntOrdering
 import scala.math.Ordering.Double.IeeeOrdering
 import math.Ordering.Implicits.sortedSetOrdering
 
-given simplexOrdering[VertexT: Ordering]: Ordering[Simplex[VertexT]] =
-  Ordering.by{(spx:Simplex[VertexT]) => spx.vertices}(sortedSetOrdering[SortedSet, VertexT])
-
 /** Class representing an abstract simplex. Abstract simplices are given by sets (of totally ordered vertices)
  * and inherit from `Cell` so that the class has a `boundary` and a `dim` method.
  *
@@ -35,6 +32,13 @@ case class Simplex[VertexT : Ordering] private (vertices : SortedSet[VertexT]) {
   def union(other: Simplex[VertexT]) =
     new Simplex(vertices.union(other.vertices))
 }
+
+def simplexOrdering[VertexT : Ordering as vtxOrdering]: Ordering[Simplex[VertexT]] =
+  Ordering.by{(spx: Simplex[VertexT]) => spx.vertices}(sortedSetOrdering[SortedSet, VertexT](vtxOrdering))
+
+given [VertexT : Ordering] => Ordering[Simplex[VertexT]] = simplexOrdering
+
+  //  Ordering.by{(spx: Simplex[VertexT]) => spx.vertices}(sortedSetOrdering[SortedSet, VertexT](vtxOrdering))
 
 given [VertexT : Ordering] : OrderedCell[Simplex[VertexT]] with {
   given Ordering[Simplex[VertexT]] = simplexOrdering

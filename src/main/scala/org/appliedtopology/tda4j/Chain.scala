@@ -137,7 +137,7 @@ object Chain {
 class ChainOps[CellT : OrderedCell, CoefficientT](using fr: Fractional[CoefficientT])
     extends RingModule[Chain[CellT, CoefficientT], CoefficientT] {
 
-  import Numeric.Implicits._
+  import Numeric.Implicits.*
 
   override val zero: Chain[CellT, CoefficientT] = Chain()
 

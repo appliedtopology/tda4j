@@ -418,13 +418,13 @@ def normalizedCellStream[FiltrationT: Ordering : Filterable](
     filterable.smallest
   })
 
-  given sseCell: Cell[SimplicialSetElement] = ss.normalizedHomologyCell
-
   given sseOrd: Ordering[SimplicialSetElement] = Ordering
     .by[SimplicialSetElement, FiltrationT] { (sse: SimplicialSetElement) =>
       filtrationValues.applyOrElse(sse, { _ => filterable.smallest })
     }
     .orElseBy(_.dim)
+
+  given sseCell: Cell[SimplicialSetElement] = ss.normalizedHomologyCell
 
   new CellStream[SimplicialSetElement, FiltrationT] {
     export filterable.{largest, smallest}
