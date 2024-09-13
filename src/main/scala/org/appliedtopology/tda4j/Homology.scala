@@ -11,7 +11,8 @@ import scala.annotation.tailrec
 class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional, FiltrationT: Ordering]()
     extends CellularHomologyContext[Simplex[VertexT], CoefficientT, FiltrationT] {}
 
-class CellularHomologyContext[CellT : OrderedCell, CoefficientT: Fractional, FiltrationT: Ordering] extends ChainOps[CellT, CoefficientT]() {
+class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Fractional, FiltrationT: Ordering]
+    extends ChainOps[CellT, CoefficientT]() {
 
   import barcode._
 
@@ -222,12 +223,12 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Frac
 
     @tailrec
     private def reduceBy(
-                          z: Chain[Simplex[VertexT], CoefficientT],
-                          basis: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]],
-                          reductionLog: Chain[Simplex[VertexT], CoefficientT] = Chain()
-                        )(using
-                          fr: Fractional[CoefficientT]
-                        ): (Chain[Simplex[VertexT], CoefficientT], Chain[Simplex[VertexT], CoefficientT]) =
+      z: Chain[Simplex[VertexT], CoefficientT],
+      basis: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]],
+      reductionLog: Chain[Simplex[VertexT], CoefficientT] = Chain()
+    )(using
+      fr: Fractional[CoefficientT]
+    ): (Chain[Simplex[VertexT], CoefficientT], Chain[Simplex[VertexT], CoefficientT]) =
       z.leadingCell match {
         case None => (z, reductionLog)
         case Some(sigma) =>
@@ -241,7 +242,7 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Frac
       if (currentIterator.hasNext) {
         val fr = summon[Fractional[CoefficientT]]
         val sigma = currentIterator.next()
-        val dsigma : Chain[Simplex[VertexT], CoefficientT] = sigma.boundary
+        val dsigma: Chain[Simplex[VertexT], CoefficientT] = sigma.boundary
         val (dsigmaReduced, reduction) = reduceBy(dsigma, boundaries)
         val coboundary = reduction.items.foldRight(fr.negate(fr.one) ⊠ Chain(sigma)) { (next, acc) =>
           val (spx, coeff) = next
@@ -262,38 +263,39 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Frac
 
           val (_, cycleBasis) = reduceBy(dsigmaReduced, cycles)
           val representativeCycle: Chain[Simplex[VertexT], CoefficientT] = cycleBasis.leadingCell match {
-            case None => Chain()
+            case None       => Chain()
             case Some(cell) => cycles(cell)
           }
           cycleBasis.leadingCell match {
-            case None => ()
+            case None       => ()
             case Some(cell) => cycles.remove(cell)
           }
 
           val lower: Double = cycleBasis.leadingCell match {
             case None => Double.NegativeInfinity
             case Some(spx) =>
-              stream.filtrationValue.orElse{(_) => Double.NegativeInfinity}.compose(cyclesBornBy)(spx)
+              stream.filtrationValue.orElse(_ => Double.NegativeInfinity).compose(cyclesBornBy)(spx)
           }
           val upper: Double =
-            stream.filtrationValue.orElse{(_) => Double.PositiveInfinity}(sigma)
+            stream.filtrationValue.orElse(_ => Double.PositiveInfinity)(sigma)
 
           barcode(currentDim) = barcode(currentDim).appended((lower, upper, representativeCycle))
         }
         current = stream.filtrationValue.lift(sigma).getOrElse(stream.smallest)
       } else {
         currentDim += 1
-        currentIterator = stream
-          .iterateDimension
+        currentIterator = stream.iterateDimension
           .applyOrElse(currentDim, _ => Iterator.empty)
           .buffered
         current = Double.NegativeInfinity
       }
 
     def advanceTo(dim: Int, f: Double = Double.PositiveInfinity): Unit =
-      while(currentIterator.hasNext &&
+      while (
+        currentIterator.hasNext &&
         currentDim <= dim &&
-        f > current)
+        f > current
+      )
         advanceOne()
   }
 

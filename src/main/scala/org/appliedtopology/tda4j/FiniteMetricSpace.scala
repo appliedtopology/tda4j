@@ -68,8 +68,7 @@ object FiniteMetricSpace {
       if (spx.dim <= 0)
         0.0
       else
-        spx
-          .vertices
+        spx.vertices
           .flatMap(v => spx.vertices.filter(_ > v).map(w => metricSpace.distance(v, w)))
           .max
   }

@@ -29,7 +29,7 @@ class UnionFind[T](vertices: IterableOnce[T]) {
   * Minimal Spanning Tree in increasing weight order, while the second iterator gives all the non-included
   */
 
-class Kruskal[T](elements: Seq[T], distance: (T,T) => Double)(using
+class Kruskal[T](elements: Seq[T], distance: (T, T) => Double)(using
   orderingT: Ordering[T]
 ) {
   val unionFind: UnionFind[T] = UnionFind(elements)
@@ -57,7 +57,7 @@ class Kruskal[T](elements: Seq[T], distance: (T,T) => Double)(using
 }
 
 object Kruskal {
-  def apply[T:Ordering](metricSpace: FiniteMetricSpace[T]): Kruskal[T] =
+  def apply[T: Ordering](metricSpace: FiniteMetricSpace[T]): Kruskal[T] =
     new Kruskal(metricSpace.elements.toSeq, metricSpace.distance)
 }
 

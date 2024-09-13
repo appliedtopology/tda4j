@@ -38,10 +38,11 @@ class CubicalSpec extends mutable.Specification with ScalaCheck {
 
     smallCubes.size must be_>(0)
 
-    val homologyContext = CellularHomologyContext[ElementaryCube,Double,Int]()
+    val homologyContext = CellularHomologyContext[ElementaryCube, Double, Int]()
     val pH = homologyContext.persistentHomology(smallCubical)
-    pH.diagramAt(2) must containTheSameElementsAs(Seq(
-
-    ))
+    pH.diagramAt(2) must containTheSameElementsAs(
+      Seq(
+      )
+    )
   }
 }

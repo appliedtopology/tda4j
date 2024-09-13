@@ -19,14 +19,12 @@ libraryDependencies += "org.openjdk.jol"    % "jol-core"                      % 
 libraryDependencies += "org.apache.commons" % "commons-numbers-combinatorics" % "1.1"
 libraryDependencies += "org.apache.commons" % "commons-math3"                 % "3.6.1"
 libraryDependencies +=
-  "org.scala-lang.modules"              %% "scala-parallel-collections" % "1.0.4"
-libraryDependencies += "org.scalacheck" %% "scalacheck"                 % "1.17.0" % "test"
-libraryDependencies += "org.scalaz"     %% "scalaz-core"                % "7.3.6"
-libraryDependencies += "org.scalaz"     %% "scalaz-scalacheck-binding"  % "7.4.0-M14"
-libraryDependencies += "org.bitbucket.inkytonik.kiama" %% "kiama" % "2.5.1"
-libraryDependencies += "org.bitbucket.inkytonik.kiama" %% "kiama-extras" % "2.5.1"
-
-
+  "org.scala-lang.modules"                             %% "scala-parallel-collections" % "1.0.4"
+libraryDependencies += "org.scalacheck"                %% "scalacheck"                 % "1.17.0" % "test"
+libraryDependencies += "org.scalaz"                    %% "scalaz-core"                % "7.3.6"
+libraryDependencies += "org.scalaz"                    %% "scalaz-scalacheck-binding"  % "7.4.0-M14"
+libraryDependencies += "org.bitbucket.inkytonik.kiama" %% "kiama"                      % "2.5.1"
+libraryDependencies += "org.bitbucket.inkytonik.kiama" %% "kiama-extras"               % "2.5.1"
 
 lazy val root = (project in file("."))
   .enablePlugins(

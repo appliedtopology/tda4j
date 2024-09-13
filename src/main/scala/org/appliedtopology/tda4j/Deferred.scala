@@ -1,6 +1,5 @@
 package org.appliedtopology.tda4j
 
-
 import scala.math.Numeric.DoubleIsFractional
 
 /** This functionality is an experiment in using algebraic effect structures for flexible coefficient choices. The idea

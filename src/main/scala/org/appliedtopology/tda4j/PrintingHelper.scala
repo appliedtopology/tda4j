@@ -1,11 +1,9 @@
 package org.appliedtopology.tda4j
 package unicode
 
-def applyTranslation(trMap: Map[Char,String]): (String => String) = s =>
-  s.flatMap(trMap.orElse(_.toString))
+def applyTranslation(trMap: Map[Char, String]): (String => String) = s => s.flatMap(trMap.orElse(_.toString))
 
-def applyCharTranslation(trMap: Map[Char,Char]): (String => String) = s =>
-  s.map(trMap.orElse{c => c})
+def applyCharTranslation(trMap: Map[Char, Char]): (String => String) = s => s.map(trMap.orElse(c => c))
 
 val superScriptMap = Map(
   '0' -> '⁰',
@@ -25,7 +23,7 @@ val superScriptMap = Map(
   ')' -> '⁾',
   'i' -> 'ⁱ',
   'n' -> 'ⁿ',
-  'h' -> 'ʰ',
+  'h' -> 'ʰ'
 )
 
 val subScriptMap = Map(
@@ -60,7 +58,7 @@ val subScriptMap = Map(
   'p' -> 'ₚ',
   's' -> 'ₛ',
   't' -> 'ₜ',
-  'j' -> 'ⱼ',
+  'j' -> 'ⱼ'
 )
 
 def unicodeSuperScript = applyCharTranslation(superScriptMap)

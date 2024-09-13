@@ -34,18 +34,16 @@ given LongIsFilterable: Filterable[Long] = new Filterable[Long] {
   val largest = Long.MaxValue
 }
 
-trait Filtration[CellT : Cell, FiltrationT: Ordering: Filterable] extends Filterable[FiltrationT] {
+trait Filtration[CellT: Cell, FiltrationT: Ordering: Filterable] extends Filterable[FiltrationT] {
   def filtrationValue: PartialFunction[CellT, FiltrationT]
 }
 
-trait DoubleFiltration[CellT : Cell] extends Filtration[CellT, Double] {
+trait DoubleFiltration[CellT: Cell] extends Filtration[CellT, Double] {
   val smallest = Double.NegativeInfinity
   val largest = Double.PositiveInfinity
 }
 
-trait CellStream[CellT : Cell, FiltrationT: Ordering]
-    extends Filtration[CellT, FiltrationT]
-    with IterableOnce[CellT] {
+trait CellStream[CellT: Cell, FiltrationT: Ordering] extends Filtration[CellT, FiltrationT] with IterableOnce[CellT] {
   def filtrationOrdering: Ordering[CellT]
 }
 
@@ -142,10 +140,10 @@ class ExplicitStreamBuilder[VertexT: Ordering, FiltrationT](using
   }
 
   override def result(): ExplicitStream[VertexT, FiltrationT] = {
-    given filtrationOrdering : Ordering[(FiltrationT, Simplex[VertexT])] =
+    given filtrationOrdering: Ordering[(FiltrationT, Simplex[VertexT])] =
       Ordering
-        .by[(FiltrationT,Simplex[VertexT]),FiltrationT]{(f:FiltrationT,s:Simplex[VertexT]) => f}(ordering)
-        .orElseBy{(f:FiltrationT,s:Simplex[VertexT]) => s}(simplexOrdering[VertexT])
+        .by[(FiltrationT, Simplex[VertexT]), FiltrationT]((f: FiltrationT, s: Simplex[VertexT]) => f)(ordering)
+        .orElseBy((f: FiltrationT, s: Simplex[VertexT]) => s)(simplexOrdering[VertexT])
     simplices.sortInPlace
 
     new ExplicitStream(filtrationValues.toMap, simplices.map((_, s) => s).toSeq)(using filterable)
@@ -187,16 +185,16 @@ class FilteredSimplexOrdering[VertexT, FiltrationT](
   }
 }
 
-
-
-trait StratifiedCellStream[CellT : OrderedCell,FiltrationT:Filterable] extends CellStream[CellT,FiltrationT] {
-  def iterateDimension : PartialFunction[Int, Iterator[CellT]]
+trait StratifiedCellStream[CellT: OrderedCell, FiltrationT: Filterable] extends CellStream[CellT, FiltrationT] {
+  def iterateDimension: PartialFunction[Int, Iterator[CellT]]
 
   override def iterator: Iterator[CellT] =
-    Iterator.from(0)
+    Iterator
+      .from(0)
       .filter(iterateDimension.isDefinedAt)
-      .map{ (dim:Int) => iterateDimension.applyOrElse(dim, (d:Int) => Iterator.empty) }
-      .fold(Iterator.empty:Iterator[CellT])((x,y) => x++y)
+      .map((dim: Int) => iterateDimension.applyOrElse(dim, (d: Int) => Iterator.empty))
+      .fold(Iterator.empty: Iterator[CellT])((x, y) => x ++ y)
 }
 
-trait StratifiedSimplexStream[VertexT:Ordering, FiltrationT:Filterable] extends StratifiedCellStream[Simplex[VertexT],FiltrationT] { }
+trait StratifiedSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
+    extends StratifiedCellStream[Simplex[VertexT], FiltrationT] {}

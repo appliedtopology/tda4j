@@ -82,8 +82,7 @@ class SimplexStreamSpec extends mutable.Specification {
         cmutable.Set(Simplex())
       sortedSimplexSeq.foreach { spx =>
         seen += spx
-        spx.vertices
-          .toSet
+        spx.vertices.toSet
           .subsets()
           .foreach(face => seen must contain(Simplex.from(face)))
       }

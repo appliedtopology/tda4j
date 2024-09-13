@@ -7,7 +7,7 @@ sealed trait ElementaryInterval {
   def n: Int
 }
 
-given elementaryIntervalOrdering : Ordering[ElementaryInterval] = Ordering.by(i => i.n)
+given elementaryIntervalOrdering: Ordering[ElementaryInterval] = Ordering.by(i => i.n)
 
 case class DegenerateInterval(n: Int) extends ElementaryInterval {
   def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] =
@@ -25,18 +25,19 @@ given OrderedCell[ElementaryInterval] with {
     override def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] = t match
       case DegenerateInterval(n) => Chain()
       case FullInterval(n) =>
-        ChainOps[ElementaryInterval, CoefficientT]().minus(Chain(DegenerateInterval(n + 1)), Chain(DegenerateInterval(n)))
+        ChainOps[ElementaryInterval, CoefficientT]()
+          .minus(Chain(DegenerateInterval(n + 1)), Chain(DegenerateInterval(n)))
   extension (t: ElementaryInterval)
     override def dim: Int = t match
       case DegenerateInterval(n) => 0
-      case FullInterval(n) => 1
+      case FullInterval(n)       => 1
 
-  override def compare(x: ElementaryInterval, y: ElementaryInterval): Int = elementaryIntervalOrdering.compare(x,y)
+  override def compare(x: ElementaryInterval, y: ElementaryInterval): Int = elementaryIntervalOrdering.compare(x, y)
 }
 
 case class ElementaryCube(val intervals: List[ElementaryInterval]) {
   def boundaryImpl[CoefficientT: Fractional]: Chain[ElementaryCube, CoefficientT] =
-    if(this.dim == 0) Chain()
+    if (this.dim == 0) Chain()
     else {
       val chainOps = ChainOps[ElementaryCube, CoefficientT]()
       import chainOps.{*, given}
@@ -97,16 +98,15 @@ case class ElementaryCube(val intervals: List[ElementaryInterval]) {
     s"Cubical[${intervals.map(_.toString).mkString("x")}]"
 }
 
-given elementaryCubeOrdering : Ordering[ElementaryCube] = Ordering.by(c => c.intervals)
+given elementaryCubeOrdering: Ordering[ElementaryCube] = Ordering.by(c => c.intervals)
 
 given OrderedCell[ElementaryCube] with {
   extension (t: ElementaryCube)
     override def boundary[CoefficientT: Fractional]: Chain[ElementaryCube, CoefficientT] =
       t.boundaryImpl
-  extension (t: ElementaryCube)
-    override def dim: Int = t.intervals.map(_.dim).sum
+  extension (t: ElementaryCube) override def dim: Int = t.intervals.map(_.dim).sum
 
-  override def compare(x: ElementaryCube, y: ElementaryCube): Int = elementaryCubeOrdering.compare(x,y)
+  override def compare(x: ElementaryCube, y: ElementaryCube): Int = elementaryCubeOrdering.compare(x, y)
 }
 
 trait CubeStream[FiltrationT: Ordering] extends CellStream[ElementaryCube, FiltrationT]
@@ -117,7 +117,7 @@ object Cubical {
     val smallest = summon[Filterable[T]].smallest
 
     override def filtrationOrdering: Ordering[ElementaryCube] =
-      Ordering.by(cubes).orElseBy(_.dim).orElseBy(_.intervals.map{(int) => int.n})
+      Ordering.by(cubes).orElseBy(_.dim).orElseBy(_.intervals.map(int => int.n))
 
     val cubes: Map[ElementaryCube, T] = Map.from(
       (

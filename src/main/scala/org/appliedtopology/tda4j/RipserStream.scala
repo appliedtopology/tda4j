@@ -1,6 +1,6 @@
 package org.appliedtopology.tda4j
 
-import scala.collection.Searching.{*, given}
+import scala.collection.Searching.{given, *}
 import org.apache.commons.numbers.combinatorics
 import org.appliedtopology.tda4j.barcode.{ClosedEndpoint, OpenEndpoint, PersistenceBar}
 
@@ -79,14 +79,15 @@ class SimplexIndexing(val vertexCount: Int) {
       .map((os: Option[Int]) => os.get)
 
   def facetIterator(index: Int, size: Int): Iterator[Int] =
-    Iterator.unfold((apply(index, size).vertices.toSeq.sorted, index, 0, size - 1)) { (s:Seq[Int], iB:Int, iA:Int, k:Int) =>
-      if (k < 0) None
-      else {
-        val j = s(k)
-        val iiB = iB - binomial(j, k + 1)
-        val iiA = iA + binomial(j, k)
-        Some((iiB + iA, (s, iiB, iiA, k - 1)))
-      }
+    Iterator.unfold((apply(index, size).vertices.toSeq.sorted, index, 0, size - 1)) {
+      (s: Seq[Int], iB: Int, iA: Int, k: Int) =>
+        if (k < 0) None
+        else {
+          val j = s(k)
+          val iiB = iB - binomial(j, k + 1)
+          val iiA = iA + binomial(j, k)
+          Some((iiB + iA, (s, iiB, iiA, k - 1)))
+        }
     }
 
   def apply(simplex: Simplex[Int]): Int =
@@ -298,7 +299,7 @@ class RipserStreamOf[VertexT: Ordering](
     rs.iterator.map(s => Simplex.from(s.vertices.map(v => vertices(v))))
 
   override def filtrationValue: PartialFunction[Simplex[VertexT], Double] = { spx =>
-    val indices : SortedSet[Int] = spx.vertices.map(vertices.indexOf)
+    val indices: SortedSet[Int] = spx.vertices.map(vertices.indexOf)
     rs.filtrationValue(Simplex.from(indices))
   }
 }
