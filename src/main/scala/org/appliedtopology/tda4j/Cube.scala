@@ -20,7 +20,7 @@ case class FullInterval(n: Int) extends ElementaryInterval {
   override def toString: String = s"[$n,${n + 1}]"
 }
 
-given ElementaryInterval is OrderedCell with {
+given (ElementaryInterval is OrderedCell) with {
   extension (t: ElementaryInterval)
     override def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] = t match
       case DegenerateInterval(n) => Chain()
@@ -99,7 +99,7 @@ case class ElementaryCube(val intervals: List[ElementaryInterval]) {
 
 given elementaryCubeOrdering : Ordering[ElementaryCube] = Ordering.by(c => c.intervals)
 
-given ElementaryCube is OrderedCell with {
+given (ElementaryCube is OrderedCell) with {
   extension (t: ElementaryCube)
     override def boundary[CoefficientT: Fractional]: Chain[ElementaryCube, CoefficientT] =
       t.boundaryImpl
