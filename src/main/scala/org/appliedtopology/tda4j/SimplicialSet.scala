@@ -172,7 +172,7 @@ trait SimplicialSet {
       val generators: Seq[SimplicialSetElement] = this.generators.takeWhile(_.dim <= n)
 
       override def face(index: Int): PartialFunction[SimplicialSetElement, SimplicialSetElement] =
-        this.face(index)
+        ??? // FIXME this.face(index) creates an infinite loop - but how else can we access the existing face method? /MVJ
     }
 
   given sseOrdering: Ordering[SimplicialSetElement] =

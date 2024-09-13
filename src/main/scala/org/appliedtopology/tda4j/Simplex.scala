@@ -21,11 +21,6 @@ import math.Ordering.Implicits.sortedSetOrdering
  * Vertex type
  */
 case class Simplex[VertexT : Ordering] private[tda4j] (vertices : SortedSet[VertexT]) {
-  override def equals(obj: Any): Boolean = obj match {
-    case other : Simplex[VertexT] => vertices == other.vertices
-    case _ => super.equals(obj)
-  }
-
   override def toString(): String =
     vertices.mkString(s"∆(", ",", ")")
 
