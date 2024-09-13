@@ -1,7 +1,7 @@
 name := "TDA4j"
 organization := "org.appliedtopology"
 version := "0.1.0-alpha"
-scalaVersion := "3.3.0"
+scalaVersion := "3.5.0"
 
 versionScheme := Some("semver-spec")
 
@@ -36,6 +36,8 @@ lazy val root = (project in file("."))
     GitHubPagesPlugin
   )
   .settings(
+    // these options make 3.5.0 use the given resolution algorithms planned for 3.7.x.
+    scalacOptions ++= List("-source:future", "-language:experimental.modularity"),
     Compile / paradoxMaterialTheme := {
       ParadoxMaterialTheme()
     },

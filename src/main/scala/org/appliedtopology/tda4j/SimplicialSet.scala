@@ -1,5 +1,6 @@
 package org.appliedtopology.tda4j
 
+import org.appliedtopology.tda4j
 import org.appliedtopology.tda4j.unicode
 
 import scala.annotation.tailrec
@@ -12,9 +13,26 @@ import scala.math.Fractional.Implicits.infixFractionalOps
  */
 trait SimplicialSetElement {
   def base: SimplicialSetElement
-  def dim: Int
+
+  def dimension: Int
+
   def degeneracies: List[Int]
-  override def toString: String = unicode.unicodeSuperScript(s"∆$dim")
+
+  override def toString: String = unicode.unicodeSuperScript(s"∆$dimension")
+}
+
+object SimplicialSetElement {
+  object empty extends SimplicialSetElement:
+    sse =>
+    override def base: SimplicialSetElement = sse
+
+    override def dimension: Int = -1
+
+    override def degeneracies: List[Int] = List.empty
+}
+
+given SimplicialSetElement is HasDimension with {
+  extension (t: SimplicialSetElement) def dim = t.dimension
 }
 
 /**
@@ -28,7 +46,9 @@ trait SimplicialSetElement {
 def simplicialGenerator(generatorDim: Int): SimplicialSetElement =
   new SimplicialSetElement:
     override def base: SimplicialSetElement = this
-    override def dim: Int = generatorDim
+
+    override def dimension: Int = generatorDim
+
     override def degeneracies: List[Int] = List.empty
 
 /**
@@ -39,9 +59,11 @@ def simplicialGenerator(generatorDim: Int): SimplicialSetElement =
  * @param hasDimension$T$0
  * @tparam T
  */
-case class SimplicialWrapper[T : HasDimension](wrapped: T) extends SimplicialSetElement {
+case class SimplicialWrapper[T: HasDimension](wrapped: T) extends SimplicialSetElement {
   override def base: SimplicialSetElement = this
-  override def dim: Int = wrapped.dim
+
+  override def dimension: Int = wrapped.dim
+
   override def degeneracies: List[Int] = List.empty
 
   override def toString: String = s"wrapped[${wrapped}]"
@@ -61,13 +83,15 @@ case class SimplicialWrapper[T : HasDimension](wrapped: T) extends SimplicialSet
  * @param base
  * @param degeneracies
  */
-case class DegenerateSimplicialSetElement private (base: SimplicialSetElement, degeneracies: List[Int])
-    extends SimplicialSetElement:
-  override def dim: Int = base.dim + degeneracies.size
+case class DegenerateSimplicialSetElement private(base: SimplicialSetElement, degeneracies: List[Int])
+  extends SimplicialSetElement:
+  override def dimension: Int = base.dim + degeneracies.size
+
   override def toString: String =
     degeneracies
       .map(d => "s" + unicode.unicodeSubScript(d.toString))
       .mkString("", "  ", " ") + s"${base.toString}"
+
   // Handle cases where the base is also a simplicial set element
   // This is very reminiscent of a monad structure - but the data type is not a data container the way most
   // monads in functional programming would be
@@ -100,10 +124,10 @@ object DegenerateSimplicialSetElement {
  * A simplicial set **must** have:
  *
  * 1. A sequence of generating elements. These are considered non-degenerate in the context of this simplicial set.
- *    This sequence will be assumed to be in increasing order of dimension (so that things like [[nSkeleton]] can
- *    stop searching when it hits large enough dimensions), but this is not structurally enforced by the trait itself.
+ * This sequence will be assumed to be in increasing order of dimension (so that things like [[nSkeleton]] can
+ * stop searching when it hits large enough dimensions), but this is not structurally enforced by the trait itself.
  * 2. For each index $i$, a partial function from [[SimplicialSetElement]] to [[SimplicialSetElement]] encoding
- *    the $i$th face map. These partial functions **must** be defined on all the [[generators]].
+ * the $i$th face map. These partial functions **must** be defined on all the [[generators]].
  *
  * With these building blocks, a simplicial set also has:
  *
@@ -111,18 +135,26 @@ object DegenerateSimplicialSetElement {
  * 2. A method for listing all n-dimensional cells (degenerate as well as non-degenerate).
  * 3. A total order of `SimplicialSetElement`s, as a `given` declaration.
  * 4. An instance of the `Cell` typeclass for `SimplicialSetElement`s, as a `given` declaration.
- *    This instance works on the assumption that you will want to work in the **normalized Moore complex**,
- *    and will treat the [[generators]] as your cells.
+ * This instance works on the assumption that you will want to work in the **normalized Moore complex**,
+ * and will treat the [[generators]] as your cells.
  * 5. Functions to compute an [[f_vector]] (of non-degenerate elements), a full f-vector (of all elements),
- *    and the Euler characteristic.
+ * and the Euler characteristic.
  */
 trait SimplicialSet {
   def generators: Seq[SimplicialSetElement]
+
   def face(index: Int): PartialFunction[SimplicialSetElement, SimplicialSetElement]
 
+  def degenerate(index: Int): PartialFunction[SimplicialSetElement, SimplicialSetElement] = {
+    case sse@DegenerateSimplicialSetElement(base, degeneracies) =>
+      DegenerateSimplicialSetElement(base, DegenerateSimplicialSetElement.normalizeDegeneracies(degeneracies, List(index)))
+    case sse =>
+      DegenerateSimplicialSetElement(sse, List(index))
+  }
 
   def contains(sse: SimplicialSetElement): Boolean =
     generators.exists(g => g.base == sse.base)
+
   infix def ∋(sse: SimplicialSetElement): Boolean = contains(sse)
 
   def all_n_cells(n: Int): List[SimplicialSetElement] =
@@ -140,17 +172,18 @@ trait SimplicialSet {
       val generators: Seq[SimplicialSetElement] = this.generators.takeWhile(_.dim <= n)
 
       override def face(index: Int): PartialFunction[SimplicialSetElement, SimplicialSetElement] =
-        this.face(index)
+        ??? // FIXME this.face(index) creates an infinite loop - but how else can we access the existing face method? /MVJ
     }
 
   given sseOrdering: Ordering[SimplicialSetElement] =
     Ordering.by((sse: SimplicialSetElement) => sse.dim).orElseBy(_.hashCode())
-  given normalizedHomologyCell(using seOrd: Ordering[SimplicialSetElement]): OrderedCell[SimplicialSetElement] with {
+
+  given normalizedHomologyCell(using seOrd: Ordering[SimplicialSetElement])(using hasDim: SimplicialSetElement is HasDimension): (SimplicialSetElement is OrderedCell) with {
     extension (t: SimplicialSetElement) {
       override def boundary[CoefficientT](using
                                           fr: Fractional[CoefficientT]
                                          ): Chain[SimplicialSetElement, CoefficientT] =
-        if (t.dim == 0) Chain()
+        if (t.dim <= 0) Chain()
         else {
           val pmOne = List(fr.one, fr.negate(fr.one))
           if (t.degeneracies.isEmpty)
@@ -163,9 +196,10 @@ trait SimplicialSet {
             )
           else Chain()
         }
-      override def dim: Int = t.base.dim + t.degeneracies.size
+      override def dim: Int = hasDim.dim(t.base) + t.degeneracies.size
     }
-    override def compare(x: SimplicialSetElement, y: SimplicialSetElement): Int =
+
+    def compare(x: SimplicialSetElement, y: SimplicialSetElement): Int =
       seOrd.compare(x, y)
   }
 
@@ -187,19 +221,23 @@ trait SimplicialSet {
   def eulerCharacteristic(maxDim: Int = 10): Int =
     f_vector(maxDim)
       .zipWithIndex
-      .map{(f,i) => List(1,-1)(i%2) * f}
+      .map { (f, i) => List(1, -1)(i % 2) * f }
       .sum
 }
 
 object SimplicialSet {
-  def mkFaceMaps(faceMapping : PartialFunction[SimplicialSetElement, List[SimplicialSetElement]]):
-    Int => PartialFunction[SimplicialSetElement, SimplicialSetElement] = index => {
+  def mkFaceMaps(faceMapping: PartialFunction[SimplicialSetElement, List[SimplicialSetElement]]):
+  Int => PartialFunction[SimplicialSetElement, SimplicialSetElement] = index => {
+    case sse if (sse.dim <= 0) => SimplicialSetElement.empty
     case sse if (0 <= index) && (index <= sse.dim) =>
       val split = sse.degeneracies
         .groupBy(j => (index < j, index == j || index == j + 1, index > j + 1))
         .orElse(_ => List.empty)
+
       inline def INDEX_SMALL = (true, false, false)
+
       inline def INDEX_MATCH = (false, true, false)
+
       inline def INDEX_LARGE = (false, false, true)
 
       val newFace: Option[Int] =
@@ -218,7 +256,9 @@ object SimplicialSet {
         case None =>
           DegenerateSimplicialSetElement(sse.base, newDegeneracies)
         case Some(i) =>
-          DegenerateSimplicialSetElement(faceMapping.apply(sse.base)(i), newDegeneracies).join()
+          DegenerateSimplicialSetElement(
+            faceMapping.applyOrElse(sse.base, { (_) => List.empty })(i),
+            newDegeneracies).join()
       }
   }
 
@@ -250,13 +290,14 @@ object SimplicialSet {
  * This is an implementation of the [[SimplicialSet]] trait that allows for infinite generating sets.
  * It also assembles face maps for you from just defining them on the generators and inferring their
  * results on degeneracies.
+ *
  * @param generators
  * @param faceMapping
  */
 case class LazySimplicialSet(
-  generators: LazyList[SimplicialSetElement],
-  faceMapping: PartialFunction[SimplicialSetElement, List[SimplicialSetElement]]
-) extends SimplicialSet {
+                              generators: LazyList[SimplicialSetElement],
+                              faceMapping: PartialFunction[SimplicialSetElement, List[SimplicialSetElement]]
+                            ) extends SimplicialSet {
   val faceMaps = SimplicialSet.mkFaceMaps(faceMapping)
 
   override def face(index: Int): PartialFunction[SimplicialSetElement, SimplicialSetElement] =
@@ -265,36 +306,46 @@ case class LazySimplicialSet(
 
 
 /** Notes on boundaries of degenerate elements
-  *
-  * Suppose w = s_j_ z Suppose k > j+1, i < j Then by the simplicial set laws: d_k_ s_j_ z = s_j d_k-1_ z d_i_ s_j_ z =
-  * s_j-1_ d_i_ z d_j_ s_j_ z = d_j+1_ s_j_ z = z
-  *
-  * So from all this follows: ∂ s_j_ z = ∑ (-1)^n^ d_i_ s_j_ z = s_j_ (d_0_ - d_1_ + ... ± d_j-1_) z + (z - z) ± s_j_
-  * (d_j+1_ - d_j+2_ + ... ± d_n_) z = s_j_ ∂ z (??? not sure it all lines up right here?)
-  *
-  * Goerss-Jardine III:2, esp. Theorem 2.1:
-  *
-  * Normalized Chain Complex NA is isomorphic to the quotient A/DA chain complex clearing out the degenerate simplices.
-  */
+ *
+ * Suppose w = s_j_ z Suppose k > j+1, i < j Then by the simplicial set laws: d_k_ s_j_ z = s_j d_k-1_ z d_i_ s_j_ z =
+ * s_j-1_ d_i_ z d_j_ s_j_ z = d_j+1_ s_j_ z = z
+ *
+ * So from all this follows: ∂ s_j_ z = ∑ (-1)^n^ d_i_ s_j_ z = s_j_ (d_0_ - d_1_ + ... ± d_j-1_) z + (z - z) ± s_j_
+ * (d_j+1_ - d_j+2_ + ... ± d_n_) z = s_j_ ∂ z (??? not sure it all lines up right here?)
+ *
+ * Goerss-Jardine III:2, esp. Theorem 2.1:
+ *
+ * Normalized Chain Complex NA is isomorphic to the quotient A/DA chain complex clearing out the degenerate simplices.
+ */
 
 /** Normalization is with respect to simplicial identities:
-  *
-  * Face(i)Face(j) = Face(j-1)Face(i) if i < j Face(i)Degeneracy(j) = Degeneracy(j-1)Face(i) if i < j
-  * Face(i)Degeneracy(j) = Degeneracy(j)Face(i-1) if i > j+1 Face(j)Degeneracy(j) = 1 = Face(j+1)Degeneracy(j)
-  * Degeneracy(i)Degeneracy(j) = Degeneracy(j+1)Degeneracy(j) if i < j+1
-  *
-  * With these identities we can process any sequence of applications of faces and degeneracies until faces in
-  * decreasing order sit to the right (are applied first) and degeneracies are applied on top of these. Since each
-  * nondegenerate simplex must know its faces, we only track degeneracies with a specific list. Now:
-  * Face(i)Degeneracy(j)Degeneracy(k)Degeneracy(l) =
-  * -reduce face index if i > j+1; reduce degeneracy index if i < j Degeneracy(j)Face(i-1)Degeneracy(k)Degeneracy(l) =
-  * ...
-  */
+ *
+ * Face(i)Face(j) = Face(j-1)Face(i) if i < j Face(i)Degeneracy(j) = Degeneracy(j-1)Face(i) if i < j
+ * Face(i)Degeneracy(j) = Degeneracy(j)Face(i-1) if i > j+1 Face(j)Degeneracy(j) = 1 = Face(j+1)Degeneracy(j)
+ * Degeneracy(i)Degeneracy(j) = Degeneracy(j+1)Degeneracy(j) if i < j+1
+ *
+ * With these identities we can process any sequence of applications of faces and degeneracies until faces in
+ * decreasing order sit to the right (are applied first) and degeneracies are applied on top of these. Since each
+ * nondegenerate simplex must know its faces, we only track degeneracies with a specific list. Now:
+ * Face(i)Degeneracy(j)Degeneracy(k)Degeneracy(l) =
+ * -reduce face index if i > j+1; reduce degeneracy index if i < j Degeneracy(j)Face(i-1)Degeneracy(k)Degeneracy(l) =
+ * ...
+ */
 
 /** ************** Constructions
-  */
+ */
 
 import math.Ordering.Implicits.sortedSetOrdering
+
+
+case class SimplicialMap(mapping: PartialFunction[SimplicialSetElement, SimplicialSetElement],
+                         source: SimplicialSet, target: SimplicialSet) {
+  def apply(sse: SimplicialSetElement): SimplicialSetElement = sse match {
+    case DegenerateSimplicialSetElement(base, degeneracies) if (mapping.isDefinedAt(base)) =>
+      DegenerateSimplicialSetElement(mapping(base), degeneracies).join()
+    case sse if(mapping.isDefinedAt(sse)) => mapping.apply(sse)
+  }
+}
 
 /**
  * The Singular Simplicial Set of a simplicial complex (seen as a sequence of simplices).
@@ -303,7 +354,7 @@ import math.Ordering.Implicits.sortedSetOrdering
  * @param ordering$VertexT$0
  * @tparam VertexT
  */
-class Singular[VertexT: Ordering] private[tda4j] (val allSimplices: Seq[Simplex[VertexT]]) extends SimplicialSet {
+class Singular[VertexT: Ordering] private[tda4j](val allSimplices: Seq[Simplex[VertexT]]) extends SimplicialSet {
   val generators: Seq[SimplicialWrapper[Simplex[VertexT]]] =
     allSimplices.toSeq.sortBy(_.dim).map(spx => SimplicialWrapper(spx))
   val faceMapping: Map[SimplicialSetElement, List[SimplicialSetElement]] = Map.from(
@@ -318,6 +369,7 @@ class Singular[VertexT: Ordering] private[tda4j] (val allSimplices: Seq[Simplex[
 
   override def face(index: Int): PartialFunction[SimplicialSetElement, SimplicialSetElement] =
     simplicialSet.face(index)
+
   override def contains(sse: SimplicialSetElement): Boolean =
     simplicialSet.contains(sse)
 }
@@ -332,7 +384,7 @@ object Singular {
    * @tparam VertexT
    * @return
    */
-  def from[VertexT : Ordering](underlying : Seq[Simplex[VertexT]]): Singular[VertexT] =
+  def from[VertexT: Ordering](underlying: Seq[Simplex[VertexT]]): Singular[VertexT] =
     fromAll(underlying.toSet.flatMap(spx => spx.vertices.subsets.filter(_.nonEmpty).map(Simplex.from)).toSeq)
 
   /**
@@ -343,7 +395,7 @@ object Singular {
    * @tparam VertexT
    * @return
    */
-  def fromAll[VertexT : Ordering](allSimplices : Seq[Simplex[VertexT]]): Singular[VertexT] = new Singular(allSimplices)
+  def fromAll[VertexT: Ordering](allSimplices: Seq[Simplex[VertexT]]): Singular[VertexT] = new Singular(allSimplices)
 }
 
 /**
@@ -356,30 +408,35 @@ object Singular {
  * @tparam FiltrationT
  * @return
  */
-def normalizedCellStream[FiltrationT: Ordering: Filterable](
-                                                             ss: SimplicialSet,
-                                                             filtrationValueO: Option[PartialFunction[SimplicialSetElement, FiltrationT]] = None
-): CellStream[SimplicialSetElement, FiltrationT] = {
+def normalizedCellStream[FiltrationT: Ordering : Filterable](
+                                                              ss: SimplicialSet,
+                                                              filtrationValueO: Option[PartialFunction[SimplicialSetElement, FiltrationT]] = None
+                                                            ): CellStream[SimplicialSetElement, FiltrationT] = {
   val filterable: Filterable[FiltrationT] = summon[Filterable[FiltrationT]]
+
   def filtrationValues = filtrationValueO.getOrElse({ case _ =>
     filterable.smallest
   })
-  given sseCell: Cell[SimplicialSetElement] = ss.normalizedHomologyCell
+
   given sseOrd: Ordering[SimplicialSetElement] = Ordering
     .by[SimplicialSetElement, FiltrationT] { (sse: SimplicialSetElement) =>
-      filtrationValues.applyOrElse(sse, { _ => filterable.smallest }) }
-    .orElseBy(_.dim)
-  new CellStream[SimplicialSetElement, FiltrationT] {
-      export filterable.{largest, smallest}
-
-      override def filtrationValue: PartialFunction[SimplicialSetElement, FiltrationT] = filtrationValues
-
-      override def filtrationOrdering: Ordering[SimplicialSetElement] = sseOrd
-
-      override def iterator: Iterator[SimplicialSetElement] =
-        ss.generators.sorted(filtrationOrdering).iterator
+      filtrationValues.applyOrElse(sse, { _ => filterable.smallest })
     }
+    .orElseBy(_.dim)
+
+  given sseCell: (SimplicialSetElement is OrderedCell) = ss.normalizedHomologyCell
+
+  new CellStream[SimplicialSetElement, FiltrationT] {
+    export filterable.{largest, smallest}
+
+    override def filtrationValue: PartialFunction[SimplicialSetElement, FiltrationT] = filtrationValues
+
+    override def filtrationOrdering: Ordering[SimplicialSetElement] = sseOrd
+
+    override def iterator: Iterator[SimplicialSetElement] =
+      ss.generators.sorted(filtrationOrdering).iterator
   }
+}
 
 /**
  * Helper function to interleave two lazy lists -- so that we can take their union without having to run
@@ -407,21 +464,26 @@ def alternateLazyLists[A](left: Seq[A], right: Seq[A]): LazyList[A] =
  */
 case class Coproduct(left: SimplicialSet, right: SimplicialSet) extends SimplicialSet {
   override def generators: LazyList[SimplicialSetElement] = alternateLazyLists(left.generators, right.generators)
+
   override def face(index: Int): PartialFunction[SimplicialSetElement, SimplicialSetElement] =
     left.face(index).orElse(right.face(index))
+
   override def contains(sse: SimplicialSetElement): Boolean =
     left.contains(sse) || right.contains(sse)
 }
 
 /** For now this is only written for finitely generated simplicial sets.
-  *
-  * Anything with potentially infinite generator sets will need special handling.
-  */
+ *
+ * Anything with potentially infinite generator sets will need special handling.
+ */
 
 case class ProductElement(left: SimplicialSetElement, right: SimplicialSetElement) extends SimplicialSetElement {
   assert(left.dim == right.dim)
+
   override def base: SimplicialSetElement = this
-  override def dim: Int = left.dim
+
+  override def dimension: Int = left.dim
+
   override def degeneracies: List[Int] = List()
 
   override def toString: String =
@@ -450,13 +512,13 @@ case class ProductElement(left: SimplicialSetElement, right: SimplicialSetElemen
 // So this should be a valid candidate, but is missed if we just take the sequence (n to(0, -1)) and split it
 
 
-
 case class Product(left: SimplicialSet, right: SimplicialSet) extends SimplicialSet {
   given productOrdering: Ordering[ProductElement] =
     Ordering
       .by((pe: ProductElement) => pe.left)(left.sseOrdering)
       .orElseBy((pe: ProductElement) => pe.right)(right.sseOrdering)
-  given productCell: OrderedCell[ProductElement] with {
+
+  given productCell: (ProductElement is OrderedCell) with {
     extension (t: ProductElement)
       override def boundary[CoefficientT: Fractional]: Chain[ProductElement, CoefficientT] = {
         val leftBoundary: Chain[SimplicialSetElement, CoefficientT] = {
@@ -476,13 +538,15 @@ case class Product(left: SimplicialSet, right: SimplicialSet) extends Simplicial
 
     extension (t: ProductElement) override def dim: Int = t.left.dim
 
-    override def compare(x: ProductElement, y: ProductElement): Int =
+    def compare(x: ProductElement, y: ProductElement): Int =
       productOrdering.compare(x, y)
   }
+
   val generatorPairs: LazyList[(SimplicialSetElement, SimplicialSetElement)] = LazyList.from(for
     gL <- left.generators
     gR <- right.generators
   yield (gL, gR))
+
   def productGenerators(dimension: Int): LazyList[SimplicialSetElement] =
     generatorPairs
       .filter((gL, gR) => gL.dim + gR.dim >= dimension)
@@ -490,54 +554,129 @@ case class Product(left: SimplicialSet, right: SimplicialSet) extends Simplicial
       .flatMap { (gL, gR) =>
         val degeneracyIndexPool = (0 to dimension).reverse
         val totalCount = (dimension - gL.dim) + (dimension - gR.dim)
-        val leftCandidates = degeneracyIndexPool
-          .combinations(dimension - gL.dim)
-          .toSeq
-          .filter { (comb) => comb.reverse.zipWithIndex.forall { (c,i) => c <= gL.dim+i } }
-          .groupBy { (comb) => comb.zipWithIndex.map(_+_).toSet }
-        val rightCandidates = degeneracyIndexPool
-          .combinations(dimension - gR.dim)
-          .toSeq
-          .filter { (comb) => comb.reverse.zipWithIndex.forall { (c,i) => c <= gR.dim+i } }
-          .groupBy { (comb) => comb.zipWithIndex.map(_+_).toSet }
         for
-          (cL,ccL) <- leftCandidates
-          (cR,ccR) <- rightCandidates
-          if(cL.intersect(cR).isEmpty)
-          dL <- ccL
-          dR <- ccR
+          comb <- degeneracyIndexPool.combinations(totalCount)
+          combL <- comb.combinations(dimension - gL.dim)
+          combR = comb diff combL
+          if (combL.reverse.zipWithIndex.forall { (c, i) => c <= gL.dim + i })
+          if (combR.reverse.zipWithIndex.forall { (c, i) => c <= gR.dim + i })
         yield
           SimplicialWrapper(ProductElement(
-            DegenerateSimplicialSetElement(gL, dL.toList),
-            DegenerateSimplicialSetElement(gR, dR.toList)))
+            DegenerateSimplicialSetElement(gL, combL.toList),
+            DegenerateSimplicialSetElement(gR, combR.toList)))
       }
+
   val maxdim = (left.generators.map(_.dim).max) + (right.generators.map(_.dim).max)
+
   override def generators: Seq[SimplicialSetElement] =
     (0 to maxdim).flatMap(productGenerators)
+
   override def face(index: Int): PartialFunction[SimplicialSetElement, SimplicialSetElement] = {
     // see e.g. https://ncatlab.org/nlab/show/product+of+simplices#ProductsOfSimplicialSets prop 2.1.
-    case sse @ SimplicialWrapper(ProductElement(sseL, sseR)) =>
+    case sse if (sse.dim <= 0) => SimplicialSetElement.empty
+    case sse@SimplicialWrapper(ProductElement(sseL, sseR)) =>
       SimplicialWrapper(ProductElement(left.face(index)(sseL), right.face(index)(sseR)))
   }
+
   override def contains(sse: SimplicialSetElement): Boolean =
     generators.contains(sse.base)
 }
 
+case class SubSimplicialSetElement(base: SimplicialSetElement) extends SimplicialSetElement {
+  override def dimension: Int = base.dimension
+  override def degeneracies: List[Int] = List.empty
+}
 case class SubSimplicialSet(
-                             ss: SimplicialSet,
+                             subSet: SimplicialSet,
                              ambient: SimplicialSet,
                              inclusion: PartialFunction[SimplicialSetElement, SimplicialSetElement]
-) extends SimplicialSet {
-  override def generators: LazyList[SimplicialSetElement] = LazyList.from(ss.generators)
-  override def face(index: Int): PartialFunction[SimplicialSetElement, SimplicialSetElement] = ss.face(index)
-  override def contains(sse: SimplicialSetElement): Boolean = ss.contains(sse)
+                           ) extends SimplicialSet {
+  override def generators: Seq[SimplicialSetElement] = subSet.generators
+
+  override def face(index: Int): PartialFunction[SimplicialSetElement, SimplicialSetElement] = subSet.face(index)
+
+  override def contains(sse: SimplicialSetElement): Boolean = subSet.contains(sse)
 }
 
+object SubSimplicialSet {
+  def from(ambient: SimplicialSet, generators: Seq[SimplicialSetElement]): SubSimplicialSet =
+    SubSimplicialSet(
+      SimplicialSet(
+        generators.map(SubSimplicialSetElement.apply).toList,
+        Map.from(generators.map { (g) =>
+          SubSimplicialSetElement(g) -> (if (g.dim > 0)
+            (0 to g.dim)
+              .map { (i) => ambient.face(i)(g) }
+              .map {
+              case DegenerateSimplicialSetElement(base, degeneracies) =>
+                DegenerateSimplicialSetElement(SubSimplicialSetElement(base), degeneracies)
+              case sse => DegenerateSimplicialSetElement(sse, List.empty)
+              }
+              .toList
+          else List.empty)
+        })),
+      ambient,
+      {
+        case sse@DegenerateSimplicialSetElement(base, degeneracies) => base match {
+          case SubSimplicialSetElement(base2) => DegenerateSimplicialSetElement(base2, degeneracies)
+          case _ => sse
+        }
+        case SubSimplicialSetElement(base3) => base3
+      }
+    )
+}
 
 case class QuotientSimplicialSet(
-                                  superSet: SimplicialSet,
                                   quotientSet: SimplicialSet,
-                                )
+                                  superSet: SimplicialSet,
+                                  projection: PartialFunction[SimplicialSetElement, SimplicialSetElement]
+                                ) extends SimplicialSet {
+  override def generators: Seq[SimplicialSetElement] = quotientSet.generators
+
+  override def face(index: Int): PartialFunction[SimplicialSetElement, SimplicialSetElement] = quotientSet.face(index)
+
+  override def contains(sse: SimplicialSetElement): Boolean = quotientSet.contains(sse)
+}
+
+object QuotientSimplicialSet {
+  def from(superSet : SimplicialSet, collapses: Seq[Set[SimplicialSetElement]]): QuotientSimplicialSet = {
+    assert(collapses.forall{ (collapse) => collapse.map(_.dim).toSet.size <= 1}) // homogenous collapse sets
+    val collapseMap : Map[SimplicialSetElement, Set[SimplicialSetElement]] =
+      Map.from(collapses.map { (collapse) =>
+        DegenerateSimplicialSetElement(simplicialGenerator(0), (collapse.head.dim-1 to (0,-1)).toList) -> collapse})
+    val projection : PartialFunction[SimplicialSetElement, SimplicialSetElement] =
+      Map.from(collapseMap.flatMap{(basis, contents) => contents.map(_ -> basis)}).orElse(identity(_))
+    val removed = collapses.flatten
+    val quotientGenerators = superSet.generators
+      .filter(!removed.contains(_)) ++ collapseMap.keys
+    QuotientSimplicialSet(
+      SimplicialSet(quotientGenerators.toList,
+                    {
+                      case sse@DegenerateSimplicialSetElement(base, degeneracies) =>
+                        if(!collapseMap.keySet.contains(base))
+                          (0 to sse.dim).map(superSet.face(_)(sse)).toList
+                        else
+                          (0 to sse.dim).map{(j) =>
+                            if(degeneracies.contains(j))
+                              DegenerateSimplicialSetElement(
+                                base,
+                                degeneracies.collect {
+                                  case i if(i > j) => i-1
+                                  case i if (i < j) => i
+                                }
+                              )
+                            else SimplicialSetElement.empty
+                          }.toList
+                      case sse if(quotientGenerators.contains(sse)) =>
+                        if (!collapseMap.keySet.contains(sse))
+                          (0 to sse.dim).map(superSet.face(_)(sse)).toList
+                        else (0 to sse.dim).map{(_) => SimplicialSetElement.empty}.toList
+                    }),
+      superSet,
+      projection
+      )
+  }
+}
 
 /** The Pushout of a diagram
  *
@@ -555,31 +694,59 @@ case class Pushout(
                     left: SimplicialSet, center: SimplicialSet, right: SimplicialSet,
                     f: PartialFunction[SimplicialSetElement, SimplicialSetElement],
                     g: PartialFunction[SimplicialSetElement, SimplicialSetElement]
-                   ) extends SimplicialSet {
+                  ) extends SimplicialSet {
   lazy val ambient: Product = Product(left, right)
-  lazy val ambient_ssl : SimplicialSet = ambient
+  lazy val ambient_ssl: SimplicialSet = ambient
 
   override def generators: Seq[SimplicialSetElement] =
     for
       psse <- ambient.generators
       p = psse.asInstanceOf[ProductElement] // this is ugly, but I'm stuck
-      if(f(p.left) == g(p.right))
+      if (f(p.left) == g(p.right))
     yield
       p
 
-  override def face(index: Int): PartialFunction[SimplicialSetElement, SimplicialSetElement] =
-    {
-      case ProductElement(leftS, rightS) => ProductElement(left.face(index)(leftS), right.face(index)(rightS))
-    }
+  override def face(index: Int): PartialFunction[SimplicialSetElement, SimplicialSetElement] = {
+    case ProductElement(leftS, rightS) => ProductElement(left.face(index)(leftS), right.face(index)(rightS))
+  }
 }
 
 
 /** ************** Examples
-  */
+ */
 
-def sphere(dim: Int): SimplicialSet = {
-  val v0 = simplicialGenerator(0)
-  val wn = simplicialGenerator(dim)
-  val dv0 = DegenerateSimplicialSetElement(v0, (dim - 2).to(0, -1).toList)
-  SimplicialSet(List(v0, wn), Map(v0 -> List.empty, wn -> List.fill(dim + 1)(dv0)))
+object SimplicialSetExamples {
+  def sphere(dim: Int): SimplicialSet = {
+    val v0 = simplicialGenerator(0)
+    val wn = simplicialGenerator(dim)
+    val dv0 = DegenerateSimplicialSetElement(v0, (dim - 2).to(0, -1).toList)
+    SimplicialSet(List(v0, wn), Map(v0 -> List.empty, wn -> List.fill(dim + 1)(dv0)))
+  }
+
+  def simplex(dim: Int): SimplicialSet = {
+    val vertices = (0 to dim).map{(_) => simplicialGenerator(0)}
+    val generators : Seq[Map[Seq[Int], SimplicialSetElement]] =
+      Map.from(vertices.indices.map{(j) => Vector(j) -> vertices(j)}) ::
+      (1 to dim).toList.map { (d) =>
+      Map.from(for
+        combination <- vertices.indices.combinations(d+1).toList
+      yield
+        combination -> simplicialGenerator(d)
+      )
+    }
+    val allGeneratorKeys = generators.flatMap(_.keySet)
+    val allGenerators = allGeneratorKeys.toList.map{(k) => generators(k.size-1)(k)}
+    val reverseGeneratorLookup = Map.from(allGeneratorKeys.map{(k) => generators(k.size-1)(k) -> k})
+    val faceMapping = Map.from(
+      allGenerators.map{(generator) => 
+        val generatorKey = reverseGeneratorLookup(generator)
+        generator -> generatorKey
+          .indices
+          .toList
+          .map(generatorKey.patch(_, List.empty, 1))
+          .map(generators(generator.dim-1))
+      }
+    )
+    SimplicialSet(allGenerators, faceMapping)
+  }
 }

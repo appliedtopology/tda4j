@@ -6,9 +6,6 @@ import scala.math.Ordering.IntOrdering
 import scala.math.Ordering.Double.IeeeOrdering
 import math.Ordering.Implicits.sortedSetOrdering
 
-given simplexOrdering[VertexT: Ordering]: Ordering[Simplex[VertexT]] =
-  Ordering.by{(spx:Simplex[VertexT]) => spx.vertices}(sortedSetOrdering[SortedSet, VertexT])
-
 /** Class representing an abstract simplex. Abstract simplices are given by sets (of totally ordered vertices)
  * and inherit from `Cell` so that the class has a `boundary` and a `dim` method.
  *
@@ -23,12 +20,7 @@ given simplexOrdering[VertexT: Ordering]: Ordering[Simplex[VertexT]] =
  * @tparam VertexT
  * Vertex type
  */
-case class Simplex[VertexT : Ordering] private (vertices : SortedSet[VertexT]) {
-  override def equals(obj: Any): Boolean = obj match {
-    case other : Simplex[VertexT] => vertices == other.vertices
-    case _ => super.equals(obj)
-  }
-
+case class Simplex[VertexT : Ordering] private[tda4j] (vertices : SortedSet[VertexT]) {
   override def toString(): String =
     vertices.mkString(s"∆(", ",", ")")
 
@@ -36,7 +28,14 @@ case class Simplex[VertexT : Ordering] private (vertices : SortedSet[VertexT]) {
     new Simplex(vertices.union(other.vertices))
 }
 
-given [VertexT : Ordering] : OrderedCell[Simplex[VertexT]] with {
+def simplexOrdering[VertexT : Ordering as vtxOrdering]: Ordering[Simplex[VertexT]] =
+  Ordering.by{(spx: Simplex[VertexT]) => spx.vertices}(sortedSetOrdering[SortedSet, VertexT](vtxOrdering))
+
+given [VertexT : Ordering] => Ordering[Simplex[VertexT]] = simplexOrdering
+
+  //  Ordering.by{(spx: Simplex[VertexT]) => spx.vertices}(sortedSetOrdering[SortedSet, VertexT](vtxOrdering))
+
+given [VertexT : Ordering] => Simplex[VertexT] is OrderedCell with {
   given Ordering[Simplex[VertexT]] = simplexOrdering
   extension (t: Simplex[VertexT]) {
     override def boundary[CoefficientT](using fr: Fractional[CoefficientT]): Chain[Simplex[VertexT], CoefficientT] =
@@ -50,7 +49,7 @@ given [VertexT : Ordering] : OrderedCell[Simplex[VertexT]] with {
       )
     override def dim: Int = t.vertices.size - 1
   }
-  override def compare(x: Simplex[VertexT], y: Simplex[VertexT]): Int = simplexOrdering[VertexT].compare(x,y)
+  def compare(x: Simplex[VertexT], y: Simplex[VertexT]): Int = simplexOrdering[VertexT].compare(x,y)
 }
 
 /** Simplex companion object with factory methods

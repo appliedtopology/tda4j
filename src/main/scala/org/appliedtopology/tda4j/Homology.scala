@@ -13,7 +13,7 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional, Fil
 
 class CellularHomologyContext[CellT : OrderedCell, CoefficientT: Fractional, FiltrationT: Ordering] extends ChainOps[CellT, CoefficientT]() {
 
-  import barcode._
+  import barcode.*
 
   case class HomologyState(
     cycles: mutable.Map[CellT, Chain[CellT, CoefficientT]],
@@ -43,12 +43,7 @@ class CellularHomologyContext[CellT : OrderedCell, CoefficientT: Fractional, Fil
     ): List[(Int, FiltrationT, FiltrationT)] = {
       advanceTo(f)
       (for
-        (dim, lower, oldUpper, cycle): (
-          Int,
-          FiltrationT,
-          FiltrationT,
-          Chain[CellT, CoefficientT]
-        ) <- barcode.toList
+        (dim : Int, lower : FiltrationT, oldUpper : FiltrationT, cycle : Chain[CellT, CoefficientT]) <- barcode.toList
         if lower <= f
         upper = oldUpper.min(f)
       yield (dim, lower, upper)) ++ (

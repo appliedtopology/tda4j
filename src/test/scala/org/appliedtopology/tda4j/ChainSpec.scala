@@ -178,7 +178,7 @@ class HeapChainSpec extends mutable.Specification {
     }
     "be created from varargs" >> {
       val elts = Seq((∆(1, 2), 1.0), (∆(1, 3), -1.0))
-      val hc = Chain[Simplex[Int], Double](elts: _*)
+      val hc = Chain[Simplex[Int], Double](elts*)
       "contains the right things" ==>
         (hc.items.toList must containTheSameElementsAs(elts))
     }
