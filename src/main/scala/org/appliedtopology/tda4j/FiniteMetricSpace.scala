@@ -3,7 +3,7 @@ package org.appliedtopology.tda4j
 import math.{pow, sqrt}
 import collection.immutable.Range
 import util.chaining.scalaUtilChainingOps
-import math.Ordering.Implicits._
+import math.Ordering.Implicits.*
 
 /** Interface for being a finite metric space
   *

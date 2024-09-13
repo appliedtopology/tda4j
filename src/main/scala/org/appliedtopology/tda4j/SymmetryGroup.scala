@@ -7,7 +7,7 @@ import java.util.NoSuchElementException
 import scala.collection.mutable.ListBuffer
 import org.apache.commons.numbers.combinatorics.Factorial
 
-import scala.collection.parallel.CollectionConverters._
+import scala.collection.parallel.CollectionConverters.*
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -399,7 +399,7 @@ class Permutations(elementCount: Int) {
     *   Image of the permutation as a [[List]].
     */
   def apply(n: Int): List[Int] = {
-    val source: ListBuffer[Int] = ListBuffer(Range(0, elementCount).toList: _*)
+    val source: ListBuffer[Int] = ListBuffer(Range(0, elementCount).toList*)
     val retval: ListBuffer[Int] = ListBuffer[Int]()
 
     var pos: Long = n.toLong
