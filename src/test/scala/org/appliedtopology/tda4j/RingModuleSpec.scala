@@ -7,7 +7,10 @@ class RingModuleSpec extends mutable.Specification with ScalaCheck {
     |and make sure that it does what we need it to do.
     |""".stripMargin
 
-  object rm extends RingModule[(Int, Int), Int] {
+  given rm : (RingModule { type Self=(Int,Int); type R=Int }) with {
+    type Self = (Int,Int)
+    type R = Int
+
     val zero: (Int, Int) = (0, 0)
 
     def plus(ls: (Int, Int), rs: (Int, Int)): (Int, Int) =
@@ -17,8 +20,6 @@ class RingModuleSpec extends mutable.Specification with ScalaCheck {
 
     def scale(x: Int, y: (Int, Int)): (Int, Int) = (x * y._1, x * y._2)
   }
-
-  given RingModule[(Int, Int), Int] = rm
 
   "zero should exist" >> {
     val v: (Int, Int) = rm.zero

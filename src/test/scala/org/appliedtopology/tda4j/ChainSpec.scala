@@ -19,8 +19,7 @@ class ChainSpec extends mutable.Specification {
 
   given Ordering[Int] = math.Ordering.Int
 
-  given rm: RingModule[Chain[Simplex[Int], Double], Double] =
-    ChainOps[Simplex[Int], Double]
+  val rm = summon[RingModule { type Self=Chain[Simplex[Int], Double]; type R=Double }]
   import rm.*
 
   "The `Chain` type should" >> {
@@ -163,7 +162,7 @@ class ChainSpec extends mutable.Specification {
 
     z1 + z2 must beEqualTo(∆(1, 2, 3) + ∆(1, 2) - ∆(1, 3) + ∆(2, 3))
     z2 - z6 must beEqualTo(
-      summon[RingModule[Chain[Simplex[Int], Double], Double]].zero
+      summon[RingModule { type Self=Chain[Simplex[Int], Double]; type R=Double}].zero
     )
   }
 }
@@ -191,7 +190,7 @@ class HeapChainSpec extends mutable.Specification {
     }
     "be possible to add together" >> {
       given Conversion[Simplex[Int], Chain[Simplex[Int], Double]] = Chain.apply
-      given rm: RingModule[Chain[Simplex[Int], Double], Double] = ChainOps()
+      val rm = summon[RingModule{ type Self=Chain[Simplex[Int], Double]; type R=Double}]
       import rm.{given, *}
       val z1: Chain[Simplex[Int], Double] =
         1.0 ⊠ ∆(1, 2) + (∆(1, 3).mul(2.0)) - (1.0 |*| ∆(2, 3)) + (5.2.scale(∆(1, 4)))

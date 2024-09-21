@@ -62,8 +62,8 @@ object Kruskal {
 }
 
 /*
-def KruskalF[T](metricSpace: FiniteMetricSpace[T])(using orderingT: Ordering[T]) = {
-  val unionFind: UnionFind[T] = UnionFind(metricSpace.elements)
+def KruskalF[Self](metricSpace: FiniteMetricSpace[Self])(using orderingT: Ordering[Self]) = {
+  val unionFind: UnionFind[Self] = UnionFind(metricSpace.elements)
   val sortedEdges: List[(Double, unionFind.UFSet, unionFind.UFSet)] =
     (for
       x <- unionFind.sets.keysIterator
@@ -73,14 +73,14 @@ def KruskalF[T](metricSpace: FiniteMetricSpace[T])(using orderingT: Ordering[T])
       l._1 < r._1
     }
 
-    def process(dxy: (Double,unionFind.UFSet,unionFind.UFSet)): Either[(T,T),(T,T)] =
+    def process(dxy: (Double,unionFind.UFSet,unionFind.UFSet)): Either[(Self,Self),(Self,Self)] =
       if unionFind.find(dxy._2) != unionFind.find(dxy._3) then {
         unionFind.union(dxy._2, dxy._3)
-        Left[(T, T), (T, T)]((dxy._2.label, dxy._3.label))
+        Left[(Self, Self), (Self, Self)]((dxy._2.label, dxy._3.label))
       } else {
-        Right[(T, T), (T, T)]((dxy._2.label, dxy._3.label))
+        Right[(Self, Self), (Self, Self)]((dxy._2.label, dxy._3.label))
       }
 
-    val lrList: (List[(T,T)],List[(T,T)]) = sortedEdges.partitionMap(process)
+    val lrList: (List[(Self,Self)],List[(Self,Self)]) = sortedEdges.partitionMap(process)
 }
  */

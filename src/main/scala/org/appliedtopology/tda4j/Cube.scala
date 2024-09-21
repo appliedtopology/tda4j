@@ -10,35 +10,27 @@ sealed trait ElementaryInterval {
 given elementaryIntervalOrdering : Ordering[ElementaryInterval] = Ordering.by(i => i.n)
 
 case class DegenerateInterval(n: Int) extends ElementaryInterval {
-  def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] =
-    Chain[ElementaryInterval, CoefficientT]()
   override def toString: String = s"[$n,$n]"
 }
 case class FullInterval(n: Int) extends ElementaryInterval {
-  def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] =
-    ChainOps[ElementaryInterval, CoefficientT]().minus(Chain(DegenerateInterval(n + 1)), Chain(DegenerateInterval(n)))
   override def toString: String = s"[$n,${n + 1}]"
 }
-
-given (ElementaryInterval is OrderedCell) with {
-  extension (t: ElementaryInterval)
-    override def boundary[CoefficientT: Fractional]: Chain[ElementaryInterval, CoefficientT] = t match
-      case DegenerateInterval(n) => Chain()
-      case FullInterval(n) =>
-        ChainOps[ElementaryInterval, CoefficientT]().minus(Chain(DegenerateInterval(n + 1)), Chain(DegenerateInterval(n)))
-  extension (t: ElementaryInterval)
-    override def dim: Int = t match
-      case DegenerateInterval(n) => 0
-      case FullInterval(n) => 1
-
-  def compare(x: ElementaryInterval, y: ElementaryInterval): Int = elementaryIntervalOrdering.compare(x,y)
-}
+object ElementaryInterval:
+  given (ElementaryInterval is OrderedCell):
+    extension (t : ElementaryInterval)
+      def boundary[CoefficientT : Fractional]: Chain[ElementaryInterval, CoefficientT] = t match {
+        case td@DegenerateInterval(n) => Chain.empty[ElementaryInterval,CoefficientT]
+        case tf@FullInterval(n) => Chain[ElementaryInterval,CoefficientT](DegenerateInterval(t.n+1)) - Chain[ElementaryInterval,CoefficientT](DegenerateInterval(t.n))
+      }
+      def dim : Int = t match
+        case td@DegenerateInterval(n) => 0
+        case tf@FullInterval(n) => 1
 
 case class ElementaryCube(val intervals: List[ElementaryInterval]) {
   def boundaryImpl[CoefficientT: Fractional]: Chain[ElementaryCube, CoefficientT] =
     if(this.dim == 0) Chain()
     else {
-      val chainOps = ChainOps[ElementaryCube, CoefficientT]()
+      val chainOps = summon[Chain[ElementaryInterval, CoefficientT] is RingModule]
       import chainOps.{*, given}
       val fr = summon[Fractional[CoefficientT]]
       import math.Fractional.Implicits.infixFractionalOps
@@ -72,6 +64,8 @@ case class ElementaryCube(val intervals: List[ElementaryInterval]) {
         sign: CoefficientT,
         acc: Chain[ElementaryCube, CoefficientT]
       ): Chain[ElementaryCube, CoefficientT] = {
+        val cubeOps = summon[Chain[ElementaryCube,CoefficientT] is RingModule]
+        import cubeOps.*
         val (sgn, newchain) = process(left, current, right)
         right match {
           case Nil =>
@@ -128,7 +122,7 @@ object Cubical {
           secondInterval <- Seq(FullInterval(j), DegenerateInterval(j))
         yield ElementaryCube(List(firstInterval, secondInterval)) -> pixel
       ).toList.sorted.reverse
-    ) // reversed so that the last element saved for any one cube is the one with lowest T-value
+    ) // reversed so that the last element saved for any one cube is the one with lowest Self-value
 
     override def filtrationValue: PartialFunction[ElementaryCube, T] =
       cubes

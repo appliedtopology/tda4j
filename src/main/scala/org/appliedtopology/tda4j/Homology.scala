@@ -11,9 +11,11 @@ import scala.annotation.tailrec
 class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional, FiltrationT: Ordering]()
     extends CellularHomologyContext[Simplex[VertexT], CoefficientT, FiltrationT] {}
 
-class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Fractional, FiltrationT: Ordering]
-    extends ChainOps[CellT, CoefficientT]() {
+class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Fractional, FiltrationT: Ordering] {
 
+  val chainRM = summon[Chain[CellT,CoefficientT] is RingModule]
+  import chainRM.*
+  
   import barcode.*
 
   case class HomologyState(
@@ -154,8 +156,7 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Fractional, Filt
     ) // torsion part of barcode
 }
 
-class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fractional]
-    extends ChainOps[Simplex[VertexT], CoefficientT]() {
+class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fractional] {
   case class HomologyState(
     cycles: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]],
     cyclesBornBy: mutable.Map[Simplex[VertexT], Simplex[VertexT]],
@@ -168,6 +169,9 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Frac
     var currentIterator: collection.BufferedIterator[Simplex[VertexT]],
     barcode: mutable.Map[Int, immutable.Queue[(Double, Double, Chain[Simplex[VertexT], CoefficientT])]]
   ) {
+    val chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]
+    import chainRM.*
+    
     // first off, all vertices are immediately cycles
     cycles.addAll(stream.iterateDimension(0).map(cell => cell -> Chain(cell)))
     cyclesBornBy.addAll(cycles.map((cell, chain) => cell -> cell))

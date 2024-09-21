@@ -6,23 +6,17 @@ import scala.annotation.{tailrec, targetName}
 import scala.collection.mutable
 import math.Fractional.Implicits.infixFractionalOps
 
-/**
- * Typeclass for having a boundary map
- */
-
-trait HasBoundary:
-  type Self : Ordering as ordering
-  extension (t: Self)
-    def boundary[CoefficientT : Fractional]: Chain[Self, CoefficientT]
-
 trait HasDimension:
   type Self
-  extension (t: Self)
-    def dim: Int
+  extension (self : Self)
+    def dim : Int
 
-trait Cell extends HasBoundary with HasDimension
+trait Cell extends HasDimension:
+  type Self
+  extension (self : Self)
+    def boundary[CoefficientT : Fractional] : Chain[Self, CoefficientT]
 
-trait OrderedCell extends Cell
+trait OrderedCell extends Cell { type Self : Ordering as ordering }
 
 given [CellT : OrderedCell as oCell] => Ordering[CellT] = oCell.ordering
 
@@ -114,49 +108,55 @@ class Chain[CellT : OrderedCell, CoefficientT : Fractional] private[tda4j] (
 }
 
 object Chain {
-  def apply[CellT : OrderedCell, CoefficientT: Fractional](
-    cs: (CellT, CoefficientT)*
-  ): Chain[CellT, CoefficientT] =
+  def empty[CellT: OrderedCell, Coefficient: Fractional] = from(Seq())
+
+  def apply[CellT: OrderedCell, CoefficientT: Fractional](
+                                                           cs: (CellT, CoefficientT)*
+                                                         ): Chain[CellT, CoefficientT] =
     from(cs)
-  def apply[CellT : OrderedCell, CoefficientT: Fractional](c: CellT): Chain[CellT, CoefficientT] =
+
+  def apply[CellT: OrderedCell, CoefficientT: Fractional](c: CellT): Chain[CellT, CoefficientT] =
     apply(c -> summon[Fractional[CoefficientT]].one)
-  def from[CellT : OrderedCell, CoefficientT: Fractional](
-    cs: Seq[(CellT, CoefficientT)]
-  ): Chain[CellT, CoefficientT] =
+
+  def from[CellT: OrderedCell, CoefficientT: Fractional](
+                                                          cs: Seq[(CellT, CoefficientT)]
+                                                        ): Chain[CellT, CoefficientT] =
     new Chain(mutable.PriorityQueue.from(cs)(using Ordering.by[(CellT, CoefficientT), CellT](_._1)))
-}
 
-given [CellT : OrderedCell, CoefficientT : Fractional] => Chain[CellT,CoefficientT] is OrderedBasis[CellT, CoefficientT] {
-  extension (self: Self)
-    def leadingTerm: (Option[CellT], CoefficientT) = {
-      self.collapseHead()
-      { (x: (Option[CellT], Option[CoefficientT])) =>
-        x.copy(_2 = x._2.getOrElse(summon[Fractional[CoefficientT]].zero))
+  given [CellT: OrderedCell, CoefficientT: Fractional] => Chain[CellT, CoefficientT] is OrderedBasis[CellT, CoefficientT] {
+    extension (self: Self)
+      def leadingTerm: (Option[CellT], CoefficientT) = {
+        self.collapseHead()
+        { (x: (Option[CellT], Option[CoefficientT])) =>
+          x.copy(_2 = x._2.getOrElse(summon[Fractional[CoefficientT]].zero))
+        }
+          .apply(self.entries.headOption.unzip)
       }
-        .apply(self.entries.headOption.unzip)
-    }
-}
+  }
 
-class ChainOps[CellT : OrderedCell, CoefficientT](using fr: Fractional[CoefficientT])
-    extends RingModule[Chain[CellT, CoefficientT], CoefficientT] {
+  given [CellT: OrderedCell, CoefficientT: Fractional as fr] => (Chain[CellT, CoefficientT] is RingModule {
+    type R = CoefficientT
+  }) = new {
+    type R = CoefficientT
 
-  import Numeric.Implicits.*
+    import Numeric.Implicits.*
 
-  override val zero: Chain[CellT, CoefficientT] = Chain()
+    override val zero: Chain[CellT, CoefficientT] = Chain()
 
-  override def plus(
-    x: Chain[CellT, CoefficientT],
-    y: Chain[CellT, CoefficientT]
-  ): Chain[CellT, CoefficientT] = new Chain[CellT, CoefficientT](x.entries.clone().addAll(y.entries))
+    override def plus(
+                       x: Chain[CellT, CoefficientT],
+                       y: Chain[CellT, CoefficientT]
+                     ): Chain[CellT, CoefficientT] = new Chain[CellT, CoefficientT](x.entries.clone().addAll(y.entries))
 
-  override def scale(
-    x: CoefficientT,
-    y: Chain[CellT, CoefficientT]
-  ): Chain[CellT, CoefficientT] =
-    Chain.from[CellT, CoefficientT](y.entries.map((cell, coeff) => (cell, x * coeff)).toSeq)
+    override def scale(
+                        x: CoefficientT,
+                        y: Chain[CellT, CoefficientT]
+                      ): Chain[CellT, CoefficientT] =
+      Chain.from[CellT, CoefficientT](y.entries.map((cell, coeff) => (cell, x * coeff)).toSeq)
 
-  override def negate(
-    x: Chain[CellT, CoefficientT]
-  ): Chain[CellT, CoefficientT] =
-    scale(-fr.one, x)
+    override def negate(
+                         x: Chain[CellT, CoefficientT]
+                       ): Chain[CellT, CoefficientT] =
+      scale(-fr.one, x)
+  }
 }

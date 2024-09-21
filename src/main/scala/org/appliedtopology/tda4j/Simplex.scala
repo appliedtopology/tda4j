@@ -11,7 +11,7 @@ import math.Ordering.Implicits.sortedSetOrdering
  *
  * You should never have reason to use the constructor directly (...and if you do, you should make sure to give the
  * internal `SortedSet` yourself) - instead use the factory method in the companion object. In code this means that
- * instead of `new Simplex[T](a,b,c)` you would write `Simplex[T](a,b,c)`.
+ * instead of `new Simplex[Self](a,b,c)` you would write `Simplex[Self](a,b,c)`.
  *
  * @param vertices
  * Vertices of the simplex
@@ -35,22 +35,6 @@ given [VertexT : Ordering] => Ordering[Simplex[VertexT]] = simplexOrdering
 
   //  Ordering.by{(spx: Simplex[VertexT]) => spx.vertices}(sortedSetOrdering[SortedSet, VertexT](vtxOrdering))
 
-given [VertexT : Ordering] => Simplex[VertexT] is OrderedCell with {
-  given Ordering[Simplex[VertexT]] = simplexOrdering
-  extension (t: Simplex[VertexT]) {
-    override def boundary[CoefficientT](using fr: Fractional[CoefficientT]): Chain[Simplex[VertexT], CoefficientT] =
-      if(t.dim <= 0) Chain()
-      else Chain.from(
-        t.vertices
-          .to(Seq)
-          .zipWithIndex
-          .map((vtx,i) => Simplex.from(t.vertices.toSeq.patch(i,Seq.empty,1)))
-          .zip(Iterator.unfold(fr.one)(s => Some((s, fr.negate(s)))))
-      )
-    override def dim: Int = t.vertices.size - 1
-  }
-  def compare(x: Simplex[VertexT], y: Simplex[VertexT]): Int = simplexOrdering[VertexT].compare(x,y)
-}
 
 /** Simplex companion object with factory methods
  */
@@ -63,6 +47,24 @@ object Simplex {
 
   def from[VertexT: Ordering](source: IterableOnce[VertexT]): Simplex[VertexT] =
     new Simplex(SortedSet.from(source.iterator))
+
+  given [VertexT: Ordering] => Simplex[VertexT] is OrderedCell:
+    given Ordering[Simplex[VertexT]] = simplexOrdering
+
+    extension (t: Simplex[VertexT]) {
+      override def boundary[CoefficientT](using fr: Fractional[CoefficientT]): Chain[Simplex[VertexT], CoefficientT] =
+        if (t.dim <= 0) Chain()
+        else Chain.from(
+          t.vertices
+            .to(Seq)
+            .zipWithIndex
+            .map((vtx, i) => Simplex.from(t.vertices.toSeq.patch(i, Seq.empty, 1)))
+            .zip(Iterator.unfold(fr.one)(s => Some((s, fr.negate(s)))))
+        )
+      override def dim: Int = t.vertices.size - 1
+    }
+
+    def compare(x: Simplex[VertexT], y: Simplex[VertexT]): Int = simplexOrdering[VertexT].compare(x, y)
 }
 
 /** Convenience method for defining simplices
