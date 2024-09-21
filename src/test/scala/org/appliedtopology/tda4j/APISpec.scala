@@ -11,13 +11,11 @@ class APISpec extends mutable.Specification {
   given ctx: TDAContext[Int, Double, Double]()
   import ctx.{given, *}
 
-  /* // FIXME Something weird is going on with given resolutions that makes Scala think that every (?) chain is cubical.
   "we should be able to create and compute with chains" >> {
     1.0 ⊠ ∆(1, 2) - ∆(2, 3) must beEqualTo(
       Chain(Simplex(1, 2) -> 1.0, Simplex(2, 3) -> -1.0)
     )
   }
-   */
 
   "A full persistent homology computation" >> {
     val as = (1 to 50).map(_ => scala.util.Random.nextDouble * 2.0 * math.Pi)
