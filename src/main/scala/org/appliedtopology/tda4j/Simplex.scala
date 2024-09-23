@@ -52,7 +52,7 @@ object Simplex {
     given Ordering[Simplex[VertexT]] = simplexOrdering
 
     extension (t: Simplex[VertexT]) {
-      override def boundary[CoefficientT](using fr: Fractional[CoefficientT]): Chain[Simplex[VertexT], CoefficientT] =
+      def boundary[CoefficientT](using fr: Fractional[CoefficientT]): Chain[Simplex[VertexT], CoefficientT] =
         if (t.dim <= 0) Chain()
         else Chain.from(
           t.vertices
@@ -61,7 +61,7 @@ object Simplex {
             .map((vtx, i) => Simplex.from(t.vertices.toSeq.patch(i, Seq.empty, 1)))
             .zip(Iterator.unfold(fr.one)(s => Some((s, fr.negate(s)))))
         )
-      override def dim: Int = t.vertices.size - 1
+      def dim: Int = t.vertices.size - 1
     }
 
     def compare(x: Simplex[VertexT], y: Simplex[VertexT]): Int = simplexOrdering[VertexT].compare(x, y)

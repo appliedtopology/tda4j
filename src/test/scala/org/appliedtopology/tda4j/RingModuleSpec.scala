@@ -7,8 +7,8 @@ class RingModuleSpec extends mutable.Specification with ScalaCheck {
     |and make sure that it does what we need it to do.
     |""".stripMargin
 
-  given rm : (RingModule { type Self=(Int,Int); type R=Int }) with {
-    type Self = (Int,Int)
+  given rm: (RingModule { type Self = (Int, Int); type R = Int }) with {
+    type Self = (Int, Int)
     type R = Int
 
     val zero: (Int, Int) = (0, 0)
