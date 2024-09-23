@@ -180,7 +180,65 @@ appliedtopology/tda4j
 </div>
 <h2><a href="#type-class-pattern" name="type-class-pattern" class="anchor"><span class="anchor-link"></span></a>Type Class Pattern</h2>
 <p>We draw extensively on Scala&rsquo;s capacity for type classes to introduce additional capabilities to (possibly pre-existing) classes. Thus, for instance, a <code>Chain</code> object is fundamentally handled as a map with keys from some type <code>CellT</code> and values from some type <code>CoefficientT</code>. By requiring <code>CellT</code> to implement the <code>Cell</code> type class and <code>CoefficientT</code> to have a <code>Fractional</code> implementation, we can guarantee that you can always call the <code>boundary</code> method on any cell and you can do any fractional arithmetic with any coefficients.</p>
-<p>Where appropriate, this is implemented with F-bounded types (<code>CellT</code> needs to implement the <code>Cell</code> typeclass; see <a href="https://tpolecat.github.io/2015/04/29/f-bounds.html">https://tpolecat.github.io/2015/04/29/f-bounds.html</a> and <a href="https://dotty.epfl.ch/3.0.0/docs/reference/contextual/type-classes.html">https://dotty.epfl.ch/3.0.0/docs/reference/contextual/type-classes.html</a>) - or with <code>given</code> instances following the Scala 3 pattern for implicit type classes (our <code>FiniteField</code> implementation comes with a <code>Fractional[Fp]</code> instance as an encapsulated <code>given</code> that can easily be imported).</p>
+<p>As of the release of Scala 3.5.0, the type class pattern representation in Scala is a little bit in flux: support is being introduced for a type member-based type class pattern similar to how type classes are handled in Scala from a parametrized type style type system. This follows the conventions in use in Rust and Swift. As a result, type classes currently can be handled <strong>both ways</strong>, and in this library we will keep on using parametrized style access to the standard library type classes (such as <code>Ordering</code>), but our own type classes will be predominantly written according to the new style and syntax, as introduced in <a href="https://docs.scala-lang.org/sips/sips/typeclasses-syntax.html">SIP-64</a> and <a href="https://dotty.epfl.ch/docs/reference/experimental/typeclasses.html">described in the Scala 3 documentation here</a></p>
+<p>As an example of how this works out in practice, the <code>OrderedCell</code> type class is the fundamental building block of the topological functionality, and is introduced as follows:</p>
+<pre class="prettyprint"><code class="language-scala 3">trait HasDimension:
+  type Self
+  extension (self : Self)
+    def dim : Int
+
+trait Cell extends HasDimension:
+  type Self
+  extension (self : Self)
+    def boundary[CoefficientT : Fractional] : Chain[Self, CoefficientT]
+
+trait OrderedCell extends Cell { type Self : Ordering as ordering }
+
+given [CellT : OrderedCell as oCell] =&gt; Ordering[CellT] = oCell.ordering
+</code></pre>
+<p>This code block defines three type classes: <code>HasDimension</code>, <code>Cell</code> and <code>OrderedCell</code>, where <code>HasDimension</code> introduces a method <code>dim</code> to the members of the typeclass, and <code>Cell</code> introduces a boundary method. Finally, <code>OrderedCell</code> introduces a chosen ordering as an additional constraint, and also provides that ordering as a declaration (in parametrized-style) for the standard library.</p>
+<p>Being a type class declaration in the type member style boils down to having a type member called <code>Self</code>. Then when context bounds are used (such as in <code>[CellT : OrderedCell]</code>), as of Scala 3.5.0, these are interpreted to force <strong>either</strong> the existence of some <code>OrderedCell[CellT]</code> or some instance of <code>OrderedCell</code> where the type <code>Self</code> is exactly <code>CellT</code>. Both of these circumstances get recognized as fulfilling the context bound by the compiler.</p>
+<p>With parametrized type classes, you would use the syntax <code>Ordering[CellT]</code> to refer to a specific instance. The corresponding notation with type member type classes is <code>OrderedCell { type Self = CellT }</code>, or as a notational convenience, Scala also provides the <code>is</code> type alias that allows us to write <code>CellT is OrderedCell</code>.</p>
+<p>With these type class definitions in place, an actual implementation of a specific type to fulfill the type class can look like this:</p>
+<pre class="prettyprint"><code class="language-scala 3">given [VertexT: Ordering] =&gt; Simplex[VertexT] is OrderedCell:
+    given Ordering[Simplex[VertexT]] = simplexOrdering
+    
+    extension (t: Simplex[VertexT]) {
+      def boundary[CoefficientT](using fr: Fractional[CoefficientT]): Chain[Simplex[VertexT], CoefficientT] =
+        if (t.dim &lt;= 0) Chain()
+        else Chain.from(
+          t.vertices
+            .to(Seq)
+            .zipWithIndex
+            .map((vtx, i) =&gt; Simplex.from(t.vertices.toSeq.patch(i, Seq.empty, 1)))
+            .zip(Iterator.unfold(fr.one)(s =&gt; Some((s, fr.negate(s)))))
+        )
+      def dim: Int = t.vertices.size - 1
+    }
+</code></pre>
+<p>Here, the basic declaration is that whenever a type <code>VertexT</code> is a member of the <code>Ordering</code> typeclass (so that there is somewhere an object of type <code>Ordering[VertexT]</code>), this piece of code declares for us the membership of <code>Simplex[VertexT]</code> in the type class <code>OrderedCell</code>, by providing a canonically chosen (using the <code>given</code> keyword) object of type <code>Simplex[VertexT] is OrderedCell</code>.</p>
+<p>The definition of this object witnessing the type class membership follows: the code block that follows is the body of an anonymous class instance of the type <code>Simplex[VertexT] is OrderedCell</code>, which by the definition of <code>OrderedCell</code> has to provide:</p>
+<ol>
+  <li>An ordering for <code>Simplex[VertexT]</code> (because <code>Self : Ordering</code> was part of the definition of <code>OrderedCell</code>)</li>
+  <li>An implementation of <code>boundary[CoefficientT : Fractional]</code>.</li>
+  <li>An implementation of <code>dim</code>.</li>
+</ol>
+<p>So the body of the membership declaration provides an ordering, and in an <code>extension</code> block, provides definitions of the methods <code>boundary</code> and <code>dim</code>.</p>
+<p>And now, since the library provides <code>given</code> instances of the type class, the following code works as is:</p>
+<pre class="prettyprint"><code class="language-scala 3">Welcome to Scala 3.5.0 (17.0.9, Java OpenJDK 64-Bit Server VM).
+Type in expressions for evaluation. Or try :help.
+                                                                                                                                                                                                                   
+scala&gt; import org.appliedtopology.tda4j.*
+                                                                                                                                                                                                                   
+scala&gt; ∆(1,2,3).boundary[Double]
+val res0:
+  org.appliedtopology.tda4j.Chain[org.appliedtopology.tda4j.Simplex[Int], Double
+    ] = 1.0⊠∆(2,3) + -1.0⊠∆(1,3) + 1.0⊠∆(1,2)
+                                                                                                                                                                                                                   
+scala&gt; ∆(1,2,3).boundary[Float]
+val res1:
+  org.appliedtopology.tda4j.Chain[org.appliedtopology.tda4j.Simplex[Int], Float] = 1.0⊠∆(2,3) + -1.0⊠∆(1,3) + 1.0⊠∆(1,2)
+</code></pre>
 <h2><a href="#context-pattern" name="context-pattern" class="anchor"><span class="anchor-link"></span></a>Context Pattern</h2>
 <p>After seeing how Kotlin works we have also decided to draw extensively on <em>context-driven programming</em>; we provide a number of contexts that include specific choices of things that need to be chosen, and type aliases and notation to enable working with the chosen things. Hence, providing a <code>SimplexContext</code> with a type parameter determines how <code>VertexT</code> will work throughout, and defines <code>Simplex</code> as a type alias for <code>AbstractSimplex[VertexT]</code> as well as a convenience function <code>s</code> that allows the user to very easily write explicit simplex instances.</p>
 <p>Code that uses the simplex capabilities will likely want to start with the lines</p>
