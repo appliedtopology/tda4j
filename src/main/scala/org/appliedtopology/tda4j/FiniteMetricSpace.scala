@@ -108,3 +108,26 @@ class EuclideanMetricSpace(val pts: Seq[Seq[Double]]) extends FiniteMetricSpace[
   def elements: Iterable[Int] = Range(0, size)
   override def contains(x: Int): Boolean = 0 <= x & x < size
 }
+
+
+/********* Efficient Spatial Queries ********/
+
+import scala.jdk.CollectionConverters.*
+import com.eatthepath.jvptree.*
+
+trait SpatialQuery[VertexT]:
+  def neighbors(v : VertexT, epsilon : Double): Set[VertexT]
+
+case class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT] {
+  val distanceFunction : DistanceFunction[VertexT] = new DistanceFunction[VertexT]:
+    override def getDistance(firstPoint: VertexT, secondPoint: VertexT): Double = metricSpace.distance(firstPoint, secondPoint)
+  val vpTree : VPTree[VertexT, VertexT] = new VPTree(distanceFunction, metricSpace.elements.asJavaCollection)
+
+  override def neighbors(v: VertexT, epsilon: Double): Set[VertexT] =
+    vpTree.getAllWithinDistance(v, epsilon).asScala.toSet
+}
+
+case class BruteForce[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT] {
+  override def neighbors(v: VertexT, epsilon: Double): Set[VertexT] =
+    metricSpace.elements.toSet.filter { (w) => metricSpace.distance(v,w) <= epsilon }
+}

@@ -40,5 +40,14 @@ class MetricSpaceSpec extends mutable.Specification with ScalaCheck {
         }
       }
     }
+    "JVP-trees and brute force should find the same neighborhoods" >> {
+      val jvp = JVPTree(metricSpace)
+      val bf = BruteForce(metricSpace)
+      AsResult {
+        prop { (x: Int, y: Double) =>
+          jvp.neighbors(x, y).toSeq must containTheSameElementsAs(bf.neighbors(x,y).toSeq)
+        }
+      }
+    }
   }
 }
