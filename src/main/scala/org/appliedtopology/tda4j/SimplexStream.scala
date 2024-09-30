@@ -1,5 +1,7 @@
 package org.appliedtopology.tda4j
 
+import org.apache.commons.numbers.combinatorics.BinomialCoefficient
+
 import scala.collection.mutable
 import scala.collection.immutable.{Map, Seq, SortedSet}
 import math.Ordering.Implicits.*
@@ -198,3 +200,64 @@ trait StratifiedCellStream[CellT: OrderedCell, FiltrationT: Filterable] extends 
 
 trait StratifiedSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
     extends StratifiedCellStream[Simplex[VertexT], FiltrationT] {}
+
+trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
+  extends StratifiedSimplexStream[VertexT, FiltrationT] {
+  
+  def currentDimension : Int
+  
+  def lastDimensionCache : Seq[Simplex[VertexT]]
+  
+  def currentDimensionCache : Seq[Simplex[VertexT]]
+  
+  def pruneAllCofaces : Boolean
+  
+  def keepCriterion : PartialFunction[Simplex[VertexT], Boolean]
+}
+
+case class RipserCofaceSimplexStream[VertexT : Ordering](
+  metricSpace: FiniteMetricSpace[VertexT],
+  keepCriterion : PartialFunction[Simplex[VertexT], Boolean] = {case _ => True}
+      ) extends CofaceSimplexStream[VertexT, Double] with DoubleFiltration[Simplex[VertexT]]() {
+
+  lazy val edges = for
+      i <- metricSpace.elements
+      j <- metricSpace.elements
+      if(i < j)
+    yield
+      Simplex(i,j)
+  
+  override var currentDimension: Int = 0
+
+  override var lastDimensionCache: IndexedSeq[Simplex[VertexT]] = IndexedSeq()
+
+  override var currentDimensionCache: IndexedSeq[Simplex[VertexT]] = IndexedSeq()
+
+  override def pruneAllCofaces: Boolean = False
+
+  override val filtrationValue: PartialFunction[Simplex[VertexT], Double] =
+    FiniteMetricSpace.MaximumDistanceFiltrationValue[VertexT](metricSpace)
+
+  override val filtrationOrdering: Ordering[Simplex[VertexT]] =
+    Ordering.by(filtrationValue)
+
+  var finishedCurrent : Boolean = false
+
+  lazy val simplexIndexing : SimplexIndexing = SimplexIndexing(metricSpace.size)
+  
+  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[VertexT]]] = {
+    case 0 => metricSpace.elements.map(Simplex.apply).iterator
+    case 1 => edges.toSeq.sortBy(filtrationValue).iterator
+    case d => {
+      // first, generate all simplices of this dimension
+      (0 to BinomialCoefficient.value(metricSpace.size, d + 1))
+        .toSeq
+        .map { (ix) =>
+          simplexIndexing(ix, d)
+        }
+        .filter(keepCriterion.applyOrElse(_, _ => true))
+        .sortBy(filtrationValue)
+        .iterator
+    }
+  }
+}
