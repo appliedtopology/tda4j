@@ -202,31 +202,31 @@ trait StratifiedSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
     extends StratifiedCellStream[Simplex[VertexT], FiltrationT] {}
 
 trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
-  extends StratifiedSimplexStream[VertexT, FiltrationT] {
-  
-  def currentDimension : Int
-  
-  def lastDimensionCache : Seq[Simplex[VertexT]]
-  
-  def currentDimensionCache : Seq[Simplex[VertexT]]
-  
-  def pruneAllCofaces : Boolean
-  
-  def keepCriterion : PartialFunction[Simplex[VertexT], Boolean]
+    extends StratifiedSimplexStream[VertexT, FiltrationT] {
+
+  def currentDimension: Int
+
+  def lastDimensionCache: Seq[Simplex[VertexT]]
+
+  def currentDimensionCache: Seq[Simplex[VertexT]]
+
+  def pruneAllCofaces: Boolean
+
+  def keepCriterion: PartialFunction[Simplex[VertexT], Boolean]
 }
 
 case class RipserCofaceSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
-  keepCriterion : PartialFunction[Simplex[Int], Boolean] = {case _ => true}
-      ) extends CofaceSimplexStream[Int, Double] with DoubleFiltration[Simplex[Int]]() {
+  keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
+) extends CofaceSimplexStream[Int, Double]
+    with DoubleFiltration[Simplex[Int]]() {
 
   lazy val edges = for
-      i <- metricSpace.elements
-      j <- metricSpace.elements
-      if(i < j)
-    yield
-      Simplex(i,j)
-  
+    i <- metricSpace.elements
+    j <- metricSpace.elements
+    if i < j
+  yield Simplex(i, j)
+
   var currentDimension: Int = 0
 
   var lastDimensionCache: IndexedSeq[Simplex[Int]] = IndexedSeq()
@@ -241,23 +241,21 @@ case class RipserCofaceSimplexStream(
   override val filtrationOrdering: Ordering[Simplex[Int]] =
     Ordering.by(filtrationValue)
 
-  var finishedCurrent : Boolean = false
+  var finishedCurrent: Boolean = false
 
-  lazy val simplexIndexing : SimplexIndexing = SimplexIndexing(metricSpace.size)
-  
+  lazy val simplexIndexing: SimplexIndexing = SimplexIndexing(metricSpace.size)
+
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
-    case 0 => metricSpace.elements.map{ (v) => Simplex(v) }.iterator
+    case 0 => metricSpace.elements.map(v => Simplex(v)).iterator
     case 1 => edges.toSeq.sortBy(filtrationValue).iterator
-    case d => {
+    case d =>
       // first, generate all simplices of this dimension
-      (0 to BinomialCoefficient.value(metricSpace.size, d + 1).toInt)
-        .toSeq
-        .map { (ix) =>
+      (0 to BinomialCoefficient.value(metricSpace.size, d + 1).toInt).toSeq
+        .map { ix =>
           simplexIndexing(ix, d)
         }
         .filter(keepCriterion.applyOrElse(_, _ => true))
         .sortBy(filtrationValue)
         .iterator
-    }
   }
 }
