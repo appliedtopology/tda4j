@@ -109,6 +109,12 @@ class EuclideanMetricSpace(val pts: Seq[Seq[Double]]) extends FiniteMetricSpace[
   override def contains(x: Int): Boolean = 0 <= x & x < size
 }
 
+object EuclideanMetricSpace {
+  def apply(points : Seq[Seq[Double]]) : EuclideanMetricSpace = 
+    new EuclideanMetricSpace(points)
+  def apply(points : Array[Array[Double]]) : EuclideanMetricSpace =
+    new EuclideanMetricSpace(points.map(_.toSeq).toSeq)
+}
 
 /********* Efficient Spatial Queries ********/
 

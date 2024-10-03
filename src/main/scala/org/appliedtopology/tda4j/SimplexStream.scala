@@ -215,10 +215,10 @@ trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
   def keepCriterion : PartialFunction[Simplex[VertexT], Boolean]
 }
 
-case class RipserCofaceSimplexStream[VertexT : Ordering](
-  metricSpace: FiniteMetricSpace[VertexT],
-  keepCriterion : PartialFunction[Simplex[VertexT], Boolean] = {case _ => True}
-      ) extends CofaceSimplexStream[VertexT, Double] with DoubleFiltration[Simplex[VertexT]]() {
+case class RipserCofaceSimplexStream(
+  metricSpace: FiniteMetricSpace[Int],
+  keepCriterion : PartialFunction[Simplex[Int], Boolean] = {case _ => true}
+      ) extends CofaceSimplexStream[Int, Double] with DoubleFiltration[Simplex[Int]]() {
 
   lazy val edges = for
       i <- metricSpace.elements
@@ -227,30 +227,30 @@ case class RipserCofaceSimplexStream[VertexT : Ordering](
     yield
       Simplex(i,j)
   
-  override var currentDimension: Int = 0
+  var currentDimension: Int = 0
 
-  override var lastDimensionCache: IndexedSeq[Simplex[VertexT]] = IndexedSeq()
+  var lastDimensionCache: IndexedSeq[Simplex[Int]] = IndexedSeq()
 
-  override var currentDimensionCache: IndexedSeq[Simplex[VertexT]] = IndexedSeq()
+  var currentDimensionCache: IndexedSeq[Simplex[Int]] = IndexedSeq()
 
-  override def pruneAllCofaces: Boolean = False
+  override def pruneAllCofaces: Boolean = false
 
-  override val filtrationValue: PartialFunction[Simplex[VertexT], Double] =
-    FiniteMetricSpace.MaximumDistanceFiltrationValue[VertexT](metricSpace)
+  override val filtrationValue: PartialFunction[Simplex[Int], Double] =
+    FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 
-  override val filtrationOrdering: Ordering[Simplex[VertexT]] =
+  override val filtrationOrdering: Ordering[Simplex[Int]] =
     Ordering.by(filtrationValue)
 
   var finishedCurrent : Boolean = false
 
   lazy val simplexIndexing : SimplexIndexing = SimplexIndexing(metricSpace.size)
   
-  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[VertexT]]] = {
-    case 0 => metricSpace.elements.map(Simplex.apply).iterator
+  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+    case 0 => metricSpace.elements.map{ (v) => Simplex(v) }.iterator
     case 1 => edges.toSeq.sortBy(filtrationValue).iterator
     case d => {
       // first, generate all simplices of this dimension
-      (0 to BinomialCoefficient.value(metricSpace.size, d + 1))
+      (0 to BinomialCoefficient.value(metricSpace.size, d + 1).toInt)
         .toSeq
         .map { (ix) =>
           simplexIndexing(ix, d)

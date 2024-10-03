@@ -19,7 +19,7 @@ class APISpec extends mutable.Specification {
 
   "A full persistent homology computation" >> {
     val as = (1 to 50).map(_ => scala.util.Random.nextDouble * 2.0 * math.Pi)
-    val xys = as.map(a => Seq(math.cos(a), math.sin(a)))
+    val xys = as.toSeq.map(a => Seq(math.cos(a), math.sin(a)))
 
     val homology = persistentHomology(
       VietorisRips[Int](
