@@ -10,7 +10,7 @@
 </div>
 <div class="main-signature mono-small-block">
  <div class="signature">
-  <span class="signature-short"><span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="EuclideanMetricSpace.html" t="n" class="documentableName ">EuclideanMetricSpace</a>(<span t="k"></span><span t="k">val </span><span data-unresolved-link="" t="n">pts</span>: <span data-unresolved-link="" t="t">Seq</span>[<span data-unresolved-link="" t="t">Seq</span>[<span data-unresolved-link="" t="t">Double</span>]])<span t="k"> extends </span><a href="FiniteMetricSpace.html" t="t">FiniteMetricSpace</a>[<span data-unresolved-link="" t="t">Int</span>]</span><span class="signature-long"></span>
+  <span class="signature-short"><span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="EuclideanMetricSpace.html" t="n" class="documentableName ">EuclideanMetricSpace</a>(<span t="k"></span><span t="k">val </span><span data-unresolved-link="" t="n">pts</span>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Double</span>]])<span t="k"> extends </span><a href="FiniteMetricSpace.html" t="t">FiniteMetricSpace</a>[<span data-unresolved-link="" t="t">Int</span>]</span><span class="signature-long"></span>
  </div>
 </div>
 <div class="cover">
@@ -228,6 +228,24 @@ node4 -> node1;
           </div>
          </div>
         </div>
+        <div class="documentableElement" id="neighbors-fffffaff">
+         <div class="documentableElement-expander">
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="EuclideanMetricSpace.html#neighbors-fffffaff" t="n" class="documentableName ">neighbors</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">qp</span>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Double</span>], <span t="k"></span><span data-unresolved-link="" t="n">eps</span>: <span data-unresolved-link="" t="t">Double</span>): <span data-unresolved-link="" t="t">Seq</span>[<span data-unresolved-link="" t="t">Int</span>]
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="pointSqDistance-acf">
+         <div class="documentableElement-expander">
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="EuclideanMetricSpace.html#pointSqDistance-acf" t="n" class="documentableName ">pointSqDistance</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">x</span>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Double</span>], <span t="k"></span><span data-unresolved-link="" t="n">y</span>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Double</span>]): <span data-unresolved-link="" t="t">Double</span>
+           </div>
+          </div>
+         </div>
+        </div>
         <div class="documentableElement" id="size-0">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
@@ -268,7 +286,25 @@ node4 -> node1;
          <div class="documentableElement-expander">
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="modifiers"></span><span class="kind"><span t="k">val </span></span><a href="EuclideanMetricSpace.html#pts-0" t="n" class="documentableName ">pts</a>: <span data-unresolved-link="" t="t">Seq</span>[<span data-unresolved-link="" t="t">Seq</span>[<span data-unresolved-link="" t="t">Double</span>]]
+            <span class="modifiers"></span><span class="kind"><span t="k">val </span></span><a href="EuclideanMetricSpace.html#pts-0" t="n" class="documentableName ">pts</a>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Double</span>]]
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="vpdf-0" data-f-keywords="lazy">
+         <div class="documentableElement-expander">
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"><span t="k">lazy </span></span><span class="kind"><span t="k">val </span></span><a href="EuclideanMetricSpace.html#vpdf-0" t="n" class="documentableName ">vpdf</a>: <span data-unresolved-link="" t="t">DistanceFunction</span>[<span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Double</span>]]
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="vpt-0" data-f-keywords="lazy">
+         <div class="documentableElement-expander">
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"><span t="k">lazy </span></span><span class="kind"><span t="k">val </span></span><a href="EuclideanMetricSpace.html#vpt-0" t="n" class="documentableName ">vpt</a>: <span data-unresolved-link="" t="t">VPTree</span>[<span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Double</span>], <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Double</span>]]
            </div>
           </div>
          </div>
