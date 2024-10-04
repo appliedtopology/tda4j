@@ -14,7 +14,11 @@ class AlphaComplexSpec extends org.specs2.mutable.Specification with ScalaCheck 
       val ref0 : Seq[Simplex[Int]] = alpha.metricSpace.elements.toSeq.map(Simplex(_))
       val it0 : Seq[Simplex[Int]] = alpha.iterateDimension(0).toSeq
       
-      val ref1 : Seq[Simplex[Int]] = alpha.iterateDimension(1).toSeq
+      val ref1 : Iterator[Simplex[Int]] = alpha.iterateDimension(1)
+      val ref2 : Iterator[Simplex[Int]] = alpha.iterateDimension(2)
+      
+      ref1.tapEach(_ => ())
+      ref2.tapEach(_ => ())
       
       it0 must containTheSameElementsAs(ref0)
     }

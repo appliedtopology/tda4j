@@ -10,24 +10,34 @@ class ScalaPointSet(points : Array[Array[Double]]) extends PointSet {
 }
 
 class AlphaShapes(val points : Array[Array[Double]]) extends StratifiedSimplexStream[Int, Double]() with DoubleFiltration[Simplex[Int]]() {
-  def isDelaunay(pts: Array[Array[Double]], points: Array[Array[Double]]): Boolean = {
-    val mb = Miniball(ScalaPointSet(pts))
-    
-    def sqdist(x : Array[Double], y : Array[Double]): Double = 
-      x.zip(y).map((a, b) => (a-b)*(a-b)).sum
-
-    points.filter(sqdist(mb.center(), _) < mb.squaredRadius()).isEmpty
-  }
-
-  def isDelaunaySimplex(spx: Simplex[Int], points: Array[Array[Double]]): Boolean = {
-    isDelaunay(spx.vertices.toArray.map(points(_)), points)
-  }
   
   val pointSet : ScalaPointSet = ScalaPointSet(points)
   val metricSpace : EuclideanMetricSpace = EuclideanMetricSpace(points)
   
   var simplexCache : Seq[Simplex[Int]] = metricSpace.elements.toSeq.map(Simplex(_))
   var cacheDimension : Int = 0
+
+
+  def isDelaunay(pts: Array[Array[Double]]): Boolean = pts.size match {
+    case 0 => true
+    case 1 => true
+    case 2 => {
+      val c = pts(0)
+        .zip(pts(1))
+        .map{(x,y) => (x+y)/2}
+      val sqd = metricSpace.pointSqDistance(c, pts(0))
+      !points.exists(metricSpace.pointSqDistance(c, _) < sqd)
+    }
+    case _ => {
+      val mb = Miniball(ScalaPointSet(pts))
+
+      !points.exists(metricSpace.pointSqDistance(mb.center(), _) < mb.squaredRadius())
+    }
+  }
+
+  def isDelaunaySimplex(spx: Simplex[Int]): Boolean = {
+    isDelaunay(spx.vertices.toArray.map(points(_)))
+  }
   
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case d if(d == cacheDimension) => simplexCache.iterator
@@ -37,8 +47,10 @@ class AlphaShapes(val points : Array[Array[Double]]) extends StratifiedSimplexSt
         i <- metricSpace.elements
         j <- metricSpace.elements
         if(i < j)
+        spx = Simplex(i,j)
+        if(isDelaunaySimplex(spx))
       yield
-        Simplex(i,j)).toSeq.sortBy(filtrationValue)
+        spx).toSeq.sortBy(filtrationValue)
       cacheDimension = 1
       simplexCache.iterator
     }
@@ -47,7 +59,7 @@ class AlphaShapes(val points : Array[Array[Double]]) extends StratifiedSimplexSt
         spx <- simplexCache
         i <- metricSpace.elements.takeWhile(_ < spx.vertices.min)
         coface = spx.union(Simplex(i))
-        if(isDelaunaySimplex(coface, points))
+        if(isDelaunaySimplex(coface))
       yield
         coface
       simplexCache = newSimplexCache
@@ -60,6 +72,7 @@ class AlphaShapes(val points : Array[Array[Double]]) extends StratifiedSimplexSt
         .toSeq
         .combinations(d+1)
         .map(Simplex.from(_))
+        .filter(isDelaunaySimplex)
         .toSeq
         .sortBy(filtrationValue)
       cacheDimension = d
