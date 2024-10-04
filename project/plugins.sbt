@@ -1,4 +1,4 @@
-addSbtPlugin("org.scalameta"  % "sbt-scalafmt"               % "2.4.6")
+addSbtPlugin("org.scalameta"  % "sbt-scalafmt"               % "2.5.2")
 addSbtPlugin("com.github.sbt" % "sbt-site-paradox"           % "1.6.0")
 addSbtPlugin("com.github.sbt" % "sbt-paradox-material-theme" % "0.7.0")
 addSbtPlugin("io.kevinlee"    % "sbt-github-pages"           % "0.14.0")

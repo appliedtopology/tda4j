@@ -8,10 +8,9 @@ class UnionFind[T](vertices: IterableOnce[T]) {
   val sets: mutable.Map[UFSet, UFSet] = mutable.Map.from(
     vertices.iterator.map(v => (UFSet(v), UFSet(v)))
   )
-  def find(s: UFSet): UFSet = {
-    if(sets(s) == s) s
+  def find(s: UFSet): UFSet =
+    if (sets(s) == s) s
     else find(sets(s))
-  }
   def union(x: UFSet, y: UFSet): UFSet = {
     var xr = find(x)
     var yr = find(y)
@@ -27,7 +26,7 @@ class UnionFind[T](vertices: IterableOnce[T]) {
   * Minimal Spanning Tree in increasing weight order, while the second iterator gives all the non-included
   */
 
-class Kruskal[T](elements: Seq[T], distance: (T, T) => Double, maxDistance : Double = Double.PositiveInfinity)(using
+class Kruskal[T](elements: Seq[T], distance: (T, T) => Double, maxDistance: Double = Double.PositiveInfinity)(using
   orderingT: Ordering[T]
 ) {
   val unionFind: UnionFind[T] = UnionFind(elements)
@@ -54,28 +53,34 @@ class Kruskal[T](elements: Seq[T], distance: (T, T) => Double, maxDistance : Dou
   val mstIterator: Iterator[(T, T)] = lrList._1.iterator
   val cyclesIterator: Iterator[(T, T)] = lrList._2.iterator
 
-  def cycleToChain[CoefficientT : Fractional](edge : (T,T)): Chain[Simplex[T], CoefficientT] = {
+  def cycleToChain[CoefficientT: Fractional](edge: (T, T)): Chain[Simplex[T], CoefficientT] = {
     import unionFind.UFSet
-    val (s,t) = edge
+    val (s, t) = edge
     val edgeChain =
-      if(s < t) Chain(Simplex(s,t))
-      else Chain(Simplex(t,s))
-    val sPath = Seq.unfold(UFSet(s)){(v) =>
+      if (s < t) Chain(Simplex(s, t))
+      else Chain(Simplex(t, s))
+    val sPath = Seq
+      .unfold(UFSet(s)) { v =>
         val next = unionFind.sets(v)
-        if(next == v) None
-        else Some(((v.label,next.label),next))
-      }.map{(i,j) =>
-      if(i < j) Chain[Simplex[T], CoefficientT](Simplex(i,j))
-      else -Chain[Simplex[T], CoefficientT](Simplex(j,i))
-    }.fold(summon[Chain[Simplex[T],CoefficientT] is RingModule].zero)(_+_)
-    val tPath = Seq.unfold(UFSet(t)){(v) =>
-      val next = unionFind.sets(v)
-      if(next == v) None
-      else Some(((v.label,next.label),next))
-      }.map{(i,j) =>
-      if(i < j) Chain[Simplex[T], CoefficientT](Simplex(i,j))
-      else -Chain[Simplex[T], CoefficientT](Simplex(j,i))
-    }.fold(summon[Chain[Simplex[T],CoefficientT] is RingModule].zero)(_+_)
+        if (next == v) None
+        else Some(((v.label, next.label), next))
+      }
+      .map { (i, j) =>
+        if (i < j) Chain[Simplex[T], CoefficientT](Simplex(i, j))
+        else -Chain[Simplex[T], CoefficientT](Simplex(j, i))
+      }
+      .fold(summon[Chain[Simplex[T], CoefficientT] is RingModule].zero)(_ + _)
+    val tPath = Seq
+      .unfold(UFSet(t)) { v =>
+        val next = unionFind.sets(v)
+        if (next == v) None
+        else Some(((v.label, next.label), next))
+      }
+      .map { (i, j) =>
+        if (i < j) Chain[Simplex[T], CoefficientT](Simplex(i, j))
+        else -Chain[Simplex[T], CoefficientT](Simplex(j, i))
+      }
+      .fold(summon[Chain[Simplex[T], CoefficientT] is RingModule].zero)(_ + _)
 
     edgeChain + sPath - tPath
   }

@@ -7,19 +7,18 @@ import scala.math.Numeric.DoubleIsFractional
   * effect handler that evaluates the remainder in the field of coefficients to be used.
   */
 
-trait FractionalHandler {
+trait FractionalHandler:
   type T
   val fractional: Fractional[T]
   def eval(fractionalExpr: FractionalExpr): T
-}
 
-object doubleHandler extends FractionalHandler {
+object doubleHandler extends FractionalHandler:
   import FractionalExpr.*
   override type T = Double
 
   override val fractional: Fractional[Double] = DoubleIsFractional
 
-  override def eval(fractionalExpr: FractionalExpr): Double = fractionalExpr match {
+  override def eval(fractionalExpr: FractionalExpr): Double = fractionalExpr match
     case Zero        => 0.0
     case One         => 1.0
     case Negate(x)   => -eval(x)
@@ -28,11 +27,9 @@ object doubleHandler extends FractionalHandler {
     case Minus(x, y) => eval(x) - eval(y)
     case Times(x, y) => eval(x) * eval(y)
     case Div(x, y)   => eval(x) / eval(y)
-  }
-}
 
 sealed trait FractionalExpr
-object FractionalExpr {
+object FractionalExpr:
   case object Zero extends FractionalExpr
   case object One extends FractionalExpr
   case class Plus(x: FractionalExpr, y: FractionalExpr) extends FractionalExpr
@@ -44,9 +41,8 @@ object FractionalExpr {
   case class Sum(xs: List[FractionalExpr]) extends FractionalExpr
   case class Prod(xs: List[FractionalExpr]) extends FractionalExpr
   case class Succ(x: FractionalExpr) extends FractionalExpr
-}
 
-given Fractional[FractionalExpr] = new Fractional[FractionalExpr] {
+given Fractional[FractionalExpr] = new Fractional[FractionalExpr]:
   import FractionalExpr.*
 
   override def div(x: FractionalExpr, y: FractionalExpr): FractionalExpr = Div(x, y)
@@ -55,7 +51,7 @@ given Fractional[FractionalExpr] = new Fractional[FractionalExpr] {
   override def times(x: FractionalExpr, y: FractionalExpr): FractionalExpr = Times(x, y)
   override def negate(x: FractionalExpr): FractionalExpr = Negate(x)
   override def fromInt(x: Int): FractionalExpr =
-    if (x < 0) Negate(fromInt(-x))
+    if x < 0 then Negate(fromInt(-x))
     else Plus(One, fromInt(x - 1))
   override def parseString(str: String): Option[FractionalExpr] = None
   override def toInt(x: FractionalExpr): Int = doubleHandler.eval(x).round.toInt
@@ -64,4 +60,3 @@ given Fractional[FractionalExpr] = new Fractional[FractionalExpr] {
   override def toDouble(x: FractionalExpr): Double = doubleHandler.eval(x)
   override def compare(x: FractionalExpr, y: FractionalExpr): Int =
     doubleHandler.fractional.compare(doubleHandler.eval(x), doubleHandler.eval(y))
-}

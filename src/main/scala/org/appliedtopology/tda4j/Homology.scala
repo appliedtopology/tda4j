@@ -13,9 +13,9 @@ class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional, Fil
 
 class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Fractional, FiltrationT: Ordering] {
 
-  val chainRM = summon[Chain[CellT,CoefficientT] is RingModule]
+  val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
   import chainRM.*
-  
+
   import barcode.*
 
   case class HomologyState(
@@ -46,7 +46,7 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Fractional, Filt
     ): List[(Int, FiltrationT, FiltrationT)] = {
       advanceTo(f)
       (for
-        (dim : Int, lower : FiltrationT, oldUpper : FiltrationT, cycle : Chain[CellT, CoefficientT]) <- barcode.toList
+        (dim: Int, lower: FiltrationT, oldUpper: FiltrationT, cycle: Chain[CellT, CoefficientT]) <- barcode.toList
         if lower <= f
         upper = oldUpper.min(f)
       yield (dim, lower, upper)) ++ (
@@ -171,7 +171,7 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Frac
   ) {
     val chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]
     import chainRM.*
-    
+
     // first off, all vertices are immediately cycles
     cycles.addAll(stream.iterateDimension(0).map(cell => cell -> Chain(cell)))
     cyclesBornBy.addAll(cycles.map((cell, chain) => cell -> cell))
