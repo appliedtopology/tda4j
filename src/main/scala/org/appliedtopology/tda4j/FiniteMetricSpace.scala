@@ -159,3 +159,28 @@ case class BruteForce[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends 
   override def neighbors(v: VertexT, epsilon: Double): Set[VertexT] =
     metricSpace.elements.toSet.filter { (w) => metricSpace.distance(v,w) <= epsilon }
 }
+
+
+
+/******** Sparse Metric Spaces and the Dory storage ********/
+
+case class SparseMetricSpace[VertexT : Ordering](metricSpace : FiniteMetricSpace[VertexT], diameter : Double) extends FiniteMetricSpace[VertexT]() {
+  val spatialQuery : SpatialQuery[VertexT] = JVPTree(metricSpace)
+
+  val neighborhoods : Map[VertexT, Seq[(VertexT, Double)]] =
+    Map.from(
+      metricSpace.elements.map { (x) => x ->
+        spatialQuery.neighbors(x, diameter).toSeq.map { (y) => (y, metricSpace.distance(x,y)) }.sortBy(_._2)
+      }
+    )
+
+  /** Delegated */
+  override def contains(x: VertexT): Boolean = metricSpace.contains(x)
+  override def elements: Iterable[VertexT] = metricSpace.elements
+  override def size: Int = metricSpace.size
+
+  override def distance(x: VertexT, y: VertexT): Double = 
+    metricSpace
+      .distance(x,y)
+      .pipe((d) => if(d > diameter) Double.PositiveInfinity else d)
+}
