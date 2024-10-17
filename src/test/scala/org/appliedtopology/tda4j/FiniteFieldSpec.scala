@@ -10,7 +10,7 @@ import scala.math.Fractional.Implicits.*
 import org.scalacheck.*
 
 //noinspection ScalaRedundantConversion
-object FiniteFieldSpec extends mutable.Specification with ScalaCheck {
+object FiniteFieldSpec extends mutable.Specification with ScalaCheck:
   """This is the specification for unit testing of our
     |implementation of arithmetic mod p as a Fractional[Int]
     |instance.
@@ -20,14 +20,11 @@ object FiniteFieldSpec extends mutable.Specification with ScalaCheck {
   import IntMod17.Fp
   import IntMod17.given
 
-  import IntMod17.FpIsFractional.mkNumericOps
-  import IntMod17.FpIsFractional.mkOrderingOps
-
   "Numbers mod p should" >> {
     "all have an inverse" >> {
-      val calc = for {
-        j <- Range(1, 17)
-      } yield Fp(j) / Fp(j)
+      val calc =
+        for j <- Range(1, 17)
+        yield Fp(j) / Fp(j)
       calc must contain(be_==(Fp(1))).forall
     }
 
@@ -165,4 +162,3 @@ object FiniteFieldSpec extends mutable.Specification with ScalaCheck {
     val Fp(y) = x
     eg(y == (42 % 17))
   }
-}

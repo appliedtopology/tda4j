@@ -29,7 +29,8 @@ class FiniteField(val p: Int) {
     def toString: String = s"Fp(${fp.norm})"
   }
 
-  given FpIsFractional: Fractional[Fp] with {
+  given (Fp is Field) = new (Fp is Field) {
+    //given FpIsFractional: Fractional[Fp] with {
     def computeInverse(a: Fp): Fp = {
       val aa: Int = a.toUInt
       var u: Int = aa % p
@@ -66,6 +67,14 @@ class FiniteField(val p: Int) {
         inverses(ix)
     }
 
+    def invert(x : Fp) : Fp = inverse(x)
+    def isEqual(x : Fp, y: Fp) : Boolean = 
+      val Fp(xv) = norm(x)
+      val Fp(yv) = norm(y)
+      xv == yv
+    def zero : Fp = Fp(0)
+    def one : Fp = Fp(1)
+    
     def op1(op: Int => Int): Fp => Fp =
       a => norm(Fp(op(a)))
 
@@ -78,7 +87,7 @@ class FiniteField(val p: Int) {
       Ordering.Int.compare(x, y)
 
     // Members declared in scala.math.Fractional
-    def div(x: Fp, y: Fp): Fp = times(x, inverse(y))
+    def divide(x: Fp, y: Fp): Fp = times(x, inverse(y))
 
     // Members declared in scala.math.Numeric
     def fromInt(x: Int): Fp = norm(Fp(x))
