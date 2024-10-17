@@ -16,7 +16,7 @@ class UnionFind[T](vertices: IterableOnce[T]) {
     var yr = find(y)
 
     if (xr != yr) {
-      sets(y) = x
+      sets(yr) = x
     }
     xr
   }
@@ -50,15 +50,15 @@ class Kruskal[T](elements: Seq[T], distance: (T, T) => Double, maxDistance: Doub
     }
   }
 
-  val mstIterator: Iterator[(T, T)] = lrList._1.iterator
-  val cyclesIterator: Iterator[(T, T)] = lrList._2.iterator
+  def mstIterator: Iterator[(T, T)] = lrList._1.iterator
+  def cyclesIterator: Iterator[(T, T)] = lrList._2.iterator
 
   def cycleToChain[CoefficientT: Fractional](edge: (T, T)): Chain[Simplex[T], CoefficientT] = {
     import unionFind.UFSet
     val (s, t) = edge
     val edgeChain =
       if (s < t) Chain(Simplex(s, t))
-      else Chain(Simplex(t, s))
+      else -Chain(Simplex(t, s))
     val sPath = Seq
       .unfold(UFSet(s)) { v =>
         val next = unionFind.sets(v)
