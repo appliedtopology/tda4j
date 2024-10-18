@@ -8,10 +8,10 @@ import scala.annotation.tailrec
 //class ReducedSimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional, FiltrationT: Ordering]()
 //  extends CellularHomologyContext[Simplex[VertexT], CoefficientT, FiltrationT]() {}
 
-class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional, FiltrationT: Ordering]()
+class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]()
     extends CellularHomologyContext[Simplex[VertexT], CoefficientT, FiltrationT] {}
 
-class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Fractional, FiltrationT: Ordering] {
+class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]:
 
   val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
   import chainRM.*
@@ -34,7 +34,7 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Fractional, Filt
         Chain[CellT, CoefficientT]
       )
     ]
-  ) {
+  ):
     given Ordering[CellT] = stream.filtrationOrdering
     import Ordering.Implicits.infixOrderingOps
     given filtration: Filtration[CellT, FiltrationT] = stream
@@ -43,7 +43,7 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Fractional, Filt
 
     def diagramAt(
       f: FiltrationT
-    ): List[(Int, FiltrationT, FiltrationT)] = {
+    ): List[(Int, FiltrationT, FiltrationT)] =
       advanceTo(f)
       (for
         (dim: Int, lower: FiltrationT, oldUpper: FiltrationT, cycle: Chain[CellT, CoefficientT]) <- barcode.toList
@@ -56,18 +56,15 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Fractional, Filt
           lower = stream.filtrationValue.applyOrElse(sigma, _ => filtration.smallest)
         yield (dim, lower, filtration.largest)
       )
-    }
 
     def barcodeAt(f: FiltrationT): List[PersistenceBar[FiltrationT, Nothing]] =
       diagramAt(f).map { (dim, l, u) =>
-        val lower: BarcodeEndpoint[FiltrationT] = l match {
+        val lower: BarcodeEndpoint[FiltrationT] = l match
           case i if i == filtration.smallest => NegativeInfinity()
           case f: FiltrationT                => ClosedEndpoint(f)
-        }
-        val upper: BarcodeEndpoint[FiltrationT] = u match {
+        val upper: BarcodeEndpoint[FiltrationT] = u match
           case i if i == filtration.largest => PositiveInfinity()
           case f: FiltrationT               => OpenEndpoint(f)
-        }
         new PersistenceBar(dim, lower, upper, None)
       }
 
@@ -76,72 +73,61 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Fractional, Filt
       z: Chain[CellT, CoefficientT],
       basis: mutable.Map[CellT, Chain[CellT, CoefficientT]],
       reductionLog: Chain[CellT, CoefficientT] = Chain()
-    )(using fr: Fractional[CoefficientT]): (Chain[CellT, CoefficientT], Chain[CellT, CoefficientT]) =
-      z.leadingCell match {
+    )(using fr: (CoefficientT is Field)): (Chain[CellT, CoefficientT], Chain[CellT, CoefficientT]) =
+      z.leadingCell match
         case None => (z, reductionLog)
         case Some(sigma) =>
-          if (basis.contains(sigma)) {
-            val redCoeff = fr.div(z.leadingCoefficient, basis(sigma).leadingCoefficient)
+          if basis.contains(sigma) then
+            val redCoeff = fr.divide(z.leadingCoefficient, basis(sigma).leadingCoefficient)
             reduceBy(z - redCoeff ⊠ basis(sigma), basis, reductionLog + redCoeff ⊠ Chain(sigma))
-          } else (z, reductionLog)
-      }
+          else (z, reductionLog)
 
     def advanceOne(): Unit =
-      if (CellIterator.hasNext) {
-        val fr = summon[Fractional[CoefficientT]]
+      if CellIterator.hasNext then
+        val fr = summon[CoefficientT is Field]
         val sigma: CellT = CellIterator.next()
         val dsigma: Chain[CellT, CoefficientT] =
           sigma.boundary[CoefficientT]: Chain[CellT, CoefficientT]
         val (dsigmaReduced, reduction) = reduceBy(dsigma, boundaries)
         val coboundary = reduction.items.foldRight(fr.negate(fr.one) ⊠ Chain(sigma)) { (next, acc) =>
           val (spx, coeff) = next
-          if (coboundaries.contains(spx))
-            acc + coeff ⊠ coboundaries(spx)
-          else
-            acc
+          if coboundaries.contains(spx) then acc + coeff ⊠ coboundaries(spx)
+          else acc
         }
-        if (dsigmaReduced.isZero()) {
+        if dsigmaReduced.isZero() then
           // adding a boundary to a boundary creates a new cycle as sigma + whatever whose boundary eliminated dsigma
           cycles(coboundary.leadingCell.get) = coboundary
           cyclesBornBy(coboundary.leadingCell.get) = sigma
-        } else {
+        else
           // we have a new boundary witnessed
           boundaries(dsigmaReduced.leadingCell.get) = dsigmaReduced
           boundariesBornBy(dsigmaReduced.leadingCell.get) = sigma
           coboundaries(dsigmaReduced.leadingCell.get) = coboundary
 
           val (_, cycleBasis) = reduceBy(dsigmaReduced, cycles)
-          val representativeCycle: Chain[CellT, CoefficientT] = cycleBasis.leadingCell match {
+          val representativeCycle: Chain[CellT, CoefficientT] = cycleBasis.leadingCell match
             case None       => Chain()
             case Some(cell) => cycles(cell)
-          }
-          cycleBasis.leadingCell match {
+          cycleBasis.leadingCell match
             case None       => ()
             case Some(cell) => cycles.remove(cell)
-          }
 
-          val lower: FiltrationT = cycleBasis.leadingCell match {
+          val lower: FiltrationT = cycleBasis.leadingCell match
             case None => filtration.smallest
             case Some(spx) =>
               stream.filtrationValue.orElse(_ => filtration.smallest).compose(cyclesBornBy)(spx)
-          }
           val upper: FiltrationT =
             stream.filtrationValue.orElse(_ => filtration.largest)(sigma)
 
           barcode.append((sigma.dim - 1, lower, upper, representativeCycle))
-        }
         current = stream.filtrationValue.lift(sigma).getOrElse(stream.smallest)
-      }
 
     def advanceTo(f: FiltrationT): Unit =
-      while (CellIterator.hasNext && f > stream.filtrationValue.lift(CellIterator.head).getOrElse(stream.smallest))
+      while CellIterator.hasNext && f > stream.filtrationValue.lift(CellIterator.head).getOrElse(stream.smallest) do
         advanceOne()
 
     def advanceAll(): Unit =
-      while (CellIterator.hasNext)
-        advanceOne()
-
-  }
+      while CellIterator.hasNext do advanceOne()
 
   def persistentHomology(stream: => CellStream[CellT, FiltrationT]): HomologyState =
     HomologyState(
@@ -154,9 +140,8 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Fractional, Filt
       stream.smallest: FiltrationT, // computation done up until filtrationValue
       mutable.ArrayDeque.empty
     ) // torsion part of barcode
-}
 
-class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fractional] {
+class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Field]:
   case class HomologyState(
     cycles: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]],
     cyclesBornBy: mutable.Map[Simplex[VertexT], Simplex[VertexT]],
@@ -168,7 +153,7 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Frac
     var currentDim: Int,
     var currentIterator: collection.BufferedIterator[Simplex[VertexT]],
     barcode: mutable.Map[Int, immutable.Queue[(Double, Double, Chain[Simplex[VertexT], CoefficientT])]]
-  ) {
+  ):
     val chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]
     import chainRM.*
 
@@ -203,14 +188,12 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Frac
       // TODO is it worth it to have a more complex UnionFind that allows us to get the entire path along the MST?
       val (reduced, reductionLog): (Chain[Simplex[VertexT], CoefficientT], Chain[Simplex[VertexT], CoefficientT]) =
         reduceBy(dEdge, boundaries)
-      val fr = summon[Fractional[CoefficientT]]
+      val fr = summon[CoefficientT is Field]
       val coboundary: Chain[Simplex[VertexT], CoefficientT] =
         reductionLog.items.foldRight(fr.negate(fr.one) ⊠ Chain(edge)) { (item, acc) =>
           val (spx, coeff) = item
-          if (coboundaries.contains(spx))
-            acc + coeff ⊠ coboundaries(spx)
-          else
-            acc
+          if coboundaries.contains(spx) then acc + coeff ⊠ coboundaries(spx)
+          else acc
         }
       cycles(coboundary.leadingCell.get) = coboundary
       cyclesBornBy(coboundary.leadingCell.get) = edge
@@ -226,77 +209,66 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Frac
       basis: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]],
       reductionLog: Chain[Simplex[VertexT], CoefficientT] = Chain()
     )(using
-      fr: Fractional[CoefficientT]
+      fr: (CoefficientT is Field)
     ): (Chain[Simplex[VertexT], CoefficientT], Chain[Simplex[VertexT], CoefficientT]) =
-      z.leadingCell match {
+      z.leadingCell match
         case None => (z, reductionLog)
         case Some(sigma) =>
-          if (basis.contains(sigma)) {
-            val redCoeff = fr.div(z.leadingCoefficient, basis(sigma).leadingCoefficient)
+          if basis.contains(sigma) then
+            val redCoeff = fr.divide(z.leadingCoefficient, basis(sigma).leadingCoefficient)
             reduceBy(z - redCoeff ⊠ basis(sigma), basis, reductionLog + redCoeff ⊠ Chain(sigma))
-          } else (z, reductionLog)
-      }
+          else (z, reductionLog)
 
     def advanceOne(): Unit =
-      if (currentIterator.hasNext) {
-        val fr = summon[Fractional[CoefficientT]]
+      if currentIterator.hasNext then
+        val fr = summon[CoefficientT is Field]
         val sigma = currentIterator.next()
         val dsigma: Chain[Simplex[VertexT], CoefficientT] = sigma.boundary
         val (dsigmaReduced, reduction) = reduceBy(dsigma, boundaries)
         val coboundary = reduction.items.foldRight(fr.negate(fr.one) ⊠ Chain(sigma)) { (next, acc) =>
           val (spx, coeff) = next
-          if (coboundaries.contains(spx))
-            acc + coeff ⊠ coboundaries(spx)
-          else
-            acc
+          if coboundaries.contains(spx) then acc + coeff ⊠ coboundaries(spx)
+          else acc
         }
-        if (dsigmaReduced.isZero()) {
+        if dsigmaReduced.isZero() then
           // adding a boundary to a boundary creates a new cycle as sigma + whatever whose boundary eliminated dsigma
           cycles(coboundary.leadingCell.get) = coboundary
           cyclesBornBy(coboundary.leadingCell.get) = sigma
-        } else {
+        else
           // we have a new boundary witnessed
           boundaries(dsigmaReduced.leadingCell.get) = dsigmaReduced
           boundariesBornBy(dsigmaReduced.leadingCell.get) = sigma
           coboundaries(dsigmaReduced.leadingCell.get) = coboundary
 
           val (_, cycleBasis) = reduceBy(dsigmaReduced, cycles)
-          val representativeCycle: Chain[Simplex[VertexT], CoefficientT] = cycleBasis.leadingCell match {
+          val representativeCycle: Chain[Simplex[VertexT], CoefficientT] = cycleBasis.leadingCell match
             case None       => Chain()
             case Some(cell) => cycles(cell)
-          }
-          cycleBasis.leadingCell match {
+          cycleBasis.leadingCell match
             case None       => ()
             case Some(cell) => cycles.remove(cell)
-          }
 
-          val lower: Double = cycleBasis.leadingCell match {
+          val lower: Double = cycleBasis.leadingCell match
             case None => Double.NegativeInfinity
             case Some(spx) =>
               stream.filtrationValue.orElse(_ => Double.NegativeInfinity).compose(cyclesBornBy)(spx)
-          }
           val upper: Double =
             stream.filtrationValue.orElse(_ => Double.PositiveInfinity)(sigma)
 
           barcode(currentDim) = barcode(currentDim).appended((lower, upper, representativeCycle))
-        }
         current = stream.filtrationValue.lift(sigma).getOrElse(stream.smallest)
-      } else {
+      else
         currentDim += 1
         currentIterator = stream.iterateDimension
           .applyOrElse(currentDim, _ => Iterator.empty)
           .buffered
         current = Double.NegativeInfinity
-      }
 
     def advanceTo(dim: Int, f: Double = Double.PositiveInfinity): Unit =
-      while (
-        currentIterator.hasNext &&
+      while currentIterator.hasNext &&
         currentDim <= dim &&
         f > current
-      )
-        advanceOne()
-  }
+      do advanceOne()
 
   def persistentHomology(stream: => StratifiedCellStream[Simplex[VertexT], Double]): HomologyState =
     HomologyState(

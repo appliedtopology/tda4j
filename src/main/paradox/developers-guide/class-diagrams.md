@@ -26,16 +26,16 @@ classDiagram
         class `DoubleIsFractional:Fractional[Double]` {
         }
     }
-    FiniteField -- Fractional
+    FiniteField -- Field
 
-    class `Chain[CellT: Cell, CoefficientT: Fractional]` {
+    class `Chain[CellT: Cell, CoefficientT: Field]` {
         ...
     }
 
-    Double -- Fractional
+    Double -- Field
 
-    Fractional *-- `Chain[CellT: Cell, CoefficientT: Fractional]`
-    `Cell[CellT]` *-- `Chain[CellT: Cell, CoefficientT: Fractional]`
+    Field *-- `Chain[CellT: Cell, CoefficientT: Field]`
+    `Cell[CellT]` *-- `Chain[CellT: Cell, CoefficientT: Field]`
     `Cell[CellT]` --> `Simplex[VertexT]`
     class `Cell[CellT]` {
 <<interface Typeclass>>
@@ -157,7 +157,7 @@ classDiagram
     namespace Chain_scala {
         class HasBoundary {
             type Self : Ordering
-            extension Self.boundary[CoefficientT : Fractional] : Chain[Self, CoefficientT]
+            extension Self.boundary[CoefficientT : Field] : Chain[Self, CoefficientT]
         }
         class HasDimension {
             type Self

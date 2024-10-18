@@ -14,7 +14,7 @@ trait HasDimension:
 trait Cell extends HasDimension:
   type Self
   extension (self : Self)
-    def boundary[CoefficientT : Fractional] : Chain[Self, CoefficientT]
+    def boundary[CoefficientT : Field] : Chain[Self, CoefficientT]
 
 trait OrderedCell extends Cell { type Self : Ordering as ordering }
 
@@ -23,7 +23,7 @@ given [CellT : OrderedCell as oCell] => Ordering[CellT] = oCell.ordering
 
 /** Trait that defines what it means to have an ordered basis
   */
-trait OrderedBasis[CellT : Ordering, CoefficientT: Fractional]:
+trait OrderedBasis[CellT : OrderedCell, CoefficientT: Field]:
   type Self
   extension(t: Self)
     def leadingCell: Option[CellT] = leadingTerm._1
@@ -37,12 +37,12 @@ trait OrderedBasis[CellT : Ordering, CoefficientT: Fractional]:
 Implementation of the Chain trait using heaps for internal storage and deferred arithmetic.
  */
 
-class Chain[CellT : OrderedCell, CoefficientT : Fractional] private[tda4j] (
+class Chain[CellT : OrderedCell as oCell, CoefficientT : Field] private[tda4j] (
   var entries: mutable.PriorityQueue[(CellT, CoefficientT)]
 ) {
   @tailrec
   final def collapseHead(): Unit = {
-    val fr = summon[Fractional[CoefficientT]]
+    val fr = summon[CoefficientT is Field]
     val cmp = entries.ord
     entries.headOption match {
       case None => ()
@@ -61,7 +61,7 @@ class Chain[CellT : OrderedCell, CoefficientT : Fractional] private[tda4j] (
     }
   }
 
-  def collapseAll()(using fr: Fractional[CoefficientT]): Unit =
+  def collapseAll()(using fr: (CoefficientT is Field)): Unit =
     entries = mutable.PriorityQueue.from(
       entries
         .groupMapReduce(_._1) // group by cell
@@ -70,11 +70,11 @@ class Chain[CellT : OrderedCell, CoefficientT : Fractional] private[tda4j] (
         .filter((c, x) => x != fr.zero)
         .iterator
         .toSeq
-    )
+    )(using entries.ord)
 
   def isZero(): Boolean = {
     collapseHead()
-    entries.isEmpty || (entries.head._2 == summon[Fractional[CoefficientT]].zero)
+    entries.isEmpty || (entries.head._2 == summon[CoefficientT is Field].zero)
   }
 
   def items: Seq[(CellT, CoefficientT)] = entries.toSeq
@@ -108,33 +108,33 @@ class Chain[CellT : OrderedCell, CoefficientT : Fractional] private[tda4j] (
 }
 
 object Chain {
-  def empty[CellT: OrderedCell, Coefficient: Fractional] = from(Seq())
+  def empty[CellT: OrderedCell, CoefficientT: Field] = from(Seq())
 
-  def apply[CellT: OrderedCell, CoefficientT: Fractional](
+  def apply[CellT: OrderedCell, CoefficientT: Field](
                                                            cs: (CellT, CoefficientT)*
                                                          ): Chain[CellT, CoefficientT] =
     from(cs)
 
-  def apply[CellT: OrderedCell, CoefficientT: Fractional](c: CellT): Chain[CellT, CoefficientT] =
-    apply(c -> summon[Fractional[CoefficientT]].one)
+  def apply[CellT: OrderedCell, CoefficientT: Field as fld](c: CellT): Chain[CellT, CoefficientT] =
+    apply(c -> fld.one)
 
-  def from[CellT: OrderedCell, CoefficientT: Fractional](
+  def from[CellT: OrderedCell as oCell, CoefficientT: Field](
                                                           cs: Seq[(CellT, CoefficientT)]
                                                         ): Chain[CellT, CoefficientT] =
-    new Chain(mutable.PriorityQueue.from(cs)(using Ordering.by[(CellT, CoefficientT), CellT](_._1)))
+    new Chain(mutable.PriorityQueue.from(cs)(using Ordering.by[(CellT, CoefficientT), CellT](_._1)(using oCell.ordering.reverse)))
 
-  given [CellT: OrderedCell, CoefficientT: Fractional] => Chain[CellT, CoefficientT] is OrderedBasis[CellT, CoefficientT] {
+  given [CellT: OrderedCell, CoefficientT: Field as fld] => Chain[CellT, CoefficientT] is OrderedBasis[CellT, CoefficientT] {
     extension (self: Self)
       def leadingTerm: (Option[CellT], CoefficientT) = {
         self.collapseHead()
         { (x: (Option[CellT], Option[CoefficientT])) =>
-          x.copy(_2 = x._2.getOrElse(summon[Fractional[CoefficientT]].zero))
+          x.copy(_2 = x._2.getOrElse(fld.zero))
         }
           .apply(self.entries.headOption.unzip)
       }
   }
 
-  given [CellT: OrderedCell, CoefficientT: Fractional as fr] => (Chain[CellT, CoefficientT] is RingModule {
+  given [CellT: OrderedCell, CoefficientT: Field as fr] => (Chain[CellT, CoefficientT] is RingModule {
     type R = CoefficientT
   }) = new {
     type R = CoefficientT

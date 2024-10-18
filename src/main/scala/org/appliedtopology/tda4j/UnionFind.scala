@@ -53,7 +53,7 @@ class Kruskal[T](elements: Seq[T], distance: (T, T) => Double, maxDistance: Doub
   def mstIterator: Iterator[(T, T)] = lrList._1.iterator
   def cyclesIterator: Iterator[(T, T)] = lrList._2.iterator
 
-  def cycleToChain[CoefficientT: Fractional](edge: (T, T)): Chain[Simplex[T], CoefficientT] = {
+  def cycleToChain[CoefficientT : Field](edge: (T, T)): Chain[Simplex[T], CoefficientT] = {
     import unionFind.UFSet
     val (s, t) = edge
     val edgeChain =

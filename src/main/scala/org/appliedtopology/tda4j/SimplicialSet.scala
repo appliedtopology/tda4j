@@ -181,7 +181,7 @@ trait SimplicialSet {
   given normalizedHomologyCell(using seOrd: Ordering[SimplicialSetElement])(using hasDim: SimplicialSetElement is HasDimension): (SimplicialSetElement is OrderedCell) with {
     extension (t: SimplicialSetElement) {
       override def boundary[CoefficientT](using
-                                          fr: Fractional[CoefficientT]
+                                          fr: (CoefficientT is Field)
                                          ): Chain[SimplicialSetElement, CoefficientT] =
         if (t.dim <= 0) Chain()
         else {
@@ -520,7 +520,7 @@ case class Product(left: SimplicialSet, right: SimplicialSet) extends Simplicial
 
   given productCell: (ProductElement is OrderedCell) with {
     extension (t: ProductElement)
-      override def boundary[CoefficientT: Fractional]: Chain[ProductElement, CoefficientT] = {
+      override def boundary[CoefficientT: Field]: Chain[ProductElement, CoefficientT] = {
         val leftBoundary: Chain[SimplicialSetElement, CoefficientT] = {
           import left.{normalizedHomologyCell, given}
           t.left.boundary[CoefficientT]

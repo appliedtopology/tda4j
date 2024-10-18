@@ -12,11 +12,11 @@ class ChainSpec extends mutable.Specification {
   """This is the specification for testing the Chain implementation.
     |""".stripMargin.txt
 
+  given (Double is Field) = Field.DoubleApproximated(1e-25)
+
   given Conversion[Simplex[Int], Chain[Simplex[Int], Double]] =
     Chain.apply
-
-  given Fractional[Double] = math.Numeric.DoubleIsFractional
-
+  
   given Ordering[Int] = math.Ordering.Int
 
   val rm = summon[RingModule { type Self = Chain[Simplex[Int], Double]; type R = Double }]
@@ -168,6 +168,8 @@ class ChainSpec extends mutable.Specification {
 }
 
 class HeapChainSpec extends mutable.Specification {
+  given (Double is Field) = Field.DoubleApproximated(1e-25)
+
   "Heap-based chains should" >> {
     "be created from a sequence" >> {
       val elts = List((∆(1, 2), 1.0), (∆(1, 3), -1.0))

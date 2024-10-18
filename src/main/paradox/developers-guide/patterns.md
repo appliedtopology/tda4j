@@ -31,7 +31,7 @@ trait HasDimension:
 trait Cell extends HasDimension:
   type Self
   extension (self : Self)
-    def boundary[CoefficientT : Fractional] : Chain[Self, CoefficientT]
+    def boundary[CoefficientT : Field] : Chain[Self, CoefficientT]
 
 trait OrderedCell extends Cell { type Self : Ordering as ordering }
 
@@ -60,7 +60,7 @@ given [VertexT: Ordering] => Simplex[VertexT] is OrderedCell:
     given Ordering[Simplex[VertexT]] = simplexOrdering
     
     extension (t: Simplex[VertexT]) {
-      def boundary[CoefficientT](using fr: Fractional[CoefficientT]): Chain[Simplex[VertexT], CoefficientT] =
+      def boundary[CoefficientT](using fr: (CoefficientT is Field)): Chain[Simplex[VertexT], CoefficientT] =
         if (t.dim <= 0) Chain()
         else Chain.from(
           t.vertices

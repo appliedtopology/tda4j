@@ -4,6 +4,7 @@ import org.specs2.mutable
 import org.specs2.ScalaCheck
 
 class HomologySpec extends mutable.Specification with ScalaCheck {
+  given (Double is Field) = Field.DoubleApproximated(1e-25)
 
   "Homology of a triangle" >> {
     given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()

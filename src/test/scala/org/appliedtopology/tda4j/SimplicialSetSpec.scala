@@ -4,6 +4,7 @@ import org.appliedtopology.tda4j.SimplicialSetExamples.sphere
 import org.specs2.mutable
 
 class SimplicialSetSpec extends mutable.Specification {
+  given (Double is Field) = Field.DoubleApproximated(1e-25)
 
   "Homology of 4-sphere" >> {
     val sphere4 = sphere(4)

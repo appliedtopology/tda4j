@@ -8,6 +8,7 @@ class APISpec extends mutable.Specification {
   """Test case class for developing the non-Scala facing API functionality
     |and the non-expert API functionality""".stripMargin
 
+  given (Double is Field) = Field.DoubleApproximated(1e-25)
   given ctx: TDAContext[Int, Double, Double]()
   import ctx.{given, *}
 

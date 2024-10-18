@@ -52,7 +52,7 @@ object Simplex {
     given Ordering[Simplex[VertexT]] = simplexOrdering
 
     extension (t: Simplex[VertexT]) {
-      def boundary[CoefficientT](using fr: Fractional[CoefficientT]): Chain[Simplex[VertexT], CoefficientT] =
+      def boundary[CoefficientT](using fr: (CoefficientT is Field)): Chain[Simplex[VertexT], CoefficientT] =
         if (t.dim <= 0) Chain()
         else Chain.from(
           t.vertices
