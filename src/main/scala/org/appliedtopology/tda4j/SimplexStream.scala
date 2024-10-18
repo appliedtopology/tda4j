@@ -217,7 +217,7 @@ trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
 
 case class RipserCofaceSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
-  keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
+  var keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
 ) extends CofaceSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]() {
 
