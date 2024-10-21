@@ -82,7 +82,7 @@ class Kruskal[T](elements: Seq[T], distance: (T, T) => Double, maxDistance: Doub
       }
       .fold(summon[Chain[Simplex[T], CoefficientT] is RingModule].zero)(_ + _)
 
-    edgeChain + sPath - tPath
+    edgeChain - sPath + tPath
   }
 }
 
