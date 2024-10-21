@@ -1,6 +1,6 @@
 package org.appliedtopology.tda4j
 
-import scala.collection.{mutable, SortedIterableFactory, SortedSetFactoryDefaults, StrictOptimizedSortedSetOps}
+import scala.collection.{SortedIterableFactory, SortedSetFactoryDefaults, StrictOptimizedSortedSetOps, mutable}
 import scala.collection.immutable.{Set, SortedMap, SortedSet, SortedSetOps, TreeSet}
 import scala.math.Ordering.IntOrdering
 import scala.math.Ordering.Double.IeeeOrdering
@@ -26,6 +26,11 @@ case class Simplex[VertexT : Ordering] private[tda4j] (vertices : SortedSet[Vert
 
   def union(other: Simplex[VertexT]) =
     new Simplex(vertices.union(other.vertices))
+
+  def incl(x : VertexT) =
+    new Simplex(vertices + x)
+
+  def contains(x : VertexT) = vertices.contains(x)
 }
 
 def simplexOrdering[VertexT : Ordering as vtxOrdering]: Ordering[Simplex[VertexT]] =
@@ -48,23 +53,25 @@ object Simplex {
   def from[VertexT: Ordering](source: IterableOnce[VertexT]): Simplex[VertexT] =
     new Simplex(SortedSet.from(source.iterator))
 
-  given [VertexT: Ordering] => Simplex[VertexT] is OrderedCell:
-    given Ordering[Simplex[VertexT]] = simplexOrdering
+  def simplexIsOrderedCell[VertexT](using vtxOrd : Ordering[VertexT])(using ord : Ordering[Simplex[VertexT]]) : Simplex[VertexT] is OrderedCell =
+    new (Simplex[VertexT] is OrderedCell):
+      override lazy val ordering = ord
+      extension (t: Simplex[VertexT]) {
+        def boundary[CoefficientT](using fr: (CoefficientT is Field)): Chain[Simplex[VertexT], CoefficientT] =
+          if (t.dim <= 0) Chain()(using this)
+          else Chain.from(
+            t.vertices
+              .to(Seq)
+              .zipWithIndex
+              .map((vtx, i) => Simplex.from(t.vertices.toSeq.patch(i, Seq.empty, 1)))
+              .zip(Iterator.unfold(fr.one)(s => Some((s, fr.negate(s)))))
+          )(using this)
+        def dim: Int = t.vertices.size - 1
+      }
+      def compare(x: Simplex[VertexT], y: Simplex[VertexT]): Int = ord.compare(x, y)
 
-    extension (t: Simplex[VertexT]) {
-      def boundary[CoefficientT](using fr: (CoefficientT is Field)): Chain[Simplex[VertexT], CoefficientT] =
-        if (t.dim <= 0) Chain()
-        else Chain.from(
-          t.vertices
-            .to(Seq)
-            .zipWithIndex
-            .map((vtx, i) => Simplex.from(t.vertices.toSeq.patch(i, Seq.empty, 1)))
-            .zip(Iterator.unfold(fr.one)(s => Some((s, fr.negate(s)))))
-        )
-      def dim: Int = t.vertices.size - 1
-    }
-
-    def compare(x: Simplex[VertexT], y: Simplex[VertexT]): Int = simplexOrdering[VertexT].compare(x, y)
+  given [VertexT : Ordering as vtxOrdering] => (Simplex[VertexT] is OrderedCell) =
+    simplexIsOrderedCell(using vtxOrdering)(using simplexOrdering[VertexT](using vtxOrdering))
 }
 
 /** Convenience method for defining simplices
