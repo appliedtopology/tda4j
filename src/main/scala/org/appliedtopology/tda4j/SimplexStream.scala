@@ -250,11 +250,10 @@ case class RipserCofaceSimplexStream(
     case 1 => edges.toSeq.sortBy(filtrationValue).iterator
     case d =>
       // first, generate all simplices of this dimension
-      (0 to BinomialCoefficient.value(metricSpace.size, d + 1).toInt).toSeq
-        .map { ix =>
-          simplexIndexing(ix, d)
+      (0 until BinomialCoefficient.value(metricSpace.size, d + 1).toInt).toSeq
+        .flatMap { ix =>
+          Some(simplexIndexing(ix, d+1)).filter(keepCriterion.applyOrElse(_, _ => true))
         }
-        .filter(keepCriterion.applyOrElse(_, _ => true))
         .sortBy(filtrationValue)
         .iterator
   }
