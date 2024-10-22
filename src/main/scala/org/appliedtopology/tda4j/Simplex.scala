@@ -58,14 +58,14 @@ object Simplex {
       override lazy val ordering = ord
       extension (t: Simplex[VertexT]) {
         def boundary[CoefficientT](using fr: (CoefficientT is Field)): Chain[Simplex[VertexT], CoefficientT] =
-          if (t.dim <= 0) Chain()(using this)
+          if (t.dim <= 0) Chain()(using ord)
           else Chain.from(
             t.vertices
               .to(Seq)
               .zipWithIndex
               .map((vtx, i) => Simplex.from(t.vertices.toSeq.patch(i, Seq.empty, 1)))
               .zip(Iterator.unfold(fr.one)(s => Some((s, fr.negate(s)))))
-          )(using this)
+          )(using ord)
         def dim: Int = t.vertices.size - 1
       }
       def compare(x: Simplex[VertexT], y: Simplex[VertexT]): Int = ord.compare(x, y)

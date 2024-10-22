@@ -23,7 +23,7 @@ given [CellT : OrderedCell as oCell] => Ordering[CellT] = oCell.ordering
 
 /** Trait that defines what it means to have an ordered basis
   */
-trait OrderedBasis[CellT : OrderedCell, CoefficientT: Field]:
+trait OrderedBasis[CellT : Ordering, CoefficientT: Field]:
   type Self
   extension(t: Self)
     def leadingCell: Option[CellT] = leadingTerm._1
@@ -37,7 +37,7 @@ trait OrderedBasis[CellT : OrderedCell, CoefficientT: Field]:
 Implementation of the Chain trait using heaps for internal storage and deferred arithmetic.
  */
 
-class Chain[CellT : OrderedCell as oCell, CoefficientT : Field] private[tda4j] (
+class Chain[CellT : Ordering, CoefficientT : Field] private[tda4j] (
   var entries: mutable.PriorityQueue[(CellT, CoefficientT)]
 ) {
   @tailrec
@@ -50,7 +50,7 @@ class Chain[CellT : OrderedCell as oCell, CoefficientT : Field] private[tda4j] (
         val head = entries.dequeue
         val cell = head._1
         var acc = head._2
-        while (entries.headOption.map(cmp.compare(head, _)) == Some(0)) {
+        while (entries.headOption.map(cmp.compare(head, _)).contains(0)) {
           val otherHead = entries.dequeue
           acc = fr.plus(acc, otherHead._2)
         }
@@ -92,38 +92,25 @@ class Chain[CellT : OrderedCell as oCell, CoefficientT : Field] private[tda4j] (
   override def toString: String =
     if (entries.iterator.isEmpty) "Chain()"
     else entries.iterator.map((c, x) => s"${x.toString}⊠${c.toString}").mkString(" + ")
-
-  def chainBoundary: Chain[CellT, CoefficientT] =
-    Chain.from(entries
-      .iterator
-      .flatMap { (cellO, coeffO) =>
-        cellO
-          .boundary[CoefficientT]
-          .entries
-          .iterator
-          .map { (cellI, coeffI) => (cellI, coeffO * coeffI) }
-      }
-      .toSeq
-    )
 }
 
 object Chain {
-  def empty[CellT: OrderedCell, CoefficientT: Field] = from(Seq())
+  def empty[CellT: Ordering, CoefficientT: Field] = from(Seq())
 
-  def apply[CellT: OrderedCell, CoefficientT: Field](
+  def apply[CellT: Ordering, CoefficientT: Field](
                                                            cs: (CellT, CoefficientT)*
                                                          ): Chain[CellT, CoefficientT] =
     from(cs)
 
-  def apply[CellT: OrderedCell, CoefficientT: Field as fld](c: CellT): Chain[CellT, CoefficientT] =
+  def apply[CellT : Ordering, CoefficientT: Field as fld](c: CellT): Chain[CellT, CoefficientT] =
     apply(c -> fld.one)
 
-  def from[CellT: OrderedCell as oCell, CoefficientT: Field](
+  def from[CellT : Ordering as ord, CoefficientT: Field](
                                                           cs: Seq[(CellT, CoefficientT)]
                                                         ): Chain[CellT, CoefficientT] =
-    new Chain(mutable.PriorityQueue.from(cs)(using Ordering.by[(CellT, CoefficientT), CellT](_._1)(using oCell.ordering.reverse)))
+    new Chain(mutable.PriorityQueue.from(cs)(using Ordering.by[(CellT, CoefficientT), CellT](_._1)(using ord.reverse)))
 
-  given [CellT: OrderedCell, CoefficientT: Field as fld] => Chain[CellT, CoefficientT] is OrderedBasis[CellT, CoefficientT] {
+  given chain_is_ordered_basis[CellT : Ordering, CoefficientT: Field as fld] : (Chain[CellT, CoefficientT] is OrderedBasis[CellT, CoefficientT]) with {
     extension (self: Self)
       def leadingTerm: (Option[CellT], CoefficientT) = {
         self.collapseHead()
@@ -134,7 +121,7 @@ object Chain {
       }
   }
 
-  given [CellT: OrderedCell, CoefficientT: Field as fr] => (Chain[CellT, CoefficientT] is RingModule {
+  given [CellT : Ordering, CoefficientT: Field as fr] => (Chain[CellT, CoefficientT] is RingModule {
     type R = CoefficientT
   }) = new {
     type R = CoefficientT
@@ -159,4 +146,18 @@ object Chain {
                        ): Chain[CellT, CoefficientT] =
       scale(-fr.one, x)
   }
+
+  extension [CellT : OrderedCell, CoefficientT : Field] (z : Chain[CellT, CoefficientT])
+    def boundary : Chain[CellT, CoefficientT] =
+      Chain.from(z.entries
+        .iterator
+        .flatMap { (cellO, coeffO) =>
+          cellO
+            .boundary[CoefficientT]
+            .entries
+            .iterator
+            .map { (cellI, coeffI) => (cellI, coeffO * coeffI) }
+        }
+        .toSeq
+      )
 }
