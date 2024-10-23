@@ -52,7 +52,7 @@ class AlphaShapes(val points: Array[Array[Double]])
       val newSimplexCache = for
         spx <- simplexCache
         i <- metricSpace.elements.takeWhile(_ < spx.min)
-        coface = spx.union(∆(i))
+        coface = spx.union(Simplex(i))
         if isDelaunaySimplex(coface)
       yield coface
       simplexCache = newSimplexCache.sortBy(filtrationValue)
