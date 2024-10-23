@@ -41,11 +41,11 @@ class SimplexTypeSpec extends mutable.Specification {
     val s = Simplex(1, 2, 3)
     val t = Simplex(2, 3, 4)
     "be the return type of the Simplex constructor" >> {
-      s must haveClass[Simplex[Int]]
+      s must haveSuperclass[Simplex[Int]]
     }
   }
   "we can create a simplex, and get the right type" >> {
-    ∆('a', 'b', 'c') must haveClass[Simplex[Char]]
-    ∆('a', 'b', 'c') must haveClass[Simplex[Char]]
+    ∆('a', 'b', 'c') must haveSuperclass[Simplex[Char]]
+    ∆('a', 'b', 'c') must haveSuperclass[Simplex[Char]]
   }
 }

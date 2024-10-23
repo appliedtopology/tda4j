@@ -28,10 +28,10 @@ class SimplexIndexing(val vertexCount: Int) {
   }
 
   @tailrec
-  final def apply(n: Int, d: Int, upperAccum: Set[Int] = Set()): Simplex[Int] = {
-    if (d < 0) return Simplex.from(upperAccum)
-    if (n <= 0) return Simplex.from(upperAccum ++ (0 until d).toSet)
-    if (d == 0) return Simplex.from(upperAccum + n)
+  final def apply(n: Int, d: Int, upperAccum: Simplex[Int] = ∆()): Simplex[Int] = {
+    if (d < 0) return upperAccum
+    if (n <= 0) return upperAccum ++ (0 until d).toSet
+    if (d == 0) return upperAccum + n
     val searchResult: SearchResult = binomialTable(d).search(n)
     val id: Int = searchResult match {
       case Found(foundIndex)              => foundIndex
@@ -41,9 +41,9 @@ class SimplexIndexing(val vertexCount: Int) {
   }
 
   def cofacetIterator(simplex: Simplex[Int]): Iterator[Int] =
-    cofacetIterator(apply(simplex), simplex.vertices.size, true)
+    cofacetIterator(apply(simplex), simplex.size, true)
   def topCofacetIterator(simplex: Simplex[Int]): Iterator[Int] =
-    cofacetIterator(apply(simplex), simplex.vertices.size, false)
+    cofacetIterator(apply(simplex), simplex.size, false)
   def cofacetIterator(
     index: Int,
     size: Int,
@@ -61,7 +61,7 @@ class SimplexIndexing(val vertexCount: Int) {
       ) { (s, iB, iA, k, j) =>
         if (j < 0) {
           None // end iteration when we're done
-        } else if (s.vertices.contains(j)) {
+        } else if (s.contains(j)) {
           if (!allCofacets)
             None
           else
@@ -79,7 +79,7 @@ class SimplexIndexing(val vertexCount: Int) {
       .map((os: Option[Int]) => os.get)
 
   def facetIterator(index: Int, size: Int): Iterator[Int] =
-    Iterator.unfold((apply(index, size).vertices.toSeq.sorted, index, 0, size - 1)) {
+    Iterator.unfold((apply(index, size).toSeq.sorted, index, 0, size - 1)) {
       (s: Seq[Int], iB: Int, iA: Int, k: Int) =>
         if (k < 0) None
         else {
@@ -91,8 +91,8 @@ class SimplexIndexing(val vertexCount: Int) {
     }
 
   def apply(simplex: Simplex[Int]): Int =
-    simplex.vertices.toSeq.sorted.reverse.zipWithIndex.map { (v, i) =>
-      binomial(v, simplex.vertices.size - i)
+    simplex.toSeq.sorted.reverse.zipWithIndex.map { (v, i) =>
+      binomial(v, simplex.size - i)
     }.sum
 }
 
@@ -116,7 +116,7 @@ class RipserStreamSparse(
   val doubleSimplexPairOrdering: Ordering[(Double, Simplex[Int])] = {
     (x: (Double, Simplex[Int]), y: (Double, Simplex[Int])) =>
       Ordering.Double.TotalOrdering.compare(x._1, y._1) match {
-        case 0      => simplexOrdering[Int].compare(x._2, y._2)
+        case 0      => summon[Ordering[Simplex[Int]]].compare(x._2, y._2)
         case c: Int => c
       }
   }
@@ -183,11 +183,11 @@ class RipserStreamSparse(
           fV <- simplexCache.map(_._1).iterator
           previousSimplex <- simplexCache.filter(_._1 < fV).iterator.map(_._2)
           nextVertex <- metricSpace.elements
-            .filter(!previousSimplex.vertices.contains(_))
-            .filter(nV => previousSimplex.vertices.map(oV => metricSpace.distance(oV, nV)).max <= fV)
-          simplex: Simplex[Int] = Simplex.from(previousSimplex.vertices + nextVertex)
-          if zeroApparentCofacet(si(simplex), simplex.vertices.size).isEmpty
-          if zeroApparentFacet(si(simplex), simplex.vertices.size).isEmpty
+            .filter(!previousSimplex.contains(_))
+            .filter(nV => previousSimplex.map(oV => metricSpace.distance(oV, nV)).max <= fV)
+          simplex: Simplex[Int] = previousSimplex + nextVertex
+          if zeroApparentCofacet(si(simplex), simplex.size).isEmpty
+          if zeroApparentFacet(si(simplex), simplex.size).isEmpty
         // also check if this is cleared?
         yield simplex
       }.iterator
@@ -296,11 +296,11 @@ class RipserStreamOf[VertexT: Ordering](
     RipserStream(intMetricSpace, maxFiltrationValue, maxDimension)
 
   override def iterator: Iterator[Simplex[VertexT]] =
-    rs.iterator.map(s => Simplex.from(s.vertices.map(v => vertices(v))))
+    rs.iterator.map(s => s.map(v => vertices(v)))
 
   override def filtrationValue: PartialFunction[Simplex[VertexT], Double] = { spx =>
-    val indices: SortedSet[Int] = spx.vertices.map(vertices.indexOf)
-    rs.filtrationValue(Simplex.from(indices))
+    val indices: SortedSet[Int] = spx.map(vertices.indexOf)
+    rs.filtrationValue(indices)
   }
 }
 

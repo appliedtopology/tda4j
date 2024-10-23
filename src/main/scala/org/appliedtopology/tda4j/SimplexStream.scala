@@ -145,7 +145,7 @@ class ExplicitStreamBuilder[VertexT: Ordering, FiltrationT](using
     given filtrationOrdering: Ordering[(FiltrationT, Simplex[VertexT])] =
       Ordering
         .by[(FiltrationT, Simplex[VertexT]), FiltrationT]((f: FiltrationT, s: Simplex[VertexT]) => f)(ordering)
-        .orElseBy((f: FiltrationT, s: Simplex[VertexT]) => s)(simplexOrdering[VertexT])
+        .orElseBy((f: FiltrationT, s: Simplex[VertexT]) => s)(simplexOrdering)
     simplices.sortInPlace
 
     new ExplicitStream(filtrationValues.toMap, simplices.map((_, s) => s).toSeq)(using filterable)
@@ -169,21 +169,21 @@ class FilteredSimplexOrdering[VertexT, FiltrationT](
     case (x, y) if filtration.filtrationValue.isDefinedAt(x) && filtration.filtrationValue.isDefinedAt(y) =>
       filtrationOrdering.compare(filtration.filtrationValue(x), filtration.filtrationValue(y)) match {
         case 0 =>
-          if (Ordering.Int.compare(x.vertices.size, y.vertices.size) == 0)
+          if (Ordering.Int.compare(x.size, y.size) == 0)
             Ordering.Implicits
               .sortedSetOrdering[SortedSet, VertexT](vertexOrdering)
-              .compare(x.vertices, y.vertices)
+              .compare(x, y)
           else
-            Ordering.Int.compare(x.vertices.size, y.vertices.size)
+            Ordering.Int.compare(x.size, y.size)
         case cmp if cmp != 0 => cmp
       }
     case (x, y) => // at least one does not have a filtration value defined; just go by dimension and lexicographic
-      if (Ordering.Int.compare(x.vertices.size, y.vertices.size) == 0)
+      if (Ordering.Int.compare(x.size, y.size) == 0)
         Ordering.Implicits
           .sortedSetOrdering[SortedSet, VertexT](vertexOrdering)
-          .compare(x.vertices, y.vertices)
+          .compare(x, y)
       else
-        Ordering.Int.compare(x.vertices.size, y.vertices.size)
+        Ordering.Int.compare(x.size, y.size)
   }
 }
 

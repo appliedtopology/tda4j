@@ -91,26 +91,3 @@ object Kruskal {
     new Kruskal(metricSpace.elements.toSeq, metricSpace.distance)
 }
 
-/*
-def KruskalF[Self](metricSpace: FiniteMetricSpace[Self])(using orderingT: Ordering[Self]) = {
-  val unionFind: UnionFind[Self] = UnionFind(metricSpace.elements)
-  val sortedEdges: List[(Double, unionFind.UFSet, unionFind.UFSet)] =
-    (for
-      x <- unionFind.sets.keysIterator
-      y <- unionFind.sets.keysIterator
-      if orderingT.lt(x.label, y.label)
-    yield (metricSpace.distance(x.label, y.label), x, y)).toList.sortWith { (l,r) =>
-      l._1 < r._1
-    }
-
-    def process(dxy: (Double,unionFind.UFSet,unionFind.UFSet)): Either[(Self,Self),(Self,Self)] =
-      if unionFind.find(dxy._2) != unionFind.find(dxy._3) then {
-        unionFind.union(dxy._2, dxy._3)
-        Left[(Self, Self), (Self, Self)]((dxy._2.label, dxy._3.label))
-      } else {
-        Right[(Self, Self), (Self, Self)]((dxy._2.label, dxy._3.label))
-      }
-
-    val lrList: (List[(Self,Self)],List[(Self,Self)]) = sortedEdges.partitionMap(process)
-}
- */

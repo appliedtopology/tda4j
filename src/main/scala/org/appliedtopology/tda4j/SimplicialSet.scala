@@ -361,7 +361,7 @@ class Singular[VertexT: Ordering] private[tda4j](val allSimplices: Seq[Simplex[V
     generators.map { spx =>
       spx ->
         (0 to spx.dim).map { i =>
-          SimplicialWrapper(Simplex(spx.wrapped.vertices.drop(i)))
+          SimplicialWrapper(spx.wrapped.drop(i))
         }.toList
     }
   )
@@ -385,7 +385,7 @@ object Singular {
    * @return
    */
   def from[VertexT: Ordering](underlying: Seq[Simplex[VertexT]]): Singular[VertexT] =
-    fromAll(underlying.toSet.flatMap(spx => spx.vertices.subsets.filter(_.nonEmpty).map(Simplex.from)).toSeq)
+    fromAll(underlying.toSet.flatMap(spx => spx.subsets.filter(_.nonEmpty)).toSeq)
 
   /**
    * Create a [[Singular]] simplicial set from the simplices in `allSimplices`. This method will trust the
