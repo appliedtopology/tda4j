@@ -189,7 +189,7 @@ class BronKerbosch[VertexT: Ordering] extends CliqueFinder[VertexT] {
     val simplices: Seq[Simplex[VertexT]] =
       cliqueSet
         .filter(spx => spx.nonEmpty)
-        .map(spx => Simplex[VertexT](spx.to(Seq)*)) to Seq
+        .map(spx => SortedSet[VertexT](spx.to(Seq)*)) to Seq
     val filtration =
       new MaximumDistanceFiltrationValue[VertexT](metricSpace)
     val simplexOrdering =
@@ -228,7 +228,7 @@ class ZomorodianIncremental[VertexT: Ordering] extends CliqueFinder[VertexT] {
       val task = tasks.pop()
       val tau = task._1
       val N = task._2
-      V += Simplex.from(tau)
+      V += tau
       if (tau.size <= maxDimension) {
         N.foreach { v =>
           val sigma = tau + v
@@ -293,7 +293,7 @@ object LazyVietorisRips {
           val task = tasks.pop()
           val tau = task._1
           val N = task._2
-          V += Simplex.from(tau)
+          V += tau
           if (tau.size <= maxDimension) {
             N.foreach { v =>
               val sigma = tau + v
@@ -303,10 +303,9 @@ object LazyVietorisRips {
           }
         }
 
-        val newSimplices: SortedSet[Simplex[VertexT]] =
-          V.map(spx => spx.vertices)
-            .map(spx => Simplex.from(spx ++ endpoints))
-            .to(SortedSet)
+        val newSimplices: mutable.SortedSet[Simplex[VertexT]] =
+          V.map(spx => spx ++ endpoints)
+            
 
         FoldState(
           g + nextEdge,
@@ -318,7 +317,7 @@ object LazyVietorisRips {
     val simplices = edges.nodes
       .to(Seq)
       .map(_.toOuter)
-      .map(spx => Simplex(spx))
+      .map(spx => SortedSet(spx))
       .sorted
       .to(LazyList) #::: {
       val edgesLL: LazyList[WUnDiEdge[VertexT]] =
@@ -388,10 +387,10 @@ object LazyStratifiedVietorisRips {
     ): LazyList[Simplex[VertexT]] =
       LazyList
         .from(
-          simplex.vertices.tail
-            .foldRight(neighbors(simplex.vertices.head))((v, N) => N.intersect(neighbors(v)))
+          simplex.tail
+            .foldRight(neighbors(simplex.head))((v, N) => N.intersect(neighbors(v)))
         )
-        .map(v => Simplex.from(simplex.vertices + v))
+        .map(v => simplex + v)
 
     case class FoldState(
       outputLists: Array[LazyList[Simplex[VertexT]]],
@@ -416,12 +415,12 @@ object LazyStratifiedVietorisRips {
         val newCofacets =
           for
             cofacet <- candidateCofacets
-            others = cofacet.vertices.toList
+            others = cofacet.toList
               .combinations(simplex.dim + 1)
               .filter(spx => filtrationValue(Simplex.from(spx)) == metricSpace.distance(src, tgt))
               .toList
               .sorted(math.Ordering.Implicits.seqOrdering)
-            if simplex.vertices.toSeq == others.last
+            if simplex.toSeq == others.last
           yield cofacet
 
         oneStep(

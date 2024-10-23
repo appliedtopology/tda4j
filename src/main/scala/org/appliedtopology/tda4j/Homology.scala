@@ -5,7 +5,10 @@ import org.appliedtopology.tda4j.barcode.PersistenceBar
 import collection.{immutable, mutable}
 import scala.annotation.tailrec
 
-//class ReducedSimplicialHomologyContext[VertexT: Ordering, CoefficientT: Fractional, FiltrationT: Ordering]()
+import math.Fractional.Implicits.infixFractionalOps
+import math.Ordering.Implicits.sortedSetOrdering
+
+//class ReducedSimplicialHomologyContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]()
 //  extends CellularHomologyContext[Simplex[VertexT], CoefficientT, FiltrationT]() {}
 
 class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]()
@@ -164,11 +167,11 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
     // secondly, we can read off homology completely from a minimal spanning tree
     val kruskal = new Kruskal[Simplex[VertexT]](
       cycles.keys.toSeq,
-      { (x: Simplex[VertexT], y: Simplex[VertexT]) => stream.filtrationValue(Simplex.from(x.vertices ++ y.vertices)) }
+      { (x: Simplex[VertexT], y: Simplex[VertexT]) => stream.filtrationValue(x ++ y) }
     )(using stream.filtrationOrdering)
 
     kruskal.mstIterator.foreach { (src, tgt) =>
-      val edge: Simplex[VertexT] = Simplex.from(src.vertices ++ tgt.vertices)
+      val edge: Simplex[VertexT] = src ++ tgt
 
       // the edge src -- tgt will connect src to tgt thus removing one of the cycles
       val dEdge = edge.boundary
@@ -181,7 +184,7 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
     }
 
     kruskal.cyclesIterator.foreach { (src, tgt) =>
-      val edge: Simplex[VertexT] = Simplex.from(src.vertices ++ tgt.vertices)
+      val edge: Simplex[VertexT] = src ++ tgt
 
       // the edge src -- tgt will connect src to tgt thus closing a loop
       val dEdge = edge.boundary

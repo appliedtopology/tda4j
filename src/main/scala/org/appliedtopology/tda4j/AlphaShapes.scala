@@ -33,7 +33,7 @@ class AlphaShapes(val points: Array[Array[Double]])
       !points.exists(metricSpace.pointSqDistance(mb.center(), _) < mb.squaredRadius())
 
   def isDelaunaySimplex(spx: Simplex[Int]): Boolean =
-    isDelaunay(spx.vertices.toArray.map(points(_)))
+    isDelaunay(spx.toArray.map(points(_)))
 
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case d if d == cacheDimension => simplexCache.iterator
@@ -52,7 +52,7 @@ class AlphaShapes(val points: Array[Array[Double]])
       val newSimplexCache = for
         spx <- simplexCache
         i <- metricSpace.elements.takeWhile(_ < spx.vertices.min)
-        coface = spx.union(Simplex(i))
+        i <- metricSpace.elements.takeWhile(_ < spx.min)
         if isDelaunaySimplex(coface)
       yield coface
       simplexCache = newSimplexCache.sortBy(filtrationValue)

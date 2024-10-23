@@ -43,9 +43,8 @@ class SimplexStreamSpec extends mutable.Specification {
         cmutable.Set(Simplex())
       simplexStream.iterator.foreach { spx =>
         seen += spx
-        spx.vertices.toSet
-          .subsets()
-          .foreach(face => seen must contain(Simplex.from(face)))
+        spx.subsets()
+          .foreach(face => seen must contain(face))
       }
     }
     "have all simplices, in order" >> {
@@ -82,9 +81,8 @@ class SimplexStreamSpec extends mutable.Specification {
         cmutable.Set(Simplex())
       sortedSimplexSeq.foreach { spx =>
         seen += spx
-        spx.vertices.toSet
-          .subsets()
-          .foreach(face => seen must contain(Simplex.from(face)))
+        spx.subsets()
+          .foreach(face => seen must contain(face))
       }
     }
   }
