@@ -2,7 +2,7 @@ package org.appliedtopology.tda4j
 
 import org.apache.commons.numbers.combinatorics.BinomialCoefficient
 
-import scala.collection.mutable
+import scala.collection.{mutable,immutable}
 import scala.collection.immutable.{Map, Seq, SortedSet}
 import math.Ordering.Implicits.*
 
@@ -215,8 +215,8 @@ trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
   def keepCriterion: PartialFunction[Simplex[VertexT], Boolean]
 }
 
-case class RipserCofaceSimplexStream(
-  metricSpace: FiniteMetricSpace[Int],
+class EnumeratingCofaceSimplexStream(
+  val metricSpace: FiniteMetricSpace[Int],
   var keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
 ) extends CofaceSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]() {
@@ -231,7 +231,7 @@ case class RipserCofaceSimplexStream(
 
   var lastDimensionCache: IndexedSeq[Simplex[Int]] = IndexedSeq()
 
-  var currentDimensionCache: IndexedSeq[Simplex[Int]] = IndexedSeq()
+  var currentDimensionCache: immutable.Queue[Simplex[Int]] = immutable.Queue.empty
 
   override def pruneAllCofaces: Boolean = false
 
@@ -256,5 +256,123 @@ case class RipserCofaceSimplexStream(
         }
         .sortBy(filtrationValue)
         .iterator
+  }
+}
+
+class RipserCofaceSimplexStream(
+                                  metricSpace: FiniteMetricSpace[Int],
+                                  keepCriterion: PartialFunction[Simplex[Int], Boolean] = {
+                                    case _ => true
+                                  }
+                                ) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion) {
+  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+      case 0 => {
+        currentDimensionCache = metricSpace.elements.map(v => Simplex(v)).to(immutable.Queue)
+        currentDimension = 0
+        lastDimensionCache = IndexedSeq.empty[Simplex[Int]]
+        currentDimensionCache.iterator
+      }
+      case d => {
+        if(currentDimension != d-1) {
+          // we don't have a good cache, just generate entire previous dimension and deal with it
+          lastDimensionCache = (0 until BinomialCoefficient.value(metricSpace.size, d).toInt).toSeq
+            .flatMap { ix =>
+              Some(simplexIndexing(ix, d)).filter(keepCriterion.applyOrElse(_, _ => true))
+            }
+            .sortBy(filtrationValue)
+        } else {
+          lastDimensionCache = currentDimensionCache.toIndexedSeq
+        }
+        // now we have a known good lastDimensionCache
+        currentDimensionCache = (for
+          spx <- lastDimensionCache
+          i <- metricSpace.elements.filter((j) => j < spx.min)
+          newSpx = spx + i
+          if(keepCriterion.applyOrElse(newSpx, (_) => false))
+        yield
+          newSpx).sorted(using filtrationOrdering).to(immutable.Queue) // we _would_ want to avoid creating the entire thing and sort it
+        currentDimensionCache.iterator
+      }
+    }
+}
+
+class InorderCofaceSimplexStream(
+  metricSpace : FiniteMetricSpace[Int],
+  keepCriterion : PartialFunction[Simplex[Int], Boolean] = { case _ => true }
+                                ) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion) {
+  def inOrderCofaceIterator(spx : Simplex[Int]): Iterator[Simplex[Int]] = 
+    if(spx.isEmpty) {
+      metricSpace.elements.iterator.map((s) => Simplex(s))
+    } else {
+    val alpha = filtrationValue(spx)
+    val alpha0 = if(spx.size > 0) then filtrationValue(spx.tail) else smallest
+    val alpha1 = if(spx.size > 1) then filtrationValue(spx.tail.tail + spx.head) else smallest
+    def localMin(s : Simplex[Int]): Int =
+      if(s.nonEmpty) s.min
+      else metricSpace.elements.max+1
+    Iterator.concat(
+      // first, all the vertices that come before the first vertex - case 1
+      for
+        i <- metricSpace.elements.filter((j) => j < localMin(spx))
+        if(spx.map((j) => metricSpace.distance(i,j)).max <= alpha)
+      yield
+        spx + i
+      ,
+      // next, if filtrationValue drops when eliminating the first vertex
+      if(alpha > alpha0) {
+        for
+          i <- metricSpace.elements.filter((j) => (localMin(spx) < j) && (j < localMin(spx.tail)))
+          newSpx = spx + i
+          if (filtrationValue(newSpx) == alpha)
+        yield
+          newSpx
+      } else Iterable.empty[Simplex[Int]],
+      // finally, if filtrationValue drops both when eliminating the first and the second vertex
+      // in this case, the edge between first and second is the only full-length edge
+      if((alpha > alpha0) && (alpha > alpha1) && (spx.size > 1)) {
+        for 
+          i <- metricSpace.elements.filter((j) => (localMin(spx.tail) < j) && (j < localMin(spx.tail.tail)))
+          if (spx.map((j) => metricSpace.distance(i,j)).max < alpha)
+        yield
+          spx + i
+      } else Iterable.empty
+    )
+  }
+  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+    case 0 => {
+      currentDimensionCache = metricSpace.elements.map(v => Simplex(v)).to(immutable.Queue)
+      currentDimension = 0
+      lastDimensionCache = IndexedSeq.empty
+      currentDimensionCache.iterator
+    }
+    case 1 => {
+      currentDimensionCache = edges.toSeq.sortBy(filtrationValue).to(immutable.Queue)
+      currentDimension = 1
+      lastDimensionCache = metricSpace.elements.map(v => Simplex(v)).toIndexedSeq
+      currentDimensionCache.iterator
+    }
+    case d => {
+      if(currentDimension != d-1) {
+        // we don't have a good cache, just generate entire previous dimension and deal with it
+        lastDimensionCache = (0 until BinomialCoefficient.value(metricSpace.size, d).toInt).toSeq
+          .flatMap { ix =>
+            Some(simplexIndexing(ix, d)).filter(keepCriterion.applyOrElse(_, _ => true))
+          }
+          .sortBy(filtrationValue)
+      } else {
+        lastDimensionCache = currentDimensionCache.toIndexedSeq
+      }
+      // now we have a known good lastDimensionCache
+      currentDimensionCache = immutable.Queue.empty
+      currentDimension = d
+      for
+        spx <- lastDimensionCache.iterator
+        newSpx <- inOrderCofaceIterator(spx)
+        if(keepCriterion.applyOrElse(newSpx, (_) => false))
+      yield {
+        currentDimensionCache = currentDimensionCache appended newSpx
+        newSpx
+      }
+    }
   }
 }

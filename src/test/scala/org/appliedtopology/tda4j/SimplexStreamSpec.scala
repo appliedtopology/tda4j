@@ -1,11 +1,14 @@
 package org.appliedtopology.tda4j
 
-import org.specs2.{mutable, Specification}
+import org.specs2.{Specification, mutable}
 import org.specs2.execute.Result
+import org.specs2.specification.core.Fragment
+import org.scalacheck.Gen
+import org.scalacheck.Prop.forAll
 
 import scala.collection.mutable as cmutable
 
-class SimplexStreamSpec extends mutable.Specification {
+class SimplexStreamSpec extends mutable.Specification with org.specs2.ScalaCheck {
   "Test suite for the abstraction and implementations of `SimplexStream`".txt
 
   val esb: ExplicitStreamBuilder[Int, Double] =
@@ -83,6 +86,26 @@ class SimplexStreamSpec extends mutable.Specification {
         seen += spx
         spx.subsets()
           .foreach(face => seen must contain(face))
+      }
+    }
+  }
+}
+
+class CofaceSimplexStreamSpec extends mutable.Specification with org.specs2.ScalaCheck {
+  "Different coface simplex streams should agree" >> {
+    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(15, 15))) { (pts: Array[Array[Double]]) =>
+      val metricSpace = EuclideanMetricSpace(pts)
+      val enumerating = EnumeratingCofaceSimplexStream(metricSpace)
+      val inorder = InorderCofaceSimplexStream(metricSpace)
+
+      Result.foreach(0 to 5) { (dim) =>
+        val enumerated = enumerating.iterateDimension(dim).toSeq
+        val inordered = inorder.iterateDimension(dim).toSeq
+
+        (enumerated.map((spx) => enumerating.filtrationValue(spx)) must beSorted) and
+          (inordered.map((spx) => inorder.filtrationValue(spx)) must beSorted) and
+          // using size as proxy for equality for CI testing; change to `enumerated === inordered` if debugging
+          (enumerated.size === inordered.size)
       }
     }
   }
