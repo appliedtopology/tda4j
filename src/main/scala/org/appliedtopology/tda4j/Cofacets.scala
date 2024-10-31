@@ -1,5 +1,6 @@
 package org.appliedtopology.tda4j
 
+import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 import scala.util.chaining.scalaUtilChainingOps
@@ -7,24 +8,23 @@ import scala.util.chaining.scalaUtilChainingOps
 
 /********* Optimized Vietoris-Rips cofacet generation for fast coboundary computation ********/
 
-case class CofacetIterator[VertexT : Ordering](val simplex : Simplex[VertexT], sparseMetricSpace: SparseMetricSpace[VertexT]) extends Iterator[Simplex[VertexT]] {
+case class CofacetIterator[VertexT : Ordering](val simplex : Simplex[VertexT], sparseMetricSpace: SparseMetricSpace[VertexT]) extends Iterator[VertexT] {
   val vertices : Vector[VertexT] = Vector.from(simplex.toSeq.sorted)
   // data structure to hold and buffer outputs until it's time to send them out
   val outputQueue : mutable.ArrayDeque[VertexT] = mutable.ArrayDeque.empty
   var canProcess: Boolean = true
 
-  override def hasNext: Boolean = outputQueue.nonEmpty || { process(); outputQueue.nonEmpty }
-  override def next(): Simplex[VertexT] =
+  override def hasNext: Boolean = outputQueue.nonEmpty || { fillQueue(); outputQueue.nonEmpty }
+  override def next(): VertexT =
     if(hasNext)
-      ∆(vertices.appended(
-        if(outputQueue.nonEmpty) outputQueue.removeHead()
-        else {
-          process()
-          if(outputQueue.nonEmpty)
-            outputQueue.removeHead()
-          else
-            throw new NoSuchElementException("Iterator exhausted")
-        })*)
+      if(outputQueue.nonEmpty) outputQueue.removeHead()
+      else {
+        fillQueue()
+        if (outputQueue.nonEmpty)
+          outputQueue.removeHead()
+        else
+          throw new NoSuchElementException("Iterator exhausted")
+      }
     else
       throw new NoSuchElementException("Iterator exhausted")
 
@@ -51,11 +51,13 @@ case class CofacetIterator[VertexT : Ordering](val simplex : Simplex[VertexT], s
       var wi : Int = 0
       var innerflag : Boolean = true
       while(innerflag && (wi < neighbors.size)) {
-        if(neighbors(wi)._2 <= alpha) {
-          vertexL1.addOne(neighbors(wi)._1)
-        } else {
-          innerflag = false
-          vPointers(vi) = wi
+        if(!simplex.contains(neighbors(wi)._1)) {
+          if (neighbors(wi)._2 <= alpha) {
+            vertexL1.addOne(neighbors(wi)._1)
+          } else {
+            innerflag = false
+            vPointers(vi) = wi
+          }
         }
         wi += 1
       }
@@ -115,10 +117,12 @@ case class CofacetIterator[VertexT : Ordering](val simplex : Simplex[VertexT], s
           nearestNeighbor
         } match {
           case Success((v, (w, d))) => {
-            vertexCache(w) = vertexCache.getOrElse(w, 0) + 1
-            if (vertexCache(w) == vertices.size) {
-              outputQueue.append(w)
-              vertexCache.remove(w)
+            if(!simplex.contains(w)) {
+              vertexCache(w) = vertexCache.getOrElse(w, 0) + 1
+              if (vertexCache(w) == vertices.size) {
+                outputQueue.append(w)
+                vertexCache.remove(w)
+              }
             }
             pointers(v) += 1
           }
@@ -141,5 +145,16 @@ case class CofacetIterator[VertexT : Ordering](val simplex : Simplex[VertexT], s
           case Failure(exc) => throw exc
         }
     }
+
+  @tailrec
+  final def fillQueue() : Unit = {
+    if (canProcess) {
+      process()
+      if (outputQueue.nonEmpty) ()
+      else fillQueue()
+    }
+    else
+      ()
+  }
 }
 
