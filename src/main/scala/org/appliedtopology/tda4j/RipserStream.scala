@@ -27,6 +27,18 @@ class SimplexIndexing(val vertexCount: Int) {
     }
   }
 
+
+  /**
+   * Uses the binomial numbering system to generate the `n`th simplex of dimension `d-1`, that is
+   * the `n`th subset of size `d` of the vertices.
+   * 
+   * If `n` is greater than (`vertexCount` choose `d`) the result will not be a subset of size `d`.
+   * 
+   * @param n
+   * @param d
+   * @param upperAccum
+   * @return
+   */
   @tailrec
   final def apply(n: Int, d: Int, upperAccum: Simplex[Int] = ∆()): Simplex[Int] = {
     if (d < 0) return upperAccum
@@ -95,6 +107,10 @@ class SimplexIndexing(val vertexCount: Int) {
       binomial(v, simplex.size - i)
     }.sum
 }
+
+
+
+/******** Maybe @deprecate or outright everything below here? *******/
 
 class RipserCliqueFinder extends CliqueFinder[Int] {
   override val className: String = "RipserCliqueFinder"
