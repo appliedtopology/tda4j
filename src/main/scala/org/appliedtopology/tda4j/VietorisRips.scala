@@ -189,7 +189,8 @@ class BronKerbosch[VertexT: Ordering] extends CliqueFinder[VertexT] {
     val simplices: Seq[Simplex[VertexT]] =
       cliqueSet
         .filter(spx => spx.nonEmpty)
-        .map(spx => SortedSet[VertexT](spx.to(Seq)*)) to Seq
+        .map(spx => Simplex.from(spx.toSeq))
+        .toSeq
     val filtration =
       new MaximumDistanceFiltrationValue[VertexT](metricSpace)
     val simplexOrdering =

@@ -171,7 +171,7 @@ class FilteredSimplexOrdering[VertexT, FiltrationT](
         case 0 =>
           if (Ordering.Int.compare(x.size, y.size) == 0)
             Ordering.Implicits
-              .sortedSetOrdering[SortedSet, VertexT](vertexOrdering)
+              .sortedSetOrdering[Simplex, VertexT](vertexOrdering)
               .compare(x, y)
           else
             Ordering.Int.compare(x.size, y.size)
@@ -180,7 +180,7 @@ class FilteredSimplexOrdering[VertexT, FiltrationT](
     case (x, y) => // at least one does not have a filtration value defined; just go by dimension and lexicographic
       if (Ordering.Int.compare(x.size, y.size) == 0)
         Ordering.Implicits
-          .sortedSetOrdering[SortedSet, VertexT](vertexOrdering)
+          .sortedSetOrdering[Simplex, VertexT](vertexOrdering)
           .compare(x, y)
       else
         Ordering.Int.compare(x.size, y.size)
