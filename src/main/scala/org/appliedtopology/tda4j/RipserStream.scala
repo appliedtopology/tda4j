@@ -9,10 +9,26 @@ import scala.collection.immutable.SortedSet
 import scala.collection.mutable
 import scala.collection.parallel.CollectionConverters.*
 
-def binomial(n: Int, k: Int): Int =
+def binomialApache(n: Int, k: Int): Int =
   if (n > 0 && k >= 0 && n >= k)
     combinatorics.BinomialCoefficient.value(n, k).toInt
   else 0
+
+// see https://stackoverflow.com/questions/52795217/scala-tail-recursive-method-has-an-divide-and-remainder-error/65362753#65362753
+def binomialBigint(n: Int, k: Int): BigInt = {
+  if (k < 0 || n < k) 0
+  else {
+    @tailrec
+    def binomialtail(nIter: Int, kIter: Int, ac: BigInt): BigInt =
+      if (kIter > k) ac
+      else binomialtail(nIter + 1, kIter + 1, (nIter * ac) / kIter)
+
+    if (k == 0 || k == n) 1
+    else binomialtail(n - k + 1, 1, BigInt(1))
+  }
+}
+
+def binomial(n: Int, k: Int): Int = binomialBigint(n,k).intValue
 
 class SimplexIndexing(val vertexCount: Int) {
 
