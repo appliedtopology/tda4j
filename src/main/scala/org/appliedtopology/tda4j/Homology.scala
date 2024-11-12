@@ -190,7 +190,7 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
       val dEdge = edge.boundary
       // TODO is it worth it to have a more complex UnionFind that allows us to get the entire path along the MST?
       val (reduced, reductionLog): (Chain[Simplex[VertexT], CoefficientT], Chain[Simplex[VertexT], CoefficientT]) =
-        reduceBy(dEdge, boundaries)
+        Chain.reduceBy(dEdge, boundaries)
       val fr = summon[CoefficientT is Field]
       val coboundary: Chain[Simplex[VertexT], CoefficientT] =
         reductionLog.items.foldRight(fr.negate(fr.one) ⊠ Chain(edge)) { (item, acc) =>
@@ -205,29 +205,13 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
     // setup is done, we should be ready to start dimension 2
     currentDim = 1
     current = Double.PositiveInfinity
-
-    @tailrec
-    private def reduceBy(
-      z: Chain[Simplex[VertexT], CoefficientT],
-      basis: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]],
-      reductionLog: Chain[Simplex[VertexT], CoefficientT] = Chain()
-    )(using
-      fr: (CoefficientT is Field)
-    ): (Chain[Simplex[VertexT], CoefficientT], Chain[Simplex[VertexT], CoefficientT]) =
-      z.leadingCell match
-        case None => (z, reductionLog)
-        case Some(sigma) =>
-          if basis.contains(sigma) then
-            val redCoeff = fr.divide(z.leadingCoefficient, basis(sigma).leadingCoefficient)
-            reduceBy(z - redCoeff ⊠ basis(sigma), basis, reductionLog + redCoeff ⊠ Chain(sigma))
-          else (z, reductionLog)
-
+    
     def advanceOne(): Unit =
       if currentIterator.hasNext then
         val fr = summon[CoefficientT is Field]
         val sigma = currentIterator.next()
         val dsigma: Chain[Simplex[VertexT], CoefficientT] = sigma.boundary
-        val (dsigmaReduced, reduction) = reduceBy(dsigma, boundaries)
+        val (dsigmaReduced, reduction) = Chain.reduceBy(dsigma, boundaries)
         val coboundary = reduction.items.foldRight(fr.negate(fr.one) ⊠ Chain(sigma)) { (next, acc) =>
           val (spx, coeff) = next
           if coboundaries.contains(spx) then acc + coeff ⊠ coboundaries(spx)
@@ -243,7 +227,7 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
           boundariesBornBy(dsigmaReduced.leadingCell.get) = sigma
           coboundaries(dsigmaReduced.leadingCell.get) = coboundary
 
-          val (_, cycleBasis) = reduceBy(dsigmaReduced, cycles)
+          val (_, cycleBasis) = Chain.reduceBy(dsigmaReduced, cycles)
           val representativeCycle: Chain[Simplex[VertexT], CoefficientT] = cycleBasis.leadingCell match
             case None       => Chain()
             case Some(cell) => cycles(cell)

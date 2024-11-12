@@ -121,6 +121,20 @@ object Chain {
       }
   }
 
+  @tailrec
+  final def reduceBy[CellT : Ordering, CoefficientT : Field](z : Chain[CellT, CoefficientT],
+               basis: mutable.Map[CellT, Chain[CellT, CoefficientT]],
+               reductionLog: Chain[CellT, CoefficientT] = Chain()
+              ): (Chain[CellT, CoefficientT], Chain[CellT, CoefficientT]) =
+      z.leadingCell match {
+        case None => (z, reductionLog)
+        case Some(sigma) =>
+          if basis.contains(sigma) then
+            val redCoeff = z.leadingCoefficient / basis(sigma).leadingCoefficient
+            reduceBy(z - redCoeff ⊠ basis(sigma), basis, reductionLog + redCoeff ⊠ Chain(sigma))
+          else (z, reductionLog)
+  }
+
   given [CellT : Ordering, CoefficientT: Field as fr] => (Chain[CellT, CoefficientT] is RingModule {
     type R = CoefficientT
   }) = new {
