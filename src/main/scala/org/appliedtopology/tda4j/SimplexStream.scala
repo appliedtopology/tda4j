@@ -36,7 +36,7 @@ given LongIsFilterable: Filterable[Long] = new Filterable[Long] {
   val largest = Long.MaxValue
 }
 
-trait Filtration[CellT: Cell, FiltrationT: Ordering: Filterable] extends Filterable[FiltrationT] {
+trait Filtration[CellT: Cell, FiltrationT: {Ordering, Filterable}] extends Filterable[FiltrationT] {
   def filtrationValue: PartialFunction[CellT, FiltrationT]
 }
 
@@ -60,7 +60,7 @@ trait CellStream[CellT: Cell, FiltrationT: Ordering] extends Filtration[CellT, F
   *   We may want to change this to inherit instead from `IterableOnce[Simplex[VertexT]]`, so that a lazy computed
   *   simplex stream can be created and fit in the type hierarchy.
   */
-trait SimplexStream[VertexT: Ordering, FiltrationT: Ordering: Filterable]
+trait SimplexStream[VertexT: Ordering, FiltrationT: {Ordering, Filterable}]
     extends CellStream[Simplex[VertexT], FiltrationT] {
   val filterable: Filterable[FiltrationT] = summon[Filterable[FiltrationT]]
   export filterable.{largest, smallest}
@@ -110,7 +110,7 @@ class ExplicitStream[VertexT: Ordering, FiltrationT](
   def length: Int = simplices.length
 }
 
-given [FiltrationT: Filterable]: Option[Filterable[FiltrationT]] =
+given [FiltrationT: Filterable] => Option[Filterable[FiltrationT]] =
   Some(summon[Filterable[FiltrationT]])
 
 class ExplicitStreamBuilder[VertexT: Ordering, FiltrationT](using

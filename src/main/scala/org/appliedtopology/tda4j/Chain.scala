@@ -110,7 +110,7 @@ object Chain {
                                                         ): Chain[CellT, CoefficientT] =
     new Chain(mutable.PriorityQueue.from(cs)(using Ordering.by[(CellT, CoefficientT), CellT](_._1)(using ord.reverse)))
 
-  given chain_is_ordered_basis[CellT : Ordering, CoefficientT: Field as fld] : (Chain[CellT, CoefficientT] is OrderedBasis[CellT, CoefficientT]) with {
+  given chain_is_ordered_basis: [CellT : Ordering, CoefficientT: Field as fld] => (Chain[CellT, CoefficientT] is OrderedBasis[CellT, CoefficientT]):
     extension (self: Self)
       def leadingTerm: (Option[CellT], CoefficientT) = {
         self.collapseHead()
@@ -119,12 +119,12 @@ object Chain {
         }
           .apply(self.entries.headOption.unzip)
       }
-  }
+
 
   @tailrec
   final def reduceBy[CellT : Ordering, CoefficientT : Field](z : Chain[CellT, CoefficientT],
                basis: mutable.Map[CellT, Chain[CellT, CoefficientT]],
-               reductionLog: Chain[CellT, CoefficientT] = Chain()
+               reductionLog: Chain[CellT, CoefficientT] // want to have a default empty here?
               ): (Chain[CellT, CoefficientT], Chain[CellT, CoefficientT]) =
       z.leadingCell match {
         case None => (z, reductionLog)

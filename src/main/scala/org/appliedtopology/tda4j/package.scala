@@ -20,7 +20,7 @@ package object tda4j {
       summon[Chain[Simplex[VertexT],CoefficientT] is RingModule { type R=CoefficientT}]
     export chainIsRingModule.*
     import scala.language.implicitConversions
-    given [T: Ordering]: Conversion[Simplex[T], Chain[Simplex[T], CoefficientT]] =
+    given [T: Ordering] => Conversion[Simplex[T], Chain[Simplex[T], CoefficientT]] =
       Chain.apply
   }
 }

@@ -40,5 +40,5 @@ def Simplex_is_OrderedCell[VertexT](using vtxOrd : Ordering[VertexT])(setOrderin
         )
     }
   }
-given default_Simplex_is_OrderedCell[VertexT : Ordering] : (Simplex[VertexT] is OrderedCell) =
+given default_Simplex_is_OrderedCell: [VertexT : Ordering] => (Simplex[VertexT] is OrderedCell) =
   Simplex_is_OrderedCell[VertexT]()

@@ -28,9 +28,7 @@ case class ClosedEndpoint[FiltrationT: Ordering](val value: FiltrationT) extends
   override val isFinite = true
 
 import math.Ordered.orderingToOrdered
-given [FiltrationT](using
-  ord: Ordering[FiltrationT]
-): Ordering[BarcodeEndpoint[FiltrationT]] with
+given [FiltrationT : Ordering as ord] => Ordering[BarcodeEndpoint[FiltrationT]]:
   def compare(
     x: BarcodeEndpoint[FiltrationT],
     y: BarcodeEndpoint[FiltrationT]
@@ -156,7 +154,7 @@ class BarcodeContext[FiltrationT: Ordering]():
   def dim(d: Int)(ba: BarAssembly) =
     new PersistenceBar[FiltrationT, Nothing](d, ba.lower, ba.upper)
 
-class Barcode[FiltrationT: Ordering: Numeric, AnnotationT]:
+class Barcode[FiltrationT: {Ordering, Numeric}, AnnotationT]:
   def isMap(
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
