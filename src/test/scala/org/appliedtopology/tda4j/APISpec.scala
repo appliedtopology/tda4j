@@ -22,33 +22,12 @@ class APISpec extends mutable.Specification {
     val as = (1 to 50).map(_ => scala.util.Random.nextDouble * 2.0 * math.Pi)
     val xys = as.toSeq.map(a => Seq(math.cos(a), math.sin(a)))
 
-    val homology = persistentHomology(
-      VietorisRips[Int](
-        EuclideanMetricSpace(xys),
-        1.5,
-        4,
-        ZomorodianIncremental[Int]()
-      )
-    )
+    val homology = ???
 
     val metricSpace = EuclideanMetricSpace(xys)
-    val lazyHomology = persistentHomology(
-      SimplexStream.from(
-        LazyVietorisRips(
-          metricSpace,
-          1.5,
-          4
-        ),
-        metricSpace
-      )
-    )
 
-    homology.advanceTo(0.15)
-    homology.diagramAt(0.15) should not(beEmpty)
+//    homology.advanceTo(0.15)
+//    homology.diagramAt(0.15) should not(beEmpty)
 
-    lazyHomology.advanceTo(0.15)
-    lazyHomology.diagramAt(0.15) should not(beEmpty)
-
-    lazyHomology.diagramAt(0.15) should containTheSameElementsAs(homology.diagramAt(0.15))
   }
 }

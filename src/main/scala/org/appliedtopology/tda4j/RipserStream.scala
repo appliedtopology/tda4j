@@ -114,7 +114,7 @@ class SimplexIndexing(val vertexCount: Int) {
           val j = s(k)
           val iiB = iB - binomial(j, k + 1)
           val iiA = iA + binomial(j, k)
-          Some((iiB + iA, (s, iiB, iiA, k - 1)))
+          Some((iiB + iA, (s.to(Vector), iiB, iiA, k - 1)))
         }
     }
 
@@ -128,10 +128,10 @@ class SimplexIndexing(val vertexCount: Int) {
 
 /******** Maybe @deprecate or outright everything below here? *******/
 
-class RipserCliqueFinder extends CliqueFinder[Int] {
-  override val className: String = "RipserCliqueFinder"
+class RipserCliqueFinder {
+   val className: String = "RipserCliqueFinder"
 
-  override def apply(
+   def apply(
     metricSpace: FiniteMetricSpace[Int],
     maxFiltrationValue: Double,
     maxDimension: Int
@@ -338,10 +338,10 @@ class RipserStreamOf[VertexT: Ordering](
 
 class SymmetricRipserCliqueFinder[KeyT](
   val symmetryGroup: SymmetryGroup[KeyT, Int]
-) extends CliqueFinder[Int] {
-  override val className: String = "SymmetricRipserCliqueFinder"
+) {
+   val className: String = "SymmetricRipserCliqueFinder"
 
-  override def apply(
+   def apply(
     metricSpace: FiniteMetricSpace[Int],
     maxFiltrationValue: Double,
     maxDimension: Int
@@ -373,11 +373,11 @@ class SymmetricRipserStream[KeyT](
 
 class MaskedSymmetricRipserVR[KeyT: Ordering](
   val symmetryGroup: SymmetryGroup[KeyT, Int]
-) extends CliqueFinder[Int] {
+) {
 
-  override val className: String = "MaskedSymmetricRipserVR"
+   val className: String = "MaskedSymmetricRipserVR"
 
-  override def apply(
+   def apply(
     metricSpace: FiniteMetricSpace[Int],
     maxFiltrationValue: Double,
     maxDimension: Int
