@@ -8,6 +8,11 @@ trait MetricSpace[T] {
   def elements: Seq[T]
 }
 
+object MetricSpace {
+  def fromDistanceMatrix(matrix: Array[Array[Double]]): MetricSpace[Int] = new DistanceMatrixMetricSpace(matrix)
+  def fromPoints(points: Seq[Array[Double]], metricName: String = "lp(2.0)"): MetricSpace[Int] = new VectorMetricSpace(VectorMetricSpace(metricName), points)
+}
+
 /** An implementation of MetricSpace based on a precomputed distance matrix. */
 class DistanceMatrixMetricSpace(matrix: Array[Array[Double]]) extends MetricSpace[Int] {
   if (!matrix.forall(_.length == matrix.length)) {
@@ -33,7 +38,7 @@ object VectorMetricSpace {
   // Type alias for different distance metric functions
   type DistanceMetric = (Array[Double], Array[Double]) => Double
 
-  private val lpRegex = """lp\((\d+(\.\d+)?)\)""".r
+  private val lpRegex = """lp\((\d+(?:\.\d*)?)\)""".r
   def apply(metricName: String): DistanceMetric = metricName match {
     case "euclidean" => lp(2.0)
     case "cosine" => cosine

@@ -3,7 +3,9 @@ package org.appliedtopology.tda4s
 import language.experimental.modularity
 
 case class Simplex(vertices: Set[Int])
-
+object Simplex:
+  def apply(v: Int*): Simplex = Simplex(v.toSet)
+  
 given Simplex is TopologicalCell = new TopologicalCell:
   type Self = Simplex
 
