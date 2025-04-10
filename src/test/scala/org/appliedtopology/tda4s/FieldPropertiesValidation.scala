@@ -7,51 +7,92 @@ import org.scalatest.propspec.AnyPropSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalatest.matchers.should.Matchers
 
-class FieldPropertiesValidation extends AnyPropSpec
+class DoublePropertiesValidation extends AnyPropSpec
   with ScalaCheckPropertyChecks
   with Matchers:
-  import Field.given
 
+  val field = Field(0)
+  
   property("additive identity") {
-    forAll { (x: Double) =>
-      val field = summon[Double is Field]
-      field.add(x, field.zero) == x
+    forAll { (x: Int) =>
+      field(x) + field.zero == field(x)
     }
   }
   
   property("additive commutativity") {
-    forAll { (x: Double, y: Double) =>
-      val field = summon[Double is Field]
-      field.add(x, y) == field.add(y, x)
+    forAll { (x: Int, y: Int) =>
+      field(x) + field(y) == field(y) + field(x)
     }
   }
 
   property("multiplicative identity") {
-    forAll { (x: Double) =>
-      val field = summon[Double is Field]
-      field.mul(x, field.one) == x
+    forAll { (x: Int) =>
+      field(x) * field.one == field(x)
     }
   }
 
   property("multiplicative commutativity") {
-    forAll { (x: Double, y: Double) =>
-      val field = summon[Double is Field]
-      field.mul(x, y) == field.mul(y, x)
+    forAll { (x: Int, y: Int) =>
+      field(x) * field(y) == field(y) * field(x)
     }
   }
 
   property("distributivity") {
-    forAll { (x: Double, y: Double, z: Double) =>
-      val field = summon[Double is Field]
-      field.mul(x, field.add(y, z)) == field.add(field.mul(x, y), field.mul(x, z))
+    forAll { (x: Int, y: Int, z: Int) =>
+      field(x) * (field(y) + field(z)) == field(x) * field(y) + field(x) * field(z)
     }
   }
 
   property("division reversal") {
-    forAll { (x: Double, y: Double) =>
-      val field = summon[Double is Field]
+    forAll { (x: Int, y: Int) =>
       (y != 0) ==> {
-        field.mul(field.div(x, y), y) == x
+        (field(x)/field(y))*field(y) == field(x)
+      }
+    }
+  }
+
+class FF17PropertiesValidation extends AnyPropSpec
+  with ScalaCheckPropertyChecks
+  with Matchers:
+  
+  val field = Field(17)
+  
+  given (field.Self is Field) = field
+  
+  property("additive identity") {
+    forAll { (x: Int) =>
+      field(x) + field.zero == field(x)
+    }
+  }
+  
+  property("additive commutativity") {
+    forAll { (x: Int, y: Int) =>
+      field(x) + field(y) == field(y) + field(x)
+    }
+  }
+  
+  property("multiplicative identity") {
+    forAll { (x: Int) =>
+      field(x) * field.one == field(x)
+    }
+  }
+  
+  property("multiplicative commutativity") {
+    forAll { (x: Int, y: Int) =>
+      field(x) * field(y) == field(y) * field(x)
+    }
+  }
+  
+  property("distributivity") {
+    forAll { (x: Int, y: Int, z: Int) =>
+      field(x) * (field(y) + field(z)) == field(x) * field(y) + field(x) * field(z)
+    }
+  }
+  
+  property("division reversal") {
+    forAll { (x: Int, y: Int) =>
+      (y != 0) ==> {
+        (field(x) / field(y)) * field(y) == field(x)
       }
     }
   }
