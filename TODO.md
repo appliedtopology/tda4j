@@ -56,3 +56,7 @@ https://github.com/scala/scala/blob/4905801fc161300ba20bae4f7adf045b1698e831/src
 ## Document
 
 - [ ] Port Henry Adams' tutorials to TDA4j.
+
+## Test
+
+- [ ] add a coverage reporting tool to CI
