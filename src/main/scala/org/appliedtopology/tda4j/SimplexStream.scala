@@ -171,8 +171,8 @@ class FilteredSimplexOrdering[VertexT, FiltrationT](
         case 0 =>
           if (Ordering.Int.compare(x.size, y.size) == 0)
             Ordering.Implicits
-              .sortedSetOrdering[Simplex, VertexT](vertexOrdering)
-              .compare(x, y)
+              .sortedSetOrdering[SortedSet, VertexT](vertexOrdering)
+              .compare(x.toSortedSet, y.toSortedSet)
           else
             Ordering.Int.compare(x.size, y.size)
         case cmp if cmp != 0 => cmp
@@ -180,8 +180,8 @@ class FilteredSimplexOrdering[VertexT, FiltrationT](
     case (x, y) => // at least one does not have a filtration value defined; just go by dimension and lexicographic
       if (Ordering.Int.compare(x.size, y.size) == 0)
         Ordering.Implicits
-          .sortedSetOrdering[Simplex, VertexT](vertexOrdering)
-          .compare(x, y)
+          .sortedSetOrdering[SortedSet, VertexT](vertexOrdering)
+          .compare(x.toSortedSet, y.toSortedSet)
       else
         Ordering.Int.compare(x.size, y.size)
   }
@@ -287,7 +287,7 @@ class RipserCofaceSimplexStream(
         currentDimensionCache = (for
           spx <- lastDimensionCache
           i <- metricSpace.elements.filter((j) => j < spx.min)
-          newSpx = spx + i
+          newSpx : Simplex[Int] = spx + i
           if(keepCriterion.applyOrElse(newSpx, (_) => false))
         yield
           newSpx).sorted(using filtrationOrdering).to(immutable.Queue) // we _would_ want to avoid creating the entire thing and sort it
@@ -306,7 +306,7 @@ class InorderCofaceSimplexStream(
     } else {
     val alpha = filtrationValue(spx)
     val alpha0 = if(spx.size > 0) then filtrationValue(spx.tail) else smallest
-    val alpha1 = if(spx.size > 1) then filtrationValue(spx.tail.tail + spx.head) else smallest
+    val alpha1 = if(spx.size > 1) then filtrationValue(spx.dropIndex(1)) else smallest
     def localMin(s : Simplex[Int]): Int =
       if(s.nonEmpty) s.min
       else metricSpace.elements.max+1
@@ -322,7 +322,7 @@ class InorderCofaceSimplexStream(
       if(alpha > alpha0) {
         for
           i <- metricSpace.elements.filter((j) => (localMin(spx) < j) && (j < localMin(spx.tail)))
-          newSpx = spx + i
+          newSpx : Simplex[Int]= spx + i
           if (filtrationValue(newSpx) == alpha)
         yield
           newSpx
@@ -331,7 +331,7 @@ class InorderCofaceSimplexStream(
       // in this case, the edge between first and second is the only full-length edge
       if((alpha > alpha0) && (alpha > alpha1) && (spx.size > 1)) {
         for 
-          i <- metricSpace.elements.filter((j) => (localMin(spx.tail) < j) && (j < localMin(spx.tail.tail)))
+          i <- metricSpace.elements.filter((j) => (localMin(spx.tail) < j) && (j < localMin(spx.drop(2))))
           if (spx.map((j) => metricSpace.distance(i,j)).max < alpha)
         yield
           spx + i

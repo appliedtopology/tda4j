@@ -331,7 +331,7 @@ class RipserStreamOf[VertexT: Ordering](
     rs.iterator.map(s => s.map(v => vertices(v)))
 
   override def filtrationValue: PartialFunction[Simplex[VertexT], Double] = { spx =>
-    val indices: SortedSet[Int] = spx.map(vertices.indexOf)
+    val indices: Simplex[Int] = spx.map(vertices.indexOf)
     rs.filtrationValue(indices)
   }
 }

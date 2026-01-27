@@ -16,10 +16,18 @@ trait Cell extends HasDimension:
   extension (self : Self)
     def boundary[CoefficientT : Field] : Chain[Self, CoefficientT]
 
+trait Cocell extends HasDimension:
+  type Self
+  extension (self : Self)
+    def coboundary[CoefficientT : Field] : Chain[Self, CoefficientT]
+
 trait OrderedCell extends Cell { type Self : Ordering as ordering }
+
+trait OrderedCocell extends Cocell { type Self : Ordering as ordering }
 
 given [CellT : OrderedCell as oCell] => Ordering[CellT] = oCell.ordering
 
+given [CocellT : OrderedCocell as oCocell] => Ordering[CocellT] = oCocell.ordering
 
 /** Trait that defines what it means to have an ordered basis
   */

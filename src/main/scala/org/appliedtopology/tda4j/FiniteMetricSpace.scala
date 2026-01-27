@@ -81,14 +81,14 @@ object FiniteMetricSpace {
 /**
  * Wrapper class to make any metricspace into a metricspace defined on indices 0 through `metricSpace.size`.
  * This way, code can assume that the index set is contiguous.
- * 
+ *
  * @param metricSpace Wrapped metric space
  * @tparam VertexT
  *   Type of the vertex indices for the wrapped metric space
  */
 class IntMetricSpace[VertexT](val metricSpace: FiniteMetricSpace[VertexT]) extends FiniteMetricSpace[Int] {
   override def distance(x: Int, y: Int): Double =
-    metricSpace.distance(metricSpace.elements(x), metricSpace.elements(y))
+    metricSpace.distance(metricSpace.elements.toIndexedSeq(x), metricSpace.elements.toIndexedSeq(y))
 
   override def contains(x: Int): Boolean = (x < metricSpace.size) && (0 <= x)
 

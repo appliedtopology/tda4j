@@ -240,7 +240,7 @@ class ExpandList[VertexT: Ordering, KeyT](
   */
 class SymmetricZomorodianIncremental[VertexT: Ordering, KeyT](
   val symmetry: SymmetryGroup[KeyT, VertexT]
-) extends CliqueFinder[VertexT] {
+)  {
   self =>
   val className = "SymmetricZomorodianIncremental"
 
@@ -266,34 +266,34 @@ class SymmetricZomorodianIncremental[VertexT: Ordering, KeyT](
     *   Maximum homological dimension to consider.
     * @return
     */
-  override def apply(
+   def apply(
     metricSpace: FiniteMetricSpace[VertexT],
     maxFiltrationValue: Double,
     maxDimension: Int
   ): Seq[Simplex[VertexT]] = {
-    val edges = CliqueFinder.weightedEdges(metricSpace, maxFiltrationValue)
+    val edges = ???
 
     def lowerNeighbors(v: VertexT): SortedSet[VertexT] =
-      edges.get(v).neighbors.map(_.toOuter).filter(_ < v).to(SortedSet)
+      ??? //edges.get(v).neighbors.map(_.toOuter).filter(_ < v).to(SortedSet)
 
     given Ordering[Simplex[VertexT]] =
-      CliqueFinder.simplexOrdering(metricSpace)
+      Ordering.by(FiniteMetricSpace.MaximumDistanceFiltrationValue[VertexT](metricSpace)).orElse(simplexOrdering)
 
     // val V = mutable.SortedSet[Simplex[VertexT]]()
     val tasks = mutable.Stack[(SortedSet[VertexT], SortedSet[VertexT])]()
     val representatives = mutable.SortedSet[Simplex[VertexT]]()
 
-    edges.nodes
-      .map(_.toOuter)
-      .foreach(u => tasks.push((SortedSet[VertexT](u), lowerNeighbors(u))))
+//    edges.nodes
+//      .map(_.toOuter)
+//      .foreach(u => tasks.push((SortedSet[VertexT](u), lowerNeighbors(u))))
 
     while (tasks.nonEmpty) {
       val task = tasks.pop()
       val tau = task._1
       val N = task._2
-      val simplex : Simplex[VertexT] = tau
+      val simplex : Simplex[VertexT] = Simplex.from(tau.toSeq)
       if (symmetry.isRepresentative(simplex)) {
-        representatives += tau
+        representatives += simplex
       }
       if (tau.size <= maxDimension) {
         N.foreach { v =>

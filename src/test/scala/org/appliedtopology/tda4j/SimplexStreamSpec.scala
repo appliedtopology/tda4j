@@ -46,7 +46,7 @@ class SimplexStreamSpec extends mutable.Specification with org.specs2.ScalaCheck
         cmutable.Set(Simplex())
       simplexStream.iterator.foreach { spx =>
         seen += spx
-        spx.subsets()
+        spx.toSet.subsets()
           .foreach(face => seen must contain(face))
       }
     }
@@ -84,7 +84,7 @@ class SimplexStreamSpec extends mutable.Specification with org.specs2.ScalaCheck
         cmutable.Set(Simplex())
       sortedSimplexSeq.foreach { spx =>
         seen += spx
-        spx.subsets()
+        spx.toSet.subsets()
           .foreach(face => seen must contain(face))
       }
     }

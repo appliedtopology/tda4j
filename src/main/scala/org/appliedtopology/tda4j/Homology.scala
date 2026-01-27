@@ -167,14 +167,15 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
     // secondly, we can read off homology completely from a minimal spanning tree
     val kruskal = new Kruskal[Simplex[VertexT]](
       cycles.keys.toSeq,
-      { (x: Simplex[VertexT], y: Simplex[VertexT]) => stream.filtrationValue(x ++ y) }
+      { (x: Simplex[VertexT], y: Simplex[VertexT]) =>
+        stream.filtrationValue(x | y) }
     )(using stream.filtrationOrdering)
 
     kruskal.mstIterator.foreach { (src, tgt) =>
-      val edge: Simplex[VertexT] = src ++ tgt
+      val edge: Simplex[VertexT] = src | tgt
 
       // the edge src -- tgt will connect src to tgt thus removing one of the cycles
-      val dEdge = edge.boundary
+      val dEdge : Chain[Simplex[VertexT],CoefficientT] = edge.boundary
       val dyingVertex = dEdge.leadingCell.get
       boundaries.addOne(dEdge.leadingCell.get -> dEdge)
       coboundaries.addOne(dyingVertex, dEdge)
@@ -184,10 +185,10 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
     }
 
     kruskal.cyclesIterator.foreach { (src, tgt) =>
-      val edge: Simplex[VertexT] = src ++ tgt
+      val edge: Simplex[VertexT] = src | tgt
 
       // the edge src -- tgt will connect src to tgt thus closing a loop
-      val dEdge = edge.boundary
+      val dEdge : Chain[Simplex[VertexT], CoefficientT] = edge.boundary
       // TODO is it worth it to have a more complex UnionFind that allows us to get the entire path along the MST?
       val (reduced, reductionLog): (Chain[Simplex[VertexT], CoefficientT], Chain[Simplex[VertexT], CoefficientT]) =
         Chain.reduceBy(dEdge, boundaries, Chain.empty)
@@ -270,4 +271,226 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
       Iterator.empty.buffered,
       mutable.Map.empty
     )
+
+/*
+class RipserHomology[CoefficientT: Field](metricSpace: FiniteMetricSpace[Int]):
+  val sparseMetricSpace = SparseMetricSpace(metricSpace, metricSpace.minimumEnclosingRadius)
+
+  val cofaceStream: EnumeratingCofaceSimplexStream = EnumeratingCofaceSimplexStream(sparseMetricSpace)
+
+  given (Simplex[Int] is OrderedCell) = Simplex_is_OrderedCell[Int](cofaceStream.filtrationOrdering.orElse(simplexOrdering))
+
+  case class Bar(dim: Int, birth: Double, death: Double)
+
+  val barcodes: mutable.Map[Int, List[Bar]] = mutable.Map.empty
+
+  val cocycleMaps : mutable.Map[Int, mutable.Map[Simplex[Int], Chain[Simplex[Int],CoefficientT]]] = mutable.Map.empty
+  val coboundaryMaps : mutable.Map[Int, mutable.Map[Simplex[Int], Chain[Simplex[Int],CoefficientT]]] = mutable.Map.empty
+
+  lazy val kruskal = Kruskal(sparseMetricSpace)
+
+  @tailrec
+  private def reducingCycles(
+                      reducedCycles: Map[Simplex[Int], Chain[Simplex[Int], CoefficientT]],
+                      unprocessedCycles: List[Chain[Simplex[Int], CoefficientT]],
+                      bailout: Int = 0
+                    ): Map[Simplex[Int], Chain[Simplex[Int], CoefficientT]] =
+    if (bailout > 1000) {
+      println(s"Bailing out, $bailout\n${unprocessedCycles(0)}")
+      reducedCycles
+    }
+    else unprocessedCycles match {
+      case (z :: rest) => {
+        if (z.isZero())
+          reducingCycles(reducedCycles, rest, bailout + 1)
+        else {
+          println(s"Reducing... $z")
+          val sigma = z.leadingCell.get
+          if (reducedCycles.contains(sigma)) {
+            val z0 = reducedCycles(sigma)
+            val z1 = z - (z0 <* (z.leadingCoefficient / z0.leadingCoefficient))
+            z1.collapseAll()
+            reducingCycles(reducedCycles, z1 :: rest, bailout + 1)
+          } else {
+            z.collapseAll()
+            val zs = z.items.flatMap { (sc) =>
+              val (s, c) = sc
+              if (reducedCycles.contains(s)) {
+                val w = reducedCycles(s)
+                Some(w <* (-c / w.leadingCoefficient))
+              } else None
+            }
+            val zred = zs.foldLeft(z)(_ + _)
+            zred.collapseAll()
+            reducingCycles(reducedCycles.updated(zred.leadingCell.get, zred), rest, bailout + 1)
+          }
+        }
+      }
+      case _ => reducedCycles
+    }
+
+  def computeNextBarcode(): List[Bar] = {
+    def cofacets(spx: Simplex[Int]): List[Chain[Simplex[Int], CoefficientT]] = {
+      val c1 : List[(Simplex[Int], Int)] = metricSpace
+        .elements
+        .flatMap((x) => if spx.contains(x) then None else Some((spx.incl(x), spx.count(_ < x))))
+        .toList
+        .sortBy((item) => cofaceStream.filtrationValue(item._1))
+
+      c1.map { (item) =>
+          val (w, pos) = item
+          (pos % 2) match {
+            case 0 => Chain(w)
+            case 1 => -Chain(w)
+          }
+        }
+        .toList
+    }
+    if barcodes.isEmpty then // start with dim 0
+      barcodes(0) = (for (i, j) <- kruskal.mstIterator
+      yield Bar(0, 0, metricSpace.distance(i, j))).toList.prepended(Bar(0, 0, Double.PositiveInfinity))
+      barcodes(0)
+    else
+      if (barcodes.keySet.max == 0) {
+        // using the cycles iterator implicitly already skips all the skippable 1-simplices
+        // _because_ we're already avoiding the entire minimum spanning tree
+        // everything that remains creates a 1-cocycle
+        val cocycles = kruskal.cyclesIterator.toList.map((e) => Chain(∆(e._1, e._2)))
+        
+        val cocycleMap: mutable.Map[Simplex[Int], Chain[Simplex[Int], CoefficientT]] =
+          mutable.Map.from(cocycles.flatMap((ch) => ch.leadingCell.map((c) => c -> ch)))
+        val coboundaryMap: mutable.Map[Simplex[Int], Chain[Simplex[Int], CoefficientT]] = mutable.Map.empty
+
+        cocycleMaps(1) = cocycleMap
+        coboundaryMaps(1) = coboundaryMap
+        val nextCocycles: mutable.Map[Simplex[Int], Chain[Simplex[Int], CoefficientT]] = mutable.Map.empty
+        cocycleMaps(2) = nextCocycles
+      }
+      val d = barcodes.keySet.max+1
+      val cocycles : List[Chain[Simplex[Int], CoefficientT]] = cocycleMaps(d).values.toList
+      val skippable: List[Simplex[Int]] = coboundaryMaps.getOrElseUpdate(d, mutable.Map.empty).values.flatMap(_.leadingCell).toList
+
+      val cocycleMap = cocycleMaps.getOrElseUpdate(d, mutable.Map.empty)
+      val coboundaryMap = coboundaryMaps.getOrElseUpdate(d, mutable.Map.empty)
+      val nextCocycles = cocycleMaps.getOrElseUpdate(d+1, mutable.Map.empty)
+      val currentBarcode: mutable.ArrayDeque[Bar] = mutable.ArrayDeque.empty
+
+      for cocycle <- cocycles do
+        val spx : Simplex[Int] = cocycle.leadingCell.get
+        val cofacetIterator = CofacetIterator(spx, sparseMetricSpace)
+        // TODO Check with Ulrich Bauer carefully that this is the right thing to check
+        if (cofacetIterator.apparentVertex.exists(w => !spx.exists(v => v > w))) {
+          given (Chain[Simplex[Int], CoefficientT] is RingModule{type R = CoefficientT}) = summon[Chain[Simplex[Int], CoefficientT] is RingModule{type R = CoefficientT}]
+          val cofacets : Iterator[Chain[Simplex[Int], CoefficientT]] = cofacetIterator.map(w => spx.count(_<w) % 2 match {
+            case 0 => Chain(spx+w)
+            case 1 => -Chain(spx+w)
+          })
+          val cofacetHead = cofacets.next()
+          var coboundary = cofacets.foldLeft(cofacetHead)(_ + _)
+          coboundary.collapseAll()
+          val cancellations = for
+            (z, c) <- coboundary.items
+            if coboundaryMap.contains(z)
+            dz = coboundaryMap(z)
+          yield
+            dz <* (-c / dz.leadingCoefficient)
+          val reduced = cancellations.foldLeft(coboundary)(_ + _)
+          if reduced.isZero() then // new coboundary is a coboundary; create a cocycle
+            val newCocycleItems = for
+              (z,c) <- coboundary.items
+              if coboundaryMap.contains(z)
+            yield
+              Chain(z) <* (-c/coboundaryMap(z).leadingCoefficient)
+            val newCocycle = newCocycleItems.tail.foldLeft(newCocycleItems.head)(_+_)
+            if (!newCocycle.isZero())
+              nextCocycles(newCocycle.leadingCell.get) = newCocycle
+          else // new coboundary cobounds cocycle
+            cocycleMap.remove(cocycle.leadingCell.get)
+            currentBarcode.addOne(
+              Bar(cocycle.leadingCell.get.dim,
+                cofaceStream.filtrationValue(cocycle.leadingCell.get),
+                cofaceStream.filtrationValue(reduced.leadingCell.get)))
+            coboundaryMap(reduced.leadingCell.get) = reduced
+        }
+      barcodes(d) = currentBarcode.toList
+      barcodes(d)
+  }
+
+
+def computePersistentHomology[Vertex, Filtration, CoefficientT: Field](
+                                                                        simplexStream: SimplexStream[Vertex, Filtration]
+                                                                      ): (
+  mutable.Map[Simplex[Vertex], Chain[Simplex[Vertex], CoefficientT]],
+    mutable.Map[Simplex[Vertex], Chain[Simplex[Vertex], CoefficientT]]
+  ) = {
+
+  // Initialize two mutable structures to hold cycles and boundaries
+  val cycles: mutable.Map[Simplex[Vertex], Chain[Simplex[Vertex], CoefficientT]] = mutable.Map.empty
+
+  // Use a Map to track boundaries, associating each simplex with its generated boundary chain
+  val boundaries: mutable.Map[Simplex[Vertex], Chain[Simplex[Vertex], CoefficientT]] = mutable.Map.empty
+
+  // Process each simplex in the simplex stream
+  for (simplex <- simplexStream) {
+    val boundary = simplex.boundary() // Compute the boundary of the simplex
+    var activeChain = boundary.collapseAll() // Simplify the boundary chain
+
+    // Map to track reduction coefficients and the simplices associated with each boundary chain
+    val reductionCoefficients = mutable.Map[Simplex[Vertex], CoefficientT]()
+
+    // Step 1: Reduce activeChain using the boundary chains
+    for ((boundarySimplex, boundaryChain) <- boundaries) {
+      val leadingCell = boundaryChain.leadingCell
+      if (leadingCell.isDefined && activeChain.leadingCell.contains(leadingCell.get)) {
+        val boundaryLeading = boundaryChain.leadingCoefficient
+        val activeLeading = activeChain.leadingCoefficient
+        val coef = activeLeading / boundaryLeading
+
+        // Reduce the activeChain by the boundary chain
+        activeChain = activeChain - (boundaryChain <* coef)
+
+        // Track the simplex that generated the boundary chain and the coefficient used
+        reductionCoefficients(boundarySimplex) = coef
+      }
+    }
+
+    // Step 2: Check if the activeChain is zero (a boundary)
+    if (activeChain.isZero) {
+      // New boundary generated by this simplex
+      val newBoundaryChain = reductionCoefficients.foldLeft(Chain(simplex)) { (chain, entry) =>
+        val (boundarySimplex, coef) = entry
+        chain - (Chain(boundarySimplex) <* coef) // Subtract scaled boundary-contributing simplices
+      }
+      boundaries(simplex) = newBoundaryChain
+    } else {
+      // Step 3: Reduce activeChain using cycles and track reduction coefficients
+      val cycleReductionCoefficients = mutable.Map[Simplex[Vertex], CoefficientT]()
+      for ((leadingSimplex, cycleChain) <- cycles) {
+        val cycleLeadingCell = cycleChain.leadingCell
+        if (cycleLeadingCell.isDefined && activeChain.leadingCell.contains(cycleLeadingCell.get)) {
+          val coef = activeChain.leadingCoefficient / cycleChain.leadingCoefficient
+          cycleReductionCoefficients(leadingSimplex) = coef
+          activeChain = activeChain - (cycleChain <* coef)
+        }
+      }
+
+      // Track and manage the cycle and boundary sets
+      if (activeChain.isZero) {
+        // Among cycles used in reduction, pick the one with the most recently occurring leading cell
+        val mostRecent = cycleReductionCoefficients.keys
+          .maxByOption(simplex => cycles.keysIterator.indexOf(simplex))
+        mostRecent.foreach { leadingSimplex =>
+          val movedCycle = cycles.remove(leadingSimplex).get
+          boundaries(leadingSimplex) = movedCycle
+        }
+      } else {
+        // Add the remaining (non-zero) active chain as a new cycle
+        val newCycle = Chain(simplex) + activeChain
+        cycles(simplex) = newCycle
+      }
+    }
+  }
+
+  (cycles, boundaries)
 }
+    */

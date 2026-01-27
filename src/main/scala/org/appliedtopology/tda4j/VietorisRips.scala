@@ -18,8 +18,8 @@ case class SimplexEdge(simplex : Simplex[Int], edge: Simplex[Int], diameter: Dou
 object SimplexEdge:
   def from(simplex : Simplex[Int])(using metricSpace : FiniteMetricSpace[Int]) = {
     val edges = for
-      i <- simplex
-      j <- simplex
+      i <- simplex.toSortedSet
+      j <- simplex.toSortedSet
       if(i > j)
     yield
       (metricSpace.distance(i,j),i,j)
