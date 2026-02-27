@@ -3,8 +3,6 @@ package org.appliedtopology.tda4s
 import scala.collection.mutable
 import scala.util.Sorting
 
-type WeightedSimplex = (Simplex, Double)
-
 trait VietorisRipsComplexGenerator(val metricSpace: MetricSpace[Int]) {
   /**
    * Generate the Vietoris-Rips simplices for a given dimension, in filtration order.
@@ -67,7 +65,7 @@ class MemoryEfficientVietorisRipsComplex(metricSpace: MetricSpace[Int]) extends 
   {
     val edges = mutable.ArrayBuffer[WeightedSimplex]()
     val visited = mutable.Set[Int]()
-    val pq = mutable.PriorityQueue.empty[(Double, Int, Int)](Ordering.by(-_._1)) // Min-heap based on edge length
+    val pq = mutable.PriorityQueue.empty[(Double, Int, Int)](using Ordering.by(-_._1)) // Min-heap based on edge length
 
     val vertices = mutable.ArrayBuffer.from(metricSpace.elements)
     if(vertices.size < 2) Seq() else {

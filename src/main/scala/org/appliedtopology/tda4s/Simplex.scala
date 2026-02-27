@@ -18,3 +18,5 @@ given Simplex is TopologicalCell = new TopologicalCell:
       face -> sign
     }
     MapFormalLinearCombination(terms.toMap)
+
+type WeightedSimplex = (Simplex, Double)

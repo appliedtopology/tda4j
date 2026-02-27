@@ -1,4 +1,4 @@
-   ThisBuild / scalaVersion := "3.6.4" // Matches your scala.build version
+   ThisBuild / scalaVersion := "3.8.2" // Matches your scala.build version
    ThisBuild / scalacOptions ++= Seq("-language:experimental.modularity") // Compiler options
 
    lazy val root = (project in file("."))
