@@ -1,0 +1,19 @@
+name: Docs
+
+on:
+  push:
+    branches:
+      - tda4s
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    if: github.ref != 'refs/heads/gh-pages' && github.ref != 'gh-pages'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ts-graphviz/setup-graphviz@v2
+      - name: Compile and publish docs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PAGES_PUBLISH_FORCE_PUSH: "Updating webpages."
+        run: sbt makeSite publishToGitHubPages

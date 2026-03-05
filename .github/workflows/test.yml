@@ -1,0 +1,19 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - tda4s
+  pull_request:
+    branches:
+      - tda4s
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run tests
+        run: sbt clean test
+      - name: Binary Compatibility Checks
+        run: sbt mimaReportBinaryIssues
