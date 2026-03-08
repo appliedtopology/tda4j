@@ -1,20 +1,16 @@
-# TDA4S: Topological Data Analysis for Scala
+[![test](https://github.com/appliedtopology/tda4j/actions/workflows/test.yml/badge.svg?branch=scala)](https://github.com/appliedtopology/tda4j/actions)
+[![lint](https://github.com/appliedtopology/tda4j/actions/workflows/lint.yml/badge.svg?branch=scala)](https://github.com/appliedtopology/tda4j/actions)
+[![docs](https://github.com/appliedtopology/tda4j/actions/workflows/docs.yml/badge.svg?branch=scala)](https://github.com/appliedtopology/tda4j/actions)
 
-Welcome to **TDA4S**, a Scala library for advanced **Topological Data Analysis (TDA)**.
 
-## Features
-- Efficient TDA algorithms
-- Support for simplicial complexes, filtered complexes, and persistent homology
-- Cross-platform support: JVM, Scala.js, Scala Native
-- Property-based testing using **ScalaCheck**
+# TDA4j
 
-## Getting Started
-1. Clone the repository.
-2. Run the application:
-   ```bash
-   scala-cli run .
-   ```
-3. Test the library:
-   ```bash
-   scala-cli test
-   ```
+## Persistent Homology and Topological Data Analysis Library 
+
+
+The `TDA4j` library implements persistent homology and related techniques from computational and applied topology, in a library designed for ease of use, ease of access from Matlab and java-based systems, and ease of extensions for further research projects and approaches.
+
+The library is based on previous libraries from the Computational Topology workgroup at Stanford University.
+
+For persistent homology and its capabilities, we recommend the survey article [Topology and Data](http://www.ams.org/journals/bull/2009-46-02/S0273-0979-09-01249-X/S0273-0979-09-01249-X.pdf) by Gunnar Carlsson.
+
