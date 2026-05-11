@@ -144,6 +144,109 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, Filtratio
       mutable.ArrayDeque.empty
     ) // torsion part of barcode
 
+class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
+  val chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]
+  import chainRM.*
+
+  case class HomologyState(
+    boundaries: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]],
+    stream: StratifiedCellStream[Simplex[VertexT], Double],
+    var current: Double,
+    var currentDim: Int,
+    var currentIterator: collection.BufferedIterator[Simplex[VertexT]],
+    barcode: mutable.Map[Int, immutable.Queue[(Double, Double, Chain[Simplex[VertexT], CoefficientT])]]
+  ):
+
+    given Ordering[Simplex[VertexT]] = stream.filtrationOrdering
+
+    // top-down state: pivots already claimed by some higher-dim sigma, and "so-far essential" classes
+    val cleared: mutable.Set[Simplex[VertexT]] = mutable.Set.empty
+    val essentialSimplices: mutable.Set[Simplex[VertexT]] = mutable.Set.empty
+
+    // start from max dimension instead for clearing's sake
+    val maxDim: Int =
+      var d = 0
+      while stream.iterateDimension.isDefinedAt(d + 1) do d += 1
+      d
+    currentDim = maxDim
+    currentIterator = stream.iterateDimension.applyOrElse(maxDim, _ => Iterator.empty).buffered
+    current = Double.PositiveInfinity
+
+    def diagramAt(f: Double): List[(Int, Double, Double)] =
+      advanceAll()
+
+      val pairs: List[(Int, Double, Double)] =
+        barcode.toList.flatMap { case (dim, bars) =>
+          bars.toList.collect {
+            case (lower, upper, _) if lower <= f => (dim, lower, upper min f)
+          }
+        }
+
+      val essentialBars: List[(Int, Double, Double)] =
+        essentialSimplices.toList.map { sigma =>
+          val lower =
+            stream.filtrationValue.applyOrElse(sigma, (_: Simplex[VertexT]) => Double.NegativeInfinity)
+          (sigma.dim, lower, Double.PositiveInfinity)
+        }
+
+      pairs ++ essentialBars
+
+    def advanceOne(): Unit =
+      if currentIterator.hasNext then
+        val sigma = currentIterator.next()
+        if cleared.contains(sigma) then
+          // some higher-dim simplex already paired sigma as its pivot — nothing to do
+          current = stream.filtrationValue.lift(sigma).getOrElse(stream.smallest)
+        else
+          // rebuild the boundary chain under the local filtration ordering — the chain
+          // returned by sigma.boundary is ordered by Simplex.scala's default (lex) ordering,
+          // not stream.filtrationOrdering, which gives wrong pivots in top-down.
+          val dsigma: Chain[Simplex[VertexT], CoefficientT] =
+            Chain.from(sigma.boundary[CoefficientT].items)
+          val (dsigmaReduced, _) = Chain.reduceBy(dsigma, boundaries, Chain.empty)
+          if dsigmaReduced.isZero() then
+            // sigma is positive and unpaired so far — essential class born at filtration(sigma)
+            essentialSimplices += sigma
+          else
+            // sigma is negative — pairs with pivot of reduced boundary (dim sigma.dim - 1)
+            val pivot = dsigmaReduced.leadingCell.get
+            boundaries(pivot) = dsigmaReduced
+            cleared += pivot
+            val lower =
+              stream.filtrationValue.applyOrElse(pivot, (_: Simplex[VertexT]) => Double.NegativeInfinity)
+            val upper =
+              stream.filtrationValue.applyOrElse(sigma, (_: Simplex[VertexT]) => Double.PositiveInfinity)
+            val barDim = pivot.dim
+            barcode(barDim) =
+              barcode.getOrElse(barDim, immutable.Queue.empty)
+                .appended((lower, upper, dsigmaReduced))
+          current = stream.filtrationValue.lift(sigma).getOrElse(stream.smallest)
+      else
+        currentDim -= 1
+        currentIterator = stream.iterateDimension
+          .applyOrElse(currentDim, _ => Iterator.empty)
+          .buffered
+        current = Double.PositiveInfinity
+
+    def advanceTo(dim: Int, f: Double = Double.PositiveInfinity): Unit =
+      while currentIterator.hasNext &&
+        currentDim >= dim &&
+        f > current
+      do advanceOne()
+
+    def advanceAll(): Unit =
+      while currentDim >= 0 do advanceOne()
+
+  def persistentHomology(stream: => StratifiedCellStream[Simplex[VertexT], Double]): HomologyState =
+    HomologyState(
+      mutable.Map.empty,
+      stream,
+      stream.smallest,
+      0,
+      Iterator.empty.buffered,
+      mutable.Map.empty
+    )
+
 class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Field]:
   case class HomologyState(
     cycles: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]],
