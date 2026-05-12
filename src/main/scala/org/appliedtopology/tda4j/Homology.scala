@@ -181,6 +181,11 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
     val cellIndex: Map[Simplex[VertexT], Int] = allCells.zipWithIndex.toMap
     val chunkSize: Int = math.max(1, math.sqrt(allCells.size.toDouble).floor.toInt)
 
+    // killer column index for each local pivot
+    val killer: mutable.Map[Simplex[VertexT], Simplex[VertexT]] = mutable.Map.empty
+    // R supplies R_k for unpaired column k, to be used in marking active entries
+    val R: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]] = mutable.Map.empty
+
     def diagramAt(f: Double): List[(Int, Double, Double)] =
       advanceAll()
 
@@ -213,12 +218,14 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
         if dsigmaReduced.isZero() then
           essentialSimplices += sigma
         else
+          R(sigma) = dsigmaReduced
           val pivot = dsigmaReduced.leadingCell.get
           // only record when the pivot is local (i.e. stop didn't fire)
           if !stop(pivot) then
             boundaries(pivot) = dsigmaReduced
             cleared += pivot
             paired += sigma
+            killer(pivot) = sigma
             // if the pivot was previously marked essential (e.g. by an earlier local pass),
             // promote it to a paired class now
             essentialSimplices -= pivot
@@ -230,6 +237,32 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
             barcode(barDim) =
               barcode.getOrElse(barDim, immutable.Queue.empty)
                 .appended((lower, upper, dsigmaReduced))
+
+    def markActiveEntries(): mutable.Map[Simplex[VertexT], Boolean] =
+      val active: mutable.Map[Simplex[VertexT], Boolean] = mutable.Map.empty
+
+      def markColumn(k: Simplex[VertexT]): Boolean =
+        active.get(k) match
+          case Some(b) => b
+          case None =>
+            active(k) = false
+            var isActive = false
+            val Rk = R.getOrElse(k, Chain.empty)
+            Rk.items.iterator.takeWhile(_ => !isActive).foreach { case (i, _) =>
+              if !cleared.contains(i) && !paired.contains(i) then
+                isActive = true
+              // i is unpaired (global)
+              else if cleared.contains(i) then
+                killer.get(i).foreach { j =>
+                  if j != k && markColumn(j) then isActive = true
+                }
+              // else i is paired (negative side of local pair)
+            }
+            active(k) = isActive
+            isActive
+
+      for k <- R.keys do markColumn(k)
+      active
 
     def advanceAll(): Unit =
       val n: Int = allCells.size
@@ -255,6 +288,9 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
               sigma => cellIndex.getOrElse(sigma, -1) < floorIdx
             for sigma <- cellsByDimChunk(delta)(b) do
               processCell(sigma, stop)
+
+      // Algorithm 3: mark_active_entries from clear-and-compress paper
+      val active = markActiveEntries()
 
       // Global fallback: pick up pairs that span more than the local horizon.
       // Stand-in for Algorithm 5's compress + global reduction.
