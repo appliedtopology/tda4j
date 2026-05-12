@@ -152,15 +152,17 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
     boundaries: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]],
     stream: StratifiedCellStream[Simplex[VertexT], Double],
     var current: Double,
-    var currentDim: Int,
-    var currentIterator: collection.BufferedIterator[Simplex[VertexT]],
     barcode: mutable.Map[Int, immutable.Queue[(Double, Double, Chain[Simplex[VertexT], CoefficientT])]]
   ):
 
     given Ordering[Simplex[VertexT]] = stream.filtrationOrdering
 
-    // top-down state: pivots already claimed by some higher-dim sigma, and "so-far essential" classes
+    // top-down state:
+    //   cleared ------------- simplices paired as pivots (positive side); their column is implicitly zero
+    //   paired -------------- simplices paired as σ (negative side); already recorded a bar
+    //   essentialSimplices -- so-far unpaired classes
     val cleared: mutable.Set[Simplex[VertexT]] = mutable.Set.empty
+    val paired: mutable.Set[Simplex[VertexT]] = mutable.Set.empty
     val essentialSimplices: mutable.Set[Simplex[VertexT]] = mutable.Set.empty
 
     // start from max dimension instead for clearing's sake
@@ -168,9 +170,16 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
       var d = 0
       while stream.iterateDimension.isDefinedAt(d + 1) do d += 1
       d
-    currentDim = maxDim
-    currentIterator = stream.iterateDimension.applyOrElse(maxDim, _ => Iterator.empty).buffered
-    current = Double.PositiveInfinity
+
+    // build index map to support chunk boundary calculation.
+    // Note: stream.iterator (the default StratifiedCellStream impl) infinite-loops because it
+    // filters Iterator.from(0) with a finite predicate. Walk dimensions explicitly instead.
+    val allCells: Vector[Simplex[VertexT]] =
+      0.to(maxDim).iterator.flatMap { d =>
+        stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty)
+      }.toVector
+    val cellIndex: Map[Simplex[VertexT], Int] = allCells.zipWithIndex.toMap
+    val chunkSize: Int = math.max(1, math.sqrt(allCells.size.toDouble).floor.toInt)
 
     def diagramAt(f: Double): List[(Int, Double, Double)] =
       advanceAll()
@@ -191,27 +200,28 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
 
       pairs ++ essentialBars
 
-    def advanceOne(): Unit =
-      if currentIterator.hasNext then
-        val sigma = currentIterator.next()
-        if cleared.contains(sigma) then
-          // some higher-dim simplex already paired sigma as its pivot — nothing to do
-          current = stream.filtrationValue.lift(sigma).getOrElse(stream.smallest)
+    def processCell(sigma: Simplex[VertexT], stop: Simplex[VertexT] => Boolean): Unit =
+      if cleared.contains(sigma) || paired.contains(sigma) then ()
+      else
+        // rebuild the boundary chain under the local filtration ordering — the chain
+        // returned by sigma.boundary is ordered by Simplex.scala's default (lex) ordering,
+        // not stream.filtrationOrdering, which gives wrong pivots in top-down.
+        val dsigma: Chain[Simplex[VertexT], CoefficientT] =
+          Chain.from(sigma.boundary[CoefficientT].items)
+        val (dsigmaReduced, _) =
+          Chain.reduceByUntil(dsigma, boundaries, Chain.empty, stop)
+        if dsigmaReduced.isZero() then
+          essentialSimplices += sigma
         else
-          // rebuild the boundary chain under the local filtration ordering — the chain
-          // returned by sigma.boundary is ordered by Simplex.scala's default (lex) ordering,
-          // not stream.filtrationOrdering, which gives wrong pivots in top-down.
-          val dsigma: Chain[Simplex[VertexT], CoefficientT] =
-            Chain.from(sigma.boundary[CoefficientT].items)
-          val (dsigmaReduced, _) = Chain.reduceBy(dsigma, boundaries, Chain.empty)
-          if dsigmaReduced.isZero() then
-            // sigma is positive and unpaired so far — essential class born at filtration(sigma)
-            essentialSimplices += sigma
-          else
-            // sigma is negative — pairs with pivot of reduced boundary (dim sigma.dim - 1)
-            val pivot = dsigmaReduced.leadingCell.get
+          val pivot = dsigmaReduced.leadingCell.get
+          // only record when the pivot is local (i.e. stop didn't fire)
+          if !stop(pivot) then
             boundaries(pivot) = dsigmaReduced
             cleared += pivot
+            paired += sigma
+            // if the pivot was previously marked essential (e.g. by an earlier local pass),
+            // promote it to a paired class now
+            essentialSimplices -= pivot
             val lower =
               stream.filtrationValue.applyOrElse(pivot, (_: Simplex[VertexT]) => Double.NegativeInfinity)
             val upper =
@@ -220,30 +230,46 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
             barcode(barDim) =
               barcode.getOrElse(barDim, immutable.Queue.empty)
                 .appended((lower, upper, dsigmaReduced))
-          current = stream.filtrationValue.lift(sigma).getOrElse(stream.smallest)
-      else
-        currentDim -= 1
-        currentIterator = stream.iterateDimension
-          .applyOrElse(currentDim, _ => Iterator.empty)
-          .buffered
-        current = Double.PositiveInfinity
-
-    def advanceTo(dim: Int, f: Double = Double.PositiveInfinity): Unit =
-      while currentIterator.hasNext &&
-        currentDim >= dim &&
-        f > current
-      do advanceOne()
 
     def advanceAll(): Unit =
-      while currentDim >= 0 do advanceOne()
+      val n: Int = allCells.size
+      val m: Int = (n + chunkSize - 1) / chunkSize
+
+      val cellsByDimChunk: Map[Int, IndexedSeq[IndexedSeq[Simplex[VertexT]]]] =
+        0.to(maxDim).map { d =>
+          val atDim =
+            stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty).toVector
+          val chunked: IndexedSeq[IndexedSeq[Simplex[VertexT]]] =
+            0.until(m).map { b =>
+              atDim.filter(s => cellIndex(s) / chunkSize == b)
+            }
+          d -> chunked
+        }.toMap
+
+      // Algorithm 2: local_reduction from clear-and-compress paper
+      for delta <- maxDim.to(0, -1) do
+        for r <- 1.to(2) do
+          for b <- (r - 1).until(m) do // parallelizable!
+            val floorIdx: Int = math.max(0, (b - r + 1) * chunkSize)
+            val stop: Simplex[VertexT] => Boolean =
+              sigma => cellIndex.getOrElse(sigma, -1) < floorIdx
+            for sigma <- cellsByDimChunk(delta)(b) do
+              processCell(sigma, stop)
+
+      // Global fallback: pick up pairs that span more than the local horizon.
+      // Stand-in for Algorithm 5's compress + global reduction.
+      val noStop: Simplex[VertexT] => Boolean = _ => false
+      for delta <- maxDim.to(0, -1) do
+        val cellsAtDim =
+          stream.iterateDimension.applyOrElse(delta, (_: Int) => Iterator.empty).toVector
+        for sigma <- cellsAtDim do
+          processCell(sigma, noStop)
 
   def persistentHomology(stream: => StratifiedCellStream[Simplex[VertexT], Double]): HomologyState =
     HomologyState(
       mutable.Map.empty,
       stream,
       stream.smallest,
-      0,
-      Iterator.empty.buffered,
       mutable.Map.empty
     )
 

@@ -143,6 +143,22 @@ object Chain {
           else (z, reductionLog)
   }
 
+  @tailrec
+  final def reduceByUntil[CellT : Ordering, CoefficientT : Field](z : Chain[CellT, CoefficientT],
+               basis: mutable.Map[CellT, Chain[CellT, CoefficientT]],
+               reductionLog: Chain[CellT, CoefficientT], // want to have a default empty here?
+               stop: CellT => Boolean // stop when the stop function tells you to
+              ): (Chain[CellT, CoefficientT], Chain[CellT, CoefficientT]) =
+      z.leadingCell match {
+        case None => (z, reductionLog)
+        case Some(sigma) =>
+          if stop(sigma) then (z, reductionLog)
+          else if basis.contains(sigma) then
+            val redCoeff = z.leadingCoefficient / basis(sigma).leadingCoefficient
+            reduceByUntil(z - redCoeff ⊠ basis(sigma), basis, reductionLog + redCoeff ⊠ Chain(sigma), stop)
+          else (z, reductionLog)
+  }
+
   given [CellT : Ordering, CoefficientT: Field as fr] => (Chain[CellT, CoefficientT] is RingModule {
     type R = CoefficientT
   }) = new {
