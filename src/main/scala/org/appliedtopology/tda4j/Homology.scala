@@ -185,6 +185,8 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
     val killer: mutable.Map[Simplex[VertexT], Simplex[VertexT]] = mutable.Map.empty
     // R supplies R_k for unpaired column k, to be used in marking active entries
     val R: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]] = mutable.Map.empty
+    // active entries
+    val active: mutable.Map[Simplex[VertexT], Boolean] = mutable.Map.empty
 
     def diagramAt(f: Double): List[(Int, Double, Double)] =
       advanceAll()
@@ -238,8 +240,8 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
               barcode.getOrElse(barDim, immutable.Queue.empty)
                 .appended((lower, upper, dsigmaReduced))
 
-    def markActiveEntries(): mutable.Map[Simplex[VertexT], Boolean] =
-      val active: mutable.Map[Simplex[VertexT], Boolean] = mutable.Map.empty
+    def markActiveEntries(): Unit =
+      active.clear()
 
       def markColumn(k: Simplex[VertexT]): Boolean =
         active.get(k) match
@@ -262,7 +264,21 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
             isActive
 
       for k <- R.keys do markColumn(k)
-      active
+
+    // Algorithm 4: global column compression from clear-and-compress paper
+    def compress(k: Simplex[VertexT]): Unit =
+      val fr = summon[CoefficientT is Field]
+      var Rk: Chain[Simplex[VertexT], CoefficientT] = R.getOrElse(k, Chain.empty)
+      val entries: Seq[(Simplex[VertexT], CoefficientT)] = Rk.items.toSeq.sortBy(_._1)
+      for (l, coeff) <- entries do
+        if cleared.contains(l) || paired.contains(l) then
+          if !active.getOrElse(l, false) then
+            Rk = Rk - coeff ⊠ Chain(l)
+          else
+            killer.get(l).foreach { j =>
+              Rk = Rk + R.getOrElse(j, Chain.empty) // (l,j) is persistence pair
+            }
+      R(k) = Rk
 
     def advanceAll(): Unit =
       val n: Int = allCells.size
@@ -290,7 +306,7 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
               processCell(sigma, stop)
 
       // Algorithm 3: mark_active_entries from clear-and-compress paper
-      val active = markActiveEntries()
+      markActiveEntries()
 
       // Global fallback: pick up pairs that span more than the local horizon.
       // Stand-in for Algorithm 5's compress + global reduction.
