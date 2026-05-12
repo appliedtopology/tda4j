@@ -1,18 +1,11 @@
 package org.appliedtopology.tda4j
 
 import org.specs2.mutable
-import org.specs2.ScalaCheck
 
-class PersistenceInChunksSpec extends mutable.Specification with ScalaCheck {
+class PersistenceInChunksSpec extends mutable.Specification {
   given (Double is Field) = Field.DoubleApproximated(1e-25)
 
-  "Homology of a triangle" >> {
-    given shc: PersistenceInChunksContext[Int, Double] = PersistenceInChunksContext()
-    import shc.{*, given}
-
-    val streamBuilder = ExplicitStreamBuilder[Int, Double]
-    streamBuilder.addAll(List(1, 2, 3).map(i => (0.0, ∆(i))))
-    streamBuilder.addAll(List((1.0, ∆(1, 2)), (2.0, ∆(1, 3)), (3.0, ∆(2, 3)), (4.0, ∆(1, 2, 3))))
+  def explicitToStratifiedCellStream(streamBuilder: ExplicitStreamBuilder[Int, Double]): StratifiedCellStream[Simplex[Int], Double] =
     val rawStream = streamBuilder.result()
     val byDim: Map[Int, Seq[Simplex[Int]]] =
       rawStream.iterator.toSeq.groupBy(_.dim)
@@ -27,6 +20,16 @@ class PersistenceInChunksSpec extends mutable.Specification with ScalaCheck {
           case d if byDim.contains(d) => byDim(d).iterator
         }
       }
+    stream
+
+  "Homology of a triangle" >> {
+    given shc: PersistenceInChunksContext[Int, Double] = PersistenceInChunksContext()
+    import shc.{*, given}
+
+    val streamBuilder = ExplicitStreamBuilder[Int, Double]
+    streamBuilder.addAll(List(1, 2, 3).map(i => (0.0, ∆(i))))
+    streamBuilder.addAll(List((1.0, ∆(1, 2)), (2.0, ∆(1, 3)), (3.0, ∆(2, 3)), (4.0, ∆(1, 2, 3))))
+    val stream = explicitToStratifiedCellStream(streamBuilder)
     val homology = persistentHomology(stream)
     homology.diagramAt(5.0) must containTheSameElementsAs(
       List(
@@ -60,21 +63,7 @@ class PersistenceInChunksSpec extends mutable.Specification with ScalaCheck {
     ))
     streamBuilder.addOne((11.0, ∆(1, 2, 3, 4)))
 
-    val rawStream = streamBuilder.result()
-    val byDim: Map[Int, Seq[Simplex[Int]]] =
-      rawStream.iterator.toSeq.groupBy(_.dim)
-
-    val stream: StratifiedCellStream[Simplex[Int], Double] =
-      new StratifiedCellStream[Simplex[Int], Double] {
-        def filtrationValue = rawStream.filtrationValue
-        def filtrationOrdering = rawStream.filtrationOrdering
-        val smallest = Double.NegativeInfinity
-        var largest = Double.PositiveInfinity
-        def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
-          case d if byDim.contains(d) => byDim(d).iterator
-        }
-      }
-
+    val stream = explicitToStratifiedCellStream(streamBuilder)
     val homology = persistentHomology(stream)
     homology.diagramAt(12.0) must containTheSameElementsAs(
       List(

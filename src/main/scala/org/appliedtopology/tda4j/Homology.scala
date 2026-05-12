@@ -151,7 +151,6 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
   case class HomologyState(
     boundaries: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]],
     stream: StratifiedCellStream[Simplex[VertexT], Double],
-    var current: Double,
     barcode: mutable.Map[Int, immutable.Queue[(Double, Double, Chain[Simplex[VertexT], CoefficientT])]]
   ):
 
@@ -186,7 +185,7 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
     // R supplies R_k for unpaired column k, to be used in marking active entries
     val R: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]] = mutable.Map.empty
     // active entries
-    val active: mutable.Map[Simplex[VertexT], Boolean] = mutable.Map.empty
+    val activeRows: mutable.Map[Simplex[VertexT], Boolean] = mutable.Map.empty
 
     def diagramAt(f: Double): List[(Int, Double, Double)] =
       advanceAll()
@@ -207,6 +206,25 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
 
       pairs ++ essentialBars
 
+    def recordPair(sigma: Simplex[VertexT], dsigmaReduced: Chain[Simplex[VertexT], CoefficientT]): Unit =
+      val pivot = dsigmaReduced.leadingCell.get
+      boundaries(pivot) = dsigmaReduced
+      cleared += pivot
+      paired += sigma
+      killer(pivot) = sigma
+      // if the pivot was previously marked essential (e.g. by an earlier local pass),
+      // promote it to a paired class now
+      essentialSimplices -= pivot
+      essentialSimplices -= sigma
+      val lower =
+        stream.filtrationValue.applyOrElse(pivot, (_: Simplex[VertexT]) => Double.NegativeInfinity)
+      val upper =
+        stream.filtrationValue.applyOrElse(sigma, (_: Simplex[VertexT]) => Double.PositiveInfinity)
+      val barDim = pivot.dim
+      barcode(barDim) =
+        barcode.getOrElse(barDim, immutable.Queue.empty)
+          .appended((lower, upper, dsigmaReduced))
+
     def processCell(sigma: Simplex[VertexT], stop: Simplex[VertexT] => Boolean): Unit =
       if cleared.contains(sigma) || paired.contains(sigma) then ()
       else
@@ -218,67 +236,80 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
         val (dsigmaReduced, _) =
           Chain.reduceByUntil(dsigma, boundaries, Chain.empty, stop)
         if dsigmaReduced.isZero() then
+          R -= sigma
           essentialSimplices += sigma
         else
           R(sigma) = dsigmaReduced
           val pivot = dsigmaReduced.leadingCell.get
           // only record when the pivot is local (i.e. stop didn't fire)
           if !stop(pivot) then
-            boundaries(pivot) = dsigmaReduced
-            cleared += pivot
-            paired += sigma
-            killer(pivot) = sigma
-            // if the pivot was previously marked essential (e.g. by an earlier local pass),
-            // promote it to a paired class now
-            essentialSimplices -= pivot
-            val lower =
-              stream.filtrationValue.applyOrElse(pivot, (_: Simplex[VertexT]) => Double.NegativeInfinity)
-            val upper =
-              stream.filtrationValue.applyOrElse(sigma, (_: Simplex[VertexT]) => Double.PositiveInfinity)
-            val barDim = pivot.dim
-            barcode(barDim) =
-              barcode.getOrElse(barDim, immutable.Queue.empty)
-                .appended((lower, upper, dsigmaReduced))
+            recordPair(sigma, dsigmaReduced)
 
     def markActiveEntries(): Unit =
-      active.clear()
+      activeRows.clear()
+      val activeColumns: mutable.Map[Simplex[VertexT], Boolean] = mutable.Map.empty
 
       def markColumn(k: Simplex[VertexT]): Boolean =
-        active.get(k) match
+        activeColumns.get(k) match
           case Some(b) => b
           case None =>
-            active(k) = false
+            activeColumns(k) = false
             var isActive = false
             val Rk = R.getOrElse(k, Chain.empty)
             Rk.items.iterator.takeWhile(_ => !isActive).foreach { case (i, _) =>
               if !cleared.contains(i) && !paired.contains(i) then
+                activeRows(i) = true
                 isActive = true
               // i is unpaired (global)
               else if cleared.contains(i) then
                 killer.get(i).foreach { j =>
-                  if j != k && markColumn(j) then isActive = true
+                  if j != k && markColumn(j) then
+                    activeRows(i) = true
+                    isActive = true
                 }
               // else i is paired (negative side of local pair)
             }
-            active(k) = isActive
+            activeColumns(k) = isActive
             isActive
 
       for k <- R.keys do markColumn(k)
 
-    // Algorithm 4: global column compression from clear-and-compress paper
+    // Algorithm 4: global column compression from clear-and-compress paper.
+    // The paper writes this over Z/2; over a general field we have to scale the
+    // killer column by the right ratio.
     def compress(k: Simplex[VertexT]): Unit =
       val fr = summon[CoefficientT is Field]
       var Rk: Chain[Simplex[VertexT], CoefficientT] = R.getOrElse(k, Chain.empty)
       val entries: Seq[(Simplex[VertexT], CoefficientT)] = Rk.items.toSeq.sortBy(_._1)
-      for (l, coeff) <- entries do
+      for (l, currentCoeff) <- entries do
         if cleared.contains(l) || paired.contains(l) then
-          if !active.getOrElse(l, false) then
-            Rk = Rk - coeff ⊠ Chain(l)
+          if !activeRows.getOrElse(l, false) then
+            // l is inactive - zero out its entry.
+            Rk = Rk - currentCoeff ⊠ Chain(l)
           else
+            // l is active - add the killer column
             killer.get(l).foreach { j =>
-              Rk = Rk + R.getOrElse(j, Chain.empty) // (l,j) is persistence pair
+              val Rj = R.getOrElse(j, Chain.empty) // (l,j) is persistence pair
+              val redCoeff = fr.divide(currentCoeff, Rj.leadingCoefficient)
+              Rk = Rk - redCoeff ⊠ Rj
             }
       R(k) = Rk
+
+    // Algorithm 5 (lines 9-16): reduce the (now-compressed) global column k and record any pair found.
+    def globalReduce(sigma: Simplex[VertexT]): Unit =
+      if cleared.contains(sigma) || paired.contains(sigma) then return
+      // If R(sigma) was never stored, sigma was locally essential and has nothing to reduce.
+      R.get(sigma) match
+        case None => ()  // stays in essentialSimplices unless a higher-dim sigma globally pairs with it
+        case Some(rSigma) =>
+          val noStop: Simplex[VertexT] => Boolean = _ => false
+          val (dsigmaReduced, _) = Chain.reduceByUntil(rSigma, boundaries, Chain.empty, noStop)
+          R(sigma) = dsigmaReduced
+          if dsigmaReduced.isZero() then
+            R.remove(sigma)
+            essentialSimplices += sigma
+          else
+            recordPair(sigma, dsigmaReduced)
 
     def advanceAll(): Unit =
       val n: Int = allCells.size
@@ -308,20 +339,23 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
       // Algorithm 3: mark_active_entries from clear-and-compress paper
       markActiveEntries()
 
-      // Global fallback: pick up pairs that span more than the local horizon.
-      // Stand-in for Algorithm 5's compress + global reduction.
-      val noStop: Simplex[VertexT] => Boolean = _ => false
+      // Algorithm 5 (Persistence in chunks): per dim top-down, compress unpaired
+      // global columns then reduce them. Clearing keeps positives' columns at zero.
       for delta <- maxDim.to(0, -1) do
         val cellsAtDim =
           stream.iterateDimension.applyOrElse(delta, (_: Int) => Iterator.empty).toVector
+        // step 2: compress unpaired global columns
         for sigma <- cellsAtDim do
-          processCell(sigma, noStop)
+          if !cleared.contains(sigma) && !paired.contains(sigma) && R.contains(sigma) then
+            compress(sigma)
+        // step 3: reduce the compressed global columns and record pairs
+        for sigma <- cellsAtDim do
+          globalReduce(sigma)
 
   def persistentHomology(stream: => StratifiedCellStream[Simplex[VertexT], Double]): HomologyState =
     HomologyState(
       mutable.Map.empty,
       stream,
-      stream.smallest,
       mutable.Map.empty
     )
 
