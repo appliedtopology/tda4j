@@ -315,16 +315,8 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
       val n: Int = allCells.size
       val m: Int = (n + chunkSize - 1) / chunkSize
 
-      val cellsByDimChunk: Map[Int, IndexedSeq[IndexedSeq[Simplex[VertexT]]]] =
-        0.to(maxDim).map { d =>
-          val atDim =
-            stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty).toVector
-          val chunked: IndexedSeq[IndexedSeq[Simplex[VertexT]]] =
-            0.until(m).map { b =>
-              atDim.filter(s => cellIndex(s) / chunkSize == b)
-            }
-          d -> chunked
-        }.toMap
+      val chunks: IndexedSeq[IndexedSeq[Simplex[VertexT]]] =
+        allCells.grouped(chunkSize).toIndexedSeq
 
       // Algorithm 2: local_reduction from clear-and-compress paper
       for delta <- maxDim.to(0, -1) do
@@ -333,7 +325,7 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
             val floorIdx: Int = math.max(0, (b - r + 1) * chunkSize)
             val stop: Simplex[VertexT] => Boolean =
               sigma => cellIndex.getOrElse(sigma, -1) < floorIdx
-            for sigma <- cellsByDimChunk(delta)(b) do
+            for sigma <- chunks(b) if sigma.dim == delta do
               processCell(sigma, stop)
 
       // Algorithm 3: mark_active_entries from clear-and-compress paper
