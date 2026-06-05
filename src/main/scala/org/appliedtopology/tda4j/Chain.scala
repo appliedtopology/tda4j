@@ -14,12 +14,12 @@ trait HasDimension:
 trait Cell extends HasDimension:
   type Self
   extension (self : Self)
-    def boundary[CoefficientT : Field] : Chain[Self, CoefficientT]
+    def boundary[CoefficientT : Field] : Seq[(Self, CoefficientT)]
 
 trait Cocell extends HasDimension:
   type Self
   extension (self : Self)
-    def coboundary[CoefficientT : Field] : Chain[Self, CoefficientT]
+    def coboundary[CoefficientT : Field] : Seq[(Self, CoefficientT)]
 
 trait OrderedCell extends Cell { type Self : Ordering as ordering }
 
@@ -208,16 +208,14 @@ object Chain {
   }
 
   extension [CellT : OrderedCell, CoefficientT : Field] (z : Chain[CellT, CoefficientT])
-    def boundary : Chain[CellT, CoefficientT] =
-      Chain.from(z.entries
+    def boundary : Seq[(CellT, CoefficientT)] =
+      z.entries
         .iterator
         .flatMap { (cellO, coeffO) =>
           cellO
             .boundary[CoefficientT]
-            .entries
             .iterator
             .map { (cellI, coeffI) => (cellI, coeffO * coeffI) }
         }
         .toSeq
-      )
 }

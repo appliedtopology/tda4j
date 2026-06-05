@@ -93,14 +93,12 @@ def Simplex_is_OrderedCell[VertexT](using vtxOrd : Ordering[VertexT])(setOrderin
     override lazy val ordering = setOrdering
     extension (spx: Simplex[VertexT]) {
       override def dim = spx.size - 1
-      override def boundary[CoefficientT: Field as fr]: Chain[Simplex[VertexT],CoefficientT] =
-        if (spx.dim <= 0) Chain()
-        else Chain.from(
-          spx.zipWithIndex
+      override def boundary[CoefficientT: Field as fr]: Seq[(Simplex[VertexT],CoefficientT)] =
+        if (spx.dim <= 0) Seq.empty
+        else spx.zipWithIndex
             .map((vtx, i) => spx.dropIndex(i))
             .toSeq
             .zip(Iterator.unfold(fr.one)(s => Some((s, fr.negate(s)))))
-        )
     }
   }
 given default_Simplex_is_OrderedCell: [VertexT : Ordering] => (Simplex[VertexT] is OrderedCell) =

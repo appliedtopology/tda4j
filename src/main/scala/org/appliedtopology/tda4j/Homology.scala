@@ -90,7 +90,7 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, Filtratio
         val fr = summon[CoefficientT is Field]
         val sigma: CellT = CellIterator.next()
         val dsigma: Chain[CellT, CoefficientT] =
-          sigma.boundary[CoefficientT]: Chain[CellT, CoefficientT]
+          Chain.from(sigma.boundary[CoefficientT])
         val (dsigmaReduced, reduction) = reduceBy(dsigma, boundaries)
         val coboundary = reduction.items.foldRight(fr.negate(fr.one) ⊠ Chain(sigma)) { (next, acc) =>
           val (spx, coeff) = next
@@ -232,7 +232,7 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
         // returned by sigma.boundary is ordered by Simplex.scala's default (lex) ordering,
         // not stream.filtrationOrdering, which gives wrong pivots in top-down.
         val dsigma: Chain[Simplex[VertexT], CoefficientT] =
-          Chain.from(sigma.boundary[CoefficientT].items)
+          Chain.from(sigma.boundary[CoefficientT])
         val (dsigmaReduced, _) =
           Chain.reduceByUntil(dsigma, boundaries, Chain.empty, stop)
         if dsigmaReduced.isZero() then
@@ -382,7 +382,7 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
       val edge: Simplex[VertexT] = src | tgt
 
       // the edge src -- tgt will connect src to tgt thus removing one of the cycles
-      val dEdge : Chain[Simplex[VertexT],CoefficientT] = edge.boundary
+      val dEdge : Chain[Simplex[VertexT],CoefficientT] = Chain.from(edge.boundary)
       val dyingVertex = dEdge.leadingCell.get
       boundaries.addOne(dEdge.leadingCell.get -> dEdge)
       coboundaries.addOne(dyingVertex, dEdge)
@@ -395,7 +395,7 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
       val edge: Simplex[VertexT] = src | tgt
 
       // the edge src -- tgt will connect src to tgt thus closing a loop
-      val dEdge : Chain[Simplex[VertexT], CoefficientT] = edge.boundary
+      val dEdge : Chain[Simplex[VertexT], CoefficientT] = Chain.from(edge.boundary)
       // TODO is it worth it to have a more complex UnionFind that allows us to get the entire path along the MST?
       val (reduced, reductionLog): (Chain[Simplex[VertexT], CoefficientT], Chain[Simplex[VertexT], CoefficientT]) =
         Chain.reduceBy(dEdge, boundaries, Chain.empty)
@@ -418,7 +418,7 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
       if currentIterator.hasNext then
         val fr = summon[CoefficientT is Field]
         val sigma = currentIterator.next()
-        val dsigma: Chain[Simplex[VertexT], CoefficientT] = sigma.boundary
+        val dsigma: Chain[Simplex[VertexT], CoefficientT] = Chain.from(sigma.boundary)
         val (dsigmaReduced, reduction) = Chain.reduceBy(dsigma, boundaries, Chain.empty)
         val coboundary = reduction.items.foldRight(fr.negate(fr.one) ⊠ Chain(sigma)) { (next, acc) =>
           val (spx, coeff) = next
