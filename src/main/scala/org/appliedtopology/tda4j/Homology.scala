@@ -144,6 +144,213 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, Filtratio
       mutable.ArrayDeque.empty
     ) // torsion part of barcode
 
+class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
+  val chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]
+  import chainRM.*
+
+  case class HomologyState(
+    boundaries: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]],
+    stream: StratifiedCellStream[Simplex[VertexT], Double],
+    barcode: mutable.Map[Int, immutable.Queue[(Double, Double, Chain[Simplex[VertexT], CoefficientT])]]
+  ):
+
+    given Ordering[Simplex[VertexT]] = stream.filtrationOrdering
+
+    // top-down state:
+    //   cleared ------------- simplices paired as pivots (positive side); their column is implicitly zero
+    //   paired -------------- simplices paired as σ (negative side); already recorded a bar
+    //   essentialSimplices -- so-far unpaired classes
+    val cleared: mutable.Set[Simplex[VertexT]] = mutable.Set.empty
+    val paired: mutable.Set[Simplex[VertexT]] = mutable.Set.empty
+    val essentialSimplices: mutable.Set[Simplex[VertexT]] = mutable.Set.empty
+
+    // start from max dimension instead for clearing's sake
+    val maxDim: Int =
+      var d = 0
+      while stream.iterateDimension.isDefinedAt(d + 1) do d += 1
+      d
+
+    // build index map to support chunk boundary calculation.
+    // Note: stream.iterator (the default StratifiedCellStream impl) infinite-loops because it
+    // filters Iterator.from(0) with a finite predicate. Walk dimensions explicitly instead.
+    val allCells: Vector[Simplex[VertexT]] =
+      0.to(maxDim).iterator.flatMap { d =>
+        stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty)
+      }.toVector
+    val cellIndex: Map[Simplex[VertexT], Int] = allCells.zipWithIndex.toMap
+    val chunkSize: Int = math.max(1, math.sqrt(allCells.size.toDouble).floor.toInt)
+
+    // killer column index for each local pivot
+    val killer: mutable.Map[Simplex[VertexT], Simplex[VertexT]] = mutable.Map.empty
+    // R supplies R_k for unpaired column k, to be used in marking active entries
+    val R: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]] = mutable.Map.empty
+    // active entries
+    val activeRows: mutable.Map[Simplex[VertexT], Boolean] = mutable.Map.empty
+
+    def diagramAt(f: Double): List[(Int, Double, Double)] =
+      advanceAll()
+
+      val pairs: List[(Int, Double, Double)] =
+        barcode.toList.flatMap { case (dim, bars) =>
+          bars.toList.collect {
+            case (lower, upper, _) if lower <= f => (dim, lower, upper min f)
+          }
+        }
+
+      val essentialBars: List[(Int, Double, Double)] =
+        essentialSimplices.toList.map { sigma =>
+          val lower =
+            stream.filtrationValue.applyOrElse(sigma, (_: Simplex[VertexT]) => Double.NegativeInfinity)
+          (sigma.dim, lower, Double.PositiveInfinity)
+        }
+
+      pairs ++ essentialBars
+
+    def recordPair(sigma: Simplex[VertexT], dsigmaReduced: Chain[Simplex[VertexT], CoefficientT]): Unit =
+      val pivot = dsigmaReduced.leadingCell.get
+      boundaries(pivot) = dsigmaReduced
+      cleared += pivot
+      paired += sigma
+      killer(pivot) = sigma
+      // if the pivot was previously marked essential (e.g. by an earlier local pass),
+      // promote it to a paired class now
+      essentialSimplices -= pivot
+      essentialSimplices -= sigma
+      val lower =
+        stream.filtrationValue.applyOrElse(pivot, (_: Simplex[VertexT]) => Double.NegativeInfinity)
+      val upper =
+        stream.filtrationValue.applyOrElse(sigma, (_: Simplex[VertexT]) => Double.PositiveInfinity)
+      val barDim = pivot.dim
+      barcode(barDim) =
+        barcode.getOrElse(barDim, immutable.Queue.empty)
+          .appended((lower, upper, dsigmaReduced))
+
+    def processCell(sigma: Simplex[VertexT], stop: Simplex[VertexT] => Boolean): Unit =
+      if cleared.contains(sigma) || paired.contains(sigma) then ()
+      else
+        // rebuild the boundary chain under the local filtration ordering — the chain
+        // returned by sigma.boundary is ordered by Simplex.scala's default (lex) ordering,
+        // not stream.filtrationOrdering, which gives wrong pivots in top-down.
+        val dsigma: Chain[Simplex[VertexT], CoefficientT] =
+          Chain.from(sigma.boundary[CoefficientT].items)
+        val (dsigmaReduced, _) =
+          Chain.reduceByUntil(dsigma, boundaries, Chain.empty, stop)
+        if dsigmaReduced.isZero() then
+          R -= sigma
+          essentialSimplices += sigma
+        else
+          R(sigma) = dsigmaReduced
+          val pivot = dsigmaReduced.leadingCell.get
+          // only record when the pivot is local (i.e. stop didn't fire)
+          if !stop(pivot) then
+            recordPair(sigma, dsigmaReduced)
+
+    def markActiveEntries(): Unit =
+      activeRows.clear()
+      val activeColumns: mutable.Map[Simplex[VertexT], Boolean] = mutable.Map.empty
+
+      def markColumn(k: Simplex[VertexT]): Boolean =
+        activeColumns.get(k) match
+          case Some(b) => b
+          case None =>
+            activeColumns(k) = false
+            var isActive = false
+            val Rk = R.getOrElse(k, Chain.empty)
+            Rk.items.iterator.takeWhile(_ => !isActive).foreach { case (i, _) =>
+              if !cleared.contains(i) && !paired.contains(i) then
+                activeRows(i) = true
+                isActive = true
+              // i is unpaired (global)
+              else if cleared.contains(i) then
+                killer.get(i).foreach { j =>
+                  if j != k && markColumn(j) then
+                    activeRows(i) = true
+                    isActive = true
+                }
+              // else i is paired (negative side of local pair)
+            }
+            activeColumns(k) = isActive
+            isActive
+
+      for k <- R.keys do markColumn(k)
+
+    // Algorithm 4: global column compression from clear-and-compress paper.
+    // The paper writes this over Z/2; over a general field we have to scale the
+    // killer column by the right ratio.
+    def compress(k: Simplex[VertexT]): Unit =
+      val fr = summon[CoefficientT is Field]
+      var Rk: Chain[Simplex[VertexT], CoefficientT] = R.getOrElse(k, Chain.empty)
+      val entries: Seq[(Simplex[VertexT], CoefficientT)] = Rk.items.toSeq.sortBy(_._1)
+      for (l, currentCoeff) <- entries do
+        if cleared.contains(l) || paired.contains(l) then
+          if !activeRows.getOrElse(l, false) then
+            // l is inactive - zero out its entry.
+            Rk = Rk - currentCoeff ⊠ Chain(l)
+          else
+            // l is active - add the killer column
+            killer.get(l).foreach { j =>
+              val Rj = R.getOrElse(j, Chain.empty) // (l,j) is persistence pair
+              val redCoeff = fr.divide(currentCoeff, Rj.leadingCoefficient)
+              Rk = Rk - redCoeff ⊠ Rj
+            }
+      R(k) = Rk
+
+    // Algorithm 5 (lines 9-16): reduce the (now-compressed) global column k and record any pair found.
+    def globalReduce(sigma: Simplex[VertexT]): Unit =
+      if cleared.contains(sigma) || paired.contains(sigma) then return
+      // If R(sigma) was never stored, sigma was locally essential and has nothing to reduce.
+      R.get(sigma) match
+        case None => ()  // stays in essentialSimplices unless a higher-dim sigma globally pairs with it
+        case Some(rSigma) =>
+          val noStop: Simplex[VertexT] => Boolean = _ => false
+          val (dsigmaReduced, _) = Chain.reduceByUntil(rSigma, boundaries, Chain.empty, noStop)
+          R(sigma) = dsigmaReduced
+          if dsigmaReduced.isZero() then
+            R.remove(sigma)
+            essentialSimplices += sigma
+          else
+            recordPair(sigma, dsigmaReduced)
+
+    def advanceAll(): Unit =
+      val n: Int = allCells.size
+      val m: Int = (n + chunkSize - 1) / chunkSize
+
+      val chunks: IndexedSeq[IndexedSeq[Simplex[VertexT]]] =
+        allCells.grouped(chunkSize).toIndexedSeq
+
+      // Algorithm 2: local_reduction from clear-and-compress paper
+      for delta <- maxDim.to(0, -1) do
+        for r <- 1.to(2) do
+          for b <- (r - 1).until(m) do // parallelizable!
+            val floorIdx: Int = math.max(0, (b - r + 1) * chunkSize)
+            val stop: Simplex[VertexT] => Boolean =
+              sigma => cellIndex.getOrElse(sigma, -1) < floorIdx
+            for sigma <- chunks(b) if sigma.dim == delta do
+              processCell(sigma, stop)
+
+      // Algorithm 3: mark_active_entries from clear-and-compress paper
+      markActiveEntries()
+
+      // Algorithm 5 (Persistence in chunks): per dim top-down, compress unpaired
+      // global columns then reduce them. Clearing keeps positives' columns at zero.
+      for delta <- maxDim.to(0, -1) do
+        val cellsAtDim =
+          stream.iterateDimension.applyOrElse(delta, (_: Int) => Iterator.empty).toVector
+        // step 2: compress unpaired global columns
+        for sigma <- cellsAtDim do
+          if !cleared.contains(sigma) && !paired.contains(sigma) && R.contains(sigma) then
+            compress(sigma)
+        // step 3: reduce the compressed global columns and record pairs
+        for sigma <- cellsAtDim do
+          globalReduce(sigma)
+
+  def persistentHomology(stream: => StratifiedCellStream[Simplex[VertexT], Double]): HomologyState =
+    HomologyState(
+      mutable.Map.empty,
+      stream,
+      mutable.Map.empty
+    )
+
 class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Field]:
   case class HomologyState(
     cycles: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]],

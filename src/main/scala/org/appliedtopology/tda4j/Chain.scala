@@ -128,20 +128,58 @@ object Chain {
           .apply(self.entries.headOption.unzip)
       }
 
+  private def updateMap[CellT : Ordering, CoefficientT : Field](m: SortedMap[CellT, CoefficientT],
+        cell: CellT,
+        coeff: CoefficientT): SortedMap[CellT, CoefficientT] =
+    val fr = summon[CoefficientT is Field]
+    val newCoeff = fr.plus(m.getOrElse(cell, fr.zero), coeff)
+    if newCoeff == fr.zero then m.removed(cell)
+    else m.updated(cell, newCoeff)
+
+  private def toSortedMap[CellT : Ordering, CoefficientT : Field](
+    z: Chain[CellT, CoefficientT]
+  ): SortedMap[CellT, CoefficientT] =
+    z.entries.foldLeft(SortedMap.empty[CellT, CoefficientT]) {
+      case (m, (cell, coeff)) => updateMap(m, cell, coeff)
+    }
 
   @tailrec
+  private def reduceLoop[CellT : Ordering, CoefficientT : Field](z: SortedMap[CellT, CoefficientT],
+    basis: mutable.Map[CellT, Chain[CellT, CoefficientT]],
+    reductionLog: SortedMap[CellT, CoefficientT],
+    stop: CellT => Boolean
+  ): (SortedMap[CellT, CoefficientT], SortedMap[CellT, CoefficientT]) =
+    z.headOption match {
+      case None => (z, reductionLog)
+      case Some((sigma, sigmaCoeff)) =>
+        if stop(sigma) then (z, reductionLog)
+        else if !basis.contains(sigma) then (z, reductionLog)
+        else
+          val fr = summon[CoefficientT is Field]
+          val redCoeff = sigmaCoeff / basis(sigma).leadingCoefficient
+          reduceLoop(
+            basis(sigma).entries.foldLeft(z) {
+              case (m, (bCell, bCoeff)) => updateMap(m, bCell, fr.negate(fr.times(redCoeff, bCoeff)))
+            },
+            basis,
+            updateMap(reductionLog, sigma, redCoeff),
+            stop
+          )
+    }
+
+  final def reduceByUntil[CellT : Ordering, CoefficientT : Field](z : Chain[CellT, CoefficientT],
+               basis: mutable.Map[CellT, Chain[CellT, CoefficientT]],
+               reductionLog: Chain[CellT, CoefficientT], // want to have a default empty here?
+               stop: CellT => Boolean = (_: CellT) => false // stop when the stop function tells you to
+              ): (Chain[CellT, CoefficientT], Chain[CellT, CoefficientT]) =
+      val (accMap, logMap) = reduceLoop(toSortedMap(z), basis, toSortedMap(reductionLog), stop)
+      (Chain.from(accMap.toSeq), Chain.from(logMap.toSeq))
+
   final def reduceBy[CellT : Ordering, CoefficientT : Field](z : Chain[CellT, CoefficientT],
                basis: mutable.Map[CellT, Chain[CellT, CoefficientT]],
-               reductionLog: Chain[CellT, CoefficientT] // want to have a default empty here?
+               reductionLog: Chain[CellT, CoefficientT]
               ): (Chain[CellT, CoefficientT], Chain[CellT, CoefficientT]) =
-      z.leadingCell match {
-        case None => (z, reductionLog)
-        case Some(sigma) =>
-          if basis.contains(sigma) then
-            val redCoeff = z.leadingCoefficient / basis(sigma).leadingCoefficient
-            reduceBy(z - redCoeff ⊠ basis(sigma), basis, reductionLog + redCoeff ⊠ Chain(sigma))
-          else (z, reductionLog)
-  }
+      reduceByUntil(z, basis, reductionLog)
 
   given [CellT : Ordering, CoefficientT: Field as fr] => (Chain[CellT, CoefficientT] is RingModule {
     type R = CoefficientT
