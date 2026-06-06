@@ -215,6 +215,21 @@ trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
   def keepCriterion: PartialFunction[Simplex[VertexT], Boolean]
 }
 
+class LimitedCofaceSimplexStream(stream : CofaceSimplexStream[Int, Double], maxDim : Int) extends CofaceSimplexStream[Int, Double]
+  with DoubleFiltration[Simplex[Int]]() {
+  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+    case d : Int if d <= maxDim => stream.iterateDimension(d)
+  }
+  
+  override def currentDimension: Int = stream.currentDimension
+  override def lastDimensionCache: Seq[Simplex[Int]] = stream.lastDimensionCache
+  override def currentDimensionCache: Seq[Simplex[Int]] = stream.currentDimensionCache
+  override def pruneAllCofaces: Boolean = stream.pruneAllCofaces
+  override def keepCriterion: PartialFunction[Simplex[Int], Boolean] = stream.keepCriterion
+  override def filtrationOrdering: Ordering[Simplex[Int]] = stream.filtrationOrdering
+  override def filtrationValue: PartialFunction[Simplex[Int], Double] = stream.filtrationValue
+}
+
 class EnumeratingCofaceSimplexStream(
   val metricSpace: FiniteMetricSpace[Int],
   var keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }

@@ -144,7 +144,7 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, Filtratio
       mutable.ArrayDeque.empty
     ) // torsion part of barcode
 
-class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
+class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim : Int = 5):
   val chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]
   import chainRM.*
 
@@ -165,10 +165,12 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]:
     val essentialSimplices: mutable.Set[Simplex[VertexT]] = mutable.Set.empty
 
     // start from max dimension instead for clearing's sake
+    /*
     val maxDim: Int =
       var d = 0
       while stream.iterateDimension.isDefinedAt(d + 1) do d += 1
       d
+    */
 
     // build index map to support chunk boundary calculation.
     // Note: stream.iterator (the default StratifiedCellStream impl) infinite-loops because it
