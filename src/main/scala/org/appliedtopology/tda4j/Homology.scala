@@ -76,9 +76,9 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, Filtratio
       z: Chain[CellT, CoefficientT],
       basis: mutable.Map[CellT, Chain[CellT, CoefficientT]],
       reductionLog: Chain[CellT, CoefficientT] = Chain()
-    )(using fr: (CoefficientT is Field)): (Chain[CellT, CoefficientT], Chain[CellT, CoefficientT]) =
+    )(using fr: CoefficientT is Field): (Chain[CellT, CoefficientT], Chain[CellT, CoefficientT]) =
       z.leadingCell match
-        case None => (z, reductionLog)
+        case None        => (z, reductionLog)
         case Some(sigma) =>
           if basis.contains(sigma) then
             val redCoeff = fr.divide(z.leadingCoefficient, basis(sigma).leadingCoefficient)
@@ -116,7 +116,7 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, Filtratio
             case Some(cell) => cycles.remove(cell)
 
           val lower: FiltrationT = cycleBasis.leadingCell match
-            case None => filtration.smallest
+            case None      => filtration.smallest
             case Some(spx) =>
               stream.filtrationValue.orElse(_ => filtration.smallest).compose(cyclesBornBy)(spx)
           val upper: FiltrationT =
@@ -144,7 +144,7 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, Filtratio
       mutable.ArrayDeque.empty
     ) // torsion part of barcode
 
-class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim : Int = 5):
+class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim: Int = 5):
   val chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]
   import chainRM.*
 
@@ -170,15 +170,18 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim 
       var d = 0
       while stream.iterateDimension.isDefinedAt(d + 1) do d += 1
       d
-    */
+     */
 
     // build index map to support chunk boundary calculation.
     // Note: stream.iterator (the default StratifiedCellStream impl) infinite-loops because it
     // filters Iterator.from(0) with a finite predicate. Walk dimensions explicitly instead.
     val allCells: Vector[Simplex[VertexT]] =
-      0.to(maxDim).iterator.flatMap { d =>
-        stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty)
-      }.toVector
+      0.to(maxDim)
+        .iterator
+        .flatMap { d =>
+          stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty)
+        }
+        .toVector
     val cellIndex: Map[Simplex[VertexT], Int] = allCells.zipWithIndex.toMap
     val chunkSize: Int = math.max(1, math.sqrt(allCells.size.toDouble).floor.toInt)
 
@@ -223,9 +226,9 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim 
       val upper =
         stream.filtrationValue.applyOrElse(sigma, (_: Simplex[VertexT]) => Double.PositiveInfinity)
       val barDim = pivot.dim
-      barcode(barDim) =
-        barcode.getOrElse(barDim, immutable.Queue.empty)
-          .appended((lower, upper, dsigmaReduced))
+      barcode(barDim) = barcode
+        .getOrElse(barDim, immutable.Queue.empty)
+        .appended((lower, upper, dsigmaReduced))
 
     def processCell(sigma: Simplex[VertexT], stop: Simplex[VertexT] => Boolean): Unit =
       if cleared.contains(sigma) || paired.contains(sigma) then ()
@@ -244,8 +247,7 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim 
           R(sigma) = dsigmaReduced
           val pivot = dsigmaReduced.leadingCell.get
           // only record when the pivot is local (i.e. stop didn't fire)
-          if !stop(pivot) then
-            recordPair(sigma, dsigmaReduced)
+          if !stop(pivot) then recordPair(sigma, dsigmaReduced)
 
     def markActiveEntries(): Unit =
       activeRows.clear()
@@ -254,7 +256,7 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim 
       def markColumn(k: Simplex[VertexT]): Boolean =
         activeColumns.get(k) match
           case Some(b) => b
-          case None =>
+          case None    =>
             activeColumns(k) = false
             var isActive = false
             val Rk = R.getOrElse(k, Chain.empty)
@@ -269,7 +271,7 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim 
                     activeRows(i) = true
                     isActive = true
                 }
-              // else i is paired (negative side of local pair)
+            // else i is paired (negative side of local pair)
             }
             activeColumns(k) = isActive
             isActive
@@ -302,7 +304,7 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim 
       if cleared.contains(sigma) || paired.contains(sigma) then return
       // If R(sigma) was never stored, sigma was locally essential and has nothing to reduce.
       R.get(sigma) match
-        case None => ()  // stays in essentialSimplices unless a higher-dim sigma globally pairs with it
+        case None         => () // stays in essentialSimplices unless a higher-dim sigma globally pairs with it
         case Some(rSigma) =>
           val noStop: Simplex[VertexT] => Boolean = _ => false
           val (dsigmaReduced, _) = Chain.reduceByUntil(rSigma, boundaries, Chain.empty, noStop)
@@ -310,8 +312,7 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim 
           if dsigmaReduced.isZero() then
             R.remove(sigma)
             essentialSimplices += sigma
-          else
-            recordPair(sigma, dsigmaReduced)
+          else recordPair(sigma, dsigmaReduced)
 
     def advanceAll(): Unit =
       val n: Int = allCells.size
@@ -327,8 +328,7 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim 
             val floorIdx: Int = math.max(0, (b - r + 1) * chunkSize)
             val stop: Simplex[VertexT] => Boolean =
               sigma => cellIndex.getOrElse(sigma, -1) < floorIdx
-            for sigma <- chunks(b) if sigma.dim == delta do
-              processCell(sigma, stop)
+            for sigma <- chunks(b) if sigma.dim == delta do processCell(sigma, stop)
 
       // Algorithm 3: mark_active_entries from clear-and-compress paper
       markActiveEntries()
@@ -340,11 +340,9 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim 
           stream.iterateDimension.applyOrElse(delta, (_: Int) => Iterator.empty).toVector
         // step 2: compress unpaired global columns
         for sigma <- cellsAtDim do
-          if !cleared.contains(sigma) && !paired.contains(sigma) && R.contains(sigma) then
-            compress(sigma)
+          if !cleared.contains(sigma) && !paired.contains(sigma) && R.contains(sigma) then compress(sigma)
         // step 3: reduce the compressed global columns and record pairs
-        for sigma <- cellsAtDim do
-          globalReduce(sigma)
+        for sigma <- cellsAtDim do globalReduce(sigma)
 
   def persistentHomology(stream: => StratifiedCellStream[Simplex[VertexT], Double]): HomologyState =
     HomologyState(
@@ -377,14 +375,15 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
     val kruskal = new Kruskal[Simplex[VertexT]](
       cycles.keys.toSeq,
       { (x: Simplex[VertexT], y: Simplex[VertexT]) =>
-        stream.filtrationValue(x | y) }
+        stream.filtrationValue(x | y)
+      }
     )(using stream.filtrationOrdering)
 
     kruskal.mstIterator.foreach { (src, tgt) =>
       val edge: Simplex[VertexT] = src | tgt
 
       // the edge src -- tgt will connect src to tgt thus removing one of the cycles
-      val dEdge : Chain[Simplex[VertexT],CoefficientT] = Chain.from(edge.boundary)
+      val dEdge: Chain[Simplex[VertexT], CoefficientT] = Chain.from(edge.boundary)
       val dyingVertex = dEdge.leadingCell.get
       boundaries.addOne(dEdge.leadingCell.get -> dEdge)
       coboundaries.addOne(dyingVertex, dEdge)
@@ -397,7 +396,7 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
       val edge: Simplex[VertexT] = src | tgt
 
       // the edge src -- tgt will connect src to tgt thus closing a loop
-      val dEdge : Chain[Simplex[VertexT], CoefficientT] = Chain.from(edge.boundary)
+      val dEdge: Chain[Simplex[VertexT], CoefficientT] = Chain.from(edge.boundary)
       // TODO is it worth it to have a more complex UnionFind that allows us to get the entire path along the MST?
       val (reduced, reductionLog): (Chain[Simplex[VertexT], CoefficientT], Chain[Simplex[VertexT], CoefficientT]) =
         Chain.reduceBy(dEdge, boundaries, Chain.empty)
@@ -415,7 +414,7 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
     // setup is done, we should be ready to start dimension 2
     currentDim = 1
     current = Double.PositiveInfinity
-    
+
     def advanceOne(): Unit =
       if currentIterator.hasNext then
         val fr = summon[CoefficientT is Field]
@@ -446,7 +445,7 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
             case Some(cell) => cycles.remove(cell)
 
           val lower: Double = cycleBasis.leadingCell match
-            case None => Double.NegativeInfinity
+            case None      => Double.NegativeInfinity
             case Some(spx) =>
               stream.filtrationValue.orElse(_ => Double.NegativeInfinity).compose(cyclesBornBy)(spx)
           val upper: Double =
@@ -702,4 +701,4 @@ def computePersistentHomology[Vertex, Filtration, CoefficientT: Field](
 
   (cycles, boundaries)
 }
-    */
+ */

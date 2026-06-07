@@ -7,7 +7,7 @@ import org.appliedtopology.tda4j.given
 
 import math.Ordering.Implicits.sortedSetOrdering
 
-object SimplexSpec extends Specification {
+object SimplexSpec extends Specification:
 
   def is =
     s2"""
@@ -22,7 +22,7 @@ A `Simplex` should
 
   def e1: Result = s.dim must beGreaterThan[Int](0)
 
-  given (Double is Field) = Field.DoubleApproximated(1e-25)
+  given Double is Field = Field.DoubleApproximated(1e-25)
 
   def e2: Result = s.boundary `must` be_==(
     Chain[Simplex[Int], Double](
@@ -31,7 +31,6 @@ A `Simplex` should
       Simplex(1, 2) -> 1.0
     )
   )
-}
 
 /* this might need some sort of reflection hackery to work
 //noinspection ScalaFileName
@@ -50,4 +49,4 @@ class SimplexTypeSpec extends mutable.Specification {
     ∆('a', 'b', 'c') must haveSuperclass[Simplex[Char]]
   }
 }
-*/
+ */

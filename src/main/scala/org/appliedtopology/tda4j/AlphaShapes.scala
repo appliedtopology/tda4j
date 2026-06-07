@@ -38,7 +38,7 @@ class AlphaShapes(val points: Array[Array[Double]])
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case d if d == cacheDimension => simplexCache.iterator
     case 0                        => metricSpace.elements.toSeq.map(Simplex(_)).iterator
-    case 1 =>
+    case 1                        =>
       simplexCache = (for
         i <- metricSpace.elements
         j <- metricSpace.elements
@@ -52,7 +52,7 @@ class AlphaShapes(val points: Array[Array[Double]])
       val newSimplexCache = for
         spx <- simplexCache
         i <- metricSpace.elements.takeWhile(_ < spx.min)
-        coface : Simplex[Int] = spx.union(Simplex(i))
+        coface: Simplex[Int] = spx.union(Simplex(i))
         if isDelaunaySimplex(coface)
       yield coface
       simplexCache = newSimplexCache.sortBy(filtrationValue)

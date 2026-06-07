@@ -31,7 +31,7 @@ given orderingBitSet: Ordering[BitSet] = math.Ordering.by(bs => bs.toSeq)
   * @tparam VertexT
   *   The type of the vertices.
   */
-trait SymmetryGroup[KeyT, VertexT: Ordering]() {
+trait SymmetryGroup[KeyT, VertexT: Ordering]():
   self =>
 
   /** List of all keys that can be used to address individual group elements. */
@@ -60,15 +60,14 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
 
   def orbitPar(
     simplex: Simplex[VertexT]
-  ): Set[Simplex[VertexT]] = {
+  ): Set[Simplex[VertexT]] =
     val futures: Iterable[Future[Simplex[VertexT]]] =
-      for (k <- keys) yield Future {
+      for k <- keys yield Future {
         simplex.map(apply(k))
       }
 
     val allfutures = Future.sequence(futures)
     Await.result(allfutures, Duration.Inf).toSeq.toSet
-  }
 
   def orbit = orbitPar
 
@@ -93,8 +92,6 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
   def isRepresentative(simplex: Simplex[VertexT]): Boolean =
     simplex == representative(simplex)
 
-}
-
 /** A symmetry-aware compressed indexed sequence container that keeps track of representatives of each orbit, and
   * generates the rest of the orbit as and when needed, including an iterator structure that also only generates the
   * rest of the orbit when needed, and a method for checking whether a particular simplex **is** an orbit
@@ -116,7 +113,7 @@ trait SymmetryGroup[KeyT, VertexT: Ordering]() {
 class ExpandList[VertexT: Ordering, KeyT](
   val representatives: Seq[Simplex[VertexT]],
   val symmetry: SymmetryGroup[KeyT, VertexT]
-) extends IndexedSeq[Simplex[VertexT]] {
+) extends IndexedSeq[Simplex[VertexT]]:
   self =>
 
   /** `orbitSizes` contains each representative paired with the size of its orbit, for fast lookup.
@@ -148,16 +145,14 @@ class ExpandList[VertexT: Ordering, KeyT](
     * @return
     *   The element at position `i` among all the simplices represented.
     */
-  override def apply(i: Int): Simplex[VertexT] = {
+  override def apply(i: Int): Simplex[VertexT] =
     val targetRepresentativeRange = repOrbitRanges.filter(_._2 <= i).last
-    if (!currentRepresentative.contains(targetRepresentativeRange._1)) {
+    if !currentRepresentative.contains(targetRepresentativeRange._1) then
       currentRepresentative = Some(targetRepresentativeRange._1)
       currentOrbit = Some(symmetry.orbit(currentRepresentative.get).toSeq)
-    }
 
     val offset = i - targetRepresentativeRange._2
     currentOrbit.get(offset)
-  }
 
   /** The number of elements in the compressed list is the sum of orbit sizes.
     *
@@ -174,7 +169,7 @@ class ExpandList[VertexT: Ordering, KeyT](
     *   Iterator that traverses the entire represented set.
     */
   override def iterator: Iterator[Simplex[VertexT]] =
-    new Iterator[Simplex[VertexT]] {
+    new Iterator[Simplex[VertexT]]:
       var currentOrbitIx = 0
       var currentElement = 0
       var currentOrbit: Set[Simplex[VertexT]] =
@@ -199,32 +194,26 @@ class ExpandList[VertexT: Ordering, KeyT](
         * @return
         *   The next element in the `ExpandList`.
         */
-      override def next(): Simplex[VertexT] = {
-        if (!hasNext()) {
-          throw new NoSuchElementException("Iterator exhausted")
-        }
+      override def next(): Simplex[VertexT] =
+        if !hasNext() then throw new NoSuchElementException("Iterator exhausted")
         val retval = currentOrbit.toList(currentElement)
-        if (currentElement < currentOrbit.size - 1) {
+        if currentElement < currentOrbit.size - 1 then
           // We can keep feeding elements from the current orbit
           currentElement += 1
-        } else if (currentOrbitIx < representatives.length - 1) {
+        else if currentOrbitIx < representatives.length - 1 then
           // We need to move to the next orbit
           currentOrbitIx += 1
           currentOrbit = symmetry.orbit(representatives(currentOrbitIx))
           currentElement = 0
-        } else {
+        else
           // Hit the end of the line
           _hasNext = false
-        }
         retval
-      }
-    }
 
   /** Printing that does not itself trigger a full traversal of the entire `ExpandList` just to print things out.
     * @return
     */
   override def toString(): String = s"ExpandList(${orbitSizes.toString()}"
-}
 
 /** Symmetry-aware version of Zomorodian's incremental algorithm for generating Vietoris-Rips complexes. The algorithm
   * object needs access to a `SymmetryGroup` instance that encodes all we know about the symmetries.
@@ -240,7 +229,7 @@ class ExpandList[VertexT: Ordering, KeyT](
   */
 class SymmetricZomorodianIncremental[VertexT: Ordering, KeyT](
   val symmetry: SymmetryGroup[KeyT, VertexT]
-)  {
+):
   self =>
   val className = "SymmetricZomorodianIncremental"
 
@@ -266,15 +255,15 @@ class SymmetricZomorodianIncremental[VertexT: Ordering, KeyT](
     *   Maximum homological dimension to consider.
     * @return
     */
-   def apply(
+  def apply(
     metricSpace: FiniteMetricSpace[VertexT],
     maxFiltrationValue: Double,
     maxDimension: Int
-  ): Seq[Simplex[VertexT]] = {
+  ): Seq[Simplex[VertexT]] =
     val edges = ???
 
     def lowerNeighbors(v: VertexT): SortedSet[VertexT] =
-      ??? //edges.get(v).neighbors.map(_.toOuter).filter(_ < v).to(SortedSet)
+      ??? // edges.get(v).neighbors.map(_.toOuter).filter(_ < v).to(SortedSet)
 
     given Ordering[Simplex[VertexT]] =
       Ordering.by(FiniteMetricSpace.MaximumDistanceFiltrationValue[VertexT](metricSpace)).orElse(simplexOrdering)
@@ -287,26 +276,20 @@ class SymmetricZomorodianIncremental[VertexT: Ordering, KeyT](
 //      .map(_.toOuter)
 //      .foreach(u => tasks.push((SortedSet[VertexT](u), lowerNeighbors(u))))
 
-    while (tasks.nonEmpty) {
+    while tasks.nonEmpty do
       val task = tasks.pop()
       val tau = task._1
       val N = task._2
-      val simplex : Simplex[VertexT] = Simplex.from(tau.toSeq)
-      if (symmetry.isRepresentative(simplex)) {
-        representatives += simplex
-      }
-      if (tau.size <= maxDimension) {
+      val simplex: Simplex[VertexT] = Simplex.from(tau.toSeq)
+      if symmetry.isRepresentative(simplex) then representatives += simplex
+      if tau.size <= maxDimension then
         N.foreach { v =>
           val sigma = tau + v
           val M = N & lowerNeighbors(v)
           tasks.push((sigma, M))
         }
-      }
-    }
 
     ExpandList[VertexT, KeyT](representatives.toSeq, symmetry)
-  }
-}
 
 // Canonical example: hypercube with symmetries from permuting bit positions
 
@@ -318,7 +301,7 @@ class SymmetricZomorodianIncremental[VertexT: Ordering, KeyT](
   * @param bitlength
   *   The dimension of the hypercube.
   */
-class HyperCubeBitSet(bitlength: Int) extends FiniteMetricSpace[immutable.BitSet] {
+class HyperCubeBitSet(bitlength: Int) extends FiniteMetricSpace[immutable.BitSet]:
   val top: immutable.BitSet =
     immutable.BitSet.fromBitMask(Array((1L << bitlength) - 1))
 
@@ -331,10 +314,9 @@ class HyperCubeBitSet(bitlength: Int) extends FiniteMetricSpace[immutable.BitSet
     * @return
     *   Distance between x and y
     */
-  override def distance(x: immutable.BitSet, y: immutable.BitSet): Double = {
+  override def distance(x: immutable.BitSet, y: immutable.BitSet): Double =
     val xy = x.xor(y)
     xy.count(xy(_))
-  }
 
   /** Check whether an [[immutable.BitSet]] represents a point in the hypercube. In practice, checks that the bitset
     * contains no entries above the bitlength.
@@ -342,10 +324,9 @@ class HyperCubeBitSet(bitlength: Int) extends FiniteMetricSpace[immutable.BitSet
     * @param x
     * @return
     */
-  override def contains(x: immutable.BitSet): Boolean = {
+  override def contains(x: immutable.BitSet): Boolean =
     val xexcess = x -- top
     !xexcess.exists(xexcess(_))
-  }
 
   /** Size of the hypercube: 2^bitlength^. Computed by left-shifting.
     *
@@ -363,9 +344,8 @@ class HyperCubeBitSet(bitlength: Int) extends FiniteMetricSpace[immutable.BitSet
     Range
       .inclusive(0, size - 1)
       .map(k => immutable.BitSet.fromBitMask(Array(k.toLong)))
-}
 
-class HyperCube(bitlength: Int) extends FiniteMetricSpace[Int] {
+class HyperCube(bitlength: Int) extends FiniteMetricSpace[Int]:
   protected val hc: HyperCubeBitSet = HyperCubeBitSet(bitlength)
 
   override def size: Int = hc.size
@@ -379,7 +359,6 @@ class HyperCube(bitlength: Int) extends FiniteMetricSpace[Int] {
     )
   override def contains(x: Int): Boolean =
     hc.contains(immutable.BitSet.fromBitMask(Array(x.toLong)))
-}
 
 /** This class enumerates permutations in order to allow permutations of bit-positions to fill out the symmetry group of
   * the hypercube.
@@ -387,7 +366,7 @@ class HyperCube(bitlength: Int) extends FiniteMetricSpace[Int] {
   * @param elementCount
   *   How many objects are permuted?
   */
-class Permutations(elementCount: Int) {
+class Permutations(elementCount: Int):
   def factorial(n: Int): Long = Factorial.value(n)
 
   val size: Long = factorial(elementCount)
@@ -398,7 +377,7 @@ class Permutations(elementCount: Int) {
     * @return
     *   Image of the permutation as a [[List]].
     */
-  def apply(n: Int): List[Int] = {
+  def apply(n: Int): List[Int] =
     val source: ListBuffer[Int] = ListBuffer(Range(0, elementCount).toList*)
     val retval: ListBuffer[Int] = ListBuffer[Int]()
 
@@ -406,15 +385,12 @@ class Permutations(elementCount: Int) {
     var div: Long = 0L
     var point: Int = 0
 
-    while (source.nonEmpty) {
+    while source.nonEmpty do
       div = math.floorDiv(pos, factorial(source.size - 1))
       pos = math.floorMod(pos, factorial(source.size - 1))
       point = source.remove(div.toInt)
       retval.append(point)
-    }
     retval.toList
-  }
-}
 
 //123
 //132
@@ -428,7 +404,7 @@ class Permutations(elementCount: Int) {
   * @param bitlength
   *   Dimension of the hypercube.
   */
-class HyperCubeSymmetryBitSet(bitlength: Int) extends SymmetryGroup[Int, immutable.BitSet] {
+class HyperCubeSymmetryBitSet(bitlength: Int) extends SymmetryGroup[Int, immutable.BitSet]:
   val permutations: Permutations = Permutations(bitlength)
   val hypercube: HyperCubeBitSet = HyperCubeBitSet(bitlength)
 
@@ -449,13 +425,11 @@ class HyperCubeSymmetryBitSet(bitlength: Int) extends SymmetryGroup[Int, immutab
     * @return
     */
   def apply(permutationIndex: Int): (immutable.BitSet => immutable.BitSet) =
-    bs => {
+    bs =>
       val pbs = hypercube.top.toList.map(permutations(permutationIndex)).map(bs)
       pbs.indices.filter(pbs(_)).to(BitSet)
-    }
-}
 
-class HyperCubeSymmetry(bitlength: Int) extends SymmetryGroup[Int, Int] {
+class HyperCubeSymmetry(bitlength: Int) extends SymmetryGroup[Int, Int]:
   val permutations: Permutations = Permutations(bitlength)
   val hypercube: HyperCube = HyperCube(bitlength)
 
@@ -470,9 +444,8 @@ class HyperCubeSymmetry(bitlength: Int) extends SymmetryGroup[Int, Int] {
       .map(permutations(groupElementKey)(_))
       .map(1 << _)
       .sum
-}
 
-class HyperCubeSymmetryGeneratorsBitSet(val bitlength: Int) extends HyperCubeSymmetryBitSet(bitlength) {
+class HyperCubeSymmetryGeneratorsBitSet(val bitlength: Int) extends HyperCubeSymmetryBitSet(bitlength):
 
   /** By maintaining a set of known representatives, and first testing against the group generators, we are expecting
     * significant speedups over the case where we keep traversing each orbit over and over again.
@@ -483,31 +456,26 @@ class HyperCubeSymmetryGeneratorsBitSet(val bitlength: Int) extends HyperCubeSym
   val generators: List[immutable.BitSet => immutable.BitSet] =
     hypercube.top.toList.indices
       .map(i => immutable.Map(i -> (i + 1), (i + 1) -> i))
-      .map(map => ((bs: immutable.BitSet) => bs.collect(map.orElse(identity(_)))))
+      .map(map => (bs: immutable.BitSet) => bs.collect(map.orElse(identity(_))))
       .toList
 
   override def isRepresentative(simplex: Simplex[BitSet]): Boolean =
-    if (representatives.contains(simplex)) {
+    if representatives.contains(simplex) then simplex == representatives(simplex)
+    else if generators.forall(g => simplex <= simplex.map(s => g(s))) then
+      // simplex is a pseudo-minimum
+      // time to check the entire orbit
+      representatives(simplex) = super.representative(simplex)
       simplex == representatives(simplex)
-    } else {
-      if (generators.forall(g => simplex <= simplex.map(s => g(s)))) {
-        // simplex is a pseudo-minimum
-        // time to check the entire orbit
-        representatives(simplex) = super.representative(simplex)
-        simplex == representatives(simplex)
-      } else { // if it's not even a pseudo-minimum, definitely not a minimum
-        false
-      }
-    }
+    else // if it's not even a pseudo-minimum, definitely not a minimum
+      false
 
   override def representative(
     simplex: Simplex[BitSet]
   ): Simplex[BitSet] =
-    if (representatives.contains(simplex)) representatives(simplex)
+    if representatives.contains(simplex) then representatives(simplex)
     else super.representative(simplex)
-}
 
-class HyperCubeSymmetryGenerators(val bitlength: Int) extends HyperCubeSymmetry(bitlength) {
+class HyperCubeSymmetryGenerators(val bitlength: Int) extends HyperCubeSymmetry(bitlength):
   val representatives: mutable.Map[Simplex[Int], Simplex[Int]] =
     mutable.Map.empty
 
@@ -521,16 +489,11 @@ class HyperCubeSymmetryGenerators(val bitlength: Int) extends HyperCubeSymmetry(
       }
 
   override def isRepresentative(simplex: Simplex[Int]): Boolean =
-    if (representatives.contains(simplex)) {
+    if representatives.contains(simplex) then simplex == representatives(simplex)
+    else if generators.par.forall(g => simplex <= simplex.map(s => g(s))) then
+      // simplex is a pseudo-minimum
+      // time to check the entire orbit
+      representatives(simplex) = super.representative(simplex)
       simplex == representatives(simplex)
-    } else {
-      if (generators.par.forall(g => simplex <= simplex.map(s => g(s)))) {
-        // simplex is a pseudo-minimum
-        // time to check the entire orbit
-        representatives(simplex) = super.representative(simplex)
-        simplex == representatives(simplex)
-      } else { // if it's not even a pseudo-minimum, definitely not a minimum
-        false
-      }
-    }
-}
+    else // if it's not even a pseudo-minimum, definitely not a minimum
+      false

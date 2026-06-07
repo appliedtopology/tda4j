@@ -5,33 +5,29 @@ import scala.math.Numeric.IntIsIntegral
 import math.Fractional.Implicits.infixFractionalOps
 import scala.collection.immutable.ArraySeq
 
-class FiniteField(val p: Int) {
+class FiniteField(val p: Int):
   opaque type Fp = Int
 
-  object Fp {
+  object Fp:
     def apply(a: Int): Fp = a % p
     def unapply(a: Fp): Some[Int] = Some(a)
-  }
 
-  extension (fp: Fp) {
-    def norm: Fp = {
+  extension (fp: Fp)
+    def norm: Fp =
       val aa: Int = fp
       val r: Int = aa % p
 
-      Fp(r match {
+      Fp(r match
         case rr: Int if rr < -(p - 1) / 2 => rr + p
         case rr: Int if rr > (p - 1) / 2  => rr - p
-        case rr: Int                      => rr
-      })
-    }
+        case rr: Int                      => rr)
     def toInt: Int = fp.norm
     def toUInt: Int = ((fp % p) + p) % p // Have to get to the interval (0,p-1)
     def toString: String = s"Fp(${fp.norm})"
-  }
 
-  given (Fp is Field) = new (Fp is Field) {
-    //given FpIsFractional: Fractional[Fp] with {
-    def computeInverse(a: Fp): Fp = {
+  given (Fp is Field) = new (Fp is Field):
+    // given FpIsFractional: Fractional[Fp] with {
+    def computeInverse(a: Fp): Fp =
       val aa: Int = a.toUInt
       var u: Int = aa % p
       var v: Int = p
@@ -40,7 +36,7 @@ class FiniteField(val p: Int) {
       var q: Int = 0
       var r: Int = 0
       var x: Int = 0
-      while (u != 1) {
+      while u != 1 do
         q = v / u
         r = v - q * u
         x = x2 - q * x1
@@ -48,33 +44,28 @@ class FiniteField(val p: Int) {
         u = r
         x2 = x1
         x1 = x
-      }
       Fp(x1 % p)
-    }
 
     val p2: Int = (p - 1) / 2
 
     val inverses: ArraySeq[Fp] = ArraySeq.tabulate(p)(j =>
-      if (j == 0) 0
+      if j == 0 then 0
       else computeInverse(Fp(j))
     )
 
-    def inverse(fp: Fp): Fp = {
+    def inverse(fp: Fp): Fp =
       val ix: Int = fp.toUInt
-      if (ix == 0)
-        throw new ArithmeticException("Division by zero")
-      else
-        inverses(ix)
-    }
+      if ix == 0 then throw new ArithmeticException("Division by zero")
+      else inverses(ix)
 
-    def invert(x : Fp) : Fp = inverse(x)
-    def isEqual(x : Fp, y: Fp) : Boolean = 
+    def invert(x: Fp): Fp = inverse(x)
+    def isEqual(x: Fp, y: Fp): Boolean =
       val Fp(xv) = norm(x)
       val Fp(yv) = norm(y)
       xv == yv
-    def zero : Fp = Fp(0)
-    def one : Fp = Fp(1)
-    
+    def zero: Fp = Fp(0)
+    def one: Fp = Fp(1)
+
     def op1(op: Int => Int): Fp => Fp =
       a => norm(Fp(op(a)))
 
@@ -103,24 +94,18 @@ class FiniteField(val p: Int) {
 
     def times(x: Fp, y: Fp): Fp = op2(_ * _)(x, y)
 
-    def toDouble(x: Fp): Double = {
+    def toDouble(x: Fp): Double =
       val xx = x
       IntIsIntegral.toDouble(xx)
-    }
 
-    def toFloat(x: Fp): Float = {
+    def toFloat(x: Fp): Float =
       val xx = x
       IntIsIntegral.toFloat(xx)
-    }
 
-    def toInt(x: Fp): Fp = {
+    def toInt(x: Fp): Fp =
       val xx = x
       IntIsIntegral.toInt(xx)
-    }
 
-    def toLong(x: Fp): Long = {
+    def toLong(x: Fp): Long =
       val xx = x
       IntIsIntegral.toLong(xx)
-    }
-  }
-}

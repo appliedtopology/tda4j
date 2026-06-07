@@ -2,7 +2,7 @@ package org.appliedtopology.tda4j
 
 import org.specs2.mutable
 
-class DeferredSpec extends mutable.Specification {
+class DeferredSpec extends mutable.Specification:
   val fr = FractionalExpr
   val fractional: Fractional[FractionalExpr] = summon[Fractional[FractionalExpr]]
   import fractional.*
@@ -72,4 +72,3 @@ class DeferredSpec extends mutable.Specification {
       )
     }
   }
-}

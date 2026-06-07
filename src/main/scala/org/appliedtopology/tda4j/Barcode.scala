@@ -28,25 +28,25 @@ case class ClosedEndpoint[FiltrationT: Ordering](val value: FiltrationT) extends
   override val isFinite = true
 
 import math.Ordered.orderingToOrdered
-given [FiltrationT : Ordering as ord] => Ordering[BarcodeEndpoint[FiltrationT]]:
+given [FiltrationT: Ordering as ord] => Ordering[BarcodeEndpoint[FiltrationT]]:
   def compare(
     x: BarcodeEndpoint[FiltrationT],
     y: BarcodeEndpoint[FiltrationT]
   ) = x match
-    case NegativeInfinity() => -1
-    case PositiveInfinity() => +1
+    case NegativeInfinity()     => -1
+    case PositiveInfinity()     => +1
     case ClosedEndpoint(xvalue) =>
       y match
         case NegativeInfinity()     => +1
         case PositiveInfinity()     => -1
         case ClosedEndpoint(yvalue) => ord.compare(xvalue, yvalue)
-        case OpenEndpoint(yvalue) =>
+        case OpenEndpoint(yvalue)   =>
           if ord.compare(xvalue, yvalue) == 0 then -1
           else ord.compare(xvalue, yvalue)
     case OpenEndpoint(xvalue) =>
       y match
-        case NegativeInfinity() => +1
-        case PositiveInfinity() => -1
+        case NegativeInfinity()     => +1
+        case PositiveInfinity()     => -1
         case ClosedEndpoint(yvalue) =>
           if ord.compare(xvalue, yvalue) == 0 then +1
           else ord.compare(xvalue, yvalue)

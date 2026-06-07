@@ -1,13 +1,8 @@
 name := "TDA4j"
 organization := "org.appliedtopology"
-version := "0.1.0-alpha"
-scalaVersion := "3.6.2"
+scalaVersion := "3.8.4"
 
 versionScheme := Some("semver-spec")
-
-pomIncludeRepository := { _ => false }
-publishTo := sonatypePublishToBundle.value
-sonatypeCredentialHost := "s01.oss.sonatype.org"
 
 libraryDependencies += "org.specs2"       %% "specs2-core"          % "5.5.1" % "test"
 libraryDependencies += "org.specs2"       %% "specs2-matcher-extra" % "5.5.1" % "test"
@@ -38,9 +33,8 @@ lazy val root = (project in file("."))
   .settings(
     // these options make 3.5.0 use the given resolution algorithms planned for 3.7.x.
     scalacOptions ++= List("-source:future", "-language:experimental.modularity"),
-    Compile / paradoxMaterialTheme := {
-      ParadoxMaterialTheme()
-    },
+    Compile / paradoxMaterialTheme :=
+      ParadoxMaterialTheme(),
     Compile / paradoxProperties ++= Map(
       "project.url" -> "https://appliedtopology.github.io/tda4j",
       "github.base_url" -> s"https://github.com/appliedtopology/tda4j/tree/${version.value}",

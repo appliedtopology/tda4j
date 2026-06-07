@@ -8,7 +8,7 @@ import java.lang.Runtime
 import java.lang.System
 import collection.immutable.BitSet
 
-class ProfilingSpec(args: Arguments) extends mutable.Specification {
+class ProfilingSpec(args: Arguments) extends mutable.Specification:
   """This is a profiling script to measure performance of different implementations.""" >> {
     val bitlength: Int = args.commandLine.intOr("bitlength", 3)
     val maxFVal: Double = args.commandLine.doubleOr("maxFVal", 4.0)
@@ -17,4 +17,3 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification {
     val symmetry: HyperCubeSymmetry = HyperCubeSymmetry(bitlength)
 
   }
-}

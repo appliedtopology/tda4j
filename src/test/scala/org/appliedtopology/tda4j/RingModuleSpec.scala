@@ -2,12 +2,12 @@ package org.appliedtopology.tda4j
 import org.specs2.{mutable, ScalaCheck}
 import org.specs2.execute.AsResult
 
-class RingModuleSpec extends mutable.Specification with ScalaCheck {
+class RingModuleSpec extends mutable.Specification with ScalaCheck:
   """This is a test module for developing the RingModule[M,R] interface
     |and make sure that it does what we need it to do.
     |""".stripMargin
 
-  given rm: (RingModule { type Self = (Int, Int); type R = Int }) with {
+  given rm: (RingModule { type Self = (Int, Int); type R = Int }):
     type Self = (Int, Int)
     type R = Int
 
@@ -19,7 +19,6 @@ class RingModuleSpec extends mutable.Specification with ScalaCheck {
     override def negate(x: (Int, Int)): (Int, Int) = (-x._1, -x._2)
 
     def scale(x: Int, y: (Int, Int)): (Int, Int) = (x * y._1, x * y._2)
-  }
 
   "zero should exist" >> {
     val v: (Int, Int) = rm.zero
@@ -32,36 +31,31 @@ class RingModuleSpec extends mutable.Specification with ScalaCheck {
         (x, y) + (z, w) should be_==(x + z, y + w)
       }
     }
-    "zero is a left zero" >> {
+    "zero is a left zero" >>
       AsResult {
         prop { (x: Int, y: Int) =>
           rm.zero + (x, y) should be_==(x, y)
         }
       }
-    }
-    "zero is a right zero" >> {
+    "zero is a right zero" >>
       AsResult {
         prop { (x: Int, y: Int) =>
           (x, y) + rm.zero should be_==(x, y)
         }
       }
-    }
   }
 
-  "scalar multiplication should work" >> {
+  "scalar multiplication should work" >>
     AsResult {
       prop { (x: Int, y: Int, r: Int) =>
         (x, y) <* r should be_==(x * r, y * r)
 
       }
     }
-  }
 
-  "scalar left-multiplication should work" >> {
+  "scalar left-multiplication should work" >>
     AsResult {
       prop { (x: Int, y: Int, r: Int) =>
         (r |*| (x, y)) should be_==(x * r, y * r)
       }
     }
-  }
-}

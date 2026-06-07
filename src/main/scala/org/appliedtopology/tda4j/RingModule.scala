@@ -12,7 +12,7 @@ import scala.annotation.targetName
   * @tparam R
   *   Type of the ring coefficients
   */
-trait RingModule {
+trait RingModule:
   type Self
   type R
 
@@ -23,7 +23,7 @@ trait RingModule {
   def negate(x: Self): Self = minus(zero, x)
   def scale(x: R, y: Self): Self
 
-  extension (t: Self) {
+  extension (t: Self)
     @targetName("add")
     def +(rhs: Self): Self = plus(t, rhs)
     @targetName("subtract")
@@ -32,14 +32,11 @@ trait RingModule {
     def <*(rhs: R): Self = scale(rhs, t)
     infix def mul(rhs: R): Self = scale(rhs, t)
     def unary_- : Self = negate(t)
-  }
 
-  extension (r: R) {
+  extension (r: R)
     @targetName("scalarMultiplyLeft")
     def |*|(t: Self): Self = this.scale(r, t)
     @targetName("scalarMultiplyLeft2")
     def ⊠(t: Self): Self = this.scale(r, t) // unicode ⊠ for boxed times
     @targetName("infixScale")
     infix def scale(t: Self): Self = this.scale(r, t)
-  }
-}

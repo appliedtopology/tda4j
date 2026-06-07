@@ -8,13 +8,12 @@ import math.Ordering.Implicits.*
 import scala.jdk.CollectionConverters.*
 import com.eatthepath.jvptree.*
 
-
 /** Interface for being a finite metric space
   *
   * @tparam VertexT
   *   Type of the vertex indices for the metric space
   */
-trait FiniteMetricSpace[VertexT] {
+trait FiniteMetricSpace[VertexT]:
 
   /** Distance in the metric space. Takes two indices and returns a non-negative real number.
     * @param x
@@ -47,11 +46,10 @@ trait FiniteMetricSpace[VertexT] {
     elements.map { x =>
       elements.map(y => distance(x, y)).max
     }.min
-}
 
 /** Convenience functionality for metric spaces.
   */
-object FiniteMetricSpace {
+object FiniteMetricSpace:
 
   /** Creates a filtration value partial function implementing the functionality of a [[SimplexFiltration]] for a
     * filtration generated from a metric space, where the filtration value is the maximum distance between vertices (or
@@ -64,29 +62,26 @@ object FiniteMetricSpace {
     */
   class MaximumDistanceFiltrationValue[VertexT: Ordering](
     val metricSpace: FiniteMetricSpace[VertexT]
-  ) extends PartialFunction[Simplex[VertexT], Double] {
+  ) extends PartialFunction[Simplex[VertexT], Double]:
     def isDefinedAt(spx: Simplex[VertexT]): Boolean =
       spx.forall(v => metricSpace.contains(v))
 
     def apply(spx: Simplex[VertexT]): Double =
-      if (spx.dim <= 0)
-        0.0
+      if spx.dim <= 0 then 0.0
       else
         spx
-          .flatMap(v => spx.filter(_ > v).map(w => metricSpace.distance(v, w)))
+          .flatMap(v => spx.toSeq.filter(_ > v).map(w => metricSpace.distance(v, w)))
           .max
-  }
-}
 
-/**
- * Wrapper class to make any metricspace into a metricspace defined on indices 0 through `metricSpace.size`.
- * This way, code can assume that the index set is contiguous.
- *
- * @param metricSpace Wrapped metric space
- * @tparam VertexT
- *   Type of the vertex indices for the wrapped metric space
- */
-class IntMetricSpace[VertexT](val metricSpace: FiniteMetricSpace[VertexT]) extends FiniteMetricSpace[Int] {
+/** Wrapper class to make any metricspace into a metricspace defined on indices 0 through `metricSpace.size`. This way,
+  * code can assume that the index set is contiguous.
+  *
+  * @param metricSpace
+  *   Wrapped metric space
+  * @tparam VertexT
+  *   Type of the vertex indices for the wrapped metric space
+  */
+class IntMetricSpace[VertexT](val metricSpace: FiniteMetricSpace[VertexT]) extends FiniteMetricSpace[Int]:
   override def distance(x: Int, y: Int): Double =
     metricSpace.distance(metricSpace.elements.toIndexedSeq(x), metricSpace.elements.toIndexedSeq(y))
 
@@ -96,8 +91,7 @@ class IntMetricSpace[VertexT](val metricSpace: FiniteMetricSpace[VertexT]) exten
 
   override def size: Int = metricSpace.size
 
-  override def elements: Iterable[Int] = (0 until size)
-}
+  override def elements: Iterable[Int] = 0 until size
 
 /** Takes in an explicit distance matrix, and performs lookups in this distance matrix.
   *
@@ -109,12 +103,11 @@ class IntMetricSpace[VertexT](val metricSpace: FiniteMetricSpace[VertexT]) exten
   *   - `dist(x)(x) == 0` for all `x`
   *   - The triangle inequality
   */
-class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricSpace[Int] {
+class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricSpace[Int]:
   def distance(x: Int, y: Int): Double = dist(x)(y)
   def size: Int = dist.size
   def elements: Iterable[Int] = Range(0, size)
   override def contains(x: Int): Boolean = 0 <= x & x < size
-}
 
 /** Takes in an point cloud and computes the Euclidean distance on demand.
   *
@@ -124,74 +117,70 @@ class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricSpace[
   *   - `pts(x1).size == pts(x2).size` for all `x1,x2`
   */
 
-class EuclideanMetricSpace(val pts: Array[Array[Double]]) extends FiniteMetricSpace[Int] {
-  def pointSqDistance(x : Array[Double], y : Array[Double]): Double = {
-    var acc : Double = 0.0
+class EuclideanMetricSpace(val pts: Array[Array[Double]]) extends FiniteMetricSpace[Int]:
+  def pointSqDistance(x: Array[Double], y: Array[Double]): Double =
+    var acc: Double = 0.0
     var i = 0
-    while(i < math.min(x.length, y.length)) {
-      val d : Double = x(i)-y(i)
-      acc += d*d
+    while i < math.min(x.length, y.length) do
+      val d: Double = x(i) - y(i)
+      acc += d * d
       i += 1
-    }
     acc
-  }
 
-  def distance(x: Int, y: Int): Double = {
+  def distance(x: Int, y: Int): Double =
     sqrt(pointSqDistance(pts(x), pts(y)))
-  }
   def size: Int = pts.size
   def elements: Iterable[Int] = Range(0, size)
   override def contains(x: Int): Boolean = 0 <= x & x < size
 
-  lazy val vpdf : DistanceFunction[Array[Double]] =
+  lazy val vpdf: DistanceFunction[Array[Double]] =
     new DistanceFunction[Array[Double]]:
       override def getDistance(firstPoint: Array[Double], secondPoint: Array[Double]): Double =
         sqrt(pointSqDistance(firstPoint, secondPoint))
 
-  lazy val vpt : VPTree[Array[Double],Array[Double]] =
+  lazy val vpt: VPTree[Array[Double], Array[Double]] =
     new VPTree(vpdf, pts.toSeq.asJavaCollection)
 
-  def neighbors(qp : Array[Double], eps : Double) : Seq[Int] =
+  def neighbors(qp: Array[Double], eps: Double): Seq[Int] =
     vpt.getAllWithinDistance(qp, eps).asScala.toSeq.map(pts.indexOf(_))
-}
 
-object EuclideanMetricSpace {
-  def apply(points : Seq[Seq[Double]]) : EuclideanMetricSpace =
+object EuclideanMetricSpace:
+  def apply(points: Seq[Seq[Double]]): EuclideanMetricSpace =
     new EuclideanMetricSpace(points.map(_.toArray).toArray)
-  def apply(points : Array[Array[Double]]) : EuclideanMetricSpace =
+  def apply(points: Array[Array[Double]]): EuclideanMetricSpace =
     new EuclideanMetricSpace(points)
-}
 
-/********* Efficient Spatial Queries ********/
+/** ******* Efficient Spatial Queries *******
+  */
 
 trait SpatialQuery[VertexT]:
-  def neighbors(v : VertexT, epsilon : Double): Set[VertexT]
+  def neighbors(v: VertexT, epsilon: Double): Set[VertexT]
 
-case class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT] {
-  val distanceFunction : DistanceFunction[VertexT] = new DistanceFunction[VertexT]:
-    override def getDistance(firstPoint: VertexT, secondPoint: VertexT): Double = metricSpace.distance(firstPoint, secondPoint)
-  val vpTree : VPTree[VertexT, VertexT] = new VPTree(distanceFunction, metricSpace.elements.asJavaCollection)
+case class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
+  val distanceFunction: DistanceFunction[VertexT] = new DistanceFunction[VertexT]:
+    override def getDistance(firstPoint: VertexT, secondPoint: VertexT): Double =
+      metricSpace.distance(firstPoint, secondPoint)
+  val vpTree: VPTree[VertexT, VertexT] = new VPTree(distanceFunction, metricSpace.elements.asJavaCollection)
 
   override def neighbors(v: VertexT, epsilon: Double): Set[VertexT] =
     vpTree.getAllWithinDistance(v, epsilon).asScala.toSet
-}
 
-case class BruteForce[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT] {
+case class BruteForce[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
   override def neighbors(v: VertexT, epsilon: Double): Set[VertexT] =
-    metricSpace.elements.toSet.filter { (w) => metricSpace.distance(v,w) <= epsilon }
-}
+    metricSpace.elements.toSet.filter(w => metricSpace.distance(v, w) <= epsilon)
 
+/** ****** Sparse Metric Spaces and the Dory storage *******
+  */
 
+case class SparseMetricSpace[VertexT: Ordering](metricSpace: FiniteMetricSpace[VertexT], diameter: Double)
+    extends FiniteMetricSpace[VertexT]():
+  val spatialQuery: SpatialQuery[VertexT] = JVPTree(metricSpace)
 
-/******** Sparse Metric Spaces and the Dory storage ********/
-
-case class SparseMetricSpace[VertexT : Ordering](metricSpace : FiniteMetricSpace[VertexT], diameter : Double) extends FiniteMetricSpace[VertexT]() {
-  val spatialQuery : SpatialQuery[VertexT] = JVPTree(metricSpace)
-
-  val neighborhoods : Map[VertexT, Seq[(VertexT, Double)]] =
+  val neighborhoods: Map[VertexT, Seq[(VertexT, Double)]] =
     Map.from(
-      metricSpace.elements.map { (x) => x ->
-        spatialQuery.neighbors(x, diameter).toSeq.map { (y) => (y, metricSpace.distance(x,y)) }.sortBy(_._2)
+      metricSpace.elements.map { x =>
+        x ->
+          spatialQuery.neighbors(x, diameter).toSeq.map(y => (y, metricSpace.distance(x, y))).sortBy(_._2)
       }
     )
 
@@ -200,8 +189,7 @@ case class SparseMetricSpace[VertexT : Ordering](metricSpace : FiniteMetricSpace
   override def elements: Iterable[VertexT] = metricSpace.elements
   override def size: Int = metricSpace.size
 
-  override def distance(x: VertexT, y: VertexT): Double = 
+  override def distance(x: VertexT, y: VertexT): Double =
     metricSpace
-      .distance(x,y)
-      .pipe((d) => if(d > diameter) Double.PositiveInfinity else d)
-}
+      .distance(x, y)
+      .pipe(d => if d > diameter then Double.PositiveInfinity else d)

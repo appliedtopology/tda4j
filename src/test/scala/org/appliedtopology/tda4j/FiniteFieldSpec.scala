@@ -29,131 +29,115 @@ object FiniteFieldSpec extends mutable.Specification with ScalaCheck:
     }
 
     "all signed operations stay within -p/2, p/2" >> {
-      "*" >> {
+      "*" >>
         AsResult {
           prop { (x: Int, y: Int) =>
             (-8 to 8).contains((Fp(x) * Fp(y)).toInt)
           }
         }
-      }
-      "+" >> {
+      "+" >>
         AsResult {
           prop { (x: Int, y: Int) =>
             (-8 to 8).contains((Fp(x) + Fp(y)).toInt)
           }
         }
-      }
-      "-" >> {
+      "-" >>
         AsResult {
           prop { (x: Int, y: Int) =>
             (-8 to 8).contains((Fp(x) - Fp(y)).toInt)
           }
         }
-      }
-      "/" >> {
+      "/" >>
         AsResult {
           prop { (x: Int, y: Int) =>
             (y != 0) ==>
               (-8 to 8).contains((Fp(x) * Fp(y)).toInt)
           }
         }
-      }
     }
 
     "all unsigned operations stay within 0, p-1" >> {
-      "*" >> {
+      "*" >>
         AsResult {
           prop { (x: Int, y: Int) =>
             (0 to 16).contains((Fp(x) * Fp(y)).toUInt)
           }
         }
-      }
-      "+" >> {
+      "+" >>
         AsResult {
           prop { (x: Int, y: Int) =>
             (0 to 16).contains((Fp(x) + Fp(y)).toUInt)
           }
         }
-      }
-      "-" >> {
+      "-" >>
         AsResult {
           prop { (x: Int, y: Int) =>
             (0 to 16).contains((Fp(x) - Fp(y)).toUInt)
           }
         }
-      }
-      "/" >> {
+      "/" >>
         AsResult {
           prop { (x: Int, y: Int) =>
             (y != 0) ==>
               (0 to 16).contains((Fp(x) * Fp(y)).toUInt)
           }
         }
-      }
     }
 
     "commutativity" >> {
-      "*" >> {
+      "*" >>
         AsResult {
           prop { (x: Int, y: Int) =>
             Fp(x) * Fp(y) === Fp(y) * Fp(x)
           }
         }
-      }
-      "+" >> {
+      "+" >>
         AsResult {
           prop { (x: Int, y: Int) =>
             Fp(x) + Fp(y) === Fp(y) + Fp(x)
           }
         }
-      }
     }
     "associativity" >> {
-      "*" >> {
+      "*" >>
         AsResult {
           prop { (x: Int, y: Int, z: Int) =>
             (Fp(x) * Fp(y)) * Fp(z) === Fp(y) * (Fp(x) * Fp(z))
           }
         }
-      }
-      "+" >> {
+      "+" >>
         AsResult {
           prop { (x: Int, y: Int, z: Int) =>
             (Fp(x) + Fp(y)) + Fp(z) === Fp(y) + (Fp(x) + Fp(z))
           }
         }
-      }
     }
-    "distributivity" >> {
+    "distributivity" >>
       AsResult {
         prop { (x: Int, y: Int, z: Int) =>
           Fp(x) * (Fp(y) + Fp(z)) === Fp(x) * Fp(y) + Fp(x) * Fp(z)
         }
       }
-    }
     "units" >> {
-      "x-x" >> {
+      "x-x" >>
         AsResult {
           prop { (x: Int) =>
             x - x === Fp(0)
           }
         }
-      }
-      "x + (-x)" >> {
+      "x + (-x)" >>
         AsResult {
           prop { (x: Int) =>
             x + (-x) === Fp(0)
           }
         }
-      }
-      "x * (1/x)" >> {
+      "x * (1/x)" >>
         AsResult {
           prop { (y: Int) =>
             (y % 17 != 0) ==>
               (Fp(y) * (Fp(1) / Fp(y)) === Fp(1))
           }
         }
-      }
     }
   }
 

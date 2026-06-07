@@ -3,24 +3,20 @@ package org.appliedtopology.tda4j
 import collection.mutable
 import math.Ordering.Implicits.infixOrderingOps
 
-class UnionFind[T](vertices: IterableOnce[T]) {
+class UnionFind[T](vertices: IterableOnce[T]):
   case class UFSet(val label: T)
   val sets: mutable.Map[UFSet, UFSet] = mutable.Map.from(
     vertices.iterator.map(v => (UFSet(v), UFSet(v)))
   )
   def find(s: UFSet): UFSet =
-    if (sets(s) == s) s
+    if sets(s) == s then s
     else find(sets(s))
-  def union(x: UFSet, y: UFSet): UFSet = {
+  def union(x: UFSet, y: UFSet): UFSet =
     var xr = find(x)
     var yr = find(y)
 
-    if (xr != yr) {
-      sets(yr) = x
-    }
+    if xr != yr then sets(yr) = x
     xr
-  }
-}
 
 /** This implementation of Kruskal's algorithm will return two iterators of vertex pairs: the first iterator is a
   * Minimal Spanning Tree in increasing weight order, while the second iterator gives all the non-included
@@ -28,7 +24,7 @@ class UnionFind[T](vertices: IterableOnce[T]) {
 
 class Kruskal[T](elements: Seq[T], distance: (T, T) => Double, maxDistance: Double = Double.PositiveInfinity)(using
   orderingT: Ordering[T]
-) {
+):
   val unionFind: UnionFind[T] = UnionFind(elements)
 
   val sortedEdges: List[(Double, unionFind.UFSet, unionFind.UFSet)] =
@@ -42,52 +38,46 @@ class Kruskal[T](elements: Seq[T], distance: (T, T) => Double, maxDistance: Doub
     }
 
   val lrList: (List[(T, T)], List[(T, T)]) = sortedEdges.partitionMap { (d, x, y) =>
-    if unionFind.find(x) != unionFind.find(y) then {
+    if unionFind.find(x) != unionFind.find(y) then
       unionFind.union(x, y)
       Left[(T, T), (T, T)]((x.label, y.label))
-    } else {
-      Right[(T, T), (T, T)]((x.label, y.label))
-    }
+    else Right[(T, T), (T, T)]((x.label, y.label))
   }
 
   def mstIterator: Iterator[(T, T)] = lrList._1.iterator
   def cyclesIterator: Iterator[(T, T)] = lrList._2.iterator
 
-  def cycleToChain[CoefficientT : Field](edge: (T, T)): Chain[Simplex[T], CoefficientT] = {
+  def cycleToChain[CoefficientT: Field](edge: (T, T)): Chain[Simplex[T], CoefficientT] =
     import unionFind.UFSet
     val (s, t) = edge
     val edgeChain =
-      if (s < t) Chain(Simplex(s, t))
+      if s < t then Chain(Simplex(s, t))
       else -Chain(Simplex(t, s))
     val sPath = Seq
       .unfold(UFSet(s)) { v =>
         val next = unionFind.sets(v)
-        if (next == v) None
+        if next == v then None
         else Some(((v.label, next.label), next))
       }
       .map { (i, j) =>
-        if (i < j) Chain[Simplex[T], CoefficientT](Simplex(i, j))
+        if i < j then Chain[Simplex[T], CoefficientT](Simplex(i, j))
         else -Chain[Simplex[T], CoefficientT](Simplex(j, i))
       }
       .fold(summon[Chain[Simplex[T], CoefficientT] is RingModule].zero)(_ + _)
     val tPath = Seq
       .unfold(UFSet(t)) { v =>
         val next = unionFind.sets(v)
-        if (next == v) None
+        if next == v then None
         else Some(((v.label, next.label), next))
       }
       .map { (i, j) =>
-        if (i < j) Chain[Simplex[T], CoefficientT](Simplex(i, j))
+        if i < j then Chain[Simplex[T], CoefficientT](Simplex(i, j))
         else -Chain[Simplex[T], CoefficientT](Simplex(j, i))
       }
       .fold(summon[Chain[Simplex[T], CoefficientT] is RingModule].zero)(_ + _)
 
     edgeChain - sPath + tPath
-  }
-}
 
-object Kruskal {
+object Kruskal:
   def apply[T: Ordering](metricSpace: FiniteMetricSpace[T]): Kruskal[T] =
     new Kruskal(metricSpace.elements.toSeq, metricSpace.distance)
-}
-

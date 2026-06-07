@@ -3,7 +3,7 @@ package org.appliedtopology.tda4j
 import org.specs2.mutable.Specification
 import org.specs2.specification.core.Fragment
 
-class SimplexIndexingSpec extends Specification {
+class SimplexIndexingSpec extends Specification:
   "Testing the simplex indexing code against Ulrich Bauer's paper examples" >> {
 
     "Error Case" >> {
@@ -74,9 +74,8 @@ class SimplexIndexingSpec extends Specification {
       ))
     }
   }
-}
 
-class RipserStreamSpec extends Specification {
+class RipserStreamSpec extends Specification:
   "RipserStream interface testing" >> {
     val hc2: HyperCube = HyperCube(2)
 
@@ -114,16 +113,15 @@ class RipserStreamSpec extends Specification {
         .iteratorByDimension(4)
         .toSeq must beEmpty)
     }
-    "Check total orders of dimensions" >> {
+    "Check total orders of dimensions" >>
       Fragment.foreach(0 to hc2.size) { d =>
         s"$d is sorted" ! {
-          (rs
+          rs
             .iteratorByDimension(d)
             .map(s => rs.filtrationValue(s))
-            .toSeq must beSorted)
+            .toSeq must beSorted
         }
       }
-    }
     "Full simplex stream gives the right number of elements" >> {
       rs.iterator.toSeq must haveSize((1 << hc2.size) - 1)
     }
@@ -154,4 +152,3 @@ class RipserStreamSpec extends Specification {
       (rs.zeroPivotFacet(rs.si(∆(0, 1, 3)), 3)
         must beSome(rs.si(∆(0, 3))))
   }
-}

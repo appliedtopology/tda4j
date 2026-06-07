@@ -5,8 +5,8 @@ import org.scalacheck.Prop.forAll
 import org.specs2.mutable
 import org.specs2.ScalaCheck
 
-class HomologySpec extends mutable.Specification with ScalaCheck {
-  given (Double is Field) = Field.DoubleApproximated(1e-25)
+class HomologySpec extends mutable.Specification with ScalaCheck:
+  given Double is Field = Field.DoubleApproximated(1e-25)
 
   "Homology of a triangle" >> {
     given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
@@ -26,27 +26,28 @@ class HomologySpec extends mutable.Specification with ScalaCheck {
       )
     )
   }
-}
 
-class BarcodeRegressionSpec extends org.specs2.mutable.Specification with ScalaCheck {
-  given (Double is Field) = Field.DoubleApproximated(1e-25)
+class BarcodeRegressionSpec extends org.specs2.mutable.Specification with ScalaCheck:
+  given Double is Field = Field.DoubleApproximated(1e-25)
 
-  val shc = PersistenceInChunksContext[Int,Double](3)
+  val shc = PersistenceInChunksContext[Int, Double](3)
 
-  val cases : Seq[(String, Array[Array[Double]] => StratifiedSimplexStream[Int,Double])] = Seq(
-    ("Alpha", (pts : Array[Array[Double]]) => AlphaShapes(pts)),
-    ("VR", (pts : Array[Array[Double]]) => LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(EuclideanMetricSpace(pts)), 4))
+  val cases: Seq[(String, Array[Array[Double]] => StratifiedSimplexStream[Int, Double])] = Seq(
+    ("Alpha", (pts: Array[Array[Double]]) => AlphaShapes(pts)),
+    (
+      "VR",
+      (pts: Array[Array[Double]]) =>
+        LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(EuclideanMetricSpace(pts)), 4)
+    )
   )
-  for ((name, streamBuilder) <- cases) {
+  for (name, streamBuilder) <- cases do
     s"$name complex should have births before deaths" >> {
       // matrixGen is defined in VietorisRipsSpec.scala
-      //forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(25, 250))) { (points: Array[Array[Double]]) =>
+      // forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(25, 250))) { (points: Array[Array[Double]]) =>
       val points = matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(25, 250)).sample.get
-        val vrstream = streamBuilder(points)
-        val homology = shc.persistentHomology(vrstream)
-        val dgm = homology.diagramAt(5.0)
-        forall(dgm) { (bar : (Int, Double, Double)) => bar._2 <= bar._3 }
-      //}
+      val vrstream = streamBuilder(points)
+      val homology = shc.persistentHomology(vrstream)
+      val dgm = homology.diagramAt(5.0)
+      forall(dgm)((bar: (Int, Double, Double)) => bar._2 <= bar._3)
+      // }
     }
-  }
-}

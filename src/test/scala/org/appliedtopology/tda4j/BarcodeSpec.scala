@@ -7,9 +7,9 @@ import org.specs2.mutable.Specification
 import scala.collection.immutable.Seq
 
 import org.appliedtopology.tda4j.given
-import org.appliedtopology.tda4j.barcode.{given, *}
+import org.appliedtopology.tda4j.barcode.{*, given}
 
-class BarcodeAlgebraSpec extends Specification with ScalaCheck {
+class BarcodeAlgebraSpec extends Specification with ScalaCheck:
   "Comparing endpoints" >> {
     "Negative Infinity is less than everything else" >> {
       prop { (d: Double) =>
@@ -85,14 +85,14 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck {
       ) must beTrue
     )
 
-    "Target must exist at source birth" ==> ({
+    "Target must exist at source birth" ==> {
       val isThisAMap = barcode.isMap(
         List(dim(0)(0.bc(5))),
         List(dim(0)(1.bc(5))),
         MatrixUtils.createRealMatrix(Array(Array(1.0)))
       )
       isThisAMap must beFalse
-    })
+    }
 
     "Target must exist at source death" ==> (
       barcode.isMap(
@@ -229,13 +229,11 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck {
       )
     ))
   }
-}
 
-class BarcodeSpec extends Specification {
+class BarcodeSpec extends Specification:
   "0-persistence output" >> {
     val ms: FiniteMetricSpace[Int] = ExplicitMetricSpace(
       Seq(Seq(0.0, 1.0, 2.0), Seq(1.0, 0.0, 3.0), Seq(2.0, 3.0, 0.0))
     )
     val rs = RipserStream(ms, ms.minimumEnclosingRadius, 5)
   }
-}

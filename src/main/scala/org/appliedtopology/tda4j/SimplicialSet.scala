@@ -437,7 +437,7 @@
 //    override def iterator: Iterator[SimplicialSetElement] =
 //      ss.generators.sorted(filtrationOrdering).iterator
 //  }
-// 
+//
 //}
 //*/
 //
@@ -746,7 +746,7 @@
 //    val allGenerators = allGeneratorKeys.toList.map{(k) => generators(k.size-1)(k)}
 //    val reverseGeneratorLookup = Map.from(allGeneratorKeys.map{(k) => generators(k.size-1)(k) -> k})
 //    val faceMapping = Map.from(
-//      allGenerators.map{(generator) => 
+//      allGenerators.map{(generator) =>
 //        val generatorKey = reverseGeneratorLookup(generator)
 //        generator -> generatorKey
 //          .indices

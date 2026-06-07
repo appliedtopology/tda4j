@@ -10,7 +10,7 @@ import scala.collection.immutable.{BitSet, Range}
 import scala.collection.mutable.ListBuffer
 import math.Ordering.Implicits.*
 
-class SymmetryGroupSpec extends mutable.Specification {
+class SymmetryGroupSpec extends mutable.Specification:
   sequential
   """This is the specification for our expectations on the symmetry group
     |action interfaces and their usages.
@@ -52,9 +52,8 @@ class SymmetryGroupSpec extends mutable.Specification {
   val itallsimplices: ListBuffer[Simplex[Int]] =
     collection.mutable.ListBuffer[Simplex[Int]]()
 
-  "ExpandList Iterator does not throw exception while it has content" >> {
+  "ExpandList Iterator does not throw exception while it has content" >>
     el.indices.foreach(_ => itallsimplices.append(it.next()))
-  }
 
   "ExpandList Iterator reflects content" >> {
     allsimplices === itallsimplices.toList
@@ -67,4 +66,3 @@ class SymmetryGroupSpec extends mutable.Specification {
   "Another step with iterator throws exception" >> {
     it.next() must throwA[NoSuchElementException]
   }
-}

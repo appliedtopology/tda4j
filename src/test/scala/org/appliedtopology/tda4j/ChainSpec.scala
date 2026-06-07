@@ -8,15 +8,15 @@ import scala.math.Numeric.FloatIsFractional
 
 import scala.math.Fractional.Implicits.infixFractionalOps
 
-class ChainSpec extends mutable.Specification {
+class ChainSpec extends mutable.Specification:
   """This is the specification for testing the Chain implementation.
     |""".stripMargin.txt
 
-  given (Double is Field) = Field.DoubleApproximated(1e-25)
+  given Double is Field = Field.DoubleApproximated(1e-25)
 
   given Conversion[Simplex[Int], Chain[Simplex[Int], Double]] =
     Chain.apply
-  
+
   given Ordering[Int] = math.Ordering.Int
 
   val rm = summon[RingModule { type Self = Chain[Simplex[Int], Double]; type R = Double }]
@@ -75,15 +75,14 @@ class ChainSpec extends mutable.Specification {
          correctly perform subtraction $e4
        """
 
-      def e1 = {
+      def e1 =
         val chain = z1
         val expectedResult = Chain(Simplex(1, 2, 3))
         val result = 2 |*| chain
 
         result must beEqualTo(expectedResult)
-      }
 
-      def e2 = {
+      def e2 =
         val chain1 = z1
         val chain2 = z2
         val chain3 = z5
@@ -106,17 +105,15 @@ class ChainSpec extends mutable.Specification {
 
         result1 must beEqualTo(expectedResult1)
         result2 must beEqualTo(expectedResult2)
-      }
 
-      def e3 = {
+      def e3 =
         val chain = z1
         val expectedResult: Chain[Simplex[Int], Double] = Chain(Simplex(1, 2, 3) -> -1.0)
         val result = -chain
 
         result must beEqualTo(expectedResult)
-      }
 
-      def e4 = {
+      def e4 =
         val chain1 = z1
         val chain2 = z2
         val expectedResult = Chain(
@@ -128,7 +125,6 @@ class ChainSpec extends mutable.Specification {
         val result = chain1 - chain2
 
         result must beEqualTo(expectedResult)
-      }
     }
 
   }
@@ -165,10 +161,9 @@ class ChainSpec extends mutable.Specification {
       summon[RingModule { type Self = Chain[Simplex[Int], Double]; type R = Double }].zero
     )
   }
-}
 
-class HeapChainSpec extends mutable.Specification {
-  given (Double is Field) = Field.DoubleApproximated(1e-25)
+class HeapChainSpec extends mutable.Specification:
+  given Double is Field = Field.DoubleApproximated(1e-25)
 
   "Heap-based chains should" >> {
     "be created from a sequence" >> {
@@ -203,4 +198,3 @@ class HeapChainSpec extends mutable.Specification {
         (z3.isZero() must beTrue)
     }
   }
-}
