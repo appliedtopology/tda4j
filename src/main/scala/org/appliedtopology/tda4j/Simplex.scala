@@ -43,6 +43,8 @@ extension [VertexT](spx: Simplex[VertexT])
   def |(that: Simplex[VertexT]): Simplex[VertexT] = spx.union(that)
   def incl(v: VertexT): Simplex[VertexT] = spx.incl(v)
   def +(v: VertexT): Simplex[VertexT] = spx.incl(v)
+  def excl(v: VertexT): Simplex[VertexT] = spx.excl(v)
+  def -(v: VertexT): Simplex[VertexT] = spx.excl(v)
   def concat(that: IterableOnce[VertexT]): Simplex[VertexT] = spx.concat(that)
   def ++(that: IterableOnce[VertexT]): Simplex[VertexT] = spx.concat(that)
   def min[B >: VertexT: Ordering]: VertexT = spx.min
@@ -85,7 +87,9 @@ object Simplex:
   */
 def ∆[VertexT: Ordering](vertices: VertexT*): Simplex[VertexT] = Simplex.from(vertices)
 
-def simplexOrdering[VertexT](using vtxOrd: Ordering[VertexT]): Ordering[Simplex[VertexT]] = sortedSetOrdering(using vtxOrd)
+def simplexOrdering[VertexT](using vtxOrd: Ordering[VertexT]): Ordering[Simplex[VertexT]] = sortedSetOrdering(using
+  vtxOrd
+)
 def Simplex_is_OrderedCell[VertexT](using
   vtxOrd: Ordering[VertexT]
 )(setOrdering: Ordering[Simplex[VertexT]] = simplexOrdering(using vtxOrd)): Simplex[VertexT] is OrderedCell =
