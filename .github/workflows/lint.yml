@@ -12,6 +12,14 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup sbt launcher
+        uses: sbt/setup-sbt@v1
       - name: Formatting
         run: sbt scalafmtSbtCheck scalafmtCheck

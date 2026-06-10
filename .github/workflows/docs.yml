@@ -12,6 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ts-graphviz/setup-graphviz@v2
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup sbt launcher
+        uses: sbt/setup-sbt@v1
       - name: Compile and publish docs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
