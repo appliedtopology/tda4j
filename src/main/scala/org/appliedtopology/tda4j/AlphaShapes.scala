@@ -32,6 +32,7 @@ def Alpha(pts: Seq[Array[Double]], dispatch: String = "default")(using epsilon: 
   case "helix" =>
     HelixDelaunay(pts.toArray) // Helix should be faster for dim: 7 - 17. Adjust this check when additional impl exists.
   case "miniball" => MiniballDelaunay(pts.toArray)
+  case "DQP" => AlphaShapeDQP(pts.toArray)
 
 abstract class AlphaShapes extends StratifiedSimplexStream[Int, Double]() with DoubleFiltration[Simplex[Int]]():
   val metricSpace: FiniteMetricSpace[Int]

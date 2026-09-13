@@ -1,82 +1,66 @@
 package org.appliedtopology.tda4j
 
-import org.scalacheck.Gen.listOfN
-import org.scalacheck.{Arbitrary, Gen}
-import org.specs2.{ScalaCheck, Specification}
-import org.specs2.execute.{AsResult, Result}
+import org.scalacheck.{Gen, Prop}
 import org.scalacheck.Prop.forAll
+import org.specs2.{ScalaCheck, Specification}
 
 class AlphaComplexSpec extends org.specs2.mutable.Specification with ScalaCheck:
-  skipAll // alpha code not ready for constant testing without more careful test design
-  "Alpha complex should" >>
-    // matrixGen is defined in VietorisRipsSpec.scala
-    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(25, 50))) {
-      (points: Array[Array[Double]]) =>
-        val alpha = Alpha(points)
-        val ref0: Seq[Simplex[Int]] = alpha.metricSpace.elements.toSeq.map(Simplex(_))
-        val it0: Seq[Simplex[Int]] = alpha.iterateDimension(0).toSeq
+  private val dispatches = Seq("miniball", "helix", "DQP")
+  private val pointsGen =
+    matrixGen[Double](Gen.double, Gen.chooseNum(2, 5), Gen.chooseNum(6, 12))
 
-        val ref1: Iterator[Simplex[Int]] = alpha.iterateDimension(1)
-        val ref2: Iterator[Simplex[Int]] = alpha.iterateDimension(2)
+  private def layers(
+                      points: Array[Array[Double]],
+                      dispatch: String
+                    ): Seq[Seq[Simplex[Int]]] =
+    val alpha = Alpha(points, dispatch)
+    (0 to points.head.length).map(d => alpha.iterateDimension(d).toSeq)
 
-        ref1.tapEach(_ => ())
-        ref2.tapEach(_ => ())
-
-        it0 must containTheSameElementsAs(ref0)
-    }
-  /*
-  "Timing experiments" >> {
-    def timing(points : Array[Array[Double]]) = {
-      val alpha = AlphaShapes(points)
-      val ref0 : Seq[Simplex[Int]] = alpha.metricSpace.elements.toSeq.map(Simplex(_))
-      val it0 : Seq[Simplex[Int]] = alpha.iterateDimension(0).toSeq
-
-      val ref1 : Iterator[Simplex[Int]] = alpha.iterateDimension(1)
-      val ref2 : Iterator[Simplex[Int]] = alpha.iterateDimension(2)
-
-      ref1.tapEach(_ => ())
-      ref2.tapEach(_ => ())
-
-      it0 must containTheSameElementsAs(ref0)
-    }
-    "50 points 2 dimensions" >> {
-      forAll(matrixGen[Double](Gen.double, Gen.const(2), Gen.const(50)))(timing)
-    }
-    "100 points 2 dimensions" >> {
-      forAll(matrixGen[Double](Gen.double, Gen.const(2), Gen.const(100)))(timing)
-    }
-    "500 points 2 dimensions" >> {
-      forAll(matrixGen[Double](Gen.double, Gen.const(2), Gen.const(500)))(timing)
+  private def everySimplexHasExpectedFaces(
+                                            layerByDimension: Seq[Seq[Simplex[Int]]]
+                                          ): Boolean =
+    val simplicesByDimension = layerByDimension.map(_.toSet)
+    layerByDimension.zipWithIndex.forall { case (layer, dimension) =>
+      layer.forall { simplex =>
+        simplex.dim == dimension &&
+          simplex.toSeq.forall(vertex => vertex >= 0 && vertex < layerByDimension.head.size) &&
+          (dimension == 0 ||
+            simplex.toSeq.forall(vertex =>
+              simplicesByDimension(dimension - 1).contains(simplex - vertex)
+            ))
+      }
     }
 
-    "50 points 3 dimensions" >> {
-      forAll(matrixGen[Double](Gen.double, Gen.const(3), Gen.const(50)))(timing)
-    }
-    "100 points 3 dimensions" >> {
-      forAll(matrixGen[Double](Gen.double, Gen.const(3), Gen.const(100)))(timing)
-    }
-    "500 points 3 dimensions" >> {
-      forAll(matrixGen[Double](Gen.double, Gen.const(3), Gen.const(500)))(timing)
-    }
+  private def alphaProperties(points: Array[Array[Double]], dispatch: String): Prop =
+    val alpha = Alpha(points, dispatch)
+    val layerByDimension = (0 to points.head.length).map(d => alpha.iterateDimension(d).toSeq)
+    val allSimplices : IndexedSeq[Simplex[Int]] = layerByDimension.flatten
+    val simplicesByDimension = layerByDimension.map(_.toSet)
 
-    "50 points 5 dimensions" >> {
-      forAll(matrixGen[Double](Gen.double, Gen.const(5), Gen.const(50)))(timing)
-    }
-    "100 points 5 dimensions" >> {
-      forAll(matrixGen[Double](Gen.double, Gen.const(5), Gen.const(100)))(timing)
-    }
-    "500 points 5 dimensions" >> {
-      forAll(matrixGen[Double](Gen.double, Gen.const(5), Gen.const(500)))(timing)
-    }
+    (
+      layerByDimension.head.toSet must containTheSameElementsAs(
+        points.indices.map(Simplex(_))
+      )
+      ) and
+      (allSimplices.forall(_.dim >= 0) must beTrue) and
+      (layerByDimension.forall(layer => layer.distinct.size == layer.size) must beTrue) and
+      (everySimplexHasExpectedFaces(layerByDimension) must beTrue) and
+      (layerByDimension.forall(layer =>
+        layer.map(alpha.filtrationValue).toSeq == layer.map(alpha.filtrationValue).toSeq.sorted
+      ) must beTrue) and
+      (allSimplices.forall { simplex =>
+        simplex.dim == 0 || simplex.toSeq.forall { vertex =>
+          alpha.filtrationValue(simplex - vertex) <= alpha.filtrationValue(simplex)
+        }
+      } must beTrue) and
+      (allSimplices.forall(simplex =>
+        simplicesByDimension(simplex.dim).contains(simplex)
+      ) must beTrue)
 
-    "50 points 10 dimensions" >> {
-      forAll(matrixGen[Double](Gen.double, Gen.const(10), Gen.const(50)))(timing)
+  for dispatch <- dispatches do
+    s"$dispatch alpha complex should" >> {
+      "satisfy the simplicial-stream properties" >>
+        forAll(pointsGen) { points =>
+          alphaProperties(points, dispatch)
+        }
     }
-    "100 points 10 dimensions" >> {
-      forAll(matrixGen[Double](Gen.double, Gen.const(10), Gen.const(100)))(timing)
-    }
-    "500 points 10 dimensions" >> {
-      forAll(matrixGen[Double](Gen.double, Gen.const(10), Gen.const(500)))(timing)
-    }
-  }
-   */

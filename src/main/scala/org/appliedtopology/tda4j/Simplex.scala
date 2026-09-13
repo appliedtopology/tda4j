@@ -27,6 +27,7 @@ extension [VertexT](spx: Simplex[VertexT])
   def lastOption: Option[VertexT] = spx.lastOption
   def map[B: Ordering](f: VertexT => B): Simplex[B] = spx.map(f)
   // def map[B](f: (VertexT => B)): Set[B] = spx.toSet.map(f)
+  def foreach(f: VertexT => Unit): Unit = spx.foreach(f)
   def nonEmpty: Boolean = spx.nonEmpty
   def isEmpty: Boolean = spx.isEmpty
   def size: Int = spx.size
