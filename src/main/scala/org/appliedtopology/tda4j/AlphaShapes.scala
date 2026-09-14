@@ -26,12 +26,11 @@ given Epsilon = Epsilon(1e-5)
 def Alpha(pts: Seq[Array[Double]], dispatch: String = "default")(using epsilon: Epsilon): AlphaShapes = dispatch match
   case "default" =>
     pts match
-      case pts if pts.isEmpty         => Alpha(pts, dispatch = "miniball")
+      case pts if pts.isEmpty         => Alpha(pts, dispatch = "helix")
       case pts if pts.head.length > 7 => Alpha(pts, dispatch = "helix")
-      case _                          => Alpha(pts, dispatch = "miniball")
+      case _                          => Alpha(pts, dispatch = "helix")
   case "helix" =>
     HelixDelaunay(pts.toArray) // Helix should be faster for dim: 7 - 17. Adjust this check when additional impl exists.
-  case "miniball" => MiniballDelaunay(pts.toArray)
   case "DQP" => AlphaShapeDQP(pts.toArray)
 
 abstract class AlphaShapes extends StratifiedSimplexStream[Int, Double]() with DoubleFiltration[Simplex[Int]]():
@@ -41,73 +40,6 @@ class ScalaPointSet(points: Array[Array[Double]]) extends PointSet:
   override def size: Int = points.size
   override def dimension: Int = points(0).size
   override def coord(i: Int, j: Int): Double = points(i)(j)
-
-class MiniballDelaunay(val points: Array[Array[Double]]) extends AlphaShapes:
-
-  val pointSet: ScalaPointSet = ScalaPointSet(points)
-  override val metricSpace: EuclideanMetricSpace = EuclideanMetricSpace(points)
-
-  val triangles : Seq[Simplex[Int]] = metricSpace
-    .elements
-    .toSeq
-    .combinations(3)
-    .map(Simplex.from)
-    .filter(isDelaunay)
-    .toSeq
-  val edges : Seq[Simplex[Int]] = triangles.flatMap(s => s.toSeq.map(s - _))
-
-  var simplexCache: Seq[Simplex[Int]] = metricSpace.elements.toSeq.map(Simplex(_))
-  var cacheDimension: Int = 0
-
-  def isDelaunay(spx: Simplex[Int]): Boolean = spx.size match
-    case 0 => true
-    case 1 => true
-    case 2 => edges.contains(spx)
-    case _ =>
-      val mb = Miniball(ScalaPointSet(spx.underlying.toArray.map(points(_))))
-
-      !(points.indices.toSet -- spx.underlying).exists((i) => metricSpace.pointSqDistance(mb.center(), points(i)) < mb.squaredRadius())
-
-  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
-    case d if d == cacheDimension => simplexCache.iterator
-    case 0                        => metricSpace.elements.toSeq.map(Simplex(_)).iterator
-    case 1                        =>
-      simplexCache = (for
-        i <- metricSpace.elements
-        j <- metricSpace.elements
-        if i < j
-        spx = Simplex(i, j)
-        if isDelaunay(spx)
-      yield spx).toSeq.sortBy(filtrationValue)
-      cacheDimension = 1
-      simplexCache.iterator
-    case d if d == cacheDimension + 1 =>
-      val newSimplexCache = for
-        spx <- simplexCache
-        i <- metricSpace.elements.takeWhile(_ < spx.min)
-        coface: Simplex[Int] = spx.union(Simplex(i))
-        if isDelaunay(coface)
-      yield coface
-      simplexCache = newSimplexCache.sortBy(filtrationValue)
-      cacheDimension += 1
-      simplexCache.iterator
-    case d =>
-      // this may be a time sink
-      simplexCache = metricSpace.elements.toSeq
-        .combinations(d + 1)
-        .map(Simplex.from(_))
-        .filter(isDelaunay)
-        .toSeq
-        .sortBy(filtrationValue)
-      cacheDimension = d
-      simplexCache.iterator
-  }
-
-  override def filtrationOrdering: Ordering[Simplex[Int]] =
-    FilteredSimplexOrdering[Int, Double](this)
-
-  override def filtrationValue: PartialFunction[Simplex[Int], Double] =
-    FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 
 // utilities for Delaunay computations
 type Point = RealVector
