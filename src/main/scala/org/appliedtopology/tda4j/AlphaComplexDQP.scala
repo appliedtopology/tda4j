@@ -5,6 +5,7 @@ import scala.collection.mutable
 
 /*
  * Mikael Vejdemo-Johansson with Claude Opus 5 at Extra effort
+ * Partially refactored with GitHub Copilot
  * ===========================================================================
  *  Weighted alpha complexes via dual active-set quadratic programming
  *
@@ -153,15 +154,11 @@ object PowerDistance:
       override def coordinate(i: Int, k: Int): Double = points(i)(k)
       override def weight(i: Int): Double = if weights == null then 0.0 else weights(i)
       def squaredDistance(i: Int, j: Int): Double =
-        val a = points(i)
-        val b = points(j)
-        var s = 0.0
-        var k = 0
-        while k < m do
-          val d = a(k) - b(k)
-          s += d * d
-          k += 1
-        s
+        points(i)
+          .zip(points(j))
+          .map((a,b) => a-b)
+          .map(d => d*d)
+          .sum
 
   /** Same, but caches the full N×N squared-distance matrix. Worth it when
     * the ambient dimension is large and N is moderate (the paper's
@@ -652,14 +649,14 @@ end DualQP
 
 /** A computed weighted alpha complex.
   *
-  * Simplices are `SortedSet[Int]` of site indices in increasing order.
+  * Simplices are `Simplex[Int]` of site indices in increasing order.
   * `cells` is in a valid filtration order: faces always precede cofaces.
   */
 final class AlphaComplexDQP(
     val space: PowerDistance,
     val maxPower: Double,
     val maxDimension: Int,
-    private val cellsByDim: Array[mutable.ArrayBuffer[Simplex[Int]]],
+    private val cellsByDim: IndexedSeq[mutable.IndexedBuffer[Simplex[Int]]],
     private val weights: mutable.HashMap[Simplex[Int], Double],
     private val witnesses: mutable.HashMap[Simplex[Int], Array[Double]]
 ):
@@ -681,7 +678,7 @@ final class AlphaComplexDQP(
   /** The weight w(sigma) of Definition 10, i.e. the *power* at the witness.
     * Unweighted: the squared circumradius.
     */
-  def filtrationValue(cell: Simplex[Int]): Double = weights(cell)
+  def filtrationValue(cell: Simplex[Int]): Double = weights.getOrElse(cell, 0.0)
 
   /** The alpha radius. Only equals the circumradius when p = 0. */
   def radiusOf(cell: Simplex[Int]): Double =
@@ -694,22 +691,17 @@ final class AlphaComplexDQP(
   def witness(cell: Simplex[Int]): Option[Array[Double]] = witnesses.get(cell)
 
   def eulerCharacteristic: Long =
-    var chi = 0L
-    var k = 0
-    while k < cellsByDim.length do
-      chi += (if (k % 2) == 0 then cellsByDim(k).size else -cellsByDim(k).size)
-      k += 1
-    chi
+    cellsByDim.zipWithIndex.foldLeft(0L) { case (chi, (cells, k)) =>
+      chi + (if (k % 2) == 0 then cells.size else -cells.size)
+    }
 
   /** Filtration order: increasing weight, breaking ties by dimension so that
     * faces precede cofaces, then lexicographically for determinism.
     */
   lazy val cells: IndexedSeq[Simplex[Int]] =
-    val all = mutable.ArrayBuffer[Simplex[Int]]()
-    cellsByDim.foreach(all ++= _)
-    all
+    cellsByDim
+      .flatten
       .sortBy(c => (weights(c), c.size, c.show))
-      .toIndexedSeq
 
   /** (simplex, filtration value) pairs in filtration order. */
   def barcodeInput: IndexedSeq[(Simplex[Int], Double)] =
@@ -787,51 +779,33 @@ class AlphaComplexDQPBuilder(
     * Overridable: this default is O(N²) and is the obvious place to plug in
     * a spatial index or cover tree for large N.
     */
-  protected def cechNeighbours(): Array[Array[Int]] =
-    val radius = new Array[Double](n)
-    val alive = new Array[Boolean](n)
-    var i = 0
-    while i < n do
-      val r = space.ballRadius(i, maxPower)
-      radius(i) = r
-      alive(i) = r >= 0.0
-      i += 1
-    val adj = Array.fill(n)(mutable.ArrayBuilder.make[Int])
-    i = 0
-    while i < n do
-      if alive(i) then
-        var j = i + 1
-        while j < n do
-          if alive(j) then
-            val sum = radius(i) + radius(j)
-            // Generous by a relative epsilon: a superset of the true Cech
-            // graph is always safe (extra candidates get rejected by the QP,
-            // extra constraints are genuine constraints), a subset is not.
-            val bound = sum * sum
-            if space.squaredDistance(i, j) <= bound * (1.0 + 1e-12) then
-              adj(i) += j
-              adj(j) += i
-          j += 1
-      i += 1
-    val out = new Array[Array[Int]](n)
-    i = 0
-    while i < n do
-      val a = adj(i).result()
-      java.util.Arrays.sort(a)
-      out(i) = a
-      i += 1
-    out
+  protected def cechNeighbours(): IndexedSeq[IndexedSeq[Int]] =
+    val radius = Array.tabulate(n)(space.ballRadius(_, maxPower))
+    val alive = radius.map(_ >= 0.0)
+    val adj = IndexedSeq.fill(n)(mutable.SortedSet[Int]())
+    for
+      i <- 0 until n
+      if alive(i)
+      j <- i + 1 until n
+      if alive(j)
+    do
+      val sum = radius(i) + radius(j)
+      // Generous by a relative epsilon: a superset of the true Cech
+      // graph is always safe (extra candidates get rejected by the QP,
+      // extra constraints are genuine constraints), a subset is not.
+      val bound = sum * sum
+      if space.squaredDistance(i, j) <= bound * (1.0 + 1e-12) then
+        adj(i) += j
+        adj(j) += i
+
+    adj.map(_.toIndexedSeq)
 
   def compute(): AlphaComplexDQP =
     val nbrs = cechNeighbours()
-    val alive = new Array[Boolean](n)
-    var v = 0
-    while v < n do
-      alive(v) = space.ballRadius(v, maxPower) >= 0.0
-      v += 1
+    val alive = IndexedSeq.tabulate[Boolean](n)(space.ballRadius(_, maxPower) >= 0.0)
 
     val present = mutable.HashSet[Simplex[Int]]()
-    val byDim = Array.fill(maxDimension + 1)(mutable.ArrayBuffer[Simplex[Int]]())
+    val byDim = IndexedSeq.fill(maxDimension + 1)(mutable.IndexedBuffer[Simplex[Int]]())
     val weights = mutable.HashMap[Simplex[Int], Double]()
     val witnesses = mutable.HashMap[Simplex[Int], Array[Double]]()
 
@@ -840,41 +814,34 @@ class AlphaComplexDQPBuilder(
       if settings.workingSetCapacity > 0 then math.min(n, settings.workingSetCapacity)
       else if space.ambientDimension > 0 then math.min(n, space.ambientDimension + 2)
       else n
+    // k == 0
+    for // because dim 0, we know that the candidates are just the vertices
+      (x,_) <- buildCandidates(0, nbrs, alive, byDim, present)
+    do
+      byDim(0) += Simplex(x)
 
-    var k = 0
-    while k <= maxDimension do
-      val candidates = buildCandidates(k, nbrs, alive, byDim, present)
+    for k <- 1 to maxDimension do
+      val candidates : mutable.Map[Int, mutable.IndexedBuffer[Simplex[Int]]] = 
+        buildCandidates(k, nbrs, alive, byDim, present)
 
-      val perVertex = new Array[mutable.ArrayBuffer[Found]](n)
-      val task = new java.util.function.IntConsumer:
-        def accept(x: Int): Unit =
-          val cs = candidates(x)
-          if cs != null && cs.nonEmpty then perVertex(x) = solveAtVertex(x, cs, nbrs(x), wsCap)
-
-      if settings.parallel then
-        java.util.stream.IntStream.range(0, n).parallel().forEach(task)
-      else
-        var x = 0
-        while x < n do
-          task.accept(x)
-          x += 1
+      val perVertex : IndexedSeq[mutable.IndexedBuffer[Found]] = candidates
+        .collect { case (x, cs) if cs.nonEmpty =>  
+            solveAtVertex(x, cs, nbrs(x), wsCap).to(mutable.IndexedBuffer)
+        }.toIndexedSeq
 
       // Merge in vertex order so the output does not depend on scheduling.
-      var x = 0
-      while x < n do
-        val res = perVertex(x)
-        if res != null then
-          var t = 0
-          while t < res.length do
-            val f = res(t)
-            byDim(k) += f.cell
-            weights(f.cell) = f.weight
-            if f.witness != null then witnesses(f.cell) = f.witness
-            t += 1
-        x += 1
+      perVertex.foreach { founds => 
+        founds.foreach { (f:Found) =>
+          byDim(k) += f.cell
+          weights(f.cell) = f.weight
+          witnesses(f.cell) = f.witness
+        }
+      }
 
-      byDim(k).foreach(cell => present.add(cell))
-      k += 1
+      for
+        f <- byDim(k)
+      do
+        present.add(f)
 
     if settings.enforceMonotonicity then clampMonotone(byDim, weights)
 
@@ -897,50 +864,42 @@ class AlphaComplexDQPBuilder(
     */
   /* lines 1 and 4-8 of Algorithm 1 */
   private def buildCandidates(
-      k: Int,
-      nbrs: Array[Array[Int]],
-      alive: Array[Boolean],
-      byDim: Array[mutable.ArrayBuffer[Simplex[Int]]],
-      present: mutable.HashSet[Simplex[Int]]
-  ): Array[mutable.ArrayBuffer[Array[Int]]] =
-    val out = new Array[mutable.ArrayBuffer[Array[Int]]](n)
-    def bucket(x: Int): mutable.ArrayBuffer[Array[Int]] =
-      if out(x) == null then out(x) = mutable.ArrayBuffer[Array[Int]]()
-      out(x)
-
-    if k == 0 then
-      var x = 0
-      while x < n do
-        if alive(x) then bucket(x) += Array.emptyIntArray
-        x += 1
-    else if k == 1 then
-      var x = 0
-      while x < n do
-        if alive(x) then
-          val nb = nbrs(x)
-          var t = 0
-          while t < nb.length do
-            if nb(t) > x then bucket(x) += Array(nb(t))
-            t += 1
-        x += 1
-    else
-      val prev = byDim(k - 1)
-      var p = 0
-      while p < prev.length do
-        val tau = prev(p)
-        val x = tau.first
-        val last = tau.last
-        val nb = nbrs(x)
-        var t = 0
-        while t < nb.length do
-          val w = nb(t)
-          if w > last then
-            val sigma = tau + w
-            if allFacetsPresent(sigma, present) then
-              bucket(x) += sigma.tail.toArray
-          t += 1
-        p += 1
-    out
+                               k: Int,
+                               nbrs: IndexedSeq[IndexedSeq[Int]],
+                               alive: IndexedSeq[Boolean],
+                               byDim: IndexedSeq[mutable.IndexedBuffer[Simplex[Int]]],
+                               present: mutable.HashSet[Simplex[Int]]
+  ): mutable.Map[Int, mutable.IndexedBuffer[Simplex[Int]]] = k match {
+    case 0 => mutable.Map.from(
+      (0 until n)
+        .filter(alive)
+        .map(x => (x, mutable.IndexedBuffer[Simplex[Int]]()))
+    )
+    case 1 => mutable.Map.from(
+      (0 until n)
+        .filter(alive)
+        .map(x => (x,
+          nbrs(x)
+            .filter(_ > x)
+            .map(Simplex[Int](_))
+            .to(mutable.IndexedBuffer)
+        ))
+    )
+    case _ => {
+      byDim(k-1)
+        .foldLeft(mutable.Map[Int, mutable.IndexedBuffer[Simplex[Int]]]()) {
+          (acc, tau) => {
+            val x = tau.first
+            val last = tau.last
+            acc.getOrElseUpdate(x, mutable.IndexedBuffer()) ++= nbrs(x)
+                .filter(_ > last)
+                .map(w => tau + w)
+                .filter(allFacetsPresent(_, present))
+            acc
+          }
+        }
+      }
+    }
 
   private def allFacetsPresent(sigma: Simplex[Int], present: mutable.HashSet[Simplex[Int]]): Boolean =
     sigma
@@ -951,23 +910,20 @@ class AlphaComplexDQPBuilder(
     * one QP per candidate simplex based at x.
     */
   private def solveAtVertex(
-      x: Int,
-      candidates: mutable.ArrayBuffer[Array[Int]],
-      nb: Array[Int],
-      wsCap: Int
-  ): mutable.ArrayBuffer[Found] =
-    val found = mutable.ArrayBuffer[Found]()
+                             x: Int,
+                             candidates: mutable.IndexedBuffer[Simplex[Int]],
+                             nb: IndexedSeq[Int],
+                             wsCap: Int
+  ): mutable.IndexedBuffer[Found] =
+    val found = mutable.IndexedBuffer[Found]()
     val m = nb.length
     val c1 = 0.5 * (maxPower + space.weight(x))
 
     // Isolated site: V_x is everything, the QP is trivially solved by
     // lambda = 0, and only the vertex itself can be a simplex.
     if m == 0 then
-      var c = 0
-      while c < candidates.length do
-        if candidates(c).length == 0 then
-          found += Found(Simplex.from(Array(x)), -space.weight(x), coordsOf(x))
-        c += 1
+      if candidates.exists(_.isEmpty) then
+        found += Found(Simplex.from(Array(x)), -space.weight(x), coordsOf(x))
       return found
 
     // line 11-12: B and U, once per vertex per dimension
@@ -986,24 +942,20 @@ class AlphaComplexDQPBuilder(
 
     val qp = new DualQP(m, wsCap, settings)
     val eq = new Array[Int](maxDimension + 1)
+    val neighbourPositions =
+      scala.collection.immutable.SortedSet.from(nb).zipWithIndex.toMap
 
-    var c = 0
-    while c < candidates.length do
-      val rest = candidates(c)
-      var ok = true
-      var t = 0
-      while t < rest.length do
-        val pos = java.util.Arrays.binarySearch(nb, rest(t))
-        if pos < 0 then ok = false else eq(t) = pos
-        t += 1
-
-      if ok then
-        val cStar = qp.solve(b, u, eq, rest.length, c1)
-        if cStar <= c1 && !cStar.isNaN then
-          val cell = Simplex.from(rest) + x
-          val w = 2.0 * cStar - space.weight(x)
-          found += Found(cell, math.min(w, maxPower), witnessOf(x, nb, qp))
-      c += 1
+    candidates.foreach { rest =>
+      rest.toSeq.flatMap(neighbourPositions.get) match
+        case positions if positions.size == rest.size =>
+          positions.toArray.copyToArray(eq)
+          val cStar = qp.solve(b, u, eq, rest.size, c1)
+          if cStar <= c1 && !cStar.isNaN then
+            val cell = rest + x
+            val w = 2.0 * cStar - space.weight(x)
+            found += Found(cell, math.min(w, maxPower), witnessOf(x, nb.toArray, qp))
+        case _ => ()
+    }
     found
   end solveAtVertex
 
@@ -1012,33 +964,20 @@ class AlphaComplexDQPBuilder(
     if !space.hasCoordinates then null
     else
       val d = space.ambientDimension
-      val y = new Array[Double](d)
-      var k = 0
-      while k < d do
-        y(k) = space.coordinate(x, k)
-        k += 1
-      var t = 0
-      while t < qp.activeSetSize do
+      val y = Array.tabulate(d)(space.coordinate(x, _))
+      for t <- 0 until qp.activeSetSize do
         val lamT = qp.multiplier(t)
         if lamT != 0.0 then
           val site = nb(qp.activeIndex(t))
-          k = 0
-          while k < d do
+          for k <- 0 until d do
             y(k) -= lamT * (space.coordinate(site, k) - space.coordinate(x, k))
-            k += 1
-        t += 1
       y
 
   private def coordsOf(x: Int): Array[Double] =
     if !space.hasCoordinates then null
     else
       val d = space.ambientDimension
-      val y = new Array[Double](d)
-      var k = 0
-      while k < d do
-        y(k) = space.coordinate(x, k)
-        k += 1
-      y
+      Array.tabulate(d)(space.coordinate(x, _))
 
   /** w is monotone along faces by construction -- the QP for a face has
     * strictly fewer equality constraints, hence a larger feasible set and a
@@ -1046,33 +985,27 @@ class AlphaComplexDQPBuilder(
     * which some persistence algorithms will not forgive.
     */
   private def clampMonotone(
-      byDim: Array[mutable.ArrayBuffer[Simplex[Int]]],
-      weights: mutable.HashMap[Simplex[Int], Double]
+                             byDim: IndexedSeq[mutable.IndexedBuffer[Simplex[Int]]],
+                             weights: mutable.HashMap[Simplex[Int], Double]
   ): Unit =
-    var k = 1
-    while k < byDim.length do
+    for k <- 1 until byDim.length do
       val cells = byDim(k)
-      var p = 0
-      while p < cells.length do
-        val sigma = cells(p)
+      cells.foreach { sigma =>
         var w = weights(sigma)
         sigma
           .map(v => sigma-v)
           .foreach(facet => weights.get(facet).foreach(fw => if fw > w then w = fw))
         weights(sigma) = w
-        p += 1
-      k += 1
+      }
 end AlphaComplexDQPBuilder
 
 class AlphaShapeDQP(val points: Array[Array[Double]]) extends AlphaShapes:
+  override val metricSpace = EuclideanMetricSpace(points)
   val alphaComplexDQP = AlphaComplexDQP
-    .euclidean(points, 
-      Double.PositiveInfinity,
+    .euclidean(points,
+      metricSpace.minimumEnclosingRadius,
       points.headOption.map(_.length).getOrElse(0)
     )
-  override val metricSpace: FiniteMetricSpace[Int] = alphaComplexDQP
-    .space
-    .toMetricSpace
 
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] =
     alphaComplexDQP.cellsOfDimension(_).iterator

@@ -4,6 +4,8 @@ scalaVersion := "3.8.4"
 
 versionScheme := Some("semver-spec")
 
+assembly / assemblyJarName := s"${name.value}-${version.value}-assembly.jar"
+
 libraryDependencies += "org.specs2"       %% "specs2-core"          % "5.5.1" % "test"
 libraryDependencies += "org.specs2"       %% "specs2-matcher-extra" % "5.5.1" % "test"
 libraryDependencies += "org.specs2"       %% "specs2-scalacheck"    % "5.5.1" % "test"

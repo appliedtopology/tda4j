@@ -47,25 +47,26 @@ class MiniballDelaunay(val points: Array[Array[Double]]) extends AlphaShapes:
   val pointSet: ScalaPointSet = ScalaPointSet(points)
   override val metricSpace: EuclideanMetricSpace = EuclideanMetricSpace(points)
 
+  val triangles : Seq[Simplex[Int]] = metricSpace
+    .elements
+    .toSeq
+    .combinations(3)
+    .map(Simplex.from)
+    .filter(isDelaunay)
+    .toSeq
+  val edges : Seq[Simplex[Int]] = triangles.flatMap(s => s.toSeq.map(s - _))
+
   var simplexCache: Seq[Simplex[Int]] = metricSpace.elements.toSeq.map(Simplex(_))
   var cacheDimension: Int = 0
 
-  def isDelaunay(pts: Array[Array[Double]]): Boolean = pts.size match
+  def isDelaunay(spx: Simplex[Int]): Boolean = spx.size match
     case 0 => true
     case 1 => true
-    case 2 =>
-      val c = pts(0)
-        .zip(pts(1))
-        .map((x, y) => (x + y) / 2)
-      val sqd = metricSpace.pointSqDistance(c, pts(0))
-      !points.exists(metricSpace.pointSqDistance(c, _) < sqd)
+    case 2 => edges.contains(spx)
     case _ =>
-      val mb = Miniball(ScalaPointSet(pts))
+      val mb = Miniball(ScalaPointSet(spx.underlying.toArray.map(points(_))))
 
-      !points.exists(metricSpace.pointSqDistance(mb.center(), _) < mb.squaredRadius())
-
-  def isDelaunaySimplex(spx: Simplex[Int]): Boolean =
-    isDelaunay(spx.toArray.map(points(_)))
+      !(points.indices.toSet -- spx.underlying).exists((i) => metricSpace.pointSqDistance(mb.center(), points(i)) < mb.squaredRadius())
 
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case d if d == cacheDimension => simplexCache.iterator
@@ -76,7 +77,7 @@ class MiniballDelaunay(val points: Array[Array[Double]]) extends AlphaShapes:
         j <- metricSpace.elements
         if i < j
         spx = Simplex(i, j)
-        if isDelaunaySimplex(spx)
+        if isDelaunay(spx)
       yield spx).toSeq.sortBy(filtrationValue)
       cacheDimension = 1
       simplexCache.iterator
@@ -85,7 +86,7 @@ class MiniballDelaunay(val points: Array[Array[Double]]) extends AlphaShapes:
         spx <- simplexCache
         i <- metricSpace.elements.takeWhile(_ < spx.min)
         coface: Simplex[Int] = spx.union(Simplex(i))
-        if isDelaunaySimplex(coface)
+        if isDelaunay(coface)
       yield coface
       simplexCache = newSimplexCache.sortBy(filtrationValue)
       cacheDimension += 1
@@ -95,7 +96,7 @@ class MiniballDelaunay(val points: Array[Array[Double]]) extends AlphaShapes:
       simplexCache = metricSpace.elements.toSeq
         .combinations(d + 1)
         .map(Simplex.from(_))
-        .filter(isDelaunaySimplex)
+        .filter(isDelaunay)
         .toSeq
         .sortBy(filtrationValue)
       cacheDimension = d
