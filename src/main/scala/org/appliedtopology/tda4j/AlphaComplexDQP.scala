@@ -91,6 +91,7 @@ final class AlphaComplexDQPException(message: String) extends RuntimeException(m
   * the notion of "alpha complex" is not defined there either.
   */
 trait PowerDistance:
+  pd =>
   def size: Int
 
   /** Squared distance between sites i and j. */
@@ -132,7 +133,7 @@ trait PowerDistance:
     
   def toMetricSpace: FiniteMetricSpace[Int] = new FiniteMetricSpace[Int] {
     override def distance(x: Int, y: Int): Double = math.sqrt(squaredDistance(x, y))
-    override def size: Int = size
+    override def size: Int = pd.size
     override def elements: Iterable[Int] = Range(0, size)
     override def contains(x: Int): Boolean = x >= 0 && x < size
 }
@@ -762,10 +763,10 @@ class AlphaComplexDQPBuilder(
 ):
   require(maxDimension >= 0, "maxDimension must be nonnegative")
 
-  private val n = space.size
+  val n = space.size
 
   /** One record produced by a single successful QP solve. */
-  private final case class Found(cell: Simplex[Int], weight: Double, witness: Array[Double])
+  final case class Found(cell: Simplex[Int], weight: Double, witness: Array[Double])
 
   /** Line 1-2: the one-skeleton of the Cech complex of the weighted ball
     * cover, Cech(S, p, a1).
@@ -779,7 +780,7 @@ class AlphaComplexDQPBuilder(
     * Overridable: this default is O(N²) and is the obvious place to plug in
     * a spatial index or cover tree for large N.
     */
-  protected def cechNeighbours(): IndexedSeq[IndexedSeq[Int]] =
+  def cechNeighbours(): IndexedSeq[IndexedSeq[Int]] =
     val radius = Array.tabulate(n)(space.ballRadius(_, maxPower))
     val alive = radius.map(_ >= 0.0)
     val adj = IndexedSeq.fill(n)(mutable.SortedSet[Int]())
@@ -817,8 +818,10 @@ class AlphaComplexDQPBuilder(
     // k == 0
     for // because dim 0, we know that the candidates are just the vertices
       (x,_) <- buildCandidates(0, nbrs, alive, byDim, present)
+      f = Simplex(x)
     do
-      byDim(0) += Simplex(x)
+      byDim(0) += f
+      present.add(f)
 
     for k <- 1 to maxDimension do
       val candidates : mutable.Map[Int, mutable.IndexedBuffer[Simplex[Int]]] = 
@@ -863,7 +866,7 @@ class AlphaComplexDQPBuilder(
     * 2(b): every simplex is then tested exactly once.
     */
   /* lines 1 and 4-8 of Algorithm 1 */
-  private def buildCandidates(
+  def buildCandidates(
                                k: Int,
                                nbrs: IndexedSeq[IndexedSeq[Int]],
                                alive: IndexedSeq[Boolean],
@@ -901,7 +904,7 @@ class AlphaComplexDQPBuilder(
       }
     }
 
-  private def allFacetsPresent(sigma: Simplex[Int], present: mutable.HashSet[Simplex[Int]]): Boolean =
+  def allFacetsPresent(sigma: Simplex[Int], present: mutable.HashSet[Simplex[Int]]): Boolean =
     sigma
       .map(v => (sigma - v))
       .forall(present.contains)
@@ -909,7 +912,7 @@ class AlphaComplexDQPBuilder(
   /** Steps 2(a)-(b): assemble the dual data for the cell V_x once, then run
     * one QP per candidate simplex based at x.
     */
-  private def solveAtVertex(
+  def solveAtVertex(
                              x: Int,
                              candidates: mutable.IndexedBuffer[Simplex[Int]],
                              nb: IndexedSeq[Int],
@@ -960,7 +963,7 @@ class AlphaComplexDQPBuilder(
   end solveAtVertex
 
   /** KKT conditions (12): Phi(sigma) = y* = x - sum_i lambda_i (x_i - x). */
-  private def witnessOf(x: Int, nb: Array[Int], qp: DualQP): Array[Double] =
+  def witnessOf(x: Int, nb: Array[Int], qp: DualQP): Array[Double] =
     if !space.hasCoordinates then null
     else
       val d = space.ambientDimension
@@ -973,7 +976,7 @@ class AlphaComplexDQPBuilder(
             y(k) -= lamT * (space.coordinate(site, k) - space.coordinate(x, k))
       y
 
-  private def coordsOf(x: Int): Array[Double] =
+  def coordsOf(x: Int): Array[Double] =
     if !space.hasCoordinates then null
     else
       val d = space.ambientDimension
@@ -984,7 +987,7 @@ class AlphaComplexDQPBuilder(
     * smaller optimum -- but floating point can violate it by an ulp or two,
     * which some persistence algorithms will not forgive.
     */
-  private def clampMonotone(
+  def clampMonotone(
                              byDim: IndexedSeq[mutable.IndexedBuffer[Simplex[Int]]],
                              weights: mutable.HashMap[Simplex[Int], Double]
   ): Unit =
