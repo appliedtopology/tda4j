@@ -14,135 +14,171 @@ import math.Ordering.Implicits.sortedSetOrdering
 class SimplicialHomologyContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]()
     extends CellularHomologyContext[Simplex[VertexT], CoefficientT, FiltrationT] {}
 
+/** Naive persistent homology via the standard single-pivot-table reduction algorithm: process cells in filtration
+  * order, reduce each cell's boundary against the pivots recorded so far, and every cell either opens a class (reduced
+  * boundary is zero) or closes one (reduced boundary is nonzero, and its leading cell -- the pivot -- is necessarily a
+  * previously-opened, still-unpaired cell).
+  *
+  * No clearing, no chunking, no cohomology/twist optimization: this is the reference-grade baseline the other two
+  * algorithms in this file (`PersistenceInChunksContext`, `SimplicialHomologyByDimensionContext`) can be
+  * cross-validated against.
+  *
+  * Correctness note for future maintainers: the `RingModule`/`Ordering[CellT]` instances used for chain arithmetic MUST
+  * be summoned inside `HomologyState`, not at `CellularHomologyContext` class scope. A `given Ordering[CellT]` derived
+  * from a per-stream `filtrationOrdering` only exists once a stream is available (i.e. inside `HomologyState`);
+  * summoning `Chain[CellT, CoefficientT] is RingModule` any earlier silently falls back to the generic,
+  * filtration-blind `OrderedCell`-derived ordering and bakes it into that RingModule instance's closures permanently
+  * (Scala resolves a given's own implicit parameters once, at the point the given is constructed, not at each later
+  * call to its methods). That was a real, confirmed bug here: see WORKLOG-naive-homology.md.
+  */
 class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]:
-
-  val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
-  import chainRM.*
 
   import barcode.*
 
   case class HomologyState(
-    cycles: mutable.Map[CellT, Chain[CellT, CoefficientT]],
-    cyclesBornBy: mutable.Map[CellT, CellT],
-    boundaries: mutable.Map[CellT, Chain[CellT, CoefficientT]],
-    boundariesBornBy: mutable.Map[CellT, CellT],
-    coboundaries: mutable.Map[CellT, Chain[CellT, CoefficientT]],
+    boundaries: mutable.Map[CellT, Chain[CellT, CoefficientT]], // pivot cell -> reduced boundary column
+    generators: mutable.Map[CellT, Chain[CellT, CoefficientT]], // pivot cell -> V-column of its producing cell
+    positives: mutable.Map[
+      CellT,
+      (FiltrationT, Chain[CellT, CoefficientT])
+    ], // open cell -> (birth, representative cycle)
     stream: CellStream[CellT, FiltrationT],
     var current: FiltrationT,
-    barcode: mutable.ArrayDeque[
-      (
-        Int,
-        FiltrationT,
-        FiltrationT,
-        Chain[CellT, CoefficientT]
-      )
-    ]
+    barcode: mutable.ArrayDeque[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT])]
   ):
     given Ordering[CellT] = stream.filtrationOrdering
     import Ordering.Implicits.infixOrderingOps
     given filtration: Filtration[CellT, FiltrationT] = stream
 
+    // Summoned here, not at CellularHomologyContext scope -- see class doc above.
+    val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
+    import chainRM.*
+
     val CellIterator: collection.BufferedIterator[CellT] = stream.iterator.buffered
 
-    def diagramAt(
-      f: FiltrationT
-    ): List[(Int, FiltrationT, FiltrationT)] =
-      advanceTo(f)
-      (for
-        (dim: Int, lower: FiltrationT, oldUpper: FiltrationT, cycle: Chain[CellT, CoefficientT]) <- barcode.toList
-        if lower <= f
-        upper = oldUpper.min(f)
-      yield (dim, lower, upper)) ++ (
-        for
-          (sigma, z) <- cycles
-          dim = sigma.dim
-          lower = stream.filtrationValue.applyOrElse(sigma, _ => filtration.smallest)
-        yield (dim, lower, filtration.largest)
-      )
+    private def cellFiltrationValue(cell: CellT, fallback: FiltrationT): FiltrationT =
+      stream.filtrationValue.applyOrElse(cell, (_: CellT) => fallback)
 
-    def barcodeAt(f: FiltrationT): List[PersistenceBar[FiltrationT, Nothing]] =
-      diagramAt(f).map { (dim, l, u) =>
+    def advanceOne(): Unit =
+      if CellIterator.hasNext then
+        val sigma: CellT = CellIterator.next()
+        val dsigma: Chain[CellT, CoefficientT] = Chain.from(sigma.boundary[CoefficientT])
+        // Chain.reduceBy (the SortedMap-based object-level primitive shared with
+        // PersistenceInChunksContext), not a hand-rolled reduction over raw Chain arithmetic: `-`/`⊠`
+        // on Chain objects only collapse the *head* of their internal priority queue lazily, so a
+        // hand-rolled fold accumulating many raw subtractions builds up an ever-growing backlog of
+        // uncollapsed duplicate entries -- fine for the tiny hand-built fixtures this was first tested
+        // against, but quadratic-to-worse blowup on a real (even small) Vietoris-Rips stream, confirmed
+        // directly (a first attempt at this method hung/burned CPU for minutes on an 8-12 point VR
+        // complex that should take milliseconds). Chain.reduceBy works through a SortedMap internally,
+        // which collapses duplicates by construction on every insertion.
+        val (reduced, log) = Chain.reduceBy(dsigma, boundaries, Chain.empty)
+        // V-column: sigma minus, for every pivot the reduction subtracted off, that pivot's own
+        // producing cell's V-column. If ∂sigma reduced to zero this chain is itself the new cycle
+        // representative; either way it becomes the generator future cells reduce through if sigma
+        // itself goes on to become a pivot. Collapsed explicitly before use for the same reason as
+        // above: this fold also accumulates through raw Chain subtraction.
+        val vcol: Chain[CellT, CoefficientT] = log.items.foldLeft(Chain(sigma)) { case (acc, (pivot, coeff)) =>
+          // Every entry reduceBy's log can name is a key reduceBy itself just matched against
+          // `boundaries`, and `generators` is always written in lockstep with `boundaries` (see the
+          // else-branch below) -- so a missing entry here means the pivot bookkeeping has drifted out
+          // of sync, not a legitimate case to default through silently.
+          acc - coeff ⊠ generators.getOrElse(
+            pivot,
+            throw new IllegalStateException(s"pivot $pivot has a boundaries entry but no generators entry")
+          )
+        }
+        // Collapse BEFORE either write below, not after: `generators`/`positives` entries are read
+        // back into future cells' own vcol folds (line ~86 above), so an uncollapsed value stored here
+        // would make every subsequent generation's fold re-accumulate this cell's own backlog on top
+        // of its own -- silently reintroducing the superlinear blowup this collapse call exists to
+        // prevent (see WORKLOG-naive-homology.md). Moving this call after the writes below is a
+        // regression, not a refactor.
+        vcol.collapseAll()
+        if reduced.isZero() then
+          // sigma's boundary was fully cancelled by already-recorded pivots: sigma is a new,
+          // as-yet-unpaired positive cell -- a class is born here, represented by vcol. A cell with
+          // no known filtration value is assumed to have happened as early as possible (smallest),
+          // matching the essential-bar convention in diagramWithGeneratorsAt below.
+          val birthFv = cellFiltrationValue(sigma, filtration.smallest)
+          positives(sigma) = (birthFv, vcol)
+          current = birthFv
+        else
+          // reduced is nonzero, so its leading cell is a pivot: by construction (reduction only
+          // stops at a cell no earlier column has claimed as a pivot) that pivot must be a
+          // currently-open positive cell -- the one sigma's arrival pairs off and kills.
+          val pivot = reduced.leadingCell.get
+          boundaries(pivot) = reduced
+          generators(pivot) = vcol
+          val (pivotFv, representative) = positives
+            .remove(pivot)
+            .getOrElse(
+              throw new IllegalStateException(
+                s"reduction pivot $pivot was not a recorded open class -- reduction invariant violated"
+              )
+            )
+          // A death cell with no known filtration value is assumed to have happened as late as
+          // possible (largest) -- the opposite fallback direction from a birth, so an unknown death
+          // is never silently placed before its own (already-recorded) birth.
+          val deathFv = cellFiltrationValue(sigma, filtration.largest)
+          barcode.append((pivot.dim, pivotFv, deathFv, representative))
+          current = deathFv
+
+    def advanceTo(f: FiltrationT): Unit =
+      // Closed-birth/open-death convention: a cell exactly at f has already occurred by the time we
+      // query at f, so it must be consumed (hence f >= headFv, not the previous strict f > headFv). A
+      // cell with no known filtration value is assumed to have happened already (smallest), so it
+      // always gets consumed eagerly.
+      while CellIterator.hasNext && f >= cellFiltrationValue(CellIterator.head, filtration.smallest) do advanceOne()
+
+    def advanceAll(): Unit =
+      while CellIterator.hasNext do advanceOne()
+
+    /** Full diagram at f, each bar annotated with its representative cycle (the class's generator at birth for a
+      * finished bar; the still-open generator for an essential class).
+      *
+      * Query values across successive calls must be non-decreasing: this mutates state by advancing the underlying
+      * stream, never rewinding it, so `diagramAt(3.0)` followed by `diagramAt(1.0)` does not recompute the state as of
+      * 1.0 -- it reports whatever was still open at 3.0 as if newly queried at 1.0. Pre-existing behavior, inherited
+      * unchanged from the algorithm this replaces.
+      */
+    def diagramWithGeneratorsAt(f: FiltrationT): List[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT])] =
+      advanceTo(f)
+      val finished: List[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT])] =
+        barcode.toList.collect { case (dim, lower, upper, rep) if lower <= f => (dim, lower, upper.min(f), rep) }
+      // A class still open at query time f is only truly essential (dies at +infinity) once the
+      // whole stream is exhausted; mid-stream it merely hasn't died *yet*, so its death is capped at
+      // the query value f rather than reported as infinite.
+      val essentialUpper: FiltrationT = if CellIterator.hasNext then f else filtration.largest
+      val essential: List[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT])] =
+        positives.toList.collect {
+          case (sigma, (birth, rep)) if birth <= f => (sigma.dim, birth, essentialUpper, rep)
+        }
+      finished ++ essential
+
+    def diagramAt(f: FiltrationT): List[(Int, FiltrationT, FiltrationT)] =
+      diagramWithGeneratorsAt(f).map { case (dim, lower, upper, _) => (dim, lower, upper) }
+
+    def barcodeAt(f: FiltrationT): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
+      diagramWithGeneratorsAt(f).map { (dim, l, u, rep) =>
         val lower: BarcodeEndpoint[FiltrationT] = l match
           case i if i == filtration.smallest => NegativeInfinity()
           case f: FiltrationT                => ClosedEndpoint(f)
         val upper: BarcodeEndpoint[FiltrationT] = u match
           case i if i == filtration.largest => PositiveInfinity()
           case f: FiltrationT               => OpenEndpoint(f)
-        new PersistenceBar(dim, lower, upper, None)
+        new PersistenceBar(dim, lower, upper, Some(rep))
       }
-
-    @tailrec
-    private def reduceBy(
-      z: Chain[CellT, CoefficientT],
-      basis: mutable.Map[CellT, Chain[CellT, CoefficientT]],
-      reductionLog: Chain[CellT, CoefficientT] = Chain()
-    )(using fr: CoefficientT is Field): (Chain[CellT, CoefficientT], Chain[CellT, CoefficientT]) =
-      z.leadingCell match
-        case None        => (z, reductionLog)
-        case Some(sigma) =>
-          if basis.contains(sigma) then
-            val redCoeff = fr.divide(z.leadingCoefficient, basis(sigma).leadingCoefficient)
-            reduceBy(z - redCoeff ⊠ basis(sigma), basis, reductionLog + redCoeff ⊠ Chain(sigma))
-          else (z, reductionLog)
-
-    def advanceOne(): Unit =
-      if CellIterator.hasNext then
-        val fr = summon[CoefficientT is Field]
-        val sigma: CellT = CellIterator.next()
-        val dsigma: Chain[CellT, CoefficientT] =
-          Chain.from(sigma.boundary[CoefficientT])
-        val (dsigmaReduced, reduction) = reduceBy(dsigma, boundaries)
-        val coboundary = reduction.items.foldRight(fr.negate(fr.one) ⊠ Chain(sigma)) { (next, acc) =>
-          val (spx, coeff) = next
-          if coboundaries.contains(spx) then acc + coeff ⊠ coboundaries(spx)
-          else acc
-        }
-        if dsigmaReduced.isZero() then
-          // adding a boundary to a boundary creates a new cycle as sigma + whatever whose boundary eliminated dsigma
-          cycles(coboundary.leadingCell.get) = coboundary
-          cyclesBornBy(coboundary.leadingCell.get) = sigma
-        else
-          // we have a new boundary witnessed
-          boundaries(dsigmaReduced.leadingCell.get) = dsigmaReduced
-          boundariesBornBy(dsigmaReduced.leadingCell.get) = sigma
-          coboundaries(dsigmaReduced.leadingCell.get) = coboundary
-
-          val (_, cycleBasis) = reduceBy(dsigmaReduced, cycles)
-          val representativeCycle: Chain[CellT, CoefficientT] = cycleBasis.leadingCell match
-            case None       => Chain()
-            case Some(cell) => cycles(cell)
-          cycleBasis.leadingCell match
-            case None       => ()
-            case Some(cell) => cycles.remove(cell)
-
-          val lower: FiltrationT = cycleBasis.leadingCell match
-            case None      => filtration.smallest
-            case Some(spx) =>
-              stream.filtrationValue.orElse(_ => filtration.smallest).compose(cyclesBornBy)(spx)
-          val upper: FiltrationT =
-            stream.filtrationValue.orElse(_ => filtration.largest)(sigma)
-
-          barcode.append((sigma.dim - 1, lower, upper, representativeCycle))
-        current = stream.filtrationValue.lift(sigma).getOrElse(stream.smallest)
-
-    def advanceTo(f: FiltrationT): Unit =
-      while CellIterator.hasNext && f > stream.filtrationValue.lift(CellIterator.head).getOrElse(stream.smallest) do
-        advanceOne()
-
-    def advanceAll(): Unit =
-      while CellIterator.hasNext do advanceOne()
 
   def persistentHomology(stream: => CellStream[CellT, FiltrationT]): HomologyState =
     HomologyState(
-      mutable.Map.empty, // cycle basis
-      mutable.Map.empty, // cycle born by
-      mutable.Map.empty, // boundary basis
-      mutable.Map.empty, // boundary born by
-      mutable.Map.empty, // coboundary mapping
-      stream, // simplex stream
-      stream.smallest: FiltrationT, // computation done up until filtrationValue
+      mutable.Map.empty, // boundaries: pivot -> reduced column
+      mutable.Map.empty, // generators: pivot -> producing cell's V-column
+      mutable.Map.empty, // positives: open cell -> (birth value, representative cycle)
+      stream,
+      stream.smallest: FiltrationT,
       mutable.ArrayDeque.empty
-    ) // torsion part of barcode
+    )
 
 class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim: Int = 5):
   val chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]
