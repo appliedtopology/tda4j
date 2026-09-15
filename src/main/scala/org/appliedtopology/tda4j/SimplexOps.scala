@@ -4,7 +4,7 @@ import scala.collection.immutable.SortedSet
 import scala.reflect.ClassTag
 
 /** Inherit a selection of the SortedSet methods and add other utility methods
- */
+  */
 extension [VertexT](spx: Simplex[VertexT])
   // ----- rendering & dimension
   def show: String = spx.underlying.mkString(s"∆(", ",", ")")
@@ -20,7 +20,7 @@ extension [VertexT](spx: Simplex[VertexT])
   // ----- iteration
   def foreach(f: VertexT => Unit): Unit = spx.underlying.foreach(f)
   def iterator: Iterator[VertexT] = spx.underlying.iterator
-  // ----- ends  
+  // ----- ends
   def head: VertexT = spx.underlying.head
   def headOption: Option[VertexT] = spx.underlying.headOption
   def first: VertexT = spx.underlying.head
@@ -39,12 +39,12 @@ extension [VertexT](spx: Simplex[VertexT])
   def toSet: Set[VertexT] = spx.underlying.toSet
   def toSortedSet: SortedSet[VertexT] = spx.underlying
   // ---- order queries
-  def min[B >: VertexT : Ordering]: VertexT = spx.underlying.min
+  def min[B >: VertexT: Ordering]: VertexT = spx.underlying.min
   def minAfter(key: VertexT): Option[VertexT] = spx.underlying.minAfter(key)
   def minBy[B: Ordering](f: VertexT => B): VertexT = spx.underlying.minBy(f)
   def minByOption[B: Ordering](f: VertexT => B): Option[VertexT] = spx.underlying.minByOption(f)
   def minOption[B >: VertexT](using ordering: Ordering[B]): Option[B] = spx.underlying.minOption
-  def max[B >: VertexT : Ordering]: VertexT = spx.underlying.max
+  def max[B >: VertexT: Ordering]: VertexT = spx.underlying.max
   def maxBefore(key: VertexT): Option[VertexT] = spx.underlying.maxBefore(key)
   def maxBy[B: Ordering](f: VertexT => B): VertexT = spx.underlying.maxBy(f)
   def maxByOption[B: Ordering](f: VertexT => B): Option[VertexT] = spx.underlying.maxByOption(f)

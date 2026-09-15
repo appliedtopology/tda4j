@@ -122,7 +122,32 @@ class HelixDelaunay(pts: Array[Array[Double]])(using epsilon: Epsilon) extends A
     ) match
       case vs if vs.size == ambientDimension => vs.toSet
       case vs if vs.size > ambientDimension  =>
-        Set(vs.head, vs.tail.minBy(vi => points(vs.head).getDistance(points(vi))))
+        // vs has more points on the supporting hyperplane than needed for a
+        // non-degenerate (ambientDimension-1)-simplex within it -- common for
+        // grid-like or otherwise partly-degenerate point clouds. Picking just 2
+        // of them regardless of ambientDimension leaves startingSimplex
+        // undersized for ambientDimension > 2, starving the brute-force
+        // bootstrap search below of a well-posed circumsphere (Hypersphere
+        // needs ambientDimension+1 points to be uniquely determined) and
+        // making it fail to find any candidate, which fails the assertion
+        // below. Instead, greedily grow an affinely-independent subset of
+        // exactly ambientDimension points: start from vs.head, and add each
+        // next candidate only if it strictly increases the rank of the affine
+        // span built so far (i.e. isn't already in that span). vs always has
+        // at least ambientDimension independent points available, since it's
+        // a superset of the already-independent startingSimplex being refined.
+        val base = points(vs.head)
+        var chosen: Vector[Int] = Vector(vs.head)
+        var chosenVecs: Vector[Array[Double]] = Vector.empty
+        val remaining = vs.tail.iterator
+        while chosen.size < ambientDimension && remaining.hasNext do
+          val candidate = remaining.next()
+          val trialVecs = chosenVecs :+ points(candidate).subtract(base).toArray
+          val rank = new SingularValueDecomposition(MatrixUtils.createRealMatrix(trialVecs.toArray)).getRank
+          if rank > chosenVecs.size then
+            chosen = chosen :+ candidate
+            chosenVecs = trialVecs
+        chosen.toSet
 
     // brute force search for first delaunay simplex
     var done = false
@@ -155,7 +180,8 @@ class HelixDelaunay(pts: Array[Array[Double]])(using epsilon: Epsilon) extends A
   val cospherical: mutable.Set[Set[Int]] = mutable.Set.empty
 
   def addFrontierCase(simplex: DelaunaySimplex, complement: Int): Unit =
-    val removed = frontierCases.removeIf((fc: FrontierCase) => fc.facet.toSortedSet == simplex.simplex.toSortedSet)
+    val newFacet = simplex.simplex - complement
+    val removed = frontierCases.removeIf((fc: FrontierCase) => fc.facet.toSortedSet == newFacet.toSortedSet)
     if !removed then frontierCases.put(FrontierCase(simplex, complement))
 
   def handleCosphericalPoints(
@@ -233,7 +259,7 @@ class HelixDelaunay(pts: Array[Array[Double]])(using epsilon: Epsilon) extends A
           // check whether we have "too many" cospherical points; in that case we have to tile them on our own
           val spherepoints: mutable.SortedSet[Int] = points.indices
             .map(i => (i, newDelaunaySimplex.circumsphere.center.getDistance(points(i))))
-            .filter((i, d) => math.abs(d - newDelaunaySimplex.circumsphere.radius) <= 1e-5)
+            .filter((i, d) => math.abs(d - newDelaunaySimplex.circumsphere.radius) <= epsilon.epsilon)
             .map(_._1)
             .to(mutable.SortedSet)
           if spherepoints.size > ambientDimension + 1 then
