@@ -1,0 +1,125 @@
+package org.appliedtopology.tda4j
+
+import org.appliedtopology.tda4j.barcode.*
+import org.scalacheck.Gen
+import org.scalacheck.Prop.forAll
+import org.specs2.mutable
+import org.specs2.ScalaCheck
+import org.specs2.scalacheck.Parameters
+
+class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
+  given Double is Field = Field.DoubleApproximated(1e-9)
+  given Parameters = Parameters(minTestsOk = 200)
+
+  private def endpointValue(e: BarcodeEndpoint[Double]): Double = e match
+    case NegativeInfinity() => Double.NegativeInfinity
+    case PositiveInfinity() => Double.PositiveInfinity
+    case ClosedEndpoint(v)  => v
+    case OpenEndpoint(v)    => v
+
+  private def toTuple(bar: PersistenceBar[Double, Chain[Simplex[Int], Double]]): (Int, Double, Double) =
+    (bar.dim, endpointValue(bar.lower), endpointValue(bar.upper))
+
+  private def naiveBars(metricSpace: FiniteMetricSpace[Int], maxDim: Int): List[(Int, Double, Double)] =
+    val vrStream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), maxDim)
+    val cellStream = HomologyFixtures.flattenToCellStream(vrStream, maxDim)
+    SimplicialHomologyContext[Int, Double, Double]()
+      .persistentHomology(cellStream)
+      .diagramAt(Double.PositiveInfinity)
+
+  private def cohomologyBars(metricSpace: FiniteMetricSpace[Int], maxDim: Int): List[(Int, Double, Double)] =
+    RipserCohomologyContext[Double](metricSpace, maxDim).persistentCohomology().map(toTuple)
+
+  private def totalSimplices(n: Int, maxDim: Int): Int =
+    (0 to maxDim).map(d => binomial(n, d + 1)).sum
+
+  // Hand-verified calibration example (see WORKLOG-cohomology.md's "clearing is required for
+  // correctness" section for the full derivation): 3 colinear points at 0, 1, 3, all pairwise distances
+  // distinct (1, 2, 3), so H_0's finite deaths are unambiguous MST edges, not tie-broken guesses. This
+  // is the exact counterexample that caught a first draft of this engine (without clearing) reporting
+  // spurious essential H^1 classes.
+  private val threePointLine = EuclideanMetricSpace(Array(Array(0.0), Array(1.0), Array(3.0)))
+
+  "Persistent cohomology of a 3-cycle graph (no filled triangle) has one essential H^1 class, not three" >> {
+    // maxDimension = 1: vertices + edges only, no triangle. Elementary graph theory: cycle rank =
+    // edges - vertices + components = 3 - 3 + 1 = 1. A first draft that skipped clearing reported 3
+    // (every edge independently "essential").
+    val bars = RipserCohomologyContext[Double](threePointLine, 1).persistentCohomology().map(toTuple)
+    bars must containTheSameElementsAs(
+      List(
+        (0, 0.0, 1.0),
+        (0, 0.0, 2.0),
+        (0, 0.0, Double.PositiveInfinity),
+        (1, 3.0, Double.PositiveInfinity)
+      )
+    )
+  }
+
+  "Persistent cohomology of the filled triangle has zero essential H^1 classes (contractible)" >> {
+    // maxDimension = 2: the triangle now exists, born at 3.0 (its longest edge), tied with edge {0,2}'s
+    // own filtration value -- a genuine zero-persistence pair, which must still be EMITTED (not
+    // dropped) by this stage since apparent-pairs shortcutting isn't implemented yet. A first draft that
+    // skipped clearing reported 2 spurious essential H^1 classes instead of 0.
+    val bars = RipserCohomologyContext[Double](threePointLine, 2).persistentCohomology().map(toTuple)
+    bars must containTheSameElementsAs(
+      List(
+        (0, 0.0, 1.0),
+        (0, 0.0, 2.0),
+        (0, 0.0, Double.PositiveInfinity),
+        (1, 3.0, 3.0) // zero-length: {0,2} paired with the triangle, both born at 3.0
+      )
+    )
+  }
+
+  "Cohomology's finite bars agree with the naive homology engine on the calibration example" >> {
+    val maxDim = 2
+    val naive = naiveBars(threePointLine, maxDim).filter { case (_, b, d) => b < d }
+    val cohomology = cohomologyBars(threePointLine, maxDim).filter { case (_, b, d) => b < d }
+    cohomology must containTheSameElementsAs(naive)
+  }
+
+  "Cohomology's finite bars agree with the naive homology engine on random Vietoris-Rips point clouds" >> {
+    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
+      val metricSpace = EuclideanMetricSpace(points)
+      val maxDim = 2
+      val naive = naiveBars(metricSpace, maxDim).filter { case (_, b, d) => b < d }
+      val cohomology = cohomologyBars(metricSpace, maxDim).filter { case (_, b, d) => b < d }
+      cohomology must containTheSameElementsAs(naive)
+    }
+  }
+
+  "Every simplex is accounted for: finite*2 + essential == total simplices, per dimension count" >> {
+    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
+      val metricSpace = EuclideanMetricSpace(points)
+      val maxDim = 2
+      val bars = cohomologyBars(metricSpace, maxDim)
+      HomologyFixtures.totalBarsAccountForAllCells(bars, totalSimplices(metricSpace.size, maxDim)) must beTrue
+    }
+  }
+
+  "Essential representatives are genuine cocycles (zero coboundary) below the top dimension" >> {
+    // Exact arithmetic (Fp), not Double -- zero-detection during reduction must not be confused with
+    // floating-point noise (same precedent as the naive engine's own representative-cycle test).
+    val f11 = new FiniteField(11)
+    import f11.given
+
+    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 10))) { points =>
+      val metricSpace = EuclideanMetricSpace(points)
+      val maxDim = 2
+      val ctx = RipserCohomologyContext[f11.Fp](metricSpace, maxDim)
+      val bars = ctx.persistentCohomology()
+      // Only ESSENTIAL bars (upper == +infinity) have a representative with zero coboundary by
+      // construction: Algorithm 1's V_j satisfies delta(V_j) = R_j throughout, and R_j is zero
+      // precisely when the bar is essential -- for a FINITE bar, delta(V_j) = R_j equals the reduced
+      // PIVOT chain, which is nonzero by definition (that's what makes it finite). Confirmed directly
+      // by inspection during development: a finite bar's representative has a nonzero coboundary that
+      // exactly matches its own reduced column, not zero -- asserting isZero() there would be a test
+      // bug, not a property of the algorithm. Also guarded to dim < maxDim: coboundaryOf is vacuously
+      // empty at the top dimension (no cofacets are ever enumerated beyond maxDimension), so the check
+      // would pass there for the wrong reason -- see WORKLOG-cohomology.md.
+      forall(bars.filter(b => b.dim < maxDim && b.upper == PositiveInfinity[Double]())) { bar =>
+        val rep = bar.annotation.get
+        ctx.coboundaryOfChain(rep).isZero() must beTrue
+      }
+    }
+  }

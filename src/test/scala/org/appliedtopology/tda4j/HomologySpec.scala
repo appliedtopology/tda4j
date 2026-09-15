@@ -181,25 +181,10 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
     }
   }
 
-  // StratifiedCellStream's default `.iterator` (Iterator.from(0).filter(isDefinedAt).fold(...)) is
-  // documented elsewhere (PersistenceInChunksContext, PersistenceInChunksSpec) as hanging forever for
-  // exactly this kind of coface stream. CellularHomologyContext.HomologyState calls `stream.iterator`
-  // directly, so feeding it a CofaceSimplexStream would hang too. Sidestep by flattening
-  // iterateDimension over a bounded range into a finite Vector up front and wrapping that as a plain
-  // CellStream -- the engine only needs a correctly-ordered finite iterator, not this specific stream
-  // implementation's own (buggy) default one.
   private def flattenToCellStream(
     source: StratifiedSimplexStream[Int, Double],
     maxDim: Int
-  ): CellStream[Simplex[Int], Double] =
-    val cells: Vector[Simplex[Int]] =
-      (0 to maxDim).iterator.flatMap(d => source.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty)).toVector
-    new CellStream[Simplex[Int], Double]:
-      def filtrationValue = source.filtrationValue
-      def filtrationOrdering = source.filtrationOrdering
-      val smallest = Double.NegativeInfinity
-      val largest = Double.PositiveInfinity
-      def iterator: Iterator[Simplex[Int]] = cells.iterator
+  ): CellStream[Simplex[Int], Double] = HomologyFixtures.flattenToCellStream(source, maxDim)
 
   private def endpointValue(e: BarcodeEndpoint[Double]): Double = e match
     case NegativeInfinity() => Double.NegativeInfinity

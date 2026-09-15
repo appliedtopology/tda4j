@@ -227,8 +227,45 @@ class EnumeratingCofaceSimplexStream(
   override val filtrationValue: PartialFunction[Simplex[Int], Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 
-  override val filtrationOrdering: Ordering[Simplex[Int]] =
-    Ordering.by(filtrationValue)
+  /** Filtration value, reversed (so smaller-under-this-ordering means YOUNGER, matching `SimplexStream`'s own
+    * established convention -- see `FilteredSimplexOrdering`, and `CellularHomologyContext`'s class doc, which relies
+    * on `leadingCell` meaning "youngest" wherever a stream's `filtrationOrdering` backs `Chain`'s pivot machinery),
+    * then dimension, then COLEXICOGRAPHIC order on the vertex set (via `simplexIndexing`'s own
+    * combinatorial-number-system index, not a fresh comparator -- this is exactly the "lexicographically refined"
+    * tie-break Ripser's own apparent-pairs machinery (Definition 3.2/Proposition 3.9, see `RipserCohomologyContext`) is
+    * defined in terms of, so using it here keeps this stream's ordering consistent with every other Ripser-flavored
+    * piece of this codebase, not just internally self-consistent -- deliberately not the plain lexicographic tie-break
+    * `FilteredSimplexOrdering` uses, which is the more generic, non-Ripser-specific default.
+    *
+    * Fixes a real, previously-confirmed bug (see WORKLOG-cohomology.md for the full repro): the prior
+    * `Ordering.by(filtrationValue)` had NO tie-break at all, so two DIFFERENT simplices tied at the same filtration
+    * value compared as *equal* -- not a total order. This happens by construction (not rarely) on any Vietoris-Rips
+    * complex with a triangle, since a triangle's filtration value always equals that of its own longest edge.
+    * `CellularHomologyContext` bakes a stream's `filtrationOrdering` into `Chain.reduceBy`'s `SortedMap`, so two cells
+    * that compare equal collide as a single map key and the reduction silently garbles pairings for that complex.
+    *
+    * `iterateDimension` sorts each dimension's bucket by `filtrationOrdering.reverse` (oldest-first, the direction
+    * Algorithm 1 needs to process columns in) -- this is deliberately `.reverse` on this SAME `Ordering` object, not an
+    * independently-built "oldest first" comparator. A previous attempt used a separately-built ordering (via the
+    * structurally similar `FilteredSimplexOrdering`) for iteration while this ordering backed pivot selection; the two
+    * disagreed on tie-break direction, so a coface could sort before its own tied facet, corrupting `Chain.reduceBy`'s
+    * pivot table exactly like the original no-tie-break bug did (see WORKLOG-cohomology.md). The general lesson: a
+    * stream's iteration order and its `filtrationOrdering` (pivot order) must be THE SAME total order (one the
+    * consistent reverse of the other) -- Algorithm 1 requires columns and rows to be indexed by one shared filtration
+    * order, not merely "each independently a valid total order." `.reverse` on this object, rather than a second
+    * hand-written comparator, is what guarantees that.
+    */
+  override val filtrationOrdering: Ordering[Simplex[Int]] = new Ordering[Simplex[Int]]:
+    def compare(x: Simplex[Int], y: Simplex[Int]): Int =
+      val tieBreak: Int =
+        Ordering.Int.compare(x.size, y.size) match
+          case 0  => Ordering.Int.compare(simplexIndexing(x), simplexIndexing(y))
+          case dc => dc
+      if filtrationValue.isDefinedAt(x) && filtrationValue.isDefinedAt(y) then
+        java.lang.Double.compare(filtrationValue(y), filtrationValue(x)) match
+          case 0  => tieBreak
+          case fc => fc
+      else tieBreak
 
   var finishedCurrent: Boolean = false
 
@@ -236,14 +273,14 @@ class EnumeratingCofaceSimplexStream(
 
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case 0 => metricSpace.elements.map(v => Simplex(v)).iterator
-    case 1 => edges.toSeq.sortBy(filtrationValue).iterator
+    case 1 => edges.toSeq.sorted(using filtrationOrdering.reverse).iterator
     case d =>
       // first, generate all simplices of this dimension
       (0 until BinomialCoefficient.value(metricSpace.size, d + 1).toInt).toSeq
         .flatMap { ix =>
           Some(simplexIndexing(ix, d + 1)).filter(keepCriterion.applyOrElse(_, _ => true))
         }
-        .sortBy(filtrationValue)
+        .sorted(using filtrationOrdering.reverse)
         .iterator
   }
 
@@ -266,7 +303,7 @@ class RipserCofaceSimplexStream(
           .flatMap { ix =>
             Some(simplexIndexing(ix, d)).filter(keepCriterion.applyOrElse(_, _ => true))
           }
-          .sortBy(filtrationValue)
+          .sorted(using filtrationOrdering.reverse)
       else lastDimensionCache = currentDimensionCache.toIndexedSeq
       // now we have a known good lastDimensionCache
       currentDimensionCache = (for
@@ -275,7 +312,7 @@ class RipserCofaceSimplexStream(
         newSpx: Simplex[Int] = spx + i
         if keepCriterion.applyOrElse(newSpx, _ => false)
       yield newSpx)
-        .sorted(using filtrationOrdering)
+        .sorted(using filtrationOrdering.reverse)
         .to(immutable.Queue) // we _would_ want to avoid creating the entire thing and sort it
       currentDimensionCache.iterator
   }
@@ -323,7 +360,7 @@ class InorderCofaceSimplexStream(
       lastDimensionCache = IndexedSeq.empty
       currentDimensionCache.iterator
     case 1 =>
-      currentDimensionCache = edges.toSeq.sortBy(filtrationValue).to(immutable.Queue)
+      currentDimensionCache = edges.toSeq.sorted(using filtrationOrdering.reverse).to(immutable.Queue)
       currentDimension = 1
       lastDimensionCache = metricSpace.elements.map(v => Simplex(v)).toIndexedSeq
       currentDimensionCache.iterator
@@ -334,7 +371,7 @@ class InorderCofaceSimplexStream(
           .flatMap { ix =>
             Some(simplexIndexing(ix, d)).filter(keepCriterion.applyOrElse(_, _ => true))
           }
-          .sortBy(filtrationValue)
+          .sorted(using filtrationOrdering.reverse)
       else lastDimensionCache = currentDimensionCache.toIndexedSeq
       // now we have a known good lastDimensionCache
       currentDimensionCache = immutable.Queue.empty

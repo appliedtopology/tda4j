@@ -1,11 +1,45 @@
 package org.appliedtopology.tda4j
 
-/** Hand-verified simplicial complexes with known barcodes, shared across homology-engine test
-  * suites so that different persistence algorithms (naive reduction, clear&compress, ...) can be
-  * checked against the exact same input and are directly comparable to each other, not just each
-  * internally self-consistent.
+/** Hand-verified simplicial complexes with known barcodes, shared across homology-engine test suites so that different
+  * persistence algorithms (naive reduction, clear&compress, ...) can be checked against the exact same input and are
+  * directly comparable to each other, not just each internally self-consistent.
   */
 object HomologyFixtures:
+
+  /** `StratifiedCellStream`'s default `.iterator` (`Iterator.from(0).filter(isDefinedAt).fold(...)`) hangs forever for
+    * a coface stream (documented in `PersistenceInChunksContext`/`PersistenceInChunksSpec`). Engines that call
+    * `stream.iterator` directly (`CellularHomologyContext.HomologyState`) would hang too. Sidestep by flattening
+    * `iterateDimension` over a bounded range into a finite `Vector` up front and wrapping that as a plain `CellStream`
+    * -- the engine only needs a correctly-ordered finite iterator, not this specific stream implementation's own
+    * (buggy) default one. Shared across homology-engine specs so a naive-engine test and a cohomology-engine test can
+    * build comparable streams from the same helper.
+    *
+    * This dimension-major cell vector is also what makes `flattenToCellStream` safe regardless of `source
+    * .filtrationOrdering`'s own tie-break: `CellularHomologyContext`'s reduction only ever touches a cell's own
+    * transitive faces, so faces-before-cofaces (all it actually needs from iteration order) holds unconditionally here
+    * -- a proper face always has strictly smaller dimension, and dimension-major processing does all of dimension `d-1`
+    * before any of dimension `d`, regardless of any filtration-value tie.
+    *
+    * (`source.filtrationOrdering` itself -- used for PIVOT selection, a separate concern from iteration order -- was
+    * for a while a real hazard here: `EnumeratingCofaceSimplexStream.filtrationOrdering` used to be `Ordering.by
+    * (filtrationValue)` with no tie-break at all, so two DIFFERENT simplices tied at the same filtration value compared
+    * as *equal*, corrupting `Chain.reduceBy`'s `SortedMap`-keyed pivot table on any Vietoris-Rips complex with
+    * `maxDimension >= 2` (a triangle always ties with its own longest edge). Fixed directly at the source -- see
+    * `EnumeratingCofaceSimplexStream.filtrationOrdering`'s own doc comment and WORKLOG-cohomology.md for the full repro
+    * and derivation -- so this helper no longer needs a workaround for it.)
+    */
+  def flattenToCellStream(
+    source: StratifiedSimplexStream[Int, Double],
+    maxDim: Int
+  ): CellStream[Simplex[Int], Double] =
+    val cells: Vector[Simplex[Int]] =
+      (0 to maxDim).iterator.flatMap(d => source.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty)).toVector
+    new CellStream[Simplex[Int], Double]:
+      def filtrationValue = source.filtrationValue
+      def filtrationOrdering = source.filtrationOrdering
+      val smallest = Double.NegativeInfinity
+      val largest = Double.PositiveInfinity
+      def iterator: Iterator[Simplex[Int]] = cells.iterator
 
   val triangleCells: Seq[(Double, Simplex[Int])] =
     List(1, 2, 3).map(i => (0.0, ∆(i))) ++
@@ -147,10 +181,9 @@ object HomologyFixtures:
     (0, 0.0, Double.PositiveInfinity) // older component (vertex 1, born 0.0) survives
   )
 
-  /** For every cell in a stream, it either opens exactly one bar (as a birth, whether finite or
-    * essential) or closes exactly one bar (as a death); a finite bar accounts for 2 cells, an
-    * essential bar for 1. This is a cheap structural invariant that catches most reduction bugs
-    * without needing an external oracle.
+  /** For every cell in a stream, it either opens exactly one bar (as a birth, whether finite or essential) or closes
+    * exactly one bar (as a death); a finite bar accounts for 2 cells, an essential bar for 1. This is a cheap
+    * structural invariant that catches most reduction bugs without needing an external oracle.
     */
   def totalBarsAccountForAllCells(
     barcode: List[(Int, Double, Double)],

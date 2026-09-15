@@ -516,6 +516,153 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
       mutable.Map.empty
     )
 
+/** Persistent cohomology via Ulrich Bauer's Ripser algorithm (arXiv:1908.02518), specialized to `Simplex[Int]`
+  * Vietoris-Rips/clique complexes via the combinatorial number system (`SimplexIndexing`) -- a deliberate narrowing
+  * from `CellularHomologyContext`'s generic `CellT: OrderedCell`, agreed with the project lead (see "Phase 2 plan" in
+  * WORKLOG-naive-homology.md). One-shot: computes the full barcode in a single pass, no incremental querying (also
+  * agreed scope, same source).
+  *
+  * Includes clearing (see the `cleared` set in `persistentCohomology`): unlike the standard framing of clearing as a
+  * pure performance optimization on top of an already-correct baseline, a first draft of this engine without it was
+  * confirmed WRONG by hand-deriving H^1 of a plain 3-cycle graph (spurious essential classes from dimension-d simplices
+  * that were already claimed as pivots one dimension down, violating Proposition 3.1's "not a pivot anywhere" clause)
+  * -- see WORKLOG-cohomology.md for the full derivation. Apparent pairs are NOT yet implemented (a later,
+  * genuinely-optional addition -- see the staged plan in WORKLOG-cohomology.md, which also has the full derivation of
+  * the pivot orientation, birth/death/dimension mapping, and sign convention below, re-derived directly from the paper
+  * rather than from memory -- this area of the codebase has a history of subtly-wrong unverified code, see CLAUDE.md).
+  * Do not "simplify" this against intuition without rereading that derivation; the reversed-order reasoning is
+  * genuinely non-obvious and has already produced two plausible-but-wrong drafts during development.
+  */
+class RipserCohomologyContext[CoefficientT: Field](metricSpace: FiniteMetricSpace[Int], maxDimension: Int):
+  import barcode.*
+
+  val si: SimplexIndexing = SimplexIndexing(metricSpace.size)
+  val filtrationValue: PartialFunction[Simplex[Int], Double] =
+    FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
+
+  private val fr = summon[CoefficientT is Field]
+
+  /** Ascending by filtration value; ties broken so a LARGER combinatorial index sorts as OLDER (smaller) -- the
+    * lexicographically-refined tie-break Definition 3.2/Proposition 3.9 rely on. `Chain`'s `leadingCell` is the MINIMUM
+    * under whatever `Ordering` is supplied (`Chain.from` builds its `PriorityQueue` with `ord.reverse`), and persistent
+    * cohomology's pivot is the OLDEST cofacet in the reduced coboundary chain -- so this ascending ordering, not a
+    * reversed one, is what the coboundary-side `Chain`/`RingModule` machinery needs in scope. This is the opposite
+    * convention from `CellularHomologyContext`'s `stream.filtrationOrdering`, which is deliberately reversed so ITS
+    * `leadingCell` means youngest -- see WORKLOG-cohomology.md for the full "transpose + reverse filtration order"
+    * derivation from the paper. Safe to declare at class scope (unlike the `chainRM` hazard documented on
+    * `CellularHomologyContext`): this ordering is self-contained, built directly from `filtrationValue`/`si` rather
+    * than by summoning some other ambient `Ordering`, so there is no stream-not-yet-available timing issue to worry
+    * about here.
+    */
+  given cohomologyOrdering: Ordering[Simplex[Int]]:
+    def compare(x: Simplex[Int], y: Simplex[Int]): Int =
+      val fc = java.lang.Double.compare(filtrationValue(x), filtrationValue(y))
+      if fc != 0 then fc else java.lang.Integer.compare(si(y), si(x))
+
+  /** Coboundary of sigma, implicitly restricted to the truncated (maxDimension-skeleton) complex: empty at
+    * `sigma.dim == maxDimension` by construction (no cofacets are ever enumerated beyond `maxDimension`), which is
+    * exactly what makes dimension-`maxDimension` classes come out essential rather than needing a special case. Sign
+    * convention dual to `Simplex.scala`'s boundary: `(-1)^`(number of sigma's vertices smaller than the inserted
+    * vertex).
+    */
+  def coboundaryOf(sigma: Simplex[Int]): Chain[Simplex[Int], CoefficientT] =
+    if sigma.dim + 1 > maxDimension then Chain.empty
+    else
+      Chain.from(
+        si.cofacetIterator(sigma)
+          .map { cofacetIdx =>
+            val tau = si(cofacetIdx, sigma.size + 1)
+            val inserted = (tau.underlying diff sigma.underlying).head
+            val position = sigma.underlying.count(_ < inserted)
+            val sign = if position % 2 == 0 then fr.one else fr.negate(fr.one)
+            (tau, sign)
+          }
+          .toSeq
+      )
+
+  /** Coboundary of a whole chain, linearly extending `coboundaryOf`. Unlike `Chain.scala`'s `.boundary` extension
+    * (intrinsic to a cell), a coboundary is extrinsic -- it depends on which higher-dimensional simplices exist in this
+    * (possibly truncated) complex -- so it lives here rather than as a general-purpose `Chain` extension. Used by tests
+    * to check that a representative essential cocycle genuinely has zero coboundary; trivially true at
+    * `sigma.dim == maxDimension` (see `coboundaryOf`), so that check is only meaningful below the top dimension.
+    */
+  def coboundaryOfChain(c: Chain[Simplex[Int], CoefficientT]): Chain[Simplex[Int], CoefficientT] =
+    Chain.from(c.items.flatMap { case (cell, coeff) =>
+      coboundaryOf(cell).items.map { case (tau, sign) => (tau, fr.times(coeff, sign)) }
+    })
+
+  def persistentCohomology(): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
+    // Summoned here, not any earlier -- see class doc above and CellularHomologyContext's class doc for
+    // why a Chain[...] is RingModule instance's summon-time Ordering[CellT] scoping matters.
+    val chainRM = summon[Chain[Simplex[Int], CoefficientT] is RingModule]
+    import chainRM.*
+
+    val bars = mutable.ArrayDeque.empty[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]]
+
+    // Clearing: a d-simplex that was already claimed as the PIVOT of some (d-1)-simplex's reduction
+    // (i.e. it's the death side of a bar already recorded one dimension down) MUST NOT be independently
+    // considered when reducing dimension d's own coboundary matrix -- carried across dimensions, not
+    // reset. This is NOT an optional speedup here (see WORKLOG-cohomology.md's "clearing is required for
+    // correctness" finding, confirmed by hand-deriving H^1 of a 3-cycle graph and catching this exact
+    // engine reporting 2-3 spurious essential classes instead of the correct 0-1): Proposition 3.1 defines
+    // essential indices as {i | R_i = 0 AND i is not a pivot anywhere}, and skipping that second condition
+    // is precisely the bug this set exists to prevent. A cleared simplex contributes no bar at all (its
+    // bar was already recorded when it was claimed as a pivot).
+    val cleared: mutable.Set[Simplex[Int]] = mutable.Set.empty
+
+    for d <- 0 to maxDimension do
+      // Youngest first: Algorithm 1 processes columns in increasing [matrix] order, which under the
+      // reversed-order coboundary matrix means decreasing real filtration order. Structural, not a
+      // performance tweak -- see WORKLOG-cohomology.md.
+      val simplicesAtD: Seq[Simplex[Int]] =
+        (0 until binomial(metricSpace.size, d + 1))
+          .map(idx => si(idx, d + 1))
+          .sorted(using cohomologyOrdering.reverse)
+
+      // Pivot (dimension d+1 simplex) -> reduced coboundary column, reset per dimension: dimension d's
+      // coboundary matrix delta: C^d -> C^{d+1} is reduced independently of every other dimension's.
+      val basis: mutable.Map[Simplex[Int], Chain[Simplex[Int], CoefficientT]] = mutable.Map.empty
+      // Pivot -> the V-column (a dimension-d chain) of whichever d-simplex claimed that pivot.
+      val generators: mutable.Map[Simplex[Int], Chain[Simplex[Int], CoefficientT]] = mutable.Map.empty
+
+      for sigma <- simplicesAtD if !cleared.contains(sigma) do
+        val z = coboundaryOf(sigma)
+        // Chain.reduceBy (SortedMap-based), not hand-rolled reduction over raw Chain arithmetic -- see
+        // WORKLOG-naive-homology.md's "critical performance bug" for why that silently reintroduces
+        // superlinear blowup on real VR streams.
+        val (reduced, log) = Chain.reduceBy(z, basis, Chain.empty)
+        // V-column: by construction (Algorithm 1's V_j, updated in lockstep with R_j = delta(V_j)
+        // throughout), this is itself a genuine cocycle whenever reduced is zero -- no separate
+        // cocycle-reconstruction step needed, unlike the naive engine's homology case. Collapsed
+        // explicitly, and BEFORE either write below, for the same reason as CellularHomologyContext:
+        // generators entries get read back into later cells' own vcol folds.
+        val vcol: Chain[Simplex[Int], CoefficientT] = log.items.foldLeft(Chain(sigma)) { case (acc, (pivot, coeff)) =>
+          acc - coeff ⊠ generators.getOrElse(
+            pivot,
+            throw new IllegalStateException(s"pivot $pivot has a basis entry but no generators entry")
+          )
+        }
+        vcol.collapseAll()
+        if reduced.isZero() then
+          // sigma's coboundary fully cancelled, AND (since we didn't skip it above) sigma was never
+          // claimed as anyone's pivot: a genuine essential class born at sigma (dimension d). Emitted
+          // unconditionally, including alongside a zero-length finite bar elsewhere in the list -- see
+          // WORKLOG-cohomology.md on why zero-length bars must not be silently dropped at this stage.
+          bars.append(PersistenceBar(d, ClosedEndpoint(filtrationValue(sigma)), PositiveInfinity(), Some(vcol)))
+        else
+          // reduced is nonzero: its leading cell (the OLDEST cofacet remaining, per cohomologyOrdering)
+          // is sigma's death partner. Birth = sigma (dimension d, the column); death = that pivot
+          // (dimension d+1, the row) -- see WORKLOG-cohomology.md's birth/death/dimension derivation.
+          val pivot = reduced.leadingCell.get
+          basis(pivot) = reduced
+          generators(pivot) = vcol
+          cleared += pivot
+          bars.append(
+            PersistenceBar(d, ClosedEndpoint(filtrationValue(sigma)), OpenEndpoint(filtrationValue(pivot)), Some(vcol))
+          )
+
+    bars.toList
+
 /*
 class RipserHomology[CoefficientT: Field](metricSpace: FiniteMetricSpace[Int]):
   val sparseMetricSpace = SparseMetricSpace(metricSpace, metricSpace.minimumEnclosingRadius)
