@@ -6,27 +6,26 @@ import org.specs2.main.Arguments
 import scala.util.Random
 
 /** Benchmarks `RipserCohomologyContext`'s apparent-pairs shortcut (`zeroApparentCofacet`, wired into
-  * `persistentCohomology` -- see WORKLOG-cohomology.md's "Apparent pairs: resolved" section for the full
-  * derivation) against the exact same engine with the shortcut disabled via `useApparentPairs = false`.
-  * Timing the same algorithm with one optimization toggled, rather than a different engine entirely,
-  * isolates this specific change's effect from any unrelated difference between engines.
+  * `persistentCohomology` -- see WORKLOG-cohomology.md's "Apparent pairs: resolved" section for the full derivation)
+  * against the exact same engine with the shortcut disabled via `useApparentPairs = false`. Timing the same algorithm
+  * with one optimization toggled, rather than a different engine entirely, isolates this specific change's effect from
+  * any unrelated difference between engines.
   *
-  * Like `ProfilingSpec`, this is a profiling script, not a correctness check: it reads specs2 command-line
-  * args and prints a timing table rather than asserting behavior. A failure here (an exception, not a slow
-  * number) is the only thing worth treating as a real problem -- the timings themselves are informational.
-  * Defaults are kept small and fast on purpose so this stays cheap under plain `sbt test`/CI; pass larger
-  * values for an actual benchmarking run, e.g.:
+  * Like `ProfilingSpec`, this is a profiling script, not a correctness check: it reads specs2 command-line args and
+  * prints a timing table rather than asserting behavior. A failure here (an exception, not a slow number) is the only
+  * thing worth treating as a real problem -- the timings themselves are informational. Defaults are kept small and fast
+  * on purpose so this stays cheap under plain `sbt test`/CI; pass larger values for an actual benchmarking run, e.g.:
   *
   * {{{
   * sbt -DminSize=12 -DmaxSize=24 -Dstep=4 -Dtrials=7 "testOnly org.appliedtopology.tda4j.ApparentPairsBenchmarkSpec"
   * }}}
   *
-  * (the `-D` flags go to the `sbt` JVM itself, before the `testOnly` command -- specs2's own `--` argument
-  * syntax is for named specs2 arguments, not these, and silently falls back to defaults if used here.)
+  * (the `-D` flags go to the `sbt` JVM itself, before the `testOnly` command -- specs2's own `--` argument syntax is
+  * for named specs2 arguments, not these, and silently falls back to defaults if used here.)
   *
-  * The original measurement this spec reproduces (1.35x-1.8x, growing with n, on n=12-20 random point
-  * clouds) was done ad hoc during development and not preserved -- this file is the durable, rerunnable
-  * replacement for that one-off measurement.
+  * The original measurement this spec reproduces (1.35x-1.8x, growing with n, on n=12-20 random point clouds) was done
+  * ad hoc during development and not preserved -- this file is the durable, rerunnable replacement for that one-off
+  * measurement.
   */
 class ApparentPairsBenchmarkSpec(args: Arguments) extends mutable.Specification:
   "Apparent-pairs optimization benchmark" >> {

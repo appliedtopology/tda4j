@@ -133,45 +133,58 @@ object Chain:
       updateMap(m, cell, coeff)
     }
 
+  /** `fallback` is consulted only when `sigma` has no `basis` entry -- Ripser's `compute_pairs` on-the-fly
+    * apparent-pair substitution (confirmed against `ripser.cpp` directly: it recomputes the substitute column fresh
+    * every time a pivot is hit, with no cache anywhere). Deliberately NOT written into `basis` here, for the same
+    * reason: a caller relying on a stale substitute would be trusting a value real Ripser itself never trusts twice.
+    * `fallback(sigma)`, if `Some`, must return a chain whose `leadingCell` is `sigma` itself -- the caller is
+    * responsible for that invariant (see `RipserCohomologyContext.zeroApparentFacet`'s doc for why it holds there).
+    */
   @tailrec
   private def reduceLoop[CellT: Ordering, CoefficientT: Field](
     z: SortedMap[CellT, CoefficientT],
     basis: mutable.Map[CellT, Chain[CellT, CoefficientT]],
     reductionLog: SortedMap[CellT, CoefficientT],
-    stop: CellT => Boolean
+    stop: CellT => Boolean,
+    fallback: CellT => Option[Chain[CellT, CoefficientT]]
   ): (SortedMap[CellT, CoefficientT], SortedMap[CellT, CoefficientT]) =
     z.headOption match
       case None                      => (z, reductionLog)
       case Some((sigma, sigmaCoeff)) =>
         if stop(sigma) then (z, reductionLog)
-        else if !basis.contains(sigma) then (z, reductionLog)
         else
-          val fr = summon[CoefficientT is Field]
-          val redCoeff = sigmaCoeff / basis(sigma).leadingCoefficient
-          reduceLoop(
-            basis(sigma).entries.foldLeft(z) { case (m, (bCell, bCoeff)) =>
-              updateMap(m, bCell, fr.negate(fr.times(redCoeff, bCoeff)))
-            },
-            basis,
-            updateMap(reductionLog, sigma, redCoeff),
-            stop
-          )
+          basis.get(sigma).orElse(fallback(sigma)) match
+            case None             => (z, reductionLog)
+            case Some(basisChain) =>
+              val fr = summon[CoefficientT is Field]
+              val redCoeff = sigmaCoeff / basisChain.leadingCoefficient
+              reduceLoop(
+                basisChain.entries.foldLeft(z) { case (m, (bCell, bCoeff)) =>
+                  updateMap(m, bCell, fr.negate(fr.times(redCoeff, bCoeff)))
+                },
+                basis,
+                updateMap(reductionLog, sigma, redCoeff),
+                stop,
+                fallback
+              )
 
   final def reduceByUntil[CellT: Ordering, CoefficientT: Field](
     z: Chain[CellT, CoefficientT],
     basis: mutable.Map[CellT, Chain[CellT, CoefficientT]],
     reductionLog: Chain[CellT, CoefficientT], // want to have a default empty here?
-    stop: CellT => Boolean = (_: CellT) => false // stop when the stop function tells you to
+    stop: CellT => Boolean = (_: CellT) => false, // stop when the stop function tells you to
+    fallback: CellT => Option[Chain[CellT, CoefficientT]] = (_: CellT) => Option.empty[Chain[CellT, CoefficientT]]
   ): (Chain[CellT, CoefficientT], Chain[CellT, CoefficientT]) =
-    val (accMap, logMap) = reduceLoop(toSortedMap(z), basis, toSortedMap(reductionLog), stop)
+    val (accMap, logMap) = reduceLoop(toSortedMap(z), basis, toSortedMap(reductionLog), stop, fallback)
     (Chain.from(accMap.toSeq), Chain.from(logMap.toSeq))
 
   final def reduceBy[CellT: Ordering, CoefficientT: Field](
     z: Chain[CellT, CoefficientT],
     basis: mutable.Map[CellT, Chain[CellT, CoefficientT]],
-    reductionLog: Chain[CellT, CoefficientT]
+    reductionLog: Chain[CellT, CoefficientT],
+    fallback: CellT => Option[Chain[CellT, CoefficientT]] = (_: CellT) => Option.empty[Chain[CellT, CoefficientT]]
   ): (Chain[CellT, CoefficientT], Chain[CellT, CoefficientT]) =
-    reduceByUntil(z, basis, reductionLog)
+    reduceByUntil(z, basis, reductionLog, (_: CellT) => false, fallback)
 
   given [CellT: Ordering, CoefficientT: Field as fr]
     => (Chain[CellT, CoefficientT] is RingModule {

@@ -122,12 +122,156 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
     cohomology must containTheSameElementsAs(naive)
   }
 
+  "The on-the-fly apparent-pair substitution actually fires on the collision regression example" >> {
+    // Not just "the barcode is unchanged": persistentCohomology now defers coboundaryOf(sigma) for
+    // every apparent pair and only recomputes it via substitution when some OTHER column's reduction
+    // actually reaches tau as an unresolved pivot (see WORKLOG-lazy-enumeration.md). A test that only
+    // checks the final barcode can't distinguish "the fallback fired and computed correctly" from "the
+    // fallback never fired at all" -- this cloud is the confirmed case (WORKLOG-cohomology.md's
+    // "Apparent pairs: resolved" section): edge {7,11}'s reduction needs {2,7,11}'s apparent-pair
+    // partner's coboundary, which is exactly what the substitution recomputes on the fly.
+    val ctx = RipserCohomologyContext[Double](apparentPairCollisionCloud, 2)
+    ctx.persistentCohomology()
+    ctx.substitutionCount must be_>(0)
+  }
+
+  "The substitution never fires when useApparentPairs is disabled" >> {
+    val ctx = RipserCohomologyContext[Double](apparentPairCollisionCloud, 2, useApparentPairs = false)
+    ctx.persistentCohomology()
+    ctx.substitutionCount must be_==(0)
+  }
+
+  "The substitution fires across randomized Vietoris-Rips point clouds, not just the pinned collision example" >> {
+    // The two tests above only prove the substitution path CAN fire (on one hand-pinned cloud) and can be
+    // turned off. Neither proves the randomized cross-validation property above actually EXERCISES it --
+    // that property could pass at 200/200 trials while the substitution path never once fires, which would
+    // make it useless as a regression guard for this session's own change. Plain sampling (not `forAll`)
+    // so the accumulation across trials is unambiguous, rather than fighting specs2-scalacheck's Prop/Result
+    // execution-order semantics for a check that only needs to run once, after all trials.
+    val gen = matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))
+    val totalSubstitutions = (1 to 200).map { _ =>
+      val metricSpace = EuclideanMetricSpace(gen.sample.get)
+      val ctx = RipserCohomologyContext[Double](metricSpace, 2)
+      ctx.persistentCohomology()
+      ctx.substitutionCount
+    }.sum
+    totalSubstitutions must be_>(0)
+  }
+
   "Every simplex is accounted for: finite*2 + essential == total simplices, per dimension count" >>
     forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
       val metricSpace = EuclideanMetricSpace(points)
       val maxDim = 2
       val bars = cohomologyBars(metricSpace, maxDim)
       HomologyFixtures.totalBarsAccountForAllCells(bars, totalSimplices(metricSpace.size, maxDim)) must beTrue
+    }
+
+  // Session 2 (sparse Rips / maxFiltrationValue): picks t as the midpoint of two ADJACENT entries in the
+  // sorted list of distinct pairwise distances. Since every simplex's filtration value is itself some
+  // pairwise distance, and t sits strictly between two distinct, adjacent such values by construction, no
+  // filtration value in THIS cloud can equal t -- avoids having to litigate the closed/open death
+  // convention just to get a test to pass. This guarantee is specific to how t is built here (a strict
+  // interior midpoint of adjacent sorted distances) -- it is not a general property of any threshold.
+  // Falls back to something past the one distinct distance in the (exceedingly rare, for random doubles)
+  // degenerate all-equidistant case.
+  private def midThreshold(metricSpace: FiniteMetricSpace[Int]): Double =
+    val distances = (for
+      x <- metricSpace.elements
+      y <- metricSpace.elements
+      if x != y
+    yield metricSpace.distance(x, y)).toSeq.distinct.sorted
+    if distances.size < 2 then distances.headOption.getOrElse(0.0) + 1.0
+    else (distances(distances.size / 2 - 1) + distances(distances.size / 2)) / 2.0
+
+  // The free oracle: a Vietoris-Rips filtration thresholded at t is EXACTLY the untruncated filtration's
+  // own persistence restricted to [0, t] -- a bar born after t never existed at all (dropped); a bar that
+  // straddles t is truncated to essential at t (it survives at least that far, but the threshold means we
+  // can never observe it dying, same as querying an incremental engine before its stream finishes). Both
+  // sides come from the SAME engine, so tie-breaks are identical and the comparison can use the FULL bar
+  // list, zero-length bars included -- a much stronger check than the naive-engine cross-validation
+  // above, which is restricted to birth < death because the two engines' tie-breaks differ.
+  private def restrictToThreshold(bars: List[(Int, Double, Double)], t: Double): List[(Int, Double, Double)] =
+    bars
+      .filter { case (_, b, _) => b <= t }
+      .map { case (dim, b, d) => (dim, b, if d > t then Double.PositiveInfinity else d) }
+
+  "Thresholded persistent cohomology is exactly the untruncated barcode restricted to [0, t]" >>
+    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
+      val metricSpace = EuclideanMetricSpace(points)
+      val maxDim = 2
+      val t = midThreshold(metricSpace)
+      val untruncated = cohomologyBars(metricSpace, maxDim)
+      val thresholded = RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = t)
+        .persistentCohomology()
+        .map(toTuple)
+      thresholded must containTheSameElementsAs(restrictToThreshold(untruncated, t))
+    }
+
+  "A threshold larger than the cloud's own diameter matches the untruncated barcode exactly" >>
+    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
+      val metricSpace = EuclideanMetricSpace(points)
+      val maxDim = 2
+      val maxPairwiseDistance =
+        (for x <- metricSpace.elements; y <- metricSpace.elements yield metricSpace.distance(x, y)).max
+      val thresholded =
+        RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = maxPairwiseDistance + 1.0)
+          .persistentCohomology()
+          .map(toTuple)
+      thresholded must containTheSameElementsAs(cohomologyBars(metricSpace, maxDim))
+    }
+
+  "maxFiltrationValue defaults to +Infinity, and passing it explicitly changes nothing" >> {
+    val defaultBars = cohomologyBars(apparentPairCollisionCloud, 2)
+    val explicitBars =
+      RipserCohomologyContext[Double](apparentPairCollisionCloud, 2, maxFiltrationValue = Double.PositiveInfinity)
+        .persistentCohomology()
+        .map(toTuple)
+    explicitBars must containTheSameElementsAs(defaultBars)
+  }
+
+  "A threshold strictly between two pairwise distances excludes the longer edge and the triangle entirely" >> {
+    // threePointLine: pairwise distances 1, 2, 3. At t=2.5 (strictly between 2 and 3), edge {0,2} and the
+    // triangle {0,1,2} -- both born at 3.0, per the "filled triangle" test above -- never come into
+    // existence at all, not merely truncated at their death: their own BIRTH (3.0) exceeds t. What
+    // remains is a plain path graph (0-1-2, no cycle) -- H^1 is trivial, not just capped to essential.
+    val bars =
+      RipserCohomologyContext[Double](threePointLine, 2, maxFiltrationValue = 2.5).persistentCohomology().map(toTuple)
+    bars must containTheSameElementsAs(
+      List(
+        (0, 0.0, 1.0),
+        (0, 0.0, 2.0),
+        (0, 0.0, Double.PositiveInfinity)
+      )
+    )
+  }
+
+  "Every simplex is accounted for under a threshold too: finite*2 + essential == the actually-assembled simplex count" >>
+    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
+      val metricSpace = EuclideanMetricSpace(points)
+      val maxDim = 2
+      val t = midThreshold(metricSpace)
+      val ctx = RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = t)
+      val bars = ctx.persistentCohomology().map(toTuple)
+      // NOT totalSimplices(n, maxDim) (the binomial formula): that assumes every combinatorially-possible
+      // subset exists, true only at maxFiltrationValue = +Infinity. A thresholded complex genuinely
+      // excludes most subsets outright (see sparseCofacets) -- ctx.totalSimplexCount is the count of what
+      // was actually assembled, the only correct total once a threshold is in play.
+      HomologyFixtures.totalBarsAccountForAllCells(bars, ctx.totalSimplexCount) must beTrue
+    }
+
+  "Memoizing filtrationValue changes nothing about the computed barcode" >>
+    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
+      val metricSpace = EuclideanMetricSpace(points)
+      val maxDim = 2
+      val unmemoized =
+        RipserCohomologyContext[Double](metricSpace, maxDim, memoizeFiltrationValue = false)
+          .persistentCohomology()
+          .map(toTuple)
+      val memoized =
+        RipserCohomologyContext[Double](metricSpace, maxDim, memoizeFiltrationValue = true)
+          .persistentCohomology()
+          .map(toTuple)
+      memoized must containTheSameElementsAs(unmemoized)
     }
 
   "Essential representatives are genuine cocycles (zero coboundary) below the top dimension" >> {

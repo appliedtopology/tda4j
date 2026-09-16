@@ -560,18 +560,63 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
   * no-op, not just an empirically-checked one. Not intended as a user-facing tuning knob outside benchmarking; there is
   * no known case where `false` is the right choice for real use.
   */
+/** `maxFiltrationValue` (default `Double.PositiveInfinity`, matching `RipserStreamBase`'s existing sparse-Rips
+  * convention elsewhere in this codebase, NOT `AlphaShapeDQP`'s always-untruncated one -- alpha shapes and this Ripser
+  * reproduction are different sections of the library with minimal interaction, and there's no reason to force them to
+  * agree on this) and `memoizeFiltrationValue` (default `false`) are both explicit, approved architectural choices from
+  * a second session -- see WORKLOG-lazy-enumeration.md's "Session 2" section for the full derivation. In short:
+  * Ripser's own historical design goal was MEMORY frugality (the classic bottleneck for persistent homology
+  * implementations before Ripser), not raw speed -- the speedups were a side effect of that, not the primary goal. A
+  * global cache of every filtration value ever touched runs directly against that goal on large complexes, so it's
+  * opt-in here, not the default. The actual replacement for it is `insertionDiameter`'s incremental diameter formula
+  * (below), which ELIMINATES the O(d^2) `MaximumDistanceFiltrationValue` recomputation for cofacet enumeration
+  * entirely, rather than paying for it once and caching the answer -- strictly better than a cache on every axis that
+  * matters here (no growing memory footprint, no hashing, no first-computation cost to amortize).
+  */
 class RipserCohomologyContext[CoefficientT: Field](
   metricSpace: FiniteMetricSpace[Int],
   maxDimension: Int,
-  useApparentPairs: Boolean = true
+  useApparentPairs: Boolean = true,
+  maxFiltrationValue: Double = Double.PositiveInfinity,
+  memoizeFiltrationValue: Boolean = false
 ):
   import barcode.*
 
   val si: SimplexIndexing = SimplexIndexing(metricSpace.size)
-  val filtrationValue: PartialFunction[Simplex[Int], Double] =
+
+  private val rawFiltrationValue: PartialFunction[Simplex[Int], Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 
+  /** Optionally-memoized wrapper around `rawFiltrationValue`: `MaximumDistanceFiltrationValue.apply` recomputes an
+    * O(d^2) max over pairwise vertex distances from scratch on every call, with no caching of its own (confirmed by
+    * reading `FiniteMetricSpace.scala` directly, not assumed). Gated behind `memoizeFiltrationValue` (default `false`
+    * -- see the class doc above for why): the enumeration/assembly path (`insertionDiameter`, `sparseCofacets`,
+    * `persistentCohomology`'s own per-dimension loop) never goes through this at all, carrying diameters incrementally
+    * instead, so this field's remaining callers are `cohomologyOrdering` (consulted on every `SortedMap`/
+    * `PriorityQueue` comparison inside `Chain.reduceBy`'s reduction machinery -- the majority of remaining calls) plus
+    * the handful of once-per-simplex lookups in `coboundaryOf`/`zeroPivotCofacet`/`zeroPivotFacet`/bar-endpoint
+    * reporting. See WORKLOG-lazy-enumeration.md for the measured cost of leaving this `false`.
+    */
+  val filtrationValue: PartialFunction[Simplex[Int], Double] =
+    if memoizeFiltrationValue then
+      new PartialFunction[Simplex[Int], Double]:
+        private val cache: mutable.HashMap[Simplex[Int], Double] = mutable.HashMap.empty
+        def isDefinedAt(spx: Simplex[Int]): Boolean = rawFiltrationValue.isDefinedAt(spx)
+        def apply(spx: Simplex[Int]): Double = cache.getOrElseUpdate(spx, rawFiltrationValue(spx))
+    else rawFiltrationValue
+
   private val fr = summon[CoefficientT is Field]
+
+  /** Shared comparator logic for "ascending by filtration value, ties broken so a LARGER combinatorial index sorts as
+    * OLDER (smaller)" -- factored out so a diameter-CARRYING ordering (`diameterSimplexOrdering`, below) can reuse the
+    * exact same tie-break instead of being a second, independently-written comparator that might silently disagree on a
+    * tie (the trap this codebase's own history -- `NOTES-for-guides.md` item 3 -- flags explicitly). Takes raw
+    * `(filtrationValue, combinatorialIndex)` pairs rather than `Simplex[Int]` so callers who already have the
+    * filtration value in hand (i.e. don't need to call `filtrationValue` at all) can avoid it.
+    */
+  private def compareFvThenIndex(xFv: Double, xIdx: Int, yFv: Double, yIdx: Int): Int =
+    val fc = java.lang.Double.compare(xFv, yFv)
+    if fc != 0 then fc else java.lang.Integer.compare(yIdx, xIdx)
 
   /** Ascending by filtration value; ties broken so a LARGER combinatorial index sorts as OLDER (smaller) -- the
     * lexicographically-refined tie-break Definition 3.2/Proposition 3.9 rely on. `Chain`'s `leadingCell` is the MINIMUM
@@ -587,26 +632,88 @@ class RipserCohomologyContext[CoefficientT: Field](
     */
   given cohomologyOrdering: Ordering[Simplex[Int]]:
     def compare(x: Simplex[Int], y: Simplex[Int]): Int =
-      val fc = java.lang.Double.compare(filtrationValue(x), filtrationValue(y))
-      if fc != 0 then fc else java.lang.Integer.compare(si(y), si(x))
+      compareFvThenIndex(filtrationValue(x), si(x), filtrationValue(y), si(y))
 
-  /** Coboundary of sigma, implicitly restricted to the truncated (maxDimension-skeleton) complex: empty at
-    * `sigma.dim == maxDimension` by construction (no cofacets are ever enumerated beyond `maxDimension`), which is
-    * exactly what makes dimension-`maxDimension` classes come out essential rather than needing a special case. Sign
-    * convention dual to `Simplex.scala`'s boundary: `(-1)^`(number of sigma's vertices smaller than the inserted
-    * vertex).
+  /** A simplex paired with its ALREADY-KNOWN filtration value, carried through enumeration/assembly so it never needs
+    * to be recomputed (the `insertionDiameter` incremental formula below, not `filtrationValue`/`MaximumDistance
+    * FiltrationValue`'s O(d^2) recompute, is how a cofacet's `diameter` field gets produced in the first place). This
+    * is this codebase's analogue of Ripser's own `diameter_index_t` -- deliberately NOT the same compact
+    * `(Double, Int)` representation Ripser actually uses (Ripser stores a combinatorial index, not a materialized
+    * `Simplex[Int]`/`SortedSet[Int]`): carrying the full `Simplex[Int]` is a simplicity/speed choice made AGAINST the
+    * project's stated memory goal, not an oversight -- flagged here as a live option for a future session, not
+    * something to silently "fix" by trying to swap in a raw-index representation without re-deriving what else that
+    * would touch (every downstream consumer currently expects a `Simplex[Int]`).
+    *
+    * WARNING: do not use `DiameterSimplex` as a `Set`/`Map` key anywhere -- its case-class equality includes the
+    * `Double` diameter, so two carriers for the textually-same simplex could compare unequal on floating-point noise.
+    * `cleared`/`basis`/`generators` are and must stay keyed by `.simplex` directly, never by a `DiameterSimplex`.
+    */
+  private final case class DiameterSimplex(diameter: Double, simplex: Simplex[Int])
+
+  private val diameterSimplexOrdering: Ordering[DiameterSimplex] =
+    (x: DiameterSimplex, y: DiameterSimplex) => compareFvThenIndex(x.diameter, si(x.simplex), y.diameter, si(y.simplex))
+
+  /** Ripser's actual cofacet-diameter recurrence (`simplex_coboundary_enumerator` in `ripser.cpp`): a cofacet formed by
+    * inserting vertex `v` into `sigma` has diameter `max(sigma's own diameter, max over sigma's vertices of the
+    * distance to v)` -- O(d) given `sigma`'s already-known diameter, vs. `MaximumDistanceFiltrationValue.apply`'s
+    * O(d^2) full pairwise recompute from scratch, which is ignorant of any already-known partial answer. This is what
+    * makes carrying `DiameterSimplex` through enumeration strictly better than caching: the expensive computation is
+    * eliminated, not paid for once and reused. Valid for inserting ANY vertex, not just ones satisfying the "above
+    * sigma's own max" canonical-cofacet convention `sparseCofacets` uses below -- so this is also used inside
+    * `coboundaryOf`/`zeroPivotCofacet`, which need to consider cofacets from inserting vertices in general.
+    */
+  private def insertionDiameter(sigma: Simplex[Int], sigmaFv: Double, v: Int): Double =
+    math.max(sigmaFv, sigma.underlying.iterator.map(u => metricSpace.distance(u, v)).max)
+
+  /** The canonical cofacets of `sigma` -- one per higher simplex that has `sigma` as ITS canonical facet (the facet
+    * obtained by removing its own maximum vertex) -- generated by inserting a vertex strictly greater than `sigma`'s
+    * own maximum, the same convention `SimplexIndexing.topCofacetIterator`/`cofacetIterator(..., allCofacets = false)`
+    * already uses and `SimplexIndexingSpec` already verifies against the paper's worked examples. This generates each
+    * dimension-(d+1) simplex from EXACTLY one dimension-d source, so no deduplication is needed when assembling a whole
+    * dimension's worth of candidates from the previous dimension's simplices (`persistentCohomology`'s
+    * `currentLevel.iterator.flatMap(sparseCofacets)`) -- see WORKLOG-lazy-enumeration.md's uniqueness argument.
+    *
+    * Deliberately built by direct `SortedSet` insertion (`sigma.simplex.underlying + v`), NOT by routing through
+    * `SimplexIndexing.cofacetIterator` + `si(idx, ...)` decode: the combinatorial-index round-trip costs O(d log n) per
+    * candidate for information (the inserted vertex) this method already has directly from the loop variable, where a
+    * direct `SortedSet` insertion is O(d). `maxFiltrationValue` is enforced here -- this is the one place in the engine
+    * that actually EXCLUDES a simplex from existing in the complex at all, as opposed to `coboundaryOf`'s
+    * within-an-existing-simplex's-coboundary filtering.
+    */
+  private def sparseCofacets(sigma: DiameterSimplex): Iterator[DiameterSimplex] =
+    if sigma.simplex.dim + 1 > maxDimension then Iterator.empty
+    else
+      val maxVertex = sigma.simplex.underlying.max
+      (maxVertex + 1 until metricSpace.size).iterator
+        .map { v =>
+          DiameterSimplex(insertionDiameter(sigma.simplex, sigma.diameter, v), (sigma.simplex.underlying + v).asSimplex)
+        }
+        .filter(_.diameter <= maxFiltrationValue)
+
+  /** Coboundary of sigma, implicitly restricted to the truncated (maxDimension-skeleton,
+    * maxFiltrationValue-thresholded) complex: empty at `sigma.dim == maxDimension` by construction (no cofacets are
+    * ever enumerated beyond `maxDimension`), which is exactly what makes dimension-`maxDimension` classes come out
+    * essential rather than needing a special case. A candidate cofacet past `maxFiltrationValue` is filtered out via
+    * `insertionDiameter`'s O(d) incremental formula (one `filtrationValue(sigma)` call for `sigma` itself, not one per
+    * candidate) rather than `filtrationValue(tau)`'s O(d^2) full recompute per candidate -- this is the one place
+    * `coboundaryOf` genuinely needs a diameter it doesn't already have (it considers ALL of sigma's cofacets, not just
+    * tied ones, unlike `zeroPivotCofacet` below). Sign convention dual to `Simplex.scala`'s boundary: `(-1)^`(number of
+    * sigma's vertices smaller than the inserted vertex).
     */
   def coboundaryOf(sigma: Simplex[Int]): Chain[Simplex[Int], CoefficientT] =
     if sigma.dim + 1 > maxDimension then Chain.empty
     else
+      val sigmaFv = filtrationValue(sigma)
       Chain.from(
         si.cofacetIterator(sigma)
-          .map { cofacetIdx =>
+          .flatMap { cofacetIdx =>
             val tau = si(cofacetIdx, sigma.size + 1)
             val inserted = (tau.underlying diff sigma.underlying).head
-            val position = sigma.underlying.count(_ < inserted)
-            val sign = if position % 2 == 0 then fr.one else fr.negate(fr.one)
-            (tau, sign)
+            if insertionDiameter(sigma, sigmaFv, inserted) > maxFiltrationValue then None
+            else
+              val position = sigma.underlying.count(_ < inserted)
+              val sign = if position % 2 == 0 then fr.one else fr.negate(fr.one)
+              Some((tau, sign))
           }
           .toSeq
       )
@@ -629,21 +736,37 @@ class RipserCohomologyContext[CoefficientT: Field](
     * by inserting a vertex strictly greater than sigma's own maximum, which silently misses a real tied cofacet
     * whenever sigma already contains `vertexCount - 1` (a false negative, not merely an inefficiency). Truncated to
     * `maxDimension` exactly like `coboundaryOf`, for the same reason: `SimplexIndexing`'s raw iterators have no notion
-    * of any dimension cap on their own.
+    * of any dimension cap on their own. Tau's diameter is computed via `insertionDiameter`'s O(d) incremental formula,
+    * not `filtrationValue(tau)`'s O(d^2) recompute. No SEPARATE `maxFiltrationValue` guard is needed here (unlike
+    * `coboundaryOf`, which considers every cofacet, not just tied ones): this method only ever selects a tau tied at
+    * `sigma`'s own value, and `sigma` is only ever called with here if it's already within the threshold (guaranteed by
+    * construction -- see `sparseCofacets`), so any tied tau is automatically within threshold too.
     */
   private def zeroPivotCofacet(sigma: Simplex[Int]): Option[Simplex[Int]] =
     if sigma.dim + 1 > maxDimension then None
     else
       val d = filtrationValue(sigma)
       si.cofacetIterator(sigma)
-        .map(idx => si(idx, sigma.size + 1))
-        .filter(tau => filtrationValue(tau) == d)
-        .maxByOption(tau => si(tau))
+        .map { idx =>
+          val tau = si(idx, sigma.size + 1)
+          val inserted = (tau.underlying diff sigma.underlying).head
+          (tau, insertionDiameter(sigma, d, inserted))
+        }
+        .filter((tau, tauFv) => tauFv == d)
+        .maxByOption((tau, _) => si(tau))
+        .map((tau, _) => tau)
 
   /** `tau`'s facet tied at `tau`'s own filtration value with the SMALLEST combinatorial index, i.e. the "youngest
     * facet" in Definition 3.2/3.11's sense. No `maxDimension` guard needed: a facet is always one dimension lower than
     * `tau`, which is already within the truncated complex by construction (it only exists as some `sigma`'s candidate
-    * cofacet, already dimension-checked by `zeroPivotCofacet` above).
+    * cofacet, already dimension-checked by `zeroPivotCofacet` above). Likewise no `maxFiltrationValue` guard: by
+    * Vietoris-Rips monotonicity a facet's diameter can only be <= its coface's, so if `tau` is within threshold every
+    * one of its facets automatically is too. Candidate facets' diameters are NOT computed incrementally here, unlike
+    * the cofacet direction (`insertionDiameter`) -- removing a vertex doesn't admit the same cheap O(d) recurrence
+    * (whether the diameter changes at all depends on whether the removed vertex realized `tau`'s own maximum pairwise
+    * distance, which isn't tracked) -- so this remains a `filtrationValue(sigma)` call per candidate, same as before
+    * this session's enumeration work. Left as a scope boundary, not an oversight: see WORKLOG-lazy-enumeration.md's
+    * "Session 2" section.
     */
   private def zeroPivotFacet(tau: Simplex[Int]): Option[Simplex[Int]] =
     val d = filtrationValue(tau)
@@ -677,12 +800,58 @@ class RipserCohomologyContext[CoefficientT: Field](
       if partner == sigma
     yield tau
 
+  /** Mirror of `zeroApparentCofacet`, entered from the other side: `Some(sigma)` iff `tau` has a facet `sigma` such
+    * that `(sigma, tau)` is a genuine (mutual) Definition 3.2 apparent pair. This is the lookup Ripser's
+    * `compute_pairs` performs (`get_zero_apparent_facet`) when some OTHER column's reduction reaches `tau` as an
+    * unresolved pivot -- confirmed against `ripser.cpp` directly (source fetched this session, not recalled): the
+    * substitution is a fresh recomputation every time, with NO cache anywhere in Ripser's own implementation. Mirrored
+    * here for the same reason, not out of caution: `zeroApparentCofacet`'s soundness proof (see its own doc) only
+    * establishes that `sigma` is the first simplex whose RAW, unreduced coboundary can reach `tau` -- it says nothing
+    * about whether some other column's own mid-cascade, already-partially-reduced working chain could reach `tau` as an
+    * intermediate pivot before `sigma`'s own turn in the outer sweep. A map recording "who claimed this pair first"
+    * would need to answer that question to be trustworthy; a pure recomputation from Definition 3.2 doesn't, because
+    * `sigma` is the mutual apparent partner of `tau` as a fact about filtration values and combinatorial indices alone,
+    * independent of when or how `tau` was reached. See WORKLOG-lazy-enumeration.md's "on-the-fly substitution" section
+    * for the full reasoning (advisor-caught: an earlier draft of this session's plan proposed a recorded `tau -> sigma`
+    * map instead, which this exact argument ruled out before it was implemented).
+    */
+  private def zeroApparentFacet(tau: Simplex[Int]): Option[Simplex[Int]] =
+    for
+      sigma <- zeroPivotFacet(tau)
+      partner <- zeroPivotCofacet(sigma)
+      if partner == tau
+    yield sigma
+
+  private var _substitutionCount: Int = 0
+
+  /** How many times the on-the-fly substitution above actually fired during the most recent `persistentCohomology()`
+    * call -- i.e. how many times some OTHER column's reduction reached an apparent pair's tau as an unresolved pivot
+    * and had to recompute that pair's coboundary on the fly. Exposed purely for testing: WORKLOG-lazy-enumeration.md's
+    * whole point is that this should be RARE (most apparent pairs are never looked up by anyone else's reduction) -- a
+    * test that only checks the final barcode is unchanged cannot distinguish "the fallback fired and computed
+    * correctly" from "the fallback never fired at all," so a discriminating test needs this counter, not just the bars.
+    */
+  def substitutionCount: Int = _substitutionCount
+
+  private var _totalSimplexCount: Int = 0
+
+  /** Total number of simplices actually assembled across all dimensions during the most recent `persistentCohomology()`
+    * call -- exposed for testing. NOT `Σ binomial(n, d+1)`: that formula assumes every combinatorially-possible subset
+    * exists, which is only true at `maxFiltrationValue = +Infinity`. For a genuinely thresholded complex most subsets
+    * never get generated at all (see `sparseCofacets`), so the `finite*2 + essential == totalSimplices` structural
+    * invariant `RipserCohomologySpec` checks needs THIS count, not the binomial formula, once a finite threshold is in
+    * play.
+    */
+  def totalSimplexCount: Int = _totalSimplexCount
+
   def persistentCohomology(): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     // Summoned here, not any earlier -- see class doc above and CellularHomologyContext's class doc for
     // why a Chain[...] is RingModule instance's summon-time Ordering[CellT] scoping matters.
     val chainRM = summon[Chain[Simplex[Int], CoefficientT] is RingModule]
     import chainRM.*
 
+    _substitutionCount = 0
+    _totalSimplexCount = 0
     val bars = mutable.ArrayDeque.empty[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]]
 
     // Clearing: a d-simplex that was already claimed as the PIVOT of some (d-1)-simplex's reduction
@@ -696,14 +865,39 @@ class RipserCohomologyContext[CoefficientT: Field](
     // bar was already recorded when it was claimed as a pivot).
     val cleared: mutable.Set[Simplex[Int]] = mutable.Set.empty
 
+    // On-the-fly apparent-pair substitution (Ripser's `compute_pairs`, confirmed no-cache against
+    // ripser.cpp -- see zeroApparentFacet's doc and WORKLOG-lazy-enumeration.md). Consulted by
+    // `Chain.reduceBy` below ONLY when a working chain's leading pivot has no `basis` entry -- which,
+    // now that apparent pairs never write one (see the `Some(tau)` branch below), is exactly the case
+    // for an apparent pair's tau whenever some OTHER column's reduction happens to reach it. This is
+    // what lets `persistentCohomology` skip `coboundaryOf(sigma)` ENTIRELY for every apparent pair
+    // nobody else's reduction ever touches, not merely skip the reduction pass the way last session's
+    // version did (that version called `coboundaryOf(sigma)` unconditionally to eagerly populate
+    // `basis(tau)`, "just in case").
+    val basisFallback: Simplex[Int] => Option[Chain[Simplex[Int], CoefficientT]] =
+      if useApparentPairs then
+        (tau: Simplex[Int]) =>
+          zeroApparentFacet(tau).map { sigma =>
+            _substitutionCount += 1
+            coboundaryOf(sigma)
+          }
+      else (_: Simplex[Int]) => None
+
+    // Dimension-0 candidates: every vertex, diameter 0.0 by convention (matches
+    // MaximumDistanceFiltrationValue's own `spx.dim <= 0 then 0.0`). This, not `(0 until binomial(n,
+    // d+1))`-style direct combinatorial indexing, is the seed of the incrementally-assembled candidate
+    // list every higher dimension is built from -- see WORKLOG-lazy-enumeration.md's "Session 2" section.
+    var currentLevel: Seq[DiameterSimplex] =
+      (0 until metricSpace.size).map(v => DiameterSimplex(0.0, Simplex(v)))
+
     for d <- 0 to maxDimension do
       // Youngest first: Algorithm 1 processes columns in increasing [matrix] order, which under the
       // reversed-order coboundary matrix means decreasing real filtration order. Structural, not a
-      // performance tweak -- see WORKLOG-cohomology.md.
-      val simplicesAtD: Seq[Simplex[Int]] =
-        (0 until binomial(metricSpace.size, d + 1))
-          .map(idx => si(idx, d + 1))
-          .sorted(using cohomologyOrdering.reverse)
+      // performance tweak -- see WORKLOG-cohomology.md. Sorted via `diameterSimplexOrdering` (sharing
+      // `compareFvThenIndex` with `cohomologyOrdering`, so this is provably the same tie-break, not a
+      // second independently-written comparator) over the CARRIED diameters, not recomputed ones.
+      val simplicesAtD: Seq[DiameterSimplex] = currentLevel.sorted(using diameterSimplexOrdering.reverse)
+      _totalSimplexCount += simplicesAtD.size
 
       // Pivot (dimension d+1 simplex) -> reduced coboundary column, reset per dimension: dimension d's
       // coboundary matrix delta: C^d -> C^{d+1} is reduced independently of every other dimension's.
@@ -711,42 +905,45 @@ class RipserCohomologyContext[CoefficientT: Field](
       // Pivot -> the V-column (a dimension-d chain) of whichever d-simplex claimed that pivot.
       val generators: mutable.Map[Simplex[Int], Chain[Simplex[Int], CoefficientT]] = mutable.Map.empty
 
-      for sigma <- simplicesAtD if !cleared.contains(sigma) do
+      for ds <- simplicesAtD if !cleared.contains(ds.simplex) do
+        val sigma = ds.simplex
+        // sigma's own diameter is already known (this dimension's assembly just computed it) -- using it
+        // directly for bar-endpoint reporting below avoids yet another filtrationValue(sigma) recompute.
+        val sigmaFv = ds.diameter
         (if useApparentPairs then zeroApparentCofacet(sigma) else None) match
           case Some(tau) =>
             // Apparent pair shortcut (Definition 3.2/Proposition 3.9): sigma's raw, UNREDUCED coboundary
             // already has tau as its leading term under cohomologyOrdering, and no earlier-processed
             // simplex can have already claimed tau in `basis` -- see `zeroApparentCofacet`'s doc and
             // WORKLOG-cohomology.md's "Apparent pairs: resolved" section for why. So `Chain.reduceBy`
-            // is GUARANTEED to be a no-op here (log = Nil, reduced = z unchanged) and can be skipped --
-            // but `z` itself must still be computed and stored as-is in `basis(tau)`, in full, not
-            // truncated to just the (tau, sign) leading term: z can genuinely have OTHER, non-leading
-            // terms too (other cofacets of sigma tied at the same filtration value as tau, or cofacets
-            // at a strictly higher one), and those terms are exactly what a LATER column's own reduction
-            // needs to pick up when it subtracts basis(tau) to cancel tau out of ITS working chain. An
-            // earlier draft stored only the singleton {tau -> sign} here and silently dropped those
-            // other terms, which produced a wrong death for a different, unrelated column later in the
-            // same dimension (confirmed by a direct counterexample: two triangles tied at the same value
-            // as their shared edge partner's own apparent-pair triangle, see WORKLOG-cohomology.md). This
-            // still pays for the full `coboundaryOf(sigma)` enumeration (only the reduction pass is
-            // skipped), but is a measured 1.35x-1.8x wall-clock win on n=12-20 point VR complexes anyway,
-            // because `Chain.reduceBy`'s recursive per-step SortedMap fold -- not the enumeration -- is
-            // this loop's dominant cost. See WORKLOG-cohomology.md for the numbers and for why the further
-            // (lazy, enumeration-skipping) version Ripser itself uses is NOT implemented here.
-            val z = coboundaryOf(sigma)
+            // is GUARANTEED to be a no-op here (log = Nil, reduced = z unchanged) and can be skipped.
+            //
+            // UNLIKE last session's version, `coboundaryOf(sigma)` is NOT computed here at all, and
+            // `basis(tau)` is deliberately NEVER written. If some OTHER column's reduction later reaches
+            // tau as an unresolved pivot, `basisFallback` above recomputes `coboundaryOf(sigma)` fresh
+            // at that point instead -- Ripser's own `compute_pairs` substitution, confirmed no-cache
+            // against ripser.cpp (see zeroApparentFacet's doc and WORKLOG-lazy-enumeration.md). This is
+            // what turns the apparent-pairs shortcut from "skip the reduction pass, still pay for the
+            // full coboundary enumeration" (last session, a measured 1.35x-1.8x win) into "skip the
+            // coboundary enumeration too, for every apparent pair nobody else's reduction ever reaches."
+            //
+            // generators(tau) MUST still be written here even though basis(tau) is not: it's read back
+            // by ANY later column whose reduction log has a `tau` entry, whether tau was reached via
+            // ordinary `basis` or via `basisFallback` -- omitting it reintroduces the "pivot has a basis
+            // entry but no generators entry" throw below.
             val vcol = Chain[Simplex[Int], CoefficientT](sigma)
-            basis(tau) = z
             generators(tau) = vcol
             cleared += tau
             bars.append(
-              PersistenceBar(d, ClosedEndpoint(filtrationValue(sigma)), OpenEndpoint(filtrationValue(tau)), Some(vcol))
+              PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(filtrationValue(tau)), Some(vcol))
             )
           case None =>
             val z = coboundaryOf(sigma)
             // Chain.reduceBy (SortedMap-based), not hand-rolled reduction over raw Chain arithmetic -- see
             // WORKLOG-naive-homology.md's "critical performance bug" for why that silently reintroduces
-            // superlinear blowup on real VR streams.
-            val (reduced, log) = Chain.reduceBy(z, basis, Chain.empty)
+            // superlinear blowup on real VR streams. `basisFallback` (see above) supplies the on-the-fly
+            // apparent-pair substitution when this reduction's own working chain hits an unclaimed pivot.
+            val (reduced, log) = Chain.reduceBy(z, basis, Chain.empty, basisFallback)
             // V-column: by construction (Algorithm 1's V_j, updated in lockstep with R_j = delta(V_j)
             // throughout), this is itself a genuine cocycle whenever reduced is zero -- no separate
             // cocycle-reconstruction step needed, unlike the naive engine's homology case. Collapsed
@@ -765,7 +962,7 @@ class RipserCohomologyContext[CoefficientT: Field](
               // claimed as anyone's pivot: a genuine essential class born at sigma (dimension d). Emitted
               // unconditionally, including alongside a zero-length finite bar elsewhere in the list -- see
               // WORKLOG-cohomology.md on why zero-length bars must not be silently dropped at this stage.
-              bars.append(PersistenceBar(d, ClosedEndpoint(filtrationValue(sigma)), PositiveInfinity(), Some(vcol)))
+              bars.append(PersistenceBar(d, ClosedEndpoint(sigmaFv), PositiveInfinity(), Some(vcol)))
             else
               // reduced is nonzero: its leading cell (the OLDEST cofacet remaining, per cohomologyOrdering)
               // is sigma's death partner. Birth = sigma (dimension d, the column); death = that pivot
@@ -777,10 +974,20 @@ class RipserCohomologyContext[CoefficientT: Field](
               bars.append(
                 PersistenceBar(
                   d,
-                  ClosedEndpoint(filtrationValue(sigma)),
+                  ClosedEndpoint(sigmaFv),
                   OpenEndpoint(filtrationValue(pivot)),
                   Some(vcol)
                 )
               )
+
+      // Assemble the NEXT dimension's candidates from every dimension-d simplex, cleared ones included --
+      // see WORKLOG-lazy-enumeration.md's "Session 2" section, confirmed from ripser.cpp's own
+      // `assemble_columns_to_reduce`: `next_simplices.push_back(...)` runs unconditionally, BEFORE the
+      // `is_in_zero_apparent_pair`/already-a-pivot exclusion checks that shrink `columns_to_reduce`.
+      // Clearing controls which simplices get independently REDUCED at a dimension, never which simplices
+      // are a valid source for generating the next dimension's cofacets -- a cleared simplex's own higher
+      // cofacets still genuinely exist in the complex. Getting this backwards would silently omit real
+      // simplices from every dimension above the first one with a cleared/apparent-paired member.
+      if d < maxDimension then currentLevel = simplicesAtD.iterator.flatMap(sparseCofacets).toSeq
 
     bars.toList
