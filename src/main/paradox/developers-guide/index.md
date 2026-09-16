@@ -1,49 +1,64 @@
 @@@ index
-* [Class diagrams](class-diagrams.md)
-* [Programming Patterns](patterns.md)
+
+* @ref:[A Scala 3.7+ primer for this codebase](scala3-primer.md)
+* @ref:[Architecture: from algebra to a filtration stream](architecture.md)
+* @ref:[Persistence engines: what to trust, and why](persistence-engines.md)
+* @ref:[Hard-won invariants you must not break](gotchas.md)
+* @ref:[Degeneracy behaviors that look like bugs but aren't](degeneracies.md)
+* @ref:[Alpha complex: DQP vs Helix](alpha-complex.md)
+* @ref:[Class diagrams](class-diagrams.md)
+
 @@@
 
-# Developers Guide for TDA4j
+# Developer's Guide for TDA4j
 
-We intend the library to be a viable platform for algorithm development and research into topological data analysis.
-This guide is intended to demonstrate how to understand the abstractions and class hierarchies, and to understand how
-to extend the code to cover your use cases and fill your needs.
+TDA4j is meant to be a viable platform for algorithm development and research into topological data
+analysis, not just a library you call into as a black box. This guide exists to get you from "I understand
+persistent homology" to "I can confidently write, review, and extend code in this repository" — which,
+if you're new to Scala 3.7+'s newest context-abstraction syntax (as most people are — it's genuinely
+recent), is most of the actual gap.
 
-## Fundamental Paradigm: Context-driven programming
+## What you need to deduce before you can contribute fully
 
-Drawing on experiences from the first year of the development work, a lot of the library is intended to work in a
-paradigm called _context-driven programming_, which can be seen in action in the Kotlin library kmath.
-The idea is that there are interfaces and objects that specify the _context_ in which your computation takes place,
-and inside these contexts, symbols and functions are defined that make it natural to write the algebraic and arithmetic
-operations that you might need.
-The ideal end goal is that a user would need to run one or two lines of code to instantiate choices of what complexes
-they are building and what coefficients they want to use for computation, and to load the corresponding functionality
-into the current namespace.
-Currently, this might look something like this:
+A useful way to organize this guide is around the questions a new contributor actually has to answer for
+themselves before their first non-trivial change is safe to merge — because that's the order most of this
+guide's content was originally discovered in, the hard way, across several sessions of work on this
+codebase:
 
-```scala 3
-import org.appliedtopology.tda4j.*
-val tda = TDAContext[Char, Double]()
-import tda.*
+1. **What does this Scala 3 syntax even mean?** `Type is TypeClass`, `type Self: Ordering as ordering`,
+   `given [bounds] => Body = value`, opaque types, extension methods. None of this is Scala-2-style or
+   older-Scala-3-style code that "should" already look familiar — it's genuinely new syntax, introduced
+   across recent dotty releases. Start with the @ref:[Scala 3 primer](scala3-primer.md).
+2. **Where is any given piece of functionality actually defined, and what layer is it in?** The library is
+   built in clear layers — algebra (`RingModule`/`Field`/`Chain`), then complex construction (streams),
+   then the persistence engines that consume a stream — and knowing which layer you're in tells you what
+   invariants you can rely on and which file to go read. See @ref:[Architecture](architecture.md).
+3. **Which of the four persistence engines in `Homology.scala` can I actually trust for the thing I'm
+   trying to do?** They are independently implemented, not layers on one shared core, and their trust
+   status is not uniform — one of the four is currently non-functional. This is not something you can infer
+   from the fact that all four compile and are exported from the same file. See
+   @ref:[Persistence engines](persistence-engines.md).
+4. **What are the traps that look fine, compile fine, and only produce a wrong *answer* on specific
+   inputs?** This codebase has a real, documented history of exactly this failure mode — code that type-
+   checks, runs, and passes a test suite that simply never happened to exercise the input where it breaks.
+   See @ref:[Hard-won invariants](gotchas.md), and read it before you assume your own "this looks obviously
+   correct" judgment is enough on a change to reduction or ordering logic.
+5. **Is this surprising output a bug, or is it the library doing the mathematically correct thing on a
+   degenerate input?** See @ref:[Degeneracies](degeneracies.md) before you "fix" something that isn't broken.
 
-// now we are ready to write TDA code, and can create simplices and chains easily
-// This code creates the chain 2[1,2] - [2,3]
-val z = 2.0 *> s(1,2) - s(2,3)
-```
+If you take one thing away from this guide before diving into the rest: **in this codebase, "compiles and
+has a passing test suite" has not historically been a reliable signal of correctness for the persistence
+and ordering machinery.** Every subtle bug found so far was caught by a specifically-constructed
+discriminating test fixture, not by the existing suite noticing on its own, because the existing tests
+mostly didn't happen to exercise the specific tie or label-order mismatch that triggers the bug class. When
+you're about to trust your own "this seems obviously sound" reasoning about a change to reduction or
+ordering code, build the cheap discriminating fixture first — see the closing section of
+@ref:[Hard-won invariants](gotchas.md) for what that looks like in practice.
 
-Currently, there are a few more lines needed to set up a finite field context, but we aim to streamline the
-top-level calling interface for this:
+## Where the bug histories and design derivations live
 
-```scala 3
-import org.appliedtopology.tda4j.*
-
-val ff: FiniteField = tda4j.FiniteField(17)
-import ff.{*,given}
-val tda = TDAContext[Char, FiniteField]()
-
-import tda.*
-
-// now we are ready to write TDA code, and can create simplices and chains easily
-// This code creates the chain 2[1,2] - [2,3]
-val z = Fp(2) *> s(1,2) - s(2,3)
-```
+This guide summarizes and cross-references, but doesn't duplicate, the detailed worklogs kept at the repo
+root: `WORKLOG-naive-homology.md`, `WORKLOG-cohomology.md`, `WORKLOG-alpha-complex.md`, and `WORKLOG.md`
+(the alpha-complex DQP numerical-robustness derivations). When this guide says "confirmed by a specific
+counterexample" or "see the full derivation," that's where the full derivation actually lives — read those
+worklogs directly if you're about to touch code in the area they cover.

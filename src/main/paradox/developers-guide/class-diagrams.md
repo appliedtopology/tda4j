@@ -1,330 +1,224 @@
-# Mapping the library: class- and type-diagrams
+# Mapping the library: class diagrams
 
-## Support for different coefficients
+@@@ note
+This page is a structural sketch to help you get oriented, not an exhaustive or automatically generated
+reference — field names and signatures can drift out of sync with source over time. When a diagram and the
+actual `.scala` file disagree, trust the file; the previous version of this page (dated 2024-09-18) had
+drifted enough from current source (referencing a `Cube.scala` file and cubical-complex types that no
+longer exist anywhere in `src/main`, among other things) that it was more actively misleading than useful,
+which is why this page was rebuilt from scratch against current source rather than incrementally patched.
+@@@
 
-We handle coefficient types by requiring a `Fractional` instance to be defined, 
-which produces all the expected arithmetic operations on coefficients.
-`Fractional[Double]` already exists in Scala, and we also implement in the same
-way as is main-stream in the persistent homology library ecosystem finite field
-arithmetic with lookup tables for inverses.
-
-```
-classDiagram
-    class FiniteField {
-        val p: Int
-        type Fp
-        given val FpIsFractional: Fractional[Fp]
-        extension Fp.norm() Fp
-        extension Fp.toInt() Int
-        extension Fp.toString() String
-        extension Fp.toUInt() UInt
-    }
-    namespace Scala {
-        class Double {
-        }
-
-        class `DoubleIsFractional:Fractional[Double]` {
-        }
-    }
-    FiniteField -- Field
-
-    class `Chain[CellT: Cell, CoefficientT: Field]` {
-        ...
-    }
-
-    Double -- Field
-
-    Field *-- `Chain[CellT: Cell, CoefficientT: Field]`
-    `Cell[CellT]` *-- `Chain[CellT: Cell, CoefficientT: Field]`
-    `Cell[CellT]` --> `Simplex[VertexT]`
-    class `Cell[CellT]` {
-<<interface Typeclass>>
-boundary() Chain[CellT, CoefficientT]
-}
-class `Simplex[VertexT]` {
-<<extends SortedSet, Cell>>
-size : Int
-iterator : Iterator[VertexT]
-boundary() Chain[AbstractSimplex[VertexT],CoefficientT]
-}
-```
-
-
-## How do we describe a Simplicial Complex?
-
-```
-classDiagram
-    `Cell[CellT]` --> `Simplex[VertexT]`
-    class `Cell[CellT]` {
-<<interface>>
-boundary() Chain[CellT, CoefficientT]
-}
-class `Simplex[VertexT]` {
-<<extends SortedSet, Cell>>
-size : Int
-iterator : Iterator[VertexT]
-boundary() Chain[AbstractSimplex[VertexT],CoefficientT]
-}
-class `SimplexContext[VertexT]` {
-<<interface Context>>
-type Simplex = AbstractSimplex[VertexT]
-given Ordering[Simplex]
-s(vs*: Simplex) Simplex
-}
-class `IterableOnce[T]` {
-iterator : Iterator[T]
-knownSize : Int
-}
-class `SimplexFiltration[VertexT,FiltrationT]` {
-filtrationValue(simplex: AbstractSimplex[VertexT]) FiltrationT
-}
-class `SimplexStream[VertexT,FiltrationT]` {
-<<extends Filtration[VertexT,FiltrationT], IterableOnce[AbstractSimplex[VertexT]]>>
-}
-`IterableOnce[T]` --> `SimplexStream[VertexT,FiltrationT]` : inherits
-`SimplexFiltration[VertexT,FiltrationT]` --> `SimplexStream[VertexT,FiltrationT]` : inherits
-`Simplex[VertexT]` "*" o-- "1" `SimplexStream[VertexT,FiltrationT]` : contains
-
-class `ExplicitStream[VertexT,FiltrationT]` {
-filtrationValues : Map[AbstractSimplex[VertexT],FiltrationT]
-simplices: Seq[AbstractSimplex[VertexT]]
-}
-class `VietorisRips[VertexT]` {
-metricSpace: FiniteMetricSpace[VertexT]
-maxDimension: Int
-maxFiltrationValue: Double
-cliqueFinder: CliqueFinder[VertexT]
-}
-`SimplexStream[VertexT,FiltrationT]` --> `ExplicitStream[VertexT,FiltrationT]`: inherits
-`SimplexStream[VertexT,FiltrationT]` --> `VietorisRips[VertexT]`: inherits FiltrationT=Double
-`VietorisRips[VertexT]` -- `CliqueFinder[VertexT]` : uses
-class `CliqueFinder[VertexT]` {
-<<interface>>
-apply(metricSpace, maxFiltrationValue, maxDimension) Seq[AbstractSimplex[VertexT]]
-    }
-`CliqueFinder[VertexT]` --> BronKerbosch : implements
-`CliqueFinder[VertexT]` --> ZomorodianIncremental : implements
-`CliqueFinder[VertexT]` --> SymmetricZomorodianIncremental : implements
-```
-
-
-## Revision 2024-09-18
+## Typeclass hierarchy (`RingModule.scala`, `Field.scala`, `Chain.scala`)
 
 ```mermaid
 classDiagram
-    namespace Barcode_scala {
-        class BarcodeEndpoint
-        class PositiveInfinity
-        class NegativeInfinity
-        class OpenEndpoint
-        class ClosedEndpoint
-        class PersistenceBar {
-            dim : int
-            lower : BarcodeEndpoint
-            upper : BarcodeEndpoint
-            annotation : Option[AnnotationT]
-            toString()
-        }
-        class BarcodeContext {
-            FiltrationT bc FiltrationT : PersistenceBar
-            FiltrationT clcl FiltrationT : PersistenceBar
-            FiltrationT clop FiltrationT : PersistenceBar
-            FiltrationT opcl FiltrationT : PersistenceBar
-            FiltrationT opop FiltrationT : PersistenceBar
-            clinf FiltrationT : PersistenceBar
-            opinf FiltrationT : PersistenceBar
-            infcl FiltrationT : PersistenceBar
-            infop FiltrationT : PersistenceBar
-        }
-        class Barcode {
-            isMap(List~PersistenceBar~, List~PersistenceBar~, RealMatrix) bool
-            imageMatrix(List~PersistenceBar~, List~PersistenceBar~, RealMatrix) RealMatrix
-            image(List~PersistenceBar~, List~PersistenceBar~, RealMatrix) List~PersistenceBar~
-            kernel(List~PersistenceBar~, List~PersistenceBar~, RealMatrix) List~PersistenceBar~
-            cokernelMatrix(List~PersistenceBar~, List~PersistenceBar~, RealMatrix) RealMatrix
-            cokernel(List~PersistenceBar~, List~PersistenceBar~, RealMatrix) List~PersistenceBar~
-            reduceMatrix(RealMatrix) RealMatrix
-        }
+    class RingModule {
+        <<typeclass: type Self, type R>>
+        zero: Self
+        plus(x, y) Self
+        minus(x, y) Self
+        negate(x) Self
+        scale(r, y) Self
+        +(rhs) Self
+        -(rhs) Self
+        unary_-() Self
+        R.⊠(t) Self
     }
-    BarcodeEndpoint --|> PositiveInfinity
-    BarcodeEndpoint --|> NegativeInfinity
-    BarcodeEndpoint --|> OpenEndpoint
-    BarcodeEndpoint --|> ClosedEndpoint
+    class Field {
+        <<typeclass: type Self>>
+        plus(x, y) Self
+        times(x, y) Self
+        divide(x, y) Self
+        invert(x) Self
+        zero: Self
+        one: Self
+    }
+    class HasDimension {
+        <<typeclass: type Self>>
+        dim: Int
+    }
+    class Cell {
+        <<typeclass: type Self, extends HasDimension>>
+        boundary~CoefficientT~() Seq~Tuple2~
+    }
+    class Cocell {
+        <<typeclass: type Self, extends HasDimension>>
+        coboundary~CoefficientT~() Seq~Tuple2~
+    }
+    class OrderedCell {
+        <<typeclass: type Self : Ordering as ordering, extends Cell>>
+    }
+    class OrderedCocell {
+        <<typeclass: type Self : Ordering as ordering, extends Cocell>>
+    }
+    class OrderedBasis {
+        <<typeclass: type Self, requires CellT:Ordering, CoefficientT:Field>>
+        leadingCell: Option~CellT~
+        leadingCoefficient: CoefficientT
+        leadingTerm: Tuple2
+    }
+    HasDimension <|-- Cell
+    HasDimension <|-- Cocell
+    Cell <|-- OrderedCell
+    Cocell <|-- OrderedCocell
+    Simplex ..|> OrderedCell : given instance
+    Chain ..|> OrderedBasis : given instance
+    Chain ..|> RingModule : given instance
 ```
+
+`Simplex[VertexT]` is currently the library's only `OrderedCell` instance; no concrete `Cocell`/
+`OrderedCocell` instance exists yet (`RipserCohomologyContext` computes coboundaries directly against
+`SimplexIndexing` instead — see @ref:[Persistence engines](persistence-engines.md)). See the
+@ref:[Scala 3 primer](scala3-primer.md) for what "typeclass: type Self" and "given instance" mean concretely in
+this codebase's syntax.
+
+## `Chain[CellT, CoefficientT]` (`Chain.scala`)
 
 ```mermaid
 classDiagram
-    namespace Chain_scala {
-        class HasBoundary {
-            type Self : Ordering
-            extension Self.boundary[CoefficientT : Field] : Chain[Self, CoefficientT]
-        }
-        class HasDimension {
-            type Self
-            extension Self.dim : Int
-        }
-        class Cell
-        class OrderedCell
-        class given_Ordering~OrderedCell~
-        class OrderedBasis {
-            type Self
-            extension Self.leadingTerm: Tuple[Option[CellT], CoefficientT]
-            extension Self.leadingCoefficient : CoefficientT
-            extension Self.leadingCell : Option[CellT]
-        }
-        class Chain~CellT, CoefficientT~ {
-            private entries : mutable.PriorityQueue[Tuple[CellT, CoefficientT]]
-            collapseHead()
-            collapseAll()
-            isZero() bool
-            items : Seq[Tuple[CellT, CoefficientT]]
-            chainBoundary() Chain~CellT, CoefficientT~ 
-        }
-        class object_Chain {
-            apply(cs : vararg Tuple[CellT, CoefficientT]) Chain~CellT, CoefficientT~
-            apply(c : CellT) Chain~CellT, CoefficientT~
-            from(cs : Seq[Tuple[CellT, CoefficientT]]) Chain~CellT, CoefficientT~ 
-        }
-        class given_Chain_is_OrderedBasis
-        class ChainOps~CellT, CoefficientT~
+    class Chain {
+        -entries: PriorityQueue~Tuple2~
+        collapseHead() Unit
+        collapseAll() Unit
+        isZero() Boolean
+        items: Seq~Tuple2~
     }
-    HasBoundary --|> Cell
-    HasDimension --|> Cell
-    Cell --|> OrderedCell
-    RingModule --|> ChainOps
-
+    class `Chain$` {
+        <<companion object>>
+        empty~CellT,CoefficientT~() Chain
+        apply(cs: Tuple2*) Chain
+        from(cs: Seq~Tuple2~) Chain
+        reduceBy(z, basis, log) Tuple2
+        reduceByUntil(z, basis, log, stop) Tuple2
+    }
+    `Chain$` ..> Chain : constructs
 ```
+
+`reduceBy`/`reduceByUntil` are the shared reduction primitives every persistence engine in `Homology.scala`
+builds on — see @ref:[Architecture](architecture.md) and
+@ref:[Hard-won invariants #4](gotchas.md).
+
+## `Simplex[VertexT]` (`Simplex.scala`, `SimplexOps.scala`)
 
 ```mermaid
 classDiagram
-    namespace Cube_scala {
-        class ElementaryInterval {
-            n : int
-        }
-        class DegenerateInterval
-        class FullInterval
-        class given_Ordering_ElementaryInterval
-        class given_ElementaryInterval_is_OrderedCell
-        class ElementaryCube {
-            intervals : List[ElementaryInterval]
-        }
+    class Simplex {
+        <<opaque type = SortedSet~VertexT~>>
+        underlying: SortedSet~VertexT~
+        dim: Int
+        boundary~CoefficientT~() Seq~Tuple2~
     }
-    ElementaryInterval --|> DegenerateInterval
-    ElementaryInterval --|> FullInterval
+    class `Simplex$` {
+        <<companion object>>
+        apply(vertices: VertexT*) Simplex
+        from(vertices: Seq~VertexT~) Simplex
+        unapplySeq(s: Simplex) Option~Seq~
+    }
+    Simplex ..|> OrderedCell : given default_Simplex_is_OrderedCell
 ```
+
+`SimplexOps.scala` adds a large `extension` block delegating most of `SortedSet`'s surface (`.size`,
+`.map`, `.union`, `.dropIndex`, ...) so `Simplex` "feels like" a set even though it's a zero-cost opaque
+wrapper at runtime — see the @ref:[primer](scala3-primer.md).
+
+## Streams (`SimplexStream.scala`, `RipserStream.scala`, `VietorisRips.scala`)
 
 ```mermaid
 classDiagram
-    namespace FiniteField_scala {
-        class FiniteField {
-            p : int
-            type Fp
-            given Fp_is_Fractional
-        }
+    class Filtration {
+        <<typeclass: CellT:Cell, FiltrationT:Ordering,FiltrationT:Filterable>>
+        filtrationValue: PartialFunction
     }
+    class CellStream {
+        <<typeclass: extends Filtration, IterableOnce>>
+        filtrationOrdering: Ordering~CellT~
+    }
+    class SimplexStream {
+        <<CellStream specialized to Simplex~VertexT~>>
+    }
+    class StratifiedCellStream {
+        iterateDimension: PartialFunction~Int, Iterator~
+    }
+    Filtration <|-- CellStream
+    CellStream <|-- SimplexStream
+    CellStream <|-- StratifiedCellStream
+    SimplexStream <|-- StratifiedSimplexStream
+    StratifiedCellStream <|-- StratifiedSimplexStream
+    StratifiedSimplexStream <|-- CofaceSimplexStream
+    CofaceSimplexStream <|-- EnumeratingCofaceSimplexStream
+    EnumeratingCofaceSimplexStream <|-- RipserCofaceSimplexStream
+    EnumeratingCofaceSimplexStream <|-- InorderCofaceSimplexStream
+    SimplexStream <|-- ExplicitStream
+    SimplexStream <|-- RipserStreamBase
+    RipserStreamBase <|-- RipserStream
+    SimplexStream <|-- RipserStreamSparse
+    StratifiedSimplexStream <|-- RecursiveStackVietorisRipsSimplexStream
+    StratifiedSimplexStream <|-- AlphaShapes
+    AlphaShapes <|-- HelixDelaunay
+    AlphaShapes <|-- AlphaShapeDQP
 ```
+
+These are **alternate stream implementations with a common output contract, not layers on top of one
+another** — see @ref:[Architecture](architecture.md).
+
+## Persistence engines (`Homology.scala`)
+
+Deliberately *not* diagrammed field-by-field here — their exact state and trust status changes over time
+and belongs in one place. See @ref:[Persistence engines](persistence-engines.md) for the full, current picture
+of `CellularHomologyContext`/`SimplicialHomologyContext`, `PersistenceInChunksContext`,
+`SimplicialHomologyByDimensionContext` (non-functional as of this writing), and `RipserCohomologyContext`.
+
+## Metric spaces (`FiniteMetricSpace.scala`)
 
 ```mermaid
 classDiagram
-    namespace FiniteMetricSpace_scala {
-        class FiniteMetricSpace {
-            distance(vertex, vertex) Double
-            size : int
-            elements : Iterable[VertexT]
-            contains(vertex) bool
-            minimumEnclosingRadius : lazy Double
-        }
-        class MaximumDistanceFiltrationValue
-        class ExplicitMetricSpace
-        class EuclideanMetricSpace
+    class FiniteMetricSpace {
+        <<typeclass: type VertexT>>
+        distance(x, y) Double
+        size: Int
+        elements: Iterable~VertexT~
+        minimumEnclosingRadius: Double
     }
-    FiniteMetricSpace --|> ExplicitMetricSpace
-    FiniteMetricSpace --|> EuclideanMetricSpace
+    FiniteMetricSpace <|-- IntMetricSpace
+    FiniteMetricSpace <|-- ExplicitMetricSpace
+    FiniteMetricSpace <|-- EuclideanMetricSpace
+    FiniteMetricSpace <|-- SparseMetricSpace
+    class SpatialQuery {
+        <<typeclass: type VertexT>>
+        neighbors(v, epsilon) Set~VertexT~
+    }
+    SpatialQuery <|-- JVPTree
+    SpatialQuery <|-- BruteForce
+    SparseMetricSpace --> SpatialQuery : uses (JVPTree)
 ```
+
+## Barcode representation (`Barcode.scala`, package `org.appliedtopology.tda4j.barcode`)
 
 ```mermaid
 classDiagram
-    namespace Homology_scala {
-        class HomologyState {
-            cycles : mutable.Map[CellT, Chain[CellT, CoefficientT]]
-            cyclesBornBy : mutable.Map[CellT, CellT]
-            boundaries : mutable.Map[CellT, Chain[CellT, CoefficientT]]
-            boundariesBornBy : mutable.Map[CellT, CellT]
-            coboundaries : mutable.Map[CellT, Chain[CellT, CoefficientT]]
-            stream : CellStream[CellT, FiltrationT]
-            current : FiltrationT
-            barcode : mutable.ArrayDeque[Tuple[Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT]]
-            diagramAt(f : FiltrationT) List[Tuple[Int,FiltrationT,FiltrationT]]
-            barcodeAt(f : FiltrationT) List[PersistenceBar]
-            advanceOne()
-            advanceTo(f: FiltrationT)
-            advanceAll()
-        }
+    class BarcodeEndpoint {
+        <<sealed trait>>
+        flip() BarcodeEndpoint
+        isFinite: Boolean
+    }
+    BarcodeEndpoint <|-- PositiveInfinity
+    BarcodeEndpoint <|-- NegativeInfinity
+    BarcodeEndpoint <|-- OpenEndpoint
+    BarcodeEndpoint <|-- ClosedEndpoint
+    class PersistenceBar {
+        dim: Int
+        lower: BarcodeEndpoint
+        upper: BarcodeEndpoint
+        annotation: Option~AnnotationT~
+    }
+    class Barcode {
+        isMap(source, target, matrix) Boolean
+        image(source, target, matrix) List~PersistenceBar~
+        kernel(source, target, matrix) List~PersistenceBar~
+        cokernel(source, target, matrix) List~PersistenceBar~
     }
 ```
 
-```mermaid
-classDiagram
-    namespace RingModule_scala {
-        class RingModule {
-            zero : T
-            isZero(t : T) bool
-            plus(s : T, t: T) T
-            minus(s : T, t: T) T
-            negate(t: T) T
-            scale(r : R, t : T) T
-            extension T.+
-            extension T.-
-            extension T.unary_-
-            extension infix T.mul
-            extension R.⊠
-            extension infix R.scale
-        }
-    }
-```
-
-```mermaid
-classDiagram
-    namespace Simplex_scala {
-        class Simplex {
-            vertices : SortedSet[VertexT]
-            union(other : Simplex) Simplex
-        }
-        class given_Ordering_Simplex
-        class given_Simplex_is_OrderedCell
-        class object_Simplex {
-            apply(vertices : vararg VertexT) Simplex
-            from(vertices : Seq[VertexT]) Simplex
-            empty() Simplex
-            ∆(vertices : vararg VertexT) Simplex
-        }
-    }
-```
-
-```mermaid
-classDiagram
-    namespace SimplexStream_scala {
-        class SimplexStream
-    }
-```
-
-```mermaid
-classDiagram
-    namespace SymmetryGroup_scala {
-        class SymmetryGroup
-    }
-```
-
-```mermaid
-classDiagram
-    namespace UnionFind_scala {
-        class UnionFind
-    }
-```
-
-```mermaid
-classDiagram
-    namespace VietorisRips_scala {
-        class VietorisRips
-    }
-```
+`AnnotationT` in practice is always `Chain[CellT, CoefficientT]` — the representative cycle/cocycle for a
+bar, when an engine tracks one.
