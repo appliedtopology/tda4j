@@ -8,71 +8,74 @@ import scala.concurrent.duration.*
 import scala.concurrent.{Await, ExecutionContext, Future, TimeoutException}
 import scala.util.Random
 
-/** Cross-product benchmark: every (complex construction x homology engine) pairing this codebase actually
-  * supports, timed across a sweep of point count, ambient point-cloud dimension, and max homology dimension.
-  * Like `ProfilingSpec`/`ApparentPairsBenchmarkSpec`/`SparseRipsBenchmarkSpec`, this is a profiling script, not
-  * a correctness check: it prints a timing table rather than asserting behavior (an exception is caught and
-  * reported as a per-cell finding, not a spec failure). Defaults are kept small so this stays cheap under plain
-  * `sbt test`/CI; pass larger values for a real sweep, e.g.:
+/** Cross-product benchmark: every (complex construction x homology engine) pairing this codebase actually supports,
+  * timed across a sweep of point count, ambient point-cloud dimension, and max homology dimension. Like
+  * `ProfilingSpec`/`ApparentPairsBenchmarkSpec`/`SparseRipsBenchmarkSpec`, this is a profiling script, not a
+  * correctness check: it prints a timing table rather than asserting behavior (an exception is caught and reported as a
+  * per-cell finding, not a spec failure). Defaults are kept small so this stays cheap under plain `sbt test`/CI; pass
+  * larger values for a real sweep, e.g.:
   *
   * {{{
   * sbt -DminSize=20 -DmaxSize=60 -DsizeStep=20 -DmaxAmbientDim=4 -DmaxMaxDim=3 -Dtrials=5 \
   *   "testOnly org.appliedtopology.tda4j.EngineComparisonBenchmarkSpec"
   * }}}
   *
-  * '''The grid is not a clean cross product, and the table says so rather than papering over it with N/A
-  * cells.''' Three engines exist (see `Homology.scala`'s class docs): `SimplicialHomologyContext` (naive) and
-  * `PersistenceInChunksContext` (chunked clear&compress) both take an arbitrary `CellStream`/`StratifiedCellStream`,
-  * so either can run on any of the 7 constructions below. `RipserCohomologyContext` is different in kind, not
-  * degree: it takes a `FiniteMetricSpace[Int]` directly and builds its own internal sparse-Rips enumeration --
-  * it cannot be pointed at a stream at all, and specifically cannot touch an alpha complex (which isn't a
-  * metric-space clique complex). It appears as its own bundled row (`construction = "VR (built-in)"`,
-  * `engine = "RipserCohomology"`), not decomposed into a (construction, engine) pair like the other 14 cells.
-  * `SimplicialHomologyByDimensionContext`, the fourth engine in `Homology.scala`, is excluded entirely: it is
-  * confirmed non-functional (throws unconditionally on any complex with an MST edge -- see that class's own doc),
-  * not merely slow, so it has nothing to contribute to a performance comparison.
+  * '''The grid is not a clean cross product, and the table says so rather than papering over it with N/A cells.'''
+  * Three engines exist (see `Homology.scala`'s class docs): `SimplicialHomologyContext` (naive) and
+  * `PersistenceInChunksContext` (chunked clear&compress) both take an arbitrary `CellStream`/`StratifiedCellStream`, so
+  * either can run on any of the 7 constructions below. `RipserCohomologyContext` is different in kind, not degree: it
+  * takes a `FiniteMetricSpace[Int]` directly and builds its own internal sparse-Rips enumeration -- it cannot be
+  * pointed at a stream at all, and specifically cannot touch an alpha complex (which isn't a metric-space clique
+  * complex). It appears as its own bundled row (`construction = "VR (built-in)"`, `engine = "RipserCohomology"`), not
+  * decomposed into a (construction, engine) pair like the other 14 cells. `SimplicialHomologyByDimensionContext`, the
+  * fourth engine in `Homology.scala`, is excluded entirely: it is confirmed non-functional (throws unconditionally on
+  * any complex with an MST edge -- see that class's own doc), not merely slow, so it has nothing to contribute to a
+  * performance comparison.
   *
-  * '''Alpha complexes paired with `PersistenceInChunksContext` were a known, previously-unresolved slow case''' --
-  * `HomologySpec.scala`'s `BarcodeRegressionSpec` used to be `skipAll`'d with "currently stalls out" for exactly
-  * this combination; it's since been un-skipped (see CLAUDE.md's cross-engine benchmark section) and now passes
-  * in well under this spec's own default timeout. Kept the per-cell timeout below regardless -- rather than
-  * exclude alpha x Chunks (and lose the chance to quantify it) or let a future regression hang the whole run, every
-  * cell here runs under `timeoutSeconds` (default 3) on a daemon-thread executor and reports `"timeout"` if it
-  * doesn't finish -- a timeout is itself a finding, printed in the table, not a reason to abort. Because none of
-  * these engines expose cooperative cancellation, a timed-out computation's thread keeps running in the
-  * background after `withTimeout` gives up on it; daemon threads only guarantee this can't block JVM/sbt exit,
-  * not that the work stops -- expect elevated CPU/memory usage for the remainder of a run that hits several
-  * timeouts back to back.
+  * '''Alpha complexes paired with `PersistenceInChunksContext` are a known, unresolved scale risk''' --
+  * `HomologySpec.scala`'s `BarcodeRegressionSpec` is `skipAll`'d with "currently stalls out" for exactly this
+  * combination. A first attempt to un-skip it, based on a single small-sample run, wrongly declared it fixed; a later
+  * run on a larger sample (still well inside the same test's own generator range) hit `OutOfMemoryError` after nearly 3
+  * minutes -- measured cause was `AlphaShapeDQP`'s always-untruncated construction producing over 100,000 simplices
+  * from a completely unremarkable-looking 40-point, dimension-4 input, not anything specific to
+  * `PersistenceInChunksContext`'s own algorithm (see CLAUDE.md's cross-engine benchmark section for the full account,
+  * including what was actually measured before re-`skipAll`ing it). Kept the per-cell timeout below regardless --
+  * rather than exclude alpha x Chunks (and lose the chance to quantify it) or let a future regression hang the whole
+  * run, every cell here runs under `timeoutSeconds` (default 3) on a daemon-thread executor and reports `"timeout"` if
+  * it doesn't finish -- a timeout is itself a finding, printed in the table, not a reason to abort. Because none of
+  * these engines expose cooperative cancellation, a timed-out computation's thread keeps running in the background
+  * after `withTimeout` gives up on it; daemon threads only guarantee this can't block JVM/sbt exit, not that the work
+  * stops -- expect elevated CPU/memory usage for the remainder of a run that hits several timeouts back to back.
   *
   * '''Timing is split into construction and reduction phases, on purpose.''' `persistentHomology(stream)`'s
-  * `HomologyState` constructor does almost nothing by itself -- the real work happens inside `diagramAt`, driven
-  * by pulling `stream.iterator`. But how much work a given *construction* front-loads varies enormously: an
+  * `HomologyState` constructor does almost nothing by itself -- the real work happens inside `diagramAt`, driven by
+  * pulling `stream.iterator`. But how much work a given *construction* front-loads varies enormously: an
   * `IncrementalVietorisRipsSimplexStream`'s whole complex is a `lazy val` built on first touch,
-  * `EnumeratingCofaceSimplexStream` computes everything on demand inside `iterateDimension`, and `AlphaShapeDQP`
-  * runs its QP solve eagerly in its own constructor. Starting the clock after constructing the stream object
-  * would measure wildly different things per row. Instead, "construction" here means "build the stream AND
-  * force full enumeration" (`.iterator.toVector`, dimension-major, matching `StratifiedCellStream.iterator`'s own
-  * contract -- see its doc), and "reduction" means "run the chosen engine over that already-materialized,
-  * `Vector`-backed `StratifiedCellStream`" -- so the reduction column measures only the homology algorithm, never
-  * a second pass through a possibly-expensive original enumeration. `RipserCohomologyContext`'s bundled row has
-  * no such split (its enumeration and reduction are the same call); only its `total(ms)` column is filled.
+  * `EnumeratingCofaceSimplexStream` computes everything on demand inside `iterateDimension`, and `AlphaShapeDQP` runs
+  * its QP solve eagerly in its own constructor. Starting the clock after constructing the stream object would measure
+  * wildly different things per row. Instead, "construction" here means "build the stream AND force full enumeration"
+  * (`.iterator.toVector`, dimension-major, matching `StratifiedCellStream.iterator`'s own contract -- see its doc), and
+  * "reduction" means "run the chosen engine over that already-materialized, `Vector`-backed `StratifiedCellStream`" --
+  * so the reduction column measures only the homology algorithm, never a second pass through a possibly-expensive
+  * original enumeration. `RipserCohomologyContext`'s bundled row has no such split (its enumeration and reduction are
+  * the same call); only its `total(ms)` column is filled.
   *
   * '''Alpha and VR filtration values are not the same quantity''' (circumradius vs. diameter -- see CLAUDE.md's
-  * alpha-complex section), so this benchmark makes no attempt to compare *barcodes* across construction
-  * families; `#bars` is reported per cell purely as a structural sanity signal (e.g. catching a construction that
-  * silently returns nothing), not for cross-row comparison. Comparing bar counts within one family (all VR rows
-  * at the same `n`/dims, say) is meaningful; comparing an alpha row's bar count to a VR row's is not.
+  * alpha-complex section), so this benchmark makes no attempt to compare *barcodes* across construction families;
+  * `#bars` is reported per cell purely as a structural sanity signal (e.g. catching a construction that silently
+  * returns nothing), not for cross-row comparison. Comparing bar counts within one family (all VR rows at the same
+  * `n`/dims, say) is meaningful; comparing an alpha row's bar count to a VR row's is not.
   *
   * `bounded` (below) is a generic `maxDim` cap usable for both VR and alpha streams alike, because
-  * `LimitedCofaceSimplexStream` only accepts the narrower `CofaceSimplexStream` interface that alpha streams
-  * don't implement -- see `SimplexStream.scala`. `IncrementalVietorisRipsSimplexStream` already takes
-  * `maxDimension` as a constructor argument and so skips this wrapper entirely.
+  * `LimitedCofaceSimplexStream` only accepts the narrower `CofaceSimplexStream` interface that alpha streams don't
+  * implement -- see `SimplexStream.scala`. `IncrementalVietorisRipsSimplexStream` already takes `maxDimension` as a
+  * constructor argument and so skips this wrapper entirely.
   */
 class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specification:
   "Engine x construction comparison benchmark" >> {
-    val minSize: Int = args.commandLine.intOr("minSize", 8)
-    val maxSize: Int = args.commandLine.intOr("maxSize", 12)
-    val sizeStep: Int = args.commandLine.intOr("sizeStep", 4)
+    val minSize: Int = args.commandLine.intOr("minSize", 10)
+    val maxSize: Int = args.commandLine.intOr("maxSize", 160)
+    val sizeStep: Int = args.commandLine.intOr("sizeStep", 25)
     val minAmbientDim: Int = args.commandLine.intOr("minAmbientDim", 2)
     val maxAmbientDim: Int = args.commandLine.intOr("maxAmbientDim", 3)
     val minMaxDim: Int = args.commandLine.intOr("minMaxDim", 1)
@@ -85,12 +88,11 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
 
     // No cooperative cancellation exists anywhere in these engines, so a "timeout" only means withTimeout stops
     // waiting -- the body keeps running on its own thread. Daemon threads keep that from blocking JVM/sbt exit.
-    val daemonExecutor = Executors.newCachedThreadPool(new ThreadFactory {
+    val daemonExecutor = Executors.newCachedThreadPool(new ThreadFactory:
       def newThread(r: Runnable): Thread =
         val t = new Thread(r)
         t.setDaemon(true)
-        t
-    })
+        t)
     given ExecutionContext = ExecutionContext.fromExecutor(daemonExecutor)
 
     def withTimeout[A](body: => A): Either[String, A] =
@@ -126,10 +128,16 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
 
     val engines: Seq[(String, (StratifiedCellStream[Simplex[Int], Double], Int) => Int)] = Seq(
       "Naive" -> ((stream, _) =>
-        SimplicialHomologyContext[Int, Double, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity).size
+        SimplicialHomologyContext[Int, Double, Double]()
+          .persistentHomology(stream)
+          .diagramAt(Double.PositiveInfinity)
+          .size
       ),
       "Chunks" -> ((stream, maxDim) =>
-        PersistenceInChunksContext[Int, Double](maxDim).persistentHomology(stream).diagramAt(Double.PositiveInfinity).size
+        PersistenceInChunksContext[Int, Double](maxDim)
+          .persistentHomology(stream)
+          .diagramAt(Double.PositiveInfinity)
+          .size
       )
     )
 
