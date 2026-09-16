@@ -57,9 +57,9 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
 
   "Persistent cohomology of the filled triangle has zero essential H^1 classes (contractible)" >> {
     // maxDimension = 2: the triangle now exists, born at 3.0 (its longest edge), tied with edge {0,2}'s
-    // own filtration value -- a genuine zero-persistence pair, which must still be EMITTED (not
-    // dropped) by this stage since apparent-pairs shortcutting isn't implemented yet. A first draft that
-    // skipped clearing reported 2 spurious essential H^1 classes instead of 0.
+    // own filtration value -- a genuine zero-persistence pair (also the apparent-pairs shortcut's own
+    // canonical example, see `zeroApparentCofacet`'s doc), which must still be EMITTED, not dropped. A
+    // first draft that skipped clearing reported 2 spurious essential H^1 classes instead of 0.
     val bars = RipserCohomologyContext[Double](threePointLine, 2).persistentCohomology().map(toTuple)
     bars must containTheSameElementsAs(
       List(
@@ -78,7 +78,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
     cohomology must containTheSameElementsAs(naive)
   }
 
-  "Cohomology's finite bars agree with the naive homology engine on random Vietoris-Rips point clouds" >> {
+  "Cohomology's finite bars agree with the naive homology engine on random Vietoris-Rips point clouds" >>
     forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
       val metricSpace = EuclideanMetricSpace(points)
       val maxDim = 2
@@ -86,16 +86,49 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       val cohomology = cohomologyBars(metricSpace, maxDim).filter { case (_, b, d) => b < d }
       cohomology must containTheSameElementsAs(naive)
     }
+
+  // Pinned adversarial example (see WORKLOG-cohomology.md's "Apparent pairs: resolved" section for the
+  // full derivation), found by the property above rather than by hand: edge {2,7} and triangle {2,7,11}
+  // are a genuine, mutual apparent pair (both born at 0.47710577497688794), but edge {2,7}'s coboundary
+  // ALSO contains triangle {2,6,7}, tied at the same value -- a different, non-apparent-paired cofacet.
+  // A first draft of the apparent-pairs shortcut stored only the single (tau, sign) term in `basis(tau)`
+  // instead of sigma's full coboundary, silently dropping the {2,6,7} term. That broke a completely
+  // unrelated edge, {7,11} (born 0.4416078462172273, a lower value, hence processed strictly later):
+  // its own reduction needed to pick up {2,6,7} after cancelling {2,7,11} via `basis`, and instead
+  // reduced through to a wrong, much later pivot (0.8477007042116179 instead of the correct
+  // 0.47710577497688794). Every hand-built fixture in this file, including `threePointLine`'s own
+  // apparent pair above, was too small to contain this shape.
+  private val apparentPairCollisionCloud = EuclideanMetricSpace(
+    Array(
+      Array(0.6840899819795643, 0.8632191311777603),
+      Array(0.7925816891415143, 0.5159681790435516),
+      Array(0.28417731332368257, 0.4559405417686636),
+      Array(0.35675429103128775, 0.4806622567817712),
+      Array(0.9029384857840582, 0.692961159818487),
+      Array(0.20118350789432415, 0.06900108902109969),
+      Array(0.1158610163249012, 0.5096602272996563),
+      Array(0.12795009537546453, 0.906743133696058),
+      Array(0.11613774851681025, 0.024181302854615505),
+      Array(0.8012044768533325, 0.5021171135882059),
+      Array(0.8937233905719311, 0.16065156938011227),
+      Array(0.5637341324741952, 0.8352605284654816)
+    )
+  )
+
+  "Cohomology's finite bars agree with the naive engine on the apparent-pair singleton-vs-full-chain regression example" >> {
+    val maxDim = 2
+    val naive = naiveBars(apparentPairCollisionCloud, maxDim).filter { case (_, b, d) => b < d }
+    val cohomology = cohomologyBars(apparentPairCollisionCloud, maxDim).filter { case (_, b, d) => b < d }
+    cohomology must containTheSameElementsAs(naive)
   }
 
-  "Every simplex is accounted for: finite*2 + essential == total simplices, per dimension count" >> {
+  "Every simplex is accounted for: finite*2 + essential == total simplices, per dimension count" >>
     forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
       val metricSpace = EuclideanMetricSpace(points)
       val maxDim = 2
       val bars = cohomologyBars(metricSpace, maxDim)
       HomologyFixtures.totalBarsAccountForAllCells(bars, totalSimplices(metricSpace.size, maxDim)) must beTrue
     }
-  }
 
   "Essential representatives are genuine cocycles (zero coboundary) below the top dimension" >> {
     // Exact arithmetic (Fp), not Double -- zero-detection during reduction must not be confused with

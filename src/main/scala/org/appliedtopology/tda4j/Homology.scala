@@ -526,14 +526,45 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
   * pure performance optimization on top of an already-correct baseline, a first draft of this engine without it was
   * confirmed WRONG by hand-deriving H^1 of a plain 3-cycle graph (spurious essential classes from dimension-d simplices
   * that were already claimed as pivots one dimension down, violating Proposition 3.1's "not a pivot anywhere" clause)
-  * -- see WORKLOG-cohomology.md for the full derivation. Apparent pairs are NOT yet implemented (a later,
-  * genuinely-optional addition -- see the staged plan in WORKLOG-cohomology.md, which also has the full derivation of
-  * the pivot orientation, birth/death/dimension mapping, and sign convention below, re-derived directly from the paper
-  * rather than from memory -- this area of the codebase has a history of subtly-wrong unverified code, see CLAUDE.md).
-  * Do not "simplify" this against intuition without rereading that derivation; the reversed-order reasoning is
-  * genuinely non-obvious and has already produced two plausible-but-wrong drafts during development.
+  * -- see WORKLOG-cohomology.md for the full derivation. Do not "simplify" this against intuition without rereading
+  * that derivation; the reversed-order reasoning is genuinely non-obvious and has already produced two
+  * plausible-but-wrong drafts during development.
+  *
+  * Also includes a PARTIAL apparent-pairs optimization (see `zeroApparentCofacet` and its use in
+  * `persistentCohomology`) -- partial, and that qualifier matters: what's implemented is Definition 3.2 apparent-pair
+  * identification wired into the reduction loop to SKIP `Chain.reduceBy`'s reduction pass for an apparent sigma (it's
+  * guaranteed to be a no-op by Proposition 3.9/Lemma 3.3), NOT Ripser's further, larger optimization of never building
+  * an apparent sigma's coboundary at all unless some other column's reduction actually needs it. `coboundaryOf(sigma)`
+  * is still called in full on the shortcut path -- `basis(tau)` needs the COMPLETE reduced column (all of sigma's
+  * cofacets, not just tau), not a truncated single-term stand-in (an earlier draft got this wrong; see
+  * WORKLOG-cohomology.md's "Apparent pairs: resolved" section for the 12-point counterexample that caught it). Despite
+  * still paying for the enumeration, this is a measured 1.35x-1.8x wall-clock win on n=12-20 point random VR complexes
+  * at maxDimension=2 (growing with n) -- `Chain.reduceBy`'s recursive per-pivot `SortedMap` fold, not the coboundary
+  * enumeration, turns out to dominate this loop's cost, so skipping just the reduction pass is still worthwhile. Unlike
+  * Ripser's own C++ implementation, this shortcut does NOT need Ripser's `assemble_columns_to_reduce` exclusion step or
+  * its `compute_pairs` on-the-fly substitution fallback (`get_zero_apparent_facet` at `compute_pairs` time in Ripser's
+  * source) -- this engine never removes a simplex from the set it iterates over at a given dimension (only `cleared`
+  * skips a *later* dimension's redundant reprocessing, which was already correct before this shortcut existed), so the
+  * true (mutual) Definition 3.2 apparent-pair check alone is sufficient for THIS optimization to be safe. Getting the
+  * larger, lazy optimization would require also changing how `persistentCohomology` enumerates each dimension's
+  * simplices in the first place (currently an eager `(0 until binomial(n, d+1))` over the WHOLE complex, unlike
+  * Ripser's own incrementally-assembled `columns_to_reduce`) -- a separate, larger, not-yet-attempted project. See
+  * WORKLOG-cohomology.md's dated "Apparent pairs: resolved" section (after the earlier "negative result" section, which
+  * stays as historical record) for the full derivation, grounded directly in Ripser's own `ripser.cpp` source and
+  * arXiv:1908.02518's Definition 3.2/3.11 and Proposition 3.9/Lemma 3.3 -- re-derived from those primary sources this
+  * session, not reconstructed from memory.
+  *
+  * `useApparentPairs` (default `true`) exists so `ApparentPairsBenchmarkSpec` can isolate this optimization's own
+  * effect: with it `false`, `persistentCohomology` always falls through to the ordinary `Chain.reduceBy` path, byte for
+  * byte the same output as when it's `true` -- see `zeroApparentCofacet`'s doc for why the shortcut is provably a
+  * no-op, not just an empirically-checked one. Not intended as a user-facing tuning knob outside benchmarking; there is
+  * no known case where `false` is the right choice for real use.
   */
-class RipserCohomologyContext[CoefficientT: Field](metricSpace: FiniteMetricSpace[Int], maxDimension: Int):
+class RipserCohomologyContext[CoefficientT: Field](
+  metricSpace: FiniteMetricSpace[Int],
+  maxDimension: Int,
+  useApparentPairs: Boolean = true
+):
   import barcode.*
 
   val si: SimplexIndexing = SimplexIndexing(metricSpace.size)
@@ -591,6 +622,61 @@ class RipserCohomologyContext[CoefficientT: Field](metricSpace: FiniteMetricSpac
       coboundaryOf(cell).items.map { case (tau, sign) => (tau, fr.times(coeff, sign)) }
     })
 
+  /** `sigma`'s cofacet tied at `sigma`'s own filtration value with the LARGEST combinatorial index, i.e. the "oldest
+    * cofacet" in Definition 3.2/3.11's sense (`cohomologyOrdering` sorts a larger index as older). Built directly
+    * against `si.cofacetIterator`'s full (unrestricted) enumeration, NOT `RipserStreamBase`'s
+    * `zeroPivotCofacet`/`Cofacets.scala`'s `apparentVertex` -- see CLAUDE.md: those are restricted to cofacets formed
+    * by inserting a vertex strictly greater than sigma's own maximum, which silently misses a real tied cofacet
+    * whenever sigma already contains `vertexCount - 1` (a false negative, not merely an inefficiency). Truncated to
+    * `maxDimension` exactly like `coboundaryOf`, for the same reason: `SimplexIndexing`'s raw iterators have no notion
+    * of any dimension cap on their own.
+    */
+  private def zeroPivotCofacet(sigma: Simplex[Int]): Option[Simplex[Int]] =
+    if sigma.dim + 1 > maxDimension then None
+    else
+      val d = filtrationValue(sigma)
+      si.cofacetIterator(sigma)
+        .map(idx => si(idx, sigma.size + 1))
+        .filter(tau => filtrationValue(tau) == d)
+        .maxByOption(tau => si(tau))
+
+  /** `tau`'s facet tied at `tau`'s own filtration value with the SMALLEST combinatorial index, i.e. the "youngest
+    * facet" in Definition 3.2/3.11's sense. No `maxDimension` guard needed: a facet is always one dimension lower than
+    * `tau`, which is already within the truncated complex by construction (it only exists as some `sigma`'s candidate
+    * cofacet, already dimension-checked by `zeroPivotCofacet` above).
+    */
+  private def zeroPivotFacet(tau: Simplex[Int]): Option[Simplex[Int]] =
+    val d = filtrationValue(tau)
+    si.facetIterator(si(tau), tau.size)
+      .map(idx => si(idx, tau.size - 1))
+      .filter(sigma => filtrationValue(sigma) == d)
+      .minByOption(sigma => si(sigma))
+
+  /** `Some(tau)` iff `(sigma, tau)` is a genuine (mutual) Definition 3.2 apparent pair: tau is sigma's oldest tied
+    * cofacet, AND sigma is, symmetrically, tau's youngest tied facet. Verified against the hand-derived
+    * `threePointLine` fixture in `RipserCohomologySpec` (`{0,2}` paired with the triangle `{0,1,2}`, both born at 3.0).
+    * Deliberately just the mutual check, not Ripser's own broader "emergent pair" condition (`ripser.cpp`'s
+    * `init_coboundary_and_get_pivot`, which also has to guard against a *different*, non-apparent simplex racing for
+    * the same tau) -- that broader condition exists in Ripser only because Ripser additionally removes tau from the
+    * pool of simplices it ever separately reduces (`assemble_columns_to_reduce`'s `is_in_zero_apparent_pair`
+    * exclusion), which forces it to also handle tau turning up as some *other* column's intermediate pivot via a
+    * substitution fallback (`compute_pairs`'s own `get_zero_apparent_facet` call). This engine does neither:
+    * `persistentCohomology`'s loop below still visits every non-cleared simplex, so the mutual pair's `sigma` is
+    * *always* the first (youngest, smallest-index) simplex whose raw, unreduced coboundary can possibly have `tau` as
+    * its leading term under `cohomologyOrdering` -- any tied-diameter cofacet of any simplex necessarily is that
+    * simplex's chain minimum, by Vietoris-Rips monotonicity (a cofacet's filtration value is never smaller than its
+    * facet's, so a tied one is always the smallest term present) -- so `tau` can never already be claimed in `basis` by
+    * anything else by the time `sigma`'s turn comes up. See WORKLOG-cohomology.md's dated "Apparent pairs: resolved"
+    * section for the full derivation, including why this makes the shortcut in `persistentCohomology` provably
+    * behavior-preserving rather than merely empirically-checked.
+    */
+  private def zeroApparentCofacet(sigma: Simplex[Int]): Option[Simplex[Int]] =
+    for
+      tau <- zeroPivotCofacet(sigma)
+      partner <- zeroPivotFacet(tau)
+      if partner == sigma
+    yield tau
+
   def persistentCohomology(): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     // Summoned here, not any earlier -- see class doc above and CellularHomologyContext's class doc for
     // why a Chain[...] is RingModule instance's summon-time Ordering[CellT] scoping matters.
@@ -626,262 +712,75 @@ class RipserCohomologyContext[CoefficientT: Field](metricSpace: FiniteMetricSpac
       val generators: mutable.Map[Simplex[Int], Chain[Simplex[Int], CoefficientT]] = mutable.Map.empty
 
       for sigma <- simplicesAtD if !cleared.contains(sigma) do
-        val z = coboundaryOf(sigma)
-        // Chain.reduceBy (SortedMap-based), not hand-rolled reduction over raw Chain arithmetic -- see
-        // WORKLOG-naive-homology.md's "critical performance bug" for why that silently reintroduces
-        // superlinear blowup on real VR streams.
-        val (reduced, log) = Chain.reduceBy(z, basis, Chain.empty)
-        // V-column: by construction (Algorithm 1's V_j, updated in lockstep with R_j = delta(V_j)
-        // throughout), this is itself a genuine cocycle whenever reduced is zero -- no separate
-        // cocycle-reconstruction step needed, unlike the naive engine's homology case. Collapsed
-        // explicitly, and BEFORE either write below, for the same reason as CellularHomologyContext:
-        // generators entries get read back into later cells' own vcol folds.
-        val vcol: Chain[Simplex[Int], CoefficientT] = log.items.foldLeft(Chain(sigma)) { case (acc, (pivot, coeff)) =>
-          acc - coeff ⊠ generators.getOrElse(
-            pivot,
-            throw new IllegalStateException(s"pivot $pivot has a basis entry but no generators entry")
-          )
-        }
-        vcol.collapseAll()
-        if reduced.isZero() then
-          // sigma's coboundary fully cancelled, AND (since we didn't skip it above) sigma was never
-          // claimed as anyone's pivot: a genuine essential class born at sigma (dimension d). Emitted
-          // unconditionally, including alongside a zero-length finite bar elsewhere in the list -- see
-          // WORKLOG-cohomology.md on why zero-length bars must not be silently dropped at this stage.
-          bars.append(PersistenceBar(d, ClosedEndpoint(filtrationValue(sigma)), PositiveInfinity(), Some(vcol)))
-        else
-          // reduced is nonzero: its leading cell (the OLDEST cofacet remaining, per cohomologyOrdering)
-          // is sigma's death partner. Birth = sigma (dimension d, the column); death = that pivot
-          // (dimension d+1, the row) -- see WORKLOG-cohomology.md's birth/death/dimension derivation.
-          val pivot = reduced.leadingCell.get
-          basis(pivot) = reduced
-          generators(pivot) = vcol
-          cleared += pivot
-          bars.append(
-            PersistenceBar(d, ClosedEndpoint(filtrationValue(sigma)), OpenEndpoint(filtrationValue(pivot)), Some(vcol))
-          )
+        (if useApparentPairs then zeroApparentCofacet(sigma) else None) match
+          case Some(tau) =>
+            // Apparent pair shortcut (Definition 3.2/Proposition 3.9): sigma's raw, UNREDUCED coboundary
+            // already has tau as its leading term under cohomologyOrdering, and no earlier-processed
+            // simplex can have already claimed tau in `basis` -- see `zeroApparentCofacet`'s doc and
+            // WORKLOG-cohomology.md's "Apparent pairs: resolved" section for why. So `Chain.reduceBy`
+            // is GUARANTEED to be a no-op here (log = Nil, reduced = z unchanged) and can be skipped --
+            // but `z` itself must still be computed and stored as-is in `basis(tau)`, in full, not
+            // truncated to just the (tau, sign) leading term: z can genuinely have OTHER, non-leading
+            // terms too (other cofacets of sigma tied at the same filtration value as tau, or cofacets
+            // at a strictly higher one), and those terms are exactly what a LATER column's own reduction
+            // needs to pick up when it subtracts basis(tau) to cancel tau out of ITS working chain. An
+            // earlier draft stored only the singleton {tau -> sign} here and silently dropped those
+            // other terms, which produced a wrong death for a different, unrelated column later in the
+            // same dimension (confirmed by a direct counterexample: two triangles tied at the same value
+            // as their shared edge partner's own apparent-pair triangle, see WORKLOG-cohomology.md). This
+            // still pays for the full `coboundaryOf(sigma)` enumeration (only the reduction pass is
+            // skipped), but is a measured 1.35x-1.8x wall-clock win on n=12-20 point VR complexes anyway,
+            // because `Chain.reduceBy`'s recursive per-step SortedMap fold -- not the enumeration -- is
+            // this loop's dominant cost. See WORKLOG-cohomology.md for the numbers and for why the further
+            // (lazy, enumeration-skipping) version Ripser itself uses is NOT implemented here.
+            val z = coboundaryOf(sigma)
+            val vcol = Chain[Simplex[Int], CoefficientT](sigma)
+            basis(tau) = z
+            generators(tau) = vcol
+            cleared += tau
+            bars.append(
+              PersistenceBar(d, ClosedEndpoint(filtrationValue(sigma)), OpenEndpoint(filtrationValue(tau)), Some(vcol))
+            )
+          case None =>
+            val z = coboundaryOf(sigma)
+            // Chain.reduceBy (SortedMap-based), not hand-rolled reduction over raw Chain arithmetic -- see
+            // WORKLOG-naive-homology.md's "critical performance bug" for why that silently reintroduces
+            // superlinear blowup on real VR streams.
+            val (reduced, log) = Chain.reduceBy(z, basis, Chain.empty)
+            // V-column: by construction (Algorithm 1's V_j, updated in lockstep with R_j = delta(V_j)
+            // throughout), this is itself a genuine cocycle whenever reduced is zero -- no separate
+            // cocycle-reconstruction step needed, unlike the naive engine's homology case. Collapsed
+            // explicitly, and BEFORE either write below, for the same reason as CellularHomologyContext:
+            // generators entries get read back into later cells' own vcol folds.
+            val vcol: Chain[Simplex[Int], CoefficientT] =
+              log.items.foldLeft(Chain(sigma)) { case (acc, (pivot, coeff)) =>
+                acc - coeff ⊠ generators.getOrElse(
+                  pivot,
+                  throw new IllegalStateException(s"pivot $pivot has a basis entry but no generators entry")
+                )
+              }
+            vcol.collapseAll()
+            if reduced.isZero() then
+              // sigma's coboundary fully cancelled, AND (since we didn't skip it above) sigma was never
+              // claimed as anyone's pivot: a genuine essential class born at sigma (dimension d). Emitted
+              // unconditionally, including alongside a zero-length finite bar elsewhere in the list -- see
+              // WORKLOG-cohomology.md on why zero-length bars must not be silently dropped at this stage.
+              bars.append(PersistenceBar(d, ClosedEndpoint(filtrationValue(sigma)), PositiveInfinity(), Some(vcol)))
+            else
+              // reduced is nonzero: its leading cell (the OLDEST cofacet remaining, per cohomologyOrdering)
+              // is sigma's death partner. Birth = sigma (dimension d, the column); death = that pivot
+              // (dimension d+1, the row) -- see WORKLOG-cohomology.md's birth/death/dimension derivation.
+              val pivot = reduced.leadingCell.get
+              basis(pivot) = reduced
+              generators(pivot) = vcol
+              cleared += pivot
+              bars.append(
+                PersistenceBar(
+                  d,
+                  ClosedEndpoint(filtrationValue(sigma)),
+                  OpenEndpoint(filtrationValue(pivot)),
+                  Some(vcol)
+                )
+              )
 
     bars.toList
-
-/*
-class RipserHomology[CoefficientT: Field](metricSpace: FiniteMetricSpace[Int]):
-  val sparseMetricSpace = SparseMetricSpace(metricSpace, metricSpace.minimumEnclosingRadius)
-
-  val cofaceStream: EnumeratingCofaceSimplexStream = EnumeratingCofaceSimplexStream(sparseMetricSpace)
-
-  given (Simplex[Int] is OrderedCell) = Simplex_is_OrderedCell[Int](cofaceStream.filtrationOrdering.orElse(simplexOrdering))
-
-  case class Bar(dim: Int, birth: Double, death: Double)
-
-  val barcodes: mutable.Map[Int, List[Bar]] = mutable.Map.empty
-
-  val cocycleMaps : mutable.Map[Int, mutable.Map[Simplex[Int], Chain[Simplex[Int],CoefficientT]]] = mutable.Map.empty
-  val coboundaryMaps : mutable.Map[Int, mutable.Map[Simplex[Int], Chain[Simplex[Int],CoefficientT]]] = mutable.Map.empty
-
-  lazy val kruskal = Kruskal(sparseMetricSpace)
-
-  @tailrec
-  private def reducingCycles(
-                      reducedCycles: Map[Simplex[Int], Chain[Simplex[Int], CoefficientT]],
-                      unprocessedCycles: List[Chain[Simplex[Int], CoefficientT]],
-                      bailout: Int = 0
-                    ): Map[Simplex[Int], Chain[Simplex[Int], CoefficientT]] =
-    if (bailout > 1000) {
-      println(s"Bailing out, $bailout\n${unprocessedCycles(0)}")
-      reducedCycles
-    }
-    else unprocessedCycles match {
-      case (z :: rest) => {
-        if (z.isZero())
-          reducingCycles(reducedCycles, rest, bailout + 1)
-        else {
-          println(s"Reducing... $z")
-          val sigma = z.leadingCell.get
-          if (reducedCycles.contains(sigma)) {
-            val z0 = reducedCycles(sigma)
-            val z1 = z - (z0 <* (z.leadingCoefficient / z0.leadingCoefficient))
-            z1.collapseAll()
-            reducingCycles(reducedCycles, z1 :: rest, bailout + 1)
-          } else {
-            z.collapseAll()
-            val zs = z.items.flatMap { (sc) =>
-              val (s, c) = sc
-              if (reducedCycles.contains(s)) {
-                val w = reducedCycles(s)
-                Some(w <* (-c / w.leadingCoefficient))
-              } else None
-            }
-            val zred = zs.foldLeft(z)(_ + _)
-            zred.collapseAll()
-            reducingCycles(reducedCycles.updated(zred.leadingCell.get, zred), rest, bailout + 1)
-          }
-        }
-      }
-      case _ => reducedCycles
-    }
-
-  def computeNextBarcode(): List[Bar] = {
-    def cofacets(spx: Simplex[Int]): List[Chain[Simplex[Int], CoefficientT]] = {
-      val c1 : List[(Simplex[Int], Int)] = metricSpace
-        .elements
-        .flatMap((x) => if spx.contains(x) then None else Some((spx.incl(x), spx.count(_ < x))))
-        .toList
-        .sortBy((item) => cofaceStream.filtrationValue(item._1))
-
-      c1.map { (item) =>
-          val (w, pos) = item
-          (pos % 2) match {
-            case 0 => Chain(w)
-            case 1 => -Chain(w)
-          }
-        }
-        .toList
-    }
-    if barcodes.isEmpty then // start with dim 0
-      barcodes(0) = (for (i, j) <- kruskal.mstIterator
-      yield Bar(0, 0, metricSpace.distance(i, j))).toList.prepended(Bar(0, 0, Double.PositiveInfinity))
-      barcodes(0)
-    else
-      if (barcodes.keySet.max == 0) {
-        // using the cycles iterator implicitly already skips all the skippable 1-simplices
-        // _because_ we're already avoiding the entire minimum spanning tree
-        // everything that remains creates a 1-cocycle
-        val cocycles = kruskal.cyclesIterator.toList.map((e) => Chain(∆(e._1, e._2)))
-        
-        val cocycleMap: mutable.Map[Simplex[Int], Chain[Simplex[Int], CoefficientT]] =
-          mutable.Map.from(cocycles.flatMap((ch) => ch.leadingCell.map((c) => c -> ch)))
-        val coboundaryMap: mutable.Map[Simplex[Int], Chain[Simplex[Int], CoefficientT]] = mutable.Map.empty
-
-        cocycleMaps(1) = cocycleMap
-        coboundaryMaps(1) = coboundaryMap
-        val nextCocycles: mutable.Map[Simplex[Int], Chain[Simplex[Int], CoefficientT]] = mutable.Map.empty
-        cocycleMaps(2) = nextCocycles
-      }
-      val d = barcodes.keySet.max+1
-      val cocycles : List[Chain[Simplex[Int], CoefficientT]] = cocycleMaps(d).values.toList
-      val skippable: List[Simplex[Int]] = coboundaryMaps.getOrElseUpdate(d, mutable.Map.empty).values.flatMap(_.leadingCell).toList
-
-      val cocycleMap = cocycleMaps.getOrElseUpdate(d, mutable.Map.empty)
-      val coboundaryMap = coboundaryMaps.getOrElseUpdate(d, mutable.Map.empty)
-      val nextCocycles = cocycleMaps.getOrElseUpdate(d+1, mutable.Map.empty)
-      val currentBarcode: mutable.ArrayDeque[Bar] = mutable.ArrayDeque.empty
-
-      for cocycle <- cocycles do
-        val spx : Simplex[Int] = cocycle.leadingCell.get
-        val cofacetIterator = CofacetIterator(spx, sparseMetricSpace)
-        // TODO Check with Ulrich Bauer carefully that this is the right thing to check
-        if (cofacetIterator.apparentVertex.exists(w => !spx.exists(v => v > w))) {
-          given (Chain[Simplex[Int], CoefficientT] is RingModule{type R = CoefficientT}) = summon[Chain[Simplex[Int], CoefficientT] is RingModule{type R = CoefficientT}]
-          val cofacets : Iterator[Chain[Simplex[Int], CoefficientT]] = cofacetIterator.map(w => spx.count(_<w) % 2 match {
-            case 0 => Chain(spx+w)
-            case 1 => -Chain(spx+w)
-          })
-          val cofacetHead = cofacets.next()
-          var coboundary = cofacets.foldLeft(cofacetHead)(_ + _)
-          coboundary.collapseAll()
-          val cancellations = for
-            (z, c) <- coboundary.items
-            if coboundaryMap.contains(z)
-            dz = coboundaryMap(z)
-          yield
-            dz <* (-c / dz.leadingCoefficient)
-          val reduced = cancellations.foldLeft(coboundary)(_ + _)
-          if reduced.isZero() then // new coboundary is a coboundary; create a cocycle
-            val newCocycleItems = for
-              (z,c) <- coboundary.items
-              if coboundaryMap.contains(z)
-            yield
-              Chain(z) <* (-c/coboundaryMap(z).leadingCoefficient)
-            val newCocycle = newCocycleItems.tail.foldLeft(newCocycleItems.head)(_+_)
-            if (!newCocycle.isZero())
-              nextCocycles(newCocycle.leadingCell.get) = newCocycle
-          else // new coboundary cobounds cocycle
-            cocycleMap.remove(cocycle.leadingCell.get)
-            currentBarcode.addOne(
-              Bar(cocycle.leadingCell.get.dim,
-                cofaceStream.filtrationValue(cocycle.leadingCell.get),
-                cofaceStream.filtrationValue(reduced.leadingCell.get)))
-            coboundaryMap(reduced.leadingCell.get) = reduced
-        }
-      barcodes(d) = currentBarcode.toList
-      barcodes(d)
-  }
-
-
-def computePersistentHomology[Vertex, Filtration, CoefficientT: Field](
-                                                                        simplexStream: SimplexStream[Vertex, Filtration]
-                                                                      ): (
-  mutable.Map[Simplex[Vertex], Chain[Simplex[Vertex], CoefficientT]],
-    mutable.Map[Simplex[Vertex], Chain[Simplex[Vertex], CoefficientT]]
-  ) = {
-
-  // Initialize two mutable structures to hold cycles and boundaries
-  val cycles: mutable.Map[Simplex[Vertex], Chain[Simplex[Vertex], CoefficientT]] = mutable.Map.empty
-
-  // Use a Map to track boundaries, associating each simplex with its generated boundary chain
-  val boundaries: mutable.Map[Simplex[Vertex], Chain[Simplex[Vertex], CoefficientT]] = mutable.Map.empty
-
-  // Process each simplex in the simplex stream
-  for (simplex <- simplexStream) {
-    val boundary = simplex.boundary() // Compute the boundary of the simplex
-    var activeChain = boundary.collapseAll() // Simplify the boundary chain
-
-    // Map to track reduction coefficients and the simplices associated with each boundary chain
-    val reductionCoefficients = mutable.Map[Simplex[Vertex], CoefficientT]()
-
-    // Step 1: Reduce activeChain using the boundary chains
-    for ((boundarySimplex, boundaryChain) <- boundaries) {
-      val leadingCell = boundaryChain.leadingCell
-      if (leadingCell.isDefined && activeChain.leadingCell.contains(leadingCell.get)) {
-        val boundaryLeading = boundaryChain.leadingCoefficient
-        val activeLeading = activeChain.leadingCoefficient
-        val coef = activeLeading / boundaryLeading
-
-        // Reduce the activeChain by the boundary chain
-        activeChain = activeChain - (boundaryChain <* coef)
-
-        // Track the simplex that generated the boundary chain and the coefficient used
-        reductionCoefficients(boundarySimplex) = coef
-      }
-    }
-
-    // Step 2: Check if the activeChain is zero (a boundary)
-    if (activeChain.isZero) {
-      // New boundary generated by this simplex
-      val newBoundaryChain = reductionCoefficients.foldLeft(Chain(simplex)) { (chain, entry) =>
-        val (boundarySimplex, coef) = entry
-        chain - (Chain(boundarySimplex) <* coef) // Subtract scaled boundary-contributing simplices
-      }
-      boundaries(simplex) = newBoundaryChain
-    } else {
-      // Step 3: Reduce activeChain using cycles and track reduction coefficients
-      val cycleReductionCoefficients = mutable.Map[Simplex[Vertex], CoefficientT]()
-      for ((leadingSimplex, cycleChain) <- cycles) {
-        val cycleLeadingCell = cycleChain.leadingCell
-        if (cycleLeadingCell.isDefined && activeChain.leadingCell.contains(cycleLeadingCell.get)) {
-          val coef = activeChain.leadingCoefficient / cycleChain.leadingCoefficient
-          cycleReductionCoefficients(leadingSimplex) = coef
-          activeChain = activeChain - (cycleChain <* coef)
-        }
-      }
-
-      // Track and manage the cycle and boundary sets
-      if (activeChain.isZero) {
-        // Among cycles used in reduction, pick the one with the most recently occurring leading cell
-        val mostRecent = cycleReductionCoefficients.keys
-          .maxByOption(simplex => cycles.keysIterator.indexOf(simplex))
-        mostRecent.foreach { leadingSimplex =>
-          val movedCycle = cycles.remove(leadingSimplex).get
-          boundaries(leadingSimplex) = movedCycle
-        }
-      } else {
-        // Add the remaining (non-zero) active chain as a new cycle
-        val newCycle = Chain(simplex) + activeChain
-        cycles(simplex) = newCycle
-      }
-    }
-  }
-
-  (cycles, boundaries)
-}
- */
