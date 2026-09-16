@@ -57,11 +57,14 @@ class IncrementalVietorisRipsSpec extends s2mutable.Specification with ScalaChec
         }
       }
 
-    "matches EnumeratingCofaceSimplexStream exactly at the untruncated (default) threshold" >>
+    "matches EnumeratingCofaceSimplexStream exactly at the untruncated (explicit +Infinity) threshold" >>
       forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(4, 12))) { points =>
         val metricSpace = EuclideanMetricSpace(points)
-        val incremental = IncrementalVietorisRipsSimplexStream(metricSpace, maxDim)
-        val enumerating = EnumeratingCofaceSimplexStream(metricSpace)
+        // Both classes now default to metricSpace.minimumEnclosingRadius, not +Infinity (see
+        // CLAUDE.md/WORKLOG-mst-and-perf.md) -- this comparison wants the genuinely untruncated complex on
+        // both sides, so both need it explicitly.
+        val incremental = IncrementalVietorisRipsSimplexStream(metricSpace, maxDim, Double.PositiveInfinity)
+        val enumerating = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Double.PositiveInfinity)
         Result.foreach(0 to maxDim) { d =>
           incremental.iterateDimension(d).toSet === enumerating.iterateDimension(d).toSet
         }
@@ -96,9 +99,17 @@ class IncrementalVietorisRipsSpec extends s2mutable.Specification with ScalaChec
       forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
         val metricSpace = EuclideanMetricSpace(points)
         val homDim = 2
-        val incrementalBars = naiveBars(IncrementalVietorisRipsSimplexStream(metricSpace, homDim))
+        // Both classes now default to metricSpace.minimumEnclosingRadius, not +Infinity -- both sides need
+        // it explicitly to compare the genuinely untruncated complex.
+        val incrementalBars =
+          naiveBars(IncrementalVietorisRipsSimplexStream(metricSpace, homDim, Double.PositiveInfinity))
         val enumeratingBars =
-          naiveBars(LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), homDim))
+          naiveBars(
+            LimitedCofaceSimplexStream(
+              EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Double.PositiveInfinity),
+              homDim
+            )
+          )
         incrementalBars must containTheSameElementsAs(enumeratingBars)
       }
 
@@ -108,8 +119,23 @@ class IncrementalVietorisRipsSpec extends s2mutable.Specification with ScalaChec
         val homDim = 2
         val t = midThreshold(metricSpace)
         val thresholdedBars = naiveBars(IncrementalVietorisRipsSimplexStream(metricSpace, homDim, t))
-        val untruncatedBars = naiveBars(IncrementalVietorisRipsSimplexStream(metricSpace, homDim))
+        val untruncatedBars =
+          naiveBars(IncrementalVietorisRipsSimplexStream(metricSpace, homDim, Double.PositiveInfinity))
         thresholdedBars must containTheSameElementsAs(restrictToThreshold(untruncatedBars, t))
+      }
+
+    // The load-bearing check for the minimumEnclosingRadius default itself (see
+    // RipserCohomologySpec's own version of this check, and CLAUDE.md/WORKLOG-mst-and-perf.md): is the
+    // default just another threshold value, subject to the same restriction oracle as any explicit t?
+    "the minimumEnclosingRadius default equals the untruncated barcode restricted to [0, minimumEnclosingRadius]" >>
+      forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
+        val metricSpace = EuclideanMetricSpace(points)
+        val homDim = 2
+        val t = metricSpace.minimumEnclosingRadius
+        val defaultBars = naiveBars(IncrementalVietorisRipsSimplexStream(metricSpace, homDim)) // exercises the default
+        val untruncatedBars =
+          naiveBars(IncrementalVietorisRipsSimplexStream(metricSpace, homDim, Double.PositiveInfinity))
+        defaultBars must containTheSameElementsAs(restrictToThreshold(untruncatedBars, t))
       }
 
     // Algorithm 4 as written does `Σ ← V ∪ E` unconditionally, so the paper's own Σ always carries the full
@@ -118,14 +144,18 @@ class IncrementalVietorisRipsSpec extends s2mutable.Specification with ScalaChec
     // no edges. Pinned directly rather than left to the property tests above, all of which use maxDim >= 2.
     "maxDimension = 0 yields vertices only, with no edges (a deliberate departure from the paper's own Σ ← V ∪ E)" >> {
       val metricSpace = EuclideanMetricSpace(Array(Array(0.0), Array(1.0), Array(3.0)))
-      val stream = IncrementalVietorisRipsSimplexStream(metricSpace, 0)
+      // Explicit +Infinity: this fixture's own minimumEnclosingRadius (2.0, from the middle point) is less
+      // than its longest edge (3.0), so the default would exclude that edge -- irrelevant to what this test
+      // checks (dimension bounding), but would make the comparison below fail for an unrelated reason.
+      val stream = IncrementalVietorisRipsSimplexStream(metricSpace, 0, Double.PositiveInfinity)
       stream.iterateDimension(0).toSet === bruteForce(metricSpace, 0, Double.PositiveInfinity)
       stream.iterateDimension.isDefinedAt(1) must beFalse
     }
 
     "maxDimension = 1 yields vertices and edges, matching brute force" >> {
       val metricSpace = EuclideanMetricSpace(Array(Array(0.0), Array(1.0), Array(3.0)))
-      val stream = IncrementalVietorisRipsSimplexStream(metricSpace, 1)
+      // Explicit +Infinity -- see the maxDimension = 0 case above for why.
+      val stream = IncrementalVietorisRipsSimplexStream(metricSpace, 1, Double.PositiveInfinity)
       stream.iterateDimension(0).toSet === bruteForce(metricSpace, 0, Double.PositiveInfinity)
       stream.iterateDimension(1).toSet === bruteForce(metricSpace, 1, Double.PositiveInfinity)
       stream.iterateDimension.isDefinedAt(2) must beFalse

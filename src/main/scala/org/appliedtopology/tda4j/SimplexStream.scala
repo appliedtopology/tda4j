@@ -226,14 +226,27 @@ class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDi
 
 class EnumeratingCofaceSimplexStream(
   val metricSpace: FiniteMetricSpace[Int],
-  var keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
+  var keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
+  // NaN is a sentinel for "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below.
+  // Beyond that radius every vertex is within range of some common apex, so the (unboundedly-many-dimensions)
+  // complex is a cone from that point on and contributes no further homology (Ripser paper, p. 412) -- real
+  // Ripser uses this exact quantity (enclosing_radius) as its own default threshold, routinely alongside a
+  // bounded dim_max, so this is not a truncation reserved for the unbounded-dimension case. Pass
+  // Double.PositiveInfinity explicitly for the old always-unbounded behavior. See CLAUDE.md/
+  // WORKLOG-mst-and-perf.md for the full derivation, including the load-bearing check that this default is
+  // exactly the untruncated barcode restricted to [0, minimumEnclosingRadius] -- the same property any other
+  // explicit threshold already satisfies, not a special case.
+  maxFiltrationValue: Double = Double.NaN
 ) extends CofaceSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]():
+
+  protected val resolvedMaxFiltrationValue: Double =
+    if maxFiltrationValue.isNaN then metricSpace.minimumEnclosingRadius else maxFiltrationValue
 
   lazy val edges = for
     i <- metricSpace.elements
     j <- metricSpace.elements
-    if i < j
+    if i < j && metricSpace.distance(i, j) <= resolvedMaxFiltrationValue
   yield Simplex(i, j)
 
   var currentDimension: Int = 0
@@ -277,7 +290,11 @@ class EnumeratingCofaceSimplexStream(
     */
   override val filtrationOrdering: Ordering[Simplex[Int]] = new Ordering[Simplex[Int]]:
     def compare(x: Simplex[Int], y: Simplex[Int]): Int =
-      val tieBreak: Int =
+      // lazy: simplexIndexing sorts a list internally (see SimplexIndexing.apply), so this must not run
+      // when the filtration-value comparison below already decides the result -- a real, profiler-confirmed
+      // cost (see sortedByFiltration's own doc and CLAUDE.md) on every PriorityQueue/SortedMap comparison
+      // this ordering backs, not just during a sort.
+      lazy val tieBreak: Int =
         Ordering.Int.compare(x.size, y.size) match
           case 0  => Ordering.Int.compare(simplexIndexing(x), simplexIndexing(y))
           case dc => dc
@@ -291,6 +308,47 @@ class EnumeratingCofaceSimplexStream(
 
   lazy val simplexIndexing: SimplexIndexing = SimplexIndexing(metricSpace.size)
 
+  /** Sorts `cells` by `filtrationOrdering.reverse` -- semantically identical to `.sorted(using
+    * filtrationOrdering.reverse)`, but memoizes each cell's filtrationValue/simplexIndexing for the duration of this
+    * one call instead of letting TimSort's O(m log m) comparisons each recompute both from scratch. Confirmed via
+    * jstack sampling during EngineComparisonBenchmarkSpec (see CLAUDE.md) to be the dominant cost of materializing a
+    * dimension's bucket: `MaximumDistanceFiltrationValue.apply` is O(d^2) with SortedSet/List allocation, and
+    * `simplexIndexing`'s tie-break sorts a list -- both pure, side-effect-free functions of the cell alone, so caching
+    * them for this one sort changes nothing about the resulting order, only how many times each is computed. The cache
+    * is local to this call, not stored on the stream instance, so it stays bounded to one dimension's bucket and never
+    * grows across the stream's lifetime -- deliberately NOT a stream-lifetime filtrationValue cache like
+    * `RipserCohomologyContext.memoizeFiltrationValue`, which the project lead specifically declined to default on
+    * there, for memory-frugality reasons that apply here too (see CLAUDE.md). This does not touch `filtrationOrdering`
+    * itself or its tie-break semantics -- it delegates to the exact same compare logic above, just memoized, so it
+    * cannot silently diverge from it.
+    */
+  protected def sortedByFiltration(cells: IterableOnce[Simplex[Int]]): Vector[Simplex[Int]] =
+    val fvCache = mutable.HashMap.empty[Simplex[Int], Option[Double]]
+    val ixCache = mutable.HashMap.empty[Simplex[Int], Int]
+    def fv(s: Simplex[Int]): Option[Double] = fvCache.getOrElseUpdate(s, filtrationValue.lift(s))
+    def ix(s: Simplex[Int]): Int = ixCache.getOrElseUpdate(s, simplexIndexing(s))
+    val memoOrdering: Ordering[Simplex[Int]] = new Ordering[Simplex[Int]]:
+      def compare(x: Simplex[Int], y: Simplex[Int]): Int =
+        lazy val tieBreak: Int =
+          Ordering.Int.compare(x.size, y.size) match
+            case 0  => Ordering.Int.compare(ix(x), ix(y))
+            case dc => dc
+        (fv(x), fv(y)) match
+          case (Some(a), Some(b)) =>
+            java.lang.Double.compare(b, a) match
+              case 0  => tieBreak
+              case fc => fc
+          case _ => tieBreak
+    cells.iterator.toVector.sorted(using memoOrdering.reverse)
+
+  /** A candidate is kept iff both the caller's own `keepCriterion` AND the threshold accept it -- one place deciding
+    * "is this cell kept," per `sortedByFiltration`'s own note about not duplicating filtration-value lookups across
+    * independent filters.
+    */
+  protected def keptByThresholdAndCriterion(spx: Simplex[Int]): Boolean =
+    keepCriterion.applyOrElse(spx, (_: Simplex[Int]) => true) &&
+      filtrationValue.applyOrElse(spx, (_: Simplex[Int]) => Double.PositiveInfinity) <= resolvedMaxFiltrationValue
+
   // Bounded at metricSpace.size (a d-simplex needs d+1 distinct vertices, and there are none beyond that): a
   // real bound, not just a defensive one -- StratifiedCellStream's default .iterator relies on isDefinedAt
   // eventually staying false, and BinomialCoefficient.value(metricSpace.size, d + 1) throws outright for
@@ -298,23 +356,24 @@ class EnumeratingCofaceSimplexStream(
   // .iterator hangs / eventually crashes" bug (see StratifiedCellStream's doc).
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case 0                                   => metricSpace.elements.map(v => Simplex(v)).iterator
-    case 1                                   => edges.toSeq.sorted(using filtrationOrdering.reverse).iterator
+    case 1                                   => sortedByFiltration(edges).iterator
     case d if d >= 0 && d < metricSpace.size =>
       // first, generate all simplices of this dimension
-      (0 until BinomialCoefficient.value(metricSpace.size, d + 1).toInt).toSeq
-        .flatMap { ix =>
-          Some(simplexIndexing(ix, d + 1)).filter(keepCriterion.applyOrElse(_, _ => true))
-        }
-        .sorted(using filtrationOrdering.reverse)
-        .iterator
+      sortedByFiltration(
+        (0 until BinomialCoefficient.value(metricSpace.size, d + 1).toInt).toSeq
+          .flatMap { ix =>
+            Some(simplexIndexing(ix, d + 1)).filter(keptByThresholdAndCriterion)
+          }
+      ).iterator
   }
 
 class RipserCofaceSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ =>
     true
-  }
-) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion):
+  },
+  maxFiltrationValue: Double = Double.NaN
+) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion, maxFiltrationValue):
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case 0 =>
       currentDimensionCache = metricSpace.elements.map(v => Simplex(v)).to(immutable.Queue)
@@ -326,28 +385,30 @@ class RipserCofaceSimplexStream(
     case d if d >= 1 && d < metricSpace.size =>
       if currentDimension != d - 1 then
         // we don't have a good cache, just generate entire previous dimension and deal with it
-        lastDimensionCache = (0 until BinomialCoefficient.value(metricSpace.size, d).toInt).toSeq
-          .flatMap { ix =>
-            Some(simplexIndexing(ix, d)).filter(keepCriterion.applyOrElse(_, _ => true))
-          }
-          .sorted(using filtrationOrdering.reverse)
+        lastDimensionCache = sortedByFiltration(
+          (0 until BinomialCoefficient.value(metricSpace.size, d).toInt).toSeq
+            .flatMap { ix =>
+              Some(simplexIndexing(ix, d)).filter(keptByThresholdAndCriterion)
+            }
+        )
       else lastDimensionCache = currentDimensionCache.toIndexedSeq
       // now we have a known good lastDimensionCache
-      currentDimensionCache = (for
-        spx <- lastDimensionCache
-        i <- metricSpace.elements.filter(j => j < spx.min)
-        newSpx: Simplex[Int] = spx + i
-        if keepCriterion.applyOrElse(newSpx, _ => false)
-      yield newSpx)
-        .sorted(using filtrationOrdering.reverse)
-        .to(immutable.Queue) // we _would_ want to avoid creating the entire thing and sort it
+      currentDimensionCache = sortedByFiltration(
+        for
+          spx <- lastDimensionCache
+          i <- metricSpace.elements.filter(j => j < spx.min)
+          newSpx: Simplex[Int] = spx + i
+          if keptByThresholdAndCriterion(newSpx)
+        yield newSpx
+      ).to(immutable.Queue) // we _would_ want to avoid creating the entire thing and sort it
       currentDimensionCache.iterator
   }
 
 class InorderCofaceSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
-  keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
-) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion):
+  keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
+  maxFiltrationValue: Double = Double.NaN
+) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion, maxFiltrationValue):
   def inOrderCofaceIterator(spx: Simplex[Int]): Iterator[Simplex[Int]] =
     if spx.isEmpty then metricSpace.elements.iterator.map(s => Simplex(s))
     else
@@ -387,7 +448,7 @@ class InorderCofaceSimplexStream(
       lastDimensionCache = IndexedSeq.empty
       currentDimensionCache.iterator
     case 1 =>
-      currentDimensionCache = edges.toSeq.sorted(using filtrationOrdering.reverse).to(immutable.Queue)
+      currentDimensionCache = sortedByFiltration(edges).to(immutable.Queue)
       currentDimension = 1
       lastDimensionCache = metricSpace.elements.map(v => Simplex(v)).toIndexedSeq
       currentDimensionCache.iterator
@@ -396,11 +457,12 @@ class InorderCofaceSimplexStream(
     case d if d >= 2 && d < metricSpace.size =>
       if currentDimension != d - 1 then
         // we don't have a good cache, just generate entire previous dimension and deal with it
-        lastDimensionCache = (0 until BinomialCoefficient.value(metricSpace.size, d).toInt).toSeq
-          .flatMap { ix =>
-            Some(simplexIndexing(ix, d)).filter(keepCriterion.applyOrElse(_, _ => true))
-          }
-          .sorted(using filtrationOrdering.reverse)
+        lastDimensionCache = sortedByFiltration(
+          (0 until BinomialCoefficient.value(metricSpace.size, d).toInt).toSeq
+            .flatMap { ix =>
+              Some(simplexIndexing(ix, d)).filter(keptByThresholdAndCriterion)
+            }
+        )
       else lastDimensionCache = currentDimensionCache.toIndexedSeq
       // now we have a known good lastDimensionCache
       currentDimensionCache = immutable.Queue.empty
@@ -408,7 +470,10 @@ class InorderCofaceSimplexStream(
       for
         spx <- lastDimensionCache.iterator
         newSpx <- inOrderCofaceIterator(spx)
-        if keepCriterion.applyOrElse(newSpx, _ => false)
+        // inOrderCofaceIterator's own alpha/alpha0/alpha1 logic is purely about the VR flag condition
+        // relative to spx's own faces, with no awareness of a global threshold -- filtered here, same as
+        // keepCriterion always was.
+        if keptByThresholdAndCriterion(newSpx)
       yield
         currentDimensionCache = currentDimensionCache appended newSpx
         newSpx
@@ -461,7 +526,19 @@ class InorderCofaceSimplexStream(
 class IncrementalVietorisRipsSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
   val maxDimension: Int,
-  val maxFiltrationValue: Double = Double.PositiveInfinity,
+  // NaN is a sentinel for "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below --
+  // NOT a literal default of metricSpace.minimumEnclosingRadius, because Scala 3 only allows a default value
+  // to reference an EARLIER parameter LIST, not an earlier parameter within the same list, and splitting this
+  // into a second, curried parameter list would require every existing call site (including plain
+  // `IncrementalVietorisRipsSimplexStream(metricSpace, maxDim)` ones) to add an explicit trailing `()` --
+  // confirmed: Scala does not let a call site omit a later parameter list just because every parameter in it
+  // has a default. Beyond metricSpace.minimumEnclosingRadius, every vertex is within range of every other, so
+  // the VR complex is a cone from that point on -- contractible, contributing no further homology (Ripser
+  // paper, p. 412; FiniteMetricSpace.minimumEnclosingRadius's own doc). Defaulting here rather than +Infinity
+  // is a free optimization, NOT a truncation: unlike a genuine sparse-Rips cutoff (which drops real bars, see
+  // RipserCohomologyContext's maxFiltrationValue), this default provably computes the exact same barcode over
+  // fewer simplices -- pass Double.PositiveInfinity explicitly to opt out.
+  maxFiltrationValue: Double = Double.NaN,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
   /** Exposed purely so `IncrementalVietorisRipsSpec` can pin that `L` is a non-load-bearing optimization on top of
     * Table-Lookup's definition: disabling it must never change `byDimension`, only how it gets computed.
@@ -469,8 +546,11 @@ class IncrementalVietorisRipsSimplexStream(
   useLargestNeighborBound: Boolean = true
 ) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion):
 
+  private val resolvedMaxFiltrationValue: Double =
+    if maxFiltrationValue.isNaN then metricSpace.minimumEnclosingRadius else maxFiltrationValue
+
   private def isEdge(i: Int, j: Int): Boolean =
-    metricSpace.distance(i, j) <= maxFiltrationValue
+    metricSpace.distance(i, j) <= resolvedMaxFiltrationValue
 
   /** Algorithm 1, Upper-Neighbors(G, v). */
   private def upperNeighbors(v: Int): SortedSet[Int] =
@@ -508,7 +588,7 @@ class IncrementalVietorisRipsSimplexStream(
   private lazy val byDimension: IndexedSeq[Seq[Simplex[Int]]] =
     val buckets = IndexedSeq.fill(maxDimension + 1)(mutable.ArrayBuffer.empty[Simplex[Int]])
     for u <- metricSpace.elements do addCofaces(Simplex(u), upperNeighbors(u), buckets)
-    buckets.map(_.toSeq.sorted(using filtrationOrdering.reverse))
+    buckets.map(b => sortedByFiltration(b.toSeq))
 
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case d if d >= 0 && d <= maxDimension => byDimension(d).iterator

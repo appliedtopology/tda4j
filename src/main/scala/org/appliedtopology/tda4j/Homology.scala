@@ -440,6 +440,10 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
     var currentIterator: collection.BufferedIterator[Simplex[VertexT]],
     barcode: mutable.Map[Int, immutable.Queue[(Double, Double, Chain[Simplex[VertexT], CoefficientT])]]
   ):
+    // Must be summoned before chainRM below, and must shadow the generic lexicographic
+    // Simplex is OrderedCell ordering -- see CellularHomologyContext's class doc for why a stale,
+    // filtration-blind ordering baked into chain arithmetic is a real, previously-confirmed bug class.
+    given Ordering[Simplex[VertexT]] = stream.filtrationOrdering
     val chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]
     import chainRM.*
 
@@ -447,49 +451,56 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
     cycles.addAll(stream.iterateDimension(0).map(cell => cell -> Chain(cell)))
     cyclesBornBy.addAll(cycles.map((cell, chain) => cell -> cell))
 
-    // secondly, we can read off homology completely from a minimal spanning tree
-    val kruskal = new Kruskal[Simplex[VertexT]](
-      cycles.keys.toSeq,
-      { (x: Simplex[VertexT], y: Simplex[VertexT]) =>
-        stream.filtrationValue(x | y)
-      }
-    )(using stream.filtrationOrdering)
-
-    kruskal.mstIterator.foreach { (src, tgt) =>
-      val edge: Simplex[VertexT] = src | tgt
-
-      // the edge src -- tgt will connect src to tgt thus removing one of the cycles
-      val dEdge: Chain[Simplex[VertexT], CoefficientT] = Chain.from(edge.boundary)
-      val dyingVertex = dEdge.leadingCell.get
-      boundaries.addOne(dEdge.leadingCell.get -> dEdge)
-      coboundaries.addOne(dyingVertex, dEdge)
-      barcode(0) =
-        barcode(0).appended((stream.filtrationValue(dyingVertex), stream.filtrationValue(edge), cycles(dyingVertex)))
-      cycles.remove(dyingVertex)
-    }
-
-    kruskal.cyclesIterator.foreach { (src, tgt) =>
-      val edge: Simplex[VertexT] = src | tgt
-
-      // the edge src -- tgt will connect src to tgt thus closing a loop
-      val dEdge: Chain[Simplex[VertexT], CoefficientT] = Chain.from(edge.boundary)
-      // TODO is it worth it to have a more complex UnionFind that allows us to get the entire path along the MST?
-      val (reduced, reductionLog): (Chain[Simplex[VertexT], CoefficientT], Chain[Simplex[VertexT], CoefficientT]) =
-        Chain.reduceBy(dEdge, boundaries, Chain.empty)
+    // Secondly, dimension 0 and the births of dimension 1 can be read off directly: one pass over the
+    // stream's own dimension-1 cells, in filtration order (already guaranteed by the stream contract, so
+    // no separate sort is needed), each reduced through the exact same Chain.reduceBy primitive advanceOne
+    // uses for every other dimension. This is Kruskal's algorithm (a tree edge merges two components and
+    // kills the younger one's class; a non-tree edge births a new 1-cycle), but deliberately NOT routed
+    // through the Kruskal class: that class (a) reconstructs a complete graph from a pairwise distance
+    // function (wrong whenever the complex's 1-skeleton isn't complete -- alpha complexes, thresholded VR),
+    // and (b) computes its entire union-find result eagerly at construction time, which discards which
+    // vertex was the open root AT THE TIME each specific edge was processed -- exactly what the elder rule
+    // needs. An earlier version of this method used Kruskal.mstIterator/.cyclesIterator directly and took
+    // dEdge.leadingCell.get (the edge's own two endpoints) as the dying vertex; that crashed with
+    // NoSuchElementException as soon as a second tree edge touched a vertex already killed by an earlier
+    // one in the same pass, because the true dying vertex after a cascade is the reduced pivot, not
+    // necessarily either of the edge's own two endpoints. Routing every edge through Chain.reduceBy against
+    // `boundaries` (exactly like advanceOne below) makes this provably the same computation as the general
+    // algorithm applied one dimension early, not a hand-rolled shortcut that could silently diverge from
+    // it -- see SimplicialHomologyByDimensionSpec for the cross-validation this now passes.
+    stream.iterateDimension.applyOrElse(1, (_: Int) => Iterator.empty).foreach { edge =>
       val fr = summon[CoefficientT is Field]
+      val dEdge: Chain[Simplex[VertexT], CoefficientT] = Chain.from(edge.boundary)
+      val (reduced, reductionLog) = Chain.reduceBy(dEdge, boundaries, Chain.empty)
       val coboundary: Chain[Simplex[VertexT], CoefficientT] =
         reductionLog.items.foldRight(fr.negate(fr.one) ⊠ Chain(edge)) { (item, acc) =>
           val (spx, coeff) = item
           if coboundaries.contains(spx) then acc + coeff ⊠ coboundaries(spx)
           else acc
         }
-      cycles(coboundary.leadingCell.get) = coboundary
-      cyclesBornBy(coboundary.leadingCell.get) = edge
+      if reduced.isZero() then
+        // this edge closes a loop: a new 1-dimensional cycle is born
+        cycles(coboundary.leadingCell.get) = coboundary
+        cyclesBornBy(coboundary.leadingCell.get) = edge
+      else
+        // this edge connects two previously-separate components: the younger one's H0 class dies
+        val dyingVertex = reduced.leadingCell.get
+        boundaries(dyingVertex) = reduced
+        coboundaries(dyingVertex) = coboundary
+        barcode(0) = barcode
+          .getOrElse(0, immutable.Queue.empty)
+          .appended((stream.filtrationValue(dyingVertex), stream.filtrationValue(edge), cycles(dyingVertex)))
+        cycles.remove(dyingVertex)
     }
 
-    // setup is done, we should be ready to start dimension 2
+    // Setup is done, we should be ready to start dimension 2. `current` must stay at "nothing real
+    // processed yet" (stream.smallest, i.e. -Infinity), not +Infinity: advanceTo's `f > current` guard
+    // below needs this to be less than any real query value `f` (including its own +Infinity default),
+    // or the very first advanceTo call would never enter its loop at all -- a real, previously-confirmed
+    // bug found via SimplicialHomologyByDimensionSpec's cross-validation (dimension-2+ cells were never
+    // processed, so no bar above dimension 1 was ever recorded).
     currentDim = 1
-    current = Double.PositiveInfinity
+    current = stream.smallest
 
     def advanceOne(): Unit =
       if currentIterator.hasNext then
@@ -526,8 +537,17 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
               stream.filtrationValue.orElse(_ => Double.NegativeInfinity).compose(cyclesBornBy)(spx)
           val upper: Double =
             stream.filtrationValue.orElse(_ => Double.PositiveInfinity)(sigma)
+          // A bar's dimension is the dimension of the CLASS being closed (the killed cycle, one
+          // dimension below sigma), not sigma's own dimension -- matching CellularHomologyContext's
+          // barcode.append((pivot.dim, ...)). Using currentDim (= sigma.dim) here was a real,
+          // previously-confirmed bug: every finite bar above dimension 0 was recorded one dimension too
+          // high (e.g. a killed 1-cycle filed under dimension 2), caught by
+          // SimplicialHomologyByDimensionSpec's cross-validation against the hand-verified fixtures.
+          val barDim: Int = cycleBasis.leadingCell.map(_.dim).getOrElse(currentDim - 1)
 
-          barcode(currentDim) = barcode(currentDim).appended((lower, upper, representativeCycle))
+          barcode(barDim) = barcode
+            .getOrElse(barDim, immutable.Queue.empty)
+            .appended((lower, upper, representativeCycle))
         current = stream.filtrationValue.lift(sigma).getOrElse(stream.smallest)
       else
         currentDim += 1
@@ -536,10 +556,16 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
           .buffered
         current = Double.NegativeInfinity
 
+    // Deliberately does NOT gate on currentIterator.hasNext: currentIterator starts out empty (the
+    // Iterator.empty.buffered passed by persistentHomology below), and becoming empty mid-walk is the
+    // NORMAL signal advanceOne uses to move to the next dimension, not a "nothing left at all" signal --
+    // gating on it here made the very first call (and any call that lands on an empty dimension) a no-op,
+    // silently skipping every cell from that point on. `currentDim <= dim` alone is the correct bound: once
+    // currentDim exceeds the caller's target, further advanceOne calls would only ever hit empty iterators
+    // (iterateDimension.applyOrElse degrades to Iterator.empty past the stream's real max), so the loop
+    // still terminates even though current gets reset to -Infinity on every dimension change.
     def advanceTo(dim: Int, f: Double = Double.PositiveInfinity): Unit =
-      while currentIterator.hasNext &&
-        currentDim <= dim &&
-        f > current
+      while currentDim <= dim && f > current
       do advanceOne()
 
   def persistentHomology(stream: => StratifiedCellStream[Simplex[VertexT], Double]): HomologyState =
@@ -600,27 +626,48 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
   * no-op, not just an empirically-checked one. Not intended as a user-facing tuning knob outside benchmarking; there is
   * no known case where `false` is the right choice for real use.
   */
-/** `maxFiltrationValue` (default `Double.PositiveInfinity`, matching `RipserStreamBase`'s existing sparse-Rips
-  * convention elsewhere in this codebase, NOT `AlphaShapeDQP`'s always-untruncated one -- alpha shapes and this Ripser
-  * reproduction are different sections of the library with minimal interaction, and there's no reason to force them to
-  * agree on this) and `memoizeFiltrationValue` (default `false`) are both explicit, approved architectural choices from
-  * a second session -- see WORKLOG-lazy-enumeration.md's "Session 2" section for the full derivation. In short:
-  * Ripser's own historical design goal was MEMORY frugality (the classic bottleneck for persistent homology
-  * implementations before Ripser), not raw speed -- the speedups were a side effect of that, not the primary goal. A
-  * global cache of every filtration value ever touched runs directly against that goal on large complexes, so it's
-  * opt-in here, not the default. The actual replacement for it is `insertionDiameter`'s incremental diameter formula
-  * (below), which ELIMINATES the O(d^2) `MaximumDistanceFiltrationValue` recomputation for cofacet enumeration
-  * entirely, rather than paying for it once and caching the answer -- strictly better than a cache on every axis that
-  * matters here (no growing memory footprint, no hashing, no first-computation cost to amortize).
+/** `maxFiltrationValue` now defaults to `metricSpace.minimumEnclosingRadius`, not `Double.PositiveInfinity` -- a change
+  * from the "explicit, approved architectural choice" of a second session (see WORKLOG-lazy-enumeration.md's "Session
+  * 2" section for that original derivation, and WORKLOG-mst-and-perf.md for this one). This is NOT a reversal of that
+  * session's reasoning about sparse-Rips truncation being a real, bar-dropping semantic choice that shouldn't silently
+  * default on (that reasoning still holds for any FINITE threshold below the enclosing radius) -- it's a different,
+  * narrower optimization layered underneath it: beyond `minimumEnclosingRadius`, every vertex is within range of every
+  * other, so the complex is a cone from that point on and provably contributes no further homology (Ripser paper, p.
+  * 412). Cutting there computes the exact same barcode over fewer simplices -- confirmed empirically against
+  * `RipserCohomologySpec`'s existing "thresholded barcode = untruncated barcode restricted to [0, t]" test machinery,
+  * not just asserted -- unlike a genuine finite `maxFiltrationValue` below the enclosing radius, which DOES drop real
+  * bars and remains an explicit, deliberate truncation the caller opts into. Still matches `RipserStreamBase`'s
+  * sparse-Rips convention, still NOT `AlphaShapeDQP`'s always-untruncated one (alpha shapes and this Ripser
+  * reproduction remain different sections of the library with minimal interaction). Pass `Double.PositiveInfinity`
+  * explicitly for the old always-unbounded behavior. `memoizeFiltrationValue` (default `false`) is unaffected by this
+  * change -- see the original derivation below for why it stays opt-in: Ripser's own historical design goal was MEMORY
+  * frugality (the classic bottleneck for persistent homology implementations before Ripser), not raw speed -- the
+  * speedups were a side effect of that, not the primary goal. A global cache of every filtration value ever touched
+  * runs directly against that goal on large complexes, so it's opt-in here, not the default. The actual replacement for
+  * it is `insertionDiameter`'s incremental diameter formula (below), which ELIMINATES the O(d^2)
+  * `MaximumDistanceFiltrationValue` recomputation for cofacet enumeration entirely, rather than paying for it once and
+  * caching the answer -- strictly better than a cache on every axis that matters here (no growing memory footprint, no
+  * hashing, no first-computation cost to amortize).
   */
 class RipserCohomologyContext[CoefficientT: Field](
   metricSpace: FiniteMetricSpace[Int],
   maxDimension: Int,
   useApparentPairs: Boolean = true,
-  maxFiltrationValue: Double = Double.PositiveInfinity,
+  // NaN is a sentinel for "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below --
+  // NOT a literal default of metricSpace.minimumEnclosingRadius, because Scala 3 only allows a default value
+  // to reference an EARLIER parameter LIST, not an earlier parameter within the same list, and splitting this
+  // into a second, curried parameter list would require every existing call site (including plain
+  // `RipserCohomologyContext(metricSpace, maxDim)` ones) to add an explicit trailing `()` -- confirmed: Scala
+  // does not let a call site omit a later parameter list just because every parameter in it has a default.
+  // See the class doc above this class for why the resolved default itself changed from
+  // Double.PositiveInfinity to metricSpace.minimumEnclosingRadius.
+  maxFiltrationValue: Double = Double.NaN,
   memoizeFiltrationValue: Boolean = false
 ):
   import barcode.*
+
+  private val resolvedMaxFiltrationValue: Double =
+    if maxFiltrationValue.isNaN then metricSpace.minimumEnclosingRadius else maxFiltrationValue
 
   val si: SimplexIndexing = SimplexIndexing(metricSpace.size)
 
@@ -728,7 +775,7 @@ class RipserCohomologyContext[CoefficientT: Field](
         .map { v =>
           DiameterSimplex(insertionDiameter(sigma.simplex, sigma.diameter, v), (sigma.simplex.underlying + v).asSimplex)
         }
-        .filter(_.diameter <= maxFiltrationValue)
+        .filter(_.diameter <= resolvedMaxFiltrationValue)
 
   /** Coboundary of sigma, implicitly restricted to the truncated (maxDimension-skeleton,
     * maxFiltrationValue-thresholded) complex: empty at `sigma.dim == maxDimension` by construction (no cofacets are
@@ -749,7 +796,7 @@ class RipserCohomologyContext[CoefficientT: Field](
           .flatMap { cofacetIdx =>
             val tau = si(cofacetIdx, sigma.size + 1)
             val inserted = (tau.underlying diff sigma.underlying).head
-            if insertionDiameter(sigma, sigmaFv, inserted) > maxFiltrationValue then None
+            if insertionDiameter(sigma, sigmaFv, inserted) > resolvedMaxFiltrationValue then None
             else
               val position = sigma.underlying.count(_ < inserted)
               val sign = if position % 2 == 0 then fr.one else fr.negate(fr.one)

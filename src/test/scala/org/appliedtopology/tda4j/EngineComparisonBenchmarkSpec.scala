@@ -70,6 +70,13 @@ import scala.util.Random
   * `LimitedCofaceSimplexStream` only accepts the narrower `CofaceSimplexStream` interface that alpha streams don't
   * implement -- see `SimplexStream.scala`. `IncrementalVietorisRipsSimplexStream` already takes `maxDimension` as a
   * constructor argument and so skips this wrapper entirely.
+  *
+  * '''All five VR constructions now default `maxFiltrationValue` to `metricSpace.minimumEnclosingRadius`, not
+  * `+Infinity`''' (see CLAUDE.md/WORKLOG-mst-and-perf.md) -- none of the constructions below pass it explicitly, so
+  * every VR row here reflects that default, not the previously-complete flag complex. This changes the `cells`/`bars`
+  * numbers (smaller complex) but not the point of the benchmark: comparing engines/constructions against each other
+  * under whatever complex actually gets built. Alpha rows are unaffected (alpha construction was never touched by this
+  * change).
   */
 class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specification:
   "Engine x construction comparison benchmark" >> {

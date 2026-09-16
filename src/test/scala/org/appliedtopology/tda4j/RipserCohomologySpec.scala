@@ -20,14 +20,33 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
   private def toTuple(bar: PersistenceBar[Double, Chain[Simplex[Int], Double]]): (Int, Double, Double) =
     (bar.dim, endpointValue(bar.lower), endpointValue(bar.upper))
 
+  // Explicit +Infinity: EnumeratingCofaceSimplexStream now also defaults to metricSpace.minimumEnclosingRadius
+  // (see CLAUDE.md/WORKLOG-mst-and-perf.md), and every caller of naiveBars in this file pairs it with
+  // cohomologyBarsUnthresholded -- both sides need to be the same, genuinely untruncated filtration.
   private def naiveBars(metricSpace: FiniteMetricSpace[Int], maxDim: Int): List[(Int, Double, Double)] =
-    val vrStream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), maxDim)
+    val vrStream = LimitedCofaceSimplexStream(
+      EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Double.PositiveInfinity),
+      maxDim
+    )
     SimplicialHomologyContext[Int, Double, Double]()
       .persistentHomology(vrStream)
       .diagramAt(Double.PositiveInfinity)
 
   private def cohomologyBars(metricSpace: FiniteMetricSpace[Int], maxDim: Int): List[(Int, Double, Double)] =
     RipserCohomologyContext[Double](metricSpace, maxDim).persistentCohomology().map(toTuple)
+
+  // `naiveBars` builds an EnumeratingCofaceSimplexStream, which has no threshold parameter at all (still
+  // unbounded regardless of RipserCohomologyContext's own default) -- so any test comparing the two needs
+  // BOTH sides untruncated, or it's comparing two different filtrations rather than cross-validating one
+  // reduction algorithm against another. Used wherever the naive-engine comparison is the point, not the
+  // minimumEnclosingRadius default itself (that default has its own dedicated check further down).
+  private def cohomologyBarsUnthresholded(
+    metricSpace: FiniteMetricSpace[Int],
+    maxDim: Int
+  ): List[(Int, Double, Double)] =
+    RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = Double.PositiveInfinity)
+      .persistentCohomology()
+      .map(toTuple)
 
   private def totalSimplices(n: Int, maxDim: Int): Int =
     (0 to maxDim).map(d => binomial(n, d + 1)).sum
@@ -43,7 +62,15 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
     // maxDimension = 1: vertices + edges only, no triangle. Elementary graph theory: cycle rank =
     // edges - vertices + components = 3 - 3 + 1 = 1. A first draft that skipped clearing reported 3
     // (every edge independently "essential").
-    val bars = RipserCohomologyContext[Double](threePointLine, 1).persistentCohomology().map(toTuple)
+    // maxFiltrationValue = +Infinity, explicitly: this test wants the raw, unthresholded graph's own cycle
+    // structure (see comment above), which is smaller than threePointLine's own minimumEnclosingRadius (2.0
+    // -- the longest edge, {0,2} at distance 3.0, needed for the 3-cycle here, is excluded by the enclosing-
+    // radius default at maxDim=1: with no triangle available to kill it, real Ripser has this same property
+    // -- see WORKLOG-mst-and-perf.md).
+    val bars =
+      RipserCohomologyContext[Double](threePointLine, 1, maxFiltrationValue = Double.PositiveInfinity)
+        .persistentCohomology()
+        .map(toTuple)
     bars must containTheSameElementsAs(
       List(
         (0, 0.0, 1.0),
@@ -59,7 +86,13 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
     // own filtration value -- a genuine zero-persistence pair (also the apparent-pairs shortcut's own
     // canonical example, see `zeroApparentCofacet`'s doc), which must still be EMITTED, not dropped. A
     // first draft that skipped clearing reported 2 spurious essential H^1 classes instead of 0.
-    val bars = RipserCohomologyContext[Double](threePointLine, 2).persistentCohomology().map(toTuple)
+    // maxFiltrationValue = +Infinity, explicitly: {0,2} and the triangle are both born at 3.0, past
+    // threePointLine's own minimumEnclosingRadius (2.0) -- the default would exclude both entirely rather
+    // than emit the zero-length pair this test exists to check.
+    val bars =
+      RipserCohomologyContext[Double](threePointLine, 2, maxFiltrationValue = Double.PositiveInfinity)
+        .persistentCohomology()
+        .map(toTuple)
     bars must containTheSameElementsAs(
       List(
         (0, 0.0, 1.0),
@@ -73,7 +106,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
   "Cohomology's finite bars agree with the naive homology engine on the calibration example" >> {
     val maxDim = 2
     val naive = naiveBars(threePointLine, maxDim).filter { case (_, b, d) => b < d }
-    val cohomology = cohomologyBars(threePointLine, maxDim).filter { case (_, b, d) => b < d }
+    val cohomology = cohomologyBarsUnthresholded(threePointLine, maxDim).filter { case (_, b, d) => b < d }
     cohomology must containTheSameElementsAs(naive)
   }
 
@@ -82,7 +115,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       val metricSpace = EuclideanMetricSpace(points)
       val maxDim = 2
       val naive = naiveBars(metricSpace, maxDim).filter { case (_, b, d) => b < d }
-      val cohomology = cohomologyBars(metricSpace, maxDim).filter { case (_, b, d) => b < d }
+      val cohomology = cohomologyBarsUnthresholded(metricSpace, maxDim).filter { case (_, b, d) => b < d }
       cohomology must containTheSameElementsAs(naive)
     }
 
@@ -117,7 +150,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
   "Cohomology's finite bars agree with the naive engine on the apparent-pair singleton-vs-full-chain regression example" >> {
     val maxDim = 2
     val naive = naiveBars(apparentPairCollisionCloud, maxDim).filter { case (_, b, d) => b < d }
-    val cohomology = cohomologyBars(apparentPairCollisionCloud, maxDim).filter { case (_, b, d) => b < d }
+    val cohomology = cohomologyBarsUnthresholded(apparentPairCollisionCloud, maxDim).filter { case (_, b, d) => b < d }
     cohomology must containTheSameElementsAs(naive)
   }
 
@@ -161,8 +194,13 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
     forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
       val metricSpace = EuclideanMetricSpace(points)
       val maxDim = 2
-      val bars = cohomologyBars(metricSpace, maxDim)
-      HomologyFixtures.totalBarsAccountForAllCells(bars, totalSimplices(metricSpace.size, maxDim)) must beTrue
+      // NOT totalSimplices(n, maxDim) (the binomial formula): that assumes every combinatorially-possible
+      // subset exists, true only at maxFiltrationValue = +Infinity. The default now thresholds at
+      // metricSpace.minimumEnclosingRadius, so ctx.totalSimplexCount (the count of what was actually
+      // assembled) is the only correct total here too, same as the explicit-threshold test below.
+      val ctx = RipserCohomologyContext[Double](metricSpace, maxDim)
+      val bars = ctx.persistentCohomology().map(toTuple)
+      HomologyFixtures.totalBarsAccountForAllCells(bars, ctx.totalSimplexCount) must beTrue
     }
 
   // Session 2 (sparse Rips / maxFiltrationValue): picks t as the midpoint of two ADJACENT entries in the
@@ -199,7 +237,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       val metricSpace = EuclideanMetricSpace(points)
       val maxDim = 2
       val t = midThreshold(metricSpace)
-      val untruncated = cohomologyBars(metricSpace, maxDim)
+      val untruncated = cohomologyBarsUnthresholded(metricSpace, maxDim)
       val thresholded = RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = t)
         .persistentCohomology()
         .map(toTuple)
@@ -216,17 +254,43 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
         RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = maxPairwiseDistance + 1.0)
           .persistentCohomology()
           .map(toTuple)
-      thresholded must containTheSameElementsAs(cohomologyBars(metricSpace, maxDim))
+      thresholded must containTheSameElementsAs(cohomologyBarsUnthresholded(metricSpace, maxDim))
     }
 
-  "maxFiltrationValue defaults to +Infinity, and passing it explicitly changes nothing" >> {
+  "maxFiltrationValue defaults to metricSpace.minimumEnclosingRadius, and passing it explicitly changes nothing" >> {
     val defaultBars = cohomologyBars(apparentPairCollisionCloud, 2)
     val explicitBars =
-      RipserCohomologyContext[Double](apparentPairCollisionCloud, 2, maxFiltrationValue = Double.PositiveInfinity)
-        .persistentCohomology()
-        .map(toTuple)
+      RipserCohomologyContext[Double](
+        apparentPairCollisionCloud,
+        2,
+        maxFiltrationValue = apparentPairCollisionCloud.minimumEnclosingRadius
+      ).persistentCohomology().map(toTuple)
     explicitBars must containTheSameElementsAs(defaultBars)
   }
+
+  // The load-bearing check for the minimumEnclosingRadius default (see CLAUDE.md/WORKLOG-mst-and-perf.md):
+  // is it just another threshold value, subject to the SAME restrictToThreshold oracle as any other t, or
+  // does it behave differently? Beyond minimumEnclosingRadius every vertex is within range of some common
+  // apex, so the (unboundedly-many-dimensions) complex is a cone from that point on -- but this codebase's
+  // maxDim is always finite, and a bounded maxDim can still see NEW dimension-maxDim simplices born past
+  // minimumEnclosingRadius with nothing available to kill them (no maxDim+1 simplex exists to pair against).
+  // Real Ripser has this exact same property (enclosing_radius as the default threshold, used with routinely
+  // bounded dim_max) -- this is not a maxDim=2-specific safety margin, it's how the optimization has always
+  // worked: it truncates the FILTRATION the same way any other maxFiltrationValue does, dropping whatever's
+  // born after the cutoff, essential-izing whatever straddles it. Confirmed here against maxDim=2 specifically
+  // (not just asserted from the general argument) since that's what every other test in this file uses.
+  "The minimumEnclosingRadius default is exactly the untruncated barcode restricted to [0, minimumEnclosingRadius]" >>
+    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
+      val metricSpace = EuclideanMetricSpace(points)
+      val maxDim = 2
+      val t = metricSpace.minimumEnclosingRadius
+      val untruncated =
+        RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = Double.PositiveInfinity)
+          .persistentCohomology()
+          .map(toTuple)
+      val defaulted = cohomologyBars(metricSpace, maxDim) // no maxFiltrationValue given -- exercises the default
+      defaulted must containTheSameElementsAs(restrictToThreshold(untruncated, t))
+    }
 
   "A threshold strictly between two pairwise distances excludes the longer edge and the triangle entirely" >> {
     // threePointLine: pairwise distances 1, 2, 3. At t=2.5 (strictly between 2 and 3), edge {0,2} and the

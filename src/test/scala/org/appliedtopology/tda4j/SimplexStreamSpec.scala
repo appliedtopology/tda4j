@@ -125,7 +125,10 @@ class CofaceSimplexStreamSpec extends mutable.Specification with org.specs2.Scal
     val metricSpace = EuclideanMetricSpace(
       Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.0, 1.0), Array(1.0, 1.0), Array(0.5, 0.5))
     )
-    val stream = EnumeratingCofaceSimplexStream(metricSpace)
+    // Explicit +Infinity: this test wants the complete complex (every combinatorially-possible subset), the
+    // premise the binomial-sum expectedTotal below assumes -- EnumeratingCofaceSimplexStream now defaults to
+    // metricSpace.minimumEnclosingRadius, which would exclude some subsets (see CLAUDE.md/WORKLOG-mst-and-perf.md).
+    val stream = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Double.PositiveInfinity)
     val expectedTotal = (0 until metricSpace.size).map(d => binomial(metricSpace.size, d + 1)).sum
     stream.iterator.size === expectedTotal
   }

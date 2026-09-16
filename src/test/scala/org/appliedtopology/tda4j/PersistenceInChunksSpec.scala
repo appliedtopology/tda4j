@@ -239,7 +239,14 @@ class PersistenceInChunksSpec extends mutable.Specification:
     import shc.{*, given}
 
     val threePointLine = EuclideanMetricSpace(Array(Array(0.0), Array(1.0), Array(3.0)))
-    val stream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(threePointLine), 1)
+    // Explicit +Infinity: this test wants the raw, unthresholded graph's own cycle structure. threePointLine's
+    // own minimumEnclosingRadius (2.0, from the middle point) is less than the longest edge {0,2} (3.0) needed
+    // for the 3-cycle here, and EnumeratingCofaceSimplexStream now defaults to that radius (see
+    // CLAUDE.md/WORKLOG-mst-and-perf.md).
+    val stream = LimitedCofaceSimplexStream(
+      EnumeratingCofaceSimplexStream(threePointLine, maxFiltrationValue = Double.PositiveInfinity),
+      1
+    )
     persistentHomology(stream).diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(
       List(
         (0, 0.0, 1.0),
@@ -255,7 +262,12 @@ class PersistenceInChunksSpec extends mutable.Specification:
     import shc.{*, given}
 
     val threePointLine = EuclideanMetricSpace(Array(Array(0.0), Array(1.0), Array(3.0)))
-    val stream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(threePointLine), 2)
+    // Explicit +Infinity -- see the "3-cycle graph" test above for why: {0,2} and the triangle are both born
+    // at 3.0, past threePointLine's own minimumEnclosingRadius (2.0).
+    val stream = LimitedCofaceSimplexStream(
+      EnumeratingCofaceSimplexStream(threePointLine, maxFiltrationValue = Double.PositiveInfinity),
+      2
+    )
     persistentHomology(stream).diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(
       List(
         (0, 0.0, 1.0),
