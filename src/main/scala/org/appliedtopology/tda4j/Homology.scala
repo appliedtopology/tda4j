@@ -209,8 +209,10 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
      */
 
     // build index map to support chunk boundary calculation.
-    // Note: stream.iterator (the default StratifiedCellStream impl) infinite-loops because it
-    // filters Iterator.from(0) with a finite predicate. Walk dimensions explicitly instead.
+    // Note: stream.iterator would walk the stream's own full natural bound (now that
+    // StratifiedCellStream's default .iterator is fixed, see its doc), which may be looser than the
+    // maxDim this context was asked for -- walk dimensions explicitly instead so maxDim is enforced
+    // regardless of what the stream itself would otherwise produce.
     val allCells: Vector[Simplex[VertexT]] =
       0.to(maxDim)
         .iterator
@@ -296,7 +298,19 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
             activeColumns(k) = false
             var isActive = false
             val Rk = R.getOrElse(k, Chain.empty)
-            Rk.items.iterator.takeWhile(_ => !isActive).foreach { case (i, _) =>
+            // Every row in Rk needs to be individually classified into activeRows (compress()/globalReduce
+            // later look each one up independently) -- this must be a full scan, not stop at the first
+            // active row. A `takeWhile(_ => !isActive)` short-circuit used to sit here: once any one row
+            // set isActive, every later row in the same chain was silently left unclassified, defaulting
+            // to "inactive" wherever activeRows is read. Changed to a full scan on general principle while
+            // root-causing a real, confirmed PersistenceInChunksContext bug (see eliminationFallback's own
+            // doc, and WORKLOG-benchmark-and-chunks-bug.md section 5, for the actual mechanism that was
+            // found and fixed) -- this specific change wasn't shown to be load-bearing for that bug by
+            // itself, but marking MORE rows active is the conservative direction to err in: an inactive row
+            // gets deleted outright by eliminationFallback (Chain(l) self-cancel), while an active row
+            // substitutes its killer's full column, so under-marking risks silently dropping real content
+            // and over-marking only costs an extra (still-correct) substitution.
+            Rk.items.iterator.foreach { case (i, _) =>
               if !cleared.contains(i) && !paired.contains(i) then
                 activeRows(i) = true
                 isActive = true
@@ -314,26 +328,51 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
 
       for k <- R.keys do markColumn(k)
 
+    // Shared by compress (Algorithm 4) and globalReduce (Algorithm 5): a cleared row substitutes its
+    // killer's own chain if active, else self-cancels ("compression" -- the row is provably irrelevant
+    // downstream); a paired row self-cancels if inactive, or is left alone (no killer exists for a paired
+    // cell, so there is nothing to substitute) if active -- an active paired row is a legitimate potential
+    // final pivot for Rk.
+    //
+    // globalReduce's own reduction (against `boundaries`, which only ever holds *cleared* pivots) can
+    // expose a *paired* cell as a new term partway through -- e.g. substituting a cleared cell's boundary
+    // can introduce one of ITS OWN non-pivot terms, and that term can be a cell already used as someone
+    // else's killer. Passing only `boundaries` there (no fallback) left such a term unhandled: it could
+    // survive as Rk's final leading term even though it was already `paired`, and recordPair then added it
+    // to `cleared` while still in `paired`, corrupting the pivot/pairing invariant. compress and
+    // globalReduce must therefore share this exact elimination rule, not just the same `boundaries` map --
+    // found via EngineComparisonBenchmarkSpec's filtrationOrdering regression tests, which (once the
+    // ordering bug itself was fixed) exposed this as a second, unrelated PersistenceInChunksContext bug
+    // reproducing even on the well-established EnumeratingCofaceSimplexStream (see CLAUDE.md): it silently
+    // dropped essential classes at a bounded maxDim whenever this cross-step gap was hit.
+    def eliminationFallback(l: Simplex[VertexT]): Option[Chain[Simplex[VertexT], CoefficientT]] =
+      if cleared.contains(l) then
+        if activeRows.getOrElse(l, false) then killer.get(l).map(j => R.getOrElse(j, Chain.empty))
+        else Some(Chain(l))
+      else if paired.contains(l) then
+        if activeRows.getOrElse(l, false) then None
+        else Some(Chain(l))
+      else None
+
     // Algorithm 4: global column compression from clear-and-compress paper.
     // The paper writes this over Z/2; over a general field we have to scale the
     // killer column by the right ratio.
+    //
+    // Implemented via Chain.reduceByUntil's own fixpoint loop (the same primitive processCell/globalReduce
+    // use), NOT a hand-rolled single pass over Rk.items.toSeq -- an earlier version took that static
+    // snapshot once and mutated Rk inside the loop body, so any term newly introduced by a substitution
+    // was silently never itself eliminated (see eliminationFallback's doc above for the concrete failure
+    // this caused).
     def compress(k: Simplex[VertexT]): Unit =
-      val fr = summon[CoefficientT is Field]
-      var Rk: Chain[Simplex[VertexT], CoefficientT] = R.getOrElse(k, Chain.empty)
-      val entries: Seq[(Simplex[VertexT], CoefficientT)] = Rk.items.toSeq.sortBy(_._1)
-      for (l, currentCoeff) <- entries do
-        if cleared.contains(l) || paired.contains(l) then
-          if !activeRows.getOrElse(l, false) then
-            // l is inactive - zero out its entry.
-            Rk = Rk - currentCoeff ⊠ Chain(l)
-          else
-            // l is active - add the killer column
-            killer.get(l).foreach { j =>
-              val Rj = R.getOrElse(j, Chain.empty) // (l,j) is persistence pair
-              val redCoeff = fr.divide(currentCoeff, Rj.leadingCoefficient)
-              Rk = Rk - redCoeff ⊠ Rj
-            }
-      R(k) = Rk
+      val Rk: Chain[Simplex[VertexT], CoefficientT] = R.getOrElse(k, Chain.empty)
+      val (reduced, _) = Chain.reduceByUntil(
+        Rk,
+        mutable.Map.empty,
+        Chain.empty,
+        stop = (_: Simplex[VertexT]) => false,
+        fallback = eliminationFallback
+      )
+      R(k) = reduced
 
     // Algorithm 5 (lines 9-16): reduce the (now-compressed) global column k and record any pair found.
     def globalReduce(sigma: Simplex[VertexT]): Unit =
@@ -343,7 +382,8 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
         case None         => () // stays in essentialSimplices unless a higher-dim sigma globally pairs with it
         case Some(rSigma) =>
           val noStop: Simplex[VertexT] => Boolean = _ => false
-          val (dsigmaReduced, _) = Chain.reduceByUntil(rSigma, boundaries, Chain.empty, noStop)
+          val (dsigmaReduced, _) =
+            Chain.reduceByUntil(rSigma, boundaries, Chain.empty, noStop, fallback = eliminationFallback)
           R(sigma) = dsigmaReduced
           if dsigmaReduced.isZero() then
             R.remove(sigma)

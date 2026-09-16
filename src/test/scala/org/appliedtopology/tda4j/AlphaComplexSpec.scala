@@ -315,3 +315,58 @@ class AlphaComplexDQPRegressionSpec extends org.specs2.mutable.Specification:
       dqpSet must be_==(helixSet)
     }
   }
+
+/** Regression test for a confirmed bug (found by `EngineComparisonBenchmarkSpec`, full writeup in CLAUDE.md's
+  * "Cross-engine benchmark, and a bug it found on first run" section): both `HelixDelaunay` and `AlphaShapeDQP` used to
+  * define `filtrationOrdering` ascending instead of reversed, which crashed `SimplicialHomologyContext` ("Naive"
+  * engine) at `maxDim >= 2` with `IllegalStateException: reduction pivot ... was not a recorded open class`, while
+  * leaving `PersistenceInChunksContext` ("Chunks") unaffected. Pins both halves of the fix: no exception, AND agreement
+  * between the two engines -- the actual property that was broken, not just "doesn't crash".
+  */
+class AlphaFiltrationOrderingRegressionSpec extends org.specs2.mutable.Specification with ScalaCheck:
+  given Double is Field = Field.DoubleApproximated(1e-9)
+
+  private val dispatches = Seq("helix", "DQP")
+  private val maxDim = 2
+
+  private def bounded(stream: StratifiedSimplexStream[Int, Double]): StratifiedCellStream[Simplex[Int], Double] =
+    val cells =
+      (0 to maxDim).iterator.flatMap(d => stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty)).toVector
+    val byDim = cells.groupBy(_.dim)
+    new StratifiedCellStream[Simplex[Int], Double]:
+      def filtrationValue = stream.filtrationValue
+      def filtrationOrdering = stream.filtrationOrdering
+      val smallest = stream.smallest
+      val largest = stream.largest
+      def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+        case d if byDim.contains(d) => byDim(d).iterator
+      }
+
+  for dispatch <- dispatches do
+    s"$dispatch alpha complex's Naive-engine barcode agrees with Chunks at maxDim >= 2" in
+      forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
+        // Construct the alpha complex once and share it between both engines. Building it twice (once
+        // per engine) was found to occasionally disagree in the last bit or two of a filtration value --
+        // e.g. helix's computeFVal touches a mutable.Set whose iteration order (and hence floating-point
+        // summation order) isn't guaranteed identical between two independent constructions of "the same"
+        // complex. That's a construction-nondeterminism artifact of the old test, not a reduction bug: it
+        // produced two mathematically-equal but bit-different Doubles, which containTheSameElementsAs (an
+        // exact-equality comparison) then reported as "missing"/"must not contain" on otherwise-identical
+        // bars. Sharing one construction is also simply the more faithful test of the property this spec
+        // actually cares about: two engines agreeing on ONE complex, not on two independently-rebuilt ones.
+        val streamB = bounded(Alpha(points.toIndexedSeq, dispatch))
+        val totalCells = streamB.iterator.size
+        val naive =
+          SimplicialHomologyContext[Int, Double, Double]()
+            .persistentHomology(streamB)
+            .diagramAt(Double.PositiveInfinity)
+        val chunks =
+          PersistenceInChunksContext[Int, Double](maxDim).persistentHomology(streamB).diagramAt(Double.PositiveInfinity)
+        // No independent oracle stream exists for alpha complexes (unlike VR, where this test class's
+        // sibling cross-checks against EnumeratingCofaceSimplexStream) -- so Naive's own structural
+        // invariant (every cell opens or closes exactly one bar) is the strongest check available on its
+        // own, independent of whether Chunks agrees. CLAUDE.md cites this holding "on every trial" as part
+        // of this fix's verification; keep this assertion in sync with that claim.
+        (HomologyFixtures.totalBarsAccountForAllCells(naive, totalCells) must beTrue) and
+          (naive must containTheSameElementsAs(chunks))
+      }

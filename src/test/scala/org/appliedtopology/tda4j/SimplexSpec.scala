@@ -25,7 +25,7 @@ A `Simplex` should
   given Double is Field = Field.DoubleApproximated(1e-25)
 
   def e2: Result = s.boundary `must` be_==(
-    Chain[Simplex[Int], Double](
+    List(
       Simplex(2, 3) -> 1.0,
       Simplex(1, 3) -> -1.0,
       Simplex(1, 2) -> 1.0

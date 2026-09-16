@@ -113,11 +113,36 @@ class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace
   override def filtrationValue: PartialFunction[Simplex[Int], Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 
+  // Reversed on the primary (filtration-value) key only -- tie-break stays ascending. Required convention
+  // (see EnumeratingCofaceSimplexStream's own filtrationOrdering doc and CLAUDE.md): CellularHomologyContext
+  // bakes this directly into Chain's pivot-selection machinery, which needs "smaller under this ordering" to
+  // mean "younger," not "older." This used to be a plain ascending Ordering.by(filtrationValue) -- self
+  // consistent with this class's own (already-ascending, already covered by VietorisRipsSpec's sortedness
+  // check) iteration order, but backwards relative to what CellularHomologyContext needs, and the reason
+  // SimplicialHomologyContext threw `IllegalStateException: reduction pivot ... was not a recorded open
+  // class` on this stream at maxDim >= 2 (found by EngineComparisonBenchmarkSpec; see CLAUDE.md).
   override def filtrationOrdering: Ordering[Simplex[Int]] =
-    Ordering.by(filtrationValue).orElse(simplexOrdering[Int])
+    Ordering.by(filtrationValue).reverse.orElse(simplexOrdering[Int])
 
+  // Bounded at metricSpace.size (a d-simplex needs d+1 distinct vertices) -- see
+  // EnumeratingCofaceSimplexStream's own iterateDimension and StratifiedCellStream's doc for why an unbounded
+  // catch-all here is the actual bug behind ".iterator hangs/eventually crashes", not just a missing guard.
+  //
+  // Each bucket is explicitly re-sorted by filtrationOrdering.reverse before being handed out, even though
+  // `edges` (case 1) is already ascending by filtrationValue and the d >= 2 case's DFS-over-neighbors walk
+  // (RecursiveStackSimplexEnumerator, via TopCofacetEnumerator) is already non-decreasing overall (pinned by
+  // VietorisRipsSpec's "have sorted layers" test). Neither of those matches filtrationOrdering's tie-break on
+  // cells that tie exactly -- `edges` tie-breaks ascending via simplexOrdering, and the DFS walk's tie order
+  // comes from SortedSet[Int] neighbor traversal (ascending vertex id), not any filtration-aware order at
+  // all. PersistenceInChunksContext's chunk-boundary logic (Homology.scala's
+  // PersistenceInChunksContext.allCells) relies on this bucket's own position standing in for
+  // filtrationOrdering position, so an inconsistent tie-break there silently breaks it even though this
+  // class's own crash (the un-reversed filtrationOrdering primary key, fixed separately above) is gone --
+  // found via EngineComparisonBenchmarkSpec / the regression test below.
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case 0 => metricSpace.elements.iterator.map(v => Simplex(v))
-    case 1 => RecursiveStackSimplexEnumerator(metricSpace, 1)().edges.iterator
-    case d => RecursiveStackSimplexEnumerator(metricSpace, d - 1)()
+    case 1 =>
+      RecursiveStackSimplexEnumerator(metricSpace, 1)().edges.sorted(using filtrationOrdering.reverse).iterator
+    case d if d >= 2 && d < metricSpace.size =>
+      RecursiveStackSimplexEnumerator(metricSpace, d - 1)().toVector.sorted(using filtrationOrdering.reverse).iterator
   }

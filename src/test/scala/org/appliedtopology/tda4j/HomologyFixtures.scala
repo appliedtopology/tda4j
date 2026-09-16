@@ -6,41 +6,6 @@ package org.appliedtopology.tda4j
   */
 object HomologyFixtures:
 
-  /** `StratifiedCellStream`'s default `.iterator` (`Iterator.from(0).filter(isDefinedAt).fold(...)`) hangs forever for
-    * a coface stream (documented in `PersistenceInChunksContext`/`PersistenceInChunksSpec`). Engines that call
-    * `stream.iterator` directly (`CellularHomologyContext.HomologyState`) would hang too. Sidestep by flattening
-    * `iterateDimension` over a bounded range into a finite `Vector` up front and wrapping that as a plain `CellStream`
-    * -- the engine only needs a correctly-ordered finite iterator, not this specific stream implementation's own
-    * (buggy) default one. Shared across homology-engine specs so a naive-engine test and a cohomology-engine test can
-    * build comparable streams from the same helper.
-    *
-    * This dimension-major cell vector is also what makes `flattenToCellStream` safe regardless of `source
-    * .filtrationOrdering`'s own tie-break: `CellularHomologyContext`'s reduction only ever touches a cell's own
-    * transitive faces, so faces-before-cofaces (all it actually needs from iteration order) holds unconditionally here
-    * -- a proper face always has strictly smaller dimension, and dimension-major processing does all of dimension `d-1`
-    * before any of dimension `d`, regardless of any filtration-value tie.
-    *
-    * (`source.filtrationOrdering` itself -- used for PIVOT selection, a separate concern from iteration order -- was
-    * for a while a real hazard here: `EnumeratingCofaceSimplexStream.filtrationOrdering` used to be `Ordering.by
-    * (filtrationValue)` with no tie-break at all, so two DIFFERENT simplices tied at the same filtration value compared
-    * as *equal*, corrupting `Chain.reduceBy`'s `SortedMap`-keyed pivot table on any Vietoris-Rips complex with
-    * `maxDimension >= 2` (a triangle always ties with its own longest edge). Fixed directly at the source -- see
-    * `EnumeratingCofaceSimplexStream.filtrationOrdering`'s own doc comment and WORKLOG-cohomology.md for the full repro
-    * and derivation -- so this helper no longer needs a workaround for it.)
-    */
-  def flattenToCellStream(
-    source: StratifiedSimplexStream[Int, Double],
-    maxDim: Int
-  ): CellStream[Simplex[Int], Double] =
-    val cells: Vector[Simplex[Int]] =
-      (0 to maxDim).iterator.flatMap(d => source.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty)).toVector
-    new CellStream[Simplex[Int], Double]:
-      def filtrationValue = source.filtrationValue
-      def filtrationOrdering = source.filtrationOrdering
-      val smallest = Double.NegativeInfinity
-      val largest = Double.PositiveInfinity
-      def iterator: Iterator[Simplex[Int]] = cells.iterator
-
   val triangleCells: Seq[(Double, Simplex[Int])] =
     List(1, 2, 3).map(i => (0.0, ∆(i))) ++
       List((1.0, ∆(1, 2)), (2.0, ∆(1, 3)), (3.0, ∆(2, 3)), (4.0, ∆(1, 2, 3)))
@@ -179,6 +144,37 @@ object HomologyFixtures:
   val elderRuleExpected: List[(Int, Double, Double)] = List(
     (0, 10.0, 20.0), // younger component (vertex 9, born 10.0) dies when the edge connects it
     (0, 0.0, Double.PositiveInfinity) // older component (vertex 1, born 0.0) survives
+  )
+
+  // Regression fixture for a confirmed PersistenceInChunksContext bug (see WORKLOG-benchmark-and-chunks-bug.md
+  // section 5): the full 2-skeleton of a tetrahedron -- its own boundary, i.e. deliberately NOT including
+  // the solid 3-simplex -- topologically S^2, with every cell tied at the SAME filtration value. The tie is
+  // what actually exercises the bug: compress/globalReduce's elimination loop needing more than one round to
+  // settle only matters when multiple cells could plausibly serve as each other's pivot, which ties make
+  // possible. tetrahedronCells above (all-distinct values) has the same combinatorial shape but does NOT
+  // exercise this path -- confirmed by hand-tracing the original bug, which only reproduced once every
+  // filtration value coincided.
+  val tetrahedronBoundaryDegenerateCells: Seq[(Double, Simplex[Int])] =
+    List(1, 2, 3, 4).map(i => (0.0, ∆(i))) ++
+      List((0.0, ∆(1, 2)), (0.0, ∆(1, 3)), (0.0, ∆(1, 4)), (0.0, ∆(2, 3)), (0.0, ∆(2, 4)), (0.0, ∆(3, 4))) ++
+      List((0.0, ∆(1, 2, 3)), (0.0, ∆(1, 2, 4)), (0.0, ∆(1, 3, 4)), (0.0, ∆(2, 3, 4)))
+
+  // By hand: connected (H_0 = Z, one essential class -- all 4 vertices tie at 0.0, 3 of them merge
+  // immediately at value 0.0 too). No 1-cycle survives (H_1 = 0): with all 6 edges present and only 3
+  // needed to connect 4 vertices, the other 3 each get filled by some triangle, all at value 0.0 --
+  // WHICH specific edge pairs with which triangle is legitimately tie-order-dependent, but since every
+  // value here is 0.0, every such pairing is the same zero-length bar (0.0, 0.0) regardless. One
+  // 2-dimensional void (H_2 = Z, essential): the tetrahedron's own boundary, with no 3-simplex to fill it
+  // in (deliberately excluded from this fixture).
+  val tetrahedronBoundaryDegenerateExpected: List[(Int, Double, Double)] = List(
+    (0, 0.0, 0.0),
+    (0, 0.0, 0.0),
+    (0, 0.0, 0.0),
+    (0, 0.0, Double.PositiveInfinity),
+    (1, 0.0, 0.0),
+    (1, 0.0, 0.0),
+    (1, 0.0, 0.0),
+    (2, 0.0, Double.PositiveInfinity)
   )
 
   /** For every cell in a stream, it either opens exactly one bar (as a birth, whether finite or essential) or closes

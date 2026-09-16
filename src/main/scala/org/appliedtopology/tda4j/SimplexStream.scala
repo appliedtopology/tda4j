@@ -164,14 +164,34 @@ class FilteredSimplexOrdering[VertexT, FiltrationT](
       else Ordering.Int.compare(x.size, y.size)
 
 trait StratifiedCellStream[CellT: OrderedCell, FiltrationT: Filterable] extends CellStream[CellT, FiltrationT]:
+  /** Contract `.iterator` below relies on: the domain must be contiguous starting at 0 -- defined for `0, 1, ..., k`
+    * for some `k` (or empty, or all of the non-negative integers), never with a gap. `.iterator` stops at the first
+    * dimension this is undefined for, so a non-contiguous domain (defined at `d` but not at `d - 1`) would silently
+    * truncate iteration instead of skipping the gap. Every implementation in this codebase already satisfies this (a
+    * simplicial complex can't have a `d`-simplex without its `(d-1)`-dimensional faces, so "no cells at `d`" implies
+    * "no cells at any dimension beyond `d`" too); a new implementation must preserve it.
+    */
   def iterateDimension: PartialFunction[Int, Iterator[CellT]]
 
+  /** Dimension-major: all of dimension `d` before any of dimension `d + 1`.
+    *
+    * MUST NOT be implemented as `Iterator.from(0).filter(iterateDimension.isDefinedAt)....fold(...)` (a real, confirmed
+    * bug this replaced -- see WORKLOG-cohomology.md and Homology.scala's own historical workaround comment at
+    * `PersistenceInChunksContext`): `Iterator.filter` on an infinite source can never prove "no more matches ahead", so
+    * once past the last dimension `iterateDimension` is defined for, it spins forever searching for a `d` that will
+    * never come. `.fold` compounds this -- being a strict terminal operation, it can't yield anything until the
+    * (already-hanging) source is exhausted. Worse, for a guard shaped like `d <= someBound` (true for negative `d`
+    * too), `Int` silently wrapping from `Int.MaxValue` to `Int.MinValue` after ~2^31 iterations makes the guard
+    * spuriously true again, so instead of hanging forever this can eventually resume and feed a huge negative `d`
+    * straight to `iterateDimension`, surfacing as a `BinomialCoefficient` range exception rather than a hang.
+    * `.takeWhile` instead stops at the first `d` this is undefined for and never asks about any `d` beyond it, relying
+    * on exactly the contiguous-domain contract documented on `iterateDimension` above.
+    */
   override def iterator: Iterator[CellT] =
     Iterator
       .from(0)
-      .filter(iterateDimension.isDefinedAt)
-      .map((dim: Int) => iterateDimension.applyOrElse(dim, (d: Int) => Iterator.empty))
-      .fold(Iterator.empty: Iterator[CellT])((x, y) => x ++ y)
+      .takeWhile(iterateDimension.isDefinedAt)
+      .flatMap(iterateDimension)
 
 trait StratifiedSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
     extends StratifiedCellStream[Simplex[VertexT], FiltrationT] {}
@@ -193,7 +213,7 @@ class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDi
     extends CofaceSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]():
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
-    case d: Int if d <= maxDim => stream.iterateDimension(d)
+    case d: Int if d >= 0 && d <= maxDim => stream.iterateDimension(d)
   }
 
   override def currentDimension: Int = stream.currentDimension
@@ -271,10 +291,15 @@ class EnumeratingCofaceSimplexStream(
 
   lazy val simplexIndexing: SimplexIndexing = SimplexIndexing(metricSpace.size)
 
+  // Bounded at metricSpace.size (a d-simplex needs d+1 distinct vertices, and there are none beyond that): a
+  // real bound, not just a defensive one -- StratifiedCellStream's default .iterator relies on isDefinedAt
+  // eventually staying false, and BinomialCoefficient.value(metricSpace.size, d + 1) throws outright for
+  // d + 1 > metricSpace.size, so an unbounded catch-all here was the actual root cause of the "some engines'
+  // .iterator hangs / eventually crashes" bug (see StratifiedCellStream's doc).
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
-    case 0 => metricSpace.elements.map(v => Simplex(v)).iterator
-    case 1 => edges.toSeq.sorted(using filtrationOrdering.reverse).iterator
-    case d =>
+    case 0                                   => metricSpace.elements.map(v => Simplex(v)).iterator
+    case 1                                   => edges.toSeq.sorted(using filtrationOrdering.reverse).iterator
+    case d if d >= 0 && d < metricSpace.size =>
       // first, generate all simplices of this dimension
       (0 until BinomialCoefficient.value(metricSpace.size, d + 1).toInt).toSeq
         .flatMap { ix =>
@@ -296,7 +321,9 @@ class RipserCofaceSimplexStream(
       currentDimension = 0
       lastDimensionCache = IndexedSeq.empty[Simplex[Int]]
       currentDimensionCache.iterator
-    case d =>
+    // Bounded at metricSpace.size, same reasoning as EnumeratingCofaceSimplexStream's own iterateDimension --
+    // see that class's comment and StratifiedCellStream's doc.
+    case d if d >= 1 && d < metricSpace.size =>
       if currentDimension != d - 1 then
         // we don't have a good cache, just generate entire previous dimension and deal with it
         lastDimensionCache = (0 until BinomialCoefficient.value(metricSpace.size, d).toInt).toSeq
@@ -364,7 +391,9 @@ class InorderCofaceSimplexStream(
       currentDimension = 1
       lastDimensionCache = metricSpace.elements.map(v => Simplex(v)).toIndexedSeq
       currentDimensionCache.iterator
-    case d =>
+    // Bounded at metricSpace.size, same reasoning as EnumeratingCofaceSimplexStream's own iterateDimension --
+    // see that class's comment and StratifiedCellStream's doc.
+    case d if d >= 2 && d < metricSpace.size =>
       if currentDimension != d - 1 then
         // we don't have a good cache, just generate entire previous dimension and deal with it
         lastDimensionCache = (0 until BinomialCoefficient.value(metricSpace.size, d).toInt).toSeq
@@ -383,4 +412,104 @@ class InorderCofaceSimplexStream(
       yield
         currentDimensionCache = currentDimensionCache appended newSpx
         newSpx
+  }
+
+/** A straightforward, non-optimized reference implementation of a Vietoris-Rips coface stream, following Antonio
+  * Rieser's New-VR algorithm ("A New Construction of the Vietoris-Rips Complex", arXiv:2301.07191v3) -- an explicit
+  * refinement of Zomorodian's own Incremental-VR algorithm (Algorithms 6/7 in that paper's Section 4; the algorithm
+  * `EnumeratingCofaceSimplexStream` and its siblings above are alternate, independently-optimized engines for the same
+  * construction). Kept intentionally close to the paper's own Algorithms 1-4, as a solid baseline the other, more
+  * experimental streams in this file can be cross-validated against, rather than as a speed-competitive engine in its
+  * own right.
+  *
+  * The paper phrases the construction as a depth-first recursion over a simplex tree (`New-Add-Cofaces`, Algorithm 3),
+  * but its own prose description of the "inductive step" (Section 3, immediately above Algorithm 1) is equivalently a
+  * breadth-first, layer-by-layer construction: layer `D(k+1)` is built entirely from layer `D(k)` and each of that
+  * layer's own candidate/sibling lists. This class uses that framing so it can slot into `iterateDimension`'s
+  * per-dimension contract like every other `CofaceSimplexStream` here. Since `iterateDimension` is a `PartialFunction`
+  * that may be called for any dimension in any order (unlike a genuinely incremental engine such as
+  * `RipserCofaceSimplexStream`, which depends on being driven dimension-by-dimension), the whole complex is built
+  * eagerly, once, into `byDimension`, and every call just serves a bucket from it -- simpler and safer than making the
+  * recursive construction itself resumable/order-independent.
+  *
+  * `maxFiltrationValue` (default `+Infinity`) is the threshold defining the graph `G` whose clique complex the paper's
+  * algorithm builds: `{i,j} ∈ E` iff `metricSpace.distance(i,j) <= maxFiltrationValue` (the same `<=` convention
+  * `RipserCohomologyContext`'s own sparse-Rips support uses, see `Homology.scala`). At the default `+Infinity`, `G` is
+  * the complete graph, every vertex subset is a clique, and this degenerates to plain bounded subset enumeration -- the
+  * New-VR algorithm's whole advantage over Incremental-VR is exploiting genuine non-edges in `G`, so a finite threshold
+  * is where this class's construction actually differs in kind, not just in output, from
+  * `EnumeratingCofaceSimplexStream`'s. The inherited `keepCriterion` is a separate, per-simplex filter for callers who
+  * want to prune the output further -- it does not define the graph.
+  *
+  * `largestNeighbor`, the paper's own precomputed "largest neighbor of `v`" table (`L` in Algorithm 2) used by
+  * `Table-Lookup` to early-exit the scan over a candidate list once it is provably exhausted, is a pure optimization on
+  * top of `Table-Lookup`'s definition (`M = {w ∈ N : w > v, {v,w} ∈ E}`) -- see `IncrementalVietorisRipsSpec` for a
+  * pinned test that including it changes nothing about the output.
+  *
+  * No deduplication is needed anywhere in this construction: every simplex is reached via exactly one recursive path,
+  * built by always appending vertices in increasing order from a candidate list that only ever contains vertices
+  * greater than every vertex already in `tau` (Theorem 2.5's minimal-pair bijection, in the paper's own terms). If a
+  * bug ever makes a simplex appear twice, that is a sign the recursion itself is wrong, not a reason to add a dedup
+  * step.
+  *
+  * One deliberate departure from Algorithm 4 as written: the paper's own pseudocode does `Σ ← V ∪ E` unconditionally,
+  * before the main loop, so the full 1-skeleton is always present regardless of `d`. Here `maxDimension` instead
+  * behaves exactly like `LimitedCofaceSimplexStream`'s `maxDim` -- the highest dimension `iterateDimension` will ever
+  * serve -- so `maxDimension = 0` yields vertices only, with no edges, unlike the paper's own Σ. This matches every
+  * other bounded stream in this codebase and is what a caller building up dimension-by-dimension would expect.
+  */
+class IncrementalVietorisRipsSimplexStream(
+  metricSpace: FiniteMetricSpace[Int],
+  val maxDimension: Int,
+  val maxFiltrationValue: Double = Double.PositiveInfinity,
+  keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
+  /** Exposed purely so `IncrementalVietorisRipsSpec` can pin that `L` is a non-load-bearing optimization on top of
+    * Table-Lookup's definition: disabling it must never change `byDimension`, only how it gets computed.
+    */
+  useLargestNeighborBound: Boolean = true
+) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion):
+
+  private def isEdge(i: Int, j: Int): Boolean =
+    metricSpace.distance(i, j) <= maxFiltrationValue
+
+  /** Algorithm 1, Upper-Neighbors(G, v). */
+  private def upperNeighbors(v: Int): SortedSet[Int] =
+    SortedSet.from(metricSpace.elements.filter(w => w > v && isEdge(v, w)))
+
+  /** The table `L` used by Algorithm 2, precomputed once per vertex. */
+  private lazy val largestNeighbor: Map[Int, Int] =
+    metricSpace.elements.map(v => v -> upperNeighbors(v).maxOption.getOrElse(v)).toMap
+
+  /** Algorithm 2 (Table-Lookup). `N` is always sorted ascending by construction (it is either `upperNeighbors(v)` or a
+    * filtered subset thereof), so `N.maxOption` is `end(N)` in the paper's notation.
+    */
+  private def tableLookup(N: SortedSet[Int], v: Int): SortedSet[Int] =
+    val bound =
+      if useLargestNeighborBound then math.min(N.maxOption.getOrElse(v), largestNeighbor(v))
+      else N.maxOption.getOrElse(v)
+    N.filter(w => w > v && w <= bound && isEdge(v, w))
+
+  /** Algorithm 3 (New-Add-Cofaces), restructured to stop one layer early each call instead of recursing all the way to
+    * `maxDimension` in a single pass -- see the class doc for why.
+    */
+  private def addCofaces(
+    tau: Simplex[Int],
+    N: SortedSet[Int],
+    buckets: IndexedSeq[mutable.ArrayBuffer[Simplex[Int]]]
+  ): Unit =
+    buckets(tau.size - 1) += tau
+    if tau.size - 1 < maxDimension then
+      for v <- N do
+        val sigma = tau + v
+        if keepCriterion.applyOrElse(sigma, (_: Simplex[Int]) => true) then
+          addCofaces(sigma, tableLookup(N, v), buckets)
+
+  /** Algorithm 4 (New-VR), applied once and bucketed by dimension. */
+  private lazy val byDimension: IndexedSeq[Seq[Simplex[Int]]] =
+    val buckets = IndexedSeq.fill(maxDimension + 1)(mutable.ArrayBuffer.empty[Simplex[Int]])
+    for u <- metricSpace.elements do addCofaces(Simplex(u), upperNeighbors(u), buckets)
+    buckets.map(_.toSeq.sorted(using filtrationOrdering.reverse))
+
+  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+    case d if d >= 0 && d <= maxDimension => byDimension(d).iterator
   }

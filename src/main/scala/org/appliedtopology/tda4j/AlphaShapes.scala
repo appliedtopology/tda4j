@@ -310,7 +310,15 @@ class HelixDelaunay(pts: Array[Array[Double]])(using epsilon: Epsilon) extends A
     filtrationValuesMemo.getOrElseUpdate(spx, computeFVal(spx))
   }
 
-  val simplicesSortedMap: Map[Int, Seq[Simplex[Int]]] = simplicesMap.map((d, v) => (d, v.sortBy(filtrationValue)))
+  // Must be the exact reverse of filtrationOrdering below, not merely "ascending by filtrationValue" --
+  // sortBy(filtrationValue) alone has no explicit tie-break (falls back to simplicesMap's own insertion
+  // order among ties), which doesn't match filtrationOrdering's simplexOrdering[Int] tie-break. This
+  // passes VietorisRipsSpec-style sortedness checks (value-only) but breaks PersistenceInChunksContext,
+  // whose chunk-boundary logic (Homology.scala's PersistenceInChunksContext.allCells) relies on
+  // iterateDimension's own emission order standing in for filtrationOrdering position -- found via
+  // EngineComparisonBenchmarkSpec / AlphaFiltrationOrderingRegressionSpec (see CLAUDE.md).
+  val simplicesSortedMap: Map[Int, Seq[Simplex[Int]]] =
+    simplicesMap.map((d, v) => (d, v.sorted(using filtrationOrdering.reverse)))
 
   def simplicesInDimension(d: Int): Iterator[Simplex[Int]] = simplicesSortedMap(d).iterator
 
@@ -320,5 +328,10 @@ class HelixDelaunay(pts: Array[Array[Double]])(using epsilon: Epsilon) extends A
     case d if simplicesSortedMap.contains(d) => simplicesSortedMap(d).iterator
   }
 
+  // Reversed on the primary (filtration-value) key only -- see RecursiveStackVietorisRipsSimplexStream's
+  // identical fix (VietorisRips.scala) and CLAUDE.md for the full root-cause writeup. `simplicesSortedMap`
+  // (above) is built as `.sorted(using filtrationOrdering.reverse)` specifically so it stays the exact
+  // reverse of this ordering, tie-break included -- an earlier version of this comment claimed the old
+  // `sortBy(filtrationValue)` "didn't need to change" and was wrong; see the note above it.
   override def filtrationOrdering: Ordering[Simplex[Int]] =
-    Ordering.by[Simplex[Int], Double](s => filtrationValue(s)).orElse(simplexOrdering[Int])
+    Ordering.by[Simplex[Int], Double](s => filtrationValue(s)).reverse.orElse(simplexOrdering[Int])

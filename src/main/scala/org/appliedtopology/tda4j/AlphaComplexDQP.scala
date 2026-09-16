@@ -924,14 +924,23 @@ class AlphaComplexDQPBuilder(
 
     if settings.enforceMonotonicity then clampMonotone(byDim, weights)
 
-    // cellsOfDimension/iterateDimension hand out byDim(k) directly, and
-    // callers (e.g. the simplicial-stream contract, filtration-order
-    // consumers) expect each dimension in increasing filtration order --
-    // HelixDelaunay does this explicitly (sortBy(filtrationValue)). byDim(k)
-    // is populated per base vertex via a mutable.Map, whose iteration order
-    // is unspecified, so it needs an explicit sort; do this after
-    // clampMonotone so the order reflects final, possibly-clamped weights.
-    for k <- byDim.indices do byDim(k).sortInPlaceBy(c => (weights.getOrElse(c, 0.0), c.show))
+    // cellsOfDimension/iterateDimension hand out byDim(k) directly, and this order must be the exact
+    // reverse of AlphaShapeDQP.filtrationOrdering (ascending weight -- monotonic in radius via radiusOf,
+    // same as before -- but tie-broken by *descending* simplexOrdering[Int], not c.show). Getting only
+    // the primary key right and leaving an inconsistent tie-break (previously: c.show, a string) is
+    // exactly the bug class documented in CLAUDE.md's "Bug found while cross-validating" section: it self
+    // passes VietorisRipsSpec-style sortedness checks (those only look at filtration VALUES), but breaks
+    // PersistenceInChunksContext, whose chunk-boundary/local-reduction logic (Homology.scala's
+    // PersistenceInChunksContext.allCells) relies on positional index in iterateDimension's own emission
+    // order standing in for filtrationOrdering position -- found via EngineComparisonBenchmarkSpec /
+    // AlphaFiltrationOrderingRegressionSpec once the primary-key-direction half of this bug was fixed
+    // and the crash it caused went away but disagreement with the naive engine remained. byDim(k) is
+    // populated per base vertex via a mutable.Map, whose iteration order is unspecified, so it needs an
+    // explicit sort regardless; do this after clampMonotone so the order reflects final, possibly-clamped
+    // weights.
+    val cellOrdering: Ordering[Simplex[Int]] =
+      Ordering.by[Simplex[Int], Double](c => weights.getOrElse(c, 0.0)).orElse(simplexOrdering[Int].reverse)
+    for k <- byDim.indices do byDim(k).sortInPlace()(using cellOrdering)
 
     new AlphaComplexDQP(space, maxPower, maxDimension, byDim, weights, witnesses)
   end compute
@@ -1122,11 +1131,30 @@ class AlphaShapeDQP(val points: Array[Array[Double]]) extends AlphaShapes:
   val alphaComplexDQP = AlphaComplexDQP
     .euclidean(points, Double.PositiveInfinity, points.headOption.map(_.length).getOrElse(0))
 
-  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] =
-    alphaComplexDQP.cellsOfDimension(_).iterator
+  // Bounded at alphaComplexDQP.sizeByDimension.length (== the private cellsByDim.length, maxDimension + 1),
+  // mirroring cellsOfDimension's own internal `k < 0 || k >= cellsByDim.length` bound exactly -- for any k
+  // already in that range this changes nothing (cellsOfDimension never hit its own empty-fallback there
+  // anyway), it only turns "silently returns an empty iterator forever" into "undefined" for k past it. That
+  // matters because an eta-expanded function assigned to a PartialFunction (what this used to be) has
+  // isDefinedAt always true, which is the same unbounded-domain shape StratifiedCellStream's own doc warns
+  // about: `.iterator` would hang past the last real dimension exactly like the coface streams used to (see
+  // that doc for the full mechanism). No existing caller is affected -- every one of them (AlphaComplexSpec,
+  // AlphaValidationSpec, AlphaCrossValidationSpec) loops iterateDimension(d) for d up to the point cloud's own
+  // ambient dimension, which is always < cellsByDim.length by construction (maxDimension is set to the
+  // ambient dimension two lines up, so cellsByDim.length = ambientDimension + 1).
+  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+    case k if k >= 0 && k < alphaComplexDQP.sizeByDimension.length => alphaComplexDQP.cellsOfDimension(k).iterator
+  }
 
+  // `FilteredSimplexOrdering` compares filtration values using whatever `Ordering[Double]` using-param it's
+  // given -- called with none, it silently defaulted to ascending `Ordering[Double]`, the same wrong-direction
+  // bug `RecursiveStackVietorisRipsSimplexStream`/`HelixDelaunay` had (see their fixes and CLAUDE.md for the
+  // full root-cause writeup). Supplying `.reverse` explicitly here is exactly `SimplexStream`'s own default
+  // `val filtrationOrdering` pattern (`SimplexStream.scala`), not a bespoke construction.
   override def filtrationOrdering: Ordering[Simplex[Int]] =
-    FilteredSimplexOrdering[Int, Double](this)
+    FilteredSimplexOrdering[Int, Double](this)(using vertexOrdering = summon[Ordering[Int]])(using
+      filtrationOrdering = summon[Ordering[Double]].reverse
+    )
 
   // NOTE: alphaComplexDQP.filtrationValue is the *squared* radius (the paper's
   // "power", Definition 10) -- see radiusOf. HelixDelaunay.filtrationValue,

@@ -25,7 +25,6 @@ class APISpec extends mutable.Specification:
     val metricSpace = EuclideanMetricSpace(xys)
     val homology = persistentHomology(LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), 4))
 
-
     homology.advanceTo(0.15)
     homology.diagramAt(0.15) should not(beEmpty)
 

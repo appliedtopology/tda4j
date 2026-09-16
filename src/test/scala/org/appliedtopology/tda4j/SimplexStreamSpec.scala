@@ -98,14 +98,43 @@ class CofaceSimplexStreamSpec extends mutable.Specification with org.specs2.Scal
       val metricSpace = EuclideanMetricSpace(pts)
       val enumerating = EnumeratingCofaceSimplexStream(metricSpace)
       val inorder = InorderCofaceSimplexStream(metricSpace)
+      // Driven dimension-by-dimension, strictly increasing -- required for RipserCofaceSimplexStream's own
+      // incremental cache (currentDimension/lastDimensionCache) to stay valid across calls.
+      val ripser = RipserCofaceSimplexStream(metricSpace)
 
       Result.foreach(0 to 5) { dim =>
         val enumerated = enumerating.iterateDimension(dim).toSeq
         val inordered = inorder.iterateDimension(dim).toSeq
+        val ripsered = ripser.iterateDimension(dim).toSeq
 
         (enumerated.map(spx => enumerating.filtrationValue(spx)) must beSorted) and
           (inordered.map(spx => inorder.filtrationValue(spx)) must beSorted) and
+          (ripsered.map(spx => ripser.filtrationValue(spx)) must beSorted) and
           // using size as proxy for equality for CI testing; change to `enumerated === inordered` if debugging
-          (enumerated.size === inordered.size)
+          (enumerated.size === inordered.size) and
+          (enumerated.size === ripsered.size)
       }
     }
+
+  // Direct tests of StratifiedCellStream's own contract (see its doc comment): `.iterator` must actually
+  // terminate, and the bound it terminates at must be exactly metricSpace.size, not one off in either
+  // direction -- an off-by-one here would silently drop (or spuriously include) the top-dimensional simplex,
+  // and nothing else in this suite would notice since every other test drives iterateDimension(d) directly
+  // for d values it already knows are in range.
+  "EnumeratingCofaceSimplexStream.iterator terminates and covers every simplex up to metricSpace.size - 1" >> {
+    val metricSpace = EuclideanMetricSpace(
+      Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.0, 1.0), Array(1.0, 1.0), Array(0.5, 0.5))
+    )
+    val stream = EnumeratingCofaceSimplexStream(metricSpace)
+    val expectedTotal = (0 until metricSpace.size).map(d => binomial(metricSpace.size, d + 1)).sum
+    stream.iterator.size === expectedTotal
+  }
+
+  "EnumeratingCofaceSimplexStream.iterateDimension is defined exactly on [0, metricSpace.size)" >> {
+    val metricSpace = EuclideanMetricSpace(
+      Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.0, 1.0), Array(1.0, 1.0), Array(0.5, 0.5))
+    )
+    val stream = EnumeratingCofaceSimplexStream(metricSpace)
+    (stream.iterateDimension.isDefinedAt(metricSpace.size - 1) must beTrue) and
+      (stream.iterateDimension.isDefinedAt(metricSpace.size) must beFalse)
+  }

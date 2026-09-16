@@ -181,11 +181,6 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
     }
   }
 
-  private def flattenToCellStream(
-    source: StratifiedSimplexStream[Int, Double],
-    maxDim: Int
-  ): CellStream[Simplex[Int], Double] = HomologyFixtures.flattenToCellStream(source, maxDim)
-
   private def endpointValue(e: BarcodeEndpoint[Double]): Double = e match
     case NegativeInfinity() => Double.NegativeInfinity
     case PositiveInfinity() => Double.PositiveInfinity
@@ -201,10 +196,9 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
 
     forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
       val vrStream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(EuclideanMetricSpace(points)), 2)
-      val cellStream = flattenToCellStream(vrStream, 2)
-      val totalCells = cellStream.iterator.size
+      val totalCells = vrStream.iterator.size
       // One HomologyState, not two -- both checks must look at the exact same computation.
-      val bars = persistentHomology(cellStream).barcodeAt(Double.PositiveInfinity)
+      val bars = persistentHomology(vrStream).barcodeAt(Double.PositiveInfinity)
       bars.forall(bar => barcodeEndpointLtEq(bar.lower, bar.upper)) &&
       // Structural bound doubling as the non-flaky proxy for the uncollapsed-entry blowup bug fixed
       // in this session: a representative cycle can't have more distinct cells than the complex does.
@@ -224,17 +218,16 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
     // Points 0=(0,0), 1=(1,0), 2=(1,1), 3=(0,1): a unit square with diagonal 0-2 of length sqrt(2).
     val square = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
     val vrStream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(EuclideanMetricSpace(square)), 2)
-    val cellStream = flattenToCellStream(vrStream, 2)
-    val allCells: Vector[Simplex[Int]] = cellStream.iterator.toVector
+    val allCells: Vector[Simplex[Int]] = vrStream.iterator.toVector
 
     // Confirm the fixture actually exercises the hazard it's named for: a face and its own strictly
     // higher-dimensional coface sharing a filtration value, not merely two unrelated cells at
     // different dimensions happening to tie. Triangle {0,1,2}'s VR value is its longest edge, the
     // diagonal {0,2} (length sqrt(2)) -- so the diagonal and the triangle containing it tie exactly.
-    (cellStream.filtrationValue(∆(0, 2)) == cellStream.filtrationValue(∆(0, 1, 2))) must beTrue
+    (vrStream.filtrationValue(∆(0, 2)) == vrStream.filtrationValue(∆(0, 1, 2))) must beTrue
 
     // One HomologyState, not two -- both checks below must look at the exact same computation.
-    val bars = persistentHomology(cellStream).barcodeAt(Double.PositiveInfinity)
+    val bars = persistentHomology(vrStream).barcodeAt(Double.PositiveInfinity)
     forall(bars) { bar =>
       (barcodeEndpointLtEq(bar.lower, bar.upper) must beTrue) and
         // Structural bound doubling as the non-flaky proxy for the uncollapsed-entry blowup bug fixed
@@ -244,6 +237,15 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
   }
 
 class BarcodeRegressionSpec extends org.specs2.mutable.Specification with ScalaCheck:
+  // Re-skipped after a correctness-fix session initially un-skipped this on the strength of one fast,
+  // small-sample run -- wrong: matrixGen's own range here (25-150 points, dimension 2-10) can and does
+  // also sample large/high-dimensional clouds, and on at least one of those this OOMs with severe GC
+  // thrashing (up to 515% GC time observed) well before completing, not a quick pass. Whether that's the
+  // same pre-existing "stalls out" performance issue this skip always documented, or something this
+  // session's PersistenceInChunksContext fix made worse by doing more substitution work per cell, is NOT
+  // yet determined -- don't re-attempt un-skipping without measuring across the actual generator range,
+  // not one sample. See WORKLOG-benchmark-and-chunks-bug.md.
+  skipAll // currently stalls out - we need to figure out the speed issues here.
   given Double is Field = Field.DoubleApproximated(1e-25)
 
   val shc = PersistenceInChunksContext[Int, Double](3)

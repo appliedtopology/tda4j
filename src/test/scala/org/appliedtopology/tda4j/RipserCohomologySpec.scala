@@ -22,9 +22,8 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
 
   private def naiveBars(metricSpace: FiniteMetricSpace[Int], maxDim: Int): List[(Int, Double, Double)] =
     val vrStream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), maxDim)
-    val cellStream = HomologyFixtures.flattenToCellStream(vrStream, maxDim)
     SimplicialHomologyContext[Int, Double, Double]()
-      .persistentHomology(cellStream)
+      .persistentHomology(vrStream)
       .diagramAt(Double.PositiveInfinity)
 
   private def cohomologyBars(metricSpace: FiniteMetricSpace[Int], maxDim: Int): List[(Int, Double, Double)] =

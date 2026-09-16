@@ -208,3 +208,72 @@ class PersistenceInChunksSpec extends mutable.Specification:
       )
     )
   }
+
+  // Regression pin for a confirmed, now-fixed bug (see WORKLOG-benchmark-and-chunks-bug.md section 5):
+  // compress/globalReduce's elimination loop could leave an already-`paired` cell as a chain's final
+  // pivot when multiple rounds of substitution were needed to settle, corrupting the cleared/paired
+  // invariant. This fixture -- the boundary of a tetrahedron (topologically S^2) with every cell tied at
+  // the same filtration value -- is the minimal hand-verifiable case that actually exercises the tie
+  // (HomologyFixtures.tetrahedronCells has the same shape but distinct values, and does NOT trigger it).
+  // Checks PersistenceInChunksContext directly against a hand-derived barcode, not against agreement with
+  // another engine -- the two engines agreeing was exactly what this bug defeated for a while.
+  "Homology of the tetrahedron boundary with every cell tied at the same value (degenerate S^2)" >> {
+    given shc: PersistenceInChunksContext[Int, Double] = PersistenceInChunksContext(2)
+    import shc.{*, given}
+
+    val streamBuilder = ExplicitStreamBuilder[Int, Double]
+    streamBuilder.addAll(HomologyFixtures.tetrahedronBoundaryDegenerateCells)
+    val stream = explicitToStratifiedCellStream(streamBuilder)
+    val homology = persistentHomology(stream)
+    homology.diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(
+      HomologyFixtures.tetrahedronBoundaryDegenerateExpected
+    )
+  }
+
+  // Ground-truth checks reusing RipserCohomologySpec's hand-verified fixtures (threePointLine: 3 colinear
+  // points at 0, 1, 3, so H_0's finite deaths are unambiguous MST edges, not tie-broken guesses) --
+  // checked directly against a hand-derived barcode, the same reason as the fixture above: engines
+  // agreeing with each other was exactly the check this session's bug defeated.
+  "Homology of a 3-cycle graph (no filled triangle) has one essential H^1 class, not three" >> {
+    given shc: PersistenceInChunksContext[Int, Double] = PersistenceInChunksContext(1)
+    import shc.{*, given}
+
+    val threePointLine = EuclideanMetricSpace(Array(Array(0.0), Array(1.0), Array(3.0)))
+    val stream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(threePointLine), 1)
+    persistentHomology(stream).diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(
+      List(
+        (0, 0.0, 1.0),
+        (0, 0.0, 2.0),
+        (0, 0.0, Double.PositiveInfinity),
+        (1, 3.0, Double.PositiveInfinity)
+      )
+    )
+  }
+
+  "Homology of the filled triangle has zero essential H^1 classes (contractible)" >> {
+    given shc: PersistenceInChunksContext[Int, Double] = PersistenceInChunksContext(2)
+    import shc.{*, given}
+
+    val threePointLine = EuclideanMetricSpace(Array(Array(0.0), Array(1.0), Array(3.0)))
+    val stream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(threePointLine), 2)
+    persistentHomology(stream).diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(
+      List(
+        (0, 0.0, 1.0),
+        (0, 0.0, 2.0),
+        (0, 0.0, Double.PositiveInfinity),
+        (1, 3.0, 3.0) // zero-length: {0,2} paired with the triangle, both born at 3.0
+      )
+    )
+  }
+
+  "Homology of the elder-rule fixture picks the filtration-order pivot, not the lexicographic one" >> {
+    given shc: PersistenceInChunksContext[Int, Double] = PersistenceInChunksContext()
+    import shc.{*, given}
+
+    val streamBuilder = ExplicitStreamBuilder[Int, Double]
+    streamBuilder.addAll(HomologyFixtures.elderRuleCells)
+    val stream = explicitToStratifiedCellStream(streamBuilder)
+    persistentHomology(stream).diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(
+      HomologyFixtures.elderRuleExpected
+    )
+  }
