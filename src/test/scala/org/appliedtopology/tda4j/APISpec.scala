@@ -22,11 +22,11 @@ class APISpec extends mutable.Specification:
     val as = (1 to 50).map(_ => scala.util.Random.nextDouble * 2.0 * math.Pi)
     val xys = as.toSeq.map(a => Seq(math.cos(a), math.sin(a)))
 
-    val homology = ???
-
     val metricSpace = EuclideanMetricSpace(xys)
+    val homology = persistentHomology(LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), 4))
 
-//    homology.advanceTo(0.15)
-//    homology.diagramAt(0.15) should not(beEmpty)
+
+    homology.advanceTo(0.15)
+    homology.diagramAt(0.15) should not(beEmpty)
 
   }

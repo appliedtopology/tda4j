@@ -249,7 +249,7 @@ class BarcodeRegressionSpec extends org.specs2.mutable.Specification with ScalaC
   val shc = PersistenceInChunksContext[Int, Double](3)
 
   val cases: Seq[(String, Array[Array[Double]] => StratifiedSimplexStream[Int, Double])] = Seq(
-    ("Alpha Miniball", (pts: Array[Array[Double]]) => Alpha(pts, "miniball")),
+    ("Alpha DQP", (pts: Array[Array[Double]]) => Alpha(pts, "DQP")),
     ("Alpha Helix", (pts: Array[Array[Double]]) => Alpha(pts, "helix")),
     (
       "VR",
