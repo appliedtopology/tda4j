@@ -5,16 +5,16 @@ import org.scalacheck.Prop.forAll
 import org.specs2.mutable
 import org.specs2.ScalaCheck
 
-/** Cross-validation for `SimplicialHomologyByDimensionContext` -- the MST/Kruskal-based engine (see
-  * `Homology.scala`'s class doc and CLAUDE.md's "Persistent homology" section). Confirmed non-functional before this
-  * session: `HomologyState`'s constructor threw `NoSuchElementException` unconditionally on any complex with an MST
-  * edge (an unguarded `barcode(0)` read on a map initialized empty), and separately lacked the
+/** Cross-validation for `SimplicialHomologyByDimensionContext` -- the MST/Kruskal-based engine (see `Homology.scala`'s
+  * class doc and CLAUDE.md's "Persistent homology" section). Confirmed non-functional before this session:
+  * `HomologyState`'s constructor threw `NoSuchElementException` unconditionally on any complex with an MST edge (an
+  * unguarded `barcode(0)` read on a map initialized empty), and separately lacked the
   * `given Ordering[Simplex[VertexT]] = stream.filtrationOrdering` every other engine needs (see
   * `CellularHomologyContext`'s own class doc) -- without it, chain arithmetic silently falls back to the generic
   * lexicographic `Simplex is OrderedCell` ordering instead of filtration order. Both are now fixed; this spec is the
   * regression suite that class never had, checking the fixed engine against hand-verified fixtures AND against
-  * `SimplicialHomologyContext` (the already-cross-validated reference engine) on random Vietoris-Rips complexes --
-  * not just "does it run without crashing."
+  * `SimplicialHomologyContext` (the already-cross-validated reference engine) on random Vietoris-Rips complexes -- not
+  * just "does it run without crashing."
   */
 class SimplicialHomologyByDimensionSpec extends mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
@@ -45,8 +45,8 @@ class SimplicialHomologyByDimensionSpec extends mutable.Specification with Scala
 
   /** Drives a `SimplicialHomologyByDimensionContext#HomologyState` to completion and reads off the full diagram
     * (finished bars from `barcode`, essential/still-open bars from whatever remains in `cycles`) -- there is no
-    * `diagramAt`-style accessor on this engine (unlike `CellularHomologyContext`), so this reconstructs the same
-    * shape `SimplicialHomologyContext.diagramAt` returns directly from the two maps `advanceTo` leaves behind.
+    * `diagramAt`-style accessor on this engine (unlike `CellularHomologyContext`), so this reconstructs the same shape
+    * `SimplicialHomologyContext.diagramAt` returns directly from the two maps `advanceTo` leaves behind.
     */
   private def fullDiagram(
     shc: SimplicialHomologyByDimensionContext[Int, Double]

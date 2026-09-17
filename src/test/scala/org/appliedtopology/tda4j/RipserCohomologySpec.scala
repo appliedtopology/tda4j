@@ -48,7 +48,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       .persistentCohomology()
       .map(toTuple)
 
-  private def totalSimplices(n: Int, maxDim: Int): Int =
+  private def totalSimplices(n: Int, maxDim: Int): Long =
     (0 to maxDim).map(d => binomial(n, d + 1)).sum
 
   // Hand-verified calibration example (see WORKLOG-cohomology.md's "clearing is required for

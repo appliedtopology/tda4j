@@ -57,7 +57,7 @@ class Chain[CellT: Ordering, CoefficientT: Field] private[tda4j] (
         while entries.headOption.map(cmp.compare(head, _)).contains(0) do
           val otherHead = entries.dequeue
           acc = fr.plus(acc, otherHead._2)
-        if acc == fr.zero then collapseHead()
+        if fr.isEqual(acc, fr.zero) then collapseHead()
         else entries.enqueue((cell, acc))
 
   def collapseAll()(using fr: CoefficientT is Field): Unit =
@@ -66,14 +66,15 @@ class Chain[CellT: Ordering, CoefficientT: Field] private[tda4j] (
         .groupMapReduce(_._1) // group by cell
         (x => x._2) // extract coefficient
         (fr.plus) // sum the coefficient parts
-        .filter((c, x) => x != fr.zero)
+        .filter((c, x) => !fr.isEqual(x, fr.zero))
         .iterator
         .toSeq
     )(using entries.ord)
 
   def isZero(): Boolean =
     collapseHead()
-    entries.isEmpty || (entries.head._2 == summon[CoefficientT is Field].zero)
+    val fr = summon[CoefficientT is Field]
+    entries.isEmpty || fr.isEqual(entries.head._2, fr.zero)
 
   def items: Seq[(CellT, CoefficientT)] = entries.toSeq
 
@@ -123,7 +124,7 @@ object Chain:
   ): SortedMap[CellT, CoefficientT] =
     val fr = summon[CoefficientT is Field]
     val newCoeff = fr.plus(m.getOrElse(cell, fr.zero), coeff)
-    if newCoeff == fr.zero then m.removed(cell)
+    if fr.isEqual(newCoeff, fr.zero) then m.removed(cell)
     else m.updated(cell, newCoeff)
 
   private def toSortedMap[CellT: Ordering, CoefficientT: Field](

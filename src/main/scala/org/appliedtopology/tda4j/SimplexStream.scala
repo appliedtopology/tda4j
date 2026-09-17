@@ -296,7 +296,7 @@ class EnumeratingCofaceSimplexStream(
       // this ordering backs, not just during a sort.
       lazy val tieBreak: Int =
         Ordering.Int.compare(x.size, y.size) match
-          case 0  => Ordering.Int.compare(simplexIndexing(x), simplexIndexing(y))
+          case 0  => Ordering.Long.compare(simplexIndexing(x), simplexIndexing(y))
           case dc => dc
       if filtrationValue.isDefinedAt(x) && filtrationValue.isDefinedAt(y) then
         java.lang.Double.compare(filtrationValue(y), filtrationValue(x)) match
@@ -324,14 +324,14 @@ class EnumeratingCofaceSimplexStream(
     */
   protected def sortedByFiltration(cells: IterableOnce[Simplex[Int]]): Vector[Simplex[Int]] =
     val fvCache = mutable.HashMap.empty[Simplex[Int], Option[Double]]
-    val ixCache = mutable.HashMap.empty[Simplex[Int], Int]
+    val ixCache = mutable.HashMap.empty[Simplex[Int], Long]
     def fv(s: Simplex[Int]): Option[Double] = fvCache.getOrElseUpdate(s, filtrationValue.lift(s))
-    def ix(s: Simplex[Int]): Int = ixCache.getOrElseUpdate(s, simplexIndexing(s))
+    def ix(s: Simplex[Int]): Long = ixCache.getOrElseUpdate(s, simplexIndexing(s))
     val memoOrdering: Ordering[Simplex[Int]] = new Ordering[Simplex[Int]]:
       def compare(x: Simplex[Int], y: Simplex[Int]): Int =
         lazy val tieBreak: Int =
           Ordering.Int.compare(x.size, y.size) match
-            case 0  => Ordering.Int.compare(ix(x), ix(y))
+            case 0  => Ordering.Long.compare(ix(x), ix(y))
             case dc => dc
         (fv(x), fv(y)) match
           case (Some(a), Some(b)) =>

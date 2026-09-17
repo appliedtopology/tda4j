@@ -133,5 +133,5 @@ history is that "obviously sound" has been wrong at roughly the same rate as "se
 discriminating fixture deliberately puts filtration order and some other natural order (vertex label,
 insertion order) in conflict — a fixture where they happen to agree will not catch this class of bug (see
 `HomologyFixtures.elderRuleCells`, the tied-square fixture used to catch invariant #2, and the
-three-point-line calibration example used to catch invariant #3, all in `WORKLOG-naive-homology.md`/
-`WORKLOG-cohomology.md` if you want to see the actual repros).
+three-point-line calibration example used to catch invariant #3, all in `../../../../.claude/WORKLOG-naive-homology.md`/
+`../../../../.claude/WORKLOG-cohomology.md` if you want to see the actual repros).

@@ -54,10 +54,66 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, Filtratio
     val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
     import chainRM.*
 
-    val CellIterator: collection.BufferedIterator[CellT] = stream.iterator.buffered
+    // NOT stream.iterator directly: for any StratifiedCellStream (every stream in this codebase besides a
+    // hand-built .iterator override), that default is DIMENSION-MAJOR -- Iterator.from(0).takeWhile(...).flatMap
+    // (iterateDimension), all of dimension d before any of dimension d+1. That's correct only WITHIN each
+    // dimension's own bucket, which every stream here is careful to sort by filtrationOrdering.reverse -- but the
+    // single shared pivot table this algorithm uses (boundaries/positives, populated across ALL dimensions
+    // together, unlike RipserCohomologyContext's per-dimension-reset basis) requires cells consumed in TRUE
+    // combined filtration order: a dimension-(d-1) cell can legitimately become a dimension-d cell's pivot, and
+    // Algorithm 1's correctness proof (a cell is ever used as a pivot iff it opened a class of its own) depends
+    // on processing ALL dimensions together in one oldest-to-youngest sequence, not per-dimension blocks.
+    // Dimension-major order is NOT generally consistent with that: a higher-dimensional cell can have a SMALLER
+    // (older) filtration value than an unrelated lower-dimensional one (there is no general monotonicity of
+    // filtration value with dimension across UNRELATED simplices, only along a single face/coface chain), so
+    // dimension-major order can process a "negative" (already paired downward) low-dimensional cell before a
+    // higher-dimensional cell that legitimately needed it as an open pivot -- confirmed by direct reproduction:
+    // a 15-point, ambientDim=3 cloud built to dimension 4 has real filtration-value inversions between dimension-3
+    // and dimension-4 cells, and crashed identically (same pivot, same message) on two independently-implemented
+    // streams (EnumeratingCofaceSimplexStream and IncrementalVietorisRipsSimplexStream/NewVR) that differ in every
+    // other respect, which rules out a stream-specific bug and confirms this is a CellularHomologyContext defect.
+    // Fixed by re-sorting the fully-materialized cell sequence -- NOT via `stream.filtrationOrdering.reverse`
+    // wholesale (a first attempt at this fix, reverted): filtrationOrdering's tie-break is `(dimension, then
+    // colex)` UNREVERSED even though its primary key (filtration value) IS reversed -- see
+    // EnumeratingCofaceSimplexStream.filtrationOrdering's own doc, "ascending fv comparison ... then dimension ...
+    // then colex", where only the fv comparison is written negated. `.reverse` on the WHOLE ordering therefore
+    // flips the dimension tie-break too: under `.reverse` a tie sorts LARGER dimension first, so a triangle
+    // processes before its own longest edge whenever they tie (which happens on every VR triangle, by
+    // definition). That is exactly backwards from Algorithm 1's actual precondition (every cell's faces must
+    // appear before it), and never surfaced from any single-dimension `.sorted(using filtrationOrdering.reverse)`
+    // call site elsewhere in this codebase because within one dimension `x.size == y.size` makes that tie-break a
+    // no-op -- this is the first place the comparator spans dimensions. Built explicitly instead: ascending
+    // filtration value (oldest first, the correct direction, unreversed), THEN ascending dimension (faces before
+    // cofaces on a tie), falling back to `stream.filtrationOrdering.reverse` only to inherit the established
+    // within-dimension tie-break (colex) bit-for-bit -- safe to reuse there because two cells of the SAME
+    // dimension never hit the dimension key above, so `.reverse`'s flipped dimension-ordering is never consulted.
+    val processingOrder: Ordering[CellT] =
+      Ordering
+        .by[CellT, FiltrationT](c => stream.filtrationValue.applyOrElse(c, (_: CellT) => stream.smallest))
+        .orElse(Ordering.by[CellT, Int](_.dim))
+        .orElse(stream.filtrationOrdering.reverse)
+    val CellIterator: collection.BufferedIterator[CellT] =
+      stream.iterator.toVector.sorted(using processingOrder).iterator.buffered
 
     private def cellFiltrationValue(cell: CellT, fallback: FiltrationT): FiltrationT =
       stream.filtrationValue.applyOrElse(cell, (_: CellT) => fallback)
+
+    // The persistence matching partitions every cell into POSITIVE (its own reduced boundary is zero -- a
+    // creator, recorded in `positives` until matched) or NEGATIVE (its own reduced boundary is nonzero -- a
+    // destroyer, matched immediately with the positive pivot it kills, recorded via `boundaries`/`generators`
+    // keyed by THAT pivot, never by itself). A cell is never both, and `boundaries` only ever holds POSITIVE
+    // (matched) cells as keys -- so when a LATER, higher-dimension column's reduction cascades down and its
+    // current leading term is a cell that is itself NEGATIVE, `boundaries.get` correctly finds nothing, but
+    // that does NOT mean reduction is finished: a negative cell was already matched (as a destroyer), so it
+    // is not an available pivot -- but it also isn't an inexpressible dead end, since it has its own V-column
+    // (a chain in ITS OWN dimension whose leading term is the cell itself, by the same construction as any
+    // positive cell's `generators` entry) recorded right below at the moment it went negative. Recording that
+    // here, keyed by the negative cell itself, and threading it through `Chain.reduceBy`'s existing `fallback`
+    // hook (the same mechanism `RipserCohomologyContext` already uses for its own apparent-pairs on-the-fly
+    // substitution -- see that class's `zeroApparentFacet`) lets reduction substitute and continue past a
+    // negative cell exactly as it already does past a positive one, instead of wrongly treating "not a
+    // positive pivot" as "reduction is done." See WORKLOG-reference-engine-fix.md for the derivation.
+    val negativeVCols: mutable.Map[CellT, Chain[CellT, CoefficientT]] = mutable.Map.empty
 
     def advanceOne(): Unit =
       if CellIterator.hasNext then
@@ -71,22 +127,36 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, Filtratio
         // against, but quadratic-to-worse blowup on a real (even small) Vietoris-Rips stream, confirmed
         // directly (a first attempt at this method hung/burned CPU for minutes on an 8-12 point VR
         // complex that should take milliseconds). Chain.reduceBy works through a SortedMap internally,
-        // which collapses duplicates by construction on every insertion.
-        val (reduced, log) = Chain.reduceBy(dsigma, boundaries, Chain.empty)
+        // which collapses duplicates by construction on every insertion. `fallback = negativeVCols.get`
+        // lets reduction substitute past an already-matched NEGATIVE cell too -- see the field's own doc.
+        val (reduced, log) = Chain.reduceBy(dsigma, boundaries, Chain.empty, fallback = negativeVCols.get)
         // V-column: sigma minus, for every pivot the reduction subtracted off, that pivot's own
         // producing cell's V-column. If ∂sigma reduced to zero this chain is itself the new cycle
         // representative; either way it becomes the generator future cells reduce through if sigma
         // itself goes on to become a pivot. Collapsed explicitly before use for the same reason as
         // above: this fold also accumulates through raw Chain subtraction.
         val vcol: Chain[CellT, CoefficientT] = log.items.foldLeft(Chain(sigma)) { case (acc, (pivot, coeff)) =>
-          // Every entry reduceBy's log can name is a key reduceBy itself just matched against
-          // `boundaries`, and `generators` is always written in lockstep with `boundaries` (see the
-          // else-branch below) -- so a missing entry here means the pivot bookkeeping has drifted out
-          // of sync, not a legitimate case to default through silently.
-          acc - coeff ⊠ generators.getOrElse(
-            pivot,
-            throw new IllegalStateException(s"pivot $pivot has a boundaries entry but no generators entry")
-          )
+          // `log` now names two structurally different kinds of elimination (since reduceLoop's fallback
+          // was wired up above), and they need different treatment here:
+          //  - eliminated via `boundaries` (a POSITIVE, matched pivot): `boundaries(pivot) = d(generators
+          //    (pivot))` by construction (the killer's own V-column's boundary), so substituting it into
+          //    dsigma's reduction corresponds to a REAL change in sigma's own identity -- vcol must apply
+          //    the matching correction, or `d(vcol) = reduced` (the invariant every later generators/
+          //    negativeVCols lookup depends on) breaks.
+          //  - eliminated via `negativeVCols` (a NEGATIVE cell's own fallback substitution): this is a
+          //    PURE basis change WITHIN dsigma's own dimension (re-expressing one raw cell via earlier
+          //    same-dimension cells -- see negativeVCols' own doc) with no dimension shift and no relation
+          //    to sigma's identity at all. The underlying value of dsigma's reduction is unchanged by it,
+          //    only its expression is, so d(vcol) = reduced already holds without any vcol correction here
+          //    -- applying one anyway would be wrong, not merely redundant.
+          // `generators`/`negativeVCols` are disjoint keys (the persistence matching: a cell is never both
+          // positive-matched and negative), so checking negativeVCols first is unambiguous.
+          if negativeVCols.contains(pivot) then acc
+          else
+            acc - coeff ⊠ generators.getOrElse(
+              pivot,
+              throw new IllegalStateException(s"pivot $pivot has a boundaries entry but no generators entry")
+            )
         }
         // Collapse BEFORE either write below, not after: `generators`/`positives` entries are read
         // back into future cells' own vcol folds (line ~86 above), so an uncollapsed value stored here
@@ -110,6 +180,11 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, Filtratio
           val pivot = reduced.leadingCell.get
           boundaries(pivot) = reduced
           generators(pivot) = vcol
+          // sigma itself is NEGATIVE (matched, as the destroyer of pivot's class) -- record its own
+          // V-column (leading term = sigma, see this map's own doc above) so a later, higher-dimension
+          // reduction that cascades onto sigma can substitute via Chain.reduceBy's fallback instead of
+          // wrongly treating it as an unrecorded, still-open pivot.
+          negativeVCols(sigma) = vcol
           val (pivotFv, representative) = positives
             .remove(pivot)
             .getOrElse(
@@ -701,9 +776,9 @@ class RipserCohomologyContext[CoefficientT: Field](
     * `(filtrationValue, combinatorialIndex)` pairs rather than `Simplex[Int]` so callers who already have the
     * filtration value in hand (i.e. don't need to call `filtrationValue` at all) can avoid it.
     */
-  private def compareFvThenIndex(xFv: Double, xIdx: Int, yFv: Double, yIdx: Int): Int =
+  private def compareFvThenIndex(xFv: Double, xIdx: Long, yFv: Double, yIdx: Long): Int =
     val fc = java.lang.Double.compare(xFv, yFv)
-    if fc != 0 then fc else java.lang.Integer.compare(yIdx, xIdx)
+    if fc != 0 then fc else java.lang.Long.compare(yIdx, xIdx)
 
   /** Ascending by filtration value; ties broken so a LARGER combinatorial index sorts as OLDER (smaller) -- the
     * lexicographically-refined tie-break Definition 3.2/Proposition 3.9 rely on. `Chain`'s `leadingCell` is the MINIMUM

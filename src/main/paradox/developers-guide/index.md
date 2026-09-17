@@ -58,7 +58,7 @@ ordering code, build the cheap discriminating fixture first — see the closing 
 ## Where the bug histories and design derivations live
 
 This guide summarizes and cross-references, but doesn't duplicate, the detailed worklogs kept at the repo
-root: `WORKLOG-naive-homology.md`, `WORKLOG-cohomology.md`, `WORKLOG-alpha-complex.md`, and `WORKLOG.md`
+root: `../../../../.claude/WORKLOG-naive-homology.md`, `../../../../.claude/WORKLOG-cohomology.md`, `../../../../.claude/WORKLOG-alpha-complex.md`, and `WORKLOG.md`
 (the alpha-complex DQP numerical-robustness derivations). When this guide says "confirmed by a specific
 counterexample" or "see the full derivation," that's where the full derivation actually lives — read those
 worklogs directly if you're about to touch code in the area they cover.

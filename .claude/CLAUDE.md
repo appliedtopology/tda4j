@@ -1,0 +1,723 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+TDA4j is a Scala 3 library for persistent homology and topological data analysis (a spiritual successor to
+JavaPlex/Ripser, from the Stanford Computational Topology workgroup lineage). Single sbt module, package
+`org.appliedtopology.tda4j`. Currently pre-1.0 (`0.1.3-SNAPSHOT`), actively evolving API.
+
+## Commands
+
+Build and test with sbt (Java 21, Scala 3.8.4):
+
+```
+sbt clean test                  # full test suite (what CI runs)
+sbt "testOnly *SimplexSpec"     # run a single specs2 spec by class name (glob supported)
+sbt "testOnly org.appliedtopology.tda4j.HomologySpec"
+sbt scalafmtAll                 # format the whole codebase
+sbt scalafmtCheck scalafmtSbtCheck   # what CI's lint job checks (formatting only, no autofix)
+sbt mimaReportBinaryIssues      # binary-compatibility check (also run in CI's test job)
+sbt makeSite                    # build the Paradox docs site (src/main/paradox) — needs Graphviz for diagrams
+```
+
+There is no linter beyond scalafmt — formatting is enforced in CI (`lint.yml`) as a check, not autofix, so run
+`scalafmtAll` before committing. Tests use specs2 (`org.specs2.mutable.Specification`); `ProfilingSpec` is a
+benchmark-style spec that reads `-Dbitlength=`/`-DmaxFVal=`/`-DmaxDim=`-style specs2 command-line args rather than
+asserting behavior — don't treat its failures like normal test failures.
+
+CI is three independent GitHub Actions workflows on push/PR to `scala`: `test.yml` (test + mima),
+`lint.yml` (scalafmt check), `docs.yml` (build+publish Paradox site to GitHub Pages, push-to-`scala` only).
+
+## Scala style used throughout
+
+The codebase leans heavily on Scala 3.7+'s newest context-abstraction syntax — don't "correct" this to Scala 2
+style or older Scala 3 idioms:
+
+- **`Type is TypeClass`** as the spelling for a context bound/given instance (e.g. `Chain[CellT, CoefficientT] is
+  RingModule`, `Simplex[VertexT] is OrderedCell`), instead of `given TypeClass[Type]`.
+- **`type Self: Ordering as ordering`** — named context-bound aliasing (`as ordering`) inside trait bodies, so the
+  bound's evidence can be referred to by name without a separate `summon`.
+- Custom operators/unicode for algebra: `⊠` (boxed times, scalar action), `∆(...)` (simplex literal, typed
+  `Alt+J` on Mac GB layout), `<*`, `|*|` for the `RingModule`/`Field` typeclasses in `RingModule.scala` /
+  `Field.scala`.
+- `opaque type Simplex[VertexT] = SortedSet[VertexT]` — `Simplex` has no runtime wrapper; its API is entirely
+  extension methods (see `SimplexOps.scala` for the delegated `SortedSet`-like surface, `Simplex.scala` for the
+  `OrderedCell` instance).
+
+## Architecture
+
+### Algebraic core (typeclass layer)
+
+- `RingModule.scala` / `Field.scala`: minimal typeclasses for "module/vector space over a ring/field" and "field",
+  built via the `is` syntax above. Everything downstream (chains, homology) is generic over the coefficient
+  `Field` — not hardcoded to `Double` or `Z/pZ`.
+- `FiniteField.scala`: `Fp` as an opaque type per prime `p`, with a `Field` instance.
+- `Chain.scala`: `Chain[CellT, CoefficientT]` is a formal sum of cells with field coefficients, backed by a mutable
+  `PriorityQueue` ordered by cell (so the "leading term" — used pervasively in the reduction algorithms below — is
+  always a cheap peek). Defines the generic matrix-reduction primitives (`reduceBy`, `reduceByUntil`) that the
+  homology algorithms build on, plus a `RingModule` instance so chains support `+`, `-`, `⊠` directly.
+- `Chain.scala` also defines the `Cell`/`Cocell`/`OrderedCell`/`OrderedBasis` traits: anything with a `boundary`
+  (given a coefficient field) and a total order over instances can plug into the homology machinery — not just
+  simplices. `Simplex.scala` is the (currently only) concrete `OrderedCell` instance.
+
+### Complex construction (producing a filtered stream of cells)
+
+- `SimplexStream.scala`: `SimplexStream`/`CellStream`/`Filtration`/`StratifiedCellStream` — the abstract interface
+  a persistent-homology computation consumes: an iterator over cells in filtration order, plus a
+  `filtrationValue` partial function and a `Filterable` (smallest/largest sentinel values, e.g. ±∞ for `Double`).
+  `StratifiedCellStream` additionally exposes `iterateDimension` for dimension-by-dimension algorithms.
+  **`iterateDimension`'s domain must be contiguous from 0** (defined for `0, 1, ..., k` for some `k`, or all of
+  ℕ, never with a gap) — `.iterator`'s default implementation stops at the first dimension it's undefined for,
+  so a gap silently truncates iteration rather than skipping past it. Every implementation here already
+  satisfies this for a structural reason, not by convention alone: a simplicial complex can't have a
+  `d`-simplex without its `(d-1)`-dimensional faces, so "no cells at `d`" implies "no cells at any dimension
+  beyond `d`" too.
+- `FiniteMetricSpace.scala`: abstracts "distance + finite point set", with a VP-tree (`jvptree`)-backed
+  implementation for nearest-neighbor queries and a `SparseMetricSpace` wrapper that only exposes edges below a
+  diameter cutoff (used to bound Vietoris–Rips construction).
+- `VietorisRips.scala` / `Cofacets.scala` / `RipserStream.scala`: several independent strategies for enumerating a
+  VR filtration — an explicit coface-enumeration stream (`EnumeratingCofaceSimplexStream`), a Ripser-style
+  binomial-indexed stream (`RipserCofaceSimplexStream`, `SimplexIndexing`), an in-order variant
+  (`InorderCofaceSimplexStream`), a recursive-stack variant (`RecursiveStackVietorisRipsSimplexStream`), a
+  straightforward non-optimized reference implementation of Antonio Rieser's New-VR algorithm (arXiv:2301.07191v3,
+  *A New Construction of the Vietoris-Rips Complex* — an explicit refinement of Zomorodian's own Incremental-VR;
+  "Rieser" the author, not "Ripser" the software — `IncrementalVietorisRipsSimplexStream` in `SimplexStream.scala`,
+  meant as a cross-validation baseline for the other, more experimental engines rather than a speed-competitive
+  one), and `CofacetIterator` for lazy coboundary generation. These are alternate engines with the same output
+  contract, not layers on top of each other — check `iterateDimension`/`iterator` in whichever is in play.
+
+**`EnumeratingCofaceSimplexStream`/`RipserCofaceSimplexStream`/`InorderCofaceSimplexStream`/
+`IncrementalVietorisRipsSimplexStream` all now default `maxFiltrationValue` to `metricSpace.minimumEnclosingRadius`
+instead of `Double.PositiveInfinity`** (`RecursiveStackVietorisRipsSimplexStream` was deliberately left alone —
+see below). Past that radius every vertex is within range of some common apex, so the (unboundedly-many-dimensions)
+complex is a cone from that point on and contributes no further homology (Ripser paper, p. 412) — real `ripser.cpp`
+uses this exact quantity (`enclosing_radius`) as its own default threshold, routinely alongside a bounded `dim_max`,
+so this is how Ripser has always worked, not a special unbounded-dimension case. `EnumeratingCofaceSimplexStream`
+and its two direct subclasses had NO threshold mechanism at all before this — `maxFiltrationValue` is a genuinely
+new parameter there, folded into a combined `keptByThresholdAndCriterion` predicate alongside the existing
+`keepCriterion` (one place deciding "is this cell kept," not two independent filters); `RipserCohomologyContext`
+and `IncrementalVietorisRipsSimplexStream` already had the parameter (used for genuine sparse-Rips truncation) and
+only had their *default* changed. All five constructors use a `Double.NaN` sentinel resolved internally to
+`metricSpace.minimumEnclosingRadius`, not a literal default referencing `metricSpace` directly, because Scala 3
+only allows a default value to reference an earlier *parameter list*, not an earlier parameter in the same list —
+confirmed directly (`class Foo(val x: Int, val y: Int = x + 1)` fails to compile with "Not found: x" under this
+project's `-source:future` setting), and splitting into a curried parameter list instead was rejected because Scala
+requires an explicit trailing `()` at every call site once a parameter list exists, even one where every parameter
+has a default — that would have broken every existing call, not just the ones setting the threshold. Pass
+`maxFiltrationValue = Double.PositiveInfinity` explicitly for the old always-unbounded behavior.
+
+**This is a real semantic change, not a free performance win layered on unchanged output** — confirmed by a first
+implementation attempt that broke ~10 existing tests across `RipserCohomologySpec`/`IncrementalVietorisRipsSpec`/
+`PersistenceInChunksSpec`/`SimplexStreamSpec`, all of which had (understandably, since no other option existed
+before this session) pinned specific behavior at the untruncated default — e.g. `threePointLine` (3 colinear points
+at distances 1, 2, 3) has `minimumEnclosingRadius = 2.0` from its middle point, less than its own longest edge
+(3.0), so a `maxDim = 1` computation (no triangle available to kill anything) genuinely loses the essential H¹ bar
+that edge would otherwise contribute — this is Ripser's actual, intended behavior (a real bar dropped, not a
+truncation artifact), not a bug, but every test that wanted the old always-unbounded semantics needed
+`maxFiltrationValue = Double.PositiveInfinity` added explicitly. **The load-bearing verification, present now in
+both `RipserCohomologySpec` and `IncrementalVietorisRipsSpec`**: the default-thresholded barcode is exactly the
+untruncated barcode restricted to `[0, minimumEnclosingRadius]` — the identical `restrictToThreshold` oracle every
+other explicit threshold value already had to satisfy, confirmed over 200 random Vietoris-Rips point clouds each,
+not just reasoned through. Full derivation, including the advisor exchange that corrected an initial "this looks
+unsafe, revert it" instinct once the restriction-oracle check actually ran, is in `WORKLOG-mst-and-perf.md`.
+
+`RecursiveStackVietorisRipsSimplexStream` (`VietorisRips.scala`) was deliberately NOT given this treatment in the
+same pass — it has its own `edges`/coface-enumeration logic independent of `EnumeratingCofaceSimplexStream`'s, is
+explicitly documented as a cross-validation baseline rather than a speed-competitive engine, and extending it
+needs its own dedicated pass rather than being folded into this one. `AlphaShapeDQP`/`HelixDelaunay` were also
+NOT touched — alpha shapes and Ripser reproduction remain different sections of the library with minimal
+interaction (an explicit, standing call from the project lead), and `minimumEnclosingRadius` in Euclidean-distance
+terms is not obviously the right quantity for a circumradius-based filtration in the first place.
+
+**`StratifiedCellStream.iterator`'s default implementation used to hang or crash for every coface-style stream,
+fixed**: it was `Iterator.from(0).filter(iterateDimension.isDefinedAt).map(...).fold(Iterator.empty)((x,y) => x ++
+y)` — two compounding bugs. `Iterator.filter` on an infinite source can never prove "no more matches ahead", so
+once past the last dimension `iterateDimension` is defined for, it spins forever searching for a `d` that will
+never come; `.fold` compounds this by being a strict terminal op that can't yield anything until the
+(already-hanging) source is exhausted. Worse: for a guard shaped like `d <= someBound` (true for negative `d`
+too, which `LimitedCofaceSimplexStream`'s `case d: Int if d <= maxDim` was), `Int` silently wrapping from
+`Int.MaxValue` to `Int.MinValue` after ~2^31 iterations makes the guard spuriously true again, so instead of
+hanging forever the loop can eventually resume and feed a huge negative `d` straight to the wrapped stream's
+`iterateDimension` — surfaced as `BinomialCoefficient` throwing `CombinatoricsException: Number -2147483647 is
+out of range [0, n]`, not as an obvious hang, which is what `APISpec`'s "A full persistent homology computation"
+test did after ~1m20s before this fix. `HomologyFixtures.flattenToCellStream` (a test-only helper that
+pre-flattened `iterateDimension` into a finite `Vector` up front) and a matching workaround in
+`PersistenceInChunksContext` (`Homology.scala`) both existed specifically to route around this — `flattenToCellStream`
+is gone now, its callers pass their coface streams straight to `persistentHomology` (exactly what `APISpec` already
+did, which is what exposed the bug), and `PersistenceInChunksContext`'s explicit-walk is kept only because it
+separately enforces a caller-supplied `maxDim` that can be tighter than a stream's own natural bound, not because
+`.iterator` is unsafe anymore.
+
+Fixed by replacing the whole thing with `Iterator.from(0).takeWhile(iterateDimension.isDefinedAt).flatMap
+(iterateDimension)` — `.takeWhile` stops at the first `d` the domain doesn't cover and never asks about any `d`
+beyond it, which is exactly the contiguous-domain contract documented on `iterateDimension` above. This alone
+fixes any stream whose domain is already properly bounded (`LimitedCofaceSimplexStream`,
+`IncrementalVietorisRipsSimplexStream`), but `EnumeratingCofaceSimplexStream`, `RipserCofaceSimplexStream`,
+`InorderCofaceSimplexStream`, and `RecursiveStackVietorisRipsSimplexStream` all used to declare their top
+dimension via a catch-all `case d => ...` with no upper bound at all (`isDefinedAt` always `true`) — genuinely
+unbounded, so `.takeWhile` alone wouldn't have terminated on any of them either. Fixed at the source too: each
+now guards its catch-all case with `d < metricSpace.size` (a real bound, not a defensive one — a `d`-simplex
+needs `d + 1` distinct vertices, and `BinomialCoefficient.value(metricSpace.size, d + 1)` throws outright past
+that point anyway) and `LimitedCofaceSimplexStream`'s own guard picked up an explicit `d >= 0` alongside its
+existing `d <= maxDim`, closing the wraparound path at the source rather than relying on `.takeWhile` alone to
+never reach it. `HelixDelaunay` (`AlphaShapes.scala`) was already safe under the old buggy `.iterator` *or* the
+new one — its `iterateDimension` domain (`simplicesSortedMap.contains(d)`) is contiguous by construction
+(`Map.from((0 to ambientDimension).map(...))`), so it satisfies the contract without needing this fix at all.
+**`AlphaShapeDQP`'s `iterateDimension` (`AlphaComplexDQP.scala`) was left alone in that same session, then fixed in
+a later one** once `EngineComparisonBenchmarkSpec` (below) became a real caller of `.iterator()` on it. It used to
+be `alphaComplexDQP.cellsOfDimension(_).iterator`, an eta-expanded total function assigned to a `PartialFunction`,
+which makes `isDefinedAt` always `true` — the same unbounded shape the coface streams had. Fixed by bounding it to
+`k >= 0 && k < alphaComplexDQP.sizeByDimension.length` (the public mirror of the private `cellsByDim.length`,
+`== maxDimension + 1`) — this changes nothing for any `k` already in range, since `cellsOfDimension`'s own internal
+`k >= cellsByDim.length` check already silently returned empty there; it only turns the never-reached tail from
+"silently empty forever" into "undefined," matching every other stream. Confirmed safe against the exact concern
+that held this back the first time (`AlphaComplexSpec`/`AlphaValidationSpec`/`AlphaCrossValidationSpec` calling
+`iterateDimension(d)` directly up to the point cloud's own ambient dimension, and the degeneracy-hazard note above
+meaning a cosphericity-driven simplex can legitimately exceed ambient dimension): `maxDimension` is set to the
+ambient dimension at construction, so `cellsByDim.length = ambientDimension + 1` and every existing call site's `d`
+is already `< cellsByDim.length` by construction — verified by running all four alpha specs after the change, not
+just reasoned through.
+- `AlphaShapes.scala` / `AlphaComplexDQP.scala`: alpha complex construction — see "Alpha complex: DQP vs Helix"
+  below for full context, including known, accepted limitations in both backends.
+  `Alpha(points, dispatch)` chooses a backend: `"helix"` (`HelixDelaunay`, an actual Delaunay triangulation) or
+  `"DQP"` (`AlphaShapeDQP`/`AlphaComplexDQP.scala`) — a from-scratch dual active-set QP method that never builds
+  the Delaunay complex at all, instead answering per-simplex feasibility queries via a Cholesky-updated active-set
+  QP. As of now `dispatch = "default"` always resolves to `"helix"` regardless of point-cloud shape — `"DQP"` must
+  be requested explicitly. An earlier Miniball-based Delaunay backend was ripped out entirely as broken (see git
+  history); don't resurrect it without checking why.
+- `SymmetryGroup.scala`: for complexes with a known vertex symmetry group (e.g. `HyperCubeSymmetry`), lets
+  construction/computation work on canonical orbit representatives only.
+
+### Cross-engine benchmark, and a bug it found on first run
+
+`EngineComparisonBenchmarkSpec.scala` times every (complex construction x homology engine) pairing this codebase
+actually supports — the 5 VR streams, both alpha backends, `SimplicialHomologyContext` and
+`PersistenceInChunksContext` as decomposable (stream, engine) pairs, plus `RipserCohomologyContext` as its own
+bundled row (it takes a `FiniteMetricSpace[Int]` directly, not a stream, and can't touch alpha complexes at all)
+— across a sweep of point count, ambient dimension, and max homology dimension. Follows the established
+`ProfilingSpec`/`ApparentPairsBenchmarkSpec`/`SparseRipsBenchmarkSpec` convention (`Arguments`-driven config,
+median-of-trials, printed table, small CI-safe defaults); see its own doc comment for the full rationale,
+including why construction and reduction are timed as separate phases and why alpha/VR bar counts are never
+compared against each other (different quantities — circumradius vs. diameter). Each cell runs under a
+per-cell timeout on a daemon-thread executor (no engine here supports cooperative cancellation), so a stall
+prints `"timeout"` rather than hanging the run — `PersistenceInChunksContext` x alpha specifically is a known
+stall/scale risk: `HomologySpec.scala`'s `BarcodeRegressionSpec` is `skipAll`'d, "currently stalls out," for
+exactly that combination, predating this benchmark.
+
+**A first pass this session tried un-skipping `BarcodeRegressionSpec`, on the strength of one fast run — wrong,
+and worth recording as a caught mistake, not quietly fixed**: a single `sbt testOnly` invocation happened to
+sample a small point cloud from the spec's own `matrixGen(..., Gen.chooseNum(2, 10), Gen.chooseNum(25, 150))`
+generator (no fixed seed) and finished in under 20 seconds, which was wrongly generalized to "the stall is
+fixed." A later run — same un-skipped test, different random sample — hit `OutOfMemoryError` after nearly 3
+minutes with up to 515% GC time (multiple threads all in GC simultaneously) on a 1GB heap, and left the JVM
+degraded enough to cascade into an unrelated spec's failure later in the same `sbt test` run. Re-skipped.
+**Measured, not inferred, before re-closing this**: instrumented `PersistenceInChunksContext.advanceAll` to
+print `R`'s total and max per-chain term count after each dimension's global step on a 40-point, ambient-
+dimension-4 `AlphaShapeDQP` complex (well inside this spec's own generator range) — the per-chain maximum
+stayed at 8-10 terms throughout, no growth pattern consistent with this session's `compress`/`globalReduce`
+fix compounding chain sizes across the sweep. The actual cause: that same 40-point/dimension-4 input alone
+produced **102,090 simplices** from `AlphaShapeDQP`'s always-untruncated construction (see "Alpha complex: DQP
+vs Helix" below) — this spec's generator range (dimension up to 10, up to 150 points) can produce alpha
+complexes far larger still. This is a pre-existing combinatorial-scale limitation of `PersistenceInChunksContext`
+on complexes this size (the exact "stalls out... speed issues" the skip already documented, likely long
+predating this session), not a regression from anything fixed here — but that's a measured conclusion from one
+diagnostic run, not an exhaustive proof, and un-skipping this again without first fixing or bounding the scale
+problem would repeat the same mistake.
+
+**First run immediately found a real, previously-unknown reduction bug**, not a benchmark artifact: at
+`maxDim >= 2`, `SimplicialHomologyContext` (the "Naive" engine) threw `IllegalStateException: reduction pivot
+... was not a recorded open class` for exactly three constructions -- `RecursiveStackVietorisRipsSimplexStream`,
+`HelixDelaunay`, and `AlphaShapeDQP` -- while every other construction, and `PersistenceInChunksContext` on these
+same three, ran clean. **Now fixed, in two parts, both required:**
+
+1. **Direction.** All three defined `filtrationOrdering` as a plain ascending `Ordering.by(filtrationValue)`
+   (`VietorisRips.scala`, `AlphaShapes.scala`, and `AlphaComplexDQP.scala`'s `FilteredSimplexOrdering[Int,
+   Double](this)` called without supplying its own `filtrationOrdering` using-parameter, silently defaulting to
+   ascending `Ordering[Double]`) -- never reversed. This violates the exact convention
+   `EnumeratingCofaceSimplexStream.filtrationOrdering` documents (see the "Bug found while cross-validating (4)
+   against (1)" section below): `CellularHomologyContext.HomologyState` bakes `stream.filtrationOrdering`
+   directly into `Chain`'s pivot-selection machinery, which requires "smaller under this ordering" to mean
+   "younger," not "older." Fixed by reversing the primary key only (`Ordering.by(filtrationValue).reverse.orElse(tiebreak)`,
+   matching `EnumeratingCofaceSimplexStream`'s own pattern) in all three. This alone made the crash go away.
+2. **Tie-break consistency.** Fixing (1) alone left a *second*, distinct bug exposed rather than fixed: each
+   stream's `iterateDimension` bucket order didn't match `filtrationOrdering.reverse` on cells that tie exactly
+   -- `RecursiveStackVietorisRipsSimplexStream`'s dim-1 `edges` sorted ascending+ascending-tiebreak (not
+   ascending+descending, what `filtrationOrdering.reverse` actually is once the primary key alone is reversed),
+   its dim>=2 DFS walk had no sort at all (order came from `SortedSet[Int]` neighbor traversal, i.e. ascending
+   vertex id, unrelated to filtration order); `HelixDelaunay`'s `simplicesSortedMap` used bare
+   `sortBy(filtrationValue)`, no explicit tie-break at all; `AlphaShapeDQP`'s `byDim(k).sortInPlaceBy` tie-broke
+   on `c.show` (a string), not `simplexOrdering[Int]`. This is the *same bug class* the "Bug found while
+   cross-validating" section documents for `EnumeratingCofaceSimplexStream`/`RipserCofaceSimplexStream`/
+   `InorderCofaceSimplexStream`, just not yet applied to these three. No crash resulted (the pivot-table
+   `IllegalStateException` only fires on values, not orders among ties), so it surfaced instead as
+   `SimplicialHomologyContext` producing a *different, still self-consistent* barcode than before -- caught only
+   by adding real regression tests (`VietorisRipsSpec`'s new test, `AlphaFiltrationOrderingRegressionSpec`) that
+   compared against an independent oracle rather than just checking "does it still crash." Fixed the same way as
+   the original fix: every ad hoc/independent bucket sort replaced with `.sorted(using filtrationOrdering.reverse)`
+   -- the same `Ordering` object, not a separately reconstructed comparator (`AlphaShapeDQP`'s fix builds an
+   explicit `Ordering.by(weight).orElse(simplexOrdering[Int].reverse)` at the point in `AlphaComplexDQP.scala`'s
+   `compute()` where `filtrationOrdering` itself isn't yet constructible, but is written to match it exactly).
+
+**Verified**, not just asserted: `SimplicialHomologyContext` on the now-fixed `RecursiveStackVietorisRipsSimplexStream`
+matches `SimplicialHomologyContext` on `EnumeratingCofaceSimplexStream` (an independently cross-validated stream)
+*exactly*, cell-for-cell, on every generated point cloud tried -- the strongest evidence available that this
+stream's ordering is now fully correct, not merely "passes its own structural invariant." No independent oracle
+stream exists for alpha complexes (`RipserCohomologyContext` can't consume one), so `HelixDelaunay`/`AlphaShapeDQP`
+are verified only via `SimplicialHomologyContext`'s own structural invariant (`totalBarsAccountForAllCells`:
+every cell opens or closes exactly one bar) holding on every trial, which is weaker but was never even close before
+this fix.
+
+**A second, separate bug was found in the process, and is now fixed too**: `PersistenceInChunksContext` itself --
+independent of anything above -- failed its own `totalBarsAccountForAllCells` structural invariant (and disagreed
+with the now-verified-correct `SimplicialHomologyContext`) on all three of these streams, specifically when
+`maxDim` was bounded and there were multiple/tied essential classes at the top retained dimension: it dropped one
+or more genuine essential bars (e.g. `(2, x, Infinity)`) and reported a spurious extra finite bar instead (e.g. an
+extra `(1, y, x)`), which is topologically impossible for a bounded complex whose top-dimension cells were never
+paired against anything higher. This is *not* the same bug as the direction/tie-break issue above: it reproduced
+even when `SimplicialHomologyContext` was fully cross-validated and self-consistent (confirmed via a hand-verified
+minimal repro -- 4 coincident points bounded at `maxDim=2`, the full 2-skeleton of a tetrahedron, i.e. the
+boundary of the 3-simplex, topologically S², whose correct barcode is verifiable by hand: one essential H₀ class,
+one essential H₂ class), and reproduced even on `EnumeratingCofaceSimplexStream`, the well-established stream --
+so it isn't a stream-ordering issue at all, and existing `PersistenceInChunksSpec` coverage never exercised the
+multiple-tied-essential-classes-at-a-bounded-maxDim case that triggers it.
+
+Root cause, two distinct defects in `PersistenceInChunksContext.HomologyState` (`Homology.scala`), both now
+fixed: (1) `compress` (Algorithm 4) took a static snapshot of `Rk.items` before its elimination loop started,
+then mutated `Rk` inside the loop body -- any term newly introduced by a substitution (compressing away one
+cleared entry can pull in an unrelated *paired* cell never in the original snapshot) was silently never itself
+eliminated, letting an already-paired cell (which must never become anyone's pivot) survive as `Rk`'s final
+leading term and corrupt the cleared/paired invariant. Fixed by rewriting `compress` on top of
+`Chain.reduceByUntil`'s existing fixpoint loop (the same primitive `processCell`/`globalReduce` already use)
+instead of a hand-rolled single pass. (2) Fixing that alone wasn't sufficient: `globalReduce`'s own separate
+reduction (against `boundaries`, cleared pivots only) could *also* expose a newly-introduced paired cell
+partway through, and `globalReduce` had no elimination rule for paired cells at all -- only `compress` did, and
+by then `compress` had already finished running for that cell. Fixed by extracting the elimination rule into one
+shared `eliminationFallback` method and passing it to both `compress` and `globalReduce`. Also fixed in passing,
+defensibly if not proven load-bearing for the specific repro: `markActiveEntries`'s row scan used
+`takeWhile(_ => !isActive)`, stopping at the first row that makes a column active and leaving every later row in
+the same chain unclassified in `activeRows` even though `compress`/`eliminationFallback` look each one up
+independently later -- changed to a full scan. Full derivation, including the hand-traced repro's exact
+call-by-call sequence, in `WORKLOG-benchmark-and-chunks-bug.md`.
+
+Verified against `PersistenceInChunksContext` directly, not merely against agreement with `SimplicialHomologyContext`
+(agreement was exactly what this bug defeated for a while, so it can't be the only oracle): the S² repro above is
+pinned as `PersistenceInChunksSpec`'s own `HomologyFixtures.tetrahedronBoundaryDegenerateCells` fixture, alongside
+new `PersistenceInChunksSpec` cases reusing `RipserCohomologySpec`'s hand-verified 3-cycle-graph and
+filled-triangle fixtures and `HomologyFixtures.elderRuleExpected`, all checked against a hand-derived barcode
+directly. Full `sbt test`: 146 total, 143 passed, 0 failed, 3 skipped, 1 pending (`HomologySpec.scala`'s
+`BarcodeRegressionSpec` stays `skipAll`'d, accounting for the 3 skips -- see the
+cross-engine benchmark section above for why un-skipping it turned out to be premature) -- this touched shared
+machinery (`Chain.reduceByUntil`'s calling convention at two call sites; every stream's own bucket order), so a
+clean full run mattered more here than for a narrowly-scoped change.
+
+### Persistent homology (consuming a stream)
+
+`Homology.scala` contains **four independently-implemented** persistence algorithms sharing the `Chain` reduction
+primitives but with different tradeoffs — they are not variants of one shared engine, so a fix in one does not
+imply the others need it:
+
+1. `CellularHomologyContext` / `SimplicialHomologyContext`: the naive single-pivot-table boundary-reduction
+   algorithm (no clearing, no chunking, no cohomology/twist optimization) — the reference-grade baseline the
+   other two algorithms below get cross-validated against. Incremental (`advanceOne`/`advanceTo`/`advanceAll`) so
+   you can query `diagramAt`/`barcodeAt` a filtration value without finishing the whole stream; `barcodeAt`
+   annotates each `PersistenceBar` with an actual representative cycle, reconstructed via a V-column alongside the
+   ordinary boundary-matrix reduction (see the class doc in `Homology.scala` for the derivation). **Rewritten from
+   a "twist"-with-cohomology-bookkeeping variant that was silently wrong**: the old code summoned its
+   `Chain[CellT,CoefficientT] is RingModule` instance at `CellularHomologyContext` class scope, before any stream
+   (hence before the stream-specific filtration `Ordering[CellT]`) existed, so it permanently captured the
+   generic, filtration-blind `OrderedCell`-derived ordering instead — chain arithmetic silently pivoted on
+   lexicographic vertex order rather than filtration order whenever a multi-term chain got built through it. Fixed
+   by summoning `chainRM` inside `HomologyState` (where the correct per-stream ordering is in scope); the general
+   lesson — a generic `given` resolves its own implicit parameters once, at construction, not per later call to its
+   methods — applies to any future `chainRM`-style pattern in this codebase (see WORKLOG-naive-homology.md for the
+   confirmed repro). **Audited against `PersistenceInChunksContext` and `SimplicialHomologyByDimensionContext`**
+   (`WORKLOG-cohomology.md`'s "a different ordering bug" section has the full audit): `PersistenceInChunksContext`
+   also summons `chainRM` at class scope but is confirmed correct anyway — every pivot-relevant reduction goes
+   through `Chain.reduceByUntil`, a `def` that resolves `Ordering[CellT]` fresh per call site, not through the
+   stale `chainRM` closure — verified empirically against the same elder-rule discriminator fixture used below, not
+   just reasoned through (the capture mechanism is subtle enough that a read-through alone isn't trustworthy here).
+   `SimplicialHomologyByDimensionContext` was **not** auditable the same way: its `HomologyState` constructor
+   throws `NoSuchElementException` unconditionally for any complex with an MST edge (an unrelated, pre-existing
+   `barcode(0)`-read-before-init bug, `Homology.scala:427`/`490`), so it has never successfully run and the
+   ordering question is moot until that's fixed — see item 3 below. `package.scala`'s `TDAContext` was checked too
+   and left alone: its class-scope `chainIsRingModule` is exported purely for user-facing chain-arithmetic
+   convenience (`+`/`⊠`/an implicit `Simplex -> Chain` conversion), never consumed by any engine's own reduction
+   path, so a stale ordering there affects only how a user's own hand-built chain arithmetic displays/collides,
+   not any persistence computation. **Phase 2 (persistent cohomology + clearing + apparent pairs) is mostly done**:
+   persistent cohomology and clearing are implemented as `RipserCohomologyContext` (item 4 below); apparent pairs is
+   implemented too, but only partially — see item 4's own note for exactly what's landed vs. what's still open (the
+   full lazy optimization). `WORKLOG-naive-homology.md`'s "Phase 2 plan" section has the original plan;
+   `WORKLOG-cohomology.md` has what actually happened, including a correction to that plan (clearing turned out to be
+   required for correctness, not a later-stage optimization) and the apparent-pairs resolution (its "Apparent pairs:
+   resolved" section, after the earlier "negative result" section that stays as historical record) — read the latter
+   before continuing phase 2 work.
+2. `PersistenceInChunksContext`: the parallelizable "clear-and-compress" chunked algorithm (local reduction per
+   chunk, then global column compression/reduction), for larger complexes where cross-chunk work can be batched.
+3. `SimplicialHomologyByDimensionContext`: dimension-0 and the births of dimension-1 classes read off directly via
+   Kruskal's algorithm/union-find over the stream's own dimension-0/1 cells (elder rule: a tree edge kills the
+   younger of the two components it joins; a non-tree edge births a new 1-cycle), higher dimensions via the same
+   reduction approach as (1) but processed strictly dimension by dimension. **Fixed and cross-validated this
+   session** (`WORKLOG-mst-and-perf.md` has the full account) — it was previously non-functional, and turned out
+   to have five distinct bugs, not the two originally suspected: (i) an unguarded `barcode` map read
+   (`NoSuchElementException` on any complex with an MST edge), (ii) a missing `given Ordering[Simplex[VertexT]] =
+   stream.filtrationOrdering` (chain arithmetic silently falling back to lexicographic order), (iii) the
+   dimension-0/1 setup itself took an edge's own two raw endpoints as "the vertex that dies" instead of reducing
+   against `boundaries` first, which breaks as soon as a cascade touches an already-killed vertex twice in the
+   same pass -- fixed by dropping `Kruskal`'s own eager, complete-graph-assuming `mstIterator`/`cyclesIterator`
+   entirely and instead reducing every dimension-1 cell (in the stream's own already-correct filtration order)
+   through the exact same `Chain.reduceBy` primitive `advanceOne` uses for every other dimension, (iv)
+   `advanceTo`'s loop condition gated on `currentIterator.hasNext`, which starts `false` (`Iterator.empty.buffered`)
+   and is only ever refilled by a call this same condition was blocking -- no dimension >= 2 cell was ever
+   processed before this fix, for any input, (v) finite bars above dimension 0 were filed under the *killing*
+   cell's own dimension instead of the *killed class*'s dimension (one lower). `SimplicialHomologyByDimensionSpec`
+   is this class's first-ever regression suite: hand-verified fixtures (including one fully-degenerate,
+   all-cells-tied-at-one-value case), the bars-account-for-cells structural invariant, and cross-validation
+   against `SimplicialHomologyContext` on 100+ random Vietoris-Rips point clouds, all passing.
+   **Deliberately not (yet) wired into `CellularHomologyContext`/`PersistenceInChunksContext` as an actual
+   performance fast path** -- see `WORKLOG-mst-and-perf.md`'s "Decision" section: the `Chain.reduceBy`-based
+   version validated here is provably correct but pays the same `filtrationOrdering` comparator cost as general
+   reduction, so it isn't obviously faster; a genuine speedup would need raw `UnionFind` instead, which needs its
+   own dedicated validation before touching the reference oracle every other engine is checked against.
+4. `RipserCohomologyContext`: persistent *co*homology via Ulrich Bauer's Ripser algorithm
+   (arXiv:1908.02518), specialized to `Simplex[Int]` Vietoris-Rips/clique complexes via `SimplexIndexing`'s
+   combinatorial number system (a deliberate narrowing from (1)'s generic `CellT: OrderedCell`, agreed with the
+   project lead) and one-shot (no incremental `advanceTo`-style querying, also agreed scope). Cross-validated
+   against (1) — see `WORKLOG-cohomology.md` for the full pivot-orientation/birth-death-dimension derivation
+   (re-derived directly from the paper, not from memory) and the validation strategy.
+   **Clearing is included and is load-bearing for correctness, not an optional speedup layered on an
+   already-correct baseline** — an early draft without it passed every hand-built fixture but reported spurious
+   essential cohomology classes on real inputs (confirmed by hand-deriving H¹ of a plain 3-cycle graph: 3
+   reported vs. the correct 1), because Proposition 3.1's essential-index definition requires excluding any
+   simplex already claimed as a pivot one dimension down, not just checking its own column reduces to zero. See
+   `WORKLOG-cohomology.md`'s "clearing is required for correctness" section before touching this. **Apparent pairs
+   (Ripser's other major optimization, Definition 3.2/Proposition 3.9) is implemented, including the on-the-fly
+   lazy substitution** — `zeroPivotCofacet`/`zeroPivotFacet`/`zeroApparentCofacet`/`zeroApparentFacet`
+   (reimplemented from scratch against `SimplexIndexing`'s full unrestricted iterators, confirmed term-for-term
+   against Ripser's own `get_zero_pivot_facet`/`get_zero_pivot_cofacet`/`get_zero_apparent_facet`/
+   `get_zero_apparent_cofacet` in `ripser.cpp`, NOT reusing `RipserStreamBase`'s `zero*` helpers or
+   `Cofacets.scala`'s `apparentVertex` — both flagged as using a restricted, false-negative-prone cofacet
+   iterator) gate `persistentCohomology`'s main loop: when a genuine mutual apparent pair `(sigma, tau)` is found,
+   `coboundaryOf(sigma)` is NOT computed at all and `basis(tau)` is never written — only `generators(tau)` (a
+   trivial single-term V-column) and the bar itself. If some OTHER column's own reduction later reaches `tau` as
+   an unresolved pivot, `Chain.reduceBy`'s new `fallback` parameter (`Chain.scala`) recomputes
+   `coboundaryOf(zeroApparentFacet(tau).get)` fresh, right there, and folds it in — this is Ripser's own
+   `compute_pairs` on-the-fly substitution, confirmed against `ripser.cpp` directly to do no caching anywhere
+   (recomputes every time a pivot is hit, even by a different column later), so this codebase deliberately
+   doesn't cache it either. Correctness of recomputing via `zeroApparentFacet` rather than consulting a map
+   built up during the sweep: the mutual apparent-pair condition is a pure fact about filtration values and
+   combinatorial indices, so it doesn't depend on *when* or *how* `tau` was reached — unlike a map keyed by
+   "who claimed this pair first," which would need its own soundness argument for the mid-cascade case (see
+   `zeroApparentFacet`'s doc). See `WORKLOG-cohomology.md`'s "Apparent pairs: resolved" section for the
+   apparent-pairs derivation itself, the Ripser source line citations for the mutual-pair check, and a real bug
+   caught along the way (storing only `{tau -> sign}` in `basis(tau)` instead of sigma's complete coboundary —
+   passed every hand-built fixture, broke on a fuzzed 12-point counterexample, now a pinned regression test in
+   `RipserCohomologySpec`, and the reason this engine recomputes the FULL coboundary on substitution too, not
+   a shortcut of it).
+
+   **Sparse Rips (`maxFiltrationValue`, default `metricSpace.minimumEnclosingRadius` as of a later session —
+   see below) and optional memoization (`memoizeFiltrationValue`, default `false`) are both implemented** — a
+   second, later session, deliberately
+   NOT matching `AlphaShapeDQP`'s always-untruncated convention ("alpha shapes and Ripser reproduction are
+   different sections of the library with minimal interaction," an explicit call from the project lead).
+   `filtrationValue` is memoized only when `memoizeFiltrationValue = true` (a `mutable.HashMap` wrapper,
+   unchanged from the first attempt at this); **it defaults to `false`, on an explicit correction from the
+   project lead**: Ripser's own historical design goal was memory frugality (the classic bottleneck for
+   persistent homology implementations), not raw speed — a global cache of every filtration value ever
+   touched runs directly against that on large complexes, so it isn't the default. The actual replacement is
+   `insertionDiameter`, an O(d) incremental cofacet-diameter formula (`max(parent's own diameter, max distance
+   from the parent's vertices to the newly inserted vertex)`, Ripser's own `simplex_coboundary_enumerator`
+   recurrence, confirmed against `ripser.cpp` directly) threaded through a new `DiameterSimplex` carrier —
+   this ELIMINATES `MaximumDistanceFiltrationValue`'s O(d²) full-pairwise-recompute for cofacet enumeration
+   entirely, rather than paying for it once and caching the answer, which is strictly better on every axis
+   that matters here (no growing memory footprint, no hashing, no first-computation cost to amortize).
+   `persistentCohomology`'s per-dimension candidate list is now assembled incrementally dimension-by-dimension
+   (`sparseCofacets`, the "insert a vertex strictly above the simplex's own maximum" canonical-facet
+   convention `SimplexIndexing.topCofacetIterator` already uses) instead of `(0 until binomial(n, d+1))`
+   direct indexing — critically, assembled from EVERY dimension-d simplex, cleared/apparent-paired ones
+   included, not just the ones independently reduced (confirmed from `ripser.cpp`'s own
+   `assemble_columns_to_reduce`: its `next_simplices.push_back(...)` runs unconditionally, BEFORE the
+   exclusion checks that shrink `columns_to_reduce` — clearing controls what gets independently reduced,
+   never what's a valid source for the next dimension's cofacets). `coboundaryOf`/`zeroPivotCofacet` also use
+   `insertionDiameter` instead of `filtrationValue(tau)` per candidate; `zeroPivotFacet` does NOT (removing a
+   vertex has no equally cheap incremental formula — a real, named scope boundary, not an oversight).
+   Emergent pairs (Definition 3.11, Ripser's OTHER apparent-pairs fast path) is deliberately NOT implemented —
+   its guard interacts with `basis` occupancy and apparent-pair exclusion in a way two prior designs in this
+   file's history already died on, so it's pure speed layered on a now-verified base, left for later rather
+   than risked in the same pass. `totalSimplexCount` (a new public accessor, reset per `persistentCohomology()`
+   call) replaces `Σ binomial(n, d+1)` for the bars-account-for-cells structural invariant once a threshold is
+   in play — the binomial formula assumes every combinatorially-possible subset exists, true only at
+   `maxFiltrationValue = +Infinity`.
+
+   **Correctness oracle for the threshold**: NOT thresholding the naive engine's own input stream (a real trap
+   — `SparseMetricSpace.distance` returns `+Infinity` past its cutoff rather than excluding the simplex, so
+   `EnumeratingCofaceSimplexStream` over it would emit simplices at `fv = +Infinity` the sparse engine excludes
+   outright, for reasons that have nothing to do with a bug). Instead: a thresholded Vietoris-Rips filtration's
+   persistence is EXACTLY the untruncated filtration's own persistence restricted to `[0, t]` (a bar born after
+   `t` never existed at all; a bar straddling `t` truncates to essential at `t`) — both sides come from the
+   SAME engine, so tie-breaks agree and the comparison covers the full bar list, zero-length bars included, on
+   200 random Vietoris-Rips clouds (`RipserCohomologySpec`). Also pinned: `maxFiltrationValue = +Infinity`
+   (explicit or default) reproduces the pre-threshold engine's output bit-for-bit on every existing fixture,
+   and `memoizeFiltrationValue` toggled true/false changes nothing about the computed barcode (200 random
+   clouds).
+
+   **Measured performance, both real and honestly attributed** (`SparseRipsBenchmarkSpec`,
+   `ApparentPairsBenchmarkSpec` with `-Dmemoize`): a threshold scaled as `~2.5/sqrt(n)` (keeping the expected
+   neighborhood size roughly constant as `n` grows, rather than the complex getting denser) measured 3.85x–
+   15.1x wall-clock speedup at n=40–80, GROWING with n as expected for an untruncated complex's `O(n^{d+1})`
+   growth — but the same runs' `totalSimplexCount` shows the sparse/dense SIZE ratio (10.5x–32.5x) exceeds the
+   time ratio at every n, meaning the speedup is dominated by, and actually runs somewhat below, the reduction
+   in complex size — not an artifact of extra per-simplex overhead in the new enumeration mechanism, which is
+   the honest framing, not "the threshold makes the algorithm smarter." Separately, `memoizeFiltrationValue
+   = false`'s own cost (previously unmeasured — flagged and fixed within the same session after a second
+   advisor pass) is a real but modest 5%–25% slowdown on the dense (untruncated) path at n=40–80, shrinking as
+   n grows — a defensible tradeoff for the stated memory-frugality goal, not a silent regression.
+
+   **Deferred, on purpose, not by oversight**: Ripser's own compact `(Double, Int)` `diameter_index_t`
+   representation — `DiameterSimplex` carries a full `Simplex[Int]`/`SortedSet[Int]` instead, a
+   speed/simplicity choice made AGAINST the project's stated memory goal, flagged in `DiameterSimplex`'s own
+   doc as a live option for a future session, not something to silently "fix." See
+   `WORKLOG-lazy-enumeration.md`'s "Session 2" section for the full derivation, the advisor corrections that
+   shaped it (recompute `zeroApparentFacet` rather than cache a claim-order map; measure the memoization cost
+   rather than infer it; separate size-reduction from mechanism-efficiency in the benchmark), and the API
+   changes a distance threshold would need if a from-scratch reader wants to extend this further (the note was
+   already there before this session started implementing).
+
+**Bug found while cross-validating (4) against (1), fixed**: `EnumeratingCofaceSimplexStream.filtrationOrdering`
+(`SimplexStream.scala`) used to be `Ordering.by(filtrationValue)` — no secondary tie-break — so it wasn't a
+total order: it treated any two *different* simplices tied at the same filtration value as equal, which
+happens by construction on every Vietoris-Rips complex with `maxDimension >= 2` (a triangle always ties with
+its own longest edge). `CellularHomologyContext` bakes `stream.filtrationOrdering` into `Chain.reduceBy`'s
+`SortedMap`, so two tied cells collided as one map key and the reduction silently garbled pairings.
+
+Fixed at the source, on explicit instruction: `filtrationOrdering` is now filtration value (reversed, so
+smaller-under-this-ordering = younger), then dimension, then **colexicographic** order via `simplexIndexing`'s
+own combinatorial-number-system index — colex specifically to match Ripser's own Definition 3.2/Proposition 3.9
+"lexicographically refined" tie-break, not `FilteredSimplexOrdering`'s plain lex.
+
+Fixing that tie-break alone then *exposed* a second, distinct bug: `iterateDimension` in
+`EnumeratingCofaceSimplexStream`, `RipserCofaceSimplexStream`, and `InorderCofaceSimplexStream` sorted each
+dimension's bucket via its own independent `.sortBy(filtrationValue)` (or, in one `RipserCofaceSimplexStream`
+call, `.sorted(using filtrationOrdering)` with no `.reverse` — silently correct only because the *old*,
+non-reversed `filtrationOrdering` happened to already sort oldest-first) — a *different* total order from
+`filtrationOrdering` on exactly the cells that tie. Algorithm 1 requires processing order (columns) and pivot
+order (rows) to be indexed by one shared total order; two independently-tie-broken orders that disagree,
+even though each is individually a valid total order, violates that precondition. This produced a crash
+(`IllegalStateException: reduction pivot ... was not a recorded open class`) on a 4-point unit-square fixture
+once (1) alone was fixed. **General lesson**: a stream's `iterateDimension` order and its `filtrationOrdering`
+must be the *same* total order, one the consistent `.reverse` of the other — not merely "each independently
+valid." Fixed by replacing every `.sortBy(filtrationValue)` (and the one un-reversed `.sorted(using
+filtrationOrdering)`) with `.sorted(using filtrationOrdering.reverse)` — `.reverse` on the *same* `Ordering`
+object, not a second, independently-built comparator (an earlier attempt at "oldest-first" via
+`FilteredSimplexOrdering` broke exactly this way: its dimension tie-break didn't reverse consistently with a
+separately-reversed primary key). `InorderCofaceSimplexStream`'s own coface generation doesn't sort at all
+(order comes from the metric-space structure directly); checked independently and found to already agree with
+the fixed `filtrationOrdering` on the same square fixture. Verified: square-fixture crash gone, resulting
+barcode independently correct by hand count, full targeted regression (`HomologySpec`,
+`PersistenceInChunksSpec`, `RipserCohomologySpec`, `SimplexStreamSpec`, `SimplexIndexingSpec`,
+`RipserStreamSpec`, `VietorisRipsSpec`, `CofaceSimplexStreamSpec`) clean. Full derivation in
+`WORKLOG-cohomology.md`. (`SimplicialHomologyByDimensionContext`, the third live persistence engine, was not
+exercisable by this regression at all — see item 3 above, it's non-functional independent of this bug.)
+
+`Barcode.scala` (package `org.appliedtopology.tda4j.barcode`) defines the persistence-diagram representation:
+`BarcodeEndpoint` (open/closed/±∞) and `PersistenceBar`, plus algebra on finitely-presented persistence modules.
+
+### Dead/experimental code, kept intentionally
+
+- `SimplicialSet.scala` is entirely commented out — a sketch for a future simplicial-set (as opposed to simplicial
+  complex) representation. Don't delete without checking with the maintainer; it's a placeholder, not cruft.
+- `Deferred.scala` is an experiment in representing arithmetic as an AST (`FractionalExpr`) evaluated by a
+  pluggable `FractionalHandler`, exploring algebraic-effect-style deferred coefficient choice. Not wired into the
+  rest of the library yet.
+- The bottom third of `Homology.scala` (below `SimplicialHomologyByDimensionContext`) is commented-out prior art
+  (`RipserHomology`, `computePersistentHomology`) kept for reference while the three live contexts above were
+  developed.
+
+## Alpha complex: DQP vs Helix
+
+`AlphaComplexDQP.scala` implements Erik Carlsson & John Carlsson, *Computing the alpha complex using dual active
+set quadratic programming*, Scientific Reports 14:19824 (2024), https://doi.org/10.1038/s41598-024-63971-3. The
+QP solver follows DAQP (Arnström, Bemporad & Axehill, IEEE TAC 67(8):4362–4369, 2022,
+https://github.com/darnstrom/daqp — the paper's own reference [27]); the paper's problem (9) is already in DAQP's
+canonical inner form (H = I, a least-distance problem), so DAQP's H-factorisation is unnecessary and its recursive
+LDL^T updates collapse to Cholesky update/downdate of `B_W` (`CholeskyWorkspace` in the source, a hand-rolled
+incremental Cholesky — deliberately not Apache Commons Math's `CholeskyDecomposition`, which has no update/downdate
+API and would force an O(k³) full refactorisation per active-set step instead of O(k²)).
+
+Math cheat sheet (so it doesn't need re-deriving from the paper): base vertex `x`, neighbours `x_i`, power weights
+`p`. **Filtration values are squared radii (powers)** per the paper's Definition 10 — `radiusOf` takes the sqrt
+(and `AlphaShapeDQP.filtrationValue` goes through `radiusOf`, not the raw squared value, specifically so it
+matches `HelixDelaunay.filtrationValue`'s units under the shared `AlphaShapes` contract — the two are meant to be
+dispatch-interchangeable). The dual objective only needs *squared distances*, not the dot products the paper
+frames it with: `B_ij = (d²(i,x) + d²(j,x) - d²(i,j))/2` — so `PowerDistance` sits on squared distance rather than
+extending `FiniteMetricSpace` directly (which is unsquared); it bridges via `PowerDistance.toMetricSpace` where
+interop is actually needed (e.g. `cechNeighbours()`'s VP-tree spatial index, `JVPTree` from
+`FiniteMetricSpace.scala`), not by inheritance. Caveat: `B` is PSD only for Euclidean-embeddable metrics.
+
+`AlphaShapeDQP` (what `Alpha(pts, "DQP")` actually constructs) always computes the complete, **untruncated** alpha
+complex (`maxRadius = Double.PositiveInfinity`), specifically to match `HelixDelaunay`'s always-untruncated
+behaviour — `metricSpace.minimumEnclosingRadius` was tried as the default first and rejected, because degenerate
+configurations produce simplices with arbitrarily large circumradius (see the degeneracy hazard below) that a
+finite bound silently excludes. Callers who want an actually radius-truncated alpha complex should call
+`AlphaComplexDQP.euclidean(points, maxRadius, maxDimension, settings)` directly.
+
+**Extensive numerical-robustness work has gone into `DualQP.solve`** (see `WORKLOG.md` at the repo root for the
+full derivation of each, including concrete counterexample point clouds) — treat these as settled, verified
+design decisions, not things to casually retune:
+- `rankTolerance` default is `1e-6`, not the more "obvious" `1e-12`: a Schur-complement ratio as large as `~1e-8`
+  has been observed to poison the Cholesky factor (multipliers blowing up to `~1e14`) and cause genuine
+  non-terminating active-set cycling (confirmed non-terminating at 100,000 iterations, not just slow) —
+  `[1e-7, 1e-5]` is the empirically-verified safe range; `1e-4` starts rejecting genuinely non-degenerate
+  directions and silently gives a wrong answer instead.
+- The ratio tests in the singular-step handling break ties by the constraint's **global** index, not its position
+  in the working set (Bland's-rule anti-cycling) — working-set position isn't a stable ordering, so breaking ties
+  by it lets the same pair of global indices swap forever without progress.
+- **Known, accepted limitation** (do not "fix" this without re-reading `WORKLOG.md` first): when the entering
+  variable's Schur complement is small and no active inequality can be swapped out to compensate, `DualQP.solve`
+  conservatively treats the candidate as infeasible rather than committing the small pivot directly. This *can*
+  wrongly exclude a genuinely-Delaunay simplex near certain near-degenerate configurations. A mathematically
+  "more correct" fix (commit anyway when `s > 0`, since the dual objective has a genuine finite maximum at
+  `t* = grad_j / s`) was implemented and reverted: two counterexamples with near-identical Schur-complement ratios
+  (`~3.4e-7` legitimate, `~3.0e-7` catastrophic) required opposite handling, proving no fixed numerical threshold
+  can safely distinguish "safe to commit" from "will poison the factor" — it depends on the rest of the working
+  set's conditioning, not that one ratio in isolation. `solveAtVertex` also has a defense-in-depth per-candidate
+  catch so a not-yet-characterised non-convergence case excludes just that one candidate (logged to stderr)
+  rather than aborting the whole complex.
+- **Vertex filtration values must go through `space.weight(x)`, not a bare `0.0` default.** `weights`/`witnesses`
+  (the `HashMap`s backing `AlphaComplexDQP.filtrationValue`/`.witness`) are only ever populated for `k>=1`
+  candidates inside `compute()`'s main loop — vertices are added to `byDim(0)` separately and need their own
+  entries set explicitly (`weights(f) = -space.weight(x)`, per Definition 10 evaluated at a vertex where the
+  unconstrained minimiser is trivially `y*=x`; `witnesses(f) = coordsOf(x)`). Defaulting to `0.0`/`null` is only
+  correct in the unweighted case — with nonzero weights it silently breaks the monotonicity invariant (a vertex
+  can report a *larger* filtration value than an edge through it). Caught by `AlphaComplexDQPWeightedSpec`, which
+  is the only place weighted complexes get exercised end-to-end at all (`HelixDelaunay` is plain-Euclidean-only
+  and can't serve as ground truth for the weighted case, so this spec checks structural invariants only, the same
+  way the unweighted `AlphaComplexSpec` does, not a full correctness proof).
+- `AlphaComplexDQPRegressionSpec` (in `AlphaComplexSpec.scala`) pins two hand-verified adversarial point clouds
+  (a facet-closure counterexample and the cycling counterexample above) as permanent regression tests, alongside
+  the original 3x3-grid repro in `AlphaValidationSpec` and a broader `AlphaComplexSpec` property suite
+  (`minTestsOk = 2000`, not the scalacheck default of 100 — the bugs above had verified failure rates as low as
+  1-in-12000, so 100 samples gives weak protection). `AlphaComplexDQPSpatialIndexSpec` separately cross-checks
+  `cechNeighbours()`'s VP-tree-based implementation (used when `maxPower` is finite; the default unbounded mode
+  takes a separate "everyone is everyone's neighbour" path where a spatial index buys nothing) against a
+  preserved brute-force reimplementation — correctness never depends on the index, only performance does, and the
+  win is real but regime-dependent (scales with N in sparse/local neighbourhoods, the normal alpha-complex case;
+  no benefit, even a small regression, in dense near-complete-graph neighbourhoods).
+- Writing more specs2 code with `Seq[Simplex[_]]` in this file: give it an explicit type ascription
+  (`val xs : IndexedSeq[Simplex[Int]] = ...`) before calling `.forall`/similar on it. Without one, in a class
+  mixing specs2's `ScalaCheck` trait, `.forall` can resolve to a specs2 `ValueCheck`-based extension instead of
+  the standard-library one, breaking type inference inside the lambda with confusing "value X is not a member of
+  ValueCheck[Simplex[Int]]" errors. Not fully root-caused; the explicit ascription reliably fixes it.
+
+**`HelixDelaunay` had two of its own independent robustness bugs**, found incidentally while using it as DQP's
+cross-validation ground truth (see `WORKLOG.md` Part 3 for full repro/root-cause detail):
+1. **Fixed and verified.** `assert(validated.nonEmpty)` at the initial-simplex bootstrap used to fail on ordinary
+   random input at roughly a 1-in-600 rate: when more than `ambientDimension` points lay on the discovered
+   hull-supporting hyperplane (common for grid-like/degenerate clouds), the code collapsed `startingSimplex` down
+   to just 2 points regardless of `ambientDimension`, starving the subsequent bootstrap of a well-posed
+   circumsphere. Fixed by greedily growing an affinely-independent subset of exactly `ambientDimension` points
+   (rank-checked via `SingularValueDecomposition`) instead. 20,000-trial fuzz re-run: zero failures.
+2. **Partially fixed; residual behavior is a known, accepted limitation, not a bug left open by oversight.**
+   `addFrontierCase`'s facet-deduplication check compared a `d`-vertex facet against a `(d+1)`-vertex full
+   simplex (always `false`, dead code) instead of the facet actually derived from it — fixed, but this alone
+   didn't meaningfully change the failure rate. The dominant cause: on point clouds containing a near-cospherical
+   local cluster (circumradii of multiple candidate top-dimensional simplices agreeing to ~4-5 significant
+   figures — closer than `HelixDelaunay`'s own `handleCosphericalPoints` tiling logic detects, since that logic
+   only checks how many points lie near *one already-chosen* candidate's own circumsphere, not near-ties *across*
+   competing candidates), the frontier walk's greedy first-empty-candidate search becomes order-dependent: a seed
+   sweep of one adversarial example found the DQP-matching (correct) triangulation only 8% of the time across 300
+   reconstructions, an incomplete-but-locally-consistent one 25% of the time, and an entirely disjoint, wrong
+   triangulation the remaining 66% of the time. Quantified prevalence: **zero failures in 20,000-trial fuzz sweeps
+   at ambient dimension 2 and 5** (generic, not adversarially-minimized, point clouds) but **~1-in-170 at ambient
+   dimension 4 with 20-30 points** — ordinary-looking inputs, not just contrived minimal counterexamples. A real
+   fix needs joint near-tie detection across all competing candidates before committing to one, using a tie-break
+   convention consistent with DQP's own (Bland's-rule) one — a genuine algorithm change, out of scope for a
+   bounded bug fix. This mirrors DQP's own already-accepted "conservative exclusion near thin Schur complements"
+   limitation in spirit (see the reverted "commit anyway" fix above) — same category of problem, same reason not
+   to chase a fragile threshold-based patch.
+   This means **Helix is not a fully reliable ground truth for automated cross-validation fuzzing on point clouds
+   with ambient dimension ≥ 4 and no assurance against near-cospherical local structure** —
+   `AlphaCrossValidationSpec`'s broad `forAll`-based DQP-vs-Helix comparisons are deliberately *not* wired into
+   `sbt test` (kept as `unsafeCompare`/`unsafeFuzzCompare` diagnostic methods instead — a real Helix bug would
+   otherwise masquerade as a DQP regression or vice versa). `specs2`'s `pendingUntilFixed` was tried for this and
+   rejected: it's for a deterministically-known-failing example, and flags an unexpected *pass* as itself a
+   failure — wrong semantics for a bug that only triggers probabilistically.
+
+**Degeneracy hazard worth knowing before "fixing" complex sizes that look too big:** in degenerate (cospherical)
+position the alpha complex is *not* a Delaunay subcomplex. `k` cospherical sites sharing a Voronoi vertex
+contribute a `(k-1)`-simplex — e.g. a unit grid in the plane produces 3-simplices (one per unit square), a unit
+grid in R³ produces 7-simplices (one per unit cube). Truncating at the ambient dimension gives the *wrong homotopy
+type*, not merely a truncated one. CGAL/GUDHI users will not expect this; it is correct, not a bug. The
+`AlphaValidationSpec` grid test is a mild version of exactly this: two near-collinear rows produce two
+"sliver" simplices with circumradius ~40-60x the point cloud's diameter, which both backends correctly include.
+
+Honest framing to keep when discussing this work: the paper's own benchmarks are mixed against Ripser (loses on
+2 of 4 persistence examples) and against qhull-based Delaunay on some inputs. The genuine value proposition is
+high ambient dimension (where Delaunay is infeasible), exact homology rather than persistence diagrams, and much
+smaller complexes than Vietoris–Rips when data sits near a low-dimensional subspace — not raw speed.
+
+## MATLAB API
+
+`org.appliedtopology.tda4j.matlab` (`Tda4j.scala`, `PersistenceResult.scala`) is a Java-facing facade for calling
+this library from MATLAB via MATLAB's built-in Java interface (`javaaddpath` + the `sbt assembly` fat jar). Every
+public method takes/returns only `double`, `int`, `String`, `double[][]`, or `String[]` — no `java.util.Map`, no
+generics, nothing Scala-specific — on explicit instruction from the project lead, who rejected an initial
+`Map<String,Object>`-based design as unusable from MATLAB. Options are a flat alternating key/value `String[]`
+(`{"engine","naive","maxDimension","3"}`) rather than fixed parameters, specifically so new options never change a
+method's call signature. `Tda4j.computeFromPoints`/`computeFromDistanceMatrix` dispatch across `complex`
+(`vr`/`alpha`), `engine` (`ripser`/`naive`/`chunks`, with `alpha` refusing `ripser` and `chunks` — the latter
+because `complex=alpha` + `engine=chunks` is the exact combination `HomologySpec`'s `BarcodeRegressionSpec` stays
+`skipAll`'d for), and coefficient field (`Z` — a prime finite field, default `prime=2`, matching the TDA research
+literature's own convention — or `R`, `Field.DoubleApproximated`, which is what this codebase's *own* existing
+cross-validation specs default to instead; a deliberate, known divergence, not an oversight). `PersistenceResult`
+is non-generic on purpose: it eagerly converts to plain `int`/`double` arrays for the barcode itself
+(`toArray()`, N-by-3: dimension/birth/death) and lazily, via a captured closure, for representative-chain access
+(`cycleVertices`/`cycleCoefficients`), throwing `UnsupportedOperationException` rather than returning something
+empty when an engine genuinely has no chain to report (`engine=chunks` always; `engine=ripser` for a bar resolved
+via the apparent-pairs shortcut). Boundary-matrix export is designed for (a second such closure) but not yet
+implemented.
+
+**Two real bugs were found and fixed via this facade's own cross-validation, not inherited from either engine.**
+First: the `engine=naive` VR path originally built `EnumeratingCofaceSimplexStream` directly, which has no
+dimension cap of its own (only a filtration-value one — CLAUDE.md's `.iterator` notes above cover why its
+`iterateDimension` is merely bounded by `d < metricSpace.size`) — so despite `maxDimension` defaulting to 2 and
+being threaded correctly to `engine=ripser`/`chunks`, the naive path silently computed through higher dimensions
+than requested. Caught by `Tda4jSpec` checking that `engine=ripser` and `engine=naive` agree through the facade on
+a fixed point cloud (they didn't). Fixing this alone — wrapping the stream in
+`LimitedCofaceSimplexStream(rawStream, maxDimension)`, the same wrapping `RipserCohomologySpec`'s own `naiveBars`
+helper already uses — made the two engines *agree*, but not *correct*: **computing H_k correctly requires
+(k+1)-dimensional chains** (H_k = ker(∂_k)/im(∂_{k+1}); with no (k+1)-chains at all there's no way to tell a
+genuine k-cycle from one a not-yet-built (k+1)-simplex would have killed), so building only to `maxDimension` and
+reporting its own top dimension makes every top-dimension class look essential *by construction* regardless of
+whether it actually is — a well-known truncation artifact, not engine-specific behavior, per the project lead
+after reviewing the first fix. Corrected by building to `maxDimension + 1` internally for `complex=vr` (across all
+three VR engines) and dropping bars at the requested-and-beyond dimension from what's reported, keeping
+`"maxDimension"` as the public option name (still the intuitive "give me H_0..H_k" reading) while its internal
+meaning shifted from "highest simplex dimension to build" to "highest homological degree to report."
+`complex=alpha` needed no equivalent change — an alpha complex's chain complex terminates on its own (see the
+degeneracy-hazard note above), so it's never artificially cut short by this option to begin with, and its own top
+dimension is genuine information rather than scaffolding. `Tda4jSpec` pins the fix as a discriminating regression
+(the old, un-corrected construction is asserted to actually disagree with the corrected one on the same cloud, not
+just re-checked for self-consistency). See `WORKLOG-matlab-api.md` for the full account, including the MATLAB-side
+spikes attempted (fat-jar build succeeded; confirming MATLAB's own bundled JVM version and its actual
+`double[][]`/`String[]` marshalling behavior could not be completed from this environment and remain open, not
+silently assumed to work).
+
+## Session practices
+
+**Any session that does a substantial investigation or debugging arc (tracking down a root cause, fixing more
+than one related bug, a profiling/benchmarking pass) should write a `WORKLOG-<topic>.md` at the repo root**,
+even without an explicit ask to keep one going — this has been asked for repeatedly and should be the default,
+not something the project lead has to remember to request each time. See [[tda4j-worklog-convention]] /
+the existing `WORKLOG-*.md` files for the expected shape: a point-in-time record of what was tried, what the
+root cause turned out to be, and what's still open, kept separate from `CLAUDE.md` (which reflects only the
+final shipped state, updated at the end of the arc). Worklogs are not retroactively edited later.
+
+## Collaboration preferences
+
+The project lead values intellectual honesty and direct pushback over agreement — say plainly when an approach is
+a dead end, when benchmarks are mixed, or when a deliverable is unverified, rather than softening it. This has
+been well received repeatedly on exactly this alpha-complex work (mixed paper benchmarks, an uncompiled
+deliverable, a drifted reference oracle, bugs in existing code, a "fix" that turned out to be numerically unsafe
+and had to be reverted) — don't reflexively hedge findings like these.

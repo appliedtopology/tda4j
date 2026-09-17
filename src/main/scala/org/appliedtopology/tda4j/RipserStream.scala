@@ -1,6 +1,5 @@
 package org.appliedtopology.tda4j
 
-import scala.collection.Searching.{given, *}
 import org.apache.commons.numbers.combinatorics
 import org.appliedtopology.tda4j.barcode.{ClosedEndpoint, OpenEndpoint, PersistenceBar}
 
@@ -25,25 +24,70 @@ def binomialBigint(n: Int, k: Int): BigInt =
     if k == 0 || k == n then 1
     else binomialtail(n - k + 1, 1, BigInt(1))
 
-def binomial(n: Int, k: Int): Int = binomialBigint(n, k).intValue
+/** Returns `Long`, not `Int`: a combinatorial index (unlike `n`/`k` themselves, which stay realistically small --
+  * vertex counts and dimension-derived sizes) can be astronomically larger than either input, and silently truncating
+  * it is exactly the bug this signature change fixes -- see WORKLOG-simplexindexing-overflow.md. Confirmed directly:
+  * `C(229,5) = 5,022,337,545` used to truncate to `727,370,249` via the old `Int`-returning `.intValue`, and
+  * `C(229,6) = 187,500,601,680` truncated to `-1,477,959,344` (negative) -- both well within a realistic point-cloud
+  * size, not a contrived edge case. `Long` matches `ripser.cpp`'s own `int64_t`/`long long` for this exact purpose, not
+  * chosen arbitrarily -- and is dramatically cheaper than `BigInt` throughout, which matters here since this backs
+  * `Ordering[Simplex[Int]]`'s comparator, consulted on every `SortedMap`/ `PriorityQueue` operation during reduction,
+  * the hottest path in the engine. `Long` is not infinite either, so this still asserts rather than silently repeating
+  * the same class of bug one order of magnitude further out -- a real, if astronomically unlikely for any complex
+  * actually computable in practice, failure mode.
+  */
+def binomial(n: Int, k: Int): Long =
+  val big = binomialBigint(n, k)
+  require(big.isValidLong, s"binomial($n, $k) = $big overflows Long -- this complex is too large to index")
+  big.longValue
 
 class SimplexIndexing(val vertexCount: Int):
 
-  /** Table of binomial coefficients for fast lookups.
-    *
-    * In order to make the simplex <-> index mapping work, this table encodes binomial coefficients (d+s \choose s) so
-    * that binary search along each such diagonal works.
+  /** Lazily-memoized `binomial(d + s, s)` lookup -- NOT an eagerly-computed full `(vertexCount+1) x (vertexCount+1)`
+    * table (a prior version of this class had exactly that, computing every `(d, s)` pair up front regardless of
+    * whether `d` values that large are ever used). In every real call, `d` is bounded by the SIMPLEX SIZE being
+    * encoded/decoded (small -- `apply`'s own recursion only ever decreases `d`, starting from an actual simplex's
+    * vertex count), never by `vertexCount` itself, so eagerly filling rows out to `d = vertexCount` computed
+    * astronomically large, NEVER-READ entries for any nontrivial `vertexCount`. Confirmed directly, not hypothesized:
+    * `SimplexIndexing(230)`'s eager construction failed on `binomial(207, 195)` (`d=12, s=195`) -- a `(d, s)` pair no
+    * real cofacet/facet/encode/decode call for this codebase's actual dimension range would ever need, but which the
+    * eager table computed anyway just by iterating `d` up to `vertexCount`. See `binomial`'s own doc and
+    * WORKLOG-simplexindexing-overflow.md for the full account (this table itself is where the `Int`-truncation bug that
+    * motivated the `Long` migration was silently swallowing out-of-range values before this same problem became
+    * `Long`-overflow instead of a wrong answer). Memoizing per-`(d,s)`-pair on demand means only the pairs a real call
+    * actually needs ever get computed, and those stay well within `Long`'s range for any complex actually computable in
+    * practice.
     */
-  val binomialTable = (0 to vertexCount).map { d =>
-    (0 to vertexCount).map { s =>
-      binomial(d + s, s)
-    }
-  }
+  private val binomialCache: mutable.Map[(Int, Int), Long] = mutable.Map.empty
+  private def binomialEntry(d: Int, s: Int): Long =
+    binomialCache.getOrElseUpdate((d, s), binomial(d + s, s))
+
+  /** Binary search for the largest `s` in `[0, vertexCount]` with `binomialEntry(d, s) <= n` -- the same "`Found` or
+    * `insertionPoint - 1`" result `scala.collection.Searching.search` used to give against the (now-removed)
+    * eagerly-materialized table row, computed instead against the lazily-memoized entries above so the search never
+    * forces evaluation of the wasteful, potentially-overflowing high-`s` region the eager table used to build
+    * unconditionally. `binomialEntry(d, ·)` is strictly increasing in `s` for `d >= 0` (the standard
+    * combinatorial-number-system property this class's whole encode/decode relies on), so ordinary binary search
+    * applies.
+    */
+  private def searchRow(d: Int, n: Long): Int =
+    var lo = 0
+    var hi = vertexCount
+    while lo < hi do
+      val mid = lo + (hi - lo + 1) / 2
+      if binomialEntry(d, mid) <= n then lo = mid else hi = mid - 1
+    lo
 
   /** Uses the binomial numbering system to generate the `n`th simplex of dimension `d-1`, that is the `n`th subset of
     * size `d` of the vertices.
     *
     * If `n` is greater than (`vertexCount` choose `d`) the result will not be a subset of size `d`.
+    *
+    * `n` is `Long`, not `Int` -- see `binomial`'s own doc and WORKLOG-simplexindexing-overflow.md: a combinatorial
+    * index can be astronomically larger than `vertexCount`/`d` themselves. The `d == 0` base case converts back to
+    * `Int` via `.toInt` -- safe there specifically, not a re-introduction of the same truncation bug: by this
+    * algorithm's own invariant, the residual `n` at `d == 0` is always a single vertex id (bounded by
+    * `vertexCount: Int`), never a combinatorial index anymore.
     *
     * @param n
     * @param d
@@ -51,31 +95,28 @@ class SimplexIndexing(val vertexCount: Int):
     * @return
     */
   @tailrec
-  final def apply(n: Int, d: Int, upperAccum: Simplex[Int] = ∆()): Simplex[Int] =
+  final def apply(n: Long, d: Int, upperAccum: Simplex[Int] = ∆()): Simplex[Int] =
     if d < 0 then return upperAccum
     if n <= 0 then return upperAccum ++ (0 until d).toSet
-    if d == 0 then return upperAccum + n
-    val searchResult: SearchResult = binomialTable(d).search(n)
-    val id: Int = searchResult match
-      case Found(foundIndex)              => foundIndex
-      case InsertionPoint(insertionPoint) => insertionPoint - 1
-    apply(n - binomialTable(d)(id), d - 1, upperAccum + (id + d))
+    if d == 0 then return upperAccum + n.toInt
+    val id: Int = searchRow(d, n)
+    apply(n - binomialEntry(d, id), d - 1, upperAccum + (id + d))
 
-  def cofacetIterator(simplex: Simplex[Int]): Iterator[Int] =
+  def cofacetIterator(simplex: Simplex[Int]): Iterator[Long] =
     cofacetIterator(apply(simplex), simplex.size, true)
-  def topCofacetIterator(simplex: Simplex[Int]): Iterator[Int] =
+  def topCofacetIterator(simplex: Simplex[Int]): Iterator[Long] =
     cofacetIterator(apply(simplex), simplex.size, false)
   def cofacetIterator(
-    index: Int,
+    index: Long,
     size: Int,
     allCofacets: Boolean = true
-  ): Iterator[Int] =
+  ): Iterator[Long] =
     Iterator
       .unfold(
-        (apply(index, size), index, 0, size, vertexCount - 1): Tuple5[
+        (apply(index, size), index, 0L, size, vertexCount - 1): Tuple5[
           Simplex[Int],
-          Int,
-          Int,
+          Long,
+          Long,
           Int,
           Int
         ]
@@ -93,20 +134,21 @@ class SimplexIndexing(val vertexCount: Int):
         else // if j is there, skip
           Some((Some(iB + binomial(j, k + 1) + iA), (s, iB, iA, k, j - 1)))
       }
-      .filter((os: Option[Int]) => os.isDefined)
-      .map((os: Option[Int]) => os.get)
+      .filter((os: Option[Long]) => os.isDefined)
+      .map((os: Option[Long]) => os.get)
 
-  def facetIterator(index: Int, size: Int): Iterator[Int] =
-    Iterator.unfold((apply(index, size).toSeq.sorted, index, 0, size - 1)) { (s: Seq[Int], iB: Int, iA: Int, k: Int) =>
-      if k < 0 then None
-      else
-        val j = s(k)
-        val iiB = iB - binomial(j, k + 1)
-        val iiA = iA + binomial(j, k)
-        Some((iiB + iA, (s.to(Vector), iiB, iiA, k - 1)))
+  def facetIterator(index: Long, size: Int): Iterator[Long] =
+    Iterator.unfold((apply(index, size).toSeq.sorted, index, 0L, size - 1)) {
+      (s: Seq[Int], iB: Long, iA: Long, k: Int) =>
+        if k < 0 then None
+        else
+          val j = s(k)
+          val iiB = iB - binomial(j, k + 1)
+          val iiA = iA + binomial(j, k)
+          Some((iiB + iA, (s.to(Vector), iiB, iiA, k - 1)))
     }
 
-  def apply(simplex: Simplex[Int]): Int =
+  def apply(simplex: Simplex[Int]): Long =
     simplex.toSeq.sorted.reverse.zipWithIndex.map { (v, i) =>
       binomial(v, simplex.size - i)
     }.sum
@@ -143,26 +185,26 @@ class RipserStreamSparse(
   override def filtrationValue: PartialFunction[Simplex[Int], Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 
-  def zeroPivotCofacet(index: Int, size: Int): Option[Int] = (for
+  def zeroPivotCofacet(index: Long, size: Int): Option[Long] = (for
     cofacet <- si.cofacetIterator(index, size, false)
     if filtrationValue(si(cofacet, size + 1)) == filtrationValue(
       si(index, size)
     )
   yield cofacet).maxOption
 
-  def zeroPivotFacet(index: Int, size: Int): Option[Int] = (for
+  def zeroPivotFacet(index: Long, size: Int): Option[Long] = (for
     facet <- si.facetIterator(index, size)
     if filtrationValue(si(facet, size - 1)) == filtrationValue(si(index, size))
   yield facet).maxOption
 
-  def zeroApparentCofacet(index: Int, size: Int): Option[Int] =
+  def zeroApparentCofacet(index: Long, size: Int): Option[Long] =
     for
       cofacet <- zeroPivotCofacet(index, size)
       facet <- zeroPivotFacet(cofacet, size + 1)
       if facet == index
     yield cofacet
 
-  def zeroApparentFacet(index: Int, size: Int): Option[Int] =
+  def zeroApparentFacet(index: Long, size: Int): Option[Long] =
     for
       facet <- zeroPivotFacet(index, size)
       cofacet <- zeroPivotCofacet(facet, size - 1)
@@ -217,8 +259,8 @@ abstract class RipserStreamBase(
   val maxFiltrationValue: Double = Double.PositiveInfinity,
   val maxDimension: Int = 2
 ) extends SimplexStream[Int, Double]:
-  def retain(index: Int, size: Int): Boolean = true
-  def expand(filtrationValue: Double, index: Int, size: Int): Seq[Simplex[Int]] =
+  def retain(index: Long, size: Int): Boolean = true
+  def expand(filtrationValue: Double, index: Long, size: Int): Seq[Simplex[Int]] =
     Seq(si(index, size))
 
   val si: SimplexIndexing = SimplexIndexing(metricSpace.size)
@@ -231,7 +273,7 @@ abstract class RipserStreamBase(
 
   def iteratorByDimension(d: Int): Iterator[Simplex[Int]] = if d > metricSpace.size then Iterator()
   else
-    (0 until binomial(metricSpace.size, d + 1)).iterator
+    (0L until binomial(metricSpace.size, d + 1)).iterator
       .filter(i => retain(i, d + 1))
       .map(i => (filtrationValue(si(i, d + 1)), i, d + 1))
       .toSeq
@@ -242,26 +284,26 @@ abstract class RipserStreamBase(
   override def filtrationValue: PartialFunction[Simplex[Int], Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 
-  def zeroPivotCofacet(index: Int, size: Int): Option[Int] = (for
+  def zeroPivotCofacet(index: Long, size: Int): Option[Long] = (for
     cofacet <- si.cofacetIterator(index, size, false)
     if filtrationValue(si(cofacet, size + 1)) == filtrationValue(
       si(index, size)
     )
   yield cofacet).maxOption
 
-  def zeroPivotFacet(index: Int, size: Int): Option[Int] = (for
+  def zeroPivotFacet(index: Long, size: Int): Option[Long] = (for
     facet <- si.facetIterator(index, size)
     if filtrationValue(si(facet, size - 1)) == filtrationValue(si(index, size))
   yield facet).maxOption
 
-  def zeroApparentCofacet(index: Int, size: Int): Option[Int] =
+  def zeroApparentCofacet(index: Long, size: Int): Option[Long] =
     for
       cofacet <- zeroPivotCofacet(index, size)
       facet <- zeroPivotFacet(cofacet, size + 1)
       if facet == index
     yield cofacet
 
-  def zeroApparentFacet(index: Int, size: Int): Option[Int] =
+  def zeroApparentFacet(index: Long, size: Int): Option[Long] =
     for
       facet <- zeroPivotFacet(index, size)
       cofacet <- zeroPivotCofacet(facet, size - 1)
@@ -333,12 +375,12 @@ class SymmetricRipserStream[KeyT](
   maxDimension: Int = 2,
   val symmetryGroup: SymmetryGroup[KeyT, Int]
 ) extends RipserStream(metricSpace, maxFiltrationValue, maxDimension):
-  override def retain(index: Int, size: Int): Boolean =
+  override def retain(index: Long, size: Int): Boolean =
     symmetryGroup.isRepresentative(si(index, size))
 
   override def expand(
     filtrationValue: Double,
-    index: Int,
+    index: Long,
     size: Int
   ): Seq[Simplex[Int]] =
     symmetryGroup.orbit(si(index, size)).toSeq
@@ -386,7 +428,7 @@ class MaskedSymmetricRipserStream[KeyT](
     val repmap: Map[Double, List[Simplex[Int]]] = List
       .from(
         for
-          i <- (0 until binomial(metricSpace.size, d + 1)).iterator
+          i <- (0L until binomial(metricSpace.size, d + 1)).iterator
           spx <- Seq(si(i, d + 1))
           if symmetryGroup.isRepresentative(spx)
         yield filtrationValue(spx) -> spx

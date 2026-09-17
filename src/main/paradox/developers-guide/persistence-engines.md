@@ -48,7 +48,7 @@ step actually goes through `Chain.reduceByUntil`, a `def` whose own `[CellT: Ord
 resolves fresh at each call site (where the correct `stream.filtrationOrdering` given, declared inside
 `HomologyState`, is in scope) — the stale class-scope `chainRM`'s `⊠`/`-` operators are only ever used to
 build intermediate values (in `compress`) that get fed straight back into a fresh `reduceByUntil` call
-before anything reads `.leadingCell`. See `WORKLOG-cohomology.md`'s "a different ordering bug" section for
+before anything reads `.leadingCell`. See `../../../../.claude/WORKLOG-cohomology.md`'s "a different ordering bug" section for
 the discriminating-fixture methodology (`HomologyFixtures.elderRuleCells`, built specifically so
 lexicographic and filtration order disagree) used to confirm this rather than just reason through it.
 
@@ -107,10 +107,10 @@ Structural points worth internalizing before touching this class:
   without this passed every hand-built fixture but reported spurious essential cohomology classes on real
   input — confirmed by hand-deriving H¹ of a plain 3-cycle graph (3 reported vs. the correct 1) — because
   Proposition 3.1's essential-index definition requires excluding any simplex already claimed as a pivot at
-  a lower dimension, not just checking that its own column reduces to zero. See `WORKLOG-cohomology.md`'s
+  a lower dimension, not just checking that its own column reduces to zero. See `../../../../.claude/WORKLOG-cohomology.md`'s
   "clearing is required for correctness" section for the full derivation.
 - Cross-validated against engine 1 (`CellularHomologyContext`) on hundreds of random inputs plus hand-
-  derived fixtures — see `WORKLOG-cohomology.md` for the pivot-orientation/birth-death-dimension derivation,
+  derived fixtures — see `../../../../.claude/WORKLOG-cohomology.md` for the pivot-orientation/birth-death-dimension derivation,
   re-derived directly from the paper rather than from memory (this area of the codebase has a documented
   history of subtly-wrong unverified code; don't "simplify" the reversed-order reasoning here without
   rereading that derivation first).
@@ -121,11 +121,11 @@ normally, and (2) a genuine pre-pass that removes both members of every apparent
 never building the removed simplex's coboundary at all — were both tried and **confirmed unsound by direct
 counterexample**: a cofacet `tau` that is one simplex's apparent partner can simultaneously be a different,
 non-apparent simplex's legitimate reduction target, and neither design accounts for that. See
-`WORKLOG-cohomology.md`'s "Apparent pairs: negative result" section for the two concrete counterexamples.
+`../../../../.claude/WORKLOG-cohomology.md`'s "Apparent pairs: negative result" section for the two concrete counterexamples.
 If you're picking this up: the next step (per that worklog and the project's own working notes) is reading
 Ripser's actual `compute_pairs` implementation/Proposition 3.9's proof to see how real Ripser sequences
 apparent-pair removal to avoid this exact collision — this may be in progress or already resolved by the
-time you read this, so check `WORKLOG-cohomology.md`'s current state rather than trusting this paragraph
+time you read this, so check `../../../../.claude/WORKLOG-cohomology.md`'s current state rather than trusting this paragraph
 alone.
 
 Don't confuse this with `RipserStreamSparse`/`RipserStreamBase`'s `zeroApparentCofacet`/`zeroApparentFacet`
