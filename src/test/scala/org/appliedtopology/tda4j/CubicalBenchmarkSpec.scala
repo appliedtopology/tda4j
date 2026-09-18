@@ -3,19 +3,19 @@ package org.appliedtopology.tda4j
 import org.specs2.mutable
 import org.specs2.main.Arguments
 
-/** Measures where `CellularHomologyContext` -- the naive, generic single-pivot-table reduction engine, the ONLY
-  * one `Cube` currently plugs into (a specialized grid-exploiting engine like CubicalRipser or the Wagner-Chen-
-  * Vuçini approach is deliberately deferred, see CLAUDE.md/WORKLOG-cubical.md) -- starts to strain on REAL image
-  * sizes. Like `SparseRipsBenchmarkSpec`, prints a timing table rather than asserting behavior; not a correctness
-  * check, and kept small by default so `sbt test` stays fast:
+/** Measures where `CellularHomologyContext` -- the naive, generic single-pivot-table reduction engine, the ONLY one
+  * `Cube` currently plugs into (a specialized grid-exploiting engine like CubicalRipser or the Wagner-Chen- Vuçini
+  * approach is deliberately deferred, see CLAUDE.md/WORKLOG-cubical.md) -- starts to strain on REAL image sizes. Like
+  * `SparseRipsBenchmarkSpec`, prints a timing table rather than asserting behavior; not a correctness check, and kept
+  * small by default so `sbt test` stays fast:
   *
   * {{{
   * sbt -DminN=8 -DmaxN=256 -DstepMultiplier=2 "testOnly org.appliedtopology.tda4j.CubicalBenchmarkSpec"
   * }}}
   *
-  * Random (not constant/tie-heavy) pixel values on purpose -- `CubicalStreamSpec`'s hand fixtures deliberately
-  * stress the TIE-BREAK path with few distinct values; this benchmark instead wants the generic case an actual
-  * photograph would produce (see `totalCellCount` for the real cell count at each `n`, not the pixel count).
+  * Random (not constant/tie-heavy) pixel values on purpose -- `CubicalStreamSpec`'s hand fixtures deliberately stress
+  * the TIE-BREAK path with few distinct values; this benchmark instead wants the generic case an actual photograph
+  * would produce (see `totalCellCount` for the real cell count at each `n`, not the pixel count).
   */
 class CubicalBenchmarkSpec(args: Arguments) extends mutable.Specification:
   "Cubical naive-engine scaling on square images" >> {

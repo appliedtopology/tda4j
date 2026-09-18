@@ -8,10 +8,10 @@ import org.scalacheck.*
 import math.Fractional.Implicits.infixFractionalOps
 
 /** Core `Cube`/`OrderedCell` correctness, independent of any stream or homology engine: the boundary formula's own
-  * algebraic properties. Deliberately checked over a SIGNED field that isn't F2 (F3 here) in addition to Double --
-  * F2 can't distinguish a correctly-alternating sign from a constant one (-1 = 1 mod 2), so an F2-only dd=0 check
-  * would pass even with the "raw coordinate position" sign bug the advisor flagged before any of this was written
-  * (see `Cube_is_OrderedCell`'s own doc and `.claude/WORKLOG-cubical.md`).
+  * algebraic properties. Deliberately checked over a SIGNED field that isn't F2 (F3 here) in addition to Double -- F2
+  * can't distinguish a correctly-alternating sign from a constant one (-1 = 1 mod 2), so an F2-only dd=0 check would
+  * pass even with the "raw coordinate position" sign bug the advisor flagged before any of this was written (see
+  * `Cube_is_OrderedCell`'s own doc and `.claude/WORKLOG-cubical.md`).
   */
 class CubicalSpec extends mutable.Specification with ScalaCheck:
   "The `Cube` type should" >> {
@@ -46,8 +46,8 @@ class CubicalSpec extends mutable.Specification with ScalaCheck:
   import GF3.given
 
   /** Every cube reachable within `ambientDim` axes and coordinates in `0 to maxCoord` (both directions, i.e.
-    * doubled-encoding entries `0 to 2*maxCoord`), exhaustively -- small enough to be a real exhaustive check, not
-    * just a spot sample, for the dimensions cubical complexes actually get used at (2D images, 3D voxel grids).
+    * doubled-encoding entries `0 to 2*maxCoord`), exhaustively -- small enough to be a real exhaustive check, not just
+    * a spot sample, for the dimensions cubical complexes actually get used at (2D images, 3D voxel grids).
     */
   def allCubes(ambientDim: Int, maxCoord: Int): Seq[Cube] =
     def go(n: Int): Seq[Seq[Int]] =

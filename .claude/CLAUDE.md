@@ -582,7 +582,29 @@ exercisable by this regression at all — see item 3 above, it's non-functional 
 `Cubical.scala`/`CubicalStream.scala`/`CubicalImage.scala` add cubical complexes as a second concrete `OrderedCell`
 instance alongside `Simplex[VertexT]` — built in one overnight session; see `.claude/WORKLOG-cubical.md` for the
 full derivation, including the advisor consult that shaped the design up front and three separate instances of a
-same-named-top-level-extension-method collision hit and fixed along the way.
+same-named-top-level-extension-method collision hit and fixed along the way (worked around at the time by picking
+distinct names, `encoded`/`describe` instead of `underlying`/`show`).
+
+**That collision's root cause is now fixed for real, in a later session** — every `Simplex[VertexT]`/`Cube`
+extension whose *receiver* is the opaque type itself now lives inside that type's own companion object
+(`object Simplex`/`object Cube`), not as a top-level `extension` clause; extension-method resolution checks a
+receiver type's companion object by nominal type, so two unrelated opaque types can now safely reuse the same
+method name (confirmed with `underlying`/`show` reused across a standalone `scala-cli` repro before this was
+applied to real code). `encoded`/`describe` were deliberately **not** renamed back to `underlying`/`show` — the
+fix removes the *need* for distinct names, but renaming touches call sites and is left as an independent decision.
+This is **not** a fix to reach for reflexively on every future opaque type without re-checking two hazards
+found in the process: (1) opaque-type transparency is scoped to the *whole file* the `opaque type` is declared
+in, so any code in that same file calling the type's own extensions by dot-syntax breaks (hard error, or worse,
+silently resolves to a same-named member of the underlying representation type instead) — `Simplex_is_OrderedCell`/
+`Cube_is_OrderedCell` had to move into their own files (`SimplexOrderedCell.scala`/`CubicalOrderedCell.scala`) for
+exactly this reason; (2) a companion-object extension can lose to a same-named stdlib extension reachable via a
+wildcard import at some call site (`Simplex[VertexT]`'s `min`/`max` vs. `scala.math.Ordering.Implicits.
+infixOrderingOps.{min,max}`, imported via `import math.Ordering.Implicits.*` in `FiniteMetricSpace.scala`/
+`SimplexStream.scala`) — `min`/`max` deliberately stay top-level extensions for this reason, the sole exception.
+`asSimplex`/`asCube` were never moved either, for a third, simpler reason: their receiver is the *raw*
+`SortedSet[VertexT]`/`Vector[Int]`, not the opaque type, so companion-object lookup on `Simplex`/`Cube` could never
+find them regardless. Full derivation, including every `scala-cli` repro that pinned down each hazard one at a
+time, in `.claude/WORKLOG-extension-companion-objects.md`.
 
 **`Cube` (`Cubical.scala`)**: an elementary cube is a product of `n` (the ambient/embedding dimension, fixed per
 complex — not per cube) factors, each either a degenerate interval `[a,a]` or a unit interval `[a,a+1]`; the

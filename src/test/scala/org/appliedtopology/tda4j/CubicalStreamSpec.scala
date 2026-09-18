@@ -6,11 +6,10 @@ import org.specs2.ScalaCheck
 import org.scalacheck.*
 
 /** `CubicalGridStream` + `CubicalHomologyContext` correctness. Validation order deliberately follows the advisor's
-  * corrected priority (see `.claude/WORKLOG-cubical.md`): dd=0/canonical ordering already covered by
-  * `CubicalSpec`; here, monotonicity, the structural (bars-account-for-cells) invariant, hand-derived fixtures, and
-  * an independent H0-via-union-find cross-check -- NOT a cubical-to-simplicial triangulation cross-check, which
-  * would need its own from-scratch correctness argument and risks masking a real cubical bug as a triangulation
-  * bug or vice versa.
+  * corrected priority (see `.claude/WORKLOG-cubical.md`): dd=0/canonical ordering already covered by `CubicalSpec`;
+  * here, monotonicity, the structural (bars-account-for-cells) invariant, hand-derived fixtures, and an independent
+  * H0-via-union-find cross-check -- NOT a cubical-to-simplicial triangulation cross-check, which would need its own
+  * from-scratch correctness argument and risks masking a real cubical bug as a triangulation bug or vice versa.
   */
 class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
@@ -52,7 +51,7 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
       val flat = idx.zip(img.shape).foldLeft(0) { case (acc, (i, n)) => acc * n + i }
       img.values(flat).toDouble
 
-  "fv(face) <= fv(coface) on every boundary relationship, exhaustively on small random 2D/3D images" >> {
+  "fv(face) <= fv(coface) on every boundary relationship, exhaustively on small random 2D/3D images" >>
     AsResult {
       prop { (img: TestImage) =>
         val stream = CubicalGridStream(img.shape, valueFnOf(img))
@@ -73,13 +72,12 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
         }
       }
     }
-  }
 
   // ---------------------------------------------------------------------------------------------------------
   // Structural invariant (bars-account-for-cells), reusing HomologyFixtures' existing helper.
   // ---------------------------------------------------------------------------------------------------------
 
-  "The bars-account-for-cells structural invariant holds on random small images" >> {
+  "The bars-account-for-cells structural invariant holds on random small images" >>
     AsResult {
       prop { (img: TestImage) =>
         val stream = CubicalGridStream(img.shape, valueFnOf(img))
@@ -87,7 +85,6 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
         HomologyFixtures.totalBarsAccountForAllCells(barcode, stream.totalCellCount.toInt)
       }
     }
-  }
 
   // ---------------------------------------------------------------------------------------------------------
   // Independent H0 cross-check via union-find on the sublevel set of PRESENT PIXELS -- fully independent of
@@ -117,7 +114,7 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
     do uf.union(UFSet(p), UFSet(q))
     present.map(p => uf.find(UFSet(p))).toSet.size
 
-  "H0 (open positive classes at a threshold) matches an independent union-find count, on random small images" >> {
+  "H0 (open positive classes at a threshold) matches an independent union-find count, on random small images" >>
     AsResult {
       prop { (img: TestImage) =>
         val stream = CubicalGridStream(img.shape, valueFnOf(img))
@@ -131,7 +128,6 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
         }
       }
     }
-  }
 
   // ---------------------------------------------------------------------------------------------------------
   // Hand-derived fixtures. Every count below comes from a general fact, not a guess: for a d-cell grid's FULL
@@ -163,20 +159,20 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
 
   "A single bright center pixel in an otherwise dark 3x3 image (16 vertices, 24 edges, 9 pixels, " +
     "totalCells=49) produces exactly one persistent H1 bar (the hollow center)" >> {
-    val shape = IndexedSeq(3, 3)
-    val valueFn: IndexedSeq[Int] => Double = idx => if idx == IndexedSeq(1, 1) then 1.0 else 0.0
-    val stream = CubicalGridStream(shape, valueFn)
-    val barcode = persistentHomology(stream).diagramAt(Double.PositiveInfinity)
-    (stream.totalCellCount must beEqualTo(49L)) and
-      (HomologyFixtures.totalBarsAccountForAllCells(barcode, 49) must beTrue) and
-      (barcode.count(_._1 == 0) must beEqualTo(16)) and
-      (barcode.count { case (0, _, d) => d.isInfinite; case _ => false } must beEqualTo(1)) and
-      (barcode.count { case (0, b, d) => b == d; case _ => false } must beEqualTo(15)) and
-      (barcode.count(_._1 == 1) must beEqualTo(9)) and
-      (barcode.count { case (1, b, d) => b == d; case _ => false } must beEqualTo(8)) and
-      (barcode.exists(_ == (1, 0.0, 1.0)) must beTrue) and
-      (barcode.count(_._1 >= 2) must beEqualTo(0))
-  }
+      val shape = IndexedSeq(3, 3)
+      val valueFn: IndexedSeq[Int] => Double = idx => if idx == IndexedSeq(1, 1) then 1.0 else 0.0
+      val stream = CubicalGridStream(shape, valueFn)
+      val barcode = persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+      (stream.totalCellCount must beEqualTo(49L)) and
+        (HomologyFixtures.totalBarsAccountForAllCells(barcode, 49) must beTrue) and
+        (barcode.count(_._1 == 0) must beEqualTo(16)) and
+        (barcode.count { case (0, _, d) => d.isInfinite; case _ => false } must beEqualTo(1)) and
+        (barcode.count { case (0, b, d) => b == d; case _ => false } must beEqualTo(15)) and
+        (barcode.count(_._1 == 1) must beEqualTo(9)) and
+        (barcode.count { case (1, b, d) => b == d; case _ => false } must beEqualTo(8)) and
+        (barcode.exists(_ == (1, 0.0, 1.0)) must beTrue) and
+        (barcode.count(_._1 >= 2) must beEqualTo(0))
+    }
 
   "Two separated 1D blobs (values [0,2,0], 4 vertices, 3 pixels, totalCells=7) merge into one component" >> {
     val shape = IndexedSeq(3)

@@ -11,12 +11,28 @@ import scala.reflect.ClassTag
 
 opaque type Simplex[VertexT] = SortedSet[VertexT]
 
-object Simplex:
+/** `object Simplex` mixes in `SimplexOps` (`SimplexOps.scala`) rather than the trait's methods living as a separate
+  * top-level `extension` clause: extension methods declared here, in the opaque type's own companion object, are found
+  * via the receiver type's implicit scope, not via blanket top-level visibility across the package -- the fix for the
+  * same-named top-level extension collisions documented in `.claude/WORKLOG-cubical.md` and
+  * `.claude/WORKLOG-extension-companion-objects.md`. `underlying` moved in here for the same reason, even though
+  * nothing currently collides on that name -- keeping every `Simplex[VertexT]`-receiver extension routed through one
+  * place is what makes the guarantee "a future opaque type may reuse this name" actually hold.
+  *
+  * `asSimplex` (below, top-level, NOT moved in here) is a real exception to that, not an oversight: its RECEIVER is
+  * `SortedSet[VertexT]`, not `Simplex[VertexT]` -- companion-object-based extension lookup is keyed by the receiver
+  * type, so an extension on `SortedSet[VertexT]` placed inside `Simplex`'s companion is simply never found from a
+  * `SortedSet[VertexT]` receiver (confirmed the hard way: moving it here broke every `.asSimplex` call site in this
+  * file with "value asSimplex is not a member of SortedSet[VertexT]"). It stays a top-level extension on purpose; it
+  * was never part of the collision in the first place (`asSimplex`/`asCube` don't share a name), so it doesn't need to
+  * move for that reason either.
+  */
+object Simplex extends SimplexOps:
   def from[VertexT: Ordering, T <: Seq[VertexT]](vertices: T): Simplex[VertexT] = SortedSet.from(vertices)
   def apply[VertexT: Ordering](vertices: VertexT*): Simplex[VertexT] = from(vertices)
   def unapplySeq[VertexT: Ordering](simplex: Simplex[VertexT]): Option[Seq[VertexT]] = Some(simplex.toSeq)
 
-extension [VertexT](spx: Simplex[VertexT]) def underlying: SortedSet[VertexT] = spx
+  extension [VertexT](spx: Simplex[VertexT]) def underlying: SortedSet[VertexT] = spx
 
 extension [VertexT](vertices: SortedSet[VertexT]) def asSimplex: Simplex[VertexT] = vertices
 
@@ -26,22 +42,11 @@ extension [VertexT](vertices: SortedSet[VertexT]) def asSimplex: Simplex[VertexT
   */
 def ∆[VertexT: Ordering](vertices: VertexT*): Simplex[VertexT] = Simplex.from(vertices)
 
+/** Stays in this file (needs `Simplex[VertexT]`'s own opaque-type transparency for the `Ordering[SortedSet[ VertexT]]
+  * -> Ordering[Simplex[VertexT]]` coercion below), unlike `Simplex_is_OrderedCell` (`SimplexOrderedCell.scala`) -- this
+  * function makes no `.someExtensionMethod` call on any `Simplex[VertexT]` value, so it isn't exposed to the same-file
+  * dealiasing hazard that forced that one out. See `SimplexOrderedCell.scala`'s own doc for the full explanation.
+  */
 def simplexOrdering[VertexT](using vtxOrd: Ordering[VertexT]): Ordering[Simplex[VertexT]] = sortedSetOrdering(using
   vtxOrd
 )
-def Simplex_is_OrderedCell[VertexT](using
-  vtxOrd: Ordering[VertexT]
-)(setOrdering: Ordering[Simplex[VertexT]] = simplexOrdering(using vtxOrd)): Simplex[VertexT] is OrderedCell =
-  new (Simplex[VertexT] is OrderedCell):
-    override lazy val ordering = setOrdering
-    extension (spx: Simplex[VertexT])
-      override def dim = spx.size - 1
-      override def boundary[CoefficientT: Field as fr]: Seq[(Simplex[VertexT], CoefficientT)] =
-        if spx.dim <= 0 then Seq.empty
-        else
-          spx.zipWithIndex
-            .map((vtx, i) => spx.dropIndex(i))
-            .toSeq
-            .zip(Iterator.unfold(fr.one)(s => Some((s, fr.negate(s)))))
-given default_Simplex_is_OrderedCell: [VertexT: Ordering] => (Simplex[VertexT] is OrderedCell) =
-  Simplex_is_OrderedCell[VertexT]()
