@@ -8,12 +8,12 @@ import org.specs2.ScalaCheck
 import org.specs2.scalacheck.Parameters
 
 /** Cross-validates `PackedRipserCohomologyContext` (`PackedRipserCohomology.scala`) against the reference
-  * `RipserCohomologyContext` (`Homology.scala`) -- NOT against hand-derived expected barcodes, since that would
-  * just re-litigate `RipserCohomologySpec`'s own already-established correctness. The reference engine is itself
-  * extensively cross-validated elsewhere (see CLAUDE.md); this spec's job is only to confirm the packed re-keying
-  * didn't change behavior, on exactly the fixtures `RipserCohomologySpec` already uses (so a real behavioral
-  * difference here can't be blamed on an unfamiliar input). See `.claude/WORKLOG-packed-ripser-engine.md` for the
-  * design and the performance measurement this spec's passing status is a precondition for.
+  * `RipserCohomologyContext` (`Homology.scala`) -- NOT against hand-derived expected barcodes, since that would just
+  * re-litigate `RipserCohomologySpec`'s own already-established correctness. The reference engine is itself extensively
+  * cross-validated elsewhere (see CLAUDE.md); this spec's job is only to confirm the packed re-keying didn't change
+  * behavior, on exactly the fixtures `RipserCohomologySpec` already uses (so a real behavioral difference here can't be
+  * blamed on an unfamiliar input). See `.claude/WORKLOG-packed-ripser-engine.md` for the design and the performance
+  * measurement this spec's passing status is a precondition for.
   */
 class PackedRipserCohomologySpec extends mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)

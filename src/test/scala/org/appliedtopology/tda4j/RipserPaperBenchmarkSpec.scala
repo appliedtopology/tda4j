@@ -8,19 +8,19 @@ import scala.concurrent.duration.*
 import scala.concurrent.{Await, ExecutionContext, Future, TimeoutException}
 import scala.io.Source
 
-/** Compares `RipserCohomologyContext` (this codebase's own reproduction of Bauer's Ripser algorithm,
-  * `Homology.scala`) against real `ripser.cpp`, on the actual data sets used in Table 1 of the Ripser paper
-  * (arXiv:1908.02518, "Ripser: efficient computation of Vietoris-Rips persistence barcodes") -- not the paper's
-  * own 2019-hardware numbers, which aren't comparable to anything run today, but a same-machine, same-day
-  * re-measurement of real `ripser.cpp` (built from `github.com/Ripser/ripser`, plain `make`, no
-  * `USE_COEFFICIENTS` -- its default build already computes over Z/2, matching this class's `IntMod2.Fp` below)
-  * done alongside this spec. Like `ProfilingSpec`/`ApparentPairsBenchmarkSpec`/`SparseRipsBenchmarkSpec`, this is
-  * a profiling script, not a correctness check.
+/** Compares `RipserCohomologyContext` (this codebase's own reproduction of Bauer's Ripser algorithm, `Homology.scala`)
+  * against real `ripser.cpp`, on the actual data sets used in Table 1 of the Ripser paper (arXiv:1908.02518, "Ripser:
+  * efficient computation of Vietoris-Rips persistence barcodes") -- not the paper's own 2019-hardware numbers, which
+  * aren't comparable to anything run today, but a same-machine, same-day re-measurement of real `ripser.cpp` (built
+  * from `github.com/Ripser/ripser`, plain `make`, no `USE_COEFFICIENTS` -- its default build already computes over Z/2,
+  * matching this class's `IntMod2.Fp` below) done alongside this spec. Like
+  * `ProfilingSpec`/`ApparentPairsBenchmarkSpec`/`SparseRipsBenchmarkSpec`, this is a profiling script, not a
+  * correctness check.
   *
   * '''Getting the data.''' The paper's `sphere3`/`o3` data sets are `ripser`'s own bundled examples; `random16`/
-  * `dragon`/`fractal-r` come from the Otter et al. "roadmap" benchmark the paper cites. Exact URLs (confirmed
-  * against the actual Dockerfile the paper's own `ripser-benchmark` repo uses to produce Table 1, not
-  * reconstructed from memory):
+  * `dragon`/`fractal-r` come from the Otter et al. "roadmap" benchmark the paper cites. Exact URLs (confirmed against
+  * the actual Dockerfile the paper's own `ripser-benchmark` repo uses to produce Table 1, not reconstructed from
+  * memory):
   * {{{
   * BASE=https://raw.githubusercontent.com/Ripser/ripser-benchmark/master
   * curl -sO $BASE/sphere_3_192_points.dat
@@ -36,61 +36,58 @@ import scala.io.Source
   * `sphere_3_192_points.dat`. These are third-party benchmark files (not this project's own data), so they are
   * deliberately NOT checked into the repo -- point `-DdataDir=` at wherever you downloaded them.
   *
-  * '''`RipserCohomologyContext`'s `maxDimension` means "top homological degree reported," not "top simplex
-  * dimension built" -- fixed at its own source since this spec first caught it (`Homology.scala`, see
-  * `.claude/WORKLOG-maxdim-semantics-fix.md` for the fix itself and `.claude/WORKLOG-ripser-comparison.md` for
-  * how it was originally found).''' A first version of this spec passed `c.maxDim` straight through before the
-  * fix landed, which made every class at the requested top dimension spuriously essential (`coboundaryOf` was
-  * empty by construction at `sigma.dim == maxDimension`) -- a real, well-known truncation artifact (H_k needs
-  * (k+1)-chains to resolve which k-cycles actually die), not this engine's bug specifically. Real `ripser --dim
-  * p` never had this problem because it always builds the `(p+1)`-skeleton internally to resolve dimension-`p`
-  * pairs (the paper's own Section 3.2: "computing persistent homology in dimensions `0 <= d <= p` still
-  * requires reduction of the full boundary matrix `d_{p+1}`") -- `RipserCohomologyContext` now does the same
-  * internally, so this spec passes `c.maxDim` directly with no `+1`-and-filter workaround. That first version's
-  * un-worked-around run reported a 192-point sphere at `--dim 2` producing over one million "bars" -- Table 2's
-  * entire non-zero-pair count for that same data set is 18 145 -- which is what caught the bug in the first
-  * place; see `.claude/WORKLOG-ripser-comparison.md`.
+  * '''`RipserCohomologyContext`'s `maxDimension` means "top homological degree reported," not "top simplex dimension
+  * built" -- fixed at its own source since this spec first caught it (`Homology.scala`, see
+  * `.claude/WORKLOG-maxdim-semantics-fix.md` for the fix itself and `.claude/WORKLOG-ripser-comparison.md` for how it
+  * was originally found).''' A first version of this spec passed `c.maxDim` straight through before the fix landed,
+  * which made every class at the requested top dimension spuriously essential (`coboundaryOf` was empty by construction
+  * at `sigma.dim == maxDimension`) -- a real, well-known truncation artifact (H_k needs (k+1)-chains to resolve which
+  * k-cycles actually die), not this engine's bug specifically. Real `ripser --dim p` never had this problem because it
+  * always builds the `(p+1)`-skeleton internally to resolve dimension-`p` pairs (the paper's own Section 3.2:
+  * "computing persistent homology in dimensions `0 <= d <= p` still requires reduction of the full boundary matrix
+  * `d_{p+1}`") -- `RipserCohomologyContext` now does the same internally, so this spec passes `c.maxDim` directly with
+  * no `+1`-and-filter workaround. That first version's un-worked-around run reported a 192-point sphere at `--dim 2`
+  * producing over one million "bars" -- Table 2's entire non-zero-pair count for that same data set is 18 145 -- which
+  * is what caught the bug in the first place; see `.claude/WORKLOG-ripser-comparison.md`.
   *
-  * '''Zero-persistence bars''': `persistentCohomology()`'s own bar list includes zero-persistence bars
-  * deliberately (`Homology.scala`'s "zero-length bars must not be silently dropped" -- required for the
-  * bars-account-for-cells structural invariant elsewhere), but `ripser.cpp`'s own printed text output does not
-  * print persistence-0 intervals. So the reference counts embedded below (`refBars`) are non-zero-persistence
-  * counts parsed from real `ripser`'s own output, and this spec filters tda4j's own bars the same way
-  * (`lower != upper`) before comparing -- otherwise this would be comparing two different things and calling
-  * the mismatch a bug.
+  * '''Zero-persistence bars''': `persistentCohomology()`'s own bar list includes zero-persistence bars deliberately
+  * (`Homology.scala`'s "zero-length bars must not be silently dropped" -- required for the bars-account-for-cells
+  * structural invariant elsewhere), but `ripser.cpp`'s own printed text output does not print persistence-0 intervals.
+  * So the reference counts embedded below (`refBars`) are non-zero-persistence counts parsed from real `ripser`'s own
+  * output, and this spec filters tda4j's own bars the same way (`lower != upper`) before comparing -- otherwise this
+  * would be comparing two different things and calling the mismatch a bug.
   *
-  * '''`torus4` (50000 points) is deliberately excluded''', not merely deferred: real `ripser.cpp` itself needs
-  * ~8GB for it (Table 1), and this engine's `Simplex[Int]`/`SortedSet[Int]` per-simplex carrier is roughly two
-  * orders of magnitude heavier than Ripser's packed 64-bit `diameter_index_t` (`DiameterSimplex`'s own doc,
-  * `RipserStream.scala`, flags this as a deliberate deferred choice, not an oversight) -- extrapolating that
-  * ratio puts torus4 over what any single machine reasonably has, so running it would test the JVM's OOM killer,
-  * not this engine. State the reason; don't spend wall-clock time proving it.
+  * '''`torus4` (50000 points) is deliberately excluded''', not merely deferred: real `ripser.cpp` itself needs ~8GB for
+  * it (Table 1), and this engine's `Simplex[Int]`/`SortedSet[Int]` per-simplex carrier is roughly two orders of
+  * magnitude heavier than Ripser's packed 64-bit `diameter_index_t` (`DiameterSimplex`'s own doc, `RipserStream.scala`,
+  * flags this as a deliberate deferred choice, not an oversight) -- extrapolating that ratio puts torus4 over what any
+  * single machine reasonably has, so running it would test the JVM's OOM killer, not this engine. State the reason;
+  * don't spend wall-clock time proving it.
   *
   * '''Coefficients''': ripser's default (no `USE_COEFFICIENTS`) build computes over Z/2, not the
-  * `Field.DoubleApproximated` this codebase's other specs default to -- so this spec uses `FiniteField(2)`
-  * explicitly, to make the two sides comparable rather than comparing different problems.
+  * `Field.DoubleApproximated` this codebase's other specs default to -- so this spec uses `FiniteField(2)` explicitly,
+  * to make the two sides comparable rather than comparing different problems.
   *
-  * '''Thresholds''': `o3_1024`/`o3_4096` pass `maxFiltrationValue` explicitly (1.8 / 1.4, matching the paper's
-  * own `--threshold` flags) rather than relying on `minimumEnclosingRadius` -- the paper's own benchmark harness
-  * passes these explicitly too, they are not this engine's computed enclosing radius. The no-threshold rows
-  * (`sphere3`/`random16`/`dragon`/`fractal-r`) rely on this engine's `minimumEnclosingRadius` default, which is
-  * the same `min_i max_j d(i,j)` quantity `ripser.cpp`'s own no-`--threshold` default (`enclosing_radius`)
-  * computes -- confirmed by reading both definitions directly, and empirically: this spec's own reference
-  * `ripser.cpp` run on `sphere3` reported "using threshold at enclosing radius 1.97444" with no `--threshold`
-  * flag passed.
+  * '''Thresholds''': `o3_1024`/`o3_4096` pass `maxFiltrationValue` explicitly (1.8 / 1.4, matching the paper's own
+  * `--threshold` flags) rather than relying on `minimumEnclosingRadius` -- the paper's own benchmark harness passes
+  * these explicitly too, they are not this engine's computed enclosing radius. The no-threshold rows
+  * (`sphere3`/`random16`/`dragon`/`fractal-r`) rely on this engine's `minimumEnclosingRadius` default, which is the
+  * same `min_i max_j d(i,j)` quantity `ripser.cpp`'s own no-`--threshold` default (`enclosing_radius`) computes --
+  * confirmed by reading both definitions directly, and empirically: this spec's own reference `ripser.cpp` run on
+  * `sphere3` reported "using threshold at enclosing radius 1.97444" with no `--threshold` flag passed.
   *
-  * '''Size-growth ladder''': `sphere3` is also run at `n = 48, 96, 192` (first rows of the same file, same
-  * `--dim 2`, same no-threshold default), each against its own freshly-measured `ripser.cpp` reference -- this
-  * is what distinguishes a roughly-constant "JVM/representation tax" from a slowdown ratio that grows with `n`
-  * (an algorithmic problem), which a single-`n`-per-data-set table can't, since every row here already varies
-  * `n`, `maxDim`, ambient dimension, and threshold simultaneously.
+  * '''Size-growth ladder''': `sphere3` is also run at `n = 48, 96, 192` (first rows of the same file, same `--dim 2`,
+  * same no-threshold default), each against its own freshly-measured `ripser.cpp` reference -- this is what
+  * distinguishes a roughly-constant "JVM/representation tax" from a slowdown ratio that grows with `n` (an algorithmic
+  * problem), which a single-`n`-per-data-set table can't, since every row here already varies `n`, `maxDim`, ambient
+  * dimension, and threshold simultaneously.
   *
   * '''Three-way comparison, not two''': every case now also runs `PackedRipserCohomologyContext`
-  * (`PackedRipserCohomology.scala`) -- the parallel packed-`(Double, Long)` engine built to test whether
-  * eliminating `Simplex[Int]`/`SortedSet[Int]` as the reduction-time carrier actually closes some of the
-  * ~20µs/simplex constant-factor tax this same spec first measured (`.claude/WORKLOG-ripser-comparison.md`).
-  * See `.claude/WORKLOG-packed-ripser-engine.md` for the measurement this table's own numbers feed into --
-  * this class doc states the methodology, that worklog states the result.
+  * (`PackedRipserCohomology.scala`) -- the parallel packed-`(Double, Long)` engine built to test whether eliminating
+  * `Simplex[Int]`/`SortedSet[Int]` as the reduction-time carrier actually closes some of the ~20µs/simplex
+  * constant-factor tax this same spec first measured (`.claude/WORKLOG-ripser-comparison.md`). See
+  * `.claude/WORKLOG-packed-ripser-engine.md` for the measurement this table's own numbers feed into -- this class doc
+  * states the methodology, that worklog states the result.
   *
   * Run with, e.g.:
   * {{{
@@ -161,7 +158,7 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
           catch
             case _: TimeoutException => Left("timeout")
             case e: OutOfMemoryError => Left(s"OutOfMemoryError: ${Option(e.getMessage).getOrElse("")}")
-            case e: Throwable => Left(s"${e.getClass.getSimpleName}: ${Option(e.getMessage).getOrElse("")}".trim)
+            case e: Throwable        => Left(s"${e.getClass.getSimpleName}: ${Option(e.getMessage).getOrElse("")}".trim)
 
         case class DataCase(
           name: String,
@@ -246,11 +243,21 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
           )
         )
 
+        // -DcaseNames=fractal-r,o3_4096 restricts the run to specific cases by name -- added to give a targeted
+        // re-run (e.g. a longer per-case -DtimeoutSeconds budget) to just the cases that didn't finish in an
+        // earlier pass, without re-running every smaller case's already-known-good numbers ahead of them.
+        val caseNames: Option[Set[String]] =
+          sys.props.get("caseNames").filter(_.nonEmpty).map(_.split(",").map(_.trim).toSet)
+        val selectedCases = caseNames match
+          case None        => cases
+          case Some(names) => cases.filter(c => names.contains(c.name))
+
         def barsMatchStr(byDim: Map[Int, Int], refBars: Map[Int, Int]): String =
           val allDims = (byDim.keySet ++ refBars.keySet).toSeq.sorted
           val mismatches = allDims.filter(d => byDim.getOrElse(d, 0) != refBars.getOrElse(d, 0))
           if mismatches.isEmpty then "yes"
-          else mismatches.map(d => s"d$d:${byDim.getOrElse(d, 0)}vs${refBars.getOrElse(d, 0)}").mkString("NO(", ",", ")")
+          else
+            mismatches.map(d => s"d$d:${byDim.getOrElse(d, 0)}vs${refBars.getOrElse(d, 0)}").mkString("NO(", ",", ")")
 
         println(
           f"${"case"}%-13s${"ripser(ms)"}%-11s${"SortedSet(ms)"}%-14s${"x"}%-8s${"packed(ms)"}%-11s${"x"}%-8s" +
@@ -267,7 +274,7 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
         // Only safe to trust the dual-engine table's ratio columns for cases where BOTH engines actually
         // finished; anything after the first timeout should be re-measured with this flag instead.
         val packedOnly = sys.props.get("packedOnly").contains("true")
-        for c <- cases do
+        for c <- selectedCases do
           // Both engines timed in the SAME run, same JVM warmup state, so the SortedSet-vs-packed ratio isn't
           // biased by one of them going first every time the way separate spec runs would be -- run order here
           // is SortedSet then packed for every case, a consistent (if not counterbalanced) bias, noted rather
@@ -310,7 +317,8 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
           // from a packed OutOfMemoryError would have been directly useful, and this bug threw that information
           // away -- see WORKLOG-packed-ripser-engine.md's later update).
           val barsOk =
-            if packedOnly then packedOutcome.toOption.map((_, pkBars, _) => barsMatchStr(pkBars, c.refBars)).getOrElse("-")
+            if packedOnly then
+              packedOutcome.toOption.map((_, pkBars, _) => barsMatchStr(pkBars, c.refBars)).getOrElse("-")
             else
               (sortedSetOutcome, packedOutcome) match
                 case (Right((_, ssBars, _)), Right((_, pkBars, _))) =>

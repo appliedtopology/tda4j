@@ -577,6 +577,107 @@ exercisable by this regression at all — see item 3 above, it's non-functional 
   (`RipserHomology`, `computePersistentHomology`) kept for reference while the three live contexts above were
   developed.
 
+## Cubical complexes and persistence
+
+`Cubical.scala`/`CubicalStream.scala`/`CubicalImage.scala` add cubical complexes as a second concrete `OrderedCell`
+instance alongside `Simplex[VertexT]` — built in one overnight session; see `.claude/WORKLOG-cubical.md` for the
+full derivation, including the advisor consult that shaped the design up front and three separate instances of a
+same-named-top-level-extension-method collision hit and fixed along the way.
+
+**`Cube` (`Cubical.scala`)**: an elementary cube is a product of `n` (the ambient/embedding dimension, fixed per
+complex — not per cube) factors, each either a degenerate interval `[a,a]` or a unit interval `[a,a+1]`; the
+cube's own dimension is the count of non-degenerate factors. `opaque type Cube = Vector[Int]`, the standard
+"doubled coordinate" encoding from the cubical-homology literature (Kaczynski-Mischaikow-Mrozek, *Computational
+Homology*): axis `k` is `2*a` (degenerate, point `a`) or `2*a+1` (non-degenerate, `[a,a+1]`). `Vector`, not
+`Array`/`IArray` — structural `equals`/`hashCode` is required for `Chain`'s pivot tables to collide two
+structurally-identical cubes; an array-backed opaque type would silently use reference equality instead.
+Boundary is the standard KMM formula, sign alternating over a non-degenerate axis's RANK AMONG the other
+non-degenerate axes (not its raw position in the coordinate vector) — using raw position instead is a real,
+easy-to-make sign bug that breaks d(d(x))=0 as soon as a cube has a degenerate axis interleaved among its
+non-degenerate ones, and is invisible over F2 (where -1=1) — `CubicalSpec`'s dd=0 property test is therefore run
+over a signed field (F3) as well as Double, exhaustively for small ambient dimensions. `Cube_is_OrderedCell`
+mirrors `Simplex.scala`'s parameterized-given pattern exactly (a `setOrdering` parameter defaulting to a
+canonical lexicographic order on the encoding, so a stream can inject its own filtration-aware ordering).
+
+`CellularHomologyContext` (the naive, generic reduction engine — see "Persistent homology" above) needed
+**nothing new** to consume `Cube`: it was already fully generic over `CellT: OrderedCell`. `CubicalHomologyContext`
+is a one-line wrapper, exactly mirroring `SimplicialHomologyContext`'s relationship to the same engine.
+`PersistenceInChunksContext`/`SimplicialHomologyByDimensionContext` remain hardcoded to `Simplex[VertexT]` and
+were NOT generalized — out of scope for this session, matching what "slot in cleanly with [the cellular
+homology algorithm]" actually meant (the naive engine specifically, confirmed by reading `Homology.scala`
+before writing any code).
+
+**`CubicalGridStream` (`CubicalStream.scala`)**: a dense cubical complex over a full rectangular grid — the
+T-construction, GUDHI/DIPHA/Perseus's standard convention for image persistence. A caller-supplied
+`topCellValue: IndexedSeq[Int] => Double` gives every top-dimensional cube (pixel/voxel) its own value directly;
+every lower-dimensional cube's value is the `min` over every top cell that contains it, computed DIRECTLY
+(cartesian product over the cube's degenerate axes' `±1` choices) rather than via a recursive immediate-cofaces
+walk — mathematically equivalent (every top cell containing an immediate coface of `c` also contains `c`) and
+cheaper. Monotonicity (`fv(face) <= fv(coface)`, which `CellularHomologyContext.processingOrder`'s ascending
+sort requires — get it backwards and it's the exact "reduction pivot ... was not a recorded open class" crash
+this codebase has hit three other times, see the "Bug found while cross-validating" section above) falls
+directly out of this construction: `{top cells containing a coface}` is always a subset of `{top cells
+containing its face}`, so a min over fewer things is never smaller. `filtrationOrdering` copies
+`EnumeratingCofaceSimplexStream`'s exact shape (explicit negated-fv comparison, then dimension, then a canonical
+tie-break) — NOT `.reverse` of an ascending-built ordering, which flips the dimension tie-break too. `shape(i)`
+is the pixel/voxel COUNT along axis `i` (not lattice points); `totalCellCount = prod_i (2*shape(i)+1)` — a real
+256x256 image is 263,169 cells, not 65,536. `ExplicitCubicalStream` (sparse/arbitrary cube sets with explicit
+filtration values, mirroring `ExplicitStream`) also exists for hand-built fixtures and genuinely non-grid
+cubical complexes.
+
+Sublevel (ascending intensity, the default and GUDHI's own convention) vs. superlevel is handled ENTIRELY in
+`CubicalImage.scala`'s loaders (`sublevel: Boolean` parameter, negating values on load — the standard "sublevel
+of `-f` is superlevel of `f`, reparametrized" trick) rather than as a direction flag on `CubicalGridStream`
+itself — keeps the stream's "min over cofaces, always" logic free of a second code path to verify.
+
+**`CubicalImage.scala`** converts greyscale images/voxel grids into `CubicalGridStream`s: `fromFlatArray(shape,
+flatValues, sublevel)` is the one real implementation everything else reduces to (row-major strides).
+`fromBufferedImage`/`fromFile` use `javax.imageio` (JDK-builtin, no new dependency) for 2D image files, standard
+ITU-R BT.601 luma for grayscale conversion (applied unconditionally — harmless identity on an already-grayscale
+image). 3D+ voxel grids (`fromVoxelGrid3D`, or `fromFlatArray` directly) take a plain in-memory array — there is
+no single standard JDK-readable volumetric format, so a caller with a specific one (NRRD, NIfTI, a raw slice
+stack) loads it upstream with whatever library that needs.
+
+**Validation strategy, deliberately reordered from a first instinct** (see WORKLOG-cubical.md's advisor-consult
+section): NOT led with a cubical-to-simplicial triangulation cross-check — an unvalidated oracle can make a real
+cubical bug look like a triangulation bug or vice versa, the same trap this file's Helix/DQP history already
+documents. Led instead with, in order: dd=0 over a signed field; a monotonicity property test; the
+`totalBarsAccountForAllCells` structural invariant (`HomologyFixtures`, already used elsewhere in this
+codebase); three hand-derived fixtures deliberately chosen TIE-HEAVY (few distinct filtration values — exactly
+the regime this codebase's `filtrationOrdering` bugs have historically hidden in), whose EXACT bar-count
+breakdown (not just presence of the topologically meaningful bars) was pinned via a general planar-graph
+argument (spanning-tree/cycle-rank: a grid's full 1-skeleton opens `V` classes at dimension 0, `V-1` "tree"
+edges kill all but one, and by Euler's formula the remaining `E-(V-1)` "extra" edges exactly equal the pixel
+count, so every pixel is guaranteed to kill exactly one dimension-1 class); and an independent H0 cross-check
+via union-find over PRESENT PIXELS using Moore/Chebyshev adjacency (8-connected in 2D, 26-connected in 3D) — NOT
+4-connected, which would be a WRONG oracle here: two pixels touching only at a shared corner vertex are
+genuinely in the same path component of the cubical complex whenever that vertex is present. All of the above
+pass: `CubicalSpec` (9 examples), `CubicalStreamSpec` (8 examples, 331 expectations, including a dedicated
+`ExplicitCubicalStream`-vs-`CubicalGridStream` cross-check — the former's own `filtrationOrdering` is an
+independently-written duplicate, not shared code, so this also confirms the two never silently drifted apart),
+`CubicalImageSpec` (12
+examples, including a real PNG file round-trip through `ImageIO.write`/`fromFile` and an end-to-end image-to-
+barcode test reproducing the hand-derived fixture through the actual `BufferedImage`/luma path).
+
+**Naive-engine scaling, measured** (`CubicalBenchmarkSpec.scala`, matching `SparseRipsBenchmarkSpec`'s
+convention — small defaults, `Arguments`-driven overrides for a real run): 2D is roughly FLAT per-cell cost
+(~60-95us/cell) across a 900x range of complex sizes, so a real 256x256 image (263,169 cells) processes in
+~25 seconds on the fully generic, unoptimized naive engine. **3D is a materially different, worse shape**:
+per-cell cost GROWS with `n` (190 -> 340 -> 850 us/cell from n=8 to n=32) rather than staying flat, so a modest
+32-cubed voxel grid (274,625 cells — barely more than the 2D 256x256 case) takes ~3.9 MINUTES, not ~25 seconds.
+Not yet root-caused (a genuine next-session profiling target — allocation profiler, not another timing table,
+same lesson `RipserCohomologyContext`'s own constant-factor tax learned the hard way).
+
+A specialized, grid-structure-exploiting fast cubical persistence algorithm — **CubicalRipser** (reproducing
+Ripser's clearing/apparent-pairs optimizations for cubical complexes) or the **Wagner-Chen-Vuçini** "Efficient
+Computation of Persistent Homology for Cubical Data" approach (union-find for dimension 0, discrete-Morse-style
+reduction for higher dimensions) — is a real, flagged-on-purpose future direction, NOT attempted this session:
+tonight's scope was deliberately limited to slotting `Cube` into the existing generic naive engine. The measured
+3D numbers above are the concrete case for it, not a theoretical one — profile first (root-cause the growing
+per-cell cost) before deciding whether a targeted fix or a genuinely specialized engine is warranted, mirroring
+how `RipserCohomologyContext` itself was only built after the naive engine's own limits were understood, not
+before.
+
 ## Alpha complex: DQP vs Helix
 
 `AlphaComplexDQP.scala` implements Erik Carlsson & John Carlsson, *Computing the alpha complex using dual active

@@ -241,3 +241,77 @@ column. Fixed at the source: both `status` and `barsOk` now branch on `packedOnl
 `packedOutcome`'s own result/reason directly when SortedSet was deliberately skipped, rather than falling
 through the general two-engine `match`. This is a permanent fix, not a throwaway diagnostic — kept in the
 committed spec.
+
+### `fractal-r`/`o3_4096` final attempt: 3-hour-per-case budget, launched 2026-09-17 ~10:43PM
+
+Project lead's explicit call for tonight: give these two a real 3-hour shot each, rather than accepting the
+30-minute-budget "timeout" (whose actual failure mode -- timeout vs. OOM -- the print-masking bug above had
+been hiding). Added a `-DcaseNames=fractal-r,o3_4096` filter to `RipserPaperBenchmarkSpec` (comma-separated,
+matches by `DataCase.name`) so this run doesn't re-run the 6 already-known-good cases first -- small, permanent,
+in the same style as the existing `-D` flags.
+
+**Two mistakes caught before/during launch, worth recording**:
+1. First launch attempt (`-J-Xmx24G`) came back in 5 seconds with the header row printed but the example itself
+   reported `SKIPPED` (specs2's `o` marker, "1 example ... 1 skipped") -- the class's own `skipAll` (line 102)
+   was still active. The EARLIER 30-min run that produced real output must have had it temporarily commented
+   out and then restored afterward, per the class's own documented convention ("re-enable deliberately when
+   actually running the benchmark") -- I mis-generalized from that earlier log's behavior instead of checking
+   whether `skipAll` was actually commented out in the CURRENT source before trusting a `grep` hit alone. Fixed
+   by commenting it out for this run; needs to be RESTORED (re-enabled) once this run is done, matching the
+   project's own convention -- not yet done as of this note, flagged so it isn't forgotten.
+2. Mid-launch, the project lead flagged that swap was already critically tight from a previous, unrelated
+   session event ("last we tried something big, the swap was almost exhausted") -- confirmed directly:
+   `vm.swapusage` showed 14.69GB/16GB used, 1.69GB free, BEFORE this run had done any real computation (the
+   first, `-Xmx24G` attempt had immediately skipped, so it never touched memory) -- i.e. this pressure predates
+   and is independent of this benchmark, from other already-open applications. Responded by relaunching with a
+   much more conservative `-J-Xmx10G` (down from 24G) rather than assuming a big ceiling is free just because
+   the machine nominally has 32GB -- `fractal-r` is only 512 points (smaller than `dragon`'s 2000 or
+   `o3_1024`'s 1024, both of which already succeeded), which is itself evidence this case's actual bottleneck is
+   more likely algorithmic/time than raw memory, making a conservative heap a low-risk choice, not just a safe
+   one. Confirmed launched successfully this time: real CPU usage (98%+), RSS climbing normally, table header
+   printed, swap unchanged immediately after launch (not yet made worse).
+
+**Explicit instruction from the project lead**: whatever happens here -- clean finish, timeout, or an OOM
+crash -- gets written up properly in this file (this note), not silently absorbed. If this section doesn't have
+a "Result" subsection appended below it, the run's outcome was not yet known when the session ended; check
+`fractal-o3_4096-3h.log` in the ripser-bench scratchpad directory directly.
+
+### Result: killed by the harness's own memory-safety monitor within ~3 minutes, no case completed
+
+NOT a JVM `OutOfMemoryError` (which `withTimeout`'s own catch block would have reported per-case, in the
+table, distinguishable from a timeout -- exactly what this session's earlier print-masking-bug fix was
+supposed to finally let this spec show). This was the AGENT HARNESS'S background-task process itself being
+killed externally ("stopped because the system is running low on memory") -- `ps`/`vm.swapusage` immediately
+after showed the java process gone entirely and no case row ever printed past the table header, so this landed
+somewhere in `fractal-r`'s own `metricSpace()`/`PackedRipserCohomologyContext` construction, before the first
+case's timing block even completed.
+
+Diagnosed, not just observed, before deciding whether to retry: `uptime` showed load averages of 20.38/15.44/
+15.45 on an 8-core machine (i.e. genuinely oversubscribed, not a measurement artifact) and `vm.swapusage`
+showed 14.69GB/16.0GB swap used both BEFORE and immediately AFTER this attempt (unchanged -- the kill happened
+too early to move that number further). `ps` sorted by CPU showed the load coming from a long list of ordinary,
+long-running user applications (`WindowServer` 48%, `iTerm2` 34.8%, `IntelliJ IDEA` 5.3%, plus Adobe Acrobat,
+BusyCal, zoom.us, Avast's endpoint-security helper, Brave, an IDrive backup daemon -- 6 days of uptime), not a
+single runaway/rogue process that could be safely killed to free room. This is the project lead's own normal
+open-application workload (confirmed by their own message mid-session: "I've closed pycharm since, but none of
+the others"), not something this session could or should intervene on.
+
+**Decision made, and the reasoning for it**: did NOT attempt a further, smaller-heap retry (e.g. `-J-Xmx4G`)
+after this kill, even though that would have been the natural next incremental step. The load-average and
+swap numbers indicate the constraint here is the MACHINE'S overall committed workload, not this specific JVM's
+heap ceiling -- a smaller `-Xmx` reduces this benchmark's own worst-case footprint but does nothing about the
+other ~15GB of resident/swapped memory already committed elsewhere, so another attempt was judged likely to
+either get killed again the same way or, worse, NOT get caught by the harness's safety net in time and risk
+actually destabilizing the project lead's other open work (unsaved documents, an active Zoom call, etc.) --
+a real, asymmetric downside for a benchmark script with no correctness stakes. Restored `skipAll` (reverted to
+its default-committed state) and stopped here for the night, reporting this back rather than continuing to
+retry unsupervised.
+
+**Honest final status for `fractal-r`/`o3_4096`**: still not resolved. Genuinely unknown whether either case is
+memory-bound, time-bound, or both, at any budget -- three consecutive attempts (the original 30-minute run,
+whose actual per-case failure mode was hidden by the print-masking bug now fixed; the first 3-hour attempt,
+which itself never ran due to `skipAll`; and this one, killed by system memory pressure before any case
+finished) have each failed for a DIFFERENT reason, none of which is "the packed engine needs N more hours and
+would finish." A future session wanting to actually resolve this should do so on a machine/moment with real
+headroom -- confirmed via `uptime`/`vm.swapusage` BEFORE launching, not assumed from nominal RAM size -- rather
+than fighting the same already-loaded machine again.
