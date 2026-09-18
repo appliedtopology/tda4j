@@ -1,5 +1,11 @@
 package org.appliedtopology.tda4j.matlab
 
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.homology.{given, *}
+import org.appliedtopology.tda4j.alpha.{given, *}
+
 /** A finished persistence computation, in a shape callable directly from MATLAB (or any other plain-Java caller) via
   * MATLAB's built-in Java interface: every public method here takes/returns only `int`, `double`, `double[][]`, or
   * `int[][]` -- no Scala types, no generics, no `java.util.Map` -- since none of those marshal reliably across MATLAB's

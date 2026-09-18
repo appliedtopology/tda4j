@@ -5,8 +5,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 TDA4j is a Scala 3 library for persistent homology and topological data analysis (a spiritual successor to
-JavaPlex/Ripser, from the Stanford Computational Topology workgroup lineage). Single sbt module, package
-`org.appliedtopology.tda4j`. Currently pre-1.0 (`0.1.3-SNAPSHOT`), actively evolving API.
+JavaPlex/Ripser, from the Stanford Computational Topology workgroup lineage). Single sbt module, root package
+`org.appliedtopology.tda4j`, split into subpackages (see "Package layout" below). Currently pre-1.0
+(`0.1.3-SNAPSHOT`), actively evolving API.
+
+## Package layout
+
+The codebase used to be one flat package; it's now split into subpackages under `org.appliedtopology.tda4j`,
+matching this file's own section structure below. Source and test directories mirror the package names
+(`src/main/scala/.../algebra/`, `src/test/scala/.../algebra/`, etc.) — file names are unchanged, only their
+directory and package declaration moved, so any file path in this doc below should be read as living under its
+package's subdirectory.
+
+- `algebra` — `RingModule`, `Field`, `FiniteField`, `Chain` (including the `Cell`/`Cocell`/`OrderedCell`/
+  `OrderedBasis` trait contracts), `Deferred`. The coefficient/module typeclasses plus the formal-sum machinery
+  everything else builds on.
+- `cells` — `Simplex`/`SimplexOps`/`SimplexOrderedCell`, `Cubical`/`CubicalOrderedCell`, `SimplicialSet` (dead
+  code). Concrete `OrderedCell` instances.
+- `streams` — `SimplexStream`, `FiniteMetricSpace`, `VietorisRips`, `Cofacets`, `RipserStream`, `CubicalStream`,
+  `CubicalImage`, `SymmetryGroup`, `UnionFind` (which also defines `Kruskal` — MST/cycle-basis over a
+  `FiniteMetricSpace`, not a generic utility, which is why it lives here and not in some separate `util`
+  package that never ended up existing — see below). Filtration/complex construction.
+- `homology` — `Homology` (all four persistence engines), `PackedRipserCohomology`. Note `CubicalHomologyContext`
+  is defined inside `streams/CubicalStream.scala`, not here — a real, pre-existing `streams -> homology`
+  dependency for that one wrapper class, not a layering violation introduced by the split.
+- `barcode` — `Barcode`. Already its own package before this split (nested `package barcode` inside the file);
+  only the physical file location changed, to match.
+- `alpha` — `AlphaShapes`, `AlphaComplexDQP`.
+- `unicode` — `PrintingHelper`. Already its own package before this split, same as `barcode`; currently unused
+  (only a dead commented-out import references it).
+- `matlab` — unchanged, already its own package.
+- root (`org.appliedtopology.tda4j` itself) — just `package.scala` (`TDAContext`), the thin user-facing facade,
+  plus `APISpec.scala`/`SimplicialSetSpec.scala` (dead) on the test side, which stay flat as cross-cutting
+  integration tests rather than belonging to any one subpackage.
+
+There is no dedicated `util` package — `UnionFind.scala` was the only real util-shaped candidate, and turned
+out to be mixed-concern (see `streams` above), so the bucket was dropped rather than forced.
+
+Every file that references a symbol from another subpackage does so via an explicit
+`import org.appliedtopology.tda4j.<pkg>.{given, *}` — note the `given`: a plain `import pkg.*` does NOT bring
+`given` instances into scope in Scala 3 (a real, easy-to-hit gotcha, distinct from the companion-object/opaque-
+type hazards below), and this codebase's `Ordering[CellT]`/`RingModule`/`Field` instances are all `given`s. These
+imports are broad wildcard imports by design (mirroring what same-package visibility already gave every file
+before the split) rather than narrow per-symbol imports — full derivation of the split, including the two
+Scala-3-specific gotchas hit along the way, is in `WORKLOG-package-reorg.md`.
 
 ## Commands
 
@@ -15,7 +57,7 @@ Build and test with sbt (Java 21, Scala 3.8.4):
 ```
 sbt clean test                  # full test suite (what CI runs)
 sbt "testOnly *SimplexSpec"     # run a single specs2 spec by class name (glob supported)
-sbt "testOnly org.appliedtopology.tda4j.HomologySpec"
+sbt "testOnly org.appliedtopology.tda4j.homology.HomologySpec"
 sbt scalafmtAll                 # format the whole codebase
 sbt scalafmtCheck scalafmtSbtCheck   # what CI's lint job checks (formatting only, no autofix)
 sbt mimaReportBinaryIssues      # binary-compatibility check (also run in CI's test job)

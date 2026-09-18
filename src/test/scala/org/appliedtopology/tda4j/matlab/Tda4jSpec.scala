@@ -1,5 +1,11 @@
 package org.appliedtopology.tda4j.matlab
 
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.homology.{given, *}
+import org.appliedtopology.tda4j.alpha.{given, *}
+
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.barcode.*
 import org.specs2.mutable
