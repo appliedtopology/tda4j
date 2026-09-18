@@ -20,7 +20,7 @@
 
 <meta name="description" content="A Java Platform compatible library for topological data analysis (TDA).">
 <link rel="shortcut icon" href="../assets/images/favicon.png">
-<title>Mapping the library: class- and type-diagrams · TDA4j</title>
+<title>Mapping the library: class diagrams · TDA4j</title>
 <link rel="stylesheet" href="../assets/stylesheets/application.451f80e5.css">
 <link rel="stylesheet" href="../assets/stylesheets/application-palette.22915126.css">
 <meta name="theme-color" content="#3f51b5" />
@@ -60,7 +60,7 @@ data-md-color-accent="blue"
 TDA4j
 </span>
 <span class="md-header-nav__topic">
-Mapping the library: class- and type-diagrams
+Mapping the library: class diagrams
 </span>
 </div>
 </div>
@@ -120,20 +120,29 @@ appliedtopology/tda4j
 <ul>
   <li><a href="../tutorials/index.html" class="page">Tutorials for TDA4j</a></li>
   <li><a href="../user-guide/index.html" class="page">User Guide for TDA4j</a></li>
-  <li><a href="../developers-guide/index.html" class="page">Developers Guide for TDA4j</a>
+  <li><a href="../developers-guide/index.html" class="page">Developer&rsquo;s Guide for TDA4j</a>
   <ul>
-    <li><a href="../developers-guide/class-diagrams.html" class="active page">Mapping the library: class- and type-diagrams</a></li>
-    <li><a href="../developers-guide/patterns.html" class="page">Programming Patterns in use</a></li>
+    <li><a href="../developers-guide/scala3-primer.html" class="page">A Scala 3.7+ primer for this codebase</a></li>
+    <li><a href="../developers-guide/architecture.html" class="page">Architecture: from algebra to a filtration stream</a></li>
+    <li><a href="../developers-guide/persistence-engines.html" class="page">Persistence engines: what to trust, and why</a></li>
+    <li><a href="../developers-guide/gotchas.html" class="page">Hard-won invariants you must not break</a></li>
+    <li><a href="../developers-guide/degeneracies.html" class="page">Degeneracy behaviors that look like bugs but aren&rsquo;t</a></li>
+    <li><a href="../developers-guide/alpha-complex.html" class="page">Alpha complex: DQP vs Helix</a></li>
+    <li><a href="../developers-guide/class-diagrams.html" class="active page">Mapping the library: class diagrams</a></li>
   </ul></li>
 </ul>
 <nav class="md-nav md-nav--secondary">
 <label class="md-nav__title" for="__toc">Table of contents</label>
 <ul>
-  <li><a href="../developers-guide/class-diagrams.html#mapping-the-library-class-and-type-diagrams" class="header">Mapping the library: class- and type-diagrams</a>
+  <li><a href="../developers-guide/class-diagrams.html#mapping-the-library-class-diagrams" class="header">Mapping the library: class diagrams</a>
   <ul>
-    <li><a href="../developers-guide/class-diagrams.html#support-for-different-coefficients" class="header">Support for different coefficients</a></li>
-    <li><a href="../developers-guide/class-diagrams.html#how-do-we-describe-a-simplicial-complex-" class="header">How do we describe a Simplicial Complex?</a></li>
-    <li><a href="../developers-guide/class-diagrams.html#revision-2024-09-18" class="header">Revision 2024-09-18</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#typeclass-hierarchy-ringmodule-scala-field-scala-chain-scala-" class="header">Typeclass hierarchy (<code>RingModule.scala</code>, <code>Field.scala</code>, <code>Chain.scala</code>)</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#chain-cellt-coefficientt-chain-scala-" class="header"><code>Chain[CellT, CoefficientT]</code> (<code>Chain.scala</code>)</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#simplex-vertext-simplex-scala-simplexops-scala-" class="header"><code>Simplex[VertexT]</code> (<code>Simplex.scala</code>, <code>SimplexOps.scala</code>)</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#streams-simplexstream-scala-ripserstream-scala-vietorisrips-scala-" class="header">Streams (<code>SimplexStream.scala</code>, <code>RipserStream.scala</code>, <code>VietorisRips.scala</code>)</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#persistence-engines-homology-scala-" class="header">Persistence engines (<code>Homology.scala</code>)</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#metric-spaces-finitemetricspace-scala-" class="header">Metric spaces (<code>FiniteMetricSpace.scala</code>)</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#barcode-representation-barcode-scala-package-org-appliedtopology-tda4j-barcode-" class="header">Barcode representation (<code>Barcode.scala</code>, package <code>org.appliedtopology.tda4j.barcode</code>)</a></li>
   </ul></li>
 </ul>
 </nav>
@@ -155,11 +164,15 @@ appliedtopology/tda4j
 <nav class="md-nav md-nav--secondary">
 <label class="md-nav__title" for="__toc">Table of contents</label>
 <ul>
-  <li><a href="../developers-guide/class-diagrams.html#mapping-the-library-class-and-type-diagrams" class="header">Mapping the library: class- and type-diagrams</a>
+  <li><a href="../developers-guide/class-diagrams.html#mapping-the-library-class-diagrams" class="header">Mapping the library: class diagrams</a>
   <ul>
-    <li><a href="../developers-guide/class-diagrams.html#support-for-different-coefficients" class="header">Support for different coefficients</a></li>
-    <li><a href="../developers-guide/class-diagrams.html#how-do-we-describe-a-simplicial-complex-" class="header">How do we describe a Simplicial Complex?</a></li>
-    <li><a href="../developers-guide/class-diagrams.html#revision-2024-09-18" class="header">Revision 2024-09-18</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#typeclass-hierarchy-ringmodule-scala-field-scala-chain-scala-" class="header">Typeclass hierarchy (<code>RingModule.scala</code>, <code>Field.scala</code>, <code>Chain.scala</code>)</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#chain-cellt-coefficientt-chain-scala-" class="header"><code>Chain[CellT, CoefficientT]</code> (<code>Chain.scala</code>)</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#simplex-vertext-simplex-scala-simplexops-scala-" class="header"><code>Simplex[VertexT]</code> (<code>Simplex.scala</code>, <code>SimplexOps.scala</code>)</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#streams-simplexstream-scala-ripserstream-scala-vietorisrips-scala-" class="header">Streams (<code>SimplexStream.scala</code>, <code>RipserStream.scala</code>, <code>VietorisRips.scala</code>)</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#persistence-engines-homology-scala-" class="header">Persistence engines (<code>Homology.scala</code>)</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#metric-spaces-finitemetricspace-scala-" class="header">Metric spaces (<code>FiniteMetricSpace.scala</code>)</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#barcode-representation-barcode-scala-package-org-appliedtopology-tda4j-barcode-" class="header">Barcode representation (<code>Barcode.scala</code>, package <code>org.appliedtopology.tda4j.barcode</code>)</a></li>
   </ul></li>
 </ul>
 </nav>
@@ -170,298 +183,184 @@ appliedtopology/tda4j
 <div class="md-content">
 <article class="md-content__inner md-typeset">
 <div class="md-content__searchable">
-<h1><a href="#mapping-the-library-class-and-type-diagrams" name="mapping-the-library-class-and-type-diagrams" class="anchor"><span class="anchor-link"></span></a>Mapping the library: class- and type-diagrams</h1>
-<h2><a href="#support-for-different-coefficients" name="support-for-different-coefficients" class="anchor"><span class="anchor-link"></span></a>Support for different coefficients</h2>
-<p>We handle coefficient types by requiring a <code>Fractional</code> instance to be defined, which produces all the expected arithmetic operations on coefficients. <code>Fractional[Double]</code> already exists in Scala, and we also implement in the same way as is main-stream in the persistent homology library ecosystem finite field arithmetic with lookup tables for inverses.</p>
-<pre><code>classDiagram
-    class FiniteField {
-        val p: Int
-        type Fp
-        given val FpIsFractional: Fractional[Fp]
-        extension Fp.norm() Fp
-        extension Fp.toInt() Int
-        extension Fp.toString() String
-        extension Fp.toUInt() UInt
-    }
-    namespace Scala {
-        class Double {
-        }
-
-        class `DoubleIsFractional:Fractional[Double]` {
-        }
-    }
-    FiniteField -- Field
-
-    class `Chain[CellT: Cell, CoefficientT: Field]` {
-        ...
-    }
-
-    Double -- Field
-
-    Field *-- `Chain[CellT: Cell, CoefficientT: Field]`
-    `Cell[CellT]` *-- `Chain[CellT: Cell, CoefficientT: Field]`
-    `Cell[CellT]` --&gt; `Simplex[VertexT]`
-    class `Cell[CellT]` {
-&lt;&lt;interface Typeclass&gt;&gt;
-boundary() Chain[CellT, CoefficientT]
-}
-class `Simplex[VertexT]` {
-&lt;&lt;extends SortedSet, Cell&gt;&gt;
-size : Int
-iterator : Iterator[VertexT]
-boundary() Chain[AbstractSimplex[VertexT],CoefficientT]
-}
-</code></pre>
-<h2><a href="#how-do-we-describe-a-simplicial-complex-" name="how-do-we-describe-a-simplicial-complex-" class="anchor"><span class="anchor-link"></span></a>How do we describe a Simplicial Complex?</h2>
-<pre><code>classDiagram
-    `Cell[CellT]` --&gt; `Simplex[VertexT]`
-    class `Cell[CellT]` {
-&lt;&lt;interface&gt;&gt;
-boundary() Chain[CellT, CoefficientT]
-}
-class `Simplex[VertexT]` {
-&lt;&lt;extends SortedSet, Cell&gt;&gt;
-size : Int
-iterator : Iterator[VertexT]
-boundary() Chain[AbstractSimplex[VertexT],CoefficientT]
-}
-class `SimplexContext[VertexT]` {
-&lt;&lt;interface Context&gt;&gt;
-type Simplex = AbstractSimplex[VertexT]
-given Ordering[Simplex]
-s(vs*: Simplex) Simplex
-}
-class `IterableOnce[T]` {
-iterator : Iterator[T]
-knownSize : Int
-}
-class `SimplexFiltration[VertexT,FiltrationT]` {
-filtrationValue(simplex: AbstractSimplex[VertexT]) FiltrationT
-}
-class `SimplexStream[VertexT,FiltrationT]` {
-&lt;&lt;extends Filtration[VertexT,FiltrationT], IterableOnce[AbstractSimplex[VertexT]]&gt;&gt;
-}
-`IterableOnce[T]` --&gt; `SimplexStream[VertexT,FiltrationT]` : inherits
-`SimplexFiltration[VertexT,FiltrationT]` --&gt; `SimplexStream[VertexT,FiltrationT]` : inherits
-`Simplex[VertexT]` &quot;*&quot; o-- &quot;1&quot; `SimplexStream[VertexT,FiltrationT]` : contains
-
-class `ExplicitStream[VertexT,FiltrationT]` {
-filtrationValues : Map[AbstractSimplex[VertexT],FiltrationT]
-simplices: Seq[AbstractSimplex[VertexT]]
-}
-class `VietorisRips[VertexT]` {
-metricSpace: FiniteMetricSpace[VertexT]
-maxDimension: Int
-maxFiltrationValue: Double
-cliqueFinder: CliqueFinder[VertexT]
-}
-`SimplexStream[VertexT,FiltrationT]` --&gt; `ExplicitStream[VertexT,FiltrationT]`: inherits
-`SimplexStream[VertexT,FiltrationT]` --&gt; `VietorisRips[VertexT]`: inherits FiltrationT=Double
-`VietorisRips[VertexT]` -- `CliqueFinder[VertexT]` : uses
-class `CliqueFinder[VertexT]` {
-&lt;&lt;interface&gt;&gt;
-apply(metricSpace, maxFiltrationValue, maxDimension) Seq[AbstractSimplex[VertexT]]
-    }
-`CliqueFinder[VertexT]` --&gt; BronKerbosch : implements
-`CliqueFinder[VertexT]` --&gt; ZomorodianIncremental : implements
-`CliqueFinder[VertexT]` --&gt; SymmetricZomorodianIncremental : implements
-</code></pre>
-<h2><a href="#revision-2024-09-18" name="revision-2024-09-18" class="anchor"><span class="anchor-link"></span></a>Revision 2024-09-18</h2>
+<h1><a href="#mapping-the-library-class-diagrams" name="mapping-the-library-class-diagrams" class="anchor"><span class="anchor-link"></span></a>Mapping the library: class diagrams</h1><div class="callout note "><div class="callout-title">Note</div>
+<p>This page is a structural sketch to help you get oriented, not an exhaustive or automatically generated reference — field names and signatures can drift out of sync with source over time. When a diagram and the actual <code>.scala</code> file disagree, trust the file; the previous version of this page (dated 2024-09-18) had drifted enough from current source (referencing a <code>Cube.scala</code> file and cubical-complex types that no longer exist anywhere in <code>src/main</code>, among other things) that it was more actively misleading than useful, which is why this page was rebuilt from scratch against current source rather than incrementally patched.</p></div>
+<h2><a href="#typeclass-hierarchy-ringmodule-scala-field-scala-chain-scala-" name="typeclass-hierarchy-ringmodule-scala-field-scala-chain-scala-" class="anchor"><span class="anchor-link"></span></a>Typeclass hierarchy (<code>RingModule.scala</code>, <code>Field.scala</code>, <code>Chain.scala</code>)</h2>
 <pre class="prettyprint"><code class="language-mermaid">classDiagram
-    namespace Barcode_scala {
-        class BarcodeEndpoint
-        class PositiveInfinity
-        class NegativeInfinity
-        class OpenEndpoint
-        class ClosedEndpoint
-        class PersistenceBar {
-            dim : int
-            lower : BarcodeEndpoint
-            upper : BarcodeEndpoint
-            annotation : Option[AnnotationT]
-            toString()
-        }
-        class BarcodeContext {
-            FiltrationT bc FiltrationT : PersistenceBar
-            FiltrationT clcl FiltrationT : PersistenceBar
-            FiltrationT clop FiltrationT : PersistenceBar
-            FiltrationT opcl FiltrationT : PersistenceBar
-            FiltrationT opop FiltrationT : PersistenceBar
-            clinf FiltrationT : PersistenceBar
-            opinf FiltrationT : PersistenceBar
-            infcl FiltrationT : PersistenceBar
-            infop FiltrationT : PersistenceBar
-        }
-        class Barcode {
-            isMap(List~PersistenceBar~, List~PersistenceBar~, RealMatrix) bool
-            imageMatrix(List~PersistenceBar~, List~PersistenceBar~, RealMatrix) RealMatrix
-            image(List~PersistenceBar~, List~PersistenceBar~, RealMatrix) List~PersistenceBar~
-            kernel(List~PersistenceBar~, List~PersistenceBar~, RealMatrix) List~PersistenceBar~
-            cokernelMatrix(List~PersistenceBar~, List~PersistenceBar~, RealMatrix) RealMatrix
-            cokernel(List~PersistenceBar~, List~PersistenceBar~, RealMatrix) List~PersistenceBar~
-            reduceMatrix(RealMatrix) RealMatrix
-        }
+    class RingModule {
+        &lt;&lt;typeclass: type Self, type R&gt;&gt;
+        zero: Self
+        plus(x, y) Self
+        minus(x, y) Self
+        negate(x) Self
+        scale(r, y) Self
+        +(rhs) Self
+        -(rhs) Self
+        unary_-() Self
+        R.⊠(t) Self
     }
-    BarcodeEndpoint --|&gt; PositiveInfinity
-    BarcodeEndpoint --|&gt; NegativeInfinity
-    BarcodeEndpoint --|&gt; OpenEndpoint
-    BarcodeEndpoint --|&gt; ClosedEndpoint
+    class Field {
+        &lt;&lt;typeclass: type Self&gt;&gt;
+        plus(x, y) Self
+        times(x, y) Self
+        divide(x, y) Self
+        invert(x) Self
+        zero: Self
+        one: Self
+    }
+    class HasDimension {
+        &lt;&lt;typeclass: type Self&gt;&gt;
+        dim: Int
+    }
+    class Cell {
+        &lt;&lt;typeclass: type Self, extends HasDimension&gt;&gt;
+        boundary~CoefficientT~() Seq~Tuple2~
+    }
+    class Cocell {
+        &lt;&lt;typeclass: type Self, extends HasDimension&gt;&gt;
+        coboundary~CoefficientT~() Seq~Tuple2~
+    }
+    class OrderedCell {
+        &lt;&lt;typeclass: type Self : Ordering as ordering, extends Cell&gt;&gt;
+    }
+    class OrderedCocell {
+        &lt;&lt;typeclass: type Self : Ordering as ordering, extends Cocell&gt;&gt;
+    }
+    class OrderedBasis {
+        &lt;&lt;typeclass: type Self, requires CellT:Ordering, CoefficientT:Field&gt;&gt;
+        leadingCell: Option~CellT~
+        leadingCoefficient: CoefficientT
+        leadingTerm: Tuple2
+    }
+    HasDimension &lt;|-- Cell
+    HasDimension &lt;|-- Cocell
+    Cell &lt;|-- OrderedCell
+    Cocell &lt;|-- OrderedCocell
+    Simplex ..|&gt; OrderedCell : given instance
+    Chain ..|&gt; OrderedBasis : given instance
+    Chain ..|&gt; RingModule : given instance
 </code></pre>
+<p><code>Simplex[VertexT]</code> is currently the library&rsquo;s only <code>OrderedCell</code> instance; no concrete <code>Cocell</code>/ <code>OrderedCocell</code> instance exists yet (<code>RipserCohomologyContext</code> computes coboundaries directly against <code>SimplexIndexing</code> instead — see <a href="persistence-engines.html">Persistence engines</a>). See the <a href="scala3-primer.html">Scala 3 primer</a> for what &ldquo;typeclass: type Self&rdquo; and &ldquo;given instance&rdquo; mean concretely in this codebase&rsquo;s syntax.</p>
+<h2><a href="#chain-cellt-coefficientt-chain-scala-" name="chain-cellt-coefficientt-chain-scala-" class="anchor"><span class="anchor-link"></span></a><code>Chain[CellT, CoefficientT]</code> (<code>Chain.scala</code>)</h2>
 <pre class="prettyprint"><code class="language-mermaid">classDiagram
-    namespace Chain_scala {
-        class HasBoundary {
-            type Self : Ordering
-            extension Self.boundary[CoefficientT : Field] : Chain[Self, CoefficientT]
-        }
-        class HasDimension {
-            type Self
-            extension Self.dim : Int
-        }
-        class Cell
-        class OrderedCell
-        class given_Ordering~OrderedCell~
-        class OrderedBasis {
-            type Self
-            extension Self.leadingTerm: Tuple[Option[CellT], CoefficientT]
-            extension Self.leadingCoefficient : CoefficientT
-            extension Self.leadingCell : Option[CellT]
-        }
-        class Chain~CellT, CoefficientT~ {
-            private entries : mutable.PriorityQueue[Tuple[CellT, CoefficientT]]
-            collapseHead()
-            collapseAll()
-            isZero() bool
-            items : Seq[Tuple[CellT, CoefficientT]]
-            chainBoundary() Chain~CellT, CoefficientT~ 
-        }
-        class object_Chain {
-            apply(cs : vararg Tuple[CellT, CoefficientT]) Chain~CellT, CoefficientT~
-            apply(c : CellT) Chain~CellT, CoefficientT~
-            from(cs : Seq[Tuple[CellT, CoefficientT]]) Chain~CellT, CoefficientT~ 
-        }
-        class given_Chain_is_OrderedBasis
-        class ChainOps~CellT, CoefficientT~
+    class Chain {
+        -entries: PriorityQueue~Tuple2~
+        collapseHead() Unit
+        collapseAll() Unit
+        isZero() Boolean
+        items: Seq~Tuple2~
     }
-    HasBoundary --|&gt; Cell
-    HasDimension --|&gt; Cell
-    Cell --|&gt; OrderedCell
-    RingModule --|&gt; ChainOps
-
+    class `Chain$` {
+        &lt;&lt;companion object&gt;&gt;
+        empty~CellT,CoefficientT~() Chain
+        apply(cs: Tuple2*) Chain
+        from(cs: Seq~Tuple2~) Chain
+        reduceBy(z, basis, log) Tuple2
+        reduceByUntil(z, basis, log, stop) Tuple2
+    }
+    `Chain$` ..&gt; Chain : constructs
 </code></pre>
+<p><code>reduceBy</code>/<code>reduceByUntil</code> are the shared reduction primitives every persistence engine in <code>Homology.scala</code> builds on — see <a href="architecture.html">Architecture</a> and <a href="gotchas.html">Hard-won invariants #4</a>.</p>
+<h2><a href="#simplex-vertext-simplex-scala-simplexops-scala-" name="simplex-vertext-simplex-scala-simplexops-scala-" class="anchor"><span class="anchor-link"></span></a><code>Simplex[VertexT]</code> (<code>Simplex.scala</code>, <code>SimplexOps.scala</code>)</h2>
 <pre class="prettyprint"><code class="language-mermaid">classDiagram
-    namespace Cube_scala {
-        class ElementaryInterval {
-            n : int
-        }
-        class DegenerateInterval
-        class FullInterval
-        class given_Ordering_ElementaryInterval
-        class given_ElementaryInterval_is_OrderedCell
-        class ElementaryCube {
-            intervals : List[ElementaryInterval]
-        }
+    class Simplex {
+        &lt;&lt;opaque type = SortedSet~VertexT~&gt;&gt;
+        underlying: SortedSet~VertexT~
+        dim: Int
+        boundary~CoefficientT~() Seq~Tuple2~
     }
-    ElementaryInterval --|&gt; DegenerateInterval
-    ElementaryInterval --|&gt; FullInterval
+    class `Simplex$` {
+        &lt;&lt;companion object&gt;&gt;
+        apply(vertices: VertexT*) Simplex
+        from(vertices: Seq~VertexT~) Simplex
+        unapplySeq(s: Simplex) Option~Seq~
+    }
+    Simplex ..|&gt; OrderedCell : given default_Simplex_is_OrderedCell
 </code></pre>
+<p><code>SimplexOps.scala</code> adds a large <code>extension</code> block delegating most of <code>SortedSet</code>&rsquo;s surface (<code>.size</code>, <code>.map</code>, <code>.union</code>, <code>.dropIndex</code>, &hellip;) so <code>Simplex</code> &ldquo;feels like&rdquo; a set even though it&rsquo;s a zero-cost opaque wrapper at runtime — see the <a href="scala3-primer.html">primer</a>.</p>
+<h2><a href="#streams-simplexstream-scala-ripserstream-scala-vietorisrips-scala-" name="streams-simplexstream-scala-ripserstream-scala-vietorisrips-scala-" class="anchor"><span class="anchor-link"></span></a>Streams (<code>SimplexStream.scala</code>, <code>RipserStream.scala</code>, <code>VietorisRips.scala</code>)</h2>
 <pre class="prettyprint"><code class="language-mermaid">classDiagram
-    namespace FiniteField_scala {
-        class FiniteField {
-            p : int
-            type Fp
-            given Fp_is_Fractional
-        }
+    class Filtration {
+        &lt;&lt;typeclass: CellT:Cell, FiltrationT:Ordering,FiltrationT:Filterable&gt;&gt;
+        filtrationValue: PartialFunction
     }
+    class CellStream {
+        &lt;&lt;typeclass: extends Filtration, IterableOnce&gt;&gt;
+        filtrationOrdering: Ordering~CellT~
+    }
+    class SimplexStream {
+        &lt;&lt;CellStream specialized to Simplex~VertexT~&gt;&gt;
+    }
+    class StratifiedCellStream {
+        iterateDimension: PartialFunction~Int, Iterator~
+    }
+    Filtration &lt;|-- CellStream
+    CellStream &lt;|-- SimplexStream
+    CellStream &lt;|-- StratifiedCellStream
+    SimplexStream &lt;|-- StratifiedSimplexStream
+    StratifiedCellStream &lt;|-- StratifiedSimplexStream
+    StratifiedSimplexStream &lt;|-- CofaceSimplexStream
+    CofaceSimplexStream &lt;|-- EnumeratingCofaceSimplexStream
+    EnumeratingCofaceSimplexStream &lt;|-- RipserCofaceSimplexStream
+    EnumeratingCofaceSimplexStream &lt;|-- InorderCofaceSimplexStream
+    SimplexStream &lt;|-- ExplicitStream
+    SimplexStream &lt;|-- RipserStreamBase
+    RipserStreamBase &lt;|-- RipserStream
+    SimplexStream &lt;|-- RipserStreamSparse
+    StratifiedSimplexStream &lt;|-- RecursiveStackVietorisRipsSimplexStream
+    StratifiedSimplexStream &lt;|-- AlphaShapes
+    AlphaShapes &lt;|-- HelixDelaunay
+    AlphaShapes &lt;|-- AlphaShapeDQP
 </code></pre>
+<p>These are <strong>alternate stream implementations with a common output contract, not layers on top of one another</strong> — see <a href="architecture.html">Architecture</a>.</p>
+<h2><a href="#persistence-engines-homology-scala-" name="persistence-engines-homology-scala-" class="anchor"><span class="anchor-link"></span></a>Persistence engines (<code>Homology.scala</code>)</h2>
+<p>Deliberately <em>not</em> diagrammed field-by-field here — their exact state and trust status changes over time and belongs in one place. See <a href="persistence-engines.html">Persistence engines</a> for the full, current picture of <code>CellularHomologyContext</code>/<code>SimplicialHomologyContext</code>, <code>PersistenceInChunksContext</code>, <code>SimplicialHomologyByDimensionContext</code> (non-functional as of this writing), and <code>RipserCohomologyContext</code>.</p>
+<h2><a href="#metric-spaces-finitemetricspace-scala-" name="metric-spaces-finitemetricspace-scala-" class="anchor"><span class="anchor-link"></span></a>Metric spaces (<code>FiniteMetricSpace.scala</code>)</h2>
 <pre class="prettyprint"><code class="language-mermaid">classDiagram
-    namespace FiniteMetricSpace_scala {
-        class FiniteMetricSpace {
-            distance(vertex, vertex) Double
-            size : int
-            elements : Iterable[VertexT]
-            contains(vertex) bool
-            minimumEnclosingRadius : lazy Double
-        }
-        class MaximumDistanceFiltrationValue
-        class ExplicitMetricSpace
-        class EuclideanMetricSpace
+    class FiniteMetricSpace {
+        &lt;&lt;typeclass: type VertexT&gt;&gt;
+        distance(x, y) Double
+        size: Int
+        elements: Iterable~VertexT~
+        minimumEnclosingRadius: Double
     }
-    FiniteMetricSpace --|&gt; ExplicitMetricSpace
-    FiniteMetricSpace --|&gt; EuclideanMetricSpace
+    FiniteMetricSpace &lt;|-- IntMetricSpace
+    FiniteMetricSpace &lt;|-- ExplicitMetricSpace
+    FiniteMetricSpace &lt;|-- EuclideanMetricSpace
+    FiniteMetricSpace &lt;|-- SparseMetricSpace
+    class SpatialQuery {
+        &lt;&lt;typeclass: type VertexT&gt;&gt;
+        neighbors(v, epsilon) Set~VertexT~
+    }
+    SpatialQuery &lt;|-- JVPTree
+    SpatialQuery &lt;|-- BruteForce
+    SparseMetricSpace --&gt; SpatialQuery : uses (JVPTree)
 </code></pre>
+<h2><a href="#barcode-representation-barcode-scala-package-org-appliedtopology-tda4j-barcode-" name="barcode-representation-barcode-scala-package-org-appliedtopology-tda4j-barcode-" class="anchor"><span class="anchor-link"></span></a>Barcode representation (<code>Barcode.scala</code>, package <code>org.appliedtopology.tda4j.barcode</code>)</h2>
 <pre class="prettyprint"><code class="language-mermaid">classDiagram
-    namespace Homology_scala {
-        class HomologyState {
-            cycles : mutable.Map[CellT, Chain[CellT, CoefficientT]]
-            cyclesBornBy : mutable.Map[CellT, CellT]
-            boundaries : mutable.Map[CellT, Chain[CellT, CoefficientT]]
-            boundariesBornBy : mutable.Map[CellT, CellT]
-            coboundaries : mutable.Map[CellT, Chain[CellT, CoefficientT]]
-            stream : CellStream[CellT, FiltrationT]
-            current : FiltrationT
-            barcode : mutable.ArrayDeque[Tuple[Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT]]
-            diagramAt(f : FiltrationT) List[Tuple[Int,FiltrationT,FiltrationT]]
-            barcodeAt(f : FiltrationT) List[PersistenceBar]
-            advanceOne()
-            advanceTo(f: FiltrationT)
-            advanceAll()
-        }
+    class BarcodeEndpoint {
+        &lt;&lt;sealed trait&gt;&gt;
+        flip() BarcodeEndpoint
+        isFinite: Boolean
+    }
+    BarcodeEndpoint &lt;|-- PositiveInfinity
+    BarcodeEndpoint &lt;|-- NegativeInfinity
+    BarcodeEndpoint &lt;|-- OpenEndpoint
+    BarcodeEndpoint &lt;|-- ClosedEndpoint
+    class PersistenceBar {
+        dim: Int
+        lower: BarcodeEndpoint
+        upper: BarcodeEndpoint
+        annotation: Option~AnnotationT~
+    }
+    class Barcode {
+        isMap(source, target, matrix) Boolean
+        image(source, target, matrix) List~PersistenceBar~
+        kernel(source, target, matrix) List~PersistenceBar~
+        cokernel(source, target, matrix) List~PersistenceBar~
     }
 </code></pre>
-<pre class="prettyprint"><code class="language-mermaid">classDiagram
-    namespace RingModule_scala {
-        class RingModule {
-            zero : T
-            isZero(t : T) bool
-            plus(s : T, t: T) T
-            minus(s : T, t: T) T
-            negate(t: T) T
-            scale(r : R, t : T) T
-            extension T.+
-            extension T.-
-            extension T.unary_-
-            extension infix T.mul
-            extension R.⊠
-            extension infix R.scale
-        }
-    }
-</code></pre>
-<pre class="prettyprint"><code class="language-mermaid">classDiagram
-    namespace Simplex_scala {
-        class Simplex {
-            vertices : SortedSet[VertexT]
-            union(other : Simplex) Simplex
-        }
-        class given_Ordering_Simplex
-        class given_Simplex_is_OrderedCell
-        class object_Simplex {
-            apply(vertices : vararg VertexT) Simplex
-            from(vertices : Seq[VertexT]) Simplex
-            empty() Simplex
-            ∆(vertices : vararg VertexT) Simplex
-        }
-    }
-</code></pre>
-<pre class="prettyprint"><code class="language-mermaid">classDiagram
-    namespace SimplexStream_scala {
-        class SimplexStream
-    }
-</code></pre>
-<pre class="prettyprint"><code class="language-mermaid">classDiagram
-    namespace SymmetryGroup_scala {
-        class SymmetryGroup
-    }
-</code></pre>
-<pre class="prettyprint"><code class="language-mermaid">classDiagram
-    namespace UnionFind_scala {
-        class UnionFind
-    }
-</code></pre>
-<pre class="prettyprint"><code class="language-mermaid">classDiagram
-    namespace VietorisRips_scala {
-        class VietorisRips
-    }
-</code></pre>
+<p><code>AnnotationT</code> in practice is always <code>Chain[CellT, CoefficientT]</code> — the representative cycle/cocycle for a bar, when an engine tracks one.</p>
 </div>
 <div>
 <a href="https://github.com/appliedtopology/tda4j/tree/0.1.3-SNAPSHOT/src/main/paradox/developers-guide/class-diagrams.md" title="Edit this page" class="md-source-file md-edit">
@@ -480,7 +379,7 @@ Edit this page
 <footer class="md-footer">
 <div class="md-footer-nav">
 <nav class="md-footer-nav__inner md-grid">
-<a href="../developers-guide/index.html" title="Developers Guide for TDA4j" class="md-flex md-footer-nav__link md-footer-nav__link--prev" rel="prev">
+<a href="../developers-guide/alpha-complex.html" title="Alpha complex: DQP vs Helix" class="md-flex md-footer-nav__link md-footer-nav__link--prev" rel="prev">
 <div class="md-flex__cell md-flex__cell--shrink">
 <i class="md-icon md-icon--arrow-back md-footer-nav__button"></i>
 </div>
@@ -489,21 +388,8 @@ Edit this page
 <span class="md-footer-nav__direction">
 Previous
 </span>
-Developers Guide for TDA4j
+Alpha complex: DQP vs Helix
 </span>
-</div>
-</a>
-<a href="../developers-guide/patterns.html" title="Programming Patterns in use" class="md-flex md-footer-nav__link md-footer-nav__link--next" rel="next">
-<div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
-<span class="md-flex__ellipsis">
-<span class="md-footer-nav__direction">
-Next
-</span>
-Programming Patterns in use
-</span>
-</div>
-<div class="md-flex__cell md-flex__cell--shrink">
-<i class="md-icon md-icon--arrow-forward md-footer-nav__button"></i>
 </div>
 </a>
 </nav>

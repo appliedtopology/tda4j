@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="x-ua-compatible" content="ie=edge">
+<meta name="description" content="A Java Platform compatible library for topological data analysis (TDA).">
+<meta name="generator" content="Paradox, paradox-material-theme=0.7.0, mkdocs-material=3.0.3">
+
+<meta name="lang:clipboard.copy" content="Copy to clipboard">
+<meta name="lang:clipboard.copied" content="Copied to clipboard">
+<meta name="lang:search.language" content="">
+<meta name="lang:search.pipeline.stopwords" content="true">
+<meta name="lang:search.pipeline.trimmer" content="true">
+<meta name="lang:search.result.none" content="No matching documents">
+<meta name="lang:search.result.one" content="1 matching document">
+<meta name="lang:search.result.other" content="# matching documents">
+<meta name="lang:search.tokenizer" content="">
+
+
+<meta name="description" content="A Java Platform compatible library for topological data analysis (TDA).">
+<link rel="shortcut icon" href="../assets/images/favicon.png">
+<title>Hard-won invariants you must not break · TDA4j</title>
+<link rel="stylesheet" href="../assets/stylesheets/application.451f80e5.css">
+<link rel="stylesheet" href="../assets/stylesheets/application-palette.22915126.css">
+<meta name="theme-color" content="#3f51b5" />
+<link rel="stylesheet" href="../lib/material__tabs/dist/mdc.tabs.min.css">
+<link rel="stylesheet" href="../lib/prettify/prettify.css">
+<script src="../assets/javascripts/modernizr.1aa3b519.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700|Roboto+Mono">
+<style>
+body,input{font-family:"Roboto","Helvetica Neue",Helvetica,Arial,sans-serif}
+code,kbd,pre{font-family:"Roboto Mono","Courier New",Courier,monospace}
+</style>
+<link rel="stylesheet" href="../assets/fonts/font-awesome.css">
+<link rel="stylesheet" href="../assets/fonts/material-icons.css">
+<link rel="stylesheet" href="../assets/stylesheets/paradox-material-theme.css">
+</head>
+<body
+data-md-color-primary="indigo"
+data-md-color-accent="blue"
+>
+<input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+<input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+<label class="md-overlay" data-md-component="overlay" for="__drawer"></label>
+<header class="md-header" data-md-component="header">
+<nav class="md-header-nav md-grid">
+<div class="md-flex">
+<div class="md-flex__cell md-flex__cell--shrink">
+<a href="../index.html" title="TDA4j" class="md-header-nav__button md-logo">
+<i class="md-icon">local_library</i>
+</a>
+</div>
+<div class="md-flex__cell md-flex__cell--shrink">
+<label class="md-icon md-icon--menu md-header-nav__button" for="__drawer"></label>
+</div>
+<div class="md-flex__cell md-flex__cell--stretch">
+<div class="md-flex__ellipsis md-header-nav__title" data-md-component="title">
+<span class="md-header-nav__topic">
+TDA4j
+</span>
+<span class="md-header-nav__topic">
+Hard-won invariants you must not break
+</span>
+</div>
+</div>
+<form name="search" style="display: none">
+<input type="text" name="query">
+</form>
+<div class="md-flex__cell md-flex__cell--shrink">
+<div class="md-header-nav__source">
+<a href="https://github.com/appliedtopology/tda4j"
+title="Go to repository"
+class="md-source"
+data-md-source="github">
+<div class="md-source__icon">
+<i class="fa fa-github"></i>
+</div>
+<div class="md-source__repository">
+appliedtopology/tda4j
+</div>
+</a>
+
+</div>
+</div>
+</div>
+</nav>
+</header>
+
+<div class="md-container">
+<main class="md-main">
+<div class="md-main__inner md-grid" data-md-component="container">
+<div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
+<div class="md-sidebar__scrollwrap">
+<div class="md-sidebar__inner">
+<nav class="md-nav md-nav--primary" data-md-level="0" style="visibility: hidden">
+<label class="md-nav__title md-nav__title--site" for="drawer">
+<a href="../index.html" title="TDA4j" class="md-nav__button md-logo">
+<span class="md-nav__button md-logo">
+<i class="md-icon">local_library</i>
+</a>
+<a href="../index.html" title="TDA4j">
+TDA4j
+</a>
+</label>
+<div class="md-nav__source">
+<a href="https://github.com/appliedtopology/tda4j"
+title="Go to repository"
+class="md-source"
+data-md-source="github">
+<div class="md-source__icon">
+<i class="fa fa-github"></i>
+</div>
+<div class="md-source__repository">
+appliedtopology/tda4j
+</div>
+</a>
+
+</div>
+<ul>
+  <li><a href="../tutorials/index.html" class="page">Tutorials for TDA4j</a></li>
+  <li><a href="../user-guide/index.html" class="page">User Guide for TDA4j</a></li>
+  <li><a href="../developers-guide/index.html" class="page">Developer&rsquo;s Guide for TDA4j</a>
+  <ul>
+    <li><a href="../developers-guide/scala3-primer.html" class="page">A Scala 3.7+ primer for this codebase</a></li>
+    <li><a href="../developers-guide/architecture.html" class="page">Architecture: from algebra to a filtration stream</a></li>
+    <li><a href="../developers-guide/persistence-engines.html" class="page">Persistence engines: what to trust, and why</a></li>
+    <li><a href="../developers-guide/gotchas.html" class="active page">Hard-won invariants you must not break</a></li>
+    <li><a href="../developers-guide/degeneracies.html" class="page">Degeneracy behaviors that look like bugs but aren&rsquo;t</a></li>
+    <li><a href="../developers-guide/alpha-complex.html" class="page">Alpha complex: DQP vs Helix</a></li>
+    <li><a href="../developers-guide/class-diagrams.html" class="page">Mapping the library: class diagrams</a></li>
+  </ul></li>
+</ul>
+<nav class="md-nav md-nav--secondary">
+<label class="md-nav__title" for="__toc">Table of contents</label>
+<ul>
+  <li><a href="../developers-guide/gotchas.html#hard-won-invariants-you-must-not-break" class="header">Hard-won invariants you must not break</a>
+  <ul>
+    <li><a href="../developers-guide/gotchas.html#1-given-implicit-resolution-happens-once-at-construction-not-per-call" class="header">1. <code>given</code>/implicit resolution happens once, at construction, not per call</a></li>
+    <li><a href="../developers-guide/gotchas.html#2-a-streams-iteration-order-and-its-pivot-order-must-be-the-total-order" class="header">2. A stream&rsquo;s iteration order and its pivot order must be the <em>same</em> total order</a></li>
+    <li><a href="../developers-guide/gotchas.html#3-colex-vs-lex-tie-breaks-are-not-interchangeable-once-ripser-flavored-code-is-involved" class="header">3. Colex vs. lex tie-breaks are not interchangeable once Ripser-flavored code is involved</a></li>
+    <li><a href="../developers-guide/gotchas.html#4-chain-reduceby-reducebyuntil-never-hand-rolled-chain-arithmetic-inside-a-reduction-loop" class="header">4. <code>Chain.reduceBy</code>/<code>reduceByUntil</code>, never hand-rolled <code>Chain</code> arithmetic, inside a reduction loop</a></li>
+    <li><a href="../developers-guide/gotchas.html#5-combinatorial-helpers-over-the-full-point-set-dont-know-about-maxdimension-truncation" class="header">5. Combinatorial helpers over the full point set don&rsquo;t know about <code>maxDimension</code> truncation</a></li>
+    <li><a href="../developers-guide/gotchas.html#process-validate-empirically-not-by-inspection" class="header">Process: validate empirically, not by inspection</a></li>
+  </ul></li>
+</ul>
+</nav>
+
+</nav>
+<ul style="display: none">
+<li class="md-nav__item md-version" id="project.version">
+<label class="md-nav__link" for="__version">
+<i class="md-icon" title="Version">label_outline</i> 0.1.3*
+</label>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
+<div class="md-sidebar__scrollwrap">
+<div class="md-sidebar__inner">
+<nav class="md-nav md-nav--secondary">
+<label class="md-nav__title" for="__toc">Table of contents</label>
+<ul>
+  <li><a href="../developers-guide/gotchas.html#hard-won-invariants-you-must-not-break" class="header">Hard-won invariants you must not break</a>
+  <ul>
+    <li><a href="../developers-guide/gotchas.html#1-given-implicit-resolution-happens-once-at-construction-not-per-call" class="header">1. <code>given</code>/implicit resolution happens once, at construction, not per call</a></li>
+    <li><a href="../developers-guide/gotchas.html#2-a-streams-iteration-order-and-its-pivot-order-must-be-the-total-order" class="header">2. A stream&rsquo;s iteration order and its pivot order must be the <em>same</em> total order</a></li>
+    <li><a href="../developers-guide/gotchas.html#3-colex-vs-lex-tie-breaks-are-not-interchangeable-once-ripser-flavored-code-is-involved" class="header">3. Colex vs. lex tie-breaks are not interchangeable once Ripser-flavored code is involved</a></li>
+    <li><a href="../developers-guide/gotchas.html#4-chain-reduceby-reducebyuntil-never-hand-rolled-chain-arithmetic-inside-a-reduction-loop" class="header">4. <code>Chain.reduceBy</code>/<code>reduceByUntil</code>, never hand-rolled <code>Chain</code> arithmetic, inside a reduction loop</a></li>
+    <li><a href="../developers-guide/gotchas.html#5-combinatorial-helpers-over-the-full-point-set-dont-know-about-maxdimension-truncation" class="header">5. Combinatorial helpers over the full point set don&rsquo;t know about <code>maxDimension</code> truncation</a></li>
+    <li><a href="../developers-guide/gotchas.html#process-validate-empirically-not-by-inspection" class="header">Process: validate empirically, not by inspection</a></li>
+  </ul></li>
+</ul>
+</nav>
+
+</div>
+</div>
+</div>
+<div class="md-content">
+<article class="md-content__inner md-typeset">
+<div class="md-content__searchable">
+<h1><a href="#hard-won-invariants-you-must-not-break" name="hard-won-invariants-you-must-not-break" class="anchor"><span class="anchor-link"></span></a>Hard-won invariants you must not break</h1>
+<p>These are the load-bearing, non-obvious rules this codebase depends on. Every one of them was found by a real bug, not by reading a spec — which is itself the pattern worth internalizing (see <a href="#process-validate-empirically-not-by-inspection">Process: validate empirically, not by inspection</a> at the bottom of this page). If you&rsquo;re extending the persistence engines, complex-construction streams, or anything Ripser-flavored, read this page in full before you start, and again before you trust your own &ldquo;this should obviously be fine&rdquo; reasoning about a change.</p>
+<h2><a href="#1-given-implicit-resolution-happens-once-at-construction-not-per-call" name="1-given-implicit-resolution-happens-once-at-construction-not-per-call" class="anchor"><span class="anchor-link"></span></a>1. <code>given</code>/implicit resolution happens once, at construction, not per call</h2>
+<p>A <code>given [CellT: Ordering, CoefficientT: Field] =&gt; (Chain[CellT, CoefficientT] is RingModule)</code> instance resolves its <code>Ordering[CellT]</code> context-bound parameter <strong>exactly once</strong>, when the instance is first summoned — and every method on that instance (<code>plus</code>, <code>scale</code>, <code>negate</code>, and the <code>+</code>/<code>-</code>/<code>⊠</code> operators built on them) permanently closes over that one resolution. Calling those methods later, from a scope where a <em>different</em> <code>Ordering[CellT]</code> given is available, does <strong>not</strong> re-resolve anything — Scala&rsquo;s implicit search is static (compile-time, lexical), not dynamic.</p>
+<p>Concretely: <code>Simplex[VertexT] is OrderedCell</code>&rsquo;s own <code>.ordering</code> is a fixed lexicographic order on the vertex set, and <code>Chain.scala</code>&rsquo;s <code>given [CellT: OrderedCell] =&gt; Ordering[CellT] = oCell.ordering</code> fallback means any <code>chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]</code> written <em>before</em> a stream-specific <code>given Ordering[Simplex[VertexT]] = stream.filtrationOrdering</code> is in scope will silently capture that lexicographic fallback instead — and every chain built through <code>⊠</code>/<code>.scale</code> afterward pivots on vertex label order, not filtration order, regardless of what ordering is nominally &ldquo;in scope&rdquo; at the call site.</p>
+<p><strong>The fix pattern, everywhere it&rsquo;s applied correctly</strong>: declare <code>given Ordering[CellT] =
+stream.filtrationOrdering</code> as the <em>first</em> statement inside whatever state object holds the stream, before summoning <code>chainRM</code>. See <code>CellularHomologyContext.HomologyState</code> (<code>Homology.scala:49</code>) for the canonical example.</p>
+<p><strong>Why this is genuinely dangerous, not just a style nit</strong>: it compiles cleanly either way, produces a runtime object of the correct type either way, and only manifests as wrong <em>answers</em> on inputs where lexicographic vertex order and filtration order actually disagree — which most hand-built test fixtures don&rsquo;t exercise unless someone deliberately constructs one. <code>HomologyFixtures.elderRuleCells</code> in the test suite was built specifically to discriminate the two conventions (vertex 1 born at t=0, vertex 9 born at t=10, so a lex-order bug and a filtration-order-correct implementation disagree about which component dies). A test suite that never builds such a fixture can stay green for a long time on top of this bug.</p>
+<p><strong>This is not a hazard you internalize once and then stop guarding against.</strong> It has recurred in scratch code written specifically to measure something <em>about</em> this bug — a standalone helper summoned <code>Chain[...] is RingModule</code> without first bringing the relevant stream&rsquo;s ordering into scope, silently fell back to the lexicographic default, and produced a wrong dimension-0 death with no apparent-pair activity anywhere near it to explain the discrepancy. Every new <code>summon[... is RingModule]</code> call, anywhere, needs the ordering-in-scope check applied freshly — treat it as a code-review checklist item, not a thing you can rely on having internalized.</p>
+<p><strong>Not every class-scope <code>chainRM</code> instance is actually a live bug</strong> — see <a href="persistence-engines.html">Persistence engines</a> for the audit of all three engines that use this pattern: one was broken and fixed (<code>CellularHomologyContext</code>), one is present but empirically confirmed inert (<code>PersistenceInChunksContext</code> — every pivot-relevant reduction re-resolves ordering itself via <code>Chain.reduceByUntil</code>), and one is present but genuinely irrelevant (<code>TDAContext</code>&rsquo;s own class-scope <code>chainIsRingModule</code>, exported purely for user-facing chain-arithmetic convenience, never consumed by any engine&rsquo;s own reduction path). The general lesson: <strong>this pattern needs a case-by-case audit</strong> — &ldquo;is the class-scope instance&rsquo;s output ever trusted directly for pivot identity, or does every consumer re-resolve ordering itself&rdquo; — not a blanket rule, and &ldquo;should be inert&rdquo; needs an empirical discriminating test, not just a read-through, every time.</p>
+<h2><a href="#2-a-streams-iteration-order-and-its-pivot-order-must-be-the-total-order" name="2-a-streams-iteration-order-and-its-pivot-order-must-be-the-total-order" class="anchor"><span class="anchor-link"></span></a>2. A stream&rsquo;s iteration order and its pivot order must be the <em>same</em> total order</h2>
+<p>Boundary-matrix reduction (Algorithm 1, and its coboundary dual) requires columns (processing order) and rows (pivot order) to be indexed by one shared total order. In this codebase that means: a <code>SimplexStream</code>&rsquo;s <code>.iterator</code>/<code>iterateDimension</code> order and its <code>.filtrationOrdering</code> (used to key <code>Chain.reduceBy</code>&rsquo;s <code>SortedMap</code>) must be <em>the same ordering</em>, one the consistent <code>.reverse</code> of the other — not merely &ldquo;each independently a valid total order.&rdquo; Two orderings that are each individually consistent but disagree on which of two <em>tied</em> cells comes first will corrupt reduction in a way that&rsquo;s easy to miss, because most random test inputs don&rsquo;t have exact filtration-value ties. Vietoris-Rips complexes do, structurally — see <a href="degeneracies.html">Degeneracies that look like bugs</a>.</p>
+<p>Symptom to watch for: <code>IllegalStateException: reduction pivot ... was not a recorded open class</code>. That message means a cell got selected as a pivot that the algorithm&rsquo;s own invariants say should have been impossible — which almost always traces back to two orderings disagreeing on a tie, not a logic bug in the reduction loop itself. When you see it, check whether iteration order and pivot order for the stream in play are provably the same ordering <em>before</em> you go looking in the reduction code.</p>
+<p><code>.reverse</code> on the <em>same</em> <code>Ordering</code> object is safe for this; building a <em>second</em>, independently-written &ldquo;reversed&rdquo; comparator is not, even if it looks equivalent on paper — this has broken this codebase twice (<code>ExplicitStreamBuilder</code>&rsquo;s interaction with <code>FilteredSimplexOrdering</code>, and an early attempt to fix <code>EnumeratingCofaceSimplexStream</code> the same way) because a hand-written second comparator&rsquo;s tie-break direction doesn&rsquo;t automatically stay consistent with a separately-reversed primary key.</p>
+<h2><a href="#3-colex-vs-lex-tie-breaks-are-not-interchangeable-once-ripser-flavored-code-is-involved" name="3-colex-vs-lex-tie-breaks-are-not-interchangeable-once-ripser-flavored-code-is-involved" class="anchor"><span class="anchor-link"></span></a>3. Colex vs. lex tie-breaks are not interchangeable once Ripser-flavored code is involved</h2>
+<p><code>FilteredSimplexOrdering</code> (the generic, trait-level default) tie-breaks on plain lexicographic vertex-set order. <code>EnumeratingCofaceSimplexStream.filtrationOrdering</code> and <code>RipserCohomologyContext.cohomologyOrdering</code> both deliberately use <strong>colexicographic</strong> order instead, via <code>SimplexIndexing</code>&rsquo;s own combinatorial-number- system index — because that&rsquo;s the exact tie-break Ripser&rsquo;s Definition 3.2/Proposition 3.9 (apparent pairs) are stated in terms of. Don&rsquo;t casually &ldquo;simplify&rdquo; a colex ordering to the generic lex one in code that touches the Ripser-derived machinery (<code>SimplexIndexing</code>, <code>RipserCohomologyContext</code>, <code>RipserStreamBase</code>/<code>RipserStreamSparse</code>&rsquo;s zero-persistence checks); they need to agree with each other, not just each independently be &ldquo;a valid tie-break.&rdquo;</p>
+<h2><a href="#4-chain-reduceby-reducebyuntil-never-hand-rolled-chain-arithmetic-inside-a-reduction-loop" name="4-chain-reduceby-reducebyuntil-never-hand-rolled-chain-arithmetic-inside-a-reduction-loop" class="anchor"><span class="anchor-link"></span></a>4. <code>Chain.reduceBy</code>/<code>reduceByUntil</code>, never hand-rolled <code>Chain</code> arithmetic, inside a reduction loop</h2>
+<p><code>Chain</code>&rsquo;s <code>+</code>/<code>-</code>/<code>⊠</code> operators are correct but not efficient for iterative reduction: they only lazily collapse the <em>head</em> of the underlying <code>PriorityQueue</code>, so a hand-rolled fold that repeatedly subtracts terms builds an ever-growing backlog of uncollapsed duplicate entries. Confirmed directly: a first draft of <code>CellularHomologyContext.advanceOne</code> written this way hung/burned CPU for minutes on an 8-12 point VR complex that should take milliseconds. <code>Chain.reduceBy</code>/<code>reduceByUntil</code> go through a <code>SortedMap</code> that collapses duplicates on every insertion — always use these for actual reduction, and reserve raw chain arithmetic (<code>+</code>/<code>-</code>/<code>⊠</code>) for small, one-shot combinations like building a V-column fold, not for anything that accumulates over many reduction steps.</p>
+<h2><a href="#5-combinatorial-helpers-over-the-full-point-set-dont-know-about-maxdimension-truncation" name="5-combinatorial-helpers-over-the-full-point-set-dont-know-about-maxdimension-truncation" class="anchor"><span class="anchor-link"></span></a>5. Combinatorial helpers over the full point set don&rsquo;t know about <code>maxDimension</code> truncation</h2>
+<p><code>SimplexIndexing.cofacetIterator</code>/<code>facetIterator</code> operate purely combinatorially over the complete n-point abstract simplex — they have no concept of any per-engine dimension cap. <code>RipserCohomologyContext
+.coboundaryOf</code>, by contrast, explicitly truncates (<code>Chain.empty</code> whenever <code>sigma.dim + 1 &gt; maxDimension</code>), which is what makes top-dimension simplices come out essential. Any new code built directly on <code>SimplexIndexing</code>&rsquo;s iterators rather than going through <code>coboundaryOf</code> inherits none of that truncation — concretely, a from-scratch Definition-3.2 apparent-pair check built directly on <code>cofacetIterator</code> &ldquo;found&rdquo; apparent cofacets for top-dimension simplices in a truncated complex that don&rsquo;t actually exist there, wrongly demoting simplices that must stay essential. The fix is a manual guard (<code>sigma.dim &lt; maxDimension</code>) at the call site — <code>SimplexIndexing</code> itself has no way to know what any particular caller&rsquo;s cap is, so this isn&rsquo;t something to fix once at the source; every future direct consumer of these iterators needs its own guard. Worth watching for specifically because the symptom (wrong finite bars where essential ones were expected) looks like a reduction bug, not an off-by-scope error in helper code two layers away.</p>
+<h2><a href="#process-validate-empirically-not-by-inspection" name="process-validate-empirically-not-by-inspection" class="anchor"><span class="anchor-link"></span></a>Process: validate empirically, not by inspection</h2>
+<p>Every substantive design decision in this codebase&rsquo;s persistence-engine work (pivot orientation, whether clearing is optional, whether an ordering fix is complete, whether an optimization is sound) has gone through at least one empirical discriminating test before being trusted — never a plausibility argument alone, even when the plausibility argument came from a careful re-derivation. Concretely: reasoning that &ldquo;the class-scope <code>chainRM</code> should be inert here because X&rdquo; was correct for <code>PersistenceInChunksContext</code>, but the <em>same style</em> of reasoning about a &ldquo;full apparent-pairs skip&rdquo; in <code>RipserCohomologyContext</code> was contradicted by a two-minute empirical check on random input (see <a href="persistence-engines.html">Persistence engines</a>).</p>
+<p>The pattern to carry into new work: <strong>when a change to reduction/ordering logic seems obviously sound by inspection, build the cheap discriminating test anyway before implementing it for real.</strong> This codebase&rsquo;s history is that &ldquo;obviously sound&rdquo; has been wrong at roughly the same rate as &ldquo;seems fine, ship it.&rdquo; A good discriminating fixture deliberately puts filtration order and some other natural order (vertex label, insertion order) in conflict — a fixture where they happen to agree will not catch this class of bug (see <code>HomologyFixtures.elderRuleCells</code>, the tied-square fixture used to catch invariant #2, and the three-point-line calibration example used to catch invariant #3, all in <code>../../../../.claude/WORKLOG-naive-homology.md</code>/ <code>../../../../.claude/WORKLOG-cohomology.md</code> if you want to see the actual repros).</p>
+</div>
+<div>
+<a href="https://github.com/appliedtopology/tda4j/tree/0.1.3-SNAPSHOT/src/main/paradox/developers-guide/gotchas.md" title="Edit this page" class="md-source-file md-edit">
+Edit this page
+</a>
+</div>
+<div class="print-only">
+<span class="md-source-file md-version">
+0.1.3*
+</span>
+</div>
+</article>
+</div>
+</div>
+</main>
+<footer class="md-footer">
+<div class="md-footer-nav">
+<nav class="md-footer-nav__inner md-grid">
+<a href="../developers-guide/persistence-engines.html" title="Persistence engines: what to trust, and why" class="md-flex md-footer-nav__link md-footer-nav__link--prev" rel="prev">
+<div class="md-flex__cell md-flex__cell--shrink">
+<i class="md-icon md-icon--arrow-back md-footer-nav__button"></i>
+</div>
+<div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
+<span class="md-flex__ellipsis">
+<span class="md-footer-nav__direction">
+Previous
+</span>
+Persistence engines: what to trust, and why
+</span>
+</div>
+</a>
+<a href="../developers-guide/degeneracies.html" title="Degeneracy behaviors that look like bugs but arent" class="md-flex md-footer-nav__link md-footer-nav__link--next" rel="next">
+<div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
+<span class="md-flex__ellipsis">
+<span class="md-footer-nav__direction">
+Next
+</span>
+Degeneracy behaviors that look like bugs but arent
+</span>
+</div>
+<div class="md-flex__cell md-flex__cell--shrink">
+<i class="md-icon md-icon--arrow-forward md-footer-nav__button"></i>
+</div>
+</a>
+</nav>
+</div>
+<div class="md-footer-meta md-typeset">
+<div class="md-footer-meta__inner md-grid">
+<div class="md-footer-copyright">
+<div class="md-footer-copyright__highlight">
+MIT License © Mikael Vejdemo-Johansson, Daniel Hope
+</div>
+Powered by
+<a href="https://github.com/lightbend/paradox">Paradox</a>
+and
+<a href="https://sbt.github.io/sbt-paradox-material-theme/">Paradox Material Theme</a>
+
+</div>
+</div>
+</div>
+</footer>
+
+</div>
+<script src="../assets/javascripts/application.583bbe55.js"></script>
+<script src="../assets/javascripts/paradox-material-theme.js"></script>
+<script>app.initialize({version:"0.17",url:{base:"../."}})</script>
+<script type="text/javascript" src="../lib/prettify/prettify.js"></script>
+<script type="text/javascript" src="../lib/prettify/lang-scala.js"></script>
+<script type="text/javascript">
+document.addEventListener("DOMContentLoaded", function(event) {
+window.prettyPrint && prettyPrint();
+});
+</script>
+</body>
+</html>

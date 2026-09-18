@@ -120,18 +120,24 @@ appliedtopology/tda4j
 <ul>
   <li><a href="../tutorials/index.html" class="page">Tutorials for TDA4j</a></li>
   <li><a href="../user-guide/index.html" class="page">User Guide for TDA4j</a></li>
-  <li><a href="../developers-guide/index.html" class="active page">Developers Guide for TDA4j</a>
+  <li><a href="../developers-guide/index.html" class="active page">Developer&rsquo;s Guide for TDA4j</a>
   <ul>
-    <li><a href="../developers-guide/class-diagrams.html" class="page">Mapping the library: class- and type-diagrams</a></li>
-    <li><a href="../developers-guide/patterns.html" class="page">Programming Patterns in use</a></li>
+    <li><a href="../developers-guide/scala3-primer.html" class="page">A Scala 3.7+ primer for this codebase</a></li>
+    <li><a href="../developers-guide/architecture.html" class="page">Architecture: from algebra to a filtration stream</a></li>
+    <li><a href="../developers-guide/persistence-engines.html" class="page">Persistence engines: what to trust, and why</a></li>
+    <li><a href="../developers-guide/gotchas.html" class="page">Hard-won invariants you must not break</a></li>
+    <li><a href="../developers-guide/degeneracies.html" class="page">Degeneracy behaviors that look like bugs but aren&rsquo;t</a></li>
+    <li><a href="../developers-guide/alpha-complex.html" class="page">Alpha complex: DQP vs Helix</a></li>
+    <li><a href="../developers-guide/class-diagrams.html" class="page">Mapping the library: class diagrams</a></li>
   </ul></li>
 </ul>
 <nav class="md-nav md-nav--secondary">
 <label class="md-nav__title" for="__toc">Table of contents</label>
 <ul>
-  <li><a href="../developers-guide/index.html#developers-guide-for-tda4j" class="header">Developers Guide for TDA4j</a>
+  <li><a href="../developers-guide/index.html#developers-guide-for-tda4j" class="header">Developer&rsquo;s Guide for TDA4j</a>
   <ul>
-    <li><a href="../developers-guide/index.html#fundamental-paradigm-context-driven-programming" class="header">Fundamental Paradigm: Context-driven programming</a></li>
+    <li><a href="../developers-guide/index.html#what-you-need-to-deduce-before-you-can-contribute-fully" class="header">What you need to deduce before you can contribute fully</a></li>
+    <li><a href="../developers-guide/index.html#where-the-bug-histories-and-design-derivations-live" class="header">Where the bug histories and design derivations live</a></li>
   </ul></li>
 </ul>
 </nav>
@@ -153,9 +159,10 @@ appliedtopology/tda4j
 <nav class="md-nav md-nav--secondary">
 <label class="md-nav__title" for="__toc">Table of contents</label>
 <ul>
-  <li><a href="../developers-guide/index.html#developers-guide-for-tda4j" class="header">Developers Guide for TDA4j</a>
+  <li><a href="../developers-guide/index.html#developers-guide-for-tda4j" class="header">Developer&rsquo;s Guide for TDA4j</a>
   <ul>
-    <li><a href="../developers-guide/index.html#fundamental-paradigm-context-driven-programming" class="header">Fundamental Paradigm: Context-driven programming</a></li>
+    <li><a href="../developers-guide/index.html#what-you-need-to-deduce-before-you-can-contribute-fully" class="header">What you need to deduce before you can contribute fully</a></li>
+    <li><a href="../developers-guide/index.html#where-the-bug-histories-and-design-derivations-live" class="header">Where the bug histories and design derivations live</a></li>
   </ul></li>
 </ul>
 </nav>
@@ -166,31 +173,20 @@ appliedtopology/tda4j
 <div class="md-content">
 <article class="md-content__inner md-typeset">
 <div class="md-content__searchable">
-<h1><a href="#developers-guide-for-tda4j" name="developers-guide-for-tda4j" class="anchor"><span class="anchor-link"></span></a>Developers Guide for TDA4j</h1>
-<p>We intend the library to be a viable platform for algorithm development and research into topological data analysis. This guide is intended to demonstrate how to understand the abstractions and class hierarchies, and to understand how to extend the code to cover your use cases and fill your needs.</p>
-<h2><a href="#fundamental-paradigm-context-driven-programming" name="fundamental-paradigm-context-driven-programming" class="anchor"><span class="anchor-link"></span></a>Fundamental Paradigm: Context-driven programming</h2>
-<p>Drawing on experiences from the first year of the development work, a lot of the library is intended to work in a paradigm called <em>context-driven programming</em>, which can be seen in action in the Kotlin library kmath. The idea is that there are interfaces and objects that specify the <em>context</em> in which your computation takes place, and inside these contexts, symbols and functions are defined that make it natural to write the algebraic and arithmetic operations that you might need. The ideal end goal is that a user would need to run one or two lines of code to instantiate choices of what complexes they are building and what coefficients they want to use for computation, and to load the corresponding functionality into the current namespace. Currently, this might look something like this:</p>
-<pre class="prettyprint"><code class="language-scala 3">import org.appliedtopology.tda4j.*
-val tda = TDAContext[Char, Double]()
-import tda.*
-
-// now we are ready to write TDA code, and can create simplices and chains easily
-// This code creates the chain 2[1,2] - [2,3]
-val z = 2.0 *&gt; s(1,2) - s(2,3)
-</code></pre>
-<p>Currently, there are a few more lines needed to set up a finite field context, but we aim to streamline the top-level calling interface for this:</p>
-<pre class="prettyprint"><code class="language-scala 3">import org.appliedtopology.tda4j.*
-
-val ff: FiniteField = tda4j.FiniteField(17)
-import ff.{*,given}
-val tda = TDAContext[Char, FiniteField]()
-
-import tda.*
-
-// now we are ready to write TDA code, and can create simplices and chains easily
-// This code creates the chain 2[1,2] - [2,3]
-val z = Fp(2) *&gt; s(1,2) - s(2,3)
-</code></pre>
+<h1><a href="#developers-guide-for-tda4j" name="developers-guide-for-tda4j" class="anchor"><span class="anchor-link"></span></a>Developer&rsquo;s Guide for TDA4j</h1>
+<p>TDA4j is meant to be a viable platform for algorithm development and research into topological data analysis, not just a library you call into as a black box. This guide exists to get you from &ldquo;I understand persistent homology&rdquo; to &ldquo;I can confidently write, review, and extend code in this repository&rdquo; — which, if you&rsquo;re new to Scala 3.7+&rsquo;s newest context-abstraction syntax (as most people are — it&rsquo;s genuinely recent), is most of the actual gap.</p>
+<h2><a href="#what-you-need-to-deduce-before-you-can-contribute-fully" name="what-you-need-to-deduce-before-you-can-contribute-fully" class="anchor"><span class="anchor-link"></span></a>What you need to deduce before you can contribute fully</h2>
+<p>A useful way to organize this guide is around the questions a new contributor actually has to answer for themselves before their first non-trivial change is safe to merge — because that&rsquo;s the order most of this guide&rsquo;s content was originally discovered in, the hard way, across several sessions of work on this codebase:</p>
+<ol>
+  <li><strong>What does this Scala 3 syntax even mean?</strong> <code>Type is TypeClass</code>, <code>type Self: Ordering as ordering</code>,  <code>given [bounds] =&gt; Body = value</code>, opaque types, extension methods. None of this is Scala-2-style or  older-Scala-3-style code that &ldquo;should&rdquo; already look familiar — it&rsquo;s genuinely new syntax, introduced  across recent dotty releases. Start with the <a href="scala3-primer.html">Scala 3 primer</a>.</li>
+  <li><strong>Where is any given piece of functionality actually defined, and what layer is it in?</strong> The library is  built in clear layers — algebra (<code>RingModule</code>/<code>Field</code>/<code>Chain</code>), then complex construction (streams),  then the persistence engines that consume a stream — and knowing which layer you&rsquo;re in tells you what  invariants you can rely on and which file to go read. See <a href="architecture.html">Architecture</a>.</li>
+  <li><strong>Which of the four persistence engines in <code>Homology.scala</code> can I actually trust for the thing I&rsquo;m  trying to do?</strong> They are independently implemented, not layers on one shared core, and their trust  status is not uniform — one of the four is currently non-functional. This is not something you can infer  from the fact that all four compile and are exported from the same file. See  <a href="persistence-engines.html">Persistence engines</a>.</li>
+  <li><strong>What are the traps that look fine, compile fine, and only produce a wrong <em>answer</em> on specific  inputs?</strong> This codebase has a real, documented history of exactly this failure mode — code that type-  checks, runs, and passes a test suite that simply never happened to exercise the input where it breaks.  See <a href="gotchas.html">Hard-won invariants</a>, and read it before you assume your own &ldquo;this looks obviously  correct&rdquo; judgment is enough on a change to reduction or ordering logic.</li>
+  <li><strong>Is this surprising output a bug, or is it the library doing the mathematically correct thing on a  degenerate input?</strong> See <a href="degeneracies.html">Degeneracies</a> before you &ldquo;fix&rdquo; something that isn&rsquo;t broken.</li>
+</ol>
+<p>If you take one thing away from this guide before diving into the rest: <strong>in this codebase, &ldquo;compiles and has a passing test suite&rdquo; has not historically been a reliable signal of correctness for the persistence and ordering machinery.</strong> Every subtle bug found so far was caught by a specifically-constructed discriminating test fixture, not by the existing suite noticing on its own, because the existing tests mostly didn&rsquo;t happen to exercise the specific tie or label-order mismatch that triggers the bug class. When you&rsquo;re about to trust your own &ldquo;this seems obviously sound&rdquo; reasoning about a change to reduction or ordering code, build the cheap discriminating fixture first — see the closing section of <a href="gotchas.html">Hard-won invariants</a> for what that looks like in practice.</p>
+<h2><a href="#where-the-bug-histories-and-design-derivations-live" name="where-the-bug-histories-and-design-derivations-live" class="anchor"><span class="anchor-link"></span></a>Where the bug histories and design derivations live</h2>
+<p>This guide summarizes and cross-references, but doesn&rsquo;t duplicate, the detailed worklogs kept at the repo root: <code>../../../../.claude/WORKLOG-naive-homology.md</code>, <code>../../../../.claude/WORKLOG-cohomology.md</code>, <code>../../../../.claude/WORKLOG-alpha-complex.md</code>, and <code>WORKLOG.md</code> (the alpha-complex DQP numerical-robustness derivations). When this guide says &ldquo;confirmed by a specific counterexample&rdquo; or &ldquo;see the full derivation,&rdquo; that&rsquo;s where the full derivation actually lives — read those worklogs directly if you&rsquo;re about to touch code in the area they cover.</p>
 </div>
 <div>
 <a href="https://github.com/appliedtopology/tda4j/tree/0.1.3-SNAPSHOT/src/main/paradox/developers-guide/index.md" title="Edit this page" class="md-source-file md-edit">
@@ -222,13 +218,13 @@ User Guide for TDA4j
 </span>
 </div>
 </a>
-<a href="../developers-guide/class-diagrams.html" title="Mapping the library: class- and type-diagrams" class="md-flex md-footer-nav__link md-footer-nav__link--next" rel="next">
+<a href="../developers-guide/scala3-primer.html" title="A Scala 3.7+ primer for this codebase" class="md-flex md-footer-nav__link md-footer-nav__link--next" rel="next">
 <div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
 <span class="md-flex__ellipsis">
 <span class="md-footer-nav__direction">
 Next
 </span>
-Mapping the library: class- and type-diagrams
+A Scala 3.7+ primer for this codebase
 </span>
 </div>
 <div class="md-flex__cell md-flex__cell--shrink">
