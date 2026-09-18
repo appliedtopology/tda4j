@@ -212,8 +212,18 @@ trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
 class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDim: Int)
     extends CofaceSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]():
+  // `d <= maxDim` alone is not sufficient: the WRAPPED stream has its own natural bound (e.g.
+  // EnumeratingCofaceSimplexStream's `d < metricSpace.size`, needed because a d-simplex needs d+1 distinct
+  // vertices), which can be tighter than `maxDim` for a small point cloud. Calling `stream.iterateDimension(d)`
+  // directly (not through `.applyOrElse`) when the wrapped stream isn't itself defined at `d` throws a raw
+  // MatchError rather than correctly reporting "undefined here" -- caught via `RipserCohomologySpec`'s
+  // `naiveBars` helper needing `maxDim + 1` on a 3-point fixture once RipserCohomologyContext's own
+  // maxDimension semantics were fixed (see .claude/WORKLOG-maxdim-semantics-fix.md). Checking
+  // `stream.iterateDimension.isDefinedAt(d)` here keeps this class's own contract (a d it declares undefined
+  // for is a d that was never going to have any cells anyway) rather than crashing on a d that merely exceeds
+  // what the wrapped stream can combinatorially produce.
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
-    case d: Int if d >= 0 && d <= maxDim => stream.iterateDimension(d)
+    case d: Int if d >= 0 && d <= maxDim && stream.iterateDimension.isDefinedAt(d) => stream.iterateDimension(d)
   }
 
   override def currentDimension: Int = stream.currentDimension

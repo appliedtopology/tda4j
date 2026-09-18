@@ -7,51 +7,53 @@ import scala.collection.mutable
 
 /** Static entry point for computing persistent (co)homology from MATLAB (or any plain-Java caller) via MATLAB's
   * built-in Java interface. Every public method takes/returns only `double`, `int`, `String`, `double[][]`, or
-  * `String[]` -- deliberately not `java.util.Map` or anything generic, since MATLAB's Java bridge doesn't marshal
-  * those reliably. See `WORKLOG-matlab-api.md` for the full design rationale and what's still open, and
-  * `PersistenceResult` for what comes back.
+  * `String[]` -- deliberately not `java.util.Map` or anything generic, since MATLAB's Java bridge doesn't marshal those
+  * reliably. See `WORKLOG-matlab-api.md` for the full design rationale and what's still open, and `PersistenceResult`
+  * for what comes back.
   *
   * Options are passed as a flat, alternating key/value `String[]` (`{"engine","ripser","maxDimension","3"}`) rather
   * than fixed parameters, so that adding a new option never changes any method's call signature. Recognized keys:
   *
   *   - `"complex"`: `"vr"` (default) or `"alpha"`.
   *   - `"engine"`: `"ripser"` (default for `complex=vr`; fastest, most cross-validated -- see CLAUDE.md), `"naive"`
-  *     (reference-grade, slower, the only engine usable with `complex=alpha`), or `"chunks"` (`complex=vr` only --
-  *     see below for why `complex=alpha` refuses it).
+  *     (reference-grade, slower, the only engine usable with `complex=alpha`), or `"chunks"` (`complex=vr` only -- see
+  *     below for why `complex=alpha` refuses it).
   *   - `"alphaBackend"`: `"helix"` (default) or `"DQP"`, only consulted when `complex=alpha`.
   *   - `"maxDimension"`: integer, default `2` -- the highest HOMOLOGICAL degree you want back (i.e. "give me
-  *     H_0..H_k"), not the highest simplex dimension to build. Computing H_k correctly needs (k+1)-dimensional
-  *     chains (H_k = ker(d_k)/im(d_{k+1}) -- with no (k+1)-chains at all there's no way to tell a genuine k-cycle
-  *     from one a not-yet-built (k+1)-simplex would have killed), so for `complex=vr` this facade builds one
-  *     dimension higher than requested internally and drops that extra top dimension from what's reported -- it
-  *     would otherwise look spuriously essential for every engine, a well-known truncation artifact of the top
-  *     dimension of any truncated chain complex, not real information (confirmed the hard way in this facade's
-  *     first pass -- see WORKLOG-matlab-api.md). `complex=alpha` ignores this option entirely and reports every
-  *     dimension its complex naturally has: an alpha complex's chain complex terminates on its own (bounded by
-  *     ambient dimension, or higher under cosphericity -- see CLAUDE.md), it is never artificially cut short the
-  *     way a VR complex is by this option, so its own top dimension is genuine information, not scaffolding.
-  *   - `"maxFiltrationValue"`: double, default is the point cloud's own `minimumEnclosingRadius` (Ripser's own
-  *     default truncation, not unbounded -- see CLAUDE.md's "enclosing-radius default" note). Pass a very large
-  *     number for the old always-unbounded behavior. Only consulted for `complex=vr`.
-  *   - `"field"`: `"Z"` (default -- a prime finite field, `prime=2` unless overridden; the standard convention in
-  *     the TDA research literature, e.g. Ripser/GUDHI) or `"R"` (floating point with an epsilon tolerance,
+  *     H_0..H_k"), not the highest simplex dimension to build. Computing H_k correctly needs (k+1)-dimensional chains
+  *     (H_k = ker(d_k)/im(d_{k+1}) -- with no (k+1)-chains at all there's no way to tell a genuine k-cycle from one a
+  *     not-yet-built (k+1)-simplex would have killed). For `engine="ripser"`/`"chunks"`, `RipserCohomologyContext`/
+  *     `PersistenceInChunksContext` both now handle this internally (fixed at their own source -- see
+  *     `.claude/WORKLOG-maxdim-semantics-fix.md`); for `engine="naive"`, this facade still builds one dimension higher
+  *     internally and drops that extra top dimension from what's reported, since `SimplicialHomologyContext` has no
+  *     `maxDimension` of its own at all -- it would otherwise look spuriously essential, a well-known truncation
+  *     artifact of the top dimension of any truncated chain complex, not real information (confirmed the hard way in
+  *     this facade's first pass -- see WORKLOG-matlab-api.md). `complex=alpha` ignores this option entirely and reports
+  *     every dimension its complex naturally has: an alpha complex's chain complex terminates on its own (bounded by
+  *     ambient dimension, or higher under cosphericity -- see CLAUDE.md), it is never artificially cut short the way a
+  *     VR complex is by this option, so its own top dimension is genuine information, not scaffolding.
+  *   - `"maxFiltrationValue"`: double, default is the point cloud's own `minimumEnclosingRadius` (Ripser's own default
+  *     truncation, not unbounded -- see CLAUDE.md's "enclosing-radius default" note). Pass a very large number for the
+  *     old always-unbounded behavior. Only consulted for `complex=vr`.
+  *   - `"field"`: `"Z"` (default -- a prime finite field, `prime=2` unless overridden; the standard convention in the
+  *     TDA research literature, e.g. Ripser/GUDHI) or `"R"` (floating point with an epsilon tolerance,
   *     `Field.DoubleApproximated` -- notably what this codebase's own existing cross-validation specs default to
-  *     instead, an established-convention-vs-existing-test-suite mismatch worth knowing about, not silently
-  *     resolved either way; see WORKLOG-matlab-api.md).
+  *     instead, an established-convention-vs-existing-test-suite mismatch worth knowing about, not silently resolved
+  *     either way; see WORKLOG-matlab-api.md).
   *   - `"prime"`: integer, default `2`, only consulted when `field=Z`.
   *   - `"epsilon"`: double, default `1e-9`, only consulted when `field=R`.
   *
   * Unrecognized keys, and unrecognized values for `complex`/`engine`/`field`, throw `IllegalArgumentException`
-  * immediately rather than silently falling back to a default -- a typo in a MATLAB string literal should fail
-  * loudly, not produce a quietly-wrong barcode.
+  * immediately rather than silently falling back to a default -- a typo in a MATLAB string literal should fail loudly,
+  * not produce a quietly-wrong barcode.
   */
 object Tda4j:
   def computeFromPoints(points: Array[Array[Double]]): PersistenceResult =
     computeFromPoints(points, Array.empty[String])
 
-  /** Vietoris-Rips or alpha-complex persistence from a point cloud (one row per point, Euclidean distance). This is
-    * the only entry point that supports `complex=alpha`, since alpha complexes need actual coordinates, not just
-    * pairwise distances.
+  /** Vietoris-Rips or alpha-complex persistence from a point cloud (one row per point, Euclidean distance). This is the
+    * only entry point that supports `complex=alpha`, since alpha complexes need actual coordinates, not just pairwise
+    * distances.
     */
   def computeFromPoints(points: Array[Array[Double]], options: Array[String]): PersistenceResult =
     validatePoints(points)
@@ -147,7 +149,8 @@ object Tda4j:
       )
 
     val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(2)
-    val maxFiltrationValue = opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _)).getOrElse(Double.NaN)
+    val maxFiltrationValue =
+      opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _)).getOrElse(Double.NaN)
     val alphaBackend = opts.getOrElse("alphabackend", "helix")
 
     opts.getOrElse("field", "z").toLowerCase match
@@ -155,11 +158,29 @@ object Tda4j:
         val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(2)
         val ff = new FiniteField(prime)
         import ff.given
-        computeGeneric[ff.Fp](metricSpace, points, complex, engine, alphaBackend, maxDimension, maxFiltrationValue, _.toInt.toDouble)
+        computeGeneric[ff.Fp](
+          metricSpace,
+          points,
+          complex,
+          engine,
+          alphaBackend,
+          maxDimension,
+          maxFiltrationValue,
+          _.toInt.toDouble
+        )
       case "r" =>
         val epsilon = opts.get("epsilon").map(parseDoubleOption("epsilon", _)).getOrElse(1e-9)
         given Double is Field = Field.DoubleApproximated(epsilon)
-        computeGeneric[Double](metricSpace, points, complex, engine, alphaBackend, maxDimension, maxFiltrationValue, identity)
+        computeGeneric[Double](
+          metricSpace,
+          points,
+          complex,
+          engine,
+          alphaBackend,
+          maxDimension,
+          maxFiltrationValue,
+          identity
+        )
       case other =>
         throw new IllegalArgumentException(s"unrecognized field '$other'; expected 'Z' or 'R'")
 
@@ -187,16 +208,17 @@ object Tda4j:
       case "vr" =>
         // Computing H_k needs (k+1)-dimensional chains -- H_k = ker(d_k)/im(d_{k+1}), so with no (k+1)-chains at
         // all there is no way to tell a genuine k-cycle from one that a not-yet-built (k+1)-simplex would have
-        // killed. Building only to `requestedMaxDimension` (the first attempt at this facade) made every engine's
-        // OWN top dimension look essential by construction, not because it actually is -- confirmed and corrected
-        // after the project lead pointed out this is a well-known truncation artifact, not information about
-        // H_(requestedMaxDimension). Fix: build one dimension higher than requested, then drop that extra top
-        // dimension from what's reported -- it's now itself subject to the exact same artifact, one level up, and
-        // was never what the caller asked for. See WORKLOG-matlab-api.md.
-        val buildDimension = requestedMaxDimension + 1
+        // killed. Both `RipserCohomologyContext` and `PersistenceInChunksContext` now handle this internally
+        // (their own `maxDimension`/`maxDim` constructor parameters mean "top homological degree reported,"
+        // fixed at the source -- see .claude/WORKLOG-maxdim-semantics-fix.md), so `engine="ripser"`/`"chunks"`
+        // both pass `requestedMaxDimension` straight through with no adjustment; `fromBars`/`fromDiagram`'s
+        // filter below is a defensive no-op for them now, not load-bearing. `engine="naive"` still needs the
+        // manual `buildDimension = requestedMaxDimension + 1` dance: `SimplicialHomologyContext` has no
+        // `maxDimension` of its own at all -- the cap lives entirely in the stream it's handed.
         engine match
           case "ripser" =>
-            val ctx = RipserCohomologyContext[C](metricSpace, buildDimension, maxFiltrationValue = maxFiltrationValue)
+            val ctx =
+              RipserCohomologyContext[C](metricSpace, requestedMaxDimension, maxFiltrationValue = maxFiltrationValue)
             fromBars(ctx.persistentCohomology(), toDouble, requestedMaxDimension)
           case "naive" =>
             // EnumeratingCofaceSimplexStream has no dimension cap of its own (only a filtration-value one) --
@@ -204,14 +226,14 @@ object Tda4j:
             // RipserCohomologySpec's own naiveBars helper uses.
             val stream = LimitedCofaceSimplexStream(
               EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
-              buildDimension
+              requestedMaxDimension + 1
             )
             val state = SimplicialHomologyContext[Int, C, Double]().persistentHomology(stream)
             state.advanceAll()
             fromBars(state.barcodeAt(Double.PositiveInfinity), toDouble, requestedMaxDimension)
           case "chunks" =>
             val stream = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue)
-            val state = PersistenceInChunksContext[Int, C](buildDimension).persistentHomology(stream)
+            val state = PersistenceInChunksContext[Int, C](requestedMaxDimension).persistentHomology(stream)
             fromDiagram(state.diagramAt(Double.PositiveInfinity), requestedMaxDimension)
           case other =>
             throw new IllegalArgumentException(
@@ -224,7 +246,9 @@ object Tda4j:
         // is genuine information, not a truncation artifact -- nothing to drop. `requestedMaxDimension` is
         // correctly ignored here (see the class doc).
         val pts = points.getOrElse(
-          throw new IllegalArgumentException("complex=alpha requires point coordinates -- use computeFromPoints, not computeFromDistanceMatrix")
+          throw new IllegalArgumentException(
+            "complex=alpha requires point coordinates -- use computeFromPoints, not computeFromDistanceMatrix"
+          )
         )
         val alphaStream = Alpha(pts.toIndexedSeq, alphaBackend)
         engine match

@@ -5,12 +5,12 @@ import org.appliedtopology.tda4j.barcode.*
 import org.specs2.mutable
 
 /** Verifies the MATLAB-facing facade's *conversion layer*, not the underlying engines (those already have their own
-  * extensive cross-validation elsewhere -- see CLAUDE.md). Specifically: that `Tda4j`'s string-option parsing wires
-  * up to the same engine calls a direct Scala caller would make, and that `PersistenceResult`'s double/Inf/dimension
+  * extensive cross-validation elsewhere -- see CLAUDE.md). Specifically: that `Tda4j`'s string-option parsing wires up
+  * to the same engine calls a direct Scala caller would make, and that `PersistenceResult`'s double/Inf/dimension
   * conversion doesn't scramble anything relative to calling the engine directly. See WORKLOG-matlab-api.md for the
   * design this checks against, and note (per that worklog and CLAUDE.md) that MATLAB's own Java marshalling of
-  * `double[][]`/`String[]` across the bridge is NOT covered by anything in this file -- unverified from Scala,
-  * flagged explicitly rather than implied.
+  * `double[][]`/`String[]` across the bridge is NOT covered by anything in this file -- unverified from Scala, flagged
+  * explicitly rather than implied.
   */
 class Tda4jSpec extends mutable.Specification:
   private val points: Array[Array[Double]] = Array(
@@ -32,12 +32,11 @@ class Tda4jSpec extends mutable.Specification:
     }
 
   "Tda4j.computeFromPoints with default options (complex=vr, engine=ripser, field=Z, prime=2, maxDimension=2)" should {
-    "match RipserCohomologyContext[Fp(2)] driven directly one dimension higher, top dimension dropped" in {
-      // Mirrors what the facade itself now does (see Tda4j.computeGeneric's comment): maxDimension=2 means "give
-      // me H_0..H_2", which needs 3-dimensional chains to resolve correctly (H_2 = ker(d_2)/im(d_3)) -- so the
-      // reference construction here also builds at dimension 3 and drops the resulting (now-scaffolding-only)
-      // dimension-3 bars, rather than building at dimension 2 directly (which would reproduce the exact
-      // truncation artifact this facade exists to avoid -- see WORKLOG-matlab-api.md).
+    "match RipserCohomologyContext[Fp(2)] driven directly" in {
+      // RipserCohomologyContext's own maxDimension now means "top homological degree reported," fixed at its
+      // own source (see .claude/WORKLOG-maxdim-semantics-fix.md) -- so the facade's engine=ripser path
+      // (Tda4j.computeGeneric) is now a fully transparent passthrough of requestedMaxDimension, with no
+      // +1-and-filter workaround on either side of this comparison anymore.
       val viaFacade = triples(Tda4j.computeFromPoints(points).toArray())
 
       val ff = new FiniteField(2)
@@ -50,20 +49,20 @@ class Tda4jSpec extends mutable.Specification:
         case ClosedEndpoint(v)  => v
         case OpenEndpoint(v)    => v
 
-      val direct = RipserCohomologyContext[ff.Fp](metricSpace, 3)
+      val direct = RipserCohomologyContext[ff.Fp](metricSpace, 2)
         .persistentCohomology()
         .map(bar => (bar.dim, toDouble(bar.lower), toDouble(bar.upper)))
-        .filter(_._1 <= 2)
 
       viaFacade must containTheSameElementsAs(direct)
     }
   }
 
-  "the top-dimension truncation-artifact fix" should {
-    "actually change output on this cloud, not just refactor internals" in {
-      // Discriminating regression, not just "does it still pass": build RipserCohomologyContext directly at
-      // maxDimension=2 (the facade's FIRST, incorrect approach -- no extra dimension, no drop) and confirm it
-      // reports a spurious essential dim-2 bar that the facade's actual (corrected) output does not.
+  "RipserCohomologyContext's maxDimension semantics fix" should {
+    "resolve the same barcode whether asked for degree k directly or degree k+1 with the extra dimension filtered" in {
+      // Regression pin for the fix itself (.claude/WORKLOG-maxdim-semantics-fix.md): before the fix, calling
+      // directly at maxDimension=2 produced spurious essential dim-2 bars that calling at maxDimension=3 and
+      // filtering to dim<=2 did not -- exactly the discriminating check that originally caught the bug (see
+      // .claude/WORKLOG-ripser-comparison.md). If the fix ever regresses, these two calls disagree again.
       val ff = new FiniteField(2)
       import ff.given
       val metricSpace = EuclideanMetricSpace(points)
@@ -74,13 +73,16 @@ class Tda4jSpec extends mutable.Specification:
         case ClosedEndpoint(v)  => v
         case OpenEndpoint(v)    => v
 
-      val truncatedDirect = RipserCohomologyContext[ff.Fp](metricSpace, 2)
+      val direct = RipserCohomologyContext[ff.Fp](metricSpace, 2)
         .persistentCohomology()
         .map(bar => (bar.dim, toDouble(bar.lower), toDouble(bar.upper)))
 
-      val viaFacade = triples(Tda4j.computeFromPoints(points).toArray())
+      val viaOneHigherFiltered = RipserCohomologyContext[ff.Fp](metricSpace, 3)
+        .persistentCohomology()
+        .map(bar => (bar.dim, toDouble(bar.lower), toDouble(bar.upper)))
+        .filter(_._1 <= 2)
 
-      truncatedDirect must not(containTheSameElementsAs(viaFacade))
+      direct must containTheSameElementsAs(viaOneHigherFiltered)
     }
   }
 
@@ -103,7 +105,8 @@ class Tda4jSpec extends mutable.Specification:
   "field=R" should {
     "agree (up to floating-point tolerance) with the default field=Z, through the facade" in {
       val zResult = triples(Tda4j.computeFromPoints(points).toArray()).sortBy(t => (t._1, t._2, t._3))
-      val rResult = triples(Tda4j.computeFromPoints(points, Array("field", "R")).toArray()).sortBy(t => (t._1, t._2, t._3))
+      val rResult =
+        triples(Tda4j.computeFromPoints(points, Array("field", "R")).toArray()).sortBy(t => (t._1, t._2, t._3))
 
       zResult.length must be_==(rResult.length)
       val agree = zResult.zip(rResult).forall { case ((d1, b1, e1), (d2, b2, e2)) =>
@@ -123,10 +126,12 @@ class Tda4jSpec extends mutable.Specification:
       Tda4j.computeFromPoints(points, Array("bogus", "value")) must throwA[IllegalArgumentException]
     }
     "reject engine=ripser combined with complex=alpha" in {
-      Tda4j.computeFromPoints(points, Array("complex", "alpha", "engine", "ripser")) must throwA[IllegalArgumentException]
+      Tda4j
+        .computeFromPoints(points, Array("complex", "alpha", "engine", "ripser")) must throwA[IllegalArgumentException]
     }
     "reject engine=chunks combined with complex=alpha" in {
-      Tda4j.computeFromPoints(points, Array("complex", "alpha", "engine", "chunks")) must throwA[IllegalArgumentException]
+      Tda4j
+        .computeFromPoints(points, Array("complex", "alpha", "engine", "chunks")) must throwA[IllegalArgumentException]
     }
     "reject complex=alpha via computeFromDistanceMatrix (alpha needs coordinates)" in {
       Tda4j.computeFromDistanceMatrix(euclideanDistanceMatrix(points), Array("complex", "alpha")) must throwA[

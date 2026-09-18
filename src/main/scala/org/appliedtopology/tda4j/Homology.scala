@@ -255,9 +255,30 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, Filtratio
       mutable.ArrayDeque.empty
     )
 
+/** `maxDim` means "top homological degree reported," not "top simplex dimension built" -- fixed at the source, the same
+  * fix and for the same reason as `RipserCohomologyContext`'s own `maxDimension` (see
+  * `.claude/WORKLOG-maxdim-semantics-fix.md`). This is homology, not cohomology, so the mirror-image fact holds:
+  * correctly determining whether a class BORN at dimension `maxDim` is essential or killed requires considering real
+  * `(maxDim + 1)`-dimensional cells' own boundaries (a `(maxDim+1)`-simplex's boundary reduces to a dimension-`maxDim`
+  * pivot exactly when it kills that class) -- without them, every dimension-`maxDim` class was unconditionally
+  * essential, since no cell of the stream was ever considered that could possibly pair against it. Fixed by internally
+  * walking `0.to(maxDim + 1)` (both in `allCells`'s construction and both loops in `advanceAll`) instead of
+  * `0.to(maxDim)`, so `(maxDim + 1)`-cells DO get locally/globally reduced and CAN correctly kill a `maxDim`-born class
+  * -- and filtering `diagramAt`'s essential-bar output back down to `sigma.dim <= maxDim` (finite bars need no
+  * equivalent filter: `recordPair`'s `barDim = pivot.dim`, and a pivot is always one dimension below its killer, so
+  * `barDim <= maxDim` automatically whenever the killer's own dimension is `<= maxDim + 1`). `(maxDim+1)`-cells that
+  * themselves end up looking essential (nothing of dimension `maxDim + 2` was ever considered to check) are
+  * deliberately left in `essentialSimplices` internally (later pairing logic in `recordPair` needs an accurate view
+  * across all live dimensions) and only excluded at this final reporting boundary, never a filter applied earlier.
+  */
 class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim: Int = 5):
   val chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]
   import chainRM.*
+
+  // The real internal ceiling: one dimension higher than what's reported, so a class born AT maxDim can still be
+  // correctly killed by a genuine (maxDim + 1)-cell rather than looking essential purely because nothing above
+  // maxDim was ever considered. See the class doc above.
+  private val internalMaxDim: Int = maxDim + 1
 
   case class HomologyState(
     boundaries: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]],
@@ -285,11 +306,12 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
 
     // build index map to support chunk boundary calculation.
     // Note: stream.iterator would walk the stream's own full natural bound (now that
-    // StratifiedCellStream's default .iterator is fixed, see its doc), which may be looser than the
-    // maxDim this context was asked for -- walk dimensions explicitly instead so maxDim is enforced
-    // regardless of what the stream itself would otherwise produce.
+    // StratifiedCellStream's default .iterator is fixed, see its doc), which may be looser than
+    // internalMaxDim this context was asked for -- walk dimensions explicitly instead so internalMaxDim is
+    // enforced regardless of what the stream itself would otherwise produce. Walks to internalMaxDim
+    // (maxDim + 1), not maxDim -- see the class doc above for why the extra dimension is needed.
     val allCells: Vector[Simplex[VertexT]] =
-      0.to(maxDim)
+      0.to(internalMaxDim)
         .iterator
         .flatMap { d =>
           stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty)
@@ -315,8 +337,12 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
           }
         }
 
+      // Filtered to sigma.dim <= maxDim: a dimension-(maxDim + 1) cell can end up in essentialSimplices too
+      // (nothing of dimension maxDim + 2 was ever considered to possibly kill IT), but that's scaffolding for
+      // correctly resolving maxDim, not information the caller asked for -- see the class doc above. Finite
+      // bars need no equivalent filter (recordPair's barDim = pivot.dim is always <= maxDim already).
       val essentialBars: List[(Int, Double, Double)] =
-        essentialSimplices.toList.map { sigma =>
+        essentialSimplices.toList.filter(_.dim <= maxDim).map { sigma =>
           val lower =
             stream.filtrationValue.applyOrElse(sigma, (_: Simplex[VertexT]) => Double.NegativeInfinity)
           (sigma.dim, lower, Double.PositiveInfinity)
@@ -472,8 +498,9 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
       val chunks: IndexedSeq[IndexedSeq[Simplex[VertexT]]] =
         allCells.grouped(chunkSize).toIndexedSeq
 
-      // Algorithm 2: local_reduction from clear-and-compress paper
-      for delta <- maxDim.to(0, -1) do
+      // Algorithm 2: local_reduction from clear-and-compress paper. Walks to internalMaxDim (maxDim + 1), not
+      // maxDim -- see the class doc above for why the extra dimension is needed.
+      for delta <- internalMaxDim.to(0, -1) do
         for r <- 1.to(2) do
           for b <- (r - 1).until(m) do // parallelizable!
             val floorIdx: Int = math.max(0, (b - r + 1) * chunkSize)
@@ -486,7 +513,8 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
 
       // Algorithm 5 (Persistence in chunks): per dim top-down, compress unpaired
       // global columns then reduce them. Clearing keeps positives' columns at zero.
-      for delta <- maxDim.to(0, -1) do
+      // Walks to internalMaxDim (maxDim + 1), not maxDim -- see the class doc above for why.
+      for delta <- internalMaxDim.to(0, -1) do
         val cellsAtDim =
           stream.iterateDimension.applyOrElse(delta, (_: Int) => Iterator.empty).toVector
         // step 2: compress unpaired global columns
@@ -724,6 +752,21 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
   * caching the answer -- strictly better than a cache on every axis that matters here (no growing memory footprint, no
   * hashing, no first-computation cost to amortize).
   */
+/** `maxDimension` means "top HOMOLOGICAL DEGREE reported," not "top simplex dimension built" -- fixed at the source
+  * (previously only worked around at the MATLAB facade layer, `matlab.Tda4j`, which built `requestedMaxDimension + 1`
+  * internally and filtered the extra dimension back out; see `.claude/WORKLOG-maxdim-semantics-fix.md` for the full
+  * derivation, including how this was discovered via a same-hardware benchmark against real `ripser.cpp`). Before this
+  * fix, `coboundaryOf`/`zeroPivotCofacet` refused to look past `sigma.dim + 1 > maxDimension`, i.e. `sigma.dim ==
+  * maxDimension` always got a trivially-empty coboundary and therefore always came out essential -- a well-known
+  * truncation artifact (H_k needs (k+1)-chains to resolve correctly), not real information about H_maxDimension. Fixed
+  * by relaxing that guard to `sigma.dim > maxDimension` (see `coboundaryOf`'s own doc): a real `(maxDimension +
+  * 1)`-simplex is now enumerated on the fly, transiently, whenever needed to resolve a dimension-`maxDimension` pairing
+  * -- never materialized into its own `currentLevel`/reduced as its own column, so `totalSimplexCount` and the main
+  * loop's own bounds (`for d <- 0 to maxDimension`) are UNCHANGED by this fix; only the two guards moved. Any external
+  * caller previously passing `maxDimension + 1` and filtering out `dim == maxDimension + 1` bars itself should now pass
+  * the real requested degree directly and drop that workaround entirely -- double-shifting by continuing the old
+  * pattern on top of this fix reintroduces the exact artifact one dimension further out.
+  */
 class RipserCohomologyContext[CoefficientT: Field](
   metricSpace: FiniteMetricSpace[Int],
   maxDimension: Int,
@@ -852,10 +895,16 @@ class RipserCohomologyContext[CoefficientT: Field](
         }
         .filter(_.diameter <= resolvedMaxFiltrationValue)
 
-  /** Coboundary of sigma, implicitly restricted to the truncated (maxDimension-skeleton,
-    * maxFiltrationValue-thresholded) complex: empty at `sigma.dim == maxDimension` by construction (no cofacets are
-    * ever enumerated beyond `maxDimension`), which is exactly what makes dimension-`maxDimension` classes come out
-    * essential rather than needing a special case. A candidate cofacet past `maxFiltrationValue` is filtered out via
+  /** Coboundary of sigma, implicitly restricted to the maxFiltrationValue-thresholded complex. `maxDimension` means
+    * "top homological degree reported," not "top simplex dimension built" (see
+    * `.claude/WORKLOG-maxdim-semantics-fix.md` for the full derivation of this distinction and why it matters):
+    * correctly resolving whether a dimension- `maxDimension` class is finite or essential needs a REAL coboundary
+    * against genuine `(maxDimension + 1)`-simplices, so this method only refuses to look past `maxDimension + 1`
+    * (`sigma.dim > maxDimension`), not `maxDimension` itself. Those `(maxDimension + 1)`-simplices are enumerated here
+    * on the fly, via `si.cofacetIterator`, and never separately materialized into `currentLevel`/`simplicesAtD` --
+    * `persistentCohomology`'s own loop never runs a `d == maxDimension + 1` iteration, so nothing above `maxDimension`
+    * is ever independently reduced as its own column; it exists only transiently, as a pairing target for the
+    * dimension-`maxDimension` column that needs it. A candidate cofacet past `maxFiltrationValue` is filtered out via
     * `insertionDiameter`'s O(d) incremental formula (one `filtrationValue(sigma)` call for `sigma` itself, not one per
     * candidate) rather than `filtrationValue(tau)`'s O(d^2) full recompute per candidate -- this is the one place
     * `coboundaryOf` genuinely needs a diameter it doesn't already have (it considers ALL of sigma's cofacets, not just
@@ -863,7 +912,7 @@ class RipserCohomologyContext[CoefficientT: Field](
     * sigma's vertices smaller than the inserted vertex).
     */
   def coboundaryOf(sigma: Simplex[Int]): Chain[Simplex[Int], CoefficientT] =
-    if sigma.dim + 1 > maxDimension then Chain.empty
+    if sigma.dim > maxDimension then Chain.empty
     else
       val sigmaFv = filtrationValue(sigma)
       Chain.from(
@@ -883,8 +932,9 @@ class RipserCohomologyContext[CoefficientT: Field](
   /** Coboundary of a whole chain, linearly extending `coboundaryOf`. Unlike `Chain.scala`'s `.boundary` extension
     * (intrinsic to a cell), a coboundary is extrinsic -- it depends on which higher-dimensional simplices exist in this
     * (possibly truncated) complex -- so it lives here rather than as a general-purpose `Chain` extension. Used by tests
-    * to check that a representative essential cocycle genuinely has zero coboundary; trivially true at
-    * `sigma.dim == maxDimension` (see `coboundaryOf`), so that check is only meaningful below the top dimension.
+    * to check that a representative essential cocycle genuinely has zero coboundary -- genuinely meaningful at every
+    * dimension up to and including `maxDimension` (not vacuously true at the top dimension anymore, since
+    * `coboundaryOf` now computes a real coboundary there too; see its own doc).
     */
   def coboundaryOfChain(c: Chain[Simplex[Int], CoefficientT]): Chain[Simplex[Int], CoefficientT] =
     Chain.from(c.items.flatMap { case (cell, coeff) =>
@@ -896,16 +946,18 @@ class RipserCohomologyContext[CoefficientT: Field](
     * against `si.cofacetIterator`'s full (unrestricted) enumeration, NOT `RipserStreamBase`'s
     * `zeroPivotCofacet`/`Cofacets.scala`'s `apparentVertex` -- see CLAUDE.md: those are restricted to cofacets formed
     * by inserting a vertex strictly greater than sigma's own maximum, which silently misses a real tied cofacet
-    * whenever sigma already contains `vertexCount - 1` (a false negative, not merely an inefficiency). Truncated to
-    * `maxDimension` exactly like `coboundaryOf`, for the same reason: `SimplexIndexing`'s raw iterators have no notion
-    * of any dimension cap on their own. Tau's diameter is computed via `insertionDiameter`'s O(d) incremental formula,
-    * not `filtrationValue(tau)`'s O(d^2) recompute. No SEPARATE `maxFiltrationValue` guard is needed here (unlike
-    * `coboundaryOf`, which considers every cofacet, not just tied ones): this method only ever selects a tau tied at
-    * `sigma`'s own value, and `sigma` is only ever called with here if it's already within the threshold (guaranteed by
-    * construction -- see `sparseCofacets`), so any tied tau is automatically within threshold too.
+    * whenever sigma already contains `vertexCount - 1` (a false negative, not merely an inefficiency). Guarded at
+    * `sigma.dim > maxDimension`, the same boundary `coboundaryOf` uses and for the same reason (see its doc): a real
+    * tied cofacet at `sigma.dim == maxDimension` must be found too, or the apparent-pairs shortcut would silently miss
+    * genuine pairs at the requested top dimension. `SimplexIndexing`'s raw iterators have no notion of any dimension
+    * cap on their own, hence the explicit guard. Tau's diameter is computed via `insertionDiameter`'s O(d) incremental
+    * formula, not `filtrationValue(tau)`'s O(d^2) recompute. No SEPARATE `maxFiltrationValue` guard is needed here
+    * (unlike `coboundaryOf`, which considers every cofacet, not just tied ones): this method only ever selects a tau
+    * tied at `sigma`'s own value, and `sigma` is only ever called with here if it's already within the threshold
+    * (guaranteed by construction -- see `sparseCofacets`), so any tied tau is automatically within threshold too.
     */
   private def zeroPivotCofacet(sigma: Simplex[Int]): Option[Simplex[Int]] =
-    if sigma.dim + 1 > maxDimension then None
+    if sigma.dim > maxDimension then None
     else
       val d = filtrationValue(sigma)
       si.cofacetIterator(sigma)

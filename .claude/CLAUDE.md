@@ -355,6 +355,19 @@ imply the others need it:
    before continuing phase 2 work.
 2. `PersistenceInChunksContext`: the parallelizable "clear-and-compress" chunked algorithm (local reduction per
    chunk, then global column compression/reduction), for larger complexes where cross-chunk work can be batched.
+   **`maxDim` means "top homological degree reported," not "top simplex dimension built" -- fixed at the source,
+   same fix and same reason as `RipserCohomologyContext`'s own `maxDimension` below (see
+   `.claude/WORKLOG-maxdim-semantics-fix.md`)**: this is homology, so the mirror-image fact holds -- a class
+   BORN at dimension `maxDim` can only be correctly resolved as finite-or-essential by considering real
+   `(maxDim + 1)`-dimensional cells' own boundaries (a `(maxDim+1)`-simplex's boundary reduces to a
+   dimension-`maxDim` pivot exactly when it kills that class). Before the fix, `allCells` and both `advanceAll`
+   loops walked only `0.to(maxDim)`, so no cell that could possibly kill a `maxDim`-born class was ever
+   considered -- every such class came out essential regardless of whether it actually was. Fixed by walking
+   `0.to(maxDim + 1)` internally (a private `internalMaxDim`) and filtering `diagramAt`'s essential-bar output
+   back down to `sigma.dim <= maxDim` (finite bars need no equivalent filter: `recordPair`'s `barDim =
+   pivot.dim` is always `<= maxDim` already, since a pivot is one dimension below its killer). Any external
+   caller previously passing `maxDim + 1` and filtering out `dim == maxDim + 1` bars itself (the MATLAB facade
+   did, for `engine="chunks"`) should now pass the real requested degree directly.
 3. `SimplicialHomologyByDimensionContext`: dimension-0 and the births of dimension-1 classes read off directly via
    Kruskal's algorithm/union-find over the stream's own dimension-0/1 cells (elder rule: a tree edge kills the
    younger of the two components it joins; a non-tree edge births a new 1-cycle), higher dimensions via the same
@@ -386,6 +399,18 @@ imply the others need it:
    project lead) and one-shot (no incremental `advanceTo`-style querying, also agreed scope). Cross-validated
    against (1) — see `WORKLOG-cohomology.md` for the full pivot-orientation/birth-death-dimension derivation
    (re-derived directly from the paper, not from memory) and the validation strategy.
+   **`maxDimension` means "top simplex dimension built," not "top homological degree reported" — a real API
+   footgun for any direct caller, confirmed while building a same-hardware benchmark against real
+   `ripser.cpp`** (`WORKLOG-ripser-comparison.md`): `coboundaryOf(sigma)` is empty by construction at
+   `sigma.dim == maxDimension` (`Homology.scala`), so every simplex at the requested top dimension comes out
+   essential regardless of whether it actually is — the same "H_k needs (k+1)-chains" truncation artifact
+   already fixed for the MATLAB facade (`Tda4j.computeFromPoints`/`computeFromDistanceMatrix`: "build to
+   `maxDimension + 1` internally, report only `dim <= maxDimension`"), just never applied to a *direct* caller
+   of this class before. `RipserCohomologySpec`'s own cross-validation never caught this because its oracle
+   (`LimitedCofaceSimplexStream(stream, maxDim)`) truncates simplices at the same `maxDim` too — both sides
+   consistently truncated the same way, so agreement between them never implied "maxDim means top *reported*
+   degree." Any caller wanting correct dimension-`k` bars must construct with `maxDimension = k + 1` and drop
+   the reported `dim == k + 1` bars itself; this class does not do that internally.
    **Clearing is included and is load-bearing for correctness, not an optional speedup layered on an
    already-correct baseline** — an early draft without it passed every hand-built fixture but reported spurious
    essential cohomology classes on real inputs (confirmed by hand-deriving H¹ of a plain 3-cycle graph: 3
@@ -474,12 +499,30 @@ imply the others need it:
    advisor pass) is a real but modest 5%–25% slowdown on the dense (untruncated) path at n=40–80, shrinking as
    n grows — a defensible tradeoff for the stated memory-frugality goal, not a silent regression.
 
+   **Same-hardware comparison against real `ripser.cpp` on the Ripser paper's own Table 1 data sets**
+   (`RipserPaperBenchmarkSpec`, `skipAll`'d like the other benchmark specs — see its own doc for exact data-set
+   URLs and invocation) found a large but roughly FLAT per-simplex constant-factor tax, not a growing
+   algorithmic divergence: ~20µs/simplex in `RipserCohomologyContext`, confirmed flat to within ~11% across an
+   18x range of complex sizes (`totalSimplexCount`) — real ripser's own per-simplex cost wasn't directly
+   measured (it prints no simplex count), but it solves Table-2-scale complexes in 1-31s flat on the same
+   machine, bounding it well below tda4j's ~20µs without pinning an exact ratio. Large enough either way that
+   6 of 8 Table-1-derived cases didn't finish in a 240s budget purely from complex-size scale, not from any
+   per-case blowup. A `memoizeFiltrationValue=true`/`false` A/B on the slow case confirmed
+   the already-documented 5%-25% comparator-recompute cost accounts for only about a quarter of that ~20µs —
+   the remaining majority is unexplained by anything measured so far and is the natural next thing to profile
+   (allocation profiler, not another `jstack` sample) before touching this class's representation. See
+   `WORKLOG-ripser-comparison.md` for the full derivation, including the `maxDimension`-semantics footgun noted
+   above (discovered while building this same benchmark) and why this session characterized the cost and
+   deliberately stopped short of fixing it.
+
    **Deferred, on purpose, not by oversight**: Ripser's own compact `(Double, Int)` `diameter_index_t`
    representation — `DiameterSimplex` carries a full `Simplex[Int]`/`SortedSet[Int]` instead, a
    speed/simplicity choice made AGAINST the project's stated memory goal, flagged in `DiameterSimplex`'s own
-   doc as a live option for a future session, not something to silently "fix." See
-   `WORKLOG-lazy-enumeration.md`'s "Session 2" section for the full derivation, the advisor corrections that
-   shaped it (recompute `zeroApparentFacet` rather than cache a claim-order map; measure the memoization cost
+   doc as a live option for a future session, not something to silently "fix." **This is now the leading
+   suspect for the ~20µs/simplex constant-factor tax measured above**, not just a theoretical memory-vs-speed
+   tradeoff. See `WORKLOG-lazy-enumeration.md`'s "Session 2" section for the full derivation, the advisor
+   corrections that shaped it (recompute `zeroApparentFacet` rather than cache a claim-order map; measure the
+   memoization cost
    rather than infer it; separate size-reduction from mechanism-efficiency in the benchmark), and the API
    changes a distance threshold would need if a from-scratch reader wants to extend this further (the note was
    already there before this session started implementing).
@@ -562,8 +605,8 @@ configurations produce simplices with arbitrarily large circumradius (see the de
 finite bound silently excludes. Callers who want an actually radius-truncated alpha complex should call
 `AlphaComplexDQP.euclidean(points, maxRadius, maxDimension, settings)` directly.
 
-**Extensive numerical-robustness work has gone into `DualQP.solve`** (see `WORKLOG.md` at the repo root for the
-full derivation of each, including concrete counterexample point clouds) — treat these as settled, verified
+**Extensive numerical-robustness work has gone into `DualQP.solve`** (see `WORKLOG-alpha-complex.md` in `.claude/`
+for the full derivation of each, including concrete counterexample point clouds) — treat these as settled, verified
 design decisions, not things to casually retune:
 - `rankTolerance` default is `1e-6`, not the more "obvious" `1e-12`: a Schur-complement ratio as large as `~1e-8`
   has been observed to poison the Cholesky factor (multipliers blowing up to `~1e14`) and cause genuine
@@ -707,12 +750,13 @@ silently assumed to work).
 ## Session practices
 
 **Any session that does a substantial investigation or debugging arc (tracking down a root cause, fixing more
-than one related bug, a profiling/benchmarking pass) should write a `WORKLOG-<topic>.md` at the repo root**,
-even without an explicit ask to keep one going — this has been asked for repeatedly and should be the default,
-not something the project lead has to remember to request each time. See [[tda4j-worklog-convention]] /
-the existing `WORKLOG-*.md` files for the expected shape: a point-in-time record of what was tried, what the
-root cause turned out to be, and what's still open, kept separate from `CLAUDE.md` (which reflects only the
-final shipped state, updated at the end of the arc). Worklogs are not retroactively edited later.
+than one related bug, a profiling/benchmarking pass) should write a `WORKLOG-<topic>.md` in `.claude/`**
+(alongside this file), even without an explicit ask to keep one going — this has been asked for repeatedly and
+should be the default, not something the project lead has to remember to request each time. See
+[[tda4j-worklog-convention]] / the existing `.claude/WORKLOG-*.md` files for the expected shape: a point-in-time
+record of what was tried, what the root cause turned out to be, and what's still open, kept separate from
+`CLAUDE.md` (which reflects only the final shipped state, updated at the end of the arc). Worklogs are not
+retroactively edited later.
 
 ## Collaboration preferences
 

@@ -16,19 +16,24 @@ import scala.util.Random
   * '''What "restricted to homological dimension H" actually requires building''': per CLAUDE.md's MATLAB-API section,
   * computing H_k correctly (not as a truncation artifact where every top-dimension class looks essential because no
   * (k+1)-simplex exists to possibly kill it) needs (k+1)-dimensional simplices present. `RipserCohomologyContext`'s
-  * `maxDimension` constructor argument is the highest SIMPLEX dimension built (confirmed by reading `sparseCofacets`/
-  * `coboundaryOf` in `Homology.scala`: cofacet enumeration stops past `maxDimension`, which is exactly what forces
-  * dimension-`maxDimension` classes essential by construction). So "highest interesting homological dimension H"
-  * below is built as `maxDimension = H + 1`, not `H` -- sweeping `homDims = 2,3,4` builds simplex dimensions 3,4,5.
+  * `maxDimension` constructor argument now means the highest HOMOLOGICAL DEGREE reported, fixed at its own source
+  * (`.claude/WORKLOG-maxdim-semantics-fix.md`) -- it resolves the needed `(H+1)`-simplices internally, so
+  * `ripserAttempt` below passes `homDim` directly. `VR-Enum+Naive` (`SimplicialHomologyContext` fed a
+  * `LimitedCofaceSimplexStream`) has NOT been fixed this way -- its dimension cap lives entirely in the stream it's
+  * handed, so `vrEnumNaiveAttempt` still manually builds `buildDim = homDim + 1` simplices and lets
+  * `SimplicialHomologyContext` report every dimension it finds (the top one, `homDim + 1`, is then itself a truncation
+  * artifact, but this spec never reads that row's own top-dimension bars individually -- only total `cells`/`bars`
+  * counts, for ceiling-finding purposes, not correctness assertions).
   *
   * '''Three threshold regimes, not two''', because "bounded" is not one thing:
   *   - `unbounded`: `maxFiltrationValue = Double.PositiveInfinity` -- the complete flag complex, every pairwise
   *     distance included regardless of size. The old default before this session's earlier work (see
   *     WORKLOG-mst-and-perf.md Part 4).
-  *   - `default`: `maxFiltrationValue` left as `Double.NaN`, resolving internally to `metricSpace.minimumEnclosingRadius`
-  *     -- the CURRENT default across this codebase's VR constructions. In a unit hypercube this stays roughly constant
-  *     (~0.7 in 2D) as `n` grows -- it's a correctness cap (excludes only the genuinely cone-redundant long tail), not a
-  *     scaling lever, so it should NOT be expected to keep complex size bounded as `n` grows.
+  *   - `default`: `maxFiltrationValue` left as `Double.NaN`, resolving internally to
+  *     `metricSpace.minimumEnclosingRadius` -- the CURRENT default across this codebase's VR constructions. In a unit
+  *     hypercube this stays roughly constant (~0.7 in 2D) as `n` grows -- it's a correctness cap (excludes only the
+  *     genuinely cone-redundant long tail), not a scaling lever, so it should NOT be expected to keep complex size
+  *     bounded as `n` grows.
   *   - `sparse`: `maxFiltrationValue = thresholdScale / sqrt(n)` (same convention as `SparseRipsBenchmarkSpec`) -- a
   *     threshold that genuinely SHRINKS with `n`, keeping the expected local neighborhood size roughly constant. This
   *     is the regime a user restricting attention to local/short-range topology would actually want, and is the one
@@ -46,12 +51,12 @@ import scala.util.Random
   *
   * '''Methodology: grow `n` until a per-attempt timeout fires, rather than time a fixed guessed grid''' -- the
   * point-cloud-size ceiling IS the answer to "how big can my point cloud be," so it's measured directly: for each
-  * (engine, homDim, thresholdRegime) cell, `n` starts at `nStart` and grows geometrically (factor `growthFactor`)
-  * until an attempt exceeds `ceilingTimeoutMs` (no cooperative cancellation exists in these engines -- same daemon-
-  * executor pattern as `EngineComparisonBenchmarkSpec`, so a timed-out attempt's thread keeps running in the
-  * background) or `nCap`/`maxSteps` is hit. Reports the largest `n` that completed within `fastBudgetMs` AND the
-  * largest `n` that completed within `ceilingTimeoutMs`, side by side with `totalSimplexCount`/bar count, so a reader
-  * can separate "the complex got smaller" from "the same-size complex got faster."
+  * (engine, homDim, thresholdRegime) cell, `n` starts at `nStart` and grows geometrically (factor `growthFactor`) until
+  * an attempt exceeds `ceilingTimeoutMs` (no cooperative cancellation exists in these engines -- same daemon- executor
+  * pattern as `EngineComparisonBenchmarkSpec`, so a timed-out attempt's thread keeps running in the background) or
+  * `nCap`/`maxSteps` is hit. Reports the largest `n` that completed within `fastBudgetMs` AND the largest `n` that
+  * completed within `ceilingTimeoutMs`, side by side with `totalSimplexCount`/bar count, so a reader can separate "the
+  * complex got smaller" from "the same-size complex got faster."
   *
   * '''Single trial per step, not median-of-several''' -- this is a ceiling-finding exploratory sweep, not a precise
   * timing comparison (that's what `SparseRipsBenchmarkSpec`/`ApparentPairsBenchmarkSpec` are for at a fixed `n`).
@@ -60,8 +65,8 @@ import scala.util.Random
   * '''A global wall-clock deadline bounds the whole run''', independent of every other parameter -- a single
   * misbehaving cell (e.g. an engine whose ceiling sits just past `nCap` and keeps retrying near the edge) cannot make
   * this spec repeat `EngineComparisonBenchmarkSpec`'s 15+ minute sbt-lock incident (see CLAUDE.md's cross-engine
-  * benchmark section). Cells not reached before the deadline print "skipped (deadline)" rather than silently
-  * vanishing from the table.
+  * benchmark section). Cells not reached before the deadline print "skipped (deadline)" rather than silently vanishing
+  * from the table.
   *
   * Run standalone (NOT as part of plain `sbt test` -- see CLAUDE.md/WORKLOG-mst-and-perf.md Part 1 for the prior OOM
   * that cascaded into a spurious unrelated-spec failure in the same `sbt test` run), e.g.:
@@ -71,19 +76,19 @@ import scala.util.Random
   * }}}
   *
   * '''A previously-unknown correctness bug in `SimplicialHomologyContext`, found while building this spec, is now
-  * FIXED''' (`CellularHomologyContext.HomologyState` in `Homology.scala`, plus two structurally-related fixes found
-  * in the same pass -- see WORKLOG-dimension-ceiling.md for the original discovery and WORKLOG-reference-engine-fix.md
-  * for the full derivation and fix). It used to throw `IllegalStateException: reduction pivot ... was not a recorded
-  * open class` once simplices of dimension >= 4 (5+ vertices) were built, i.e. `homDim >= 3` here. Root cause: the
+  * FIXED''' (`CellularHomologyContext.HomologyState` in `Homology.scala`, plus two structurally-related fixes found in
+  * the same pass -- see WORKLOG-dimension-ceiling.md for the original discovery and WORKLOG-reference-engine-fix.md for
+  * the full derivation and fix). It used to throw `IllegalStateException: reduction pivot ... was not a recorded open
+  * class` once simplices of dimension >= 4 (5+ vertices) were built, i.e. `homDim >= 3` here. Root cause: the
   * persistence matching partitions every cell into POSITIVE (creator) or NEGATIVE (destroyer, matched immediately,
   * recorded only under its own pivot's key) -- when a later, higher-dimension column's reduction cascaded onto an
   * already-matched NEGATIVE cell, `boundaries.get` correctly found nothing, but that did not mean reduction was
   * finished, only that the existing lookup couldn't see a negative cell's own substitute. Fixed by recording each
-  * negative cell's own V-column (already computed, unused past its own branch) in a new `negativeVCols` map and
-  * wiring it through `Chain.reduceBy`'s existing `fallback` parameter -- the same mechanism `RipserCohomologyContext`
-  * already uses for its own apparent-pairs substitution. Verified against `RipserCohomologyContext`'s independently-
-  * derived bar count (exact agreement, not just "no crash") and a 64-trial cross-validation sweep, 0 mismatches. This
-  * spec's own previously-crashing cells (VR-Enum+Naive at H=3/H=4) now hit ordinary timeout ceilings instead.
+  * negative cell's own V-column (already computed, unused past its own branch) in a new `negativeVCols` map and wiring
+  * it through `Chain.reduceBy`'s existing `fallback` parameter -- the same mechanism `RipserCohomologyContext` already
+  * uses for its own apparent-pairs substitution. Verified against `RipserCohomologyContext`'s independently- derived
+  * bar count (exact agreement, not just "no crash") and a 64-trial cross-validation sweep, 0 mismatches. This spec's
+  * own previously-crashing cells (VR-Enum+Naive at H=3/H=4) now hit ordinary timeout ceilings instead.
   */
 class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specification:
   // Not skipAll, unlike EngineComparisonBenchmarkSpec -- defaults below are kept deliberately small/cheap (a global
@@ -170,13 +175,16 @@ class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specificati
         }
       (wrapped, cellVec.size)
 
-    def ripserAttempt(n: Int, buildDim: Int, regime: String): Either[String, (Double, Int, Int)] =
+    // RipserCohomologyContext's own maxDimension now means "top homological degree reported," fixed at its
+    // own source (see .claude/WORKLOG-maxdim-semantics-fix.md) -- homDim is passed directly, no +1 needed here
+    // (unlike vrEnumNaiveAttempt below, which still builds one dimension higher manually).
+    def ripserAttempt(n: Int, homDim: Int, regime: String): Either[String, (Double, Int, Int)] =
       withTimeout(ceilingTimeoutMs) {
-        val pts = randomCloud(n, rngFor(s"ripser-$regime-$buildDim", n))
+        val pts = randomCloud(n, rngFor(s"ripser-$regime-$homDim", n))
         val metricSpace = EuclideanMetricSpace(pts)
         val threshold = thresholdFor(regime, n)
         val t0 = System.nanoTime()
-        val ctx = RipserCohomologyContext[Double](metricSpace, buildDim, maxFiltrationValue = threshold)
+        val ctx = RipserCohomologyContext[Double](metricSpace, homDim, maxFiltrationValue = threshold)
         val bars = ctx.persistentCohomology()
         val ms = (System.nanoTime() - t0) / 1e6
         (ms, ctx.totalSimplexCount, bars.size)
@@ -230,7 +238,10 @@ class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specificati
       s"ambientDim=$ambientDim thresholdScale=$thresholdScale nStart=$nStart nCap=$nCap growthFactor=$growthFactor " +
         s"fastBudgetMs=$fastBudgetMs ceilingTimeoutMs=$ceilingTimeoutMs deadlineSeconds=$deadlineSeconds"
     )
-    println("homDim H is reported at the level a user cares about; buildDim = H+1 simplices are actually built.")
+    println(
+      "homDim H is reported at the level a user cares about. Ripser now takes H directly (fixed at its own " +
+        "source); VR-Enum+Naive still builds buildDim = H+1 simplices manually (see class doc)."
+    )
     println("")
 
     val regimes = Seq("unbounded", "default", "sparse")
@@ -240,9 +251,10 @@ class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specificati
       regime <- regimes
       if !deadlineHit
     do
-      val buildDim = homDim + 1
-      findCeiling(s"Ripser H=$homDim($regime)", n => ripserAttempt(n, buildDim, regime))
-      if !deadlineHit then findCeiling(s"VR-Enum+Naive H=$homDim($regime)", n => vrEnumNaiveAttempt(n, buildDim, regime))
+      findCeiling(s"Ripser H=$homDim($regime)", n => ripserAttempt(n, homDim, regime))
+      if !deadlineHit then
+        val buildDim = homDim + 1
+        findCeiling(s"VR-Enum+Naive H=$homDim($regime)", n => vrEnumNaiveAttempt(n, buildDim, regime))
 
     if deadlineHit then println("Global deadline reached -- remaining cells skipped (deadline).")
 

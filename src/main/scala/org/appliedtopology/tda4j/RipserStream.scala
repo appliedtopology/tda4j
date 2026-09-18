@@ -111,6 +111,20 @@ class SimplexIndexing(val vertexCount: Int):
     size: Int,
     allCofacets: Boolean = true
   ): Iterator[Long] =
+    cofacetIteratorWithVertex(index, size, allCofacets).map((_, idx) => idx)
+
+  /** Same enumeration as `cofacetIterator`, but also yields the INSERTED vertex alongside each cofacet index -- needed
+    * by a packed (index-only) reduction that has no materialized `Simplex[Int]` to recover it from afterward
+    * (`(tau.underlying diff sigma.underlying).head`, `coboundaryOf`'s own approach, requires decoding `tau`). The
+    * vertex is already present as `j`, the unfold's own loop state, at exactly the point a cofacet is emitted (`j`
+    * values that are NOT already in `s` are candidates for insertion) -- so exposing it costs nothing beyond what this
+    * method was already computing.
+    */
+  def cofacetIteratorWithVertex(
+    index: Long,
+    size: Int,
+    allCofacets: Boolean = true
+  ): Iterator[(Int, Long)] =
     Iterator
       .unfold(
         (apply(index, size), index, 0L, size, vertexCount - 1): Tuple5[
@@ -132,10 +146,10 @@ class SimplexIndexing(val vertexCount: Int):
               )
             )
         else // if j is there, skip
-          Some((Some(iB + binomial(j, k + 1) + iA), (s, iB, iA, k, j - 1)))
+          Some((Some((j, iB + binomial(j, k + 1) + iA)), (s, iB, iA, k, j - 1)))
       }
-      .filter((os: Option[Long]) => os.isDefined)
-      .map((os: Option[Long]) => os.get)
+      .filter((os: Option[(Int, Long)]) => os.isDefined)
+      .map((os: Option[(Int, Long)]) => os.get)
 
   def facetIterator(index: Long, size: Int): Iterator[Long] =
     Iterator.unfold((apply(index, size).toSeq.sorted, index, 0L, size - 1)) {

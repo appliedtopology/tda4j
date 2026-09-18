@@ -23,14 +23,23 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
   // Explicit +Infinity: EnumeratingCofaceSimplexStream now also defaults to metricSpace.minimumEnclosingRadius
   // (see CLAUDE.md/WORKLOG-mst-and-perf.md), and every caller of naiveBars in this file pairs it with
   // cohomologyBarsUnthresholded -- both sides need to be the same, genuinely untruncated filtration.
+  //
+  // Builds to maxDim + 1 (LimitedCofaceSimplexStream caps SIMPLEX dimension, unlike RipserCohomologyContext's
+  // now-fixed maxDimension, which caps reported HOMOLOGICAL degree -- see .claude/WORKLOG-maxdim-semantics-fix.md)
+  // and drops the resulting dim == maxDim + 1 bars (spuriously essential by construction, same truncation
+  // artifact RipserCohomologyContext itself used to have) before comparing. Needed once RipserCohomologyContext
+  // was fixed to correctly resolve dim == maxDim: without this, naiveBars alone still has the old artifact at
+  // maxDim, and disagrees with the NOW-correct cohomologyBars at that exact dimension for reasons that have
+  // nothing to do with a reduction bug.
   private def naiveBars(metricSpace: FiniteMetricSpace[Int], maxDim: Int): List[(Int, Double, Double)] =
     val vrStream = LimitedCofaceSimplexStream(
       EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Double.PositiveInfinity),
-      maxDim
+      maxDim + 1
     )
     SimplicialHomologyContext[Int, Double, Double]()
       .persistentHomology(vrStream)
       .diagramAt(Double.PositiveInfinity)
+      .filter(_._1 <= maxDim)
 
   private def cohomologyBars(metricSpace: FiniteMetricSpace[Int], maxDim: Int): List[(Int, Double, Double)] =
     RipserCohomologyContext[Double](metricSpace, maxDim).persistentCohomology().map(toTuple)
@@ -58,15 +67,22 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
   // spurious essential H^1 classes.
   private val threePointLine = EuclideanMetricSpace(Array(Array(0.0), Array(1.0), Array(3.0)))
 
-  "Persistent cohomology of a 3-cycle graph (no filled triangle) has one essential H^1 class, not three" >> {
-    // maxDimension = 1: vertices + edges only, no triangle. Elementary graph theory: cycle rank =
-    // edges - vertices + components = 3 - 3 + 1 = 1. A first draft that skipped clearing reported 3
-    // (every edge independently "essential").
-    // maxFiltrationValue = +Infinity, explicitly: this test wants the raw, unthresholded graph's own cycle
-    // structure (see comment above), which is smaller than threePointLine's own minimumEnclosingRadius (2.0
-    // -- the longest edge, {0,2} at distance 3.0, needed for the 3-cycle here, is excluded by the enclosing-
-    // radius default at maxDim=1: with no triangle available to kill it, real Ripser has this same property
-    // -- see WORKLOG-mst-and-perf.md).
+  "Persistent cohomology at requested H^1, 3-point line: the cycle dies at the same value its filling triangle appears" >> {
+    // Pre-maxDim-semantics-fix, this test requested maxDimension=1 expecting NO triangle to ever be built
+    // (the old, buggy "maxDimension = top simplex dimension" semantics) and asserted the resulting 1-cycle
+    // stayed essential. That premise is no longer achievable for THIS fixture: maxDimension now means "top
+    // HOMOLOGICAL DEGREE reported" (see .claude/WORKLOG-maxdim-semantics-fix.md), so correctly resolving H^1
+    // REQUIRES considering the real dimension-2 coboundary regardless of what's requested -- and for exactly
+    // 3 points, the triangle {0,1,2} unavoidably exists (and is born at the same value, 3.0, as its own
+    // longest edge {0,2}) the instant all three edges do. There is no threshold or maxDimension choice that
+    // gives this specific 3-point fixture edges but not the triangle. This is the mathematically CORRECT
+    // answer, not a truncation artifact: the "hole" the 3-cycle would otherwise trace is filled in the same
+    // instant it closes, a genuine zero-persistence bar -- exactly what real `ripser --dim 1` would also
+    // report on this same point cloud, since Ripser always builds one dimension higher internally too. The
+    // "filled triangle" test right below covers the same zero-persistence pairing at maxDimension=2; this
+    // test's remaining value is confirming maxDimension=1 produces the IDENTICAL answer (not merely "some
+    // essential-looking placeholder"), i.e. that requesting a lower degree changes only what's REPORTED, not
+    // what's correctly computed underneath it.
     val bars =
       RipserCohomologyContext[Double](threePointLine, 1, maxFiltrationValue = Double.PositiveInfinity)
         .persistentCohomology()
@@ -76,7 +92,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
         (0, 0.0, 1.0),
         (0, 0.0, 2.0),
         (0, 0.0, Double.PositiveInfinity),
-        (1, 3.0, Double.PositiveInfinity)
+        (1, 3.0, 3.0)
       )
     )
   }
@@ -200,7 +216,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       // assembled) is the only correct total here too, same as the explicit-threshold test below.
       val ctx = RipserCohomologyContext[Double](metricSpace, maxDim)
       val bars = ctx.persistentCohomology().map(toTuple)
-      HomologyFixtures.totalBarsAccountForAllCells(bars, ctx.totalSimplexCount) must beTrue
+      HomologyFixtures.totalBarsAccountForAllCells(bars, ctx.totalSimplexCount, topDimension = maxDim) must beTrue
     }
 
   // Session 2 (sparse Rips / maxFiltrationValue): picks t as the midpoint of two ADJACENT entries in the
@@ -319,7 +335,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       // subset exists, true only at maxFiltrationValue = +Infinity. A thresholded complex genuinely
       // excludes most subsets outright (see sparseCofacets) -- ctx.totalSimplexCount is the count of what
       // was actually assembled, the only correct total once a threshold is in play.
-      HomologyFixtures.totalBarsAccountForAllCells(bars, ctx.totalSimplexCount) must beTrue
+      HomologyFixtures.totalBarsAccountForAllCells(bars, ctx.totalSimplexCount, topDimension = maxDim) must beTrue
     }
 
   "Memoizing filtrationValue changes nothing about the computed barcode" >>
@@ -337,7 +353,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       memoized must containTheSameElementsAs(unmemoized)
     }
 
-  "Essential representatives are genuine cocycles (zero coboundary) below the top dimension" >> {
+  "Essential representatives are genuine cocycles (zero coboundary), including at the top dimension" >> {
     // Exact arithmetic (Fp), not Double -- zero-detection during reduction must not be confused with
     // floating-point noise (same precedent as the naive engine's own representative-cycle test).
     val f11 = new FiniteField(11)
@@ -354,10 +370,12 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       // PIVOT chain, which is nonzero by definition (that's what makes it finite). Confirmed directly
       // by inspection during development: a finite bar's representative has a nonzero coboundary that
       // exactly matches its own reduced column, not zero -- asserting isZero() there would be a test
-      // bug, not a property of the algorithm. Also guarded to dim < maxDim: coboundaryOf is vacuously
-      // empty at the top dimension (no cofacets are ever enumerated beyond maxDimension), so the check
-      // would pass there for the wrong reason -- see WORKLOG-cohomology.md.
-      forall(bars.filter(b => b.dim < maxDim && b.upper == PositiveInfinity[Double]())) { bar =>
+      // bug, not a property of the algorithm. Checked at EVERY dimension up to and including maxDim:
+      // coboundaryOf used to be vacuously empty at the top dimension (no cofacets were ever enumerated
+      // beyond maxDimension), which would have made this check pass there for the wrong reason -- fixed
+      // at the source (see .claude/WORKLOG-maxdim-semantics-fix.md), so dim == maxDim is now a genuine,
+      // non-vacuous instance of this same property, not a case to exclude.
+      forall(bars.filter(b => b.dim <= maxDim && b.upper == PositiveInfinity[Double]())) { bar =>
         val rep = bar.annotation.get
         ctx.coboundaryOfChain(rep).isZero() must beTrue
       }

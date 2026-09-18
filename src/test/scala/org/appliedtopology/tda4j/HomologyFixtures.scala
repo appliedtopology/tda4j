@@ -180,10 +180,21 @@ object HomologyFixtures:
   /** For every cell in a stream, it either opens exactly one bar (as a birth, whether finite or essential) or closes
     * exactly one bar (as a death); a finite bar accounts for 2 cells, an essential bar for 1. This is a cheap
     * structural invariant that catches most reduction bugs without needing an external oracle.
+    *
+    * `topDimension` (default `Int.MaxValue`, i.e. no special case -- every other caller of this helper feeds a
+    * complete, untruncated complex) accounts for one specific, legitimate exception: an engine like
+    * `RipserCohomologyContext` that reports homology only up to some requested top dimension `maxDimension` can have a
+    * genuine finite bar BORN at `dim == maxDimension` whose death cell lives at `maxDimension + 1` -- a real simplex,
+    * needed to correctly resolve that pairing, but never itself one of the `totalCells` counted (it was never
+    * independently considered as its own reduction column; see `RipserCohomologyContext.coboundaryOf`'s doc and
+    * `.claude/WORKLOG-maxdim-semantics-fix.md`). Such a bar consumes only its birth cell for this invariant's purposes,
+    * same as an essential bar -- not 2, since its death cell isn't part of the counted set.
     */
   def totalBarsAccountForAllCells(
     barcode: List[(Int, Double, Double)],
-    totalCells: Int
+    totalCells: Int,
+    topDimension: Int = Int.MaxValue
   ): Boolean =
     val (finite, essential) = barcode.partition((_, _, upper) => upper.isFinite)
-    finite.size * 2 + essential.size == totalCells
+    val (finiteAtTop, finiteBelowTop) = finite.partition((dim, _, _) => dim == topDimension)
+    finiteBelowTop.size * 2 + finiteAtTop.size + essential.size == totalCells
