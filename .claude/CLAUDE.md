@@ -456,6 +456,10 @@ imply the others need it:
    project lead) and one-shot (no incremental `advanceTo`-style querying, also agreed scope). Cross-validated
    against (1) — see `WORKLOG-cohomology.md` for the full pivot-orientation/birth-death-dimension derivation
    (re-derived directly from the paper, not from memory) and the validation strategy.
+   **As of `.claude/WORKLOG-ripser-profiling.md`'s cursor-redesign session, this class is a test/reference oracle
+   only** — `PackedRipserCohomologyContext` (below) is the production engine every real caller (including the
+   MATLAB facade's `engine="ripser"`) actually uses; see that class's own doc and the "MATLAB API" section below
+   for the full reasoning on why this one stays around but isn't a second production option.
    **`maxDimension` means "top simplex dimension built," not "top homological degree reported" — a real API
    footgun for any direct caller, confirmed while building a same-hardware benchmark against real
    `ripser.cpp`** (`WORKLOG-ripser-comparison.md`): `coboundaryOf(sigma)` is empty by construction at
@@ -1302,6 +1306,37 @@ just re-checked for self-consistency). See `WORKLOG-matlab-api.md` for the full 
 spikes attempted (fat-jar build succeeded; confirming MATLAB's own bundled JVM version and its actual
 `double[][]`/`String[]` marshalling behavior could not be completed from this environment and remain open, not
 silently assumed to work).
+
+**`engine="ripser"` is now backed by `PackedRipserCohomologyContext`, not `RipserCohomologyContext`** — a later
+session (`.claude/WORKLOG-ripser-profiling.md`'s cursor-redesign session) found, via `advisor()`, that this was the
+one place a "should `RipserCohomologyContext` just be deprecated in favor of packed" question actually had a real
+answer beyond "no functional gap": `fromBars`'s `cycleProvider` called `.underlying.toArray` directly on each
+chain cell, which only `Simplex[Int]` has — `PackedRipserCohomologyContext`'s cells are `DiameterIndex`, which
+carries a combinatorial index but not its own vertex count, so decoding it needs `size` from somewhere else.
+Closed by generalizing `fromBars[CellT, C]` to take `cellVertices: (Int, CellT) => Array[Int]` instead of a
+hardcoded `.underlying` call — `dim` (the bar's own dimension) is exactly the `size` a `DiameterIndex` decode
+needs, since every cell in one bar's cocycle is a simplex of that same dimension; `engine="ripser"`'s call site
+passes `(dim, cell) => ctx.si.decodeToArray(cell.index, dim + 1)`, `engine="naive"`'s (both `complex=vr` and
+`complex=alpha`) passes `(_, cell) => cell.underlying.toArray` unchanged. `PackedRipserCohomologyContext.si` (was
+`private`) is now a public `val` specifically so this call site can reuse it rather than constructing a second,
+cold `SimplexIndexing` that would rebuild `binomialEntry`'s lazily-grown cache from scratch. `Tda4jSpec`'s existing
+"match `RipserCohomologyContext[Fp(2)]` driven directly" test needed no changes and still passes — it's now
+additional cross-validation evidence (facade-via-packed agrees with direct-SortedSet) rather than a check that
+would need updating, since both engines are already cross-validated to produce identical bars.
+
+`RipserCohomologyContext` is deliberately marked, in its own class doc (`Homology.scala`) and
+`PackedRipserCohomologyContext`'s (`PackedRipserCohomology.scala`), as a test/reference oracle ONLY from this
+point on — not a second production option, and not something a new call site should route through. Its remaining
+value is narrower than "an independent check on the Ripser algorithm" (both engines share `SimplexIndexing`, so a
+bug there passes both silently — `SimplicialHomologyContext` is the actually-independent oracle, a different
+algorithm with no shared code path): it catches bugs specific to `PackedRipserCohomologyContext`'s OWN
+representation layer (`DiameterIndex`'s index-only `equals`/`hashCode` override, its index-keyed
+`basis`/`generators`/`cleared` maps) that no other spec would flag. Kept fully maintained regardless — a correct
+reference implementation of a published algorithm has standing value on its own — but its own remaining
+SortedSet-specific performance costs (`SimplexIndexing.apply(simplex)`'s five-stage encode chain,
+`zeroPivotFacet`'s generic `MaximumDistanceFiltrationValue`, both flagged in `.claude/WORKLOG-ripser-profiling.md`)
+are deliberately NOT being chased: optimizing a component whose job is legibility, not speed, is work against its
+own stated purpose.
 
 ## Session practices
 

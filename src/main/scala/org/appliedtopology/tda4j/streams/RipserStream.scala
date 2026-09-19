@@ -176,17 +176,17 @@ class SimplexIndexing(val vertexCount: Int):
     * different algorithm) but writes each vertex into a pre-sized `Array[Int]` and sorts once at the end
     * (`java.util.Arrays.sort`, in-place, zero allocation) rather than maintaining sortedness via `size` incremental
     * tree rebuilds -- correct regardless of which order the underlying recursion happens to emit vertices in, so this
-    * doesn't depend on separately re-deriving that order. Verified against `apply` directly (same vertex set, for
-    * every `(index, size)` pair the recursion can reach) in `SimplexIndexingSpec`'s property test, not just reasoned
-    * through -- `apply` itself is left completely unchanged, so any future divergence between the two would show up
-    * as a test failure rather than silently drifting.
+    * doesn't depend on separately re-deriving that order. Verified against `apply` directly (same vertex set, for every
+    * `(index, size)` pair the recursion can reach) in `SimplexIndexingSpec`'s property test, not just reasoned through
+    * -- `apply` itself is left completely unchanged, so any future divergence between the two would show up as a test
+    * failure rather than silently drifting.
     *
-    * `apply`'s own `Simplex[Int]`-returning callers (this class's `apply(simplex): Long` encode direction aside,
-    * every caller that genuinely needs a `Simplex[Int]` object, e.g. `RipserCohomologyContext.zeroPivotFacet`'s
+    * `apply`'s own `Simplex[Int]`-returning callers (this class's `apply(simplex): Long` encode direction aside, every
+    * caller that genuinely needs a `Simplex[Int]` object, e.g. `RipserCohomologyContext.zeroPivotFacet`'s
     * `rawFiltrationValue` argument) are NOT switched to this method: building a `SortedSet[Int]` from an already-
     * sorted array is not obviously cheaper than `apply`'s own incremental construction (Scala's `TreeSet` has no
-    * exposed O(n) bulk-build-from-sorted-input path), so there is no clear win there, only a different allocation
-    * shape -- left alone rather than "fixed" without a measurement to justify it.
+    * exposed O(n) bulk-build-from-sorted-input path), so there is no clear win there, only a different allocation shape
+    * -- left alone rather than "fixed" without a measurement to justify it.
     */
   def decodeToArray(n0: Long, size: Int): Array[Int] =
     val result = new Array[Int](size)
@@ -234,17 +234,17 @@ class SimplexIndexing(val vertexCount: Int):
 
   /** A `hasNext`/`vertex`/`index`/`advance()` cursor over `sigma`'s cofacets -- the enumeration
     * `cofacetIteratorWithVertex` used to do directly as a hand-rolled `Iterator[(Int, Long)]`, now factored out so a
-    * caller can read `vertex`/`index` as plain field accesses with zero per-step allocation, not even the
-    * `(Int, Long)` tuple `Iterator[(Int, Long)]`'s own contract forces on every `next()` call -- measured
+    * caller can read `vertex`/`index` as plain field accesses with zero per-step allocation, not even the `(Int, Long)`
+    * tuple `Iterator[(Int, Long)]`'s own contract forces on every `next()` call -- measured
     * (`.claude/WORKLOG-ripser-profiling.md`'s follow-up session) as ~49.8% of total allocation weight in both engines
-    * after every earlier fix in that arc, the largest remaining identified cost. `hasNext`/`advance()` are
-    * deliberately split from a single `next()`: `vertex`/`index` stay valid to re-read as many times as a caller
-    * wants between one `advance()` and the next (both `PackedRipserCohomology.scala`'s `coboundaryOf` and
-    * `Homology.scala`'s now read both fields off one candidate before advancing).
+    * after every earlier fix in that arc, the largest remaining identified cost. `hasNext`/`advance()` are deliberately
+    * split from a single `next()`: `vertex`/`index` stay valid to re-read as many times as a caller wants between one
+    * `advance()` and the next (both `PackedRipserCohomology.scala`'s `coboundaryOf` and `Homology.scala`'s now read
+    * both fields off one candidate before advancing).
     *
-    * Decodes `sigma` via `decodeToArray` (a plain sorted `Array[Int]`, binary-searched for membership), not
-    * `apply` (a `Simplex[Int]`/`SortedSet[Int]`, `O(log d)` tree lookup per membership check) -- the same
-    * array-over-tree substitution `decodeToArray`'s own doc motivates, folded in here since this cursor replaces
+    * Decodes `sigma` via `decodeToArray` (a plain sorted `Array[Int]`, binary-searched for membership), not `apply` (a
+    * `Simplex[Int]`/`SortedSet[Int]`, `O(log d)` tree lookup per membership check) -- the same array-over-tree
+    * substitution `decodeToArray`'s own doc motivates, folded in here since this cursor replaces
     * `cofacetIteratorWithVertex`'s body outright rather than wrapping it.
     */
   final class CofacetCursor(startIndex: Long, size: Int, allCofacets: Boolean):
@@ -318,13 +318,13 @@ class SimplexIndexing(val vertexCount: Int):
         cur.advance()
         result
 
-  /** A `hasNext`/`vertex`/`index`/`advance()` cursor over `tau`'s facets, mirroring `CofacetCursor` above --
-    * `vertex` is the vertex REMOVED to produce the facet at `index` (already available as `vertices(k)` at the
-    * point `index` is computed, so exposing it costs nothing extra). Preserves the original `facetIterator`'s exact
-    * arithmetic, including yielding `iiB + iA` (the OLD `iA`, before this step's own update) rather than `iiB + iiA`
-    * -- a real, easy-to-invert-by-mistake detail of the original, kept byte-for-byte, not "corrected." Decodes `tau`
-    * via `decodeToArray`, not `apply(...).toSeq.sorted` (a `Simplex[Int]` decode followed by a redundant re-sort of
-    * an already-sorted `SortedSet`).
+  /** A `hasNext`/`vertex`/`index`/`advance()` cursor over `tau`'s facets, mirroring `CofacetCursor` above -- `vertex`
+    * is the vertex REMOVED to produce the facet at `index` (already available as `vertices(k)` at the point `index` is
+    * computed, so exposing it costs nothing extra). Preserves the original `facetIterator`'s exact arithmetic,
+    * including yielding `iiB + iA` (the OLD `iA`, before this step's own update) rather than `iiB + iiA` -- a real,
+    * easy-to-invert-by-mistake detail of the original, kept byte-for-byte, not "corrected." Decodes `tau` via
+    * `decodeToArray`, not `apply(...).toSeq.sorted` (a `Simplex[Int]` decode followed by a redundant re-sort of an
+    * already-sorted `SortedSet`).
     */
   final class FacetCursor(startIndex: Long, size: Int):
     private val vertices: Array[Int] = decodeToArray(startIndex, size)

@@ -732,4 +732,92 @@ incremental-removal restructuring), `SimplexIndexingSpec.scala` (two new cursor-
 scratch driver this arc, `SingleEngineProfileDriver.scala` (single engine, single JVM process, no sbt/timeout
 machinery) -- kept past this session rather than deleted, since the same shape is needed for the still-pending
 time-and-memory-vs-real-`ripser.cpp` comparison this session's own request also asked for; see that deliverable's
-own section below once it exists.
+own section below once it exists. Committed as `d0daec6`.
+
+## Fifth follow-up session, same day (2026-09-19): time+memory comparison, then closing the packed-vs-SortedSet question
+
+Two asks: the time-and-memory comparison against real `ripser.cpp` this session's earlier request had flagged as
+still-pending, then (after seeing the numbers) whether any real setting still needs `RipserCohomologyContext`
+(SortedSet) now that `PackedRipserCohomologyContext` exists.
+
+**Time+memory comparison** (`sphere3_48`/`sphere3_96` only, per `advisor()`'s scope calibration -- the paper's
+other Table 1 cases already don't finish in a reasonable budget, and the point was orders-of-magnitude, not an
+exhaustive sweep): moved `SingleEngineProfileDriver.scala` from a scratch `src/main/.../profiling/` package (not a
+documented package per CLAUDE.md's own "Package layout" section -- would have shipped in the library jar) to
+`src/test/scala/.../homology/`, alongside `RipserPaperBenchmarkSpec.scala`, its natural sibling. Wired
+`RipserCohomologyContext.totalSimplexCount` into the driver's `sortedset` branch (was hardcoded `0` -- a real gap
+`advisor()` caught: "don't print a zero that reads as a measurement").
+
+Wall-clock (warm, median-of-3 in-process for the JVM engines, median-of-5 subprocess for `ripser.cpp`, same
+machine, same run): `sphere3_48` -- ripser 22.6ms, packed 68.2ms (3.0x), SortedSet 562.6ms (24.9x); `sphere3_96` --
+ripser 53.3ms, packed 941.0ms (17.7x), SortedSet 19755.0ms (370.9x). Peak RSS (`/usr/bin/time -l`, one process per
+measurement, `-Xmx4G` generous heap): `sphere3_48` -- ripser 1.5MB, packed 104.8MB, SortedSet 574.0MB;
+`sphere3_96` -- ripser 8.3MB, packed 336.3MB, SortedSet 1271.0MB. A coarse `-Xmx` bisection (4096m/2048m/1024m/
+512m/256m, per `advisor()`'s "at most 5 launches, order-of-magnitude not the exact floor") found every engine on
+both cases still completed at 256M -- the true floor is lower and wasn't chased further, reported honestly as
+"fits comfortably under 256MB," not as the floor itself. **Two honesty points, not smoothed over**: (1) macOS
+`time -l` reports `maximum resident set size` in BYTES, not KB (checked against a trivial `sleep` process first,
+per `advisor()`'s explicit warning, before trusting it on real data); (2) this session's freshly-measured
+`ripser.cpp` baseline (22.6ms/53.3ms) is noticeably slower than the hardcoded 2026-09-17 snapshot this arc has
+quoted throughout (10.0ms/50.0ms) -- machine variance or measurement-method difference between sessions, not
+reconciled further, so this table's own ratios are a self-consistent snapshot, NOT a continuation of the
+previously-quoted "18.8x/38.6x" gap figures (different baseline, different methodology, same trap this arc's own
+`ripserMs`-different-machine finding already warned about).
+
+**The packed-vs-SortedSet question, settled via `advisor()`, then two greps, not by reasoning alone**: asked
+whether ANY setting still requires `RipserCohomologyContext` now that `PackedRipserCohomologyContext` measures
+faster and leaner on every axis. Initial read (both take the same `FiniteMetricSpace[Int]`, same options minus an
+unneeded `memoizeFiltrationValue`, share `SimplexIndexing`) was "no functional gap" -- `advisor()` confirmed that
+read but flagged two things to check with a grep, not just reasoning: whether anything outside specs consumes
+`.annotation` (a chain's representative-cycle data), and what the MATLAB facade's `engine="ripser"` actually calls.
+
+**Found a real, if narrow and closable, gap**: `Tda4j.scala`'s `engine="ripser"` option was wired directly to
+`RipserCohomologyContext`, and its `fromBars` helper's `cycleProvider` called `.underlying.toArray` directly on
+each chain cell -- `Simplex[Int]`-only. `PackedRipserCohomologyContext`'s cells are `DiameterIndex` (a
+combinatorial index, no `.underlying`), and critically `DiameterIndex` doesn't carry its own vertex count, so
+decoding it back needs `size` from outside -- not plumbed through anywhere. This is the one place today a
+representation change would be a public-API change, not an internal one.
+
+**Closed the gap**: `fromBars[CellT, C]` generalized to take `cellVertices: (Int, CellT) => Array[Int]` instead
+of a hardcoded `.underlying` call. `dim` (the bar's own dimension) turns out to be exactly the `size` a
+`DiameterIndex` decode needs -- every cell in one bar's cocycle is a simplex of that SAME dimension (true for both
+engines symmetrically, since they implement the same algorithm), so nothing needed guessing. `engine="ripser"`'s
+call site now builds `PackedRipserCohomologyContext[C]` and passes `(dim, cell) => ctx.si.decodeToArray(cell.index,
+dim + 1)`; `engine="naive"` (both `complex=vr` and `complex=alpha`) passes `(_, cell) => cell.underlying.toArray`,
+unchanged behavior. `PackedRipserCohomologyContext.si` (was `private`) is now a public `val` -- its own doc already
+anticipated this exact need ("callers need to be able to name the type... to decode a bar's cells back to
+`Simplex[Int]`... for display or cross-validation"), just hadn't been wired up. `Tda4jSpec`'s existing "match
+`RipserCohomologyContext[Fp(2)]` driven directly" test needed no changes and still passes -- it's now additional
+cross-validation evidence (facade-via-packed agrees with direct-SortedSet) rather than something that needed
+updating, since `PackedRipserCohomologySpec` already established the two engines produce identical bars.
+
+**`advisor()`'s sharper framing of what to actually tell the project lead, adopted verbatim**: the honest answer
+isn't "SortedSet has no value" -- packed-vs-SortedSet agreement is weak evidence for the ALGORITHM (both share
+`SimplexIndexing`, so a shared bug there passes both identically; `SimplicialHomologyContext` is the genuinely
+independent oracle), but it's the ONLY thing that would catch a bug specific to packed's OWN representation layer
+-- `DiameterIndex`'s index-only `equals`/`hashCode` override, its index-keyed `basis`/`generators`/`cleared` maps.
+So `RipserCohomologyContext`'s remaining value is as a test oracle for packed's representation layer specifically,
+not as a production alternative and not as an independent check on the Ripser algorithm itself. Per `advisor()`'s
+explicit caution, did NOT propose deprecating `RipserCohomologyContext` -- it's a correct, paper-faithful reference
+implementation with standing value on its own, and "it's slower" isn't sufficient cause to remove it; the decision
+of whether to keep it a documented public class, mark it test-scope-only, or leave a doc note steering new callers
+to packed was left to the project lead, who chose to keep it (fully maintained) but mark it clearly as
+test/reference-oracle-only in its own class doc and CLAUDE.md, and to do the `Tda4j.scala` plumbing so
+`engine="ripser"` actually routes through packed now rather than leaving that gap open.
+
+**Also per `advisor()`'s explicit caution, NOT done as a follow-on**: `SimplexIndexing.apply(simplex)`'s five-stage
+encode chain and `RipserCohomologyContext.zeroPivotFacet`'s generic `MaximumDistanceFiltrationValue` (both flagged,
+not fixed, in the cursor-redesign session above) stay unfixed -- they're SortedSet-engine-only costs, and if that
+engine's remaining job is legibility rather than speed, optimizing them is work against its own stated purpose.
+
+**Validation**: full `sbt test` clean (237 examples, 232/0/5/1, unchanged from the cursor-redesign baseline --
+this session added no new tests, only rewired an existing call site and its cross-validation coverage already
+existed). `Tda4jSpec` individually (12 examples, including the new `cellVertices` decode path exercised by
+"representative chains... be readable for at least one engine=ripser bar").
+
+**Files changed this session**: `PackedRipserCohomology.scala` (`si` made public, class doc marks it "the
+production engine"), `Homology.scala` (`RipserCohomologyContext`'s class doc marks it "test/reference oracle
+only"), `Tda4j.scala` (`fromBars` generalized to `cellVertices: (Int, CellT) => Array[Int]`, `engine="ripser"`
+now builds `PackedRipserCohomologyContext` instead of `RipserCohomologyContext`, doc comments and error messages
+updated to match), `SingleEngineProfileDriver.scala` (moved from `src/main/.../profiling/` to
+`src/test/scala/.../homology/`, `totalSimplexCount` wired up for the `sortedset` branch).

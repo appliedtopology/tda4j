@@ -21,23 +21,24 @@ import scala.collection.mutable
   * than fixed parameters, so that adding a new option never changes any method's call signature. Recognized keys:
   *
   *   - `"complex"`: `"vr"` (default) or `"alpha"`.
-  *   - `"engine"`: `"ripser"` (default for `complex=vr`; fastest, most cross-validated -- see CLAUDE.md), `"naive"`
-  *     (reference-grade, slower, the only engine usable with `complex=alpha`), or `"chunks"` (`complex=vr` only -- see
-  *     below for why `complex=alpha` refuses it).
+  *   - `"engine"`: `"ripser"` (default for `complex=vr`; backed by `PackedRipserCohomologyContext`, the fastest and
+  *     most memory-efficient engine -- see CLAUDE.md), `"naive"` (reference-grade, slower, the only engine usable with
+  *     `complex=alpha`), or `"chunks"` (`complex=vr` only -- see below for why `complex=alpha` refuses it).
   *   - `"alphaBackend"`: `"helix"` (default) or `"DQP"`, only consulted when `complex=alpha`.
   *   - `"maxDimension"`: integer, default `2` -- the highest HOMOLOGICAL degree you want back (i.e. "give me
   *     H_0..H_k"), not the highest simplex dimension to build. Computing H_k correctly needs (k+1)-dimensional chains
   *     (H_k = ker(d_k)/im(d_{k+1}) -- with no (k+1)-chains at all there's no way to tell a genuine k-cycle from one a
-  *     not-yet-built (k+1)-simplex would have killed). For `engine="ripser"`/`"chunks"`, `RipserCohomologyContext`/
-  *     `PersistenceInChunksContext` both now handle this internally (fixed at their own source -- see
-  *     `.claude/WORKLOG-maxdim-semantics-fix.md`); for `engine="naive"`, this facade still builds one dimension higher
-  *     internally and drops that extra top dimension from what's reported, since `SimplicialHomologyContext` has no
-  *     `maxDimension` of its own at all -- it would otherwise look spuriously essential, a well-known truncation
-  *     artifact of the top dimension of any truncated chain complex, not real information (confirmed the hard way in
-  *     this facade's first pass -- see WORKLOG-matlab-api.md). `complex=alpha` ignores this option entirely and reports
-  *     every dimension its complex naturally has: an alpha complex's chain complex terminates on its own (bounded by
-  *     ambient dimension, or higher under cosphericity -- see CLAUDE.md), it is never artificially cut short the way a
-  *     VR complex is by this option, so its own top dimension is genuine information, not scaffolding.
+  *     not-yet-built (k+1)-simplex would have killed). For `engine="ripser"`/`"chunks"`,
+  *     `PackedRipserCohomologyContext`/ `PersistenceInChunksContext` both now handle this internally (fixed at their
+  *     own source -- see `.claude/WORKLOG-maxdim-semantics-fix.md`); for `engine="naive"`, this facade still builds one
+  *     dimension higher internally and drops that extra top dimension from what's reported, since
+  *     `SimplicialHomologyContext` has no `maxDimension` of its own at all -- it would otherwise look spuriously
+  *     essential, a well-known truncation artifact of the top dimension of any truncated chain complex, not real
+  *     information (confirmed the hard way in this facade's first pass -- see WORKLOG-matlab-api.md). `complex=alpha`
+  *     ignores this option entirely and reports every dimension its complex naturally has: an alpha complex's chain
+  *     complex terminates on its own (bounded by ambient dimension, or higher under cosphericity -- see CLAUDE.md), it
+  *     is never artificially cut short the way a VR complex is by this option, so its own top dimension is genuine
+  *     information, not scaffolding.
   *   - `"maxFiltrationValue"`: double, default is the point cloud's own `minimumEnclosingRadius` (Ripser's own default
   *     truncation, not unbounded -- see CLAUDE.md's "enclosing-radius default" note). Pass a very large number for the
   *     old always-unbounded behavior. Only consulted for `complex=vr`.
@@ -144,8 +145,8 @@ object Tda4j:
     val engine = opts.getOrElse("engine", if complex == "alpha" then "naive" else "ripser").toLowerCase
     if complex == "alpha" && engine == "ripser" then
       throw new IllegalArgumentException(
-        "engine=ripser cannot be used with complex=alpha: RipserCohomologyContext computes persistent cohomology " +
-          "directly from a metric space's Vietoris-Rips complex and has no notion of an alpha complex at all."
+        "engine=ripser cannot be used with complex=alpha: PackedRipserCohomologyContext computes persistent " +
+          "cohomology directly from a metric space's Vietoris-Rips complex and has no notion of an alpha complex at all."
       )
     if complex == "alpha" && engine == "chunks" then
       throw new IllegalArgumentException(
@@ -214,7 +215,7 @@ object Tda4j:
       case "vr" =>
         // Computing H_k needs (k+1)-dimensional chains -- H_k = ker(d_k)/im(d_{k+1}), so with no (k+1)-chains at
         // all there is no way to tell a genuine k-cycle from one that a not-yet-built (k+1)-simplex would have
-        // killed. Both `RipserCohomologyContext` and `PersistenceInChunksContext` now handle this internally
+        // killed. Both `PackedRipserCohomologyContext` and `PersistenceInChunksContext` now handle this internally
         // (their own `maxDimension`/`maxDim` constructor parameters mean "top homological degree reported,"
         // fixed at the source -- see .claude/WORKLOG-maxdim-semantics-fix.md), so `engine="ripser"`/`"chunks"`
         // both pass `requestedMaxDimension` straight through with no adjustment; `fromBars`/`fromDiagram`'s
@@ -223,9 +224,26 @@ object Tda4j:
         // `maxDimension` of its own at all -- the cap lives entirely in the stream it's handed.
         engine match
           case "ripser" =>
-            val ctx =
-              RipserCohomologyContext[C](metricSpace, requestedMaxDimension, maxFiltrationValue = maxFiltrationValue)
-            fromBars(ctx.persistentCohomology(), toDouble, requestedMaxDimension)
+            // Backed by PackedRipserCohomologyContext, not RipserCohomologyContext -- see CLAUDE.md and that
+            // class's own doc: same algorithm, measured faster and far leaner on memory. RipserCohomologyContext
+            // stays in the codebase only as PackedRipserCohomologyContext's cross-validation test oracle, not as
+            // a second production option.
+            val ctx = PackedRipserCohomologyContext[C](
+              metricSpace,
+              requestedMaxDimension,
+              maxFiltrationValue = maxFiltrationValue
+            )
+            // A packed bar's annotation is keyed by DiameterIndex, which carries a combinatorial index but not its
+            // own vertex count -- unlike Simplex[Int]'s `.underlying`, decoding needs `size` from outside. Every
+            // cell in one bar's cocycle is a simplex of the SAME dimension as the bar itself (`bar.dim`), so
+            // `dim + 1` (vertex count) is exactly the `size` `si.decodeToArray` needs -- known from the bar, not
+            // guessed.
+            fromBars[ctx.DiameterIndex, C](
+              ctx.persistentCohomology(),
+              (dim, cell) => ctx.si.decodeToArray(cell.index, dim + 1),
+              toDouble,
+              requestedMaxDimension
+            )
           case "naive" =>
             // EnumeratingCofaceSimplexStream has no dimension cap of its own (only a filtration-value one) --
             // LimitedCofaceSimplexStream is what actually enforces a dimension cap, the same wrapping
@@ -236,7 +254,12 @@ object Tda4j:
             )
             val state = SimplicialHomologyContext[Int, C, Double]().persistentHomology(stream)
             state.advanceAll()
-            fromBars(state.barcodeAt(Double.PositiveInfinity), toDouble, requestedMaxDimension)
+            fromBars[Simplex[Int], C](
+              state.barcodeAt(Double.PositiveInfinity),
+              (_, cell) => cell.underlying.toArray,
+              toDouble,
+              requestedMaxDimension
+            )
           case "chunks" =>
             val stream = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue)
             val state = PersistenceInChunksContext[Int, C](requestedMaxDimension).persistentHomology(stream)
@@ -261,7 +284,12 @@ object Tda4j:
           case "naive" =>
             val state = SimplicialHomologyContext[Int, C, Double]().persistentHomology(alphaStream)
             state.advanceAll()
-            fromBars(state.barcodeAt(Double.PositiveInfinity), toDouble, Int.MaxValue)
+            fromBars[Simplex[Int], C](
+              state.barcodeAt(Double.PositiveInfinity),
+              (_, cell) => cell.underlying.toArray,
+              toDouble,
+              Int.MaxValue
+            )
           case other =>
             // dispatch() already rejects ripser/chunks for alpha; anything else is a genuinely unrecognized engine.
             throw new IllegalArgumentException(s"unrecognized engine '$other' for complex=alpha; expected 'naive'")
@@ -278,8 +306,16 @@ object Tda4j:
     case OpenEndpoint(v)    => v
     case ClosedEndpoint(v)  => v
 
-  private def fromBars[C](
-    bars: List[PersistenceBar[Double, Chain[Simplex[Int], C]]],
+  /** `cellVertices(dim, cell)` recovers a chain cell's vertex array -- generalized from a hardcoded `.underlying`
+    * (which only `Simplex[Int]` has) as of routing `engine="ripser"` through `PackedRipserCohomologyContext`: its cells
+    * are `DiameterIndex`, decoded via `ctx.si.decodeToArray(cell.index, dim + 1)` at the call site instead. Takes `dim`
+    * (the bar's own dimension, hence the cocycle's -- every cell in one bar's annotation is a simplex of that same
+    * dimension) because `DiameterIndex` doesn't carry its own vertex count the way `Simplex[Int]` does; a caller
+    * decoding it needs `size` from somewhere else, and the bar itself already has it.
+    */
+  private def fromBars[CellT, C](
+    bars: List[PersistenceBar[Double, Chain[CellT, C]]],
+    cellVertices: (Int, CellT) => Array[Int],
     toDouble: C => Double,
     keepDimensionsUpTo: Int
   )(using C is Field): PersistenceResult =
@@ -292,11 +328,12 @@ object Tda4j:
     val births = indexed.map(b => endpointToDouble(b.lower)).toArray
     val deaths = indexed.map(b => endpointToDouble(b.upper)).toArray
     val cycleProvider: Int => (Array[Array[Int]], Array[Double]) = i =>
+      val dim = indexed(i).dim
       indexed(i).annotation match
         case Some(chain) =>
           chain.collapseAll()
           val items = chain.items
-          (items.map(_._1.underlying.toArray).toArray, items.map(t => toDouble(t._2)).toArray)
+          (items.map(t => cellVertices(dim, t._1)).toArray, items.map(t => toDouble(t._2)).toArray)
         case None =>
           throw new UnsupportedOperationException(
             s"no representative chain was recorded for bar $i (this can happen for engine=ripser bars resolved via the apparent-pairs shortcut)"

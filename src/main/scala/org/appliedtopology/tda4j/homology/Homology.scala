@@ -702,7 +702,24 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
       mutable.Map.empty
     )
 
-/** Persistent cohomology via Ulrich Bauer's Ripser algorithm (arXiv:1908.02518), specialized to `Simplex[Int]`
+/** '''Test/reference oracle only -- not a production engine, and not what `Tda4j.scala`'s `engine="ripser"` calls.'''
+  * As of `.claude/WORKLOG-ripser-profiling.md`'s cursor-redesign session, `PackedRipserCohomologyContext`
+  * (`PackedRipserCohomology.scala`) is the production Ripser engine: same algorithm, method for method, keyed on a
+  * packed `(Double, Long)` pair instead of a materialized `Simplex[Int]`, measured faster and dramatically leaner on
+  * memory on real paper data (see that class's own doc for the comparison). This class's remaining job is narrower than
+  * "a slower production alternative": it's the thing `PackedRipserCohomologySpec` cross-validates the packed engine's
+  * `DiameterIndex`-specific machinery against (its index-only `equals`/`hashCode`, its index-keyed
+  * `basis`/`generators`/`cleared` maps) -- representation bugs no other spec would catch. It does NOT independently
+  * validate the Ripser ALGORITHM itself (both engines share `SimplexIndexing`, so a shared bug there passes both); that
+  * job belongs to `SimplicialHomologyContext`, a genuinely different, boundary-based algorithm with no shared code
+  * path. Its `Simplex[Int]`-keyed chains are also more directly legible for hand-debugging than `DiameterIndex`-keyed
+  * ones, which is real value but a development-time one, not a reason to route production traffic through it. Kept
+  * fully maintained and validated regardless (a correct paper-algorithm reference implementation has standing value on
+  * its own), but don't add production call sites against it, and don't chase its own remaining SortedSet-specific
+  * performance costs (flagged, not fixed, in the worklog above) -- that work would target legibility, not the thing
+  * this class's job actually calls for.
+  *
+  * Persistent cohomology via Ulrich Bauer's Ripser algorithm (arXiv:1908.02518), specialized to `Simplex[Int]`
   * Vietoris-Rips/clique complexes via the combinatorial number system (`SimplexIndexing`) -- a deliberate narrowing
   * from `CellularHomologyContext`'s generic `CellT: OrderedCell`, agreed with the project lead (see "Phase 2 plan" in
   * WORKLOG-naive-homology.md). One-shot: computes the full barcode in a single pass, no incremental querying (also
@@ -884,18 +901,18 @@ class RipserCohomologyContext[CoefficientT: Field](
     * sigma's own max" canonical-cofacet convention `sparseCofacets` uses below -- so this is also used inside
     * `coboundaryOf`/`zeroPivotCofacet`, which need to consider cofacets from inserting vertices in general.
     */
-  /** Takes `sigma`'s vertex set as an already-materialized `Array[Int]`, not a `Simplex[Int]`/`SortedSet[Int]`, as of
-    * a later follow-up session -- see `PackedRipserCohomologyContext.insertionDiameter` (`PackedRipserCohomology.scala`)
+  /** Takes `sigma`'s vertex set as an already-materialized `Array[Int]`, not a `Simplex[Int]`/`SortedSet[Int]`, as of a
+    * later follow-up session -- see `PackedRipserCohomologyContext.insertionDiameter` (`PackedRipserCohomology.scala`)
     * for the full rationale: the earlier closure-allocation fix that replaced `.map(...).max` with a `while` loop (see
     * git history) still called `sigma.underlying.iterator`, and `TreeSet.iterator()` itself allocates a `KeysIterator`
     * wrapping a `TreeIterator` (with its own `Tree[]` DFS-stack array) on every single call -- re-profiling
     * `PackedRipserCohomologyContext` found this was actually that class's single LARGEST allocation source (23.8% of
     * total weight), bigger than `Chain.reduceLoop`'s own accumulator churn. `sigma` is fixed across every candidate
-    * vertex considered within one enumeration call, so each caller here now hoists `sigma.underlying.toArray` ONCE
-    * and passes the same array to every `insertionDiameter` call in that enumeration, rather than each call
-    * re-iterating `sigma.underlying` itself. The two engines are no longer byte-for-byte identical at their call
-    * sites (this one already holds `sigma: Simplex[Int]` directly, so it hoists straight from it; the packed engine
-    * decodes from a combinatorial index first) but `insertionDiameter`'s own array-indexing body stays identical.
+    * vertex considered within one enumeration call, so each caller here now hoists `sigma.underlying.toArray` ONCE and
+    * passes the same array to every `insertionDiameter` call in that enumeration, rather than each call re-iterating
+    * `sigma.underlying` itself. The two engines are no longer byte-for-byte identical at their call sites (this one
+    * already holds `sigma: Simplex[Int]` directly, so it hoists straight from it; the packed engine decodes from a
+    * combinatorial index first) but `insertionDiameter`'s own array-indexing body stays identical.
     */
   private def insertionDiameter(vertices: Array[Int], sigmaFv: Double, v: Int): Double =
     var maxD = sigmaFv
@@ -953,8 +970,8 @@ class RipserCohomologyContext[CoefficientT: Field](
     * every candidate to be fully decoded back into a `Simplex[Int]` (`si(cofacetIdx, sigma.size + 1)`) and then
     * linearly scanned (`tau.underlying.find(...)`) just to recover the ONE vertex `CofacetCursor` already hands over
     * directly as `cur.vertex` -- on top of `cofacetIteratorWithVertex`'s own `(Int, Long)` tuple allocation per
-    * candidate, together the single largest remaining allocation source measured in this engine (~49.8% for the
-    * tuple boxing alone, before even counting the redundant decode this rewrite also removes). `tau` is now built by
+    * candidate, together the single largest remaining allocation source measured in this engine (~49.8% for the tuple
+    * boxing alone, before even counting the redundant decode this rewrite also removes). `tau` is now built by
     * inserting `cur.vertex` directly into `sigma`'s own vertex set (`sigma.underlying + v`, O(log d)) -- the same
     * incremental-insertion `sparseCofacets` above already uses, rather than a full O(d log d) combinatorial decode.
     */
@@ -1006,21 +1023,21 @@ class RipserCohomologyContext[CoefficientT: Field](
     * tied at `sigma`'s own value, and `sigma` is only ever called with here if it's already within the threshold
     * (guaranteed by construction -- see `sparseCofacets`), so any tied tau is automatically within threshold too.
     */
-  /** A hand-rolled `while` loop, not `.filter(...).maxByOption((tau, _) => si(tau))`, as of a later follow-up
-    * session (`.claude/WORKLOG-ripser-profiling.md`): two separate costs stacked here. First, `maxByOption` boxes
-    * every `Long` key comparison, same as `PackedRipserCohomologyContext.zeroPivotCofacet`'s identical fix. Second,
-    * and specific to this engine, `si(tau)` RE-ENCODES a simplex that was just DECODED from `idx` one line above --
-    * `idx` already IS `tau`'s own combinatorial index by construction (`si.cofacetIterator` yields it,
-    * `tau = si(idx, ...)` decodes it), so `si(tau)` is a fully redundant O(d log d) round trip through the same
-    * `searchRow`/`binomialEntry` machinery for a value already in hand. Reusing `idx` directly is not an
-    * assumption: `SimplexIndexingSpec`'s round-trip property test (`si(si(idx, size), size) == idx` for random
-    * valid indices) confirms decode-then-encode is the identity, independent of this fix.
+  /** A hand-rolled `while` loop, not `.filter(...).maxByOption((tau, _) => si(tau))`, as of a later follow-up session
+    * (`.claude/WORKLOG-ripser-profiling.md`): two separate costs stacked here. First, `maxByOption` boxes every `Long`
+    * key comparison, same as `PackedRipserCohomologyContext.zeroPivotCofacet`'s identical fix. Second, and specific to
+    * this engine, `si(tau)` RE-ENCODES a simplex that was just DECODED from `idx` one line above -- `idx` already IS
+    * `tau`'s own combinatorial index by construction (`si.cofacetIterator` yields it, `tau = si(idx, ...)` decodes it),
+    * so `si(tau)` is a fully redundant O(d log d) round trip through the same `searchRow`/`binomialEntry` machinery for
+    * a value already in hand. Reusing `idx` directly is not an assumption: `SimplexIndexingSpec`'s round-trip property
+    * test (`si(si(idx, size), size) == idx` for random valid indices) confirms decode-then-encode is the identity,
+    * independent of this fix.
     */
   /** Built on `CofacetCursor` directly, as of the cursor-redesign session -- see `coboundaryOf`'s identical rewrite
     * above for the shared rationale. Unlike `coboundaryOf`, which needs every surviving candidate's `Simplex[Int]`,
-    * this method only ever needs the SINGLE winning one -- so `tau` is never built at all until the loop finishes,
-    * only `bestVertex`/`bestIdx` (primitives) are tracked per candidate, and `sigma.underlying + bestVertex` runs
-    * exactly once, for the winner, not once per candidate considered.
+    * this method only ever needs the SINGLE winning one -- so `tau` is never built at all until the loop finishes, only
+    * `bestVertex`/`bestIdx` (primitives) are tracked per candidate, and `sigma.underlying + bestVertex` runs exactly
+    * once, for the winner, not once per candidate considered.
     */
   private def zeroPivotCofacet(sigma: Simplex[Int]): Option[Simplex[Int]] =
     if sigma.dim > maxDimension then None
@@ -1052,21 +1069,21 @@ class RipserCohomologyContext[CoefficientT: Field](
     * this session's enumeration work. Left as a scope boundary, not an oversight: see WORKLOG-lazy-enumeration.md's
     * "Session 2" section.
     */
-  /** Hand-rolled for the same two reasons as `zeroPivotCofacet` above: `.minByOption(sigma => si(sigma))` boxes
-    * every `Long` comparison, AND `si(sigma)` re-encodes a simplex just decoded from `idx`, which already IS
-    * `sigma`'s own index. The ONE genuinely necessary encode call, `si(tau)` (seeding `facetIterator` with `tau`'s
-    * own index, since a facet iterator needs to know what it's removing a vertex FROM), stays -- it happens once
-    * per `zeroPivotFacet` call, not once per candidate, so it was never part of either cost.
+  /** Hand-rolled for the same two reasons as `zeroPivotCofacet` above: `.minByOption(sigma => si(sigma))` boxes every
+    * `Long` comparison, AND `si(sigma)` re-encodes a simplex just decoded from `idx`, which already IS `sigma`'s own
+    * index. The ONE genuinely necessary encode call, `si(tau)` (seeding `facetIterator` with `tau`'s own index, since a
+    * facet iterator needs to know what it's removing a vertex FROM), stays -- it happens once per `zeroPivotFacet`
+    * call, not once per candidate, so it was never part of either cost.
     */
-  /** Built on `FacetCursor` directly, as of the cursor-redesign session: `FacetCursor.vertex` is the vertex REMOVED
-    * to reach `.index` (verified against `decodeToArray` independently by `SimplexIndexingSpec`'s `FacetCursor`
-    * property before this was relied on here), so each candidate's vertex set is built by removing ONE vertex from
-    * `tau`'s own already-materialized `underlying` (`tau.underlying - v`, O(log d)) rather than a full combinatorial
-    * decode (`si(idx, tau.size - 1)`, O(d log vertexCount) search plus `size - 1` incremental tree insertions).
+  /** Built on `FacetCursor` directly, as of the cursor-redesign session: `FacetCursor.vertex` is the vertex REMOVED to
+    * reach `.index` (verified against `decodeToArray` independently by `SimplexIndexingSpec`'s `FacetCursor` property
+    * before this was relied on here), so each candidate's vertex set is built by removing ONE vertex from `tau`'s own
+    * already-materialized `underlying` (`tau.underlying - v`, O(log d)) rather than a full combinatorial decode
+    * (`si(idx, tau.size - 1)`, O(d log vertexCount) search plus `size - 1` incremental tree insertions).
     * `filtrationValue(sigma)` itself still needs the full candidate vertex set on every candidate, unlike the cofacet
     * direction's `insertionDiameter` -- no incremental shortcut exists for removing a vertex's diameter contribution
-    * (same scope boundary this class's other docs already note), so `sigma` can't be deferred to just the winner
-    * the way `zeroPivotCofacet` defers `tau`.
+    * (same scope boundary this class's other docs already note), so `sigma` can't be deferred to just the winner the
+    * way `zeroPivotCofacet` defers `tau`.
     */
   private def zeroPivotFacet(tau: Simplex[Int]): Option[Simplex[Int]] =
     val d = filtrationValue(tau)

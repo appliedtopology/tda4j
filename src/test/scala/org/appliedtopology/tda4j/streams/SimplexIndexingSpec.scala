@@ -87,10 +87,10 @@ class SimplexIndexingSpec extends Specification with ScalaCheck:
       ))
     }
 
-    /** Backs two later fixes' correctness (`.claude/WORKLOG-ripser-profiling.md`): `decodeToArray`'s array+sort
-      * rewrite of `apply`'s decode, and `RipserCohomologyContext.zeroPivotCofacet`/`zeroPivotFacet` reusing an
-      * iterator's own already-known index instead of re-encoding the simplex it just decoded. Neither fix is
-      * exercised by the hand-picked paper examples above (those never decode-then-encode the SAME simplex back).
+    /** Backs two later fixes' correctness (`.claude/WORKLOG-ripser-profiling.md`): `decodeToArray`'s array+sort rewrite
+      * of `apply`'s decode, and `RipserCohomologyContext.zeroPivotCofacet`/`zeroPivotFacet` reusing an iterator's own
+      * already-known index instead of re-encoding the simplex it just decoded. Neither fix is exercised by the
+      * hand-picked paper examples above (those never decode-then-encode the SAME simplex back).
       */
     "decodeToArray and decode-then-encode round-tripping, for arbitrary valid (vertexCount, size, index)" >> {
       val validCase = for
