@@ -14,6 +14,7 @@ import java.util.concurrent.{Executors, ThreadFactory}
 import scala.concurrent.duration.*
 import scala.concurrent.{Await, ExecutionContext, Future, TimeoutException}
 import scala.io.Source
+import scala.sys.process.*
 
 /** Compares `RipserCohomologyContext` (this codebase's own reproduction of Bauer's Ripser algorithm, `Homology.scala`)
   * against real `ripser.cpp`, on the actual data sets used in Table 1 of the Ripser paper (arXiv:1908.02518, "Ripser:
@@ -101,6 +102,22 @@ import scala.io.Source
   * sbt -J-Xmx16G -DdataDir=/path/to/downloaded/data -DtimeoutSeconds=300 \
   *   "testOnly org.appliedtopology.tda4j.RipserPaperBenchmarkSpec"
   * }}}
+  *
+  * '''`-DripserBin=<path>`, added in `.claude/WORKLOG-ripser-profiling.md`'s follow-up session''': when set, this spec
+  * shells out to a REAL `ripser` binary at that path for every case (`--dim`/`--threshold`/`--format` built from each
+  * `DataCase`'s own fields, matching the exact invocation this class's doc above already documents by hand) and times
+  * it directly with `System.nanoTime()` around the subprocess call, instead of trusting the hardcoded
+  * `DataCase.ripserMs`/`refBars` snapshot from 2026-09-17. This is what "orchestrate the real-ripser comparison from
+  * within the benchmark test case code" means here: no separate script has to build the timing table by hand, run this
+  * spec with the flag set and it reflects whatever machine it's actually running on, TODAY. Falls back to the hardcoded
+  * `ripserMs`/`refBars` when the flag isn't given (the original, unchanged default behavior) -- this is additive, not a
+  * replacement of the existing snapshot-comparison mode. Bar counts are parsed fresh from the real binary's own stdout
+  * (`persistence intervals in dim K:` sections, counting lines until the next such header or EOF) rather than trusted
+  * from `refBars` too, when this flag is set -- a genuine cross-check, not just a timing number. A companion shell
+  * script, `.claude/scripts/run-ripser-paper-benchmark.sh`, builds a fresh vanilla `ripser.cpp` (from
+  * `github.com/Ripser/ripser`, matching this class's own documented build), downloads the data sets from the URLs
+  * already in this doc comment if missing, and invokes `sbt` with both `-DdataDir` and `-DripserBin` set -- meant to be
+  * copied to and run directly on a machine (e.g. a compute server) that doesn't already have either.
   */
 class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
   // Re-enable deliberately (uncomment) when actually running the benchmark -- see EngineComparisonBenchmarkSpec's
@@ -176,8 +193,13 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
           // real ripser.cpp built from a fresh `git clone` + plain `make`), not the 2019 paper's numbers --
           // see the class doc and WORKLOG-ripser-comparison.md for the full re-measurement. `refBars` is
           // non-zero-persistence bars per dimension, parsed from ripser's own printed output (see class doc).
+          // Both are used only as a FALLBACK when `-DripserBin` isn't set -- see that flag's own doc above.
           ripserMs: Double,
-          refBars: Map[Int, Int]
+          refBars: Map[Int, Int],
+          // The same underlying data file/format `metricSpace` above already loads, exposed separately so
+          // `-DripserBin` mode can hand them to the real `ripser` binary directly rather than re-deriving them.
+          dataFile: String,
+          ripserFormat: String // "point-cloud" or "distance" -- real ripser's own `--format` flag values
         )
 
         // Ordered smallest-complex-first (Table 2's total-pairs column, not raw n -- random16's n=50 is
@@ -190,7 +212,9 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
             2,
             Double.NaN,
             10,
-            Map(0 -> 48, 1 -> 14, 2 -> 1)
+            Map(0 -> 48, 1 -> 14, 2 -> 1),
+            s"$dir/sphere3_48.dat",
+            "point-cloud"
           ),
           DataCase(
             "sphere3_96",
@@ -198,7 +222,9 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
             2,
             Double.NaN,
             50,
-            Map(0 -> 96, 1 -> 22, 2 -> 1)
+            Map(0 -> 96, 1 -> 22, 2 -> 1),
+            s"$dir/sphere3_96.dat",
+            "point-cloud"
           ),
           DataCase(
             "sphere3_192",
@@ -206,7 +232,9 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
             2,
             Double.NaN,
             660,
-            Map(0 -> 192, 1 -> 53, 2 -> 1)
+            Map(0 -> 192, 1 -> 53, 2 -> 1),
+            s"$dir/sphere_3_192_points.dat",
+            "point-cloud"
           ),
           DataCase(
             "dragon",
@@ -214,7 +242,9 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
             1,
             Double.NaN,
             1150,
-            Map(0 -> 2000, 1 -> 576)
+            Map(0 -> 2000, 1 -> 576),
+            s"$dir/dragon_vrip_2000.txt",
+            "point-cloud"
           ),
           DataCase(
             "o3_1024",
@@ -222,7 +252,9 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
             3,
             1.8,
             1570,
-            Map(0 -> 1024, 1 -> 576, 2 -> 180, 3 -> 7)
+            Map(0 -> 1024, 1 -> 576, 2 -> 180, 3 -> 7),
+            s"$dir/o3_1024.txt",
+            "point-cloud"
           ),
           DataCase(
             "fractal-r",
@@ -230,7 +262,9 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
             2,
             Double.NaN,
             3030,
-            Map(0 -> 512, 1 -> 438, 2 -> 659)
+            Map(0 -> 512, 1 -> 438, 2 -> 659),
+            s"$dir/fractal_9_5_2_distmat.txt",
+            "distance"
           ),
           DataCase(
             "random16",
@@ -238,7 +272,9 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
             7,
             Double.NaN,
             3440,
-            Map(0 -> 50, 1 -> 39, 2 -> 16, 3 -> 5, 4 -> 3, 5 -> 0, 6 -> 0, 7 -> 0)
+            Map(0 -> 50, 1 -> 39, 2 -> 16, 3 -> 5, 4 -> 3, 5 -> 0, 6 -> 0, 7 -> 0),
+            s"$dir/random_point_cloud_50_16_.txt",
+            "point-cloud"
           ),
           DataCase(
             "o3_4096",
@@ -246,7 +282,9 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
             3,
             1.4,
             30790,
-            Map(0 -> 4096, 1 -> 2466, 2 -> 811, 3 -> 33)
+            Map(0 -> 4096, 1 -> 2466, 2 -> 811, 3 -> 33),
+            s"$dir/o3_4096.txt",
+            "point-cloud"
           )
         )
 
@@ -266,6 +304,58 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
           else
             mismatches.map(d => s"d$d:${byDim.getOrElse(d, 0)}vs${refBars.getOrElse(d, 0)}").mkString("NO(", ",", ")")
 
+        // -DripserBin=<path> -- see this class's own doc comment above for the full rationale. Shells out to a
+        // REAL ripser binary, built and invoked exactly the way this class's doc already documents by hand
+        // (`--dim`/`--threshold`/`--format`), and times it directly with `System.nanoTime()` around the
+        // subprocess call -- the same "wall clock around the call" approach `withTimeout` already uses for the
+        // Scala engines, so all three numbers in one table row are measured the same way. Inherits the same
+        // no-cooperative-cancellation caveat `withTimeout`'s own doc states: a `-DtimeoutSeconds` that elapses
+        // stops WAITING on the subprocess, not the subprocess itself.
+        val ripserBinProp: Option[String] = sys.props.get("ripserBin").filter(_.nonEmpty)
+
+        // A single subprocess invocation of `ripser` on a small case (tens of milliseconds) is dominated by
+        // process-launch noise, not the actual VR computation -- already flagged as a caveat in
+        // `WORKLOG-ripser-comparison.md` and confirmed directly this session: a single run of `sphere3_96`
+        // varied between ~42ms (5-trial median via a standalone script) and ~107ms (one-off), a >2x spread on
+        // the SAME binary/data/machine. `ripserTrials` (default 5) re-runs the SAME subprocess this many times
+        // and takes the MEDIAN elapsed time -- cheap for small/fast cases (where the noise matters most) and
+        // still bounded for slow ones (a 30s case costs at most `ripserTrials`x its own runtime, not
+        // `ripserTrials` times some larger multiple). Bar counts are parsed from the LAST trial's stdout only
+        // (they don't vary between runs, only timing does, so re-parsing every trial would be wasted work).
+        val ripserTrials: Int = sys.props.get("ripserTrials").map(_.toInt).getOrElse(5)
+
+        def runRealRipser(ripserBin: String, c: DataCase): Either[String, (Double, Map[Int, Int])] =
+          withTimeout {
+            val args = Seq(ripserBin, "--dim", c.maxDim.toString, "--format", c.ripserFormat) ++
+              (if c.threshold.isNaN then Seq.empty else Seq("--threshold", c.threshold.toString)) :+
+              c.dataFile
+            var lastOutput: String = ""
+            val times = (1 to ripserTrials).map { _ =>
+              val t0 = System.nanoTime()
+              lastOutput = args.!!
+              (System.nanoTime() - t0) / 1e6
+            }.sorted
+            val medianMs = times(times.size / 2)
+            // Every line ripser prints under a "persistence intervals in dim K:" header is already a
+            // non-zero-persistence bar -- its own text output omits persistence-0 intervals (this class's doc
+            // comment above, confirmed against real ripser's source) -- so a raw per-section line count is
+            // directly comparable to `refBars`/this spec's own `byDim` computation, no further filtering needed.
+            val dimHeader = """persistence intervals in dim (\d+):""".r
+            var currentDim: Option[Int] = None
+            val byDim = scala.collection.mutable.Map.empty[Int, Int]
+            for line <- lastOutput.linesIterator do
+              dimHeader.findFirstMatchIn(line) match
+                case Some(m) => currentDim = Some(m.group(1).toInt)
+                case None    =>
+                  if line.trim.startsWith("[") then currentDim.foreach(d => byDim(d) = byDim.getOrElse(d, 0) + 1)
+            (medianMs, byDim.toMap)
+          }
+
+        println(
+          if ripserBinProp.isDefined then
+            s"Real ripser.cpp binary: ${ripserBinProp.get} (live-measured on this run, not the hardcoded 2026-09-17 snapshot)"
+          else "No -DripserBin given -- using the hardcoded 2026-09-17 M1 Pro reference snapshot (see class doc)"
+        )
         println(
           f"${"case"}%-13s${"ripser(ms)"}%-11s${"SortedSet(ms)"}%-14s${"x"}%-8s${"packed(ms)"}%-11s${"x"}%-8s" +
             f"${"S/pack"}%-8s${"bars ok"}%-9s${"status"}%-20s"
@@ -282,6 +372,20 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
         // finished; anything after the first timeout should be re-measured with this flag instead.
         val packedOnly = sys.props.get("packedOnly").contains("true")
         for c <- selectedCases do
+          // Live-measure real ripser.cpp first (before either Scala engine), same run order rationale as
+          // SortedSet-then-packed below -- a consistent, documented bias rather than a counterbalanced median,
+          // matching this spec's existing single-trial convention. Falls back to the hardcoded snapshot when
+          // `-DripserBin` isn't set, or reports its own failure reason (e.g. a bad path, or the binary itself
+          // erroring on this data set) rather than silently reusing the snapshot on a live-mode failure.
+          val liveRipserOutcome: Option[Either[String, (Double, Map[Int, Int])]] =
+            ripserBinProp.map(bin => runRealRipser(bin, c))
+          val effectiveRipserMs: Double = liveRipserOutcome match
+            case Some(Right((ms, _))) => ms
+            case _                    => c.ripserMs
+          val effectiveRefBars: Map[Int, Int] = liveRipserOutcome match
+            case Some(Right((_, bars))) => bars
+            case _                      => c.refBars
+          val liveRipserFailure: Option[String] = liveRipserOutcome.flatMap(_.left.toOption)
           // Both engines timed in the SAME run, same JVM warmup state, so the SortedSet-vs-packed ratio isn't
           // biased by one of them going first every time the way separate spec runs would be -- run order here
           // is SortedSet then packed for every case, a consistent (if not counterbalanced) bias, noted rather
@@ -325,32 +429,35 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
           // away -- see WORKLOG-packed-ripser-engine.md's later update).
           val barsOk =
             if packedOnly then
-              packedOutcome.toOption.map((_, pkBars, _) => barsMatchStr(pkBars, c.refBars)).getOrElse("-")
+              packedOutcome.toOption.map((_, pkBars, _) => barsMatchStr(pkBars, effectiveRefBars)).getOrElse("-")
             else
               (sortedSetOutcome, packedOutcome) match
                 case (Right((_, ssBars, _)), Right((_, pkBars, _))) =>
-                  val ssVsRef = barsMatchStr(ssBars, c.refBars)
-                  val pkVsRef = barsMatchStr(pkBars, c.refBars)
+                  val ssVsRef = barsMatchStr(ssBars, effectiveRefBars)
+                  val pkVsRef = barsMatchStr(pkBars, effectiveRefBars)
                   if ssVsRef == "yes" && pkVsRef == "yes" then "yes" else s"SS:$ssVsRef,PK:$pkVsRef"
                 case _ => "-"
           val status =
-            if packedOnly then
-              packedOutcome match
-                case Left(e)  => s"packed: $e"
-                case Right(_) => "ok (packed only)"
-            else
-              (sortedSetOutcome, packedOutcome) match
-                case (Left(e), _) => s"SortedSet: $e"
-                case (_, Left(e)) => s"packed: $e"
-                case _            => "ok"
+            liveRipserFailure match
+              case Some(e) => s"ripser: $e"
+              case None    =>
+                if packedOnly then
+                  packedOutcome match
+                    case Left(e)  => s"packed: $e"
+                    case Right(_) => "ok (packed only)"
+                else
+                  (sortedSetOutcome, packedOutcome) match
+                    case (Left(e), _) => s"SortedSet: $e"
+                    case (_, Left(e)) => s"packed: $e"
+                    case _            => "ok"
 
           def fmtMs(o: Option[Double]): String = o.map(v => f"$v%.1f").getOrElse("-")
           def fmtRatio(o: Option[Double]): String = o.map(v => f"${v}%.2fx").getOrElse("-")
 
           println(
-            f"${c.name}%-13s${c.ripserMs}%-11.1f${fmtMs(sortedSetMs)}%-14s" +
-              f"${fmtRatio(sortedSetMs.map(_ / c.ripserMs))}%-8s${fmtMs(packedMs)}%-11s" +
-              f"${fmtRatio(packedMs.map(_ / c.ripserMs))}%-8s" +
+            f"${c.name}%-13s${effectiveRipserMs}%-11.1f${fmtMs(sortedSetMs)}%-14s" +
+              f"${fmtRatio(sortedSetMs.map(_ / effectiveRipserMs))}%-8s${fmtMs(packedMs)}%-11s" +
+              f"${fmtRatio(packedMs.map(_ / effectiveRipserMs))}%-8s" +
               f"${fmtRatio(for s <- sortedSetMs; p <- packedMs yield s / p)}%-8s$barsOk%-9s$status%-20s"
           )
 

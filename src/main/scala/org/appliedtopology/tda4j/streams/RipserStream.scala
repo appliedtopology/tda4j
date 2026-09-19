@@ -39,11 +39,46 @@ def binomialBigint(n: Int, k: Int): BigInt =
   * the hottest path in the engine. `Long` is not infinite either, so this still asserts rather than silently repeating
   * the same class of bug one order of magnitude further out -- a real, if astronomically unlikely for any complex
   * actually computable in practice, failure mode.
+  *
+  * '''Delegates to `commons.numbers.combinatorics.BinomialCoefficient.value`, not `binomialBigint`, as of
+  * `.claude/WORKLOG-ripser-profiling.md`''': this function sits directly on the coboundary/cofacet/facet enumeration
+  * hot path (`SimplexIndexing.cofacetIteratorWithVertex`/`facetIterator`/the encode direction of `apply(simplex)` call
+  * it directly, unmemoized, `O(vertexCount)` times per simplex whose coboundary is enumerated -- NOT just the
+  * `O(1)`-per-decode calls `binomialEntry` already memoizes). Profiling on a 48-point random cloud found
+  * `binomialtail`/`binomialBigint` as the CURRENTLY-EXECUTING (leaf) frame in 11.6% of `RipserCohomologyContext`'s CPU
+  * samples and 25.5% of `PackedRipserCohomologyContext`'s; a separate, cruder "`binomial` appears ANYWHERE in the call
+  * stack" count (35.9%/44.1%) also double-counts every caller waiting on it and isn't the right number to quote as
+  * "time spent computing" -- the leaf figures are. The first fix attempted was a memoizing `HashMap[(Int,Int),Long]`
+  * wrapper around the old `binomialBigint`-backed `binomial` (kept as `SimplexIndexing`'s existing `binomialEntry`/
+  * `binomialCache` pattern already does for its own, smaller usage) -- measured, via a controlled before/after at
+  * matched problem sizes, to change wall-clock time by nothing outside noise (confirmed the JFR leaf-frame cost had
+  * genuinely moved from `binomialBigint` into `HashMap$Node.findNode`/tuple-boxing, not disappeared): for the small `k`
+  * these call sites always use (bounded by simplex dimension), a `BigInt` tail-recursion is already cheap enough per
+  * call that a boxed-tuple `HashMap` lookup costs about the same as just recomputing it -- caching a fundamentally
+  * expensive-for-its-shape operation doesn't help when the operation is only expensive because of ITS OWN
+  * implementation choice (`BigInt`), not because it's being redundantly recomputed. Switching the computation itself to
+  * `BinomialCoefficient.value` -- a `long`-only, non-`BigInt`, GCD-guarded-for-large-`n` algorithm already a dependency
+  * of this exact file (`binomialApache` above already calls it, just truncated to `Int`) -- removes the `BigInt`
+  * allocation/arithmetic entirely rather than caching around it, and needs no cache at all: see
+  * `WORKLOG-ripser-profiling.md` for the measured before/after. `n < 0 || k < 0 || n < k` are special-cased to `0`
+  * BEFORE delegating, matching `binomialBigint`'s own semantics -- `BinomialCoefficient.value` throws
+  * `IllegalArgumentException` for `k > n`/negative inputs instead, which would be a real behavior change for any caller
+  * relying on the old "returns 0 outside the valid range" contract (`cofacetIteratorWithVertex`'s own `iA`/`iB`
+  * bookkeeping does hit `k > n`-shaped calls at the boundary of its sweep, confirmed by running the full existing
+  * regression suite -- not merely reasoned through). Overflow (`ArithmeticException` from `BinomialCoefficient.value`)
+  * is caught and re-thrown as the same `IllegalArgumentException`-with-message shape `require` used to produce, so any
+  * caller (none currently do) depending on that exception TYPE stays correct.
   */
 def binomial(n: Int, k: Int): Long =
-  val big = binomialBigint(n, k)
-  require(big.isValidLong, s"binomial($n, $k) = $big overflows Long -- this complex is too large to index")
-  big.longValue
+  if k < 0 || n < 0 || n < k then 0L
+  else
+    try combinatorics.BinomialCoefficient.value(n, k)
+    catch
+      case e: ArithmeticException =>
+        throw new IllegalArgumentException(
+          s"binomial($n, $k) overflows Long -- this complex is too large to index",
+          e
+        )
 
 class SimplexIndexing(val vertexCount: Int):
 
@@ -62,9 +97,32 @@ class SimplexIndexing(val vertexCount: Int):
     * actually needs ever get computed, and those stay well within `Long`'s range for any complex actually computable in
     * practice.
     */
-  private val binomialCache: mutable.Map[(Int, Int), Long] = mutable.Map.empty
+  /** Array-backed, not `mutable.Map[(Int, Int), Long]`, as of `.claude/WORKLOG-ripser-profiling.md`: allocation
+    * profiling (`jdk.ObjectAllocationSample`, weighted by allocated bytes) found the `(d, s)` tuple key this used to
+    * box on EVERY lookup -- including cache HITS, since a `HashMap` key still has to be constructed before it can be
+    * hashed/compared -- was the single largest allocation source in both Ripser engines, 16.3% of all main-thread
+    * allocation weight in `RipserCohomologyContext` and 19.1% in `PackedRipserCohomologyContext` on a 48-point random
+    * cloud (`scala.Tuple2$mcII$sp`). `d` is always `>= 0` at both real call sites (`apply`'s own `d < 0` guard returns
+    * before ever reaching `searchRow`/`binomialEntry`), so a `d`-indexed `Array` of per-`s` rows, each row sized
+    * `vertexCount + 1` and grown/filled lazily, replaces the `(d, s)` tuple key with plain integer indexing -- zero
+    * allocation per lookup after a row exists, and the row itself is only ever allocated for a `d` a real call actually
+    * reaches (rows are grown one at a time up to the largest `d` seen, not pre-sized to some assumed maximum), so this
+    * is NOT a reintroduction of the eagerly-computed-full-table bug the class doc below warns about -- that bug was
+    * about eagerly COMPUTING every entry in a row up to `s = vertexCount` regardless of whether `apply`'s decode ever
+    * asks for it; this still computes each entry lazily, on first access, exactly as before, just into array cells
+    * instead of hashmap buckets. `-1L` is the "not yet computed" sentinel: every real `binomial(d + s, s)` value is
+    * `>= 0`, so `-1L` can never collide with a genuine result.
+    */
+  private var binomialRows: Array[Array[Long]] = Array.empty
   private def binomialEntry(d: Int, s: Int): Long =
-    binomialCache.getOrElseUpdate((d, s), binomial(d + s, s))
+    if d >= binomialRows.length then
+      val grown = Array.ofDim[Array[Long]](d + 1)
+      Array.copy(binomialRows, 0, grown, 0, binomialRows.length)
+      binomialRows = grown
+    if binomialRows(d) == null then binomialRows(d) = Array.fill(vertexCount + 1)(-1L)
+    val row = binomialRows(d)
+    if row(s) == -1L then row(s) = binomial(d + s, s)
+    row(s)
 
   /** Binary search for the largest `s` in `[0, vertexCount]` with `binomialEntry(d, s) <= n` -- the same "`Found` or
     * `insertionPoint - 1`" result `scala.collection.Searching.search` used to give against the (now-removed)
@@ -124,47 +182,86 @@ class SimplexIndexing(val vertexCount: Int):
     * values that are NOT already in `s` are candidates for insertion) -- so exposing it costs nothing beyond what this
     * method was already computing.
     */
+  /** Hand-rolled `Iterator`, not `Iterator.unfold` + `.filter` + `.map`, as of `.claude/WORKLOG-ripser-profiling.md`:
+    * allocation profiling found the `unfold`-based version allocated a fresh `Tuple5` state tuple AND an
+    * `Option[(Int, Long)]` on EVERY candidate vertex `j` from `vertexCount - 1` down to `0` -- not just once per
+    * cofacet actually found -- plus the `unfold`/`filter`/`map` step closures themselves, allocated once per call to
+    * this method (`SimplexIndexing$$Lambda...` was the second-largest single allocation source measured, 13.5%-14.9% of
+    * main-thread allocation weight, right behind `binomialEntry`'s tuple-keyed cache lookup fixed just above). This
+    * version preserves the exact same per-step arithmetic and termination behavior (see the original `unfold` step
+    * function, kept in git history for direct comparison) -- verified against it directly via `SimplexIndexingSpec`'s
+    * exact-cofacet-set assertions and `RipserCohomologySpec`/`PackedRipserCohomologySpec`'s full-barcode
+    * cross-validation, not merely reasoned through -- but allocates only the `(Int, Long)` result pair actually
+    * returned by `next()`, never a throwaway state tuple or `Option` wrapper per skipped candidate.
+    */
   def cofacetIteratorWithVertex(
     index: Long,
     size: Int,
     allCofacets: Boolean = true
   ): Iterator[(Int, Long)] =
-    Iterator
-      .unfold(
-        (apply(index, size), index, 0L, size, vertexCount - 1): Tuple5[
-          Simplex[Int],
-          Long,
-          Long,
-          Int,
-          Int
-        ]
-      ) { (s, iB, iA, k, j) =>
-        if j < 0 then None // end iteration when we're done
-        else if s.contains(j) then
-          if !allCofacets then None
-          else
-            Some(
-              (
-                None,
-                (s, iB - binomial(j, k), iA + binomial(j, k + 1), k - 1, j - 1)
-              )
-            )
-        else // if j is there, skip
-          Some((Some((j, iB + binomial(j, k + 1) + iA)), (s, iB, iA, k, j - 1)))
-      }
-      .filter((os: Option[(Int, Long)]) => os.isDefined)
-      .map((os: Option[(Int, Long)]) => os.get)
+    val sz = size // `size` also names `Iterator`'s own member; capture the parameter under a distinct name
+    new Iterator[(Int, Long)]:
+      private val s: Simplex[Int] = apply(index, sz)
+      private var iB: Long = index
+      private var iA: Long = 0L
+      private var k: Int = sz
+      private var j: Int = vertexCount - 1
+      private var pendingVertex: Int = -1
+      private var pendingIndex: Long = -1L
+      private var havePending: Boolean = false
+      private var done: Boolean = false
 
+      private def advance(): Unit =
+        while !havePending && !done do
+          if j < 0 then done = true
+          else if s.contains(j) then
+            if !allCofacets then done = true
+            else
+              iB -= binomial(j, k)
+              iA += binomial(j, k + 1)
+              k -= 1
+              j -= 1
+          else
+            pendingVertex = j
+            pendingIndex = iB + binomial(j, k + 1) + iA
+            havePending = true
+            j -= 1
+
+      advance()
+
+      def hasNext: Boolean = havePending
+      def next(): (Int, Long) =
+        if !havePending then throw new NoSuchElementException("next on empty iterator")
+        val result = (pendingVertex, pendingIndex)
+        havePending = false
+        advance()
+        result
+
+  /** Hand-rolled for the same reason as `cofacetIteratorWithVertex` above -- the `unfold`-based version allocated a
+    * fresh `Tuple4` state (plus a defensive `.to(Vector)` re-copy of the already-immutable decoded simplex, EVERY step)
+    * for what is always exactly `size` steps, no filtering or early termination. Preserves the original's exact
+    * arithmetic, including yielding `iiB + iA` (the OLD `iA`, before this step's own update) rather than `iiB + iiA` --
+    * a real, easy-to-invert-by-mistake detail of the original, kept byte-for-byte, not "corrected."
+    */
   def facetIterator(index: Long, size: Int): Iterator[Long] =
-    Iterator.unfold((apply(index, size).toSeq.sorted, index, 0L, size - 1)) {
-      (s: Seq[Int], iB: Long, iA: Long, k: Int) =>
-        if k < 0 then None
-        else
-          val j = s(k)
-          val iiB = iB - binomial(j, k + 1)
-          val iiA = iA + binomial(j, k)
-          Some((iiB + iA, (s.to(Vector), iiB, iiA, k - 1)))
-    }
+    val sz = size // `size` also names `Iterator`'s own member; capture the parameter under a distinct name
+    new Iterator[Long]:
+      private val s: Seq[Int] = apply(index, sz).toSeq.sorted
+      private var iB: Long = index
+      private var iA: Long = 0L
+      private var k: Int = sz - 1
+
+      def hasNext: Boolean = k >= 0
+      def next(): Long =
+        if !hasNext then throw new NoSuchElementException("next on empty iterator")
+        val j = s(k)
+        val iiB = iB - binomial(j, k + 1)
+        val iiA = iA + binomial(j, k)
+        val result = iiB + iA
+        iB = iiB
+        iA = iiA
+        k -= 1
+        result
 
   def apply(simplex: Simplex[Int]): Long =
     simplex.toSeq.sorted.reverse.zipWithIndex.map { (v, i) =>

@@ -276,8 +276,8 @@ class CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, Filtratio
   * deliberately left in `essentialSimplices` internally (later pairing logic in `recordPair` needs an accurate view
   * across all live dimensions) and only excluded at this final reporting boundary, never a filter applied earlier.
   */
-class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim: Int = 5):
-  val chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]
+class CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field](maxDim: Int = 5):
+  val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
   import chainRM.*
 
   // The real internal ceiling: one dimension higher than what's reported, so a class born AT maxDim can still be
@@ -286,20 +286,20 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
   private val internalMaxDim: Int = maxDim + 1
 
   case class HomologyState(
-    boundaries: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]],
-    stream: StratifiedCellStream[Simplex[VertexT], Double],
-    barcode: mutable.Map[Int, immutable.Queue[(Double, Double, Chain[Simplex[VertexT], CoefficientT])]]
+    boundaries: mutable.Map[CellT, Chain[CellT, CoefficientT]],
+    stream: StratifiedCellStream[CellT, Double],
+    barcode: mutable.Map[Int, immutable.Queue[(Double, Double, Chain[CellT, CoefficientT])]]
   ):
 
-    given Ordering[Simplex[VertexT]] = stream.filtrationOrdering
+    given Ordering[CellT] = stream.filtrationOrdering
 
     // top-down state:
     //   cleared ------------- simplices paired as pivots (positive side); their column is implicitly zero
     //   paired -------------- simplices paired as σ (negative side); already recorded a bar
     //   essentialSimplices -- so-far unpaired classes
-    val cleared: mutable.Set[Simplex[VertexT]] = mutable.Set.empty
-    val paired: mutable.Set[Simplex[VertexT]] = mutable.Set.empty
-    val essentialSimplices: mutable.Set[Simplex[VertexT]] = mutable.Set.empty
+    val cleared: mutable.Set[CellT] = mutable.Set.empty
+    val paired: mutable.Set[CellT] = mutable.Set.empty
+    val essentialSimplices: mutable.Set[CellT] = mutable.Set.empty
 
     // start from max dimension instead for clearing's sake
     /*
@@ -315,22 +315,22 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
     // internalMaxDim this context was asked for -- walk dimensions explicitly instead so internalMaxDim is
     // enforced regardless of what the stream itself would otherwise produce. Walks to internalMaxDim
     // (maxDim + 1), not maxDim -- see the class doc above for why the extra dimension is needed.
-    val allCells: Vector[Simplex[VertexT]] =
+    val allCells: Vector[CellT] =
       0.to(internalMaxDim)
         .iterator
         .flatMap { d =>
           stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty)
         }
         .toVector
-    val cellIndex: Map[Simplex[VertexT], Int] = allCells.zipWithIndex.toMap
+    val cellIndex: Map[CellT, Int] = allCells.zipWithIndex.toMap
     val chunkSize: Int = math.max(1, math.sqrt(allCells.size.toDouble).floor.toInt)
 
     // killer column index for each local pivot
-    val killer: mutable.Map[Simplex[VertexT], Simplex[VertexT]] = mutable.Map.empty
+    val killer: mutable.Map[CellT, CellT] = mutable.Map.empty
     // R supplies R_k for unpaired column k, to be used in marking active entries
-    val R: mutable.Map[Simplex[VertexT], Chain[Simplex[VertexT], CoefficientT]] = mutable.Map.empty
+    val R: mutable.Map[CellT, Chain[CellT, CoefficientT]] = mutable.Map.empty
     // active entries
-    val activeRows: mutable.Map[Simplex[VertexT], Boolean] = mutable.Map.empty
+    val activeRows: mutable.Map[CellT, Boolean] = mutable.Map.empty
 
     def diagramAt(f: Double): List[(Int, Double, Double)] =
       advanceAll()
@@ -349,13 +349,13 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
       val essentialBars: List[(Int, Double, Double)] =
         essentialSimplices.toList.filter(_.dim <= maxDim).map { sigma =>
           val lower =
-            stream.filtrationValue.applyOrElse(sigma, (_: Simplex[VertexT]) => Double.NegativeInfinity)
+            stream.filtrationValue.applyOrElse(sigma, (_: CellT) => Double.NegativeInfinity)
           (sigma.dim, lower, Double.PositiveInfinity)
         }
 
       pairs ++ essentialBars
 
-    def recordPair(sigma: Simplex[VertexT], dsigmaReduced: Chain[Simplex[VertexT], CoefficientT]): Unit =
+    def recordPair(sigma: CellT, dsigmaReduced: Chain[CellT, CoefficientT]): Unit =
       val pivot = dsigmaReduced.leadingCell.get
       boundaries(pivot) = dsigmaReduced
       cleared += pivot
@@ -366,21 +366,21 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
       essentialSimplices -= pivot
       essentialSimplices -= sigma
       val lower =
-        stream.filtrationValue.applyOrElse(pivot, (_: Simplex[VertexT]) => Double.NegativeInfinity)
+        stream.filtrationValue.applyOrElse(pivot, (_: CellT) => Double.NegativeInfinity)
       val upper =
-        stream.filtrationValue.applyOrElse(sigma, (_: Simplex[VertexT]) => Double.PositiveInfinity)
+        stream.filtrationValue.applyOrElse(sigma, (_: CellT) => Double.PositiveInfinity)
       val barDim = pivot.dim
       barcode(barDim) = barcode
         .getOrElse(barDim, immutable.Queue.empty)
         .appended((lower, upper, dsigmaReduced))
 
-    def processCell(sigma: Simplex[VertexT], stop: Simplex[VertexT] => Boolean): Unit =
+    def processCell(sigma: CellT, stop: CellT => Boolean): Unit =
       if cleared.contains(sigma) || paired.contains(sigma) then ()
       else
         // rebuild the boundary chain under the local filtration ordering — the chain
         // returned by sigma.boundary is ordered by Simplex.scala's default (lex) ordering,
         // not stream.filtrationOrdering, which gives wrong pivots in top-down.
-        val dsigma: Chain[Simplex[VertexT], CoefficientT] =
+        val dsigma: Chain[CellT, CoefficientT] =
           Chain.from(sigma.boundary[CoefficientT])
         val (dsigmaReduced, _) =
           Chain.reduceByUntil(dsigma, boundaries, Chain.empty, stop)
@@ -395,9 +395,9 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
 
     def markActiveEntries(): Unit =
       activeRows.clear()
-      val activeColumns: mutable.Map[Simplex[VertexT], Boolean] = mutable.Map.empty
+      val activeColumns: mutable.Map[CellT, Boolean] = mutable.Map.empty
 
-      def markColumn(k: Simplex[VertexT]): Boolean =
+      def markColumn(k: CellT): Boolean =
         activeColumns.get(k) match
           case Some(b) => b
           case None    =>
@@ -451,7 +451,7 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
     // ordering bug itself was fixed) exposed this as a second, unrelated PersistenceInChunksContext bug
     // reproducing even on the well-established EnumeratingCofaceSimplexStream (see CLAUDE.md): it silently
     // dropped essential classes at a bounded maxDim whenever this cross-step gap was hit.
-    def eliminationFallback(l: Simplex[VertexT]): Option[Chain[Simplex[VertexT], CoefficientT]] =
+    def eliminationFallback(l: CellT): Option[Chain[CellT, CoefficientT]] =
       if cleared.contains(l) then
         if activeRows.getOrElse(l, false) then killer.get(l).map(j => R.getOrElse(j, Chain.empty))
         else Some(Chain(l))
@@ -469,25 +469,25 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
     // snapshot once and mutated Rk inside the loop body, so any term newly introduced by a substitution
     // was silently never itself eliminated (see eliminationFallback's doc above for the concrete failure
     // this caused).
-    def compress(k: Simplex[VertexT]): Unit =
-      val Rk: Chain[Simplex[VertexT], CoefficientT] = R.getOrElse(k, Chain.empty)
+    def compress(k: CellT): Unit =
+      val Rk: Chain[CellT, CoefficientT] = R.getOrElse(k, Chain.empty)
       val (reduced, _) = Chain.reduceByUntil(
         Rk,
         mutable.Map.empty,
         Chain.empty,
-        stop = (_: Simplex[VertexT]) => false,
+        stop = (_: CellT) => false,
         fallback = eliminationFallback
       )
       R(k) = reduced
 
     // Algorithm 5 (lines 9-16): reduce the (now-compressed) global column k and record any pair found.
-    def globalReduce(sigma: Simplex[VertexT]): Unit =
+    def globalReduce(sigma: CellT): Unit =
       if cleared.contains(sigma) || paired.contains(sigma) then return
       // If R(sigma) was never stored, sigma was locally essential and has nothing to reduce.
       R.get(sigma) match
         case None         => () // stays in essentialSimplices unless a higher-dim sigma globally pairs with it
         case Some(rSigma) =>
-          val noStop: Simplex[VertexT] => Boolean = _ => false
+          val noStop: CellT => Boolean = _ => false
           val (dsigmaReduced, _) =
             Chain.reduceByUntil(rSigma, boundaries, Chain.empty, noStop, fallback = eliminationFallback)
           R(sigma) = dsigmaReduced
@@ -500,7 +500,7 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
       val n: Int = allCells.size
       val m: Int = (n + chunkSize - 1) / chunkSize
 
-      val chunks: IndexedSeq[IndexedSeq[Simplex[VertexT]]] =
+      val chunks: IndexedSeq[IndexedSeq[CellT]] =
         allCells.grouped(chunkSize).toIndexedSeq
 
       // Algorithm 2: local_reduction from clear-and-compress paper. Walks to internalMaxDim (maxDim + 1), not
@@ -509,7 +509,7 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
         for r <- 1.to(2) do
           for b <- (r - 1).until(m) do // parallelizable!
             val floorIdx: Int = math.max(0, (b - r + 1) * chunkSize)
-            val stop: Simplex[VertexT] => Boolean =
+            val stop: CellT => Boolean =
               sigma => cellIndex.getOrElse(sigma, -1) < floorIdx
             for sigma <- chunks(b) if sigma.dim == delta do processCell(sigma, stop)
 
@@ -528,12 +528,24 @@ class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim:
         // step 3: reduce the compressed global columns and record pairs
         for sigma <- cellsAtDim do globalReduce(sigma)
 
-  def persistentHomology(stream: => StratifiedCellStream[Simplex[VertexT], Double]): HomologyState =
+  def persistentHomology(stream: => StratifiedCellStream[CellT, Double]): HomologyState =
     HomologyState(
       mutable.Map.empty,
       stream,
       mutable.Map.empty
     )
+
+/** Thin `Simplex`-specific wrapper around `CellularPersistenceInChunksContext`, exactly mirroring
+  * `SimplicialHomologyContext`'s relationship to `CellularHomologyContext` above -- every existing call site
+  * (`PersistenceInChunksContext[Int, Double](...)` etc.) keeps working unchanged, since the generic engine itself has
+  * no `Simplex`-specific behavior anywhere in its body: everything goes through the generic `OrderedCell` interface
+  * (`.dim`, `.boundary[CoefficientT]`), so genericizing was a pure type-annotation change, not a behavior change.
+  * `Simplex[VertexT] is OrderedCell` resolves automatically here from `Ordering[VertexT]` alone
+  * (`default_Simplex_is_OrderedCell`, `SimplexOrderedCell.scala`), same as `SimplicialHomologyContext` already relies
+  * on. See `.claude/WORKLOG-simplicial-set-filtration.md`.
+  */
+class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim: Int = 5)
+    extends CellularPersistenceInChunksContext[Simplex[VertexT], CoefficientT](maxDim) {}
 
 class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Field]:
   case class HomologyState(
@@ -872,8 +884,19 @@ class RipserCohomologyContext[CoefficientT: Field](
     * sigma's own max" canonical-cofacet convention `sparseCofacets` uses below -- so this is also used inside
     * `coboundaryOf`/`zeroPivotCofacet`, which need to consider cofacets from inserting vertices in general.
     */
+  /** A plain `while` loop, not `sigma.underlying.iterator.map(u => metricSpace.distance(u, v)).max`, as of
+    * `.claude/WORKLOG-ripser-profiling.md`'s follow-up session -- see `PackedRipserCohomologyContext.insertionDiameter`
+    * (`PackedRipserCohomology.scala`) for the full rationale (the `.map` closure was measured as that class's own
+    * single largest allocation source, allocated fresh on every candidate cofacet vertex). Both engines had a
+    * byte-for-byte identical implementation before this fix; both have one after it.
+    */
   private def insertionDiameter(sigma: Simplex[Int], sigmaFv: Double, v: Int): Double =
-    math.max(sigmaFv, sigma.underlying.iterator.map(u => metricSpace.distance(u, v)).max)
+    var maxD = sigmaFv
+    val it = sigma.underlying.iterator
+    while it.hasNext do
+      val d = metricSpace.distance(it.next(), v)
+      if d > maxD then maxD = d
+    maxD
 
   /** The canonical cofacets of `sigma` -- one per higher simplex that has `sigma` as ITS canonical facet (the facet
     * obtained by removing its own maximum vertex) -- generated by inserting a vertex strictly greater than `sigma`'s
@@ -924,7 +947,18 @@ class RipserCohomologyContext[CoefficientT: Field](
         si.cofacetIterator(sigma)
           .flatMap { cofacetIdx =>
             val tau = si(cofacetIdx, sigma.size + 1)
-            val inserted = (tau.underlying diff sigma.underlying).head
+            // A linear scan for the one vertex `tau` has and `sigma` doesn't -- NOT `(tau.underlying diff
+            // sigma.underlying).head`, which was measured (`.claude/WORKLOG-ripser-profiling.md`) to route through
+            // `TreeSet`/`RedBlackTree`'s general persistent-tree set-difference algorithm (`split`/`_difference`,
+            // allocating `Tuple4`s and tree nodes) to answer a question with exactly one right answer by
+            // construction: `tau` is `sigma` plus one inserted vertex, so `tau.underlying.size == sigma.underlying.size
+            // + 1` always, and `.find` on `tau`'s own (already-sorted) small vertex set is `O(sigma.size)` with zero
+            // tree-merge machinery -- the same style of fix `SimplexIndexing.cofacetIteratorWithVertex` already
+            // avoided needing, by exposing the inserted vertex directly (see that method's own doc for why the packed
+            // engine never had this cost to begin with). This is the single largest remaining allocation source found
+            // in this engine after the `binomial`/iterator fixes above -- 12.5% of all main-thread allocation weight
+            // on a 48-point random cloud, all in `scala.Tuple4`/`RedBlackTree$Tree` under this exact call site.
+            val inserted = tau.underlying.find(v => !sigma.underlying.contains(v)).get
             if insertionDiameter(sigma, sigmaFv, inserted) > resolvedMaxFiltrationValue then None
             else
               val position = sigma.underlying.count(_ < inserted)
@@ -968,7 +1002,9 @@ class RipserCohomologyContext[CoefficientT: Field](
       si.cofacetIterator(sigma)
         .map { idx =>
           val tau = si(idx, sigma.size + 1)
-          val inserted = (tau.underlying diff sigma.underlying).head
+          // See `coboundaryOf`'s identical fix above -- same single-inserted-vertex question, same cheap linear
+          // scan instead of a full `TreeSet.diff`.
+          val inserted = tau.underlying.find(v => !sigma.underlying.contains(v)).get
           (tau, insertionDiameter(sigma, d, inserted))
         }
         .filter((tau, tauFv) => tauFv == d)

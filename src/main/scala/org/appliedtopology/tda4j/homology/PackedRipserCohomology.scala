@@ -90,8 +90,23 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
     * `.claude/WORKLOG-packed-ripser-engine.md` for the confirmation that this decode cost is NOT on the reduction hot
     * path this class exists to avoid.
     */
+  /** A plain `while` loop, not `sigma.underlying.iterator.map(u => metricSpace.distance(u, v)).max`, as of
+    * `.claude/WORKLOG-ripser-profiling.md`'s follow-up session: the `.map(...)` closure captures `v`/`this` and is
+    * allocated FRESH on every single call -- and every candidate cofacet vertex considered by
+    * `sparseCofacets`/`coboundaryOf`/`zeroPivotCofacet`/`zeroApparentCofacet` calls this once, `O(vertexCount)` times
+    * per simplex -- measured as this class's own single largest allocation source after the `binomial`/ cache/iterator
+    * fixes above (7.5% of total allocation weight on real `sphere3_96` data, all under this one closure). `.max` on the
+    * boxed-`Double` iterator this produced added its own boxing on top. Same fix applied identically to
+    * `RipserCohomologyContext.insertionDiameter` (`Homology.scala`) -- the two were already byte-for-byte identical
+    * implementations before this fix, and stay byte-for-byte identical after it.
+    */
   private def insertionDiameter(sigma: Simplex[Int], sigmaFv: Double, v: Int): Double =
-    math.max(sigmaFv, sigma.underlying.iterator.map(u => metricSpace.distance(u, v)).max)
+    var maxD = sigmaFv
+    val it = sigma.underlying.iterator
+    while it.hasNext do
+      val d = metricSpace.distance(it.next(), v)
+      if d > maxD then maxD = d
+    maxD
 
   private val rawFiltrationValue = FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 

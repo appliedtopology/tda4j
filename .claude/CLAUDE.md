@@ -18,14 +18,19 @@ directory and package declaration moved, so any file path in this doc below shou
 package's subdirectory.
 
 - `algebra` — `RingModule`, `Field`, `FiniteField`, `Chain` (including the `Cell`/`Cocell`/`OrderedCell`/
-  `OrderedBasis` trait contracts), `Deferred`. The coefficient/module typeclasses plus the formal-sum machinery
-  everything else builds on.
-- `cells` — `Simplex`/`SimplexOps`/`SimplexOrderedCell`, `Cubical`/`CubicalOrderedCell`, `SimplicialSet` (dead
-  code). Concrete `OrderedCell` instances.
+  `OrderedBasis` trait contracts), `SSetElement` (the degeneracy-word element type + `insertOuter`/`faceOf`
+  operator algebra underlying finite simplicial sets — see "Simplicial sets" below). The coefficient/module
+  typeclasses plus the formal-sum machinery everything else builds on.
+- `cells` — `Simplex`/`SimplexOps`/`SimplexOrderedCell`, `Cubical`/`CubicalOrderedCell`, `SimplicialSet`
+  (`FiniteSimplicialSet`, a third concrete `OrderedCell` instance — see "Simplicial sets" below),
+  `SimplicialSetConstructions` (`product`/`coproduct`). Concrete `OrderedCell` instances.
 - `streams` — `SimplexStream`, `FiniteMetricSpace`, `VietorisRips`, `Cofacets`, `RipserStream`, `CubicalStream`,
   `CubicalImage`, `SymmetryGroup`, `UnionFind` (which also defines `Kruskal` — MST/cycle-basis over a
   `FiniteMetricSpace`, not a generic utility, which is why it lives here and not in some separate `util`
-  package that never ended up existing — see below). Filtration/complex construction.
+  package that never ended up existing — see below), `SimplicialSetStream` (the `CellStream` adapter for
+  `FiniteSimplicialSet`, plus the `fromStream` builder), `FilteredSimplicialSetStream` (a real, non-constant
+  `StratifiedCellStream[G, Double]` for `FiniteSimplicialSet` — see "Simplicial sets" below). Filtration/complex
+  construction.
 - `homology` — `Homology` (all four persistence engines), `PackedRipserCohomology`. Note `CubicalHomologyContext`
   is defined inside `streams/CubicalStream.scala`, not here — a real, pre-existing `streams -> homology`
   dependency for that one wrapper class, not a layering violation introduced by the split.
@@ -410,6 +415,16 @@ imply the others need it:
    pivot.dim` is always `<= maxDim` already, since a pivot is one dimension below its killer). Any external
    caller previously passing `maxDim + 1` and filtering out `dim == maxDim + 1` bars itself (the MATLAB facade
    did, for `engine="chunks"`) should now pass the real requested degree directly.
+
+   **Genericized in a later session, to `CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT:
+   Field]`, with `PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field]` now a one-line `Simplex`-
+   specific subclass** — mirroring `SimplicialHomologyContext`'s relationship to `CellularHomologyContext`
+   exactly. This class had zero actual `Simplex`-specific behavior anywhere in its body (every operation went
+   through the generic `OrderedCell` interface), so the change was a pure type-annotation rename, not a
+   behavior change — confirmed by every one of the ~9 existing `PersistenceInChunksContext[Int, Double]` call
+   sites continuing to work unchanged (the subclass, not a rename), and a clean full-suite run. See "Simplicial
+   sets" below for what this unlocked and `.claude/WORKLOG-simplicial-set-filtration.md` for the full
+   derivation.
 3. `SimplicialHomologyByDimensionContext`: dimension-0 and the births of dimension-1 classes read off directly via
    Kruskal's algorithm/union-find over the stream's own dimension-0/1 cells (elder rule: a tree edge kills the
    younger of the two components it joins; a non-tree edge births a new 1-cycle), higher dimensions via the same
@@ -569,6 +584,91 @@ imply the others need it:
    changes a distance threshold would need if a from-scratch reader wants to extend this further (the note was
    already there before this session started implementing).
 
+   **A real profiling pass, not the `DiameterSimplex` redesign above, found and fixed three separate sources of
+   accidentally-sunk compute shared by `RipserCohomologyContext` AND `PackedRipserCohomologyContext`** (both go
+   through the same `SimplexIndexing` class) — see `.claude/WORKLOG-ripser-profiling.md` for the full derivation,
+   including a negative result worth remembering (naive `HashMap`-based memoization of the first bug below measured
+   as making zero difference, because the cost was in `BigInt`'s own arithmetic, not in redundant recomputation of
+   it — the fix had to change the ALGORITHM, not add a cache around it). (1) `SimplexIndexing.cofacetIteratorWithVertex`/
+   `facetIterator`/the encode direction of `apply(simplex)` called the free-standing `binomial(n, k)` function
+   directly, UNCACHED, despite `SimplexIndexing`'s own class doc explaining exactly why `binomialEntry`/
+   `binomialCache` needed to memoize this same computation for its OWN (smaller) usage — `O(vertexCount)` uncached
+   `BigInt`-based recomputations per simplex whose coboundary is enumerated, not `O(1)`. Fixed by switching
+   `binomial`'s own implementation from `BigInt` to `org.apache.commons.numbers.combinatorics.BinomialCoefficient.value`
+   (a `long`-only, non-allocating-for-realistic-sizes algorithm already a dependency of this file), not by caching the
+   old `BigInt` version — caching it was the first attempt, and measured to do nothing (see the worklog). (2)
+   `binomialEntry`/`binomialCache` itself was a `mutable.Map[(Int, Int), Long]`, boxing a `Tuple2$mcII$sp` key on
+   EVERY lookup including cache hits — allocation profiling found this was the single largest allocation source in
+   BOTH engines (16.3%/19.1% of main-thread allocation weight). Fixed with a lazily-grown `Array[Array[Long]]`
+   instead (rows indexed by `d`, always small at every real call site; NOT a reintroduction of the eagerly-computed-
+   full-table overflow bug `WORKLOG-simplexindexing-overflow.md` fixed — entries are still computed lazily, on first
+   access, just into array cells instead of hashmap buckets). (3) `cofacetIteratorWithVertex`/`facetIterator` were
+   built on `Iterator.unfold(...).filter(...).map(...)`, allocating a fresh `Tuple5`/`Tuple4` state tuple, an
+   `Option` wrapper, AND a step closure on every candidate vertex considered — not just once per cofacet/facet
+   actually found. Rewritten as hand-rolled `Iterator` subclasses with plain mutable fields, same exact per-step
+   arithmetic (verified line-for-line against the original, including a subtle detail in `facetIterator` — it yields
+   using the OLD `iA` before that step's own update, not the freshly-computed one — kept byte-for-byte, not
+   "corrected"). A FOURTH bug, found only in `RipserCohomologyContext` specifically (the packed engine never had it,
+   for a reason already documented on `cofacetIteratorWithVertex`'s own doc comment): `coboundaryOf`/
+   `zeroPivotCofacet` used `(tau.underlying diff sigma.underlying).head` to find the one vertex a cofacet has that its
+   facet doesn't — invoking `TreeSet`'s general persistent-tree set-difference algorithm
+   (`RedBlackTree.split`/`._difference`, itself allocating `Tuple4`s and tree nodes) to answer a question with
+   exactly one right answer by construction. Fixed with a plain linear scan,
+   `tau.underlying.find(v => !sigma.underlying.contains(v)).get`. **Measured, not inferred, on a machine under real
+   external load for the whole session** (a documented, checked-first noise floor of ~13% run-to-run at these sizes):
+   all four fixes together gave a reproducible ~36% wall-clock improvement on BOTH engines, and a 37.7%–45.2%
+   reduction in total allocated bytes, with the full `sbt test` suite (235 examples) passing identically after every
+   individual fix. **What's now the largest remaining identified cost, characterized but deliberately NOT touched
+   this session**: `Chain.reduceLoop`'s `SortedMap`-based elimination accumulator (`Chain.scala`) — shared by every
+   engine in this file via `Chain.reduceByUntil`, so a change here needs its own dedicated, carefully-validated
+   session rather than being folded into this one; see the worklog's own "What's still open" section for a concrete,
+   bounded next step (`mutable.TreeMap` instead of the current immutable, persistent `SortedMap`) and why it wasn't
+   attempted here (this class is the reference oracle every other engine is cross-validated against, and the packed
+   engine was built on an explicit standing instruction to go through `Chain.reduceBy` unchanged).
+
+   **Separately: a compute-server timing table given for this same profiling pass turned out to compare
+   tda4j-on-the-compute-server against a HARDCODED `ripser.cpp` reference value measured on a completely different
+   machine** (`RipserPaperBenchmarkSpec.scala`'s `DataCase.ripserMs` field, dated 2026-09-17, Apple M1 Pro — see the
+   class's own doc comment) — every `x`/gap-to-ripser ratio in that table is not a same-hardware comparison and
+   shouldn't be read as one; only the `SortedSet`-vs-`packed` ratio within that table (both freshly measured on the
+   same machine) is trustworthy as given. A real same-hardware comparison would need `ripser.cpp` actually built and
+   timed on the compute server itself, not inferred from the M1 Pro's numbers.
+
+   **Follow-up session (2026-09-19), three more things, all in `.claude/WORKLOG-ripser-profiling.md`'s own
+   "Follow-up session" heading**: (a) a real same-day, same-machine re-measurement against a FRESH vanilla
+   `ripser.cpp` build (`github.com/Ripser/ripser`, not the project lead's own separate, independently-modified
+   fork at `~/CLionProjects/ripser` — using that instead would have silently changed what "ripser.cpp" means here)
+   confirmed the fixes above are real on actual paper data, not just synthetic clouds: the packed engine's own
+   wall-clock time on `sphere3_48`/`96`/`192` dropped by 60.5%/48.9%/44.9% against the true pre-session baseline,
+   larger than the ~36% measured on synthetic clouds — real point clouds exercise the `O(vertexCount)`-scaling
+   fixes harder. The gap to real `ripser.cpp` on these three cases is now 18.8x/38.6x/64.0x (GROWING with `n`, not
+   closing — consistent with the still-unfixed `Chain.reduceLoop`/boxing costs below scaling with total simplex
+   count same as ripser's own work). (b) `RipserPaperBenchmarkSpec` now supports `-DripserBin=<path>`: when set, it
+   shells out to a real `ripser` binary directly, times it (median of `-DripserTrials`, default 5 — a SINGLE
+   subprocess timing at these small sizes is dominated by process-launch noise, confirmed directly: one single-
+   trial run of `sphere3_96` gave 106.6ms, a 5-trial median of the identical binary/data/machine gave 45.7ms), and
+   parses bar counts fresh from its own stdout — replacing the hardcoded snapshot for any run that sets this flag,
+   with the old hardcoded-snapshot behavior kept as the default when it isn't. A companion script,
+   `.claude/scripts/run-ripser-paper-benchmark.sh`, builds/downloads everything `-DripserBin` needs and is meant to
+   be copied onto and run directly on a machine (e.g. a compute server) that doesn't already have either, with the
+   `skipAll` toggle it needs restored via an `EXIT` trap even on a failed run. (c) A fifth fix, found by a
+   dedicated profiling pass aimed specifically at answering "are there more clear time sinks in the packed path":
+   `insertionDiameter` (byte-for-byte identical in BOTH engines) computed `math.max(sigmaFv,
+   sigma.underlying.iterator.map(u => metricSpace.distance(u, v)).max)` — a closure allocated fresh on every single
+   call (this method is itself called `O(vertexCount)` times per simplex, same shape as every other fix in this
+   arc) plus `Double` boxing from `.map(...).max`; measured as the packed engine's own single largest allocation
+   source after the four fixes above (7.5% of allocation weight on real `sphere3_96` data). Fixed with a plain
+   `while` loop over primitive `double`, no closure, no boxing — measured as a further 26.7% wall-clock reduction
+   on top of the four fixes already described, the single largest individual improvement in either session, and
+   confirmed via re-profiling: the closure category disappeared entirely and `Double`'s own allocation share
+   dropped from 21.7% to 1.2%. **After this fifth fix, a fresh profile of the packed engine shows the "quick win"
+   tier exhausted**: every remaining cost is either genuinely necessary computation (the same `insertionDiameter`
+   loop's own distance math, `SimplexIndexing.searchRow`'s decode, `BinomialCoefficient.value`'s own arithmetic) or
+   the SAME two already-characterized structural costs named just above (`Chain.reduceLoop`'s `SortedMap`, now
+   ~48% of allocation weight with the noise on top of it removed; generic `Long`/`DiameterIndex`/`Tuple2` boxing,
+   ~34%) — nothing new in that category, just the same bigger, already-scoped job with the smaller stuff cleared
+   away from around it.
+
 **Bug found while cross-validating (4) against (1), fixed**: `EnumeratingCofaceSimplexStream.filtrationOrdering`
 (`SimplexStream.scala`) used to be `Ordering.by(filtrationValue)` — no secondary tie-break — so it wasn't a
 total order: it treated any two *different* simplices tied at the same filtration value as equal, which
@@ -610,14 +710,17 @@ exercisable by this regression at all — see item 3 above, it's non-functional 
 
 ### Dead/experimental code, kept intentionally
 
-- `SimplicialSet.scala` is entirely commented out — a sketch for a future simplicial-set (as opposed to simplicial
-  complex) representation. Don't delete without checking with the maintainer; it's a placeholder, not cruft.
-- `Deferred.scala` is an experiment in representing arithmetic as an AST (`FractionalExpr`) evaluated by a
-  pluggable `FractionalHandler`, exploring algebraic-effect-style deferred coefficient choice. Not wired into the
-  rest of the library yet.
 - The bottom third of `Homology.scala` (below `SimplicialHomologyByDimensionContext`) is commented-out prior art
   (`RipserHomology`, `computePersistentHomology`) kept for reference while the three live contexts above were
   developed.
+- Root test sources' `APISpec.scala`/`SimplicialSetSpec.scala`: the latter is entirely commented out (a much
+  earlier, from-scratch sketch of a simplicial-set representation — `SimplicialSetElement`, a `Product`
+  construction, a `sphere(n)` builder — predating and unrelated to the real `FiniteSimplicialSet` now in
+  `cells`/"Simplicial sets" below; kept as historical record of that earlier attempt, not wired into anything).
+
+`SimplicialSet.scala`'s old commented-out sketch and `Deferred.scala` (an AST-based deferred-arithmetic
+experiment) were both deleted outright in the session that preceded "Simplicial sets" below, on the project
+lead's own initiative — no longer present, not merely dead code kept around.
 
 ## Cubical complexes and persistence
 
@@ -741,6 +844,157 @@ tonight's scope was deliberately limited to slotting `Cube` into the existing ge
 per-cell cost) before deciding whether a targeted fix or a genuinely specialized engine is warranted, mirroring
 how `RipserCohomologyContext` itself was only built after the naive engine's own limits were understood, not
 before.
+
+## Simplicial sets
+
+`algebra/SSetElement.scala` + `cells/SimplicialSet.scala` + `streams/SimplicialSetStream.scala` add finite
+simplicial sets as a third concrete `OrderedCell` instance alongside `Simplex[VertexT]` and `Cube` — a genuinely
+independent design from the earlier, entirely-deleted `SimplicialSet.scala` sketch (see "Dead/experimental code"
+above), built fresh per an explicit ask not to reuse the old approach. See `.claude/WORKLOG-simplicial-sets.md`
+for the full derivation, including three `advisor()`-driven correction passes before any code was written.
+
+**Representation**: the classical Eilenberg–Zilber presentation (as used by Kenzo/EAT for effective homology).
+A finite simplicial set is a finite set of non-degenerate *generators* per dimension, plus, per generator `g`
+of dimension `n`, primitive user-supplied face data `faces: G => IndexedSeq[SSetElement[G]]` — the `n+1` values
+`d_0(g), ..., d_n(g)`, each itself an `SSetElement[G](word, target)`: `word` is the degeneracy indices in
+Eilenberg–Zilber normal form (**strictly decreasing**, not increasing — derived directly from `s_i s_j =
+s_{j+1} s_i` for `i <= j`: `s_0 s_0 (v) = s_1 s_0 (v)`, so the unique normal form for "apply `s_0` twice" is
+`[1,0]`, never `[0,1]`), `word = Nil` meaning the face is itself a bare (non-degenerate) generator. This
+primitive data is enough to infer everything else. Dimension-0 generators have zero faces (face maps target
+dimension `n-1`, which doesn't exist below 0 — the same convention `Simplex`/`Cube` already use).
+
+**Operator algebra, not just a homology-only boundary rule**: `insertOuter` (composes a new outermost
+degeneracy into a normalized word) and `faceOf` (`d_i` on an *arbitrary* element — not just generators — via
+the simplicial identities: `i < w1` shrinks the target index and recurses, `i ∈ {w1, w1+1}` cancels the
+degeneracy outright, `i > w1+1` shifts and recurses) together let `FiniteSimplicialSet.validate()` check that
+hand-supplied face data actually satisfies `d_i d_j = d_{j-1} d_i` (`i<j`) — impossible with only a
+generators-only boundary rule, since checking it requires `d_i` on the frequently-*degenerate* `d_j(g)`.
+`validate()` also checks structural well-formedness first (arity, registered targets, a genuinely normalized
+`word`) since those are the data-entry mistakes a hand-written presentation is actually likely to make.
+
+**The `OrderedCell` instance lives on the generators themselves** (`FiniteSimplicialSet_is_OrderedCell`,
+mirroring `Simplex_is_OrderedCell`'s injectable-ordering pattern): `boundary` is the normalized-chain-complex
+differential — only faces that are themselves bare generators (`word.isEmpty`) contribute, alternating sign;
+a degenerate face contributes nothing, since the normalized chain complex is quasi-isomorphic to the full one.
+This is the *only* place degeneracy matters for homology; no recursive `faceOf` is needed there at all.
+
+**Feeding the existing engines needed a real structural finding, not an assumption**: `CellularHomologyContext`
+(`Homology.scala:39`) takes a `stream: CellStream[CellT, FiltrationT]`, not a bare `OrderedCell` — there is no
+engine entry point that skips the stream interface. `SimplicialSetStream[G]` is a trivial adapter (every
+generator at filtration value `0` — ordinary, unfiltered homology of one fixed simplicial set, not real
+persistence) whose `filtrationOrdering` (`Ordering.by(dimOf)` ascending, then the caller's own `Ordering[G]` as
+tiebreak) was derived by tracing `Homology.scala:80-94`'s own `processingOrder` comment rather than guessed —
+that comment documents exactly why `filtrationOrdering`'s dimension component must be ascending and unreversed.
+`G is OrderedCell` is threaded explicitly through the adapter's companion `apply`, not resolved as an ambient
+global given: unlike `Simplex`/`Cube`, a `FiniteSimplicialSet`'s `OrderedCell` instance depends on that one
+instance's own `faces` data, not on `G` alone, so it can never be a single global instance for a given `G`.
+
+**`fromStream[VertexT](stream: CellStream[Simplex[VertexT], ?])`** builds a `FiniteSimplicialSet` from any
+stream of simplices: faces of a genuinely-ordered simplex (strictly increasing vertex tuple) are always
+non-degenerate, so every generator's own face data is `word = Nil` throughout — exercising *zero* of the
+degeneracy machinery, a plumbing check only (cross-validated against `SimplicialHomologyContext` run directly
+on the same stream), not evidence `faceOf`/`insertOuter` themselves are correct. Deliberately typed against
+`CellStream[Simplex[VertexT], ?]`, not the narrower `SimplexStream[VertexT, ?]` the first draft used: the real
+Vietoris-Rips streams in this codebase (`EnumeratingCofaceSimplexStream` and relatives) are
+`CofaceSimplexStream`/`StratifiedCellStream`, a *sibling* of `SimplexStream` under `CellStream`, not a subtype
+of it — caught by trying `fromStream` against a real VR stream while writing its cross-validation spec, not by
+re-reading the type hierarchy in the abstract.
+
+**Fixtures** (`cells/SimplicialSetFixtures.scala`, test sources), each hand-derived and cross-checked against
+the real engine, not just asserted: `minimalSphere(n)` (S¹, S², S³ from one generic builder — 1 vertex, 1 top
+`n`-cell, all faces the same maximally-degenerate `(n-1)`-simplex over the vertex for `n >= 2`, no degeneracy
+at all for `n=1`); `realProjectiveSpace(topDim)` (RP², RP³ from one generic builder — the reduced-bar-
+construction model of `B(Z/2)`, one non-degenerate generator per dimension); `torus` (Hatcher's minimal
+Δ-complex model, *Algebraic Topology* Example 2.4 — 1 vertex, 3 loop-edges, 2 triangles, no degeneracy at all;
+its value is being a genuine Δ-complex `fromStream` can never produce from an actual `Simplex[VertexT]`, which
+forbids repeated vertices). **RP² is the sign-discriminating fixture** (`H_1=H_2=F2` over F2, both `0` over F3
+— a sign error in the alternating boundary is invisible over F2 and only shows up over F3); **RP³ is the only
+fixture that reaches `faceOf`'s `i > w1+1` branch** (none of the others do — a real coverage gap found and
+closed by extending RP² to RP³, not assumed covered) and pins a genuinely essential bar above dimension 0
+(`H_3=F` over every field, since RP³ is a closed orientable 3-manifold).
+
+**`product`/`coproduct` (`cells/SimplicialSetConstructions.scala`), added in a later session** — see
+`.claude/WORKLOG-simplicial-set-constructions.md` for the full derivation, including a real design correction
+and a real implementation bug, both caught rather than assumed away.
+
+**The first design attempt was wrong, caught by `advisor()` before any code was written**: indexing the
+product's generators by Eilenberg–Zilber *shuffles* (pairs of non-degenerate simplices of dimension `p`,`q`
+with `p+q=n`) is the classical EZ *chain map* between `C_*(X) tensor C_*(Y)` and `C_*(X x Y)`, not an
+enumeration of `X x Y`'s own non-degenerate simplices — concrete counterexample: for `X=Y=minimalSphere(1)`,
+`(e_X, e_Y)` (both non-degenerate, dimension 1 each) is a real non-degenerate 1-simplex of `X x Y` that no
+`(p,q)`-shuffle with `p+q=1` could ever produce, since here `p=q=1`. The actual definition needs no shuffles:
+`(X x Y)_n = X_n x Y_n` degreewise, and a pair `(a,b)` is non-degenerate in the product iff no single `j`
+degenerates both sides at once (`s_j` on the product is literally the diagonal `(s_j, s_j)`) — operationally,
+`a` is `s_j`-degenerate exactly when `j` appears anywhere in `a.word` (not just the outermost entry), so
+non-degeneracy of the pair reduces to `a.word.toSet.intersect(b.word.toSet).isEmpty`, cross-checked in
+`SimplicialSetConstructionsSpec` against the actual definition (`sOp(j, dOp(j, a)) == a`) exhaustively, not
+just spot-checked. `elementsAtDim[G](sset, n)` enumerates ALL of `X_n`, not just its generators (every
+generator of dimension `p<=n` paired with every size-`(n-p)` subset of `{0,...,n-1}` as its word) — needed
+because `product` must consider every element of `X_n x Y_n` before filtering to non-degenerate pairs.
+`ProductGenerator[GX,GY](x, y)` (a word-disjoint pair) is the product's generator type.
+
+**Top dimension is `maxDim(x) + maxDim(y)`, proved during implementation, not merely assumed by analogy to
+CW-complex dimension**: a non-degenerate pair at dimension `n` needs disjoint word-subsets of an `n`-element
+set, each of size `>= n - maxDim` of its own factor, forcing `n <= maxDim(x)+maxDim(y)` by a direct counting
+argument — beyond that bound no pair can possibly be non-degenerate, permanently.
+
+**A real bug, caught by `validate()`'s `d_i d_j = d_{j-1} d_i` check, not by inspection**: face maps reuse
+`faceOf` on each side independently, but the result can come back sharing common word entries even when the
+input pair didn't — handled by stripping the common degeneracy set `J` from both sides. The first attempt just
+deleted `J`'s entries from each word, leaving the remaining entries' absolute values unchanged — wrong, and
+caught immediately as an `IndexOutOfBoundsException` deep in `faceOf`'s recursion on
+`product(minimalSphere(1), minimalSphere(2))` (the first test case big enough to exercise the stripping path at
+all — the torus-matching `product(minimalSphere(1), minimalSphere(1))` never hits it, by luck of that
+example's dimensions). Root cause: the remaining (private) word entries live in the *same shared* gap-position
+domain as the stripped-out ones, so removing `J` shrinks that domain and the survivors must be *relabeled* via
+the rank function (`e -> e - |{j in J : j < e}|`, the standard order isomorphism onto the smaller domain), not
+left at their original absolute values, which can land outside the smaller domain's valid range entirely — the
+*outer* wrapping word (`J` itself) needs no such relabeling, since it's already expressed in the final,
+larger-dimensional domain's own coordinates.
+
+**Verification**: `product(minimalSphere(1), minimalSphere(1))` generator counts by dimension `(1, 3, 2)`,
+hand-derived before writing any code and confirmed by the implementation — NOT the minimal 2-edge Δ-complex
+torus (3 edges, not 2; the raw categorical product is a strictly larger, non-minimal simplicial set, only
+homotopy equivalent to the hand-built `torus` fixture), but matching its Betti numbers `(1,2,1)` exactly, via a
+completely different construction. `product(minimalSphere(1), minimalSphere(2))` matches Künneth's theorem for
+`S^1 x S^2` (Betti `(1,1,1,1)`) — the same case that exercises the stripping/relabeling bug above, so it
+doubles as the strongest correctness evidence available (an independent classical theorem) and the regression
+pin for the fix. `coproduct(minimalSphere(1), minimalSphere(2))`: Betti `(2,1,1)` — unreduced `H_0` adds
+directly across a disjoint union of connected spaces (this engine computes unreduced homology throughout; it's
+*reduced* `H_0` that would need a "-1" adjustment, not this case). `coproduct` itself needs no degeneracy
+machinery at all — generators tagged `Left`/`Right`, faces delegate within whichever side a generator came
+from.
+
+**Real filtration + a chunks engine, added in a later session** (`streams/FilteredSimplicialSetStream.scala`) —
+see `.claude/WORKLOG-simplicial-set-filtration.md` for the full derivation. `SimplicialSetStream` stays the
+constant-`0`, ordinary-homology-only adapter; `FilteredSimplicialSetStream[G]` is a genuine
+`StratifiedCellStream[G, Double]` with a caller-supplied `filtrationValue: PartialFunction[G, Double]`, defined
+only on generators (never on degenerate `SSetElement`s, since no engine here ever queries a stream's
+`filtrationValue` on anything else). `filtrationOrdering` (`simplicialSetFiltrationOrdering`) reuses
+`EnumeratingCofaceSimplexStream`'s exact, twice-debugged convention rather than re-deriving it: filtration value
+compared reversed (smaller-under-this-ordering = younger), then dimension ascending, then a caller-supplied
+tie-break. `validateMonotoneFiltration(sset, filtrationValue)` checks the one precondition every engine needs —
+a face's value never exceeds its coface's — against only BARE (`word = Nil`) direct faces, the only ones
+`FiniteSimplicialSet_is_OrderedCell.boundary` ever looks at; lives in this adapter file, not on
+`FiniteSimplicialSet` itself, per the architecture principle already stated above.
+
+This is also what motivated genericizing `PersistenceInChunksContext` into `CellularPersistenceInChunksContext`
+(see "Persistent homology" above) — investigation before writing anything found the class had zero actual
+`Simplex`-specific behavior in its body, so `FiniteSimplicialSet` generators slot in directly once a real
+`StratifiedCellStream[G, Double]` exists. Cross-validated against `CellularHomologyContext` on a deliberately
+non-dimension-aligned `torus` filtration (edges of the SAME dimension given different values, so filtration
+order and dimension order genuinely disagree — a dimension-aligned filtration couldn't have caught a reversed
+`filtrationOrdering` primary key) — the two engines agree exactly, matching a hand-derived expected structure
+(one finite H_1 bar dying at the older triangle's filtration value; the younger, identical-face-data triangle
+survives as the essential H_2 class) — plus a randomized dimension-band-plus-jitter fuzz across every existing
+fixture.
+
+**Deliberately deferred, still not attempted**: quotients/attaching maps (identifying generators, or generators
+across a coproduct, under a gluing relation respecting face compatibility — probably the single most useful
+remaining construction for hand-building models directly, and a prerequisite for the item below); the bar
+construction / classifying spaces (would lean on `product` and quotients once quotients exist).
+`SimplicialHomologyByDimensionContext` remains hardcoded to `Simplex[VertexT]` and was not generalized — a
+separate, unrelated algorithm (union-find-based dimension-0/1 handling) from the two engines touched so far.
 
 ## Alpha complex: DQP vs Helix
 

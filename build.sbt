@@ -12,7 +12,6 @@ libraryDependencies += "org.specs2"       %% "specs2-scalacheck"    % "5.5.1" % 
 libraryDependencies += ("org.scala-graph" %% "graph-core"           % "1.13.5").cross(
   CrossVersion.for3Use2_13
 )
-libraryDependencies += "org.openjdk.jol"    % "jol-core"                      % "0.17"
 libraryDependencies += "org.apache.commons" % "commons-numbers-combinatorics" % "1.1"
 libraryDependencies += "org.apache.commons" % "commons-math3"                 % "3.6.1"
 libraryDependencies += "com.eatthepath"     % "jvptree"                       % "0.2"
@@ -20,8 +19,6 @@ libraryDependencies += "com.dreizak"        % "miniball"                      % 
 libraryDependencies +=
   "org.scala-lang.modules"                             %% "scala-parallel-collections" % "1.0.4"
 libraryDependencies += "org.scalacheck"                %% "scalacheck"                 % "1.17.0" % "test"
-libraryDependencies += "org.scalaz"                    %% "scalaz-core"                % "7.3.6"
-libraryDependencies += "org.scalaz"                    %% "scalaz-scalacheck-binding"  % "7.4.0-M14"
 libraryDependencies += "org.bitbucket.inkytonik.kiama" %% "kiama"                      % "2.5.1"
 libraryDependencies += "org.bitbucket.inkytonik.kiama" %% "kiama-extras"               % "2.5.1"
 
