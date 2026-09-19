@@ -821,3 +821,77 @@ only"), `Tda4j.scala` (`fromBars` generalized to `cellVertices: (Int, CellT) => 
 now builds `PackedRipserCohomologyContext` instead of `RipserCohomologyContext`, doc comments and error messages
 updated to match), `SingleEngineProfileDriver.scala` (moved from `src/main/.../profiling/` to
 `src/test/scala/.../homology/`, `totalSimplexCount` wired up for the `sortedset` branch).
+
+## Sixth follow-up session, same day (2026-09-19): three named targets from a fresh CPU-time profile
+
+The cursor redesign cleared out the allocation-side "quick wins"; asked "what's next," a fresh CPU EXECUTION-
+SAMPLE profile (not another allocation profile) on `sphere3_96`/packed found three candidates: `binomial(j,k)`
+still uncached inside `CofacetCursor`/`FacetCursor`'s own stepping (~11-15% of samples, spread across leaf frames
+depending on JIT inlining), `basis`/`generators`/`cleared` hitting `HashMap.growTable`/`HashSet.growTable` (~4%),
+and `Chain.reduceLoop`'s `RedBlackTree` churn (~14%, already-known, shared with the SortedSet oracle). Asked to go
+after all three.
+
+**Target 1: `binomial(j,k)` caching -- mechanism confirmed, wall-clock benefit NOT confirmed above this
+machine's noise floor.** Added `SimplexIndexing.binomialChoose(n, k)`, a SEPARATE lazily-memoized `Array[Array[
+Long]]` cache from `binomialEntry`'s -- deliberately not a reuse of `binomialEntry` via the `binomial(n,k) =
+binomialEntry(n-k, k)` identity, which holds mathematically but would make the reindexed row axis (`d = n-k`)
+scale with `vertexCount` instead of simplex size, reintroducing the exact vertexCount-scaled-table memory shape
+`WORKLOG-simplexindexing-overflow.md`'s original eager-table bug was fixed to avoid (checked concretely: at
+`vertexCount=4096` that reindexing would grow to ~4096 rows of ~4096 entries each, tens of MB of memoized state
+against this project's own memory-frugality goal). `binomialChoose` keeps `k` (bounded by simplex size, small) as
+the row index and `n` (bounded by `vertexCount`) as the column -- the same safe shape `binomialEntry` already
+uses, just re-derived for this access pattern's own argument order. Wired into both cursors' `step()` methods.
+Verified correct via the full test suite (existing `CofacetCursor`/`FacetCursor` property tests already exercise
+`.index`/`.vertex` values that depend on this arithmetic being right; no separate unit test needed since
+`binomialChoose` is `private`).
+
+**This needed a genuinely fresh measurement, not an assumption either way** -- a near-identical-looking earlier
+finding in this same file ("caching binomial doesn't help") was specific to the OLD `BigInt`-based `binomial`,
+where that session's own re-profile showed the cost had moved into `HashMap$Node.findNode`/tuple-boxing rather
+than disappearing -- a genuine negative result for THAT implementation, not evidence about this one. Re-profiling
+after this fix confirmed the mechanism DOES work here, unlike that case: `BinomialCoefficient.value`/`gcd`
+leaf frames, previously ~11-15% of CPU samples combined, dropped to ~0.8% -- the targeted cost is genuinely gone,
+not just relocated. But an interleaved A/B/A wall-clock comparison (packed engine, `sphere3_96`, 7 trials each,
+cache-toggled via `git stash` between each leg to control for the machine's own load drifting over the course of
+a measurement session) gave AFTER=757.0ms, BEFORE=810.1ms, AFTER=840.7ms -- the two AFTER measurements differ
+from EACH OTHER (757.0 vs 840.7, an 11% spread) by more than the AFTER-BEFORE gap, meaning this machine's
+trial-to-trial and session-to-session noise floor exceeds whatever real effect this change has. **Kept anyway,
+not reverted**: unlike the BigInt case, the targeted cost demonstrably vanished from the CPU profile rather than
+relocating, the change is allocation-neutral (the cache's own row arrays are allocated once per `SimplexIndexing`
+lifetime, not per lookup), and it's fully correctness-verified -- but the wall-clock claim is reported as
+genuinely unconfirmed at this measurement precision, not as a proven win, per this arc's own "measure, don't
+infer" standard applied honestly even when the answer is "inconclusive."
+
+**Target 2: capacity-hint `basis`/`generators`/`nextCleared` in `persistentCohomology()`.** Each collection gets
+AT MOST one entry per simplex in `simplicesAtD` (checked directly from the loop body, not assumed: `sigma`
+contributes to at most one of the two branches, and `nextCleared` gets at most one insert per `sigma` either
+way), so `simplicesAtD.size` is a real upper bound, not a guess -- sized via `new mutable.HashMap(capacity,
+loadFactor)`/`new mutable.HashSet(capacity, loadFactor)` with `capacity = (simplicesAtD.size /
+defaultLoadFactor).toInt + 1`, replacing the default-capacity `mutable.Map.empty`/`mutable.Set.empty` (which
+`HashMap`/`HashSet` already backed anyway -- a pure capacity hint, no type change, and none of these three
+collections is ever iterated in an order-dependent way, only point `.get`/`.contains`/`+=`/`.getOrElse`
+operations, checked before assuming the change was iteration-order-safe). `nextCleared`'s declaration moved from
+an outer `var` reset to `mutable.Set.empty` at the end of each iteration to a fresh, per-dimension-sized `val`
+declared where `basis`/`generators` already are, since its correct capacity is only known once `simplicesAtD.size`
+is. Verified mechanically: re-profiling confirmed `HashMap.growTable`/`HashSet.growTable` no longer appear
+anywhere in the leaf-frame samples (only the expected `HashSet$Node.findNode` lookup cost remains). Full `sbt
+test` clean.
+
+**Target 3: `Chain.reduceLoop`'s remaining `RedBlackTree` churn -- investigated, no viable further win found,
+NOT attempted.** The obvious next lever, `updateMap`'s `getOrElse`-then-`update`/`remove` pattern (two tree
+traversals per elimination step) collapsing to a single-traversal `TreeMap.updateWith`, was checked by
+decompiling `scala.collection.mutable.TreeMap`/`MapOps` bytecode directly rather than assumed: `TreeMap` does
+NOT override `updateWith`, and `MapOps`'s own default implementation is `get` followed by a conditional
+`update`/`remove` -- the SAME two-traversal shape `updateMap` already hand-rolls, not a single-descent
+alternative. No stdlib API exists for this access pattern. A genuine further win would need either a hand-rolled
+tree with a real single-descent upsert-or-delete primitive, or a different accumulator shape entirely (e.g. a
+mutable `HashMap` for O(1) get/update/remove plus a separate lazy-deletion heap for the sorted "leading term"
+access `z.head` needs) -- both a materially bigger, riskier redesign of `Chain.reduceLoop`, the SAME shared,
+reference-oracle-adjacent machinery this arc's earlier `Chain.reduceLoop` session already treated as needing its
+own dedicated, carefully-validated pass rather than folding into an unrelated round. Not attempted here; reported
+as a checked dead end for a quick fix, not chased further.
+
+**Files changed**: `RipserStream.scala` (`binomialChoose`, wired into `CofacetCursor.step()`/`FacetCursor.step()`),
+`PackedRipserCohomology.scala` (`basis`/`generators`/`nextCleared` capacity-hinted). Full `sbt test` clean (237,
+232/0/5/1, unchanged -- no new tests needed, existing cursor-correctness and cross-validation coverage already
+exercises both changes).

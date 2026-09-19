@@ -314,9 +314,9 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
     // number-system index is only unique WITHIN one fixed size (index 5 at dimension 1 and index 5 at dimension
     // 2 are different simplices), so a stale entry from two dimensions ago could otherwise cause a false-positive
     // clear. `activeCleared` holds this iteration's dimension-d clears (populated during the PREVIOUS iteration);
-    // `nextCleared` accumulates dimension-(d+1) clears as they're discovered THIS iteration, then rotates in.
+    // `nextCleared` (below, inside the loop) accumulates dimension-(d+1) clears as they're discovered THIS
+    // iteration, then rotates in.
     var activeCleared: mutable.Set[Long] = mutable.Set.empty
-    var nextCleared: mutable.Set[Long] = mutable.Set.empty
 
     // Dimension-0 candidates: every vertex, diameter 0.0 -- index IS the vertex id (SimplexIndexing.apply's own
     // d==0 base case: a single vertex v decodes to/from index v directly).
@@ -328,8 +328,24 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
       val simplicesAtD: Seq[DiameterIndex] = currentLevel.sorted(using packedOrdering.reverse)
       _totalSimplexCount += simplicesAtD.size
 
-      val basis: mutable.Map[DiameterIndex, Chain[DiameterIndex, CoefficientT]] = mutable.Map.empty
-      val generators: mutable.Map[DiameterIndex, Chain[DiameterIndex, CoefficientT]] = mutable.Map.empty
+      // Capacity-hinted, not `mutable.Map.empty`/`mutable.Set.empty` (which default to `HashMap`/`HashSet` at
+      // their own built-in starting capacity regardless of how many entries this dimension will actually hold) --
+      // `basis`/`generators` each get AT MOST one entry per simplex in `simplicesAtD` (exactly one write per
+      // `sigma` processed below, to at most one of the two branches), and `nextCleared` likewise at most one
+      // entry per `sigma`, so `simplicesAtD.size` is a real upper bound on final size, not a guess. Sized to avoid
+      // `HashMap.growTable`/`HashSet.growTable` entirely for the common case (measured as a real, if modest, CPU
+      // cost in `.claude/WORKLOG-ripser-profiling.md`'s cursor-redesign follow-up) rather than the default
+      // capacity forcing one or more table-doubling rehashes as each dimension's collections fill up. Pure
+      // capacity hint, no behavior change: `HashMap`/`HashSet`'s own default `.empty` already returns this same
+      // underlying type, and none of these three collections is ever iterated in an order-dependent way below
+      // (only `.get`/`.contains`/`+=`/`.getOrElse`, all point operations).
+      val loadFactor = mutable.HashMap.defaultLoadFactor
+      val capacity = (simplicesAtD.size / loadFactor).toInt + 1
+      val basis: mutable.Map[DiameterIndex, Chain[DiameterIndex, CoefficientT]] =
+        new mutable.HashMap(capacity, loadFactor)
+      val generators: mutable.Map[DiameterIndex, Chain[DiameterIndex, CoefficientT]] =
+        new mutable.HashMap(capacity, loadFactor)
+      var nextCleared: mutable.Set[Long] = new mutable.HashSet(capacity, loadFactor)
 
       // tau's own size (one more than sigma's) -- captured here, per-dimension, because a bare DiameterIndex
       // doesn't know its own dimension the way a Simplex[Int] does; zeroApparentFacet needs it to decode tau's
@@ -375,6 +391,5 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
       if d < maxDimension then currentLevel = simplicesAtD.iterator.flatMap(sparseCofacets(_, size)).toSeq
 
       activeCleared = nextCleared
-      nextCleared = mutable.Set.empty
 
     bars.toList

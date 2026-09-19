@@ -810,6 +810,30 @@ imply the others need it:
    neither attempted: give this engine's `zeroPivotFacet` the same array-based treatment; and/or collapse
    `apply(simplex)`'s five-stage `toSeq.sorted.reverse.zipWithIndex.map(...).sum` into a single `while` loop.
 
+   **Sixth follow-up session, same day: three targets from a fresh CPU-time (not allocation) profile**.
+   `SimplexIndexing.binomialChoose(n, k)`, a lazily-memoized cache SEPARATE from `binomialEntry`'s (reusing
+   `binomialEntry` via the `binomial(n,k) = binomialEntry(n-k, k)` identity would make the reindexed row axis
+   scale with `vertexCount` instead of simplex size — checked concretely, not assumed, that this would
+   reintroduce the vertexCount-scaled-table memory shape `WORKLOG-simplexindexing-overflow.md`'s original bug was
+   fixed to avoid), wired into `CofacetCursor`/`FacetCursor`'s `step()` methods. Re-profiling confirmed the
+   targeted `BinomialCoefficient.value`/`gcd` cost (~11-15% of CPU samples) genuinely vanished, not merely
+   relocated (the outcome the earlier, unrelated "caching binomial doesn't help" finding warned against, for a
+   different — `BigInt`-based — implementation) — but an interleaved A/B/A wall-clock comparison found this
+   machine's own trial-to-trial noise exceeds the effect size, so the wall-clock benefit is reported as
+   genuinely unconfirmed, not assumed positive just because the mechanism checks out. Kept anyway: allocation-
+   neutral, fully correctness-verified, and the targeted cost demonstrably gone from the profile.
+   `basis`/`generators`/`nextCleared` in `PackedRipserCohomologyContext.persistentCohomology()` are now capacity-
+   hinted (`new mutable.HashMap/HashSet(capacity, loadFactor)`, `capacity` derived from `simplicesAtD.size`, a real
+   upper bound on each collection's final size) instead of default-capacity `mutable.Map.empty`/`mutable.Set.empty`
+   — confirmed via re-profiling that `HashMap.growTable`/`HashSet.growTable` no longer appear in the leaf-frame
+   samples. `Chain.reduceLoop`'s own remaining `RedBlackTree` churn was investigated and left alone: decompiling
+   `scala.collection.mutable.TreeMap`/`MapOps` bytecode directly confirmed `TreeMap` does not override
+   `updateWith`, and `MapOps`'s own default implementation is the SAME get-then-update/remove two-traversal shape
+   `updateMap` already hand-rolls — no stdlib single-descent upsert-or-delete primitive exists to swap in. A real
+   further win here would need a hand-rolled tree or a different accumulator shape entirely, the same bigger,
+   riskier redesign this arc's earlier `Chain.reduceLoop` session already deferred to its own dedicated pass —
+   not attempted, reported as a checked dead end rather than forced.
+
 **Bug found while cross-validating (4) against (1), fixed**: `EnumeratingCofaceSimplexStream.filtrationOrdering`
 (`SimplexStream.scala`) used to be `Ordering.by(filtrationValue)` — no secondary tie-break — so it wasn't a
 total order: it treated any two *different* simplices tied at the same filtration value as equal, which

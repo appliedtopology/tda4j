@@ -124,6 +124,38 @@ class SimplexIndexing(val vertexCount: Int):
     if row(s) == -1L then row(s) = binomial(d + s, s)
     row(s)
 
+  /** A SEPARATE lazily-memoized cache for `CofacetCursor`/`FacetCursor`'s own `binomial(n, k)` calls -- NOT a reuse of
+    * `binomialEntry` above via the `binomial(n, k) = binomialEntry(n - k, k)` reindexing, even though that identity
+    * holds. `binomialEntry`'s row axis (`d`) is safe to grow lazily ONLY because every real caller of it
+    * (`searchRow`/`apply`/`decodeToArray`) bounds `d` by SIMPLEX SIZE, a small quantity -- exactly the invariant
+    * `WORKLOG-simplexindexing-overflow.md`'s original eager-full-table bug violated by growing along `vertexCount`
+    * instead. `CofacetCursor.step()`/`FacetCursor.step()` call `binomial(j, k)`/`binomial(j, k+1)` where `j` (a VERTEX
+    * id) ranges up to `vertexCount - 1` -- reindexed as `binomialEntry(j - k, k)`, the row index `d = j - k` would
+    * itself range up to `vertexCount - 1`, reintroducing exactly that same vertexCount-scaled row growth this class's
+    * own doc above warns against (a real, checked concern, not a theoretical one: at `vertexCount = 4096`, that
+    * reindexing would grow `binomialEntry`'s row array to ~4096 rows of ~4096 entries each, tens of megabytes of
+    * memoized state this codebase's `Chain.reduceBy`-adjacent memory-frugality goal doesn't want). Here the roles are
+    * kept the RIGHT way round instead: `k` (bounded by simplex size, small) is the row index, `n` (bounded by
+    * `vertexCount`) is the column -- the same shape `binomialEntry` itself already uses safely, just re-derived for
+    * `(n, k)` argument order instead of `(d, s)`. `.claude/WORKLOG-ripser-profiling.md`'s cursor-redesign follow-up
+    * session has the measurement that justified adding this (a fresh check, not a repeat of the earlier "caching
+    * binomial doesn't help" finding -- that finding was about caching the OLD `BigInt`-based `binomial`'s own
+    * arithmetic; this caches calls into the CURRENT `BinomialCoefficient.value`- backed one, a different question,
+    * checked fresh rather than assumed to have the same answer).
+    */
+  private var binomialChooseRows: Array[Array[Long]] = Array.empty
+  private def binomialChoose(n: Int, k: Int): Long =
+    if k < 0 || n < k then 0L
+    else
+      if k >= binomialChooseRows.length then
+        val grown = Array.ofDim[Array[Long]](k + 1)
+        Array.copy(binomialChooseRows, 0, grown, 0, binomialChooseRows.length)
+        binomialChooseRows = grown
+      if binomialChooseRows(k) == null then binomialChooseRows(k) = Array.fill(vertexCount + 1)(-1L)
+      val row = binomialChooseRows(k)
+      if row(n) == -1L then row(n) = binomial(n, k)
+      row(n)
+
   /** Binary search for the largest `s` in `[0, vertexCount]` with `binomialEntry(d, s) <= n` -- the same "`Found` or
     * `insertionPoint - 1`" result `scala.collection.Searching.search` used to give against the (now-removed)
     * eagerly-materialized table row, computed instead against the lazily-memoized entries above so the search never
@@ -276,13 +308,13 @@ class SimplexIndexing(val vertexCount: Int):
         else if containsVertex(j) then
           if !allCofacets then done = true
           else
-            iB -= binomial(j, k)
-            iA += binomial(j, k + 1)
+            iB -= binomialChoose(j, k)
+            iA += binomialChoose(j, k + 1)
             k -= 1
             j -= 1
         else
           _vertex = j
-          _index = iB + binomial(j, k + 1) + iA
+          _index = iB + binomialChoose(j, k + 1) + iA
           havePending = true
           j -= 1
 
@@ -338,8 +370,8 @@ class SimplexIndexing(val vertexCount: Int):
     private def step(): Unit =
       if k >= 0 then
         val v = vertices(k)
-        val iiB = iB - binomial(v, k + 1)
-        val iiA = iA + binomial(v, k)
+        val iiB = iB - binomialChoose(v, k + 1)
+        val iiA = iA + binomialChoose(v, k)
         _vertex = v
         _index = iiB + iA
         iB = iiB
