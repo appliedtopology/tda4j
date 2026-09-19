@@ -664,10 +664,66 @@ imply the others need it:
    dropped from 21.7% to 1.2%. **After this fifth fix, a fresh profile of the packed engine shows the "quick win"
    tier exhausted**: every remaining cost is either genuinely necessary computation (the same `insertionDiameter`
    loop's own distance math, `SimplexIndexing.searchRow`'s decode, `BinomialCoefficient.value`'s own arithmetic) or
-   the SAME two already-characterized structural costs named just above (`Chain.reduceLoop`'s `SortedMap`, now
-   ~48% of allocation weight with the noise on top of it removed; generic `Long`/`DiameterIndex`/`Tuple2` boxing,
-   ~34%) — nothing new in that category, just the same bigger, already-scoped job with the smaller stuff cleared
-   away from around it.
+   two already-characterized structural costs (`Chain.reduceLoop`'s `SortedMap`; generic `Long`/`DiameterIndex`/
+   `Tuple2` boxing) — nothing new in that category, just the same bigger, already-scoped job with the smaller
+   stuff cleared away from around it. **The "~48%" figure this session reported for `Chain.reduceLoop`'s own share
+   was itself wrong, corrected in a later follow-up session (below) before anything was built on top of it**: a
+   deeper stack trace (`jfr print --stack-depth 30` instead of the shallow default used at the time) showed that
+   number conflated three unrelated allocation sources that only share a `RedBlackTree` class-name prefix.
+
+   **Second follow-up session, same day, the `Chain.reduceLoop` redesign — but not before the "~48%" premise was
+   checked and found wrong**: asked to redesign `Chain.reduceLoop`'s `SortedMap` accumulator per the bounded plan
+   above. Before writing code, re-checked that plan's own premise (advisor's suggestion) by extracting the earlier
+   profile at a much deeper stack trace than before. **The "~48%" was three unrelated things sharing a class-name
+   prefix**: `insertionDiameter`'s own `sigma.underlying.iterator` call — 23.8% of total allocation, the single
+   largest identified cost in the whole arc, and NOT `Chain.reduceLoop` at all — `TreeSet.iterator()` allocates a
+   `KeysIterator`+`TreeIterator` (with its own `Tree[]` DFS-stack array) on every call, a cost the fifth fix above
+   (the `while`-loop rewrite) reduced the closure/boxing overhead of but never actually eliminated, since it still
+   called `.iterator` once per candidate cofacet vertex; `SimplexIndexing`/`SimplexOps`'s own decode-time `TreeSet`
+   construction (building a `Simplex[Int]` from a packed index) at ~12%; and `Chain.reduceLoop`'s actual
+   `SortedMap.updated`/`.removed` churn at a confirmed ~6.9% — real, but far smaller than what was about to be
+   built for.
+
+   **Fixed the bigger, lower-risk one first, as advisor recommended**: `insertionDiameter` (both engines) now
+   takes an already-materialized `Array[Int]` instead of `Simplex[Int]`, since `sigma`'s vertex set is fixed
+   across every candidate considered within one `coboundaryOf`/`sparseCofacets`/`zeroPivotCofacet` call — each
+   caller hoists `sigma.underlying.toArray` ONCE per call instead of re-iterating a `SortedSet` on every
+   candidate; `coboundaryOf`'s sign computation (`sigma.underlying.count(_ < v)`, the identical "iterate a
+   `SortedSet` for a question the hoisted array can already answer" shape) fixed the same way, as a plain scan.
+   Deliberately left alone: `Homology.scala`'s `tau.underlying.find(v => !sigma.underlying.contains(v)).get` (a
+   separate, already-fixed call site from Finding #4 above, operating on `tau`, which varies per candidate and
+   can't be hoisted the same way — a real fix would mean switching to `SimplexIndexing.cofacetIteratorWithVertex`,
+   a bigger structural change, left for a future session). Verified the sign fix isn't hiding behind an F2 blind
+   spot before trusting the green suite (a sign error here is invisible over F2, per this codebase's own
+   established `CubicalSpec`-dd=0-over-F3 lesson): both `RipserCohomologySpec` and `PackedRipserCohomologySpec`
+   default to `Field.DoubleApproximated`, not F2. Measured (controlled A/B, real `sphere3_96` data): the
+   `KeysIterator`/`Tree[]` allocation categories under `insertionDiameter` vanished entirely on re-profiling
+   (confirmed by grep, not just "looks smaller"), wall-clock **~8.9% faster** (2316.0ms → 2110.2ms) — real but well
+   below the 23.8%-of-allocation figure alone would suggest, since the underlying computation (real floating-point
+   distance math) already dominates and allocation reduction doesn't translate 1:1 to wall-clock time.
+
+   **Then the originally-scoped `Chain.reduceLoop` redesign, now correctly scoped to a ~7% cost, not 48%**:
+   `updateMap`/`toSortedMap`/`reduceLoop` rewritten from an immutable, persistent `SortedMap` (each
+   `updated`/`removed` allocates O(log n) fresh tree nodes to preserve structural sharing this accumulator never
+   actually needs — `z`/`reductionLog` are built fresh at the top of `reduceByUntil` and never observed at an
+   intermediate, pre-mutation state by anything else) to a `scala.collection.mutable.TreeMap`, mutated in place;
+   `reduceLoop` itself changed from `@tailrec` recursion to an explicit `while` loop, a mechanical consequence of
+   the mutation. `reduceByUntil`'s public signature and return type are unchanged. Checked, not assumed:
+   `mutable.TreeMap` does NOT override `headOption` itself, and the inherited `IterableOnceOps` default allocates
+   a full iterator via `.iterator.next()` — decompiling `TreeMap.class` confirmed `head` (unlike `headOption`) IS
+   separately overridden to a direct `RedBlackTree.min` call, zero iterator, so `reduceLoop` uses
+   `if z.isEmpty then ... else z.head` instead of `z.headOption`. Full `sbt test` clean (235 examples, unchanged
+   230/0/5/1 baseline), with particular attention to `PersistenceInChunksSpec`'s pinned
+   `tetrahedronBoundaryDegenerateCells` fixture — the one place a previous bug (`compress`'s stale-snapshot-vs-
+   mutation hazard, see the "Cross-engine benchmark" section above) was exactly this class of hazard, introducing
+   in-place mutation where value semantics used to hold. Measured (same A/B methodology): allocation share dropped
+   to ~8.4% of a much smaller total (mostly now-legitimate new-node allocation and the final `Chain.from(...)`
+   conversion, not persistent-tree churn), wall-clock **~6.2% faster** (2097.8ms → 1967.1ms) — matching the
+   corrected low-single-digits expectation, not the originally-guessed 10-15% that was itself based on the wrong
+   48% figure. Combined effect of both fixes this second follow-up session: **~15.1% faster** (2316.0ms →
+   1967.1ms) on real `sphere3_96` data. Full derivation, including the exact `jfr` commands used to catch the
+   misattribution, in `.claude/WORKLOG-ripser-profiling.md`'s own "Follow-up session (2026-09-19, later the same
+   day)" heading.
 
 **Bug found while cross-validating (4) against (1), fixed**: `EnumeratingCofaceSimplexStream.filtrationOrdering`
 (`SimplexStream.scala`) used to be `Ordering.by(filtrationValue)` — no secondary tie-break — so it wasn't a

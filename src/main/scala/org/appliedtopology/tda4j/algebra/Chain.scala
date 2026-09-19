@@ -1,7 +1,6 @@
 package org.appliedtopology.tda4j
 package algebra
 
-import collection.immutable.SortedMap
 import math.Ordering.Implicits.sortedSetOrdering
 import scala.annotation.{tailrec, targetName}
 import scala.collection.mutable
@@ -118,22 +117,35 @@ object Chain:
         }
           .apply(self.entries.headOption.unzip)
 
+  /** Mutates `m` in place and returns `Unit`, NOT a new `SortedMap`, as of a later follow-up session (see
+    * `.claude/WORKLOG-ripser-profiling.md`'s "the reduceLoop redesign" section): the persistent (immutable)
+    * `SortedMap.updated`/`.removed` this used to call allocates O(log n) fresh red-black tree nodes on EVERY
+    * elimination step, purely to preserve structural sharing that `reduceLoop`'s own accumulator never actually
+    * needs -- `z`/`reductionLog` are built fresh at the top of `reduceByUntil` and never observed at any
+    * intermediate (pre-mutation) state by anything else, so nothing here relies on the old, functional
+    * "each call returns an independent snapshot" behavior. Measured (real `sphere3_96` paper data, packed engine):
+    * this was `Chain`'s own accumulator churn, ~7% of total allocation weight once accurately attributed -- NOT
+    * the "48%" figure `WORKLOG-ripser-profiling.md`'s first pass over this data reported, which turned out to
+    * conflate three unrelated allocation sources sharing a `RedBlackTree` class-name prefix (see that section for
+    * the corrected breakdown; the other two, larger sources were `insertionDiameter`'s repeated `SortedSet.iterator`
+    * calls and `SimplexIndexing`'s own index-to-`Simplex` decode, fixed separately and NOT part of this change).
+    */
   private def updateMap[CellT: Ordering, CoefficientT: Field](
-    m: SortedMap[CellT, CoefficientT],
+    m: mutable.TreeMap[CellT, CoefficientT],
     cell: CellT,
     coeff: CoefficientT
-  ): SortedMap[CellT, CoefficientT] =
+  ): Unit =
     val fr = summon[CoefficientT is Field]
     val newCoeff = fr.plus(m.getOrElse(cell, fr.zero), coeff)
-    if fr.isEqual(newCoeff, fr.zero) then m.removed(cell)
-    else m.updated(cell, newCoeff)
+    if fr.isEqual(newCoeff, fr.zero) then m.remove(cell)
+    else m.update(cell, newCoeff)
 
-  private def toSortedMap[CellT: Ordering, CoefficientT: Field](
+  private def toMutableTreeMap[CellT: Ordering, CoefficientT: Field](
     z: Chain[CellT, CoefficientT]
-  ): SortedMap[CellT, CoefficientT] =
-    z.entries.foldLeft(SortedMap.empty[CellT, CoefficientT]) { case (m, (cell, coeff)) =>
-      updateMap(m, cell, coeff)
-    }
+  ): mutable.TreeMap[CellT, CoefficientT] =
+    val m = mutable.TreeMap.empty[CellT, CoefficientT]
+    z.entries.foreach { case (cell, coeff) => updateMap(m, cell, coeff) }
+    m
 
   /** `fallback` is consulted only when `sigma` has no `basis` entry -- Ripser's `compute_pairs` on-the-fly
     * apparent-pair substitution (confirmed against `ripser.cpp` directly: it recomputes the substitute column fresh
@@ -141,34 +153,40 @@ object Chain:
     * reason: a caller relying on a stale substitute would be trusting a value real Ripser itself never trusts twice.
     * `fallback(sigma)`, if `Some`, must return a chain whose `leadingCell` is `sigma` itself -- the caller is
     * responsible for that invariant (see `RipserCohomologyContext.zeroApparentFacet`'s doc for why it holds there).
+    *
+    * A `while` loop mutating `z`/`reductionLog` in place, not `@tailrec` recursion threading a fresh immutable
+    * `SortedMap` through each step -- see `updateMap`'s doc above. `z.head`/`z.isEmpty` are used instead of
+    * `z.headOption`: `mutable.TreeMap` does NOT override `headOption` itself, and `IterableOnceOps`'s inherited
+    * default (`if (it.hasNext) Some(it.next())`, built on `.iterator`) would silently reintroduce a
+    * `KeysIterator`/`TreeIterator` allocation on every single loop iteration -- exactly the class of cost this
+    * whole session's investigation was chasing. `head` IS separately overridden (confirmed by decompiling
+    * `TreeMap.class`: it calls `RedBlackTree.min` directly, one O(log n) descent, zero iterator) -- checked
+    * empirically, not assumed, per this session's own "measure, don't infer" lesson from the `insertionDiameter`
+    * misattribution above.
     */
-  @tailrec
   private def reduceLoop[CellT: Ordering, CoefficientT: Field](
-    z: SortedMap[CellT, CoefficientT],
+    z: mutable.TreeMap[CellT, CoefficientT],
     basis: mutable.Map[CellT, Chain[CellT, CoefficientT]],
-    reductionLog: SortedMap[CellT, CoefficientT],
+    reductionLog: mutable.TreeMap[CellT, CoefficientT],
     stop: CellT => Boolean,
     fallback: CellT => Option[Chain[CellT, CoefficientT]]
-  ): (SortedMap[CellT, CoefficientT], SortedMap[CellT, CoefficientT]) =
-    z.headOption match
-      case None                      => (z, reductionLog)
-      case Some((sigma, sigmaCoeff)) =>
-        if stop(sigma) then (z, reductionLog)
+  ): Unit =
+    var continue = true
+    while continue do
+      if z.isEmpty then continue = false
+      else
+        val (sigma, sigmaCoeff) = z.head
+        if stop(sigma) then continue = false
         else
           basis.get(sigma).orElse(fallback(sigma)) match
-            case None             => (z, reductionLog)
+            case None => continue = false
             case Some(basisChain) =>
               val fr = summon[CoefficientT is Field]
               val redCoeff = sigmaCoeff / basisChain.leadingCoefficient
-              reduceLoop(
-                basisChain.entries.foldLeft(z) { case (m, (bCell, bCoeff)) =>
-                  updateMap(m, bCell, fr.negate(fr.times(redCoeff, bCoeff)))
-                },
-                basis,
-                updateMap(reductionLog, sigma, redCoeff),
-                stop,
-                fallback
-              )
+              basisChain.entries.foreach { case (bCell, bCoeff) =>
+                updateMap(z, bCell, fr.negate(fr.times(redCoeff, bCoeff)))
+              }
+              updateMap(reductionLog, sigma, redCoeff)
 
   final def reduceByUntil[CellT: Ordering, CoefficientT: Field](
     z: Chain[CellT, CoefficientT],
@@ -177,7 +195,9 @@ object Chain:
     stop: CellT => Boolean = (_: CellT) => false, // stop when the stop function tells you to
     fallback: CellT => Option[Chain[CellT, CoefficientT]] = (_: CellT) => Option.empty[Chain[CellT, CoefficientT]]
   ): (Chain[CellT, CoefficientT], Chain[CellT, CoefficientT]) =
-    val (accMap, logMap) = reduceLoop(toSortedMap(z), basis, toSortedMap(reductionLog), stop, fallback)
+    val accMap = toMutableTreeMap(z)
+    val logMap = toMutableTreeMap(reductionLog)
+    reduceLoop(accMap, basis, logMap, stop, fallback)
     (Chain.from(accMap.toSeq), Chain.from(logMap.toSeq))
 
   final def reduceBy[CellT: Ordering, CoefficientT: Field](

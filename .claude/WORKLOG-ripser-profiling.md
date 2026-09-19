@@ -416,3 +416,106 @@ constant-factor tax from `WORKLOG-ripser-comparison.md` was not re-measured dire
 `SortedMap` machinery (now the largest remaining identified cost) and `DiameterIndex`/`Field` boxing are the two
 concrete, evidence-backed candidates for most of what remains of it — not vague "the JVM is just slower than C++"
 hand-waving.
+
+## Follow-up session (2026-09-19, later the same day): the reduceLoop redesign, and a misattribution caught first
+
+Asked to do the `Chain.reduceLoop` redesign scoped above (`SortedMap` → a mutable accumulator). Before writing any
+code, re-checked the earlier profile's exact allocation call sites (`jfr print --stack-depth 30`, not the shallow
+depth used the first time) — advisor's suggestion, on the reasoning that "48% RedBlackTree" was suspiciously
+large for one accumulator. It was: **the "48%" figure earlier in this worklog conflated three unrelated
+allocation sources that only share a `RedBlackTree` class-name prefix.**
+
+| source | share of total allocation | what it actually is |
+|---|---|---|
+| `insertionDiameter`'s `sigma.underlying.iterator` | **23.8%** | reading a `Simplex`'s own vertex set, once per candidate cofacet |
+| `SimplexIndexing`/`SimplexOps` decode-time `TreeSet` building | ~12% | constructing a `Simplex[Int]` from a packed combinatorial index, one vertex at a time |
+| `Chain.reduceLoop`'s actual `SortedMap.updated`/`.removed` churn | **~6.9%** (confirmed at `--stack-depth 30`, zero unattributed) | the accumulator this session was asked to redesign |
+
+The first two were never `Chain.reduceLoop` at all. `insertionDiameter` — the `while`-loop rewrite from the
+earlier pass in this same worklog — eliminated the closure/boxing cost of `.map(...).max` but still called
+`sigma.underlying.iterator` on every single call, and `TreeSet.iterator()` itself allocates a `KeysIterator`
+wrapping a `TreeIterator` (with its own `Tree[]` DFS-stack array) — a persistent-tree cost that has nothing to do
+with tail recursion or `Chain`'s own map. This was a bigger, lower-risk fish than the originally-scoped redesign:
+it doesn't touch the reference-oracle `CellularHomologyContext`/`Chain.reduceBy` machinery at all, just two
+already-experimental/already-fixed-once methods.
+
+**Fix #6 (insertionDiameter iterator elimination)**: `insertionDiameter` now takes an already-materialized
+`Array[Int]` instead of a `Simplex[Int]`, indexed directly in the `while` loop. `sigma`/`decoded` is fixed across
+every candidate cofacet vertex considered within one `coboundaryOf`/`sparseCofacets`/`zeroPivotCofacet` call, so
+each caller (both engines, `PackedRipserCohomology.scala` and `Homology.scala`) hoists
+`sigma.underlying.toArray` ONCE per call instead of `insertionDiameter` re-iterating `sigma.underlying` on every
+candidate. The sibling cost — `coboundaryOf`'s sign computation, `sigma.underlying.count(_ < v)`, the same
+"iterate a `SortedSet` for a question the already-hoisted array can answer" shape — was fixed identically, as a
+plain scan over the (already-sorted) hoisted array. **Deliberately NOT touched**: `Homology.scala`'s
+`tau.underlying.find(v => !sigma.underlying.contains(v)).get` (`coboundaryOf`/`zeroPivotCofacet`'s
+inserted-vertex lookup) — a separate, already-fixed call site from the FIRST pass in this worklog (Finding #4),
+operating on `tau`, which varies per candidate and can't be hoisted the same way; fixing it properly would mean
+switching to `SimplexIndexing.cofacetIteratorWithVertex` (which the packed engine already uses specifically to
+avoid needing this lookup at all) — a bigger structural change, left as a candidate for a future session, not
+attempted here.
+
+Verified the coefficient fields these engines' own cross-validation specs actually use before trusting the sign
+fix against a green suite (a sign error here is invisible over F2, and this codebase already knows that trap from
+`CubicalSpec`'s dd=0-over-F3 test): both `RipserCohomologySpec` and `PackedRipserCohomologySpec` default to
+`Field.DoubleApproximated`, not F2 (`RipserCohomologySpec` also exercises `FiniteField(11)`) — neither hides a
+sign flip, so the existing 235-example green suite is real evidence here, not a blind spot.
+
+**Measured (controlled A/B, `git stash` isolating just the two changed files, same `sphere3_96` real paper data,
+`-DpackedOnly=true`, median of 3 trials each)**: re-profiling confirmed the `KeysIterator`/`Tree[]` allocation
+categories under `insertionDiameter` vanished entirely (zero occurrences in a fresh profile, not reduced —
+checked by grepping for the method name in the extracted allocation trace) rather than reappearing under
+`toArray`. Wall-clock: 2316.0ms → 2110.2ms, **~8.9% faster** — real, but well below the 23.8%-of-allocation
+figure would suggest on its own (allocation reduction doesn't translate 1:1 to wall-clock time when the
+computation itself, real floating-point distance math, already dominates).
+
+**Fix #7 (the originally-scoped `Chain.reduceLoop` redesign, now correctly scoped)**: `Chain.scala`'s
+`updateMap`/`toSortedMap`/`reduceLoop` rewritten from an immutable, persistent `SortedMap` (each `updated`/
+`removed` allocates O(log n) fresh tree nodes to preserve structural sharing nothing in this recursion actually
+needs — `z`/`reductionLog` are built fresh at the top of `reduceByUntil` and never observed at an intermediate,
+pre-mutation state by anything else) to a `scala.collection.mutable.TreeMap`, mutated in place. `reduceLoop`
+itself changed from `@tailrec` recursion threading a fresh map through each step to an explicit `while` loop
+mutating the same map object — a mechanical consequence of the mutation, not a separate design choice.
+`reduceByUntil`'s public signature and return type are byte-for-byte unchanged. One subtlety checked, not
+assumed: `mutable.TreeMap` does NOT override `headOption` itself, and `IterableOnceOps`'s inherited default
+allocates a full iterator (`if (it.hasNext) Some(it.next())`, built on `.iterator`) — exactly the class of cost
+this whole session was chasing. Decompiled `TreeMap.class` to check rather than guess: `head` (unlike
+`headOption`) IS separately overridden and compiles to one direct `RedBlackTree.min` call, zero iterator — so
+`reduceLoop` uses `if z.isEmpty then ... else val (sigma, sigmaCoeff) = z.head` instead of `z.headOption`.
+
+**Validation**: full `sbt test` (235 examples, 230 passed/0 failed/5 skipped/1 pending — unchanged baseline) after
+the redesign, with particular attention to `PersistenceInChunksSpec` (7 examples, clean) — flagged by advisor as
+the one place a previous bug (`compress`'s stale-snapshot-vs-mutation hazard, see the "Cross-engine benchmark"
+section of `CLAUDE.md`) was *exactly* this class of hazard (introducing in-place mutation where value semantics
+used to hold), and which carries a pinned regression fixture
+(`HomologyFixtures.tetrahedronBoundaryDegenerateCells`) that already discriminates it. `RipserCohomologySpec`
+(17 examples) and `PackedRipserCohomologySpec` (9 examples) — the two engines whose `coboundaryOf`/`insertionDiameter`
+also changed this session — both clean.
+
+**Measured (same A/B methodology, isolating just `Chain.scala` via `git stash` with the iterator fix already
+applied to both files)**: re-profiling confirmed `Chain$.reduceLoop`/`.updateMap`/`.toMutableTreeMap`'s combined
+allocation share dropped to ~8.4% of a much-smaller total (most of which is now legitimate: a mutable tree still
+allocates a node for a genuinely NEW key, and `reduceByUntil`'s final `Chain.from(...)` conversion is unavoidable
+either way — the eliminated cost was specifically the *rebuild-the-path-to-the-root* churn on every UPDATE of an
+existing key, not all `TreeMap` allocation). Wall-clock: 2097.8ms → 1967.1ms, **~6.2% faster** — matching
+advisor's corrected expectation ("low single digits from the accumulator swap alone") once the 48% misattribution
+was corrected, not the originally-guessed 10-15%.
+
+**Combined effect of both fixes this follow-up session, against the true pre-session baseline**: 2316.0ms →
+1967.1ms on real `sphere3_96` data, packed engine, **~15.1% faster** — on top of the ~45-60% already measured
+earlier the same day (see the first follow-up section above) and the ~36% from the original overnight session.
+
+**General lesson, worth restating because it was worth two advisor round-trips to surface**: a profiler grouping
+by bare class name (`RedBlackTree$Tree`, `RedBlackTree$KeysIterator`) can silently merge unrelated call sites that
+happen to share an implementation class. The fix was cheap once applied (`jfr print --stack-depth 30` instead of
+a shallow default, then classify each sample by its actual originating method) but nearly wasn't applied at all —
+the plan to redesign `Chain.reduceLoop` was fully formed, advisor-reviewed once already, and about to be coded
+before the deeper stack trace was pulled. The prompt for pulling it was advisor's own explicit "one more check,
+because it may change what you build" — not a self-generated doubt. Worth remembering the *shape* of that prompt
+for next time: when a single number drives an implementation plan, check what's actually IN that number before
+building on top of it, especially when the number is suspiciously round or suspiciously large relative to
+everything else measured in the same pass.
+
+**Files changed this follow-up**: `PackedRipserCohomology.scala`/`Homology.scala` (`insertionDiameter` signature,
+`coboundaryOf`'s sign computation, all call sites), `Chain.scala` (`updateMap`/`toSortedMap`→`toMutableTreeMap`/
+`reduceLoop`). A third scratch driver, `PackedProfileDriver.scala`, was used twice (once per fix) and deleted
+both times, same convention as the first two sessions.

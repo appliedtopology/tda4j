@@ -884,18 +884,26 @@ class RipserCohomologyContext[CoefficientT: Field](
     * sigma's own max" canonical-cofacet convention `sparseCofacets` uses below -- so this is also used inside
     * `coboundaryOf`/`zeroPivotCofacet`, which need to consider cofacets from inserting vertices in general.
     */
-  /** A plain `while` loop, not `sigma.underlying.iterator.map(u => metricSpace.distance(u, v)).max`, as of
-    * `.claude/WORKLOG-ripser-profiling.md`'s follow-up session -- see `PackedRipserCohomologyContext.insertionDiameter`
-    * (`PackedRipserCohomology.scala`) for the full rationale (the `.map` closure was measured as that class's own
-    * single largest allocation source, allocated fresh on every candidate cofacet vertex). Both engines had a
-    * byte-for-byte identical implementation before this fix; both have one after it.
+  /** Takes `sigma`'s vertex set as an already-materialized `Array[Int]`, not a `Simplex[Int]`/`SortedSet[Int]`, as of
+    * a later follow-up session -- see `PackedRipserCohomologyContext.insertionDiameter` (`PackedRipserCohomology.scala`)
+    * for the full rationale: the earlier closure-allocation fix that replaced `.map(...).max` with a `while` loop (see
+    * git history) still called `sigma.underlying.iterator`, and `TreeSet.iterator()` itself allocates a `KeysIterator`
+    * wrapping a `TreeIterator` (with its own `Tree[]` DFS-stack array) on every single call -- re-profiling
+    * `PackedRipserCohomologyContext` found this was actually that class's single LARGEST allocation source (23.8% of
+    * total weight), bigger than `Chain.reduceLoop`'s own accumulator churn. `sigma` is fixed across every candidate
+    * vertex considered within one enumeration call, so each caller here now hoists `sigma.underlying.toArray` ONCE
+    * and passes the same array to every `insertionDiameter` call in that enumeration, rather than each call
+    * re-iterating `sigma.underlying` itself. The two engines are no longer byte-for-byte identical at their call
+    * sites (this one already holds `sigma: Simplex[Int]` directly, so it hoists straight from it; the packed engine
+    * decodes from a combinatorial index first) but `insertionDiameter`'s own array-indexing body stays identical.
     */
-  private def insertionDiameter(sigma: Simplex[Int], sigmaFv: Double, v: Int): Double =
+  private def insertionDiameter(vertices: Array[Int], sigmaFv: Double, v: Int): Double =
     var maxD = sigmaFv
-    val it = sigma.underlying.iterator
-    while it.hasNext do
-      val d = metricSpace.distance(it.next(), v)
+    var i = 0
+    while i < vertices.length do
+      val d = metricSpace.distance(vertices(i), v)
       if d > maxD then maxD = d
+      i += 1
     maxD
 
   /** The canonical cofacets of `sigma` -- one per higher simplex that has `sigma` as ITS canonical facet (the facet
@@ -916,10 +924,11 @@ class RipserCohomologyContext[CoefficientT: Field](
   private def sparseCofacets(sigma: DiameterSimplex): Iterator[DiameterSimplex] =
     if sigma.simplex.dim + 1 > maxDimension then Iterator.empty
     else
-      val maxVertex = sigma.simplex.underlying.max
+      val vertices = sigma.simplex.underlying.toArray
+      val maxVertex = vertices(vertices.length - 1)
       (maxVertex + 1 until metricSpace.size).iterator
         .map { v =>
-          DiameterSimplex(insertionDiameter(sigma.simplex, sigma.diameter, v), (sigma.simplex.underlying + v).asSimplex)
+          DiameterSimplex(insertionDiameter(vertices, sigma.diameter, v), (sigma.simplex.underlying + v).asSimplex)
         }
         .filter(_.diameter <= resolvedMaxFiltrationValue)
 
@@ -943,6 +952,7 @@ class RipserCohomologyContext[CoefficientT: Field](
     if sigma.dim > maxDimension then Chain.empty
     else
       val sigmaFv = filtrationValue(sigma)
+      val vertices = sigma.underlying.toArray
       Chain.from(
         si.cofacetIterator(sigma)
           .flatMap { cofacetIdx =>
@@ -955,13 +965,17 @@ class RipserCohomologyContext[CoefficientT: Field](
             // + 1` always, and `.find` on `tau`'s own (already-sorted) small vertex set is `O(sigma.size)` with zero
             // tree-merge machinery -- the same style of fix `SimplexIndexing.cofacetIteratorWithVertex` already
             // avoided needing, by exposing the inserted vertex directly (see that method's own doc for why the packed
-            // engine never had this cost to begin with). This is the single largest remaining allocation source found
-            // in this engine after the `binomial`/iterator fixes above -- 12.5% of all main-thread allocation weight
-            // on a 48-point random cloud, all in `scala.Tuple4`/`RedBlackTree$Tree` under this exact call site.
+            // engine never had this cost to begin with). `tau.underlying.contains(v)` is a direct O(log d) tree
+            // descent, not an iterator -- unlike `insertionDiameter`/the sign computation below, `.find` itself was
+            // NOT re-profiled as part of the later iterator-allocation fix and is left as-is.
             val inserted = tau.underlying.find(v => !sigma.underlying.contains(v)).get
-            if insertionDiameter(sigma, sigmaFv, inserted) > resolvedMaxFiltrationValue then None
+            if insertionDiameter(vertices, sigmaFv, inserted) > resolvedMaxFiltrationValue then None
             else
-              val position = sigma.underlying.count(_ < inserted)
+              // `vertices` is sorted ascending, so this is a plain scan, not `sigma.underlying.count(_ < inserted)`
+              // -- see `insertionDiameter`'s doc above for why a `SortedSet` operation here allocates an iterator on
+              // every single candidate.
+              var position = 0
+              while position < vertices.length && vertices(position) < inserted do position += 1
               val sign = if position % 2 == 0 then fr.one else fr.negate(fr.one)
               Some((tau, sign))
           }
@@ -999,13 +1013,14 @@ class RipserCohomologyContext[CoefficientT: Field](
     if sigma.dim > maxDimension then None
     else
       val d = filtrationValue(sigma)
+      val vertices = sigma.underlying.toArray
       si.cofacetIterator(sigma)
         .map { idx =>
           val tau = si(idx, sigma.size + 1)
           // See `coboundaryOf`'s identical fix above -- same single-inserted-vertex question, same cheap linear
           // scan instead of a full `TreeSet.diff`.
           val inserted = tau.underlying.find(v => !sigma.underlying.contains(v)).get
-          (tau, insertionDiameter(sigma, d, inserted))
+          (tau, insertionDiameter(vertices, d, inserted))
         }
         .filter((tau, tauFv) => tauFv == d)
         .maxByOption((tau, _) => si(tau))
