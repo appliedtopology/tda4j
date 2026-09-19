@@ -948,39 +948,36 @@ class RipserCohomologyContext[CoefficientT: Field](
     * tied ones, unlike `zeroPivotCofacet` below). Sign convention dual to `Simplex.scala`'s boundary: `(-1)^`(number of
     * sigma's vertices smaller than the inserted vertex).
     */
+  /** Built directly on `SimplexIndexing.CofacetCursor`, not `si.cofacetIterator` + `si(idx, ...)` decode, as of the
+    * cursor-redesign session (`.claude/WORKLOG-ripser-profiling.md`): the old vertex-less `cofacetIterator` forced
+    * every candidate to be fully decoded back into a `Simplex[Int]` (`si(cofacetIdx, sigma.size + 1)`) and then
+    * linearly scanned (`tau.underlying.find(...)`) just to recover the ONE vertex `CofacetCursor` already hands over
+    * directly as `cur.vertex` -- on top of `cofacetIteratorWithVertex`'s own `(Int, Long)` tuple allocation per
+    * candidate, together the single largest remaining allocation source measured in this engine (~49.8% for the
+    * tuple boxing alone, before even counting the redundant decode this rewrite also removes). `tau` is now built by
+    * inserting `cur.vertex` directly into `sigma`'s own vertex set (`sigma.underlying + v`, O(log d)) -- the same
+    * incremental-insertion `sparseCofacets` above already uses, rather than a full O(d log d) combinatorial decode.
+    */
   def coboundaryOf(sigma: Simplex[Int]): Chain[Simplex[Int], CoefficientT] =
     if sigma.dim > maxDimension then Chain.empty
     else
       val sigmaFv = filtrationValue(sigma)
       val vertices = sigma.underlying.toArray
-      Chain.from(
-        si.cofacetIterator(sigma)
-          .flatMap { cofacetIdx =>
-            val tau = si(cofacetIdx, sigma.size + 1)
-            // A linear scan for the one vertex `tau` has and `sigma` doesn't -- NOT `(tau.underlying diff
-            // sigma.underlying).head`, which was measured (`.claude/WORKLOG-ripser-profiling.md`) to route through
-            // `TreeSet`/`RedBlackTree`'s general persistent-tree set-difference algorithm (`split`/`_difference`,
-            // allocating `Tuple4`s and tree nodes) to answer a question with exactly one right answer by
-            // construction: `tau` is `sigma` plus one inserted vertex, so `tau.underlying.size == sigma.underlying.size
-            // + 1` always, and `.find` on `tau`'s own (already-sorted) small vertex set is `O(sigma.size)` with zero
-            // tree-merge machinery -- the same style of fix `SimplexIndexing.cofacetIteratorWithVertex` already
-            // avoided needing, by exposing the inserted vertex directly (see that method's own doc for why the packed
-            // engine never had this cost to begin with). `tau.underlying.contains(v)` is a direct O(log d) tree
-            // descent, not an iterator -- unlike `insertionDiameter`/the sign computation below, `.find` itself was
-            // NOT re-profiled as part of the later iterator-allocation fix and is left as-is.
-            val inserted = tau.underlying.find(v => !sigma.underlying.contains(v)).get
-            if insertionDiameter(vertices, sigmaFv, inserted) > resolvedMaxFiltrationValue then None
-            else
-              // `vertices` is sorted ascending, so this is a plain scan, not `sigma.underlying.count(_ < inserted)`
-              // -- see `insertionDiameter`'s doc above for why a `SortedSet` operation here allocates an iterator on
-              // every single candidate.
-              var position = 0
-              while position < vertices.length && vertices(position) < inserted do position += 1
-              val sign = if position % 2 == 0 then fr.one else fr.negate(fr.one)
-              Some((tau, sign))
-          }
-          .toSeq
-      )
+      val cur = si.cofacetCursor(si(sigma), sigma.size, allCofacets = true)
+      val buffer = mutable.ArrayBuffer.empty[(Simplex[Int], CoefficientT)]
+      while cur.hasNext do
+        val v = cur.vertex
+        if insertionDiameter(vertices, sigmaFv, v) <= resolvedMaxFiltrationValue then
+          val tau = (sigma.underlying + v).asSimplex
+          // `vertices` is sorted ascending, so this is a plain scan, not `sigma.underlying.count(_ < v)` -- see
+          // `insertionDiameter`'s doc above for why a `SortedSet` operation here allocates an iterator on every
+          // single candidate.
+          var position = 0
+          while position < vertices.length && vertices(position) < v do position += 1
+          val sign = if position % 2 == 0 then fr.one else fr.negate(fr.one)
+          buffer += ((tau, sign))
+        cur.advance()
+      Chain.from(buffer.toSeq)
 
   /** Coboundary of a whole chain, linearly extending `coboundaryOf`. Unlike `Chain.scala`'s `.boundary` extension
     * (intrinsic to a cell), a coboundary is extrinsic -- it depends on which higher-dimensional simplices exist in this
@@ -1019,27 +1016,29 @@ class RipserCohomologyContext[CoefficientT: Field](
     * assumption: `SimplexIndexingSpec`'s round-trip property test (`si(si(idx, size), size) == idx` for random
     * valid indices) confirms decode-then-encode is the identity, independent of this fix.
     */
+  /** Built on `CofacetCursor` directly, as of the cursor-redesign session -- see `coboundaryOf`'s identical rewrite
+    * above for the shared rationale. Unlike `coboundaryOf`, which needs every surviving candidate's `Simplex[Int]`,
+    * this method only ever needs the SINGLE winning one -- so `tau` is never built at all until the loop finishes,
+    * only `bestVertex`/`bestIdx` (primitives) are tracked per candidate, and `sigma.underlying + bestVertex` runs
+    * exactly once, for the winner, not once per candidate considered.
+    */
   private def zeroPivotCofacet(sigma: Simplex[Int]): Option[Simplex[Int]] =
     if sigma.dim > maxDimension then None
     else
       val d = filtrationValue(sigma)
       val vertices = sigma.underlying.toArray
-      val it = si.cofacetIterator(sigma)
-      var best: Simplex[Int] = ∆()
+      val cur = si.cofacetCursor(si(sigma), sigma.size, allCofacets = true)
+      var bestVertex: Int = -1
       var bestIdx: Long = -1L
       var found = false
-      while it.hasNext do
-        val idx = it.next()
-        val tau = si(idx, sigma.size + 1)
-        // See `coboundaryOf`'s identical fix above -- same single-inserted-vertex question, same cheap linear
-        // scan instead of a full `TreeSet.diff`.
-        val inserted = tau.underlying.find(v => !sigma.underlying.contains(v)).get
-        val tauFv = insertionDiameter(vertices, d, inserted)
-        if tauFv == d && (!found || idx > bestIdx) then
-          best = tau
-          bestIdx = idx
+      while cur.hasNext do
+        val tauFv = insertionDiameter(vertices, d, cur.vertex)
+        if tauFv == d && (!found || cur.index > bestIdx) then
+          bestVertex = cur.vertex
+          bestIdx = cur.index
           found = true
-      if found then Some(best) else None
+        cur.advance()
+      if found then Some((sigma.underlying + bestVertex).asSimplex) else None
 
   /** `tau`'s facet tied at `tau`'s own filtration value with the SMALLEST combinatorial index, i.e. the "youngest
     * facet" in Definition 3.2/3.11's sense. No `maxDimension` guard needed: a facet is always one dimension lower than
@@ -1059,19 +1058,29 @@ class RipserCohomologyContext[CoefficientT: Field](
     * own index, since a facet iterator needs to know what it's removing a vertex FROM), stays -- it happens once
     * per `zeroPivotFacet` call, not once per candidate, so it was never part of either cost.
     */
+  /** Built on `FacetCursor` directly, as of the cursor-redesign session: `FacetCursor.vertex` is the vertex REMOVED
+    * to reach `.index` (verified against `decodeToArray` independently by `SimplexIndexingSpec`'s `FacetCursor`
+    * property before this was relied on here), so each candidate's vertex set is built by removing ONE vertex from
+    * `tau`'s own already-materialized `underlying` (`tau.underlying - v`, O(log d)) rather than a full combinatorial
+    * decode (`si(idx, tau.size - 1)`, O(d log vertexCount) search plus `size - 1` incremental tree insertions).
+    * `filtrationValue(sigma)` itself still needs the full candidate vertex set on every candidate, unlike the cofacet
+    * direction's `insertionDiameter` -- no incremental shortcut exists for removing a vertex's diameter contribution
+    * (same scope boundary this class's other docs already note), so `sigma` can't be deferred to just the winner
+    * the way `zeroPivotCofacet` defers `tau`.
+    */
   private def zeroPivotFacet(tau: Simplex[Int]): Option[Simplex[Int]] =
     val d = filtrationValue(tau)
-    val it = si.facetIterator(si(tau), tau.size)
+    val cur = si.facetCursor(si(tau), tau.size)
     var best: Simplex[Int] = ∆()
     var bestIdx: Long = Long.MaxValue
     var found = false
-    while it.hasNext do
-      val idx = it.next()
-      val sigma = si(idx, tau.size - 1)
-      if filtrationValue(sigma) == d && (!found || idx < bestIdx) then
+    while cur.hasNext do
+      val sigma = (tau.underlying - cur.vertex).asSimplex
+      if filtrationValue(sigma) == d && (!found || cur.index < bestIdx) then
         best = sigma
-        bestIdx = idx
+        bestIdx = cur.index
         found = true
+      cur.advance()
     if found then Some(best) else None
 
   /** `Some(tau)` iff `(sigma, tau)` is a genuine (mutual) Definition 3.2 apparent pair: tau is sigma's oldest tied

@@ -232,92 +232,143 @@ class SimplexIndexing(val vertexCount: Int):
   ): Iterator[Long] =
     cofacetIteratorWithVertex(index, size, allCofacets).map((_, idx) => idx)
 
+  /** A `hasNext`/`vertex`/`index`/`advance()` cursor over `sigma`'s cofacets -- the enumeration
+    * `cofacetIteratorWithVertex` used to do directly as a hand-rolled `Iterator[(Int, Long)]`, now factored out so a
+    * caller can read `vertex`/`index` as plain field accesses with zero per-step allocation, not even the
+    * `(Int, Long)` tuple `Iterator[(Int, Long)]`'s own contract forces on every `next()` call -- measured
+    * (`.claude/WORKLOG-ripser-profiling.md`'s follow-up session) as ~49.8% of total allocation weight in both engines
+    * after every earlier fix in that arc, the largest remaining identified cost. `hasNext`/`advance()` are
+    * deliberately split from a single `next()`: `vertex`/`index` stay valid to re-read as many times as a caller
+    * wants between one `advance()` and the next (both `PackedRipserCohomology.scala`'s `coboundaryOf` and
+    * `Homology.scala`'s now read both fields off one candidate before advancing).
+    *
+    * Decodes `sigma` via `decodeToArray` (a plain sorted `Array[Int]`, binary-searched for membership), not
+    * `apply` (a `Simplex[Int]`/`SortedSet[Int]`, `O(log d)` tree lookup per membership check) -- the same
+    * array-over-tree substitution `decodeToArray`'s own doc motivates, folded in here since this cursor replaces
+    * `cofacetIteratorWithVertex`'s body outright rather than wrapping it.
+    */
+  final class CofacetCursor(startIndex: Long, size: Int, allCofacets: Boolean):
+    private val vertices: Array[Int] = decodeToArray(startIndex, size)
+    private var iB: Long = startIndex
+    private var iA: Long = 0L
+    private var k: Int = size
+    private var j: Int = vertexCount - 1
+    private var _vertex: Int = -1
+    private var _index: Long = -1L
+    private var havePending: Boolean = false
+    private var done: Boolean = false
+
+    private def containsVertex(v: Int): Boolean =
+      var lo = 0
+      var hi = vertices.length - 1
+      var found = false
+      while lo <= hi && !found do
+        val mid = (lo + hi) >>> 1
+        val mv = vertices(mid)
+        if mv == v then found = true
+        else if mv < v then lo = mid + 1
+        else hi = mid - 1
+      found
+
+    private def step(): Unit =
+      while !havePending && !done do
+        if j < 0 then done = true
+        else if containsVertex(j) then
+          if !allCofacets then done = true
+          else
+            iB -= binomial(j, k)
+            iA += binomial(j, k + 1)
+            k -= 1
+            j -= 1
+        else
+          _vertex = j
+          _index = iB + binomial(j, k + 1) + iA
+          havePending = true
+          j -= 1
+
+    step()
+
+    def hasNext: Boolean = havePending
+    def vertex: Int = _vertex
+    def index: Long = _index
+    def advance(): Unit =
+      havePending = false
+      step()
+
+  def cofacetCursor(index: Long, size: Int, allCofacets: Boolean = true): CofacetCursor =
+    new CofacetCursor(index, size, allCofacets)
+
   /** Same enumeration as `cofacetIterator`, but also yields the INSERTED vertex alongside each cofacet index -- needed
     * by a packed (index-only) reduction that has no materialized `Simplex[Int]` to recover it from afterward
-    * (`(tau.underlying diff sigma.underlying).head`, `coboundaryOf`'s own approach, requires decoding `tau`). The
-    * vertex is already present as `j`, the unfold's own loop state, at exactly the point a cofacet is emitted (`j`
-    * values that are NOT already in `s` are candidates for insertion) -- so exposing it costs nothing beyond what this
-    * method was already computing.
-    */
-  /** Hand-rolled `Iterator`, not `Iterator.unfold` + `.filter` + `.map`, as of `.claude/WORKLOG-ripser-profiling.md`:
-    * allocation profiling found the `unfold`-based version allocated a fresh `Tuple5` state tuple AND an
-    * `Option[(Int, Long)]` on EVERY candidate vertex `j` from `vertexCount - 1` down to `0` -- not just once per
-    * cofacet actually found -- plus the `unfold`/`filter`/`map` step closures themselves, allocated once per call to
-    * this method (`SimplexIndexing$$Lambda...` was the second-largest single allocation source measured, 13.5%-14.9% of
-    * main-thread allocation weight, right behind `binomialEntry`'s tuple-keyed cache lookup fixed just above). This
-    * version preserves the exact same per-step arithmetic and termination behavior (see the original `unfold` step
-    * function, kept in git history for direct comparison) -- verified against it directly via `SimplexIndexingSpec`'s
-    * exact-cofacet-set assertions and `RipserCohomologySpec`/`PackedRipserCohomologySpec`'s full-barcode
-    * cross-validation, not merely reasoned through -- but allocates only the `(Int, Long)` result pair actually
-    * returned by `next()`, never a throwaway state tuple or `Option` wrapper per skipped candidate.
+    * (`(tau.underlying diff sigma.underlying).head`, `coboundaryOf`'s own approach, requires decoding `tau`). Now a
+    * thin `Iterator[(Int, Long)]` wrapper over `CofacetCursor` above, kept for the legacy `RipserStreamSparse` class
+    * and `SimplexIndexingSpec`'s own `Iterator`-based assertions -- new call sites use `cofacetCursor` directly.
     */
   def cofacetIteratorWithVertex(
     index: Long,
     size: Int,
     allCofacets: Boolean = true
   ): Iterator[(Int, Long)] =
-    val sz = size // `size` also names `Iterator`'s own member; capture the parameter under a distinct name
+    val cur = cofacetCursor(index, size, allCofacets)
     new Iterator[(Int, Long)]:
-      private val s: Simplex[Int] = apply(index, sz)
-      private var iB: Long = index
-      private var iA: Long = 0L
-      private var k: Int = sz
-      private var j: Int = vertexCount - 1
-      private var pendingVertex: Int = -1
-      private var pendingIndex: Long = -1L
-      private var havePending: Boolean = false
-      private var done: Boolean = false
-
-      private def advance(): Unit =
-        while !havePending && !done do
-          if j < 0 then done = true
-          else if s.contains(j) then
-            if !allCofacets then done = true
-            else
-              iB -= binomial(j, k)
-              iA += binomial(j, k + 1)
-              k -= 1
-              j -= 1
-          else
-            pendingVertex = j
-            pendingIndex = iB + binomial(j, k + 1) + iA
-            havePending = true
-            j -= 1
-
-      advance()
-
-      def hasNext: Boolean = havePending
+      def hasNext: Boolean = cur.hasNext
       def next(): (Int, Long) =
-        if !havePending then throw new NoSuchElementException("next on empty iterator")
-        val result = (pendingVertex, pendingIndex)
-        havePending = false
-        advance()
+        if !cur.hasNext then throw new NoSuchElementException("next on empty iterator")
+        val result = (cur.vertex, cur.index)
+        cur.advance()
         result
 
-  /** Hand-rolled for the same reason as `cofacetIteratorWithVertex` above -- the `unfold`-based version allocated a
-    * fresh `Tuple4` state (plus a defensive `.to(Vector)` re-copy of the already-immutable decoded simplex, EVERY step)
-    * for what is always exactly `size` steps, no filtering or early termination. Preserves the original's exact
-    * arithmetic, including yielding `iiB + iA` (the OLD `iA`, before this step's own update) rather than `iiB + iiA` --
-    * a real, easy-to-invert-by-mistake detail of the original, kept byte-for-byte, not "corrected."
+  /** A `hasNext`/`vertex`/`index`/`advance()` cursor over `tau`'s facets, mirroring `CofacetCursor` above --
+    * `vertex` is the vertex REMOVED to produce the facet at `index` (already available as `vertices(k)` at the
+    * point `index` is computed, so exposing it costs nothing extra). Preserves the original `facetIterator`'s exact
+    * arithmetic, including yielding `iiB + iA` (the OLD `iA`, before this step's own update) rather than `iiB + iiA`
+    * -- a real, easy-to-invert-by-mistake detail of the original, kept byte-for-byte, not "corrected." Decodes `tau`
+    * via `decodeToArray`, not `apply(...).toSeq.sorted` (a `Simplex[Int]` decode followed by a redundant re-sort of
+    * an already-sorted `SortedSet`).
     */
-  def facetIterator(index: Long, size: Int): Iterator[Long] =
-    val sz = size // `size` also names `Iterator`'s own member; capture the parameter under a distinct name
-    new Iterator[Long]:
-      private val s: Seq[Int] = apply(index, sz).toSeq.sorted
-      private var iB: Long = index
-      private var iA: Long = 0L
-      private var k: Int = sz - 1
+  final class FacetCursor(startIndex: Long, size: Int):
+    private val vertices: Array[Int] = decodeToArray(startIndex, size)
+    private var iB: Long = startIndex
+    private var iA: Long = 0L
+    private var k: Int = size - 1
+    private var _vertex: Int = -1
+    private var _index: Long = -1L
+    private var havePending: Boolean = false
 
-      def hasNext: Boolean = k >= 0
-      def next(): Long =
-        if !hasNext then throw new NoSuchElementException("next on empty iterator")
-        val j = s(k)
-        val iiB = iB - binomial(j, k + 1)
-        val iiA = iA + binomial(j, k)
-        val result = iiB + iA
+    private def step(): Unit =
+      if k >= 0 then
+        val v = vertices(k)
+        val iiB = iB - binomial(v, k + 1)
+        val iiA = iA + binomial(v, k)
+        _vertex = v
+        _index = iiB + iA
         iB = iiB
         iA = iiA
         k -= 1
+        havePending = true
+      else havePending = false
+
+    step()
+
+    def hasNext: Boolean = havePending
+    def vertex: Int = _vertex
+    def index: Long = _index
+    def advance(): Unit = step()
+
+  def facetCursor(index: Long, size: Int): FacetCursor =
+    new FacetCursor(index, size)
+
+  /** Now a thin `Iterator[Long]` wrapper over `FacetCursor` above, kept for the legacy `RipserStreamSparse` class and
+    * `SimplexIndexingSpec`'s own `Iterator`-based assertions -- new call sites use `facetCursor` directly.
+    */
+  def facetIterator(index: Long, size: Int): Iterator[Long] =
+    val cur = facetCursor(index, size)
+    new Iterator[Long]:
+      def hasNext: Boolean = cur.hasNext
+      def next(): Long =
+        if !cur.hasNext then throw new NoSuchElementException("next on empty iterator")
+        val result = cur.index
+        cur.advance()
         result
 
   def apply(simplex: Simplex[Int]): Long =

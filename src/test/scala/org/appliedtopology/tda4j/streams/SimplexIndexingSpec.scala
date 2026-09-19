@@ -110,6 +110,46 @@ class SimplexIndexingSpec extends Specification with ScalaCheck:
         si(si(idx, size)) must be_==(idx)
       }
     }
+
+    /** Backs the incremental-insert/incremental-remove optimizations `RipserCohomologyContext.coboundaryOf`/
+      * `zeroPivotCofacet`/`zeroPivotFacet` build on top of `CofacetCursor`/`FacetCursor` (`.claude/
+      * WORKLOG-ripser-profiling.md`'s cursor-redesign session): those callers build a cofacet/facet's vertex set by
+      * inserting/removing `cursor.vertex` from an already-materialized set instead of decoding `cursor.index` fresh --
+      * only sound if `cursor.vertex` really is the one vertex that distinguishes `cursor.index`'s simplex from the
+      * cursor's own starting simplex. Checked directly against `decodeToArray`, independently of any assumption about
+      * the cursors' own internal arithmetic.
+      */
+    "CofacetCursor/FacetCursor's vertex is exactly the vertex inserted/removed to reach their index, for arbitrary valid (vertexCount, size, index)" >> {
+      val validCase = for
+        vertexCount <- Gen.chooseNum(2, 25)
+        size <- Gen.chooseNum(1, vertexCount)
+        idx <- Gen.chooseNum(0L, math.max(0L, binomial(vertexCount, size) - 1))
+      yield (vertexCount, size, idx)
+
+      "CofacetCursor" ==> forAll(validCase) { case (vertexCount, size, idx) =>
+        val si = SimplexIndexing(vertexCount)
+        val startSet = si.decodeToArray(idx, size).toSet
+        val cur = si.cofacetCursor(idx, size, allCofacets = true)
+        var ok = true
+        while cur.hasNext do
+          if si.decodeToArray(cur.index, size + 1).toSet != startSet + cur.vertex then ok = false
+          cur.advance()
+        ok must beTrue
+      }
+
+      "FacetCursor" ==> forAll(validCase) { case (vertexCount, size, idx) =>
+        val si = SimplexIndexing(vertexCount)
+        val startSet = si.decodeToArray(idx, size).toSet
+        val cur = si.facetCursor(idx, size)
+        var ok = true
+        var count = 0
+        while cur.hasNext do
+          if si.decodeToArray(cur.index, size - 1).toSet != startSet - cur.vertex then ok = false
+          count += 1
+          cur.advance()
+        (ok must beTrue) and (count must be_==(size))
+      }
+    }
   }
 
 class RipserStreamSpec extends Specification:

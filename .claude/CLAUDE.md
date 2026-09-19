@@ -752,13 +752,59 @@ imply the others need it:
    combined this session**, ~52.6% allocation reduction. Full `sbt test` clean after each fix (236 examples now,
    231/0/5/1 — the `SimplexIndexingSpec` property test is the +1 over the prior 235/230 baseline).
 
-   **Now the dominant remaining cost, identified but NOT attempted — a real, interface-changing job flagged for
-   the project lead to decide on, not expanded into unasked**: `SimplexIndexing.cofacetIteratorWithVertex`'s hand-
-   rolled `Iterator[(Int, Long)]` (Finding #3 from the very first session in this arc) boxes its result pair on
-   every step — now **~49.8%** of total allocation weight, by a wide margin the largest single category in either
-   engine, having overtaken everything this and the prior two sessions fixed. A real fix means replacing the
-   per-step `(Int, Long)` tuple return with a cursor interface (`hasNext`/`advance`/`vertex`/`index`), which
-   changes the calling convention at every use site in BOTH engines — not a quick win.
+   **Fourth follow-up session, same day: the cursor redesign, explicitly authorized after the ~49.8% finding
+   above was flagged**. `SimplexIndexing` gains `CofacetCursor`/`FacetCursor` — a `hasNext`/`vertex`/`index`/
+   `advance()` cursor interface (deliberately not `scala.collection.Iterator`: splitting `next()`'s read-then-step
+   into two calls lets a caller re-read `vertex`/`index` between one `advance()` and the next, at zero allocation)
+   — replacing the hand-rolled `Iterator[(Int, Long)]`/`Iterator[Long]` bodies of `cofacetIteratorWithVertex`/
+   `facetIterator`, which are kept as thin wrappers over the new cursors for backward compatibility with dead/
+   legacy code and `SimplexIndexingSpec`'s own tests. `advisor()` was consulted before writing code, given this
+   touches `RipserCohomologyContext` (the reference oracle every other engine is cross-validated against); two
+   corrections came out of that: `PackedRipserCohomologyContext.sparseCofacets` keeps returning
+   `Iterator[DiameterIndex]`, not `Seq`, since both call sites' eager `.toSeq` would otherwise be preceded by
+   fully materializing every source simplex's cofacet list instead of streaming one at a time — a real peak-memory
+   regression on exactly the workload a separate, still-pending memory-comparison deliverable measures; and
+   `FacetCursor`'s removed-vertex correctness needed its own ScalaCheck property (`decodeToArray(cur.index, size -
+   1).toSet == decodeToArray(startIndex, size).toSet - cur.vertex`, verified independently of the cursor's own
+   internal arithmetic) before being relied on, since it isn't already covered by `cofacetIteratorWithVertex`'s
+   existing tests the way `CofacetCursor`'s inserted-vertex path is.
+
+   **`RipserCohomologyContext`'s rewrite goes further than a cursor swap**: `coboundaryOf`/`zeroPivotCofacet` used
+   to fully decode each candidate back into a `Simplex[Int]` (`si(cofacetIdx, sigma.size + 1)`) and linearly scan
+   it (`tau.underlying.find(v => !sigma.underlying.contains(v))`) just to recover the one vertex `CofacetCursor`
+   now hands over directly — both now build `tau` via `(sigma.underlying + v).asSimplex`, one incremental
+   insertion, the same convention `sparseCofacets` already used; `zeroPivotCofacet` additionally defers building
+   `tau` at all until the single winning candidate is known. `zeroPivotFacet` builds each candidate's `sigma` via
+   `(tau.underlying - cur.vertex).asSimplex` (one incremental removal) instead of a full decode
+   (`si(idx, tau.size - 1)`) — verified safe by the `FacetCursor` property above — though `sigma` still can't be
+   deferred to just the winner here, since `filtrationValue(sigma)` needs the full vertex set on every candidate
+   (no incremental shortcut for removing a vertex's diameter contribution, an already-documented scope boundary).
+   The packed engine's `zeroPivotFacet` got the same array-removal treatment on top of its own cursor swap.
+
+   **Measured (one engine per JVM process — a new, kept-not-scratch `SingleEngineProfileDriver`, avoiding the
+   sbt-hosted benchmark harness's own documented timeout/daemon-thread contamination risk — median of 3 trials,
+   real `sphere3_96` data, `git stash` isolating this round's four changed files)**: packed engine 1006.4ms →
+   941.0ms (6.5% faster); `RipserCohomologyContext` 25690.7ms → 19755.0ms (23.1% faster) — the SortedSet engine's
+   larger gain is expected, not an inconsistency: its fix removed a genuine O(d log d) decode-then-scan, not just
+   the tuple allocation the packed engine's fix removed alone. Re-profiled to confirm, not assumed:
+   `SimplexIndexing$$anon$1` (the old tuple-allocating iterator) no longer appears anywhere in either engine's
+   allocation profile. Full `sbt test` clean (237 examples, 232/0/5/1 — the +1 is the two new cursor-correctness
+   properties), with particular attention to `RipserCohomologySpec` (cross-validated against
+   `SimplicialHomologyContext`, unaffected by this rewrite) and `PackedRipserCohomologySpec` staying green — the
+   latter is `RipserCohomologyContext`'s own cross-validation oracle, and both were changed in the same session,
+   so `RipserCohomologySpec`'s independent check against the naive engine is what actually confirms correctness
+   here, not packed-vs-SortedSet agreement alone.
+
+   **A new cost surfaced by re-profiling after this fix, identified but explicitly NOT attempted**: with the
+   tuple/decode cost gone, `RipserCohomologyContext`'s remaining hot-path allocation is now dominated by
+   `SimplexIndexing.apply(simplex): Long` (the encode direction, called once per `coboundaryOf`/`zeroPivotCofacet`/
+   `zeroPivotFacet` invocation to seed that call's cursor — pre-existing, unchanged by this session, just no
+   longer hidden behind something bigger) and `zeroPivotFacet`'s `filtrationValue(sigma)` going through the
+   generic `FiniteMetricSpace.MaximumDistanceFiltrationValue` per candidate — the same closure/`SortedSet`-
+   iteration shape `PackedRipserCohomologyContext.zeroPivotFacet` already fixed via its own array-based
+   `maxPairwiseDistance`, never applied to this engine's equivalent call. Two concrete, already-scoped next steps,
+   neither attempted: give this engine's `zeroPivotFacet` the same array-based treatment; and/or collapse
+   `apply(simplex)`'s five-stage `toSeq.sorted.reverse.zipWithIndex.map(...).sum` into a single `while` loop.
 
 **Bug found while cross-validating (4) against (1), fixed**: `EnumeratingCofaceSimplexStream.filtrationOrdering`
 (`SimplexStream.scala`) used to be `Ordering.by(filtrationValue)` — no secondary tie-break — so it wasn't a
