@@ -7,10 +7,16 @@ import org.appliedtopology.tda4j.streams.{given, *}
 import org.appliedtopology.tda4j.homology.{given, *}
 import org.appliedtopology.tda4j.alpha.{given, *}
 
+import org.scalacheck.Gen
+import org.scalacheck.Prop.forAll
+import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
+import org.specs2.scalacheck.Parameters
 import org.specs2.specification.core.Fragment
 
-class SimplexIndexingSpec extends Specification:
+class SimplexIndexingSpec extends Specification with ScalaCheck:
+  given Parameters = Parameters(minTestsOk = 500)
+
   "Testing the simplex indexing code against Ulrich Bauer's paper examples" >> {
 
     "Error Case" >> {
@@ -79,6 +85,30 @@ class SimplexIndexingSpec extends Specification:
           si(∆(2, 4, 5))
         )
       ))
+    }
+
+    /** Backs two later fixes' correctness (`.claude/WORKLOG-ripser-profiling.md`): `decodeToArray`'s array+sort
+      * rewrite of `apply`'s decode, and `RipserCohomologyContext.zeroPivotCofacet`/`zeroPivotFacet` reusing an
+      * iterator's own already-known index instead of re-encoding the simplex it just decoded. Neither fix is
+      * exercised by the hand-picked paper examples above (those never decode-then-encode the SAME simplex back).
+      */
+    "decodeToArray and decode-then-encode round-tripping, for arbitrary valid (vertexCount, size, index)" >> {
+      val validCase = for
+        vertexCount <- Gen.chooseNum(2, 25)
+        size <- Gen.chooseNum(1, vertexCount)
+        idx <- Gen.chooseNum(0L, math.max(0L, binomial(vertexCount, size) - 1))
+      yield (vertexCount, size, idx)
+
+      "decodeToArray agrees with apply's own Simplex[Int] decode" ==> forAll(validCase) {
+        case (vertexCount, size, idx) =>
+          val si = SimplexIndexing(vertexCount)
+          si.decodeToArray(idx, size).toSet must be_==(si(idx, size).underlying)
+      }
+
+      "decode then re-encode is the identity on valid indices" ==> forAll(validCase) { case (vertexCount, size, idx) =>
+        val si = SimplexIndexing(vertexCount)
+        si(si(idx, size)) must be_==(idx)
+      }
     }
   }
 

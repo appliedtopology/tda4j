@@ -1009,22 +1009,37 @@ class RipserCohomologyContext[CoefficientT: Field](
     * tied at `sigma`'s own value, and `sigma` is only ever called with here if it's already within the threshold
     * (guaranteed by construction -- see `sparseCofacets`), so any tied tau is automatically within threshold too.
     */
+  /** A hand-rolled `while` loop, not `.filter(...).maxByOption((tau, _) => si(tau))`, as of a later follow-up
+    * session (`.claude/WORKLOG-ripser-profiling.md`): two separate costs stacked here. First, `maxByOption` boxes
+    * every `Long` key comparison, same as `PackedRipserCohomologyContext.zeroPivotCofacet`'s identical fix. Second,
+    * and specific to this engine, `si(tau)` RE-ENCODES a simplex that was just DECODED from `idx` one line above --
+    * `idx` already IS `tau`'s own combinatorial index by construction (`si.cofacetIterator` yields it,
+    * `tau = si(idx, ...)` decodes it), so `si(tau)` is a fully redundant O(d log d) round trip through the same
+    * `searchRow`/`binomialEntry` machinery for a value already in hand. Reusing `idx` directly is not an
+    * assumption: `SimplexIndexingSpec`'s round-trip property test (`si(si(idx, size), size) == idx` for random
+    * valid indices) confirms decode-then-encode is the identity, independent of this fix.
+    */
   private def zeroPivotCofacet(sigma: Simplex[Int]): Option[Simplex[Int]] =
     if sigma.dim > maxDimension then None
     else
       val d = filtrationValue(sigma)
       val vertices = sigma.underlying.toArray
-      si.cofacetIterator(sigma)
-        .map { idx =>
-          val tau = si(idx, sigma.size + 1)
-          // See `coboundaryOf`'s identical fix above -- same single-inserted-vertex question, same cheap linear
-          // scan instead of a full `TreeSet.diff`.
-          val inserted = tau.underlying.find(v => !sigma.underlying.contains(v)).get
-          (tau, insertionDiameter(vertices, d, inserted))
-        }
-        .filter((tau, tauFv) => tauFv == d)
-        .maxByOption((tau, _) => si(tau))
-        .map((tau, _) => tau)
+      val it = si.cofacetIterator(sigma)
+      var best: Simplex[Int] = ∆()
+      var bestIdx: Long = -1L
+      var found = false
+      while it.hasNext do
+        val idx = it.next()
+        val tau = si(idx, sigma.size + 1)
+        // See `coboundaryOf`'s identical fix above -- same single-inserted-vertex question, same cheap linear
+        // scan instead of a full `TreeSet.diff`.
+        val inserted = tau.underlying.find(v => !sigma.underlying.contains(v)).get
+        val tauFv = insertionDiameter(vertices, d, inserted)
+        if tauFv == d && (!found || idx > bestIdx) then
+          best = tau
+          bestIdx = idx
+          found = true
+      if found then Some(best) else None
 
   /** `tau`'s facet tied at `tau`'s own filtration value with the SMALLEST combinatorial index, i.e. the "youngest
     * facet" in Definition 3.2/3.11's sense. No `maxDimension` guard needed: a facet is always one dimension lower than
@@ -1038,12 +1053,26 @@ class RipserCohomologyContext[CoefficientT: Field](
     * this session's enumeration work. Left as a scope boundary, not an oversight: see WORKLOG-lazy-enumeration.md's
     * "Session 2" section.
     */
+  /** Hand-rolled for the same two reasons as `zeroPivotCofacet` above: `.minByOption(sigma => si(sigma))` boxes
+    * every `Long` comparison, AND `si(sigma)` re-encodes a simplex just decoded from `idx`, which already IS
+    * `sigma`'s own index. The ONE genuinely necessary encode call, `si(tau)` (seeding `facetIterator` with `tau`'s
+    * own index, since a facet iterator needs to know what it's removing a vertex FROM), stays -- it happens once
+    * per `zeroPivotFacet` call, not once per candidate, so it was never part of either cost.
+    */
   private def zeroPivotFacet(tau: Simplex[Int]): Option[Simplex[Int]] =
     val d = filtrationValue(tau)
-    si.facetIterator(si(tau), tau.size)
-      .map(idx => si(idx, tau.size - 1))
-      .filter(sigma => filtrationValue(sigma) == d)
-      .minByOption(sigma => si(sigma))
+    val it = si.facetIterator(si(tau), tau.size)
+    var best: Simplex[Int] = ∆()
+    var bestIdx: Long = Long.MaxValue
+    var found = false
+    while it.hasNext do
+      val idx = it.next()
+      val sigma = si(idx, tau.size - 1)
+      if filtrationValue(sigma) == d && (!found || idx < bestIdx) then
+        best = sigma
+        bestIdx = idx
+        found = true
+    if found then Some(best) else None
 
   /** `Some(tau)` iff `(sigma, tau)` is a genuine (mutual) Definition 3.2 apparent pair: tau is sigma's oldest tied
     * cofacet, AND sigma is, symmetrically, tau's youngest tied facet. Verified against the hand-derived

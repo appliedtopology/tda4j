@@ -725,6 +725,41 @@ imply the others need it:
    misattribution, in `.claude/WORKLOG-ripser-profiling.md`'s own "Follow-up session (2026-09-19, later the same
    day)" heading.
 
+   **Third follow-up session, same day: the boxing and decoding, three more fixes**. `SimplexIndexing.decodeToArray
+   (n, size): Array[Int]`, a NEW method alongside `apply` (not a replacement), performs `apply`'s identical
+   `searchRow`/`binomialEntry` decode arithmetic but writes into a pre-sized array and sorts once at the end
+   (`java.util.Arrays.sort`, in-place) instead of building a `Simplex[Int]` via `size` separate persistent-tree
+   insertions — for the three `PackedRipserCohomologyContext` call sites (`sparseCofacets`/`coboundaryOf`/
+   `zeroPivotCofacet`) that only ever did `si(index, size).underlying.toArray`, discarding the `Simplex` object
+   immediately. Verified against `apply` directly via a new `SimplexIndexingSpec` ScalaCheck property
+   (`decodeToArray(n,size).toSet == apply(n,size).underlying`, 500+ random valid triples) before use — this also
+   confirmed decode-then-encode is the identity (`si(si(idx,size),size) == idx`), which the next fix relies on.
+   Separately, `zeroPivotCofacet`/`zeroPivotFacet` (BOTH engines) were rewritten from `.filter(...).maxByOption
+   (_.index)`/`.minByOption(_.index)` to hand-rolled `while` loops with a primitive `Long` accumulator —
+   `maxByOption`/`minByOption` aren't specialized for `Long`, so every comparison boxed (measured as the packed
+   engine's own largest remaining source after the decode fix, ~13.5%). `Homology.scala`'s versions had a SECOND,
+   distinct cost stacked on the same lines: `.maxByOption((tau,_) => si(tau))` RE-ENCODED a simplex just decoded
+   from an index the iterator already yielded (`si.cofacetIterator`/`facetIterator` hand the exact index back;
+   `tau = si(idx, ...)` decodes it) — a fully redundant O(d log d) round trip, fixed by reusing `idx` directly,
+   backed by the same round-trip property test rather than assumed safe. A third fix, found only by re-profiling
+   after the first two: `zeroPivotFacet`'s own remaining `si(facetIdx, size-1)` decode (needed to feed
+   `MaximumDistanceFiltrationValue`, which takes a `Simplex[Int]`) became the single LARGEST remaining category
+   once everything bigger shrank around it (~34%) — fixed with a new `maxPairwiseDistance(vertices: Array[Int])`
+   helper (plain O(d^2) nested loops, mirroring `insertionDiameter`'s style) replacing
+   `MaximumDistanceFiltrationValue` for this one call site only; that class itself, and every other caller, is
+   untouched. **Measured (same `git stash` A/B methodology, real `sphere3_96` data)**: 1959.3ms → 1603.2ms (decode
+   + boxing fixes, 18.2% faster) → 1399.1ms (`zeroPivotFacet` fix, a further 12.7% faster) — **28.6% faster
+   combined this session**, ~52.6% allocation reduction. Full `sbt test` clean after each fix (236 examples now,
+   231/0/5/1 — the `SimplexIndexingSpec` property test is the +1 over the prior 235/230 baseline).
+
+   **Now the dominant remaining cost, identified but NOT attempted — a real, interface-changing job flagged for
+   the project lead to decide on, not expanded into unasked**: `SimplexIndexing.cofacetIteratorWithVertex`'s hand-
+   rolled `Iterator[(Int, Long)]` (Finding #3 from the very first session in this arc) boxes its result pair on
+   every step — now **~49.8%** of total allocation weight, by a wide margin the largest single category in either
+   engine, having overtaken everything this and the prior two sessions fixed. A real fix means replacing the
+   per-step `(Int, Long)` tuple return with a cursor interface (`hasNext`/`advance`/`vertex`/`index`), which
+   changes the calling convention at every use site in BOTH engines — not a quick win.
+
 **Bug found while cross-validating (4) against (1), fixed**: `EnumeratingCofaceSimplexStream.filtrationOrdering`
 (`SimplexStream.scala`) used to be `Ordering.by(filtrationValue)` — no secondary tie-break — so it wasn't a
 total order: it treated any two *different* simplices tied at the same filtration value as equal, which

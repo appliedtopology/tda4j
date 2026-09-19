@@ -117,7 +117,28 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
       i += 1
     maxD
 
-  private val rawFiltrationValue = FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
+  /** Plain O(d^2) pairwise-maximum over an already-decoded `Array[Int]` -- the array-based equivalent of
+    * `FiniteMetricSpace.MaximumDistanceFiltrationValue.apply(Simplex[Int])`, used ONLY by `zeroPivotFacet` below.
+    * That method has no incremental shortcut (removing a vertex, unlike inserting one via `insertionDiameter`,
+    * admits no O(d) recurrence -- see its own doc), so each candidate facet's filtration value must be recomputed
+    * from scratch regardless; this exists so that recompute can work directly off `decodeToArray`'s cheap array
+    * decode instead of needing a `Simplex[Int]` (which `MaximumDistanceFiltrationValue.apply` requires, and which
+    * would need the `apply`/`SimplexOps.$plus`-based decode this session's other fixes moved away from). Measured
+    * as the single largest remaining allocation category after the `decodeToArray`/boxing fixes above (~34% of a
+    * much-smaller total, `.claude/WORKLOG-ripser-profiling.md`) -- `MaximumDistanceFiltrationValue` itself is
+    * untouched; every other caller of it is unaffected.
+    */
+  private def maxPairwiseDistance(vertices: Array[Int]): Double =
+    var maxD = 0.0
+    var i = 0
+    while i < vertices.length do
+      var j = i + 1
+      while j < vertices.length do
+        val d = metricSpace.distance(vertices(i), vertices(j))
+        if d > maxD then maxD = d
+        j += 1
+      i += 1
+    maxD
 
   /** The canonical (insert-above-own-maximum) cofacets of `sigma`, one per higher simplex that has `sigma` as its own
     * canonical facet -- packed analogue of `RipserCohomologyContext.sparseCofacets`. `size` is `sigma`'s own vertex
@@ -127,7 +148,7 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
   private def sparseCofacets(sigma: DiameterIndex, size: Int): Iterator[DiameterIndex] =
     if size > maxDimension then Iterator.empty
     else
-      val vertices = si(sigma.index, size).underlying.toArray
+      val vertices = si.decodeToArray(sigma.index, size)
       si.cofacetIteratorWithVertex(sigma.index, size, allCofacets = false)
         .map((v, tauIdx) => DiameterIndex(insertionDiameter(vertices, sigma.diameter, v), tauIdx))
         .filter(_.diameter <= resolvedMaxFiltrationValue)
@@ -141,7 +162,7 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
   def coboundaryOf(sigma: DiameterIndex, size: Int): Chain[DiameterIndex, CoefficientT] =
     if size - 1 > maxDimension then Chain.empty
     else
-      val vertices = si(sigma.index, size).underlying.toArray
+      val vertices = si.decodeToArray(sigma.index, size)
       Chain.from(
         si.cofacetIteratorWithVertex(sigma.index, size, allCofacets = true)
           .flatMap { (v, tauIdx) =>
@@ -159,28 +180,47 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
           .toSeq
       )
 
+  /** A hand-rolled `while` loop, not `.filter(...).maxByOption(_.index)`, as of a later follow-up session
+    * (`.claude/WORKLOG-ripser-profiling.md`): `maxByOption` is generic over its key type and isn't specialized for
+    * `Long`, so every comparison boxed the candidate's `index` field -- measured as this class's own largest single
+    * remaining allocation source after the `insertionDiameter`/`decodeToArray` fixes (~13.5% of total weight on real
+    * `sphere3_96` data). Since every candidate that survives the `_.diameter == sigma.diameter` filter shares the
+    * SAME diameter (`sigma.diameter`), the winning `DiameterIndex` can be reconstructed from just the best `index`
+    * seen, tracked as a primitive `var` -- no `Option`/`DiameterIndex` boxing per candidate considered, only for the
+    * single final result.
+    */
   private def zeroPivotCofacet(sigma: DiameterIndex, size: Int): Option[DiameterIndex] =
     if size - 1 > maxDimension then None
     else
-      val vertices = si(sigma.index, size).underlying.toArray
-      si.cofacetIteratorWithVertex(sigma.index, size, allCofacets = true)
-        .map((v, tauIdx) => DiameterIndex(insertionDiameter(vertices, sigma.diameter, v), tauIdx))
-        .filter(_.diameter == sigma.diameter)
-        .maxByOption(_.index)
+      val vertices = si.decodeToArray(sigma.index, size)
+      val it = si.cofacetIteratorWithVertex(sigma.index, size, allCofacets = true)
+      var bestIdx: Long = -1L
+      var found = false
+      while it.hasNext do
+        val (v, tauIdx) = it.next()
+        val tauFv = insertionDiameter(vertices, sigma.diameter, v)
+        if tauFv == sigma.diameter && (!found || tauIdx > bestIdx) then
+          bestIdx = tauIdx
+          found = true
+      if found then Some(DiameterIndex(sigma.diameter, bestIdx)) else None
 
   /** `tau`'s facet tied at `tau`'s own value with the smallest index. No incremental shortcut exists for removing a
-    * vertex (same scope boundary `RipserCohomologyContext.zeroPivotFacet` documents), so each candidate facet is
-    * decoded and its filtration value fully recomputed via the same `MaximumDistanceFiltrationValue` this codebase's
-    * stream-based engines already use -- reused directly rather than reimplemented.
+    * vertex (same scope boundary `RipserCohomologyContext.zeroPivotFacet` documents), so each candidate facet's
+    * filtration value is fully recomputed via `maxPairwiseDistance` above (working off `decodeToArray`, not a
+    * materialized `Simplex[Int]`). Hand-rolled `while` loop for the same reason as `zeroPivotCofacet` above --
+    * `.minByOption(_.index)` boxes every `Long` comparison.
     */
   private def zeroPivotFacet(tau: DiameterIndex, size: Int): Option[DiameterIndex] =
-    si.facetIterator(tau.index, size)
-      .map { facetIdx =>
-        val facetSimplex = si(facetIdx, size - 1)
-        DiameterIndex(rawFiltrationValue(facetSimplex), facetIdx)
-      }
-      .filter(_.diameter == tau.diameter)
-      .minByOption(_.index)
+    val it = si.facetIterator(tau.index, size)
+    var bestIdx: Long = Long.MaxValue
+    var found = false
+    while it.hasNext do
+      val facetIdx = it.next()
+      val fv = maxPairwiseDistance(si.decodeToArray(facetIdx, size - 1))
+      if fv == tau.diameter && (!found || facetIdx < bestIdx) then
+        bestIdx = facetIdx
+        found = true
+    if found then Some(DiameterIndex(tau.diameter, bestIdx)) else None
 
   private def zeroApparentCofacet(sigma: DiameterIndex, size: Int): Option[DiameterIndex] =
     for

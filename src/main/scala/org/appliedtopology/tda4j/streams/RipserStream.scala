@@ -164,6 +164,63 @@ class SimplexIndexing(val vertexCount: Int):
     val id: Int = searchRow(d, n)
     apply(n - binomialEntry(d, id), d - 1, upperAccum + (id + d))
 
+  /** Same decode as `apply(n, size)`, but returns the vertex set as a plain sorted `Array[Int]` instead of a
+    * `Simplex[Int]`/`SortedSet[Int]` -- for callers (`PackedRipserCohomologyContext.sparseCofacets`/`coboundaryOf`/
+    * `zeroPivotCofacet`) that only ever wanted `si(index, size).underlying.toArray` and threw the decoded `Simplex`
+    * away immediately afterward. `apply`'s own `upperAccum + (id + d)` builds the result via `size` separate
+    * persistent-tree insertions (each an O(log size) allocation to preserve structural sharing this throwaway value
+    * never uses) -- measured as the single largest remaining allocation source in the packed engine after this
+    * session's other fixes, ~24% of total weight combined across its three call sites (`.claude/
+    * WORKLOG-ripser-profiling.md`). This method performs the IDENTICAL `searchRow`/`binomialEntry` arithmetic as
+    * `apply` (a direct, line-for-line transcription of the same three base cases and the same recursive step, not a
+    * different algorithm) but writes each vertex into a pre-sized `Array[Int]` and sorts once at the end
+    * (`java.util.Arrays.sort`, in-place, zero allocation) rather than maintaining sortedness via `size` incremental
+    * tree rebuilds -- correct regardless of which order the underlying recursion happens to emit vertices in, so this
+    * doesn't depend on separately re-deriving that order. Verified against `apply` directly (same vertex set, for
+    * every `(index, size)` pair the recursion can reach) in `SimplexIndexingSpec`'s property test, not just reasoned
+    * through -- `apply` itself is left completely unchanged, so any future divergence between the two would show up
+    * as a test failure rather than silently drifting.
+    *
+    * `apply`'s own `Simplex[Int]`-returning callers (this class's `apply(simplex): Long` encode direction aside,
+    * every caller that genuinely needs a `Simplex[Int]` object, e.g. `RipserCohomologyContext.zeroPivotFacet`'s
+    * `rawFiltrationValue` argument) are NOT switched to this method: building a `SortedSet[Int]` from an already-
+    * sorted array is not obviously cheaper than `apply`'s own incremental construction (Scala's `TreeSet` has no
+    * exposed O(n) bulk-build-from-sorted-input path), so there is no clear win there, only a different allocation
+    * shape -- left alone rather than "fixed" without a measurement to justify it.
+    */
+  def decodeToArray(n0: Long, size: Int): Array[Int] =
+    val result = new Array[Int](size)
+    var cursor = 0
+    var n = n0
+    var d = size
+    var continue = true
+    while continue do
+      if d < 0 then
+        // Unreachable in practice (mirrors `apply`'s own dead `d < 0` guard -- `d == 0` always short-circuits
+        // below before `d` could ever go negative), kept only for exact parity with `apply`'s branch structure.
+        continue = false
+      else if n <= 0 then
+        // Remaining `d` vertices are exactly {0, ..., d-1} -- `apply`'s `upperAccum ++ (0 until d).toSet`.
+        var v = 0
+        while v < d do
+          result(cursor) = v
+          cursor += 1
+          v += 1
+        continue = false
+      else if d == 0 then
+        // `apply`'s `upperAccum + n.toInt` base case.
+        result(cursor) = n.toInt
+        cursor += 1
+        continue = false
+      else
+        val id: Int = searchRow(d, n)
+        result(cursor) = id + d
+        cursor += 1
+        n -= binomialEntry(d, id)
+        d -= 1
+    java.util.Arrays.sort(result)
+    result
+
   def cofacetIterator(simplex: Simplex[Int]): Iterator[Long] =
     cofacetIterator(apply(simplex), simplex.size, true)
   def topCofacetIterator(simplex: Simplex[Int]): Iterator[Long] =

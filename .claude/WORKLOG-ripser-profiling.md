@@ -519,3 +519,89 @@ everything else measured in the same pass.
 `coboundaryOf`'s sign computation, all call sites), `Chain.scala` (`updateMap`/`toSortedMap`→`toMutableTreeMap`/
 `reduceLoop`). A third scratch driver, `PackedProfileDriver.scala`, was used twice (once per fix) and deleted
 both times, same convention as the first two sessions.
+
+## Third follow-up session, same day (2026-09-19): the boxing and decoding, three fixes
+
+Asked to fix the two remaining items from the second follow-up's report: `.maxByOption`/`.minByOption`'s generic
+`Long` boxing in `zeroPivotCofacet`/`zeroPivotFacet` (both engines), and the decode-time `Simplex[Int]`/`SortedSet`
+construction (`si(index, size)`, immediately flattened to an array and discarded at three of the packed engine's
+own call sites) that had become the single largest remaining allocation category once the second follow-up's fixes
+cleared everything bigger away from around it.
+
+**Fix #8: `SimplexIndexing.decodeToArray(n, size): Array[Int]`, a new method alongside `apply`, not a replacement
+for it**. `apply`'s existing decode builds a `Simplex[Int]` via `size` separate `upperAccum + (id + d)` calls, each
+a full persistent-tree insertion -- fine for callers that actually need a `Simplex[Int]` object, wasteful for
+`PackedRipserCohomologyContext.sparseCofacets`/`coboundaryOf`/`zeroPivotCofacet`, which only ever did
+`si(sigma.index, size).underlying.toArray`, discarding the `Simplex` immediately. `decodeToArray` performs the
+IDENTICAL `searchRow`/`binomialEntry` arithmetic as `apply` (every branch transcribed line-for-line, not a
+different algorithm) but writes each vertex into a pre-sized `Array[Int]` and sorts once at the end
+(`java.util.Arrays.sort`, in-place, zero allocation) instead of maintaining sortedness via incremental tree
+rebuilds -- correct regardless of which order the recursion happens to emit vertices in, so this doesn't depend on
+separately re-deriving that order by hand. `apply` itself is completely unchanged. **Verified before use, not
+assumed**: a new `SimplexIndexingSpec` ScalaCheck property (`minTestsOk = 500`) confirms `decodeToArray(n,
+size).toSet == apply(n, size).underlying` across random valid `(vertexCount, size, index)` triples -- this also
+incidentally confirmed decode-then-encode is the identity (`si(si(idx, size), size) == idx`), an invariant the next
+fix relies on directly.
+
+**Fix #9: eliminate `.maxByOption`/`.minByOption`'s generic boxing in `zeroPivotCofacet`/`zeroPivotFacet`, both
+engines**. Scala's `maxByOption`/`minByOption` aren't specialized for `Long` keys, so every comparison boxed --
+measured as the packed engine's own largest remaining allocation source after fix #8 alone (~13.5% of total
+weight). Rewritten as hand-rolled `while` loops with a primitive `Long` accumulator and a `found: Boolean` flag
+(instead of a nullable `Simplex[Int]` sentinel, which doesn't type-check -- opaque types don't admit `null` under
+this project's null-safety settings). In `Homology.scala`'s versions specifically, a SECOND, distinct cost stacked
+on top of the same boxing: `.maxByOption((tau, _) => si(tau))`/`.minByOption(sigma => si(sigma))` RE-ENCODED a
+simplex that had JUST been decoded from an index the iterator already handed over (`si.cofacetIterator`/
+`facetIterator` yield the exact index `tau`/`sigma` was decoded from) -- a fully redundant O(d log d) round trip
+through `searchRow`/`binomialEntry` for a `Long` already in hand. Fixed by reusing that index directly instead of
+re-encoding, backed by fix #8's round-trip property test rather than assumed safe.
+
+**Fix #10, found while re-profiling after #8/#9, not part of the original ask but the same shape**:
+`zeroPivotFacet`'s own candidate-facet decode (`si(facetIdx, size - 1)`, needed only to feed
+`FiniteMetricSpace.MaximumDistanceFiltrationValue`) was the ONE remaining `Simplex[Int]`-returning decode call in
+the packed engine's hot path -- `zeroPivotCofacet`'s doc had explicitly called removing-a-vertex's cost "a scope
+boundary, not an oversight" in the second follow-up, but re-profiling after #8/#9 showed it had become the single
+LARGEST remaining category (~34% of a much-smaller total) purely because everything bigger around it had shrunk.
+Fixed with a new private `maxPairwiseDistance(vertices: Array[Int]): Double` (plain O(d^2) nested `while` loops,
+mirroring `insertionDiameter`'s style) replacing `rawFiltrationValue`/`MaximumDistanceFiltrationValue` for this ONE
+call site -- `zeroPivotFacet` now decodes via `decodeToArray` like every other hot-path call, needing no
+`Simplex[Int]` at all. `MaximumDistanceFiltrationValue` itself is untouched; every other caller is unaffected.
+
+**Validation**: full `sbt test` after each of the three fixes individually (236 examples now, 231 passed/0
+failed/5 skipped/1 pending -- the +1 over the prior 235/230 baseline is the new `SimplexIndexingSpec` round-trip
+property test), with particular attention to `PackedRipserCohomologySpec`'s apparent-pair regression cases (which
+exercise `zeroPivotCofacet`/`zeroPivotFacet` directly) and `RipserCohomologySpec`'s equivalent -- both clean after
+every step, not just at the end.
+
+**Measured (controlled A/B, `git stash` isolating the fix files -- and, since the new property test references
+`decodeToArray`, the test file had to be stashed alongside them for the baseline to even compile)**: real
+`sphere3_96` data, packed engine, `-DpackedOnly=true`, median of 3 trials at each stage:
+
+| stage | median wall-clock | vs. previous stage |
+|---|---|---|
+| before this round (end of 2nd follow-up) | 1959.3 ms | -- |
+| after fix #8 + #9 (decode-array + boxing) | 1603.2 ms | 18.2% faster |
+| after fix #10 (`zeroPivotFacet` decode) | 1399.1 ms | a further 12.7% faster |
+| **combined, this round** | | **28.6% faster** |
+
+Allocation, same three stages (isolated `PackedProfileDriver` runs, not sbt-test-suite-wide totals, so NOT directly
+comparable to earlier sessions' percentages, but internally consistent across this table): 2215.23 MB -> 1582.41
+MB -> 1050.88 MB, a 52.6% total reduction. Re-profiling after fix #8/#9 confirmed `SimplexOps.$plus`/`.toSeq` (the
+decode-time TreeSet cost) dropped from being the single largest category to a residual ~34% dominated entirely by
+`zeroPivotFacet`'s still-unfixed decode; after fix #10, that same category dropped to ~1.2% (only genuinely
+necessary decodes remain), and `.maxByOption`/`.minByOption` no longer appear anywhere in the profile at all.
+
+**What's now the dominant remaining cost, identified but explicitly NOT attempted this round**:
+`SimplexIndexing$$anon$1.next()` (the hand-rolled `cofacetIteratorWithVertex` from the very first session's
+Finding #3) boxing its `(Int, Long)` result pair on every step -- `Tuple2` + `Long` together are now **49.8%** of
+total allocation weight, by a wide margin the largest single category, bigger than everything else in this
+session combined. This was already named as an "identified, deferred" item in the second follow-up's report to
+the project lead (see that section above): fixing it means replacing `Iterator[(Int, Long)]`'s return-a-pair-per-
+step interface with a cursor (`hasNext`/`advance`/`vertex`/`index`), which changes the calling convention at every
+call site in BOTH engines -- a real, interface-changing job, not a quick win, and deliberately left for the
+project lead to decide whether to take on next rather than expanded into without asking.
+
+**Files changed this follow-up**: `RipserStream.scala` (`decodeToArray`, new), `PackedRipserCohomology.scala`
+(`decodeToArray` at three call sites, `zeroPivotCofacet`/`zeroPivotFacet` hand-rolled, `maxPairwiseDistance` new),
+`Homology.scala` (`zeroPivotCofacet`/`zeroPivotFacet` hand-rolled + redundant-encode removal),
+`SimplexIndexingSpec.scala` (new round-trip property test). A fourth scratch driver, reused three times (once per
+fix) and deleted each time, same convention as every prior session.
