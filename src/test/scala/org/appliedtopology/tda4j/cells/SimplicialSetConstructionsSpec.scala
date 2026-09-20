@@ -49,3 +49,43 @@ class SimplicialSetConstructionsSpec extends mutable.Specification:
     val coprod = coproduct(SimplicialSetFixtures.minimalSphere(1), SimplicialSetFixtures.minimalSphere(2))
     coprod.validate() must beEmpty
   }
+
+  "identify(coproduct(edge, edge), ...)'s induced face data satisfies the simplicial identities, and has the hand-derived (2, 2) generator counts of a bigon" >> {
+    import SimplicialSetFixtures.EdgeGenerator
+    import SimplicialSetFixtures.EdgeGenerator.*
+
+    type G = Either[EdgeGenerator, EdgeGenerator]
+    given Ordering[G] = eitherOrdering[EdgeGenerator, EdgeGenerator]
+
+    val bigon = identify(
+      coproduct(SimplicialSetFixtures.edge, SimplicialSetFixtures.edge),
+      Seq[(G, G)]((Left(V0), Right(V0)), (Left(V1), Right(V1)))
+    )
+    (bigon.validate() must beEmpty).and(bigon.generatorsByDim.map(_.size) === IndexedSeq(2, 2))
+  }
+
+  "quotient(triangle, ...)'s induced face data satisfies the simplicial identities, and has the hand-derived (1, 1, 1) generator counts of Hatcher's single-2-simplex RP^2 model" >> {
+    val rp2ViaQuotient = SimplicialSetFixtures.realProjectiveSpaceViaQuotient
+    (rp2ViaQuotient.validate() must beEmpty).and(rp2ViaQuotient.generatorsByDim.map(_.size) === IndexedSeq(1, 1, 1))
+  }
+
+  "quotient with a dimension-inconsistent quotientMap is caught by validate() as a structural error, not silently accepted -- validate() is a necessary precondition, even though it can't by itself prove a quotient is the INTENDED one (see quotient's own doc comment)" >> {
+    import SimplicialSetFixtures.TriangleGenerator
+    import SimplicialSetFixtures.TriangleGenerator.*
+
+    // Wrong on purpose: V0 (dimension 0) is mapped to a degenerate dimension-1 element instead of a fixed point
+    // or a dimension-0 target -- every OTHER generator is left alone (mapped to itself), so this isolates the
+    // one broken case rather than conflating it with an otherwise-nontrivial gluing.
+    def brokenQuotientMap(g: TriangleGenerator): SSetElement[TriangleGenerator] = g match
+      case V0    => SSetElement(List(0), V1)
+      case other => SSetElement(Nil, other)
+
+    quotient(SimplicialSetFixtures.triangle, brokenQuotientMap).validate() must not(beEmpty)
+  }
+
+  "identify refuses to glue generators of different dimensions" >> {
+    import SimplicialSetFixtures.TriangleGenerator
+    import SimplicialSetFixtures.TriangleGenerator.*
+
+    identify(SimplicialSetFixtures.triangle, Seq((V0, E01))) must throwAn[IllegalArgumentException]
+  }

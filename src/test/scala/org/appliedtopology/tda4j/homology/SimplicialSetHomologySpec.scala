@@ -97,6 +97,46 @@ class SimplicialSetHomologySpec extends mutable.Specification:
     essentialCountsByDim(diagram) === Map(0 -> 2, 1 -> 1, 2 -> 1)
   }
 
+  "identify(coproduct(edge, edge), ...) glues two disjoint edges endpoint-to-endpoint into a bigon (S^1): H_0 = H_1 = F, hand-verifiable directly (two edges sharing the same pair of boundary vertices, so the boundary map has rank 1, not 2)" >> {
+    import SimplicialSetFixtures.EdgeGenerator
+    import SimplicialSetFixtures.EdgeGenerator.*
+
+    type G = Either[EdgeGenerator, EdgeGenerator]
+    given Ordering[G] = eitherOrdering[EdgeGenerator, EdgeGenerator]
+
+    val bigon: FiniteSimplicialSet[G] =
+      identify(
+        coproduct(SimplicialSetFixtures.edge, SimplicialSetFixtures.edge),
+        Seq[(G, G)]((Left(V0), Right(V0)), (Left(V1), Right(V1)))
+      )
+
+    (bigon.validate() must beEmpty)
+      .and(bigon.generatorsByDim.map(_.size).toList === List(2, 2))
+      .and(essentialCountsByDim(homologyOf[G, f11.Fp](bigon)) === Map(0 -> 1, 1 -> 1))
+  }
+
+  "quotient(triangle, ...) reproduces Hatcher's single-2-simplex Delta-complex model of RP^2 by gluing two of a filled triangle's edges into a loop and collapsing the third to a degenerate point -- cross-validated against the independently-hand-built realProjectiveSpace(2) fixture, over both F2 and F3 (the sign-discriminating pair)" >> {
+    import SimplicialSetFixtures.TriangleGenerator
+
+    val rp2ViaQuotient = SimplicialSetFixtures.realProjectiveSpaceViaQuotient
+
+    def diagramOver[CoefficientT: Field](sset: FiniteSimplicialSet[TriangleGenerator]) =
+      homologyOf[TriangleGenerator, CoefficientT](sset)
+
+    val f2 = new FiniteField(2)
+    val f3 = new FiniteField(3)
+
+    val overF2 =
+      import f2.given; diagramOver[f2.Fp](rp2ViaQuotient)
+    val overF3 =
+      import f3.given; diagramOver[f3.Fp](rp2ViaQuotient)
+
+    (rp2ViaQuotient.validate() must beEmpty)
+      .and(rp2ViaQuotient.generatorsByDim.map(_.size).toList === List(1, 1, 1))
+      .and(overF2 must containTheSameElementsAs(List((0, 0, Int.MaxValue), (1, 0, Int.MaxValue), (2, 0, Int.MaxValue))))
+      .and(overF3 must containTheSameElementsAs(List((0, 0, Int.MaxValue), (1, 0, 0))))
+  }
+
   "Every fixture's diagram accounts for exactly one bar-cell-slot per generator" >> {
     def totalCells[G](sset: FiniteSimplicialSet[G]): Int = sset.generatorsByDim.map(_.size).sum
     def accountsForAllCells(diagram: List[(Int, Int, Int)], cells: Int): Boolean =

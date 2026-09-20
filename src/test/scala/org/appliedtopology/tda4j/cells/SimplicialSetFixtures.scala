@@ -101,3 +101,72 @@ object SimplicialSetFixtures:
       case A | B | C => loopFaces
       case U | L     => triangleFaces
     new FiniteSimplicialSet(summon[Ordering[TorusGenerator]])(byDim, facesOf)
+
+  /** A single non-degenerate edge with two distinct endpoints -- raw material for `quotient`/`identify`
+    * cross-validation (`SimplicialSetHomologySpec`), not a fixture with known homology on its own (it's contractible:
+    * `H_0 = F`, nothing else).
+    */
+  enum EdgeGenerator derives CanEqual:
+    case V0, V1, E
+
+  object EdgeGenerator:
+    given Ordering[EdgeGenerator] = Ordering.by { case V0 => 0; case V1 => 1; case E => 2 }
+
+  def edge: FiniteSimplicialSet[EdgeGenerator] =
+    import EdgeGenerator.*
+    val byDim: IndexedSeq[Set[EdgeGenerator]] = IndexedSeq(Set(V0, V1), Set(E))
+    def facesOf(g: EdgeGenerator): IndexedSeq[SSetElement[EdgeGenerator]] = g match
+      case V0 | V1 => IndexedSeq.empty
+      case E       => IndexedSeq(SSetElement(Nil, V1), SSetElement(Nil, V0))
+    new FiniteSimplicialSet(summon[Ordering[EdgeGenerator]])(byDim, facesOf)
+
+  /** A single filled 2-simplex (3 vertices, 3 edges, 1 face) -- raw material for `quotient` cross-validation
+    * (`SimplicialSetHomologySpec`), not a fixture with known homology on its own (it's contractible: `H_0 = F`, nothing
+    * else). Standard convention: `d_i` on the 2-cell removes vertex `i`; `d_i` on an edge `[a,b]` (`a<b`) has
+    * `d_0 = b`, `d_1 = a`.
+    */
+  enum TriangleGenerator derives CanEqual:
+    case V0, V1, V2, E01, E12, E02, F
+
+  object TriangleGenerator:
+    given Ordering[TriangleGenerator] = Ordering.by {
+      case V0  => 0
+      case V1  => 1
+      case V2  => 2
+      case E01 => 3
+      case E12 => 4
+      case E02 => 5
+      case F   => 6
+    }
+
+  def triangle: FiniteSimplicialSet[TriangleGenerator] =
+    import TriangleGenerator.*
+    val byDim: IndexedSeq[Set[TriangleGenerator]] =
+      IndexedSeq(Set(V0, V1, V2), Set(E01, E12, E02), Set(F))
+    def facesOf(g: TriangleGenerator): IndexedSeq[SSetElement[TriangleGenerator]] = g match
+      case V0 | V1 | V2 => IndexedSeq.empty
+      case E01          => IndexedSeq(SSetElement(Nil, V1), SSetElement(Nil, V0))
+      case E12          => IndexedSeq(SSetElement(Nil, V2), SSetElement(Nil, V1))
+      case E02          => IndexedSeq(SSetElement(Nil, V2), SSetElement(Nil, V0))
+      case F            => IndexedSeq(SSetElement(Nil, E12), SSetElement(Nil, E02), SSetElement(Nil, E01))
+    new FiniteSimplicialSet(summon[Ordering[TriangleGenerator]])(byDim, facesOf)
+
+  /** Hatcher's own single-2-simplex Delta-complex model of RP^2 (*Algebraic Topology*, Example 2.4), built as a
+    * `quotient` of `triangle` rather than hand-assembled directly like `realProjectiveSpace` -- two of the three edges
+    * (`E12 = d_0(F)`, `E01 = d_2(F)`) are glued into one loop (`E12`, chosen as the representative); the third (`E02 =
+    * d_1(F)`) has no peer to glue to and instead collapses to a degenerate point over the vertex `V0` -- exactly the
+    * case `identify` (generator-to-generator only) cannot express, and the reason `quotient` takes a
+    * `G => SSetElement[G]` map rather than `G => G`. Shared between `SimplicialSetConstructionsSpec` (structural
+    * checks) and `SimplicialSetHomologySpec` (cross-validated against the independently-hand-built
+    * `realProjectiveSpace(2)`) so both specs exercise literally the same gluing, not two copies that could drift apart.
+    */
+  def rp2QuotientMap(g: TriangleGenerator): SSetElement[TriangleGenerator] =
+    import TriangleGenerator.*
+    g match
+      case V0 | V1 | V2 => SSetElement(Nil, V0)
+      case E12 | E01    => SSetElement(Nil, E12)
+      case E02          => SSetElement(List(0), V0)
+      case F            => SSetElement(Nil, F)
+
+  def realProjectiveSpaceViaQuotient: FiniteSimplicialSet[TriangleGenerator] =
+    quotient(triangle, rp2QuotientMap)

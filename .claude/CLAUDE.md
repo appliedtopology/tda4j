@@ -1244,12 +1244,55 @@ order and dimension order genuinely disagree — a dimension-aligned filtration 
 survives as the essential H_2 class) — plus a randomized dimension-band-plus-jitter fuzz across every existing
 fixture.
 
-**Deliberately deferred, still not attempted**: quotients/attaching maps (identifying generators, or generators
-across a coproduct, under a gluing relation respecting face compatibility — probably the single most useful
-remaining construction for hand-building models directly, and a prerequisite for the item below); the bar
-construction / classifying spaces (would lean on `product` and quotients once quotients exist).
-`SimplicialHomologyByDimensionContext` remains hardcoded to `Simplex[VertexT]` and was not generalized — a
-separate, unrelated algorithm (union-find-based dimension-0/1 handling) from the two engines touched so far.
+**Quotients/attaching maps (`quotient`/`identify`, `SimplicialSetConstructions.scala`), added in a later session**
+— see `.claude/WORKLOG-autonomous-session-2026-09-19.md`'s task #3 for the full derivation, including a real
+design correction caught by `advisor()` before any code was written.
+
+`quotient[G: Ordering](sset, quotientMap: G => SSetElement[G])` takes `quotientMap: G => SSetElement[G]`, **not**
+`G => G` (generator-to-generator only) — this looks like unnecessary generality until Hatcher's own single-2-
+simplex Δ-complex model of RP² (`Algebraic Topology`, Example 2.4) is worked through by hand: two of a filled
+triangle's three edges glue into one loop, but the THIRD has no peer to glue to at all and instead collapses
+entirely to a *degenerate* point over the vertex (`d_1(E_2) = s_0(E_0)`, already exactly how
+`SimplicialSetFixtures.realProjectiveSpace` represents this). A generator-to-generator map has no way to express
+a cell crushing down a dimension — only "merge with a same-dimension peer." `quotientMap` must be
+dimension-consistent (`dimOf(quotientMap(g).generator) + quotientMap(g).word.length == dimOf(g)`) and every
+generator must resolve to a fixed point (`quotientMap(rep) == SSetElement(Nil, rep)`) **in one step** — this
+one-step requirement is checked explicitly with a `require` in `quotient` itself (`isFixedPoint(quotientMap(g)
+.generator)` for every generator), not left to `validate()`: a chained map (`a -> b`, `b -> c`, `b` never itself a
+fixed point) would otherwise slip through silently whenever no surviving cell's face happens to target the
+broken link directly, since `validate()`'s structural check only inspects `faces(g)` for generators already
+surviving into `generatorsByDim`. A face's own already-possibly-degenerate word and its remapped target's own
+word are combined via `word.foldRight(mapped.word)(insertOuter)` — no new degeneracy algebra needed, just
+`insertOuter` applied one step at a time, right-to-left, composing `s_word(s_mappedWord(rep))`.
+
+**`validate()` on the result is a necessary precondition, not a sufficient correctness check** — it verifies the
+simplicial identities hold, not that the quotient computed is the *intended* one; an over-eager `quotientMap` can
+produce an internally-consistent but topologically wrong space. The actual correctness evidence is a homology
+cross-check against an independent expectation.
+
+`identify[G: Ordering](sset, pairs: Seq[(G, G)])` is the ergonomic layer for the common case (never a degenerate
+collapse) — pairs of generators identified via a small union-find implemented fresh in `cells` (not
+`streams.UnionFind`: `cells` sits below `streams` in this codebase's layering, so importing it here would be a
+backwards dependency), `Ordering[G]`-minimum per connected component as the canonical representative. `identify`
+is immune to the chained-map hazard above by construction — its own `find` always path-compresses to a genuine
+root before ever calling `quotient`.
+
+**Validation, hand-derived before any code, not just asserted after**: a *bigon* (two disjoint edges from
+`coproduct`, endpoints identified pairwise via `identify` into a 2-vertex, 2-edge circle) has `H_0 = H_1 = F`,
+verified directly (both edges end up sharing the identical boundary `V1 - V0`, so the boundary map has rank 1,
+not 2). RP² built via `quotient` on a plain filled triangle (`SimplicialSetFixtures.triangle`/`rp2QuotientMap`/
+`realProjectiveSpaceViaQuotient`) was derived by hand to converge, face-for-face, on `realProjectiveSpace(2)`'s
+own already-existing data (`facesOf(F) = [Nil->loop, [0]->vertex, Nil->loop]` in both, under the obvious
+correspondence) *before* being run — then cross-validated by actually computing its homology over both F2 and F3
+against the independently-hand-built `realProjectiveSpace(2)` fixture, the same sign-discriminating pair
+(`H_1=H_2=F2` over F2, both `0` over F3) that fixture was originally built to catch. Two negative tests pin the
+`require` guards: a dimension-inconsistent `quotientMap` is caught by `validate()` as a structural error, and
+`identify` throws on a pair of different-dimension generators.
+
+**Deliberately still not attempted**: the bar construction / classifying spaces (would lean on `product` and
+`quotient`, now that both exist). `SimplicialHomologyByDimensionContext` remains hardcoded to `Simplex[VertexT]`
+and was not generalized — a separate, unrelated algorithm (union-find-based dimension-0/1 handling) from the two
+engines touched so far.
 
 ## Cech complexes
 

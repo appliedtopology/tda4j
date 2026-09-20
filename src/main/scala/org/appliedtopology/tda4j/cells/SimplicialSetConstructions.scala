@@ -145,3 +145,96 @@ def coproduct[GX: Ordering, GY: Ordering](
     case Right(gy) => ys.faces(gy).map(e => SSetElement(e.word, Right(e.generator): Either[GX, GY]))
 
   new FiniteSimplicialSet(eitherOrd)(generatorsByDim, facesOf)
+
+/** Quotient of a finite simplicial set by an arbitrary map from generators to elements: `quotientMap(g)` says what `g`
+  * becomes in the quotient -- either a genuine surviving representative (`SSetElement(Nil, g)`, a FIXED POINT) or a
+  * properly degenerate collapse (`SSetElement(word, rep)` for some OTHER representative `rep`). This is deliberately
+  * more general than `G => G` (generator-to-generator only), because identifying cells can crush one of them down a
+  * dimension, not just merge same-dimension cells with a peer. Concretely: Hatcher's own single-2-simplex Delta-complex
+  * model of RP^2 (`Algebraic Topology`, Example 2.4 -- cross-validated against the independently-hand-built
+  * `SimplicialSetFixtures.realProjectiveSpace(2)` in `SimplicialSetConstructionsSpec`) glues two of a filled triangle's
+  * three edges together into one loop, but the THIRD edge doesn't glue to anything else -- it collapses entirely to a
+  * degenerate point over the surviving vertex. A `G => G` quotient map cannot express that third case at all, only
+  * `G => SSetElement[G]` can (`identify`, below, covers the common generator-to-generator case ergonomically without
+  * ever needing this extra generality itself).
+  *
+  * `quotientMap` must be dimension-consistent (`dimOf(quotientMap(g).generator) + quotientMap(g).word.length ==
+  * dimOf(g)`) and every generator must resolve to a fixed point IN ONE STEP (some generator `rep` with
+  * `quotientMap(rep) == SSetElement(Nil, rep)`) -- `quotientMap` is not itself iterated to a fixpoint, so a *chain*
+  * (`quotientMap(a) = SSetElement(Nil, b)`, `quotientMap(b) = SSetElement(Nil, c)`, `b` never a fixed point) is a
+  * caller error, checked explicitly below rather than left to `validate()`: `validate()`'s own structural check only
+  * inspects `faces(g)` for `g` already in the surviving `generatorsByDim`, so a chain would slip through silently
+  * whenever no surviving cell's face happens to target the broken link directly (`identify` is immune to this by
+  * construction -- its own `find` always path-compresses to a genuine root -- so this exposure is specific to a
+  * hand-written `quotientMap` passed to `quotient` directly).
+  *
+  * `facesOf` reuses the ORIGINAL face data of a surviving representative, then pushes each face's own target through
+  * `quotientMap` too, composing the two degeneracy words via `insertOuter` one step at a time
+  * (`word.foldRight(mapped.word)(insertOuter)`) -- a face that was already degenerate, whose target ALSO collapses
+  * further under the quotient, needs both effects combined into one normalized word, exactly the composition
+  * `s_word(s_word2(rep2))` that `insertOuter` is built to accumulate.
+  *
+  * `validate()` on the RESULT is a necessary precondition beyond the fixed-point check above -- it will flag a
+  * `quotientMap` that isn't dimension-consistent as a structural error -- but NOT a sufficient correctness check: it
+  * verifies the simplicial identities hold, not that the quotient is the intended one, and an over-eager `quotientMap`
+  * can produce an internally-consistent but topologically wrong space. Homology cross-checks against an
+  * independently-derived expectation are what actually establish correctness.
+  */
+def quotient[G: Ordering](
+  sset: FiniteSimplicialSet[G],
+  quotientMap: G => SSetElement[G]
+): FiniteSimplicialSet[G] =
+  def isFixedPoint(g: G): Boolean = quotientMap(g) == SSetElement(Nil, g)
+
+  val generatorsByDim: IndexedSeq[Set[G]] =
+    sset.generatorsByDim.map(_.filter(isFixedPoint))
+
+  for g <- sset.generatorsByDim.flatten do
+    require(
+      isFixedPoint(quotientMap(g).generator),
+      s"quotient: quotientMap($g) = ${quotientMap(g)}, whose own generator is not a fixed point -- " +
+        "quotientMap must resolve every generator in one step, not via a multi-step chain"
+    )
+
+  def facesOf(rep: G): IndexedSeq[SSetElement[G]] =
+    sset.faces(rep).map { case SSetElement(word, target) =>
+      val mapped = quotientMap(target)
+      SSetElement(word.foldRight(mapped.word)(insertOuter), mapped.generator)
+    }
+
+  new FiniteSimplicialSet(summon[Ordering[G]])(generatorsByDim, facesOf)
+
+/** Ergonomic layer over `quotient` for the common case: identify PAIRS of same-dimension generators with each other
+  * directly (never a degenerate collapse down a dimension -- see `quotient`'s own doc for that more general case).
+  * Computes the quotient map via a small union-find over the transitive closure of `pairs`, implemented fresh right
+  * here rather than reusing `streams.UnionFind`: `cells` sits below `streams` in this codebase's package layering
+  * (`algebra -> cells -> streams -> homology`), so importing it here would be a backwards dependency, and a hand-built,
+  * small-scale set of generators has no performance need for anything beyond the simplest union-find anyway. Each
+  * connected component's `Ordering[G]`-minimum member is its canonical representative -- a deterministic, reproducible
+  * choice rather than an arbitrary one.
+  */
+def identify[G: Ordering](
+  sset: FiniteSimplicialSet[G],
+  pairs: Seq[(G, G)]
+): FiniteSimplicialSet[G] =
+  val ord = summon[Ordering[G]]
+  val parent = scala.collection.mutable.Map.from(sset.generatorsByDim.flatten.map(g => g -> g))
+
+  def find(g: G): G =
+    val p = parent(g)
+    if p == g then g
+    else
+      val root = find(p)
+      parent(g) = root
+      root
+
+  for (a, b) <- pairs do
+    require(
+      sset.dimOf(a) == sset.dimOf(b),
+      s"identify: cannot identify generators of different dimension ($a at dim ${sset.dimOf(a)}, " +
+        s"$b at dim ${sset.dimOf(b)})"
+    )
+    val (ra, rb) = (find(a), find(b))
+    if ra != rb then if ord.lt(ra, rb) then parent(rb) = ra else parent(ra) = rb
+
+  quotient(sset, g => SSetElement(Nil, find(g)))

@@ -7,41 +7,39 @@ import org.appliedtopology.tda4j.streams.{given, *}
 
 import scala.util.Random
 
-/** Test-scope driver, kept alongside `CubicalProfileDriver`/`SingleEngineProfileDriver` -- a single-process JVM
-  * target for profiling `SimplicialHomologyContext` (the naive engine) on a large, SPARSE, low-`maxDim`
-  * Vietoris-Rips complex. Invoked directly:
+/** Test-scope driver, kept alongside `CubicalProfileDriver`/`SingleEngineProfileDriver` -- a single-process JVM target
+  * for profiling `SimplicialHomologyContext` (the naive engine) on a large, SPARSE, low-`maxDim` Vietoris-Rips complex.
+  * Invoked directly:
   *
   * {{{
   * java -cp $CP org.appliedtopology.tda4j.homology.VRLowDimProfileDriver <n> <maxDim> [seed] [thresholdScale] [forceUncached]
   * }}}
   *
-  * Built to answer the question item #2 of `.claude/WORKLOG-autonomous-session-2026-09-19.md` needed answered
-  * BEFORE writing any raw-`UnionFind` code: `WORKLOG-mst-and-perf.md`'s own deferred-decision section named
-  * "large point cloud, low maxDim (0 or 1) -- where dimension-0/1 IS most or all of the complex" as the one
-  * scenario where a raw-UnionFind fast path could plausibly pay off, and explicitly said this needs its own
-  * targeted benchmark rather than being assumed. `maxDim` defaults to 1 for exactly that reason -- `maxDim >= 2`
-  * is the case that same worklog already settled as NOT worth it (dimension-0/1 is a small fraction of the
-  * complex once triangles exist).
+  * Built to answer the question item #2 of `.claude/WORKLOG-autonomous-session-2026-09-19.md` needed answered BEFORE
+  * writing any raw-`UnionFind` code: `WORKLOG-mst-and-perf.md`'s own deferred-decision section named "large point
+  * cloud, low maxDim (0 or 1) -- where dimension-0/1 IS most or all of the complex" as the one scenario where a
+  * raw-UnionFind fast path could plausibly pay off, and explicitly said this needs its own targeted benchmark rather
+  * than being assumed. `maxDim` defaults to 1 for exactly that reason -- `maxDim >= 2` is the case that same worklog
+  * already settled as NOT worth it (dimension-0/1 is a small fraction of the complex once triangles exist).
   *
-  * The measurement this drove found the answer wasn't raw UnionFind at all: deep-stack profiling attributed
-  * ~57% of samples to `filtrationValue`/`filtrationOrdering`, and `EnumeratingCofaceSimplexStream.filtrationValue`
-  * (its default `MaximumDistanceFiltrationValue` fallback) turned out to be exactly as uncached as
-  * `CubicalGridStream` was before task #1's fix -- same bug class, same fix. That fix now lives on the stream
-  * itself (`SimplexStream.scala`), on by default. `forceUncached` (default `false`) lets this driver still
-  * reproduce the PRE-fix baseline on demand, by supplying an explicit, deliberately-uncached
-  * `filtrationValueOverride` -- kept for exactly this kind of before/after re-measurement, not because the
-  * default stream is still uncached.
+  * The measurement this drove found the answer wasn't raw UnionFind at all: deep-stack profiling attributed ~57% of
+  * samples to `filtrationValue`/`filtrationOrdering`, and `EnumeratingCofaceSimplexStream.filtrationValue` (its default
+  * `MaximumDistanceFiltrationValue` fallback) turned out to be exactly as uncached as `CubicalGridStream` was before
+  * task #1's fix -- same bug class, same fix. That fix now lives on the stream itself (`SimplexStream.scala`), on by
+  * default. `forceUncached` (default `false`) lets this driver still reproduce the PRE-fix baseline on demand, by
+  * supplying an explicit, deliberately-uncached `filtrationValueOverride` -- kept for exactly this kind of before/after
+  * re-measurement, not because the default stream is still uncached.
   *
-  * Phase-separated exactly like `CubicalProfileDriver`, for the same reason (a FRESH stream instance per phase,
-  * so no phase's cost is accidentally inflated or hidden by another phase's side effects/caching):
+  * Phase-separated exactly like `CubicalProfileDriver`, for the same reason (a FRESH stream instance per phase, so no
+  * phase's cost is accidentally inflated or hidden by another phase's side effects/caching):
   *   1. `stream.iterator.size` -- the stream's own coface enumeration + per-dimension sort.
   *   2. `persistentHomology(stream)` -- `HomologyState`'s construction (its own global `processingOrder` sort).
   *   3. `.diagramAt(...)` -- the actual `advanceAll`/reduction loop.
   *
-  * The point cloud is sparse by construction (threshold scaled as `thresholdScale / sqrt(n)`, the same
-  * "roughly constant expected neighbor count as n grows" convention `SparseRipsBenchmarkSpec` already uses) --
-  * a fixed threshold would make the complex denser as `n` grows, which is not the "large point cloud, low
-  * maxDim" scenario this driver exists to characterize.
+  * The point cloud is sparse by construction (threshold scaled as `thresholdScale / sqrt(n)`, the same "roughly
+  * constant expected neighbor count as n grows" convention `SparseRipsBenchmarkSpec` already uses) -- a fixed threshold
+  * would make the complex denser as `n` grows, which is not the "large point cloud, low maxDim" scenario this driver
+  * exists to characterize.
   */
 object VRLowDimProfileDriver:
   def main(args: Array[String]): Unit =
@@ -67,7 +65,11 @@ object VRLowDimProfileDriver:
         if forceUncached then Some(FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace))
         else None
       LimitedCofaceSimplexStream(
-        EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(threshold), filtrationValueOverride = fvOverride),
+        EnumeratingCofaceSimplexStream(
+          metricSpace,
+          maxFiltrationValue = Some(threshold),
+          filtrationValueOverride = fvOverride
+        ),
         maxDim
       )
 

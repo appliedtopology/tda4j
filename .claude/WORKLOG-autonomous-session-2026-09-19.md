@@ -291,3 +291,140 @@ now-default memoized stream and an explicitly-forced-uncached one, on random poi
 - Task #2 is DONE, closed via measurement + a cheaper fix that answers the same underlying question the raw
   UnionFind proposal was trying to answer (make dimension-0/1-heavy, large VR complexes faster on the naive
   engine), not via the originally-named mechanism.
+
+---
+
+## Task #3: simplicial set quotients/attaching maps
+
+### Starting point
+
+CLAUDE.md's "Simplicial sets" section named this as the deliberately-deferred next construction after
+`product`/`coproduct`: "identifying generators, or generators across a coproduct, under a gluing relation
+respecting face compatibility." Orientation pass before any design: read `SSetElement.scala` (the
+`insertOuter`/`faceOf` operator algebra), `SimplicialSet.scala` (`FiniteSimplicialSet`, `validate()`),
+`SimplicialSetConstructions.scala` (`product`/`coproduct`, for the established style/conventions), and
+`SimplicialSetFixtures.scala` (existing hand-built fixtures, including the F2-vs-F3-discriminating
+`realProjectiveSpace(2)`).
+
+### Advisor check-in #1: the design, before any code
+
+Proposed a two-layer split: a primitive `quotient[G](sset, quotientMap: G => G)` (generator-to-generator only,
+reusing `validate()` unchanged for correctness-checking) plus an ergonomic `identify[G](sset, pairs: Seq[(G,G)])`
+using a small union-find LOCAL to `cells` (not `streams.UnionFind` -- backwards package dependency). Proposed
+validation fixtures: a bigon (two edges glued into a circle) and Hatcher's single-2-simplex RP² Δ-complex model,
+cross-validated against the existing `realProjectiveSpace(2)` fixture.
+
+**Two corrections came back, both load-bearing, before any code was written:**
+
+1. **The `G => G` design cannot express Hatcher's own RP² model.** Working through it by hand (which the advisor
+   asked for explicitly, rather than trusting `validate()` to catch a wrong-but-consistent construction): in
+   Hatcher's model, a filled triangle's three edges do NOT all glue pairwise -- two of them (`d_0(F)`, `d_2(F)`)
+   glue into one loop, but the THIRD (`d_1(F)`) has no peer and instead collapses entirely to a DEGENERATE point
+   over the vertex (`d_1(E_2) = s_0(E_0)` in `realProjectiveSpace`'s own already-existing face data). A
+   generator-to-generator map can only ever produce another non-degenerate generator as a face's target -- it has
+   no way to express "this cell crushes down a dimension." `identify`'s pairs-of-generators interface is
+   fundamentally the wrong shape for that third edge.
+2. **`validate()` is a necessary precondition, not a sufficient correctness check.** It verifies the simplicial
+   identities hold on the RESULT, not that the quotient computed is the INTENDED one -- an over-eager
+   `quotientMap` can satisfy `d_i d_j = d_{j-1} d_i` perfectly while still describing the wrong space. The actual
+   correctness evidence has to be an independent homology cross-check.
+
+### Resolution: generalize `quotientMap` to `G => SSetElement[G]`, not restrict the fixture
+
+Rather than the fallback the advisor offered (ship a restricted `quotient` and pick a fixture that avoids the
+degenerate-collapse case), worked through Hatcher's RP² construction by hand against the more general signature
+`quotientMap: G => SSetElement[G]` -- letting a generator collapse either to a genuine surviving representative
+(`SSetElement(Nil, rep)`, a fixed point) or to an already-established degenerate element (`SSetElement(word,
+rep)`). Composing a face's own (possibly already-degenerate) word with its remapped target's own word needed no
+new algebra: `word.foldRight(mapped.word)(insertOuter)` is exactly `insertOuter` applied one step at a time,
+right-to-left, which composes `s_word(s_mappedWord(rep))` correctly using machinery that already existed.
+
+Derived the RP² gluing by hand BEFORE writing any code and checked it converges to `realProjectiveSpace(2)`'s
+own already-existing face data structurally, not just its homology: with `V0,V1,V2 -> V0`, `E12,E01 -> E12`
+(the loop), `E02 -> s_0(V0)` (the degenerate collapse), and `F -> F`, the derived `facesOf(F)` came out as
+`[SSetElement(Nil,E12), SSetElement([0],V0), SSetElement(Nil,E12)]` -- literally the same shape as
+`realProjectiveSpace`'s own `[outer, SSetElement(List(0),E(0)), outer]`, under the correspondence
+`E12<->E(1)`, `V0<->E(0)`, `F<->E(2)`. This hand convergence, done before any code ran, is stronger evidence of
+correctness than the green test that followed it.
+
+### Implementation
+
+`quotient[G: Ordering](sset, quotientMap: G => SSetElement[G])` and `identify[G: Ordering](sset, pairs:
+Seq[(G,G)])` added to `SimplicialSetConstructions.scala`, after `coproduct`. `identify` computes its
+generator-to-generator `quotientMap` via a small, local (not `streams.UnionFind`) union-find over the transitive
+closure of `pairs`, `Ordering[G]`-minimum per component as the canonical representative, and delegates to
+`quotient`.
+
+New fixtures added to `SimplicialSetFixtures.scala`: `edge` (a single non-degenerate edge, two distinct
+endpoints) and `triangle` (a plain filled 2-simplex, three vertices/edges/one face) as raw material, plus
+`rp2QuotientMap`/`realProjectiveSpaceViaQuotient` (Hatcher's gluing applied to `triangle` via `quotient`) --
+shared between `SimplicialSetConstructionsSpec` (structural checks) and `SimplicialSetHomologySpec` (the
+cross-validation against the independently-hand-built `realProjectiveSpace(2)`), specifically so both specs
+exercise literally the same gluing rather than two copies that could silently drift apart.
+
+### Advisor check-in #2: after implementation, before declaring done
+
+Verdict: ship it, the `G => SSetElement[G]` generalization was the right call (better than the suggested
+restricted-fallback), and the hand-derivation converging to `realProjectiveSpace(2)`'s exact face data is
+stronger evidence than the passing test alone. One real gap flagged: `quotient` never checked that
+`quotientMap(g).generator` is ITSELF a fixed point -- a caller passing a chained map (`quotientMap(a) =
+SSetElement(Nil,b)`, `quotientMap(b) = SSetElement(Nil,c)`, `b` never a fixed point) would silently produce a
+quotient whose faces target `b`, which isn't in `generatorsByDim` -- and `validate()`'s own structural check only
+inspects `faces(g)` for surviving `g`, so this would slip through silently whenever no surviving cell's face
+happens to point at the broken link directly. `identify` is immune by construction (`find` always
+path-compresses to a genuine root), so this was a `quotient`-only exposure. Fixed with an explicit `require` in
+`quotient` checking `isFixedPoint(quotientMap(g).generator)` for every generator, before computing `facesOf`.
+Also flagged and fixed: the RP² quotient map had been written out twice (once per spec file) -- moved to
+`SimplicialSetFixtures.realProjectiveSpaceViaQuotient` so both specs share one definition.
+
+### Validation
+
+`SimplicialSetHomologySpec.scala` (homology cross-checks, via `CellularHomologyContext`):
+- **Bigon** (`identify(coproduct(edge, edge), [(Left(V0),Right(V0)), (Left(V1),Right(V1))])`): `validate()`
+  empty, generator counts `(2, 2)`, `H_0 = H_1 = F` -- hand-verifiable directly (both edges end up sharing the
+  identical boundary `V1 - V0`, so the boundary map has rank 1, not 2).
+- **RP² via quotient**: `validate()` empty, generator counts `(1, 1, 1)`, cross-validated against
+  `realProjectiveSpace(2)` over BOTH F2 and F3 -- `H_1 = H_2 = F2` over F2, both `0` over F3 (the same
+  sign-discriminating pair `realProjectiveSpace(2)` was originally built to catch), confirming the general
+  `quotient` primitive is correct, not merely internally consistent.
+
+`SimplicialSetConstructionsSpec.scala` (structural checks, mirroring how `product`/`coproduct` are covered
+there): the same two fixtures' `validate()`/generator-count checks, plus two negative tests -- a
+dimension-inconsistent `quotientMap` is caught by `validate()` as a structural error (isolated to one broken
+generator, everything else left as identity, so the test isolates exactly the one failure mode), and `identify`
+throws `IllegalArgumentException` on a pair of different-dimension generators.
+
+No `forAll`/ScalaCheck properties were added for this task -- every fixture here is a small, fixed-size hand-built
+complex (matching `product`/`coproduct`'s own precedent), so the oversized-property-test lesson from earlier in
+this session (see the `sbt test` runtime incident, below) doesn't apply to this task's own additions.
+
+Full `sbt test` after `scalafmtAll`: clean, no new failures (see this file's own final entry below for the exact
+count).
+
+### Decision
+
+- Task #3 is DONE. `quotient`/`identify` are in `SimplicialSetConstructions.scala`; CLAUDE.md's "Deliberately
+  deferred, still not attempted" sentence in the Simplicial sets section is updated to reflect the shipped state.
+- The bar construction / classifying spaces (named in the same deferred sentence as leaning on `product` and
+  quotients once quotients exist) remains NOT attempted -- out of scope for this task, a genuinely separate,
+  larger construction.
+- This closes the three-item mandate for this session (#1, #2, #3 all done, in order, each committed
+  separately).
+
+---
+
+## Aside: an `sbt test` runtime incident during task #2, worth recording
+
+Mid-task-#2, a full `sbt test` run that should finish in under 5 minutes (per this codebase's own established
+baseline) instead ran past 17 minutes, with real `OutOfMemoryError`s inside sbt's own 1GB-heap JVM cascading into
+unrelated, otherwise-passing specs (`RipserCohomologySpec`, `AlphaComplexDQPWeightedSpec`) later in the same run
+-- the user asked directly why. Root cause, found and fixed immediately: a new ScalaCheck property just added to
+`SimplexStreamSpec.scala` (the memoization-toggle test for task #2's own `filtrationValue` fix) built the
+COMPLETE, untruncated Vietoris-Rips complex (`maxFiltrationValue = +Infinity`, no dimension cap) for point clouds
+up to 15 points -- up to 2^15-1 simplices through the slow naive engine, TWICE per trial, across ~100 default
+ScalaCheck trials. Fixed by capping `maxDim = 2` (via `LimitedCofaceSimplexStream`) and reducing the point-cloud
+generator range to `Gen.chooseNum(6, 12)`, exactly matching `RipserCohomologySpec`'s own equivalent property's
+established convention. Verified in isolation first, then via a full clean re-run (`RipserCohomologySpec`'s
+previously-OOM'd cases came back fully green), confirming the OOM cascade was this session's own oversized test,
+not a pre-existing or environmental problem. This is the direct precedent behind task #3's own "no `forAll` on
+unbounded-size complexes" discipline above.
