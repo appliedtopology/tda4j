@@ -6,6 +6,7 @@ import org.appliedtopology.tda4j.cells.{given, *}
 import org.appliedtopology.tda4j.homology.{given, *}
 
 import scala.collection.immutable.Map
+import scala.collection.mutable
 
 /** Dense cubical complex over a full rectangular grid, filtration values assigned via the T-construction: a
   * caller-supplied `topCellValue` gives every top-dimensional cube (pixel/voxel) its own value directly, and every
@@ -70,9 +71,24 @@ class CubicalGridStream(
       for prefix <- acc; v <- opts yield prefix :+ v
     }
 
+  // Memoized: `CellularHomologyContext` re-derives `Ordering[CellT] = stream.filtrationOrdering` and consults it
+  // on every chain-arithmetic comparison during reduction (Chain's SortedMap/PriorityQueue accumulator), not
+  // just once per cell during the stream's own up-front sorts -- an UNCACHED filtrationValue means
+  // containingTopCells (already O(2^(ambientDim - dim(c))) per call) gets recomputed on every single one of
+  // those comparisons. Unlike RipserCohomologyContext's `memoizeFiltrationValue` (opt-in, defaulting to false
+  // for memory frugality on potentially-huge VR complexes with a cheap incremental alternative,
+  // `insertionDiameter`), there is no equivalent incremental formula here, AND `CellularHomologyContext.
+  // HomologyState.CellIterator` already materializes every cell of the stream into one in-memory Vector before
+  // reduction even starts -- so a cache bounded by the same already-resident cell count adds no new
+  // memory-frugality concern to weigh against. See `.claude/WORKLOG-autonomous-session-2026-09-19.md` for the
+  // phase-separated profiling that found this: per-cell cost was flat in both of the stream's own sort phases,
+  // and the entire 3D growth (231->678 us/cell, n=8->24) was isolated to the reduction phase alone.
+  private val filtrationValueCache = mutable.HashMap.empty[Cube, Double]
+
   override val filtrationValue: PartialFunction[Cube, Double] = new PartialFunction[Cube, Double]:
     def isDefinedAt(c: Cube): Boolean = inGrid(c)
-    def apply(c: Cube): Double = containingTopCells(c).map(topCellValue).min
+    def apply(c: Cube): Double =
+      filtrationValueCache.getOrElseUpdate(c, containingTopCells(c).map(topCellValue).min)
 
   /** Explicit negated-fv comparison, then dimension, then the canonical `cubeOrdering` tie-break -- copied in shape
     * from `EnumeratingCofaceSimplexStream.filtrationOrdering`, deliberately NOT `.reverse` of an ascending-built

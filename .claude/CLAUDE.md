@@ -998,39 +998,65 @@ independently-written duplicate, not shared code, so this also confirms the two 
 examples, including a real PNG file round-trip through `ImageIO.write`/`fromFile` and an end-to-end image-to-
 barcode test reproducing the hand-derived fixture through the actual `BufferedImage`/luma path).
 
-**Naive-engine scaling, measured** (`CubicalBenchmarkSpec.scala`, matching `SparseRipsBenchmarkSpec`'s
-convention — small defaults, `Arguments`-driven overrides for a real run): 2D is roughly FLAT per-cell cost
-(~60-95us/cell) across a 900x range of complex sizes, so a real 256x256 image (263,169 cells) processes in
-~25 seconds on the fully generic, unoptimized naive engine. **3D is a materially different, worse shape**:
-per-cell cost GROWS with `n` (190 -> 340 -> 850 us/cell from n=8 to n=32) rather than staying flat, so a modest
-32-cubed voxel grid (274,625 cells — barely more than the 2D 256x256 case) takes ~3.9 MINUTES, not ~25 seconds.
-Not yet root-caused (a genuine next-session profiling target — allocation profiler, not another timing table,
-same lesson `RipserCohomologyContext`'s own constant-factor tax learned the hard way).
+**Naive-engine scaling, root-caused and fixed** (`.claude/WORKLOG-autonomous-session-2026-09-19.md` has the full
+derivation): the 3D "per-cell cost grows with `n`" finding recorded in an earlier session (and the "chunks
+doesn't have this problem" finding that had briefly stood below it) both turned out to trace to the SAME root
+cause, and it wasn't an algorithmic difference between the naive and chunks engines at all — it was
+`CubicalGridStream.filtrationValue` (`CubicalStream.scala`) being a completely UNCACHED `PartialFunction`.
+`CellularHomologyContext`/`CellularPersistenceInChunksContext` both bake `stream.filtrationOrdering` directly
+into `Chain`'s `SortedMap`/`PriorityQueue` pivot machinery, which calls `filtrationValue` on EVERY chain-
+arithmetic comparison during reduction — not just once per cell during the stream's own up-front sorts. Every
+one of those calls recomputed `containingTopCells` (O(2^(ambientDim - dim(c))) — a small, ambient-dimension-
+bound constant, NOT itself `n`-dependent) completely from scratch. In 2D that constant is small enough (max 4)
+to stay hidden in the noise; in 3D (max 8) it was large enough, multiplied by however many comparisons a
+growing reduction performs, to look like genuine `n`-dependent growth.
 
-**Naive vs. chunks, measured in a later session** (`CubicalBenchmarkSpec.scala`, extended to time both engines
-on the SAME generated grid per row): `CellularPersistenceInChunksContext[Cube, ...]` had never been exercised
-anywhere in this codebase before this session (only `Simplex[VertexT]`/`FiniteSimplicialSet` generators had) —
-cross-validated first (`CubicalStreamSpec.scala`'s tie-heavy fixtures, naive-vs-chunks agreement plus chunks' own
-`totalBarsAccountForAllCells` structural invariant, since both engines share `CubicalGridStream.filtrationOrdering`
-and agreement alone can't catch a bug in that shared ordering) before trusting any timing. **In 2D, chunks is a
-flat ~2x constant-factor win** (naive ~75-150us/cell, chunks ~42-66us/cell, both roughly flat across a 900x size
-range). **In 3D, the difference is structural, not constant-factor**: naive's per-cell cost keeps growing with
-`n` (284 → 349 → 891 us/cell from n=8 to n=32, confirming the scaling problem above), but chunks' stays flat
-(123 → 90 → 114 us/cell, no growth trend) over the same range — so the speedup ratio itself grows with `n` (2.3x
-→ 3.9x → 7.8x). Chunks does not inherit naive's 3D scaling problem, though naive's own growth is still not
-root-caused, and chunks was only tested up to 274,625 cells (n=32) — untested whether its flat shape holds at
-n=64+ or whether it eventually hits the same stall/OOM risk `PersistenceInChunksContext` x alpha showed at a
-comparable simplex count. Full derivation in `.claude/WORKLOG-cubical-chunks-benchmark.md`.
+**Isolated by phase-separated timing** (a new, kept driver, `CubicalProfileDriver.scala`, mirroring
+`SingleEngineProfileDriver`'s own single-JVM-process convention, same reasoning): `CubicalGridStream.
+iterateDimension`'s own per-dimension sort (phase 1) and `HomologyState`'s second, global sort (phase 2 — see
+`processingOrder`'s own comment above) were both FLAT or mildly shrinking with `n` in 3D — ruling out both of
+the stream's own up-front sorting passes. All of the previously-documented growth lived in phase 3 (the actual
+`advanceAll` reduction) alone: 231 -> 439 -> 678 us/cell at n=8/16/24, a real ~3x factor over that range.
+
+**Fixed** with a per-instance `mutable.HashMap[Cube, Double]` memoization cache on `filtrationValue` —
+justified as memory-frugality-neutral in a way `RipserCohomologyContext`'s deliberately-opt-in
+`memoizeFiltrationValue` isn't: `CellularHomologyContext.HomologyState.CellIterator` (`stream.iterator.
+toVector.sorted(...)`) and `CellularPersistenceInChunksContext.HomologyState.allCells` (`0.to(internalMaxDim).
+iterator.flatMap(...).toVector`) BOTH already eagerly materialize every cell of the stream into one in-memory
+`Vector` before any reduction starts — checked directly in `Homology.scala`, not assumed — so a cache bounded
+by that same already-resident cell count adds no new peak-memory concern on EITHER engine. (No caller in this
+codebase holds a `CubicalGridStream` across multiple `persistentHomology`/`diagramAt` runs or builds one
+without ever consuming it, but this wouldn't matter regardless: the cache's ceiling is the stream's own fixed,
+finite `totalCellCount`, independent of caller behavior.)
+
+**Measured, phase-separated, after the fix** (3D, same driver): phase 3 dropped to 61 -> 68 -> 91 us/cell at
+n=8/16/24 — much flatter than before (the previous ~3x factor over this range is now ~1.5x, consistent with
+ordinary O(log N) reduction-accumulator behavior, not eliminated to perfectly flat but no longer a distinct
+pathology). Total time at n=24 dropped from 83.9s to 11.9s, a ~7x wall-clock improvement on the synthetic
+driver.
+
+**Confirmed on the real, established benchmark** (`CubicalBenchmarkSpec.scala`), which is what the numbers
+below supersede: 2D naive dropped from ~75-150us/cell to a roughly flat 21-45us/cell; 2D chunks dropped from
+~42-66us/cell to ~12-23us/cell (both engines benefit, since both consume the same `CubicalGridStream`). **3D
+naive dropped from the previously-documented 284/349/891 us/cell (n=8/16/32) to 84/48/109 us/cell** — an 8x
+wall-clock improvement at n=32 (244.8s -> 30.0s) — **and the old clear growth trend is gone**, leaving only
+ordinary run-to-run noise. 3D chunks dropped from 123/90/114 to 25/18/23 us/cell. **This revises the "naive vs.
+chunks is a structural, not constant-factor, difference in 3D" finding an earlier session recorded here**: that
+difference was real as measured at the time, but it traced to a shared stream-level cost that happened to
+dominate the naive engine's smaller per-comparison overhead more visibly than chunks' larger one, not to an
+algorithmic property of either engine — see `.claude/WORKLOG-cubical-chunks-benchmark.md` for that earlier
+session's own (now-superseded) numbers and cross-validation work, which remains valid as the record of when
+`CellularPersistenceInChunksContext[Cube, ...]` was first exercised and validated. Full `sbt test` (249
+examples) passes identically before and after this fix, confirming it's a pure performance change.
 
 A specialized, grid-structure-exploiting fast cubical persistence algorithm — **CubicalRipser** (reproducing
 Ripser's clearing/apparent-pairs optimizations for cubical complexes) or the **Wagner-Chen-Vuçini** "Efficient
 Computation of Persistent Homology for Cubical Data" approach (union-find for dimension 0, discrete-Morse-style
-reduction for higher dimensions) — is a real, flagged-on-purpose future direction, NOT attempted this session:
-tonight's scope was deliberately limited to slotting `Cube` into the existing generic naive engine. The measured
-3D numbers above are the concrete case for it, not a theoretical one — profile first (root-cause the growing
-per-cell cost) before deciding whether a targeted fix or a genuinely specialized engine is warranted, mirroring
-how `RipserCohomologyContext` itself was only built after the naive engine's own limits were understood, not
-before.
+reduction for higher dimensions) — remains a real, valid future direction, independent of the fix above: that
+fix removed a bug (a completely uncached filtration value), not a ceiling on what the generic engines can do.
+Both engines still pay the same general-purpose `Chain.reduceByUntil` reduction cost real Ripser-style
+optimizations (clearing, apparent pairs) are specifically designed to avoid — not attempted this session, which
+was scoped to root-causing and fixing the specific measured regression, not building a new engine.
 
 ## Simplicial sets
 
