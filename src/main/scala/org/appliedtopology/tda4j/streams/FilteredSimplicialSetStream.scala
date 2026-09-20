@@ -4,13 +4,13 @@ package streams
 import org.appliedtopology.tda4j.algebra.{given, *}
 import org.appliedtopology.tda4j.cells.{given, *}
 
-/** `filtrationOrdering` for a `FiniteSimplicialSet`, given a real (non-constant) filtration value and the
-  * generator's own dimension: `Double.compare(fv(y), fv(x))` -- deliberately swapped arguments, not
-  * `Ordering.by(fv).reverse`, but the identical effect -- so smaller-under-this-ordering means younger (larger
-  * fv), then dimension ascending, then a caller-supplied tie-break. This is `EnumeratingCofaceSimplexStream`'s
-  * exact convention (`SimplexStream.scala`), mirrored line-for-line rather than reinvented: that comparator has
-  * been broken and fixed twice in this codebase's history (see CLAUDE.md's "Bug found while cross-validating"
-  * sections), so reusing its exact shape is worth more here than a fresh derivation that happens to agree.
+/** `filtrationOrdering` for a `FiniteSimplicialSet`, given a real (non-constant) filtration value and the generator's
+  * own dimension: `Double.compare(fv(y), fv(x))` -- deliberately swapped arguments, not `Ordering.by(fv).reverse`, but
+  * the identical effect -- so smaller-under-this-ordering means younger (larger fv), then dimension ascending, then a
+  * caller-supplied tie-break. This is `EnumeratingCofaceSimplexStream`'s exact convention (`SimplexStream.scala`),
+  * mirrored line-for-line rather than reinvented: that comparator has been broken and fixed twice in this codebase's
+  * history (see CLAUDE.md's "Bug found while cross-validating" sections), so reusing its exact shape is worth more here
+  * than a fresh derivation that happens to agree.
   */
 def simplicialSetFiltrationOrdering[G](
   filtrationValue: PartialFunction[G, Double],
@@ -28,13 +28,12 @@ def simplicialSetFiltrationOrdering[G](
         case fc => fc
     else tb
 
-/** Checks the one precondition every persistence engine in this codebase needs from a filtration: a face's
-  * value is never larger than its coface's. Only BARE (`word = Nil`) direct faces matter here -- those are the
-  * only faces `FiniteSimplicialSet_is_OrderedCell.boundary` (hence every engine consuming this complex) ever
-  * looks at; a degenerate face contributes nothing to the boundary and is never separately filtration-tested.
-  * Lives here, not on `FiniteSimplicialSet` itself: filtration is entirely an adapter-layer concern, per the
-  * architecture note in CLAUDE.md's "Simplicial sets" section (a `FiniteSimplicialSet`'s own structure has no
-  * notion of filtration at all).
+/** Checks the one precondition every persistence engine in this codebase needs from a filtration: a face's value is
+  * never larger than its coface's. Only BARE (`word = Nil`) direct faces matter here -- those are the only faces
+  * `FiniteSimplicialSet_is_OrderedCell.boundary` (hence every engine consuming this complex) ever looks at; a
+  * degenerate face contributes nothing to the boundary and is never separately filtration-tested. Lives here, not on
+  * `FiniteSimplicialSet` itself: filtration is entirely an adapter-layer concern, per the architecture note in
+  * CLAUDE.md's "Simplicial sets" section (a `FiniteSimplicialSet`'s own structure has no notion of filtration at all).
   */
 def validateMonotoneFiltration[G](sset: FiniteSimplicialSet[G], filtrationValue: G => Double): Seq[String] =
   sset.generatorsByDim.zipWithIndex.flatMap { case (gens, n) =>
@@ -46,23 +45,23 @@ def validateMonotoneFiltration[G](sset: FiniteSimplicialSet[G], filtrationValue:
     }
   }
 
-/** A `FiniteSimplicialSet` with a real, caller-supplied filtration -- unlike `SimplicialSetStream` (every
-  * generator at filtration `0`, ordinary homology only), this is a genuine `StratifiedCellStream[G, Double]`,
-  * so it plugs into `CellularPersistenceInChunksContext`/`PersistenceInChunksContext` as well as
-  * `CellularHomologyContext`. `filtrationValue` is defined only on generators (never on arbitrary, possibly
-  * degenerate `SSetElement`s) -- correct because every engine here only ever queries a stream's
-  * `filtrationValue` on the actual `CellT` values it iterates, and `SimplicialSetStream`/this class both only
-  * ever iterate generators, never degenerate elements (`FiniteSimplicialSet_is_OrderedCell.boundary` resolves
-  * degeneracy internally via `faces`, without the engine ever seeing an `SSetElement` directly).
+/** A `FiniteSimplicialSet` with a real, caller-supplied filtration -- unlike `SimplicialSetStream` (every generator at
+  * filtration `0`, ordinary homology only), this is a genuine `StratifiedCellStream[G, Double]`, so it plugs into
+  * `CellularPersistenceInChunksContext`/`PersistenceInChunksContext` as well as `CellularHomologyContext`.
+  * `filtrationValue` is defined only on generators (never on arbitrary, possibly degenerate `SSetElement`s) -- correct
+  * because every engine here only ever queries a stream's `filtrationValue` on the actual `CellT` values it iterates,
+  * and `SimplicialSetStream`/this class both only ever iterate generators, never degenerate elements
+  * (`FiniteSimplicialSet_is_OrderedCell.boundary` resolves degeneracy internally via `faces`, without the engine ever
+  * seeing an `SSetElement` directly).
   *
   * `iterateDimension` sorts each dimension's bucket by `filtrationOrdering.reverse` -- oldest first, the SAME
-  * `Ordering` object reversed, not an independently-built comparator -- matching the established convention
-  * this codebase has broken and fixed three separate times when two independently-tie-broken orders
-  * disagreed (see CLAUDE.md). Positional index within `PersistenceInChunksContext`'s `allCells` (built by
-  * dimension-major concatenation of `iterateDimension`'s buckets) stands in for chunk-boundary/local-reduction
-  * "how old is this cell" logic, so a bucket sorted any other way corrupts chunking even though it would still
-  * look like a valid total order in isolation -- `FilteredSimplicialSetStreamSpec` asserts this directly rather
-  * than only checking the resulting barcode.
+  * `Ordering` object reversed, not an independently-built comparator -- matching the established convention this
+  * codebase has broken and fixed three separate times when two independently-tie-broken orders disagreed (see
+  * CLAUDE.md). Positional index within `PersistenceInChunksContext`'s `allCells` (built by dimension-major
+  * concatenation of `iterateDimension`'s buckets) stands in for chunk-boundary/local-reduction "how old is this cell"
+  * logic, so a bucket sorted any other way corrupts chunking even though it would still look like a valid total order
+  * in isolation -- `FilteredSimplicialSetStreamSpec` asserts this directly rather than only checking the resulting
+  * barcode.
   */
 class FilteredSimplicialSetStream[G](
   sset: FiniteSimplicialSet[G],
@@ -74,9 +73,12 @@ class FilteredSimplicialSetStream[G](
   override def iterateDimension: PartialFunction[Int, Iterator[G]] =
     case d if d >= 0 && d < sset.generatorsByDim.length =>
       sset.generatorsByDim(d).toVector.sorted(using filtrationOrdering.reverse).iterator
-  export DoubleIsFilterable.{smallest, largest}
+  export DoubleIsFilterable.{largest, smallest}
 
 object FilteredSimplicialSetStream:
-  def apply[G](sset: FiniteSimplicialSet[G], filtrationValue: PartialFunction[G, Double]): FilteredSimplicialSetStream[G] =
+  def apply[G](
+    sset: FiniteSimplicialSet[G],
+    filtrationValue: PartialFunction[G, Double]
+  ): FilteredSimplicialSetStream[G] =
     given (G is OrderedCell) = sset.cellInstance
     new FilteredSimplicialSetStream(sset, filtrationValue)

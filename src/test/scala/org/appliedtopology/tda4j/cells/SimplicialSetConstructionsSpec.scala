@@ -5,8 +5,8 @@ import org.appliedtopology.tda4j.algebra.{given, *}
 
 import org.specs2.mutable
 
-/** Structural tests for `product`/`coproduct` (`SimplicialSetConstructions.scala`) -- the word-based
-  * non-degeneracy shortcut checked against its definition, the hand-derived generator counts for
+/** Structural tests for `product`/`coproduct` (`SimplicialSetConstructions.scala`) -- the word-based non-degeneracy
+  * shortcut checked against its definition, the hand-derived generator counts for
   * `minimalSphere(1) x minimalSphere(1)`, and `validate()` on the constructed simplicial sets. Homology
   * cross-validation (Betti numbers against independently-known answers) lives in
   * `homology/SimplicialSetHomologySpec.scala`, alongside the rest of this feature's homology tests.

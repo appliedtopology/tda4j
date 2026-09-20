@@ -38,4 +38,3 @@ class SimplicialSetSpec extends mutable.Specification:
     val broken = new FiniteSimplicialSet(rp2.ord)(rp2.generatorsByDim, brokenFaces)
     broken.validate().exists(_.contains("malformed degeneracy word")) must beTrue
   }
-

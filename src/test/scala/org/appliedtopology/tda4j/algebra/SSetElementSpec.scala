@@ -8,9 +8,9 @@ import org.appliedtopology.tda4j.cells.SimplicialSetFixtures.SphereGenerator
 
 import org.specs2.mutable
 
-/** Direct, hand-verified unit tests for `insertOuter`/`faceOf` themselves -- independent of any fixture's
-  * topological meaning, and independent of `FiniteSimplicialSet.validate()`'s own (integration-level) use of the
-  * same functions. See `.claude/WORKLOG-simplicial-sets.md` for the full derivation of each example.
+/** Direct, hand-verified unit tests for `insertOuter`/`faceOf` themselves -- independent of any fixture's topological
+  * meaning, and independent of `FiniteSimplicialSet.validate()`'s own (integration-level) use of the same functions.
+  * See `.claude/WORKLOG-simplicial-sets.md` for the full derivation of each example.
   */
 class SSetElementSpec extends mutable.Specification:
 

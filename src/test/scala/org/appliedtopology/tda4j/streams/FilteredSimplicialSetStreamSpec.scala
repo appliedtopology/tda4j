@@ -9,9 +9,8 @@ import org.appliedtopology.tda4j.homology.{given, *}
 import org.specs2.mutable
 
 /** Real (non-constant) filtration for `FiniteSimplicialSet`, and cross-validation of the newly-genericized
-  * `CellularPersistenceInChunksContext` against the already-trusted `CellularHomologyContext` on it. Full
-  * derivation, including the `advisor()`-driven design corrections, in
-  * `.claude/WORKLOG-simplicial-set-filtration.md`.
+  * `CellularPersistenceInChunksContext` against the already-trusted `CellularHomologyContext` on it. Full derivation,
+  * including the `advisor()`-driven design corrections, in `.claude/WORKLOG-simplicial-set-filtration.md`.
   */
 class FilteredSimplicialSetStreamSpec extends mutable.Specification:
   import SimplicialSetFixtures.TorusGenerator
@@ -120,7 +119,8 @@ class FilteredSimplicialSetStreamSpec extends mutable.Specification:
     val seeds = 1L to 5L
 
     val sphereChecks = (1 to 3).forall(n => seeds.forall(s => check(SimplicialSetFixtures.minimalSphere(n), s)))
-    val projectiveChecks = (2 to 3).forall(n => seeds.forall(s => check(SimplicialSetFixtures.realProjectiveSpace(n), s)))
+    val projectiveChecks =
+      (2 to 3).forall(n => seeds.forall(s => check(SimplicialSetFixtures.realProjectiveSpace(n), s)))
     val torusChecks = seeds.forall(s => check(SimplicialSetFixtures.torus, s))
 
     (sphereChecks must beTrue).and(projectiveChecks must beTrue).and(torusChecks must beTrue)

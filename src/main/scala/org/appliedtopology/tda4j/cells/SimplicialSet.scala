@@ -6,8 +6,8 @@ import org.appliedtopology.tda4j.algebra.{given, *}
 /** `OrderedCell` instance for the generators (non-degenerate simplices) of a finite simplicial set: `dim` is the
   * generator's own dimension, and `boundary` is the normalized-chain-complex differential -- only faces that are
   * themselves bare generators (`word.isEmpty`) contribute, with the usual alternating sign; a degenerate face
-  * contributes nothing, since the normalized chain complex is quasi-isomorphic to the full one. This is the only
-  * place degeneracy matters for homology -- computing it needs no recursive `faceOf`, only `faces(g)` itself.
+  * contributes nothing, since the normalized chain complex is quasi-isomorphic to the full one. This is the only place
+  * degeneracy matters for homology -- computing it needs no recursive `faceOf`, only `faces(g)` itself.
   *
   * Mirrors `Simplex_is_OrderedCell`'s injectable-ordering pattern (`SimplexOrderedCell.scala`).
   */
@@ -23,14 +23,13 @@ def FiniteSimplicialSet_is_OrderedCell[G](using
           (target, if i % 2 == 0 then fr.one else fr.negate(fr.one))
         }
 
-/** A finite simplicial set presented by generators (non-degenerate simplices) and, for each generator, its
-  * primitive face data -- from which everything else (arbitrary `d_i`/`s_j`, the `OrderedCell` instance feeding
-  * the homology engines) is inferred via `faceOf`/`insertOuter` (`SSetElement.scala`).
+/** A finite simplicial set presented by generators (non-degenerate simplices) and, for each generator, its primitive
+  * face data -- from which everything else (arbitrary `d_i`/`s_j`, the `OrderedCell` instance feeding the homology
+  * engines) is inferred via `faceOf`/`insertOuter` (`SSetElement.scala`).
   *
-  * `faces(g)`, for `g` of dimension `n`, must supply exactly `n+1` already-normalized `SSetElement`s of
-  * dimension `n-1` each (empty for `n = 0`) -- `validate()` checks this contract plus the simplicial identities
-  * at runtime, since it's easy to get a hand-written presentation subtly wrong with no crash, just silently
-  * wrong homology.
+  * `faces(g)`, for `g` of dimension `n`, must supply exactly `n+1` already-normalized `SSetElement`s of dimension `n-1`
+  * each (empty for `n = 0`) -- `validate()` checks this contract plus the simplicial identities at runtime, since it's
+  * easy to get a hand-written presentation subtly wrong with no crash, just silently wrong homology.
   */
 class FiniteSimplicialSet[G](val ord: Ordering[G])(
   val generatorsByDim: IndexedSeq[Set[G]],

@@ -12,8 +12,8 @@ import org.specs2.{mutable as s2mutable, ScalaCheck}
 
 /** `fromStream` exercises no degeneracy machinery at all (every face it produces is a bare generator) -- it's a
   * plumbing check that the `CellStream` adapter and `FiniteSimplicialSet` wiring agree with the existing, already-
-  * validated `SimplicialHomologyContext` engine on the exact same input, not evidence that `faceOf`/`insertOuter`
-  * are correct (that's `SSetElementSpec`/`SimplicialSetHomologySpec`, via the hand-built fixtures).
+  * validated `SimplicialHomologyContext` engine on the exact same input, not evidence that `faceOf`/`insertOuter` are
+  * correct (that's `SSetElementSpec`/`SimplicialSetHomologySpec`, via the hand-built fixtures).
   */
 class SimplicialSetStreamSpec extends s2mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
@@ -27,7 +27,12 @@ class SimplicialSetStreamSpec extends s2mutable.Specification with ScalaCheck:
     diagram.collect { case (dim, _, Int.MaxValue) => dim }.groupBy(identity).view.mapValues(_.size).toMap
 
   private def bettiFromReference(diagram: List[(Int, Double, Double)]): Map[Int, Int] =
-    diagram.collect { case (dim, _, death) if death.isPosInfinity => dim }.groupBy(identity).view.mapValues(_.size).toMap
+    diagram
+      .collect { case (dim, _, death) if death.isPosInfinity => dim }
+      .groupBy(identity)
+      .view
+      .mapValues(_.size)
+      .toMap
 
   private def accountsForAllCells(diagram: List[(Int, Int, Int)], cells: Int): Boolean =
     val (finite, essential) = diagram.partition { case (_, _, death) => death != Int.MaxValue }
@@ -36,7 +41,8 @@ class SimplicialSetStreamSpec extends s2mutable.Specification with ScalaCheck:
   private def ourBetti(stream: CellStream[Simplex[Int], ?]): (Map[Int, Int], Int) =
     val sset = fromStream(stream)
     given (Simplex[Int] is OrderedCell) = sset.cellInstance
-    val diagram = CellularHomologyContext[Simplex[Int], Double, Int]().persistentHomology(SimplicialSetStream(sset)).diagramAt(0)
+    val diagram =
+      CellularHomologyContext[Simplex[Int], Double, Int]().persistentHomology(SimplicialSetStream(sset)).diagramAt(0)
     (bettiFromOurs(diagram), diagram.size)
 
   "fromStream agrees with SimplicialHomologyContext on Betti numbers, for hand-built fixtures" >> {
@@ -58,21 +64,22 @@ class SimplicialSetStreamSpec extends s2mutable.Specification with ScalaCheck:
       val stream = explicitStream(cells)
       val sset = fromStream(stream)
       given (Simplex[Int] is OrderedCell) = sset.cellInstance
-      val diagram = CellularHomologyContext[Simplex[Int], Double, Int]().persistentHomology(SimplicialSetStream(sset)).diagramAt(0)
+      val diagram =
+        CellularHomologyContext[Simplex[Int], Double, Int]().persistentHomology(SimplicialSetStream(sset)).diagramAt(0)
       accountsForAllCells(diagram, cells.size) must beTrue
     }
   }
 
-  "fromStream agrees with SimplicialHomologyContext on Betti numbers, random Vietoris-Rips clouds" >> {
+  "fromStream agrees with SimplicialHomologyContext on Betti numbers, random Vietoris-Rips clouds" >>
     forAll(matrixGen(Gen.choose(-1.0, 1.0), Gen.chooseNum(2, 4), Gen.chooseNum(6, 10))) { pts =>
       val metricSpace = EuclideanMetricSpace(pts)
       val vrStream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), 2)
       val (betti, _) = ourBetti(vrStream)
 
       val reference = SimplicialHomologyContext[Int, Double, Double]()
-      val theirs = reference.persistentHomology(LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), 2))
+      val theirs = reference
+        .persistentHomology(LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), 2))
         .diagramAt(Double.PositiveInfinity)
 
       betti === bettiFromReference(theirs)
     }
-  }
