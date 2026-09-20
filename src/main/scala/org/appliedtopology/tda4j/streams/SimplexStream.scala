@@ -283,8 +283,43 @@ class EnumeratingCofaceSimplexStream(
 
   override def pruneAllCofaces: Boolean = false
 
+  // Memoized -- but ONLY the default MaximumDistanceFiltrationValue fallback, not a caller-supplied
+  // filtrationValueOverride (e.g. CechFiltration already caches internally; double-wrapping it is pure
+  // waste, and a hypothetical future override might have its own memory-shape reasons not to be cached
+  // here too). CellularHomologyContext (via SimplicialHomologyContext) and
+  // CellularPersistenceInChunksContext both re-derive Ordering[CellT] = stream.filtrationOrdering and
+  // consult it on every chain-arithmetic comparison during reduction (Chain's SortedMap/PriorityQueue
+  // accumulator), not just once per cell during this stream's own up-front sorts -- an uncached
+  // filtrationValue means MaximumDistanceFiltrationValue's O(d^2) pairwise-distance recompute (plus its
+  // own SortedSet-iteration allocation) reruns on every single one of those comparisons. This is the SAME
+  // bug class root-caused and fixed for CubicalGridStream (see CLAUDE.md's "Naive-engine scaling"
+  // section) -- confirmed by direct measurement here too, not by analogy alone: a phase-separated
+  // profiling driver (VRLowDimProfileDriver, see .claude/WORKLOG-autonomous-session-2026-09-19.md) found
+  // deep-stack-attributed filtrationValue/filtrationOrdering cost at ~57% of total samples on a large,
+  // sparse, maxDim=1 Vietoris-Rips complex, and memoizing this one fallback alone cut the reduction
+  // phase's own wall-clock time by 32-46% across n=5000-20000.
+  //
+  // This is NOT a reversal of RipserCohomologyContext's own `memoizeFiltrationValue = false` default: that
+  // decision is about a stream `RipserCohomologyContext`/`PackedRipserCohomologyContext` NEVER fully
+  // materialize (a genuinely unbounded-in-practice VR complex, by design), where `insertionDiameter` gives
+  // an O(d) incremental alternative that makes not caching viable in the first place. Neither condition
+  // holds here: `CellularHomologyContext.HomologyState.CellIterator`
+  // (`stream.iterator.toVector.sorted(...)`) and `CellularPersistenceInChunksContext.HomologyState.
+  // allCells` (`0.to(internalMaxDim).iterator.flatMap(...).toVector`) BOTH already eagerly materialize
+  // every cell of the stream into one in-memory Vector before any reduction starts, so a cache bounded by
+  // that same already-resident cell count adds no new memory-frugality concern -- and there is no
+  // equivalent incremental formula for the general max-pairwise-distance functional this stream computes
+  // by default (that's specifically what `insertionDiameter` provides for Ripser's OWN cofacet-enumeration
+  // shape, not something this stream's coface-generation loop can reuse).
+  private val filtrationValueCache = mutable.HashMap.empty[Simplex[Int], Double]
+
   override val filtrationValue: PartialFunction[Simplex[Int], Double] =
-    filtrationValueOverride.getOrElse(FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace))
+    filtrationValueOverride.getOrElse {
+      val base = FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
+      new PartialFunction[Simplex[Int], Double]:
+        def isDefinedAt(spx: Simplex[Int]): Boolean = base.isDefinedAt(spx)
+        def apply(spx: Simplex[Int]): Double = filtrationValueCache.getOrElseUpdate(spx, base(spx))
+    }
 
   /** Filtration value, reversed (so smaller-under-this-ordering means YOUNGER, matching `SimplexStream`'s own
     * established convention -- see `FilteredSimplexOrdering`, and `CellularHomologyContext`'s class doc, which relies

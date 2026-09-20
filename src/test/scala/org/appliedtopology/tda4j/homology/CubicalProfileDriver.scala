@@ -6,16 +6,16 @@ import org.appliedtopology.tda4j.cells.{given, *}
 import org.appliedtopology.tda4j.streams.{given, *}
 
 /** Test-scope driver, kept alongside `CubicalBenchmarkSpec.scala` -- a single-process JVM target for profiling
-  * `CellularHomologyContext` on a `CubicalGridStream`, avoiding the sbt-hosted benchmark harness's own
-  * documented timeout/daemon-thread contamination risk (see `SingleEngineProfileDriver`'s own doc, same
-  * reasoning). Invoked directly:
+  * `CellularHomologyContext` on a `CubicalGridStream`, avoiding the sbt-hosted benchmark harness's own documented
+  * timeout/daemon-thread contamination risk (see `SingleEngineProfileDriver`'s own doc, same reasoning). Invoked
+  * directly:
   *
   * {{{
   * java -cp $CP org.appliedtopology.tda4j.homology.CubicalProfileDriver <dims> <n> [seed]
   * }}}
   *
-  * Built to root-cause CLAUDE.md's documented-but-unexplained finding: the naive cubical engine's per-cell cost
-  * GROWS with `n` in 3D but stays flat in 2D. See `.claude/WORKLOG-autonomous-session-2026-09-19.md`.
+  * Built to root-cause CLAUDE.md's documented-but-unexplained finding: the naive cubical engine's per-cell cost GROWS
+  * with `n` in 3D but stays flat in 2D. See `.claude/WORKLOG-autonomous-session-2026-09-19.md`.
   */
 object CubicalProfileDriver:
   def main(args: Array[String]): Unit =

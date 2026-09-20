@@ -173,3 +173,121 @@ the same measurement in the file.
   (`.claude/WORKLOG-ripser-profiling.md`'s `Chain.reduceLoop` sections), not a new, unexplained pathology
   worth a dedicated investigation of its own.
 - Task #1 is DONE.
+
+---
+
+## Task #2: raw-UnionFind fast path for dimension 0/1 -- scoped out after measurement, replaced with a cheaper fix that answers the same question
+
+### Starting point
+
+`WORKLOG-mst-and-perf.md`'s own "Decision" section (an earlier session) explicitly deferred porting
+`SimplicialHomologyByDimensionContext`'s validated elder-rule logic into `CellularHomologyContext` as a raw
+`UnionFind`-based fast path, for two stated reasons: the benefit looked small for the `maxDim >= 2` case actually
+measured back then (dimension-0/1 is a small fraction of a complex once triangles exist), and the risk of
+introducing a new bug into the REFERENCE ORACLE every other engine is cross-validated against was real (that
+session found five distinct bugs getting the `Chain.reduceBy`-based version right in an isolated class with no
+other consumers). It explicitly named the scenario where the benefit WOULD be real -- "large point cloud, low
+maxDim (0 or 1), where dimension-0/1 IS most or all of the complex" -- and said this needs its own targeted
+benchmark before deciding, not an assumption either way.
+
+### Measurement
+
+Built `VRLowDimProfileDriver.scala` (kept, mirroring `CubicalProfileDriver`'s phase-separated convention) to
+target exactly that scenario: `SimplicialHomologyContext` on a large (n=2000-20000), SPARSE (threshold scaled as
+`2.5/sqrt(n)`, same convention as `SparseRipsBenchmarkSpec`) Vietoris-Rips complex capped at `maxDim=1`.
+Phase-separated timing confirmed phase3 (the actual reduction) dominates (~85-90% of total wall-clock), with a
+mildly-growing but not pathological per-cell cost (~106-130 us/cell across n=2000-20000).
+
+Deep-stack JFR profiling (`jfr print --stack-depth 30`, the SAME depth-30 correction this codebase's own Ripser
+profiling arc already learned it needed -- a shallower `--stack-depth 12` pass first mis-attributed a large
+chunk of cost to "other," which turned out on the deeper pass to be `Chain.collapseAll`/`filtrationValue`
+machinery hidden a few frames further up than 12 could reach) found: **~57% of execution samples (whole-process,
+dominated by phase3) attributed to `filtrationValue`/`filtrationOrdering`**, ~22% to coface enumeration (mostly
+phase1/phase2, not phase3), ~6.3% to `Chain.reduceLoop`/`reduceBy` machinery, ~3.6% to `Chain`/`PriorityQueue`
+construction, ~0.3% to `Simplex.boundary` construction, ~11% genuinely unattributed (mostly `Chain.collapseAll`/
+`HashMap` bookkeeping intrinsic to the general reduction algorithm itself).
+
+### Advisor check-in and the pivot away from raw UnionFind
+
+Two check-ins here. The first, before any code, sanity-checked the measurement plan itself and caught a real
+methodology risk before it was spent: task #1's own fix had JUST changed the baseline this benchmark would be
+measuring against (both the cubical fix and the earlier same-day Ripser-profiling arc had already removed
+similar comparator costs elsewhere), so the measurement had to characterize the CURRENT cost, not infer from a
+stale mental model. It also corrected an over-broad initial design instinct (a fully generic `CellT: OrderedCell`
+fast path) with a concrete counterexample: `FiniteSimplicialSet`'s `torus`/`minimalSphere(1)` fixtures have
+1-generators with BOTH faces equal (self-loops), whose boundary is algebraically ZERO over a field (`d(e) = v -
+v = 0`), not two terms -- a fast path keyed on "the two endpoints" would silently mishandle exactly the fixture
+family built to be adversarial. Scoped to `Simplex[VertexT]` only, per that correction.
+
+The second check-in, after the measurement above came back, is the one that actually changed the plan: **while
+attempting to design the raw UnionFind implementation, reconstructing exactly which coefficients/V-column
+corrections a multi-hop `boundaries` substitution needs (to stay bit-for-bit algebraically valid for a LATER
+dimension-2+ cell's reduction, which reads `boundaries`/`generators`/`negativeVCols` for dimension-1 pivots) took
+many turns of careful derivation without ever fully settling the general-coefficient-field case** -- a
+real, concrete instance of exactly the "five bugs last time, in an isolated class with no other consumers" risk
+`WORKLOG-mst-and-perf.md` already flagged, except this time the target was the reference oracle directly. Before
+writing any of that code, tried a MUCH cheaper alternative first: manually wrapping
+`EnumeratingCofaceSimplexStream`'s default `filtrationValue` (`FiniteMetricSpace.MaximumDistanceFiltrationValue`)
+in a `mutable.HashMap` cache, entirely in the profiling driver, no production code touched yet, to see how much
+of the 57% that alone would close.
+
+**Result: this stream's default `filtrationValue` was uncached, exactly the same bug class task #1 fixed for
+`CubicalGridStream`, apparently never given the equivalent treatment.** Memoizing it alone (measured
+before/after, `forceUncached` toggle in the driver):
+
+| n     | cells   | phase3 us/cell (uncached) | phase3 us/cell (memoized) | reduction |
+|-------|---------|---------------------------|-----------------------------|-----------|
+| 5000  | 52431   | 123.029                   | 68.114                      | 44.6%     |
+| 10000 | 105591  | 123.150                   | 77.061                      | 37.4%     |
+| 20000 | 212839  | 129.175                   | 80.742                      | 37.5%     |
+
+Brought to advisor as an explicit reconciliation ("I found X [uncached filtrationValue explains most of the
+measured cost], you suggested Y [raw UnionFind], which constraint breaks the tie?"), per the standing instruction
+to surface exactly this kind of conflict rather than silently picking a side. Verdict: **do the memoization fix,
+do NOT build the raw UnionFind path.** The residual cost after memoization (`Chain.reduceLoop`'s accumulator,
+`Chain`/`PriorityQueue` construction -- a combined ~10% of the ORIGINAL whole-process measurement, i.e. small
+once the dominant cost is gone) is exactly the SAME cost `.claude/WORKLOG-ripser-profiling.md` already
+characterized and deliberately deferred to its own dedicated redesign -- not a dimension-0/1-specific
+opportunity at all, so a raw UnionFind port would buy little beyond what's already a known, separately-owned
+future task, at real risk to the reference oracle for a derivation that hadn't converged cleanly. This is the
+measured answer to item #2's actual question, not a failure to complete it.
+
+### Fix shipped
+
+`EnumeratingCofaceSimplexStream.filtrationValue` (`SimplexStream.scala`): the default `MaximumDistanceFiltrationValue`
+fallback is now wrapped in a per-instance `mutable.HashMap[Simplex[Int], Double]` cache, ON by default -- scoped
+to ONLY the default fallback, not a caller-supplied `filtrationValueOverride` (e.g. `CechFiltration` already
+caches internally; double-wrapping would be pure waste). `RipserCofaceSimplexStream`/`InorderCofaceSimplexStream`
+both extend `EnumeratingCofaceSimplexStream` and inherit this unchanged (confirmed neither overrides
+`filtrationValue` itself). `RecursiveStackVietorisRipsSimplexStream` has its own independent `filtrationValue`
+and was deliberately left alone, matching this codebase's existing precedent of excluding it from this stream
+family's shared changes.
+
+**Why this doesn't contradict `RipserCohomologyContext`'s own `memoizeFiltrationValue = false` default** (an
+explicit project-lead call, documented in CLAUDE.md): that decision protects a stream `RipserCohomologyContext`/
+`PackedRipserCohomologyContext` never fully materialize by design (genuinely large VR complexes), where
+`insertionDiameter` gives an O(d) incremental alternative that makes NOT caching viable in the first place.
+Neither condition holds for `EnumeratingCofaceSimplexStream`'s actual consumers: `CellularHomologyContext.
+HomologyState.CellIterator` and `CellularPersistenceInChunksContext.HomologyState.allCells` BOTH already eagerly
+materialize every cell into a `Vector` before any reduction starts (checked directly, same check task #1 did for
+the cubical engines), and there's no incremental alternative to the general max-pairwise-distance functional this
+stream computes by default.
+
+**Verified**: full `sbt test` clean; a new ScalaCheck property in `SimplexStreamSpec.scala`
+(`CofaceSimplexStreamSpec`, "Memoizing EnumeratingCofaceSimplexStream's default filtrationValue changes nothing
+about the computed barcode") cross-checks the FULL bar list (dim, birth, death), not just counts, between the
+now-default memoized stream and an explicitly-forced-uncached one, on random point clouds -- mirroring
+`RipserCohomologySpec`'s own memoization-toggle property test.
+
+### Decision
+
+- Raw UnionFind for dimension 0/1 is NOT built. `SimplicialHomologyByDimensionContext` remains the only place
+  that logic exists, unchanged, still not wired into the production engines -- this is unchanged from
+  `WORKLOG-mst-and-perf.md`'s own prior state, now with an actual measurement behind why the port isn't worth its
+  risk (not just an assumption).
+- The residual `Chain.reduceLoop`/`PriorityQueue` cost (~10% of the original whole-process measurement) is a
+  known, already-owned future task (`.claude/WORKLOG-ripser-profiling.md`'s own "what's still open" section),
+  not something this session re-scoped or re-flagged as dimension-0/1-specific.
+- Task #2 is DONE, closed via measurement + a cheaper fix that answers the same underlying question the raw
+  UnionFind proposal was trying to answer (make dimension-0/1-heavy, large VR complexes faster on the naive
+  engine), not via the originally-named mechanism.

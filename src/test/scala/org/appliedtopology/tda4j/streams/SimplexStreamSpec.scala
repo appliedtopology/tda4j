@@ -148,3 +148,41 @@ class CofaceSimplexStreamSpec extends mutable.Specification with org.specs2.Scal
     (stream.iterateDimension.isDefinedAt(metricSpace.size - 1) must beTrue) and
       (stream.iterateDimension.isDefinedAt(metricSpace.size) must beFalse)
   }
+
+  // Pins the memoization fix from .claude/WORKLOG-autonomous-session-2026-09-19.md (task #2): the default
+  // MaximumDistanceFiltrationValue fallback is now cached per-instance, exactly the same fix (and same
+  // justification) as CubicalGridStream's own filtrationValue cache. Mirrors RipserCohomologySpec's own
+  // "memoizing changes nothing about the computed barcode" property, but for SimplicialHomologyContext
+  // (the naive engine actually consuming this stream's default filtrationValue), and comparing the FULL
+  // bar list (dim, birth, death) rather than just counts.
+  // maxDim capped at 2 (via LimitedCofaceSimplexStream) and point counts kept modest (6-12, matching
+  // RipserCohomologySpec's own memoization-toggle property): an EARLIER version of this test built the
+  // COMPLETE, untruncated complex (maxFiltrationValue = +Infinity, no dimension cap) for up to 15 points --
+  // up to 2^15-1 simplices through the naive engine, TWICE per trial, across ~100 ScalaCheck trials -- and
+  // was the direct cause of a several-minute `sbt test` slowdown plus OOM-driven failures cascading into
+  // unrelated specs (the same failure shape CLAUDE.md's "Cross-engine benchmark" section already documents
+  // from a prior incident). Fixed by capping scope the same way every other property test in this file does.
+  "Memoizing EnumeratingCofaceSimplexStream's default filtrationValue changes nothing about the computed barcode" >>
+    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
+      given Double is Field = Field.DoubleApproximated(1e-9)
+      given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+
+      val metricSpace = EuclideanMetricSpace(points)
+      val maxDim = 2
+
+      def barcodeWith(forceUncached: Boolean): List[(Int, Double, Double)] =
+        val fvOverride =
+          if forceUncached then Some(FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace))
+          else None
+        val stream = LimitedCofaceSimplexStream(
+          EnumeratingCofaceSimplexStream(
+            metricSpace,
+            maxFiltrationValue = Some(Double.PositiveInfinity),
+            filtrationValueOverride = fvOverride
+          ),
+          maxDim
+        )
+        shc.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+
+      barcodeWith(forceUncached = false) must containTheSameElementsAs(barcodeWith(forceUncached = true))
+    }

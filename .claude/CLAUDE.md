@@ -185,6 +185,33 @@ NOT touched — alpha shapes and Ripser reproduction remain different sections o
 interaction (an explicit, standing call from the project lead), and `minimumEnclosingRadius` in Euclidean-distance
 terms is not obviously the right quantity for a circumradius-based filtration in the first place.
 
+**`EnumeratingCofaceSimplexStream.filtrationValue`'s default fallback is now memoized, in a later session**
+(`.claude/WORKLOG-autonomous-session-2026-09-19.md`, task #2) — found while benchmarking whether a raw
+`UnionFind` fast path for dimension 0/1 was worth building (see item 3's own note below): the default
+`FiniteMetricSpace.MaximumDistanceFiltrationValue` fallback was completely uncached, the exact same bug class
+`CubicalGridStream`'s own fix addressed (see "Naive-engine scaling" above) — `CellularHomologyContext`/
+`CellularPersistenceInChunksContext` both bake `stream.filtrationOrdering` into `Chain`'s pivot-selection
+machinery, invoked on every chain-arithmetic comparison during reduction, so an uncached filtrationValue meant
+this O(d²) pairwise-distance recompute reran on every comparison, not once per cell. Deep-stack JFR profiling
+(`VRLowDimProfileDriver`, a large sparse maxDim=1 VR complex) attributed ~57% of samples to
+`filtrationValue`/`filtrationOrdering`; memoizing just this default fallback (a per-instance
+`mutable.HashMap[Simplex[Int], Double]`, wrapping ONLY the `MaximumDistanceFiltrationValue` case, not a
+caller-supplied `filtrationValueOverride` such as `CechFiltration`'s own already-cached one) cut the reduction
+phase's own wall-clock time by 37-46% across n=5000-20000. `RipserCofaceSimplexStream`/
+`InorderCofaceSimplexStream` inherit this unchanged (both extend `EnumeratingCofaceSimplexStream` without
+overriding `filtrationValue`); `RecursiveStackVietorisRipsSimplexStream` (above) keeps its own independent
+implementation, untouched, matching its existing exclusion from this family's shared changes. **Not a reversal
+of `RipserCohomologyContext`'s own `memoizeFiltrationValue = false` default** — that decision protects a stream
+`RipserCohomologyContext`/`PackedRipserCohomologyContext` never fully materialize by design, with
+`insertionDiameter` as a cheaper incremental alternative; neither condition holds here; both
+`CellularHomologyContext.HomologyState.CellIterator` and `CellularPersistenceInChunksContext.HomologyState.
+allCells` already eagerly materialize every cell into a `Vector` before any reduction starts, so a cache bounded
+by that same already-resident cell count adds no new memory-frugality concern, and there is no incremental
+alternative to the general max-pairwise-distance functional this stream computes by default. Verified via a new
+`SimplexStreamSpec` property (`CofaceSimplexStreamSpec`) comparing the full bar list — not just counts —
+between the now-default memoized stream and an explicitly-forced-uncached one, mirroring
+`RipserCohomologySpec`'s own memoization-toggle property.
+
 **`StratifiedCellStream.iterator`'s default implementation used to hang or crash for every coface-style stream,
 fixed**: it was `Iterator.from(0).filter(iterateDimension.isDefinedAt).map(...).fold(Iterator.empty)((x,y) => x ++
 y)` — two compounding bugs. `Iterator.filter` on an infinite source can never prove "no more matches ahead", so
@@ -452,11 +479,25 @@ imply the others need it:
    is this class's first-ever regression suite: hand-verified fixtures (including one fully-degenerate,
    all-cells-tied-at-one-value case), the bars-account-for-cells structural invariant, and cross-validation
    against `SimplicialHomologyContext` on 100+ random Vietoris-Rips point clouds, all passing.
-   **Deliberately not (yet) wired into `CellularHomologyContext`/`PersistenceInChunksContext` as an actual
-   performance fast path** -- see `WORKLOG-mst-and-perf.md`'s "Decision" section: the `Chain.reduceBy`-based
-   version validated here is provably correct but pays the same `filtrationOrdering` comparator cost as general
-   reduction, so it isn't obviously faster; a genuine speedup would need raw `UnionFind` instead, which needs its
-   own dedicated validation before touching the reference oracle every other engine is checked against.
+   **Deliberately NOT wired into `CellularHomologyContext`/`PersistenceInChunksContext` as a raw-`UnionFind`
+   performance fast path -- now backed by an actual measurement, not just the earlier session's risk/benefit
+   read** (`.claude/WORKLOG-autonomous-session-2026-09-19.md`, task #2, has the full account):
+   `WORKLOG-mst-and-perf.md`'s own "Decision" section flagged the `Chain.reduceBy`-based version validated here
+   as provably correct but not obviously faster, since it pays the same `filtrationOrdering` comparator cost as
+   general reduction, and deferred a genuine raw-`UnionFind` port pending its own dedicated benchmark on the one
+   scenario that could justify it: a large point cloud at low `maxDim` (0 or 1), where dimension-0/1 IS most of
+   the complex. That benchmark ran (`VRLowDimProfileDriver`, phase-separated + deep-stack JFR profiling on a
+   sparse maxDim=1 VR complex, n up to 20000) and found the dominant cost (~57% of samples) wasn't
+   `Chain.reduceBy`'s reduction machinery at all -- it was `EnumeratingCofaceSimplexStream.filtrationValue`
+   being completely uncached, the SAME bug class as `CubicalGridStream`'s (see "Naive-engine scaling" above),
+   apparently never given the equivalent fix. Memoizing that alone (see "Vietoris-Rips construction" below)
+   closed 37-46% of the reduction phase's own wall-clock time; what's left (`Chain.reduceLoop`'s accumulator,
+   `Chain`/`PriorityQueue` construction) is small and is the SAME cost `.claude/WORKLOG-ripser-profiling.md`
+   already characterized and deliberately deferred to its own dedicated redesign, not a dimension-0/1-specific
+   opportunity. Given that, a raw `UnionFind` port -- which a live design attempt found needs delicate,
+   not-yet-fully-converged elder-rule/V-column coefficient bookkeeping to stay correct for a LATER
+   dimension-2+ cell's reduction -- was scoped out as real risk to the reference oracle for a small remaining
+   gain, not attempted. `SimplicialHomologyByDimensionContext` remains unwired, unchanged from before.
 4. `RipserCohomologyContext`: persistent *co*homology via Ulrich Bauer's Ripser algorithm
    (arXiv:1908.02518), specialized to `Simplex[Int]` Vietoris-Rips/clique complexes via `SimplexIndexing`'s
    combinatorial number system (a deliberate narrowing from (1)'s generic `CellT: OrderedCell`, agreed with the
@@ -1042,12 +1083,13 @@ naive dropped from the previously-documented 284/349/891 us/cell (n=8/16/32) to 
 wall-clock improvement at n=32 (244.8s -> 30.0s) — **and the old clear growth trend is gone**, leaving only
 ordinary run-to-run noise. 3D chunks dropped from 123/90/114 to 25/18/23 us/cell. **This revises the "naive vs.
 chunks is a structural, not constant-factor, difference in 3D" finding an earlier session recorded here**: that
-difference was real as measured at the time, but it traced to a shared stream-level cost that happened to
-dominate the naive engine's smaller per-comparison overhead more visibly than chunks' larger one, not to an
-algorithmic property of either engine — see `.claude/WORKLOG-cubical-chunks-benchmark.md` for that earlier
-session's own (now-superseded) numbers and cross-validation work, which remains valid as the record of when
-`CellularPersistenceInChunksContext[Cube, ...]` was first exercised and validated. Full `sbt test` (249
-examples) passes identically before and after this fix, confirming it's a pure performance change.
+difference was real as measured at the time, but it traced to a shared stream-level cost — both engines
+improved once it was fixed. Exactly why chunks' own curve looked flat before (rather than also showing visible
+growth) was NOT separately measured and isn't claimed here — see `.claude/WORKLOG-cubical-chunks-benchmark.md`
+for that earlier session's own (now-superseded) numbers and cross-validation work, which remains valid as the
+record of when `CellularPersistenceInChunksContext[Cube, ...]` was first exercised and validated. Full
+`sbt test` (249 examples) passes identically before and after this fix, confirming it's a pure performance
+change.
 
 A specialized, grid-structure-exploiting fast cubical persistence algorithm — **CubicalRipser** (reproducing
 Ripser's clearing/apparent-pairs optimizations for cubical complexes) or the **Wagner-Chen-Vuçini** "Efficient
