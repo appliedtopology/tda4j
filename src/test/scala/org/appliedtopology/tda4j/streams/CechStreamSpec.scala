@@ -13,17 +13,17 @@ import org.specs2.ScalaCheck
 import org.scalacheck.*
 
 /** `CechCofaceSimplexStream` correctness -- this is the first-ever exercise of the Cech complex anywhere in this
-  * codebase, built on `RipserCofaceSimplexStream`'s generic coface-generation loop (genericized in this same
-  * session, see `CechStream.scala`'s own doc for the downward-closure argument for why that reuse is valid) and
-  * Miniball's minimum-enclosing-ball solver (previously imported but never actually invoked anywhere in this
-  * codebase -- the one prior use, `MiniballDelaunay`, was ripped out for reporting the WRONG quantity as its
-  * filtration value, not for a Miniball correctness problem -- see `.claude/WORKLOG-cech-complex.md`).
+  * codebase, built on `RipserCofaceSimplexStream`'s generic coface-generation loop (genericized in this same session,
+  * see `CechStream.scala`'s own doc for the downward-closure argument for why that reuse is valid) and Miniball's
+  * minimum-enclosing-ball solver (previously imported but never actually invoked anywhere in this codebase -- the one
+  * prior use, `MiniballDelaunay`, was ripped out for reporting the WRONG quantity as its filtration value, not for a
+  * Miniball correctness problem -- see `.claude/WORKLOG-cech-complex.md`).
   *
-  * Validation order follows this codebase's established convention for a new complex type (see
-  * `CubicalStreamSpec`'s own header): hand-derived fixtures chosen to discriminate specific wrong-implementation
-  * shapes, a monotonicity property test, the bars-account-for-cells structural invariant, an independent H0
-  * cross-check, and (specific to this stream's own enumeration algorithm, not needed for e.g. `CubicalGridStream`)
-  * a brute-force enumeration-completeness check.
+  * Validation order follows this codebase's established convention for a new complex type (see `CubicalStreamSpec`'s
+  * own header): hand-derived fixtures chosen to discriminate specific wrong-implementation shapes, a monotonicity
+  * property test, the bars-account-for-cells structural invariant, an independent H0 cross-check, and (specific to this
+  * stream's own enumeration algorithm, not needed for e.g. `CubicalGridStream`) a brute-force enumeration-completeness
+  * check.
   */
 class CechStreamSpec extends mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
@@ -74,7 +74,7 @@ class CechStreamSpec extends mutable.Specification with ScalaCheck:
       // inside it.
       val ms = EuclideanMetricSpace(Array(Array(0.0, 0.0), Array(10.0, 0.0), Array(5.0, 0.5)))
       val radius = CechFiltration(ms)(Simplex(0, 1, 2))
-      val naiveCircumradius = {
+      val naiveCircumradius =
         // Standard circumradius formula abc/(4K), computed independently for comparison only.
         val a = math.sqrt(math.pow(10.0 - 5.0, 2) + math.pow(0.0 - 0.5, 2))
         val b = math.sqrt(math.pow(5.0 - 0.0, 2) + math.pow(0.5 - 0.0, 2))
@@ -82,7 +82,6 @@ class CechStreamSpec extends mutable.Specification with ScalaCheck:
         val s = (a + b + c) / 2
         val area = math.sqrt(s * (s - a) * (s - b) * (s - c))
         (a * b * c) / (4 * area)
-      }
       (radius must beCloseTo(5.0, 1e-6)) and (radius must be_<(naiveCircumradius))
     }
 
@@ -152,15 +151,17 @@ class CechStreamSpec extends mutable.Specification with ScalaCheck:
     val threshold = 0.6
     val stream = CechCofaceSimplexStream(ms, maxFiltrationValue = Some(threshold))
     val fv = stream.filtrationValue
-    (0 until 6).map { d =>
-      val fromStream = stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty).toSet
-      val bruteForce = ms.elements.toSeq
-        .combinations(d + 1)
-        .map(vs => Simplex(vs*))
-        .filter(spx => fv.isDefinedAt(spx) && fv(spx) <= threshold)
-        .toSet
-      fromStream must beEqualTo(bruteForce)
-    }.reduce(_ and _)
+    (0 until 6)
+      .map { d =>
+        val fromStream = stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty).toSet
+        val bruteForce = ms.elements.toSeq
+          .combinations(d + 1)
+          .map(vs => Simplex(vs*))
+          .filter(spx => fv.isDefinedAt(spx) && fv(spx) <= threshold)
+          .toSet
+        fromStream must beEqualTo(bruteForce)
+      }
+      .reduce(_ and _)
   }
 
   // ---------------------------------------------------------------------------------------------------------
@@ -200,11 +201,11 @@ class CechStreamSpec extends mutable.Specification with ScalaCheck:
         // real, reproducible off-by-one-ULP false mismatch while writing this test. 0.0 is prepended, not
         // appended, since `advanceTo` only moves forward -- appending it after the real thresholds would make
         // it a no-op on an already-fully-advanced state instead of genuinely checking the empty-edge-set case.
-        val radii = (0.0 +: (for
+        val radii = 0.0 +: (for
           i <- ms.elements
           j <- ms.elements
           if i < j
-        yield stream.filtrationValue(Simplex(i, j))).toSeq.distinct.sorted)
+        yield stream.filtrationValue(Simplex(i, j))).toSeq.distinct.sorted
         val h0Ok = radii.forall { r =>
           state.advanceTo(r)
           val reported = state.positives.count { case (sigma, _) => sigma.dim == 0 }
