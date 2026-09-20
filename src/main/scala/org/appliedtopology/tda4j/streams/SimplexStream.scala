@@ -241,21 +241,24 @@ class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDi
 class EnumeratingCofaceSimplexStream(
   val metricSpace: FiniteMetricSpace[Int],
   var keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
-  // NaN is a sentinel for "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below.
-  // Beyond that radius every vertex is within range of some common apex, so the (unboundedly-many-dimensions)
-  // complex is a cone from that point on and contributes no further homology (Ripser paper, p. 412) -- real
-  // Ripser uses this exact quantity (enclosing_radius) as its own default threshold, routinely alongside a
-  // bounded dim_max, so this is not a truncation reserved for the unbounded-dimension case. Pass
-  // Double.PositiveInfinity explicitly for the old always-unbounded behavior. See CLAUDE.md/
-  // WORKLOG-mst-and-perf.md for the full derivation, including the load-bearing check that this default is
-  // exactly the untruncated barcode restricted to [0, minimumEnclosingRadius] -- the same property any other
-  // explicit threshold already satisfies, not a special case.
-  maxFiltrationValue: Double = Double.NaN
+  // None means "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below -- an ordinary
+  // Option default, not a magic-value sentinel: None is a constant, so it doesn't hit Scala 3's restriction on
+  // a default referencing an earlier same-list parameter (metricSpace) the way a literal
+  // `= metricSpace.minimumEnclosingRadius` default would. Beyond that radius every vertex is within range of
+  // some common apex, so the (unboundedly-many-dimensions) complex is a cone from that point on and
+  // contributes no further homology (Ripser paper, p. 412) -- real Ripser uses this exact quantity
+  // (enclosing_radius) as its own default threshold, routinely alongside a bounded dim_max, so this is not a
+  // truncation reserved for the unbounded-dimension case. Pass `Some(Double.PositiveInfinity)` explicitly for
+  // the old always-unbounded behavior. See CLAUDE.md/WORKLOG-mst-and-perf.md for the full derivation, including
+  // the load-bearing check that this default is exactly the untruncated barcode restricted to
+  // [0, minimumEnclosingRadius] -- the same property any other explicit threshold already satisfies, not a
+  // special case.
+  maxFiltrationValue: Option[Double] = None
 ) extends CofaceSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]():
 
   protected val resolvedMaxFiltrationValue: Double =
-    if maxFiltrationValue.isNaN then metricSpace.minimumEnclosingRadius else maxFiltrationValue
+    maxFiltrationValue.getOrElse(metricSpace.minimumEnclosingRadius)
 
   lazy val edges = for
     i <- metricSpace.elements
@@ -386,7 +389,7 @@ class RipserCofaceSimplexStream(
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ =>
     true
   },
-  maxFiltrationValue: Double = Double.NaN
+  maxFiltrationValue: Option[Double] = None
 ) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion, maxFiltrationValue):
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case 0 =>
@@ -421,7 +424,7 @@ class RipserCofaceSimplexStream(
 class InorderCofaceSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
-  maxFiltrationValue: Double = Double.NaN
+  maxFiltrationValue: Option[Double] = None
 ) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion, maxFiltrationValue):
   def inOrderCofaceIterator(spx: Simplex[Int]): Iterator[Simplex[Int]] =
     if spx.isEmpty then metricSpace.elements.iterator.map(s => Simplex(s))
@@ -540,19 +543,17 @@ class InorderCofaceSimplexStream(
 class IncrementalVietorisRipsSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
   val maxDimension: Int,
-  // NaN is a sentinel for "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below --
-  // NOT a literal default of metricSpace.minimumEnclosingRadius, because Scala 3 only allows a default value
-  // to reference an EARLIER parameter LIST, not an earlier parameter within the same list, and splitting this
-  // into a second, curried parameter list would require every existing call site (including plain
-  // `IncrementalVietorisRipsSimplexStream(metricSpace, maxDim)` ones) to add an explicit trailing `()` --
-  // confirmed: Scala does not let a call site omit a later parameter list just because every parameter in it
-  // has a default. Beyond metricSpace.minimumEnclosingRadius, every vertex is within range of every other, so
-  // the VR complex is a cone from that point on -- contractible, contributing no further homology (Ripser
-  // paper, p. 412; FiniteMetricSpace.minimumEnclosingRadius's own doc). Defaulting here rather than +Infinity
-  // is a free optimization, NOT a truncation: unlike a genuine sparse-Rips cutoff (which drops real bars, see
-  // RipserCohomologyContext's maxFiltrationValue), this default provably computes the exact same barcode over
-  // fewer simplices -- pass Double.PositiveInfinity explicitly to opt out.
-  maxFiltrationValue: Double = Double.NaN,
+  // None means "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below -- an ordinary
+  // Option default, not a magic-value sentinel: None is a constant, so it doesn't hit Scala 3's restriction on
+  // a default referencing an earlier same-list parameter (metricSpace) the way a literal
+  // `= metricSpace.minimumEnclosingRadius` default would. Beyond metricSpace.minimumEnclosingRadius, every
+  // vertex is within range of every other, so the VR complex is a cone from that point on -- contractible,
+  // contributing no further homology (Ripser paper, p. 412; FiniteMetricSpace.minimumEnclosingRadius's own
+  // doc). Defaulting here rather than +Infinity is a free optimization, NOT a truncation: unlike a genuine
+  // sparse-Rips cutoff (which drops real bars, see RipserCohomologyContext's maxFiltrationValue), this default
+  // provably computes the exact same barcode over fewer simplices -- pass `Some(Double.PositiveInfinity)`
+  // explicitly to opt out.
+  maxFiltrationValue: Option[Double] = None,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
   /** Exposed purely so `IncrementalVietorisRipsSpec` can pin that `L` is a non-load-bearing optimization on top of
     * Table-Lookup's definition: disabling it must never change `byDimension`, only how it gets computed.
@@ -561,7 +562,7 @@ class IncrementalVietorisRipsSimplexStream(
 ) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion):
 
   private val resolvedMaxFiltrationValue: Double =
-    if maxFiltrationValue.isNaN then metricSpace.minimumEnclosingRadius else maxFiltrationValue
+    maxFiltrationValue.getOrElse(metricSpace.minimumEnclosingRadius)
 
   private def isEdge(i: Int, j: Int): Boolean =
     metricSpace.distance(i, j) <= resolvedMaxFiltrationValue

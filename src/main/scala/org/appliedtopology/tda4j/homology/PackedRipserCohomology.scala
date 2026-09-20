@@ -64,12 +64,14 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
   metricSpace: FiniteMetricSpace[Int],
   maxDimension: Int,
   useApparentPairs: Boolean = true,
-  maxFiltrationValue: Double = Double.NaN
+  // None means "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below -- see
+  // RipserCohomologyContext's identical parameter for the full derivation of why Option, not a NaN sentinel.
+  maxFiltrationValue: Option[Double] = None
 ):
   import org.appliedtopology.tda4j.barcode.*
 
   private val resolvedMaxFiltrationValue: Double =
-    if maxFiltrationValue.isNaN then metricSpace.minimumEnclosingRadius else maxFiltrationValue
+    maxFiltrationValue.getOrElse(metricSpace.minimumEnclosingRadius)
 
   /** Not `private`, as of `Tda4j.scala` routing `engine="ripser"` through this class instead of
     * `RipserCohomologyContext`: a caller decoding a bar's `DiameterIndex` cells back to vertex arrays (e.g.

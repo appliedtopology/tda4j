@@ -156,8 +156,8 @@ object Tda4j:
       )
 
     val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(2)
-    val maxFiltrationValue =
-      opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _)).getOrElse(Double.NaN)
+    val maxFiltrationValue: Option[Double] =
+      opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
     val alphaBackend = opts.getOrElse("alphabackend", "helix")
 
     opts.getOrElse("field", "z").toLowerCase match
@@ -208,7 +208,7 @@ object Tda4j:
     engine: String,
     alphaBackend: String,
     requestedMaxDimension: Int,
-    maxFiltrationValue: Double,
+    maxFiltrationValue: Option[Double],
     toDouble: C => Double
   )(using C is Field): PersistenceResult =
     complex match

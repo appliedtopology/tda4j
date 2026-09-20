@@ -36,11 +36,10 @@ import scala.util.Random
   *   - `unbounded`: `maxFiltrationValue = Double.PositiveInfinity` -- the complete flag complex, every pairwise
   *     distance included regardless of size. The old default before this session's earlier work (see
   *     WORKLOG-mst-and-perf.md Part 4).
-  *   - `default`: `maxFiltrationValue` left as `Double.NaN`, resolving internally to
-  *     `metricSpace.minimumEnclosingRadius` -- the CURRENT default across this codebase's VR constructions. In a unit
-  *     hypercube this stays roughly constant (~0.7 in 2D) as `n` grows -- it's a correctness cap (excludes only the
-  *     genuinely cone-redundant long tail), not a scaling lever, so it should NOT be expected to keep complex size
-  *     bounded as `n` grows.
+  *   - `default`: `maxFiltrationValue` left as `None`, resolving internally to `metricSpace.minimumEnclosingRadius` --
+  *     the CURRENT default across this codebase's VR constructions. In a unit hypercube this stays roughly constant
+  *     (~0.7 in 2D) as `n` grows -- it's a correctness cap (excludes only the genuinely cone-redundant long tail), not
+  *     a scaling lever, so it should NOT be expected to keep complex size bounded as `n` grows.
   *   - `sparse`: `maxFiltrationValue = thresholdScale / sqrt(n)` (same convention as `SparseRipsBenchmarkSpec`) -- a
   *     threshold that genuinely SHRINKS with `n`, keeping the expected local neighborhood size roughly constant. This
   *     is the regime a user restricting attention to local/short-range topology would actually want, and is the one
@@ -191,7 +190,7 @@ class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specificati
         val metricSpace = EuclideanMetricSpace(pts)
         val threshold = thresholdFor(regime, n)
         val t0 = System.nanoTime()
-        val ctx = RipserCohomologyContext[Double](metricSpace, homDim, maxFiltrationValue = threshold)
+        val ctx = RipserCohomologyContext[Double](metricSpace, homDim, maxFiltrationValue = Some(threshold))
         val bars = ctx.persistentCohomology()
         val ms = (System.nanoTime() - t0) / 1e6
         (ms, ctx.totalSimplexCount, bars.size)
@@ -203,7 +202,8 @@ class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specificati
         val metricSpace = EuclideanMetricSpace(pts)
         val threshold = thresholdFor(regime, n)
         val t0 = System.nanoTime()
-        val stream = bounded(EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = threshold), buildDim)
+        val stream =
+          bounded(EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(threshold)), buildDim)
         val (wrapped, cellCount) = materializeAndWrap(stream)
         val barCount = SimplicialHomologyContext[Int, Double, Double]()
           .persistentHomology(wrapped)

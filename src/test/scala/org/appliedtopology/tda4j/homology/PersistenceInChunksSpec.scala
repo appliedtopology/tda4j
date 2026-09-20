@@ -251,7 +251,7 @@ class PersistenceInChunksSpec extends mutable.Specification:
     // for the 3-cycle here, and EnumeratingCofaceSimplexStream now defaults to that radius (see
     // CLAUDE.md/WORKLOG-mst-and-perf.md).
     val stream = LimitedCofaceSimplexStream(
-      EnumeratingCofaceSimplexStream(threePointLine, maxFiltrationValue = Double.PositiveInfinity),
+      EnumeratingCofaceSimplexStream(threePointLine, maxFiltrationValue = Some(Double.PositiveInfinity)),
       1
     )
     persistentHomology(stream).diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(
@@ -272,7 +272,7 @@ class PersistenceInChunksSpec extends mutable.Specification:
     // Explicit +Infinity -- see the "3-cycle graph" test above for why: {0,2} and the triangle are both born
     // at 3.0, past threePointLine's own minimumEnclosingRadius (2.0).
     val stream = LimitedCofaceSimplexStream(
-      EnumeratingCofaceSimplexStream(threePointLine, maxFiltrationValue = Double.PositiveInfinity),
+      EnumeratingCofaceSimplexStream(threePointLine, maxFiltrationValue = Some(Double.PositiveInfinity)),
       2
     )
     persistentHomology(stream).diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(

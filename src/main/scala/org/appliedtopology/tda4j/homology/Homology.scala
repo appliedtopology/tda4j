@@ -805,21 +805,18 @@ class RipserCohomologyContext[CoefficientT: Field](
   metricSpace: FiniteMetricSpace[Int],
   maxDimension: Int,
   useApparentPairs: Boolean = true,
-  // NaN is a sentinel for "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below --
-  // NOT a literal default of metricSpace.minimumEnclosingRadius, because Scala 3 only allows a default value
-  // to reference an EARLIER parameter LIST, not an earlier parameter within the same list, and splitting this
-  // into a second, curried parameter list would require every existing call site (including plain
-  // `RipserCohomologyContext(metricSpace, maxDim)` ones) to add an explicit trailing `()` -- confirmed: Scala
-  // does not let a call site omit a later parameter list just because every parameter in it has a default.
-  // See the class doc above this class for why the resolved default itself changed from
-  // Double.PositiveInfinity to metricSpace.minimumEnclosingRadius.
-  maxFiltrationValue: Double = Double.NaN,
+  // None means "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below -- an ordinary
+  // Option default, not a magic-value sentinel: None is a constant, so it doesn't hit Scala 3's restriction on
+  // a default referencing an earlier same-list parameter (metricSpace) the way a literal
+  // `= metricSpace.minimumEnclosingRadius` default would. See the class doc above this class for why the
+  // resolved default itself changed from Double.PositiveInfinity to metricSpace.minimumEnclosingRadius.
+  maxFiltrationValue: Option[Double] = None,
   memoizeFiltrationValue: Boolean = false
 ):
   import barcode.*
 
   private val resolvedMaxFiltrationValue: Double =
-    if maxFiltrationValue.isNaN then metricSpace.minimumEnclosingRadius else maxFiltrationValue
+    maxFiltrationValue.getOrElse(metricSpace.minimumEnclosingRadius)
 
   val si: SimplexIndexing = SimplexIndexing(metricSpace.size)
 

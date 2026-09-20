@@ -60,7 +60,7 @@ class SparseRipsBenchmarkSpec(args: Arguments) extends mutable.Specification:
         RipserCohomologyContext[Double](
           metricSpace,
           maxDim,
-          maxFiltrationValue = maxFiltrationValue,
+          maxFiltrationValue = Some(maxFiltrationValue),
           memoizeFiltrationValue = memoize
         )
       val start = System.nanoTime()

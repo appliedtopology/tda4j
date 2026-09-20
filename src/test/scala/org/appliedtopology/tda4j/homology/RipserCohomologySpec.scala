@@ -40,7 +40,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
   // nothing to do with a reduction bug.
   private def naiveBars(metricSpace: FiniteMetricSpace[Int], maxDim: Int): List[(Int, Double, Double)] =
     val vrStream = LimitedCofaceSimplexStream(
-      EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Double.PositiveInfinity),
+      EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(Double.PositiveInfinity)),
       maxDim + 1
     )
     SimplicialHomologyContext[Int, Double, Double]()
@@ -60,7 +60,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
     metricSpace: FiniteMetricSpace[Int],
     maxDim: Int
   ): List[(Int, Double, Double)] =
-    RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = Double.PositiveInfinity)
+    RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = Some(Double.PositiveInfinity))
       .persistentCohomology()
       .map(toTuple)
 
@@ -91,7 +91,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
     // essential-looking placeholder"), i.e. that requesting a lower degree changes only what's REPORTED, not
     // what's correctly computed underneath it.
     val bars =
-      RipserCohomologyContext[Double](threePointLine, 1, maxFiltrationValue = Double.PositiveInfinity)
+      RipserCohomologyContext[Double](threePointLine, 1, maxFiltrationValue = Some(Double.PositiveInfinity))
         .persistentCohomology()
         .map(toTuple)
     bars must containTheSameElementsAs(
@@ -113,7 +113,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
     // threePointLine's own minimumEnclosingRadius (2.0) -- the default would exclude both entirely rather
     // than emit the zero-length pair this test exists to check.
     val bars =
-      RipserCohomologyContext[Double](threePointLine, 2, maxFiltrationValue = Double.PositiveInfinity)
+      RipserCohomologyContext[Double](threePointLine, 2, maxFiltrationValue = Some(Double.PositiveInfinity))
         .persistentCohomology()
         .map(toTuple)
     bars must containTheSameElementsAs(
@@ -261,7 +261,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       val maxDim = 2
       val t = midThreshold(metricSpace)
       val untruncated = cohomologyBarsUnthresholded(metricSpace, maxDim)
-      val thresholded = RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = t)
+      val thresholded = RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = Some(t))
         .persistentCohomology()
         .map(toTuple)
       thresholded must containTheSameElementsAs(restrictToThreshold(untruncated, t))
@@ -274,7 +274,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       val maxPairwiseDistance =
         (for x <- metricSpace.elements; y <- metricSpace.elements yield metricSpace.distance(x, y)).max
       val thresholded =
-        RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = maxPairwiseDistance + 1.0)
+        RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = Some(maxPairwiseDistance + 1.0))
           .persistentCohomology()
           .map(toTuple)
       thresholded must containTheSameElementsAs(cohomologyBarsUnthresholded(metricSpace, maxDim))
@@ -286,7 +286,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       RipserCohomologyContext[Double](
         apparentPairCollisionCloud,
         2,
-        maxFiltrationValue = apparentPairCollisionCloud.minimumEnclosingRadius
+        maxFiltrationValue = Some(apparentPairCollisionCloud.minimumEnclosingRadius)
       ).persistentCohomology().map(toTuple)
     explicitBars must containTheSameElementsAs(defaultBars)
   }
@@ -308,7 +308,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       val maxDim = 2
       val t = metricSpace.minimumEnclosingRadius
       val untruncated =
-        RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = Double.PositiveInfinity)
+        RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = Some(Double.PositiveInfinity))
           .persistentCohomology()
           .map(toTuple)
       val defaulted = cohomologyBars(metricSpace, maxDim) // no maxFiltrationValue given -- exercises the default
@@ -321,7 +321,9 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
     // existence at all, not merely truncated at their death: their own BIRTH (3.0) exceeds t. What
     // remains is a plain path graph (0-1-2, no cycle) -- H^1 is trivial, not just capped to essential.
     val bars =
-      RipserCohomologyContext[Double](threePointLine, 2, maxFiltrationValue = 2.5).persistentCohomology().map(toTuple)
+      RipserCohomologyContext[Double](threePointLine, 2, maxFiltrationValue = Some(2.5))
+        .persistentCohomology()
+        .map(toTuple)
     bars must containTheSameElementsAs(
       List(
         (0, 0.0, 1.0),
@@ -336,7 +338,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       val metricSpace = EuclideanMetricSpace(points)
       val maxDim = 2
       val t = midThreshold(metricSpace)
-      val ctx = RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = t)
+      val ctx = RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = Some(t))
       val bars = ctx.persistentCohomology().map(toTuple)
       // NOT totalSimplices(n, maxDim) (the binomial formula): that assumes every combinatorially-possible
       // subset exists, true only at maxFiltrationValue = +Infinity. A thresholded complex genuinely

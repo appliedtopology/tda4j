@@ -38,7 +38,7 @@ class PackedRipserCohomologySpec extends mutable.Specification with ScalaCheck:
   private def referenceBars(
     metricSpace: FiniteMetricSpace[Int],
     maxDim: Int,
-    maxFiltrationValue: Double = Double.NaN
+    maxFiltrationValue: Option[Double] = None
   ): List[(Int, Double, Double)] =
     RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = maxFiltrationValue)
       .persistentCohomology()
@@ -47,7 +47,7 @@ class PackedRipserCohomologySpec extends mutable.Specification with ScalaCheck:
   private def packedBars(
     metricSpace: FiniteMetricSpace[Int],
     maxDim: Int,
-    maxFiltrationValue: Double = Double.NaN
+    maxFiltrationValue: Option[Double] = None
   ): List[(Int, Double, Double)] =
     PackedRipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = maxFiltrationValue)
       .persistentCohomology()
@@ -80,20 +80,20 @@ class PackedRipserCohomologySpec extends mutable.Specification with ScalaCheck:
   )
 
   "Packed engine matches the reference exactly on the 3-point line at maxDimension=1 (essential H^1 -- no triangle-caused kill possible below H^1's own requested degree, but the killing triangle still resolves correctly at degree 1 itself)" >> {
-    packedBars(threePointLine, 1, Double.PositiveInfinity) must containTheSameElementsAs(
-      referenceBars(threePointLine, 1, Double.PositiveInfinity)
+    packedBars(threePointLine, 1, Some(Double.PositiveInfinity)) must containTheSameElementsAs(
+      referenceBars(threePointLine, 1, Some(Double.PositiveInfinity))
     )
   }
 
   "Packed engine matches the reference exactly on the filled triangle at maxDimension=2 (zero-persistence H^1)" >> {
-    packedBars(threePointLine, 2, Double.PositiveInfinity) must containTheSameElementsAs(
-      referenceBars(threePointLine, 2, Double.PositiveInfinity)
+    packedBars(threePointLine, 2, Some(Double.PositiveInfinity)) must containTheSameElementsAs(
+      referenceBars(threePointLine, 2, Some(Double.PositiveInfinity))
     )
   }
 
   "Packed engine matches the reference exactly on the apparent-pair collision regression cloud" >> {
-    packedBars(apparentPairCollisionCloud, 2, Double.PositiveInfinity) must containTheSameElementsAs(
-      referenceBars(apparentPairCollisionCloud, 2, Double.PositiveInfinity)
+    packedBars(apparentPairCollisionCloud, 2, Some(Double.PositiveInfinity)) must containTheSameElementsAs(
+      referenceBars(apparentPairCollisionCloud, 2, Some(Double.PositiveInfinity))
     )
   }
 
@@ -115,8 +115,8 @@ class PackedRipserCohomologySpec extends mutable.Specification with ScalaCheck:
   "Packed engine matches the reference exactly on random Vietoris-Rips point clouds, unthresholded" >>
     forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 15))) { points =>
       val metricSpace = EuclideanMetricSpace(points)
-      packedBars(metricSpace, 2, Double.PositiveInfinity) must containTheSameElementsAs(
-        referenceBars(metricSpace, 2, Double.PositiveInfinity)
+      packedBars(metricSpace, 2, Some(Double.PositiveInfinity)) must containTheSameElementsAs(
+        referenceBars(metricSpace, 2, Some(Double.PositiveInfinity))
       )
     }
 
@@ -139,7 +139,7 @@ class PackedRipserCohomologySpec extends mutable.Specification with ScalaCheck:
   "Packed engine matches the reference exactly at requested maxDimension=3, confirming the maxDim-semantics fix carried over correctly" >>
     forAll(matrixGen[Double](Gen.double, Gen.chooseNum(3, 4), Gen.chooseNum(6, 10))) { points =>
       val metricSpace = EuclideanMetricSpace(points)
-      packedBars(metricSpace, 3, Double.PositiveInfinity) must containTheSameElementsAs(
-        referenceBars(metricSpace, 3, Double.PositiveInfinity)
+      packedBars(metricSpace, 3, Some(Double.PositiveInfinity)) must containTheSameElementsAs(
+        referenceBars(metricSpace, 3, Some(Double.PositiveInfinity))
       )
     }

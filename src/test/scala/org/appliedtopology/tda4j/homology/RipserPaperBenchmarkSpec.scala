@@ -401,7 +401,7 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
                 // the source -- see .claude/WORKLOG-maxdim-semantics-fix.md), so c.maxDim is passed directly; no
                 // manual +1-and-filter workaround needed anymore (a first version of this spec had one, which is
                 // exactly what caught the semantics bug in the first place -- see the class doc above).
-                val ctx = RipserCohomologyContext[Fp](ms, c.maxDim, maxFiltrationValue = c.threshold)
+                val ctx = RipserCohomologyContext[Fp](ms, c.maxDim, maxFiltrationValue = Some(c.threshold))
                 val allBars = ctx.persistentCohomology()
                 val elapsedMs = (System.nanoTime() - t0) / 1e6
                 val nonZero = allBars.filter(b => endpointValue(b.lower) != endpointValue(b.upper))
@@ -411,7 +411,7 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
           val packedOutcome = withTimeout {
             val ms = c.metricSpace()
             val t0 = System.nanoTime()
-            val ctx = PackedRipserCohomologyContext[Fp](ms, c.maxDim, maxFiltrationValue = c.threshold)
+            val ctx = PackedRipserCohomologyContext[Fp](ms, c.maxDim, maxFiltrationValue = Some(c.threshold))
             val allBars = ctx.persistentCohomology()
             val elapsedMs = (System.nanoTime() - t0) / 1e6
             val nonZero = allBars.filter(b => endpointValue(b.lower) != endpointValue(b.upper))
