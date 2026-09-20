@@ -1000,6 +1000,21 @@ per-cell cost GROWS with `n` (190 -> 340 -> 850 us/cell from n=8 to n=32) rather
 Not yet root-caused (a genuine next-session profiling target — allocation profiler, not another timing table,
 same lesson `RipserCohomologyContext`'s own constant-factor tax learned the hard way).
 
+**Naive vs. chunks, measured in a later session** (`CubicalBenchmarkSpec.scala`, extended to time both engines
+on the SAME generated grid per row): `CellularPersistenceInChunksContext[Cube, ...]` had never been exercised
+anywhere in this codebase before this session (only `Simplex[VertexT]`/`FiniteSimplicialSet` generators had) —
+cross-validated first (`CubicalStreamSpec.scala`'s tie-heavy fixtures, naive-vs-chunks agreement plus chunks' own
+`totalBarsAccountForAllCells` structural invariant, since both engines share `CubicalGridStream.filtrationOrdering`
+and agreement alone can't catch a bug in that shared ordering) before trusting any timing. **In 2D, chunks is a
+flat ~2x constant-factor win** (naive ~75-150us/cell, chunks ~42-66us/cell, both roughly flat across a 900x size
+range). **In 3D, the difference is structural, not constant-factor**: naive's per-cell cost keeps growing with
+`n` (284 → 349 → 891 us/cell from n=8 to n=32, confirming the scaling problem above), but chunks' stays flat
+(123 → 90 → 114 us/cell, no growth trend) over the same range — so the speedup ratio itself grows with `n` (2.3x
+→ 3.9x → 7.8x). Chunks does not inherit naive's 3D scaling problem, though naive's own growth is still not
+root-caused, and chunks was only tested up to 274,625 cells (n=32) — untested whether its flat shape holds at
+n=64+ or whether it eventually hits the same stall/OOM risk `PersistenceInChunksContext` x alpha showed at a
+comparable simplex count. Full derivation in `.claude/WORKLOG-cubical-chunks-benchmark.md`.
+
 A specialized, grid-structure-exploiting fast cubical persistence algorithm — **CubicalRipser** (reproducing
 Ripser's clearing/apparent-pairs optimizations for cubical complexes) or the **Wagner-Chen-Vuçini** "Efficient
 Computation of Persistent Homology for Cubical Data" approach (union-find for dimension 0, discrete-Morse-style

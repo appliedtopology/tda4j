@@ -243,3 +243,49 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
       (HomologyFixtures.totalBarsAccountForAllCells(explicitBarcode, 7) must beTrue) and
       (explicitBarcode.exists(_ == (0, 0.0, 2.0)) must beTrue)
   }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // CellularPersistenceInChunksContext[Cube, ...] cross-validation. This exact combination -- the generic chunks
+  // engine plugged into Cube -- had never been exercised anywhere in this codebase before (grep confirmed zero
+  // hits for `CellularPersistenceInChunksContext[Cube`), a genuine gap given the chunks engine's own history
+  // (CLAUDE.md's "Cross-engine benchmark" section: a real, previously-unknown bug at multiple tied essential
+  // classes under a bounded maxDim, caught only once a case exercising that combination was tried).
+  //
+  // Naive and chunks run on the SAME stream, so they share CubicalGridStream.filtrationOrdering -- a bug in that
+  // ordering would make both sides wrong the SAME way and naive-vs-chunks agreement alone couldn't catch it.
+  // That's why HomologyFixtures.totalBarsAccountForAllCells is also run on chunks' OWN output: an independent
+  // structural invariant that doesn't depend on naive being right, catching a chunks-specific defect even if the
+  // shared ordering were somehow broken. Reuses these same tie-heavy fixtures (not the random-image generator
+  // above) on purpose -- see the hand-derived-fixtures header comment above for why tie-heavy is where
+  // filtrationOrdering bugs in this codebase have historically hidden.
+  //
+  // maxDim is pinned explicitly to each fixture's own ambient dimension: chunks' maxDim means "top homological
+  // degree reported" (it internally walks maxDim+1), while naive has no maxDim parameter at all and simply
+  // computes through the stream's actual top cube dimension -- for a `dims`-dimensional grid that's `dims`
+  // itself, so passing maxDim=dims makes the two calls ask the same question rather than risking a semantics
+  // mismatch masquerading as a correctness bug.
+  // ---------------------------------------------------------------------------------------------------------
+
+  case class ChunksCase(stream: CubicalGridStream, cellCount: Int, maxDim: Int)
+
+  "CellularPersistenceInChunksContext[Cube,...] matches the naive engine and its own structural invariant on the tie-heavy fixtures" >> {
+    val cases = Seq(
+      ChunksCase(CubicalGridStream(IndexedSeq(2, 2), _ => 5.0), 25, 2),
+      ChunksCase(
+        CubicalGridStream(IndexedSeq(3, 3), idx => if idx == IndexedSeq(1, 1) then 1.0 else 0.0),
+        49,
+        2
+      ),
+      ChunksCase(CubicalGridStream(IndexedSeq(3), idx => if idx(0) == 1 then 2.0 else 0.0), 7, 1)
+    )
+    cases
+      .map { c =>
+        val naiveBarcode = persistentHomology(c.stream).diagramAt(Double.PositiveInfinity)
+        val chunksBarcode = CellularPersistenceInChunksContext[Cube, Double](c.maxDim)
+          .persistentHomology(c.stream)
+          .diagramAt(Double.PositiveInfinity)
+        (HomologyFixtures.totalBarsAccountForAllCells(chunksBarcode, c.cellCount) must beTrue) and
+          (chunksBarcode must containTheSameElementsAs(naiveBarcode))
+      }
+      .reduce(_ and _)
+  }
