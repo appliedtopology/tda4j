@@ -253,7 +253,16 @@ class EnumeratingCofaceSimplexStream(
   // the load-bearing check that this default is exactly the untruncated barcode restricted to
   // [0, minimumEnclosingRadius] -- the same property any other explicit threshold already satisfies, not a
   // special case.
-  maxFiltrationValue: Option[Double] = None
+  maxFiltrationValue: Option[Double] = None,
+  // None means "use the default Vietoris-Rips diameter (max pairwise distance) functional," resolved just
+  // below. This class's own coface-generation logic (iterateDimension, keptByThresholdAndCriterion,
+  // sortedByFiltration) touches filtrationValue only as an opaque PartialFunction -- it has no VR-specific
+  // behavior of its own -- so a caller building a genuinely different filtered simplicial complex over the
+  // same vertex set (e.g. a Cech complex's circumradius functional, see CechCofaceSimplexStream) can supply
+  // its own here instead of duplicating this class's ordering/coface machinery. Named `filtrationValueOverride`,
+  // not `filtrationValue`, because `filtrationValue` is the class's own overridden member below -- a
+  // constructor parameter and a same-named class member can't coexist.
+  filtrationValueOverride: Option[PartialFunction[Simplex[Int], Double]] = None
 ) extends CofaceSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]():
 
@@ -275,7 +284,7 @@ class EnumeratingCofaceSimplexStream(
   override def pruneAllCofaces: Boolean = false
 
   override val filtrationValue: PartialFunction[Simplex[Int], Double] =
-    FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
+    filtrationValueOverride.getOrElse(FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace))
 
   /** Filtration value, reversed (so smaller-under-this-ordering means YOUNGER, matching `SimplexStream`'s own
     * established convention -- see `FilteredSimplexOrdering`, and `CellularHomologyContext`'s class doc, which relies
@@ -389,8 +398,13 @@ class RipserCofaceSimplexStream(
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ =>
     true
   },
-  maxFiltrationValue: Option[Double] = None
-) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion, maxFiltrationValue):
+  maxFiltrationValue: Option[Double] = None,
+  // See EnumeratingCofaceSimplexStream's identical parameter -- this class's own iterateDimension override
+  // (the dimension-by-dimension "extend accepted survivors only" coface loop) touches filtrationValue only
+  // through the inherited keptByThresholdAndCriterion/sortedByFiltration, so it carries over unchanged to any
+  // filtration functional supplied here, VR-specific or not.
+  filtrationValueOverride: Option[PartialFunction[Simplex[Int], Double]] = None
+) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion, maxFiltrationValue, filtrationValueOverride):
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case 0 =>
       currentDimensionCache = metricSpace.elements.map(v => Simplex(v)).to(immutable.Queue)

@@ -29,7 +29,8 @@ package's subdirectory.
   `FiniteMetricSpace`, not a generic utility, which is why it lives here and not in some separate `util`
   package that never ended up existing — see below), `SimplicialSetStream` (the `CellStream` adapter for
   `FiniteSimplicialSet`, plus the `fromStream` builder), `FilteredSimplicialSetStream` (a real, non-constant
-  `StratifiedCellStream[G, Double]` for `FiniteSimplicialSet` — see "Simplicial sets" below). Filtration/complex
+  `StratifiedCellStream[G, Double]` for `FiniteSimplicialSet` — see "Simplicial sets" below), `CechStream`
+  (`CechCofaceSimplexStream`/`CechFiltration` — the Cech complex, see "Cech complexes" below). Filtration/complex
   construction.
 - `homology` — `Homology` (all four persistence engines), `PackedRipserCohomology`. Note `CubicalHomologyContext`
   is defined inside `streams/CubicalStream.scala`, not here — a real, pre-existing `streams -> homology`
@@ -146,14 +147,20 @@ and its two direct subclasses had NO threshold mechanism at all before this — 
 new parameter there, folded into a combined `keptByThresholdAndCriterion` predicate alongside the existing
 `keepCriterion` (one place deciding "is this cell kept," not two independent filters); `RipserCohomologyContext`
 and `IncrementalVietorisRipsSimplexStream` already had the parameter (used for genuine sparse-Rips truncation) and
-only had their *default* changed. All five constructors use a `Double.NaN` sentinel resolved internally to
-`metricSpace.minimumEnclosingRadius`, not a literal default referencing `metricSpace` directly, because Scala 3
-only allows a default value to reference an earlier *parameter list*, not an earlier parameter in the same list —
-confirmed directly (`class Foo(val x: Int, val y: Int = x + 1)` fails to compile with "Not found: x" under this
-project's `-source:future` setting), and splitting into a curried parameter list instead was rejected because Scala
-requires an explicit trailing `()` at every call site once a parameter list exists, even one where every parameter
-has a default — that would have broken every existing call, not just the ones setting the threshold. Pass
-`maxFiltrationValue = Double.PositiveInfinity` explicitly for the old always-unbounded behavior.
+only had their *default* changed. All six constructors (a sixth, `PackedRipserCohomologyContext`, was added in a
+later session) take `maxFiltrationValue: Option[Double] = None`, resolved internally via `.getOrElse(metricSpace.
+minimumEnclosingRadius)` — **originally a `Double.NaN` sentinel, replaced with `Option[Double]` in a later
+session** (on the project lead's own instruction, once a second constructor parameter needed the identical
+"optional, can't reference an earlier same-list parameter" treatment — see "Cech complexes" below) — not a
+literal default referencing `metricSpace` directly, because Scala 3 only allows a default value to reference an
+earlier *parameter list*, not an earlier parameter in the same list — confirmed directly (`class Foo(val x: Int,
+val y: Int = x + 1)` fails to compile with "Not found: x" under this project's `-source:future` setting); `None`
+being an ordinary constant sidesteps this restriction without it, so no sentinel value was needed even before the
+NaN-to-Option cleanup fixed the code smell. Splitting into a curried parameter list was rejected for the same
+reason as always: Scala requires an explicit trailing `()` at every call site once a parameter list exists, even
+one where every parameter has a default — that would have broken every existing call, not just the ones setting
+the threshold. Pass `maxFiltrationValue = Some(Double.PositiveInfinity)` explicitly for the old always-unbounded
+behavior.
 
 **This is a real semantic change, not a free performance win layered on unchanged output** — confirmed by a first
 implementation attempt that broke ~10 existing tests across `RipserCohomologySpec`/`IncrementalVietorisRipsSpec`/
@@ -1175,6 +1182,72 @@ remaining construction for hand-building models directly, and a prerequisite for
 construction / classifying spaces (would lean on `product` and quotients once quotients exist).
 `SimplicialHomologyByDimensionContext` remains hardcoded to `Simplex[VertexT]` and was not generalized — a
 separate, unrelated algorithm (union-find-based dimension-0/1 handling) from the two engines touched so far.
+
+## Cech complexes
+
+`streams/CechStream.scala` (`CechCofaceSimplexStream`/`CechFiltration`) adds the Cech complex, over
+`Simplex[Int]` (no new cell type needed — a Cech complex is still an ordinary simplicial complex, just with a
+different membership/filtration rule than Vietoris-Rips). Full derivation, including why neither New-VR nor the
+packed Ripser engine carry over and two real floating-point correctness bugs found along the way, in
+`.claude/WORKLOG-cech-complex.md`.
+
+**Built on the genericized VR coface machinery, not a from-scratch algorithm.** `EnumeratingCofaceSimplexStream`/
+`RipserCofaceSimplexStream` gained a `filtrationValueOverride: Option[PartialFunction[Simplex[Int], Double]] =
+None` constructor parameter (defaulting to the existing VR diameter computation) — their coface-generation loop
+(build dimension `d+1` only as cofaces of dimension-`d` survivors, never the full `binomial(n, d+1)` power set)
+touches `filtrationValue` only through the already-generic `keptByThresholdAndCriterion`/`sortedByFiltration`,
+zero VR-specific logic, the same signature that justified genericizing `PersistenceInChunksContext` earlier.
+Every existing VR call site is unaffected. **New-VR's Table-Lookup optimization does NOT carry over** — its
+entire speed advantage prunes candidate vertices using graph/clique structure, valid only because VR membership
+is fully determined by pairwise edges (a flag complex); Cech is not a flag complex (three balls can
+pairwise-overlap in three places with no common triple intersection), so this pruning has no valid Cech
+analogue. **Packed Ripser doesn't carry over either** — its headline optimizations (`insertionDiameter`'s
+incremental recurrence, apparent pairs) are proven specifically for the max-pairwise-distance functional, with
+nothing establishing they hold for circumradius; only the naive engine is used for Cech.
+
+**Valid for Cech, not just VR, for a checked reason**: Cech is downward-closed (a point witnessing a simplex's
+balls having a common intersection trivially witnesses every subset's too), so a valid Cech `(d+1)`-simplex's
+canonical generating facet is guaranteed to already be in the accepted `d`-dimensional cache — the coface loop
+cannot silently skip a real Cech simplex. Checked empirically (not just trusted from the proof) via an
+enumeration-completeness test comparing the coface-loop's per-dimension count against a brute-force
+`combinations(d+1).filter(cechValid)` count.
+
+**The geometric primitive is Miniball (`com.dreizak:miniball`), not `AlphaComplexDQP`'s QP machinery.** Cech
+radius of a simplex is the true minimum-enclosing-ball radius of its own vertices' coordinates, unconditional on
+any other point in the cloud — genuinely simpler than alpha shapes' Delaunay/Voronoi feasibility question, which
+depends on every OTHER point too. Miniball was already a `build.sbt` dependency but never actually invoked
+anywhere in this codebase before this session (a prior use, `MiniballDelaunay`, was ripped out — checked
+directly, and confirmed to be for reporting the WRONG quantity as its filtration value, an unrelated bug, not a
+Miniball correctness problem — see the worklog for the full diff-level derivation). Miniball itself was, and
+until this session remained, completely unvalidated here — `CechStreamSpec`'s fixtures are what establish trust,
+not the history.
+
+**Two real floating-point correctness bugs, found and fixed, not just test flakiness.** Cech radius is
+mathematically monotone non-decreasing under vertex insertion, but Miniball's raw output can violate this by an
+ULP on near-degenerate inputs (confirmed directly: a facet radius of `0.3887884477377332` vs. its own coface's
+`0.3887884477377331`, one ULP smaller) — not cosmetic, since `CellularHomologyContext`'s reduction requires
+exact monotonicity (the same invariant behind three prior "reduction pivot ... was not a recorded open class"
+crashes in this codebase), and this DID reproduce that exact crash before the fix. Fixed by having
+`CechFiltration` clamp every computed radius to the max of its own facets' already-cached radii (a lookup, never
+a fresh Miniball call) — airtight, not a patch, by the same downward-closure argument above (every facet of an
+accepted simplex is guaranteed already cached one dimension down). Separately, `CechFiltration`'s per-simplex
+cache exists specifically because Miniball's cross-call determinism was never verified — sidestepped entirely by
+caching once and reading forever, rather than resting correctness on trusting a third-party library's internals.
+
+**Validation**: hand-derived fixtures chosen to discriminate specific wrong-implementation shapes (an
+equilateral triangle's Cech radius is its circumradius `s/sqrt(3)`, not `s/2` — the exact historical
+`MiniballDelaunay` bug shape; an obtuse triangle's is half its longest side, strictly less than its circumradius
+— catches a naive closed-form circumradius formula that doesn't fall back to the enclosing-ball case), a
+monotonicity property test, the enumeration-completeness check above, `totalBarsAccountForAllCells` plus an
+independent H0-via-union-find oracle (an edge exists in Cech_r iff `d(x,y) <= 2r`, needing only the triangle
+inequality), and a full hand-derived barcode (unit equilateral triangle: Cech gives a genuinely non-zero-length
+H1 bar from 0.5 to `1/sqrt(3)`, where VR on the identical cloud gives a zero-length one — a real discriminator,
+not just a structural check). 11 examples, clean across repeated fresh-seed runs.
+
+**Deliberately not attempted**: packed-Ripser-speed Cech (apparent pairs for the circumradius functional is
+open math, not an engineering gap); using the metric-only necessary condition Cech_r ⊆ VR_2r (provable from the
+triangle inequality alone) as a cheap pre-filter before invoking Miniball, a real scoped future speedup: not
+needed for this session's correctness-first priority.
 
 ## Alpha complex: DQP vs Helix
 
