@@ -24,7 +24,6 @@ class FiniteField(val p: Int):
         case rr: Int                      => rr)
     def toInt: Int = fp.norm
     def toUInt: Int = ((fp % p) + p) % p // Have to get to the interval (0,p-1)
-    def toString: String = s"Fp(${fp.norm})"
 
   given (Fp is Field) = new (Fp is Field):
     // given FpIsFractional: Fractional[Fp] with {

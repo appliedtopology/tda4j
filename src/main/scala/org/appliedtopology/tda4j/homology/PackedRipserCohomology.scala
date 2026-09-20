@@ -8,6 +8,7 @@ import org.appliedtopology.tda4j.streams.{given, *}
 import org.appliedtopology.tda4j.barcode.PersistenceBar
 
 import scala.collection.mutable
+import scala.compiletime.asMatchable
 
 /** '''The production Ripser persistent-cohomology engine''' -- as of `.claude/WORKLOG-ripser-profiling.md`'s
   * cursor-redesign session, this is what `Tda4j.scala`'s public `engine="ripser"` MATLAB-facing option actually calls,
@@ -86,7 +87,12 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
     * `SimplexIndexing.apply(index, size)` for display or cross-validation).
     */
   final case class DiameterIndex(diameter: Double, index: Long):
-    override def equals(other: Any): Boolean = other match
+    // `.asMatchable` is a compile-time-only cast (satisfies Scala 3's Matchable safety check on an `Any`
+    // selector -- `equals` must take `Any`, which isn't itself `Matchable`), not a runtime operation -- zero
+    // added cost on this hot path (`equals`/`hashCode` run on every `basis`/`generators`/`cleared` map/set
+    // operation in `persistentCohomology`). No `@unchecked` needed here, unlike `Chain.equals`: `DiameterIndex`
+    // has no type parameters to erase.
+    override def equals(other: Any): Boolean = other.asMatchable match
       case that: DiameterIndex => this.index == that.index
       case _                   => false
     override def hashCode(): Int = index.hashCode()

@@ -104,7 +104,7 @@ case class DelaunaySimplex(simplex: Simplex[Int], circumsphere: Hypersphere)
   * @param pts - the input points to triangulate
   */
 class HelixDelaunay(pts: Array[Array[Double]])(using epsilon: Epsilon) extends AlphaShapes:
-  val points: Seq[Point] = pts.map(Point.apply)
+  val points: Seq[Point] = pts.map(Point.apply).toIndexedSeq
   override val metricSpace: EuclideanMetricSpace = EuclideanMetricSpace(pts)
   val ambientDimension: Int = points.head.getDimension
   val validated: mutable.Set[DelaunaySimplex] = mutable.Set.empty

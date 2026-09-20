@@ -1030,7 +1030,7 @@ class AlphaComplexDQPBuilder(
     // Isolated site: V_x is everything, the QP is trivially solved by
     // lambda = 0, and only the vertex itself can be a simplex.
     if m == 0 then
-      if candidates.exists(_.isEmpty) then found += Found(Simplex.from(Array(x)), -space.weight(x), coordsOf(x))
+      if candidates.exists(_.isEmpty) then found += Found(Simplex.from(Seq(x)), -space.weight(x), coordsOf(x))
       return found
 
     // line 11-12: B and U, once per vertex per dimension

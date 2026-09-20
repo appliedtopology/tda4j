@@ -78,7 +78,7 @@ class AlphaComplexSpec extends org.specs2.mutable.Specification with ScalaCheck:
     points: Array[Array[Double]],
     dispatch: String
   ): Seq[Seq[Simplex[Int]]] =
-    val alpha = Alpha(points, dispatch)
+    val alpha = Alpha(points.toIndexedSeq, dispatch)
     (0 to points.head.length).map(d => alpha.iterateDimension(d).toSeq)
 
   private def everySimplexHasExpectedFaces(
@@ -95,7 +95,7 @@ class AlphaComplexSpec extends org.specs2.mutable.Specification with ScalaCheck:
     }
 
   private def alphaProperties(points: Array[Array[Double]], dispatch: String): Prop =
-    val alpha = Alpha(points, dispatch)
+    val alpha = Alpha(points.toIndexedSeq, dispatch)
     val layerByDimension = (0 to points.head.length).map(d => alpha.iterateDimension(d).toSeq)
     val allSimplices: IndexedSeq[Simplex[Int]] = layerByDimension.flatten
     val simplicesByDimension = layerByDimension.map(_.toSet)
@@ -177,8 +177,8 @@ class AlphaCrossValidationSpec extends org.specs2.mutable.Specification with Sca
     * cloud: reports where DQP and Helix disagree, without assuming either side is ground truth.
     */
   def unsafeCompare(points: Array[Array[Double]]): String =
-    val dqp = Alpha(points, "DQP")
-    val helix = Alpha(points, "helix")
+    val dqp = Alpha(points.toIndexedSeq, "DQP")
+    val helix = Alpha(points.toIndexedSeq, "helix")
     val dim = points.head.length
     val report = (0 to dim).map { d =>
       val dqpSet = dqp.iterateDimension(d).toSet
@@ -201,8 +201,8 @@ class AlphaCrossValidationSpec extends org.specs2.mutable.Specification with Sca
     for _ <- 1 to samples do
       pointsGen.sample.foreach { points =>
         try
-          val dqp = Alpha(points, "DQP")
-          val helix = Alpha(points, "helix")
+          val dqp = Alpha(points.toIndexedSeq, "DQP")
+          val helix = Alpha(points.toIndexedSeq, "helix")
           val dim = points.head.length
           if (0 to dim).exists(d => (dqp.iterateDimension(d).toSet -- helix.iterateDimension(d).toSet).nonEmpty)
           then subsetViolations += 1
@@ -278,7 +278,7 @@ class AlphaComplexDQPRegressionSpec extends org.specs2.mutable.Specification:
   )
 
   private def hasCleanFaceClosure(points: Array[Array[Double]]): Boolean =
-    val dqp = Alpha(points, "DQP")
+    val dqp = Alpha(points.toIndexedSeq, "DQP")
     val layerByDimension = (0 to points.head.length).map(d => dqp.iterateDimension(d).toSeq)
     val byDim = layerByDimension.map(_.toSet)
     layerByDimension.zipWithIndex.forall { case (layer, dimension) =>
@@ -300,8 +300,8 @@ class AlphaComplexDQPRegressionSpec extends org.specs2.mutable.Specification:
       // here), but if a future fix shrinks it to empty, that's progress, not a
       // failure -- so only the "DQP is a subset" direction is asserted with must.
       val d = facetClosureCounterexample
-      val dqpSet = (0 to d.head.length).flatMap(k => Alpha(d, "DQP").iterateDimension(k).toSeq).toSet
-      val helixSet = (0 to d.head.length).flatMap(k => Alpha(d, "helix").iterateDimension(k).toSeq).toSet
+      val dqpSet = (0 to d.head.length).flatMap(k => Alpha(d.toIndexedSeq, "DQP").iterateDimension(k).toSeq).toSet
+      val helixSet = (0 to d.head.length).flatMap(k => Alpha(d.toIndexedSeq, "helix").iterateDimension(k).toSeq).toSet
       println(
         s"AlphaComplexDQPRegressionSpec: facetClosureCounterexample currently missing ${helixSet -- dqpSet} relative to Helix"
       )
@@ -313,12 +313,12 @@ class AlphaComplexDQPRegressionSpec extends org.specs2.mutable.Specification:
     "compute without AlphaComplexDQPException (no active-set cycling)" in {
       // AlphaShapeDQP.alphaComplexDQP is an eager val, so construction alone forces
       // the full computation across every dimension.
-      Alpha(cyclingCounterexample, "DQP") must not(throwAn[AlphaComplexDQPException])
+      Alpha(cyclingCounterexample.toIndexedSeq, "DQP") must not(throwAn[AlphaComplexDQPException])
     }
     "agree exactly with Helix" in {
       val d = cyclingCounterexample
-      val dqpSet = (0 to d.head.length).flatMap(k => Alpha(d, "DQP").iterateDimension(k).toSeq).toSet
-      val helixSet = (0 to d.head.length).flatMap(k => Alpha(d, "helix").iterateDimension(k).toSeq).toSet
+      val dqpSet = (0 to d.head.length).flatMap(k => Alpha(d.toIndexedSeq, "DQP").iterateDimension(k).toSeq).toSet
+      val helixSet = (0 to d.head.length).flatMap(k => Alpha(d.toIndexedSeq, "helix").iterateDimension(k).toSeq).toSet
       dqpSet must be_==(helixSet)
     }
   }
