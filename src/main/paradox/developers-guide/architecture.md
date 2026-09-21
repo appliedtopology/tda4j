@@ -85,8 +85,9 @@ source, not a doc, when the two disagree). Callers wrap the result in `Chain.fro
 actual `Chain` machinery (collapsing, reduction, arithmetic) — see `CellularHomologyContext.advanceOne`'s
 `Chain.from(sigma.boundary[CoefficientT])` in `Homology.scala`.
 
-`Simplex[VertexT]` is the library's only current `OrderedCell` instance (`Simplex.scala`): `boundary`
-returns each codimension-1 face (drop one vertex) paired with alternating signs `+1, -1, +1, ...`, and
+`Simplex[VertexT]`, `Cube`, and `FiniteSimplicialSet` are the library's current `OrderedCell` implementations
+(`Simplex.scala`, `Cube.scala`, `FiniteSimplicialSet.scala`): `boundary`
+returns each codimension-1 face (drop one vertex for simplices) paired with alternating signs `+1, -1, +1, ...`, and
 `dim` is `size - 1`. `Cocell`/`OrderedCocell` are the dual traits (`coboundary` instead of `boundary`); no
 concrete type implements them yet as of this writing — `RipserCohomologyContext` computes coboundaries
 directly against `SimplexIndexing`'s cofacet iterator rather than through a `Cocell` instance (see
@@ -112,8 +113,8 @@ Key operations:
   repeatedly subtract off the appropriate multiple of `basis(pivot)` from `z` until `z`'s leading cell is no
   longer a key in `basis` (or `stop` fires), returning both the reduced chain and a "reduction log" chain
   recording which pivots were used and with what coefficient — the log is what lets a caller reconstruct a
-  V-column (see @ref:[Persistence engines](persistence-engines.md)). Internally these go through an
-  `immutable.SortedMap`, not the `PriorityQueue`-backed `Chain` type, specifically so repeated updates stay
+  V-column (see @ref:[Persistence engines](persistence-engines.md)). Internally these go through a
+  `mutable.TreeMap`, not the `PriorityQueue`-backed `Chain` type, specifically so repeated updates stay
   cheap (map insertion collapses duplicates automatically) — this is the actually-efficient path raw `Chain`
   arithmetic is not.
 - `given [CellT: Ordering, CoefficientT: Field] => (Chain[CellT, CoefficientT] is RingModule {type R =

@@ -31,7 +31,7 @@ facets, testing candidate points against each facet's supporting hyperplane and 
 below).
 
 **Two independent robustness bugs were found while using this as DQP's cross-validation ground truth**
-(full repro/root-cause detail in `WORKLOG.md` at the repo root, Part 3):
+(full repro/root-cause detail in `.claude/WORKLOG-alpha-complex.md`, Part 3):
 
 1. **Fixed and verified.** The initial-simplex bootstrap's `assert(validated.nonEmpty)` used to fail on
    ordinary random input at roughly a 1-in-600 rate: when more than `ambientDimension` points lay on the

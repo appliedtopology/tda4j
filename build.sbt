@@ -34,20 +34,7 @@ lazy val root = (project in file("."))
     GitHubPagesPlugin
   )
   .settings(
-    // these options make 3.5.0 use the given resolution algorithms planned for 3.7.x.
-    // implicitConversions: specs2's own matcher/prop DSL (asResultToProp, matcherIsValueCheck, typedValueCheck)
-    // is implicit-conversion-based by design -- these fire on essentially every spec file that uses the DSL
-    // idiomatically, not on anything project-specific or risky, alongside this project's own deliberate
-    // Simplex -> Chain conversion (TDAContext, package.scala). adhocExtensions: SimplicialHomologyContext/
-    // CellularHomologyContext are genuinely, permanently subclassed across files by design (TDAContext in
-    // package.scala, CubicalHomologyContext in streams/CubicalStream.scala -- see CLAUDE.md's "Persistent
-    // homology"/"Cubical complexes" sections), not accidental one-offs; enabled project-wide rather than
-    // per-file imports or marking individual classes `open` (a real API-surface decision left to the project
-    // lead, not made unilaterally here) given how many call sites this otherwise touches.
-    // -feature/-deprecation/-unchecked made permanent (not just a one-off cleanup pass) so a future deprecated-API
-    // use or unchecked type test shows up in ordinary `sbt compile`/`sbt test` output going forward, rather than
-    // needing these flags re-enabled by hand to notice -- these only print warnings here (no -Xfatal-warnings),
-    // so they can't newly fail CI on their own.
+    // Compiler options: language features (implicitConversions, adhocExtensions) and warning flags.
     scalacOptions ++= List(
       "-source:future",
       "-language:experimental.modularity",
