@@ -46,9 +46,11 @@ final class PersistenceResult private[matlab] (
 
   /** The simplices making up bar `i`'s representative chain, each as its sorted array of vertex indices (0-based,
     * matching the row indices of whatever point/distance matrix was passed to `Tda4j`). Throws
-    * `UnsupportedOperationException` if this bar's engine doesn't record representative chains (`engine="chunks"`
-    * currently never does) or if this specific bar has no recorded representative (can happen for `engine="ripser"`,
-    * whose apparent-pairs shortcut skips writing one down for some bars).
+    * `UnsupportedOperationException` if this specific bar has no recorded representative -- can happen for
+    * `engine="ripser"` (its apparent-pairs shortcut skips writing one down for some bars) or for `engine="chunks"` bars
+    * above dimension 0 (representative tracking there currently only covers dimension 0 -- see
+    * `CellularPersistenceInChunksContext.barcodeAt`'s own doc for the scope boundary and `.claude/CLAUDE.md`'s
+    * coefficients-and-representatives design principle for why this is a gap to close, not an accepted limitation).
     */
   def cycleVertices(i: Int): Array[Array[Int]] = cycleProvider(i)._1
 

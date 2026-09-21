@@ -289,3 +289,22 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
       }
       .reduce(_ and _)
   }
+
+  // Broader fuzz for the dimension-0/1 raw-union-find fast path added to CellularPersistenceInChunksContext
+  // (.claude/WORKLOG-unionfind-in-chunks.md) -- reuses genTestImage above (small integer values, so
+  // low-effort-tied by construction) rather than the fixed tie-heavy fixtures alone, since that's exactly the
+  // hazard an order-dependent union-find bug would show up in first, per this codebase's own established
+  // cubical validation discipline (CLAUDE.md: "hand-derived fixtures... deliberately chosen TIE-HEAVY").
+  "CellularPersistenceInChunksContext[Cube,...]'s union-find fast path agrees with the naive engine on random tie-heavy images" >>
+    AsResult {
+      prop { (img: TestImage) =>
+        val stream = CubicalGridStream(img.shape, valueFnOf(img))
+        val cellCount = stream.totalCellCount
+        val naiveBarcode = persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+        val chunksBarcode = CellularPersistenceInChunksContext[Cube, Double](img.shape.size)
+          .persistentHomology(stream)
+          .diagramAt(Double.PositiveInfinity)
+        (HomologyFixtures.totalBarsAccountForAllCells(chunksBarcode, cellCount.toInt) must beTrue) and
+          (chunksBarcode must containTheSameElementsAs(naiveBarcode))
+      }
+    }

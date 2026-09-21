@@ -96,6 +96,37 @@ style or older Scala 3 idioms:
 
 ## Architecture
 
+**Design principle, stated by the project lead as foundational to this whole line of work -- hold every future
+engine/optimization against this, not just raw speed**: every interesting implementation of homology should
+(a) support flexible coefficient choice (generic over `Field`, not hardcoded to `Double` or one finite field)
+and (b) return representatives (an actual chain witnessing each bar, not just its birth/death numbers). An
+optimization that requires abandoning representatives is probably not worth it. Every public-facing interface
+(the MATLAB facade included) should offer access to representatives -- anywhere that currently doesn't is
+incomplete, not an accepted design choice.
+
+**Where the codebase stood against this as of the union-find session below, before that session's own fix (see
+"Persistent homology" item 2)**: `CellularHomologyContext`/`SimplicialHomologyContext` (naive) fully complied --
+generic over `Field`, and `barcodeAt` returns a real representative cycle per bar via V-column tracking.
+`RipserCohomologyContext`/`PackedRipserCohomologyContext` are generic over `Field` and do track representatives
+(`basis`/`generators`), exposed through the MATLAB facade's `cycleVertices`/`cycleCoefficients` for
+`engine=ripser` -- except for a bar resolved via the apparent-pairs shortcut, which throws
+`UnsupportedOperationException` (a real, narrower gap against this principle). `SimplicialHomologyByDimensionContext`
+is generic over `Field` and does track representatives internally (`cycles`/`coboundaries`, the same shape as
+the naive engine) but has never had them audited or exposed through a public method -- unwired from production
+regardless (see item 3). `CellularPersistenceInChunksContext`/`PersistenceInChunksContext` (chunks) was generic
+over `Field` but had NO representative-cycle API at all: `diagramAt` was its only query method and discarded
+every bar's chain data outright; the MATLAB facade's `engine=chunks` always threw `UnsupportedOperationException`
+for exactly this reason. This was a pre-existing gap, not something the union-find work introduced -- but seeing
+it named as a standing principle is what prompted fixing it directly; see item 2 for what changed.
+**Partially closed the same day**: chunks now has a `barcodeAt`, and the MATLAB facade routes `engine=chunks`
+through it -- but honestly, only for dimension-0 bars so far (both finite and essential), verified to match the
+naive engine's own representatives EXACTLY, not just homologously. Dimension >= 1 bars (finite and essential
+alike) still report no representative; closing that needs porting the naive engine's incremental
+`coboundaries`/`cycles` mechanism into the chunked algorithm, a distinct, larger, not-yet-started piece of work
+-- see item 2's own note and `.claude/WORKLOG-unionfind-in-chunks.md` for the exact scope boundary and the
+real blocker (deferred pair resolution across the chunked algorithm's local/global passes) flagged for whoever
+picks it up next.
+
 ### Algebraic core (typeclass layer)
 
 - `RingModule.scala` / `Field.scala`: minimal typeclasses for "module/vector space over a ring/field" and "field",
@@ -459,6 +490,40 @@ imply the others need it:
    sites continuing to work unchanged (the subclass, not a rename), and a clean full-suite run. See "Simplicial
    sets" below for what this unlocked and `.claude/WORKLOG-simplicial-set-filtration.md` for the full
    derivation.
+
+   **Gained a raw, `Chain`-free union-find fast path for dimensions 0/1, plus dimension-0 representative
+   tracking, in a later session** — see `.claude/DESIGN-unionfind-in-chunks.md` (written before any code) and
+   `.claude/WORKLOG-unionfind-in-chunks.md` for the full derivation. Prompted by the project lead's own
+   refinement of "what can union-find/discrete-Morse-theory do for cubical performance": rather than a new,
+   separate cubical-only engine (the original design), union-find acceleration was built directly into this
+   class, generic over `CellT`, since it's mathematically forced to agree with the general `Chain.reduceByUntil`
+   machinery on dimensions 0/1 (both compute the same canonical reduced boundary matrix given the same fixed
+   total order) and — checked before writing any code — this class carries no V-column/representative-cycle
+   state the way `CellularHomologyContext` does, removing the specific risk (delicate multi-hop coefficient
+   bookkeeping) that had earlier scoped out an equivalent raw-`UnionFind` port for the *naive* engine (see item
+   3 below). `HomologyState.unionFindDim01()` fully resolves dimensions 0 and 1 up front (`cleared`/`paired`/
+   `killer`/`barcode(0)`/`essentialSimplices`, all populated directly), and `advanceAll`'s two loops (local
+   `processCell`, global `compress`/`globalReduce`) now start at delta=2 instead of delta=0 — dimension 0
+   (vertices) was already free in the existing algorithm (an empty boundary always trivially reduces to
+   essential), so the real win is skipping the general machinery for dimension 1 (edges), most of which are
+   cycle-forming and previously got reduced all the way to zero through the expensive general path. Verified
+   against the naive engine on 100+ random Vietoris-Rips point clouds and random tie-heavy cubical images (not
+   just the existing fixed tie-heavy fixtures), plus the pinned degenerate-S² and elder-rule fixtures.
+
+   Separately, prompted by the coefficients-and-representatives design principle above: `barcodeAt` now exists
+   on this class, returning real, naive-engine-*exact* representatives (`Chain(dyingVertex)`/`Chain(rootVertex)`,
+   verified by direct comparison, not just homology-equivalence) for dimension-0 bars only — every other bar
+   still reports `annotation = None`, honestly reflecting that the naive engine's incremental
+   `coboundaries`/`cycles` mechanism hasn't been ported into the chunked algorithm yet (a distinct, larger,
+   explicitly-deferred piece of work — the worklog above names the concrete blocker: the chunked algorithm's
+   local pass can defer a pair's resolution into a later global pass, so presence of a substituted cell's
+   `coboundaries` entry can't be assumed the way the naive engine's single sequential sweep guarantees). The
+   MATLAB facade's `engine="chunks"` now routes through `barcodeAt`/`fromBars` (the same `Option[Chain]`-aware
+   path `"ripser"`/`"naive"` already used) instead of the old always-throwing `fromDiagram`, which is deleted.
+
+   `SimplicialHomologyByDimensionContext` was deliberately NOT deleted as part of this — kept as the independent
+   cross-validation oracle (and, now, the only worked example of the `coboundaries`/`cycles` mechanism a future
+   session will need for dimension >= 1 representatives), pending broader fuzz validation.
 3. `SimplicialHomologyByDimensionContext`: dimension-0 and the births of dimension-1 classes read off directly via
    Kruskal's algorithm/union-find over the stream's own dimension-0/1 cells (elder rule: a tree edge kills the
    younger of the two components it joins; a non-tree edge births a new 1-cycle), higher dimensions via the same
@@ -498,6 +563,14 @@ imply the others need it:
    not-yet-fully-converged elder-rule/V-column coefficient bookkeeping to stay correct for a LATER
    dimension-2+ cell's reduction -- was scoped out as real risk to the reference oracle for a small remaining
    gain, not attempted. `SimplicialHomologyByDimensionContext` remains unwired, unchanged from before.
+
+   **This "remains unwired" conclusion was specifically about the NAIVE engine (`CellularHomologyContext`) and
+   is superseded for CHUNKS in a later session, not contradicted** — the V-column risk above is a real property
+   of the naive engine's own `barcodeAt` (which reconstructs representative cycles); `CellularPersistenceInChunksContext`
+   was checked and confirmed to carry no such state, which is exactly what made a fresh raw-union-find design
+   safe to build there. See item 2's own entry above and `.claude/DESIGN-unionfind-in-chunks.md` for the full
+   reasoning; `SimplicialHomologyByDimensionContext` itself is untouched by this and remains unwired, kept
+   purely as a cross-validation oracle.
 4. `RipserCohomologyContext`: persistent *co*homology via Ulrich Bauer's Ripser algorithm
    (arXiv:1908.02518), specialized to `Simplex[Int]` Vietoris-Rips/clique complexes via `SimplexIndexing`'s
    combinatorial number system (a deliberate narrowing from (1)'s generic `CellT: OrderedCell`, agreed with the

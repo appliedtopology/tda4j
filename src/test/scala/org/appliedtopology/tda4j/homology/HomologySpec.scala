@@ -165,6 +165,65 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
     }
   }
 
+  // Per .claude/CLAUDE.md's coefficients-and-representatives design principle: chunks' dimension-0 representatives
+  // must match the naive engine's EXACTLY, not merely be homologous -- both sides claim to store the trivial
+  // Chain(vertex) representative at dimension 0, and this is the only check that catches it if they diverge
+  // (advisor's explicit caution: don't just assert "some valid cycle").
+  "The clear-and-compress engine's dimension-0 representatives match the naive engine's exactly" >> {
+    given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+    import shc.{*, given}
+
+    def asStratified(cells: Seq[(Double, Simplex[Int])]): StratifiedCellStream[Simplex[Int], Double] =
+      val raw = explicitStream(cells)
+      val byDim: Map[Int, Seq[Simplex[Int]]] = raw.iterator.toSeq.groupBy(_.dim)
+      new StratifiedCellStream[Simplex[Int], Double]:
+        def filtrationValue = raw.filtrationValue
+        def filtrationOrdering = raw.filtrationOrdering
+        val smallest = Double.NegativeInfinity
+        val largest = Double.PositiveInfinity
+        override def iterator: Iterator[Simplex[Int]] = cells.sortBy(_._1).map(_._2).iterator
+        def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+          case d if byDim.contains(d) => byDim(d).iterator
+        }
+
+    val cases =
+      List(HomologyFixtures.elderRuleCells, HomologyFixtures.triangleCells, HomologyFixtures.tetrahedronCells)
+    forall(cases) { cells =>
+      val naiveBars = persistentHomology(explicitStream(cells)).barcodeAt(Double.PositiveInfinity)
+      val chunksBars = PersistenceInChunksContext[Int, Double](3)
+        .persistentHomology(asStratified(cells))
+        .barcodeAt(Double.PositiveInfinity)
+      val naiveDim0Reps = naiveBars.filter(_.dim == 0).map(b => (b.lower, b.upper, b.annotation.get))
+      val chunksDim0Reps = chunksBars.filter(_.dim == 0).map(b => (b.lower, b.upper, b.annotation.get))
+      chunksDim0Reps must containTheSameElementsAs(naiveDim0Reps)
+    }
+  }
+
+  // Broader fuzz for the dimension-0/1 raw-union-find fast path added to CellularPersistenceInChunksContext
+  // (.claude/WORKLOG-unionfind-in-chunks.md) -- the fixed-fixture check above (triangle/tetrahedron/torus) is
+  // real coverage but far narrower than SimplicialHomologyByDimensionSpec's own 100+-random-cloud property for
+  // the same kind of change, and this is exactly the class the new fast path was added to. Mirrors that
+  // property's shape directly: naive engine (unaffected by this change, a genuinely different algorithm) is
+  // the oracle.
+  "The clear-and-compress engine's dimension-0/1 union-find agrees with the naive engine on random Vietoris-Rips complexes" >> {
+    val boundedMaxDim = 3
+    "agreement" ==> forAll(matrixGen[Double](Gen.double, Gen.chooseNum(1, 4), Gen.chooseNum(4, 12))) {
+      (points: Array[Array[Double]]) =>
+        val metricSpace = EuclideanMetricSpace(points)
+        val naiveStream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), boundedMaxDim)
+        val naive = SimplicialHomologyContext[Int, Double, Double]()
+          .persistentHomology(naiveStream)
+          .diagramAt(Double.PositiveInfinity)
+
+        val chunksStream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), boundedMaxDim)
+        val chunks = PersistenceInChunksContext[Int, Double](boundedMaxDim)
+          .persistentHomology(chunksStream)
+          .diagramAt(Double.PositiveInfinity)
+
+        "chunks (union-find dim 0/1) and naive engines agree" ==> (chunks must containTheSameElementsAs(naive))
+    }
+  }
+
   "Barcode is independent of the coefficient field for these torsion-free complexes" >> {
     val f2 = new FiniteField(2)
     val f3 = new FiniteField(3)

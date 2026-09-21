@@ -218,7 +218,7 @@ object Tda4j:
         // killed. Both `PackedRipserCohomologyContext` and `PersistenceInChunksContext` now handle this internally
         // (their own `maxDimension`/`maxDim` constructor parameters mean "top homological degree reported,"
         // fixed at the source -- see .claude/WORKLOG-maxdim-semantics-fix.md), so `engine="ripser"`/`"chunks"`
-        // both pass `requestedMaxDimension` straight through with no adjustment; `fromBars`/`fromDiagram`'s
+        // both pass `requestedMaxDimension` straight through with no adjustment; `fromBars`'s
         // filter below is a defensive no-op for them now, not load-bearing. `engine="naive"` still needs the
         // manual `buildDimension = requestedMaxDimension + 1` dance: `SimplicialHomologyContext` has no
         // `maxDimension` of its own at all -- the cap lives entirely in the stream it's handed.
@@ -261,9 +261,20 @@ object Tda4j:
               requestedMaxDimension
             )
           case "chunks" =>
+            // barcodeAt, not diagramAt: CellularPersistenceInChunksContext now records real (dimension-0-only,
+            // for now -- see that method's own doc and .claude/CLAUDE.md's coefficients-and-representatives
+            // principle) representatives, via the SAME fromBars/Option[Chain] path "ripser"/"naive" already use
+            // below -- a bar with no representative yet (any dim >= 1) comes back with annotation = None, which
+            // fromBars already turns into a per-bar UnsupportedOperationException rather than failing the whole
+            // call, exactly the same as an engine=ripser apparent-pairs-resolved bar today.
             val stream = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue)
             val state = PersistenceInChunksContext[Int, C](requestedMaxDimension).persistentHomology(stream)
-            fromDiagram(state.diagramAt(Double.PositiveInfinity), requestedMaxDimension)
+            fromBars[Simplex[Int], C](
+              state.barcodeAt(Double.PositiveInfinity),
+              (_, cell) => cell.underlying.toArray,
+              toDouble,
+              requestedMaxDimension
+            )
           case other =>
             throw new IllegalArgumentException(
               s"unrecognized engine '$other' for complex=vr; expected 'ripser', 'naive', or 'chunks'"
@@ -336,15 +347,8 @@ object Tda4j:
           (items.map(t => cellVertices(dim, t._1)).toArray, items.map(t => toDouble(t._2)).toArray)
         case None =>
           throw new UnsupportedOperationException(
-            s"no representative chain was recorded for bar $i (this can happen for engine=ripser bars resolved via the apparent-pairs shortcut)"
+            s"no representative chain was recorded for bar $i (this can happen for engine=ripser bars resolved " +
+              "via the apparent-pairs shortcut, or for engine=chunks bars above dimension 0 -- see " +
+              "CellularPersistenceInChunksContext.barcodeAt's own doc for the current scope boundary)"
           )
-    new PersistenceResult(dims, births, deaths, cycleProvider)
-
-  private def fromDiagram(diagram: List[(Int, Double, Double)], keepDimensionsUpTo: Int): PersistenceResult =
-    val indexed = diagram.filter(_._1 <= keepDimensionsUpTo).toIndexedSeq
-    val dims = indexed.map(_._1).toArray
-    val births = indexed.map(_._2).toArray
-    val deaths = indexed.map(_._3).toArray
-    val cycleProvider: Int => (Array[Array[Int]], Array[Double]) = _ =>
-      throw new UnsupportedOperationException("engine=chunks does not currently record representative chains")
     new PersistenceResult(dims, births, deaths, cycleProvider)
