@@ -21,6 +21,10 @@ libraryDependencies +=
 libraryDependencies += "org.scalacheck"                %% "scalacheck"                 % "1.17.0" % "test"
 libraryDependencies += "org.bitbucket.inkytonik.kiama" %% "kiama"                      % "2.5.1"
 libraryDependencies += "org.bitbucket.inkytonik.kiama" %% "kiama-extras"               % "2.5.1"
+// CLI argument parsing for the `cli` package -- chosen over decline specifically because it has zero transitive
+// dependencies (decline pulls in cats-core, which nothing else in this codebase uses) -- see
+// .claude/WORKLOG-cli-executable.md.
+libraryDependencies += "org.rogach" %% "scallop" % "6.0.0"
 
 lazy val root = (project in file("."))
   .enablePlugins(
@@ -75,7 +79,12 @@ lazy val root = (project in file("."))
     },
     gitHubPagesOrgName := "appliedtopology",
     gitHubPagesRepoName := "tda4j",
-    gitHubPagesSiteDir := baseDirectory.value / "target/site"
+    gitHubPagesSiteDir := baseDirectory.value / "target/site",
+    // Both settings are needed, not just one: `Compile / mainClass` is what `sbt run` uses; `assembly /
+    // mainClass` is what sbt-assembly writes into the fat jar's manifest (`java -jar ... `). Neither is inferred
+    // from the other.
+    Compile / mainClass := Some("org.appliedtopology.tda4j.cli.Tda4jCli"),
+    assembly / mainClass := Some("org.appliedtopology.tda4j.cli.Tda4jCli")
   )
 
 // Workaround for XML versioning issues

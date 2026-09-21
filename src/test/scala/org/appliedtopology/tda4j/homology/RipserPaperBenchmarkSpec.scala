@@ -6,6 +6,7 @@ import org.appliedtopology.tda4j.cells.{given, *}
 import org.appliedtopology.tda4j.streams.{given, *}
 import org.appliedtopology.tda4j.homology.{given, *}
 import org.appliedtopology.tda4j.alpha.{given, *}
+import org.appliedtopology.tda4j.io.{given, *}
 
 import org.specs2.mutable
 import org.specs2.main.Arguments
@@ -13,7 +14,6 @@ import org.specs2.main.Arguments
 import java.util.concurrent.{Executors, ThreadFactory}
 import scala.concurrent.duration.*
 import scala.concurrent.{Await, ExecutionContext, Future, TimeoutException}
-import scala.io.Source
 import scala.sys.process.*
 
 /** Compares `RipserCohomologyContext` (this codebase's own reproduction of Bauer's Ripser algorithm, `Homology.scala`)
@@ -138,25 +138,14 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
         import IntMod2.Fp
         import IntMod2.given
 
-        def loadPointCloud(path: String): Array[Array[Double]] =
-          val src = Source.fromFile(path)
-          try
-            src
-              .getLines()
-              .filter(_.trim.nonEmpty)
-              .map(_.trim.split("[\\s,]+").map(_.toDouble))
-              .toArray
-          finally src.close()
+        // Routed through the `io` module (added in a later session -- see `.claude/WORKLOG-io-module.md`) instead
+        // of this spec's own ad hoc parsing, which is exactly what motivated building `io.Csv` in the first
+        // place: `Csv.readPointCloud`/`Csv.readFullDistanceMatrix` implement the identical
+        // trim-filter-split-on-`[\s,]+` logic this spec used to hand-roll.
+        def loadPointCloud(path: String): Array[Array[Double]] = Csv.readPointCloud(path)
 
         def loadDistanceMatrix(path: String): IndexedSeq[IndexedSeq[Double]] =
-          val src = Source.fromFile(path)
-          try
-            src
-              .getLines()
-              .filter(_.trim.nonEmpty)
-              .map(_.trim.split("[\\s,]+").map(_.toDouble).toIndexedSeq)
-              .toIndexedSeq
-          finally src.close()
+          Csv.readFullDistanceMatrix(path).map(_.toIndexedSeq).toIndexedSeq
 
         // No cooperative cancellation exists in this engine -- see EngineComparisonBenchmarkSpec's own doc for
         // why a timeout only stops waiting, not the underlying computation. Daemon threads keep that from

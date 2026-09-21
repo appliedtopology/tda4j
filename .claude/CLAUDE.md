@@ -41,6 +41,11 @@ package's subdirectory.
 - `unicode` — `PrintingHelper`. Already its own package before this split, same as `barcode`; currently unused
   (only a dead commented-out import references it).
 - `matlab` — unchanged, already its own package.
+- `io` — `Csv`, `Ripser`, `Dipha`, `Gudhi`, `Perseus` (file-format adaptors — point clouds, distance matrices,
+  cubical images, persistence diagrams — see "File I/O" below). A leaf package: imports `streams`/`barcode`,
+  nothing imports it back.
+- `cli` — `Tda4jConf` (Scallop option definitions), `Tda4jCli` (the `tda4j` executable's `main`, plus a testable
+  `run` — see "CLI executable" below). A thin translator over `matlab.Tda4j`/`io`, not a new implementation.
 - root (`org.appliedtopology.tda4j` itself) — just `package.scala` (`TDAContext`), the thin user-facing facade,
   plus `APISpec.scala`/`SimplicialSetSpec.scala` (dead) on the test side, which stay flat as cross-cutting
   integration tests rather than belonging to any one subpackage.
@@ -1649,6 +1654,115 @@ Honest framing to keep when discussing this work: the paper's own benchmarks are
 2 of 4 persistence examples) and against qhull-based Delaunay on some inputs. The genuine value proposition is
 high ambient dimension (where Delaunay is infeasible), exact homology rather than persistence diagrams, and much
 smaller complexes than Vietoris–Rips when data sits near a low-dimensional subspace — not raw speed.
+
+## File I/O
+
+`io` (`Csv.scala`, `Ripser.scala`, `Dipha.scala`, `Gudhi.scala`, `Perseus.scala`) loads and saves the file formats
+the wider TDA ecosystem actually uses — point clouds, distance matrices, cubical images, and persistence diagrams —
+so callers don't have to hand-roll parsing the way `RipserPaperBenchmarkSpec` used to (its own
+`loadPointCloud`/`loadDistanceMatrix` are now one-line delegations to `Csv.readPointCloud`/
+`Csv.readFullDistanceMatrix`). See `.claude/WORKLOG-io-module.md` for the full derivation.
+
+**Every format shipped here was verified against a primary source** — the originating project's own source code or
+its own documentation, fetched fresh, not recalled from memory — before being implemented: **Ripser**
+(`github.com/Ripser/ripser`'s `ripser.cpp` directly, including tracing `compressed_upper_distance_matrix`'s
+`init_rows` pointer arithmetic term-by-term rather than assuming symmetry with the lower-triangular case); **DIPHA**
+(`DIPHA/dipha`'s `file_types.h` and `README.md`); **GUDHI** (`gudhi.inria.fr`'s file-format docs, plus
+`Bitmap_cubical_complex_base.h`'s actual source for its Perseus-style cubical reader's axis order, since the docs'
+own prose wasn't conclusive on that point); **Perseus** (its own documentation page). Formats with no such
+verification (Perseus's simplicial toplex format, PHAT's boundary-matrix format, and both projects' sparse
+triplet distance-matrix formats — Ripser `--format sparse`, DIPHA `SPARSE_DISTANCE_MATRIX`) are deliberately NOT
+implemented — a wrong parser that silently produces a plausible-looking wrong answer is worse than a missing one,
+and sparse triplet formats specifically need a real design decision this codebase hasn't made yet (what type
+represents "only these pairs are known," as opposed to `SparseMetricSpace`'s existing "known distance matrix,
+cutoff applied" wrapper). Dionysus and JavaPlex need no dedicated adaptor: both consume the same plain
+whitespace/comma-separated point-cloud and distance-matrix text `Csv`/`Ripser` already read.
+
+**Two details that would have silently produced a wrong-but-plausible answer, both caught before writing the
+reader, not after**: Ripser's binary distance-matrix format is packed 32-bit `float` (`typedef float value_t` in
+`ripser.cpp`), not 64-bit `double` — a write-then-read round trip cannot catch the wrong element width, since both
+directions would share the same wrong assumption; only the real typedef (or a real ripser-produced file) can.
+And DIPHA's/Perseus's cubical-grid axis order (`g(1)`/the first declared axis fastest-varying) is the OPPOSITE of
+`CubicalImage.fromFlatArray`'s own convention (last axis fastest, ordinary row-major) — `Dipha.readImageData`/
+`writeImageData` and `Perseus.readCubicalToplex`/`writeCubicalToplex` reverse the shape to reconcile this. Neither
+a round trip nor even a full persistent-homology comparison against an un-transposed oracle can catch this class of
+bug (transposing a grid preserves its homology) — both are pinned instead with hand-built-bytes, asymmetric-shape,
+all-distinct-value fixtures asserting `CubicalGridStream.topCellValue` at specific coordinates, plus a cross-format
+oracle (the same grid built via Perseus text and via `Dipha.writeImageData` must agree at every coordinate).
+
+**Persistence-diagram round-tripping needed one more piece of care**: `PersistenceBar.apply(dim, lower, upper)`
+(this codebase's own existing half-open-interval convention) produces `ClosedEndpoint(lower)`/`OpenEndpoint(upper)`,
+but a file format's two raw birth/death numbers carry no open/closed distinction at all. Every reader here
+(`Endpoints.toBar`, shared by `Csv`/`Gudhi`'s text formats; `Dipha`'s own binary reader inline) reconstructs finite
+bars via that SAME companion factory rather than hand-building `ClosedEndpoint` on both ends — otherwise a bar built
+the ordinary way fails to round-trip (`OpenEndpoint(4.0) != ClosedEndpoint(4.0)` under case-class equality) even
+though nothing is actually wrong.
+
+**API shape**: two layers per format family — a raw loader (`Array[Array[Double]]` for point clouds/dense matrices,
+`(shape, flatValues)` for cubical images in `CubicalImage.fromFlatArray`'s own convention,
+`Seq[PersistenceBar[Double, Nothing]]` for diagrams) and a one-line convenience constructor on top
+(`read*EuclideanMetricSpace`/`read*ExplicitMetricSpace`/`read*CubicalGridStream`).
+
+**Verification**: 37 examples across 5 new specs, including a real end-to-end check (not just "the loader didn't
+crash"): `PerseusSpec`'s missing-pixel test maps a Perseus `-1` (missing cube) to `Double.PositiveInfinity` in a 3x3
+grid with the center pixel absent, runs it through actual `CellularHomologyContext`/`persistentHomology`, and
+asserts a genuine essential dimension-1 bar — the topologically correct signature of an 8-pixel ring (homotopy
+equivalent to $S^1$), not merely that nothing threw. A real off-by-one bug in `Csv.readLowerTriangularDistanceMatrix`
+(`n = rows.size` instead of `rows.size + 1`, since row 0 is never written) was caught by the first
+non-round-trip test written against it — a round trip through the same bug would have silently "passed" by
+symmetrically shrinking the matrix on both sides.
+
+## CLI executable
+
+`cli` (`Tda4jConf.scala`, `Tda4jCli.scala`) is the `tda4j` command-line executable, built via `sbt assembly` into
+a runnable fat jar (`java -jar target/scala-3.9.0/TDA4j-<version>-assembly.jar [options] <input-file>` --
+`build.sbt`'s `assembly / mainClass`/`Compile / mainClass` settings). See `.claude/WORKLOG-cli-executable.md` for
+the full derivation.
+
+**Argument parsing: Scallop, not Decline** — checked both against their actual current releases (not memory):
+Decline `v2.2.0` depends on `cats-core`, a genuinely new dependency family for a codebase with no typelevel
+surface anywhere else; Scallop `v6.0.0` has zero external runtime dependencies and its mutable `ScallopConf`
+builder style matches the imperative `Tda4j`/`PersistenceResult` facade this CLI sits directly on top of.
+
+**Design: mirrors the MATLAB facade, doesn't reimplement it.** Every `--complex`/`--engine`/`--alpha-backend`/
+`--max-dimension`/`--max-filtration-value`/`--field`/`--prime`/`--epsilon` flag is a 1:1 mirror of an option key
+`org.appliedtopology.tda4j.matlab.Tda4j` already recognizes and validates — `Tda4jCli` does no validation of its
+own for any of these. Every such flag is defined WITHOUT a Scallop-level default; the options array the CLI
+builds omits a key entirely when the user didn't pass it, letting `Tda4j`'s own defaults apply — so there is
+exactly one place in the codebase that knows what "unset" means for any given option, not two independently
+maintained copies that could drift apart. `--input-format` loads via the `io` module (see "File I/O" above); one
+format name maps 1:1 onto one `io.*` method and onto exactly one of point-cloud-vs-distance-matrix, so there's no
+separate "kind" flag that could disagree with the format choice. `--output-format` writes via the same module's
+`Csv`/`Gudhi`/`Dipha`/`Perseus` writers.
+
+**A real design bug caught before shipping (by `advisor()`, before implementation), not after**: wiring
+`--output-format=perseus` straight through to `Perseus.writePersistenceIntervals` would have rounded real-valued
+Vietoris-Rips/alpha birth/death (often well under `1.0`) to integer step indices, silently collapsing nearly
+every bar to `0 0` — output that parses as a valid Perseus file but carries no real information, the same
+"internally consistent but silently wrong" shape as this codebase's historical `filtrationOrdering` bugs. Fixed
+by refusing the combination outright (`requireIntegralForPerseus`) with a message naming the actual mismatch
+(step indices vs. raw filtration values) rather than shipping it as an equal-looking output choice.
+
+**Testability**: `Tda4jCli.run(args, out): Int` contains the entire CLI and returns an exit code rather than
+calling `sys.exit` — `main` is a two-line wrapper. This is what lets `CliSpec` exercise real end-to-end runs
+in-process. **Known, checked-not-assumed limitation** (traced directly in Scallop's own source, not the docs):
+this only covers errors `Tda4j` itself raises, i.e. ones that occur AFTER Scallop successfully parses the command
+line. A genuine parse-level error (a malformed flag value, a missing required argument, or `--help`/`--version`
+themselves) is handled entirely inside `new Tda4jConf(args)`'s own `verify()` — Scallop's default `onError` prints
+directly and calls `System.exit` unconditionally before `run` ever regains control. Scallop does offer an escape
+hatch (`org.rogach.scallop.throwError`, a `DynamicVariable[Boolean]`), deliberately not used here: its effect is
+all-or-nothing, so using it would also turn `--help`/`--version` into raw thrown exceptions instead of Scallop's
+own formatted output, needing to be reimplemented by hand for a code path `CliSpec` simply avoids exercising by
+construction instead.
+
+**Manual verification, not just `sbt compile`** (per advisor's explicit instruction to actually run the built
+jar): `sbt assembly` succeeds with sbt-assembly's own default merge strategies (no custom
+`assemblyMergeStrategy` needed); `java -jar ...-assembly.jar --help` and a real point-cloud computation both work
+standalone. A hand-built unit-square fixture through `--max-dimension 1` produces a topologically correct
+barcode (three finite $H_0$ bars, one essential; two zero-persistence $H_1$ bars from the diagonals/triangles;
+one genuine finite $H_1$ bar `[1.0, sqrt(2))`, the square's own hole) — confirmed by hand, not just "didn't
+crash." `--representatives`, `--complex bogus` (surfaces `Tda4j`'s own error message unmodified), and
+`csv`/`gudhi`/`dipha` output were all exercised live too.
 
 ## MATLAB API
 
