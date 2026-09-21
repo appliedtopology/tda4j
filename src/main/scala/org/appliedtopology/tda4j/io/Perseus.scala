@@ -7,34 +7,33 @@ import org.appliedtopology.tda4j.barcode.{given, *}
 import scala.io.Source
 import java.io.PrintWriter
 
-/** Perseus's own cubical toplex ("dense grid") input format, and its per-dimension persistence-interval output
-  * format -- verified against Perseus's own documentation page and cross-checked against GUDHI's own
-  * `Bitmap_cubical_complex_base.h` reader source (GUDHI's cubical-complex module reads real Perseus files
-  * directly), not reconstructed from memory. See `.claude/WORKLOG-io-module.md`.
+/** Perseus's own cubical toplex ("dense grid") input format, and its per-dimension persistence-interval output format
+  * -- verified against Perseus's own documentation page and cross-checked against GUDHI's own
+  * `Bitmap_cubical_complex_base.h` reader source (GUDHI's cubical-complex module reads real Perseus files directly),
+  * not reconstructed from memory. See `.claude/WORKLOG-io-module.md`.
   *
   * '''Axis order''': "lexicographic order" in Perseus's own sense has the FIRST declared axis fastest-varying --
   * confirmed from GUDHI's own `compute_position_in_bitmap`/multiplier construction (`multipliers[0] = 1`), the only
-  * place either project's exact stride arithmetic is spelled out in source rather than prose. This is the OPPOSITE
-  * of `CubicalImage.fromFlatArray`'s own last-axis-fastest convention -- the same reversal `Dipha.readImageData`
-  * already needs, for the same underlying reason, and handled the same way here.
+  * place either project's exact stride arithmetic is spelled out in source rather than prose. This is the OPPOSITE of
+  * `CubicalImage.fromFlatArray`'s own last-axis-fastest convention -- the same reversal `Dipha.readImageData` already
+  * needs, for the same underlying reason, and handled the same way here.
   *
   * '''Periodic boundaries''' (a negative grid size, GUDHI's own extension to this format) are not representable by
   * `CubicalGridStream` and are rejected outright with a clear error rather than silently misinterpreted.
   *
   * '''Missing cubes''': Perseus reserves filtration value `-1` for a cube absent from the complex entirely --
   * `CubicalGridStream` has no "absent cell" concept, so `-1` is mapped to `Double.PositiveInfinity` (GUDHI's own
-  * documented convention for the same gap), which has the intended effect: the cell exists in the stream but is
-  * never reached by any finite-threshold computation.
+  * documented convention for the same gap), which has the intended effect: the cell exists in the stream but is never
+  * reached by any finite-threshold computation.
   *
-  * '''Perseus's own simplicial toplex format is deliberately not implemented here''' -- no primary-source
-  * verification of it was done (see `.claude/WORKLOG-io-module.md`), and a wrong parser for it would be worse than
-  * none.
+  * '''Perseus's own simplicial toplex format is deliberately not implemented here''' -- no primary-source verification
+  * of it was done (see `.claude/WORKLOG-io-module.md`), and a wrong parser for it would be worse than none.
   */
 object Perseus:
 
-  /** Line 1: dimension `d`. Next `d` lines: grid size along each axis (all positive -- see the class doc on
-    * periodic boundaries). Remaining tokens: `d`-many products worth of filtration values, in Perseus's own
-    * lexicographic (first-axis-fastest) order; `-1` means "this cube is absent."
+  /** Line 1: dimension `d`. Next `d` lines: grid size along each axis (all positive -- see the class doc on periodic
+    * boundaries). Remaining tokens: `d`-many products worth of filtration values, in Perseus's own lexicographic
+    * (first-axis-fastest) order; `-1` means "this cube is absent."
     */
   def readCubicalToplex(path: String, sublevel: Boolean = true): CubicalGridStream =
     val src = Source.fromFile(path)
@@ -60,9 +59,8 @@ object Perseus:
       CubicalImage.fromFlatArray(sizes.reverse.toIndexedSeq, raw.toIndexedSeq, sublevel)
     finally src.close()
 
-  /** `shape`/`flatValues` in `CubicalImage.fromFlatArray`'s own last-axis-fastest convention -- reversed internally
-    * to Perseus's own first-axis-fastest convention before writing. `Double.PositiveInfinity` round-trips back to
-    * `-1`.
+  /** `shape`/`flatValues` in `CubicalImage.fromFlatArray`'s own last-axis-fastest convention -- reversed internally to
+    * Perseus's own first-axis-fastest convention before writing. `Double.PositiveInfinity` round-trips back to `-1`.
     */
   def writeCubicalToplex(path: String, shape: IndexedSeq[Int], flatValues: IndexedSeq[Double]): Unit =
     require(flatValues.size == shape.product, "flatValues size must equal the product of shape")
@@ -102,8 +100,8 @@ object Perseus:
       finally out.close()
     }
 
-  /** Reads one Perseus output file (`<...>_<dim>.txt`) back into bars of the given dimension -- `dim` must be
-    * supplied by the caller, since Perseus's own per-dimension output files don't repeat it inside the file.
+  /** Reads one Perseus output file (`<...>_<dim>.txt`) back into bars of the given dimension -- `dim` must be supplied
+    * by the caller, since Perseus's own per-dimension output files don't repeat it inside the file.
     */
   def readPersistenceIntervals(path: String, dim: Int): Seq[PersistenceBar[Double, Nothing]] =
     val src = Source.fromFile(path)

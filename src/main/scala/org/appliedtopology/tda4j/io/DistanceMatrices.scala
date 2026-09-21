@@ -1,17 +1,17 @@
 package org.appliedtopology.tda4j
 package io
 
-/** Shared triangular-distance-matrix arithmetic, used by both `Csv` and `Ripser` -- the two families of format that
+/** Shared triangular-distance-matrix arithmetic, used by both `CSV` and `Ripser` -- the two families of format that
   * store a distance matrix as a flat list of triangular entries rather than a dense grid. Kept as one implementation
-  * rather than two so the "which row has how many entries, in what order" convention can't silently drift apart
-  * between the two call sites.
+  * rather than two so the "which row has how many entries, in what order" convention can't silently drift apart between
+  * the two call sites.
   */
 private[io] object DistanceMatrices:
 
-  /** Solve `n*(n-1)/2 = count` for `n`, the number of points implied by a flat triangular list of pairwise
-    * distances with no diagonal. Fails loudly (rather than silently flooring or truncating) if `count` is not
-    * exactly of this form -- a truncated or malformed input file would otherwise silently produce a
-    * smaller-than-intended, wrong matrix instead of an error.
+  /** Solve `n*(n-1)/2 = count` for `n`, the number of points implied by a flat triangular list of pairwise distances
+    * with no diagonal. Fails loudly (rather than silently flooring or truncating) if `count` is not exactly of this
+    * form -- a truncated or malformed input file would otherwise silently produce a smaller-than-intended, wrong matrix
+    * instead of an error.
     */
   def sizeFromTriangularCount(count: Int): Int =
     val approx = (1 + math.sqrt(1 + 8.0 * count)) / 2
@@ -23,7 +23,7 @@ private[io] object DistanceMatrices:
     n
 
   /** `flat` holds, for `i = 1 until n`, the `i` entries `d(i,0),...,d(i,i-1)`, rows concatenated in order -- both
-    * Ripser's own `LOWER_DISTANCE_MATRIX`/`DISTANCE_MATRIX` text formats and `Csv.readLowerTriangularDistanceMatrix`
+    * Ripser's own `LOWER_DISTANCE_MATRIX`/`DISTANCE_MATRIX` text formats and `CSV.readLowerTriangularDistanceMatrix`
     * use this exact convention. Expanded here into a full symmetric `n x n` matrix with zero diagonal.
     */
   def expandLowerTriangular(flat: IndexedSeq[Double], n: Int): Array[Array[Double]] =
@@ -49,8 +49,8 @@ private[io] object DistanceMatrices:
     out.result()
 
   /** `flat` holds, for `i = 0 until n-1`, the `n-1-i` entries `d(i,i+1),...,d(i,n-1)`, rows concatenated -- Ripser's
-    * own `UPPER_DISTANCE_MATRIX` convention (confirmed against `compressed_upper_distance_matrix`'s `init_rows`
-    * pointer arithmetic in `ripser.cpp` directly, not guessed by symmetry with the lower case -- see
+    * own `UPPER_DISTANCE_MATRIX` convention (confirmed against `compressed_upper_distance_matrix`'s `init_rows` pointer
+    * arithmetic in `ripser.cpp` directly, not guessed by symmetry with the lower case -- see
     * `.claude/WORKLOG-io-module.md`). Expanded the same way as `expandLowerTriangular`.
     */
   def expandUpperTriangular(flat: IndexedSeq[Double], n: Int): Array[Array[Double]] =

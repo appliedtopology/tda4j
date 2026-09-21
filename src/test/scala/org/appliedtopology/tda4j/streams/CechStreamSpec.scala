@@ -271,3 +271,31 @@ class CechStreamSpec extends mutable.Specification with ScalaCheck:
       } must beTrue) and
       (barcode.count(_._1 >= 2) must beEqualTo(0))
   }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // Chunks vs. naive cross-validation on Cech streams -- `CellularPersistenceInChunksContext` has never been
+  // exercised against `CechCofaceSimplexStream` before (CLAUDE.md's Cech section only ever validated the naive
+  // engine here). `CellularPersistenceInChunksContext[CellT: OrderedCell, ...]` has no Cech-specific code path
+  // at all -- same as its already-validated use on `Cube`/`FiniteSimplicialSet` generators -- so there is no a
+  // priori reason to expect it to fail here, but "no a priori reason to expect a bug" is exactly the standing
+  // this codebase's own history warns against trusting without a real check (see e.g. the chunks pairing bug
+  // found on tie-heavy VR cliques). `maxDim = points.length` is deliberately generous (the true combinatorial
+  // top dimension for an n-point cloud), so nothing is truncated away that the naive engine would otherwise see.
+  // ---------------------------------------------------------------------------------------------------------
+
+  "CellularPersistenceInChunksContext agrees with the naive engine's own diagram, exactly, on random Cech streams" >>
+    AsResult {
+      prop { (points: Array[Array[Double]]) =>
+        val ms = EuclideanMetricSpace(points)
+        val stream = CechCofaceSimplexStream(ms, maxFiltrationValue = Some(Double.PositiveInfinity))
+        val naive = SimplicialHomologyContext[Int, Double, Double]()
+          .persistentHomology(stream)
+          .diagramAt(Double.PositiveInfinity)
+          .toSet
+        val chunks = CellularPersistenceInChunksContext[Simplex[Int], Double](points.length)
+          .persistentHomology(stream)
+          .diagramAt(Double.PositiveInfinity)
+          .toSet
+        naive must beEqualTo(chunks)
+      }
+    }

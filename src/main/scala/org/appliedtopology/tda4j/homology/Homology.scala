@@ -1106,7 +1106,7 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
       mutable.Map.empty
     )
 
-/** '''Test/reference oracle only -- not a production engine, and not what `Tda4j.scala`'s `engine="ripser"` calls.'''
+/** '''Test/reference oracle only -- not a production engine, and not what `TDA4j.scala`'s `engine="ripser"` calls.'''
   * As of `.claude/WORKLOG-ripser-profiling.md`'s cursor-redesign session, `PackedRipserCohomologyContext`
   * (`PackedRipserCohomology.scala`) is the production Ripser engine: same algorithm, method for method, keyed on a
   * packed `(Double, Long)` pair instead of a materialized `Simplex[Int]`, measured faster and dramatically leaner on
@@ -1191,7 +1191,7 @@ class SimplicialHomologyByDimensionContext[VertexT: Ordering, CoefficientT: Fiel
   * hashing, no first-computation cost to amortize).
   */
 /** `maxDimension` means "top HOMOLOGICAL DEGREE reported," not "top simplex dimension built" -- fixed at the source
-  * (previously only worked around at the MATLAB facade layer, `matlab.Tda4j`, which built `requestedMaxDimension + 1`
+  * (previously only worked around at the MATLAB facade layer, `matlab.TDA4j`, which built `requestedMaxDimension + 1`
   * internally and filtered the extra dimension back out; see `.claude/WORKLOG-maxdim-semantics-fix.md` for the full
   * derivation, including how this was discovered via a same-hardware benchmark against real `ripser.cpp`). Before this
   * fix, `coboundaryOf`/`zeroPivotCofacet` refused to look past `sigma.dim + 1 > maxDimension`, i.e. `sigma.dim ==

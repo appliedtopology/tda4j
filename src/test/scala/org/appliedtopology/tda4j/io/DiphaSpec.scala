@@ -11,8 +11,7 @@ import java.nio.file.{Files, Paths}
 
 /** Byte-level fixtures against DIPHA's own documented binary layout (`.claude/WORKLOG-io-module.md`) -- a
   * write-then-read round trip alone can't catch a self-consistently-wrong convention (wrong axis order, wrong
-  * essential-class encoding), so every format here gets at least one hand-built-bytes fixture, not just a round
-  * trip.
+  * essential-class encoding), so every format here gets at least one hand-built-bytes fixture, not just a round trip.
   */
 class DiphaSpec extends mutable.Specification:
   private val Magic = 8067171840L

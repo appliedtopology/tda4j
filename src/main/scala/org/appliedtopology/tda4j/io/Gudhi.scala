@@ -10,15 +10,15 @@ import java.io.PrintWriter
 /** GUDHI's own OFF/nOFF point-cloud format and `.pers` persistence-diagram format -- verified against
   * `gudhi.inria.fr`'s own file-format documentation (see `.claude/WORKLOG-io-module.md`). GUDHI's cubical-complex
   * module also reads Perseus's cubical toplex format directly, byte-for-byte the same as real Perseus (confirmed
-  * against GUDHI's own `Bitmap_cubical_complex_base.h` reader source) -- see `Perseus.readCubicalToplex` for that,
-  * not duplicated here.
+  * against GUDHI's own `Bitmap_cubical_complex_base.h` reader source) -- see `Perseus.readCubicalToplex` for that, not
+  * duplicated here.
   */
 object Gudhi:
 
-  /** `OFF`/`nOFF` point clouds (Geomview's OFF format): a header line (`OFF` for 3 dimensions, `<dim>OFF` for any
-    * other dimension), then a `[dim] vertices faces edges` count line, then one vertex per line. `#`-prefixed lines
-    * are comments, skipped anywhere. Faces/edges are never read -- GUDHI's own reader doesn't use them for a point
-    * set either.
+  /** `OFF`/`nOFF` point clouds (Geomview's OFF format): a header line (`OFF` for 3 dimensions, `<dim>OFF` for any other
+    * dimension), then a `[dim] vertices faces edges` count line, then one vertex per line. `#`-prefixed lines are
+    * comments, skipped anywhere. Faces/edges are never read -- GUDHI's own reader doesn't use them for a point set
+    * either.
     */
   def readOff(path: String): Array[Array[Double]] =
     val src = Source.fromFile(path)
@@ -52,9 +52,9 @@ object Gudhi:
 
   /** GUDHI's `.pers` diagram format: `#`-prefixed comment lines are ignored; every other line has 2, 3, or 4
     * whitespace-separated fields, `[[field] dimension] birth death`. This reads the LAST two fields as birth/death
-    * always, and: 4 fields -> `dimension` is the second field (the first, the coefficient-field characteristic, is
-    * not represented in [[PersistenceBar]] and is discarded); 3 fields -> the first field is `dimension`; 2 fields
-    * -> `dimension` defaults to `0`. `inf`/`-inf` (any case) are infinite endpoints.
+    * always, and: 4 fields -> `dimension` is the second field (the first, the coefficient-field characteristic, is not
+    * represented in [[PersistenceBar]] and is discarded); 3 fields -> the first field is `dimension`; 2 fields ->
+    * `dimension` defaults to `0`. `inf`/`-inf` (any case) are infinite endpoints.
     */
   def readPersistenceDiagram(path: String): Seq[PersistenceBar[Double, Nothing]] =
     val src = Source.fromFile(path)

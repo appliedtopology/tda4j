@@ -9,12 +9,12 @@ import org.appliedtopology.tda4j.barcode.{given, *}
   * `include/dipha/file_types.h` and `README.md` (see `.claude/WORKLOG-io-module.md`), not reconstructed from a
   * secondhand description.
   *
-  * '''Axis order''': DIPHA's `IMAGE_DATA` format is explicitly "x-fastest" (`g(1)` varies fastest) -- the OPPOSITE
-  * of `CubicalImage.fromFlatArray`'s own convention (its LAST shape axis is fastest, matching ordinary row-major
-  * `Array[Array[...]].flatten`). `readImageData`/`writeImageData` reverse the shape to line the two conventions up
-  * (a flat array with axis-0 fastest is, by definition, already in row-major order for the REVERSED shape) --
-  * pinned with a hand-built asymmetric-shape fixture, not just reasoned through, since transposing an image
-  * preserves its homology and a barcode-only test cannot catch getting this backwards.
+  * '''Axis order''': DIPHA's `IMAGE_DATA` format is explicitly "x-fastest" (`g(1)` varies fastest) -- the OPPOSITE of
+  * `CubicalImage.fromFlatArray`'s own convention (its LAST shape axis is fastest, matching ordinary row-major
+  * `Array[Array[...]].flatten`). `readImageData`/`writeImageData` reverse the shape to line the two conventions up (a
+  * flat array with axis-0 fastest is, by definition, already in row-major order for the REVERSED shape) -- pinned with
+  * a hand-built asymmetric-shape fixture, not just reasoned through, since transposing an image preserves its homology
+  * and a barcode-only test cannot catch getting this backwards.
   */
 object Dipha:
   private val Magic: Long = 8067171840L
@@ -28,9 +28,9 @@ object Dipha:
     val fileType = buf.getLong()
     require(fileType == expected, s"expected DIPHA file type $expected, got $fileType")
 
-  /** `DISTANCE_MATRIX` (file type 7): magic, type, `n` (Int64), then `n*n` `Float64` values in plain row-major
-    * order (`d(1,1)...d(1,n) d(2,1)...d(n,n)` per the README) -- the FULL matrix, diagonal included, not a
-    * triangular packing.
+  /** `DISTANCE_MATRIX` (file type 7): magic, type, `n` (Int64), then `n*n` `Float64` values in plain row-major order
+    * (`d(1,1)...d(1,n) d(2,1)...d(n,n)` per the README) -- the FULL matrix, diagonal included, not a triangular
+    * packing.
     */
   def readDistanceMatrix(path: String): Array[Array[Double]] =
     val buf = BinaryIO.readAllLE(path)
@@ -58,10 +58,10 @@ object Dipha:
     do buf.putDouble(matrix(i)(j))
     BinaryIO.writeLE(path, buf)
 
-  /** `IMAGE_DATA` (file type 1): magic, type, `n` (Int64, total value count), `d` (Int64, dimension), `d` Int64
-    * grid sizes `g(1)...g(d)` (`g(1)` fastest-varying), then `n` `Float64` values in "x-fastest" order. Returned as
-    * `(shape, flatValues)` in `CubicalImage.fromFlatArray`'s own last-axis-fastest convention -- i.e. `shape` here
-    * is `g.reverse`, not `g` -- ready to pass straight to `fromFlatArray`/`readCubicalGridStream`.
+  /** `IMAGE_DATA` (file type 1): magic, type, `n` (Int64, total value count), `d` (Int64, dimension), `d` Int64 grid
+    * sizes `g(1)...g(d)` (`g(1)` fastest-varying), then `n` `Float64` values in "x-fastest" order. Returned as
+    * `(shape, flatValues)` in `CubicalImage.fromFlatArray`'s own last-axis-fastest convention -- i.e. `shape` here is
+    * `g.reverse`, not `g` -- ready to pass straight to `fromFlatArray`/`readCubicalGridStream`.
     */
   def readImageData(path: String): (IndexedSeq[Int], IndexedSeq[Double]) =
     val buf = BinaryIO.readAllLE(path)
@@ -85,8 +85,8 @@ object Dipha:
     val (shape, flatValues) = readImageData(path)
     CubicalImage.fromFlatArray(shape, flatValues, sublevel)
 
-  /** `shape`/`flatValues` in `CubicalImage.fromFlatArray`'s own last-axis-fastest convention -- reversed internally
-    * to DIPHA's own `g(1)`-fastest convention before writing (the inverse of `readImageData`'s own reversal).
+  /** `shape`/`flatValues` in `CubicalImage.fromFlatArray`'s own last-axis-fastest convention -- reversed internally to
+    * DIPHA's own `g(1)`-fastest convention before writing (the inverse of `readImageData`'s own reversal).
     */
   def writeImageData(path: String, shape: IndexedSeq[Int], flatValues: IndexedSeq[Double]): Unit =
     require(flatValues.size == shape.product, "flatValues size must equal the product of shape")
@@ -103,12 +103,11 @@ object Dipha:
     BinaryIO.writeLE(path, buf)
 
   /** `PERSISTENCE_DIAGRAM` (file type 2): magic, type, `p` (Int64), then `p` `(dim, birth, death)` triples as
-    * `Int64`/`Float64`/`Float64`. A negative `dim` value `-k` encodes an ESSENTIAL class of real dimension `k - 1`
-    * (the README's own convention -- the `-1` offset exists specifically so a dimension-0 essential class, the
-    * single most common case, doesn't collide with an ordinary finite `dim == 0`); confirmed with a dedicated
-    * dimension-0-essential fixture, not just read from the README (see `.claude/WORKLOG-io-module.md`). The
-    * `death` field of an essential triple is unspecified by the format and is written here as `0.0`, ignored on
-    * read.
+    * `Int64`/`Float64`/`Float64`. A negative `dim` value `-k` encodes an ESSENTIAL class of real dimension `k - 1` (the
+    * README's own convention -- the `-1` offset exists specifically so a dimension-0 essential class, the single most
+    * common case, doesn't collide with an ordinary finite `dim == 0`); confirmed with a dedicated dimension-0-essential
+    * fixture, not just read from the README (see `.claude/WORKLOG-io-module.md`). The `death` field of an essential
+    * triple is unspecified by the format and is written here as `0.0`, ignored on read.
     */
   def readPersistenceDiagram(path: String): Seq[PersistenceBar[Double, Nothing]] =
     val buf = BinaryIO.readAllLE(path)

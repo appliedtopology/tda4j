@@ -41,11 +41,11 @@ package's subdirectory.
 - `unicode` — `PrintingHelper`. Already its own package before this split, same as `barcode`; currently unused
   (only a dead commented-out import references it).
 - `matlab` — unchanged, already its own package.
-- `io` — `Csv`, `Ripser`, `Dipha`, `Gudhi`, `Perseus` (file-format adaptors — point clouds, distance matrices,
+- `io` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus` (file-format adaptors — point clouds, distance matrices,
   cubical images, persistence diagrams — see "File I/O" below). A leaf package: imports `streams`/`barcode`,
   nothing imports it back.
-- `cli` — `Tda4jConf` (Scallop option definitions), `Tda4jCli` (the `tda4j` executable's `main`, plus a testable
-  `run` — see "CLI executable" below). A thin translator over `matlab.Tda4j`/`io`, not a new implementation.
+- `cli` — `TDA4jConf` (Scallop option definitions), `TDA4jCLI` (the `tda4j` executable's `main`, plus a testable
+  `run` — see "CLI executable" below). A thin translator over `matlab.TDA4j`/`io`, not a new implementation.
 - root (`org.appliedtopology.tda4j` itself) — just `package.scala` (`TDAContext`), the thin user-facing facade,
   plus `APISpec.scala`/`SimplicialSetSpec.scala` (dead) on the test side, which stay flat as cross-cutting
   integration tests rather than belonging to any one subpackage.
@@ -98,6 +98,25 @@ style or older Scala 3 idioms:
 - `opaque type Simplex[VertexT] = SortedSet[VertexT]` — `Simplex` has no runtime wrapper; its API is entirely
   extension methods (see `SimplexOps.scala` for the delegated `SortedSet`-like surface, `Simplex.scala` for the
   `OrderedCell` instance).
+
+## Naming convention: `tda4j`/`TDA4j`, never `Tda4j`
+
+The project name is the acronym TDA ("topological data analysis") plus the conventional `4j` suffix (`log4j`,
+`slf4j`) — not an ordinary English word, so it must never be PascalCase-titlecased the way a class-naming tool or
+autocomplete instinctively wants to (`Tda4j`). Use **`tda4j`** (all lowercase) for the package name
+(`org.appliedtopology.tda4j`), the executable/artifact name, the repo name, and ordinary prose; use **`TDA4j`**
+(acronym preserved, capital `4j`-suffix convention) for anything that's a Scala identifier and therefore has to
+start with a capital letter — class/object/trait names (`TDA4j`, `TDA4jConf`, `TDA4jCLI`, `TDA4jSpec`) and section
+headings. `Tda4j` is never correct in either role. This was a real, repeated drift in this codebase — the MATLAB
+facade (`matlab.Tda4j`) and CLI (`cli.Tda4jConf`/`Tda4jCli`) were both introduced as `Tda4j`-cased and renamed to
+`TDA4j`-cased in a later pass — watch for the same instinct recurring on any new class introduced from scratch.
+
+**The same rule applies to any other identifier that's itself an acronym, not just the project name**: `io`'s
+`CSV` (was `Csv`) and `cli`'s `TDA4jCLI` (was `TDA4jCli`) are both real acronyms (comma-separated values,
+command-line interface) and were renamed the same way, in the same pass. `io`'s `Gudhi`/`Dipha`/`Ripser`/
+`Perseus` are deliberately titlecased as ordinary proper nouns instead (each is the name of an external project
+this codebase interoperates with, following that project's own conventional spelling) and are correctly outside
+this rule.
 
 ## Architecture
 
@@ -685,7 +704,7 @@ imply the others need it:
    `ripser.cpp`** (`WORKLOG-ripser-comparison.md`): `coboundaryOf(sigma)` is empty by construction at
    `sigma.dim == maxDimension` (`Homology.scala`), so every simplex at the requested top dimension comes out
    essential regardless of whether it actually is — the same "H_k needs (k+1)-chains" truncation artifact
-   already fixed for the MATLAB facade (`Tda4j.computeFromPoints`/`computeFromDistanceMatrix`: "build to
+   already fixed for the MATLAB facade (`TDA4j.computeFromPoints`/`computeFromDistanceMatrix`: "build to
    `maxDimension + 1` internally, report only `dim <= maxDimension`"), just never applied to a *direct* caller
    of this class before. `RipserCohomologySpec`'s own cross-validation never caught this because its oracle
    (`LimitedCofaceSimplexStream(stream, maxDim)`) truncates simplices at the same `maxDim` too — both sides
@@ -1657,11 +1676,11 @@ smaller complexes than Vietoris–Rips when data sits near a low-dimensional sub
 
 ## File I/O
 
-`io` (`Csv.scala`, `Ripser.scala`, `Dipha.scala`, `Gudhi.scala`, `Perseus.scala`) loads and saves the file formats
+`io` (`CSV.scala`, `Ripser.scala`, `Dipha.scala`, `Gudhi.scala`, `Perseus.scala`) loads and saves the file formats
 the wider TDA ecosystem actually uses — point clouds, distance matrices, cubical images, and persistence diagrams —
 so callers don't have to hand-roll parsing the way `RipserPaperBenchmarkSpec` used to (its own
-`loadPointCloud`/`loadDistanceMatrix` are now one-line delegations to `Csv.readPointCloud`/
-`Csv.readFullDistanceMatrix`). See `.claude/WORKLOG-io-module.md` for the full derivation.
+`loadPointCloud`/`loadDistanceMatrix` are now one-line delegations to `CSV.readPointCloud`/
+`CSV.readFullDistanceMatrix`). See `.claude/WORKLOG-io-module.md` for the full derivation.
 
 **Every format shipped here was verified against a primary source** — the originating project's own source code or
 its own documentation, fetched fresh, not recalled from memory — before being implemented: **Ripser**
@@ -1676,7 +1695,7 @@ implemented — a wrong parser that silently produces a plausible-looking wrong 
 and sparse triplet formats specifically need a real design decision this codebase hasn't made yet (what type
 represents "only these pairs are known," as opposed to `SparseMetricSpace`'s existing "known distance matrix,
 cutoff applied" wrapper). Dionysus and JavaPlex need no dedicated adaptor: both consume the same plain
-whitespace/comma-separated point-cloud and distance-matrix text `Csv`/`Ripser` already read.
+whitespace/comma-separated point-cloud and distance-matrix text `CSV`/`Ripser` already read.
 
 **Two details that would have silently produced a wrong-but-plausible answer, both caught before writing the
 reader, not after**: Ripser's binary distance-matrix format is packed 32-bit `float` (`typedef float value_t` in
@@ -1693,7 +1712,7 @@ oracle (the same grid built via Perseus text and via `Dipha.writeImageData` must
 **Persistence-diagram round-tripping needed one more piece of care**: `PersistenceBar.apply(dim, lower, upper)`
 (this codebase's own existing half-open-interval convention) produces `ClosedEndpoint(lower)`/`OpenEndpoint(upper)`,
 but a file format's two raw birth/death numbers carry no open/closed distinction at all. Every reader here
-(`Endpoints.toBar`, shared by `Csv`/`Gudhi`'s text formats; `Dipha`'s own binary reader inline) reconstructs finite
+(`Endpoints.toBar`, shared by `CSV`/`Gudhi`'s text formats; `Dipha`'s own binary reader inline) reconstructs finite
 bars via that SAME companion factory rather than hand-building `ClosedEndpoint` on both ends — otherwise a bar built
 the ordinary way fails to round-trip (`OpenEndpoint(4.0) != ClosedEndpoint(4.0)` under case-class equality) even
 though nothing is actually wrong.
@@ -1707,14 +1726,14 @@ though nothing is actually wrong.
 crash"): `PerseusSpec`'s missing-pixel test maps a Perseus `-1` (missing cube) to `Double.PositiveInfinity` in a 3x3
 grid with the center pixel absent, runs it through actual `CellularHomologyContext`/`persistentHomology`, and
 asserts a genuine essential dimension-1 bar — the topologically correct signature of an 8-pixel ring (homotopy
-equivalent to $S^1$), not merely that nothing threw. A real off-by-one bug in `Csv.readLowerTriangularDistanceMatrix`
+equivalent to $S^1$), not merely that nothing threw. A real off-by-one bug in `CSV.readLowerTriangularDistanceMatrix`
 (`n = rows.size` instead of `rows.size + 1`, since row 0 is never written) was caught by the first
 non-round-trip test written against it — a round trip through the same bug would have silently "passed" by
 symmetrically shrinking the matrix on both sides.
 
 ## CLI executable
 
-`cli` (`Tda4jConf.scala`, `Tda4jCli.scala`) is the `tda4j` command-line executable, built via `sbt assembly` into
+`cli` (`TDA4jConf.scala`, `TDA4jCLI.scala`) is the `tda4j` command-line executable, built via `sbt assembly` into
 a runnable fat jar (`java -jar target/scala-3.9.0/TDA4j-<version>-assembly.jar [options] <input-file>` --
 `build.sbt`'s `assembly / mainClass`/`Compile / mainClass` settings). See `.claude/WORKLOG-cli-executable.md` for
 the full derivation.
@@ -1722,18 +1741,18 @@ the full derivation.
 **Argument parsing: Scallop, not Decline** — checked both against their actual current releases (not memory):
 Decline `v2.2.0` depends on `cats-core`, a genuinely new dependency family for a codebase with no typelevel
 surface anywhere else; Scallop `v6.0.0` has zero external runtime dependencies and its mutable `ScallopConf`
-builder style matches the imperative `Tda4j`/`PersistenceResult` facade this CLI sits directly on top of.
+builder style matches the imperative `TDA4j`/`PersistenceResult` facade this CLI sits directly on top of.
 
 **Design: mirrors the MATLAB facade, doesn't reimplement it.** Every `--complex`/`--engine`/`--alpha-backend`/
 `--max-dimension`/`--max-filtration-value`/`--field`/`--prime`/`--epsilon` flag is a 1:1 mirror of an option key
-`org.appliedtopology.tda4j.matlab.Tda4j` already recognizes and validates — `Tda4jCli` does no validation of its
+`org.appliedtopology.tda4j.matlab.TDA4j` already recognizes and validates — `TDA4jCLI` does no validation of its
 own for any of these. Every such flag is defined WITHOUT a Scallop-level default; the options array the CLI
-builds omits a key entirely when the user didn't pass it, letting `Tda4j`'s own defaults apply — so there is
+builds omits a key entirely when the user didn't pass it, letting `TDA4j`'s own defaults apply — so there is
 exactly one place in the codebase that knows what "unset" means for any given option, not two independently
 maintained copies that could drift apart. `--input-format` loads via the `io` module (see "File I/O" above); one
 format name maps 1:1 onto one `io.*` method and onto exactly one of point-cloud-vs-distance-matrix, so there's no
 separate "kind" flag that could disagree with the format choice. `--output-format` writes via the same module's
-`Csv`/`Gudhi`/`Dipha`/`Perseus` writers.
+`CSV`/`Gudhi`/`Dipha`/`Perseus` writers.
 
 **A real design bug caught before shipping (by `advisor()`, before implementation), not after**: wiring
 `--output-format=perseus` straight through to `Perseus.writePersistenceIntervals` would have rounded real-valued
@@ -1743,16 +1762,16 @@ every bar to `0 0` — output that parses as a valid Perseus file but carries no
 by refusing the combination outright (`requireIntegralForPerseus`) with a message naming the actual mismatch
 (step indices vs. raw filtration values) rather than shipping it as an equal-looking output choice.
 
-**Testability**: `Tda4jCli.run(args, out): Int` contains the entire CLI and returns an exit code rather than
-calling `sys.exit` — `main` is a two-line wrapper. This is what lets `CliSpec` exercise real end-to-end runs
+**Testability**: `TDA4jCLI.run(args, out): Int` contains the entire CLI and returns an exit code rather than
+calling `sys.exit` — `main` is a two-line wrapper. This is what lets `CLISpec` exercise real end-to-end runs
 in-process. **Known, checked-not-assumed limitation** (traced directly in Scallop's own source, not the docs):
-this only covers errors `Tda4j` itself raises, i.e. ones that occur AFTER Scallop successfully parses the command
+this only covers errors `TDA4j` itself raises, i.e. ones that occur AFTER Scallop successfully parses the command
 line. A genuine parse-level error (a malformed flag value, a missing required argument, or `--help`/`--version`
-themselves) is handled entirely inside `new Tda4jConf(args)`'s own `verify()` — Scallop's default `onError` prints
+themselves) is handled entirely inside `new TDA4jConf(args)`'s own `verify()` — Scallop's default `onError` prints
 directly and calls `System.exit` unconditionally before `run` ever regains control. Scallop does offer an escape
 hatch (`org.rogach.scallop.throwError`, a `DynamicVariable[Boolean]`), deliberately not used here: its effect is
 all-or-nothing, so using it would also turn `--help`/`--version` into raw thrown exceptions instead of Scallop's
-own formatted output, needing to be reimplemented by hand for a code path `CliSpec` simply avoids exercising by
+own formatted output, needing to be reimplemented by hand for a code path `CLISpec` simply avoids exercising by
 construction instead.
 
 **Manual verification, not just `sbt compile`** (per advisor's explicit instruction to actually run the built
@@ -1761,18 +1780,18 @@ jar): `sbt assembly` succeeds with sbt-assembly's own default merge strategies (
 standalone. A hand-built unit-square fixture through `--max-dimension 1` produces a topologically correct
 barcode (three finite $H_0$ bars, one essential; two zero-persistence $H_1$ bars from the diagonals/triangles;
 one genuine finite $H_1$ bar `[1.0, sqrt(2))`, the square's own hole) — confirmed by hand, not just "didn't
-crash." `--representatives`, `--complex bogus` (surfaces `Tda4j`'s own error message unmodified), and
+crash." `--representatives`, `--complex bogus` (surfaces `TDA4j`'s own error message unmodified), and
 `csv`/`gudhi`/`dipha` output were all exercised live too.
 
 ## MATLAB API
 
-`org.appliedtopology.tda4j.matlab` (`Tda4j.scala`, `PersistenceResult.scala`) is a Java-facing facade for calling
+`org.appliedtopology.tda4j.matlab` (`TDA4j.scala`, `PersistenceResult.scala`) is a Java-facing facade for calling
 this library from MATLAB via MATLAB's built-in Java interface (`javaaddpath` + the `sbt assembly` fat jar). Every
 public method takes/returns only `double`, `int`, `String`, `double[][]`, or `String[]` — no `java.util.Map`, no
 generics, nothing Scala-specific — on explicit instruction from the project lead, who rejected an initial
 `Map<String,Object>`-based design as unusable from MATLAB. Options are a flat alternating key/value `String[]`
 (`{"engine","naive","maxDimension","3"}`) rather than fixed parameters, specifically so new options never change a
-method's call signature. `Tda4j.computeFromPoints`/`computeFromDistanceMatrix` dispatch across `complex`
+method's call signature. `TDA4j.computeFromPoints`/`computeFromDistanceMatrix` dispatch across `complex`
 (`vr`/`alpha`), `engine` (`ripser`/`naive`/`chunks`, with `alpha` refusing `ripser` and `chunks` — the latter
 because `complex=alpha` + `engine=chunks` is the exact combination `HomologySpec`'s `BarcodeRegressionSpec` stays
 `skipAll`'d for), and coefficient field (`Z` — a prime finite field, default `prime=2`, matching the TDA research
@@ -1790,7 +1809,7 @@ First: the `engine=naive` VR path originally built `EnumeratingCofaceSimplexStre
 dimension cap of its own (only a filtration-value one — CLAUDE.md's `.iterator` notes above cover why its
 `iterateDimension` is merely bounded by `d < metricSpace.size`) — so despite `maxDimension` defaulting to 2 and
 being threaded correctly to `engine=ripser`/`chunks`, the naive path silently computed through higher dimensions
-than requested. Caught by `Tda4jSpec` checking that `engine=ripser` and `engine=naive` agree through the facade on
+than requested. Caught by `TDA4jSpec` checking that `engine=ripser` and `engine=naive` agree through the facade on
 a fixed point cloud (they didn't). Fixing this alone — wrapping the stream in
 `LimitedCofaceSimplexStream(rawStream, maxDimension)`, the same wrapping `RipserCohomologySpec`'s own `naiveBars`
 helper already uses — made the two engines *agree*, but not *correct*: **computing H_k correctly requires
@@ -1804,7 +1823,7 @@ three VR engines) and dropping bars at the requested-and-beyond dimension from w
 meaning shifted from "highest simplex dimension to build" to "highest homological degree to report."
 `complex=alpha` needed no equivalent change — an alpha complex's chain complex terminates on its own (see the
 degeneracy-hazard note above), so it's never artificially cut short by this option to begin with, and its own top
-dimension is genuine information rather than scaffolding. `Tda4jSpec` pins the fix as a discriminating regression
+dimension is genuine information rather than scaffolding. `TDA4jSpec` pins the fix as a discriminating regression
 (the old, un-corrected construction is asserted to actually disagree with the corrected one on the same cloud, not
 just re-checked for self-consistency). See `WORKLOG-matlab-api.md` for the full account, including the MATLAB-side
 spikes attempted (fat-jar build succeeded; confirming MATLAB's own bundled JVM version and its actual
@@ -1823,7 +1842,7 @@ needs, since every cell in one bar's cocycle is a simplex of that same dimension
 passes `(dim, cell) => ctx.si.decodeToArray(cell.index, dim + 1)`, `engine="naive"`'s (both `complex=vr` and
 `complex=alpha`) passes `(_, cell) => cell.underlying.toArray` unchanged. `PackedRipserCohomologyContext.si` (was
 `private`) is now a public `val` specifically so this call site can reuse it rather than constructing a second,
-cold `SimplexIndexing` that would rebuild `binomialEntry`'s lazily-grown cache from scratch. `Tda4jSpec`'s existing
+cold `SimplexIndexing` that would rebuild `binomialEntry`'s lazily-grown cache from scratch. `TDA4jSpec`'s existing
 "match `RipserCohomologyContext[Fp(2)]` driven directly" test needed no changes and still passes — it's now
 additional cross-validation evidence (facade-via-packed agrees with direct-SortedSet) rather than a check that
 would need updating, since both engines are already cross-validated to produce identical bars.

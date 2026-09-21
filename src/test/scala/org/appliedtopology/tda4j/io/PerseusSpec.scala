@@ -88,7 +88,7 @@ class PerseusSpec extends mutable.Specification:
     }
   }
 
-  "persistence interval output" should {
+  "persistence interval output" should
     "round-trip finite and essential bars through writePersistenceIntervals/readPersistenceIntervals" >> {
       val dir = Files.createTempDirectory("perseus-spec-intervals")
       val prefix = dir.resolve("out").toString
@@ -103,4 +103,3 @@ class PerseusSpec extends mutable.Specification:
       (dim0.toSet must beEqualTo(bars.filter(_.dim == 0).toSet)) and
         (dim1.toSet must beEqualTo(bars.filter(_.dim == 1).toSet))
     }
-  }

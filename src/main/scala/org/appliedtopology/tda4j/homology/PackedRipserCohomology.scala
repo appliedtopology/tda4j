@@ -11,7 +11,7 @@ import scala.collection.mutable
 import scala.compiletime.asMatchable
 
 /** '''The production Ripser persistent-cohomology engine''' -- as of `.claude/WORKLOG-ripser-profiling.md`'s
-  * cursor-redesign session, this is what `Tda4j.scala`'s public `engine="ripser"` MATLAB-facing option actually calls,
+  * cursor-redesign session, this is what `TDA4j.scala`'s public `engine="ripser"` MATLAB-facing option actually calls,
   * not `RipserCohomologyContext`. `RipserCohomologyContext` (`Homology.scala`) stays in the codebase deliberately, but
   * ONLY as this class's cross-validation test oracle -- see that class's own doc for why its remaining value is
   * narrower than "a second production option" (it catches representation-specific bugs in `DiameterIndex`'s index-only
@@ -73,7 +73,7 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
   private val resolvedMaxFiltrationValue: Double =
     maxFiltrationValue.getOrElse(metricSpace.minimumEnclosingRadius)
 
-  /** Not `private`, as of `Tda4j.scala` routing `engine="ripser"` through this class instead of
+  /** Not `private`, as of `TDA4j.scala` routing `engine="ripser"` through this class instead of
     * `RipserCohomologyContext`: a caller decoding a bar's `DiameterIndex` cells back to vertex arrays (e.g.
     * `PersistenceResult.cycleVertices`) needs this same `SimplexIndexing` instance -- constructing a fresh one from
     * `metricSpace.size` would work too (the class is a pure function of vertex count), but would rebuild

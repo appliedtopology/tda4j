@@ -139,13 +139,13 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
         import IntMod2.given
 
         // Routed through the `io` module (added in a later session -- see `.claude/WORKLOG-io-module.md`) instead
-        // of this spec's own ad hoc parsing, which is exactly what motivated building `io.Csv` in the first
-        // place: `Csv.readPointCloud`/`Csv.readFullDistanceMatrix` implement the identical
+        // of this spec's own ad hoc parsing, which is exactly what motivated building `io.CSV` in the first
+        // place: `CSV.readPointCloud`/`CSV.readFullDistanceMatrix` implement the identical
         // trim-filter-split-on-`[\s,]+` logic this spec used to hand-roll.
-        def loadPointCloud(path: String): Array[Array[Double]] = Csv.readPointCloud(path)
+        def loadPointCloud(path: String): Array[Array[Double]] = CSV.readPointCloud(path)
 
         def loadDistanceMatrix(path: String): IndexedSeq[IndexedSeq[Double]] =
-          Csv.readFullDistanceMatrix(path).map(_.toIndexedSeq).toIndexedSeq
+          CSV.readFullDistanceMatrix(path).map(_.toIndexedSeq).toIndexedSeq
 
         // No cooperative cancellation exists in this engine -- see EngineComparisonBenchmarkSpec's own doc for
         // why a timeout only stops waiting, not the underlying computation. Daemon threads keep that from

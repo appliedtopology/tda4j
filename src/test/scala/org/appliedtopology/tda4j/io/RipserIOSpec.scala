@@ -9,8 +9,8 @@ import java.nio.{ByteBuffer, ByteOrder}
 import java.nio.file.{Files, Paths}
 
 /** Discriminating tests for `Ripser.scala`, per the ordering derivation in `.claude/WORKLOG-io-module.md`: every
-  * fixture here uses all-distinct values specifically so a row/column or lower/upper mixup would change the result,
-  * not just reorder equal entries.
+  * fixture here uses all-distinct values specifically so a row/column or lower/upper mixup would change the result, not
+  * just reorder equal entries.
   */
 class RipserIOSpec extends mutable.Specification:
 
@@ -19,14 +19,13 @@ class RipserIOSpec extends mutable.Specification:
     f.deleteOnExit()
     f.getAbsolutePath
 
-  "point clouds" should {
+  "point clouds" should
     "round-trip through readPointCloud/writePointCloud" >> {
       val points = Seq(Seq(1.0, 2.0), Seq(3.0, 4.0), Seq(5.0, 6.0))
       val path = tempFile(".txt")
       Ripser.writePointCloud(path, points)
       Ripser.readPointCloud(path).map(_.toSeq).toSeq must beEqualTo(points)
     }
-  }
 
   "lower-distance text format" should {
     "read row i (1 until n) as d(i,0),...,d(i,i-1), flat across line breaks" >> {
@@ -72,7 +71,7 @@ class RipserIOSpec extends mutable.Specification:
     }
   }
 
-  "dense distance-matrix text format (only the lower triangle is read)" should {
+  "dense distance-matrix text format (only the lower triangle is read)" should
     "read line i's first i values, ignoring anything at or past the diagonal" >> {
       val path = tempFile(".txt")
       // Line 0: nothing needed (0 values read). Line 1: "1 99" -- only "1" (the first 1 value) is read, "99"
@@ -81,7 +80,6 @@ class RipserIOSpec extends mutable.Specification:
       val m = Ripser.readDistanceMatrix(path)
       (m(1)(0) must beEqualTo(1.0)) and (m(2)(0) must beEqualTo(2.0)) and (m(2)(1) must beEqualTo(3.0))
     }
-  }
 
   "binary (packed) lower-distance format" should {
     // Byte-level fixture: hand-built little-endian float32 bytes, not round-trip -- a round trip would pass
@@ -115,11 +113,10 @@ class RipserIOSpec extends mutable.Specification:
     }
   }
 
-  "malformed triangular counts" should {
+  "malformed triangular counts" should
     "fail loudly instead of silently flooring to a smaller n" >> {
       val path = tempFile(".txt")
       // 4 values is not n*(n-1)/2 for any integer n (n=3 -> 3 values, n=4 -> 6 values).
       Files.write(Paths.get(path), "1,2,3,4".getBytes)
       Ripser.readLowerDistanceMatrix(path) must throwA[IllegalArgumentException]
     }
-  }

@@ -83,8 +83,8 @@ lazy val root = (project in file("."))
     // Both settings are needed, not just one: `Compile / mainClass` is what `sbt run` uses; `assembly /
     // mainClass` is what sbt-assembly writes into the fat jar's manifest (`java -jar ... `). Neither is inferred
     // from the other.
-    Compile / mainClass := Some("org.appliedtopology.tda4j.cli.Tda4jCli"),
-    assembly / mainClass := Some("org.appliedtopology.tda4j.cli.Tda4jCli")
+    Compile / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI"),
+    assembly / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI")
   )
 
 // Workaround for XML versioning issues

@@ -18,25 +18,24 @@ class CsvSpec extends mutable.Specification:
     "round-trip through readPointCloud/writePointCloud" >> {
       val points = Seq(Seq(1.0, 2.0, 3.0), Seq(4.0, 5.0, 6.0))
       val path = tempFile(".csv")
-      Csv.writePointCloud(path, points)
-      Csv.readPointCloud(path).map(_.toSeq).toSeq must beEqualTo(points)
+      CSV.writePointCloud(path, points)
+      CSV.readPointCloud(path).map(_.toSeq).toSeq must beEqualTo(points)
     }
 
     "build a usable EuclideanMetricSpace" >> {
       val path = tempFile(".csv")
-      Csv.writePointCloud(path, Seq(Seq(0.0, 0.0), Seq(3.0, 4.0)))
-      Csv.readEuclideanMetricSpace(path).distance(0, 1) must beEqualTo(5.0)
+      CSV.writePointCloud(path, Seq(Seq(0.0, 0.0), Seq(3.0, 4.0)))
+      CSV.readEuclideanMetricSpace(path).distance(0, 1) must beEqualTo(5.0)
     }
   }
 
-  "full distance matrices" should {
+  "full distance matrices" should
     "round-trip through readFullDistanceMatrix/writeFullDistanceMatrix" >> {
       val m = Seq(Seq(0.0, 1.0, 2.0), Seq(1.0, 0.0, 3.0), Seq(2.0, 3.0, 0.0))
       val path = tempFile(".csv")
-      Csv.writeFullDistanceMatrix(path, m)
-      Csv.readFullDistanceMatrix(path).map(_.toSeq).toSeq must beEqualTo(m)
+      CSV.writeFullDistanceMatrix(path, m)
+      CSV.readFullDistanceMatrix(path).map(_.toSeq).toSeq must beEqualTo(m)
     }
-  }
 
   "lower-triangular distance matrices" should {
     // All-distinct entries: a symmetric-looking matrix could hide a row/column swap, this can't.
@@ -46,7 +45,7 @@ class CsvSpec extends mutable.Specification:
       out.println("1")
       out.println("2,3")
       out.close()
-      val m = Csv.readLowerTriangularDistanceMatrix(path)
+      val m = CSV.readLowerTriangularDistanceMatrix(path)
       (m(1)(0) must beEqualTo(1.0)) and
         (m(2)(0) must beEqualTo(2.0)) and
         (m(2)(1) must beEqualTo(3.0)) and
@@ -61,8 +60,8 @@ class CsvSpec extends mutable.Specification:
         IndexedSeq(2.0, 3.0, 0.0)
       )
       val path = tempFile(".csv")
-      Csv.writeLowerTriangularDistanceMatrix(path, m)
-      Csv.readLowerTriangularDistanceMatrix(path).map(_.toSeq).toSeq must beEqualTo(m.map(_.toSeq))
+      CSV.writeLowerTriangularDistanceMatrix(path, m)
+      CSV.readLowerTriangularDistanceMatrix(path).map(_.toSeq).toSeq must beEqualTo(m.map(_.toSeq))
     }
 
     "agree with Ripser's own lower-distance flat convention on the same matrix" >> {
@@ -73,14 +72,14 @@ class CsvSpec extends mutable.Specification:
       )
       val csvPath = tempFile(".csv")
       val ripserPath = tempFile(".ripser")
-      Csv.writeLowerTriangularDistanceMatrix(csvPath, m)
+      CSV.writeLowerTriangularDistanceMatrix(csvPath, m)
       Ripser.writeLowerDistanceMatrix(ripserPath, m)
-      Csv.readLowerTriangularDistanceMatrix(csvPath).map(_.toSeq).toSeq must
+      CSV.readLowerTriangularDistanceMatrix(csvPath).map(_.toSeq).toSeq must
         beEqualTo(Ripser.readLowerDistanceMatrix(ripserPath).map(_.toSeq).toSeq)
     }
   }
 
-  "persistence diagrams" should {
+  "persistence diagrams" should
     "round-trip finite, essential, and negative-infinity-lower bars" >> {
       val path = tempFile(".csv")
       val bars = Seq(
@@ -88,8 +87,7 @@ class CsvSpec extends mutable.Specification:
         PersistenceBar[Double](1, 0.5),
         new PersistenceBar[Double, Nothing](0, NegativeInfinity(), ClosedEndpoint(3.0))
       )
-      Csv.writePersistenceDiagram(path, bars)
-      val readBack = Csv.readPersistenceDiagram(path)
+      CSV.writePersistenceDiagram(path, bars)
+      val readBack = CSV.readPersistenceDiagram(path)
       readBack must beEqualTo(bars)
     }
-  }

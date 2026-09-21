@@ -20,10 +20,11 @@ import scala.collection.mutable
   * Options are passed as a flat, alternating key/value `String[]` (`{"engine","ripser","maxDimension","3"}`) rather
   * than fixed parameters, so that adding a new option never changes any method's call signature. Recognized keys:
   *
-  *   - `"complex"`: `"vr"` (default) or `"alpha"`.
+  *   - `"complex"`: `"vr"` (default), `"alpha"`, or `"cech"`.
   *   - `"engine"`: `"ripser"` (default for `complex=vr`; backed by `PackedRipserCohomologyContext`, the fastest and
-  *     most memory-efficient engine -- see CLAUDE.md), `"naive"` (reference-grade, slower, the only engine usable with
-  *     `complex=alpha`), or `"chunks"` (`complex=vr` only -- see below for why `complex=alpha` refuses it).
+  *     most memory-efficient engine -- see CLAUDE.md), `"naive"` (reference-grade, slower; the only engine usable with
+  *     `complex=alpha`, and the default for `complex=cech`), or `"chunks"` (`complex=vr`/`complex=cech` only -- see
+  *     below for why `complex=alpha` refuses it, and why `complex=cech` refuses `engine=ripser` specifically).
   *   - `"alphaBackend"`: `"helix"` (default) or `"DQP"`, only consulted when `complex=alpha`.
   *   - `"maxDimension"`: integer, default `2` -- the highest HOMOLOGICAL degree you want back (i.e. "give me
   *     H_0..H_k"), not the highest simplex dimension to build. Computing H_k correctly needs (k+1)-dimensional chains
@@ -41,7 +42,9 @@ import scala.collection.mutable
   *     information, not scaffolding.
   *   - `"maxFiltrationValue"`: double, default is the point cloud's own `minimumEnclosingRadius` (Ripser's own default
   *     truncation, not unbounded -- see CLAUDE.md's "enclosing-radius default" note). Pass a very large number for the
-  *     old always-unbounded behavior. Only consulted for `complex=vr`.
+  *     old always-unbounded behavior. Consulted for `complex=vr` (a diameter) and `complex=cech` (a RADIUS -- Cech's
+  *     own filtration units, not doubled the way a VR diameter would be); not consulted for `complex=alpha`, which
+  *     always computes its complete, untruncated complex (see CLAUDE.md's "Alpha complex" section for why).
   *   - `"field"`: `"Z"` (default -- a prime finite field, `prime=2` unless overridden; the standard convention in the
   *     TDA research literature, e.g. Ripser/GUDHI) or `"R"` (floating point with an epsilon tolerance,
   *     `Field.DoubleApproximated` -- notably what this codebase's own existing cross-validation specs default to
@@ -54,7 +57,7 @@ import scala.collection.mutable
   * immediately rather than silently falling back to a default -- a typo in a MATLAB string literal should fail loudly,
   * not produce a quietly-wrong barcode.
   */
-object Tda4j:
+object TDA4j:
   def computeFromPoints(points: Array[Array[Double]]): PersistenceResult =
     computeFromPoints(points, Array.empty[String])
 
@@ -82,6 +85,56 @@ object Tda4j:
     val metricSpace = ExplicitMetricSpace(distances.toIndexedSeq.map(_.toIndexedSeq))
     dispatch(opts, metricSpace, None)
 
+  def computeFromCubicalImage(shape: Array[Int], flatValues: Array[Double]): PersistenceResult =
+    computeFromCubicalImage(shape, flatValues, Array.empty[String])
+
+  /** Cubical persistence of a dense n-dimensional grid (an image or voxel volume): a flat, row-major array of
+    * per-pixel/voxel values plus an explicit `shape` -- the same convention `CubicalImage.fromFlatArray` uses (last
+    * axis fastest-varying, so `shape=(rows,cols)`/a flattened `Array[Array[Double]]` matches an ordinary 2D image).
+    * `computeFromImage` below is a `double[][]`-typed 2D convenience wrapper over this, MATLAB's own natural matrix
+    * shape for the common image case.
+    *
+    * There is no `"complex"` option here -- a cubical grid is a different SHAPE of input entirely (no metric space, no
+    * point coordinates), not a different value for an existing option, so it gets its own entry point rather than a new
+    * `"complex"` value on `computeFromPoints`/`computeFromDistanceMatrix`. Recognized options:
+    *
+    *   - `"engine"`: `"naive"` (default) or `"chunks"` -- `"ripser"` is never offered here:
+    *     `PackedRipserCohomologyContext` is specialized to `Simplex[Int]` Vietoris-Rips complexes and has no notion of
+    *     a cubical complex at all.
+    *   - `"maxDimension"`: integer, default is the grid's own ambient dimension (i.e. "give me everything"). Unlike
+    *     `complex=vr`/`"cech"` above, a cubical grid's own top dimension is ALREADY naturally bounded by its ambient
+    *     dimension (an image's own dimensionality) and is never artificially cut short the way an unbounded VR/Cech
+    *     complex is -- so this option is purely an opt-in performance cap for a caller who only wants low-dimensional
+    *     homology, not a correctness necessity.
+    *   - `"sublevel"`: `"true"` (default) or `"false"` -- sublevel-set (ascending intensity) filtration, GUDHI/DIPHA/
+    *     Perseus's own convention, or superlevel-set (`"false"` -- the standard "sublevel of -f is superlevel of f"
+    *     trick, see `CubicalImage.scala`'s own doc). Reported birth/death values under `sublevel=false` are in
+    *     NEGATED-intensity units, not raw pixel values -- documented, expected behavior of this trick, not a bug.
+    *   - `"field"`/`"prime"`/`"epsilon"`: same as `computeFromPoints` above.
+    */
+  def computeFromCubicalImage(
+    shape: Array[Int],
+    flatValues: Array[Double],
+    options: Array[String]
+  ): PersistenceResult =
+    validateShape(shape, flatValues)
+    val opts = parseOptions(options)
+    val sublevel = opts.get("sublevel").forall(v => parseBooleanOption("sublevel", v))
+    val stream = CubicalImage.fromFlatArray(shape.toIndexedSeq, flatValues.toIndexedSeq, sublevel)
+    dispatchCubical(opts, stream)
+
+  def computeFromImage(pixels: Array[Array[Double]]): PersistenceResult =
+    computeFromImage(pixels, Array.empty[String])
+
+  /** 2D convenience over `computeFromCubicalImage`: `pixels(i)(j)` as a dense grid, shape `(pixels.length,
+    * pixels(0).length)` -- MATLAB's own natural matrix type, so the common 2D image case needs no explicit
+    * shape/flattening. See `computeFromCubicalImage` for recognized options; this delegates to it directly.
+    */
+  def computeFromImage(pixels: Array[Array[Double]], options: Array[String]): PersistenceResult =
+    validatePoints(pixels) // reuses the existing "non-empty, rectangular" check -- the same shape requirement
+    val cols = pixels(0).length
+    computeFromCubicalImage(Array(pixels.length, cols), pixels.flatten, options)
+
   // ---------------------------------------------------------------------------------------------------------------
   // option parsing
   // ---------------------------------------------------------------------------------------------------------------
@@ -94,7 +147,8 @@ object Tda4j:
     "maxfiltrationvalue",
     "field",
     "prime",
-    "epsilon"
+    "epsilon",
+    "sublevel"
   )
 
   private def parseOptions(options: Array[String]): Map[String, String] =
@@ -127,6 +181,21 @@ object Tda4j:
     if distances.exists(_.length != n) then
       throw new IllegalArgumentException(s"distances must be square ($n x $n), got a ragged/non-square array")
 
+  private def validateShape(shape: Array[Int], flatValues: Array[Double]): Unit =
+    if shape.isEmpty then throw new IllegalArgumentException("shape must have at least one axis")
+    if shape.exists(_ <= 0) then throw new IllegalArgumentException("shape must be strictly positive along every axis")
+    val expected = shape.map(_.toLong).product
+    if flatValues.length.toLong != expected then
+      throw new IllegalArgumentException(
+        s"flatValues has ${flatValues.length} entries, expected $expected for shape ${shape.mkString("[", ",", "]")}"
+      )
+
+  private def parseBooleanOption(name: String, raw: String): Boolean =
+    raw.toLowerCase match
+      case "true"  => true
+      case "false" => false
+      case other   => throw new IllegalArgumentException(s"option '$name' must be 'true' or 'false', got '$other'")
+
   // ---------------------------------------------------------------------------------------------------------------
   // dispatch: string options -> concrete engine/field choice
   // ---------------------------------------------------------------------------------------------------------------
@@ -139,10 +208,11 @@ object Tda4j:
     points: Option[Array[Array[Double]]]
   ): PersistenceResult =
     val complex = opts.getOrElse("complex", "vr").toLowerCase
-    if complex != "vr" && complex != "alpha" then
-      throw new IllegalArgumentException(s"unrecognized complex '$complex'; expected 'vr' or 'alpha'")
+    if complex != "vr" && complex != "alpha" && complex != "cech" then
+      throw new IllegalArgumentException(s"unrecognized complex '$complex'; expected 'vr', 'alpha', or 'cech'")
 
-    val engine = opts.getOrElse("engine", if complex == "alpha" then "naive" else "ripser").toLowerCase
+    val engine =
+      opts.getOrElse("engine", if complex == "alpha" || complex == "cech" then "naive" else "ripser").toLowerCase
     if complex == "alpha" && engine == "ripser" then
       throw new IllegalArgumentException(
         "engine=ripser cannot be used with complex=alpha: PackedRipserCohomologyContext computes persistent " +
@@ -153,6 +223,13 @@ object Tda4j:
         "engine=chunks is not offered for complex=alpha: this exact combination is a known stall/out-of-memory " +
           "risk in the underlying library (see CLAUDE.md and HomologySpec's BarcodeRegressionSpec, which stays " +
           "skipped for exactly this reason). Use engine=naive for alpha complexes."
+      )
+    if complex == "cech" && engine == "ripser" then
+      throw new IllegalArgumentException(
+        "engine=ripser cannot be used with complex=cech: PackedRipserCohomologyContext's apparent-pairs and " +
+          "insertionDiameter optimizations are proven specifically for the max-pairwise-distance (Vietoris-Rips) " +
+          "functional, not Cech's circumradius -- see CLAUDE.md's Cech complexes section. Use engine=naive or " +
+          "engine=chunks for Cech complexes."
       )
 
     val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(2)
@@ -304,8 +381,121 @@ object Tda4j:
           case other =>
             // dispatch() already rejects ripser/chunks for alpha; anything else is a genuinely unrecognized engine.
             throw new IllegalArgumentException(s"unrecognized engine '$other' for complex=alpha; expected 'naive'")
+      case "cech" =>
+        // Cech grows unboundedly in dimension just like VR -- unlike alpha/cubical, its own top dimension is NOT
+        // naturally bounded (a Cech complex over n points can, in principle, reach an (n-1)-simplex) -- so it needs
+        // the SAME "build one dimension higher than requested, then drop it" dance the VR case above uses, for the
+        // identical reason: H_k needs (k+1)-dimensional chains to tell a genuine k-cycle from one a not-yet-built
+        // (k+1)-simplex would have killed. `maxFiltrationValue` here is in CECH RADIUS units (see class doc above),
+        // not a VR diameter -- `CechCofaceSimplexStream` consumes it directly, no doubling.
+        val pts = points.getOrElse(
+          throw new IllegalArgumentException(
+            "complex=cech requires point coordinates -- use computeFromPoints, not computeFromDistanceMatrix"
+          )
+        )
+        val euclideanMetricSpace = EuclideanMetricSpace(pts)
+        engine match
+          case "naive" =>
+            val stream = LimitedCofaceSimplexStream(
+              CechCofaceSimplexStream(euclideanMetricSpace, maxFiltrationValue = maxFiltrationValue),
+              requestedMaxDimension + 1
+            )
+            val state = SimplicialHomologyContext[Int, C, Double]().persistentHomology(stream)
+            state.advanceAll()
+            fromBars[Simplex[Int], C](
+              state.barcodeAt(Double.PositiveInfinity),
+              (_, cell) => cell.underlying.toArray,
+              toDouble,
+              requestedMaxDimension
+            )
+          case "chunks" =>
+            // CellularPersistenceInChunksContext handles the "+1" dance internally (its own maxDim constructor
+            // parameter means "top reported degree," fixed at the source -- see .claude/WORKLOG-maxdim-semantics-
+            // fix.md), and CechCofaceSimplexStream's own iterateDimension is already naturally bounded (inherited
+            // from RipserCofaceSimplexStream's `d < metricSpace.size` guard), so no LimitedCofaceSimplexStream
+            // wrapping is needed here -- mirroring engine=chunks's own complex=vr case above exactly. Cross-
+            // validated against the naive engine directly on Cech streams in CechStreamSpec (not assumed to carry
+            // over from VR/cubical/simplicial-set validation, since this combination had never been exercised
+            // before).
+            val stream = CechCofaceSimplexStream(euclideanMetricSpace, maxFiltrationValue = maxFiltrationValue)
+            val state = CellularPersistenceInChunksContext[Simplex[Int], C](requestedMaxDimension)
+              .persistentHomology(stream)
+            fromBars[Simplex[Int], C](
+              state.barcodeAt(Double.PositiveInfinity),
+              (_, cell) => cell.underlying.toArray,
+              toDouble,
+              requestedMaxDimension
+            )
+          case other =>
+            // dispatch() already rejects ripser for cech; anything else is a genuinely unrecognized engine.
+            throw new IllegalArgumentException(
+              s"unrecognized engine '$other' for complex=cech; expected 'naive' or 'chunks'"
+            )
       case other =>
-        throw new IllegalArgumentException(s"unrecognized complex '$other'; expected 'vr' or 'alpha'")
+        throw new IllegalArgumentException(s"unrecognized complex '$other'; expected 'vr', 'alpha', or 'cech'")
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // dispatch for computeFromCubicalImage/computeFromImage -- a separate function from dispatch/computeGeneric
+  // above (not a new "complex" branch inside them) because a cubical grid carries no FiniteMetricSpace[Int] at
+  // all, the type dispatch()/computeGeneric are built around.
+  // ---------------------------------------------------------------------------------------------------------------
+
+  private def dispatchCubical(opts: Map[String, String], stream: CubicalGridStream): PersistenceResult =
+    val engine = opts.getOrElse("engine", "naive").toLowerCase
+    if engine == "ripser" then
+      throw new IllegalArgumentException(
+        "engine=ripser cannot be used for a cubical complex: PackedRipserCohomologyContext is specialized to " +
+          "Simplex[Int] Vietoris-Rips complexes and has no notion of a cubical complex at all. Use engine=naive " +
+          "or engine=chunks."
+      )
+    // Default: the grid's own ambient dimension, i.e. "give me everything" -- correctly parallel to complex=alpha
+    // above (a cubical grid's own top dimension is already naturally bounded, never artificially truncated the
+    // way VR/Cech are), NOT to complex=vr's default of 2.
+    val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(stream.ambientDim)
+
+    opts.getOrElse("field", "z").toLowerCase match
+      case "z" =>
+        val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(2)
+        val ff = new FiniteField(prime)
+        import ff.given
+        computeCubicalGeneric[ff.Fp](stream, engine, maxDimension, _.toInt.toDouble)
+      case "r" =>
+        val epsilon = opts.get("epsilon").map(parseDoubleOption("epsilon", _)).getOrElse(1e-9)
+        given Double is Field = Field.DoubleApproximated(epsilon)
+        computeCubicalGeneric[Double](stream, engine, maxDimension, identity)
+      case other =>
+        throw new IllegalArgumentException(s"unrecognized field '$other'; expected 'Z' or 'R'")
+
+  private def computeCubicalGeneric[C](
+    stream: CubicalGridStream,
+    engine: String,
+    maxDimension: Int,
+    toDouble: C => Double
+  )(using C is Field): PersistenceResult =
+    // cellVertices reports a Cube's own doubled-coordinate encoding, not vertex indices -- see
+    // PersistenceResult.cycleVertices's own doc for the decode rule and why this differs from the
+    // Simplex[Int]-based complexes above.
+    val cellVertices: (Int, Cube) => Array[Int] = (_, cell) => cell.encoded.toArray
+    engine match
+      case "naive" =>
+        // No dimension cap is applied to the stream itself, on purpose, mirroring complex=alpha above: a cubical
+        // grid's own chain complex terminates on its own (bounded by its ambient dimension), so it is never
+        // artificially cut short the way a VR/Cech complex is -- nothing to build one dimension higher for.
+        // CubicalHomologyContext has no maxDim of its own at all, same as SimplicialHomologyContext.
+        val state = CubicalHomologyContext[C, Double]().persistentHomology(stream)
+        state.advanceAll()
+        fromBars[Cube, C](state.barcodeAt(Double.PositiveInfinity), cellVertices, toDouble, maxDimension)
+      case "chunks" =>
+        // Unlike the naive path above, maxDimension IS passed through here as a genuine, correct truncation --
+        // CellularPersistenceInChunksContext handles the "+1" dance internally (see .claude/WORKLOG-maxdim-
+        // semantics-fix.md), so this can skip real work for a caller who only wants low-dimensional homology, not
+        // just filter what's reported after the fact.
+        val state = CellularPersistenceInChunksContext[Cube, C](maxDimension).persistentHomology(stream)
+        fromBars[Cube, C](state.barcodeAt(Double.PositiveInfinity), cellVertices, toDouble, maxDimension)
+      case other =>
+        throw new IllegalArgumentException(
+          s"unrecognized engine '$other' for a cubical complex; expected 'naive' or 'chunks'"
+        )
 
   // ---------------------------------------------------------------------------------------------------------------
   // barcode/chain -> PersistenceResult conversion

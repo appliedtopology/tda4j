@@ -45,14 +45,14 @@ class GudhiSpec extends mutable.Specification:
       Gudhi.readOff(path).map(_.toSeq).toSeq must beEqualTo(points)
     }
 
-    "agree with Csv on the same point cloud (cross-format oracle)" >> {
+    "agree with CSV on the same point cloud (cross-format oracle)" >> {
       val points = Seq(Seq(0.0, 0.0), Seq(3.0, 4.0), Seq(6.0, 8.0))
       val offPath = tempFile(".off")
       val csvPath = tempFile(".csv")
       Gudhi.writeOff(offPath, points)
-      Csv.writePointCloud(csvPath, points)
+      CSV.writePointCloud(csvPath, points)
       val fromOff = Gudhi.readEuclideanMetricSpace(offPath)
-      val fromCsv = Csv.readEuclideanMetricSpace(csvPath)
+      val fromCsv = CSV.readEuclideanMetricSpace(csvPath)
       (fromOff.distance(0, 1) must beEqualTo(fromCsv.distance(0, 1))) and
         (fromOff.distance(1, 2) must beEqualTo(fromCsv.distance(1, 2)))
     }

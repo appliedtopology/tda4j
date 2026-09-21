@@ -9,7 +9,7 @@ import org.appliedtopology.tda4j.alpha.{given, *}
 /** A finished persistence computation, in a shape callable directly from MATLAB (or any other plain-Java caller) via
   * MATLAB's built-in Java interface: every public method here takes/returns only `int`, `double`, `double[][]`, or
   * `int[][]` -- no Scala types, no generics, no `java.util.Map` -- since none of those marshal reliably across MATLAB's
-  * Java bridge. See `Tda4j` for how this gets constructed and `WORKLOG-matlab-api.md` for the design rationale,
+  * Java bridge. See `TDA4j` for how this gets constructed and `WORKLOG-matlab-api.md` for the design rationale,
   * including what was deliberately left out of this first pass.
   *
   * Bars are indexed `0` until `size() - 1`, in no particular guaranteed order (the underlying engines don't sort their
@@ -44,13 +44,21 @@ final class PersistenceResult private[matlab] (
   def birth(i: Int): Double = births(i)
   def death(i: Int): Double = deaths(i)
 
-  /** The simplices making up bar `i`'s representative chain, each as its sorted array of vertex indices (0-based,
-    * matching the row indices of whatever point/distance matrix was passed to `Tda4j`). Throws
-    * `UnsupportedOperationException` if this specific bar has no recorded representative -- can happen for
+  /** The cells making up bar `i`'s representative chain, each as an `int[]` identifying that cell -- the array's own
+    * meaning depends on which complex this result came from, since the underlying cell type differs:
+    *
+    *   - `complex="vr"`/`"alpha"`/`"cech"` (a `Simplex[Int]`): the simplex's sorted vertex array (0-based, matching the
+    *     row indices of whatever point/distance matrix was passed to `TDA4j`).
+    *   - `complex="cubical"` (a `Cube`): the cell's own doubled-coordinate encoding (`Cube.encoded`, see
+    *     `Cubical.scala`) -- NOT vertex indices. Axis `k`'s entry is `2*a` for a degenerate (point) factor at lattice
+    *     coordinate `a`, or `2*a+1` for a non-degenerate (unit-interval) factor spanning `[a, a+1]`; decode coordinate
+    *     `k` as `a = v(k)/2` (integer division) plus, when `v(k)` is odd, a unit interval starting there.
+    *
+    * Throws `UnsupportedOperationException` if this specific bar has no recorded representative -- can happen for
     * `engine="ripser"` (its apparent-pairs shortcut skips writing one down for some bars). `engine="chunks"` now
-    * records a representative for every bar, at every dimension -- see `CellularPersistenceInChunksContext.barcodeAt`'s
-    * own doc for how, and `.claude/CLAUDE.md`'s coefficients-and-representatives design principle for why this
-    * mattered.
+    * records a representative for every bar, at every dimension, for every complex type above -- see
+    * `CellularPersistenceInChunksContext.barcodeAt`'s own doc for how, and `.claude/CLAUDE.md`'s
+    * coefficients-and-representatives design principle for why this mattered.
     */
   def cycleVertices(i: Int): Array[Array[Int]] = cycleProvider(i)._1
 

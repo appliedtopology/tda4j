@@ -55,6 +55,20 @@ you're about to trust your own "this seems obviously sound" reasoning about a ch
 ordering code, build the cheap discriminating fixture first — see the closing section of
 @ref:[Hard-won invariants](gotchas.md) for what that looks like in practice.
 
+## Naming convention: `tda4j`/`TDA4j`, never `Tda4j`
+
+"TDA4j" is the acronym TDA ("topological data analysis") plus the conventional `4j` suffix (`log4j`,
+`slf4j`) — not an ordinary English word, so don't let a titlecasing habit turn it into `Tda4j`. Use
+**`tda4j`** (all lowercase) for the package name, the executable/artifact name, the repo name, and ordinary
+prose; use **`TDA4j`** (acronym preserved) for Scala identifiers that must start with a capital letter —
+class/object/trait names such as `TDA4j` (the MATLAB facade), `TDA4jConf`/`TDA4jCLI` (the CLI). `Tda4j` is
+never correct.
+
+This applies to any identifier that's itself an acronym, not just the project name: `io.CSV` (comma-separated
+values) and `cli.TDA4jCLI` (command-line interface) are both fully capitalized for the same reason. `io.Gudhi`/
+`Dipha`/`Ripser`/`Perseus`, by contrast, are ordinary proper nouns (external projects this codebase talks to
+file formats for) and stay titlecased in their own conventional spelling.
+
 ## Where the bug histories and design derivations live
 
 This guide summarizes and cross-references, but doesn't duplicate, the detailed worklogs kept at the repo
