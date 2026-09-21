@@ -104,6 +104,41 @@ class FilteredSimplicialSetStreamSpec extends mutable.Specification:
       .and(essential1.size === 2)
   }
 
+  // Generic-over-CellT coverage for barcodeAt's incremental representative tracking
+  // (.claude/WORKLOG-chunks-representatives-incremental.md): FiniteSimplicialSet generators are the third
+  // concrete OrderedCell instance in this codebase (alongside Simplex/Cube) and the only one whose boundary
+  // formula involves the degeneracy machinery at all -- real coverage, not a formality. RP2 over F3
+  // specifically: it's this codebase's established sign-discriminating
+  // fixture (H_1=H_2=F2 over F2, both 0 over F3 -- an alternating-sum sign error is invisible over F2), so a
+  // representative-formula sign bug (exactly the class of bug the SimplicialHomologyByDimensionContext audit
+  // below found) has a real chance to surface here where it wouldn't over F2.
+  "barcodeAt gives every bar (torus, RP2 over F3) a genuine-cycle representative with no missing annotation" >> {
+    val f3 = new FiniteField(3)
+    import f3.given
+
+    def checkAllReps[G](sset: FiniteSimplicialSet[G], filtrationValue: G => Double): Boolean =
+      given (G is OrderedCell) = sset.cellInstance
+      val stream = FilteredSimplicialSetStream(sset, PartialFunction.fromFunction(filtrationValue))
+      val bars = CellularPersistenceInChunksContext[G, f3.Fp]()
+        .persistentHomology(stream)
+        .barcodeAt(Double.PositiveInfinity)
+      bars.nonEmpty && bars.forall { bar =>
+        bar.annotation match
+          case None      => false
+          case Some(rep) =>
+            Chain.from(rep.boundary).isZero() &&
+            rep.items.size <= sset.generatorsByDim.map(_.size).sum
+      }
+
+    val torusOk = checkAllReps(SimplicialSetFixtures.torus, torusFiltration)
+    val rp2 = SimplicialSetFixtures.realProjectiveSpace(2)
+    val rp2Filtration: SimplicialSetFixtures.ProjectiveGenerator => Double = {
+      case SimplicialSetFixtures.ProjectiveGenerator.E(n) => n.toDouble
+    }
+    val rp2Ok = checkAllReps(rp2, rp2Filtration)
+    (torusOk must beTrue) and (rp2Ok must beTrue)
+  }
+
   "a randomized dimension-band-plus-jitter filtration on every fixture: CellularHomologyContext and the chunks engine agree exactly, across several seeds" >> {
     def randomFiltration[G](sset: FiniteSimplicialSet[G], seed: Long): G => Double =
       val rng = new scala.util.Random(seed)

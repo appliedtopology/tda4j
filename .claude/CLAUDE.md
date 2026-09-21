@@ -58,7 +58,7 @@ Scala-3-specific gotchas hit along the way, is in `WORKLOG-package-reorg.md`.
 
 ## Commands
 
-Build and test with sbt (Java 21, Scala 3.8.4):
+Build and test with sbt (Java 21, Scala 3.9.0 LTS):
 
 ```
 sbt clean test                  # full test suite (what CI runs)
@@ -118,14 +118,57 @@ over `Field` but had NO representative-cycle API at all: `diagramAt` was its onl
 every bar's chain data outright; the MATLAB facade's `engine=chunks` always threw `UnsupportedOperationException`
 for exactly this reason. This was a pre-existing gap, not something the union-find work introduced -- but seeing
 it named as a standing principle is what prompted fixing it directly; see item 2 for what changed.
-**Partially closed the same day**: chunks now has a `barcodeAt`, and the MATLAB facade routes `engine=chunks`
-through it -- but honestly, only for dimension-0 bars so far (both finite and essential), verified to match the
-naive engine's own representatives EXACTLY, not just homologously. Dimension >= 1 bars (finite and essential
-alike) still report no representative; closing that needs porting the naive engine's incremental
-`coboundaries`/`cycles` mechanism into the chunked algorithm, a distinct, larger, not-yet-started piece of work
--- see item 2's own note and `.claude/WORKLOG-unionfind-in-chunks.md` for the exact scope boundary and the
-real blocker (deferred pair resolution across the chunked algorithm's local/global passes) flagged for whoever
-picks it up next.
+**Closed in three sessions**: chunks now has a `barcodeAt`, and the MATLAB facade routes `engine=chunks` through
+it, with a real representative for EVERY bar (finite or essential, at every dimension `<= maxDim`), not just
+dimension 0. The first session closed dimension 0 only (verified to match the naive engine's own representatives
+EXACTLY). The second closed the rest via a design `advisor()` blessed at the time: `barcodeAt` delegating the
+WHOLE representative computation to a fresh `CellularHomologyContext` run over a dimension-capped copy of the
+same stream, rather than porting the naive engine's `coboundaries`/`cycles` mechanism into the chunked
+local/global passes directly. **That delegate design was itself replaced in a third session**, on the project
+lead's own direct rejection ("asking for a full CellularHomologyContext run *as well as* the original run is
+nowhere near a reasonable request") -- pointing at `PackedRipserCohomologyContext` as proof that clearing and
+inline representative tracking already coexist elsewhere in this codebase. `barcodeAt` now reuses chunks' OWN
+already-computed `boundaries`/`cleared`/`paired`/`killer` state incrementally, via a new `vcolOf` method that
+reconstructs each cell's V-column on demand (memoized, cached in `vcolCache`) -- derived term-for-term from
+`CellularHomologyContext.advanceOne`'s own audited V-column formula, not reasoned out independently. Dimension 0
+stays the trivial `Chain(dyingVertex)`/`Chain(rootVertex)`; dimension 1 essential (cycle-forming) edges get a
+real spanning-forest-path construction in `unionFindDim01`, reused for dimension-1 finite bars too; dimension
+`>= 2` goes through `vcolOf`. Still correct by the same canonical-reduced-matrix argument `unionFindDim01`
+already relies on (a fixed total order determines a unique reduced boundary matrix regardless of which
+algorithm computes it) -- confirmed empirically too, exact match against the naive engine at every dimension,
+not just homologous. See `.claude/WORKLOG-chunks-representatives-incremental.md` for the full derivation
+(the second session's own worklog, `.claude/WORKLOG-chunks-representatives.md`, is left as historical record of
+the rejected delegate design, per this file's own worklog convention -- not edited to match the final state).
+
+**A real, separate, pre-existing bug in chunks' own PAIRING (not representatives) was found while validating
+`vcolOf` against the naive engine, and fixed in the same (third) session**: on tie-heavy cliques,
+`diagramAt` itself -- unrelated to any representative-tracking code, confirmed present on unmodified `HEAD` --
+could wrongly classify a cell as `cleared` (someone's pivot) when it should only ever have been `paired`
+(a killer), corrupting the `cleared`/`paired` invariant and leaving spurious cells essential. Root cause was two
+compounding mechanisms in `advanceAll`'s local/global split, both now fixed: (1) a cell whose local pivot fell
+outside its own round's window can be left "in limbo" (neither cleared nor paired) when the local phase ends,
+and the global phase, also running dimension-descending, could reach it as a substituted term in a HIGHER
+dimension's reduction before its OWN dimension's global turn ever came -- `eliminationFallback`'s catch-all
+couldn't distinguish "in limbo" from "genuinely essential." Fixed with a reconciliation step, between the local
+and global phases, that resolves every in-limbo cell first. (2) `eliminationFallback`'s existing "paired cell"
+substitute was `Chain(l)` (trivial self-cancel) or `None` (become-the-final-pivot) depending on an "active" flag
+-- neither is a valid general substitute; the naive engine's own equivalent (`negativeVCols.get`) is a REAL
+V-column, consulted unconditionally. Fixed by routing `eliminationFallback`'s paired branch through `vcolOf`
+itself (safe to call mid-`advanceAll`, not just post-hoc, specifically because fix (1) guarantees every
+dependency it might recurse into is already permanently classified by the time the global phase runs). Verified
+against the naive engine across a full sweep (tie-heavy cliques, n in [5,8] x maxDim in [2,3]) and the existing
+pinned degenerate-S^2 fixture; full `sbt test` clean (264 examples, 0 failures) after the fix. This is the more
+consequential of the two findings from this arc -- it would have mattered even had representatives never been
+in scope. See `.claude/WORKLOG-chunks-pairing-bug.md` for the full traced derivation.
+
+A real, unrelated bug was found and NOT fixed along the way, in the SECOND session (still true, unaffected by
+the third session's redesign): `SimplicialHomologyByDimensionContext`'s own `cycles`/`coboundaries` formula (the
+mechanism the second session's original plan would have ported) produces non-cycle representatives for every
+dimension >= 1 bar tested -- never caught before because nothing ever exposed that class's chains publicly. See
+`.claude/WORKLOG-chunks-representatives.md` for the full derivation, including that finding, the four
+corrections `advisor()` made to the second session's original plan, and a second incidental finding (`Chain` has
+no `hashCode` matching its overridden `equals` -- a real footgun for any future `Set`/`Map` use of `Chain`
+values, also not fixed here).
 
 ### Algebraic core (typeclass layer)
 
@@ -511,19 +554,70 @@ imply the others need it:
    just the existing fixed tie-heavy fixtures), plus the pinned degenerate-S² and elder-rule fixtures.
 
    Separately, prompted by the coefficients-and-representatives design principle above: `barcodeAt` now exists
-   on this class, returning real, naive-engine-*exact* representatives (`Chain(dyingVertex)`/`Chain(rootVertex)`,
-   verified by direct comparison, not just homology-equivalence) for dimension-0 bars only — every other bar
-   still reports `annotation = None`, honestly reflecting that the naive engine's incremental
-   `coboundaries`/`cycles` mechanism hasn't been ported into the chunked algorithm yet (a distinct, larger,
-   explicitly-deferred piece of work — the worklog above names the concrete blocker: the chunked algorithm's
-   local pass can defer a pair's resolution into a later global pass, so presence of a substituted cell's
-   `coboundaries` entry can't be assumed the way the naive engine's single sequential sweep guarantees). The
-   MATLAB facade's `engine="chunks"` now routes through `barcodeAt`/`fromBars` (the same `Option[Chain]`-aware
-   path `"ripser"`/`"naive"` already used) instead of the old always-throwing `fromDiagram`, which is deleted.
+   on this class, returning real representatives for EVERY bar — first shipped for dimension-0 bars only
+   (`Chain(dyingVertex)`/`Chain(rootVertex)`, verified by direct comparison against the naive engine, not just
+   homology-equivalence), then extended to every other dimension across two more sessions. **The first extension
+   attempt did NOT port the naive engine's incremental `coboundaries`/`cycles` mechanism into the chunked
+   local/global passes** — the plan this section originally predicted, and the one the real blocker above
+   (deferred pair resolution across local/global passes) was named against. `advisor()`, consulted with that plan
+   before any code was written, redirected it to a delegate design instead: `barcodeAt` running a second, fresh
+   `CellularHomologyContext` over a dimension-capped copy of the same stream. **That delegate design was itself
+   replaced in a THIRD session**, on the project lead's own direct rejection: running a whole second engine
+   alongside the original was judged "nowhere near a reasonable request," with `PackedRipserCohomologyContext`
+   pointed to as proof that clearing and inline representative tracking already coexist elsewhere in this
+   codebase. The blocker the delegate design had sidestepped — deferred pair resolution across the local/global
+   split — turned out to need a real fix rather than avoidance, and fixing it (see the pairing-bug note below)
+   is what made the direct, incremental approach safe.
 
-   `SimplicialHomologyByDimensionContext` was deliberately NOT deleted as part of this — kept as the independent
-   cross-validation oracle (and, now, the only worked example of the `coboundaries`/`cycles` mechanism a future
-   session will need for dimension >= 1 representatives), pending broader fuzz validation.
+   `barcodeAt` now reuses this class's OWN already-computed `boundaries`/`cleared`/`paired`/`killer` state
+   directly, via a new `vcolOf(sigma)` method: reconstructs a V-column for ANY cell (paired or essential) with
+   leading term `sigma` itself, memoized (`vcolCache`, with `vcolInProgress` cycle detection), derived
+   term-for-term from `CellularHomologyContext.advanceOne`'s own audited V-column formula rather than reasoned
+   out independently (two wrong guesses from memory were caught and corrected by re-reading that source
+   verbatim — see the incremental worklog for both). Dimension 0/1 finite and essential bars are handled
+   directly in `unionFindDim01` itself (dimension 0: trivial `Chain(dyingVertex)`/`Chain(rootVertex)`; dimension
+   1 essential/cycle-forming edges: a real spanning-forest-path construction over the union-find tree edges,
+   reused for dimension-1 finite bars too, since that map entry is never removed once built); dimension `>= 2`
+   goes through `vcolOf`. Still correct by the SAME canonical-reduced-matrix argument `unionFindDim01` already
+   relies on: a fixed total order over a fixed cell set determines a unique reduced boundary matrix regardless
+   of which algorithm computes it — confirmed empirically too, exact term-for-term match against the naive
+   engine at every dimension (not just homology-equivalence), across `HomologySpec`, `CubicalStreamSpec`, and
+   `FilteredSimplicialSetStreamSpec`. The MATLAB facade's `engine="chunks"` routes through `barcodeAt`/`fromBars`
+   (the same `Option[Chain]`-aware path `"ripser"`/`"naive"` already used) instead of the old always-throwing
+   `fromDiagram`, which is deleted. See `.claude/WORKLOG-chunks-representatives-incremental.md` for the full
+   derivation; `.claude/WORKLOG-chunks-representatives.md` is left as historical record of the rejected delegate
+   design, per this file's own worklog convention.
+
+   **A real, separate, pre-existing PAIRING bug (not a representatives bug) was found while validating `vcolOf`
+   against the naive engine, in the third session, and fixed in the same session**: on tie-heavy cliques,
+   `diagramAt` itself — unrelated to any representative-tracking code, confirmed present on unmodified `HEAD` —
+   could wrongly classify a cell as `cleared` when it should only ever have been `paired`, corrupting the
+   `cleared`/`paired` invariant and leaving spurious cells essential. Two compounding mechanisms, both fixed: (1)
+   a cell left "in limbo" (neither cleared nor paired) when its local pivot fell outside its own round's window
+   could get wrongly claimed as a HIGHER dimension's final pivot during the global phase, before its own
+   dimension's global turn ever came — fixed with a reconciliation step, between the local and global phases,
+   resolving every in-limbo cell first. (2) `eliminationFallback`'s existing paired-cell substitute (a trivial
+   self-cancel, or "become the final pivot," gated on an "active" flag) was never a valid general substitute —
+   the naive engine's own equivalent (`negativeVCols.get`) is a REAL, unconditionally-consulted V-column — fixed
+   by routing `eliminationFallback`'s paired branch through `vcolOf` itself, safe to call mid-`advanceAll`
+   specifically because fix (1) guarantees every dependency it might recurse into is already permanently
+   classified by the time the global phase runs. This is the more consequential of the two findings from this
+   arc, independent of representatives entirely. See `.claude/WORKLOG-chunks-pairing-bug.md` for the full traced
+   derivation.
+
+   **A real, previously-unknown bug was found while validating the second session's original plan's premise, and
+   is still NOT fixed, unaffected by the third session's redesign**: `SimplicialHomologyByDimensionContext`'s own
+   `cycles`/`coboundaries` formula — the mechanism that plan would have ported — was checked against
+   `CellularHomologyContext`'s audited V-column formula on `elderRuleCells`/`triangleCells`/`tetrahedronCells`
+   before being trusted, and found to produce genuinely non-cycle representatives (`boundary(rep) != 0`) for
+   every dimension >= 1 bar tested — not a sign/normalization difference, an outright wrong chain. This had never
+   been caught because that class exposes no public method returning its `cycles`/`coboundaries` chains at all;
+   its own cross-validation to date only ever checked birth/death VALUES, never chain content.
+   `SimplicialHomologyByDimensionContext` remains the independent birth/death-value oracle it already was — that
+   role is unaffected — but its own representative *chains* should not be trusted or exposed without first fixing
+   this. See `.claude/WORKLOG-chunks-representatives.md` for the full derivation, including a second, unrelated
+   finding from that session (`Chain` has an overridden `equals` but no matching `hashCode` — a real footgun for
+   a `Set`/`Map` of `Chain` values, also not fixed).
 3. `SimplicialHomologyByDimensionContext`: dimension-0 and the births of dimension-1 classes read off directly via
    Kruskal's algorithm/union-find over the stream's own dimension-0/1 cells (elder rule: a tree edge kills the
    younger of the two components it joins; a non-tree edge births a new 1-cycle), higher dimensions via the same
@@ -1573,9 +1667,9 @@ cross-validation specs default to instead; a deliberate, known divergence, not a
 is non-generic on purpose: it eagerly converts to plain `int`/`double` arrays for the barcode itself
 (`toArray()`, N-by-3: dimension/birth/death) and lazily, via a captured closure, for representative-chain access
 (`cycleVertices`/`cycleCoefficients`), throwing `UnsupportedOperationException` rather than returning something
-empty when an engine genuinely has no chain to report (`engine=chunks` always; `engine=ripser` for a bar resolved
-via the apparent-pairs shortcut). Boundary-matrix export is designed for (a second such closure) but not yet
-implemented.
+empty when an engine genuinely has no chain to report (`engine=ripser` for a bar resolved via the apparent-pairs
+shortcut — `engine=chunks` now records a representative for every bar, see the "Persistent homology" section
+above). Boundary-matrix export is designed for (a second such closure) but not yet implemented.
 
 **Two real bugs were found and fixed via this facade's own cross-validation, not inherited from either engine.**
 First: the `engine=naive` VR path originally built `EnumeratingCofaceSimplexStream` directly, which has no

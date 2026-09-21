@@ -297,6 +297,23 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
           case None        => cases
           case Some(names) => cases.filter(c => names.contains(c.name))
 
+        // c.threshold uses Double.NaN as its own "no explicit threshold, fall back to this engine's own
+        // minimumEnclosingRadius default" sentinel (matching real ripser's --threshold-omitted behavior, see
+        // runRealRipser's own identical `if c.threshold.isNaN then Seq.empty else ...` check below) -- a
+        // holdover from when RipserCohomologyContext/PackedRipserCohomologyContext's own maxFiltrationValue
+        // parameter was itself a raw NaN-sentineled Double, before it became Option[Double] (see CLAUDE.md's
+        // "maxFiltrationValue Option refactor" entry). `Some(c.threshold)` unconditionally, as both engine
+        // constructor calls below used to do, wraps that NaN sentinel in a Some instead of passing None --
+        // since Option[Double] resolves its own default via `.getOrElse`, only actually consulted when the
+        // caller passes None, `Some(Double.NaN)` bypasses minimumEnclosingRadius entirely and uses NaN as the
+        // literal threshold. Every simplex-inclusion check compares against it as `diameter <= threshold`,
+        // which is false for any diameter since any comparison against NaN is false -- so every simplex above
+        // dimension 0 (vertices aren't threshold-checked) gets silently excluded, collapsing every no-threshold
+        // case's dimension >= 1 output to empty. This spec is skipAll'd by default (see the class's own note
+        // above), so the Option refactor's own verification never exercised it -- found only when someone
+        // explicitly ran this benchmark and noticed dimension >= 1 bar counts were all zero.
+        def effectiveThreshold(c: DataCase): Option[Double] = if c.threshold.isNaN then None else Some(c.threshold)
+
         def barsMatchStr(byDim: Map[Int, Int], refBars: Map[Int, Int]): String =
           val allDims = (byDim.keySet ++ refBars.keySet).toSeq.sorted
           val mismatches = allDims.filter(d => byDim.getOrElse(d, 0) != refBars.getOrElse(d, 0))
@@ -401,7 +418,7 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
                 // the source -- see .claude/WORKLOG-maxdim-semantics-fix.md), so c.maxDim is passed directly; no
                 // manual +1-and-filter workaround needed anymore (a first version of this spec had one, which is
                 // exactly what caught the semantics bug in the first place -- see the class doc above).
-                val ctx = RipserCohomologyContext[Fp](ms, c.maxDim, maxFiltrationValue = Some(c.threshold))
+                val ctx = RipserCohomologyContext[Fp](ms, c.maxDim, maxFiltrationValue = effectiveThreshold(c))
                 val allBars = ctx.persistentCohomology()
                 val elapsedMs = (System.nanoTime() - t0) / 1e6
                 val nonZero = allBars.filter(b => endpointValue(b.lower) != endpointValue(b.upper))
@@ -411,7 +428,7 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
           val packedOutcome = withTimeout {
             val ms = c.metricSpace()
             val t0 = System.nanoTime()
-            val ctx = PackedRipserCohomologyContext[Fp](ms, c.maxDim, maxFiltrationValue = Some(c.threshold))
+            val ctx = PackedRipserCohomologyContext[Fp](ms, c.maxDim, maxFiltrationValue = effectiveThreshold(c))
             val allBars = ctx.persistentCohomology()
             val elapsedMs = (System.nanoTime() - t0) / 1e6
             val nonZero = allBars.filter(b => endpointValue(b.lower) != endpointValue(b.upper))

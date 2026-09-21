@@ -142,6 +142,22 @@ class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specificati
       case "default"   => Double.NaN
       case "sparse"    => thresholdScale / math.sqrt(n.toDouble)
 
+    // thresholdFor's "default" regime uses Double.NaN as its own "no explicit threshold, fall back to the
+    // engine/stream's own minimumEnclosingRadius default" sentinel -- a holdover from when
+    // RipserCohomologyContext/EnumeratingCofaceSimplexStream's own maxFiltrationValue parameter was itself a
+    // raw NaN-sentineled Double, before it became Option[Double] (see CLAUDE.md's "maxFiltrationValue Option
+    // refactor" entry). Wrapping it in `Some(...)` unconditionally -- as both call sites below used to do --
+    // bypasses that default entirely (`Option[Double]`'s own `.getOrElse` is only consulted for `None`) and
+    // uses NaN as the LITERAL threshold, under which every simplex-inclusion check (`diameter <= threshold`)
+    // is false, silently collapsing the "default" regime to vertices only. Confirmed as the cause of this
+    // spec's own long-silent "(default)" rows always reporting `cells=n, bars=n` (trivial) instead of a real
+    // Vietoris-Rips computation -- this spec asserts nothing about its own printed numbers (a profiling
+    // script, not a correctness check, see the class doc), so it never failed despite being wrong the whole
+    // time. See RipserPaperBenchmarkSpec's own identical fix/doc for the fuller derivation.
+    def effectiveThreshold(regime: String, n: Int): Option[Double] =
+      val t = thresholdFor(regime, n)
+      if t.isNaN then None else Some(t)
+
     val startTime = System.nanoTime()
     def deadlineHit: Boolean = (System.nanoTime() - startTime) / 1e9 >= deadlineSeconds
 
@@ -188,9 +204,9 @@ class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specificati
       withTimeout(ceilingTimeoutMs) {
         val pts = randomCloud(n, rngFor(s"ripser-$regime-$homDim", n))
         val metricSpace = EuclideanMetricSpace(pts)
-        val threshold = thresholdFor(regime, n)
         val t0 = System.nanoTime()
-        val ctx = RipserCohomologyContext[Double](metricSpace, homDim, maxFiltrationValue = Some(threshold))
+        val ctx =
+          RipserCohomologyContext[Double](metricSpace, homDim, maxFiltrationValue = effectiveThreshold(regime, n))
         val bars = ctx.persistentCohomology()
         val ms = (System.nanoTime() - t0) / 1e6
         (ms, ctx.totalSimplexCount, bars.size)
@@ -200,10 +216,12 @@ class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specificati
       withTimeout(ceilingTimeoutMs) {
         val pts = randomCloud(n, rngFor(s"vrenum-$regime-$buildDim", n))
         val metricSpace = EuclideanMetricSpace(pts)
-        val threshold = thresholdFor(regime, n)
         val t0 = System.nanoTime()
         val stream =
-          bounded(EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(threshold)), buildDim)
+          bounded(
+            EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = effectiveThreshold(regime, n)),
+            buildDim
+          )
         val (wrapped, cellCount) = materializeAndWrap(stream)
         val barCount = SimplicialHomologyContext[Int, Double, Double]()
           .persistentHomology(wrapped)

@@ -165,11 +165,18 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
     }
   }
 
-  // Per .claude/CLAUDE.md's coefficients-and-representatives design principle: chunks' dimension-0 representatives
-  // must match the naive engine's EXACTLY, not merely be homologous -- both sides claim to store the trivial
-  // Chain(vertex) representative at dimension 0, and this is the only check that catches it if they diverge
-  // (advisor's explicit caution: don't just assert "some valid cycle").
-  "The clear-and-compress engine's dimension-0 representatives match the naive engine's exactly" >> {
+  // Per .claude/CLAUDE.md's coefficients-and-representatives design principle: chunks' representatives must be
+  // genuine cycles matching the naive engine's EXACTLY (not merely homologous), at EVERY dimension -- the
+  // earlier, narrower dimension-0-only version of this test is superseded now that barcodeAt closes that gap.
+  // barcodeAt no longer delegates to a second CellularHomologyContext run (see
+  // .claude/WORKLOG-chunks-representatives-incremental.md: that design was tried, then rejected by the project
+  // lead as "nowhere near a reasonable request," and replaced with `vcolOf`, which reconstructs each
+  // representative incrementally from chunks' own already-computed boundaries/cleared/paired/killer state).
+  // Exact match still holds under the new design too, for the same reason it held under the old one: a fixed
+  // total order over a fixed cell set determines a unique reduced boundary matrix regardless of which
+  // algorithm computes it, and `vcolOf`'s fold-over-reduction-log logic is derived term-for-term from
+  // CellularHomologyContext.advanceOne's own audited V-column formula (see vcolOf's own doc).
+  "The clear-and-compress engine's representatives match the naive engine's exactly, at every dimension" >> {
     given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
     import shc.{*, given}
 
@@ -189,13 +196,50 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
     val cases =
       List(HomologyFixtures.elderRuleCells, HomologyFixtures.triangleCells, HomologyFixtures.tetrahedronCells)
     forall(cases) { cells =>
+      val fvByCell: Map[Simplex[Int], Double] = cells.map((f, c) => c -> f).toMap
       val naiveBars = persistentHomology(explicitStream(cells)).barcodeAt(Double.PositiveInfinity)
-      val chunksBars = PersistenceInChunksContext[Int, Double](3)
-        .persistentHomology(asStratified(cells))
-        .barcodeAt(Double.PositiveInfinity)
-      val naiveDim0Reps = naiveBars.filter(_.dim == 0).map(b => (b.lower, b.upper, b.annotation.get))
-      val chunksDim0Reps = chunksBars.filter(_.dim == 0).map(b => (b.lower, b.upper, b.annotation.get))
-      chunksDim0Reps must containTheSameElementsAs(naiveDim0Reps)
+      val chunksState = PersistenceInChunksContext[Int, Double](3).persistentHomology(asStratified(cells))
+      val chunksBars = chunksState.barcodeAt(Double.PositiveInfinity)
+      val chunksDiagram = chunksState.diagramAt(Double.PositiveInfinity)
+
+      val naiveReps = naiveBars.map(b => (b.dim, b.lower, b.upper, b.annotation.get))
+      val chunksReps = chunksBars.map(b => (b.dim, b.lower, b.upper, b.annotation.get))
+
+      // (1) no bar with dim <= maxDim is left with annotation = None -- a silent None is exactly how a
+      // disagreement between barcodeAt's delegate and diagramAt's own chunked computation would hide.
+      val noneMissing = chunksBars.forall(_.annotation.isDefined)
+      // (2) exact representative match against the naive engine, at every dimension -- multiset equality via
+      // Chain's own overridden `equals` (item order inside a Chain isn't significant, and Chain has no
+      // matching `hashCode` override, so plain `.toSet`/`.toMap` equality on tuples containing a Chain is NOT
+      // reliable here: two `equals`-equal Chains can land in different hash buckets). Bipartite-match instead.
+      val matchesNaive =
+        val remaining = scala.collection.mutable.ArrayBuffer.from(naiveReps)
+        chunksReps.forall { case (dim, lower, upper, chain) =>
+          val idx = remaining.indexWhere { case (d, l, u, c) => d == dim && l == lower && u == upper && c == chain }
+          idx >= 0 && { remaining.remove(idx); true }
+        } && remaining.isEmpty
+      // (3) independent agreement check: barcodeAt's own (dim, lower, upper) triples (stripped of
+      // annotation) match diagramAt's -- barcodeAt's pairing comes from the same advanceAll the state
+      // was already built from (diagramAt just reads it back without representatives), so this mainly
+      // guards against barcodeAt's own assembly logic silently reordering or dropping a bar, not a
+      // second independent computation the way it was when barcodeAt delegated elsewhere.
+      val agreesWithDiagramAt =
+        chunksBars.map(b => (b.dim, endpointValue(b.lower), endpointValue(b.upper))).toSet ==
+          chunksDiagram.toSet
+      // (4) every representative is a genuine cycle, over a field where a sign error can't hide (Double,
+      // not F2).
+      val allCycles = chunksBars.forall(b => Chain.from(b.annotation.get.boundary).isZero())
+      // (5) the representative's own leading (youngest) cell is exactly the bar's birth cell -- checked via
+      // filtration value, and every term in the representative existed by the time the bar was born.
+      val leadingCellMatchesBirth = chunksBars.forall { b =>
+        val rep = b.annotation.get
+        val leadingFv = fvByCell(rep.leadingCell.get)
+        (leadingFv == endpointValue(b.lower)) &&
+        rep.items.forall((cell, _) => fvByCell(cell) <= endpointValue(b.lower))
+      }
+
+      (noneMissing must beTrue) and (matchesNaive must beTrue) and (agreesWithDiagramAt must beTrue) and
+        (allCycles must beTrue) and (leadingCellMatchesBirth must beTrue)
     }
   }
 

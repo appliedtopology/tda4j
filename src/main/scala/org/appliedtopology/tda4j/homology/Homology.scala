@@ -290,10 +290,14 @@ class CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field
     boundaries: mutable.Map[CellT, Chain[CellT, CoefficientT]],
     stream: StratifiedCellStream[CellT, Double],
     barcode: mutable.Map[Int, immutable.Queue[(Double, Double, Chain[CellT, CoefficientT])]],
-    // Representative cycle for a still-open (essential) class, keyed by the cell itself -- ONLY ever populated
-    // for dimension-0 root vertices by unionFindDim01, for now. Mirrors CellularHomologyContext's own
-    // `positives` map in spirit (open cell -> representative), but deliberately much narrower in scope: see
-    // barcodeAt's own doc for exactly what's covered and what isn't yet.
+    // Representative cycle for a still-open (essential) class, keyed by the cell itself. Populated eagerly by
+    // unionFindDim01 for dimension 0 (root vertices, trivially `Chain(root)`) and dimension 1 (cycle-forming
+    // edges, via the spanning-forest-path construction in unionFindDim01's own doc) -- both cheap, bounded by
+    // the union-find pass itself. Dimension >= 2 essential cells are NOT populated here eagerly; barcodeAt
+    // fills this map lazily, on first request, via vcolOf (see its own doc) -- essential classes are typically
+    // few (bounded by the Betti number at that dimension), so computing their representatives on demand,
+    // reusing this class's own already-complete `boundaries`/`killer` state, costs only what each one's own
+    // reduction actually touches, not a second full pass over every cell.
     essentialRepresentatives: mutable.Map[CellT, Chain[CellT, CoefficientT]]
   ):
 
@@ -333,6 +337,10 @@ class CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field
 
     // killer column index for each local pivot
     val killer: mutable.Map[CellT, CellT] = mutable.Map.empty
+    // Reverse of `killer` (killer cell -> the pivot it kills), maintained alongside it everywhere `killer` is
+    // set -- needed by vcolOf (see its own doc) to recover a PAIRED cell's own pivot without a full scan of
+    // `killer`, and without relying on `R` (never populated by unionFindDim01 for dimension 0/1 tree edges).
+    val killerOf: mutable.Map[CellT, CellT] = mutable.Map.empty
     // R supplies R_k for unpaired column k, to be used in marking active entries
     val R: mutable.Map[CellT, Chain[CellT, CoefficientT]] = mutable.Map.empty
     // active entries
@@ -395,11 +403,20 @@ class CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field
           root
 
         val ord = summon[Ordering[CellT]]
+        // Tree edges (r0 != r1) are collected here, not resolved into a representative inline -- building the
+        // dim-1 essential (cycle-forming edge) representatives below needs the FULL spanning forest, not a
+        // partial one, and needs it via an explicit, uncompressed parent-edge structure distinct from `parent`
+        // above (which IS heavily path-compressed by the time this loop finishes, so it can no longer answer
+        // "which edge actually connects v to its tree-parent" for an arbitrary non-root v).
+        val treeEdges: mutable.ArrayBuffer[CellT] = mutable.ArrayBuffer.empty
+        val cycleEdges: mutable.ArrayBuffer[CellT] = mutable.ArrayBuffer.empty
         stream.iterateDimension.applyOrElse(1, (_: Int) => Iterator.empty).foreach { edge =>
           val endpoints = edge.boundary[CoefficientT]
           val r0 = find(vertexIndex(endpoints(0)._1))
           val r1 = find(vertexIndex(endpoints(1)._1))
-          if r0 == r1 then essentialSimplices += edge
+          if r0 == r1 then
+            essentialSimplices += edge
+            cycleEdges += edge
           else
             val (youngRoot, oldRoot) =
               if ord.lt(vertices(r0), vertices(r1)) then (r0, r1) else (r1, r0)
@@ -408,6 +425,8 @@ class CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field
             cleared += dyingVertex
             paired += edge
             killer(dyingVertex) = edge
+            killerOf(edge) = dyingVertex
+            treeEdges += edge
             val lower =
               stream.filtrationValue.applyOrElse(dyingVertex, (_: CellT) => Double.NegativeInfinity)
             val upper =
@@ -425,6 +444,51 @@ class CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field
           if find(i) == i then
             essentialSimplices += vertices(i)
             essentialRepresentatives(vertices(i)) = Chain(vertices(i))
+        }
+
+        // Dimension-1 essential (cycle-forming) edge representatives: a real spanning-forest-path
+        // construction, NOT a trivial one -- a lone cycle-forming edge is not itself a cycle (its own
+        // boundary is generally nonzero), unlike the dimension-0 case above. Built from `treeEdges` alone
+        // (never touching `parent`'s path-compressed pointers, which have already lost the actual historical
+        // tree shape by this point): one plain BFS per component over an adjacency list assembled from tree
+        // edges only, computing `pathFromRoot(v)` incrementally so that `boundary(pathFromRoot(v)) ==
+        // Chain(v) - Chain(root)` always holds -- verified by `RepCycleAuditSpec`/`HomologySpec`'s own dd=0
+        // checks over a signed field, not just asserted here. For a tree edge `e` with `e.boundary` terms
+        // `(u, cu)` (already resolved, i.e. `u`'s own path is known) and `(v, cv)` (the newly-reached vertex):
+        // `boundary(Chain(e)) = cu*u + cv*v`, and since `boundary(Chain(u)) = 0` trivially (dimension 0), the
+        // correction term `(1/cv) * Chain(e)` alone has `boundary = (cu/cv)*u + v`, which equals `v - u`
+        // exactly because every dimension-1 boundary in this codebase (Simplex, Cube, FiniteSimplicialSet
+        // alike) has its two coefficients as additive inverses (`cu = -cv`) -- so `pathFromRoot(v) =
+        // pathFromRoot(u) + (1/cv) ⊠ Chain(e)`, no `Chain(u)` term needed at all.
+        val adjacency: mutable.Map[CellT, mutable.ArrayBuffer[(CellT, CellT)]] = mutable.Map.empty
+        treeEdges.foreach { edge =>
+          val endpoints = edge.boundary[CoefficientT]
+          val v0 = endpoints(0)._1
+          val v1 = endpoints(1)._1
+          adjacency.getOrElseUpdate(v0, mutable.ArrayBuffer.empty) += ((v1, edge))
+          adjacency.getOrElseUpdate(v1, mutable.ArrayBuffer.empty) += ((v0, edge))
+        }
+        val fld = summon[CoefficientT is Field]
+        val pathFromRoot: mutable.Map[CellT, Chain[CellT, CoefficientT]] = mutable.Map.empty
+        vertices.indices.foreach { i =>
+          if find(i) == i then
+            val root = vertices(i)
+            pathFromRoot(root) = Chain.empty
+            val stack = mutable.Stack(root)
+            while stack.nonEmpty do
+              val u = stack.pop()
+              adjacency.getOrElse(u, mutable.ArrayBuffer.empty).foreach { case (v, edge) =>
+                if !pathFromRoot.contains(v) then
+                  val cv = edge.boundary[CoefficientT].find(_._1 == v).get._2
+                  pathFromRoot(v) = pathFromRoot(u) + (fld.invert(cv) ⊠ Chain(edge))
+                  stack.push(v)
+              }
+        }
+        cycleEdges.foreach { edge =>
+          val endpoints = edge.boundary[CoefficientT]
+          val (v0, c0) = endpoints(0)
+          val (v1, c1) = endpoints(1)
+          essentialRepresentatives(edge) = Chain(edge) - (c0 ⊠ pathFromRoot(v0)) - (c1 ⊠ pathFromRoot(v1))
         }
 
     def diagramAt(f: Double): List[(Int, Double, Double)] =
@@ -450,21 +514,121 @@ class CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field
 
       pairs ++ essentialBars
 
+    // Memoized, on-demand V-column for a cell already resolved by advanceAll -- the mechanism that closes the
+    // representative gap for essential bars at dimension >= 2 (dimension 0/1 are handled entirely by
+    // unionFindDim01 above, cheaply, and never call this). Modeled directly on
+    // `CellularHomologyContext.advanceOne`'s own audited V-column formula and on
+    // `PackedRipserCohomologyContext.persistentCohomology`'s inline `generators` tracking (the project lead's
+    // own pointer to how Ripser reconciles clearing/optimizations with real representatives, without a second
+    // pass) -- but evaluated lazily, per cell, AFTER advanceAll has already finished and `boundaries`/`killer`
+    // are complete and immutable, rather than threaded through processCell/compress/globalReduce's own
+    // multi-round local/global state. That's a deliberate, checked choice, not a simplification of convenience:
+    // `boundaries` only ever grows (a pivot is recorded exactly once, at recordPair time, and no code path ever
+    // overwrites an existing entry -- confirmed by reading every call site), so a reduction that finds zero
+    // against a PARTIAL boundaries table (e.g. processCell's stop-bounded local pass) is already the correct
+    // answer against the COMPLETE one too: reduceLoop only ever narrows an accumulator, never un-eliminates a
+    // term, so an already-empty result can't change when more substitutions become available. That monotonicity
+    // is exactly what makes calling this post-hoc, over the finished `boundaries`, safe -- it reproduces the
+    // SAME elimination sequence advanceAll's own local/global passes would have found, without needing to track
+    // where in that multi-round process any given cell was actually resolved.
+    //
+    // A PAIRED cell x is the one place that monotonicity argument doesn't apply as-is: x's own reduction
+    // stopped the moment it found its pivot (`killerOf(x)`, frozen at recordPair/unionFindDim01 time -- once
+    // set, never changed). Re-reducing x's boundary against the NOW-complete `boundaries` with no stop at all
+    // would let reduction run PAST that pivot (now itself available as a substitution target, since whatever
+    // killed x's pivot was necessarily recorded too), producing a different elimination log than the one that
+    // actually determined x's own bar -- and, worse, risking a recursive call back into a cell whose vcol
+    // depends on x's own. Guarded by reducing with `stop = (c => c == pivotOf(x))`, reproducing exactly where
+    // the original reduction halted. `pivotOf` reads `killerOf` (the reverse of `killer`), not `R` -- `R` is
+    // never populated for dimension 0/1 tree edges (unionFindDim01 is deliberately Chain-free), so it can't
+    // serve this lookup uniformly across both the union-find fast path and the general processCell/compress/
+    // globalReduce path.
+    //
+    // A second, initially-missed fallback, found empirically (RepCycleAuditSpec's diagnostic dump, not derived
+    // up front): `boundaries` alone is NOT a sufficient `basis` for this reduction. It only ever holds entries
+    // for CLEARED (pivot) cells -- a PAIRED cell (a killer, of ANY dimension, tree edges included) never gets
+    // one, by construction. But a cell's raw boundary can perfectly well have a PAIRED cell as a term that still
+    // needs eliminating before reduction can reach zero (confirmed directly: a dimension-3 pivot's own 4-triangle
+    // boundary reduced to a 1-term, uneliminated residual instead of zero, because its youngest face was a
+    // PAIRED triangle with no `boundaries` entry to substitute through). This is exactly the gap
+    // `CellularHomologyContext.advanceOne`'s own `negativeVCols` fallback closes for the naive engine --
+    // ported here the same way, just computed lazily via `vcolOf` itself instead of a map populated during a
+    // single sequential sweep: `fallback` below recurses into `vcolOf(pairedCell)`, whose own result always has
+    // `pairedCell` as its leading term (by the same induction the naive engine's own `negativeVCols` relies on),
+    // satisfying `Chain.reduceByUntil`'s fallback contract.
+    //
+    // Termination: `boundaries(pivot)`'s own content, and any PAIRED cell reached via the fallback, can only
+    // reference cells that were ALREADY resolved (recorded in `boundaries`/`killer`) at the moment `killer(x)`
+    // itself got set -- so the "which cells does resolving x eliminate" relation is acyclic by the very order
+    // recordPair/unionFindDim01 calls actually happened in, regardless of filtration order. Trusted but not
+    // ONLY trusted: `vcolInProgress` below detects a real cycle at runtime and fails loudly instead of
+    // overflowing the stack, in case this reasoning is wrong for some case not yet found.
+    private val vcolCache: mutable.Map[CellT, Chain[CellT, CoefficientT]] = mutable.Map.empty
+    private val vcolInProgress: mutable.Set[CellT] = mutable.Set.empty
+
+    private def pivotOf(x: CellT): CellT =
+      killerOf.getOrElse(x, throw new IllegalStateException(s"vcolOf: paired cell $x has no recorded pivot"))
+
+    def vcolOf(sigma: CellT): Chain[CellT, CoefficientT] =
+      vcolCache.get(sigma) match
+        case Some(c) => c
+        case None    =>
+          if vcolInProgress.contains(sigma) then
+            throw new IllegalStateException(
+              s"vcolOf: cycle detected reconstructing $sigma's representative -- the acyclic-elimination " +
+                "invariant this relies on was violated"
+            )
+          vcolInProgress += sigma
+          val dsigma: Chain[CellT, CoefficientT] = Chain.from(sigma.boundary[CoefficientT])
+          val stop: CellT => Boolean =
+            if paired.contains(sigma) then
+              val myPivot = pivotOf(sigma)
+              (c: CellT) => c == myPivot
+            else (_: CellT) => false
+          val fallback: CellT => Option[Chain[CellT, CoefficientT]] =
+            (c: CellT) => if paired.contains(c) then Some(vcolOf(c)) else None
+          val (_, log) = Chain.reduceByUntil(dsigma, boundaries, Chain.empty, stop, fallback)
+          // Mirrors CellularHomologyContext.advanceOne's own vcol fold exactly (see its doc for the full
+          // derivation): a term eliminated via `boundaries` (CLEARED) corresponds to a real dimension-shift
+          // relationship (`boundaries(pivot) = boundary(vcolOf(killer(pivot)))`) that sigma's own vcol must
+          // correct for. A term eliminated via the fallback above (PAIRED) is a pure same-dimension basis
+          // rewrite with no such relationship -- it doesn't change what dsigma's reduction VALUE is, only how
+          // it's expressed -- so it needs NO correction here at all, not a different one.
+          val vcol = log.items.foldLeft(Chain(sigma)) { case (acc, (eliminated, coeff)) =>
+            if paired.contains(eliminated) then acc
+            else
+              val k = killer.getOrElse(
+                eliminated,
+                throw new IllegalStateException(s"vcolOf: eliminated pivot $eliminated has no recorded killer")
+              )
+              acc - (coeff ⊠ vcolOf(k))
+          }
+          vcol.collapseAll()
+          vcolInProgress -= sigma
+          vcolCache(sigma) = vcol
+          vcol
+
     /** Representative-annotated barcode, per `.claude/CLAUDE.md`'s coefficients-and-representatives design principle --
       * mirrors `CellularHomologyContext.barcodeAt`'s output shape exactly (`List[PersistenceBar[Double, Chain[CellT,
-      * CoefficientT]]]`), but is honest about a real, current scope boundary rather than claiming more than is actually
-      * computed: **only dimension-0 bars (finite or essential) carry a real `Some` representative right now** -- both
-      * are produced exclusively by `unionFindDim01`, which stores `Chain(dyingVertex)`/`Chain(rootVertex)` directly
-      * (the same trivial representative `CellularHomologyContext`'s own `cycles` map holds at dimension 0, since every
-      * 0-chain is automatically a cycle). Every other bar -- dimension >= 1 finite bars (still routed through the
-      * general `Chain.reduceByUntil` machinery, which stores a chain that IS a genuine cycle by the boundary-of-a-
-      * boundary argument but is NOT yet verified to match what `CellularHomologyContext`'s own incrementally- tracked
-      * `cycles`/`coboundaries` mechanism would report for the same bar) and every essential bar above dimension 0 (no
-      * representative-tracking mechanism exists here at all yet, for any dimension) -- reports `None`, matching
-      * `PersistenceBar.annotation`'s existing `Option` design rather than fabricating a value. Closing this gap for
-      * dimension >= 1 is real, separately-scoped future work (porting the same `reductionLog` -> `coboundaries` ->
-      * `cycles` incremental mechanism into the chunked local/global algorithm) -- see
-      * `.claude/WORKLOG-unionfind-in-chunks.md`.
+      * CoefficientT]]]`), and attaches a REAL representative to every reported bar (finite or essential, any dimension
+      * `<= maxDim`) -- computed by REUSING this class's own already-computed reduction state, not by running a second,
+      * independent engine over the same cells (see `vcolOf`'s own doc, and `.claude/WORKLOG-chunks-representatives.md`
+      * for the full derivation, including an earlier delegate-based design that was tried, rejected, and replaced with
+      * this one).
+      *
+      * Finite bars (any dimension): the `Chain` already stored in `barcode` by `recordPair`/`unionFindDim01` --
+      * `dsigmaReduced`, or `Chain(dyingVertex)` at dimension 0. This costs nothing extra: `R_sigma = boundary(V_sigma)`
+      * always (an inductive consequence of `d^2 = 0` plus how `recordPair`'s `generators`-equivalent chain is built),
+      * so whatever chunks' own local/global reduction produced is already a genuine cycle, independent of which
+      * specific elimination path (local `processCell`, or `compress`/`globalReduce`'s compression shortcuts) produced
+      * it -- confirmed empirically, not just derived, by `RepCycleAuditSpec`'s throwaway audit forcing genuinely
+      * globally-resolved pairs (large/tie-heavy clouds where local `processCell` alone can't reach the pivot) and
+      * checking `boundary(rep) == 0` over a signed field.
+      *
+      * Essential bars: dimension 0 (`Chain(rootVertex)`) and dimension 1 (spanning-forest-path cycles) come from
+      * `essentialRepresentatives`, populated eagerly by `unionFindDim01`. Dimension >= 2 is populated lazily, here, via
+      * `vcolOf` -- cached into `essentialRepresentatives` on first request so a repeated `barcodeAt` call doesn't
+      * recompute it.
       */
     def barcodeAt(f: Double): List[PersistenceBar[Double, Chain[CellT, CoefficientT]]] =
       advanceAll()
@@ -479,12 +643,25 @@ class CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field
         barcode.toList.flatMap { case (dim, bars) =>
           bars.toList.collect {
             case (lower, upper, chain) if lower <= f =>
-              // dim == 0 is a safe, sufficient proxy for "produced by unionFindDim01" today: that method is the
-              // ONLY populator of barcode(0), and always stores the real Chain(dyingVertex) there (see its own
-              // doc). A future dual-union-find phase (top-dimension-specific, see
-              // .claude/DESIGN-unionfind-in-chunks.md) would need to extend this check, not just this comment.
-              val rep = if dim == 0 then Some(chain) else None
-              new PersistenceBar(dim, endpoint(true)(lower), endpoint(false)(upper min f), rep)
+              // The chain STORED here (dsigmaReduced from recordPair, or Chain(dyingVertex) from
+              // unionFindDim01) is trustworthy as-is only at dim 0 -- for dim >= 1, `compress`'s own
+              // "inactive row" shortcut (eliminationFallback's `Some(Chain(l))` self-cancel branch) can DROP
+              // terms from what's stored, which is provably safe for the algorithm's own PIVOT correctness
+              // (the paper's own clearing argument) but NOT for the stored VALUE remaining a genuine cycle --
+              // confirmed empirically by RepCycleAuditSpec finding boundary(dsigmaReduced) != 0 on a
+              // globally-resolved (compress/globalReduce-heavy) fixture, exactly the case a purely
+              // locally-resolved fixture can't exercise. `chain.leadingCell` (the pivot identity) remains
+              // trustworthy regardless -- that's what clearing's correctness argument actually guarantees --
+              // so it's used here only to look up the REAL representative, not as the representative itself.
+              val rep =
+                if dim == 0 then chain
+                else
+                  val pivot = chain.leadingCell.get
+                  if dim == 1 then essentialRepresentatives(pivot) // the tree-path cycle unionFindDim01 built
+                  // for this edge back when it was still cycle-forming/essential, before recordPair promoted
+                  // it out of essentialSimplices -- that promotion never removes the representative itself.
+                  else vcolOf(pivot)
+              new PersistenceBar(dim, endpoint(true)(lower), endpoint(false)(upper min f), Some(rep))
           }
         }
 
@@ -492,11 +669,12 @@ class CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field
         essentialSimplices.toList.filter(_.dim <= maxDim).map { sigma =>
           val lower =
             stream.filtrationValue.applyOrElse(sigma, (_: CellT) => Double.NegativeInfinity)
+          val rep = essentialRepresentatives.getOrElseUpdate(sigma, vcolOf(sigma))
           new PersistenceBar(
             sigma.dim,
             endpoint(true)(lower),
             PositiveInfinity(),
-            essentialRepresentatives.get(sigma)
+            Some(rep)
           )
         }
 
@@ -508,6 +686,7 @@ class CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field
       cleared += pivot
       paired += sigma
       killer(pivot) = sigma
+      killerOf(sigma) = pivot
       // if the pivot was previously marked essential (e.g. by an earlier local pass),
       // promote it to a paired class now
       essentialSimplices -= pivot
@@ -583,9 +762,9 @@ class CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field
 
     // Shared by compress (Algorithm 4) and globalReduce (Algorithm 5): a cleared row substitutes its
     // killer's own chain if active, else self-cancels ("compression" -- the row is provably irrelevant
-    // downstream); a paired row self-cancels if inactive, or is left alone (no killer exists for a paired
-    // cell, so there is nothing to substitute) if active -- an active paired row is a legitimate potential
-    // final pivot for Rk.
+    // downstream); a paired row ALWAYS substitutes via its own V-column (vcolOf), unconditional on
+    // activity -- see below for why the earlier active/inactive self-cancel split was wrong for this
+    // branch specifically.
     //
     // globalReduce's own reduction (against `boundaries`, which only ever holds *cleared* pivots) can
     // expose a *paired* cell as a new term partway through -- e.g. substituting a cleared cell's boundary
@@ -598,13 +777,31 @@ class CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field
     // ordering bug itself was fixed) exposed this as a second, unrelated PersistenceInChunksContext bug
     // reproducing even on the well-established EnumeratingCofaceSimplexStream (see CLAUDE.md): it silently
     // dropped essential classes at a bounded maxDim whenever this cross-step gap was hit.
+    //
+    // The paired branch's earlier "self-cancel if inactive, else None (legitimate final pivot)" logic was
+    // ITSELF a second, distinct bug, found while root-causing a pre-existing chunks/naive pairing
+    // disagreement on a tie-heavy n=6 clique (WORKLOG-chunks-pairing-bug.md has the full trace):
+    // `Chain(l)` (trivial self-cancel) is NOT a valid substitute for a paired cell in general -- it just
+    // drops l from the accumulator, which is only correct if l's own true contribution happens to be
+    // exactly l itself. Compare CellularHomologyContext.advanceOne's own fallback, `negativeVCols.get`:
+    // a REAL, possibly multi-term V-column (leading term = the cell itself, built via the same
+    // fold-over-reduction-log the naive engine's own `vcol` uses), not a placeholder. `vcolOf` (built
+    // earlier in this class for barcodeAt's own representative tracking) computes exactly this same
+    // quantity for a paired cell -- see its own doc -- so reusing it here closes the gap without
+    // reintroducing full incremental V-column bookkeeping into the local/global passes (the plan
+    // advisor() redirected away from when representatives were first designed). Safe to call mid-algorithm
+    // (not just post-advanceAll, vcolOf's original use) specifically BECAUSE advanceAll's own reconciliation
+    // step (see its own doc, right before markActiveEntries) guarantees every cell's cleared/paired
+    // classification -- and hence every dependency vcolOf might recurse into -- is already final by the
+    // time compress/globalReduce (and therefore eliminationFallback) ever run: nothing below reopens or
+    // reclassifies an already-paired cell. Dropping the "active" gate entirely for this branch (not just
+    // widening it) matches CellularHomologyContext, which has no equivalent concept at all -- `negativeVCols.
+    // get` is consulted unconditionally whenever a paired cell is hit as a term needing elimination.
     def eliminationFallback(l: CellT): Option[Chain[CellT, CoefficientT]] =
       if cleared.contains(l) then
         if activeRows.getOrElse(l, false) then killer.get(l).map(j => R.getOrElse(j, Chain.empty))
         else Some(Chain(l))
-      else if paired.contains(l) then
-        if activeRows.getOrElse(l, false) then None
-        else Some(Chain(l))
+      else if paired.contains(l) then Some(vcolOf(l))
       else None
 
     // Algorithm 4: global column compression from clear-and-compress paper.
@@ -667,6 +864,57 @@ class CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field
             val stop: CellT => Boolean =
               sigma => cellIndex.getOrElse(sigma, -1) < floorIdx
             for sigma <- chunks(b) if sigma.dim == delta do processCell(sigma, stop)
+
+      // Resolve any cell left "in limbo" by the local phase above: processCell found a nonzero
+      // R value (this cell genuinely has unresolved content, i.e. is NOT locally essential) but
+      // deferred recordPair because its chosen pivot fell outside that round's local window
+      // (stop fired every time it was visited). Left unresolved, such a cell is neither cleared
+      // nor paired -- indistinguishable, to eliminationFallback's catch-all `else None` case,
+      // from a cell that's genuinely essential (R actively removed). That catch-all treats
+      // "else None" as "no content, safe for anyone to claim as their own pivot" -- true for a
+      // genuinely essential cell, false for one merely pending its own global resolution. Because
+      // the global phase below processes dimensions top-down (like the local phase), a HIGHER-
+      // dimension cell's globalReduce can reach a lower-dimension in-limbo cell as a substituted
+      // term *before* that lower cell's own compress/globalReduce ever runs -- wrongly claiming
+      // it as ITS OWN final pivot and stealing it from its rightful killer relationship. Found via
+      // a traced repro (tetrahedron {1,2,4,5} on an n=6, all-tied-at-zero, maxDim=3 clique: {0,1,2,3,4}'s
+      // global reduction reached {1,2,4,5} as a substituted term while {1,2,4,5} was still in limbo,
+      // and wrongly recorded it as {0,1,2,3,4}'s pivot instead of letting it resolve as the killer of
+      // its own triangle face {1,2,4}, which was left spuriously essential as a result).
+      //
+      // Fixed by re-reducing every in-limbo cell's raw boundary, with no local window, in filtration
+      // order -- exactly what the local phase itself would have done for it eventually, just without
+      // deferring. Re-deriving dsigma fresh and reducing against the current (accumulated) boundaries
+      // -- rather than recordPair-ing the stale stored R value directly -- matters when two in-limbo
+      // cells share a dimension: resolving the earlier one first can newly clear a pivot the later
+      // one's own raw boundary also contains, exactly the same sequential same-dimension resolution
+      // the ordinary (non-deferred) local pass already relies on.
+      //
+      // NOT a plain processCell(sigma, stop) call (which reduces against `boundaries` alone, no
+      // fallback): the ordinary local phase never needs a fallback, because it runs strictly
+      // dimension-descending (see processCell's own call site above), so a dimension-d cell's local
+      // reduction can never encounter an already-`paired` (dimension < d) term -- nothing below
+      // dimension d has been locally processed yet. This reconciliation step is different: it runs
+      // once, across ALL dimensions, AFTER the whole descending local phase -- so a higher-dimension
+      // in-limbo cell resolved here CAN cascade into an already-paired lower-dimension cell (a cleared
+      // pivot's own stored boundary can itself contain paired terms). Found the hard way: an earlier
+      // version of this loop called processCell directly, which fixed the {1,2,4,5} repro above but
+      // broke a DIFFERENT cell ({0,2,3,5} on the same fixture) the same way -- boundaries-only
+      // reduction has no way to eliminate a paired term it stumbles into, so it wrongly stopped on
+      // {0,2,3,5} as a final pivot too. Using eliminationFallback here (same as compress/globalReduce)
+      // closes that: a paired term now substitutes via its own V-column (vcolOf) instead of becoming
+      // an illegitimate terminus. See eliminationFallback's own doc for why calling vcolOf here, before
+      // the global phase has run, is safe.
+      for sigma <- allCells if R.contains(sigma) && !cleared.contains(sigma) && !paired.contains(sigma) do
+        val dsigma: Chain[CellT, CoefficientT] = Chain.from(sigma.boundary[CoefficientT])
+        val (dsigmaReduced, _) =
+          Chain.reduceByUntil(dsigma, boundaries, Chain.empty, (_: CellT) => false, fallback = eliminationFallback)
+        if dsigmaReduced.isZero() then
+          R -= sigma
+          essentialSimplices += sigma
+        else
+          R(sigma) = dsigmaReduced
+          recordPair(sigma, dsigmaReduced)
 
       // Algorithm 3: mark_active_entries from clear-and-compress paper
       markActiveEntries()

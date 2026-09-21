@@ -296,3 +296,53 @@ class PersistenceInChunksSpec extends mutable.Specification:
       HomologyFixtures.elderRuleExpected
     )
   }
+
+  // Regression pin for a real, pre-existing pairing bug found while validating dimension >= 2 representative
+  // tracking (.claude/WORKLOG-chunks-pairing-bug.md): on a tie-heavy clique (every point at the same
+  // filtration value, forcing heavy cross-chunk/cross-dimension cascading resolution), advanceAll's
+  // local/global split could leave a cell "in limbo" (neither cleared nor paired) that a HIGHER dimension's
+  // global pass would then wrongly claim as its own pivot, corrupting the cleared/paired invariant and
+  // leaving an unrelated cell spuriously essential. Minimal repro was n=6, maxDim=3 (tetrahedron {1,2,4,5}
+  // wrongly cleared by {0,1,2,3,4} instead of resolving as the killer of its own face {1,2,4}). Swept wider
+  // here (n in [5,8] x maxDim in [2,3]) since the bug's own two root causes are both about cascade depth/
+  // timing, not specific to the minimal case. Checks THREE independent things per case: diagramAt's own bar
+  // counts by dimension against naive's (restricted to dim <= maxDim, since naive's own stream has no
+  // maxDim concept -- a dimension-d cell can only ever affect a dimension d-1 pivot, so nothing above
+  // maxDim+1 can change a dim <= maxDim bar, matching chunks' own internalMaxDim = maxDim + 1 convention);
+  // that every barcodeAt representative at dimension >= 1 is a genuine cycle (this bug's fix reuses vcolOf,
+  // so a regression here would likely also break representatives); and that cleared/paired never overlap.
+  "Homology of tie-heavy cliques matches the naive engine exactly, with no cleared/paired overlap (pairing-bug regression)" >> {
+    val results = for
+      n <- 5 to 8
+      maxDim <- 2 to 3
+    yield
+      val metricSpace = EuclideanMetricSpace(Array.fill(n)(Array(0.0)))
+
+      val chunksCtx = PersistenceInChunksContext[Int, Double](maxDim)
+      val chunksState = chunksCtx.persistentHomology(
+        EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(Double.PositiveInfinity))
+      )
+      val chunksBars = chunksState.diagramAt(Double.PositiveInfinity)
+      val chunksReps = chunksState.barcodeAt(Double.PositiveInfinity)
+
+      given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+      val naiveBars = shc
+        .persistentHomology(
+          EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(Double.PositiveInfinity))
+        )
+        .diagramAt(Double.PositiveInfinity)
+        .filter(_._1 <= maxDim)
+
+      def countsByDim(bars: List[(Int, Double, Double)]): Map[Int, Int] =
+        bars.groupBy(_._1).view.mapValues(_.size).toMap
+
+      val countsMatch = countsByDim(chunksBars) == countsByDim(naiveBars)
+      val noOverlap = chunksState.cleared.intersect(chunksState.paired).isEmpty
+      val repsAreCycles = chunksReps.filter(_.dim >= 1).forall { bar =>
+        bar.annotation.exists(rep => Chain.from(rep.boundary).isZero())
+      }
+      (n, maxDim, countsMatch, noOverlap, repsAreCycles)
+
+    val bad = results.filterNot { case (_, _, a, b, c) => a && b && c }
+    bad must beEmpty
+  }

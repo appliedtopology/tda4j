@@ -290,6 +290,47 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
       .reduce(_ and _)
   }
 
+  // Generic-over-CellT coverage for barcodeAt's incremental representative tracking
+  // (.claude/WORKLOG-chunks-representatives-incremental.md) -- Cube is exactly the kind of non-Simplex
+  // OrderedCell instance that motivated genericizing CellularPersistenceInChunksContext in the first place,
+  // so it's real coverage, not a formality: vcolOf's own reduction and fold logic both need to work for
+  // Cube specifically, not just Simplex[Int] (which every fixture elsewhere in this file, and every fixture
+  // barcodeAt was originally developed against, happens to use).
+  "CellularPersistenceInChunksContext[Cube,...]'s barcodeAt gives every bar a genuine-cycle representative matching the naive engine's exactly" >> {
+    val cases = Seq(
+      ChunksCase(CubicalGridStream(IndexedSeq(2, 2), _ => 5.0), 25, 2),
+      ChunksCase(
+        CubicalGridStream(IndexedSeq(3, 3), idx => if idx == IndexedSeq(1, 1) then 1.0 else 0.0),
+        49,
+        2
+      ),
+      ChunksCase(CubicalGridStream(IndexedSeq(3), idx => if idx(0) == 1 then 2.0 else 0.0), 7, 1)
+    )
+    cases
+      .map { c =>
+        val naiveBars = persistentHomology(c.stream).barcodeAt(Double.PositiveInfinity)
+        val chunksBars = CellularPersistenceInChunksContext[Cube, Double](c.maxDim)
+          .persistentHomology(c.stream)
+          .barcodeAt(Double.PositiveInfinity)
+
+        val noneMissing = chunksBars.forall(_.annotation.isDefined)
+        val allCycles = chunksBars.forall(b => Chain.from(b.annotation.get.boundary).isZero())
+        // Multiset match via Chain's own overridden `equals`, not `.toSet` (Chain has no matching `hashCode`
+        // override -- see HomologySpec's own analogous check for the full reasoning).
+        val remaining =
+          scala.collection.mutable.ArrayBuffer.from(naiveBars.map(b => (b.dim, b.lower, b.upper, b.annotation.get)))
+        val matchesNaive = chunksBars.forall { b =>
+          val idx = remaining.indexWhere { case (d, l, u, rep) =>
+            d == b.dim && l == b.lower && u == b.upper && rep == b.annotation.get
+          }
+          idx >= 0 && { remaining.remove(idx); true }
+        } && remaining.isEmpty
+
+        (noneMissing must beTrue) and (allCycles must beTrue) and (matchesNaive must beTrue)
+      }
+      .reduce(_ and _)
+  }
+
   // Broader fuzz for the dimension-0/1 raw-union-find fast path added to CellularPersistenceInChunksContext
   // (.claude/WORKLOG-unionfind-in-chunks.md) -- reuses genTestImage above (small integer values, so
   // low-effort-tied by construction) rather than the fixed tie-heavy fixtures alone, since that's exactly the

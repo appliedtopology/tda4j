@@ -1,6 +1,6 @@
 name := "TDA4j"
 organization := "org.appliedtopology"
-scalaVersion := "3.8.4"
+scalaVersion := "3.9.0"
 
 versionScheme := Some("semver-spec")
 

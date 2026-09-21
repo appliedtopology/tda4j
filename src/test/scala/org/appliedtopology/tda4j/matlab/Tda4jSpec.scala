@@ -160,23 +160,17 @@ class Tda4jSpec extends mutable.Specification:
       readable must contain(true).forall
     }
 
-    // CellularPersistenceInChunksContext now records real representatives for dimension-0 bars (see
-    // .claude/CLAUDE.md's coefficients-and-representatives principle and .claude/WORKLOG-unionfind-in-chunks.md)
-    // -- no longer "explicitly refuse for every bar," so this is split into what's now readable (dimension 0)
-    // vs. what still explicitly refuses (dimension >= 1, not yet ported).
-    "be readable for engine=chunks dimension-0 bars, with matching vertex/coefficient array lengths" in {
+    // CellularPersistenceInChunksContext.barcodeAt now records a real representative for EVERY bar, at every
+    // dimension (see .claude/CLAUDE.md's coefficients-and-representatives principle and
+    // .claude/WORKLOG-chunks-representatives-incremental.md) -- the earlier "dimension-0 only" gap is closed,
+    // so this checks every reported bar, not just dimension 0.
+    "be readable for every engine=chunks bar, at every dimension, with matching vertex/coefficient array lengths" in {
       val chunksResult = Tda4j.computeFromPoints(points, Array("engine", "chunks"))
-      val dim0Indices = (0 until chunksResult.size()).filter(chunksResult.dimension(_) == 0)
-      dim0Indices must not(beEmpty)
-      dim0Indices.forall { i =>
+      chunksResult.size() must be_>(0)
+      // at least one bar above dimension 0, or this test isn't exercising the gap that used to exist
+      (0 until chunksResult.size()).exists(chunksResult.dimension(_) > 0) must beTrue
+      (0 until chunksResult.size()).forall { i =>
         chunksResult.cycleVertices(i).length == chunksResult.cycleCoefficients(i).length
       } must beTrue
-    }
-
-    "still explicitly refuse (not silently return empty) for engine=chunks bars above dimension 0" in {
-      val chunksResult = Tda4j.computeFromPoints(points, Array("engine", "chunks"))
-      val aboveDim0 = (0 until chunksResult.size()).find(chunksResult.dimension(_) > 0)
-      aboveDim0 must beSome
-      chunksResult.cycleVertices(aboveDim0.get) must throwA[UnsupportedOperationException]
     }
   }

@@ -261,12 +261,12 @@ object Tda4j:
               requestedMaxDimension
             )
           case "chunks" =>
-            // barcodeAt, not diagramAt: CellularPersistenceInChunksContext now records real (dimension-0-only,
-            // for now -- see that method's own doc and .claude/CLAUDE.md's coefficients-and-representatives
-            // principle) representatives, via the SAME fromBars/Option[Chain] path "ripser"/"naive" already use
-            // below -- a bar with no representative yet (any dim >= 1) comes back with annotation = None, which
-            // fromBars already turns into a per-bar UnsupportedOperationException rather than failing the whole
-            // call, exactly the same as an engine=ripser apparent-pairs-resolved bar today.
+            // barcodeAt, not diagramAt: CellularPersistenceInChunksContext now records a REAL representative for
+            // every bar (any dimension <= requestedMaxDimension), via the SAME fromBars/Option[Chain] path
+            // "ripser"/"naive" already use below -- see that method's own doc for how (it reuses this class's
+            // OWN already-computed reduction state -- boundaries/cleared/paired/killer -- incrementally, via
+            // vcolOf, rather than delegating to a second independent engine) and .claude/CLAUDE.md's
+            // coefficients-and-representatives principle.
             val stream = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue)
             val state = PersistenceInChunksContext[Int, C](requestedMaxDimension).persistentHomology(stream)
             fromBars[Simplex[Int], C](
@@ -348,7 +348,7 @@ object Tda4j:
         case None =>
           throw new UnsupportedOperationException(
             s"no representative chain was recorded for bar $i (this can happen for engine=ripser bars resolved " +
-              "via the apparent-pairs shortcut, or for engine=chunks bars above dimension 0 -- see " +
-              "CellularPersistenceInChunksContext.barcodeAt's own doc for the current scope boundary)"
+              "via the apparent-pairs shortcut -- engine=chunks now records a representative for every bar, see " +
+              "CellularPersistenceInChunksContext.barcodeAt's own doc)"
           )
     new PersistenceResult(dims, births, deaths, cycleProvider)
