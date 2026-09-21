@@ -137,6 +137,7 @@ appliedtopology/tda4j
   <li><a href="../developers-guide/index.html#developers-guide-for-tda4j" class="header">Developer&rsquo;s Guide for TDA4j</a>
   <ul>
     <li><a href="../developers-guide/index.html#what-you-need-to-deduce-before-you-can-contribute-fully" class="header">What you need to deduce before you can contribute fully</a></li>
+    <li><a href="../developers-guide/index.html#naming-convention-tda4j-tda4j-never-tda4j" class="header">Naming convention: <code>tda4j</code>/<code>TDA4j</code>, never <code>Tda4j</code></a></li>
     <li><a href="../developers-guide/index.html#where-the-bug-histories-and-design-derivations-live" class="header">Where the bug histories and design derivations live</a></li>
   </ul></li>
 </ul>
@@ -162,6 +163,7 @@ appliedtopology/tda4j
   <li><a href="../developers-guide/index.html#developers-guide-for-tda4j" class="header">Developer&rsquo;s Guide for TDA4j</a>
   <ul>
     <li><a href="../developers-guide/index.html#what-you-need-to-deduce-before-you-can-contribute-fully" class="header">What you need to deduce before you can contribute fully</a></li>
+    <li><a href="../developers-guide/index.html#naming-convention-tda4j-tda4j-never-tda4j" class="header">Naming convention: <code>tda4j</code>/<code>TDA4j</code>, never <code>Tda4j</code></a></li>
     <li><a href="../developers-guide/index.html#where-the-bug-histories-and-design-derivations-live" class="header">Where the bug histories and design derivations live</a></li>
   </ul></li>
 </ul>
@@ -185,6 +187,9 @@ appliedtopology/tda4j
   <li><strong>Is this surprising output a bug, or is it the library doing the mathematically correct thing on a  degenerate input?</strong> See <a href="degeneracies.html">Degeneracies</a> before you &ldquo;fix&rdquo; something that isn&rsquo;t broken.</li>
 </ol>
 <p>If you take one thing away from this guide before diving into the rest: <strong>in this codebase, &ldquo;compiles and has a passing test suite&rdquo; has not historically been a reliable signal of correctness for the persistence and ordering machinery.</strong> Every subtle bug found so far was caught by a specifically-constructed discriminating test fixture, not by the existing suite noticing on its own, because the existing tests mostly didn&rsquo;t happen to exercise the specific tie or label-order mismatch that triggers the bug class. When you&rsquo;re about to trust your own &ldquo;this seems obviously sound&rdquo; reasoning about a change to reduction or ordering code, build the cheap discriminating fixture first — see the closing section of <a href="gotchas.html">Hard-won invariants</a> for what that looks like in practice.</p>
+<h2><a href="#naming-convention-tda4j-tda4j-never-tda4j" name="naming-convention-tda4j-tda4j-never-tda4j" class="anchor"><span class="anchor-link"></span></a>Naming convention: <code>tda4j</code>/<code>TDA4j</code>, never <code>Tda4j</code></h2>
+<p>&ldquo;TDA4j&rdquo; is the acronym TDA (&ldquo;topological data analysis&rdquo;) plus the conventional <code>4j</code> suffix (<code>log4j</code>, <code>slf4j</code>) — not an ordinary English word, so don&rsquo;t let a titlecasing habit turn it into <code>Tda4j</code>. Use <strong><code>tda4j</code></strong> (all lowercase) for the package name, the executable/artifact name, the repo name, and ordinary prose; use <strong><code>TDA4j</code></strong> (acronym preserved) for Scala identifiers that must start with a capital letter — class/object/trait names such as <code>TDA4j</code> (the MATLAB facade), <code>TDA4jConf</code>/<code>TDA4jCLI</code> (the CLI). <code>Tda4j</code> is never correct.</p>
+<p>This applies to any identifier that&rsquo;s itself an acronym, not just the project name: <code>io.CSV</code> (comma-separated values) and <code>cli.TDA4jCLI</code> (command-line interface) are both fully capitalized for the same reason. <code>io.Gudhi</code>/ <code>Dipha</code>/<code>Ripser</code>/<code>Perseus</code>, by contrast, are ordinary proper nouns (external projects this codebase talks to file formats for) and stay titlecased in their own conventional spelling.</p>
 <h2><a href="#where-the-bug-histories-and-design-derivations-live" name="where-the-bug-histories-and-design-derivations-live" class="anchor"><span class="anchor-link"></span></a>Where the bug histories and design derivations live</h2>
 <p>This guide summarizes and cross-references, but doesn&rsquo;t duplicate, the detailed worklogs kept at the repo root: <code>../../../../.claude/WORKLOG-naive-homology.md</code>, <code>../../../../.claude/WORKLOG-cohomology.md</code>, <code>../../../../.claude/WORKLOG-alpha-complex.md</code>, and <code>WORKLOG.md</code> (the alpha-complex DQP numerical-robustness derivations). When this guide says &ldquo;confirmed by a specific counterexample&rdquo; or &ldquo;see the full derivation,&rdquo; that&rsquo;s where the full derivation actually lives — read those worklogs directly if you&rsquo;re about to touch code in the area they cover.</p>
 </div>
