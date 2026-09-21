@@ -73,12 +73,24 @@ sbt scalafmtAll                 # format the whole codebase
 sbt scalafmtCheck scalafmtSbtCheck   # what CI's lint job checks (formatting only, no autofix)
 sbt mimaReportBinaryIssues      # binary-compatibility check (also run in CI's test job)
 sbt makeSite                    # build the Paradox docs site (src/main/paradox) — needs Graphviz for diagrams
+sbt -DrunBenchmarks=true test   # also run every *BenchmarkSpec/ProfilingSpec (see below) — NOT what CI runs
 ```
 
 There is no linter beyond scalafmt — formatting is enforced in CI (`lint.yml`) as a check, not autofix, so run
-`scalafmtAll` before committing. Tests use specs2 (`org.specs2.mutable.Specification`); `ProfilingSpec` is a
-benchmark-style spec that reads `-Dbitlength=`/`-DmaxFVal=`/`-DmaxDim=`-style specs2 command-line args rather than
-asserting behavior — don't treat its failures like normal test failures.
+`scalafmtAll` before committing. Tests use specs2 (`org.specs2.mutable.Specification`); `ProfilingSpec`,
+`ApparentPairsBenchmarkSpec`, `CubicalBenchmarkSpec`, `SparseRipsBenchmarkSpec`, `DimensionCeilingBenchmarkSpec`,
+`EngineComparisonBenchmarkSpec`, and `RipserPaperBenchmarkSpec` (all in `homology`) are benchmark-style specs that
+read `-D`-style specs2 command-line args and print a timing table rather than asserting behavior — a failure there
+(an exception, not a slow number) is the only thing worth treating like a normal test failure. **All seven are
+skipped by default** (`if !args.commandLine.boolOr("runBenchmarks", false) then skipAll`, evaluated once at spec
+construction) so plain `sbt test`/CI never pays for them; pass `-DrunBenchmarks=true` (to `sbt`, before the task —
+these are JVM system properties, not specs2's own `--` argument syntax) to run them, typically scoped with
+`testOnly` since `EngineComparisonBenchmarkSpec` alone can take 15+ minutes and `RipserPaperBenchmarkSpec` needs
+its own `-DdataDir` on top of the flag to do anything. This is a shared on/off switch, not a per-spec size dial —
+each spec's own `-DminSize=`/`-Dtrials=`-style args (documented in its own class doc) still control how much work
+it does once enabled. `HomologySpec`'s `BarcodeRegressionSpec` is a separate case: it's `skipAll`'d unconditionally
+because it's a correctness spec that currently stalls/OOMs on its own generator range (a known open bug, not a
+benchmark opt-in), so it is deliberately NOT wired to this flag.
 
 CI is three independent GitHub Actions workflows on push/PR to `scala`: `test.yml` (test + mima),
 `lint.yml` (scalafmt check), `docs.yml` (build+publish Paradox site to GitHub Pages, push-to-`scala` only).

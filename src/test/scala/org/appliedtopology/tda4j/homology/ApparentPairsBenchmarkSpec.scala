@@ -35,6 +35,9 @@ import scala.util.Random
   * measurement.
   */
 class ApparentPairsBenchmarkSpec(args: Arguments) extends mutable.Specification:
+  // Skipped by default so plain `sbt test` never pays for this -- pass -DrunBenchmarks=true to actually run it
+  // (see CLAUDE.md's "Commands" section). One shared flag gates every *BenchmarkSpec/ProfilingSpec in this package.
+  if !args.commandLine.boolOr("runBenchmarks", false) then skipAll
   "Apparent-pairs optimization benchmark" >> {
     val minSize: Int = args.commandLine.intOr("minSize", 8)
     val maxSize: Int = args.commandLine.intOr("maxSize", 12)

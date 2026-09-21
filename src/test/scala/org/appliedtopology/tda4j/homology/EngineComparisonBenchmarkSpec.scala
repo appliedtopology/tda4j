@@ -91,9 +91,13 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
   // MATLAB-API session, and being a single `sbt` invocation, it holds the project-wide sbt lock for that whole
   // span, blocking any other `sbt` command against this project from even starting. Not a correctness regression
   // (this spec asserts nothing, just prints a timing table -- see the doc above), so skipping costs nothing for
-  // CI's actual pass/fail signal. Re-enable deliberately (drop this skipAll) when actually running the benchmark,
-  // not by default. See WORKLOG-matlab-api.md.
-  skipAll
+  // CI's actual pass/fail signal. See WORKLOG-matlab-api.md.
+  //
+  // Gated on -DrunBenchmarks=true (not a hardcoded skipAll) as of the test-suite-memory session, so running this
+  // deliberately no longer means editing source and remembering to revert it -- see CLAUDE.md's "Commands" section.
+  // Still the slowest thing this flag turns on (15+ minutes): scope a real run with `testOnly` rather than setting
+  // the flag on a plain `sbt test`, unless you actually want every gated benchmark to run.
+  if !args.commandLine.boolOr("runBenchmarks", false) then skipAll
   "Engine x construction comparison benchmark" >> {
     val minSize: Int = args.commandLine.intOr("minSize", 10)
     val maxSize: Int = args.commandLine.intOr("maxSize", 85)

@@ -120,10 +120,12 @@ import scala.sys.process.*
   * copied to and run directly on a machine (e.g. a compute server) that doesn't already have either.
   */
 class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
-  // Re-enable deliberately (uncomment) when actually running the benchmark -- see EngineComparisonBenchmarkSpec's
-  // own doc for why these stay skipped by default (holds sbt's project-wide lock; no pass/fail signal either way
-  // since this asserts nothing, just prints a table).
-  skipAll
+  // Gated on -DrunBenchmarks=true (not a hardcoded skipAll) as of the test-suite-memory session -- see
+  // EngineComparisonBenchmarkSpec's own doc for why these stay skipped by default (holds sbt's project-wide lock;
+  // no pass/fail signal either way since this asserts nothing, just prints a table) and CLAUDE.md's "Commands"
+  // section for the flag. Even with the flag set this spec self-skips its real work unless -DdataDir is also
+  // given (see below) -- a second, independent gate on top of the shared one.
+  if !args.commandLine.boolOr("runBenchmarks", false) then skipAll
   "RipserCohomologyContext vs real ripser.cpp, on the paper's own data sets" >> {
     val dataDir: Option[String] = sys.props.get("dataDir").filter(_.nonEmpty)
     val timeoutSeconds: Int = sys.props.get("timeoutSeconds").map(_.toInt).getOrElse(180)

@@ -1,0 +1,9 @@
+# Read by the sbt launcher itself (see `sbt` script's `loadConfigFile .jvmopts`), not by build.sbt --
+# applies to sbt's own JVM, which is also the test JVM since `Test / fork` is false (the default).
+#
+# Without this file the sbt launcher's own default (`sbt_default_mem=1024`, i.e. -Xmx1024m) applies --
+# confirmed via `sbt -batch "eval java.lang.Runtime.getRuntime.maxMemory/1048576"` returning 1024 on this
+# repo before this file existed. That default is too small for this suite (property-based specs with
+# minTestsOk in the thousands, e.g. AlphaComplexSpec/AlphaComplexDQPWeightedSpec) and has caused real
+# OutOfMemoryErrors -- see CLAUDE.md's "Cross-engine benchmark" section for one documented instance.
+-Xmx2G

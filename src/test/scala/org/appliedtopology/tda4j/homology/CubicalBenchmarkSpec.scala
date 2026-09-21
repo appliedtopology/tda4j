@@ -45,6 +45,9 @@ import scala.concurrent.duration.*
   * would produce (see `totalCellCount` for the real cell count at each `n`, not the pixel count).
   */
 class CubicalBenchmarkSpec(args: Arguments) extends mutable.Specification:
+  // Skipped by default so plain `sbt test` never pays for this -- pass -DrunBenchmarks=true to actually run it
+  // (see CLAUDE.md's "Commands" section). One shared flag gates every *BenchmarkSpec/ProfilingSpec in this package.
+  if !args.commandLine.boolOr("runBenchmarks", false) then skipAll
   "Cubical naive-vs-chunks engine scaling on square images" >> {
     val minN: Int = args.commandLine.intOr("minN", 4)
     val maxN: Int = args.commandLine.intOr("maxN", 32)

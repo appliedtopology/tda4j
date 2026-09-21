@@ -97,10 +97,13 @@ import scala.util.Random
   * own previously-crashing cells (VR-Enum+Naive at H=3/H=4) now hit ordinary timeout ceilings instead.
   */
 class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specification:
-  // Not skipAll, unlike EngineComparisonBenchmarkSpec -- defaults below are kept deliberately small/cheap (a global
-  // deadline included) so this stays safe under plain `sbt test`, the same convention SparseRipsBenchmarkSpec/
-  // ApparentPairsBenchmarkSpec use. Pass much larger -D overrides via an explicit `testOnly` invocation for a real
-  // sweep -- see the class doc's example command.
+  // Gated on -DrunBenchmarks=true, same as every other *BenchmarkSpec/ProfilingSpec in this package (see
+  // CLAUDE.md's "Commands" section) -- this one used to run unconditionally under plain `sbt test` on the theory
+  // that its defaults (a global deadline included) were cheap enough to be safe there, but that's exactly the kind
+  // of per-spec judgment call that's easy to get wrong under a suite-wide memory/time budget, so it's folded into
+  // the same shared flag as the rest rather than kept as a special case. Pass much larger -D overrides via an
+  // explicit `testOnly` invocation for a real sweep -- see the class doc's example command.
+  if !args.commandLine.boolOr("runBenchmarks", false) then skipAll
   "Dimension/threshold ceiling sweep" >> {
     val nStart: Int = args.commandLine.intOr("nStart", 15)
     val nCap: Int = args.commandLine.intOr("nCap", 60)

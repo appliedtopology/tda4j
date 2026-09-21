@@ -91,30 +91,19 @@ fi
 echo "Data ready in $DATA_DIR"
 
 echo
-echo "=== Step 3: un-skip RipserPaperBenchmarkSpec (temporarily -- restored by this script's own exit trap) ==="
-SPEC_FILE="src/test/scala/org/appliedtopology/tda4j/homology/RipserPaperBenchmarkSpec.scala"
-if [ ! -f "$SPEC_FILE" ]; then
-  echo "Run this script from the tda4j repo root (couldn't find $SPEC_FILE from $(pwd))"
-  exit 1
-fi
-cleanup() {
-  echo
-  echo "=== Restoring skipAll in $SPEC_FILE ==="
-  sed -i.bak 's/^  \/\/ skipAll -- .*$/  skipAll/' "$SPEC_FILE"
-  rm -f "$SPEC_FILE.bak"
-}
-trap cleanup EXIT
-sed -i.bak 's/^  skipAll$/  \/\/ skipAll -- temporarily disabled by run-ripser-paper-benchmark.sh, restored on exit/' "$SPEC_FILE"
-rm -f "$SPEC_FILE.bak"
-
-echo
-echo "=== Step 4: run the benchmark ==="
+echo "=== Step 3: run the benchmark ==="
+# RipserPaperBenchmarkSpec.scala (like every *BenchmarkSpec/ProfilingSpec in this package -- see CLAUDE.md's
+# "Commands" section) is skipped by default via `if !args.commandLine.boolOr("runBenchmarks", false) then
+# skipAll`, not a hardcoded `skipAll` -- -DrunBenchmarks=true below re-enables it directly, no source editing
+# or restore-on-exit trap needed (this script used to sed-toggle a literal `skipAll` line for exactly that
+# reason; that line no longer exists, so the toggle is gone too, not patched to match).
 CASE_ARG=""
 if [ -n "$CASE_NAMES" ]; then
   CASE_ARG="-DcaseNames=$CASE_NAMES"
 fi
 
 sbt -J-Xmx"$HEAP" \
+  -DrunBenchmarks=true \
   -DdataDir="$DATA_DIR" \
   -DripserBin="$RIPSER_BIN" \
   -DtimeoutSeconds="$TIMEOUT_SECONDS" \
@@ -122,5 +111,3 @@ sbt -J-Xmx"$HEAP" \
   -DpackedOnly="$PACKED_ONLY" \
   $CASE_ARG \
   "testOnly org.appliedtopology.tda4j.homology.RipserPaperBenchmarkSpec"
-
-# cleanup() runs automatically via the EXIT trap, restoring skipAll.
