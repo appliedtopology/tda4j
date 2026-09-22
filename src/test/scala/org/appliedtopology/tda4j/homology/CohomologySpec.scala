@@ -18,14 +18,12 @@ import org.specs2.scalacheck.Parameters
 /** `CellularCohomologyContext` correctness -- the generic (`CellT: OrderedCell`) cohomology engine, per
   * `.claude/DESIGN-generic-cohomology.md`. Validation plan, mirrored from that doc:
   *
-  *   1. Cross-validate against `RipserCohomologyContext` on `Simplex[Int]` VR complexes -- bar VALUES
-  *      (birth/death), not representative content: the two engines' tie-breaks were checked and found to
-  *      genuinely differ (see the "term for term" test's own comment below for why that's expected, not a
-  *      bug), so exact cross-engine representative agreement isn't a sound claim to make on VR input, where
-  *      dimension 0 is always fully tied.
-  *   2. `coboundaryOfChain(rep, cofacets).isZero()` for every ESSENTIAL bar (the only bars whose V-column is a
-  *      genuine cocycle by construction -- see `Cohomology.scala`'s own doc), across every cell type this class
-  *      newly supports.
+  *   1. Cross-validate against `RipserCohomologyContext` on `Simplex[Int]` VR complexes -- bar VALUES (birth/death),
+  *      not representative content: the two engines' tie-breaks were checked and found to genuinely differ (see the
+  *      "term for term" test's own comment below for why that's expected, not a bug), so exact cross-engine
+  *      representative agreement isn't a sound claim to make on VR input, where dimension 0 is always fully tied.
+  *   2. `coboundaryOfChain(rep, cofacets).isZero()` for every ESSENTIAL bar (the only bars whose V-column is a genuine
+  *      cocycle by construction -- see `Cohomology.scala`'s own doc), across every cell type this class newly supports.
   *   3. Barcode-value cross-validation against the already-trusted `CellularHomologyContext`, on Cube,
   *      `FiniteSimplicialSet`, Cech, and Alpha -- none of which had any cohomology cross-check before this class.
   *   4. The `totalBarsAccountForAllCells` structural invariant.
@@ -66,7 +64,10 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
     )
     vrCtx.persistentCohomology(stream).filter(_.dim <= maxDim)
 
-  private def ripserBars(metricSpace: FiniteMetricSpace[Int], maxDim: Int): List[PersistenceBar[Double, Chain[Simplex[Int], Double]]] =
+  private def ripserBars(
+    metricSpace: FiniteMetricSpace[Int],
+    maxDim: Int
+  ): List[PersistenceBar[Double, Chain[Simplex[Int], Double]]] =
     RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = Some(Double.PositiveInfinity))
       .persistentCohomology()
 
