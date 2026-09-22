@@ -140,7 +140,7 @@ appliedtopology/tda4j
     <li><a href="../developers-guide/class-diagrams.html#chain-cellt-coefficientt-chain-scala-" class="header"><code>Chain[CellT, CoefficientT]</code> (<code>Chain.scala</code>)</a></li>
     <li><a href="../developers-guide/class-diagrams.html#simplex-vertext-simplex-scala-simplexops-scala-" class="header"><code>Simplex[VertexT]</code> (<code>Simplex.scala</code>, <code>SimplexOps.scala</code>)</a></li>
     <li><a href="../developers-guide/class-diagrams.html#streams-simplexstream-scala-ripserstream-scala-vietorisrips-scala-" class="header">Streams (<code>SimplexStream.scala</code>, <code>RipserStream.scala</code>, <code>VietorisRips.scala</code>)</a></li>
-    <li><a href="../developers-guide/class-diagrams.html#persistence-engines-homology-scala-" class="header">Persistence engines (<code>Homology.scala</code>)</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#persistence-engines-homology-homology-scala-homology-packedripsercohomology-scala-" class="header">Persistence engines (<code>homology/Homology.scala</code>, <code>homology/PackedRipserCohomology.scala</code>)</a></li>
     <li><a href="../developers-guide/class-diagrams.html#metric-spaces-finitemetricspace-scala-" class="header">Metric spaces (<code>FiniteMetricSpace.scala</code>)</a></li>
     <li><a href="../developers-guide/class-diagrams.html#barcode-representation-barcode-scala-package-org-appliedtopology-tda4j-barcode-" class="header">Barcode representation (<code>Barcode.scala</code>, package <code>org.appliedtopology.tda4j.barcode</code>)</a></li>
   </ul></li>
@@ -170,7 +170,7 @@ appliedtopology/tda4j
     <li><a href="../developers-guide/class-diagrams.html#chain-cellt-coefficientt-chain-scala-" class="header"><code>Chain[CellT, CoefficientT]</code> (<code>Chain.scala</code>)</a></li>
     <li><a href="../developers-guide/class-diagrams.html#simplex-vertext-simplex-scala-simplexops-scala-" class="header"><code>Simplex[VertexT]</code> (<code>Simplex.scala</code>, <code>SimplexOps.scala</code>)</a></li>
     <li><a href="../developers-guide/class-diagrams.html#streams-simplexstream-scala-ripserstream-scala-vietorisrips-scala-" class="header">Streams (<code>SimplexStream.scala</code>, <code>RipserStream.scala</code>, <code>VietorisRips.scala</code>)</a></li>
-    <li><a href="../developers-guide/class-diagrams.html#persistence-engines-homology-scala-" class="header">Persistence engines (<code>Homology.scala</code>)</a></li>
+    <li><a href="../developers-guide/class-diagrams.html#persistence-engines-homology-homology-scala-homology-packedripsercohomology-scala-" class="header">Persistence engines (<code>homology/Homology.scala</code>, <code>homology/PackedRipserCohomology.scala</code>)</a></li>
     <li><a href="../developers-guide/class-diagrams.html#metric-spaces-finitemetricspace-scala-" class="header">Metric spaces (<code>FiniteMetricSpace.scala</code>)</a></li>
     <li><a href="../developers-guide/class-diagrams.html#barcode-representation-barcode-scala-package-org-appliedtopology-tda4j-barcode-" class="header">Barcode representation (<code>Barcode.scala</code>, package <code>org.appliedtopology.tda4j.barcode</code>)</a></li>
   </ul></li>
@@ -184,7 +184,7 @@ appliedtopology/tda4j
 <article class="md-content__inner md-typeset">
 <div class="md-content__searchable">
 <h1><a href="#mapping-the-library-class-diagrams" name="mapping-the-library-class-diagrams" class="anchor"><span class="anchor-link"></span></a>Mapping the library: class diagrams</h1><div class="callout note "><div class="callout-title">Note</div>
-<p>This page is a structural sketch to help you get oriented, not an exhaustive or automatically generated reference — field names and signatures can drift out of sync with source over time. When a diagram and the actual <code>.scala</code> file disagree, trust the file; the previous version of this page (dated 2024-09-18) had drifted enough from current source (referencing a <code>Cube.scala</code> file and cubical-complex types that no longer exist anywhere in <code>src/main</code>, among other things) that it was more actively misleading than useful, which is why this page was rebuilt from scratch against current source rather than incrementally patched.</p></div>
+<p>This page is a structural sketch to help you get oriented, not an exhaustive or automatically generated reference — field names and signatures can drift out of sync with source over time. When a diagram and the actual <code>.scala</code> file disagree, trust the file.</p></div>
 <h2><a href="#typeclass-hierarchy-ringmodule-scala-field-scala-chain-scala-" name="typeclass-hierarchy-ringmodule-scala-field-scala-chain-scala-" class="anchor"><span class="anchor-link"></span></a>Typeclass hierarchy (<code>RingModule.scala</code>, <code>Field.scala</code>, <code>Chain.scala</code>)</h2>
 <pre class="prettyprint"><code class="language-mermaid">classDiagram
     class RingModule {
@@ -237,10 +237,12 @@ appliedtopology/tda4j
     Cell &lt;|-- OrderedCell
     Cocell &lt;|-- OrderedCocell
     Simplex ..|&gt; OrderedCell : given instance
+    Cube ..|&gt; OrderedCell : given instance
+    FiniteSimplicialSet ..|&gt; OrderedCell : per-instance given (cellInstance)
     Chain ..|&gt; OrderedBasis : given instance
     Chain ..|&gt; RingModule : given instance
 </code></pre>
-<p><code>Simplex[VertexT]</code> is currently the library&rsquo;s only <code>OrderedCell</code> instance; no concrete <code>Cocell</code>/ <code>OrderedCocell</code> instance exists yet (<code>RipserCohomologyContext</code> computes coboundaries directly against <code>SimplexIndexing</code> instead — see <a href="persistence-engines.html">Persistence engines</a>). See the <a href="scala3-primer.html">Scala 3 primer</a> for what &ldquo;typeclass: type Self&rdquo; and &ldquo;given instance&rdquo; mean concretely in this codebase&rsquo;s syntax.</p>
+<p>Three concrete <code>OrderedCell</code> instances exist: <code>Simplex[VertexT]</code>, <code>Cube</code>, and a <code>FiniteSimplicialSet[G]</code>&rsquo;s own generators (that last one is a per-instance <code>given</code>, not a global one, since its boundary depends on that particular simplicial set&rsquo;s own face data). No concrete <code>Cocell</code>/<code>OrderedCocell</code> instance exists — <code>RipserCohomologyContext</code>/<code>PackedRipserCohomologyContext</code> compute coboundaries directly against <code>SimplexIndexing</code> instead (see <a href="persistence-engines.html">Persistence engines</a>). See the <a href="scala3-primer.html">Scala 3 primer</a> for what &ldquo;typeclass: type Self&rdquo; and &ldquo;given instance&rdquo; mean concretely in this codebase&rsquo;s syntax.</p>
 <h2><a href="#chain-cellt-coefficientt-chain-scala-" name="chain-cellt-coefficientt-chain-scala-" class="anchor"><span class="anchor-link"></span></a><code>Chain[CellT, CoefficientT]</code> (<code>Chain.scala</code>)</h2>
 <pre class="prettyprint"><code class="language-mermaid">classDiagram
     class Chain {
@@ -302,19 +304,25 @@ appliedtopology/tda4j
     StratifiedSimplexStream &lt;|-- CofaceSimplexStream
     CofaceSimplexStream &lt;|-- EnumeratingCofaceSimplexStream
     EnumeratingCofaceSimplexStream &lt;|-- RipserCofaceSimplexStream
+    RipserCofaceSimplexStream &lt;|-- CechCofaceSimplexStream
     EnumeratingCofaceSimplexStream &lt;|-- InorderCofaceSimplexStream
     SimplexStream &lt;|-- ExplicitStream
     SimplexStream &lt;|-- RipserStreamBase
     RipserStreamBase &lt;|-- RipserStream
     SimplexStream &lt;|-- RipserStreamSparse
     StratifiedSimplexStream &lt;|-- RecursiveStackVietorisRipsSimplexStream
+    StratifiedSimplexStream &lt;|-- IncrementalVietorisRipsSimplexStream
     StratifiedSimplexStream &lt;|-- AlphaShapes
     AlphaShapes &lt;|-- HelixDelaunay
     AlphaShapes &lt;|-- AlphaShapeDQP
+    StratifiedCellStream &lt;|-- CubicalGridStream
+    StratifiedCellStream &lt;|-- ExplicitCubicalStream
+    CellStream &lt;|-- SimplicialSetStream
+    StratifiedCellStream &lt;|-- FilteredSimplicialSetStream
 </code></pre>
-<p>These are <strong>alternate stream implementations with a common output contract, not layers on top of one another</strong> — see <a href="architecture.html">Architecture</a>.</p>
-<h2><a href="#persistence-engines-homology-scala-" name="persistence-engines-homology-scala-" class="anchor"><span class="anchor-link"></span></a>Persistence engines (<code>Homology.scala</code>)</h2>
-<p>Deliberately <em>not</em> diagrammed field-by-field here — their exact state and trust status changes over time and belongs in one place. See <a href="persistence-engines.html">Persistence engines</a> for the full, current picture of <code>CellularHomologyContext</code>/<code>SimplicialHomologyContext</code>, <code>PersistenceInChunksContext</code>, <code>SimplicialHomologyByDimensionContext</code> (non-functional as of this writing), and <code>RipserCohomologyContext</code>.</p>
+<p>These are <strong>alternate stream implementations with a common output contract, not layers on top of one another</strong> — see <a href="architecture.html">Architecture</a>. <code>CubicalGridStream</code>/<code>ExplicitCubicalStream</code> produce <code>Cube</code>s rather than <code>Simplex</code>es; <code>SimplicialSetStream</code>/<code>FilteredSimplicialSetStream</code> produce a <code>FiniteSimplicialSet[G]</code>&rsquo;s own generator type <code>G</code>.</p>
+<h2><a href="#persistence-engines-homology-homology-scala-homology-packedripsercohomology-scala-" name="persistence-engines-homology-homology-scala-homology-packedripsercohomology-scala-" class="anchor"><span class="anchor-link"></span></a>Persistence engines (<code>homology/Homology.scala</code>, <code>homology/PackedRipserCohomology.scala</code>)</h2>
+<p>Deliberately <em>not</em> diagrammed field-by-field here — their exact state and trust status belongs in one place. See <a href="persistence-engines.html">Persistence engines</a> for the full, current picture of the four algorithms across five classes: <code>CellularHomologyContext</code>/<code>SimplicialHomologyContext</code>, <code>CellularPersistenceInChunksContext</code>/<code>PersistenceInChunksContext</code>, <code>SimplicialHomologyByDimensionContext</code>, <code>RipserCohomologyContext</code>, and <code>PackedRipserCohomologyContext</code>.</p>
 <h2><a href="#metric-spaces-finitemetricspace-scala-" name="metric-spaces-finitemetricspace-scala-" class="anchor"><span class="anchor-link"></span></a>Metric spaces (<code>FiniteMetricSpace.scala</code>)</h2>
 <pre class="prettyprint"><code class="language-mermaid">classDiagram
     class FiniteMetricSpace {
