@@ -7,11 +7,10 @@ import org.appliedtopology.tda4j.homology.{given, *}
 
 import scala.util.Random
 
-/** Test-scope driver, kept alongside `AlphaDQPParallelProfileDriver`/`CubicalParallelProfileDriver` as the same kind
-  * of one-engine-per-process timing tool. Measures `CechCofaceSimplexStream` construction (stream materialization
-  * alone, isolating the Miniball-heavy filtration-value work) and full end-to-end persistent homology wall-clock time
-  * with `parallelFiltrationValue` on vs off -- see `.claude/WORKLOG-parallelization-survey.md` item 2. Invoked
-  * directly:
+/** Test-scope driver, kept alongside `AlphaDQPParallelProfileDriver`/`CubicalParallelProfileDriver` as the same kind of
+  * one-engine-per-process timing tool. Measures `CechCofaceSimplexStream` construction (stream materialization alone,
+  * isolating the Miniball-heavy filtration-value work) and full end-to-end persistent homology wall-clock time with
+  * `parallelFiltrationValue` on vs off -- see `.claude/WORKLOG-parallelization-survey.md` item 2. Invoked directly:
   *
   * {{{
   * java -cp $CP org.appliedtopology.tda4j.streams.CechParallelProfileDriver <parallel> <n> <dim> <maxDimCap> [seed] [trials]

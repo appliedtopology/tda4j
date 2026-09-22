@@ -100,6 +100,59 @@ class TDA4jSpec extends mutable.Specification:
     }
   }
 
+  "engine=cohomology, through the facade" should {
+    // CellularCohomologyContext -- .claude/DESIGN-generic-cohomology.md. Bar VALUES should agree with
+    // engine=ripser on complex=vr (both compute persistent cohomology of the same Vietoris-Rips complex,
+    // just one generic/materialized and one VR-specialized) -- not representative CONTENT, which
+    // `CohomologySpec`'s own comment explains isn't a sound cross-engine claim on VR input (dimension 0 is
+    // always fully tied, and the two engines' tie-breaks genuinely differ).
+    "agree with the default engine=ripser, through the facade" in {
+      val ripser = triples(TDA4j.computeFromPoints(points).toArray())
+      val cohomology = triples(TDA4j.computeFromPoints(points, Array("engine", "cohomology")).toArray())
+      cohomology must containTheSameElementsAs(ripser)
+    }
+
+    // Every bar carries a real annotation (this engine never resolves a bar via a shortcut that skips
+    // recording one, unlike engine=ripser's apparent-pairs case) -- mirrors the equivalent engine=chunks
+    // check below.
+    "have representative chains readable for every bar, with matching vertex/coefficient array lengths" in {
+      val result = TDA4j.computeFromPoints(points, Array("engine", "cohomology"))
+      result.size() must be_>(0)
+      (0 until result.size()).forall { i =>
+        result.cycleVertices(i).length == result.cycleCoefficients(i).length
+      } must beTrue
+    }
+  }
+
+  "complex=alpha, through the facade" should {
+    // Tolerance-based, not exact `containTheSameElementsAs` -- each facade call independently reconstructs its
+    // own `Alpha(pts, alphaBackend)`, and HelixDelaunay's own filtration-value computation touches a
+    // `mutable.Set` whose iteration order (hence floating-point summation order) isn't guaranteed identical
+    // between two independent constructions of "the same" complex -- the exact construction-nondeterminism
+    // class `AlphaComplexSpec`'s own comment documents (last-ULP-level differences, not a reduction bug).
+    "engine=cohomology agrees with the default engine=naive, up to floating-point tolerance" in {
+      val naive =
+        triples(TDA4j.computeFromPoints(points, Array("complex", "alpha")).toArray()).sortBy(t => (t._1, t._2, t._3))
+      val cohomology = triples(
+        TDA4j.computeFromPoints(points, Array("complex", "alpha", "engine", "cohomology")).toArray()
+      ).sortBy(t => (t._1, t._2, t._3))
+
+      naive.length must be_==(cohomology.length)
+      val agree = naive.zip(cohomology).forall { case ((d1, b1, e1), (d2, b2, e2)) =>
+        d1 == d2 &&
+        math.abs(b1 - b2) < 1e-9 &&
+        (e1.isInfinite == e2.isInfinite) && (e1.isInfinite || math.abs(e1 - e2) < 1e-9)
+      }
+      agree must beTrue
+    }
+
+    "reject an unrecognized engine value" in {
+      TDA4j.computeFromPoints(points, Array("complex", "alpha", "engine", "bogus")) must throwA[
+        IllegalArgumentException
+      ]
+    }
+  }
+
   "computeFromDistanceMatrix" should {
     "agree with computeFromPoints given the same cloud's own Euclidean distances" in {
       val fromDist = triples(TDA4j.computeFromDistanceMatrix(euclideanDistanceMatrix(points)).toArray())
@@ -185,6 +238,17 @@ class TDA4jSpec extends mutable.Specification:
       allReadable(naiveResult) must beTrue
       allReadable(chunksResult) must beTrue
     }
+
+    "engine=cohomology agrees with the default engine=naive, with readable representative chains" in {
+      val naive = triples(TDA4j.computeFromPoints(points, Array("complex", "cech")).toArray())
+      val cohomologyResult = TDA4j.computeFromPoints(points, Array("complex", "cech", "engine", "cohomology"))
+      val cohomology = triples(cohomologyResult.toArray())
+      val allReadable =
+        (0 until cohomologyResult.size()).forall { i =>
+          cohomologyResult.cycleVertices(i).length == cohomologyResult.cycleCoefficients(i).length
+        }
+      (cohomology must containTheSameElementsAs(naive)) and (allReadable must beTrue)
+    }
   }
 
   "complex=cubical, through the facade" should {
@@ -226,6 +290,13 @@ class TDA4jSpec extends mutable.Specification:
       val naive = triples(TDA4j.computeFromCubicalImage(ringShape, ringFlat).toArray())
       val chunks = triples(TDA4j.computeFromCubicalImage(ringShape, ringFlat, Array("engine", "chunks")).toArray())
       naive must containTheSameElementsAs(chunks)
+    }
+
+    "engine=cohomology agrees with the default engine=naive" in {
+      val naive = triples(TDA4j.computeFromCubicalImage(ringShape, ringFlat).toArray())
+      val cohomology =
+        triples(TDA4j.computeFromCubicalImage(ringShape, ringFlat, Array("engine", "cohomology")).toArray())
+      naive must containTheSameElementsAs(cohomology)
     }
 
     "computeFromImage (the 2D double[][] convenience) matches computeFromCubicalImage on the same grid" in {

@@ -91,6 +91,23 @@ class CLISpec extends mutable.Specification:
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
     }
 
+    "produce the exact same barcode with --engine cohomology as calling TDA4j directly, via a real file on disk" >> {
+      val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, points.map(_.toSeq).toSeq)
+
+      val buffer = new ByteArrayOutputStream()
+      val exitCode =
+        TDA4jCLI.run(Seq("--engine", "cohomology", "--max-dimension", "1", path), new PrintStream(buffer))
+      val cliLines = buffer.toString.linesIterator.toSeq
+
+      val direct = TDA4j.computeFromPoints(points, Array("engine", "cohomology", "maxDimension", "1"))
+      val directBars = TDA4jCLI.toBars(direct)
+      val directLines = directBars.map(_.toString)
+
+      (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
+    }
+
     "return exit code 1 and print a one-line message on a bad option, without throwing" >> {
       val path = tempFile(".csv")
       CSV.writePointCloud(path, Seq(Seq(0.0, 0.0), Seq(1.0, 0.0)))

@@ -39,15 +39,8 @@ classDiagram
         <<typeclass: type Self, extends HasDimension>>
         boundary~CoefficientT~() Seq~Tuple2~
     }
-    class Cocell {
-        <<typeclass: type Self, extends HasDimension>>
-        coboundary~CoefficientT~() Seq~Tuple2~
-    }
     class OrderedCell {
         <<typeclass: type Self : Ordering as ordering, extends Cell>>
-    }
-    class OrderedCocell {
-        <<typeclass: type Self : Ordering as ordering, extends Cocell>>
     }
     class OrderedBasis {
         <<typeclass: type Self, requires CellT:Ordering, CoefficientT:Field>>
@@ -56,9 +49,7 @@ classDiagram
         leadingTerm: Tuple2
     }
     HasDimension <|-- Cell
-    HasDimension <|-- Cocell
     Cell <|-- OrderedCell
-    Cocell <|-- OrderedCocell
     Simplex ..|> OrderedCell : given instance
     Cube ..|> OrderedCell : given instance
     FiniteSimplicialSet ..|> OrderedCell : per-instance given (cellInstance)
@@ -68,9 +59,10 @@ classDiagram
 
 Three concrete `OrderedCell` instances exist: `Simplex[VertexT]`, `Cube`, and a `FiniteSimplicialSet[G]`'s
 own generators (that last one is a per-instance `given`, not a global one, since its boundary depends on
-that particular simplicial set's own face data). No concrete `Cocell`/`OrderedCocell` instance exists —
-`RipserCohomologyContext`/`PackedRipserCohomologyContext` compute coboundaries directly against
-`SimplexIndexing` instead (see @ref:[Persistence engines](persistence-engines.md)). See the
+that particular simplicial set's own face data). There is no dual `Cocell`/`OrderedCocell` trait pair (an
+earlier version had one; removed as the wrong shape for coboundary, which is extrinsic to a cell, not
+intrinsic like `boundary`) — `RipserCohomologyContext`/`PackedRipserCohomologyContext` compute coboundaries
+directly against `SimplexIndexing` instead (see @ref:[Persistence engines](persistence-engines.md)). See the
 @ref:[Scala 3 primer](scala3-primer.md) for what "typeclass: type Self" and "given instance" mean concretely in
 this codebase's syntax.
 

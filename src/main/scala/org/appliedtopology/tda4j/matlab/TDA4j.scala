@@ -22,9 +22,15 @@ import scala.collection.mutable
   *
   *   - `"complex"`: `"vr"` (default), `"alpha"`, or `"cech"`.
   *   - `"engine"`: `"ripser"` (default for `complex=vr`; backed by `PackedRipserCohomologyContext`, the fastest and
-  *     most memory-efficient engine -- see CLAUDE.md), `"naive"` (reference-grade, slower; the only engine usable with
-  *     `complex=alpha`, and the default for `complex=cech`), or `"chunks"` (`complex=vr`/`complex=cech` only -- see
-  *     below for why `complex=alpha` refuses it, and why `complex=cech` refuses `engine=ripser` specifically).
+  *     most memory-efficient engine -- see CLAUDE.md), `"naive"` (reference-grade, slower; the default for
+  *     `complex=alpha`/`complex=cech`), `"chunks"` (`complex=vr`/`complex=cech` only -- see below for why
+  *     `complex=alpha` refuses it, and why `complex=cech` refuses `engine=ripser` specifically), or `"cohomology"`
+  *     (backed by `CellularCohomologyContext` -- persistent COhomology, generic over `CellT: OrderedCell`, valid for
+  *     every `complex` value including `alpha`; unlike `engine=ripser`, not specialized to Vietoris-Rips, so it also
+  *     works for `complex=alpha`/`complex=cech`, but without `ripser`'s VR-specific speed optimizations -- see
+  *     `.claude/DESIGN-generic-cohomology.md`). Every essential bar's representative is a genuine cocycle (`d(rep) =
+  *     0`); a finite bar's representative is a valid witness on its own living interval but is NOT expected to have
+  *     zero coboundary over the whole complex -- see `Cohomology.scala`'s own doc for why.
   *   - `"alphaBackend"`: `"helix"` (default) or `"DQP"`, only consulted when `complex=alpha`.
   *   - `"maxDimension"`: integer, default `2` -- the highest HOMOLOGICAL degree you want back (i.e. "give me
   *     H_0..H_k"), not the highest simplex dimension to build. Computing H_k correctly needs (k+1)-dimensional chains
@@ -352,9 +358,25 @@ object TDA4j:
               toDouble,
               requestedMaxDimension
             )
+          case "cohomology" =>
+            // CellularCohomologyContext, generic over CellT: OrderedCell -- see
+            // .claude/DESIGN-generic-cohomology.md. Same "build one dimension higher, drop it via fromBars"
+            // dance as engine=naive above, for the identical reason (H_k needs (k+1)-dimensional chains); this
+            // engine has no maxDim/maxDimension parameter of its own at all (deliberately -- see that class's
+            // own doc), so the cap lives entirely in the stream, exactly like engine=naive.
+            val stream = LimitedCofaceSimplexStream(
+              EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
+              requestedMaxDimension + 1
+            )
+            fromBars[Simplex[Int], C](
+              CellularCohomologyContext[Simplex[Int], C, Double]().persistentCohomology(stream),
+              (_, cell) => cell.underlying.toArray,
+              toDouble,
+              requestedMaxDimension
+            )
           case other =>
             throw new IllegalArgumentException(
-              s"unrecognized engine '$other' for complex=vr; expected 'ripser', 'naive', or 'chunks'"
+              s"unrecognized engine '$other' for complex=vr; expected 'ripser', 'naive', 'chunks', or 'cohomology'"
             )
       case "alpha" =>
         // No dimension cap is applied here at all, on purpose: an alpha complex's chain complex terminates on its
@@ -378,9 +400,21 @@ object TDA4j:
               toDouble,
               Int.MaxValue
             )
+          case "cohomology" =>
+            // No stream-level dimension cap here either, for the same reason as engine=naive above: an alpha
+            // complex's chain complex terminates on its own. CellularCohomologyContext accepts `alphaStream`
+            // directly -- it's a StratifiedSimplexStream[Int, Double], hence a CellStream[Simplex[Int], Double].
+            fromBars[Simplex[Int], C](
+              CellularCohomologyContext[Simplex[Int], C, Double]().persistentCohomology(alphaStream),
+              (_, cell) => cell.underlying.toArray,
+              toDouble,
+              Int.MaxValue
+            )
           case other =>
             // dispatch() already rejects ripser/chunks for alpha; anything else is a genuinely unrecognized engine.
-            throw new IllegalArgumentException(s"unrecognized engine '$other' for complex=alpha; expected 'naive'")
+            throw new IllegalArgumentException(
+              s"unrecognized engine '$other' for complex=alpha; expected 'naive' or 'cohomology'"
+            )
       case "cech" =>
         // Cech grows unboundedly in dimension just like VR -- unlike alpha/cubical, its own top dimension is NOT
         // naturally bounded (a Cech complex over n points can, in principle, reach an (n-1)-simplex) -- so it needs
@@ -426,10 +460,24 @@ object TDA4j:
               toDouble,
               requestedMaxDimension
             )
+          case "cohomology" =>
+            // Same shape as engine=naive above for complex=cech -- Cech's top dimension is not naturally
+            // bounded, so the same "build one dimension higher via LimitedCofaceSimplexStream, drop it via
+            // fromBars" dance applies, for the identical reason as complex=vr's own engine=cohomology branch.
+            val stream = LimitedCofaceSimplexStream(
+              CechCofaceSimplexStream(euclideanMetricSpace, maxFiltrationValue = maxFiltrationValue),
+              requestedMaxDimension + 1
+            )
+            fromBars[Simplex[Int], C](
+              CellularCohomologyContext[Simplex[Int], C, Double]().persistentCohomology(stream),
+              (_, cell) => cell.underlying.toArray,
+              toDouble,
+              requestedMaxDimension
+            )
           case other =>
             // dispatch() already rejects ripser for cech; anything else is a genuinely unrecognized engine.
             throw new IllegalArgumentException(
-              s"unrecognized engine '$other' for complex=cech; expected 'naive' or 'chunks'"
+              s"unrecognized engine '$other' for complex=cech; expected 'naive', 'chunks', or 'cohomology'"
             )
       case other =>
         throw new IllegalArgumentException(s"unrecognized complex '$other'; expected 'vr', 'alpha', or 'cech'")
@@ -445,8 +493,8 @@ object TDA4j:
     if engine == "ripser" then
       throw new IllegalArgumentException(
         "engine=ripser cannot be used for a cubical complex: PackedRipserCohomologyContext is specialized to " +
-          "Simplex[Int] Vietoris-Rips complexes and has no notion of a cubical complex at all. Use engine=naive " +
-          "or engine=chunks."
+          "Simplex[Int] Vietoris-Rips complexes and has no notion of a cubical complex at all. Use engine=naive, " +
+          "engine=chunks, or engine=cohomology."
       )
     // Default: the grid's own ambient dimension, i.e. "give me everything" -- correctly parallel to complex=alpha
     // above (a cubical grid's own top dimension is already naturally bounded, never artificially truncated the
@@ -492,9 +540,19 @@ object TDA4j:
         // just filter what's reported after the fact.
         val state = CellularPersistenceInChunksContext[Cube, C](maxDimension).persistentHomology(stream)
         fromBars[Cube, C](state.barcodeAt(Double.PositiveInfinity), cellVertices, toDouble, maxDimension)
+      case "cohomology" =>
+        // Same shape as engine=naive above: no stream-level dimension cap (a cubical grid's own top dimension
+        // is already naturally bounded), CellularCohomologyContext computes to that natural top dimension, and
+        // maxDimension is applied purely as a post-hoc filter via fromBars.
+        fromBars[Cube, C](
+          CellularCohomologyContext[Cube, C, Double]().persistentCohomology(stream),
+          cellVertices,
+          toDouble,
+          maxDimension
+        )
       case other =>
         throw new IllegalArgumentException(
-          s"unrecognized engine '$other' for a cubical complex; expected 'naive' or 'chunks'"
+          s"unrecognized engine '$other' for a cubical complex; expected 'naive', 'chunks', or 'cohomology'"
         )
 
   // ---------------------------------------------------------------------------------------------------------------

@@ -11,7 +11,7 @@ If a piece of Scala 3 syntax below looks unfamiliar, see the @ref:[Scala 3 prime
 
 `org.appliedtopology.tda4j` is split into subpackages, each a layer:
 
-- **`algebra`** — `RingModule`, `Field`, `FiniteField`, `Chain` (including the `Cell`/`Cocell`/
+- **`algebra`** — `RingModule`, `Field`, `FiniteField`, `Chain` (including the `Cell`/
   `OrderedCell`/`OrderedBasis` contracts), `SSetElement` (the degeneracy-word algebra underlying simplicial
   sets). The typeclasses and formal-sum machinery everything else builds on.
 - **`cells`** — `Simplex`, `Cube`, `FiniteSimplicialSet` — the three concrete `OrderedCell` instances — plus
@@ -19,7 +19,8 @@ If a piece of Scala 3 syntax below looks unfamiliar, see the @ref:[Scala 3 prime
 - **`streams`** — everything that produces cells in filtration order: `SimplexStream`/`CellStream`, the
   Vietoris-Rips family, `FiniteMetricSpace`, `CubicalStream`/`CubicalImage`, `SimplicialSetStream`/
   `FilteredSimplicialSetStream`, `CechStream`, `SymmetryGroup`, `UnionFind`.
-- **`homology`** — the persistence algorithms (`Homology.scala`, `PackedRipserCohomology.scala`).
+- **`homology`** — the persistence algorithms (`Homology.scala`, `PackedRipserCohomology.scala`,
+  `Cohomology.scala`).
 - **`barcode`** — `Barcode`, `PersistenceBar`, `BarcodeEndpoint`.
 - **`alpha`** — `AlphaShapes` (`HelixDelaunay`/`AlphaShapeDQP`), `AlphaComplexDQP`.
 - **`io`** — file-format adaptors: `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
@@ -93,9 +94,14 @@ trait OrderedCell extends Cell:
 `Simplex[VertexT]`, `Cube`, and `FiniteSimplicialSet[G]`'s generators are the library's three concrete
 `OrderedCell` instances (`cells/SimplexOrderedCell.scala`, `cells/CubicalOrderedCell.scala`,
 `cells/SimplicialSet.scala`): `boundary` returns each codimension-1 face paired with alternating signs.
-`Cocell`/`OrderedCocell` are the dual traits; no concrete type implements them as such —
-`RipserCohomologyContext`/`PackedRipserCohomologyContext` compute coboundaries directly against
-`SimplexIndexing`'s cofacet iterator instead (see @ref:[Persistence engines](persistence-engines.md)).
+
+There is no dual `Cocell`/`OrderedCocell` trait pair — an earlier version of this codebase had one, and it was
+removed: coboundary is *extrinsic* to a cell (it depends on which higher-dimensional cells actually exist in
+the ambient, possibly-truncated complex), not intrinsic the way `boundary` is, so a per-cell `coboundary`
+method with no complex to consult can only be correct when the complex is always the full
+combinatorially-possible one. `RipserCohomologyContext`/`PackedRipserCohomologyContext` compute coboundaries
+directly against `SimplexIndexing`'s cofacet iterator instead (see
+@ref:[Persistence engines](persistence-engines.md)).
 
 ### `Chain`
 

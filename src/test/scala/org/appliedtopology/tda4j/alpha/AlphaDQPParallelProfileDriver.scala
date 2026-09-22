@@ -9,8 +9,8 @@ import scala.util.Random
   * settings solve the identical point cloud, hence the identical amount of QP work -- required for the comparison to
   * isolate scheduling, not workload size). Invoked directly via
   * `java -cp $CP org.appliedtopology.tda4j.alpha.AlphaDQPParallelProfileDriver <parallel> <n> <dim> [trials] [seed]`
-  * (get `$CP` from `sbt "export Test/fullClasspath"`), not `sbt runMain`, to avoid sbt's own per-invocation
-  * startup cost when sweeping many (parallel, n, dim) combinations.
+  * (get `$CP` from `sbt "export Test/fullClasspath"`), not `sbt runMain`, to avoid sbt's own per-invocation startup
+  * cost when sweeping many (parallel, n, dim) combinations.
   */
 object AlphaDQPParallelProfileDriver:
   def main(args: Array[String]): Unit =

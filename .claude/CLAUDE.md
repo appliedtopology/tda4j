@@ -17,7 +17,7 @@ matching this file's own section structure below. Source and test directories mi
 directory and package declaration moved, so any file path in this doc below should be read as living under its
 package's subdirectory.
 
-- `algebra` — `RingModule`, `Field`, `FiniteField`, `Chain` (including the `Cell`/`Cocell`/`OrderedCell`/
+- `algebra` — `RingModule`, `Field`, `FiniteField`, `Chain` (including the `Cell`/`OrderedCell`/
   `OrderedBasis` trait contracts), `SSetElement` (the degeneracy-word element type + `insertOuter`/`faceOf`
   operator algebra underlying finite simplicial sets — see "Simplicial sets" below). The coefficient/module
   typeclasses plus the formal-sum machinery everything else builds on.
@@ -32,9 +32,10 @@ package's subdirectory.
   `StratifiedCellStream[G, Double]` for `FiniteSimplicialSet` — see "Simplicial sets" below), `CechStream`
   (`CechCofaceSimplexStream`/`CechFiltration` — the Cech complex, see "Cech complexes" below). Filtration/complex
   construction.
-- `homology` — `Homology` (all four persistence engines), `PackedRipserCohomology`. Note `CubicalHomologyContext`
-  is defined inside `streams/CubicalStream.scala`, not here — a real, pre-existing `streams -> homology`
-  dependency for that one wrapper class, not a layering violation introduced by the split.
+- `homology` — `Homology` (four of the five persistence engines), `PackedRipserCohomology`, `Cohomology`
+  (`CellularCohomologyContext`, the fifth — generic cohomology, see "Persistent homology" below). Note
+  `CubicalHomologyContext` is defined inside `streams/CubicalStream.scala`, not here — a real, pre-existing
+  `streams -> homology` dependency for that one wrapper class, not a layering violation introduced by the split.
 - `barcode` — `Barcode`. Already its own package before this split (nested `package barcode` inside the file);
   only the physical file location changed, to match.
 - `alpha` — `AlphaShapes`, `AlphaComplexDQP`.
@@ -216,9 +217,19 @@ values, also not fixed here).
   `PriorityQueue` ordered by cell (so the "leading term" — used pervasively in the reduction algorithms below — is
   always a cheap peek). Defines the generic matrix-reduction primitives (`reduceBy`, `reduceByUntil`) that the
   homology algorithms build on, plus a `RingModule` instance so chains support `+`, `-`, `⊠` directly.
-- `Chain.scala` also defines the `Cell`/`Cocell`/`OrderedCell`/`OrderedBasis` traits: anything with a `boundary`
+- `Chain.scala` also defines the `Cell`/`OrderedCell`/`OrderedBasis` traits: anything with a `boundary`
   (given a coefficient field) and a total order over instances can plug into the homology machinery — not just
   simplices. `Simplex.scala` is the (currently only) concrete `OrderedCell` instance.
+
+  **`Cocell`/`OrderedCocell` (the dual, intrinsic-`coboundary` traits) were removed outright in a later
+  session**, not merely left dead — they were architecturally wrong for what cohomology in this codebase
+  actually needs: coboundary is *extrinsic* to a cell (it depends on which higher-dimensional cells exist in
+  the ambient, possibly-truncated complex — see `RipserCohomologyContext.coboundaryOf`'s own doc), not
+  intrinsic the way `boundary` is, so a per-cell `coboundary` method with no complex to consult can only ever
+  be correct when the complex is always the full combinatorially-possible one. Confirmed unused anywhere in
+  the codebase (zero non-declaration hits) before deletion. See `.claude/DESIGN-generic-cohomology.md` for the
+  fuller argument (written while planning a generic cohomology engine, which is what surfaced the traits as
+  worth removing rather than merely ignoring).
 
 ### Complex construction (producing a filtered stream of cells)
 
@@ -505,9 +516,9 @@ clean full run mattered more here than for a narrowly-scoped change.
 
 ### Persistent homology (consuming a stream)
 
-`Homology.scala` contains **four independently-implemented** persistence algorithms sharing the `Chain` reduction
-primitives but with different tradeoffs — they are not variants of one shared engine, so a fix in one does not
-imply the others need it:
+`Homology.scala`/`Cohomology.scala` contain **five independently-implemented** persistence algorithms sharing the
+`Chain` reduction primitives but with different tradeoffs — they are not variants of one shared engine, so a fix
+in one does not imply the others need it:
 
 1. `CellularHomologyContext` / `SimplicialHomologyContext`: the naive single-pivot-table boundary-reduction
    algorithm (no clearing, no chunking, no cohomology/twist optimization) — the reference-grade baseline the
@@ -1084,6 +1095,78 @@ imply the others need it:
    further win here would need a hand-rolled tree or a different accumulator shape entirely, the same bigger,
    riskier redesign this arc's earlier `Chain.reduceLoop` session already deferred to its own dedicated pass —
    not attempted, reported as a checked dead end rather than forced.
+5. `CellularCohomologyContext` (`homology/Cohomology.scala`): persistent *co*homology, generic over `CellT:
+   OrderedCell` — closes what had been a real, standing asymmetry: cohomology used to mean (4)/`Packed
+   RipserCohomologyContext` only, both hardcoded to `Simplex[Int]`, so `Cube`/`FiniteSimplicialSet` generators
+   had no cohomology option at all, and neither did Cech/Alpha despite already using `Simplex[Int]` (their
+   own filtration functionals aren't what (4)'s `insertionDiameter`/apparent-pairs are proven for). Built on
+   one key fact: the coboundary matrix is the transpose of the boundary matrix, same coefficients, so for any
+   stream that gets fully materialized before persistence runs (every stream this class targets, unlike VR at
+   the scale (4) targets), the coboundary relation is just every materialized cell's own already-generic
+   `boundary[CoefficientT]` call, inverted — no per-cell-type coboundary formula, and no dual `Cocell`/
+   `OrderedCocell` typeclass either (removed outright from `Chain.scala` in the same arc: coboundary is
+   extrinsic to a cell, not intrinsic the way `boundary` is, so a per-cell `coboundary` method with no complex
+   to consult was architecturally the wrong shape, not merely unused). Built one dimension-band coboundary
+   block at a time, discarded once that dimension's cells are processed, bounding peak memory to the largest
+   single block. Deliberately has no `maxDim` parameter at all (a caller truncates the *input stream* instead,
+   e.g. `LimitedCofaceSimplexStream(stream, k + 1)`, and drops `dim == k + 1` bars from the result) — this
+   deletes the "`maxDim` means top built vs. top reported degree" footgun class rather than reimplementing it
+   a fourth time (item 2 above and (4)/`PackedRipserCohomologyContext` each had to fix this exact bug once).
+   Apparent pairs was planned, then dropped on the project lead's own sharper read: its entire point is
+   avoiding coboundary *enumeration*, and this class has none to avoid, since materializing the coboundary
+   relation for every cell up front is the precondition for "coboundary" existing at all here — what would be
+   left (skip one `basis` write, skip one already-cheap `Chain.reduceBy` call) is noise, not a real
+   optimization. Every bar carries a V-column; only an *essential* bar's is a genuine cocycle by construction
+   (`d(vcol) = 0` — a finite bar's V-column equals its own nonzero reduced pivot chain instead, still a valid
+   witness on the bar's own living interval, just not a cocycle over the whole complex) — `coboundaryOfChain`
+   exists to check this directly, and is this class's actual point: over a field the cohomology barcode is
+   identical to the homology barcode, so a bars-only version would be redundant with item 1, which already
+   covers every cell type this class does.
+
+   **Two real, checked-not-assumed corrections surfaced during validation, both in the test design, not the
+   engine**: a first test asserted `coboundaryOfChain(rep).isZero()` for *every* bar and failed across every
+   cell type tried — root cause is the same one `RipserCohomologySpec`'s own identically-scoped test already
+   documents (Algorithm 1's `d(V_j) = R_j` invariant makes this true only for essential bars); fixed by scoping
+   the check to essential bars, matching that existing precedent. A second test asserted representative
+   *content* would match `RipserCohomologyContext` term-for-term on the same VR complex, reasoning that both
+   engines' tie-breaks resolve to colex and hence (by the canonical-reduced-matrix argument this codebase
+   already relies on for `unionFindDim01`/`vcolOf`) must compute identical V-columns — checked directly
+   (printing both engines' bars on a small fixture) and found FALSE on the very first random point cloud
+   tried, not a rare edge case: VR dimension-0 simplices are *always* tied at `fv = 0`, and this class's
+   `cohomologyOrdering` tie-break (falling through to `stream.filtrationOrdering`) resolves ties in the
+   OPPOSITE direction from `RipserCohomologyContext`'s own hand-built `compareFvThenIndex` — confirmed two
+   ways, in two separate passes: by inspecting the resulting bar/vertex pairings first, then, in a later
+   advisor-prompted follow-up, by directly printing each engine's own processing order over the same tied
+   vertices (generic `[2,1,0]`, Ripser `[0,1,2]`), not left as an inference from reading the two comparators'
+   source alone. Legitimate, not a bug — which tied cell gets reported dying at which death time is
+   tie-order-dependent by design (the same point `HomologyFixtures.tetrahedronBoundaryDegenerateExpected`
+   already documents for homology's elder rule) — so the claim was dropped rather than chased; bar VALUES (not
+   representative content) remain cross-validated against `RipserCohomologyContext` exactly. See
+   `.claude/WORKLOG-generic-cohomology.md` for the full derivation and `.claude/DESIGN-generic-cohomology.md`
+   for the design (written and advisor-reviewed before any code, including the corrected plan after apparent
+   pairs was dropped).
+
+   **A post-completion advisor review found and closed three more real gaps, in the same arc**: (a)
+   `coboundaryOfChain` had no `require` enforcing its actual precondition (a homogeneous chain, and a
+   `cofacets` band exactly one dimension up) — every existing caller already satisfied both, but nothing said
+   so, and a caller that didn't would have gotten a silently partial, meaningless answer rather than a loud
+   failure; fixed with two `require`s. (b) `persistentCohomology` never checked dimension-contiguity — a gap in
+   the materialized cell set (structurally impossible for every stream this class targets, but not enforced)
+   would silently be treated as an empty dimension rather than fail; fixed with one `require` on `cellsByDim`'s
+   own key set. (c) no test anywhere ran this engine over a signed field or a torsion-sensitive fixture (every
+   `CohomologySpec` example used `Double`; every `TDA4jSpec` facade test defaulted to F2, where a sign error is
+   invisible) — closed with two new `CohomologySpec` examples on `SimplicialSetFixtures.realProjectiveSpace(2)`
+   (this codebase's own established sign-discriminating fixture) over `Fp(3)`, both passing on the first run.
+
+   Finalization, per this file's own "Session practices" rule (added in the same arc, prompted by this exact
+   feature): `matlab.TDA4j`/`cli.TDA4jCLI` both gained `engine="cohomology"`, valid for `complex=vr`/`alpha`/
+   `cech` and for `computeFromCubicalImage`/`computeFromImage` (`Cube`) — mirroring `engine=naive`'s dispatch
+   shape throughout, including the same "+1 and filter" dance for VR/Cech. `complex=simplicialset` was NOT
+   added anywhere: no MATLAB/CLI entry point for `FiniteSimplicialSet` exists at all (never did, for either
+   homology or cohomology) — building one needs a way to encode a user-supplied simplicial set's degeneracy/
+   face data through MATLAB's primitives-only bridge, a separate, larger design question, not a gap in this
+   arc. `developers-guide/persistence-engines.md` gained a sixth section; `user-guide/index.md`'s options
+   table/engine-choice table/representative-caveat prose were updated to match.
 
 **Bug found while cross-validating (4) against (1), fixed**: `EnumeratingCofaceSimplexStream.filtrationOrdering`
 (`SimplexStream.scala`) used to be `Ordering.by(filtrationValue)` — no secondary tie-break — so it wasn't a
@@ -1804,9 +1887,10 @@ generics, nothing Scala-specific — on explicit instruction from the project le
 `Map<String,Object>`-based design as unusable from MATLAB. Options are a flat alternating key/value `String[]`
 (`{"engine","naive","maxDimension","3"}`) rather than fixed parameters, specifically so new options never change a
 method's call signature. `TDA4j.computeFromPoints`/`computeFromDistanceMatrix` dispatch across `complex`
-(`vr`/`alpha`), `engine` (`ripser`/`naive`/`chunks`, with `alpha` refusing `ripser` and `chunks` — the latter
-because `complex=alpha` + `engine=chunks` is the exact combination `HomologySpec`'s `BarcodeRegressionSpec` stays
-`skipAll`'d for), and coefficient field (`Z` — a prime finite field, default `prime=2`, matching the TDA research
+(`vr`/`alpha`), `engine` (`ripser`/`naive`/`chunks`/`cohomology`, with `alpha` refusing `ripser` and `chunks` — the
+latter because `complex=alpha` + `engine=chunks` is the exact combination `HomologySpec`'s `BarcodeRegressionSpec`
+stays `skipAll`'d for; `cohomology` is accepted everywhere `naive` is, see "Persistent homology" item 5), and
+coefficient field (`Z` — a prime finite field, default `prime=2`, matching the TDA research
 literature's own convention — or `R`, `Field.DoubleApproximated`, which is what this codebase's *own* existing
 cross-validation specs default to instead; a deliberate, known divergence, not an oversight). `PersistenceResult`
 is non-generic on purpose: it eagerly converts to plain `int`/`double` arrays for the barcode itself
@@ -1883,6 +1967,27 @@ should be the default, not something the project lead has to remember to request
 record of what was tried, what the root cause turned out to be, and what's still open, kept separate from
 `CLAUDE.md` (which reflects only the final shipped state, updated at the end of the arc). Worklogs are not
 retroactively edited later.
+
+**A feature that adds or changes user-visible capability (a new complex type, a new engine, a new option) is
+not done when the core implementation is green — finalizing it means a deliberate pass over four surfaces,
+every time, not just when someone happens to ask:**
+
+1. **`matlab.TDA4j`** — does `computeFromPoints`/`computeFromDistanceMatrix`/`computeFromCubicalImage`/
+   `computeFromImage` need a new `complex=`/`engine=` dispatch value, or does an existing one now have a real
+   option it was silently missing?
+2. **`cli.TDA4jCLI`/`TDA4jConf`** — mirrors the MATLAB facade 1:1 by design (see "CLI executable" below); a new
+   MATLAB-facing option needs the matching `--flag`, not a second copy of its validation/defaults.
+3. **`src/main/paradox/developers-guide/`** — does `persistence-engines.md`/`architecture.md`/`class-diagrams.md`
+   still accurately describe what exists? A new engine belongs in `persistence-engines.md` next to the other
+   four; a new cell type or trait change belongs in `architecture.md`/`class-diagrams.md`.
+4. **`src/main/paradox/user-guide/index.md`** — does a user-facing capability change need a mention here, the
+   way an already-shipped feature would expect to find itself documented?
+
+This is a repeated finalization *impulse*, not a checklist to run once at the very end of a multi-session arc —
+each session that lands a real chunk of a feature should ask whether any of these four are now stale, the same
+way `CLAUDE.md`/worklog updates already get asked at the end of a substantial arc above. Something scoped
+narrowly enough that none of the four genuinely apply (an internal refactor, a bug fix with no new surface) is
+exempt — this is about closing the loop on new capability, not padding every commit with doc churn.
 
 ## Collaboration preferences
 

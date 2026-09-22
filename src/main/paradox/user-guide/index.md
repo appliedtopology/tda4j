@@ -211,7 +211,7 @@ signature:
 | Option | Values | Default |
 |---|---|---|
 | `complex` | `vr`, `alpha`, `cech` | `vr` |
-| `engine` | `ripser`, `naive`, `chunks` | `ripser` for `vr`; `naive` for `alpha`/`cech` |
+| `engine` | `ripser`, `naive`, `chunks`, `cohomology` | `ripser` for `vr`; `naive` for `alpha`/`cech` |
 | `alphaBackend` | `helix`, `DQP` | `helix` (only consulted for `complex=alpha`) |
 | `maxDimension` | integer | `2` — highest H_k reported, not highest simplex dimension built |
 | `maxFiltrationValue` | double | the point cloud's own minimum enclosing radius |
@@ -222,12 +222,16 @@ signature:
 `alpha` refuses `engine=ripser` and `engine=chunks` (neither engine understands alpha complexes, and the
 chunks/alpha combination is a known stall risk in the underlying library); `cech` refuses `engine=ripser`
 (the packed Ripser engine's optimizations are proven for Vietoris-Rips's diameter functional specifically,
-not Cech's circumradius). Unrecognized keys or values throw `IllegalArgumentException` immediately rather
-than silently falling back to a default.
+not Cech's circumradius). `engine=cohomology` is accepted everywhere `engine=naive` is (`vr`, `alpha`, and
+`cech` alike). Unrecognized keys or values throw `IllegalArgumentException` immediately rather than silently
+falling back to a default.
 
 `PersistenceResult.cycleVertices`/`cycleCoefficients` give you each bar's representative chain, best-effort:
 `engine=ripser` has no representative for a handful of bars resolved via its apparent-pairs shortcut
-(throws `UnsupportedOperationException` for those specific bars); `engine=chunks` records one for every bar.
+(throws `UnsupportedOperationException` for those specific bars); `engine=chunks` and `engine=cohomology`
+both record one for every bar — though for `engine=cohomology`, only an *essential* bar's representative is
+guaranteed to be a genuine cocycle (zero coboundary); a finite bar's is a valid witness on its own living
+interval, not over the whole complex (see the developer's guide's persistence-engines page for why).
 
 ## Which persistence engine?
 
@@ -236,13 +240,15 @@ than silently falling back to a default.
 | Exploration, intermediate-filtration queries, representative cycles | `naive` (`CellularHomologyContext`/`TDAContext`) |
 | Fastest, most memory-efficient — the default for `complex=vr` | `ripser` (`PackedRipserCohomologyContext`) |
 | Large complex, want representatives for every bar including essential ones | `chunks` (`CellularPersistenceInChunksContext`) |
-| Alpha or Cech complexes | `naive` (the only option for alpha; `chunks` also works for Cech) |
+| Cohomology (cocycle representatives) on `Cube`/`FiniteSimplicialSet`, or on Alpha/Cech, where `ripser` doesn't apply | `cohomology` (`CellularCohomologyContext`) |
+| Alpha or Cech complexes | `naive` or `cohomology` (`chunks` also works for Cech) |
 
-All engines are generic over the coefficient field (a prime finite field or floating point) and, except for
-`ripser`, over the cell type (simplices, cubes, or simplicial-set generators). See the
+All engines are generic over the coefficient field (a prime finite field or floating point); `naive`,
+`chunks`, and `cohomology` are also generic over the cell type (simplices, cubes, or simplicial-set
+generators) — only `ripser` is Vietoris-Rips-specialized. See the
 @ref:[Developer's Guide's persistence-engines page](../developers-guide/persistence-engines.md) for the full
-detail, including a fifth class (`SimplicialHomologyByDimensionContext`) kept as an independent
-cross-validation oracle rather than a production choice.
+detail, including a class (`SimplicialHomologyByDimensionContext`) kept as an independent cross-validation
+oracle rather than a production choice.
 
 ## Which alpha-complex backend?
 
