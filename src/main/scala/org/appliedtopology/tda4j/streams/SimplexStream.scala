@@ -8,6 +8,8 @@ import org.apache.commons.numbers.combinatorics.BinomialCoefficient
 
 import scala.collection.{immutable, mutable}
 import scala.collection.immutable.{Map, Seq, SortedSet}
+import scala.collection.concurrent.TrieMap
+import scala.collection.parallel.CollectionConverters.*
 import math.Ordering.Implicits.*
 
 trait Filterable[FiltrationT: Ordering]:
@@ -311,7 +313,11 @@ class EnumeratingCofaceSimplexStream(
   // equivalent incremental formula for the general max-pairwise-distance functional this stream computes
   // by default (that's specifically what `insertionDiameter` provides for Ripser's OWN cofacet-enumeration
   // shape, not something this stream's coface-generation loop can reuse).
-  private val filtrationValueCache = mutable.HashMap.empty[Simplex[Int], Double]
+  // TrieMap, not mutable.HashMap: a plain HashMap's getOrElseUpdate is not safe to call concurrently, and
+  // parallelFiltrationValue's pre-warm step (below) does exactly that -- TrieMap's own getOrElseUpdate is a
+  // genuine drop-in (same signature, same call sites need no change) backed by a lock-free Ctrie, safe for
+  // concurrent reads and writes alike. See .claude/WORKLOG-parallelization-survey.md item 2 (Cech).
+  private val filtrationValueCache = TrieMap.empty[Simplex[Int], Double]
 
   override val filtrationValue: PartialFunction[Simplex[Int], Double] =
     filtrationValueOverride.getOrElse {
@@ -438,7 +444,17 @@ class RipserCofaceSimplexStream(
   // (the dimension-by-dimension "extend accepted survivors only" coface loop) touches filtrationValue only
   // through the inherited keptByThresholdAndCriterion/sortedByFiltration, so it carries over unchanged to any
   // filtration functional supplied here, VR-specific or not.
-  filtrationValueOverride: Option[PartialFunction[Simplex[Int], Double]] = None
+  filtrationValueOverride: Option[PartialFunction[Simplex[Int], Double]] = None,
+  // Pre-warm filtrationValue for one dimension's whole candidate list in parallel before the sequential
+  // filter+sort below touches it -- see .claude/WORKLOG-parallelization-survey.md item 2 (Cech, the
+  // motivating case, though this applies to plain VR via this class too since both share this method).
+  // Safe because every candidate at dimension d is generated from lastDimensionCache (dimension d-1,
+  // already fully resolved and frozen), so each candidate's own filtration-value computation -- Cech's
+  // Miniball solve plus its facet-floor lookup, or the default MaximumDistanceFiltrationValue -- reads only
+  // already-complete lower-dimension state; the two caches this can write to concurrently
+  // (filtrationValueCache above, CechFiltration's own) are both TrieMap-backed specifically so this is safe.
+  // Defaults to false: zero behavior change unless explicitly requested.
+  parallelFiltrationValue: Boolean = false
 ) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion, maxFiltrationValue, filtrationValueOverride):
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case 0 =>
@@ -459,13 +475,19 @@ class RipserCofaceSimplexStream(
         )
       else lastDimensionCache = currentDimensionCache.toIndexedSeq
       // now we have a known good lastDimensionCache
-      currentDimensionCache = sortedByFiltration(
+      val rawCandidates: IndexedSeq[Simplex[Int]] =
         for
           spx <- lastDimensionCache
           i <- metricSpace.elements.filter(j => j < spx.min)
-          newSpx: Simplex[Int] = spx + i
-          if keptByThresholdAndCriterion(newSpx)
-        yield newSpx
+        yield spx + i
+      if parallelFiltrationValue then
+        // Side-effect-only: populates filtrationValueCache/CechFiltration's own cache as a side effect of
+        // each applyOrElse call, in parallel; the returned values themselves are discarded, exactly the
+        // same "parallel compute, sequential-cache-already-safe" pattern used elsewhere in this arc, except
+        // here the safety comes from the TrieMap swap above rather than a separate sequential merge step.
+        rawCandidates.par.foreach(c => filtrationValue.applyOrElse(c, (_: Simplex[Int]) => Double.NaN))
+      currentDimensionCache = sortedByFiltration(
+        rawCandidates.filter(keptByThresholdAndCriterion)
       ).to(immutable.Queue) // we _would_ want to avoid creating the entire thing and sort it
       currentDimensionCache.iterator
   }

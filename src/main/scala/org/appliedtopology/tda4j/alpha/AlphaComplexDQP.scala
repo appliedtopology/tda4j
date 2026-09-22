@@ -8,6 +8,7 @@ import org.appliedtopology.tda4j.homology.{given, *}
 
 import scala.collection.immutable.ArraySeq
 import scala.collection.mutable
+import scala.collection.parallel.CollectionConverters.*
 
 /*
  * Mikael Vejdemo-Johansson with Claude Opus 5 at Extra effort
@@ -911,10 +912,21 @@ class AlphaComplexDQPBuilder(
       val candidates: mutable.Map[Int, mutable.IndexedBuffer[Simplex[Int]]] =
         buildCandidates(k, nbrs, alive, byDim, present)
 
-      val perVertex: IndexedSeq[mutable.IndexedBuffer[Found]] = candidates.collect {
-        case (x, cs) if cs.nonEmpty =>
-          solveAtVertex(x, cs, nbrs(x), wsCap).to(mutable.IndexedBuffer)
-      }.toIndexedSeq
+      // Each (x, cs) entry is solved independently: solveAtVertex allocates its own DualQP/CholeskyWorkspace
+      // per call and touches no state shared across vertices (verified directly, not assumed -- see
+      // .claude/WORKLOG-parallelization-survey.md item 1), so the per-vertex solve itself is safe to run on
+      // settings.parallel's ForkJoinPool. `.par.map` preserves `vertices`' own positional order when
+      // materialized back via `.toIndexedSeq` (a documented scala-parallel-collections property), so
+      // `perVertex`'s order -- and hence the entire computation's output -- is identical whether or not
+      // settings.parallel is set, matching this method's own "Output is deterministic" contract.
+      val vertices: IndexedSeq[(Int, mutable.IndexedBuffer[Simplex[Int]])] =
+        candidates.iterator.filter(_._2.nonEmpty).toIndexedSeq
+      def solveEntry(entry: (Int, mutable.IndexedBuffer[Simplex[Int]])): mutable.IndexedBuffer[Found] =
+        val (x, cs) = entry
+        solveAtVertex(x, cs, nbrs(x), wsCap).to(mutable.IndexedBuffer)
+      val perVertex: IndexedSeq[mutable.IndexedBuffer[Found]] =
+        if settings.parallel then vertices.par.map(solveEntry).toIndexedSeq
+        else vertices.map(solveEntry)
 
       // Merge in vertex order so the output does not depend on scheduling.
       perVertex.foreach { founds =>

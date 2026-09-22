@@ -137,6 +137,45 @@ class AlphaComplexSpec extends org.specs2.mutable.Specification with ScalaCheck:
         }
     }
 
+/** Regression coverage for `AlphaDQPSettings.parallel`: this flag used to be defined and documented ("run the
+  * per-vertex loop on the common ForkJoinPool. Output is deterministic.") but never actually read anywhere -- see
+  * `.claude/WORKLOG-parallelization-survey.md` item 1. Now wired into `AlphaComplexDQPBuilder.compute()`'s per-vertex
+  * loop. This spec is the actual proof of the flag's own documented "Output is deterministic" claim: build the same
+  * point cloud with `parallel = false` and `parallel = true` and require the two complexes agree exactly -- same cells
+  * per dimension (not just the same set: `cellsOfDimension` order matters to callers, since `cells`/`barcodeInput` are
+  * relied on to already be filtration-sorted), same filtration value per cell, same witness per cell. `sizeByDimension`
+  * in `[2,4]`/`[6,14]` (bigger than `AlphaComplexSpec`'s own generator) specifically to guarantee multiple candidates
+  * per base vertex at most dimensions, so the parallel branch actually has more than one task in flight most of the
+  * time this runs.
+  */
+class AlphaComplexDQPParallelSpec extends org.specs2.mutable.Specification with ScalaCheck:
+  given Parameters = Parameters(minTestsOk = 200)
+
+  private val pointsGen =
+    matrixGen[Double](Gen.double, Gen.chooseNum(2, 4), Gen.chooseNum(6, 14))
+
+  "AlphaComplexDQP with settings.parallel = true" should {
+    "agree exactly with settings.parallel = false, dimension by dimension" in
+      forAll(pointsGen) { points =>
+        val maxDim = points.head.length
+        val sequential =
+          AlphaComplexDQP.euclidean(points, Double.PositiveInfinity, maxDim, AlphaDQPSettings(parallel = false))
+        val parallel =
+          AlphaComplexDQP.euclidean(points, Double.PositiveInfinity, maxDim, AlphaDQPSettings(parallel = true))
+
+        val cellsAgree =
+          (0 to maxDim).forall(k => sequential.cellsOfDimension(k) == parallel.cellsOfDimension(k))
+        val valuesAgree =
+          (0 to maxDim).forall { k =>
+            sequential.cellsOfDimension(k).forall { c =>
+              sequential.filtrationValue(c) == parallel.filtrationValue(c) &&
+              sequential.witness(c).map(_.toSeq) == parallel.witness(c).map(_.toSeq)
+            }
+          }
+        (cellsAgree must beTrue) and (valuesAgree must beTrue)
+      }
+  }
+
 /** Cross-validates `AlphaShapeDQP` directly against `HelixDelaunay` on the same point clouds. `AlphaComplexSpec` above
   * checks each backend's *internal* consistency separately (face closure, sortedness, monotonicity); this checks that
   * the two backends compute the *same complex* -- which is a strictly stronger property, and would have caught every

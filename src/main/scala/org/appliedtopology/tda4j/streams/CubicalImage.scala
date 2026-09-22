@@ -43,7 +43,11 @@ object CubicalImage:
   def fromFlatArray(
     shape: IndexedSeq[Int],
     flatValues: IndexedSeq[Double],
-    sublevel: Boolean = true
+    sublevel: Boolean = true,
+    // Threaded straight through to CubicalGridStream's own constructor parameter of the same name -- see
+    // its doc there. Safe with every value closure built in this object (all read only immutable captured
+    // data), so this is the one place a caller of these convenience constructors can actually reach it.
+    parallelFiltrationValue: Boolean = false
   ): CubicalGridStream =
     require(
       flatValues.length == shape.product,
@@ -56,17 +60,25 @@ object CubicalImage:
     val values: IndexedSeq[Int] => Double = idx =>
       val flat = idx.zip(strides).map { case (i, s) => i * s }.sum
       sign * flatValues(flat)
-    CubicalGridStream(shape, values)
+    CubicalGridStream(shape, values, parallelFiltrationValue)
 
   /** `pixels(i)(j)` as a dense 2D grid, shape `(pixels.length, pixels(0).length)`. */
-  def fromGrayscale2D(pixels: Array[Array[Double]], sublevel: Boolean = true): CubicalGridStream =
+  def fromGrayscale2D(
+    pixels: Array[Array[Double]],
+    sublevel: Boolean = true,
+    parallelFiltrationValue: Boolean = false
+  ): CubicalGridStream =
     require(pixels.nonEmpty, "pixels must be non-empty")
     val cols = pixels(0).length
     require(pixels.forall(_.length == cols), "every row of pixels must have the same length")
-    fromFlatArray(IndexedSeq(pixels.length, cols), pixels.flatten.toIndexedSeq, sublevel)
+    fromFlatArray(IndexedSeq(pixels.length, cols), pixels.flatten.toIndexedSeq, sublevel, parallelFiltrationValue)
 
   /** `voxels(i)(j)(k)` as a dense 3D grid, shape `(voxels.length, voxels(0).length, voxels(0)(0).length)`. */
-  def fromVoxelGrid3D(voxels: Array[Array[Array[Double]]], sublevel: Boolean = true): CubicalGridStream =
+  def fromVoxelGrid3D(
+    voxels: Array[Array[Array[Double]]],
+    sublevel: Boolean = true,
+    parallelFiltrationValue: Boolean = false
+  ): CubicalGridStream =
     require(voxels.nonEmpty, "voxels must be non-empty")
     require(voxels(0).nonEmpty, "voxels(0) must be non-empty")
     val d1 = voxels(0).length
@@ -75,22 +87,37 @@ object CubicalImage:
       voxels.forall(a => a.length == d1 && a.forall(_.length == d2)),
       "every sub-array of voxels must have consistent dimensions"
     )
-    fromFlatArray(IndexedSeq(voxels.length, d1, d2), voxels.flatten.flatten.toIndexedSeq, sublevel)
+    fromFlatArray(
+      IndexedSeq(voxels.length, d1, d2),
+      voxels.flatten.flatten.toIndexedSeq,
+      sublevel,
+      parallelFiltrationValue
+    )
 
   /** `img.getRGB(x, y)` grayscale (luma) values as a dense grid, shape `(width, height)` -- axis 0 is the image's own
     * x-axis, axis 1 is y.
     */
-  def fromBufferedImage(img: BufferedImage, sublevel: Boolean = true): CubicalGridStream =
+  def fromBufferedImage(
+    img: BufferedImage,
+    sublevel: Boolean = true,
+    parallelFiltrationValue: Boolean = false
+  ): CubicalGridStream =
     val width = img.getWidth
     val height = img.getHeight
     val sign = if sublevel then 1.0 else -1.0
+    // BufferedImage.getRGB is safe for concurrent reads as long as nothing mutates the image concurrently
+    // (true here: img is only ever read, by this closure, for the stream's whole lifetime).
     val values: IndexedSeq[Int] => Double = idx => sign * luma(img.getRGB(idx(0), idx(1)))
-    CubicalGridStream(IndexedSeq(width, height), values)
+    CubicalGridStream(IndexedSeq(width, height), values, parallelFiltrationValue)
 
   /** Reads an image file via `javax.imageio.ImageIO` (JDK-builtin, no new dependency) -- PNG/JPEG/BMP/GIF and whatever
     * other formats the running JVM's registered `ImageReader`s support.
     */
-  def fromFile(path: String, sublevel: Boolean = true): CubicalGridStream =
+  def fromFile(
+    path: String,
+    sublevel: Boolean = true,
+    parallelFiltrationValue: Boolean = false
+  ): CubicalGridStream =
     val img = ImageIO.read(new File(path))
     require(img != null, s"could not read an image from $path (unrecognized format, or not an image file)")
-    fromBufferedImage(img, sublevel)
+    fromBufferedImage(img, sublevel, parallelFiltrationValue)

@@ -7,6 +7,7 @@ import org.appliedtopology.tda4j.homology.{given, *}
 
 import scala.collection.immutable.Map
 import scala.collection.mutable
+import scala.collection.parallel.CollectionConverters.*
 
 /** Dense cubical complex over a full rectangular grid, filtration values assigned via the T-construction: a
   * caller-supplied `topCellValue` gives every top-dimensional cube (pixel/voxel) its own value directly, and every
@@ -28,7 +29,18 @@ import scala.collection.mutable
   */
 class CubicalGridStream(
   val shape: IndexedSeq[Int],
-  val topCellValue: IndexedSeq[Int] => Double
+  val topCellValue: IndexedSeq[Int] => Double,
+  // Warm filtrationValueCache in parallel, per dimension, before iterateDimension's own sort -- see
+  // .claude/WORKLOG-parallelization-survey.md item 3 (cubical). Every cube's filtration value is
+  // independent of every other cube's -- unlike CechStream's Miniball radii, there is no facet
+  // dependency at all here (containingTopCells(c) reads only c's own coordinates and shape, never
+  // another Cube's cached value) -- so the only real precondition is that `topCellValue` itself is safe
+  // to call concurrently from multiple threads. True for every built-in constructor in
+  // CubicalImage.scala (each reads only immutable captured data -- a flat array, or a BufferedImage's
+  // pixels -- never mutates anything); a caller-supplied `topCellValue` with its own mutable state would
+  // need to be made safe first. Defaults to false, matching AlphaDQPSettings.parallel's own opt-in
+  // convention.
+  val parallelFiltrationValue: Boolean = false
 ) extends StratifiedCellStream[Cube, Double]
     with DoubleFiltration[Cube]():
 
@@ -136,7 +148,18 @@ class CubicalGridStream(
     */
   override def iterateDimension: PartialFunction[Int, Iterator[Cube]] = {
     case d if d >= 0 && d <= ambientDim =>
-      cubesOfDimension(d).toVector.sorted(using filtrationOrdering.reverse).iterator
+      val cubes = cubesOfDimension(d).toVector
+      if parallelFiltrationValue then
+        // Compute into a plain parallel collection first, THEN write into the shared
+        // filtrationValueCache sequentially -- mutable.HashMap.getOrElseUpdate is not safe to call
+        // concurrently (same hazard class as every other memoization cache in this codebase; see
+        // .claude/WORKLOG-parallelization-survey.md's "recurring hazard" note). `cubesOfDimension(d)`
+        // yields each cube exactly once (a distinct non-degenerate-axis-set + coordinate combination
+        // per cube), so the sequential merge below never redundantly recomputes or double-writes.
+        val computed: IndexedSeq[(Cube, Double)] =
+          cubes.par.map(c => c -> containingTopCells(c).map(topCellValue).min).toIndexedSeq
+        computed.foreach { case (c, v) => filtrationValueCache.getOrElseUpdate(c, v) }
+      cubes.sorted(using filtrationOrdering.reverse).iterator
   }
 
 /** A sparse/arbitrary finite set of cubes with explicit filtration values -- mirrors `ExplicitStream` for simplices.

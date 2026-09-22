@@ -138,6 +138,58 @@ class CechStreamSpec extends mutable.Specification with ScalaCheck:
     }
 
   // ---------------------------------------------------------------------------------------------------------
+  // parallelFiltrationValue regression coverage: .claude/WORKLOG-parallelization-survey.md item 2. Cech's own
+  // Miniball-based radius computation is exactly the layered-independence case the survey identified (each
+  // candidate's own radius depends only on already-frozen, lower-dimension cache entries, never a sibling at
+  // the same dimension) -- this is the actual proof that warming the CechFiltration/RipserCofaceSimplexStream
+  // caches in parallel (now TrieMap-backed, see CechStream.scala/SimplexStream.scala) produces IDENTICAL
+  // per-simplex filtration values, not just an agreeing barcode -- a corrupted individual value that still
+  // happened to sort into the same relative order would pass a barcode-only check.
+  // ---------------------------------------------------------------------------------------------------------
+
+  "parallelFiltrationValue = true computes exactly the same per-simplex filtration values as the default" >>
+    AsResult {
+      prop { (points: Array[Array[Double]]) =>
+        val ms = EuclideanMetricSpace(points)
+        val sequential =
+          CechCofaceSimplexStream(
+            ms,
+            maxFiltrationValue = Some(Double.PositiveInfinity),
+            parallelFiltrationValue = false
+          )
+        val parallel =
+          CechCofaceSimplexStream(
+            ms,
+            maxFiltrationValue = Some(Double.PositiveInfinity),
+            parallelFiltrationValue = true
+          )
+        (0 until points.length).forall { d =>
+          val seqCells = sequential.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty).toVector
+          val parCells = parallel.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty).toVector
+          seqCells == parCells &&
+          seqCells.forall(c => sequential.filtrationValue(c) == parallel.filtrationValue(c))
+        }
+      }
+    }
+
+  "parallelFiltrationValue = true produces the exact same barcode as the default, on the unit equilateral triangle" >> {
+    val s = 1.0
+    val ms = EuclideanMetricSpace(
+      Array(Array(0.0, 0.0), Array(s, 0.0), Array(s / 2, s * math.sqrt(3) / 2))
+    )
+    val sequentialBarcode = SimplicialHomologyContext[Int, Double, Double]()
+      .persistentHomology(CechCofaceSimplexStream(ms, maxFiltrationValue = Some(Double.PositiveInfinity)))
+      .diagramAt(Double.PositiveInfinity)
+    val parallelBarcode = SimplicialHomologyContext[Int, Double, Double]()
+      .persistentHomology(
+        CechCofaceSimplexStream(ms, maxFiltrationValue = Some(Double.PositiveInfinity), parallelFiltrationValue = true)
+      )
+      .diagramAt(Double.PositiveInfinity)
+    (HomologyFixtures.totalBarsAccountForAllCells(parallelBarcode, 7) must beTrue) and
+      (parallelBarcode must containTheSameElementsAs(sequentialBarcode))
+  }
+
+  // ---------------------------------------------------------------------------------------------------------
   // Enumeration completeness: RipserCofaceSimplexStream's "extend accepted survivors only" coface loop is valid
   // for Cech because Cech is downward-closed (CechStream.scala's own doc has the argument) -- checked
   // empirically here, not just trusted from the proof, by comparing against a full brute-force

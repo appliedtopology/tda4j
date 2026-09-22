@@ -186,3 +186,46 @@ class CofaceSimplexStreamSpec extends mutable.Specification with org.specs2.Scal
 
       barcodeWith(forceUncached = false) must containTheSameElementsAs(barcodeWith(forceUncached = true))
     }
+
+  // parallelFiltrationValue regression coverage for PLAIN Vietoris-Rips via RipserCofaceSimplexStream --
+  // .claude/WORKLOG-parallelization-survey.md item 2 originally shipped this flag for Cech specifically, but
+  // it lives on RipserCofaceSimplexStream itself (shared by both), and the project lead confirmed VR is
+  // welcome to use it too. Mirrors the memoization property directly above: capped the same way (maxDim=2,
+  // points 6-12) for the same documented reason -- an earlier, uncapped version of a property test in this
+  // exact file caused a multi-minute OOM-driven `sbt test` slowdown.
+  "parallelFiltrationValue = true computes exactly the same per-simplex filtration values as the default, for plain VR" >>
+    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
+      val metricSpace = EuclideanMetricSpace(points)
+      val sequential = RipserCofaceSimplexStream(metricSpace, parallelFiltrationValue = false)
+      val parallel = RipserCofaceSimplexStream(metricSpace, parallelFiltrationValue = true)
+      Result.foreach(0 until metricSpace.size) { d =>
+        val seqCells = sequential.iterateDimension(d).toVector
+        val parCells = parallel.iterateDimension(d).toVector
+        (seqCells === parCells) and
+          Result.foreach(seqCells) { c =>
+            sequential.filtrationValue(c) === parallel.filtrationValue(c)
+          }
+      }
+    }
+
+  "parallelFiltrationValue = true produces the exact same barcode as the default, for plain VR" >>
+    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
+      given Double is Field = Field.DoubleApproximated(1e-9)
+      given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+
+      val metricSpace = EuclideanMetricSpace(points)
+      val maxDim = 2
+
+      def barcodeWith(parallel: Boolean): List[(Int, Double, Double)] =
+        val stream = LimitedCofaceSimplexStream(
+          RipserCofaceSimplexStream(
+            metricSpace,
+            maxFiltrationValue = Some(Double.PositiveInfinity),
+            parallelFiltrationValue = parallel
+          ),
+          maxDim
+        )
+        shc.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+
+      barcodeWith(parallel = false) must containTheSameElementsAs(barcodeWith(parallel = true))
+    }

@@ -4,7 +4,7 @@ package streams
 import org.appliedtopology.tda4j.algebra.{given, *}
 import org.appliedtopology.tda4j.cells.{given, *}
 
-import scala.collection.mutable
+import scala.collection.concurrent.TrieMap
 
 import com.dreizak.miniball.model.PointSet
 import com.dreizak.miniball.highdim.Miniball
@@ -72,7 +72,14 @@ object CechFiltration:
     * simplex's facets are always visited, and hence cached, at the dimension immediately below.
     */
   def apply(euclideanMetricSpace: EuclideanMetricSpace): PartialFunction[Simplex[Int], Double] =
-    val cache = mutable.HashMap.empty[Simplex[Int], Double]
+    // TrieMap, not mutable.HashMap: RipserCofaceSimplexStream's parallelFiltrationValue pre-warm step calls
+    // this PartialFunction's apply concurrently from multiple threads when enabled -- see
+    // .claude/WORKLOG-parallelization-survey.md item 2. TrieMap's getOrElseUpdate is a genuine drop-in (same
+    // signature) backed by a lock-free Ctrie, safe for concurrent reads and writes; computeRadius's own
+    // facet-floor lookups (cache.getOrElse, a plain read) are likewise safe concurrently, since the parallel
+    // phase never writes a NEW entry mid-computation -- only already-complete lower-dimension entries are
+    // ever read while dimension d's own candidates are being computed.
+    val cache = TrieMap.empty[Simplex[Int], Double]
     def computeRadius(spx: Simplex[Int]): Double =
       val raw = cechRadius(spx.underlying.toArray.map(euclideanMetricSpace.pts))
       val facetFloor = spx.underlying.iterator
@@ -113,10 +120,16 @@ object CechFiltration:
 class CechCofaceSimplexStream(
   val euclideanMetricSpace: EuclideanMetricSpace,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
-  maxFiltrationValue: Option[Double] = None
+  maxFiltrationValue: Option[Double] = None,
+  // Threaded straight through to RipserCofaceSimplexStream's own parameter of the same name -- see its doc
+  // there. Cech's own Miniball-based radius computation is exactly the case this exists for: unlike a
+  // cheap arithmetic filtration value, a real per-candidate Miniball solve is worth parallelizing once a
+  // complex is large enough. See .claude/WORKLOG-parallelization-survey.md item 2.
+  parallelFiltrationValue: Boolean = false
 ) extends RipserCofaceSimplexStream(
       euclideanMetricSpace,
       keepCriterion,
       maxFiltrationValue,
-      Some(CechFiltration(euclideanMetricSpace))
+      Some(CechFiltration(euclideanMetricSpace)),
+      parallelFiltrationValue
     )

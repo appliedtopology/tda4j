@@ -81,6 +81,49 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
     }
 
   // ---------------------------------------------------------------------------------------------------------
+  // parallelFiltrationValue regression coverage: .claude/WORKLOG-parallelization-survey.md item 3. Every
+  // cube's filtration value is computed independently of every other's, so the only thing to actually verify
+  // is that warming the cache in parallel (before iterateDimension's own sort) produces IDENTICAL values --
+  // not just an agreeing barcode, which could mask a corrupted individual filtration value if it happened to
+  // still sort into the same relative order. Reuses genTestImage (small, tie-heavy by construction) rather
+  // than a fresh generator, matching this file's own established discipline for exactly this class of bug.
+  // ---------------------------------------------------------------------------------------------------------
+
+  "parallelFiltrationValue = true computes exactly the same per-cube filtration values as the default" >>
+    AsResult {
+      prop { (img: TestImage) =>
+        val sequential = CubicalGridStream(img.shape, valueFnOf(img), parallelFiltrationValue = false)
+        val parallel = CubicalGridStream(img.shape, valueFnOf(img), parallelFiltrationValue = true)
+        (0 to sequential.ambientDim).forall { d =>
+          val seqCells = sequential.iterateDimension(d).toVector
+          val parCells = parallel.iterateDimension(d).toVector
+          seqCells == parCells &&
+          seqCells.forall(c => sequential.filtrationValue(c) == parallel.filtrationValue(c))
+        }
+      }
+    }
+
+  "parallelFiltrationValue = true produces the exact same barcode as the default, on the tie-heavy fixtures" >> {
+    val fixtures = Seq(
+      (IndexedSeq(2, 2), (_: IndexedSeq[Int]) => 5.0, 25),
+      (IndexedSeq(3, 3), (idx: IndexedSeq[Int]) => if idx == IndexedSeq(1, 1) then 1.0 else 0.0, 49),
+      (IndexedSeq(3), (idx: IndexedSeq[Int]) => if idx(0) == 1 then 2.0 else 0.0, 7)
+    )
+    fixtures
+      .map { case (shape, valueFn, cellCount) =>
+        val sequentialBarcode =
+          persistentHomology(CubicalGridStream(shape, valueFn, parallelFiltrationValue = false))
+            .diagramAt(Double.PositiveInfinity)
+        val parallelBarcode =
+          persistentHomology(CubicalGridStream(shape, valueFn, parallelFiltrationValue = true))
+            .diagramAt(Double.PositiveInfinity)
+        (HomologyFixtures.totalBarsAccountForAllCells(parallelBarcode, cellCount) must beTrue) and
+          (parallelBarcode must containTheSameElementsAs(sequentialBarcode))
+      }
+      .reduce(_ and _)
+  }
+
+  // ---------------------------------------------------------------------------------------------------------
   // Structural invariant (bars-account-for-cells), reusing HomologyFixtures' existing helper.
   // ---------------------------------------------------------------------------------------------------------
 
