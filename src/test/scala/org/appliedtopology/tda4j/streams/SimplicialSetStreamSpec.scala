@@ -70,6 +70,20 @@ class SimplicialSetStreamSpec extends s2mutable.Specification with ScalaCheck:
     }
   }
 
+  // Past 4 vertices: an unordered-Set face list is hash-ordered from 5 elements on (see SimplexBoundarySpec).
+  "fromStream lists each generator's faces as d_0..d_n (vertex i removed), and validates, up to 7 vertices" >>
+    forall(1 to 7) { n =>
+      val spx = Simplex((0 until n).map(v => 2 * v + 1)*)
+      val sset = fromStream(explicitStream(Seq(0.0 -> spx)))
+      val expected = if n == 1 then IndexedSeq.empty else spx.toIndexedSeq.map(v => SSetElement(Nil, spx - v))
+      sset.faces(spx) must beEqualTo(expected)
+    }
+
+  "fromStream on a full 6-simplex (every face present) passes validate()" >> {
+    val cells = (1 to 7).flatMap(k => (0 until 7).combinations(k).map(vs => 0.0 -> Simplex(vs*)))
+    fromStream(explicitStream(cells)).validate() must beEmpty
+  }
+
   "fromStream agrees with SimplicialHomologyContext on Betti numbers, random Vietoris-Rips clouds" >>
     forAll(matrixGen(Gen.choose(-1.0, 1.0), Gen.chooseNum(2, 4), Gen.chooseNum(6, 10))) { pts =>
       val metricSpace = EuclideanMetricSpace(pts)

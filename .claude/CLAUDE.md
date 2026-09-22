@@ -249,7 +249,11 @@ bars. Over a field, cohomology and homology barcodes coincide.
    match. `require`s enforce chain homogeneity and dimension contiguity. Sign-tested on RP² over `Fp(3)`
    (`WORKLOG-generic-cohomology.md`).
 
-Testing lessons that apply to every engine: F2 hides sign errors (use `Double` or `Fp(3)`); agreement between two
+Testing lessons that apply to every engine: F2 hides sign errors (use `Double` or `Fp(3)`) — and signed-field
+fixtures must include simplices with **≥5 vertices**: `Set1..Set4` iterate in insertion order, so anything
+accidentally routed through an unordered `Set` looks right up to 4 elements and is hash-ordered from 5 on (this hid
+a boundary-sign bug until 2026-09-22; `SimplexBoundarySpec`, `SignedFieldBarcodeSpec`,
+`WORKLOG-code-critique.md` §1.1). Torsion-free F3-vs-F2 barcode agreement is a cheap sign oracle. Agreement between two
 engines isn't proof when both share a truncation or code path (hand-derived fixtures, e.g.
 `HomologyFixtures.elderRuleExpected`, are the real oracle); which tied cell dies at a tied time is order-dependent.
 

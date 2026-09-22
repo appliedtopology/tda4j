@@ -55,5 +55,5 @@ def fromStream[VertexT: Ordering](stream: CellStream[Simplex[VertexT], ?]): Fini
     byDim,
     spx =>
       if spx.dim <= 0 then IndexedSeq.empty
-      else spx.zipWithIndex.map((_, i) => SSetElement[Simplex[VertexT]](Nil, spx.dropIndex(i))).toSeq.toIndexedSeq
+      else spx.iterator.map(v => SSetElement[Simplex[VertexT]](Nil, spx - v)).toIndexedSeq // d_i drops vertex i
   )

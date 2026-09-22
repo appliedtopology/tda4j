@@ -82,11 +82,12 @@ trait SimplexOps:
     def dropIndex(n: Int): Simplex[VertexT] = (spx.underlying -- spx.underlying.slice(n, n + 1)).asSimplex
     def take(n: Int): Simplex[VertexT] = spx.underlying.take(n).asSimplex
     def takeRight(n: Int): Simplex[VertexT] = spx.underlying.takeRight(n).asSimplex
-    // ----- zipping
-    def zip[B](that: IterableOnce[B]): Set[(VertexT, B)] = spx.underlying.toSet.zip(that)
-    def zipAll[V >: VertexT, B](that: Iterable[B], thisElem: V, thatElem: B): Set[(V, B)] =
-      spx.underlying.zipAll(that, thisElem, thatElem)
-    def zipWithIndex: Set[(VertexT, Int)] = spx.underlying.zipWithIndex
+    // ----- zipping: IndexedSeq, in vertex order -- NOT the underlying SortedSet's own zip*, which return an
+    // unordered `Set` (hash-ordered from 5 elements on) and so lose the vertex order these exist to expose.
+    def zip[B](that: IterableOnce[B]): IndexedSeq[(VertexT, B)] = spx.underlying.toIndexedSeq.zip(that)
+    def zipAll[V >: VertexT, B](that: Iterable[B], thisElem: V, thatElem: B): IndexedSeq[(V, B)] =
+      spx.underlying.toIndexedSeq.zipAll(that, thisElem, thatElem)
+    def zipWithIndex: IndexedSeq[(VertexT, Int)] = spx.underlying.toIndexedSeq.zipWithIndex
 
 /** `min`/`max`, unlike everything else in `SimplexOps` above, are kept as a plain TOP-LEVEL extension clause rather
   * than moved into the trait (hence not routed through `object Simplex`'s companion scope) -- a second, different kind
