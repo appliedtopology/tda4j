@@ -3,20 +3,32 @@
 TDA4j implements persistent homology and related techniques from computational and applied topology. This
 guide assumes you know what a simplicial complex, a filtration, and a persistence barcode are — it does not
 assume you know Scala. If you want to understand *why* the library is built the way it is, or you're
-planning to write new code against it, see the @ref:[Developer's Guide](../developers-guide/index.md) instead;
-this page is about getting things done as a caller.
+planning to write new code against it, see the @ref:[Developer's Guide](../developers-guide/index.md)
+instead; this page is about getting things done as a caller.
 
 ## Quick-start: Scala
 
-This is the fully worked, verified-against-current-source path. All type and method names below were
-checked directly against `src/main/scala` while writing this guide — if you find they've drifted, trust the
-source over this page and consider it a bug report.
+Every snippet below is checked directly against `src/main/scala` — if you find it's drifted, trust the
+source over this page.
+
+### Imports
+
+TDA4j's package is split into subpackages (`algebra`, `cells`, `streams`, `homology`, `alpha`, ...). Bring
+in what you need with the `{given, *}` form — a plain `import pkg.*` does **not** bring `given` instances
+(coefficient fields, orderings) into scope in Scala 3:
+
+```scala 3
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.homology.{given, *}
+```
+
+The rest of this guide assumes these four imports (plus `alpha.{given, *}` where alpha complexes come up).
 
 ### Building and taking the boundary of a simplex
 
 ```scala 3
-import org.appliedtopology.tda4j.*
-
 // Coefficients need an explicit Field instance in scope -- there is no default one for Double.
 // DoubleApproximated treats two coefficients as equal within epsilon, which matters for the
 // zero-checks that drive chain reduction.
@@ -26,20 +38,15 @@ val triangle = Simplex(1, 2, 3)      // same as ∆(1, 2, 3)
 triangle.boundary[Double]            // Seq((Simplex(2,3), 1.0), (Simplex(1,3), -1.0), (Simplex(1,2), 1.0))
 ```
 
-### A full persistence computation
+### A full Vietoris-Rips persistence computation
 
 ```scala 3
-import org.appliedtopology.tda4j.*
-
 given Double is Field = Field.DoubleApproximated(1e-9)
 given ctx: TDAContext[Int, Double, Double]()
 import ctx.{*, given}
 
-// A small point cloud: three points roughly forming a triangle
 val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8))
 val metricSpace = EuclideanMetricSpace(points)
-
-// Vietoris-Rips filtration, connecting points up to distance 2.0, up through dimension 2
 val stream = RipserStream(metricSpace, maxFiltrationValue = 2.0, maxDimension = 2)
 
 val state = ctx.persistentHomology(stream)
@@ -47,147 +54,223 @@ state.barcodeAt(Double.PositiveInfinity).foreach(println)
 ```
 
 `TDAContext[VertexT, CoefficientT, FiltrationT]` bundles the naive, reference-grade persistence engine
-(`SimplicialHomologyContext`) together with convenient chain-arithmetic operators and an implicit
-`Simplex -> Chain` conversion, so `1.0 ⊠ ∆(1,2) - ∆(2,3)` works directly once `ctx`'s members are imported
-(`import ctx.{*, given}`). It's a good default for exploration and for anything where you want to query
-the diagram at intermediate filtration values or get representative cycles back, via
-`state.diagramAt(f)`/`state.barcodeAt(f)` (see the @ref:[Developer's Guide](../developers-guide/index.md) if you
-need something `TDAContext` doesn't wrap — larger complexes where chunked parallelism matters, or
-cohomology specifically).
+together with chain-arithmetic operators, so `1.0 ⊠ ∆(1,2) - ∆(2,3)` works directly once `ctx`'s members are
+imported. It's a good default for exploration and for anything where you want to query the diagram at
+intermediate filtration values or get representative cycles back (`state.diagramAt(f)`/`state.barcodeAt(f)`)
+— see "Which persistence engine?" below for when a different engine is worth reaching for instead.
 
-### Alpha complexes instead of Vietoris-Rips
+**A default worth knowing**: `RipserStream`'s `maxFiltrationValue` is whatever you pass — but the several
+other Vietoris-Rips stream implementations (`EnumeratingCofaceSimplexStream` and relatives) default it to
+the point cloud's own *minimum enclosing radius*, not unbounded, since nothing past that radius contributes
+new homology. Pass `Some(Double.PositiveInfinity)` explicitly if you want the old always-unbounded behavior.
+
+### Alpha complexes
 
 ```scala 3
+import org.appliedtopology.tda4j.alpha.{given, *}
+
 val shape = Alpha(points.toSeq, dispatch = "helix")   // or "DQP"
 ```
 
-**Important**: `Alpha(points)` with no `dispatch` argument, or `dispatch = "default"`, currently always
-resolves to `"helix"` regardless of your point cloud's shape or dimension — despite the name, it is not
-actually choosing between backends yet. If you want the DQP backend, you have to ask for it by name. See
-"Which alpha-complex backend?" below for how to choose.
+`Alpha(points)` with no `dispatch`, or `dispatch = "default"`, always resolves to `"helix"` — ask for
+`"DQP"` explicitly if you want it. See "Which alpha-complex backend?" below for the tradeoffs.
 
-## Quick-start: Java (11+)
+### Cech complexes
 
-**Honest framing up front**: there is no dedicated Java-facing API in this codebase today, and nothing
-below has been exercised by an actual Java caller as part of this codebase's own test suite — a repo-wide
-search finds zero `.java` files anywhere in this project. The closest thing that exists is
-`src/test/scala/.../APISpec.scala`, whose own doc comment describes itself as "developing the non-Scala
-facing API functionality," and which is currently a stub (its persistence-computation test body is a bare
-`val homology = ???`). If your project genuinely needs to call TDA4j from Java soon, budget time to either
-build that adapter yourself or ask the maintainers where it stands.
+```scala 3
+val cechStream = CechCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(2.0))
+val homology = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(cechStream)
+```
 
-That said, here's concretely what makes calling the existing Scala surface directly from Java awkward,
-so you know what you're up against rather than discovering it one compiler error at a time:
+`maxFiltrationValue` here is a Cech **radius**, not a Vietoris-Rips diameter — the two aren't
+interchangeable units. Only the naive engine (`SimplicialHomologyContext`/`CellularHomologyContext`) is used
+for Cech complexes; the packed Ripser engine's optimizations don't carry over (see the
+@ref:[Developer's Guide](../developers-guide/architecture.md)).
 
-- **Context (`given`/`using`) parameters have no Java equivalent.** Every method with a context bound —
-  which is most of the library, e.g. `boundary[CoefficientT: Field]` — compiles to a method with an *extra
-  trailing parameter list* for the typeclass dictionary. From Java, you'd have to construct and pass a
-  correctly-shaped `Field`/`RingModule`/`Ordering` instance by hand at every call site. This is possible in
-  principle (Java can implement a Scala trait's abstract methods) but is not remotely ergonomic.
-- **Most useful behavior lives in `extension` methods**, which compile to static methods on a
-  compiler-synthesized module class (not instance methods on the type itself), so IDE method-resolution
-  and autocomplete from Java won't find `.boundary()`/`.dim` on a `Simplex` the way you'd expect from a
-  normal Java class.
-- **Some operators are Unicode symbols that aren't legal Java identifier characters at all** (`⊠`, `∆`).
-  The `RingModule` operators do have plain-ASCII, `@targetName`-annotated aliases you can call directly —
-  verified in `RingModule.scala`: `+` compiles to `add`, `-` to `subtract`, `<*` to `scalarMultiplyRight`,
-  `|*|` to `scalarMultiplyLeft`, and `⊠` to `scalarMultiplyLeft2`. `Field`'s own `+`/`-`/`*`/`/` operators
-  (`Field.scala`) carry no `@targetName`, so they'd only be reachable under Scala's standard compiler-
-  generated symbolic-name encoding (e.g. roughly `$plus`, `$times`) — usable from Java, but not something
-  we'd recommend building against without confirming the exact mangled names via `javap -p` on the compiled
-  classes first.
-- **`Simplex[VertexT]` is an opaque type** with zero runtime representation distinct from
-  `scala.collection.immutable.SortedSet` — from Java's perspective, a `Simplex` you receive back from a
-  Scala method call *is* a `SortedSet`, with none of `Simplex`'s own extension-method API attached to it in
-  a way Java's type system can see.
+### Cubical complexes and images
 
-**If you need to call this from Java today**, the realistic path is a small Scala-side adapter: ordinary
-methods with plain generics, no context parameters (bake in one fixed coefficient choice, e.g. `Double` via
-`Field.DoubleApproximated`), ASCII names, and plain Java collections/arrays in and out rather than `Seq`/
-`Simplex`/`Chain` directly — essentially what `APISpec.scala` is the seed for, and what the Matlab section
-below sketches in more detail (an object like that would very likely serve Java callers too, since Matlab's
-own Java bridge has to deal with exactly the same friction points).
+```scala 3
+val stream = CubicalImage.fromFlatArray(shape = IndexedSeq(3, 3), flatValues = pixelValues, sublevel = true)
+val homology = CubicalHomologyContext[Double, Double]().persistentHomology(stream)
+homology.diagramAt(Double.PositiveInfinity)
+```
 
-## Quick-start: Matlab
+`CubicalImage` also has `fromGrayscale2D`, `fromVoxelGrid3D`, `fromBufferedImage`, and `fromFile` for loading
+real images/volumes. `sublevel = false` computes superlevel-set persistence instead (ascending vs.
+descending intensity) via the standard "negate the values" trick — reported filtration values under
+`sublevel = false` are in negated-intensity units, not raw pixel values.
 
-Matlab can call into Java/JVM libraries, but through its Java bridge — which, like plain Java, cannot use
-Scala's context parameters, extension-method dispatch, opaque types, or Unicode operator names. **No
-Matlab-facing entry point exists in this codebase yet** — the previous draft of this guide described one as
-though it were already available (`Api` object, "implementations of most of the tasks of immediate
-interest"); that was aspirational, not current. A repository-wide search (`grep -rn "object Api" src/main`)
-finds nothing.
+### Simplicial sets
 
-`src/test/scala/.../APISpec.scala` is the actual, present-day starting point for this work — its doc
-comment already frames itself as developing "the non-Scala facing API functionality and the non-expert API
-functionality," and its (currently unimplemented) second test case sketches the intended shape: take a
-point cloud, build a metric space, run persistent homology, and query the diagram at a filtration value,
-all without the caller ever touching a `given`, an extension method, or a `Simplex`/`Chain` directly.
+For homology of a space presented combinatorially (not as a metric-space complex), build a
+`FiniteSimplicialSet[G]` by giving each generator's faces directly. A minimal circle (one vertex, one loop
+edge):
 
-If you're picking this up, a Matlab/Java-facing `Api` object would need to expose, at minimum:
+```scala 3
+enum CircleGen { case V, E }
+import CircleGen.*
+given Ordering[CircleGen] = Ordering.by(_.ordinal)
 
-- **Construction entry points that take plain arrays**: a point cloud as `double[][]`, not a
-  Scala-idiomatic type.
-- **One fixed (or explicitly selected, via a plain `String`/`int` flag rather than a typeclass) coefficient
-  choice per call** — e.g. `Field.DoubleApproximated` baked in by default, since asking a Matlab caller to
-  supply a `Field` typeclass instance isn't realistic.
-- **Persistence computation methods that return plain data**: arrays or lists of `(dimension, birth, death)`
-  tuples (or parallel arrays), not a `PersistenceBar[FiltrationT, Chain[...]]` carrying a Scala-side
-  representative-cycle annotation.
-- **No operator overloading and no Unicode names** — `add`/`subtract`/`scale`-style plain method names
-  throughout, matching the `@targetName` aliases the `RingModule` operators already have (see the Java
-  section above) rather than inventing new ones.
-- **A choice of which persistence engine and alpha-complex backend to use exposed as a plain flag**, with
-  sane, explicitly-documented defaults — see "Which persistence engine?" and "Which alpha-complex backend?"
-  below for what those defaults should probably be and why.
+val circle = FiniteSimplicialSet[CircleGen](summon[Ordering[CircleGen]])(
+  generatorsByDim = IndexedSeq(Set(V), Set(E)),
+  faces = {
+    case V => IndexedSeq.empty
+    case E => IndexedSeq(SSetElement(Nil, V), SSetElement(Nil, V)) // both faces of the loop are V
+  }
+)
+circle.validate()   // Seq.empty -- no errors
 
-This is forward-looking design guidance, not a description of anything that works today.
+given (CircleGen is OrderedCell) = circle.cellInstance
+val stream = FilteredSimplicialSetStream(circle, { case V => 0.0; case E => 1.0 })
+CellularHomologyContext[CircleGen, Double, Double]()
+  .persistentHomology(stream)
+  .diagramAt(Double.PositiveInfinity)
+// List((1, 1.0, Infinity), (0, 0.0, Infinity)) -- H0 = H1 = one essential class each, as expected for S^1
+```
+
+`SimplicialSetConstructions` builds new simplicial sets from existing ones instead of by hand:
+`product`/`coproduct` (the categorical product/coproduct) and `quotient`/`identify` (attaching maps — glue
+generators together, or collapse one down onto a lower-dimensional target). `validate()` checks that
+hand-written or constructed face data actually satisfies the simplicial identities; it's a necessary
+sanity check, not proof the resulting space is the one you intended.
+
+## Loading and saving data: the `io` module
+
+`org.appliedtopology.tda4j.io` reads and writes the file formats the wider TDA ecosystem uses, so you don't
+have to hand-roll parsing:
+
+| Object | Formats |
+|---|---|
+| `CSV` | plain CSV point clouds, full/lower-triangular distance matrices, persistence diagrams |
+| `Ripser` | Ripser's point-cloud/lower/upper/full/binary distance-matrix formats |
+| `Dipha` | DIPHA's distance-matrix, cubical-image, and persistence-diagram formats |
+| `Gudhi` | GUDHI's OFF point-cloud format and persistence-diagram format |
+| `Perseus` | Perseus's cubical toplex and persistence-interval formats |
+
+Each object offers a raw loader (`readPointCloud`/`readFullDistanceMatrix`/...) and a one-line convenience
+constructor on top (`readEuclideanMetricSpace`/`readExplicitMetricSpace`/`readCubicalGridStream`/...):
+
+```scala 3
+import org.appliedtopology.tda4j.io.{given, *}
+
+val metricSpace = Ripser.readEuclideanMetricSpace("points.txt")
+val stream = Perseus.readCubicalToplex("image.txt")
+```
+
+Two format details worth knowing if you're comparing output against another tool: Ripser's binary
+distance-matrix format is 32-bit `float`, not 64-bit `double`. DIPHA's and Perseus's cubical-grid axis order
+is the opposite of `CubicalImage`'s own convention (first axis fastest-varying vs. last); both readers/
+writers here handle the transposition for you.
+
+## Command-line tool: `tda4j`
+
+`sbt assembly` builds a runnable fat jar exposing the whole library as a command-line tool, without writing
+any Scala:
+
+```
+java -jar target/scala-3.9.0/TDA4j-<version>-assembly.jar [options] <input-file>
+```
+
+It loads a point cloud, distance matrix, or cubical image in one of several formats (`--input-format`),
+computes persistence via the same facade the MATLAB bridge uses (below), and writes the result in one of
+several formats (`--output-format`: `text`, `csv`, `gudhi`, `dipha`, `perseus`). Run with `--help` for the
+full flag list; the main ones mirror the MATLAB options one-to-one: `--complex` (`vr`/`alpha`/`cech`),
+`--engine`, `--max-dimension`, `--max-filtration-value`, `--field`, `--representatives` (also print each
+bar's representative chain).
+
+## Calling from MATLAB or Java
+
+`org.appliedtopology.tda4j.matlab.TDA4j`/`PersistenceResult` is a real, tested facade for calling TDA4j from
+MATLAB's built-in Java interface, or from any plain-Java caller — every public method and return type is a
+plain `int`, `double`, `String`, `double[][]`, or `String[]`; no Scala types, no generics, no context
+parameters, no Unicode operator names.
+
+```java
+double[][] points = { {0.0, 0.0}, {1.0, 0.0}, {0.5, 0.8} };
+PersistenceResult result = TDA4j.computeFromPoints(points);
+
+double[][] bars = result.toArray();   // one row per bar: [dimension, birth, death], death = Inf if essential
+double[] coeffs = result.cycleCoefficients(0);
+int[][] simplices = result.cycleVertices(0);   // each row: a simplex's sorted vertex indices
+```
+
+```matlab
+javaaddpath('target/scala-3.9.0/TDA4j-<version>-assembly.jar');
+points = [0.0 0.0; 1.0 0.0; 0.5 0.8];
+result = org.appliedtopology.tda4j.matlab.TDA4j.computeFromPoints(points);
+bars = result.toArray();
+```
+
+Entry points: `computeFromPoints`/`computeFromDistanceMatrix` (Vietoris-Rips/alpha/Cech, from a point cloud
+or a precomputed distance matrix — alpha needs real coordinates, so it's only available from the points
+overload), and `computeFromCubicalImage`/`computeFromImage` (cubical persistence from a flat array + shape,
+or a 2D pixel matrix directly). Every method has a no-options overload and one taking a flat, alternating
+key/value `String[]` of options — so adding a new option in the future never changes a method's call
+signature:
+
+| Option | Values | Default |
+|---|---|---|
+| `complex` | `vr`, `alpha`, `cech` | `vr` |
+| `engine` | `ripser`, `naive`, `chunks` | `ripser` for `vr`; `naive` for `alpha`/`cech` |
+| `alphaBackend` | `helix`, `DQP` | `helix` (only consulted for `complex=alpha`) |
+| `maxDimension` | integer | `2` — highest H_k reported, not highest simplex dimension built |
+| `maxFiltrationValue` | double | the point cloud's own minimum enclosing radius |
+| `field` | `Z` (finite field), `R` (floating point) | `Z`, `prime=2` |
+| `prime` | integer | `2` (only for `field=Z`) |
+| `epsilon` | double | `1e-9` (only for `field=R`) |
+
+`alpha` refuses `engine=ripser` and `engine=chunks` (neither engine understands alpha complexes, and the
+chunks/alpha combination is a known stall risk in the underlying library); `cech` refuses `engine=ripser`
+(the packed Ripser engine's optimizations are proven for Vietoris-Rips's diameter functional specifically,
+not Cech's circumradius). Unrecognized keys or values throw `IllegalArgumentException` immediately rather
+than silently falling back to a default.
+
+`PersistenceResult.cycleVertices`/`cycleCoefficients` give you each bar's representative chain, best-effort:
+`engine=ripser` has no representative for a handful of bars resolved via its apparent-pairs shortcut
+(throws `UnsupportedOperationException` for those specific bars); `engine=chunks` records one for every bar.
 
 ## Which persistence engine?
 
-TDA4j currently has four independently-implemented persistence algorithms (`Homology.scala`) — they are not
-variants of one shared engine, and their trustworthiness is not uniform. As a user, not a contributor, here
-is what you need to know to pick correctly:
+| Need | Engine (`engine=` for MATLAB/CLI) |
+|---|---|
+| Exploration, intermediate-filtration queries, representative cycles | `naive` (`CellularHomologyContext`/`TDAContext`) |
+| Fastest, most memory-efficient — the default for `complex=vr` | `ripser` (`PackedRipserCohomologyContext`) |
+| Large complex, want representatives for every bar including essential ones | `chunks` (`CellularPersistenceInChunksContext`) |
+| Alpha or Cech complexes | `naive` (the only option for alpha; `chunks` also works for Cech) |
 
-- **Default choice for most use cases**: `TDAContext`/`SimplicialHomologyContext`/`CellularHomologyContext`
-  — the naive, reference-grade algorithm. It's what the Scala quick-start above uses. Supports querying the
-  diagram at intermediate filtration values and returns representative cycles.
-- **Large complexes, want to exploit parallelism**: `PersistenceInChunksContext` — a chunked "clear and
-  compress" algorithm, audited and trustworthy, but one-shot (no intermediate querying).
-- **You specifically need cohomology, on a Vietoris-Rips/clique complex over integer vertex labels**:
-  `RipserCohomologyContext` — trustworthy for cohomology with clearing; one-shot only.
-- **Do not use `SimplicialHomologyByDimensionContext`.** As of this writing it crashes unconditionally on
-  any complex with more than one connected component's worth of structure (a `NoSuchElementException`
-  thrown from its own constructor on ordinary input) and has, as far as anyone can tell, never successfully
-  computed a result. A guide that simply listed "four engines, pick one" without this warning would
-  actively mislead you into hitting this.
-
-See the @ref:[Developer's Guide's persistence-engines page](../developers-guide/persistence-engines.md) for the
-full detail behind each of these claims if you want it.
+All engines are generic over the coefficient field (a prime finite field or floating point) and, except for
+`ripser`, over the cell type (simplices, cubes, or simplicial-set generators). See the
+@ref:[Developer's Guide's persistence-engines page](../developers-guide/persistence-engines.md) for the full
+detail, including a fifth class (`SimplicialHomologyByDimensionContext`) kept as an independent
+cross-validation oracle rather than a production choice.
 
 ## Which alpha-complex backend?
 
-`Alpha(points, dispatch)` (see above) chooses between two independent implementations:
+- **`"helix"`** (`HelixDelaunay`) — an actual Delaunay triangulation, computed incrementally. What
+  `dispatch = "default"` resolves to. Has a known, quantified failure mode on point clouds with a
+  near-cospherical local cluster: zero failures across 20,000-trial fuzz testing at ambient dimension 2 and
+  5, but roughly 1-in-170 at ambient dimension 4 with 20-30 points, on ordinary-looking input. Don't treat
+  its output as unconditionally reliable ground truth at ambient dimension 4 or higher.
+- **`"DQP"`** (`AlphaShapeDQP`) — a dual active-set quadratic-programming method (Carlsson & Carlsson 2024)
+  that never builds a Delaunay triangulation at all. Its real strength is high ambient dimension, where
+  Delaunay becomes infeasible, and exact homology rather than an approximate persistence diagram. The
+  paper's own published benchmarks are mixed — it loses to Ripser on 2 of 4 of its own persistence examples,
+  and to qhull-based Delaunay on some inputs. The honest value proposition is high-dimensional feasibility
+  and exactness, not raw speed.
 
-- **`"helix"`** (`HelixDelaunay`) — an actual Delaunay triangulation, computed incrementally. This is what
-  `dispatch = "default"` currently resolves to, always, regardless of your point cloud. Has a known,
-  *quantified* failure mode: zero failures across 20,000-trial fuzz testing at ambient dimension 2 and 5,
-  but roughly 1-in-170 at ambient dimension 4 with 20-30 points, on ordinary-looking (not adversarially
-  constructed) input with a near-cospherical local cluster. If you're working at ambient dimension 4 or
-  higher, don't treat Helix's output as unconditionally reliable ground truth without being aware of this.
-- **`"DQP"`** (`AlphaShapeDQP`/`AlphaComplexDQP`) — a from-scratch dual active-set quadratic-programming
-  method (Carlsson & Carlsson 2024) that never builds a Delaunay triangulation at all. Its real strength is
-  high ambient dimension, where Delaunay-based approaches become infeasible, and getting exact homology
-  rather than an approximate persistence diagram. Be aware: **the paper's own published benchmarks are
-  mixed** — it loses to Ripser on 2 of 4 of the paper's own persistence examples, and to qhull-based
-  Delaunay on some inputs. The honest value proposition is high-dimensional feasibility and exactness, not
-  raw speed — don't oversell it as a strict upgrade over Helix.
+Both backends agree that in degenerate (cospherical) point configurations — e.g. points on a regular grid —
+the alpha complex genuinely contains higher-dimensional simplices than a triangulation-based mental model
+would suggest (a unit grid in the plane produces 3-simplices, one per unit square, not just triangles). This
+is correct behavior, not a bug in either backend; users coming from CGAL or GUDHI may find it surprising.
 
-Both backends agree that in degenerate (cospherical) point configurations — e.g. points sitting on a regular
-grid — the alpha complex genuinely contains higher-dimensional simplices than you might expect from a
-triangulation-based mental model (a unit grid in the plane produces 3-simplices, one per unit square, not
-just triangles). This is mathematically correct behavior, not a bug in either backend, and users coming
-from CGAL or GUDHI (which typically report a triangulation, not the true alpha complex, in the degenerate
-case) may find it surprising.
+## Performance: opt-in parallelism
+
+A few of the more expensive per-cell computations can run on the JVM's common thread pool, opt-in via a
+constructor flag (`AlphaDQPSettings.parallel`, `CubicalGridStream.parallelFiltrationValue`,
+`CechCofaceSimplexStream.parallelFiltrationValue`), all defaulting to `false`, with deterministic output
+either way. Worth turning on for a large alpha-complex computation (each vertex's own QP solve is genuinely
+expensive — measured 2-4x speedup at a few hundred points and above); cubical images and Cech complexes see
+a smaller win (a few percent) since the per-cell cost there is lighter.
 
 ## Tutorials
 

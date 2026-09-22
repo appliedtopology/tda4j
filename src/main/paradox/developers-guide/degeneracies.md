@@ -36,3 +36,20 @@ input, and any reduction code path that implicitly assumes "ties are rare" will 
 ordinary data. This is precisely why
 @ref:[Hard-won invariants #2 and #3](gotchas.md)
 about tie-break consistency exist and matter in practice, not just in adversarially constructed test cases.
+
+## A quotient simplicial set can collapse a cell to a *degenerate* point, not just merge it with a peer
+
+`quotient`'s attaching map is `G => SSetElement[G]`, not `G => G`, specifically because some quotients need
+a cell to crush down a dimension entirely rather than merge with a same-dimension peer — the standard
+Δ-complex model of ℝP² glues two of a filled triangle's three edges into a loop, but the third collapses
+entirely onto a degenerate point over a vertex. If you're building a new attaching map and find yourself
+wanting to map a generator to a lower-dimensional target, that's expected, not a sign the API is being
+misused.
+
+## A cubical or Cech complex having "extra" simplices/cubes at a shared tie is not a bug
+
+The same underlying fact as the alpha-complex case above shows up differently in other constructions: a
+cubical grid's dense T-construction cell count (`prod_i (2*shape(i)+1)`) is much larger than the pixel/voxel
+count itself — a 256x256 image is 263,169 cells, not 65,536 — because every lower-dimensional face of every
+pixel is its own cell, most of them shared between adjacent pixels. This is the correct cell count for the
+cubical complex, not evidence of a construction bug.

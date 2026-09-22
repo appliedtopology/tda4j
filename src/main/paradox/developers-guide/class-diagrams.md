@@ -3,10 +3,7 @@
 @@@ note
 This page is a structural sketch to help you get oriented, not an exhaustive or automatically generated
 reference — field names and signatures can drift out of sync with source over time. When a diagram and the
-actual `.scala` file disagree, trust the file; the previous version of this page (dated 2024-09-18) had
-drifted enough from current source (referencing a `Cube.scala` file and cubical-complex types that no
-longer exist anywhere in `src/main`, among other things) that it was more actively misleading than useful,
-which is why this page was rebuilt from scratch against current source rather than incrementally patched.
+actual `.scala` file disagree, trust the file.
 @@@
 
 ## Typeclass hierarchy (`RingModule.scala`, `Field.scala`, `Chain.scala`)
@@ -63,13 +60,17 @@ classDiagram
     Cell <|-- OrderedCell
     Cocell <|-- OrderedCocell
     Simplex ..|> OrderedCell : given instance
+    Cube ..|> OrderedCell : given instance
+    FiniteSimplicialSet ..|> OrderedCell : per-instance given (cellInstance)
     Chain ..|> OrderedBasis : given instance
     Chain ..|> RingModule : given instance
 ```
 
-`Simplex[VertexT]` is currently the library's only `OrderedCell` instance; no concrete `Cocell`/
-`OrderedCocell` instance exists yet (`RipserCohomologyContext` computes coboundaries directly against
-`SimplexIndexing` instead — see @ref:[Persistence engines](persistence-engines.md)). See the
+Three concrete `OrderedCell` instances exist: `Simplex[VertexT]`, `Cube`, and a `FiniteSimplicialSet[G]`'s
+own generators (that last one is a per-instance `given`, not a global one, since its boundary depends on
+that particular simplicial set's own face data). No concrete `Cocell`/`OrderedCocell` instance exists —
+`RipserCohomologyContext`/`PackedRipserCohomologyContext` compute coboundaries directly against
+`SimplexIndexing` instead (see @ref:[Persistence engines](persistence-engines.md)). See the
 @ref:[Scala 3 primer](scala3-primer.md) for what "typeclass: type Self" and "given instance" mean concretely in
 this codebase's syntax.
 
@@ -148,26 +149,35 @@ classDiagram
     StratifiedSimplexStream <|-- CofaceSimplexStream
     CofaceSimplexStream <|-- EnumeratingCofaceSimplexStream
     EnumeratingCofaceSimplexStream <|-- RipserCofaceSimplexStream
+    RipserCofaceSimplexStream <|-- CechCofaceSimplexStream
     EnumeratingCofaceSimplexStream <|-- InorderCofaceSimplexStream
     SimplexStream <|-- ExplicitStream
     SimplexStream <|-- RipserStreamBase
     RipserStreamBase <|-- RipserStream
     SimplexStream <|-- RipserStreamSparse
     StratifiedSimplexStream <|-- RecursiveStackVietorisRipsSimplexStream
+    StratifiedSimplexStream <|-- IncrementalVietorisRipsSimplexStream
     StratifiedSimplexStream <|-- AlphaShapes
     AlphaShapes <|-- HelixDelaunay
     AlphaShapes <|-- AlphaShapeDQP
+    StratifiedCellStream <|-- CubicalGridStream
+    StratifiedCellStream <|-- ExplicitCubicalStream
+    CellStream <|-- SimplicialSetStream
+    StratifiedCellStream <|-- FilteredSimplicialSetStream
 ```
 
 These are **alternate stream implementations with a common output contract, not layers on top of one
-another** — see @ref:[Architecture](architecture.md).
+another** — see @ref:[Architecture](architecture.md). `CubicalGridStream`/`ExplicitCubicalStream` produce
+`Cube`s rather than `Simplex`es; `SimplicialSetStream`/`FilteredSimplicialSetStream` produce a
+`FiniteSimplicialSet[G]`'s own generator type `G`.
 
-## Persistence engines (`Homology.scala`)
+## Persistence engines (`homology/Homology.scala`, `homology/PackedRipserCohomology.scala`)
 
-Deliberately *not* diagrammed field-by-field here — their exact state and trust status changes over time
-and belongs in one place. See @ref:[Persistence engines](persistence-engines.md) for the full, current picture
-of `CellularHomologyContext`/`SimplicialHomologyContext`, `PersistenceInChunksContext`,
-`SimplicialHomologyByDimensionContext` (non-functional as of this writing), and `RipserCohomologyContext`.
+Deliberately *not* diagrammed field-by-field here — their exact state and trust status belongs in one
+place. See @ref:[Persistence engines](persistence-engines.md) for the full, current picture of the four
+algorithms across five classes: `CellularHomologyContext`/`SimplicialHomologyContext`,
+`CellularPersistenceInChunksContext`/`PersistenceInChunksContext`,
+`SimplicialHomologyByDimensionContext`, `RipserCohomologyContext`, and `PackedRipserCohomologyContext`.
 
 ## Metric spaces (`FiniteMetricSpace.scala`)
 

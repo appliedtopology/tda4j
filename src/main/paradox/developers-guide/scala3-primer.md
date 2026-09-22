@@ -60,8 +60,8 @@ trait OrderedCell extends Cell:
   type Self: Ordering as ordering
 ```
 
-(`Chain.scala:9-25`, current source — note `boundary` returns `Seq[(Self, CoefficientT)]`, not a `Chain`;
-more on that in @ref:[Architecture](architecture.md).)
+(`algebra/Chain.scala`, current source — note `boundary` returns `Seq[(Self, CoefficientT)]`, not a
+`Chain`; more on that in @ref:[Architecture](architecture.md).)
 
 To say "type `T` implements `Cell`," you don't write `Cell[T]` — you write **`T is Cell`**, using the
 special infix type alias `is` that the typeclasses feature provides (roughly `infix type is[A, C <: {type
@@ -81,13 +81,17 @@ given default_Simplex_is_OrderedCell: [VertexT: Ordering] => (Simplex[VertexT] i
 
 where `Simplex_is_OrderedCell` builds an anonymous `new (Simplex[VertexT] is OrderedCell):` instance,
 providing the `ordering` member `OrderedCell` requires and, in an `extension (spx: Simplex[VertexT])`
-block, concrete implementations of `dim` and `boundary`. Once this `given` is in scope (it's top-level in
-`Simplex.scala`, so a plain `import org.appliedtopology.tda4j.*` brings it in), **any** `Simplex[Int]` value
-can call `.dim` and `.boundary[Double]` directly, with no explicit typeclass-dictionary plumbing at the call
-site — that's the entire payoff of the pattern.
+block, concrete implementations of `dim` and `boundary`. Once this `given` is in scope, **any**
+`Simplex[Int]` value can call `.dim` and `.boundary[Double]` directly, with no explicit typeclass-dictionary
+plumbing at the call site — that's the entire payoff of the pattern. **One gotcha specific to this
+codebase's own package split**: a `given` only comes into scope via a wildcard import that explicitly says
+so — `import org.appliedtopology.tda4j.cells.{given, *}`, not just `import
+org.appliedtopology.tda4j.cells.*`. A plain `import pkg.*` does **not** bring `given` instances into scope
+in Scala 3; every file in this codebase that reaches across a subpackage boundary uses the `{given, *}`
+form for exactly this reason — see @ref:[Architecture](architecture.md)'s package-layout section.
 
 One syntax detail worth flagging because it trips people up: `given [CellT: OrderedCell as oCell] =>
-Ordering[CellT] = oCell.ordering` (`Chain.scala:27`) is the "anonymous given via arrow" form — a `given`
+Ordering[CellT] = oCell.ordering` (`algebra/Chain.scala`) is the "anonymous given via arrow" form — a `given`
 with no name, whose *value* is given after `=>`, parametrized by a context-bound clause on the left of the
 arrow. Read `given [bounds] => Body = value` as "for any type satisfying `[bounds]`, here is a value of
 type `Body`." This is how the library bridges its own `OrderedCell.ordering` member back into the
@@ -132,9 +136,9 @@ CoefficientT] is RingModule`'s implementation needs an `Ordering[CellT]` in scop
 constructed** — not fresh on every later call to the outer instance's methods. If you construct a `given`
 too early, before the specific `Ordering` you actually wanted is in scope, the instance permanently closes
 over whatever fallback *was* in scope at that moment, and no later import or context change will fix it.
-This is exactly why `CellularHomologyContext.HomologyState` (`Homology.scala:49`) declares `given
-Ordering[CellT] = stream.filtrationOrdering` as its *first* line, before summoning
-`Chain[CellT,CoefficientT] is RingModule` on the next line — order matters, and it isn't stylistic.
+This is exactly why every `HomologyState` in `homology/Homology.scala` declares `given Ordering[CellT] =
+stream.filtrationOrdering` as its *first* line, before summoning `Chain[CellT,CoefficientT] is RingModule`
+on the next line — order matters, and it isn't stylistic.
 
 ## What to read next
 

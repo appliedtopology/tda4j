@@ -2,17 +2,42 @@
 
 This page walks the two lower layers of the library: the algebraic core (what a "chain" and a
 "coefficient" actually are) and complex construction (how a sequence of cells in filtration order gets
-produced in the first place). @ref:[Persistence engines](persistence-engines.md) covers what consumes the
-stream this layer produces.
+produced). @ref:[Persistence engines](persistence-engines.md) covers what consumes the stream this layer
+produces.
 
-If a piece of Scala 3 syntax below looks unfamiliar, see the @ref:[Scala 3 primer](scala3-primer.md) first —
-this page assumes you've read it.
+If a piece of Scala 3 syntax below looks unfamiliar, see the @ref:[Scala 3 primer](scala3-primer.md) first.
+
+## Package layout
+
+`org.appliedtopology.tda4j` is split into subpackages, each a layer:
+
+- **`algebra`** — `RingModule`, `Field`, `FiniteField`, `Chain` (including the `Cell`/`Cocell`/
+  `OrderedCell`/`OrderedBasis` contracts), `SSetElement` (the degeneracy-word algebra underlying simplicial
+  sets). The typeclasses and formal-sum machinery everything else builds on.
+- **`cells`** — `Simplex`, `Cube`, `FiniteSimplicialSet` — the three concrete `OrderedCell` instances — plus
+  `SimplicialSetConstructions` (`product`/`coproduct`/`quotient`/`identify`).
+- **`streams`** — everything that produces cells in filtration order: `SimplexStream`/`CellStream`, the
+  Vietoris-Rips family, `FiniteMetricSpace`, `CubicalStream`/`CubicalImage`, `SimplicialSetStream`/
+  `FilteredSimplicialSetStream`, `CechStream`, `SymmetryGroup`, `UnionFind`.
+- **`homology`** — the persistence algorithms (`Homology.scala`, `PackedRipserCohomology.scala`).
+- **`barcode`** — `Barcode`, `PersistenceBar`, `BarcodeEndpoint`.
+- **`alpha`** — `AlphaShapes` (`HelixDelaunay`/`AlphaShapeDQP`), `AlphaComplexDQP`.
+- **`io`** — file-format adaptors: `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
+- **`cli`** — the `tda4j` executable (`TDA4jConf`, `TDA4jCLI`), a thin translator over `matlab.TDA4j`/`io`.
+- **`matlab`** — `TDA4j`/`PersistenceResult`, the plain-primitives facade for MATLAB and other Java callers.
+- root (`org.appliedtopology.tda4j` itself) — `package.scala` (`TDAContext`), the user-facing Scala facade.
+
+**Load-bearing import rule**: every file that reaches across a subpackage boundary does it via
+`import org.appliedtopology.tda4j.<pkg>.{given, *}` — the `given` matters. A plain `import pkg.*` does
+**not** bring `given` instances into scope in Scala 3, and this codebase's `Ordering`/`RingModule`/`Field`
+instances are all `given`s. Forgetting `given` compiles cleanly and fails at a summon site with a
+confusing "no given instance" error far from the missing import.
 
 ## The algebraic core
 
 ### `RingModule` and `Field`
 
-`RingModule.scala` defines what it means for a type `Self` to be a module over a ring-like type `R`:
+`algebra/RingModule.scala` defines what it means for a type `Self` to be a module over a ring-like type `R`:
 
 ```scala 3
 trait RingModule:
@@ -30,44 +55,28 @@ trait RingModule:
     def unary_- : Self = negate(t)
   extension (r: R)
     def |*|(t: Self): Self = this.scale(r, t)
-    def ⊠(t: Self): Self = this.scale(r, t) // unicode ⊠, "boxed times" -- scalar action
+    def ⊠(t: Self): Self = this.scale(r, t) // "boxed times" -- scalar action
 ```
 
-A minimal instance only needs to implement `zero`, `plus`, `scale`, and one of `minus`/`negate`; the rest
-come for free. `⊠` (type it as `Alt+J` doesn't apply here — it's typed via a Unicode input method or
-copy-paste; the character is U+22A0) is the scalar-multiplication operator you'll see everywhere:
-`2.0 ⊠ chain` scales `chain` by `2.0`.
+A minimal instance only needs `zero`, `plus`, `scale`, and one of `minus`/`negate`. `⊠` (U+22A0, typed via
+a Unicode input method or copy-paste) is the scalar-multiplication operator used throughout: `2.0 ⊠ chain`.
 
-`Field.scala` is a separate, self-contained typeclass (not built on `RingModule`) for coefficient types
-themselves — `plus`/`minus`/`times`/`divide`/`negate`/`invert`/`zero`/`one`, with `+`/`-`/`*`/`/`/`eql`
-extension operators. **There is no default `given Double is Field` anywhere in `src/main`.** You must
-bring one into scope explicitly wherever you use `Double` coefficients:
+`algebra/Field.scala` is a separate, self-contained typeclass (not built on `RingModule`) for coefficient
+types themselves — `plus`/`minus`/`times`/`divide`/`negate`/`invert`/`zero`/`one`, with `+`/`-`/`*`/`/`/`eql`
+extension operators. **There is no default `given Double is Field` anywhere in `src/main`** — bring one in
+explicitly:
 
 ```scala 3
 given Double is Field = Field.DoubleApproximated(1e-9)
 ```
 
-`Field.DoubleApproximated(epsilon)` wraps `Fractional[Double]` and treats two doubles as equal when they're
-within `epsilon` — necessary because exact equality on floating point is rarely what you want when
-`isZero` checks decide whether a chain entry survives a reduction step. Pick `epsilon` relative to the
-scale of your data; every spec in `src/test` uses `1e-25` or `1e-9` (see `ChainSpec.scala`,
-`HomologySpec.scala`).
+`Field.DoubleApproximated(epsilon)` treats two doubles as equal within `epsilon` — necessary because exact
+floating-point equality is rarely what you want when an `isZero` check decides whether a chain entry
+survives a reduction step. `FiniteField.scala` gives exact, non-approximate coefficients instead:
+`FiniteField(p)`'s `Fp` is an opaque type *per instance* (so `Fp` from a mod-5 field and a mod-7 field are
+distinct, incompatible types), with exact arithmetic via a precomputed inverse table.
 
-`FiniteField.scala` gives you exact, non-approximate coefficients instead: `FiniteField(p)` is a class
-whose `Fp` is an *opaque type per instance* (so `Fp` from a mod-5 field and `Fp` from a mod-7 field are
-different, incompatible types, even though both are erased to `Int`), with `given (Fp is Field)` supplying
-exact arithmetic via a precomputed inverse table. Usage:
-
-```scala 3
-val fp17 = FiniteField(17)
-import fp17.{given, *}
-Fp(1) ⊠ ∆(1, 2) - Fp(2) ⊠ ∆(1, 3)
-```
-
-### `Cell`, `OrderedCell`, and what `boundary` actually returns
-
-From `Chain.scala` (see the @ref:[primer](scala3-primer.md)
-for the `is`-syntax mechanics):
+### `Cell`, `OrderedCell`, and what `boundary` returns
 
 ```scala 3
 trait Cell extends HasDimension:
@@ -78,166 +87,202 @@ trait OrderedCell extends Cell:
   type Self: Ordering as ordering
 ```
 
-**`boundary` returns a plain `Seq[(Self, CoefficientT)]`, not a `Chain`.** This is easy to get wrong if
-you've seen an older draft of this codebase's own docs (an earlier version of this guide showed `boundary`
-returning `Chain[Self, CoefficientT]` directly — that was already stale when found; always check current
-source, not a doc, when the two disagree). Callers wrap the result in `Chain.from(...)` when they need
-actual `Chain` machinery (collapsing, reduction, arithmetic) — see `CellularHomologyContext.advanceOne`'s
-`Chain.from(sigma.boundary[CoefficientT])` in `Homology.scala`.
+**`boundary` returns a plain `Seq[(Self, CoefficientT)]`, not a `Chain`.** Callers wrap the result in
+`Chain.from(...)` when they need actual `Chain` machinery.
 
-`Simplex[VertexT]`, `Cube`, and `FiniteSimplicialSet` are the library's current `OrderedCell` implementations
-(`Simplex.scala`, `Cube.scala`, `FiniteSimplicialSet.scala`): `boundary`
-returns each codimension-1 face (drop one vertex for simplices) paired with alternating signs `+1, -1, +1, ...`, and
-`dim` is `size - 1`. `Cocell`/`OrderedCocell` are the dual traits (`coboundary` instead of `boundary`); no
-concrete type implements them yet as of this writing — `RipserCohomologyContext` computes coboundaries
-directly against `SimplexIndexing`'s cofacet iterator rather than through a `Cocell` instance (see
-@ref:[Persistence engines](persistence-engines.md)).
+`Simplex[VertexT]`, `Cube`, and `FiniteSimplicialSet[G]`'s generators are the library's three concrete
+`OrderedCell` instances (`cells/SimplexOrderedCell.scala`, `cells/CubicalOrderedCell.scala`,
+`cells/SimplicialSet.scala`): `boundary` returns each codimension-1 face paired with alternating signs.
+`Cocell`/`OrderedCocell` are the dual traits; no concrete type implements them as such —
+`RipserCohomologyContext`/`PackedRipserCohomologyContext` compute coboundaries directly against
+`SimplexIndexing`'s cofacet iterator instead (see @ref:[Persistence engines](persistence-engines.md)).
 
 ### `Chain`
 
-`Chain[CellT: Ordering, CoefficientT: Field]` is a formal sum of cells with field coefficients
-(`Chain.scala`), backed by a mutable `scala.collection.mutable.PriorityQueue[(CellT, CoefficientT)]`
-ordered so the *smallest* cell under the ambient `Ordering[CellT]` sits at the head — cheap to peek, which
-matters because "leading term" (the pivot in every reduction algorithm below) is queried constantly.
-Key operations:
+`Chain[CellT: Ordering, CoefficientT: Field]` (`algebra/Chain.scala`) is a formal sum of cells with field
+coefficients, backed by a mutable `PriorityQueue` ordered so the *smallest* cell under the ambient
+`Ordering[CellT]` sits at the head — cheap to peek, since "leading term" (the reduction pivot) is queried
+constantly.
 
-- `collapseHead()` / `collapseAll()` merge duplicate-cell entries by summing their coefficients (dropping
-  exact zeros). `collapseHead` only touches entries tied with the current head; `collapseAll` rebuilds the
-  whole queue. Naive `+`/`-`/`⊠` on `Chain` (via its `RingModule` instance, `Chain.scala:176`) only
-  lazily collapse the head — repeated raw arithmetic in a loop accumulates an ever-growing backlog of
-  un-collapsed duplicates. **Never build a reduction loop out of raw `Chain` arithmetic** — see
+- `collapseHead()`/`collapseAll()` merge duplicate-cell entries, dropping exact zeros. Naive `+`/`-`/`⊠`
+  only lazily collapse the head, so a hand-rolled reduction loop built out of raw `Chain` arithmetic
+  accumulates an ever-growing backlog of uncollapsed duplicates — see
   @ref:[Hard-won invariants](gotchas.md).
-- `Chain.reduceBy` / `Chain.reduceByUntil` (`Chain.scala:160-174`) are the actual matrix-reduction
-  primitives every persistence engine builds on: given a chain `z`, a `basis: mutable.Map[CellT,
-  Chain[CellT,CoefficientT]]` of already-recorded pivot columns, and an optional `stop` predicate, they
-  repeatedly subtract off the appropriate multiple of `basis(pivot)` from `z` until `z`'s leading cell is no
-  longer a key in `basis` (or `stop` fires), returning both the reduced chain and a "reduction log" chain
-  recording which pivots were used and with what coefficient — the log is what lets a caller reconstruct a
-  V-column (see @ref:[Persistence engines](persistence-engines.md)). Internally these go through a
-  `mutable.TreeMap`, not the `PriorityQueue`-backed `Chain` type, specifically so repeated updates stay
-  cheap (map insertion collapses duplicates automatically) — this is the actually-efficient path raw `Chain`
-  arithmetic is not.
-- `given [CellT: Ordering, CoefficientT: Field] => (Chain[CellT, CoefficientT] is RingModule {type R =
-  CoefficientT})` (`Chain.scala:176`) is what makes `+`, `-`, `⊠`, `unary_-` work on `Chain` values. This is
-  the `given` whose summon *timing* matters — see the primer and @ref:[Hard-won invariants](gotchas.md).
+- `Chain.reduceBy`/`Chain.reduceByUntil` are the actual matrix-reduction primitives every persistence
+  engine builds on: given a chain `z` and a `basis: Map[CellT, Chain[CellT, CoefficientT]]` of recorded
+  pivot columns, repeatedly subtract the appropriate multiple of `basis(pivot)` until `z`'s leading cell is
+  no longer a key in `basis`, returning both the reduced chain and a reduction-log chain (the multipliers
+  used) that lets a caller reconstruct a V-column. Internally these go through a `mutable.TreeMap`, not the
+  `PriorityQueue`-backed `Chain` type, so repeated updates collapse duplicates automatically.
+- `given [CellT: Ordering, CoefficientT: Field] => (Chain[CellT, CoefficientT] is RingModule)` is what makes
+  `+`, `-`, `⊠`, `unary_-` work on `Chain` values — the `given` whose summon *timing* matters, see
+  @ref:[Hard-won invariants](gotchas.md).
 
 ## Complex construction: streams
 
-A `SimplexStream` is the abstract interface every persistence engine consumes: an iterator over cells in
-filtration order, plus a `filtrationValue: PartialFunction[CellT, FiltrationT]` and a `Filterable`
-(smallest/largest sentinel values — `±Infinity` for `Double`, via `Filterable.scala`'s givens in
-`SimplexStream.scala`). The trait hierarchy, most-general to least:
+A `CellStream[CellT, FiltrationT]` is the abstract interface every persistence engine consumes: an iterator
+over cells in filtration order, plus a `filtrationValue: PartialFunction[CellT, FiltrationT]` and a
+`Filterable` (smallest/largest sentinel values, `±Infinity` for `Double`). Trait hierarchy, most-general to
+least:
 
 ```
-Filtration[CellT, FiltrationT]         -- has a filtrationValue partial function
-CellStream[CellT, FiltrationT]         -- Filtration + IterableOnce[CellT] + filtrationOrdering
-SimplexStream[VertexT, FiltrationT]    -- CellStream specialized to Simplex[VertexT]
+Filtration[CellT, FiltrationT]           -- has a filtrationValue partial function
+CellStream[CellT, FiltrationT]           -- Filtration + IterableOnce[CellT] + filtrationOrdering
+SimplexStream[VertexT, FiltrationT]      -- CellStream specialized to Simplex[VertexT]
 StratifiedCellStream[CellT, FiltrationT] -- adds iterateDimension: dimension-by-dimension access
 ```
 
-`filtrationOrdering` deserves special attention: `SimplexStream`'s default implementation
-(`FilteredSimplexOrdering`, `SimplexStream.scala`) orders cells by filtration value **reversed** (so the
-*smallest*-under-this-ordering cell is the *youngest*), tie-broken by dimension then lexicographic vertex
-order. This reversal is deliberate and load-bearing: `Chain`'s `leadingCell` is always the minimum under
-whatever `Ordering` backs it, and the persistence algorithms need `leadingCell` to mean "youngest" for the
-boundary-matrix reduction to select the correct pivot. Several concrete streams override
-`filtrationOrdering` with their own tie-break instead of the generic lexicographic one — see
-@ref:[Hard-won invariants](gotchas.md)
-for why, and #2 for why a stream's *iteration* order and its `filtrationOrdering` (*pivot* order) must
-agree.
+**Two rules that hold for every stream in this codebase**, both explained in full in
+@ref:[Hard-won invariants](gotchas.md):
 
-### The several VR-stream implementations
+- `filtrationOrdering` orders cells by filtration value **reversed** (so the *smallest*-under-this-ordering
+  cell is the *youngest*), because `Chain`'s pivot is always the ordering's minimum and the reduction
+  algorithms need "leading cell" to mean "youngest." A stream's iteration order and its `filtrationOrdering`
+  must be the *same* total order (one the consistent `.reverse` of the other), not merely two independently
+  valid orderings.
+- `StratifiedCellStream.iterateDimension`'s domain must be contiguous from `0` (defined for `0, ..., k` or
+  all of ℕ, never with a gap) — the default `.iterator` stops at the first dimension it's undefined for.
 
-These are **alternate engines with the same output contract, not layers on top of each other** — don't
-assume fixing one fixes the others, and check which `iterateDimension`/`iterator` implementation is
-actually in play before reasoning about a bug:
+### Vietoris-Rips: several independent generation strategies
 
-- `EnumeratingCofaceSimplexStream` (`SimplexStream.scala`) — generates each dimension explicitly via
-  `SimplexIndexing`'s combinatorial-number-system enumeration (see below), filtered by an optional
-  `keepCriterion`, sorted by `filtrationOrdering.reverse`.
-- `RipserCofaceSimplexStream` (`SimplexStream.scala`) — a coface-generation variant that caches the
-  previous dimension's simplices and only expands cofaces reachable from them, rather than enumerating an
-  entire dimension from scratch every time.
-- `InorderCofaceSimplexStream` (`SimplexStream.scala`) — generates cofaces "in order" directly from the
-  metric-space structure (no post-hoc sort needed for its own generation, though it still relies on
-  `filtrationOrdering` being consistent with it — see the gotcha above).
-- `RipserStream` / `RipserStreamBase` (`RipserStream.scala`) — a Ripser-style binomial-indexed stream:
-  every simplex is addressed by an integer index via `SimplexIndexing`'s combinatorial number system
-  (`apply(n, d)` decodes index `n` to the `n`th `d`-subset; `apply(simplex)` encodes the reverse direction),
-  letting the stream enumerate `0 until binomial(N, d+1)` directly rather than building simplices
-  incrementally. `RipserStreamSparse` additionally does zero-persistence-pair detection
-  (`zeroApparentCofacet`/`zeroApparentFacet`) as a generation-time filter — see
-  @ref:[Persistence engines](persistence-engines.md) for how this relates to (and differs from) apparent pairs
-  as an optimization inside `RipserCohomologyContext`.
-- `RecursiveStackVietorisRipsSimplexStream` (`VietorisRips.scala`) — a recursive-stack coface enumerator
-  built on a `TopCofacetEnumerator`/spatial-query combination, a third independent generation strategy.
+These are **alternate engines with the same output contract, not layers on one another** — check which
+`iterateDimension`/`iterator` implementation is actually in play before reasoning about a bug:
 
-`Cofacets.scala`'s `CofacetIterator` is a separate, lower-level lazy coboundary generator over a
-`SparseMetricSpace` (only edges within a diameter cutoff are visible — see `FiniteMetricSpace.scala`'s
-`SparseMetricSpace`), used where lazy per-cell coface generation matters more than whole-dimension
-enumeration.
+- `EnumeratingCofaceSimplexStream` — generates each dimension explicitly via `SimplexIndexing`'s
+  combinatorial-number-system enumeration, filtered by an optional `keepCriterion`.
+- `RipserCofaceSimplexStream` — a coface-generation variant that only expands cofaces reachable from the
+  previous dimension's survivors rather than re-enumerating a whole dimension from scratch. `CechStream`'s
+  `CechCofaceSimplexStream` is built directly on top of this class (see below).
+- `InorderCofaceSimplexStream` — generates cofaces "in order" directly from the metric-space structure.
+- `IncrementalVietorisRipsSimplexStream` — a reference implementation of Antonio Rieser's New-VR algorithm
+  (arXiv:2301.07191), meant as a cross-validation baseline rather than a speed-competitive engine.
+- `RecursiveStackVietorisRipsSimplexStream` — a third, independent coface-enumeration strategy built on a
+  recursive stack and spatial query.
+- `RipserStream`/`RipserStreamBase` — a Ripser-style binomial-indexed stream: every simplex is addressed by
+  an integer index via `SimplexIndexing`'s combinatorial number system, so the stream can enumerate
+  `0 until binomial(N, d+1)` directly rather than building simplices incrementally.
 
-### `SimplexIndexing` and the combinatorial number system
+`EnumeratingCofaceSimplexStream`/`RipserCofaceSimplexStream`/`InorderCofaceSimplexStream`/
+`IncrementalVietorisRipsSimplexStream` all default `maxFiltrationValue` to `metricSpace.minimumEnclosingRadius`,
+not `Double.PositiveInfinity` — past that radius every vertex is within range of a common apex, so the
+complex is a cone from there on and provably contributes no further homology (real `ripser.cpp` uses the
+same default). Pass `maxFiltrationValue = Some(Double.PositiveInfinity)` for the old always-unbounded
+behavior. `RecursiveStackVietorisRipsSimplexStream` and the alpha-complex backends keep their own,
+always-untruncated default (see @ref:[Alpha complex](alpha-complex.md)).
 
-`SimplexIndexing.scala` (inside `RipserStream.scala`) is the piece every Ripser-flavored part of this
-codebase depends on: it encodes/decodes a `d`-subset of `{0, ..., vertexCount-1}` to/from a single integer
-index via binomial-coefficient lookups, giving `O(d)` conversion in both directions without ever
-materializing all subsets. `cofacetIterator`/`facetIterator` walk cofacets/facets of a simplex purely
-combinatorially over the *complete* `vertexCount`-point abstract simplex — **they have no notion of
-`maxDimension` truncation at all**. See
-@ref:[Hard-won invariants](gotchas.md)
-before building anything new directly on these iterators.
+`SimplexIndexing` (inside `RipserStream.scala`) is the piece every Ripser-flavored part of this codebase
+depends on: it encodes/decodes a `d`-subset of `{0, ..., vertexCount-1}` to/from a single integer index via
+binomial-coefficient lookups, in `O(d)` either direction. Its `cofacetIterator`/`facetIterator` walk the
+*complete* `vertexCount`-point abstract simplex with no notion of `maxDimension` truncation at all — see
+@ref:[Hard-won invariants](gotchas.md) before building anything new directly on them.
+
+### Cubical complexes
+
+`Cube` (`cells/Cubical.scala`) is an elementary cube: a product of `n` (fixed ambient dimension) factors,
+each a degenerate point `[a,a]` or a unit interval `[a,a+1]`, via the standard "doubled coordinate"
+encoding (axis `k` is `2a` or `2a+1`). `opaque type Cube = Vector[Int]` — `Vector`, not `Array`, so
+structural equality works for `Chain`'s pivot tables. Boundary sign alternates over a non-degenerate axis's
+*rank among the other non-degenerate axes*, not its raw coordinate position — get this wrong and `d(d(x))`
+fails to vanish as soon as a cube has an interleaved degenerate axis, invisibly over a field of
+characteristic 2.
+
+`CubicalGridStream` (`streams/CubicalStream.scala`) is a dense cubical complex over a full rectangular grid
+(the standard T-construction): a caller-supplied `topCellValue` gives every top-dimensional cube its own
+value, and every lower-dimensional cube's value is the `min` over the top cells containing it — computed
+directly via the cartesian product over the cube's degenerate axes rather than a recursive coface walk.
+`CubicalImage` builds these from images/voxel grids (`fromFlatArray`/`fromBufferedImage`/`fromFile`/
+`fromVoxelGrid3D`); sublevel vs. superlevel filtration is handled by negating values on load, not as a flag
+on the stream itself. `CubicalHomologyContext` is a one-line `Cube`-specialized wrapper around
+`CellularHomologyContext` — cubical complexes needed no new engine code, only a new `OrderedCell` instance.
+
+### Simplicial sets
+
+`SSetElement[G](word, generator)` (`algebra/SSetElement.scala`) plus `FiniteSimplicialSet[G]`
+(`cells/SimplicialSet.scala`) implement finite simplicial sets in the classical Eilenberg-Zilber
+presentation: a finite set of non-degenerate generators per dimension, plus primitive face data
+`faces: G => IndexedSeq[SSetElement[G]]`. `word` is the degeneracy indices in normal form — **strictly
+decreasing**, not increasing, a direct consequence of the simplicial identity `s_i s_j = s_{j+1} s_i`
+(`i <= j`). `insertOuter`/`faceOf` implement the full operator algebra (`s_i`/`d_i` on arbitrary, possibly
+degenerate elements), which is what lets `FiniteSimplicialSet.validate()` check that hand-supplied face data
+actually satisfies the simplicial identities.
+
+`cells/SimplicialSetConstructions.scala` builds new simplicial sets from old: `product`/`coproduct`
+(categorical product/coproduct — a product's non-degenerate simplices are pairs `(a, b)` with
+*disjoint* degeneracy words, not Eilenberg-Zilber shuffles, and its top dimension is
+`maxDim(x) + maxDim(y)`), and `quotient`/`identify` (attaching maps — `quotient` takes `G => SSetElement[G]`
+rather than `G => G` specifically so a cell can collapse down a dimension onto a degenerate point, the
+Δ-complex model of ℝP² needs exactly this for one of a triangle's three edges).
+
+`streams/SimplicialSetStream.scala` adapts a `FiniteSimplicialSet[G]` to `CellStream` for ordinary,
+unfiltered homology (every generator at filtration value `0`); `fromStream` builds a `FiniteSimplicialSet`
+from any simplex stream. `streams/FilteredSimplicialSetStream.scala` is the genuine
+`StratifiedCellStream[G, Double]`, with a caller-supplied `filtrationValue` and
+`validateMonotoneFiltration` to check the one precondition every engine needs (a face's value never exceeds
+its coface's).
+
+### Cech complexes
+
+`streams/CechStream.scala` (`CechCofaceSimplexStream`/`CechFiltration`) builds Cech complexes over
+`Simplex[Int]`, reusing `RipserCofaceSimplexStream`'s generic coface-generation loop via its
+`filtrationValueOverride` hook rather than a from-scratch algorithm. The geometric primitive is
+minimum-enclosing-ball radius (`com.dreizak:miniball`), not the Delaunay/QP machinery alpha shapes use —
+Cech membership depends only on a simplex's own vertices, not on every other point in the cloud.
+`CechFiltration` caches each simplex's radius and clamps it to the max of its own facets' cached radii,
+since a raw Miniball call can violate monotonicity by a floating-point ULP on near-degenerate input.
+
+New-VR's Table-Lookup optimization and the packed Ripser engine's optimizations do **not** carry over to
+Cech: both are proven specifically for flag complexes / the max-pairwise-distance functional, and Cech is
+neither a flag complex nor governed by that functional. Cech complexes work with either generic engine
+(`CellularHomologyContext`/`CellularPersistenceInChunksContext`), cross-validated against each other; the
+packed and reference Ripser engines (specialized to the Vietoris-Rips functional) are not offered for it.
 
 ### Metric spaces
 
 `FiniteMetricSpace.scala` abstracts "distance + finite point set": `ExplicitMetricSpace` (raw distance
-matrix), `EuclideanMetricSpace` (coordinate array, on-demand Euclidean distance, with a VP-tree-backed
-`neighbors` query via the `jvptree` library), `IntMetricSpace` (reindexes any metric space to contiguous
-`0 until size` integer indices), and `SparseMetricSpace` (wraps another metric space, reporting `+Infinity`
-beyond a fixed diameter cutoff — used to bound Vietoris-Rips construction to a finite neighborhood per
-point). `JVPTree`/`BruteForce` (implementing `SpatialQuery`) are the two neighbor-query backends;
-`SparseMetricSpace` uses `JVPTree` by default.
+matrix), `EuclideanMetricSpace` (coordinate array, on-demand Euclidean distance, VP-tree-backed `neighbors`
+query), `IntMetricSpace` (reindexes to contiguous `0 until size`), `SparseMetricSpace` (reports `+Infinity`
+beyond a fixed diameter cutoff, bounding Vietoris-Rips construction to a finite neighborhood per point).
 
 ### Symmetry-aware construction
 
 `SymmetryGroup.scala` lets construction/computation work on canonical orbit representatives only, when the
-point cloud has a known vertex symmetry group. `SymmetryGroup[KeyT, VertexT]` provides `orbit`/
-`representative`/`isRepresentative`; `SymmetricRipserStream`/`SymmetricRipserCliqueFinder` build a
-`RipserStream` variant that only retains orbit representatives and expands the rest of the orbit lazily.
-`HyperCubeSymmetry`/`HyperCubeSymmetryGenerators` are the worked example (hypercube vertices under bit-
-position permutation), with a "pseudo-minimum against generators, then check the full orbit only if
-needed" optimization in `HyperCubeSymmetryGenerators.isRepresentative` worth reading if you're building a
-new symmetry group.
+point cloud has a known vertex symmetry group. `SymmetricRipserStream`/`SymmetricRipserCliqueFinder` build a
+`RipserStream` variant retaining only orbit representatives; `HyperCubeSymmetry`/
+`HyperCubeSymmetryGenerators` is the worked example (hypercube vertices under bit-position permutation).
+
+### Opt-in parallelism
+
+A few of the more expensive per-cell computations can run on the common `ForkJoinPool`, opt-in via a
+constructor flag defaulting to `false`, with output that is deterministic either way:
+`AlphaDQPSettings.parallel` (the per-vertex QP solve), `CubicalGridStream.parallelFiltrationValue`, and
+`CechCofaceSimplexStream.parallelFiltrationValue`. These are worth reaching for on large inputs where the
+per-cell cost is real (a QP solve, a Miniball radius) but shouldn't be assumed to give a large win — measured
+speedups range from a few percent (cubical, Cech — the per-cell cost there is small enough that scheduling
+overhead eats most of the gain) up to roughly 2-4x for the alpha-complex QP solve at a few hundred points and
+above, where each per-vertex solve is genuinely expensive.
 
 ## `Barcode.scala`: representing the output
 
-`org.appliedtopology.tda4j.barcode` (note: this is a genuinely separate package, not just a file) defines
-`BarcodeEndpoint` (`PositiveInfinity`/`NegativeInfinity`/`OpenEndpoint`/`ClosedEndpoint`, with a
-total-order `given Ordering[BarcodeEndpoint[FiltrationT]]` that correctly interleaves finite and infinite
+`org.appliedtopology.tda4j.barcode` defines `BarcodeEndpoint` (`PositiveInfinity`/`NegativeInfinity`/
+`OpenEndpoint`/`ClosedEndpoint`, with a total order that correctly interleaves finite and infinite
 endpoints) and `PersistenceBar[FiltrationT, AnnotationT]` (dimension, lower/upper endpoint, an optional
-`annotation` — in practice always `Chain[CellT, CoefficientT]`, the representative cycle/cocycle). `Barcode`
-additionally implements algebra on finitely-presented persistence modules: `image`/`kernel`/`cokernel` of a
-map between two barcodes represented as a matrix, following the standard "reduce the induced matrix, read
-off pivots" approach — useful if you're implementing interleaving distances or persistence-module
-morphisms, not needed for ordinary persistent-homology computation.
+annotation — in practice always the representative `Chain`). `Barcode` additionally implements algebra on
+finitely-presented persistence modules: `image`/`kernel`/`cokernel` of a map between two barcodes
+represented as a matrix — useful for interleaving distances or persistence-module morphisms, not needed for
+ordinary persistent-homology computation.
 
 ## `package.scala`: `TDAContext`
 
 ```scala 3
 class TDAContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]
     extends SimplicialHomologyContext[VertexT, CoefficientT, FiltrationT]():
-  val chainIsRingModule = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule {type R = CoefficientT}]
+  val chainIsRingModule = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule { type R = CoefficientT }]
   export chainIsRingModule.*
   given [T: Ordering] => Conversion[Simplex[T], Chain[Simplex[T], CoefficientT]] = Chain.apply
 ```
 
-`TDAContext` takes **three** type parameters (`VertexT`, `CoefficientT`, `FiltrationT`) — an earlier draft
-of this guide, and the code sample it was copied from, used only two and is wrong; always check
-`package.scala` directly. `TDAContext` *is* a `SimplicialHomologyContext` (the naive, reference-grade
-persistence engine — see @ref:[Persistence engines](persistence-engines.md)), plus it exports chain-arithmetic
-operators (`+`, `-`, `⊠`, ...) into your namespace and provides an implicit `Simplex -> Chain` conversion so
-you can write `∆(1,2) - ∆(2,3)` directly. See `src/test/scala/.../APISpec.scala` for the actual, currently
-working usage pattern (also the basis for the @ref:[User's Guide](../user-guide/index.md)'s Scala quickstart).
-`APISpec.scala`'s own doc comment calls itself "developing the non-Scala facing API functionality" — it's
-the closest thing that exists today to a seed for a future Matlab/Java-friendly entry point (see the
-User's Guide's Matlab section for what that would need to add).
+`TDAContext` takes **three** type parameters (`VertexT`, `CoefficientT`, `FiltrationT`). It *is* a
+`SimplicialHomologyContext` (see @ref:[Persistence engines](persistence-engines.md)), plus it exports
+chain-arithmetic operators (`+`, `-`, `⊠`, ...) into your namespace and provides an implicit
+`Simplex -> Chain` conversion so you can write `∆(1,2) - ∆(2,3)` directly — the basis for the
+@ref:[User's Guide](../user-guide/index.md)'s Scala quick-start.

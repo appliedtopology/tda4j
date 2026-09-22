@@ -1,157 +1,120 @@
 # Persistence engines: what to trust, and why
 
-`Homology.scala` contains **four independently-implemented** persistence algorithms. They share the
-`Chain` reduction primitives from @ref:[Architecture](architecture.md) (`Chain.reduceBy`/`reduceByUntil`), but
-they are not variants of one shared engine — a fix or bug found in one does not imply anything about the
-others, and this has been confirmed the hard way more than once (see
-@ref:[Hard-won invariants](gotchas.md)). Read this page before choosing which engine to build on, and before
-assuming any given engine's output is trustworthy just because it's in the file and compiles.
+`homology/Homology.scala` and `homology/PackedRipserCohomology.scala` contain **four independently-implemented
+algorithms across five concrete classes**. They share the `Chain` reduction primitives from
+@ref:[Architecture](architecture.md), but they are not variants of one shared engine — a fix or bug found in
+one does not imply anything about the others. Read this page before choosing which engine to build on.
 
-## 1. `CellularHomologyContext` / `SimplicialHomologyContext` — reference-grade, trustworthy
+## 1. `CellularHomologyContext` / `SimplicialHomologyContext` — reference-grade, generic
 
 `CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]` is the naive
 single-pivot-table boundary-reduction algorithm: process cells in filtration order, reduce each cell's
 boundary against pivots recorded so far via `Chain.reduceBy`, and the cell either opens a class (reduced
-boundary is zero) or closes one (reduced boundary is nonzero; its leading cell is the pivot it kills). No
-clearing, no chunking, no cohomology/twist optimization. This is the **oracle every other engine in this
-file gets cross-validated against** — when in doubt about whether some other engine's output is right,
-this is the one to compare against, not the reverse. `SimplicialHomologyContext[VertexT, CoefficientT,
-FiltrationT]` is a thin `Simplex[VertexT]`-specialized subclass; `TDAContext` (see
-@ref:[Architecture](architecture.md)) extends this one.
+boundary is zero) or closes one. No clearing, no chunking, no cohomology/twist optimization. Generic over
+*any* `CellT: OrderedCell` — this is what makes it the engine `Cube` and `FiniteSimplicialSet` slot into
+with no new engine code (`CubicalHomologyContext`, `SimplicialHomologyContext` are one-line specializations
+of it). It's the **oracle every other engine here gets cross-validated against**.
 
-It's also the only engine that supports genuine incremental querying: `HomologyState` exposes
-`advanceOne()`/`advanceTo(f)`/`advanceAll()`, and `diagramAt(f)`/`barcodeAt(f)` can be called mid-stream to
-get the diagram *as of* filtration value `f` without finishing the whole stream. `barcodeAt` additionally
-annotates each bar with an actual representative cycle, tracked via a parallel "V-column"
-(`generators`/`positives` maps in `HomologyState`) alongside the ordinary boundary-matrix reduction — read
-the class doc at the top of `CellularHomologyContext` in `Homology.scala` for the full derivation of why
-that reconstruction is correct.
+It's also the only engine with genuine incremental querying: `HomologyState.advanceOne()`/`advanceTo(f)`/
+`advanceAll()`, and `diagramAt(f)`/`barcodeAt(f)` can be called mid-stream to get the diagram *as of*
+filtration value `f`. `barcodeAt` annotates every bar with a real representative cycle, tracked via a
+parallel V-column alongside the ordinary reduction. `TDAContext` (root `package.scala`) extends this class.
 
-**History worth knowing**: this class was rewritten from a "twist"-with-cohomology-bookkeeping variant that
-was silently wrong, due to exactly the `given`-summon-timing bug described in
-@ref:[Hard-won invariants #1](gotchas.md).
-`HomologyState` now declares `given Ordering[CellT] = stream.filtrationOrdering` as its first statement,
-before summoning `chainRM` — this ordering matters, don't reorder it.
+## 2. `CellularPersistenceInChunksContext` / `PersistenceInChunksContext` — chunked, generic
 
-## 2. `PersistenceInChunksContext` — trustworthy, audited twice
+`CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field](maxDim: Int = 5)` implements the
+parallelizable "clear-and-compress" algorithm: local reduction per chunk, active-entry marking, then global
+column compression/reduction. `PersistenceInChunksContext[VertexT, CoefficientT]` is a one-line
+`Simplex`-specialized subclass, mirroring `SimplicialHomologyContext`'s relationship to engine 1 — the class
+has no `Simplex`-specific behavior anywhere in its body, so any `OrderedCell` slots in directly.
 
-`PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim: Int = 5)` implements the
-parallelizable "clear-and-compress" chunked algorithm from the persistence-in-chunks literature: local
-reduction per chunk (Algorithm 2), active-entry marking (Algorithm 3), then global column
-compression/reduction (Algorithms 4-5). Built for larger complexes where cross-chunk work can be batched;
-`advanceAll()` runs the whole pipeline in one shot (no incremental querying like engine 1 has).
+Dimensions 0 and 1 go through a dedicated union-find fast path (`unionFindDim01`) instead of the general
+`Chain`-based reduction, since both dimensions are mathematically forced to agree with the general machinery
+on a fixed total order — a real, measured win when a large point cloud's dimension-0/1 structure dominates
+the complex. `barcodeAt(f)` returns a real representative for **every** bar, at every dimension, including
+essential classes — reconstructed incrementally from this class's own already-computed
+`boundaries`/`cleared`/`paired`/`killer` state (`vcolOf`, memoized) rather than by delegating to a second
+engine run. `advanceAll()` runs the whole pipeline in one shot; there is no incremental querying the way
+engine 1 has.
 
-This class summons its `chainRM` (`Chain[Simplex[VertexT], CoefficientT] is RingModule`) at *class* scope,
-before any stream exists — structurally the same pattern that broke engine 1. It has been **audited twice
-and confirmed correct both times, empirically, not just by inspection**: every pivot-relevant reduction
-step actually goes through `Chain.reduceByUntil`, a `def` whose own `[CellT: Ordering]` context bound
-resolves fresh at each call site (where the correct `stream.filtrationOrdering` given, declared inside
-`HomologyState`, is in scope) — the stale class-scope `chainRM`'s `⊠`/`-` operators are only ever used to
-build intermediate values (in `compress`) that get fed straight back into a fresh `reduceByUntil` call
-before anything reads `.leadingCell`. See `../../../../.claude/WORKLOG-cohomology.md`'s "a different ordering bug" section for
-the discriminating-fixture methodology (`HomologyFixtures.elderRuleCells`, built specifically so
-lexicographic and filtration order disagree) used to confirm this rather than just reason through it.
+## 3. `SimplicialHomologyByDimensionContext` — a genuinely independent oracle, not a production choice
 
-## 3. `SimplicialHomologyByDimensionContext` — non-functional, do not use
+Dimension 0 and the births of dimension-1 classes via union-find/Kruskal's algorithm (the elder rule);
+higher dimensions via the same boundary-reduction approach as engine 1, processed strictly dimension by
+dimension. This is a real, independently-implemented algorithm (not a variant of the reduction engines
+above) — cross-validated against `SimplicialHomologyContext` on birth/death values across hundreds of random
+Vietoris-Rips point clouds, agreeing exactly.
 
-Dimension-0 handled directly via `UnionFind`/Kruskal MST (`UnionFind.scala`); higher dimensions via a
-similar reduction approach to engine 1, processed strictly dimension-by-dimension.
+**Two caveats before reaching for it**: its own representative *chains* (`cycles`/`coboundaries`) have been
+checked directly and found to be non-cycles (`boundary(rep) != 0`) for every dimension-≥1 bar tested — don't
+expose or trust its representatives without fixing that first; birth/death *values* are unaffected. And it
+is not wired into either production engine as a performance fast path — a dedicated benchmark found the
+dominant cost elsewhere (an uncached filtration value, since fixed at the source), so a raw union-find port
+was judged not worth the correctness risk to engine 2's own representative-tracking state. Its role is as an
+independent cross-check when you specifically want a second algorithm's agreement, not as something to route
+real work through.
 
-**This class currently crashes unconditionally on any complex with at least one MST edge** — i.e. almost
-any real input with two or more connected vertices. `HomologyState`'s constructor calls
-`barcode(0) = barcode(0).appended(...)` (`Homology.scala:426-427`) against a `mutable.Map[Int,
-immutable.Queue[...]]` initialized empty, with no `.getOrElse(dim, immutable.Queue.empty)` guard — contrast
-`PersistenceInChunksContext.recordPair`, which has exactly that guard. The same unguarded pattern recurs at
-`Homology.scala:490`. This throws `NoSuchElementException: key not found: 0` from inside the constructor,
-which means **this class has, as far as anyone can tell, never successfully run end-to-end** — `grep -rl
-SimplicialHomologyByDimensionContext src/` finds only its own definition, zero test coverage anywhere.
-
-Separately, once that crash is fixed, it will *also* need the ordering fix from
-@ref:[Hard-won invariants #1](gotchas.md):
-it declares no `given Ordering[Simplex[VertexT]] = stream.filtrationOrdering` anywhere, so
-`Chain.from(edge.boundary).leadingCell` (used to pick the dying vertex at `Homology.scala:423,435,458`)
-falls back to the generic lexicographic `Simplex is OrderedCell` ordering rather than filtration order —
-the same bug class engine 1 had and fixed. **Both fixes, plus a real test suite from scratch, are their
-own bounded task** — don't casually "fix the crash" without also fixing the ordering, or you'll ship a
-class that runs but gives wrong answers on any input where lex and filtration order disagree.
-
-If you're tempted to point a new user or a new algorithm at this class because "it's in the file, so it
-must work" — it doesn't. Don't.
-
-## 4. `RipserCohomologyContext` — trustworthy for cohomology + clearing; apparent pairs not yet landed
+## 4. `RipserCohomologyContext` — test/reference oracle for engine 5
 
 Persistent *co*homology via Ulrich Bauer's Ripser algorithm (arXiv:1908.02518), specialized to
 `Simplex[Int]` Vietoris-Rips/clique complexes via `SimplexIndexing`'s combinatorial number system — a
-deliberate narrowing from the other three engines' generic `CellT: OrderedCell`, agreed with the project
-lead as in-scope. One-shot only: `persistentCohomology()` computes the full barcode in a single pass, no
-incremental `advanceTo`-style querying (also agreed scope).
+deliberate narrowing from the generic `CellT: OrderedCell` engines above. One-shot only
+(`persistentCohomology()`, no incremental querying).
 
-Structural points worth internalizing before touching this class:
+**This class is not what production code calls.** `PackedRipserCohomologyContext` (engine 5) is a faithful
+re-keying of the same algorithm onto a packed representation, and is what `matlab.TDA4j`'s
+`engine="ripser"` actually uses. This class's remaining value is narrower than "an independent check on the
+Ripser algorithm": both classes share `SimplexIndexing`, so a bug there passes both silently (engine 1 is the
+actually-independent oracle for the algorithm itself). What this class *does* catch is anything specific to
+engine 5's own packed representation — its `DiameterIndex` carrier's index-only `equals`/`hashCode`, its
+index-keyed lookup maps — that no other spec would flag. Its `Simplex[Int]`-keyed chains are also more
+directly legible for hand-debugging. Kept fully maintained; don't add new production call sites against it.
 
-- **`cohomologyOrdering`** (`Homology.scala`, class-scope `given`) is ascending by filtration value, tied
-  broken so a *larger* combinatorial index sorts *older* (smaller) — the opposite convention from
-  `CellularHomologyContext`'s reversed `filtrationOrdering`, because `Chain.leadingCell` is always the
-  minimum under whatever ordering backs it, and cohomology's pivot is the *oldest* cofacet in a reduced
-  coboundary chain (the dual of homology's "pivot is the youngest boundary term"). This is safe to declare
-  at class scope, unlike the `chainRM` hazard elsewhere — it's self-contained (built directly from
-  `filtrationValue`/`si`, not by summoning some other ambient given), so there's no stream-not-yet-available
-  timing issue.
-- **`coboundaryOf(sigma)`** explicitly truncates: `Chain.empty` when `sigma.dim + 1 > maxDimension`. This is
-  what makes top-dimension simplices come out essential rather than needing a special case, and it's the
-  behavior @ref:[Hard-won invariants #5](gotchas.md)
-  warns you to replicate if you build anything new directly on `SimplexIndexing`'s raw iterators instead of
-  going through `coboundaryOf`.
-- **Clearing is required for correctness here, not an optional speedup layered on an already-correct
-  baseline.** A `cleared: mutable.Set[Simplex[Int]]` set tracks every simplex already claimed as a pivot
-  one dimension down; those are skipped entirely when reducing the next dimension up. An early draft
-  without this passed every hand-built fixture but reported spurious essential cohomology classes on real
-  input — confirmed by hand-deriving H¹ of a plain 3-cycle graph (3 reported vs. the correct 1) — because
-  Proposition 3.1's essential-index definition requires excluding any simplex already claimed as a pivot at
-  a lower dimension, not just checking that its own column reduces to zero. See `../../../../.claude/WORKLOG-cohomology.md`'s
-  "clearing is required for correctness" section for the full derivation.
-- Cross-validated against engine 1 (`CellularHomologyContext`) on hundreds of random inputs plus hand-
-  derived fixtures — see `../../../../.claude/WORKLOG-cohomology.md` for the pivot-orientation/birth-death-dimension derivation,
-  re-derived directly from the paper rather than from memory (this area of the codebase has a documented
-  history of subtly-wrong unverified code; don't "simplify" the reversed-order reasoning here without
-  rereading that derivation first).
+Structural points worth knowing:
 
-**Apparent pairs status as of this writing**: not yet landed. Two candidate designs — (1) find the pivot
-via the Definition 3.2 apparent-pair check instead of the `reduceBy` head-check, still populating `basis`
-normally, and (2) a genuine pre-pass that removes both members of every apparent pair before the main loop,
-never building the removed simplex's coboundary at all — were both tried and **confirmed unsound by direct
-counterexample**: a cofacet `tau` that is one simplex's apparent partner can simultaneously be a different,
-non-apparent simplex's legitimate reduction target, and neither design accounts for that. See
-`../../../../.claude/WORKLOG-cohomology.md`'s "Apparent pairs: negative result" section for the two concrete counterexamples.
-If you're picking this up: the next step (per that worklog and the project's own working notes) is reading
-Ripser's actual `compute_pairs` implementation/Proposition 3.9's proof to see how real Ripser sequences
-apparent-pair removal to avoid this exact collision — this may be in progress or already resolved by the
-time you read this, so check `../../../../.claude/WORKLOG-cohomology.md`'s current state rather than trusting this paragraph
-alone.
+- **Clearing is required for correctness, not an optional speedup**: a simplex already claimed as a pivot
+  one dimension down must be excluded from the next dimension's essential-index count entirely, not merely
+  checked for "does its own column reduce to zero" — Definition 3.2/Proposition 3.1 of the paper.
+- **Apparent pairs (Definition 3.2/Proposition 3.9) are partially implemented**: a genuine mutual
+  apparent-pair check identifies the pivot directly and skips `Chain.reduceBy`'s reduction pass for it (a
+  measured 1.35x-1.8x win, growing with complex size). What is *not* implemented is Ripser's further
+  optimization of never building an apparent simplex's coboundary at all — `coboundaryOf(sigma)` is still
+  called in full on the shortcut path, since `basis(tau)` needs the complete reduced column, not a truncated
+  stand-in. Getting the fully lazy version would also require restructuring how each dimension's candidate
+  simplices are enumerated in the first place (currently eager, unlike Ripser's own incrementally-assembled
+  `columns_to_reduce`) — a larger, separate project.
 
-Don't confuse this with `RipserStreamSparse`/`RipserStreamBase`'s `zeroApparentCofacet`/`zeroApparentFacet`
-(`RipserStream.scala`) — those are a *stream-generation-time* filter (skip generating a simplex at all if
-it's zero-persistence-paired) built on `topCofacetIterator`, a restricted iterator that only looks at
-cofacets formed by inserting a vertex strictly *greater* than the simplex's own maximum — a different
-mechanism from, and not verified equivalent to, `RipserCohomologyContext`'s own from-scratch Definition 3.2
-check. `Cofacets.scala`'s `apparentVertex` is unrelated to either: it's bookkeeping for lazy generic coface
-generation (which vertex is common to every relevant neighborhood), not a persistence-pairing notion.
+Don't confuse this with `RipserStreamBase`'s `zeroApparentCofacet`/`zeroApparentFacet` (see
+@ref:[Architecture](architecture.md)) — those are a *stream-generation-time* filter built on a restricted
+cofacet iterator, a different mechanism serving a different purpose (skip generating a simplex at all, not
+skip a reduction step).
+
+## 5. `PackedRipserCohomologyContext` — the production Ripser engine
+
+Same algorithm as engine 4, method for method, keyed on a packed `(Double, Long)` diameter/combinatorial-
+index pair (`DiameterIndex`) instead of a materialized `Simplex[Int]`. This is what `matlab.TDA4j`'s
+`engine="ripser"` calls, and the fastest, most memory-efficient engine in the library — a deliberate
+representation choice on top of an already-validated algorithm, not a new algorithm. Kept in its own file,
+separate from the four generic-`OrderedCell` algorithms in `Homology.scala`, since it's specific to
+Vietoris-Rips/`SimplexIndexing` rather than a general engine.
+
+`DiameterIndex` overrides `equals`/`hashCode` to consider only the combinatorial index, not the diameter —
+so "same simplex" is true by construction regardless of which floating-point path computed its diameter,
+sidestepping a real footgun (two carriers for the same simplex comparing unequal on floating-point noise).
 
 ## Choosing an engine
 
-- Need to query the diagram at intermediate filtration values, or want representative cycles for homology
-  classes? **`CellularHomologyContext`/`SimplicialHomologyContext`** (or `TDAContext`, which wraps it).
-- Large complex, want to exploit parallelism across chunks? **`PersistenceInChunksContext`**.
-- Need cohomology specifically, and your complex is a `Simplex[Int]` Vietoris-Rips/clique complex?
-  **`RipserCohomologyContext`**.
-- Never **`SimplicialHomologyByDimensionContext`** until someone has fixed both the constructor crash and
-  the ordering bug, and written a real test suite for it.
+| Need | Engine |
+|---|---|
+| Exploration, intermediate-filtration queries, representative cycles, any `OrderedCell` type | **`CellularHomologyContext`**/`TDAContext` |
+| Large complex, chunked/parallelizable, representatives for every bar including essential ones | **`CellularPersistenceInChunksContext`** |
+| A second, independently-implemented algorithm to cross-check birth/death values against | **`SimplicialHomologyByDimensionContext`** (values only — see its caveats above) |
+| Fast, memory-efficient cohomology on a Vietoris-Rips/clique complex over integer vertex labels | **`PackedRipserCohomologyContext`** (what `engine="ripser"` uses) |
+| A `Simplex[Int]`-keyed reference implementation for hand-debugging engine 5 | `RipserCohomologyContext` (test oracle, not a production choice) |
 
 ## Dead/experimental code kept intentionally
 
-The bottom third of `Homology.scala` (below `RipserCohomologyContext`) is commented-out prior art
-(`RipserHomology`, `computePersistentHomology`) kept for reference while the four live engines above were
-developed — not a fifth engine to consider using. `SimplicialSet.scala` is entirely commented out, a sketch
-for a future simplicial-set (as opposed to simplicial complex) representation; `Deferred.scala` is an
-experiment representing arithmetic as an AST evaluated by a pluggable handler, exploring algebraic-effect-
-style deferred coefficient choice, not wired into the rest of the library. Neither should be deleted
-without checking with the maintainer first — they're placeholders, not cruft.
+Root test sources' `SimplicialSetSpec.scala` is entirely commented out — an earlier, from-scratch sketch of
+a simplicial-set representation, predating and unrelated to the real `FiniteSimplicialSet` now in `cells`
+(see @ref:[Architecture](architecture.md)). Kept as historical record, not wired into anything; don't delete
+without checking with the maintainer first.
