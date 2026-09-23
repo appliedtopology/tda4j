@@ -108,14 +108,14 @@ classDiagram
         from(vertices: Seq~VertexT~) Simplex
         unapplySeq(s: Simplex) Option~Seq~
     }
-    Simplex ..|> OrderedCell : given default_Simplex_is_OrderedCell
+    Simplex ..|> OrderedCell : given defaultSimplexIsOrderedCell
 ```
 
 `SimplexOps.scala` adds a large `extension` block delegating most of `SortedSet`'s surface (`.size`,
 `.map`, `.union`, `.dropIndex`, ...) so `Simplex` "feels like" a set even though it's a zero-cost opaque
 wrapper at runtime — see the @ref:[primer](scala3-primer.md).
 
-## Streams (`SimplexStream.scala`, `RipserStream.scala`, `VietorisRips.scala`)
+## Streams (`SimplexStream.scala`, `SimplexIndexing.scala`, `VietorisRips.scala`)
 
 ```mermaid
 classDiagram
@@ -144,9 +144,6 @@ classDiagram
     RipserCofaceSimplexStream <|-- CechCofaceSimplexStream
     EnumeratingCofaceSimplexStream <|-- InorderCofaceSimplexStream
     SimplexStream <|-- ExplicitStream
-    SimplexStream <|-- RipserStreamBase
-    RipserStreamBase <|-- RipserStream
-    SimplexStream <|-- RipserStreamSparse
     StratifiedSimplexStream <|-- RecursiveStackVietorisRipsSimplexStream
     StratifiedSimplexStream <|-- IncrementalVietorisRipsSimplexStream
     StratifiedSimplexStream <|-- AlphaShapes
@@ -166,10 +163,10 @@ another** — see @ref:[Architecture](architecture.md). `CubicalGridStream`/`Exp
 ## Persistence engines (`homology/Homology.scala`, `homology/PackedRipserCohomology.scala`)
 
 Deliberately *not* diagrammed field-by-field here — their exact state and trust status belongs in one
-place. See @ref:[Persistence engines](persistence-engines.md) for the full, current picture of the four
-algorithms across five classes: `CellularHomologyContext`/`SimplicialHomologyContext`,
+place. See @ref:[Persistence engines](persistence-engines.md) for the full, current picture across
+`CellularHomologyContext`/`SimplicialHomologyContext`,
 `CellularPersistenceInChunksContext`/`PersistenceInChunksContext`,
-`SimplicialHomologyByDimensionContext`, `RipserCohomologyContext`, and `PackedRipserCohomologyContext`.
+`RipserCohomologyContext`, `PackedRipserCohomologyContext`, and `CellularCohomologyContext`.
 
 ## Metric spaces (`FiniteMetricSpace.scala`)
 

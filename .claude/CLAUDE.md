@@ -15,23 +15,25 @@ JavaPlex/Ripser, from the Stanford Computational Topology workgroup lineage). Si
 
 ## Package layout
 
-Source/test directories mirror package names; file names are unchanged from the old flat layout
-(`WORKLOG-package-reorg.md`).
+Source/test directories mirror package names; file names mostly carry over from the old flat layout
+(`WORKLOG-package-reorg.md`), with a few later renames/moves to fix a file's content drifting from its name
+(`RipserStream.scala` → `SimplexIndexing.scala`; `CubicalHomologyContext` moved from `streams` to `homology`).
 
 - `algebra` — `RingModule`, `Field`, `FiniteField`, `Chain` (plus the `Cell`/`OrderedCell`/`OrderedBasis`
   contracts), `SSetElement` (degeneracy words + `insertOuter`/`faceOf`).
 - `cells` — `Simplex`/`SimplexOps`/`SimplexOrderedCell`, `Cubical`/`CubicalOrderedCell`, `SimplicialSet`
-  (`FiniteSimplicialSet`), `SimplicialSetConstructions` (`product`/`coproduct`/`quotient`/`identify`).
-- `streams` — `SimplexStream`, `FiniteMetricSpace`, `VietorisRips`, `Cofacets`, `RipserStream`, `CubicalStream`,
-  `CubicalImage`, `SymmetryGroup`, `UnionFind` (also defines `Kruskal`, which is metric-space-specific — hence
+  (`FiniteSimplicialSet`, with `.product`/`.coproduct`/`.quotient`/`.identify` on its companion object, also in
+  `SimplicialSet.scala`), `SimplicialSetConstructions` (shared ordering helpers those draw on).
+- `streams` — `SimplexStream`, `FiniteMetricSpace`, `VietorisRips`, `Cofacets`, `SimplexIndexing`, `CubicalStream`,
+  `CubicalImage`, `UnionFind` (also defines `Kruskal`, which is metric-space-specific — hence
   here, and why no `util` package exists), `SimplicialSetStream`, `FilteredSimplicialSetStream`, `CechStream`.
-  `CubicalHomologyContext` lives in `CubicalStream.scala` — a real, pre-existing `streams -> homology` dependency.
-- `homology` — `Homology` (four engines), `PackedRipserCohomology`, `Cohomology` (`CellularCohomologyContext`).
+- `homology` — `Homology` (four engines, including `CubicalHomologyContext`), `PackedRipserCohomology`, `Cohomology`
+  (`CellularCohomologyContext`). The package graph is acyclic: `streams` never depends on `homology`.
 - `barcode` — `Barcode`. `alpha` — `AlphaShapes`, `AlphaComplexDQP`. `unicode` — `PrintingHelper` (unused).
 - `matlab` — MATLAB facade. `io` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus` (leaf package).
   `cli` — `TDA4jConf`, `TDA4jCLI` (thin translator over `matlab.TDA4j`/`io`).
-- root — `package.scala` (`TDAContext`, thin user facade); test side `APISpec.scala` and (dead, fully commented
-  out, an unrelated early sketch) `SimplicialSetSpec.scala`, kept flat as cross-cutting tests.
+- root — `package.scala` (`TDAContext`, a top-level class, thin user facade); test side `APISpec.scala`, kept flat
+  as a cross-cutting test.
 
 Cross-package references use `import org.appliedtopology.tda4j.<pkg>.{given, *}` — **the `given` matters**: a plain
 `import pkg.*` does NOT import `given` instances in Scala 3, and this codebase's `Ordering`/`RingModule`/`Field`
@@ -57,6 +59,11 @@ No linter beyond scalafmt. Tests are specs2 (`org.specs2.mutable.Specification`)
 `lint.yml` (scalafmt), `docs.yml` (Paradox → GitHub Pages, push to `scala` only). `build.sbt` permanently enables
 `-feature -deprecation -unchecked` etc.; the ~319 `-Wunused:all` warnings (mostly unused wildcard imports) are
 deliberately left alone (`WORKLOG-compiler-warnings.md`).
+
+**Never run two `sbt` invocations against this checkout at once** (e.g. a background `test` run plus a foreground
+`compile`): the incremental compiler's own class-file writes from one process can be read mid-update by the other,
+producing a `NoClassDefFoundError` at test-run time that looks like a real regression but disappears on a clean,
+sequential rerun. Wait for one `sbt` command to finish before starting another.
 
 **Benchmark specs** (`ProfilingSpec`, `ApparentPairsBenchmarkSpec`, `CubicalBenchmarkSpec`, `SparseRipsBenchmarkSpec`,
 `DimensionCeilingBenchmarkSpec`, `EngineComparisonBenchmarkSpec`, `RipserPaperBenchmarkSpec`, all in `homology`)
@@ -85,12 +92,17 @@ Uses Scala 3.7+'s newest context-abstraction syntax — don't "correct" it to ol
 - Prefer `Option` over sentinel values (e.g. `maxFiltrationValue: Option[Double] = None`, formerly a `NaN`
   sentinel). A default can't reference an earlier parameter in the *same* list (`-source:future`), and curried
   parameter lists would force `()` at every call site — `None` + `.getOrElse(...)` inside is the pattern.
+- A method's own `[T: Ordering, C: Field]`-style context bounds desugar to a `using` clause appended AFTER every
+  explicit parameter list — so a default value earlier in that same signature (e.g. `reductionLog: Chain[T, C] =
+  Chain.empty`) cannot reference the `Ordering`/`Field` given that default itself needs; it isn't in scope yet at
+  that point in elaboration. No workaround short of every caller passing the value explicitly, or restructuring
+  the signature so the context bound is a `using` clause of its own, ahead of that parameter (`Chain.reduceByUntil`).
 
 **Opaque-type extension methods** (`WORKLOG-extension-companion-objects.md`): extensions whose receiver is the
 opaque type live in its companion (`object Simplex`/`object Cube`), so different opaque types can reuse names. Two
 hazards before copying this pattern: (1) opaque transparency is file-scoped, so same-file code calling the type's
-extensions by dot-syntax breaks or silently hits the underlying type's member — hence `Simplex_is_OrderedCell`/
-`Cube_is_OrderedCell` live in separate files; (2) a companion extension can lose to a same-named stdlib extension
+extensions by dot-syntax breaks or silently hits the underlying type's member — hence `simplexIsOrderedCell`/
+`cubeIsOrderedCell` live in separate files; (2) a companion extension can lose to a same-named stdlib extension
 from a wildcard import (`math.Ordering.Implicits.*`'s `min`/`max`) — so `min`/`max` stay top-level.
 `asSimplex`/`asCube` are top-level because their receiver is the raw `SortedSet`/`Vector`. `encoded`/`describe`
 were deliberately not renamed back to `underlying`/`show`.
@@ -111,9 +123,8 @@ proper nouns (external projects' own spellings), correctly titlecased.
 every homology implementation should (a) be generic over `Field` coefficients and (b) return representatives (a
 real chain witnessing each bar). An optimization that abandons representatives is probably not worth it. Every
 public interface (MATLAB facade included) should expose representatives; anywhere that doesn't is incomplete.
-**Current gaps**: `PackedRipserCohomologyContext` bars resolved via the apparent-pairs shortcut throw
-`UnsupportedOperationException` on representative lookup; `SimplicialHomologyByDimensionContext`'s internal
-representatives are wrong (see engine 3) and unexposed.
+**Current gaps**: none known — every engine, including `PackedRipserCohomologyContext`'s apparent-pairs shortcut,
+now records a representative for every bar.
 
 ### Algebraic core
 
@@ -141,10 +152,12 @@ filtration order, a `filtrationValue` partial function, a `Filterable` (±∞ se
 recorded open class" `IllegalStateException` at least five times, or worse, a silently different barcode:
 
 1. **`filtrationOrdering` is a total order with the primary key reversed**: smaller-under-the-ordering = younger.
-   Canonical shape (`EnumeratingCofaceSimplexStream`): filtration value reversed, then dimension, then a canonical
-   tie-break (colex via `simplexIndexing` for VR, matching Ripser's Def 3.2). Reverse *only* the primary key —
-   `.reverse` on a whole ascending ordering also flips the dimension tie-break. No tie-break at all = tied cells
-   collide as one `SortedMap` key.
+   Build it with `FiltrationOrdering.canonical(filtrationValue, dim, tieBreak)` (`SimplexStream.scala`) — filtration
+   value reversed, then dimension, then `tieBreak` (colex via `simplexIndexing` for VR, matching Ripser's Def 3.2) —
+   rather than hand-rolling the comparator: every stream in this codebase (VR, cubical, alpha, simplicial-set) now
+   goes through this one combinator, after several independent hand-built copies each dropped or misordered a key
+   at some point (`WORKLOG-code-critique.md`). Reverse *only* the primary key — `.reverse` on a whole ascending
+   ordering also flips the dimension tie-break. No tie-break at all = tied cells collide as one `SortedMap` key.
 2. **`iterateDimension` bucket order must be `.sorted(using filtrationOrdering.reverse)`** — the *same* `Ordering`
    object, never an independently-built comparator (`sortBy(filtrationValue)`, string tie-breaks, DFS order).
    Two individually-valid orders disagreeing on ties breaks Algorithm 1's shared-order precondition.
@@ -174,9 +187,7 @@ Pass `Some(Double.PositiveInfinity)` for untruncated. Oracle: default output == 
 `[0, radius]`. `RecursiveStackVietorisRipsSimplexStream` and alpha streams deliberately don't get this
 (`WORKLOG-mst-and-perf.md`).
 
-`SymmetryGroup.scala` (e.g. `HyperCubeSymmetry`) lets construction work on orbit representatives only.
-
-### Persistent homology: five independent engines
+### Persistent homology: four independent engines
 
 Independent implementations sharing `Chain` primitives — a fix in one doesn't imply the others need it.
 **`maxDim`/`maxDimension` means "top homological degree reported" everywhere it exists** (engines internally build
@@ -207,11 +218,7 @@ bars. Over a field, cohomology and homology barcodes coincide.
      S²) and tie-heavy clique sweeps.
    - A parallel chunks redesign was attempted and invalidated by measurement: rounds 1/2 resolve 0 pairs on real
      inputs (`WORKLOG-parallelization-survey.md`).
-3. **`SimplicialHomologyByDimensionContext`** — Kruskal/elder-rule for dims 0/1, then dimension-by-dimension
-   reduction. Fixed (five bugs, `WORKLOG-mst-and-perf.md`), still `Simplex`-only and **unwired: kept purely as an
-   independent birth/death-value oracle**. Its `cycles`/`coboundaries` chains are **wrong** (non-cycles for dim ≥ 1)
-   — never expose or port them (`WORKLOG-chunks-representatives.md`).
-4. **`RipserCohomologyContext`** — Bauer's Ripser (arXiv:1908.02518) on `Simplex[Int]` VR, one-shot. **Test/reference
+3. **`RipserCohomologyContext`** — Bauer's Ripser (arXiv:1908.02518) on `Simplex[Int]` VR, one-shot. **Test/reference
    oracle only** — new call sites use `PackedRipserCohomologyContext`, which is production (MATLAB `engine=ripser`).
    It catches bugs in packed's own representation layer (`DiameterIndex`'s index-only `equals`/`hashCode`,
    index-keyed maps); it is *not* independent of `SimplexIndexing` (the naive engine is the independent oracle).
@@ -221,8 +228,8 @@ bars. Over a field, cohomology and homology barcodes coincide.
    - **Apparent pairs** (Def 3.2/Prop 3.9) with lazy substitution: a mutual apparent pair skips `coboundaryOf(sigma)`
      and writes only `generators(tau)`; a later reduction hitting `tau` recomputes the *full*
      `coboundaryOf(zeroApparentFacet(tau).get)` via `Chain.reduceBy`'s `fallback`, uncached, exactly like
-     `ripser.cpp`. The `zero*` helpers use full unrestricted iterators — NOT `RipserStreamBase`'s helpers or
-     `Cofacets.apparentVertex` (restricted, false-negative-prone). Emergent pairs (Def 3.11): deliberately not
+     `ripser.cpp`. The `zero*` helpers use full unrestricted iterators — NOT the restricted, false-negative-prone
+     `Cofacets.apparentVertex`. Emergent pairs (Def 3.11): deliberately not
      implemented.
    - Sparse Rips via `maxFiltrationValue`; candidates assembled incrementally from **every** dim-d simplex
      (cleared/apparent-paired included — as `ripser.cpp`'s `assemble_columns_to_reduce` does). `totalSimplexCount`
@@ -240,7 +247,7 @@ bars. Over a field, cohomology and homology barcodes coincide.
      upsert exists, so further gains need a real redesign. Compare against **vanilla** `github.com/Ripser/ripser`,
      same machine — not the project lead's modified fork at `~/CLionProjects/ripser`, and not the hardcoded M1 Pro
      `ripserMs` values. Profile with deep stacks (`jfr print --stack-depth 30`); measure A/B, don't infer.
-5. **`CellularCohomologyContext`** (`Cohomology.scala`) — persistent cohomology generic over `CellT: OrderedCell`,
+4. **`CellularCohomologyContext`** (`Cohomology.scala`) — persistent cohomology generic over `CellT: OrderedCell`,
    for streams that are fully materialized: builds the coboundary relation by inverting each cell's `boundary`, one
    dimension band at a time. No `maxDim` (see above). No apparent pairs — pointless here, there's no enumeration to
    skip (project lead's call). Only **essential** bars' V-columns are cocycles (`coboundaryOfChain(rep).isZero()`);
@@ -258,8 +265,7 @@ engines isn't proof when both share a truncation or code path (hand-derived fixt
 `HomologyFixtures.elderRuleExpected`, are the real oracle); which tied cell dies at a tied time is order-dependent.
 
 `Barcode.scala`: `BarcodeEndpoint` (open/closed/±∞), `PersistenceBar`, algebra on finitely-presented persistence
-modules. The bottom third of `Homology.scala` is commented-out prior art (`RipserHomology`,
-`computePersistentHomology`), kept for reference.
+modules.
 
 ### Cross-engine benchmark
 
@@ -276,7 +282,7 @@ axis's **rank among non-degenerate axes**, not raw position (invisible over F2; 
 `CubicalGridStream`: dense T-construction (GUDHI/DIPHA/Perseus convention). `topCellValue` per pixel/voxel; lower
 cubes take the min over containing top cells (computed directly), which guarantees monotonicity. `shape(i)` = pixel
 count; `totalCellCount = prod(2*shape(i)+1)`. `filtrationOrdering` copies `EnumeratingCofaceSimplexStream`'s shape.
-`ExplicitCubicalStream` for sparse/hand-built complexes (its ordering is an independent duplicate, cross-checked).
+`ExplicitCubicalStream` for sparse/hand-built complexes (its `filtrationOrdering` uses the same `FiltrationOrdering.canonical` combinator as `CubicalGridStream`, not an independent copy).
 Sublevel/superlevel is handled only in `CubicalImage.scala`'s loaders (negate on load). `CubicalImage`:
 `fromFlatArray` (row-major, last axis fastest) is the core; `fromBufferedImage`/`fromFile` via `javax.imageio` with
 BT.601 luma; 3D via in-memory arrays. H0 oracle uses Moore (8/26-connected) adjacency, not 4-connected.
@@ -295,8 +301,15 @@ remains a valid future direction (`DESIGN-fast-cubical-engine.md`, `WORKLOG-cubi
 - `insertOuter`/`faceOf` implement the simplicial identities on arbitrary elements; `validate()` checks structure
   (arity, registered targets, normalized words) then `d_i d_j = d_{j-1} d_i`. `validate()` passing is necessary,
   not sufficient — verify intended topology via homology.
-- `FiniteSimplicialSet_is_OrderedCell`: normalized chain complex boundary (only bare faces contribute). The
+- `finiteSimplicialSetIsOrderedCell`: normalized chain complex boundary (only bare faces contribute). The
   instance depends on the set's own `faces`, so thread it explicitly — never an ambient global given.
+- **`FiniteSimplicialSet[G]`'s `using Ordering[G]` clause comes AFTER its `generatorsByDim`/`faces` value
+  parameters, not before**: putting a `using` clause first (matching the codebase's usual `is`-typeclass-first
+  style) broke `new FiniteSimplicialSet(...)` call sites' own type inference for `G` — with no other argument yet
+  processed to pin it down, the compiler silently unified `G` with whatever `Ordering` happened to be found first
+  in scope, once even landing on an unrelated `Ordering[Cube]`. `using`-first is safe only when the type parameter
+  is already fixed some other way (e.g. `finiteSimplicialSetIsOrderedCell`'s own `[G]`, resolved by its caller);
+  a constructor that must infer its type parameter from the ordinary arguments needs the `using` clause last.
 - `SimplicialSetStream`: constant-0 filtration (ordinary homology); `filtrationOrdering` is dimension ascending
   (unreversed, per `processingOrder`'s comment) then caller's `Ordering[G]`. `FilteredSimplicialSetStream`: real
   `StratifiedCellStream[G, Double]`, same ordering convention as VR; `validateMonotoneFiltration` checks bare faces.
@@ -327,7 +340,7 @@ pre-filter. Fixture discriminators: equilateral radius `s/√3` (not `s/2`), obt
 
 ## Alpha complex: DQP vs Helix
 
-`WORKLOG-alpha-complex.md`, `HANDOFF-alpha-complex.md`. `Alpha(points, dispatch)`: `"default"` → `"helix"`
+`WORKLOG-alpha-complex.md`, `HANDOFF-alpha-complex.md`. `AlphaShapes(points, dispatch)`: `"default"` → `"helix"`
 (`HelixDelaunay`); `"DQP"` must be explicit. Alpha and VR/Ripser are separate sections with minimal interaction
 (project lead's standing call). Never resurrect the ripped-out Miniball-Delaunay backend.
 
@@ -345,7 +358,8 @@ maxRadius, ...)` for truncation. Optional parallel construction (`WORKLOG-parall
 - Ratio-test ties broken by **global** constraint index (Bland's rule), not working-set position.
 - **Accepted limitation**: small Schur complement with no swappable inequality → candidate treated as infeasible
   (may wrongly exclude a near-degenerate Delaunay simplex). "Commit anyway" was tried and reverted: no fixed
-  threshold separates safe from catastrophic. `solveAtVertex` catches per-candidate non-convergence (logs, excludes).
+  threshold separates safe from catastrophic. `solveAtVertex` catches per-candidate non-convergence and excludes it;
+  logs to stderr only under `AlphaDQPSettings(verbose = true)` (off by default — this is routine, not exceptional).
 - Vertex filtration values must be `-space.weight(x)`, witness `coordsOf(x)` — not a `0.0` default (breaks weighted
   monotonicity; `AlphaComplexDQPWeightedSpec`).
 - Regressions pinned in `AlphaComplexDQPRegressionSpec`/`AlphaValidationSpec`; property suite uses
@@ -392,6 +406,10 @@ Scallop default** — omitted keys let `TDA4j` apply its own defaults (one sourc
 `matlab` (`TDA4j.scala`, `PersistenceResult.scala`), `WORKLOG-matlab-api.md`. Java-facing facade: public methods
 take/return only `double`, `int`, `String`, `double[][]`, `String[]` — no `Map`, generics, or Scala types (project
 lead rejected a `Map`-based design). Options are a flat key/value `String[]` so new options never change signatures.
+The MATLAB-facing option strings still drive dispatch (can't match on types across that boundary), but `dispatch`
+parses each one exactly once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before anything else
+runs, and dispatches on those enums via `PersistenceEngine.naive`/`.chunks`/`.cohomology` (`homology/
+PersistenceEngine.scala`) rather than re-matching the raw string at each branch.
 - `computeFromPoints`/`computeFromDistanceMatrix`: `complex` = `vr`/`alpha`/`cech`; `engine` = `ripser`/`naive`/
   `chunks`/`cohomology`. Alpha refuses `ripser` and `chunks` (the `BarcodeRegressionSpec` combination). Cech has no
   `ripser`. `computeFromCubicalImage`/`computeFromImage` for cubes.
@@ -401,8 +419,10 @@ lead rejected a `Map`-based design). Options are a flat key/value `String[]` so 
 - Field: `Z` (prime field, default `prime=2`, the research-literature convention) or `R`
   (`Field.DoubleApproximated`, what internal specs default to) — deliberate divergence.
 - `PersistenceResult`: `toArray()` (N×3 dim/birth/death) eagerly; `cycleVertices`/`cycleCoefficients` lazily via
-  `fromBars(..., cellVertices: (Int, CellT) => Array[Int], ...)`; throws `UnsupportedOperationException` when a bar
-  truly has no chain (ripser apparent-pair bars). Boundary-matrix export designed, not implemented.
+  `fromBars(..., cellVertices: (Int, CellT) => Array[Int], ...)`. `cycleVertices` throws `UnsupportedOperationException`
+  if a bar has no recorded representative, but every engine now records one for every bar at every dimension (see
+  the representatives design principle above) — this exception path indicates an engine bug, not an expected gap.
+  Boundary-matrix export designed, not implemented.
 - Unverified: MATLAB's bundled JVM version and actual `double[][]`/`String[]` marshalling.
 
 ## Session practices

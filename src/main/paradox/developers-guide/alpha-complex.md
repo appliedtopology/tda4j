@@ -1,13 +1,14 @@
 # Alpha complex: DQP vs Helix
 
-Two independent backends compute alpha complexes; `Alpha(points, dispatch)` (`alpha/AlphaShapes.scala`)
+Two independent backends compute alpha complexes; `AlphaShapes(points, dispatch)` (`alpha/AlphaShapes.scala`)
 chooses between them. This page is the developer-facing view. For the user-facing framing (which one to
 pick, and the honest tradeoffs), see the @ref:[User's Guide](../user-guide/index.md).
 
 ## Dispatch
 
 ```scala 3
-def Alpha(pts: Seq[Array[Double]], dispatch: String = "default")(using epsilon: Epsilon): AlphaShapes
+object AlphaShapes:
+  def apply(pts: Seq[Array[Double]], dispatch: String = "default")(using epsilon: Epsilon): AlphaShapes
 ```
 
 `dispatch = "default"` **always resolves to `"helix"` regardless of point-cloud shape** — `"DQP"` must be

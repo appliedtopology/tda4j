@@ -8,8 +8,9 @@ instead; this page is about getting things done as a caller.
 
 ## Quick-start: Scala
 
-Every snippet below is checked directly against `src/main/scala` — if you find it's drifted, trust the
-source over this page.
+Snippets included via `@@snip` (with a source-file link) are compiled and exercised directly by the test
+suite. The rest are illustrative and hand-maintained, not mechanically checked — if you find one has
+drifted, trust the source over this page.
 
 ### Imports
 
@@ -40,18 +41,7 @@ triangle.boundary[Double]            // Seq((Simplex(2,3), 1.0), (Simplex(1,3), 
 
 ### A full Vietoris-Rips persistence computation
 
-```scala 3
-given Double is Field = Field.DoubleApproximated(1e-9)
-given ctx: TDAContext[Int, Double, Double]()
-import ctx.{*, given}
-
-val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8))
-val metricSpace = EuclideanMetricSpace(points)
-val stream = RipserStream(metricSpace, maxFiltrationValue = 2.0, maxDimension = 2)
-
-val state = ctx.persistentHomology(stream)
-state.barcodeAt(Double.PositiveInfinity).foreach(println)
-```
+@@snip [APISpec.scala](/src/test/scala/org/appliedtopology/tda4j/APISpec.scala) { #full-vr-computation }
 
 `TDAContext[VertexT, CoefficientT, FiltrationT]` bundles the naive, reference-grade persistence engine
 together with chain-arithmetic operators, so `1.0 ⊠ ∆(1,2) - ∆(2,3)` works directly once `ctx`'s members are
@@ -59,20 +49,20 @@ imported. It's a good default for exploration and for anything where you want to
 intermediate filtration values or get representative cycles back (`state.diagramAt(f)`/`state.barcodeAt(f)`)
 — see "Which persistence engine?" below for when a different engine is worth reaching for instead.
 
-**A default worth knowing**: `RipserStream`'s `maxFiltrationValue` is whatever you pass — but the several
-other Vietoris-Rips stream implementations (`EnumeratingCofaceSimplexStream` and relatives) default it to
-the point cloud's own *minimum enclosing radius*, not unbounded, since nothing past that radius contributes
-new homology. Pass `Some(Double.PositiveInfinity)` explicitly if you want the old always-unbounded behavior.
+**A default worth knowing**: `EnumeratingCofaceSimplexStream` and the other Vietoris-Rips stream
+implementations default `maxFiltrationValue` to the point cloud's own *minimum enclosing radius*, not
+unbounded, since nothing past that radius contributes new homology. Pass `Some(Double.PositiveInfinity)`
+explicitly if you want the old always-unbounded behavior.
 
 ### Alpha complexes
 
 ```scala 3
 import org.appliedtopology.tda4j.alpha.{given, *}
 
-val shape = Alpha(points.toSeq, dispatch = "helix")   // or "DQP"
+val shape = AlphaShapes(points.toSeq, dispatch = "helix")   // or "DQP"
 ```
 
-`Alpha(points)` with no `dispatch`, or `dispatch = "default"`, always resolves to `"helix"` — ask for
+`AlphaShapes(points)` with no `dispatch`, or `dispatch = "default"`, always resolves to `"helix"` — ask for
 `"DQP"` explicitly if you want it. See "Which alpha-complex backend?" below for the tradeoffs.
 
 ### Cech complexes
@@ -128,11 +118,11 @@ CellularHomologyContext[CircleGen, Double, Double]()
 // List((1, 1.0, Infinity), (0, 0.0, Infinity)) -- H0 = H1 = one essential class each, as expected for S^1
 ```
 
-`SimplicialSetConstructions` builds new simplicial sets from existing ones instead of by hand:
-`product`/`coproduct` (the categorical product/coproduct) and `quotient`/`identify` (attaching maps — glue
-generators together, or collapse one down onto a lower-dimensional target). `validate()` checks that
-hand-written or constructed face data actually satisfies the simplicial identities; it's a necessary
-sanity check, not proof the resulting space is the one you intended.
+`FiniteSimplicialSet`'s companion object builds new simplicial sets from existing ones instead of by hand:
+`FiniteSimplicialSet.product`/`.coproduct` (the categorical product/coproduct) and `.quotient`/`.identify`
+(attaching maps — glue generators together, or collapse one down onto a lower-dimensional target).
+`validate()` checks that hand-written or constructed face data actually satisfies the simplicial identities;
+it's a necessary sanity check, not proof the resulting space is the one you intended.
 
 ## Loading and saving data: the `io` module
 
@@ -226,10 +216,8 @@ not Cech's circumradius). `engine=cohomology` is accepted everywhere `engine=nai
 `cech` alike). Unrecognized keys or values throw `IllegalArgumentException` immediately rather than silently
 falling back to a default.
 
-`PersistenceResult.cycleVertices`/`cycleCoefficients` give you each bar's representative chain, best-effort:
-`engine=ripser` has no representative for a handful of bars resolved via its apparent-pairs shortcut
-(throws `UnsupportedOperationException` for those specific bars); `engine=chunks` and `engine=cohomology`
-both record one for every bar — though for `engine=cohomology`, only an *essential* bar's representative is
+`PersistenceResult.cycleVertices`/`cycleCoefficients` give you each bar's representative chain: every engine
+records one for every bar — though for `engine=cohomology`, only an *essential* bar's representative is
 guaranteed to be a genuine cocycle (zero coboundary); a finite bar's is a valid witness on its own living
 interval, not over the whole complex (see the developer's guide's persistence-engines page for why).
 
@@ -247,8 +235,7 @@ All engines are generic over the coefficient field (a prime finite field or floa
 `chunks`, and `cohomology` are also generic over the cell type (simplices, cubes, or simplicial-set
 generators) — only `ripser` is Vietoris-Rips-specialized. See the
 @ref:[Developer's Guide's persistence-engines page](../developers-guide/persistence-engines.md) for the full
-detail, including a class (`SimplicialHomologyByDimensionContext`) kept as an independent cross-validation
-oracle rather than a production choice.
+detail.
 
 ## Which alpha-complex backend?
 

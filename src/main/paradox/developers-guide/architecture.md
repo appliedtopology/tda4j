@@ -15,10 +15,11 @@ If a piece of Scala 3 syntax below looks unfamiliar, see the @ref:[Scala 3 prime
   `OrderedCell`/`OrderedBasis` contracts), `SSetElement` (the degeneracy-word algebra underlying simplicial
   sets). The typeclasses and formal-sum machinery everything else builds on.
 - **`cells`** — `Simplex`, `Cube`, `FiniteSimplicialSet` — the three concrete `OrderedCell` instances — plus
-  `SimplicialSetConstructions` (`product`/`coproduct`/`quotient`/`identify`).
+  `FiniteSimplicialSet`'s companion (`product`/`coproduct`/`quotient`/`identify`), which draws on shared
+  ordering helpers kept in the separate `SimplicialSetConstructions.scala`.
 - **`streams`** — everything that produces cells in filtration order: `SimplexStream`/`CellStream`, the
   Vietoris-Rips family, `FiniteMetricSpace`, `CubicalStream`/`CubicalImage`, `SimplicialSetStream`/
-  `FilteredSimplicialSetStream`, `CechStream`, `SymmetryGroup`, `UnionFind`.
+  `FilteredSimplicialSetStream`, `CechStream`, `UnionFind`.
 - **`homology`** — the persistence algorithms (`Homology.scala`, `PackedRipserCohomology.scala`,
   `Cohomology.scala`).
 - **`barcode`** — `Barcode`, `PersistenceBar`, `BarcodeEndpoint`.
@@ -164,9 +165,6 @@ These are **alternate engines with the same output contract, not layers on one a
   (arXiv:2301.07191), meant as a cross-validation baseline rather than a speed-competitive engine.
 - `RecursiveStackVietorisRipsSimplexStream` — a third, independent coface-enumeration strategy built on a
   recursive stack and spatial query.
-- `RipserStream`/`RipserStreamBase` — a Ripser-style binomial-indexed stream: every simplex is addressed by
-  an integer index via `SimplexIndexing`'s combinatorial number system, so the stream can enumerate
-  `0 until binomial(N, d+1)` directly rather than building simplices incrementally.
 
 `EnumeratingCofaceSimplexStream`/`RipserCofaceSimplexStream`/`InorderCofaceSimplexStream`/
 `IncrementalVietorisRipsSimplexStream` all default `maxFiltrationValue` to `metricSpace.minimumEnclosingRadius`,
@@ -176,7 +174,7 @@ same default). Pass `maxFiltrationValue = Some(Double.PositiveInfinity)` for the
 behavior. `RecursiveStackVietorisRipsSimplexStream` and the alpha-complex backends keep their own,
 always-untruncated default (see @ref:[Alpha complex](alpha-complex.md)).
 
-`SimplexIndexing` (inside `RipserStream.scala`) is the piece every Ripser-flavored part of this codebase
+`SimplexIndexing` (inside `SimplexIndexing.scala`) is the piece every Ripser-flavored part of this codebase
 depends on: it encodes/decodes a `d`-subset of `{0, ..., vertexCount-1}` to/from a single integer index via
 binomial-coefficient lookups, in `O(d)` either direction. Its `cofacetIterator`/`facetIterator` walk the
 *complete* `vertexCount`-point abstract simplex with no notion of `maxDimension` truncation at all — see
@@ -212,9 +210,10 @@ decreasing**, not increasing, a direct consequence of the simplicial identity `s
 degenerate elements), which is what lets `FiniteSimplicialSet.validate()` check that hand-supplied face data
 actually satisfies the simplicial identities.
 
-`cells/SimplicialSetConstructions.scala` builds new simplicial sets from old: `product`/`coproduct`
-(categorical product/coproduct — a product's non-degenerate simplices are pairs `(a, b)` with
-*disjoint* degeneracy words, not Eilenberg-Zilber shuffles, and its top dimension is
+`FiniteSimplicialSet`'s companion object (`cells/SimplicialSet.scala`; the ordering helpers it uses live in
+`cells/SimplicialSetConstructions.scala`) builds new simplicial sets from old: `product`/`coproduct`
+(categorical product/coproduct — a product's non-degenerate simplices
+are pairs `(a, b)` with *disjoint* degeneracy words, not Eilenberg-Zilber shuffles, and its top dimension is
 `maxDim(x) + maxDim(y)`), and `quotient`/`identify` (attaching maps — `quotient` takes `G => SSetElement[G]`
 rather than `G => G` specifically so a cell can collapse down a dimension onto a degenerate point, the
 Δ-complex model of ℝP² needs exactly this for one of a triangle's three edges).
@@ -248,13 +247,6 @@ packed and reference Ripser engines (specialized to the Vietoris-Rips functional
 matrix), `EuclideanMetricSpace` (coordinate array, on-demand Euclidean distance, VP-tree-backed `neighbors`
 query), `IntMetricSpace` (reindexes to contiguous `0 until size`), `SparseMetricSpace` (reports `+Infinity`
 beyond a fixed diameter cutoff, bounding Vietoris-Rips construction to a finite neighborhood per point).
-
-### Symmetry-aware construction
-
-`SymmetryGroup.scala` lets construction/computation work on canonical orbit representatives only, when the
-point cloud has a known vertex symmetry group. `SymmetricRipserStream`/`SymmetricRipserCliqueFinder` build a
-`RipserStream` variant retaining only orbit representatives; `HyperCubeSymmetry`/
-`HyperCubeSymmetryGenerators` is the worked example (hypercube vertices under bit-position permutation).
 
 ### Opt-in parallelism
 

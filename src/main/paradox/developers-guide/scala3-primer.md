@@ -71,15 +71,12 @@ as a context bound (`[CellT: OrderedCell]`, which desugars to "there exists a gi
 { type Self = CellT }`" — the compiler treats both spellings, `OrderedCell[CellT]`-shaped and `CellT is
 OrderedCell`-shaped, as satisfying the same bound).
 
-A concrete instance looks like this — `Simplex.scala`'s (paraphrased) construction of `Simplex[VertexT] is
+A concrete instance looks like this — `SimplexOrderedCell.scala`'s actual construction of `Simplex[VertexT] is
 OrderedCell`:
 
-```scala 3
-given default_Simplex_is_OrderedCell: [VertexT: Ordering] => (Simplex[VertexT] is OrderedCell) =
-  Simplex_is_OrderedCell[VertexT]()
-```
+@@snip [SimplexOrderedCell.scala](/src/main/scala/org/appliedtopology/tda4j/cells/SimplexOrderedCell.scala) { #given-example }
 
-where `Simplex_is_OrderedCell` builds an anonymous `new (Simplex[VertexT] is OrderedCell):` instance,
+where `simplexIsOrderedCell` builds an anonymous `new (Simplex[VertexT] is OrderedCell):` instance,
 providing the `ordering` member `OrderedCell` requires and, in an `extension (spx: Simplex[VertexT])`
 block, concrete implementations of `dim` and `boundary`. Once this `given` is in scope, **any**
 `Simplex[Int]` value can call `.dim` and `.boundary[Double]` directly, with no explicit typeclass-dictionary
