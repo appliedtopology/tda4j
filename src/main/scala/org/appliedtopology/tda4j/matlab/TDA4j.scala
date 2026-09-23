@@ -63,6 +63,49 @@ import scala.collection.mutable
   * immediately rather than silently falling back to a default -- a typo in a MATLAB string literal should fail loudly,
   * not produce a quietly-wrong barcode.
   */
+
+/** Parsed, validated forms of the `"complex"`/`"engine"`/`"field"` string options -- `TDA4j`'s public methods still
+  * take/return only MATLAB-marshalable primitives (`String[]` included), so the string parsing itself can't go away,
+  * but every dispatch decision downstream of `dispatch`/`dispatchCubical` matches on these enums instead of
+  * re-lowercasing and re-comparing the same raw strings at each of several call sites. The CLI (`cli.TDA4jCLI`) stays a
+  * thin translator passing strings straight through to this same facade -- it does not get its own copy of this
+  * parsing, by design (see CLAUDE.md's CLI section: the CLI was chosen to mirror this facade 1:1 specifically to avoid
+  * a second dispatch system to keep in sync).
+  */
+private enum ComplexKind:
+  case VR, Alpha, Cech
+
+private object ComplexKind:
+  def parse(raw: String): ComplexKind = raw.toLowerCase match
+    case "vr"    => VR
+    case "alpha" => Alpha
+    case "cech"  => Cech
+    case other   =>
+      throw new IllegalArgumentException(s"unrecognized complex '$other'; expected 'vr', 'alpha', or 'cech'")
+
+private enum EngineKind:
+  case Ripser, Naive, Chunks, Cohomology
+
+private object EngineKind:
+  def parse(raw: String): EngineKind = raw.toLowerCase match
+    case "ripser"     => Ripser
+    case "naive"      => Naive
+    case "chunks"     => Chunks
+    case "cohomology" => Cohomology
+    case other        =>
+      throw new IllegalArgumentException(
+        s"unrecognized engine '$other'; expected 'ripser', 'naive', 'chunks', or 'cohomology'"
+      )
+
+private enum CoefficientKind:
+  case Z, R
+
+private object CoefficientKind:
+  def parse(raw: String): CoefficientKind = raw.toLowerCase match
+    case "z"   => Z
+    case "r"   => R
+    case other => throw new IllegalArgumentException(s"unrecognized field '$other'; expected 'Z' or 'R'")
+
 object TDA4j:
   def computeFromPoints(points: Array[Array[Double]]): PersistenceResult =
     computeFromPoints(points, Array.empty[String])
@@ -206,45 +249,47 @@ object TDA4j:
   // dispatch: string options -> concrete engine/field choice
   // ---------------------------------------------------------------------------------------------------------------
 
-  private given epsilonForAlpha: Epsilon = Epsilon(1e-5)
-
   private def dispatch(
     opts: Map[String, String],
     metricSpace: FiniteMetricSpace[Int],
     points: Option[Array[Array[Double]]]
   ): PersistenceResult =
-    val complex = opts.getOrElse("complex", "vr").toLowerCase
-    if complex != "vr" && complex != "alpha" && complex != "cech" then
-      throw new IllegalArgumentException(s"unrecognized complex '$complex'; expected 'vr', 'alpha', or 'cech'")
+    val complex = ComplexKind.parse(opts.getOrElse("complex", "vr"))
 
-    val engine =
-      opts.getOrElse("engine", if complex == "alpha" || complex == "cech" then "naive" else "ripser").toLowerCase
-    if complex == "alpha" && engine == "ripser" then
-      throw new IllegalArgumentException(
-        "engine=ripser cannot be used with complex=alpha: PackedRipserCohomologyContext computes persistent " +
-          "cohomology directly from a metric space's Vietoris-Rips complex and has no notion of an alpha complex at all."
+    val engine = EngineKind.parse(
+      opts.getOrElse(
+        "engine",
+        if complex == ComplexKind.Alpha || complex == ComplexKind.Cech then "naive" else "ripser"
       )
-    if complex == "alpha" && engine == "chunks" then
-      throw new IllegalArgumentException(
-        "engine=chunks is not offered for complex=alpha: this exact combination is a known stall/out-of-memory " +
-          "risk in the underlying library (see CLAUDE.md and HomologySpec's BarcodeRegressionSpec, which stays " +
-          "skipped for exactly this reason). Use engine=naive for alpha complexes."
-      )
-    if complex == "cech" && engine == "ripser" then
-      throw new IllegalArgumentException(
-        "engine=ripser cannot be used with complex=cech: PackedRipserCohomologyContext's apparent-pairs and " +
-          "insertionDiameter optimizations are proven specifically for the max-pairwise-distance (Vietoris-Rips) " +
-          "functional, not Cech's circumradius -- see CLAUDE.md's Cech complexes section. Use engine=naive or " +
-          "engine=chunks for Cech complexes."
-      )
+    )
+    (complex, engine) match
+      case (ComplexKind.Alpha, EngineKind.Ripser) =>
+        throw new IllegalArgumentException(
+          "engine=ripser cannot be used with complex=alpha: PackedRipserCohomologyContext computes persistent " +
+            "cohomology directly from a metric space's Vietoris-Rips complex and has no notion of an alpha complex at all."
+        )
+      case (ComplexKind.Alpha, EngineKind.Chunks) =>
+        throw new IllegalArgumentException(
+          "engine=chunks is not offered for complex=alpha: this exact combination is a known stall/out-of-memory " +
+            "risk in the underlying library (see CLAUDE.md and HomologySpec's BarcodeRegressionSpec, which stays " +
+            "skipped for exactly this reason). Use engine=naive for alpha complexes."
+        )
+      case (ComplexKind.Cech, EngineKind.Ripser) =>
+        throw new IllegalArgumentException(
+          "engine=ripser cannot be used with complex=cech: PackedRipserCohomologyContext's apparent-pairs and " +
+            "insertionDiameter optimizations are proven specifically for the max-pairwise-distance (Vietoris-Rips) " +
+            "functional, not Cech's circumradius -- see CLAUDE.md's Cech complexes section. Use engine=naive or " +
+            "engine=chunks for Cech complexes."
+        )
+      case _ => ()
 
     val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(2)
     val maxFiltrationValue: Option[Double] =
       opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
     val alphaBackend = opts.getOrElse("alphabackend", "helix")
 
-    opts.getOrElse("field", "z").toLowerCase match
-      case "z" =>
+    CoefficientKind.parse(opts.getOrElse("field", "z")) match
+      case CoefficientKind.Z =>
         val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(2)
         val ff = new FiniteField(prime)
         import ff.given
@@ -258,7 +303,7 @@ object TDA4j:
           maxFiltrationValue,
           _.toInt.toDouble
         )
-      case "r" =>
+      case CoefficientKind.R =>
         val epsilon = opts.get("epsilon").map(parseDoubleOption("epsilon", _)).getOrElse(1e-9)
         given Double is Field = Field.DoubleApproximated(epsilon)
         computeGeneric[Double](
@@ -271,8 +316,6 @@ object TDA4j:
           maxFiltrationValue,
           identity
         )
-      case other =>
-        throw new IllegalArgumentException(s"unrecognized field '$other'; expected 'Z' or 'R'")
 
   private def parseIntOption(name: String, raw: String): Int =
     raw.toIntOption.getOrElse(throw new IllegalArgumentException(s"option '$name' must be an integer, got '$raw'"))
@@ -287,30 +330,32 @@ object TDA4j:
   private def computeGeneric[C](
     metricSpace: FiniteMetricSpace[Int],
     points: Option[Array[Array[Double]]],
-    complex: String,
-    engine: String,
+    complex: ComplexKind,
+    engine: EngineKind,
     alphaBackend: String,
     requestedMaxDimension: Int,
     maxFiltrationValue: Option[Double],
     toDouble: C => Double
   )(using C is Field): PersistenceResult =
     complex match
-      case "vr" =>
+      case ComplexKind.VR =>
         // Computing H_k needs (k+1)-dimensional chains -- H_k = ker(d_k)/im(d_{k+1}), so with no (k+1)-chains at
         // all there is no way to tell a genuine k-cycle from one that a not-yet-built (k+1)-simplex would have
         // killed. Both `PackedRipserCohomologyContext` and `PersistenceInChunksContext` now handle this internally
         // (their own `maxDimension`/`maxDim` constructor parameters mean "top homological degree reported,"
-        // fixed at the source -- see .claude/WORKLOG-maxdim-semantics-fix.md), so `engine="ripser"`/`"chunks"`
+        // fixed at the source -- see .claude/WORKLOG-maxdim-semantics-fix.md), so `engine=Ripser`/`Chunks`
         // both pass `requestedMaxDimension` straight through with no adjustment; `fromBars`'s
-        // filter below is a defensive no-op for them now, not load-bearing. `engine="naive"` still needs the
-        // manual `buildDimension = requestedMaxDimension + 1` dance: `SimplicialHomologyContext` has no
-        // `maxDimension` of its own at all -- the cap lives entirely in the stream it's handed.
+        // filter below is a defensive no-op for them now, not load-bearing. `engine=Naive`/`Cohomology` still need
+        // the manual `buildDimension = requestedMaxDimension + 1` dance via `PersistenceEngine`'s own adapters
+        // below: neither `SimplicialHomologyContext` nor `CellularCohomologyContext` has a `maxDimension` of its
+        // own at all -- the cap lives entirely in the stream each is handed.
         engine match
-          case "ripser" =>
+          case EngineKind.Ripser =>
             // Backed by PackedRipserCohomologyContext, not RipserCohomologyContext -- see CLAUDE.md and that
             // class's own doc: same algorithm, measured faster and far leaner on memory. RipserCohomologyContext
             // stays in the codebase only as PackedRipserCohomologyContext's cross-validation test oracle, not as
-            // a second production option.
+            // a second production option. Doesn't go through `PersistenceEngine`: it consumes a metric space
+            // directly, not a stream -- see that trait's own doc for why this is an honest asymmetry.
             val ctx = PackedRipserCohomologyContext[C](
               metricSpace,
               requestedMaxDimension,
@@ -327,7 +372,7 @@ object TDA4j:
               toDouble,
               requestedMaxDimension
             )
-          case "naive" =>
+          case EngineKind.Naive =>
             // EnumeratingCofaceSimplexStream has no dimension cap of its own (only a filtration-value one) --
             // LimitedCofaceSimplexStream is what actually enforces a dimension cap, the same wrapping
             // RipserCohomologySpec's own naiveBars helper uses.
@@ -335,50 +380,43 @@ object TDA4j:
               EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
               requestedMaxDimension + 1
             )
-            val state = SimplicialHomologyContext[Int, C, Double]().persistentHomology(stream)
-            state.advanceAll()
             fromBars[Simplex[Int], C](
-              state.barcodeAt(Double.PositiveInfinity),
+              PersistenceEngine.naive[Simplex[Int], C].barcode(stream),
               (_, cell) => cell.underlying.toArray,
               toDouble,
               requestedMaxDimension
             )
-          case "chunks" =>
+          case EngineKind.Chunks =>
             // barcodeAt, not diagramAt: CellularPersistenceInChunksContext now records a REAL representative for
             // every bar (any dimension <= requestedMaxDimension), via the SAME fromBars/Option[Chain] path
-            // "ripser"/"naive" already use below -- see that method's own doc for how (it reuses this class's
+            // Ripser/Naive already use above -- see PersistenceEngine's own doc for how (it reuses this class's
             // OWN already-computed reduction state -- boundaries/cleared/paired/killer -- incrementally, via
             // vcolOf, rather than delegating to a second independent engine) and .claude/CLAUDE.md's
             // coefficients-and-representatives principle.
             val stream = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue)
-            val state = PersistenceInChunksContext[Int, C](requestedMaxDimension).persistentHomology(stream)
             fromBars[Simplex[Int], C](
-              state.barcodeAt(Double.PositiveInfinity),
+              PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(stream),
               (_, cell) => cell.underlying.toArray,
               toDouble,
               requestedMaxDimension
             )
-          case "cohomology" =>
+          case EngineKind.Cohomology =>
             // CellularCohomologyContext, generic over CellT: OrderedCell -- see
             // .claude/DESIGN-generic-cohomology.md. Same "build one dimension higher, drop it via fromBars"
-            // dance as engine=naive above, for the identical reason (H_k needs (k+1)-dimensional chains); this
+            // dance as engine=Naive above, for the identical reason (H_k needs (k+1)-dimensional chains); this
             // engine has no maxDim/maxDimension parameter of its own at all (deliberately -- see that class's
-            // own doc), so the cap lives entirely in the stream, exactly like engine=naive.
+            // own doc), so the cap lives entirely in the stream, exactly like engine=Naive.
             val stream = LimitedCofaceSimplexStream(
               EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
               requestedMaxDimension + 1
             )
             fromBars[Simplex[Int], C](
-              CellularCohomologyContext[Simplex[Int], C, Double]().persistentCohomology(stream),
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(stream),
               (_, cell) => cell.underlying.toArray,
               toDouble,
               requestedMaxDimension
             )
-          case other =>
-            throw new IllegalArgumentException(
-              s"unrecognized engine '$other' for complex=vr; expected 'ripser', 'naive', 'chunks', or 'cohomology'"
-            )
-      case "alpha" =>
+      case ComplexKind.Alpha =>
         // No dimension cap is applied here at all, on purpose: an alpha complex's chain complex terminates on its
         // own (bounded by ambient dimension, or higher under cosphericity -- see CLAUDE.md), it is never
         // artificially cut off the way a VR complex is by `requestedMaxDimension` above, so its own top dimension
@@ -389,33 +427,29 @@ object TDA4j:
             "complex=alpha requires point coordinates -- use computeFromPoints, not computeFromDistanceMatrix"
           )
         )
-        val alphaStream = Alpha(pts.toIndexedSeq, alphaBackend)
+        val alphaStream = AlphaShapes(pts.toIndexedSeq, alphaBackend)
         engine match
-          case "naive" =>
-            val state = SimplicialHomologyContext[Int, C, Double]().persistentHomology(alphaStream)
-            state.advanceAll()
+          case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              state.barcodeAt(Double.PositiveInfinity),
+              PersistenceEngine.naive[Simplex[Int], C].barcode(alphaStream),
               (_, cell) => cell.underlying.toArray,
               toDouble,
               Int.MaxValue
             )
-          case "cohomology" =>
-            // No stream-level dimension cap here either, for the same reason as engine=naive above: an alpha
+          case EngineKind.Cohomology =>
+            // No stream-level dimension cap here either, for the same reason as engine=Naive above: an alpha
             // complex's chain complex terminates on its own. CellularCohomologyContext accepts `alphaStream`
             // directly -- it's a StratifiedSimplexStream[Int, Double], hence a CellStream[Simplex[Int], Double].
             fromBars[Simplex[Int], C](
-              CellularCohomologyContext[Simplex[Int], C, Double]().persistentCohomology(alphaStream),
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(alphaStream),
               (_, cell) => cell.underlying.toArray,
               toDouble,
               Int.MaxValue
             )
-          case other =>
-            // dispatch() already rejects ripser/chunks for alpha; anything else is a genuinely unrecognized engine.
-            throw new IllegalArgumentException(
-              s"unrecognized engine '$other' for complex=alpha; expected 'naive' or 'cohomology'"
-            )
-      case "cech" =>
+          case EngineKind.Ripser | EngineKind.Chunks =>
+            // dispatch() already rejects both of these for complex=alpha before computeGeneric is ever reached.
+            throw new IllegalArgumentException(s"engine=$engine is not offered for complex=alpha")
+      case ComplexKind.Cech =>
         // Cech grows unboundedly in dimension just like VR -- unlike alpha/cubical, its own top dimension is NOT
         // naturally bounded (a Cech complex over n points can, in principle, reach an (n-1)-simplex) -- so it needs
         // the SAME "build one dimension higher than requested, then drop it" dance the VR case above uses, for the
@@ -429,58 +463,50 @@ object TDA4j:
         )
         val euclideanMetricSpace = EuclideanMetricSpace(pts)
         engine match
-          case "naive" =>
+          case EngineKind.Naive =>
             val stream = LimitedCofaceSimplexStream(
               CechCofaceSimplexStream(euclideanMetricSpace, maxFiltrationValue = maxFiltrationValue),
               requestedMaxDimension + 1
             )
-            val state = SimplicialHomologyContext[Int, C, Double]().persistentHomology(stream)
-            state.advanceAll()
             fromBars[Simplex[Int], C](
-              state.barcodeAt(Double.PositiveInfinity),
+              PersistenceEngine.naive[Simplex[Int], C].barcode(stream),
               (_, cell) => cell.underlying.toArray,
               toDouble,
               requestedMaxDimension
             )
-          case "chunks" =>
+          case EngineKind.Chunks =>
             // CellularPersistenceInChunksContext handles the "+1" dance internally (its own maxDim constructor
             // parameter means "top reported degree," fixed at the source -- see .claude/WORKLOG-maxdim-semantics-
             // fix.md), and CechCofaceSimplexStream's own iterateDimension is already naturally bounded (inherited
             // from RipserCofaceSimplexStream's `d < metricSpace.size` guard), so no LimitedCofaceSimplexStream
-            // wrapping is needed here -- mirroring engine=chunks's own complex=vr case above exactly. Cross-
+            // wrapping is needed here -- mirroring engine=Chunks's own complex=vr case above exactly. Cross-
             // validated against the naive engine directly on Cech streams in CechStreamSpec (not assumed to carry
             // over from VR/cubical/simplicial-set validation, since this combination had never been exercised
             // before).
             val stream = CechCofaceSimplexStream(euclideanMetricSpace, maxFiltrationValue = maxFiltrationValue)
-            val state = CellularPersistenceInChunksContext[Simplex[Int], C](requestedMaxDimension)
-              .persistentHomology(stream)
             fromBars[Simplex[Int], C](
-              state.barcodeAt(Double.PositiveInfinity),
+              PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(stream),
               (_, cell) => cell.underlying.toArray,
               toDouble,
               requestedMaxDimension
             )
-          case "cohomology" =>
-            // Same shape as engine=naive above for complex=cech -- Cech's top dimension is not naturally
+          case EngineKind.Cohomology =>
+            // Same shape as engine=Naive above for complex=cech -- Cech's top dimension is not naturally
             // bounded, so the same "build one dimension higher via LimitedCofaceSimplexStream, drop it via
-            // fromBars" dance applies, for the identical reason as complex=vr's own engine=cohomology branch.
+            // fromBars" dance applies, for the identical reason as complex=vr's own engine=Cohomology branch.
             val stream = LimitedCofaceSimplexStream(
               CechCofaceSimplexStream(euclideanMetricSpace, maxFiltrationValue = maxFiltrationValue),
               requestedMaxDimension + 1
             )
             fromBars[Simplex[Int], C](
-              CellularCohomologyContext[Simplex[Int], C, Double]().persistentCohomology(stream),
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(stream),
               (_, cell) => cell.underlying.toArray,
               toDouble,
               requestedMaxDimension
             )
-          case other =>
-            // dispatch() already rejects ripser for cech; anything else is a genuinely unrecognized engine.
-            throw new IllegalArgumentException(
-              s"unrecognized engine '$other' for complex=cech; expected 'naive', 'chunks', or 'cohomology'"
-            )
-      case other =>
-        throw new IllegalArgumentException(s"unrecognized complex '$other'; expected 'vr', 'alpha', or 'cech'")
+          case EngineKind.Ripser =>
+            // dispatch() already rejects this for complex=cech before computeGeneric is ever reached.
+            throw new IllegalArgumentException(s"engine=$engine is not offered for complex=cech")
 
   // ---------------------------------------------------------------------------------------------------------------
   // dispatch for computeFromCubicalImage/computeFromImage -- a separate function from dispatch/computeGeneric
@@ -489,8 +515,8 @@ object TDA4j:
   // ---------------------------------------------------------------------------------------------------------------
 
   private def dispatchCubical(opts: Map[String, String], stream: CubicalGridStream): PersistenceResult =
-    val engine = opts.getOrElse("engine", "naive").toLowerCase
-    if engine == "ripser" then
+    val engine = EngineKind.parse(opts.getOrElse("engine", "naive"))
+    if engine == EngineKind.Ripser then
       throw new IllegalArgumentException(
         "engine=ripser cannot be used for a cubical complex: PackedRipserCohomologyContext is specialized to " +
           "Simplex[Int] Vietoris-Rips complexes and has no notion of a cubical complex at all. Use engine=naive, " +
@@ -501,22 +527,20 @@ object TDA4j:
     // way VR/Cech are), NOT to complex=vr's default of 2.
     val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(stream.ambientDim)
 
-    opts.getOrElse("field", "z").toLowerCase match
-      case "z" =>
+    CoefficientKind.parse(opts.getOrElse("field", "z")) match
+      case CoefficientKind.Z =>
         val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(2)
         val ff = new FiniteField(prime)
         import ff.given
         computeCubicalGeneric[ff.Fp](stream, engine, maxDimension, _.toInt.toDouble)
-      case "r" =>
+      case CoefficientKind.R =>
         val epsilon = opts.get("epsilon").map(parseDoubleOption("epsilon", _)).getOrElse(1e-9)
         given Double is Field = Field.DoubleApproximated(epsilon)
         computeCubicalGeneric[Double](stream, engine, maxDimension, identity)
-      case other =>
-        throw new IllegalArgumentException(s"unrecognized field '$other'; expected 'Z' or 'R'")
 
   private def computeCubicalGeneric[C](
     stream: CubicalGridStream,
-    engine: String,
+    engine: EngineKind,
     maxDimension: Int,
     toDouble: C => Double
   )(using C is Field): PersistenceResult =
@@ -525,35 +549,36 @@ object TDA4j:
     // Simplex[Int]-based complexes above.
     val cellVertices: (Int, Cube) => Array[Int] = (_, cell) => cell.encoded.toArray
     engine match
-      case "naive" =>
+      case EngineKind.Naive =>
         // No dimension cap is applied to the stream itself, on purpose, mirroring complex=alpha above: a cubical
         // grid's own chain complex terminates on its own (bounded by its ambient dimension), so it is never
         // artificially cut short the way a VR/Cech complex is -- nothing to build one dimension higher for.
-        // CubicalHomologyContext has no maxDim of its own at all, same as SimplicialHomologyContext.
-        val state = CubicalHomologyContext[C, Double]().persistentHomology(stream)
-        state.advanceAll()
-        fromBars[Cube, C](state.barcodeAt(Double.PositiveInfinity), cellVertices, toDouble, maxDimension)
-      case "chunks" =>
+        // CellularHomologyContext[Cube, ...] has no maxDim of its own at all, same as Simplex[Int].
+        fromBars[Cube, C](PersistenceEngine.naive[Cube, C].barcode(stream), cellVertices, toDouble, maxDimension)
+      case EngineKind.Chunks =>
         // Unlike the naive path above, maxDimension IS passed through here as a genuine, correct truncation --
         // CellularPersistenceInChunksContext handles the "+1" dance internally (see .claude/WORKLOG-maxdim-
         // semantics-fix.md), so this can skip real work for a caller who only wants low-dimensional homology, not
         // just filter what's reported after the fact.
-        val state = CellularPersistenceInChunksContext[Cube, C](maxDimension).persistentHomology(stream)
-        fromBars[Cube, C](state.barcodeAt(Double.PositiveInfinity), cellVertices, toDouble, maxDimension)
-      case "cohomology" =>
-        // Same shape as engine=naive above: no stream-level dimension cap (a cubical grid's own top dimension
-        // is already naturally bounded), CellularCohomologyContext computes to that natural top dimension, and
-        // maxDimension is applied purely as a post-hoc filter via fromBars.
         fromBars[Cube, C](
-          CellularCohomologyContext[Cube, C, Double]().persistentCohomology(stream),
+          PersistenceEngine.chunks[Cube, C](maxDimension).barcode(stream),
           cellVertices,
           toDouble,
           maxDimension
         )
-      case other =>
-        throw new IllegalArgumentException(
-          s"unrecognized engine '$other' for a cubical complex; expected 'naive', 'chunks', or 'cohomology'"
+      case EngineKind.Cohomology =>
+        // Same shape as engine=Naive above: no stream-level dimension cap (a cubical grid's own top dimension
+        // is already naturally bounded), CellularCohomologyContext computes to that natural top dimension, and
+        // maxDimension is applied purely as a post-hoc filter via fromBars.
+        fromBars[Cube, C](
+          PersistenceEngine.cohomology[Cube, C].barcode(stream),
+          cellVertices,
+          toDouble,
+          maxDimension
         )
+      case EngineKind.Ripser =>
+        // dispatchCubical already rejects this before computeCubicalGeneric is ever reached.
+        throw new IllegalArgumentException("engine=ripser is not offered for a cubical complex")
 
   // ---------------------------------------------------------------------------------------------------------------
   // barcode/chain -> PersistenceResult conversion
@@ -591,12 +616,11 @@ object TDA4j:
       indexed(i).annotation match
         case Some(chain) =>
           chain.collapseAll()
-          val items = chain.items
+          val items = chain.rawEntries
           (items.map(t => cellVertices(dim, t._1)).toArray, items.map(t => toDouble(t._2)).toArray)
         case None =>
           throw new UnsupportedOperationException(
-            s"no representative chain was recorded for bar $i (this can happen for engine=ripser bars resolved " +
-              "via the apparent-pairs shortcut -- engine=chunks now records a representative for every bar, see " +
-              "CellularPersistenceInChunksContext.barcodeAt's own doc)"
+            s"no representative chain was recorded for bar $i; every engine records one for every bar, so this " +
+              "indicates a bug in the engine that produced this result, not an expected gap"
           )
     new PersistenceResult(dims, births, deaths, cycleProvider)

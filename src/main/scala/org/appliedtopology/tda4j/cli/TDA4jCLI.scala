@@ -70,6 +70,12 @@ object TDA4jCLI:
       case e: IllegalArgumentException =>
         System.err.println(s"tda4j: ${e.getMessage}")
         1
+      case e: java.io.IOException =>
+        // Covers FileNotFoundException (a missing/unreadable --input path) and any other I/O failure from the
+        // io.* readers -- these are user-input problems (a typo'd path, a permissions issue), not a `tda4j` bug,
+        // so they get the same clean one-line message as an IllegalArgumentException rather than a raw stack trace.
+        System.err.println(s"tda4j: ${e.getMessage}")
+        1
 
   // -----------------------------------------------------------------------------------------------------------
   // Scallop -> TDA4j's flat key/value options array. Every key is omitted entirely when the user didn't pass the
@@ -109,11 +115,12 @@ object TDA4jCLI:
     case CubicalGrid(shape: Array[Int], flatValues: Array[Double])
 
   /** Inverts `CubicalImage.fromFlatArray`'s own row-major, last-axis-fastest convention to recover a raw
-    * `(shape, flatValues)` pair from an already-built `CubicalGridStream` -- used for readers (`Perseus`/
-    * `CubicalImage.fromFile`) that only expose a finished stream, not the raw values underneath. Always called with a
-    * stream built at `sublevel = true` (see call sites below), so the recovered values are the ORIGINAL, un-negated
-    * ones: `TDA4j.computeFromCubicalImage` applies the user's own `--sublevel` choice itself, exactly once -- reading
-    * with the caller's own `--sublevel` value here too would silently double-apply it.
+    * `(shape, flatValues)` pair from an already-built `CubicalGridStream` -- used for `CubicalImage.fromFile` (a real
+    * image/volume file, decoded via `javax.imageio`, so there's no raw-array layer underneath to read directly the way
+    * `Perseus`/`Dipha`'s own text formats have). Always called with a stream built at `sublevel = true` (see the call
+    * site below), so the recovered values are the ORIGINAL, un-negated ones: `TDA4j.computeFromCubicalImage` applies
+    * the user's own `--sublevel` choice itself, exactly once -- reading with the caller's own `--sublevel` value here
+    * too would silently double-apply it.
     */
   private[cli] def flattenGridStream(stream: CubicalGridStream): (Array[Int], Array[Double]) =
     val shape = stream.shape.toArray
@@ -138,8 +145,8 @@ object TDA4jCLI:
       case "dipha-distance"  => ResolvedInput.Distances(Dipha.readDistanceMatrix(path))
       case "off"             => ResolvedInput.Points(Gudhi.readOff(path))
       case "perseus-cubical" =>
-        val (shape, flatValues) = flattenGridStream(Perseus.readCubicalToplex(path, sublevel = true))
-        ResolvedInput.CubicalGrid(shape, flatValues)
+        val (shape, flatValues) = Perseus.readCubicalImageData(path)
+        ResolvedInput.CubicalGrid(shape.toArray, flatValues.toArray)
       case "dipha-image" =>
         val (shape, flatValues) = Dipha.readImageData(path)
         ResolvedInput.CubicalGrid(shape.toArray, flatValues.toArray)

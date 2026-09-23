@@ -43,10 +43,9 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   )
   val representatives: ScallopOption[Boolean] = opt[Boolean](
     default = Some(false),
-    descr = "also print each bar's representative chain (--output-format=text only). Best-effort: the default " +
-      "engine (ripser) has no representative recorded for some bars resolved via its apparent-pairs shortcut " +
-      "-- those print as '(no representative recorded)' rather than failing the whole run. engine=chunks and " +
-      "engine=cohomology both record one for every bar."
+    descr = "also print each bar's representative chain (--output-format=text only). Every engine records a " +
+      "representative for every bar; a printed '(no representative recorded)' would indicate an engine bug, not " +
+      "an expected gap."
   )
 
   val complex: ScallopOption[String] = opt[String](descr = "vr (default), alpha, or cech")
@@ -54,8 +53,7 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     opt[String](descr =
       "ripser, naive, chunks, or cohomology (default depends on --complex -- see TDA4j's own doc). cohomology " +
         "is CellularCohomologyContext, generic over cell type and valid for every --complex value -- unlike " +
-        "ripser, not Vietoris-Rips-specialized, so it also works with --complex=alpha/cech, and (like chunks) " +
-        "records a representative for every bar with no apparent-pairs gap."
+        "ripser, not Vietoris-Rips-specialized, so it also works with --complex=alpha/cech."
     )
   val alphaBackend: ScallopOption[String] =
     opt[String](descr = "helix (default) or DQP -- only consulted when --complex=alpha")

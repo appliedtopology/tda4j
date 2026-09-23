@@ -16,12 +16,13 @@ import org.appliedtopology.tda4j.alpha.{given, *}
   * output beyond grouping by dimension). An essential (never-dying) class reports `death(i) ==
   * Double.POSITIVE_INFINITY`.
   *
-  * Representative-chain access (`cycleVertices`/`cycleCoefficients`) is best-effort and engine-dependent -- see the
-  * per-method doc. For `engine="ripser"` the chain is a representative *cocycle*; for `engine="naive"` it is a
-  * representative *cycle*. Both are reported the same way here (a list of simplices, each given as its sorted vertex
-  * array, with a parallel coefficient array) because MATLAB-side code that only wants "the simplices spanning this bar"
-  * doesn't need to care which. Boundary-matrix export is not implemented yet -- flagged as a follow-up in
-  * WORKLOG-matlab-api.md, not silently missing.
+  * Representative-chain access (`cycleVertices`/`cycleCoefficients`) is engine-dependent in *what kind* of chain it
+  * returns, not in *whether* one is available -- every engine records one for every bar; see the per-method doc. For
+  * `engine="ripser"` the chain is a representative *cocycle*; for `engine="naive"` it is a representative *cycle*. Both
+  * are reported the same way here (a list of simplices, each given as its sorted vertex array, with a parallel
+  * coefficient array) because MATLAB-side code that only wants "the simplices spanning this bar" doesn't need to care
+  * which. Boundary-matrix export is not implemented yet -- flagged as a follow-up in WORKLOG-matlab-api.md, not
+  * silently missing.
   */
 final class PersistenceResult private[matlab] (
   private val dims: Array[Int],
@@ -54,11 +55,10 @@ final class PersistenceResult private[matlab] (
     *     coordinate `a`, or `2*a+1` for a non-degenerate (unit-interval) factor spanning `[a, a+1]`; decode coordinate
     *     `k` as `a = v(k)/2` (integer division) plus, when `v(k)` is odd, a unit interval starting there.
     *
-    * Throws `UnsupportedOperationException` if this specific bar has no recorded representative -- can happen for
-    * `engine="ripser"` (its apparent-pairs shortcut skips writing one down for some bars). `engine="chunks"` now
-    * records a representative for every bar, at every dimension, for every complex type above -- see
-    * `CellularPersistenceInChunksContext.barcodeAt`'s own doc for how, and `.claude/CLAUDE.md`'s
-    * coefficients-and-representatives design principle for why this mattered.
+    * Throws `UnsupportedOperationException` if this specific bar has no recorded representative. Every engine records
+    * one for every bar, at every dimension, for every complex type above, so this indicates an engine bug rather than
+    * an expected gap -- see `.claude/CLAUDE.md`'s coefficients-and-representatives design principle for why this
+    * matters.
     */
   def cycleVertices(i: Int): Array[Array[Int]] = cycleProvider(i)._1
 
