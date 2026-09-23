@@ -23,7 +23,7 @@ class RipserIOSpec extends mutable.Specification:
     "round-trip through readPointCloud/writePointCloud" >> {
       val points = Seq(Seq(1.0, 2.0), Seq(3.0, 4.0), Seq(5.0, 6.0))
       val path = tempFile(".txt")
-      Ripser.writePointCloud(path, points)
+      Ripser.writePointCloud(path, points.map(_.toArray).toArray)
       Ripser.readPointCloud(path).map(_.toSeq).toSeq must beEqualTo(points)
     }
 
@@ -38,7 +38,7 @@ class RipserIOSpec extends mutable.Specification:
     "round-trip through writeLowerDistanceMatrix" >> {
       val m = IndexedSeq(IndexedSeq(0.0, 1.0, 2.0), IndexedSeq(1.0, 0.0, 3.0), IndexedSeq(2.0, 3.0, 0.0))
       val path = tempFile(".txt")
-      Ripser.writeLowerDistanceMatrix(path, m)
+      Ripser.writeLowerDistanceMatrix(path, m.map(_.toArray).toArray)
       Ripser.readLowerDistanceMatrix(path).map(_.toSeq).toSeq must beEqualTo(m.map(_.toSeq))
     }
   }
@@ -66,7 +66,7 @@ class RipserIOSpec extends mutable.Specification:
     "round-trip through writeUpperDistanceMatrix" >> {
       val m = IndexedSeq(IndexedSeq(0.0, 1.0, 2.0), IndexedSeq(1.0, 0.0, 3.0), IndexedSeq(2.0, 3.0, 0.0))
       val path = tempFile(".txt")
-      Ripser.writeUpperDistanceMatrix(path, m)
+      Ripser.writeUpperDistanceMatrix(path, m.map(_.toArray).toArray)
       Ripser.readUpperDistanceMatrix(path).map(_.toSeq).toSeq must beEqualTo(m.map(_.toSeq))
     }
   }
@@ -98,7 +98,7 @@ class RipserIOSpec extends mutable.Specification:
     "round-trip through writeBinaryLowerDistanceMatrix, at float32 precision" >> {
       val m = IndexedSeq(IndexedSeq(0.0, 1.5, 2.5), IndexedSeq(1.5, 0.0, 3.5), IndexedSeq(2.5, 3.5, 0.0))
       val path = tempFile(".bin")
-      Ripser.writeBinaryLowerDistanceMatrix(path, m)
+      Ripser.writeBinaryLowerDistanceMatrix(path, m.map(_.toArray).toArray)
       Ripser.readBinaryLowerDistanceMatrix(path).map(_.toSeq).toSeq must beEqualTo(m.map(_.toSeq))
     }
 
@@ -106,8 +106,8 @@ class RipserIOSpec extends mutable.Specification:
       val m = IndexedSeq(IndexedSeq(0.0, 1.5, 2.5), IndexedSeq(1.5, 0.0, 3.5), IndexedSeq(2.5, 3.5, 0.0))
       val binPath = tempFile(".bin")
       val textPath = tempFile(".txt")
-      Ripser.writeBinaryLowerDistanceMatrix(binPath, m)
-      Ripser.writeLowerDistanceMatrix(textPath, m)
+      Ripser.writeBinaryLowerDistanceMatrix(binPath, m.map(_.toArray).toArray)
+      Ripser.writeLowerDistanceMatrix(textPath, m.map(_.toArray).toArray)
       Ripser.readBinaryLowerDistanceMatrix(binPath).map(_.toSeq).toSeq must
         beEqualTo(Ripser.readLowerDistanceMatrix(textPath).map(_.toSeq).toSeq)
     }

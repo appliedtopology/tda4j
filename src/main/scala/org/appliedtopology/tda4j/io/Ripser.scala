@@ -34,7 +34,7 @@ object Ripser:
   def readEuclideanMetricSpace(path: String): EuclideanMetricSpace =
     EuclideanMetricSpace(readPointCloud(path))
 
-  def writePointCloud(path: String, points: Seq[Seq[Double]]): Unit =
+  def writePointCloud(path: String, points: Array[Array[Double]]): Unit =
     val out = new PrintWriter(path)
     try points.foreach(p => out.println(p.mkString(",")))
     finally out.close()
@@ -56,7 +56,7 @@ object Ripser:
   def readLowerDistanceExplicitMetricSpace(path: String): ExplicitMetricSpace =
     ExplicitMetricSpace(readLowerDistanceMatrix(path).map(_.toIndexedSeq).toIndexedSeq)
 
-  def writeLowerDistanceMatrix(path: String, matrix: IndexedSeq[IndexedSeq[Double]]): Unit =
+  def writeLowerDistanceMatrix(path: String, matrix: Array[Array[Double]]): Unit =
     val out = new PrintWriter(path)
     try out.println(DistanceMatrices.flattenLowerTriangular(matrix).mkString(","))
     finally out.close()
@@ -73,7 +73,7 @@ object Ripser:
   def readUpperDistanceExplicitMetricSpace(path: String): ExplicitMetricSpace =
     ExplicitMetricSpace(readUpperDistanceMatrix(path).map(_.toIndexedSeq).toIndexedSeq)
 
-  def writeUpperDistanceMatrix(path: String, matrix: IndexedSeq[IndexedSeq[Double]]): Unit =
+  def writeUpperDistanceMatrix(path: String, matrix: Array[Array[Double]]): Unit =
     val out = new PrintWriter(path)
     try out.println(DistanceMatrices.flattenUpperTriangular(matrix).mkString(","))
     finally out.close()
@@ -118,7 +118,7 @@ object Ripser:
   def readBinaryExplicitMetricSpace(path: String): ExplicitMetricSpace =
     ExplicitMetricSpace(readBinaryLowerDistanceMatrix(path).map(_.toIndexedSeq).toIndexedSeq)
 
-  def writeBinaryLowerDistanceMatrix(path: String, matrix: IndexedSeq[IndexedSeq[Double]]): Unit =
+  def writeBinaryLowerDistanceMatrix(path: String, matrix: Array[Array[Double]]): Unit =
     val flat = DistanceMatrices.flattenLowerTriangular(matrix)
     val buf = BinaryIO.newBufferLE(flat.length * 4)
     flat.foreach(v => buf.putFloat(v.toFloat))

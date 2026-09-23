@@ -18,13 +18,13 @@ class CsvSpec extends mutable.Specification:
     "round-trip through readPointCloud/writePointCloud" >> {
       val points = Seq(Seq(1.0, 2.0, 3.0), Seq(4.0, 5.0, 6.0))
       val path = tempFile(".csv")
-      CSV.writePointCloud(path, points)
+      CSV.writePointCloud(path, points.map(_.toArray).toArray)
       CSV.readPointCloud(path).map(_.toSeq).toSeq must beEqualTo(points)
     }
 
     "build a usable EuclideanMetricSpace" >> {
       val path = tempFile(".csv")
-      CSV.writePointCloud(path, Seq(Seq(0.0, 0.0), Seq(3.0, 4.0)))
+      CSV.writePointCloud(path, Array(Array(0.0, 0.0), Array(3.0, 4.0)))
       CSV.readEuclideanMetricSpace(path).distance(0, 1) must beEqualTo(5.0)
     }
   }
@@ -33,7 +33,7 @@ class CsvSpec extends mutable.Specification:
     "round-trip through readFullDistanceMatrix/writeFullDistanceMatrix" >> {
       val m = Seq(Seq(0.0, 1.0, 2.0), Seq(1.0, 0.0, 3.0), Seq(2.0, 3.0, 0.0))
       val path = tempFile(".csv")
-      CSV.writeFullDistanceMatrix(path, m)
+      CSV.writeFullDistanceMatrix(path, m.map(_.toArray).toArray)
       CSV.readFullDistanceMatrix(path).map(_.toSeq).toSeq must beEqualTo(m)
     }
 
@@ -60,7 +60,7 @@ class CsvSpec extends mutable.Specification:
         IndexedSeq(2.0, 3.0, 0.0)
       )
       val path = tempFile(".csv")
-      CSV.writeLowerTriangularDistanceMatrix(path, m)
+      CSV.writeLowerTriangularDistanceMatrix(path, m.map(_.toArray).toArray)
       CSV.readLowerTriangularDistanceMatrix(path).map(_.toSeq).toSeq must beEqualTo(m.map(_.toSeq))
     }
 
@@ -72,8 +72,8 @@ class CsvSpec extends mutable.Specification:
       )
       val csvPath = tempFile(".csv")
       val ripserPath = tempFile(".ripser")
-      CSV.writeLowerTriangularDistanceMatrix(csvPath, m)
-      Ripser.writeLowerDistanceMatrix(ripserPath, m)
+      CSV.writeLowerTriangularDistanceMatrix(csvPath, m.map(_.toArray).toArray)
+      Ripser.writeLowerDistanceMatrix(ripserPath, m.map(_.toArray).toArray)
       CSV.readLowerTriangularDistanceMatrix(csvPath).map(_.toSeq).toSeq must
         beEqualTo(Ripser.readLowerDistanceMatrix(ripserPath).map(_.toSeq).toSeq)
     }

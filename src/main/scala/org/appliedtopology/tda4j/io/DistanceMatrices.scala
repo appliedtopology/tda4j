@@ -39,7 +39,7 @@ private[io] object DistanceMatrices:
     m
 
   /** Inverse of `expandLowerTriangular`: row `i` (`1 until n`) contributes `d(i,0),...,d(i,i-1)`, in that order. */
-  def flattenLowerTriangular(m: IndexedSeq[IndexedSeq[Double]]): Array[Double] =
+  def flattenLowerTriangular(m: Array[Array[Double]]): Array[Double] =
     val n = m.size
     val out = Array.newBuilder[Double]
     for
@@ -66,7 +66,7 @@ private[io] object DistanceMatrices:
     m
 
   /** Inverse of `expandUpperTriangular`. */
-  def flattenUpperTriangular(m: IndexedSeq[IndexedSeq[Double]]): Array[Double] =
+  def flattenUpperTriangular(m: Array[Array[Double]]): Array[Double] =
     val n = m.size
     val out = Array.newBuilder[Double]
     for

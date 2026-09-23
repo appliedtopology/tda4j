@@ -33,9 +33,13 @@ object Perseus:
 
   /** Line 1: dimension `d`. Next `d` lines: grid size along each axis (all positive -- see the class doc on periodic
     * boundaries). Remaining tokens: `d`-many products worth of filtration values, in Perseus's own lexicographic
-    * (first-axis-fastest) order; `-1` means "this cube is absent."
+    * (first-axis-fastest) order; `-1` means "this cube is absent." Returns the raw `(shape, flatValues)` pair in
+    * `CubicalImage.fromFlatArray`'s own last-axis-fastest convention (axes already reversed from Perseus's own order,
+    * `-1` already mapped to `Double.PositiveInfinity`) -- mirrors `Dipha.readImageData`'s own raw-array shape, so a
+    * caller that only needs the raw grid (not an already-built stream, e.g. to round-trip it through a different
+    * loader) isn't forced to build a `CubicalGridStream` just to immediately flatten it back out.
     */
-  def readCubicalToplex(path: String, sublevel: Boolean = true): CubicalGridStream =
+  def readCubicalImageData(path: String): (IndexedSeq[Int], IndexedSeq[Double]) =
     val src = Source.fromFile(path)
     try
       val tokens = src.getLines().flatMap(_.trim.split("\\s+")).filter(_.nonEmpty)
@@ -56,8 +60,12 @@ object Perseus:
         val v = tokens.next().toDouble
         raw(i) = if v == -1.0 then Double.PositiveInfinity else v
         i += 1
-      CubicalImage.fromFlatArray(sizes.reverse.toIndexedSeq, raw.toIndexedSeq, sublevel)
+      (sizes.reverse.toIndexedSeq, raw.toIndexedSeq)
     finally src.close()
+
+  def readCubicalToplex(path: String, sublevel: Boolean = true): CubicalGridStream =
+    val (shape, flatValues) = readCubicalImageData(path)
+    CubicalImage.fromFlatArray(shape, flatValues, sublevel)
 
   /** `shape`/`flatValues` in `CubicalImage.fromFlatArray`'s own last-axis-fastest convention -- reversed internally to
     * Perseus's own first-axis-fastest convention before writing. `Double.PositiveInfinity` round-trips back to `-1`.

@@ -41,7 +41,7 @@ class GudhiSpec extends mutable.Specification:
     "round-trip a 3D point cloud through writeOff" >> {
       val points = Seq(Seq(0.0, 0.0, 0.0), Seq(1.0, 2.0, 3.0), Seq(4.0, 5.0, 6.0))
       val path = tempFile(".off")
-      Gudhi.writeOff(path, points)
+      Gudhi.writeOff(path, points.map(_.toArray).toArray)
       Gudhi.readOff(path).map(_.toSeq).toSeq must beEqualTo(points)
     }
 
@@ -49,8 +49,8 @@ class GudhiSpec extends mutable.Specification:
       val points = Seq(Seq(0.0, 0.0), Seq(3.0, 4.0), Seq(6.0, 8.0))
       val offPath = tempFile(".off")
       val csvPath = tempFile(".csv")
-      Gudhi.writeOff(offPath, points)
-      CSV.writePointCloud(csvPath, points)
+      Gudhi.writeOff(offPath, points.map(_.toArray).toArray)
+      CSV.writePointCloud(csvPath, points.map(_.toArray).toArray)
       val fromOff = Gudhi.readEuclideanMetricSpace(offPath)
       val fromCsv = CSV.readEuclideanMetricSpace(csvPath)
       (fromOff.distance(0, 1) must beEqualTo(fromCsv.distance(0, 1))) and

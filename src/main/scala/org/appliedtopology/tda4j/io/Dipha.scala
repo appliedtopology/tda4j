@@ -46,7 +46,7 @@ object Dipha:
   def readExplicitMetricSpace(path: String): ExplicitMetricSpace =
     ExplicitMetricSpace(readDistanceMatrix(path).map(_.toIndexedSeq).toIndexedSeq)
 
-  def writeDistanceMatrix(path: String, matrix: IndexedSeq[IndexedSeq[Double]]): Unit =
+  def writeDistanceMatrix(path: String, matrix: Array[Array[Double]]): Unit =
     val n = matrix.size
     val buf = BinaryIO.newBufferLE(8 + 8 + 8 + n * n * 8)
     buf.putLong(Magic)

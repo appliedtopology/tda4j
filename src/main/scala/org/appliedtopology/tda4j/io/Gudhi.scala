@@ -39,7 +39,7 @@ object Gudhi:
     EuclideanMetricSpace(readOff(path))
 
   /** Writes an `OFF` (3D) or `nOFF` (any other dimension) point cloud, no faces/edges. */
-  def writeOff(path: String, points: Seq[Seq[Double]]): Unit =
+  def writeOff(path: String, points: Array[Array[Double]]): Unit =
     require(points.nonEmpty, "cannot write an OFF file for an empty point cloud")
     val dim = points.head.size
     require(points.forall(_.size == dim), "every point must have the same dimension")

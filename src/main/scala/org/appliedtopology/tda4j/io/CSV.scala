@@ -59,8 +59,8 @@ object CSV:
   def readEuclideanMetricSpace(path: String): EuclideanMetricSpace =
     EuclideanMetricSpace(readPointCloud(path))
 
-  def writePointCloud(path: String, points: Seq[Seq[Double]]): Unit =
-    writeRows(path, points)
+  def writePointCloud(path: String, points: Array[Array[Double]]): Unit =
+    writeRows(path, points.toIndexedSeq.map(_.toIndexedSeq))
 
   /** A full `n x n` distance matrix, one row per line -- both triangles and the diagonal are read as given; this does
     * NOT check that they agree (a caller wanting that checked should build from `readLowerTriangularDistanceMatrix`
@@ -72,8 +72,8 @@ object CSV:
   def readExplicitMetricSpace(path: String): ExplicitMetricSpace =
     ExplicitMetricSpace(readFullDistanceMatrix(path).map(_.toIndexedSeq).toIndexedSeq)
 
-  def writeFullDistanceMatrix(path: String, matrix: Seq[Seq[Double]]): Unit =
-    writeRows(path, matrix)
+  def writeFullDistanceMatrix(path: String, matrix: Array[Array[Double]]): Unit =
+    writeRows(path, matrix.toIndexedSeq.map(_.toIndexedSeq))
 
   /** Row `i` (`i = 1 until n`) has exactly `i` entries, `d(i,0),...,d(i,i-1)` -- no diagonal, no upper triangle, and
     * row `0` (which would have zero entries) is omitted entirely rather than written as a blank line -- so an `n`-point
@@ -88,7 +88,7 @@ object CSV:
   def readLowerTriangularExplicitMetricSpace(path: String): ExplicitMetricSpace =
     ExplicitMetricSpace(readLowerTriangularDistanceMatrix(path).map(_.toIndexedSeq).toIndexedSeq)
 
-  def writeLowerTriangularDistanceMatrix(path: String, matrix: IndexedSeq[IndexedSeq[Double]]): Unit =
+  def writeLowerTriangularDistanceMatrix(path: String, matrix: Array[Array[Double]]): Unit =
     val out = new PrintWriter(path)
     try for i <- 1 until matrix.size do out.println((0 until i).map(j => matrix(i)(j)).mkString(","))
     finally out.close()

@@ -54,7 +54,7 @@ class DiphaSpec extends mutable.Specification:
     "round-trip through writeDistanceMatrix" >> {
       val m = IndexedSeq(IndexedSeq(0.0, 1.0, 2.0), IndexedSeq(1.0, 0.0, 3.0), IndexedSeq(2.0, 3.0, 0.0))
       val path = tempFile(".dipha")
-      Dipha.writeDistanceMatrix(path, m)
+      Dipha.writeDistanceMatrix(path, m.map(_.toArray).toArray)
       Dipha.readDistanceMatrix(path).map(_.toSeq).toSeq must beEqualTo(m.map(_.toSeq))
     }
   }
