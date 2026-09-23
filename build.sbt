@@ -6,21 +6,16 @@ versionScheme := Some("semver-spec")
 
 assembly / assemblyJarName := s"${name.value}-${version.value}-assembly.jar"
 
-libraryDependencies += "org.specs2"       %% "specs2-core"          % "5.5.1" % "test"
-libraryDependencies += "org.specs2"       %% "specs2-matcher-extra" % "5.5.1" % "test"
-libraryDependencies += "org.specs2"       %% "specs2-scalacheck"    % "5.5.1" % "test"
-libraryDependencies += ("org.scala-graph" %% "graph-core"           % "1.13.5").cross(
-  CrossVersion.for3Use2_13
-)
+libraryDependencies += "org.specs2"        %% "specs2-core"                   % "5.5.1" % "test"
+libraryDependencies += "org.specs2"        %% "specs2-matcher-extra"          % "5.5.1" % "test"
+libraryDependencies += "org.specs2"        %% "specs2-scalacheck"             % "5.5.1" % "test"
 libraryDependencies += "org.apache.commons" % "commons-numbers-combinatorics" % "1.1"
 libraryDependencies += "org.apache.commons" % "commons-math3"                 % "3.6.1"
 libraryDependencies += "com.eatthepath"     % "jvptree"                       % "0.2"
 libraryDependencies += "com.dreizak"        % "miniball"                      % "1.0.3"
 libraryDependencies +=
-  "org.scala-lang.modules"                             %% "scala-parallel-collections" % "1.0.4"
-libraryDependencies += "org.scalacheck"                %% "scalacheck"                 % "1.17.0" % "test"
-libraryDependencies += "org.bitbucket.inkytonik.kiama" %% "kiama"                      % "2.5.1"
-libraryDependencies += "org.bitbucket.inkytonik.kiama" %% "kiama-extras"               % "2.5.1"
+  "org.scala-lang.modules"              %% "scala-parallel-collections" % "1.0.4"
+libraryDependencies += "org.scalacheck" %% "scalacheck"                 % "1.17.0" % "test"
 // CLI argument parsing for the `cli` package -- chosen over decline specifically because it has zero transitive
 // dependencies (decline pulls in cats-core, which nothing else in this codebase uses) -- see
 // .claude/WORKLOG-cli-executable.md.
@@ -44,6 +39,7 @@ lazy val root = (project in file("."))
       "-deprecation",
       "-unchecked"
     ),
+    paradoxGroups := Map("Language" -> Seq("Scala", "Java", "Matlab")),
     Compile / paradoxMaterialTheme :=
       ParadoxMaterialTheme(),
     Compile / paradoxProperties ++= Map(
