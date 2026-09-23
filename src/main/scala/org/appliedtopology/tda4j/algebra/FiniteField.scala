@@ -1,9 +1,6 @@
 package org.appliedtopology.tda4j
 package algebra
 
-import scala.math.*
-import scala.math.Numeric.IntIsIntegral
-import math.Fractional.Implicits.infixFractionalOps
 import scala.collection.immutable.ArraySeq
 
 class FiniteField(val p: Int):
@@ -26,7 +23,6 @@ class FiniteField(val p: Int):
     def toUInt: Int = ((fp % p) + p) % p // Have to get to the interval (0,p-1)
 
   given (Fp is Field) = new (Fp is Field):
-    // given FpIsFractional: Fractional[Fp] with {
     def computeInverse(a: Fp): Fp =
       val aa: Int = a.toUInt
       var u: Int = aa % p
@@ -46,8 +42,6 @@ class FiniteField(val p: Int):
         x1 = x
       Fp(x1 % p)
 
-    val p2: Int = (p - 1) / 2
-
     val inverses: ArraySeq[Fp] = ArraySeq.tabulate(p)(j =>
       if j == 0 then 0
       else computeInverse(Fp(j))
@@ -66,46 +60,8 @@ class FiniteField(val p: Int):
     def zero: Fp = Fp(0)
     def one: Fp = Fp(1)
 
-    def op1(op: Int => Int): Fp => Fp =
-      a => norm(Fp(op(a)))
-
-    def op2(op: (x: Int, y: Int) => Int): (Fp, Fp) => Fp =
-      (a, b) => norm(Fp(op(a, b)))
-
-    // Members declared in java.util.Comparator
-    // Members declared in scala.math.Ordering
-    def compare(x: Fp, y: Fp): Int =
-      Ordering.Int.compare(x, y)
-
-    // Members declared in scala.math.Fractional
     def divide(x: Fp, y: Fp): Fp = times(x, inverse(y))
-
-    // Members declared in scala.math.Numeric
-    def fromInt(x: Int): Fp = norm(Fp(x))
-
-    def minus(x: Fp, y: Fp): Fp = op2(_ - _)(x, y)
-
-    def negate(x: Fp): Fp = op1(-_)(x)
-
-    def parseString(str: String): Option[Fp] =
-      IntIsIntegral.parseString(str).map(j => norm(j))
-
-    def plus(x: Fp, y: Fp): Fp = op2(_ + _)(x, y)
-
-    def times(x: Fp, y: Fp): Fp = op2(_ * _)(x, y)
-
-    def toDouble(x: Fp): Double =
-      val xx = x
-      IntIsIntegral.toDouble(xx)
-
-    def toFloat(x: Fp): Float =
-      val xx = x
-      IntIsIntegral.toFloat(xx)
-
-    def toInt(x: Fp): Fp =
-      val xx = x
-      IntIsIntegral.toInt(xx)
-
-    def toLong(x: Fp): Long =
-      val xx = x
-      IntIsIntegral.toLong(xx)
+    def minus(x: Fp, y: Fp): Fp = norm(Fp(x - y))
+    def negate(x: Fp): Fp = norm(Fp(-x))
+    def plus(x: Fp, y: Fp): Fp = norm(Fp(x + y))
+    def times(x: Fp, y: Fp): Fp = norm(Fp(x * y))

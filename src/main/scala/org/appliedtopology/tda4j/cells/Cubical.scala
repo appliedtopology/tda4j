@@ -21,9 +21,7 @@ import scala.annotation.targetName
   * `opaque type` over `Vector[Int]`, not `Array`/`IArray`: `Vector` has structural `equals`/`hashCode`, which `Chain`'s
   * pivot tables (`mutable.Map[CellT, Chain[...]]`, `SortedMap[CellT, CoefficientT]`) depend on to collide two
   * structurally-identical cubes -- an array-backed opaque type would silently use reference equality instead and
-  * corrupt every reduction that touches two independently-constructed copies of the same cube. See
-  * `.claude/WORKLOG-cubical.md` for the derivation (caught by the advisor before any code was written, not found by
-  * debugging a corrupted reduction after the fact).
+  * corrupt every reduction that touches two independently-constructed copies of the same cube.
   */
 opaque type Cube = Vector[Int]
 
@@ -55,31 +53,12 @@ object Cube:
 
   def unapplySeq(cube: Cube): Option[Seq[Int]] = Some(cube.encoded)
 
-  // Originally named `encoded`/`asCube`/`describe` rather than the more obvious `underlying`/`asSimplex`/`show`
-  // because a same-named top-level extension for a DIFFERENT, unrelated receiver type (Simplex[VertexT]'s own
-  // `underlying`/`show`) already existed elsewhere in this package, and Scala 3 does not allow two same-named
-  // top-level `def`s (extension methods included) in different files of one package unless they form one legal
-  // overload group -- every `Simplex[VertexT].underlying`/`.show` call site elsewhere in the codebase failed to
-  // compile with "value underlying is not a member of Simplex[VertexT] ... Required: Cube" the first time this was
-  // named `underlying` here. Confirmed empirically, not just reasoned through -- see WORKLOG-cubical.md.
-  //
-  // `encoded`/`show` (this object) are now defined INSIDE `object Cube` (this companion object) rather than as
-  // top-level extensions, which is what actually fixes the root cause rather than just working around one instance
-  // of it -- extension methods declared in an opaque type's own companion object are found via the receiver type's
-  // implicit scope, keyed by nominal receiver type, not via blanket top-level visibility across the whole package,
-  // so they can no longer collide with another opaque type's same-named companion-object extensions. Confirmed
-  // with a standalone `scala-cli` repro mirroring this exact shape (two unrelated opaque types, same method names,
-  // companion-object-scoped extensions, one of them split across two files via a mixin trait exactly like
-  // `Simplex`/`SimplexOps`) before this file was changed -- see `.claude/WORKLOG-extension-companion-objects.md`.
-  // Left named `encoded`/`show` rather than renamed back to `underlying`/`show`: the fix removes the NEED for
-  // distinct names, but only `show` was readjusted since the cube representation is an encoding more than an underlying carrier.
-  //
-  // `asCube` (below, top-level, kept OUTSIDE `object Cube`) is the real exception: its receiver is `Vector[Int]`,
-  // not `Cube`, so companion-object-based extension lookup (keyed by receiver type) would never find it inside
-  // `Cube`'s own companion -- confirmed the hard way, moving it in broke every `.asCube` call site with "value
-  // asCube is not a member of Vector[Int]". It was never part of the naming collision to begin with
-  // (`asSimplex`/`asCube` don't share a name), so it doesn't need to move for that reason either -- mirrors
-  // `Simplex.asSimplex`'s own identical exception in `Simplex.scala`.
+  // `encoded`/`show` live inside `object Cube` (this companion), the same fix as `Simplex.underlying`/`SimplexOps`
+  // (see `Simplex.scala`'s own doc for the full mechanism) -- collision-scoped by nominal receiver type instead of
+  // top-level package-wide visibility, which is also why they were never renamed back to `underlying`/`show` once
+  // the actual name collision that first forced this move was gone. `asCube` (below, kept top-level OUTSIDE `object
+  // Cube`) is the same exception as `Simplex.asSimplex`: its receiver is `Vector[Int]`, not `Cube`, so companion-
+  // object lookup (keyed by receiver type) would never find it there.
   extension (c: Cube) def encoded: Vector[Int] = c
 
   /** Ergonomic accessors, kept distinct from `dim`/`boundary` (which live on the `OrderedCell` instance below, per

@@ -16,25 +16,30 @@ trait Filterable[FiltrationT: Ordering]:
   def smallest: FiltrationT
   def largest: FiltrationT
 
-given DoubleIsFilterable: Filterable[Double] = new Filterable[Double]:
-  val smallest = Double.NegativeInfinity
-  val largest = Double.PositiveInfinity
+/** The stdlib-numeric-type instances live here, on `Filterable`'s own companion, rather than as bare top-level package
+  * `given`s: found via ordinary implicit-scope search (the companion of either side of `Filterable[Double]`) regardless
+  * of import, rather than being ambient to every file that happens to do `import streams.{given, *}`.
+  */
+object Filterable:
+  given DoubleIsFilterable: Filterable[Double] = new Filterable[Double]:
+    val smallest = Double.NegativeInfinity
+    val largest = Double.PositiveInfinity
 
-given FloatIsFilterable: Filterable[Float] = new Filterable[Float]:
-  val smallest = Float.NegativeInfinity
-  val largest = Float.PositiveInfinity
+  given FloatIsFilterable: Filterable[Float] = new Filterable[Float]:
+    val smallest = Float.NegativeInfinity
+    val largest = Float.PositiveInfinity
 
-given IntIsFilterable: Filterable[Int] = new Filterable[Int]:
-  val smallest = Int.MinValue
-  val largest = Int.MaxValue
+  given IntIsFilterable: Filterable[Int] = new Filterable[Int]:
+    val smallest = Int.MinValue
+    val largest = Int.MaxValue
 
-given ShortIsFilterable: Filterable[Short] = new Filterable[Short]:
-  val smallest = Short.MinValue
-  val largest = Short.MaxValue
+  given ShortIsFilterable: Filterable[Short] = new Filterable[Short]:
+    val smallest = Short.MinValue
+    val largest = Short.MaxValue
 
-given LongIsFilterable: Filterable[Long] = new Filterable[Long]:
-  val smallest = Long.MinValue
-  val largest = Long.MaxValue
+  given LongIsFilterable: Filterable[Long] = new Filterable[Long]:
+    val smallest = Long.MinValue
+    val largest = Long.MaxValue
 
 trait Filtration[CellT: Cell, FiltrationT: {Ordering, Filterable}] extends Filterable[FiltrationT]:
   def filtrationValue: PartialFunction[CellT, FiltrationT]
@@ -45,6 +50,30 @@ trait DoubleFiltration[CellT: Cell] extends Filtration[CellT, Double]:
 
 trait CellStream[CellT: Cell, FiltrationT: Ordering] extends Filtration[CellT, FiltrationT] with IterableOnce[CellT]:
   def filtrationOrdering: Ordering[CellT]
+
+object FiltrationOrdering:
+  /** The canonical `filtrationOrdering` shape every stream in this codebase's ordering contract must produce
+    * (CLAUDE.md's stream rules 1/2): primary key filtration value REVERSED (smaller-under-this-ordering means younger
+    * -- `Chain`'s pivot-selection machinery needs "smaller" to mean "younger"), then dimension ascending, then a
+    * caller-supplied tie-break. A cell either side's `fv` is undefined for falls through to the dimension/tie-break
+    * keys alone, matching every existing call site's behavior.
+    *
+    * `fv` stays a `PartialFunction`, not `C => Option[Double]`: every call site already had one on hand (no `.lift`
+    * allocation needed), and this sits directly on `Chain.reduceBy`'s `SortedMap`/`PriorityQueue` comparison path --
+    * the hottest loop in every engine.
+    */
+  def canonical[C](fv: PartialFunction[C, Double], dim: C => Int, tieBreak: Ordering[C]): Ordering[C] =
+    new Ordering[C]:
+      def compare(x: C, y: C): Int =
+        lazy val tb: Int =
+          Ordering.Int.compare(dim(x), dim(y)) match
+            case 0  => tieBreak.compare(x, y)
+            case dc => dc
+        if fv.isDefinedAt(x) && fv.isDefinedAt(y) then
+          java.lang.Double.compare(fv(y), fv(x)) match
+            case 0  => tb
+            case fc => fc
+        else tb
 
 /** Abstract trait for representing a sequence of simplices.
   *
@@ -86,20 +115,11 @@ class ExplicitStream[VertexT: Ordering, FiltrationT](
     extends SimplexStream[VertexT, FiltrationT]:
   self =>
 
-  // Members declared in org.appliedtopology.tda4j.SimplexFiltration
-  def filtrationValue: PartialFunction[
-    org.appliedtopology.tda4j.cells.Simplex[VertexT],
-    FiltrationT
-  ] =
-    filtrationValues
+  def filtrationValue: PartialFunction[Simplex[VertexT], FiltrationT] = filtrationValues
 
-  // Members declared in scala.collection.IterableOnce
-  def iterator: Iterator[org.appliedtopology.tda4j.cells.Simplex[VertexT]] =
-    simplices.iterator
+  def iterator: Iterator[Simplex[VertexT]] = simplices.iterator
 
-  // Members declared in scala.collection.SeqOps
-  def apply(i: Int): org.appliedtopology.tda4j.cells.Simplex[VertexT] =
-    simplices(i)
+  def apply(i: Int): Simplex[VertexT] = simplices(i)
 
   def length: Int = simplices.length
 
@@ -115,17 +135,19 @@ class ExplicitStreamBuilder[VertexT: Ordering, FiltrationT](using
     ]:
   self =>
 
-  val filterable: Filterable[FiltrationT] = filterableO match
-    case Some(f) => f
-    case None    =>
-      new Filterable[FiltrationT]:
-        val largest: FiltrationT = filtrationValues.maxBy(_._2)._2
-        val smallest: FiltrationT = filtrationValues.minBy(_._2)._2
-
   protected val filtrationValues: mutable.Map[Simplex[VertexT], FiltrationT] =
     new mutable.HashMap[Simplex[VertexT], FiltrationT]()
   protected val simplices: mutable.Queue[(FiltrationT, Simplex[VertexT])] =
     mutable.Queue[(FiltrationT, Simplex[VertexT])]()
+
+  // `def`s, not `val`s: this fallback is only ever queried after entries have been added (from `result()`'s
+  // `filterable`, used downstream), never at construction time, when `filtrationValues` is still empty.
+  val filterable: Filterable[FiltrationT] = filterableO match
+    case Some(f) => f
+    case None    =>
+      new Filterable[FiltrationT]:
+        def largest: FiltrationT = filtrationValues.maxBy(_._2)._2
+        def smallest: FiltrationT = filtrationValues.minBy(_._2)._2
 
   override def clear(): Unit =
     filtrationValues.clear()
@@ -182,16 +204,13 @@ trait StratifiedCellStream[CellT: OrderedCell, FiltrationT: Filterable] extends 
   /** Dimension-major: all of dimension `d` before any of dimension `d + 1`.
     *
     * MUST NOT be implemented as `Iterator.from(0).filter(iterateDimension.isDefinedAt)....fold(...)` (a real, confirmed
-    * bug this replaced -- see WORKLOG-cohomology.md and Homology.scala's own historical workaround comment at
-    * `PersistenceInChunksContext`): `Iterator.filter` on an infinite source can never prove "no more matches ahead", so
-    * once past the last dimension `iterateDimension` is defined for, it spins forever searching for a `d` that will
-    * never come. `.fold` compounds this -- being a strict terminal operation, it can't yield anything until the
-    * (already-hanging) source is exhausted. Worse, for a guard shaped like `d <= someBound` (true for negative `d`
-    * too), `Int` silently wrapping from `Int.MaxValue` to `Int.MinValue` after ~2^31 iterations makes the guard
-    * spuriously true again, so instead of hanging forever this can eventually resume and feed a huge negative `d`
-    * straight to `iterateDimension`, surfacing as a `BinomialCoefficient` range exception rather than a hang.
-    * `.takeWhile` instead stops at the first `d` this is undefined for and never asks about any `d` beyond it, relying
-    * on exactly the contiguous-domain contract documented on `iterateDimension` above.
+    * bug this replaced -- see `.claude/WORKLOG-cohomology.md`): `Iterator.filter` on an infinite source can never prove
+    * "no more matches ahead", so once past the last dimension `iterateDimension` is defined for, it spins forever
+    * searching for a `d` that will never come -- and `Int` silently wrapping from `Int.MaxValue` to `Int.MinValue`
+    * after ~2^31 iterations can eventually feed a huge negative `d` straight to `iterateDimension` instead, surfacing
+    * as a `BinomialCoefficient` range exception rather than a hang. `.takeWhile` instead stops at the first `d` this is
+    * undefined for and never asks about any `d` beyond it, relying on exactly the contiguous-domain contract documented
+    * on `iterateDimension` above.
     */
   override def iterator: Iterator[CellT] =
     Iterator
@@ -211,8 +230,6 @@ trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
 
   def currentDimensionCache: Seq[Simplex[VertexT]]
 
-  def pruneAllCofaces: Boolean
-
   def keepCriterion: PartialFunction[Simplex[VertexT], Boolean]
 
 class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDim: Int)
@@ -222,12 +239,10 @@ class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDi
   // EnumeratingCofaceSimplexStream's `d < metricSpace.size`, needed because a d-simplex needs d+1 distinct
   // vertices), which can be tighter than `maxDim` for a small point cloud. Calling `stream.iterateDimension(d)`
   // directly (not through `.applyOrElse`) when the wrapped stream isn't itself defined at `d` throws a raw
-  // MatchError rather than correctly reporting "undefined here" -- caught via `RipserCohomologySpec`'s
-  // `naiveBars` helper needing `maxDim + 1` on a 3-point fixture once RipserCohomologyContext's own
-  // maxDimension semantics were fixed (see .claude/WORKLOG-maxdim-semantics-fix.md). Checking
-  // `stream.iterateDimension.isDefinedAt(d)` here keeps this class's own contract (a d it declares undefined
-  // for is a d that was never going to have any cells anyway) rather than crashing on a d that merely exceeds
-  // what the wrapped stream can combinatorially produce.
+  // MatchError rather than correctly reporting "undefined here" (see .claude/WORKLOG-maxdim-semantics-fix.md).
+  // Checking `stream.iterateDimension.isDefinedAt(d)` here keeps this class's own contract (a d it declares
+  // undefined for is a d that was never going to have any cells anyway) rather than crashing on a d that merely
+  // exceeds what the wrapped stream can combinatorially produce.
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case d: Int if d >= 0 && d <= maxDim && stream.iterateDimension.isDefinedAt(d) => stream.iterateDimension(d)
   }
@@ -235,7 +250,6 @@ class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDi
   override def currentDimension: Int = stream.currentDimension
   override def lastDimensionCache: Seq[Simplex[Int]] = stream.lastDimensionCache
   override def currentDimensionCache: Seq[Simplex[Int]] = stream.currentDimensionCache
-  override def pruneAllCofaces: Boolean = stream.pruneAllCofaces
   override def keepCriterion: PartialFunction[Simplex[Int], Boolean] = stream.keepCriterion
   override def filtrationOrdering: Ordering[Simplex[Int]] = stream.filtrationOrdering
   override def filtrationValue: PartialFunction[Simplex[Int], Double] = stream.filtrationValue
@@ -243,27 +257,18 @@ class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDi
 class EnumeratingCofaceSimplexStream(
   val metricSpace: FiniteMetricSpace[Int],
   var keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
-  // None means "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below -- an ordinary
-  // Option default, not a magic-value sentinel: None is a constant, so it doesn't hit Scala 3's restriction on
-  // a default referencing an earlier same-list parameter (metricSpace) the way a literal
-  // `= metricSpace.minimumEnclosingRadius` default would. Beyond that radius every vertex is within range of
-  // some common apex, so the (unboundedly-many-dimensions) complex is a cone from that point on and
-  // contributes no further homology (Ripser paper, p. 412) -- real Ripser uses this exact quantity
-  // (enclosing_radius) as its own default threshold, routinely alongside a bounded dim_max, so this is not a
-  // truncation reserved for the unbounded-dimension case. Pass `Some(Double.PositiveInfinity)` explicitly for
-  // the old always-unbounded behavior. See CLAUDE.md/WORKLOG-mst-and-perf.md for the full derivation, including
-  // the load-bearing check that this default is exactly the untruncated barcode restricted to
-  // [0, minimumEnclosingRadius] -- the same property any other explicit threshold already satisfies, not a
-  // special case.
+  // None means "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below (a constant
+  // default, since a literal `= metricSpace.minimumEnclosingRadius` can't reference the earlier `metricSpace`
+  // parameter). Beyond that radius the complex is a cone from that point on and contributes no further
+  // homology (Ripser paper, p. 412; real Ripser uses this exact quantity, `enclosing_radius`, as its own
+  // default threshold). Pass `Some(Double.PositiveInfinity)` explicitly for the old always-unbounded behavior.
+  // See CLAUDE.md/WORKLOG-mst-and-perf.md.
   maxFiltrationValue: Option[Double] = None,
   // None means "use the default Vietoris-Rips diameter (max pairwise distance) functional," resolved just
-  // below. This class's own coface-generation logic (iterateDimension, keptByThresholdAndCriterion,
-  // sortedByFiltration) touches filtrationValue only as an opaque PartialFunction -- it has no VR-specific
-  // behavior of its own -- so a caller building a genuinely different filtered simplicial complex over the
-  // same vertex set (e.g. a Cech complex's circumradius functional, see CechCofaceSimplexStream) can supply
-  // its own here instead of duplicating this class's ordering/coface machinery. Named `filtrationValueOverride`,
-  // not `filtrationValue`, because `filtrationValue` is the class's own overridden member below -- a
-  // constructor parameter and a same-named class member can't coexist.
+  // below. This class's own coface-generation logic touches filtrationValue only as an opaque
+  // PartialFunction, so a caller building a genuinely different filtered complex over the same vertex set
+  // (e.g. Cech's circumradius functional, see CechCofaceSimplexStream) can supply its own here. Named
+  // `filtrationValueOverride`, not `filtrationValue`: the latter is the class's own overridden member below.
   filtrationValueOverride: Option[PartialFunction[Simplex[Int], Double]] = None
 ) extends CofaceSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]():
@@ -283,40 +288,26 @@ class EnumeratingCofaceSimplexStream(
 
   var currentDimensionCache: immutable.Queue[Simplex[Int]] = immutable.Queue.empty
 
-  override def pruneAllCofaces: Boolean = false
-
   // Memoized -- but ONLY the default MaximumDistanceFiltrationValue fallback, not a caller-supplied
   // filtrationValueOverride (e.g. CechFiltration already caches internally; double-wrapping it is pure
-  // waste, and a hypothetical future override might have its own memory-shape reasons not to be cached
-  // here too). CellularHomologyContext (via SimplicialHomologyContext) and
-  // CellularPersistenceInChunksContext both re-derive Ordering[CellT] = stream.filtrationOrdering and
-  // consult it on every chain-arithmetic comparison during reduction (Chain's SortedMap/PriorityQueue
-  // accumulator), not just once per cell during this stream's own up-front sorts -- an uncached
-  // filtrationValue means MaximumDistanceFiltrationValue's O(d^2) pairwise-distance recompute (plus its
-  // own SortedSet-iteration allocation) reruns on every single one of those comparisons. This is the SAME
-  // bug class root-caused and fixed for CubicalGridStream (see CLAUDE.md's "Naive-engine scaling"
-  // section) -- confirmed by direct measurement here too, not by analogy alone: a phase-separated
-  // profiling driver (VRLowDimProfileDriver, see .claude/WORKLOG-autonomous-session-2026-09-19.md) found
-  // deep-stack-attributed filtrationValue/filtrationOrdering cost at ~57% of total samples on a large,
-  // sparse, maxDim=1 Vietoris-Rips complex, and memoizing this one fallback alone cut the reduction
-  // phase's own wall-clock time by 32-46% across n=5000-20000.
+  // waste). CellularHomologyContext and CellularPersistenceInChunksContext both re-derive
+  // Ordering[CellT] = stream.filtrationOrdering and consult it on every chain-arithmetic comparison during
+  // reduction, not just once per cell during this stream's own up-front sorts -- an uncached filtrationValue
+  // means MaximumDistanceFiltrationValue's O(d^2) pairwise-distance recompute reruns on every one of those
+  // comparisons. Measured (`.claude/WORKLOG-autonomous-session-2026-09-19.md`): memoizing this one fallback
+  // cut reduction-phase wall-clock time by 32-46% across n=5000-20000 on a large, sparse, maxDim=1 complex.
   //
   // This is NOT a reversal of RipserCohomologyContext's own `memoizeFiltrationValue = false` default: that
-  // decision is about a stream `RipserCohomologyContext`/`PackedRipserCohomologyContext` NEVER fully
-  // materialize (a genuinely unbounded-in-practice VR complex, by design), where `insertionDiameter` gives
-  // an O(d) incremental alternative that makes not caching viable in the first place. Neither condition
-  // holds here: `CellularHomologyContext.HomologyState.CellIterator`
-  // (`stream.iterator.toVector.sorted(...)`) and `CellularPersistenceInChunksContext.HomologyState.
-  // allCells` (`0.to(internalMaxDim).iterator.flatMap(...).toVector`) BOTH already eagerly materialize
-  // every cell of the stream into one in-memory Vector before any reduction starts, so a cache bounded by
-  // that same already-resident cell count adds no new memory-frugality concern -- and there is no
-  // equivalent incremental formula for the general max-pairwise-distance functional this stream computes
-  // by default (that's specifically what `insertionDiameter` provides for Ripser's OWN cofacet-enumeration
-  // shape, not something this stream's coface-generation loop can reuse).
+  // decision is about a stream that never fully materializes (a genuinely unbounded-in-practice VR complex,
+  // by design), where `insertionDiameter` gives an O(d) incremental alternative that makes not caching
+  // viable in the first place. Neither condition holds here -- both engines already eagerly materialize
+  // every cell into one in-memory Vector before reduction starts, so a cache bounded by that same
+  // already-resident cell count adds no new memory concern, and there is no incremental formula for the
+  // general max-pairwise-distance functional this stream computes by default.
+  //
   // TrieMap, not mutable.HashMap: a plain HashMap's getOrElseUpdate is not safe to call concurrently, and
   // parallelFiltrationValue's pre-warm step (below) does exactly that -- TrieMap's own getOrElseUpdate is a
-  // genuine drop-in (same signature, same call sites need no change) backed by a lock-free Ctrie, safe for
-  // concurrent reads and writes alike. See .claude/WORKLOG-parallelization-survey.md item 2 (Cech).
+  // genuine drop-in backed by a lock-free Ctrie. See .claude/WORKLOG-parallelization-survey.md item 2 (Cech).
   private val filtrationValueCache = TrieMap.empty[Simplex[Int], Double]
 
   override val filtrationValue: PartialFunction[Simplex[Int], Double] =
@@ -328,85 +319,48 @@ class EnumeratingCofaceSimplexStream(
     }
 
   /** Filtration value, reversed (so smaller-under-this-ordering means YOUNGER, matching `SimplexStream`'s own
-    * established convention -- see `FilteredSimplexOrdering`, and `CellularHomologyContext`'s class doc, which relies
-    * on `leadingCell` meaning "youngest" wherever a stream's `filtrationOrdering` backs `Chain`'s pivot machinery),
-    * then dimension, then COLEXICOGRAPHIC order on the vertex set (via `simplexIndexing`'s own
-    * combinatorial-number-system index, not a fresh comparator -- this is exactly the "lexicographically refined"
-    * tie-break Ripser's own apparent-pairs machinery (Definition 3.2/Proposition 3.9, see `RipserCohomologyContext`) is
-    * defined in terms of, so using it here keeps this stream's ordering consistent with every other Ripser-flavored
-    * piece of this codebase, not just internally self-consistent -- deliberately not the plain lexicographic tie-break
-    * `FilteredSimplexOrdering` uses, which is the more generic, non-Ripser-specific default.
+    * established convention), then dimension, then COLEXICOGRAPHIC order on the vertex set (via `simplexIndexing`'s own
+    * combinatorial-number-system index) -- the "lexicographically refined" tie-break Ripser's own apparent-pairs
+    * machinery (Definition 3.2/Proposition 3.9, see `RipserCohomologyContext`) is defined in terms of, so using it here
+    * keeps this stream's ordering consistent with every other Ripser-flavored piece of this codebase, not just
+    * internally self-consistent -- deliberately not the plain lexicographic tie-break `FilteredSimplexOrdering` uses.
     *
-    * Fixes a real, previously-confirmed bug (see WORKLOG-cohomology.md for the full repro): the prior
-    * `Ordering.by(filtrationValue)` had NO tie-break at all, so two DIFFERENT simplices tied at the same filtration
-    * value compared as *equal* -- not a total order. This happens by construction (not rarely) on any Vietoris-Rips
-    * complex with a triangle, since a triangle's filtration value always equals that of its own longest edge.
-    * `CellularHomologyContext` bakes a stream's `filtrationOrdering` into `Chain.reduceBy`'s `SortedMap`, so two cells
-    * that compare equal collide as a single map key and the reduction silently garbles pairings for that complex.
+    * Fixes a real, previously-confirmed bug (`.claude/WORKLOG-cohomology.md`): a bare `Ordering.by(filtrationValue)`
+    * has no tie-break at all, so two DIFFERENT simplices tied at the same filtration value compare as *equal* -- not a
+    * total order. This happens by construction on any Vietoris-Rips complex with a triangle, since a triangle's
+    * filtration value always equals that of its own longest edge; `CellularHomologyContext` bakes a stream's
+    * `filtrationOrdering` into `Chain.reduceBy`'s `SortedMap`, so two cells that compare equal collide as a single map
+    * key and the reduction silently garbles pairings for that complex.
     *
-    * `iterateDimension` sorts each dimension's bucket by `filtrationOrdering.reverse` (oldest-first, the direction
-    * Algorithm 1 needs to process columns in) -- this is deliberately `.reverse` on this SAME `Ordering` object, not an
-    * independently-built "oldest first" comparator. A previous attempt used a separately-built ordering (via the
-    * structurally similar `FilteredSimplexOrdering`) for iteration while this ordering backed pivot selection; the two
-    * disagreed on tie-break direction, so a coface could sort before its own tied facet, corrupting `Chain.reduceBy`'s
-    * pivot table exactly like the original no-tie-break bug did (see WORKLOG-cohomology.md). The general lesson: a
-    * stream's iteration order and its `filtrationOrdering` (pivot order) must be THE SAME total order (one the
-    * consistent reverse of the other) -- Algorithm 1 requires columns and rows to be indexed by one shared filtration
-    * order, not merely "each independently a valid total order." `.reverse` on this object, rather than a second
-    * hand-written comparator, is what guarantees that.
+    * `iterateDimension` sorts each dimension's bucket by `filtrationOrdering.reverse` -- deliberately `.reverse` on
+    * this SAME `Ordering` object, not an independently-built "oldest first" comparator: two individually-valid
+    * orderings that disagree on tie-break direction let a coface sort before its own tied facet, corrupting
+    * `Chain.reduceBy`'s pivot table the same way the no-tie-break bug did. A stream's iteration order and its
+    * `filtrationOrdering` (pivot order) must be THE SAME total order, one the consistent reverse of the other.
     */
-  override val filtrationOrdering: Ordering[Simplex[Int]] = new Ordering[Simplex[Int]]:
-    def compare(x: Simplex[Int], y: Simplex[Int]): Int =
-      // lazy: simplexIndexing sorts a list internally (see SimplexIndexing.apply), so this must not run
-      // when the filtration-value comparison below already decides the result -- a real, profiler-confirmed
-      // cost (see sortedByFiltration's own doc and CLAUDE.md) on every PriorityQueue/SortedMap comparison
-      // this ordering backs, not just during a sort.
-      lazy val tieBreak: Int =
-        Ordering.Int.compare(x.size, y.size) match
-          case 0  => Ordering.Long.compare(simplexIndexing(x), simplexIndexing(y))
-          case dc => dc
-      if filtrationValue.isDefinedAt(x) && filtrationValue.isDefinedAt(y) then
-        java.lang.Double.compare(filtrationValue(y), filtrationValue(x)) match
-          case 0  => tieBreak
-          case fc => fc
-      else tieBreak
-
-  var finishedCurrent: Boolean = false
+  override val filtrationOrdering: Ordering[Simplex[Int]] =
+    FiltrationOrdering.canonical(filtrationValue, _.size, Ordering.by(simplexIndexing(_)))
 
   lazy val simplexIndexing: SimplexIndexing = SimplexIndexing(metricSpace.size)
 
   /** Sorts `cells` by `filtrationOrdering.reverse` -- semantically identical to `.sorted(using
     * filtrationOrdering.reverse)`, but memoizes each cell's filtrationValue/simplexIndexing for the duration of this
-    * one call instead of letting TimSort's O(m log m) comparisons each recompute both from scratch. Confirmed via
-    * jstack sampling during EngineComparisonBenchmarkSpec (see CLAUDE.md) to be the dominant cost of materializing a
-    * dimension's bucket: `MaximumDistanceFiltrationValue.apply` is O(d^2) with SortedSet/List allocation, and
-    * `simplexIndexing`'s tie-break sorts a list -- both pure, side-effect-free functions of the cell alone, so caching
-    * them for this one sort changes nothing about the resulting order, only how many times each is computed. The cache
-    * is local to this call, not stored on the stream instance, so it stays bounded to one dimension's bucket and never
-    * grows across the stream's lifetime -- deliberately NOT a stream-lifetime filtrationValue cache like
-    * `RipserCohomologyContext.memoizeFiltrationValue`, which the project lead specifically declined to default on
-    * there, for memory-frugality reasons that apply here too (see CLAUDE.md). This does not touch `filtrationOrdering`
-    * itself or its tie-break semantics -- it delegates to the exact same compare logic above, just memoized, so it
-    * cannot silently diverge from it.
+    * one call instead of letting TimSort's O(m log m) comparisons each recompute both from scratch
+    * (`MaximumDistanceFiltrationValue.apply` is O(d^2); `simplexIndexing`'s tie-break sorts a list). Both are pure,
+    * side-effect-free functions of the cell alone, so caching them for this one sort changes nothing about the
+    * resulting order, only how many times each is computed. The cache is local to this call, not stored on the stream
+    * instance, so it stays bounded to one dimension's bucket -- deliberately NOT a stream-lifetime cache like
+    * `RipserCohomologyContext.memoizeFiltrationValue`, off there for the same memory-frugality reasons. Delegates to
+    * the exact same `FiltrationOrdering.canonical` shape above, just memoized, so it cannot silently diverge from it.
     */
   protected def sortedByFiltration(cells: IterableOnce[Simplex[Int]]): Vector[Simplex[Int]] =
     val fvCache = mutable.HashMap.empty[Simplex[Int], Option[Double]]
     val ixCache = mutable.HashMap.empty[Simplex[Int], Long]
-    def fv(s: Simplex[Int]): Option[Double] = fvCache.getOrElseUpdate(s, filtrationValue.lift(s))
-    def ix(s: Simplex[Int]): Long = ixCache.getOrElseUpdate(s, simplexIndexing(s))
-    val memoOrdering: Ordering[Simplex[Int]] = new Ordering[Simplex[Int]]:
-      def compare(x: Simplex[Int], y: Simplex[Int]): Int =
-        lazy val tieBreak: Int =
-          Ordering.Int.compare(x.size, y.size) match
-            case 0  => Ordering.Long.compare(ix(x), ix(y))
-            case dc => dc
-        (fv(x), fv(y)) match
-          case (Some(a), Some(b)) =>
-            java.lang.Double.compare(b, a) match
-              case 0  => tieBreak
-              case fc => fc
-          case _ => tieBreak
-    cells.iterator.toVector.sorted(using memoOrdering.reverse)
+    val memoFv: PartialFunction[Simplex[Int], Double] = new PartialFunction[Simplex[Int], Double]:
+      def isDefinedAt(s: Simplex[Int]): Boolean = fvCache.getOrElseUpdate(s, filtrationValue.lift(s)).isDefined
+      def apply(s: Simplex[Int]): Double = fvCache.getOrElseUpdate(s, filtrationValue.lift(s)).get
+    val memoTieBreak: Ordering[Simplex[Int]] = Ordering.by(s => ixCache.getOrElseUpdate(s, simplexIndexing(s)))
+    cells.iterator.toVector.sorted(using FiltrationOrdering.canonical(memoFv, _.size, memoTieBreak).reverse)
 
   /** A candidate is kept iff both the caller's own `keepCriterion` AND the threshold accept it -- one place deciding
     * "is this cell kept," per `sortedByFiltration`'s own note about not duplicating filtration-value lookups across
@@ -441,19 +395,14 @@ class RipserCofaceSimplexStream(
   },
   maxFiltrationValue: Option[Double] = None,
   // See EnumeratingCofaceSimplexStream's identical parameter -- this class's own iterateDimension override
-  // (the dimension-by-dimension "extend accepted survivors only" coface loop) touches filtrationValue only
-  // through the inherited keptByThresholdAndCriterion/sortedByFiltration, so it carries over unchanged to any
-  // filtration functional supplied here, VR-specific or not.
+  // touches filtrationValue only through the inherited keptByThresholdAndCriterion/sortedByFiltration, so it
+  // carries over unchanged to any filtration functional supplied here, VR-specific or not.
   filtrationValueOverride: Option[PartialFunction[Simplex[Int], Double]] = None,
   // Pre-warm filtrationValue for one dimension's whole candidate list in parallel before the sequential
-  // filter+sort below touches it -- see .claude/WORKLOG-parallelization-survey.md item 2 (Cech, the
-  // motivating case, though this applies to plain VR via this class too since both share this method).
-  // Safe because every candidate at dimension d is generated from lastDimensionCache (dimension d-1,
-  // already fully resolved and frozen), so each candidate's own filtration-value computation -- Cech's
-  // Miniball solve plus its facet-floor lookup, or the default MaximumDistanceFiltrationValue -- reads only
-  // already-complete lower-dimension state; the two caches this can write to concurrently
-  // (filtrationValueCache above, CechFiltration's own) are both TrieMap-backed specifically so this is safe.
-  // Defaults to false: zero behavior change unless explicitly requested.
+  // filter+sort below touches it (`.claude/WORKLOG-parallelization-survey.md` item 2, Cech). Safe because
+  // every candidate at dimension d is generated from lastDimensionCache (dimension d-1, already fully
+  // resolved and frozen), so each candidate's own filtration-value computation reads only already-complete
+  // lower-dimension state, and the caches this writes to concurrently are TrieMap-backed. Defaults to false.
   parallelFiltrationValue: Boolean = false
 ) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion, maxFiltrationValue, filtrationValueOverride):
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
@@ -492,6 +441,11 @@ class RipserCofaceSimplexStream(
       currentDimensionCache.iterator
   }
 
+/** An alternate Vietoris-Rips coface-generation strategy, independent of `EnumeratingCofaceSimplexStream`'s
+  * combinatorial-number-system enumeration: cofaces are generated "in order" directly from the metric space's own
+  * structure. A cross-validation baseline for the canonical VR streams, not a speed-competitive production engine in
+  * its own right.
+  */
 class InorderCofaceSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
@@ -614,16 +568,9 @@ class InorderCofaceSimplexStream(
 class IncrementalVietorisRipsSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
   val maxDimension: Int,
-  // None means "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below -- an ordinary
-  // Option default, not a magic-value sentinel: None is a constant, so it doesn't hit Scala 3's restriction on
-  // a default referencing an earlier same-list parameter (metricSpace) the way a literal
-  // `= metricSpace.minimumEnclosingRadius` default would. Beyond metricSpace.minimumEnclosingRadius, every
-  // vertex is within range of every other, so the VR complex is a cone from that point on -- contractible,
-  // contributing no further homology (Ripser paper, p. 412; FiniteMetricSpace.minimumEnclosingRadius's own
-  // doc). Defaulting here rather than +Infinity is a free optimization, NOT a truncation: unlike a genuine
-  // sparse-Rips cutoff (which drops real bars, see RipserCohomologyContext's maxFiltrationValue), this default
-  // provably computes the exact same barcode over fewer simplices -- pass `Some(Double.PositiveInfinity)`
-  // explicitly to opt out.
+  // Same default as EnumeratingCofaceSimplexStream's identical parameter (see there): resolved to
+  // metricSpace.minimumEnclosingRadius, a free optimization here (this class's VR complex is provably
+  // unaffected below that radius), not a truncation. Pass `Some(Double.PositiveInfinity)` to opt out.
   maxFiltrationValue: Option[Double] = None,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
   /** Exposed purely so `IncrementalVietorisRipsSpec` can pin that `L` is a non-load-bearing optimization on top of

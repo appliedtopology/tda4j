@@ -8,9 +8,6 @@ package org.appliedtopology.tda4j
 package barcode
 
 import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
 import org.apache.commons.math3.linear.*
 
 sealed trait BarcodeEndpoint[FiltrationT: Ordering]:
@@ -24,10 +21,10 @@ case class PositiveInfinity[FiltrationT: Ordering]() extends BarcodeEndpoint[Fil
 case class NegativeInfinity[FiltrationT: Ordering]() extends BarcodeEndpoint[FiltrationT]:
   override def flip: BarcodeEndpoint[FiltrationT] = this
   override val isFinite = false
-case class OpenEndpoint[FiltrationT: Ordering](val value: FiltrationT) extends BarcodeEndpoint[FiltrationT]:
+case class OpenEndpoint[FiltrationT: Ordering](value: FiltrationT) extends BarcodeEndpoint[FiltrationT]:
   override def flip: BarcodeEndpoint[FiltrationT] = ClosedEndpoint(value)
   override val isFinite = true
-case class ClosedEndpoint[FiltrationT: Ordering](val value: FiltrationT) extends BarcodeEndpoint[FiltrationT]:
+case class ClosedEndpoint[FiltrationT: Ordering](value: FiltrationT) extends BarcodeEndpoint[FiltrationT]:
   override def flip: BarcodeEndpoint[FiltrationT] = OpenEndpoint(value)
   override val isFinite = true
 
@@ -37,8 +34,14 @@ given [FiltrationT: Ordering as ord] => Ordering[BarcodeEndpoint[FiltrationT]]:
     x: BarcodeEndpoint[FiltrationT],
     y: BarcodeEndpoint[FiltrationT]
   ) = x match
-    case NegativeInfinity()     => -1
-    case PositiveInfinity()     => +1
+    case NegativeInfinity() =>
+      y match
+        case NegativeInfinity() => 0
+        case _                  => -1
+    case PositiveInfinity() =>
+      y match
+        case PositiveInfinity() => 0
+        case _                  => +1
     case ClosedEndpoint(xvalue) =>
       y match
         case NegativeInfinity()     => +1
@@ -66,10 +69,10 @@ given [FiltrationT: Ordering as ord] => Ordering[BarcodeEndpoint[FiltrationT]]:
   *   Type of the annotation (we would expect this to be [[Chain]]).
   */
 case class PersistenceBar[FiltrationT: Ordering, AnnotationT](
-  val dim: Int,
-  val lower: BarcodeEndpoint[FiltrationT],
-  val upper: BarcodeEndpoint[FiltrationT],
-  val annotation: Option[AnnotationT] = None
+  dim: Int,
+  lower: BarcodeEndpoint[FiltrationT],
+  upper: BarcodeEndpoint[FiltrationT],
+  annotation: Option[AnnotationT] = None
 ):
   override def toString: String =
     val open: String = lower match
@@ -128,9 +131,19 @@ object PersistenceBar:
 class BarcodeContext[FiltrationT: Ordering]():
   type Bar = PersistenceBar[FiltrationT, Nothing]
 
-  /** Trying to create comfortable notation for inputting explicit barcodes....
-    *
-    * 3 dim 2 clop 5 3 dim 2 clcl 5 3 dim 2 opop 5 3 dim 2 opcl 5 3 dim infop 5 3 dim 2 clinf
+  /** Infix notation for hand-building explicit persistence bars: `lower <infix> upper` constructs a `BarAssembly`,
+    * which `dim(d)(...)` then turns into a `PersistenceBar`. Each infix method's name spells out its endpoint kinds in
+    * birth-then-death order: `cl` = closed, `op` = open, `inf` = infinite (only ever at the far end -- negative
+    * infinity as a lower bound, positive infinity as an upper bound). So `a clop b` is the closed-open bar `[a, b)`
+    * (the usual half-open persistence interval, and what the bare `bc` alias also means); `a clcl b` is `[a, b]`;
+    * `a opop b` is `(a, b)`; `a opcl b` is `(a, b]`; `clinf(a)`/`opinf(a)` are `[a, ∞)`/`(a, ∞)`; `infcl(b)`/`infop(b)`
+    * are `(-∞, b]`/`(-∞, b)`.
+    * {{{
+    * val ctx = BarcodeContext[Double]()
+    * import ctx.*
+    * ctx.dim(1)(3.0 clop 5.0)   // PersistenceBar(1, ClosedEndpoint(3.0), OpenEndpoint(5.0))
+    * ctx.dim(0)(clinf(2.0))     // PersistenceBar(0, ClosedEndpoint(2.0), PositiveInfinity())
+    * }}}
     */
   class BarAssembly(
     val lower: BarcodeEndpoint[FiltrationT],
@@ -158,8 +171,12 @@ class BarcodeContext[FiltrationT: Ordering]():
   def dim(d: Int)(ba: BarAssembly) =
     new PersistenceBar[FiltrationT, Nothing](d, ba.lower, ba.upper)
 
-class Barcode[FiltrationT: {Ordering, Numeric}, AnnotationT]:
-  def isMap(
+/** Stateless: every method here is a pure function of its arguments, so this is an `object`, not a class you
+  * instantiate per call (as it was before, `Barcode[F, A]().method(...)`, with no state ever carried between the
+  * construction and the one call).
+  */
+object Barcode:
+  def isMap[FiltrationT: Ordering, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
     matrix: RealMatrix
@@ -181,7 +198,7 @@ class Barcode[FiltrationT: {Ordering, Numeric}, AnnotationT]:
       ).lower // target must be born before source dies
   ).forall(b => b)
 
-  def imageMatrix(
+  def imageMatrix[FiltrationT: Ordering, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
     matrix: RealMatrix
@@ -195,14 +212,10 @@ class Barcode[FiltrationT: {Ordering, Numeric}, AnnotationT]:
     for
       birth <- 0 until births.size
       death <- 0 until deaths.size
-    yield imagematrix.setEntry(
-      birth,
-      death,
-      matrixT.getEntry(birthOrder(birth), deathOrder(death))
-    )
+    do imagematrix.setEntry(birth, death, matrixT.getEntry(birthOrder(birth), deathOrder(death)))
     reduceMatrix(imagematrix)
 
-  def image(
+  def image[FiltrationT: Ordering, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
     matrix: RealMatrix
@@ -218,7 +231,7 @@ class Barcode[FiltrationT: {Ordering, Numeric}, AnnotationT]:
       source(birth).annotation
     )).toList
 
-  def kernel(
+  def kernel[FiltrationT, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
     matrix: RealMatrix
@@ -233,7 +246,7 @@ class Barcode[FiltrationT: {Ordering, Numeric}, AnnotationT]:
       cokernel(dualSource, dualTarget, matrix.transpose())(using ord = ord.reverse)
     cokernelIntervals.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
 
-  def cokernelMatrix(
+  def cokernelMatrix[FiltrationT, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
     matrix: RealMatrix
@@ -248,17 +261,13 @@ class Barcode[FiltrationT: {Ordering, Numeric}, AnnotationT]:
     for
       s <- 0 until source.size
       t <- 0 until target.size
-    yield cokernelmatrix.setEntry(
-      t,
-      s,
-      matrix.getEntry(birthOrder(t), deathOrder(s))
-    )
+    do cokernelmatrix.setEntry(t, s, matrix.getEntry(birthOrder(t), deathOrder(s)))
     (0 until target.size).foreach { t =>
       cokernelmatrix.setEntry(birthOrder(t), deathOrder(source.size + t), 1.0)
     }
     reduceMatrix(cokernelmatrix)
 
-  def cokernel(
+  def cokernel[FiltrationT, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
     matrix: RealMatrix
@@ -288,18 +297,19 @@ class Barcode[FiltrationT: {Ordering, Numeric}, AnnotationT]:
       if pivot >= 0
       nextcol <- col + 1 until matrix.getColumnDimension
       if matrix.getEntry(pivot, nextcol) != 0
-    yield matrix.setColumnMatrix(
-      nextcol,
-      matrix
-        .getColumnMatrix(nextcol)
-        .subtract(
-          matrix
-            .getColumnMatrix(col)
-            .scalarMultiply(
-              matrix.getEntry(pivot, nextcol) / matrix.getEntry(pivot, col)
-            )
-        )
-    )
+    do
+      matrix.setColumnMatrix(
+        nextcol,
+        matrix
+          .getColumnMatrix(nextcol)
+          .subtract(
+            matrix
+              .getColumnMatrix(col)
+              .scalarMultiply(
+                matrix.getEntry(pivot, nextcol) / matrix.getEntry(pivot, col)
+              )
+          )
+      )
     matrix
 
   def pivotsOf(matrix: RealMatrix): Seq[(Int, Int)] =
@@ -308,8 +318,6 @@ class Barcode[FiltrationT: {Ordering, Numeric}, AnnotationT]:
       pivot = matrix.getColumn(col).iterator.toSeq.lastIndexWhere(_ != 0)
       if pivot >= 0
     yield (pivot, col)
-
-//type Barcode[FiltrationT] = List[PersistenceBar[FiltrationT, Nothing]]
 
 type BarcodeGenerators[FiltrationT, CellT, CoefficientT] =
   List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]]

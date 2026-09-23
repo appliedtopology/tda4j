@@ -59,7 +59,7 @@ import scala.collection.parallel.CollectionConverters.*
  *    AlphaComplexDQP.weighted(pts, weights, maxPower = 0.12, maxDimension = 3)
  *    AlphaComplexDQP(PowerDistance.fromSquaredDistances(d2), 0.12, 3, AlphaDQPSettings())
  *
- *    // AlphaShapeDQP (what Alpha(pts, "DQP") constructs) always uses
+ *    // AlphaShapeDQP (what AlphaShapes(pts, "DQP") constructs) always uses
  *    // maxRadius = Infinity to match HelixDelaunay's always-untruncated
  *    // behaviour -- call AlphaComplexDQP.euclidean/.weighted/.apply directly,
  *    // as above, for an actually radius-truncated complex.
@@ -153,16 +153,16 @@ object PowerDistance:
 
   /** Sites given by coordinates; squared distances computed on demand. Memory O(N·m), time O(m) per squared distance.
     */
-  def euclidean(points: Array[Array[Double]], weights: Array[Double] = null): PowerDistance =
+  def euclidean(points: Array[Array[Double]], weights: Option[Array[Double]] = None): PowerDistance =
     require(points.nonEmpty, "empty point set")
     val m = points(0).length
     require(points.forall(_.length == m), "ragged coordinate array")
-    require(weights == null || weights.length == points.length, "weights/points length mismatch")
+    require(weights.forall(_.length == points.length), "weights/points length mismatch")
     new PowerDistance:
       def size: Int = points.length
       override def ambientDimension: Int = m
       override def coordinate(i: Int, k: Int): Double = points(i)(k)
-      override def weight(i: Int): Double = if weights == null then 0.0 else weights(i)
+      override def weight(i: Int): Double = weights.map(_(i)).getOrElse(0.0)
       def squaredDistance(i: Int, j: Int): Double =
         points(i)
           .zip(points(j))
@@ -195,10 +195,10 @@ object PowerDistance:
   /** Sites given by an explicit squared-distance matrix (no coordinates: the witness map will be unavailable,
     * everything else works).
     */
-  def fromSquaredDistances(d2: Array[Array[Double]], weights: Array[Double] = null): PowerDistance =
+  def fromSquaredDistances(d2: Array[Array[Double]], weights: Option[Array[Double]] = None): PowerDistance =
     new PowerDistance:
       def size: Int = d2.length
-      override def weight(i: Int): Double = if weights == null then 0.0 else weights(i)
+      override def weight(i: Int): Double = weights.map(_(i)).getOrElse(0.0)
       def squaredDistance(i: Int, j: Int): Double = d2(i)(j)
 
 end PowerDistance
@@ -234,6 +234,11 @@ end PowerDistance
   *   violations that would upset a persistence algorithm.
   * @param parallel
   *   run the per-vertex loop on the common ForkJoinPool. Output is deterministic.
+  * @param verbose
+  *   print a diagnostic to stderr each time a candidate is dropped for QP non-convergence (see `solveAtVertex`'s
+  *   "defense in depth" comment). Off by default: this is an accepted, recurring limitation of the active-set method on
+  *   near-degenerate configurations, not an actionable-every-time event, so a caller running many builds (e.g. a
+  *   property test) would otherwise get stderr spam proportional to trial count rather than a signal worth reading.
   */
 final case class AlphaDQPSettings(
   rankTolerance: Double = 1e-6,
@@ -243,7 +248,8 @@ final case class AlphaDQPSettings(
   maxIterationsPerQP: Int = 0,
   workingSetCapacity: Int = 0,
   enforceMonotonicity: Boolean = true,
-  parallel: Boolean = false
+  parallel: Boolean = false,
+  verbose: Boolean = false
 )
 
 // ===========================================================================
@@ -751,12 +757,15 @@ final class AlphaComplexDQP(
       chi + (if (k % 2) == 0 then cells.size else -cells.size)
     }
 
-  /** Filtration order: increasing weight, breaking ties by dimension so that faces precede cofaces, then
-    * lexicographically for determinism.
+  /** Filtration order: increasing weight, breaking ties by dimension so that faces precede cofaces, then by
+    * `simplexOrdering[Int]` (the same colex/lex vertex-set order every other Ripser-flavored tie-break in this codebase
+    * uses) for determinism -- not a string comparison on `c.show`, which sorted "10" before "9" and gave no guarantee
+    * of agreeing with any other ordering in the codebase.
     */
   lazy val cells: IndexedSeq[Simplex[Int]] =
-    cellsByDim.flatten
-      .sortBy(c => (weights.getOrElse(c, 0.0), c.size, c.show))
+    cellsByDim.flatten.sorted(using
+      Ordering.by[Simplex[Int], (Double, Int)](c => (weights.getOrElse(c, 0.0), c.size)).orElse(simplexOrdering[Int])
+    )
 
   /** (simplex, filtration value) pairs in filtration order. */
   def barcodeInput: IndexedSeq[(Simplex[Int], Double)] =
@@ -791,7 +800,7 @@ object AlphaComplexDQP:
     maxDimension: Int,
     settings: AlphaDQPSettings = AlphaDQPSettings()
   ): AlphaComplexDQP =
-    apply(PowerDistance.euclidean(points, powerWeights), maxPower, maxDimension, settings)
+    apply(PowerDistance.euclidean(points, Some(powerWeights)), maxPower, maxDimension, settings)
 
   def apply(
     space: PowerDistance,
@@ -819,7 +828,7 @@ class AlphaComplexDQPBuilder(
   val n = space.size
 
   /** One record produced by a single successful QP solve. */
-  final case class Found(cell: Simplex[Int], weight: Double, witness: Array[Double])
+  final case class Found(cell: Simplex[Int], weight: Double, witness: Option[Array[Double]])
 
   /** Line 1-2: the one-skeleton of the Cech complex of the weighted ball cover, Cech(S, p, a1).
     *
@@ -906,7 +915,7 @@ class AlphaComplexDQPBuilder(
       // breaks monotonicity against every edge incident to a nonzero-weight vertex.
       // Confirmed by AlphaComplexDQPWeightedSpec.
       weights(f) = -space.weight(x)
-      witnesses(f) = coordsOf(x)
+      coordsOf(x).foreach(arr => witnesses(f) = arr)
 
     for k <- 1 to maxDimension do
       val candidates: mutable.Map[Int, mutable.IndexedBuffer[Simplex[Int]]] =
@@ -933,7 +942,7 @@ class AlphaComplexDQPBuilder(
         founds.foreach { (f: Found) =>
           byDim(k) += f.cell
           weights(f.cell) = f.weight
-          witnesses(f.cell) = f.witness
+          f.witness.foreach(arr => witnesses(f.cell) = arr)
         }
       }
 
@@ -1081,9 +1090,10 @@ class AlphaComplexDQPBuilder(
                 // infeasibility determination -- and keep going. This is
                 // meant to catch configurations *beyond* the ones already
                 // characterised, not to paper over a known, fixable bug.
-                System.err.println(
-                  s"AlphaComplexDQP: dropping candidate ${rest + x} (base vertex $x) after non-convergence: ${e.getMessage}"
-                )
+                if settings.verbose then
+                  System.err.println(
+                    s"AlphaComplexDQP: dropping candidate ${rest + x} (base vertex $x) after non-convergence: ${e.getMessage}"
+                  )
                 Double.PositiveInfinity
           // cStar.isFinite (not just !cStar.isNaN): DualQP.solve uses
           // Double.PositiveInfinity as its sentinel for "infeasible, discard".
@@ -1099,9 +1109,12 @@ class AlphaComplexDQPBuilder(
     found
   end solveAtVertex
 
-  /** KKT conditions (12): Phi(sigma) = y* = x - sum_i lambda_i (x_i - x). */
-  def witnessOf(x: Int, nb: Array[Int], qp: DualQP): Array[Double] =
-    if !space.hasCoordinates then null
+  /** KKT conditions (12): Phi(sigma) = y* = x - sum_i lambda_i (x_i - x). `None` when the input carried no coordinates,
+    * matching `witness`'s own contract -- must stay `None`, not `null`: storing `null` under an otherwise-present map
+    * key makes `.get` return `Some(null)`, not `None`.
+    */
+  def witnessOf(x: Int, nb: Array[Int], qp: DualQP): Option[Array[Double]] =
+    if !space.hasCoordinates then None
     else
       val d = space.ambientDimension
       val y = Array.tabulate(d)(space.coordinate(x, _))
@@ -1110,13 +1123,13 @@ class AlphaComplexDQPBuilder(
         if lamT != 0.0 then
           val site = nb(qp.activeIndex(t))
           for k <- 0 until d do y(k) -= lamT * (space.coordinate(site, k) - space.coordinate(x, k))
-      y
+      Some(y)
 
-  def coordsOf(x: Int): Array[Double] =
-    if !space.hasCoordinates then null
+  def coordsOf(x: Int): Option[Array[Double]] =
+    if !space.hasCoordinates then None
     else
       val d = space.ambientDimension
-      Array.tabulate(d)(space.coordinate(x, _))
+      Some(Array.tabulate(d)(space.coordinate(x, _)))
 
   /** w is monotone along faces by construction -- the QP for a face has strictly fewer equality constraints, hence a
     * larger feasible set and a smaller optimum -- but floating point can violate it by an ulp or two, which some
@@ -1177,7 +1190,7 @@ class AlphaShapeDQP(val points: Array[Array[Double]]) extends AlphaShapes:
   // NOTE: alphaComplexDQP.filtrationValue is the *squared* radius (the paper's
   // "power", Definition 10) -- see radiusOf. HelixDelaunay.filtrationValue,
   // its sibling under the shared AlphaShapes contract, returns the actual
-  // (unsquared) circumradius, and Alpha(pts, dispatch) is designed to be
+  // (unsquared) circumradius, and AlphaShapes(pts, dispatch) is designed to be
   // dispatch-interchangeable (see AlphaComplexSpec, which runs identical
   // property checks against both). Go through radiusOf here so both
   // implementations report the same quantity in the same units.

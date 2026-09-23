@@ -10,12 +10,9 @@ import scala.reflect.ClassTag
   *
   * A `trait`, mixed into `object Simplex` (`Simplex.scala`), rather than a top-level `extension` clause: Scala 3 does
   * not allow same-named top-level extension methods for unrelated receiver types across different files in one package
-  * (confirmed empirically, not merely suspected -- see `.claude/WORKLOG-cubical.md`'s "naming collision" section and
-  * `.claude/WORKLOG-extension-companion-objects.md`). Routing through the opaque type's own companion object instead
+  * (`.claude/WORKLOG-extension-companion-objects.md`). Routing through the opaque type's own companion object instead
   * scopes lookup by nominal receiver type, so a future opaque type's extensions can reuse a name like
-  * `show`/`underlying` without colliding with this one -- confirmed by a standalone `scala-cli` repro mirroring this
-  * exact shape (generic opaque type, non-generic companion, extension body split across two files) before this file was
-  * changed, not merely reasoned through.
+  * `show`/`underlying` without colliding with this one.
   */
 trait SimplexOps:
   extension [VertexT](spx: Simplex[VertexT])
@@ -89,29 +86,14 @@ trait SimplexOps:
       spx.underlying.toIndexedSeq.zipAll(that, thisElem, thatElem)
     def zipWithIndex: IndexedSeq[(VertexT, Int)] = spx.underlying.toIndexedSeq.zipWithIndex
 
-/** `min`/`max`, unlike everything else in `SimplexOps` above, are kept as a plain TOP-LEVEL extension clause rather
-  * than moved into the trait (hence not routed through `object Simplex`'s companion scope) -- a second, different kind
-  * of exception from `asSimplex`/`asCube`'s (see `Simplex.scala`/`Cubical.scala`), found the hard way: several call
-  * sites elsewhere in this codebase (`FiniteMetricSpace.scala`, `SimplexStream.scala`) do
-  * `import math.Ordering.Implicits.*`, which brings `scala.math.Ordering.Implicits.infixOrderingOps`'s OWN
-  * `min(rhs: T)`/`max(rhs: T)` (binary, generic over any `T: Ordering`) into LEXICAL scope there -- a phase-1 extension
-  * candidate. Extension-method resolution tries phase 1 (lexical scope: imports, local defs, and every top-level
-  * `def`/`extension` visible package-wide) before ever considering phase 2 (the receiver type's own implicit/companion
-  * scope) -- so once `min`/`max` moved into `object Simplex`'s companion (phase 2 only), calls like `spx.max` at those
-  * sites stopped finding `SimplexOps.max` (this file's zero-arg "largest element") and committed instead to the
-  * stdlib's phase-1 `infixOrderingOps.max(rhs)`, eta-expanded to a function value for lack of an argument -- a hard
-  * type error (`Found: Simplex[Double] => Simplex[Double], Required: Double`), not a silent behavior change, confirmed
-  * empirically by moving `min`/`max` into the trait and rerunning `sbt compile`. Keeping `min`/`max` at the TOP level
-  * (their original position, and the same phase-1 slot `infixOrderingOps` competes for) restores the original, correct
-  * overload resolution: two phase-1 candidates, one of which (`SimplexOps.min`/`.max`, a genuine zero-arg method)
-  * actually type-checks as called and the other (`infixOrderingOps`) doesn't without an explicit argument, so ordinary
-  * overload resolution -- not phase priority -- picks the right one. This is the general lesson for any future opaque
-  * type in this codebase: a method name that collides with a common, wildcard-importable stdlib extension
-  * (`min`/`max`/`<`/`compare`/etc. from `Ordering.Implicits`, but potentially others) is safer left as a top-level
-  * extension, not moved to the companion object -- the companion-object fix solves collisions between two of THIS
-  * codebase's own opaque types (see `SimplexOps`'s own doc above), not collisions with the standard library's own
-  * generic extensions, which predate and are orthogonal to that fix. See
-  * `.claude/WORKLOG-extension-companion-objects.md`.
+/** `min`/`max` stay a top-level extension, not moved into `SimplexOps`/`object Simplex`'s companion scope like
+  * everything else above: Scala 3 tries phase-1 extension candidates (lexical scope, including any wildcard
+  * `import math.Ordering.Implicits.*` a call site has, which brings in `infixOrderingOps`'s binary `min(rhs)`/
+  * `max(rhs)`) before phase-2 (the receiver's own companion). Moving these into the companion drops them to phase 2, so
+  * a call site with that import silently rebinds `spx.max` to the stdlib's binary version instead -- a hard type error
+  * (wrong arity), not a silent behavior change, but only caught at those call sites, not here. General lesson: an
+  * opaque type's extension name that collides with a wildcard-importable stdlib extension (`min`/`max`/`<`/`compare`
+  * from `Ordering.Implicits`, possibly others) needs to stay top-level.
   */
 extension [VertexT](spx: Simplex[VertexT])
   def min[B >: VertexT: Ordering]: VertexT = spx.underlying.min

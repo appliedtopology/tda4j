@@ -12,7 +12,7 @@ import scala.util.chaining.scalaUtilChainingOps
 /** ******* Optimized Vietoris-Rips cofacet generation for fast coboundary computation *******
   */
 
-case class CofacetIterator[VertexT: Ordering](
+class CofacetIterator[VertexT: Ordering](
   val simplex: Simplex[VertexT],
   sparseMetricSpace: SparseMetricSpace[VertexT]
 ) extends Iterator[VertexT]:
@@ -87,12 +87,10 @@ case class CofacetIterator[VertexT: Ordering](
       vertexCache(w) = vertexCache.getOrElse(w, 0) + 1
     }
 
-    val immediateOutput = for
-      w <- vertexCache.keys
-      if vertexCache(w) == vertices.size
-    yield
-      vertexCache.remove(w)
-      w
+    // Snapshot the ready keys before removing: mutating vertexCache while iterating its own live `.keys` view
+    // (mutable.HashMap) is undefined behavior.
+    val immediateOutput = vertexCache.keys.filter(w => vertexCache(w) == vertices.size).toSeq
+    immediateOutput.foreach(vertexCache.remove)
 
     outputQueue.appendAll(immediateOutput)
 

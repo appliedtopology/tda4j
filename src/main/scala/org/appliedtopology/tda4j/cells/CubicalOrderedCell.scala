@@ -3,25 +3,11 @@ package cells
 
 import org.appliedtopology.tda4j.algebra.{given, *}
 
-/** `cubeOrdering`/`Cube_is_OrderedCell` -- split into their own file from `Cubical.scala` (where the opaque type `Cube`
-  * and its companion object live) rather than kept alongside them, and this split is required for correctness, not just
-  * organizational preference. Same underlying reason as `SimplexOrderedCell.scala`'s split from `Simplex.scala` -- see
-  * that file's doc for the general explanation (opaque-type transparency, scoped to the WHOLE FILE a top-level opaque
-  * type is declared in, defeats companion-object-based extension resolution for any `.someExtensionMethod` call made
-  * from that same file, silently for names that coincide with a real member of the underlying representation type and
-  * with a hard compile error otherwise). Confirmed empirically for `Cube` specifically, not just assumed to generalize
-  * from the `Simplex` case: moving this content back into `Cubical.scala` reproduces "value encoded is not a member of
-  * Cube" / "value nondegenerateAxes is not a member of Cube" at exactly the `x.encoded`/`c.nondegenerateAxes` call
-  * sites below.
-  *
-  * One additional wrinkle specific to `Cube`, absent from the `Simplex` case: `boundary`'s original implementation
-  * (written when this lived inside `Cubical.scala`) built new cube values via a raw coercion --
-  * `val upperCube: Cube = coords.updated(axis, 2 * k + 2)`, relying on `Vector[Int] =:= Cube` transparency directly,
-  * which -- unlike an extension-method call -- is *only* ever available inside `Cubical.scala` itself and cannot be
-  * exported to a companion object at all. Moving this file out required replacing that coercion with an explicit
-  * `.asCube` call (`Cubical.scala`'s own top-level extension on `Vector[Int]`, callable from anywhere): `.asCube`
-  * itself still relies on the transparency, but only in the file where it's defined, exactly like every other extension
-  * here.
+/** `cubeOrdering`/`cubeIsOrderedCell` -- split into their own file from `Cubical.scala` (where the opaque type `Cube`
+  * and its companion live), for the same file-scoped opaque-transparency reason as `SimplexOrderedCell.scala`'s split
+  * from `Simplex.scala` (see that file's doc). One wrinkle specific to `Cube`: `boundary` below builds new cube values
+  * via `Cubical.scala`'s own top-level `.asCube` extension on `Vector[Int]`, not a raw `Vector[Int] =:= Cube` coercion
+  * -- that coercion is only available inside `Cubical.scala` itself and cannot be exported.
   */
 def cubeOrdering: Ordering[Cube] = new Ordering[Cube]:
   def compare(x: Cube, y: Cube): Int =
@@ -35,7 +21,7 @@ def cubeOrdering: Ordering[Cube] = new Ordering[Cube]:
       i += 1
     if result != 0 then result else Integer.compare(xu.length, yu.length)
 
-/** `Cube is OrderedCell` instance -- mirrors `Simplex.scala`'s `Simplex_is_OrderedCell` parameterized-given pattern
+/** `Cube is OrderedCell` instance -- mirrors `Simplex.scala`'s `simplexIsOrderedCell` parameterized-given pattern
   * exactly, so a stream can inject its own filtration-aware ordering the same way `EnumeratingCofaceSimplexStream` etc.
   * do for `Simplex[Int]`.
   *
@@ -49,12 +35,11 @@ def cubeOrdering: Ordering[Cube] = new Ordering[Cube]:
   *
   * i.e. the sign alternates over the RANK of the axis among non-degenerate axes (`l`, 0-indexed as `rank` below), not
   * over its raw position in the coordinate vector -- using the raw position instead is a real, easy-to-make sign bug
-  * that breaks d(d(x)) = 0 as soon as a cube has a degenerate axis interleaved among its non-degenerate ones. Flagged
-  * by the advisor before this was written (see WORKLOG-cubical.md) and verified below by `CubicalSpec`'s dd=0 property
-  * test over a signed field (F3), not just F2 -- F2 cannot distinguish a correct alternating sign from a constant one,
-  * since -1 = 1 there.
+  * that breaks d(d(x)) = 0 as soon as a cube has a degenerate axis interleaved among its non-degenerate ones. Verified
+  * by `CubicalSpec`'s dd=0 property test over a signed field (F3), not just F2 -- F2 cannot distinguish a correct
+  * alternating sign from a constant one, since -1 = 1 there.
   */
-def Cube_is_OrderedCell(setOrdering: Ordering[Cube] = cubeOrdering): Cube is OrderedCell =
+def cubeIsOrderedCell(setOrdering: Ordering[Cube] = cubeOrdering): Cube is OrderedCell =
   new (Cube is OrderedCell):
     override lazy val ordering = setOrdering
     extension (c: Cube)
@@ -70,4 +55,4 @@ def Cube_is_OrderedCell(setOrdering: Ordering[Cube] = cubeOrdering): Cube is Ord
           Seq(upperCube -> upperSign, lowerCube -> lowerSign)
         }
 
-given default_Cube_is_OrderedCell: Cube is OrderedCell = Cube_is_OrderedCell()
+given defaultCubeIsOrderedCell: Cube is OrderedCell = cubeIsOrderedCell()

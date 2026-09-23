@@ -9,10 +9,9 @@ import scala.collection.concurrent.TrieMap
 import com.dreizak.miniball.model.PointSet
 import com.dreizak.miniball.highdim.Miniball
 
-/** Adapts a raw coordinate array to Miniball's `PointSet` interface -- structurally identical to `alpha.ScalaPointSet`,
-  * but declared separately here rather than imported from `alpha`: `streams` is the more foundational package (`alpha`
-  * already depends on `streams`, not the other way around -- see CLAUDE.md's "Package layout"), so reusing
-  * `alpha.ScalaPointSet` here would introduce a backwards cross-package dependency for a 3-line adapter. See
+/** Adapts a raw coordinate array to Miniball's `PointSet` interface. Declared locally in `streams` rather than anywhere
+  * in `alpha`: `streams` is the more foundational package (`alpha` already depends on `streams`, not the other way
+  * around -- see CLAUDE.md's "Package layout"), so a shared adapter would have to live here regardless. See
   * `CechFiltration`'s own doc for why Miniball, not the DAQP/alpha-shape machinery, is the right primitive for Cech
   * specifically.
   */
@@ -22,31 +21,20 @@ private class MiniballPointSet(points: Array[Array[Double]]) extends PointSet:
   override def coord(i: Int, j: Int): Double = points(i)(j)
 
 /** The Cech radius of a simplex: the true minimum-enclosing-ball radius of its vertices' coordinates, computed once per
-  * simplex and cached forever (a deliberate, DOCUMENTED departure from `RipserCohomologyContext`'s "don't cache
-  * filtration values by default" memory-frugality doctrine, not an oversight -- that doctrine exists because
-  * `insertionDiameter` gives the VR diameter functional a cheap O(d) incremental recompute that makes NOT caching
-  * viable; no equivalent incremental shortcut exists for the minimum-enclosing-ball radius here, so without a cache
-  * this value would be recomputed via a full Miniball solve on every `keptByThresholdAndCriterion` filter check, every
-  * `sortedByFiltration` sort, and every later `filtrationOrdering` comparison inside the homology reduction itself --
-  * easily 3+ full solves per simplex).
+  * simplex and cached forever -- a deliberate departure from `RipserCohomologyContext`'s "don't cache filtration values
+  * by default" doctrine, since (unlike VR's diameter, which `insertionDiameter` recomputes incrementally in O(d)) there
+  * is no incremental shortcut for a minimum-enclosing-ball radius: every filter check, sort, and `filtrationOrdering`
+  * comparison would otherwise re-run a full Miniball solve.
   *
-  * This caching is also a real CORRECTNESS safeguard, not just a speed one: Miniball is a randomized-incremental
-  * algorithm, and while the minimum enclosing ball of a fixed point set is mathematically unique, a randomized
-  * algorithm can in principle accumulate floating-point rounding differently across separate calls on the identical
-  * input, returning bit-different radii. `filtrationOrdering`'s comparator needs one CONSISTENT answer per simplex to
-  * stay a total order -- an inconsistency here is exactly the failure shape (a coface sorting inconsistently relative
-  * to its own facet) that has produced three separate "reduction pivot ... was not a recorded open class" crashes
-  * elsewhere in this codebase (see CLAUDE.md's "Bug found while cross-validating" section). Caching sidesteps the
-  * question of whether Miniball is actually deterministic across calls, rather than resting correctness on trusting a
-  * third-party library's internals.
+  * Caching is also a correctness safeguard, not just a speed one: Miniball is a randomized-incremental algorithm, so
+  * two separate calls on the identical input can in principle round differently and return bit-different radii.
+  * `filtrationOrdering` needs one consistent answer per simplex to stay a total order; caching guarantees that without
+  * needing to trust a third-party library's determinism.
   *
-  * Cech's own value proposition over Vietoris-Rips is exactly this quantity: unlike VR's max-pairwise-distance (purely
-  * combinatorial, needs no ambient geometry), the Cech radius genuinely needs the vertices' real coordinates and the
-  * classical minimum-enclosing-ball computation -- Welzl's algorithm, which Miniball implements. This does NOT need
-  * `alpha.AlphaComplexDQP`'s dual active-set QP machinery: that solver answers a strictly harder question (does this
-  * simplex survive as a face of the RESTRICTED Delaunay/Voronoi complex, i.e. is there a witness point not closer to
-  * any OTHER point in the cloud) that Cech has no analogue of -- Cech membership depends only on a simplex's OWN
-  * vertices, never on what else is in the point cloud.
+  * Cech's own value over Vietoris-Rips is exactly this quantity: unlike VR's purely combinatorial max-pairwise-
+  * distance, the Cech radius needs the vertices' real coordinates and a minimum-enclosing-ball computation (Welzl's
+  * algorithm, via Miniball) -- not `alpha.AlphaComplexDQP`'s dual active-set QP, which answers a different question
+  * (restricted-Delaunay membership, dependent on the whole point cloud, not just a simplex's own vertices).
   */
 object CechFiltration:
   private def cechRadius(vertexCoords: Array[Array[Double]]): Double =
@@ -56,20 +44,14 @@ object CechFiltration:
   /** A fresh `PartialFunction` with its own private cache -- one call to `CechFiltration(...)` per stream instance, not
     * a shared/global cache, matching every other per-stream filtration value in this codebase.
     *
-    * '''Monotonicity is explicitly ENFORCED here, not merely trusted from the math''': Cech radius is mathematically
-    * monotone non-decreasing under vertex insertion (adding a ball-intersection constraint can never shrink the minimum
-    * enclosing ball), but Miniball's raw floating-point output can violate this by an ULP or two on near-degenerate
-    * inputs -- confirmed directly (not hypothesized) while validating this class: a concrete random point cloud
-    * produced a facet radius of 0.3887884477377332 and its own coface's radius as 0.3887884477377331, one ULP SMALLER.
-    * `CellularHomologyContext`'s reduction requires this monotonicity to hold EXACTLY (its ascending-filtration
-    * processing order is the same invariant three prior "reduction pivot ... was not a recorded open class" crashes
-    * elsewhere in this codebase trace back to, see CLAUDE.md's "Bug found while cross-validating" section) -- confirmed
-    * to reproduce that exact crash here before this fix. Fixed by clamping every computed radius to be at least the max
-    * of its own facets' ALREADY-CACHED radii (a plain lookup, never a fresh Miniball call): every facet of any simplex
-    * this method is ever asked about is guaranteed to already be cached by the time this runs, because
-    * `filtrationValue` is only ever queried on simplices `RipserCofaceSimplexStream`'s coface loop is about to accept
-    * or has already generated, and (per `CechCofaceSimplexStream`'s own downward-closure argument) an accepted
-    * simplex's facets are always visited, and hence cached, at the dimension immediately below.
+    * '''Monotonicity is explicitly enforced here, not merely trusted from the math''': the Cech radius is
+    * mathematically non-decreasing under vertex insertion, but Miniball's raw floating-point output can violate this by
+    * a few ULPs on near-degenerate inputs -- and `CellularHomologyContext`'s reduction requires it to hold exactly (see
+    * CLAUDE.md's ordering-contract rule 3). Fixed by clamping every computed radius to at least the max of its own
+    * facets' ALREADY-CACHED radii (a plain lookup, never a fresh Miniball call): every facet of any simplex this method
+    * is asked about is guaranteed already cached, because `filtrationValue` is only ever queried on simplices the
+    * coface loop is about to accept or has already generated, and (per `CechCofaceSimplexStream`'s own downward-closure
+    * argument) an accepted simplex's facets are always visited, and hence cached, one dimension earlier.
     */
   def apply(euclideanMetricSpace: EuclideanMetricSpace): PartialFunction[Simplex[Int], Double] =
     // TrieMap, not mutable.HashMap: RipserCofaceSimplexStream's parallelFiltrationValue pre-warm step calls

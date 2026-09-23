@@ -9,13 +9,15 @@ import org.appliedtopology.tda4j.algebra.{given, *}
   * `spx.size`/`spx.iterator`/`spx - v` would resolve to `SortedSet`'s own members (or fail to compile) instead of
   * `SimplexOps`'s. See `.claude/WORKLOG-extension-companion-objects.md`.
   */
-def Simplex_is_OrderedCell[VertexT](using
+def simplexIsOrderedCell[VertexT](using
   vtxOrd: Ordering[VertexT]
 )(setOrdering: Ordering[Simplex[VertexT]] = simplexOrdering(using vtxOrd)): Simplex[VertexT] is OrderedCell =
   new (Simplex[VertexT] is OrderedCell):
     override lazy val ordering = setOrdering
     extension (spx: Simplex[VertexT])
-      override def dim = spx.size - 1
+      // Delegates to `SimplexOps.dim` (qualified explicitly, not via `spx.dim`, to avoid this same extension
+      // clause's own `dim` resolving to itself) rather than recomputing `size - 1` a second time.
+      override def dim = Simplex.dim(spx)
       // Face i (vertex i removed, vertices in sorted order) carries sign (-1)^i. Built from an ordered iterator:
       // collection ops on the underlying SortedSet that return a plain `Set` (zipWithIndex, map to a non-Ordering
       // type) are hash-ordered from 5 elements on, which silently mis-signs every simplex with >= 5 vertices.
@@ -25,5 +27,7 @@ def Simplex_is_OrderedCell[VertexT](using
           spx.iterator.zipWithIndex.map { (vtx, i) =>
             (spx - vtx, if i % 2 == 0 then fr.one else fr.negate(fr.one))
           }.toVector
-given default_Simplex_is_OrderedCell: [VertexT: Ordering] => (Simplex[VertexT] is OrderedCell) =
-  Simplex_is_OrderedCell[VertexT]()
+// #given-example
+given defaultSimplexIsOrderedCell: [VertexT: Ordering] => (Simplex[VertexT] is OrderedCell) =
+  simplexIsOrderedCell[VertexT]()
+// #given-example

@@ -160,7 +160,7 @@ object EuclideanMetricSpace:
 trait SpatialQuery[VertexT]:
   def neighbors(v: VertexT, epsilon: Double): Set[VertexT]
 
-case class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
+class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
   val distanceFunction: DistanceFunction[VertexT] = new DistanceFunction[VertexT]:
     override def getDistance(firstPoint: VertexT, secondPoint: VertexT): Double =
       metricSpace.distance(firstPoint, secondPoint)
@@ -169,14 +169,14 @@ case class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends Spa
   override def neighbors(v: VertexT, epsilon: Double): Set[VertexT] =
     vpTree.getAllWithinDistance(v, epsilon).asScala.toSet
 
-case class BruteForce[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
+class BruteForce[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
   override def neighbors(v: VertexT, epsilon: Double): Set[VertexT] =
     metricSpace.elements.toSet.filter(w => metricSpace.distance(v, w) <= epsilon)
 
 /** ****** Sparse Metric Spaces and the Dory storage *******
   */
 
-case class SparseMetricSpace[VertexT: Ordering](metricSpace: FiniteMetricSpace[VertexT], diameter: Double)
+class SparseMetricSpace[VertexT: Ordering](metricSpace: FiniteMetricSpace[VertexT], diameter: Double)
     extends FiniteMetricSpace[VertexT]():
   val spatialQuery: SpatialQuery[VertexT] = JVPTree(metricSpace)
 

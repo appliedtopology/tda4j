@@ -8,9 +8,6 @@ import org.appliedtopology.tda4j.streams.FiniteMetricSpace.MaximumDistanceFiltra
 
 import scala.collection.immutable.{LazyList, SortedSet}
 import scala.math.Ordering.Implicits.*
-import scalax.collection.{edge, mutable as gmutable, Graph}
-import scalax.collection.edge.Implicits.*
-import scalax.collection.edge.WUnDiEdge
 
 import scala.annotation.tailrec
 import scala.collection.{immutable, mutable}
@@ -29,10 +26,10 @@ object SimplexEdge:
     val maxedge = edges.max
     SimplexEdge(simplex, Simplex(maxedge._2, maxedge._3), maxedge._1)
 
-case class TopCofacetEnumerator(val simplex: SimplexEdge, val neighbors: SortedSet[Int])(using
+class TopCofacetEnumerator(val simplex: SimplexEdge, val neighbors: SortedSet[Int])(using
   val metricSpace: FiniteMetricSpace[Int]
 ):
-  val neighbor_it: collection.BufferedIterator[Int] = neighbors.iterator.buffered
+  val neighborIt: collection.BufferedIterator[Int] = neighbors.iterator.buffered
 
   val case2: Boolean = simplex.edge.last == simplex.simplex.last
   val case3: Boolean = case2 && (simplex.edge.firstKey == simplex.simplex.takeRight(2).firstKey)
@@ -58,12 +55,12 @@ case class TopCofacetEnumerator(val simplex: SimplexEdge, val neighbors: SortedS
 
   def nonValid(head: Option[Int]): Boolean = !isValid(head)
 
-  def hasNext(): Boolean =
-    while nonValid(neighbor_it.headOption) && neighbor_it.hasNext do neighbor_it.next()
-    neighbor_it.hasNext
-  def next(): Int = neighbor_it.next()
+  def hasNext: Boolean =
+    while nonValid(neighborIt.headOption) && neighborIt.hasNext do neighborIt.next()
+    neighborIt.hasNext
+  def next(): Int = neighborIt.next()
 
-case class RecursiveStackSimplexEnumerator(val metricSpace: FiniteMetricSpace[Int], val targetDimension: Int = 2)(
+class RecursiveStackSimplexEnumerator(val metricSpace: FiniteMetricSpace[Int], val targetDimension: Int = 2)(
   val query: SpatialQuery[Int] = BruteForce(metricSpace)
 ) extends Iterator[Simplex[Int]]:
   given FiniteMetricSpace[Int] = metricSpace
@@ -77,12 +74,12 @@ case class RecursiveStackSimplexEnumerator(val metricSpace: FiniteMetricSpace[In
   ).toSeq.sorted(using Ordering.by(filtrationValue).orElse(simplexOrdering))
 
   val enumeratorStack: mutable.Stack[TopCofacetEnumerator] = mutable.Stack.empty
-  lazy val edge_it: Iterator[Simplex[Int]] = edges.iterator
+  lazy val edgeIt: Iterator[Simplex[Int]] = edges.iterator
 
   def nextEdge(): Unit =
     if enumeratorStack.isEmpty then
-      if edge_it.hasNext then
-        val edge = edge_it.next()
+      if edgeIt.hasNext then
+        val edge = edgeIt.next()
         val Simplex(i, j) = edge: @unchecked
         val simplexedge: SimplexEdge = SimplexEdge.from(edge)
         val neighbors: SortedSet[Int] =
@@ -90,43 +87,50 @@ case class RecursiveStackSimplexEnumerator(val metricSpace: FiniteMetricSpace[In
             (query.neighbors(j, simplexedge.diameter) - j)).to(SortedSet)
         enumeratorStack.push(TopCofacetEnumerator(simplexedge, neighbors))
 
+  // Grows enumeratorStack (pulling a new edge, or a new candidate vertex from the current top) until it reaches
+  // targetDimension, backtracking (popping) whenever the current top is exhausted; once at depth, reports whether
+  // the top level has a next candidate, backtracking and retrying if not.
   @tailrec
-  final def hasNext(): Boolean =
-    while enumeratorStack.size < targetDimension do
+  final def hasNext: Boolean =
+    if enumeratorStack.size < targetDimension then
       if enumeratorStack.isEmpty then
         nextEdge()
-        if enumeratorStack.isEmpty then return false
-      else if enumeratorStack.top.hasNext() then
+        if enumeratorStack.isEmpty then false else hasNext
+      else if enumeratorStack.top.hasNext then
         // build up the next iterator up top
         val w = enumeratorStack.top.next()
         val simplexedge = enumeratorStack.top.simplex.copy(simplex = enumeratorStack.top.simplex.simplex + w)
         val neighbors = enumeratorStack.top.neighbors & (query.neighbors(w, enumeratorStack.top.simplex.diameter) - w)
         enumeratorStack.push(TopCofacetEnumerator(simplexedge, neighbors))
-      else enumeratorStack.pop()
-    if enumeratorStack.top.hasNext() then return true
+        hasNext
+      else
+        enumeratorStack.pop()
+        hasNext
+    else if enumeratorStack.top.hasNext then true
     else
       enumeratorStack.pop()
-      return hasNext()
-    return false
+      hasNext
 
   def next(): Simplex[Int] = enumeratorStack.top.simplex.simplex + enumeratorStack.top.next()
 
+/** A third, independent Vietoris-Rips coface-enumeration strategy, built on a recursive stack and spatial (VP-tree)
+  * neighbor query rather than `SimplexIndexing`'s combinatorial-number-system enumeration. A cross-validation baseline
+  * for the canonical VR streams, not a speed-competitive production engine in its own right.
+  */
 class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace[Int])
     extends StratifiedSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]:
   override def filtrationValue: PartialFunction[Simplex[Int], Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
 
-  // Reversed on the primary (filtration-value) key only -- tie-break stays ascending. Required convention
-  // (see EnumeratingCofaceSimplexStream's own filtrationOrdering doc and CLAUDE.md): CellularHomologyContext
-  // bakes this directly into Chain's pivot-selection machinery, which needs "smaller under this ordering" to
-  // mean "younger," not "older." This used to be a plain ascending Ordering.by(filtrationValue) -- self
-  // consistent with this class's own (already-ascending, already covered by VietorisRipsSpec's sortedness
-  // check) iteration order, but backwards relative to what CellularHomologyContext needs, and the reason
-  // SimplicialHomologyContext threw `IllegalStateException: reduction pivot ... was not a recorded open
-  // class` on this stream at maxDim >= 2 (found by EngineComparisonBenchmarkSpec; see CLAUDE.md).
+  // The shared FiltrationOrdering.canonical shape: fv reversed, then dimension, then simplexOrdering. This used
+  // to be a hand-built `Ordering.by(filtrationValue).reverse.orElse(simplexOrdering[Int])` with NO dimension key
+  // at all -- self-consistent within one dimension (all that VietorisRipsSpec's sortedness check or this class's
+  // own bucket-by-bucket iteration ever compares), but wrong for the CROSS-dimension comparisons
+  // `Chain.reduceBy`'s SortedMap/PriorityQueue actually performs during reduction, where two cells of different
+  // dimension can tie on filtration value and must not compare equal.
   override def filtrationOrdering: Ordering[Simplex[Int]] =
-    Ordering.by(filtrationValue).reverse.orElse(simplexOrdering[Int])
+    FiltrationOrdering.canonical(filtrationValue, _.size, simplexOrdering[Int])
 
   // Bounded at metricSpace.size (a d-simplex needs d+1 distinct vertices) -- see
   // EnumeratingCofaceSimplexStream's own iterateDimension and StratifiedCellStream's doc for why an unbounded

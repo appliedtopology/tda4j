@@ -8,49 +8,58 @@ import org.appliedtopology.tda4j.homology.{given, *}
 
 import collection.mutable
 import scala.math.{pow, sqrt}
-import org.apache.commons.math3.linear.{
-  MatrixUtils,
-  QRDecomposition,
-  RealMatrix,
-  RealVector,
-  SingularValueDecomposition
-}
+import org.apache.commons.math3.linear.{MatrixUtils, RealMatrix, RealVector, SingularValueDecomposition}
 import org.apache.commons.math3.linear.MatrixUtils.createRealVector
 import scala.util.Random
 import scala.util.chaining.*
 
-import scala.jdk.CollectionConverters.*
-
 import java.util.concurrent.*
 
-import com.dreizak.miniball.model.{ArrayPointSet, PointSet}
-import com.dreizak.miniball.highdim.Miniball
-
+/** A numerical tolerance, threaded via `using` through `Hyperplane.from`/`Hypersphere`/`HelixDelaunay`'s internal
+  * geometric comparisons (near-zero singular values, near-zero circumsphere margins). Deliberately NOT a package- level
+  * `given` (the earlier shape here): `Hyperplane`/`Hypersphere`/`HelixDelaunay` are never constructed from outside this
+  * file (every external caller goes through `AlphaShapes.apply` below), so the one default value this codebase actually
+  * uses only needs to live on `apply`'s own `using` parameter -- an ordinary default value, not an ambient given every
+  * file that happens to wildcard-import `alpha.{given, *}` would otherwise pick up silently.
+  */
 final case class Epsilon(epsilon: Double)
-given Epsilon = Epsilon(1e-5)
-
-def Alpha(pts: Seq[Array[Double]], dispatch: String = "default")(using epsilon: Epsilon): AlphaShapes = dispatch match
-  case "default" =>
-    pts match
-      case pts if pts.isEmpty         => Alpha(pts, dispatch = "helix")
-      case pts if pts.head.length > 7 => Alpha(pts, dispatch = "helix")
-      case _                          => Alpha(pts, dispatch = "helix")
-  case "helix" =>
-    HelixDelaunay(pts.toArray) // Helix should be faster for dim: 7 - 17. Adjust this check when additional impl exists.
-  case "DQP" => AlphaShapeDQP(pts.toArray)
 
 abstract class AlphaShapes extends StratifiedSimplexStream[Int, Double]() with DoubleFiltration[Simplex[Int]]():
   val metricSpace: FiniteMetricSpace[Int]
 
-class ScalaPointSet(points: Array[Array[Double]]) extends PointSet:
-  override def size: Int = points.size
-  override def dimension: Int = points(0).size
-  override def coord(i: Int, j: Int): Double = points(i)(j)
+/** `apply`/`Point` are scoped here rather than as bare top-level `alpha` package defs (a generic name like `Point`, or
+  * a dispatch function as central as `Alpha` used to be, is exactly the kind of top-level-name collision hazard
+  * documented elsewhere in this codebase) -- callers write `AlphaShapes(points, dispatch)`. `import AlphaShapes.Point`
+  * below brings both the type and its factory back into unqualified scope for the rest of this file, where `Point` is
+  * used pervasively by `Hyperplane`/`Hypersphere`/`HelixDelaunay`.
+  */
+object AlphaShapes:
+  def apply(pts: Seq[Array[Double]], dispatch: String = "default")(using
+    epsilon: Epsilon = Epsilon(1e-5)
+  ): AlphaShapes =
+    dispatch.toLowerCase match
+      case "default" =>
+        // These three branches all resolve to "helix" today: no regime (point count / ambient dimension) has been
+        // measured yet to pick a backend by. They're placeholders for that dispatch, not dead code -- keep them
+        // distinct rather than collapsing to a single case.
+        pts match
+          case pts if pts.isEmpty         => apply(pts, dispatch = "helix")
+          case pts if pts.head.length > 7 => apply(pts, dispatch = "helix")
+          case _                          => apply(pts, dispatch = "helix")
+      case "helix" =>
+        HelixDelaunay(
+          pts.toArray
+        ) // Helix should be faster for dim: 7 - 17. Adjust this check when additional impl exists.
+      case "dqp" => AlphaShapeDQP(pts.toArray)
+      case other =>
+        throw IllegalArgumentException(s"Unknown alpha complex backend: '$other' (expected default/helix/DQP)")
 
-// utilities for Delaunay computations
-type Point = RealVector
-object Point:
-  def apply(coords: Array[Double]): Point = MatrixUtils.createRealVector(coords)
+  // utilities for Delaunay computations
+  type Point = RealVector
+  object Point:
+    def apply(coords: Array[Double]): Point = MatrixUtils.createRealVector(coords)
+
+import AlphaShapes.Point
 
 case class Hyperplane(normal: Point, offset: Double):
   def isLight(point: Point): Boolean = normal.dotProduct(point) >= offset
@@ -72,22 +81,13 @@ object Hyperplane:
     val offset = n.dotProduct(pointSet.head)
     Hyperplane(n, offset)
 
-case class Ridge(normals: (Point, Point))
-object Ridge:
-  def apply(pointSet: Seq[Point], hyperplane: Hyperplane): Ridge =
-    assert(pointSet.size == hyperplane.normal.getDimension - 1)
-    val Hyperplane(normal1, offset1) = hyperplane
-    val points = pointSet.map(p => p.subtract(pointSet.head)).appended(normal1)
-    val Hyperplane(normal2, offset) = Hyperplane.from(points)
-    Ridge((normal1, normal2))
-
 case class Hypersphere(center: Point, radius: Double)(using epsilon: Epsilon):
   def contains(point: Point): Boolean = point.subtract(center).getNorm < radius - epsilon.epsilon
 
   def onSphere(point: Point): Boolean = math.abs(point.subtract(center).getNorm - radius) < epsilon.epsilon
 
 object Hypersphere:
-  def apply(pointSet: Seq[Point]): Hypersphere =
+  def apply(pointSet: Seq[Point])(using epsilon: Epsilon): Hypersphere =
     val vvs = for
       v1 <- pointSet.indices
       v2 <- pointSet.indices
@@ -100,18 +100,84 @@ object Hypersphere:
 
 case class DelaunaySimplex(simplex: Simplex[Int], circumsphere: Hypersphere)
 
-/** Based on https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10917453&tag=1
-  * @param pts - the input points to triangulate
+/** Runs the frontier-walking bootstrap + main loop that finds every Delaunay simplex of `pts`, holding all of the
+  * algorithm's own mutable working state (`validated`, `frontierCases`, `visitedFacets`, `cospherical`) so
+  * `HelixDelaunay` itself only ever sees the finished, immutable result of `compute()` -- the same
+  * mutable-builder/immutable-result split `AlphaComplexDQPBuilder`/`AlphaComplexDQP` use.
   */
-class HelixDelaunay(pts: Array[Array[Double]])(using epsilon: Epsilon) extends AlphaShapes:
+private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using epsilon: Epsilon):
+  // `seed` controls, not merely reproduces: measured directly (varying seed 0-9 on a 3x3 grid and on 6 cospherical
+  // points), the bootstrap shuffle changes WHICH of several valid tilings the frontier walk produces whenever the
+  // input has cospherical/degenerate structure -- exactly the class doc's own "Accepted limitation" case, since a
+  // different starting simplex can land the walk on a different side of an order-dependent tie. A fixed default
+  // keeps unseeded call sites deterministic; it does not make the walk order-independent.
+  private val rng: Random = new Random(seed)
   val points: Seq[Point] = pts.map(Point.apply).toIndexedSeq
-  override val metricSpace: EuclideanMetricSpace = EuclideanMetricSpace(pts)
   val ambientDimension: Int = points.head.getDimension
-  val validated: mutable.Set[DelaunaySimplex] = mutable.Set.empty
-  val candidate: mutable.ArrayDeque[Simplex[Int]] = mutable.ArrayDeque.empty
+  private val validated: mutable.Set[DelaunaySimplex] = mutable.Set.empty
 
-  var startingSimplex: Set[Int] = points.indices.take(ambientDimension).toSet
-  {
+  private case class FrontierCase(
+    facet: Simplex[Int],
+    hyperplane: Hyperplane,
+    complement: Int,
+    cofacetHypersphere: Hypersphere
+  )
+
+  private object FrontierCase:
+    def apply(cofacet: DelaunaySimplex, complement: Int): FrontierCase =
+      val facet = cofacet.simplex - complement
+      val hyperplane = Hyperplane.from(facet.toSeq.toSeq.map(points(_)))
+      if hyperplane.isLight(points(complement)) then
+        FrontierCase(facet, hyperplane.reverse, complement, cofacet.circumsphere)
+      else FrontierCase(facet, hyperplane, complement, cofacet.circumsphere)
+
+  private val frontierCases: LinkedBlockingDeque[FrontierCase] = LinkedBlockingDeque[FrontierCase]()
+  private val visitedFacets: mutable.Set[Simplex[Int]] = mutable.Set.empty
+  private val cospherical: mutable.Set[Set[Int]] = mutable.Set.empty
+
+  private def addFrontierCase(simplex: DelaunaySimplex, complement: Int): Unit =
+    val newFacet = simplex.simplex - complement
+    val removed = frontierCases.removeIf((fc: FrontierCase) => fc.facet.toSortedSet == newFacet.toSortedSet)
+    if !removed then frontierCases.put(FrontierCase(simplex, complement))
+
+  private def handleCosphericalPoints(
+    cosphericalPoints: Seq[Int],
+    frontierCase: FrontierCase,
+    newDelaunaySimplex: DelaunaySimplex
+  ): Unit =
+    val spherepoints: mutable.SortedSet[Int] = cosphericalPoints.to(mutable.SortedSet)
+    // all of these work as extra point: every subset of the spherepoints is a valid Delaunay simplex with this empty circumsphere
+    // so we need to pick a tiling subset of them. We start a local version of this frontier walking algorithm
+    // we also need to make sure we don't come back inside this cospherical point set in a later iteration
+    cospherical.add(spherepoints.toSet)
+    frontierCases.removeIf((fc: FrontierCase) => fc.facet.toSet.subsetOf(cosphericalPoints.toSet))
+    spherepoints.subtractAll(newDelaunaySimplex.simplex.toSeq)
+    val facets: mutable.ArrayDeque[(Simplex[Int], Simplex[Int])] =
+      mutable.ArrayDeque.from(
+        frontierCase.facet.toSeq.toSeq.map(fi => (newDelaunaySimplex.simplex - fi, newDelaunaySimplex.simplex))
+      )
+    while facets.nonEmpty do
+      // take a facet
+      val (facet, cofacet) = facets.removeHead()
+      val complement = cofacet.toSeq.diff(facet.toSeq).head
+      val hyperplane: Hyperplane = Hyperplane.from(facet.toSeq.toSeq.map(points)) match
+        case candidateHP if candidateHP.isLight(points(complement)) => candidateHP.reverse
+        case candidateHP                                            => candidateHP
+      spherepoints.filter(hyperplane.isLight.compose(points)).headOption match
+        case Some(pi) =>
+          val nds = DelaunaySimplex(facet + pi, newDelaunaySimplex.circumsphere)
+          validated.add(nds)
+          facets.addAll(facet.toSeq.toSeq.map(pj => (Simplex.from(nds.simplex.toSet.diff(Set(pj)).toSeq), nds.simplex)))
+          spherepoints.remove(pi)
+        case None =>
+          addFrontierCase(
+            DelaunaySimplex(cofacet, newDelaunaySimplex.circumsphere),
+            cofacet.toSeq.diff(facet.toSeq).head
+          )
+
+  /** Runs the full bootstrap + frontier walk once and returns every Delaunay simplex found. */
+  def compute(): Set[DelaunaySimplex] =
+    var startingSimplex: Set[Int] = points.indices.take(ambientDimension).toSet
     var convexHullHP: Boolean = false
     while !convexHullHP do
       val currentHP: Hyperplane = Hyperplane.from(startingSimplex.map(p => points(p)).toSeq)
@@ -120,7 +186,7 @@ class HelixDelaunay(pts: Array[Array[Double]])(using epsilon: Epsilon) extends A
       if lightPoints.isEmpty then convexHullHP = true
       else
         startingSimplex = (lightPoints ++ startingSimplex).toSeq
-          .pipe(Random.shuffle)
+          .pipe(rng.shuffle)
           .take(ambientDimension)
           .toSet
     startingSimplex = points.indices.filter(pi =>
@@ -159,7 +225,6 @@ class HelixDelaunay(pts: Array[Array[Double]])(using epsilon: Epsilon) extends A
     var done = false
     for pi <- points.indices do
       if !done then
-        var valid = true
         if !startingSimplex.contains(pi) then
           val circumsphere = Hypersphere((startingSimplex + pi).map(p => points(p)).toSeq)
           val containedPoints = points.indices.toSet.filter(qi => circumsphere.contains(points(qi)))
@@ -167,117 +232,78 @@ class HelixDelaunay(pts: Array[Array[Double]])(using epsilon: Epsilon) extends A
             done = true
             validated.add(DelaunaySimplex(Simplex.from((startingSimplex + pi).toSeq), circumsphere))
     assert(validated.nonEmpty)
-  }
-  // println(s"Starting simplex: $startingSimplex\n\tDelaunay simplex: ${validated.head}")
 
-  case class FrontierCase(facet: Simplex[Int], hyperplane: Hyperplane, complement: Int, cofacetHypersphere: Hypersphere)
+    visitedFacets.add(Simplex.from(startingSimplex.toSeq))
 
-  object FrontierCase:
-    def apply(cofacet: DelaunaySimplex, complement: Int): FrontierCase =
-      val facet = cofacet.simplex - complement
-      val hyperplane = Hyperplane.from(facet.toSeq.toSeq.map(points(_)))
-      if hyperplane.isLight(points(complement)) then
-        FrontierCase(facet, hyperplane.reverse, complement, cofacet.circumsphere)
-      else FrontierCase(facet, hyperplane, complement, cofacet.circumsphere)
-
-  // val frontierCases: mutable.ArrayDeque[FrontierCase] = mutable.ArrayDeque.empty
-  val frontierCases: LinkedBlockingDeque[FrontierCase] = LinkedBlockingDeque[FrontierCase]()
-  val visitedFacets: mutable.Set[Simplex[Int]] = mutable.Set(Simplex.from(startingSimplex.toSeq))
-  val cospherical: mutable.Set[Set[Int]] = mutable.Set.empty
-
-  def addFrontierCase(simplex: DelaunaySimplex, complement: Int): Unit =
-    val newFacet = simplex.simplex - complement
-    val removed = frontierCases.removeIf((fc: FrontierCase) => fc.facet.toSortedSet == newFacet.toSortedSet)
-    if !removed then frontierCases.put(FrontierCase(simplex, complement))
-
-  def handleCosphericalPoints(
-    cosphericalPoints: Seq[Int],
-    frontierCase: FrontierCase,
-    newDelaunaySimplex: DelaunaySimplex
-  ): Unit =
-    // println(s"Handling cospherical points by tiling: $cosphericalPoints")
-    val spherepoints: mutable.SortedSet[Int] = cosphericalPoints.to(mutable.SortedSet)
-    // all of these work as extra point: every subset of the spherepoints is a valid Delaunay simplex with this empty circumsphere
-    // so we need to pick a tiling subset of them. We start a local version of this frontier walking algorithm
-    // we also need to make sure we don't come back inside this cospherical point set in a later iteration
-    cospherical.add(spherepoints.toSet)
-    frontierCases.removeIf((fc: FrontierCase) => fc.facet.toSet.subsetOf(cosphericalPoints.toSet))
-    spherepoints.subtractAll(newDelaunaySimplex.simplex.toSeq)
-    // println(s"\tRemaining spherepoints: $spherepoints")
-    val facets: mutable.ArrayDeque[(Simplex[Int], Simplex[Int])] =
-      mutable.ArrayDeque.from(
-        frontierCase.facet.toSeq.toSeq.map(fi => (newDelaunaySimplex.simplex - fi, newDelaunaySimplex.simplex))
-      )
-    while facets.nonEmpty do
-      // take a facet
-      val (facet, cofacet) = facets.removeHead()
-      val complement = cofacet.toSeq.diff(facet.toSeq).head
-      // println(s"\tFacet: $facet, cofacet: $cofacet")
-      val hyperplane: Hyperplane = Hyperplane.from(facet.toSeq.toSeq.map(points)) match
-        case candidateHP if candidateHP.isLight(points(complement)) => candidateHP.reverse
-        case candidateHP                                            => candidateHP
-      spherepoints.filter(hyperplane.isLight.compose(points)).headOption match
-        case Some(pi) =>
-          // println(s"\tFound light point: $pi creating Delaunay simplex: ${facet+pi}")
-          val nds = DelaunaySimplex(facet + pi, newDelaunaySimplex.circumsphere)
-          validated.add(nds)
-          facets.addAll(facet.toSeq.toSeq.map(pj => (Simplex.from(nds.simplex.toSet.diff(Set(pj)).toSeq), nds.simplex)))
-          spherepoints.remove(pi)
-        case None =>
-          // println(s"\tNo light points, the facet $facet points outwards")
-          addFrontierCase(
-            DelaunaySimplex(cofacet, newDelaunaySimplex.circumsphere),
-            cofacet.toSeq.diff(facet.toSeq).head
-          )
-
-  val seedDelaunaySimplex: DelaunaySimplex = validated.head
-  points.indices
-    .map(i => (i, seedDelaunaySimplex.circumsphere.center.getDistance(points(i))))
-    .filter((i, d) => math.abs(d - seedDelaunaySimplex.circumsphere.radius) <= epsilon.epsilon)
-    .map(_._1)
-    .to(mutable.SortedSet) match
-    case spherepoints if spherepoints.size > ambientDimension + 1 =>
-      handleCosphericalPoints(
-        spherepoints.toSeq,
-        FrontierCase(seedDelaunaySimplex, seedDelaunaySimplex.simplex.toSet.diff(startingSimplex).head),
-        seedDelaunaySimplex
-      )
-    case spherepoints => startingSimplex.foreach(pi => frontierCases.put(FrontierCase(seedDelaunaySimplex, pi)))
-
-  // handle a frontier case
-  while !frontierCases.isEmpty do
-    val frontierCase = frontierCases.take()
-    // println(s"Handling frontier case: $frontierCase")
-    if !visitedFacets.contains(frontierCase.facet) then
-      visitedFacets.add(frontierCase.facet)
-      // "light points" (in front of the facet) split into inside and outside a small circumsphere of the facet
-      val circumsphere = Hypersphere(frontierCase.facet.toSeq.toSeq.map(points))
-      (points.indices.toSet -- frontierCase.facet.toSeq).toSeq
-        .filter(pi => frontierCase.hyperplane.isLight(points(pi)))
-        .sortBy(pi => circumsphere.center.getDistance(points(pi)))
-        .view
-        .map(pi =>
-          DelaunaySimplex(frontierCase.facet + pi, Hypersphere((frontierCase.facet + pi).toSeq.toSeq.map(points)))
+    val seedDelaunaySimplex: DelaunaySimplex = validated.head
+    points.indices
+      .map(i => (i, seedDelaunaySimplex.circumsphere.center.getDistance(points(i))))
+      .filter((i, d) => math.abs(d - seedDelaunaySimplex.circumsphere.radius) <= epsilon.epsilon)
+      .map(_._1)
+      .to(mutable.SortedSet) match
+      case spherepoints if spherepoints.size > ambientDimension + 1 =>
+        handleCosphericalPoints(
+          spherepoints.toSeq,
+          FrontierCase(seedDelaunaySimplex, seedDelaunaySimplex.simplex.toSet.diff(startingSimplex).head),
+          seedDelaunaySimplex
         )
-        .collectFirst { case ds if !points.exists(ds.circumsphere.contains) => ds } match
-        case Some(newDelaunaySimplex) if !validated.exists(ds => newDelaunaySimplex.simplex == ds.simplex) =>
-          // println(s"Adding new Delaunay simplex: $newDelaunaySimplex")
-          // check whether we have "too many" cospherical points; in that case we have to tile them on our own
-          val spherepoints: mutable.SortedSet[Int] = points.indices
-            .map(i => (i, newDelaunaySimplex.circumsphere.center.getDistance(points(i))))
-            .filter((i, d) => math.abs(d - newDelaunaySimplex.circumsphere.radius) <= epsilon.epsilon)
-            .map(_._1)
-            .to(mutable.SortedSet)
-          if spherepoints.size > ambientDimension + 1 then
-            if !cospherical.contains(spherepoints.toSet) then
+      case spherepoints => startingSimplex.foreach(pi => frontierCases.put(FrontierCase(seedDelaunaySimplex, pi)))
+
+    // handle a frontier case
+    while !frontierCases.isEmpty do
+      val frontierCase = frontierCases.take()
+      if !visitedFacets.contains(frontierCase.facet) then
+        visitedFacets.add(frontierCase.facet)
+        // "light points" (in front of the facet) split into inside and outside a small circumsphere of the facet
+        val circumsphere = Hypersphere(frontierCase.facet.toSeq.toSeq.map(points))
+        (points.indices.toSet -- frontierCase.facet.toSeq).toSeq
+          .filter(pi => frontierCase.hyperplane.isLight(points(pi)))
+          .sortBy(pi => circumsphere.center.getDistance(points(pi)))
+          .view
+          .map(pi =>
+            DelaunaySimplex(frontierCase.facet + pi, Hypersphere((frontierCase.facet + pi).toSeq.toSeq.map(points)))
+          )
+          .collectFirst { case ds if !points.exists(ds.circumsphere.contains) => ds } match
+          case Some(newDelaunaySimplex) if !validated.exists(ds => newDelaunaySimplex.simplex == ds.simplex) =>
+            // check whether we have "too many" cospherical points; in that case we have to tile them on our own
+            val spherepoints: mutable.SortedSet[Int] = points.indices
+              .map(i => (i, newDelaunaySimplex.circumsphere.center.getDistance(points(i))))
+              .filter((i, d) => math.abs(d - newDelaunaySimplex.circumsphere.radius) <= epsilon.epsilon)
+              .map(_._1)
+              .to(mutable.SortedSet)
+            if spherepoints.size > ambientDimension + 1 then
+              if !cospherical.contains(spherepoints.toSet) then
+                validated.add(newDelaunaySimplex)
+                handleCosphericalPoints(spherepoints.toSeq, frontierCase, newDelaunaySimplex)
+            else
               validated.add(newDelaunaySimplex)
-              handleCosphericalPoints(spherepoints.toSeq, frontierCase, newDelaunaySimplex)
-          else
-            validated.add(newDelaunaySimplex)
-            frontierCase.facet.toSeq.toSeq
-              .foreach(vi => addFrontierCase(newDelaunaySimplex, vi))
-        case Some(newDelaunaySimplex) => ()
-        case None                     => ()
+              frontierCase.facet.toSeq.toSeq
+                .foreach(vi => addFrontierCase(newDelaunaySimplex, vi))
+          case Some(newDelaunaySimplex) => ()
+          case None                     => ()
+
+    validated.toSet
+
+/** Based on https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10917453&tag=1
+  *
+  * '''Accepted limitation''': near-cospherical clusters make the frontier walk order-dependent (~1/170 at ambient
+  * dimension 4, 20-30 points) -- a real fix needs joint near-tie detection, not attempted here. So Helix is not
+  * reliable ground truth for dimension >= 4 fuzzing (`AlphaCrossValidationSpec`'s comparisons stay as
+  * `unsafeCompare`/`unsafeFuzzCompare` diagnostics, not wired into `sbt test`). `seed` makes a given `(pts, seed)` pair
+  * deterministic, but does not remove this order-dependency -- see `HelixDelaunayBuilder`'s own doc.
+  *
+  * @param pts
+  *   the input points to triangulate
+  * @param seed
+  *   seeds the bootstrap frontier-selection shuffle (`HelixDelaunayBuilder`); same `pts` and `seed` always produce the
+  *   same triangulation.
+  */
+class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L)(using epsilon: Epsilon) extends AlphaShapes:
+  private val builder = HelixDelaunayBuilder(pts, seed)
+  val points: Seq[Point] = builder.points
+  override val metricSpace: EuclideanMetricSpace = EuclideanMetricSpace(pts)
+  val ambientDimension: Int = builder.ambientDimension
+  val validated: Set[DelaunaySimplex] = builder.compute()
 
   val simplicesMap: Map[Int, Seq[Simplex[Int]]] = Map.from(
     (0 to ambientDimension).map(d =>
@@ -334,10 +360,14 @@ class HelixDelaunay(pts: Array[Array[Double]])(using epsilon: Epsilon) extends A
     case d if simplicesSortedMap.contains(d) => simplicesSortedMap(d).iterator
   }
 
-  // Reversed on the primary (filtration-value) key only -- see RecursiveStackVietorisRipsSimplexStream's
-  // identical fix (VietorisRips.scala) and CLAUDE.md for the full root-cause writeup. `simplicesSortedMap`
-  // (above) is built as `.sorted(using filtrationOrdering.reverse)` specifically so it stays the exact
-  // reverse of this ordering, tie-break included -- an earlier version of this comment claimed the old
-  // `sortBy(filtrationValue)` "didn't need to change" and was wrong; see the note above it.
+  // The shared FiltrationOrdering.canonical shape: fv reversed, then dimension, then simplexOrdering.
+  // `simplicesSortedMap` (above) is built as `.sorted(using filtrationOrdering.reverse)` specifically so it
+  // stays the exact reverse of this ordering, tie-break included -- see RecursiveStackVietorisRipsSimplexStream's
+  // identical fix (VietorisRips.scala) and CLAUDE.md for the full root-cause writeup. This used to have no
+  // dimension key at all (`Ordering.by(filtrationValue).reverse.orElse(simplexOrdering[Int])`), which is wrong
+  // for the cross-dimension comparisons `Chain.reduceBy` performs during reduction (see the identical fix's own
+  // comment). Kept a `def`, not a `val`: `simplicesSortedMap` above uses it during construction, before a `val`
+  // declared this late in the class body would be initialized (see CLAUDE.md's `ExplicitStreamBuilder` NPE note
+  // for the general hazard).
   override def filtrationOrdering: Ordering[Simplex[Int]] =
-    Ordering.by[Simplex[Int], Double](s => filtrationValue(s)).reverse.orElse(simplexOrdering[Int])
+    FiltrationOrdering.canonical(filtrationValue, _.size, simplexOrdering[Int])

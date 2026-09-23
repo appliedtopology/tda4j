@@ -155,7 +155,7 @@ class CellularCohomologyContext[CellT: OrderedCell, CoefficientT: Field, Filtrat
           // No `fallback` argument: its default (`_ => None`) is exactly right here, since there is no
           // apparent-pairs substitution to wire in -- see this class's own doc.
           val (reduced, log) = Chain.reduceBy(z, basis, Chain.empty)
-          val vcol: Chain[CellT, CoefficientT] = log.items.foldLeft(Chain(sigma)) { case (acc, (pivot, coeff)) =>
+          val vcol: Chain[CellT, CoefficientT] = log.rawEntries.foldLeft(Chain(sigma)) { case (acc, (pivot, coeff)) =>
             acc - coeff ⊠ generators.getOrElse(
               pivot,
               throw new IllegalStateException(s"pivot $pivot has a basis entry but no generators entry")
@@ -200,7 +200,9 @@ class CellularCohomologyContext[CellT: OrderedCell, CoefficientT: Field, Filtrat
     cofacets: IterableOnce[CellT]
   ): Chain[CellT, CoefficientT] =
     val fr = summon[CoefficientT is Field]
-    val chainMap: Map[CellT, CoefficientT] = chain.items.toMap
+    // groupMapReduce, not .toMap: rawEntries can hold duplicate (cell, coeff) pairs for one cell (deferred
+    // arithmetic, e.g. `a + a`), and .toMap would silently keep only one of them.
+    val chainMap: Map[CellT, CoefficientT] = chain.rawEntries.groupMapReduce(_._1)(_._2)(fr.plus)
     require(
       chainMap.keys.map(_.dim).toSet.sizeIs <= 1,
       s"coboundaryOfChain requires a homogeneous chain (every cell the same dimension), got dimensions " +

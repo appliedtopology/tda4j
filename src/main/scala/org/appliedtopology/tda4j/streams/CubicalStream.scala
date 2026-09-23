@@ -90,7 +90,7 @@ class CubicalGridStream(
   // those comparisons. Unlike RipserCohomologyContext's `memoizeFiltrationValue` (opt-in, defaulting to false
   // for memory frugality on potentially-huge VR complexes with a cheap incremental alternative,
   // `insertionDiameter`), there is no equivalent incremental formula here, AND `CellularHomologyContext.
-  // HomologyState.CellIterator` already materializes every cell of the stream into one in-memory Vector before
+  // HomologyState.cellIterator` already materializes every cell of the stream into one in-memory Vector before
   // reduction even starts -- so a cache bounded by the same already-resident cell count adds no new
   // memory-frugality concern to weigh against. See `.claude/WORKLOG-autonomous-session-2026-09-19.md` for the
   // phase-separated profiling that found this: per-cell cost was flat in both of the stream's own sort phases,
@@ -102,24 +102,13 @@ class CubicalGridStream(
     def apply(c: Cube): Double =
       filtrationValueCache.getOrElseUpdate(c, containingTopCells(c).map(topCellValue).min)
 
-  /** Explicit negated-fv comparison, then dimension, then the canonical `cubeOrdering` tie-break -- copied in shape
-    * from `EnumeratingCofaceSimplexStream.filtrationOrdering`, deliberately NOT `.reverse` of an ascending-built
-    * ordering (that flips the dimension tie-break too -- see `Homology.scala`'s `processingOrder` note and
-    * `.claude/WORKLOG-cubical.md`'s advisor-consult section). Ties on filtration value are the COMMON case here, not an
-    * edge case: every non-top face shares its value with at least one of its cofaces by construction
-    * (min-over-cofaces), so a broken tie-break would corrupt essentially every reduction, not just rare coincidences.
+  /** The shared `FiltrationOrdering.canonical` shape (fv reversed, then dimension, then the canonical `cubeOrdering`
+    * tie-break). Ties on filtration value are the COMMON case here, not an edge case: every non-top face shares its
+    * value with at least one of its cofaces by construction (min-over-cofaces), so a broken tie-break would corrupt
+    * essentially every reduction, not just rare coincidences.
     */
-  override val filtrationOrdering: Ordering[Cube] = new Ordering[Cube]:
-    def compare(x: Cube, y: Cube): Int =
-      lazy val tieBreak: Int =
-        Integer.compare(x.dim, y.dim) match
-          case 0  => cubeOrdering.compare(x, y)
-          case dc => dc
-      if filtrationValue.isDefinedAt(x) && filtrationValue.isDefinedAt(y) then
-        java.lang.Double.compare(filtrationValue(y), filtrationValue(x)) match
-          case 0  => tieBreak
-          case fc => fc
-      else tieBreak
+  override val filtrationOrdering: Ordering[Cube] =
+    FiltrationOrdering.canonical(filtrationValue, _.dim, cubeOrdering)
 
   private def cubesOfDimension(d: Int): Iterator[Cube] =
     if d < 0 || d > ambientDim then Iterator.empty
@@ -175,17 +164,8 @@ class ExplicitCubicalStream(
 
   override val filtrationValue: PartialFunction[Cube, Double] = filtrationValues
 
-  override val filtrationOrdering: Ordering[Cube] = new Ordering[Cube]:
-    def compare(x: Cube, y: Cube): Int =
-      lazy val tieBreak: Int =
-        Integer.compare(x.dim, y.dim) match
-          case 0  => cubeOrdering.compare(x, y)
-          case dc => dc
-      if filtrationValue.isDefinedAt(x) && filtrationValue.isDefinedAt(y) then
-        java.lang.Double.compare(filtrationValue(y), filtrationValue(x)) match
-          case 0  => tieBreak
-          case fc => fc
-      else tieBreak
+  override val filtrationOrdering: Ordering[Cube] =
+    FiltrationOrdering.canonical(filtrationValue, _.dim, cubeOrdering)
 
   private lazy val byDimension: Map[Int, Vector[Cube]] =
     cubes.groupBy(_.dim).view.mapValues(_.sorted(using filtrationOrdering.reverse).toVector).toMap
@@ -201,11 +181,3 @@ object ExplicitCubicalStream:
       cellsWithValues.map { case (v, c) => c -> v }.toMap,
       cellsWithValues.map(_._2)
     )
-
-/** Thin wrapper mirroring `SimplicialHomologyContext`'s own relationship to `CellularHomologyContext` -- `Cube` needed
-  * nothing new from the naive engine (it is already generic over `CellT: OrderedCell`), so this exists purely for the
-  * same ergonomic reason `SimplicialHomologyContext` does: a concrete, easily-discoverable name instead of writing out
-  * `CellularHomologyContext[Cube, CoefficientT, FiltrationT]` at every call site.
-  */
-class CubicalHomologyContext[CoefficientT: Field, FiltrationT: Ordering]()
-    extends CellularHomologyContext[Cube, CoefficientT, FiltrationT] {}

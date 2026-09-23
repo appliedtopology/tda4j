@@ -4,34 +4,10 @@ package streams
 import org.appliedtopology.tda4j.algebra.{given, *}
 import org.appliedtopology.tda4j.cells.{given, *}
 
-/** `filtrationOrdering` for a `FiniteSimplicialSet`, given a real (non-constant) filtration value and the generator's
-  * own dimension: `Double.compare(fv(y), fv(x))` -- deliberately swapped arguments, not `Ordering.by(fv).reverse`, but
-  * the identical effect -- so smaller-under-this-ordering means younger (larger fv), then dimension ascending, then a
-  * caller-supplied tie-break. This is `EnumeratingCofaceSimplexStream`'s exact convention (`SimplexStream.scala`),
-  * mirrored line-for-line rather than reinvented: that comparator has been broken and fixed twice in this codebase's
-  * history (see CLAUDE.md's "Bug found while cross-validating" sections), so reusing its exact shape is worth more here
-  * than a fresh derivation that happens to agree.
-  */
-def simplicialSetFiltrationOrdering[G](
-  filtrationValue: PartialFunction[G, Double],
-  dimOf: G => Int,
-  tieBreak: Ordering[G]
-): Ordering[G] = new Ordering[G]:
-  def compare(x: G, y: G): Int =
-    lazy val tb: Int =
-      Ordering.Int.compare(dimOf(x), dimOf(y)) match
-        case 0  => tieBreak.compare(x, y)
-        case dc => dc
-    if filtrationValue.isDefinedAt(x) && filtrationValue.isDefinedAt(y) then
-      java.lang.Double.compare(filtrationValue(y), filtrationValue(x)) match
-        case 0  => tb
-        case fc => fc
-    else tb
-
 /** Checks the one precondition every persistence engine in this codebase needs from a filtration: a face's value is
   * never larger than its coface's. Only BARE (`word = Nil`) direct faces matter here -- those are the only faces
-  * `FiniteSimplicialSet_is_OrderedCell.boundary` (hence every engine consuming this complex) ever looks at; a
-  * degenerate face contributes nothing to the boundary and is never separately filtration-tested. Lives here, not on
+  * `finiteSimplicialSetIsOrderedCell.boundary` (hence every engine consuming this complex) ever looks at; a degenerate
+  * face contributes nothing to the boundary and is never separately filtration-tested. Lives here, not on
   * `FiniteSimplicialSet` itself: filtration is entirely an adapter-layer concern, per the architecture note in
   * CLAUDE.md's "Simplicial sets" section (a `FiniteSimplicialSet`'s own structure has no notion of filtration at all).
   */
@@ -51,7 +27,7 @@ def validateMonotoneFiltration[G](sset: FiniteSimplicialSet[G], filtrationValue:
   * `filtrationValue` is defined only on generators (never on arbitrary, possibly degenerate `SSetElement`s) -- correct
   * because every engine here only ever queries a stream's `filtrationValue` on the actual `CellT` values it iterates,
   * and `SimplicialSetStream`/this class both only ever iterate generators, never degenerate elements
-  * (`FiniteSimplicialSet_is_OrderedCell.boundary` resolves degeneracy internally via `faces`, without the engine ever
+  * (`finiteSimplicialSetIsOrderedCell.boundary` resolves degeneracy internally via `faces`, without the engine ever
   * seeing an `SSetElement` directly).
   *
   * `iterateDimension` sorts each dimension's bucket by `filtrationOrdering.reverse` -- oldest first, the SAME
@@ -69,11 +45,11 @@ class FilteredSimplicialSetStream[G](
 )(using G is OrderedCell)
     extends StratifiedCellStream[G, Double]:
   override val filtrationOrdering: Ordering[G] =
-    simplicialSetFiltrationOrdering(filtrationValue, sset.dimOf, sset.ord)
+    FiltrationOrdering.canonical(filtrationValue, sset.dimOf, sset.ord)
   override def iterateDimension: PartialFunction[Int, Iterator[G]] =
     case d if d >= 0 && d < sset.generatorsByDim.length =>
       sset.generatorsByDim(d).toVector.sorted(using filtrationOrdering.reverse).iterator
-  export DoubleIsFilterable.{largest, smallest}
+  export Filterable.DoubleIsFilterable.{largest, smallest}
 
 object FilteredSimplicialSetStream:
   def apply[G](

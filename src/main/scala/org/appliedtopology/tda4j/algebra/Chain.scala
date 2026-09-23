@@ -1,40 +1,16 @@
 package org.appliedtopology.tda4j
 package algebra
 
-import math.Ordering.Implicits.sortedSetOrdering
-import scala.annotation.{tailrec, targetName}
+import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.compiletime.asMatchable
-import math.Fractional.Implicits.infixFractionalOps
-
-trait HasDimension:
-  type Self
-  extension (self: Self) def dim: Int
-
-trait Cell extends HasDimension:
-  type Self
-  extension (self: Self) def boundary[CoefficientT: Field]: Seq[(Self, CoefficientT)]
-
-trait OrderedCell extends Cell:
-  type Self: Ordering as ordering
-
-given [CellT: OrderedCell as oCell] => Ordering[CellT] = oCell.ordering
-
-/** Trait that defines what it means to have an ordered basis
-  */
-trait OrderedBasis[CellT: Ordering, CoefficientT: Field]:
-  type Self
-  extension (t: Self)
-    def leadingCell: Option[CellT] = leadingTerm._1
-    def leadingCoefficient: CoefficientT = leadingTerm._2
-    def leadingTerm: (Option[CellT], CoefficientT)
 
 /*
 Implementation of the Chain trait using heaps for internal storage and deferred arithmetic.
  */
 
 class Chain[CellT: Ordering, CoefficientT: Field] private[tda4j] (
-  var entries: mutable.PriorityQueue[(CellT, CoefficientT)]
+  private var entries: mutable.PriorityQueue[(CellT, CoefficientT)]
 ):
   @tailrec
   final def collapseHead(): Unit =
@@ -68,7 +44,11 @@ class Chain[CellT: Ordering, CoefficientT: Field] private[tda4j] (
     val fr = summon[CoefficientT is Field]
     entries.isEmpty || fr.isEqual(entries.head._2, fr.zero)
 
-  def items: Seq[(CellT, CoefficientT)] = entries.toSeq
+  /** Raw, uncollapsed entries: deferred arithmetic means a term like `(a + a)` can appear as two separate `(a, coeff)`
+    * pairs rather than one. Callers that need one coefficient per cell must collapse themselves (e.g.
+    * `groupMapReduce`).
+    */
+  def rawEntries: Seq[(CellT, CoefficientT)] = entries.toSeq
 
   /** WARNING - this is potentially an expensive operation
     *
@@ -106,15 +86,13 @@ object Chain:
   ): Chain[CellT, CoefficientT] =
     new Chain(mutable.PriorityQueue.from(cs)(using Ordering.by[(CellT, CoefficientT), CellT](_._1)(using ord.reverse)))
 
-  given chain_is_ordered_basis: [CellT: Ordering, CoefficientT: Field as fld]
+  given chainIsOrderedBasis: [CellT: Ordering, CoefficientT: Field as fld]
       => (Chain[CellT, CoefficientT] is OrderedBasis[CellT, CoefficientT]):
     extension (self: Self)
       def leadingTerm: (Option[CellT], CoefficientT) =
         self.collapseHead()
-        { (x: (Option[CellT], Option[CoefficientT])) =>
-          x.copy(_2 = x._2.getOrElse(fld.zero))
-        }
-          .apply(self.entries.headOption.unzip)
+        val head: Option[(CellT, CoefficientT)] = self.entries.headOption
+        (head.map(_._1), head.map(_._2).getOrElse(fld.zero))
 
   /** Mutates `m` in place and returns `Unit`, NOT a new `SortedMap`, as of a later follow-up session (see
     * `.claude/WORKLOG-ripser-profiling.md`'s "the reduceLoop redesign" section): the persistent (immutable)
@@ -189,7 +167,10 @@ object Chain:
   final def reduceByUntil[CellT: Ordering, CoefficientT: Field](
     z: Chain[CellT, CoefficientT],
     basis: mutable.Map[CellT, Chain[CellT, CoefficientT]],
-    reductionLog: Chain[CellT, CoefficientT], // want to have a default empty here?
+    // No default here (e.g. `= Chain.empty`): `[CellT: Ordering, CoefficientT: Field]`'s context bounds desugar to
+    // a `using` clause appended AFTER this value parameter list, so a default value here cannot reference the
+    // `Ordering`/`Field` givens `Chain.empty` itself needs. Every current caller passes one explicitly anyway.
+    reductionLog: Chain[CellT, CoefficientT],
     stop: CellT => Boolean = (_: CellT) => false, // stop when the stop function tells you to
     fallback: CellT => Option[Chain[CellT, CoefficientT]] = (_: CellT) => Option.empty[Chain[CellT, CoefficientT]]
   ): (Chain[CellT, CoefficientT], Chain[CellT, CoefficientT]) =
