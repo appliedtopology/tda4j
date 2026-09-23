@@ -135,7 +135,7 @@ class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specificati
         case e: Throwable        => Left(s"${e.getClass.getSimpleName}: ${Option(e.getMessage).getOrElse("")}".trim)
 
     def randomCloud(n: Int, rng: Random): Array[Array[Double]] =
-      Array.fill(n)(Array.fill(ambientDim)(rng.nextDouble()))
+      HomologyFixtures.randomCloud(n, ambientDim, rng)
 
     def rngFor(tag: String, n: Int): Random =
       Random(seed.toLong * 1_000_003L + tag.hashCode.toLong * 97L + n.toLong)

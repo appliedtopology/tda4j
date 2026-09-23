@@ -14,7 +14,7 @@ import org.specs2.scalacheck.Parameters
 
 /** Weighted alpha complexes (`AlphaComplexDQP.weighted`, i.e. `PowerDistance.weight != 0`, Definition 6/10 in Carlsson
   * & Carlsson 2024) were never exercised end-to-end by any existing test before this session: `AlphaComplexSpec`'s
-  * property suite always builds an unweighted `PowerDistance` (`Alpha(...)` has no weighted entry point), and
+  * property suite always builds an unweighted `PowerDistance` (`AlphaShapes(...)` has no weighted entry point), and
   * `HelixDelaunay` -- the only cross-validation ground truth available -- computes a plain Euclidean Delaunay
   * triangulation with no notion of power weights at all, so it can't serve as ground truth here regardless.
   *

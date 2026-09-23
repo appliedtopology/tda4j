@@ -177,18 +177,18 @@ class HeapChainSpec extends mutable.Specification:
       val elts = List((∆(1, 2), 1.0), (∆(1, 3), -1.0))
       val hc = Chain.from[Simplex[Int], Double](elts)
       "contains the right things" ==>
-        (hc.items.toList must containTheSameElementsAs(elts))
+        (hc.rawEntries.toList must containTheSameElementsAs(elts))
     }
     "be created from varargs" >> {
       val elts = Seq((∆(1, 2), 1.0), (∆(1, 3), -1.0))
       val hc = Chain[Simplex[Int], Double](elts*)
       "contains the right things" ==>
-        (hc.items.toList must containTheSameElementsAs(elts))
+        (hc.rawEntries.toList must containTheSameElementsAs(elts))
     }
     "be created from a single simplex" >> {
       val hc = Chain[Simplex[Int], Double](∆(1, 2, 3))
       "contains the right things" ==>
-        (hc.items.toList must containTheSameElementsAs(
+        (hc.rawEntries.toList must containTheSameElementsAs(
           Seq((∆(1, 2, 3), 1.0))
         ))
     }

@@ -18,7 +18,7 @@ import math.Fractional.Implicits.infixFractionalOps
   * algebraic properties. Deliberately checked over a SIGNED field that isn't F2 (F3 here) in addition to Double -- F2
   * can't distinguish a correctly-alternating sign from a constant one (-1 = 1 mod 2), so an F2-only dd=0 check would
   * pass even with the "raw coordinate position" sign bug the advisor flagged before any of this was written (see
-  * `Cube_is_OrderedCell`'s own doc and `.claude/WORKLOG-cubical.md`).
+  * `cubeIsOrderedCell`'s own doc and `.claude/WORKLOG-cubical.md`).
   */
 class CubicalSpec extends mutable.Specification with ScalaCheck:
   "The `Cube` type should" >> {

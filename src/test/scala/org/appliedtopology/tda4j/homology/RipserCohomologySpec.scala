@@ -6,6 +6,7 @@ import org.appliedtopology.tda4j.cells.{given, *}
 import org.appliedtopology.tda4j.streams.{given, *}
 import org.appliedtopology.tda4j.homology.{given, *}
 import org.appliedtopology.tda4j.alpha.{given, *}
+import org.appliedtopology.tda4j.streams.SimplexIndexing.binomial
 
 import org.appliedtopology.tda4j.barcode.*
 import org.scalacheck.Gen
@@ -43,10 +44,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(Double.PositiveInfinity)),
       maxDim + 1
     )
-    SimplicialHomologyContext[Int, Double, Double]()
-      .persistentHomology(vrStream)
-      .diagramAt(Double.PositiveInfinity)
-      .filter(_._1 <= maxDim)
+    HomologyFixtures.naiveBars(vrStream).filter(_._1 <= maxDim)
 
   private def cohomologyBars(metricSpace: FiniteMetricSpace[Int], maxDim: Int): List[(Int, Double, Double)] =
     RipserCohomologyContext[Double](metricSpace, maxDim).persistentCohomology().map(toTuple)

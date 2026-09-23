@@ -67,7 +67,7 @@ class AlphaComplexDQPSpatialIndexSpec extends org.specs2.mutable.Specification w
       yield (points, weights, maxRadius)
 
       forAll(weightedGen) { case (points, weights, maxRadius) =>
-        val space = PowerDistance.euclidean(points, weights)
+        val space = PowerDistance.euclidean(points, Some(weights))
         val builder = new AlphaComplexDQPBuilder(space, maxRadius * maxRadius, 1)
         val fast = builder.cechNeighbours().map(_.toSet)
         val slow = bruteForceCechNeighbours(space, maxRadius * maxRadius).map(_.toSet)

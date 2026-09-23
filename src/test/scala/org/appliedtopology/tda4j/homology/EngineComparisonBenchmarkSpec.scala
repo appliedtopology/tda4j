@@ -34,10 +34,7 @@ import scala.util.Random
   * takes a `FiniteMetricSpace[Int]` directly and builds its own internal sparse-Rips enumeration -- it cannot be
   * pointed at a stream at all, and specifically cannot touch an alpha complex (which isn't a metric-space clique
   * complex). It appears as its own bundled row (`construction = "VR (built-in)"`, `engine = "RipserCohomology"`), not
-  * decomposed into a (construction, engine) pair like the other 14 cells. `SimplicialHomologyByDimensionContext`, the
-  * fourth engine in `Homology.scala`, is excluded entirely: it is confirmed non-functional (throws unconditionally on
-  * any complex with an MST edge -- see that class's own doc), not merely slow, so it has nothing to contribute to a
-  * performance comparison.
+  * decomposed into a (construction, engine) pair like the other 14 cells.
   *
   * '''Alpha complexes paired with `PersistenceInChunksContext` are a known, unresolved scale risk''' --
   * `HomologySpec.scala`'s `BarcodeRegressionSpec` is `skipAll`'d with "currently stalls out" for exactly this
@@ -127,9 +124,6 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
         case _: TimeoutException => Left("timeout")
         case e: Throwable        => Left(s"${e.getClass.getSimpleName}: ${Option(e.getMessage).getOrElse("")}".trim)
 
-    def randomCloud(n: Int, ambientDim: Int, rng: Random): Array[Array[Double]] =
-      Array.fill(n)(Array.fill(ambientDim)(rng.nextDouble()))
-
     def bounded(stream: StratifiedSimplexStream[Int, Double], maxDim: Int): StratifiedSimplexStream[Int, Double] =
       new StratifiedSimplexStream[Int, Double]:
         def filtrationValue = stream.filtrationValue
@@ -148,8 +142,8 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
         bounded(RecursiveStackVietorisRipsSimplexStream(EuclideanMetricSpace(pts)), maxDim)
       ),
       "VR-NewVR" -> ((pts, maxDim) => IncrementalVietorisRipsSimplexStream(EuclideanMetricSpace(pts), maxDim)),
-      "Alpha-DQP" -> ((pts, maxDim) => bounded(Alpha(pts.toIndexedSeq, "DQP"), maxDim)),
-      "Alpha-Helix" -> ((pts, maxDim) => bounded(Alpha(pts.toIndexedSeq, "helix"), maxDim))
+      "Alpha-DQP" -> ((pts, maxDim) => bounded(AlphaShapes(pts.toIndexedSeq, "DQP"), maxDim)),
+      "Alpha-Helix" -> ((pts, maxDim) => bounded(AlphaShapes(pts.toIndexedSeq, "helix"), maxDim))
     )
 
     val engines: Seq[(String, (StratifiedCellStream[Simplex[Int], Double], Int) => Int)] = Seq(
@@ -281,7 +275,11 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
     do
       val clouds =
         Seq.tabulate(trials)(i =>
-          randomCloud(n, ambientDim, Random(seed.toLong * 1_000_003L + n * 1009L + ambientDim * 97L + maxDim * 13L + i))
+          HomologyFixtures.randomCloud(
+            n,
+            ambientDim,
+            Random(seed.toLong * 1_000_003L + n * 1009L + ambientDim * 97L + maxDim * 13L + i)
+          )
         )
 
       val rows =

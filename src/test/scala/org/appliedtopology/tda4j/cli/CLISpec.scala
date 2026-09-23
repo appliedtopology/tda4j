@@ -40,9 +40,9 @@ class CLISpec extends mutable.Specification:
   "resolveInput" should {
     "dispatch point-cloud and distance-matrix formats to their own ResolvedInput cases" >> {
       val csvPoints = tempFile(".csv")
-      CSV.writePointCloud(csvPoints, Seq(Seq(0.0, 0.0), Seq(1.0, 0.0)))
+      CSV.writePointCloud(csvPoints, Array(Array(0.0, 0.0), Array(1.0, 0.0)))
       val csvDist = tempFile(".csv")
-      CSV.writeFullDistanceMatrix(csvDist, Seq(Seq(0.0, 1.0), Seq(1.0, 0.0)))
+      CSV.writeFullDistanceMatrix(csvDist, Array(Array(0.0, 1.0), Array(1.0, 0.0)))
 
       (TDA4jCLI.resolveInput("csv-points", csvPoints) must beAnInstanceOf[TDA4jCLI.ResolvedInput.Points]) and
         (TDA4jCLI.resolveInput("csv-distances", csvDist) must beAnInstanceOf[TDA4jCLI.ResolvedInput.Distances])
@@ -78,7 +78,7 @@ class CLISpec extends mutable.Specification:
     "produce the exact same barcode as calling TDA4j directly, via a real file on disk" >> {
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
       val path = tempFile(".csv")
-      CSV.writePointCloud(path, points.map(_.toSeq).toSeq)
+      CSV.writePointCloud(path, points)
 
       val buffer = new ByteArrayOutputStream()
       val exitCode = TDA4jCLI.run(Seq("--max-dimension", "1", path), new PrintStream(buffer))
@@ -94,7 +94,7 @@ class CLISpec extends mutable.Specification:
     "produce the exact same barcode with --engine cohomology as calling TDA4j directly, via a real file on disk" >> {
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
       val path = tempFile(".csv")
-      CSV.writePointCloud(path, points.map(_.toSeq).toSeq)
+      CSV.writePointCloud(path, points)
 
       val buffer = new ByteArrayOutputStream()
       val exitCode =
@@ -110,7 +110,7 @@ class CLISpec extends mutable.Specification:
 
     "return exit code 1 and print a one-line message on a bad option, without throwing" >> {
       val path = tempFile(".csv")
-      CSV.writePointCloud(path, Seq(Seq(0.0, 0.0), Seq(1.0, 0.0)))
+      CSV.writePointCloud(path, Array(Array(0.0, 0.0), Array(1.0, 0.0)))
       val buffer = new ByteArrayOutputStream()
       TDA4jCLI.run(Seq("--complex", "bogus", path), new PrintStream(buffer)) must beEqualTo(1)
     }
@@ -121,7 +121,7 @@ class CLISpec extends mutable.Specification:
       // TDA4j-level complex value through correctly, without needing its own CLI code path.
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
       val path = tempFile(".csv")
-      CSV.writePointCloud(path, points.map(_.toSeq).toSeq)
+      CSV.writePointCloud(path, points)
 
       val buffer = new ByteArrayOutputStream()
       val exitCode = TDA4jCLI.run(Seq("--complex", "cech", "--max-dimension", "1", path), new PrintStream(buffer))

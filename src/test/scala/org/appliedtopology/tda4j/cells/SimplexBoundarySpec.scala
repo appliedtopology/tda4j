@@ -21,14 +21,13 @@ class SimplexBoundarySpec extends mutable.Specification with ScalaCheck:
       (Simplex(vertices.patch(i, Nil, 1)*), if i % 2 == 0 then Fp(1) else Fp(-1))
     }
 
-  "The boundary of a simplex lists faces d_0..d_n with alternating signs, for 1 to 9 vertices" >> {
+  "The boundary of a simplex lists faces d_0..d_n with alternating signs, for 1 to 9 vertices" >>
     forall(1 to 9) { n =>
       val vertices = (0 until n).map(v => 3 * v + 1)
       val bd = Simplex(vertices*).boundary[Fp]
       (bd.map(_._1) must beEqualTo(expectedBoundary(vertices).drop(if n == 1 then 1 else 0).map(_._1))) and
         (bd.map(_._2.toUInt) must beEqualTo(expectedBoundary(vertices).map(_._2.toUInt).take(bd.size)))
     }
-  }
 
   "d(d(x)) = 0 over F3 for simplices with up to 9 vertices" >> {
     val gen: Gen[Simplex[Int]] =

@@ -5,14 +5,13 @@ import org.appliedtopology.tda4j.algebra.{given, *}
 import org.appliedtopology.tda4j.cells.{given, *}
 import org.appliedtopology.tda4j.streams.{given, *}
 import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
+import SimplexIndexing.binomial
 
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 import org.specs2.scalacheck.Parameters
-import org.specs2.specification.core.Fragment
 
 class SimplexIndexingSpec extends Specification with ScalaCheck:
   given Parameters = Parameters(minTestsOk = 500)
@@ -150,82 +149,4 @@ class SimplexIndexingSpec extends Specification with ScalaCheck:
         (ok must beTrue) and (count must be_==(size))
       }
     }
-  }
-
-class RipserStreamSpec extends Specification:
-  "RipserStream interface testing" >> {
-    val hc2: HyperCube = HyperCube(2)
-
-    val rs: RipserStream = RipserStream(hc2, 5.0, 5)
-
-    "0-dimensional" >> {
-      "contains the right simplices" ==> (rs
-        .iteratorByDimension(0)
-        .toSeq must contain(∆(0), ∆(1), ∆(2), ∆(3)))
-    }
-    "1-dimensional" >> {
-      "contains the right simplices" ==> (rs
-        .iteratorByDimension(1)
-        .toSeq must contain(
-        ∆(0, 1),
-        ∆(0, 2),
-        ∆(0, 3),
-        ∆(1, 2),
-        ∆(1, 3),
-        ∆(2, 3)
-      ))
-    }
-    "2-dimensional" >> {
-      "contains the right simplices" ==> (rs
-        .iteratorByDimension(2)
-        .toSeq must contain(∆(0, 1, 2), ∆(0, 1, 3), ∆(0, 2, 3), ∆(1, 2, 3)))
-    }
-    "3-dimensional" >> {
-      "contains the right simplices" ==> (rs
-        .iteratorByDimension(3)
-        .toSeq must contain(∆(0, 1, 2, 3)))
-    }
-    "4-dimensional" >> {
-      "contains the right simplices" ==> (rs
-        .iteratorByDimension(4)
-        .toSeq must beEmpty)
-    }
-    "Check total orders of dimensions" >>
-      Fragment.foreach(0 to hc2.size) { d =>
-        s"$d is sorted" ! {
-          rs
-            .iteratorByDimension(d)
-            .map(s => rs.filtrationValue(s))
-            .toSeq must beSorted
-        }
-      }
-    "Full simplex stream gives the right number of elements" >> {
-      rs.iterator.toSeq must haveSize((1 << hc2.size) - 1)
-    }
-  }
-
-  "Ripser and Vietoris-Rips find the same simplices" >> {
-    val sG = HyperCubeSymmetryGenerators(3)
-
-    val vr = SymmetricZomorodianIncremental[Int, Int](sG)
-    val ss = vr(sG.hypercube, 2.0, 5)
-    val rs = MaskedSymmetricRipserStream[Int](sG.hypercube, 2.0, 5, sG)
-    pp(s"Ripser finds ${rs.iterator.size} simplices")
-    pp(s"Zomorodian finds ${ss.size} simplices")
-    rs.iterator.toSeq must containAllOf(ss)
-    ss.iterator.toSeq must containAllOf(rs.iterator.toSeq)
-    rs.iterator.size === ss.iterator.size
-  }.pendingUntilFixed
-
-  "Apparent facets, cofacets, pairs" >> {
-    val ms = HyperCube(2) // work with the square
-    val rs = RipserStream(ms, ms.minimumEnclosingRadius, 5)
-
-    "[0,1,2] has zero pivot cofacet [0,1,2,3]" ==>
-      (rs.zeroPivotCofacet(rs.si(∆(0, 1, 2)), 3)
-        must beSome(rs.si(∆(0, 1, 2, 3))))
-
-    "[0,1,3] has zero pivot facet [0,3]" ==>
-      (rs.zeroPivotFacet(rs.si(∆(0, 1, 3)), 3)
-        must beSome(rs.si(∆(0, 3))))
   }

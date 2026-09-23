@@ -13,6 +13,20 @@ import org.appliedtopology.tda4j.alpha.{given, *}
   */
 object HomologyFixtures:
 
+  /** `n` random points in `[0,1)^ambientDim`, shared by the benchmark specs' own `randomCloud` wrappers (each adds its
+    * own closed-over dimension and/or `EuclideanMetricSpace` wrapping on top of this).
+    */
+  def randomCloud(n: Int, ambientDim: Int, rng: scala.util.Random): Array[Array[Double]] =
+    Array.fill(n)(Array.fill(ambientDim)(rng.nextDouble()))
+
+  /** The naive engine's own barcode on an already-built stream -- the independent oracle every other engine's barcode
+    * is cross-checked against.
+    */
+  def naiveBars(source: StratifiedSimplexStream[Int, Double])(using Double is Field): List[(Int, Double, Double)] =
+    SimplicialHomologyContext[Int, Double, Double]()
+      .persistentHomology(source)
+      .diagramAt(Double.PositiveInfinity)
+
   val triangleCells: Seq[(Double, Simplex[Int])] =
     List(1, 2, 3).map(i => (0.0, ∆(i))) ++
       List((1.0, ∆(1, 2)), (2.0, ∆(1, 3)), (3.0, ∆(2, 3)), (4.0, ∆(1, 2, 3)))

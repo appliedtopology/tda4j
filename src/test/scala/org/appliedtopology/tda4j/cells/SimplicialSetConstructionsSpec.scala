@@ -2,6 +2,7 @@ package org.appliedtopology.tda4j
 package cells
 
 import org.appliedtopology.tda4j.algebra.{given, *}
+import FiniteSimplicialSet.*
 
 import org.specs2.mutable
 

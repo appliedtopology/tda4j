@@ -67,10 +67,10 @@ import scala.sys.process.*
   *
   * '''`torus4` (50000 points) is deliberately excluded''', not merely deferred: real `ripser.cpp` itself needs ~8GB for
   * it (Table 1), and this engine's `Simplex[Int]`/`SortedSet[Int]` per-simplex carrier is roughly two orders of
-  * magnitude heavier than Ripser's packed 64-bit `diameter_index_t` (`DiameterSimplex`'s own doc, `RipserStream.scala`,
-  * flags this as a deliberate deferred choice, not an oversight) -- extrapolating that ratio puts torus4 over what any
-  * single machine reasonably has, so running it would test the JVM's OOM killer, not this engine. State the reason;
-  * don't spend wall-clock time proving it.
+  * magnitude heavier than Ripser's packed 64-bit `diameter_index_t` (`DiameterSimplex`'s own doc,
+  * `SimplexIndexing.scala`, flags this as a deliberate deferred choice, not an oversight) -- extrapolating that ratio
+  * puts torus4 over what any single machine reasonably has, so running it would test the JVM's OOM killer, not this
+  * engine. State the reason; don't spend wall-clock time proving it.
   *
   * '''Coefficients''': ripser's default (no `USE_COEFFICIENTS`) build computes over Z/2, not the
   * `Field.DoubleApproximated` this codebase's other specs default to -- so this spec uses `FiniteField(2)` explicitly,

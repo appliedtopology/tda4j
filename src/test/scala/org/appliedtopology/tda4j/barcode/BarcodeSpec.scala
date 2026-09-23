@@ -82,10 +82,8 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
     given bc: BarcodeContext[Int]()
     import bc.*
 
-    val barcode = Barcode[Int, Nothing]()
-
     "One interval maps into another interval" ==> (
-      barcode.isMap(
+      Barcode.isMap(
         List(dim(0)(0.bc(5))),
         List(dim(0)(0.bc(5))),
         MatrixUtils.createRealMatrix(Array(Array(1.0)))
@@ -93,7 +91,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
     )
 
     "Target must exist at source birth" ==> {
-      val isThisAMap = barcode.isMap(
+      val isThisAMap = Barcode.isMap(
         List(dim(0)(0.bc(5))),
         List(dim(0)(1.bc(5))),
         MatrixUtils.createRealMatrix(Array(Array(1.0)))
@@ -102,7 +100,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
     }
 
     "Target must exist at source death" ==> (
-      barcode.isMap(
+      Barcode.isMap(
         List(dim(0)(0.bc(5))),
         List(dim(0)(0.bc(6))),
         MatrixUtils.createRealMatrix(Array(Array(1.0)))
@@ -110,7 +108,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
     )
 
     "Properly contained target won't work" ==> (
-      barcode.isMap(
+      Barcode.isMap(
         List(dim(0)(0.bc(5))),
         List(dim(0)(1.bc(4))),
         MatrixUtils.createRealMatrix(Array(Array(1.0)))
@@ -118,7 +116,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
     )
 
     "Target must overlap source" ==> (
-      barcode.isMap(
+      Barcode.isMap(
         List(dim(0)(0.bc(5))),
         List(dim(0)(6.bc(10))),
         MatrixUtils.createRealMatrix(Array(Array(1.0)))
@@ -126,7 +124,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
     )
 
     "Target must overlap source" ==> (
-      barcode.isMap(
+      Barcode.isMap(
         List(dim(0)(10.bc(15))),
         List(dim(0)(6.bc(9))),
         MatrixUtils.createRealMatrix(Array(Array(1.0)))
@@ -134,7 +132,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
     )
 
     val eye5 = MatrixUtils.createRealIdentityMatrix(5)
-    "Target fully below source" ==> (barcode.isMap(
+    "Target fully below source" ==> (Barcode.isMap(
       List(dim(0)(10.bc(15))),
       List(
         dim(0)(0.bc(5)),
@@ -146,7 +144,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
       eye5.getColumnMatrix(0)
     ) must beFalse)
 
-    "Target intersects source from below" ==> (barcode.isMap(
+    "Target intersects source from below" ==> (Barcode.isMap(
       List(dim(0)(10.bc(15))),
       List(
         dim(0)(0.bc(5)),
@@ -158,7 +156,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
       eye5.getColumnMatrix(1)
     ) must beTrue)
 
-    "Target fully includes source" ==> (barcode.isMap(
+    "Target fully includes source" ==> (Barcode.isMap(
       List(dim(0)(10.bc(15))),
       List(
         dim(0)(0.bc(5)),
@@ -170,7 +168,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
       eye5.getColumnMatrix(2)
     ) must beFalse)
 
-    "Target intersects source from above" ==> (barcode.isMap(
+    "Target intersects source from above" ==> (Barcode.isMap(
       List(dim(0)(10.bc(15))),
       List(
         dim(0)(0.bc(5)),
@@ -182,7 +180,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
       eye5.getColumnMatrix(3)
     ) must beFalse)
 
-    "Target fully above source" ==> (barcode.isMap(
+    "Target fully above source" ==> (Barcode.isMap(
       List(dim(0)(10.bc(15))),
       List(
         dim(0)(0.bc(5)),
@@ -203,7 +201,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
     val matrix =
       MatrixUtils.createRealMatrix(Array(Array(0.0, 1.0), Array(1.0, 1.0)))
 
-    "cokernel" ==> (Barcode[Double, Nothing]().cokernel(
+    "cokernel" ==> (Barcode.cokernel(
       source,
       target,
       matrix
@@ -214,7 +212,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
       )
     ))
 
-    "kernel" ==> (Barcode[Double, Nothing]().kernel(
+    "kernel" ==> (Barcode.kernel(
       source,
       target,
       matrix
@@ -225,7 +223,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
       )
     ))
 
-    "image" ==> (Barcode[Double, Nothing]().image(
+    "image" ==> (Barcode.image(
       source,
       target,
       matrix
@@ -235,12 +233,4 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
         dim(0)(2.bc(4))
       )
     ))
-  }
-
-class BarcodeSpec extends Specification:
-  "0-persistence output" >> {
-    val ms: FiniteMetricSpace[Int] = ExplicitMetricSpace(
-      Seq(Seq(0.0, 1.0, 2.0), Seq(1.0, 0.0, 3.0), Seq(2.0, 3.0, 0.0))
-    )
-    val rs = RipserStream(ms, ms.minimumEnclosingRadius, 5)
   }

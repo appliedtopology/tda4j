@@ -6,6 +6,7 @@ import org.appliedtopology.tda4j.cells.{given, *}
 import org.appliedtopology.tda4j.streams.{given, *}
 import org.appliedtopology.tda4j.homology.{given, *}
 import org.appliedtopology.tda4j.alpha.{given, *}
+import org.appliedtopology.tda4j.homology.HomologyFixtures.naiveBars
 
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
@@ -40,11 +41,6 @@ class IncrementalVietorisRipsSpec extends s2mutable.Specification with ScalaChec
           .forall(_ <= threshold)
       }
       .toSet
-
-  private def naiveBars(source: StratifiedSimplexStream[Int, Double]): List[(Int, Double, Double)] =
-    SimplicialHomologyContext[Int, Double, Double]()
-      .persistentHomology(source)
-      .diagramAt(Double.PositiveInfinity)
 
   private def restrictToThreshold(bars: List[(Int, Double, Double)], t: Double): List[(Int, Double, Double)] =
     bars

@@ -23,7 +23,4 @@ class ProfilingSpec(args: Arguments) extends mutable.Specification:
     val bitlength: Int = args.commandLine.intOr("bitlength", 3)
     val maxFVal: Double = args.commandLine.doubleOr("maxFVal", 4.0)
     val maxDim: Int = args.commandLine.intOr("maxDim", 7)
-
-    val symmetry: HyperCubeSymmetry = HyperCubeSymmetry(bitlength)
-
   }

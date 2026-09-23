@@ -46,3 +46,15 @@ class UnionFindSpec extends mutable.Specification with ScalaCheck:
         "MST has N-1 edges" ==> (mst.size === math.max(0, metricSpace.size - 1))
     }
   }
+  "Kruskal.cycleToChain produces a genuine zero-boundary cycle for every non-tree edge" >> {
+    val GF3 = new FiniteField(3)
+    import GF3.{Fp, given}
+    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(4, 10), Gen.chooseNum(8, 20))) {
+      (points: Array[Array[Double]]) =>
+        val kruskal = Kruskal(EuclideanMetricSpace(points))
+        kruskal.cyclesIterator.forall { edge =>
+          val chain = kruskal.cycleToChain[Fp](edge)
+          Chain.from[Simplex[Int], Fp](chain.boundary).isZero()
+        } must beTrue
+    }
+  }

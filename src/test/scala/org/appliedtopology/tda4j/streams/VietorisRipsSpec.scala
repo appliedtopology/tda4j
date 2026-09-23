@@ -6,6 +6,7 @@ import org.appliedtopology.tda4j.cells.{given, *}
 import org.appliedtopology.tda4j.streams.{given, *}
 import org.appliedtopology.tda4j.homology.{given, *}
 import org.appliedtopology.tda4j.alpha.{given, *}
+import SimplexIndexing.binomial
 
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll

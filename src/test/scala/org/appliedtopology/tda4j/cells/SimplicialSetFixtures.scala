@@ -2,6 +2,7 @@ package org.appliedtopology.tda4j
 package cells
 
 import org.appliedtopology.tda4j.algebra.{given, *}
+import FiniteSimplicialSet.*
 
 /** Hand-verified finitely-generated simplicial sets with known homology, used to validate `faceOf`/`insertOuter`
   * (`SSetElement.scala`) independently of the (degeneracy-free) `fromStream` plumbing path -- see
@@ -35,7 +36,7 @@ object SimplicialSetFixtures:
       else
         val word = (n - 2 to 0 by -1).toList
         IndexedSeq.fill(n + 1)(SSetElement(word, Vertex))
-    new FiniteSimplicialSet(summon[Ordering[SphereGenerator]])(
+    new FiniteSimplicialSet(
       byDim,
       { case Vertex => IndexedSeq.empty; case Top => topFaces }
     )
@@ -65,7 +66,7 @@ object SimplicialSetFixtures:
         (0 to n)
           .map(i => if i == 0 || i == n then outer else SSetElement[ProjectiveGenerator](List(i - 1), E(n - 2)))
           .toIndexedSeq
-    new FiniteSimplicialSet(summon[Ordering[ProjectiveGenerator]])(byDim, facesOf)
+    new FiniteSimplicialSet(byDim, facesOf)
 
   /** Hatcher's minimal Δ-complex model of the torus (*Algebraic Topology*, Example 2.4): one vertex `v`, three
     * loop-edges `a, b, c` (`c` the diagonal), two triangles `u, l` with the SAME face assignment `d_0=b, d_1=c, d_2=a`.
@@ -100,7 +101,7 @@ object SimplicialSetFixtures:
       case Vertex    => IndexedSeq.empty
       case A | B | C => loopFaces
       case U | L     => triangleFaces
-    new FiniteSimplicialSet(summon[Ordering[TorusGenerator]])(byDim, facesOf)
+    new FiniteSimplicialSet(byDim, facesOf)
 
   /** A single non-degenerate edge with two distinct endpoints -- raw material for `quotient`/`identify`
     * cross-validation (`SimplicialSetHomologySpec`), not a fixture with known homology on its own (it's contractible:
@@ -118,7 +119,7 @@ object SimplicialSetFixtures:
     def facesOf(g: EdgeGenerator): IndexedSeq[SSetElement[EdgeGenerator]] = g match
       case V0 | V1 => IndexedSeq.empty
       case E       => IndexedSeq(SSetElement(Nil, V1), SSetElement(Nil, V0))
-    new FiniteSimplicialSet(summon[Ordering[EdgeGenerator]])(byDim, facesOf)
+    new FiniteSimplicialSet(byDim, facesOf)
 
   /** A single filled 2-simplex (3 vertices, 3 edges, 1 face) -- raw material for `quotient` cross-validation
     * (`SimplicialSetHomologySpec`), not a fixture with known homology on its own (it's contractible: `H_0 = F`, nothing
@@ -149,7 +150,7 @@ object SimplicialSetFixtures:
       case E12          => IndexedSeq(SSetElement(Nil, V2), SSetElement(Nil, V1))
       case E02          => IndexedSeq(SSetElement(Nil, V2), SSetElement(Nil, V0))
       case F            => IndexedSeq(SSetElement(Nil, E12), SSetElement(Nil, E02), SSetElement(Nil, E01))
-    new FiniteSimplicialSet(summon[Ordering[TriangleGenerator]])(byDim, facesOf)
+    new FiniteSimplicialSet(byDim, facesOf)
 
   /** Hatcher's own single-2-simplex Delta-complex model of RP^2 (*Algebraic Topology*, Example 2.4), built as a
     * `quotient` of `triangle` rather than hand-assembled directly like `realProjectiveSpace` -- two of the three edges

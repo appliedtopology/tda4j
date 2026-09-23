@@ -7,6 +7,7 @@ import org.appliedtopology.tda4j.streams.{given, *}
 import org.appliedtopology.tda4j.homology.{given, *}
 import org.appliedtopology.tda4j.alpha.{given, *}
 
+import org.appliedtopology.tda4j.streams.StreamFixtures.explicitStream
 import org.appliedtopology.tda4j.barcode.*
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
@@ -60,10 +61,24 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
     )
   }
 
-  private def explicitStream(cells: Seq[(Double, Simplex[Int])]): ExplicitStream[Int, Double] =
-    val builder = ExplicitStreamBuilder[Int, Double]
-    builder.addAll(cells)
-    builder.result()
+  /** Wraps `explicitStream`'s output as a `StratifiedCellStream` with each dimension's bucket sorted by
+    * `filtrationOrdering.reverse` -- the stream contract's own rule 2 (CLAUDE.md), needed here because
+    * `PersistenceInChunksContext` (unlike the naive engine) reads `iterateDimension` bucket order directly rather than
+    * re-sorting internally.
+    */
+  private def asStratified(cells: Seq[(Double, Simplex[Int])]): StratifiedCellStream[Simplex[Int], Double] =
+    val raw = explicitStream(cells)
+    val byDim: Map[Int, Seq[Simplex[Int]]] =
+      raw.iterator.toSeq.groupBy(_.dim).view.mapValues(_.sorted(using raw.filtrationOrdering.reverse)).toMap
+    new StratifiedCellStream[Simplex[Int], Double]:
+      def filtrationValue = raw.filtrationValue
+      def filtrationOrdering = raw.filtrationOrdering
+      val smallest = Double.NegativeInfinity
+      val largest = Double.PositiveInfinity
+      override def iterator: Iterator[Simplex[Int]] = cells.sortBy(_._1).map(_._2).iterator
+      def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+        case d if byDim.contains(d) => byDim(d).iterator
+      }
 
   "Naive engine reproduces the hand-verified tetrahedron and torus barcodes" >> {
     given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
@@ -119,11 +134,11 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
       forall(bars) { bar =>
         val rep = bar.annotation.get
         // A representative cycle is a chain over the complex's own cells, so it cannot legitimately
-        // have more distinct entries than the complex has cells. `.items` reads the chain's raw,
+        // have more distinct entries than the complex has cells. `.rawEntries` reads the chain's raw,
         // uncollapsed entries, so this is also a deterministic, non-flaky proxy for the uncollapsed-
         // duplicate-entry performance bug fixed in this session (see WORKLOG-naive-homology.md) --
         // it fails hard under that regime instead of merely running slowly.
-        (Chain.from(rep.boundary).isZero() must beTrue) and (rep.items.size <= cells.size must beTrue)
+        (Chain.from(rep.boundary).isZero() must beTrue) and (rep.rawEntries.size <= cells.size must beTrue)
       }
     }
   }
@@ -142,19 +157,6 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
   "Naive engine agrees with the clear-and-compress engine on the same complexes" >> {
     given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
     import shc.{*, given}
-
-    def asStratified(cells: Seq[(Double, Simplex[Int])]): StratifiedCellStream[Simplex[Int], Double] =
-      val raw = explicitStream(cells)
-      val byDim: Map[Int, Seq[Simplex[Int]]] = raw.iterator.toSeq.groupBy(_.dim)
-      new StratifiedCellStream[Simplex[Int], Double]:
-        def filtrationValue = raw.filtrationValue
-        def filtrationOrdering = raw.filtrationOrdering
-        val smallest = Double.NegativeInfinity
-        val largest = Double.PositiveInfinity
-        override def iterator: Iterator[Simplex[Int]] = cells.sortBy(_._1).map(_._2).iterator
-        def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
-          case d if byDim.contains(d) => byDim(d).iterator
-        }
 
     val cc = PersistenceInChunksContext[Int, Double](3)
     val cases = List(HomologyFixtures.triangleCells, HomologyFixtures.tetrahedronCells, HomologyFixtures.torusCells)
@@ -179,19 +181,6 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
   "The clear-and-compress engine's representatives match the naive engine's exactly, at every dimension" >> {
     given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
     import shc.{*, given}
-
-    def asStratified(cells: Seq[(Double, Simplex[Int])]): StratifiedCellStream[Simplex[Int], Double] =
-      val raw = explicitStream(cells)
-      val byDim: Map[Int, Seq[Simplex[Int]]] = raw.iterator.toSeq.groupBy(_.dim)
-      new StratifiedCellStream[Simplex[Int], Double]:
-        def filtrationValue = raw.filtrationValue
-        def filtrationOrdering = raw.filtrationOrdering
-        val smallest = Double.NegativeInfinity
-        val largest = Double.PositiveInfinity
-        override def iterator: Iterator[Simplex[Int]] = cells.sortBy(_._1).map(_._2).iterator
-        def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
-          case d if byDim.contains(d) => byDim(d).iterator
-        }
 
     val cases =
       List(HomologyFixtures.elderRuleCells, HomologyFixtures.triangleCells, HomologyFixtures.tetrahedronCells)
@@ -235,7 +224,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
         val rep = b.annotation.get
         val leadingFv = fvByCell(rep.leadingCell.get)
         (leadingFv == endpointValue(b.lower)) &&
-        rep.items.forall((cell, _) => fvByCell(cell) <= endpointValue(b.lower))
+        rep.rawEntries.forall((cell, _) => fvByCell(cell) <= endpointValue(b.lower))
       }
 
       (noneMissing must beTrue) and (matchesNaive must beTrue) and (agreesWithDiagramAt must beTrue) and
@@ -312,7 +301,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
       bars.forall(bar => barcodeEndpointLtEq(bar.lower, bar.upper)) &&
       // Structural bound doubling as the non-flaky proxy for the uncollapsed-entry blowup bug fixed
       // in this session: a representative cycle can't have more distinct cells than the complex does.
-      bars.forall(bar => bar.annotation.get.items.size <= totalCells)
+      bars.forall(bar => bar.annotation.get.rawEntries.size <= totalCells)
     }
   }
 
@@ -342,7 +331,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
       (barcodeEndpointLtEq(bar.lower, bar.upper) must beTrue) and
         // Structural bound doubling as the non-flaky proxy for the uncollapsed-entry blowup bug fixed
         // in this session: a representative cycle can't have more distinct cells than the complex does.
-        (bar.annotation.get.items.size <= allCells.size must beTrue)
+        (bar.annotation.get.rawEntries.size <= allCells.size must beTrue)
     }
   }
 
@@ -361,8 +350,8 @@ class BarcodeRegressionSpec extends org.specs2.mutable.Specification with ScalaC
   val shc = PersistenceInChunksContext[Int, Double](3)
 
   val cases: Seq[(String, Array[Array[Double]] => StratifiedSimplexStream[Int, Double])] = Seq(
-    ("Alpha DQP", (pts: Array[Array[Double]]) => Alpha(pts.toIndexedSeq, "DQP")),
-    ("Alpha Helix", (pts: Array[Array[Double]]) => Alpha(pts.toIndexedSeq, "helix")),
+    ("Alpha DQP", (pts: Array[Array[Double]]) => AlphaShapes(pts.toIndexedSeq, "DQP")),
+    ("Alpha Helix", (pts: Array[Array[Double]]) => AlphaShapes(pts.toIndexedSeq, "helix")),
     (
       "VR",
       (pts: Array[Array[Double]]) =>

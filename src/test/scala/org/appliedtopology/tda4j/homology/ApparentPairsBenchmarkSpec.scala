@@ -50,7 +50,7 @@ class ApparentPairsBenchmarkSpec(args: Arguments) extends mutable.Specification:
     given Double is Field = Field.DoubleApproximated(1e-9)
 
     def randomCloud(n: Int, rng: Random): FiniteMetricSpace[Int] =
-      EuclideanMetricSpace(Array.fill(n)(Array.fill(ambientDim)(rng.nextDouble())))
+      EuclideanMetricSpace(HomologyFixtures.randomCloud(n, ambientDim, rng))
 
     def timeOne(metricSpace: FiniteMetricSpace[Int], useApparentPairs: Boolean): Long =
       val ctx = RipserCohomologyContext[Double](metricSpace, maxDim, useApparentPairs)

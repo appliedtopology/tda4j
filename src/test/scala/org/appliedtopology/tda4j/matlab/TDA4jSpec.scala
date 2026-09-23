@@ -126,7 +126,7 @@ class TDA4jSpec extends mutable.Specification:
 
   "complex=alpha, through the facade" should {
     // Tolerance-based, not exact `containTheSameElementsAs` -- each facade call independently reconstructs its
-    // own `Alpha(pts, alphaBackend)`, and HelixDelaunay's own filtration-value computation touches a
+    // own `AlphaShapes(pts, alphaBackend)`, and HelixDelaunay's own filtration-value computation touches a
     // `mutable.Set` whose iteration order (hence floating-point summation order) isn't guaranteed identical
     // between two independent constructions of "the same" complex -- the exact construction-nondeterminism
     // class `AlphaComplexSpec`'s own comment documents (last-ULP-level differences, not a reduction bug).

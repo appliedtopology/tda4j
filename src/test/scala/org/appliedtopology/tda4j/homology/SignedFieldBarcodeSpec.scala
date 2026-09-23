@@ -40,7 +40,7 @@ class SignedFieldBarcodeSpec extends mutable.Specification:
     new StratifiedCellStream[Simplex[Int], Double] with DoubleFiltration[Simplex[Int]]:
       val filtrationValue: PartialFunction[Simplex[Int], Double] = fv
       val filtrationOrdering: Ordering[Simplex[Int]] =
-        simplicialSetFiltrationOrdering(fv, _.dim, simplexOrdering[Int])
+        FiltrationOrdering.canonical(fv, _.dim, simplexOrdering[Int])
       def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
         case d if d >= 0 && d <= maxDim =>
           cells.map(_._2).filter(_.dim == d).sorted(using filtrationOrdering.reverse).iterator
@@ -70,13 +70,10 @@ class SignedFieldBarcodeSpec extends mutable.Specification:
   val fixtures: Seq[Seq[(Double, Simplex[Int])]] = (1 to 8).map(fixture)
 
   "Torsion-free complexes with 5- and 6-vertex simplices have the same barcode over F3 as over F2" >> {
-    "naive engine" >> {
+    "naive engine" >>
       forall(fixtures)(cells => naive[GF3.Fp](cells) must beEqualTo(naive[GF2.Fp](cells)))
-    }
-    "chunks engine" >> {
+    "chunks engine" >>
       forall(fixtures)(cells => chunks[GF3.Fp](cells) must beEqualTo(chunks[GF2.Fp](cells)))
-    }
-    "cellular cohomology engine" >> {
+    "cellular cohomology engine" >>
       forall(fixtures)(cells => cohomology[GF3.Fp](cells) must beEqualTo(cohomology[GF2.Fp](cells)))
-    }
   }

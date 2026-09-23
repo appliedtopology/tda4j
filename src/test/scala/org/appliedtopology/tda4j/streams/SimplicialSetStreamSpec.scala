@@ -5,6 +5,7 @@ import org.appliedtopology.tda4j.algebra.{given, *}
 import org.appliedtopology.tda4j.cells.{given, *}
 import org.appliedtopology.tda4j.homology.{given, *}
 import org.appliedtopology.tda4j.homology.HomologyFixtures
+import SimplicialSetStream.fromStream
 
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
@@ -17,11 +18,6 @@ import org.specs2.{mutable as s2mutable, ScalaCheck}
   */
 class SimplicialSetStreamSpec extends s2mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
-
-  private def explicitStream(cells: Seq[(Double, Simplex[Int])]): ExplicitStream[Int, Double] =
-    val builder = ExplicitStreamBuilder[Int, Double]
-    builder.addAll(cells)
-    builder.result()
 
   private def bettiFromOurs(diagram: List[(Int, Int, Int)]): Map[Int, Int] =
     diagram.collect { case (dim, _, Int.MaxValue) => dim }.groupBy(identity).view.mapValues(_.size).toMap
@@ -48,11 +44,11 @@ class SimplicialSetStreamSpec extends s2mutable.Specification with ScalaCheck:
   "fromStream agrees with SimplicialHomologyContext on Betti numbers, for hand-built fixtures" >> {
     val cases = List(HomologyFixtures.triangleCells, HomologyFixtures.tetrahedronCells, HomologyFixtures.torusCells)
     forall(cases) { cells =>
-      val stream = explicitStream(cells)
+      val stream = StreamFixtures.explicitStream(cells)
       val (betti, _) = ourBetti(stream)
 
       val reference = SimplicialHomologyContext[Int, Double, Double]()
-      val theirs = reference.persistentHomology(explicitStream(cells)).diagramAt(Double.PositiveInfinity)
+      val theirs = reference.persistentHomology(StreamFixtures.explicitStream(cells)).diagramAt(Double.PositiveInfinity)
 
       betti === bettiFromReference(theirs)
     }
@@ -61,7 +57,7 @@ class SimplicialSetStreamSpec extends s2mutable.Specification with ScalaCheck:
   "fromStream's diagram accounts for exactly one bar-cell-slot per generator, hand-built fixtures" >> {
     val cases = List(HomologyFixtures.triangleCells, HomologyFixtures.tetrahedronCells, HomologyFixtures.torusCells)
     forall(cases) { cells =>
-      val stream = explicitStream(cells)
+      val stream = StreamFixtures.explicitStream(cells)
       val sset = fromStream(stream)
       given (Simplex[Int] is OrderedCell) = sset.cellInstance
       val diagram =
@@ -74,14 +70,14 @@ class SimplicialSetStreamSpec extends s2mutable.Specification with ScalaCheck:
   "fromStream lists each generator's faces as d_0..d_n (vertex i removed), and validates, up to 7 vertices" >>
     forall(1 to 7) { n =>
       val spx = Simplex((0 until n).map(v => 2 * v + 1)*)
-      val sset = fromStream(explicitStream(Seq(0.0 -> spx)))
+      val sset = fromStream(StreamFixtures.explicitStream(Seq(0.0 -> spx)))
       val expected = if n == 1 then IndexedSeq.empty else spx.toIndexedSeq.map(v => SSetElement(Nil, spx - v))
       sset.faces(spx) must beEqualTo(expected)
     }
 
   "fromStream on a full 6-simplex (every face present) passes validate()" >> {
     val cells = (1 to 7).flatMap(k => (0 until 7).combinations(k).map(vs => 0.0 -> Simplex(vs*)))
-    fromStream(explicitStream(cells)).validate() must beEmpty
+    fromStream(StreamFixtures.explicitStream(cells)).validate() must beEmpty
   }
 
   "fromStream agrees with SimplicialHomologyContext on Betti numbers, random Vietoris-Rips clouds" >>

@@ -56,7 +56,7 @@ class SparseRipsBenchmarkSpec(args: Arguments) extends mutable.Specification:
     given Double is Field = Field.DoubleApproximated(1e-9)
 
     def randomCloud(n: Int, rng: Random): FiniteMetricSpace[Int] =
-      EuclideanMetricSpace(Array.fill(n)(Array.fill(2)(rng.nextDouble())))
+      EuclideanMetricSpace(HomologyFixtures.randomCloud(n, 2, rng))
 
     def timeAndCount(metricSpace: FiniteMetricSpace[Int], maxFiltrationValue: Double): (Long, Int) =
       val ctx =

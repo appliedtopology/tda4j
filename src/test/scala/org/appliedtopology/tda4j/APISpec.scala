@@ -24,6 +24,23 @@ class APISpec extends mutable.Specification:
     )
   }
 
+  "A full Vietoris-Rips persistence computation" >> {
+    // #full-vr-computation
+    given Double is Field = Field.DoubleApproximated(1e-9)
+    given ctx: TDAContext[Int, Double, Double]()
+    import ctx.{*, given}
+
+    val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8))
+    val metricSpace = EuclideanMetricSpace(points)
+    val stream = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(2.0))
+
+    val state = ctx.persistentHomology(stream)
+    state.barcodeAt(Double.PositiveInfinity).foreach(println)
+    // #full-vr-computation
+
+    state.barcodeAt(Double.PositiveInfinity) must not(beEmpty)
+  }
+
   "A full persistent homology computation" >> {
     val as = (1 to 50).map(_ => scala.util.Random.nextDouble() * 2.0 * math.Pi)
     val xys = as.toSeq.map(a => Seq(math.cos(a), math.sin(a)))

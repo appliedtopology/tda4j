@@ -25,7 +25,7 @@ class SimplicialSetSpec extends mutable.Specification:
     val brokenFaces: ProjectiveGenerator => IndexedSeq[SSetElement[ProjectiveGenerator]] = g =>
       val fs = rp3.faces(g)
       if g == E(3) then IndexedSeq(fs(1), fs(0), fs(2), fs(3)) else fs
-    val broken = new FiniteSimplicialSet(rp3.ord)(rp3.generatorsByDim, brokenFaces)
+    val broken = new FiniteSimplicialSet(rp3.generatorsByDim, brokenFaces)
     broken.validate() must not(beEmpty)
   }
 
@@ -35,6 +35,6 @@ class SimplicialSetSpec extends mutable.Specification:
     val brokenFaces: ProjectiveGenerator => IndexedSeq[SSetElement[ProjectiveGenerator]] = g =>
       if g == E(2) then IndexedSeq(SSetElement(Nil, E(1)), SSetElement(List(0, 1), E(0)), SSetElement(Nil, E(1)))
       else rp2.faces(g)
-    val broken = new FiniteSimplicialSet(rp2.ord)(rp2.generatorsByDim, brokenFaces)
+    val broken = new FiniteSimplicialSet(rp2.generatorsByDim, brokenFaces)
     broken.validate().exists(_.contains("malformed degeneracy word")) must beTrue
   }

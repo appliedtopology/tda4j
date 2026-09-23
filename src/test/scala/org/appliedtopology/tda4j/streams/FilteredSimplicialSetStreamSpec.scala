@@ -127,7 +127,7 @@ class FilteredSimplicialSetStreamSpec extends mutable.Specification:
           case None      => false
           case Some(rep) =>
             Chain.from(rep.boundary).isZero() &&
-            rep.items.size <= sset.generatorsByDim.map(_.size).sum
+            rep.rawEntries.size <= sset.generatorsByDim.map(_.size).sum
       }
 
     val torusOk = checkAllReps(SimplicialSetFixtures.torus, torusFiltration)
