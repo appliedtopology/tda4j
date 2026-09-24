@@ -77,6 +77,22 @@ interchangeable units. Only the naive engine (`SimplicialHomologyContext`/`Cellu
 for Cech complexes; the packed Ripser engine's optimizations don't carry over (see the
 [Developer's Guide](../developers-guide/architecture.md)).
 
+### Sheehy's sparse/approximate Vietoris-Rips filtration
+
+```scala 3
+val sheehyStream = SheehyRipsSimplexStream(metricSpace, epsilon = 0.5)
+val homology = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(sheehyStream)
+```
+
+A `(1+epsilon)`-multiplicative approximation to plain Vietoris-Rips's own barcode, built from a complex
+that's linear-sized (for point sets of bounded doubling dimension) rather than the full Vietoris-Rips
+complex — fewer simplices to reduce at the same scale range, at the cost of a controlled, quantified loss of
+precision (Cavanna, Jahanseir & Sheehy 2015). Smaller `epsilon` means less sparsification and a closer
+approximation to plain Vietoris-Rips; `epsilon` must be strictly between `0` and `1`. Like Cech above, only
+`naive`/`chunks`/`cohomology` are used — the packed Ripser engine's optimizations assume a plain
+max-pairwise-distance filtration functional, which this construction's own sparsification and vertex
+"vanishing" don't satisfy (see the [Developer's Guide](../developers-guide/architecture.md)).
+
 ### Witness complexes
 
 ```scala 3
@@ -275,12 +291,13 @@ It loads a point cloud, distance matrix, or cubical image in one of several form
 computes persistence via the same facade the MATLAB bridge uses (below), and writes the result in one of
 several formats (`--output-format`: `text`, `csv`, `gudhi`, `dipha`, `perseus`). Run with `--help` for the
 full flag list; the main ones mirror the MATLAB options one-to-one: `--complex` (`vr`/`alpha`/`cech`/
-`witness`/`dtm-rips`/`dtm-alpha`), `--engine`, `--max-dimension`, `--max-filtration-value`, `--field`, 
-`--representatives` (also print each bar's representative chain), and (for `--complex=witness`) 
-`--num-landmarks`, `--witness-variant`, `--landmark-selector`, `--landmark-seed`, `--nu`. For 
-`--complex=dtm-rips` or `--dtm-alpha`, use `--dtm-k` (required), `--dtm-q` (default 2.0), and `--dtm-p` 
-(default 1.0, only for `dtm-rips`). `--select-landmarks`/`--landmarks-file` split that same
-witness-complex computation into the two-step recipe described above.
+`witness`/`dtm-rips`/`dtm-alpha`/`sheehy-rips`), `--engine`, `--max-dimension`, `--max-filtration-value`,
+`--field`, `--representatives` (also print each bar's representative chain), and (for `--complex=witness`)
+`--num-landmarks`, `--witness-variant`, `--landmark-selector`, `--landmark-seed`, `--nu`. For
+`--complex=dtm-rips` or `--dtm-alpha`, use `--dtm-k` (required), `--dtm-q` (default 2.0), and `--dtm-p`
+(default 1.0, only for `dtm-rips`). For `--complex=sheehy-rips`, use `--sheehy-epsilon` (required, strictly
+between `0` and `1`). `--select-landmarks`/`--landmarks-file` split that same witness-complex computation
+into the two-step recipe described above.
 
 ## Calling from MATLAB or Java
 
@@ -305,10 +322,11 @@ result = org.appliedtopology.tda4j.matlab.TDA4j.computeFromPoints(points);
 bars = result.toArray();
 ```
 
-Entry points: `computeFromPoints`/`computeFromDistanceMatrix` (Vietoris-Rips/alpha/Cech/witness/dtm-rips/dtm-alpha, 
-from a point cloud or a precomputed distance matrix — alpha and Cech need real coordinates, so they're only 
-available from the points overload; witness works from either, exactly like `vr`; dtm-rips/dtm-alpha also need 
-real coordinates), `computeFromCubicalImage`/`computeFromImage` (cubical persistence from a flat array + shape, 
+Entry points: `computeFromPoints`/`computeFromDistanceMatrix` (Vietoris-Rips/alpha/Cech/witness/dtm-rips/
+dtm-alpha/sheehy-rips, from a point cloud or a precomputed distance matrix — alpha, Cech, and dtm-alpha need
+real coordinates, so they're only available from the points overload; witness/dtm-rips/sheehy-rips work from
+either, exactly like `vr`, since none of the three needs real coordinates, only a metric),
+`computeFromCubicalImage`/`computeFromImage` (cubical persistence from a flat array + shape, 
 or a 2D pixel matrix directly), and the two-step witness recipe's own four entry points -- 
 `selectLandmarksFromPoints`/`selectLandmarksFromDistanceMatrix` (→ `LandmarkSelectionResult`) and 
 `computeFromPointsAndLandmarks`/`computeFromDistanceMatrixAndLandmarks`, plus the 
@@ -320,17 +338,18 @@ changes a method's call signature:
 
 | Option | Values | Default |
 |---|---|---|
-| `complex` | `vr`, `alpha`, `cech`, `witness`, `dtm-rips`, `dtm-alpha` | `vr` |
-| `engine` | `ripser`, `naive`, `chunks`, `cohomology` | `ripser` for `vr` and `witness`/`witnessVariant=lazy`; `naive` for `alpha`/`cech`/`dtm-rips`/`dtm-alpha`/`witness`/`witnessVariant=general` |
+| `complex` | `vr`, `alpha`, `cech`, `witness`, `dtm-rips`, `dtm-alpha`, `sheehy-rips` | `vr` |
+| `engine` | `ripser`, `naive`, `chunks`, `cohomology` | `ripser` for `vr` and `witness`/`witnessVariant=lazy`; `naive` for `alpha`/`cech`/`dtm-rips`/`dtm-alpha`/`sheehy-rips`/`witness`/`witnessVariant=general` |
 | `alphaBackend` | `helix`, `DQP` | `helix` (only consulted for `complex=alpha`) |
 | `dtmK` | integer | REQUIRED for `complex=dtm-rips` or `complex=dtm-alpha`, no default |
 | `dtmQ` | double | `2.0` (only consulted for `complex=dtm-rips` or `complex=dtm-alpha`) |
 | `dtmP` | double | `1.0` (only consulted for `complex=dtm-rips`; must be `1.0` or `2.0`) |
+| `sheehyEpsilon` | double | REQUIRED for `complex=sheehy-rips`, no default; strictly between `0` and `1` |
 | `maxDimension` | integer | `2` — highest H_k reported, not highest simplex dimension built |
-| `maxFiltrationValue` | double | the point cloud's own minimum enclosing radius (`+Infinity` for `witness`/`witnessVariant=general`) |
+| `maxFiltrationValue` | double | the point cloud's own minimum enclosing radius (`+Infinity` for `witness`/`witnessVariant=general`; `SheehyRipsSimplexStream`'s own `maxFiniteFiltrationValue` for `complex=sheehy-rips`) |
 | `field` | `Z` (finite field), `R` (floating point) | `Z`, `prime=2` |
 | `prime` | integer | `2` (only for `field=Z`) |
-| `epsilon` | double | `1e-9` (only for `field=R`) |
+| `epsilon` | double | `1e-9` (only for `field=R`; unrelated to `sheehyEpsilon` above) |
 | `numLandmarks` | integer | REQUIRED for `complex=witness`, no default |
 | `witnessVariant` | `lazy`, `general` | `lazy` (only consulted for `complex=witness`) |
 | `landmarkSelector` | `maxmin`, `random` | `maxmin` (only consulted for `complex=witness`) |
@@ -338,14 +357,17 @@ changes a method's call signature:
 | `nu` | `0`, `1`, `2` | `2` (only for `complex=witness`/`witnessVariant=lazy`) |
 
 `alpha` refuses `engine=ripser` and `engine=chunks` (neither engine understands alpha complexes, and the
-chunks/alpha combination is a known stall risk in the underlying library); `cech` and `dtm-rips` refuse 
-`engine=ripser` (the packed Ripser engine's optimizations are proven for Vietoris-Rips's diameter functional 
-specifically, not for Cech's circumradius or DTM's filtration); `dtm-alpha` refuses both `engine=ripser` and 
-`engine=chunks`; `witness` with `witnessVariant=general` refuses both `engine=ripser` and `engine=chunks` for 
-the same reason as `cech` (the general witness complex isn't a flag complex either) — use `witnessVariant=lazy` 
-(the default) for `engine=ripser`/`chunks`. `engine=cohomology` is accepted everywhere `engine=naive` is 
-(`vr`, `alpha`, `cech`, `dtm-rips`, `dtm-alpha`, and `witness` alike). Unrecognized keys or values throw
-`IllegalArgumentException` immediately rather than silently falling back to a default.
+chunks/alpha combination is a known stall risk in the underlying library); `cech`, `dtm-rips`, and
+`sheehy-rips` all refuse `engine=ripser` (the packed Ripser engine's optimizations are proven for
+Vietoris-Rips's plain max-pairwise-distance functional specifically, not for Cech's circumradius, DTM's
+weighted filtration, or Sheehy's sparsified/vanishing one); `dtm-alpha` refuses both `engine=ripser` and
+`engine=chunks`; `witness` with `witnessVariant=general` refuses both `engine=ripser` and `engine=chunks` for
+the same reason as `cech` (the general witness complex isn't a flag complex either) — use `witnessVariant=lazy`
+(the default) for `engine=ripser`/`chunks`. `engine=cohomology` is accepted everywhere `engine=naive` is
+(`vr`, `alpha`, `cech`, `dtm-rips`, `dtm-alpha`, `sheehy-rips`, and `witness` alike). See the
+[Developer's Guide](../developers-guide/persistence-engines.md)'s streams-vs-engines table for the full
+picture, complex by complex. Unrecognized keys or values throw `IllegalArgumentException` immediately rather
+than silently falling back to a default.
 
 Representative-chain vertex indices for `complex=witness` are **ambient point-cloud indices**, already
 mapped back from the stream's own local `0 until numLandmarks` landmark indices — `cycleVertices` never
@@ -363,8 +385,8 @@ interval, not over the whole complex (see the developer's guide's persistence-en
 | Exploration, intermediate-filtration queries, representative cycles | `naive` (`CellularHomologyContext`/`TDAContext`) |
 | Fastest, most memory-efficient — the default for `complex=vr` | `ripser` (`PackedRipserCohomologyContext`) |
 | Large complex, want representatives for every bar including essential ones | `chunks` (`CellularPersistenceInChunksContext`) |
-| Cohomology (cocycle representatives) on `Cube`/`FiniteSimplicialSet`, or on Alpha/Cech/DTM/witness, where `ripser` doesn't apply | `cohomology` (`CellularCohomologyContext`) |
-| Alpha or Cech or DTM complexes, or a general (non-flag) witness complex | `naive` or `cohomology` (`chunks` also works for Cech and DTM-Rips) |
+| Cohomology (cocycle representatives) on `Cube`/`FiniteSimplicialSet`, or on Alpha/Cech/DTM/Sheehy/witness, where `ripser` doesn't apply | `cohomology` (`CellularCohomologyContext`) |
+| Alpha or Cech or DTM or Sheehy complexes, or a general (non-flag) witness complex | `naive` or `cohomology` (`chunks` also works for Cech, DTM-Rips, and Sheehy-Rips — not Alpha/DTM-Alpha) |
 | A lazy witness complex (the flag-complex variant) | `ripser` (`PackedRipserCohomologyContext`, run directly on `WitnessMetricSpace`) or `naive`/`chunks`/`cohomology` |
 
 All engines are generic over the coefficient field (a prime finite field or floating point); `naive`,

@@ -275,6 +275,47 @@ A fact used to cross-validate the two constructions against each other (`Witness
 complex's own 1-skeleton is identical to the lazy complex's at `nu = 2` — both use the 2nd-nearest-landmark
 threshold for edges, just reached via different code paths.
 
+### Sheehy's sparse/approximate Vietoris-Rips filtration
+
+`streams/SheehyRipsStream.scala` (`SheehyRipsSimplexStream`) implements Cavanna, Jahanseir & Sheehy's greedy-
+permutation reformulation (arXiv:1506.03797) of D.R. Sheehy's original net-tree construction (arXiv:1203.6786,
+DCG 49(4) 2013) — the two papers' own `epsilon` parameters are not comparable. Given a sparsity parameter
+`epsilon in (0,1)` and a full greedy permutation of the point set (`LandmarkSelector.maxmin` run to
+`numLandmarks = metricSpace.size`, extended to also expose each point's own insertion radius `lambda`), the
+resulting persistence barcode is a `(1+epsilon)`-multiplicative approximation to plain Vietoris-Rips's own
+barcode, from a complex whose size is linear in `n` for point sets of bounded doubling dimension — fewer
+simplices to *reduce* at the same scale range, in exchange for a controlled, quantified loss of precision.
+
+Like Cech/Witness above, this reuses `RipserCofaceSimplexStream`'s generic coface-generation loop rather than
+a from-scratch enumeration, but via a different shape: the ambient metric space is passed through UNMODIFIED
+(used only for combinatorial enumeration, never its own `.distance`), and one `filtrationValueOverride`
+computes every dimension `>= 1` directly from the greedy permutation's own `lambda` values — not a reified
+weighted `FiniteMetricSpace` the way `WitnessMetricSpace`/`DtmRipsSimplexStream`'s own reified space are. The
+reason is a genuine exclusion rule with no pairwise-only expression: a `k`-simplex's value is the `max` of its
+own edges' births, but ONLY if that value doesn't exceed the smallest of its OWN VERTICES' "vanish" times
+(`lambda_p * (1+epsilon)^2 / epsilon`) — a condition that has to see every vertex of the simplex at once, not
+just a pair, so a plain "flag complex over a weighted pairwise distance" shape can't carry it.
+
+A documented, verified gap in the source paper's own published algorithm: its `EdgeBirthTime` (Algorithm 3)
+computes an edge's birth from its two endpoints alone, with no check against either one's own vanish time —
+but the paper's own general `SimplexBirthTime` rule (Section 5.3) requires exactly that check, and an edge is
+simply that rule's `k=1` case, not a special one. Verified with two counterexamples, the second checked
+directly against the paper's own restricted neighbor-search bound (not just this implementation's own all-pairs
+enumeration) — see `.claude/WORKLOG-sheehy-rips.md` for both. This implementation applies the check uniformly
+from dimension 1 up.
+
+This construction is deliberately `O(n^2)` (every pairwise edge birth materialized directly), not the paper's
+own `O(n log n)` neighbor-search algorithm (Section 5, Algorithms 1-4, not implemented) — the payoff is a
+smaller complex to reduce, not a faster one to build, the same honest framing as Cech/Witness/alpha above.
+Refuses `engine="ripser"`: a simplex's value here is not simply the maximum ambient pairwise distance among
+its vertices (some pairs are sparsified to a smaller value, others excluded outright), so
+`PackedRipserCohomologyContext`'s `insertionDiameter`/apparent-pairs optimizations — proven specifically for
+that functional — do not apply. `naive`/`chunks`/`cohomology` all consume it like any other
+`CofaceSimplexStream[Int, Double]`; `chunks` is cross-validated fresh against `naive`
+(`SheehyRipsStreamSpec`), not assumed to carry over from any other construction — see
+[Persistence engines](persistence-engines.md)'s own streams-vs-engines table for the full picture across every
+construction, not just this one.
+
 ### Metric spaces
 
 `FiniteMetricSpace.scala` abstracts "distance + finite point set": `ExplicitMetricSpace` (raw distance

@@ -320,6 +320,95 @@ class TDA4jSpec extends mutable.Specification:
     }
   }
 
+  "complex=sheehy-rips, option validation" should {
+    "require sheehyEpsilon" in {
+      TDA4j.computeFromPoints(points, Array("complex", "sheehy-rips")) must throwA[IllegalArgumentException]
+    }
+    "reject engine=ripser combined with complex=sheehy-rips" in {
+      TDA4j.computeFromPoints(points, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "engine", "ripser")) must
+        throwA[IllegalArgumentException]
+    }
+  }
+
+  "complex=sheehy-rips, through the facade" should {
+    "match streams.SheehyRipsSimplexStream/SimplicialHomologyContext driven directly" in {
+      given Double is Field = Field.DoubleApproximated(1e-9)
+      val viaFacade = triples(
+        TDA4j.computeFromPoints(points, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "field", "R")).toArray()
+      )
+      val metricSpace = EuclideanMetricSpace(points)
+      val stream = LimitedCofaceSimplexStream(SheehyRipsSimplexStream(metricSpace, epsilon = 0.5), 3)
+      val direct = SimplicialHomologyContext[Int, Double, Double]()
+        .persistentHomology(stream)
+        .diagramAt(Double.PositiveInfinity)
+        .filter(_._1 <= 2)
+        .map { case (d, b, dd) => (d, b, if dd.isPosInfinity then Double.PositiveInfinity else dd) }
+        .toList
+      viaFacade must containTheSameElementsAs(direct)
+    }
+
+    "works from a distance matrix too (SheehyRipsSimplexStream needs no coordinates, unlike complex=cech/alpha)" in {
+      val viaPoints =
+        triples(TDA4j.computeFromPoints(points, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5")).toArray())
+      val viaDistances = triples(
+        TDA4j
+          .computeFromDistanceMatrix(
+            euclideanDistanceMatrix(points),
+            Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5")
+          )
+          .toArray()
+      )
+      viaPoints must containTheSameElementsAs(viaDistances)
+    }
+
+    "default to engine=naive and agree with an explicit engine=chunks call" in {
+      val naive =
+        triples(TDA4j.computeFromPoints(points, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5")).toArray())
+      val chunks = triples(
+        TDA4j
+          .computeFromPoints(points, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "engine", "chunks"))
+          .toArray()
+      )
+      naive must containTheSameElementsAs(chunks)
+    }
+
+    // The 6-point `points` fixture above almost certainly doesn't sparsify at all (SheehyRipsStreamSpec found
+    // this needs either a wide scale spread or many more points) -- a dispatch bug that silently routed
+    // complex=sheehy-rips to plain VR, or dropped sheehyEpsilon entirely, could still pass every test above. The
+    // three-cluster fixture (same construction, same seeds, as SheehyRipsStreamSpec's own deterministic
+    // sparsification fixture -- 105 -> 26 edges at epsilon=0.5) is reused here specifically to close that gap.
+    def clusterPoints: Array[Array[Double]] =
+      def cluster(cx: Double, cy: Double, seed: Int): Array[Array[Double]] =
+        val rng = new scala.util.Random(seed)
+        Array.fill(5)(Array(cx + (rng.nextDouble() - 0.5) * 0.5, cy + (rng.nextDouble() - 0.5) * 0.5))
+      cluster(0.0, 0.0, 1) ++ cluster(50.0, 0.0, 2) ++ cluster(25.0, 50.0, 3)
+
+    "produce a genuinely different (sparser) barcode than complex=vr, on a point cloud where sparsification fires" in {
+      val sheehy = triples(
+        TDA4j
+          .computeFromPoints(clusterPoints, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "maxDimension", "1"))
+          .toArray()
+      )
+      val vr = triples(
+        TDA4j
+          .computeFromPoints(clusterPoints, Array("maxFiltrationValue", "1000.0", "maxDimension", "1"))
+          .toArray()
+      )
+      sheehy must not(containTheSameElementsAs(vr))
+    }
+
+    "engine=cohomology agrees with the default engine=naive, on the same sparsifying point cloud" in {
+      val naive =
+        triples(TDA4j.computeFromPoints(clusterPoints, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5")).toArray())
+      val cohomology = triples(
+        TDA4j
+          .computeFromPoints(clusterPoints, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "engine", "cohomology"))
+          .toArray()
+      )
+      naive must containTheSameElementsAs(cohomology)
+    }
+  }
+
   "complex=dtm-alpha, through the facade" should {
     "match alpha.AlphaComplexDQP.dtm driven directly, in radius (not squared-power) units" in {
       given Double is Field = Field.DoubleApproximated(1e-9)

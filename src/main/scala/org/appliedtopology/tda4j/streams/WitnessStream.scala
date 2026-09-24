@@ -30,6 +30,15 @@ object LandmarkSelector:
     * Also returns the resulting covering radius `R = max_x min_{l in L} d(x,l)` (JavaPlex's own
     * `getMaxDistanceFromPointsToLandmarks()`) -- free, since the greedy loop already tracks `minDistToLandmarks` for
     * every point; callers use it to pick a `maxFiltrationValue` (e.g. `2R`, as the tutorial does).
+    *
+    * Also returns each chosen landmark's OWN insertion radius (`LandmarkSelection.insertionRadius`), lambda in the
+    * greedy-permutation literature: `lambda_p = d(p, {landmarks already chosen when p was added})`, i.e. exactly
+    * `minDistToLandmarks(next)` read just before that iteration's update -- free for the same reason the covering
+    * radius is. `firstLandmark`'s own lambda is `Double.PositiveInfinity` (there is no "distance to the empty set");
+    * every later entry is a real, finite, non-increasing (in selection order) value. `numLandmarks = metricSpace.size`
+    * gives the FULL greedy permutation of the whole space, not just a landmark subset -- this is how
+    * `streams.SheehyRipsSimplexStream` (Cavanna-Jahanseir-Sheehy 2015's sparse-filtration construction) gets its own
+    * greedy permutation, reusing this loop rather than a second copy of it.
     */
   def maxmin(metricSpace: FiniteMetricSpace[Int], numLandmarks: Int, firstLandmark: Int = 0): LandmarkSelection =
     require(
@@ -39,12 +48,24 @@ object LandmarkSelector:
     require(metricSpace.contains(firstLandmark), s"firstLandmark $firstLandmark is not in the metric space")
     val sortedElements = metricSpace.elements.toIndexedSeq.sorted
     val landmarks = mutable.ArrayBuffer(firstLandmark)
+    // Tracked separately from `landmarks` and excluded from the maxBy candidates below -- NOT redundant with
+    // `minDistToLandmarks(_) == 0.0`: an ALREADY-chosen point's own entry is 0 forever (distance to itself),
+    // but so is any UNCHOSEN point that happens to be an exact duplicate of one -- real input, not a
+    // pathological one (`SheehyRipsSimplexStream` hit this with duplicate coordinates in a generated point
+    // cloud). Without this exclusion, `maxBy`'s "first occurrence wins a tie" rule can re-pick the (lower-index)
+    // already-chosen point over the genuinely unchosen duplicate, silently dropping the duplicate from
+    // `landmarks`/`insertionRadius` forever even once `numLandmarks == metricSpace.size` (a full permutation
+    // then ends up with fewer than `metricSpace.size` DISTINCT entries).
+    val chosen = mutable.Set(firstLandmark)
+    val insertionRadius = mutable.Map[Int, Double](firstLandmark -> Double.PositiveInfinity)
     val minDistToLandmarks = mutable.Map.from(sortedElements.map(x => x -> metricSpace.distance(x, firstLandmark)))
     while landmarks.size < numLandmarks do
-      val next = sortedElements.maxBy(minDistToLandmarks(_))
+      val next = sortedElements.filterNot(chosen).maxBy(minDistToLandmarks(_))
+      insertionRadius(next) = minDistToLandmarks(next)
       landmarks += next
+      chosen += next
       for x <- sortedElements do minDistToLandmarks(x) = math.min(minDistToLandmarks(x), metricSpace.distance(x, next))
-    LandmarkSelection(landmarks.toIndexedSeq, sortedElements.map(minDistToLandmarks(_)).max)
+    LandmarkSelection(landmarks.toIndexedSeq, sortedElements.map(minDistToLandmarks(_)).max, insertionRadius.toMap)
 
   /** Uniform random selection of `numLandmarks` distinct ambient indices, seeded for reproducibility. Cheaper than
     * `maxmin` (`O(size)` vs `O(numLandmarks * size)`) but gives no covering guarantee -- outliers can be missed
@@ -71,9 +92,15 @@ object LandmarkSelector:
 
 /** `landmarks(i)` is the ambient index of the `i`-th landmark -- the mapping every witness-stream class below needs to
   * translate its own LOCAL `0 until landmarks.size` simplex vertex indices back to the caller's original point cloud
-  * (`matlab.TDA4j` does this for `cycleVertices`). `coveringRadius` is `R = max_x min_l d(x,l)`.
+  * (`matlab.TDA4j` does this for `cycleVertices`). `coveringRadius` is `R = max_x min_l d(x,l)`. `insertionRadius` maps
+  * an ambient index to its own greedy-permutation lambda (see `maxmin`'s doc); empty for `random` (no meaningful
+  * lambda) and for a hand-built selection not routed through `maxmin`.
   */
-case class LandmarkSelection(landmarks: IndexedSeq[Int], coveringRadius: Double)
+case class LandmarkSelection(
+  landmarks: IndexedSeq[Int],
+  coveringRadius: Double,
+  insertionRadius: Map[Int, Double] = Map.empty
+)
 
 /** Precomputes and exposes the landmark<->witness distance geometry a witness complex is built from (De Silva &
   * Carlsson 2004; checked against JavaPlex's own `WitnessStream`/`LazyWitnessStream` -- see

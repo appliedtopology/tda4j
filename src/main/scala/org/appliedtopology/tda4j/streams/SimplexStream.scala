@@ -282,7 +282,17 @@ class EnumeratingCofaceSimplexStream(
     if i < j && metricSpace.distance(i, j) <= resolvedMaxFiltrationValue
   yield Simplex(i, j)
 
-  var currentDimension: Int = 0
+  // -1, not 0: subclasses' iterateDimension overrides (RipserCofaceSimplexStream and its own subclasses) use
+  // `currentDimension != d - 1` to decide whether currentDimensionCache is fresh enough to reuse as dimension
+  // d's own lastDimensionCache, or must be rebuilt from scratch. `0` was indistinguishable from "dimension 0
+  // was genuinely computed and cached" -- a fresh, never-iterated instance already satisfies
+  // `currentDimension(0) != 1 - 1(0)` as `false`, so calling `iterateDimension(1)` directly (skipping dimension
+  // 0) silently reused the still-empty default `currentDimensionCache` instead of rebuilding, returning zero
+  // edges with no error (CLAUDE.md's ordering-contract rule 5; `.claude/WORKLOG-sheehy-rips.md`). `-1` can never
+  // equal `d - 1` for any `d >= 0` a caller could legitimately ask for, so it can only ever mean "nothing has
+  // been computed yet" -- every dimension `d >= 1` then correctly rebuilds on first access regardless of
+  // whether it's reached via `.iterator` (which always visits dimension 0 first) or a direct out-of-order call.
+  var currentDimension: Int = -1
 
   var lastDimensionCache: IndexedSeq[Simplex[Int]] = IndexedSeq()
 

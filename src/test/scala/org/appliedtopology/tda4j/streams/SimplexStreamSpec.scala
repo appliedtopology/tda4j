@@ -124,6 +124,22 @@ class CofaceSimplexStreamSpec extends mutable.Specification with org.specs2.Scal
       }
     }
 
+  // Regression pin for a real bug (`.claude/WORKLOG-sheehy-rips.md`, CLAUDE.md's ordering-contract rule 5):
+  // RipserCofaceSimplexStream's own dimension-d candidate generation reads dimension d-1's cache, deciding
+  // whether it's fresh via `currentDimension != d - 1`. `currentDimension` used to default to `0`, making this
+  // check silently pass for `d == 1` on a stream that had NEVER been iterated (`0 != 1 - 1` is `false`), so a
+  // direct `iterateDimension(1)` call -- skipping dimension 0, unlike the "driven strictly increasing" test
+  // above -- silently returned zero edges instead of rebuilding. Fixed by defaulting `currentDimension` to `-1`,
+  // a value no legitimate `d - 1` can ever equal.
+  "RipserCofaceSimplexStream.iterateDimension(1), called directly on a stream that was never iterated before " +
+    "(out of order, skipping dimension 0), gives the same edges .iterator would" >>
+    forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 4), Gen.chooseNum(8, 15))) { (pts: Array[Array[Double]]) =>
+      val metricSpace = EuclideanMetricSpace(pts)
+      val direct = RipserCofaceSimplexStream(metricSpace).iterateDimension(1).toSet
+      val viaIterator = RipserCofaceSimplexStream(metricSpace).iterator.filter(_.dim == 1).toSet
+      direct === viaIterator
+    }
+
   // Direct tests of StratifiedCellStream's own contract (see its doc comment): `.iterator` must actually
   // terminate, and the bound it terminates at must be exactly metricSpace.size, not one off in either
   // direction -- an off-by-one here would silently drop (or spuriously include) the top-dimensional simplex,

@@ -179,6 +179,29 @@ class CLISpec extends mutable.Specification:
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
     }
 
+    "produce the exact same barcode as calling TDA4j directly for --complex=sheehy-rips, via a real file on disk" >> {
+      // Same "no CLI-side code exists for this complex" argument as --complex=dtm-rips above -- --sheehy-epsilon
+      // is just one more 1:1-mirrored flag.
+      val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, points)
+
+      val buffer = new ByteArrayOutputStream()
+      val exitCode = TDA4jCLI.run(
+        Seq("--complex", "sheehy-rips", "--sheehy-epsilon", "0.5", "--max-dimension", "1", path),
+        new PrintStream(buffer)
+      )
+      val cliLines = buffer.toString.linesIterator.toSeq
+
+      val direct = TDA4j.computeFromPoints(
+        points,
+        Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "maxDimension", "1")
+      )
+      val directLines = TDA4jCLI.toBars(direct).map(_.toString)
+
+      (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
+    }
+
     "produce the exact same barcode as calling TDA4j directly for --complex=dtm-alpha, via a real file on disk" >> {
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
       val path = tempFile(".csv")

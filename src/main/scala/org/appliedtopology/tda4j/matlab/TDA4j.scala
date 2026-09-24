@@ -30,21 +30,23 @@ import scala.collection.mutable
   * (`computeFromPoints`/`computeFromDistanceMatrix`/`computeFromCubicalImage`/`computeFromImage` only -- see above for
   * the two-step entry points' own separate lists):
   *
-  *   - `"complex"`: `"vr"` (default), `"alpha"`, `"cech"`, `"witness"`, `"dtm-rips"`, or `"dtm-alpha"`.
+  *   - `"complex"`: `"vr"` (default), `"alpha"`, `"cech"`, `"witness"`, `"dtm-rips"`, `"dtm-alpha"`, or
+  *     `"sheehy-rips"`.
   *   - `"engine"`: `"ripser"` (default for `complex=vr`, and for `complex=witness` with `witnessVariant=lazy`; backed
   *     by `PackedRipserCohomologyContext`, the fastest and most memory-efficient engine -- see CLAUDE.md), `"naive"`
-  *     (reference-grade, slower; the default for `complex=alpha`/`complex=cech`/`complex=dtm-rips`/`complex=dtm-alpha`,
-  *     and for `complex=witness` with `witnessVariant=general`), `"chunks"` (`complex=vr`/`complex=cech`/
-  *     `complex=dtm-rips`/`complex=witness` with `witnessVariant=lazy` only -- see below for why `complex=alpha`/
-  *     `complex=dtm-alpha` refuse it, and why `complex=cech`/`complex=dtm-rips`/`witnessVariant=general` refuse
-  *     `engine=ripser` specifically), or `"cohomology"` (backed by `CellularCohomologyContext` -- persistent
-  *     COhomology, generic over `CellT: OrderedCell`, valid for every `complex` value including `alpha`; unlike
-  *     `engine=ripser`, not specialized to Vietoris-Rips, so it also works for
-  *     `complex=alpha`/`complex=cech`/`complex=witness`/`complex=dtm-rips`/`complex=dtm-alpha`, but without `ripser`'s
-  *     VR-specific speed optimizations -- see `.claude/DESIGN-generic-cohomology.md`). Every essential bar's
-  *     representative is a genuine cocycle (`d(rep) = 0`); a finite bar's representative is a valid witness on its own
-  *     living interval but is NOT expected to have zero coboundary over the whole complex -- see `Cohomology.scala`'s
-  *     own doc for why.
+  *     (reference-grade, slower; the default for
+  *     `complex=alpha`/`complex=cech`/`complex=dtm-rips`/`complex=dtm-alpha`/`complex=sheehy-rips`, and for
+  *     `complex=witness` with `witnessVariant=general`), `"chunks"` (`complex=vr`/`complex=cech`/`complex=dtm-rips`/
+  *     `complex=sheehy-rips`/`complex=witness` with `witnessVariant=lazy` only -- see below for why `complex=alpha`/
+  *     `complex=dtm-alpha` refuse it, and why `complex=cech`/`complex=dtm-rips`/`complex=sheehy-rips`/
+  *     `witnessVariant=general` refuse `engine=ripser` specifically), or `"cohomology"` (backed by
+  *     `CellularCohomologyContext` -- persistent COhomology, generic over `CellT: OrderedCell`, valid for every
+  *     `complex` value including `alpha`; unlike `engine=ripser`, not specialized to Vietoris-Rips, so it also works
+  *     for `complex=alpha`/`complex=cech`/`complex=witness`/`complex=dtm-rips`/`complex=dtm-alpha`/
+  *     `complex=sheehy-rips`, but without `ripser`'s VR-specific speed optimizations -- see
+  *     `.claude/DESIGN-generic-cohomology.md`). Every essential bar's representative is a genuine cocycle (`d(rep) =
+  *     0`); a finite bar's representative is a valid witness on its own living interval but is NOT expected to have
+  *     zero coboundary over the whole complex -- see `Cohomology.scala`'s own doc for why.
   *   - `"alphaBackend"`: `"helix"` (default) or `"DQP"`, only consulted when `complex=alpha`. `complex=dtm-alpha`
   *     always uses DQP (needs power/weighted Delaunay, which Helix does not support) -- this option is not consulted
   *     there.
@@ -59,6 +61,13 @@ import scala.collection.mutable
   *     implementation -- see `streams.DtmRipsSimplexStream`'s own doc), only consulted when `complex=dtm-rips`; must be
   *     `1.0` or `2.0`. Not consulted for `complex=dtm-alpha`, which is inherently the `p=2` ball equation by
   *     construction (see `alpha.AlphaComplexDQP.dtm`'s own doc).
+  *   - `"sheehyEpsilon"`: double, REQUIRED when `complex=sheehy-rips` (no default -- there is no universally sensible
+  *     sparsity/approximation-quality tradeoff, and silently picking one could produce a barely-sparsified or
+  *     wildly-approximate complex without the caller noticing). Must be strictly between `0` and `1`. Cavanna,
+  *     Jahanseir & Sheehy's own `epsilon` (arXiv:1506.03797): the resulting barcode is a `(1+epsilon)`-multiplicative
+  *     approximation to plain `complex=vr`'s own barcode -- see `streams.SheehyRipsSimplexStream`'s own doc for the
+  *     full construction, its units convention, and a documented gap in the source paper's own published algorithm this
+  *     implementation closes.
   *   - `"numLandmarks"`: integer, REQUIRED when `complex=witness` (no default -- there is no universally sensible
   *     landmark count). The number of landmarks to select from the input point cloud/distance matrix via
   *     `"landmarkSelector"` -- see `streams.LandmarkSelector`.
@@ -83,17 +92,22 @@ import scala.collection.mutable
   *     `complex=dtm-alpha` ignore this option entirely and report every dimension their complex naturally has: an alpha
   *     complex's chain complex terminates on its own (bounded by ambient dimension, or higher under cosphericity -- see
   *     CLAUDE.md), it is never artificially cut short the way a VR complex is by this option, so its own top dimension
-  *     is genuine information, not scaffolding. `complex=dtm-rips` needs the same "build one dimension higher, drop it"
-  *     handling as `complex=vr`/`complex=cech` (it is just as unboundedly deep).
-  *   - `"maxFiltrationValue"`: double, default is the point cloud's own `minimumEnclosingRadius` (Ripser's own default
-  *     truncation, not unbounded -- see CLAUDE.md's "enclosing-radius default" note). Pass a very large number for the
-  *     old always-unbounded behavior. Consulted for `complex=vr` (a diameter), `complex=cech` (a RADIUS -- Cech's own
-  *     filtration units, not doubled the way a VR diameter would be), `complex=dtm-rips` (DOUBLED units, exactly like
-  *     `complex=vr` -- see `streams.DtmRipsSimplexStream`'s own doc for why its default is safe there too), and
-  *     `complex=witness` with `witnessVariant=lazy` (`WitnessMetricSpace`'s own "distance" units -- the
-  *     enclosing-radius default is valid here too, see `streams.LazyWitnessSimplexStream`'s own doc); not consulted for
-  *     `complex=alpha`/`complex=dtm-alpha` (always untruncated -- see CLAUDE.md's "Alpha complex" section) nor for
-  *     `complex=witness` with `witnessVariant=general` (defaults to `+Infinity` there instead --
+  *     is genuine information, not scaffolding. `complex=dtm-rips`/`complex=sheehy-rips` need the same "build one
+  *     dimension higher, drop it" handling as `complex=vr`/`complex=cech` (both are just as unboundedly deep).
+  *   - `"maxFiltrationValue"`: double, default (when omitted) is the point cloud's own `minimumEnclosingRadius`
+  *     (Ripser's own default truncation, not unbounded -- see CLAUDE.md's "enclosing-radius default" note). Pass a very
+  *     large number for the old always-unbounded behavior. Consulted for `complex=vr` (a diameter), `complex=cech` (a
+  *     RADIUS -- Cech's own filtration units, not doubled the way a VR diameter would be), `complex=dtm-rips` (DOUBLED
+  *     units, exactly like `complex=vr` -- see `streams.DtmRipsSimplexStream`'s own doc for why its default is safe
+  *     there too), and `complex=witness` with `witnessVariant=lazy` (`WitnessMetricSpace`'s own "distance" units -- the
+  *     enclosing-radius default is valid here too, see `streams.LazyWitnessSimplexStream`'s own doc); also consulted
+  *     for `complex=sheehy-rips` (DOUBLED units, exactly like `complex=vr`) but with a DIFFERENT omitted-key default --
+  *     `minimumEnclosingRadius` would itself be unbounded here, since an edge to this construction's own anchor point
+  *     can be arbitrarily large, so omitting this key instead resolves to
+  *     `streams.SheehyRipsSimplexStream.maxFiniteFiltrationValue`, and any value given here only ever narrows that,
+  *     never widens past it (see that class's own doc for why it is always clamped regardless of what is passed); not
+  *     consulted for `complex=alpha`/`complex=dtm-alpha` (always untruncated -- see CLAUDE.md's "Alpha complex"
+  *     section) nor for `complex=witness` with `witnessVariant=general` (defaults to `+Infinity` there instead --
   *     `minimumEnclosingRadius` is NOT a valid truncation for a non-flag complex, see
   *     `streams.WitnessCofaceSimplexStream`'s own doc).
   *   - `"field"`: `"Z"` (default -- a prime finite field, `prime=2` unless overridden; the standard convention in the
@@ -118,19 +132,21 @@ import scala.collection.mutable
   * a second dispatch system to keep in sync).
   */
 private enum ComplexKind:
-  case VR, Alpha, Cech, Witness, DtmRips, DtmAlpha
+  case VR, Alpha, Cech, Witness, DtmRips, DtmAlpha, SheehyRips
 
 private object ComplexKind:
   def parse(raw: String): ComplexKind = raw.toLowerCase match
-    case "vr"        => VR
-    case "alpha"     => Alpha
-    case "cech"      => Cech
-    case "witness"   => Witness
-    case "dtm-rips"  => DtmRips
-    case "dtm-alpha" => DtmAlpha
-    case other       =>
+    case "vr"          => VR
+    case "alpha"       => Alpha
+    case "cech"        => Cech
+    case "witness"     => Witness
+    case "dtm-rips"    => DtmRips
+    case "dtm-alpha"   => DtmAlpha
+    case "sheehy-rips" => SheehyRips
+    case other         =>
       throw new IllegalArgumentException(
-        s"unrecognized complex '$other'; expected 'vr', 'alpha', 'cech', 'witness', 'dtm-rips', or 'dtm-alpha'"
+        s"unrecognized complex '$other'; expected 'vr', 'alpha', 'cech', 'witness', 'dtm-rips', 'dtm-alpha', or " +
+          "'sheehy-rips'"
       )
 
 /** `complex=witness` only: `"lazy"` (JavaPlex's `LazyWitnessStream` -- a flag complex, so `engine=ripser` is valid; see
@@ -373,7 +389,8 @@ object TDA4j:
     "nu",
     "dtmk",
     "dtmq",
-    "dtmp"
+    "dtmp",
+    "sheehyepsilon"
   )
 
   /** `numLandmarks`/`landmarkSelector`/`landmarkSeed` only -- the STRICT allowlist `selectLandmarksFromPoints`/
@@ -576,7 +593,10 @@ object TDA4j:
         EngineKind.parse(
           opts.getOrElse(
             "engine",
-            if complex == ComplexKind.Alpha || complex == ComplexKind.Cech || isDtm then "naive" else "ripser"
+            if complex == ComplexKind.Alpha || complex == ComplexKind.Cech || isDtm ||
+              complex == ComplexKind.SheehyRips
+            then "naive"
+            else "ripser"
           )
         )
     (complex, engine) match
@@ -604,6 +624,14 @@ object TDA4j:
             "born at filtration 0 and uses insertionDiameter, an incremental formula proven only for the plain " +
             "max-pairwise-distance functional -- neither holds for the DTM-weighted filtration. Use engine=naive, " +
             "engine=chunks, or engine=cohomology for complex=dtm-rips."
+        )
+      case (ComplexKind.SheehyRips, EngineKind.Ripser) =>
+        throw new IllegalArgumentException(
+          "engine=ripser cannot be used with complex=sheehy-rips: a simplex's filtration value here is not the " +
+            "maximum ambient pairwise distance among its vertices (some pairs are excluded outright, others take a " +
+            "sparsified value), so PackedRipserCohomologyContext's insertionDiameter/apparent-pairs machinery does " +
+            "not apply -- see streams.SheehyRipsSimplexStream's own doc. Use engine=naive, engine=chunks, or " +
+            "engine=cohomology for complex=sheehy-rips."
         )
       case (ComplexKind.DtmAlpha, EngineKind.Ripser) =>
         throw new IllegalArgumentException(
@@ -640,6 +668,17 @@ object TDA4j:
     val dtmQ = opts.get("dtmq").map(parseDoubleOption("dtmQ", _)).getOrElse(2.0)
     val dtmP = opts.get("dtmp").map(parseDoubleOption("dtmP", _)).getOrElse(1.0)
 
+    val sheehyEpsilon: Double =
+      if complex == ComplexKind.SheehyRips then
+        parseDoubleOption(
+          "sheehyEpsilon",
+          opts.getOrElse(
+            "sheehyepsilon",
+            throw new IllegalArgumentException("option 'sheehyEpsilon' is required for complex=sheehy-rips")
+          )
+        )
+      else 0.0 // unused for any other complex
+
     dispatchByField(opts) { [C] => (toDouble: C => Double) =>
       computeGeneric[C](
         metricSpace,
@@ -655,6 +694,7 @@ object TDA4j:
         dtmK,
         dtmQ,
         dtmP,
+        sheehyEpsilon,
         toDouble
       )
     }
@@ -683,6 +723,7 @@ object TDA4j:
     dtmK: Int,
     dtmQ: Double,
     dtmP: Double,
+    sheehyEpsilon: Double,
     toDouble: C => Double
   )(using C is Field): PersistenceResult =
     complex match
@@ -890,6 +931,42 @@ object TDA4j:
           case EngineKind.Ripser =>
             // dispatch() already rejects this for complex=dtm-rips before computeGeneric is ever reached.
             throw new IllegalArgumentException(s"engine=$engine is not offered for complex=dtm-rips")
+      case ComplexKind.SheehyRips =>
+        // Just as unboundedly deep as complex=vr/complex=cech/complex=dtm-rips -- the same "build one dimension
+        // higher, drop it" dance for engine=Naive/Cohomology, for the identical reason (H_k needs (k+1)-dimensional
+        // chains). Needs no real coordinates -- streams.SheehyRipsSimplexStream only needs a FiniteMetricSpace (the
+        // greedy permutation it builds on is purely metric), so this works from computeFromDistanceMatrix too.
+        // maxFiltrationValue is passed straight through: SheehyRipsSimplexStream's own constructor always clamps
+        // it to maxFiniteFiltrationValue regardless (see that class's own doc), so there is no separate "resolve
+        // the omitted-key default here" step the way complex=vr/complex=cech need.
+        val sheehyStream = SheehyRipsSimplexStream(metricSpace, sheehyEpsilon, maxFiltrationValue = maxFiltrationValue)
+        engine match
+          case EngineKind.Naive =>
+            val stream = LimitedCofaceSimplexStream(sheehyStream, requestedMaxDimension + 1)
+            fromBars[Simplex[Int], C](
+              PersistenceEngine.naive[Simplex[Int], C].barcode(stream),
+              (_, cell) => cell.underlying.toArray,
+              toDouble,
+              requestedMaxDimension
+            )
+          case EngineKind.Chunks =>
+            fromBars[Simplex[Int], C](
+              PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(sheehyStream),
+              (_, cell) => cell.underlying.toArray,
+              toDouble,
+              requestedMaxDimension
+            )
+          case EngineKind.Cohomology =>
+            val stream = LimitedCofaceSimplexStream(sheehyStream, requestedMaxDimension + 1)
+            fromBars[Simplex[Int], C](
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(stream),
+              (_, cell) => cell.underlying.toArray,
+              toDouble,
+              requestedMaxDimension
+            )
+          case EngineKind.Ripser =>
+            // dispatch() already rejects this for complex=sheehy-rips before computeGeneric is ever reached.
+            throw new IllegalArgumentException(s"engine=$engine is not offered for complex=sheehy-rips")
       case ComplexKind.DtmAlpha =>
         // No dimension cap applied, exactly like complex=alpha -- see that case's own comment.
         val pts = points.getOrElse(

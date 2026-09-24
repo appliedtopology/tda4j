@@ -176,6 +176,15 @@ recorded open class" `IllegalStateException` at least five times, or worse, a si
    is `Iterator.from(0).takeWhile(isDefinedAt).flatMap(iterateDimension)`; an always-true domain never terminates.
    VR streams guard with `d < metricSpace.size`; `LimitedCofaceSimplexStream` with `d >= 0 && d <= maxDim` (the
    `d >= 0` closes an `Int`-wraparound path); `AlphaShapeDQP` with `k < sizeByDimension.length`.
+5. **Fixed**: calling `iterateDimension(1)` directly on a never-touched `RipserCofaceSimplexStream` used to
+   silently return empty, not an error — `EnumeratingCofaceSimplexStream.currentDimension` defaulted to `0`,
+   indistinguishable from "dimension 0 was genuinely computed and cached," so the dimension-1 branch's own
+   `currentDimension != d - 1` freshness check read a fresh instance as "cache is fine" (`0 != 0` is false)
+   instead of "never populated" (dimension `d >= 2` was never affected: `0 != d-1` is true there, forcing a
+   correct rebuild regardless). `currentDimension` now defaults to `-1`, a value no legitimate `d - 1` can ever
+   equal, so every dimension self-heals on first access whether reached via `.iterator` or a direct,
+   out-of-order call. Regression-pinned in `CofaceSimplexStreamSpec` (`WORKLOG-sheehy-rips.md`); still prefer
+   `.iterator` for driving a stream, this fix just removes the silent-wrong-answer failure mode.
 
 Checks for a new/changed stream: cross-validate against an independent stream/engine *cell-for-cell* and use
 tie-heavy fixtures; the `totalBarsAccountForAllCells` invariant alone is weaker. Filtration values consulted by
@@ -353,7 +362,13 @@ pre-filter. Fixture discriminators: equilateral radius `s/√3` (not `s/2`), obt
 `streams/WitnessStream.scala`, `WORKLOG-witness-complex.md`. De Silva-Carlsson 2004, checked directly against
 JavaPlex's own `LazyWitnessStream`/`WitnessStream` Java source. `LandmarkSelector.maxmin`/`.random` pick a
 landmark subset (ambient indices) of a `FiniteMetricSpace[Int]`; `WitnessGeometry` precomputes the landmark
-x witness distance matrix and each witness's sorted landmark-distance row.
+x witness distance matrix and each witness's sorted landmark-distance row. `maxmin` also exposes each chosen
+point's own insertion radius (`LandmarkSelection.insertionRadius`, `streams.SheehyRipsSimplexStream`'s own
+greedy permutation) and excludes already-chosen points from its own tie-break candidates — a real, if narrow,
+pre-existing bug otherwise: an unchosen point that's an exact duplicate of an already-chosen one used to tie
+at `minDistToLandmarks = 0` with that already-chosen point and lose the tie (lower ambient index wins), so a
+FULL permutation (`numLandmarks = metricSpace.size`) could silently end up with fewer than `metricSpace.size`
+distinct entries (`WORKLOG-sheehy-rips.md`).
 
 Two independent variants, both `Simplex[Int]` over LOCAL landmark indices (`0 until landmarks.size` — map back
 through `landmarks(i)` for ambient ids), both built on `RipserCofaceSimplexStream` unchanged:
@@ -452,6 +467,41 @@ threshold), NOT bar-for-bar — alpha correctly delays/omits vertices Rips can't
 Rips side that must be dropped before comparing; see the worklog for the full derivation (it did not match on
 the first attempt, and understanding why cost real time — worth reading before touching this code).
 
+## Sheehy's sparse/approximate Vietoris-Rips filtration
+
+`streams/SheehyRipsStream.scala`, `WORKLOG-sheehy-rips.md`. `SheehyRipsSimplexStream` implements
+Cavanna-Jahanseir-Sheehy 2015 (arXiv:1506.03797) — the greedy-permutation reformulation of Sheehy's original
+net-tree construction (arXiv:1203.6786); the two papers' `epsilon` values are **not** comparable (CJS 2015's
+factor is `(1+epsilon)`, Sheehy 2013's is `1/(1-2ε)`). Deliberately `O(n²)` (every pairwise `edgeBirth`
+materialized directly), not the paper's own `O(n log n)` neighbor-search algorithm — a smaller complex to
+*reduce*, not a faster one to *build*.
+
+Built on `LandmarkSelector.maxmin` run to full size (`numLandmarks = metricSpace.size`) for the greedy
+permutation — extended, not duplicated, to also expose each point's own insertion radius
+(`LandmarkSelection.insertionRadius`). One memoized `filtrationValueOverride` handles every dimension ≥ 1
+uniformly (not a reified weighted metric space plus a separate higher-dimension patch): the `min`-over-
+vertices `vanish` exclusion check has to see every vertex of a simplex at once, which a pairwise-distance
+flag default cannot express.
+
+**CJS 2015's own Algorithm 3 (`EdgeBirthTime`) omits a check Section 5.3's own `SimplexBirthTime` definition
+requires** (a `min`-over-vertices `vanish` clamp) — verified as a real gap that survives even the paper's own
+restricted neighbor search, not just an artifact of this class's all-pairs enumeration; whether the paper's
+full pipeline compensates elsewhere was not checked. `edgeBirth` here applies that clamp to every edge, not
+just higher simplices — pinned by a hand-derived triangle fixture (three individually-finite edges whose own
+triangle is still excluded).
+
+Units doubled (diameter convention, matching every other stream here); reduces to plain VR exactly at a
+SMALL `epsilon` (not large — the opposite of the first, wrong instinct; see the worklog for the direction).
+`maxFiltrationValue` is unconditionally clamped to `maxFiniteFiltrationValue`, even when the caller passes an
+explicit `Some(Double.PositiveInfinity)` — `keptByThresholdAndCriterion`'s plain IEEE-754 `<=` would otherwise
+treat that threshold as equal to (hence admitting) every excluded pair's own `Double.PositiveInfinity`
+filtration value.
+
+Refuses `engine=ripser` (not diameter-only); `naive`/`chunks`/`cohomology` wired through `matlab.TDA4j`
+`complex=sheehy-rips` (needs `sheehyEpsilon`, required) and mirrored 1:1 in `cli` (`--sheehy-epsilon`), same as
+every other complex — see `persistence-engines.md`'s streams-vs-engines table for the full picture across
+every construction, not just this one.
+
 ## File I/O
 
 `io`, `WORKLOG-io-module.md`. Every format was verified against its project's primary source; unverified formats
@@ -483,12 +533,14 @@ The MATLAB-facing option strings still drive dispatch (can't match on types acro
 parses each one exactly once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before anything else
 runs, and dispatches on those enums via `PersistenceEngine.naive`/`.chunks`/`.cohomology` (`homology/
 PersistenceEngine.scala`) rather than re-matching the raw string at each branch.
-- `computeFromPoints`/`computeFromDistanceMatrix`: `complex` = `vr`/`alpha`/`cech`/`witness`/`dtm-rips`/`dtm-alpha`;
-  `engine` = `ripser`/`naive`/`chunks`/`cohomology` (Alpha and dtm-alpha refuse `ripser`/`chunks`; Cech, dtm-rips,
-  and witness/general refuse `ripser`, witness/general also refuses `chunks` — see "Witness complexes"/"DTM-based
-  filtrations" above). `dtm-rips`/`dtm-alpha` need `dtmK` (required); `dtm-rips` alone works from
-  `computeFromDistanceMatrix` too (no coordinates needed), `dtm-alpha` needs `computeFromPoints` like `alpha`/
-  `cech`. `computeFromCubicalImage`/`computeFromImage` for cubes.
+- `computeFromPoints`/`computeFromDistanceMatrix`: `complex` = `vr`/`alpha`/`cech`/`witness`/`dtm-rips`/`dtm-alpha`/
+  `sheehy-rips`; `engine` = `ripser`/`naive`/`chunks`/`cohomology` (Alpha and dtm-alpha refuse `ripser`/`chunks`;
+  Cech, dtm-rips, sheehy-rips, and witness/general refuse `ripser`, witness/general also refuses `chunks` — see
+  "Witness complexes"/"DTM-based filtrations"/"Sheehy's sparse/approximate Vietoris-Rips filtration" above, and
+  `persistence-engines.md`'s streams-vs-engines table for the full picture). `dtm-rips`/`dtm-alpha` need `dtmK`
+  (required); `sheehy-rips` needs `sheehyEpsilon` (required, strictly in `(0,1)`); `dtm-rips`/`sheehy-rips` alone
+  work from `computeFromDistanceMatrix` too (no coordinates needed), `dtm-alpha` needs `computeFromPoints` like
+  `alpha`/`cech`. `computeFromCubicalImage`/`computeFromImage` for cubes.
 - **Two-step witness recipe** (`WORKLOG-witness-two-step-api.md`), alongside the one-shot path:
   `selectLandmarksFrom{Points,DistanceMatrix}` (→ `LandmarkSelectionResult`) then
   `computeFrom{Points,DistanceMatrix}AndLandmarks` (takes that `int[]`, 0-based ambient indices, directly —
