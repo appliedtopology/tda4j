@@ -19,18 +19,18 @@ import scala.collection.mutable as scmutable
 
 /** `LandmarkSelector`/`WitnessGeometry`/`WitnessMetricSpace`/`LazyWitnessSimplexStream`/`WitnessCofaceSimplexStream`
   * correctness (`WitnessStream.scala`) -- the first exercise of a witness complex anywhere in this codebase, built on
-  * `RipserCofaceSimplexStream`'s generic coface-generation loop (the lazy stream, exactly like `CechCofaceSimplexStream`
-  * reuses it) plus a `filtrationValueOverride` (the general stream). Checked against JavaPlex's own
-  * `LazyWitnessStream`/`WitnessStream` Java source, not just the De Silva-Carlsson paper's prose -- see
+  * `RipserCofaceSimplexStream`'s generic coface-generation loop (the lazy stream, exactly like
+  * `CechCofaceSimplexStream` reuses it) plus a `filtrationValueOverride` (the general stream). Checked against
+  * JavaPlex's own `LazyWitnessStream`/`WitnessStream` Java source, not just the De Silva-Carlsson paper's prose -- see
   * `.claude/WORKLOG-witness-complex.md`.
   *
   * Validation order follows this codebase's established convention for a new complex type (see `CechStreamSpec`'s own
-  * header): a hand-derived fixture chosen to discriminate a specific wrong-implementation shape (forgetting the
-  * "max with facets" step), an independent from-scratch brute-force reimplementation of the De Silva-Carlsson formula
+  * header): a hand-derived fixture chosen to discriminate a specific wrong-implementation shape (forgetting the "max
+  * with facets" step), an independent from-scratch brute-force reimplementation of the De Silva-Carlsson formula
   * cross-checked cell-for-cell, the general-vs-lazy(nu=2) cross-check the two constructions' shared math predicts,
   * monotonicity/downward-closure checks, the bars-account-for-cells structural invariant, and a cross-check that
-  * `PackedRipserCohomologyContext` (proven only for genuine VR diameters -- CLAUDE.md) also happens to be valid for
-  * the lazy stream specifically, since it IS a diameter under `WitnessMetricSpace`'s own "distance."
+  * `PackedRipserCohomologyContext` (proven only for genuine VR diameters -- CLAUDE.md) also happens to be valid for the
+  * lazy stream specifically, since it IS a diameter under `WitnessMetricSpace`'s own "distance."
   */
 class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
@@ -343,7 +343,9 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
           val cap = math.max(1, landmarks.size - 2)
           val naive = sortedTriples(
             SimplicialHomologyContext[Int, Double, Double]()
-              .persistentHomology(LazyWitnessSimplexStream(ms, landmarks, maxFiltrationValue = Some(Double.PositiveInfinity)))
+              .persistentHomology(
+                LazyWitnessSimplexStream(ms, landmarks, maxFiltrationValue = Some(Double.PositiveInfinity))
+              )
               .diagramAt(Double.PositiveInfinity)
               .filter(_._1 <= cap)
           )
@@ -365,7 +367,9 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
         landmarkConfigs(ms).forall { landmarks =>
           val stream = LazyWitnessSimplexStream(ms, landmarks, maxFiltrationValue = Some(Double.PositiveInfinity))
           val naive = sortedTriples(
-            SimplicialHomologyContext[Int, Double, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+            SimplicialHomologyContext[Int, Double, Double]()
+              .persistentHomology(stream)
+              .diagramAt(Double.PositiveInfinity)
           )
           val chunks = sortedTriples(
             CellularPersistenceInChunksContext[Simplex[Int], Double](landmarks.size)
@@ -377,7 +381,9 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
       }
     }
 
-  private def cohomologyTriples[CellT](bars: List[PersistenceBar[Double, Chain[CellT, Double]]]): List[(Int, Double, Double)] =
+  private def cohomologyTriples[CellT](
+    bars: List[PersistenceBar[Double, Chain[CellT, Double]]]
+  ): List[(Int, Double, Double)] =
     sortedTriples(bars.map(bar => (bar.dim, endpointValue(bar.lower), endpointValue(bar.upper))))
 
   "CellularCohomologyContext agrees exactly (as a sorted list) with the naive engine on LazyWitnessSimplexStream, " +
@@ -387,9 +393,12 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
         landmarkConfigs(ms).forall { landmarks =>
           val stream = LazyWitnessSimplexStream(ms, landmarks, maxFiltrationValue = Some(Double.PositiveInfinity))
           val naive = sortedTriples(
-            SimplicialHomologyContext[Int, Double, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+            SimplicialHomologyContext[Int, Double, Double]()
+              .persistentHomology(stream)
+              .diagramAt(Double.PositiveInfinity)
           )
-          val cohomology = cohomologyTriples(CellularCohomologyContext[Simplex[Int], Double, Double]().persistentCohomology(stream))
+          val cohomology =
+            cohomologyTriples(CellularCohomologyContext[Simplex[Int], Double, Double]().persistentCohomology(stream))
           naive == cohomology
         }
       }
@@ -403,9 +412,12 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
         landmarkConfigs(ms).forall { landmarks =>
           val stream = WitnessCofaceSimplexStream(WitnessGeometry(ms, landmarks))
           val naive = sortedTriples(
-            SimplicialHomologyContext[Int, Double, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+            SimplicialHomologyContext[Int, Double, Double]()
+              .persistentHomology(stream)
+              .diagramAt(Double.PositiveInfinity)
           )
-          val cohomology = cohomologyTriples(CellularCohomologyContext[Simplex[Int], Double, Double]().persistentCohomology(stream))
+          val cohomology =
+            cohomologyTriples(CellularCohomologyContext[Simplex[Int], Double, Double]().persistentCohomology(stream))
           naive == cohomology
         }
       }
@@ -413,20 +425,20 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
 
   "complex=witness via computeFromDistanceMatrix agrees exactly with computeFromPoints on the same cloud's " +
     "own Euclidean distances, for both the lazy and general variants" >> {
-    val points =
-      Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0), Array(0.5, 2.0), Array(2.0, 0.5))
-    val distances = Array.tabulate(points.length, points.length)((i, j) => bruteDistance(points(i), points(j)))
-    def triples(m: Array[Array[Double]]): List[(Int, Double, Double)] =
-      sortedTriples(m.toList.map(row => (row(0).toInt, row(1), row(2))))
-    val lazyOpts = Array("complex", "witness", "numLandmarks", "4")
-    val generalOpts = Array("complex", "witness", "numLandmarks", "4", "witnessVariant", "general")
-    (triples(TDA4j.computeFromDistanceMatrix(distances, lazyOpts).toArray()) must beEqualTo(
-      triples(TDA4j.computeFromPoints(points, lazyOpts).toArray())
-    )) and
-      (triples(TDA4j.computeFromDistanceMatrix(distances, generalOpts).toArray()) must beEqualTo(
-        triples(TDA4j.computeFromPoints(points, generalOpts).toArray())
-      ))
-  }
+      val points =
+        Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0), Array(0.5, 2.0), Array(2.0, 0.5))
+      val distances = Array.tabulate(points.length, points.length)((i, j) => bruteDistance(points(i), points(j)))
+      def triples(m: Array[Array[Double]]): List[(Int, Double, Double)] =
+        sortedTriples(m.toList.map(row => (row(0).toInt, row(1), row(2))))
+      val lazyOpts = Array("complex", "witness", "numLandmarks", "4")
+      val generalOpts = Array("complex", "witness", "numLandmarks", "4", "witnessVariant", "general")
+      (triples(TDA4j.computeFromDistanceMatrix(distances, lazyOpts).toArray()) must beEqualTo(
+        triples(TDA4j.computeFromPoints(points, lazyOpts).toArray())
+      )) and
+        (triples(TDA4j.computeFromDistanceMatrix(distances, generalOpts).toArray()) must beEqualTo(
+          triples(TDA4j.computeFromPoints(points, generalOpts).toArray())
+        ))
+    }
 
   // ---------------------------------------------------------------------------------------------------------
   // Qualitative smoke test only, explicitly NOT a pinned oracle: witness complexes of small, evenly-spaced
