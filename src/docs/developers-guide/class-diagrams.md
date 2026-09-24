@@ -171,6 +171,34 @@ place. See [Persistence engines](persistence-engines.md) for the full, current p
 `CellularPersistenceInChunksContext`/`PersistenceInChunksContext`,
 `RipserCohomologyContext`, `PackedRipserCohomologyContext`, and `CellularCohomologyContext`.
 
+## Circular coordinates (`homology/CircularCoordinates.scala`)
+
+```mermaid
+classDiagram
+    class CircularCoordinates {
+        <<object>>
+        h1Bars(metricSpace, maxFiltrationValue) IndexedSeq~(Double, Double)~
+        compute(metricSpace, r, cocycleIndex, prime, maxFiltrationValue) Result
+    }
+    class Result {
+        theta: Map~Int, Double~
+        birth: Double
+        death: Double
+        r: Double
+        prime: Int
+    }
+    class NoIntegerCocycleException {
+        <<RuntimeException>>
+    }
+    CircularCoordinates --> Result : returns
+    CircularCoordinates ..> CellularCohomologyContext : computes K_r's cohomology with
+    CircularCoordinates ..> NoIntegerCocycleException : throws (no ℤ-lift at prime)
+```
+
+A standalone construction, not a fifth persistence engine — see [Architecture](architecture.md)'s own
+`homology.CircularCoordinates` section for the truncated-complex reframing, the harmonic-smoothing linear
+system, and why the output is a per-point angle map rather than a barcode.
+
 ## Metric spaces (`FiniteMetricSpace.scala`)
 
 ```mermaid

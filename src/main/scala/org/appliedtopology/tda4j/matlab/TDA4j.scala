@@ -318,6 +318,45 @@ object TDA4j:
     validateLandmarks(landmarks, metricSpace.size)
     LandmarkSelector.coveringRadius(metricSpace, landmarks.toIndexedSeq)
 
+  // ---------------------------------------------------------------------------------------------------------------
+  // circular coordinates (homology.CircularCoordinates, .claude/WORKLOG-mainstream-feature-gap-analysis.md item 2)
+  // -- a genuinely different SHAPE of result from PersistenceResult (a per-point angle, not a barcode), so its own
+  // small entry points rather than a new complex=circular value on computeFromPoints.
+  // ---------------------------------------------------------------------------------------------------------------
+
+  /** The `(birth, death)` range of every persistent H¹ class of `points`' own Vietoris-Rips complex, as an N-by-2 array
+    * (column 0 birth, column 1 death, `+Inf` for an essential bar), sorted by persistence descending -- row `i` here is
+    * exactly `circularCoordinates`'s own `cocycleIndex = i`. There is no way to pick a meaningful `r` for
+    * `circularCoordinates` without first knowing a target bar's own range, so this is the intended first call for a
+    * MATLAB caller, not merely a diagnostic -- see `homology.CircularCoordinates.h1Bars`'s own doc.
+    */
+  def h1Bars(points: Array[Array[Double]]): Array[Array[Double]] =
+    validatePoints(points)
+    CircularCoordinates.h1Bars(EuclideanMetricSpace(points)).map((b, d) => Array(b, d)).toArray
+
+  def circularCoordinates(points: Array[Array[Double]], r: Double): CircularCoordinatesResult =
+    circularCoordinates(points, r, 0, 47)
+
+  /** Circular coordinates (de Silva-Morozov-Vejdemo-Johansson) for one persistent H¹ class of `points`' own
+    * Vietoris-Rips complex -- see `homology.CircularCoordinates.compute`'s own doc for `r`/`cocycleIndex`/`prime`'s
+    * exact meaning and the full construction, and `h1Bars` above for how to find a valid `r`. Throws
+    * `IllegalArgumentException` for an invalid `r`/`cocycleIndex`/`prime`, or `NoIntegerCocycleException` (a
+    * `RuntimeException`, so it crosses MATLAB's Java bridge the same way `IllegalArgumentException` already does) if
+    * the chosen class has no exact integer lift at `prime` -- see that exception's own doc for what to do about it
+    * (usually: retry with a larger `prime`).
+    */
+  def circularCoordinates(
+    points: Array[Array[Double]],
+    r: Double,
+    cocycleIndex: Int,
+    prime: Int
+  ): CircularCoordinatesResult =
+    validatePoints(points)
+    val result = CircularCoordinates.compute(EuclideanMetricSpace(points), r, cocycleIndex, prime)
+    val thetaArray = Array.fill(points.length)(Double.NaN)
+    result.theta.foreach((i, t) => thetaArray(i) = t)
+    new CircularCoordinatesResult(thetaArray, result.birth, result.death, result.r, result.prime)
+
   def computeFromCubicalImage(shape: Array[Int], flatValues: Array[Double]): PersistenceResult =
     computeFromCubicalImage(shape, flatValues, Array.empty[String])
 

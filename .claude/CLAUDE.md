@@ -299,6 +299,24 @@ inconsistency. `matlab.PersistenceResult` exposes both; CLI (`--distance-to`) mi
 the vectorizations (matrix output doesn't fit the CLI's existing diagram-shaped output model — a deliberate
 scope boundary, not an oversight). `WORKLOG-bottleneck-wasserstein-vectorizations.md`.
 
+**`homology.CircularCoordinates`** (de Silva-Morozov-Vejdemo-Johansson 2011): `h1Bars` lists persistent H¹
+`(birth,death)` by persistence descending (the required first call — no other way to pick `r`);
+`compute(metricSpace, r, cocycleIndex, prime=47, ...)` fixes `r` inside a chosen bar's range and computes
+`CellularCohomologyContext` cohomology of the *static* truncated complex `K_r` directly — the class is
+essential there by construction, dissolving the open question of whether a finite bar's own representative
+restricts to a nonzero cocycle on a sub-level complex. A `K_r`-essential class is matched back to its
+full-filtration bar by birth value alone (truncating a filtration's end can't change an already-determined
+birth) — no separate bookkeeping needed. Cohomology runs over an odd prime field (never `p=2`: an RP²-type
+class has no real/integer lift, so a mod-2 "cocycle" is a mirage here); the integer lift is checked **exactly**
+against every triangle, throwing `NoIntegerCocycleException` (plain `RuntimeException`) rather than silently
+coordinatizing a mirage. Harmonic smoothing (`d0^T d0 g = d0^T z`) solves matrix-free via `commons-math3`
+`ConjugateGradient`/`RealLinearOperator`, restricted to the cocycle's own connected component (other
+components get no coordinate, not a sentinel), one vertex anchored at `g=0` for positive-definiteness. Output
+is directly `theta(v) = frac(g(v))` — no path-integration step (confirmed against `scikit-tda/DREiMac`'s own
+source). MATLAB facade (`TDA4j.h1Bars`/`circularCoordinates`, `CircularCoordinatesResult`) mirrors this;
+deliberately no CLI mirror (per-point array, not a diagram; picking `r` is inherently two-step and
+data-dependent). `WORKLOG-circular-coordinates.md`.
+
 ### Cross-engine benchmark
 
 `EngineComparisonBenchmarkSpec` times every (construction x engine) pairing across point count/dimension/`maxDim`,
@@ -581,6 +599,11 @@ PersistenceEngine.scala`) rather than re-matching the raw string at each branch.
   `columnVertices`/`columnFiltrationValue`, lazy (`TDA4j.buildBoundaryMatrix`, one shared thunk per `complex`
   branch, reused across every `engine` — the matrix is a property of the complex, not of which engine reduced
   it; confirmed byte-identical across engines, not just designed that way). See "Barcode representation" above.
+- **Circular coordinates**: `h1Bars(points)`/`circularCoordinates(points, r[, cocycleIndex, prime])` →
+  `CircularCoordinatesResult` (`theta`/`hasCoordinate`/`birth`/`death`/`r`/`prime`), own small entry points
+  rather than a `complex=` value on `computeFromPoints` (a per-point angle is a different result shape from a
+  barcode). No CLI mirror, same reasoning as the vectorizations above plus `r` needing a prior `h1Bars` call to
+  pick meaningfully. See "Barcode representation" above (`homology.CircularCoordinates`).
 - Unverified: MATLAB's bundled JVM version and actual `double[][]`/`String[]`/`int[]` marshalling.
 
 ## Session practices

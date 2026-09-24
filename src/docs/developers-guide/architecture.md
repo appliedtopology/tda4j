@@ -388,6 +388,59 @@ that way: `naive`/`ripser`/`chunks`/`cohomology` all export byte-for-byte identi
 input). Like the vectorizations above, deliberately not mirrored on the CLI — a sparse matrix doesn't fit the
 CLI's diagram-in-diagram-out shape any better than a landscape/image array does.
 
+## `homology.CircularCoordinates` (`CircularCoordinates.scala`)
+
+`org.appliedtopology.tda4j.homology` also holds a standalone construction rather than a fifth persistence
+engine: circular coordinates (de Silva-Morozov-Vejdemo-Johansson 2011,
+`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 2), which turns one persistent H¹ class of a
+Vietoris-Rips complex into a map from (a connected subset of) the point cloud to the circle `R/Z`. `h1Bars`
+lists every persistent H¹ class's `(birth, death)`, sorted by persistence descending — the only way a caller
+can pick a meaningful threshold `r` for `compute` below, so it's the intended first call, not a diagnostic.
+
+**The reframing that makes this tractable** (the originating worklog's own contribution, not just a
+literature port): rather than asking whether a *finite* bar's already-computed representative happens to
+restrict to a nonzero cocycle on some sub-level complex — an open question about an existing artifact —
+`compute` fixes `r` inside the target bar's `[birth, death)` up front, builds the *static* truncated complex
+`K_r` (`maxFiltrationValue = Some(r)`, the same knob enclosing-radius truncation already uses), and computes
+`CellularCohomologyContext`'s persistent cohomology of that fixed complex directly. The target class is
+essential at `K_r` *by construction* — nothing survives past `r` in a view that stops at `r` — so the
+verification question dissolves rather than needing an answer. Matching one of possibly several
+simultaneously-alive `K_r`-essential classes back to the specific full-filtration bar `h1Bars` reported turns
+out to need only a birth-value comparison: truncating the *end* of a filtration cannot change how early
+something is born, so `K_r`'s persistent cohomology (fed the same filtration values, just cut off at `r`)
+assigns every bar the same birth it has in the full computation.
+
+The chosen cocycle is computed over an odd prime field (`prime`, default `47` — not this library's usual `2`
+default, since an RP²-type class exists over `F_2` with no real/integer lift at all, making a mod-2 "cocycle"
+a mirage for coordinatization specifically), lifted to an integer cochain, and checked EXACTLY (not just mod
+`prime`, which the field computation already guarantees trivially) against every triangle of `K_r` —
+`NoIntegerCocycleException` (a `RuntimeException`, crossing the MATLAB bridge the same way
+`IllegalArgumentException` already does) if some triangle's integer boundary doesn't sum to zero, naming the
+offending triangle. Verified, not assumed: a class that fails this check is either genuinely torsion or needs
+a larger prime; `compute` does not silently coordinatize against a mod-`prime` mirage either way.
+
+The verified integer cocycle is then harmonically smoothed: `min_g ||z - d0 g||^2` for a real vertex function
+`g` (`d0` the 0-coboundary map), via the normal equations `d0^T d0 g = d0^T z` — a sparse SPD least-squares
+solve, not "optimization" in the LP/QP sense that `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 3
+(optimal cycles, deprioritized) actually needs. Solved matrix-free with the already-vendored
+`org.apache.commons.math3.linear.ConjugateGradient` against a `RealLinearOperator` built directly from
+`Simplex.boundary[Double]` — no dense matrix materialized, no new dependency — restricted to the connected
+component of `K_r`'s 1-skeleton containing the cocycle's own support (a class is only meaningful where a path
+exists to integrate it along; other components get no coordinate at all, not a sentinel), with one arbitrary
+vertex in that component anchored at `g = 0` to make the reduced system genuinely positive *definite* (the
+unreduced graph Laplacian is singular on constants, one null dimension per connected component). The output
+coordinate is then, directly, `theta(v) = frac(g(v))` — no separate path-integration step, confirmed against a
+real reference implementation (`scikit-tda/DREiMac`'s `toroidalcoords.py`, fetched and read directly) rather
+than derived from the paper's more abstract statement alone.
+
+`matlab.TDA4j.h1Bars`/`circularCoordinates` (returning `CircularCoordinatesResult`) mirror `h1Bars`/`compute`
+for a MATLAB caller — a genuinely different result *shape* (a per-point angle, `Double.NaN` for a point
+outside the relevant component) from `PersistenceResult`'s barcode, hence its own small entry points rather
+than a new `complex=circular` value on `computeFromPoints`. Like the vectorizations and boundary-matrix export
+above, deliberately not mirrored on the CLI: the natural output is a per-point angle array, not a diagram, and
+picking a meaningful `r` is an inherently interactive, data-dependent choice (`h1Bars` then `compute`) that
+doesn't reduce to a single flag the way `--distance-to` does for `BarcodeDistance`.
+
 ```scala 3
 class TDAContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]
     extends SimplicialHomologyContext[VertexT, CoefficientT, FiltrationT]():

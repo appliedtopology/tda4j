@@ -448,6 +448,34 @@ this is a different indexing than `dimension(i)`/`cycleVertices(i)`/etc. above. 
 sparse matrix doesn't fit its diagram-in-diagram-out shape) — see the [Developer's
 Guide](../developers-guide/architecture.md)'s "`Barcode.scala`" section for the full construction.
 
+### Circular coordinates
+
+For a point cloud with cyclic/periodic structure (e.g. samples along a loop), `TDA4j.h1Bars`/
+`circularCoordinates` (de Silva-Morozov-Vejdemo-Johansson 2011) turn a persistent H¹ class into a map from
+each point to an angle in `[0, 1)` — a genuinely topological coordinate, not a barcode, so these are their own
+entry points rather than a new `complex=` value on `computeFromPoints`:
+
+```java
+double[][] bars = TDA4j.h1Bars(points);      // row i: (birth_i, death_i), sorted by persistence descending
+double r = bars[0][0] + (bars[0][1] - bars[0][0]) * 0.5; // pick r inside the most persistent bar's own range
+
+CircularCoordinatesResult result = TDA4j.circularCoordinates(points, r); // cocycleIndex=0, prime=47 defaults
+double[] theta = result.theta();             // one entry per input point, Double.NaN outside the class's own
+                                              // connected component -- not every point necessarily gets one
+boolean covered = result.hasCoordinate(3);
+```
+
+`h1Bars` is the required first call: there is no way to pick a meaningful `r` without first knowing a target
+bar's own `[birth, death)` range. `circularCoordinates` throws `IllegalArgumentException` for an `r` outside
+that range (or a bad `cocycleIndex`/`prime`), and `NoIntegerCocycleException` (also a plain `RuntimeException`,
+so it crosses the MATLAB bridge the same way) if the chosen class has no exact integer lift at `prime` —
+usually resolved by retrying with a larger odd prime; a genuinely torsion class (no real/integer lift at any
+prime, RP²'s own fundamental class being the standard example) will keep failing regardless. Not mirrored on
+the CLI, for the same reason as the vectorizations and boundary-matrix export above (its output is a per-point
+array, not a diagram) plus the inherently two-step, data-dependent nature of picking `r` — see the [Developer's
+Guide](../developers-guide/architecture.md)'s `homology.CircularCoordinates` section for the full construction
+(the truncated-complex `K_r` reframing, the harmonic-smoothing linear system, and the integer-lift check).
+
 ## Which persistence engine?
 
 | Need | Engine (`engine=` for MATLAB/CLI) |
