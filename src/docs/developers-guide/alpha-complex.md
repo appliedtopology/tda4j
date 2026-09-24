@@ -2,7 +2,7 @@
 
 Two independent backends compute alpha complexes; `AlphaShapes(points, dispatch)` (`alpha/AlphaShapes.scala`)
 chooses between them. This page is the developer-facing view. For the user-facing framing (which one to
-pick, and the honest tradeoffs), see the @ref:[User's Guide](../user-guide/index.md).
+pick, and the honest tradeoffs), see the [User's Guide](../user-guide/README.md).
 
 ## Dispatch
 
@@ -63,7 +63,7 @@ Euclidean-embeddable metrics.
 
 `AlphaShapeDQP` always computes the complete, **untruncated** alpha complex, matching `HelixDelaunay`'s own
 always-untruncated behavior (a finite radius bound would silently exclude the arbitrarily-large-circumradius
-simplices degenerate configurations legitimately produce — see @ref:[Degeneracies](degeneracies.md)).
+simplices degenerate configurations legitimately produce — see [Degeneracies](degeneracies.md)).
 Callers who want an actually radius-truncated alpha complex should call `AlphaComplexDQP.euclidean(points,
 maxRadius, maxDimension, settings)` directly.
 
@@ -112,4 +112,4 @@ The paper's own benchmarks are mixed against Ripser (loses on 2 of 4 persistence
 qhull-based Delaunay on some inputs. DQP's genuine value proposition is high ambient dimension (where
 Delaunay is infeasible), exact homology rather than persistence diagrams, and much smaller complexes than
 Vietoris-Rips when data sits near a low-dimensional subspace — not raw speed. See the
-@ref:[User's Guide](../user-guide/index.md) for how this should shape what you tell an end user.
+[User's Guide](../user-guide/README.md) for how this should shape what you tell an end user.

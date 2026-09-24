@@ -1,7 +1,7 @@
 # WORKLOG: whole-project code critique (readability, idiom, organization), 2026-09-22
 
 **Scope.** Every Scala file in `src/main` (44 files, ~10.3k lines) was read, plus `build.sbt`/`.scalafmt.conf`, a
-quick pass over `src/test` (§7), and a grep of `src/main/paradox` for the classes §5 proposes to delete or move
+quick pass over `src/test` (§7), and a grep of `../src/main/docs` for the classes §5 proposes to delete or move
 (§5.5). The Paradox prose itself was not reviewed. `AlphaComplexDQP.scala`'s numerical core (`CholeskyWorkspace`/`DualQP`, lines
 ~262–710) was only skimmed, since the settled-numerics section of CLAUDE.md puts it off-limits for retuning anyway.
 

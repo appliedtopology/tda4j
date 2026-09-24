@@ -2,10 +2,10 @@
 
 This page walks the two lower layers of the library: the algebraic core (what a "chain" and a
 "coefficient" actually are) and complex construction (how a sequence of cells in filtration order gets
-produced). @ref:[Persistence engines](persistence-engines.md) covers what consumes the stream this layer
+produced). [Persistence engines](persistence-engines.md) covers what consumes the stream this layer
 produces.
 
-If a piece of Scala 3 syntax below looks unfamiliar, see the @ref:[Scala 3 primer](scala3-primer.md) first.
+If a piece of Scala 3 syntax below looks unfamiliar, see the [Scala 3 primer](scala3-primer.md) first.
 
 ## Package layout
 
@@ -103,7 +103,7 @@ the ambient, possibly-truncated complex), not intrinsic the way `boundary` is, s
 method with no complex to consult can only be correct when the complex is always the full
 combinatorially-possible one. `RipserCohomologyContext`/`PackedRipserCohomologyContext` compute coboundaries
 directly against `SimplexIndexing`'s cofacet iterator instead (see
-@ref:[Persistence engines](persistence-engines.md)).
+[Persistence engines](persistence-engines.md)).
 
 ### `Chain`
 
@@ -115,7 +115,7 @@ constantly.
 - `collapseHead()`/`collapseAll()` merge duplicate-cell entries, dropping exact zeros. Naive `+`/`-`/`⊠`
   only lazily collapse the head, so a hand-rolled reduction loop built out of raw `Chain` arithmetic
   accumulates an ever-growing backlog of uncollapsed duplicates — see
-  @ref:[Hard-won invariants](gotchas.md).
+  [Hard-won invariants](gotchas.md).
 - `Chain.reduceBy`/`Chain.reduceByUntil` are the actual matrix-reduction primitives every persistence
   engine builds on: given a chain `z` and a `basis: Map[CellT, Chain[CellT, CoefficientT]]` of recorded
   pivot columns, repeatedly subtract the appropriate multiple of `basis(pivot)` until `z`'s leading cell is
@@ -124,7 +124,7 @@ constantly.
   `PriorityQueue`-backed `Chain` type, so repeated updates collapse duplicates automatically.
 - `given [CellT: Ordering, CoefficientT: Field] => (Chain[CellT, CoefficientT] is RingModule)` is what makes
   `+`, `-`, `⊠`, `unary_-` work on `Chain` values — the `given` whose summon *timing* matters, see
-  @ref:[Hard-won invariants](gotchas.md).
+  [Hard-won invariants](gotchas.md).
 
 ## Complex construction: streams
 
@@ -141,7 +141,7 @@ StratifiedCellStream[CellT, FiltrationT] -- adds iterateDimension: dimension-by-
 ```
 
 **Two rules that hold for every stream in this codebase**, both explained in full in
-@ref:[Hard-won invariants](gotchas.md):
+[Hard-won invariants](gotchas.md):
 
 - `filtrationOrdering` orders cells by filtration value **reversed** (so the *smallest*-under-this-ordering
   cell is the *youngest*), because `Chain`'s pivot is always the ordering's minimum and the reduction
@@ -173,13 +173,13 @@ not `Double.PositiveInfinity` — past that radius every vertex is within range 
 complex is a cone from there on and provably contributes no further homology (real `ripser.cpp` uses the
 same default). Pass `maxFiltrationValue = Some(Double.PositiveInfinity)` for the old always-unbounded
 behavior. `RecursiveStackVietorisRipsSimplexStream` and the alpha-complex backends keep their own,
-always-untruncated default (see @ref:[Alpha complex](alpha-complex.md)).
+always-untruncated default (see [Alpha complex](alpha-complex.md)).
 
 `SimplexIndexing` (inside `SimplexIndexing.scala`) is the piece every Ripser-flavored part of this codebase
 depends on: it encodes/decodes a `d`-subset of `{0, ..., vertexCount-1}` to/from a single integer index via
 binomial-coefficient lookups, in `O(d)` either direction. Its `cofacetIterator`/`facetIterator` walk the
 *complete* `vertexCount`-point abstract simplex with no notion of `maxDimension` truncation at all — see
-@ref:[Hard-won invariants](gotchas.md) before building anything new directly on them.
+[Hard-won invariants](gotchas.md) before building anything new directly on them.
 
 ### Cubical complexes
 
@@ -314,7 +314,7 @@ class TDAContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]
 ```
 
 `TDAContext` takes **three** type parameters (`VertexT`, `CoefficientT`, `FiltrationT`). It *is* a
-`SimplicialHomologyContext` (see @ref:[Persistence engines](persistence-engines.md)), plus it exports
+`SimplicialHomologyContext` (see [Persistence engines](persistence-engines.md)), plus it exports
 chain-arithmetic operators (`+`, `-`, `⊠`, ...) into your namespace and provides an implicit
 `Simplex -> Chain` conversion so you can write `∆(1,2) - ∆(2,3)` directly — the basis for the
-@ref:[User's Guide](../user-guide/index.md)'s Scala quick-start.
+[User's Guide](../user-guide/README.md)'s Scala quick-start.

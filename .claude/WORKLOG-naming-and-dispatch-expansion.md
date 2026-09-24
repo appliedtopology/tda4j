@@ -43,7 +43,7 @@ between), confirmed via `git status` showing clean `R` (rename) entries immediat
 
 **Documented in three places** (per this session's own advisor consult): `.claude/CLAUDE.md` (new "Naming
 convention" section, right after "Scala style used throughout"), the Paradox developer's guide
-(`src/main/paradox/developers-guide/index.md`, new section, confirmed rendering via `sbt makeSite`), and a new
+(`../src/main/docs`, new section, confirmed rendering via `sbt makeSite`), and a new
 `feedback`-type memory (`tda4j_naming_convention.md` in the project's memory store) -- memory is what actually
 carries a stated user preference like this across sessions; CLAUDE.md alone doesn't reach other contexts.
 

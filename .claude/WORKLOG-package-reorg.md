@@ -8,7 +8,7 @@ maintained state; this worklog is the derivation and is not retroactively update
 
 The user asked to "plan out a sensible selection of subpackages" for a codebase that had grown sprawling.
 Before writing any code, surveyed the existing flat layout (line counts per file, cross-file import patterns)
-and cross-checked the proposed grouping against `src/main/paradox/developers-guide/architecture.md`, which
+and cross-checked the proposed grouping against `../src/main/docs`, which
 already used almost exactly this taxonomy in prose ("the algebraic core", "Complex construction: streams",
 "`Barcode.scala`: representing the output") — strong evidence the cut was natural rather than invented for
 this session. Presented the plan (7 subpackages + root + existing `matlab/`) with an explicit cost/risk callout

@@ -272,7 +272,7 @@ complex is always the full combinatorially-possible one — not the general case
 foundation worth keeping around even unused. On the project lead's own instruction, given this was the point
 that surfaced them as architecturally wrong rather than merely dead: **removed outright**, in this same
 session — `Chain.scala` (the traits and the dual `given Ordering[CocellT]`), plus every doc reference
-(`CLAUDE.md`, `src/main/paradox/developers-guide/architecture.md` and `class-diagrams.md`'s mermaid diagram).
+(`CLAUDE.md`, `../src/main/docs` and `class-diagrams.md`'s mermaid diagram).
 `WORKLOG-package-reorg.md`'s own mention is left untouched, per this codebase's worklog convention of not
 retroactively editing point-in-time records.
 
@@ -335,13 +335,13 @@ when the core engine is green — shipping this engine includes, not as a deferr
    no validation of its own" — every flag is a direct mirror of a `matlab.TDA4j` option key) — the new
    `engine=` value just needs to be a legal value for the existing `--engine` flag, no new flag needed unless
    (1) introduces one.
-3. **`src/main/paradox/developers-guide/persistence-engines.md`** — add this engine as a fifth entry alongside
+3. **`../src/main/docs`** — add this engine as a fifth entry alongside
    the four canonical ones, matching their existing treatment (what it computes, its genericity, its
    representative-tracking story, cross-validation summary). **`architecture.md`/`class-diagrams.md`** — confirm
    whether the `Cell`/`OrderedCell`/`OrderedBasis` section needs a mention of this engine's coboundary-via-
    boundary-inversion technique (likely yes, since it's a genuinely new construction on top of `Cell`, not just
    a new consumer of the existing one).
-4. **`src/main/paradox/user-guide/index.md`** — a user-facing mention: cohomology (and real cocycle
+4. **`../src/main/docs`** — a user-facing mention: cohomology (and real cocycle
    representatives) now available for Cube/`FiniteSimplicialSet`/Cech/Alpha, not just Vietoris-Rips.
 
 ## Explicitly out of scope for this plan

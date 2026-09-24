@@ -61,7 +61,7 @@ trait OrderedCell extends Cell:
 ```
 
 (`algebra/Chain.scala`, current source — note `boundary` returns `Seq[(Self, CoefficientT)]`, not a
-`Chain`; more on that in @ref:[Architecture](architecture.md).)
+`Chain`; more on that in [Architecture](architecture.md).)
 
 To say "type `T` implements `Cell`," you don't write `Cell[T]` — you write **`T is Cell`**, using the
 special infix type alias `is` that the typeclasses feature provides (roughly `infix type is[A, C <: {type
@@ -74,7 +74,7 @@ OrderedCell`-shaped, as satisfying the same bound).
 A concrete instance looks like this — `SimplexOrderedCell.scala`'s actual construction of `Simplex[VertexT] is
 OrderedCell`:
 
-@@snip [SimplexOrderedCell.scala](/src/main/scala/org/appliedtopology/tda4j/cells/SimplexOrderedCell.scala) { #given-example }
+@:snip(/src/main/scala/org/appliedtopology/tda4j/cells/SimplexOrderedCell.scala, given-example)
 
 where `simplexIsOrderedCell` builds an anonymous `new (Simplex[VertexT] is OrderedCell):` instance,
 providing the `ordering` member `OrderedCell` requires and, in an `extension (spx: Simplex[VertexT])`
@@ -85,7 +85,7 @@ codebase's own package split**: a `given` only comes into scope via a wildcard i
 so — `import org.appliedtopology.tda4j.cells.{given, *}`, not just `import
 org.appliedtopology.tda4j.cells.*`. A plain `import pkg.*` does **not** bring `given` instances into scope
 in Scala 3; every file in this codebase that reaches across a subpackage boundary uses the `{given, *}`
-form for exactly this reason — see @ref:[Architecture](architecture.md)'s package-layout section.
+form for exactly this reason — see [Architecture](architecture.md)'s package-layout section.
 
 One syntax detail worth flagging because it trips people up: `given [CellT: OrderedCell as oCell] =>
 Ordering[CellT] = oCell.ordering` (`algebra/Chain.scala`) is the "anonymous given via arrow" form — a `given`
@@ -126,7 +126,7 @@ constructs; `Simplex.unapplySeq` deconstructs, letting you write `case Simplex(a
 ## `given`/summon resolution: static, not dynamic — and why this matters more than usual here
 
 This is ordinary Scala 3 implicit-resolution behavior, but it is unusually load-bearing in this codebase,
-enough that it has caused real, confirmed bugs (see @ref:[Hard-won invariants](gotchas.md) for the full story).
+enough that it has caused real, confirmed bugs (see [Hard-won invariants](gotchas.md) for the full story).
 The short version: when a `given` instance's body summons another `given` (e.g. `Chain[CellT,
 CoefficientT] is RingModule`'s implementation needs an `Ordering[CellT]` in scope to build its internal
 `SortedMap`/`PriorityQueue`), that inner summon happens **once, when the outer `given` is first
@@ -139,8 +139,8 @@ on the next line — order matters, and it isn't stylistic.
 
 ## What to read next
 
-@ref:[Architecture](architecture.md) walks the algebraic core and complex-construction layers using the
-concepts above; @ref:[Persistence engines](persistence-engines.md) covers the four homology algorithms and
-their trust status; @ref:[Hard-won invariants](gotchas.md) is the concentrated list of non-obvious rules (like
+[Architecture](architecture.md) walks the algebraic core and complex-construction layers using the
+concepts above; [Persistence engines](persistence-engines.md) covers the four homology algorithms and
+their trust status; [Hard-won invariants](gotchas.md) is the concentrated list of non-obvious rules (like
 the `given`-timing one above) that this codebase depends on and that are easy to violate even once you
 know they exist.

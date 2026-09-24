@@ -1,10 +1,10 @@
 # Mapping the library: class diagrams
 
-@@@ note
+@:callout(info)
 This page is a structural sketch to help you get oriented, not an exhaustive or automatically generated
 reference — field names and signatures can drift out of sync with source over time. When a diagram and the
 actual `.scala` file disagree, trust the file.
-@@@
+@:@
 
 ## Typeclass hierarchy (`RingModule.scala`, `Field.scala`, `Chain.scala`)
 
@@ -62,8 +62,8 @@ own generators (that last one is a per-instance `given`, not a global one, since
 that particular simplicial set's own face data). There is no dual `Cocell`/`OrderedCocell` trait pair (an
 earlier version had one; removed as the wrong shape for coboundary, which is extrinsic to a cell, not
 intrinsic like `boundary`) — `RipserCohomologyContext`/`PackedRipserCohomologyContext` compute coboundaries
-directly against `SimplexIndexing` instead (see @ref:[Persistence engines](persistence-engines.md)). See the
-@ref:[Scala 3 primer](scala3-primer.md) for what "typeclass: type Self" and "given instance" mean concretely in
+directly against `SimplexIndexing` instead (see [Persistence engines](persistence-engines.md)). See the
+[Scala 3 primer](scala3-primer.md) for what "typeclass: type Self" and "given instance" mean concretely in
 this codebase's syntax.
 
 ## `Chain[CellT, CoefficientT]` (`Chain.scala`)
@@ -89,8 +89,8 @@ classDiagram
 ```
 
 `reduceBy`/`reduceByUntil` are the shared reduction primitives every persistence engine in `Homology.scala`
-builds on — see @ref:[Architecture](architecture.md) and
-@ref:[Hard-won invariants #4](gotchas.md).
+builds on — see [Architecture](architecture.md) and
+[Hard-won invariants #4](gotchas.md).
 
 ## `Simplex[VertexT]` (`Simplex.scala`, `SimplexOps.scala`)
 
@@ -113,7 +113,7 @@ classDiagram
 
 `SimplexOps.scala` adds a large `extension` block delegating most of `SortedSet`'s surface (`.size`,
 `.map`, `.union`, `.dropIndex`, ...) so `Simplex` "feels like" a set even though it's a zero-cost opaque
-wrapper at runtime — see the @ref:[primer](scala3-primer.md).
+wrapper at runtime — see the [primer](scala3-primer.md).
 
 ## Streams (`SimplexStream.scala`, `SimplexIndexing.scala`, `VietorisRips.scala`)
 
@@ -158,14 +158,14 @@ classDiagram
 ```
 
 These are **alternate stream implementations with a common output contract, not layers on top of one
-another** — see @ref:[Architecture](architecture.md). `CubicalGridStream`/`ExplicitCubicalStream` produce
+another** — see [Architecture](architecture.md). `CubicalGridStream`/`ExplicitCubicalStream` produce
 `Cube`s rather than `Simplex`es; `SimplicialSetStream`/`FilteredSimplicialSetStream` produce a
 `FiniteSimplicialSet[G]`'s own generator type `G`.
 
 ## Persistence engines (`homology/Homology.scala`, `homology/PackedRipserCohomology.scala`)
 
 Deliberately *not* diagrammed field-by-field here — their exact state and trust status belongs in one
-place. See @ref:[Persistence engines](persistence-engines.md) for the full, current picture across
+place. See [Persistence engines](persistence-engines.md) for the full, current picture across
 `CellularHomologyContext`/`SimplicialHomologyContext`,
 `CellularPersistenceInChunksContext`/`PersistenceInChunksContext`,
 `RipserCohomologyContext`, `PackedRipserCohomologyContext`, and `CellularCohomologyContext`.

@@ -2,7 +2,7 @@
 
 `homology/Homology.scala`, `homology/PackedRipserCohomology.scala`, and `homology/Cohomology.scala` contain
 **four independently-implemented algorithms across five concrete classes**. They share the `Chain` reduction
-primitives from @ref:[Architecture](architecture.md), but they are not variants of one shared engine — a fix
+primitives from [Architecture](architecture.md), but they are not variants of one shared engine — a fix
 or bug found in one does not imply anything about the others. Read this page before choosing which engine to
 build on.
 

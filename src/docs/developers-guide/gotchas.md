@@ -42,7 +42,7 @@ other — not merely "each independently a valid total order." Two orderings tha
 consistent but disagree on which of two *tied* cells comes first corrupt reduction in a way that's easy to
 miss on random test input, because Vietoris-Rips complexes have *structural* ties (every simplex of
 dimension ≥ 2 ties with its own longest edge) while random fixtures often don't — see
-@ref:[Degeneracies](degeneracies.md).
+[Degeneracies](degeneracies.md).
 
 **Symptom**: `IllegalStateException: reduction pivot ... was not a recorded open class`. This means a cell
 got selected as a pivot the algorithm's own invariants say should have been impossible — check whether

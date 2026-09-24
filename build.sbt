@@ -21,11 +21,68 @@ libraryDependencies += "org.scalacheck" %% "scalacheck"                 % "1.17.
 // .claude/WORKLOG-cli-executable.md.
 libraryDependencies += "org.rogach" %% "scallop" % "6.0.0"
 
+import laika.helium.Helium
+import laika.helium.config.{HeliumIcon, IconLink}
+import laika.theme.config.Color
+import laika.format.Markdown
+import laika.ast.Path.Root
+
+// Off-white/dark-charcoal (light) and dark-charcoal/off-white (dark) rather than Helium's stock blues; teal/red
+// stay as brand accent colors (links, headers, banner), not as the page's dominant wash.
+val theme = Helium.defaults.all
+  .metadata(
+    title = Some("TDA4j"),
+    authors = Seq("Mikael Vejdemo-Johansson", "Jordan Matuszewski", "Kei Kebreau")
+  )
+  .site
+  .baseURL("https://appliedtopology.github.io/tda4j")
+  .site
+  .topNavigationBar(
+    navLinks = Seq(
+      IconLink.internal(Root / "api" / "index.html", HeliumIcon.api),
+      IconLink.external("https://github.com/appliedtopology/tda4j", HeliumIcon.github)
+    )
+  )
+  .site
+  .footer("MIT License © Mikael Vejdemo-Johansson, Daniel Hope")
+  // The breadcrumb (added via a default.template.html override, since Helium doesn't include one) reuses the
+  // `nav-list` class the sidebar nav uses, whose `li a { display: block }` stacks entries vertically -- there is
+  // no dedicated `.breadcrumb` rule in Helium's own CSS to override that. Lay it out as a horizontal trail instead.
+  .site
+  .downloadPage("Downloads", None)
+  .site
+  .inlineCSS("""
+    |.breadcrumb { display: flex; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 1.5rem 0; }
+    |.breadcrumb li { margin: 0; }
+    |.breadcrumb li a { display: inline; padding: 0; }
+    |.breadcrumb li:not(:last-child)::after { content: "\203A"; margin: 0 0.4em; color: var(--secondary-color); }
+    |""".stripMargin)
+  .all
+  .themeColors(
+    primary = Color.hex("007c99"),
+    secondary = Color.hex("931813"),
+    primaryMedium = Color.hex("a7d4de"),
+    primaryLight = Color.hex("f2efe7"),
+    text = Color.hex("333333"),
+    background = Color.hex("faf8f4"),
+    bgGradient = (Color.hex("095269"), Color.hex("007c99"))
+  )
+  .site
+  .darkMode
+  .themeColors(
+    primary = Color.hex("7fc2d6"),
+    secondary = Color.hex("f1c47b"),
+    primaryMedium = Color.hex("3a5a63"),
+    primaryLight = Color.hex("16323c"),
+    text = Color.hex("f0ede6"),
+    background = Color.hex("1e2124"),
+    bgGradient = (Color.hex("064458"), Color.hex("197286"))
+  )
+  .build
+
 lazy val root = (project in file("."))
   .enablePlugins(
-    SiteScaladocPlugin,
-    ParadoxSitePlugin,
-    ParadoxMaterialThemePlugin,
+    LaikaPlugin,
     GitHubPagesPlugin
   )
   .settings(
@@ -39,30 +96,24 @@ lazy val root = (project in file("."))
       "-deprecation",
       "-unchecked"
     ),
-    paradoxGroups := Map("Language" -> Seq("Scala", "Java", "Matlab")),
-    Compile / paradoxMaterialTheme :=
-      ParadoxMaterialTheme(),
-    Compile / paradoxProperties ++= Map(
-      "project.url" -> "https://appliedtopology.github.io/tda4j",
-      "github.base_url" -> s"https://github.com/appliedtopology/tda4j/tree/${version.value}",
-      "scaladoc.base_url" -> s"latest/api",
-      "scaladoc.tda4j.base_url" -> s"latest/api"
-    ),
-    Compile / paradoxMaterialTheme ~= {
-      _.withoutSearch()
-    },
-    Compile / paradoxMaterialTheme ~= {
-      _.withColor("indigo", "blue")
-    },
-    Compile / paradoxMaterialTheme ~= {
-      _.withCopyright("MIT License © Mikael Vejdemo-Johansson, Daniel Hope")
-    },
-    Compile / paradoxMaterialTheme ~= {
-      _.withRepository(uri("https://github.com/appliedtopology/tda4j"))
-    },
+    // ***** laika ******
+    Laika / sourceDirectories := Seq(sourceDirectory.value / "docs"),
+    laikaIncludeAPI := true,
+    laikaIncludePDF := true,
+    laikaTheme := theme,
+    // Without this, fenced/inline code spans aren't recognized as code at all (plain CommonMark Markdown, the
+    // laika-sbt default, doesn't include GFM fences) -- their contents get parsed as ordinary prose, so any `[...]`
+    // in a code example (a Scala type param, a Java array type, a bracketed comment) is treated as a dangling
+    // Markdown link/reference and fails the build.
+    laikaExtensions += Markdown.GitHubFlavor,
+    // Also opt-in, like GitHubFlavor: without it every fenced code block renders as plain, unstyled text.
+    // (@:snip tokenizes its own extracted text separately -- see project/SnipDirective.scala.)
+    laikaExtensions += laika.config.SyntaxHighlighting,
+    laikaExtensions += new SnipDirective(baseDirectory.value),
+    // ***** gh-pages *****
     gitHubPagesOrgName := "appliedtopology",
     gitHubPagesRepoName := "tda4j",
-    gitHubPagesSiteDir := baseDirectory.value / "target/site",
+    gitHubPagesSiteDir := (laikaSite / target).value,
     // Both settings are needed, not just one: `Compile / mainClass` is what `sbt run` uses; `assembly /
     // mainClass` is what sbt-assembly writes into the fat jar's manifest (`java -jar ... `). Neither is inferred
     // from the other.
@@ -75,7 +126,5 @@ lazy val root = (project in file("."))
 libraryDependencySchemes ++= Seq(
   "org.scala-lang.modules" %% "scala-xml" % VersionScheme.Always
 )
-
-Compile / doc / scalacOptions := Seq("-diagrams")
 
 mimaPreviousArtifacts := Set.empty

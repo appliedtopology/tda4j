@@ -50,15 +50,25 @@ sbt "testOnly *SimplexSpec"     # single specs2 spec (glob ok)
 sbt scalafmtAll                 # format everything — run before committing
 sbt scalafmtCheck scalafmtSbtCheck   # what CI's lint job checks (check only, no autofix)
 sbt mimaReportBinaryIssues      # binary compat (CI test job)
-sbt makeSite                    # Paradox docs (src/main/paradox), needs Graphviz
+sbt laikaSite                   # docs site (src/docs) -> target/docs/site, linked scaladoc included
 sbt assembly                    # fat jar for CLI/MATLAB
 sbt -DrunBenchmarks=true test   # also run benchmark/profiling specs — NOT what CI runs
 ```
 
 No linter beyond scalafmt. Tests are specs2 (`org.specs2.mutable.Specification`). CI: `test.yml` (test + mima),
-`lint.yml` (scalafmt), `docs.yml` (Paradox → GitHub Pages, push to `scala` only). `build.sbt` permanently enables
+`lint.yml` (scalafmt), `docs.yml` (Laika → GitHub Pages, push to `scala` only). `build.sbt` permanently enables
 `-feature -deprecation -unchecked` etc.; the ~319 `-Wunused:all` warnings (mostly unused wildcard imports) are
 deliberately left alone (`WORKLOG-compiler-warnings.md`).
+
+**Docs site is Laika (Paradox fully removed)**, sources at `src/docs/`, Markdown with a `@:directive` syntax (not
+Paradox's `@@`/`@ref:`). `Markdown.GitHubFlavor` and `laika.config.SyntaxHighlighting` are both required
+`laikaExtensions` — Laika's base parser doesn't fence code blocks or highlight them without these, and un-fenced
+code silently gets parsed as prose (any `[...]` in an example becomes a dangling link reference and fails the
+build). `project/SnipDirective.scala` implements `@:snip(path, tag)`, the `@@snip` replacement: extracts the region
+between two `// #tag` marker lines from a real source file at build time, same convention as before. Each
+directory needing a non-alphabetical left-nav order needs its own `directory.conf` with `laika.navigationOrder`.
+`src/docs/default.template.html` overrides Helium's default template to add `@:breadcrumb` (not on by default).
+Full derivation: `WORKLOG-laika-migration.md`.
 
 **Never run two `sbt` invocations against this checkout at once** (e.g. a background `test` run plus a foreground
 `compile`): the incremental compiler's own class-file writes from one process can be read mid-update by the other,
@@ -467,8 +477,8 @@ PersistenceEngine.scala`) rather than re-matching the raw string at each branch.
   noise here often exceeds small effects — report unconfirmed effects as unconfirmed.
 - **Finalizing a user-visible capability** (new complex, engine, or option) means checking four surfaces each
   session that lands a chunk of it: (1) `matlab.TDA4j` dispatch, (2) `cli.TDA4jCLI`/`TDA4jConf` (1:1 mirror),
-  (3) `src/main/paradox/developers-guide/` (`persistence-engines.md`, `architecture.md`, `class-diagrams.md`),
-  (4) `src/main/paradox/user-guide/index.md`. Internal refactors and bug fixes with no new surface are exempt.
+  (3) `src/docs/developers-guide/` (`persistence-engines.md`, `architecture.md`, `class-diagrams.md`),
+  (4) `src/docs/user-guide/README.md`. Internal refactors and bug fixes with no new surface are exempt.
 - The project lead commits their own work; don't commit unasked.
 
 ## Collaboration preferences

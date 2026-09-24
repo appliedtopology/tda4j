@@ -1,15 +1,3 @@
-@@@ index
-
-* @ref:[A Scala 3.7+ primer for this codebase](scala3-primer.md)
-* @ref:[Architecture: from algebra to a filtration stream](architecture.md)
-* @ref:[Persistence engines: what to trust, and why](persistence-engines.md)
-* @ref:[Hard-won invariants you must not break](gotchas.md)
-* @ref:[Degeneracy behaviors that look like bugs but aren't](degeneracies.md)
-* @ref:[Alpha complex: DQP vs Helix](alpha-complex.md)
-* @ref:[Class diagrams](class-diagrams.md)
-
-@@@
-
 # Developer's Guide for TDA4j
 
 TDA4j is meant to be a viable platform for algorithm development and research into topological data
@@ -22,20 +10,20 @@ recent), is most of the actual gap.
 
 1. **The Scala 3 syntax.** `Type is TypeClass`, `type Self: Ordering as ordering`, `given [bounds] => Body
    = value`, opaque types, extension methods. None of this is older-Scala-3-style code that "should" already
-   look familiar. Start with the @ref:[Scala 3 primer](scala3-primer.md).
+   look familiar. Start with the [Scala 3 primer](scala3-primer.md).
 2. **Where a given piece of functionality lives, and what layer it's in.** The library is built in clear
    layers — algebra, then complex construction (streams), then the persistence engines that consume a
-   stream — and each has its own subpackage. See @ref:[Architecture](architecture.md).
+   stream — and each has its own subpackage. See [Architecture](architecture.md).
 3. **Which persistence algorithm, and which of its implementations, to build on.** `homology` ships four
    independently-implemented algorithms across five concrete classes; they are not layers on one shared
    core, and their intended roles (production vs. reference oracle) are not something you can infer just
-   because all five compile and share a file. See @ref:[Persistence engines](persistence-engines.md).
+   because all five compile and share a file. See [Persistence engines](persistence-engines.md).
 4. **What traps look fine, compile fine, and only produce a wrong answer on specific inputs.** Ordering and
    reduction code in this codebase has a real history of exactly this failure mode. See
-   @ref:[Hard-won invariants](gotchas.md) before you trust your own "this looks obviously correct" judgment
+   [Hard-won invariants](gotchas.md) before you trust your own "this looks obviously correct" judgment
    on a change to reduction or ordering logic.
 5. **Whether a surprising result is a bug or the mathematically correct answer on a degenerate input.** See
-   @ref:[Degeneracies](degeneracies.md) before "fixing" something that isn't broken.
+   [Degeneracies](degeneracies.md) before "fixing" something that isn't broken.
 
 ## Naming convention: `tda4j`/`TDA4j`, never `Tda4j`
 

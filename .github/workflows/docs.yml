@@ -11,7 +11,6 @@ jobs:
     if: github.ref != 'refs/heads/gh-pages' && github.ref != 'gh-pages'
     steps:
       - uses: actions/checkout@v3
-      - uses: ts-graphviz/setup-graphviz@v2
       - name: Setup JDK
         uses: actions/setup-java@v4
         with:
@@ -23,4 +22,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_PAGES_PUBLISH_FORCE_PUSH: "Updating webpages."
-        run: sbt makeSite publishToGitHubPages
+        run: sbt laikaSite publishToGitHubPages
