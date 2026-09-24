@@ -105,7 +105,7 @@ class BarcodeDistanceSpec extends Specification with ScalaCheck:
   }
 
   "metric-like properties" >> {
-    "symmetric under swapping the two diagrams" >> {
+    "symmetric under swapping the two diagrams" >>
       forAll(diagramGen, diagramGen) { (d1, d2) =>
         val bAB = BarcodeDistance.bottleneckDistance(d1, d2)
         val bBA = BarcodeDistance.bottleneckDistance(d2, d1)
@@ -113,28 +113,30 @@ class BarcodeDistanceSpec extends Specification with ScalaCheck:
         val wBA = BarcodeDistance.wassersteinDistance(d2, d1)
         (bAB must beCloseTo(bBA, 1e-9)) and (wAB must beCloseTo(wBA, 1e-9))
       }
-    }
 
-    "bottleneck never exceeds Wasserstein, at any order (order -> Infinity is the max aggregation)" >> {
+    "bottleneck never exceeds Wasserstein, at any order (order -> Infinity is the max aggregation)" >>
       forAll(diagramGen, diagramGen, Gen.oneOf(1.0, 1.5, 2.0, 3.0)) { (d1, d2, order) =>
         val bottleneck = BarcodeDistance.bottleneckDistance(d1, d2)
         val wasserstein = BarcodeDistance.wassersteinDistance(d1, d2, order)
         bottleneck must beLessThanOrEqualTo(wasserstein + 1e-9)
       }
-    }
 
-    "a diagram is at distance 0 from itself" >> {
+    "a diagram is at distance 0 from itself" >>
       forAll(diagramGen) { d =>
         (BarcodeDistance.bottleneckDistance(d, d) must beCloseTo(0.0, 1e-9)) and
           (BarcodeDistance.wassersteinDistance(d, d) must beCloseTo(0.0, 1e-9))
       }
-    }
   }
 
   "brute-force cross-check on small finite diagrams" >> {
     // Independent oracle: re-derives the same "augmented, diagonal-padded" matching from scratch and
     // solves it by literal permutation search, rather than calling into Hungarian/HopcroftKarp.
-    def bruteForceCost(left: Seq[(Double, Double)], right: Seq[(Double, Double)], order: Double, groundNorm: GroundNorm): Double =
+    def bruteForceCost(
+      left: Seq[(Double, Double)],
+      right: Seq[(Double, Double)],
+      order: Double,
+      groundNorm: GroundNorm
+    ): Double =
       def diagonalDistance(pi: Double): Double = groundNorm match
         case GroundNorm.LInfinity => pi / 2.0
         case GroundNorm.LP(p)     => pi * math.pow(2.0, 1.0 / p - 1.0)
@@ -156,8 +158,10 @@ class BarcodeDistanceSpec extends Specification with ScalaCheck:
           else 0.0
         }
         val best = (0 until n).permutations
-          .map(perm => if order.isPosInfinity then perm.zipWithIndex.map((r, c) => matrix(r)(c)).max
-                       else perm.zipWithIndex.map((r, c) => math.pow(matrix(r)(c), order)).sum)
+          .map(perm =>
+            if order.isPosInfinity then perm.zipWithIndex.map((r, c) => matrix(r)(c)).max
+            else perm.zipWithIndex.map((r, c) => math.pow(matrix(r)(c), order)).sum
+          )
           .min
         if order.isPosInfinity then best else math.pow(best, 1.0 / order)
 
@@ -169,7 +173,7 @@ class BarcodeDistanceSpec extends Specification with ScalaCheck:
     val smallFiniteDiagramGen: Gen[Seq[(Double, Double)]] =
       Gen.choose(0, 3).flatMap(n => Gen.listOfN(n, smallFinitePointGen))
 
-    "bottleneck matches brute-force min-max matching" >> {
+    "bottleneck matches brute-force min-max matching" >>
       forAll(smallFiniteDiagramGen, smallFiniteDiagramGen, Gen.oneOf(GroundNorm.LInfinity, GroundNorm.LP(2.0))) {
         (pts1, pts2, groundNorm) =>
           val diagram1 = pts1.map((b, d) => bar(0, b, d))
@@ -177,9 +181,8 @@ class BarcodeDistanceSpec extends Specification with ScalaCheck:
           val expected = bruteForceCost(pts1, pts2, Double.PositiveInfinity, groundNorm)
           BarcodeDistance.bottleneckDistance(diagram1, diagram2, groundNorm) must beCloseTo(expected, 1e-6)
       }
-    }
 
-    "wasserstein matches brute-force min-sum-of-powers matching" >> {
+    "wasserstein matches brute-force min-sum-of-powers matching" >>
       forAll(
         smallFiniteDiagramGen,
         smallFiniteDiagramGen,
@@ -191,7 +194,6 @@ class BarcodeDistanceSpec extends Specification with ScalaCheck:
         val expected = bruteForceCost(pts1, pts2, order, groundNorm)
         BarcodeDistance.wassersteinDistance(diagram1, diagram2, order, groundNorm) must beCloseTo(expected, 1e-6)
       }
-    }
   }
 
   "input validation at the diagram-comparison boundary" >> {
@@ -255,7 +257,10 @@ class BarcodeDistanceSpec extends Specification with ScalaCheck:
     // theorem's actual precondition instead of a superficially similar but different claim.
     def barcodeOf(points: Array[Array[Double]]): List[PersistenceBar[Double, Chain[Simplex[Int], Double]]] =
       val vrStream = LimitedCofaceSimplexStream(
-        EnumeratingCofaceSimplexStream(EuclideanMetricSpace(points), maxFiltrationValue = Some(Double.PositiveInfinity)),
+        EnumeratingCofaceSimplexStream(
+          EuclideanMetricSpace(points),
+          maxFiltrationValue = Some(Double.PositiveInfinity)
+        ),
         2
       )
       persistentHomology(vrStream).barcodeAt(Double.PositiveInfinity).filter(_.dim <= 1)

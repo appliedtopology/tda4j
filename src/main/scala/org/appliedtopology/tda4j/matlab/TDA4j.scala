@@ -738,6 +738,24 @@ object TDA4j:
         // the manual `buildDimension = requestedMaxDimension + 1` dance via `PersistenceEngine`'s own adapters
         // below: neither `SimplicialHomologyContext` nor `CellularCohomologyContext` has a `maxDimension` of its
         // own at all -- the cap lives entirely in the stream each is handed.
+        // Shared by every engine branch below: the boundary matrix is a property of the complex, not of which
+        // reduction algorithm ran over it, so it's built ONCE here (the same construction engine=Naive/Cohomology
+        // already need below) and reused -- see `buildBoundaryMatrix`'s own doc.
+        val vrCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
+        val vrStreamForBoundary =
+          LimitedCofaceSimplexStream(
+            EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
+            requestedMaxDimension + 1
+          )
+        val vrBoundaryMatrixOf =
+          () =>
+            buildBoundaryMatrix[Simplex[Int], C](
+              vrStreamForBoundary.iterator.toIndexedSeq,
+              vrCellVertices,
+              toDouble,
+              vrStreamForBoundary.filtrationValue
+            )
+
         engine match
           case EngineKind.Ripser =>
             // Backed by PackedRipserCohomologyContext, not RipserCohomologyContext -- see CLAUDE.md and that
@@ -759,21 +777,20 @@ object TDA4j:
               ctx.persistentCohomology(),
               (dim, cell) => ctx.si.decodeToArray(cell.index, dim + 1),
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              vrBoundaryMatrixOf
             )
           case EngineKind.Naive =>
             // EnumeratingCofaceSimplexStream has no dimension cap of its own (only a filtration-value one) --
             // LimitedCofaceSimplexStream is what actually enforces a dimension cap, the same wrapping
-            // RipserCohomologySpec's own naiveBars helper uses.
-            val stream = LimitedCofaceSimplexStream(
-              EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
-              requestedMaxDimension + 1
-            )
+            // RipserCohomologySpec's own naiveBars helper uses. Reuses vrStreamForBoundary directly -- an
+            // identical construction to what this branch built for itself before the boundary matrix existed.
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(stream),
-              (_, cell) => cell.underlying.toArray,
+              PersistenceEngine.naive[Simplex[Int], C].barcode(vrStreamForBoundary),
+              vrCellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              vrBoundaryMatrixOf
             )
           case EngineKind.Chunks =>
             // barcodeAt, not diagramAt: CellularPersistenceInChunksContext now records a REAL representative for
@@ -785,25 +802,24 @@ object TDA4j:
             val stream = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue)
             fromBars[Simplex[Int], C](
               PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(stream),
-              (_, cell) => cell.underlying.toArray,
+              vrCellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              vrBoundaryMatrixOf
             )
           case EngineKind.Cohomology =>
             // CellularCohomologyContext, generic over CellT: OrderedCell -- see
             // .claude/DESIGN-generic-cohomology.md. Same "build one dimension higher, drop it via fromBars"
             // dance as engine=Naive above, for the identical reason (H_k needs (k+1)-dimensional chains); this
             // engine has no maxDim/maxDimension parameter of its own at all (deliberately -- see that class's
-            // own doc), so the cap lives entirely in the stream, exactly like engine=Naive.
-            val stream = LimitedCofaceSimplexStream(
-              EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
-              requestedMaxDimension + 1
-            )
+            // own doc), so the cap lives entirely in the stream, exactly like engine=Naive. Reuses
+            // vrStreamForBoundary directly, same as engine=Naive above.
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(stream),
-              (_, cell) => cell.underlying.toArray,
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(vrStreamForBoundary),
+              vrCellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              vrBoundaryMatrixOf
             )
       case ComplexKind.Alpha =>
         // No dimension cap is applied here at all, on purpose: an alpha complex's chain complex terminates on its
@@ -817,13 +833,23 @@ object TDA4j:
           )
         )
         val alphaStream = AlphaShapes(pts.toIndexedSeq, alphaBackend)
+        val alphaCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
+        val alphaBoundaryMatrixOf =
+          () =>
+            buildBoundaryMatrix[Simplex[Int], C](
+              alphaStream.iterator.toIndexedSeq,
+              alphaCellVertices,
+              toDouble,
+              alphaStream.filtrationValue
+            )
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
               PersistenceEngine.naive[Simplex[Int], C].barcode(alphaStream),
-              (_, cell) => cell.underlying.toArray,
+              alphaCellVertices,
               toDouble,
-              Int.MaxValue
+              Int.MaxValue,
+              alphaBoundaryMatrixOf
             )
           case EngineKind.Cohomology =>
             // No stream-level dimension cap here either, for the same reason as engine=Naive above: an alpha
@@ -831,9 +857,10 @@ object TDA4j:
             // directly -- it's a StratifiedSimplexStream[Int, Double], hence a CellStream[Simplex[Int], Double].
             fromBars[Simplex[Int], C](
               PersistenceEngine.cohomology[Simplex[Int], C].barcode(alphaStream),
-              (_, cell) => cell.underlying.toArray,
+              alphaCellVertices,
               toDouble,
-              Int.MaxValue
+              Int.MaxValue,
+              alphaBoundaryMatrixOf
             )
           case EngineKind.Ripser | EngineKind.Chunks =>
             // dispatch() already rejects both of these for complex=alpha before computeGeneric is ever reached.
@@ -851,17 +878,26 @@ object TDA4j:
           )
         )
         val euclideanMetricSpace = EuclideanMetricSpace(pts)
+        val cechCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
+        val cechStreamForBoundary = LimitedCofaceSimplexStream(
+          CechCofaceSimplexStream(euclideanMetricSpace, maxFiltrationValue = maxFiltrationValue),
+          requestedMaxDimension + 1
+        )
+        val cechBoundaryMatrixOf = () =>
+          buildBoundaryMatrix[Simplex[Int], C](
+            cechStreamForBoundary.iterator.toIndexedSeq,
+            cechCellVertices,
+            toDouble,
+            cechStreamForBoundary.filtrationValue
+          )
         engine match
           case EngineKind.Naive =>
-            val stream = LimitedCofaceSimplexStream(
-              CechCofaceSimplexStream(euclideanMetricSpace, maxFiltrationValue = maxFiltrationValue),
-              requestedMaxDimension + 1
-            )
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(stream),
-              (_, cell) => cell.underlying.toArray,
+              PersistenceEngine.naive[Simplex[Int], C].barcode(cechStreamForBoundary),
+              cechCellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              cechBoundaryMatrixOf
             )
           case EngineKind.Chunks =>
             // CellularPersistenceInChunksContext handles the "+1" dance internally (its own maxDim constructor
@@ -875,23 +911,21 @@ object TDA4j:
             val stream = CechCofaceSimplexStream(euclideanMetricSpace, maxFiltrationValue = maxFiltrationValue)
             fromBars[Simplex[Int], C](
               PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(stream),
-              (_, cell) => cell.underlying.toArray,
+              cechCellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              cechBoundaryMatrixOf
             )
           case EngineKind.Cohomology =>
             // Same shape as engine=Naive above for complex=cech -- Cech's top dimension is not naturally
             // bounded, so the same "build one dimension higher via LimitedCofaceSimplexStream, drop it via
             // fromBars" dance applies, for the identical reason as complex=vr's own engine=Cohomology branch.
-            val stream = LimitedCofaceSimplexStream(
-              CechCofaceSimplexStream(euclideanMetricSpace, maxFiltrationValue = maxFiltrationValue),
-              requestedMaxDimension + 1
-            )
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(stream),
-              (_, cell) => cell.underlying.toArray,
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(cechStreamForBoundary),
+              cechCellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              cechBoundaryMatrixOf
             )
           case EngineKind.Ripser =>
             // dispatch() already rejects this for complex=cech before computeGeneric is ever reached.
@@ -904,29 +938,39 @@ object TDA4j:
         // metricSpace here may not obey the triangle inequality -- see streams.DistanceToMeasure's own doc).
         val f = DistanceToMeasure(metricSpace, dtmK, dtmQ)
         val dtmStream = DtmRipsSimplexStream(metricSpace, f, dtmP, maxFiltrationValue = maxFiltrationValue)
+        val dtmCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
+        val dtmStreamForBoundary = LimitedCofaceSimplexStream(dtmStream, requestedMaxDimension + 1)
+        val dtmBoundaryMatrixOf = () =>
+          buildBoundaryMatrix[Simplex[Int], C](
+            dtmStreamForBoundary.iterator.toIndexedSeq,
+            dtmCellVertices,
+            toDouble,
+            dtmStreamForBoundary.filtrationValue
+          )
         engine match
           case EngineKind.Naive =>
-            val stream = LimitedCofaceSimplexStream(dtmStream, requestedMaxDimension + 1)
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(stream),
-              (_, cell) => cell.underlying.toArray,
+              PersistenceEngine.naive[Simplex[Int], C].barcode(dtmStreamForBoundary),
+              dtmCellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              dtmBoundaryMatrixOf
             )
           case EngineKind.Chunks =>
             fromBars[Simplex[Int], C](
               PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(dtmStream),
-              (_, cell) => cell.underlying.toArray,
+              dtmCellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              dtmBoundaryMatrixOf
             )
           case EngineKind.Cohomology =>
-            val stream = LimitedCofaceSimplexStream(dtmStream, requestedMaxDimension + 1)
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(stream),
-              (_, cell) => cell.underlying.toArray,
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(dtmStreamForBoundary),
+              dtmCellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              dtmBoundaryMatrixOf
             )
           case EngineKind.Ripser =>
             // dispatch() already rejects this for complex=dtm-rips before computeGeneric is ever reached.
@@ -940,29 +984,39 @@ object TDA4j:
         // it to maxFiniteFiltrationValue regardless (see that class's own doc), so there is no separate "resolve
         // the omitted-key default here" step the way complex=vr/complex=cech need.
         val sheehyStream = SheehyRipsSimplexStream(metricSpace, sheehyEpsilon, maxFiltrationValue = maxFiltrationValue)
+        val sheehyCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
+        val sheehyStreamForBoundary = LimitedCofaceSimplexStream(sheehyStream, requestedMaxDimension + 1)
+        val sheehyBoundaryMatrixOf = () =>
+          buildBoundaryMatrix[Simplex[Int], C](
+            sheehyStreamForBoundary.iterator.toIndexedSeq,
+            sheehyCellVertices,
+            toDouble,
+            sheehyStreamForBoundary.filtrationValue
+          )
         engine match
           case EngineKind.Naive =>
-            val stream = LimitedCofaceSimplexStream(sheehyStream, requestedMaxDimension + 1)
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(stream),
-              (_, cell) => cell.underlying.toArray,
+              PersistenceEngine.naive[Simplex[Int], C].barcode(sheehyStreamForBoundary),
+              sheehyCellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              sheehyBoundaryMatrixOf
             )
           case EngineKind.Chunks =>
             fromBars[Simplex[Int], C](
               PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(sheehyStream),
-              (_, cell) => cell.underlying.toArray,
+              sheehyCellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              sheehyBoundaryMatrixOf
             )
           case EngineKind.Cohomology =>
-            val stream = LimitedCofaceSimplexStream(sheehyStream, requestedMaxDimension + 1)
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(stream),
-              (_, cell) => cell.underlying.toArray,
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(sheehyStreamForBoundary),
+              sheehyCellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              sheehyBoundaryMatrixOf
             )
           case EngineKind.Ripser =>
             // dispatch() already rejects this for complex=sheehy-rips before computeGeneric is ever reached.
@@ -977,20 +1031,30 @@ object TDA4j:
         val ac =
           AlphaComplexDQP.dtm(pts, dtmK, Double.PositiveInfinity, pts.headOption.map(_.length).getOrElse(0), dtmQ)
         val dtmAlphaStream = AlphaComplexDQPStream(pts, ac)
+        val dtmAlphaCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
+        val dtmAlphaBoundaryMatrixOf = () =>
+          buildBoundaryMatrix[Simplex[Int], C](
+            dtmAlphaStream.iterator.toIndexedSeq,
+            dtmAlphaCellVertices,
+            toDouble,
+            dtmAlphaStream.filtrationValue
+          )
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
               PersistenceEngine.naive[Simplex[Int], C].barcode(dtmAlphaStream),
-              (_, cell) => cell.underlying.toArray,
+              dtmAlphaCellVertices,
               toDouble,
-              Int.MaxValue
+              Int.MaxValue,
+              dtmAlphaBoundaryMatrixOf
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
               PersistenceEngine.cohomology[Simplex[Int], C].barcode(dtmAlphaStream),
-              (_, cell) => cell.underlying.toArray,
+              dtmAlphaCellVertices,
               toDouble,
-              Int.MaxValue
+              Int.MaxValue,
+              dtmAlphaBoundaryMatrixOf
             )
           case EngineKind.Ripser | EngineKind.Chunks =>
             // dispatch() already rejects both of these for complex=dtm-alpha before computeGeneric is ever reached.
@@ -1035,6 +1099,18 @@ object TDA4j:
       (_, cell) => cell.underlying.toArray.map(landmarks)
     witnessVariant match
       case WitnessVariantKind.Lazy =>
+        // Shared across all four engine branches below, same reasoning as complex=vr's own vrBoundaryMatrixOf.
+        val lazyStreamForBoundary = LimitedCofaceSimplexStream(
+          LazyWitnessSimplexStream(metricSpace, landmarks, nu, maxFiltrationValue = maxFiltrationValue),
+          requestedMaxDimension + 1
+        )
+        val lazyBoundaryMatrixOf = () =>
+          buildBoundaryMatrix[Simplex[Int], C](
+            lazyStreamForBoundary.iterator.toIndexedSeq,
+            cellVertices,
+            toDouble,
+            lazyStreamForBoundary.filtrationValue
+          )
         engine match
           case EngineKind.Ripser =>
             // The lazy witness complex IS a flag complex under WitnessMetricSpace's own "distance" -- exactly
@@ -1049,18 +1125,16 @@ object TDA4j:
               ctx.persistentCohomology(),
               (dim, cell) => ctx.si.decodeToArray(cell.index, dim + 1).map(landmarks),
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              lazyBoundaryMatrixOf
             )
           case EngineKind.Naive =>
-            val stream = LimitedCofaceSimplexStream(
-              LazyWitnessSimplexStream(metricSpace, landmarks, nu, maxFiltrationValue = maxFiltrationValue),
-              requestedMaxDimension + 1
-            )
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(stream),
+              PersistenceEngine.naive[Simplex[Int], C].barcode(lazyStreamForBoundary),
               cellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              lazyBoundaryMatrixOf
             )
           case EngineKind.Chunks =>
             // No LimitedCofaceSimplexStream wrapping needed -- PersistenceInChunksContext handles the "+1"
@@ -1071,18 +1145,16 @@ object TDA4j:
               PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(stream),
               cellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              lazyBoundaryMatrixOf
             )
           case EngineKind.Cohomology =>
-            val stream = LimitedCofaceSimplexStream(
-              LazyWitnessSimplexStream(metricSpace, landmarks, nu, maxFiltrationValue = maxFiltrationValue),
-              requestedMaxDimension + 1
-            )
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(stream),
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(lazyStreamForBoundary),
               cellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              lazyBoundaryMatrixOf
             )
       case WitnessVariantKind.General =>
         // Not a flag complex -- minimumEnclosingRadius is not a valid truncation here (see
@@ -1090,28 +1162,33 @@ object TDA4j:
         // NOT "fall back to the metric space's own enclosing radius" the way every other complex above does.
         val geometry = WitnessGeometry(metricSpace, landmarks)
         val resolvedMaxFiltrationValue = maxFiltrationValue.getOrElse(Double.PositiveInfinity)
+        val generalStreamForBoundary = LimitedCofaceSimplexStream(
+          WitnessCofaceSimplexStream(geometry, resolvedMaxFiltrationValue),
+          requestedMaxDimension + 1
+        )
+        val generalBoundaryMatrixOf = () =>
+          buildBoundaryMatrix[Simplex[Int], C](
+            generalStreamForBoundary.iterator.toIndexedSeq,
+            cellVertices,
+            toDouble,
+            generalStreamForBoundary.filtrationValue
+          )
         engine match
           case EngineKind.Naive =>
-            val stream = LimitedCofaceSimplexStream(
-              WitnessCofaceSimplexStream(geometry, resolvedMaxFiltrationValue),
-              requestedMaxDimension + 1
-            )
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(stream),
+              PersistenceEngine.naive[Simplex[Int], C].barcode(generalStreamForBoundary),
               cellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              generalBoundaryMatrixOf
             )
           case EngineKind.Cohomology =>
-            val stream = LimitedCofaceSimplexStream(
-              WitnessCofaceSimplexStream(geometry, resolvedMaxFiltrationValue),
-              requestedMaxDimension + 1
-            )
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(stream),
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(generalStreamForBoundary),
               cellVertices,
               toDouble,
-              requestedMaxDimension
+              requestedMaxDimension,
+              generalBoundaryMatrixOf
             )
           case EngineKind.Ripser | EngineKind.Chunks =>
             // Both dispatch() (one-shot) and dispatchWitnessFromLandmarks (step 2) already reject these via
@@ -1188,13 +1265,21 @@ object TDA4j:
     // PersistenceResult.cycleVertices's own doc for the decode rule and why this differs from the
     // Simplex[Int]-based complexes above.
     val cellVertices: (Int, Cube) => Array[Int] = (_, cell) => cell.encoded.toArray
+    val boundaryMatrixOf =
+      () => buildBoundaryMatrix[Cube, C](stream.iterator.toIndexedSeq, cellVertices, toDouble, stream.filtrationValue)
     engine match
       case EngineKind.Naive =>
         // No dimension cap is applied to the stream itself, on purpose, mirroring complex=alpha above: a cubical
         // grid's own chain complex terminates on its own (bounded by its ambient dimension), so it is never
         // artificially cut short the way a VR/Cech complex is -- nothing to build one dimension higher for.
         // CellularHomologyContext[Cube, ...] has no maxDim of its own at all, same as Simplex[Int].
-        fromBars[Cube, C](PersistenceEngine.naive[Cube, C].barcode(stream), cellVertices, toDouble, maxDimension)
+        fromBars[Cube, C](
+          PersistenceEngine.naive[Cube, C].barcode(stream),
+          cellVertices,
+          toDouble,
+          maxDimension,
+          boundaryMatrixOf
+        )
       case EngineKind.Chunks =>
         // Unlike the naive path above, maxDimension IS passed through here as a genuine, correct truncation --
         // CellularPersistenceInChunksContext handles the "+1" dance internally (see .claude/WORKLOG-maxdim-
@@ -1204,7 +1289,8 @@ object TDA4j:
           PersistenceEngine.chunks[Cube, C](maxDimension).barcode(stream),
           cellVertices,
           toDouble,
-          maxDimension
+          maxDimension,
+          boundaryMatrixOf
         )
       case EngineKind.Cohomology =>
         // Same shape as engine=Naive above: no stream-level dimension cap (a cubical grid's own top dimension
@@ -1214,7 +1300,8 @@ object TDA4j:
           PersistenceEngine.cohomology[Cube, C].barcode(stream),
           cellVertices,
           toDouble,
-          maxDimension
+          maxDimension,
+          boundaryMatrixOf
         )
       case EngineKind.Ripser =>
         // dispatchCubical already rejects this before computeCubicalGeneric is ever reached.
@@ -1237,11 +1324,41 @@ object TDA4j:
     * dimension) because `DiameterIndex` doesn't carry its own vertex count the way `Simplex[Int]` does; a caller
     * decoding it needs `size` from somewhere else, and the bar itself already has it.
     */
+  /** The boundary matrix of `cells` (already in filtration order), one column per cell -- shared by every `fromBars`
+    * call site below via a `() => BoundaryMatrixData` thunk each complex branch builds once (from the SAME
+    * stream/metric-space construction `engine=naive` already consumes for that complex, regardless of which engine
+    * actually computed this result's own bars -- see `PersistenceResult.BoundaryMatrixData`'s own doc for why that's
+    * the right choice) and reuses across all of that complex's engine branches, so the boundary matrix a MATLAB caller
+    * sees is consistent across `engine` choices by construction, not by keeping several copies of "how do you build the
+    * stream for this complex" in sync by hand.
+    */
+  private def buildBoundaryMatrix[CellT: OrderedCell, C: Field](
+    cells: Iterable[CellT],
+    cellVertices: (Int, CellT) => Array[Int],
+    toDouble: C => Double,
+    filtrationValue: CellT => Double
+  ): BoundaryMatrixData =
+    val ordered = cells.toIndexedSeq
+    val index: Map[CellT, Int] = ordered.zipWithIndex.toMap
+    val columnDims = ordered.map(_.dim).toArray
+    val columnVertices = Array.tabulate(ordered.length)(j => cellVertices(columnDims(j), ordered(j)))
+    val columnFiltrationValues = ordered.map(filtrationValue).toArray
+    val rows = mutable.ArrayBuffer.empty[Int]
+    val cols = mutable.ArrayBuffer.empty[Int]
+    val values = mutable.ArrayBuffer.empty[Double]
+    for (cell, j) <- ordered.zipWithIndex do
+      for (faceCell, coefficient) <- cell.boundary[C] do
+        rows += index(faceCell)
+        cols += j
+        values += toDouble(coefficient)
+    BoundaryMatrixData(rows.toArray, cols.toArray, values.toArray, columnDims, columnVertices, columnFiltrationValues)
+
   private def fromBars[CellT, C](
     bars: List[PersistenceBar[Double, Chain[CellT, C]]],
     cellVertices: (Int, CellT) => Array[Int],
     toDouble: C => Double,
-    keepDimensionsUpTo: Int
+    keepDimensionsUpTo: Int,
+    boundaryMatrixOf: () => BoundaryMatrixData
   )(using C is Field): PersistenceResult =
     // Drop the top-of-the-built-complex dimension: it was only ever built as scaffolding for the requested
     // dimension below it, and (for the VR engines, which built one dimension higher than requested precisely for
@@ -1263,4 +1380,4 @@ object TDA4j:
             s"no representative chain was recorded for bar $i; every engine records one for every bar, so this " +
               "indicates a bug in the engine that produced this result, not an expected gap"
           )
-    new PersistenceResult(dims, births, deaths, cycleProvider)
+    new PersistenceResult(dims, births, deaths, cycleProvider, boundaryMatrixOf)

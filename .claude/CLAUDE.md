@@ -573,11 +573,14 @@ PersistenceEngine.scala`) rather than re-matching the raw string at each branch.
   `fromBars(..., cellVertices: (Int, CellT) => Array[Int], ...)`. `cycleVertices` throws `UnsupportedOperationException`
   if a bar has no recorded representative, but every engine now records one for every bar at every dimension (see
   the representatives design principle above) — this exception path indicates an engine bug, not an expected gap.
-  Boundary-matrix export designed, not implemented.
 - `PersistenceResult.bottleneckDistance`/`wassersteinDistance` (against another `PersistenceResult` handle —
   fine across MATLAB's Java bridge, unlike a generic/`Map` type) and `.landscape`/`.persistenceImage`: plain
   required positional parameters, not routed through the `String[]` options map (none of these are optional/
   cross-cutting the way that map exists for) — see "Barcode representation" above.
+- **Boundary-matrix export**: `numCells`/`boundaryRows`/`boundaryCols`/`boundaryValues`/`columnDimension`/
+  `columnVertices`/`columnFiltrationValue`, lazy (`TDA4j.buildBoundaryMatrix`, one shared thunk per `complex`
+  branch, reused across every `engine` — the matrix is a property of the complex, not of which engine reduced
+  it; confirmed byte-identical across engines, not just designed that way). See "Barcode representation" above.
 - Unverified: MATLAB's bundled JVM version and actual `double[][]`/`String[]`/`int[]` marshalling.
 
 ## Session practices

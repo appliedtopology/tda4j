@@ -376,7 +376,17 @@ against another `PersistenceResult`, `landscape`/`persistenceImage` on itself) �
 since they produce a matrix rather than a diagram, which does not fit this CLI's existing single-diagram
 output model — see `TDA4jConf.distanceTo`'s own doc.
 
-## `package.scala`: `TDAContext`
+`matlab.PersistenceResult` also exports the **boundary matrix** of the full complex it was computed from
+(`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 1) — `numCells`/`boundaryRows`/`boundaryCols`/
+`boundaryValues`/`columnDimension`/`columnVertices`/`columnFiltrationValue`, rebuildable MATLAB-side as
+`sparse(rows()+1, cols()+1, values(), n, n)`. Built lazily (a caller who never asks never pays for it) by
+`TDA4j.buildBoundaryMatrix`, called once per `complex` branch in `computeGeneric`/`computeWitnessFromLandmarks`/
+`computeCubicalGeneric` from the SAME stream/metric-space construction `engine=naive` already consumes for that
+complex — **regardless of which engine actually computed this result's own bars**, since the boundary matrix is
+a property of the complex, not of which reduction algorithm ran over it (confirmed directly, not just designed
+that way: `naive`/`ripser`/`chunks`/`cohomology` all export byte-for-byte identical matrices for the same
+input). Like the vectorizations above, deliberately not mirrored on the CLI — a sparse matrix doesn't fit the
+CLI's diagram-in-diagram-out shape any better than a landscape/image array does.
 
 ```scala 3
 class TDAContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]

@@ -20,19 +20,19 @@ class VectorizationSpec extends Specification with ScalaCheck:
       "discretization tolerance -- each bar's tent has triangular area persistence * (persistence/2) / 2, and " +
       "the per-t sum of order statistics is exactly the per-t sum of tent values, so integrating a fine-enough " +
       "grid trapezoidally should match tightly)" >> {
-      val diagram = List(bar(0, 1.0, 3.0), bar(0, 0.5, 6.5), bar(0, 4.0, 4.4), bar(0, 7.0, 9.0))
-      val tMin = 0.0
-      val tMax = 10.0
-      val resolution = 4001 // fine grid so any breakpoint/grid misalignment contributes negligible error
-      val step = (tMax - tMin) / (resolution - 1)
-      // numLevels must cover every bar, or the top-k truncation would drop some tents' contributions entirely
-      // and break the identity -- see Vectorization.landscape's own doc for why.
-      val levels = Vectorization.landscape(diagram, numLevels = diagram.size, tMin, tMax, resolution)
+        val diagram = List(bar(0, 1.0, 3.0), bar(0, 0.5, 6.5), bar(0, 4.0, 4.4), bar(0, 7.0, 9.0))
+        val tMin = 0.0
+        val tMax = 10.0
+        val resolution = 4001 // fine grid so any breakpoint/grid misalignment contributes negligible error
+        val step = (tMax - tMin) / (resolution - 1)
+        // numLevels must cover every bar, or the top-k truncation would drop some tents' contributions entirely
+        // and break the identity -- see Vectorization.landscape's own doc for why.
+        val levels = Vectorization.landscape(diagram, numLevels = diagram.size, tMin, tMax, resolution)
 
-      val totalIntegral = levels.map(trapezoidalIntegral(_, step)).sum
-      val expected = diagram.map(b => math.pow(DiagramPoint.of(b).persistence, 2) / 4.0).sum
-      totalIntegral must beCloseTo(expected, 1e-3)
-    }
+        val totalIntegral = levels.map(trapezoidalIntegral(_, step)).sum
+        val expected = diagram.map(b => math.pow(DiagramPoint.of(b).persistence, 2) / 4.0).sum
+        totalIntegral must beCloseTo(expected, 1e-3)
+      }
 
     "a single bar only populates level 0, matching its tent function exactly" >> {
       val diagram = List(bar(0, 2.0, 6.0))
@@ -119,11 +119,20 @@ class VectorizationSpec extends Specification with ScalaCheck:
       image.flatten.forall(_ == 0.0) must beTrue
     }
 
-    "every pixel is non-negative" >> {
-      forAll(Gen.choose(0, 4).flatMap(n => Gen.listOfN(n, for
-        b <- Gen.choose(-2.0, 2.0)
-        p <- Gen.choose(0.01, 3.0)
-      yield bar(0, b, b + p)))) { diagram =>
+    "every pixel is non-negative" >>
+      forAll(
+        Gen
+          .choose(0, 4)
+          .flatMap(n =>
+            Gen.listOfN(
+              n,
+              for
+                b <- Gen.choose(-2.0, 2.0)
+                p <- Gen.choose(0.01, 3.0)
+              yield bar(0, b, b + p)
+            )
+          )
+      ) { diagram =>
         val image = Vectorization.persistenceImage(
           diagram,
           sigma = 0.5,
@@ -134,7 +143,6 @@ class VectorizationSpec extends Specification with ScalaCheck:
         )
         image.flatten.forall(_ >= 0.0) must beTrue
       }
-    }
 
     "matches independent Riemann-sum numerical integration of the raw weighted Gaussian density" >> {
       // Independent oracle: evaluates the actual 2D Gaussian PDF (not the CDF-difference trick) on a fine

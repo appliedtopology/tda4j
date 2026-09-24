@@ -6,10 +6,10 @@ import org.appliedtopology.tda4j.barcode.{given, *}
 import org.specs2.mutable.Specification
 
 /** Tests the [[PersistenceResult]] additions from `.claude/WORKLOG-mainstream-feature-gap-analysis.md` items 4/8
-  * (bottleneck/Wasserstein distance, landscapes, persistence images) -- specifically that this MATLAB-facing
-  * wrapper is a faithful, correctly-marshalled pass-through to [[org.appliedtopology.tda4j.barcode.BarcodeDistance]]/
-  * [[org.appliedtopology.tda4j.barcode.Vectorization]], which already have their own thorough, independently-
-  * oracled test suites (`BarcodeDistanceSpec`/`VectorizationSpec`) -- not a re-test of the underlying math.
+  * (bottleneck/Wasserstein distance, landscapes, persistence images) -- specifically that this MATLAB-facing wrapper is
+  * a faithful, correctly-marshalled pass-through to [[org.appliedtopology.tda4j.barcode.BarcodeDistance]]/
+  * [[org.appliedtopology.tda4j.barcode.Vectorization]], which already have their own thorough, independently- oracled
+  * test suites (`BarcodeDistanceSpec`/`VectorizationSpec`) -- not a re-test of the underlying math.
   */
 class PersistenceResultSpec extends Specification:
   private val triangle = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.9))
@@ -61,10 +61,10 @@ class PersistenceResultSpec extends Specification:
 
     "a finite ground norm (L-2) gives a genuinely different value than the L-infinity default, on a diagram " +
       "with more than one bar" >> {
-      val r1 = TDA4j.computeFromPoints(triangle, Array("maxDimension", "1"))
-      val r2 = TDA4j.computeFromPoints(square, Array("maxDimension", "1"))
-      r1.bottleneckDistance(r2, 0, 2.0) must not(beEqualTo(r1.bottleneckDistance(r2, 0)))
-    }
+        val r1 = TDA4j.computeFromPoints(triangle, Array("maxDimension", "1"))
+        val r2 = TDA4j.computeFromPoints(square, Array("maxDimension", "1"))
+        r1.bottleneckDistance(r2, 0, 2.0) must not(beEqualTo(r1.bottleneckDistance(r2, 0)))
+      }
   }
 
   "landscape" should {
@@ -84,8 +84,16 @@ class PersistenceResultSpec extends Specification:
   "persistenceImage" should {
     "returns birthResolution x persistenceResolution, non-negative throughout" >> {
       val result = TDA4j.computeFromPoints(square, Array("maxDimension", "1"))
-      val image = result.persistenceImage(1, sigma = 0.2, birthMin = 0.0, birthMax = 2.0, persistenceMin = 0.0,
-        persistenceMax = 2.0, birthResolution = 10, persistenceResolution = 10)
+      val image = result.persistenceImage(
+        1,
+        sigma = 0.2,
+        birthMin = 0.0,
+        birthMax = 2.0,
+        persistenceMin = 0.0,
+        persistenceMax = 2.0,
+        birthResolution = 10,
+        persistenceResolution = 10
+      )
       (image.length must beEqualTo(10)) and
         (image.forall(_.length == 10) must beTrue) and
         (image.flatten.forall(_ >= 0.0) must beTrue)
@@ -93,19 +101,19 @@ class PersistenceResultSpec extends Specification:
 
     "the explicit-weightCap overload, given the diagram's own max finite persistence, matches the default " +
       "overload exactly" >> {
-      val result = TDA4j.computeFromPoints(square, Array("maxDimension", "1"))
-      val dim = 1
-      val maxPersistence = (0 until result.size())
-        .filter(result.dimension(_) == dim)
-        .map(i => result.death(i) - result.birth(i))
-        .filter(_.isFinite)
-        .maxOption
-        .getOrElse(0.0)
+        val result = TDA4j.computeFromPoints(square, Array("maxDimension", "1"))
+        val dim = 1
+        val maxPersistence = (0 until result.size())
+          .filter(result.dimension(_) == dim)
+          .map(i => result.death(i) - result.birth(i))
+          .filter(_.isFinite)
+          .maxOption
+          .getOrElse(0.0)
 
-      val withoutCap =
-        result.persistenceImage(dim, 0.3, 0.0, 2.0, 0.0, 2.0, 8, 8)
-      val withExplicitCap =
-        result.persistenceImage(dim, 0.3, 0.0, 2.0, 0.0, 2.0, 8, 8, maxPersistence)
-      withoutCap.flatten.toSeq must beEqualTo(withExplicitCap.flatten.toSeq)
-    }
+        val withoutCap =
+          result.persistenceImage(dim, 0.3, 0.0, 2.0, 0.0, 2.0, 8, 8)
+        val withExplicitCap =
+          result.persistenceImage(dim, 0.3, 0.0, 2.0, 0.0, 2.0, 8, 8, maxPersistence)
+        withoutCap.flatten.toSeq must beEqualTo(withExplicitCap.flatten.toSeq)
+      }
   }

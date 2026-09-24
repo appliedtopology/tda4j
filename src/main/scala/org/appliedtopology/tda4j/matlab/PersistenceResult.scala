@@ -7,6 +7,23 @@ import org.appliedtopology.tda4j.homology.{given, *}
 import org.appliedtopology.tda4j.alpha.{given, *}
 import org.appliedtopology.tda4j.barcode.{given, *}
 
+/** The boundary matrix of the full complex a [[PersistenceResult]] was computed from, one column per cell in filtration
+  * order (column `j`'s own dimension/vertices are `columnDims(j)`/`columnVertices(j)`) -- `TDA4j`'s own
+  * `buildBoundaryMatrix` builds this from the same stream/metric-space construction `engine="naive"` would consume for
+  * that `complex`, REGARDLESS of which engine actually computed this result's own bars (the boundary matrix is a
+  * property of the complex, not of which reduction algorithm ran over it) -- see that method's own doc.
+  * `private[matlab]`: MATLAB never sees this type directly, only via `PersistenceResult`'s own `int[]`/`double[]`
+  * accessor methods below.
+  */
+private[matlab] case class BoundaryMatrixData(
+  rows: Array[Int],
+  cols: Array[Int],
+  values: Array[Double],
+  columnDims: Array[Int],
+  columnVertices: Array[Array[Int]],
+  columnFiltrationValues: Array[Double]
+)
+
 /** A finished persistence computation, in a shape callable directly from MATLAB (or any other plain-Java caller) via
   * MATLAB's built-in Java interface: every public method here takes/returns only `int`, `double`, `double[][]`,
   * `int[][]`, or another `PersistenceResult` handle (MATLAB's Java bridge holds and passes those around like any other
@@ -24,14 +41,14 @@ import org.appliedtopology.tda4j.barcode.{given, *}
   * `engine="ripser"` the chain is a representative *cocycle*; for `engine="naive"` it is a representative *cycle*. Both
   * are reported the same way here (a list of simplices, each given as its sorted vertex array, with a parallel
   * coefficient array) because MATLAB-side code that only wants "the simplices spanning this bar" doesn't need to care
-  * which. Boundary-matrix export is not implemented yet -- flagged as a follow-up in WORKLOG-matlab-api.md, not
-  * silently missing.
+  * which.
   */
 final class PersistenceResult private[matlab] (
   private val dims: Array[Int],
   private val births: Array[Double],
   private val deaths: Array[Double],
-  private val cycleProvider: Int => (Array[Array[Int]], Array[Double])
+  private val cycleProvider: Int => (Array[Array[Int]], Array[Double]),
+  private val boundaryMatrixProvider: () => BoundaryMatrixData
 ):
   def size(): Int = dims.length
 
@@ -72,9 +89,9 @@ final class PersistenceResult private[matlab] (
   def cycleCoefficients(i: Int): Array[Double] = cycleProvider(i)._2
 
   /** This result's own bars of dimension `dim`, as plain `PersistenceBar[Double, Nothing]` (no representative chain --
-    * [[BarcodeDistance]]/[[Vectorization]] only ever look at `dim`/`lower`/`upper`) for feeding into those two objects.
-    * An essential class (`death(i) == Double.PositiveInfinity`) becomes a `PositiveInfinity` upper endpoint, exactly
-    * what both consume directly for the essential-bar handling documented on each.
+    * `barcode.BarcodeDistance`/`barcode.Vectorization` only ever look at `dim`/`lower`/`upper`) for feeding into those
+    * two objects. An essential class (`death(i) == Double.PositiveInfinity`) becomes a `PositiveInfinity` upper
+    * endpoint, exactly what both consume directly for the essential-bar handling documented on each.
     */
   private def barsOfDimension(dim: Int): IndexedSeq[PersistenceBar[Double, Nothing]] =
     (0 until size())
@@ -94,8 +111,8 @@ final class PersistenceResult private[matlab] (
     if groundNorm.isPosInfinity then BarcodeDistance.GroundNorm.LInfinity else BarcodeDistance.GroundNorm.LP(groundNorm)
 
   /** Bottleneck distance (`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 4) between this result's and
-    * `other`'s dimension-`dimension` bars, under the L-infinity ground norm -- see [[BarcodeDistance]] for the full
-    * matching/essential-bar policy this implements. `Double.PositiveInfinity` back means the two diagrams have
+    * `other`'s dimension-`dimension` bars, under the L-infinity ground norm -- see `barcode.BarcodeDistance` for the
+    * full matching/essential-bar policy this implements. `Double.PositiveInfinity` back means the two diagrams have
     * different numbers of essential (never-dying) classes in this dimension, so no finite matching exists; that is a
     * real answer, not a failure.
     */
@@ -112,8 +129,8 @@ final class PersistenceResult private[matlab] (
       toGroundNorm(groundNorm)
     )
 
-  /** Wasserstein distance, order `1.0`, L-infinity ground norm -- see [[bottleneckDistance]] and [[BarcodeDistance]]
-    * for the shared essential-bar policy and ground-norm convention.
+  /** Wasserstein distance, order `1.0`, L-infinity ground norm -- see [[bottleneckDistance]] and
+    * `barcode.BarcodeDistance` for the shared essential-bar policy and ground-norm convention.
     */
   def wassersteinDistance(other: PersistenceResult, dimension: Int): Double =
     wassersteinDistance(other, dimension, 1.0, Double.PositiveInfinity)
@@ -135,9 +152,9 @@ final class PersistenceResult private[matlab] (
 
   /** The first `numLevels` persistence landscape functions (Bubenik 2013, `.claude/WORKLOG-mainstream-feature-gap-
     * analysis.md` item 8) of this result's dimension-`dimension` bars, sampled at `resolution` evenly-spaced points
-    * across `[tMin, tMax]` -- see [[Vectorization.landscape]] for the exact sampling convention, the closed-form check
-    * it satisfies, and why an essential (never-dying) bar needs no special handling here. Returns `levels(k)(j)`: level
-    * `k` (`0` = the outer envelope) at the `j`-th sample point.
+    * across `[tMin, tMax]` -- see `barcode.Vectorization.landscape` for the exact sampling convention, the closed-form
+    * check it satisfies, and why an essential (never-dying) bar needs no special handling here. Returns `levels(k)(j)`:
+    * level `k` (`0` = the outer envelope) at the `j`-th sample point.
     */
   def landscape(dimension: Int, numLevels: Int, tMin: Double, tMax: Double, resolution: Int): Array[Array[Double]] =
     Vectorization.landscape(barsOfDimension(dimension), numLevels, tMin, tMax, resolution)
@@ -145,7 +162,7 @@ final class PersistenceResult private[matlab] (
   /** The persistence image (Adams et al. 2017, `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 8) of this
     * result's dimension-`dimension` bars, with the weight cap defaulted to that diagram's own maximum finite
     * persistence (the paper's suggested default) -- see the eight-argument overload to pass one explicitly, and
-    * [[Vectorization.persistenceImage]] for the exact construction (isotropic Gaussian bumps in birth-persistence
+    * `barcode.Vectorization.persistenceImage` for the exact construction (isotropic Gaussian bumps in birth-persistence
     * coordinates, exact per-pixel integration, piecewise-linear weighting) and why essential (never-dying) bars are
     * dropped rather than given a special-cased value. Returns `image(r)(c)`: `r` indexes `birthResolution` pixels
     * spanning `[birthMin, birthMax]`, `c` indexes `persistenceResolution` pixels spanning `[persistenceMin,
@@ -171,8 +188,8 @@ final class PersistenceResult private[matlab] (
     )
 
   /** As the eight-argument [[persistenceImage]], with an explicit weight cap (the persistence value at and beyond which
-    * [[Vectorization]]'s piecewise-linear weighting saturates to `1.0`) instead of the diagram's own maximum finite
-    * persistence.
+    * `barcode.Vectorization`'s piecewise-linear weighting saturates to `1.0`) instead of the diagram's own maximum
+    * finite persistence.
     */
   def persistenceImage(
     dimension: Int,
@@ -194,3 +211,49 @@ final class PersistenceResult private[matlab] (
       persistenceResolution,
       Some(weightCap)
     )
+
+  /** Computed once, lazily (a caller who never asks for the boundary matrix never pays for it -- unlike `toArray()`/
+    * `cycleVertices`, this can mean materializing and re-deriving every cell of a possibly-large complex, not just this
+    * result's own bars), then memoized: every accessor below reads this same cached value.
+    */
+  private lazy val boundaryMatrixData: BoundaryMatrixData = boundaryMatrixProvider()
+
+  /** The number of cells (matrix columns/rows) in the full complex this result was computed from -- pass this as `n` to
+    * MATLAB's own `sparse(rows()+1, cols()+1, values(), n, n)` (see `boundaryRows`'s own doc for the `+1`).
+    */
+  def numCells(): Int = boundaryMatrixData.columnDims.length
+
+  /** Row indices of the boundary matrix's nonzero entries (0-based, parallel to [[boundaryCols]]/[[boundaryValues]]):
+    * row `i`/column `j` means cell `j`'s boundary includes cell `i` with coefficient `boundaryValues()(k)`. Every
+    * complex/engine combination `TDA4j` supports populates this (see that class's `buildBoundaryMatrix`) -- rebuild in
+    * MATLAB as `sparse(rows()+1, cols()+1, values(), n, n)` (MATLAB's `sparse` is 1-based; every index in this facade,
+    * including this one, is 0-based, matching `cycleVertices`'s own convention).
+    */
+  def boundaryRows(): Array[Int] = boundaryMatrixData.rows
+
+  /** Column indices parallel to [[boundaryRows]] -- see that method's own doc. */
+  def boundaryCols(): Array[Int] = boundaryMatrixData.cols
+
+  /** Coefficients parallel to [[boundaryRows]]/[[boundaryCols]], reported as `double` the same way
+    * [[cycleCoefficients]] is (the representative-integer value cast to `double` for a finite field, the value itself
+    * for the default real-valued field).
+    */
+  def boundaryValues(): Array[Double] = boundaryMatrixData.values
+
+  /** The homological dimension of boundary-matrix column `j` (`0` until [[numCells]]) -- the same cell ordering
+    * [[boundaryRows]]/[[boundaryCols]] index into, NOT a bar index (there are generally far more cells than bars).
+    */
+  def columnDimension(j: Int): Int = boundaryMatrixData.columnDims(j)
+
+  /** Column `j`'s own cell identity, in the same per-complex-type shape [[cycleVertices]] documents (a sorted vertex
+    * array for `Simplex[Int]`-based complexes, a doubled-coordinate `Cube` encoding for cubical ones) -- lets a MATLAB
+    * caller relate a solved linear-algebra result (e.g. a cocycle from `boundaryValues`-derived harmonic smoothing)
+    * back to actual cells.
+    */
+  def columnVertices(j: Int): Array[Int] = boundaryMatrixData.columnVertices(j)
+
+  /** Column `j`'s own filtration value -- the same quantity `birth`/`death` above report per bar, but per CELL here.
+    * Needed for anything that truncates the complex to a sub-level set `K_r` (e.g. circular coordinates: pick `r` in a
+    * target bar's `[birth, death)`, keep only columns/rows with `columnFiltrationValue <= r`).
+    */
+  def columnFiltrationValue(j: Int): Double = boundaryMatrixData.columnFiltrationValues(j)
