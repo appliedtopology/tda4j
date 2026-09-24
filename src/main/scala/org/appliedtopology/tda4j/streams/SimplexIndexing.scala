@@ -10,13 +10,13 @@ import scala.annotation.tailrec
 
 class SimplexIndexing(val vertexCount: Int):
 
-  /** Lazily-memoized `binomial(d + s, s)`, indexed by `d`-row/`s`-column `Array`s rather than an eagerly-computed
-    * full `(vertexCount+1) x (vertexCount+1)` table or a `Map[(Int, Int), Long]`. Eager: `d` is always bounded by
-    * the SIMPLEX SIZE being encoded/decoded (small), never by `vertexCount` itself, so filling every row out to
+  /** Lazily-memoized `binomial(d + s, s)`, indexed by `d`-row/`s`-column `Array`s rather than an eagerly-computed full
+    * `(vertexCount+1) x (vertexCount+1)` table or a `Map[(Int, Int), Long]`. Eager: `d` is always bounded by the
+    * SIMPLEX SIZE being encoded/decoded (small), never by `vertexCount` itself, so filling every row out to
     * `d = vertexCount` wastes work on astronomically large, never-read, potentially-overflowing entries (see
     * `binomial`'s own doc). Map-keyed: a `(d, s)` tuple key boxes on every lookup, including cache hits. Rows grow
-    * lazily up to the largest `d` a real call reaches; `-1L` is the "not yet computed" sentinel (every real
-    * `binomial` result is `>= 0`, so it can never collide with one).
+    * lazily up to the largest `d` a real call reaches; `-1L` is the "not yet computed" sentinel (every real `binomial`
+    * result is `>= 0`, so it can never collide with one).
     */
   private var binomialRows: Array[Array[Long]] = Array.empty
   private def binomialEntry(d: Int, s: Int): Long =
@@ -29,14 +29,14 @@ class SimplexIndexing(val vertexCount: Int):
     if row(s) == -1L then row(s) = SimplexIndexing.binomial(d + s, s)
     row(s)
 
-  /** A SEPARATE lazily-memoized cache for `CofacetCursor`/`FacetCursor`'s own `binomial(n, k)` calls -- NOT a reuse
-    * of `binomialEntry` above via the `binomial(n, k) = binomialEntry(n - k, k)` reindexing, even though that
-    * identity holds: `binomialEntry`'s row axis (`d`) is only safe to grow lazily because every OTHER caller bounds
-    * `d` by simplex size (small); `CofacetCursor`/`FacetCursor` call `binomial(j, k)` with `j` a vertex id ranging up
-    * to `vertexCount - 1`, and reindexing that through `binomialEntry` would make ITS row axis scale with
-    * `vertexCount` instead, reintroducing the same unbounded-row-growth problem `binomialEntry`'s own doc describes.
-    * Here the roles are kept the right way round: `k` (bounded by simplex size) is the row index, `n` (bounded by
-    * `vertexCount`) is the column.
+  /** A SEPARATE lazily-memoized cache for `CofacetCursor`/`FacetCursor`'s own `binomial(n, k)` calls -- NOT a reuse of
+    * `binomialEntry` above via the `binomial(n, k) = binomialEntry(n - k, k)` reindexing, even though that identity
+    * holds: `binomialEntry`'s row axis (`d`) is only safe to grow lazily because every OTHER caller bounds `d` by
+    * simplex size (small); `CofacetCursor`/`FacetCursor` call `binomial(j, k)` with `j` a vertex id ranging up to
+    * `vertexCount - 1`, and reindexing that through `binomialEntry` would make ITS row axis scale with `vertexCount`
+    * instead, reintroducing the same unbounded-row-growth problem `binomialEntry`'s own doc describes. Here the roles
+    * are kept the right way round: `k` (bounded by simplex size) is the row index, `n` (bounded by `vertexCount`) is
+    * the column.
     */
   private var binomialChooseRows: Array[Array[Long]] = Array.empty
   private def binomialChoose(n: Int, k: Int): Long =
@@ -74,8 +74,8 @@ class SimplexIndexing(val vertexCount: Int):
     *
     * `n` is `Long`, not `Int` -- see `binomial`'s own doc: a combinatorial index can be astronomically larger than
     * `vertexCount`/`d` themselves. The `d == 0` base case converts back to `Int` via `.toInt` safely: by this
-    * algorithm's own invariant, the residual `n` at `d == 0` is always a single vertex id, never a combinatorial
-    * index anymore.
+    * algorithm's own invariant, the residual `n` at `d == 0` is always a single vertex id, never a combinatorial index
+    * anymore.
     */
   @tailrec
   final def apply(n: Long, d: Int, upperAccum: Simplex[Int] = ∆()): Simplex[Int] =
@@ -89,17 +89,17 @@ class SimplexIndexing(val vertexCount: Int):
     * `Simplex[Int]`/`SortedSet[Int]` -- for callers (`PackedRipserCohomologyContext.sparseCofacets`/`coboundaryOf`/
     * `zeroPivotCofacet`) that only ever wanted `si(index, size).underlying.toArray` and threw the decoded `Simplex`
     * away immediately afterward. `apply`'s own `upperAccum + (id + d)` builds the result via `size` separate
-    * persistent-tree insertions (each an O(log size) allocation this throwaway value never needs). This method
-    * performs the identical `searchRow`/`binomialEntry` arithmetic as `apply` -- a direct transcription of the same
-    * three base cases and recursive step -- but writes each vertex into a pre-sized `Array[Int]` and sorts once at
-    * the end (`java.util.Arrays.sort`, in-place, zero allocation) instead. Verified against `apply` directly (same
-    * vertex set, for every `(index, size)` pair the recursion can reach) in `SimplexIndexingSpec`'s property test;
-    * `apply` itself is left unchanged, so any future divergence between the two shows up as a test failure.
+    * persistent-tree insertions (each an O(log size) allocation this throwaway value never needs). This method performs
+    * the identical `searchRow`/`binomialEntry` arithmetic as `apply` -- a direct transcription of the same three base
+    * cases and recursive step -- but writes each vertex into a pre-sized `Array[Int]` and sorts once at the end
+    * (`java.util.Arrays.sort`, in-place, zero allocation) instead. Verified against `apply` directly (same vertex set,
+    * for every `(index, size)` pair the recursion can reach) in `SimplexIndexingSpec`'s property test; `apply` itself
+    * is left unchanged, so any future divergence between the two shows up as a test failure.
     *
-    * `apply`'s own `Simplex[Int]`-returning callers are NOT switched to this method: building a `SortedSet[Int]`
-    * from an already-sorted array is not obviously cheaper than `apply`'s own incremental construction (`TreeSet`
-    * has no exposed O(n) bulk-build-from-sorted-input path), so there's no clear win, only a different allocation
-    * shape -- left alone rather than "fixed" without a measurement to justify it.
+    * `apply`'s own `Simplex[Int]`-returning callers are NOT switched to this method: building a `SortedSet[Int]` from
+    * an already-sorted array is not obviously cheaper than `apply`'s own incremental construction (`TreeSet` has no
+    * exposed O(n) bulk-build-from-sorted-input path), so there's no clear win, only a different allocation shape --
+    * left alone rather than "fixed" without a measurement to justify it.
     */
   def decodeToArray(n0: Long, size: Int): Array[Int] =
     val result = new Array[Int](size)
@@ -148,10 +148,10 @@ class SimplexIndexing(val vertexCount: Int):
   /** A `hasNext`/`vertex`/`index`/`advance()` cursor over `sigma`'s cofacets, factored out of what
     * `cofacetIteratorWithVertex` used to do directly as a hand-rolled `Iterator[(Int, Long)]`, so a caller can read
     * `vertex`/`index` as plain field accesses with zero per-step allocation -- not even the `(Int, Long)` tuple an
-    * `Iterator[(Int, Long)]` contract forces on every `next()` call. `hasNext`/`advance()` are deliberately split
-    * from a single `next()`: `vertex`/`index` stay valid to re-read as many times as a caller wants between one
-    * `advance()` and the next (both `PackedRipserCohomology.scala`'s `coboundaryOf` and `Homology.scala` read both
-    * fields off one candidate before advancing).
+    * `Iterator[(Int, Long)]` contract forces on every `next()` call. `hasNext`/`advance()` are deliberately split from
+    * a single `next()`: `vertex`/`index` stay valid to re-read as many times as a caller wants between one `advance()`
+    * and the next (both `PackedRipserCohomology.scala`'s `coboundaryOf` and `Homology.scala` read both fields off one
+    * candidate before advancing).
     *
     * Decodes `sigma` via `decodeToArray` (a plain sorted `Array[Int]`, binary-searched for membership), not `apply` (a
     * `Simplex[Int]`/`SortedSet[Int]`, `O(log d)` tree lookup per membership check) -- the same array-over-tree
@@ -232,8 +232,8 @@ class SimplexIndexing(val vertexCount: Int):
 
   /** A `hasNext`/`vertex`/`index`/`advance()` cursor over `tau`'s facets, mirroring `CofacetCursor` above -- `vertex`
     * is the vertex REMOVED to produce the facet at `index`. `_index` is `iiB + iA` (the OLD `iA`, before this step's
-    * own update), not `iiB + iiA` -- easy to invert by mistake, so kept exactly. Decodes `tau` via `decodeToArray`,
-    * not `apply(...).toSeq.sorted` (a `Simplex[Int]` decode followed by a redundant re-sort of an already-sorted
+    * own update), not `iiB + iiA` -- easy to invert by mistake, so kept exactly. Decodes `tau` via `decodeToArray`, not
+    * `apply(...).toSeq.sorted` (a `Simplex[Int]` decode followed by a redundant re-sort of an already-sorted
     * `SortedSet`).
     */
   final class FacetCursor(startIndex: Long, size: Int):
@@ -290,10 +290,10 @@ object SimplexIndexing:
   /** Returns `Long`, not `Int`: a combinatorial index can be astronomically larger than `n`/`k` themselves, and
     * silently truncating it is a real bug, not a contrived edge case -- e.g. `C(229,5) = 5,022,337,545` truncates to
     * `727,370,249` via `Int`, well within a realistic point-cloud size. `Long` matches `ripser.cpp`'s own
-    * `int64_t`/`long long` for this exact purpose and is dramatically cheaper than `BigInt`, which matters since
-    * this backs `Ordering[Simplex[Int]]`'s comparator, consulted on every `SortedMap`/`PriorityQueue` operation
-    * during reduction. `Long` is not infinite either, so this still asserts on overflow rather than repeating the
-    * same class of bug one order of magnitude further out.
+    * `int64_t`/`long long` for this exact purpose and is dramatically cheaper than `BigInt`, which matters since this
+    * backs `Ordering[Simplex[Int]]`'s comparator, consulted on every `SortedMap`/`PriorityQueue` operation during
+    * reduction. `Long` is not infinite either, so this still asserts on overflow rather than repeating the same class
+    * of bug one order of magnitude further out.
     *
     * Delegates to `commons.numbers.combinatorics.BinomialCoefficient.value`, a `long`-only, GCD-guarded-for-large-`n`
     * algorithm. `n < 0 || k < 0 || n < k` are special-cased to `0` BEFORE delegating: `BinomialCoefficient.value`
