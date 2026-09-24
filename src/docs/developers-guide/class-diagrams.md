@@ -220,7 +220,26 @@ classDiagram
         kernel(source, target, matrix) List~PersistenceBar~
         cokernel(source, target, matrix) List~PersistenceBar~
     }
+    class BarcodeDistance {
+        <<object>>
+        bottleneckDistance(diagram1, diagram2, groundNorm) Double
+        wassersteinDistance(diagram1, diagram2, order, groundNorm) Double
+        bottleneckDistanceByDimension(diagram1, diagram2, groundNorm) Map~Int, Double~
+        wassersteinDistanceByDimension(diagram1, diagram2, order, groundNorm) Map~Int, Double~
+    }
+    class Vectorization {
+        <<object>>
+        landscape(diagram, numLevels, tMin, tMax, resolution) Array~Array~Double~~
+        persistenceImage(diagram, sigma, birthRange, persistenceRange, birthResolution, persistenceResolution, weightCap) Array~Array~Double~~
+    }
+    BarcodeDistance ..> PersistenceBar : reads
+    Vectorization ..> PersistenceBar : reads
 ```
 
 `AnnotationT` in practice is always `Chain[CellT, CoefficientT]` — the representative cycle/cocycle for a
-bar, when an engine tracks one.
+bar, when an engine tracks one. `BarcodeDistance`/`Vectorization` only ever read a bar's `dim`/`lower`/`upper`
+(never `annotation`), and are specialized to `PersistenceBar[Double, _]` rather than sharing `Barcode`'s own
+`FiltrationT: Ordering` genericity — see [Architecture](architecture.md)'s "`Barcode.scala`" section
+for why, and for `BipartiteMatching.scala`'s two package-private combinatorial primitives
+(`HopcroftKarp`/`Hungarian`) `BarcodeDistance` is built on, omitted here as an implementation detail rather
+than part of this package's public shape.

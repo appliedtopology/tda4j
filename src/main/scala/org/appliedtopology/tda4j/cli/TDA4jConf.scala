@@ -135,6 +135,30 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "witness; --num-landmarks/--landmark-selector/--landmark-seed are not meaningful together with this"
   )
 
+  // barcode.BarcodeDistance mirror (`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 4). Landscapes/
+  // persistence images (item 8) are deliberately NOT mirrored here: they produce a matrix, not a diagram, which
+  // doesn't fit this CLI's existing single-diagram text/csv/gudhi/dipha/perseus output model the way a second
+  // diagram-shaped comparison does -- a real matrix-output CLI mode is its own design question (output format,
+  // file layout for a multi-row/column result), left as a follow-up rather than bolted on here. See
+  // matlab.PersistenceResult.landscape/persistenceImage for that capability's MATLAB-facing form.
+  val distanceTo: ScallopOption[String] = opt[String](
+    descr = "compare the computed diagram against an already-computed one read from this file (see " +
+      "--distance-format), printing per-dimension bottleneck/Wasserstein distance instead of writing the " +
+      "computed diagram -- --output/--output-format (text only) apply to THAT printed comparison, not a barcode"
+  )
+  val distanceFormat: ScallopOption[String] = opt[String](
+    default = Some("csv"),
+    descr = "file format of --distance-to: csv (default), gudhi, or dipha -- NOT perseus, whose format is " +
+      "inherently single-dimension (see io.Perseus.readPersistenceIntervals's own `dim` parameter), not a fit " +
+      "for this multi-dimension comparison"
+  )
+  val distanceOrder: ScallopOption[Double] =
+    opt[Double](descr = "Wasserstein order (default: 1.0) -- only consulted with --distance-to")
+  val distanceGroundNorm: ScallopOption[Double] = opt[Double](
+    descr = "ground norm on the birth-death plane: a finite p >= 1.0, or omit for the default L-infinity -- " +
+      "only consulted with --distance-to. See barcode.BarcodeDistance.GroundNorm's own doc."
+  )
+
   val input: ScallopOption[String] = trailArg[String](name = "input-file", descr = "input file", required = true)
 
   verify()

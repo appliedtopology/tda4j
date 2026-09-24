@@ -344,6 +344,38 @@ finitely-presented persistence modules: `image`/`kernel`/`cokernel` of a map bet
 represented as a matrix — useful for interleaving distances or persistence-module morphisms, not needed for
 ordinary persistent-homology computation.
 
+Two more objects in the same package compare/summarize already-computed diagrams rather than computing one
+(`.claude/WORKLOG-mainstream-feature-gap-analysis.md` items 4/8) — both specialized to `PersistenceBar[Double,
+_]` (unlike `Barcode`'s own `FiltrationT: Ordering` genericity: every real engine in this codebase already
+produces `Double` filtration values, and a metric distance needs real arithmetic, not just an `Ordering`):
+
+- **`BarcodeDistance`**: bottleneck and Wasserstein distance between two single-dimension diagrams
+  (`bottleneckDistance`/`wassersteinDistance`, plus `...ByDimension` convenience wrappers that group a
+  multi-dimensional barcode first). Ground metric and aggregation-order convention cross-checked against
+  Hera/GUDHI's own (`GroundNorm.LInfinity`/`LP(p)` is their `internal_p`, the `order` parameter is their
+  `order`/`wasserstein_power`). Essential (never-dying) bars are matched only to each other, by sorted birth
+  value; a mismatched essential-bar count between the two diagrams reports `Double.PositiveInfinity`, not an
+  exception — a real, meaningful answer ("no finite matching exists"), not a failure. Built on two
+  package-private combinatorial primitives in `BipartiteMatching.scala` (`HopcroftKarp` for the bottleneck
+  binary search, `Hungarian` for Wasserstein's assignment problem) — both independently unit-tested against
+  brute-force permutation search, not just exercised indirectly through `BarcodeDistance` itself.
+- **`Vectorization`**: persistence landscapes (Bubenik 2013) and persistence images (Adams et al. 2017),
+  turning a diagram into a fixed-size `Array[Array[Double]]` for downstream (e.g. ML) use. The two handle
+  essential bars differently, deliberately: a landscape's tent function `max(0, min(t - birth, death - t))`
+  degrades to the meaningful, finite ramp `t - birth` exactly at `death = Infinity`, so essential bars are
+  included with no special-casing; a persistence image's Gaussian bump is centered at `(birth, Infinity)` in
+  birth-persistence coordinates, which has no overlap with any finite pixel grid, so essential bars are
+  dropped outright rather than left to silently underflow to zero. Persistence images integrate each pixel's
+  weighted Gaussian mass *exactly* (a product of 1D normal-CDF differences, since an isotropic Gaussian's mass
+  over a rectangle factors along both axes), not by sampling the surface at the pixel center.
+
+`matlab.PersistenceResult` exposes both as instance methods (`bottleneckDistance`/`wassersteinDistance`
+against another `PersistenceResult`, `landscape`/`persistenceImage` on itself) — see that class's own doc.
+`cli.TDA4jCLI`'s `--distance-to` mirrors `BarcodeDistance` only (reading a second diagram via
+`io.{CSV,Gudhi,Dipha}.readPersistenceDiagram`); the vectorizations are deliberately not mirrored in the CLI,
+since they produce a matrix rather than a diagram, which does not fit this CLI's existing single-diagram
+output model — see `TDA4jConf.distanceTo`'s own doc.
+
 ## `package.scala`: `TDAContext`
 
 ```scala 3

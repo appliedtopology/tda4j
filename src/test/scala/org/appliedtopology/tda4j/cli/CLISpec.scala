@@ -389,3 +389,69 @@ class CLISpec extends mutable.Specification:
           ) must beEqualTo(1))
       }
   }
+
+  "--distance-to (barcode.BarcodeDistance mirror)" should {
+    def writeComparisonDiagram(points: Array[Array[Double]]): String =
+      val result = TDA4j.computeFromPoints(points, Array("maxDimension", "1"))
+      val path = tempFile(".csv")
+      CSV.writePersistenceDiagram(path, TDA4jCLI.toBars(result))
+      path
+
+    "print one 'dim <k>: bottleneck=... wasserstein=...' line per dimension, matching a direct " +
+      "BarcodeDistance call on the same bars" >> {
+        val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.9))
+        val comparisonPoints = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+        val inputPath = tempFile(".csv")
+        CSV.writePointCloud(inputPath, points)
+        val comparisonPath = writeComparisonDiagram(comparisonPoints)
+
+        val buffer = new ByteArrayOutputStream()
+        val exitCode = TDA4jCLI.run(
+          Seq("--max-dimension", "1", "--distance-to", comparisonPath, inputPath),
+          new PrintStream(buffer)
+        )
+        val lines = buffer.toString.linesIterator.toSeq
+
+        val computed = TDA4j.computeFromPoints(points, Array("maxDimension", "1"))
+        val computedBars = TDA4jCLI.toBars(computed)
+        val comparisonBars = CSV.readPersistenceDiagram(comparisonPath)
+        val expectedBottleneck = BarcodeDistance.bottleneckDistanceByDimension(computedBars, comparisonBars)
+        val expectedWasserstein = BarcodeDistance.wassersteinDistanceByDimension(computedBars, comparisonBars)
+        val expectedLines =
+          expectedBottleneck.keySet.toSeq.sorted.map(d =>
+            s"dim $d: bottleneck=${expectedBottleneck(d)} wasserstein=${expectedWasserstein(d)}"
+          )
+
+        (exitCode must beEqualTo(0)) and (lines must beEqualTo(expectedLines))
+      }
+
+    "reject --distance-to combined with --select-landmarks" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, Array(Array(0.0, 0.0), Array(1.0, 0.0)))
+      val comparisonPath = writeComparisonDiagram(Array(Array(0.0, 0.0), Array(1.0, 0.0)))
+      TDA4jCLI.run(
+        Seq("--select-landmarks", "--num-landmarks", "1", "--distance-to", comparisonPath, path),
+        new PrintStream(new ByteArrayOutputStream())
+      ) must beEqualTo(1)
+    }
+
+    "reject --distance-to combined with a non-text --output-format" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, Array(Array(0.0, 0.0), Array(1.0, 0.0)))
+      val comparisonPath = writeComparisonDiagram(Array(Array(0.0, 0.0), Array(1.0, 0.0)))
+      TDA4jCLI.run(
+        Seq("--output-format", "csv", "--output", tempFile(".csv"), "--distance-to", comparisonPath, path),
+        new PrintStream(new ByteArrayOutputStream())
+      ) must beEqualTo(1)
+    }
+
+    "reject an unrecognized --distance-format" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, Array(Array(0.0, 0.0), Array(1.0, 0.0)))
+      val comparisonPath = writeComparisonDiagram(Array(Array(0.0, 0.0), Array(1.0, 0.0)))
+      TDA4jCLI.run(
+        Seq("--distance-to", comparisonPath, "--distance-format", "perseus", path),
+        new PrintStream(new ByteArrayOutputStream())
+      ) must beEqualTo(1)
+    }
+  }

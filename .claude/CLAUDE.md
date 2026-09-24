@@ -286,6 +286,19 @@ engines isn't proof when both share a truncation or code path (hand-derived fixt
 `Barcode.scala`: `BarcodeEndpoint` (open/closed/±∞), `PersistenceBar`, algebra on finitely-presented persistence
 modules.
 
+**`BarcodeDistance`/`Vectorization`** (same package): bottleneck/Wasserstein distance and persistence
+landscapes/images, `PersistenceBar[Double, _]`-specialized (not `Barcode`'s own `FiltrationT: Ordering`
+genericity — every real engine here already produces `Double`, and a metric needs real arithmetic). Ground-
+norm/aggregation convention matches Hera/GUDHI's own (`internal_p`/`order`); persistence-image construction
+(exact per-pixel Gaussian-CDF integration, piecewise-linear weight) matches `scikit-tda/persim`'s. Essential
+bars: for distance, matched only to each other by sorted birth (mismatched count → `+Infinity`, not an
+exception); for vectorization, included for free by landscapes (the tent function degrades to a meaningful
+ramp at `death=Infinity`) but dropped by images (a Gaussian centered at infinite persistence has no finite-grid
+overlap to underflow silently instead of dropping outright) — a deliberate, per-method difference, not an
+inconsistency. `matlab.PersistenceResult` exposes both; CLI (`--distance-to`) mirrors only the distance, not
+the vectorizations (matrix output doesn't fit the CLI's existing diagram-shaped output model — a deliberate
+scope boundary, not an oversight). `WORKLOG-bottleneck-wasserstein-vectorizations.md`.
+
 ### Cross-engine benchmark
 
 `EngineComparisonBenchmarkSpec` times every (construction x engine) pairing across point count/dimension/`maxDim`,
@@ -522,7 +535,11 @@ Scallop default** — omitted keys let `TDA4j` apply its own defaults (one sourc
 (would silently round to step indices). `TDA4jCLI.run(args, out): Int` is testable in-process, but Scallop's default
 `onError` calls `System.exit` on any parse error or `--help`/`--version` — `CLISpec` must never pass malformed flags.
 `throwError` was deliberately not used. Scallop `opt[Boolean]` has always-supplied toggle semantics
-(`WORKLOG-naming-and-dispatch-expansion.md`).
+(`WORKLOG-naming-and-dispatch-expansion.md`). `--distance-to` (+ `--distance-format`/`-order`/`-ground-norm`)
+is the one exception to the "every flag mirrors a compute option" framing above — it mirrors
+`barcode.BarcodeDistance` instead, comparing the computed diagram against one read from a file via the
+existing `io.{CSV,Gudhi,Dipha}.readPersistenceDiagram`; only `--output-format=text` is supported with it (see
+"Barcode representation" above for why the vectorizations have no CLI mirror at all).
 
 ## MATLAB API
 
@@ -557,6 +574,10 @@ PersistenceEngine.scala`) rather than re-matching the raw string at each branch.
   if a bar has no recorded representative, but every engine now records one for every bar at every dimension (see
   the representatives design principle above) — this exception path indicates an engine bug, not an expected gap.
   Boundary-matrix export designed, not implemented.
+- `PersistenceResult.bottleneckDistance`/`wassersteinDistance` (against another `PersistenceResult` handle —
+  fine across MATLAB's Java bridge, unlike a generic/`Map` type) and `.landscape`/`.persistenceImage`: plain
+  required positional parameters, not routed through the `String[]` options map (none of these are optional/
+  cross-cutting the way that map exists for) — see "Barcode representation" above.
 - Unverified: MATLAB's bundled JVM version and actual `double[][]`/`String[]`/`int[]` marshalling.
 
 ## Session practices

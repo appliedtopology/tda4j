@@ -56,6 +56,22 @@ object TDA4jCLI:
             "(step 1), the second CONSUMES one (step 2) -- run them as two separate invocations"
         )
 
+      if conf.distanceTo.isSupplied then
+        if conf.selectLandmarks() then
+          throw new IllegalArgumentException(
+            "--distance-to is meaningless with --select-landmarks: there is no barcode here, only a landmark set"
+          )
+        if conf.representatives() then
+          throw new IllegalArgumentException(
+            "--representatives is meaningless with --distance-to: a bottleneck/Wasserstein comparison has no " +
+              "representative chains, only a distance per dimension"
+          )
+        if conf.outputFormat() != "text" then
+          throw new IllegalArgumentException(
+            s"--output-format=${conf.outputFormat()} is not supported with --distance-to -- only the default " +
+              "text format is (one 'dim <k>: bottleneck=... wasserstein=...' line per dimension)"
+          )
+
       // --complex is meaningless for a cubical grid (TDA4j.computeFromCubicalImage has no "complex" option at
       // all -- it would otherwise be silently ignored rather than validated, the exact "two flags can disagree
       // and nothing notices" trap this CLI's whole design (buildOptions's own doc above) exists to avoid). Same
@@ -107,7 +123,8 @@ object TDA4jCLI:
               case ResolvedInput.Points(points)               => TDA4j.computeFromPoints(points, options)
               case ResolvedInput.Distances(distances)         => TDA4j.computeFromDistanceMatrix(distances, options)
               case ResolvedInput.CubicalGrid(shape, flatVals) => TDA4j.computeFromCubicalImage(shape, flatVals, options)
-        writeOutput(conf, result, out)
+        if conf.distanceTo.isSupplied then writeDistance(conf, result, out)
+        else writeOutput(conf, result, out)
         0
     catch
       case e: IllegalArgumentException =>
@@ -320,6 +337,36 @@ object TDA4jCLI:
         .map { case (vs, c) => s"$c*${vs.mkString("[", ",", "]")}" }
         .mkString(" + ")
     catch case _: UnsupportedOperationException => "(no representative recorded)"
+
+  /** `--distance-format`'s three supported values -- NOT `--input-format`'s reader set: these read an ALREADY-COMPUTED
+    * multi-dimension diagram (`io.*.readPersistenceDiagram`), not raw point/distance/cubical data. `perseus` is
+    * deliberately excluded -- see `TDA4jConf.distanceFormat`'s own doc for why.
+    */
+  private[cli] def readComparisonDiagram(format: String, path: String): Seq[PersistenceBar[Double, Nothing]] =
+    format match
+      case "csv"   => CSV.readPersistenceDiagram(path)
+      case "gudhi" => Gudhi.readPersistenceDiagram(path)
+      case "dipha" => Dipha.readPersistenceDiagram(path)
+      case other   =>
+        throw new IllegalArgumentException(s"unrecognized --distance-format '$other'; expected csv, gudhi, or dipha")
+
+  private[cli] def writeDistance(conf: TDA4jConf, result: PersistenceResult, out: java.io.PrintStream): Unit =
+    val bars = toBars(result)
+    val comparison = readComparisonDiagram(conf.distanceFormat(), conf.distanceTo())
+    val order = conf.distanceOrder.toOption.getOrElse(1.0)
+    val groundNorm = conf.distanceGroundNorm.toOption match
+      case Some(p) => BarcodeDistance.GroundNorm.LP(p)
+      case None    => BarcodeDistance.GroundNorm.LInfinity
+    val bottleneck = BarcodeDistance.bottleneckDistanceByDimension(bars, comparison, groundNorm)
+    val wasserstein = BarcodeDistance.wassersteinDistanceByDimension(bars, comparison, order, groundNorm)
+    val dims = (bottleneck.keySet ++ wasserstein.keySet).toSeq.sorted
+    val lines = dims.map(d => s"dim $d: bottleneck=${bottleneck(d)} wasserstein=${wasserstein(d)}")
+    conf.output.toOption match
+      case Some(path) =>
+        val writer = new PrintWriter(path)
+        try lines.foreach(writer.println)
+        finally writer.close()
+      case None => lines.foreach(out.println)
 
   private[cli] def writeOutput(conf: TDA4jConf, result: PersistenceResult, out: java.io.PrintStream): Unit =
     val bars = toBars(result)
