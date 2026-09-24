@@ -802,6 +802,41 @@ object AlphaComplexDQP:
   ): AlphaComplexDQP =
     apply(PowerDistance.euclidean(points, Some(powerWeights)), maxPower, maxDimension, settings)
 
+  /** DTM-weighted alpha complex: `weight(i) = -f(i)^2`, where `f` is the empirical distance-to-measure
+    * (`streams.DistanceToMeasure`, Chazal-Cohen-Steiner-Merigot 2011) with `k` neighbours and exponent `q`.
+    *
+    * This is exactly the `p = 2` ball equation of Anai et al., "DTM-based filtrations" (arXiv:1811.04757, Def.
+    * 3.1/Prop. 3.5) -- `r_x(t)^2 = t^2 - f(x)^2` -- read against THIS class's own power-distance convention
+    * `pi_i(y) = ||y-x_i||^2 - weight(i)` (Definition 6/10 above): setting `weight(i) = -f(i)^2` makes
+    * `pi_i(y) = ||y-x_i||^2 + f(i)^2`, so `pi_i(y) <= alpha` iff `||y-x_i||^2 <= alpha - f(i)^2 = r_x(sqrt(alpha))^2`
+    * exactly. `alpha.PowerDistance`/`AlphaComplexDQP` already implement the general weighted-alpha/restricted- nerve
+    * machinery this needs -- DTM-alpha is that machinery fed these specific weights, not a new construction.
+    * Cross-checked (not merely asserted) against `streams.DtmRipsSimplexStream(..., p = 2.0)`: both are the SAME
+    * `p = 2` weighted-ball union, so their H0 barcodes agree once alpha's own `sqrt(alpha)` units are doubled to match
+    * Rips's -- `.claude/WORKLOG-dtm-filtrations.md` has the full derivation and the cross-check itself
+    * (`AlphaComplexDQPDtmSpec`).
+    *
+    * Uses `JVPTree` for the `k`-NN search (`DistanceToMeasure`'s own default is the safer-but-slower `BruteForce`,
+    * needed only when the triangle inequality isn't guaranteed -- not a concern here, `points` is always genuinely
+    * Euclidean).
+    *
+    * Depends on the vertex-attachment fix in `AlphaComplexDQPBuilder.compute()` (`.claude/WORKLOG-dtm-
+    * filtrations.md`): DTM weights make a point's own centre fall outside its own restricted power cell routinely (any
+    * point near an outlier), which the OLD unconditional `weight(f) = -space.weight(x)` got wrong -- this constructor
+    * would have produced spurious/missing H0 bars on essentially every real input before that fix landed.
+    */
+  def dtm(
+    points: Array[Array[Double]],
+    k: Int,
+    maxRadius: Double,
+    maxDimension: Int,
+    q: Double = 2.0,
+    settings: AlphaDQPSettings = AlphaDQPSettings()
+  ): AlphaComplexDQP =
+    val ambient = streams.EuclideanMetricSpace(points)
+    val f = streams.DistanceToMeasure(ambient, streams.JVPTree(ambient), k, q)
+    weighted(points, f.toArray.map(fi => -fi * fi), maxRadius * maxRadius, maxDimension, settings)
+
   def apply(
     space: PowerDistance,
     maxPower: Double,
@@ -901,33 +936,21 @@ class AlphaComplexDQPBuilder(
       if settings.workingSetCapacity > 0 then math.min(n, settings.workingSetCapacity)
       else if space.ambientDimension > 0 then math.min(n, space.ambientDimension + 2)
       else n
-    // k == 0
-    for // because dim 0, we know that the candidates are just the vertices
-      (x, _) <- buildCandidates(0, nbrs, alive, byDim, present)
-      f = Simplex(x)
-    do
-      byDim(0) += f
-      present.add(f)
-      // Definition 10 evaluated at a vertex: the unconstrained minimiser of ||y-x||^2 is
-      // trivially y*=x, so w({x}) = 0 - p(x) = -weight(x). This is only ever 0 in the
-      // unweighted case; leaving no entry here (falling back to filtrationValue's
-      // getOrElse(cell, 0.0) default) is silently wrong whenever weight(x) != 0 -- it
-      // breaks monotonicity against every edge incident to a nonzero-weight vertex.
-      // Confirmed by AlphaComplexDQPWeightedSpec.
-      weights(f) = -space.weight(x)
-      coordsOf(x).foreach(arr => witnesses(f) = arr)
 
-    for k <- 1 to maxDimension do
-      val candidates: mutable.Map[Int, mutable.IndexedBuffer[Simplex[Int]]] =
-        buildCandidates(k, nbrs, alive, byDim, present)
-
-      // Each (x, cs) entry is solved independently: solveAtVertex allocates its own DualQP/CholeskyWorkspace
-      // per call and touches no state shared across vertices (verified directly, not assumed -- see
-      // .claude/WORKLOG-parallelization-survey.md item 1), so the per-vertex solve itself is safe to run on
-      // settings.parallel's ForkJoinPool. `.par.map` preserves `vertices`' own positional order when
-      // materialized back via `.toIndexedSeq` (a documented scala-parallel-collections property), so
-      // `perVertex`'s order -- and hence the entire computation's output -- is identical whether or not
-      // settings.parallel is set, matching this method's own "Output is deterministic" contract.
+    /** Runs the QP solve for every candidate at dimension k >= 1 (line 8 of Algorithm 1), merging results into
+      * byDim(k)/weights/witnesses/present in vertex order, deterministic regardless of settings.parallel. Shared by the
+      * k=1 pre-step below (needed before dimension 0 can be resolved -- see that comment) and the k=2..maxDimension
+      * loop, so the two can't drift apart.
+      *
+      * Each (x, cs) entry is solved independently: solveAtVertex allocates its own DualQP/CholeskyWorkspace per call
+      * and touches no state shared across vertices (verified directly, not assumed -- see
+      * .claude/WORKLOG-parallelization-survey.md item 1), so the per-vertex solve itself is safe to run on
+      * settings.parallel's ForkJoinPool. `.par.map` preserves `vertices`' own positional order when materialized back
+      * via `.toIndexedSeq` (a documented scala-parallel-collections property), so `perVertex`'s order -- and hence the
+      * entire computation's output -- is identical whether or not settings.parallel is set, matching this method's own
+      * "Output is deterministic" contract.
+      */
+    def solveDimension(k: Int, candidates: mutable.Map[Int, mutable.IndexedBuffer[Simplex[Int]]]): Unit =
       val vertices: IndexedSeq[(Int, mutable.IndexedBuffer[Simplex[Int]])] =
         candidates.iterator.filter(_._2.nonEmpty).toIndexedSeq
       def solveEntry(entry: (Int, mutable.IndexedBuffer[Simplex[Int]])): mutable.IndexedBuffer[Found] =
@@ -948,6 +971,50 @@ class AlphaComplexDQPBuilder(
 
       for f <- byDim(k)
       do present.add(f)
+
+    // k == 1 before k == 0: Definition 10 evaluated at a vertex x is the minimum of pi_x over its OWN restricted
+    // power cell V_x, which is only pi_x(x) = -weight(x) (the unconstrained minimiser of the paraboloid) when x
+    // itself actually lies in V_x. Whenever some Cech-neighbour j has weight(j) - weight(x) > d^2(x,j), x's own
+    // point is dominated by j and sits OUTSIDE V_x -- a real gap in the previous unconditional `-weight(x)`, not
+    // a DTM-specific one: any sufficiently divergent PowerDistance.weight triggers it (worked R^1 counterexample,
+    // and why AlphaComplexDQPWeightedSpec's mild [-0.3, 0.3] weight range never caught it, in
+    // .claude/WORKLOG-dtm-filtrations.md). DTM weights trigger it routinely, since a large DTM value on an
+    // outlier shrinks its ball until the outlier's own centre is dominated by a nearby non-outlier's ball.
+    //
+    // When x is not in V_x, the constrained minimum of the convex pi_x over the convex polytope V_x is an
+    // orthogonal projection of x onto V_x, generically attained on a FACET of V_x -- the shared boundary with
+    // exactly one Cech-neighbour j -- which is exactly the point solveAtVertex already computes for the edge
+    // {x, j} (pi_x and pi_j agree there by construction of the power bisector, regardless of which of x/j was
+    // used as that edge's own QP base vertex). So x's correct vertex value is the MINIMUM over its own incident,
+    // already-solved edges, with that edge's own witness carried over too (Phi({x}) is that boundary point, not
+    // x's own coordinates, once x is excluded from V_x) -- no new geometry needed, just solving k=1 before k=0.
+    // A vertex with NO incident edges at all has no valid attachment to the rest of the complex: a genuinely
+    // redundant site with an empty power cell (in the regular-triangulation sense), dropped from byDim(0)
+    // entirely rather than assigned any filtration value -- matching CGAL/GUDHI's own treatment of hidden
+    // points. Such a vertex can never appear in any higher-dimensional simplex either (those are only ever built
+    // by extending existing lower-dimensional ones, bottoming out at k=1), so dropping it here is automatically
+    // consistent with the rest of the complex -- no separate closure check is needed.
+    if maxDimension >= 1 then solveDimension(1, buildCandidates(1, nbrs, alive, byDim, present))
+
+    val incidentEdges: Map[Int, IndexedSeq[Simplex[Int]]] =
+      if maxDimension >= 1 then
+        byDim(1).iterator.flatMap(e => e.toSeq.map(v => v -> e)).toIndexedSeq.groupMap(_._1)(_._2)
+      else Map.empty[Int, IndexedSeq[Simplex[Int]]]
+
+    for x <- (0 until n).filter(alive) do
+      val insideOwnCell = nbrs(x).forall(j => space.weight(j) - space.weight(x) <= space.squaredDistance(x, j))
+      val chosen: Option[(Double, Option[Array[Double]])] =
+        if insideOwnCell then Some((-space.weight(x), coordsOf(x)))
+        else incidentEdges.getOrElse(x, IndexedSeq.empty).minByOption(weights).map(e => (weights(e), witnesses.get(e)))
+      chosen.foreach { case (w, witness) =>
+        val f = Simplex(x)
+        byDim(0) += f
+        present.add(f)
+        weights(f) = w
+        witness.foreach(arr => witnesses(f) = arr)
+      }
+
+    for k <- 2 to maxDimension do solveDimension(k, buildCandidates(k, nbrs, alive, byDim, present))
 
     if settings.enforceMonotonicity then clampMonotone(byDim, weights)
 
@@ -1194,5 +1261,32 @@ class AlphaShapeDQP(val points: Array[Array[Double]]) extends AlphaShapes:
   // dispatch-interchangeable (see AlphaComplexSpec, which runs identical
   // property checks against both). Go through radiusOf here so both
   // implementations report the same quantity in the same units.
+  override def filtrationValue: PartialFunction[Simplex[Int], Double] =
+    alphaComplexDQP.radiusOf(_)
+
+/** Wraps an ALREADY-BUILT `AlphaComplexDQP` (any `space`/`maxPower`/`maxDimension`, e.g. `AlphaComplexDQP.dtm`'s
+  * DTM-weighted output, or a radius-truncated `.weighted`/`.euclidean` call) as an `AlphaShapes` stream -- the exact
+  * same `iterateDimension`/`filtrationOrdering`/`filtrationValue` shape `AlphaShapeDQP` uses for its own
+  * always-untruncated, always-unweighted build, just parameterized over a caller-supplied one instead of building a
+  * fresh untruncated `AlphaComplexDQP.euclidean` internally. `points` is needed only to satisfy `AlphaShapes`'s own
+  * `metricSpace` contract (unused by homology engines, see that trait's doc); it must be the SAME points
+  * `alphaComplexDQP` was built from.
+  */
+class AlphaComplexDQPStream(val points: Array[Array[Double]], val alphaComplexDQP: AlphaComplexDQP) extends AlphaShapes:
+  override val metricSpace = EuclideanMetricSpace(points)
+
+  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+    case k if k >= 0 && k < alphaComplexDQP.sizeByDimension.length => alphaComplexDQP.cellsOfDimension(k).iterator
+  }
+
+  override def filtrationOrdering: Ordering[Simplex[Int]] =
+    FilteredSimplexOrdering[Int, Double](this)(using vertexOrdering = summon[Ordering[Int]])(using
+      filtrationOrdering = summon[Ordering[Double]].reverse
+    )
+
+  // radiusOf, not the raw (squared) filtrationValue, for the same reason AlphaShapeDQP does -- see its own note:
+  // every AlphaShapes implementation (Helix, DQP, and now this one) reports the actual circumradius, so callers
+  // dispatching on the shared AlphaShapes contract (matlab.TDA4j's complex=alpha/complex=dtm-alpha included) get
+  // consistent units regardless of which weighting produced the underlying AlphaComplexDQP.
   override def filtrationValue: PartialFunction[Simplex[Int], Double] =
     alphaComplexDQP.radiusOf(_)

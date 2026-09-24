@@ -156,6 +156,50 @@ class CLISpec extends mutable.Specification:
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
     }
 
+    "produce the exact same barcode as calling TDA4j directly for --complex=dtm-rips, via a real file on disk" >> {
+      // Same "no CLI-side code exists for this complex" argument as --complex=cech above -- --dtm-k/--dtm-q/--dtm-p
+      // are all just more 1:1-mirrored flags.
+      val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, points)
+
+      val buffer = new ByteArrayOutputStream()
+      val exitCode = TDA4jCLI.run(
+        Seq("--complex", "dtm-rips", "--dtm-k", "3", "--max-dimension", "1", path),
+        new PrintStream(buffer)
+      )
+      val cliLines = buffer.toString.linesIterator.toSeq
+
+      val direct = TDA4j.computeFromPoints(
+        points,
+        Array("complex", "dtm-rips", "dtmK", "3", "maxDimension", "1")
+      )
+      val directLines = TDA4jCLI.toBars(direct).map(_.toString)
+
+      (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
+    }
+
+    "produce the exact same barcode as calling TDA4j directly for --complex=dtm-alpha, via a real file on disk" >> {
+      val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, points)
+
+      val buffer = new ByteArrayOutputStream()
+      val exitCode = TDA4jCLI.run(
+        Seq("--complex", "dtm-alpha", "--dtm-k", "3", path),
+        new PrintStream(buffer)
+      )
+      val cliLines = buffer.toString.linesIterator.toSeq
+
+      val direct = TDA4j.computeFromPoints(
+        points,
+        Array("complex", "dtm-alpha", "dtmK", "3")
+      )
+      val directLines = TDA4jCLI.toBars(direct).map(_.toString)
+
+      (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
+    }
+
     "produce the exact same barcode as calling TDA4j.computeFromCubicalImage directly for a cubical-image file" >> {
       val path = tempFile(".txt")
       // A 3x3 ring with a permanently missing center (-1 -> +Infinity, Perseus's own convention) -- the same

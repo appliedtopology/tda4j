@@ -395,8 +395,14 @@ maxRadius, ...)` for truncation. Optional parallel construction (`WORKLOG-parall
   (may wrongly exclude a near-degenerate Delaunay simplex). "Commit anyway" was tried and reverted: no fixed
   threshold separates safe from catastrophic. `solveAtVertex` catches per-candidate non-convergence and excludes it;
   logs to stderr only under `AlphaDQPSettings(verbose = true)` (off by default — this is routine, not exceptional).
-- Vertex filtration values must be `-space.weight(x)`, witness `coordsOf(x)` — not a `0.0` default (breaks weighted
-  monotonicity; `AlphaComplexDQPWeightedSpec`).
+- Vertex filtration value is `-space.weight(x)` (witness `coordsOf(x)`) **only when `x` lies inside its own
+  restricted power cell `V_x`** — not a `0.0` default (breaks weighted monotonicity; `AlphaComplexDQPWeightedSpec`).
+  When some Cech-neighbour dominates `x`'s own point (`weight(j) - weight(x) > d²(x,j)`), the correct value is the
+  **minimum over `x`'s own incident, already-solved edges** (dimension 1 is solved before dimension 0 for exactly
+  this reason), with that edge's own witness, not `x`'s coordinates; a vertex with no incident edges at all is
+  genuinely hidden (empty power cell) and is **dropped from the complex entirely**, not assigned a value. Found via
+  DTM weights (which trigger this routinely) but not DTM-specific — mild weights never triggered it before.
+  `AlphaComplexDQPVertexAttachmentSpec`, `WORKLOG-dtm-filtrations.md`.
 - Regressions pinned in `AlphaComplexDQPRegressionSpec`/`AlphaValidationSpec`; property suite uses
   `minTestsOk = 2000` (failure rates were as low as 1/12000). `AlphaComplexDQPSpatialIndexSpec` checks the VP-tree
   `cechNeighbours()` against brute force.
@@ -413,6 +419,38 @@ homotopy type. Correct, not a bug.
 
 Honest framing: the paper's benchmarks are mixed vs Ripser and qhull; the value is high ambient dimension, exact
 homology, and small complexes near low-dimensional data — not raw speed.
+
+## DTM-based filtrations
+
+`streams/DistanceToMeasure.scala`, `streams/DtmRipsStream.scala`, `alpha.AlphaComplexDQP.dtm`,
+`WORKLOG-dtm-filtrations.md`. `streams.DistanceToMeasure(metricSpace, k, q=2)`: Chazal-Cohen-Steiner-Merigot 2011,
+generic over any `FiniteMetricSpace[Int]` (no coordinates needed). `k` is **self-inclusive** (a point counts as
+its own nearest neighbour, verified against GUDHI's own docstring and worked examples byte-for-byte) — `k=1` gives
+`f=0` everywhere, the degenerate case every DTM consumer here reduces to its unweighted construction at. Defaults
+to `streams.BruteForce` for k-NN, not `JVPTree`: VP-tree pruning assumes the triangle inequality, which not every
+`FiniteMetricSpace` in this codebase satisfies (`ExplicitMetricSpace` enforces nothing).
+
+**`streams.DtmRipsSimplexStream`** (Anai et al., "DTM-based filtrations," arXiv:1811.04757, Def. 3.1/Prop. 3.5):
+doubled units, matching plain VR (GUDHI's own convention too). `p ∈ {1.0, 2.0}` (Def. 3.1's ball-radius exponent,
+**not** `DistanceToMeasure`'s own `q`); `p=1` (default) is checked byte-for-byte against GUDHI's own
+`DTMRipsComplex`/`WeightedRipsComplex`; `p=2` has no external reference implementation and exists only as the
+cross-validation device against `AlphaComplexDQP.dtm` below, not as a recommended default. **The first coface
+stream in this codebase with nonzero, distinct vertex filtration values** — every prior VR-flavored stream's
+inherited `case 0` (unsorted, unfiltered) was only ever safe because every vertex tied at 0; this class overrides
+`case 0` explicitly. `maxFiltrationValue` defaults to the reified (doubled) metric space's own
+`minimumEnclosingRadius`, not GUDHI's `+Infinity` — proven safe for both `p` values (`t(f_x,f_y,d) >= max(f_x,f_y)`
+by construction), see the worklog for the proof. Refuses `engine=ripser` in `matlab.TDA4j` (Ripser assumes vertex
+births at 0 and a diameter-only incremental formula); `naive`/`chunks`/`cohomology` all consume it like any other
+flag complex — `chunks` cross-validated against `naive`, not assumed to carry over.
+
+**`alpha.AlphaComplexDQP.dtm`**: `weight(i) = -f(i)²`, the `p=2` ball equation applied through the pre-existing
+weighted-alpha/power-distance machinery — not a construction GUDHI implements (no `DTMAlphaComplex` there) or a
+literature citation confirmed for this exact combination; derived, not copied. Depends on the vertex-attachment
+fix above (DTM weights make a point's own centre fall outside its own cell routinely). Cross-checked against
+`DtmRipsSimplexStream(p=2)`'s H0 (persistent nerve lemma: same union of balls ⟹ same component count at every
+threshold), NOT bar-for-bar — alpha correctly delays/omits vertices Rips can't, producing zero-length bars on the
+Rips side that must be dropped before comparing; see the worklog for the full derivation (it did not match on
+the first attempt, and understanding why cost real time — worth reading before touching this code).
 
 ## File I/O
 
@@ -445,10 +483,12 @@ The MATLAB-facing option strings still drive dispatch (can't match on types acro
 parses each one exactly once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before anything else
 runs, and dispatches on those enums via `PersistenceEngine.naive`/`.chunks`/`.cohomology` (`homology/
 PersistenceEngine.scala`) rather than re-matching the raw string at each branch.
-- `computeFromPoints`/`computeFromDistanceMatrix`: `complex` = `vr`/`alpha`/`cech`/`witness`; `engine` =
-  `ripser`/`naive`/`chunks`/`cohomology` (Alpha refuses `ripser`/`chunks`; Cech and witness/general refuse
-  `ripser`, witness/general also refuses `chunks` — see "Witness complexes" above). `computeFromCubicalImage`/
-  `computeFromImage` for cubes.
+- `computeFromPoints`/`computeFromDistanceMatrix`: `complex` = `vr`/`alpha`/`cech`/`witness`/`dtm-rips`/`dtm-alpha`;
+  `engine` = `ripser`/`naive`/`chunks`/`cohomology` (Alpha and dtm-alpha refuse `ripser`/`chunks`; Cech, dtm-rips,
+  and witness/general refuse `ripser`, witness/general also refuses `chunks` — see "Witness complexes"/"DTM-based
+  filtrations" above). `dtm-rips`/`dtm-alpha` need `dtmK` (required); `dtm-rips` alone works from
+  `computeFromDistanceMatrix` too (no coordinates needed), `dtm-alpha` needs `computeFromPoints` like `alpha`/
+  `cech`. `computeFromCubicalImage`/`computeFromImage` for cubes.
 - **Two-step witness recipe** (`WORKLOG-witness-two-step-api.md`), alongside the one-shot path:
   `selectLandmarksFrom{Points,DistanceMatrix}` (→ `LandmarkSelectionResult`) then
   `computeFrom{Points,DistanceMatrix}AndLandmarks` (takes that `int[]`, 0-based ambient indices, directly —

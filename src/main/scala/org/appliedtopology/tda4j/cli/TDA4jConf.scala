@@ -48,7 +48,7 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "an expected gap."
   )
 
-  val complex: ScallopOption[String] = opt[String](descr = "vr (default), alpha, cech, or witness")
+  val complex: ScallopOption[String] = opt[String](descr = "vr (default), alpha, cech, witness, dtm-rips, or dtm-alpha")
   val engine: ScallopOption[String] =
     opt[String](descr =
       "ripser, naive, chunks, or cohomology (default depends on --complex -- see TDA4j's own doc). cohomology " +
@@ -95,6 +95,18 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     opt[Int](descr =
       "0, 1, or 2 (default: 2) -- only consulted when --complex=witness and --witness-variant=lazy, see " +
         "streams.WitnessMetricSpace's own doc"
+    )
+
+  val dtmK: ScallopOption[Int] =
+    opt[Int](descr =
+      "number of nearest neighbours (self included) for distance-to-measure filtration -- REQUIRED when " +
+        "--complex=dtm-rips or --complex=dtm-alpha, ignored otherwise"
+    )
+  val dtmQ: ScallopOption[Double] =
+    opt[Double](descr = "DTM exponent, default 2.0 -- only consulted when --complex=dtm-rips or --complex=dtm-alpha")
+  val dtmP: ScallopOption[Double] =
+    opt[Double](descr =
+      "ball-radius exponent for DTM-Rips (1.0 or 2.0, default 1.0) -- only consulted when --complex=dtm-rips"
     )
 
   // CLI-LOCAL control flow, unlike every option above: neither is forwarded into TDA4j's own options array

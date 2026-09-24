@@ -251,6 +251,90 @@ class TDA4jSpec extends mutable.Specification:
     }
   }
 
+  "complex=dtm-rips/complex=dtm-alpha, option validation" should {
+    "require dtmK" in {
+      TDA4j.computeFromPoints(points, Array("complex", "dtm-rips")) must throwA[IllegalArgumentException]
+      TDA4j.computeFromPoints(points, Array("complex", "dtm-alpha")) must throwA[IllegalArgumentException]
+    }
+    "reject engine=ripser combined with complex=dtm-rips" in {
+      TDA4j.computeFromPoints(points, Array("complex", "dtm-rips", "dtmK", "2", "engine", "ripser")) must throwA[
+        IllegalArgumentException
+      ]
+    }
+    "reject engine=ripser combined with complex=dtm-alpha" in {
+      TDA4j.computeFromPoints(points, Array("complex", "dtm-alpha", "dtmK", "2", "engine", "ripser")) must throwA[
+        IllegalArgumentException
+      ]
+    }
+    "reject engine=chunks combined with complex=dtm-alpha" in {
+      TDA4j.computeFromPoints(points, Array("complex", "dtm-alpha", "dtmK", "2", "engine", "chunks")) must throwA[
+        IllegalArgumentException
+      ]
+    }
+    "reject complex=dtm-alpha via computeFromDistanceMatrix (dtm-alpha needs coordinates)" in {
+      TDA4j.computeFromDistanceMatrix(euclideanDistanceMatrix(points), Array("complex", "dtm-alpha", "dtmK", "2")) must
+        throwA[IllegalArgumentException]
+    }
+  }
+
+  "complex=dtm-rips, through the facade" should {
+    "match streams.DtmRipsSimplexStream/SimplicialHomologyContext driven directly" in {
+      given Double is Field = Field.DoubleApproximated(1e-9)
+      val viaFacade =
+        triples(TDA4j.computeFromPoints(points, Array("complex", "dtm-rips", "dtmK", "3", "field", "R")).toArray())
+      val metricSpace = EuclideanMetricSpace(points)
+      val f = DistanceToMeasure(metricSpace, 3)
+      val stream = LimitedCofaceSimplexStream(DtmRipsSimplexStream(metricSpace, f), 3)
+      val direct = SimplicialHomologyContext[Int, Double, Double]()
+        .persistentHomology(stream)
+        .diagramAt(Double.PositiveInfinity)
+        .filter(_._1 <= 2)
+        .map { case (d, b, dd) => (d, b, if dd.isPosInfinity then Double.PositiveInfinity else dd) }
+        .toList
+      viaFacade must containTheSameElementsAs(direct)
+    }
+
+    "works from a distance matrix too (streams.DistanceToMeasure needs no coordinates, unlike complex=cech/alpha)" in {
+      val viaPoints = triples(TDA4j.computeFromPoints(points, Array("complex", "dtm-rips", "dtmK", "3")).toArray())
+      val viaDistances = triples(
+        TDA4j
+          .computeFromDistanceMatrix(euclideanDistanceMatrix(points), Array("complex", "dtm-rips", "dtmK", "3"))
+          .toArray()
+      )
+      viaPoints must containTheSameElementsAs(viaDistances)
+    }
+
+    "default to engine=naive and agree with an explicit engine=chunks call" in {
+      val naive = triples(TDA4j.computeFromPoints(points, Array("complex", "dtm-rips", "dtmK", "3")).toArray())
+      val chunks =
+        triples(
+          TDA4j.computeFromPoints(points, Array("complex", "dtm-rips", "dtmK", "3", "engine", "chunks")).toArray()
+        )
+      naive must containTheSameElementsAs(chunks)
+    }
+
+    "k=1 (dtmK=1) reproduces plain complex=vr exactly, filtration values included" in {
+      val vr = triples(TDA4j.computeFromPoints(points).toArray())
+      val dtmRips1 = triples(TDA4j.computeFromPoints(points, Array("complex", "dtm-rips", "dtmK", "1")).toArray())
+      vr must containTheSameElementsAs(dtmRips1)
+    }
+  }
+
+  "complex=dtm-alpha, through the facade" should {
+    "match alpha.AlphaComplexDQP.dtm driven directly, in radius (not squared-power) units" in {
+      given Double is Field = Field.DoubleApproximated(1e-9)
+      val viaFacade =
+        triples(TDA4j.computeFromPoints(points, Array("complex", "dtm-alpha", "dtmK", "3", "field", "R")).toArray())
+      val ac = AlphaComplexDQP.dtm(points, 3, Double.PositiveInfinity, points.head.length)
+      val direct = SimplicialHomologyContext[Int, Double, Double]()
+        .persistentHomology(AlphaComplexDQPStream(points, ac))
+        .diagramAt(Double.PositiveInfinity)
+        .map { case (d, b, dd) => (d, b, if dd.isPosInfinity then Double.PositiveInfinity else dd) }
+        .toList
+      viaFacade must containTheSameElementsAs(direct)
+    }
+  }
+
   "complex=cubical, through the facade" should {
     // A simple 3x3 image with a single-pixel hole in the middle -- the standard "ring" cubical fixture this
     // codebase already uses elsewhere (CLAUDE.md's Perseus missing-pixel test): topologically an 8-pixel ring,
