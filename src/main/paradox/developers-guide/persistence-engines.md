@@ -95,10 +95,13 @@ sidestepping a real footgun (two carriers for the same simplex comparing unequal
 Persistent *co*homology, generic over `CellT: OrderedCell` — the cohomology counterpart to engine 1, filling
 in what used to be a real asymmetry: cohomology in this codebase meant engines 3/4 only, both hardcoded to
 `Simplex[Int]`. `Cube`, `FiniteSimplicialSet` generators, and `Simplex[Int]` complexes that aren't
-Vietoris-Rips (Cech, Alpha) had no cohomology option at all before this class — not even Cech/Alpha, despite
-sharing `Simplex[Int]` as a cell type, since engines 3/4's speed optimizations (`insertionDiameter`, apparent
-pairs) are proven specifically for the max-pairwise-distance functional, not Cech's circumradius or Alpha's
-own filtration.
+Vietoris-Rips (Cech, Alpha, the general witness complex) had no cohomology option at all before this class —
+not even Cech/Alpha, despite sharing `Simplex[Int]` as a cell type, since engines 3/4's speed optimizations
+(`insertionDiameter`, apparent pairs) are proven specifically for the max-pairwise-distance functional, not
+Cech's circumradius, Alpha's own filtration, or the general witness complex's per-dimension threshold. (The
+*lazy* witness complex is the one exception among these: it genuinely IS a max-pairwise-distance flag
+complex under its own `WitnessMetricSpace`, so engines 3/4 both work for it directly — see
+`architecture.md`'s "Witness complexes" section.)
 
 **The key idea**: the coboundary matrix persistent cohomology reduces is the transpose of the ordinary
 boundary matrix, same coefficients. Every stream this class targets already gets fully materialized before
@@ -140,4 +143,4 @@ per-cell `coboundary` method with no complex to consult was never the right shap
 | Large complex, chunked/parallelizable, representatives for every bar including essential ones | **`CellularPersistenceInChunksContext`** |
 | Fast, memory-efficient cohomology on a Vietoris-Rips/clique complex over integer vertex labels | **`PackedRipserCohomologyContext`** (what `engine="ripser"` uses) |
 | A `Simplex[Int]`-keyed reference implementation for hand-debugging engine 4 | `RipserCohomologyContext` (test oracle, not a production choice) |
-| Cohomology (real cocycle representatives) on `Cube`/`FiniteSimplicialSet`/Cech/Alpha, or any `OrderedCell` type engines 3/4 can't serve | **`CellularCohomologyContext`** (what `engine="cohomology"` uses) |
+| Cohomology (real cocycle representatives) on `Cube`/`FiniteSimplicialSet`/Cech/Alpha/general witness complex, or any `OrderedCell` type engines 3/4 can't serve | **`CellularCohomologyContext`** (what `engine="cohomology"` uses) |

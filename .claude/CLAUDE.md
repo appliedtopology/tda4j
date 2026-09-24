@@ -338,6 +338,31 @@ can be one ULP non-monotone, which reproduced the pivot crash. New-VR's pruning 
 Ripser (proven for diameter only) do **not** carry over; naive/chunks/cohomology only. Future: `Cech_r ⊆ VR_2r`
 pre-filter. Fixture discriminators: equilateral radius `s/√3` (not `s/2`), obtuse = half longest side.
 
+## Witness complexes
+
+`streams/WitnessStream.scala`, `WORKLOG-witness-complex.md`. De Silva-Carlsson 2004, checked directly against
+JavaPlex's own `LazyWitnessStream`/`WitnessStream` Java source. `LandmarkSelector.maxmin`/`.random` pick a
+landmark subset (ambient indices) of a `FiniteMetricSpace[Int]`; `WitnessGeometry` precomputes the landmark
+x witness distance matrix and each witness's sorted landmark-distance row.
+
+Two independent variants, both `Simplex[Int]` over LOCAL landmark indices (`0 until landmarks.size` — map back
+through `landmarks(i)` for ambient ids), both built on `RipserCofaceSimplexStream` unchanged:
+- **`LazyWitnessSimplexStream`**: IS a flag complex by definition, so `WitnessMetricSpace` reifies its edge
+  weights as a `FiniteMetricSpace[Int]` (NOT a real metric — can be 0 for distinct landmarks, no triangle
+  inequality; never hand it to `JVPTree`/`SparseMetricSpace`/`RecursiveStackVietorisRipsSimplexStream`/`alpha`)
+  and needs no `filtrationValueOverride` — the inherited "max pairwise distance" flag extension is exactly
+  right. A genuine flag complex, so `PackedRipserCohomologyContext` (proven only for VR diameters) is *also*
+  valid here — the one exception to "ripser is VR-only." `nu ∈ {0,1,2}` (JavaPlex's own cap), default 2.
+  `maxFiltrationValue` defaults to `minimumEnclosingRadius` — valid (same cone argument as VR/Cech).
+- **`WitnessCofaceSimplexStream`** (general): NOT a flag complex — a `k`-simplex's own per-dimension threshold
+  `m_k` isn't monotone facet-to-coface alone, so `filtrationValueOverride` computes a **recursive**
+  `max(own_k(σ), max over σ's own facets)`, `TrieMap`-memoized (the base class never memoizes a
+  caller-supplied override). This recursive max — not JavaPlex's separate `containsElement(face)` gate, which
+  it makes redundant — is what makes "the complex at threshold R" automatically downward-closed for every R.
+  Refuses `engine=ripser`/`chunks` (MATLAB/CLI); `maxFiltrationValue` defaults to `+Infinity`, NOT the
+  enclosing radius (not valid for a non-flag complex). The general complex's own 1-skeleton is provably
+  identical to the lazy complex's at `nu=2` (cross-validated, both use the 2nd-nearest-landmark threshold).
+
 ## Alpha complex: DQP vs Helix
 
 `WORKLOG-alpha-complex.md`, `HANDOFF-alpha-complex.md`. `AlphaShapes(points, dispatch)`: `"default"` → `"helix"`

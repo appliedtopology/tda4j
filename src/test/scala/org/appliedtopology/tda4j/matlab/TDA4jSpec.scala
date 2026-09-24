@@ -387,3 +387,176 @@ class TDA4jSpec extends mutable.Specification:
       } must beTrue
     }
   }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // complex=witness: only the facade's own conversion layer (option parsing, landmark-selector dispatch,
+  // local-to-ambient vertex remapping) -- streams.WitnessStreamSpec already cross-validates the underlying
+  // construction itself (brute-force oracle, general-vs-lazy agreement, Ripser-on-lazy, downward closure).
+  // ---------------------------------------------------------------------------------------------------------
+
+  "complex=witness, through the facade" should {
+    "require numLandmarks" in {
+      TDA4j.computeFromPoints(points, Array("complex", "witness")) must throwA[IllegalArgumentException]
+    }
+
+    "reject an unrecognized landmarkSelector" in {
+      TDA4j.computeFromPoints(
+        points,
+        Array("complex", "witness", "numLandmarks", "4", "landmarkSelector", "bogus")
+      ) must throwA[IllegalArgumentException]
+    }
+
+    "landmarkSelector=random with an explicit landmarkSeed matches PackedRipserCohomologyContext driven " +
+      "directly over the SAME LandmarkSelector.random(...) call" in {
+        val numLandmarks = 4
+        val seed = 7L
+        val viaFacade = triples(
+          TDA4j
+            .computeFromPoints(
+              points,
+              Array(
+                "complex",
+                "witness",
+                "numLandmarks",
+                numLandmarks.toString,
+                "landmarkSelector",
+                "random",
+                "landmarkSeed",
+                seed.toString
+              )
+            )
+            .toArray()
+        )
+
+        val ff = new FiniteField(2)
+        import ff.given
+        val metricSpace = EuclideanMetricSpace(points)
+        val landmarks = LandmarkSelector.random(metricSpace, numLandmarks, seed).landmarks
+        val wms = WitnessMetricSpace(WitnessGeometry(metricSpace, landmarks), nu = 2)
+
+        def toDouble(e: BarcodeEndpoint[Double]): Double = e match
+          case NegativeInfinity() => Double.NegativeInfinity
+          case PositiveInfinity() => Double.PositiveInfinity
+          case ClosedEndpoint(v)  => v
+          case OpenEndpoint(v)    => v
+
+        val direct = PackedRipserCohomologyContext[ff.Fp](wms, 2)
+          .persistentCohomology()
+          .map(bar => (bar.dim, toDouble(bar.lower), toDouble(bar.upper)))
+
+        viaFacade must containTheSameElementsAs(direct)
+      }
+
+    "reject engine=ripser and engine=chunks combined with witnessVariant=general" in {
+      (TDA4j.computeFromPoints(
+        points,
+        Array("complex", "witness", "numLandmarks", "4", "witnessVariant", "general", "engine", "ripser")
+      ) must throwA[IllegalArgumentException]) and
+        (TDA4j.computeFromPoints(
+          points,
+          Array("complex", "witness", "numLandmarks", "4", "witnessVariant", "general", "engine", "chunks")
+        ) must throwA[IllegalArgumentException])
+    }
+
+    "default witnessVariant=lazy, engine=ripser: matches PackedRipserCohomologyContext driven directly over " +
+      "streams.WitnessMetricSpace, via the SAME maxmin landmark selection" in {
+        val numLandmarks = 4
+        val viaFacade = triples(
+          TDA4j.computeFromPoints(points, Array("complex", "witness", "numLandmarks", numLandmarks.toString)).toArray()
+        )
+
+        val ff = new FiniteField(2)
+        import ff.given
+        val metricSpace = EuclideanMetricSpace(points)
+        val landmarks = LandmarkSelector.maxmin(metricSpace, numLandmarks).landmarks
+        val wms = WitnessMetricSpace(WitnessGeometry(metricSpace, landmarks), nu = 2)
+
+        def toDouble(e: BarcodeEndpoint[Double]): Double = e match
+          case NegativeInfinity() => Double.NegativeInfinity
+          case PositiveInfinity() => Double.PositiveInfinity
+          case ClosedEndpoint(v)  => v
+          case OpenEndpoint(v)    => v
+
+        val direct = PackedRipserCohomologyContext[ff.Fp](wms, 2)
+          .persistentCohomology()
+          .map(bar => (bar.dim, toDouble(bar.lower), toDouble(bar.upper)))
+
+        viaFacade must containTheSameElementsAs(direct)
+      }
+
+    "witnessVariant=general, engine=naive: matches WitnessCofaceSimplexStream driven directly, via the SAME " +
+      "maxmin landmark selection" in {
+        val numLandmarks = 4
+        val viaFacade = triples(
+          TDA4j
+            .computeFromPoints(
+              points,
+              Array("complex", "witness", "numLandmarks", numLandmarks.toString, "witnessVariant", "general")
+            )
+            .toArray()
+        )
+
+        val ff = new FiniteField(2)
+        import ff.given
+        val metricSpace = EuclideanMetricSpace(points)
+        val geometry = WitnessGeometry(metricSpace, LandmarkSelector.maxmin(metricSpace, numLandmarks).landmarks)
+        val stream = LimitedCofaceSimplexStream(WitnessCofaceSimplexStream(geometry), 3)
+
+        def toDouble(e: BarcodeEndpoint[Double]): Double = e match
+          case NegativeInfinity() => Double.NegativeInfinity
+          case PositiveInfinity() => Double.PositiveInfinity
+          case ClosedEndpoint(v)  => v
+          case OpenEndpoint(v)    => v
+
+        val direct = PersistenceEngine
+          .naive[Simplex[Int], ff.Fp]
+          .barcode(stream)
+          .filter(_.dim <= 2)
+          .map(bar => (bar.dim, toDouble(bar.lower), toDouble(bar.upper)))
+
+        viaFacade must containTheSameElementsAs(direct)
+      }
+
+    // NOTE on why "every vertex is in [0, points.length)" is NOT a sufficient check, and was wrong in an
+    // earlier version of this test: with numLandmarks=3 and 6 points, an UNMAPPED local landmark index (0, 1,
+    // or 2) is ALSO a perfectly valid AMBIENT index in [0, 6) -- so that check passes whether or not the
+    // facade actually maps through witnessLandmarks(i). The real discriminator is comparing against the
+    // SPECIFIC landmark set maxmin actually chose (computed independently here, not hardcoded) and confirming
+    // it is NOT a subset of the local range {0, ..., numLandmarks-1} -- which only holds if the reported
+    // vertices are genuinely ambient, not local, indices. On this fixture maxmin from firstLandmark=0 picks
+    // {0, 4, 5} (points 4 and 5 tie exactly at sqrt(4.25); 4 wins the tie by lower index), so a local-index bug
+    // would show only {0,1,2}, never 4 or 5.
+    "cycleVertices reports AMBIENT point-cloud indices, not local 0-until-numLandmarks landmark indices, for " +
+      "both the default engine=ripser and engine=naive" in {
+        val numLandmarks = 3
+        val landmarks = LandmarkSelector.maxmin(EuclideanMetricSpace(points), numLandmarks).landmarks.toSet
+        def allVertices(result: PersistenceResult): Set[Int] =
+          (0 until result.size()).flatMap(i => result.cycleVertices(i).flatten).toSet
+        val ripserResult =
+          TDA4j.computeFromPoints(points, Array("complex", "witness", "numLandmarks", numLandmarks.toString))
+        val naiveResult = TDA4j.computeFromPoints(
+          points,
+          Array("complex", "witness", "numLandmarks", numLandmarks.toString, "engine", "naive")
+        )
+        val ripserVertices = allVertices(ripserResult)
+        val naiveVertices = allVertices(naiveResult)
+        (ripserVertices.nonEmpty must beTrue) and (naiveVertices.nonEmpty must beTrue) and
+          (ripserVertices.forall(landmarks.contains) must beTrue) and
+          (naiveVertices.forall(landmarks.contains) must beTrue) and
+          (ripserVertices.subsetOf((0 until numLandmarks).toSet) must beFalse) and
+          (naiveVertices.subsetOf((0 until numLandmarks).toSet) must beFalse)
+      }
+
+    "cycleVertices reports AMBIENT indices for witnessVariant=general too" in {
+      val numLandmarks = 3
+      val landmarks = LandmarkSelector.maxmin(EuclideanMetricSpace(points), numLandmarks).landmarks.toSet
+      val result = TDA4j.computeFromPoints(
+        points,
+        Array("complex", "witness", "numLandmarks", numLandmarks.toString, "witnessVariant", "general")
+      )
+      val vertices = (0 until result.size()).flatMap(i => result.cycleVertices(i).flatten).toSet
+      (vertices.nonEmpty must beTrue) and
+        (vertices.forall(landmarks.contains) must beTrue) and
+        (vertices.subsetOf((0 until numLandmarks).toSet) must beFalse)
+    }
+  }

@@ -77,6 +77,54 @@ interchangeable units. Only the naive engine (`SimplicialHomologyContext`/`Cellu
 for Cech complexes; the packed Ripser engine's optimizations don't carry over (see the
 @ref:[Developer's Guide](../developers-guide/architecture.md)).
 
+### Witness complexes
+
+```scala 3
+val ambient = EuclideanMetricSpace(points)
+val landmarks = LandmarkSelector.maxmin(ambient, numLandmarks = 20).landmarks
+
+val lazyStream = LazyWitnessSimplexStream(ambient, landmarks)   // nu = 2, JavaPlex's own default
+val homology = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(lazyStream)
+```
+
+De Silva & Carlsson's witness complex (2004; the construction behind most of the JavaPlex tutorials) builds
+a complex over a small **landmark** subset of your point cloud, using every point (landmarks included) as a
+**witness** — useful when the full point cloud is too large to build a Vietoris-Rips complex over directly.
+`LandmarkSelector.maxmin` (sequential furthest-point sampling, a covering-radius guarantee) and
+`LandmarkSelector.random` (seeded, cheaper, no coverage guarantee) both work over any `FiniteMetricSpace[Int]`
+— a point cloud or a precomputed distance matrix.
+
+Every emitted `Simplex[Int]`'s vertices are **local landmark indices** (`0 until landmarks.size`), not indices
+into your original point cloud — map back through `landmarks(i)` yourself (`matlab.TDA4j` does this for you).
+
+Two variants, matching JavaPlex's own two classes:
+
+- **`LazyWitnessSimplexStream`** (JavaPlex's `LazyWitnessStream`) — a flag/clique complex, so it also works
+  directly with the packed Ripser engine (`PackedRipserCohomologyContext`) by handing it a
+  `WitnessMetricSpace` instead of a stream: `PackedRipserCohomologyContext(WitnessMetricSpace(WitnessGeometry(ambient,
+  landmarks), nu = 2), maxDimension)`. The `nu` parameter (`0`, `1`, or `2`, default `2`) controls how
+  forgiving a witness's own threshold is — see `WitnessMetricSpace`'s own doc.
+- **`WitnessCofaceSimplexStream`** (JavaPlex's plain `WitnessStream`) — NOT a flag complex, so `engine=ripser`/
+  `chunks` don't apply; use the naive or cohomology engine instead. `maxFiltrationValue` here defaults to
+  `+Infinity` (untruncated), not the point cloud's enclosing radius — the enclosing-radius shortcut is only
+  valid for flag complexes.
+
+```scala 3
+val geometry = WitnessGeometry(ambient, landmarks)
+val generalStream = WitnessCofaceSimplexStream(geometry, maxFiltrationValue = 2.0)
+```
+
+**Pick a finite `maxFiltrationValue` for the general variant, or cap dimension with
+`LimitedCofaceSimplexStream`** — its default is `+Infinity`, and nothing prunes an unbounded enumeration, so
+a direct call can reach the full `2^landmarks.size` power set. `matlab.TDA4j` always caps dimension for you.
+Prefer `witnessVariant=lazy` (the default) when the flag-complex behavior is acceptable — it unlocks
+`engine=ripser`, and at tutorial scale (1000 points, 50 landmarks, threshold `2R` — `R` the landmark
+selection's own covering radius, the JavaPlex tutorial's own recommended threshold) that engine choice is
+where nearly all the speed difference actually is: `lazy+ripser` ~0.2s vs. `lazy+naive` ~11.2s (same
+complex, same bar count, engine alone) vs. `general+naive` ~11.5s (variant alone, engine held to `naive`,
+indistinguishable from `lazy+naive` at single-trial resolution) — measured, not inferred (single-trial
+numbers on one machine; see `.claude/WORKLOG-witness-complex.md`).
+
 ### Cubical complexes and images
 
 ```scala 3
@@ -164,9 +212,10 @@ java -jar target/scala-3.9.0/TDA4j-<version>-assembly.jar [options] <input-file>
 It loads a point cloud, distance matrix, or cubical image in one of several formats (`--input-format`),
 computes persistence via the same facade the MATLAB bridge uses (below), and writes the result in one of
 several formats (`--output-format`: `text`, `csv`, `gudhi`, `dipha`, `perseus`). Run with `--help` for the
-full flag list; the main ones mirror the MATLAB options one-to-one: `--complex` (`vr`/`alpha`/`cech`),
-`--engine`, `--max-dimension`, `--max-filtration-value`, `--field`, `--representatives` (also print each
-bar's representative chain).
+full flag list; the main ones mirror the MATLAB options one-to-one: `--complex` (`vr`/`alpha`/`cech`/
+`witness`), `--engine`, `--max-dimension`, `--max-filtration-value`, `--field`, `--representatives` (also
+print each bar's representative chain), and (for `--complex=witness`) `--num-landmarks`, `--witness-variant`,
+`--landmark-selector`, `--landmark-seed`, `--nu`.
 
 ## Calling from MATLAB or Java
 
@@ -191,30 +240,41 @@ result = org.appliedtopology.tda4j.matlab.TDA4j.computeFromPoints(points);
 bars = result.toArray();
 ```
 
-Entry points: `computeFromPoints`/`computeFromDistanceMatrix` (Vietoris-Rips/alpha/Cech, from a point cloud
-or a precomputed distance matrix — alpha needs real coordinates, so it's only available from the points
-overload), and `computeFromCubicalImage`/`computeFromImage` (cubical persistence from a flat array + shape,
-or a 2D pixel matrix directly). Every method has a no-options overload and one taking a flat, alternating
-key/value `String[]` of options — so adding a new option in the future never changes a method's call
-signature:
+Entry points: `computeFromPoints`/`computeFromDistanceMatrix` (Vietoris-Rips/alpha/Cech/witness, from a point
+cloud or a precomputed distance matrix — alpha and Cech need real coordinates, so they're only available from
+the points overload; witness works from either, exactly like `vr`), and `computeFromCubicalImage`/
+`computeFromImage` (cubical persistence from a flat array + shape, or a 2D pixel matrix directly). Every
+method has a no-options overload and one taking a flat, alternating key/value `String[]` of options — so
+adding a new option in the future never changes a method's call signature:
 
 | Option | Values | Default |
 |---|---|---|
-| `complex` | `vr`, `alpha`, `cech` | `vr` |
-| `engine` | `ripser`, `naive`, `chunks`, `cohomology` | `ripser` for `vr`; `naive` for `alpha`/`cech` |
+| `complex` | `vr`, `alpha`, `cech`, `witness` | `vr` |
+| `engine` | `ripser`, `naive`, `chunks`, `cohomology` | `ripser` for `vr` and `witness`/`witnessVariant=lazy`; `naive` for `alpha`/`cech`/`witness`/`witnessVariant=general` |
 | `alphaBackend` | `helix`, `DQP` | `helix` (only consulted for `complex=alpha`) |
 | `maxDimension` | integer | `2` — highest H_k reported, not highest simplex dimension built |
-| `maxFiltrationValue` | double | the point cloud's own minimum enclosing radius |
+| `maxFiltrationValue` | double | the point cloud's own minimum enclosing radius (`+Infinity` for `witness`/`witnessVariant=general`) |
 | `field` | `Z` (finite field), `R` (floating point) | `Z`, `prime=2` |
 | `prime` | integer | `2` (only for `field=Z`) |
 | `epsilon` | double | `1e-9` (only for `field=R`) |
+| `numLandmarks` | integer | REQUIRED for `complex=witness`, no default |
+| `witnessVariant` | `lazy`, `general` | `lazy` (only consulted for `complex=witness`) |
+| `landmarkSelector` | `maxmin`, `random` | `maxmin` (only consulted for `complex=witness`) |
+| `landmarkSeed` | integer | `0` (only for `complex=witness`/`landmarkSelector=random`) |
+| `nu` | `0`, `1`, `2` | `2` (only for `complex=witness`/`witnessVariant=lazy`) |
 
 `alpha` refuses `engine=ripser` and `engine=chunks` (neither engine understands alpha complexes, and the
 chunks/alpha combination is a known stall risk in the underlying library); `cech` refuses `engine=ripser`
 (the packed Ripser engine's optimizations are proven for Vietoris-Rips's diameter functional specifically,
-not Cech's circumradius). `engine=cohomology` is accepted everywhere `engine=naive` is (`vr`, `alpha`, and
-`cech` alike). Unrecognized keys or values throw `IllegalArgumentException` immediately rather than silently
-falling back to a default.
+not Cech's circumradius); `witness` with `witnessVariant=general` refuses both `engine=ripser` and
+`engine=chunks` for the same reason as `cech` (the general witness complex isn't a flag complex either) —
+use `witnessVariant=lazy` (the default) for `engine=ripser`/`chunks`. `engine=cohomology` is accepted
+everywhere `engine=naive` is (`vr`, `alpha`, `cech`, and `witness` alike). Unrecognized keys or values throw
+`IllegalArgumentException` immediately rather than silently falling back to a default.
+
+Representative-chain vertex indices for `complex=witness` are **ambient point-cloud indices**, already
+mapped back from the stream's own local `0 until numLandmarks` landmark indices — `cycleVertices` never
+reports a raw local landmark index.
 
 `PersistenceResult.cycleVertices`/`cycleCoefficients` give you each bar's representative chain: every engine
 records one for every bar — though for `engine=cohomology`, only an *essential* bar's representative is
@@ -228,8 +288,9 @@ interval, not over the whole complex (see the developer's guide's persistence-en
 | Exploration, intermediate-filtration queries, representative cycles | `naive` (`CellularHomologyContext`/`TDAContext`) |
 | Fastest, most memory-efficient — the default for `complex=vr` | `ripser` (`PackedRipserCohomologyContext`) |
 | Large complex, want representatives for every bar including essential ones | `chunks` (`CellularPersistenceInChunksContext`) |
-| Cohomology (cocycle representatives) on `Cube`/`FiniteSimplicialSet`, or on Alpha/Cech, where `ripser` doesn't apply | `cohomology` (`CellularCohomologyContext`) |
-| Alpha or Cech complexes | `naive` or `cohomology` (`chunks` also works for Cech) |
+| Cohomology (cocycle representatives) on `Cube`/`FiniteSimplicialSet`, or on Alpha/Cech/witness, where `ripser` doesn't apply | `cohomology` (`CellularCohomologyContext`) |
+| Alpha or Cech complexes, or a general (non-flag) witness complex | `naive` or `cohomology` (`chunks` also works for Cech) |
+| A lazy witness complex (the flag-complex variant) | `ripser` (`PackedRipserCohomologyContext`, run directly on `WitnessMetricSpace`) or `naive`/`chunks`/`cohomology` |
 
 All engines are generic over the coefficient field (a prime finite field or floating point); `naive`,
 `chunks`, and `cohomology` are also generic over the cell type (simplices, cubes, or simplicial-set
@@ -268,4 +329,7 @@ a smaller win (a few percent) since the per-cell cost there is lighter.
 ## Tutorials
 
 @ref:[Tutorials](../tutorials/index.md) — currently a placeholder; porting Henry Adams' JavaPlex tutorials
-to TDA4j is tracked there as future work, not yet done.
+to TDA4j is tracked there as future work, not yet done. The witness-complex construction those tutorials
+lean on heavily is now implemented (`LandmarkSelector`/`WitnessGeometry`/`LazyWitnessSimplexStream`/
+`WitnessCofaceSimplexStream`, see "Witness complexes" above) — a building block for that port, not the port
+itself.

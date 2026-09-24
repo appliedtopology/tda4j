@@ -14,7 +14,7 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   banner(
     """tda4j: compute persistent (co)homology of a point cloud, distance matrix, or cubical image.
       |
-      |Loads one of several file formats (see --input-format), computes a Vietoris-Rips/alpha/Cech complex's
+      |Loads one of several file formats (see --input-format), computes a Vietoris-Rips/alpha/Cech/witness complex's
       |persistence (point-cloud/distance-matrix formats) or a cubical image's persistence (cubical-image formats)
       |via the same TDA4j/PersistenceResult facade the MATLAB bridge uses (see
       |org.appliedtopology.tda4j.matlab.TDA4j's own doc for the underlying --complex/--engine/--field options,
@@ -48,7 +48,7 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "an expected gap."
   )
 
-  val complex: ScallopOption[String] = opt[String](descr = "vr (default), alpha, or cech")
+  val complex: ScallopOption[String] = opt[String](descr = "vr (default), alpha, cech, or witness")
   val engine: ScallopOption[String] =
     opt[String](descr =
       "ripser, naive, chunks, or cohomology (default depends on --complex -- see TDA4j's own doc). cohomology " +
@@ -76,6 +76,26 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     descr = "true (default, sublevel) or false (superlevel) filtration -- only consulted for a cubical-image " +
       "--input-format (perseus-cubical, dipha-image, image)"
   )
+
+  val numLandmarks: ScallopOption[Int] =
+    opt[Int](descr = "number of landmarks to select -- REQUIRED when --complex=witness, ignored otherwise")
+  val witnessVariant: ScallopOption[String] =
+    opt[String](descr =
+      "lazy (default, a flag complex -- supports --engine=ripser) or general (not a flag complex -- " +
+        "--engine=ripser/chunks refused) -- only consulted when --complex=witness"
+    )
+  val landmarkSelector: ScallopOption[String] =
+    opt[String](descr =
+      "maxmin (default, sequential furthest-point sampling) or random (seeded by --landmark-seed) -- only " +
+        "consulted when --complex=witness"
+    )
+  val landmarkSeed: ScallopOption[Int] =
+    opt[Int](descr = "seed for --landmark-selector=random (default: 0) -- only consulted when --complex=witness")
+  val nu: ScallopOption[Int] =
+    opt[Int](descr =
+      "0, 1, or 2 (default: 2) -- only consulted when --complex=witness and --witness-variant=lazy, see " +
+        "streams.WitnessMetricSpace's own doc"
+    )
 
   val input: ScallopOption[String] = trailArg[String](name = "input-file", descr = "input file", required = true)
 

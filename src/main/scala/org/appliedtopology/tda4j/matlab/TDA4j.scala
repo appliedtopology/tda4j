@@ -20,18 +20,31 @@ import scala.collection.mutable
   * Options are passed as a flat, alternating key/value `String[]` (`{"engine","ripser","maxDimension","3"}`) rather
   * than fixed parameters, so that adding a new option never changes any method's call signature. Recognized keys:
   *
-  *   - `"complex"`: `"vr"` (default), `"alpha"`, or `"cech"`.
-  *   - `"engine"`: `"ripser"` (default for `complex=vr`; backed by `PackedRipserCohomologyContext`, the fastest and
-  *     most memory-efficient engine -- see CLAUDE.md), `"naive"` (reference-grade, slower; the default for
-  *     `complex=alpha`/`complex=cech`), `"chunks"` (`complex=vr`/`complex=cech` only -- see below for why
-  *     `complex=alpha` refuses it, and why `complex=cech` refuses `engine=ripser` specifically), or `"cohomology"`
-  *     (backed by `CellularCohomologyContext` -- persistent COhomology, generic over `CellT: OrderedCell`, valid for
-  *     every `complex` value including `alpha`; unlike `engine=ripser`, not specialized to Vietoris-Rips, so it also
-  *     works for `complex=alpha`/`complex=cech`, but without `ripser`'s VR-specific speed optimizations -- see
+  *   - `"complex"`: `"vr"` (default), `"alpha"`, `"cech"`, or `"witness"`.
+  *   - `"engine"`: `"ripser"` (default for `complex=vr`, and for `complex=witness` with `witnessVariant=lazy`; backed
+  *     by `PackedRipserCohomologyContext`, the fastest and most memory-efficient engine -- see CLAUDE.md), `"naive"`
+  *     (reference-grade, slower; the default for `complex=alpha`/`complex=cech`, and for `complex=witness` with
+  *     `witnessVariant=general`), `"chunks"` (`complex=vr`/`complex=cech`/`complex=witness` with `witnessVariant=lazy`
+  *     only -- see below for why `complex=alpha` refuses it, and why `complex=cech`/ `witnessVariant=general` refuse
+  *     `engine=ripser` specifically), or `"cohomology"` (backed by `CellularCohomologyContext` -- persistent
+  *     COhomology, generic over `CellT: OrderedCell`, valid for every `complex` value including `alpha`; unlike
+  *     `engine=ripser`, not specialized to Vietoris-Rips, so it also works for
+  *     `complex=alpha`/`complex=cech`/`complex=witness`, but without `ripser`'s VR-specific speed optimizations -- see
   *     `.claude/DESIGN-generic-cohomology.md`). Every essential bar's representative is a genuine cocycle (`d(rep) =
   *     0`); a finite bar's representative is a valid witness on its own living interval but is NOT expected to have
   *     zero coboundary over the whole complex -- see `Cohomology.scala`'s own doc for why.
   *   - `"alphaBackend"`: `"helix"` (default) or `"DQP"`, only consulted when `complex=alpha`.
+  *   - `"numLandmarks"`: integer, REQUIRED when `complex=witness` (no default -- there is no universally sensible
+  *     landmark count). The number of landmarks to select from the input point cloud/distance matrix via
+  *     `"landmarkSelector"` -- see `streams.LandmarkSelector`.
+  *   - `"witnessVariant"`: `"lazy"` (default) or `"general"`, only consulted when `complex=witness` -- see
+  *     `WitnessVariantKind`'s own doc for the distinction (flag complex vs. not).
+  *   - `"landmarkSelector"`: `"maxmin"` (default, sequential furthest-point sampling -- a covering-radius guarantee,
+  *     JavaPlex's own recommended default) or `"random"` (uniform, seeded by `"landmarkSeed"`), only consulted when
+  *     `complex=witness`.
+  *   - `"landmarkSeed"`: integer, default `0`, only consulted when `complex=witness` and `landmarkSelector=random`.
+  *   - `"nu"`: integer, default `2` (JavaPlex's own default), only consulted when `complex=witness` and
+  *     `witnessVariant=lazy` -- see `streams.WitnessMetricSpace`'s own doc; must be `0`, `1`, or `2`.
   *   - `"maxDimension"`: integer, default `2` -- the highest HOMOLOGICAL degree you want back (i.e. "give me
   *     H_0..H_k"), not the highest simplex dimension to build. Computing H_k correctly needs (k+1)-dimensional chains
   *     (H_k = ker(d_k)/im(d_{k+1}) -- with no (k+1)-chains at all there's no way to tell a genuine k-cycle from one a
@@ -48,9 +61,13 @@ import scala.collection.mutable
   *     information, not scaffolding.
   *   - `"maxFiltrationValue"`: double, default is the point cloud's own `minimumEnclosingRadius` (Ripser's own default
   *     truncation, not unbounded -- see CLAUDE.md's "enclosing-radius default" note). Pass a very large number for the
-  *     old always-unbounded behavior. Consulted for `complex=vr` (a diameter) and `complex=cech` (a RADIUS -- Cech's
-  *     own filtration units, not doubled the way a VR diameter would be); not consulted for `complex=alpha`, which
-  *     always computes its complete, untruncated complex (see CLAUDE.md's "Alpha complex" section for why).
+  *     old always-unbounded behavior. Consulted for `complex=vr` (a diameter), `complex=cech` (a RADIUS -- Cech's own
+  *     filtration units, not doubled the way a VR diameter would be), and `complex=witness` with `witnessVariant=lazy`
+  *     (`WitnessMetricSpace`'s own "distance" units -- the enclosing-radius default is valid here too, see
+  *     `streams.LazyWitnessSimplexStream`'s own doc); not consulted for `complex=alpha` (always untruncated -- see
+  *     CLAUDE.md's "Alpha complex" section) nor for `complex=witness` with `witnessVariant=general` (defaults to
+  *     `+Infinity` there instead -- `minimumEnclosingRadius` is NOT a valid truncation for a non-flag complex, see
+  *     `streams.WitnessCofaceSimplexStream`'s own doc).
   *   - `"field"`: `"Z"` (default -- a prime finite field, `prime=2` unless overridden; the standard convention in the
   *     TDA research literature, e.g. Ripser/GUDHI) or `"R"` (floating point with an epsilon tolerance,
   *     `Field.DoubleApproximated` -- notably what this codebase's own existing cross-validation specs default to
@@ -73,15 +90,31 @@ import scala.collection.mutable
   * a second dispatch system to keep in sync).
   */
 private enum ComplexKind:
-  case VR, Alpha, Cech
+  case VR, Alpha, Cech, Witness
 
 private object ComplexKind:
   def parse(raw: String): ComplexKind = raw.toLowerCase match
-    case "vr"    => VR
-    case "alpha" => Alpha
-    case "cech"  => Cech
-    case other   =>
-      throw new IllegalArgumentException(s"unrecognized complex '$other'; expected 'vr', 'alpha', or 'cech'")
+    case "vr"      => VR
+    case "alpha"   => Alpha
+    case "cech"    => Cech
+    case "witness" => Witness
+    case other     =>
+      throw new IllegalArgumentException(s"unrecognized complex '$other'; expected 'vr', 'alpha', 'cech', or 'witness'")
+
+/** `complex=witness` only: `"lazy"` (JavaPlex's `LazyWitnessStream` -- a flag complex, so `engine=ripser` is valid; see
+  * `streams.LazyWitnessSimplexStream`) or `"general"` (JavaPlex's plain `WitnessStream` -- NOT a flag complex, so
+  * `engine=ripser`/`"chunks"` are refused, exactly like `complex=cech`'s own `engine=ripser` refusal; see
+  * `streams.WitnessCofaceSimplexStream`).
+  */
+private enum WitnessVariantKind:
+  case Lazy, General
+
+private object WitnessVariantKind:
+  def parse(raw: String): WitnessVariantKind = raw.toLowerCase match
+    case "lazy"    => WitnessVariantKind.Lazy
+    case "general" => WitnessVariantKind.General
+    case other     =>
+      throw new IllegalArgumentException(s"unrecognized witnessVariant '$other'; expected 'lazy' or 'general'")
 
 private enum EngineKind:
   case Ripser, Naive, Chunks, Cohomology
@@ -197,7 +230,12 @@ object TDA4j:
     "field",
     "prime",
     "epsilon",
-    "sublevel"
+    "sublevel",
+    "numlandmarks",
+    "witnessvariant",
+    "landmarkselector",
+    "landmarkseed",
+    "nu"
   )
 
   private def parseOptions(options: Array[String]): Map[String, String] =
@@ -256,10 +294,19 @@ object TDA4j:
   ): PersistenceResult =
     val complex = ComplexKind.parse(opts.getOrElse("complex", "vr"))
 
+    // Parsed BEFORE the engine default below, since complex=witness's own default depends on it (lazy behaves
+    // like complex=vr -- a flag complex, defaults to ripser; general behaves like complex=alpha/cech -- not a
+    // flag complex, defaults to naive).
+    val witnessVariant =
+      if complex == ComplexKind.Witness then WitnessVariantKind.parse(opts.getOrElse("witnessvariant", "lazy"))
+      else WitnessVariantKind.Lazy // unused for any other complex; a harmless placeholder, never consulted below
+
     val engine = EngineKind.parse(
       opts.getOrElse(
         "engine",
-        if complex == ComplexKind.Alpha || complex == ComplexKind.Cech then "naive" else "ripser"
+        if complex == ComplexKind.Alpha || complex == ComplexKind.Cech then "naive"
+        else if complex == ComplexKind.Witness && witnessVariant == WitnessVariantKind.General then "naive"
+        else "ripser"
       )
     )
     (complex, engine) match
@@ -281,12 +328,43 @@ object TDA4j:
             "functional, not Cech's circumradius -- see CLAUDE.md's Cech complexes section. Use engine=naive or " +
             "engine=chunks for Cech complexes."
         )
+      case (ComplexKind.Witness, EngineKind.Ripser) if witnessVariant == WitnessVariantKind.General =>
+        throw new IllegalArgumentException(
+          "engine=ripser cannot be used with complex=witness/witnessVariant=general: the general witness complex " +
+            "is not a flag complex (see streams.WitnessCofaceSimplexStream's own doc), so PackedRipserCohomologyContext's " +
+            "diameter-based optimizations do not apply -- use witnessVariant=lazy instead, or engine=naive/cohomology."
+        )
+      case (ComplexKind.Witness, EngineKind.Chunks) if witnessVariant == WitnessVariantKind.General =>
+        throw new IllegalArgumentException(
+          "engine=chunks is not offered for complex=witness/witnessVariant=general: use witnessVariant=lazy instead, " +
+            "or engine=naive/cohomology."
+        )
       case _ => ()
 
     val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(2)
     val maxFiltrationValue: Option[Double] =
       opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
     val alphaBackend = opts.getOrElse("alphabackend", "helix")
+
+    val witnessLandmarks: IndexedSeq[Int] =
+      if complex == ComplexKind.Witness then
+        val numLandmarks = opts
+          .get("numlandmarks")
+          .map(parseIntOption("numLandmarks", _))
+          .getOrElse(
+            throw new IllegalArgumentException("option 'numLandmarks' is required when complex=witness")
+          )
+        opts.getOrElse("landmarkselector", "maxmin").toLowerCase match
+          case "maxmin" => LandmarkSelector.maxmin(metricSpace, numLandmarks).landmarks
+          case "random" =>
+            val seed = opts.get("landmarkseed").map(parseIntOption("landmarkSeed", _)).getOrElse(0)
+            LandmarkSelector.random(metricSpace, numLandmarks, seed.toLong).landmarks
+          case other =>
+            throw new IllegalArgumentException(
+              s"unrecognized landmarkSelector '$other'; expected 'maxmin' or 'random'"
+            )
+      else IndexedSeq.empty // unused for any other complex
+    val witnessNu = opts.get("nu").map(parseIntOption("nu", _)).getOrElse(2)
 
     CoefficientKind.parse(opts.getOrElse("field", "z")) match
       case CoefficientKind.Z =>
@@ -301,6 +379,9 @@ object TDA4j:
           alphaBackend,
           maxDimension,
           maxFiltrationValue,
+          witnessVariant,
+          witnessLandmarks,
+          witnessNu,
           _.toInt.toDouble
         )
       case CoefficientKind.R =>
@@ -314,6 +395,9 @@ object TDA4j:
           alphaBackend,
           maxDimension,
           maxFiltrationValue,
+          witnessVariant,
+          witnessLandmarks,
+          witnessNu,
           identity
         )
 
@@ -335,6 +419,9 @@ object TDA4j:
     alphaBackend: String,
     requestedMaxDimension: Int,
     maxFiltrationValue: Option[Double],
+    witnessVariant: WitnessVariantKind,
+    witnessLandmarks: IndexedSeq[Int],
+    witnessNu: Int,
     toDouble: C => Double
   )(using C is Field): PersistenceResult =
     complex match
@@ -507,6 +594,114 @@ object TDA4j:
           case EngineKind.Ripser =>
             // dispatch() already rejects this for complex=cech before computeGeneric is ever reached.
             throw new IllegalArgumentException(s"engine=$engine is not offered for complex=cech")
+      case ComplexKind.Witness =>
+        // Both variants grow unboundedly in dimension just like VR/Cech (up to witnessLandmarks.size - 1), so
+        // naive/cohomology need the same "build one dimension higher, drop it via fromBars" dance those use.
+        // Cells are Simplex[Int] over LOCAL landmark indices (0 until witnessLandmarks.size) -- every cellVertices
+        // below maps back through witnessLandmarks(i) to the caller's own ambient point cloud, exactly the
+        // translation streams.LazyWitnessSimplexStream/WitnessCofaceSimplexStream's own docs call for.
+        val cellVertices: (Int, Simplex[Int]) => Array[Int] =
+          (_, cell) => cell.underlying.toArray.map(witnessLandmarks)
+        witnessVariant match
+          case WitnessVariantKind.Lazy =>
+            engine match
+              case EngineKind.Ripser =>
+                // The lazy witness complex IS a flag complex under WitnessMetricSpace's own "distance" -- exactly
+                // the case PackedRipserCohomologyContext is proven for (any FiniteMetricSpace[Int] diameter), not
+                // VR-specific at all despite the class's own name -- see streams.WitnessMetricSpace's own doc and
+                // WitnessStreamSpec's direct cross-check against the naive engine.
+                val geometry = WitnessGeometry(metricSpace, witnessLandmarks)
+                val wms = WitnessMetricSpace(geometry, witnessNu)
+                val ctx =
+                  PackedRipserCohomologyContext[C](wms, requestedMaxDimension, maxFiltrationValue = maxFiltrationValue)
+                fromBars[ctx.DiameterIndex, C](
+                  ctx.persistentCohomology(),
+                  (dim, cell) => ctx.si.decodeToArray(cell.index, dim + 1).map(witnessLandmarks),
+                  toDouble,
+                  requestedMaxDimension
+                )
+              case EngineKind.Naive =>
+                val stream = LimitedCofaceSimplexStream(
+                  LazyWitnessSimplexStream(
+                    metricSpace,
+                    witnessLandmarks,
+                    witnessNu,
+                    maxFiltrationValue = maxFiltrationValue
+                  ),
+                  requestedMaxDimension + 1
+                )
+                fromBars[Simplex[Int], C](
+                  PersistenceEngine.naive[Simplex[Int], C].barcode(stream),
+                  cellVertices,
+                  toDouble,
+                  requestedMaxDimension
+                )
+              case EngineKind.Chunks =>
+                // No LimitedCofaceSimplexStream wrapping needed -- PersistenceInChunksContext handles the "+1"
+                // dance internally, and LazyWitnessSimplexStream's own iterateDimension is already naturally
+                // bounded (inherited from RipserCofaceSimplexStream), mirroring complex=cech's own chunks case.
+                val stream =
+                  LazyWitnessSimplexStream(
+                    metricSpace,
+                    witnessLandmarks,
+                    witnessNu,
+                    maxFiltrationValue = maxFiltrationValue
+                  )
+                fromBars[Simplex[Int], C](
+                  PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(stream),
+                  cellVertices,
+                  toDouble,
+                  requestedMaxDimension
+                )
+              case EngineKind.Cohomology =>
+                val stream = LimitedCofaceSimplexStream(
+                  LazyWitnessSimplexStream(
+                    metricSpace,
+                    witnessLandmarks,
+                    witnessNu,
+                    maxFiltrationValue = maxFiltrationValue
+                  ),
+                  requestedMaxDimension + 1
+                )
+                fromBars[Simplex[Int], C](
+                  PersistenceEngine.cohomology[Simplex[Int], C].barcode(stream),
+                  cellVertices,
+                  toDouble,
+                  requestedMaxDimension
+                )
+          case WitnessVariantKind.General =>
+            // Not a flag complex -- minimumEnclosingRadius is not a valid truncation here (see
+            // streams.WitnessCofaceSimplexStream's own doc), so an unset maxFiltrationValue means +Infinity,
+            // NOT "fall back to the metric space's own enclosing radius" the way every other complex above does.
+            val geometry = WitnessGeometry(metricSpace, witnessLandmarks)
+            val resolvedMaxFiltrationValue = maxFiltrationValue.getOrElse(Double.PositiveInfinity)
+            engine match
+              case EngineKind.Naive =>
+                val stream = LimitedCofaceSimplexStream(
+                  WitnessCofaceSimplexStream(geometry, resolvedMaxFiltrationValue),
+                  requestedMaxDimension + 1
+                )
+                fromBars[Simplex[Int], C](
+                  PersistenceEngine.naive[Simplex[Int], C].barcode(stream),
+                  cellVertices,
+                  toDouble,
+                  requestedMaxDimension
+                )
+              case EngineKind.Cohomology =>
+                val stream = LimitedCofaceSimplexStream(
+                  WitnessCofaceSimplexStream(geometry, resolvedMaxFiltrationValue),
+                  requestedMaxDimension + 1
+                )
+                fromBars[Simplex[Int], C](
+                  PersistenceEngine.cohomology[Simplex[Int], C].barcode(stream),
+                  cellVertices,
+                  toDouble,
+                  requestedMaxDimension
+                )
+              case EngineKind.Ripser | EngineKind.Chunks =>
+                // dispatch() already rejects both of these for witnessVariant=general before computeGeneric is
+                // ever reached.
+                throw new IllegalArgumentException(s"engine=$engine is not offered for witnessVariant=general")
 
   // ---------------------------------------------------------------------------------------------------------------
   // dispatch for computeFromCubicalImage/computeFromImage -- a separate function from dispatch/computeGeneric

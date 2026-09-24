@@ -19,7 +19,7 @@ If a piece of Scala 3 syntax below looks unfamiliar, see the @ref:[Scala 3 prime
   ordering helpers kept in the separate `SimplicialSetConstructions.scala`.
 - **`streams`** — everything that produces cells in filtration order: `SimplexStream`/`CellStream`, the
   Vietoris-Rips family, `FiniteMetricSpace`, `CubicalStream`/`CubicalImage`, `SimplicialSetStream`/
-  `FilteredSimplicialSetStream`, `CechStream`, `UnionFind`.
+  `FilteredSimplicialSetStream`, `CechStream`, `WitnessStream`, `UnionFind`.
 - **`homology`** — the persistence algorithms (`Homology.scala`, `PackedRipserCohomology.scala`,
   `Cohomology.scala`).
 - **`barcode`** — `Barcode`, `PersistenceBar`, `BarcodeEndpoint`.
@@ -240,6 +240,39 @@ Cech: both are proven specifically for flag complexes / the max-pairwise-distanc
 neither a flag complex nor governed by that functional. Cech complexes work with either generic engine
 (`CellularHomologyContext`/`CellularPersistenceInChunksContext`), cross-validated against each other; the
 packed and reference Ripser engines (specialized to the Vietoris-Rips functional) are not offered for it.
+
+### Witness complexes
+
+`streams/WitnessStream.scala` implements De Silva & Carlsson's witness complex (2004), checked directly
+against JavaPlex's own `LazyWitnessStream`/`WitnessStream` Java source (not just the paper's prose).
+`LandmarkSelector.maxmin`/`.random` pick a landmark subset of a `FiniteMetricSpace[Int]`; `WitnessGeometry`
+precomputes the landmark-to-witness distance matrix `D` and each witness's sorted landmark-distance row
+(`mDim(k, witness)`, the `(k+1)`-th nearest landmark — the one primitive both variants below are built from).
+
+Two independent implementations, both reusing `RipserCofaceSimplexStream`'s generic coface-generation loop
+(the same reuse `CechCofaceSimplexStream` makes) rather than a from-scratch enumeration:
+
+- **`LazyWitnessSimplexStream`** (JavaPlex's `LazyWitnessStream`): the lazy witness complex IS, by
+  definition, the flag/clique complex of a weighted graph, so `WitnessMetricSpace` reifies that graph as an
+  ordinary `FiniteMetricSpace[Int]` (`distance(a,b)` = the edge witness value at a fixed `nu` in `{0,1,2}`)
+  and hands it to `RipserCofaceSimplexStream` **unmodified** — no `filtrationValueOverride` at all; the
+  inherited "max pairwise distance" flag extension is exactly what a lazy witness complex wants. Because it
+  really is a flag complex, `PackedRipserCohomologyContext` — proven only for genuine VR diameters — is
+  *also* valid here (any `FiniteMetricSpace[Int]`'s own diameter, not something VR-specific despite the
+  class's name), cross-validated directly in `WitnessStreamSpec` rather than assumed.
+- **`WitnessCofaceSimplexStream`** (JavaPlex's plain `WitnessStream`): NOT a flag complex — a `k`-dimensional
+  simplex's own witness value uses a dimension-specific threshold (`m_k`, JavaPlex's own per-dimension array)
+  that need not be monotone facet-to-coface on its own. `filtrationValueOverride` here is a genuinely
+  recursive function (`max(own_k(sigma), max over sigma's own facets)`, `TrieMap`-memoized, since the base
+  class doesn't memoize a caller-supplied override) — that recursive max is what makes "the complex at
+  threshold R" automatically downward-closed for every R, the same way VR's max-pairwise-distance does, and
+  it's also what makes JavaPlex's separate `containsElement(face)` gate redundant here (proof and empirical
+  check both in `WitnessStreamSpec`). `maxFiltrationValue` defaults to `+Infinity`, not the metric space's
+  enclosing radius — that shortcut is only valid for flag complexes.
+
+A fact used to cross-validate the two constructions against each other (`WitnessStreamSpec`): the general
+complex's own 1-skeleton is identical to the lazy complex's at `nu = 2` — both use the 2nd-nearest-landmark
+threshold for edges, just reached via different code paths.
 
 ### Metric spaces
 

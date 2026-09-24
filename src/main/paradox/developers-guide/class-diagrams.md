@@ -142,6 +142,8 @@ classDiagram
     CofaceSimplexStream <|-- EnumeratingCofaceSimplexStream
     EnumeratingCofaceSimplexStream <|-- RipserCofaceSimplexStream
     RipserCofaceSimplexStream <|-- CechCofaceSimplexStream
+    RipserCofaceSimplexStream <|-- LazyWitnessSimplexStream
+    RipserCofaceSimplexStream <|-- WitnessCofaceSimplexStream
     EnumeratingCofaceSimplexStream <|-- InorderCofaceSimplexStream
     SimplexStream <|-- ExplicitStream
     StratifiedSimplexStream <|-- RecursiveStackVietorisRipsSimplexStream

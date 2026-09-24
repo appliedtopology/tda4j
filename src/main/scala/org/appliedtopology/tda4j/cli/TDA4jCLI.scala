@@ -100,6 +100,11 @@ object TDA4jCLI:
     add("prime", conf.prime)
     add("epsilon", conf.epsilon)
     add("sublevel", conf.sublevel)
+    add("numLandmarks", conf.numLandmarks)
+    add("witnessVariant", conf.witnessVariant)
+    add("landmarkSelector", conf.landmarkSelector)
+    add("landmarkSeed", conf.landmarkSeed)
+    add("nu", conf.nu)
     pairs.toArray
 
   // -----------------------------------------------------------------------------------------------------------
