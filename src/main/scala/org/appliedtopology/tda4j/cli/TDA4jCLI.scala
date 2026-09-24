@@ -4,7 +4,7 @@ package cli
 import org.appliedtopology.tda4j.barcode.{given, *}
 import org.appliedtopology.tda4j.io.{given, *}
 import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.matlab.{PersistenceResult, TDA4j}
+import org.appliedtopology.tda4j.matlab.{LandmarkSelectionResult, PersistenceResult, TDA4j}
 
 import org.rogach.scallop.ScallopOption
 
@@ -49,9 +49,17 @@ object TDA4jCLI:
       val conf = new TDA4jConf(args)
       val options = buildOptions(conf)
       val resolved = resolveInput(conf.inputFormat(), conf.input())
+
+      if conf.selectLandmarks() && conf.landmarksFile.isSupplied then
+        throw new IllegalArgumentException(
+          "--select-landmarks and --landmarks-file are mutually exclusive: the first PRODUCES a landmark set " +
+            "(step 1), the second CONSUMES one (step 2) -- run them as two separate invocations"
+        )
+
       // --complex is meaningless for a cubical grid (TDA4j.computeFromCubicalImage has no "complex" option at
       // all -- it would otherwise be silently ignored rather than validated, the exact "two flags can disagree
-      // and nothing notices" trap this CLI's whole design (buildOptions's own doc above) exists to avoid).
+      // and nothing notices" trap this CLI's whole design (buildOptions's own doc above) exists to avoid). Same
+      // reasoning for the two witness-recipe flags: a cubical grid has no landmarks to select or supply.
       resolved match
         case ResolvedInput.CubicalGrid(_, _) if conf.complex.isSupplied =>
           throw new IllegalArgumentException(
@@ -59,21 +67,57 @@ object TDA4jCLI:
               "'complex' option (see TDA4j.computeFromCubicalImage's own doc) -- remove --complex, or choose a " +
               "point-cloud/distance-matrix --input-format instead"
           )
+        case ResolvedInput.CubicalGrid(_, _) if conf.selectLandmarks() || conf.landmarksFile.isSupplied =>
+          throw new IllegalArgumentException(
+            s"--select-landmarks/--landmarks-file are not meaningful with --input-format=${conf.inputFormat()}: " +
+              "a cubical grid has no witness-complex landmarks to select or supply"
+          )
         case _ => ()
-      val result = resolved match
-        case ResolvedInput.Points(points)               => TDA4j.computeFromPoints(points, options)
-        case ResolvedInput.Distances(distances)         => TDA4j.computeFromDistanceMatrix(distances, options)
-        case ResolvedInput.CubicalGrid(shape, flatVals) => TDA4j.computeFromCubicalImage(shape, flatVals, options)
-      writeOutput(conf, result, out)
-      0
+
+      if conf.selectLandmarks() then
+        if conf.representatives() then
+          throw new IllegalArgumentException(
+            "--representatives is meaningless with --select-landmarks: there is no barcode here, only a " +
+              "landmark set"
+          )
+        if conf.outputFormat() != "text" then
+          throw new IllegalArgumentException(
+            s"--output-format=${conf.outputFormat()} is not supported with --select-landmarks -- only the " +
+              "default text format is (one 0-based landmark index per line, plus a '# coveringRadius=...' line)"
+          )
+        val selection = resolved match
+          case ResolvedInput.Points(points)       => TDA4j.selectLandmarksFromPoints(points, options)
+          case ResolvedInput.Distances(distances) => TDA4j.selectLandmarksFromDistanceMatrix(distances, options)
+          case ResolvedInput.CubicalGrid(_, _)    =>
+            throw new IllegalStateException("unreachable: rejected by the CubicalGrid guard above")
+        writeLandmarkSelection(conf, selection, out)
+        0
+      else
+        val result = conf.landmarksFile.toOption match
+          case Some(path) =>
+            val landmarks = readLandmarksFile(path)
+            resolved match
+              case ResolvedInput.Points(points)       => TDA4j.computeFromPointsAndLandmarks(points, landmarks, options)
+              case ResolvedInput.Distances(distances) =>
+                TDA4j.computeFromDistanceMatrixAndLandmarks(distances, landmarks, options)
+              case ResolvedInput.CubicalGrid(_, _) =>
+                throw new IllegalStateException("unreachable: rejected by the CubicalGrid guard above")
+          case None =>
+            resolved match
+              case ResolvedInput.Points(points)               => TDA4j.computeFromPoints(points, options)
+              case ResolvedInput.Distances(distances)         => TDA4j.computeFromDistanceMatrix(distances, options)
+              case ResolvedInput.CubicalGrid(shape, flatVals) => TDA4j.computeFromCubicalImage(shape, flatVals, options)
+        writeOutput(conf, result, out)
+        0
     catch
       case e: IllegalArgumentException =>
         System.err.println(s"tda4j: ${e.getMessage}")
         1
       case e: java.io.IOException =>
-        // Covers FileNotFoundException (a missing/unreadable --input path) and any other I/O failure from the
-        // io.* readers -- these are user-input problems (a typo'd path, a permissions issue), not a `tda4j` bug,
-        // so they get the same clean one-line message as an IllegalArgumentException rather than a raw stack trace.
+        // Covers FileNotFoundException (a missing/unreadable --input path OR --landmarks-file path) and any
+        // other I/O failure from the io.* readers -- these are user-input problems (a typo'd path, a
+        // permissions issue), not a `tda4j` bug, so they get the same clean one-line message as an
+        // IllegalArgumentException rather than a raw stack trace.
         System.err.println(s"tda4j: ${e.getMessage}")
         1
 
@@ -164,6 +208,59 @@ object TDA4jCLI:
             "ripser-points, ripser-lower, ripser-upper, ripser-distance, ripser-binary, dipha-distance, off, " +
             "perseus-cubical, dipha-image, image"
         )
+
+  // -----------------------------------------------------------------------------------------------------------
+  // the two-step witness recipe's own file format: one 0-based landmark index per line, plus a leading
+  // '# coveringRadius=...' comment line -- tda4j's own format (not an external one, so kept here rather than
+  // in `io`, matching CLAUDE.md's io-module convention of only implementing formats verified against a real
+  // primary source). Deliberately NOT reused for anything else: it exists purely to round-trip
+  // --select-landmarks's own output back into --landmarks-file.
+  // -----------------------------------------------------------------------------------------------------------
+
+  private[cli] def writeLandmarkSelection(
+    conf: TDA4jConf,
+    selection: LandmarkSelectionResult,
+    out: java.io.PrintStream
+  ): Unit =
+    val lines = s"# coveringRadius=${selection.coveringRadius()}" +: selection.landmarks().map(_.toString).toSeq
+    conf.output.toOption match
+      case Some(path) =>
+        val writer = new PrintWriter(path)
+        try lines.foreach(writer.println)
+        finally writer.close()
+      case None => lines.foreach(out.println)
+    // Always to stderr, even when --output also wrote it as a comment line: the point is that a human running
+    // this interactively sees R without having to open/grep the output file.
+    System.err.println(
+      s"tda4j: covering radius R = ${selection.coveringRadius()} -- e.g. pass '${2 * selection.coveringRadius()}' " +
+        "as --max-filtration-value for step 2 (the JavaPlex tutorial's own 2R recipe)"
+    )
+
+  /** Reads a `--landmarks-file` written by `writeLandmarkSelection` above (or hand-edited in the same shape): one
+    * 0-based landmark index per line, blank lines and `#`-prefixed comment lines ignored. Parse errors report the
+    * OFFENDING LINE NUMBER (1-based, matching what a text editor shows), not just the bad token, since a hand-edited
+    * landmarks file is exactly the case where "which line" matters for fixing it.
+    */
+  private[cli] def readLandmarksFile(path: String): Array[Int] =
+    val source = scala.io.Source.fromFile(path)
+    try
+      source
+        .getLines()
+        .zipWithIndex
+        .flatMap { case (raw, idx) =>
+          val trimmed = raw.trim
+          if trimmed.isEmpty || trimmed.startsWith("#") then None
+          else
+            Some(
+              trimmed.toIntOption.getOrElse(
+                throw new IllegalArgumentException(
+                  s"$path:${idx + 1}: expected an integer landmark index, got '$raw'"
+                )
+              )
+            )
+        }
+        .toArray
+    finally source.close()
 
   // -----------------------------------------------------------------------------------------------------------
   // PersistenceResult -> PersistenceBar, using the SAME PersistenceBar.apply(dim, lower, [upper]) factories

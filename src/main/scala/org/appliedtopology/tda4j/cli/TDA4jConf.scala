@@ -97,6 +97,25 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
         "streams.WitnessMetricSpace's own doc"
     )
 
+  // CLI-LOCAL control flow, unlike every option above: neither is forwarded into TDA4j's own options array
+  // (see buildOptions's own comment) -- they select which of TDA4j's ENTRY POINTS this run calls, not a value
+  // passed to one fixed entry point. opt[Boolean] here has the same always-supplied-defaulting-to-false
+  // semantics --representatives already relies on (Scallop's own toggle-flag behavior, not a genuinely
+  // optional value) -- fine for exactly the same reason: read only as `conf.selectLandmarks()`, a plain
+  // Boolean, never through `.toOption`/`.isSupplied`.
+  val selectLandmarks: ScallopOption[Boolean] = opt[Boolean](
+    default = Some(false),
+    descr = "step 1 of the two-step witness recipe: select landmarks only (requires --num-landmarks), " +
+      "writing one 0-based landmark index per line to --output (or stdout) plus a '# coveringRadius=...' " +
+      "line, and printing R to stderr -- see --landmarks-file for step 2. Only --output-format=text (the " +
+      "default) is supported, and --representatives is meaningless here (there is no barcode)."
+  )
+  val landmarksFile: ScallopOption[String] = opt[String](
+    descr = "step 2 of the two-step witness recipe: read landmark indices from this file (one 0-based index " +
+      "per line, as --select-landmarks writes) instead of selecting them internally -- implies --complex " +
+      "witness; --num-landmarks/--landmark-selector/--landmark-seed are not meaningful together with this"
+  )
+
   val input: ScallopOption[String] = trailArg[String](name = "input-file", descr = "input file", required = true)
 
   verify()

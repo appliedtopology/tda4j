@@ -14,8 +14,8 @@ import scala.util.Random
   * are always a SUBSET of the ambient point set (their own ambient indices), matching JavaPlex's convention -- not
   * arbitrary points outside it, which the original paper allows but no downstream tool actually uses.
   *
-  * Both selectors assume `metricSpace`'s own `elements` are the contiguous range `0 until metricSpace.size` -- the
-  * same assumption every other coface stream in this codebase already makes of its own `FiniteMetricSpace[Int]` (via
+  * Both selectors assume `metricSpace`'s own `elements` are the contiguous range `0 until metricSpace.size` -- the same
+  * assumption every other coface stream in this codebase already makes of its own `FiniteMetricSpace[Int]` (via
   * `SimplexIndexing`'s combinatorial-number-system enumeration; see `IntMetricSpace`'s own doc), not a new one
   * introduced here.
   */
@@ -43,42 +43,49 @@ object LandmarkSelector:
     while landmarks.size < numLandmarks do
       val next = sortedElements.maxBy(minDistToLandmarks(_))
       landmarks += next
-      for x <- sortedElements do
-        minDistToLandmarks(x) = math.min(minDistToLandmarks(x), metricSpace.distance(x, next))
+      for x <- sortedElements do minDistToLandmarks(x) = math.min(minDistToLandmarks(x), metricSpace.distance(x, next))
     LandmarkSelection(landmarks.toIndexedSeq, sortedElements.map(minDistToLandmarks(_)).max)
 
   /** Uniform random selection of `numLandmarks` distinct ambient indices, seeded for reproducibility. Cheaper than
     * `maxmin` (`O(size)` vs `O(numLandmarks * size)`) but gives no covering guarantee -- outliers can be missed
-    * entirely, unlike maxmin's worst-case coverage bound. The covering radius is still computed and returned (an
-    * honest `O(size * numLandmarks)` pass after the fact), for the same `maxFiltrationValue`-picking use as maxmin's.
+    * entirely, unlike maxmin's worst-case coverage bound. The covering radius is still computed and returned (an honest
+    * `O(size * numLandmarks)` pass after the fact), for the same `maxFiltrationValue`-picking use as maxmin's.
     */
   def random(metricSpace: FiniteMetricSpace[Int], numLandmarks: Int, seed: Long): LandmarkSelection =
     require(
       numLandmarks >= 1 && numLandmarks <= metricSpace.size,
       s"numLandmarks must be between 1 and ${metricSpace.size}, got $numLandmarks"
     )
-    val sortedElements = metricSpace.elements.toIndexedSeq.sorted
-    val landmarks = new Random(seed).shuffle(sortedElements).take(numLandmarks)
-    val coveringRadius = sortedElements.map(x => landmarks.map(l => metricSpace.distance(x, l)).min).max
-    LandmarkSelection(landmarks, coveringRadius)
+    val landmarks = new Random(seed).shuffle(metricSpace.elements.toIndexedSeq.sorted).take(numLandmarks)
+    LandmarkSelection(landmarks, coveringRadius(metricSpace, landmarks))
 
-/** `landmarks(i)` is the ambient index of the `i`-th landmark -- the mapping every witness-stream class below needs
-  * to translate its own LOCAL `0 until landmarks.size` simplex vertex indices back to the caller's original point
-  * cloud (`matlab.TDA4j` does this for `cycleVertices`). `coveringRadius` is `R = max_x min_l d(x,l)`.
+  /** The covering radius of an ARBITRARY landmark set, not necessarily one `maxmin`/`random` chose --
+    * `R = max_x min_{l in landmarks} d(x,l)`. `maxmin`/`random` already compute this as part of their own selection
+    * loop and return it via `LandmarkSelection`; this standalone version is for a caller who already has a landmark set
+    * (hand-picked, or reused from an earlier selection) and wants `R` for it -- e.g. to apply the JavaPlex tutorial's
+    * own `2R` threshold recipe to landmarks it didn't just pick. `O(metricSpace.size * landmarks.size)`, the same cost
+    * `random`'s own inline version (now just this call) always was.
+    */
+  def coveringRadius(metricSpace: FiniteMetricSpace[Int], landmarks: IndexedSeq[Int]): Double =
+    metricSpace.elements.map(x => landmarks.map(l => metricSpace.distance(x, l)).min).max
+
+/** `landmarks(i)` is the ambient index of the `i`-th landmark -- the mapping every witness-stream class below needs to
+  * translate its own LOCAL `0 until landmarks.size` simplex vertex indices back to the caller's original point cloud
+  * (`matlab.TDA4j` does this for `cycleVertices`). `coveringRadius` is `R = max_x min_l d(x,l)`.
   */
 case class LandmarkSelection(landmarks: IndexedSeq[Int], coveringRadius: Double)
 
 /** Precomputes and exposes the landmark<->witness distance geometry a witness complex is built from (De Silva &
   * Carlsson 2004; checked against JavaPlex's own `WitnessStream`/`LazyWitnessStream` -- see
   * `.claude/WORKLOG-witness-complex.md`). Every point of `ambientMetricSpace` is a witness (landmarks included,
-  * matching JavaPlex's own `plex3Compatible = true` default), and `landmarks` is a subset of `ambientMetricSpace`'s
-  * own ambient indices -- LOCAL landmark index `i` (`0 until landmarks.size`) corresponds to ambient index
-  * `landmarks(i)`. Assumes `ambientMetricSpace.elements == 0 until ambientMetricSpace.size` (see `LandmarkSelector`'s
-  * own doc for why that's not a new assumption).
+  * matching JavaPlex's own `plex3Compatible = true` default), and `landmarks` is a subset of `ambientMetricSpace`'s own
+  * ambient indices -- LOCAL landmark index `i` (`0 until landmarks.size`) corresponds to ambient index `landmarks(i)`.
+  * Assumes `ambientMetricSpace.elements == 0 until ambientMetricSpace.size` (see `LandmarkSelector`'s own doc for why
+  * that's not a new assumption).
   *
-  * `D(l)(n)` is the distance from landmark `l` (local index) to witness `n` (ambient index) -- built once, eagerly:
-  * an `L x N` matrix, exactly JavaPlex's own `D`. `O(L*N)` space/time, unavoidable since the witness-value formula
-  * below reads a whole row per candidate landmark.
+  * `D(l)(n)` is the distance from landmark `l` (local index) to witness `n` (ambient index) -- built once, eagerly: an
+  * `L x N` matrix, exactly JavaPlex's own `D`. `O(L*N)` space/time, unavoidable since the witness-value formula below
+  * reads a whole row per candidate landmark.
   */
 class WitnessGeometry(val ambientMetricSpace: FiniteMetricSpace[Int], val landmarks: IndexedSeq[Int]):
   val L: Int = landmarks.size
@@ -93,8 +100,8 @@ class WitnessGeometry(val ambientMetricSpace: FiniteMetricSpace[Int], val landma
   /** `sortedByWitness(n)` is witness `n`'s own row of `D` (its distance to every landmark), sorted ascending --
     * `sortedByWitness(n)(0)` is the nearest-landmark distance, `sortedByWitness(n)(k)` the `(k+1)`-th nearest.
     * Precomputed once per witness (`O(N*L log L)`, matching JavaPlex's own per-column `Arrays.sort`) since both the
-    * lazy stream's single `m_nu` and the general stream's per-dimension `m_k` are just different indices into the
-    * SAME sorted row.
+    * lazy stream's single `m_nu` and the general stream's per-dimension `m_k` are just different indices into the SAME
+    * sorted row.
     */
   private val sortedByWitness: Array[Array[Double]] =
     Array.tabulate(N)(n => Array.tabulate(L)(l => D(l)(n)).sorted)
@@ -108,10 +115,10 @@ class WitnessGeometry(val ambientMetricSpace: FiniteMetricSpace[Int], val landma
   /** The De Silva-Carlsson witness value for the landmark set `sigma` (local indices), given a per-witness threshold
     * function `m`: `min over witnesses n of max(0, (max over l in sigma of D(l,n)) - m(n))`. Shared by both
     * `WitnessMetricSpace` (edges, `m = m_nu`, one global `nu`) and `WitnessCofaceSimplexStream` (a `k`-dimensional
-    * simplex, `m = m_k`) -- JavaPlex's own `getWitnessAndDistance`/`addCofaces_` formula. Clamping `max(0, ...)`
-    * PER WITNESS before taking the `min`, rather than clamping the min's own result, matches JavaPlex's code exactly
-    * and is provably equivalent (`max(0, *)` is monotone nondecreasing, and a monotone function commutes with `min`)
-    * -- see `.claude/WORKLOG-witness-complex.md`.
+    * simplex, `m = m_k`) -- JavaPlex's own `getWitnessAndDistance`/`addCofaces_` formula. Clamping `max(0, ...)` PER
+    * WITNESS before taking the `min`, rather than clamping the min's own result, matches JavaPlex's code exactly and is
+    * provably equivalent (`max(0, *)` is monotone nondecreasing, and a monotone function commutes with `min`) -- see
+    * `.claude/WORKLOG-witness-complex.md`.
     */
   def witnessValue(sigma: IndexedSeq[Int], m: Int => Double): Double =
     var best = Double.PositiveInfinity
@@ -129,18 +136,18 @@ class WitnessGeometry(val ambientMetricSpace: FiniteMetricSpace[Int], val landma
     best
 
 /** The lazy witness complex's own 1-skeleton (De Silva & Carlsson 2004; JavaPlex's `LazyWitnessStream`), reified as a
-  * `FiniteMetricSpace[Int]` over LOCAL landmark indices so it slots directly into `RipserCofaceSimplexStream`
-  * unchanged (`LazyWitnessSimplexStream` below) -- the lazy witness complex IS, by definition, the flag/clique
-  * complex of this weighted graph (JavaPlex's own `LazyWitnessStream` derives from `FlagComplexStream` for exactly
-  * this reason), so `distance(a,b)` here doubles as both the edge filtration value AND (via the inherited
-  * `MaximumDistanceFiltrationValue` "max pairwise distance" formula) every higher simplex's filtration value too --
-  * no `filtrationValueOverride` needed anywhere.
+  * `FiniteMetricSpace[Int]` over LOCAL landmark indices so it slots directly into `RipserCofaceSimplexStream` unchanged
+  * (`LazyWitnessSimplexStream` below) -- the lazy witness complex IS, by definition, the flag/clique complex of this
+  * weighted graph (JavaPlex's own `LazyWitnessStream` derives from `FlagComplexStream` for exactly this reason), so
+  * `distance(a,b)` here doubles as both the edge filtration value AND (via the inherited
+  * `MaximumDistanceFiltrationValue` "max pairwise distance" formula) every higher simplex's filtration value too -- no
+  * `filtrationValueOverride` needed anywhere.
   *
   * '''Not a real metric''': `distance` can be zero for two distinct landmarks (whenever some witness sees both within
   * its own `m_nu` threshold) and need not obey the triangle inequality. NEVER hand this to `JVPTree`,
   * `SparseMetricSpace`, `RecursiveStackVietorisRipsSimplexStream`, or anything in the `alpha` package -- only to
-  * `EnumeratingCofaceSimplexStream`/`RipserCofaceSimplexStream`'s own combinatorial (not spatial) candidate
-  * generation, which assumes neither property.
+  * `EnumeratingCofaceSimplexStream`/`RipserCofaceSimplexStream`'s own combinatorial (not spatial) candidate generation,
+  * which assumes neither property.
   *
   * `nu` (JavaPlex's own name) selects the per-witness threshold `m_nu`: `0` means no threshold (`m = 0` everywhere --
   * the strictest/smallest complex), `1` the nearest-landmark distance, `2` (JavaPlex's own default) the 2nd-nearest.
@@ -178,8 +185,8 @@ class WitnessMetricSpace(val geometry: WitnessGeometry, val nu: Int = 2) extends
   * `maxFiltrationValue` inherits `EnumeratingCofaceSimplexStream`'s own default: `metricSpace.minimumEnclosingRadius`
   * under `WitnessMetricSpace.distance`. This IS a valid truncation here (unlike for `WitnessCofaceSimplexStream`
   * below): any flag complex is a cone past `min_x max_y d'(x,y)` regardless of whether `d'` is a genuine metric -- the
-  * cone argument (Ripser paper p.412) only needs symmetry of `d'` and the flag property, both of which hold here --
-  * see `.claude/WORKLOG-witness-complex.md`.
+  * cone argument (Ripser paper p.412) only needs symmetry of `d'` and the flag property, both of which hold here -- see
+  * `.claude/WORKLOG-witness-complex.md`.
   *
   * Vertex ids in every emitted `Simplex[Int]` are LOCAL landmark indices (`0 until landmarks.size`) -- translate back
   * through `landmarks(i)` for the caller's own ambient point cloud (`matlab.TDA4j` does this for `cycleVertices`).
@@ -200,44 +207,41 @@ class LazyWitnessSimplexStream(
     )
 
 /** The general witness complex (De Silva & Carlsson 2004; JavaPlex's plain `WitnessStream`): unlike the lazy variant
-  * above, NOT a flag complex -- a higher simplex's own witness condition uses a DIMENSION-SPECIFIC threshold `m_k`
-  * (the `(k+1)`-th nearest landmark, `k` = the simplex's own dimension) that need not be monotone facet-to-coface on
-  * its own, so every simplex's recorded filtration value is `max(own_k(sigma), max over its own facets' filtration
-  * values)` (JavaPlex's own `addCofaces_`: `filtrationIndex = max(filtrationIndex, ...)` over the boundary, then
-  * maxed again with the simplex's own witness value). This recursive max is what makes "the complex at threshold R"
-  * automatically downward-closed for every `R` -- the same way VR's own "max pairwise distance" does -- and it also
-  * makes JavaPlex's separate `containsElement(face)` gate redundant here (any facet whose own value exceeds a
-  * threshold forces its coface's value above that threshold too, via the max): see
-  * `.claude/WORKLOG-witness-complex.md` for the proof. So, unlike the eager reference implementation,
-  * `RipserCofaceSimplexStream`'s plain "generate from the canonical (min-vertex-removed) facet, filter by
-  * filtrationValue <= threshold" shape is already correct once fed this recursive filtration value -- no extra
-  * "are all my facets already accepted" check needed.
+  * above, NOT a flag complex -- a higher simplex's own witness condition uses a DIMENSION-SPECIFIC threshold `m_k` (the
+  * `(k+1)`-th nearest landmark, `k` = the simplex's own dimension) that need not be monotone facet-to-coface on its
+  * own, so every simplex's recorded filtration value is `max(own_k(sigma), max over its own facets' filtration values)`
+  * (JavaPlex's own `addCofaces_`: `filtrationIndex = max(filtrationIndex, ...)` over the boundary, then maxed again
+  * with the simplex's own witness value). This recursive max is what makes "the complex at threshold R" automatically
+  * downward-closed for every `R` -- the same way VR's own "max pairwise distance" does -- and it also makes JavaPlex's
+  * separate `containsElement(face)` gate redundant here (any facet whose own value exceeds a threshold forces its
+  * coface's value above that threshold too, via the max): see `.claude/WORKLOG-witness-complex.md` for the proof. So,
+  * unlike the eager reference implementation, `RipserCofaceSimplexStream`'s plain "generate from the canonical
+  * (min-vertex-removed) facet, filter by filtrationValue <= threshold" shape is already correct once fed this recursive
+  * filtration value -- no extra "are all my facets already accepted" check needed.
   *
   * `nu` plays no role here (each dimension has its own fixed `m_k`, not a caller-chosen parameter) -- the
-  * `WitnessMetricSpace` handed to the superclass exists only to satisfy `RipserCofaceSimplexStream`'s constructor;
-  * its `distance` is never actually read (see that class's own "lazy, not eager" note), since
-  * `filtrationValueOverride` replaces `filtrationValue` for every dimension including edges, and `maxFiltrationValue`
-  * is always supplied explicitly (default `+Infinity`, i.e. untruncated) rather than left `None` -- `None` would fall
-  * back to `minimumEnclosingRadius`, NOT a valid truncation for a non-flag complex like this one (see
+  * `WitnessMetricSpace` handed to the superclass exists only to satisfy `RipserCofaceSimplexStream`'s constructor; its
+  * `distance` is never actually read (see that class's own "lazy, not eager" note), since `filtrationValueOverride`
+  * replaces `filtrationValue` for every dimension including edges, and `maxFiltrationValue` is always supplied
+  * explicitly (default `+Infinity`, i.e. untruncated) rather than left `None` -- `None` would fall back to
+  * `minimumEnclosingRadius`, NOT a valid truncation for a non-flag complex like this one (see
   * `.claude/WORKLOG-witness-complex.md`).
   *
   * '''Fact used to cross-validate against the lazy stream''' (`WitnessStreamSpec`): this class's own 1-skeleton is
   * IDENTICAL to `LazyWitnessSimplexStream(..., nu = 2)`'s -- both use the 2nd-nearest-landmark threshold for edges
   * (`m_1` here, `m_nu` there with its sentinel-shifted index), reached via different code paths.
   *
-  * Built via the companion `apply` (below), not `new`, so the shared `WitnessGeometry` (`O(L*N)` to build) is
-  * computed exactly once and reused both for the superclass's `WitnessMetricSpace` and for
-  * `recursiveFiltrationValue` -- constructing it twice from raw `(ambientMetricSpace, landmarks)` would silently
-  * duplicate that work.
+  * Built via the companion `apply` (below), not `new`, so the shared `WitnessGeometry` (`O(L*N)` to build) is computed
+  * exactly once and reused both for the superclass's `WitnessMetricSpace` and for `recursiveFiltrationValue` --
+  * constructing it twice from raw `(ambientMetricSpace, landmarks)` would silently duplicate that work.
   *
-  * '''Performance hazard, standing for any unbounded coface stream, not specific to this one''': iterating this
-  * stream at its default `maxFiltrationValue = +Infinity` enumerates EVERY dimension up to `landmarks.size - 1`
-  * -- the full `2^L` power set for `L` landmarks, since nothing about the recursive filtration value ever
-  * prunes a candidate at an unbounded threshold. `matlab.TDA4j`'s own facade avoids this by always wrapping in
-  * `LimitedCofaceSimplexStream` (its `maxDimension` option defaults to reporting `H_0..H_2`, i.e. simplices up
-  * to 4 vertices); a caller driving this class directly should do the same, or pass a finite
-  * `maxFiltrationValue` -- see `.claude/WORKLOG-witness-complex.md` for tutorial-scale timing measurements
-  * (machine-specific, kept there rather than here).
+  * '''Performance hazard, standing for any unbounded coface stream, not specific to this one''': iterating this stream
+  * at its default `maxFiltrationValue = +Infinity` enumerates EVERY dimension up to `landmarks.size - 1` -- the full
+  * `2^L` power set for `L` landmarks, since nothing about the recursive filtration value ever prunes a candidate at an
+  * unbounded threshold. `matlab.TDA4j`'s own facade avoids this by always wrapping in `LimitedCofaceSimplexStream` (its
+  * `maxDimension` option defaults to reporting `H_0..H_2`, i.e. simplices up to 4 vertices); a caller driving this
+  * class directly should do the same, or pass a finite `maxFiltrationValue` -- see `.claude/WORKLOG-witness-complex.md`
+  * for tutorial-scale timing measurements (machine-specific, kept there rather than here).
   */
 class WitnessCofaceSimplexStream(
   val geometry: WitnessGeometry,
@@ -261,9 +265,9 @@ object WitnessCofaceSimplexStream:
     new WitnessCofaceSimplexStream(WitnessGeometry(ambientMetricSpace, landmarks), maxFiltrationValue, keepCriterion)
 
   /** Overloads taking an already-built `WitnessGeometry` directly (e.g. one a caller is also handing to
-    * `recursiveFiltrationValue` separately, for cross-validation) -- avoids rebuilding it a second time. Scala
-    * forbids default arguments on more than one overloaded `apply` variant, so these mirror the primary
-    * constructor's own defaults (`Double.PositiveInfinity` / accept-everything) by hand instead of sharing them.
+    * `recursiveFiltrationValue` separately, for cross-validation) -- avoids rebuilding it a second time. Scala forbids
+    * default arguments on more than one overloaded `apply` variant, so these mirror the primary constructor's own
+    * defaults (`Double.PositiveInfinity` / accept-everything) by hand instead of sharing them.
     */
   def apply(geometry: WitnessGeometry): WitnessCofaceSimplexStream =
     new WitnessCofaceSimplexStream(geometry, Double.PositiveInfinity, { case _ => true })
@@ -280,18 +284,17 @@ object WitnessCofaceSimplexStream:
 
   /** `max(own_k(sigma), max over sigma's own facets)`, memoized -- unlike `EnumeratingCofaceSimplexStream`'s own
     * `filtrationValueCache` (which only memoizes the DEFAULT `MaximumDistanceFiltrationValue` fallback), a
-    * caller-supplied `filtrationValueOverride` is NOT memoized by the base class itself, and `Chain`'s
-    * reduction consults `filtrationValue` on every pivot comparison -- so a genuinely expensive override (this one:
-    * O(N) per call, before recursion) must cache itself, exactly like `CechFiltration` does.
+    * caller-supplied `filtrationValueOverride` is NOT memoized by the base class itself, and `Chain`'s reduction
+    * consults `filtrationValue` on every pivot comparison -- so a genuinely expensive override (this one: O(N) per
+    * call, before recursion) must cache itself, exactly like `CechFiltration` does.
     *
-    * '''Not `cache.getOrElse(facet, 0.0)`''' (the shortcut `CechFiltration` uses for its own facet floor): unlike
-    * Cech, this stream's candidate generation touches only ONE canonical facet per candidate (the one obtained by
-    * removing the minimum vertex) before this function is ever asked about the candidate at all -- a facet other
-    * than that one is generally NOT already cached, and defaulting it to `0.0` would silently drop it from the max,
-    * corrupting monotonicity for exactly the simplices this recursion exists to get right. Recursing (`apply` calling
-    * itself on every facet) computes it instead of assuming it, at the cost JavaPlex's own `containsElement`
-    * short-circuit exists to avoid -- see the class doc for why that short-circuit isn't a correctness requirement
-    * here.
+    * '''Not `cache.getOrElse(facet, 0.0)`''' (the shortcut `CechFiltration` uses for its own facet floor): unlike Cech,
+    * this stream's candidate generation touches only ONE canonical facet per candidate (the one obtained by removing
+    * the minimum vertex) before this function is ever asked about the candidate at all -- a facet other than that one
+    * is generally NOT already cached, and defaulting it to `0.0` would silently drop it from the max, corrupting
+    * monotonicity for exactly the simplices this recursion exists to get right. Recursing (`apply` calling itself on
+    * every facet) computes it instead of assuming it, at the cost JavaPlex's own `containsElement` short-circuit exists
+    * to avoid -- see the class doc for why that short-circuit isn't a correctness requirement here.
     */
   def recursiveFiltrationValue(geometry: WitnessGeometry): PartialFunction[Simplex[Int], Double] =
     val cache = TrieMap.empty[Simplex[Int], Double]

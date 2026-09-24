@@ -125,6 +125,68 @@ complex, same bar count, engine alone) vs. `general+naive` ~11.5s (variant alone
 indistinguishable from `lazy+naive` at single-trial resolution) — measured, not inferred (single-trial
 numbers on one machine; see `.claude/WORKLOG-witness-complex.md`).
 
+#### The two-step recipe from MATLAB/CLI: select landmarks, read R, then compute
+
+The one-shot `complex=witness` path (below, in "Calling from MATLAB or Java") picks landmarks internally and
+never reports back the covering radius `R` — so the JavaPlex tutorial's own "pick landmarks, read `R`, use `2R`
+as the threshold" recipe isn't reproducible through it. `matlab.TDA4j` also offers the SAME construction split
+into two steps for exactly this: `selectLandmarksFrom{Points,DistanceMatrix}` (step 1, returns a
+`LandmarkSelectionResult` with both `landmarks()` and `coveringRadius()`) and
+`computeFrom{Points,DistanceMatrix}AndLandmarks` (step 2, takes that landmark array directly). Both entry points
+work from Scala too, not just MATLAB:
+
+```scala 3
+val selection = TDA4j.selectLandmarksFromPoints(points, Array("numLandmarks", "50"))
+val result = TDA4j.computeFromPointsAndLandmarks(
+  points,
+  selection.landmarks(),
+  Array("maxFiltrationValue", (2 * selection.coveringRadius()).toString)
+)
+```
+
+From MATLAB:
+
+```matlab
+javaaddpath('target/scala-3.9.0/TDA4j-<version>-assembly.jar');
+selection = org.appliedtopology.tda4j.matlab.TDA4j.selectLandmarksFromPoints(points, {'numLandmarks', '50'});
+landmarks = selection.landmarks();   % int32 array, 0-BASED ambient indices into `points`
+R = selection.coveringRadius();
+
+result = org.appliedtopology.tda4j.matlab.TDA4j.computeFromPointsAndLandmarks(points, landmarks, ...
+    {'maxFiltrationValue', sprintf('%.17g', 2 * R)});
+bars = result.toArray();
+```
+
+Two MATLAB-specific traps worth calling out explicitly:
+
+- **`landmarks` is 0-based** (matching `cycleVertices`'s own convention), but MATLAB arrays are 1-based — index
+  `points` with `points(landmarks + 1, :)`, not `points(landmarks, :)`.
+- **Use `sprintf('%.17g', 2 * R)`, not `num2str(2 * R)`**, to build the `maxFiltrationValue` option string.
+  `num2str`'s own default precision silently rounds most covering radii, which can shift which simplices
+  actually fall under the threshold — `sprintf('%.17g', ...)` round-trips a `double` exactly.
+
+`coveringRadiusFromPoints`/`coveringRadiusFromDistanceMatrix` compute `R` for a landmark set you didn't get
+from `selectLandmarksFrom*` (hand-picked, or reused from elsewhere) — same `2R` recipe, different source for
+the landmarks. Every entry point in this two-step family validates its own `landmarks` array eagerly (non-empty,
+0-based in range, no duplicates), with a message that specifically flags an index equal to `points.length` as a
+likely 1-based-indexing mistake.
+
+From the CLI, the same two steps are two separate invocations:
+
+```
+tda4j --select-landmarks --num-landmarks 50 --output landmarks.txt points.csv
+# tda4j: covering radius R = 0.12081466774937936 -- e.g. pass '0.24162933549875873' as --max-filtration-value...
+
+tda4j --landmarks-file landmarks.txt --complex witness --max-filtration-value 0.24162933549875873 points.csv
+```
+
+The first writes one 0-based landmark index per line to `landmarks.txt` (plus a `# coveringRadius=...` comment
+line) and prints `R` — and the exact `2R` string to pass on — to stderr; **use that printed string verbatim**,
+not a value you round or retype by hand (the same truncation trap `sprintf('%.17g')` avoids above applies
+here too). The second invocation reads the landmarks file back in and computes the barcode. `--complex witness`
+on the second line is optional (that combination of flags can only ever mean a witness complex) but
+accepted if you type it out of habit from the one-shot form.
+
 ### Cubical complexes and images
 
 ```scala 3
@@ -215,7 +277,8 @@ several formats (`--output-format`: `text`, `csv`, `gudhi`, `dipha`, `perseus`).
 full flag list; the main ones mirror the MATLAB options one-to-one: `--complex` (`vr`/`alpha`/`cech`/
 `witness`), `--engine`, `--max-dimension`, `--max-filtration-value`, `--field`, `--representatives` (also
 print each bar's representative chain), and (for `--complex=witness`) `--num-landmarks`, `--witness-variant`,
-`--landmark-selector`, `--landmark-seed`, `--nu`.
+`--landmark-selector`, `--landmark-seed`, `--nu`. `--select-landmarks`/`--landmarks-file` split that same
+witness-complex computation into the two-step recipe described above.
 
 ## Calling from MATLAB or Java
 
@@ -242,10 +305,15 @@ bars = result.toArray();
 
 Entry points: `computeFromPoints`/`computeFromDistanceMatrix` (Vietoris-Rips/alpha/Cech/witness, from a point
 cloud or a precomputed distance matrix — alpha and Cech need real coordinates, so they're only available from
-the points overload; witness works from either, exactly like `vr`), and `computeFromCubicalImage`/
-`computeFromImage` (cubical persistence from a flat array + shape, or a 2D pixel matrix directly). Every
-method has a no-options overload and one taking a flat, alternating key/value `String[]` of options — so
-adding a new option in the future never changes a method's call signature:
+the points overload; witness works from either, exactly like `vr`), `computeFromCubicalImage`/
+`computeFromImage` (cubical persistence from a flat array + shape, or a 2D pixel matrix directly), and the
+two-step witness recipe's own four entry points -- `selectLandmarksFromPoints`/`selectLandmarksFromDistanceMatrix`
+(→ `LandmarkSelectionResult`) and `computeFromPointsAndLandmarks`/`computeFromDistanceMatrixAndLandmarks`, plus
+the `coveringRadiusFromPoints`/`coveringRadiusFromDistanceMatrix` query pair -- covered in their own section
+above rather than the table below, since they take an explicit `int[] landmarks` parameter and each has its OWN
+(stricter) recognized-options set rather than sharing the table's. Every method here has a no-options overload
+and one taking a flat, alternating key/value `String[]` of options — so adding a new option in the future never
+changes a method's call signature:
 
 | Option | Values | Default |
 |---|---|---|

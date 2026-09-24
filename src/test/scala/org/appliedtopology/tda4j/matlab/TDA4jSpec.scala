@@ -560,3 +560,197 @@ class TDA4jSpec extends mutable.Specification:
         (vertices.subsetOf((0 until numLandmarks).toSet) must beFalse)
     }
   }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // The two-step witness recipe: selectLandmarksFrom{Points,DistanceMatrix} (step 1) and
+  // computeFrom{Points,DistanceMatrix}AndLandmarks (step 2), an alternative to the one-shot complex=witness path
+  // above for callers who want the JavaPlex tutorial's own "pick landmarks, read R, pass 2R" recipe, or who want
+  // to reuse/inspect/hand-edit a landmark set across more than one computation. The one-shot path above is
+  // UNCHANGED by this refactor (confirmed by every test above still passing byte-for-byte); these tests cover
+  // only the new entry points.
+  // ---------------------------------------------------------------------------------------------------------
+
+  "the two-step witness recipe, through the facade" should {
+    "selectLandmarksFromPoints (maxmin, the default) matches LandmarkSelector.maxmin driven directly, for " +
+      "both the landmarks and the covering radius" in {
+        val numLandmarks = 4
+        val result = TDA4j.selectLandmarksFromPoints(points, Array("numLandmarks", numLandmarks.toString))
+        val direct = LandmarkSelector.maxmin(EuclideanMetricSpace(points), numLandmarks)
+        (result.landmarks().toSeq must beEqualTo(direct.landmarks)) and
+          (result.coveringRadius() must beEqualTo(direct.coveringRadius))
+      }
+
+    "selectLandmarksFromPoints (random) matches LandmarkSelector.random driven directly" in {
+      val numLandmarks = 4
+      val seed = 11L
+      val result = TDA4j.selectLandmarksFromPoints(
+        points,
+        Array("numLandmarks", numLandmarks.toString, "landmarkSelector", "random", "landmarkSeed", seed.toString)
+      )
+      val direct = LandmarkSelector.random(EuclideanMetricSpace(points), numLandmarks, seed)
+      (result.landmarks().toSeq must beEqualTo(direct.landmarks)) and
+        (result.coveringRadius() must beEqualTo(direct.coveringRadius))
+    }
+
+    "selectLandmarksFromDistanceMatrix agrees exactly with selectLandmarksFromPoints on the same cloud's own " +
+      "Euclidean distances" in {
+        val numLandmarks = 4
+        val distances = euclideanDistanceMatrix(points)
+        val viaPoints = TDA4j.selectLandmarksFromPoints(points, Array("numLandmarks", numLandmarks.toString))
+        val viaDistances =
+          TDA4j.selectLandmarksFromDistanceMatrix(distances, Array("numLandmarks", numLandmarks.toString))
+        (viaDistances.landmarks().toSeq must beEqualTo(viaPoints.landmarks().toSeq)) and
+          (viaDistances.coveringRadius() must beEqualTo(viaPoints.coveringRadius()))
+      }
+
+    "the one-shot complex=witness path equals step 1 (selectLandmarksFromPoints) followed by step 2 " +
+      "(computeFromPointsAndLandmarks) with the SAME landmarks, for both variants" in {
+        val numLandmarks = 4
+        def oneShot(variant: String): List[(Int, Double, Double)] =
+          triples(
+            TDA4j
+              .computeFromPoints(
+                points,
+                Array("complex", "witness", "numLandmarks", numLandmarks.toString, "witnessVariant", variant)
+              )
+              .toArray()
+          ).sorted
+        def twoStep(variant: String): List[(Int, Double, Double)] =
+          val selection = TDA4j.selectLandmarksFromPoints(points, Array("numLandmarks", numLandmarks.toString))
+          triples(
+            TDA4j
+              .computeFromPointsAndLandmarks(points, selection.landmarks(), Array("witnessVariant", variant))
+              .toArray()
+          ).sorted
+        (oneShot("lazy") must beEqualTo(twoStep("lazy"))) and (oneShot("general") must beEqualTo(twoStep("general")))
+      }
+
+    // THE discriminating test: {5,2,0} is deliberately NOT the set maxmin(numLandmarks=3) would choose from
+    // this cloud ({0,4,5}, confirmed by hand -- points 4 and 5 tie at sqrt(4.25), 4 wins the tie). If
+    // computeFromPointsAndLandmarks silently ignored its own `landmarks` argument and re-ran maxmin internally
+    // instead, this would still "pass" a test built on maxmin's own output (as the one-shot-equals-two-step
+    // test above necessarily is, by construction) -- it can only be caught by landmarks maxmin would not have
+    // picked. Compared against PackedRipserCohomologyContext driven directly over the SAME explicit, UNSORTED
+    // array, as sorted lists (not `.toSet` -- see .claude/WORKLOG-witness-complex.md's own lesson about
+    // multiplicity), plus a direct cycleVertices check.
+    "computeFromPointsAndLandmarks uses the landmarks it is GIVEN, not a freshly-selected set" in {
+      val landmarks = Array(5, 2, 0)
+      val result = TDA4j.computeFromPointsAndLandmarks(points, landmarks)
+      val viaFacade = triples(result.toArray()).sorted
+
+      val ff = new FiniteField(2)
+      import ff.given
+      val metricSpace = EuclideanMetricSpace(points)
+      val wms = WitnessMetricSpace(WitnessGeometry(metricSpace, landmarks.toIndexedSeq), nu = 2)
+
+      def toDouble(e: BarcodeEndpoint[Double]): Double = e match
+        case NegativeInfinity() => Double.NegativeInfinity
+        case PositiveInfinity() => Double.PositiveInfinity
+        case ClosedEndpoint(v)  => v
+        case OpenEndpoint(v)    => v
+
+      val direct = PackedRipserCohomologyContext[ff.Fp](wms, 2)
+        .persistentCohomology()
+        .map(bar => (bar.dim, toDouble(bar.lower), toDouble(bar.upper)))
+        .sorted
+
+      val allVertices = (0 until result.size()).flatMap(i => result.cycleVertices(i).flatten).toSet
+
+      (viaFacade must beEqualTo(direct)) and
+        (allVertices.forall(landmarks.contains) must beTrue) and
+        (allVertices.subsetOf((0 until landmarks.length).toSet) must beFalse)
+    }
+
+    "reordering the SAME landmark set changes local indices/tie-breaks but not the resulting barcode" in {
+      val barcodeA = triples(TDA4j.computeFromPointsAndLandmarks(points, Array(0, 2, 5)).toArray()).sorted
+      val barcodeB = triples(TDA4j.computeFromPointsAndLandmarks(points, Array(5, 0, 2)).toArray()).sorted
+      barcodeA must beEqualTo(barcodeB)
+    }
+
+    "computeFromDistanceMatrixAndLandmarks agrees exactly with computeFromPointsAndLandmarks on the same " +
+      "cloud's own Euclidean distances, for the SAME hand-picked, unsorted landmark array used above" in {
+        val landmarks = Array(5, 2, 0)
+        val distances = euclideanDistanceMatrix(points)
+        val viaDistances = triples(TDA4j.computeFromDistanceMatrixAndLandmarks(distances, landmarks).toArray()).sorted
+        val viaPoints = triples(TDA4j.computeFromPointsAndLandmarks(points, landmarks).toArray()).sorted
+        viaDistances must beEqualTo(viaPoints)
+      }
+
+    "computeFromPointsAndLandmarks rejects an invalid landmark array: empty, duplicate, negative, or out of " +
+      "range (including exactly points.length, hinting at a 1-based-indexing mistake)" in {
+        (TDA4j.computeFromPointsAndLandmarks(points, Array.empty[Int]) must throwA[IllegalArgumentException]) and
+          (TDA4j.computeFromPointsAndLandmarks(points, Array(0, 1, 1)) must throwA[IllegalArgumentException]) and
+          (TDA4j.computeFromPointsAndLandmarks(points, Array(0, -1)) must throwA[IllegalArgumentException]) and
+          (TDA4j
+            .computeFromPointsAndLandmarks(points, Array(0, points.length)) must throwA[IllegalArgumentException]) and
+          (TDA4j.computeFromPointsAndLandmarks(points, Array(0, points.length + 5)) must throwA[
+            IllegalArgumentException
+          ])
+      }
+
+    "computeFromPointsAndLandmarks rejects numLandmarks/landmarkSelector/landmarkSeed -- landmarks are given " +
+      "directly here, not selected" in {
+        val landmarks = Array(0, 2, 5)
+        (TDA4j.computeFromPointsAndLandmarks(points, landmarks, Array("numLandmarks", "3")) must throwA[
+          IllegalArgumentException
+        ]) and
+          (TDA4j.computeFromPointsAndLandmarks(points, landmarks, Array("landmarkSelector", "maxmin")) must throwA[
+            IllegalArgumentException
+          ]) and
+          (TDA4j.computeFromPointsAndLandmarks(points, landmarks, Array("landmarkSeed", "0")) must throwA[
+            IllegalArgumentException
+          ])
+      }
+
+    "computeFromPointsAndLandmarks accepts complex=witness but rejects any other complex value" in {
+      val landmarks = Array(0, 2, 5)
+      (TDA4j.computeFromPointsAndLandmarks(points, landmarks, Array("complex", "vr")) must throwA[
+        IllegalArgumentException
+      ]) and
+        (TDA4j.computeFromPointsAndLandmarks(points, landmarks, Array("complex", "witness")).size() must be_>=(0))
+    }
+
+    "selectLandmarksFromPoints rejects options meaningful only to step 2 (complex, witnessVariant, engine, ...)" in {
+      (TDA4j.selectLandmarksFromPoints(points, Array("numLandmarks", "3", "complex", "witness")) must throwA[
+        IllegalArgumentException
+      ]) and
+        (TDA4j.selectLandmarksFromPoints(points, Array("numLandmarks", "3", "witnessVariant", "lazy")) must throwA[
+          IllegalArgumentException
+        ])
+    }
+
+    "computeFromPointsAndLandmarks refuses engine=ripser/chunks with witnessVariant=general, exactly like the " +
+      "one-shot path" in {
+        val landmarks = Array(0, 2, 5)
+        (TDA4j.computeFromPointsAndLandmarks(
+          points,
+          landmarks,
+          Array("witnessVariant", "general", "engine", "ripser")
+        ) must throwA[IllegalArgumentException]) and
+          (TDA4j.computeFromPointsAndLandmarks(
+            points,
+            landmarks,
+            Array("witnessVariant", "general", "engine", "chunks")
+          ) must throwA[IllegalArgumentException]) and
+          (TDA4j
+            .computeFromPointsAndLandmarks(points, landmarks, Array("witnessVariant", "general"))
+            .size() must be_>=(0))
+      }
+
+    "coveringRadiusFromPoints matches LandmarkSelector.coveringRadius driven directly, for a hand-picked " +
+      "landmark set" in {
+        val landmarks = Array(0, 2, 5)
+        val viaFacade = TDA4j.coveringRadiusFromPoints(points, landmarks)
+        val direct = LandmarkSelector.coveringRadius(EuclideanMetricSpace(points), landmarks.toIndexedSeq)
+        viaFacade must beEqualTo(direct)
+      }
+
+    "coveringRadiusFromDistanceMatrix agrees exactly with coveringRadiusFromPoints on the same cloud's own " +
+      "Euclidean distances" in {
+        val landmarks = Array(0, 2, 5)
+        val distances = euclideanDistanceMatrix(points)
+        TDA4j.coveringRadiusFromDistanceMatrix(distances, landmarks) must beEqualTo(
+          TDA4j.coveringRadiusFromPoints(points, landmarks)
+        )
+      }
+  }

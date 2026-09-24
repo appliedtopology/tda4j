@@ -188,3 +188,137 @@ class CLISpec extends mutable.Specification:
       ) must beEqualTo(1)
     }
   }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // The two-step witness recipe's own CLI surface: --select-landmarks (step 1) and --landmarks-file (step 2).
+  // No CLI-side logic exists for EITHER beyond option translation and the tiny landmarks-file reader/writer
+  // (`readLandmarksFile`/`writeLandmarkSelection`) -- every conflict check below relies on TDA4j's own strict
+  // allowlists doing the real validation, exactly like `--complex` + cubical-grid above.
+  // ---------------------------------------------------------------------------------------------------------
+
+  "the two-step witness recipe" should {
+    val points =
+      Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0), Array(0.5, 2.0), Array(2.0, 0.5))
+
+    "reproduce the one-shot barcode via two real file-based invocations: --select-landmarks then " +
+      "--landmarks-file" >> {
+        val inputPath = tempFile(".csv")
+        CSV.writePointCloud(inputPath, points)
+        val landmarksPath = tempFile(".txt")
+
+        val step1Buffer = new ByteArrayOutputStream()
+        val step1Exit = TDA4jCLI.run(
+          Seq("--select-landmarks", "--num-landmarks", "4", "--output", landmarksPath, inputPath),
+          new PrintStream(step1Buffer)
+        )
+
+        val step2Buffer = new ByteArrayOutputStream()
+        val step2Exit = TDA4jCLI.run(
+          Seq("--landmarks-file", landmarksPath, "--complex", "witness", inputPath),
+          new PrintStream(step2Buffer)
+        )
+        val cliLines = step2Buffer.toString.linesIterator.toSeq
+
+        val landmarks = TDA4jCLI.readLandmarksFile(landmarksPath)
+        val direct = TDA4j.computeFromPointsAndLandmarks(points, landmarks)
+        val directLines = TDA4jCLI.toBars(direct).map(_.toString)
+
+        // The actual "reproduces the ONE-SHOT barcode" claim in this test's own name -- maxmin(numLandmarks=4)
+        // is deterministic (firstLandmark=0 by default), so the one-shot path picks the SAME landmarks the
+        // two-step run above did, and must agree exactly.
+        val oneShot = TDA4j.computeFromPoints(points, Array("complex", "witness", "numLandmarks", "4"))
+        val oneShotLines = TDA4jCLI.toBars(oneShot).map(_.toString)
+
+        (step1Exit must beEqualTo(0)) and (step2Exit must beEqualTo(0)) and
+          (cliLines must beEqualTo(directLines)) and (cliLines must beEqualTo(oneShotLines))
+      }
+
+    "--select-landmarks writes the SAME landmarks TDA4j.selectLandmarksFromPoints would, plus a parseable " +
+      "coveringRadius comment line" >> {
+        val inputPath = tempFile(".csv")
+        CSV.writePointCloud(inputPath, points)
+        val landmarksPath = tempFile(".txt")
+
+        TDA4jCLI.run(
+          Seq("--select-landmarks", "--num-landmarks", "4", "--output", landmarksPath, inputPath),
+          new PrintStream(new ByteArrayOutputStream())
+        )
+
+        val direct = TDA4j.selectLandmarksFromPoints(points, Array("numLandmarks", "4"))
+        val fileLines = scala.io.Source.fromFile(landmarksPath).getLines().toSeq
+        val commentLine = fileLines.find(_.startsWith("#"))
+
+        (TDA4jCLI.readLandmarksFile(landmarksPath) must beEqualTo(direct.landmarks())) and
+          (commentLine must beSome(s"# coveringRadius=${direct.coveringRadius()}"))
+      }
+
+    "reject --select-landmarks combined with --landmarks-file" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, points)
+      val buffer = new ByteArrayOutputStream()
+      TDA4jCLI.run(
+        Seq("--select-landmarks", "--landmarks-file", "somefile.txt", "--num-landmarks", "1", path),
+        new PrintStream(buffer)
+      ) must beEqualTo(1)
+    }
+
+    "reject --select-landmarks combined with --representatives" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, points)
+      val buffer = new ByteArrayOutputStream()
+      TDA4jCLI.run(
+        Seq("--select-landmarks", "--num-landmarks", "3", "--representatives", path),
+        new PrintStream(buffer)
+      ) must beEqualTo(1)
+    }
+
+    "reject --select-landmarks combined with a non-text --output-format" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, points)
+      val buffer = new ByteArrayOutputStream()
+      TDA4jCLI.run(
+        Seq("--select-landmarks", "--num-landmarks", "3", "--output-format", "csv", "--output", "out.csv", path),
+        new PrintStream(buffer)
+      ) must beEqualTo(1)
+    }
+
+    "reject --select-landmarks with a cubical-image --input-format" >> {
+      val path = tempFile(".txt")
+      java.nio.file.Files.write(java.nio.file.Paths.get(path), "2\n2\n2\n0\n1\n2\n3\n".getBytes)
+      val buffer = new ByteArrayOutputStream()
+      TDA4jCLI.run(
+        Seq("--input-format", "perseus-cubical", "--select-landmarks", "--num-landmarks", "1", path),
+        new PrintStream(buffer)
+      ) must beEqualTo(1)
+    }
+
+    "reject --landmarks-file with a cubical-image --input-format" >> {
+      val path = tempFile(".txt")
+      java.nio.file.Files.write(java.nio.file.Paths.get(path), "2\n2\n2\n0\n1\n2\n3\n".getBytes)
+      val buffer = new ByteArrayOutputStream()
+      TDA4jCLI.run(
+        Seq("--input-format", "perseus-cubical", "--landmarks-file", "somefile.txt", path),
+        new PrintStream(buffer)
+      ) must beEqualTo(1)
+    }
+
+    "readLandmarksFile skips blank lines and '#' comments, and a malformed --landmarks-file causes a clean " +
+      "exit code 1 (not a raw stack trace) through a real run" >> {
+        val path = tempFile(".txt")
+        java.nio.file.Files.write(
+          java.nio.file.Paths.get(path),
+          "# coveringRadius=0.5\n0\n\n2\n# a trailing comment\n5\n".getBytes
+        )
+        val badPath = tempFile(".txt")
+        java.nio.file.Files.write(java.nio.file.Paths.get(badPath), "0\nnotanumber\n2\n".getBytes)
+        val inputPath = tempFile(".csv")
+        CSV.writePointCloud(inputPath, points) // a genuinely valid input, so the failure below is attributable
+        // to the landmarks file alone, not an unrelated bad --input-format
+
+        (TDA4jCLI.readLandmarksFile(path) must beEqualTo(Array(0, 2, 5))) and
+          (TDA4jCLI.run(
+            Seq("--landmarks-file", badPath, "--complex", "witness", inputPath),
+            new PrintStream(new ByteArrayOutputStream())
+          ) must beEqualTo(1))
+      }
+  }

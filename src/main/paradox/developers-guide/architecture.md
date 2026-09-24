@@ -26,7 +26,8 @@ If a piece of Scala 3 syntax below looks unfamiliar, see the @ref:[Scala 3 prime
 - **`alpha`** — `AlphaShapes` (`HelixDelaunay`/`AlphaShapeDQP`), `AlphaComplexDQP`.
 - **`io`** — file-format adaptors: `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
 - **`cli`** — the `tda4j` executable (`TDA4jConf`, `TDA4jCLI`), a thin translator over `matlab.TDA4j`/`io`.
-- **`matlab`** — `TDA4j`/`PersistenceResult`, the plain-primitives facade for MATLAB and other Java callers.
+- **`matlab`** — `TDA4j`/`PersistenceResult`/`LandmarkSelectionResult`, the plain-primitives facade for MATLAB
+  and other Java callers.
 - root (`org.appliedtopology.tda4j` itself) — `package.scala` (`TDAContext`), the user-facing Scala facade.
 
 **Load-bearing import rule**: every file that reaches across a subpackage boundary does it via

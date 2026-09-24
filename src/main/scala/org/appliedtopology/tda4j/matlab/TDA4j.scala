@@ -12,13 +12,23 @@ import org.appliedtopology.tda4j.barcode.*
 import scala.collection.mutable
 
 /** Static entry point for computing persistent (co)homology from MATLAB (or any plain-Java caller) via MATLAB's
-  * built-in Java interface. Every public method takes/returns only `double`, `int`, `String`, `double[][]`, or
+  * built-in Java interface. Every public method takes/returns only `double`, `int`, `String`, `double[][]`, `int[]`, or
   * `String[]` -- deliberately not `java.util.Map` or anything generic, since MATLAB's Java bridge doesn't marshal those
-  * reliably. See `WORKLOG-matlab-api.md` for the full design rationale and what's still open, and `PersistenceResult`
-  * for what comes back.
+  * reliably. See `WORKLOG-matlab-api.md` for the full design rationale and what's still open, `PersistenceResult` for
+  * what `computeFrom*` returns, and `LandmarkSelectionResult` for what `selectLandmarksFrom*` returns.
+  *
+  * `selectLandmarksFrom{Points,DistanceMatrix}`/`computeFrom{Points,DistanceMatrix}AndLandmarks`/
+  * `coveringRadiusFrom{Points,DistanceMatrix}` (further down this file) are a separate, TWO-STEP alternative to the
+  * one-shot `complex=witness` path below -- pick landmarks and read back the covering radius `R` first, then compute
+  * (or query `R` for a landmark set you picked yourself) -- for the JavaPlex tutorial's own "pick landmarks, read R,
+  * use 2R" recipe, which the one-shot path can't reproduce (it never reports `R` back). Each of those entry points
+  * documents its own, STRICTER recognized-options set on itself, separate from the list below (see
+  * `.claude/WORKLOG-witness-two-step-api.md`).
   *
   * Options are passed as a flat, alternating key/value `String[]` (`{"engine","ripser","maxDimension","3"}`) rather
-  * than fixed parameters, so that adding a new option never changes any method's call signature. Recognized keys:
+  * than fixed parameters, so that adding a new option never changes any method's call signature. Recognized keys
+  * (`computeFromPoints`/`computeFromDistanceMatrix`/`computeFromCubicalImage`/`computeFromImage` only -- see above for
+  * the two-step entry points' own separate lists):
   *
   *   - `"complex"`: `"vr"` (default), `"alpha"`, `"cech"`, or `"witness"`.
   *   - `"engine"`: `"ripser"` (default for `complex=vr`, and for `complex=witness` with `witnessVariant=lazy`; backed
@@ -164,8 +174,111 @@ object TDA4j:
   def computeFromDistanceMatrix(distances: Array[Array[Double]], options: Array[String]): PersistenceResult =
     validateSquare(distances)
     val opts = parseOptions(options)
-    val metricSpace = ExplicitMetricSpace(distances.toIndexedSeq.map(_.toIndexedSeq))
-    dispatch(opts, metricSpace, None)
+    dispatch(opts, explicitMetricSpace(distances), None)
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // the two-step witness-complex recipe: select landmarks (and read back R), THEN compute -- an alternative to
+  // computeFrom{Points,DistanceMatrix}'s own one-shot complex=witness path (which stays exactly as it was: pick
+  // landmarks internally, compute, return only the barcode). Use the two-step form when you want the JavaPlex
+  // tutorial's own recipe (pick landmarks, read R, pass 2R as maxFiltrationValue) or want to reuse/inspect/
+  // hand-edit a landmark set across more than one computation. See the user guide's "Witness complexes" section
+  // for a worked MATLAB example.
+  // ---------------------------------------------------------------------------------------------------------------
+
+  def selectLandmarksFromPoints(points: Array[Array[Double]], options: Array[String]): LandmarkSelectionResult =
+    validatePoints(points)
+    val opts = parseOptionsWithKeys(options, landmarkSelectionKeys)
+    val selection = resolveLandmarkSelection(opts, EuclideanMetricSpace(points))
+    new LandmarkSelectionResult(selection.landmarks.toArray, selection.coveringRadius)
+
+  /** Step 1 (point-cloud input) of the two-step witness recipe: pick landmarks via `"landmarkSelector"` (`"maxmin"`
+    * default or `"random"`, seeded by `"landmarkSeed"`) and read back the covering radius `R` -- without yet building
+    * any complex. Recognizes ONLY `"numLandmarks"` (REQUIRED), `"landmarkSelector"`, and `"landmarkSeed"` -- a STRICTER
+    * allowlist than `computeFromPoints`'s own (see `landmarkSelectionKeys`'s own doc for why). Pass
+    * `LandmarkSelectionResult.landmarks()` straight into `computeFromPointsAndLandmarks` for step 2, or into
+    * `coveringRadiusFromPoints` if you want `R` for a DIFFERENT (e.g. hand-edited) landmark set.
+    */
+  def selectLandmarksFromPoints(points: Array[Array[Double]]): LandmarkSelectionResult =
+    selectLandmarksFromPoints(points, Array.empty[String])
+
+  def selectLandmarksFromDistanceMatrix(
+    distances: Array[Array[Double]],
+    options: Array[String]
+  ): LandmarkSelectionResult =
+    validateSquare(distances)
+    val opts = parseOptionsWithKeys(options, landmarkSelectionKeys)
+    val selection = resolveLandmarkSelection(opts, explicitMetricSpace(distances))
+    new LandmarkSelectionResult(selection.landmarks.toArray, selection.coveringRadius)
+
+  /** Step 1 (distance-matrix input) -- see `selectLandmarksFromPoints`'s own doc; identical recipe, just from a
+    * precomputed pairwise-distance matrix instead of point coordinates.
+    */
+  def selectLandmarksFromDistanceMatrix(distances: Array[Array[Double]]): LandmarkSelectionResult =
+    selectLandmarksFromDistanceMatrix(distances, Array.empty[String])
+
+  def computeFromPointsAndLandmarks(
+    points: Array[Array[Double]],
+    landmarks: Array[Int],
+    options: Array[String]
+  ): PersistenceResult =
+    validatePoints(points)
+    val metricSpace = EuclideanMetricSpace(points)
+    validateLandmarks(landmarks, metricSpace.size)
+    val opts = parseOptionsWithKeys(options, witnessFromLandmarksKeys)
+    dispatchWitnessFromLandmarks(opts, metricSpace, landmarks.toIndexedSeq)
+
+  /** Step 2 (point-cloud input) of the two-step witness recipe: compute the witness complex barcode for an EXPLICIT,
+    * caller-supplied landmark set (0-based ambient indices into `points`) -- typically
+    * `LandmarkSelectionResult.landmarks()` from step 1, but any hand-picked or reused set works too; this method never
+    * re-selects landmarks itself. Always computes `complex=witness` (there is nothing else it could compute) --
+    * `"complex"` is accepted as an option ONLY when its value is `"witness"`, so a caller migrating from the one-shot
+    * `computeFromPoints` who still types that flag out of habit isn't silently ignored, but a genuine mismatch (e.g. a
+    * stray `"complex","vr"`) IS caught. Recognizes `"witnessVariant"`, `"nu"`, `"engine"`, `"maxDimension"`,
+    * `"maxFiltrationValue"`, `"field"`, `"prime"`, `"epsilon"` -- see `computeFromPoints`'s own doc for what each
+    * means; NOT `"numLandmarks"`/`"landmarkSelector"`/ `"landmarkSeed"`, since landmarks are supplied directly here,
+    * not selected.
+    *
+    * `landmarks` must be non-empty, every entry in `[0, points.length)`, and free of duplicates -- checked eagerly with
+    * an actionable message (an out-of-range index equal to `points.length` specifically hints at a 1-based-indexing
+    * mistake, MATLAB's own default convention).
+    */
+  def computeFromPointsAndLandmarks(points: Array[Array[Double]], landmarks: Array[Int]): PersistenceResult =
+    computeFromPointsAndLandmarks(points, landmarks, Array.empty[String])
+
+  def computeFromDistanceMatrixAndLandmarks(
+    distances: Array[Array[Double]],
+    landmarks: Array[Int],
+    options: Array[String]
+  ): PersistenceResult =
+    validateSquare(distances)
+    val metricSpace = explicitMetricSpace(distances)
+    validateLandmarks(landmarks, metricSpace.size)
+    val opts = parseOptionsWithKeys(options, witnessFromLandmarksKeys)
+    dispatchWitnessFromLandmarks(opts, metricSpace, landmarks.toIndexedSeq)
+
+  /** Step 2 (distance-matrix input) -- see `computeFromPointsAndLandmarks`'s own doc; identical recipe, just from a
+    * precomputed pairwise-distance matrix instead of point coordinates.
+    */
+  def computeFromDistanceMatrixAndLandmarks(distances: Array[Array[Double]], landmarks: Array[Int]): PersistenceResult =
+    computeFromDistanceMatrixAndLandmarks(distances, landmarks, Array.empty[String])
+
+  /** The covering radius `R = max_x min_{l in landmarks} d(x,l)` of an ARBITRARY landmark set -- not necessarily one
+    * `selectLandmarksFrom*` chose (e.g. a hand-picked or externally-computed set) -- for the same `2R` threshold recipe
+    * `LandmarkSelectionResult.coveringRadius()` supports for a `selectLandmarksFrom*`-chosen set. Same landmark
+    * validation as `computeFromPointsAndLandmarks`.
+    */
+  def coveringRadiusFromPoints(points: Array[Array[Double]], landmarks: Array[Int]): Double =
+    validatePoints(points)
+    val metricSpace = EuclideanMetricSpace(points)
+    validateLandmarks(landmarks, metricSpace.size)
+    LandmarkSelector.coveringRadius(metricSpace, landmarks.toIndexedSeq)
+
+  /** See `coveringRadiusFromPoints`'s own doc; identical, just from a precomputed pairwise-distance matrix. */
+  def coveringRadiusFromDistanceMatrix(distances: Array[Array[Double]], landmarks: Array[Int]): Double =
+    validateSquare(distances)
+    val metricSpace = explicitMetricSpace(distances)
+    validateLandmarks(landmarks, metricSpace.size)
+    LandmarkSelector.coveringRadius(metricSpace, landmarks.toIndexedSeq)
 
   def computeFromCubicalImage(shape: Array[Int], flatValues: Array[Double]): PersistenceResult =
     computeFromCubicalImage(shape, flatValues, Array.empty[String])
@@ -238,7 +351,28 @@ object TDA4j:
     "nu"
   )
 
-  private def parseOptions(options: Array[String]): Map[String, String] =
+  /** `numLandmarks`/`landmarkSelector`/`landmarkSeed` only -- the STRICT allowlist `selectLandmarksFromPoints`/
+    * `selectLandmarksFromDistanceMatrix` (step 1 of the two-step witness recipe) parse against, via
+    * `parseOptionsWithKeys` below rather than the permissive `recognizedKeys` every one-shot method uses. This matters
+    * more here than it would elsewhere: a caller who passes `numLandmarks` alongside an ALREADY-CHOSEN landmark array
+    * in step 2 (`witnessFromLandmarksKeys` below, which deliberately excludes it) would otherwise have that option
+    * silently dropped -- a quiet, easy-to-make footgun a strict, per-entry-point allowlist catches immediately instead.
+    */
+  private val landmarkSelectionKeys = Set("numlandmarks", "landmarkselector", "landmarkseed")
+
+  /** Step 2 of the two-step witness recipe (`computeFromPointsAndLandmarks`/`computeFromDistanceMatrixAndLandmarks`):
+    * landmarks are supplied directly, so `numLandmarks`/`landmarkSelector`/`landmarkSeed` are deliberately NOT here
+    * (see `landmarkSelectionKeys`'s own doc for why silently accepting them would be worse than rejecting them).
+    * `"complex"` IS allowed, but only ever checked against `"witness"` -- these methods are inherently
+    * `complex=witness` (there is nothing else they could compute), but a CLI/MATLAB caller migrating from the one-shot
+    * entry point will naturally still type `--complex witness`/`"complex","witness"` out of habit; accepting that exact
+    * value and rejecting any OTHER value catches a genuine mismatch (e.g. a copy-pasted `complex=vr`) instead of
+    * silently ignoring it.
+    */
+  private val witnessFromLandmarksKeys =
+    Set("complex", "witnessvariant", "nu", "engine", "maxdimension", "maxfiltrationvalue", "field", "prime", "epsilon")
+
+  private def parseOptionsWithKeys(options: Array[String], allowedKeys: Set[String]): Map[String, String] =
     if options.length % 2 != 0 then
       throw new IllegalArgumentException(
         s"options must be a flat key,value,key,value,... array (even length), got ${options.length} entries"
@@ -248,13 +382,40 @@ object TDA4j:
     while i < options.length do
       val rawKey = options(i)
       val key = rawKey.toLowerCase
-      if !recognizedKeys.contains(key) then
+      if !allowedKeys.contains(key) then
         throw new IllegalArgumentException(
-          s"unrecognized option '$rawKey'; recognized options are: ${recognizedKeys.toSeq.sorted.mkString(", ")}"
+          s"unrecognized option '$rawKey'; recognized options are: ${allowedKeys.toSeq.sorted.mkString(", ")}"
         )
       m(key) = options(i + 1)
       i += 2
     m.toMap
+
+  private def parseOptions(options: Array[String]): Map[String, String] =
+    parseOptionsWithKeys(options, recognizedKeys)
+
+  private def parseWitnessComplexOption(opts: Map[String, String]): Unit =
+    opts.get("complex").foreach { raw =>
+      if ComplexKind.parse(raw) != ComplexKind.Witness then
+        throw new IllegalArgumentException(
+          s"complex='$raw' is meaningless here: this entry point always computes a witness complex -- omit " +
+            "'complex', or pass 'witness'"
+        )
+    }
+
+  private def validateLandmarks(landmarks: Array[Int], n: Int): Unit =
+    if landmarks.isEmpty then throw new IllegalArgumentException("landmarks must have at least one entry")
+    landmarks.foreach { l =>
+      if l == n then
+        throw new IllegalArgumentException(
+          s"landmark index $l is out of range [0, $n) -- indices are 0-based; did you pass a 1-based index?"
+        )
+      if l < 0 || l >= n then throw new IllegalArgumentException(s"landmark index $l is out of range [0, $n)")
+    }
+    if landmarks.distinct.length != landmarks.length then
+      throw new IllegalArgumentException(
+        "landmarks must not contain duplicate indices (WitnessGeometry would silently treat a repeated index " +
+          "as two distinct landmarks at distance zero from each other)"
+      )
 
   private def validatePoints(points: Array[Array[Double]]): Unit =
     if points.isEmpty then throw new IllegalArgumentException("points must have at least one row")
@@ -267,6 +428,9 @@ object TDA4j:
     val n = distances.length
     if distances.exists(_.length != n) then
       throw new IllegalArgumentException(s"distances must be square ($n x $n), got a ragged/non-square array")
+
+  private def explicitMetricSpace(distances: Array[Array[Double]]): FiniteMetricSpace[Int] =
+    ExplicitMetricSpace(distances.toIndexedSeq.map(_.toIndexedSeq))
 
   private def validateShape(shape: Array[Int], flatValues: Array[Double]): Unit =
     if shape.isEmpty then throw new IllegalArgumentException("shape must have at least one axis")
@@ -287,6 +451,85 @@ object TDA4j:
   // dispatch: string options -> concrete engine/field choice
   // ---------------------------------------------------------------------------------------------------------------
 
+  /** `"witnessVariant"` alone, defaulting to `"lazy"` -- shared by the one-shot `dispatch` (only when
+    * `complex=witness`) and step 2's `dispatchWitnessFromLandmarks` (always, since those entry points are inherently
+    * witness-only).
+    */
+  private def resolveWitnessVariant(opts: Map[String, String]): WitnessVariantKind =
+    WitnessVariantKind.parse(opts.getOrElse("witnessvariant", "lazy"))
+
+  /** `"engine"`, defaulted and validated against `witnessVariant`: `witnessVariant=general` defaults to `naive` (not a
+    * flag complex, same reasoning as `complex=alpha`/`complex=cech`'s own defaults) and refuses `ripser`/`chunks`
+    * outright; `witnessVariant=lazy` defaults to `ripser` (it really is a flag complex -- see
+    * `streams.WitnessMetricSpace`'s own doc) and allows all four. Pulled out of `dispatch`'s own
+    * `(complex, engine) match` refusal block so step 2 gets the identical default-and-refusal behavior without
+    * re-deriving it.
+    */
+  private def resolveWitnessEngine(opts: Map[String, String], witnessVariant: WitnessVariantKind): EngineKind =
+    val engine = EngineKind.parse(
+      opts.getOrElse("engine", if witnessVariant == WitnessVariantKind.General then "naive" else "ripser")
+    )
+    if witnessVariant == WitnessVariantKind.General then
+      engine match
+        case EngineKind.Ripser =>
+          throw new IllegalArgumentException(
+            "engine=ripser cannot be used with complex=witness/witnessVariant=general: the general witness " +
+              "complex is not a flag complex (see streams.WitnessCofaceSimplexStream's own doc), so " +
+              "PackedRipserCohomologyContext's diameter-based optimizations do not apply -- use " +
+              "witnessVariant=lazy instead, or engine=naive/cohomology."
+          )
+        case EngineKind.Chunks =>
+          throw new IllegalArgumentException(
+            "engine=chunks is not offered for complex=witness/witnessVariant=general: use witnessVariant=lazy " +
+              "instead, or engine=naive/cohomology."
+          )
+        case _ => ()
+    engine
+
+  private def resolveWitnessNu(opts: Map[String, String]): Int =
+    opts.get("nu").map(parseIntOption("nu", _)).getOrElse(2)
+
+  /** `"numLandmarks"` (required) + `"landmarkSelector"`/`"landmarkSeed"` -- landmark SELECTION, shared by the one-shot
+    * `dispatch` (only when `complex=witness`) and step 1 (`selectLandmarksFromPoints`/
+    * `selectLandmarksFromDistanceMatrix`, always). Step 2 never calls this: its landmarks are supplied directly, not
+    * selected.
+    */
+  private def resolveLandmarkSelection(
+    opts: Map[String, String],
+    metricSpace: FiniteMetricSpace[Int]
+  ): LandmarkSelection =
+    val numLandmarks = opts
+      .get("numlandmarks")
+      .map(parseIntOption("numLandmarks", _))
+      .getOrElse(throw new IllegalArgumentException("option 'numLandmarks' is required"))
+    opts.getOrElse("landmarkselector", "maxmin").toLowerCase match
+      case "maxmin" => LandmarkSelector.maxmin(metricSpace, numLandmarks)
+      case "random" =>
+        val seed = opts.get("landmarkseed").map(parseIntOption("landmarkSeed", _)).getOrElse(0)
+        LandmarkSelector.random(metricSpace, numLandmarks, seed.toLong)
+      case other =>
+        throw new IllegalArgumentException(s"unrecognized landmarkSelector '$other'; expected 'maxmin' or 'random'")
+
+  /** `"field"`/`"prime"`/`"epsilon"` -> a resolved coefficient type `C`, shared by `dispatch` (the one-shot path) and
+    * step 2's `dispatchWitnessFromLandmarks`, so the `Z`/`R` branching -- and the `given C is Field` each branch brings
+    * into scope -- exists in exactly one place for both. (`dispatchCubical` has its own, still-separate copy of the
+    * identical `Z`/`R` match -- not routed through this helper in this pass, since the cubical path isn't part of what
+    * this arc touches or tests; a future session could fold it in too.) `compute` is a polymorphic function value so
+    * `C` (and the `given` it needs) stay resolved together, at the call site, rather than threading a `C` type
+    * parameter and a separate `toDouble: C => Double` through every caller by hand.
+    */
+  private def dispatchByField[T](opts: Map[String, String])(compute: [C] => (C => Double) => (C is Field) ?=> T): T =
+    CoefficientKind.parse(opts.getOrElse("field", "z")) match
+      case CoefficientKind.Z =>
+        val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(2)
+        val ff = new FiniteField(prime)
+        import ff.given
+        compute[ff.Fp](_.toInt.toDouble)
+      case CoefficientKind.R =>
+        val epsilon = opts.get("epsilon").map(parseDoubleOption("epsilon", _)).getOrElse(1e-9)
+        given Double is Field = Field.DoubleApproximated(epsilon)
+        compute[Double](identity)
+
   private def dispatch(
     opts: Map[String, String],
     metricSpace: FiniteMetricSpace[Int],
@@ -298,17 +541,18 @@ object TDA4j:
     // like complex=vr -- a flag complex, defaults to ripser; general behaves like complex=alpha/cech -- not a
     // flag complex, defaults to naive).
     val witnessVariant =
-      if complex == ComplexKind.Witness then WitnessVariantKind.parse(opts.getOrElse("witnessvariant", "lazy"))
+      if complex == ComplexKind.Witness then resolveWitnessVariant(opts)
       else WitnessVariantKind.Lazy // unused for any other complex; a harmless placeholder, never consulted below
 
-    val engine = EngineKind.parse(
-      opts.getOrElse(
-        "engine",
-        if complex == ComplexKind.Alpha || complex == ComplexKind.Cech then "naive"
-        else if complex == ComplexKind.Witness && witnessVariant == WitnessVariantKind.General then "naive"
-        else "ripser"
-      )
-    )
+    val engine =
+      if complex == ComplexKind.Witness then resolveWitnessEngine(opts, witnessVariant)
+      else
+        EngineKind.parse(
+          opts.getOrElse(
+            "engine",
+            if complex == ComplexKind.Alpha || complex == ComplexKind.Cech then "naive" else "ripser"
+          )
+        )
     (complex, engine) match
       case (ComplexKind.Alpha, EngineKind.Ripser) =>
         throw new IllegalArgumentException(
@@ -328,18 +572,7 @@ object TDA4j:
             "functional, not Cech's circumradius -- see CLAUDE.md's Cech complexes section. Use engine=naive or " +
             "engine=chunks for Cech complexes."
         )
-      case (ComplexKind.Witness, EngineKind.Ripser) if witnessVariant == WitnessVariantKind.General =>
-        throw new IllegalArgumentException(
-          "engine=ripser cannot be used with complex=witness/witnessVariant=general: the general witness complex " +
-            "is not a flag complex (see streams.WitnessCofaceSimplexStream's own doc), so PackedRipserCohomologyContext's " +
-            "diameter-based optimizations do not apply -- use witnessVariant=lazy instead, or engine=naive/cohomology."
-        )
-      case (ComplexKind.Witness, EngineKind.Chunks) if witnessVariant == WitnessVariantKind.General =>
-        throw new IllegalArgumentException(
-          "engine=chunks is not offered for complex=witness/witnessVariant=general: use witnessVariant=lazy instead, " +
-            "or engine=naive/cohomology."
-        )
-      case _ => ()
+      case _ => () // Witness's own refusals already enforced inside resolveWitnessEngine above.
 
     val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(2)
     val maxFiltrationValue: Option[Double] =
@@ -347,59 +580,25 @@ object TDA4j:
     val alphaBackend = opts.getOrElse("alphabackend", "helix")
 
     val witnessLandmarks: IndexedSeq[Int] =
-      if complex == ComplexKind.Witness then
-        val numLandmarks = opts
-          .get("numlandmarks")
-          .map(parseIntOption("numLandmarks", _))
-          .getOrElse(
-            throw new IllegalArgumentException("option 'numLandmarks' is required when complex=witness")
-          )
-        opts.getOrElse("landmarkselector", "maxmin").toLowerCase match
-          case "maxmin" => LandmarkSelector.maxmin(metricSpace, numLandmarks).landmarks
-          case "random" =>
-            val seed = opts.get("landmarkseed").map(parseIntOption("landmarkSeed", _)).getOrElse(0)
-            LandmarkSelector.random(metricSpace, numLandmarks, seed.toLong).landmarks
-          case other =>
-            throw new IllegalArgumentException(
-              s"unrecognized landmarkSelector '$other'; expected 'maxmin' or 'random'"
-            )
+      if complex == ComplexKind.Witness then resolveLandmarkSelection(opts, metricSpace).landmarks
       else IndexedSeq.empty // unused for any other complex
-    val witnessNu = opts.get("nu").map(parseIntOption("nu", _)).getOrElse(2)
+    val witnessNu = if complex == ComplexKind.Witness then resolveWitnessNu(opts) else 2
 
-    CoefficientKind.parse(opts.getOrElse("field", "z")) match
-      case CoefficientKind.Z =>
-        val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(2)
-        val ff = new FiniteField(prime)
-        import ff.given
-        computeGeneric[ff.Fp](
-          metricSpace,
-          points,
-          complex,
-          engine,
-          alphaBackend,
-          maxDimension,
-          maxFiltrationValue,
-          witnessVariant,
-          witnessLandmarks,
-          witnessNu,
-          _.toInt.toDouble
-        )
-      case CoefficientKind.R =>
-        val epsilon = opts.get("epsilon").map(parseDoubleOption("epsilon", _)).getOrElse(1e-9)
-        given Double is Field = Field.DoubleApproximated(epsilon)
-        computeGeneric[Double](
-          metricSpace,
-          points,
-          complex,
-          engine,
-          alphaBackend,
-          maxDimension,
-          maxFiltrationValue,
-          witnessVariant,
-          witnessLandmarks,
-          witnessNu,
-          identity
-        )
+    dispatchByField(opts) { [C] => (toDouble: C => Double) =>
+      computeGeneric[C](
+        metricSpace,
+        points,
+        complex,
+        engine,
+        alphaBackend,
+        maxDimension,
+        maxFiltrationValue,
+        witnessVariant,
+        witnessLandmarks,
+        witnessNu,
+        toDouble
+      )
+    }
 
   private def parseIntOption(name: String, raw: String): Int =
     raw.toIntOption.getOrElse(throw new IllegalArgumentException(s"option '$name' must be an integer, got '$raw'"))
@@ -595,113 +794,157 @@ object TDA4j:
             // dispatch() already rejects this for complex=cech before computeGeneric is ever reached.
             throw new IllegalArgumentException(s"engine=$engine is not offered for complex=cech")
       case ComplexKind.Witness =>
-        // Both variants grow unboundedly in dimension just like VR/Cech (up to witnessLandmarks.size - 1), so
-        // naive/cohomology need the same "build one dimension higher, drop it via fromBars" dance those use.
-        // Cells are Simplex[Int] over LOCAL landmark indices (0 until witnessLandmarks.size) -- every cellVertices
-        // below maps back through witnessLandmarks(i) to the caller's own ambient point cloud, exactly the
-        // translation streams.LazyWitnessSimplexStream/WitnessCofaceSimplexStream's own docs call for.
-        val cellVertices: (Int, Simplex[Int]) => Array[Int] =
-          (_, cell) => cell.underlying.toArray.map(witnessLandmarks)
-        witnessVariant match
-          case WitnessVariantKind.Lazy =>
-            engine match
-              case EngineKind.Ripser =>
-                // The lazy witness complex IS a flag complex under WitnessMetricSpace's own "distance" -- exactly
-                // the case PackedRipserCohomologyContext is proven for (any FiniteMetricSpace[Int] diameter), not
-                // VR-specific at all despite the class's own name -- see streams.WitnessMetricSpace's own doc and
-                // WitnessStreamSpec's direct cross-check against the naive engine.
-                val geometry = WitnessGeometry(metricSpace, witnessLandmarks)
-                val wms = WitnessMetricSpace(geometry, witnessNu)
-                val ctx =
-                  PackedRipserCohomologyContext[C](wms, requestedMaxDimension, maxFiltrationValue = maxFiltrationValue)
-                fromBars[ctx.DiameterIndex, C](
-                  ctx.persistentCohomology(),
-                  (dim, cell) => ctx.si.decodeToArray(cell.index, dim + 1).map(witnessLandmarks),
-                  toDouble,
-                  requestedMaxDimension
-                )
-              case EngineKind.Naive =>
-                val stream = LimitedCofaceSimplexStream(
-                  LazyWitnessSimplexStream(
-                    metricSpace,
-                    witnessLandmarks,
-                    witnessNu,
-                    maxFiltrationValue = maxFiltrationValue
-                  ),
-                  requestedMaxDimension + 1
-                )
-                fromBars[Simplex[Int], C](
-                  PersistenceEngine.naive[Simplex[Int], C].barcode(stream),
-                  cellVertices,
-                  toDouble,
-                  requestedMaxDimension
-                )
-              case EngineKind.Chunks =>
-                // No LimitedCofaceSimplexStream wrapping needed -- PersistenceInChunksContext handles the "+1"
-                // dance internally, and LazyWitnessSimplexStream's own iterateDimension is already naturally
-                // bounded (inherited from RipserCofaceSimplexStream), mirroring complex=cech's own chunks case.
-                val stream =
-                  LazyWitnessSimplexStream(
-                    metricSpace,
-                    witnessLandmarks,
-                    witnessNu,
-                    maxFiltrationValue = maxFiltrationValue
-                  )
-                fromBars[Simplex[Int], C](
-                  PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(stream),
-                  cellVertices,
-                  toDouble,
-                  requestedMaxDimension
-                )
-              case EngineKind.Cohomology =>
-                val stream = LimitedCofaceSimplexStream(
-                  LazyWitnessSimplexStream(
-                    metricSpace,
-                    witnessLandmarks,
-                    witnessNu,
-                    maxFiltrationValue = maxFiltrationValue
-                  ),
-                  requestedMaxDimension + 1
-                )
-                fromBars[Simplex[Int], C](
-                  PersistenceEngine.cohomology[Simplex[Int], C].barcode(stream),
-                  cellVertices,
-                  toDouble,
-                  requestedMaxDimension
-                )
-          case WitnessVariantKind.General =>
-            // Not a flag complex -- minimumEnclosingRadius is not a valid truncation here (see
-            // streams.WitnessCofaceSimplexStream's own doc), so an unset maxFiltrationValue means +Infinity,
-            // NOT "fall back to the metric space's own enclosing radius" the way every other complex above does.
-            val geometry = WitnessGeometry(metricSpace, witnessLandmarks)
-            val resolvedMaxFiltrationValue = maxFiltrationValue.getOrElse(Double.PositiveInfinity)
-            engine match
-              case EngineKind.Naive =>
-                val stream = LimitedCofaceSimplexStream(
-                  WitnessCofaceSimplexStream(geometry, resolvedMaxFiltrationValue),
-                  requestedMaxDimension + 1
-                )
-                fromBars[Simplex[Int], C](
-                  PersistenceEngine.naive[Simplex[Int], C].barcode(stream),
-                  cellVertices,
-                  toDouble,
-                  requestedMaxDimension
-                )
-              case EngineKind.Cohomology =>
-                val stream = LimitedCofaceSimplexStream(
-                  WitnessCofaceSimplexStream(geometry, resolvedMaxFiltrationValue),
-                  requestedMaxDimension + 1
-                )
-                fromBars[Simplex[Int], C](
-                  PersistenceEngine.cohomology[Simplex[Int], C].barcode(stream),
-                  cellVertices,
-                  toDouble,
-                  requestedMaxDimension
-                )
-              case EngineKind.Ripser | EngineKind.Chunks =>
-                // dispatch() already rejects both of these for witnessVariant=general before computeGeneric is
-                // ever reached.
-                throw new IllegalArgumentException(s"engine=$engine is not offered for witnessVariant=general")
+        computeWitnessFromLandmarks[C](
+          metricSpace,
+          witnessLandmarks,
+          witnessVariant,
+          engine,
+          witnessNu,
+          requestedMaxDimension,
+          maxFiltrationValue,
+          toDouble
+        )
+
+  /** The actual witness-complex computation, given an ALREADY-RESOLVED landmark set -- shared by `computeGeneric`'s
+    * `ComplexKind.Witness` case (one-shot: landmarks were just selected from `numLandmarks`/`landmarkSelector` a few
+    * lines up in `dispatch`) and `dispatchWitnessFromLandmarks` below (step 2 of the two-step recipe: `landmarks` is
+    * whatever the caller passed to `computeFromPointsAndLandmarks`/ `computeFromDistanceMatrixAndLandmarks`, already
+    * validated). Neither caller-specific concern (how landmarks were obtained, how `witnessVariant`/`engine`/`nu` were
+    * parsed and defaulted) appears here at all -- this function only knows how to build a barcode from a metric space
+    * and an already-decided landmark set.
+    *
+    * Both variants grow unboundedly in dimension just like VR/Cech (up to `landmarks.size - 1`), so naive/ cohomology
+    * need the same "build one dimension higher, drop it via fromBars" dance those use. Cells are `Simplex[Int]` over
+    * LOCAL landmark indices (`0 until landmarks.size`) -- every `cellVertices` below maps back through `landmarks(i)`
+    * to the caller's own ambient point cloud, exactly the translation
+    * `streams.LazyWitnessSimplexStream`/`WitnessCofaceSimplexStream`'s own docs call for.
+    */
+  private def computeWitnessFromLandmarks[C](
+    metricSpace: FiniteMetricSpace[Int],
+    landmarks: IndexedSeq[Int],
+    witnessVariant: WitnessVariantKind,
+    engine: EngineKind,
+    nu: Int,
+    requestedMaxDimension: Int,
+    maxFiltrationValue: Option[Double],
+    toDouble: C => Double
+  )(using C is Field): PersistenceResult =
+    val cellVertices: (Int, Simplex[Int]) => Array[Int] =
+      (_, cell) => cell.underlying.toArray.map(landmarks)
+    witnessVariant match
+      case WitnessVariantKind.Lazy =>
+        engine match
+          case EngineKind.Ripser =>
+            // The lazy witness complex IS a flag complex under WitnessMetricSpace's own "distance" -- exactly
+            // the case PackedRipserCohomologyContext is proven for (any FiniteMetricSpace[Int] diameter), not
+            // VR-specific at all despite the class's own name -- see streams.WitnessMetricSpace's own doc and
+            // WitnessStreamSpec's direct cross-check against the naive engine.
+            val geometry = WitnessGeometry(metricSpace, landmarks)
+            val wms = WitnessMetricSpace(geometry, nu)
+            val ctx =
+              PackedRipserCohomologyContext[C](wms, requestedMaxDimension, maxFiltrationValue = maxFiltrationValue)
+            fromBars[ctx.DiameterIndex, C](
+              ctx.persistentCohomology(),
+              (dim, cell) => ctx.si.decodeToArray(cell.index, dim + 1).map(landmarks),
+              toDouble,
+              requestedMaxDimension
+            )
+          case EngineKind.Naive =>
+            val stream = LimitedCofaceSimplexStream(
+              LazyWitnessSimplexStream(metricSpace, landmarks, nu, maxFiltrationValue = maxFiltrationValue),
+              requestedMaxDimension + 1
+            )
+            fromBars[Simplex[Int], C](
+              PersistenceEngine.naive[Simplex[Int], C].barcode(stream),
+              cellVertices,
+              toDouble,
+              requestedMaxDimension
+            )
+          case EngineKind.Chunks =>
+            // No LimitedCofaceSimplexStream wrapping needed -- PersistenceInChunksContext handles the "+1"
+            // dance internally, and LazyWitnessSimplexStream's own iterateDimension is already naturally
+            // bounded (inherited from RipserCofaceSimplexStream), mirroring complex=cech's own chunks case.
+            val stream = LazyWitnessSimplexStream(metricSpace, landmarks, nu, maxFiltrationValue = maxFiltrationValue)
+            fromBars[Simplex[Int], C](
+              PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(stream),
+              cellVertices,
+              toDouble,
+              requestedMaxDimension
+            )
+          case EngineKind.Cohomology =>
+            val stream = LimitedCofaceSimplexStream(
+              LazyWitnessSimplexStream(metricSpace, landmarks, nu, maxFiltrationValue = maxFiltrationValue),
+              requestedMaxDimension + 1
+            )
+            fromBars[Simplex[Int], C](
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(stream),
+              cellVertices,
+              toDouble,
+              requestedMaxDimension
+            )
+      case WitnessVariantKind.General =>
+        // Not a flag complex -- minimumEnclosingRadius is not a valid truncation here (see
+        // streams.WitnessCofaceSimplexStream's own doc), so an unset maxFiltrationValue means +Infinity,
+        // NOT "fall back to the metric space's own enclosing radius" the way every other complex above does.
+        val geometry = WitnessGeometry(metricSpace, landmarks)
+        val resolvedMaxFiltrationValue = maxFiltrationValue.getOrElse(Double.PositiveInfinity)
+        engine match
+          case EngineKind.Naive =>
+            val stream = LimitedCofaceSimplexStream(
+              WitnessCofaceSimplexStream(geometry, resolvedMaxFiltrationValue),
+              requestedMaxDimension + 1
+            )
+            fromBars[Simplex[Int], C](
+              PersistenceEngine.naive[Simplex[Int], C].barcode(stream),
+              cellVertices,
+              toDouble,
+              requestedMaxDimension
+            )
+          case EngineKind.Cohomology =>
+            val stream = LimitedCofaceSimplexStream(
+              WitnessCofaceSimplexStream(geometry, resolvedMaxFiltrationValue),
+              requestedMaxDimension + 1
+            )
+            fromBars[Simplex[Int], C](
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(stream),
+              cellVertices,
+              toDouble,
+              requestedMaxDimension
+            )
+          case EngineKind.Ripser | EngineKind.Chunks =>
+            // Both dispatch() (one-shot) and dispatchWitnessFromLandmarks (step 2) already reject these via
+            // resolveWitnessEngine before this method is ever reached.
+            throw new IllegalArgumentException(s"engine=$engine is not offered for witnessVariant=general")
+
+  /** Step 2 of the two-step witness recipe: `computeFromPointsAndLandmarks`/`computeFromDistanceMatrixAndLandmarks`
+    * both parse their own (strict-allowlist) options here, then delegate to `computeWitnessFromLandmarks` -- the same
+    * core the one-shot `dispatch`/`computeGeneric` path uses, just with `landmarks` supplied directly instead of
+    * resolved from `numLandmarks`/`landmarkSelector`.
+    */
+  private def dispatchWitnessFromLandmarks(
+    opts: Map[String, String],
+    metricSpace: FiniteMetricSpace[Int],
+    landmarks: IndexedSeq[Int]
+  ): PersistenceResult =
+    parseWitnessComplexOption(opts)
+    val witnessVariant = resolveWitnessVariant(opts)
+    val engine = resolveWitnessEngine(opts, witnessVariant)
+    val nu = resolveWitnessNu(opts)
+    val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(2)
+    val maxFiltrationValue: Option[Double] =
+      opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
+    dispatchByField(opts) { [C] => (toDouble: C => Double) =>
+      computeWitnessFromLandmarks[C](
+        metricSpace,
+        landmarks,
+        witnessVariant,
+        engine,
+        nu,
+        maxDimension,
+        maxFiltrationValue,
+        toDouble
+      )
+    }
 
   // ---------------------------------------------------------------------------------------------------------------
   // dispatch for computeFromCubicalImage/computeFromImage -- a separate function from dispatch/computeGeneric

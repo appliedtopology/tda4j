@@ -435,9 +435,16 @@ The MATLAB-facing option strings still drive dispatch (can't match on types acro
 parses each one exactly once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before anything else
 runs, and dispatches on those enums via `PersistenceEngine.naive`/`.chunks`/`.cohomology` (`homology/
 PersistenceEngine.scala`) rather than re-matching the raw string at each branch.
-- `computeFromPoints`/`computeFromDistanceMatrix`: `complex` = `vr`/`alpha`/`cech`; `engine` = `ripser`/`naive`/
-  `chunks`/`cohomology`. Alpha refuses `ripser` and `chunks` (the `BarcodeRegressionSpec` combination). Cech has no
-  `ripser`. `computeFromCubicalImage`/`computeFromImage` for cubes.
+- `computeFromPoints`/`computeFromDistanceMatrix`: `complex` = `vr`/`alpha`/`cech`/`witness`; `engine` =
+  `ripser`/`naive`/`chunks`/`cohomology` (Alpha refuses `ripser`/`chunks`; Cech and witness/general refuse
+  `ripser`, witness/general also refuses `chunks` — see "Witness complexes" above). `computeFromCubicalImage`/
+  `computeFromImage` for cubes.
+- **Two-step witness recipe** (`WORKLOG-witness-two-step-api.md`), alongside the one-shot path:
+  `selectLandmarksFrom{Points,DistanceMatrix}` (→ `LandmarkSelectionResult`) then
+  `computeFrom{Points,DistanceMatrix}AndLandmarks` (takes that `int[]`, 0-based ambient indices, directly —
+  never re-selects); `coveringRadiusFrom{Points,DistanceMatrix}` queries R for a hand-picked set. Each new pair
+  has its OWN strict option allowlist, not the one-shot path's permissive shared one. CLI mirror:
+  `--select-landmarks`/`--landmarks-file`.
 - `maxDimension` (default 2) = top homological degree. `ripser`/`chunks` pass it straight through; `naive`/
   `cohomology` wrap the stream in `LimitedCofaceSimplexStream(..., k + 1)` and drop `dim == k + 1` bars. Alpha needs
   no +1 (its chain complex terminates on its own). `TDA4jSpec` pins the old un-corrected construction as disagreeing.
@@ -448,7 +455,7 @@ PersistenceEngine.scala`) rather than re-matching the raw string at each branch.
   if a bar has no recorded representative, but every engine now records one for every bar at every dimension (see
   the representatives design principle above) — this exception path indicates an engine bug, not an expected gap.
   Boundary-matrix export designed, not implemented.
-- Unverified: MATLAB's bundled JVM version and actual `double[][]`/`String[]` marshalling.
+- Unverified: MATLAB's bundled JVM version and actual `double[][]`/`String[]`/`int[]` marshalling.
 
 ## Session practices
 
