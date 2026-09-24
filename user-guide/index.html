@@ -1,487 +1,642 @@
 <!DOCTYPE html>
-<html lang="en" class="no-js">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="x-ua-compatible" content="ie=edge">
-<meta name="description" content="A Java Platform compatible library for topological data analysis (TDA).">
-<meta name="generator" content="Paradox, paradox-material-theme=0.7.0, mkdocs-material=3.0.3">
+<html lang="en">
 
-<meta name="lang:clipboard.copy" content="Copy to clipboard">
-<meta name="lang:clipboard.copied" content="Copied to clipboard">
-<meta name="lang:search.language" content="">
-<meta name="lang:search.pipeline.stopwords" content="true">
-<meta name="lang:search.pipeline.trimmer" content="true">
-<meta name="lang:search.result.none" content="No matching documents">
-<meta name="lang:search.result.one" content="1 matching document">
-<meta name="lang:search.result.other" content="# matching documents">
-<meta name="lang:search.tokenizer" content="">
+  <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="generator" content="Typelevel Laika + Helium Theme" />
+  <title>User Guide for TDA4j</title>
+  
+  <meta name="author" content="Mikael Vejdemo-Johansson"/>
+  
+  <meta name="author" content="Jordan Matuszewski"/>
+  
+  <meta name="author" content="Kei Kebreau"/>
+  
+  
+  <meta name="description" content="A Java Platform compatible library for topological data analysis (TDA)."/>
+  
+  
+  
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato:400,700">
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Fira+Mono:500">
+  
+  <link rel="stylesheet" type="text/css" href="../helium/site/icofont.min.css" />
+    <link rel="stylesheet" type="text/css" href="../helium/site/laika-helium.css" />
+    <style>
 
+.breadcrumb { display: flex; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 1.5rem 0; }
+.breadcrumb li { margin: 0; }
+.breadcrumb li a { display: inline; padding: 0; }
+.breadcrumb li:not(:last-child)::after { content: "\203A"; margin: 0 0.4em; color: var(--secondary-color); }
 
-<meta name="description" content="A Java Platform compatible library for topological data analysis (TDA).">
-<link rel="shortcut icon" href="../assets/images/favicon.png">
-<title>User Guide for TDA4j · TDA4j</title>
-<link rel="stylesheet" href="../assets/stylesheets/application.451f80e5.css">
-<link rel="stylesheet" href="../assets/stylesheets/application-palette.22915126.css">
-<meta name="theme-color" content="#3f51b5" />
-<link rel="stylesheet" href="../lib/material__tabs/dist/mdc.tabs.min.css">
-<link rel="stylesheet" href="../lib/prettify/prettify.css">
-<script src="../assets/javascripts/modernizr.1aa3b519.js"></script>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700|Roboto+Mono">
-<style>
-body,input{font-family:"Roboto","Helvetica Neue",Helvetica,Arial,sans-serif}
-code,kbd,pre{font-family:"Roboto Mono","Courier New",Courier,monospace}
 </style>
-<link rel="stylesheet" href="../assets/fonts/font-awesome.css">
-<link rel="stylesheet" href="../assets/fonts/material-icons.css">
-<link rel="stylesheet" href="../assets/stylesheets/paradox-material-theme.css">
+  <script src="../helium/site/laika-helium.js"></script>
+  
+  
+  <script> /* for avoiding page load transitions */ </script>
 </head>
-<body
-data-md-color-primary="indigo"
-data-md-color-accent="blue"
->
-<input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
-<input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
-<label class="md-overlay" data-md-component="overlay" for="__drawer"></label>
-<header class="md-header" data-md-component="header">
-<nav class="md-header-nav md-grid">
-<div class="md-flex">
-<div class="md-flex__cell md-flex__cell--shrink">
-<a href="../index.html" title="TDA4j" class="md-header-nav__button md-logo">
-<i class="md-icon">local_library</i>
-</a>
-</div>
-<div class="md-flex__cell md-flex__cell--shrink">
-<label class="md-icon md-icon--menu md-header-nav__button" for="__drawer"></label>
-</div>
-<div class="md-flex__cell md-flex__cell--stretch">
-<div class="md-flex__ellipsis md-header-nav__title" data-md-component="title">
-<span class="md-header-nav__topic">
-TDA4j
-</span>
-<span class="md-header-nav__topic">
-User Guide for TDA4j
-</span>
-</div>
-</div>
-<form name="search" style="display: none">
-<input type="text" name="query">
-</form>
-<div class="md-flex__cell md-flex__cell--shrink">
-<div class="md-header-nav__source">
-<a href="https://github.com/appliedtopology/tda4j"
-title="Go to repository"
-class="md-source"
-data-md-source="github">
-<div class="md-source__icon">
-<i class="fa fa-github"></i>
-</div>
-<div class="md-source__repository">
-appliedtopology/tda4j
-</div>
-</a>
 
-</div>
-</div>
-</div>
-</nav>
+  <body>
+
+    <header id="top-bar" class="light-default dark-default">
+
+  <div class="row">
+    <a id="nav-icon">
+      <i class="icofont-laika navigationMenu" title="Navigation">&#xefa2;</i>
+    </a>
+    
+    
+  </div>
+
+  <a class="icon-link glyph-link" href="../"><i class="icofont-laika home" title="Home">&#xef47;</i></a>
+
+  <div class="row links">
+    
+    <a class="icon-link svg-link" href="../api/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/appliedtopology/tda4j"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+  </div>  
+
 </header>
 
-<div class="md-container">
-<main class="md-main">
-<div class="md-main__inner md-grid" data-md-component="container">
-<div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
-<div class="md-sidebar__scrollwrap">
-<div class="md-sidebar__inner">
-<nav class="md-nav md-nav--primary" data-md-level="0" style="visibility: hidden">
-<label class="md-nav__title md-nav__title--site" for="drawer">
-<a href="../index.html" title="TDA4j" class="md-nav__button md-logo">
-<span class="md-nav__button md-logo">
-<i class="md-icon">local_library</i>
-</a>
-<a href="../index.html" title="TDA4j">
-TDA4j
-</a>
-</label>
-<div class="md-nav__source">
-<a href="https://github.com/appliedtopology/tda4j"
-title="Go to repository"
-class="md-source"
-data-md-source="github">
-<div class="md-source__icon">
-<i class="fa fa-github"></i>
-</div>
-<div class="md-source__repository">
-appliedtopology/tda4j
-</div>
-</a>
+    <nav id="sidebar">
 
-</div>
-<ul>
-  <li><a href="../tutorials/index.html" class="page">Tutorials for TDA4j</a></li>
-  <li><a href="../user-guide/index.html" class="active page">User Guide for TDA4j</a></li>
-  <li><a href="../developers-guide/index.html" class="page">Developer&rsquo;s Guide for TDA4j</a>
-  <ul>
-    <li><a href="../developers-guide/scala3-primer.html" class="page">A Scala 3.7+ primer for this codebase</a></li>
-    <li><a href="../developers-guide/architecture.html" class="page">Architecture: from algebra to a filtration stream</a></li>
-    <li><a href="../developers-guide/persistence-engines.html" class="page">Persistence engines: what to trust, and why</a></li>
-    <li><a href="../developers-guide/gotchas.html" class="page">Hard-won invariants you must not break</a></li>
-    <li><a href="../developers-guide/degeneracies.html" class="page">Degeneracy behaviors that look like bugs but aren&rsquo;t</a></li>
-    <li><a href="../developers-guide/alpha-complex.html" class="page">Alpha complex: DQP vs Helix</a></li>
-    <li><a href="../developers-guide/class-diagrams.html" class="page">Mapping the library: class diagrams</a></li>
-  </ul></li>
-</ul>
-<nav class="md-nav md-nav--secondary">
-<label class="md-nav__title" for="__toc">Table of contents</label>
-<ul>
-  <li><a href="../user-guide/index.html#user-guide-for-tda4j" class="header">User Guide for TDA4j</a>
-  <ul>
-    <li><a href="../user-guide/index.html#quick-start-scala" class="header">Quick-start: Scala</a></li>
-    <li><a href="../user-guide/index.html#loading-and-saving-data-the-io-module" class="header">Loading and saving data: the <code>io</code> module</a></li>
-    <li><a href="../user-guide/index.html#command-line-tool-tda4j" class="header">Command-line tool: <code>tda4j</code></a></li>
-    <li><a href="../user-guide/index.html#calling-from-matlab-or-java" class="header">Calling from MATLAB or Java</a></li>
-    <li><a href="../user-guide/index.html#which-persistence-engine-" class="header">Which persistence engine?</a></li>
-    <li><a href="../user-guide/index.html#which-alpha-complex-backend-" class="header">Which alpha-complex backend?</a></li>
-    <li><a href="../user-guide/index.html#performance-opt-in-parallelism" class="header">Performance: opt-in parallelism</a></li>
-    <li><a href="../user-guide/index.html#tutorials" class="header">Tutorials</a></li>
-  </ul></li>
-</ul>
-</nav>
+  <div class="row">
+    
+    <a class="icon-link svg-link" href="../api/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/appliedtopology/tda4j"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+  </div>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="../downloads.html">Downloads</a></li>
+    <li class="level1 nav-leaf"><a href="../tutorials/">Tutorials for TDA4j</a></li>
+    <li class="level1 active nav-leaf"><a href="#">User Guide for TDA4j</a></li>
+    <li class="level1 nav-node"><a href="../developers-guide/">Developer&#39;s Guide for TDA4j</a></li>
+    <li class="level2 nav-leaf"><a href="../developers-guide/scala3-primer.html">A Scala 3.7+ primer for this codebase</a></li>
+    <li class="level2 nav-leaf"><a href="../developers-guide/architecture.html">Architecture: from algebra to a filtration stream</a></li>
+    <li class="level2 nav-leaf"><a href="../developers-guide/persistence-engines.html">Persistence engines: what to trust, and why</a></li>
+    <li class="level2 nav-leaf"><a href="../developers-guide/gotchas.html">Hard-won invariants you must not break</a></li>
+    <li class="level2 nav-leaf"><a href="../developers-guide/degeneracies.html">Degeneracy behaviors that look like bugs but aren&#39;t</a></li>
+    <li class="level2 nav-leaf"><a href="../developers-guide/alpha-complex.html">Alpha complex: DQP vs Helix</a></li>
+    <li class="level2 nav-leaf"><a href="../developers-guide/class-diagrams.html">Mapping the library: class diagrams</a></li>
+  </ul>
 
 </nav>
-<ul style="display: none">
-<li class="md-nav__item md-version" id="project.version">
-<label class="md-nav__link" for="__version">
-<i class="md-icon" title="Version">label_outline</i> 0.1.3*
-</label>
-</li>
-</ul>
-</div>
-</div>
-</div>
-<div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
-<div class="md-sidebar__scrollwrap">
-<div class="md-sidebar__inner">
-<nav class="md-nav md-nav--secondary">
-<label class="md-nav__title" for="__toc">Table of contents</label>
-<ul>
-  <li><a href="../user-guide/index.html#user-guide-for-tda4j" class="header">User Guide for TDA4j</a>
-  <ul>
-    <li><a href="../user-guide/index.html#quick-start-scala" class="header">Quick-start: Scala</a></li>
-    <li><a href="../user-guide/index.html#loading-and-saving-data-the-io-module" class="header">Loading and saving data: the <code>io</code> module</a></li>
-    <li><a href="../user-guide/index.html#command-line-tool-tda4j" class="header">Command-line tool: <code>tda4j</code></a></li>
-    <li><a href="../user-guide/index.html#calling-from-matlab-or-java" class="header">Calling from MATLAB or Java</a></li>
-    <li><a href="../user-guide/index.html#which-persistence-engine-" class="header">Which persistence engine?</a></li>
-    <li><a href="../user-guide/index.html#which-alpha-complex-backend-" class="header">Which alpha-complex backend?</a></li>
-    <li><a href="../user-guide/index.html#performance-opt-in-parallelism" class="header">Performance: opt-in parallelism</a></li>
-    <li><a href="../user-guide/index.html#tutorials" class="header">Tutorials</a></li>
-  </ul></li>
-</ul>
+
+    <div id="container">
+
+      
+<nav id="page-nav">
+  <p class="header"><a href="#">User Guide for TDA4j</a></p>
+
+  <ul class="nav-list">
+    <li class="level1 nav-node"><a href="#quick-start-scala">Quick-start: Scala</a></li>
+    <li class="level2 nav-leaf"><a href="#imports">Imports</a></li>
+    <li class="level2 nav-leaf"><a href="#building-and-taking-the-boundary-of-a-simplex">Building and taking the boundary of a simplex</a></li>
+    <li class="level2 nav-leaf"><a href="#a-full-vietoris-rips-persistence-computation">A full Vietoris-Rips persistence computation</a></li>
+    <li class="level2 nav-leaf"><a href="#alpha-complexes">Alpha complexes</a></li>
+    <li class="level2 nav-leaf"><a href="#cech-complexes">Cech complexes</a></li>
+    <li class="level2 nav-leaf"><a href="#sheehy-s-sparse-approximate-vietoris-rips-filtration">Sheehy&#39;s sparse/approximate Vietoris-Rips filtration</a></li>
+    <li class="level2 nav-leaf"><a href="#witness-complexes">Witness complexes</a></li>
+    <li class="level2 nav-leaf"><a href="#cubical-complexes-and-images">Cubical complexes and images</a></li>
+    <li class="level2 nav-leaf"><a href="#simplicial-sets">Simplicial sets</a></li>
+    <li class="level1 nav-leaf"><a href="#loading-and-saving-data-the-io-module">Loading and saving data: the <code>io</code> module</a></li>
+    <li class="level1 nav-leaf"><a href="#command-line-tool-tda4j">Command-line tool: <code>tda4j</code></a></li>
+    <li class="level1 nav-leaf"><a href="#calling-from-matlab-or-java">Calling from MATLAB or Java</a></li>
+    <li class="level1 nav-leaf"><a href="#which-persistence-engine">Which persistence engine?</a></li>
+    <li class="level1 nav-leaf"><a href="#which-alpha-complex-backend">Which alpha-complex backend?</a></li>
+    <li class="level1 nav-leaf"><a href="#performance-opt-in-parallelism">Performance: opt-in parallelism</a></li>
+    <li class="level1 nav-leaf"><a href="#tutorials">Tutorials</a></li>
+  </ul>
+
+  <p class="footer"></p>
 </nav>
 
-</div>
-</div>
-</div>
-<div class="md-content">
-<article class="md-content__inner md-typeset">
-<div class="md-content__searchable">
-<h1><a href="#user-guide-for-tda4j" name="user-guide-for-tda4j" class="anchor"><span class="anchor-link"></span></a>User Guide for TDA4j</h1>
-<p>TDA4j implements persistent homology and related techniques from computational and applied topology. This guide assumes you know what a simplicial complex, a filtration, and a persistence barcode are — it does not assume you know Scala. If you want to understand <em>why</em> the library is built the way it is, or you&rsquo;re planning to write new code against it, see the <a href="../developers-guide/index.html">Developer&rsquo;s Guide</a> instead; this page is about getting things done as a caller.</p>
-<h2><a href="#quick-start-scala" name="quick-start-scala" class="anchor"><span class="anchor-link"></span></a>Quick-start: Scala</h2>
-<p>Every snippet below is checked directly against <code>src/main/scala</code> — if you find it&rsquo;s drifted, trust the source over this page.</p>
-<h3><a href="#imports" name="imports" class="anchor"><span class="anchor-link"></span></a>Imports</h3>
-<p>TDA4j&rsquo;s package is split into subpackages (<code>algebra</code>, <code>cells</code>, <code>streams</code>, <code>homology</code>, <code>alpha</code>, &hellip;). Bring in what you need with the <code>{given, *}</code> form — a plain <code>import pkg.*</code> does <strong>not</strong> bring <code>given</code> instances (coefficient fields, orderings) into scope in Scala 3:</p>
-<pre class="prettyprint"><code class="language-scala 3">import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-</code></pre>
-<p>The rest of this guide assumes these four imports (plus <code>alpha.{given, *}</code> where alpha complexes come up).</p>
-<h3><a href="#building-and-taking-the-boundary-of-a-simplex" name="building-and-taking-the-boundary-of-a-simplex" class="anchor"><span class="anchor-link"></span></a>Building and taking the boundary of a simplex</h3>
-<pre class="prettyprint"><code class="language-scala 3">// Coefficients need an explicit Field instance in scope -- there is no default one for Double.
+
+      <main class="content">
+
+        <ul class="breadcrumb nav-list">
+          <li class="level1 breadcrumb nav-leaf"><a href="../">TDA4j</a></li>
+          <li class="level1 breadcrumb active nav-leaf"><a href="#">User Guide for TDA4j</a></li>
+        </ul>
+
+        <h1 id="user-guide-for-tda4j" class="title">User Guide for TDA4j</h1>
+        <p>TDA4j implements persistent homology and related techniques from computational and applied topology. This
+        guide assumes you know what a simplicial complex, a filtration, and a persistence barcode are — it does not
+        assume you know Scala. If you want to understand <em>why</em> the library is built the way it is, or you&#39;re
+        planning to write new code against it, see the <a href="../developers-guide/">Developer&#39;s Guide</a>
+        instead; this page is about getting things done as a caller.</p>
+        
+        <h2 id="quick-start-scala" class="section"><a class="anchor-link left" href="#quick-start-scala"><i class="icofont-laika link">&#xef71;</i></a>Quick-start: Scala</h2>
+        <p>Snippets included via <code>@:snip</code> (with a source-file link) are compiled and exercised directly by the test
+        suite. The rest are illustrative and hand-maintained, not mechanically checked — if you find one has
+        drifted, trust the source over this page.</p>
+        
+        <h3 id="imports" class="section"><a class="anchor-link left" href="#imports"><i class="icofont-laika link">&#xef71;</i></a>Imports</h3>
+        <p>TDA4j&#39;s package is split into subpackages (<code>algebra</code>, <code>cells</code>, <code>streams</code>, <code>homology</code>, <code>alpha</code>, ...). Bring
+        in what you need with the <code>{given, *}</code> form — a plain <code>import pkg.*</code> does <strong>not</strong> bring <code>given</code> instances
+        (coefficient fields, orderings) into scope in Scala 3:</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">import</span><span> </span><span class="identifier">org</span><span>.</span><span class="identifier">appliedtopology</span><span>.</span><span class="identifier">tda4j</span><span>.</span><span class="identifier">algebra</span><span>.{</span><span class="identifier">given</span><span>, *}
+</span><span class="keyword">import</span><span> </span><span class="identifier">org</span><span>.</span><span class="identifier">appliedtopology</span><span>.</span><span class="identifier">tda4j</span><span>.</span><span class="identifier">cells</span><span>.{</span><span class="identifier">given</span><span>, *}
+</span><span class="keyword">import</span><span> </span><span class="identifier">org</span><span>.</span><span class="identifier">appliedtopology</span><span>.</span><span class="identifier">tda4j</span><span>.</span><span class="identifier">streams</span><span>.{</span><span class="identifier">given</span><span>, *}
+</span><span class="keyword">import</span><span> </span><span class="identifier">org</span><span>.</span><span class="identifier">appliedtopology</span><span>.</span><span class="identifier">tda4j</span><span>.</span><span class="identifier">homology</span><span>.{</span><span class="identifier">given</span><span>, *}</span></code></pre>
+        <p>The rest of this guide assumes these four imports (plus <code>alpha.{given, *}</code> where alpha complexes come up).</p>
+        
+        <h3 id="building-and-taking-the-boundary-of-a-simplex" class="section"><a class="anchor-link left" href="#building-and-taking-the-boundary-of-a-simplex"><i class="icofont-laika link">&#xef71;</i></a>Building and taking the boundary of a simplex</h3>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="comment">// Coefficients need an explicit Field instance in scope -- there is no default one for Double.
 // DoubleApproximated treats two coefficients as equal within epsilon, which matters for the
 // zero-checks that drive chain reduction.
-given Double is Field = Field.DoubleApproximated(1e-9)
+</span><span class="identifier">given</span><span> </span><span class="type-name">Double</span><span> </span><span class="identifier">is</span><span> </span><span class="type-name">Field</span><span> = </span><span class="type-name">Field</span><span>.</span><span class="type-name">DoubleApproximated</span><span>(</span><span class="number-literal">1e-9</span><span>)
 
-val triangle = Simplex(1, 2, 3)      // same as ∆(1, 2, 3)
-triangle.boundary[Double]            // Seq((Simplex(2,3), 1.0), (Simplex(1,3), -1.0), (Simplex(1,2), 1.0))
-</code></pre>
-<h3><a href="#a-full-vietoris-rips-persistence-computation" name="a-full-vietoris-rips-persistence-computation" class="anchor"><span class="anchor-link"></span></a>A full Vietoris-Rips persistence computation</h3>
-<pre class="prettyprint"><code class="language-scala 3">given Double is Field = Field.DoubleApproximated(1e-9)
-given ctx: TDAContext[Int, Double, Double]()
-import ctx.{*, given}
+</span><span class="keyword">val</span><span> </span><span class="identifier">triangle</span><span> = </span><span class="type-name">Simplex</span><span>(</span><span class="number-literal">1</span><span>, </span><span class="number-literal">2</span><span>, </span><span class="number-literal">3</span><span>)      </span><span class="comment">// same as ∆(1, 2, 3)
+</span><span class="identifier">triangle</span><span>.</span><span class="identifier">boundary</span><span>[</span><span class="type-name">Double</span><span>]            </span><span class="comment">// Seq((Simplex(2,3), 1.0), (Simplex(1,3), -1.0), (Simplex(1,2), 1.0))</span></code></pre>
+        
+        <h3 id="a-full-vietoris-rips-persistence-computation" class="section"><a class="anchor-link left" href="#a-full-vietoris-rips-persistence-computation"><i class="icofont-laika link">&#xef71;</i></a>A full Vietoris-Rips persistence computation</h3>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="identifier">given</span><span> </span><span class="type-name">Double</span><span> </span><span class="identifier">is</span><span> </span><span class="type-name">Field</span><span> = </span><span class="type-name">Field</span><span>.</span><span class="type-name">DoubleApproximated</span><span>(</span><span class="number-literal">1e-9</span><span>)
+</span><span class="identifier">given</span><span> </span><span class="identifier">ctx</span><span>: </span><span class="type-name">TDAContext</span><span>[</span><span class="type-name">Int</span><span>, </span><span class="type-name">Double</span><span>, </span><span class="type-name">Double</span><span>]()
+</span><span class="keyword">import</span><span> </span><span class="identifier">ctx</span><span>.{*, </span><span class="identifier">given</span><span>}
 
-val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8))
-val metricSpace = EuclideanMetricSpace(points)
-val stream = RipserStream(metricSpace, maxFiltrationValue = 2.0, maxDimension = 2)
+</span><span class="keyword">val</span><span> </span><span class="identifier">points</span><span>: </span><span class="type-name">Array</span><span>[</span><span class="type-name">Array</span><span>[</span><span class="type-name">Double</span><span>]] = </span><span class="type-name">Array</span><span>(</span><span class="type-name">Array</span><span>(</span><span class="number-literal">0.0</span><span>, </span><span class="number-literal">0.0</span><span>), </span><span class="type-name">Array</span><span>(</span><span class="number-literal">1.0</span><span>, </span><span class="number-literal">0.0</span><span>), </span><span class="type-name">Array</span><span>(</span><span class="number-literal">0.5</span><span>, </span><span class="number-literal">0.8</span><span>))
+</span><span class="keyword">val</span><span> </span><span class="identifier">metricSpace</span><span> = </span><span class="type-name">EuclideanMetricSpace</span><span>(</span><span class="identifier">points</span><span>)
+</span><span class="keyword">val</span><span> </span><span class="identifier">stream</span><span> = </span><span class="type-name">EnumeratingCofaceSimplexStream</span><span>(</span><span class="identifier">metricSpace</span><span>, </span><span class="identifier">maxFiltrationValue</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="number-literal">2.0</span><span>))
 
-val state = ctx.persistentHomology(stream)
-state.barcodeAt(Double.PositiveInfinity).foreach(println)
-</code></pre>
-<p><code>TDAContext[VertexT, CoefficientT, FiltrationT]</code> bundles the naive, reference-grade persistence engine together with chain-arithmetic operators, so <code>1.0 ⊠ ∆(1,2) - ∆(2,3)</code> works directly once <code>ctx</code>&rsquo;s members are imported. It&rsquo;s a good default for exploration and for anything where you want to query the diagram at intermediate filtration values or get representative cycles back (<code>state.diagramAt(f)</code>/<code>state.barcodeAt(f)</code>) — see &ldquo;Which persistence engine?&rdquo; below for when a different engine is worth reaching for instead.</p>
-<p><strong>A default worth knowing</strong>: <code>RipserStream</code>&rsquo;s <code>maxFiltrationValue</code> is whatever you pass — but the several other Vietoris-Rips stream implementations (<code>EnumeratingCofaceSimplexStream</code> and relatives) default it to the point cloud&rsquo;s own <em>minimum enclosing radius</em>, not unbounded, since nothing past that radius contributes new homology. Pass <code>Some(Double.PositiveInfinity)</code> explicitly if you want the old always-unbounded behavior.</p>
-<h3><a href="#alpha-complexes" name="alpha-complexes" class="anchor"><span class="anchor-link"></span></a>Alpha complexes</h3>
-<pre class="prettyprint"><code class="language-scala 3">import org.appliedtopology.tda4j.alpha.{given, *}
+</span><span class="keyword">val</span><span> </span><span class="identifier">state</span><span> = </span><span class="identifier">ctx</span><span>.</span><span class="identifier">persistentHomology</span><span>(</span><span class="identifier">stream</span><span>)
+</span><span class="identifier">state</span><span>.</span><span class="identifier">barcodeAt</span><span>(</span><span class="type-name">Double</span><span>.</span><span class="type-name">PositiveInfinity</span><span>).</span><span class="identifier">foreach</span><span>(</span><span class="identifier">println</span><span>)</span></code></pre>
+        <p><code>TDAContext[VertexT, CoefficientT, FiltrationT]</code> bundles the naive, reference-grade persistence engine
+        together with chain-arithmetic operators, so <code>1.0 ⊠ ∆(1,2) - ∆(2,3)</code> works directly once <code>ctx</code>&#39;s members are
+        imported. It&#39;s a good default for exploration and for anything where you want to query the diagram at
+        intermediate filtration values or get representative cycles back (<code>state.diagramAt(f)</code>/<code>state.barcodeAt(f)</code>)
+        — see &quot;Which persistence engine?&quot; below for when a different engine is worth reaching for instead.</p>
+        <p><strong>A default worth knowing</strong>: <code>EnumeratingCofaceSimplexStream</code> and the other Vietoris-Rips stream
+        implementations default <code>maxFiltrationValue</code> to the point cloud&#39;s own <em>minimum enclosing radius</em>, not
+        unbounded, since nothing past that radius contributes new homology. Pass <code>Some(Double.PositiveInfinity)</code>
+        explicitly if you want the old always-unbounded behavior.</p>
+        
+        <h3 id="alpha-complexes" class="section"><a class="anchor-link left" href="#alpha-complexes"><i class="icofont-laika link">&#xef71;</i></a>Alpha complexes</h3>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">import</span><span> </span><span class="identifier">org</span><span>.</span><span class="identifier">appliedtopology</span><span>.</span><span class="identifier">tda4j</span><span>.</span><span class="identifier">alpha</span><span>.{</span><span class="identifier">given</span><span>, *}
 
-val shape = Alpha(points.toSeq, dispatch = &quot;helix&quot;)   // or &quot;DQP&quot;
-</code></pre>
-<p><code>Alpha(points)</code> with no <code>dispatch</code>, or <code>dispatch = &quot;default&quot;</code>, always resolves to <code>&quot;helix&quot;</code> — ask for <code>&quot;DQP&quot;</code> explicitly if you want it. See &ldquo;Which alpha-complex backend?&rdquo; below for the tradeoffs.</p>
-<h3><a href="#cech-complexes" name="cech-complexes" class="anchor"><span class="anchor-link"></span></a>Cech complexes</h3>
-<pre class="prettyprint"><code class="language-scala 3">val cechStream = CechCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(2.0))
-val homology = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(cechStream)
-</code></pre>
-<p><code>maxFiltrationValue</code> here is a Cech <strong>radius</strong>, not a Vietoris-Rips diameter — the two aren&rsquo;t interchangeable units. Only the naive engine (<code>SimplicialHomologyContext</code>/<code>CellularHomologyContext</code>) is used for Cech complexes; the packed Ripser engine&rsquo;s optimizations don&rsquo;t carry over (see the <a href="../developers-guide/architecture.html">Developer&rsquo;s Guide</a>).</p>
-<h3><a href="#cubical-complexes-and-images" name="cubical-complexes-and-images" class="anchor"><span class="anchor-link"></span></a>Cubical complexes and images</h3>
-<pre class="prettyprint"><code class="language-scala 3">val stream = CubicalImage.fromFlatArray(shape = IndexedSeq(3, 3), flatValues = pixelValues, sublevel = true)
-val homology = CubicalHomologyContext[Double, Double]().persistentHomology(stream)
-homology.diagramAt(Double.PositiveInfinity)
-</code></pre>
-<p><code>CubicalImage</code> also has <code>fromGrayscale2D</code>, <code>fromVoxelGrid3D</code>, <code>fromBufferedImage</code>, and <code>fromFile</code> for loading real images/volumes. <code>sublevel = false</code> computes superlevel-set persistence instead (ascending vs. descending intensity) via the standard &ldquo;negate the values&rdquo; trick — reported filtration values under <code>sublevel = false</code> are in negated-intensity units, not raw pixel values.</p>
-<h3><a href="#simplicial-sets" name="simplicial-sets" class="anchor"><span class="anchor-link"></span></a>Simplicial sets</h3>
-<p>For homology of a space presented combinatorially (not as a metric-space complex), build a <code>FiniteSimplicialSet[G]</code> by giving each generator&rsquo;s faces directly. A minimal circle (one vertex, one loop edge):</p>
-<pre class="prettyprint"><code class="language-scala 3">enum CircleGen { case V, E }
-import CircleGen.*
-given Ordering[CircleGen] = Ordering.by(_.ordinal)
+</span><span class="keyword">val</span><span> </span><span class="identifier">shape</span><span> = </span><span class="type-name">AlphaShapes</span><span>(</span><span class="identifier">points</span><span>.</span><span class="identifier">toSeq</span><span>, </span><span class="identifier">dispatch</span><span> = </span><span class="string-literal">&quot;helix&quot;</span><span>)   </span><span class="comment">// or &quot;DQP&quot;</span></code></pre>
+        <p><code>AlphaShapes(points)</code> with no <code>dispatch</code>, or <code>dispatch = &quot;default&quot;</code>, always resolves to <code>&quot;helix&quot;</code> — ask for
+        <code>&quot;DQP&quot;</code> explicitly if you want it. See &quot;Which alpha-complex backend?&quot; below for the tradeoffs.</p>
+        
+        <h3 id="cech-complexes" class="section"><a class="anchor-link left" href="#cech-complexes"><i class="icofont-laika link">&#xef71;</i></a>Cech complexes</h3>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">val</span><span> </span><span class="identifier">cechStream</span><span> = </span><span class="type-name">CechCofaceSimplexStream</span><span>(</span><span class="identifier">metricSpace</span><span>, </span><span class="identifier">maxFiltrationValue</span><span> = </span><span class="type-name">Some</span><span>(</span><span class="number-literal">2.0</span><span>))
+</span><span class="keyword">val</span><span> </span><span class="identifier">homology</span><span> = </span><span class="type-name">SimplicialHomologyContext</span><span>[</span><span class="type-name">Int</span><span>, </span><span class="type-name">Double</span><span>, </span><span class="type-name">Double</span><span>]().</span><span class="identifier">persistentHomology</span><span>(</span><span class="identifier">cechStream</span><span>)</span></code></pre>
+        <p><code>maxFiltrationValue</code> here is a Cech <strong>radius</strong>, not a Vietoris-Rips diameter — the two aren&#39;t
+        interchangeable units. Only the naive engine (<code>SimplicialHomologyContext</code>/<code>CellularHomologyContext</code>) is used
+        for Cech complexes; the packed Ripser engine&#39;s optimizations don&#39;t carry over (see the
+        <a href="../developers-guide/architecture.html">Developer&#39;s Guide</a>).</p>
+        
+        <h3 id="sheehy-s-sparse-approximate-vietoris-rips-filtration" class="section"><a class="anchor-link left" href="#sheehy-s-sparse-approximate-vietoris-rips-filtration"><i class="icofont-laika link">&#xef71;</i></a>Sheehy&#39;s sparse/approximate Vietoris-Rips filtration</h3>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">val</span><span> </span><span class="identifier">sheehyStream</span><span> = </span><span class="type-name">SheehyRipsSimplexStream</span><span>(</span><span class="identifier">metricSpace</span><span>, </span><span class="identifier">epsilon</span><span> = </span><span class="number-literal">0.5</span><span>)
+</span><span class="keyword">val</span><span> </span><span class="identifier">homology</span><span> = </span><span class="type-name">SimplicialHomologyContext</span><span>[</span><span class="type-name">Int</span><span>, </span><span class="type-name">Double</span><span>, </span><span class="type-name">Double</span><span>]().</span><span class="identifier">persistentHomology</span><span>(</span><span class="identifier">sheehyStream</span><span>)</span></code></pre>
+        <p>A <code>(1+epsilon)</code>-multiplicative approximation to plain Vietoris-Rips&#39;s own barcode, built from a complex
+        that&#39;s linear-sized (for point sets of bounded doubling dimension) rather than the full Vietoris-Rips
+        complex — fewer simplices to reduce at the same scale range, at the cost of a controlled, quantified loss of
+        precision (Cavanna, Jahanseir &amp; Sheehy 2015). Smaller <code>epsilon</code> means less sparsification and a closer
+        approximation to plain Vietoris-Rips; <code>epsilon</code> must be strictly between <code>0</code> and <code>1</code>. Like Cech above, only
+        <code>naive</code>/<code>chunks</code>/<code>cohomology</code> are used — the packed Ripser engine&#39;s optimizations assume a plain
+        max-pairwise-distance filtration functional, which this construction&#39;s own sparsification and vertex
+        &quot;vanishing&quot; don&#39;t satisfy (see the <a href="../developers-guide/architecture.html">Developer&#39;s Guide</a>).</p>
+        
+        <h3 id="witness-complexes" class="section"><a class="anchor-link left" href="#witness-complexes"><i class="icofont-laika link">&#xef71;</i></a>Witness complexes</h3>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">val</span><span> </span><span class="identifier">ambient</span><span> = </span><span class="type-name">EuclideanMetricSpace</span><span>(</span><span class="identifier">points</span><span>)
+</span><span class="keyword">val</span><span> </span><span class="identifier">landmarks</span><span> = </span><span class="type-name">LandmarkSelector</span><span>.</span><span class="identifier">maxmin</span><span>(</span><span class="identifier">ambient</span><span>, </span><span class="identifier">numLandmarks</span><span> = </span><span class="number-literal">20</span><span>).</span><span class="identifier">landmarks</span><span>
 
-val circle = FiniteSimplicialSet[CircleGen](summon[Ordering[CircleGen]])(
-  generatorsByDim = IndexedSeq(Set(V), Set(E)),
-  faces = {
-    case V =&gt; IndexedSeq.empty
-    case E =&gt; IndexedSeq(SSetElement(Nil, V), SSetElement(Nil, V)) // both faces of the loop are V
-  }
+</span><span class="keyword">val</span><span> </span><span class="identifier">lazyStream</span><span> = </span><span class="type-name">LazyWitnessSimplexStream</span><span>(</span><span class="identifier">ambient</span><span>, </span><span class="identifier">landmarks</span><span>)   </span><span class="comment">// nu = 2, JavaPlex&#39;s own default
+</span><span class="keyword">val</span><span> </span><span class="identifier">homology</span><span> = </span><span class="type-name">SimplicialHomologyContext</span><span>[</span><span class="type-name">Int</span><span>, </span><span class="type-name">Double</span><span>, </span><span class="type-name">Double</span><span>]().</span><span class="identifier">persistentHomology</span><span>(</span><span class="identifier">lazyStream</span><span>)</span></code></pre>
+        <p>De Silva &amp; Carlsson&#39;s witness complex (2004; the construction behind most of the JavaPlex tutorials) builds
+        a complex over a small <strong>landmark</strong> subset of your point cloud, using every point (landmarks included) as a
+        <strong>witness</strong> — useful when the full point cloud is too large to build a Vietoris-Rips complex over directly.
+        <code>LandmarkSelector.maxmin</code> (sequential furthest-point sampling, a covering-radius guarantee) and
+        <code>LandmarkSelector.random</code> (seeded, cheaper, no coverage guarantee) both work over any <code>FiniteMetricSpace[Int]</code>
+        — a point cloud or a precomputed distance matrix.</p>
+        <p>Every emitted <code>Simplex[Int]</code>&#39;s vertices are <strong>local landmark indices</strong> (<code>0 until landmarks.size</code>), not indices
+        into your original point cloud — map back through <code>landmarks(i)</code> yourself (<code>matlab.TDA4j</code> does this for you).</p>
+        <p>Two variants, matching JavaPlex&#39;s own two classes:</p>
+        <ul>
+          <li><strong><code>LazyWitnessSimplexStream</code></strong> (JavaPlex&#39;s <code>LazyWitnessStream</code>) — a flag/clique complex, so it also works
+          directly with the packed Ripser engine (<code>PackedRipserCohomologyContext</code>) by handing it a
+          <code>WitnessMetricSpace</code> instead of a stream: <code>PackedRipserCohomologyContext(WitnessMetricSpace(WitnessGeometry(ambient,
+landmarks), nu = 2), maxDimension)</code>. The <code>nu</code> parameter (<code>0</code>, <code>1</code>, or <code>2</code>, default <code>2</code>) controls how
+          forgiving a witness&#39;s own threshold is — see <code>WitnessMetricSpace</code>&#39;s own doc.</li>
+          <li><strong><code>WitnessCofaceSimplexStream</code></strong> (JavaPlex&#39;s plain <code>WitnessStream</code>) — NOT a flag complex, so <code>engine=ripser</code>/
+          <code>chunks</code> don&#39;t apply; use the naive or cohomology engine instead. <code>maxFiltrationValue</code> here defaults to
+          <code>+Infinity</code> (untruncated), not the point cloud&#39;s enclosing radius — the enclosing-radius shortcut is only
+          valid for flag complexes.</li>
+        </ul>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">val</span><span> </span><span class="identifier">geometry</span><span> = </span><span class="type-name">WitnessGeometry</span><span>(</span><span class="identifier">ambient</span><span>, </span><span class="identifier">landmarks</span><span>)
+</span><span class="keyword">val</span><span> </span><span class="identifier">generalStream</span><span> = </span><span class="type-name">WitnessCofaceSimplexStream</span><span>(</span><span class="identifier">geometry</span><span>, </span><span class="identifier">maxFiltrationValue</span><span> = </span><span class="number-literal">2.0</span><span>)</span></code></pre>
+        <p><strong>Pick a finite <code>maxFiltrationValue</code> for the general variant, or cap dimension with
+        <code>LimitedCofaceSimplexStream</code></strong> — its default is <code>+Infinity</code>, and nothing prunes an unbounded enumeration, so
+        a direct call can reach the full <code>2^landmarks.size</code> power set. <code>matlab.TDA4j</code> always caps dimension for you.
+        Prefer <code>witnessVariant=lazy</code> (the default) when the flag-complex behavior is acceptable — it unlocks
+        <code>engine=ripser</code>, and at tutorial scale (1000 points, 50 landmarks, threshold <code>2R</code> — <code>R</code> the landmark
+        selection&#39;s own covering radius, the JavaPlex tutorial&#39;s own recommended threshold) that engine choice is
+        where nearly all the speed difference actually is: <code>lazy+ripser</code> ~0.2s vs. <code>lazy+naive</code> ~11.2s (same
+        complex, same bar count, engine alone) vs. <code>general+naive</code> ~11.5s (variant alone, engine held to <code>naive</code>,
+        indistinguishable from <code>lazy+naive</code> at single-trial resolution) — measured, not inferred (single-trial
+        numbers on one machine; see <code>.claude/WORKLOG-witness-complex.md</code>).</p>
+        
+        <h4 id="the-two-step-recipe-from-matlab-cli-select-landmarks-read-r-then-compute" class="section"><a class="anchor-link left" href="#the-two-step-recipe-from-matlab-cli-select-landmarks-read-r-then-compute"><i class="icofont-laika link">&#xef71;</i></a>The two-step recipe from MATLAB/CLI: select landmarks, read R, then compute</h4>
+        <p>The one-shot <code>complex=witness</code> path (below, in &quot;Calling from MATLAB or Java&quot;) picks landmarks internally and
+        never reports back the covering radius <code>R</code> — so the JavaPlex tutorial&#39;s own &quot;pick landmarks, read <code>R</code>, use <code>2R</code>
+        as the threshold&quot; recipe isn&#39;t reproducible through it. <code>matlab.TDA4j</code> also offers the SAME construction split
+        into two steps for exactly this: <code>selectLandmarksFrom{Points,DistanceMatrix}</code> (step 1, returns a
+        <code>LandmarkSelectionResult</code> with both <code>landmarks()</code> and <code>coveringRadius()</code>) and
+        <code>computeFrom{Points,DistanceMatrix}AndLandmarks</code> (step 2, takes that landmark array directly). Both entry points
+        work from Scala too, not just MATLAB:</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">val</span><span> </span><span class="identifier">selection</span><span> = </span><span class="type-name">TDA4j</span><span>.</span><span class="identifier">selectLandmarksFromPoints</span><span>(</span><span class="identifier">points</span><span>, </span><span class="type-name">Array</span><span>(</span><span class="string-literal">&quot;numLandmarks&quot;</span><span>, </span><span class="string-literal">&quot;50&quot;</span><span>))
+</span><span class="keyword">val</span><span> </span><span class="identifier">result</span><span> = </span><span class="type-name">TDA4j</span><span>.</span><span class="identifier">computeFromPointsAndLandmarks</span><span>(
+  </span><span class="identifier">points</span><span>,
+  </span><span class="identifier">selection</span><span>.</span><span class="identifier">landmarks</span><span>(),
+  </span><span class="type-name">Array</span><span>(</span><span class="string-literal">&quot;maxFiltrationValue&quot;</span><span>, (</span><span class="number-literal">2</span><span> * </span><span class="identifier">selection</span><span>.</span><span class="identifier">coveringRadius</span><span>()).</span><span class="identifier">toString</span><span>)
+)</span></code></pre>
+        <p>From MATLAB:</p>
+        <pre class="keep-together pdf epub"><code class="matlab">javaaddpath(&#39;target/scala-3.9.0/TDA4j-&lt;version&gt;-assembly.jar&#39;);
+selection = org.appliedtopology.tda4j.matlab.TDA4j.selectLandmarksFromPoints(points, {&#39;numLandmarks&#39;, &#39;50&#39;});
+landmarks = selection.landmarks();   % int32 array, 0-BASED ambient indices into `points`
+R = selection.coveringRadius();
+
+result = org.appliedtopology.tda4j.matlab.TDA4j.computeFromPointsAndLandmarks(points, landmarks, ...
+    {&#39;maxFiltrationValue&#39;, sprintf(&#39;%.17g&#39;, 2 * R)});
+bars = result.toArray();</code></pre>
+        <p>Two MATLAB-specific traps worth calling out explicitly:</p>
+        <ul>
+          <li><strong><code>landmarks</code> is 0-based</strong> (matching <code>cycleVertices</code>&#39;s own convention), but MATLAB arrays are 1-based — index
+          <code>points</code> with <code>points(landmarks + 1, :)</code>, not <code>points(landmarks, :)</code>.</li>
+          <li><strong>Use <code>sprintf(&#39;%.17g&#39;, 2 * R)</code>, not <code>num2str(2 * R)</code></strong>, to build the <code>maxFiltrationValue</code> option string.
+          <code>num2str</code>&#39;s own default precision silently rounds most covering radii, which can shift which simplices
+          actually fall under the threshold — <code>sprintf(&#39;%.17g&#39;, ...)</code> round-trips a <code>double</code> exactly.</li>
+        </ul>
+        <p><code>coveringRadiusFromPoints</code>/<code>coveringRadiusFromDistanceMatrix</code> compute <code>R</code> for a landmark set you didn&#39;t get
+        from <code>selectLandmarksFrom*</code> (hand-picked, or reused from elsewhere) — same <code>2R</code> recipe, different source for
+        the landmarks. Every entry point in this two-step family validates its own <code>landmarks</code> array eagerly (non-empty,
+        0-based in range, no duplicates), with a message that specifically flags an index equal to <code>points.length</code> as a
+        likely 1-based-indexing mistake.</p>
+        <p>From the CLI, the same two steps are two separate invocations:</p>
+        <pre><code>tda4j --select-landmarks --num-landmarks 50 --output landmarks.txt points.csv
+# tda4j: covering radius R = 0.12081466774937936 -- e.g. pass &#39;0.24162933549875873&#39; as --max-filtration-value...
+
+tda4j --landmarks-file landmarks.txt --complex witness --max-filtration-value 0.24162933549875873 points.csv</code></pre>
+        <p>The first writes one 0-based landmark index per line to <code>landmarks.txt</code> (plus a <code># coveringRadius=...</code> comment
+        line) and prints <code>R</code> — and the exact <code>2R</code> string to pass on — to stderr; <strong>use that printed string verbatim</strong>,
+        not a value you round or retype by hand (the same truncation trap <code>sprintf(&#39;%.17g&#39;)</code> avoids above applies
+        here too). The second invocation reads the landmarks file back in and computes the barcode. <code>--complex witness</code>
+        on the second line is optional (that combination of flags can only ever mean a witness complex) but
+        accepted if you type it out of habit from the one-shot form.</p>
+        
+        <h3 id="cubical-complexes-and-images" class="section"><a class="anchor-link left" href="#cubical-complexes-and-images"><i class="icofont-laika link">&#xef71;</i></a>Cubical complexes and images</h3>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">val</span><span> </span><span class="identifier">stream</span><span> = </span><span class="type-name">CubicalImage</span><span>.</span><span class="identifier">fromFlatArray</span><span>(</span><span class="identifier">shape</span><span> = </span><span class="type-name">IndexedSeq</span><span>(</span><span class="number-literal">3</span><span>, </span><span class="number-literal">3</span><span>), </span><span class="identifier">flatValues</span><span> = </span><span class="identifier">pixelValues</span><span>, </span><span class="identifier">sublevel</span><span> = </span><span class="boolean-literal">true</span><span>)
+</span><span class="keyword">val</span><span> </span><span class="identifier">homology</span><span> = </span><span class="type-name">CubicalHomologyContext</span><span>[</span><span class="type-name">Double</span><span>, </span><span class="type-name">Double</span><span>]().</span><span class="identifier">persistentHomology</span><span>(</span><span class="identifier">stream</span><span>)
+</span><span class="identifier">homology</span><span>.</span><span class="identifier">diagramAt</span><span>(</span><span class="type-name">Double</span><span>.</span><span class="type-name">PositiveInfinity</span><span>)</span></code></pre>
+        <p><code>CubicalImage</code> also has <code>fromGrayscale2D</code>, <code>fromVoxelGrid3D</code>, <code>fromBufferedImage</code>, and <code>fromFile</code> for loading
+        real images/volumes. <code>sublevel = false</code> computes superlevel-set persistence instead (ascending vs.
+        descending intensity) via the standard &quot;negate the values&quot; trick — reported filtration values under
+        <code>sublevel = false</code> are in negated-intensity units, not raw pixel values.</p>
+        
+        <h3 id="simplicial-sets" class="section"><a class="anchor-link left" href="#simplicial-sets"><i class="icofont-laika link">&#xef71;</i></a>Simplicial sets</h3>
+        <p>For homology of a space presented combinatorially (not as a metric-space complex), build a
+        <code>FiniteSimplicialSet[G]</code> by giving each generator&#39;s faces directly. A minimal circle (one vertex, one loop
+        edge):</p>
+        <pre><code class="nohighlight"><span class="identifier">enum</span><span> </span><span class="type-name">CircleGen</span><span> { </span><span class="keyword">case</span><span> </span><span class="type-name">V</span><span>, </span><span class="type-name">E</span><span> }
+</span><span class="keyword">import</span><span> </span><span class="type-name">CircleGen</span><span>.*
+</span><span class="identifier">given</span><span> </span><span class="type-name">Ordering</span><span>[</span><span class="type-name">CircleGen</span><span>] = </span><span class="type-name">Ordering</span><span>.</span><span class="identifier">by</span><span>(</span><span class="identifier">_</span><span>.</span><span class="identifier">ordinal</span><span>)
+
+</span><span class="keyword">val</span><span> </span><span class="identifier">circle</span><span> = </span><span class="type-name">FiniteSimplicialSet</span><span>[</span><span class="type-name">CircleGen</span><span>](</span><span class="identifier">summon</span><span>[</span><span class="type-name">Ordering</span><span>[</span><span class="type-name">CircleGen</span><span>]])(
+  </span><span class="identifier">generatorsByDim</span><span> = </span><span class="type-name">IndexedSeq</span><span>(</span><span class="type-name">Set</span><span>(</span><span class="type-name">V</span><span>), </span><span class="type-name">Set</span><span>(</span><span class="type-name">E</span><span>)),
+  </span><span class="identifier">faces</span><span> = {
+    </span><span class="keyword">case</span><span> </span><span class="type-name">V</span><span> =&gt; </span><span class="type-name">IndexedSeq</span><span>.</span><span class="identifier">empty</span><span>
+    </span><span class="keyword">case</span><span> </span><span class="type-name">E</span><span> =&gt; </span><span class="type-name">IndexedSeq</span><span>(</span><span class="type-name">SSetElement</span><span>(</span><span class="type-name">Nil</span><span>, </span><span class="type-name">V</span><span>), </span><span class="type-name">SSetElement</span><span>(</span><span class="type-name">Nil</span><span>, </span><span class="type-name">V</span><span>)) </span><span class="comment">// both faces of the loop are V
+</span><span>  }
 )
-circle.validate()   // Seq.empty -- no errors
+</span><span class="identifier">circle</span><span>.</span><span class="identifier">validate</span><span>()   </span><span class="comment">// Seq.empty -- no errors
+</span><span>
+</span><span class="identifier">given</span><span> (</span><span class="type-name">CircleGen</span><span> </span><span class="identifier">is</span><span> </span><span class="type-name">OrderedCell</span><span>) = </span><span class="identifier">circle</span><span>.</span><span class="identifier">cellInstance</span><span>
+</span><span class="keyword">val</span><span> </span><span class="identifier">stream</span><span> = </span><span class="type-name">FilteredSimplicialSetStream</span><span>(</span><span class="identifier">circle</span><span>, { </span><span class="keyword">case</span><span> </span><span class="type-name">V</span><span> =&gt; </span><span class="number-literal">0.0</span><span>; </span><span class="keyword">case</span><span> </span><span class="type-name">E</span><span> =&gt; </span><span class="number-literal">1.0</span><span> })
+</span><span class="type-name">CellularHomologyContext</span><span>[</span><span class="type-name">CircleGen</span><span>, </span><span class="type-name">Double</span><span>, </span><span class="type-name">Double</span><span>]()
+  .</span><span class="identifier">persistentHomology</span><span>(</span><span class="identifier">stream</span><span>)
+  .</span><span class="identifier">diagramAt</span><span>(</span><span class="type-name">Double</span><span>.</span><span class="type-name">PositiveInfinity</span><span>)
+</span><span class="comment">// List((1, 1.0, Infinity), (0, 0.0, Infinity)) -- H0 = H1 = one essential class each, as expected for S^1</span></code></pre>
+        <p><code>FiniteSimplicialSet</code>&#39;s companion object builds new simplicial sets from existing ones instead of by hand:
+        <code>FiniteSimplicialSet.product</code>/<code>.coproduct</code> (the categorical product/coproduct) and <code>.quotient</code>/<code>.identify</code>
+        (attaching maps — glue generators together, or collapse one down onto a lower-dimensional target).
+        <code>validate()</code> checks that hand-written or constructed face data actually satisfies the simplicial identities;
+        it&#39;s a necessary sanity check, not proof the resulting space is the one you intended.</p>
+        
+        <h2 id="loading-and-saving-data-the-io-module" class="section"><a class="anchor-link left" href="#loading-and-saving-data-the-io-module"><i class="icofont-laika link">&#xef71;</i></a>Loading and saving data: the <code>io</code> module</h2>
+        <p><code>org.appliedtopology.tda4j.io</code> reads and writes the file formats the wider TDA ecosystem uses, so you don&#39;t
+        have to hand-roll parsing:</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Object</th>
+              <th>Formats</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>CSV</code></td>
+              <td>plain CSV point clouds, full/lower-triangular distance matrices, persistence diagrams</td>
+            </tr>
+            <tr>
+              <td><code>Ripser</code></td>
+              <td>Ripser&#39;s point-cloud/lower/upper/full/binary distance-matrix formats</td>
+            </tr>
+            <tr>
+              <td><code>Dipha</code></td>
+              <td>DIPHA&#39;s distance-matrix, cubical-image, and persistence-diagram formats</td>
+            </tr>
+            <tr>
+              <td><code>Gudhi</code></td>
+              <td>GUDHI&#39;s OFF point-cloud format and persistence-diagram format</td>
+            </tr>
+            <tr>
+              <td><code>Perseus</code></td>
+              <td>Perseus&#39;s cubical toplex and persistence-interval formats</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>Each object offers a raw loader (<code>readPointCloud</code>/<code>readFullDistanceMatrix</code>/...) and a one-line convenience
+        constructor on top (<code>readEuclideanMetricSpace</code>/<code>readExplicitMetricSpace</code>/<code>readCubicalGridStream</code>/...):</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">import</span><span> </span><span class="identifier">org</span><span>.</span><span class="identifier">appliedtopology</span><span>.</span><span class="identifier">tda4j</span><span>.</span><span class="identifier">io</span><span>.{</span><span class="identifier">given</span><span>, *}
 
-given (CircleGen is OrderedCell) = circle.cellInstance
-val stream = FilteredSimplicialSetStream(circle, { case V =&gt; 0.0; case E =&gt; 1.0 })
-CellularHomologyContext[CircleGen, Double, Double]()
-  .persistentHomology(stream)
-  .diagramAt(Double.PositiveInfinity)
-// List((1, 1.0, Infinity), (0, 0.0, Infinity)) -- H0 = H1 = one essential class each, as expected for S^1
-</code></pre>
-<p><code>SimplicialSetConstructions</code> builds new simplicial sets from existing ones instead of by hand: <code>product</code>/<code>coproduct</code> (the categorical product/coproduct) and <code>quotient</code>/<code>identify</code> (attaching maps — glue generators together, or collapse one down onto a lower-dimensional target). <code>validate()</code> checks that hand-written or constructed face data actually satisfies the simplicial identities; it&rsquo;s a necessary sanity check, not proof the resulting space is the one you intended.</p>
-<h2><a href="#loading-and-saving-data-the-io-module" name="loading-and-saving-data-the-io-module" class="anchor"><span class="anchor-link"></span></a>Loading and saving data: the <code>io</code> module</h2>
-<p><code>org.appliedtopology.tda4j.io</code> reads and writes the file formats the wider TDA ecosystem uses, so you don&rsquo;t have to hand-roll parsing:</p>
-<table>
-  <thead>
-    <tr>
-      <th>Object </th>
-      <th>Formats </th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code>CSV</code> </td>
-      <td>plain CSV point clouds, full/lower-triangular distance matrices, persistence diagrams </td>
-    </tr>
-    <tr>
-      <td><code>Ripser</code> </td>
-      <td>Ripser&rsquo;s point-cloud/lower/upper/full/binary distance-matrix formats </td>
-    </tr>
-    <tr>
-      <td><code>Dipha</code> </td>
-      <td>DIPHA&rsquo;s distance-matrix, cubical-image, and persistence-diagram formats </td>
-    </tr>
-    <tr>
-      <td><code>Gudhi</code> </td>
-      <td>GUDHI&rsquo;s OFF point-cloud format and persistence-diagram format </td>
-    </tr>
-    <tr>
-      <td><code>Perseus</code> </td>
-      <td>Perseus&rsquo;s cubical toplex and persistence-interval formats </td>
-    </tr>
-  </tbody>
-</table>
-<p>Each object offers a raw loader (<code>readPointCloud</code>/<code>readFullDistanceMatrix</code>/&hellip;) and a one-line convenience constructor on top (<code>readEuclideanMetricSpace</code>/<code>readExplicitMetricSpace</code>/<code>readCubicalGridStream</code>/&hellip;):</p>
-<pre class="prettyprint"><code class="language-scala 3">import org.appliedtopology.tda4j.io.{given, *}
+</span><span class="keyword">val</span><span> </span><span class="identifier">metricSpace</span><span> = </span><span class="type-name">Ripser</span><span>.</span><span class="identifier">readEuclideanMetricSpace</span><span>(</span><span class="string-literal">&quot;points.txt&quot;</span><span>)
+</span><span class="keyword">val</span><span> </span><span class="identifier">stream</span><span> = </span><span class="type-name">Perseus</span><span>.</span><span class="identifier">readCubicalToplex</span><span>(</span><span class="string-literal">&quot;image.txt&quot;</span><span>)</span></code></pre>
+        <p>Two format details worth knowing if you&#39;re comparing output against another tool: Ripser&#39;s binary
+        distance-matrix format is 32-bit <code>float</code>, not 64-bit <code>double</code>. DIPHA&#39;s and Perseus&#39;s cubical-grid axis order
+        is the opposite of <code>CubicalImage</code>&#39;s own convention (first axis fastest-varying vs. last); both readers/
+        writers here handle the transposition for you.</p>
+        
+        <h2 id="command-line-tool-tda4j" class="section"><a class="anchor-link left" href="#command-line-tool-tda4j"><i class="icofont-laika link">&#xef71;</i></a>Command-line tool: <code>tda4j</code></h2>
+        <p><code>sbt assembly</code> builds a runnable fat jar exposing the whole library as a command-line tool, without writing
+        any Scala:</p>
+        <pre><code>java -jar target/scala-3.9.0/TDA4j-&lt;version&gt;-assembly.jar [options] &lt;input-file&gt;</code></pre>
+        <p>It loads a point cloud, distance matrix, or cubical image in one of several formats (<code>--input-format</code>),
+        computes persistence via the same facade the MATLAB bridge uses (below), and writes the result in one of
+        several formats (<code>--output-format</code>: <code>text</code>, <code>csv</code>, <code>gudhi</code>, <code>dipha</code>, <code>perseus</code>). Run with <code>--help</code> for the
+        full flag list; the main ones mirror the MATLAB options one-to-one: <code>--complex</code> (<code>vr</code>/<code>alpha</code>/<code>cech</code>/
+        <code>witness</code>/<code>dtm-rips</code>/<code>dtm-alpha</code>/<code>sheehy-rips</code>), <code>--engine</code>, <code>--max-dimension</code>, <code>--max-filtration-value</code>,
+        <code>--field</code>, <code>--representatives</code> (also print each bar&#39;s representative chain), and (for <code>--complex=witness</code>)
+        <code>--num-landmarks</code>, <code>--witness-variant</code>, <code>--landmark-selector</code>, <code>--landmark-seed</code>, <code>--nu</code>. For
+        <code>--complex=dtm-rips</code> or <code>--dtm-alpha</code>, use <code>--dtm-k</code> (required), <code>--dtm-q</code> (default 2.0), and <code>--dtm-p</code>
+        (default 1.0, only for <code>dtm-rips</code>). For <code>--complex=sheehy-rips</code>, use <code>--sheehy-epsilon</code> (required, strictly
+        between <code>0</code> and <code>1</code>). <code>--select-landmarks</code>/<code>--landmarks-file</code> split that same witness-complex computation
+        into the two-step recipe described above.</p>
+        
+        <h2 id="calling-from-matlab-or-java" class="section"><a class="anchor-link left" href="#calling-from-matlab-or-java"><i class="icofont-laika link">&#xef71;</i></a>Calling from MATLAB or Java</h2>
+        <p><code>org.appliedtopology.tda4j.matlab.TDA4j</code>/<code>PersistenceResult</code> is a real, tested facade for calling TDA4j from
+        MATLAB&#39;s built-in Java interface, or from any plain-Java caller — every public method and return type is a
+        plain <code>int</code>, <code>double</code>, <code>String</code>, <code>double[][]</code>, or <code>String[]</code>; no Scala types, no generics, no context
+        parameters, no Unicode operator names.</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="type-name">double</span><span>[][] </span><span class="identifier">points</span><span> = { {</span><span class="number-literal">0.0</span><span>, </span><span class="number-literal">0.0</span><span>}, {</span><span class="number-literal">1.0</span><span>, </span><span class="number-literal">0.0</span><span>}, {</span><span class="number-literal">0.5</span><span>, </span><span class="number-literal">0.8</span><span>} };
+</span><span class="type-name">PersistenceResult</span><span> </span><span class="identifier">result</span><span> = </span><span class="type-name">TDA4j</span><span>.</span><span class="identifier">computeFromPoints</span><span>(</span><span class="identifier">points</span><span>);
 
-val metricSpace = Ripser.readEuclideanMetricSpace(&quot;points.txt&quot;)
-val stream = Perseus.readCubicalToplex(&quot;image.txt&quot;)
-</code></pre>
-<p>Two format details worth knowing if you&rsquo;re comparing output against another tool: Ripser&rsquo;s binary distance-matrix format is 32-bit <code>float</code>, not 64-bit <code>double</code>. DIPHA&rsquo;s and Perseus&rsquo;s cubical-grid axis order is the opposite of <code>CubicalImage</code>&rsquo;s own convention (first axis fastest-varying vs. last); both readers/ writers here handle the transposition for you.</p>
-<h2><a href="#command-line-tool-tda4j" name="command-line-tool-tda4j" class="anchor"><span class="anchor-link"></span></a>Command-line tool: <code>tda4j</code></h2>
-<p><code>sbt assembly</code> builds a runnable fat jar exposing the whole library as a command-line tool, without writing any Scala:</p>
-<pre><code>java -jar target/scala-3.9.0/TDA4j-&lt;version&gt;-assembly.jar [options] &lt;input-file&gt;
-</code></pre>
-<p>It loads a point cloud, distance matrix, or cubical image in one of several formats (<code>--input-format</code>), computes persistence via the same facade the MATLAB bridge uses (below), and writes the result in one of several formats (<code>--output-format</code>: <code>text</code>, <code>csv</code>, <code>gudhi</code>, <code>dipha</code>, <code>perseus</code>). Run with <code>--help</code> for the full flag list; the main ones mirror the MATLAB options one-to-one: <code>--complex</code> (<code>vr</code>/<code>alpha</code>/<code>cech</code>), <code>--engine</code>, <code>--max-dimension</code>, <code>--max-filtration-value</code>, <code>--field</code>, <code>--representatives</code> (also print each bar&rsquo;s representative chain).</p>
-<h2><a href="#calling-from-matlab-or-java" name="calling-from-matlab-or-java" class="anchor"><span class="anchor-link"></span></a>Calling from MATLAB or Java</h2>
-<p><code>org.appliedtopology.tda4j.matlab.TDA4j</code>/<code>PersistenceResult</code> is a real, tested facade for calling TDA4j from MATLAB&rsquo;s built-in Java interface, or from any plain-Java caller — every public method and return type is a plain <code>int</code>, <code>double</code>, <code>String</code>, <code>double[][]</code>, or <code>String[]</code>; no Scala types, no generics, no context parameters, no Unicode operator names.</p>
-<pre class="prettyprint"><code class="language-java">double[][] points = { {0.0, 0.0}, {1.0, 0.0}, {0.5, 0.8} };
-PersistenceResult result = TDA4j.computeFromPoints(points);
-
-double[][] bars = result.toArray();   // one row per bar: [dimension, birth, death], death = Inf if essential
-double[] coeffs = result.cycleCoefficients(0);
-int[][] simplices = result.cycleVertices(0);   // each row: a simplex&#39;s sorted vertex indices
-</code></pre>
-<pre class="prettyprint"><code class="language-matlab">javaaddpath(&#39;target/scala-3.9.0/TDA4j-&lt;version&gt;-assembly.jar&#39;);
+</span><span class="type-name">double</span><span>[][] </span><span class="identifier">bars</span><span> = </span><span class="identifier">result</span><span>.</span><span class="identifier">toArray</span><span>();   </span><span class="comment">// one row per bar: [dimension, birth, death], death = Inf if essential
+</span><span class="type-name">double</span><span>[] </span><span class="identifier">coeffs</span><span> = </span><span class="identifier">result</span><span>.</span><span class="identifier">cycleCoefficients</span><span>(</span><span class="number-literal">0</span><span>);
+</span><span class="type-name">int</span><span>[][] </span><span class="identifier">simplices</span><span> = </span><span class="identifier">result</span><span>.</span><span class="identifier">cycleVertices</span><span>(</span><span class="number-literal">0</span><span>);   </span><span class="comment">// each row: a simplex&#39;s sorted vertex indices</span></code></pre>
+        <pre class="keep-together pdf epub"><code class="matlab">javaaddpath(&#39;target/scala-3.9.0/TDA4j-&lt;version&gt;-assembly.jar&#39;);
 points = [0.0 0.0; 1.0 0.0; 0.5 0.8];
 result = org.appliedtopology.tda4j.matlab.TDA4j.computeFromPoints(points);
-bars = result.toArray();
-</code></pre>
-<p>Entry points: <code>computeFromPoints</code>/<code>computeFromDistanceMatrix</code> (Vietoris-Rips/alpha/Cech, from a point cloud or a precomputed distance matrix — alpha needs real coordinates, so it&rsquo;s only available from the points overload), and <code>computeFromCubicalImage</code>/<code>computeFromImage</code> (cubical persistence from a flat array + shape, or a 2D pixel matrix directly). Every method has a no-options overload and one taking a flat, alternating key/value <code>String[]</code> of options — so adding a new option in the future never changes a method&rsquo;s call signature:</p>
-<table>
-  <thead>
-    <tr>
-      <th>Option </th>
-      <th>Values </th>
-      <th>Default </th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code>complex</code> </td>
-      <td><code>vr</code>, <code>alpha</code>, <code>cech</code> </td>
-      <td><code>vr</code> </td>
-    </tr>
-    <tr>
-      <td><code>engine</code> </td>
-      <td><code>ripser</code>, <code>naive</code>, <code>chunks</code> </td>
-      <td><code>ripser</code> for <code>vr</code>; <code>naive</code> for <code>alpha</code>/<code>cech</code> </td>
-    </tr>
-    <tr>
-      <td><code>alphaBackend</code> </td>
-      <td><code>helix</code>, <code>DQP</code> </td>
-      <td><code>helix</code> (only consulted for <code>complex=alpha</code>) </td>
-    </tr>
-    <tr>
-      <td><code>maxDimension</code> </td>
-      <td>integer </td>
-      <td><code>2</code> — highest H_k reported, not highest simplex dimension built </td>
-    </tr>
-    <tr>
-      <td><code>maxFiltrationValue</code> </td>
-      <td>double </td>
-      <td>the point cloud&rsquo;s own minimum enclosing radius </td>
-    </tr>
-    <tr>
-      <td><code>field</code> </td>
-      <td><code>Z</code> (finite field), <code>R</code> (floating point) </td>
-      <td><code>Z</code>, <code>prime=2</code> </td>
-    </tr>
-    <tr>
-      <td><code>prime</code> </td>
-      <td>integer </td>
-      <td><code>2</code> (only for <code>field=Z</code>) </td>
-    </tr>
-    <tr>
-      <td><code>epsilon</code> </td>
-      <td>double </td>
-      <td><code>1e-9</code> (only for <code>field=R</code>) </td>
-    </tr>
-  </tbody>
-</table>
-<p><code>alpha</code> refuses <code>engine=ripser</code> and <code>engine=chunks</code> (neither engine understands alpha complexes, and the chunks/alpha combination is a known stall risk in the underlying library); <code>cech</code> refuses <code>engine=ripser</code> (the packed Ripser engine&rsquo;s optimizations are proven for Vietoris-Rips&rsquo;s diameter functional specifically, not Cech&rsquo;s circumradius). Unrecognized keys or values throw <code>IllegalArgumentException</code> immediately rather than silently falling back to a default.</p>
-<p><code>PersistenceResult.cycleVertices</code>/<code>cycleCoefficients</code> give you each bar&rsquo;s representative chain, best-effort: <code>engine=ripser</code> has no representative for a handful of bars resolved via its apparent-pairs shortcut (throws <code>UnsupportedOperationException</code> for those specific bars); <code>engine=chunks</code> records one for every bar.</p>
-<h2><a href="#which-persistence-engine-" name="which-persistence-engine-" class="anchor"><span class="anchor-link"></span></a>Which persistence engine?</h2>
-<table>
-  <thead>
-    <tr>
-      <th>Need </th>
-      <th>Engine (<code>engine=</code> for MATLAB/CLI) </th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Exploration, intermediate-filtration queries, representative cycles </td>
-      <td><code>naive</code> (<code>CellularHomologyContext</code>/<code>TDAContext</code>) </td>
-    </tr>
-    <tr>
-      <td>Fastest, most memory-efficient — the default for <code>complex=vr</code> </td>
-      <td><code>ripser</code> (<code>PackedRipserCohomologyContext</code>) </td>
-    </tr>
-    <tr>
-      <td>Large complex, want representatives for every bar including essential ones </td>
-      <td><code>chunks</code> (<code>CellularPersistenceInChunksContext</code>) </td>
-    </tr>
-    <tr>
-      <td>Alpha or Cech complexes </td>
-      <td><code>naive</code> (the only option for alpha; <code>chunks</code> also works for Cech) </td>
-    </tr>
-  </tbody>
-</table>
-<p>All engines are generic over the coefficient field (a prime finite field or floating point) and, except for <code>ripser</code>, over the cell type (simplices, cubes, or simplicial-set generators). See the <a href="../developers-guide/persistence-engines.html">Developer&rsquo;s Guide&rsquo;s persistence-engines page</a> for the full detail, including a fifth class (<code>SimplicialHomologyByDimensionContext</code>) kept as an independent cross-validation oracle rather than a production choice.</p>
-<h2><a href="#which-alpha-complex-backend-" name="which-alpha-complex-backend-" class="anchor"><span class="anchor-link"></span></a>Which alpha-complex backend?</h2>
-<ul>
-  <li><strong><code>&quot;helix&quot;</code></strong> (<code>HelixDelaunay</code>) — an actual Delaunay triangulation, computed incrementally. What  <code>dispatch = &quot;default&quot;</code> resolves to. Has a known, quantified failure mode on point clouds with a  near-cospherical local cluster: zero failures across 20,000-trial fuzz testing at ambient dimension 2 and  5, but roughly 1-in-170 at ambient dimension 4 with 20-30 points, on ordinary-looking input. Don&rsquo;t treat  its output as unconditionally reliable ground truth at ambient dimension 4 or higher.</li>
-  <li><strong><code>&quot;DQP&quot;</code></strong> (<code>AlphaShapeDQP</code>) — a dual active-set quadratic-programming method (Carlsson &amp; Carlsson 2024)  that never builds a Delaunay triangulation at all. Its real strength is high ambient dimension, where  Delaunay becomes infeasible, and exact homology rather than an approximate persistence diagram. The  paper&rsquo;s own published benchmarks are mixed — it loses to Ripser on 2 of 4 of its own persistence examples,  and to qhull-based Delaunay on some inputs. The honest value proposition is high-dimensional feasibility  and exactness, not raw speed.</li>
-</ul>
-<p>Both backends agree that in degenerate (cospherical) point configurations — e.g. points on a regular grid — the alpha complex genuinely contains higher-dimensional simplices than a triangulation-based mental model would suggest (a unit grid in the plane produces 3-simplices, one per unit square, not just triangles). This is correct behavior, not a bug in either backend; users coming from CGAL or GUDHI may find it surprising.</p>
-<h2><a href="#performance-opt-in-parallelism" name="performance-opt-in-parallelism" class="anchor"><span class="anchor-link"></span></a>Performance: opt-in parallelism</h2>
-<p>A few of the more expensive per-cell computations can run on the JVM&rsquo;s common thread pool, opt-in via a constructor flag (<code>AlphaDQPSettings.parallel</code>, <code>CubicalGridStream.parallelFiltrationValue</code>, <code>CechCofaceSimplexStream.parallelFiltrationValue</code>), all defaulting to <code>false</code>, with deterministic output either way. Worth turning on for a large alpha-complex computation (each vertex&rsquo;s own QP solve is genuinely expensive — measured 2-4x speedup at a few hundred points and above); cubical images and Cech complexes see a smaller win (a few percent) since the per-cell cost there is lighter.</p>
-<h2><a href="#tutorials" name="tutorials" class="anchor"><span class="anchor-link"></span></a>Tutorials</h2>
-<p><a href="../tutorials/index.html">Tutorials</a> — currently a placeholder; porting Henry Adams&rsquo; JavaPlex tutorials to TDA4j is tracked there as future work, not yet done.</p>
-</div>
-<div>
-<a href="https://github.com/appliedtopology/tda4j/tree/0.1.3-SNAPSHOT/src/main/paradox/user-guide/index.md" title="Edit this page" class="md-source-file md-edit">
-Edit this page
-</a>
-</div>
-<div class="print-only">
-<span class="md-source-file md-version">
-0.1.3*
-</span>
-</div>
-</article>
-</div>
-</div>
-</main>
-<footer class="md-footer">
-<div class="md-footer-nav">
-<nav class="md-footer-nav__inner md-grid">
-<a href="../tutorials/index.html" title="Tutorials for TDA4j" class="md-flex md-footer-nav__link md-footer-nav__link--prev" rel="prev">
-<div class="md-flex__cell md-flex__cell--shrink">
-<i class="md-icon md-icon--arrow-back md-footer-nav__button"></i>
-</div>
-<div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
-<span class="md-flex__ellipsis">
-<span class="md-footer-nav__direction">
-Previous
-</span>
-Tutorials for TDA4j
-</span>
-</div>
-</a>
-<a href="../developers-guide/index.html" title="Developers Guide for TDA4j" class="md-flex md-footer-nav__link md-footer-nav__link--next" rel="next">
-<div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
-<span class="md-flex__ellipsis">
-<span class="md-footer-nav__direction">
-Next
-</span>
-Developers Guide for TDA4j
-</span>
-</div>
-<div class="md-flex__cell md-flex__cell--shrink">
-<i class="md-icon md-icon--arrow-forward md-footer-nav__button"></i>
-</div>
-</a>
-</nav>
-</div>
-<div class="md-footer-meta md-typeset">
-<div class="md-footer-meta__inner md-grid">
-<div class="md-footer-copyright">
-<div class="md-footer-copyright__highlight">
-MIT License © Mikael Vejdemo-Johansson, Daniel Hope
-</div>
-Powered by
-<a href="https://github.com/lightbend/paradox">Paradox</a>
-and
-<a href="https://sbt.github.io/sbt-paradox-material-theme/">Paradox Material Theme</a>
+bars = result.toArray();</code></pre>
+        <p>Entry points: <code>computeFromPoints</code>/<code>computeFromDistanceMatrix</code> (Vietoris-Rips/alpha/Cech/witness/dtm-rips/
+        dtm-alpha/sheehy-rips, from a point cloud or a precomputed distance matrix — alpha, Cech, and dtm-alpha need
+        real coordinates, so they&#39;re only available from the points overload; witness/dtm-rips/sheehy-rips work from
+        either, exactly like <code>vr</code>, since none of the three needs real coordinates, only a metric),
+        <code>computeFromCubicalImage</code>/<code>computeFromImage</code> (cubical persistence from a flat array + shape, 
+        or a 2D pixel matrix directly), and the two-step witness recipe&#39;s own four entry points -- 
+        <code>selectLandmarksFromPoints</code>/<code>selectLandmarksFromDistanceMatrix</code> (→ <code>LandmarkSelectionResult</code>) and 
+        <code>computeFromPointsAndLandmarks</code>/<code>computeFromDistanceMatrixAndLandmarks</code>, plus the 
+        <code>coveringRadiusFromPoints</code>/<code>coveringRadiusFromDistanceMatrix</code> query pair -- covered in their own section
+        above rather than the table below, since they take an explicit <code>int[] landmarks</code> parameter and each has its OWN
+        (stricter) recognized-options set rather than sharing the table&#39;s. Every method here has a no-options overload
+        and one taking a flat, alternating key/value <code>String[]</code> of options — so adding a new option in the future never
+        changes a method&#39;s call signature:</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Option</th>
+              <th>Values</th>
+              <th>Default</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>complex</code></td>
+              <td><code>vr</code>, <code>alpha</code>, <code>cech</code>, <code>witness</code>, <code>dtm-rips</code>, <code>dtm-alpha</code>, <code>sheehy-rips</code></td>
+              <td><code>vr</code></td>
+            </tr>
+            <tr>
+              <td><code>engine</code></td>
+              <td><code>ripser</code>, <code>naive</code>, <code>chunks</code>, <code>cohomology</code></td>
+              <td><code>ripser</code> for <code>vr</code> and <code>witness</code>/<code>witnessVariant=lazy</code>; <code>naive</code> for <code>alpha</code>/<code>cech</code>/<code>dtm-rips</code>/<code>dtm-alpha</code>/<code>sheehy-rips</code>/<code>witness</code>/<code>witnessVariant=general</code></td>
+            </tr>
+            <tr>
+              <td><code>alphaBackend</code></td>
+              <td><code>helix</code>, <code>DQP</code></td>
+              <td><code>helix</code> (only consulted for <code>complex=alpha</code>)</td>
+            </tr>
+            <tr>
+              <td><code>dtmK</code></td>
+              <td>integer</td>
+              <td>REQUIRED for <code>complex=dtm-rips</code> or <code>complex=dtm-alpha</code>, no default</td>
+            </tr>
+            <tr>
+              <td><code>dtmQ</code></td>
+              <td>double</td>
+              <td><code>2.0</code> (only consulted for <code>complex=dtm-rips</code> or <code>complex=dtm-alpha</code>)</td>
+            </tr>
+            <tr>
+              <td><code>dtmP</code></td>
+              <td>double</td>
+              <td><code>1.0</code> (only consulted for <code>complex=dtm-rips</code>; must be <code>1.0</code> or <code>2.0</code>)</td>
+            </tr>
+            <tr>
+              <td><code>sheehyEpsilon</code></td>
+              <td>double</td>
+              <td>REQUIRED for <code>complex=sheehy-rips</code>, no default; strictly between <code>0</code> and <code>1</code></td>
+            </tr>
+            <tr>
+              <td><code>maxDimension</code></td>
+              <td>integer</td>
+              <td><code>2</code> — highest H_k reported, not highest simplex dimension built</td>
+            </tr>
+            <tr>
+              <td><code>maxFiltrationValue</code></td>
+              <td>double</td>
+              <td>the point cloud&#39;s own minimum enclosing radius (<code>+Infinity</code> for <code>witness</code>/<code>witnessVariant=general</code>; <code>SheehyRipsSimplexStream</code>&#39;s own <code>maxFiniteFiltrationValue</code> for <code>complex=sheehy-rips</code>)</td>
+            </tr>
+            <tr>
+              <td><code>field</code></td>
+              <td><code>Z</code> (finite field), <code>R</code> (floating point)</td>
+              <td><code>Z</code>, <code>prime=2</code></td>
+            </tr>
+            <tr>
+              <td><code>prime</code></td>
+              <td>integer</td>
+              <td><code>2</code> (only for <code>field=Z</code>)</td>
+            </tr>
+            <tr>
+              <td><code>epsilon</code></td>
+              <td>double</td>
+              <td><code>1e-9</code> (only for <code>field=R</code>; unrelated to <code>sheehyEpsilon</code> above)</td>
+            </tr>
+            <tr>
+              <td><code>numLandmarks</code></td>
+              <td>integer</td>
+              <td>REQUIRED for <code>complex=witness</code>, no default</td>
+            </tr>
+            <tr>
+              <td><code>witnessVariant</code></td>
+              <td><code>lazy</code>, <code>general</code></td>
+              <td><code>lazy</code> (only consulted for <code>complex=witness</code>)</td>
+            </tr>
+            <tr>
+              <td><code>landmarkSelector</code></td>
+              <td><code>maxmin</code>, <code>random</code></td>
+              <td><code>maxmin</code> (only consulted for <code>complex=witness</code>)</td>
+            </tr>
+            <tr>
+              <td><code>landmarkSeed</code></td>
+              <td>integer</td>
+              <td><code>0</code> (only for <code>complex=witness</code>/<code>landmarkSelector=random</code>)</td>
+            </tr>
+            <tr>
+              <td><code>nu</code></td>
+              <td><code>0</code>, <code>1</code>, <code>2</code></td>
+              <td><code>2</code> (only for <code>complex=witness</code>/<code>witnessVariant=lazy</code>)</td>
+            </tr>
+          </tbody>
+        </table>
+        <p><code>alpha</code> refuses <code>engine=ripser</code> and <code>engine=chunks</code> (neither engine understands alpha complexes, and the
+        chunks/alpha combination is a known stall risk in the underlying library); <code>cech</code>, <code>dtm-rips</code>, and
+        <code>sheehy-rips</code> all refuse <code>engine=ripser</code> (the packed Ripser engine&#39;s optimizations are proven for
+        Vietoris-Rips&#39;s plain max-pairwise-distance functional specifically, not for Cech&#39;s circumradius, DTM&#39;s
+        weighted filtration, or Sheehy&#39;s sparsified/vanishing one); <code>dtm-alpha</code> refuses both <code>engine=ripser</code> and
+        <code>engine=chunks</code>; <code>witness</code> with <code>witnessVariant=general</code> refuses both <code>engine=ripser</code> and <code>engine=chunks</code> for
+        the same reason as <code>cech</code> (the general witness complex isn&#39;t a flag complex either) — use <code>witnessVariant=lazy</code>
+        (the default) for <code>engine=ripser</code>/<code>chunks</code>. <code>engine=cohomology</code> is accepted everywhere <code>engine=naive</code> is
+        (<code>vr</code>, <code>alpha</code>, <code>cech</code>, <code>dtm-rips</code>, <code>dtm-alpha</code>, <code>sheehy-rips</code>, and <code>witness</code> alike). See the
+        <a href="../developers-guide/persistence-engines.html">Developer&#39;s Guide</a>&#39;s streams-vs-engines table for the full
+        picture, complex by complex. Unrecognized keys or values throw <code>IllegalArgumentException</code> immediately rather
+        than silently falling back to a default.</p>
+        <p>Representative-chain vertex indices for <code>complex=witness</code> are <strong>ambient point-cloud indices</strong>, already
+        mapped back from the stream&#39;s own local <code>0 until numLandmarks</code> landmark indices — <code>cycleVertices</code> never
+        reports a raw local landmark index.</p>
+        <p><code>PersistenceResult.cycleVertices</code>/<code>cycleCoefficients</code> give you each bar&#39;s representative chain: every engine
+        records one for every bar — though for <code>engine=cohomology</code>, only an <em>essential</em> bar&#39;s representative is
+        guaranteed to be a genuine cocycle (zero coboundary); a finite bar&#39;s is a valid witness on its own living
+        interval, not over the whole complex (see the developer&#39;s guide&#39;s persistence-engines page for why).</p>
+        
+        <h2 id="which-persistence-engine" class="section"><a class="anchor-link left" href="#which-persistence-engine"><i class="icofont-laika link">&#xef71;</i></a>Which persistence engine?</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Need</th>
+              <th>Engine (<code>engine=</code> for MATLAB/CLI)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Exploration, intermediate-filtration queries, representative cycles</td>
+              <td><code>naive</code> (<code>CellularHomologyContext</code>/<code>TDAContext</code>)</td>
+            </tr>
+            <tr>
+              <td>Fastest, most memory-efficient — the default for <code>complex=vr</code></td>
+              <td><code>ripser</code> (<code>PackedRipserCohomologyContext</code>)</td>
+            </tr>
+            <tr>
+              <td>Large complex, want representatives for every bar including essential ones</td>
+              <td><code>chunks</code> (<code>CellularPersistenceInChunksContext</code>)</td>
+            </tr>
+            <tr>
+              <td>Cohomology (cocycle representatives) on <code>Cube</code>/<code>FiniteSimplicialSet</code>, or on Alpha/Cech/DTM/Sheehy/witness, where <code>ripser</code> doesn&#39;t apply</td>
+              <td><code>cohomology</code> (<code>CellularCohomologyContext</code>)</td>
+            </tr>
+            <tr>
+              <td>Alpha or Cech or DTM or Sheehy complexes, or a general (non-flag) witness complex</td>
+              <td><code>naive</code> or <code>cohomology</code> (<code>chunks</code> also works for Cech, DTM-Rips, and Sheehy-Rips — not Alpha/DTM-Alpha)</td>
+            </tr>
+            <tr>
+              <td>A lazy witness complex (the flag-complex variant)</td>
+              <td><code>ripser</code> (<code>PackedRipserCohomologyContext</code>, run directly on <code>WitnessMetricSpace</code>) or <code>naive</code>/<code>chunks</code>/<code>cohomology</code></td>
+            </tr>
+          </tbody>
+        </table>
+        <p>All engines are generic over the coefficient field (a prime finite field or floating point); <code>naive</code>,
+        <code>chunks</code>, and <code>cohomology</code> are also generic over the cell type (simplices, cubes, or simplicial-set
+        generators) — only <code>ripser</code> is Vietoris-Rips-specialized. See the
+        <a href="../developers-guide/persistence-engines.html">Developer&#39;s Guide&#39;s persistence-engines page</a> for the full
+        detail.</p>
+        
+        <h2 id="which-alpha-complex-backend" class="section"><a class="anchor-link left" href="#which-alpha-complex-backend"><i class="icofont-laika link">&#xef71;</i></a>Which alpha-complex backend?</h2>
+        <ul>
+          <li><strong><code>&quot;helix&quot;</code></strong> (<code>HelixDelaunay</code>) — an actual Delaunay triangulation, computed incrementally. What
+          <code>dispatch = &quot;default&quot;</code> resolves to. Has a known, quantified failure mode on point clouds with a
+          near-cospherical local cluster: zero failures across 20,000-trial fuzz testing at ambient dimension 2 and
+          5, but roughly 1-in-170 at ambient dimension 4 with 20-30 points, on ordinary-looking input. Don&#39;t treat
+          its output as unconditionally reliable ground truth at ambient dimension 4 or higher.</li>
+          <li><strong><code>&quot;DQP&quot;</code></strong> (<code>AlphaShapeDQP</code>) — a dual active-set quadratic-programming method (Carlsson &amp; Carlsson 2024)
+          that never builds a Delaunay triangulation at all. Its real strength is high ambient dimension, where
+          Delaunay becomes infeasible, and exact homology rather than an approximate persistence diagram. The
+          paper&#39;s own published benchmarks are mixed — it loses to Ripser on 2 of 4 of its own persistence examples,
+          and to qhull-based Delaunay on some inputs. The honest value proposition is high-dimensional feasibility
+          and exactness, not raw speed.</li>
+        </ul>
+        <p>Both backends agree that in degenerate (cospherical) point configurations — e.g. points on a regular grid —
+        the alpha complex genuinely contains higher-dimensional simplices than a triangulation-based mental model
+        would suggest (a unit grid in the plane produces 3-simplices, one per unit square, not just triangles). This
+        is correct behavior, not a bug in either backend; users coming from CGAL or GUDHI may find it surprising.</p>
+        
+        <h2 id="performance-opt-in-parallelism" class="section"><a class="anchor-link left" href="#performance-opt-in-parallelism"><i class="icofont-laika link">&#xef71;</i></a>Performance: opt-in parallelism</h2>
+        <p>A few of the more expensive per-cell computations can run on the JVM&#39;s common thread pool, opt-in via a
+        constructor flag (<code>AlphaDQPSettings.parallel</code>, <code>CubicalGridStream.parallelFiltrationValue</code>,
+        <code>CechCofaceSimplexStream.parallelFiltrationValue</code>), all defaulting to <code>false</code>, with deterministic output
+        either way. Worth turning on for a large alpha-complex computation (each vertex&#39;s own QP solve is genuinely
+        expensive — measured 2-4x speedup at a few hundred points and above); cubical images and Cech complexes see
+        a smaller win (a few percent) since the per-cell cost there is lighter.</p>
+        
+        <h2 id="tutorials" class="section"><a class="anchor-link left" href="#tutorials"><i class="icofont-laika link">&#xef71;</i></a>Tutorials</h2>
+        <p><a href="../tutorials/">Tutorials</a> — currently a placeholder; porting Henry Adams&#39; JavaPlex tutorials
+        to TDA4j is tracked there as future work, not yet done. The witness-complex construction those tutorials
+        lean on heavily is now implemented (<code>LandmarkSelector</code>/<code>WitnessGeometry</code>/<code>LazyWitnessSimplexStream</code>/
+        <code>WitnessCofaceSimplexStream</code>, see &quot;Witness complexes&quot; above) — a building block for that port, not the port
+        itself.</p>
 
-</div>
-</div>
-</div>
+        
+<hr class="footer-rule"/>
+<footer>
+  MIT License © Mikael Vejdemo-Johansson, Daniel Hope
 </footer>
 
-</div>
-<script src="../assets/javascripts/application.583bbe55.js"></script>
-<script src="../assets/javascripts/paradox-material-theme.js"></script>
-<script>app.initialize({version:"0.17",url:{base:"../."}})</script>
-<script type="text/javascript" src="../lib/prettify/prettify.js"></script>
-<script type="text/javascript" src="../lib/prettify/lang-scala.js"></script>
-<script type="text/javascript">
-document.addEventListener("DOMContentLoaded", function(event) {
-window.prettyPrint && prettyPrint();
-});
-</script>
-</body>
+
+      </main>
+
+    </div>
+
+  </body>
+
 </html>

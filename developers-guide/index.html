@@ -1,264 +1,183 @@
 <!DOCTYPE html>
-<html lang="en" class="no-js">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="x-ua-compatible" content="ie=edge">
-<meta name="description" content="A Java Platform compatible library for topological data analysis (TDA).">
-<meta name="generator" content="Paradox, paradox-material-theme=0.7.0, mkdocs-material=3.0.3">
+<html lang="en">
 
-<meta name="lang:clipboard.copy" content="Copy to clipboard">
-<meta name="lang:clipboard.copied" content="Copied to clipboard">
-<meta name="lang:search.language" content="">
-<meta name="lang:search.pipeline.stopwords" content="true">
-<meta name="lang:search.pipeline.trimmer" content="true">
-<meta name="lang:search.result.none" content="No matching documents">
-<meta name="lang:search.result.one" content="1 matching document">
-<meta name="lang:search.result.other" content="# matching documents">
-<meta name="lang:search.tokenizer" content="">
+  <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="generator" content="Typelevel Laika + Helium Theme" />
+  <title>Developer's Guide for TDA4j</title>
+  
+  <meta name="author" content="Mikael Vejdemo-Johansson"/>
+  
+  <meta name="author" content="Jordan Matuszewski"/>
+  
+  <meta name="author" content="Kei Kebreau"/>
+  
+  
+  <meta name="description" content="A Java Platform compatible library for topological data analysis (TDA)."/>
+  
+  
+  
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato:400,700">
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Fira+Mono:500">
+  
+  <link rel="stylesheet" type="text/css" href="../helium/site/icofont.min.css" />
+    <link rel="stylesheet" type="text/css" href="../helium/site/laika-helium.css" />
+    <style>
 
+.breadcrumb { display: flex; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 1.5rem 0; }
+.breadcrumb li { margin: 0; }
+.breadcrumb li a { display: inline; padding: 0; }
+.breadcrumb li:not(:last-child)::after { content: "\203A"; margin: 0 0.4em; color: var(--secondary-color); }
 
-<meta name="description" content="A Java Platform compatible library for topological data analysis (TDA).">
-<link rel="shortcut icon" href="../assets/images/favicon.png">
-<title>Developers Guide for TDA4j · TDA4j</title>
-<link rel="stylesheet" href="../assets/stylesheets/application.451f80e5.css">
-<link rel="stylesheet" href="../assets/stylesheets/application-palette.22915126.css">
-<meta name="theme-color" content="#3f51b5" />
-<link rel="stylesheet" href="../lib/material__tabs/dist/mdc.tabs.min.css">
-<link rel="stylesheet" href="../lib/prettify/prettify.css">
-<script src="../assets/javascripts/modernizr.1aa3b519.js"></script>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700|Roboto+Mono">
-<style>
-body,input{font-family:"Roboto","Helvetica Neue",Helvetica,Arial,sans-serif}
-code,kbd,pre{font-family:"Roboto Mono","Courier New",Courier,monospace}
 </style>
-<link rel="stylesheet" href="../assets/fonts/font-awesome.css">
-<link rel="stylesheet" href="../assets/fonts/material-icons.css">
-<link rel="stylesheet" href="../assets/stylesheets/paradox-material-theme.css">
+  <script src="../helium/site/laika-helium.js"></script>
+  
+  
+  <script> /* for avoiding page load transitions */ </script>
 </head>
-<body
-data-md-color-primary="indigo"
-data-md-color-accent="blue"
->
-<input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
-<input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
-<label class="md-overlay" data-md-component="overlay" for="__drawer"></label>
-<header class="md-header" data-md-component="header">
-<nav class="md-header-nav md-grid">
-<div class="md-flex">
-<div class="md-flex__cell md-flex__cell--shrink">
-<a href="../index.html" title="TDA4j" class="md-header-nav__button md-logo">
-<i class="md-icon">local_library</i>
-</a>
-</div>
-<div class="md-flex__cell md-flex__cell--shrink">
-<label class="md-icon md-icon--menu md-header-nav__button" for="__drawer"></label>
-</div>
-<div class="md-flex__cell md-flex__cell--stretch">
-<div class="md-flex__ellipsis md-header-nav__title" data-md-component="title">
-<span class="md-header-nav__topic">
-TDA4j
-</span>
-<span class="md-header-nav__topic">
-Developers Guide for TDA4j
-</span>
-</div>
-</div>
-<form name="search" style="display: none">
-<input type="text" name="query">
-</form>
-<div class="md-flex__cell md-flex__cell--shrink">
-<div class="md-header-nav__source">
-<a href="https://github.com/appliedtopology/tda4j"
-title="Go to repository"
-class="md-source"
-data-md-source="github">
-<div class="md-source__icon">
-<i class="fa fa-github"></i>
-</div>
-<div class="md-source__repository">
-appliedtopology/tda4j
-</div>
-</a>
 
-</div>
-</div>
-</div>
-</nav>
+  <body>
+
+    <header id="top-bar" class="light-default dark-default">
+
+  <div class="row">
+    <a id="nav-icon">
+      <i class="icofont-laika navigationMenu" title="Navigation">&#xefa2;</i>
+    </a>
+    
+    
+  </div>
+
+  <a class="icon-link glyph-link" href="../"><i class="icofont-laika home" title="Home">&#xef47;</i></a>
+
+  <div class="row links">
+    
+    <a class="icon-link svg-link" href="../api/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/appliedtopology/tda4j"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+  </div>  
+
 </header>
 
-<div class="md-container">
-<main class="md-main">
-<div class="md-main__inner md-grid" data-md-component="container">
-<div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
-<div class="md-sidebar__scrollwrap">
-<div class="md-sidebar__inner">
-<nav class="md-nav md-nav--primary" data-md-level="0" style="visibility: hidden">
-<label class="md-nav__title md-nav__title--site" for="drawer">
-<a href="../index.html" title="TDA4j" class="md-nav__button md-logo">
-<span class="md-nav__button md-logo">
-<i class="md-icon">local_library</i>
-</a>
-<a href="../index.html" title="TDA4j">
-TDA4j
-</a>
-</label>
-<div class="md-nav__source">
-<a href="https://github.com/appliedtopology/tda4j"
-title="Go to repository"
-class="md-source"
-data-md-source="github">
-<div class="md-source__icon">
-<i class="fa fa-github"></i>
-</div>
-<div class="md-source__repository">
-appliedtopology/tda4j
-</div>
-</a>
+    <nav id="sidebar">
 
-</div>
-<ul>
-  <li><a href="../tutorials/index.html" class="page">Tutorials for TDA4j</a></li>
-  <li><a href="../user-guide/index.html" class="page">User Guide for TDA4j</a></li>
-  <li><a href="../developers-guide/index.html" class="active page">Developer&rsquo;s Guide for TDA4j</a>
-  <ul>
-    <li><a href="../developers-guide/scala3-primer.html" class="page">A Scala 3.7+ primer for this codebase</a></li>
-    <li><a href="../developers-guide/architecture.html" class="page">Architecture: from algebra to a filtration stream</a></li>
-    <li><a href="../developers-guide/persistence-engines.html" class="page">Persistence engines: what to trust, and why</a></li>
-    <li><a href="../developers-guide/gotchas.html" class="page">Hard-won invariants you must not break</a></li>
-    <li><a href="../developers-guide/degeneracies.html" class="page">Degeneracy behaviors that look like bugs but aren&rsquo;t</a></li>
-    <li><a href="../developers-guide/alpha-complex.html" class="page">Alpha complex: DQP vs Helix</a></li>
-    <li><a href="../developers-guide/class-diagrams.html" class="page">Mapping the library: class diagrams</a></li>
-  </ul></li>
-</ul>
-<nav class="md-nav md-nav--secondary">
-<label class="md-nav__title" for="__toc">Table of contents</label>
-<ul>
-  <li><a href="../developers-guide/index.html#developers-guide-for-tda4j" class="header">Developer&rsquo;s Guide for TDA4j</a>
-  <ul>
-    <li><a href="../developers-guide/index.html#how-to-use-this-guide" class="header">How to use this guide</a></li>
-    <li><a href="../developers-guide/index.html#naming-convention-tda4j-tda4j-never-tda4j" class="header">Naming convention: <code>tda4j</code>/<code>TDA4j</code>, never <code>Tda4j</code></a></li>
-  </ul></li>
-</ul>
-</nav>
+  <div class="row">
+    
+    <a class="icon-link svg-link" href="../api/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/appliedtopology/tda4j"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+  </div>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="../downloads.html">Downloads</a></li>
+    <li class="level1 nav-leaf"><a href="../tutorials/">Tutorials for TDA4j</a></li>
+    <li class="level1 nav-leaf"><a href="../user-guide/">User Guide for TDA4j</a></li>
+    <li class="level1 active nav-node"><a href="#">Developer&#39;s Guide for TDA4j</a></li>
+    <li class="level2 nav-leaf"><a href="scala3-primer.html">A Scala 3.7+ primer for this codebase</a></li>
+    <li class="level2 nav-leaf"><a href="architecture.html">Architecture: from algebra to a filtration stream</a></li>
+    <li class="level2 nav-leaf"><a href="persistence-engines.html">Persistence engines: what to trust, and why</a></li>
+    <li class="level2 nav-leaf"><a href="gotchas.html">Hard-won invariants you must not break</a></li>
+    <li class="level2 nav-leaf"><a href="degeneracies.html">Degeneracy behaviors that look like bugs but aren&#39;t</a></li>
+    <li class="level2 nav-leaf"><a href="alpha-complex.html">Alpha complex: DQP vs Helix</a></li>
+    <li class="level2 nav-leaf"><a href="class-diagrams.html">Mapping the library: class diagrams</a></li>
+  </ul>
 
 </nav>
-<ul style="display: none">
-<li class="md-nav__item md-version" id="project.version">
-<label class="md-nav__link" for="__version">
-<i class="md-icon" title="Version">label_outline</i> 0.1.3*
-</label>
-</li>
-</ul>
-</div>
-</div>
-</div>
-<div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
-<div class="md-sidebar__scrollwrap">
-<div class="md-sidebar__inner">
-<nav class="md-nav md-nav--secondary">
-<label class="md-nav__title" for="__toc">Table of contents</label>
-<ul>
-  <li><a href="../developers-guide/index.html#developers-guide-for-tda4j" class="header">Developer&rsquo;s Guide for TDA4j</a>
-  <ul>
-    <li><a href="../developers-guide/index.html#how-to-use-this-guide" class="header">How to use this guide</a></li>
-    <li><a href="../developers-guide/index.html#naming-convention-tda4j-tda4j-never-tda4j" class="header">Naming convention: <code>tda4j</code>/<code>TDA4j</code>, never <code>Tda4j</code></a></li>
-  </ul></li>
-</ul>
+
+    <div id="container">
+
+      
+<nav id="page-nav">
+  <p class="header"><a href="#">Developer&#39;s Guide for TDA4j</a></p>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="#how-to-use-this-guide">How to use this guide</a></li>
+    <li class="level1 nav-leaf"><a href="#naming-convention-tda4j-tda4j-never-tda4j">Naming convention: <code>tda4j</code>/<code>TDA4j</code>, never <code>Tda4j</code></a></li>
+  </ul>
+
+  <p class="footer"></p>
 </nav>
 
-</div>
-</div>
-</div>
-<div class="md-content">
-<article class="md-content__inner md-typeset">
-<div class="md-content__searchable">
-<h1><a href="#developers-guide-for-tda4j" name="developers-guide-for-tda4j" class="anchor"><span class="anchor-link"></span></a>Developer&rsquo;s Guide for TDA4j</h1>
-<p>TDA4j is meant to be a viable platform for algorithm development and research into topological data analysis, not just a library you call into as a black box. This guide gets you from &ldquo;I understand persistent homology&rdquo; to &ldquo;I can confidently write, review, and extend code in this repository&rdquo; — which, if Scala 3.7+&rsquo;s newest context-abstraction syntax is new to you (as it is for most people — it&rsquo;s genuinely recent), is most of the actual gap.</p>
-<h2><a href="#how-to-use-this-guide" name="how-to-use-this-guide" class="anchor"><span class="anchor-link"></span></a>How to use this guide</h2>
-<ol>
-  <li><strong>The Scala 3 syntax.</strong> <code>Type is TypeClass</code>, <code>type Self: Ordering as ordering</code>, <code>given [bounds] =&gt; Body
-   = value</code>, opaque types, extension methods. None of this is older-Scala-3-style code that &ldquo;should&rdquo; already  look familiar. Start with the <a href="scala3-primer.html">Scala 3 primer</a>.</li>
-  <li><strong>Where a given piece of functionality lives, and what layer it&rsquo;s in.</strong> The library is built in clear  layers — algebra, then complex construction (streams), then the persistence engines that consume a  stream — and each has its own subpackage. See <a href="architecture.html">Architecture</a>.</li>
-  <li><strong>Which persistence algorithm, and which of its implementations, to build on.</strong> <code>homology</code> ships four  independently-implemented algorithms across five concrete classes; they are not layers on one shared  core, and their intended roles (production vs. reference oracle) are not something you can infer just  because all five compile and share a file. See <a href="persistence-engines.html">Persistence engines</a>.</li>
-  <li><strong>What traps look fine, compile fine, and only produce a wrong answer on specific inputs.</strong> Ordering and  reduction code in this codebase has a real history of exactly this failure mode. See  <a href="gotchas.html">Hard-won invariants</a> before you trust your own &ldquo;this looks obviously correct&rdquo; judgment  on a change to reduction or ordering logic.</li>
-  <li><strong>Whether a surprising result is a bug or the mathematically correct answer on a degenerate input.</strong> See  <a href="degeneracies.html">Degeneracies</a> before &ldquo;fixing&rdquo; something that isn&rsquo;t broken.</li>
-</ol>
-<h2><a href="#naming-convention-tda4j-tda4j-never-tda4j" name="naming-convention-tda4j-tda4j-never-tda4j" class="anchor"><span class="anchor-link"></span></a>Naming convention: <code>tda4j</code>/<code>TDA4j</code>, never <code>Tda4j</code></h2>
-<p>&ldquo;TDA4j&rdquo; is the acronym TDA (&ldquo;topological data analysis&rdquo;) plus the conventional <code>4j</code> suffix (<code>log4j</code>, <code>slf4j</code>) — not an ordinary English word, so don&rsquo;t let a titlecasing habit turn it into <code>Tda4j</code>. Use <strong><code>tda4j</code></strong> (all lowercase) for the package name, the executable/artifact name, the repo name, and ordinary prose; use <strong><code>TDA4j</code></strong> (acronym preserved) for Scala identifiers that must start with a capital letter — class/object/trait names such as <code>TDA4j</code> (the MATLAB/Java facade), <code>TDA4jConf</code>/<code>TDA4jCLI</code> (the CLI). <code>Tda4j</code> is never correct.</p>
-<p>The same rule applies to any identifier that&rsquo;s itself an acronym: <code>io.CSV</code> (comma-separated values) and <code>cli.TDA4jCLI</code> (command-line interface) are both fully capitalized for the same reason. <code>io.Gudhi</code>/<code>Dipha</code>/ <code>Ripser</code>/<code>Perseus</code> are ordinary proper nouns (the external projects those file formats belong to) and stay titlecased in their own conventional spelling instead.</p>
-</div>
-<div>
-<a href="https://github.com/appliedtopology/tda4j/tree/0.1.3-SNAPSHOT/src/main/paradox/developers-guide/index.md" title="Edit this page" class="md-source-file md-edit">
-Edit this page
-</a>
-</div>
-<div class="print-only">
-<span class="md-source-file md-version">
-0.1.3*
-</span>
-</div>
-</article>
-</div>
-</div>
-</main>
-<footer class="md-footer">
-<div class="md-footer-nav">
-<nav class="md-footer-nav__inner md-grid">
-<a href="../user-guide/index.html" title="User Guide for TDA4j" class="md-flex md-footer-nav__link md-footer-nav__link--prev" rel="prev">
-<div class="md-flex__cell md-flex__cell--shrink">
-<i class="md-icon md-icon--arrow-back md-footer-nav__button"></i>
-</div>
-<div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
-<span class="md-flex__ellipsis">
-<span class="md-footer-nav__direction">
-Previous
-</span>
-User Guide for TDA4j
-</span>
-</div>
-</a>
-<a href="../developers-guide/scala3-primer.html" title="A Scala 3.7+ primer for this codebase" class="md-flex md-footer-nav__link md-footer-nav__link--next" rel="next">
-<div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
-<span class="md-flex__ellipsis">
-<span class="md-footer-nav__direction">
-Next
-</span>
-A Scala 3.7+ primer for this codebase
-</span>
-</div>
-<div class="md-flex__cell md-flex__cell--shrink">
-<i class="md-icon md-icon--arrow-forward md-footer-nav__button"></i>
-</div>
-</a>
-</nav>
-</div>
-<div class="md-footer-meta md-typeset">
-<div class="md-footer-meta__inner md-grid">
-<div class="md-footer-copyright">
-<div class="md-footer-copyright__highlight">
-MIT License © Mikael Vejdemo-Johansson, Daniel Hope
-</div>
-Powered by
-<a href="https://github.com/lightbend/paradox">Paradox</a>
-and
-<a href="https://sbt.github.io/sbt-paradox-material-theme/">Paradox Material Theme</a>
 
-</div>
-</div>
-</div>
+      <main class="content">
+
+        <ul class="breadcrumb nav-list">
+          <li class="level1 breadcrumb nav-leaf"><a href="../">TDA4j</a></li>
+          <li class="level1 breadcrumb active nav-leaf"><a href="#">Developer&#39;s Guide for TDA4j</a></li>
+        </ul>
+
+        <h1 id="developer-s-guide-for-tda4j" class="title">Developer&#39;s Guide for TDA4j</h1>
+        <p>TDA4j is meant to be a viable platform for algorithm development and research into topological data
+        analysis, not just a library you call into as a black box. This guide gets you from &quot;I understand
+        persistent homology&quot; to &quot;I can confidently write, review, and extend code in this repository&quot; — which, if
+        Scala 3.7+&#39;s newest context-abstraction syntax is new to you (as it is for most people — it&#39;s genuinely
+        recent), is most of the actual gap.</p>
+        
+        <h2 id="how-to-use-this-guide" class="section"><a class="anchor-link left" href="#how-to-use-this-guide"><i class="icofont-laika link">&#xef71;</i></a>How to use this guide</h2>
+        <ol class="arabic">
+          <li><strong>The Scala 3 syntax.</strong> <code>Type is TypeClass</code>, <code>type Self: Ordering as ordering</code>, <code>given [bounds] =&gt; Body
+= value</code>, opaque types, extension methods. None of this is older-Scala-3-style code that &quot;should&quot; already
+          look familiar. Start with the <a href="scala3-primer.html">Scala 3 primer</a>.</li>
+          <li><strong>Where a given piece of functionality lives, and what layer it&#39;s in.</strong> The library is built in clear
+          layers — algebra, then complex construction (streams), then the persistence engines that consume a
+          stream — and each has its own subpackage. See <a href="architecture.html">Architecture</a>.</li>
+          <li><strong>Which persistence algorithm, and which of its implementations, to build on.</strong> <code>homology</code> ships four
+          independently-implemented algorithms across five concrete classes; they are not layers on one shared
+          core, and their intended roles (production vs. reference oracle) are not something you can infer just
+          because all five compile and share a file. See <a href="persistence-engines.html">Persistence engines</a>.</li>
+          <li><strong>What traps look fine, compile fine, and only produce a wrong answer on specific inputs.</strong> Ordering and
+          reduction code in this codebase has a real history of exactly this failure mode. See
+          <a href="gotchas.html">Hard-won invariants</a> before you trust your own &quot;this looks obviously correct&quot; judgment
+          on a change to reduction or ordering logic.</li>
+          <li><strong>Whether a surprising result is a bug or the mathematically correct answer on a degenerate input.</strong> See
+          <a href="degeneracies.html">Degeneracies</a> before &quot;fixing&quot; something that isn&#39;t broken.</li>
+        </ol>
+        
+        <h2 id="naming-convention-tda4j-tda4j-never-tda4j" class="section"><a class="anchor-link left" href="#naming-convention-tda4j-tda4j-never-tda4j"><i class="icofont-laika link">&#xef71;</i></a>Naming convention: <code>tda4j</code>/<code>TDA4j</code>, never <code>Tda4j</code></h2>
+        <p>&quot;TDA4j&quot; is the acronym TDA (&quot;topological data analysis&quot;) plus the conventional <code>4j</code> suffix (<code>log4j</code>,
+        <code>slf4j</code>) — not an ordinary English word, so don&#39;t let a titlecasing habit turn it into <code>Tda4j</code>. Use
+        <strong><code>tda4j</code></strong> (all lowercase) for the package name, the executable/artifact name, the repo name, and ordinary
+        prose; use <strong><code>TDA4j</code></strong> (acronym preserved) for Scala identifiers that must start with a capital letter —
+        class/object/trait names such as <code>TDA4j</code> (the MATLAB/Java facade), <code>TDA4jConf</code>/<code>TDA4jCLI</code> (the CLI).
+        <code>Tda4j</code> is never correct.</p>
+        <p>The same rule applies to any identifier that&#39;s itself an acronym: <code>io.CSV</code> (comma-separated values) and
+        <code>cli.TDA4jCLI</code> (command-line interface) are both fully capitalized for the same reason. <code>io.Gudhi</code>/<code>Dipha</code>/
+        <code>Ripser</code>/<code>Perseus</code> are ordinary proper nouns (the external projects those file formats belong to) and stay
+        titlecased in their own conventional spelling instead.</p>
+
+        
+<hr class="footer-rule"/>
+<footer>
+  MIT License © Mikael Vejdemo-Johansson, Daniel Hope
 </footer>
 
-</div>
-<script src="../assets/javascripts/application.583bbe55.js"></script>
-<script src="../assets/javascripts/paradox-material-theme.js"></script>
-<script>app.initialize({version:"0.17",url:{base:"../."}})</script>
-<script type="text/javascript" src="../lib/prettify/prettify.js"></script>
-<script type="text/javascript" src="../lib/prettify/lang-scala.js"></script>
-<script type="text/javascript">
-document.addEventListener("DOMContentLoaded", function(event) {
-window.prettyPrint && prettyPrint();
-});
-</script>
-</body>
+
+      </main>
+
+    </div>
+
+  </body>
+
 </html>

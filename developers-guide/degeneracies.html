@@ -1,268 +1,198 @@
 <!DOCTYPE html>
-<html lang="en" class="no-js">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="x-ua-compatible" content="ie=edge">
-<meta name="description" content="A Java Platform compatible library for topological data analysis (TDA).">
-<meta name="generator" content="Paradox, paradox-material-theme=0.7.0, mkdocs-material=3.0.3">
+<html lang="en">
 
-<meta name="lang:clipboard.copy" content="Copy to clipboard">
-<meta name="lang:clipboard.copied" content="Copied to clipboard">
-<meta name="lang:search.language" content="">
-<meta name="lang:search.pipeline.stopwords" content="true">
-<meta name="lang:search.pipeline.trimmer" content="true">
-<meta name="lang:search.result.none" content="No matching documents">
-<meta name="lang:search.result.one" content="1 matching document">
-<meta name="lang:search.result.other" content="# matching documents">
-<meta name="lang:search.tokenizer" content="">
+  <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="generator" content="Typelevel Laika + Helium Theme" />
+  <title>Degeneracy behaviors that look like bugs but aren't</title>
+  
+  <meta name="author" content="Mikael Vejdemo-Johansson"/>
+  
+  <meta name="author" content="Jordan Matuszewski"/>
+  
+  <meta name="author" content="Kei Kebreau"/>
+  
+  
+  <meta name="description" content="A Java Platform compatible library for topological data analysis (TDA)."/>
+  
+  
+  
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato:400,700">
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Fira+Mono:500">
+  
+  <link rel="stylesheet" type="text/css" href="../helium/site/icofont.min.css" />
+    <link rel="stylesheet" type="text/css" href="../helium/site/laika-helium.css" />
+    <style>
 
+.breadcrumb { display: flex; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 1.5rem 0; }
+.breadcrumb li { margin: 0; }
+.breadcrumb li a { display: inline; padding: 0; }
+.breadcrumb li:not(:last-child)::after { content: "\203A"; margin: 0 0.4em; color: var(--secondary-color); }
 
-<meta name="description" content="A Java Platform compatible library for topological data analysis (TDA).">
-<link rel="shortcut icon" href="../assets/images/favicon.png">
-<title>Degeneracy behaviors that look like bugs but arent · TDA4j</title>
-<link rel="stylesheet" href="../assets/stylesheets/application.451f80e5.css">
-<link rel="stylesheet" href="../assets/stylesheets/application-palette.22915126.css">
-<meta name="theme-color" content="#3f51b5" />
-<link rel="stylesheet" href="../lib/material__tabs/dist/mdc.tabs.min.css">
-<link rel="stylesheet" href="../lib/prettify/prettify.css">
-<script src="../assets/javascripts/modernizr.1aa3b519.js"></script>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700|Roboto+Mono">
-<style>
-body,input{font-family:"Roboto","Helvetica Neue",Helvetica,Arial,sans-serif}
-code,kbd,pre{font-family:"Roboto Mono","Courier New",Courier,monospace}
 </style>
-<link rel="stylesheet" href="../assets/fonts/font-awesome.css">
-<link rel="stylesheet" href="../assets/fonts/material-icons.css">
-<link rel="stylesheet" href="../assets/stylesheets/paradox-material-theme.css">
+  <script src="../helium/site/laika-helium.js"></script>
+  
+  
+  <script> /* for avoiding page load transitions */ </script>
 </head>
-<body
-data-md-color-primary="indigo"
-data-md-color-accent="blue"
->
-<input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
-<input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
-<label class="md-overlay" data-md-component="overlay" for="__drawer"></label>
-<header class="md-header" data-md-component="header">
-<nav class="md-header-nav md-grid">
-<div class="md-flex">
-<div class="md-flex__cell md-flex__cell--shrink">
-<a href="../index.html" title="TDA4j" class="md-header-nav__button md-logo">
-<i class="md-icon">local_library</i>
-</a>
-</div>
-<div class="md-flex__cell md-flex__cell--shrink">
-<label class="md-icon md-icon--menu md-header-nav__button" for="__drawer"></label>
-</div>
-<div class="md-flex__cell md-flex__cell--stretch">
-<div class="md-flex__ellipsis md-header-nav__title" data-md-component="title">
-<span class="md-header-nav__topic">
-TDA4j
-</span>
-<span class="md-header-nav__topic">
-Degeneracy behaviors that look like bugs but arent
-</span>
-</div>
-</div>
-<form name="search" style="display: none">
-<input type="text" name="query">
-</form>
-<div class="md-flex__cell md-flex__cell--shrink">
-<div class="md-header-nav__source">
-<a href="https://github.com/appliedtopology/tda4j"
-title="Go to repository"
-class="md-source"
-data-md-source="github">
-<div class="md-source__icon">
-<i class="fa fa-github"></i>
-</div>
-<div class="md-source__repository">
-appliedtopology/tda4j
-</div>
-</a>
 
-</div>
-</div>
-</div>
-</nav>
+  <body>
+
+    <header id="top-bar" class="light-default dark-default">
+
+  <div class="row">
+    <a id="nav-icon">
+      <i class="icofont-laika navigationMenu" title="Navigation">&#xefa2;</i>
+    </a>
+    
+    
+  </div>
+
+  <a class="icon-link glyph-link" href="../"><i class="icofont-laika home" title="Home">&#xef47;</i></a>
+
+  <div class="row links">
+    
+    <a class="icon-link svg-link" href="../api/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/appliedtopology/tda4j"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+  </div>  
+
 </header>
 
-<div class="md-container">
-<main class="md-main">
-<div class="md-main__inner md-grid" data-md-component="container">
-<div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
-<div class="md-sidebar__scrollwrap">
-<div class="md-sidebar__inner">
-<nav class="md-nav md-nav--primary" data-md-level="0" style="visibility: hidden">
-<label class="md-nav__title md-nav__title--site" for="drawer">
-<a href="../index.html" title="TDA4j" class="md-nav__button md-logo">
-<span class="md-nav__button md-logo">
-<i class="md-icon">local_library</i>
-</a>
-<a href="../index.html" title="TDA4j">
-TDA4j
-</a>
-</label>
-<div class="md-nav__source">
-<a href="https://github.com/appliedtopology/tda4j"
-title="Go to repository"
-class="md-source"
-data-md-source="github">
-<div class="md-source__icon">
-<i class="fa fa-github"></i>
-</div>
-<div class="md-source__repository">
-appliedtopology/tda4j
-</div>
-</a>
+    <nav id="sidebar">
 
-</div>
-<ul>
-  <li><a href="../tutorials/index.html" class="page">Tutorials for TDA4j</a></li>
-  <li><a href="../user-guide/index.html" class="page">User Guide for TDA4j</a></li>
-  <li><a href="../developers-guide/index.html" class="page">Developer&rsquo;s Guide for TDA4j</a>
-  <ul>
-    <li><a href="../developers-guide/scala3-primer.html" class="page">A Scala 3.7+ primer for this codebase</a></li>
-    <li><a href="../developers-guide/architecture.html" class="page">Architecture: from algebra to a filtration stream</a></li>
-    <li><a href="../developers-guide/persistence-engines.html" class="page">Persistence engines: what to trust, and why</a></li>
-    <li><a href="../developers-guide/gotchas.html" class="page">Hard-won invariants you must not break</a></li>
-    <li><a href="../developers-guide/degeneracies.html" class="active page">Degeneracy behaviors that look like bugs but aren&rsquo;t</a></li>
-    <li><a href="../developers-guide/alpha-complex.html" class="page">Alpha complex: DQP vs Helix</a></li>
-    <li><a href="../developers-guide/class-diagrams.html" class="page">Mapping the library: class diagrams</a></li>
-  </ul></li>
-</ul>
-<nav class="md-nav md-nav--secondary">
-<label class="md-nav__title" for="__toc">Table of contents</label>
-<ul>
-  <li><a href="../developers-guide/degeneracies.html#degeneracy-behaviors-that-look-like-bugs-but-arent" class="header">Degeneracy behaviors that look like bugs but aren&rsquo;t</a>
-  <ul>
-    <li><a href="../developers-guide/degeneracies.html#alpha-complexes-in-degenerate-cospherical-position-are-not-delaunay-subcomplexes" class="header">Alpha complexes in degenerate (cospherical) position are not Delaunay subcomplexes</a></li>
-    <li><a href="../developers-guide/degeneracies.html#zero-persistence-zero-length-bars-are-real-output-not-noise-to-filter" class="header">Zero-persistence (zero-length) bars are real output, not noise to filter</a></li>
-    <li><a href="../developers-guide/degeneracies.html#a-vietoris-rips-complex-with-maxdimension-2-always-has-ties" class="header">A Vietoris-Rips complex with <code>maxDimension ≥ 2</code> always has ties</a></li>
-    <li><a href="../developers-guide/degeneracies.html#a-quotient-simplicial-set-can-collapse-a-cell-to-a-point-not-just-merge-it-with-a-peer" class="header">A quotient simplicial set can collapse a cell to a <em>degenerate</em> point, not just merge it with a peer</a></li>
-    <li><a href="../developers-guide/degeneracies.html#a-cubical-or-cech-complex-having-simplices-cubes-at-a-shared-tie-is-not-a-bug" class="header">A cubical or Cech complex having &ldquo;extra&rdquo; simplices/cubes at a shared tie is not a bug</a></li>
-  </ul></li>
-</ul>
-</nav>
+  <div class="row">
+    
+    <a class="icon-link svg-link" href="../api/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/appliedtopology/tda4j"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+  </div>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="../downloads.html">Downloads</a></li>
+    <li class="level1 nav-leaf"><a href="../tutorials/">Tutorials for TDA4j</a></li>
+    <li class="level1 nav-leaf"><a href="../user-guide/">User Guide for TDA4j</a></li>
+    <li class="level1 nav-node"><a href="index.html">Developer&#39;s Guide for TDA4j</a></li>
+    <li class="level2 nav-leaf"><a href="scala3-primer.html">A Scala 3.7+ primer for this codebase</a></li>
+    <li class="level2 nav-leaf"><a href="architecture.html">Architecture: from algebra to a filtration stream</a></li>
+    <li class="level2 nav-leaf"><a href="persistence-engines.html">Persistence engines: what to trust, and why</a></li>
+    <li class="level2 nav-leaf"><a href="gotchas.html">Hard-won invariants you must not break</a></li>
+    <li class="level2 active nav-leaf"><a href="#">Degeneracy behaviors that look like bugs but aren&#39;t</a></li>
+    <li class="level2 nav-leaf"><a href="alpha-complex.html">Alpha complex: DQP vs Helix</a></li>
+    <li class="level2 nav-leaf"><a href="class-diagrams.html">Mapping the library: class diagrams</a></li>
+  </ul>
 
 </nav>
-<ul style="display: none">
-<li class="md-nav__item md-version" id="project.version">
-<label class="md-nav__link" for="__version">
-<i class="md-icon" title="Version">label_outline</i> 0.1.3*
-</label>
-</li>
-</ul>
-</div>
-</div>
-</div>
-<div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
-<div class="md-sidebar__scrollwrap">
-<div class="md-sidebar__inner">
-<nav class="md-nav md-nav--secondary">
-<label class="md-nav__title" for="__toc">Table of contents</label>
-<ul>
-  <li><a href="../developers-guide/degeneracies.html#degeneracy-behaviors-that-look-like-bugs-but-arent" class="header">Degeneracy behaviors that look like bugs but aren&rsquo;t</a>
-  <ul>
-    <li><a href="../developers-guide/degeneracies.html#alpha-complexes-in-degenerate-cospherical-position-are-not-delaunay-subcomplexes" class="header">Alpha complexes in degenerate (cospherical) position are not Delaunay subcomplexes</a></li>
-    <li><a href="../developers-guide/degeneracies.html#zero-persistence-zero-length-bars-are-real-output-not-noise-to-filter" class="header">Zero-persistence (zero-length) bars are real output, not noise to filter</a></li>
-    <li><a href="../developers-guide/degeneracies.html#a-vietoris-rips-complex-with-maxdimension-2-always-has-ties" class="header">A Vietoris-Rips complex with <code>maxDimension ≥ 2</code> always has ties</a></li>
-    <li><a href="../developers-guide/degeneracies.html#a-quotient-simplicial-set-can-collapse-a-cell-to-a-point-not-just-merge-it-with-a-peer" class="header">A quotient simplicial set can collapse a cell to a <em>degenerate</em> point, not just merge it with a peer</a></li>
-    <li><a href="../developers-guide/degeneracies.html#a-cubical-or-cech-complex-having-simplices-cubes-at-a-shared-tie-is-not-a-bug" class="header">A cubical or Cech complex having &ldquo;extra&rdquo; simplices/cubes at a shared tie is not a bug</a></li>
-  </ul></li>
-</ul>
+
+    <div id="container">
+
+      
+<nav id="page-nav">
+  <p class="header"><a href="#">Degeneracy behaviors that look like bugs but aren&#39;t</a></p>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="#alpha-complexes-in-degenerate-cospherical-position-are-not-delaunay-subcomplexes">Alpha complexes in degenerate (cospherical) position are not Delaunay subcomplexes</a></li>
+    <li class="level1 nav-leaf"><a href="#zero-persistence-zero-length-bars-are-real-output-not-noise-to-filter">Zero-persistence (zero-length) bars are real output, not noise to filter</a></li>
+    <li class="level1 nav-leaf"><a href="#a-vietoris-rips-complex-with-maxdimension-2-always-has-ties">A Vietoris-Rips complex with <code>maxDimension ≥ 2</code> always has ties</a></li>
+    <li class="level1 nav-leaf"><a href="#a-quotient-simplicial-set-can-collapse-a-cell-to-a-degenerate-point-not-just-merge-it-with-a-peer">A quotient simplicial set can collapse a cell to a <em>degenerate</em> point, not just merge it with a peer</a></li>
+    <li class="level1 nav-leaf"><a href="#a-cubical-or-cech-complex-having-extra-simplices-cubes-at-a-shared-tie-is-not-a-bug">A cubical or Cech complex having &quot;extra&quot; simplices/cubes at a shared tie is not a bug</a></li>
+  </ul>
+
+  <p class="footer"></p>
 </nav>
 
-</div>
-</div>
-</div>
-<div class="md-content">
-<article class="md-content__inner md-typeset">
-<div class="md-content__searchable">
-<h1><a href="#degeneracy-behaviors-that-look-like-bugs-but-arent" name="degeneracy-behaviors-that-look-like-bugs-but-arent" class="anchor"><span class="anchor-link"></span></a>Degeneracy behaviors that look like bugs but aren&rsquo;t</h1>
-<p>A dedicated page so you don&rsquo;t &ldquo;fix&rdquo; correct-but-surprising behavior. Each of these has, at some point, looked like a bug to someone reading the output for the first time.</p>
-<h2><a href="#alpha-complexes-in-degenerate-cospherical-position-are-not-delaunay-subcomplexes" name="alpha-complexes-in-degenerate-cospherical-position-are-not-delaunay-subcomplexes" class="anchor"><span class="anchor-link"></span></a>Alpha complexes in degenerate (cospherical) position are not Delaunay subcomplexes</h2>
-<p>In degenerate (cospherical) position, the alpha complex is <strong>not</strong> a subcomplex of some triangulation you could point to. <code>k</code> cospherical sites sharing a Voronoi vertex contribute a <code>(k-1)</code>-simplex — a unit grid in the plane produces 3-simplices (one per unit square, since the four corners of each square are cospherical), not just triangles from an arbitrary triangulation choice; a unit grid in R³ produces 7-simplices (one per unit cube). <strong>Truncating at the ambient dimension gives the wrong homotopy type, not merely a truncated one.</strong> Users coming from CGAL or GUDHI will not expect this, because those tools typically report a triangulation (a choice among several valid ones), not the actual alpha complex in the degenerate case — but it&rsquo;s correct here, not a bug. <code>AlphaValidationSpec</code>&rsquo;s grid test exercises a mild version of this directly: two near-collinear rows produce two &ldquo;sliver&rdquo; simplices with circumradius roughly 40-60x the point cloud&rsquo;s diameter, and both the DQP and Helix backends correctly include them. See <a href="alpha-complex.html">Alpha complex: DQP vs Helix</a> for the developer-facing detail on both backends.</p>
-<h2><a href="#zero-persistence-zero-length-bars-are-real-output-not-noise-to-filter" name="zero-persistence-zero-length-bars-are-real-output-not-noise-to-filter" class="anchor"><span class="anchor-link"></span></a>Zero-persistence (zero-length) bars are real output, not noise to filter</h2>
-<p><code>RipserCohomologyContext</code> emits these deliberately — e.g. an edge tied in filtration value with the triangle that immediately kills it. Definition 3.2/Proposition 3.9&rsquo;s <em>apparent pairs</em> (see <a href="persistence-engines.html">Persistence engines</a>) <strong>are</strong> exactly the zero-persistence pairs — dropping them silently at the engine level would be wrong at this stage of the pipeline, even though a downstream visualization might reasonably choose to filter them before display. If you see a <code>[3.0, 3.0)</code>-style bar in test output, that&rsquo;s not evidence of a bug on its own.</p>
-<h2><a href="#a-vietoris-rips-complex-with-maxdimension-2-always-has-ties" name="a-vietoris-rips-complex-with-maxdimension-2-always-has-ties" class="anchor"><span class="anchor-link"></span></a>A Vietoris-Rips complex with <code>maxDimension ≥ 2</code> always has ties</h2>
-<p>Every simplex of dimension ≥ 2 ties in filtration value with its own longest edge, by construction (a simplex&rsquo;s filtration value — maximum pairwise distance among its vertices — is always realized by some edge face of it). This is the <em>normal</em> case for VR complexes, not evidence of a degenerate or adversarial input, and any reduction code path that implicitly assumes &ldquo;ties are rare&rdquo; will misbehave on completely ordinary data. This is precisely why <a href="gotchas.html">Hard-won invariants #2 and #3</a> about tie-break consistency exist and matter in practice, not just in adversarially constructed test cases.</p>
-<h2><a href="#a-quotient-simplicial-set-can-collapse-a-cell-to-a-point-not-just-merge-it-with-a-peer" name="a-quotient-simplicial-set-can-collapse-a-cell-to-a-point-not-just-merge-it-with-a-peer" class="anchor"><span class="anchor-link"></span></a>A quotient simplicial set can collapse a cell to a <em>degenerate</em> point, not just merge it with a peer</h2>
-<p><code>quotient</code>&rsquo;s attaching map is <code>G =&gt; SSetElement[G]</code>, not <code>G =&gt; G</code>, specifically because some quotients need a cell to crush down a dimension entirely rather than merge with a same-dimension peer — the standard Δ-complex model of ℝP² glues two of a filled triangle&rsquo;s three edges into a loop, but the third collapses entirely onto a degenerate point over a vertex. If you&rsquo;re building a new attaching map and find yourself wanting to map a generator to a lower-dimensional target, that&rsquo;s expected, not a sign the API is being misused.</p>
-<h2><a href="#a-cubical-or-cech-complex-having-simplices-cubes-at-a-shared-tie-is-not-a-bug" name="a-cubical-or-cech-complex-having-simplices-cubes-at-a-shared-tie-is-not-a-bug" class="anchor"><span class="anchor-link"></span></a>A cubical or Cech complex having &ldquo;extra&rdquo; simplices/cubes at a shared tie is not a bug</h2>
-<p>The same underlying fact as the alpha-complex case above shows up differently in other constructions: a cubical grid&rsquo;s dense T-construction cell count (<code>prod_i (2*shape(i)+1)</code>) is much larger than the pixel/voxel count itself — a 256x256 image is 263,169 cells, not 65,536 — because every lower-dimensional face of every pixel is its own cell, most of them shared between adjacent pixels. This is the correct cell count for the cubical complex, not evidence of a construction bug.</p>
-</div>
-<div>
-<a href="https://github.com/appliedtopology/tda4j/tree/0.1.3-SNAPSHOT/src/main/paradox/developers-guide/degeneracies.md" title="Edit this page" class="md-source-file md-edit">
-Edit this page
-</a>
-</div>
-<div class="print-only">
-<span class="md-source-file md-version">
-0.1.3*
-</span>
-</div>
-</article>
-</div>
-</div>
-</main>
-<footer class="md-footer">
-<div class="md-footer-nav">
-<nav class="md-footer-nav__inner md-grid">
-<a href="../developers-guide/gotchas.html" title="Hard-won invariants you must not break" class="md-flex md-footer-nav__link md-footer-nav__link--prev" rel="prev">
-<div class="md-flex__cell md-flex__cell--shrink">
-<i class="md-icon md-icon--arrow-back md-footer-nav__button"></i>
-</div>
-<div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
-<span class="md-flex__ellipsis">
-<span class="md-footer-nav__direction">
-Previous
-</span>
-Hard-won invariants you must not break
-</span>
-</div>
-</a>
-<a href="../developers-guide/alpha-complex.html" title="Alpha complex: DQP vs Helix" class="md-flex md-footer-nav__link md-footer-nav__link--next" rel="next">
-<div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
-<span class="md-flex__ellipsis">
-<span class="md-footer-nav__direction">
-Next
-</span>
-Alpha complex: DQP vs Helix
-</span>
-</div>
-<div class="md-flex__cell md-flex__cell--shrink">
-<i class="md-icon md-icon--arrow-forward md-footer-nav__button"></i>
-</div>
-</a>
-</nav>
-</div>
-<div class="md-footer-meta md-typeset">
-<div class="md-footer-meta__inner md-grid">
-<div class="md-footer-copyright">
-<div class="md-footer-copyright__highlight">
-MIT License © Mikael Vejdemo-Johansson, Daniel Hope
-</div>
-Powered by
-<a href="https://github.com/lightbend/paradox">Paradox</a>
-and
-<a href="https://sbt.github.io/sbt-paradox-material-theme/">Paradox Material Theme</a>
 
-</div>
-</div>
-</div>
+      <main class="content">
+
+        <ul class="breadcrumb nav-list">
+          <li class="level1 breadcrumb nav-leaf"><a href="../">TDA4j</a></li>
+          <li class="level1 breadcrumb nav-leaf"><a href="index.html">Developer&#39;s Guide for TDA4j</a></li>
+          <li class="level1 breadcrumb active nav-leaf"><a href="#">Degeneracy behaviors that look like bugs but aren&#39;t</a></li>
+        </ul>
+
+        <h1 id="degeneracy-behaviors-that-look-like-bugs-but-aren-t" class="title">Degeneracy behaviors that look like bugs but aren&#39;t</h1>
+        <p>A dedicated page so you don&#39;t &quot;fix&quot; correct-but-surprising behavior. Each of these has, at some point,
+        looked like a bug to someone reading the output for the first time.</p>
+        
+        <h2 id="alpha-complexes-in-degenerate-cospherical-position-are-not-delaunay-subcomplexes" class="section"><a class="anchor-link left" href="#alpha-complexes-in-degenerate-cospherical-position-are-not-delaunay-subcomplexes"><i class="icofont-laika link">&#xef71;</i></a>Alpha complexes in degenerate (cospherical) position are not Delaunay subcomplexes</h2>
+        <p>In degenerate (cospherical) position, the alpha complex is <strong>not</strong> a subcomplex of some triangulation you
+        could point to. <code>k</code> cospherical sites sharing a Voronoi vertex contribute a <code>(k-1)</code>-simplex — a unit grid in
+        the plane produces 3-simplices (one per unit square, since the four corners of each square are
+        cospherical), not just triangles from an arbitrary triangulation choice; a unit grid in R³ produces
+        7-simplices (one per unit cube). <strong>Truncating at the ambient dimension gives the wrong homotopy type, not
+        merely a truncated one.</strong> Users coming from CGAL or GUDHI will not expect this, because those tools
+        typically report a triangulation (a choice among several valid ones), not the actual alpha complex in the
+        degenerate case — but it&#39;s correct here, not a bug. <code>AlphaValidationSpec</code>&#39;s grid test exercises a mild
+        version of this directly: two near-collinear rows produce two &quot;sliver&quot; simplices with circumradius roughly
+        40-60x the point cloud&#39;s diameter, and both the DQP and Helix backends correctly include them. See
+        <a href="alpha-complex.html">Alpha complex: DQP vs Helix</a> for the developer-facing detail on both backends.</p>
+        
+        <h2 id="zero-persistence-zero-length-bars-are-real-output-not-noise-to-filter" class="section"><a class="anchor-link left" href="#zero-persistence-zero-length-bars-are-real-output-not-noise-to-filter"><i class="icofont-laika link">&#xef71;</i></a>Zero-persistence (zero-length) bars are real output, not noise to filter</h2>
+        <p><code>RipserCohomologyContext</code> emits these deliberately — e.g. an edge tied in filtration value with the
+        triangle that immediately kills it. Definition 3.2/Proposition 3.9&#39;s <em>apparent pairs</em> (see
+        <a href="persistence-engines.html">Persistence engines</a>)
+        <strong>are</strong> exactly the zero-persistence pairs — dropping them silently at the engine level would be wrong at
+        this stage of the pipeline, even though a downstream visualization might reasonably choose to filter them
+        before display. If you see a <code>[3.0, 3.0)</code>-style bar in test output, that&#39;s not evidence of a bug on its
+        own.</p>
+        
+        <h2 id="a-vietoris-rips-complex-with-maxdimension-2-always-has-ties" class="section"><a class="anchor-link left" href="#a-vietoris-rips-complex-with-maxdimension-2-always-has-ties"><i class="icofont-laika link">&#xef71;</i></a>A Vietoris-Rips complex with <code>maxDimension ≥ 2</code> always has ties</h2>
+        <p>Every simplex of dimension ≥ 2 ties in filtration value with its own longest edge, by construction (a
+        simplex&#39;s filtration value — maximum pairwise distance among its vertices — is always realized by some
+        edge face of it). This is the <em>normal</em> case for VR complexes, not evidence of a degenerate or adversarial
+        input, and any reduction code path that implicitly assumes &quot;ties are rare&quot; will misbehave on completely
+        ordinary data. This is precisely why
+        <a href="gotchas.html">Hard-won invariants #2 and #3</a>
+        about tie-break consistency exist and matter in practice, not just in adversarially constructed test cases.</p>
+        
+        <h2 id="a-quotient-simplicial-set-can-collapse-a-cell-to-a-degenerate-point-not-just-merge-it-with-a-peer" class="section"><a class="anchor-link left" href="#a-quotient-simplicial-set-can-collapse-a-cell-to-a-degenerate-point-not-just-merge-it-with-a-peer"><i class="icofont-laika link">&#xef71;</i></a>A quotient simplicial set can collapse a cell to a <em>degenerate</em> point, not just merge it with a peer</h2>
+        <p><code>quotient</code>&#39;s attaching map is <code>G =&gt; SSetElement[G]</code>, not <code>G =&gt; G</code>, specifically because some quotients need
+        a cell to crush down a dimension entirely rather than merge with a same-dimension peer — the standard
+        Δ-complex model of ℝP² glues two of a filled triangle&#39;s three edges into a loop, but the third collapses
+        entirely onto a degenerate point over a vertex. If you&#39;re building a new attaching map and find yourself
+        wanting to map a generator to a lower-dimensional target, that&#39;s expected, not a sign the API is being
+        misused.</p>
+        
+        <h2 id="a-cubical-or-cech-complex-having-extra-simplices-cubes-at-a-shared-tie-is-not-a-bug" class="section"><a class="anchor-link left" href="#a-cubical-or-cech-complex-having-extra-simplices-cubes-at-a-shared-tie-is-not-a-bug"><i class="icofont-laika link">&#xef71;</i></a>A cubical or Cech complex having &quot;extra&quot; simplices/cubes at a shared tie is not a bug</h2>
+        <p>The same underlying fact as the alpha-complex case above shows up differently in other constructions: a
+        cubical grid&#39;s dense T-construction cell count (<code>prod_i (2*shape(i)+1)</code>) is much larger than the pixel/voxel
+        count itself — a 256x256 image is 263,169 cells, not 65,536 — because every lower-dimensional face of every
+        pixel is its own cell, most of them shared between adjacent pixels. This is the correct cell count for the
+        cubical complex, not evidence of a construction bug.</p>
+
+        
+<hr class="footer-rule"/>
+<footer>
+  MIT License © Mikael Vejdemo-Johansson, Daniel Hope
 </footer>
 
-</div>
-<script src="../assets/javascripts/application.583bbe55.js"></script>
-<script src="../assets/javascripts/paradox-material-theme.js"></script>
-<script>app.initialize({version:"0.17",url:{base:"../."}})</script>
-<script type="text/javascript" src="../lib/prettify/prettify.js"></script>
-<script type="text/javascript" src="../lib/prettify/lang-scala.js"></script>
-<script type="text/javascript">
-document.addEventListener("DOMContentLoaded", function(event) {
-window.prettyPrint && prettyPrint();
-});
-</script>
-</body>
+
+      </main>
+
+    </div>
+
+  </body>
+
 </html>

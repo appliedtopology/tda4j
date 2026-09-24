@@ -1,0 +1,552 @@
+<!DOCTYPE html><html data-pathToRoot="../../../" data-rawLocation="org/appliedtopology/tda4j/homology" data-dynamicSideMenu="false"><head><meta charset="utf-8"></meta><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"></meta><title>org.appliedtopology.tda4j.homology</title><link rel="shortcut icon" type="image/x-icon" href="../../../favicon.ico"></link><script type="text/javascript" src="../../../scripts/theme.js"></script><script type="text/javascript" src="../../../scripts/searchData.js" defer="true"></script><script type="text/javascript" src="../../../scripts/scastieConfiguration.js" defer="true"></script><link rel="stylesheet" href="../../../styles/theme/bundle.css"></link><link rel="stylesheet" href="../../../styles/theme/components/bundle.css"></link><link rel="stylesheet" href="../../../styles/theme/components/button/bundle.css"></link><link rel="stylesheet" href="../../../styles/theme/layout/bundle.css"></link><link rel="stylesheet" href="../../../styles/dotty-icons.css"></link><link rel="stylesheet" href="../../../styles/filter-bar.css"></link><link rel="stylesheet" href="../../../styles/searchbar.css"></link><link rel="stylesheet" href="../../../styles/social-links.css"></link><link rel="stylesheet" href="../../../styles/versions-dropdown.css"></link><link rel="stylesheet" href="../../../styles/content-contributors.css"></link><script type="text/javascript" src="../../../hljs/highlight.pack.js" defer="true"></script><script type="text/javascript" src="../../../scripts/hljs-scala3.js" defer="true"></script><script type="text/javascript" src="../../../scripts/ux.js" defer="true"></script><script type="text/javascript" src="../../../scripts/common/component.js" defer="true"></script><script type="text/javascript" src="../../../scripts/common/utils.js" defer="true"></script><script type="text/javascript" src="../../../scripts/components/FilterBar.js" defer="true"></script><script type="text/javascript" src="../../../scripts/components/DocumentableList.js" defer="true"></script><script type="text/javascript" src="../../../scripts/components/Input.js" defer="true"></script><script type="text/javascript" src="../../../scripts/components/FilterGroup.js" defer="true"></script><script type="text/javascript" src="../../../scripts/components/Filter.js" defer="true"></script><script type="text/javascript" src="../../../scripts/scaladoc-scalajs.js" defer="true"></script><script type="text/javascript" src="../../../scripts/contributors.js" defer="true"></script><script type="text/javascript" src="https://d3js.org/d3.v6.min.js" defer="true"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/graphlib-dot@0.6.2/dist/graphlib-dot.min.js" defer="true"></script><script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dagre-d3/0.6.1/dagre-d3.min.js" defer="true"></script><script type="text/javascript" src="https://scastie.scala-lang.org/embedded.js" defer="true"></script><script type="text/javascript" src="../../../scripts/data.js" defer="true"></script><script>var pathToRoot = "../../../";</script></head><body><div id=""><div id="header" class="body-small"><div class="header-container-left"><a href="../../../" class="logo-container"><span class="project-name h300">TDA4j</span></a><span onclick="dropdownHandler(event)" class="text-button with-arrow" id="dropdown-trigger"><a></a></span><div id="version-dropdown" class="dropdown-menu"></div></div><div class="header-container-right"><button id="search-toggle" class="icon-button"></button><span id="theme-toggle" class="icon-button"></span><span id="mobile-menu-toggle" class="icon-button hamburger"></span></div></div><div id="mobile-menu"><div class="mobile-menu-header body-small"><span class="mobile-menu-logo"><span class="project-name h300">TDA4j</span></span><button id="mobile-menu-close" class="icon-button close"></button></div><div class="mobile-menu-container body-medium"><input id="mobile-scaladoc-searchbar-input" class="scaladoc-searchbar-input" type="search" placeholder="Find anything"></input><span id="mobile-theme-toggle" class="mobile-menu-item mode"></span></div></div><span id="mobile-sidebar-toggle" class="floating-button"></span><div id="leftColumn" class="body-small"><div class="switcher-container"><a id="api-nav-button" class="switcher h100 selected" href="../../../index.html">API</a></div><nav id="api-nav" class="side-menu"><div class="ni n0 expanded"><span class="nh h100 expanded cs"><button class="ar icon-button expanded"></button><a href="../tda4j.html"><span class="micon pa"></span><span>org.appliedtopology.tda4j</span></a></span><div class="ni n1"><span class="nh "><button class="ar icon-button "></button><a href="algebra.html"><span class="micon pa"></span><span>algebra</span></a></span><div class="ni n2 "><span class="nh "><a href="algebra/Cell.html"><span class="micon tr"></span><span>Cell</span></a></span></div><div class="ni n2 "><span class="nh "><a href="algebra/Chain.html"><span class="micon cl"></span><span>Chain</span></a></span></div><div class="ni n2 "><span class="nh "><a href="algebra/Chain$.html"><span class="micon ob"></span><span>Chain</span></a></span></div><div class="ni n2 "><span class="nh "><a href="algebra/Field.html"><span class="micon tr"></span><span>Field</span></a></span></div><div class="ni n2 "><span class="nh "><a href="algebra/Field$.html"><span class="micon ob"></span><span>Field</span></a></span></div><div class="ni n2"><span class="nh "><button class="ar icon-button "></button><a href="algebra/FiniteField.html"><span class="micon cl"></span><span>FiniteField</span></a></span><div class="ni n3 "><span class="nh "><a href="algebra/FiniteField$Fp$.html"><span class="micon ob"></span><span>Fp</span></a></span></div></div><div class="ni n2 "><span class="nh "><a href="algebra/HasDimension.html"><span class="micon tr"></span><span>HasDimension</span></a></span></div><div class="ni n2 "><span class="nh "><a href="algebra/OrderedBasis.html"><span class="micon tr"></span><span>OrderedBasis</span></a></span></div><div class="ni n2 "><span class="nh "><a href="algebra/OrderedCell.html"><span class="micon tr"></span><span>OrderedCell</span></a></span></div><div class="ni n2 "><span class="nh "><a href="algebra/RingModule.html"><span class="micon tr"></span><span>RingModule</span></a></span></div><div class="ni n2 "><span class="nh "><a href="algebra/SSetElement.html"><span class="micon cl"></span><span>SSetElement</span></a></span></div></div><div class="ni n1"><span class="nh "><button class="ar icon-button "></button><a href="alpha.html"><span class="micon pa"></span><span>alpha</span></a></span><div class="ni n2 "><span class="nh "><a href="alpha/AlphaComplexDQP.html"><span class="micon cl"></span><span>AlphaComplexDQP</span></a></span></div><div class="ni n2 "><span class="nh "><a href="alpha/AlphaComplexDQP$.html"><span class="micon ob"></span><span>AlphaComplexDQP</span></a></span></div><div class="ni n2"><span class="nh "><button class="ar icon-button "></button><a href="alpha/AlphaComplexDQPBuilder.html"><span class="micon cl"></span><span>AlphaComplexDQPBuilder</span></a></span><div class="ni n3 "><span class="nh "><a href="alpha/AlphaComplexDQPBuilder$Found.html"><span class="micon cl"></span><span>Found</span></a></span></div></div><div class="ni n2 "><span class="nh "><a href="alpha/AlphaComplexDQPException.html"><span class="micon cl"></span><span>AlphaComplexDQPException</span></a></span></div><div class="ni n2 "><span class="nh "><a href="alpha/AlphaComplexDQPStream.html"><span class="micon cl"></span><span>AlphaComplexDQPStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="alpha/AlphaDQPSettings.html"><span class="micon cl"></span><span>AlphaDQPSettings</span></a></span></div><div class="ni n2 "><span class="nh "><a href="alpha/AlphaShapeDQP.html"><span class="micon cl"></span><span>AlphaShapeDQP</span></a></span></div><div class="ni n2 "><span class="nh "><a href="alpha/AlphaShapes.html"><span class="micon cl"></span><span>AlphaShapes</span></a></span></div><div class="ni n2"><span class="nh "><button class="ar icon-button "></button><a href="alpha/AlphaShapes$.html"><span class="micon ob"></span><span>AlphaShapes</span></a></span><div class="ni n3 "><span class="nh "><a href="alpha/AlphaShapes$$Point$.html"><span class="micon ob"></span><span>Point</span></a></span></div></div><div class="ni n2 "><span class="nh "><a href="alpha/CholeskyWorkspace.html"><span class="micon cl"></span><span>CholeskyWorkspace</span></a></span></div><div class="ni n2 "><span class="nh "><a href="alpha/DelaunaySimplex.html"><span class="micon cl"></span><span>DelaunaySimplex</span></a></span></div><div class="ni n2 "><span class="nh "><a href="alpha/DualQP.html"><span class="micon cl"></span><span>DualQP</span></a></span></div><div class="ni n2 "><span class="nh "><a href="alpha/Epsilon.html"><span class="micon cl"></span><span>Epsilon</span></a></span></div><div class="ni n2 "><span class="nh "><a href="alpha/HelixDelaunay.html"><span class="micon cl"></span><span>HelixDelaunay</span></a></span></div><div class="ni n2 "><span class="nh "><a href="alpha/Hyperplane.html"><span class="micon cl"></span><span>Hyperplane</span></a></span></div><div class="ni n2 "><span class="nh "><a href="alpha/Hyperplane$.html"><span class="micon ob"></span><span>Hyperplane</span></a></span></div><div class="ni n2 "><span class="nh "><a href="alpha/Hypersphere.html"><span class="micon cl"></span><span>Hypersphere</span></a></span></div><div class="ni n2 "><span class="nh "><a href="alpha/Hypersphere$.html"><span class="micon ob"></span><span>Hypersphere</span></a></span></div><div class="ni n2 "><span class="nh "><a href="alpha/PowerDistance$.html"><span class="micon ob"></span><span>PowerDistance</span></a></span></div><div class="ni n2 "><span class="nh "><a href="alpha/PowerDistance.html"><span class="micon tr"></span><span>PowerDistance</span></a></span></div></div><div class="ni n1"><span class="nh "><button class="ar icon-button "></button><a href="barcode.html"><span class="micon pa"></span><span>barcode</span></a></span><div class="ni n2 "><span class="nh "><a href="barcode/Barcode$.html"><span class="micon ob"></span><span>Barcode</span></a></span></div><div class="ni n2"><span class="nh "><button class="ar icon-button "></button><a href="barcode/BarcodeContext.html"><span class="micon cl"></span><span>BarcodeContext</span></a></span><div class="ni n3 "><span class="nh "><a href="barcode/BarcodeContext$BarAssembly.html"><span class="micon cl"></span><span>BarAssembly</span></a></span></div></div><div class="ni n2 "><span class="nh "><a href="barcode/BarcodeEndpoint.html"><span class="micon tr"></span><span>BarcodeEndpoint</span></a></span></div><div class="ni n2 "><span class="nh "><a href="barcode/ClosedEndpoint.html"><span class="micon cl"></span><span>ClosedEndpoint</span></a></span></div><div class="ni n2 "><span class="nh "><a href="barcode/NegativeInfinity.html"><span class="micon cl"></span><span>NegativeInfinity</span></a></span></div><div class="ni n2 "><span class="nh "><a href="barcode/OpenEndpoint.html"><span class="micon cl"></span><span>OpenEndpoint</span></a></span></div><div class="ni n2 "><span class="nh "><a href="barcode/PersistenceBar$.html"><span class="micon ob"></span><span>PersistenceBar</span></a></span></div><div class="ni n2 "><span class="nh "><a href="barcode/PersistenceBar.html"><span class="micon cl"></span><span>PersistenceBar</span></a></span></div><div class="ni n2 "><span class="nh "><a href="barcode/PositiveInfinity.html"><span class="micon cl"></span><span>PositiveInfinity</span></a></span></div></div><div class="ni n1"><span class="nh "><button class="ar icon-button "></button><a href="cells.html"><span class="micon pa"></span><span>cells</span></a></span><div class="ni n2 "><span class="nh "><a href="cells/Cube$.html"><span class="micon ob"></span><span>Cube</span></a></span></div><div class="ni n2 "><span class="nh "><a href="cells/FiniteSimplicialSet$.html"><span class="micon ob"></span><span>FiniteSimplicialSet</span></a></span></div><div class="ni n2 "><span class="nh "><a href="cells/FiniteSimplicialSet.html"><span class="micon cl"></span><span>FiniteSimplicialSet</span></a></span></div><div class="ni n2 "><span class="nh "><a href="cells/ProductGenerator.html"><span class="micon cl"></span><span>ProductGenerator</span></a></span></div><div class="ni n2 "><span class="nh "><a href="cells/Simplex$.html"><span class="micon ob"></span><span>Simplex</span></a></span></div><div class="ni n2 "><span class="nh "><a href="cells/SimplexOps.html"><span class="micon tr"></span><span>SimplexOps</span></a></span></div></div><div class="ni n1"><span class="nh "><button class="ar icon-button "></button><a href="cli.html"><span class="micon pa"></span><span>cli</span></a></span><div class="ni n2 "><span class="nh "><a href="cli/TDA4jCLI$.html"><span class="micon ob"></span><span>TDA4jCLI</span></a></span></div><div class="ni n2 "><span class="nh "><a href="cli/TDA4jConf.html"><span class="micon cl"></span><span>TDA4jConf</span></a></span></div></div><div class="ni n1 expanded"><span class="nh h100 selected"><button class="ar icon-button expanded"></button><a href="#"><span class="micon pa"></span><span>homology</span></a></span><div class="ni n2 "><span class="nh "><a href="homology/CellularCohomologyContext.html"><span class="micon cl"></span><span>CellularCohomologyContext</span></a></span></div><div class="ni n2"><span class="nh "><button class="ar icon-button "></button><a href="homology/CellularHomologyContext.html"><span class="micon cl"></span><span>CellularHomologyContext</span></a></span><div class="ni n3 "><span class="nh "><a href="homology/CellularHomologyContext$HomologyState.html"><span class="micon cl"></span><span>HomologyState</span></a></span></div></div><div class="ni n2"><span class="nh "><button class="ar icon-button "></button><a href="homology/CellularPersistenceInChunksContext.html"><span class="micon cl"></span><span>CellularPersistenceInChunksContext</span></a></span><div class="ni n3 "><span class="nh "><a href="homology/CellularPersistenceInChunksContext$HomologyState.html"><span class="micon cl"></span><span>HomologyState</span></a></span></div></div><div class="ni n2 "><span class="nh "><a href="homology/CubicalHomologyContext.html"><span class="micon cl"></span><span>CubicalHomologyContext</span></a></span></div><div class="ni n2"><span class="nh "><button class="ar icon-button "></button><a href="homology/PackedRipserCohomologyContext.html"><span class="micon cl"></span><span>PackedRipserCohomologyContext</span></a></span><div class="ni n3 "><span class="nh "><a href="homology/PackedRipserCohomologyContext$DiameterIndex.html"><span class="micon cl"></span><span>DiameterIndex</span></a></span></div></div><div class="ni n2 "><span class="nh "><a href="homology/PersistenceEngine$.html"><span class="micon ob"></span><span>PersistenceEngine</span></a></span></div><div class="ni n2 "><span class="nh "><a href="homology/PersistenceEngine.html"><span class="micon tr"></span><span>PersistenceEngine</span></a></span></div><div class="ni n2 "><span class="nh "><a href="homology/PersistenceInChunksContext.html"><span class="micon cl"></span><span>PersistenceInChunksContext</span></a></span></div><div class="ni n2"><span class="nh "><button class="ar icon-button "></button><a href="homology/RipserCohomologyContext.html"><span class="micon cl"></span><span>RipserCohomologyContext</span></a></span><div class="ni n3 "><span class="nh "><a href="homology/RipserCohomologyContext$cohomologyOrdering$.html"><span class="micon ob"></span><span>cohomologyOrdering</span></a></span></div></div><div class="ni n2 "><span class="nh "><a href="homology/SimplicialHomologyContext.html"><span class="micon cl"></span><span>SimplicialHomologyContext</span></a></span></div></div><div class="ni n1"><span class="nh "><button class="ar icon-button "></button><a href="io.html"><span class="micon pa"></span><span>io</span></a></span><div class="ni n2 "><span class="nh "><a href="io/CSV$.html"><span class="micon ob"></span><span>CSV</span></a></span></div><div class="ni n2 "><span class="nh "><a href="io/Dipha$.html"><span class="micon ob"></span><span>Dipha</span></a></span></div><div class="ni n2 "><span class="nh "><a href="io/Gudhi$.html"><span class="micon ob"></span><span>Gudhi</span></a></span></div><div class="ni n2 "><span class="nh "><a href="io/Perseus$.html"><span class="micon ob"></span><span>Perseus</span></a></span></div><div class="ni n2 "><span class="nh "><a href="io/Ripser$.html"><span class="micon ob"></span><span>Ripser</span></a></span></div></div><div class="ni n1"><span class="nh "><button class="ar icon-button "></button><a href="matlab.html"><span class="micon pa"></span><span>matlab</span></a></span><div class="ni n2 "><span class="nh "><a href="matlab/LandmarkSelectionResult.html"><span class="micon cl"></span><span>LandmarkSelectionResult</span></a></span></div><div class="ni n2 "><span class="nh "><a href="matlab/PersistenceResult.html"><span class="micon cl"></span><span>PersistenceResult</span></a></span></div><div class="ni n2 "><span class="nh "><a href="matlab/TDA4j$.html"><span class="micon ob"></span><span>TDA4j</span></a></span></div></div><div class="ni n1"><span class="nh "><button class="ar icon-button "></button><a href="streams.html"><span class="micon pa"></span><span>streams</span></a></span><div class="ni n2 "><span class="nh "><a href="streams/BruteForce.html"><span class="micon cl"></span><span>BruteForce</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/CechCofaceSimplexStream.html"><span class="micon cl"></span><span>CechCofaceSimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/CechFiltration$.html"><span class="micon ob"></span><span>CechFiltration</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/CellStream.html"><span class="micon tr"></span><span>CellStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/CofaceSimplexStream.html"><span class="micon tr"></span><span>CofaceSimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/CofacetIterator.html"><span class="micon cl"></span><span>CofacetIterator</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/CubicalGridStream.html"><span class="micon cl"></span><span>CubicalGridStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/CubicalImage$.html"><span class="micon ob"></span><span>CubicalImage</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/DistanceToMeasure$.html"><span class="micon ob"></span><span>DistanceToMeasure</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/DoubleFiltration.html"><span class="micon tr"></span><span>DoubleFiltration</span></a></span></div><div class="ni n2"><span class="nh "><button class="ar icon-button "></button><a href="streams/DtmRipsSimplexStream$.html"><span class="micon ob"></span><span>DtmRipsSimplexStream</span></a></span><div class="ni n3 "><span class="nh "><a href="streams/DtmRipsSimplexStream$$DtmMetricSpace.html"><span class="micon cl"></span><span>DtmMetricSpace</span></a></span></div></div><div class="ni n2 "><span class="nh "><a href="streams/DtmRipsSimplexStream.html"><span class="micon cl"></span><span>DtmRipsSimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/EnumeratingCofaceSimplexStream.html"><span class="micon cl"></span><span>EnumeratingCofaceSimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/EuclideanMetricSpace.html"><span class="micon cl"></span><span>EuclideanMetricSpace</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/EuclideanMetricSpace$.html"><span class="micon ob"></span><span>EuclideanMetricSpace</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/ExplicitCubicalStream.html"><span class="micon cl"></span><span>ExplicitCubicalStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/ExplicitCubicalStream$.html"><span class="micon ob"></span><span>ExplicitCubicalStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/ExplicitMetricSpace.html"><span class="micon cl"></span><span>ExplicitMetricSpace</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/ExplicitStream.html"><span class="micon cl"></span><span>ExplicitStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/ExplicitStreamBuilder.html"><span class="micon cl"></span><span>ExplicitStreamBuilder</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/Filterable.html"><span class="micon tr"></span><span>Filterable</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/Filterable$.html"><span class="micon ob"></span><span>Filterable</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/FilteredSimplexOrdering.html"><span class="micon cl"></span><span>FilteredSimplexOrdering</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/FilteredSimplicialSetStream$.html"><span class="micon ob"></span><span>FilteredSimplicialSetStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/FilteredSimplicialSetStream.html"><span class="micon cl"></span><span>FilteredSimplicialSetStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/Filtration.html"><span class="micon tr"></span><span>Filtration</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/FiltrationOrdering$.html"><span class="micon ob"></span><span>FiltrationOrdering</span></a></span></div><div class="ni n2"><span class="nh "><button class="ar icon-button "></button><a href="streams/FiniteMetricSpace$.html"><span class="micon ob"></span><span>FiniteMetricSpace</span></a></span><div class="ni n3 "><span class="nh "><a href="streams/FiniteMetricSpace$$MaximumDistanceFiltrationValue.html"><span class="micon cl"></span><span>MaximumDistanceFiltrationValue</span></a></span></div></div><div class="ni n2 "><span class="nh "><a href="streams/FiniteMetricSpace.html"><span class="micon tr"></span><span>FiniteMetricSpace</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/GreedyPermutation.html"><span class="micon cl"></span><span>GreedyPermutation</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/IncrementalVietorisRipsSimplexStream.html"><span class="micon cl"></span><span>IncrementalVietorisRipsSimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/InorderCofaceSimplexStream.html"><span class="micon cl"></span><span>InorderCofaceSimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/IntMetricSpace.html"><span class="micon cl"></span><span>IntMetricSpace</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/JVPTree.html"><span class="micon cl"></span><span>JVPTree</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/Kruskal$.html"><span class="micon ob"></span><span>Kruskal</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/Kruskal.html"><span class="micon cl"></span><span>Kruskal</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/LandmarkSelection.html"><span class="micon cl"></span><span>LandmarkSelection</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/LandmarkSelector$.html"><span class="micon ob"></span><span>LandmarkSelector</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/LazyWitnessSimplexStream.html"><span class="micon cl"></span><span>LazyWitnessSimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/LimitedCofaceSimplexStream.html"><span class="micon cl"></span><span>LimitedCofaceSimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/RecursiveStackSimplexEnumerator.html"><span class="micon cl"></span><span>RecursiveStackSimplexEnumerator</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/RecursiveStackVietorisRipsSimplexStream.html"><span class="micon cl"></span><span>RecursiveStackVietorisRipsSimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/RipserCofaceSimplexStream.html"><span class="micon cl"></span><span>RipserCofaceSimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/SheehyRipsSimplexStream$.html"><span class="micon ob"></span><span>SheehyRipsSimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/SheehyRipsSimplexStream.html"><span class="micon cl"></span><span>SheehyRipsSimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/SimplexEdge.html"><span class="micon cl"></span><span>SimplexEdge</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/SimplexEdge$.html"><span class="micon ob"></span><span>SimplexEdge</span></a></span></div><div class="ni n2"><span class="nh "><button class="ar icon-button "></button><a href="streams/SimplexIndexing.html"><span class="micon cl"></span><span>SimplexIndexing</span></a></span><div class="ni n3 "><span class="nh "><a href="streams/SimplexIndexing$CofacetCursor.html"><span class="micon cl"></span><span>CofacetCursor</span></a></span></div><div class="ni n3 "><span class="nh "><a href="streams/SimplexIndexing$FacetCursor.html"><span class="micon cl"></span><span>FacetCursor</span></a></span></div></div><div class="ni n2 "><span class="nh "><a href="streams/SimplexIndexing$.html"><span class="micon ob"></span><span>SimplexIndexing</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/SimplexStream.html"><span class="micon tr"></span><span>SimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/SimplexStream$.html"><span class="micon ob"></span><span>SimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/SimplicialSetStream.html"><span class="micon cl"></span><span>SimplicialSetStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/SimplicialSetStream$.html"><span class="micon ob"></span><span>SimplicialSetStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/SparseMetricSpace.html"><span class="micon cl"></span><span>SparseMetricSpace</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/SpatialQuery.html"><span class="micon tr"></span><span>SpatialQuery</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/StratifiedCellStream.html"><span class="micon tr"></span><span>StratifiedCellStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/StratifiedSimplexStream.html"><span class="micon tr"></span><span>StratifiedSimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/TopCofacetEnumerator.html"><span class="micon cl"></span><span>TopCofacetEnumerator</span></a></span></div><div class="ni n2"><span class="nh "><button class="ar icon-button "></button><a href="streams/UnionFind.html"><span class="micon cl"></span><span>UnionFind</span></a></span><div class="ni n3 "><span class="nh "><a href="streams/UnionFind$UFSet.html"><span class="micon cl"></span><span>UFSet</span></a></span></div></div><div class="ni n2 "><span class="nh "><a href="streams/WitnessCofaceSimplexStream$.html"><span class="micon ob"></span><span>WitnessCofaceSimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/WitnessCofaceSimplexStream.html"><span class="micon cl"></span><span>WitnessCofaceSimplexStream</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/WitnessGeometry.html"><span class="micon cl"></span><span>WitnessGeometry</span></a></span></div><div class="ni n2 "><span class="nh "><a href="streams/WitnessMetricSpace.html"><span class="micon cl"></span><span>WitnessMetricSpace</span></a></span></div></div><div class="ni n1 "><span class="nh "><a href="unicode.html"><span class="micon pa"></span><span>unicode</span></a></span></div><div class="ni n1 "><span class="nh "><a href="TDAContext.html"><span class="micon cl"></span><span>TDAContext</span></a></span></div></div></nav></div><div id="footer" class="body-small"><div class="left-container">Generated with</div><div class="right-container"><div class="text"></div></div><div class="text-mobile"></div></div><div id="scaladoc-searchBar"></div><div id="main"><div class="breadcrumbs container"><a href="../../../index.html">TDA4j</a>/<a href="../tda4j.html">org.appliedtopology.tda4j</a>/<a href="homology.html">org.appliedtopology.tda4j.homology</a></div><div id="content" class="body-medium"><div><div class="cover-header">
+ <span class="icon"><span class="micon pa"></span></span>
+ <h1 class="h600 single">org.appliedtopology.tda4j.homology</h1>
+</div>
+<div class="fqname body-large">
+ <span></span>
+</div>
+<div class="main-signature mono-small-block">
+ <div class="signature">
+  <span class="modifiers"></span><span class="kind"><span t="k">package </span></span><a href="homology.html" t="n" class="documentableName ">org.appliedtopology.tda4j.homology</a>
+ </div>
+</div>
+<section id="members-list">
+ <h2 class="h500">Members list</h2>
+ <div class="documentableFilter">
+  <div class="filtersContainer"></div>
+  <input class="filterableInput" placeholder="Filter by any phrase" data-test-id="filterBarInput" type="search"><button class="clearButton label-only-button" data-test-id="filterBarClearButton">Clear all</button>
+ </div>
+ <div class="membersList expand">
+  <div class="tabs">
+   <div class="contents">
+    <section id="Type-members">
+     <div data-togglable="Type members" class="tab expand">
+      <div class="member-group-header">
+       <h3 data-togglable="Type members" class="h400">Type members</h3>
+      </div>
+      <section id="Experimental-classlikes">
+       <div class="documentableList expand">
+        <div class="documentableList-expander">
+         <button class="icon-button show-content expand"></button>
+         <h4 class="groupHeader h200">Experimental classlikes</h4>
+        </div>
+        <div class="documentableElement">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="homology/CellularCohomologyContext.html" t="n" class="documentableName ">CellularCohomologyContext</a>[<span t="k"></span><span data-unresolved-link="" t="t">CellT</span>, <span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>, <span t="k"></span><span data-unresolved-link="" t="t">FiltrationT</span>]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>Persistent cohomology (Bauer's algorithm, arXiv:1908.02518) generic over <code>CellT: OrderedCell</code> -- the cohomology counterpart to <code>CellularHomologyContext</code>, filling in what CLAUDE.md's own architecture notes call a real, previously-unfilled asymmetry: cohomology in this codebase used to mean <code>RipserCohomologyContext</code>/ <code>PackedRipserCohomologyContext</code> only, both hardcoded to <code>Simplex[Int]</code> via <code>SimplexIndexing</code>'s combinatorial number system. This class instead works for any <code>CellT: OrderedCell</code> this library has -- <code>Simplex</code>, <code>Cube</code>, <code>FiniteSimplicialSet</code> generators alike -- including complexes that already use <code>Simplex[Int]</code> but aren't flag complexes (Cech, Alpha), which the VR-specialized engines can't serve either way. See <code>.claude/DESIGN-generic-cohomology.md</code> for the full design derivation (including an <code>advisor()</code> review and a later correction dropping apparent pairs from the design entirely); this doc summarizes the load-bearing points, not the exploration.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>Persistent cohomology (Bauer's algorithm, arXiv:1908.02518) generic over <code>CellT: OrderedCell</code> -- the cohomology counterpart to <code>CellularHomologyContext</code>, filling in what CLAUDE.md's own architecture notes call a real, previously-unfilled asymmetry: cohomology in this codebase used to mean <code>RipserCohomologyContext</code>/ <code>PackedRipserCohomologyContext</code> only, both hardcoded to <code>Simplex[Int]</code> via <code>SimplexIndexing</code>'s combinatorial number system. This class instead works for any <code>CellT: OrderedCell</code> this library has -- <code>Simplex</code>, <code>Cube</code>, <code>FiniteSimplicialSet</code> generators alike -- including complexes that already use <code>Simplex[Int]</code> but aren't flag complexes (Cech, Alpha), which the VR-specialized engines can't serve either way. See <code>.claude/DESIGN-generic-cohomology.md</code> for the full design derivation (including an <code>advisor()</code> review and a later correction dropping apparent pairs from the design entirely); this doc summarizes the load-bearing points, not the exploration.</p>
+              <p>'''The key idea''': the coboundary matrix persistent cohomology reduces is the transpose of the ordinary boundary matrix, same coefficients -- if <code>tau.boundary</code> contains <code>(sigma, c)</code>, <code>sigma</code>'s coboundary contains <code>(tau, c)</code>. Every stream this class targets (Cube, <code>FiniteSimplicialSet</code>, Cech, Alpha, and even ordinary <code>Simplex[Int]</code> VR complexes at a size where the reference/oracle engines matter more than raw speed) already gets fully materialized before persistence runs, unlike Vietoris-Rips at the scale <code>RipserCohomologyContext</code> targets -- so unlike that class's elaborate <code>SimplexIndexing</code>/<code>insertionDiameter</code>/<code>sparseCofacets</code> apparatus (built specifically to avoid ever materializing a combinatorially-exploding full flag complex), this class builds the coboundary relation directly, by inverting each materialized cell's own already-generic <code>boundary[CoefficientT]</code> call -- no cell-type-specific coboundary formula needed anywhere, and no dual <code>Cocell</code>/<code>OrderedCocell</code> typeclass either (removed from <code>Chain.scala</code>, on the same understanding: coboundary is extrinsic to a cell, not intrinsic the way <code>boundary</code> is, since it depends on which higher-dimensional cells actually exist in the ambient complex).</p>
+              <p>'''No <code>maxDim</code> parameter''', unlike every other engine in this codebase's history -- deliberately, not by oversight: this class simply computes cohomology up to whatever top dimension the materialized stream actually contains, which deletes the whole "does <code>maxDim</code> mean top <em>built</em> or top <em>reported</em> degree" footgun class (<code>CellularPersistenceInChunksContext</code>, <code>RipserCohomologyContext</code>, and <code>PackedRipserCohomologyContext</code> each had to fix this exact bug once -- see <code>.claude/WORKLOG-maxdim-semantics-fix.md</code>) rather than reimplementing it a fourth time. A caller wanting only <code>H_0..H_k</code> wraps the <em>input</em> stream first -- <code>LimitedCofaceSimplexStream(stream, k + 1)</code>, the mechanism <code>RipserCohomologySpec</code>'s own oracle and the MATLAB facade's <code>engine=naive</code> path already use for exactly this -- so real <code>(k+1)</code>-dimensional cells exist to correctly resolve whether a <code>k</code>-born class is finite or essential, and drops any <code>dim == k + 1</code> bars from the returned list itself afterward.</p>
+              <p>'''No apparent pairs''', also deliberately: Definition 3.2/Proposition 3.9's whole point is avoiding coboundary <em>enumeration</em> for cells that turn out to be trivially paired -- and this class has no enumeration to avoid, because it must materialize the coboundary relation for every cell up front just to have "coboundary" exist at all. What would be left after porting the mutual-pair check (skip one <code>basis</code> write, skip one call into an already-cheap <code>Chain.reduceBy</code> miss) is noise, plausibly a net loss once the pair- detection scan itself is counted, and not worth the extra machinery. See the design doc's "What does NOT carry over" section for the full argument.</p>
+              <p>'''Representatives''': every bar carries a V-column (tracked exactly the way <code>RipserCohomologyContext.persistentCohomology</code> already does), satisfying this codebase's standing "every engine needs generic <code>Field</code> + real representatives" principle automatically -- this is also this class's actual point, not an afterthought: over a field the cohomology barcode is identical to the homology barcode (the reason Ripser computes cohomology at all -- same answer, cheaper algorithm), so a bars-only version of this class would be entirely redundant with <code>CellularHomologyContext</code>, which already covers every cell type this class does. Only an ''essential'' bar's V-column is a genuine cocycle (<code>d(vcol) = 0</code>) by construction -- Algorithm 1's invariant is <code>d(V_j) = R_j</code> throughout, and <code>R_j</code> is zero exactly when the bar is essential; a finite bar's V-column has coboundary equal to its own nonzero reduced pivot chain instead (still a valid representative -- it witnesses the class on the sub-level set strictly before the bar's death, since every term of that nonzero coboundary is born at or after the death value -- just not a cocycle over the whole complex). <code>coboundaryOfChain</code> exists specifically so a caller (in practice, a test) can verify this directly for essential bars (<code>coboundaryOfChain(rep, ...).isZero()</code>) -- something no engine in this codebase could check for Cube/<code>FiniteSimplicialSet</code>/Cech/Alpha before this class existed, since none of them ever had a cocycle representative to check in the first place.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">Experimental</dt>
+              <dd class="body-medium">true</dd>
+              <dt class="body-small">Supertypes</dt>
+              <dd class="body-medium">
+               <div class="mono-small-block supertypes">
+                <div>
+                 class <span data-unresolved-link="" t="n">Object</span>
+                </div>
+                <div>
+                 trait <span data-unresolved-link="" t="n">Matchable</span>
+                </div>
+                <div>
+                 class <span data-unresolved-link="" t="n">Any</span>
+                </div>
+                <span></span>
+               </div>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="homology/CellularHomologyContext.html" t="n" class="documentableName ">CellularHomologyContext</a>[<span t="k"></span><span data-unresolved-link="" t="t">CellT</span>, <span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>, <span t="k"></span><span data-unresolved-link="" t="t">FiltrationT</span>]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>Naive persistent homology via the standard single-pivot-table reduction algorithm: process cells in filtration order, reduce each cell's boundary against the pivots recorded so far, and every cell either opens a class (reduced boundary is zero) or closes one (reduced boundary is nonzero, and its leading cell -- the pivot -- is necessarily a previously-opened, still-unpaired cell).</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>Naive persistent homology via the standard single-pivot-table reduction algorithm: process cells in filtration order, reduce each cell's boundary against the pivots recorded so far, and every cell either opens a class (reduced boundary is zero) or closes one (reduced boundary is nonzero, and its leading cell -- the pivot -- is necessarily a previously-opened, still-unpaired cell).</p>
+              <p>No clearing, no chunking, no cohomology/twist optimization: this is the reference-grade baseline the other algorithm in this file (<code>PersistenceInChunksContext</code>) can be cross-validated against.</p>
+              <p>Correctness note for future maintainers: the <code>RingModule</code>/<code>Ordering[CellT]</code> instances used for chain arithmetic MUST be summoned inside <code>HomologyState</code>, not at <code>CellularHomologyContext</code> class scope. A <code>given Ordering[CellT]</code> derived from a per-stream <code>filtrationOrdering</code> only exists once a stream is available (i.e. inside <code>HomologyState</code>); summoning <code>Chain[CellT, CoefficientT] is RingModule</code> any earlier silently falls back to the generic, filtration-blind <code>OrderedCell</code>-derived ordering and bakes it into that RingModule instance's closures permanently (Scala resolves a given's own implicit parameters once, at the point the given is constructed, not at each later call to its methods). A real, confirmed bug -- see <code>.claude/WORKLOG-naive-homology.md</code>.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">Experimental</dt>
+              <dd class="body-medium">true</dd>
+              <dt class="body-small">Supertypes</dt>
+              <dd class="body-medium">
+               <div class="mono-small-block supertypes">
+                <div>
+                 class <span data-unresolved-link="" t="n">Object</span>
+                </div>
+                <div>
+                 trait <span data-unresolved-link="" t="n">Matchable</span>
+                </div>
+                <div>
+                 class <span data-unresolved-link="" t="n">Any</span>
+                </div>
+                <span></span>
+               </div>
+              </dd>
+              <dt class="body-small">Known subtypes</dt>
+              <dd class="body-medium">
+               <div class="mono-small-block subtypes">
+                <div>
+                 class <a href="homology/CubicalHomologyContext.html" t="n">CubicalHomologyContext</a>[<span t="t">CoefficientT</span>, <span t="t">FiltrationT</span>]
+                </div>
+                <div>
+                 class <a href="homology/SimplicialHomologyContext.html" t="n">SimplicialHomologyContext</a>[<span t="t">VertexT</span>, <span t="t">CoefficientT</span>, <span t="t">FiltrationT</span>]
+                </div>
+                <div>
+                 class <a href="TDAContext.html" t="n">TDAContext</a>[<span t="t">VertexT</span>, <span t="t">CoefficientT</span>, <span t="t">FiltrationT</span>]
+                </div>
+                <span></span>
+               </div>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="homology/CellularPersistenceInChunksContext.html" t="n" class="documentableName ">CellularPersistenceInChunksContext</a>[<span t="k"></span><span data-unresolved-link="" t="t">CellT</span>, <span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">maxDim</span>: <span data-unresolved-link="" t="t">Int</span> = ...)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <a href="algebra/OrderedCell.html" t="t">OrderedCell</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CellT</span>; }, <span t="k"></span><span data-unresolved-link="" t="n">evidence$2</span>: <a href="algebra/Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CoefficientT</span>; })
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p><code>maxDim</code> means "top homological degree reported," not "top simplex dimension built" -- fixed at the source, the same fix and for the same reason as <code>RipserCohomologyContext</code>'s own <code>maxDimension</code> (see <code>.claude/WORKLOG-maxdim-semantics-fix.md</code>). This is homology, not cohomology, so the mirror-image fact holds: correctly determining whether a class BORN at dimension <code>maxDim</code> is essential or killed requires considering real <code>(maxDim + 1)</code>-dimensional cells' own boundaries (a <code>(maxDim+1)</code>-simplex's boundary reduces to a dimension-<code>maxDim</code> pivot exactly when it kills that class) -- without them, every dimension-<code>maxDim</code> class was unconditionally essential, since no cell of the stream was ever considered that could possibly pair against it. Fixed by internally walking <code>0.to(maxDim + 1)</code> (both in <code>allCells</code>'s construction and both loops in <code>advanceAll</code>) instead of <code>0.to(maxDim)</code>, so <code>(maxDim + 1)</code>-cells DO get locally/globally reduced and CAN correctly kill a <code>maxDim</code>-born class -- and filtering <code>diagramAt</code>'s essential-bar output back down to <code>sigma.dim &amp;lt;= maxDim</code> (finite bars need no equivalent filter: <code>recordPair</code>'s <code>barDim = pivot.dim</code>, and a pivot is always one dimension below its killer, so <code>barDim &amp;lt;= maxDim</code> automatically whenever the killer's own dimension is <code>&amp;lt;= maxDim + 1</code>). <code>(maxDim+1)</code>-cells that themselves end up looking essential (nothing of dimension <code>maxDim + 2</code> was ever considered to check) are deliberately left in <code>essentialSimplices</code> internally (later pairing logic in <code>recordPair</code> needs an accurate view across all live dimensions) and only excluded at this final reporting boundary, never a filter applied earlier.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p><code>maxDim</code> means "top homological degree reported," not "top simplex dimension built" -- fixed at the source, the same fix and for the same reason as <code>RipserCohomologyContext</code>'s own <code>maxDimension</code> (see <code>.claude/WORKLOG-maxdim-semantics-fix.md</code>). This is homology, not cohomology, so the mirror-image fact holds: correctly determining whether a class BORN at dimension <code>maxDim</code> is essential or killed requires considering real <code>(maxDim + 1)</code>-dimensional cells' own boundaries (a <code>(maxDim+1)</code>-simplex's boundary reduces to a dimension-<code>maxDim</code> pivot exactly when it kills that class) -- without them, every dimension-<code>maxDim</code> class was unconditionally essential, since no cell of the stream was ever considered that could possibly pair against it. Fixed by internally walking <code>0.to(maxDim + 1)</code> (both in <code>allCells</code>'s construction and both loops in <code>advanceAll</code>) instead of <code>0.to(maxDim)</code>, so <code>(maxDim + 1)</code>-cells DO get locally/globally reduced and CAN correctly kill a <code>maxDim</code>-born class -- and filtering <code>diagramAt</code>'s essential-bar output back down to <code>sigma.dim &amp;lt;= maxDim</code> (finite bars need no equivalent filter: <code>recordPair</code>'s <code>barDim = pivot.dim</code>, and a pivot is always one dimension below its killer, so <code>barDim &amp;lt;= maxDim</code> automatically whenever the killer's own dimension is <code>&amp;lt;= maxDim + 1</code>). <code>(maxDim+1)</code>-cells that themselves end up looking essential (nothing of dimension <code>maxDim + 2</code> was ever considered to check) are deliberately left in <code>essentialSimplices</code> internally (later pairing logic in <code>recordPair</code> needs an accurate view across all live dimensions) and only excluded at this final reporting boundary, never a filter applied earlier.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">Experimental</dt>
+              <dd class="body-medium">true</dd>
+              <dt class="body-small">Supertypes</dt>
+              <dd class="body-medium">
+               <div class="mono-small-block supertypes">
+                <div>
+                 class <span data-unresolved-link="" t="n">Object</span>
+                </div>
+                <div>
+                 trait <span data-unresolved-link="" t="n">Matchable</span>
+                </div>
+                <div>
+                 class <span data-unresolved-link="" t="n">Any</span>
+                </div>
+                <span></span>
+               </div>
+              </dd>
+              <dt class="body-small">Known subtypes</dt>
+              <dd class="body-medium">
+               <div class="mono-small-block subtypes">
+                <div>
+                 class <a href="homology/PersistenceInChunksContext.html" t="n">PersistenceInChunksContext</a>[<span t="t">VertexT</span>, <span t="t">CoefficientT</span>]
+                </div>
+                <span></span>
+               </div>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="signature-short"><span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="homology/CubicalHomologyContext.html" t="n" class="documentableName ">CubicalHomologyContext</a>[<span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>, <span t="k"></span><span data-unresolved-link="" t="t">FiltrationT</span>](<span t="k"></span>)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <a href="algebra/Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CoefficientT</span>; }, <span t="k"></span><span data-unresolved-link="" t="n">evidence$2</span>: <span data-unresolved-link="" t="t">Ordering</span>[<span data-unresolved-link="" t="t">FiltrationT</span>])<span t="k"> extends </span><a href="homology/CellularHomologyContext.html" t="t">CellularHomologyContext</a>[<a href="cells.html#Cube-0" t="t">Cube</a>, <span t="t">CoefficientT</span>, <span t="t">FiltrationT</span>]</span><span class="signature-long"></span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>Thin wrapper mirroring <code>SimplicialHomologyContext</code>'s own relationship to <code>CellularHomologyContext</code> -- <code>Cube</code> needed nothing new from the naive engine (it is already generic over <code>CellT: OrderedCell</code>), so this exists purely for the same ergonomic reason <code>SimplicialHomologyContext</code> does: a concrete, easily-discoverable name instead of writing out <code>CellularHomologyContext[Cube, CoefficientT, FiltrationT]</code> at every call site.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>Thin wrapper mirroring <code>SimplicialHomologyContext</code>'s own relationship to <code>CellularHomologyContext</code> -- <code>Cube</code> needed nothing new from the naive engine (it is already generic over <code>CellT: OrderedCell</code>), so this exists purely for the same ergonomic reason <code>SimplicialHomologyContext</code> does: a concrete, easily-discoverable name instead of writing out <code>CellularHomologyContext[Cube, CoefficientT, FiltrationT]</code> at every call site.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">Experimental</dt>
+              <dd class="body-medium">true</dd>
+              <dt class="body-small">Supertypes</dt>
+              <dd class="body-medium">
+               <div class="mono-small-block supertypes">
+                <div>
+                 class <a href="homology/CellularHomologyContext.html" t="n">CellularHomologyContext</a>[<a href="cells.html#Cube-0" t="t">Cube</a>, <span t="t">CoefficientT</span>, <span t="t">FiltrationT</span>]
+                </div>
+                <div>
+                 class <span data-unresolved-link="" t="n">Object</span>
+                </div>
+                <div>
+                 trait <span data-unresolved-link="" t="n">Matchable</span>
+                </div>
+                <div>
+                 class <span data-unresolved-link="" t="n">Any</span>
+                </div>
+                <span></span>
+               </div>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="homology/PackedRipserCohomologyContext.html" t="n" class="documentableName ">PackedRipserCohomologyContext</a>[<span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">metricSpace</span>: <a href="streams/FiniteMetricSpace.html" t="t">FiniteMetricSpace</a>[<span data-unresolved-link="" t="t">Int</span>], <span t="k"></span><span data-unresolved-link="" t="n">maxDimension</span>: <span data-unresolved-link="" t="t">Int</span>, <span t="k"></span><span data-unresolved-link="" t="n">useApparentPairs</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">maxFiltrationValue</span>: <span data-unresolved-link="" t="t">Option</span>[<span data-unresolved-link="" t="t">Double</span>] = ...)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <a href="algebra/Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CoefficientT</span>; })
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">Experimental</dt>
+              <dd class="body-medium">true</dd>
+              <dt class="body-small">Supertypes</dt>
+              <dd class="body-medium">
+               <div class="mono-small-block supertypes">
+                <div>
+                 class <span data-unresolved-link="" t="n">Object</span>
+                </div>
+                <div>
+                 trait <span data-unresolved-link="" t="n">Matchable</span>
+                </div>
+                <div>
+                 class <span data-unresolved-link="" t="n">Any</span>
+                </div>
+                <span></span>
+               </div>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">object </span></span><a href="homology/PersistenceEngine$.html" t="n" class="documentableName ">PersistenceEngine</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">Companion</dt>
+              <dd class="body-medium">
+               <a href="homology/PersistenceEngine.html">trait</a>
+              </dd>
+              <dt class="body-small">Experimental</dt>
+              <dd class="body-medium">true</dd>
+              <dt class="body-small">Supertypes</dt>
+              <dd class="body-medium">
+               <div class="mono-small-block supertypes">
+                <div>
+                 class <span data-unresolved-link="" t="n">Object</span>
+                </div>
+                <div>
+                 trait <span data-unresolved-link="" t="n">Matchable</span>
+                </div>
+                <div>
+                 class <span data-unresolved-link="" t="n">Any</span>
+                </div>
+                <span></span>
+               </div>
+              </dd>
+              <dt class="body-small">Self type</dt>
+              <dd class="body-medium">
+               <div class="mono-small-block supertypes">
+                <span></span>
+                <div>
+                 <a href="homology/PersistenceEngine$.html" t="n">PersistenceEngine</a>.<span t="k">type</span>
+                </div>
+               </div>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">trait </span></span><a href="homology/PersistenceEngine.html" t="n" class="documentableName ">PersistenceEngine</a>[<span t="k"></span><span data-unresolved-link="" t="t">CellT</span>, <span t="k"></span><span data-unresolved-link="" t="t">C</span>]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>A common shape for the three engines that consume an already-built <code>StratifiedCellStream</code> and are generic over <code>CellT: OrderedCell</code> -- <code>CellularHomologyContext</code> (naive), <code>CellularPersistenceInChunksContext</code> (chunks), and <code>CellularCohomologyContext</code> (cohomology). Each has its own incremental API beyond this (<code>advanceTo</code>/<code>diagramAt</code> for naive and chunks), which stays available on the concrete class -- this trait exists only to give callers that just want "the finished barcode" (the MATLAB/CLI facade) one shape to dispatch on, instead of hand-writing each engine's own construct/advance/read dance at every call site.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>A common shape for the three engines that consume an already-built <code>StratifiedCellStream</code> and are generic over <code>CellT: OrderedCell</code> -- <code>CellularHomologyContext</code> (naive), <code>CellularPersistenceInChunksContext</code> (chunks), and <code>CellularCohomologyContext</code> (cohomology). Each has its own incremental API beyond this (<code>advanceTo</code>/<code>diagramAt</code> for naive and chunks), which stays available on the concrete class -- this trait exists only to give callers that just want "the finished barcode" (the MATLAB/CLI facade) one shape to dispatch on, instead of hand-writing each engine's own construct/advance/read dance at every call site.</p>
+              <p><code>PackedRipserCohomologyContext</code>/<code>RipserCohomologyContext</code> deliberately do NOT implement this: they consume a <code>FiniteMetricSpace[Int]</code> directly (building their own internal sparse-Rips enumeration), not a stream, and are specialized to <code>Simplex[Int]</code>/<code>DiameterIndex</code> rather than generic over <code>CellT</code> -- an honest asymmetry, not a gap (see CLAUDE.md's persistence-engines section). Callers needing Ripser call it directly.</p>
+              <p>Deliberately does NOT own the "build one dimension higher than requested, then drop it" dance (<code>WORKLOG-maxdim-semantics-fix.md</code>'s <code>maxDim</code>-means-top-reported-degree fix): that dance is about how the INPUT stream gets bounded, which is complex-type-specific (<code>LimitedCofaceSimplexStream</code> only wraps a <code>CofaceSimplexStream[Int, Double]</code>, so it can truncate a Vietoris-Rips/Cech stream but not a cubical or simplicial-set one -- see CLAUDE.md's <code>LimitedCofaceSimplexStream</code> note), not engine-specific. Callers build the appropriately-bounded stream first (as they already did before this trait existed) and pass it in; this trait only unifies what happens AFTER that -- running the engine and reading back a finished barcode.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">Companion</dt>
+              <dd class="body-medium">
+               <a href="homology/PersistenceEngine$.html">object</a>
+              </dd>
+              <dt class="body-small">Experimental</dt>
+              <dd class="body-medium">true</dd>
+              <dt class="body-small">Supertypes</dt>
+              <dd class="body-medium">
+               <div class="mono-small-block supertypes">
+                <div>
+                 class <span data-unresolved-link="" t="n">Object</span>
+                </div>
+                <div>
+                 trait <span data-unresolved-link="" t="n">Matchable</span>
+                </div>
+                <div>
+                 class <span data-unresolved-link="" t="n">Any</span>
+                </div>
+                <span></span>
+               </div>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="signature-short"><span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="homology/PersistenceInChunksContext.html" t="n" class="documentableName ">PersistenceInChunksContext</a>[<span t="k"></span><span data-unresolved-link="" t="t">VertexT</span>, <span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">maxDim</span>: <span data-unresolved-link="" t="t">Int</span> = ...)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <span data-unresolved-link="" t="t">Ordering</span>[<span data-unresolved-link="" t="t">VertexT</span>], <span t="k"></span><span data-unresolved-link="" t="n">evidence$2</span>: <a href="algebra/Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CoefficientT</span>; })<span t="k"> extends </span><a href="homology/CellularPersistenceInChunksContext.html" t="t">CellularPersistenceInChunksContext</a>[<a href="cells.html#Simplex-0" t="t">Simplex</a>[<span t="t">VertexT</span>], <span t="t">CoefficientT</span>]</span><span class="signature-long"></span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>Thin <code>Simplex</code>-specific wrapper around <code>CellularPersistenceInChunksContext</code>, exactly mirroring <code>SimplicialHomologyContext</code>'s relationship to <code>CellularHomologyContext</code> above -- every existing call site (<code>PersistenceInChunksContext[Int, Double](...)</code> etc.) keeps working unchanged, since the generic engine itself has no <code>Simplex</code>-specific behavior anywhere in its body: everything goes through the generic <code>OrderedCell</code> interface (<code>.dim</code>, <code>.boundary[CoefficientT]</code>), so genericizing was a pure type-annotation change, not a behavior change. <code>Simplex[VertexT] is OrderedCell</code> resolves automatically here from <code>Ordering[VertexT]</code> alone (<code>defaultSimplexIsOrderedCell</code>, <code>SimplexOrderedCell.scala</code>), same as <code>SimplicialHomologyContext</code> already relies on. See <code>.claude/WORKLOG-simplicial-set-filtration.md</code>.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>Thin <code>Simplex</code>-specific wrapper around <code>CellularPersistenceInChunksContext</code>, exactly mirroring <code>SimplicialHomologyContext</code>'s relationship to <code>CellularHomologyContext</code> above -- every existing call site (<code>PersistenceInChunksContext[Int, Double](...)</code> etc.) keeps working unchanged, since the generic engine itself has no <code>Simplex</code>-specific behavior anywhere in its body: everything goes through the generic <code>OrderedCell</code> interface (<code>.dim</code>, <code>.boundary[CoefficientT]</code>), so genericizing was a pure type-annotation change, not a behavior change. <code>Simplex[VertexT] is OrderedCell</code> resolves automatically here from <code>Ordering[VertexT]</code> alone (<code>defaultSimplexIsOrderedCell</code>, <code>SimplexOrderedCell.scala</code>), same as <code>SimplicialHomologyContext</code> already relies on. See <code>.claude/WORKLOG-simplicial-set-filtration.md</code>.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">Experimental</dt>
+              <dd class="body-medium">true</dd>
+              <dt class="body-small">Supertypes</dt>
+              <dd class="body-medium">
+               <div class="mono-small-block supertypes">
+                <div>
+                 class <a href="homology/CellularPersistenceInChunksContext.html" t="n">CellularPersistenceInChunksContext</a>[<a href="cells.html#Simplex-0" t="t">Simplex</a>[<span t="t">VertexT</span>], <span t="t">CoefficientT</span>]
+                </div>
+                <div>
+                 class <span data-unresolved-link="" t="n">Object</span>
+                </div>
+                <div>
+                 trait <span data-unresolved-link="" t="n">Matchable</span>
+                </div>
+                <div>
+                 class <span data-unresolved-link="" t="n">Any</span>
+                </div>
+                <span></span>
+               </div>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="homology/RipserCohomologyContext.html" t="n" class="documentableName ">RipserCohomologyContext</a>[<span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">metricSpace</span>: <a href="streams/FiniteMetricSpace.html" t="t">FiniteMetricSpace</a>[<span data-unresolved-link="" t="t">Int</span>], <span t="k"></span><span data-unresolved-link="" t="n">maxDimension</span>: <span data-unresolved-link="" t="t">Int</span>, <span t="k"></span><span data-unresolved-link="" t="n">useApparentPairs</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">maxFiltrationValue</span>: <span data-unresolved-link="" t="t">Option</span>[<span data-unresolved-link="" t="t">Double</span>] = ..., <span t="k"></span><span data-unresolved-link="" t="n">memoizeFiltrationValue</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <a href="algebra/Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CoefficientT</span>; })
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p><code>maxDimension</code> means "top HOMOLOGICAL DEGREE reported," not "top simplex dimension built" -- fixed at the source (previously only worked around at the MATLAB facade layer, which built <code>requestedMaxDimension + 1</code> internally and filtered the extra dimension back out; see <code>.claude/WORKLOG-maxdim-semantics-fix.md</code>). Before this fix, <code>coboundaryOf</code>/<code>zeroPivotCofacet</code> refused to look past <code>sigma.dim + 1 &gt; maxDimension</code>, i.e. <code>sigma.dim == maxDimension</code> always got a trivially-empty coboundary and therefore always came out essential -- a well-known truncation artifact (H_k needs (k+1)-chains to resolve correctly), not real information about H_maxDimension. Fixed by relaxing that guard to <code>sigma.dim &gt; maxDimension</code>: a real <code>(maxDimension + 1)</code>-simplex is now enumerated on the fly, transiently, whenever needed to resolve a dimension-<code>maxDimension</code> pairing -- never materialized into its own <code>currentLevel</code>/reduced as its own column, so <code>totalSimplexCount</code> and the main loop's own bounds are unchanged; only the two guards moved. Any external caller previously passing <code>maxDimension + 1</code> and filtering out <code>dim == maxDimension + 1</code> bars itself should now pass the real requested degree directly and drop that workaround.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p><code>maxDimension</code> means "top HOMOLOGICAL DEGREE reported," not "top simplex dimension built" -- fixed at the source (previously only worked around at the MATLAB facade layer, which built <code>requestedMaxDimension + 1</code> internally and filtered the extra dimension back out; see <code>.claude/WORKLOG-maxdim-semantics-fix.md</code>). Before this fix, <code>coboundaryOf</code>/<code>zeroPivotCofacet</code> refused to look past <code>sigma.dim + 1 &gt; maxDimension</code>, i.e. <code>sigma.dim == maxDimension</code> always got a trivially-empty coboundary and therefore always came out essential -- a well-known truncation artifact (H_k needs (k+1)-chains to resolve correctly), not real information about H_maxDimension. Fixed by relaxing that guard to <code>sigma.dim &gt; maxDimension</code>: a real <code>(maxDimension + 1)</code>-simplex is now enumerated on the fly, transiently, whenever needed to resolve a dimension-<code>maxDimension</code> pairing -- never materialized into its own <code>currentLevel</code>/reduced as its own column, so <code>totalSimplexCount</code> and the main loop's own bounds are unchanged; only the two guards moved. Any external caller previously passing <code>maxDimension + 1</code> and filtering out <code>dim == maxDimension + 1</code> bars itself should now pass the real requested degree directly and drop that workaround.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">Experimental</dt>
+              <dd class="body-medium">true</dd>
+              <dt class="body-small">Supertypes</dt>
+              <dd class="body-medium">
+               <div class="mono-small-block supertypes">
+                <div>
+                 class <span data-unresolved-link="" t="n">Object</span>
+                </div>
+                <div>
+                 trait <span data-unresolved-link="" t="n">Matchable</span>
+                </div>
+                <div>
+                 class <span data-unresolved-link="" t="n">Any</span>
+                </div>
+                <span></span>
+               </div>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="signature-short"><span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="homology/SimplicialHomologyContext.html" t="n" class="documentableName ">SimplicialHomologyContext</a>[<span t="k"></span><span data-unresolved-link="" t="t">VertexT</span>, <span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>, <span t="k"></span><span data-unresolved-link="" t="t">FiltrationT</span>](<span t="k"></span>)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <span data-unresolved-link="" t="t">Ordering</span>[<span data-unresolved-link="" t="t">VertexT</span>], <span t="k"></span><span data-unresolved-link="" t="n">evidence$2</span>: <a href="algebra/Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CoefficientT</span>; }, <span t="k"></span><span data-unresolved-link="" t="n">evidence$3</span>: <span data-unresolved-link="" t="t">Ordering</span>[<span data-unresolved-link="" t="t">FiltrationT</span>])<span t="k"> extends </span><a href="homology/CellularHomologyContext.html" t="t">CellularHomologyContext</a>[<a href="cells.html#Simplex-0" t="t">Simplex</a>[<span t="t">VertexT</span>], <span t="t">CoefficientT</span>, <span t="t">FiltrationT</span>]</span><span class="signature-long"></span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">Experimental</dt>
+              <dd class="body-medium">true</dd>
+              <dt class="body-small">Supertypes</dt>
+              <dd class="body-medium">
+               <div class="mono-small-block supertypes">
+                <div>
+                 class <a href="homology/CellularHomologyContext.html" t="n">CellularHomologyContext</a>[<a href="cells.html#Simplex-0" t="t">Simplex</a>[<span t="t">VertexT</span>], <span t="t">CoefficientT</span>, <span t="t">FiltrationT</span>]
+                </div>
+                <div>
+                 class <span data-unresolved-link="" t="n">Object</span>
+                </div>
+                <div>
+                 trait <span data-unresolved-link="" t="n">Matchable</span>
+                </div>
+                <div>
+                 class <span data-unresolved-link="" t="n">Any</span>
+                </div>
+                <span></span>
+               </div>
+              </dd>
+              <dt class="body-small">Known subtypes</dt>
+              <dd class="body-medium">
+               <div class="mono-small-block subtypes">
+                <div>
+                 class <a href="TDAContext.html" t="n">TDAContext</a>[<span t="t">VertexT</span>, <span t="t">CoefficientT</span>, <span t="t">FiltrationT</span>]
+                </div>
+                <span></span>
+               </div>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+       </div>
+      </section>
+     </div>
+    </section>
+   </div>
+  </div>
+ </div>
+</section></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#members-list">Members list</a><ul><li><a href="#Type-members">Type members</a><ul><li><a href="#Experimental-classlikes">Experimental classlikes</a></li></ul></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><div class="text"></div></div><div class="text-mobile"></div></div></div></div></body></html>
