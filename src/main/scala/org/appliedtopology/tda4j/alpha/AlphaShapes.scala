@@ -116,6 +116,17 @@ object Hypersphere:
 
 case class DelaunaySimplex(simplex: Simplex[Int], circumsphere: Hypersphere)
 
+/** Rank of `matrix`'s own row space, at THIS codebase's own `epsilon` tolerance -- not `SingularValueDecomposition`'s
+  * default `getRank`, whose internal tolerance (machine-epsilon-scale, relative to the matrix's own norm) is far
+  * tighter than `epsilon.epsilon` (typically `1e-5`) and so treats near-but-not-exactly-degenerate input (e.g. points
+  * jittered at the `1e-7` scale) as full rank when every OTHER degeneracy check in this file -- `Hyperplane. from`'s
+  * own `nullSV` filter included -- would already call that same input degenerate. Used everywhere this file needs "how
+  * many affinely-independent directions does this set of points actually span," so all of them agree on where the line
+  * is.
+  */
+private def rankAtEpsilon(matrix: org.apache.commons.math3.linear.RealMatrix)(using epsilon: Epsilon): Int =
+  new SingularValueDecomposition(matrix).getSingularValues.count(_.abs > epsilon.epsilon)
+
 /** Runs the frontier-walking bootstrap + main loop that finds every Delaunay simplex of `pts`, holding all of the
   * algorithm's own mutable working state (`validated`, `frontierCases`, `visitedFacets`, `cospherical`) so
   * `HelixDelaunay` itself only ever sees the finished, immutable result of `compute()` -- the same
@@ -192,62 +203,123 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
           )
 
   /** Runs the full bootstrap + frontier walk once and returns every Delaunay simplex found. */
+  // Greedily picks `ambientDimension` affinely-independent points from `candidates` (in the given order), by
+  // rank -- the SAME technique already used below for refining an over-sized `vs`, applied here to the hull-
+  // hyperplane-search loop's OWN candidate simplex too. This matters for a genuinely different reason than the
+  // `vs` refinement: `Hyperplane.from` assumes its input spans a genuine (ambientDimension-1)-dimensional
+  // hyperplane (rank exactly `ambientDimension - 1`). If the `ambientDimension` points handed to it are
+  // THEMSELVES more degenerate than that (rank strictly less -- e.g. they lie in some lower-dimensional flat
+  // within the ambient space, not just "coplanar" the way a genuine facet's points are), its SVD-based normal-
+  // vector extraction is under-determined: there is an entire FAMILY of hyperplanes containing such a point
+  // set, not one, and the specific one the code happens to compute can be an arbitrary, non-hull-supporting
+  // plane -- one that can have points strictly on BOTH sides of it, yet still spuriously satisfy the loop's own
+  // `lightPoints.isEmpty` termination check, converging the whole bootstrap onto a bogus, non-facet
+  // `startingSimplex`. Confirmed as a real, distinct root cause (not the same one the `vs`-refinement fix
+  // above addresses) via direct reproduction: a real point cloud's 5-point candidate simplex had rank 3, not
+  // the required 4, and its resulting "hyperplane" had points with `dist` both well above and well below
+  // `epsilon` -- see `.claude/WORKLOG-helix-bootstrap-fix.md`.
+  private def affinelyIndependentPick(candidates: Seq[Int]): Set[Int] =
+    val base = points(candidates.head)
+    var chosen: Vector[Int] = Vector(candidates.head)
+    var chosenVecs: Vector[Array[Double]] = Vector.empty
+    val remaining = candidates.tail.iterator
+    while chosen.size < ambientDimension && remaining.hasNext do
+      val candidate = remaining.next()
+      val trialVecs = chosenVecs :+ points(candidate).subtract(base).toArray
+      val rank = rankAtEpsilon(MatrixUtils.createRealMatrix(trialVecs.toArray))
+      if rank > chosenVecs.size then
+        chosen = chosen :+ candidate
+        chosenVecs = trialVecs
+    chosen.toSet
+
   def compute(): Set[DelaunaySimplex] =
-    var startingSimplex: Set[Int] = points.indices.take(ambientDimension).toSet
+    var startingSimplex: Set[Int] = affinelyIndependentPick(points.indices)
     var convexHullHP: Boolean = false
     while !convexHullHP do
       val currentHP: Hyperplane = Hyperplane.from(startingSimplex.map(p => points(p)).toSeq)
       val lightPoints: Set[Int] =
         (points.indices.toSet -- startingSimplex).filter(pi => currentHP.dist(points(pi)) > epsilon.epsilon)
       if lightPoints.isEmpty then convexHullHP = true
-      else
-        startingSimplex = (lightPoints ++ startingSimplex).toSeq
-          .pipe(rng.shuffle)
-          .take(ambientDimension)
-          .toSet
-    startingSimplex = points.indices.filter(pi =>
+      else startingSimplex = affinelyIndependentPick((lightPoints ++ startingSimplex).toSeq.pipe(rng.shuffle))
+    val vs = points.indices.filter(pi =>
       Hyperplane.from(startingSimplex.map(points).toSeq).dist(points(pi)).abs < epsilon.epsilon
-    ) match
-      case vs if vs.size == ambientDimension => vs.toSet
-      case vs if vs.size > ambientDimension  =>
-        // vs has more points on the supporting hyperplane than needed for a
-        // non-degenerate (ambientDimension-1)-simplex within it -- common for
-        // grid-like or otherwise partly-degenerate point clouds. Picking just 2
-        // of them regardless of ambientDimension leaves startingSimplex
-        // undersized for ambientDimension > 2, starving the brute-force
-        // bootstrap search below of a well-posed circumsphere (Hypersphere
-        // needs ambientDimension+1 points to be uniquely determined) and
-        // making it fail to find any candidate, which fails the assertion
-        // below. Instead, greedily grow an affinely-independent subset of
-        // exactly ambientDimension points: start from vs.head, and add each
-        // next candidate only if it strictly increases the rank of the affine
-        // span built so far (i.e. isn't already in that span). vs always has
-        // at least ambientDimension independent points available, since it's
-        // a superset of the already-independent startingSimplex being refined.
-        val base = points(vs.head)
-        var chosen: Vector[Int] = Vector(vs.head)
-        var chosenVecs: Vector[Array[Double]] = Vector.empty
-        val remaining = vs.tail.iterator
-        while chosen.size < ambientDimension && remaining.hasNext do
-          val candidate = remaining.next()
-          val trialVecs = chosenVecs :+ points(candidate).subtract(base).toArray
-          val rank = new SingularValueDecomposition(MatrixUtils.createRealMatrix(trialVecs.toArray)).getRank
-          if rank > chosenVecs.size then
-            chosen = chosen :+ candidate
-            chosenVecs = trialVecs
-        chosen.toSet
+    )
 
-    // brute force search for first delaunay simplex
+    // vs has more points on the supporting hyperplane than needed for a non-degenerate
+    // (ambientDimension-1)-simplex within it -- common for grid-like or otherwise partly-degenerate point
+    // clouds. Picking just 2 of them regardless of ambientDimension leaves startingSimplex undersized for
+    // ambientDimension > 2, starving the brute-force bootstrap search below of a well-posed circumsphere
+    // (Hypersphere needs ambientDimension+1 points to be uniquely determined) and making it fail to find any
+    // candidate. So instead, greedily grow an affinely-independent subset of exactly ambientDimension points,
+    // rooted at `base`: start from `base`, and add each next candidate (by increasing distance from `base`,
+    // NOT raw point-index order) only if it strictly increases the rank of the affine span built so far.
+    //
+    // Distance-based ordering matters, not just correctness of the final rank: a candidate subset that spans a
+    // "long" edge/facet skipping over some OTHER vs point actually lying BETWEEN the chosen vertices dooms the
+    // brute-force seed search below regardless of which third point it tries next -- that skipped-over point
+    // ends up unconditionally inside every candidate circumsphere (a direct geometric fact: for any two points
+    // p, q and a third point r on the segment between them, r's distance to the center of ANY circle through p
+    // and q is always strictly less than that circle's own radius, since r sits on the foot of the
+    // perpendicular from the center to the chord p-q). Confirmed as a real root cause via a grid-point
+    // reproduction (a plain 3x3 integer grid, zero jitter: `vs = {(0,0),(1,0),(2,0)}`, and picking
+    // `{(0,0),(2,0)}` skips over `(1,0)`, which then sits inside every circumcircle through the chosen pair
+    // and any third grid point) -- see `.claude/WORKLOG-helix-bootstrap-fix.md`.
+    //
+    // A single greedy pass rooted at one fixed base (`vs.head`) is not a complete fix at higher ambient
+    // dimension: nearest-to-ONE-base doesn't guarantee no OTHER vs point ends up inside the resulting
+    // higher-dimensional simplex's own affine hull. Measured directly, not assumed, across three successive
+    // attempts: the raw index-order pick failed a targeted grid-heavy stress sweep at 2226/30000; sorting one
+    // greedy pass by distance from `vs.head` cut that to 744/30000 (fixed the 2D case outright, not the higher-
+    // dimensional one); trying a nearest-neighbor candidate rooted at every vs point in turn cut it further to
+    // 70/30000, but still not zero. So this instead enumerates every affinely-independent `ambientDimension`-
+    // subset of `vs` (bounded -- `vs` is typically a handful of points sharing one exact hyperplane even in the
+    // pathological cases that trigger this branch at all; capped at `maxCandidates` as a safety valve against a
+    // pathological `vs` this reasoning doesn't anticipate), ordered by increasing total pairwise span so the
+    // candidates least likely to skip over an interior point are tried first, and the brute-force search below
+    // retries across ALL of them (not just the first) until one succeeds.
+    val maxCandidates = 20000
+    val candidateStartingSimplices: Seq[Set[Int]] =
+      if vs.size == ambientDimension then Seq(vs.toSet)
+      else
+        vs
+          .combinations(ambientDimension)
+          .filter { combo =>
+            val base = points(combo.head)
+            val vecs = combo.tail.map(pi => points(pi).subtract(base).toArray)
+            rankAtEpsilon(MatrixUtils.createRealMatrix(vecs.toArray)) == ambientDimension - 1
+          }
+          .take(maxCandidates)
+          .map(_.toSet)
+          .toSeq
+          .sortBy(combo =>
+            (for
+              i <- combo.toSeq.indices
+              j <- (i + 1) until combo.size
+            yield points(combo.toSeq(i)).getDistance(points(combo.toSeq(j)))).sum
+          )
+
+    // brute force search for first delaunay simplex -- retried across every candidate starting simplex above,
+    // not just the first, stopping at the first (candidate, third point) pair whose circumsphere is empty.
     var done = false
-    for pi <- points.indices do
-      if !done then
-        if !startingSimplex.contains(pi) then
-          val circumsphere = Hypersphere((startingSimplex + pi).map(p => points(p)).toSeq)
-          val containedPoints = points.indices.toSet.filter(qi => circumsphere.contains(points(qi)))
-          if containedPoints.isEmpty then
-            done = true
-            validated.add(DelaunaySimplex(Simplex.from((startingSimplex + pi).toSeq), circumsphere))
-    assert(validated.nonEmpty)
+    val candidateIter = candidateStartingSimplices.iterator
+    while !done && candidateIter.hasNext do
+      val candidate = candidateIter.next()
+      for pi <- points.indices do
+        if !done then
+          if !candidate.contains(pi) then
+            val circumsphere = Hypersphere((candidate + pi).map(p => points(p)).toSeq)
+            val containedPoints = points.indices.toSet.filter(qi => circumsphere.contains(points(qi)))
+            if containedPoints.isEmpty then
+              done = true
+              startingSimplex = candidate
+              validated.add(DelaunaySimplex(Simplex.from((candidate + pi).toSeq), circumsphere))
+    assert(
+      validated.nonEmpty,
+      s"HelixDelaunayBuilder: no empty-circumsphere seed simplex found across ${candidateStartingSimplices.size} " +
+        s"candidate starting simplices (hull-supporting hyperplane has ${vs.size} coincident points) -- this is a " +
+        "genuine construction failure, not user error; please report it with the exact point cloud, per " +
+        ".claude/WORKLOG-helix-bootstrap-fix.md."
+    )
 
     visitedFacets.add(Simplex.from(startingSimplex.toSeq))
 
@@ -332,9 +404,23 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
 class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTriangulation: Boolean = false)(using
   epsilon: Epsilon
 ) extends AlphaShapes:
-  private val builder = HelixDelaunayBuilder(pts, seed)
+  // If `pts` is globally coplanar -- its own affine rank is strictly less than the declared ambient dimension
+  // (the array width) -- there is no genuine full-ambient-dimensional Delaunay simplex to find at all: every
+  // point lies in some lower-dimensional flat, so the bootstrap's search for a supporting hyperplane plus one
+  // more "inside" point can never succeed no matter which candidate subset it tries (a structurally different
+  // failure from a merely locally-bad subset choice -- no amount of subset selection fixes it). Rather than let
+  // that surface as a crash, project onto an orthonormal basis of the point set's own actual affine span first
+  // and run the whole construction there -- a no-op (identity, modulo re-centering) whenever the input already
+  // has full rank, and exact (not approximate) when it doesn't: an orthogonal projection onto the affine span
+  // containing every point changes no pairwise Euclidean distance among them, so the resulting triangulation is
+  // the genuine Delaunay triangulation of the true (lower-dimensional) point configuration, not an approximation
+  // of it. `ambientDimension` (below, via `builder`) then correctly reflects the data's own true dimensionality
+  // -- e.g. 2D points accidentally stored with a spurious constant third coordinate behave exactly like a 2D
+  // alpha complex, not a degenerate "3D" one. See `.claude/WORKLOG-helix-bootstrap-fix.md`.
+  private val reducedPts: Array[Array[Double]] = HelixDelaunay.projectToAffineRank(pts)
+  private val builder = HelixDelaunayBuilder(reducedPts, seed)
   val points: Seq[Point] = builder.points
-  override val metricSpace: EuclideanMetricSpace = EuclideanMetricSpace(pts)
+  override val metricSpace: EuclideanMetricSpace = EuclideanMetricSpace(reducedPts)
   val ambientDimension: Int = builder.ambientDimension
   val validated: Set[DelaunaySimplex] =
     val raw = builder.compute()
@@ -408,6 +494,31 @@ class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTria
     FiltrationOrdering.canonical(filtrationValue, _.size, simplexOrdering[Int])
 
 object HelixDelaunay:
+
+  /** If `pts` is globally coplanar -- its own affine rank (via SVD of the points centered at `pts.head`) is strictly
+    * less than the declared ambient dimension (`pts.head.length`) -- re-expresses every point in an orthonormal basis
+    * of that actual affine span, dropping the genuinely-unused extra coordinates; returns `pts` completely unchanged
+    * (not even re-centered) when the input already has full rank, so this is a no-op for every ordinary, non-degenerate
+    * point cloud. An orthogonal projection onto the affine span containing every input point preserves every pairwise
+    * Euclidean distance among them EXACTLY (nothing is discarded that any of the points actually extend into), so the
+    * returned points' own Delaunay triangulation is the genuine one for the true (lower-dimensional) point
+    * configuration, not an approximation -- see this class's own constructor doc and
+    * `.claude/WORKLOG-helix-bootstrap-fix.md`.
+    */
+  private def projectToAffineRank(pts: Array[Array[Double]])(using epsilon: Epsilon): Array[Array[Double]] =
+    if pts.length < 2 then pts
+    else
+      val dim = pts.head.length
+      val base = pts.head
+      val centered = pts.map(p => p.zip(base).map(_ - _))
+      val matrix = MatrixUtils.createRealMatrix(centered)
+      val rank = rankAtEpsilon(matrix)
+      if rank >= dim then pts
+      else
+        val v = new SingularValueDecomposition(matrix).getV
+        centered.map { row =>
+          Array.tabulate(rank)(k => (0 until dim).map(j => row(j) * v.getEntry(j, k)).sum)
+        }
 
   private def facetsOf(ds: DelaunaySimplex): Seq[Simplex[Int]] = ds.simplex.toSeq.toSeq.map(v => ds.simplex - v)
 

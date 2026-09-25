@@ -497,11 +497,50 @@ maxRadius, ...)` for truncation. Optional parallel construction (`WORKLOG-parall
   `minTestsOk = 2000` (failure rates were as low as 1/12000). `AlphaComplexDQPSpatialIndexSpec` checks the VP-tree
   `cechNeighbours()` against brute force.
 
-**HelixDelaunay**: bootstrap fixed (greedy affinely-independent subset). **Accepted limitation**: near-cospherical
-clusters make the frontier walk order-dependent (~1/170 at ambient dim 4, 20–30 points) — a real fix needs joint
-near-tie detection. So Helix is **not reliable ground truth** for dim ≥ 4 fuzzing; `AlphaCrossValidationSpec`'s
-comparisons stay as `unsafeCompare`/`unsafeFuzzCompare` diagnostics, not wired into `sbt test` (and not
-`pendingUntilFixed`, wrong semantics for probabilistic failures).
+**HelixDelaunay's bootstrap crash is fixed** (`assert(validated.nonEmpty)` in the initial-simplex search,
+`.claude/WORKLOG-helix-bootstrap-fix.md`) — three independent, additive fixes, each validated against a real
+reproduction before moving to the next: (1) the hull-supporting-hyperplane refinement (when more points lie on
+it than the ambient dimension needs) now retries EVERY affinely-independent candidate subset it can form, not
+just the first found greedily, ordered by smallest total pairwise span; (2) the earlier "find a hull-supporting
+hyperplane" loop now rejects an affinely-DEGENERATE candidate simplex outright (rank strictly less than ambient
+dimension − 1) rather than handing it to `Hyperplane.from`, whose SVD-based normal-vector extraction is
+under-determined for such input and can silently return an arbitrary, non-hull-supporting plane; (3) a point
+cloud that is globally coplanar — its own affine rank strictly less than the declared ambient dimension (e.g.
+2D points stored with a spurious constant third coordinate) — is transparently projected onto an orthonormal
+basis of its own true affine span before construction, an exact (not approximate) operation since it changes no
+pairwise Euclidean distance, and a no-op for any already-full-rank input. All three fixes route their own rank
+computation through one shared `rankAtEpsilon` helper, tied to this codebase's own `epsilon.epsilon` (`1e-5`),
+because `SingularValueDecomposition.getRank`'s default tolerance is far tighter and missed genuinely-degenerate-
+at-this-codebase's-own-tolerance input (points jittered at the `1e-7` scale). Measured: a targeted 30000-trial
+stress sweep against grid-like and near-grid point clouds (built specifically to trigger this bug's own known
+pattern) went from 2226 failures before these fixes to 0 after; `AlphaComplexSpec`'s own property test, which
+previously excluded `"helix"` specifically for this bug, now includes it again.
+
+**Two SEPARATE, NOT fixed limitations remain, sharing one root mechanism** (near-cospherical clusters making the
+frontier walk's own facet-pivot choices order-dependent — `HelixDelaunayBuilder`'s own class doc, "Accepted
+limitation"): when a facet has more than one legitimately-empty-circumsphere candidate coface (a genuine near
+tie, not a bug in the candidate test itself), the walk commits to whichever one it finds first and never
+reconsiders, because `visitedFacets` permanently locks that facet closed once ANY side is resolved.
+1. **Order-dependent disagreement with DQP** (~1/170 at ambient dim 4, 20-30 points): the OTHER, equally-valid
+   candidate is a real, complete, internally-consistent Delaunay triangulation, just a different one than DQP's
+   own tie-break would pick — not wrong, just non-canonical. So Helix is **not reliable ground truth** for dim
+   ≥ 4 fuzzing; `AlphaCrossValidationSpec`'s comparisons stay as `unsafeCompare`/`unsafeFuzzCompare` diagnostics,
+   not wired into `sbt test` (and not `pendingUntilFixed`, wrong semantics for probabilistic failures).
+2. **Silently incomplete output**: root-caused to the exact same mechanism, not a separate bug -- confirmed by
+   direct trace on a real 13-point, ambient-dim-4 example where DQP found 45 top simplices to Helix's 43. Facet
+   `{2,3,6,9}` had (at least) two empty-circumsphere cofaces, via vertex 1 (DQP's pick, the correct one per a
+   from-scratch check) and via vertex 4 (Helix's pick); once Helix validates the vertex-4 side, that facet is
+   marked visited and NEVER reconsidered, so the entire subtree reachable only via vertex 1 (three top simplices
+   sharing the 2-face `{1,3,9}`, plus all of their own sub-faces) is silently never discovered -- not merely a
+   different valid triangulation this time, since a permanently one-sided lock-out is not itself a complete,
+   internally-consistent alternative. No exception, no assertion -- confirmed via `AlphaCrossValidationSpec`'s
+   own `unsafeCompare`-style subset check (`dqpSet -- helixSet`), not caught by `AlphaComplexSpec`'s own
+   face-closure property test (which checks internal self-consistency of whatever Helix DOES produce, not
+   completeness against an independent oracle). A genuine fix for either of these needs the same "joint near-tie
+   detection across every currently-competing candidate before committing to any one of them" (symbolic
+   perturbation, or an equivalent canonical tie-break shared with DQP) already on record as a deliberate
+   non-goal for this codebase, not a quick patch -- not attempted this session, pending the project lead's own
+   call on scope given its shared root cause with the already-WONTFIX'd disagreement issue above.
 
 **`FastAlphaHomologyContext` (`homology/FastAlphaHomology.scala`)** — `FastCubicalHomologyContext`'s own dual
 union-find (see "Cubical complexes" above), ported to `HelixDelaunay`'s top simplices; **valid at any ambient
