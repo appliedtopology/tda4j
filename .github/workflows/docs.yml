@@ -18,8 +18,40 @@ jobs:
           java-version: 21
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
-      - name: Compile and publish docs
+      - name: Build docs site
+        run: sbt laikaSite
+      # `laikaSite`'s own output (target/docs/site) is NOT version-prefixed -- laikaConfig's Versions value
+      # only drives the version-switcher dropdown and laika/versionInfo.json, not physical output placement
+      # (confirmed by inspecting a real build's output). Nesting each version under its own path, and keeping
+      # every already-published version around, is this job's responsibility: stage this build under
+      # target/docs/publish/dev/ (this job always builds "dev" -- TDA4J_DOCS_VERSION is unset, build.sbt's
+      # default), then copy forward every other version directory from the currently published `gh-pages`
+      # tree (sbt-github-pages has no "keep remote-only files" option, so anything not in
+      # gitHubPagesSiteDir when it publishes is deleted), then write a root redirect to /dev/. release.yml
+      # does the equivalent for a tagged release's own version segment.
+      - name: Stage versioned docs for publish
+        run: |
+          set -e
+          PUBLISH_DIR="target/docs/publish"
+          mkdir -p "$PUBLISH_DIR/dev"
+          cp -r target/docs/site/. "$PUBLISH_DIR/dev/"
+          if git ls-remote --exit-code --heads origin gh-pages > /dev/null 2>&1; then
+            git fetch origin gh-pages
+            git worktree add /tmp/gh-pages-old origin/gh-pages
+            for d in /tmp/gh-pages-old/*/; do
+              name=$(basename "$d")
+              if [ ! -e "$PUBLISH_DIR/$name" ]; then
+                cp -r "$d" "$PUBLISH_DIR/$name"
+              fi
+            done
+            git worktree remove /tmp/gh-pages-old --force
+          fi
+          # Root redirects to the newest released version if one has been published, else to "dev".
+          LATEST=$(ls -1 "$PUBLISH_DIR" | grep -vE '^(dev|index\.html)$' | sort -V | tail -n1)
+          TARGET="${LATEST:-dev}/"
+          printf '<!DOCTYPE html><meta charset="utf-8"><title>TDA4j docs</title><meta http-equiv="refresh" content="0; url=%s"><a href="%s">TDA4j docs</a>' "$TARGET" "$TARGET" > "$PUBLISH_DIR/index.html"
+      - name: Publish docs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_PAGES_PUBLISH_FORCE_PUSH: "Updating webpages."
-        run: sbt laikaSite publishToGitHubPages
+        run: sbt publishToGitHubPages
