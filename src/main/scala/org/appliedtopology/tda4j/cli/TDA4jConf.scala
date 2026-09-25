@@ -65,6 +65,16 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     )
   val alphaBackend: ScallopOption[String] =
     opt[String](descr = "helix (default) or DQP -- only consulted when --complex=alpha")
+  // String, not Boolean -- same reasoning as --sublevel/--edge-collapse below (a genuinely optional flag, not an
+  // always-supplied toggle).
+  val requireValidTriangulation: ScallopOption[String] = opt[String](
+    descr = "true or false (default) -- only consulted for --complex=alpha with --alpha-backend=helix (the " +
+      "default), rejected for any other --complex or --alpha-backend=DQP. Repairs a HelixDelaunay facet-" +
+      "multiplicity violation (the precondition --engine=fast-alpha needs) instead of leaving it to surface as " +
+      "FastAlphaTriangulationException -- see HelixDelaunay.repairByJitterRetriangulation's own doc and " +
+      ".claude/DESIGN-helix-triangulation-repair.md. Validated at ambient dimension 2 and 3; not validated at " +
+      "dimension >= 4."
+  )
   val maxDimension: ScallopOption[Int] =
     opt[Int](descr = "highest homological degree to report, i.e. \"give me H_0..H_k\" (default: 2)")
   val maxFiltrationValue: ScallopOption[Double] = opt[Double](

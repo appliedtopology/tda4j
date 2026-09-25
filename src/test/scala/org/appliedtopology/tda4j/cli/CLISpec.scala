@@ -220,6 +220,42 @@ class CLISpec extends mutable.Specification:
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
     }
 
+    "produce the exact same barcode as calling TDA4j directly for --require-valid-triangulation=true, via a real " +
+      "file on disk" >> {
+        // Same pinned 12-point facet-multiplicity-violation fixture TDA4jSpec/FastAlphaHomologySpec use.
+        val points = Array(
+          Array(0.25695462472920483, 0.05056259919533401),
+          Array(0.16861543461245865, 0.6584119575973783),
+          Array(0.04467548898740192, 0.34594140416504626),
+          Array(0.4001206924759393, 0.7492099413470164),
+          Array(0.9883782492738798, 0.31376350981292744),
+          Array(0.9160887469534176, 0.952687093337434),
+          Array(0.19808274564375272, 0.2756763438426806),
+          Array(0.6337671470530175, 0.4977740447848821),
+          Array(0.6906131750679769, 0.9538206186545584),
+          Array(0.4693304070850357, 0.4362857418234436),
+          Array(0.5483329515783447, 0.7788827446454716),
+          Array(0.8916378524720998, 0.4724706741593929)
+        )
+        val path = tempFile(".csv")
+        CSV.writePointCloud(path, points)
+
+        val buffer = new ByteArrayOutputStream()
+        val exitCode = TDA4jCLI.run(
+          Seq("--complex", "alpha", "--engine", "fast-alpha", "--require-valid-triangulation", "true", path),
+          new PrintStream(buffer)
+        )
+        val cliLines = buffer.toString.linesIterator.toSeq
+
+        val direct = TDA4j.computeFromPoints(
+          points,
+          Array("complex", "alpha", "engine", "fast-alpha", "requireValidTriangulation", "true")
+        )
+        val directLines = TDA4jCLI.toBars(direct).map(_.toString)
+
+        (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
+      }
+
     "produce the exact same barcode as calling TDA4j directly for --complex=dtm-alpha, via a real file on disk" >> {
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
       val path = tempFile(".csv")

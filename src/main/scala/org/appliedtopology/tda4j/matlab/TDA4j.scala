@@ -59,6 +59,20 @@ import scala.collection.mutable
   *   - `"alphaBackend"`: `"helix"` (default) or `"DQP"`, only consulted when `complex=alpha`. `complex=dtm-alpha`
   *     always uses DQP (needs power/weighted Delaunay, which Helix does not support) -- this option is not consulted
   *     there.
+  *   - `"requireValidTriangulation"`: `"true"` or `"false"` (default), only consulted when `complex=alpha` with
+  *     `alphaBackend=helix` (the default) -- `require`d `false`/omitted for `alphaBackend=DQP` and every other
+  *     `complex`. When `true`, repairs a `HelixDelaunay` facet-multiplicity violation (the precondition
+  *     `engine=fast-alpha` needs) rather than leaving it to surface as `FastAlphaTriangulationException` --
+  *     `HelixDelaunay.repairByJitterRetriangulation`'s own doc and `.claude/DESIGN-helix-triangulation-repair.md` have
+  *     the full mechanism and validation. Off by default: zero effect unless a violation is actually present, and even
+  *     then only changes the RESULTING triangulation for the (rare) point clouds that would otherwise throw --
+  *     validated at ambient dimension 2 and 3 (`engine=fast-alpha`'s own primary use case); not validated at dimension
+  *     `>= 4`, where `HelixDelaunay` construction itself is already a documented unreliable-ground-truth regime for
+  *     unrelated reasons. Meaningful with any `"engine"` value (the flag lives on the triangulation itself, not on
+  *     `engine=fast-alpha` specifically), but its only practical effect on `engine=naive`/`"chunks"`/ `"cohomology"` is
+  *     to silently change which (rare, near-tied) triangulation gets built -- those engines have no facet-multiplicity
+  *     precondition of their own to repair, so there is usually no reason to set this unless also using
+  *     `engine=fast-alpha`.
   *   - `"dtmK"`: integer, REQUIRED when `complex=dtm-rips` or `complex=dtm-alpha` (no default -- there is no
   *     universally sensible neighbour count). The `k` of `streams.DistanceToMeasure`: how many nearest neighbours (self
   *     included) define each point's own distance-to-measure value. See `alpha.AlphaComplexDQP.dtm`/
@@ -457,7 +471,8 @@ object TDA4j:
     "dtmq",
     "dtmp",
     "sheehyepsilon",
-    "edgecollapse"
+    "edgecollapse",
+    "requirevalidtriangulation"
   )
 
   /** `numLandmarks`/`landmarkSelector`/`landmarkSeed` only -- the STRICT allowlist `selectLandmarksFromPoints`/
@@ -740,6 +755,18 @@ object TDA4j:
       opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
     val alphaBackend = opts.getOrElse("alphabackend", "helix")
 
+    // No separate alphaBackend="dqp" check here -- AlphaShapes.apply's own `require` already rejects that
+    // combination with an actionable message, the single place this is checked (mirroring how the fast-alpha
+    // dispatch below pattern-matches the CONSTRUCTED type rather than re-comparing the raw alphaBackend string,
+    // since alphaBackend="default" is also a valid spelling that resolves to HelixDelaunay).
+    val requireValidTriangulation =
+      opts.get("requirevalidtriangulation").exists(v => parseBooleanOption("requireValidTriangulation", v))
+    if requireValidTriangulation && complex != ComplexKind.Alpha then
+      throw new IllegalArgumentException(
+        s"option 'requireValidTriangulation' is only valid for complex=alpha -- got " +
+          s"complex=${opts.getOrElse("complex", "vr")}"
+      )
+
     val edgeCollapse = opts.get("edgecollapse").exists(v => parseBooleanOption("edgeCollapse", v))
     if edgeCollapse && complex != ComplexKind.VR then
       throw new IllegalArgumentException(
@@ -783,6 +810,7 @@ object TDA4j:
         complex,
         engine,
         alphaBackend,
+        requireValidTriangulation,
         maxDimension,
         maxFiltrationValue,
         witnessVariant,
@@ -813,6 +841,7 @@ object TDA4j:
     complex: ComplexKind,
     engine: EngineKind,
     alphaBackend: String,
+    requireValidTriangulation: Boolean,
     requestedMaxDimension: Int,
     maxFiltrationValue: Option[Double],
     witnessVariant: WitnessVariantKind,
@@ -943,7 +972,7 @@ object TDA4j:
             "complex=alpha requires point coordinates -- use computeFromPoints, not computeFromDistanceMatrix"
           )
         )
-        val alphaStream = AlphaShapes(pts.toIndexedSeq, alphaBackend)
+        val alphaStream = AlphaShapes(pts.toIndexedSeq, alphaBackend, requireValidTriangulation)
         val alphaCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
         val alphaBoundaryMatrixOf =
           () =>

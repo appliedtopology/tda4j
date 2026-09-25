@@ -147,6 +147,12 @@ the fix (retry with `engine="naive"`/`"chunks"`/`"cohomology"`, none of which ar
 `engine="fast-alpha"` option (and the CLI's `--engine fast-alpha`) use this automatically for `complex=alpha`
 with the default `alphaBackend=helix`, at any ambient dimension `>= 2`.
 
+There's also a repair, not just a retry: `requireValidTriangulation=true` (MATLAB)/`--require-valid-triangulation
+true` (CLI), off by default, fixes a facet-multiplicity violation before it can throw — nudging only the
+near-tied points, re-running the same triangulation construction on the full point set, then recomputing every
+simplex's circumsphere from your original coordinates so nothing about the result is contaminated by the fix
+itself. Validated at ambient dimension 2 and 3; not yet at `d >= 4`.
+
 ### Cech complexes
 
 ```scala 3
@@ -466,6 +472,7 @@ changes a method's call signature:
 | `complex` | `vr`, `alpha`, `cech`, `witness`, `dtm-rips`, `dtm-alpha`, `sheehy-rips` | `vr` |
 | `engine` | `ripser`, `naive`, `chunks`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and `witness`/`witnessVariant=lazy`; `naive` for `alpha`/`cech`/`dtm-rips`/`dtm-alpha`/`sheehy-rips`/`witness`/`witnessVariant=general`/cubical images. `fast-cubical` is valid ONLY for `computeFromCubicalImage`/`computeFromImage`, for any ambient dimension `>= 2`. `fast-alpha` is valid ONLY for `complex=alpha` with `alphaBackend=helix`, for any ambient dimension `>= 2` |
 | `alphaBackend` | `helix`, `DQP` | `helix` (only consulted for `complex=alpha`) |
+| `requireValidTriangulation` | `true`, `false` | `false` (only consulted for `complex=alpha`/`alphaBackend=helix`; rejected for any other `complex` or `alphaBackend=DQP`) — repairs a `HelixDelaunay` facet-multiplicity violation instead of letting it surface as `FastAlphaTriangulationException`; validated at ambient dimension 2 and 3, not yet at `d >= 4` |
 | `dtmK` | integer | REQUIRED for `complex=dtm-rips` or `complex=dtm-alpha`, no default |
 | `dtmQ` | double | `2.0` (only consulted for `complex=dtm-rips` or `complex=dtm-alpha`) |
 | `dtmP` | double | `1.0` (only consulted for `complex=dtm-rips`; must be `1.0` or `2.0`) |

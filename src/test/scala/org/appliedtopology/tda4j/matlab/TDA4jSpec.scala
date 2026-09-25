@@ -280,6 +280,69 @@ class TDA4jSpec extends mutable.Specification:
               (e.getMessage must contain("TO GET YOUR RESULT")) and
               (e.getMessage must contain("\"naive\""))
       }
+
+    // requireValidTriangulation (.claude/DESIGN-helix-triangulation-repair.md), threaded through the facade.
+    // Reuses the SAME pinned 12-point facet-multiplicity-violation fixture as the exception test above.
+    val degeneratePoints = Array(
+      Array(0.25695462472920483, 0.05056259919533401),
+      Array(0.16861543461245865, 0.6584119575973783),
+      Array(0.04467548898740192, 0.34594140416504626),
+      Array(0.4001206924759393, 0.7492099413470164),
+      Array(0.9883782492738798, 0.31376350981292744),
+      Array(0.9160887469534176, 0.952687093337434),
+      Array(0.19808274564375272, 0.2756763438426806),
+      Array(0.6337671470530175, 0.4977740447848821),
+      Array(0.6906131750679769, 0.9538206186545584),
+      Array(0.4693304070850357, 0.4362857418234436),
+      Array(0.5483329515783447, 0.7788827446454716),
+      Array(0.8916378524720998, 0.4724706741593929)
+    )
+
+    "requireValidTriangulation=true fixes the pinned facet-multiplicity violation: no exception, and " +
+      "engine=fast-alpha agrees with engine=naive on the SAME (deterministically seeded) repaired stream" in {
+        val naive = triples(
+          TDA4j
+            .computeFromPoints(degeneratePoints, Array("complex", "alpha", "requireValidTriangulation", "true"))
+            .toArray()
+        ).sortBy(t => (t._1, t._2, t._3))
+        val fastAlpha = triples(
+          TDA4j
+            .computeFromPoints(
+              degeneratePoints,
+              Array("complex", "alpha", "engine", "fast-alpha", "requireValidTriangulation", "true")
+            )
+            .toArray()
+        ).sortBy(t => (t._1, t._2, t._3))
+
+        naive.length must be_==(fastAlpha.length)
+        val agree = naive.zip(fastAlpha).forall { case ((d1, b1, e1), (d2, b2, e2)) =>
+          d1 == d2 &&
+          math.abs(b1 - b2) < 1e-9 &&
+          (e1.isInfinite == e2.isInfinite) && (e1.isInfinite || math.abs(e1 - e2) < 1e-9)
+        }
+        agree must beTrue
+      }
+
+    "reject requireValidTriangulation combined with a non-alpha complex" in {
+      TDA4j.computeFromPoints(
+        points,
+        Array("requireValidTriangulation", "true")
+      ) must throwA[IllegalArgumentException]
+    }
+
+    "reject requireValidTriangulation=true combined with alphaBackend=DQP" in {
+      TDA4j.computeFromPoints(
+        points,
+        Array("complex", "alpha", "alphaBackend", "DQP", "requireValidTriangulation", "true")
+      ) must throwA[IllegalArgumentException]
+    }
+
+    "reject a non-boolean requireValidTriangulation value" in {
+      TDA4j.computeFromPoints(
+        points,
+        Array("complex", "alpha", "requireValidTriangulation", "yes")
+      ) must throwA[IllegalArgumentException]
+    }
   }
 
   "computeFromDistanceMatrix" should {

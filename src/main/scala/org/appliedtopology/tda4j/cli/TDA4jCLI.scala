@@ -155,6 +155,7 @@ object TDA4jCLI:
     add("complex", conf.complex)
     add("engine", conf.engine)
     add("alphaBackend", conf.alphaBackend)
+    add("requireValidTriangulation", conf.requireValidTriangulation)
     add("dtmK", conf.dtmK)
     add("dtmQ", conf.dtmQ)
     add("dtmP", conf.dtmP)

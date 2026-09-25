@@ -218,6 +218,21 @@ this page — valid only for `complex=alpha` with `alphaBackend=helix` (the defa
 `>= 2`; see `alpha-complex.md`'s own section for the full reasoning behind shipping the measured risk above,
 including why the `d=3` figure is documented explicitly rather than assumed to match `d=2`.
 
+**A `FastAlphaTriangulationException` has a repair, not just a documented retry**: `"requireValidTriangulation"`
+(MATLAB)/`--require-valid-triangulation` (CLI), only consulted with `complex=alpha`/`alphaBackend=helix`, off by
+default. Nudges exactly the near-tied points involved in a violation by a small perturbation, re-runs
+`HelixDelaunay`'s own already-tested global construction on the full (mostly unperturbed) point set, and
+recomputes every resulting simplex's circumsphere from the ORIGINAL coordinates — see
+`HelixDelaunay.repairByJitterRetriangulation`'s own doc and `.claude/DESIGN-helix-triangulation-repair.md` for
+the full mechanism, including two earlier designs that were tried and rejected after being checked against a
+real failing fixture. Validated at ambient dimension 2 and 3 (two independent 20000-trial stress sweeps against
+near-cospherical point clouds, zero barcode disagreements against the naive engine across every genuinely-hit
+violation); not validated at `d >= 4`, where `HelixDelaunay` construction itself is already documented above as
+unreliable for unrelated reasons. Meaningful with any `engine` value (the repair lives on the triangulation
+itself), but its only practical effect on `engine="naive"`/`"chunks"`/`"cohomology"` is to silently change which
+(rare, near-tied) triangulation gets built — those engines have no facet-multiplicity precondition of their own,
+so there is usually no reason to set this unless also using `engine="fast-alpha"`.
+
 ## Streams × engines: what works with what
 
 Every complex construction in this codebase produces a `CofaceSimplexStream`/`CellStream` that, in principle,

@@ -34,7 +34,15 @@ abstract class AlphaShapes extends StratifiedSimplexStream[Int, Double]() with D
   * used pervasively by `Hyperplane`/`Hypersphere`/`HelixDelaunay`.
   */
 object AlphaShapes:
-  def apply(pts: Seq[Array[Double]], dispatch: String = "default")(using
+
+  /** @param requireValidTriangulation
+    *   OFF by default. Only meaningful for the `"helix"`/`"default"` backend -- threaded straight through to
+    *   `HelixDelaunay`'s own constructor parameter of the same name (`.claude/DESIGN-helix-triangulation-repair.md`).
+    *   `require`d `false` for `dispatch="dqp"`: `AlphaShapeDQP` has no facet-multiplicity precondition to repair in the
+    *   first place (it is not `FastAlphaHomologyContext`'s own backend), so a caller passing `true` there almost
+    *   certainly mis-set the option rather than intending a silent no-op.
+    */
+  def apply(pts: Seq[Array[Double]], dispatch: String = "default", requireValidTriangulation: Boolean = false)(using
     epsilon: Epsilon = Epsilon(1e-5)
   ): AlphaShapes =
     dispatch.toLowerCase match
@@ -43,14 +51,22 @@ object AlphaShapes:
         // measured yet to pick a backend by. They're placeholders for that dispatch, not dead code -- keep them
         // distinct rather than collapsing to a single case.
         pts match
-          case pts if pts.isEmpty         => apply(pts, dispatch = "helix")
-          case pts if pts.head.length > 7 => apply(pts, dispatch = "helix")
-          case _                          => apply(pts, dispatch = "helix")
+          case pts if pts.isEmpty         => apply(pts, dispatch = "helix", requireValidTriangulation)
+          case pts if pts.head.length > 7 => apply(pts, dispatch = "helix", requireValidTriangulation)
+          case _                          => apply(pts, dispatch = "helix", requireValidTriangulation)
       case "helix" =>
         HelixDelaunay(
-          pts.toArray
+          pts.toArray,
+          requireValidTriangulation = requireValidTriangulation
         ) // Helix should be faster for dim: 7 - 17. Adjust this check when additional impl exists.
-      case "dqp" => AlphaShapeDQP(pts.toArray)
+      case "dqp" =>
+        require(
+          !requireValidTriangulation,
+          "requireValidTriangulation=true is not valid for dispatch=\"dqp\": AlphaShapeDQP has no facet-" +
+            "multiplicity precondition to repair (FastAlphaHomologyContext is specialized to HelixDelaunay's own " +
+            "triangulation and never consumes AlphaShapeDQP's output) -- this option would be a silent no-op there."
+        )
+        AlphaShapeDQP(pts.toArray)
       case other =>
         throw IllegalArgumentException(s"Unknown alpha complex backend: '$other' (expected default/helix/DQP)")
 
