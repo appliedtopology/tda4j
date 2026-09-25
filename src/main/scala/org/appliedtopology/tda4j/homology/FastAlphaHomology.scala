@@ -32,19 +32,25 @@ class FastAlphaTriangulationException(message: String) extends RuntimeException(
   * dual graph needs the FULL, untruncated triangulation and "every facet has <= 2 cofaces," which `AlphaShapeDQP`'s own
   * documented cospherical-degeneracy hazard can violate directly (see the design note).
   *
-  * '''Currently ambient dimension 2 only''' (`require`d), for the identical reason as the cubical engine: `H_0`
-  * (ordinary primal union-find) plus `H_1` (`= H_{d-1}` at `d=2`, via the dual union-find below) together account for
-  * every cell dimension a 2D triangulation has, with no general `Chain.reduceBy` reduction needed at all. Ambient
-  * dimension 3 needs the same additional, harder piece the cubical engine deferred (`H_1` there needs general reduction
-  * on whichever cells are NOT already resolved by the `H_0`/`H_2` union-finds) -- not attempted here either.
+  * '''Valid at any ambient dimension `>= 2`''' (`require`d), same as `FastCubicalHomologyContext` (which this class
+  * mirrors term-for-term): `H_0` (ordinary primal union-find) plus `H_{d-1}` (via the dual union-find below) together
+  * account for every cell dimension a 2D triangulation has, with no general `Chain.reduceBy` reduction needed at all.
+  * At `d >= 3` there are `d-2` "middle" dimensions (`1 <= k <= d-2`) with no duality shortcut; these are handed to
+  * `CellularPersistenceInChunksContext` run on a `LimitedAlphaShapesStream` view that hides the real top-dimensional
+  * simplices entirely -- still a net win, since the (often largest) top dimension never touches general `Chain`
+  * reduction. See `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md` for the full derivation, including why the
+  * dual union-find's own correctness doesn't depend on how the middle dimensions get resolved.
   *
   * '''Unlike the cubical grid, "every facet has 1 or 2 cofaces" is not guaranteed by construction''' -- validated
   * explicitly up front, throwing [[FastAlphaTriangulationException]] (a message written for an unsuspecting caller, not
   * just this engine's own developers -- what happened, why it isn't a bug in their data, and the concrete fix) on
-  * violation, rather than silently building a wrong dual graph. Measured (this session, not previously known) at
-  * roughly 1-in-18700 on random points at this exact ambient dimension -- rare, but real, a genuine `HelixDelaunay`
-  * limitation (a cospherical tiling choice or its own documented frontier-walk incompleteness bug), not a flaw in this
-  * construction. See the design note's "new finding" section.
+  * violation, rather than silently building a wrong dual graph. Measured at roughly 1-in-18700 on random points at
+  * ambient dimension 2 (the original measurement) -- but this is a real, genuine `HelixDelaunay` limitation (a
+  * cospherical tiling choice or its own documented frontier-walk incompleteness bug), and it is NOTICEABLY MORE LIKELY
+  * at higher ambient dimension and with more points, not a flat rate: roughly 1-in-1666 measured at ambient dimension 3
+  * with 20-30 points (vs. no violations at all in 20000 trials with 6-16 points at the same dimension). See
+  * `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`'s own measurement and the design note's "new finding"
+  * section.
   *
   * '''A facet's own dual-edge value is `helix.filtrationValue(facet)` directly, never recomputed as `min` over its
   * containing top simplices''' -- unlike a cubical grid (where those two quantities are the same by construction),
@@ -63,10 +69,27 @@ class FastAlphaHomologyContext[CoefficientT: Field]:
 
   def persistentHomology(helix: HelixDelaunay): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     require(
-      helix.ambientDimension == 2,
-      s"FastAlphaHomologyContext currently supports ambient dimension 2 only, got ${helix.ambientDimension}"
+      helix.ambientDimension >= 2,
+      s"FastAlphaHomologyContext requires ambient dimension >= 2, got ${helix.ambientDimension}"
     )
-    computeH0(helix) ++ computeDualTopDimension(helix)
+    if helix.ambientDimension == 2 then computeH0(helix) ++ computeDualTopDimension(helix)
+    else computeMiddleDimensions(helix) ++ computeDualTopDimension(helix)
+
+  // -------------------------------------------------------------------------------------------------------------
+  // d >= 3's "middle" dimensions (1 <= k <= d-2): see FastCubicalHomologyContext.computeMiddleDimensions, whose
+  // structure this mirrors exactly (a stream truncated to hide the real top-dimensional cells, chunks's own
+  // maxDim = d-2 semantics discarding the resulting incomplete top-dimension bars for free, H_0 coming along as
+  // a side effect of chunks's own unionFindDim01). PersistenceInChunksContext[Int, CoefficientT] is the
+  // Simplex[Int]-over-Ordering[Int] convenience wrapper for CellularPersistenceInChunksContext -- the same class
+  // this codebase's naive/chunks/cohomology engines already use for alpha complexes elsewhere.
+  // -------------------------------------------------------------------------------------------------------------
+  private def computeMiddleDimensions(
+    helix: HelixDelaunay
+  ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
+    val truncated = LimitedAlphaShapesStream(helix, helix.ambientDimension - 1)
+    PersistenceInChunksContext[Int, CoefficientT](helix.ambientDimension - 2)
+      .persistentHomology(truncated)
+      .barcodeAt(Double.PositiveInfinity)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
     if !lower && v == Double.PositiveInfinity then PositiveInfinity()
@@ -151,20 +174,24 @@ class FastAlphaHomologyContext[CoefficientT: Field]:
         .mapValues(_.toVector)
         .toMap
 
-    // See the class doc's own note: unlike a cubical grid, this is a real precondition that can genuinely fail
-    // (measured ~1-in-18700 on random points at this exact ambient dimension) -- fail loudly and specifically,
-    // and (per the class's own doc) in language that doesn't assume the reader knows this engine's internals.
+    // See the class doc's own note: unlike a cubical grid, this is a real precondition that can genuinely fail --
+    // measured at roughly 1-in-18700 on random points at ambient dimension 2, but NOTICEABLY MORE LIKELY at
+    // higher ambient dimension and with more points (roughly 1-in-1666 measured at ambient dimension 3 with
+    // 20-30 points -- see .claude/DESIGN-fast-engines-hybrid-middle-dimensions.md's own measurement) -- fail
+    // loudly and specifically, and (per the class's own doc) in language that doesn't assume the reader knows
+    // this engine's internals.
     val badFacets = facetToTopIds.filter { case (_, ids) => ids.size < 1 || ids.size > 2 }
     if badFacets.nonEmpty then
       throw new FastAlphaTriangulationException(
         "The fast alpha-complex engine (engine=\"fast-alpha\" / FastAlphaHomologyContext) could not compute a " +
           "result for this specific set of points.\n\n" +
           "This is NOT an error in your data, and it does NOT mean this point cloud's persistent homology is " +
-          "unusual or unsupported. It is a rare, already-known limitation of HelixDelaunay, the Delaunay " +
-          "triangulation this engine's fast algorithm depends on: on a small fraction of point sets (measured " +
-          "at roughly 1-in-18700 on random points, at this same ambient dimension), HelixDelaunay's own " +
-          "triangulation comes out subtly inconsistent in a way this engine can detect but cannot safely work " +
-          "around.\n\n" +
+          "unusual or unsupported. It is a known limitation of HelixDelaunay, the Delaunay triangulation this " +
+          s"engine's fast algorithm depends on, at ambient dimension ${helix.ambientDimension}: on a fraction of " +
+          "point sets, HelixDelaunay's own triangulation comes out subtly inconsistent in a way this engine can " +
+          "detect but cannot safely work around. This is rare at ambient dimension 2 (roughly 1-in-18700 on " +
+          "random points) but noticeably more likely at higher ambient dimension and with more points (roughly " +
+          "1-in-1666 measured at ambient dimension 3 with 20-30 points).\n\n" +
           "TO GET YOUR RESULT: recompute the SAME point cloud with a different engine -- \"naive\", \"chunks\", " +
           "or \"cohomology\" all give the exact same, fully correct persistent homology, via a completely " +
           "different algorithm that this limitation does not affect at all. For example (MATLAB/Java):\n" +
@@ -174,7 +201,9 @@ class FastAlphaHomologyContext[CoefficientT: Field]:
           s"${badFacets.size} facet(s) had a containing-top-simplex count other than 1 or 2 " +
           s"(${badFacets.map { case (f, ids) => s"$f -> ${ids.size} cofaces" }.mkString("; ")}), meaning the dual " +
           "graph this engine's own algorithm needs is not well-defined for this triangulation -- see " +
-          ".claude/DESIGN-alpha-dual-unionfind.md's 'new finding' section for the full investigation.)"
+          ".claude/DESIGN-alpha-dual-unionfind.md's 'new finding' section and " +
+          ".claude/DESIGN-fast-engines-hybrid-middle-dimensions.md's own dimension-dependent measurement for the " +
+          "full investigation.)"
       )
 
     // Value from helix.filtrationValue(facet) directly, NOT ids.map(topValue).min -- see the class doc's own

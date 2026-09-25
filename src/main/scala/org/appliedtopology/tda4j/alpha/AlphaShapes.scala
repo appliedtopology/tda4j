@@ -371,3 +371,25 @@ class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L)(using epsilon: E
   // for the general hazard).
   override def filtrationOrdering: Ordering[Simplex[Int]] =
     FiltrationOrdering.canonical(filtrationValue, _.size, simplexOrdering[Int])
+
+/** Hides every simplex of dimension `> maxDim` from `helix` -- the `HelixDelaunay` analogue of
+  * `streams.LimitedCubicalGridStream` (itself needed because `streams.LimitedCofaceSimplexStream` is hardcoded to
+  * `CofaceSimplexStream[Int, Double]`, which `AlphaShapes`/`HelixDelaunay` is not -- it's the smaller
+  * `StratifiedSimplexStream[Int, Double]`, with no `currentDimension`/`keepCriterion`/etc. to forward). Used by
+  * `homology.FastAlphaHomologyContext`'s own `d >= 3` path (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`)
+  * to hand `CellularPersistenceInChunksContext` a view of the triangulation that never contains a real top-dimensional
+  * simplex, so that engine's own general `Chain` reduction never touches them -- the whole point being to let the
+  * (cheaper) dual union-find handle the top dimension instead.
+  *
+  * Delegates `filtrationOrdering`/`filtrationValue` to `helix` unchanged (removing higher-dimensional simplices from
+  * the DOMAIN doesn't change either), and preserves `StratifiedCellStream.iterator`'s own contiguous-from-0 contract
+  * for free: truncating a contiguous `0..helix.ambientDimension` domain to `0..maxDim` is still contiguous from 0.
+  */
+class LimitedAlphaShapesStream(helix: HelixDelaunay, maxDim: Int)
+    extends StratifiedSimplexStream[Int, Double]
+    with DoubleFiltration[Simplex[Int]]():
+  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+    case d: Int if d >= 0 && d <= maxDim && helix.iterateDimension.isDefinedAt(d) => helix.iterateDimension(d)
+  }
+  override def filtrationOrdering: Ordering[Simplex[Int]] = helix.filtrationOrdering
+  override def filtrationValue: PartialFunction[Simplex[Int], Double] = helix.filtrationValue

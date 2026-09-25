@@ -504,21 +504,43 @@ comparisons stay as `unsafeCompare`/`unsafeFuzzCompare` diagnostics, not wired i
 `pendingUntilFixed`, wrong semantics for probabilistic failures).
 
 **`FastAlphaHomologyContext` (`homology/FastAlphaHomology.scala`)** — `FastCubicalHomologyContext`'s own dual
-union-find (see "Cubical complexes" above), ported to `HelixDelaunay`'s top simplices; **ambient dimension 2
-only**, `HelixDelaunay` only (never `AlphaShapeDQP` — it's incremental, per-candidate QP feasibility with no
-adjacency structure ever built, so it can't supply the dual graph's own "every facet has ≤2 cofaces"
+union-find (see "Cubical complexes" above), ported to `HelixDelaunay`'s top simplices; **valid at any ambient
+dimension `>= 2`**, `HelixDelaunay` only (never `AlphaShapeDQP` — it's incremental, per-candidate QP feasibility
+with no adjacency structure ever built, so it can't supply the dual graph's own "every facet has ≤2 cofaces"
 precondition regardless of truncation). That precondition is NOT guaranteed by construction the way it is for a
 cubical grid — measured at ~1-in-18700 on random points at ambient dimension 2 (likely the same frontier-walk
 weakness as Helix's own limitation just above, viewed differently: a bad facet multiplicity rather than a
-missing-face diff against DQP) — validated explicitly, throwing the named `FastAlphaTriangulationException`
-(not a bare `IllegalStateException`; message is layered plain-language-first for MATLAB/CLI callers, then the
-offending facet count as a technical appendix) rather than building a silently-wrong dual graph. A facet's own
-dual-edge value must come from `HelixDelaunay.filtrationValue` directly, never recomputed as `min` over
-containing top simplices (unlike cubical, these can genuinely differ — `edgeIsDelaunay`'s own shortcut).
+missing-face diff against DQP), and **noticeably more likely at higher ambient dimension and with more
+points, not a flat rate**: ~1-in-1666 measured at ambient dimension 3 with 20-30 points (vs. zero violations in
+20000 trials with 6-16 points at the same dimension) — validated explicitly, throwing the named
+`FastAlphaTriangulationException` (not a bare `IllegalStateException`; message is layered plain-language-first
+for MATLAB/CLI callers, names the ambient dimension and the measured rates, then the offending facet count as a
+technical appendix) rather than building a silently-wrong dual graph. A facet's own dual-edge value must come
+from `HelixDelaunay.filtrationValue` directly, never recomputed as `min` over containing top simplices (unlike
+cubical, these can genuinely differ — `edgeIsDelaunay`'s own shortcut).
+
+**At ambient dimension `>= 3`, the same hybrid-with-`chunks` extension as `FastCubicalHomologyContext`** (see
+"Cubical complexes" above, `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): `H_0`/`H_{d-1}` stay the
+two union-finds (already dimension-generic before this extension — only the `require` gated them to `d=2`),
+and the middle dimensions (`1 <= k <= d-2`) go to `PersistenceInChunksContext[Int, C]` run on a new
+`alpha.LimitedAlphaShapesStream` view that hides the real top-dimensional simplices — the `Simplex[Int]`
+analogue of `streams.LimitedCubicalGridStream`, needed because `HelixDelaunay`/`AlphaShapes` is a
+`StratifiedSimplexStream`, not a `CofaceSimplexStream`, so `streams.LimitedCofaceSimplexStream` doesn't fit it.
+Sequenced after the cubical extension, not concurrently, per that design note's own rationale (alpha carries
+the additional facet-multiplicity risk above, which needed its own fresh measurement at `d=3` rather than
+assuming the `d=2` rate carried over — it does not). Cross-validated against the naive engine at `d=3` (one
+hand-pinned 8-point fixture with genuine nonzero-persistence `H_1`, found by search since 3D Delaunay
+triangulations aren't practical to hand-derive; Fp(3) sign-genericity; a random property test with a smaller
+generator than the `d=2` one, to keep the now-higher facet-multiplicity rate from dominating trial outcomes).
+
 **Wired into `matlab.TDA4j`/`cli` as `engine="fast-alpha"`/`--engine fast-alpha`** (valid only for
-`complex=alpha` with `alphaBackend=helix`, ambient dimension 2) — the project lead signed off on shipping the
-measured exception rate as a production option, given the clear exception message.
-`WORKLOG-alpha-dual-unionfind.md`, `DESIGN-alpha-dual-unionfind.md`.
+`complex=alpha` with `alphaBackend=helix`, any ambient dimension `>= 2`) — the project lead signed off on
+shipping the measured exception rate as a production option at `d=2`, given the clear exception message; the
+`d=3` extension carries a materially higher measured rate (~1-in-1666 vs ~1-in-18700), documented explicitly
+rather than glossed over, on the same reasoning (a rare-but-clear exception beats a silent wrong answer, and
+the message names the exact retry).
+`WORKLOG-alpha-dual-unionfind.md`, `DESIGN-alpha-dual-unionfind.md`,
+`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
 
 **Degeneracy hazard**: in cospherical position the alpha complex is not a Delaunay subcomplex — `k` cospherical
 sites give a `(k-1)`-simplex (unit grid in R² → 3-simplices). Truncating at ambient dimension gives the wrong
@@ -677,8 +699,8 @@ PersistenceEngine.scala`) rather than re-matching the raw string at each branch.
   (required); `sheehy-rips` needs `sheehyEpsilon` (required, strictly in `(0,1)`); `dtm-rips`/`sheehy-rips` alone
   work from `computeFromDistanceMatrix` too (no coordinates needed), `dtm-alpha` needs `computeFromPoints` like
   `alpha`/`cech`. A sixth `engine` value, `fast-alpha` (`FastAlphaHomologyContext`), is valid ONLY for
-  `complex=alpha` with `alphaBackend=helix` (the default) and ambient dimension 2 — refused for every other
-  `complex` and for `alphaBackend=DQP` — see "Alpha complex" above. `computeFromCubicalImage`/`computeFromImage`
+  `complex=alpha` with `alphaBackend=helix` (the default) and any ambient dimension `>= 2` — refused for every
+  other `complex` and for `alphaBackend=DQP` — see "Alpha complex" above. `computeFromCubicalImage`/`computeFromImage`
   for cubes — same four base `engine` values plus a fifth, `fast-cubical` (`FastCubicalHomologyContext`),
   refused everywhere else and refused even here only for a degenerate 1-axis image (ambient dimension `< 2`) —
   see "Cubical complexes" above.

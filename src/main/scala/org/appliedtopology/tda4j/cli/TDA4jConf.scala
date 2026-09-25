@@ -58,10 +58,10 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
         "--complex=alpha/cech. fast-cubical (FastCubicalHomologyContext) is valid ONLY for a cubical-image " +
         "--input-format (any dimension >= 2 -- a hybrid with chunks handles dimensions above 2). fast-alpha " +
         "(FastAlphaHomologyContext) is valid ONLY for --complex=alpha with --alpha-backend=helix (the default), " +
-        "and only when the point " +
-        "cloud's own ambient dimension is exactly 2; on a small fraction of point clouds it throws a " +
-        "FastAlphaTriangulationException explaining a rare, known HelixDelaunay limitation and naming the fix " +
-        "(retry with --engine naive/chunks/cohomology)."
+        "for any ambient dimension >= 2 (a hybrid with chunks handles dimensions above 2, same as fast-cubical); " +
+        "on a fraction of point clouds -- more likely at higher ambient dimension and point count -- it throws a " +
+        "FastAlphaTriangulationException explaining a known HelixDelaunay limitation and naming the fix (retry " +
+        "with --engine naive/chunks/cohomology)."
     )
   val alphaBackend: ScallopOption[String] =
     opt[String](descr = "helix (default) or DQP -- only consulted when --complex=alpha")

@@ -65,22 +65,26 @@ val shape = AlphaShapes(points.toSeq, dispatch = "helix")   // or "DQP"
 `AlphaShapes(points)` with no `dispatch`, or `dispatch = "default"`, always resolves to `"helix"` — ask for
 `"DQP"` explicitly if you want it. See "Which alpha-complex backend?" below for the tradeoffs.
 
-#### A faster engine for 2D alpha complexes
+#### A faster engine for alpha complexes
 
 ```scala 3
 val helix = HelixDelaunay(points)
 val bars = FastAlphaHomologyContext[Double]().persistentHomology(helix) // H0 and H1, that's everything at 2D
 ```
 
-For a strictly 2-dimensional point cloud built via `"helix"` (never `"DQP"` — it never builds an adjacency-aware
-triangulation at all, so it can't supply what this engine needs), `FastAlphaHomologyContext` computes the same
-barcode (with real representatives) as the naive engine, via a dual-graph union-find rather than general `Chain`
-reduction. On a small fraction of point clouds (measured at roughly 1-in-18700 at ambient dimension 2) it throws
+For a point cloud built via `"helix"` (never `"DQP"` — it never builds an adjacency-aware triangulation at all,
+so it can't supply what this engine needs), `FastAlphaHomologyContext` computes the same barcode (with real
+representatives) as the naive engine, via a dual-graph union-find rather than general `Chain` reduction, at any
+ambient dimension `>= 2`. At 2D specifically the two union-finds (`H_0`/`H_1`) cover everything; at 3D and
+beyond, the "middle" dimensions are handed to `PersistenceInChunksContext` on a view that hides the real
+top-dimensional simplices, the same hybrid `FastCubicalHomologyContext` uses above. On a fraction of point
+clouds — more likely at higher ambient dimension and point count (measured at roughly 1-in-18700 at ambient
+dimension 2, but roughly 1-in-1666 at ambient dimension 3 with 20-30 points) — it throws
 `FastAlphaTriangulationException` — a message written for you, not just for a developer: it says plainly that
-this is not an error in your data, explains the rare `HelixDelaunay` limitation, and names the fix (retry with
-`engine="naive"`/`"chunks"`/`"cohomology"`, none of which are affected). `matlab.TDA4j`'s `engine="fast-alpha"`
-option (and the CLI's `--engine fast-alpha`) use this automatically for `complex=alpha` with the default
-`alphaBackend=helix`, at ambient dimension 2.
+this is not an error in your data, explains the `HelixDelaunay` limitation and the measured rates, and names
+the fix (retry with `engine="naive"`/`"chunks"`/`"cohomology"`, none of which are affected). `matlab.TDA4j`'s
+`engine="fast-alpha"` option (and the CLI's `--engine fast-alpha`) use this automatically for `complex=alpha`
+with the default `alphaBackend=helix`, at any ambient dimension `>= 2`.
 
 ### Cech complexes
 
@@ -399,7 +403,7 @@ changes a method's call signature:
 | Option | Values | Default |
 |---|---|---|
 | `complex` | `vr`, `alpha`, `cech`, `witness`, `dtm-rips`, `dtm-alpha`, `sheehy-rips` | `vr` |
-| `engine` | `ripser`, `naive`, `chunks`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and `witness`/`witnessVariant=lazy`; `naive` for `alpha`/`cech`/`dtm-rips`/`dtm-alpha`/`sheehy-rips`/`witness`/`witnessVariant=general`/cubical images. `fast-cubical` is valid ONLY for `computeFromCubicalImage`/`computeFromImage`, for any ambient dimension `>= 2`. `fast-alpha` is valid ONLY for `complex=alpha` with `alphaBackend=helix`, and only when the point cloud's own ambient dimension is 2 |
+| `engine` | `ripser`, `naive`, `chunks`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and `witness`/`witnessVariant=lazy`; `naive` for `alpha`/`cech`/`dtm-rips`/`dtm-alpha`/`sheehy-rips`/`witness`/`witnessVariant=general`/cubical images. `fast-cubical` is valid ONLY for `computeFromCubicalImage`/`computeFromImage`, for any ambient dimension `>= 2`. `fast-alpha` is valid ONLY for `complex=alpha` with `alphaBackend=helix`, for any ambient dimension `>= 2` |
 | `alphaBackend` | `helix`, `DQP` | `helix` (only consulted for `complex=alpha`) |
 | `dtmK` | integer | REQUIRED for `complex=dtm-rips` or `complex=dtm-alpha`, no default |
 | `dtmQ` | double | `2.0` (only consulted for `complex=dtm-rips` or `complex=dtm-alpha`) |
@@ -427,12 +431,13 @@ the same reason as `cech` (the general witness complex isn't a flag complex eith
 (the default) for `engine=ripser`/`chunks`. `engine=cohomology` is accepted everywhere `engine=naive` is
 (`vr`, `alpha`, `cech`, `dtm-rips`, `dtm-alpha`, `sheehy-rips`, and `witness` alike). `engine=fast-cubical` is
 the mirror image: refused everywhere EXCEPT `computeFromCubicalImage`/`computeFromImage`, and even there
-refused only for a degenerate 1-axis image (ambient dimension `< 2`) — unlike `fast-alpha` below, it is NOT
-restricted to any particular ambient dimension beyond that. `engine=fast-alpha` is likewise refused
-everywhere except `complex=alpha` with `alphaBackend=helix` (the default; `alphaBackend=DQP` is refused too —
-`FastAlphaHomologyContext` cannot consume `AlphaShapeDQP`'s output), and even there refused for a point cloud
-whose ambient dimension isn't exactly 2. Both `fast-*` exceptions name the actual mismatch (dimension, backend,
-or complex) rather than throwing a bare `IllegalArgumentException`. See the
+refused only for a degenerate 1-axis image (ambient dimension `< 2`) — no other ambient-dimension restriction.
+`engine=fast-alpha` is likewise refused everywhere except `complex=alpha` with `alphaBackend=helix` (the
+default; `alphaBackend=DQP` is refused too — `FastAlphaHomologyContext` cannot consume `AlphaShapeDQP`'s
+output), with the same "any ambient dimension `>= 2`" rule as `fast-cubical` — though at higher ambient
+dimension and point count it's noticeably more likely to throw `FastAlphaTriangulationException` on a given
+point cloud (see "Which persistence engine?" below). Both `fast-*` exceptions name the actual mismatch
+(dimension, backend, or complex) rather than throwing a bare `IllegalArgumentException`. See the
 [Developer's Guide](../developers-guide/persistence-engines.md)'s streams-vs-engines table for the full
 picture, complex by complex. Unrecognized keys or values throw `IllegalArgumentException` immediately rather
 than silently falling back to a default.
@@ -563,12 +568,12 @@ Guide](../developers-guide/architecture.md)'s `homology.CircularCoordinates` sec
 | Alpha or Cech or DTM or Sheehy complexes, or a general (non-flag) witness complex | `naive` or `cohomology` (`chunks` also works for Cech, DTM-Rips, and Sheehy-Rips — not Alpha/DTM-Alpha) |
 | A lazy witness complex (the flag-complex variant) | `ripser` (`PackedRipserCohomologyContext`, run directly on `WitnessMetricSpace`) or `naive`/`chunks`/`cohomology` |
 | A cubical image, any ambient dimension `>= 2` — fastest option there | `fast-cubical` (`FastCubicalHomologyContext`; H0/H1 only, no `Chain` reduction at all, in 2D specifically; a `chunks` hybrid for the residual middle dimensions at 3D+) |
-| A strictly 2-dimensional alpha complex via `"helix"` — fastest option there, H0/H1 only | `fast-alpha` (`FastAlphaHomologyContext`; `"DQP"` or 3D point clouds need `naive`/`chunks`/`cohomology` instead) |
+| An alpha complex via `"helix"`, any ambient dimension `>= 2` — fastest option there | `fast-alpha` (`FastAlphaHomologyContext`; H0/H1 only, no `Chain` reduction at all, in 2D specifically; a `chunks` hybrid for the residual middle dimensions at 3D+; `"DQP"` needs `naive`/`chunks`/`cohomology` instead; higher ambient dimension and point count make `FastAlphaTriangulationException` noticeably more likely — see `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) |
 
 All engines are generic over the coefficient field (a prime finite field or floating point); `naive`,
 `chunks`, and `cohomology` are also generic over the cell type (simplices, cubes, or simplicial-set
 generators) — only `ripser`, `fast-cubical`, and `fast-alpha` are specialized (to Vietoris-Rips, to cubical
-grids, and to 2D `HelixDelaunay` triangulations, respectively). See the
+grids, and to `HelixDelaunay` triangulations, respectively). See the
 [Developer's Guide's persistence-engines page](../developers-guide/persistence-engines.md) for the full
 detail.
 

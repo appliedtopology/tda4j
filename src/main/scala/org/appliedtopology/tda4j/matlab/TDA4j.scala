@@ -47,12 +47,15 @@ import scala.collection.mutable
   *     `.claude/DESIGN-generic-cohomology.md`). Every essential bar's representative is a genuine cocycle (`d(rep) =
   *     0`); a finite bar's representative is a valid witness on its own living interval but is NOT expected to have
   *     zero coboundary over the whole complex -- see `Cohomology.scala`'s own doc for why. `"fast-alpha"`
-  *     (`homology.FastAlphaHomologyContext`, a dual-graph union-find) is valid ONLY for `complex=alpha` with
-  *     `alphaBackend=helix` (the default), and ONLY when the point cloud's own ambient dimension is exactly 2 -- see
-  *     `.claude/DESIGN-alpha-dual-unionfind.md`. On a small fraction of point clouds (measured at roughly 1-in-18700 at
-  *     ambient dimension 2) it throws `homology.FastAlphaTriangulationException`, a real but rare `HelixDelaunay`
-  *     triangulation limitation, NOT a bug in your data -- its own message explains the situation and names the fix
-  *     (retry with `engine="naive"`/`"chunks"`/`"cohomology"`, which are never affected by it).
+  *     (`homology.FastAlphaHomologyContext`, a dual-graph union-find, extended past 2D by a hybrid with `chunks` for
+  *     the residual middle dimensions -- `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) is valid ONLY for
+  *     `complex=alpha` with `alphaBackend=helix` (the default) and ambient dimension `>= 2` -- see
+  *     `.claude/DESIGN-alpha-dual-unionfind.md`. On a fraction of point clouds it throws
+  *     `homology.FastAlphaTriangulationException`, a real (NOT a bug in your data) `HelixDelaunay` triangulation
+  *     limitation whose likelihood grows with ambient dimension and point count -- roughly 1-in-18700 measured at
+  *     ambient dimension 2, roughly 1-in-1666 at ambient dimension 3 with 20-30 points -- its own message explains the
+  *     situation and names the fix (retry with `engine="naive"`/`"chunks"`/`"cohomology"`, which are never affected by
+  *     it).
   *   - `"alphaBackend"`: `"helix"` (default) or `"DQP"`, only consulted when `complex=alpha`. `complex=dtm-alpha`
   *     always uses DQP (needs power/weighted Delaunay, which Helix does not support) -- this option is not consulted
   *     there.
@@ -977,12 +980,11 @@ object TDA4j:
             // literally.
             alphaStream match
               case helix: HelixDelaunay =>
-                if helix.ambientDimension != 2 then
+                if helix.ambientDimension < 2 then
                   throw new IllegalArgumentException(
-                    s"engine=fast-alpha currently supports ambient dimension 2 only (FastAlphaHomologyContext's " +
-                      s"own dual-graph union-find has no dimension-3 formulation yet -- see " +
-                      s".claude/DESIGN-alpha-dual-unionfind.md), got a ${helix.ambientDimension}-dimensional " +
-                      s"point cloud. Use engine=naive, engine=chunks, or engine=cohomology instead."
+                    s"engine=fast-alpha requires ambient dimension >= 2, got a " +
+                      s"${helix.ambientDimension}-dimensional point cloud. Use engine=naive, engine=chunks, or " +
+                      s"engine=cohomology instead."
                   )
                 // FastAlphaHomologyContext's own FastAlphaTriangulationException (a rare, real HelixDelaunay
                 // triangulation limitation -- see that class's own doc) is deliberately NOT caught and

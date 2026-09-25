@@ -170,9 +170,9 @@ place. See [Persistence engines](persistence-engines.md) for the full, current p
 `CellularHomologyContext`/`SimplicialHomologyContext`,
 `CellularPersistenceInChunksContext`/`PersistenceInChunksContext`,
 `RipserCohomologyContext`, `PackedRipserCohomologyContext`, `CellularCohomologyContext`,
-`FastCubicalHomologyContext` (any ambient dimension `>= 2`, a `chunks` hybrid above 2D), and
-`FastAlphaHomologyContext` (2D `HelixDelaunay` alpha complexes only, for now), both wired into `matlab`/`cli`
-as `engine="fast-cubical"`/`engine="fast-alpha"`.
+`FastCubicalHomologyContext` and `FastAlphaHomologyContext` (`HelixDelaunay` alpha complexes) -- both valid at
+any ambient dimension `>= 2`, both via a `chunks` hybrid above 2D -- wired into `matlab`/`cli` as
+`engine="fast-cubical"`/`engine="fast-alpha"`.
 
 ## Circular coordinates (`homology/CircularCoordinates.scala`)
 

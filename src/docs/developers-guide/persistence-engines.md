@@ -191,28 +191,32 @@ Same algorithm as engine 6, applied to `HelixDelaunay`'s top simplices instead o
 full derivation and its own newly-measured risk). `HelixDelaunay` specifically, never `AlphaComplexDQP`/
 `AlphaShapeDQP` — the dual graph needs the full, untruncated triangulation (`AlphaComplexDQP.euclidean`'s own
 truncated mode is incompatible) and "every facet has <= 2 cofaces," which `AlphaShapeDQP`'s own documented
-cospherical-degeneracy hazard can violate directly by emitting an oversized simplex. **Currently ambient
-dimension 2 only, unlike engine 6** (which now also handles `d >= 3` via a hybrid with `chunks` — see engine
-6's own section and `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): the same hybrid shape applies
-in principle (this engine's own dual-graph code is already dimension-generic, exactly like engine 6's was
-before its own extension), but alpha's `d >= 3` port is deliberately sequenced AFTER cubical's own hybrid was
-validated, not concurrent with it, and additionally needs its own fresh measurement of the facet-multiplicity
-precondition's failure rate at `d=3` (HelixDelaunay's own separate near-cospherical limitation is known to get
-WORSE, not stay flat, at higher ambient dimension — see this file's own risk note just below and
-`alpha-complex.md`) before it can ship. Not yet started.
+cospherical-degeneracy hazard can violate directly by emitting an oversized simplex. **Valid at any ambient
+dimension `>= 2`, same as engine 6** (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): both
+union-finds were already dimension-generic before this extension (only the `require` gated them to `d=2`), so
+extending past 2D was purely a matter of handing the residual "middle" dimensions (`1 <= k <= d-2`) to
+`PersistenceInChunksContext[Int, C]` run on a new `alpha.LimitedAlphaShapesStream` view (the `Simplex[Int]`
+analogue of engine 6's own `LimitedCubicalGridStream` — needed because `HelixDelaunay`/`AlphaShapes` is a
+`StratifiedSimplexStream`, not a `CofaceSimplexStream`, so the existing `LimitedCofaceSimplexStream` doesn't fit
+it) that hides the real top-dimensional simplices. Sequenced AFTER engine 6's own hybrid was validated, not
+concurrently, because this engine ALSO carries the facet-multiplicity risk below, which needed its own fresh
+measurement at `d=3` rather than assuming the `d=2` rate carried over — it does not.
 
-**Unlike engine 6, this precondition is not guaranteed by construction** and was measured directly this
-session: roughly 1-in-18700 on random points at ambient dimension 2 specifically (see `alpha-complex.md` for
-the full measurement) — real, but rare, a genuine `HelixDelaunay` limitation, not a flaw in this construction.
-Validates the precondition explicitly and throws the named `FastAlphaTriangulationException` on violation
-rather than building a silently-wrong dual graph — its message is layered plain-language-first (for an
-unsuspecting MATLAB/CLI caller: "NOT an error in your data," the concrete retry) with the facet-count detail
-as a technical appendix, the same two-audience approach `NoIntegerCocycleException` already established for
-`CircularCoordinates`.
+**Unlike engine 6, this precondition is not guaranteed by construction**, and the rate is NOT flat across
+dimension or point count: roughly 1-in-18700 on random points at ambient dimension 2 (the original measurement)
+but roughly 1-in-1666 at ambient dimension 3 with 20-30 points (vs. zero violations in 20000 trials with only
+6-16 points at the same dimension) — see `alpha-complex.md` for the full measurement. A real `HelixDelaunay`
+limitation, not a flaw in this construction, but a materially bigger one at `d=3` than the `d=2` figure alone
+would suggest. Validates the precondition explicitly and throws the named `FastAlphaTriangulationException` on
+violation rather than building a silently-wrong dual graph — its message is layered plain-language-first (for
+an unsuspecting MATLAB/CLI caller: "NOT an error in your data," naming the ambient dimension and the measured
+rates, the concrete retry) with the facet-count detail as a technical appendix, the same two-audience approach
+`NoIntegerCocycleException` already established for `CircularCoordinates`.
 
 **Wired into `matlab.TDA4j`/`cli` as `engine="fast-alpha"`/`--engine fast-alpha`**, like every other engine on
-this page — valid only for `complex=alpha` with `alphaBackend=helix` (the default) and ambient dimension 2;
-see `alpha-complex.md`'s own section for the full reasoning behind shipping the measured risk above.
+this page — valid only for `complex=alpha` with `alphaBackend=helix` (the default) and any ambient dimension
+`>= 2`; see `alpha-complex.md`'s own section for the full reasoning behind shipping the measured risk above,
+including why the `d=3` figure is documented explicitly rather than assumed to match `d=2`.
 
 ## Streams × engines: what works with what
 

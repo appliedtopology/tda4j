@@ -218,18 +218,37 @@ class TDA4jSpec extends mutable.Specification:
       ) must throwA[IllegalArgumentException]
     }
 
-    "reject engine=fast-alpha for a 3D point cloud" in {
-      val points3d =
-        Array(
-          Array(0.0, 0.0, 0.0),
-          Array(1.0, 0.0, 0.0),
-          Array(0.0, 1.0, 0.0),
-          Array(0.0, 0.0, 1.0),
-          Array(0.3, 0.3, 0.3)
-        )
-      TDA4j.computeFromPoints(points3d, Array("complex", "alpha", "engine", "fast-alpha")) must throwA[
-        IllegalArgumentException
-      ]
+    // Was "reject engine=fast-alpha for a 3D point cloud" -- true of the OLD ambient-dimension-2-only engine, no
+    // longer true since the hybrid-with-chunks extension to d >= 3
+    // (.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md): a 3D point cloud is now a real, supported case,
+    // not a rejection, so this became a positive agreement test instead (mirroring the 2D test above), reusing
+    // FastAlphaHomologySpec's own pinned 8-point d3Fixture (already confirmed there to trigger neither known
+    // HelixDelaunay limitation).
+    "engine=fast-alpha agrees with the default engine=naive on a 3D point cloud, up to floating-point tolerance" in {
+      val points3d = Array(
+        Array(0.4613980841200842, 0.49833920626726624, -0.30338059393748606),
+        Array(0.7945542854842094, 0.4163543155535945, -0.2961704447073863),
+        Array(-0.7585278972189831, 0.6998262016945451, -0.833560565510757),
+        Array(0.8574961456450381, 0.2832300995593273, 0.5695196611305218),
+        Array(0.17793559124047031, -0.05405078558279208, -0.49115647079559355),
+        Array(-0.2347321324300118, 0.5413935071566336, -0.5601041700478047),
+        Array(-0.37397256964256, 0.7333269621250991, -0.7932032354418583),
+        Array(-0.11756472947596674, 0.04518546446771521, -0.7937972268406879)
+      )
+      val naive =
+        triples(TDA4j.computeFromPoints(points3d, Array("complex", "alpha")).toArray())
+          .sortBy(t => (t._1, t._2, t._3))
+      val fastAlpha = triples(
+        TDA4j.computeFromPoints(points3d, Array("complex", "alpha", "engine", "fast-alpha")).toArray()
+      ).sortBy(t => (t._1, t._2, t._3))
+
+      naive.length must be_==(fastAlpha.length)
+      val agree = naive.zip(fastAlpha).forall { case ((d1, b1, e1), (d2, b2, e2)) =>
+        d1 == d2 &&
+        math.abs(b1 - b2) < 1e-9 &&
+        (e1.isInfinite == e2.isInfinite) && (e1.isInfinite || math.abs(e1 - e2) < 1e-9)
+      }
+      agree must beTrue
     }
 
     "engine=fast-alpha's own triangulation-limitation exception, on a real (pinned) failing point set, has a " +
