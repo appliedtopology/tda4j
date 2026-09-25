@@ -366,7 +366,7 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
         )
         println(
           f"${"case"}%-13s${"ripser(ms)"}%-11s${"SortedSet(ms)"}%-14s${"x"}%-8s${"packed(ms)"}%-11s${"x"}%-8s" +
-            f"${"S/pack"}%-8s${"bars ok"}%-9s${"status"}%-20s"
+            f"${"S/pack"}%-8s${"simplices"}%-11s${"pk.subst"}%-10s${"bars ok"}%-9s${"status"}%-20s"
         )
 
         // -DpackedOnly=true skips RipserCohomologyContext entirely and times only the packed engine. Added
@@ -414,7 +414,7 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
                 val elapsedMs = (System.nanoTime() - t0) / 1e6
                 val nonZero = allBars.filter(b => endpointValue(b.lower) != endpointValue(b.upper))
                 val byDim = nonZero.groupBy(_.dim).view.mapValues(_.size).toMap
-                (elapsedMs, byDim, ctx.totalSimplexCount)
+                (elapsedMs, byDim, ctx.totalSimplexCount, ctx.substitutionCount)
               }
           val packedOutcome = withTimeout {
             val ms = c.metricSpace()
@@ -424,11 +424,20 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
             val elapsedMs = (System.nanoTime() - t0) / 1e6
             val nonZero = allBars.filter(b => endpointValue(b.lower) != endpointValue(b.upper))
             val byDim = nonZero.groupBy(_.dim).view.mapValues(_.size).toMap
-            (elapsedMs, byDim, ctx.totalSimplexCount)
+            (elapsedMs, byDim, ctx.totalSimplexCount, ctx.substitutionCount)
           }
 
           val sortedSetMs = sortedSetOutcome.toOption.map(_._1)
           val packedMs = packedOutcome.toOption.map(_._1)
+          // Diagnostic-only, added after the o3_1024/fractal-r compute-server run showed the packed engine's own
+          // advantage over SortedSet collapsing (1.73x, vs. 15-45x on every other case) on one case and timing out
+          // entirely on another -- printed so a future run can correlate a case's apparent-pairs hit rate
+          // (substitutionCount as a fraction of totalSimplexCount is a cheap proxy: apparent pairs found up front
+          // never touch `substitutionCount` at all, only the FALLBACK lookups during real `Chain.reduceBy` do, so a
+          // high count here means many columns are landing in the expensive reduction path, not the apparent-pairs
+          // shortcut) with which cases are anomalous, rather than re-deriving it from a fresh profiling run each time.
+          val totalSimplices: Option[Int] = packedOutcome.toOption.map(_._3).orElse(sortedSetOutcome.toOption.map(_._3))
+          val packedSubst: Option[Int] = packedOutcome.toOption.map(_._4)
           // `packedOnly` deliberately leaves `sortedSetOutcome` as a fixed `Left("skipped")` placeholder (see
           // this flag's own doc comment above) -- both `barsOk` and `status` need to look past that placeholder
           // to whatever `packedOutcome` actually did, or a real packed timeout/OOM silently prints as the
@@ -437,10 +446,10 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
           // away -- see WORKLOG-packed-ripser-engine.md's later update).
           val barsOk =
             if packedOnly then
-              packedOutcome.toOption.map((_, pkBars, _) => barsMatchStr(pkBars, effectiveRefBars)).getOrElse("-")
+              packedOutcome.toOption.map((_, pkBars, _, _) => barsMatchStr(pkBars, effectiveRefBars)).getOrElse("-")
             else
               (sortedSetOutcome, packedOutcome) match
-                case (Right((_, ssBars, _)), Right((_, pkBars, _))) =>
+                case (Right((_, ssBars, _, _)), Right((_, pkBars, _, _))) =>
                   val ssVsRef = barsMatchStr(ssBars, effectiveRefBars)
                   val pkVsRef = barsMatchStr(pkBars, effectiveRefBars)
                   if ssVsRef == "yes" && pkVsRef == "yes" then "yes" else s"SS:$ssVsRef,PK:$pkVsRef"
@@ -462,11 +471,14 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
           def fmtMs(o: Option[Double]): String = o.map(v => f"$v%.1f").getOrElse("-")
           def fmtRatio(o: Option[Double]): String = o.map(v => f"${v}%.2fx").getOrElse("-")
 
+          def fmtInt(o: Option[Int]): String = o.map(_.toString).getOrElse("-")
+
           println(
             f"${c.name}%-13s${effectiveRipserMs}%-11.1f${fmtMs(sortedSetMs)}%-14s" +
               f"${fmtRatio(sortedSetMs.map(_ / effectiveRipserMs))}%-8s${fmtMs(packedMs)}%-11s" +
               f"${fmtRatio(packedMs.map(_ / effectiveRipserMs))}%-8s" +
-              f"${fmtRatio(for s <- sortedSetMs; p <- packedMs yield s / p)}%-8s$barsOk%-9s$status%-20s"
+              f"${fmtRatio(for s <- sortedSetMs; p <- packedMs yield s / p)}%-8s" +
+              f"${fmtInt(totalSimplices)}%-11s${fmtInt(packedSubst)}%-10s$barsOk%-9s$status%-20s"
           )
 
     success
