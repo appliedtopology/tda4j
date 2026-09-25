@@ -1223,23 +1223,27 @@ class RipserCohomologyContext[CoefficientT: Field](
     * winning candidate, so `tau` is never built until the loop finishes -- only `bestVertex`/`bestIdx` (primitives) are
     * tracked per candidate, and `sigma.underlying + bestVertex` runs once, for the winner.
     */
+  /** Returns on the FIRST candidate tied at `d`, not a full sweep tracking a running max index -- sound (not just
+    * faster) because `CofacetCursor.index` is STRICTLY DECREASING across successive `advance()` calls
+    * (`SimplexIndexingSpec`'s own property test pins this), so the first tied candidate encountered already has
+    * the maximum index among every candidate that will ever tie. Matches real `ripser.cpp`'s own
+    * `get_zero_pivot_cofacet`, which returns on first match for the same reason. Found via the `o3_1024`
+    * compute-server JFR profile (`.claude/WORKLOG-packed-ripser-engine.md`): this method's own full,
+    * UNCONDITIONAL sweep (every candidate vertex, every simplex in the complex, regardless of threshold) was the
+    * largest remaining driver of `insertionDiameter` calls once the metric-space distance cache removed the
+    * earlier dominant cost.
+    */
   private def zeroPivotCofacet(sigma: Simplex[Int]): Option[Simplex[Int]] =
     if sigma.dim > maxDimension then None
     else
       val d = filtrationValue(sigma)
       val vertices = sigma.underlying.toArray
       val cur = si.cofacetCursor(si(sigma), sigma.size, allCofacets = true)
-      var bestVertex: Int = -1
-      var bestIdx: Long = -1L
-      var found = false
       while cur.hasNext do
         val tauFv = insertionDiameter(metricSpace, vertices, d, cur.vertex)
-        if tauFv == d && (!found || cur.index > bestIdx) then
-          bestVertex = cur.vertex
-          bestIdx = cur.index
-          found = true
+        if tauFv == d then return Some((sigma.underlying + cur.vertex).asSimplex)
         cur.advance()
-      if found then Some((sigma.underlying + bestVertex).asSimplex) else None
+      None
 
   /** `tau`'s facet tied at `tau`'s own filtration value with the SMALLEST combinatorial index, i.e. the "youngest
     * facet" in Definition 3.2/3.11's sense. No `maxDimension` guard needed: a facet is always one dimension lower than
@@ -1266,20 +1270,18 @@ class RipserCohomologyContext[CoefficientT: Field](
     * removing a vertex's diameter contribution, so `sigma` can't be deferred to just the winner the way
     * `zeroPivotCofacet` defers `tau`.
     */
+  /** Returns on the FIRST tied candidate for the same reason `zeroPivotCofacet` above does, mirrored: `FacetCursor.
+    * index` is STRICTLY INCREASING across successive `advance()` calls (same property test), so the first tied
+    * candidate already has the MINIMUM index -- the direction this method wants.
+    */
   private def zeroPivotFacet(tau: Simplex[Int]): Option[Simplex[Int]] =
     val d = filtrationValue(tau)
     val cur = si.facetCursor(si(tau), tau.size)
-    var best: Simplex[Int] = ∆()
-    var bestIdx: Long = Long.MaxValue
-    var found = false
     while cur.hasNext do
       val sigma = (tau.underlying - cur.vertex).asSimplex
-      if filtrationValue(sigma) == d && (!found || cur.index < bestIdx) then
-        best = sigma
-        bestIdx = cur.index
-        found = true
+      if filtrationValue(sigma) == d then return Some(sigma)
       cur.advance()
-    if found then Some(best) else None
+    None
 
   /** `Some(tau)` iff `(sigma, tau)` is a genuine (mutual) Definition 3.2 apparent pair: tau is sigma's oldest tied
     * cofacet, AND sigma is, symmetrically, tau's youngest tied facet. Verified against the hand-derived

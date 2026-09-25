@@ -208,25 +208,28 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
 
   /** A hand-rolled `while` loop over `CofacetCursor` directly, not `.filter(...).maxByOption(_.index)` or
     * `cofacetIteratorWithVertex`: `maxByOption` boxes every `Long` comparison, and an `Iterator[(Int, Long)]` allocates
-    * a fresh tuple per candidate on top of that. Since every candidate that survives the `tauFv == sigma.diameter`
-    * filter shares the SAME diameter (`sigma.diameter`), the winning `DiameterIndex` can be reconstructed from just the
-    * best `index` seen, tracked as a primitive `var` -- no boxing per candidate considered, only for the single final
-    * result.
+    * a fresh tuple per candidate on top of that.
+    *
+    * Returns on the FIRST candidate tied at `sigma.diameter`, not a full sweep tracking a running max index --
+    * sound (not just faster) because `CofacetCursor.index` is STRICTLY DECREASING across successive `advance()`
+    * calls (`SimplexIndexingSpec`'s own property test pins this), so the first tied candidate encountered already
+    * has the maximum index among every candidate that will ever tie, and continuing the sweep after finding it
+    * can only ever confirm the same answer. This matches real `ripser.cpp`'s own `get_zero_pivot_cofacet`, which
+    * returns on first match with no further scan for the same reason. Found via the `o3_1024` compute-server JFR
+    * profile (`.claude/WORKLOG-packed-ripser-engine.md`): this method's own full, UNCONDITIONAL sweep (every
+    * candidate vertex, every one of the complex's simplices, regardless of threshold) was the largest remaining
+    * driver of `insertionDiameter` calls once the metric-space distance cache removed the earlier dominant cost.
     */
   private def zeroPivotCofacet(sigma: DiameterIndex, size: Int): Option[DiameterIndex] =
     if size - 1 > maxDimension then None
     else
       val vertices = si.decodeToArray(sigma.index, size)
       val cur = si.cofacetCursor(sigma.index, size, allCofacets = true)
-      var bestIdx: Long = -1L
-      var found = false
       while cur.hasNext do
         val tauFv = insertionDiameter(metricSpace, vertices, sigma.diameter, cur.vertex)
-        if tauFv == sigma.diameter && (!found || cur.index > bestIdx) then
-          bestIdx = cur.index
-          found = true
+        if tauFv == sigma.diameter then return Some(DiameterIndex(sigma.diameter, cur.index))
         cur.advance()
-      if found then Some(DiameterIndex(sigma.diameter, bestIdx)) else None
+      None
 
   /** `tau`'s facet tied at `tau`'s own value with the smallest index. No incremental shortcut exists for removing a
     * vertex's DIAMETER (same scope boundary `RipserCohomologyContext.zeroPivotFacet` documents -- `maxPairwiseDistance`
@@ -234,14 +237,16 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
     * candidate's own VERTEX SET is built by array-removal from `tau`'s already-decoded vertices rather than a fresh
     * `decodeToArray(facetIdx, size - 1)` call -- verified sound by `SimplexIndexingSpec`'s `FacetCursor` correctness
     * property (`decodeToArray(cur.index, size-1).toSet == decodeToArray(startIndex, size).toSet - cur.vertex`).
-    * Hand-rolled `while` loop for the same reason as `zeroPivotCofacet` above.
+    *
+    * Returns on the FIRST tied candidate for the same reason `zeroPivotCofacet` above does, mirrored: `FacetCursor.
+    * index` is STRICTLY INCREASING across successive `advance()` calls (same property test), so the first tied
+    * candidate already has the MINIMUM index -- the direction this method wants, matching its own `bestIdx`
+    * initialization at `Long.MaxValue` before this change.
     */
   private def zeroPivotFacet(tau: DiameterIndex, size: Int): Option[DiameterIndex] =
     val tauVertices = si.decodeToArray(tau.index, size)
     val candidate = new Array[Int](size - 1)
     val cur = si.facetCursor(tau.index, size)
-    var bestIdx: Long = Long.MaxValue
-    var found = false
     while cur.hasNext do
       var w = 0
       var r = 0
@@ -251,11 +256,9 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
           r += 1
         w += 1
       val fv = maxPairwiseDistance(candidate)
-      if fv == tau.diameter && (!found || cur.index < bestIdx) then
-        bestIdx = cur.index
-        found = true
+      if fv == tau.diameter then return Some(DiameterIndex(tau.diameter, cur.index))
       cur.advance()
-    if found then Some(DiameterIndex(tau.diameter, bestIdx)) else None
+    None
 
   private def zeroApparentCofacet(sigma: DiameterIndex, size: Int): Option[DiameterIndex] =
     for

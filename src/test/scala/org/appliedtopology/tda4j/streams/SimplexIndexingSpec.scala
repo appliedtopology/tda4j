@@ -149,4 +149,47 @@ class SimplexIndexingSpec extends Specification with ScalaCheck:
         (ok must beTrue) and (count must be_==(size))
       }
     }
+
+    /** Backs an early-exit optimization in `zeroPivotCofacet`/`zeroPivotFacet` (both engines,
+      * `Homology.scala`/`PackedRipserCohomology.scala`): those methods want the cofacet with the MAXIMUM index
+      * (resp. facet with the MINIMUM index) among candidates tied at the target diameter, and previously found
+      * it by sweeping every candidate and tracking a running best -- wasted work if the cursor's own
+      * enumeration order already visits candidates in strict index order, since the FIRST tied match would then
+      * already be the extremal one. Confirmed here, not assumed: `CofacetCursor`'s `.index` is strictly
+      * DECREASING across successive `advance()` calls (so first tied match = max index) and `FacetCursor`'s is
+      * strictly INCREASING (so first tied match = min index) -- matching real `ripser.cpp`'s own
+      * `get_zero_pivot_cofacet`, which returns on the first diameter-tied cofacet with no further scan, relying
+      * on the same combinatorial-number-system property.
+      */
+    "CofacetCursor's index is strictly decreasing and FacetCursor's is strictly increasing across successive advance() calls" >> {
+      val validCase = for
+        vertexCount <- Gen.chooseNum(2, 25)
+        size <- Gen.chooseNum(1, vertexCount - 1)
+        idx <- Gen.chooseNum(0L, math.max(0L, binomial(vertexCount, size) - 1))
+      yield (vertexCount, size, idx)
+
+      "CofacetCursor" ==> forAll(validCase) { case (vertexCount, size, idx) =>
+        val si = SimplexIndexing(vertexCount)
+        val cur = si.cofacetCursor(idx, size, allCofacets = true)
+        var prev: Long = Long.MaxValue
+        var ok = true
+        while cur.hasNext do
+          if cur.index >= prev then ok = false
+          prev = cur.index
+          cur.advance()
+        ok must beTrue
+      }
+
+      "FacetCursor" ==> forAll(validCase) { case (vertexCount, size, idx) =>
+        val si = SimplexIndexing(vertexCount)
+        val cur = si.facetCursor(idx, size)
+        var prev: Long = Long.MinValue
+        var ok = true
+        while cur.hasNext do
+          if cur.index <= prev then ok = false
+          prev = cur.index
+          cur.advance()
+        ok must beTrue
+      }
+    }
   }
