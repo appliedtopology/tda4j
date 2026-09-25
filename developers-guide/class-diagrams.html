@@ -135,7 +135,8 @@ mermaid.initialize({
     <li class="level1 nav-leaf"><a href="#chain-cellt-coefficientt-chain-scala"><code>Chain[CellT, CoefficientT]</code> (<code>Chain.scala</code>)</a></li>
     <li class="level1 nav-leaf"><a href="#simplex-vertext-simplex-scala-simplexops-scala"><code>Simplex[VertexT]</code> (<code>Simplex.scala</code>, <code>SimplexOps.scala</code>)</a></li>
     <li class="level1 nav-leaf"><a href="#streams-simplexstream-scala-simplexindexing-scala-vietorisrips-scala">Streams (<code>SimplexStream.scala</code>, <code>SimplexIndexing.scala</code>, <code>VietorisRips.scala</code>)</a></li>
-    <li class="level1 nav-leaf"><a href="#persistence-engines-homology-homology-scala-homology-packedripsercohomology-scala">Persistence engines (<code>homology/Homology.scala</code>, <code>homology/PackedRipserCohomology.scala</code>)</a></li>
+    <li class="level1 nav-leaf"><a href="#persistence-engines-homology-homology-scala-homology-packedripsercohomology-scala-homology-fastcubicalhomology-scala-homology-fastalphahomology-scala">Persistence engines (<code>homology/Homology.scala</code>, <code>homology/PackedRipserCohomology.scala</code>, <code>homology/FastCubicalHomology.scala</code>, <code>homology/FastAlphaHomology.scala</code>)</a></li>
+    <li class="level1 nav-leaf"><a href="#circular-coordinates-homology-circularcoordinates-scala">Circular coordinates (<code>homology/CircularCoordinates.scala</code>)</a></li>
     <li class="level1 nav-leaf"><a href="#metric-spaces-finitemetricspace-scala">Metric spaces (<code>FiniteMetricSpace.scala</code>)</a></li>
     <li class="level1 nav-leaf"><a href="#barcode-representation-barcode-scala-package-org-appliedtopology-tda4j-barcode">Barcode representation (<code>Barcode.scala</code>, package <code>org.appliedtopology.tda4j.barcode</code>)</a></li>
   </ul>
@@ -285,6 +286,7 @@ mermaid.initialize({
     RipserCofaceSimplexStream &lt;|-- LazyWitnessSimplexStream
     RipserCofaceSimplexStream &lt;|-- WitnessCofaceSimplexStream
     RipserCofaceSimplexStream &lt;|-- SheehyRipsSimplexStream
+    RipserCofaceSimplexStream &lt;|-- DowkerCofaceSimplexStream
     EnumeratingCofaceSimplexStream &lt;|-- InorderCofaceSimplexStream
     SimplexStream &lt;|-- ExplicitStream
     StratifiedSimplexStream &lt;|-- RecursiveStackVietorisRipsSimplexStream
@@ -301,12 +303,39 @@ mermaid.initialize({
         <code>Cube</code>s rather than <code>Simplex</code>es; <code>SimplicialSetStream</code>/<code>FilteredSimplicialSetStream</code> produce a
         <code>FiniteSimplicialSet[G]</code>&#39;s own generator type <code>G</code>.</p>
         
-        <h2 id="persistence-engines-homology-homology-scala-homology-packedripsercohomology-scala" class="section"><a class="anchor-link left" href="#persistence-engines-homology-homology-scala-homology-packedripsercohomology-scala"><i class="icofont-laika link">&#xef71;</i></a>Persistence engines (<code>homology/Homology.scala</code>, <code>homology/PackedRipserCohomology.scala</code>)</h2>
+        <h2 id="persistence-engines-homology-homology-scala-homology-packedripsercohomology-scala-homology-fastcubicalhomology-scala-homology-fastalphahomology-scala" class="section"><a class="anchor-link left" href="#persistence-engines-homology-homology-scala-homology-packedripsercohomology-scala-homology-fastcubicalhomology-scala-homology-fastalphahomology-scala"><i class="icofont-laika link">&#xef71;</i></a>Persistence engines (<code>homology/Homology.scala</code>, <code>homology/PackedRipserCohomology.scala</code>, <code>homology/FastCubicalHomology.scala</code>, <code>homology/FastAlphaHomology.scala</code>)</h2>
         <p>Deliberately <em>not</em> diagrammed field-by-field here — their exact state and trust status belongs in one
         place. See <a href="persistence-engines.html">Persistence engines</a> for the full, current picture across
         <code>CellularHomologyContext</code>/<code>SimplicialHomologyContext</code>,
         <code>CellularPersistenceInChunksContext</code>/<code>PersistenceInChunksContext</code>,
-        <code>RipserCohomologyContext</code>, <code>PackedRipserCohomologyContext</code>, and <code>CellularCohomologyContext</code>.</p>
+        <code>RipserCohomologyContext</code>, <code>PackedRipserCohomologyContext</code>, <code>CellularCohomologyContext</code>,
+        <code>FastCubicalHomologyContext</code> and <code>FastAlphaHomologyContext</code> (<code>HelixDelaunay</code> alpha complexes) -- both valid at
+        any ambient dimension <code>&gt;= 2</code>, both via a <code>chunks</code> hybrid above 2D -- wired into <code>matlab</code>/<code>cli</code> as
+        <code>engine=&quot;fast-cubical&quot;</code>/<code>engine=&quot;fast-alpha&quot;</code>.</p>
+        
+        <h2 id="circular-coordinates-homology-circularcoordinates-scala" class="section"><a class="anchor-link left" href="#circular-coordinates-homology-circularcoordinates-scala"><i class="icofont-laika link">&#xef71;</i></a>Circular coordinates (<code>homology/CircularCoordinates.scala</code>)</h2>
+        <pre class="mermaid">classDiagram
+    class CircularCoordinates {
+        &lt;&lt;object&gt;&gt;
+        h1Bars(metricSpace, maxFiltrationValue) IndexedSeq~(Double, Double)~
+        compute(metricSpace, r, cocycleIndex, prime, maxFiltrationValue) Result
+    }
+    class Result {
+        theta: Map~Int, Double~
+        birth: Double
+        death: Double
+        r: Double
+        prime: Int
+    }
+    class NoIntegerCocycleException {
+        &lt;&lt;RuntimeException&gt;&gt;
+    }
+    CircularCoordinates --&gt; Result : returns
+    CircularCoordinates ..&gt; CellularCohomologyContext : computes K_r&#39;s cohomology with
+    CircularCoordinates ..&gt; NoIntegerCocycleException : throws (no ℤ-lift at prime)</pre>
+        <p>A standalone construction, not a fifth persistence engine — see <a href="architecture.html">Architecture</a>&#39;s own
+        <code>homology.CircularCoordinates</code> section for the truncated-complex reframing, the harmonic-smoothing linear
+        system, and why the output is a per-point angle map rather than a barcode.</p>
         
         <h2 id="metric-spaces-finitemetricspace-scala" class="section"><a class="anchor-link left" href="#metric-spaces-finitemetricspace-scala"><i class="icofont-laika link">&#xef71;</i></a>Metric spaces (<code>FiniteMetricSpace.scala</code>)</h2>
         <pre class="mermaid">classDiagram
@@ -351,9 +380,28 @@ mermaid.initialize({
         image(source, target, matrix) List~PersistenceBar~
         kernel(source, target, matrix) List~PersistenceBar~
         cokernel(source, target, matrix) List~PersistenceBar~
-    }</pre>
+    }
+    class BarcodeDistance {
+        &lt;&lt;object&gt;&gt;
+        bottleneckDistance(diagram1, diagram2, groundNorm) Double
+        wassersteinDistance(diagram1, diagram2, order, groundNorm) Double
+        bottleneckDistanceByDimension(diagram1, diagram2, groundNorm) Map~Int, Double~
+        wassersteinDistanceByDimension(diagram1, diagram2, order, groundNorm) Map~Int, Double~
+    }
+    class Vectorization {
+        &lt;&lt;object&gt;&gt;
+        landscape(diagram, numLevels, tMin, tMax, resolution) Array~Array~Double~~
+        persistenceImage(diagram, sigma, birthRange, persistenceRange, birthResolution, persistenceResolution, weightCap) Array~Array~Double~~
+    }
+    BarcodeDistance ..&gt; PersistenceBar : reads
+    Vectorization ..&gt; PersistenceBar : reads</pre>
         <p><code>AnnotationT</code> in practice is always <code>Chain[CellT, CoefficientT]</code> — the representative cycle/cocycle for a
-        bar, when an engine tracks one.</p>
+        bar, when an engine tracks one. <code>BarcodeDistance</code>/<code>Vectorization</code> only ever read a bar&#39;s <code>dim</code>/<code>lower</code>/<code>upper</code>
+        (never <code>annotation</code>), and are specialized to <code>PersistenceBar[Double, _]</code> rather than sharing <code>Barcode</code>&#39;s own
+        <code>FiltrationT: Ordering</code> genericity — see <a href="architecture.html">Architecture</a>&#39;s &quot;<code>Barcode.scala</code>&quot; section
+        for why, and for <code>BipartiteMatching.scala</code>&#39;s two package-private combinatorial primitives
+        (<code>HopcroftKarp</code>/<code>Hungarian</code>) <code>BarcodeDistance</code> is built on, omitted here as an implementation detail rather
+        than part of this package&#39;s public shape.</p>
 
         
 <hr class="footer-rule"/>

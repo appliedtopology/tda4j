@@ -118,6 +118,8 @@
     <li class="level1 nav-leaf"><a href="#_3-ripsercohomologycontext-test-reference-oracle-for-engine-4">3. <code>RipserCohomologyContext</code> — test/reference oracle for engine 4</a></li>
     <li class="level1 nav-leaf"><a href="#_4-packedripsercohomologycontext-the-production-ripser-engine">4. <code>PackedRipserCohomologyContext</code> — the production Ripser engine</a></li>
     <li class="level1 nav-leaf"><a href="#_5-cellularcohomologycontext-generic-cohomology-for-every-cell-type">5. <code>CellularCohomologyContext</code> — generic cohomology, for every cell type</a></li>
+    <li class="level1 nav-leaf"><a href="#_6-fastcubicalhomologycontext-dual-graph-union-find-any-ambient-dimension-2">6. <code>FastCubicalHomologyContext</code> — dual-graph union-find, any ambient dimension &gt;= 2</a></li>
+    <li class="level1 nav-leaf"><a href="#_7-fastalphahomologycontext-engine-6-s-own-dual-union-find-ported-to-helixdelaunay">7. <code>FastAlphaHomologyContext</code> — engine 6&#39;s own dual union-find, ported to <code>HelixDelaunay</code></a></li>
     <li class="level1 nav-leaf"><a href="#streams-engines-what-works-with-what">Streams × engines: what works with what</a></li>
     <li class="level1 nav-leaf"><a href="#choosing-an-engine">Choosing an engine</a></li>
   </ul>
@@ -135,11 +137,14 @@
         </ul>
 
         <h1 id="persistence-engines-what-to-trust-and-why" class="title">Persistence engines: what to trust, and why</h1>
-        <p><code>homology/Homology.scala</code>, <code>homology/PackedRipserCohomology.scala</code>, and <code>homology/Cohomology.scala</code> contain
-        <strong>four independently-implemented algorithms across five concrete classes</strong>. They share the <code>Chain</code> reduction
-        primitives from <a href="architecture.html">Architecture</a>, but they are not variants of one shared engine — a fix
-        or bug found in one does not imply anything about the others. Read this page before choosing which engine to
-        build on.</p>
+        <p><code>homology/Homology.scala</code>, <code>homology/PackedRipserCohomology.scala</code>, <code>homology/Cohomology.scala</code>,
+        <code>homology/FastCubicalHomology.scala</code>, and <code>homology/FastAlphaHomology.scala</code> contain <strong>five
+        independently-implemented algorithms across seven concrete classes</strong> (the last two classes share one
+        algorithm — a dual-graph union-find via Alexander duality — applied to two different cell types, the same
+        &quot;one algorithm, several concrete classes&quot; relationship engines 3/4 already have). They share the <code>Chain</code>
+        reduction primitives from <a href="architecture.html">Architecture</a>, but they are not variants of one shared engine — a
+        fix or bug found in one does not imply anything about the others. Read this page before choosing which engine
+        to build on.</p>
         <p>Three of the five (<code>CellularHomologyContext</code>, <code>CellularPersistenceInChunksContext</code>, <code>CellularCohomologyContext</code>)
         additionally implement the common <code>homology.PersistenceEngine[CellT, C]</code> trait (<code>def barcode(stream): List[
 PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.naive</code>/<code>.chunks</code>/<code>.cohomology</code> factories — a
@@ -256,16 +261,103 @@ PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.nai
         which higher-dimensional cells exist in the ambient complex), not intrinsic the way <code>boundary</code> is, so a
         per-cell <code>coboundary</code> method with no complex to consult was never the right shape.</p>
         
+        <h2 id="_6-fastcubicalhomologycontext-dual-graph-union-find-any-ambient-dimension-2" class="section"><a class="anchor-link left" href="#_6-fastcubicalhomologycontext-dual-graph-union-find-any-ambient-dimension-2"><i class="icofont-laika link">&#xef71;</i></a>6. <code>FastCubicalHomologyContext</code> — dual-graph union-find, any ambient dimension &gt;= 2</h2>
+        <p>Flash Cubical (Le Breton-Szustakowski-Piraud, arXiv:2606.04801): a genuinely different algorithm from engines
+        1/2 above, not a faster re-keying the way engine 4 is for engine 3. Specialized to <code>CubicalGridStream</code>
+        directly (like engines 3/4 are specialized to <code>Simplex[Int]</code> Vietoris-Rips) rather than generic over
+        <code>CellT: OrderedCell</code> — it reads the grid&#39;s own <code>shape</code>/<code>ambientDim</code>/<code>topCellValue</code> directly, so it does not
+        implement <code>PersistenceEngine[CellT, C]</code> either, for the same &quot;honest asymmetry&quot; reason that trait&#39;s own doc
+        comment already gives for engines 3/4.</p>
+        <p><strong>Valid at any ambient dimension <code>&gt;= 2</code></strong> (a <code>require</code>d precondition <code>matlab.TDA4j</code>/<code>cli</code> both check before
+        ever calling it, with a clear message rather than a generic exception). At <code>d=2</code>, <code>H_0</code> (an ordinary primal
+        union-find, ascending filtration order, elder rule) plus <code>H_1</code> (via the dual construction below) together
+        account for every nontrivial cell dimension a 2D grid has — <code>H_2</code> is identically zero for any subcomplex of a
+        2D grid (a bounded planar region has no 2-dimensional voids to detect), so nothing is being skipped. At <code>d &gt;=
+3</code> there are <code>d-2</code> &quot;middle&quot; dimensions (<code>1 &lt;= k &lt;= d-2</code>) with no duality shortcut; these are handed to
+        <code>CellularPersistenceInChunksContext</code> run on a <code>LimitedCubicalGridStream</code> view that hides the real
+        top-dimensional cells entirely, so the (often largest) top dimension never touches general <code>Chain</code> reduction —
+        still a real, if shrinking-with-<code>d</code>, win, and no new hardcoded dimension ceiling (<code>chunks</code> is already fully
+        general over <code>d</code>). See <code>.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md</code> for the full derivation,
+        including why the dual union-find&#39;s own correctness doesn&#39;t depend on how the middle dimensions get resolved;
+        cross-validated against the naive engine at <code>d=3</code> (hand fixtures, Fp(3) sign-genericity, a random property
+        test) plus one <code>d=4</code> smoke test, not validated at <code>d &gt;= 5</code>.</p>
+        <p><strong>The dual construction</strong>: top cells (pixels) become dual vertices, codimension-1 cells (facets) become dual
+        edges connecting the 1 or 2 top cells containing them (a shared <code>∞</code> sentinel vertex, fixed at <code>+Infinity</code>,
+        stands in for a facet&#39;s missing side on the grid&#39;s own outer boundary). Primal <code>H_{d-1}</code> of the sublevel
+        filtration equals ordinary <code>H_0</code> of this dual graph&#39;s own SUPERLEVEL filtration (Alexander duality,
+        <code>H_{d-1}(X) ≅ H^0(S^d \ X)</code>), computed by the same elder-rule array union-find engine 2&#39;s own <code>unionFindDim01</code>
+        uses, processing dual vertices/edges together in DESCENDING order of primal value, with every resulting bar&#39;s
+        endpoints swapped. <code>∞</code> must be the unconditional elder of any merge it takes part in — not just because
+        <code>birthOf(∞) = +Infinity</code> is <em>usually</em> the largest value, but enforced explicitly, since a real top cell can
+        also carry <code>topValue = +Infinity</code> (this codebase&#39;s own &quot;permanently missing cell&quot; convention, e.g. Perseus&#39;s
+        <code>-1</code>) and tie against it.</p>
+        <p><strong>Representatives</strong>: each active dual component tracks its own running signed sum of top cells, oriented
+        coherently as merges happen so a dying component&#39;s boundary is exactly the <code>H_{d-1}</code> cycle bounding it — the
+        orientation flip needed at each merge is solved directly from the connecting facet&#39;s own boundary coefficients
+        (always <code>±1</code>, <code>cubeIsOrderedCell</code>&#39;s alternating-sign rule) and each side&#39;s own already-established sign,
+        matching this codebase&#39;s design principle of representatives from every engine, not just this one&#39;s own
+        speed. This is this codebase&#39;s <em>own</em> extension: the source paper is F2-only and barcode-only.</p>
+        <p>No paper access (network-blocked) and no existing implementation to port (unlike engine 4&#39;s GUDHI-verified
+        edge-collapse precedent) meant this is an original derivation from Alexander duality, not a translation — see
+        the design note for the full derivation and a hand-verified worked example, checked before any code was
+        written.</p>
+        
+        <h2 id="_7-fastalphahomologycontext-engine-6-s-own-dual-union-find-ported-to-helixdelaunay" class="section"><a class="anchor-link left" href="#_7-fastalphahomologycontext-engine-6-s-own-dual-union-find-ported-to-helixdelaunay"><i class="icofont-laika link">&#xef71;</i></a>7. <code>FastAlphaHomologyContext</code> — engine 6&#39;s own dual union-find, ported to <code>HelixDelaunay</code></h2>
+        <p>Same algorithm as engine 6, applied to <code>HelixDelaunay</code>&#39;s top simplices instead of a cubical grid&#39;s top cells
+        (<code>.claude/DESIGN-alpha-dual-unionfind.md</code>, <code>alpha-complex.md</code>&#39;s own <code>FastAlphaHomologyContext</code> section for the
+        full derivation and its own newly-measured risk). <code>HelixDelaunay</code> specifically, never <code>AlphaComplexDQP</code>/
+        <code>AlphaShapeDQP</code> — the dual graph needs the full, untruncated triangulation (<code>AlphaComplexDQP.euclidean</code>&#39;s own
+        truncated mode is incompatible) and &quot;every facet has &lt;= 2 cofaces,&quot; which <code>AlphaShapeDQP</code>&#39;s own documented
+        cospherical-degeneracy hazard can violate directly by emitting an oversized simplex. <strong>Valid at any ambient
+        dimension <code>&gt;= 2</code>, same as engine 6</strong> (<code>.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md</code>): both
+        union-finds were already dimension-generic before this extension (only the <code>require</code> gated them to <code>d=2</code>), so
+        extending past 2D was purely a matter of handing the residual &quot;middle&quot; dimensions (<code>1 &lt;= k &lt;= d-2</code>) to
+        <code>PersistenceInChunksContext[Int, C]</code> run on a new <code>alpha.LimitedAlphaShapesStream</code> view (the <code>Simplex[Int]</code>
+        analogue of engine 6&#39;s own <code>LimitedCubicalGridStream</code> — needed because <code>HelixDelaunay</code>/<code>AlphaShapes</code> is a
+        <code>StratifiedSimplexStream</code>, not a <code>CofaceSimplexStream</code>, so the existing <code>LimitedCofaceSimplexStream</code> doesn&#39;t fit
+        it) that hides the real top-dimensional simplices. Sequenced AFTER engine 6&#39;s own hybrid was validated, not
+        concurrently, because this engine ALSO carries the facet-multiplicity risk below, which needed its own fresh
+        measurement at <code>d=3</code> rather than assuming the <code>d=2</code> rate carried over — it does not.</p>
+        <p><strong>Unlike engine 6, this precondition is not guaranteed by construction</strong>, and the rate is NOT flat across
+        dimension or point count: roughly 1-in-18700 on random points at ambient dimension 2 (the original measurement)
+        but roughly 1-in-1666 at ambient dimension 3 with 20-30 points (vs. zero violations in 20000 trials with only
+        6-16 points at the same dimension) — see <code>alpha-complex.md</code> for the full measurement. A real <code>HelixDelaunay</code>
+        limitation, not a flaw in this construction, but a materially bigger one at <code>d=3</code> than the <code>d=2</code> figure alone
+        would suggest. Validates the precondition explicitly and throws the named <code>FastAlphaTriangulationException</code> on
+        violation rather than building a silently-wrong dual graph — its message is layered plain-language-first (for
+        an unsuspecting MATLAB/CLI caller: &quot;NOT an error in your data,&quot; naming the ambient dimension and the measured
+        rates, the concrete retry) with the facet-count detail as a technical appendix, the same two-audience approach
+        <code>NoIntegerCocycleException</code> already established for <code>CircularCoordinates</code>.</p>
+        <p><strong>Wired into <code>matlab.TDA4j</code>/<code>cli</code> as <code>engine=&quot;fast-alpha&quot;</code>/<code>--engine fast-alpha</code></strong>, like every other engine on
+        this page — valid only for <code>complex=alpha</code> with <code>alphaBackend=helix</code> (the default) and any ambient dimension
+        <code>&gt;= 2</code>; see <code>alpha-complex.md</code>&#39;s own section for the full reasoning behind shipping the measured risk above,
+        including why the <code>d=3</code> figure is documented explicitly rather than assumed to match <code>d=2</code>.</p>
+        <p><strong>A <code>FastAlphaTriangulationException</code> has a repair, not just a documented retry</strong>: <code>&quot;requireValidTriangulation&quot;</code>
+        (MATLAB)/<code>--require-valid-triangulation</code> (CLI), only consulted with <code>complex=alpha</code>/<code>alphaBackend=helix</code>, off by
+        default. Nudges exactly the near-tied points involved in a violation by a small perturbation, re-runs
+        <code>HelixDelaunay</code>&#39;s own already-tested global construction on the full (mostly unperturbed) point set, and
+        recomputes every resulting simplex&#39;s circumsphere from the ORIGINAL coordinates — see
+        <code>HelixDelaunay.repairByJitterRetriangulation</code>&#39;s own doc and <code>.claude/DESIGN-helix-triangulation-repair.md</code> for
+        the full mechanism, including two earlier designs that were tried and rejected after being checked against a
+        real failing fixture. Validated at ambient dimension 2 and 3 (two independent 20000-trial stress sweeps against
+        near-cospherical point clouds, zero barcode disagreements against the naive engine across every genuinely-hit
+        violation); not validated at <code>d &gt;= 4</code>, where <code>HelixDelaunay</code> construction itself is already documented above as
+        unreliable for unrelated reasons. Meaningful with any <code>engine</code> value (the repair lives on the triangulation
+        itself), but its only practical effect on <code>engine=&quot;naive&quot;</code>/<code>&quot;chunks&quot;</code>/<code>&quot;cohomology&quot;</code> is to silently change which
+        (rare, near-tied) triangulation gets built — those engines have no facet-multiplicity precondition of their own,
+        so there is usually no reason to set this unless also using <code>engine=&quot;fast-alpha&quot;</code>.</p>
+        
         <h2 id="streams-engines-what-works-with-what" class="section"><a class="anchor-link left" href="#streams-engines-what-works-with-what"><i class="icofont-laika link">&#xef71;</i></a>Streams × engines: what works with what</h2>
         <p>Every complex construction in this codebase produces a <code>CofaceSimplexStream</code>/<code>CellStream</code> that, in principle,
-        any of <code>matlab.TDA4j</code>&#39;s four <code>engine</code> values could consume — but two of those engines
-        (<code>PackedRipserCohomologyContext</code>/<code>engine=&quot;ripser&quot;</code> and <code>CellularPersistenceInChunksContext</code>/<code>engine=&quot;chunks&quot;</code>)
-        were built against specific assumptions (a genuine flag complex, a max-pairwise-distance filtration functional,
-        vertices born at filtration 0) that not every construction satisfies, and refusing the combination outright
-        (a clear <code>IllegalArgumentException</code>, not a silently wrong barcode) is deliberate. This table is generated by
-        reading <code>matlab.TDA4j</code>&#39;s own <code>dispatch</code>/<code>resolveWitnessEngine</code>/<code>dispatchCubical</code> — the single source of truth
-        for every refusal and default — not by inference from a construction&#39;s own doc; re-check that source if this
-        table and the code ever disagree.</p>
+        some subset of <code>matlab.TDA4j</code>&#39;s six <code>engine</code> values could consume — but most of those engines were built
+        against specific assumptions that not every construction satisfies: <code>ripser</code>/<code>chunks</code> assume a genuine flag
+        complex, a max-pairwise-distance filtration functional, and vertices born at filtration 0;
+        <code>fast-cubical</code>/<code>fast-alpha</code> are each specialized to one single concrete construction (<code>CubicalGridStream</code>/
+        <code>HelixDelaunay</code> respectively) and have no notion of any other complex at all. Refusing an unsupported
+        combination outright (a clear <code>IllegalArgumentException</code>, not a silently wrong barcode) is deliberate
+        throughout. This table is generated by reading <code>matlab.TDA4j</code>&#39;s own <code>dispatch</code>/<code>resolveWitnessEngine</code>/
+        <code>dispatchCubical</code> — the single source of truth for every refusal and default — not by inference from a
+        construction&#39;s own doc; re-check that source if this table and the code ever disagree.</p>
         <table>
           <thead>
             <tr>
@@ -275,6 +367,8 @@ PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.nai
               <th><code>naive</code></th>
               <th><code>chunks</code></th>
               <th><code>cohomology</code></th>
+              <th><code>fast-cubical</code></th>
+              <th><code>fast-alpha</code></th>
             </tr>
           </thead>
           <tbody>
@@ -285,6 +379,8 @@ PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.nai
               <td>yes</td>
               <td>yes</td>
               <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong></td>
             </tr>
             <tr>
               <td><code>cech</code></td>
@@ -293,6 +389,8 @@ PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.nai
               <td>yes</td>
               <td>yes</td>
               <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong></td>
             </tr>
             <tr>
               <td><code>witness</code>, <code>witnessVariant=lazy</code></td>
@@ -301,6 +399,8 @@ PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.nai
               <td>yes</td>
               <td>yes</td>
               <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong></td>
             </tr>
             <tr>
               <td><code>witness</code>, <code>witnessVariant=general</code></td>
@@ -309,6 +409,8 @@ PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.nai
               <td>yes</td>
               <td><strong>no</strong></td>
               <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong></td>
             </tr>
             <tr>
               <td><code>dtm-rips</code></td>
@@ -317,6 +419,8 @@ PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.nai
               <td>yes</td>
               <td>yes</td>
               <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong></td>
             </tr>
             <tr>
               <td><code>dtm-alpha</code></td>
@@ -325,6 +429,8 @@ PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.nai
               <td>yes</td>
               <td><strong>no</strong> — shares <code>AlphaComplexDQP</code>&#39;s known stall/OOM risk (see <code>alpha-complex.md</code>)</td>
               <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong> — always uses <code>AlphaComplexDQP</code>, never <code>HelixDelaunay</code></td>
             </tr>
             <tr>
               <td><code>alpha</code></td>
@@ -333,6 +439,8 @@ PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.nai
               <td>yes</td>
               <td><strong>no</strong> — known stall/OOM risk (<code>HomologySpec</code>&#39;s <code>BarcodeRegressionSpec</code>)</td>
               <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>yes</strong> — only <code>alphaBackend=helix</code> (the default), any ambient dimension <code>&gt;= 2</code></td>
             </tr>
             <tr>
               <td><code>sheehy-rips</code></td>
@@ -341,6 +449,8 @@ PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.nai
               <td>yes</td>
               <td>yes</td>
               <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong></td>
             </tr>
             <tr>
               <td>cubical (<code>computeFromCubicalImage</code>/<code>computeFromImage</code>, no <code>complex</code> key)</td>
@@ -349,6 +459,18 @@ PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.nai
               <td>yes</td>
               <td>yes</td>
               <td>yes</td>
+              <td><strong>yes</strong> — any ambient dimension <code>&gt;= 2</code></td>
+              <td><strong>no</strong></td>
+            </tr>
+            <tr>
+              <td>Dowker relation (<code>computeFromRelation</code>, no <code>complex</code> key)</td>
+              <td><code>naive</code></td>
+              <td><strong>no</strong> — not a flag complex (a witness for a whole simplex need not witness any of its edges)</td>
+              <td>yes</td>
+              <td><strong>no</strong> — same conservative refusal <code>witness</code>/general has (use <code>naive</code>/<code>cohomology</code>)</td>
+              <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong></td>
             </tr>
             <tr>
               <td>simplicial sets</td>
@@ -357,18 +479,34 @@ PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.nai
               <td></td>
               <td></td>
               <td></td>
+              <td></td>
+              <td></td>
             </tr>
           </tbody>
         </table>
+        <p>The <code>fast-cubical</code>/<code>fast-alpha</code> columns are each a single &quot;yes&quot; surrounded by &quot;no&quot;s, for the SAME underlying
+        reason in each row of &quot;no&quot;s: <code>FastCubicalHomologyContext</code> is specialized to the concrete <code>CubicalGridStream</code>
+        (it reads <code>.shape</code>/<code>.ambientDim</code>/<code>.topCellValue</code> directly, not a generic <code>CellT: OrderedCell</code>) and
+        <code>FastAlphaHomologyContext</code> is specialized to the concrete <code>HelixDelaunay</code> triangulation the same way — neither
+        has any notion of the OTHER constructions at all, so every other row&#39;s &quot;no&quot; is &quot;not a cubical grid&quot;/&quot;not a
+        <code>HelixDelaunay</code>&quot; respectively, not a per-row special case. Both are additionally refused within their one
+        &quot;yes&quot; row for a narrower reason: <code>fast-cubical</code> only for a degenerate 1-axis image (ambient dimension <code>&lt; 2</code>);
+        <code>fast-alpha</code> only for <code>alphaBackend=DQP</code> (this engine cannot consume <code>AlphaShapeDQP</code>&#39;s output at all) — neither
+        is refused for HIGH ambient dimension any more, now that both are extended past 2D via a <code>chunks</code> hybrid for
+        the residual middle dimensions (<code>.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md</code>); both name the
+        actual mismatch in their own message rather than throwing a bare <code>IllegalArgumentException</code>.</p>
         <p>Reading the &quot;no&quot; cells as one-line reasons, grouped by root cause:</p>
         <ul>
-          <li><strong>Not a flag complex</strong> (<code>cech</code>, <code>witness</code>/general): a <code>k</code>-simplex&#39;s value isn&#39;t determined by its own edges&#39;
-          values alone, so <code>insertionDiameter</code>&#39;s incremental recurrence has nothing valid to incrementally update.
-          <code>sheehy-rips</code> belongs here too, not with <code>dtm-rips</code> below, despite looking pairwise-derived at a glance: its
-          own <code>filtrationValueOverride</code> needs to see every vertex of a <code>k</code>-simplex at once (the <code>min</code>-over-vertices
-          <code>vanish</code> exclusion check), not just its edges — proven by construction, not merely asserted: a hand-derived
-          fixture (<code>SheehyRipsStreamSpec</code>) exhibits a triangle whose three edges are ALL individually present and
-          finite, yet the triangle itself never appears — the one thing an actual flag complex can never do.</li>
+          <li><strong>Not a flag complex</strong> (<code>cech</code>, <code>witness</code>/general, Dowker relations): a <code>k</code>-simplex&#39;s value isn&#39;t determined
+          by its own edges&#39; values alone, so <code>insertionDiameter</code>&#39;s incremental recurrence has nothing valid to
+          incrementally update. <code>sheehy-rips</code> belongs here too, not with <code>dtm-rips</code> below, despite looking
+          pairwise-derived at a glance: its own <code>filtrationValueOverride</code> needs to see every vertex of a <code>k</code>-simplex at
+          once (the <code>min</code>-over-vertices <code>vanish</code> exclusion check), not just its edges — proven by construction, not
+          merely asserted: a hand-derived fixture (<code>SheehyRipsStreamSpec</code>) exhibits a triangle whose three edges are
+          ALL individually present and finite, yet the triangle itself never appears — the one thing an actual flag
+          complex can never do. A Dowker relation&#39;s own witness condition is the same shape: a witness for a whole
+          simplex need not witness any of that simplex&#39;s edges, so a triangle can appear with no valid edge-only
+          justification the way <code>witness</code>/general&#39;s own dimension-specific threshold does.</li>
           <li><strong>Not a Vietoris-Rips complex at all</strong> (<code>alpha</code>, <code>dtm-alpha</code>): <code>PackedRipserCohomologyContext</code> consumes a
           <code>FiniteMetricSpace[Int]</code> directly and enumerates cliques via <code>SimplexIndexing</code> — there is no Delaunay/power-
           cell structure it could route through instead.
@@ -382,8 +520,11 @@ PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.nai
           itself is, combinatorially, an ordinary flag/clique complex (unlike <code>sheehy-rips</code> above).</li>
           <li><strong>Representation-specific</strong> (cubical): <code>PackedRipserCohomologyContext</code>/<code>RipserCohomologyContext</code> are
           hardcoded to <code>Simplex[Int]</code>&#39;s combinatorial-number-system indexing (<code>SimplexIndexing</code>); <code>Cube</code> has no
-          equivalent encoding built for it (a <code>CubicalRipser</code>-style dedicated fast engine remains a documented future
-          direction, <code>DESIGN-fast-cubical-engine.md</code>, not something engine 3/4 already do).</li>
+          equivalent encoding built for it. Engine 6 (<code>fast-cubical</code>) is a dedicated fast engine in this spirit, but
+          not a drop-in replacement for <code>ripser</code> here: it&#39;s a different algorithm (dual-graph union-find plus, at
+          <code>d &gt;= 3</code>, a hybrid with <code>chunks</code> for the residual middle dimensions — not <code>SimplexIndexing</code>-style
+          enumeration). A grid-exploiting engine dedicated to 3D specifically (<code>CubicalRipser</code>, Wagner-Chen-Vuçini)
+          remains a documented future direction, <code>DESIGN-fast-cubical-engine.md</code>.</li>
         </ul>
         <p><code>engine=&quot;cohomology&quot;</code> (<code>CellularCohomologyContext</code>, engine 5 above) is the one column with no &quot;no&quot; cells for a
         reason: it&#39;s generic over <code>CellT: OrderedCell</code> with no per-construction speed assumptions baked in, at the cost
@@ -418,6 +559,14 @@ PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.nai
             <tr>
               <td>Cohomology (real cocycle representatives) on <code>Cube</code>/<code>FiniteSimplicialSet</code>/Cech/Alpha/general witness complex, or any <code>OrderedCell</code> type engines 3/4 can&#39;t serve</td>
               <td><strong><code>CellularCohomologyContext</code></strong> (what <code>engine=&quot;cohomology&quot;</code> uses)</td>
+            </tr>
+            <tr>
+              <td>Fastest option for a cubical grid of any ambient dimension <code>&gt;= 2</code> (no <code>Chain</code> reduction at all for <code>H_0</code>/<code>H_{d-1}</code>; a <code>chunks</code> hybrid for any residual middle dimensions at <code>d &gt;= 3</code>)</td>
+              <td><strong><code>FastCubicalHomologyContext</code></strong> (what <code>engine=&quot;fast-cubical&quot;</code> uses)</td>
+            </tr>
+            <tr>
+              <td>Fastest option for an alpha complex via <code>HelixDelaunay</code>, any ambient dimension <code>&gt;= 2</code> (same hybrid shape as <code>FastCubicalHomologyContext</code>; noticeably more likely to throw <code>FastAlphaTriangulationException</code> at higher ambient dimension/point count)</td>
+              <td><strong><code>FastAlphaHomologyContext</code></strong> (what <code>engine=&quot;fast-alpha&quot;</code> uses)</td>
             </tr>
           </tbody>
         </table>
