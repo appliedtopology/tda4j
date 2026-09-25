@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="generator" content="Typelevel Laika + Helium Theme" />
+  <title>Hard-won invariants you must not break</title>
+  
+  <meta name="author" content="Mikael Vejdemo-Johansson"/>
+  
+  <meta name="author" content="Jordan Matuszewski"/>
+  
+  <meta name="author" content="Kei Kebreau"/>
+  
+  
+  <meta name="description" content="A Java Platform compatible library for topological data analysis (TDA)."/>
+  
+  
+  
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato:400,700">
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Fira+Mono:500">
+  
+  <link rel="stylesheet" type="text/css" href="../helium/site/icofont.min.css" />
+    <link rel="stylesheet" type="text/css" href="../helium/site/laika-helium.css" />
+    <style>
+
+.breadcrumb { display: flex; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 1.5rem 0; }
+.breadcrumb li { margin: 0; }
+.breadcrumb li a { display: inline; padding: 0; }
+.breadcrumb li:not(:last-child)::after { content: "\203A"; margin: 0 0.4em; color: var(--secondary-color); }
+
+</style>
+  <script src="../helium/site/laika-helium.js"></script>
+  <script>initVersions("../", "", "", null);</script>
+  
+  <script> /* for avoiding page load transitions */ </script>
+</head>
+
+  <body>
+
+    <header id="top-bar" class="light-default dark-default">
+
+  <div class="row">
+    <a id="nav-icon">
+      <i class="icofont-laika navigationMenu" title="Navigation">&#xefa2;</i>
+    </a>
+    
+    <div class="menu-container version-menu">
+      <a class="text-link menu-toggle" href="#">Choose Version</a>
+      <nav class="menu-content">
+        <ul class="nav-list">
+        </ul>
+      </nav>
+    </div>
+  </div>
+
+  <a class="icon-link glyph-link" href="../"><i class="icofont-laika home" title="Home">&#xef47;</i></a>
+
+  <div class="row links">
+    
+    <a class="icon-link svg-link" href="../api/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/appliedtopology/tda4j"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+  </div>  
+
+</header>
+
+    <nav id="sidebar">
+
+  <div class="row">
+    
+    <a class="icon-link svg-link" href="../api/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/appliedtopology/tda4j"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+  </div>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="../downloads.html">Downloads</a></li>
+    <li class="level1 nav-leaf"><a href="../tutorials/">Tutorials for TDA4j</a></li>
+    <li class="level1 nav-leaf"><a href="../user-guide/">User Guide for TDA4j</a></li>
+    <li class="level1 nav-node"><a href="index.html">Developer&#39;s Guide for TDA4j</a></li>
+    <li class="level2 nav-leaf"><a href="scala3-primer.html">A Scala 3.7+ primer for this codebase</a></li>
+    <li class="level2 nav-leaf"><a href="architecture.html">Architecture: from algebra to a filtration stream</a></li>
+    <li class="level2 nav-leaf"><a href="persistence-engines.html">Persistence engines: what to trust, and why</a></li>
+    <li class="level2 active nav-leaf"><a href="#">Hard-won invariants you must not break</a></li>
+    <li class="level2 nav-leaf"><a href="degeneracies.html">Degeneracy behaviors that look like bugs but aren&#39;t</a></li>
+    <li class="level2 nav-leaf"><a href="alpha-complex.html">Alpha complex: DQP vs Helix</a></li>
+    <li class="level2 nav-leaf"><a href="class-diagrams.html">Mapping the library: class diagrams</a></li>
+  </ul>
+
+</nav>
+
+    <div id="container">
+
+      
+<nav id="page-nav">
+  <p class="header"><a href="#">Hard-won invariants you must not break</a></p>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="#_1-given-implicit-resolution-happens-once-at-construction-not-per-call">1. <code>given</code>/implicit resolution happens once, at construction, not per call</a></li>
+    <li class="level1 nav-leaf"><a href="#_2-a-stream-s-iteration-order-and-its-pivot-order-must-be-the-same-total-order">2. A stream&#39;s iteration order and its pivot order must be the <em>same</em> total order</a></li>
+    <li class="level1 nav-leaf"><a href="#_3-colex-vs-lex-tie-breaks-are-not-interchangeable-in-ripser-flavored-code">3. Colex vs. lex tie-breaks are not interchangeable in Ripser-flavored code</a></li>
+    <li class="level1 nav-leaf"><a href="#_4-chain-reduceby-reducebyuntil-never-hand-rolled-chain-arithmetic-inside-a-reduction-loop">4. <code>Chain.reduceBy</code>/<code>reduceByUntil</code>, never hand-rolled <code>Chain</code> arithmetic, inside a reduction loop</a></li>
+    <li class="level1 nav-leaf"><a href="#_5-combinatorial-helpers-over-the-full-point-set-don-t-know-about-maxdimension-truncation">5. Combinatorial helpers over the full point set don&#39;t know about <code>maxDimension</code> truncation</a></li>
+    <li class="level1 nav-leaf"><a href="#_6-iteratedimension-s-domain-must-be-contiguous-from-0">6. <code>iterateDimension</code>&#39;s domain must be contiguous from 0</a></li>
+    <li class="level1 nav-leaf"><a href="#_7-opaque-type-extension-methods-belong-in-the-type-s-own-companion-object">7. Opaque-type extension methods belong in the type&#39;s own companion object</a></li>
+    <li class="level1 nav-leaf"><a href="#process-validate-empirically-not-by-inspection">Process: validate empirically, not by inspection</a></li>
+  </ul>
+
+  <p class="footer"></p>
+</nav>
+
+
+      <main class="content">
+
+        <ul class="breadcrumb nav-list">
+          <li class="level1 breadcrumb nav-leaf"><a href="../">TDA4j</a></li>
+          <li class="level1 breadcrumb nav-leaf"><a href="index.html">Developer&#39;s Guide for TDA4j</a></li>
+          <li class="level1 breadcrumb active nav-leaf"><a href="#">Hard-won invariants you must not break</a></li>
+        </ul>
+
+        <h1 id="hard-won-invariants-you-must-not-break" class="title">Hard-won invariants you must not break</h1>
+        <p>These are the load-bearing, non-obvious rules this codebase depends on. Every one of them was found by a
+        real bug, not by reading a spec — which is itself the pattern worth internalizing (see
+        <a href="#process-validate-empirically-not-by-inspection">Process: validate empirically, not by inspection</a> at the
+        bottom). If you&#39;re extending the persistence engines, complex-construction streams, or anything
+        Ripser-flavored, read this page in full before you start.</p>
+        
+        <h2 id="_1-given-implicit-resolution-happens-once-at-construction-not-per-call" class="section"><a class="anchor-link left" href="#_1-given-implicit-resolution-happens-once-at-construction-not-per-call"><i class="icofont-laika link">&#xef71;</i></a>1. <code>given</code>/implicit resolution happens once, at construction, not per call</h2>
+        <p>A <code>given [CellT: Ordering, CoefficientT: Field] =&gt; (Chain[CellT, CoefficientT] is RingModule)</code> instance
+        resolves its <code>Ordering[CellT]</code> context-bound parameter <strong>exactly once</strong>, when the instance is first
+        summoned — every method built on it permanently closes over that one resolution. Scala&#39;s implicit search is
+        static (compile-time, lexical), not dynamic; calling those methods later, from a scope where a <em>different</em>
+        <code>Ordering[CellT]</code> given is available, does not re-resolve anything.</p>
+        <p>Concretely: <code>Simplex[VertexT] is OrderedCell</code>&#39;s own <code>.ordering</code> is a fixed lexicographic order, and
+        <code>Chain.scala</code>&#39;s <code>given [CellT: OrderedCell] =&gt; Ordering[CellT] = oCell.ordering</code> fallback means any
+        <code>chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]</code> written <em>before</em> a stream-specific
+        <code>given Ordering[Simplex[VertexT]] = stream.filtrationOrdering</code> is in scope silently captures that
+        lexicographic fallback instead — every chain built through <code>⊠</code>/<code>.scale</code> afterward pivots on vertex label
+        order, not filtration order, regardless of what&#39;s nominally in scope at the call site.</p>
+        <p><strong>The fix pattern, everywhere it&#39;s applied</strong>: declare <code>given Ordering[CellT] = stream.filtrationOrdering</code>
+        as the <em>first</em> statement inside whatever state object holds the stream, before summoning <code>chainRM</code>.</p>
+        <p>This is genuinely dangerous rather than a style nit because it compiles cleanly either way and only
+        manifests as a wrong <em>answer</em> on inputs where lexicographic and filtration order actually disagree — most
+        hand-built fixtures don&#39;t exercise that unless someone deliberately constructs one (a fixture with vertex 1
+        born early and vertex 9 born late is the minimal discriminator). <strong>Not every class-scope <code>chainRM</code> instance
+        is a live bug</strong>: whether it matters depends on whether anything downstream trusts that instance&#39;s output
+        directly for pivot identity, or whether every consumer re-resolves ordering itself (e.g. via
+        <code>Chain.reduceByUntil</code>, a <code>def</code> that resolves fresh at each call site). This needs a case-by-case,
+        empirically-verified audit every time, not a blanket rule.</p>
+        
+        <h2 id="_2-a-stream-s-iteration-order-and-its-pivot-order-must-be-the-same-total-order" class="section"><a class="anchor-link left" href="#_2-a-stream-s-iteration-order-and-its-pivot-order-must-be-the-same-total-order"><i class="icofont-laika link">&#xef71;</i></a>2. A stream&#39;s iteration order and its pivot order must be the <em>same</em> total order</h2>
+        <p>Boundary-matrix reduction requires columns (processing order) and rows (pivot order) to be indexed by one
+        shared total order. Concretely: a stream&#39;s <code>.iterator</code>/<code>iterateDimension</code> order and its <code>filtrationOrdering</code>
+        (used to key <code>Chain.reduceBy</code>&#39;s map) must be <em>the same ordering</em>, one the consistent <code>.reverse</code> of the
+        other — not merely &quot;each independently a valid total order.&quot; Two orderings that are each individually
+        consistent but disagree on which of two <em>tied</em> cells comes first corrupt reduction in a way that&#39;s easy to
+        miss on random test input, because Vietoris-Rips complexes have <em>structural</em> ties (every simplex of
+        dimension ≥ 2 ties with its own longest edge) while random fixtures often don&#39;t — see
+        <a href="degeneracies.html">Degeneracies</a>.</p>
+        <p><strong>Symptom</strong>: <code>IllegalStateException: reduction pivot ... was not a recorded open class</code>. This means a cell
+        got selected as a pivot the algorithm&#39;s own invariants say should have been impossible — check whether
+        iteration order and pivot order for the stream in play are provably the same ordering before looking in the
+        reduction code itself.</p>
+        <p><code>.reverse</code> on the <em>same</em> <code>Ordering</code> object is safe; building a <em>second</em>, independently-written &quot;reversed&quot;
+        comparator is not, even when it looks equivalent on paper — a hand-written second comparator&#39;s tie-break
+        direction doesn&#39;t automatically stay consistent with a separately-reversed primary key, and this has broken
+        more than one stream in this codebase&#39;s history for exactly that reason.</p>
+        
+        <h2 id="_3-colex-vs-lex-tie-breaks-are-not-interchangeable-in-ripser-flavored-code" class="section"><a class="anchor-link left" href="#_3-colex-vs-lex-tie-breaks-are-not-interchangeable-in-ripser-flavored-code"><i class="icofont-laika link">&#xef71;</i></a>3. Colex vs. lex tie-breaks are not interchangeable in Ripser-flavored code</h2>
+        <p>The generic default tie-breaks on plain lexicographic vertex-set order. <code>EnumeratingCofaceSimplexStream</code>&#39;s
+        and <code>RipserCohomologyContext</code>&#39;s own orderings deliberately use <strong>colexicographic</strong> order instead, via
+        <code>SimplexIndexing</code>&#39;s own combinatorial-number-system index — the exact tie-break Ripser&#39;s Definition
+        3.2/Proposition 3.9 (apparent pairs) are stated in terms of. Don&#39;t &quot;simplify&quot; a colex ordering to plain lex
+        in code that touches <code>SimplexIndexing</code>/the Ripser engines; they need to agree with each other, not just each
+        independently be a valid tie-break.</p>
+        
+        <h2 id="_4-chain-reduceby-reducebyuntil-never-hand-rolled-chain-arithmetic-inside-a-reduction-loop" class="section"><a class="anchor-link left" href="#_4-chain-reduceby-reducebyuntil-never-hand-rolled-chain-arithmetic-inside-a-reduction-loop"><i class="icofont-laika link">&#xef71;</i></a>4. <code>Chain.reduceBy</code>/<code>reduceByUntil</code>, never hand-rolled <code>Chain</code> arithmetic, inside a reduction loop</h2>
+        <p><code>Chain</code>&#39;s <code>+</code>/<code>-</code>/<code>⊠</code> operators only lazily collapse the <em>head</em> of the underlying <code>PriorityQueue</code>, so a
+        hand-rolled fold that repeatedly subtracts terms builds an ever-growing backlog of uncollapsed duplicate
+        entries — confirmed directly by a first draft that hung on an 8-12 point complex that should take
+        milliseconds. <code>Chain.reduceBy</code>/<code>reduceByUntil</code> go through a <code>SortedMap</code> that collapses duplicates on every
+        insertion. Reserve raw chain arithmetic for small, one-shot combinations (building a V-column fold), never
+        for anything that accumulates over many reduction steps.</p>
+        
+        <h2 id="_5-combinatorial-helpers-over-the-full-point-set-don-t-know-about-maxdimension-truncation" class="section"><a class="anchor-link left" href="#_5-combinatorial-helpers-over-the-full-point-set-don-t-know-about-maxdimension-truncation"><i class="icofont-laika link">&#xef71;</i></a>5. Combinatorial helpers over the full point set don&#39;t know about <code>maxDimension</code> truncation</h2>
+        <p><code>SimplexIndexing.cofacetIterator</code>/<code>facetIterator</code> operate purely combinatorially over the complete n-point
+        abstract simplex — no concept of any per-engine dimension cap. <code>RipserCohomologyContext.coboundaryOf</code>
+        truncates explicitly instead, which is what makes top-dimension simplices come out essential. Any new code
+        built directly on <code>SimplexIndexing</code>&#39;s iterators inherits none of that truncation and needs its own manual
+        guard at the call site — <code>SimplexIndexing</code> itself has no way to know what any particular caller&#39;s cap is.
+        The symptom (wrong finite bars where essential ones were expected) looks like a reduction bug, not an
+        off-by-scope error two layers away, so it&#39;s easy to misdiagnose.</p>
+        
+        <h2 id="_6-iteratedimension-s-domain-must-be-contiguous-from-0" class="section"><a class="anchor-link left" href="#_6-iteratedimension-s-domain-must-be-contiguous-from-0"><i class="icofont-laika link">&#xef71;</i></a>6. <code>iterateDimension</code>&#39;s domain must be contiguous from 0</h2>
+        <p><code>StratifiedCellStream.iterator</code>&#39;s default implementation is
+        <code>Iterator.from(0).takeWhile(iterateDimension.isDefinedAt).flatMap(iterateDimension)</code> — it stops at the
+        first dimension the stream doesn&#39;t define, and never asks about anything past it. A stream whose domain has
+        a <em>gap</em> (defined at 0 and 2 but not 1) silently truncates at the gap rather than skipping past it. Every
+        concrete stream in this codebase satisfies this for a structural reason, not by convention alone: a
+        simplicial or cubical complex can&#39;t have a <code>d</code>-cell without its <code>(d-1)</code>-dimensional faces, so &quot;no cells at
+        <code>d</code>&quot; implies &quot;no cells beyond <code>d</code>&quot; too. A hand-built or generated stream that doesn&#39;t have this structural
+        guarantee needs to enforce contiguity itself — an unbounded <code>case d =&gt; ...</code> catch-all with no upper bound is
+        also a hazard here (<code>isDefinedAt</code> always <code>true</code>, which defeats the &quot;stops at the first gap&quot; logic entirely
+        and can loop until <code>Int</code> wraps around).</p>
+        
+        <h2 id="_7-opaque-type-extension-methods-belong-in-the-type-s-own-companion-object" class="section"><a class="anchor-link left" href="#_7-opaque-type-extension-methods-belong-in-the-type-s-own-companion-object"><i class="icofont-laika link">&#xef71;</i></a>7. Opaque-type extension methods belong in the type&#39;s own companion object</h2>
+        <p>An <code>extension</code> whose <em>receiver</em> is an opaque type (<code>Simplex</code>, <code>Cube</code>) should live inside that type&#39;s own
+        companion object (<code>object Simplex</code>/<code>object Cube</code>), not as a top-level <code>extension</code> clause — extension-method
+        resolution checks a receiver type&#39;s companion object by nominal type, so two unrelated opaque types can
+        safely reuse the same method name this way (<code>Simplex.underlying</code>/<code>Cube.underlying</code> never collide). Two
+        hazards to know before leaning on this: opaque-type transparency is scoped to the <em>whole file</em> the
+        <code>opaque type</code> is declared in, so code in that same file calling the type&#39;s own extensions by dot-syntax can
+        resolve to a same-named member of the underlying representation type instead of the intended extension —
+        keep an opaque type&#39;s <code>OrderedCell</code>/similar instances in their own file when this matters. And a
+        companion-object extension can still lose to a same-named stdlib extension reachable via a wildcard import
+        at some call site (<code>min</code>/<code>max</code> deliberately stay top-level extensions on <code>Simplex</code> for exactly this reason,
+        to avoid losing to <code>scala.math.Ordering.Implicits</code>).</p>
+        
+        <h2 id="process-validate-empirically-not-by-inspection" class="section"><a class="anchor-link left" href="#process-validate-empirically-not-by-inspection"><i class="icofont-laika link">&#xef71;</i></a>Process: validate empirically, not by inspection</h2>
+        <p>Every substantive design decision in this codebase&#39;s persistence-engine work (pivot orientation, whether
+        clearing is optional, whether an ordering fix is complete, whether an optimization is sound) has gone
+        through at least one empirical discriminating test before being trusted — never a plausibility argument
+        alone, even a careful one. &quot;This class-scope <code>chainRM</code> should be inert because X&quot; has been both correct and
+        wrong for structurally similar-looking classes in this codebase; only a discriminating test told the two
+        apart.</p>
+        <p>The pattern to carry into new work: <strong>when a change to reduction/ordering logic seems obviously sound by
+        inspection, build the cheap discriminating test anyway before implementing it for real.</strong> A good
+        discriminating fixture deliberately puts filtration order and some other natural order (vertex label,
+        insertion order) in conflict — a fixture where they happen to agree will not catch this class of bug.</p>
+
+        
+<hr class="footer-rule"/>
+<footer>
+  MIT License © Mikael Vejdemo-Johansson, Daniel Hope
+</footer>
+
+
+      </main>
+
+    </div>
+
+  </body>
+
+</html>

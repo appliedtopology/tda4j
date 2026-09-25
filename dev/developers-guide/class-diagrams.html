@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="generator" content="Typelevel Laika + Helium Theme" />
+  <title>Mapping the library: class diagrams</title>
+  
+  <meta name="author" content="Mikael Vejdemo-Johansson"/>
+  
+  <meta name="author" content="Jordan Matuszewski"/>
+  
+  <meta name="author" content="Kei Kebreau"/>
+  
+  
+  <meta name="description" content="A Java Platform compatible library for topological data analysis (TDA)."/>
+  
+  
+  
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato:400,700">
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Fira+Mono:500">
+  
+  <link rel="stylesheet" type="text/css" href="../helium/site/icofont.min.css" />
+    <link rel="stylesheet" type="text/css" href="../helium/site/laika-helium.css" />
+    <style>
+
+.breadcrumb { display: flex; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 1.5rem 0; }
+.breadcrumb li { margin: 0; }
+.breadcrumb li a { display: inline; padding: 0; }
+.breadcrumb li:not(:last-child)::after { content: "\203A"; margin: 0 0.4em; color: var(--secondary-color); }
+
+</style>
+  <script src="../helium/site/laika-helium.js"></script>
+    <script type="module">
+
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+mermaid.initialize({ 
+  startOnLoad: true,
+  theme: "base",
+  themeVariables: {
+    'darkMode': dark,
+    'primaryColor': dark ? '#16323c' : '#f2efe7', 
+    'primaryTextColor': dark ? '#7fc2d6' : '#007c99',
+    'primaryBorderColor': dark ? '#3a5a63' : '#a7d4de',
+    'lineColor': dark ? '#7fc2d6' : '#007c99',
+    'background': dark ? '#1e2124' : '#faf8f4',
+  }
+});
+
+</script>
+  <script>initVersions("../", "", "", null);</script>
+  
+  <script> /* for avoiding page load transitions */ </script>
+</head>
+
+  <body>
+
+    <header id="top-bar" class="light-default dark-default">
+
+  <div class="row">
+    <a id="nav-icon">
+      <i class="icofont-laika navigationMenu" title="Navigation">&#xefa2;</i>
+    </a>
+    
+    <div class="menu-container version-menu">
+      <a class="text-link menu-toggle" href="#">Choose Version</a>
+      <nav class="menu-content">
+        <ul class="nav-list">
+        </ul>
+      </nav>
+    </div>
+  </div>
+
+  <a class="icon-link glyph-link" href="../"><i class="icofont-laika home" title="Home">&#xef47;</i></a>
+
+  <div class="row links">
+    
+    <a class="icon-link svg-link" href="../api/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/appliedtopology/tda4j"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+  </div>  
+
+</header>
+
+    <nav id="sidebar">
+
+  <div class="row">
+    
+    <a class="icon-link svg-link" href="../api/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/appliedtopology/tda4j"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+  </div>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="../downloads.html">Downloads</a></li>
+    <li class="level1 nav-leaf"><a href="../tutorials/">Tutorials for TDA4j</a></li>
+    <li class="level1 nav-leaf"><a href="../user-guide/">User Guide for TDA4j</a></li>
+    <li class="level1 nav-node"><a href="index.html">Developer&#39;s Guide for TDA4j</a></li>
+    <li class="level2 nav-leaf"><a href="scala3-primer.html">A Scala 3.7+ primer for this codebase</a></li>
+    <li class="level2 nav-leaf"><a href="architecture.html">Architecture: from algebra to a filtration stream</a></li>
+    <li class="level2 nav-leaf"><a href="persistence-engines.html">Persistence engines: what to trust, and why</a></li>
+    <li class="level2 nav-leaf"><a href="gotchas.html">Hard-won invariants you must not break</a></li>
+    <li class="level2 nav-leaf"><a href="degeneracies.html">Degeneracy behaviors that look like bugs but aren&#39;t</a></li>
+    <li class="level2 nav-leaf"><a href="alpha-complex.html">Alpha complex: DQP vs Helix</a></li>
+    <li class="level2 active nav-leaf"><a href="#">Mapping the library: class diagrams</a></li>
+  </ul>
+
+</nav>
+
+    <div id="container">
+
+      
+<nav id="page-nav">
+  <p class="header"><a href="#">Mapping the library: class diagrams</a></p>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="#typeclass-hierarchy-ringmodule-scala-field-scala-chain-scala">Typeclass hierarchy (<code>RingModule.scala</code>, <code>Field.scala</code>, <code>Chain.scala</code>)</a></li>
+    <li class="level1 nav-leaf"><a href="#chain-cellt-coefficientt-chain-scala"><code>Chain[CellT, CoefficientT]</code> (<code>Chain.scala</code>)</a></li>
+    <li class="level1 nav-leaf"><a href="#simplex-vertext-simplex-scala-simplexops-scala"><code>Simplex[VertexT]</code> (<code>Simplex.scala</code>, <code>SimplexOps.scala</code>)</a></li>
+    <li class="level1 nav-leaf"><a href="#streams-simplexstream-scala-simplexindexing-scala-vietorisrips-scala">Streams (<code>SimplexStream.scala</code>, <code>SimplexIndexing.scala</code>, <code>VietorisRips.scala</code>)</a></li>
+    <li class="level1 nav-leaf"><a href="#persistence-engines-homology-homology-scala-homology-packedripsercohomology-scala-homology-fastcubicalhomology-scala-homology-fastalphahomology-scala">Persistence engines (<code>homology/Homology.scala</code>, <code>homology/PackedRipserCohomology.scala</code>, <code>homology/FastCubicalHomology.scala</code>, <code>homology/FastAlphaHomology.scala</code>)</a></li>
+    <li class="level1 nav-leaf"><a href="#circular-coordinates-homology-circularcoordinates-scala">Circular coordinates (<code>homology/CircularCoordinates.scala</code>)</a></li>
+    <li class="level1 nav-leaf"><a href="#metric-spaces-finitemetricspace-scala">Metric spaces (<code>FiniteMetricSpace.scala</code>)</a></li>
+    <li class="level1 nav-leaf"><a href="#barcode-representation-barcode-scala-package-org-appliedtopology-tda4j-barcode">Barcode representation (<code>Barcode.scala</code>, package <code>org.appliedtopology.tda4j.barcode</code>)</a></li>
+  </ul>
+
+  <p class="footer"></p>
+</nav>
+
+
+      <main class="content">
+
+        <ul class="breadcrumb nav-list">
+          <li class="level1 breadcrumb nav-leaf"><a href="../">TDA4j</a></li>
+          <li class="level1 breadcrumb nav-leaf"><a href="index.html">Developer&#39;s Guide for TDA4j</a></li>
+          <li class="level1 breadcrumb active nav-leaf"><a href="#">Mapping the library: class diagrams</a></li>
+        </ul>
+
+        <h1 id="mapping-the-library-class-diagrams" class="title">Mapping the library: class diagrams</h1>
+        <div class="callout info">
+          <i class="icofont-laika info">&#xef4e;</i>
+          <p>This page is a structural sketch to help you get oriented, not an exhaustive or automatically generated
+          reference — field names and signatures can drift out of sync with source over time. When a diagram and the
+          actual <code>.scala</code> file disagree, trust the file.</p>
+        </div>
+        
+        <h2 id="typeclass-hierarchy-ringmodule-scala-field-scala-chain-scala" class="section"><a class="anchor-link left" href="#typeclass-hierarchy-ringmodule-scala-field-scala-chain-scala"><i class="icofont-laika link">&#xef71;</i></a>Typeclass hierarchy (<code>RingModule.scala</code>, <code>Field.scala</code>, <code>Chain.scala</code>)</h2>
+        <pre class="mermaid">classDiagram
+    class RingModule {
+        &lt;&lt;typeclass: type Self, type R&gt;&gt;
+        zero: Self
+        plus(x, y) Self
+        minus(x, y) Self
+        negate(x) Self
+        scale(r, y) Self
+        +(rhs) Self
+        -(rhs) Self
+        unary_-() Self
+        R.⊠(t) Self
+    }
+    class Field {
+        &lt;&lt;typeclass: type Self&gt;&gt;
+        plus(x, y) Self
+        times(x, y) Self
+        divide(x, y) Self
+        invert(x) Self
+        zero: Self
+        one: Self
+    }
+    class HasDimension {
+        &lt;&lt;typeclass: type Self&gt;&gt;
+        dim: Int
+    }
+    class Cell {
+        &lt;&lt;typeclass: type Self, extends HasDimension&gt;&gt;
+        boundary~CoefficientT~() Seq~Tuple2~
+    }
+    class OrderedCell {
+        &lt;&lt;typeclass: type Self : Ordering as ordering, extends Cell&gt;&gt;
+    }
+    class OrderedBasis {
+        &lt;&lt;typeclass: type Self, requires CellT:Ordering, CoefficientT:Field&gt;&gt;
+        leadingCell: Option~CellT~
+        leadingCoefficient: CoefficientT
+        leadingTerm: Tuple2
+    }
+    HasDimension &lt;|-- Cell
+    Cell &lt;|-- OrderedCell
+    Simplex ..|&gt; OrderedCell : given instance
+    Cube ..|&gt; OrderedCell : given instance
+    FiniteSimplicialSet ..|&gt; OrderedCell : per-instance given (cellInstance)
+    Chain ..|&gt; OrderedBasis : given instance
+    Chain ..|&gt; RingModule : given instance</pre>
+        <p>Three concrete <code>OrderedCell</code> instances exist: <code>Simplex[VertexT]</code>, <code>Cube</code>, and a <code>FiniteSimplicialSet[G]</code>&#39;s
+        own generators (that last one is a per-instance <code>given</code>, not a global one, since its boundary depends on
+        that particular simplicial set&#39;s own face data). There is no dual <code>Cocell</code>/<code>OrderedCocell</code> trait pair (an
+        earlier version had one; removed as the wrong shape for coboundary, which is extrinsic to a cell, not
+        intrinsic like <code>boundary</code>) — <code>RipserCohomologyContext</code>/<code>PackedRipserCohomologyContext</code> compute coboundaries
+        directly against <code>SimplexIndexing</code> instead (see <a href="persistence-engines.html">Persistence engines</a>). See the
+        <a href="scala3-primer.html">Scala 3 primer</a> for what &quot;typeclass: type Self&quot; and &quot;given instance&quot; mean concretely in
+        this codebase&#39;s syntax.</p>
+        
+        <h2 id="chain-cellt-coefficientt-chain-scala" class="section"><a class="anchor-link left" href="#chain-cellt-coefficientt-chain-scala"><i class="icofont-laika link">&#xef71;</i></a><code>Chain[CellT, CoefficientT]</code> (<code>Chain.scala</code>)</h2>
+        <pre class="mermaid">classDiagram
+    class Chain {
+        -entries: PriorityQueue~Tuple2~
+        collapseHead() Unit
+        collapseAll() Unit
+        isZero() Boolean
+        items: Seq~Tuple2~
+    }
+    class `Chain$` {
+        &lt;&lt;companion object&gt;&gt;
+        empty~CellT,CoefficientT~() Chain
+        apply(cs: Tuple2*) Chain
+        from(cs: Seq~Tuple2~) Chain
+        reduceBy(z, basis, log) Tuple2
+        reduceByUntil(z, basis, log, stop) Tuple2
+    }
+    `Chain$` ..&gt; Chain : constructs</pre>
+        <p><code>reduceBy</code>/<code>reduceByUntil</code> are the shared reduction primitives every persistence engine in <code>Homology.scala</code>
+        builds on — see <a href="architecture.html">Architecture</a> and
+        <a href="gotchas.html">Hard-won invariants #4</a>.</p>
+        
+        <h2 id="simplex-vertext-simplex-scala-simplexops-scala" class="section"><a class="anchor-link left" href="#simplex-vertext-simplex-scala-simplexops-scala"><i class="icofont-laika link">&#xef71;</i></a><code>Simplex[VertexT]</code> (<code>Simplex.scala</code>, <code>SimplexOps.scala</code>)</h2>
+        <pre class="mermaid">classDiagram
+    class Simplex {
+        &lt;&lt;opaque type = SortedSet~VertexT~&gt;&gt;
+        underlying: SortedSet~VertexT~
+        dim: Int
+        boundary~CoefficientT~() Seq~Tuple2~
+    }
+    class `Simplex$` {
+        &lt;&lt;companion object&gt;&gt;
+        apply(vertices: VertexT*) Simplex
+        from(vertices: Seq~VertexT~) Simplex
+        unapplySeq(s: Simplex) Option~Seq~
+    }
+    Simplex ..|&gt; OrderedCell : given defaultSimplexIsOrderedCell</pre>
+        <p><code>SimplexOps.scala</code> adds a large <code>extension</code> block delegating most of <code>SortedSet</code>&#39;s surface (<code>.size</code>,
+        <code>.map</code>, <code>.union</code>, <code>.dropIndex</code>, ...) so <code>Simplex</code> &quot;feels like&quot; a set even though it&#39;s a zero-cost opaque
+        wrapper at runtime — see the <a href="scala3-primer.html">primer</a>.</p>
+        
+        <h2 id="streams-simplexstream-scala-simplexindexing-scala-vietorisrips-scala" class="section"><a class="anchor-link left" href="#streams-simplexstream-scala-simplexindexing-scala-vietorisrips-scala"><i class="icofont-laika link">&#xef71;</i></a>Streams (<code>SimplexStream.scala</code>, <code>SimplexIndexing.scala</code>, <code>VietorisRips.scala</code>)</h2>
+        <pre class="mermaid">classDiagram
+    class Filtration {
+        &lt;&lt;typeclass: CellT:Cell, FiltrationT:Ordering,FiltrationT:Filterable&gt;&gt;
+        filtrationValue: PartialFunction
+    }
+    class CellStream {
+        &lt;&lt;typeclass: extends Filtration, IterableOnce&gt;&gt;
+        filtrationOrdering: Ordering~CellT~
+    }
+    class SimplexStream {
+        &lt;&lt;CellStream specialized to Simplex~VertexT~&gt;&gt;
+    }
+    class StratifiedCellStream {
+        iterateDimension: PartialFunction~Int, Iterator~
+    }
+    Filtration &lt;|-- CellStream
+    CellStream &lt;|-- SimplexStream
+    CellStream &lt;|-- StratifiedCellStream
+    SimplexStream &lt;|-- StratifiedSimplexStream
+    StratifiedCellStream &lt;|-- StratifiedSimplexStream
+    StratifiedSimplexStream &lt;|-- CofaceSimplexStream
+    CofaceSimplexStream &lt;|-- EnumeratingCofaceSimplexStream
+    EnumeratingCofaceSimplexStream &lt;|-- RipserCofaceSimplexStream
+    RipserCofaceSimplexStream &lt;|-- CechCofaceSimplexStream
+    RipserCofaceSimplexStream &lt;|-- LazyWitnessSimplexStream
+    RipserCofaceSimplexStream &lt;|-- WitnessCofaceSimplexStream
+    RipserCofaceSimplexStream &lt;|-- SheehyRipsSimplexStream
+    RipserCofaceSimplexStream &lt;|-- DowkerCofaceSimplexStream
+    EnumeratingCofaceSimplexStream &lt;|-- InorderCofaceSimplexStream
+    SimplexStream &lt;|-- ExplicitStream
+    StratifiedSimplexStream &lt;|-- RecursiveStackVietorisRipsSimplexStream
+    StratifiedSimplexStream &lt;|-- IncrementalVietorisRipsSimplexStream
+    StratifiedSimplexStream &lt;|-- AlphaShapes
+    AlphaShapes &lt;|-- HelixDelaunay
+    AlphaShapes &lt;|-- AlphaShapeDQP
+    StratifiedCellStream &lt;|-- CubicalGridStream
+    StratifiedCellStream &lt;|-- ExplicitCubicalStream
+    CellStream &lt;|-- SimplicialSetStream
+    StratifiedCellStream &lt;|-- FilteredSimplicialSetStream</pre>
+        <p>These are <strong>alternate stream implementations with a common output contract, not layers on top of one
+        another</strong> — see <a href="architecture.html">Architecture</a>. <code>CubicalGridStream</code>/<code>ExplicitCubicalStream</code> produce
+        <code>Cube</code>s rather than <code>Simplex</code>es; <code>SimplicialSetStream</code>/<code>FilteredSimplicialSetStream</code> produce a
+        <code>FiniteSimplicialSet[G]</code>&#39;s own generator type <code>G</code>.</p>
+        
+        <h2 id="persistence-engines-homology-homology-scala-homology-packedripsercohomology-scala-homology-fastcubicalhomology-scala-homology-fastalphahomology-scala" class="section"><a class="anchor-link left" href="#persistence-engines-homology-homology-scala-homology-packedripsercohomology-scala-homology-fastcubicalhomology-scala-homology-fastalphahomology-scala"><i class="icofont-laika link">&#xef71;</i></a>Persistence engines (<code>homology/Homology.scala</code>, <code>homology/PackedRipserCohomology.scala</code>, <code>homology/FastCubicalHomology.scala</code>, <code>homology/FastAlphaHomology.scala</code>)</h2>
+        <p>Deliberately <em>not</em> diagrammed field-by-field here — their exact state and trust status belongs in one
+        place. See <a href="persistence-engines.html">Persistence engines</a> for the full, current picture across
+        <code>CellularHomologyContext</code>/<code>SimplicialHomologyContext</code>,
+        <code>CellularPersistenceInChunksContext</code>/<code>PersistenceInChunksContext</code>,
+        <code>RipserCohomologyContext</code>, <code>PackedRipserCohomologyContext</code>, <code>CellularCohomologyContext</code>,
+        <code>FastCubicalHomologyContext</code> and <code>FastAlphaHomologyContext</code> (<code>HelixDelaunay</code> alpha complexes) -- both valid at
+        any ambient dimension <code>&gt;= 2</code>, both via a <code>chunks</code> hybrid above 2D -- wired into <code>matlab</code>/<code>cli</code> as
+        <code>engine=&quot;fast-cubical&quot;</code>/<code>engine=&quot;fast-alpha&quot;</code>.</p>
+        
+        <h2 id="circular-coordinates-homology-circularcoordinates-scala" class="section"><a class="anchor-link left" href="#circular-coordinates-homology-circularcoordinates-scala"><i class="icofont-laika link">&#xef71;</i></a>Circular coordinates (<code>homology/CircularCoordinates.scala</code>)</h2>
+        <pre class="mermaid">classDiagram
+    class CircularCoordinates {
+        &lt;&lt;object&gt;&gt;
+        h1Bars(metricSpace, maxFiltrationValue) IndexedSeq~(Double, Double)~
+        compute(metricSpace, r, cocycleIndex, prime, maxFiltrationValue) Result
+    }
+    class Result {
+        theta: Map~Int, Double~
+        birth: Double
+        death: Double
+        r: Double
+        prime: Int
+    }
+    class NoIntegerCocycleException {
+        &lt;&lt;RuntimeException&gt;&gt;
+    }
+    CircularCoordinates --&gt; Result : returns
+    CircularCoordinates ..&gt; CellularCohomologyContext : computes K_r&#39;s cohomology with
+    CircularCoordinates ..&gt; NoIntegerCocycleException : throws (no ℤ-lift at prime)</pre>
+        <p>A standalone construction, not a fifth persistence engine — see <a href="architecture.html">Architecture</a>&#39;s own
+        <code>homology.CircularCoordinates</code> section for the truncated-complex reframing, the harmonic-smoothing linear
+        system, and why the output is a per-point angle map rather than a barcode.</p>
+        
+        <h2 id="metric-spaces-finitemetricspace-scala" class="section"><a class="anchor-link left" href="#metric-spaces-finitemetricspace-scala"><i class="icofont-laika link">&#xef71;</i></a>Metric spaces (<code>FiniteMetricSpace.scala</code>)</h2>
+        <pre class="mermaid">classDiagram
+    class FiniteMetricSpace {
+        &lt;&lt;typeclass: type VertexT&gt;&gt;
+        distance(x, y) Double
+        size: Int
+        elements: Iterable~VertexT~
+        minimumEnclosingRadius: Double
+    }
+    FiniteMetricSpace &lt;|-- IntMetricSpace
+    FiniteMetricSpace &lt;|-- ExplicitMetricSpace
+    FiniteMetricSpace &lt;|-- EuclideanMetricSpace
+    FiniteMetricSpace &lt;|-- SparseMetricSpace
+    class SpatialQuery {
+        &lt;&lt;typeclass: type VertexT&gt;&gt;
+        neighbors(v, epsilon) Set~VertexT~
+    }
+    SpatialQuery &lt;|-- JVPTree
+    SpatialQuery &lt;|-- BruteForce
+    SparseMetricSpace --&gt; SpatialQuery : uses (JVPTree)</pre>
+        
+        <h2 id="barcode-representation-barcode-scala-package-org-appliedtopology-tda4j-barcode" class="section"><a class="anchor-link left" href="#barcode-representation-barcode-scala-package-org-appliedtopology-tda4j-barcode"><i class="icofont-laika link">&#xef71;</i></a>Barcode representation (<code>Barcode.scala</code>, package <code>org.appliedtopology.tda4j.barcode</code>)</h2>
+        <pre class="mermaid">classDiagram
+    class BarcodeEndpoint {
+        &lt;&lt;sealed trait&gt;&gt;
+        flip() BarcodeEndpoint
+        isFinite: Boolean
+    }
+    BarcodeEndpoint &lt;|-- PositiveInfinity
+    BarcodeEndpoint &lt;|-- NegativeInfinity
+    BarcodeEndpoint &lt;|-- OpenEndpoint
+    BarcodeEndpoint &lt;|-- ClosedEndpoint
+    class PersistenceBar {
+        dim: Int
+        lower: BarcodeEndpoint
+        upper: BarcodeEndpoint
+        annotation: Option~AnnotationT~
+    }
+    class Barcode {
+        isMap(source, target, matrix) Boolean
+        image(source, target, matrix) List~PersistenceBar~
+        kernel(source, target, matrix) List~PersistenceBar~
+        cokernel(source, target, matrix) List~PersistenceBar~
+    }
+    class BarcodeDistance {
+        &lt;&lt;object&gt;&gt;
+        bottleneckDistance(diagram1, diagram2, groundNorm) Double
+        wassersteinDistance(diagram1, diagram2, order, groundNorm) Double
+        bottleneckDistanceByDimension(diagram1, diagram2, groundNorm) Map~Int, Double~
+        wassersteinDistanceByDimension(diagram1, diagram2, order, groundNorm) Map~Int, Double~
+    }
+    class Vectorization {
+        &lt;&lt;object&gt;&gt;
+        landscape(diagram, numLevels, tMin, tMax, resolution) Array~Array~Double~~
+        persistenceImage(diagram, sigma, birthRange, persistenceRange, birthResolution, persistenceResolution, weightCap) Array~Array~Double~~
+    }
+    BarcodeDistance ..&gt; PersistenceBar : reads
+    Vectorization ..&gt; PersistenceBar : reads</pre>
+        <p><code>AnnotationT</code> in practice is always <code>Chain[CellT, CoefficientT]</code> — the representative cycle/cocycle for a
+        bar, when an engine tracks one. <code>BarcodeDistance</code>/<code>Vectorization</code> only ever read a bar&#39;s <code>dim</code>/<code>lower</code>/<code>upper</code>
+        (never <code>annotation</code>), and are specialized to <code>PersistenceBar[Double, _]</code> rather than sharing <code>Barcode</code>&#39;s own
+        <code>FiltrationT: Ordering</code> genericity — see <a href="architecture.html">Architecture</a>&#39;s &quot;<code>Barcode.scala</code>&quot; section
+        for why, and for <code>BipartiteMatching.scala</code>&#39;s two package-private combinatorial primitives
+        (<code>HopcroftKarp</code>/<code>Hungarian</code>) <code>BarcodeDistance</code> is built on, omitted here as an implementation detail rather
+        than part of this package&#39;s public shape.</p>
+
+        
+<hr class="footer-rule"/>
+<footer>
+  MIT License © Mikael Vejdemo-Johansson, Daniel Hope
+</footer>
+
+
+      </main>
+
+    </div>
+
+  </body>
+
+</html>

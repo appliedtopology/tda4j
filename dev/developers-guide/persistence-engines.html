@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="generator" content="Typelevel Laika + Helium Theme" />
+  <title>Persistence engines: what to trust, and why</title>
+  
+  <meta name="author" content="Mikael Vejdemo-Johansson"/>
+  
+  <meta name="author" content="Jordan Matuszewski"/>
+  
+  <meta name="author" content="Kei Kebreau"/>
+  
+  
+  <meta name="description" content="A Java Platform compatible library for topological data analysis (TDA)."/>
+  
+  
+  
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato:400,700">
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Fira+Mono:500">
+  
+  <link rel="stylesheet" type="text/css" href="../helium/site/icofont.min.css" />
+    <link rel="stylesheet" type="text/css" href="../helium/site/laika-helium.css" />
+    <style>
+
+.breadcrumb { display: flex; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 1.5rem 0; }
+.breadcrumb li { margin: 0; }
+.breadcrumb li a { display: inline; padding: 0; }
+.breadcrumb li:not(:last-child)::after { content: "\203A"; margin: 0 0.4em; color: var(--secondary-color); }
+
+</style>
+  <script src="../helium/site/laika-helium.js"></script>
+  <script>initVersions("../", "", "", null);</script>
+  
+  <script> /* for avoiding page load transitions */ </script>
+</head>
+
+  <body>
+
+    <header id="top-bar" class="light-default dark-default">
+
+  <div class="row">
+    <a id="nav-icon">
+      <i class="icofont-laika navigationMenu" title="Navigation">&#xefa2;</i>
+    </a>
+    
+    <div class="menu-container version-menu">
+      <a class="text-link menu-toggle" href="#">Choose Version</a>
+      <nav class="menu-content">
+        <ul class="nav-list">
+        </ul>
+      </nav>
+    </div>
+  </div>
+
+  <a class="icon-link glyph-link" href="../"><i class="icofont-laika home" title="Home">&#xef47;</i></a>
+
+  <div class="row links">
+    
+    <a class="icon-link svg-link" href="../api/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/appliedtopology/tda4j"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+  </div>  
+
+</header>
+
+    <nav id="sidebar">
+
+  <div class="row">
+    
+    <a class="icon-link svg-link" href="../api/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/appliedtopology/tda4j"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+  </div>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="../downloads.html">Downloads</a></li>
+    <li class="level1 nav-leaf"><a href="../tutorials/">Tutorials for TDA4j</a></li>
+    <li class="level1 nav-leaf"><a href="../user-guide/">User Guide for TDA4j</a></li>
+    <li class="level1 nav-node"><a href="index.html">Developer&#39;s Guide for TDA4j</a></li>
+    <li class="level2 nav-leaf"><a href="scala3-primer.html">A Scala 3.7+ primer for this codebase</a></li>
+    <li class="level2 nav-leaf"><a href="architecture.html">Architecture: from algebra to a filtration stream</a></li>
+    <li class="level2 active nav-leaf"><a href="#">Persistence engines: what to trust, and why</a></li>
+    <li class="level2 nav-leaf"><a href="gotchas.html">Hard-won invariants you must not break</a></li>
+    <li class="level2 nav-leaf"><a href="degeneracies.html">Degeneracy behaviors that look like bugs but aren&#39;t</a></li>
+    <li class="level2 nav-leaf"><a href="alpha-complex.html">Alpha complex: DQP vs Helix</a></li>
+    <li class="level2 nav-leaf"><a href="class-diagrams.html">Mapping the library: class diagrams</a></li>
+  </ul>
+
+</nav>
+
+    <div id="container">
+
+      
+<nav id="page-nav">
+  <p class="header"><a href="#">Persistence engines: what to trust, and why</a></p>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="#_1-cellularhomologycontext-simplicialhomologycontext-reference-grade-generic">1. <code>CellularHomologyContext</code> / <code>SimplicialHomologyContext</code> — reference-grade, generic</a></li>
+    <li class="level1 nav-leaf"><a href="#_2-cellularpersistenceinchunkscontext-persistenceinchunkscontext-chunked-generic">2. <code>CellularPersistenceInChunksContext</code> / <code>PersistenceInChunksContext</code> — chunked, generic</a></li>
+    <li class="level1 nav-leaf"><a href="#_3-ripsercohomologycontext-test-reference-oracle-for-engine-4">3. <code>RipserCohomologyContext</code> — test/reference oracle for engine 4</a></li>
+    <li class="level1 nav-leaf"><a href="#_4-packedripsercohomologycontext-the-production-ripser-engine">4. <code>PackedRipserCohomologyContext</code> — the production Ripser engine</a></li>
+    <li class="level1 nav-leaf"><a href="#_5-cellularcohomologycontext-generic-cohomology-for-every-cell-type">5. <code>CellularCohomologyContext</code> — generic cohomology, for every cell type</a></li>
+    <li class="level1 nav-leaf"><a href="#_6-fastcubicalhomologycontext-dual-graph-union-find-any-ambient-dimension-2">6. <code>FastCubicalHomologyContext</code> — dual-graph union-find, any ambient dimension &gt;= 2</a></li>
+    <li class="level1 nav-leaf"><a href="#_7-fastalphahomologycontext-engine-6-s-own-dual-union-find-ported-to-helixdelaunay">7. <code>FastAlphaHomologyContext</code> — engine 6&#39;s own dual union-find, ported to <code>HelixDelaunay</code></a></li>
+    <li class="level1 nav-leaf"><a href="#streams-engines-what-works-with-what">Streams × engines: what works with what</a></li>
+    <li class="level1 nav-leaf"><a href="#choosing-an-engine">Choosing an engine</a></li>
+  </ul>
+
+  <p class="footer"></p>
+</nav>
+
+
+      <main class="content">
+
+        <ul class="breadcrumb nav-list">
+          <li class="level1 breadcrumb nav-leaf"><a href="../">TDA4j</a></li>
+          <li class="level1 breadcrumb nav-leaf"><a href="index.html">Developer&#39;s Guide for TDA4j</a></li>
+          <li class="level1 breadcrumb active nav-leaf"><a href="#">Persistence engines: what to trust, and why</a></li>
+        </ul>
+
+        <h1 id="persistence-engines-what-to-trust-and-why" class="title">Persistence engines: what to trust, and why</h1>
+        <p><code>homology/Homology.scala</code>, <code>homology/PackedRipserCohomology.scala</code>, <code>homology/Cohomology.scala</code>,
+        <code>homology/FastCubicalHomology.scala</code>, and <code>homology/FastAlphaHomology.scala</code> contain <strong>five
+        independently-implemented algorithms across seven concrete classes</strong> (the last two classes share one
+        algorithm — a dual-graph union-find via Alexander duality — applied to two different cell types, the same
+        &quot;one algorithm, several concrete classes&quot; relationship engines 3/4 already have). They share the <code>Chain</code>
+        reduction primitives from <a href="architecture.html">Architecture</a>, but they are not variants of one shared engine — a
+        fix or bug found in one does not imply anything about the others. Read this page before choosing which engine
+        to build on.</p>
+        <p>Three of the five (<code>CellularHomologyContext</code>, <code>CellularPersistenceInChunksContext</code>, <code>CellularCohomologyContext</code>)
+        additionally implement the common <code>homology.PersistenceEngine[CellT, C]</code> trait (<code>def barcode(stream): List[
+PersistenceBar[Double, Chain[CellT, C]]]</code>) via <code>PersistenceEngine.naive</code>/<code>.chunks</code>/<code>.cohomology</code> factories — a
+        thin, opt-in adapter over each engine&#39;s own incremental API, for a caller (the MATLAB/CLI facade) that just
+        wants a finished barcode without hand-writing each engine&#39;s own construct/advance/read dance. It does not
+        change any engine&#39;s own contract; the incremental API (<code>advanceTo</code>/<code>diagramAt</code>/<code>barcodeAt</code>) stays available on
+        the concrete class. <code>PackedRipserCohomologyContext</code>/<code>RipserCohomologyContext</code> don&#39;t implement it — they consume
+        a <code>FiniteMetricSpace[Int]</code> directly, not a stream (see engine 4 below).</p>
+        
+        <h2 id="_1-cellularhomologycontext-simplicialhomologycontext-reference-grade-generic" class="section"><a class="anchor-link left" href="#_1-cellularhomologycontext-simplicialhomologycontext-reference-grade-generic"><i class="icofont-laika link">&#xef71;</i></a>1. <code>CellularHomologyContext</code> / <code>SimplicialHomologyContext</code> — reference-grade, generic</h2>
+        <p><code>CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]</code> is the naive
+        single-pivot-table boundary-reduction algorithm: process cells in filtration order, reduce each cell&#39;s
+        boundary against pivots recorded so far via <code>Chain.reduceBy</code>, and the cell either opens a class (reduced
+        boundary is zero) or closes one. No clearing, no chunking, no cohomology/twist optimization. Generic over
+        <em>any</em> <code>CellT: OrderedCell</code> — this is what makes it the engine <code>Cube</code> and <code>FiniteSimplicialSet</code> slot into
+        with no new engine code (<code>CubicalHomologyContext</code>, <code>SimplicialHomologyContext</code> are one-line specializations
+        of it). It&#39;s the <strong>oracle every other engine here gets cross-validated against</strong>.</p>
+        <p>It&#39;s also the only engine with genuine incremental querying: <code>HomologyState.advanceOne()</code>/<code>advanceTo(f)</code>/
+        <code>advanceAll()</code>, and <code>diagramAt(f)</code>/<code>barcodeAt(f)</code> can be called mid-stream to get the diagram <em>as of</em>
+        filtration value <code>f</code>. <code>barcodeAt</code> annotates every bar with a real representative cycle, tracked via a
+        parallel V-column alongside the ordinary reduction. <code>TDAContext</code> (root <code>package.scala</code>) extends this class.</p>
+        
+        <h2 id="_2-cellularpersistenceinchunkscontext-persistenceinchunkscontext-chunked-generic" class="section"><a class="anchor-link left" href="#_2-cellularpersistenceinchunkscontext-persistenceinchunkscontext-chunked-generic"><i class="icofont-laika link">&#xef71;</i></a>2. <code>CellularPersistenceInChunksContext</code> / <code>PersistenceInChunksContext</code> — chunked, generic</h2>
+        <p><code>CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field](maxDim: Int = 5)</code> implements the
+        parallelizable &quot;clear-and-compress&quot; algorithm: local reduction per chunk, active-entry marking, then global
+        column compression/reduction. <code>PersistenceInChunksContext[VertexT, CoefficientT]</code> is a one-line
+        <code>Simplex</code>-specialized subclass, mirroring <code>SimplicialHomologyContext</code>&#39;s relationship to engine 1 — the class
+        has no <code>Simplex</code>-specific behavior anywhere in its body, so any <code>OrderedCell</code> slots in directly.</p>
+        <p>Dimensions 0 and 1 go through a dedicated union-find fast path (<code>unionFindDim01</code>) instead of the general
+        <code>Chain</code>-based reduction, since both dimensions are mathematically forced to agree with the general machinery
+        on a fixed total order — a real, measured win when a large point cloud&#39;s dimension-0/1 structure dominates
+        the complex. <code>barcodeAt(f)</code> returns a real representative for <strong>every</strong> bar, at every dimension, including
+        essential classes — reconstructed incrementally from this class&#39;s own already-computed
+        <code>boundaries</code>/<code>cleared</code>/<code>paired</code>/<code>killer</code> state (<code>vcolOf</code>, memoized) rather than by delegating to a second
+        engine run. <code>advanceAll()</code> runs the whole pipeline in one shot; there is no incremental querying the way
+        engine 1 has.</p>
+        
+        <h2 id="_3-ripsercohomologycontext-test-reference-oracle-for-engine-4" class="section"><a class="anchor-link left" href="#_3-ripsercohomologycontext-test-reference-oracle-for-engine-4"><i class="icofont-laika link">&#xef71;</i></a>3. <code>RipserCohomologyContext</code> — test/reference oracle for engine 4</h2>
+        <p>Persistent <em>co</em>homology via Ulrich Bauer&#39;s Ripser algorithm (arXiv:1908.02518), specialized to
+        <code>Simplex[Int]</code> Vietoris-Rips/clique complexes via <code>SimplexIndexing</code>&#39;s combinatorial number system — a
+        deliberate narrowing from the generic <code>CellT: OrderedCell</code> engines above. One-shot only
+        (<code>persistentCohomology()</code>, no incremental querying).</p>
+        <p><strong>This class is not what production code calls.</strong> <code>PackedRipserCohomologyContext</code> (engine 4) is a faithful
+        re-keying of the same algorithm onto a packed representation, and is what <code>matlab.TDA4j</code>&#39;s
+        <code>engine=&quot;ripser&quot;</code> actually uses. This class&#39;s remaining value is narrower than &quot;an independent check on the
+        Ripser algorithm&quot;: both classes share <code>SimplexIndexing</code>, so a bug there passes both silently (engine 1 is the
+        actually-independent oracle for the algorithm itself). What this class <em>does</em> catch is anything specific to
+        engine 4&#39;s own packed representation — its <code>DiameterIndex</code> carrier&#39;s index-only <code>equals</code>/<code>hashCode</code>, its
+        index-keyed lookup maps — that no other spec would flag. Its <code>Simplex[Int]</code>-keyed chains are also more
+        directly legible for hand-debugging. Kept fully maintained; don&#39;t add new production call sites against it.</p>
+        <p>Structural points worth knowing:</p>
+        <ul>
+          <li><strong>Clearing is required for correctness, not an optional speedup</strong>: a simplex already claimed as a pivot
+          one dimension down must be excluded from the next dimension&#39;s essential-index count entirely, not merely
+          checked for &quot;does its own column reduce to zero&quot; — Definition 3.2/Proposition 3.1 of the paper.</li>
+          <li><strong>Apparent pairs (Definition 3.2/Proposition 3.9) are partially implemented</strong>: a genuine mutual
+          apparent-pair check identifies the pivot directly and skips <code>Chain.reduceBy</code>&#39;s reduction pass for it (a
+          measured 1.35x-1.8x win, growing with complex size). What is <em>not</em> implemented is Ripser&#39;s further
+          optimization of never building an apparent simplex&#39;s coboundary at all — <code>coboundaryOf(sigma)</code> is still
+          called in full on the shortcut path, since <code>basis(tau)</code> needs the complete reduced column, not a truncated
+          stand-in. Getting the fully lazy version would also require restructuring how each dimension&#39;s candidate
+          simplices are enumerated in the first place (currently eager, unlike Ripser&#39;s own incrementally-assembled
+          <code>columns_to_reduce</code>) — a larger, separate project.</li>
+        </ul>
+        
+        <h2 id="_4-packedripsercohomologycontext-the-production-ripser-engine" class="section"><a class="anchor-link left" href="#_4-packedripsercohomologycontext-the-production-ripser-engine"><i class="icofont-laika link">&#xef71;</i></a>4. <code>PackedRipserCohomologyContext</code> — the production Ripser engine</h2>
+        <p>Same algorithm as engine 3, method for method, keyed on a packed <code>(Double, Long)</code> diameter/combinatorial-
+        index pair (<code>DiameterIndex</code>) instead of a materialized <code>Simplex[Int]</code>. This is what <code>matlab.TDA4j</code>&#39;s
+        <code>engine=&quot;ripser&quot;</code> calls, and the fastest, most memory-efficient engine in the library — a deliberate
+        representation choice on top of an already-validated algorithm, not a new algorithm. Kept in its own file,
+        separate from the three generic-<code>OrderedCell</code> algorithms in <code>Homology.scala</code>, since it&#39;s specific to
+        Vietoris-Rips/<code>SimplexIndexing</code> rather than a general engine.</p>
+        <p><code>DiameterIndex</code> overrides <code>equals</code>/<code>hashCode</code> to consider only the combinatorial index, not the diameter —
+        so &quot;same simplex&quot; is true by construction regardless of which floating-point path computed its diameter,
+        sidestepping a real footgun (two carriers for the same simplex comparing unequal on floating-point noise).</p>
+        
+        <h2 id="_5-cellularcohomologycontext-generic-cohomology-for-every-cell-type" class="section"><a class="anchor-link left" href="#_5-cellularcohomologycontext-generic-cohomology-for-every-cell-type"><i class="icofont-laika link">&#xef71;</i></a>5. <code>CellularCohomologyContext</code> — generic cohomology, for every cell type</h2>
+        <p>Persistent <em>co</em>homology, generic over <code>CellT: OrderedCell</code> — the cohomology counterpart to engine 1, filling
+        in what used to be a real asymmetry: cohomology in this codebase meant engines 3/4 only, both hardcoded to
+        <code>Simplex[Int]</code>. <code>Cube</code>, <code>FiniteSimplicialSet</code> generators, and <code>Simplex[Int]</code> complexes that aren&#39;t
+        Vietoris-Rips (Cech, Alpha, the general witness complex) had no cohomology option at all before this class —
+        not even Cech/Alpha, despite sharing <code>Simplex[Int]</code> as a cell type, since engines 3/4&#39;s speed optimizations
+        (<code>insertionDiameter</code>, apparent pairs) are proven specifically for the max-pairwise-distance functional, not
+        Cech&#39;s circumradius, Alpha&#39;s own filtration, or the general witness complex&#39;s per-dimension threshold. (The
+        <em>lazy</em> witness complex is the one exception among these: it genuinely IS a max-pairwise-distance flag
+        complex under its own <code>WitnessMetricSpace</code>, so engines 3/4 both work for it directly — see
+        <code>architecture.md</code>&#39;s &quot;Witness complexes&quot; section.)</p>
+        <p><strong>The key idea</strong>: the coboundary matrix persistent cohomology reduces is the transpose of the ordinary
+        boundary matrix, same coefficients. Every stream this class targets already gets fully materialized before
+        persistence runs (unlike Vietoris-Rips at the scale engines 3/4 target), so this class builds the coboundary
+        relation directly by inverting each materialized cell&#39;s own <code>boundary[CoefficientT]</code> call, one dimension band
+        at a time (built, used, and discarded before moving to the next dimension, bounding peak memory to the
+        largest single band) — no <code>SimplexIndexing</code>-style combinatorial machinery, and no per-cell-type coboundary
+        formula.</p>
+        <p><strong>No <code>maxDim</code> parameter, and no apparent pairs — both deliberate.</strong> This class computes cohomology up to
+        whatever top dimension the materialized stream actually contains; a caller wanting only <code>H_0..H_k</code> truncates
+        the <em>input stream</em> first (<code>LimitedCofaceSimplexStream(stream, k + 1)</code>, the same mechanism engine 3&#39;s own test
+        suite and <code>engine=&quot;naive&quot;</code> already use) and drops <code>dim == k + 1</code> bars from the result afterward — deleting a
+        whole footgun class (engines 2, 3, and 4 each had to fix a &quot;<code>maxDim</code> means top built vs. top reported degree&quot;
+        bug once) rather than reimplementing it a fifth time. Apparent pairs&#39; entire point is avoiding coboundary
+        <em>enumeration</em> — this class has none to avoid, since it must materialize the coboundary relation for every
+        cell up front just to have &quot;coboundary&quot; exist at all; porting the mutual-pair check would save a <code>basis</code> write
+        and one already-cheap <code>Chain.reduceBy</code> call, noise-level and not worth the machinery. See
+        <code>.claude/DESIGN-generic-cohomology.md</code> for the full derivation of both calls.</p>
+        <p><strong>Representatives</strong>: every bar carries a V-column, the same way engines 3/4 already track one. Only an
+        <em>essential</em> bar&#39;s V-column is a genuine cocycle (<code>d(vcol) = 0</code>) by construction — a finite bar&#39;s V-column has
+        coboundary equal to its own nonzero reduced pivot chain instead (still a valid representative on the bar&#39;s own
+        living interval, just not a cocycle over the whole complex). <code>coboundaryOfChain</code> exists specifically to check
+        this for essential bars. This is also the class&#39;s actual point, not an afterthought: over a field the
+        cohomology barcode is identical to the homology barcode, so a bars-only version would be entirely redundant
+        with engine 1, which already covers every cell type this class does.</p>
+        <p>There is no <code>Cocell</code>/<code>OrderedCocell</code> typeclass backing this (an earlier, unimplemented, dual-to-<code>Cell</code> trait
+        pair was removed outright while building this class) — coboundary is <em>extrinsic</em> to a cell (it depends on
+        which higher-dimensional cells exist in the ambient complex), not intrinsic the way <code>boundary</code> is, so a
+        per-cell <code>coboundary</code> method with no complex to consult was never the right shape.</p>
+        
+        <h2 id="_6-fastcubicalhomologycontext-dual-graph-union-find-any-ambient-dimension-2" class="section"><a class="anchor-link left" href="#_6-fastcubicalhomologycontext-dual-graph-union-find-any-ambient-dimension-2"><i class="icofont-laika link">&#xef71;</i></a>6. <code>FastCubicalHomologyContext</code> — dual-graph union-find, any ambient dimension &gt;= 2</h2>
+        <p>Flash Cubical (Le Breton-Szustakowski-Piraud, arXiv:2606.04801): a genuinely different algorithm from engines
+        1/2 above, not a faster re-keying the way engine 4 is for engine 3. Specialized to <code>CubicalGridStream</code>
+        directly (like engines 3/4 are specialized to <code>Simplex[Int]</code> Vietoris-Rips) rather than generic over
+        <code>CellT: OrderedCell</code> — it reads the grid&#39;s own <code>shape</code>/<code>ambientDim</code>/<code>topCellValue</code> directly, so it does not
+        implement <code>PersistenceEngine[CellT, C]</code> either, for the same &quot;honest asymmetry&quot; reason that trait&#39;s own doc
+        comment already gives for engines 3/4.</p>
+        <p><strong>Valid at any ambient dimension <code>&gt;= 2</code></strong> (a <code>require</code>d precondition <code>matlab.TDA4j</code>/<code>cli</code> both check before
+        ever calling it, with a clear message rather than a generic exception). At <code>d=2</code>, <code>H_0</code> (an ordinary primal
+        union-find, ascending filtration order, elder rule) plus <code>H_1</code> (via the dual construction below) together
+        account for every nontrivial cell dimension a 2D grid has — <code>H_2</code> is identically zero for any subcomplex of a
+        2D grid (a bounded planar region has no 2-dimensional voids to detect), so nothing is being skipped. At <code>d &gt;=
+3</code> there are <code>d-2</code> &quot;middle&quot; dimensions (<code>1 &lt;= k &lt;= d-2</code>) with no duality shortcut; these are handed to
+        <code>CellularPersistenceInChunksContext</code> run on a <code>LimitedCubicalGridStream</code> view that hides the real
+        top-dimensional cells entirely, so the (often largest) top dimension never touches general <code>Chain</code> reduction —
+        still a real, if shrinking-with-<code>d</code>, win, and no new hardcoded dimension ceiling (<code>chunks</code> is already fully
+        general over <code>d</code>). See <code>.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md</code> for the full derivation,
+        including why the dual union-find&#39;s own correctness doesn&#39;t depend on how the middle dimensions get resolved;
+        cross-validated against the naive engine at <code>d=3</code> (hand fixtures, Fp(3) sign-genericity, a random property
+        test) plus one <code>d=4</code> smoke test, not validated at <code>d &gt;= 5</code>.</p>
+        <p><strong>The dual construction</strong>: top cells (pixels) become dual vertices, codimension-1 cells (facets) become dual
+        edges connecting the 1 or 2 top cells containing them (a shared <code>∞</code> sentinel vertex, fixed at <code>+Infinity</code>,
+        stands in for a facet&#39;s missing side on the grid&#39;s own outer boundary). Primal <code>H_{d-1}</code> of the sublevel
+        filtration equals ordinary <code>H_0</code> of this dual graph&#39;s own SUPERLEVEL filtration (Alexander duality,
+        <code>H_{d-1}(X) ≅ H^0(S^d \ X)</code>), computed by the same elder-rule array union-find engine 2&#39;s own <code>unionFindDim01</code>
+        uses, processing dual vertices/edges together in DESCENDING order of primal value, with every resulting bar&#39;s
+        endpoints swapped. <code>∞</code> must be the unconditional elder of any merge it takes part in — not just because
+        <code>birthOf(∞) = +Infinity</code> is <em>usually</em> the largest value, but enforced explicitly, since a real top cell can
+        also carry <code>topValue = +Infinity</code> (this codebase&#39;s own &quot;permanently missing cell&quot; convention, e.g. Perseus&#39;s
+        <code>-1</code>) and tie against it.</p>
+        <p><strong>Representatives</strong>: each active dual component tracks its own running signed sum of top cells, oriented
+        coherently as merges happen so a dying component&#39;s boundary is exactly the <code>H_{d-1}</code> cycle bounding it — the
+        orientation flip needed at each merge is solved directly from the connecting facet&#39;s own boundary coefficients
+        (always <code>±1</code>, <code>cubeIsOrderedCell</code>&#39;s alternating-sign rule) and each side&#39;s own already-established sign,
+        matching this codebase&#39;s design principle of representatives from every engine, not just this one&#39;s own
+        speed. This is this codebase&#39;s <em>own</em> extension: the source paper is F2-only and barcode-only.</p>
+        <p>No paper access (network-blocked) and no existing implementation to port (unlike engine 4&#39;s GUDHI-verified
+        edge-collapse precedent) meant this is an original derivation from Alexander duality, not a translation — see
+        the design note for the full derivation and a hand-verified worked example, checked before any code was
+        written.</p>
+        
+        <h2 id="_7-fastalphahomologycontext-engine-6-s-own-dual-union-find-ported-to-helixdelaunay" class="section"><a class="anchor-link left" href="#_7-fastalphahomologycontext-engine-6-s-own-dual-union-find-ported-to-helixdelaunay"><i class="icofont-laika link">&#xef71;</i></a>7. <code>FastAlphaHomologyContext</code> — engine 6&#39;s own dual union-find, ported to <code>HelixDelaunay</code></h2>
+        <p>Same algorithm as engine 6, applied to <code>HelixDelaunay</code>&#39;s top simplices instead of a cubical grid&#39;s top cells
+        (<code>.claude/DESIGN-alpha-dual-unionfind.md</code>, <code>alpha-complex.md</code>&#39;s own <code>FastAlphaHomologyContext</code> section for the
+        full derivation and its own newly-measured risk). <code>HelixDelaunay</code> specifically, never <code>AlphaComplexDQP</code>/
+        <code>AlphaShapeDQP</code> — the dual graph needs the full, untruncated triangulation (<code>AlphaComplexDQP.euclidean</code>&#39;s own
+        truncated mode is incompatible) and &quot;every facet has &lt;= 2 cofaces,&quot; which <code>AlphaShapeDQP</code>&#39;s own documented
+        cospherical-degeneracy hazard can violate directly by emitting an oversized simplex. <strong>Valid at any ambient
+        dimension <code>&gt;= 2</code>, same as engine 6</strong> (<code>.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md</code>): both
+        union-finds were already dimension-generic before this extension (only the <code>require</code> gated them to <code>d=2</code>), so
+        extending past 2D was purely a matter of handing the residual &quot;middle&quot; dimensions (<code>1 &lt;= k &lt;= d-2</code>) to
+        <code>PersistenceInChunksContext[Int, C]</code> run on a new <code>alpha.LimitedAlphaShapesStream</code> view (the <code>Simplex[Int]</code>
+        analogue of engine 6&#39;s own <code>LimitedCubicalGridStream</code> — needed because <code>HelixDelaunay</code>/<code>AlphaShapes</code> is a
+        <code>StratifiedSimplexStream</code>, not a <code>CofaceSimplexStream</code>, so the existing <code>LimitedCofaceSimplexStream</code> doesn&#39;t fit
+        it) that hides the real top-dimensional simplices. Sequenced AFTER engine 6&#39;s own hybrid was validated, not
+        concurrently, because this engine ALSO carries the facet-multiplicity risk below, which needed its own fresh
+        measurement at <code>d=3</code> rather than assuming the <code>d=2</code> rate carried over — it does not.</p>
+        <p><strong>Unlike engine 6, this precondition is not guaranteed by construction</strong>, and the rate is NOT flat across
+        dimension or point count: roughly 1-in-18700 on random points at ambient dimension 2 (the original measurement)
+        but roughly 1-in-1666 at ambient dimension 3 with 20-30 points (vs. zero violations in 20000 trials with only
+        6-16 points at the same dimension) — see <code>alpha-complex.md</code> for the full measurement. A real <code>HelixDelaunay</code>
+        limitation, not a flaw in this construction, but a materially bigger one at <code>d=3</code> than the <code>d=2</code> figure alone
+        would suggest. Validates the precondition explicitly and throws the named <code>FastAlphaTriangulationException</code> on
+        violation rather than building a silently-wrong dual graph — its message is layered plain-language-first (for
+        an unsuspecting MATLAB/CLI caller: &quot;NOT an error in your data,&quot; naming the ambient dimension and the measured
+        rates, the concrete retry) with the facet-count detail as a technical appendix, the same two-audience approach
+        <code>NoIntegerCocycleException</code> already established for <code>CircularCoordinates</code>.</p>
+        <p><strong>Wired into <code>matlab.TDA4j</code>/<code>cli</code> as <code>engine=&quot;fast-alpha&quot;</code>/<code>--engine fast-alpha</code></strong>, like every other engine on
+        this page — valid only for <code>complex=alpha</code> with <code>alphaBackend=helix</code> (the default) and any ambient dimension
+        <code>&gt;= 2</code>; see <code>alpha-complex.md</code>&#39;s own section for the full reasoning behind shipping the measured risk above,
+        including why the <code>d=3</code> figure is documented explicitly rather than assumed to match <code>d=2</code>.</p>
+        <p><strong>A <code>FastAlphaTriangulationException</code> has a repair, not just a documented retry</strong>: <code>&quot;requireValidTriangulation&quot;</code>
+        (MATLAB)/<code>--require-valid-triangulation</code> (CLI), only consulted with <code>complex=alpha</code>/<code>alphaBackend=helix</code>, off by
+        default. Nudges exactly the near-tied points involved in a violation by a small perturbation, re-runs
+        <code>HelixDelaunay</code>&#39;s own already-tested global construction on the full (mostly unperturbed) point set, and
+        recomputes every resulting simplex&#39;s circumsphere from the ORIGINAL coordinates — see
+        <code>HelixDelaunay.repairByJitterRetriangulation</code>&#39;s own doc and <code>.claude/DESIGN-helix-triangulation-repair.md</code> for
+        the full mechanism, including two earlier designs that were tried and rejected after being checked against a
+        real failing fixture. Validated at ambient dimension 2 and 3 (two independent 20000-trial stress sweeps against
+        near-cospherical point clouds, zero barcode disagreements against the naive engine across every genuinely-hit
+        violation); not validated at <code>d &gt;= 4</code>, where <code>HelixDelaunay</code> construction itself is already documented above as
+        unreliable for unrelated reasons. Meaningful with any <code>engine</code> value (the repair lives on the triangulation
+        itself), but its only practical effect on <code>engine=&quot;naive&quot;</code>/<code>&quot;chunks&quot;</code>/<code>&quot;cohomology&quot;</code> is to silently change which
+        (rare, near-tied) triangulation gets built — those engines have no facet-multiplicity precondition of their own,
+        so there is usually no reason to set this unless also using <code>engine=&quot;fast-alpha&quot;</code>.</p>
+        
+        <h2 id="streams-engines-what-works-with-what" class="section"><a class="anchor-link left" href="#streams-engines-what-works-with-what"><i class="icofont-laika link">&#xef71;</i></a>Streams × engines: what works with what</h2>
+        <p>Every complex construction in this codebase produces a <code>CofaceSimplexStream</code>/<code>CellStream</code> that, in principle,
+        some subset of <code>matlab.TDA4j</code>&#39;s six <code>engine</code> values could consume — but most of those engines were built
+        against specific assumptions that not every construction satisfies: <code>ripser</code>/<code>chunks</code> assume a genuine flag
+        complex, a max-pairwise-distance filtration functional, and vertices born at filtration 0;
+        <code>fast-cubical</code>/<code>fast-alpha</code> are each specialized to one single concrete construction (<code>CubicalGridStream</code>/
+        <code>HelixDelaunay</code> respectively) and have no notion of any other complex at all. Refusing an unsupported
+        combination outright (a clear <code>IllegalArgumentException</code>, not a silently wrong barcode) is deliberate
+        throughout. This table is generated by reading <code>matlab.TDA4j</code>&#39;s own <code>dispatch</code>/<code>resolveWitnessEngine</code>/
+        <code>dispatchCubical</code> — the single source of truth for every refusal and default — not by inference from a
+        construction&#39;s own doc; re-check that source if this table and the code ever disagree.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Complex (<code>complex=</code>)</th>
+              <th>Default engine</th>
+              <th><code>ripser</code></th>
+              <th><code>naive</code></th>
+              <th><code>chunks</code></th>
+              <th><code>cohomology</code></th>
+              <th><code>fast-cubical</code></th>
+              <th><code>fast-alpha</code></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>vr</code></td>
+              <td><code>ripser</code></td>
+              <td>yes</td>
+              <td>yes</td>
+              <td>yes</td>
+              <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong></td>
+            </tr>
+            <tr>
+              <td><code>cech</code></td>
+              <td><code>naive</code></td>
+              <td><strong>no</strong> — not a max-pairwise-distance functional (radius, not diameter)</td>
+              <td>yes</td>
+              <td>yes</td>
+              <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong></td>
+            </tr>
+            <tr>
+              <td><code>witness</code>, <code>witnessVariant=lazy</code></td>
+              <td><code>ripser</code></td>
+              <td>yes — genuinely a flag complex under its own reified <code>WitnessMetricSpace</code></td>
+              <td>yes</td>
+              <td>yes</td>
+              <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong></td>
+            </tr>
+            <tr>
+              <td><code>witness</code>, <code>witnessVariant=general</code></td>
+              <td><code>naive</code></td>
+              <td><strong>no</strong> — not a flag complex (dimension-specific threshold)</td>
+              <td>yes</td>
+              <td><strong>no</strong></td>
+              <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong></td>
+            </tr>
+            <tr>
+              <td><code>dtm-rips</code></td>
+              <td><code>naive</code></td>
+              <td><strong>no</strong> — vertices aren&#39;t born at 0, and the weighted-Rips functional isn&#39;t <code>insertionDiameter</code>-compatible</td>
+              <td>yes</td>
+              <td>yes</td>
+              <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong></td>
+            </tr>
+            <tr>
+              <td><code>dtm-alpha</code></td>
+              <td><code>naive</code></td>
+              <td><strong>no</strong> — no notion of a Vietoris-Rips complex at all</td>
+              <td>yes</td>
+              <td><strong>no</strong> — shares <code>AlphaComplexDQP</code>&#39;s known stall/OOM risk (see <code>alpha-complex.md</code>)</td>
+              <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong> — always uses <code>AlphaComplexDQP</code>, never <code>HelixDelaunay</code></td>
+            </tr>
+            <tr>
+              <td><code>alpha</code></td>
+              <td><code>naive</code></td>
+              <td><strong>no</strong> — no notion of a Vietoris-Rips complex at all</td>
+              <td>yes</td>
+              <td><strong>no</strong> — known stall/OOM risk (<code>HomologySpec</code>&#39;s <code>BarcodeRegressionSpec</code>)</td>
+              <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>yes</strong> — only <code>alphaBackend=helix</code> (the default), any ambient dimension <code>&gt;= 2</code></td>
+            </tr>
+            <tr>
+              <td><code>sheehy-rips</code></td>
+              <td><code>naive</code></td>
+              <td><strong>no</strong> — a simplex&#39;s value is not the maximum ambient pairwise distance among its vertices (some pairs sparsified away, others excluded outright)</td>
+              <td>yes</td>
+              <td>yes</td>
+              <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong></td>
+            </tr>
+            <tr>
+              <td>cubical (<code>computeFromCubicalImage</code>/<code>computeFromImage</code>, no <code>complex</code> key)</td>
+              <td><code>naive</code></td>
+              <td><strong>no</strong> — <code>PackedRipserCohomologyContext</code> is specialized to <code>Simplex[Int]</code></td>
+              <td>yes</td>
+              <td>yes</td>
+              <td>yes</td>
+              <td><strong>yes</strong> — any ambient dimension <code>&gt;= 2</code></td>
+              <td><strong>no</strong></td>
+            </tr>
+            <tr>
+              <td>Dowker relation (<code>computeFromRelation</code>, no <code>complex</code> key)</td>
+              <td><code>naive</code></td>
+              <td><strong>no</strong> — not a flag complex (a witness for a whole simplex need not witness any of its edges)</td>
+              <td>yes</td>
+              <td><strong>no</strong> — same conservative refusal <code>witness</code>/general has (use <code>naive</code>/<code>cohomology</code>)</td>
+              <td>yes</td>
+              <td><strong>no</strong></td>
+              <td><strong>no</strong></td>
+            </tr>
+            <tr>
+              <td>simplicial sets</td>
+              <td><em>(no <code>matlab</code>/<code>cli</code> entry point at all — construct <code>SimplicialSetStream</code>/<code>FilteredSimplicialSetStream</code> and drive any generic engine directly)</em></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+        <p>The <code>fast-cubical</code>/<code>fast-alpha</code> columns are each a single &quot;yes&quot; surrounded by &quot;no&quot;s, for the SAME underlying
+        reason in each row of &quot;no&quot;s: <code>FastCubicalHomologyContext</code> is specialized to the concrete <code>CubicalGridStream</code>
+        (it reads <code>.shape</code>/<code>.ambientDim</code>/<code>.topCellValue</code> directly, not a generic <code>CellT: OrderedCell</code>) and
+        <code>FastAlphaHomologyContext</code> is specialized to the concrete <code>HelixDelaunay</code> triangulation the same way — neither
+        has any notion of the OTHER constructions at all, so every other row&#39;s &quot;no&quot; is &quot;not a cubical grid&quot;/&quot;not a
+        <code>HelixDelaunay</code>&quot; respectively, not a per-row special case. Both are additionally refused within their one
+        &quot;yes&quot; row for a narrower reason: <code>fast-cubical</code> only for a degenerate 1-axis image (ambient dimension <code>&lt; 2</code>);
+        <code>fast-alpha</code> only for <code>alphaBackend=DQP</code> (this engine cannot consume <code>AlphaShapeDQP</code>&#39;s output at all) — neither
+        is refused for HIGH ambient dimension any more, now that both are extended past 2D via a <code>chunks</code> hybrid for
+        the residual middle dimensions (<code>.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md</code>); both name the
+        actual mismatch in their own message rather than throwing a bare <code>IllegalArgumentException</code>.</p>
+        <p>Reading the &quot;no&quot; cells as one-line reasons, grouped by root cause:</p>
+        <ul>
+          <li><strong>Not a flag complex</strong> (<code>cech</code>, <code>witness</code>/general, Dowker relations): a <code>k</code>-simplex&#39;s value isn&#39;t determined
+          by its own edges&#39; values alone, so <code>insertionDiameter</code>&#39;s incremental recurrence has nothing valid to
+          incrementally update. <code>sheehy-rips</code> belongs here too, not with <code>dtm-rips</code> below, despite looking
+          pairwise-derived at a glance: its own <code>filtrationValueOverride</code> needs to see every vertex of a <code>k</code>-simplex at
+          once (the <code>min</code>-over-vertices <code>vanish</code> exclusion check), not just its edges — proven by construction, not
+          merely asserted: a hand-derived fixture (<code>SheehyRipsStreamSpec</code>) exhibits a triangle whose three edges are
+          ALL individually present and finite, yet the triangle itself never appears — the one thing an actual flag
+          complex can never do. A Dowker relation&#39;s own witness condition is the same shape: a witness for a whole
+          simplex need not witness any of that simplex&#39;s edges, so a triangle can appear with no valid edge-only
+          justification the way <code>witness</code>/general&#39;s own dimension-specific threshold does.</li>
+          <li><strong>Not a Vietoris-Rips complex at all</strong> (<code>alpha</code>, <code>dtm-alpha</code>): <code>PackedRipserCohomologyContext</code> consumes a
+          <code>FiniteMetricSpace[Int]</code> directly and enumerates cliques via <code>SimplexIndexing</code> — there is no Delaunay/power-
+          cell structure it could route through instead.
+          These two also refuse <code>chunks</code>, but for a third, unrelated reason: a known stall/out-of-memory risk in
+          <code>AlphaComplexDQP</code> at scale, not an algorithmic mismatch (see <code>alpha-complex.md</code>; <code>HomologySpec</code>&#39;s
+          <code>BarcodeRegressionSpec</code> stays <code>skipAll</code>&#39;d for the same reason and is the regression pin, not a live check).</li>
+          <li><strong>A genuine flag complex, but vertices aren&#39;t born at 0 and the edge functional isn&#39;t plain max-pairwise-
+          distance</strong> (<code>dtm-rips</code> only): <code>PackedRipserCohomologyContext</code>&#39;s two production-critical optimizations
+          (<code>insertionDiameter</code>, apparent pairs) are proven specifically for <code>MaximumDistanceFiltrationValue</code> on the
+          metric space handed to it — a weighted filtration value invalidates both proofs even though the complex
+          itself is, combinatorially, an ordinary flag/clique complex (unlike <code>sheehy-rips</code> above).</li>
+          <li><strong>Representation-specific</strong> (cubical): <code>PackedRipserCohomologyContext</code>/<code>RipserCohomologyContext</code> are
+          hardcoded to <code>Simplex[Int]</code>&#39;s combinatorial-number-system indexing (<code>SimplexIndexing</code>); <code>Cube</code> has no
+          equivalent encoding built for it. Engine 6 (<code>fast-cubical</code>) is a dedicated fast engine in this spirit, but
+          not a drop-in replacement for <code>ripser</code> here: it&#39;s a different algorithm (dual-graph union-find plus, at
+          <code>d &gt;= 3</code>, a hybrid with <code>chunks</code> for the residual middle dimensions — not <code>SimplexIndexing</code>-style
+          enumeration). A grid-exploiting engine dedicated to 3D specifically (<code>CubicalRipser</code>, Wagner-Chen-Vuçini)
+          remains a documented future direction, <code>DESIGN-fast-cubical-engine.md</code>.</li>
+        </ul>
+        <p><code>engine=&quot;cohomology&quot;</code> (<code>CellularCohomologyContext</code>, engine 5 above) is the one column with no &quot;no&quot; cells for a
+        reason: it&#39;s generic over <code>CellT: OrderedCell</code> with no per-construction speed assumptions baked in, at the cost
+        of none of engines 3/4&#39;s Vietoris-Rips-specific optimizations — see engine 5&#39;s own section above for what that
+        tradeoff actually buys and costs.</p>
+        
+        <h2 id="choosing-an-engine" class="section"><a class="anchor-link left" href="#choosing-an-engine"><i class="icofont-laika link">&#xef71;</i></a>Choosing an engine</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Need</th>
+              <th>Engine</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Exploration, intermediate-filtration queries, representative cycles, any <code>OrderedCell</code> type</td>
+              <td><strong><code>CellularHomologyContext</code></strong>/<code>TDAContext</code></td>
+            </tr>
+            <tr>
+              <td>Large complex, chunked/parallelizable, representatives for every bar including essential ones</td>
+              <td><strong><code>CellularPersistenceInChunksContext</code></strong></td>
+            </tr>
+            <tr>
+              <td>Fast, memory-efficient cohomology on a Vietoris-Rips/clique complex over integer vertex labels</td>
+              <td><strong><code>PackedRipserCohomologyContext</code></strong> (what <code>engine=&quot;ripser&quot;</code> uses)</td>
+            </tr>
+            <tr>
+              <td>A <code>Simplex[Int]</code>-keyed reference implementation for hand-debugging engine 4</td>
+              <td><code>RipserCohomologyContext</code> (test oracle, not a production choice)</td>
+            </tr>
+            <tr>
+              <td>Cohomology (real cocycle representatives) on <code>Cube</code>/<code>FiniteSimplicialSet</code>/Cech/Alpha/general witness complex, or any <code>OrderedCell</code> type engines 3/4 can&#39;t serve</td>
+              <td><strong><code>CellularCohomologyContext</code></strong> (what <code>engine=&quot;cohomology&quot;</code> uses)</td>
+            </tr>
+            <tr>
+              <td>Fastest option for a cubical grid of any ambient dimension <code>&gt;= 2</code> (no <code>Chain</code> reduction at all for <code>H_0</code>/<code>H_{d-1}</code>; a <code>chunks</code> hybrid for any residual middle dimensions at <code>d &gt;= 3</code>)</td>
+              <td><strong><code>FastCubicalHomologyContext</code></strong> (what <code>engine=&quot;fast-cubical&quot;</code> uses)</td>
+            </tr>
+            <tr>
+              <td>Fastest option for an alpha complex via <code>HelixDelaunay</code>, any ambient dimension <code>&gt;= 2</code> (same hybrid shape as <code>FastCubicalHomologyContext</code>; noticeably more likely to throw <code>FastAlphaTriangulationException</code> at higher ambient dimension/point count)</td>
+              <td><strong><code>FastAlphaHomologyContext</code></strong> (what <code>engine=&quot;fast-alpha&quot;</code> uses)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        
+<hr class="footer-rule"/>
+<footer>
+  MIT License © Mikael Vejdemo-Johansson, Daniel Hope
+</footer>
+
+
+      </main>
+
+    </div>
+
+  </body>
+
+</html>

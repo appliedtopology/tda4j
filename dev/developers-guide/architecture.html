@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="generator" content="Typelevel Laika + Helium Theme" />
+  <title>Architecture: from algebra to a filtration stream</title>
+  
+  <meta name="author" content="Mikael Vejdemo-Johansson"/>
+  
+  <meta name="author" content="Jordan Matuszewski"/>
+  
+  <meta name="author" content="Kei Kebreau"/>
+  
+  
+  <meta name="description" content="A Java Platform compatible library for topological data analysis (TDA)."/>
+  
+  
+  
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato:400,700">
+  
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Fira+Mono:500">
+  
+  <link rel="stylesheet" type="text/css" href="../helium/site/icofont.min.css" />
+    <link rel="stylesheet" type="text/css" href="../helium/site/laika-helium.css" />
+    <style>
+
+.breadcrumb { display: flex; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 1.5rem 0; }
+.breadcrumb li { margin: 0; }
+.breadcrumb li a { display: inline; padding: 0; }
+.breadcrumb li:not(:last-child)::after { content: "\203A"; margin: 0 0.4em; color: var(--secondary-color); }
+
+</style>
+  <script src="../helium/site/laika-helium.js"></script>
+  <script>initVersions("../", "", "", null);</script>
+  
+  <script> /* for avoiding page load transitions */ </script>
+</head>
+
+  <body>
+
+    <header id="top-bar" class="light-default dark-default">
+
+  <div class="row">
+    <a id="nav-icon">
+      <i class="icofont-laika navigationMenu" title="Navigation">&#xefa2;</i>
+    </a>
+    
+    <div class="menu-container version-menu">
+      <a class="text-link menu-toggle" href="#">Choose Version</a>
+      <nav class="menu-content">
+        <ul class="nav-list">
+        </ul>
+      </nav>
+    </div>
+  </div>
+
+  <a class="icon-link glyph-link" href="../"><i class="icofont-laika home" title="Home">&#xef47;</i></a>
+
+  <div class="row links">
+    
+    <a class="icon-link svg-link" href="../api/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/appliedtopology/tda4j"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+  </div>  
+
+</header>
+
+    <nav id="sidebar">
+
+  <div class="row">
+    
+    <a class="icon-link svg-link" href="../api/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/appliedtopology/tda4j"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+  </div>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="../downloads.html">Downloads</a></li>
+    <li class="level1 nav-leaf"><a href="../tutorials/">Tutorials for TDA4j</a></li>
+    <li class="level1 nav-leaf"><a href="../user-guide/">User Guide for TDA4j</a></li>
+    <li class="level1 nav-node"><a href="index.html">Developer&#39;s Guide for TDA4j</a></li>
+    <li class="level2 nav-leaf"><a href="scala3-primer.html">A Scala 3.7+ primer for this codebase</a></li>
+    <li class="level2 active nav-leaf"><a href="#">Architecture: from algebra to a filtration stream</a></li>
+    <li class="level2 nav-leaf"><a href="persistence-engines.html">Persistence engines: what to trust, and why</a></li>
+    <li class="level2 nav-leaf"><a href="gotchas.html">Hard-won invariants you must not break</a></li>
+    <li class="level2 nav-leaf"><a href="degeneracies.html">Degeneracy behaviors that look like bugs but aren&#39;t</a></li>
+    <li class="level2 nav-leaf"><a href="alpha-complex.html">Alpha complex: DQP vs Helix</a></li>
+    <li class="level2 nav-leaf"><a href="class-diagrams.html">Mapping the library: class diagrams</a></li>
+  </ul>
+
+</nav>
+
+    <div id="container">
+
+      
+<nav id="page-nav">
+  <p class="header"><a href="#">Architecture: from algebra to a filtration stream</a></p>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="#package-layout">Package layout</a></li>
+    <li class="level1 nav-node"><a href="#the-algebraic-core">The algebraic core</a></li>
+    <li class="level2 nav-leaf"><a href="#ringmodule-and-field"><code>RingModule</code> and <code>Field</code></a></li>
+    <li class="level2 nav-leaf"><a href="#cell-orderedcell-and-what-boundary-returns"><code>Cell</code>, <code>OrderedCell</code>, and what <code>boundary</code> returns</a></li>
+    <li class="level2 nav-leaf"><a href="#chain"><code>Chain</code></a></li>
+    <li class="level1 nav-node"><a href="#complex-construction-streams">Complex construction: streams</a></li>
+    <li class="level2 nav-leaf"><a href="#vietoris-rips-several-independent-generation-strategies">Vietoris-Rips: several independent generation strategies</a></li>
+    <li class="level2 nav-leaf"><a href="#cubical-complexes">Cubical complexes</a></li>
+    <li class="level2 nav-leaf"><a href="#simplicial-sets">Simplicial sets</a></li>
+    <li class="level2 nav-leaf"><a href="#cech-complexes">Cech complexes</a></li>
+    <li class="level2 nav-leaf"><a href="#witness-complexes">Witness complexes</a></li>
+    <li class="level2 nav-leaf"><a href="#dowker-complexes">Dowker complexes</a></li>
+    <li class="level2 nav-leaf"><a href="#sheehy-s-sparse-approximate-vietoris-rips-filtration">Sheehy&#39;s sparse/approximate Vietoris-Rips filtration</a></li>
+    <li class="level2 nav-leaf"><a href="#flag-complex-edge-collapse">Flag-complex edge collapse</a></li>
+    <li class="level2 nav-leaf"><a href="#metric-spaces">Metric spaces</a></li>
+    <li class="level2 nav-leaf"><a href="#opt-in-parallelism">Opt-in parallelism</a></li>
+    <li class="level1 nav-leaf"><a href="#barcode-scala-representing-the-output"><code>Barcode.scala</code>: representing the output</a></li>
+    <li class="level1 nav-leaf"><a href="#homology-circularcoordinates-circularcoordinates-scala"><code>homology.CircularCoordinates</code> (<code>CircularCoordinates.scala</code>)</a></li>
+  </ul>
+
+  <p class="footer"></p>
+</nav>
+
+
+      <main class="content">
+
+        <ul class="breadcrumb nav-list">
+          <li class="level1 breadcrumb nav-leaf"><a href="../">TDA4j</a></li>
+          <li class="level1 breadcrumb nav-leaf"><a href="index.html">Developer&#39;s Guide for TDA4j</a></li>
+          <li class="level1 breadcrumb active nav-leaf"><a href="#">Architecture: from algebra to a filtration stream</a></li>
+        </ul>
+
+        <h1 id="architecture-from-algebra-to-a-filtration-stream" class="title">Architecture: from algebra to a filtration stream</h1>
+        <p>This page walks the two lower layers of the library: the algebraic core (what a &quot;chain&quot; and a
+        &quot;coefficient&quot; actually are) and complex construction (how a sequence of cells in filtration order gets
+        produced). <a href="persistence-engines.html">Persistence engines</a> covers what consumes the stream this layer
+        produces.</p>
+        <p>If a piece of Scala 3 syntax below looks unfamiliar, see the <a href="scala3-primer.html">Scala 3 primer</a> first.</p>
+        
+        <h2 id="package-layout" class="section"><a class="anchor-link left" href="#package-layout"><i class="icofont-laika link">&#xef71;</i></a>Package layout</h2>
+        <p><code>org.appliedtopology.tda4j</code> is split into subpackages, each a layer:</p>
+        <ul>
+          <li><strong><code>algebra</code></strong> — <code>RingModule</code>, <code>Field</code>, <code>FiniteField</code>, <code>Chain</code> (including the <code>Cell</code>/
+          <code>OrderedCell</code>/<code>OrderedBasis</code> contracts), <code>SSetElement</code> (the degeneracy-word algebra underlying simplicial
+          sets). The typeclasses and formal-sum machinery everything else builds on.</li>
+          <li><strong><code>cells</code></strong> — <code>Simplex</code>, <code>Cube</code>, <code>FiniteSimplicialSet</code> — the three concrete <code>OrderedCell</code> instances — plus
+          <code>FiniteSimplicialSet</code>&#39;s companion (<code>product</code>/<code>coproduct</code>/<code>quotient</code>/<code>identify</code>), which draws on shared
+          ordering helpers kept in the separate <code>SimplicialSetConstructions.scala</code>.</li>
+          <li><strong><code>streams</code></strong> — everything that produces cells in filtration order: <code>SimplexStream</code>/<code>CellStream</code>, the
+          Vietoris-Rips family, <code>FiniteMetricSpace</code>, <code>CubicalStream</code>/<code>CubicalImage</code>, <code>SimplicialSetStream</code>/
+          <code>FilteredSimplicialSetStream</code>, <code>CechStream</code>, <code>WitnessStream</code>, <code>UnionFind</code>.</li>
+          <li><strong><code>homology</code></strong> — the persistence algorithms (<code>Homology.scala</code>, <code>PackedRipserCohomology.scala</code>,
+          <code>Cohomology.scala</code>).</li>
+          <li><strong><code>barcode</code></strong> — <code>Barcode</code>, <code>PersistenceBar</code>, <code>BarcodeEndpoint</code>.</li>
+          <li><strong><code>alpha</code></strong> — <code>AlphaShapes</code> (<code>HelixDelaunay</code>/<code>AlphaShapeDQP</code>), <code>AlphaComplexDQP</code>.</li>
+          <li><strong><code>io</code></strong> — file-format adaptors: <code>CSV</code>, <code>Ripser</code>, <code>Dipha</code>, <code>Gudhi</code>, <code>Perseus</code>.</li>
+          <li><strong><code>cli</code></strong> — the <code>tda4j</code> executable (<code>TDA4jConf</code>, <code>TDA4jCLI</code>), a thin translator over <code>matlab.TDA4j</code>/<code>io</code>.</li>
+          <li><strong><code>matlab</code></strong> — <code>TDA4j</code>/<code>PersistenceResult</code>/<code>LandmarkSelectionResult</code>, the plain-primitives facade for MATLAB
+          and other Java callers.</li>
+          <li>root (<code>org.appliedtopology.tda4j</code> itself) — <code>package.scala</code> (<code>TDAContext</code>), the user-facing Scala facade.</li>
+        </ul>
+        <p><strong>Load-bearing import rule</strong>: every file that reaches across a subpackage boundary does it via
+        <code>import org.appliedtopology.tda4j.&lt;pkg&gt;.{given, *}</code> — the <code>given</code> matters. A plain <code>import pkg.*</code> does
+        <strong>not</strong> bring <code>given</code> instances into scope in Scala 3, and this codebase&#39;s <code>Ordering</code>/<code>RingModule</code>/<code>Field</code>
+        instances are all <code>given</code>s. Forgetting <code>given</code> compiles cleanly and fails at a summon site with a
+        confusing &quot;no given instance&quot; error far from the missing import.</p>
+        
+        <h2 id="the-algebraic-core" class="section"><a class="anchor-link left" href="#the-algebraic-core"><i class="icofont-laika link">&#xef71;</i></a>The algebraic core</h2>
+        
+        <h3 id="ringmodule-and-field" class="section"><a class="anchor-link left" href="#ringmodule-and-field"><i class="icofont-laika link">&#xef71;</i></a><code>RingModule</code> and <code>Field</code></h3>
+        <p><code>algebra/RingModule.scala</code> defines what it means for a type <code>Self</code> to be a module over a ring-like type <code>R</code>:</p>
+        <pre><code class="nohighlight"><span class="keyword">trait</span><span> </span><span class="type-name">RingModule</span><span>:
+  </span><span class="keyword">type</span><span> </span><span class="type-name">Self</span><span>
+  </span><span class="keyword">type</span><span> </span><span class="type-name">R</span><span>
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">zero</span><span>: </span><span class="type-name">Self</span><span>
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">plus</span><span>(</span><span class="identifier">x</span><span>: </span><span class="type-name">Self</span><span>, </span><span class="identifier">y</span><span>: </span><span class="type-name">Self</span><span>): </span><span class="type-name">Self</span><span>
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">minus</span><span>(</span><span class="identifier">x</span><span>: </span><span class="type-name">Self</span><span>, </span><span class="identifier">y</span><span>: </span><span class="type-name">Self</span><span>): </span><span class="type-name">Self</span><span> = </span><span class="identifier">plus</span><span>(</span><span class="identifier">x</span><span>, </span><span class="identifier">negate</span><span>(</span><span class="identifier">y</span><span>))
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">negate</span><span>(</span><span class="identifier">x</span><span>: </span><span class="type-name">Self</span><span>): </span><span class="type-name">Self</span><span> = </span><span class="identifier">minus</span><span>(</span><span class="identifier">zero</span><span>, </span><span class="identifier">x</span><span>)
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">scale</span><span>(</span><span class="identifier">x</span><span>: </span><span class="type-name">R</span><span>, </span><span class="identifier">y</span><span>: </span><span class="type-name">Self</span><span>): </span><span class="type-name">Self</span><span>
+  </span><span class="identifier">extension</span><span> (</span><span class="identifier">t</span><span>: </span><span class="type-name">Self</span><span>)
+    </span><span class="keyword">def</span><span> +(</span><span class="identifier">rhs</span><span>: </span><span class="type-name">Self</span><span>): </span><span class="type-name">Self</span><span> = </span><span class="identifier">plus</span><span>(</span><span class="identifier">t</span><span>, </span><span class="identifier">rhs</span><span>)
+    </span><span class="keyword">def</span><span> -(</span><span class="identifier">rhs</span><span>: </span><span class="type-name">Self</span><span>): </span><span class="type-name">Self</span><span> = </span><span class="identifier">minus</span><span>(</span><span class="identifier">t</span><span>, </span><span class="identifier">rhs</span><span>)
+    </span><span class="keyword">def</span><span> &lt;*(</span><span class="identifier">rhs</span><span>: </span><span class="type-name">R</span><span>): </span><span class="type-name">Self</span><span> = </span><span class="identifier">scale</span><span>(</span><span class="identifier">rhs</span><span>, </span><span class="identifier">t</span><span>)
+    </span><span class="keyword">def</span><span> </span><span class="declaration-name">unary_</span><span>- : </span><span class="type-name">Self</span><span> = </span><span class="identifier">negate</span><span>(</span><span class="identifier">t</span><span>)
+  </span><span class="identifier">extension</span><span> (</span><span class="identifier">r</span><span>: </span><span class="type-name">R</span><span>)
+    </span><span class="keyword">def</span><span> |*|(</span><span class="identifier">t</span><span>: </span><span class="type-name">Self</span><span>): </span><span class="type-name">Self</span><span> = </span><span class="keyword">this</span><span>.</span><span class="identifier">scale</span><span>(</span><span class="identifier">r</span><span>, </span><span class="identifier">t</span><span>)
+    </span><span class="keyword">def</span><span> ⊠(</span><span class="identifier">t</span><span>: </span><span class="type-name">Self</span><span>): </span><span class="type-name">Self</span><span> = </span><span class="keyword">this</span><span>.</span><span class="identifier">scale</span><span>(</span><span class="identifier">r</span><span>, </span><span class="identifier">t</span><span>) </span><span class="comment">// &quot;boxed times&quot; -- scalar action</span></code></pre>
+        <p>A minimal instance only needs <code>zero</code>, <code>plus</code>, <code>scale</code>, and one of <code>minus</code>/<code>negate</code>. <code>⊠</code> (U+22A0, typed via
+        a Unicode input method or copy-paste) is the scalar-multiplication operator used throughout: <code>2.0 ⊠ chain</code>.</p>
+        <p><code>algebra/Field.scala</code> is a separate, self-contained typeclass (not built on <code>RingModule</code>) for coefficient
+        types themselves — <code>plus</code>/<code>minus</code>/<code>times</code>/<code>divide</code>/<code>negate</code>/<code>invert</code>/<code>zero</code>/<code>one</code>, with <code>+</code>/<code>-</code>/<code>*</code>/<code>/</code>/<code>eql</code>
+        extension operators. <strong>There is no default <code>given Double is Field</code> anywhere in <code>src/main</code></strong> — bring one in
+        explicitly:</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="identifier">given</span><span> </span><span class="type-name">Double</span><span> </span><span class="identifier">is</span><span> </span><span class="type-name">Field</span><span> = </span><span class="type-name">Field</span><span>.</span><span class="type-name">DoubleApproximated</span><span>(</span><span class="number-literal">1e-9</span><span>)</span></code></pre>
+        <p><code>Field.DoubleApproximated(epsilon)</code> treats two doubles as equal within <code>epsilon</code> — necessary because exact
+        floating-point equality is rarely what you want when an <code>isZero</code> check decides whether a chain entry
+        survives a reduction step. <code>FiniteField.scala</code> gives exact, non-approximate coefficients instead:
+        <code>FiniteField(p)</code>&#39;s <code>Fp</code> is an opaque type <em>per instance</em> (so <code>Fp</code> from a mod-5 field and a mod-7 field are
+        distinct, incompatible types), with exact arithmetic via a precomputed inverse table.</p>
+        
+        <h3 id="cell-orderedcell-and-what-boundary-returns" class="section"><a class="anchor-link left" href="#cell-orderedcell-and-what-boundary-returns"><i class="icofont-laika link">&#xef71;</i></a><code>Cell</code>, <code>OrderedCell</code>, and what <code>boundary</code> returns</h3>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">trait</span><span> </span><span class="type-name">Cell</span><span> </span><span class="keyword">extends</span><span> </span><span class="type-name">HasDimension</span><span>:
+  </span><span class="keyword">type</span><span> </span><span class="type-name">Self</span><span>
+  </span><span class="identifier">extension</span><span> (</span><span class="identifier">self</span><span>: </span><span class="type-name">Self</span><span>) </span><span class="keyword">def</span><span> </span><span class="declaration-name">boundary</span><span>[</span><span class="type-name">CoefficientT</span><span>: </span><span class="type-name">Field</span><span>]: </span><span class="type-name">Seq</span><span>[(</span><span class="type-name">Self</span><span>, </span><span class="type-name">CoefficientT</span><span>)]
+
+</span><span class="keyword">trait</span><span> </span><span class="type-name">OrderedCell</span><span> </span><span class="keyword">extends</span><span> </span><span class="type-name">Cell</span><span>:
+  </span><span class="keyword">type</span><span> </span><span class="type-name">Self</span><span>: </span><span class="type-name">Ordering</span><span> </span><span class="identifier">as</span><span> </span><span class="identifier">ordering</span></code></pre>
+        <p><strong><code>boundary</code> returns a plain <code>Seq[(Self, CoefficientT)]</code>, not a <code>Chain</code>.</strong> Callers wrap the result in
+        <code>Chain.from(...)</code> when they need actual <code>Chain</code> machinery.</p>
+        <p><code>Simplex[VertexT]</code>, <code>Cube</code>, and <code>FiniteSimplicialSet[G]</code>&#39;s generators are the library&#39;s three concrete
+        <code>OrderedCell</code> instances (<code>cells/SimplexOrderedCell.scala</code>, <code>cells/CubicalOrderedCell.scala</code>,
+        <code>cells/SimplicialSet.scala</code>): <code>boundary</code> returns each codimension-1 face paired with alternating signs.</p>
+        <p>There is no dual <code>Cocell</code>/<code>OrderedCocell</code> trait pair — an earlier version of this codebase had one, and it was
+        removed: coboundary is <em>extrinsic</em> to a cell (it depends on which higher-dimensional cells actually exist in
+        the ambient, possibly-truncated complex), not intrinsic the way <code>boundary</code> is, so a per-cell <code>coboundary</code>
+        method with no complex to consult can only be correct when the complex is always the full
+        combinatorially-possible one. <code>RipserCohomologyContext</code>/<code>PackedRipserCohomologyContext</code> compute coboundaries
+        directly against <code>SimplexIndexing</code>&#39;s cofacet iterator instead (see
+        <a href="persistence-engines.html">Persistence engines</a>).</p>
+        
+        <h3 id="chain" class="section"><a class="anchor-link left" href="#chain"><i class="icofont-laika link">&#xef71;</i></a><code>Chain</code></h3>
+        <p><code>Chain[CellT: Ordering, CoefficientT: Field]</code> (<code>algebra/Chain.scala</code>) is a formal sum of cells with field
+        coefficients, backed by a mutable <code>PriorityQueue</code> ordered so the <em>smallest</em> cell under the ambient
+        <code>Ordering[CellT]</code> sits at the head — cheap to peek, since &quot;leading term&quot; (the reduction pivot) is queried
+        constantly.</p>
+        <ul>
+          <li><code>collapseHead()</code>/<code>collapseAll()</code> merge duplicate-cell entries, dropping exact zeros. Naive <code>+</code>/<code>-</code>/<code>⊠</code>
+          only lazily collapse the head, so a hand-rolled reduction loop built out of raw <code>Chain</code> arithmetic
+          accumulates an ever-growing backlog of uncollapsed duplicates — see
+          <a href="gotchas.html">Hard-won invariants</a>.</li>
+          <li><code>Chain.reduceBy</code>/<code>Chain.reduceByUntil</code> are the actual matrix-reduction primitives every persistence
+          engine builds on: given a chain <code>z</code> and a <code>basis: Map[CellT, Chain[CellT, CoefficientT]]</code> of recorded
+          pivot columns, repeatedly subtract the appropriate multiple of <code>basis(pivot)</code> until <code>z</code>&#39;s leading cell is
+          no longer a key in <code>basis</code>, returning both the reduced chain and a reduction-log chain (the multipliers
+          used) that lets a caller reconstruct a V-column. Internally these go through a <code>mutable.TreeMap</code>, not the
+          <code>PriorityQueue</code>-backed <code>Chain</code> type, so repeated updates collapse duplicates automatically.</li>
+          <li><code>given [CellT: Ordering, CoefficientT: Field] =&gt; (Chain[CellT, CoefficientT] is RingModule)</code> is what makes
+          <code>+</code>, <code>-</code>, <code>⊠</code>, <code>unary_-</code> work on <code>Chain</code> values — the <code>given</code> whose summon <em>timing</em> matters, see
+          <a href="gotchas.html">Hard-won invariants</a>.</li>
+        </ul>
+        
+        <h2 id="complex-construction-streams" class="section"><a class="anchor-link left" href="#complex-construction-streams"><i class="icofont-laika link">&#xef71;</i></a>Complex construction: streams</h2>
+        <p>A <code>CellStream[CellT, FiltrationT]</code> is the abstract interface every persistence engine consumes: an iterator
+        over cells in filtration order, plus a <code>filtrationValue: PartialFunction[CellT, FiltrationT]</code> and a
+        <code>Filterable</code> (smallest/largest sentinel values, <code>±Infinity</code> for <code>Double</code>). Trait hierarchy, most-general to
+        least:</p>
+        <pre><code>Filtration[CellT, FiltrationT]           -- has a filtrationValue partial function
+CellStream[CellT, FiltrationT]           -- Filtration + IterableOnce[CellT] + filtrationOrdering
+SimplexStream[VertexT, FiltrationT]      -- CellStream specialized to Simplex[VertexT]
+StratifiedCellStream[CellT, FiltrationT] -- adds iterateDimension: dimension-by-dimension access</code></pre>
+        <p><strong>Two rules that hold for every stream in this codebase</strong>, both explained in full in
+        <a href="gotchas.html">Hard-won invariants</a>:</p>
+        <ul>
+          <li><code>filtrationOrdering</code> orders cells by filtration value <strong>reversed</strong> (so the <em>smallest</em>-under-this-ordering
+          cell is the <em>youngest</em>), because <code>Chain</code>&#39;s pivot is always the ordering&#39;s minimum and the reduction
+          algorithms need &quot;leading cell&quot; to mean &quot;youngest.&quot; A stream&#39;s iteration order and its <code>filtrationOrdering</code>
+          must be the <em>same</em> total order (one the consistent <code>.reverse</code> of the other), not merely two independently
+          valid orderings.</li>
+          <li><code>StratifiedCellStream.iterateDimension</code>&#39;s domain must be contiguous from <code>0</code> (defined for <code>0, ..., k</code> or
+          all of ℕ, never with a gap) — the default <code>.iterator</code> stops at the first dimension it&#39;s undefined for.</li>
+        </ul>
+        
+        <h3 id="vietoris-rips-several-independent-generation-strategies" class="section"><a class="anchor-link left" href="#vietoris-rips-several-independent-generation-strategies"><i class="icofont-laika link">&#xef71;</i></a>Vietoris-Rips: several independent generation strategies</h3>
+        <p>These are <strong>alternate engines with the same output contract, not layers on one another</strong> — check which
+        <code>iterateDimension</code>/<code>iterator</code> implementation is actually in play before reasoning about a bug:</p>
+        <ul>
+          <li><code>EnumeratingCofaceSimplexStream</code> — generates each dimension explicitly via <code>SimplexIndexing</code>&#39;s
+          combinatorial-number-system enumeration, filtered by an optional <code>keepCriterion</code>.</li>
+          <li><code>RipserCofaceSimplexStream</code> — a coface-generation variant that only expands cofaces reachable from the
+          previous dimension&#39;s survivors rather than re-enumerating a whole dimension from scratch. <code>CechStream</code>&#39;s
+          <code>CechCofaceSimplexStream</code> is built directly on top of this class (see below).</li>
+          <li><code>InorderCofaceSimplexStream</code> — generates cofaces &quot;in order&quot; directly from the metric-space structure.</li>
+          <li><code>IncrementalVietorisRipsSimplexStream</code> — a reference implementation of Antonio Rieser&#39;s New-VR algorithm
+          (arXiv:2301.07191), meant as a cross-validation baseline rather than a speed-competitive engine.</li>
+          <li><code>RecursiveStackVietorisRipsSimplexStream</code> — a third, independent coface-enumeration strategy built on a
+          recursive stack and spatial query.</li>
+        </ul>
+        <p><code>EnumeratingCofaceSimplexStream</code>/<code>RipserCofaceSimplexStream</code>/<code>InorderCofaceSimplexStream</code>/
+        <code>IncrementalVietorisRipsSimplexStream</code> all default <code>maxFiltrationValue</code> to <code>metricSpace.minimumEnclosingRadius</code>,
+        not <code>Double.PositiveInfinity</code> — past that radius every vertex is within range of a common apex, so the
+        complex is a cone from there on and provably contributes no further homology (real <code>ripser.cpp</code> uses the
+        same default). Pass <code>maxFiltrationValue = Some(Double.PositiveInfinity)</code> for the old always-unbounded
+        behavior. <code>RecursiveStackVietorisRipsSimplexStream</code> and the alpha-complex backends keep their own,
+        always-untruncated default (see <a href="alpha-complex.html">Alpha complex</a>).</p>
+        <p><code>SimplexIndexing</code> (inside <code>SimplexIndexing.scala</code>) is the piece every Ripser-flavored part of this codebase
+        depends on: it encodes/decodes a <code>d</code>-subset of <code>{0, ..., vertexCount-1}</code> to/from a single integer index via
+        binomial-coefficient lookups, in <code>O(d)</code> either direction. Its <code>cofacetIterator</code>/<code>facetIterator</code> walk the
+        <em>complete</em> <code>vertexCount</code>-point abstract simplex with no notion of <code>maxDimension</code> truncation at all — see
+        <a href="gotchas.html">Hard-won invariants</a> before building anything new directly on them.</p>
+        
+        <h3 id="cubical-complexes" class="section"><a class="anchor-link left" href="#cubical-complexes"><i class="icofont-laika link">&#xef71;</i></a>Cubical complexes</h3>
+        <p><code>Cube</code> (<code>cells/Cubical.scala</code>) is an elementary cube: a product of <code>n</code> (fixed ambient dimension) factors,
+        each a degenerate point <code>[a,a]</code> or a unit interval <code>[a,a+1]</code>, via the standard &quot;doubled coordinate&quot;
+        encoding (axis <code>k</code> is <code>2a</code> or <code>2a+1</code>). <code>opaque type Cube = Vector[Int]</code> — <code>Vector</code>, not <code>Array</code>, so
+        structural equality works for <code>Chain</code>&#39;s pivot tables. Boundary sign alternates over a non-degenerate axis&#39;s
+        <em>rank among the other non-degenerate axes</em>, not its raw coordinate position — get this wrong and <code>d(d(x))</code>
+        fails to vanish as soon as a cube has an interleaved degenerate axis, invisibly over a field of
+        characteristic 2.</p>
+        <p><code>CubicalGridStream</code> (<code>streams/CubicalStream.scala</code>) is a dense cubical complex over a full rectangular grid
+        (the standard T-construction): a caller-supplied <code>topCellValue</code> gives every top-dimensional cube its own
+        value, and every lower-dimensional cube&#39;s value is the <code>min</code> over the top cells containing it — computed
+        directly via the cartesian product over the cube&#39;s degenerate axes rather than a recursive coface walk.
+        <code>CubicalImage</code> builds these from images/voxel grids (<code>fromFlatArray</code>/<code>fromBufferedImage</code>/<code>fromFile</code>/
+        <code>fromVoxelGrid3D</code>); sublevel vs. superlevel filtration is handled by negating values on load, not as a flag
+        on the stream itself. <code>CubicalHomologyContext</code> is a one-line <code>Cube</code>-specialized wrapper around
+        <code>CellularHomologyContext</code> — cubical complexes needed no new engine code, only a new <code>OrderedCell</code> instance.</p>
+        
+        <h4 id="dual-union-find-cubical-engine-flash-cubical" class="section"><a class="anchor-link left" href="#dual-union-find-cubical-engine-flash-cubical"><i class="icofont-laika link">&#xef71;</i></a>Dual union-find cubical engine (Flash Cubical)</h4>
+        <p><code>homology/FastCubicalHomology.scala</code> (<code>FastCubicalHomologyContext</code>, <code>.claude/DESIGN-fast-cubical-engine.md</code>,
+        <code>.claude/WORKLOG-fast-cubical-engine.md</code>) implements Flash Cubical (Le Breton-Szustakowski-Piraud,
+        arXiv:2606.04801): top cells become vertices of a DUAL graph, codimension-1 cells become dual edges (a shared
+        <code>∞</code> sentinel standing in for a facet&#39;s missing side on the grid&#39;s outer boundary), and primal <code>H_{d-1}</code> of the
+        sublevel filtration is computed as ordinary <code>H_0</code> of that dual graph&#39;s own SUPERLEVEL filtration — Alexander
+        duality, <code>H_{d-1}(X) ≅ H^0(S^d \ X)</code> — via the same elder-rule array union-find <code>CellularPersistenceInChunksContext</code>&#39;s
+        own <code>unionFindDim01</code> uses, run in DESCENDING primal-value order with every resulting bar&#39;s endpoints swapped.
+        Combined with an ordinary primal <code>H_0</code> union-find, this covers every nontrivial dimension a 2D grid has (<code>H_2</code>
+        is identically zero for any subcomplex of a 2D grid) with no general <code>Chain</code> reduction at all — <strong>valid at any
+        ambient dimension <code>&gt;= 2</code></strong> (<code>require</code>d, checked again with a clearer message at the <code>matlab.TDA4j</code>/<code>cli</code>
+        layer). At <code>d &gt;= 3</code>, the &quot;middle&quot; dimensions (<code>1 &lt;= k &lt;= d-2</code>, no duality shortcut) are handed to
+        <code>CellularPersistenceInChunksContext</code> run on a view that hides the real top-dimensional cells entirely, so the
+        (often largest) top dimension never touches general <code>Chain</code> reduction — see
+        <code>.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md</code>.</p>
+        <p><code>∞</code> must be the unconditional elder of any merge it takes part in — its own chain is deliberately never
+        populated, since it never dies — which is NOT automatically guaranteed by comparing birth values alone: a real
+        top cell can also carry <code>topValue = +Infinity</code> (this codebase&#39;s own &quot;permanently missing cell&quot; convention, the
+        same one <code>io.Perseus</code>&#39;s <code>-1</code> already maps to) and tie against <code>∞</code>&#39;s own <code>birthOf</code>, so the young/old decision
+        special-cases <code>∞</code> explicitly rather than relying on the birth-value comparison alone. Representatives: each
+        active dual component tracks a running signed sum of top cells, oriented coherently as merges happen (the
+        orientation flip is solved from the connecting facet&#39;s own <code>±1</code> boundary coefficients toward each side) so a
+        dying component&#39;s boundary is exactly its bounding <code>H_{d-1}</code> cycle — this codebase&#39;s own extension beyond the
+        source paper, which is F2-only and barcode-only. No paper access (network-blocked) and no existing
+        implementation to port meant this was derived from Alexander duality directly, not translated from a reference
+        source the way <code>EdgeCollapse</code> below could be from GUDHI&#39;s.</p>
+        
+        <h3 id="simplicial-sets" class="section"><a class="anchor-link left" href="#simplicial-sets"><i class="icofont-laika link">&#xef71;</i></a>Simplicial sets</h3>
+        <p><code>SSetElement[G](word, generator)</code> (<code>algebra/SSetElement.scala</code>) plus <code>FiniteSimplicialSet[G]</code>
+        (<code>cells/SimplicialSet.scala</code>) implement finite simplicial sets in the classical Eilenberg-Zilber
+        presentation: a finite set of non-degenerate generators per dimension, plus primitive face data
+        <code>faces: G =&gt; IndexedSeq[SSetElement[G]]</code>. <code>word</code> is the degeneracy indices in normal form — <strong>strictly
+        decreasing</strong>, not increasing, a direct consequence of the simplicial identity <code>s_i s_j = s_{j+1} s_i</code>
+        (<code>i &lt;= j</code>). <code>insertOuter</code>/<code>faceOf</code> implement the full operator algebra (<code>s_i</code>/<code>d_i</code> on arbitrary, possibly
+        degenerate elements), which is what lets <code>FiniteSimplicialSet.validate()</code> check that hand-supplied face data
+        actually satisfies the simplicial identities.</p>
+        <p><code>FiniteSimplicialSet</code>&#39;s companion object (<code>cells/SimplicialSet.scala</code>; the ordering helpers it uses live in
+        <code>cells/SimplicialSetConstructions.scala</code>) builds new simplicial sets from old: <code>product</code>/<code>coproduct</code>
+        (categorical product/coproduct — a product&#39;s non-degenerate simplices
+        are pairs <code>(a, b)</code> with <em>disjoint</em> degeneracy words, not Eilenberg-Zilber shuffles, and its top dimension is
+        <code>maxDim(x) + maxDim(y)</code>), and <code>quotient</code>/<code>identify</code> (attaching maps — <code>quotient</code> takes <code>G =&gt; SSetElement[G]</code>
+        rather than <code>G =&gt; G</code> specifically so a cell can collapse down a dimension onto a degenerate point, the
+        Δ-complex model of ℝP² needs exactly this for one of a triangle&#39;s three edges).</p>
+        <p><code>streams/SimplicialSetStream.scala</code> adapts a <code>FiniteSimplicialSet[G]</code> to <code>CellStream</code> for ordinary,
+        unfiltered homology (every generator at filtration value <code>0</code>); <code>fromStream</code> builds a <code>FiniteSimplicialSet</code>
+        from any simplex stream. <code>streams/FilteredSimplicialSetStream.scala</code> is the genuine
+        <code>StratifiedCellStream[G, Double]</code>, with a caller-supplied <code>filtrationValue</code> and
+        <code>validateMonotoneFiltration</code> to check the one precondition every engine needs (a face&#39;s value never exceeds
+        its coface&#39;s).</p>
+        
+        <h3 id="cech-complexes" class="section"><a class="anchor-link left" href="#cech-complexes"><i class="icofont-laika link">&#xef71;</i></a>Cech complexes</h3>
+        <p><code>streams/CechStream.scala</code> (<code>CechCofaceSimplexStream</code>/<code>CechFiltration</code>) builds Cech complexes over
+        <code>Simplex[Int]</code>, reusing <code>RipserCofaceSimplexStream</code>&#39;s generic coface-generation loop via its
+        <code>filtrationValueOverride</code> hook rather than a from-scratch algorithm. The geometric primitive is
+        minimum-enclosing-ball radius (<code>com.dreizak:miniball</code>), not the Delaunay/QP machinery alpha shapes use —
+        Cech membership depends only on a simplex&#39;s own vertices, not on every other point in the cloud.
+        <code>CechFiltration</code> caches each simplex&#39;s radius and clamps it to the max of its own facets&#39; cached radii,
+        since a raw Miniball call can violate monotonicity by a floating-point ULP on near-degenerate input.</p>
+        <p>New-VR&#39;s Table-Lookup optimization and the packed Ripser engine&#39;s optimizations do <strong>not</strong> carry over to
+        Cech: both are proven specifically for flag complexes / the max-pairwise-distance functional, and Cech is
+        neither a flag complex nor governed by that functional. Cech complexes work with either generic engine
+        (<code>CellularHomologyContext</code>/<code>CellularPersistenceInChunksContext</code>), cross-validated against each other; the
+        packed and reference Ripser engines (specialized to the Vietoris-Rips functional) are not offered for it.</p>
+        
+        <h3 id="witness-complexes" class="section"><a class="anchor-link left" href="#witness-complexes"><i class="icofont-laika link">&#xef71;</i></a>Witness complexes</h3>
+        <p><code>streams/WitnessStream.scala</code> implements De Silva &amp; Carlsson&#39;s witness complex (2004), checked directly
+        against JavaPlex&#39;s own <code>LazyWitnessStream</code>/<code>WitnessStream</code> Java source (not just the paper&#39;s prose).
+        <code>LandmarkSelector.maxmin</code>/<code>.random</code> pick a landmark subset of a <code>FiniteMetricSpace[Int]</code>; <code>WitnessGeometry</code>
+        precomputes the landmark-to-witness distance matrix <code>D</code> and each witness&#39;s sorted landmark-distance row
+        (<code>mDim(k, witness)</code>, the <code>(k+1)</code>-th nearest landmark — the one primitive both variants below are built from).</p>
+        <p>Two independent implementations, both reusing <code>RipserCofaceSimplexStream</code>&#39;s generic coface-generation loop
+        (the same reuse <code>CechCofaceSimplexStream</code> makes) rather than a from-scratch enumeration:</p>
+        <ul>
+          <li><strong><code>LazyWitnessSimplexStream</code></strong> (JavaPlex&#39;s <code>LazyWitnessStream</code>): the lazy witness complex IS, by
+          definition, the flag/clique complex of a weighted graph, so <code>WitnessMetricSpace</code> reifies that graph as an
+          ordinary <code>FiniteMetricSpace[Int]</code> (<code>distance(a,b)</code> = the edge witness value at a fixed <code>nu</code> in <code>{0,1,2}</code>)
+          and hands it to <code>RipserCofaceSimplexStream</code> <strong>unmodified</strong> — no <code>filtrationValueOverride</code> at all; the
+          inherited &quot;max pairwise distance&quot; flag extension is exactly what a lazy witness complex wants. Because it
+          really is a flag complex, <code>PackedRipserCohomologyContext</code> — proven only for genuine VR diameters — is
+          <em>also</em> valid here (any <code>FiniteMetricSpace[Int]</code>&#39;s own diameter, not something VR-specific despite the
+          class&#39;s name), cross-validated directly in <code>WitnessStreamSpec</code> rather than assumed.</li>
+          <li><strong><code>WitnessCofaceSimplexStream</code></strong> (JavaPlex&#39;s plain <code>WitnessStream</code>): NOT a flag complex — a <code>k</code>-dimensional
+          simplex&#39;s own witness value uses a dimension-specific threshold (<code>m_k</code>, JavaPlex&#39;s own per-dimension array)
+          that need not be monotone facet-to-coface on its own. <code>filtrationValueOverride</code> here is a genuinely
+          recursive function (<code>max(own_k(sigma), max over sigma&#39;s own facets)</code>, <code>TrieMap</code>-memoized, since the base
+          class doesn&#39;t memoize a caller-supplied override) — that recursive max is what makes &quot;the complex at
+          threshold R&quot; automatically downward-closed for every R, the same way VR&#39;s max-pairwise-distance does, and
+          it&#39;s also what makes JavaPlex&#39;s separate <code>containsElement(face)</code> gate redundant here (proof and empirical
+          check both in <code>WitnessStreamSpec</code>). <code>maxFiltrationValue</code> defaults to <code>+Infinity</code>, not the metric space&#39;s
+          enclosing radius — that shortcut is only valid for flag complexes.</li>
+        </ul>
+        <p>A fact used to cross-validate the two constructions against each other (<code>WitnessStreamSpec</code>): the general
+        complex&#39;s own 1-skeleton is identical to the lazy complex&#39;s at <code>nu = 2</code> — both use the 2nd-nearest-landmark
+        threshold for edges, just reached via different code paths.</p>
+        
+        <h3 id="dowker-complexes" class="section"><a class="anchor-link left" href="#dowker-complexes"><i class="icofont-laika link">&#xef71;</i></a>Dowker complexes</h3>
+        <p><code>streams/DowkerStream.scala</code> (<code>DowkerGeometry</code>/<code>DowkerFiltration</code>/<code>DowkerCofaceSimplexStream</code>) implements
+        Dowker&#39;s complex (C.H. Dowker, &quot;Homology groups of relations&quot;, 1952), generalized to a filtered, real-valued
+        relation the way Chowdhury &amp; Mémoli&#39;s &quot;A functorial Dowker theorem and persistent homology of asymmetric
+        networks&quot; (2018) does. Given an arbitrary relation <code>R: L x W -&gt; [0, Infinity]</code> — NOT derived from any metric,
+        and <code>L</code>/<code>W</code> need not share an ambient space or even be the same size — a subset <code>sigma subseteq L</code> is a
+        simplex at time <code>t</code> iff some witness <code>w in W</code> relates to every point of <code>sigma</code> by time <code>t</code>:
+        <code>f(sigma) = min_{w in W} max_{x in sigma} R(x,w)</code>. <code>DowkerGeometry.fromBoolean</code> lifts a classical
+        (unfiltered) boolean relation into this shape (<code>true -&gt; 0.0</code>, <code>false -&gt; +Infinity</code>).</p>
+        <p>This directly generalizes the witness complex&#39;s own <code>nu = 0</code> case: <code>WitnessGeometry.witnessValue(sigma, m =
+_ =&gt; 0.0)</code> is exactly this formula with <code>R = D</code> (the landmark-to-witness distance matrix) — not implemented
+        by delegating to <code>WitnessGeometry</code> (its own shape, an ambient metric space plus a landmark subset, doesn&#39;t
+        fit an arbitrary relation with no shared ambient space at all), but the same formula, independently re-derived.
+        Unlike witness&#39;s per-dimension threshold <code>m_k</code>, this single, dimension-independent formula is automatically
+        monotone under face removal — <code>max</code> over a subset is <code>&lt;=</code> <code>max</code> over its superset for every fixed <code>w</code>, so
+        <code>min_w</code> preserves the inequality — so no recursive &quot;max with facets&quot; clamp (<code>WitnessCofaceSimplexStream</code>&#39;s
+        own <code>recursiveFiltrationValue</code>) is needed here. Like Cech/Witness/Sheehy above, <code>DowkerCofaceSimplexStream</code>
+        reuses <code>RipserCofaceSimplexStream</code>&#39;s generic coface-generation loop, since the Dowker complex is NOT a flag
+        complex in general (a witness for a whole simplex need not witness any of its edges).</p>
+        <p>One real footgun this construction has that no earlier stream in this codebase did: <code>keptByThresholdAndCriterion</code>&#39;s
+        <code>&lt;=</code> admits <code>+Infinity &lt;= +Infinity</code>, and <code>DowkerGeometry.fromBoolean</code> deliberately produces a literal <code>+Infinity</code>
+        to mean &quot;never witnessed&quot; — every other stream&#39;s own <code>maxFiltrationValue = +Infinity</code> default is safe only
+        because none of them ever compute a genuinely infinite filtration value. <code>DowkerCofaceSimplexStream</code> overrides
+        <code>keptByThresholdAndCriterion</code> to additionally require <code>.isFinite</code>, confirmed necessary empirically (a hand-built
+        &quot;5 arcs cover a circle&quot; fixture collapsed to the complete graph on 5 vertices without the fix — see
+        <code>.claude/WORKLOG-dowker-complex.md</code>).</p>
+        <p><strong>Duality is the entire point of this construction, not an afterthought</strong>: <code>DowkerGeometry.dual</code> (the transposed
+        relation) gives the <code>W</code>-side complex, and the functorial Dowker duality theorem guarantees its persistence
+        module is naturally isomorphic to the <code>L</code>-side one — so the two sides&#39; barcodes agree exactly, but only AFTER
+        dropping zero-persistence (birth == death) bars from both. A simplicial filtration records exactly one <code>H_0</code>
+        birth event per vertex, so when <code>L</code> and <code>W</code> differ in size the raw barcodes cannot possibly match bar-for-bar
+        even in principle; every &quot;extra&quot; birth turns out to be zero-persistence (confirmed on a hand-worked rectangular
+        relation, not just asserted from the theorem — <code>DowkerStreamSpec.dropZeroPersistence</code>).</p>
+        <p>Wired into <code>matlab.TDA4j</code>/<code>cli</code> as a dedicated entry point (<code>computeFromRelation</code>/<code>--input-format csv-relation</code>),
+        separate from <code>computeFromPoints</code>/<code>computeFromDistanceMatrix</code>: a Dowker relation is neither a point cloud nor a
+        square/symmetric distance matrix, so it doesn&#39;t fit the <code>complex=</code> dispatch those methods share. <code>engine</code>
+        defaults to <code>naive</code> and refuses <code>ripser</code>/<code>chunks</code>, exactly like <code>complex=witness</code> with <code>witnessVariant=general</code> —
+        same non-flag-complex reasoning. A <code>&quot;dual&quot;</code>/<code>--dual</code> option computes the <code>W</code>-side complex directly via
+        <code>DowkerGeometry.dual</code>, without the caller having to transpose the relation by hand.</p>
+        
+        <h3 id="sheehy-s-sparse-approximate-vietoris-rips-filtration" class="section"><a class="anchor-link left" href="#sheehy-s-sparse-approximate-vietoris-rips-filtration"><i class="icofont-laika link">&#xef71;</i></a>Sheehy&#39;s sparse/approximate Vietoris-Rips filtration</h3>
+        <p><code>streams/SheehyRipsStream.scala</code> (<code>SheehyRipsSimplexStream</code>) implements Cavanna, Jahanseir &amp; Sheehy&#39;s greedy-
+        permutation reformulation (arXiv:1506.03797) of D.R. Sheehy&#39;s original net-tree construction (arXiv:1203.6786,
+        DCG 49(4) 2013) — the two papers&#39; own <code>epsilon</code> parameters are not comparable. Given a sparsity parameter
+        <code>epsilon in (0,1)</code> and a full greedy permutation of the point set (<code>LandmarkSelector.maxmin</code> run to
+        <code>numLandmarks = metricSpace.size</code>, extended to also expose each point&#39;s own insertion radius <code>lambda</code>), the
+        resulting persistence barcode is a <code>(1+epsilon)</code>-multiplicative approximation to plain Vietoris-Rips&#39;s own
+        barcode, from a complex whose size is linear in <code>n</code> for point sets of bounded doubling dimension — fewer
+        simplices to <em>reduce</em> at the same scale range, in exchange for a controlled, quantified loss of precision.</p>
+        <p>Like Cech/Witness above, this reuses <code>RipserCofaceSimplexStream</code>&#39;s generic coface-generation loop rather than
+        a from-scratch enumeration, but via a different shape: the ambient metric space is passed through UNMODIFIED
+        (used only for combinatorial enumeration, never its own <code>.distance</code>), and one <code>filtrationValueOverride</code>
+        computes every dimension <code>&gt;= 1</code> directly from the greedy permutation&#39;s own <code>lambda</code> values — not a reified
+        weighted <code>FiniteMetricSpace</code> the way <code>WitnessMetricSpace</code>/<code>DtmRipsSimplexStream</code>&#39;s own reified space are. The
+        reason is a genuine exclusion rule with no pairwise-only expression: a <code>k</code>-simplex&#39;s value is the <code>max</code> of its
+        own edges&#39; births, but ONLY if that value doesn&#39;t exceed the smallest of its OWN VERTICES&#39; &quot;vanish&quot; times
+        (<code>lambda_p * (1+epsilon)^2 / epsilon</code>) — a condition that has to see every vertex of the simplex at once, not
+        just a pair, so a plain &quot;flag complex over a weighted pairwise distance&quot; shape can&#39;t carry it.</p>
+        <p>A documented, verified gap in the source paper&#39;s own published algorithm: its <code>EdgeBirthTime</code> (Algorithm 3)
+        computes an edge&#39;s birth from its two endpoints alone, with no check against either one&#39;s own vanish time —
+        but the paper&#39;s own general <code>SimplexBirthTime</code> rule (Section 5.3) requires exactly that check, and an edge is
+        simply that rule&#39;s <code>k=1</code> case, not a special one. Verified with two counterexamples, the second checked
+        directly against the paper&#39;s own restricted neighbor-search bound (not just this implementation&#39;s own all-pairs
+        enumeration) — see <code>.claude/WORKLOG-sheehy-rips.md</code> for both. This implementation applies the check uniformly
+        from dimension 1 up.</p>
+        <p>This construction is deliberately <code>O(n^2)</code> (every pairwise edge birth materialized directly), not the paper&#39;s
+        own <code>O(n log n)</code> neighbor-search algorithm (Section 5, Algorithms 1-4, not implemented) — the payoff is a
+        smaller complex to reduce, not a faster one to build, the same honest framing as Cech/Witness/alpha above.
+        Refuses <code>engine=&quot;ripser&quot;</code>: a simplex&#39;s value here is not simply the maximum ambient pairwise distance among
+        its vertices (some pairs are sparsified to a smaller value, others excluded outright), so
+        <code>PackedRipserCohomologyContext</code>&#39;s <code>insertionDiameter</code>/apparent-pairs optimizations — proven specifically for
+        that functional — do not apply. <code>naive</code>/<code>chunks</code>/<code>cohomology</code> all consume it like any other
+        <code>CofaceSimplexStream[Int, Double]</code>; <code>chunks</code> is cross-validated fresh against <code>naive</code>
+        (<code>SheehyRipsStreamSpec</code>), not assumed to carry over from any other construction — see
+        <a href="persistence-engines.html">Persistence engines</a>&#39;s own streams-vs-engines table for the full picture across every
+        construction, not just this one.</p>
+        
+        <h3 id="flag-complex-edge-collapse" class="section"><a class="anchor-link left" href="#flag-complex-edge-collapse"><i class="icofont-laika link">&#xef71;</i></a>Flag-complex edge collapse</h3>
+        <p><code>streams/EdgeCollapseStream.scala</code> (<code>EdgeCollapse.collapse</code>, <code>.claude/WORKLOG-edge-collapse.md</code>) implements
+        Boissonnat-Pritam&#39;s edge collapse (SoCG 2020) and Glisse-Pritam&#39;s own refinement (SoCG 2022): reduces a
+        Vietoris-Rips filtration&#39;s 1-skeleton to a smaller weighted graph whose flag complex has the SAME persistent
+        homology at every filtration level, using only the graph itself — no higher simplices are ever built to decide
+        what to remove. An edge is <strong>dominated</strong> by a vertex <code>w</code> (not one of its own endpoints) iff every vertex
+        adjacent to both endpoints is also adjacent to <code>w</code> — for a flag complex this depends only on the graph, verified
+        directly against <code>GUDHI</code>&#39;s own edge-collapse module (<code>Flag_complex_edge_collapser.h</code>, co-authored by Pritam and
+        Glisse themselves; the actual papers were unreachable from this session&#39;s network policy — see the worklog).
+        Across a whole filtration, a dominated edge&#39;s own entry time is pushed forward to the largest time it remains
+        dominated (by, in general, a succession of different dominators as new common neighbors arrive), or removed
+        outright if that domination never breaks. Reified as <code>EdgeCollapsedMetricSpace</code>, a <code>FiniteMetricSpace[Int]</code> over
+        the same vertex ids — exactly the pattern <code>WitnessMetricSpace</code> already established for a non-metric,
+        construction-derived weighted graph — so it slots directly into <code>EnumeratingCofaceSimplexStream</code>/
+        <code>RipserCofaceSimplexStream</code> unmodified. Vertices are never removed (only GENUINELY correcting the originating
+        worklog&#39;s own first-draft phrasing, &quot;dominated-vertex removal&quot; — that is a <em>different</em> construction, strong
+        collapse, <code>arXiv:1809.10945</code>); <code>+Infinity</code> marks a collapsed-away pair, matching <code>SparseMetricSpace</code>&#39;s own
+        &quot;+Infinity past the cutoff&quot; convention; <code>minimumEnclosingRadius</code> is overridden to the bound the collapse itself
+        used, not computed from the (now partly-infinite) collapsed graph — the same enclosing-radius hazard
+        <code>SheehyRipsSimplexStream</code>&#39;s own truncation clamp already had to close, for an unrelated reason.</p>
+        <p><strong>Representatives transfer through inclusion, not a separate lifting step</strong>: at every filtration level, the
+        collapsed complex is a literal subcomplex of the original (a collapse only ever removes cells or defers their
+        entry, never adds or identifies anything), so a cycle/cocycle representative computed on the smaller complex is
+        automatically a valid representative of the same class in the bigger one — contrast the MST-based simplicial-set
+        collapse the originating worklog also considered and declined, where the analogous complex is a <em>quotient</em>, and
+        lifting a representative back is a genuine extra step.</p>
+        <p><strong>This implementation is a faithful port of the reference algorithm&#39;s own single-pass, descending-filtration-
+        value, live-mutating-state structure — not an independently-designed alternative</strong>, after an independently-
+        designed &quot;iterate a definition-driven resolution to a whole-graph fixed point&quot; first draft was tried and proven
+        wrong by this class&#39;s own cross-validation (two distinct over-collapsing bugs, each one silently turning a real,
+        finite bar essential — see the worklog for both). The processing order is load-bearing, not an implementation
+        convenience: reconsider it directly from the reference source before ever touching this file&#39;s core loop, don&#39;t
+        re-derive a substitute. Cross-validated by barcode agreement against plain, uncollapsed VR (property-tested
+        random point clouds, a tie-heavy grid, hand-built fixtures pinning both the shift and the outright-removal
+        outcome) — the real oracle throughout, not agreement with any external tool.</p>
+        <p><strong>Enumeration cost is not reduced uniformly</strong> (checked from source, not assumed): <code>EnumeratingCofaceSimplexStream</code>
+        and <code>PackedRipserCohomologyContext</code>&#39;s own internal <code>CofacetCursor</code>-based enumeration both scan a fixed
+        combinatorial range regardless of graph sparsity (vertices are never removed), though <code>EnumeratingCofaceSimplexStream</code>&#39;s
+        own downstream sort-and-cache pass over the <em>surviving</em> candidates does shrink; <code>RipserCofaceSimplexStream</code>&#39;s
+        own enumeration (built from the previous dimension&#39;s own survivors) benefits directly and proportionally.
+        <strong>Reduction cost benefits substantially regardless of engine</strong> — measured 73-76% of edges removed and a 43-47x
+        reduction-phase speedup on random point clouds (<code>EdgeCollapseBenchmarkSpec</code>, gated the same way
+        <code>ApparentPairsBenchmarkSpec</code> is), against a far more modest 1.45-1.74x construction-phase speedup — see the
+        worklog for the full table and the source-level reasoning behind the split.</p>
+        
+        <h3 id="metric-spaces" class="section"><a class="anchor-link left" href="#metric-spaces"><i class="icofont-laika link">&#xef71;</i></a>Metric spaces</h3>
+        <p><code>FiniteMetricSpace.scala</code> abstracts &quot;distance + finite point set&quot;: <code>ExplicitMetricSpace</code> (raw distance
+        matrix), <code>EuclideanMetricSpace</code> (coordinate array, on-demand Euclidean distance, VP-tree-backed <code>neighbors</code>
+        query), <code>IntMetricSpace</code> (reindexes to contiguous <code>0 until size</code>), <code>SparseMetricSpace</code> (reports <code>+Infinity</code>
+        beyond a fixed diameter cutoff, bounding Vietoris-Rips construction to a finite neighborhood per point).</p>
+        
+        <h3 id="opt-in-parallelism" class="section"><a class="anchor-link left" href="#opt-in-parallelism"><i class="icofont-laika link">&#xef71;</i></a>Opt-in parallelism</h3>
+        <p>A few of the more expensive per-cell computations can run on the common <code>ForkJoinPool</code>, opt-in via a
+        constructor flag defaulting to <code>false</code>, with output that is deterministic either way:
+        <code>AlphaDQPSettings.parallel</code> (the per-vertex QP solve), <code>CubicalGridStream.parallelFiltrationValue</code>, and
+        <code>CechCofaceSimplexStream.parallelFiltrationValue</code>. These are worth reaching for on large inputs where the
+        per-cell cost is real (a QP solve, a Miniball radius) but shouldn&#39;t be assumed to give a large win — measured
+        speedups range from a few percent (cubical, Cech — the per-cell cost there is small enough that scheduling
+        overhead eats most of the gain) up to roughly 2-4x for the alpha-complex QP solve at a few hundred points and
+        above, where each per-vertex solve is genuinely expensive.</p>
+        
+        <h2 id="barcode-scala-representing-the-output" class="section"><a class="anchor-link left" href="#barcode-scala-representing-the-output"><i class="icofont-laika link">&#xef71;</i></a><code>Barcode.scala</code>: representing the output</h2>
+        <p><code>org.appliedtopology.tda4j.barcode</code> defines <code>BarcodeEndpoint</code> (<code>PositiveInfinity</code>/<code>NegativeInfinity</code>/
+        <code>OpenEndpoint</code>/<code>ClosedEndpoint</code>, with a total order that correctly interleaves finite and infinite
+        endpoints) and <code>PersistenceBar[FiltrationT, AnnotationT]</code> (dimension, lower/upper endpoint, an optional
+        annotation — in practice always the representative <code>Chain</code>). <code>Barcode</code> additionally implements algebra on
+        finitely-presented persistence modules: <code>image</code>/<code>kernel</code>/<code>cokernel</code> of a map between two barcodes
+        represented as a matrix — useful for interleaving distances or persistence-module morphisms, not needed for
+        ordinary persistent-homology computation.</p>
+        <p>Two more objects in the same package compare/summarize already-computed diagrams rather than computing one
+        (<code>.claude/WORKLOG-mainstream-feature-gap-analysis.md</code> items 4/8) — both specialized to <code>PersistenceBar[Double,
+_]</code> (unlike <code>Barcode</code>&#39;s own <code>FiltrationT: Ordering</code> genericity: every real engine in this codebase already
+        produces <code>Double</code> filtration values, and a metric distance needs real arithmetic, not just an <code>Ordering</code>):</p>
+        <ul>
+          <li><strong><code>BarcodeDistance</code></strong>: bottleneck and Wasserstein distance between two single-dimension diagrams
+          (<code>bottleneckDistance</code>/<code>wassersteinDistance</code>, plus <code>...ByDimension</code> convenience wrappers that group a
+          multi-dimensional barcode first). Ground metric and aggregation-order convention cross-checked against
+          Hera/GUDHI&#39;s own (<code>GroundNorm.LInfinity</code>/<code>LP(p)</code> is their <code>internal_p</code>, the <code>order</code> parameter is their
+          <code>order</code>/<code>wasserstein_power</code>). Essential (never-dying) bars are matched only to each other, by sorted birth
+          value; a mismatched essential-bar count between the two diagrams reports <code>Double.PositiveInfinity</code>, not an
+          exception — a real, meaningful answer (&quot;no finite matching exists&quot;), not a failure. Built on two
+          package-private combinatorial primitives in <code>BipartiteMatching.scala</code> (<code>HopcroftKarp</code> for the bottleneck
+          binary search, <code>Hungarian</code> for Wasserstein&#39;s assignment problem) — both independently unit-tested against
+          brute-force permutation search, not just exercised indirectly through <code>BarcodeDistance</code> itself.</li>
+          <li><strong><code>Vectorization</code></strong>: persistence landscapes (Bubenik 2013) and persistence images (Adams et al. 2017),
+          turning a diagram into a fixed-size <code>Array[Array[Double]]</code> for downstream (e.g. ML) use. The two handle
+          essential bars differently, deliberately: a landscape&#39;s tent function <code>max(0, min(t - birth, death - t))</code>
+          degrades to the meaningful, finite ramp <code>t - birth</code> exactly at <code>death = Infinity</code>, so essential bars are
+          included with no special-casing; a persistence image&#39;s Gaussian bump is centered at <code>(birth, Infinity)</code> in
+          birth-persistence coordinates, which has no overlap with any finite pixel grid, so essential bars are
+          dropped outright rather than left to silently underflow to zero. Persistence images integrate each pixel&#39;s
+          weighted Gaussian mass <em>exactly</em> (a product of 1D normal-CDF differences, since an isotropic Gaussian&#39;s mass
+          over a rectangle factors along both axes), not by sampling the surface at the pixel center.</li>
+        </ul>
+        <p><code>matlab.PersistenceResult</code> exposes both as instance methods (<code>bottleneckDistance</code>/<code>wassersteinDistance</code>
+        against another <code>PersistenceResult</code>, <code>landscape</code>/<code>persistenceImage</code> on itself) — see that class&#39;s own doc.
+        <code>cli.TDA4jCLI</code>&#39;s <code>--distance-to</code> mirrors <code>BarcodeDistance</code> only (reading a second diagram via
+        <code>io.{CSV,Gudhi,Dipha}.readPersistenceDiagram</code>); the vectorizations are deliberately not mirrored in the CLI,
+        since they produce a matrix rather than a diagram, which does not fit this CLI&#39;s existing single-diagram
+        output model — see <code>TDA4jConf.distanceTo</code>&#39;s own doc.</p>
+        <p><code>matlab.PersistenceResult</code> also exports the <strong>boundary matrix</strong> of the full complex it was computed from
+        (<code>.claude/WORKLOG-mainstream-feature-gap-analysis.md</code> item 1) — <code>numCells</code>/<code>boundaryRows</code>/<code>boundaryCols</code>/
+        <code>boundaryValues</code>/<code>columnDimension</code>/<code>columnVertices</code>/<code>columnFiltrationValue</code>, rebuildable MATLAB-side as
+        <code>sparse(rows()+1, cols()+1, values(), n, n)</code>. Built lazily (a caller who never asks never pays for it) by
+        <code>TDA4j.buildBoundaryMatrix</code>, called once per <code>complex</code> branch in <code>computeGeneric</code>/<code>computeWitnessFromLandmarks</code>/
+        <code>computeCubicalGeneric</code> from the SAME stream/metric-space construction <code>engine=naive</code> already consumes for that
+        complex — <strong>regardless of which engine actually computed this result&#39;s own bars</strong>, since the boundary matrix is
+        a property of the complex, not of which reduction algorithm ran over it (confirmed directly, not just designed
+        that way: <code>naive</code>/<code>ripser</code>/<code>chunks</code>/<code>cohomology</code> all export byte-for-byte identical matrices for the same
+        input). Like the vectorizations above, deliberately not mirrored on the CLI — a sparse matrix doesn&#39;t fit the
+        CLI&#39;s diagram-in-diagram-out shape any better than a landscape/image array does.</p>
+        
+        <h2 id="homology-circularcoordinates-circularcoordinates-scala" class="section"><a class="anchor-link left" href="#homology-circularcoordinates-circularcoordinates-scala"><i class="icofont-laika link">&#xef71;</i></a><code>homology.CircularCoordinates</code> (<code>CircularCoordinates.scala</code>)</h2>
+        <p><code>org.appliedtopology.tda4j.homology</code> also holds a standalone construction rather than a fifth persistence
+        engine: circular coordinates (de Silva-Morozov-Vejdemo-Johansson 2011,
+        <code>.claude/WORKLOG-mainstream-feature-gap-analysis.md</code> item 2), which turns one persistent H¹ class of a
+        Vietoris-Rips complex into a map from (a connected subset of) the point cloud to the circle <code>R/Z</code>. <code>h1Bars</code>
+        lists every persistent H¹ class&#39;s <code>(birth, death)</code>, sorted by persistence descending — the only way a caller
+        can pick a meaningful threshold <code>r</code> for <code>compute</code> below, so it&#39;s the intended first call, not a diagnostic.</p>
+        <p><strong>The reframing that makes this tractable</strong> (the originating worklog&#39;s own contribution, not just a
+        literature port): rather than asking whether a <em>finite</em> bar&#39;s already-computed representative happens to
+        restrict to a nonzero cocycle on some sub-level complex — an open question about an existing artifact —
+        <code>compute</code> fixes <code>r</code> inside the target bar&#39;s <code>[birth, death)</code> up front, builds the <em>static</em> truncated complex
+        <code>K_r</code> (<code>maxFiltrationValue = Some(r)</code>, the same knob enclosing-radius truncation already uses), and computes
+        <code>CellularCohomologyContext</code>&#39;s persistent cohomology of that fixed complex directly. The target class is
+        essential at <code>K_r</code> <em>by construction</em> — nothing survives past <code>r</code> in a view that stops at <code>r</code> — so the
+        verification question dissolves rather than needing an answer. Matching one of possibly several
+        simultaneously-alive <code>K_r</code>-essential classes back to the specific full-filtration bar <code>h1Bars</code> reported turns
+        out to need only a birth-value comparison: truncating the <em>end</em> of a filtration cannot change how early
+        something is born, so <code>K_r</code>&#39;s persistent cohomology (fed the same filtration values, just cut off at <code>r</code>)
+        assigns every bar the same birth it has in the full computation.</p>
+        <p>The chosen cocycle is computed over an odd prime field (<code>prime</code>, default <code>47</code> — not this library&#39;s usual <code>2</code>
+        default, since an RP²-type class exists over <code>F_2</code> with no real/integer lift at all, making a mod-2 &quot;cocycle&quot;
+        a mirage for coordinatization specifically), lifted to an integer cochain, and checked EXACTLY (not just mod
+        <code>prime</code>, which the field computation already guarantees trivially) against every triangle of <code>K_r</code> —
+        <code>NoIntegerCocycleException</code> (a <code>RuntimeException</code>, crossing the MATLAB bridge the same way
+        <code>IllegalArgumentException</code> already does) if some triangle&#39;s integer boundary doesn&#39;t sum to zero, naming the
+        offending triangle. Verified, not assumed: a class that fails this check is either genuinely torsion or needs
+        a larger prime; <code>compute</code> does not silently coordinatize against a mod-<code>prime</code> mirage either way.</p>
+        <p>The verified integer cocycle is then harmonically smoothed: <code>min_g ||z - d0 g||^2</code> for a real vertex function
+        <code>g</code> (<code>d0</code> the 0-coboundary map), via the normal equations <code>d0^T d0 g = d0^T z</code> — a sparse SPD least-squares
+        solve, not &quot;optimization&quot; in the LP/QP sense that <code>.claude/WORKLOG-mainstream-feature-gap-analysis.md</code> item 3
+        (optimal cycles, deprioritized) actually needs. Solved matrix-free with the already-vendored
+        <code>org.apache.commons.math3.linear.ConjugateGradient</code> against a <code>RealLinearOperator</code> built directly from
+        <code>Simplex.boundary[Double]</code> — no dense matrix materialized, no new dependency — restricted to the connected
+        component of <code>K_r</code>&#39;s 1-skeleton containing the cocycle&#39;s own support (a class is only meaningful where a path
+        exists to integrate it along; other components get no coordinate at all, not a sentinel), with one arbitrary
+        vertex in that component anchored at <code>g = 0</code> to make the reduced system genuinely positive <em>definite</em> (the
+        unreduced graph Laplacian is singular on constants, one null dimension per connected component). The output
+        coordinate is then, directly, <code>theta(v) = frac(g(v))</code> — no separate path-integration step, confirmed against a
+        real reference implementation (<code>scikit-tda/DREiMac</code>&#39;s <code>toroidalcoords.py</code>, fetched and read directly) rather
+        than derived from the paper&#39;s more abstract statement alone.</p>
+        <p><code>matlab.TDA4j.h1Bars</code>/<code>circularCoordinates</code> (returning <code>CircularCoordinatesResult</code>) mirror <code>h1Bars</code>/<code>compute</code>
+        for a MATLAB caller — a genuinely different result <em>shape</em> (a per-point angle, <code>Double.NaN</code> for a point
+        outside the relevant component) from <code>PersistenceResult</code>&#39;s barcode, hence its own small entry points rather
+        than a new <code>complex=circular</code> value on <code>computeFromPoints</code>. Like the vectorizations and boundary-matrix export
+        above, deliberately not mirrored on the CLI: the natural output is a per-point angle array, not a diagram, and
+        picking a meaningful <code>r</code> is an inherently interactive, data-dependent choice (<code>h1Bars</code> then <code>compute</code>) that
+        doesn&#39;t reduce to a single flag the way <code>--distance-to</code> does for <code>BarcodeDistance</code>.</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">class</span><span> </span><span class="type-name">TDAContext</span><span>[</span><span class="type-name">VertexT</span><span>: </span><span class="type-name">Ordering</span><span>, </span><span class="type-name">CoefficientT</span><span>: </span><span class="type-name">Field</span><span>, </span><span class="type-name">FiltrationT</span><span>: </span><span class="type-name">Ordering</span><span>]
+    </span><span class="keyword">extends</span><span> </span><span class="type-name">SimplicialHomologyContext</span><span>[</span><span class="type-name">VertexT</span><span>, </span><span class="type-name">CoefficientT</span><span>, </span><span class="type-name">FiltrationT</span><span>]():
+  </span><span class="keyword">val</span><span> </span><span class="identifier">chainIsRingModule</span><span> = </span><span class="identifier">summon</span><span>[</span><span class="type-name">Chain</span><span>[</span><span class="type-name">Simplex</span><span>[</span><span class="type-name">VertexT</span><span>], </span><span class="type-name">CoefficientT</span><span>] </span><span class="identifier">is</span><span> </span><span class="type-name">RingModule</span><span> { </span><span class="keyword">type</span><span> </span><span class="type-name">R</span><span> = </span><span class="type-name">CoefficientT</span><span> }]
+  </span><span class="identifier">export</span><span> </span><span class="identifier">chainIsRingModule</span><span>.*
+  </span><span class="identifier">given</span><span> [</span><span class="type-name">T</span><span>: </span><span class="type-name">Ordering</span><span>] =&gt; </span><span class="type-name">Conversion</span><span>[</span><span class="type-name">Simplex</span><span>[</span><span class="type-name">T</span><span>], </span><span class="type-name">Chain</span><span>[</span><span class="type-name">Simplex</span><span>[</span><span class="type-name">T</span><span>], </span><span class="type-name">CoefficientT</span><span>]] = </span><span class="type-name">Chain</span><span>.</span><span class="identifier">apply</span></code></pre>
+        <p><code>TDAContext</code> takes <strong>three</strong> type parameters (<code>VertexT</code>, <code>CoefficientT</code>, <code>FiltrationT</code>). It <em>is</em> a
+        <code>SimplicialHomologyContext</code> (see <a href="persistence-engines.html">Persistence engines</a>), plus it exports
+        chain-arithmetic operators (<code>+</code>, <code>-</code>, <code>⊠</code>, ...) into your namespace and provides an implicit
+        <code>Simplex -&gt; Chain</code> conversion so you can write <code>∆(1,2) - ∆(2,3)</code> directly — the basis for the
+        <a href="../user-guide/">User&#39;s Guide</a>&#39;s Scala quick-start.</p>
+
+        
+<hr class="footer-rule"/>
+<footer>
+  MIT License © Mikael Vejdemo-Johansson, Daniel Hope
+</footer>
+
+
+      </main>
+
+    </div>
+
+  </body>
+
+</html>
