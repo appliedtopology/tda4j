@@ -603,12 +603,20 @@ class TDA4jSpec extends mutable.Specification:
       naive must containTheSameElementsAs(fastCubical)
     }
 
-    "engine=fast-cubical is refused for a 3D image" in {
-      val cubeShape = Array(2, 2, 2)
-      val cubeFlat = Array.fill(8)(0.0)
-      TDA4j.computeFromCubicalImage(cubeShape, cubeFlat, Array("engine", "fast-cubical")) must throwA[
-        IllegalArgumentException
-      ]
+    // Was "engine=fast-cubical is refused for a 3D image" -- true of the OLD ambient-dimension-2-only engine,
+    // no longer true since the hybrid-with-chunks extension to d >= 3
+    // (.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md): a 3D image is now a real, supported case, not
+    // a rejection, so this became a positive agreement test instead (mirroring the 2D "agrees with the default
+    // engine=naive" test just above) rather than being deleted outright.
+    "engine=fast-cubical agrees with the default engine=naive on a 3D image" in {
+      val cubeShape = Array(3, 3, 3)
+      val cubeFlat = Array.fill(27)(0.0)
+      cubeFlat(13) = 1.0 // flat index of (1,1,1), row-major/last-axis-fastest: 1*9 + 1*3 + 1 -- the single
+      // elevated interior voxel, exactly FastCubicalHomologySpec's own hand-derived singleVoidFixture3D
+      val naive = triples(TDA4j.computeFromCubicalImage(cubeShape, cubeFlat).toArray())
+      val fastCubical =
+        triples(TDA4j.computeFromCubicalImage(cubeShape, cubeFlat, Array("engine", "fast-cubical")).toArray())
+      naive must containTheSameElementsAs(fastCubical)
     }
 
     "computeFromImage (the 2D double[][] convenience) matches computeFromCubicalImage on the same grid" in {

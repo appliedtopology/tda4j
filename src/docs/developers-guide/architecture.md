@@ -210,10 +210,12 @@ sublevel filtration is computed as ordinary `H_0` of that dual graph's own SUPER
 duality, `H_{d-1}(X) ≅ H^0(S^d \ X)` — via the same elder-rule array union-find `CellularPersistenceInChunksContext`'s
 own `unionFindDim01` uses, run in DESCENDING primal-value order with every resulting bar's endpoints swapped.
 Combined with an ordinary primal `H_0` union-find, this covers every nontrivial dimension a 2D grid has (`H_2`
-is identically zero for any subcomplex of a 2D grid) with no general `Chain` reduction at all — **currently
-ambient dimension 2 only** (`require`d, checked again with a clearer message at the `matlab.TDA4j`/`cli` layer);
-3D needs an additional piece (`H_1` there needs general reduction on whatever the `H_0`/`H_2` union-finds don't
-already resolve) this class doesn't attempt.
+is identically zero for any subcomplex of a 2D grid) with no general `Chain` reduction at all — **valid at any
+ambient dimension `>= 2`** (`require`d, checked again with a clearer message at the `matlab.TDA4j`/`cli`
+layer). At `d >= 3`, the "middle" dimensions (`1 <= k <= d-2`, no duality shortcut) are handed to
+`CellularPersistenceInChunksContext` run on a view that hides the real top-dimensional cells entirely, so the
+(often largest) top dimension never touches general `Chain` reduction — see
+`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
 
 `∞` must be the unconditional elder of any merge it takes part in — its own chain is deliberately never
 populated, since it never dies — which is NOT automatically guaranteed by comparing birth values alone: a real

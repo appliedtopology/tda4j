@@ -23,11 +23,16 @@ import scala.collection.mutable
   * port the way `streams.EdgeCollapse` could port GUDHI's; this is original work built on Alexander duality, not a
   * translation).
   *
-  * '''Currently ambient dimension 2 only''' (`require`d) -- `H_0` (ordinary primal union-find) plus `H_1` (`= H_{d-1}`
-  * at `d=2`, via the dual union-find below) together account for every cell dimension a 2D grid has, with NO general
-  * `Chain.reduceBy` reduction needed at all. Ambient dimension 3 needs an additional piece this class does not attempt
-  * (`H_1` there needs general reduction on whichever cells are NOT already resolved by the `H_0` and `H_2` union-finds)
-  * -- deferred, not half-implemented; see the design note.
+  * '''Valid at any ambient dimension `>= 2`''' (`require`d). At `d=2`, `H_0` (ordinary primal union-find) plus `H_1`
+  * (`= H_{d-1}` at `d=2`, via the dual union-find below) together account for every cell dimension a 2D grid has, with
+  * NO general `Chain.reduceBy` reduction needed at all. At `d >= 3` there are `d-2` "middle" dimensions (`1 <= k <=
+  * d-2`) with no duality shortcut -- `H_0`/`H_{d-1}` stay union-find-only (neither computation degrades with `d`; only
+  * the FRACTION of the total homology they cover for free shrinks), and the middle dimensions are handed to
+  * `CellularPersistenceInChunksContext` run on a `LimitedCubicalGridStream` view that hides the real top-dimensional
+  * cells entirely -- still a net win over running `chunks` on the whole complex, since the (often largest) top
+  * dimension never touches general `Chain` reduction at all. See
+  * `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md` for the full derivation, including why the dual
+  * union-find's own correctness doesn't depend on how the middle dimensions get resolved.
   *
   * '''The dual construction''': top cells (`dim == ambientDim`, i.e. pixels) are dual vertices; codimension-1 cells
   * ("facets") are dual edges, each connecting the 1 or 2 top cells containing it as a face (always exactly 1 or 2 for a
@@ -57,10 +62,32 @@ class FastCubicalHomologyContext[CoefficientT: Field]:
 
   def persistentHomology(stream: CubicalGridStream): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     require(
-      stream.ambientDim == 2,
-      s"FastCubicalHomologyContext currently supports ambient dimension 2 only, got ${stream.ambientDim}"
+      stream.ambientDim >= 2,
+      s"FastCubicalHomologyContext requires ambient dimension >= 2, got ${stream.ambientDim}"
     )
-    computeH0(stream) ++ computeDualTopDimension(stream)
+    if stream.ambientDim == 2 then computeH0(stream) ++ computeDualTopDimension(stream)
+    else computeMiddleDimensions(stream) ++ computeDualTopDimension(stream)
+
+  // -------------------------------------------------------------------------------------------------------------
+  // d >= 3's "middle" dimensions (1 <= k <= d-2): no duality shortcut exists for these, so they're handed to
+  // chunks -- run on a view that hides the real top-dimensional cells entirely (never offered to `chunks` at
+  // all, not merely filtered out of its report), so that engine's own general Chain reduction never touches the
+  // (often largest) top dimension. `chunks`'s own maxDim = d-2 asks it to walk 0..d-1 (exactly what the
+  // truncated stream provides) and report <= d-2 -- its own pre-existing "drop the incomplete top bar" filtering
+  // already discards the bars a truncation would otherwise wrongly leave open, the same mechanism naive/
+  // cohomology already rely on for their own maxDim. This also yields H_0 as a side effect of chunks's own
+  // unionFindDim01 fast path, at no extra cost over what chunks was going to do anyway -- no need to separately
+  // call computeH0 here (unlike the d=2 path above, where computeH0 is the ONLY dimension-0 computation and
+  // invoking chunks at all would be pure overhead on an empty middle-dimension range).
+  // See .claude/DESIGN-fast-engines-hybrid-middle-dimensions.md for the full derivation.
+  // -------------------------------------------------------------------------------------------------------------
+  private def computeMiddleDimensions(
+    stream: CubicalGridStream
+  ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
+    val truncated = LimitedCubicalGridStream(stream, stream.ambientDim - 1)
+    CellularPersistenceInChunksContext[Cube, CoefficientT](stream.ambientDim - 2)
+      .persistentHomology(truncated)
+      .barcodeAt(Double.PositiveInfinity)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
     if !lower && v == Double.PositiveInfinity then PositiveInfinity()

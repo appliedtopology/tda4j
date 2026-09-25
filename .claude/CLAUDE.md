@@ -346,18 +346,18 @@ Sublevel/superlevel is handled only in `CubicalImage.scala`'s loaders (negate on
 BT.601 luma; 3D via in-memory arrays. H0 oracle uses Moore (8/26-connected) adjacency, not 4-connected.
 
 Both naive and chunks engines consume cubes. The old "naive scales badly in 3D" finding was an uncached
-`filtrationValue`, now fixed — not an engine difference. A grid-exploiting engine for **3D** (CubicalRipser,
-Wagner-Chen-Vuçini) remains a valid future direction (`DESIGN-fast-cubical-engine.md`,
-`WORKLOG-cubical-chunks-benchmark.md`); **2D** now has one — see below.
+`filtrationValue`, now fixed — not an engine difference. A grid-exploiting engine dedicated to **3D**
+(CubicalRipser, Wagner-Chen-Vuçini) remains a valid future direction (`DESIGN-fast-cubical-engine.md`,
+`WORKLOG-cubical-chunks-benchmark.md`); every dimension `>= 2` now has a fast(er) option — see below.
 
 **`FastCubicalHomologyContext` (`homology/FastCubicalHomology.scala`, `engine="fast-cubical"`)** — Flash Cubical
 (Le Breton-Szustakowski-Piraud, arXiv:2606.04801), an original derivation (network-blocked from the paper, no
-implementation to port — unlike `EdgeCollapse`'s GUDHI source). **Ambient dimension 2 only** (`require`d,
-checked again with a clearer message at the `matlab`/`cli` layer). Top cells become vertices of a DUAL graph,
-codimension-1 cells become dual edges (`∞` sentinel for the grid's outer boundary), and primal `H_{d-1}` of the
-sublevel filtration is ordinary `H_0` of that dual graph's own SUPERLEVEL filtration (Alexander duality,
-`H_{d-1}(X) ≅ H^0(S^d∖X)`) via the same elder-rule union-find `unionFindDim01` uses, run in descending primal
-order with every bar's endpoints swapped; combined with a primal `H_0` union-find, this covers a 2D grid
+implementation to port — unlike `EdgeCollapse`'s GUDHI source). **Valid at any ambient dimension `>= 2`**
+(`require`d, checked again with a clearer message at the `matlab`/`cli` layer). Top cells become vertices of a
+DUAL graph, codimension-1 cells become dual edges (`∞` sentinel for the grid's outer boundary), and primal
+`H_{d-1}` of the sublevel filtration is ordinary `H_0` of that dual graph's own SUPERLEVEL filtration (Alexander
+duality, `H_{d-1}(X) ≅ H^0(S^d∖X)`) via the same elder-rule union-find `unionFindDim01` uses, run in descending
+primal order with every bar's endpoints swapped; combined with a primal `H_0` union-find, this covers a 2D grid
 completely (`H_2` is identically zero for any planar subset) with no `Chain` reduction at all. **`∞` must be the
 unconditional elder of any merge it takes part in — checked explicitly, not inferred from `birthOf(∞) =
 +Infinity` being the largest value**: a real top cell can also carry `topValue = +Infinity` (this codebase's own
@@ -367,6 +367,23 @@ see the worklog before touching the young/old decision in `computeDualTopDimensi
 signed sum of top cells per active dual component, oriented coherently via each merge's connecting facet's own
 `±1` boundary coefficients — this codebase's own extension beyond the source paper (F2/barcode-only).
 `WORKLOG-fast-cubical-engine.md`.
+
+**At ambient dimension `>= 3`, a hybrid with `chunks` handles the residual "middle" dimensions**
+(`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): `H_0`/`H_{d-1}` stay exactly the two union-finds
+above (neither computation degrades with `d`; only the FRACTION of total homology they cover for free shrinks
+as `d` grows, from "everything" at `d=2` to `2` out of `d+1` dimensions in general), and dimensions `1..d-2`
+(no duality shortcut exists for these) are handed to `CellularPersistenceInChunksContext` run on a
+`LimitedCubicalGridStream` view that hides the real top-dimensional cells entirely — never offered to `chunks`
+at all, not merely filtered from its report, so the (often largest) top dimension never touches general `Chain`
+reduction. `chunks`'s own pre-existing `maxDim = d-2` semantics ("walk `0..maxDim+1`, report `<= maxDim`")
+already discards the incomplete bars a truncation would otherwise wrongly leave open — the same mechanism
+naive/cohomology already rely on for their own `maxDim`, needing no new "drop the top bar" logic here. Also
+yields `H_0` as a side effect of `chunks`'s own `unionFindDim01`, at no extra cost. No new hardcoded dimension
+ceiling was introduced (`chunks` is already fully general over `d`) — cross-validated against the naive engine
+at `d=3` (hand fixtures, Fp(3) sign-genericity, a random tie-heavy property test) plus one `d=4` smoke test;
+**not** validated at `d >= 5`, and the win shrinks with `d` by design, not merely in practice — see the design
+note for the full derivation, including why the dual union-find's own correctness doesn't depend on how the
+middle dimensions get resolved.
 
 ## Simplicial sets
 
@@ -663,8 +680,8 @@ PersistenceEngine.scala`) rather than re-matching the raw string at each branch.
   `complex=alpha` with `alphaBackend=helix` (the default) and ambient dimension 2 — refused for every other
   `complex` and for `alphaBackend=DQP` — see "Alpha complex" above. `computeFromCubicalImage`/`computeFromImage`
   for cubes — same four base `engine` values plus a fifth, `fast-cubical` (`FastCubicalHomologyContext`),
-  refused everywhere else and refused even here for a 3D image (ambient dimension must be exactly 2) — see
-  "Cubical complexes" above.
+  refused everywhere else and refused even here only for a degenerate 1-axis image (ambient dimension `< 2`) —
+  see "Cubical complexes" above.
 - **Two-step witness recipe** (`WORKLOG-witness-two-step-api.md`), alongside the one-shot path:
   `selectLandmarksFrom{Points,DistanceMatrix}` (→ `LandmarkSelectionResult`) then
   `computeFrom{Points,DistanceMatrix}AndLandmarks` (takes that `int[]`, 0-based ambient indices, directly —

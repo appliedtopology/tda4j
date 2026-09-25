@@ -151,6 +151,26 @@ class CubicalGridStream(
       cubes.sorted(using filtrationOrdering.reverse).iterator
   }
 
+/** Hides every cell of dimension `> maxDim` from `stream` -- the `Cube` analogue of `LimitedCofaceSimplexStream`
+  * (`SimplexStream.scala`), needed because that class is hardcoded to `CofaceSimplexStream[Int, Double]` and doesn't
+  * fit `Cube` at all. Used by `homology.FastCubicalHomologyContext`'s own `d >= 3` path
+  * (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) to hand `CellularPersistenceInChunksContext` a view of
+  * the grid that never contains a real top-dimensional cell, so that engine's own general `Chain` reduction never
+  * touches them -- the whole point being to let the (cheaper) dual union-find handle the top dimension instead.
+  *
+  * Delegates `filtrationOrdering`/`filtrationValue` to `stream` unchanged (removing higher-dimensional cells from the
+  * DOMAIN doesn't change either), and preserves `StratifiedCellStream.iterator`'s own contiguous-from-0 contract for
+  * free: truncating a contiguous `0..stream.ambientDim` domain to `0..maxDim` is still contiguous from 0.
+  */
+class LimitedCubicalGridStream(stream: CubicalGridStream, maxDim: Int)
+    extends StratifiedCellStream[Cube, Double]
+    with DoubleFiltration[Cube]():
+  override def iterateDimension: PartialFunction[Int, Iterator[Cube]] = {
+    case d: Int if d >= 0 && d <= maxDim && stream.iterateDimension.isDefinedAt(d) => stream.iterateDimension(d)
+  }
+  override def filtrationOrdering: Ordering[Cube] = stream.filtrationOrdering
+  override def filtrationValue: PartialFunction[Cube, Double] = stream.filtrationValue
+
 /** A sparse/arbitrary finite set of cubes with explicit filtration values -- mirrors `ExplicitStream` for simplices.
   * Useful for hand-built fixtures and for genuinely non-grid cubical complexes (arbitrary unions of products of
   * intervals, per the original ask -- `CubicalGridStream` is the important special case for images, not the only shape

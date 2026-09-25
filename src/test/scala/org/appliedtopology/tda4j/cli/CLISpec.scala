@@ -265,8 +265,7 @@ class CLISpec extends mutable.Specification:
 
     "produce the exact same barcode as calling TDA4j.computeFromCubicalImage directly with --engine fast-cubical" >> {
       val path = tempFile(".txt")
-      // Same ring fixture as the default-engine test above -- ambient dimension 2, so --engine fast-cubical is
-      // valid here (see FastCubicalHomologyContext's own doc for the dimension-2-only restriction).
+      // Same ring fixture as the default-engine test above.
       java.nio.file.Files.write(
         java.nio.file.Paths.get(path),
         "2\n3\n3\n0\n0\n0\n0\n-1\n0\n0\n0\n0\n".getBytes

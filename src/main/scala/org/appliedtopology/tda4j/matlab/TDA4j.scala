@@ -394,8 +394,9 @@ object TDA4j:
     *   - `"engine"`: `"naive"` (default), `"chunks"`, `"cohomology"`, or `"fast-cubical"` -- `"ripser"` is never
     *     offered here: `PackedRipserCohomologyContext` is specialized to `Simplex[Int]` Vietoris-Rips complexes and has
     *     no notion of a cubical complex at all. `"fast-cubical"` (`homology.FastCubicalHomologyContext`, Le Breton-
-    *     Szustakowski-Piraud's dual-graph union-find) is refused unless the grid's own ambient dimension is exactly 2
-    *     (a 3D image needs `"naive"`/`"chunks"`/`"cohomology"` instead) -- see CLAUDE.md's Cubical complexes section.
+    *     Szustakowski-Piraud's dual-graph union-find, extended past 2D by a hybrid with `chunks` for the residual
+    *     middle dimensions) is refused only for a degenerate 1-axis "image" (ambient dimension `< 2`) -- see
+    *     CLAUDE.md's Cubical complexes section and `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
     *   - `"maxDimension"`: integer, default is the grid's own ambient dimension (i.e. "give me everything"). Unlike
     *     `complex=vr`/`"cech"` above, a cubical grid's own top dimension is ALREADY naturally bounded by its ambient
     *     dimension (an image's own dimensionality) and is never artificially cut short the way an unbounded VR/Cech
@@ -1386,19 +1387,20 @@ object TDA4j:
     if engine == EngineKind.FastAlpha then
       throw new IllegalArgumentException(
         "engine=fast-alpha cannot be used for a cubical complex: FastAlphaHomologyContext is specialized to " +
-          "HelixDelaunay and has no notion of a cubical complex at all. Use engine=fast-cubical (ambient " +
-          "dimension 2 only) for a cubical grid's own fast engine, or engine=naive/chunks/cohomology otherwise."
+          "HelixDelaunay and has no notion of a cubical complex at all. Use engine=fast-cubical for a cubical " +
+          "grid's own fast engine, or engine=naive/chunks/cohomology otherwise."
       )
     // FastCubicalHomologyContext's own `require` throws IllegalArgumentException too, but with a message written
     // for a library caller who already has a `CubicalGridStream` in hand, not a MATLAB/CLI caller who only
     // supplied a `shape`/`flatValues` array -- catching it here first gives an error that names the actual
-    // option/argument to change.
-    if engine == EngineKind.FastCubical && stream.ambientDim != 2 then
+    // option/argument to change. ambientDim < 2 is the only remaining rejection (a degenerate 1-axis "image"):
+    // ambientDim >= 3 is the hybrid path (.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md), no longer
+    // rejected here at all -- see that note for why there's no principled place to draw a NEW hardcoded ceiling
+    // (chunks, which the hybrid path hands the residual middle dimensions to, is already fully general over d).
+    if engine == EngineKind.FastCubical && stream.ambientDim < 2 then
       throw new IllegalArgumentException(
-        s"engine=fast-cubical currently supports ambient dimension 2 only (FastCubicalHomologyContext's own dual-" +
-          s"graph union-find has no dimension-3 formulation yet -- see .claude/DESIGN-fast-cubical-engine.md), " +
-          s"got a ${stream.ambientDim}-dimensional shape. Use engine=naive, engine=chunks, or engine=cohomology " +
-          s"for a 3D image."
+        s"engine=fast-cubical requires ambient dimension >= 2, got a ${stream.ambientDim}-dimensional shape. " +
+          s"Use engine=naive, engine=chunks, or engine=cohomology instead."
       )
     // Default: the grid's own ambient dimension, i.e. "give me everything" -- correctly parallel to complex=alpha
     // above (a cubical grid's own top dimension is already naturally bounded, never artificially truncated the
@@ -1469,10 +1471,9 @@ object TDA4j:
         // is specialized to the concrete CubicalGridStream (its dual-graph construction reads `.shape`/`.ambientDim`/
         // `.topCellValue` directly), not generic over `CellT: OrderedCell` the way naive/chunks/cohomology are -- the
         // same "honest asymmetry" PersistenceEngine's own doc comment already states for Ripser. dispatchCubical
-        // already rejected ambientDim != 2 before this is ever reached, and the stream's own natural top dimension
-        // for ambientDim=2 IS dimension 1 (H_2 is identically zero for any subcomplex of a 2D grid -- nothing above
-        // dimension 1 for maxDimension to ever filter here), so maxDimension is passed through to fromBars purely
-        // for uniformity with every other branch, not because it does real filtering work in practice.
+        // already rejected ambientDim < 2 before this is ever reached; maxDimension is passed through to fromBars
+        // for real filtering now that ambientDim >= 3 is possible here too (unlike the old ambientDim=2-only
+        // engine, where the grid's own natural top dimension was always <= 1 and nothing was ever filtered).
         fromBars[Cube, C](
           FastCubicalHomologyContext[C]().persistentHomology(stream),
           cellVertices,

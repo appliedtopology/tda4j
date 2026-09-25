@@ -138,7 +138,7 @@ pair was removed outright while building this class) — coboundary is *extrinsi
 which higher-dimensional cells exist in the ambient complex), not intrinsic the way `boundary` is, so a
 per-cell `coboundary` method with no complex to consult was never the right shape.
 
-## 6. `FastCubicalHomologyContext` — dual-graph union-find, 2D cubical grids only
+## 6. `FastCubicalHomologyContext` — dual-graph union-find, any ambient dimension >= 2
 
 Flash Cubical (Le Breton-Szustakowski-Piraud, arXiv:2606.04801): a genuinely different algorithm from engines
 1/2 above, not a faster re-keying the way engine 4 is for engine 3. Specialized to `CubicalGridStream`
@@ -147,14 +147,19 @@ directly (like engines 3/4 are specialized to `Simplex[Int]` Vietoris-Rips) rath
 implement `PersistenceEngine[CellT, C]` either, for the same "honest asymmetry" reason that trait's own doc
 comment already gives for engines 3/4.
 
-**Currently ambient dimension 2 only** (a `require`d precondition `matlab.TDA4j`/`cli` both check before ever
-calling it, with a clear message rather than a generic exception). At `d=2`, `H_0` (an ordinary primal
+**Valid at any ambient dimension `>= 2`** (a `require`d precondition `matlab.TDA4j`/`cli` both check before
+ever calling it, with a clear message rather than a generic exception). At `d=2`, `H_0` (an ordinary primal
 union-find, ascending filtration order, elder rule) plus `H_1` (via the dual construction below) together
 account for every nontrivial cell dimension a 2D grid has — `H_2` is identically zero for any subcomplex of a
-2D grid (a bounded planar region has no 2-dimensional voids to detect), so nothing is being skipped. `d=3`
-would need an additional piece this class doesn't attempt (`H_1` there needs general `Chain` reduction on
-whatever cells aren't already resolved by the `H_0`/`H_2` union-finds) — deferred, not half-implemented; see
-`.claude/DESIGN-fast-cubical-engine.md`.
+2D grid (a bounded planar region has no 2-dimensional voids to detect), so nothing is being skipped. At `d >=
+3` there are `d-2` "middle" dimensions (`1 <= k <= d-2`) with no duality shortcut; these are handed to
+`CellularPersistenceInChunksContext` run on a `LimitedCubicalGridStream` view that hides the real
+top-dimensional cells entirely, so the (often largest) top dimension never touches general `Chain` reduction —
+still a real, if shrinking-with-`d`, win, and no new hardcoded dimension ceiling (`chunks` is already fully
+general over `d`). See `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md` for the full derivation,
+including why the dual union-find's own correctness doesn't depend on how the middle dimensions get resolved;
+cross-validated against the naive engine at `d=3` (hand fixtures, Fp(3) sign-genericity, a random property
+test) plus one `d=4` smoke test, not validated at `d >= 5`.
 
 **The dual construction**: top cells (pixels) become dual vertices, codimension-1 cells (facets) become dual
 edges connecting the 1 or 2 top cells containing them (a shared `∞` sentinel vertex, fixed at `+Infinity`,
@@ -186,9 +191,15 @@ Same algorithm as engine 6, applied to `HelixDelaunay`'s top simplices instead o
 full derivation and its own newly-measured risk). `HelixDelaunay` specifically, never `AlphaComplexDQP`/
 `AlphaShapeDQP` — the dual graph needs the full, untruncated triangulation (`AlphaComplexDQP.euclidean`'s own
 truncated mode is incompatible) and "every facet has <= 2 cofaces," which `AlphaShapeDQP`'s own documented
-cospherical-degeneracy hazard can violate directly by emitting an oversized simplex. Currently ambient
-dimension 2 only, for the identical reason as engine 6 (3D needs the same additional, harder residual-`H_1`
-piece, not attempted here either).
+cospherical-degeneracy hazard can violate directly by emitting an oversized simplex. **Currently ambient
+dimension 2 only, unlike engine 6** (which now also handles `d >= 3` via a hybrid with `chunks` — see engine
+6's own section and `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): the same hybrid shape applies
+in principle (this engine's own dual-graph code is already dimension-generic, exactly like engine 6's was
+before its own extension), but alpha's `d >= 3` port is deliberately sequenced AFTER cubical's own hybrid was
+validated, not concurrent with it, and additionally needs its own fresh measurement of the facet-multiplicity
+precondition's failure rate at `d=3` (HelixDelaunay's own separate near-cospherical limitation is known to get
+WORSE, not stay flat, at higher ambient dimension — see this file's own risk note just below and
+`alpha-complex.md`) before it can ship. Not yet started.
 
 **Unlike engine 6, this precondition is not guaranteed by construction** and was measured directly this
 session: roughly 1-in-18700 on random points at ambient dimension 2 specifically (see `alpha-complex.md` for
@@ -230,9 +241,8 @@ table and the code ever disagree.
 
 A fifth engine value, `engine="fast-cubical"` (`FastCubicalHomologyContext`, engine 6 above), is not shown as
 its own table column: it would be "no — not a cubical grid" for every row except cubical, which is the ONLY
-row that offers it, and even there **only when the image's own ambient dimension is exactly 2** (a 3D image
-must use `naive`/`chunks`/`cohomology` instead, refused with a message naming the actual dimension, not a bare
-`IllegalArgumentException`).
+row that offers it — valid at any ambient dimension `>= 2` there (a degenerate 1-axis image is refused with a
+message naming the actual dimension, not a bare `IllegalArgumentException`).
 
 A sixth engine value, `engine="fast-alpha"` (`FastAlphaHomologyContext`, engine 7 above), is symmetric: "no —
 not `HelixDelaunay`" for every row except `alpha`, the ONLY row that offers it, and even there **only when
@@ -263,9 +273,10 @@ Reading the "no" cells as one-line reasons, grouped by root cause:
 - **Representation-specific** (cubical): `PackedRipserCohomologyContext`/`RipserCohomologyContext` are
   hardcoded to `Simplex[Int]`'s combinatorial-number-system indexing (`SimplexIndexing`); `Cube` has no
   equivalent encoding built for it. Engine 6 (`fast-cubical`) is a dedicated fast engine in this spirit, but
-  not a drop-in replacement for `ripser` here: it's a different algorithm (dual-graph union-find, not
-  `SimplexIndexing`-style enumeration) and currently 2D-only — a 3D grid-exploiting engine (`CubicalRipser`,
-  Wagner-Chen-Vuçini) remains a documented future direction, `DESIGN-fast-cubical-engine.md`.
+  not a drop-in replacement for `ripser` here: it's a different algorithm (dual-graph union-find plus, at
+  `d >= 3`, a hybrid with `chunks` for the residual middle dimensions — not `SimplexIndexing`-style
+  enumeration). A grid-exploiting engine dedicated to 3D specifically (`CubicalRipser`, Wagner-Chen-Vuçini)
+  remains a documented future direction, `DESIGN-fast-cubical-engine.md`.
 
 `engine="cohomology"` (`CellularCohomologyContext`, engine 5 above) is the one column with no "no" cells for a
 reason: it's generic over `CellT: OrderedCell` with no per-construction speed assumptions baked in, at the cost
@@ -281,4 +292,4 @@ tradeoff actually buys and costs.
 | Fast, memory-efficient cohomology on a Vietoris-Rips/clique complex over integer vertex labels | **`PackedRipserCohomologyContext`** (what `engine="ripser"` uses) |
 | A `Simplex[Int]`-keyed reference implementation for hand-debugging engine 4 | `RipserCohomologyContext` (test oracle, not a production choice) |
 | Cohomology (real cocycle representatives) on `Cube`/`FiniteSimplicialSet`/Cech/Alpha/general witness complex, or any `OrderedCell` type engines 3/4 can't serve | **`CellularCohomologyContext`** (what `engine="cohomology"` uses) |
-| Fastest option for a 2D cubical grid specifically (H0/H1 only, no `Chain` reduction at all) | **`FastCubicalHomologyContext`** (what `engine="fast-cubical"` uses; 3D grids need `naive`/`chunks`/`cohomology`) |
+| Fastest option for a cubical grid of any ambient dimension `>= 2` (no `Chain` reduction at all for `H_0`/`H_{d-1}`; a `chunks` hybrid for any residual middle dimensions at `d >= 3`) | **`FastCubicalHomologyContext`** (what `engine="fast-cubical"` uses) |

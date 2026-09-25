@@ -253,20 +253,24 @@ real images/volumes. `sublevel = false` computes superlevel-set persistence inst
 descending intensity) via the standard "negate the values" trick — reported filtration values under
 `sublevel = false` are in negated-intensity units, not raw pixel values.
 
-#### A faster engine for 2D images
+#### A faster engine for cubical images
 
 ```scala 3
 val stream = CubicalGridStream(IndexedSeq(rows, cols), topValue)
 val bars = FastCubicalHomologyContext[Double]().persistentHomology(stream) // H0 and H1, that's everything at 2D
 ```
 
-For a strictly 2-dimensional grid, `FastCubicalHomologyContext` computes the exact same barcode (with real
-representatives) as `CubicalHomologyContext` above, via a different algorithm entirely — a dual-graph
-union-find (Alexander duality) rather than general `Chain` reduction. It throws `IllegalArgumentException` for
-anything other than a 2D grid (3D voxel volumes need `CubicalHomologyContext`/`CellularPersistenceInChunksContext`
-instead — see the [Developer's Guide](../developers-guide/persistence-engines.md)'s engine 6 section for why 3D
-isn't supported yet). `matlab.TDA4j`'s `engine="fast-cubical"` option (and the CLI's `--engine fast-cubical`)
-use this automatically for a 2D `computeFromCubicalImage`/`computeFromImage` call.
+`FastCubicalHomologyContext` computes the exact same barcode (with real representatives) as
+`CubicalHomologyContext` above, via a different algorithm entirely — a dual-graph union-find (Alexander
+duality) rather than general `Chain` reduction, valid at any ambient dimension `>= 2` (it throws
+`IllegalArgumentException` only for a degenerate 1-axis grid). At a 2D grid specifically, the two union-finds
+(`H_0` and `H_1`) cover everything; at 3D and beyond, the "middle" dimensions (no duality shortcut applies to
+them) are handed to `CellularPersistenceInChunksContext` on a view that hides the real top-dimensional cells,
+so the top dimension still skips general `Chain` reduction entirely — still a real win, though a shrinking one
+as the ambient dimension grows, since the fraction of dimensions the two union-finds can cover for free shrinks
+with it. See the [Developer's Guide](../developers-guide/persistence-engines.md)'s engine 6 section for the
+full picture. `matlab.TDA4j`'s `engine="fast-cubical"` option (and the CLI's `--engine fast-cubical`) use this
+automatically for any `computeFromCubicalImage`/`computeFromImage` call at ambient dimension `>= 2`.
 
 ### Simplicial sets
 
@@ -395,7 +399,7 @@ changes a method's call signature:
 | Option | Values | Default |
 |---|---|---|
 | `complex` | `vr`, `alpha`, `cech`, `witness`, `dtm-rips`, `dtm-alpha`, `sheehy-rips` | `vr` |
-| `engine` | `ripser`, `naive`, `chunks`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and `witness`/`witnessVariant=lazy`; `naive` for `alpha`/`cech`/`dtm-rips`/`dtm-alpha`/`sheehy-rips`/`witness`/`witnessVariant=general`/cubical images. `fast-cubical` is valid ONLY for `computeFromCubicalImage`/`computeFromImage`, and only when the image is 2-dimensional. `fast-alpha` is valid ONLY for `complex=alpha` with `alphaBackend=helix`, and only when the point cloud's own ambient dimension is 2 |
+| `engine` | `ripser`, `naive`, `chunks`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and `witness`/`witnessVariant=lazy`; `naive` for `alpha`/`cech`/`dtm-rips`/`dtm-alpha`/`sheehy-rips`/`witness`/`witnessVariant=general`/cubical images. `fast-cubical` is valid ONLY for `computeFromCubicalImage`/`computeFromImage`, for any ambient dimension `>= 2`. `fast-alpha` is valid ONLY for `complex=alpha` with `alphaBackend=helix`, and only when the point cloud's own ambient dimension is 2 |
 | `alphaBackend` | `helix`, `DQP` | `helix` (only consulted for `complex=alpha`) |
 | `dtmK` | integer | REQUIRED for `complex=dtm-rips` or `complex=dtm-alpha`, no default |
 | `dtmQ` | double | `2.0` (only consulted for `complex=dtm-rips` or `complex=dtm-alpha`) |
@@ -423,7 +427,8 @@ the same reason as `cech` (the general witness complex isn't a flag complex eith
 (the default) for `engine=ripser`/`chunks`. `engine=cohomology` is accepted everywhere `engine=naive` is
 (`vr`, `alpha`, `cech`, `dtm-rips`, `dtm-alpha`, `sheehy-rips`, and `witness` alike). `engine=fast-cubical` is
 the mirror image: refused everywhere EXCEPT `computeFromCubicalImage`/`computeFromImage`, and even there
-refused for a 3D image (ambient dimension must be exactly 2). `engine=fast-alpha` is likewise refused
+refused only for a degenerate 1-axis image (ambient dimension `< 2`) — unlike `fast-alpha` below, it is NOT
+restricted to any particular ambient dimension beyond that. `engine=fast-alpha` is likewise refused
 everywhere except `complex=alpha` with `alphaBackend=helix` (the default; `alphaBackend=DQP` is refused too —
 `FastAlphaHomologyContext` cannot consume `AlphaShapeDQP`'s output), and even there refused for a point cloud
 whose ambient dimension isn't exactly 2. Both `fast-*` exceptions name the actual mismatch (dimension, backend,
@@ -557,12 +562,12 @@ Guide](../developers-guide/architecture.md)'s `homology.CircularCoordinates` sec
 | Cohomology (cocycle representatives) on `Cube`/`FiniteSimplicialSet`, or on Alpha/Cech/DTM/Sheehy/witness, where `ripser` doesn't apply | `cohomology` (`CellularCohomologyContext`) |
 | Alpha or Cech or DTM or Sheehy complexes, or a general (non-flag) witness complex | `naive` or `cohomology` (`chunks` also works for Cech, DTM-Rips, and Sheehy-Rips — not Alpha/DTM-Alpha) |
 | A lazy witness complex (the flag-complex variant) | `ripser` (`PackedRipserCohomologyContext`, run directly on `WitnessMetricSpace`) or `naive`/`chunks`/`cohomology` |
-| A strictly 2-dimensional cubical image — fastest option there, H0/H1 only | `fast-cubical` (`FastCubicalHomologyContext`; 3D images need `naive`/`chunks`/`cohomology` instead) |
+| A cubical image, any ambient dimension `>= 2` — fastest option there | `fast-cubical` (`FastCubicalHomologyContext`; H0/H1 only, no `Chain` reduction at all, in 2D specifically; a `chunks` hybrid for the residual middle dimensions at 3D+) |
 | A strictly 2-dimensional alpha complex via `"helix"` — fastest option there, H0/H1 only | `fast-alpha` (`FastAlphaHomologyContext`; `"DQP"` or 3D point clouds need `naive`/`chunks`/`cohomology` instead) |
 
 All engines are generic over the coefficient field (a prime finite field or floating point); `naive`,
 `chunks`, and `cohomology` are also generic over the cell type (simplices, cubes, or simplicial-set
-generators) — only `ripser`, `fast-cubical`, and `fast-alpha` are specialized (to Vietoris-Rips, to 2D cubical
+generators) — only `ripser`, `fast-cubical`, and `fast-alpha` are specialized (to Vietoris-Rips, to cubical
 grids, and to 2D `HelixDelaunay` triangulations, respectively). See the
 [Developer's Guide's persistence-engines page](../developers-guide/persistence-engines.md) for the full
 detail.

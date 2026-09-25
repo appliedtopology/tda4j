@@ -98,9 +98,73 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
         (triples.sorted must beEqualTo(naiveBars(permanentlyMissingCenterFixture).sorted))
     }
 
-  "requires ambient dimension 2" >> {
+  "requires ambient dimension at least 2" >> {
     FastCubicalHomologyContext[Double]()
       .persistentHomology(CubicalGridStream(IndexedSeq(3), _ => 0.0)) must throwA[IllegalArgumentException]
+  }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // d=3: the hybrid path (.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md). H_0/H_2 (= H_{d-1}) still
+  // come from the two union-finds, unchanged; H_1 is the one "middle" dimension at d=3, handed to
+  // CellularPersistenceInChunksContext on a LimitedCubicalGridStream view. Direct 3D analogue of the 2D "single
+  // bright center pixel"/"two independent holes" fixtures above: a solid NxNxN block of voxels with one interior
+  // voxel elevated is a solid ball with a small cubical CAVITY (not touching the outer boundary) once the
+  // elevated voxel's own sublevel threshold is crossed -- homotopy equivalent to S^2, so exactly one persistent
+  // H_2 bar and (unlike the 2D case, where there was no middle dimension to get wrong) no persistent H_1 bar --
+  // this is exactly the new code path the 2D fixtures above could never exercise.
+  // ---------------------------------------------------------------------------------------------------------
+
+  val singleVoidFixture3D: CubicalGridStream =
+    CubicalGridStream(IndexedSeq(3, 3, 3), idx => if idx == IndexedSeq(1, 1, 1) then 1.0 else 0.0)
+
+  val twoVoidFixture3D: CubicalGridStream =
+    val elevated = Set(IndexedSeq(1, 1, 1), IndexedSeq(3, 3, 3))
+    CubicalGridStream(IndexedSeq(5, 5, 5), idx => if elevated(idx) then 1.0 else 0.0)
+
+  "A single elevated interior voxel in an otherwise-flat 3x3x3 image produces exactly one persistent H2 bar, " +
+    "no persistent H1 bar, and matches the naive engine" >> {
+      // "persistent" = nonzero persistence (birth != death), not "total count at that dimension": most dim-2
+      // bars here are zero-persistence (a 2-cell immediately killed by its own 3-cell coface at the SAME value,
+      // exactly the 2D fixture's own "8 zero-persistence H1 bars alongside the 1 real one" pattern one dimension
+      // up) -- `bars.count(_._1 == 2)` alone (27 for this fixture) would conflate the two.
+      val bars = fastBars[Double](singleVoidFixture3D)
+      (bars.count { case (2, b, d) => b != d; case _ => false } must beEqualTo(1)) and
+        (bars.exists(_ == (2, 0.0, 1.0)) must beTrue) and
+        (bars.count { case (1, b, d) => b != d; case _ => false } must beEqualTo(0)) and
+        (bars.sorted must beEqualTo(naiveBars(singleVoidFixture3D).sorted))
+    }
+
+  "Two independent elevated interior voxels in a 5x5x5 image produce exactly two persistent H2 bars, and match " +
+    "the naive engine" >> {
+      val bars = fastBars[Double](twoVoidFixture3D)
+      (bars.count { case (2, 0.0, 1.0) => true; case _ => false } must beEqualTo(2)) and
+        (bars.sorted must beEqualTo(naiveBars(twoVoidFixture3D).sorted))
+    }
+
+  val handFixtures3D: Seq[CubicalGridStream] = Seq(singleVoidFixture3D, twoVoidFixture3D)
+
+  "every representative (H1, from chunks, and H2, from the dual union-find) has zero boundary, on the 3D hand " +
+    "fixtures" >>
+    handFixtures3D
+      .map { stream =>
+        val bars = FastCubicalHomologyContext[Double]().persistentHomology(stream)
+        bars.filter(_.dim > 0).forall(b => Chain.from(b.annotation.get.boundary).isZero()) must beTrue
+      }
+      .reduce(_ and _)
+
+  // ---------------------------------------------------------------------------------------------------------
+  // Smoke test only, not a claim of validated correctness at d=4: the design note's own "no artificial dimension
+  // cap" conclusion (chunks is already fully general over d, and neither union-find degrades with d) predicts
+  // this should just work, but that prediction deserves at least one real check rather than resting on the
+  // argument alone -- kept minimal (a tiny, entirely flat 4D grid, trivial expected homology) since this spec's
+  // job is confirming the CODE PATH has no accidental d=2/d=3-specific assumption left in it, not exploring 4D
+  // topology.
+  // ---------------------------------------------------------------------------------------------------------
+
+  "does not reject ambient dimension 4, and agrees with the naive engine on a minimal flat 4D grid" >> {
+    val stream = CubicalGridStream(IndexedSeq(2, 2, 2, 2), _ => 0.0)
+    val bars = fastBars[Double](stream)
+    bars.sorted must beEqualTo(naiveBars(stream).sorted)
   }
 
   // ---------------------------------------------------------------------------------------------------------
@@ -142,6 +206,18 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
         val f3Bars = FastCubicalHomologyContext[GF3.Fp]().persistentHomology(stream)
         val f3Triples = f3Bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
         val allCycles = f3Bars.filter(_.dim == 1).forall(b => Chain.from(b.annotation.get.boundary).isZero())
+        (f3Triples.sorted must beEqualTo(doubleBars.sorted)) and (allCycles must beTrue)
+      }
+      .reduce(_ and _)
+
+  "agrees with the Double run over Fp(3), including genuine-cycle representatives, on the 3D hand fixtures " +
+    "(the middle H1 dimension included, not just the top H2 one)" >>
+    handFixtures3D
+      .map { stream =>
+        val doubleBars = fastBars[Double](stream)
+        val f3Bars = FastCubicalHomologyContext[GF3.Fp]().persistentHomology(stream)
+        val f3Triples = f3Bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
+        val allCycles = f3Bars.filter(_.dim > 0).forall(b => Chain.from(b.annotation.get.boundary).isZero())
         (f3Triples.sorted must beEqualTo(doubleBars.sorted)) and (allCycles must beTrue)
       }
       .reduce(_ and _)
@@ -190,6 +266,44 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
         val bars = FastCubicalHomologyContext[Double]().persistentHomology(stream)
         val triples = bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
         val allCycles = bars.filter(_.dim == 1).forall(b => Chain.from(b.annotation.get.boundary).isZero())
+        allCycles && triples.sorted == naiveBars(stream).sorted
+      }
+    }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // The same cross-validation, at d=3 -- exercising the hybrid path's own middle dimension (H1, from chunks on
+  // a LimitedCubicalGridStream view) together with the two union-finds (H0/H2), on random tie-heavy grids rather
+  // than only the hand-derived fixtures above. Shapes kept smaller than the 2D generator (axes up to 3, not 4):
+  // totalCellCount grows as prod(2*shape(i)+1), so 3 axes already costs noticeably more than 2 at the same
+  // per-axis bound, and chunks's own general reduction on the truncated view is the whole reason this needs
+  // watching (unlike the two union-finds alone, which were cheap enough not to care).
+  // ---------------------------------------------------------------------------------------------------------
+
+  case class TestImage3D(shape: IndexedSeq[Int], values: IndexedSeq[Int])
+
+  def genTestImage3D: Gen[TestImage3D] =
+    for
+      shape <- Gen.listOfN(3, Gen.choose(1, 3)).map(_.toIndexedSeq)
+      total = shape.product
+      values <- Gen.listOfN(total, Gen.choose(0, 4)).map(_.toIndexedSeq)
+    yield TestImage3D(shape, values)
+
+  given Arbitrary[TestImage3D] = Arbitrary(genTestImage3D)
+
+  def valueFnOf(img: TestImage3D): IndexedSeq[Int] => Double =
+    idx =>
+      val flat = idx.zip(img.shape).foldLeft(0) { case (acc, (i, n)) => acc * n + i }
+      val level = img.values(flat)
+      if level == 4 then Double.PositiveInfinity else level.toDouble
+
+  "matches the naive engine's barcode, and every H1/H2 representative is a genuine cycle, on random tie-heavy " +
+    "3D images (the hybrid path's own middle dimension, not just the two union-finds)" >>
+    AsResult {
+      prop { (img: TestImage3D) =>
+        val stream = CubicalGridStream(img.shape, valueFnOf(img))
+        val bars = FastCubicalHomologyContext[Double]().persistentHomology(stream)
+        val triples = bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
+        val allCycles = bars.filter(_.dim > 0).forall(b => Chain.from(b.annotation.get.boundary).isZero())
         allCycles && triples.sorted == naiveBars(stream).sorted
       }
     }

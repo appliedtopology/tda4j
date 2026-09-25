@@ -40,8 +40,10 @@ regression or vice versa.
 ### `FastAlphaHomologyContext` — dual union-find, and a second, MEASURED limitation this one is exposed to
 
 `homology/FastAlphaHomology.scala` (`.claude/DESIGN-alpha-dual-unionfind.md`), a follow-on to the cubical dual
-union-find engine (`FastCubicalHomologyContext`, `persistence-engines.md`'s engine 6): builds a dual graph over
-`HelixDelaunay`'s own top simplices (ambient dimension 2 only, currently) and computes `H_0`+`H_1` via the same
+union-find engine (`FastCubicalHomologyContext`, `persistence-engines.md`'s engine 6 — which, unlike this alpha
+port, now also handles ambient dimension `>= 3` via a hybrid with `chunks`, see
+`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): builds a dual graph over `HelixDelaunay`'s own top
+simplices (ambient dimension 2 only, currently) and computes `H_0`+`H_1` via the same
 Alexander-duality/elder-rule union-find, needing `HelixDelaunay` specifically (never `AlphaShapeDQP`, whose own
 documented cospherical-degeneracy hazard can emit an oversized simplex outright) because the dual graph needs
 the full, untruncated triangulation and "every facet has exactly 1 or 2 containing top simplices."
