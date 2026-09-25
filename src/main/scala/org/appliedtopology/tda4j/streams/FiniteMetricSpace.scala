@@ -124,8 +124,9 @@ class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricSpace[
 class EuclideanMetricSpace(val pts: Array[Array[Double]]) extends FiniteMetricSpace[Int]:
   def pointSqDistance(x: Array[Double], y: Array[Double]): Double =
     var acc: Double = 0.0
+    val n = math.min(x.length, y.length)
     var i = 0
-    while i < math.min(x.length, y.length) do
+    while i < n do
       val d: Double = x(i) - y(i)
       acc += d * d
       i += 1
