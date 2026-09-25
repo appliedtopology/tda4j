@@ -203,6 +203,38 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
     }
 
   // ---------------------------------------------------------------------------------------------------------
+  // requireValidTriangulation=true (.claude/DESIGN-helix-triangulation-repair.md): the SAME 12-point set that
+  // throws above no longer does when the flag is set, and the resulting barcode agrees with the naive engine's
+  // OWN barcode computed on this SAME repaired stream.
+  // ---------------------------------------------------------------------------------------------------------
+
+  val repairedFixture: HelixDelaunay = HelixDelaunay(
+    Array(
+      Array(0.25695462472920483, 0.05056259919533401),
+      Array(0.16861543461245865, 0.6584119575973783),
+      Array(0.04467548898740192, 0.34594140416504626),
+      Array(0.4001206924759393, 0.7492099413470164),
+      Array(0.9883782492738798, 0.31376350981292744),
+      Array(0.9160887469534176, 0.952687093337434),
+      Array(0.19808274564375272, 0.2756763438426806),
+      Array(0.6337671470530175, 0.4977740447848821),
+      Array(0.6906131750679769, 0.9538206186545584),
+      Array(0.4693304070850357, 0.4362857418234436),
+      Array(0.5483329515783447, 0.7788827446454716),
+      Array(0.8916378524720998, 0.4724706741593929)
+    ),
+    requireValidTriangulation = true
+  )
+
+  "requireValidTriangulation=true fixes the pinned facet-multiplicity violation fixture: no exception, and the " +
+    "barcode agrees with the naive engine's own barcode on the SAME repaired stream" >> {
+      val bars = FastAlphaHomologyContext[Double]().persistentHomology(repairedFixture)
+      val triples = bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
+      val allCycles = bars.filter(_.dim > 0).forall(b => Chain.from(b.annotation.get.boundary).isZero())
+      (allCycles must beTrue) and (triples.sorted must beEqualTo(naiveBars(repairedFixture).sorted))
+    }
+
+  // ---------------------------------------------------------------------------------------------------------
   // Random 2D point clouds, cross-validated against the naive engine. Two real, KNOWN HelixDelaunay limitations
   // (not bugs in this class -- see the design note) can legitimately fire on random input: the facet-
   // multiplicity precondition above (~1-in-18700 at this dimension) and HelixDelaunay's own separate,
@@ -274,4 +306,49 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
           case NonFatal(_)                        =>
             true // a pre-existing, unrelated HelixDelaunay construction failure -- not this class's bug
       }
+    }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // requireValidTriangulation=true at d=3 (.claude/DESIGN-helix-triangulation-repair.md): a real point cloud
+  // found by a targeted stress sweep, pinned here because an earlier version of the repair -- checking only
+  // "no facet has >2 claimants" -- passed structurally on this exact input but produced a barcode missing a
+  // real essential H2 bar (the repaired triangulation had a genuine interior gap: a real ~33% total-tetrahedra-
+  // volume shortfall, confirmed directly, not merely inferred from the barcode mismatch). The current repair's
+  // own hasNoInteriorVoid check catches this.
+  // ---------------------------------------------------------------------------------------------------------
+
+  val repairedFixture3D: HelixDelaunay = HelixDelaunay(
+    Array(
+      Array(-0.350164845110318, -0.3700869677747629, 0.12151708796048147),
+      Array(0.0525839849957362, -0.6761578106998201, 0.06442935733747843),
+      Array(0.09028145027017032, -0.6219914143579661, 0.15693776061123396),
+      Array(-0.42973545539865543, -0.3308858454190853, -0.0032960526516370714),
+      Array(0.6634006058343629, 0.8680791474958749, 0.5762119286416412),
+      Array(0.7733134859403767, 0.3735414020996175, -0.8804352267298816),
+      Array(-0.3562312736670429, -0.5075637456687292, -0.29310921774317156),
+      Array(0.4842206459413588, -0.21411675753498366, 0.23470517196074878),
+      Array(0.5741691870137027, -0.4023427360954783, -0.3885379645039237),
+      Array(-0.2179897503441489, -0.3336406569357398, 0.2699767658804606),
+      Array(0.5835005149135122, 0.13702095941697257, -0.10227904524361454),
+      Array(-0.20729896029127942, -0.09417651042354339, -0.6787956340425426),
+      Array(-0.07229135328406966, -0.6564442500942667, -0.426688752500354),
+      Array(-0.4429296234333536, -0.13210887570730087, 0.036717558351400864),
+      Array(0.5390665535844015, -0.4603158920887498, 0.01787074117977916),
+      Array(0.5262763017438334, -0.30663110808074706, 0.16442523609344836),
+      Array(0.40271579447618616, 0.31210589366125696, -0.047197809311840394),
+      Array(0.40448593828745705, -0.3507161144525709, 0.2597800501790094),
+      Array(0.19344460477415168, 0.40708848531342484, -0.09580483853373162),
+      Array(0.04078114316711489, 0.4171504940882867, -0.11742045531339786),
+      Array(0.2646294395648181, -0.6926117586346685, -0.3158288419255936)
+    ),
+    seed = 19421L,
+    requireValidTriangulation = true
+  )
+
+  "requireValidTriangulation=true fixes a real d=3 facet-multiplicity violation found by a stress sweep: no " +
+    "exception, and the barcode agrees with the naive engine's own barcode on the SAME repaired stream" >> {
+      val bars = FastAlphaHomologyContext[Double]().persistentHomology(repairedFixture3D)
+      val triples = bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
+      val allCycles = bars.filter(_.dim > 0).forall(b => Chain.from(b.annotation.get.boundary).isZero())
+      (allCycles must beTrue) and (triples.sorted must beEqualTo(naiveBars(repairedFixture3D).sorted))
     }

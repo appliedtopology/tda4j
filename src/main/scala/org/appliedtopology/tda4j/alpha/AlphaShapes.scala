@@ -297,13 +297,32 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
   * @param seed
   *   seeds the bootstrap frontier-selection shuffle (`HelixDelaunayBuilder`); same `pts` and `seed` always produce the
   *   same triangulation.
+  * @param requireValidTriangulation
+  *   OFF by default -- changes nothing above when `false`. When `true`, and `compute()` produces a facet- multiplicity
+  *   violation (`FastAlphaHomologyContext`'s own precondition), runs `HelixDelaunay.repairByJitterRetriangulation`
+  *   (`.claude/DESIGN-helix-triangulation-repair.md`): a "simulation of simplicity"-style repair that nudges exactly
+  *   the offending, near-tied points by a tiny random perturbation and re-runs this SAME `HelixDelaunayBuilder` on the
+  *   full (mostly unperturbed) point set, then recomputes every resulting simplex's own circumsphere from the ORIGINAL,
+  *   un-nudged coordinates so the perturbation never leaks into a real filtration value -- only into the combinatorial
+  *   tie-break, plus a direct check that the repaired result has no interior gap (see that method's own doc for why the
+  *   facet-count check alone was found insufficient). Two other designs (discarding the conflicting region and
+  *   re-filling it via coning from an arbitrary apex; discarding the extra claimants outright with no replacement) were
+  *   tried first and rejected after being checked against the actual failing fixture -- see the design note's own
+  *   "First"/"Second design attempt (rejected)" sections. Validated by targeted stress sweep at `d=2` and `d=3`
+  *   (`FastAlphaHomologyContext`'s own primary use case); `d>=4` is untested -- `HelixDelaunayBuilder` itself is
+  *   already "not reliable ground truth" there for unrelated reasons (this class's own doc above), so this repair
+  *   inherits that pre-existing limitation rather than introducing a new one.
   */
-class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L)(using epsilon: Epsilon) extends AlphaShapes:
+class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTriangulation: Boolean = false)(using
+  epsilon: Epsilon
+) extends AlphaShapes:
   private val builder = HelixDelaunayBuilder(pts, seed)
   val points: Seq[Point] = builder.points
   override val metricSpace: EuclideanMetricSpace = EuclideanMetricSpace(pts)
   val ambientDimension: Int = builder.ambientDimension
-  val validated: Set[DelaunaySimplex] = builder.compute()
+  val validated: Set[DelaunaySimplex] =
+    val raw = builder.compute()
+    if requireValidTriangulation then HelixDelaunay.repairByJitterRetriangulation(pts, raw, seed) else raw
 
   val simplicesMap: Map[Int, Seq[Simplex[Int]]] = Map.from(
     (0 to ambientDimension).map(d =>
@@ -371,6 +390,132 @@ class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L)(using epsilon: E
   // for the general hazard).
   override def filtrationOrdering: Ordering[Simplex[Int]] =
     FiltrationOrdering.canonical(filtrationValue, _.size, simplexOrdering[Int])
+
+object HelixDelaunay:
+
+  private def facetsOf(ds: DelaunaySimplex): Seq[Simplex[Int]] = ds.simplex.toSeq.toSeq.map(v => ds.simplex - v)
+
+  private def facetToSimplices(simps: Set[DelaunaySimplex]): Map[Simplex[Int], Vector[DelaunaySimplex]] =
+    simps.toVector
+      .flatMap(ds => facetsOf(ds).map(f => (f, ds)))
+      .groupMap(_._1)(_._2)
+      .view
+      .mapValues(_.toVector)
+      .toMap
+
+  private def badFacetsOf(simps: Set[DelaunaySimplex]): Map[Simplex[Int], Vector[DelaunaySimplex]] =
+    facetToSimplices(simps).filter { case (_, claimants) => claimants.size > 2 }
+
+  /** A genuine Delaunay triangulation always fully tetrahedralizes its own convex hull -- the hull is convex, hence
+    * contractible, so the STATIC (unfiltered, every cell at once) complex's own `H_{d-1}` must be trivial. "Every facet
+    * has `<=2` claimants" (`badFacetsOf`) is necessary for that but NOT sufficient: a facet can end up with exactly 1
+    * claimant not because it is genuinely on the outer hull, but because the builder's own search, run on jittered
+    * coordinates, simply failed to place its second coface -- indistinguishable from a real hull facet by the local
+    * claimant-count check alone, but detectable by this global one. Confirmed empirically, not assumed: a real failing
+    * case measured a 33% total-tetrahedra-volume shortfall against the (violation-inflated) unrepaired triangulation,
+    * alongside exactly one spurious essential `H_2` bar -- direct evidence of a genuine gap, not a
+    * structurally-clean-but-topologically-wrong result (`.claude/DESIGN-helix-triangulation-repair.md`).
+    */
+  private def hasNoInteriorVoid(simps: Set[DelaunaySimplex], ambientDimension: Int): Boolean =
+    given Double is Field = Field.DoubleApproximated(1e-9)
+    val builder = ExplicitStreamBuilder[Int, Double]()
+    simps
+      .flatMap(ds => ds.simplex.toSet.subsets().filter(_.nonEmpty).map(s => Simplex.from(s.toSeq)))
+      .foreach(s => builder.addOne((0.0, s)))
+    val bars = SimplicialHomologyContext[Int, Double, Double]()
+      .persistentHomology(builder.result())
+      .diagramAt(Double.PositiveInfinity)
+    !bars.exists { case (dim, _, death) => dim == ambientDimension - 1 && death.isInfinite }
+
+  /** The `requireValidTriangulation = true` repair pass (`.claude/DESIGN-helix-triangulation-repair.md`) -- strictly a
+    * post-processing step over an already-`compute()`d result. Rather than trying to hand-patch the conflicting region
+    * (both a coning re-fill and a discard-without-replacement prune were tried and rejected -- see the design note),
+    * this reruns `HelixDelaunayBuilder` -- the SAME already-tested global algorithm -- on the full point set with only
+    * the vertices actually involved in a violation nudged by a small random perturbation, so it never needs to manually
+    * reconstruct or "glue" a local patch: the builder's own global frontier walk does that implicitly, correctly,
+    * exactly as it does for any other input. The perturbation is discarded once it has done its job of breaking the
+    * combinatorial tie -- every simplex in the final result gets its own circumsphere recomputed from the ORIGINAL,
+    * un-nudged coordinates, so no filtration value is ever contaminated by jitter (the classic "simulation of
+    * simplicity" discipline: perturb only to choose a combinatorial structure, then discard the perturbation for every
+    * numeric output).
+    *
+    * Retries with a fresh seed (and a widened jitter set, folding in any newly-implicated vertices) if a retry still
+    * has EITHER problem -- rare, but not assumed away: only a direct re-check, not the fix's own optimism, decides
+    * success. Gives up after `maxAttempts` and throws a named, actionable exception rather than ever returning an
+    * unrepaired or partially-repaired result silently.
+    *
+    * '''`hasNoInteriorVoid` exists because the facet-count check alone was measured to be insufficient''' -- an earlier
+    * version of this repair, checking only "no facet has `>2` claimants," passed its own self-check but had a real
+    * ~10.5% barcode-disagreement rate against the naive engine at `d=3` (656/6272 hit violations in a stress sweep).
+    * Root-caused, not just patched around: `HelixDelaunayBuilder`, re-run on jittered coordinates, can silently fail to
+    * place a tetrahedron's second coface, leaving a facet with exactly 1 claimant that looks like an ordinary hull
+    * facet but is actually a gap -- and a genuine Delaunay triangulation can never have a real interior gap (the convex
+    * hull is convex, hence contractible, so `H_{d-1}` of the complete, unfiltered triangulation must be trivial; a
+    * nonzero `H_{d-1}` is not a legitimate feature there, it is direct evidence of a missed simplex). Confirmed on the
+    * actual failing case before implementing the fix: the repaired complex's own total tetrahedra volume was measurably
+    * short (a real ~33% shortfall) and its naive-engine barcode carried exactly one spurious essential `H_2` bar that
+    * the facet-count check could not see. Adding `hasNoInteriorVoid` to the retry condition (widening the jitter set to
+    * the result's own boundary vertices on failure) resolved it completely: re-running the same two stress sweeps with
+    * the added check found ZERO barcode disagreements across 316 hit violations at `d=2` and 6272 at `d=3` (20000
+    * trials each, near-cospherical point clouds, the SAME `d=3` sweep that previously found 656 disagreements) -- see
+    * `.claude/DESIGN-helix-triangulation-repair.md`.
+    */
+  private def repairByJitterRetriangulation(
+    pts: Array[Array[Double]],
+    validatedIn: Set[DelaunaySimplex],
+    seed: Long
+  )(using epsilon: Epsilon): Set[DelaunaySimplex] =
+    val initialBad = badFacetsOf(validatedIn)
+    if initialBad.isEmpty then validatedIn
+    else
+      var jitterVertices: Set[Int] = initialBad.values.flatten.toSet.flatMap(_.simplex.toSet)
+      var result: Option[Set[DelaunaySimplex]] = None
+      var attempt = 0
+      val maxAttempts = 8
+      while result.isEmpty && attempt < maxAttempts do
+        val localSeed = seed * 1000003L + attempt + 1
+        val rng = new Random(localSeed)
+        val jitterPoints = jitterVertices.toVector.map(i => Point(pts(i)))
+        val minPairwiseSpacing =
+          if jitterPoints.size < 2 then 1.0
+          else
+            (for
+              i <- jitterPoints.indices
+              j <- (i + 1) until jitterPoints.size
+            yield jitterPoints(i).getDistance(jitterPoints(j))).min
+        val jitterMagnitude = math.max(epsilon.epsilon * 100, minPairwiseSpacing * 1e-6)
+        val perturbedPts: Array[Array[Double]] = pts.zipWithIndex.map { case (p, i) =>
+          if jitterVertices.contains(i) then p.map(_ + (rng.nextDouble() - 0.5) * 2 * jitterMagnitude)
+          else p
+        }
+
+        val perturbedValidated = HelixDelaunayBuilder(perturbedPts, localSeed).compute()
+        val realized: Set[DelaunaySimplex] = perturbedValidated.map { ds =>
+          DelaunaySimplex(ds.simplex, Hypersphere(ds.simplex.toSeq.toSeq.map(v => Point(pts(v)))))
+        }
+        val stillBad = badFacetsOf(realized)
+        if stillBad.isEmpty && hasNoInteriorVoid(realized, pts.head.length) then result = Some(realized)
+        else
+          val extraJitterVertices =
+            if stillBad.nonEmpty then stillBad.values.flatten.toSet.flatMap(_.simplex.toSet)
+            else
+              // No facet-multiplicity violation remains, but the void check caught a gap: the builder silently
+              // failed to place some tetrahedron's second coface. The gap's own location isn't directly known,
+              // so widen to every vertex touching the result's current boundary (coface count 1) -- a real hull
+              // facet's vertices are harmless to re-jitter, and a spurious one (the actual gap site) is exactly
+              // what needs to move to get a fresh chance at the builder placing it correctly.
+              facetToSimplices(realized).collect { case (f, cs) if cs.size == 1 => f }.flatMap(_.toSet).toSet
+          jitterVertices = jitterVertices ++ extraJitterVertices
+        attempt += 1
+
+      result.getOrElse(
+        throw new IllegalStateException(
+          s"HelixDelaunay.repairByJitterRetriangulation: could not resolve the facet-multiplicity violation " +
+            s"after $maxAttempts jitter attempts on vertex set $jitterVertices; this may indicate a genuinely " +
+            "higher-order degeneracy this repair pass isn't designed for -- please report it with the exact " +
+            "point cloud that triggered this, per .claude/DESIGN-helix-triangulation-repair.md."
+        )
+      )
 
 /** Hides every simplex of dimension `> maxDim` from `helix` -- the `HelixDelaunay` analogue of
   * `streams.LimitedCubicalGridStream` (itself needed because `streams.LimitedCofaceSimplexStream` is hardcoded to

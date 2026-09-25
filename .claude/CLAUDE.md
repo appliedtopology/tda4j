@@ -542,6 +542,37 @@ the message names the exact retry).
 `WORKLOG-alpha-dual-unionfind.md`, `DESIGN-alpha-dual-unionfind.md`,
 `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
 
+**`HelixDelaunay(pts, seed, requireValidTriangulation = true)` repairs a real facet-multiplicity violation**
+(`.claude/DESIGN-helix-triangulation-repair.md`) — off by default, zero behavior change to the unflagged
+constructor. Two earlier designs were tried and rejected before this one: coning the conflicting region from an
+arbitrary apex fails on the traced real fixture (the discarded region's own boundary has degree-3 vertices, not
+a simple cycle, so naive coning double-counts facets); pruning each over-claimed facet down to its two
+smallest-circumradius claimants (discard-without-replacement) was implemented and empirically shown wrong
+instead — on the pinned fixture it silently drops an essential `H_1` bar the naive engine correctly finds on the
+identical repaired stream, because discarding a top simplex without replacement can punch a genuine interior
+hole through the mesh that `FastAlphaHomologyContext`'s single-`∞`-sentinel dual-graph technique can't see. The
+shipped design instead nudges only the near-tied vertices by a small random perturbation and re-runs
+`HelixDelaunayBuilder` — the same already-tested global algorithm — on the full (mostly unperturbed) point set,
+then recomputes every resulting simplex's circumsphere from the ORIGINAL coordinates ("simulation of
+simplicity": perturb only to break the tie, never let it reach a real filtration value). **Its own first version
+had the identical failure mode as the rejected pruning design, caught the same way**: validated clean at `d=2`
+(316/316 hit violations), but a real ~10.5% barcode-disagreement rate at `d=3` (656/6272) — the "no facet has
+`>2` claimants" self-check alone was necessary but not sufficient, because the builder, re-run on jittered
+coordinates, could silently fail to place a tetrahedron's second coface, leaving a facet that looks like an
+ordinary hull facet but is actually a gap. Confirmed directly (not just inferred from the barcode) via a ~33%
+total-tetrahedra-volume shortfall on the failing case. Fixed with a second, independent self-check,
+`HelixDelaunay.hasNoInteriorVoid`: a genuine Delaunay triangulation's convex hull is convex, hence contractible,
+so the full unfiltered complex's own `H_{d-1}` must be trivial — checked directly (`SimplicialHomologyContext`
+on the candidate, single filtration value), retrying with a widened jitter set on failure. Re-validated on the
+SAME `d=3` sweep that found the 656 disagreements: 6272/6272 clean. Not attempted at `d>=4` — `HelixDelaunay` is
+already documented above as unreliable there for unrelated reasons, so this inherits that gap rather than adding
+a new one. A third avenue (recognizing the traced violation as a textbook 2D Delaunay diagonal flip — the
+`{8,10}` facet's three claimants are actually a convex quadrilateral's two different diagonal choices, not a
+genuine 3-way tie, generalizing to a Radon-partition bistellar flip in higher dimension) was investigated and
+found promising but was not implemented; it remains a possible future alternative if the shipped design's own
+scope (any dimension, but only where `HelixDelaunay` construction itself is already reliable) ever needs
+revisiting.
+
 **Degeneracy hazard**: in cospherical position the alpha complex is not a Delaunay subcomplex — `k` cospherical
 sites give a `(k-1)`-simplex (unit grid in R² → 3-simplices). Truncating at ambient dimension gives the wrong
 homotopy type. Correct, not a bug.
