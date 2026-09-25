@@ -1,0 +1,93 @@
+name: Release
+
+# Runs on a `vX.Y.Z` tag push -- which `sbt release` (see RELEASE.md) creates and pushes itself as part of
+# its own `tagRelease`/`pushChanges` steps. This workflow does NOT publish to Maven Central: `sbt release`
+# already does that locally (publishSigned/sonaUpload/sonaRelease), and re-running those here would be a
+# duplicate publish attempt against an already-released coordinate. This workflow only covers what `sbt
+# release` doesn't: building the fat jar, attaching every release artifact to a GitHub Release, and
+# publishing that version's docs snapshot under its own path on GitHub Pages.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup sbt launcher
+        uses: sbt/setup-sbt@v1
+      - name: Derive release version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Build release artifacts
+        env:
+          TDA4J_DOCS_VERSION: ${{ steps.version.outputs.version }}
+        run: sbt assembly packageSrc packageDoc laikaSite
+      # Same rationale as docs.yml's own step of the same name -- `laikaSite`'s output isn't version-prefixed
+      # on its own (laikaConfig's Versions value only drives the switcher dropdown/manifest, not physical
+      # output placement), and sbt-github-pages doesn't preserve remote-only content either, so this build's
+      # own docs need to be nested under their own version path and every other already-published version
+      # (including "dev") copied forward, or they're lost when this publishes.
+      - name: Stage versioned docs for publish
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -e
+          PUBLISH_DIR="target/docs/publish"
+          mkdir -p "$PUBLISH_DIR/$VERSION"
+          cp -r target/docs/site/. "$PUBLISH_DIR/$VERSION/"
+          if git ls-remote --exit-code --heads origin gh-pages > /dev/null 2>&1; then
+            git fetch origin gh-pages
+            git worktree add /tmp/gh-pages-old origin/gh-pages
+            for d in /tmp/gh-pages-old/*/; do
+              name=$(basename "$d")
+              if [ ! -e "$PUBLISH_DIR/$name" ]; then
+                cp -r "$d" "$PUBLISH_DIR/$name"
+              fi
+            done
+            git worktree remove /tmp/gh-pages-old --force
+          fi
+          LATEST=$(ls -1 "$PUBLISH_DIR" | grep -vE '^(dev|index\.html)$' | sort -V | tail -n1)
+          TARGET="${LATEST:-dev}/"
+          printf '<!DOCTYPE html><meta charset="utf-8"><title>TDA4j docs</title><meta http-equiv="refresh" content="0; url=%s"><a href="%s">TDA4j docs</a>' "$TARGET" "$TARGET" > "$PUBLISH_DIR/index.html"
+      - name: Publish versioned docs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PAGES_PUBLISH_FORCE_PUSH: "Publish docs for ${{ github.ref_name }}"
+        run: sbt publishToGitHubPages
+      - name: Zip docs snapshot
+        run: |
+          (cd "target/docs/publish/${{ steps.version.outputs.version }}" && zip -rq "$GITHUB_WORKSPACE/docs-${{ steps.version.outputs.version }}.zip" .)
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Pre-1.0 releases are marked as GitHub pre-releases; drop this once the library reaches 1.0.0.
+          PRERELEASE_FLAG=""
+          case "$VERSION" in
+            0.*) PRERELEASE_FLAG="--prerelease" ;;
+          esac
+          gh release create "${{ github.ref_name }}" \
+            --title "TDA4j ${VERSION}" \
+            --generate-notes \
+            $PRERELEASE_FLAG \
+            target/scala-3.9.0/TDA4j-${VERSION}-assembly.jar \
+            target/scala-3.9.0/TDA4j*-sources.jar \
+            target/scala-3.9.0/TDA4j*-javadoc.jar \
+            "docs-${VERSION}.zip"

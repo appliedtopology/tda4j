@@ -31,3 +31,18 @@ publishTo := {
   if (isSnapshot.value) Some("central-snapshots" at centralSnapshots)
   else localStaging.value
 }
+
+// Central Portal (not the legacy OSSRH host) -- sonaUpload/sonaRelease (release.sbt) and publishSigned
+// (sbt-pgp) both read credentials via this host. Token comes from a Central Portal user token, not an
+// Sonatype OSSRH username/password -- generate it from the Central Portal account page.
+sonatypeCredentialHost := "central.sonatype.com"
+credentials += Credentials(
+  "Sonatype Central",
+  sonatypeCredentialHost.value,
+  sys.env.getOrElse("SONATYPE_USERNAME", ""),
+  sys.env.getOrElse("SONATYPE_PASSWORD", "")
+)
+
+// sbt-pgp reads this for `publishSigned`. Unset locally, sbt-pgp falls back to prompting (or the local gpg
+// agent's own cached passphrase); CI has no terminal to prompt at, so this must be set there.
+pgpPassphrase := sys.env.get("PGP_PASSPHRASE").map(_.toCharArray)

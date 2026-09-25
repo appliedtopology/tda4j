@@ -26,6 +26,32 @@ import laika.helium.config.{HeliumIcon, IconLink}
 import laika.theme.config.Color
 import laika.format.Markdown
 import laika.ast.Path.Root
+import laika.config.{Version, Versions}
+import laika.helium.config.VersionMenu
+
+// Docs versioning (RELEASE.md step 5): `release.yml` sets TDA4J_DOCS_VERSION to the tag's version
+// (e.g. "0.1.3") when publishing a tagged release; `docs.yml`'s push-to-`scala` build leaves it unset, which
+// publishes under the "dev" path segment instead of colliding with a real release's own directory. Both
+// workflows' own "Stage versioned docs for publish" step nests this build's output under that path and
+// merges in whatever version directories already exist on `gh-pages` before publishing -- `sbt-github-pages`
+// has no setting to keep remote-only files, so any directory this build doesn't already contain, and doesn't
+// restore itself, would be lost on the next publish.
+val docsVersion = sys.env.getOrElse("TDA4J_DOCS_VERSION", "dev")
+
+// Older release tags, oldest-first exclusion of the one being (re)published -- drives Laika's version
+// switcher. Reads git tags directly rather than hand-maintaining a list; a tag with no matching docs
+// directory on `gh-pages` yet (or one from before docs versioning existed) just won't have a working link
+// until it's actually published once.
+def priorReleaseVersions(baseDir: File): Seq[String] = {
+  import scala.sys.process._
+  scala.util
+    .Try(Process(Seq("git", "tag", "--list", "v*", "--sort=-v:refname"), baseDir).!!)
+    .getOrElse("")
+    .linesIterator
+    .toList
+    .map(_.stripPrefix("v"))
+    .filterNot(_ == docsVersion)
+}
 
 // Off-white/dark-charcoal (light) and dark-charcoal/off-white (dark) rather than Helium's stock blues; teal/red
 // stay as brand accent colors (links, headers, banner), not as the page's dominant wash.
@@ -41,7 +67,11 @@ val theme = Helium.defaults.all
     navLinks = Seq(
       IconLink.internal(Root / "api" / "index.html", HeliumIcon.api),
       IconLink.external("https://github.com/appliedtopology/tda4j", HeliumIcon.github)
-    )
+    ),
+    // Renders the version-switcher dropdown driven by the `laikaConfig`'s Versions value below -- links to
+    // sibling versions only resolve once those versions are actually published side by side on gh-pages (see
+    // RELEASE.md step 5), not from this setting alone.
+    versionMenu = VersionMenu.default
   )
   .site
   .footer("MIT License © Mikael Vejdemo-Johansson, Daniel Hope")
@@ -112,10 +142,24 @@ lazy val root = (project in file("."))
     // (@:snip tokenizes its own extracted text separately -- see project/SnipDirective.scala.)
     laikaExtensions += laika.config.SyntaxHighlighting,
     laikaExtensions += new SnipDirective(baseDirectory.value),
+    laikaConfig := {
+      val older = priorReleaseVersions(baseDirectory.value).map(v => Version(v, v))
+      laika.sbt.LaikaConfig.defaults.withConfigValue(
+        Versions.forCurrentVersion(Version(docsVersion, docsVersion)).withOlderVersions(older: _*)
+      )
+    },
     // ***** gh-pages *****
     gitHubPagesOrgName := "appliedtopology",
     gitHubPagesRepoName := "tda4j",
-    gitHubPagesSiteDir := (laikaSite / target).value,
+    // NOT (laikaSite / target).value directly: `laikaSite` renders this build's own docs unnested (confirmed
+    // by inspecting its actual output -- `laikaConfig`'s Versions value drives the version-switcher dropdown
+    // and `laika/versionInfo.json`, not physical output placement). Each CI workflow's own "Stage versioned
+    // docs for publish" step populates this directory itself: copy `(laikaSite / target).value`'s contents
+    // into `<this dir>/<docsVersion>/`, then copy forward every other already-published version directory
+    // from `gh-pages` before running `publishToGitHubPages`. A bare local `sbt publishToGitHubPages` run (no
+    // such staging step first) would publish this directory empty -- always run through a workflow, or
+    // replicate its staging steps by hand.
+    gitHubPagesSiteDir := baseDirectory.value / "target" / "docs" / "publish",
     // Both settings are needed, not just one: `Compile / mainClass` is what `sbt run` uses; `assembly /
     // mainClass` is what sbt-assembly writes into the fat jar's manifest (`java -jar ... `). Neither is inferred
     // from the other.
