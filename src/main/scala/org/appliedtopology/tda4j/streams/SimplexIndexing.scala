@@ -281,10 +281,30 @@ class SimplexIndexing(val vertexCount: Int):
         cur.advance()
         result
 
+  /** Hand-rolled `while` loop, not `simplex.toSeq.sorted.reverse.zipWithIndex.map(...).sum` -- five separate
+    * allocating collection stages (a fresh `Seq`, a sort, a reverse, a `zipWithIndex` pairing, a `map`) for what's
+    * structurally a single left-to-right reduction over an already-sorted set. `simplex.underlying` is already a
+    * `SortedSet[Int]` in ascending order, so `.toArray` gives the same vertices with zero re-sort, walked from the
+    * END (descending, matching the combinatorial-number-system convention every other encode/decode in this file
+    * uses). Also switched to the CACHED `binomialChoose(n, k)` (private, same class) instead of the free-standing
+    * `binomial`: this method's own access pattern -- `k` (the rank, `1..size`) small and bounded by simplex size,
+    * `n` (the vertex value) large and bounded by `vertexCount` -- is exactly what `binomialChoose`'s row/column
+    * layout was built for (see its own doc, added for `CofacetCursor`/`FacetCursor`'s stepping). Found via the
+    * `o3_1024` compute-server JFR profile on `RipserCohomologyContext` (`.claude/WORKLOG-ripser-profiling.md`):
+    * this chain (this method is the ONLY caller of the encode direction from any per-simplex hot path) accounted
+    * for roughly 41% of that engine's remaining CPU time once the metric-space cache and the apparent-pairs
+    * early-exit fix cleared away what had been dominating before, with the un-cached `binomial`'s own
+    * `BinomialCoefficient`/`gcd` cost adding another ~18%.
+    */
   def apply(simplex: Simplex[Int]): Long =
-    simplex.toSeq.sorted.reverse.zipWithIndex.map { (v, i) =>
-      SimplexIndexing.binomial(v, simplex.size - i)
-    }.sum
+    val vertices = simplex.underlying.toArray
+    val size = vertices.length
+    var acc: Long = 0L
+    var i = 0
+    while i < size do
+      acc += binomialChoose(vertices(size - 1 - i), size - i)
+      i += 1
+    acc
 
 object SimplexIndexing:
   /** Returns `Long`, not `Int`: a combinatorial index can be astronomically larger than `n`/`k` themselves, and
