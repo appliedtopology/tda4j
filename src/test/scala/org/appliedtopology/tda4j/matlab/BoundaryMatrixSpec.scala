@@ -6,23 +6,23 @@ import org.scalacheck.Prop.forAll
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 
-/** Tests `PersistenceResult`'s boundary-matrix export (`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item
-  * 1). The real oracle here is [[reduceZ2]]: an independent, textbook Z/2 persistence-algorithm reduction of the
-  * EXPORTED matrix, run entirely outside any engine in this codebase. If that reduction's own (dim, birth, death)
-  * triples don't match `result.toArray()`, the export is wrong (or inconsistent with whichever engine actually
-  * computed the bars) -- this is a strictly stronger check than eyeballing a few hand-picked entries, since it
-  * exercises every row/column/value this class reports at once.
+/** Tests `PersistenceResult`'s boundary-matrix export (`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 1).
+  * The real oracle here is [[reduceZ2]]: an independent, textbook Z/2 persistence-algorithm reduction of the EXPORTED
+  * matrix, run entirely outside any engine in this codebase. If that reduction's own (dim, birth, death) triples don't
+  * match `result.toArray()`, the export is wrong (or inconsistent with whichever engine actually computed the bars) --
+  * this is a strictly stronger check than eyeballing a few hand-picked entries, since it exercises every
+  * row/column/value this class reports at once.
   */
 class BoundaryMatrixSpec extends Specification with ScalaCheck:
 
-  /** Standard Z/2 persistence-algorithm reduction (Edelsbrunner-Letscher-Zomorodian): columns are reduced
-    * left-to-right against already-recorded pivots via symmetric difference; a column that reduces to empty
-    * opens a class, one that reduces to a nonzero pivot row closes the class that row opened. Relies on exactly
-    * one structural fact about the exported matrix -- a face's row index is always strictly less than its
-    * coface's column index (guaranteed by `TDA4j.buildBoundaryMatrix` building columns in filtration order,
-    * dimension-bucketed, so a face is always in an earlier bucket than any of its cofaces) -- not on any global
-    * monotonicity of `columnFiltrationValue` itself (which is NOT guaranteed globally, only within a dimension:
-    * e.g. a DTM-weighted vertex can be born later than some higher-dimensional cell's own filtration value).
+  /** Standard Z/2 persistence-algorithm reduction (Edelsbrunner-Letscher-Zomorodian): columns are reduced left-to-right
+    * against already-recorded pivots via symmetric difference; a column that reduces to empty opens a class, one that
+    * reduces to a nonzero pivot row closes the class that row opened. Relies on exactly one structural fact about the
+    * exported matrix -- a face's row index is always strictly less than its coface's column index (guaranteed by
+    * `TDA4j.buildBoundaryMatrix` building columns in filtration order, dimension-bucketed, so a face is always in an
+    * earlier bucket than any of its cofaces) -- not on any global monotonicity of `columnFiltrationValue` itself (which
+    * is NOT guaranteed globally, only within a dimension: e.g. a DTM-weighted vertex can be born later than some
+    * higher-dimensional cell's own filtration value).
     */
   private def reduceZ2(result: PersistenceResult): Set[(Int, Double, Double)] =
     val n = result.numCells()
@@ -142,23 +142,23 @@ class BoundaryMatrixSpec extends Specification with ScalaCheck:
 
     "is computed lazily, and only once: the provider thunk runs iff/when a boundary-matrix accessor is first " +
       "called, then never again" >> {
-      var calls = 0
-      def provider(): BoundaryMatrixData =
-        calls += 1
-        BoundaryMatrixData(Array(0), Array(1), Array(1.0), Array(0, 1), Array(Array(0), Array(1)), Array(0.0, 1.0))
-      val result = new PersistenceResult(
-        Array(0),
-        Array(0.0),
-        Array(1.0),
-        _ => (Array(Array(0)), Array(1.0)),
-        provider
-      )
-      calls must beEqualTo(0) // constructing the result alone must not force it
-      result.toArray() // ordinary barcode access must not force it either
-      calls must beEqualTo(0)
-      result.numCells() must beEqualTo(2) // first boundary-matrix accessor: forces it once
-      calls must beEqualTo(1)
-      result.boundaryRows() // a second, different accessor: must reuse the memoized value, not recompute
-      calls must beEqualTo(1)
-    }
+        var calls = 0
+        def provider(): BoundaryMatrixData =
+          calls += 1
+          BoundaryMatrixData(Array(0), Array(1), Array(1.0), Array(0, 1), Array(Array(0), Array(1)), Array(0.0, 1.0))
+        val result = new PersistenceResult(
+          Array(0),
+          Array(0.0),
+          Array(1.0),
+          _ => (Array(Array(0)), Array(1.0)),
+          provider
+        )
+        calls must beEqualTo(0) // constructing the result alone must not force it
+        result.toArray() // ordinary barcode access must not force it either
+        calls must beEqualTo(0)
+        result.numCells() must beEqualTo(2) // first boundary-matrix accessor: forces it once
+        calls must beEqualTo(1)
+        result.boundaryRows() // a second, different accessor: must reuse the memoized value, not recompute
+        calls must beEqualTo(1)
+      }
   }

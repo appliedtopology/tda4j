@@ -8,21 +8,20 @@ import org.specs2.mutable.Specification
 
 /** Tests the `TDA4j.h1Bars`/`circularCoordinates` MATLAB facade -- that it is a faithful, correctly-marshalled
   * pass-through to `homology.CircularCoordinates`, which already has its own thorough test suite
-  * (`CircularCoordinatesSpec`, including the real oracle: recovering the true geometric angle on a circle) --
-  * not a re-test of the underlying math.
+  * (`CircularCoordinatesSpec`, including the real oracle: recovering the true geometric angle on a circle) -- not a
+  * re-test of the underlying math.
   */
 class CircularCoordinatesResultSpec extends Specification:
   private def circlePoints(n: Int): Array[Array[Double]] =
     Array.tabulate(n)(i => Array(math.cos(2 * math.Pi * i / n), math.sin(2 * math.Pi * i / n)))
 
-  "h1Bars" should {
+  "h1Bars" should
     "return one row per H^1 bar, sorted by persistence descending" >> {
       val bars = TDA4j.h1Bars(circlePoints(16))
       bars.length must beGreaterThan(0)
       val persistence = bars.map(row => row(1) - row(0))
       persistence.toSeq must beEqualTo(persistence.sorted(using Ordering[Double].reverse).toSeq)
     }
-  }
 
   "circularCoordinates" should {
     "recovers the true geometric angle on a clean circle, matching homology.CircularCoordinates directly" >> {
@@ -54,8 +53,8 @@ class CircularCoordinatesResultSpec extends Specification:
 
     "throws NoIntegerCocycleException as a RuntimeException a MATLAB caller can still catch generically, not " +
       "just IllegalArgumentException" >> {
-      // Not exercised via an actual torsion fixture (hard to construct from a Euclidean point cloud -- see
-      // CircularCoordinates' own worklog) -- just confirms the exception type itself is MATLAB-bridge-safe.
-      classOf[NoIntegerCocycleException].getSuperclass must beEqualTo(classOf[RuntimeException])
-    }
+        // Not exercised via an actual torsion fixture (hard to construct from a Euclidean point cloud -- see
+        // CircularCoordinates' own worklog) -- just confirms the exception type itself is MATLAB-bridge-safe.
+        classOf[NoIntegerCocycleException].getSuperclass must beEqualTo(classOf[RuntimeException])
+      }
   }

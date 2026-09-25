@@ -8,8 +8,8 @@ import org.appliedtopology.tda4j.homology.{given, *}
 import org.appliedtopology.tda4j.alpha.{given, *}
 
 /** `streams.DistanceToMeasure` checked byte-for-byte against GUDHI's own `gudhi.point_cloud.dtm.DistanceToMeasure`
-  * (Chazal-Cohen-Steiner-Merigot 2011), not merely against a hand re-derivation of the formula -- every expected
-  * value below is copied from that project's own doctest/unit-test output (`src/python/doc/rips_complex_user.rst`,
+  * (Chazal-Cohen-Steiner-Merigot 2011), not merely against a hand re-derivation of the formula -- every expected value
+  * below is copied from that project's own doctest/unit-test output (`src/python/doc/rips_complex_user.rst`,
   * `src/python/test/test_dtm.py`, GUDHI/gudhi-devel@master), fetched and cross-checked during this session; see
   * `.claude/WORKLOG-dtm-filtrations.md` for the full derivation, including confirming self-inclusive k-NN.
   */

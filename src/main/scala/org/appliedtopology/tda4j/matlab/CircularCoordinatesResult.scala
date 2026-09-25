@@ -11,17 +11,17 @@ final class CircularCoordinatesResult private[matlab] (
   private val rValue: Double,
   private val primeValue: Int
 ):
-  /** One entry per input point (same row order as the `points`/`distances` this was computed from), each in
-    * `[0, 1)` -- or `Double.NaN` for a point outside the connected component the chosen class lives in (see
-    * `homology.CircularCoordinates`'s own class doc for why other components have no meaningful coordinate at
-    * all, not a zero or an arbitrary default).
+  /** One entry per input point (same row order as the `points`/`distances` this was computed from), each in `[0, 1)` --
+    * or `Double.NaN` for a point outside the connected component the chosen class lives in (see
+    * `homology.CircularCoordinates`'s own class doc for why other components have no meaningful coordinate at all, not
+    * a zero or an arbitrary default).
     */
   def theta(): Array[Double] = thetaArray
 
   def hasCoordinate(i: Int): Boolean = !thetaArray(i).isNaN
 
-  /** The chosen bar's own full-filtration birth/death (`death` is `Double.POSITIVE_INFINITY` for an essential
-    * bar) -- informational, matching what `cocycleIndex` selected.
+  /** The chosen bar's own full-filtration birth/death (`death` is `Double.POSITIVE_INFINITY` for an essential bar) --
+    * informational, matching what `cocycleIndex` selected.
     */
   def birth(): Double = birthValue
   def death(): Double = deathValue

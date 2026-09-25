@@ -13,9 +13,9 @@ import org.specs2.execute.AsResult
 /** `EdgeCollapse` (Boissonnat-Pritam/Glisse-Pritam, `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 5).
   * Validation order follows this codebase's established convention for a new construction: hand-derived fixtures
   * pinning the two documented outcomes (shift to a later value; outright removal) by direct computation first, THEN
-  * property-based and tie-heavy barcode cross-validation against plain (uncollapsed) VR -- agreement between the
-  * two is the real oracle here (`WORKLOG-edge-collapse.md`), not a comparison against any external tool (this
-  * session could not verify the reference algorithm's own paper directly -- see the class doc).
+  * property-based and tie-heavy barcode cross-validation against plain (uncollapsed) VR -- agreement between the two is
+  * the real oracle here (`WORKLOG-edge-collapse.md`), not a comparison against any external tool (this session could
+  * not verify the reference algorithm's own paper directly -- see the class doc).
   */
 class EdgeCollapseStreamSpec extends org.specs2.mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
@@ -33,17 +33,17 @@ class EdgeCollapseStreamSpec extends org.specs2.mutable.Specification with Scala
     "removes edge (0,1) (and (0,3), (1,3)), leaving (0,2), (1,2), (2,3) unchanged -- a cascade where two earlier " +
       "removals (in descending-filtration-value order) strip vertex 3 of its OWN connection to both 0 and 1, so " +
       "by the time (0,1) itself is processed its only remaining common neighbor (2) trivially dominates it" >> {
-      val space = ExplicitMetricSpace(
-        Seq(Seq(0.0, 1.0, 1.0, 2.0), Seq(1.0, 0.0, 1.0, 2.0), Seq(1.0, 1.0, 0.0, 1.5), Seq(2.0, 2.0, 1.5, 0.0))
-      )
-      val collapsed = EdgeCollapse.collapse(space, maxFiltrationValue = Some(Double.PositiveInfinity))
-      (collapsed.distance(0, 1) must beEqualTo(Double.PositiveInfinity)) and
-        (collapsed.distance(0, 3) must beEqualTo(Double.PositiveInfinity)) and
-        (collapsed.distance(1, 3) must beEqualTo(Double.PositiveInfinity)) and
-        (collapsed.distance(0, 2) must beEqualTo(1.0)) and
-        (collapsed.distance(1, 2) must beEqualTo(1.0)) and
-        (collapsed.distance(2, 3) must beEqualTo(1.5))
-    }
+        val space = ExplicitMetricSpace(
+          Seq(Seq(0.0, 1.0, 1.0, 2.0), Seq(1.0, 0.0, 1.0, 2.0), Seq(1.0, 1.0, 0.0, 1.5), Seq(2.0, 2.0, 1.5, 0.0))
+        )
+        val collapsed = EdgeCollapse.collapse(space, maxFiltrationValue = Some(Double.PositiveInfinity))
+        (collapsed.distance(0, 1) must beEqualTo(Double.PositiveInfinity)) and
+          (collapsed.distance(0, 3) must beEqualTo(Double.PositiveInfinity)) and
+          (collapsed.distance(1, 3) must beEqualTo(Double.PositiveInfinity)) and
+          (collapsed.distance(0, 2) must beEqualTo(1.0)) and
+          (collapsed.distance(1, 2) must beEqualTo(1.0)) and
+          (collapsed.distance(2, 3) must beEqualTo(1.5))
+      }
 
     // A genuine SHIFT (not outright removal) needs enough points that the tested edge's two candidate dominators
     // both fail only once EVERY common neighbor is active, via a cascade of its OWN making -- found by search
@@ -73,37 +73,36 @@ class EdgeCollapseStreamSpec extends org.specs2.mutable.Specification with Scala
     "shifts edge (2,4) from 6.802 to 8.257 (exactly matching the point at which its own would-be dominators " +
       "(0, then 1) each stop qualifying, both via an EARLIER cascade elsewhere in the same descending pass) " +
       "rather than removing it outright" >> {
-      val pts = Array(
-        Array(8.463243195926422, 4.0847280919596685),
-        Array(0.1844386250790142, 8.031404043213556),
-        Array(6.546935795037694, 2.7693418423902214),
-        Array(1.024453591412785, 1.087407899625793),
-        Array(5.846592877439953, 9.535171457217388)
-      )
-      val space = EuclideanMetricSpace(pts)
-      val collapsed = EdgeCollapse.collapse(space, maxFiltrationValue = Some(Double.PositiveInfinity))
-      (collapsed.distance(2, 4) must beCloseTo(8.25655308485726, 1e-9)) and
-        (collapsed.distance(2, 4) must beCloseTo(space.distance(1, 2), 1e-9)) and
-        (collapsed.distance(0, 1) must beEqualTo(Double.PositiveInfinity)) and
-        (collapsed.distance(3, 4) must beEqualTo(Double.PositiveInfinity)) and
-        (collapsed.distance(1, 2) must beCloseTo(space.distance(1, 2), 1e-9))
-    }
+        val pts = Array(
+          Array(8.463243195926422, 4.0847280919596685),
+          Array(0.1844386250790142, 8.031404043213556),
+          Array(6.546935795037694, 2.7693418423902214),
+          Array(1.024453591412785, 1.087407899625793),
+          Array(5.846592877439953, 9.535171457217388)
+        )
+        val space = EuclideanMetricSpace(pts)
+        val collapsed = EdgeCollapse.collapse(space, maxFiltrationValue = Some(Double.PositiveInfinity))
+        (collapsed.distance(2, 4) must beCloseTo(8.25655308485726, 1e-9)) and
+          (collapsed.distance(2, 4) must beCloseTo(space.distance(1, 2), 1e-9)) and
+          (collapsed.distance(0, 1) must beEqualTo(Double.PositiveInfinity)) and
+          (collapsed.distance(3, 4) must beEqualTo(Double.PositiveInfinity)) and
+          (collapsed.distance(1, 2) must beCloseTo(space.distance(1, 2), 1e-9))
+      }
   }
 
-  "EdgeCollapse.collapse on a generic (all-distinct-distances) triangle" should {
+  "EdgeCollapse.collapse on a generic (all-distinct-distances) triangle" should
     "removes exactly the longest edge -- the two shorter edges already connect its endpoints through the third " +
-      "vertex, so the longest edge's own momentary hollow-triangle-then-instantly-refilled contribution is a " +
-      "zero-persistence blip either way (conceptually the same kind of redundancy apparent pairs also exploit, " +
-      "though by a completely different mechanism)" >> {
+    "vertex, so the longest edge's own momentary hollow-triangle-then-instantly-refilled contribution is a " +
+    "zero-persistence blip either way (conceptually the same kind of redundancy apparent pairs also exploit, " +
+    "though by a completely different mechanism)" >> {
       val space = ExplicitMetricSpace(Seq(Seq(0.0, 1.0, 2.0), Seq(1.0, 0.0, 3.0), Seq(2.0, 3.0, 0.0)))
       val collapsed = EdgeCollapse.collapse(space, maxFiltrationValue = Some(Double.PositiveInfinity))
       (collapsed.distance(0, 1) must beEqualTo(1.0)) and
         (collapsed.distance(0, 2) must beEqualTo(2.0)) and
         (collapsed.distance(1, 2) must beEqualTo(Double.PositiveInfinity))
     }
-  }
 
-  "EdgeCollapse.collapse on two disjoint, far-apart edges (no shared vertex, no possible common neighbor)" should {
+  "EdgeCollapse.collapse on two disjoint, far-apart edges (no shared vertex, no possible common neighbor)" should
     "collapses nothing -- an edge with no common neighbor at all can never be dominated" >> {
       val space = ExplicitMetricSpace(
         Seq(
@@ -121,23 +120,21 @@ class EdgeCollapseStreamSpec extends org.specs2.mutable.Specification with Scala
       val stats = collapsed.stats
       stats.edgesRemoved must beEqualTo(0)
     }
-  }
 
-  "EdgeCollapsedMetricSpace.minimumEnclosingRadius" should {
+  "EdgeCollapsedMetricSpace.minimumEnclosingRadius" should
     "equals the bound actually used for the collapse (the original space's own enclosing radius by default), " +
-      "never something inflated by the collapsed graph's own new +Infinity entries" >> {
+    "never something inflated by the collapsed graph's own new +Infinity entries" >> {
       val rng = new scala.util.Random(7)
       val pts = Array.fill(14)(Array(rng.nextDouble() * 10, rng.nextDouble() * 10))
       val space = EuclideanMetricSpace(pts)
       val collapsed = EdgeCollapse.collapse(space)
       collapsed.minimumEnclosingRadius must beEqualTo(space.minimumEnclosingRadius)
     }
-  }
 
-  "EdgeCollapse re-applied to its own output" should {
+  "EdgeCollapse re-applied to its own output" should
     "may remove further edges (GUDHI's own doc: one pass is not necessarily minimal) but its barcode still " +
-      "agrees with plain VR either way -- this is a single faithfully-ordered pass, not a fixed-point iteration " +
-      "to convergence, so idempotence is NOT expected or asserted, only that a second round stays correct" >> {
+    "agrees with plain VR either way -- this is a single faithfully-ordered pass, not a fixed-point iteration " +
+    "to convergence, so idempotence is NOT expected or asserted, only that a second round stays correct" >> {
       val rng = new scala.util.Random(11)
       val pts = Array.fill(20)(Array(rng.nextDouble() * 10, rng.nextDouble() * 10))
       val space = EuclideanMetricSpace(pts)
@@ -153,7 +150,6 @@ class EdgeCollapseStreamSpec extends org.specs2.mutable.Specification with Scala
       (twice.stats.edgesAfter must beLessThanOrEqualTo(once.stats.edgesAfter)) and
         (barcode(space, homDim) must beEqualTo(barcode(twice, homDim)))
     }
-  }
 
   // Zero-persistence (birth == death) bars are filtered out before comparing: `diagramAt` reports them literally
   // (this codebase's engines don't cancel a bar just because it happens to have zero length), but edge collapse
@@ -169,7 +165,10 @@ class EdgeCollapseStreamSpec extends org.specs2.mutable.Specification with Scala
     homDim: Int,
     maxFiltrationValue: Option[Double] = Some(Double.PositiveInfinity)
   ): Set[(Int, Double, Double)] =
-    val stream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(space, maxFiltrationValue = maxFiltrationValue), homDim + 1)
+    val stream = LimitedCofaceSimplexStream(
+      EnumeratingCofaceSimplexStream(space, maxFiltrationValue = maxFiltrationValue),
+      homDim + 1
+    )
     SimplicialHomologyContext[Int, Double, Double]()
       .persistentHomology(stream)
       .diagramAt(Double.PositiveInfinity)
@@ -179,56 +178,62 @@ class EdgeCollapseStreamSpec extends org.specs2.mutable.Specification with Scala
   "the barcode of the edge-collapsed complex" should {
     "agrees EXACTLY with plain (uncollapsed) VR's own barcode, across random point clouds -- the real oracle for " +
       "this construction (persistence-preservation is the whole point of the papers this implements), not " +
-      "agreement with any external tool" >> {
+      "agreement with any external tool" >>
       AsResult {
         org.scalacheck.Prop.forAll(matrixGen(Gen.chooseNum(-10.0, 10.0), Gen.chooseNum(2, 3), Gen.chooseNum(6, 11))) {
           pts =>
             val space = EuclideanMetricSpace(pts)
             val homDim = 2
             val plain = barcode(space, homDim)
-            val collapsed = barcode(EdgeCollapse.collapse(space, maxFiltrationValue = Some(Double.PositiveInfinity)), homDim)
+            val collapsed =
+              barcode(EdgeCollapse.collapse(space, maxFiltrationValue = Some(Double.PositiveInfinity)), homDim)
             plain == collapsed
         }
       }
-    }
 
     "agrees on a tie-heavy integer-grid point cloud (many repeated pairwise distances, unlike a generic random " +
       "cloud) -- CLAUDE.md's own established discriminator for a new stream-adjacent construction" >> {
-      val pts = (for i <- 0 until 3; j <- 0 until 3 yield Array(i.toDouble, j.toDouble)).toArray
-      val space = EuclideanMetricSpace(pts)
-      val homDim = 2
-      barcode(space, homDim) must beEqualTo(barcode(EdgeCollapse.collapse(space, maxFiltrationValue = Some(Double.PositiveInfinity)), homDim))
-    }
+        val pts = (for i <- 0 until 3; j <- 0 until 3 yield Array(i.toDouble, j.toDouble)).toArray
+        val space = EuclideanMetricSpace(pts)
+        val homDim = 2
+        barcode(space, homDim) must beEqualTo(
+          barcode(EdgeCollapse.collapse(space, maxFiltrationValue = Some(Double.PositiveInfinity)), homDim)
+        )
+      }
 
     "agrees under the DEFAULT (truncated, minimumEnclosingRadius) bound too, not just the untruncated comparison " +
       "above -- the realistic usage pattern, matching every other stream's own default in this codebase" >> {
-      val rng = new scala.util.Random(23)
-      val pts = Array.fill(12)(Array(rng.nextDouble() * 10, rng.nextDouble() * 10))
-      val space = EuclideanMetricSpace(pts)
-      val homDim = 2
-      barcode(space, homDim, maxFiltrationValue = None) must beEqualTo(
-        barcode(EdgeCollapse.collapse(space), homDim, maxFiltrationValue = None)
-      )
-    }
+        val rng = new scala.util.Random(23)
+        val pts = Array.fill(12)(Array(rng.nextDouble() * 10, rng.nextDouble() * 10))
+        val space = EuclideanMetricSpace(pts)
+        val homDim = 2
+        barcode(space, homDim, maxFiltrationValue = None) must beEqualTo(
+          barcode(EdgeCollapse.collapse(space), homDim, maxFiltrationValue = None)
+        )
+      }
 
     "every representative on the collapsed complex is a genuine cycle (zero boundary) -- confirms the collapsed " +
       "stream satisfies the ordering contract well enough for the reduction algorithm itself to behave, not just " +
       "that the final bar VALUES happen to agree" >> {
-      val rng = new scala.util.Random(29)
-      val pts = Array.fill(16)(Array(rng.nextDouble() * 10, rng.nextDouble() * 10))
-      val space = EuclideanMetricSpace(pts)
-      val stream = LimitedCofaceSimplexStream(
-        EnumeratingCofaceSimplexStream(EdgeCollapse.collapse(space, maxFiltrationValue = Some(Double.PositiveInfinity)), maxFiltrationValue = Some(Double.PositiveInfinity)),
-        3
-      )
-      val bars = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(stream).barcodeAt(Double.PositiveInfinity)
-      forall(bars) { bar => Chain.from(bar.annotation.get.boundary).isZero() must beTrue }
-    }
+        val rng = new scala.util.Random(29)
+        val pts = Array.fill(16)(Array(rng.nextDouble() * 10, rng.nextDouble() * 10))
+        val space = EuclideanMetricSpace(pts)
+        val stream = LimitedCofaceSimplexStream(
+          EnumeratingCofaceSimplexStream(
+            EdgeCollapse.collapse(space, maxFiltrationValue = Some(Double.PositiveInfinity)),
+            maxFiltrationValue = Some(Double.PositiveInfinity)
+          ),
+          3
+        )
+        val bars =
+          SimplicialHomologyContext[Int, Double, Double]().persistentHomology(stream).barcodeAt(Double.PositiveInfinity)
+        forall(bars)(bar => Chain.from(bar.annotation.get.boundary).isZero() must beTrue)
+      }
   }
 
-  "EdgeCollapse.collapse on a multi-cluster point cloud" should {
+  "EdgeCollapse.collapse on a multi-cluster point cloud" should
     "removes a real, non-trivial fraction of edges -- confirms the operation is not vacuously a no-op on a " +
-      "realistic (not adversarially sparse) point cloud" >> {
+    "realistic (not adversarially sparse) point cloud" >> {
       def cluster(cx: Double, cy: Double, seed: Int): Array[Array[Double]] =
         val rng = new scala.util.Random(seed)
         Array.fill(8)(Array(cx + (rng.nextDouble() - 0.5) * 0.5, cy + (rng.nextDouble() - 0.5) * 0.5))
@@ -237,4 +242,3 @@ class EdgeCollapseStreamSpec extends org.specs2.mutable.Specification with Scala
       val stats = EdgeCollapse.collapse(space, maxFiltrationValue = Some(Double.PositiveInfinity)).stats
       stats.edgesRemoved must beGreaterThan(0)
     }
-  }

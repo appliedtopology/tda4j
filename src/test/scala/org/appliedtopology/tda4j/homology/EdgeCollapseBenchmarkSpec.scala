@@ -12,16 +12,16 @@ import org.specs2.main.Arguments
 
 import scala.util.Random
 
-/** Measures `EdgeCollapse`'s actual payoff (`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 5's own
-  * explicit instruction: "count actual cells-removed-vs-total on a real VR fixture... measure construction and
-  * reduction separately... before claiming any speedup") -- construction and reduction timed separately, exactly
-  * like `EngineComparisonBenchmarkSpec` already does for the same reason (a collapse-derived speedup, if any, is
-  * expected on REDUCTION, not necessarily on ENUMERATION -- see `WORKLOG-edge-collapse.md` for the analysis of
-  * why `EnumeratingCofaceSimplexStream`'s own combinatorial-index enumeration is `Theta(C(n,d+1))` regardless of
-  * how sparse the underlying graph is, so a smaller graph alone does not shrink ITS enumeration cost).
+/** Measures `EdgeCollapse`'s actual payoff (`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 5's own explicit
+  * instruction: "count actual cells-removed-vs-total on a real VR fixture... measure construction and reduction
+  * separately... before claiming any speedup") -- construction and reduction timed separately, exactly like
+  * `EngineComparisonBenchmarkSpec` already does for the same reason (a collapse-derived speedup, if any, is expected on
+  * REDUCTION, not necessarily on ENUMERATION -- see `WORKLOG-edge-collapse.md` for the analysis of why
+  * `EnumeratingCofaceSimplexStream`'s own combinatorial-index enumeration is `Theta(C(n,d+1))` regardless of how sparse
+  * the underlying graph is, so a smaller graph alone does not shrink ITS enumeration cost).
   *
-  * Like `ApparentPairsBenchmarkSpec`, a profiling script, not a correctness check: prints tables, only an
-  * exception is a real failure. `sbt -DrunBenchmarks=true -DminSize=... testOnly
+  * Like `ApparentPairsBenchmarkSpec`, a profiling script, not a correctness check: prints tables, only an exception is
+  * a real failure. `sbt -DrunBenchmarks=true -DminSize=... testOnly
   * org.appliedtopology.tda4j.homology.EdgeCollapseBenchmarkSpec`.
   */
 class EdgeCollapseBenchmarkSpec(args: Arguments) extends mutable.Specification:
@@ -80,7 +80,9 @@ class EdgeCollapseBenchmarkSpec(args: Arguments) extends mutable.Specification:
       val warmupSpace = randomCloud(n, Random(seed.toLong * 7 - n))
       val warmupPlain = newStream(warmupSpace)
       warmupPlain.iterator.toVector
-      SimplicialHomologyContext[Int, Double, Double]().persistentHomology(warmupPlain).diagramAt(Double.PositiveInfinity)
+      SimplicialHomologyContext[Int, Double, Double]()
+        .persistentHomology(warmupPlain)
+        .diagramAt(Double.PositiveInfinity)
       val warmupColl = newStream(EdgeCollapse.collapse(warmupSpace))
       warmupColl.iterator.toVector
       SimplicialHomologyContext[Int, Double, Double]().persistentHomology(warmupColl).diagramAt(Double.PositiveInfinity)
@@ -92,10 +94,14 @@ class EdgeCollapseBenchmarkSpec(args: Arguments) extends mutable.Specification:
       val buildCollMs = collStreams.map(s => timeMs(s.iterator.toVector)._2)
 
       val reducePlainMs = plainStreams.map { s =>
-        timeMs(SimplicialHomologyContext[Int, Double, Double]().persistentHomology(s).diagramAt(Double.PositiveInfinity))._2
+        timeMs(
+          SimplicialHomologyContext[Int, Double, Double]().persistentHomology(s).diagramAt(Double.PositiveInfinity)
+        )._2
       }
       val reduceCollMs = collStreams.map { s =>
-        timeMs(SimplicialHomologyContext[Int, Double, Double]().persistentHomology(s).diagramAt(Double.PositiveInfinity))._2
+        timeMs(
+          SimplicialHomologyContext[Int, Double, Double]().persistentHomology(s).diagramAt(Double.PositiveInfinity)
+        )._2
       }
 
       val bp = median(buildPlainMs)

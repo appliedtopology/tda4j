@@ -10,64 +10,64 @@ import org.apache.commons.math3.linear.{ArrayRealVector, ConjugateGradient, Real
 
 import scala.collection.mutable
 
-/** No valid `Z`-lift of the chosen cocycle exists for the chosen `prime` -- either the underlying cohomology class
-  * is genuinely torsion (no real/integer lift can exist at any prime -- an RP²-type class is the standard example),
-  * or `prime` was too small relative to the true integer cocycle's own magnitudes for the mod-`prime` reduction to
-  * be injective on the relevant range (retry with a larger prime). Thrown rather than silently coordinatizing
-  * against a mod-`prime` mirage -- see `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 2's own framing:
-  * "`∂(ℤ-lift) = 0` must be a runtime check, not assumed."
+/** No valid `Z`-lift of the chosen cocycle exists for the chosen `prime` -- either the underlying cohomology class is
+  * genuinely torsion (no real/integer lift can exist at any prime -- an RP²-type class is the standard example), or
+  * `prime` was too small relative to the true integer cocycle's own magnitudes for the mod-`prime` reduction to be
+  * injective on the relevant range (retry with a larger prime). Thrown rather than silently coordinatizing against a
+  * mod-`prime` mirage -- see `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 2's own framing: "`∂(ℤ-lift) =
+  * 0` must be a runtime check, not assumed."
   */
 class NoIntegerCocycleException(message: String) extends RuntimeException(message)
 
 /** Circular coordinates (de Silva, Morozov, Vejdemo-Johansson, "Persistent Cohomology and Circular Coordinates,"
-  * Discrete & Computational Geometry 45:737-759, 2011): given a persistent H¹ class of a Vietoris-Rips complex,
-  * produce a map from (a connected subset of) the point cloud to the circle `R/Z` representing that class -- a
-  * genuinely topological coordinate capturing periodic/cyclic structure in data. `.claude/WORKLOG-mainstream-
-  * feature-gap-analysis.md` item 2, including the user's own reframing of the original open question (see that
-  * worklog for the full derivation this implementation follows) and cross-checked against a real reference
-  * implementation (`scikit-tda/DREiMac`'s `toroidalcoords.py`, fetched directly -- not recalled from memory,
-  * matching this codebase's own io-module verification ethos) for the exact harmonic-smoothing linear system and
-  * the "coordinate is literally the smoothed potential itself, mod 1" formula, which is less obvious from the
-  * paper's own more abstract framing than it looks once seen written out as code.
+  * Discrete & Computational Geometry 45:737-759, 2011): given a persistent H¹ class of a Vietoris-Rips complex, produce
+  * a map from (a connected subset of) the point cloud to the circle `R/Z` representing that class -- a genuinely
+  * topological coordinate capturing periodic/cyclic structure in data. `.claude/WORKLOG-mainstream-
+  * feature-gap-analysis.md` item 2, including the user's own reframing of the original open question (see that worklog
+  * for the full derivation this implementation follows) and cross-checked against a real reference implementation
+  * (`scikit-tda/DREiMac`'s `toroidalcoords.py`, fetched directly -- not recalled from memory, matching this codebase's
+  * own io-module verification ethos) for the exact harmonic-smoothing linear system and the "coordinate is literally
+  * the smoothed potential itself, mod 1" formula, which is less obvious from the paper's own more abstract framing than
+  * it looks once seen written out as code.
   *
-  * '''The reframing''' (this is what makes the construction tractable): rather than asking whether a *finite* H¹
-  * bar's representative restricts to a nonzero cocycle on some sub-level complex `K_r` (an open question about an
+  * '''The reframing''' (this is what makes the construction tractable): rather than asking whether a *finite* H¹ bar's
+  * representative restricts to a nonzero cocycle on some sub-level complex `K_r` (an open question about an
   * already-computed representative), fix `r` inside the target bar's own `[birth, death)` range up front, build the
   * *static* truncated complex `K_r` (`maxFiltrationValue = Some(r)`, the same knob that already implements
-  * enclosing-radius truncation, plus a cell-dimension cap so `CellularCohomologyContext` -- which fully
-  * materializes its input, no `maxDim` of its own -- doesn't build cells above what H¹ needs), and compute
-  * cohomology of *that fixed complex* directly. The target class is essential there *by construction* (nothing
-  * survives past `r` in a view that stops at `r`) -- the verification question dissolves rather than needing an
-  * answer. Matching multiple simultaneously-alive classes at `K_r` back to a specific full-filtration bar turns out
-  * to need only a birth-value comparison, not a more elaborate algorithm: `K_r`'s own persistent cohomology (fed
-  * the same filtration values, just cut off at `r`) assigns every bar the SAME birth it would have in the full
-  * computation (truncating the end of a filtration cannot change how early something is born), so an essential
-  * bar at `K_r` with birth `b` is unambiguously "the same" class as a full-computation bar with that same birth
-  * `b`, found by direct comparison -- no separate matching machinery needed.
+  * enclosing-radius truncation, plus a cell-dimension cap so `CellularCohomologyContext` -- which fully materializes
+  * its input, no `maxDim` of its own -- doesn't build cells above what H¹ needs), and compute cohomology of *that fixed
+  * complex* directly. The target class is essential there *by construction* (nothing survives past `r` in a view that
+  * stops at `r`) -- the verification question dissolves rather than needing an answer. Matching multiple
+  * simultaneously-alive classes at `K_r` back to a specific full-filtration bar turns out to need only a birth-value
+  * comparison, not a more elaborate algorithm: `K_r`'s own persistent cohomology (fed the same filtration values, just
+  * cut off at `r`) assigns every bar the SAME birth it would have in the full computation (truncating the end of a
+  * filtration cannot change how early something is born), so an essential bar at `K_r` with birth `b` is unambiguously
+  * "the same" class as a full-computation bar with that same birth `b`, found by direct comparison -- no separate
+  * matching machinery needed.
   *
   * '''Harmonic smoothing''': the chosen cocycle `z` (an integer 1-cochain, lifted from a large-prime field
   * representative -- see `prime`'s own doc) is smoothed by solving `min_g ||z - d0 g||^2` for a real-valued vertex
   * function `g` (`d0`, the 0-coboundary map, is `(d0 g)(edge [i,j]) = g(j) - g(i)`), via the normal equations
-  * `d0^T d0 g = d0^T z` -- a sparse SPD least-squares solve, not "optimization" in the LP/QP sense. Solved
-  * matrix-free (`org.apache.commons.math3.linear.ConjugateGradient` against a `RealLinearOperator` built directly
-  * from `Simplex.boundary[Double]`, no dense matrix ever materialized, no new dependency -- `commons-math3` is
-  * already vendored) over the connected component of `K_r`'s 1-skeleton containing the cocycle's own support (a
-  * class is only meaningful there -- other components have no path along which it could be defined at all), with
-  * one arbitrarily-chosen vertex in that component anchored at `g = 0` to make the reduced system genuinely
-  * positive *definite*, not just semi-definite (the unreduced graph Laplacian is singular on constants, one
-  * dimension of null space per connected component -- anchoring one vertex removes exactly that one dimension,
-  * rather than disabling `ConjugateGradient`'s own positive-definiteness check and hoping).
+  * `d0^T d0 g = d0^T z` -- a sparse SPD least-squares solve, not "optimization" in the LP/QP sense. Solved matrix-free
+  * (`org.apache.commons.math3.linear.ConjugateGradient` against a `RealLinearOperator` built directly from
+  * `Simplex.boundary[Double]`, no dense matrix ever materialized, no new dependency -- `commons-math3` is already
+  * vendored) over the connected component of `K_r`'s 1-skeleton containing the cocycle's own support (a class is only
+  * meaningful there -- other components have no path along which it could be defined at all), with one
+  * arbitrarily-chosen vertex in that component anchored at `g = 0` to make the reduced system genuinely positive
+  * *definite*, not just semi-definite (the unreduced graph Laplacian is singular on constants, one dimension of null
+  * space per connected component -- anchoring one vertex removes exactly that one dimension, rather than disabling
+  * `ConjugateGradient`'s own positive-definiteness check and hoping).
   *
-  * The output coordinate is then, remarkably directly, `theta(v) = frac(g(v))`: no separate path-integration step
-  * is needed (confirmed against DREiMac's own code, not derived from the paper's more abstract statement alone).
+  * The output coordinate is then, remarkably directly, `theta(v) = frac(g(v))`: no separate path-integration step is
+  * needed (confirmed against DREiMac's own code, not derived from the paper's more abstract statement alone).
   */
 object CircularCoordinates:
 
-  /** `theta`: ambient point index (matching the `metricSpace` passed to `compute`) to its circle coordinate in
-    * `[0, 1)` -- only for points in the connected component of `K_r` containing the chosen class (see the class
-    * doc); a point outside that component has no entry at all, not a sentinel value. `birth`/`death` are the
-    * chosen bar's own full-filtration endpoints (`death = Double.PositiveInfinity` for an essential bar); `r` and
-    * `prime` echo the parameters `compute` was called with.
+  /** `theta`: ambient point index (matching the `metricSpace` passed to `compute`) to its circle coordinate in `[0, 1)`
+    * -- only for points in the connected component of `K_r` containing the chosen class (see the class doc); a point
+    * outside that component has no entry at all, not a sentinel value. `birth`/`death` are the chosen bar's own
+    * full-filtration endpoints (`death = Double.PositiveInfinity` for an essential bar); `r` and `prime` echo the
+    * parameters `compute` was called with.
     */
   case class Result(theta: Map[Int, Double], birth: Double, death: Double, r: Double, prime: Int)
 
@@ -84,17 +84,23 @@ object CircularCoordinates:
     endpointValue(bar.upper) - endpointValue(bar.lower)
 
   /** The `(birth, death)` range of every persistent H¹ class of `metricSpace`'s Vietoris-Rips complex, sorted by
-    * persistence descending -- index `i` here is exactly `compute`'s own `cocycleIndex = i`. A caller has no way
-    * to pick a meaningful `r` for `compute` without first knowing a target bar's own range, so this is the
-    * intended first call, not merely a diagnostic. Computed over `Double` coefficients (this library's usual
-    * default for reading off bar values) regardless of the `prime` a later `compute` call will use -- the
-    * `(birth, death)` values themselves agree across coefficient fields for any class `compute` could actually
-    * succeed on (a genuinely torsion class, where they might not, is exactly the case `compute` itself reports via
-    * [[NoIntegerCocycleException]] rather than silently coordinatizing).
+    * persistence descending -- index `i` here is exactly `compute`'s own `cocycleIndex = i`. A caller has no way to
+    * pick a meaningful `r` for `compute` without first knowing a target bar's own range, so this is the intended first
+    * call, not merely a diagnostic. Computed over `Double` coefficients (this library's usual default for reading off
+    * bar values) regardless of the `prime` a later `compute` call will use -- the `(birth, death)` values themselves
+    * agree across coefficient fields for any class `compute` could actually succeed on (a genuinely torsion class,
+    * where they might not, is exactly the case `compute` itself reports via [[NoIntegerCocycleException]] rather than
+    * silently coordinatizing).
     */
-  def h1Bars(metricSpace: FiniteMetricSpace[Int], maxFiltrationValue: Option[Double] = None): IndexedSeq[(Double, Double)] =
+  def h1Bars(
+    metricSpace: FiniteMetricSpace[Int],
+    maxFiltrationValue: Option[Double] = None
+  ): IndexedSeq[(Double, Double)] =
     given Double is Field = Field.DoubleApproximated(1e-9)
-    val stream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue), 2)
+    val stream = LimitedCofaceSimplexStream(
+      EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
+      2
+    )
     val ctx = CellularCohomologyContext[Simplex[Int], Double, Double]()
     ctx
       .persistentCohomology(stream)
@@ -109,25 +115,25 @@ object CircularCoordinates:
     *   the point cloud (or precomputed distance data) to coordinatize.
     * @param r
     *   the fixed threshold defining the static complex `K_r` cohomology is actually computed on -- must lie in
-    *   `[birth, death)` of the `cocycleIndex`-th class (checked; an actionable message names the valid range,
-    *   since picking `r` is a real, data-dependent choice this method cannot make for the caller -- see the class
-    *   doc's "reframing" paragraph for why this parameter exists at all).
+    *   `[birth, death)` of the `cocycleIndex`-th class (checked; an actionable message names the valid range, since
+    *   picking `r` is a real, data-dependent choice this method cannot make for the caller -- see the class doc's
+    *   "reframing" paragraph for why this parameter exists at all).
     * @param cocycleIndex
     *   selects which persistent H¹ class to coordinatize, `0` = the most persistent (matching DREiMac's own
     *   `cocycle_idx` convention, checked directly rather than assumed) -- ties broken by this codebase's own
     *   `Ordering`/sort stability, not meaningful to rely on.
     * @param prime
     *   the field cohomology is computed over before lifting to an integer cocycle -- must be an ODD prime (not the
-    *   library-wide default of `2`: an RP²-type class exists over `F_2` with no real/integer lift at all, so a
-    *   mod-2 "cocycle" can be a mirage for coordinatization here specifically, even though `F_2` is perfectly fine
-    *   for ordinary barcodes). "Large-ish" per the originating worklog: large enough that the true integer
-    *   cocycle's own entries don't exceed the field's centered representative range and wrap around -- `47` is an
-    *   unremarkable default, not a value with any special significance; raise it if [[NoIntegerCocycleException]]
-    *   is thrown and the class is not, in fact, torsion.
+    *   library-wide default of `2`: an RP²-type class exists over `F_2` with no real/integer lift at all, so a mod-2
+    *   "cocycle" can be a mirage for coordinatization here specifically, even though `F_2` is perfectly fine for
+    *   ordinary barcodes). "Large-ish" per the originating worklog: large enough that the true integer cocycle's own
+    *   entries don't exceed the field's centered representative range and wrap around -- `47` is an unremarkable
+    *   default, not a value with any special significance; raise it if [[NoIntegerCocycleException]] is thrown and the
+    *   class is not, in fact, torsion.
     * @param maxFiltrationValue
-    *   truncation for the FULL computation used only to pick the target bar (`None` defaults to the metric space's
-    *   own minimum enclosing radius, this library's usual convention) -- unrelated to `r`, which truncates the
-    *   separate, smaller complex actually used for cohomology.
+    *   truncation for the FULL computation used only to pick the target bar (`None` defaults to the metric space's own
+    *   minimum enclosing radius, this library's usual convention) -- unrelated to `r`, which truncates the separate,
+    *   smaller complex actually used for cohomology.
     */
   def compute(
     metricSpace: FiniteMetricSpace[Int],
@@ -267,9 +273,9 @@ object CircularCoordinates:
           queue.enqueue(neighbor)
     visited.toSet
 
-  /** Requires `delta(z) = 0` EXACTLY as integers for every triangle of `stream` -- not merely mod `prime` (which
-    * `z`'s own construction, a cohomology computation over a prime field, already guarantees trivially and proves
-    * nothing) -- throwing [[NoIntegerCocycleException]] naming the offending triangle if it fails anywhere.
+  /** Requires `delta(z) = 0` EXACTLY as integers for every triangle of `stream` -- not merely mod `prime` (which `z`'s
+    * own construction, a cohomology computation over a prime field, already guarantees trivially and proves nothing) --
+    * throwing [[NoIntegerCocycleException]] naming the offending triangle if it fails anywhere.
     */
   private def verifyIntegerCocycle(
     stream: CellStream[Simplex[Int], Double],
