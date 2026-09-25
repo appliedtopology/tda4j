@@ -11,9 +11,8 @@ import org.scalacheck.Gen
 import org.specs2.ScalaCheck
 import org.specs2.execute.AsResult
 
-/** `DtmRipsSimplexStream` (Anai, Chazal, Glisse, Ike, Lecci, Rouvreau, Saulnier & Wasserman, "DTM-based
-  * filtrations", arXiv:1811.04757). See `.claude/WORKLOG-dtm-filtrations.md` for the full derivation of every
-  * fixture below.
+/** `DtmRipsSimplexStream` (Anai, Chazal, Glisse, Ike, Lecci, Rouvreau, Saulnier & Wasserman, "DTM-based filtrations",
+  * arXiv:1811.04757). See `.claude/WORKLOG-dtm-filtrations.md` for the full derivation of every fixture below.
   */
 class DtmRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
@@ -31,7 +30,9 @@ class DtmRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCheck
         .diagramAt(Double.PositiveInfinity)
       val tol = 1e-6
       (barcode.count(_._1 == 0) must beEqualTo(3)) and
-        (barcode.count { case (0, b, d) => math.abs(b - 3.16227766) < tol && math.abs(d - 5.39834564) < tol; case _ => false }
+        (barcode.count {
+          case (0, b, d) => math.abs(b - 3.16227766) < tol && math.abs(d - 5.39834564) < tol; case _ => false
+        }
           must beEqualTo(2)) and
         (barcode.count { case (0, b, d) => math.abs(b - 3.16227766) < tol && d.isPosInfinity; case _ => false }
           must beEqualTo(1))
@@ -75,7 +76,7 @@ class DtmRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCheck
     // and a fully-tied bucket is consistent with EVERY order), just not necessarily the SAME one -- confirmed
     // empirically while writing this test. The barcode itself, which is what "reduces to plain VR" actually
     // means, is checked below and is insensitive to which tied order either stream picked.
-    "reduce to plain Vietoris-Rips at k=1 (f=0 everywhere, including the threshold): same cells, same values" >> {
+    "reduce to plain Vietoris-Rips at k=1 (f=0 everywhere, including the threshold): same cells, same values" >>
       AsResult {
         org.scalacheck.Prop.forAll(matrixGen(Gen.double, Gen.chooseNum(2, 4), Gen.chooseNum(5, 10))) { pts =>
           val ambient = EuclideanMetricSpace(pts)
@@ -88,13 +89,16 @@ class DtmRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCheck
             dtmCells == vrCells && dtmCells.forall(c => dtmStream.filtrationValue(c) == vrStream.filtrationValue(c))
           }
           val dtmBarcode =
-            SimplicialHomologyContext[Int, Double, Double]().persistentHomology(dtmStream).diagramAt(Double.PositiveInfinity)
+            SimplicialHomologyContext[Int, Double, Double]()
+              .persistentHomology(dtmStream)
+              .diagramAt(Double.PositiveInfinity)
           val vrBarcode =
-            SimplicialHomologyContext[Int, Double, Double]().persistentHomology(vrStream).diagramAt(Double.PositiveInfinity)
+            SimplicialHomologyContext[Int, Double, Double]()
+              .persistentHomology(vrStream)
+              .diagramAt(Double.PositiveInfinity)
           cellsMatch && dtmBarcode.toSet == vrBarcode.toSet
         }
       }
-    }
   }
 
   "DtmRipsSimplexStream" should {
@@ -110,22 +114,20 @@ class DtmRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCheck
     }
   }
 
-  "DtmRipsSimplexStream at p=1 and p=2" should {
-    "keep vertex filtration value = 2*f(x) and every edge >= both its endpoints' vertex values (monotonicity)" >> {
-      AsResult {
-        org.scalacheck.Prop.forAll(matrixGen(Gen.double, Gen.chooseNum(2, 4), Gen.chooseNum(5, 12)), Gen.oneOf(1.0, 2.0)) {
-          (pts, p) =>
-            val ambient = EuclideanMetricSpace(pts)
-            val f = DistanceToMeasure(ambient, math.min(3, ambient.size))
-            val stream = DtmRipsSimplexStream(ambient, f, p, maxFiltrationValue = Some(Double.PositiveInfinity))
-            val vertexOk = stream.iterateDimension(0).forall(v => stream.filtrationValue(v) == 2.0 * f(v.min))
-            val edgeOk = stream.iterateDimension(1).forall { e =>
-              val vs = e.toSeq
-              stream.filtrationValue(e) >= stream.filtrationValue(Simplex(vs(0))) - 1e-9 &&
-              stream.filtrationValue(e) >= stream.filtrationValue(Simplex(vs(1))) - 1e-9
-            }
-            vertexOk && edgeOk
+  "DtmRipsSimplexStream at p=1 and p=2" should
+    "keep vertex filtration value = 2*f(x) and every edge >= both its endpoints' vertex values (monotonicity)" >>
+    AsResult {
+      org.scalacheck.Prop
+        .forAll(matrixGen(Gen.double, Gen.chooseNum(2, 4), Gen.chooseNum(5, 12)), Gen.oneOf(1.0, 2.0)) { (pts, p) =>
+          val ambient = EuclideanMetricSpace(pts)
+          val f = DistanceToMeasure(ambient, math.min(3, ambient.size))
+          val stream = DtmRipsSimplexStream(ambient, f, p, maxFiltrationValue = Some(Double.PositiveInfinity))
+          val vertexOk = stream.iterateDimension(0).forall(v => stream.filtrationValue(v) == 2.0 * f(v.min))
+          val edgeOk = stream.iterateDimension(1).forall { e =>
+            val vs = e.toSeq
+            stream.filtrationValue(e) >= stream.filtrationValue(Simplex(vs(0))) - 1e-9 &&
+            stream.filtrationValue(e) >= stream.filtrationValue(Simplex(vs(1))) - 1e-9
+          }
+          vertexOk && edgeOk
         }
-      }
     }
-  }

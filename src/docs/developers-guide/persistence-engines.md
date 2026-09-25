@@ -1,10 +1,13 @@
 # Persistence engines: what to trust, and why
 
-`homology/Homology.scala`, `homology/PackedRipserCohomology.scala`, and `homology/Cohomology.scala` contain
-**four independently-implemented algorithms across five concrete classes**. They share the `Chain` reduction
-primitives from [Architecture](architecture.md), but they are not variants of one shared engine — a fix
-or bug found in one does not imply anything about the others. Read this page before choosing which engine to
-build on.
+`homology/Homology.scala`, `homology/PackedRipserCohomology.scala`, `homology/Cohomology.scala`,
+`homology/FastCubicalHomology.scala`, and `homology/FastAlphaHomology.scala` contain **five
+independently-implemented algorithms across seven concrete classes** (the last two classes share one
+algorithm — a dual-graph union-find via Alexander duality — applied to two different cell types, the same
+"one algorithm, several concrete classes" relationship engines 3/4 already have). They share the `Chain`
+reduction primitives from [Architecture](architecture.md), but they are not variants of one shared engine — a
+fix or bug found in one does not imply anything about the others. Read this page before choosing which engine
+to build on.
 
 Three of the five (`CellularHomologyContext`, `CellularPersistenceInChunksContext`, `CellularCohomologyContext`)
 additionally implement the common `homology.PersistenceEngine[CellT, C]` trait (`def barcode(stream): List[
@@ -135,40 +138,152 @@ pair was removed outright while building this class) — coboundary is *extrinsi
 which higher-dimensional cells exist in the ambient complex), not intrinsic the way `boundary` is, so a
 per-cell `coboundary` method with no complex to consult was never the right shape.
 
+## 6. `FastCubicalHomologyContext` — dual-graph union-find, any ambient dimension >= 2
+
+Flash Cubical (Le Breton-Szustakowski-Piraud, arXiv:2606.04801): a genuinely different algorithm from engines
+1/2 above, not a faster re-keying the way engine 4 is for engine 3. Specialized to `CubicalGridStream`
+directly (like engines 3/4 are specialized to `Simplex[Int]` Vietoris-Rips) rather than generic over
+`CellT: OrderedCell` — it reads the grid's own `shape`/`ambientDim`/`topCellValue` directly, so it does not
+implement `PersistenceEngine[CellT, C]` either, for the same "honest asymmetry" reason that trait's own doc
+comment already gives for engines 3/4.
+
+**Valid at any ambient dimension `>= 2`** (a `require`d precondition `matlab.TDA4j`/`cli` both check before
+ever calling it, with a clear message rather than a generic exception). At `d=2`, `H_0` (an ordinary primal
+union-find, ascending filtration order, elder rule) plus `H_1` (via the dual construction below) together
+account for every nontrivial cell dimension a 2D grid has — `H_2` is identically zero for any subcomplex of a
+2D grid (a bounded planar region has no 2-dimensional voids to detect), so nothing is being skipped. At `d >=
+3` there are `d-2` "middle" dimensions (`1 <= k <= d-2`) with no duality shortcut; these are handed to
+`CellularPersistenceInChunksContext` run on a `LimitedCubicalGridStream` view that hides the real
+top-dimensional cells entirely, so the (often largest) top dimension never touches general `Chain` reduction —
+still a real, if shrinking-with-`d`, win, and no new hardcoded dimension ceiling (`chunks` is already fully
+general over `d`). See `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md` for the full derivation,
+including why the dual union-find's own correctness doesn't depend on how the middle dimensions get resolved;
+cross-validated against the naive engine at `d=3` (hand fixtures, Fp(3) sign-genericity, a random property
+test) plus one `d=4` smoke test, not validated at `d >= 5`.
+
+**The dual construction**: top cells (pixels) become dual vertices, codimension-1 cells (facets) become dual
+edges connecting the 1 or 2 top cells containing them (a shared `∞` sentinel vertex, fixed at `+Infinity`,
+stands in for a facet's missing side on the grid's own outer boundary). Primal `H_{d-1}` of the sublevel
+filtration equals ordinary `H_0` of this dual graph's own SUPERLEVEL filtration (Alexander duality,
+`H_{d-1}(X) ≅ H^0(S^d \ X)`), computed by the same elder-rule array union-find engine 2's own `unionFindDim01`
+uses, processing dual vertices/edges together in DESCENDING order of primal value, with every resulting bar's
+endpoints swapped. `∞` must be the unconditional elder of any merge it takes part in — not just because
+`birthOf(∞) = +Infinity` is *usually* the largest value, but enforced explicitly, since a real top cell can
+also carry `topValue = +Infinity` (this codebase's own "permanently missing cell" convention, e.g. Perseus's
+`-1`) and tie against it.
+
+**Representatives**: each active dual component tracks its own running signed sum of top cells, oriented
+coherently as merges happen so a dying component's boundary is exactly the `H_{d-1}` cycle bounding it — the
+orientation flip needed at each merge is solved directly from the connecting facet's own boundary coefficients
+(always `±1`, `cubeIsOrderedCell`'s alternating-sign rule) and each side's own already-established sign,
+matching this codebase's design principle of representatives from every engine, not just this one's own
+speed. This is this codebase's *own* extension: the source paper is F2-only and barcode-only.
+
+No paper access (network-blocked) and no existing implementation to port (unlike engine 4's GUDHI-verified
+edge-collapse precedent) meant this is an original derivation from Alexander duality, not a translation — see
+the design note for the full derivation and a hand-verified worked example, checked before any code was
+written.
+
+## 7. `FastAlphaHomologyContext` — engine 6's own dual union-find, ported to `HelixDelaunay`
+
+Same algorithm as engine 6, applied to `HelixDelaunay`'s top simplices instead of a cubical grid's top cells
+(`.claude/DESIGN-alpha-dual-unionfind.md`, `alpha-complex.md`'s own `FastAlphaHomologyContext` section for the
+full derivation and its own newly-measured risk). `HelixDelaunay` specifically, never `AlphaComplexDQP`/
+`AlphaShapeDQP` — the dual graph needs the full, untruncated triangulation (`AlphaComplexDQP.euclidean`'s own
+truncated mode is incompatible) and "every facet has <= 2 cofaces," which `AlphaShapeDQP`'s own documented
+cospherical-degeneracy hazard can violate directly by emitting an oversized simplex. **Valid at any ambient
+dimension `>= 2`, same as engine 6** (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): both
+union-finds were already dimension-generic before this extension (only the `require` gated them to `d=2`), so
+extending past 2D was purely a matter of handing the residual "middle" dimensions (`1 <= k <= d-2`) to
+`PersistenceInChunksContext[Int, C]` run on a new `alpha.LimitedAlphaShapesStream` view (the `Simplex[Int]`
+analogue of engine 6's own `LimitedCubicalGridStream` — needed because `HelixDelaunay`/`AlphaShapes` is a
+`StratifiedSimplexStream`, not a `CofaceSimplexStream`, so the existing `LimitedCofaceSimplexStream` doesn't fit
+it) that hides the real top-dimensional simplices. Sequenced AFTER engine 6's own hybrid was validated, not
+concurrently, because this engine ALSO carries the facet-multiplicity risk below, which needed its own fresh
+measurement at `d=3` rather than assuming the `d=2` rate carried over — it does not.
+
+**Unlike engine 6, this precondition is not guaranteed by construction**, and the rate is NOT flat across
+dimension or point count: roughly 1-in-18700 on random points at ambient dimension 2 (the original measurement)
+but roughly 1-in-1666 at ambient dimension 3 with 20-30 points (vs. zero violations in 20000 trials with only
+6-16 points at the same dimension) — see `alpha-complex.md` for the full measurement. A real `HelixDelaunay`
+limitation, not a flaw in this construction, but a materially bigger one at `d=3` than the `d=2` figure alone
+would suggest. Validates the precondition explicitly and throws the named `FastAlphaTriangulationException` on
+violation rather than building a silently-wrong dual graph — its message is layered plain-language-first (for
+an unsuspecting MATLAB/CLI caller: "NOT an error in your data," naming the ambient dimension and the measured
+rates, the concrete retry) with the facet-count detail as a technical appendix, the same two-audience approach
+`NoIntegerCocycleException` already established for `CircularCoordinates`.
+
+**Wired into `matlab.TDA4j`/`cli` as `engine="fast-alpha"`/`--engine fast-alpha`**, like every other engine on
+this page — valid only for `complex=alpha` with `alphaBackend=helix` (the default) and any ambient dimension
+`>= 2`; see `alpha-complex.md`'s own section for the full reasoning behind shipping the measured risk above,
+including why the `d=3` figure is documented explicitly rather than assumed to match `d=2`.
+
+**A `FastAlphaTriangulationException` has a repair, not just a documented retry**: `"requireValidTriangulation"`
+(MATLAB)/`--require-valid-triangulation` (CLI), only consulted with `complex=alpha`/`alphaBackend=helix`, off by
+default. Nudges exactly the near-tied points involved in a violation by a small perturbation, re-runs
+`HelixDelaunay`'s own already-tested global construction on the full (mostly unperturbed) point set, and
+recomputes every resulting simplex's circumsphere from the ORIGINAL coordinates — see
+`HelixDelaunay.repairByJitterRetriangulation`'s own doc and `.claude/DESIGN-helix-triangulation-repair.md` for
+the full mechanism, including two earlier designs that were tried and rejected after being checked against a
+real failing fixture. Validated at ambient dimension 2 and 3 (two independent 20000-trial stress sweeps against
+near-cospherical point clouds, zero barcode disagreements against the naive engine across every genuinely-hit
+violation); not validated at `d >= 4`, where `HelixDelaunay` construction itself is already documented above as
+unreliable for unrelated reasons. Meaningful with any `engine` value (the repair lives on the triangulation
+itself), but its only practical effect on `engine="naive"`/`"chunks"`/`"cohomology"` is to silently change which
+(rare, near-tied) triangulation gets built — those engines have no facet-multiplicity precondition of their own,
+so there is usually no reason to set this unless also using `engine="fast-alpha"`.
+
 ## Streams × engines: what works with what
 
 Every complex construction in this codebase produces a `CofaceSimplexStream`/`CellStream` that, in principle,
-any of `matlab.TDA4j`'s four `engine` values could consume — but two of those engines
-(`PackedRipserCohomologyContext`/`engine="ripser"` and `CellularPersistenceInChunksContext`/`engine="chunks"`)
-were built against specific assumptions (a genuine flag complex, a max-pairwise-distance filtration functional,
-vertices born at filtration 0) that not every construction satisfies, and refusing the combination outright
-(a clear `IllegalArgumentException`, not a silently wrong barcode) is deliberate. This table is generated by
-reading `matlab.TDA4j`'s own `dispatch`/`resolveWitnessEngine`/`dispatchCubical` — the single source of truth
-for every refusal and default — not by inference from a construction's own doc; re-check that source if this
-table and the code ever disagree.
+some subset of `matlab.TDA4j`'s six `engine` values could consume — but most of those engines were built
+against specific assumptions that not every construction satisfies: `ripser`/`chunks` assume a genuine flag
+complex, a max-pairwise-distance filtration functional, and vertices born at filtration 0;
+`fast-cubical`/`fast-alpha` are each specialized to one single concrete construction (`CubicalGridStream`/
+`HelixDelaunay` respectively) and have no notion of any other complex at all. Refusing an unsupported
+combination outright (a clear `IllegalArgumentException`, not a silently wrong barcode) is deliberate
+throughout. This table is generated by reading `matlab.TDA4j`'s own `dispatch`/`resolveWitnessEngine`/
+`dispatchCubical` — the single source of truth for every refusal and default — not by inference from a
+construction's own doc; re-check that source if this table and the code ever disagree.
 
-| Complex (`complex=`)         | Default engine | `ripser`                                            | `naive` | `chunks`                                          | `cohomology` |
-|-------------------------------|-----------------|------------------------------------------------------|---------|-----------------------------------------------------|--------------|
-| `vr`                          | `ripser`        | yes                                                    | yes     | yes                                                   | yes          |
-| `cech`                        | `naive`         | **no** — not a max-pairwise-distance functional (radius, not diameter) | yes | yes | yes          |
-| `witness`, `witnessVariant=lazy`    | `ripser`  | yes — genuinely a flag complex under its own reified `WitnessMetricSpace` | yes | yes | yes |
-| `witness`, `witnessVariant=general` | `naive`   | **no** — not a flag complex (dimension-specific threshold) | yes | **no** | yes |
-| `dtm-rips`                    | `naive`         | **no** — vertices aren't born at 0, and the weighted-Rips functional isn't `insertionDiameter`-compatible | yes | yes | yes |
-| `dtm-alpha`                   | `naive`         | **no** — no notion of a Vietoris-Rips complex at all   | yes     | **no** — shares `AlphaComplexDQP`'s known stall/OOM risk (see `alpha-complex.md`) | yes |
-| `alpha`                       | `naive`         | **no** — no notion of a Vietoris-Rips complex at all   | yes     | **no** — known stall/OOM risk (`HomologySpec`'s `BarcodeRegressionSpec`) | yes |
-| `sheehy-rips`                 | `naive`         | **no** — a simplex's value is not the maximum ambient pairwise distance among its vertices (some pairs sparsified away, others excluded outright) | yes | yes | yes |
-| cubical (`computeFromCubicalImage`/`computeFromImage`, no `complex` key) | `naive` | **no** — `PackedRipserCohomologyContext` is specialized to `Simplex[Int]` | yes | yes | yes |
-| simplicial sets               | *(no `matlab`/`cli` entry point at all — construct `SimplicialSetStream`/`FilteredSimplicialSetStream` and drive any generic engine directly)* | | | | |
+| Complex (`complex=`)         | Default engine | `ripser`                                            | `naive` | `chunks`                                          | `cohomology` | `fast-cubical` | `fast-alpha` |
+|-------------------------------|-----------------|------------------------------------------------------|---------|-----------------------------------------------------|--------------|----------------|--------------|
+| `vr`                          | `ripser`        | yes                                                    | yes     | yes                                                   | yes          | **no**         | **no**       |
+| `cech`                        | `naive`         | **no** — not a max-pairwise-distance functional (radius, not diameter) | yes | yes | yes          | **no**       | **no**       |
+| `witness`, `witnessVariant=lazy`    | `ripser`  | yes — genuinely a flag complex under its own reified `WitnessMetricSpace` | yes | yes | yes | **no** | **no** |
+| `witness`, `witnessVariant=general` | `naive`   | **no** — not a flag complex (dimension-specific threshold) | yes | **no** | yes | **no** | **no** |
+| `dtm-rips`                    | `naive`         | **no** — vertices aren't born at 0, and the weighted-Rips functional isn't `insertionDiameter`-compatible | yes | yes | yes | **no** | **no** |
+| `dtm-alpha`                   | `naive`         | **no** — no notion of a Vietoris-Rips complex at all   | yes     | **no** — shares `AlphaComplexDQP`'s known stall/OOM risk (see `alpha-complex.md`) | yes | **no** | **no** — always uses `AlphaComplexDQP`, never `HelixDelaunay` |
+| `alpha`                       | `naive`         | **no** — no notion of a Vietoris-Rips complex at all   | yes     | **no** — known stall/OOM risk (`HomologySpec`'s `BarcodeRegressionSpec`) | yes | **no** | **yes** — only `alphaBackend=helix` (the default), any ambient dimension `>= 2` |
+| `sheehy-rips`                 | `naive`         | **no** — a simplex's value is not the maximum ambient pairwise distance among its vertices (some pairs sparsified away, others excluded outright) | yes | yes | yes | **no** | **no** |
+| cubical (`computeFromCubicalImage`/`computeFromImage`, no `complex` key) | `naive` | **no** — `PackedRipserCohomologyContext` is specialized to `Simplex[Int]` | yes | yes | yes | **yes** — any ambient dimension `>= 2` | **no** |
+| Dowker relation (`computeFromRelation`, no `complex` key) | `naive` | **no** — not a flag complex (a witness for a whole simplex need not witness any of its edges) | yes | **no** — same conservative refusal `witness`/general has (use `naive`/`cohomology`) | yes | **no** | **no** |
+| simplicial sets               | *(no `matlab`/`cli` entry point at all — construct `SimplicialSetStream`/`FilteredSimplicialSetStream` and drive any generic engine directly)* | | | | | | |
+
+The `fast-cubical`/`fast-alpha` columns are each a single "yes" surrounded by "no"s, for the SAME underlying
+reason in each row of "no"s: `FastCubicalHomologyContext` is specialized to the concrete `CubicalGridStream`
+(it reads `.shape`/`.ambientDim`/`.topCellValue` directly, not a generic `CellT: OrderedCell`) and
+`FastAlphaHomologyContext` is specialized to the concrete `HelixDelaunay` triangulation the same way — neither
+has any notion of the OTHER constructions at all, so every other row's "no" is "not a cubical grid"/"not a
+`HelixDelaunay`" respectively, not a per-row special case. Both are additionally refused within their one
+"yes" row for a narrower reason: `fast-cubical` only for a degenerate 1-axis image (ambient dimension `< 2`);
+`fast-alpha` only for `alphaBackend=DQP` (this engine cannot consume `AlphaShapeDQP`'s output at all) — neither
+is refused for HIGH ambient dimension any more, now that both are extended past 2D via a `chunks` hybrid for
+the residual middle dimensions (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`); both name the
+actual mismatch in their own message rather than throwing a bare `IllegalArgumentException`.
 
 Reading the "no" cells as one-line reasons, grouped by root cause:
 
-- **Not a flag complex** (`cech`, `witness`/general): a `k`-simplex's value isn't determined by its own edges'
-  values alone, so `insertionDiameter`'s incremental recurrence has nothing valid to incrementally update.
-  `sheehy-rips` belongs here too, not with `dtm-rips` below, despite looking pairwise-derived at a glance: its
-  own `filtrationValueOverride` needs to see every vertex of a `k`-simplex at once (the `min`-over-vertices
-  `vanish` exclusion check), not just its edges — proven by construction, not merely asserted: a hand-derived
-  fixture (`SheehyRipsStreamSpec`) exhibits a triangle whose three edges are ALL individually present and
-  finite, yet the triangle itself never appears — the one thing an actual flag complex can never do.
+- **Not a flag complex** (`cech`, `witness`/general, Dowker relations): a `k`-simplex's value isn't determined
+  by its own edges' values alone, so `insertionDiameter`'s incremental recurrence has nothing valid to
+  incrementally update. `sheehy-rips` belongs here too, not with `dtm-rips` below, despite looking
+  pairwise-derived at a glance: its own `filtrationValueOverride` needs to see every vertex of a `k`-simplex at
+  once (the `min`-over-vertices `vanish` exclusion check), not just its edges — proven by construction, not
+  merely asserted: a hand-derived fixture (`SheehyRipsStreamSpec`) exhibits a triangle whose three edges are
+  ALL individually present and finite, yet the triangle itself never appears — the one thing an actual flag
+  complex can never do. A Dowker relation's own witness condition is the same shape: a witness for a whole
+  simplex need not witness any of that simplex's edges, so a triangle can appear with no valid edge-only
+  justification the way `witness`/general's own dimension-specific threshold does.
 - **Not a Vietoris-Rips complex at all** (`alpha`, `dtm-alpha`): `PackedRipserCohomologyContext` consumes a
   `FiniteMetricSpace[Int]` directly and enumerates cliques via `SimplexIndexing` — there is no Delaunay/power-
   cell structure it could route through instead.
@@ -182,8 +297,11 @@ Reading the "no" cells as one-line reasons, grouped by root cause:
   itself is, combinatorially, an ordinary flag/clique complex (unlike `sheehy-rips` above).
 - **Representation-specific** (cubical): `PackedRipserCohomologyContext`/`RipserCohomologyContext` are
   hardcoded to `Simplex[Int]`'s combinatorial-number-system indexing (`SimplexIndexing`); `Cube` has no
-  equivalent encoding built for it (a `CubicalRipser`-style dedicated fast engine remains a documented future
-  direction, `DESIGN-fast-cubical-engine.md`, not something engine 3/4 already do).
+  equivalent encoding built for it. Engine 6 (`fast-cubical`) is a dedicated fast engine in this spirit, but
+  not a drop-in replacement for `ripser` here: it's a different algorithm (dual-graph union-find plus, at
+  `d >= 3`, a hybrid with `chunks` for the residual middle dimensions — not `SimplexIndexing`-style
+  enumeration). A grid-exploiting engine dedicated to 3D specifically (`CubicalRipser`, Wagner-Chen-Vuçini)
+  remains a documented future direction, `DESIGN-fast-cubical-engine.md`.
 
 `engine="cohomology"` (`CellularCohomologyContext`, engine 5 above) is the one column with no "no" cells for a
 reason: it's generic over `CellT: OrderedCell` with no per-construction speed assumptions baked in, at the cost
@@ -199,3 +317,5 @@ tradeoff actually buys and costs.
 | Fast, memory-efficient cohomology on a Vietoris-Rips/clique complex over integer vertex labels | **`PackedRipserCohomologyContext`** (what `engine="ripser"` uses) |
 | A `Simplex[Int]`-keyed reference implementation for hand-debugging engine 4 | `RipserCohomologyContext` (test oracle, not a production choice) |
 | Cohomology (real cocycle representatives) on `Cube`/`FiniteSimplicialSet`/Cech/Alpha/general witness complex, or any `OrderedCell` type engines 3/4 can't serve | **`CellularCohomologyContext`** (what `engine="cohomology"` uses) |
+| Fastest option for a cubical grid of any ambient dimension `>= 2` (no `Chain` reduction at all for `H_0`/`H_{d-1}`; a `chunks` hybrid for any residual middle dimensions at `d >= 3`) | **`FastCubicalHomologyContext`** (what `engine="fast-cubical"` uses) |
+| Fastest option for an alpha complex via `HelixDelaunay`, any ambient dimension `>= 2` (same hybrid shape as `FastCubicalHomologyContext`; noticeably more likely to throw `FastAlphaTriangulationException` at higher ambient dimension/point count) | **`FastAlphaHomologyContext`** (what `engine="fast-alpha"` uses) |

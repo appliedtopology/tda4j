@@ -56,10 +56,28 @@ object TDA4jCLI:
             "(step 1), the second CONSUMES one (step 2) -- run them as two separate invocations"
         )
 
+      if conf.distanceTo.isSupplied then
+        if conf.selectLandmarks() then
+          throw new IllegalArgumentException(
+            "--distance-to is meaningless with --select-landmarks: there is no barcode here, only a landmark set"
+          )
+        if conf.representatives() then
+          throw new IllegalArgumentException(
+            "--representatives is meaningless with --distance-to: a bottleneck/Wasserstein comparison has no " +
+              "representative chains, only a distance per dimension"
+          )
+        if conf.outputFormat() != "text" then
+          throw new IllegalArgumentException(
+            s"--output-format=${conf.outputFormat()} is not supported with --distance-to -- only the default " +
+              "text format is (one 'dim <k>: bottleneck=... wasserstein=...' line per dimension)"
+          )
+
       // --complex is meaningless for a cubical grid (TDA4j.computeFromCubicalImage has no "complex" option at
       // all -- it would otherwise be silently ignored rather than validated, the exact "two flags can disagree
       // and nothing notices" trap this CLI's whole design (buildOptions's own doc above) exists to avoid). Same
-      // reasoning for the two witness-recipe flags: a cubical grid has no landmarks to select or supply.
+      // reasoning for the two witness-recipe flags: a cubical grid/Dowker relation has no landmarks to select or
+      // supply, and --complex is equally meaningless for a Dowker relation (TDA4j.computeFromRelation has its
+      // own, separate, much smaller option set -- see that method's own doc).
       resolved match
         case ResolvedInput.CubicalGrid(_, _) if conf.complex.isSupplied =>
           throw new IllegalArgumentException(
@@ -71,6 +89,17 @@ object TDA4jCLI:
           throw new IllegalArgumentException(
             s"--select-landmarks/--landmarks-file are not meaningful with --input-format=${conf.inputFormat()}: " +
               "a cubical grid has no witness-complex landmarks to select or supply"
+          )
+        case ResolvedInput.Relation(_) if conf.complex.isSupplied =>
+          throw new IllegalArgumentException(
+            s"--complex is not meaningful with --input-format=${conf.inputFormat()}: TDA4j.computeFromRelation " +
+              "has its own, separate option set (see that method's own doc) -- remove --complex, or choose a " +
+              "point-cloud/distance-matrix --input-format instead"
+          )
+        case ResolvedInput.Relation(_) if conf.selectLandmarks() || conf.landmarksFile.isSupplied =>
+          throw new IllegalArgumentException(
+            s"--select-landmarks/--landmarks-file are not meaningful with --input-format=${conf.inputFormat()}: " +
+              "a Dowker relation has no witness-complex landmarks to select or supply"
           )
         case _ => ()
 
@@ -90,6 +119,8 @@ object TDA4jCLI:
           case ResolvedInput.Distances(distances) => TDA4j.selectLandmarksFromDistanceMatrix(distances, options)
           case ResolvedInput.CubicalGrid(_, _)    =>
             throw new IllegalStateException("unreachable: rejected by the CubicalGrid guard above")
+          case ResolvedInput.Relation(_) =>
+            throw new IllegalStateException("unreachable: rejected by the Relation guard above")
         writeLandmarkSelection(conf, selection, out)
         0
       else
@@ -102,12 +133,16 @@ object TDA4jCLI:
                 TDA4j.computeFromDistanceMatrixAndLandmarks(distances, landmarks, options)
               case ResolvedInput.CubicalGrid(_, _) =>
                 throw new IllegalStateException("unreachable: rejected by the CubicalGrid guard above")
+              case ResolvedInput.Relation(_) =>
+                throw new IllegalStateException("unreachable: rejected by the Relation guard above")
           case None =>
             resolved match
               case ResolvedInput.Points(points)               => TDA4j.computeFromPoints(points, options)
               case ResolvedInput.Distances(distances)         => TDA4j.computeFromDistanceMatrix(distances, options)
               case ResolvedInput.CubicalGrid(shape, flatVals) => TDA4j.computeFromCubicalImage(shape, flatVals, options)
-        writeOutput(conf, result, out)
+              case ResolvedInput.Relation(relation)           => TDA4j.computeFromRelation(relation, options)
+        if conf.distanceTo.isSupplied then writeDistance(conf, result, out)
+        else writeOutput(conf, result, out)
         0
     catch
       case e: IllegalArgumentException =>
@@ -138,10 +173,12 @@ object TDA4jCLI:
     add("complex", conf.complex)
     add("engine", conf.engine)
     add("alphaBackend", conf.alphaBackend)
+    add("requireValidTriangulation", conf.requireValidTriangulation)
     add("dtmK", conf.dtmK)
     add("dtmQ", conf.dtmQ)
     add("dtmP", conf.dtmP)
     add("sheehyEpsilon", conf.sheehyEpsilon)
+    add("edgeCollapse", conf.edgeCollapse)
     add("maxDimension", conf.maxDimension)
     add("maxFiltrationValue", conf.maxFiltrationValue)
     add("field", conf.field)
@@ -153,6 +190,7 @@ object TDA4jCLI:
     add("landmarkSelector", conf.landmarkSelector)
     add("landmarkSeed", conf.landmarkSeed)
     add("nu", conf.nu)
+    add("dual", conf.dual)
     pairs.toArray
 
   // -----------------------------------------------------------------------------------------------------------
@@ -166,6 +204,7 @@ object TDA4jCLI:
     case Points(points: Array[Array[Double]])
     case Distances(distances: Array[Array[Double]])
     case CubicalGrid(shape: Array[Int], flatValues: Array[Double])
+    case Relation(relation: Array[Array[Double]])
 
   /** Inverts `CubicalImage.fromFlatArray`'s own row-major, last-axis-fastest convention to recover a raw
     * `(shape, flatValues)` pair from an already-built `CubicalGridStream` -- used for `CubicalImage.fromFile` (a real
@@ -206,11 +245,16 @@ object TDA4jCLI:
       case "image" =>
         val (shape, flatValues) = flattenGridStream(CubicalImage.fromFile(path, sublevel = true))
         ResolvedInput.CubicalGrid(shape, flatValues)
-      case other =>
+      // Reuses CSV.readPointCloud outright, not a new reader: a Dowker relation is exactly the same shape
+      // that format already parses (arbitrary rows x columns, no squareness requirement) -- the only
+      // difference is what TDA4j entry point the resulting matrix is routed to (see `run`'s own match below),
+      // not how it's read off disk.
+      case "csv-relation" => ResolvedInput.Relation(CSV.readPointCloud(path))
+      case other          =>
         throw new IllegalArgumentException(
           s"unrecognized --input-format '$other'; expected one of csv-points, csv-distances, csv-lower, " +
             "ripser-points, ripser-lower, ripser-upper, ripser-distance, ripser-binary, dipha-distance, off, " +
-            "perseus-cubical, dipha-image, image"
+            "perseus-cubical, dipha-image, image, csv-relation"
         )
 
   // -----------------------------------------------------------------------------------------------------------
@@ -320,6 +364,36 @@ object TDA4jCLI:
         .map { case (vs, c) => s"$c*${vs.mkString("[", ",", "]")}" }
         .mkString(" + ")
     catch case _: UnsupportedOperationException => "(no representative recorded)"
+
+  /** `--distance-format`'s three supported values -- NOT `--input-format`'s reader set: these read an ALREADY-COMPUTED
+    * multi-dimension diagram (`io.*.readPersistenceDiagram`), not raw point/distance/cubical data. `perseus` is
+    * deliberately excluded -- see `TDA4jConf.distanceFormat`'s own doc for why.
+    */
+  private[cli] def readComparisonDiagram(format: String, path: String): Seq[PersistenceBar[Double, Nothing]] =
+    format match
+      case "csv"   => CSV.readPersistenceDiagram(path)
+      case "gudhi" => Gudhi.readPersistenceDiagram(path)
+      case "dipha" => Dipha.readPersistenceDiagram(path)
+      case other   =>
+        throw new IllegalArgumentException(s"unrecognized --distance-format '$other'; expected csv, gudhi, or dipha")
+
+  private[cli] def writeDistance(conf: TDA4jConf, result: PersistenceResult, out: java.io.PrintStream): Unit =
+    val bars = toBars(result)
+    val comparison = readComparisonDiagram(conf.distanceFormat(), conf.distanceTo())
+    val order = conf.distanceOrder.toOption.getOrElse(1.0)
+    val groundNorm = conf.distanceGroundNorm.toOption match
+      case Some(p) => BarcodeDistance.GroundNorm.LP(p)
+      case None    => BarcodeDistance.GroundNorm.LInfinity
+    val bottleneck = BarcodeDistance.bottleneckDistanceByDimension(bars, comparison, groundNorm)
+    val wasserstein = BarcodeDistance.wassersteinDistanceByDimension(bars, comparison, order, groundNorm)
+    val dims = (bottleneck.keySet ++ wasserstein.keySet).toSeq.sorted
+    val lines = dims.map(d => s"dim $d: bottleneck=${bottleneck(d)} wasserstein=${wasserstein(d)}")
+    conf.output.toOption match
+      case Some(path) =>
+        val writer = new PrintWriter(path)
+        try lines.foreach(writer.println)
+        finally writer.close()
+      case None => lines.foreach(out.println)
 
   private[cli] def writeOutput(conf: TDA4jConf, result: PersistenceResult, out: java.io.PrintStream): Unit =
     val bars = toBars(result)

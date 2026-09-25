@@ -12,14 +12,14 @@ import org.rogach.scallop.*
   */
 class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   banner(
-    """tda4j: compute persistent (co)homology of a point cloud, distance matrix, or cubical image.
+    """tda4j: compute persistent (co)homology of a point cloud, distance matrix, cubical image, or Dowker relation.
       |
       |Loads one of several file formats (see --input-format), computes a Vietoris-Rips/alpha/Cech/witness complex's
-      |persistence (point-cloud/distance-matrix formats) or a cubical image's persistence (cubical-image formats)
-      |via the same TDA4j/PersistenceResult facade the MATLAB bridge uses (see
-      |org.appliedtopology.tda4j.matlab.TDA4j's own doc for the underlying --complex/--engine/--field options,
-      |and computeFromCubicalImage's own doc for --sublevel), and writes the resulting persistence diagram in one
-      |of several formats (see --output-format).
+      |persistence (point-cloud/distance-matrix formats), a cubical image's persistence (cubical-image formats), or
+      |a Dowker complex's persistence (csv-relation format) via the same TDA4j/PersistenceResult facade the MATLAB
+      |bridge uses (see org.appliedtopology.tda4j.matlab.TDA4j's own doc for the underlying --complex/--engine/
+      |--field options, computeFromCubicalImage's own doc for --sublevel, and computeFromRelation's own doc for
+      |--dual), and writes the resulting persistence diagram in one of several formats (see --output-format).
       |
       |Usage: tda4j [options] <input-file>
       |""".stripMargin
@@ -29,8 +29,10 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     default = Some("csv-points"),
     descr = "input file format: csv-points, csv-distances, csv-lower, ripser-points, ripser-lower, ripser-upper, " +
       "ripser-distance, ripser-binary, dipha-distance, off (point-cloud/distance-matrix formats -- --complex " +
-      "applies), or perseus-cubical, dipha-image, image (cubical-image formats -- --complex does not apply, " +
-      "--sublevel does) (default: csv-points)"
+      "applies), perseus-cubical, dipha-image, image (cubical-image formats -- --complex does not apply, " +
+      "--sublevel does), or csv-relation (a Dowker relation, R x C, one row per left-side point one column per " +
+      "witness -- --complex does not apply, --dual does; see TDA4j.computeFromRelation's own doc) (default: " +
+      "csv-points)"
   )
 
   val output: ScallopOption[String] = opt[String](
@@ -52,12 +54,29 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     opt[String](descr = "vr (default), alpha, cech, witness, dtm-rips, dtm-alpha, or sheehy-rips")
   val engine: ScallopOption[String] =
     opt[String](descr =
-      "ripser, naive, chunks, or cohomology (default depends on --complex -- see TDA4j's own doc). cohomology " +
-        "is CellularCohomologyContext, generic over cell type and valid for every --complex value -- unlike " +
-        "ripser, not Vietoris-Rips-specialized, so it also works with --complex=alpha/cech."
+      "ripser, naive, chunks, cohomology, fast-cubical, or fast-alpha (default depends on --complex -- see " +
+        "TDA4j's own doc). cohomology is CellularCohomologyContext, generic over cell type and valid for every " +
+        "--complex value -- unlike ripser, not Vietoris-Rips-specialized, so it also works with " +
+        "--complex=alpha/cech. fast-cubical (FastCubicalHomologyContext) is valid ONLY for a cubical-image " +
+        "--input-format (any dimension >= 2 -- a hybrid with chunks handles dimensions above 2). fast-alpha " +
+        "(FastAlphaHomologyContext) is valid ONLY for --complex=alpha with --alpha-backend=helix (the default), " +
+        "for any ambient dimension >= 2 (a hybrid with chunks handles dimensions above 2, same as fast-cubical); " +
+        "on a fraction of point clouds -- more likely at higher ambient dimension and point count -- it throws a " +
+        "FastAlphaTriangulationException explaining a known HelixDelaunay limitation and naming the fix (retry " +
+        "with --engine naive/chunks/cohomology)."
     )
   val alphaBackend: ScallopOption[String] =
     opt[String](descr = "helix (default) or DQP -- only consulted when --complex=alpha")
+  // String, not Boolean -- same reasoning as --sublevel/--edge-collapse below (a genuinely optional flag, not an
+  // always-supplied toggle).
+  val requireValidTriangulation: ScallopOption[String] = opt[String](
+    descr = "true or false (default) -- only consulted for --complex=alpha with --alpha-backend=helix (the " +
+      "default), rejected for any other --complex or --alpha-backend=DQP. Repairs a HelixDelaunay facet-" +
+      "multiplicity violation (the precondition --engine=fast-alpha needs) instead of leaving it to surface as " +
+      "FastAlphaTriangulationException -- see HelixDelaunay.repairByJitterRetriangulation's own doc and " +
+      ".claude/DESIGN-helix-triangulation-repair.md. Validated at ambient dimension 2 and 3; not validated at " +
+      "dimension >= 4."
+  )
   val maxDimension: ScallopOption[Int] =
     opt[Int](descr = "highest homological degree to report, i.e. \"give me H_0..H_k\" (default: 2)")
   val maxFiltrationValue: ScallopOption[Double] = opt[Double](
@@ -115,6 +134,22 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
         "otherwise. The resulting barcode is a (1+epsilon)-multiplicative approximation to plain --complex=vr's " +
         "own barcode (Cavanna-Jahanseir-Sheehy 2015); see streams.SheehyRipsSimplexStream's own doc."
     )
+  // String, not Boolean -- same reasoning as --sublevel above (a genuinely optional flag, not an
+  // always-supplied toggle).
+  val edgeCollapse: ScallopOption[String] = opt[String](
+    descr = "true or false (default) -- only consulted for --complex=vr, rejected for any other --complex. " +
+      "Boissonnat-Pritam/Glisse-Pritam edge collapse (streams.EdgeCollapse): reduces the Vietoris-Rips " +
+      "1-skeleton to a smaller weighted graph with the SAME persistent homology, before anything is built on " +
+      "top of it -- a preprocessing step, changing nothing about the output shape. Measured 73-76% of edges " +
+      "removed and a 43-47x REDUCTION-phase speedup on random point clouds; see .claude/WORKLOG-edge-collapse.md."
+  )
+  // String, not Boolean -- same reasoning as --sublevel/--edge-collapse above.
+  val dual: ScallopOption[String] = opt[String](
+    descr = "true or false (default) -- only consulted for --input-format=csv-relation. Computes the W-side " +
+      "(transposed-relation) Dowker complex instead of the L-side one -- see TDA4j.computeFromRelation's own " +
+      "doc and streams.DowkerGeometry.dual. The functorial Dowker duality theorem guarantees the two sides' " +
+      "barcodes agree exactly once zero-persistence bars are dropped."
+  )
 
   // CLI-LOCAL control flow, unlike every option above: neither is forwarded into TDA4j's own options array
   // (see buildOptions's own comment) -- they select which of TDA4j's ENTRY POINTS this run calls, not a value
@@ -133,6 +168,30 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     descr = "step 2 of the two-step witness recipe: read landmark indices from this file (one 0-based index " +
       "per line, as --select-landmarks writes) instead of selecting them internally -- implies --complex " +
       "witness; --num-landmarks/--landmark-selector/--landmark-seed are not meaningful together with this"
+  )
+
+  // barcode.BarcodeDistance mirror (`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 4). Landscapes/
+  // persistence images (item 8) are deliberately NOT mirrored here: they produce a matrix, not a diagram, which
+  // doesn't fit this CLI's existing single-diagram text/csv/gudhi/dipha/perseus output model the way a second
+  // diagram-shaped comparison does -- a real matrix-output CLI mode is its own design question (output format,
+  // file layout for a multi-row/column result), left as a follow-up rather than bolted on here. See
+  // matlab.PersistenceResult.landscape/persistenceImage for that capability's MATLAB-facing form.
+  val distanceTo: ScallopOption[String] = opt[String](
+    descr = "compare the computed diagram against an already-computed one read from this file (see " +
+      "--distance-format), printing per-dimension bottleneck/Wasserstein distance instead of writing the " +
+      "computed diagram -- --output/--output-format (text only) apply to THAT printed comparison, not a barcode"
+  )
+  val distanceFormat: ScallopOption[String] = opt[String](
+    default = Some("csv"),
+    descr = "file format of --distance-to: csv (default), gudhi, or dipha -- NOT perseus, whose format is " +
+      "inherently single-dimension (see io.Perseus.readPersistenceIntervals's own `dim` parameter), not a fit " +
+      "for this multi-dimension comparison"
+  )
+  val distanceOrder: ScallopOption[Double] =
+    opt[Double](descr = "Wasserstein order (default: 1.0) -- only consulted with --distance-to")
+  val distanceGroundNorm: ScallopOption[Double] = opt[Double](
+    descr = "ground norm on the birth-death plane: a finite p >= 1.0, or omit for the default L-infinity -- " +
+      "only consulted with --distance-to. See barcode.BarcodeDistance.GroundNorm's own doc."
   )
 
   val input: ScallopOption[String] = trailArg[String](name = "input-file", descr = "input file", required = true)

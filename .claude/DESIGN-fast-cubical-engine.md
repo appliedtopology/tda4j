@@ -149,6 +149,116 @@ then Phase 2 (the dual union-find piece, where the real capacity-sweep-relevant 
 touching Phase 3 or considering Phase 4 at all. Not started in this session; this file is the design record for
 whichever session picks it up next.
 
+## 2026-09-25 update: Phase 1 status, the concrete Phase 2 algorithm, and representatives
+
+Picked up by the session executing `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 6.
+`.claude/WORKLOG-fast-cubical-engine.md` has the full narrative; this section records only the durable design
+content, per this file's own role as a design record rather than a session log.
+
+### Phase 1: already done, just needed a name
+
+`SimplicialHomologyByDimensionContext` (this file's own name from the 2026-09-20 pass) does not exist under
+that name in the current source — searched exhaustively, including every worklog that mentions it, and found
+no evidence it was ever a real, distinct class rather than a misremembered reference to `CellularPersistenceInChunksContext`'s
+own `unionFindDim01`. That method IS already fully generic over `CellT: OrderedCell` (confirmed: `streams.UnionFind`,
+the reusable class, is used nowhere in `Homology.scala` at all — `unionFindDim01` is its own self-contained,
+already-generic array-based union-find), and `CellularPersistenceInChunksContext[Cube, ...]` was ALREADY
+cross-validated against `CubicalHomologyContext` directly in a later, undocumented-in-this-file session
+(`CubicalStreamSpec`'s "matches the naive engine" and "union-find fast path agrees with the naive engine on
+random tie-heavy images" sections, plus `CubicalBenchmarkSpec`/`CubicalProfileDriver`). The only genuinely
+missing piece was the ergonomic one-line wrapper this file's own Phase 1 description asked for
+(`CubicalPersistenceInChunksContext`, mirroring `PersistenceInChunksContext`'s relationship to `Simplex`) — added,
+zero new behavior, nothing else needed.
+
+### Phase 2: the exact algorithm, derived from Alexander duality (no paper or reference implementation was
+### reachable this session — arXiv, Dagstuhl-style mirrors, and every non-arXiv summary site tried all returned
+### `EGRESS_BLOCKED` from this session's own network policy, and no GitHub implementation of Flash Cubical
+### exists to `add_repo` the way GUDHI's edge-collapse module did for a different item this session — this is
+### an independent derivation, not a port, and should be read with that in mind)
+
+**Setup.** Top cells (dimension `d` = ambient dimension) are dual VERTICES; codimension-1 cells (dimension
+`d-1`, "facets") are dual EDGES, each connecting the 1 or 2 top cells containing it as a face (always exactly 1
+or 2, for a cubical grid — `CubicalGridStream.containingTopCells` on a codimension-1 cube gives exactly this).
+A facet touching only ONE top cell (a boundary facet of the whole grid) connects that one top cell to a single
+shared auxiliary dual vertex, `∞`. Assign `∞` the value `+Infinity` (see below for why).
+
+**Claim**: primal `H_{d-1}` of the sublevel filtration equals ordinary `H_0` of the SUPERLEVEL filtration on
+this dual graph (dual-vertex/edge value = the corresponding primal cell's own T-construction filtration value,
+`∞` fixed at `+Infinity` so it is a member of every superlevel set), computed by processing dual
+vertices/edges together in a SINGLE descending-value pass with the SAME elder-rule array-based union-find
+`unionFindDim01` above already uses, with two translations: (1) every bar's `(birth, death)` pair is REPORTED
+SWAPPED — a merge event at dual-superlevel value `s` becomes a primal bar endpoint at primal value `s`, but
+whichever of {the merging component's own birth value, `s`} was the *raw* union-find birth becomes the primal
+*death*, and vice versa; (2) the component containing `∞` is discarded entirely — it is Alexander duality's own
+unbounded/reduced-homology reference component, not a real primal class.
+
+**Why**: primal sublevel sets GROW as the parameter increases; by Alexander duality (`H_{d-1}(X) ≅ H^0(S^d
+\ X)`, treating the grid as sitting inside `S^d` via one-point compactification, `∞` being that one point),
+the complement SHRINKS as the primal parameter increases, so tracking the complement's OWN connectivity means
+processing it in the OPPOSITE (descending) direction — a component of the complement "splits" (in real,
+increasing time) exactly when, read backward (decreasing time, i.e. the complement's own natural GROWING
+direction), two pieces of complement FIRST become connected — an ordinary union-find MERGE event in the
+backward reading. This is why birth and death swap: a merge that happens "late" in the backward/superlevel
+reading (small `s`) is an event that happens "early" in real forward time, and a class that dies in a merge at
+raw value `s` in the backward reading is a class that is BORN there in real time, `s` also being exactly when
+its two dual pieces most recently became distinguishable going forward — the standard cohomological
+birth/death inversion (consistent with `CLAUDE.md`'s own "over a field, cohomology and homology barcodes
+coincide" once the swap is applied — this construction computes something intrinsically cohomological in
+flavor, which is why the swap is needed to read it back as an ordinary homology bar).
+
+**Verified against a concrete, hand-computable example before writing any code** (not trusted from the
+abstract argument alone — this codebase's own repeated lesson about ordering/duality claims): a 3x3 pixel grid,
+the 8 border pixels at value 0 and the center pixel at value 1 (`.claude/WORKLOG-fast-cubical-engine.md` has
+the full arithmetic). Ground truth, independently reasoned: at `t=0` every cell of the full 3x3 grid is present
+EXCEPT the single center 2-cell (every edge/vertex touching the center pixel is ALSO a face of an adjacent
+0-valued border pixel, hence already present) — a disk with one open top cell removed, homotopy equivalent to
+a circle, so `H_1 = Z`, born at 0; filling the center cell at `t=1` kills it. Expected bar: `(0, 1)`. Dual
+graph: 9 pixel-vertices + `∞` (24 total facets/dual-edges, all at value 0 in this fixture since every one
+touches a 0-valued pixel). Superlevel/descending processing: at `s=1`, only the center pixel and `∞` are
+present, as two separate singleton components (no edges yet, all facet values are `0 < 1`); at `s=0`, all 8
+border pixels and all 24 edges enter at once, merging everything (the pixel grid graph is connected, and
+boundary pixels link to `∞`) into ONE component. Elder rule: `∞`'s component (born at `s=+Infinity`, older)
+survives; the center-pixel component (born at `s=1`) dies at `s=0`. Raw dual bar: birth=1, death=0. Swapped:
+primal `(0, 1)` — exactly the hand-derived ground truth. (A real, easy-to-make mistake caught in the same
+pass: `∞` must be `+Infinity`, not `-Infinity` — the natural-seeming "always active" framing "-Infinity" gives
+the WRONG superlevel-set membership, since `{value >= s}` requires `+Infinity`, not `-Infinity`, to always
+qualify.) Also confirms a real worry dissolves on inspection: of the 24 dual edges, only 9 are needed for a
+spanning tree of the 10 dual vertices — the other 15 are simply skipped by ordinary union-find (already
+same-component when reached), exactly the same "redundant edge, no event" case ordinary H_0 union-find already
+handles for any graph denser than a tree; no special handling needed.
+
+**Scope decision, made explicit rather than silently assumed**: shipping the ambient-dimension-2 case only
+this pass (`H_0` via the existing, already-validated primal union-find, `H_1` via the dual union-find above,
+covering 2D completely with zero general `Chain.reduceBy` reduction needed at all — exactly this file's own
+original "in 2D, this covers H0 AND H1 completely" framing). Ambient dimension 3 needs an additional, genuinely
+harder piece this pass does NOT attempt: `H_1` still needs general reduction on whichever cells are NOT already
+resolved by the two union-finds (`H_0`'s own primal one, `H_2`'s new dual one), which means correctly
+identifying and removing already-paired cells from what the general machinery sees — a real extension, not
+just "run the same thing one dimension higher," deferred to a follow-up rather than attempted half-validated.
+
+### Representatives
+
+The design gap this file itself flagged (Flash Cubical is F2-only and produces none) is resolved by construction
+of the dual algorithm above, not needing new machinery: a dual UNION-FIND is, cell-for-cell, the SAME shape as
+`unionFindDim01`'s own primal one, so it can carry a REPRESENTATIVE alongside each union exactly the way
+`unionFindDim01` already does for dimension-0 bars (`Chain(dyingVertex)`, growing a tree-path sum as unions
+happen) — except here the representative lives one dimension down from the dual vertices being unioned:
+merging two dual components (top cells) across a shared facet is exactly the elementary move "these two top
+cells are now known to be on either side of a facet already accounted for," and the accumulated GENERATOR for
+the eventual `H_{d-1}` class is `boundary(coherently-oriented sum of top cells in the younger [dying] dual
+component)` — the shared internal facets between top cells of the SAME component cancel in that sum by
+construction (each internal facet is a boundary term of both of its two top cells, with OPPOSITE sign once
+"coherently oriented" is applied consistently), leaving exactly the facets on that component's own dual
+boundary (which, by construction, is the (d-1)-cycle bounding the class). "Coherently oriented": track a
+`Field`-valued orientation SIGN per top cell relative to an arbitrarily chosen root of its own dual component
+(sign flips by `-1` each time a facet's own two boundary terms toward its two top cells have the SAME sign
+rather than opposite — i.e., propagate the relative sign across each dual edge as it is unioned, the same way
+a spanning-tree walk propagates a consistent orientation across a graph), maintained incrementally as unions
+happen (no separate walk needed after the fact). Test sign correctness over `Fp(3)`, using
+`CubicalOrderedCell.scala`'s existing rank-among-non-degenerate-axes sign rule for the actual per-facet
+coefficient in each `boundary` term — F2 cannot distinguish a correct alternating orientation from a constant
+one, the same reason every other signed-field test in this codebase insists on `Fp(3)` or `Double`.
+
 ## Sources
 
 - [Wagner, Chen, Vuçini — Efficient Computation of Persistent Homology for Cubical Data (TopoInVis 2011/2012)](https://chaochen.github.io/publications/chen_topoinvis_2011.pdf)

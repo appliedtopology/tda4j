@@ -51,12 +51,14 @@ val theme = Helium.defaults.all
   .site
   .downloadPage("Downloads", None)
   .site
-  .inlineCSS("""
-    |.breadcrumb { display: flex; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 1.5rem 0; }
-    |.breadcrumb li { margin: 0; }
-    |.breadcrumb li a { display: inline; padding: 0; }
-    |.breadcrumb li:not(:last-child)::after { content: "\203A"; margin: 0 0.4em; color: var(--secondary-color); }
-    |""".stripMargin)
+  .inlineCSS(
+    """
+      |.breadcrumb { display: flex; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 1.5rem 0; }
+      |.breadcrumb li { margin: 0; }
+      |.breadcrumb li a { display: inline; padding: 0; }
+      |.breadcrumb li:not(:last-child)::after { content: "\203A"; margin: 0 0.4em; color: var(--secondary-color); }
+      |""".stripMargin
+  )
   .all
   .themeColors(
     primary = Color.hex("007c99"),

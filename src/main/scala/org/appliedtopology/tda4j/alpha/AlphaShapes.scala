@@ -5,6 +5,7 @@ import org.appliedtopology.tda4j.algebra.{given, *}
 import org.appliedtopology.tda4j.cells.{given, *}
 import org.appliedtopology.tda4j.streams.{given, *}
 import org.appliedtopology.tda4j.homology.{given, *}
+import org.appliedtopology.tda4j.barcode.{given, *}
 
 import collection.mutable
 import scala.math.{pow, sqrt}
@@ -34,7 +35,15 @@ abstract class AlphaShapes extends StratifiedSimplexStream[Int, Double]() with D
   * used pervasively by `Hyperplane`/`Hypersphere`/`HelixDelaunay`.
   */
 object AlphaShapes:
-  def apply(pts: Seq[Array[Double]], dispatch: String = "default")(using
+
+  /** @param requireValidTriangulation
+    *   OFF by default. Only meaningful for the `"helix"`/`"default"` backend -- threaded straight through to
+    *   `HelixDelaunay`'s own constructor parameter of the same name (`.claude/DESIGN-helix-triangulation-repair.md`).
+    *   `require`d `false` for `dispatch="dqp"`: `AlphaShapeDQP` has no facet-multiplicity precondition to repair in the
+    *   first place (it is not `FastAlphaHomologyContext`'s own backend), so a caller passing `true` there almost
+    *   certainly mis-set the option rather than intending a silent no-op.
+    */
+  def apply(pts: Seq[Array[Double]], dispatch: String = "default", requireValidTriangulation: Boolean = false)(using
     epsilon: Epsilon = Epsilon(1e-5)
   ): AlphaShapes =
     dispatch.toLowerCase match
@@ -43,14 +52,22 @@ object AlphaShapes:
         // measured yet to pick a backend by. They're placeholders for that dispatch, not dead code -- keep them
         // distinct rather than collapsing to a single case.
         pts match
-          case pts if pts.isEmpty         => apply(pts, dispatch = "helix")
-          case pts if pts.head.length > 7 => apply(pts, dispatch = "helix")
-          case _                          => apply(pts, dispatch = "helix")
+          case pts if pts.isEmpty         => apply(pts, dispatch = "helix", requireValidTriangulation)
+          case pts if pts.head.length > 7 => apply(pts, dispatch = "helix", requireValidTriangulation)
+          case _                          => apply(pts, dispatch = "helix", requireValidTriangulation)
       case "helix" =>
         HelixDelaunay(
-          pts.toArray
+          pts.toArray,
+          requireValidTriangulation = requireValidTriangulation
         ) // Helix should be faster for dim: 7 - 17. Adjust this check when additional impl exists.
-      case "dqp" => AlphaShapeDQP(pts.toArray)
+      case "dqp" =>
+        require(
+          !requireValidTriangulation,
+          "requireValidTriangulation=true is not valid for dispatch=\"dqp\": AlphaShapeDQP has no facet-" +
+            "multiplicity precondition to repair (FastAlphaHomologyContext is specialized to HelixDelaunay's own " +
+            "triangulation and never consumes AlphaShapeDQP's output) -- this option would be a silent no-op there."
+        )
+        AlphaShapeDQP(pts.toArray)
       case other =>
         throw IllegalArgumentException(s"Unknown alpha complex backend: '$other' (expected default/helix/DQP)")
 
@@ -99,6 +116,17 @@ object Hypersphere:
     new Hypersphere(c, c.getDistance(pointSet.head))
 
 case class DelaunaySimplex(simplex: Simplex[Int], circumsphere: Hypersphere)
+
+/** Rank of `matrix`'s own row space, at THIS codebase's own `epsilon` tolerance -- not `SingularValueDecomposition`'s
+  * default `getRank`, whose internal tolerance (machine-epsilon-scale, relative to the matrix's own norm) is far
+  * tighter than `epsilon.epsilon` (typically `1e-5`) and so treats near-but-not-exactly-degenerate input (e.g. points
+  * jittered at the `1e-7` scale) as full rank when every OTHER degeneracy check in this file -- `Hyperplane. from`'s
+  * own `nullSV` filter included -- would already call that same input degenerate. Used everywhere this file needs "how
+  * many affinely-independent directions does this set of points actually span," so all of them agree on where the line
+  * is.
+  */
+private def rankAtEpsilon(matrix: org.apache.commons.math3.linear.RealMatrix)(using epsilon: Epsilon): Int =
+  new SingularValueDecomposition(matrix).getSingularValues.count(_.abs > epsilon.epsilon)
 
 /** Runs the frontier-walking bootstrap + main loop that finds every Delaunay simplex of `pts`, holding all of the
   * algorithm's own mutable working state (`validated`, `frontierCases`, `visitedFacets`, `cospherical`) so
@@ -152,9 +180,29 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
     cospherical.add(spherepoints.toSet)
     frontierCases.removeIf((fc: FrontierCase) => fc.facet.toSet.subsetOf(cosphericalPoints.toSet))
     spherepoints.subtractAll(newDelaunaySimplex.simplex.toSeq)
+    // EVERY facet of `newDelaunaySimplex`, not just the ones built from `frontierCase.facet`'s own vertices.
+    // `frontierCase.facet` is exactly `newDelaunaySimplex.simplex` minus the complement vertex (the one the
+    // main loop just added to resolve this frontier case) -- so iterating `fi` only over `frontierCase.facet`'s
+    // own vertices can never produce `frontierCase.facet` itself as one of the generated (facet, cofacet) pairs
+    // (`fi` never equals the complement). In the ordinary case that's harmless: there's nothing left to pull in
+    // on that side, so omitting it changes nothing. But when a genuinely different point is ALSO a valid,
+    // empty-circumsphere candidate for that SAME originating facet (near-cospherical with the one just chosen --
+    // exactly the situation this method exists to handle), omitting it means that candidate is never reachable:
+    // the cospherical branch never calls `addFrontierCase` for `frontierCase.facet` (only the non-cospherical
+    // `else` branch does), and `visitedFacets` already marked it visited at the top of the main loop before this
+    // method was ever called -- so the facet is structurally locked out from both the local search here AND the
+    // main frontier walk, and the second candidate is silently lost. Confirmed directly on a real 13-point,
+    // ambient-dimension-4 example: two points, 1 and 4, are each independently a genuine empty-circumsphere
+    // coface of facet `{2,3,6,9}` (circumradii differing by ~1.5e-5, each within `epsilon` of the other's own
+    // circumsphere), and `frontierCase.facet` there is exactly `{2,3,6,9}` -- the facet this omission drops.
+    // Iterating over EVERY vertex of `newDelaunaySimplex.simplex` includes that facet too (oriented correctly by
+    // this loop's own `candidateHP.isLight(points(complement))` check, exactly as for the other facets); in the
+    // ordinary case it then finds no remaining light spherepoints and falls through to `addFrontierCase`, which
+    // is a harmless no-op once picked up by the main loop (`visitedFacets` already has it) -- see
+    // `.claude/WORKLOG-helix-bootstrap-fix.md`.
     val facets: mutable.ArrayDeque[(Simplex[Int], Simplex[Int])] =
       mutable.ArrayDeque.from(
-        frontierCase.facet.toSeq.toSeq.map(fi => (newDelaunaySimplex.simplex - fi, newDelaunaySimplex.simplex))
+        newDelaunaySimplex.simplex.toSeq.toSeq.map(fi => (newDelaunaySimplex.simplex - fi, newDelaunaySimplex.simplex))
       )
     while facets.nonEmpty do
       // take a facet
@@ -176,62 +224,123 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
           )
 
   /** Runs the full bootstrap + frontier walk once and returns every Delaunay simplex found. */
+  // Greedily picks `ambientDimension` affinely-independent points from `candidates` (in the given order), by
+  // rank -- the SAME technique already used below for refining an over-sized `vs`, applied here to the hull-
+  // hyperplane-search loop's OWN candidate simplex too. This matters for a genuinely different reason than the
+  // `vs` refinement: `Hyperplane.from` assumes its input spans a genuine (ambientDimension-1)-dimensional
+  // hyperplane (rank exactly `ambientDimension - 1`). If the `ambientDimension` points handed to it are
+  // THEMSELVES more degenerate than that (rank strictly less -- e.g. they lie in some lower-dimensional flat
+  // within the ambient space, not just "coplanar" the way a genuine facet's points are), its SVD-based normal-
+  // vector extraction is under-determined: there is an entire FAMILY of hyperplanes containing such a point
+  // set, not one, and the specific one the code happens to compute can be an arbitrary, non-hull-supporting
+  // plane -- one that can have points strictly on BOTH sides of it, yet still spuriously satisfy the loop's own
+  // `lightPoints.isEmpty` termination check, converging the whole bootstrap onto a bogus, non-facet
+  // `startingSimplex`. Confirmed as a real, distinct root cause (not the same one the `vs`-refinement fix
+  // above addresses) via direct reproduction: a real point cloud's 5-point candidate simplex had rank 3, not
+  // the required 4, and its resulting "hyperplane" had points with `dist` both well above and well below
+  // `epsilon` -- see `.claude/WORKLOG-helix-bootstrap-fix.md`.
+  private def affinelyIndependentPick(candidates: Seq[Int]): Set[Int] =
+    val base = points(candidates.head)
+    var chosen: Vector[Int] = Vector(candidates.head)
+    var chosenVecs: Vector[Array[Double]] = Vector.empty
+    val remaining = candidates.tail.iterator
+    while chosen.size < ambientDimension && remaining.hasNext do
+      val candidate = remaining.next()
+      val trialVecs = chosenVecs :+ points(candidate).subtract(base).toArray
+      val rank = rankAtEpsilon(MatrixUtils.createRealMatrix(trialVecs.toArray))
+      if rank > chosenVecs.size then
+        chosen = chosen :+ candidate
+        chosenVecs = trialVecs
+    chosen.toSet
+
   def compute(): Set[DelaunaySimplex] =
-    var startingSimplex: Set[Int] = points.indices.take(ambientDimension).toSet
+    var startingSimplex: Set[Int] = affinelyIndependentPick(points.indices)
     var convexHullHP: Boolean = false
     while !convexHullHP do
       val currentHP: Hyperplane = Hyperplane.from(startingSimplex.map(p => points(p)).toSeq)
       val lightPoints: Set[Int] =
         (points.indices.toSet -- startingSimplex).filter(pi => currentHP.dist(points(pi)) > epsilon.epsilon)
       if lightPoints.isEmpty then convexHullHP = true
-      else
-        startingSimplex = (lightPoints ++ startingSimplex).toSeq
-          .pipe(rng.shuffle)
-          .take(ambientDimension)
-          .toSet
-    startingSimplex = points.indices.filter(pi =>
+      else startingSimplex = affinelyIndependentPick((lightPoints ++ startingSimplex).toSeq.pipe(rng.shuffle))
+    val vs = points.indices.filter(pi =>
       Hyperplane.from(startingSimplex.map(points).toSeq).dist(points(pi)).abs < epsilon.epsilon
-    ) match
-      case vs if vs.size == ambientDimension => vs.toSet
-      case vs if vs.size > ambientDimension  =>
-        // vs has more points on the supporting hyperplane than needed for a
-        // non-degenerate (ambientDimension-1)-simplex within it -- common for
-        // grid-like or otherwise partly-degenerate point clouds. Picking just 2
-        // of them regardless of ambientDimension leaves startingSimplex
-        // undersized for ambientDimension > 2, starving the brute-force
-        // bootstrap search below of a well-posed circumsphere (Hypersphere
-        // needs ambientDimension+1 points to be uniquely determined) and
-        // making it fail to find any candidate, which fails the assertion
-        // below. Instead, greedily grow an affinely-independent subset of
-        // exactly ambientDimension points: start from vs.head, and add each
-        // next candidate only if it strictly increases the rank of the affine
-        // span built so far (i.e. isn't already in that span). vs always has
-        // at least ambientDimension independent points available, since it's
-        // a superset of the already-independent startingSimplex being refined.
-        val base = points(vs.head)
-        var chosen: Vector[Int] = Vector(vs.head)
-        var chosenVecs: Vector[Array[Double]] = Vector.empty
-        val remaining = vs.tail.iterator
-        while chosen.size < ambientDimension && remaining.hasNext do
-          val candidate = remaining.next()
-          val trialVecs = chosenVecs :+ points(candidate).subtract(base).toArray
-          val rank = new SingularValueDecomposition(MatrixUtils.createRealMatrix(trialVecs.toArray)).getRank
-          if rank > chosenVecs.size then
-            chosen = chosen :+ candidate
-            chosenVecs = trialVecs
-        chosen.toSet
+    )
 
-    // brute force search for first delaunay simplex
+    // vs has more points on the supporting hyperplane than needed for a non-degenerate
+    // (ambientDimension-1)-simplex within it -- common for grid-like or otherwise partly-degenerate point
+    // clouds. Picking just 2 of them regardless of ambientDimension leaves startingSimplex undersized for
+    // ambientDimension > 2, starving the brute-force bootstrap search below of a well-posed circumsphere
+    // (Hypersphere needs ambientDimension+1 points to be uniquely determined) and making it fail to find any
+    // candidate. So instead, greedily grow an affinely-independent subset of exactly ambientDimension points,
+    // rooted at `base`: start from `base`, and add each next candidate (by increasing distance from `base`,
+    // NOT raw point-index order) only if it strictly increases the rank of the affine span built so far.
+    //
+    // Distance-based ordering matters, not just correctness of the final rank: a candidate subset that spans a
+    // "long" edge/facet skipping over some OTHER vs point actually lying BETWEEN the chosen vertices dooms the
+    // brute-force seed search below regardless of which third point it tries next -- that skipped-over point
+    // ends up unconditionally inside every candidate circumsphere (a direct geometric fact: for any two points
+    // p, q and a third point r on the segment between them, r's distance to the center of ANY circle through p
+    // and q is always strictly less than that circle's own radius, since r sits on the foot of the
+    // perpendicular from the center to the chord p-q). Confirmed as a real root cause via a grid-point
+    // reproduction (a plain 3x3 integer grid, zero jitter: `vs = {(0,0),(1,0),(2,0)}`, and picking
+    // `{(0,0),(2,0)}` skips over `(1,0)`, which then sits inside every circumcircle through the chosen pair
+    // and any third grid point) -- see `.claude/WORKLOG-helix-bootstrap-fix.md`.
+    //
+    // A single greedy pass rooted at one fixed base (`vs.head`) is not a complete fix at higher ambient
+    // dimension: nearest-to-ONE-base doesn't guarantee no OTHER vs point ends up inside the resulting
+    // higher-dimensional simplex's own affine hull. Measured directly, not assumed, across three successive
+    // attempts: the raw index-order pick failed a targeted grid-heavy stress sweep at 2226/30000; sorting one
+    // greedy pass by distance from `vs.head` cut that to 744/30000 (fixed the 2D case outright, not the higher-
+    // dimensional one); trying a nearest-neighbor candidate rooted at every vs point in turn cut it further to
+    // 70/30000, but still not zero. So this instead enumerates every affinely-independent `ambientDimension`-
+    // subset of `vs` (bounded -- `vs` is typically a handful of points sharing one exact hyperplane even in the
+    // pathological cases that trigger this branch at all; capped at `maxCandidates` as a safety valve against a
+    // pathological `vs` this reasoning doesn't anticipate), ordered by increasing total pairwise span so the
+    // candidates least likely to skip over an interior point are tried first, and the brute-force search below
+    // retries across ALL of them (not just the first) until one succeeds.
+    val maxCandidates = 20000
+    val candidateStartingSimplices: Seq[Set[Int]] =
+      if vs.size == ambientDimension then Seq(vs.toSet)
+      else
+        vs
+          .combinations(ambientDimension)
+          .filter { combo =>
+            val base = points(combo.head)
+            val vecs = combo.tail.map(pi => points(pi).subtract(base).toArray)
+            rankAtEpsilon(MatrixUtils.createRealMatrix(vecs.toArray)) == ambientDimension - 1
+          }
+          .take(maxCandidates)
+          .map(_.toSet)
+          .toSeq
+          .sortBy(combo =>
+            (for
+              i <- combo.toSeq.indices
+              j <- (i + 1) until combo.size
+            yield points(combo.toSeq(i)).getDistance(points(combo.toSeq(j)))).sum
+          )
+
+    // brute force search for first delaunay simplex -- retried across every candidate starting simplex above,
+    // not just the first, stopping at the first (candidate, third point) pair whose circumsphere is empty.
     var done = false
-    for pi <- points.indices do
-      if !done then
-        if !startingSimplex.contains(pi) then
-          val circumsphere = Hypersphere((startingSimplex + pi).map(p => points(p)).toSeq)
-          val containedPoints = points.indices.toSet.filter(qi => circumsphere.contains(points(qi)))
-          if containedPoints.isEmpty then
-            done = true
-            validated.add(DelaunaySimplex(Simplex.from((startingSimplex + pi).toSeq), circumsphere))
-    assert(validated.nonEmpty)
+    val candidateIter = candidateStartingSimplices.iterator
+    while !done && candidateIter.hasNext do
+      val candidate = candidateIter.next()
+      for pi <- points.indices do
+        if !done then
+          if !candidate.contains(pi) then
+            val circumsphere = Hypersphere((candidate + pi).map(p => points(p)).toSeq)
+            val containedPoints = points.indices.toSet.filter(qi => circumsphere.contains(points(qi)))
+            if containedPoints.isEmpty then
+              done = true
+              startingSimplex = candidate
+              validated.add(DelaunaySimplex(Simplex.from((candidate + pi).toSeq), circumsphere))
+    assert(
+      validated.nonEmpty,
+      s"HelixDelaunayBuilder: no empty-circumsphere seed simplex found across ${candidateStartingSimplices.size} " +
+        s"candidate starting simplices (hull-supporting hyperplane has ${vs.size} coincident points) -- this is a " +
+        "genuine construction failure, not user error; please report it with the exact point cloud, per " +
+        ".claude/WORKLOG-helix-bootstrap-fix.md."
+    )
 
     visitedFacets.add(Simplex.from(startingSimplex.toSeq))
 
@@ -297,13 +406,46 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
   * @param seed
   *   seeds the bootstrap frontier-selection shuffle (`HelixDelaunayBuilder`); same `pts` and `seed` always produce the
   *   same triangulation.
+  * @param requireValidTriangulation
+  *   OFF by default -- changes nothing above when `false`. When `true`, and `compute()` produces a facet- multiplicity
+  *   violation (`FastAlphaHomologyContext`'s own precondition), runs `HelixDelaunay.repairByJitterRetriangulation`
+  *   (`.claude/DESIGN-helix-triangulation-repair.md`): a "simulation of simplicity"-style repair that nudges exactly
+  *   the offending, near-tied points by a tiny random perturbation and re-runs this SAME `HelixDelaunayBuilder` on the
+  *   full (mostly unperturbed) point set, then recomputes every resulting simplex's own circumsphere from the ORIGINAL,
+  *   un-nudged coordinates so the perturbation never leaks into a real filtration value -- only into the combinatorial
+  *   tie-break, plus a direct check that the repaired result has no interior gap (see that method's own doc for why the
+  *   facet-count check alone was found insufficient). Two other designs (discarding the conflicting region and
+  *   re-filling it via coning from an arbitrary apex; discarding the extra claimants outright with no replacement) were
+  *   tried first and rejected after being checked against the actual failing fixture -- see the design note's own
+  *   "First"/"Second design attempt (rejected)" sections. Validated by targeted stress sweep at `d=2` and `d=3`
+  *   (`FastAlphaHomologyContext`'s own primary use case); `d>=4` is untested -- `HelixDelaunayBuilder` itself is
+  *   already "not reliable ground truth" there for unrelated reasons (this class's own doc above), so this repair
+  *   inherits that pre-existing limitation rather than introducing a new one.
   */
-class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L)(using epsilon: Epsilon) extends AlphaShapes:
-  private val builder = HelixDelaunayBuilder(pts, seed)
+class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTriangulation: Boolean = false)(using
+  epsilon: Epsilon
+) extends AlphaShapes:
+  // If `pts` is globally coplanar -- its own affine rank is strictly less than the declared ambient dimension
+  // (the array width) -- there is no genuine full-ambient-dimensional Delaunay simplex to find at all: every
+  // point lies in some lower-dimensional flat, so the bootstrap's search for a supporting hyperplane plus one
+  // more "inside" point can never succeed no matter which candidate subset it tries (a structurally different
+  // failure from a merely locally-bad subset choice -- no amount of subset selection fixes it). Rather than let
+  // that surface as a crash, project onto an orthonormal basis of the point set's own actual affine span first
+  // and run the whole construction there -- a no-op (identity, modulo re-centering) whenever the input already
+  // has full rank, and exact (not approximate) when it doesn't: an orthogonal projection onto the affine span
+  // containing every point changes no pairwise Euclidean distance among them, so the resulting triangulation is
+  // the genuine Delaunay triangulation of the true (lower-dimensional) point configuration, not an approximation
+  // of it. `ambientDimension` (below, via `builder`) then correctly reflects the data's own true dimensionality
+  // -- e.g. 2D points accidentally stored with a spurious constant third coordinate behave exactly like a 2D
+  // alpha complex, not a degenerate "3D" one. See `.claude/WORKLOG-helix-bootstrap-fix.md`.
+  private val reducedPts: Array[Array[Double]] = HelixDelaunay.projectToAffineRank(pts)
+  private val builder = HelixDelaunayBuilder(reducedPts, seed)
   val points: Seq[Point] = builder.points
-  override val metricSpace: EuclideanMetricSpace = EuclideanMetricSpace(pts)
+  override val metricSpace: EuclideanMetricSpace = EuclideanMetricSpace(reducedPts)
   val ambientDimension: Int = builder.ambientDimension
-  val validated: Set[DelaunaySimplex] = builder.compute()
+  val validated: Set[DelaunaySimplex] =
+    val raw = builder.compute()
+    if requireValidTriangulation then HelixDelaunay.repairByJitterRetriangulation(pts, raw, seed) else raw
 
   val simplicesMap: Map[Int, Seq[Simplex[Int]]] = Map.from(
     (0 to ambientDimension).map(d =>
@@ -371,3 +513,203 @@ class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L)(using epsilon: E
   // for the general hazard).
   override def filtrationOrdering: Ordering[Simplex[Int]] =
     FiltrationOrdering.canonical(filtrationValue, _.size, simplexOrdering[Int])
+
+object HelixDelaunay:
+
+  /** If `pts` is globally coplanar -- its own affine rank (via SVD of the points centered at `pts.head`) is strictly
+    * less than the declared ambient dimension (`pts.head.length`) -- re-expresses every point in an orthonormal basis
+    * of that actual affine span, dropping the genuinely-unused extra coordinates; returns `pts` completely unchanged
+    * (not even re-centered) when the input already has full rank, so this is a no-op for every ordinary, non-degenerate
+    * point cloud. An orthogonal projection onto the affine span containing every input point preserves every pairwise
+    * Euclidean distance among them EXACTLY (nothing is discarded that any of the points actually extend into), so the
+    * returned points' own Delaunay triangulation is the genuine one for the true (lower-dimensional) point
+    * configuration, not an approximation -- see this class's own constructor doc and
+    * `.claude/WORKLOG-helix-bootstrap-fix.md`.
+    */
+  private def projectToAffineRank(pts: Array[Array[Double]])(using epsilon: Epsilon): Array[Array[Double]] =
+    if pts.length < 2 then pts
+    else
+      val dim = pts.head.length
+      val base = pts.head
+      val centered = pts.map(p => p.zip(base).map(_ - _))
+      val matrix = MatrixUtils.createRealMatrix(centered)
+      val rank = rankAtEpsilon(matrix)
+      if rank >= dim then pts
+      else
+        val v = new SingularValueDecomposition(matrix).getV
+        centered.map { row =>
+          Array.tabulate(rank)(k => (0 until dim).map(j => row(j) * v.getEntry(j, k)).sum)
+        }
+
+  private def facetsOf(ds: DelaunaySimplex): Seq[Simplex[Int]] = ds.simplex.toSeq.toSeq.map(v => ds.simplex - v)
+
+  private def facetToSimplices(simps: Set[DelaunaySimplex]): Map[Simplex[Int], Vector[DelaunaySimplex]] =
+    simps.toVector
+      .flatMap(ds => facetsOf(ds).map(f => (f, ds)))
+      .groupMap(_._1)(_._2)
+      .view
+      .mapValues(_.toVector)
+      .toMap
+
+  private def badFacetsOf(simps: Set[DelaunaySimplex]): Map[Simplex[Int], Vector[DelaunaySimplex]] =
+    facetToSimplices(simps).filter { case (_, claimants) => claimants.size > 2 }
+
+  /** A genuine Delaunay triangulation always fully tetrahedralizes its own convex hull -- the hull is convex, hence
+    * contractible, so the STATIC (unfiltered, every cell at once) complex's own `H_{d-1}` must be trivial. "Every facet
+    * has `<=2` claimants" (`badFacetsOf`) is necessary for that but NOT sufficient: a facet can end up with exactly 1
+    * claimant not because it is genuinely on the outer hull, but because the builder's own search, run on jittered
+    * coordinates, simply failed to place its second coface -- indistinguishable from a real hull facet by the local
+    * claimant-count check alone, but detectable by this global one. Confirmed empirically, not assumed: a real failing
+    * case measured a 33% total-tetrahedra-volume shortfall against the (violation-inflated) unrepaired triangulation,
+    * alongside exactly one spurious essential `H_2` bar -- direct evidence of a genuine gap, not a
+    * structurally-clean-but-topologically-wrong result (`.claude/DESIGN-helix-triangulation-repair.md`).
+    *
+    * Returns `None` when the complex is genuinely complete (no repair needed there); `Some(vertices)` when a void
+    * exists, where `vertices` is the vertex support of the essential `H_{d-1}` representative(s) `barcodeAt` returns --
+    * the actual boundary of the hole, not a guess -- a far more targeted retry seed than "every vertex on the complex's
+    * own outer hull" would be (which is most of the point cloud for an ordinary input, and would be true of ANY
+    * complete complex too, not just an incomplete one).
+    */
+  private def interiorVoidVertices(simps: Set[DelaunaySimplex], ambientDimension: Int): Option[Set[Int]] =
+    given Double is Field = Field.DoubleApproximated(1e-9)
+    val builder = ExplicitStreamBuilder[Int, Double]()
+    simps
+      .flatMap(ds => ds.simplex.toSet.subsets().filter(_.nonEmpty).map(s => Simplex.from(s.toSeq)))
+      .foreach(s => builder.addOne((0.0, s)))
+    val bars = SimplicialHomologyContext[Int, Double, Double]()
+      .persistentHomology(builder.result())
+      .barcodeAt(Double.PositiveInfinity)
+    val voidBars = bars.filter { b =>
+      b.dim == ambientDimension - 1 && (b.upper match
+        case PositiveInfinity() => true
+        case _                  => false)
+    }
+    if voidBars.isEmpty then None
+    else Some(voidBars.flatMap(_.annotation).flatMap(_.rawEntries.map(_._1)).flatMap(_.toSet).toSet)
+
+  /** The `requireValidTriangulation = true` repair pass (`.claude/DESIGN-helix-triangulation-repair.md`) -- strictly a
+    * post-processing step over an already-`compute()`d result. Rather than trying to hand-patch the conflicting region
+    * (both a coning re-fill and a discard-without-replacement prune were tried and rejected -- see the design note),
+    * this reruns `HelixDelaunayBuilder` -- the SAME already-tested global algorithm -- on the full point set with only
+    * the vertices actually involved in a violation nudged by a small random perturbation, so it never needs to manually
+    * reconstruct or "glue" a local patch: the builder's own global frontier walk does that implicitly, correctly,
+    * exactly as it does for any other input. The perturbation is discarded once it has done its job of breaking the
+    * combinatorial tie -- every simplex in the final result gets its own circumsphere recomputed from the ORIGINAL,
+    * un-nudged coordinates, so no filtration value is ever contaminated by jitter (the classic "simulation of
+    * simplicity" discipline: perturb only to choose a combinatorial structure, then discard the perturbation for every
+    * numeric output).
+    *
+    * Retries with a fresh seed (and a widened jitter set, folding in any newly-implicated vertices) if a retry still
+    * has EITHER problem -- rare, but not assumed away: only a direct re-check, not the fix's own optimism, decides
+    * success. Gives up after `maxAttempts` and throws a named, actionable exception rather than ever returning an
+    * unrepaired or partially-repaired result silently.
+    *
+    * '''`interiorVoidVertices` exists because the facet-count check alone was measured to be insufficient''' -- an
+    * earlier version of this repair, checking only "no facet has `>2` claimants," passed its own self-check but had a
+    * real ~10.5% barcode-disagreement rate against the naive engine at `d=3` (656/6272 hit violations in a stress
+    * sweep). Root-caused, not just patched around: `HelixDelaunayBuilder`, re-run on jittered coordinates, can silently
+    * fail to place a tetrahedron's second coface, leaving a facet with exactly 1 claimant that looks like an ordinary
+    * hull facet but is actually a gap -- and a genuine Delaunay triangulation can never have a real interior gap (the
+    * convex hull is convex, hence contractible, so `H_{d-1}` of the complete, unfiltered triangulation must be trivial;
+    * a nonzero `H_{d-1}` is not a legitimate feature there, it is direct evidence of a missed simplex). Confirmed on
+    * the actual failing case before implementing the fix: the repaired complex's own total tetrahedra volume was
+    * measurably short (a real ~33% shortfall) and its naive-engine barcode carried exactly one spurious essential `H_2`
+    * bar that the facet-count check could not see. Adding this check to the retry condition resolved it completely:
+    * re-running the same two stress sweeps with it added found ZERO barcode disagreements across 316 hit violations at
+    * `d=2` and 6272 at `d=3` (20000 trials each, near-cospherical point clouds, the SAME `d=3` sweep that previously
+    * found 656 disagreements).
+    *
+    * '''ALSO checked on the UNREPAIRED input, not just after a facet-multiplicity-driven retry''' -- a second, real
+    * failure mode, confirmed via direct trace on a real 13-point, ambient-dimension-4 example: `HelixDelaunayBuilder`
+    * can leave a whole local cluster's worth of simplices silently unbuilt with NO facet-multiplicity violation at all
+    * (so `requireValidTriangulation`'s original trigger, `badFacetsOf`, never fired). Root cause: `two` points can each
+    * independently be a genuine, empty-circumsphere coface of the same facet (circumradii differing by ~1e-7, both
+    * legitimately valid -- a real near-tie, not a bug in either candidate test), and `HelixDelaunayBuilder`'s own
+    * cospherical-cluster handling (`handleCosphericalPoints`) commits to whichever one it finds first via a plain
+    * hyperplane-side test with no empty-circumsphere check of its own, consuming that point and leaving the other
+    * candidate's own entire local neighborhood unreachable -- the same near-cospherical order-dependency already
+    * accepted as a limitation elsewhere in this class, here manifesting as missing content instead of a facet
+    * multiplicity. This repair now runs whenever EITHER `badFacetsOf` OR `interiorVoidVertices` fires on the raw input,
+    * using the void check's own essential-representative vertex support (not a facet-count heuristic) as the jitter
+    * seed when there is no explicit violation to seed from -- a far more targeted set than "every hull vertex" would
+    * be. See `.claude/WORKLOG-helix-bootstrap-fix.md` for the full trace and validation.
+    */
+  private def repairByJitterRetriangulation(
+    pts: Array[Array[Double]],
+    validatedIn: Set[DelaunaySimplex],
+    seed: Long
+  )(using epsilon: Epsilon): Set[DelaunaySimplex] =
+    val initialBad = badFacetsOf(validatedIn)
+    val initialVoid = interiorVoidVertices(validatedIn, pts.head.length)
+    if initialBad.isEmpty && initialVoid.isEmpty then validatedIn
+    else
+      var jitterVertices: Set[Int] =
+        initialBad.values.flatten.toSet.flatMap(_.simplex.toSet) ++ initialVoid.getOrElse(Set.empty)
+      var result: Option[Set[DelaunaySimplex]] = None
+      var attempt = 0
+      val maxAttempts = 8
+      while result.isEmpty && attempt < maxAttempts do
+        val localSeed = seed * 1000003L + attempt + 1
+        val rng = new Random(localSeed)
+        val jitterPoints = jitterVertices.toVector.map(i => Point(pts(i)))
+        val minPairwiseSpacing =
+          if jitterPoints.size < 2 then 1.0
+          else
+            (for
+              i <- jitterPoints.indices
+              j <- (i + 1) until jitterPoints.size
+            yield jitterPoints(i).getDistance(jitterPoints(j))).min
+        val jitterMagnitude = math.max(epsilon.epsilon * 100, minPairwiseSpacing * 1e-6)
+        val perturbedPts: Array[Array[Double]] = pts.zipWithIndex.map { case (p, i) =>
+          if jitterVertices.contains(i) then p.map(_ + (rng.nextDouble() - 0.5) * 2 * jitterMagnitude)
+          else p
+        }
+
+        val perturbedValidated = HelixDelaunayBuilder(perturbedPts, localSeed).compute()
+        val realized: Set[DelaunaySimplex] = perturbedValidated.map { ds =>
+          DelaunaySimplex(ds.simplex, Hypersphere(ds.simplex.toSeq.toSeq.map(v => Point(pts(v)))))
+        }
+        val stillBad = badFacetsOf(realized)
+        val stillVoid = interiorVoidVertices(realized, pts.head.length)
+        if stillBad.isEmpty && stillVoid.isEmpty then result = Some(realized)
+        else
+          // `stillVoid.getOrElse` never falls through to a default here: reaching this `else` branch at all
+          // means `stillBad.nonEmpty || stillVoid.nonEmpty`, so whenever `stillVoid` is `None` (no void),
+          // `stillBad` is guaranteed nonempty and already contributes its own vertices below -- there is no
+          // "void present but its own representative already fully jittered" case to special-case separately,
+          // the essential representative's own vertex support IS the widened jitter set whenever a void persists.
+          val extraJitterVertices =
+            stillBad.values.flatten.toSet.flatMap(_.simplex.toSet) ++ stillVoid.getOrElse(Set.empty)
+          jitterVertices = jitterVertices ++ extraJitterVertices
+        attempt += 1
+
+      result.getOrElse(
+        throw new IllegalStateException(
+          s"HelixDelaunay.repairByJitterRetriangulation: could not resolve the facet-multiplicity violation " +
+            s"after $maxAttempts jitter attempts on vertex set $jitterVertices; this may indicate a genuinely " +
+            "higher-order degeneracy this repair pass isn't designed for -- please report it with the exact " +
+            "point cloud that triggered this, per .claude/DESIGN-helix-triangulation-repair.md."
+        )
+      )
+
+/** Hides every simplex of dimension `> maxDim` from `helix` -- the `HelixDelaunay` analogue of
+  * `streams.LimitedCubicalGridStream` (itself needed because `streams.LimitedCofaceSimplexStream` is hardcoded to
+  * `CofaceSimplexStream[Int, Double]`, which `AlphaShapes`/`HelixDelaunay` is not -- it's the smaller
+  * `StratifiedSimplexStream[Int, Double]`, with no `currentDimension`/`keepCriterion`/etc. to forward). Used by
+  * `homology.FastAlphaHomologyContext`'s own `d >= 3` path (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`)
+  * to hand `CellularPersistenceInChunksContext` a view of the triangulation that never contains a real top-dimensional
+  * simplex, so that engine's own general `Chain` reduction never touches them -- the whole point being to let the
+  * (cheaper) dual union-find handle the top dimension instead.
+  *
+  * Delegates `filtrationOrdering`/`filtrationValue` to `helix` unchanged (removing higher-dimensional simplices from
+  * the DOMAIN doesn't change either), and preserves `StratifiedCellStream.iterator`'s own contiguous-from-0 contract
+  * for free: truncating a contiguous `0..helix.ambientDimension` domain to `0..maxDim` is still contiguous from 0.
+  */
+class LimitedAlphaShapesStream(helix: HelixDelaunay, maxDim: Int)
+    extends StratifiedSimplexStream[Int, Double]
+    with DoubleFiltration[Simplex[Int]]():
+  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+    case d: Int if d >= 0 && d <= maxDim && helix.iterateDimension.isDefinedAt(d) => helix.iterateDimension(d)
+  }
+  override def filtrationOrdering: Ordering[Simplex[Int]] = helix.filtrationOrdering
+  override def filtrationValue: PartialFunction[Simplex[Int], Double] = helix.filtrationValue

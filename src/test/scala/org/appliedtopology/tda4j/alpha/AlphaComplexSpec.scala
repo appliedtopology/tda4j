@@ -118,18 +118,22 @@ class AlphaComplexSpec extends org.specs2.mutable.Specification with ScalaCheck:
       } must beTrue) and
       (allSimplices.forall(simplex => simplicesByDimension(simplex.dim).contains(simplex)) must beTrue)
 
-  // "helix" is deliberately excluded from this loop, not just skipped silently:
-  // HelixDelaunay has its own, separate robustness bug, unrelated to anything else
-  // touched today -- an assertion failure (AlphaShapes.scala:138,
-  // assert(validated.nonEmpty) in its initial-simplex bootstrap) on ordinary random
-  // input, observed at roughly 1-in-600 in this generator (see AlphaCrossValidationSpec's
-  // class doc for the full writeup and a second, independent Helix robustness gap found
-  // alongside it). specs2's pendingUntilFixed is for a deterministically-known-failing
-  // example, not a probabilistic one -- with a 1-in-600 hit rate over 2000 samples, roughly
-  // 1 run in 30 would sample zero hits and get flagged as "fixed now, remove the marker"
-  // by specs2, which is exactly the kind of flaky CI signal this file is trying to avoid
-  // elsewhere. Fixing HelixDelaunay was out of scope for this session (focus was DQP).
-  for dispatch <- dispatches.filterNot(_ == "helix") do
+  // "helix" was previously excluded here: HelixDelaunayBuilder's initial-simplex bootstrap had a real
+  // `assert(validated.nonEmpty)` crash on ordinary random input, observed at roughly 1-in-600 in this generator
+  // (see AlphaCrossValidationSpec's class doc for the original writeup). Root-caused and fixed
+  // (`.claude/WORKLOG-helix-bootstrap-fix.md`): a global affine-rank check + projection for point clouds that
+  // are entirely coplanar in a lower-dimensional flat than the declared ambient dimension, an epsilon-consistent
+  // (not SVD-default-tolerance) rank check shared by every degeneracy test in the file, and retrying the
+  // bootstrap across every affinely-independent candidate starting simplex (not just the first found) when the
+  // hull-supporting hyperplane has more coincident points than the ambient dimension needs. Re-validated with a
+  // 30000-trial stress sweep targeting exactly this failure's own pattern (grid-like and near-grid point
+  // clouds): 2226 failures before the fix, 0 after. `helix` is included in this loop again as a result -- this
+  // property test's own face-closure/sortedness checks are a genuine, if partial, regression guard against that
+  // class of bug recurring (it checks internal self-consistency, not agreement with DQP -- see
+  // AlphaCrossValidationSpec's own class doc for the remaining, NOT re-enabled cross-validation, and for a
+  // second, distinct Helix limitation -- silently incomplete output on some near-cospherical inputs -- that
+  // this fix does not address).
+  for dispatch <- dispatches do
     s"$dispatch alpha complex should" >> {
       "satisfy the simplicial-stream properties" >>
         forAll(pointsGen) { points =>

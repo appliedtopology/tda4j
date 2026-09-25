@@ -124,6 +124,49 @@ class TDA4jSpec extends mutable.Specification:
     }
   }
 
+  "complex=vr, edgeCollapse option validation" should {
+    "reject edgeCollapse=true combined with a non-vr complex" in {
+      TDA4j.computeFromPoints(
+        points,
+        Array("complex", "alpha", "edgeCollapse", "true")
+      ) must throwA[IllegalArgumentException]
+    }
+    "reject a non-boolean edgeCollapse value" in {
+      TDA4j.computeFromPoints(points, Array("edgeCollapse", "yes")) must throwA[IllegalArgumentException]
+    }
+  }
+
+  "complex=vr with edgeCollapse=true, through the facade" should {
+    // The real oracle (streams.EdgeCollapse's own worklog): edge collapse preserves persistent homology exactly,
+    // so the collapsed complex's own barcode must match plain complex=vr's, bar for bar -- not just "doesn't
+    // throw." A dropped edgeCollapse option, or one silently ignored inside computeGeneric, would still pass
+    // every other test in this file (nothing else here ever asks for it) but would fail this one immediately if
+    // it somehow changed the answer -- it should NOT change the answer at all, only how it's computed.
+    "agree exactly with edgeCollapse=false (the default), across every engine" in {
+      // Zero-persistence (birth == death) bars are dropped before comparing: edge collapse specifically
+      // eliminates exactly this kind of momentary flicker (see streams.EdgeCollapse's own worklog), so the
+      // uncollapsed baseline can have MORE of them while still agreeing with the collapsed result on every bar
+      // that represents a genuine feature -- the same filter EdgeCollapseStreamSpec's own barcode comparisons
+      // already need, for the identical reason.
+      def realBars(triples: List[(Int, Double, Double)]) = triples.filterNot((_, b, d) => b == d)
+      val baseline = realBars(triples(TDA4j.computeFromPoints(points).toArray()))
+      forall(Seq("ripser", "naive", "chunks", "cohomology")) { engine =>
+        val collapsed =
+          realBars(triples(TDA4j.computeFromPoints(points, Array("edgeCollapse", "true", "engine", engine)).toArray()))
+        collapsed must containTheSameElementsAs(baseline)
+      }
+    }
+
+    "still expose real representative chains for every bar (the collapsed stream still satisfies the ordering " +
+      "contract, not just that bar VALUES happen to survive)" in {
+        val result = TDA4j.computeFromPoints(points, Array("edgeCollapse", "true"))
+        result.size() must be_>(0)
+        (0 until result.size()).forall { i =>
+          result.cycleVertices(i).length == result.cycleCoefficients(i).length && result.cycleVertices(i).length > 0
+        } must beTrue
+      }
+  }
+
   "complex=alpha, through the facade" should {
     // Tolerance-based, not exact `containTheSameElementsAs` -- each facade call independently reconstructs its
     // own `AlphaShapes(pts, alphaBackend)`, and HelixDelaunay's own filtration-value computation touches a
@@ -150,6 +193,155 @@ class TDA4jSpec extends mutable.Specification:
       TDA4j.computeFromPoints(points, Array("complex", "alpha", "engine", "bogus")) must throwA[
         IllegalArgumentException
       ]
+    }
+
+    "engine=fast-alpha agrees with the default engine=naive, up to floating-point tolerance" in {
+      val naive =
+        triples(TDA4j.computeFromPoints(points, Array("complex", "alpha")).toArray()).sortBy(t => (t._1, t._2, t._3))
+      val fastAlpha = triples(
+        TDA4j.computeFromPoints(points, Array("complex", "alpha", "engine", "fast-alpha")).toArray()
+      ).sortBy(t => (t._1, t._2, t._3))
+
+      naive.length must be_==(fastAlpha.length)
+      val agree = naive.zip(fastAlpha).forall { case ((d1, b1, e1), (d2, b2, e2)) =>
+        d1 == d2 &&
+        math.abs(b1 - b2) < 1e-9 &&
+        (e1.isInfinite == e2.isInfinite) && (e1.isInfinite || math.abs(e1 - e2) < 1e-9)
+      }
+      agree must beTrue
+    }
+
+    "reject engine=fast-alpha combined with alphaBackend=DQP" in {
+      TDA4j.computeFromPoints(
+        points,
+        Array("complex", "alpha", "engine", "fast-alpha", "alphaBackend", "DQP")
+      ) must throwA[IllegalArgumentException]
+    }
+
+    // Was "reject engine=fast-alpha for a 3D point cloud" -- true of the OLD ambient-dimension-2-only engine, no
+    // longer true since the hybrid-with-chunks extension to d >= 3
+    // (.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md): a 3D point cloud is now a real, supported case,
+    // not a rejection, so this became a positive agreement test instead (mirroring the 2D test above), reusing
+    // FastAlphaHomologySpec's own pinned 8-point d3Fixture (already confirmed there to trigger neither known
+    // HelixDelaunay limitation).
+    "engine=fast-alpha agrees with the default engine=naive on a 3D point cloud, up to floating-point tolerance" in {
+      val points3d = Array(
+        Array(0.4613980841200842, 0.49833920626726624, -0.30338059393748606),
+        Array(0.7945542854842094, 0.4163543155535945, -0.2961704447073863),
+        Array(-0.7585278972189831, 0.6998262016945451, -0.833560565510757),
+        Array(0.8574961456450381, 0.2832300995593273, 0.5695196611305218),
+        Array(0.17793559124047031, -0.05405078558279208, -0.49115647079559355),
+        Array(-0.2347321324300118, 0.5413935071566336, -0.5601041700478047),
+        Array(-0.37397256964256, 0.7333269621250991, -0.7932032354418583),
+        Array(-0.11756472947596674, 0.04518546446771521, -0.7937972268406879)
+      )
+      val naive =
+        triples(TDA4j.computeFromPoints(points3d, Array("complex", "alpha")).toArray())
+          .sortBy(t => (t._1, t._2, t._3))
+      val fastAlpha = triples(
+        TDA4j.computeFromPoints(points3d, Array("complex", "alpha", "engine", "fast-alpha")).toArray()
+      ).sortBy(t => (t._1, t._2, t._3))
+
+      naive.length must be_==(fastAlpha.length)
+      val agree = naive.zip(fastAlpha).forall { case ((d1, b1, e1), (d2, b2, e2)) =>
+        d1 == d2 &&
+        math.abs(b1 - b2) < 1e-9 &&
+        (e1.isInfinite == e2.isInfinite) && (e1.isInfinite || math.abs(e1 - e2) < 1e-9)
+      }
+      agree must beTrue
+    }
+
+    "engine=fast-alpha's own triangulation-limitation exception, on a real (pinned) failing point set, has a " +
+      "message an unsuspecting MATLAB/CLI caller can act on -- not swallowed or replaced by the facade" in {
+        // Same 12-point set FastAlphaHomologySpec pins as a deterministic facet-multiplicity-violation regression
+        // (found by a targeted search, not relied on a seed to rediscover) -- verifies the exception propagates
+        // through the MATLAB dispatch layer completely unchanged, own message and all, rather than being
+        // swallowed or replaced by a less specific one along the way.
+        val degeneratePoints = Array(
+          Array(0.25695462472920483, 0.05056259919533401),
+          Array(0.16861543461245865, 0.6584119575973783),
+          Array(0.04467548898740192, 0.34594140416504626),
+          Array(0.4001206924759393, 0.7492099413470164),
+          Array(0.9883782492738798, 0.31376350981292744),
+          Array(0.9160887469534176, 0.952687093337434),
+          Array(0.19808274564375272, 0.2756763438426806),
+          Array(0.6337671470530175, 0.4977740447848821),
+          Array(0.6906131750679769, 0.9538206186545584),
+          Array(0.4693304070850357, 0.4362857418234436),
+          Array(0.5483329515783447, 0.7788827446454716),
+          Array(0.8916378524720998, 0.4724706741593929)
+        )
+        try
+          TDA4j.computeFromPoints(degeneratePoints, Array("complex", "alpha", "engine", "fast-alpha"))
+          ko("expected FastAlphaTriangulationException to propagate through the facade, but nothing was thrown")
+        catch
+          case e: FastAlphaTriangulationException =>
+            (e.getMessage must contain("NOT an error in your data")) and
+              (e.getMessage must contain("TO GET YOUR RESULT")) and
+              (e.getMessage must contain("\"naive\""))
+      }
+
+    // requireValidTriangulation (.claude/DESIGN-helix-triangulation-repair.md), threaded through the facade.
+    // Reuses the SAME pinned 12-point facet-multiplicity-violation fixture as the exception test above.
+    val degeneratePoints = Array(
+      Array(0.25695462472920483, 0.05056259919533401),
+      Array(0.16861543461245865, 0.6584119575973783),
+      Array(0.04467548898740192, 0.34594140416504626),
+      Array(0.4001206924759393, 0.7492099413470164),
+      Array(0.9883782492738798, 0.31376350981292744),
+      Array(0.9160887469534176, 0.952687093337434),
+      Array(0.19808274564375272, 0.2756763438426806),
+      Array(0.6337671470530175, 0.4977740447848821),
+      Array(0.6906131750679769, 0.9538206186545584),
+      Array(0.4693304070850357, 0.4362857418234436),
+      Array(0.5483329515783447, 0.7788827446454716),
+      Array(0.8916378524720998, 0.4724706741593929)
+    )
+
+    "requireValidTriangulation=true fixes the pinned facet-multiplicity violation: no exception, and " +
+      "engine=fast-alpha agrees with engine=naive on the SAME (deterministically seeded) repaired stream" in {
+        val naive = triples(
+          TDA4j
+            .computeFromPoints(degeneratePoints, Array("complex", "alpha", "requireValidTriangulation", "true"))
+            .toArray()
+        ).sortBy(t => (t._1, t._2, t._3))
+        val fastAlpha = triples(
+          TDA4j
+            .computeFromPoints(
+              degeneratePoints,
+              Array("complex", "alpha", "engine", "fast-alpha", "requireValidTriangulation", "true")
+            )
+            .toArray()
+        ).sortBy(t => (t._1, t._2, t._3))
+
+        naive.length must be_==(fastAlpha.length)
+        val agree = naive.zip(fastAlpha).forall { case ((d1, b1, e1), (d2, b2, e2)) =>
+          d1 == d2 &&
+          math.abs(b1 - b2) < 1e-9 &&
+          (e1.isInfinite == e2.isInfinite) && (e1.isInfinite || math.abs(e1 - e2) < 1e-9)
+        }
+        agree must beTrue
+      }
+
+    "reject requireValidTriangulation combined with a non-alpha complex" in {
+      TDA4j.computeFromPoints(
+        points,
+        Array("requireValidTriangulation", "true")
+      ) must throwA[IllegalArgumentException]
+    }
+
+    "reject requireValidTriangulation=true combined with alphaBackend=DQP" in {
+      TDA4j.computeFromPoints(
+        points,
+        Array("complex", "alpha", "alphaBackend", "DQP", "requireValidTriangulation", "true")
+      ) must throwA[IllegalArgumentException]
+    }
+
+    "reject a non-boolean requireValidTriangulation value" in {
+      TDA4j.computeFromPoints(
+        points,
+        Array("complex", "alpha", "requireValidTriangulation", "yes")
+      ) must throwA[IllegalArgumentException]
     }
   }
 
@@ -191,6 +383,12 @@ class TDA4jSpec extends mutable.Specification:
     "reject engine=chunks combined with complex=alpha" in {
       TDA4j
         .computeFromPoints(points, Array("complex", "alpha", "engine", "chunks")) must throwA[IllegalArgumentException]
+    }
+    "reject engine=fast-cubical combined with complex=vr" in {
+      TDA4j.computeFromPoints(points, Array("engine", "fast-cubical")) must throwA[IllegalArgumentException]
+    }
+    "reject engine=fast-alpha combined with complex=vr" in {
+      TDA4j.computeFromPoints(points, Array("engine", "fast-alpha")) must throwA[IllegalArgumentException]
     }
     "reject complex=alpha via computeFromDistanceMatrix (alpha needs coordinates)" in {
       TDA4j.computeFromDistanceMatrix(euclideanDistanceMatrix(points), Array("complex", "alpha")) must throwA[
@@ -386,7 +584,10 @@ class TDA4jSpec extends mutable.Specification:
     "produce a genuinely different (sparser) barcode than complex=vr, on a point cloud where sparsification fires" in {
       val sheehy = triples(
         TDA4j
-          .computeFromPoints(clusterPoints, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "maxDimension", "1"))
+          .computeFromPoints(
+            clusterPoints,
+            Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "maxDimension", "1")
+          )
           .toArray()
       )
       val vr = triples(
@@ -399,10 +600,15 @@ class TDA4jSpec extends mutable.Specification:
 
     "engine=cohomology agrees with the default engine=naive, on the same sparsifying point cloud" in {
       val naive =
-        triples(TDA4j.computeFromPoints(clusterPoints, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5")).toArray())
+        triples(
+          TDA4j.computeFromPoints(clusterPoints, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5")).toArray()
+        )
       val cohomology = triples(
         TDA4j
-          .computeFromPoints(clusterPoints, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "engine", "cohomology"))
+          .computeFromPoints(
+            clusterPoints,
+            Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "engine", "cohomology")
+          )
           .toArray()
       )
       naive must containTheSameElementsAs(cohomology)
@@ -470,6 +676,29 @@ class TDA4jSpec extends mutable.Specification:
       val cohomology =
         triples(TDA4j.computeFromCubicalImage(ringShape, ringFlat, Array("engine", "cohomology")).toArray())
       naive must containTheSameElementsAs(cohomology)
+    }
+
+    "engine=fast-cubical agrees with the default engine=naive" in {
+      val naive = triples(TDA4j.computeFromCubicalImage(ringShape, ringFlat).toArray())
+      val fastCubical =
+        triples(TDA4j.computeFromCubicalImage(ringShape, ringFlat, Array("engine", "fast-cubical")).toArray())
+      naive must containTheSameElementsAs(fastCubical)
+    }
+
+    // Was "engine=fast-cubical is refused for a 3D image" -- true of the OLD ambient-dimension-2-only engine,
+    // no longer true since the hybrid-with-chunks extension to d >= 3
+    // (.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md): a 3D image is now a real, supported case, not
+    // a rejection, so this became a positive agreement test instead (mirroring the 2D "agrees with the default
+    // engine=naive" test just above) rather than being deleted outright.
+    "engine=fast-cubical agrees with the default engine=naive on a 3D image" in {
+      val cubeShape = Array(3, 3, 3)
+      val cubeFlat = Array.fill(27)(0.0)
+      cubeFlat(13) = 1.0 // flat index of (1,1,1), row-major/last-axis-fastest: 1*9 + 1*3 + 1 -- the single
+      // elevated interior voxel, exactly FastCubicalHomologySpec's own hand-derived singleVoidFixture3D
+      val naive = triples(TDA4j.computeFromCubicalImage(cubeShape, cubeFlat).toArray())
+      val fastCubical =
+        triples(TDA4j.computeFromCubicalImage(cubeShape, cubeFlat, Array("engine", "fast-cubical")).toArray())
+      naive must containTheSameElementsAs(fastCubical)
     }
 
     "computeFromImage (the 2D double[][] convenience) matches computeFromCubicalImage on the same grid" in {
@@ -926,4 +1155,70 @@ class TDA4jSpec extends mutable.Specification:
           TDA4j.coveringRadiusFromPoints(points, landmarks)
         )
       }
+  }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // computeFromRelation (Dowker complex) -- conversion-layer checks only, per this file's own stated purpose:
+  // the underlying construction's own correctness (duality, monotonicity, the keptByThresholdAndCriterion
+  // infinity fix) is already cross-validated in streams.DowkerStreamSpec. A rectangular (numLeft != numWitnesses)
+  // relation is used deliberately, the same shape DowkerStreamSpec's own duality property test needed to expose
+  // a real bug during development -- see .claude/WORKLOG-dowker-complex.md.
+  // ---------------------------------------------------------------------------------------------------------
+
+  private val dowkerRelation: Array[Array[Double]] = Array(
+    Array(0.0, 1.0, 2.0, 3.0),
+    Array(1.0, 0.0, 1.0, 2.0),
+    Array(2.0, 1.0, 0.0, 1.0)
+  )
+
+  "TDA4j.computeFromRelation" should {
+    "default to engine=naive and match streams.DowkerCofaceSimplexStream driven directly" in {
+      given Double is Field = Field.DoubleApproximated(1e-9)
+      val direct = SimplicialHomologyContext[Int, Double, Double]()
+        .persistentHomology(DowkerCofaceSimplexStream(dowkerRelation))
+        .diagramAt(Double.PositiveInfinity)
+      val facade = triples(TDA4j.computeFromRelation(dowkerRelation).toArray())
+      facade must containTheSameElementsAs(direct)
+    }
+
+    "engine=cohomology agrees exactly with the default engine=naive" in {
+      val naive = triples(TDA4j.computeFromRelation(dowkerRelation).toArray())
+      val cohomology =
+        triples(TDA4j.computeFromRelation(dowkerRelation, Array("engine", "cohomology")).toArray())
+      naive must containTheSameElementsAs(cohomology)
+    }
+
+    "reject engine=ripser and engine=chunks (the Dowker complex is not a flag complex in general)" in {
+      (TDA4j
+        .computeFromRelation(dowkerRelation, Array("engine", "ripser")) must throwA[IllegalArgumentException]) and
+        (TDA4j.computeFromRelation(dowkerRelation, Array("engine", "chunks")) must throwA[IllegalArgumentException])
+    }
+
+    "reject a ragged or empty relation" in {
+      (TDA4j.computeFromRelation(Array(Array(0.0, 1.0), Array(0.0))) must throwA[IllegalArgumentException]) and
+        (TDA4j.computeFromRelation(Array.empty[Array[Double]]) must throwA[IllegalArgumentException])
+    }
+
+    "reject an unrecognized option (e.g. 'complex', which this entry point has no use for)" in {
+      TDA4j.computeFromRelation(dowkerRelation, Array("complex", "vr")) must throwA[IllegalArgumentException]
+    }
+
+    "dual=true matches streams.DowkerCofaceSimplexStream(...).dual driven directly -- the functorial Dowker " +
+      "duality theorem, exercised through the facade" in {
+        given Double is Field = Field.DoubleApproximated(1e-9)
+        val direct = SimplicialHomologyContext[Int, Double, Double]()
+          .persistentHomology(DowkerCofaceSimplexStream(dowkerRelation).dual)
+          .diagramAt(Double.PositiveInfinity)
+        val facade = triples(TDA4j.computeFromRelation(dowkerRelation, Array("dual", "true")).toArray())
+        facade must containTheSameElementsAs(direct)
+      }
+
+    "cycleVertices/cycleCoefficients are readable, same length, for engine=naive and engine=cohomology alike" in {
+      val naiveResult = TDA4j.computeFromRelation(dowkerRelation)
+      val cohomologyResult = TDA4j.computeFromRelation(dowkerRelation, Array("engine", "cohomology"))
+      def allReadable(r: PersistenceResult): Boolean =
+        (0 until r.size()).forall(i => r.cycleVertices(i).length == r.cycleCoefficients(i).length)
+      allReadable(naiveResult) must beTrue
+      allReadable(cohomologyResult) must beTrue
+    }
   }

@@ -1,3 +1,16 @@
+// format: off
+// sbt's own meta-build (this `project/` directory) compiles under sbt's bundled Scala 2.12 (confirmed from the
+// `sbt scalafmtSbt` build log: "compiling ... to .../scala-2.12/sbt-1.0/classes"), not this repo's Scala 3.9 --
+// but .scalafmt.conf's `runner.dialect = scala3` (needed for src/main and src/test) also reached this file
+// before this directive was added, via `scalafmtSbt`/`scalafmtSbtCheck`. A `fileOverride` glob keyed on
+// `**/project/*.scala` with `runner.dialect = scala212` was tried first and did NOT take effect for that
+// specific task (`scalafmtSbtCheck` still flagged this file even with the override in place) -- verified the
+// hazard directly: running `scalafmtSbt` with the global scala3 dialect and no override rewrote this file's
+// brace/`if (...) ... else { ... }` syntax into `then`/indentation-based new syntax, which the Scala 2.12 meta-
+// build compiler cannot parse at all, breaking `sbt` itself (had to `git checkout` this file back to recover).
+// `// format: off` (this directive), unlike the fileOverride attempt, verifiably fixes BOTH problems at once --
+// `scalafmtSbtCheck` passes cleanly and `scalafmtSbt` leaves the file untouched -- so don't replace it with a
+// fileOverride-based approach without first confirming that actually takes effect for the Sbt-config task.
 import cats.syntax.all.*
 import laika.api.bundle.{BlockDirectives, DirectiveRegistry, LinkDirectives, SpanDirectives, TemplateDirectives}
 import laika.api.bundle.BlockDirectives.dsl.*

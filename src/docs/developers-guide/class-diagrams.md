@@ -145,6 +145,7 @@ classDiagram
     RipserCofaceSimplexStream <|-- LazyWitnessSimplexStream
     RipserCofaceSimplexStream <|-- WitnessCofaceSimplexStream
     RipserCofaceSimplexStream <|-- SheehyRipsSimplexStream
+    RipserCofaceSimplexStream <|-- DowkerCofaceSimplexStream
     EnumeratingCofaceSimplexStream <|-- InorderCofaceSimplexStream
     SimplexStream <|-- ExplicitStream
     StratifiedSimplexStream <|-- RecursiveStackVietorisRipsSimplexStream
@@ -163,13 +164,44 @@ another** — see [Architecture](architecture.md). `CubicalGridStream`/`Explicit
 `Cube`s rather than `Simplex`es; `SimplicialSetStream`/`FilteredSimplicialSetStream` produce a
 `FiniteSimplicialSet[G]`'s own generator type `G`.
 
-## Persistence engines (`homology/Homology.scala`, `homology/PackedRipserCohomology.scala`)
+## Persistence engines (`homology/Homology.scala`, `homology/PackedRipserCohomology.scala`, `homology/FastCubicalHomology.scala`, `homology/FastAlphaHomology.scala`)
 
 Deliberately *not* diagrammed field-by-field here — their exact state and trust status belongs in one
 place. See [Persistence engines](persistence-engines.md) for the full, current picture across
 `CellularHomologyContext`/`SimplicialHomologyContext`,
 `CellularPersistenceInChunksContext`/`PersistenceInChunksContext`,
-`RipserCohomologyContext`, `PackedRipserCohomologyContext`, and `CellularCohomologyContext`.
+`RipserCohomologyContext`, `PackedRipserCohomologyContext`, `CellularCohomologyContext`,
+`FastCubicalHomologyContext` and `FastAlphaHomologyContext` (`HelixDelaunay` alpha complexes) -- both valid at
+any ambient dimension `>= 2`, both via a `chunks` hybrid above 2D -- wired into `matlab`/`cli` as
+`engine="fast-cubical"`/`engine="fast-alpha"`.
+
+## Circular coordinates (`homology/CircularCoordinates.scala`)
+
+```mermaid
+classDiagram
+    class CircularCoordinates {
+        <<object>>
+        h1Bars(metricSpace, maxFiltrationValue) IndexedSeq~(Double, Double)~
+        compute(metricSpace, r, cocycleIndex, prime, maxFiltrationValue) Result
+    }
+    class Result {
+        theta: Map~Int, Double~
+        birth: Double
+        death: Double
+        r: Double
+        prime: Int
+    }
+    class NoIntegerCocycleException {
+        <<RuntimeException>>
+    }
+    CircularCoordinates --> Result : returns
+    CircularCoordinates ..> CellularCohomologyContext : computes K_r's cohomology with
+    CircularCoordinates ..> NoIntegerCocycleException : throws (no ℤ-lift at prime)
+```
+
+A standalone construction, not a fifth persistence engine — see [Architecture](architecture.md)'s own
+`homology.CircularCoordinates` section for the truncated-complex reframing, the harmonic-smoothing linear
+system, and why the output is a per-point angle map rather than a barcode.
 
 ## Metric spaces (`FiniteMetricSpace.scala`)
 
@@ -220,7 +252,26 @@ classDiagram
         kernel(source, target, matrix) List~PersistenceBar~
         cokernel(source, target, matrix) List~PersistenceBar~
     }
+    class BarcodeDistance {
+        <<object>>
+        bottleneckDistance(diagram1, diagram2, groundNorm) Double
+        wassersteinDistance(diagram1, diagram2, order, groundNorm) Double
+        bottleneckDistanceByDimension(diagram1, diagram2, groundNorm) Map~Int, Double~
+        wassersteinDistanceByDimension(diagram1, diagram2, order, groundNorm) Map~Int, Double~
+    }
+    class Vectorization {
+        <<object>>
+        landscape(diagram, numLevels, tMin, tMax, resolution) Array~Array~Double~~
+        persistenceImage(diagram, sigma, birthRange, persistenceRange, birthResolution, persistenceResolution, weightCap) Array~Array~Double~~
+    }
+    BarcodeDistance ..> PersistenceBar : reads
+    Vectorization ..> PersistenceBar : reads
 ```
 
 `AnnotationT` in practice is always `Chain[CellT, CoefficientT]` — the representative cycle/cocycle for a
-bar, when an engine tracks one.
+bar, when an engine tracks one. `BarcodeDistance`/`Vectorization` only ever read a bar's `dim`/`lower`/`upper`
+(never `annotation`), and are specialized to `PersistenceBar[Double, _]` rather than sharing `Barcode`'s own
+`FiltrationT: Ordering` genericity — see [Architecture](architecture.md)'s "`Barcode.scala`" section
+for why, and for `BipartiteMatching.scala`'s two package-private combinatorial primitives
+(`HopcroftKarp`/`Hungarian`) `BarcodeDistance` is built on, omitted here as an implementation detail rather
+than part of this package's public shape.

@@ -8,26 +8,25 @@ import org.appliedtopology.tda4j.homology.{given, *}
 import org.appliedtopology.tda4j.alpha.{given, *}
 
 /** Cross-validates `AlphaComplexDQP.dtm`'s `weight(i) = -f(i)^2` power weighting against
-  * `streams.DtmRipsSimplexStream(..., p = 2.0)` -- the two constructions are the SAME `p = 2` ball union (Anai et
-  * al., "DTM-based filtrations", Def. 3.1/Prop. 3.5; see `alpha.AlphaComplexDQP.dtm`'s own doc for the exact
-  * correspondence), so by the persistent nerve lemma they must report the SAME number of path components at
-  * every threshold -- i.e. the same H0 barcode, once alpha's `alpha = t^2` (squared-radius) units are converted
-  * to Rips's `2*t` (doubled-diameter) units via `birth -> 2*sqrt(birth)`.
+  * `streams.DtmRipsSimplexStream(..., p = 2.0)` -- the two constructions are the SAME `p = 2` ball union (Anai et al.,
+  * "DTM-based filtrations", Def. 3.1/Prop. 3.5; see `alpha.AlphaComplexDQP.dtm`'s own doc for the exact
+  * correspondence), so by the persistent nerve lemma they must report the SAME number of path components at every
+  * threshold -- i.e. the same H0 barcode, once alpha's `alpha = t^2` (squared-radius) units are converted to Rips's
+  * `2*t` (doubled-diameter) units via `birth -> 2*sqrt(birth)`.
   *
-  * '''Zero-length bars are dropped before comparing''', deliberately: a vertex the alpha complex correctly
-  * DELAYS or OMITS entirely (its own restricted power cell is not yet, or never, nonempty -- see
+  * '''Zero-length bars are dropped before comparing''', deliberately: a vertex the alpha complex correctly DELAYS or
+  * OMITS entirely (its own restricted power cell is not yet, or never, nonempty -- see
   * `AlphaComplexDQPBuilder.compute()`'s vertex-attachment fix) still exists as an ordinary vertex in
-  * `DtmRipsSimplexStream` from `t = f(x)` onward (Rips has no notion of a restricted/hidden cell at all) --
-  * so the two constructions can, and do, disagree on individual vertex/edge appearance times without
-  * disagreeing on TOPOLOGY: the "extra" Rips vertex is born and merges back into the same component in the
-  * same instant (a zero-length bar), which carries no persistent signal and is exactly what the nerve lemma's
-  * per-threshold component-count guarantee predicts, not a discrepancy. `.claude/WORKLOG-dtm-filtrations.md`
-  * works out both fixtures below by hand, including this exact phenomenon on the two-point one.
+  * `DtmRipsSimplexStream` from `t = f(x)` onward (Rips has no notion of a restricted/hidden cell at all) -- so the two
+  * constructions can, and do, disagree on individual vertex/edge appearance times without disagreeing on TOPOLOGY: the
+  * "extra" Rips vertex is born and merges back into the same component in the same instant (a zero-length bar), which
+  * carries no persistent signal and is exactly what the nerve lemma's per-threshold component-count guarantee predicts,
+  * not a discrepancy. `.claude/WORKLOG-dtm-filtrations.md` works out both fixtures below by hand, including this exact
+  * phenomenon on the two-point one.
   *
-  * Fixtures use HAND-PICKED `f`, not `streams.DistanceToMeasure`-derived ones: a DTM-derived `f` on a fixture
-  * small enough to hand-verify tends to put every point inside its own restricted cell (no delay/omission at
-  * all), which would make this cross-check pass trivially without ever exercising the vertex-attachment fix it
-  * exists to guard.
+  * Fixtures use HAND-PICKED `f`, not `streams.DistanceToMeasure`-derived ones: a DTM-derived `f` on a fixture small
+  * enough to hand-verify tends to put every point inside its own restricted cell (no delay/omission at all), which
+  * would make this cross-check pass trivially without ever exercising the vertex-attachment fix it exists to guard.
   */
 class AlphaComplexDQPDtmSpec extends org.specs2.mutable.Specification:
   given Double is Field = Field.DoubleApproximated(1e-9)
@@ -41,15 +40,20 @@ class AlphaComplexDQPDtmSpec extends org.specs2.mutable.Specification:
       FilteredSimplexOrdering[Int, Double](this)(using vertexOrdering = summon[Ordering[Int]])(using
         filtrationOrdering = summon[Ordering[Double]].reverse
       )
-    override def filtrationValue: PartialFunction[Simplex[Int], Double] = { case c if ac.contains(c) => ac.filtrationValue(c) }
+    override def filtrationValue: PartialFunction[Simplex[Int], Double] = {
+      case c if ac.contains(c) => ac.filtrationValue(c)
+    }
 
   private def h0(points: Array[Array[Double]], f: IndexedSeq[Double]): Set[(Double, Double)] =
-    val ac = AlphaComplexDQP.weighted(points, f.map(fi => -fi * fi).toArray, Double.PositiveInfinity, points.head.length)
+    val ac =
+      AlphaComplexDQP.weighted(points, f.map(fi => -fi * fi).toArray, Double.PositiveInfinity, points.head.length)
     val stream = RawAlphaComplexStream(points, ac)
     SimplicialHomologyContext[Int, Double, Double]()
       .persistentHomology(stream)
       .diagramAt(Double.PositiveInfinity)
-      .collect { case (0, b, d) => (2.0 * math.sqrt(b), if d.isInfinite then Double.PositiveInfinity else 2.0 * math.sqrt(d)) }
+      .collect { case (0, b, d) =>
+        (2.0 * math.sqrt(b), if d.isInfinite then Double.PositiveInfinity else 2.0 * math.sqrt(d))
+      }
       .filter { case (b, d) => d != b } // drop zero-length bars -- see class doc
       .toSet
 

@@ -202,6 +202,60 @@ class CLISpec extends mutable.Specification:
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
     }
 
+    "produce the exact same barcode as calling TDA4j directly for --edge-collapse=true, via a real file on disk" >> {
+      // Same 1:1-mirrored-flag argument as --sheehy-epsilon above -- --edge-collapse changes nothing about the
+      // OUTPUT shape (unlike --distance-to, which is the one CLI flag that does NOT mirror a compute option --
+      // see TDA4jConf.distanceTo's own doc), so it needs no special CLI-side handling at all.
+      val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0), Array(0.5, 2.0))
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, points)
+
+      val buffer = new ByteArrayOutputStream()
+      val exitCode = TDA4jCLI.run(Seq("--edge-collapse", "true", "--max-dimension", "1", path), new PrintStream(buffer))
+      val cliLines = buffer.toString.linesIterator.toSeq
+
+      val direct = TDA4j.computeFromPoints(points, Array("edgeCollapse", "true", "maxDimension", "1"))
+      val directLines = TDA4jCLI.toBars(direct).map(_.toString)
+
+      (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
+    }
+
+    "produce the exact same barcode as calling TDA4j directly for --require-valid-triangulation=true, via a real " +
+      "file on disk" >> {
+        // Same pinned 12-point facet-multiplicity-violation fixture TDA4jSpec/FastAlphaHomologySpec use.
+        val points = Array(
+          Array(0.25695462472920483, 0.05056259919533401),
+          Array(0.16861543461245865, 0.6584119575973783),
+          Array(0.04467548898740192, 0.34594140416504626),
+          Array(0.4001206924759393, 0.7492099413470164),
+          Array(0.9883782492738798, 0.31376350981292744),
+          Array(0.9160887469534176, 0.952687093337434),
+          Array(0.19808274564375272, 0.2756763438426806),
+          Array(0.6337671470530175, 0.4977740447848821),
+          Array(0.6906131750679769, 0.9538206186545584),
+          Array(0.4693304070850357, 0.4362857418234436),
+          Array(0.5483329515783447, 0.7788827446454716),
+          Array(0.8916378524720998, 0.4724706741593929)
+        )
+        val path = tempFile(".csv")
+        CSV.writePointCloud(path, points)
+
+        val buffer = new ByteArrayOutputStream()
+        val exitCode = TDA4jCLI.run(
+          Seq("--complex", "alpha", "--engine", "fast-alpha", "--require-valid-triangulation", "true", path),
+          new PrintStream(buffer)
+        )
+        val cliLines = buffer.toString.linesIterator.toSeq
+
+        val direct = TDA4j.computeFromPoints(
+          points,
+          Array("complex", "alpha", "engine", "fast-alpha", "requireValidTriangulation", "true")
+        )
+        val directLines = TDA4jCLI.toBars(direct).map(_.toString)
+
+        (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
+      }
+
     "produce the exact same barcode as calling TDA4j directly for --complex=dtm-alpha, via a real file on disk" >> {
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
       val path = tempFile(".csv")
@@ -244,6 +298,56 @@ class CLISpec extends mutable.Specification:
 
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
     }
+
+    "produce the exact same barcode as calling TDA4j.computeFromCubicalImage directly with --engine fast-cubical" >> {
+      val path = tempFile(".txt")
+      // Same ring fixture as the default-engine test above.
+      java.nio.file.Files.write(
+        java.nio.file.Paths.get(path),
+        "2\n3\n3\n0\n0\n0\n0\n-1\n0\n0\n0\n0\n".getBytes
+      )
+
+      val buffer = new ByteArrayOutputStream()
+      val exitCode =
+        TDA4jCLI.run(
+          Seq("--input-format", "perseus-cubical", "--engine", "fast-cubical", path),
+          new PrintStream(buffer)
+        )
+      val cliLines = buffer.toString.linesIterator.toSeq
+
+      val (shape, flatValues) =
+        TDA4jCLI.flattenGridStream(Perseus.readCubicalToplex(path, sublevel = true))
+      val direct = TDA4j.computeFromCubicalImage(shape, flatValues, Array("engine", "fast-cubical"))
+      val directLines = TDA4jCLI.toBars(direct).map(_.toString)
+
+      (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
+    }
+
+    "runs --complex alpha --engine fast-alpha end-to-end via a real file on disk, agreeing on bar COUNT with a " +
+      "direct engine=naive call on the same points" >> {
+        // Bar count, not exact-value comparison the way the fast-cubical test above uses: this engine goes
+        // through HelixDelaunay, whose own filtration-value computation touches a mutable.Set (construction-
+        // nondeterminism class TDA4jSpec's own "complex=alpha, through the facade" section already documents,
+        // last-ULP-level differences between two independent constructions of "the same" complex, not a
+        // reduction bug) -- the CLI run and the "direct" call below are two SEPARATE constructions, and
+        // PersistenceBar's own toString isn't a format worth re-parsing just to redo the numeric comparison
+        // FastAlphaHomologySpec/TDA4jSpec's own tests already make directly. This test's own job is CLI
+        // plumbing (does --engine fast-alpha actually reach engine=fast-alpha through Scallop and a file on
+        // disk, without crashing, and with the right SHAPE of result), not re-verifying engine correctness.
+        val points =
+          Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0), Array(0.5, 2.0), Array(2.0, 0.5))
+        val path = tempFile(".csv")
+        CSV.writePointCloud(path, points)
+
+        val buffer = new ByteArrayOutputStream()
+        val exitCode =
+          TDA4jCLI.run(Seq("--complex", "alpha", "--engine", "fast-alpha", path), new PrintStream(buffer))
+        val cliLineCount = buffer.toString.linesIterator.size
+
+        val naiveBarCount = TDA4j.computeFromPoints(points, Array("complex", "alpha")).size()
+
+        (exitCode must beEqualTo(0)) and (cliLineCount must beEqualTo(naiveBarCount))
+      }
 
     "reject --complex combined with a cubical-image --input-format" >> {
       val path = tempFile(".txt")
@@ -388,4 +492,149 @@ class CLISpec extends mutable.Specification:
             new PrintStream(new ByteArrayOutputStream())
           ) must beEqualTo(1))
       }
+  }
+
+  "--distance-to (barcode.BarcodeDistance mirror)" should {
+    def writeComparisonDiagram(points: Array[Array[Double]]): String =
+      val result = TDA4j.computeFromPoints(points, Array("maxDimension", "1"))
+      val path = tempFile(".csv")
+      CSV.writePersistenceDiagram(path, TDA4jCLI.toBars(result))
+      path
+
+    "print one 'dim <k>: bottleneck=... wasserstein=...' line per dimension, matching a direct " +
+      "BarcodeDistance call on the same bars" >> {
+        val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.9))
+        val comparisonPoints = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+        val inputPath = tempFile(".csv")
+        CSV.writePointCloud(inputPath, points)
+        val comparisonPath = writeComparisonDiagram(comparisonPoints)
+
+        val buffer = new ByteArrayOutputStream()
+        val exitCode = TDA4jCLI.run(
+          Seq("--max-dimension", "1", "--distance-to", comparisonPath, inputPath),
+          new PrintStream(buffer)
+        )
+        val lines = buffer.toString.linesIterator.toSeq
+
+        val computed = TDA4j.computeFromPoints(points, Array("maxDimension", "1"))
+        val computedBars = TDA4jCLI.toBars(computed)
+        val comparisonBars = CSV.readPersistenceDiagram(comparisonPath)
+        val expectedBottleneck = BarcodeDistance.bottleneckDistanceByDimension(computedBars, comparisonBars)
+        val expectedWasserstein = BarcodeDistance.wassersteinDistanceByDimension(computedBars, comparisonBars)
+        val expectedLines =
+          expectedBottleneck.keySet.toSeq.sorted.map(d =>
+            s"dim $d: bottleneck=${expectedBottleneck(d)} wasserstein=${expectedWasserstein(d)}"
+          )
+
+        (exitCode must beEqualTo(0)) and (lines must beEqualTo(expectedLines))
+      }
+
+    "reject --distance-to combined with --select-landmarks" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, Array(Array(0.0, 0.0), Array(1.0, 0.0)))
+      val comparisonPath = writeComparisonDiagram(Array(Array(0.0, 0.0), Array(1.0, 0.0)))
+      TDA4jCLI.run(
+        Seq("--select-landmarks", "--num-landmarks", "1", "--distance-to", comparisonPath, path),
+        new PrintStream(new ByteArrayOutputStream())
+      ) must beEqualTo(1)
+    }
+
+    "reject --distance-to combined with a non-text --output-format" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, Array(Array(0.0, 0.0), Array(1.0, 0.0)))
+      val comparisonPath = writeComparisonDiagram(Array(Array(0.0, 0.0), Array(1.0, 0.0)))
+      TDA4jCLI.run(
+        Seq("--output-format", "csv", "--output", tempFile(".csv"), "--distance-to", comparisonPath, path),
+        new PrintStream(new ByteArrayOutputStream())
+      ) must beEqualTo(1)
+    }
+
+    "reject an unrecognized --distance-format" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, Array(Array(0.0, 0.0), Array(1.0, 0.0)))
+      val comparisonPath = writeComparisonDiagram(Array(Array(0.0, 0.0), Array(1.0, 0.0)))
+      TDA4jCLI.run(
+        Seq("--distance-to", comparisonPath, "--distance-format", "perseus", path),
+        new PrintStream(new ByteArrayOutputStream())
+      ) must beEqualTo(1)
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // --input-format=csv-relation (Dowker complex): reuses CSV.readPointCloud outright (same rectangular-matrix
+  // shape), routed to TDA4j.computeFromRelation instead of computeFromPoints -- see resolveInput's own comment.
+  // ---------------------------------------------------------------------------------------------------------
+
+  "--input-format=csv-relation" should {
+    val dowkerRelation: Array[Array[Double]] = Array(
+      Array(0.0, 1.0, 2.0, 3.0),
+      Array(1.0, 0.0, 1.0, 2.0),
+      Array(2.0, 1.0, 0.0, 1.0)
+    )
+
+    "dispatch to ResolvedInput.Relation" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, dowkerRelation)
+      TDA4jCLI.resolveInput("csv-relation", path) must beAnInstanceOf[TDA4jCLI.ResolvedInput.Relation]
+    }
+
+    "produce the exact same barcode as calling TDA4j.computeFromRelation directly, via a real file on disk" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, dowkerRelation)
+
+      val buffer = new ByteArrayOutputStream()
+      val exitCode = TDA4jCLI.run(Seq("--input-format", "csv-relation", path), new PrintStream(buffer))
+      val cliLines = buffer.toString.linesIterator.toSeq
+
+      val direct = TDA4j.computeFromRelation(dowkerRelation)
+      val directLines = TDA4jCLI.toBars(direct).map(_.toString)
+
+      (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
+    }
+
+    "--dual produces the exact same barcode as TDA4j.computeFromRelation(relation, Array(\"dual\", \"true\")) " +
+      "directly" >> {
+        val path = tempFile(".csv")
+        CSV.writePointCloud(path, dowkerRelation)
+
+        val buffer = new ByteArrayOutputStream()
+        val exitCode =
+          TDA4jCLI.run(Seq("--input-format", "csv-relation", "--dual", "true", path), new PrintStream(buffer))
+        val cliLines = buffer.toString.linesIterator.toSeq
+
+        val direct = TDA4j.computeFromRelation(dowkerRelation, Array("dual", "true"))
+        val directLines = TDA4jCLI.toBars(direct).map(_.toString)
+
+        (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
+      }
+
+    "reject --complex combined with --input-format=csv-relation" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, dowkerRelation)
+      val buffer = new ByteArrayOutputStream()
+      TDA4jCLI.run(
+        Seq("--input-format", "csv-relation", "--complex", "vr", path),
+        new PrintStream(buffer)
+      ) must beEqualTo(1)
+    }
+
+    "reject --select-landmarks with --input-format=csv-relation" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, dowkerRelation)
+      val buffer = new ByteArrayOutputStream()
+      TDA4jCLI.run(
+        Seq("--input-format", "csv-relation", "--select-landmarks", "--num-landmarks", "1", path),
+        new PrintStream(buffer)
+      ) must beEqualTo(1)
+    }
+
+    "reject engine=ripser (the Dowker complex is not a flag complex in general)" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, dowkerRelation)
+      val buffer = new ByteArrayOutputStream()
+      TDA4jCLI.run(
+        Seq("--input-format", "csv-relation", "--engine", "ripser", path),
+        new PrintStream(buffer)
+      ) must beEqualTo(1)
+    }
   }

@@ -16,13 +16,13 @@ import org.specs2.execute.AsResult
   * arXiv:1203.6786). See that class's own doc for the formulas and units convention, and `.claude/
   * WORKLOG-sheehy-rips.md` for the fetched paper pages this is checked against.
   *
-  * Validation order follows this codebase's established convention for a new complex type: hand-derived fixtures
-  * for `edgeBirth` pinning each of the paper's own case-1/case-2/vanish-excluded/never-reachable branches (the
-  * vanish-excluded one is a real correctness gap in the paper's own Algorithm 3, not just a defensive test -- see
-  * the class doc), a hand-derived triangle showing this is NOT a flag complex in the naive "max pairwise edge
-  * value" sense (three individually-finite edges whose own triangle is still excluded), a degenerate-epsilon-limit
-  * check that this reduces to plain Vietoris-Rips cell-for-cell (not just barcode-for-barcode), and a fresh
-  * `chunks`-vs-`naive` cross-validation (not assumed to carry over from any other stream).
+  * Validation order follows this codebase's established convention for a new complex type: hand-derived fixtures for
+  * `edgeBirth` pinning each of the paper's own case-1/case-2/vanish-excluded/never-reachable branches (the
+  * vanish-excluded one is a real correctness gap in the paper's own Algorithm 3, not just a defensive test -- see the
+  * class doc), a hand-derived triangle showing this is NOT a flag complex in the naive "max pairwise edge value" sense
+  * (three individually-finite edges whose own triangle is still excluded), a degenerate-epsilon-limit check that this
+  * reduces to plain Vietoris-Rips cell-for-cell (not just barcode-for-barcode), and a fresh `chunks`-vs-`naive`
+  * cross-validation (not assumed to carry over from any other stream).
   */
 class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
@@ -54,7 +54,7 @@ class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCh
       SheehyRipsSimplexStream.edgeBirth(1.0, 2.0, 100.0, 0.5) must beEqualTo(Double.PositiveInfinity)
     }
 
-    "be symmetric in its two lambda arguments" >> {
+    "be symmetric in its two lambda arguments" >>
       AsResult {
         org.scalacheck.Prop.forAll(
           Gen.chooseNum(0.01, 50.0),
@@ -65,7 +65,6 @@ class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCh
           SheehyRipsSimplexStream.edgeBirth(l1, l2, d, eps) == SheehyRipsSimplexStream.edgeBirth(l2, l1, d, eps)
         }
       }
-    }
 
     "match an independent bisection against the DEFINITION (not Algorithm 3's closed form), across the case-1/" +
       "case-2/vanish-excluded boundary" >> {
@@ -112,7 +111,7 @@ class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCh
       }
   }
 
-  "SheehyRipsSimplexStream.filtrationValueOverride" should {
+  "SheehyRipsSimplexStream.filtrationValueOverride" should
     "exclude a triangle via the global min-vanish check even though all three of its edges are individually finite" >> {
       // a = 0 (lambda 1), b = 1 (lambda 100), c = 2 (lambda 100), epsilon = 0.5.
       // edge(a,b): d=4, case-1 (threshold 6) -> raw 2, doubled 4; vanish(1,0.5) doubled = 9 >= 4, kept.
@@ -136,21 +135,21 @@ class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCh
         (fv(Simplex(1, 2)) must beCloseTo(50.0, 1e-9)) and
         (fv(Simplex(0, 1, 2)) must beEqualTo(Double.PositiveInfinity))
     }
-  }
 
   "LandmarkSelector.maxmin run to full size (GreedyPermutation)" should {
-    "give the seed point lambda = Infinity and every other lambda a positive, real value" >> {
+    "give the seed point lambda = Infinity and every other lambda a positive, real value" >>
       AsResult {
         org.scalacheck.Prop.forAll(matrixGen(Gen.double, Gen.chooseNum(2, 4), Gen.chooseNum(3, 12))) { pts =>
           val ambient = EuclideanMetricSpace(pts)
           val selection = LandmarkSelector.maxmin(ambient, ambient.size, firstLandmark = 0)
           selection.insertionRadius(selection.landmarks.head).isPosInfinity &&
-          selection.landmarks.tail.forall(p => selection.insertionRadius(p).isFinite && selection.insertionRadius(p) >= 0.0)
+          selection.landmarks.tail.forall(p =>
+            selection.insertionRadius(p).isFinite && selection.insertionRadius(p) >= 0.0
+          )
         }
       }
-    }
 
-    "give a non-increasing lambda sequence along the permutation order" >> {
+    "give a non-increasing lambda sequence along the permutation order" >>
       AsResult {
         org.scalacheck.Prop.forAll(matrixGen(Gen.double, Gen.chooseNum(2, 4), Gen.chooseNum(3, 12))) { pts =>
           val ambient = EuclideanMetricSpace(pts)
@@ -159,17 +158,17 @@ class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCh
           lambdas.sliding(2).forall { case Seq(a, b) => a >= b; case _ => true }
         }
       }
-    }
   }
 
   "SheehyRipsSimplexStream" should {
-    "reduce to plain Vietoris-Rips cell-for-cell at a small enough epsilon (no sparsification triggers)" >> {
+    "reduce to plain Vietoris-Rips cell-for-cell at a small enough epsilon (no sparsification triggers)" >>
       AsResult {
         org.scalacheck.Prop.forAll(matrixGen(Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(4, 8))) { pts =>
           val ambient = EuclideanMetricSpace(pts)
           val selection = LandmarkSelector.maxmin(ambient, ambient.size, firstLandmark = 0)
           val lambdaMin = selection.landmarks.tail.map(selection.insertionRadius).min
-          val diameter = ambient.minimumEnclosingRadius * 2.0 + 1.0 // a safe finite upper bound on every pairwise distance
+          val diameter =
+            ambient.minimumEnclosingRadius * 2.0 + 1.0 // a safe finite upper bound on every pairwise distance
           // Solve 2*lambdaMin*(1+eps)/eps >= diameter for a small, safely-sufficient eps (see the class doc /
           // WORKLOG for the derivation: small eps, not large, is what avoids sparsification here).
           val eps =
@@ -187,7 +186,6 @@ class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCh
           }
         }
       }
-    }
 
     "reject epsilon outside (0,1)" >> {
       val ambient = EuclideanMetricSpace(Array(Array(0.0), Array(1.0)))
@@ -195,7 +193,7 @@ class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCh
         (SheehyRipsSimplexStream(ambient, epsilon = 1.0) must throwAn[IllegalArgumentException])
     }
 
-    "cross-validate chunks against naive on a small random point cloud (fresh, not assumed from any other stream)" >> {
+    "cross-validate chunks against naive on a small random point cloud (fresh, not assumed from any other stream)" >>
       // Both streams limited to cell-dimension <= 3 (homological degree <= 2, matching PersistenceInChunksContext's
       // own maxDim = 2 below) -- NOT "maxDim = ambient.size" (CechStreamSpec's own convention for its typically-tiny
       // clouds): bounding the dimension costs nothing this test cares about, since it's checking
@@ -238,7 +236,6 @@ class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCh
             naiveBarcode.toSet == chunksBarcode.toSet
         }
       }
-    }
 
     "genuinely sparsify (fewer edges than plain VR) on a multi-cluster point cloud, with chunks and naive still agreeing" >> {
       // Deterministic, not a property -- three tight clusters (5 points each, radius ~0.5) far apart (~50 apart),
@@ -255,7 +252,8 @@ class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCh
       val ambient = EuclideanMetricSpace(pts)
       val stream = SheehyRipsSimplexStream(ambient, epsilon = 0.5)
       val vrEdgeCount =
-        RipserCofaceSimplexStream(ambient, maxFiltrationValue = Some(Double.PositiveInfinity)).iterator.count(_.dim == 1)
+        RipserCofaceSimplexStream(ambient, maxFiltrationValue = Some(Double.PositiveInfinity)).iterator
+          .count(_.dim == 1)
       val sheehyEdgeCount = stream.iterator.count(_.dim == 1)
       val homDim = ambient.size - 1
       val naiveBarcode = SimplicialHomologyContext[Int, Double, Double]()
@@ -276,7 +274,8 @@ class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCh
           .toSeq
           .sorted
       val sheehyDeaths = finiteH0Deaths(stream)
-      val vrDeaths = finiteH0Deaths(RipserCofaceSimplexStream(ambient, maxFiltrationValue = Some(Double.PositiveInfinity)))
+      val vrDeaths =
+        finiteH0Deaths(RipserCofaceSimplexStream(ambient, maxFiltrationValue = Some(Double.PositiveInfinity)))
 
       (sheehyEdgeCount must be_<(vrEdgeCount)) and
         (naiveBarcode.toSet must beEqualTo(chunksBarcode.toSet)) and
@@ -284,55 +283,53 @@ class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCh
     }
   }
 
-  "SheehyRipsSimplexStream's H0 barcode" should {
-    "is a (1+epsilon)-multiplicative approximation to plain VR's own H0 barcode (CJS 2015 Theorem 5)" >> {
-      // This test's real, narrower value: it does not reuse edgeBirth/filtrationValueOverride's own CLOSED FORM,
-      // only the PUBLIC Theorem 5 claim, so it independently exercises the units convention (doubling cancels
-      // out of every ratio) and gross over/under-exclusion. It does NOT independently exercise case 2's own
-      // constant or threshold: at these sizes/epsilon values, random clouds usually don't sparsify at all (every
-      // edge lands in case 1, ratio exactly 1 -- confirmed empirically while writing this test), so this
-      // property mostly compares plain VR against itself; the bisection-based `edgeBirth` test above is what
-      // actually exercises case 2 independently, and the cluster fixture above is what independently confirms
-      // real sparsification changes a reported value at all.
-      //
-      // The bound is tightened to [1, 1+epsilon], not CJS 2015's own symmetric [1/(1+epsilon), 1+epsilon]: every
-      // sparse edge's value is either exactly its VR counterpart (case 1) or strictly larger (case 2 only fires
-      // once d exceeds case 1's own threshold, and its own value is provably >= d there too -- see the class
-      // doc), and excluded pairs are effectively "even larger" (infinite) -- so a sparse death can never be
-      // EARLIER than its VR counterpart, only the same or later. A ratio below 1 would mean sparsification
-      // somehow merged two components before plain VR itself would have -- a real bug the symmetric bound alone
-      // would not catch.
-      AsResult {
-        org.scalacheck.Prop.forAll(
-          matrixGen(Gen.chooseNum(-10.0, 10.0), Gen.chooseNum(2, 3), Gen.chooseNum(15, 25)),
-          Gen.chooseNum(0.8, 0.9)
-        ) { (pts, eps) =>
-          val ambient = EuclideanMetricSpace(pts)
-          val sheehyH0 = LimitedCofaceSimplexStream(SheehyRipsSimplexStream(ambient, epsilon = eps), 1)
-          val vrH0 = LimitedCofaceSimplexStream(RipserCofaceSimplexStream(ambient), 1)
-          def finiteDeaths(s: CofaceSimplexStream[Int, Double]): Seq[Double] =
-            SimplicialHomologyContext[Int, Double, Double]()
-              .persistentHomology(s)
-              .diagramAt(Double.PositiveInfinity)
-              .collect { case (0, _, d) if d.isFinite => d }
-              .toSeq
-              .sorted
-          val sheehyDeaths = finiteDeaths(sheehyH0)
-          val vrDeaths = finiteDeaths(vrH0)
-          sheehyDeaths.size == vrDeaths.size &&
-          sheehyDeaths.zip(vrDeaths).forall { case (s, v) =>
-            // v == 0.0 happens whenever two generated points coincide exactly (a real, if rare, occurrence
-            // under bounded-coordinate generation, not a pathological input to guard against) -- plain VR merges
-            // them at birth (death 0.0), and SheehyRipsSimplexStream's own edgeBirth agrees exactly (case 1 with
-            // d=0 gives raw 0, and vanish(lambda,epsilon) is 0 only when lambda=0 too, in which case raw=0 <=
-            // vanish=0 still holds) -- so s == 0.0 too, and s/v is 0.0/0.0 = NaN despite the two deaths being
-            // genuinely, exactly equal. Comparing for exact equality first sidesteps the division entirely.
-            (s == v) || {
-              val ratio = s / v
-              ratio >= 1.0 - 1e-9 && ratio <= (1.0 + eps) + 1e-9
-            }
+  "SheehyRipsSimplexStream's H0 barcode" should
+    "is a (1+epsilon)-multiplicative approximation to plain VR's own H0 barcode (CJS 2015 Theorem 5)" >>
+    // This test's real, narrower value: it does not reuse edgeBirth/filtrationValueOverride's own CLOSED FORM,
+    // only the PUBLIC Theorem 5 claim, so it independently exercises the units convention (doubling cancels
+    // out of every ratio) and gross over/under-exclusion. It does NOT independently exercise case 2's own
+    // constant or threshold: at these sizes/epsilon values, random clouds usually don't sparsify at all (every
+    // edge lands in case 1, ratio exactly 1 -- confirmed empirically while writing this test), so this
+    // property mostly compares plain VR against itself; the bisection-based `edgeBirth` test above is what
+    // actually exercises case 2 independently, and the cluster fixture above is what independently confirms
+    // real sparsification changes a reported value at all.
+    //
+    // The bound is tightened to [1, 1+epsilon], not CJS 2015's own symmetric [1/(1+epsilon), 1+epsilon]: every
+    // sparse edge's value is either exactly its VR counterpart (case 1) or strictly larger (case 2 only fires
+    // once d exceeds case 1's own threshold, and its own value is provably >= d there too -- see the class
+    // doc), and excluded pairs are effectively "even larger" (infinite) -- so a sparse death can never be
+    // EARLIER than its VR counterpart, only the same or later. A ratio below 1 would mean sparsification
+    // somehow merged two components before plain VR itself would have -- a real bug the symmetric bound alone
+    // would not catch.
+    AsResult {
+      org.scalacheck.Prop.forAll(
+        matrixGen(Gen.chooseNum(-10.0, 10.0), Gen.chooseNum(2, 3), Gen.chooseNum(15, 25)),
+        Gen.chooseNum(0.8, 0.9)
+      ) { (pts, eps) =>
+        val ambient = EuclideanMetricSpace(pts)
+        val sheehyH0 = LimitedCofaceSimplexStream(SheehyRipsSimplexStream(ambient, epsilon = eps), 1)
+        val vrH0 = LimitedCofaceSimplexStream(RipserCofaceSimplexStream(ambient), 1)
+        def finiteDeaths(s: CofaceSimplexStream[Int, Double]): Seq[Double] =
+          SimplicialHomologyContext[Int, Double, Double]()
+            .persistentHomology(s)
+            .diagramAt(Double.PositiveInfinity)
+            .collect { case (0, _, d) if d.isFinite => d }
+            .toSeq
+            .sorted
+        val sheehyDeaths = finiteDeaths(sheehyH0)
+        val vrDeaths = finiteDeaths(vrH0)
+        sheehyDeaths.size == vrDeaths.size &&
+        sheehyDeaths.zip(vrDeaths).forall { case (s, v) =>
+          // v == 0.0 happens whenever two generated points coincide exactly (a real, if rare, occurrence
+          // under bounded-coordinate generation, not a pathological input to guard against) -- plain VR merges
+          // them at birth (death 0.0), and SheehyRipsSimplexStream's own edgeBirth agrees exactly (case 1 with
+          // d=0 gives raw 0, and vanish(lambda,epsilon) is 0 only when lambda=0 too, in which case raw=0 <=
+          // vanish=0 still holds) -- so s == 0.0 too, and s/v is 0.0/0.0 = NaN despite the two deaths being
+          // genuinely, exactly equal. Comparing for exact equality first sidesteps the division entirely.
+          (s == v) || {
+            val ratio = s / v
+            ratio >= 1.0 - 1e-9 && ratio <= (1.0 + eps) + 1e-9
           }
         }
       }
     }
-  }

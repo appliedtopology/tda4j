@@ -6,6 +6,67 @@ assume you know Scala. If you want to understand *why* the library is built the 
 planning to write new code against it, see the [Developer's Guide](../developers-guide/README.md)
 instead; this page is about getting things done as a caller.
 
+## Vision and goals
+
+TDA4j exists to make persistent (co)homology computations that are correct and inspectable first, fast
+second — not the other way around. A handful of commitments run through essentially every engine and
+construction in this library, and they explain a lot of choices that might otherwise look like unnecessary
+extra work:
+
+- **Generic over coefficients, always.** Every homology engine here is generic over the coefficient field,
+  not hardcoded to `Z/2` the way it's tempting to be for a first implementation. This isn't cosmetic: `Z/2`
+  provably hides sign errors that a signed field (`Double`, or an odd prime `Fp`) exposes, and this codebase
+  treats agreement across both as a real correctness check that's run routinely, not as a nice-to-have.
+- **Representatives, not just barcodes.** Every engine returns a genuine chain witnessing each bar, not only
+  a birth/death pair. A barcode alone can't answer "which part of my data does this feature correspond to";
+  a representative cycle can. An optimization that can't produce one is treated as incomplete, not as a
+  reasonable speed/completeness tradeoff — this is a standing, foundational design principle, not a
+  per-engine judgment call.
+- **Cross-validated by construction, not by convention.** TDA4j deliberately keeps independent
+  implementations of the same computation side by side — four persistent homology engines, two independent
+  Delaunay/alpha-complex backends, half a dozen Vietoris-Rips streaming strategies — and checks them against
+  each other on hand-derived and randomized fixtures rather than trusting a single implementation and hoping
+  it's right. A bug or fix found in one engine is never assumed to carry over to the others. This costs more
+  engineering time up front than committing to one "best" implementation; that cost is accepted deliberately,
+  because agreement between independently-derived engines is real evidence in a way that internal consistency
+  of a single engine never can be.
+- **Honest, measured performance claims.** Where this library is genuinely competitive, that's stated with
+  real numbers; where it isn't, that's stated too, not glossed over. The packed Ripser engine's own
+  documentation states plainly that it remains ~19–64x behind real `ripser.cpp` on `sphere3_*` benchmarks,
+  with the gap growing with `n`; the alpha-complex DQP backend's paper-level benchmarks against Ripser and
+  qhull are reported as mixed, because they are. Every performance claim here is expected to survive an
+  isolated A/B measurement before it's written down anywhere, and an unconfirmed effect is reported as
+  unconfirmed rather than asserted.
+- **A usable surface beyond Scala.** The MATLAB-facing facade (`matlab.TDA4j`) and the standalone CLI
+  executable exist so the library is directly usable by people who will never write a line of Scala, not as
+  an afterthought bolted onto an internal API.
+
+### What TDA4j deliberately does not do
+
+- **It does not chase raw throughput as the primary goal.** Where a faster, more mature external tool exists
+  for a specific job (`ripser.cpp` on plain Vietoris-Rips, qhull-based Delaunay at low ambient dimension),
+  TDA4j does not try to win that benchmark outright. Its own value is genericity (any `Field`, several cell
+  types), representatives on every bar, and cross-validated correctness — not being the fastest tool for one
+  narrow job.
+- **It does not implement every optimization in the literature.** Ripser's own "emergent pairs" (Def 3.11) are
+  a known, deliberately-skipped optimization; Cavanna-Jahanseir-Sheehy's own faster `O(n log n)` neighbor
+  search for the sparse Vietoris-Rips construction is deliberately not implemented here (this library's own
+  `O(n²)` version produces a smaller complex to *reduce*, which is the part that was slow, rather than a
+  faster complex to *build*, which wasn't). Skipping a known optimization is a recorded decision with its own
+  reasoning, not an oversight to eventually get around to.
+- **It does not treat "the one fastest engine" as a target to converge on.** Keeping multiple independent
+  engines for the same computation is a permanent architectural choice, not technical debt awaiting
+  consolidation — the redundancy is the point.
+- **It does not guess at unverified file formats.** A format with no primary source to check an implementation
+  against (Perseus's own simplicial toplex format, PHAT, sparse triplet distance matrices) is left
+  unimplemented rather than shipped as a plausible-but-unverified parser; a wrong parser is worse than none.
+- **It does not force every construction into one shared geometric abstraction.** Alpha complexes and the
+  Vietoris-Rips/Ripser machinery are kept as separate, only minimally-interacting parts of the codebase by
+  deliberate choice, rather than unified into a common framework where the fit would be awkward for both.
+- **It is not (yet) a general algebraic-topology toolkit.** Simplicial sets, for instance, have real support
+  for filtrations and homology but no MATLAB/CLI surface yet, and no bar-construction or classifying-space
+  machinery — genuinely useful future directions, but currently out of scope rather than silently missing.
+
 ## Quick-start: Scala
 
 Snippets included via `@:snip` (with a source-file link) are compiled and exercised directly by the test
@@ -65,6 +126,33 @@ val shape = AlphaShapes(points.toSeq, dispatch = "helix")   // or "DQP"
 `AlphaShapes(points)` with no `dispatch`, or `dispatch = "default"`, always resolves to `"helix"` — ask for
 `"DQP"` explicitly if you want it. See "Which alpha-complex backend?" below for the tradeoffs.
 
+#### A faster engine for alpha complexes
+
+```scala 3
+val helix = HelixDelaunay(points)
+val bars = FastAlphaHomologyContext[Double]().persistentHomology(helix) // H0 and H1, that's everything at 2D
+```
+
+For a point cloud built via `"helix"` (never `"DQP"` — it never builds an adjacency-aware triangulation at all,
+so it can't supply what this engine needs), `FastAlphaHomologyContext` computes the same barcode (with real
+representatives) as the naive engine, via a dual-graph union-find rather than general `Chain` reduction, at any
+ambient dimension `>= 2`. At 2D specifically the two union-finds (`H_0`/`H_1`) cover everything; at 3D and
+beyond, the "middle" dimensions are handed to `PersistenceInChunksContext` on a view that hides the real
+top-dimensional simplices, the same hybrid `FastCubicalHomologyContext` uses above. On a fraction of point
+clouds — more likely at higher ambient dimension and point count (measured at roughly 1-in-18700 at ambient
+dimension 2, but roughly 1-in-1666 at ambient dimension 3 with 20-30 points) — it throws
+`FastAlphaTriangulationException` — a message written for you, not just for a developer: it says plainly that
+this is not an error in your data, explains the `HelixDelaunay` limitation and the measured rates, and names
+the fix (retry with `engine="naive"`/`"chunks"`/`"cohomology"`, none of which are affected). `matlab.TDA4j`'s
+`engine="fast-alpha"` option (and the CLI's `--engine fast-alpha`) use this automatically for `complex=alpha`
+with the default `alphaBackend=helix`, at any ambient dimension `>= 2`.
+
+There's also a repair, not just a retry: `requireValidTriangulation=true` (MATLAB)/`--require-valid-triangulation
+true` (CLI), off by default, fixes a facet-multiplicity violation before it can throw — nudging only the
+near-tied points, re-running the same triangulation construction on the full point set, then recomputing every
+simplex's circumsphere from your original coordinates so nothing about the result is contaminated by the fix
+itself. Validated at ambient dimension 2 and 3; not yet at `d >= 4`.
+
 ### Cech complexes
 
 ```scala 3
@@ -92,6 +180,26 @@ approximation to plain Vietoris-Rips; `epsilon` must be strictly between `0` and
 `naive`/`chunks`/`cohomology` are used — the packed Ripser engine's optimizations assume a plain
 max-pairwise-distance filtration functional, which this construction's own sparsification and vertex
 "vanishing" don't satisfy (see the [Developer's Guide](../developers-guide/architecture.md)).
+
+### Flag-complex edge collapse
+
+```scala 3
+val collapsed = EdgeCollapse.collapse(metricSpace) // a FiniteMetricSpace[Int], drop-in for any VR-consuming stream
+val stream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(collapsed), 3)
+val homology = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(stream)
+```
+
+Unlike Sheehy's construction above, this is not an approximation: Boissonnat-Pritam/Glisse-Pritam edge
+collapse reduces a Vietoris-Rips filtration's own 1-skeleton to a smaller weighted graph with the EXACT same
+persistent homology at every filtration level, before anything is built on top of it. `EdgeCollapse.collapse`
+returns an ordinary `FiniteMetricSpace[Int]` (`EdgeCollapsedMetricSpace`), so it plugs into
+`EnumeratingCofaceSimplexStream`/`RipserCofaceSimplexStream` — and every engine that consumes them — with no
+other code changes; representatives transfer for free (the collapsed complex is a literal subcomplex of the
+original at every level). Measured 73-76% of edges removed and a 43-47x reduction-phase speedup on random
+point clouds — see the [Developer's Guide](../developers-guide/architecture.md)'s "Flag-complex edge collapse"
+section for the construction-vs-reduction breakdown and why they differ so much. `matlab.TDA4j`'s
+`edgeCollapse=true` option (and the CLI's `--edge-collapse`) apply this automatically for `complex=vr` — see
+"Calling from MATLAB or Java" below.
 
 ### Witness complexes
 
@@ -203,6 +311,56 @@ here too). The second invocation reads the landmarks file back in and computes t
 on the second line is optional (that combination of flags can only ever mean a witness complex) but
 accepted if you type it out of habit from the one-shot form.
 
+### Dowker complexes
+
+```scala 3
+val relation = Array(
+  Array(0.0, 1.0, 2.0),  // point 0's own relation value to each of 3 witnesses
+  Array(1.0, 0.0, 1.0),  // point 1's
+  Array(2.0, 1.0, 0.0)   // point 2's
+)
+val geometry = DowkerGeometry(relation)
+val stream = DowkerCofaceSimplexStream(geometry)
+val homology = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(stream)
+```
+
+Dowker's complex (1952), generalized to a real-valued, filtered relation `R: L x W -> [0, Infinity]` the way
+Chowdhury & Mémoli's "functorial Dowker theorem" does — unlike the witness complex above, `R` need not come
+from a metric at all, and `L`/`W` need not be the same set or even the same size. A subset `sigma` of `L`
+becomes a simplex at time `t` iff some witness relates to every point of `sigma` by time `t`:
+`f(sigma) = min_w max_{x in sigma} R(x,w)`. This directly generalizes witness's own `nu = 0` case — pass the
+landmark-to-witness distance matrix as `R` and you get the same construction — but also covers relations with
+no metric behind them at all, e.g. persistent homology of a directed/asymmetric network's own edge weights
+(`R(x,y)` = the weight of the edge from `x` to `y`, no symmetrization needed).
+
+For the classical (unfiltered) Dowker complex — a plain boolean "is `x` related to `w`" relation, no notion of
+time — use `DowkerGeometry.fromBoolean`:
+
+```scala 3
+val covers = Seq(
+  Seq(true, false, true),   // point 0 is covered by witnesses 0 and 2
+  Seq(true, true, false),
+  Seq(false, true, true)
+)
+val classical = DowkerGeometry.fromBoolean(covers)
+```
+
+**Duality is the whole point of this construction.** `geometry.dual` (equivalently `stream.dual`) gives the
+complex on the OTHER side — vertices = witnesses, related back to `L` via the transposed relation — and the
+functorial Dowker duality theorem guarantees its barcode agrees EXACTLY with the original side's, once
+zero-persistence (birth == death) bars are dropped from both (a real artifact when `L` and `W` differ in size:
+a simplicial filtration records one `H_0` birth per vertex, so differently-sized sides can't match bar-for-bar
+without dropping those). Pick whichever side is more convenient — e.g. if `W` is small but you want
+representatives over it, `stream.dual` gets you there directly without transposing `relation` by hand.
+
+Like Cech/witness/Sheehy above, this is **not a flag complex** in general (a witness for a whole simplex need
+not witness any of its edges), so `engine=ripser`/`chunks` don't apply — use `naive` or `cohomology`.
+
+From MATLAB/CLI, this is its own entry point (`computeFromRelation`/`--input-format csv-relation`), not a
+`complex=` value on `computeFromPoints`/`computeFromDistanceMatrix` — a relation isn't a point cloud or a
+square/symmetric distance matrix. See "Calling from MATLAB or Java" below; `"dual"`/`--dual` computes the
+`W`-side complex directly.
+
 ### Cubical complexes and images
 
 ```scala 3
@@ -215,6 +373,25 @@ homology.diagramAt(Double.PositiveInfinity)
 real images/volumes. `sublevel = false` computes superlevel-set persistence instead (ascending vs.
 descending intensity) via the standard "negate the values" trick — reported filtration values under
 `sublevel = false` are in negated-intensity units, not raw pixel values.
+
+#### A faster engine for cubical images
+
+```scala 3
+val stream = CubicalGridStream(IndexedSeq(rows, cols), topValue)
+val bars = FastCubicalHomologyContext[Double]().persistentHomology(stream) // H0 and H1, that's everything at 2D
+```
+
+`FastCubicalHomologyContext` computes the exact same barcode (with real representatives) as
+`CubicalHomologyContext` above, via a different algorithm entirely — a dual-graph union-find (Alexander
+duality) rather than general `Chain` reduction, valid at any ambient dimension `>= 2` (it throws
+`IllegalArgumentException` only for a degenerate 1-axis grid). At a 2D grid specifically, the two union-finds
+(`H_0` and `H_1`) cover everything; at 3D and beyond, the "middle" dimensions (no duality shortcut applies to
+them) are handed to `CellularPersistenceInChunksContext` on a view that hides the real top-dimensional cells,
+so the top dimension still skips general `Chain` reduction entirely — still a real win, though a shrinking one
+as the ambient dimension grows, since the fraction of dimensions the two union-finds can cover for free shrinks
+with it. See the [Developer's Guide](../developers-guide/persistence-engines.md)'s engine 6 section for the
+full picture. `matlab.TDA4j`'s `engine="fast-cubical"` option (and the CLI's `--engine fast-cubical`) use this
+automatically for any `computeFromCubicalImage`/`computeFromImage` call at ambient dimension `>= 2`.
 
 ### Simplicial sets
 
@@ -287,17 +464,25 @@ any Scala:
 java -jar target/scala-3.9.0/TDA4j-<version>-assembly.jar [options] <input-file>
 ```
 
-It loads a point cloud, distance matrix, or cubical image in one of several formats (`--input-format`),
-computes persistence via the same facade the MATLAB bridge uses (below), and writes the result in one of
-several formats (`--output-format`: `text`, `csv`, `gudhi`, `dipha`, `perseus`). Run with `--help` for the
-full flag list; the main ones mirror the MATLAB options one-to-one: `--complex` (`vr`/`alpha`/`cech`/
-`witness`/`dtm-rips`/`dtm-alpha`/`sheehy-rips`), `--engine`, `--max-dimension`, `--max-filtration-value`,
+It loads a point cloud, distance matrix, cubical image, or Dowker relation (`--input-format csv-relation`,
+routed to `computeFromRelation` — a plain rows-x-columns CSV, the same shape `csv-points` already reads, just
+without any distance/coordinate meaning) in one of several formats (`--input-format`), computes persistence via
+the same facade the MATLAB bridge uses (below), and writes the result in one of several formats
+(`--output-format`: `text`, `csv`, `gudhi`, `dipha`, `perseus`). Run with `--help` for the full flag list; the
+main ones mirror the MATLAB options one-to-one: `--complex` (`vr`/`alpha`/`cech`/
+`witness`/`dtm-rips`/`dtm-alpha`/`sheehy-rips`, meaningless with `--input-format csv-relation`), `--dual`
+(`true`/`false`, only consulted with `--input-format csv-relation` — computes the transposed-relation complex),
+`--engine`, `--max-dimension`, `--max-filtration-value`,
 `--field`, `--representatives` (also print each bar's representative chain), and (for `--complex=witness`)
 `--num-landmarks`, `--witness-variant`, `--landmark-selector`, `--landmark-seed`, `--nu`. For
 `--complex=dtm-rips` or `--dtm-alpha`, use `--dtm-k` (required), `--dtm-q` (default 2.0), and `--dtm-p`
 (default 1.0, only for `dtm-rips`). For `--complex=sheehy-rips`, use `--sheehy-epsilon` (required, strictly
 between `0` and `1`). `--select-landmarks`/`--landmarks-file` split that same witness-complex computation
-into the two-step recipe described above.
+into the two-step recipe described above. `--distance-to <file>` (`--distance-format csv`/`gudhi`/`dipha`,
+`--distance-order`, `--distance-ground-norm`) compares the freshly-computed diagram against one already saved
+to a file, printing bottleneck/Wasserstein distance per dimension instead of writing a diagram — see
+"Comparing diagrams and turning them into vectors" below for the underlying `PersistenceResult` methods this
+mirrors.
 
 ## Calling from MATLAB or Java
 
@@ -327,7 +512,11 @@ dtm-alpha/sheehy-rips, from a point cloud or a precomputed distance matrix — a
 real coordinates, so they're only available from the points overload; witness/dtm-rips/sheehy-rips work from
 either, exactly like `vr`, since none of the three needs real coordinates, only a metric),
 `computeFromCubicalImage`/`computeFromImage` (cubical persistence from a flat array + shape, 
-or a 2D pixel matrix directly), and the two-step witness recipe's own four entry points -- 
+or a 2D pixel matrix directly), `computeFromRelation` (Dowker complex persistence from a general relation
+matrix — see "Dowker complexes" above; its own OWN, much smaller options set, `"engine"`/`"maxDimension"`/
+`"maxFiltrationValue"`/`"dual"`/`"field"`/`"prime"`/`"epsilon"`, is not in the table below either, for the same
+reason the two-step witness recipe's own options aren't), and the two-step witness recipe's own four entry
+points -- 
 `selectLandmarksFromPoints`/`selectLandmarksFromDistanceMatrix` (→ `LandmarkSelectionResult`) and 
 `computeFromPointsAndLandmarks`/`computeFromDistanceMatrixAndLandmarks`, plus the 
 `coveringRadiusFromPoints`/`coveringRadiusFromDistanceMatrix` query pair -- covered in their own section
@@ -339,8 +528,9 @@ changes a method's call signature:
 | Option | Values | Default |
 |---|---|---|
 | `complex` | `vr`, `alpha`, `cech`, `witness`, `dtm-rips`, `dtm-alpha`, `sheehy-rips` | `vr` |
-| `engine` | `ripser`, `naive`, `chunks`, `cohomology` | `ripser` for `vr` and `witness`/`witnessVariant=lazy`; `naive` for `alpha`/`cech`/`dtm-rips`/`dtm-alpha`/`sheehy-rips`/`witness`/`witnessVariant=general` |
+| `engine` | `ripser`, `naive`, `chunks`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and `witness`/`witnessVariant=lazy`; `naive` for `alpha`/`cech`/`dtm-rips`/`dtm-alpha`/`sheehy-rips`/`witness`/`witnessVariant=general`/cubical images. `fast-cubical` is valid ONLY for `computeFromCubicalImage`/`computeFromImage`, for any ambient dimension `>= 2`. `fast-alpha` is valid ONLY for `complex=alpha` with `alphaBackend=helix`, for any ambient dimension `>= 2` |
 | `alphaBackend` | `helix`, `DQP` | `helix` (only consulted for `complex=alpha`) |
+| `requireValidTriangulation` | `true`, `false` | `false` (only consulted for `complex=alpha`/`alphaBackend=helix`; rejected for any other `complex` or `alphaBackend=DQP`) — repairs a `HelixDelaunay` facet-multiplicity violation instead of letting it surface as `FastAlphaTriangulationException`; validated at ambient dimension 2 and 3, not yet at `d >= 4` |
 | `dtmK` | integer | REQUIRED for `complex=dtm-rips` or `complex=dtm-alpha`, no default |
 | `dtmQ` | double | `2.0` (only consulted for `complex=dtm-rips` or `complex=dtm-alpha`) |
 | `dtmP` | double | `1.0` (only consulted for `complex=dtm-rips`; must be `1.0` or `2.0`) |
@@ -355,6 +545,7 @@ changes a method's call signature:
 | `landmarkSelector` | `maxmin`, `random` | `maxmin` (only consulted for `complex=witness`) |
 | `landmarkSeed` | integer | `0` (only for `complex=witness`/`landmarkSelector=random`) |
 | `nu` | `0`, `1`, `2` | `2` (only for `complex=witness`/`witnessVariant=lazy`) |
+| `edgeCollapse` | `true`, `false` | `false` (only consulted for `complex=vr`; `true` rejected for every other `complex`) |
 
 `alpha` refuses `engine=ripser` and `engine=chunks` (neither engine understands alpha complexes, and the
 chunks/alpha combination is a known stall risk in the underlying library); `cech`, `dtm-rips`, and
@@ -364,10 +555,30 @@ weighted filtration, or Sheehy's sparsified/vanishing one); `dtm-alpha` refuses 
 `engine=chunks`; `witness` with `witnessVariant=general` refuses both `engine=ripser` and `engine=chunks` for
 the same reason as `cech` (the general witness complex isn't a flag complex either) — use `witnessVariant=lazy`
 (the default) for `engine=ripser`/`chunks`. `engine=cohomology` is accepted everywhere `engine=naive` is
-(`vr`, `alpha`, `cech`, `dtm-rips`, `dtm-alpha`, `sheehy-rips`, and `witness` alike). See the
+(`vr`, `alpha`, `cech`, `dtm-rips`, `dtm-alpha`, `sheehy-rips`, and `witness` alike). `engine=fast-cubical` is
+the mirror image: refused everywhere EXCEPT `computeFromCubicalImage`/`computeFromImage`, and even there
+refused only for a degenerate 1-axis image (ambient dimension `< 2`) — no other ambient-dimension restriction.
+`engine=fast-alpha` is likewise refused everywhere except `complex=alpha` with `alphaBackend=helix` (the
+default; `alphaBackend=DQP` is refused too — `FastAlphaHomologyContext` cannot consume `AlphaShapeDQP`'s
+output), with the same "any ambient dimension `>= 2`" rule as `fast-cubical` — though at higher ambient
+dimension and point count it's noticeably more likely to throw `FastAlphaTriangulationException` on a given
+point cloud (see "Which persistence engine?" below). Both `fast-*` exceptions name the actual mismatch
+(dimension, backend, or complex) rather than throwing a bare `IllegalArgumentException`. See the
 [Developer's Guide](../developers-guide/persistence-engines.md)'s streams-vs-engines table for the full
 picture, complex by complex. Unrecognized keys or values throw `IllegalArgumentException` immediately rather
 than silently falling back to a default.
+
+`edgeCollapse=true` (`complex=vr` only) preprocesses the point cloud's own Vietoris-Rips 1-skeleton with edge
+collapse (Boissonnat-Pritam/Glisse-Pritam) before building anything on top of it — a smaller weighted graph
+with the SAME persistent homology at every filtration level, so the resulting `PersistenceResult` is identical
+to what `edgeCollapse=false` (the default) would have produced, just computed from a much smaller complex.
+Applies uniformly to every `engine` value. Measured 73-76% of edges removed and a 43-47x reduction-phase
+speedup on random point clouds — construction-phase speedup is far smaller (1.45-1.74x), since the dominant
+cost this removes is REDUCING the resulting chain complex, not enumerating candidate simplices in the first
+place; see the [Developer's Guide](../developers-guide/architecture.md)'s "Flag-complex edge collapse" section
+for the full construction and measurement. `--edge-collapse` on the CLI mirrors this option exactly (unlike
+`--distance-to`/the vectorizations/the boundary-matrix export above, this one changes nothing about the output
+shape, so it needs no special CLI-side handling at all).
 
 Representative-chain vertex indices for `complex=witness` are **ambient point-cloud indices**, already
 mapped back from the stream's own local `0 until numLandmarks` landmark indices — `cycleVertices` never
@@ -378,6 +589,100 @@ records one for every bar — though for `engine=cohomology`, only an *essential
 guaranteed to be a genuine cocycle (zero coboundary); a finite bar's is a valid witness on its own living
 interval, not over the whole complex (see the developer's guide's persistence-engines page for why).
 
+### Comparing diagrams and turning them into vectors
+
+`PersistenceResult` also answers "how different are these two barcodes" (bottleneck/Wasserstein distance) and
+"turn this barcode into a fixed-size array" (persistence landscapes/images, for feeding into ordinary ML
+tooling) — both compare/summarize an *already-computed* result, so they're instance methods, not part of the
+`computeFrom*` option table above:
+
+```java
+double[][] points1 = { {0.0, 0.0}, {1.0, 0.0}, {0.5, 0.8} };
+double[][] points2 = { {0.0, 0.0}, {1.05, 0.0}, {0.5, 0.85} }; // a small perturbation of points1
+PersistenceResult r1 = TDA4j.computeFromPoints(points1, new String[]{"maxDimension", "1"});
+PersistenceResult r2 = TDA4j.computeFromPoints(points2, new String[]{"maxDimension", "1"});
+
+double d0 = r1.bottleneckDistance(r2, 0);       // dimension 0, L-infinity ground norm (the usual TDA default)
+double w1 = r1.wassersteinDistance(r2, 1, 2.0); // dimension 1, order 2
+
+// 5 landscape levels, sampled at 100 points across [0.0, 2.0]
+double[][] landscape = r1.landscape(1, 5, 0.0, 2.0, 100);
+
+// a 20x20 persistence image, sigma=0.1, weight cap defaulted to the diagram's own max persistence
+double[][] image = r1.persistenceImage(1, 0.1, 0.0, 2.0, 0.0, 2.0, 20, 20);
+```
+
+`bottleneckDistance`/`wassersteinDistance` return `Double.POSITIVE_INFINITY` when the two diagrams have
+different numbers of essential (never-dying) bars in that dimension — a real answer ("no finite matching
+exists"), not a failure. `--distance-to <file>` mirrors the distance methods on the `tda4j` command line
+(comparing the diagram just computed against one already saved as `csv`/`gudhi`/`dipha`; `--distance-format`
+selects which), printing one `dim <k>: bottleneck=... wasserstein=...` line per dimension instead of writing
+a diagram; the two vectorizations are MATLAB/Java-only for now (they produce a matrix, not a diagram, which
+doesn't fit the CLI's diagram-in-diagram-out shape). From plain Scala, use
+`org.appliedtopology.tda4j.barcode.BarcodeDistance`/`Vectorization` directly on `List[PersistenceBar[Double,
+_]]` — see the [Developer's Guide](../developers-guide/architecture.md)'s "`Barcode.scala`" section for the
+ground-metric convention, the essential-bar policy (the two vectorizations handle it differently, on
+purpose), and the literature this follows (Kerber-Morozov-Nigmetov 2017 for the distances; Bubenik 2013 for
+landscapes; Adams et al. 2017 for persistence images).
+
+### Boundary-matrix export
+
+`PersistenceResult` also exports the boundary matrix of the full complex it was computed from, for anything
+that wants to do its own linear algebra over it (an optimal-cycle solver, harmonic smoothing for circular
+coordinates, ...) rather than TDA4j's own reduction:
+
+```java
+PersistenceResult result = TDA4j.computeFromPoints(points, new String[]{"maxDimension", "1"});
+int n = result.numCells();               // NOT result.size() -- cells, not bars
+int[] rows = result.boundaryRows();      // 0-based
+int[] cols = result.boundaryCols();
+double[] values = result.boundaryValues();
+int dim7 = result.columnDimension(7);
+int[] verts7 = result.columnVertices(7); // same per-complex-type shape cycleVertices documents
+double fv7 = result.columnFiltrationValue(7);
+```
+
+```matlab
+n = result.numCells();
+M = sparse(double(result.boundaryRows())+1, double(result.boundaryCols())+1, result.boundaryValues(), n, n);
+```
+
+Computed lazily (nothing is built until the first `numCells`/`boundaryRows`/... call) and cached after that,
+and is the SAME matrix regardless of which `engine` actually computed this result's own bars — the boundary
+matrix is a property of the complex, not of which reduction algorithm ran over it. Column `j`'s own dimension/
+vertices/filtration value describe cell `j`, not bar `j` — there are generally far more cells than bars, and
+this is a different indexing than `dimension(i)`/`cycleVertices(i)`/etc. above. Not mirrored on the CLI (a
+sparse matrix doesn't fit its diagram-in-diagram-out shape) — see the [Developer's
+Guide](../developers-guide/architecture.md)'s "`Barcode.scala`" section for the full construction.
+
+### Circular coordinates
+
+For a point cloud with cyclic/periodic structure (e.g. samples along a loop), `TDA4j.h1Bars`/
+`circularCoordinates` (de Silva-Morozov-Vejdemo-Johansson 2011) turn a persistent H¹ class into a map from
+each point to an angle in `[0, 1)` — a genuinely topological coordinate, not a barcode, so these are their own
+entry points rather than a new `complex=` value on `computeFromPoints`:
+
+```java
+double[][] bars = TDA4j.h1Bars(points);      // row i: (birth_i, death_i), sorted by persistence descending
+double r = bars[0][0] + (bars[0][1] - bars[0][0]) * 0.5; // pick r inside the most persistent bar's own range
+
+CircularCoordinatesResult result = TDA4j.circularCoordinates(points, r); // cocycleIndex=0, prime=47 defaults
+double[] theta = result.theta();             // one entry per input point, Double.NaN outside the class's own
+                                              // connected component -- not every point necessarily gets one
+boolean covered = result.hasCoordinate(3);
+```
+
+`h1Bars` is the required first call: there is no way to pick a meaningful `r` without first knowing a target
+bar's own `[birth, death)` range. `circularCoordinates` throws `IllegalArgumentException` for an `r` outside
+that range (or a bad `cocycleIndex`/`prime`), and `NoIntegerCocycleException` (also a plain `RuntimeException`,
+so it crosses the MATLAB bridge the same way) if the chosen class has no exact integer lift at `prime` —
+usually resolved by retrying with a larger odd prime; a genuinely torsion class (no real/integer lift at any
+prime, RP²'s own fundamental class being the standard example) will keep failing regardless. Not mirrored on
+the CLI, for the same reason as the vectorizations and boundary-matrix export above (its output is a per-point
+array, not a diagram) plus the inherently two-step, data-dependent nature of picking `r` — see the [Developer's
+Guide](../developers-guide/architecture.md)'s `homology.CircularCoordinates` section for the full construction
+(the truncated-complex `K_r` reframing, the harmonic-smoothing linear system, and the integer-lift check).
+
 ## Which persistence engine?
 
 | Need | Engine (`engine=` for MATLAB/CLI) |
@@ -386,12 +691,15 @@ interval, not over the whole complex (see the developer's guide's persistence-en
 | Fastest, most memory-efficient — the default for `complex=vr` | `ripser` (`PackedRipserCohomologyContext`) |
 | Large complex, want representatives for every bar including essential ones | `chunks` (`CellularPersistenceInChunksContext`) |
 | Cohomology (cocycle representatives) on `Cube`/`FiniteSimplicialSet`, or on Alpha/Cech/DTM/Sheehy/witness, where `ripser` doesn't apply | `cohomology` (`CellularCohomologyContext`) |
-| Alpha or Cech or DTM or Sheehy complexes, or a general (non-flag) witness complex | `naive` or `cohomology` (`chunks` also works for Cech, DTM-Rips, and Sheehy-Rips — not Alpha/DTM-Alpha) |
+| Alpha or Cech or DTM or Sheehy complexes, a Dowker complex, or a general (non-flag) witness complex | `naive` or `cohomology` (`chunks` also works for Cech, DTM-Rips, and Sheehy-Rips — not Alpha/DTM-Alpha/Dowker) |
 | A lazy witness complex (the flag-complex variant) | `ripser` (`PackedRipserCohomologyContext`, run directly on `WitnessMetricSpace`) or `naive`/`chunks`/`cohomology` |
+| A cubical image, any ambient dimension `>= 2` — fastest option there | `fast-cubical` (`FastCubicalHomologyContext`; H0/H1 only, no `Chain` reduction at all, in 2D specifically; a `chunks` hybrid for the residual middle dimensions at 3D+) |
+| An alpha complex via `"helix"`, any ambient dimension `>= 2` — fastest option there | `fast-alpha` (`FastAlphaHomologyContext`; H0/H1 only, no `Chain` reduction at all, in 2D specifically; a `chunks` hybrid for the residual middle dimensions at 3D+; `"DQP"` needs `naive`/`chunks`/`cohomology` instead; higher ambient dimension and point count make `FastAlphaTriangulationException` noticeably more likely — see `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) |
 
 All engines are generic over the coefficient field (a prime finite field or floating point); `naive`,
 `chunks`, and `cohomology` are also generic over the cell type (simplices, cubes, or simplicial-set
-generators) — only `ripser` is Vietoris-Rips-specialized. See the
+generators) — only `ripser`, `fast-cubical`, and `fast-alpha` are specialized (to Vietoris-Rips, to cubical
+grids, and to `HelixDelaunay` triangulations, respectively). See the
 [Developer's Guide's persistence-engines page](../developers-guide/persistence-engines.md) for the full
 detail.
 

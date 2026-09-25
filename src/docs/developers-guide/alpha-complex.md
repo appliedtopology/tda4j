@@ -37,6 +37,61 @@ DQP-vs-Helix comparisons in `AlphaCrossValidationSpec` are deliberately kept out
 manually-invoked diagnostic methods instead) — a real Helix failure would otherwise masquerade as a DQP
 regression or vice versa.
 
+### `FastAlphaHomologyContext` — dual union-find, and a second, MEASURED limitation this one is exposed to
+
+`homology/FastAlphaHomology.scala` (`.claude/DESIGN-alpha-dual-unionfind.md`), a follow-on to the cubical dual
+union-find engine (`FastCubicalHomologyContext`, `persistence-engines.md`'s engine 6): builds a dual graph over
+`HelixDelaunay`'s own top simplices and computes `H_0`+`H_{d-1}` via the same Alexander-duality/elder-rule
+union-find, needing `HelixDelaunay` specifically (never `AlphaShapeDQP`, whose own documented
+cospherical-degeneracy hazard can emit an oversized simplex outright) because the dual graph needs the full,
+untruncated triangulation and "every facet has exactly 1 or 2 containing top simplices."
+
+That precondition is **not guaranteed by construction** the way it is for a cubical grid, and this codebase
+measured it directly rather than assuming it: 1-in-3000 combined across ambient dimension 2/3 on `Gen.double`
+random points, isolated further to roughly 1-in-18700 at ambient dimension 2 alone (`Gen.double`, `n∈[6,16]`,
+50000 trials) — likely the SAME underlying frontier-walk weakness `AlphaCrossValidationSpec`'s own doc comment
+already reports (an incomplete complex, missing a connected sub-chain of genuinely-Delaunay faces, with no
+exception raised), observed through a different lens here (a bad facet-multiplicity count instead of a
+missing-face diff against DQP). **This rate is NOT flat across dimension or point count** — measured again when
+this engine's own `d >= 3` extension (below) was added: roughly 1-in-1666 at ambient dimension 3 with 20-30
+points, but ZERO violations in 20000 trials with only 6-16 points at the same dimension. This class validates
+the precondition explicitly and throws the named `FastAlphaTriangulationException` (never a bare
+`IllegalStateException`) naming the offending facet(s) rather than building a silently-wrong dual graph — see
+`FastAlphaHomologySpec`'s own pinned regression fixture (a concrete 12-point set that reproduces it
+deterministically) for the exact exception shape. Unlike an internal-developer exception, this one's message is
+deliberately layered for an unsuspecting MATLAB/CLI end user first ("this is NOT an error in your data," a
+plain-language explanation of the HelixDelaunay limitation naming the ambient dimension and the measured rates,
+and the concrete fix — retry with `engine="naive"`/`"chunks"`/`"cohomology"`, none of which are affected by it),
+with the facet-count technical detail kept as a secondary appendix for developers investigating this class
+itself.
+
+**At ambient dimension `>= 3`, the same hybrid-with-`chunks` extension as `FastCubicalHomologyContext`**
+(`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): both union-finds were ALREADY written generically
+in terms of `ambientDimension`, not hardcoded to 2 — the only thing gating this engine to `d=2` was the single
+`require` check, so extending it is purely a matter of handing the residual "middle" dimensions (`1 <= k <=
+d-2`) to `PersistenceInChunksContext[Int, C]` run on a new `alpha.LimitedAlphaShapesStream` view (the
+`Simplex[Int]` analogue of `streams.LimitedCubicalGridStream` — needed because `HelixDelaunay`/`AlphaShapes` is
+a `StratifiedSimplexStream`, not a `CofaceSimplexStream`, so the existing `LimitedCofaceSimplexStream` doesn't
+fit it) that hides the real top-dimensional simplices. Deliberately sequenced AFTER the cubical extension, not
+concurrently: this engine carries the additional facet-multiplicity risk above, which needed its own fresh
+measurement at `d=3` (done, and reported above) rather than assuming the `d=2` rate carried over — it does not,
+by roughly an order of magnitude at typical point counts. Cross-validated against the naive engine at `d=3`:
+one hand-pinned 8-point fixture (found by search, not hand-derived — 3D Delaunay triangulations aren't
+practical to hand-verify the way a cubical grid's cell counts are) with genuine nonzero-persistence `H_1`, Fp(3)
+sign-genericity on it, and a random property test using a smaller point-count range than the `d=2` one (to keep
+the now-higher facet-multiplicity rate from dominating trial outcomes, classifying rather than failing on it
+exactly as the `d=2` property test already does).
+
+**Wired into `matlab.TDA4j`/`cli` as `engine="fast-alpha"`/`--engine fast-alpha`**, same as the cubical engine
+— valid only for `complex=alpha` with `alphaBackend=helix` (the default; `alphaBackend=DQP` is refused, since
+this engine cannot consume `AlphaShapeDQP`'s output at all) and any ambient dimension `>= 2` (no artificial
+ceiling — `chunks`, which the hybrid path hands the middle dimensions to, is already fully general over `d`).
+The project lead reviewed the measured ~1-in-18700 rate at `d=2` and the resulting exception message and signed
+off on shipping it as a production option; the `d=3` extension's own materially higher measured rate
+(~1-in-1666 at 20-30 points) is documented explicitly here and in the exception message itself, on the same
+underlying reasoning (a rare-but-clear exception beats a silent wrong answer) rather than being glossed over as
+if the `d=2` number still applied.
+
 ## `AlphaComplexDQP` — dual active-set QP, never builds Delaunay at all
 
 Implements Erik Carlsson & John Carlsson, *Computing the alpha complex using dual active set quadratic
