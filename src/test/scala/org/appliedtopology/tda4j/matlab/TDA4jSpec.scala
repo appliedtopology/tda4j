@@ -235,6 +235,9 @@ class TDA4jSpec extends mutable.Specification:
       TDA4j
         .computeFromPoints(points, Array("complex", "alpha", "engine", "chunks")) must throwA[IllegalArgumentException]
     }
+    "reject engine=fast-cubical combined with complex=vr" in {
+      TDA4j.computeFromPoints(points, Array("engine", "fast-cubical")) must throwA[IllegalArgumentException]
+    }
     "reject complex=alpha via computeFromDistanceMatrix (alpha needs coordinates)" in {
       TDA4j.computeFromDistanceMatrix(euclideanDistanceMatrix(points), Array("complex", "alpha")) must throwA[
         IllegalArgumentException
@@ -521,6 +524,21 @@ class TDA4jSpec extends mutable.Specification:
       val cohomology =
         triples(TDA4j.computeFromCubicalImage(ringShape, ringFlat, Array("engine", "cohomology")).toArray())
       naive must containTheSameElementsAs(cohomology)
+    }
+
+    "engine=fast-cubical agrees with the default engine=naive" in {
+      val naive = triples(TDA4j.computeFromCubicalImage(ringShape, ringFlat).toArray())
+      val fastCubical =
+        triples(TDA4j.computeFromCubicalImage(ringShape, ringFlat, Array("engine", "fast-cubical")).toArray())
+      naive must containTheSameElementsAs(fastCubical)
+    }
+
+    "engine=fast-cubical is refused for a 3D image" in {
+      val cubeShape = Array(2, 2, 2)
+      val cubeFlat = Array.fill(8)(0.0)
+      TDA4j.computeFromCubicalImage(cubeShape, cubeFlat, Array("engine", "fast-cubical")) must throwA[
+        IllegalArgumentException
+      ]
     }
 
     "computeFromImage (the 2D double[][] convenience) matches computeFromCubicalImage on the same grid" in {

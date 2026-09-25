@@ -177,17 +177,18 @@ private object WitnessVariantKind:
       throw new IllegalArgumentException(s"unrecognized witnessVariant '$other'; expected 'lazy' or 'general'")
 
 private enum EngineKind:
-  case Ripser, Naive, Chunks, Cohomology
+  case Ripser, Naive, Chunks, Cohomology, FastCubical
 
 private object EngineKind:
   def parse(raw: String): EngineKind = raw.toLowerCase match
-    case "ripser"     => Ripser
-    case "naive"      => Naive
-    case "chunks"     => Chunks
-    case "cohomology" => Cohomology
-    case other        =>
+    case "ripser"       => Ripser
+    case "naive"        => Naive
+    case "chunks"       => Chunks
+    case "cohomology"   => Cohomology
+    case "fast-cubical" => FastCubical
+    case other          =>
       throw new IllegalArgumentException(
-        s"unrecognized engine '$other'; expected 'ripser', 'naive', 'chunks', or 'cohomology'"
+        s"unrecognized engine '$other'; expected 'ripser', 'naive', 'chunks', 'cohomology', or 'fast-cubical'"
       )
 
 private enum CoefficientKind:
@@ -382,9 +383,11 @@ object TDA4j:
     * point coordinates), not a different value for an existing option, so it gets its own entry point rather than a new
     * `"complex"` value on `computeFromPoints`/`computeFromDistanceMatrix`. Recognized options:
     *
-    *   - `"engine"`: `"naive"` (default) or `"chunks"` -- `"ripser"` is never offered here:
-    *     `PackedRipserCohomologyContext` is specialized to `Simplex[Int]` Vietoris-Rips complexes and has no notion of
-    *     a cubical complex at all.
+    *   - `"engine"`: `"naive"` (default), `"chunks"`, `"cohomology"`, or `"fast-cubical"` -- `"ripser"` is never
+    *     offered here: `PackedRipserCohomologyContext` is specialized to `Simplex[Int]` Vietoris-Rips complexes and has
+    *     no notion of a cubical complex at all. `"fast-cubical"` (`homology.FastCubicalHomologyContext`, Le Breton-
+    *     Szustakowski-Piraud's dual-graph union-find) is refused unless the grid's own ambient dimension is exactly 2
+    *     (a 3D image needs `"naive"`/`"chunks"`/`"cohomology"` instead) -- see CLAUDE.md's Cubical complexes section.
     *   - `"maxDimension"`: integer, default is the grid's own ambient dimension (i.e. "give me everything"). Unlike
     *     `complex=vr`/`"cech"` above, a cubical grid's own top dimension is ALREADY naturally bounded by its ambient
     *     dimension (an image's own dimensionality) and is never artificially cut short the way an unbounded VR/Cech
@@ -563,6 +566,11 @@ object TDA4j:
     val engine = EngineKind.parse(
       opts.getOrElse("engine", if witnessVariant == WitnessVariantKind.General then "naive" else "ripser")
     )
+    if engine == EngineKind.FastCubical then
+      throw new IllegalArgumentException(
+        "engine=fast-cubical is not offered for complex=witness (either variant): FastCubicalHomologyContext is " +
+          "specialized to CubicalGridStream and has no notion of a witness complex at all."
+      )
     if witnessVariant == WitnessVariantKind.General then
       engine match
         case EngineKind.Ripser =>
@@ -651,6 +659,13 @@ object TDA4j:
             else "ripser"
           )
         )
+    if engine == EngineKind.FastCubical then
+      throw new IllegalArgumentException(
+        "engine=fast-cubical is only valid for computeFromCubicalImage/computeFromImage: " +
+          "FastCubicalHomologyContext is specialized to CubicalGridStream and has no notion of a point cloud or " +
+          "distance matrix at all (unlike ripser/naive/chunks/cohomology, which every complex here can offer some " +
+          "subset of)."
+      )
     (complex, engine) match
       case (ComplexKind.Alpha, EngineKind.Ripser) =>
         throw new IllegalArgumentException(
@@ -891,6 +906,9 @@ object TDA4j:
               requestedMaxDimension,
               vrBoundaryMatrixOf
             )
+          case EngineKind.FastCubical =>
+            // dispatch() already rejects this for complex=vr before computeGeneric is ever reached.
+            throw new IllegalArgumentException(s"engine=$engine is not offered for complex=vr")
       case ComplexKind.Alpha =>
         // No dimension cap is applied here at all, on purpose: an alpha complex's chain complex terminates on its
         // own (bounded by ambient dimension, or higher under cosphericity -- see CLAUDE.md), it is never
@@ -932,8 +950,8 @@ object TDA4j:
               Int.MaxValue,
               alphaBoundaryMatrixOf
             )
-          case EngineKind.Ripser | EngineKind.Chunks =>
-            // dispatch() already rejects both of these for complex=alpha before computeGeneric is ever reached.
+          case EngineKind.Ripser | EngineKind.Chunks | EngineKind.FastCubical =>
+            // dispatch() already rejects all of these for complex=alpha before computeGeneric is ever reached.
             throw new IllegalArgumentException(s"engine=$engine is not offered for complex=alpha")
       case ComplexKind.Cech =>
         // Cech grows unboundedly in dimension just like VR -- unlike alpha/cubical, its own top dimension is NOT
@@ -997,8 +1015,8 @@ object TDA4j:
               requestedMaxDimension,
               cechBoundaryMatrixOf
             )
-          case EngineKind.Ripser =>
-            // dispatch() already rejects this for complex=cech before computeGeneric is ever reached.
+          case EngineKind.Ripser | EngineKind.FastCubical =>
+            // dispatch() already rejects both of these for complex=cech before computeGeneric is ever reached.
             throw new IllegalArgumentException(s"engine=$engine is not offered for complex=cech")
       case ComplexKind.DtmRips =>
         // Just as unboundedly deep as complex=vr/complex=cech -- the same "build one dimension higher, drop it"
@@ -1042,8 +1060,8 @@ object TDA4j:
               requestedMaxDimension,
               dtmBoundaryMatrixOf
             )
-          case EngineKind.Ripser =>
-            // dispatch() already rejects this for complex=dtm-rips before computeGeneric is ever reached.
+          case EngineKind.Ripser | EngineKind.FastCubical =>
+            // dispatch() already rejects both of these for complex=dtm-rips before computeGeneric is ever reached.
             throw new IllegalArgumentException(s"engine=$engine is not offered for complex=dtm-rips")
       case ComplexKind.SheehyRips =>
         // Just as unboundedly deep as complex=vr/complex=cech/complex=dtm-rips -- the same "build one dimension
@@ -1088,8 +1106,8 @@ object TDA4j:
               requestedMaxDimension,
               sheehyBoundaryMatrixOf
             )
-          case EngineKind.Ripser =>
-            // dispatch() already rejects this for complex=sheehy-rips before computeGeneric is ever reached.
+          case EngineKind.Ripser | EngineKind.FastCubical =>
+            // dispatch() already rejects both of these for complex=sheehy-rips before computeGeneric is ever reached.
             throw new IllegalArgumentException(s"engine=$engine is not offered for complex=sheehy-rips")
       case ComplexKind.DtmAlpha =>
         // No dimension cap applied, exactly like complex=alpha -- see that case's own comment.
@@ -1126,8 +1144,8 @@ object TDA4j:
               Int.MaxValue,
               dtmAlphaBoundaryMatrixOf
             )
-          case EngineKind.Ripser | EngineKind.Chunks =>
-            // dispatch() already rejects both of these for complex=dtm-alpha before computeGeneric is ever reached.
+          case EngineKind.Ripser | EngineKind.Chunks | EngineKind.FastCubical =>
+            // dispatch() already rejects all of these for complex=dtm-alpha before computeGeneric is ever reached.
             throw new IllegalArgumentException(s"engine=$engine is not offered for complex=dtm-alpha")
       case ComplexKind.Witness =>
         computeWitnessFromLandmarks[C](
@@ -1226,6 +1244,10 @@ object TDA4j:
               requestedMaxDimension,
               lazyBoundaryMatrixOf
             )
+          case EngineKind.FastCubical =>
+            // Both dispatch() (one-shot) and dispatchWitnessFromLandmarks (step 2) already reject this via
+            // resolveWitnessEngine before this method is ever reached.
+            throw new IllegalArgumentException(s"engine=$engine is not offered for witnessVariant=lazy")
       case WitnessVariantKind.General =>
         // Not a flag complex -- minimumEnclosingRadius is not a valid truncation here (see
         // streams.WitnessCofaceSimplexStream's own doc), so an unset maxFiltrationValue means +Infinity,
@@ -1260,7 +1282,7 @@ object TDA4j:
               requestedMaxDimension,
               generalBoundaryMatrixOf
             )
-          case EngineKind.Ripser | EngineKind.Chunks =>
+          case EngineKind.Ripser | EngineKind.Chunks | EngineKind.FastCubical =>
             // Both dispatch() (one-shot) and dispatchWitnessFromLandmarks (step 2) already reject these via
             // resolveWitnessEngine before this method is ever reached.
             throw new IllegalArgumentException(s"engine=$engine is not offered for witnessVariant=general")
@@ -1307,7 +1329,18 @@ object TDA4j:
       throw new IllegalArgumentException(
         "engine=ripser cannot be used for a cubical complex: PackedRipserCohomologyContext is specialized to " +
           "Simplex[Int] Vietoris-Rips complexes and has no notion of a cubical complex at all. Use engine=naive, " +
-          "engine=chunks, or engine=cohomology."
+          "engine=chunks, engine=cohomology, or (ambient dimension 2 only) engine=fast-cubical."
+      )
+    // FastCubicalHomologyContext's own `require` throws IllegalArgumentException too, but with a message written
+    // for a library caller who already has a `CubicalGridStream` in hand, not a MATLAB/CLI caller who only
+    // supplied a `shape`/`flatValues` array -- catching it here first gives an error that names the actual
+    // option/argument to change.
+    if engine == EngineKind.FastCubical && stream.ambientDim != 2 then
+      throw new IllegalArgumentException(
+        s"engine=fast-cubical currently supports ambient dimension 2 only (FastCubicalHomologyContext's own dual-" +
+          s"graph union-find has no dimension-3 formulation yet -- see .claude/DESIGN-fast-cubical-engine.md), " +
+          s"got a ${stream.ambientDim}-dimensional shape. Use engine=naive, engine=chunks, or engine=cohomology " +
+          s"for a 3D image."
       )
     // Default: the grid's own ambient dimension, i.e. "give me everything" -- correctly parallel to complex=alpha
     // above (a cubical grid's own top dimension is already naturally bounded, never artificially truncated the
@@ -1368,6 +1401,22 @@ object TDA4j:
         // maxDimension is applied purely as a post-hoc filter via fromBars.
         fromBars[Cube, C](
           PersistenceEngine.cohomology[Cube, C].barcode(stream),
+          cellVertices,
+          toDouble,
+          maxDimension,
+          boundaryMatrixOf
+        )
+      case EngineKind.FastCubical =>
+        // Called directly, like engine=Ripser below, not through PersistenceEngine[CellT,C]: FastCubicalHomologyContext
+        // is specialized to the concrete CubicalGridStream (its dual-graph construction reads `.shape`/`.ambientDim`/
+        // `.topCellValue` directly), not generic over `CellT: OrderedCell` the way naive/chunks/cohomology are -- the
+        // same "honest asymmetry" PersistenceEngine's own doc comment already states for Ripser. dispatchCubical
+        // already rejected ambientDim != 2 before this is ever reached, and the stream's own natural top dimension
+        // for ambientDim=2 IS dimension 1 (H_2 is identically zero for any subcomplex of a 2D grid -- nothing above
+        // dimension 1 for maxDimension to ever filter here), so maxDimension is passed through to fromBars purely
+        // for uniformity with every other branch, not because it does real filtering work in practice.
+        fromBars[Cube, C](
+          FastCubicalHomologyContext[C]().persistentHomology(stream),
           cellVertices,
           toDouble,
           maxDimension,

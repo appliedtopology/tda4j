@@ -1,10 +1,10 @@
 # Persistence engines: what to trust, and why
 
-`homology/Homology.scala`, `homology/PackedRipserCohomology.scala`, and `homology/Cohomology.scala` contain
-**four independently-implemented algorithms across five concrete classes**. They share the `Chain` reduction
-primitives from [Architecture](architecture.md), but they are not variants of one shared engine — a fix
-or bug found in one does not imply anything about the others. Read this page before choosing which engine to
-build on.
+`homology/Homology.scala`, `homology/PackedRipserCohomology.scala`, `homology/Cohomology.scala`, and
+`homology/FastCubicalHomology.scala` contain **five independently-implemented algorithms across six concrete
+classes**. They share the `Chain` reduction primitives from [Architecture](architecture.md), but they are not
+variants of one shared engine — a fix or bug found in one does not imply anything about the others. Read this
+page before choosing which engine to build on.
 
 Three of the five (`CellularHomologyContext`, `CellularPersistenceInChunksContext`, `CellularCohomologyContext`)
 additionally implement the common `homology.PersistenceEngine[CellT, C]` trait (`def barcode(stream): List[
@@ -135,6 +135,47 @@ pair was removed outright while building this class) — coboundary is *extrinsi
 which higher-dimensional cells exist in the ambient complex), not intrinsic the way `boundary` is, so a
 per-cell `coboundary` method with no complex to consult was never the right shape.
 
+## 6. `FastCubicalHomologyContext` — dual-graph union-find, 2D cubical grids only
+
+Flash Cubical (Le Breton-Szustakowski-Piraud, arXiv:2606.04801): a genuinely different algorithm from engines
+1/2 above, not a faster re-keying the way engine 4 is for engine 3. Specialized to `CubicalGridStream`
+directly (like engines 3/4 are specialized to `Simplex[Int]` Vietoris-Rips) rather than generic over
+`CellT: OrderedCell` — it reads the grid's own `shape`/`ambientDim`/`topCellValue` directly, so it does not
+implement `PersistenceEngine[CellT, C]` either, for the same "honest asymmetry" reason that trait's own doc
+comment already gives for engines 3/4.
+
+**Currently ambient dimension 2 only** (a `require`d precondition `matlab.TDA4j`/`cli` both check before ever
+calling it, with a clear message rather than a generic exception). At `d=2`, `H_0` (an ordinary primal
+union-find, ascending filtration order, elder rule) plus `H_1` (via the dual construction below) together
+account for every nontrivial cell dimension a 2D grid has — `H_2` is identically zero for any subcomplex of a
+2D grid (a bounded planar region has no 2-dimensional voids to detect), so nothing is being skipped. `d=3`
+would need an additional piece this class doesn't attempt (`H_1` there needs general `Chain` reduction on
+whatever cells aren't already resolved by the `H_0`/`H_2` union-finds) — deferred, not half-implemented; see
+`.claude/DESIGN-fast-cubical-engine.md`.
+
+**The dual construction**: top cells (pixels) become dual vertices, codimension-1 cells (facets) become dual
+edges connecting the 1 or 2 top cells containing them (a shared `∞` sentinel vertex, fixed at `+Infinity`,
+stands in for a facet's missing side on the grid's own outer boundary). Primal `H_{d-1}` of the sublevel
+filtration equals ordinary `H_0` of this dual graph's own SUPERLEVEL filtration (Alexander duality,
+`H_{d-1}(X) ≅ H^0(S^d \ X)`), computed by the same elder-rule array union-find engine 2's own `unionFindDim01`
+uses, processing dual vertices/edges together in DESCENDING order of primal value, with every resulting bar's
+endpoints swapped. `∞` must be the unconditional elder of any merge it takes part in — not just because
+`birthOf(∞) = +Infinity` is *usually* the largest value, but enforced explicitly, since a real top cell can
+also carry `topValue = +Infinity` (this codebase's own "permanently missing cell" convention, e.g. Perseus's
+`-1`) and tie against it.
+
+**Representatives**: each active dual component tracks its own running signed sum of top cells, oriented
+coherently as merges happen so a dying component's boundary is exactly the `H_{d-1}` cycle bounding it — the
+orientation flip needed at each merge is solved directly from the connecting facet's own boundary coefficients
+(always `±1`, `cubeIsOrderedCell`'s alternating-sign rule) and each side's own already-established sign,
+matching this codebase's design principle of representatives from every engine, not just this one's own
+speed. This is this codebase's *own* extension: the source paper is F2-only and barcode-only.
+
+No paper access (network-blocked) and no existing implementation to port (unlike engine 4's GUDHI-verified
+edge-collapse precedent) meant this is an original derivation from Alexander duality, not a translation — see
+the design note for the full derivation and a hand-verified worked example, checked before any code was
+written.
+
 ## Streams × engines: what works with what
 
 Every complex construction in this codebase produces a `CofaceSimplexStream`/`CellStream` that, in principle,
@@ -160,6 +201,12 @@ table and the code ever disagree.
 | cubical (`computeFromCubicalImage`/`computeFromImage`, no `complex` key) | `naive` | **no** — `PackedRipserCohomologyContext` is specialized to `Simplex[Int]` | yes | yes | yes |
 | simplicial sets               | *(no `matlab`/`cli` entry point at all — construct `SimplicialSetStream`/`FilteredSimplicialSetStream` and drive any generic engine directly)* | | | | |
 
+A fifth engine value, `engine="fast-cubical"` (`FastCubicalHomologyContext`, engine 6 above), is not shown as
+its own table column: it would be "no — not a cubical grid" for every row except cubical, which is the ONLY
+row that offers it, and even there **only when the image's own ambient dimension is exactly 2** (a 3D image
+must use `naive`/`chunks`/`cohomology` instead, refused with a message naming the actual dimension, not a bare
+`IllegalArgumentException`).
+
 Reading the "no" cells as one-line reasons, grouped by root cause:
 
 - **Not a flag complex** (`cech`, `witness`/general): a `k`-simplex's value isn't determined by its own edges'
@@ -182,8 +229,10 @@ Reading the "no" cells as one-line reasons, grouped by root cause:
   itself is, combinatorially, an ordinary flag/clique complex (unlike `sheehy-rips` above).
 - **Representation-specific** (cubical): `PackedRipserCohomologyContext`/`RipserCohomologyContext` are
   hardcoded to `Simplex[Int]`'s combinatorial-number-system indexing (`SimplexIndexing`); `Cube` has no
-  equivalent encoding built for it (a `CubicalRipser`-style dedicated fast engine remains a documented future
-  direction, `DESIGN-fast-cubical-engine.md`, not something engine 3/4 already do).
+  equivalent encoding built for it. Engine 6 (`fast-cubical`) is a dedicated fast engine in this spirit, but
+  not a drop-in replacement for `ripser` here: it's a different algorithm (dual-graph union-find, not
+  `SimplexIndexing`-style enumeration) and currently 2D-only — a 3D grid-exploiting engine (`CubicalRipser`,
+  Wagner-Chen-Vuçini) remains a documented future direction, `DESIGN-fast-cubical-engine.md`.
 
 `engine="cohomology"` (`CellularCohomologyContext`, engine 5 above) is the one column with no "no" cells for a
 reason: it's generic over `CellT: OrderedCell` with no per-construction speed assumptions baked in, at the cost
@@ -199,3 +248,4 @@ tradeoff actually buys and costs.
 | Fast, memory-efficient cohomology on a Vietoris-Rips/clique complex over integer vertex labels | **`PackedRipserCohomologyContext`** (what `engine="ripser"` uses) |
 | A `Simplex[Int]`-keyed reference implementation for hand-debugging engine 4 | `RipserCohomologyContext` (test oracle, not a production choice) |
 | Cohomology (real cocycle representatives) on `Cube`/`FiniteSimplicialSet`/Cech/Alpha/general witness complex, or any `OrderedCell` type engines 3/4 can't serve | **`CellularCohomologyContext`** (what `engine="cohomology"` uses) |
+| Fastest option for a 2D cubical grid specifically (H0/H1 only, no `Chain` reduction at all) | **`FastCubicalHomologyContext`** (what `engine="fast-cubical"` uses; 3D grids need `naive`/`chunks`/`cohomology`) |

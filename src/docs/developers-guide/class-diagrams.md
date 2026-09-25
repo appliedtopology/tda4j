@@ -163,13 +163,14 @@ another** — see [Architecture](architecture.md). `CubicalGridStream`/`Explicit
 `Cube`s rather than `Simplex`es; `SimplicialSetStream`/`FilteredSimplicialSetStream` produce a
 `FiniteSimplicialSet[G]`'s own generator type `G`.
 
-## Persistence engines (`homology/Homology.scala`, `homology/PackedRipserCohomology.scala`)
+## Persistence engines (`homology/Homology.scala`, `homology/PackedRipserCohomology.scala`, `homology/FastCubicalHomology.scala`)
 
 Deliberately *not* diagrammed field-by-field here — their exact state and trust status belongs in one
 place. See [Persistence engines](persistence-engines.md) for the full, current picture across
 `CellularHomologyContext`/`SimplicialHomologyContext`,
 `CellularPersistenceInChunksContext`/`PersistenceInChunksContext`,
-`RipserCohomologyContext`, `PackedRipserCohomologyContext`, and `CellularCohomologyContext`.
+`RipserCohomologyContext`, `PackedRipserCohomologyContext`, `CellularCohomologyContext`, and
+`FastCubicalHomologyContext` (2D cubical grids only).
 
 ## Circular coordinates (`homology/CircularCoordinates.scala`)
 

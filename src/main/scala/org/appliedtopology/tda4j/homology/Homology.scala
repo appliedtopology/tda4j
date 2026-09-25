@@ -929,6 +929,19 @@ class CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field
 class PersistenceInChunksContext[VertexT: Ordering, CoefficientT: Field](maxDim: Int = 5)
     extends CellularPersistenceInChunksContext[Simplex[VertexT], CoefficientT](maxDim) {}
 
+/** Thin `Cube`-specific wrapper, exactly mirroring `PersistenceInChunksContext` above --
+  * `CellularPersistenceInChunksContext[Cube, ...]` (including its own `unionFindDim01` dimension-0/1 fast path) already
+  * has no `Cube`-specific behavior needed anywhere: `Cube is OrderedCell` (`defaultCubeIsOrderedCell`,
+  * `CubicalOrderedCell.scala`) resolves automatically, so this class is a pure ergonomic convenience, not new
+  * capability -- `CellularPersistenceInChunksContext[Cube, ...]` was already cross-validated against
+  * `CubicalHomologyContext` directly (`CubicalStreamSpec`'s own tie-heavy-fixture and random-image cross-validation
+  * sections, including the union-find fast path specifically), the exact validation
+  * `.claude/DESIGN-fast-cubical-engine.md`'s own Phase 1 called for, just not yet under this name.
+  * `.claude/WORKLOG-fast-cubical-engine.md`.
+  */
+class CubicalPersistenceInChunksContext[CoefficientT: Field](maxDim: Int = 5)
+    extends CellularPersistenceInChunksContext[Cube, CoefficientT](maxDim) {}
+
 /** '''Test/reference oracle only -- not a production engine, and not what `TDA4j.scala`'s `engine="ripser"` calls.'''
   * `PackedRipserCohomologyContext` (`PackedRipserCohomology.scala`) is the production Ripser engine: same algorithm,
   * method for method, keyed on a packed `(Double, Long)` pair instead of a materialized `Simplex[Int]`, measured faster

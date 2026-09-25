@@ -52,9 +52,11 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     opt[String](descr = "vr (default), alpha, cech, witness, dtm-rips, dtm-alpha, or sheehy-rips")
   val engine: ScallopOption[String] =
     opt[String](descr =
-      "ripser, naive, chunks, or cohomology (default depends on --complex -- see TDA4j's own doc). cohomology " +
-        "is CellularCohomologyContext, generic over cell type and valid for every --complex value -- unlike " +
-        "ripser, not Vietoris-Rips-specialized, so it also works with --complex=alpha/cech."
+      "ripser, naive, chunks, cohomology, or fast-cubical (default depends on --complex -- see TDA4j's own doc). " +
+        "cohomology is CellularCohomologyContext, generic over cell type and valid for every --complex value -- " +
+        "unlike ripser, not Vietoris-Rips-specialized, so it also works with --complex=alpha/cech. fast-cubical " +
+        "(FastCubicalHomologyContext) is valid ONLY for a cubical-image --input-format, and only when the image " +
+        "is 2-dimensional."
     )
   val alphaBackend: ScallopOption[String] =
     opt[String](descr = "helix (default) or DQP -- only consulted when --complex=alpha")

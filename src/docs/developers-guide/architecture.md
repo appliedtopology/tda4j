@@ -200,6 +200,33 @@ directly via the cartesian product over the cube's degenerate axes rather than a
 on the stream itself. `CubicalHomologyContext` is a one-line `Cube`-specialized wrapper around
 `CellularHomologyContext` — cubical complexes needed no new engine code, only a new `OrderedCell` instance.
 
+#### Dual union-find cubical engine (Flash Cubical)
+
+`homology/FastCubicalHomology.scala` (`FastCubicalHomologyContext`, `.claude/DESIGN-fast-cubical-engine.md`,
+`.claude/WORKLOG-fast-cubical-engine.md`) implements Flash Cubical (Le Breton-Szustakowski-Piraud,
+arXiv:2606.04801): top cells become vertices of a DUAL graph, codimension-1 cells become dual edges (a shared
+`∞` sentinel standing in for a facet's missing side on the grid's outer boundary), and primal `H_{d-1}` of the
+sublevel filtration is computed as ordinary `H_0` of that dual graph's own SUPERLEVEL filtration — Alexander
+duality, `H_{d-1}(X) ≅ H^0(S^d \ X)` — via the same elder-rule array union-find `CellularPersistenceInChunksContext`'s
+own `unionFindDim01` uses, run in DESCENDING primal-value order with every resulting bar's endpoints swapped.
+Combined with an ordinary primal `H_0` union-find, this covers every nontrivial dimension a 2D grid has (`H_2`
+is identically zero for any subcomplex of a 2D grid) with no general `Chain` reduction at all — **currently
+ambient dimension 2 only** (`require`d, checked again with a clearer message at the `matlab.TDA4j`/`cli` layer);
+3D needs an additional piece (`H_1` there needs general reduction on whatever the `H_0`/`H_2` union-finds don't
+already resolve) this class doesn't attempt.
+
+`∞` must be the unconditional elder of any merge it takes part in — its own chain is deliberately never
+populated, since it never dies — which is NOT automatically guaranteed by comparing birth values alone: a real
+top cell can also carry `topValue = +Infinity` (this codebase's own "permanently missing cell" convention, the
+same one `io.Perseus`'s `-1` already maps to) and tie against `∞`'s own `birthOf`, so the young/old decision
+special-cases `∞` explicitly rather than relying on the birth-value comparison alone. Representatives: each
+active dual component tracks a running signed sum of top cells, oriented coherently as merges happen (the
+orientation flip is solved from the connecting facet's own `±1` boundary coefficients toward each side) so a
+dying component's boundary is exactly its bounding `H_{d-1}` cycle — this codebase's own extension beyond the
+source paper, which is F2-only and barcode-only. No paper access (network-blocked) and no existing
+implementation to port meant this was derived from Alexander duality directly, not translated from a reference
+source the way `EdgeCollapse` below could be from GUDHI's.
+
 ### Simplicial sets
 
 `SSetElement[G](word, generator)` (`algebra/SSetElement.scala`) plus `FiniteSimplicialSet[G]`

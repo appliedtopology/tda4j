@@ -263,6 +263,31 @@ class CLISpec extends mutable.Specification:
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
     }
 
+    "produce the exact same barcode as calling TDA4j.computeFromCubicalImage directly with --engine fast-cubical" >> {
+      val path = tempFile(".txt")
+      // Same ring fixture as the default-engine test above -- ambient dimension 2, so --engine fast-cubical is
+      // valid here (see FastCubicalHomologyContext's own doc for the dimension-2-only restriction).
+      java.nio.file.Files.write(
+        java.nio.file.Paths.get(path),
+        "2\n3\n3\n0\n0\n0\n0\n-1\n0\n0\n0\n0\n".getBytes
+      )
+
+      val buffer = new ByteArrayOutputStream()
+      val exitCode =
+        TDA4jCLI.run(
+          Seq("--input-format", "perseus-cubical", "--engine", "fast-cubical", path),
+          new PrintStream(buffer)
+        )
+      val cliLines = buffer.toString.linesIterator.toSeq
+
+      val (shape, flatValues) =
+        TDA4jCLI.flattenGridStream(Perseus.readCubicalToplex(path, sublevel = true))
+      val direct = TDA4j.computeFromCubicalImage(shape, flatValues, Array("engine", "fast-cubical"))
+      val directLines = TDA4jCLI.toBars(direct).map(_.toString)
+
+      (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
+    }
+
     "reject --complex combined with a cubical-image --input-format" >> {
       val path = tempFile(".txt")
       java.nio.file.Files.write(java.nio.file.Paths.get(path), "2\n2\n2\n0\n1\n2\n3\n".getBytes)

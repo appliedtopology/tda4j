@@ -60,6 +60,14 @@ No linter beyond scalafmt. Tests are specs2 (`org.specs2.mutable.Specification`)
 `-feature -deprecation -unchecked` etc.; the ~319 `-Wunused:all` warnings (mostly unused wildcard imports) are
 deliberately left alone (`WORKLOG-compiler-warnings.md`).
 
+**`sbt scalafmtSbt`/`scalafmtSbtCheck` cover `project/*.scala` (sbt's own Scala 2.12 meta-build), not this
+project's Scala 3.9** — `.scalafmt.conf`'s global `runner.dialect = scala3` (needed for `src/main`/`src/test`)
+also reaches these files by default and will rewrite valid Scala 2 brace syntax into `then`/indentation-based
+Scala 3 syntax that the meta-build compiler can't parse, breaking `sbt` itself. `project/SnipDirective.scala`
+carries a `// format: off` guard against exactly this (a `fileOverride` glob was tried first and did not take
+effect for these two tasks specifically — don't re-attempt that without confirming it actually works first);
+see that file's own header comment, not a separate worklog, for the full story.
+
 **Docs site is Laika (Paradox fully removed)**, sources at `src/docs/`, Markdown with a `@:directive` syntax (not
 Paradox's `@@`/`@ref:`). `Markdown.GitHubFlavor` and `laika.config.SyntaxHighlighting` are both required
 `laikaExtensions` — Laika's base parser doesn't fence code blocks or highlight them without these, and un-fenced
@@ -338,8 +346,27 @@ Sublevel/superlevel is handled only in `CubicalImage.scala`'s loaders (negate on
 BT.601 luma; 3D via in-memory arrays. H0 oracle uses Moore (8/26-connected) adjacency, not 4-connected.
 
 Both naive and chunks engines consume cubes. The old "naive scales badly in 3D" finding was an uncached
-`filtrationValue`, now fixed — not an engine difference. A grid-exploiting engine (CubicalRipser, Wagner-Chen-Vuçini)
-remains a valid future direction (`DESIGN-fast-cubical-engine.md`, `WORKLOG-cubical-chunks-benchmark.md`).
+`filtrationValue`, now fixed — not an engine difference. A grid-exploiting engine for **3D** (CubicalRipser,
+Wagner-Chen-Vuçini) remains a valid future direction (`DESIGN-fast-cubical-engine.md`,
+`WORKLOG-cubical-chunks-benchmark.md`); **2D** now has one — see below.
+
+**`FastCubicalHomologyContext` (`homology/FastCubicalHomology.scala`, `engine="fast-cubical"`)** — Flash Cubical
+(Le Breton-Szustakowski-Piraud, arXiv:2606.04801), an original derivation (network-blocked from the paper, no
+implementation to port — unlike `EdgeCollapse`'s GUDHI source). **Ambient dimension 2 only** (`require`d,
+checked again with a clearer message at the `matlab`/`cli` layer). Top cells become vertices of a DUAL graph,
+codimension-1 cells become dual edges (`∞` sentinel for the grid's outer boundary), and primal `H_{d-1}` of the
+sublevel filtration is ordinary `H_0` of that dual graph's own SUPERLEVEL filtration (Alexander duality,
+`H_{d-1}(X) ≅ H^0(S^d∖X)`) via the same elder-rule union-find `unionFindDim01` uses, run in descending primal
+order with every bar's endpoints swapped; combined with a primal `H_0` union-find, this covers a 2D grid
+completely (`H_2` is identically zero for any planar subset) with no `Chain` reduction at all. **`∞` must be the
+unconditional elder of any merge it takes part in — checked explicitly, not inferred from `birthOf(∞) =
++Infinity` being the largest value**: a real top cell can also carry `topValue = +Infinity` (this codebase's own
+"permanently missing cell" convention, `io.Perseus`'s `-1`) and tie against it, which broke this exact
+comparison twice during development (once for the resolved-vs-raw id distinction, once for the tie itself) —
+see the worklog before touching the young/old decision in `computeDualTopDimension`. Representatives: a running
+signed sum of top cells per active dual component, oriented coherently via each merge's connecting facet's own
+`±1` boundary coefficients — this codebase's own extension beyond the source paper (F2/barcode-only).
+`WORKLOG-fast-cubical-engine.md`.
 
 ## Simplicial sets
 
@@ -615,7 +642,9 @@ PersistenceEngine.scala`) rather than re-matching the raw string at each branch.
   `persistence-engines.md`'s streams-vs-engines table for the full picture). `dtm-rips`/`dtm-alpha` need `dtmK`
   (required); `sheehy-rips` needs `sheehyEpsilon` (required, strictly in `(0,1)`); `dtm-rips`/`sheehy-rips` alone
   work from `computeFromDistanceMatrix` too (no coordinates needed), `dtm-alpha` needs `computeFromPoints` like
-  `alpha`/`cech`. `computeFromCubicalImage`/`computeFromImage` for cubes.
+  `alpha`/`cech`. `computeFromCubicalImage`/`computeFromImage` for cubes — same four `engine` values plus a
+  fifth, `fast-cubical` (`FastCubicalHomologyContext`), refused everywhere else and refused even here for a 3D
+  image (ambient dimension must be exactly 2) — see "Cubical complexes" above.
 - **Two-step witness recipe** (`WORKLOG-witness-two-step-api.md`), alongside the one-shot path:
   `selectLandmarksFrom{Points,DistanceMatrix}` (→ `LandmarkSelectionResult`) then
   `computeFrom{Points,DistanceMatrix}AndLandmarks` (takes that `int[]`, 0-based ambient indices, directly —
