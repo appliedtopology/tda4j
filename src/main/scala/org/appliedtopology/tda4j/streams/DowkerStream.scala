@@ -7,11 +7,11 @@ import org.appliedtopology.tda4j.cells.{given, *}
 import scala.collection.concurrent.TrieMap
 import scala.collection.immutable
 
-/** The (filtered) Dowker complex of a relation `R: L x W -> [0, Infinity]` between two, generally distinct, finite
-  * sets `L` ("left") and `W` ("witnesses"), after Dowker's own theorem (C.H. Dowker, "Homology groups of relations",
-  * Ann. of Math. 56 (1952)), in the real-valued generalization used e.g. by Chowdhury & Mémoli ("A functorial Dowker
-  * theorem and persistent homology of asymmetric networks", 2018): a subset `sigma subseteq L` is a simplex at
-  * filtration value `t` iff some `w in W` witnesses every element of `sigma` by time `t`, i.e.
+/** The (filtered) Dowker complex of a relation `R: L x W -> [0, Infinity]` between two, generally distinct, finite sets
+  * `L` ("left") and `W` ("witnesses"), after Dowker's own theorem (C.H. Dowker, "Homology groups of relations", Ann. of
+  * Math. 56 (1952)), in the real-valued generalization used e.g. by Chowdhury & Mémoli ("A functorial Dowker theorem
+  * and persistent homology of asymmetric networks", 2018): a subset `sigma subseteq L` is a simplex at filtration value
+  * `t` iff some `w in W` witnesses every element of `sigma` by time `t`, i.e.
   * `f(sigma) = min_{w in W} max_{x in sigma} R(x, w) <= t`. Unlike De Silva-Carlsson's witness complex (`nu`-indexed,
   * `WitnessStream.scala`), `R` here is an ARBITRARY non-negative relation -- not necessarily derived from a metric, and
   * `L`/`W` need not be subsets of a common ambient space or of each other. The classical (unfiltered, boolean) Dowker
@@ -20,10 +20,11 @@ import scala.collection.immutable
   *
   * '''Monotone by construction, no recursive facet clamp needed''' (contrast `WitnessCofaceSimplexStream`'s own
   * `recursiveFiltrationValue`, needed there only because its per-dimension threshold `m_k` genuinely changes the
-  * formula from one dimension to the next): for `tau subseteq sigma`, `max_{x in tau} R(x,w) <= max_{x in sigma} R(x,w)`
-  * for every single `w`, so taking `min_w` on both sides preserves the inequality: `f(tau) <= f(sigma)`. This is
-  * CLAUDE.md's ordering-contract rule 3 (`fv(face) <= fv(coface)`), proved directly from the formula rather than
-  * enforced by a facet-floor clamp the way `CechFiltration`'s own ULP guard is.
+  * formula from one dimension to the next): for `tau subseteq sigma`,
+  * `max_{x in tau} R(x,w) <= max_{x in sigma} R(x,w)` for every single `w`, so taking `min_w` on both sides preserves
+  * the inequality: `f(tau) <= f(sigma)`. This is CLAUDE.md's ordering-contract rule 3 (`fv(face) <= fv(coface)`),
+  * proved directly from the formula rather than enforced by a facet-floor clamp the way `CechFiltration`'s own ULP
+  * guard is.
   *
   * '''Not a flag complex, in general''': `f(sigma)` is not determined by `sigma`'s own edges alone (the minimizing
   * witness `w` for a triangle need not be the one that witnesses any of its edges) -- same non-flag status as Cech and
@@ -42,24 +43,24 @@ import scala.collection.immutable
   * harmless no-op there but a correctness requirement here).
   *
   * '''Duality is the point''': Dowker's theorem says the `L`-side complex (this class, vertices = rows of `R`) and the
-  * `W`-side complex (vertices = columns, built from `R`'s transpose -- `DowkerGeometry.dual`/`.dual` below) are homotopy
-  * equivalent at EVERY threshold `t` (the simplicial complexes of the relation and its transpose are simplicially
-  * homotopy equivalent, not merely isomorphic in homology), and the FUNCTORIAL form of the theorem (Chowdhury & Mémoli,
-  * "A functorial Dowker theorem and persistent homology of asymmetric networks", 2018) extends this to the whole
-  * filtration at once: the two sides' persistence MODULES are naturally isomorphic, so their barcodes agree exactly --
-  * '''once zero-persistence (birth == death) bars are dropped from both''' (`DowkerStreamSpec.dropZeroPersistence`).
-  * Those are a total-order tie-break artifact, not a real topological feature (same status they already have
-  * elsewhere in this codebase, e.g. `WitnessStreamSpec`'s own tie-heavy witness complexes) -- but they matter more
-  * here than usual: if `numLeft != numWitnesses`, the RAW barcodes can't possibly match bar-for-bar even in principle,
-  * since a simplicial filtration records exactly one `H_0` birth event per VERTEX, unconditionally, so a 3-row/4-column
-  * relation's two sides literally have 3 vs. 4 raw `H_0` births -- confirmed by construction during this class's own
-  * development (a hand-worked 3x4 example), not merely a theoretical aside. Every one of those extra raw births is
-  * zero-persistence (the "extra" vertex is always born already-tied to an edge born at the identical filtration value),
-  * so the filtered barcodes still agree exactly, as the theorem promises.
+  * `W`-side complex (vertices = columns, built from `R`'s transpose -- `DowkerGeometry.dual`/`.dual` below) are
+  * homotopy equivalent at EVERY threshold `t` (the simplicial complexes of the relation and its transpose are
+  * simplicially homotopy equivalent, not merely isomorphic in homology), and the FUNCTORIAL form of the theorem
+  * (Chowdhury & Mémoli, "A functorial Dowker theorem and persistent homology of asymmetric networks", 2018) extends
+  * this to the whole filtration at once: the two sides' persistence MODULES are naturally isomorphic, so their barcodes
+  * agree exactly -- '''once zero-persistence (birth == death) bars are dropped from both'''
+  * (`DowkerStreamSpec.dropZeroPersistence`). Those are a total-order tie-break artifact, not a real topological feature
+  * (same status they already have elsewhere in this codebase, e.g. `WitnessStreamSpec`'s own tie-heavy witness
+  * complexes) -- but they matter more here than usual: if `numLeft != numWitnesses`, the RAW barcodes can't possibly
+  * match bar-for-bar even in principle, since a simplicial filtration records exactly one `H_0` birth event per VERTEX,
+  * unconditionally, so a 3-row/4-column relation's two sides literally have 3 vs. 4 raw `H_0` births -- confirmed by
+  * construction during this class's own development (a hand-worked 3x4 example), not merely a theoretical aside. Every
+  * one of those extra raw births is zero-persistence (the "extra" vertex is always born already-tied to an edge born at
+  * the identical filtration value), so the filtered barcodes still agree exactly, as the theorem promises.
   *
-  * This also directly subsumes the "witness complex from a distance matrix"
-  * special case: `WitnessGeometry.witnessValue(sigma, m = _ => 0.0)` (De Silva-Carlsson's `nu = 0`) is EXACTLY this
-  * class's `filtrationValue` with `R = D` (the landmark-to-witness distance matrix) -- not implemented by delegating to
+  * This also directly subsumes the "witness complex from a distance matrix" special case:
+  * `WitnessGeometry.witnessValue(sigma, m = _ => 0.0)` (De Silva-Carlsson's `nu = 0`) is EXACTLY this class's
+  * `filtrationValue` with `R = D` (the landmark-to-witness distance matrix) -- not implemented by delegating to
   * `WitnessGeometry` (that class's own shape -- an ambient metric space plus a landmark subset -- doesn't fit a general
   * relation with no shared ambient space at all), but the same formula, independently re-derived, is worth knowing
   * about if the two ever need to be cross-checked against each other.
@@ -110,10 +111,10 @@ object DowkerGeometry:
   def fromBoolean(relation: Seq[Seq[Boolean]]): DowkerGeometry =
     apply(relation.map(_.map(b => if b then 0.0 else Double.PositiveInfinity)))
 
-/** `DowkerGeometry.filtrationValue`, memoized -- the same "a caller-supplied `filtrationValueOverride` is not cached
-  * by `RipserCofaceSimplexStream` itself, so a genuinely expensive one must cache itself" reasoning as
-  * `CechFiltration`/`WitnessCofaceSimplexStream.recursiveFiltrationValue`. Deliberately no `spx.dim <= 0 => 0.0` special
-  * case (contrast `CechFiltration`/`MaximumDistanceFiltrationValue`): a Dowker vertex's own filtration value is
+/** `DowkerGeometry.filtrationValue`, memoized -- the same "a caller-supplied `filtrationValueOverride` is not cached by
+  * `RipserCofaceSimplexStream` itself, so a genuinely expensive one must cache itself" reasoning as
+  * `CechFiltration`/`WitnessCofaceSimplexStream.recursiveFiltrationValue`. Deliberately no `spx.dim <= 0 => 0.0`
+  * special case (contrast `CechFiltration`/`MaximumDistanceFiltrationValue`): a Dowker vertex's own filtration value is
   * generally nonzero and meaningful, not a VR-style convention-only placeholder -- see the class doc.
   */
 object DowkerFiltration:
@@ -124,10 +125,11 @@ object DowkerFiltration:
       def apply(spx: Simplex[Int]): Double = cache.getOrElseUpdate(spx, geometry.filtrationValue(spx.toIndexedSeq))
 
 /** Stands in for `RipserCofaceSimplexStream`'s own `FiniteMetricSpace[Int]` constructor parameter, purely to supply
-  * `size`/`elements`/`contains` over `0 until n` -- `distance` is never actually read, since `DowkerCofaceSimplexStream`
-  * always supplies its own `filtrationValueOverride` for every dimension including edges (same "lazy, not eager" reason
-  * `WitnessMetricSpace` gives for the general witness variant's own identical situation). A relation is not a metric,
-  * so this is a dedicated placeholder rather than reusing/misusing `ExplicitMetricSpace` with a throwaway matrix.
+  * `size`/`elements`/`contains` over `0 until n` -- `distance` is never actually read, since
+  * `DowkerCofaceSimplexStream` always supplies its own `filtrationValueOverride` for every dimension including edges
+  * (same "lazy, not eager" reason `WitnessMetricSpace` gives for the general witness variant's own identical
+  * situation). A relation is not a metric, so this is a dedicated placeholder rather than reusing/misusing
+  * `ExplicitMetricSpace` with a throwaway matrix.
   */
 private class DowkerPlaceholderMetricSpace(n: Int) extends FiniteMetricSpace[Int]:
   def distance(x: Int, y: Int): Double = 0.0
@@ -187,8 +189,8 @@ class DowkerCofaceSimplexStream(
     }
     dim0.orElse(super.iterateDimension)
 
-  /** The dual-side Dowker complex (`geometry.dual`), same threshold and keep-criterion -- see the class doc's
-    * "duality is the point" paragraph. Not memoized: cheap to construct (just wraps `geometry.dual`, itself memoized on
+  /** The dual-side Dowker complex (`geometry.dual`), same threshold and keep-criterion -- see the class doc's "duality
+    * is the point" paragraph. Not memoized: cheap to construct (just wraps `geometry.dual`, itself memoized on
     * `DowkerGeometry`), and a caller driving both sides concurrently would otherwise share mutable coface-generation
     * state (`currentDimensionCache` et al.) it should not share.
     */

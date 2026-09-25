@@ -395,8 +395,12 @@ barcodes can't match bar-for-bar even in principle; the "extra" births are alway
 (`DowkerStreamSpec.dropZeroPersistence`, confirmed on a hand-worked rectangular relation, not just asserted from
 the theorem).
 
-**Not yet wired into `matlab.TDA4j`/`cli`/docs** — this is a streams-layer-only capability so far; see
-`WORKLOG-dowker-complex.md`'s own "explicitly not done" section before assuming a `complex=dowker` option exists.
+**Wired into `matlab.TDA4j`/`cli` as its own entry point**, not a `complex=` value: `computeFromRelation`
+(MATLAB/Java)/`--input-format csv-relation` (CLI, reusing `CSV.readPointCloud`'s own rectangular-matrix reader
+for the on-disk shape) — a relation isn't a point cloud or a square/symmetric distance matrix, so it doesn't fit
+`computeFromPoints`/`computeFromDistanceMatrix`'s shared dispatch. `engine` defaults to `naive`, refuses
+`ripser`/`chunks` (same reasoning as `witness`/`witnessVariant=general`); a `"dual"`/`--dual` option computes the
+`W`-side complex directly via `DowkerGeometry.dual`.
 
 ## Alpha complex: DQP vs Helix
 
@@ -638,7 +642,9 @@ each branch.
   session that lands a chunk of it: (1) `matlab.TDA4j` dispatch, (2) `cli.TDA4jCLI`/`TDA4jConf` (1:1 mirror),
   (3) `src/docs/developers-guide/` (`persistence-engines.md`, `architecture.md`, `class-diagrams.md`),
   (4) `src/docs/user-guide/README.md`. Internal refactors and bug fixes with no new surface are exempt.
-- The project lead commits their own work; don't commit unasked.
+- A cloud session (working on its own `claude/...` branch) may commit and push its own work to that branch at
+  will, without asking first — the branch is disposable/session-scoped, not shared history. A local/interactive
+  session working directly on a shared branch still waits to be asked; the project lead commits that work.
 
 ## Collaboration preferences
 

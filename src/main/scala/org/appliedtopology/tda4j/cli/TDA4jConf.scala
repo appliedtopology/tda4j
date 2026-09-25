@@ -12,14 +12,14 @@ import org.rogach.scallop.*
   */
 class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   banner(
-    """tda4j: compute persistent (co)homology of a point cloud, distance matrix, or cubical image.
+    """tda4j: compute persistent (co)homology of a point cloud, distance matrix, cubical image, or Dowker relation.
       |
       |Loads one of several file formats (see --input-format), computes a Vietoris-Rips/alpha/Cech/witness complex's
-      |persistence (point-cloud/distance-matrix formats) or a cubical image's persistence (cubical-image formats)
-      |via the same TDA4j/PersistenceResult facade the MATLAB bridge uses (see
-      |org.appliedtopology.tda4j.matlab.TDA4j's own doc for the underlying --complex/--engine/--field options,
-      |and computeFromCubicalImage's own doc for --sublevel), and writes the resulting persistence diagram in one
-      |of several formats (see --output-format).
+      |persistence (point-cloud/distance-matrix formats), a cubical image's persistence (cubical-image formats), or
+      |a Dowker complex's persistence (csv-relation format) via the same TDA4j/PersistenceResult facade the MATLAB
+      |bridge uses (see org.appliedtopology.tda4j.matlab.TDA4j's own doc for the underlying --complex/--engine/
+      |--field options, computeFromCubicalImage's own doc for --sublevel, and computeFromRelation's own doc for
+      |--dual), and writes the resulting persistence diagram in one of several formats (see --output-format).
       |
       |Usage: tda4j [options] <input-file>
       |""".stripMargin
@@ -29,8 +29,10 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     default = Some("csv-points"),
     descr = "input file format: csv-points, csv-distances, csv-lower, ripser-points, ripser-lower, ripser-upper, " +
       "ripser-distance, ripser-binary, dipha-distance, off (point-cloud/distance-matrix formats -- --complex " +
-      "applies), or perseus-cubical, dipha-image, image (cubical-image formats -- --complex does not apply, " +
-      "--sublevel does) (default: csv-points)"
+      "applies), perseus-cubical, dipha-image, image (cubical-image formats -- --complex does not apply, " +
+      "--sublevel does), or csv-relation (a Dowker relation, R x C, one row per left-side point one column per " +
+      "witness -- --complex does not apply, --dual does; see TDA4j.computeFromRelation's own doc) (default: " +
+      "csv-points)"
   )
 
   val output: ScallopOption[String] = opt[String](
@@ -140,6 +142,13 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "1-skeleton to a smaller weighted graph with the SAME persistent homology, before anything is built on " +
       "top of it -- a preprocessing step, changing nothing about the output shape. Measured 73-76% of edges " +
       "removed and a 43-47x REDUCTION-phase speedup on random point clouds; see .claude/WORKLOG-edge-collapse.md."
+  )
+  // String, not Boolean -- same reasoning as --sublevel/--edge-collapse above.
+  val dual: ScallopOption[String] = opt[String](
+    descr = "true or false (default) -- only consulted for --input-format=csv-relation. Computes the W-side " +
+      "(transposed-relation) Dowker complex instead of the L-side one -- see TDA4j.computeFromRelation's own " +
+      "doc and streams.DowkerGeometry.dual. The functorial Dowker duality theorem guarantees the two sides' " +
+      "barcodes agree exactly once zero-persistence bars are dropped."
   )
 
   // CLI-LOCAL control flow, unlike every option above: neither is forwarded into TDA4j's own options array

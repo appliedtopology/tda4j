@@ -304,6 +304,51 @@ A fact used to cross-validate the two constructions against each other (`Witness
 complex's own 1-skeleton is identical to the lazy complex's at `nu = 2` — both use the 2nd-nearest-landmark
 threshold for edges, just reached via different code paths.
 
+### Dowker complexes
+
+`streams/DowkerStream.scala` (`DowkerGeometry`/`DowkerFiltration`/`DowkerCofaceSimplexStream`) implements
+Dowker's complex (C.H. Dowker, "Homology groups of relations", 1952), generalized to a filtered, real-valued
+relation the way Chowdhury & Mémoli's "A functorial Dowker theorem and persistent homology of asymmetric
+networks" (2018) does. Given an arbitrary relation `R: L x W -> [0, Infinity]` — NOT derived from any metric,
+and `L`/`W` need not share an ambient space or even be the same size — a subset `sigma subseteq L` is a
+simplex at time `t` iff some witness `w in W` relates to every point of `sigma` by time `t`:
+`f(sigma) = min_{w in W} max_{x in sigma} R(x,w)`. `DowkerGeometry.fromBoolean` lifts a classical
+(unfiltered) boolean relation into this shape (`true -> 0.0`, `false -> +Infinity`).
+
+This directly generalizes the witness complex's own `nu = 0` case: `WitnessGeometry.witnessValue(sigma, m =
+_ => 0.0)` is exactly this formula with `R = D` (the landmark-to-witness distance matrix) — not implemented
+by delegating to `WitnessGeometry` (its own shape, an ambient metric space plus a landmark subset, doesn't
+fit an arbitrary relation with no shared ambient space at all), but the same formula, independently re-derived.
+Unlike witness's per-dimension threshold `m_k`, this single, dimension-independent formula is automatically
+monotone under face removal — `max` over a subset is `<=` `max` over its superset for every fixed `w`, so
+`min_w` preserves the inequality — so no recursive "max with facets" clamp (`WitnessCofaceSimplexStream`'s
+own `recursiveFiltrationValue`) is needed here. Like Cech/Witness/Sheehy above, `DowkerCofaceSimplexStream`
+reuses `RipserCofaceSimplexStream`'s generic coface-generation loop, since the Dowker complex is NOT a flag
+complex in general (a witness for a whole simplex need not witness any of its edges).
+
+One real footgun this construction has that no earlier stream in this codebase did: `keptByThresholdAndCriterion`'s
+`<=` admits `+Infinity <= +Infinity`, and `DowkerGeometry.fromBoolean` deliberately produces a literal `+Infinity`
+to mean "never witnessed" — every other stream's own `maxFiltrationValue = +Infinity` default is safe only
+because none of them ever compute a genuinely infinite filtration value. `DowkerCofaceSimplexStream` overrides
+`keptByThresholdAndCriterion` to additionally require `.isFinite`, confirmed necessary empirically (a hand-built
+"5 arcs cover a circle" fixture collapsed to the complete graph on 5 vertices without the fix — see
+`.claude/WORKLOG-dowker-complex.md`).
+
+**Duality is the entire point of this construction, not an afterthought**: `DowkerGeometry.dual` (the transposed
+relation) gives the `W`-side complex, and the functorial Dowker duality theorem guarantees its persistence
+module is naturally isomorphic to the `L`-side one — so the two sides' barcodes agree exactly, but only AFTER
+dropping zero-persistence (birth == death) bars from both. A simplicial filtration records exactly one `H_0`
+birth event per vertex, so when `L` and `W` differ in size the raw barcodes cannot possibly match bar-for-bar
+even in principle; every "extra" birth turns out to be zero-persistence (confirmed on a hand-worked rectangular
+relation, not just asserted from the theorem — `DowkerStreamSpec.dropZeroPersistence`).
+
+Wired into `matlab.TDA4j`/`cli` as a dedicated entry point (`computeFromRelation`/`--input-format csv-relation`),
+separate from `computeFromPoints`/`computeFromDistanceMatrix`: a Dowker relation is neither a point cloud nor a
+square/symmetric distance matrix, so it doesn't fit the `complex=` dispatch those methods share. `engine`
+defaults to `naive` and refuses `ripser`/`chunks`, exactly like `complex=witness` with `witnessVariant=general` —
+same non-flag-complex reasoning. A `"dual"`/`--dual` option computes the `W`-side complex directly via
+`DowkerGeometry.dual`, without the caller having to transpose the relation by hand.
+
 ### Sheehy's sparse/approximate Vietoris-Rips filtration
 
 `streams/SheehyRipsStream.scala` (`SheehyRipsSimplexStream`) implements Cavanna, Jahanseir & Sheehy's greedy-

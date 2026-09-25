@@ -257,6 +257,7 @@ construction's own doc; re-check that source if this table and the code ever dis
 | `alpha`                       | `naive`         | **no** — no notion of a Vietoris-Rips complex at all   | yes     | **no** — known stall/OOM risk (`HomologySpec`'s `BarcodeRegressionSpec`) | yes | **no** | **yes** — only `alphaBackend=helix` (the default), any ambient dimension `>= 2` |
 | `sheehy-rips`                 | `naive`         | **no** — a simplex's value is not the maximum ambient pairwise distance among its vertices (some pairs sparsified away, others excluded outright) | yes | yes | yes | **no** | **no** |
 | cubical (`computeFromCubicalImage`/`computeFromImage`, no `complex` key) | `naive` | **no** — `PackedRipserCohomologyContext` is specialized to `Simplex[Int]` | yes | yes | yes | **yes** — any ambient dimension `>= 2` | **no** |
+| Dowker relation (`computeFromRelation`, no `complex` key) | `naive` | **no** — not a flag complex (a witness for a whole simplex need not witness any of its edges) | yes | **no** — same conservative refusal `witness`/general has (use `naive`/`cohomology`) | yes | **no** | **no** |
 | simplicial sets               | *(no `matlab`/`cli` entry point at all — construct `SimplicialSetStream`/`FilteredSimplicialSetStream` and drive any generic engine directly)* | | | | | | |
 
 The `fast-cubical`/`fast-alpha` columns are each a single "yes" surrounded by "no"s, for the SAME underlying
@@ -273,13 +274,16 @@ actual mismatch in their own message rather than throwing a bare `IllegalArgumen
 
 Reading the "no" cells as one-line reasons, grouped by root cause:
 
-- **Not a flag complex** (`cech`, `witness`/general): a `k`-simplex's value isn't determined by its own edges'
-  values alone, so `insertionDiameter`'s incremental recurrence has nothing valid to incrementally update.
-  `sheehy-rips` belongs here too, not with `dtm-rips` below, despite looking pairwise-derived at a glance: its
-  own `filtrationValueOverride` needs to see every vertex of a `k`-simplex at once (the `min`-over-vertices
-  `vanish` exclusion check), not just its edges — proven by construction, not merely asserted: a hand-derived
-  fixture (`SheehyRipsStreamSpec`) exhibits a triangle whose three edges are ALL individually present and
-  finite, yet the triangle itself never appears — the one thing an actual flag complex can never do.
+- **Not a flag complex** (`cech`, `witness`/general, Dowker relations): a `k`-simplex's value isn't determined
+  by its own edges' values alone, so `insertionDiameter`'s incremental recurrence has nothing valid to
+  incrementally update. `sheehy-rips` belongs here too, not with `dtm-rips` below, despite looking
+  pairwise-derived at a glance: its own `filtrationValueOverride` needs to see every vertex of a `k`-simplex at
+  once (the `min`-over-vertices `vanish` exclusion check), not just its edges — proven by construction, not
+  merely asserted: a hand-derived fixture (`SheehyRipsStreamSpec`) exhibits a triangle whose three edges are
+  ALL individually present and finite, yet the triangle itself never appears — the one thing an actual flag
+  complex can never do. A Dowker relation's own witness condition is the same shape: a witness for a whole
+  simplex need not witness any of that simplex's edges, so a triangle can appear with no valid edge-only
+  justification the way `witness`/general's own dimension-specific threshold does.
 - **Not a Vietoris-Rips complex at all** (`alpha`, `dtm-alpha`): `PackedRipserCohomologyContext` consumes a
   `FiniteMetricSpace[Int]` directly and enumerates cliques via `SimplexIndexing` — there is no Delaunay/power-
   cell structure it could route through instead.

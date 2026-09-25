@@ -75,7 +75,9 @@ object TDA4jCLI:
       // --complex is meaningless for a cubical grid (TDA4j.computeFromCubicalImage has no "complex" option at
       // all -- it would otherwise be silently ignored rather than validated, the exact "two flags can disagree
       // and nothing notices" trap this CLI's whole design (buildOptions's own doc above) exists to avoid). Same
-      // reasoning for the two witness-recipe flags: a cubical grid has no landmarks to select or supply.
+      // reasoning for the two witness-recipe flags: a cubical grid/Dowker relation has no landmarks to select or
+      // supply, and --complex is equally meaningless for a Dowker relation (TDA4j.computeFromRelation has its
+      // own, separate, much smaller option set -- see that method's own doc).
       resolved match
         case ResolvedInput.CubicalGrid(_, _) if conf.complex.isSupplied =>
           throw new IllegalArgumentException(
@@ -87,6 +89,17 @@ object TDA4jCLI:
           throw new IllegalArgumentException(
             s"--select-landmarks/--landmarks-file are not meaningful with --input-format=${conf.inputFormat()}: " +
               "a cubical grid has no witness-complex landmarks to select or supply"
+          )
+        case ResolvedInput.Relation(_) if conf.complex.isSupplied =>
+          throw new IllegalArgumentException(
+            s"--complex is not meaningful with --input-format=${conf.inputFormat()}: TDA4j.computeFromRelation " +
+              "has its own, separate option set (see that method's own doc) -- remove --complex, or choose a " +
+              "point-cloud/distance-matrix --input-format instead"
+          )
+        case ResolvedInput.Relation(_) if conf.selectLandmarks() || conf.landmarksFile.isSupplied =>
+          throw new IllegalArgumentException(
+            s"--select-landmarks/--landmarks-file are not meaningful with --input-format=${conf.inputFormat()}: " +
+              "a Dowker relation has no witness-complex landmarks to select or supply"
           )
         case _ => ()
 
@@ -106,6 +119,8 @@ object TDA4jCLI:
           case ResolvedInput.Distances(distances) => TDA4j.selectLandmarksFromDistanceMatrix(distances, options)
           case ResolvedInput.CubicalGrid(_, _)    =>
             throw new IllegalStateException("unreachable: rejected by the CubicalGrid guard above")
+          case ResolvedInput.Relation(_) =>
+            throw new IllegalStateException("unreachable: rejected by the Relation guard above")
         writeLandmarkSelection(conf, selection, out)
         0
       else
@@ -118,11 +133,14 @@ object TDA4jCLI:
                 TDA4j.computeFromDistanceMatrixAndLandmarks(distances, landmarks, options)
               case ResolvedInput.CubicalGrid(_, _) =>
                 throw new IllegalStateException("unreachable: rejected by the CubicalGrid guard above")
+              case ResolvedInput.Relation(_) =>
+                throw new IllegalStateException("unreachable: rejected by the Relation guard above")
           case None =>
             resolved match
               case ResolvedInput.Points(points)               => TDA4j.computeFromPoints(points, options)
               case ResolvedInput.Distances(distances)         => TDA4j.computeFromDistanceMatrix(distances, options)
               case ResolvedInput.CubicalGrid(shape, flatVals) => TDA4j.computeFromCubicalImage(shape, flatVals, options)
+              case ResolvedInput.Relation(relation)           => TDA4j.computeFromRelation(relation, options)
         if conf.distanceTo.isSupplied then writeDistance(conf, result, out)
         else writeOutput(conf, result, out)
         0
@@ -172,6 +190,7 @@ object TDA4jCLI:
     add("landmarkSelector", conf.landmarkSelector)
     add("landmarkSeed", conf.landmarkSeed)
     add("nu", conf.nu)
+    add("dual", conf.dual)
     pairs.toArray
 
   // -----------------------------------------------------------------------------------------------------------
@@ -185,6 +204,7 @@ object TDA4jCLI:
     case Points(points: Array[Array[Double]])
     case Distances(distances: Array[Array[Double]])
     case CubicalGrid(shape: Array[Int], flatValues: Array[Double])
+    case Relation(relation: Array[Array[Double]])
 
   /** Inverts `CubicalImage.fromFlatArray`'s own row-major, last-axis-fastest convention to recover a raw
     * `(shape, flatValues)` pair from an already-built `CubicalGridStream` -- used for `CubicalImage.fromFile` (a real
@@ -225,11 +245,16 @@ object TDA4jCLI:
       case "image" =>
         val (shape, flatValues) = flattenGridStream(CubicalImage.fromFile(path, sublevel = true))
         ResolvedInput.CubicalGrid(shape, flatValues)
-      case other =>
+      // Reuses CSV.readPointCloud outright, not a new reader: a Dowker relation is exactly the same shape
+      // that format already parses (arbitrary rows x columns, no squareness requirement) -- the only
+      // difference is what TDA4j entry point the resulting matrix is routed to (see `run`'s own match below),
+      // not how it's read off disk.
+      case "csv-relation" => ResolvedInput.Relation(CSV.readPointCloud(path))
+      case other          =>
         throw new IllegalArgumentException(
           s"unrecognized --input-format '$other'; expected one of csv-points, csv-distances, csv-lower, " +
             "ripser-points, ripser-lower, ripser-upper, ripser-distance, ripser-binary, dipha-distance, off, " +
-            "perseus-cubical, dipha-image, image"
+            "perseus-cubical, dipha-image, image, csv-relation"
         )
 
   // -----------------------------------------------------------------------------------------------------------

@@ -559,3 +559,82 @@ class CLISpec extends mutable.Specification:
       ) must beEqualTo(1)
     }
   }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // --input-format=csv-relation (Dowker complex): reuses CSV.readPointCloud outright (same rectangular-matrix
+  // shape), routed to TDA4j.computeFromRelation instead of computeFromPoints -- see resolveInput's own comment.
+  // ---------------------------------------------------------------------------------------------------------
+
+  "--input-format=csv-relation" should {
+    val dowkerRelation: Array[Array[Double]] = Array(
+      Array(0.0, 1.0, 2.0, 3.0),
+      Array(1.0, 0.0, 1.0, 2.0),
+      Array(2.0, 1.0, 0.0, 1.0)
+    )
+
+    "dispatch to ResolvedInput.Relation" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, dowkerRelation)
+      TDA4jCLI.resolveInput("csv-relation", path) must beAnInstanceOf[TDA4jCLI.ResolvedInput.Relation]
+    }
+
+    "produce the exact same barcode as calling TDA4j.computeFromRelation directly, via a real file on disk" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, dowkerRelation)
+
+      val buffer = new ByteArrayOutputStream()
+      val exitCode = TDA4jCLI.run(Seq("--input-format", "csv-relation", path), new PrintStream(buffer))
+      val cliLines = buffer.toString.linesIterator.toSeq
+
+      val direct = TDA4j.computeFromRelation(dowkerRelation)
+      val directLines = TDA4jCLI.toBars(direct).map(_.toString)
+
+      (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
+    }
+
+    "--dual produces the exact same barcode as TDA4j.computeFromRelation(relation, Array(\"dual\", \"true\")) " +
+      "directly" >> {
+        val path = tempFile(".csv")
+        CSV.writePointCloud(path, dowkerRelation)
+
+        val buffer = new ByteArrayOutputStream()
+        val exitCode =
+          TDA4jCLI.run(Seq("--input-format", "csv-relation", "--dual", "true", path), new PrintStream(buffer))
+        val cliLines = buffer.toString.linesIterator.toSeq
+
+        val direct = TDA4j.computeFromRelation(dowkerRelation, Array("dual", "true"))
+        val directLines = TDA4jCLI.toBars(direct).map(_.toString)
+
+        (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
+      }
+
+    "reject --complex combined with --input-format=csv-relation" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, dowkerRelation)
+      val buffer = new ByteArrayOutputStream()
+      TDA4jCLI.run(
+        Seq("--input-format", "csv-relation", "--complex", "vr", path),
+        new PrintStream(buffer)
+      ) must beEqualTo(1)
+    }
+
+    "reject --select-landmarks with --input-format=csv-relation" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, dowkerRelation)
+      val buffer = new ByteArrayOutputStream()
+      TDA4jCLI.run(
+        Seq("--input-format", "csv-relation", "--select-landmarks", "--num-landmarks", "1", path),
+        new PrintStream(buffer)
+      ) must beEqualTo(1)
+    }
+
+    "reject engine=ripser (the Dowker complex is not a flag complex in general)" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, dowkerRelation)
+      val buffer = new ByteArrayOutputStream()
+      TDA4jCLI.run(
+        Seq("--input-format", "csv-relation", "--engine", "ripser", path),
+        new PrintStream(buffer)
+      ) must beEqualTo(1)
+    }
+  }

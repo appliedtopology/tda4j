@@ -64,19 +64,50 @@ Session: 2026-09-25. First-ever exercise of a Dowker complex anywhere in this co
 - Full suite: 586 examples, 0 failures, 11 skipped (pre-existing benchmark `skipAll`s), after `scalafmtAll`
   (no reformatting needed).
 
-## Explicitly NOT done this session (follow-up)
+## Explicitly NOT done in the first (streams-only) session -- since completed
 
-- **`matlab.TDA4j`/`cli` wiring** (`complex=dowker` or similar, `engine=naive`/`cohomology` refusing
-  `ripser`/`chunks` the same way general-witness/Cech do -- needs its own `resolveDowkerEngine`-style dispatch
-  and a decision on the input shape: a relation matrix is not obviously "points" or "a distance matrix", so the
-  existing `computeFromPoints`/`computeFromDistanceMatrix` entry points may not fit cleanly and a new
-  `computeFromRelation`-style entry point may be needed).
-- `src/docs/developers-guide/persistence-engines.md`'s streams x engines table (a `dowker` row, mirroring the
-  `witness`/general row's reasoning).
-- `src/docs/developers-guide/architecture.md`/`class-diagrams.md` and `src/docs/user-guide/README.md`.
-- CLAUDE.md's own package-layout/architecture summary (a short "Dowker complexes" paragraph, once the above
-  surfaces exist to summarize).
+- **`matlab.TDA4j`/`cli` wiring** -- DONE in a follow-up session (see below).
+- `src/docs/developers-guide/persistence-engines.md`'s streams x engines table -- DONE.
+- `src/docs/developers-guide/architecture.md`/`class-diagrams.md` and `src/docs/user-guide/README.md` -- DONE.
+- CLAUDE.md's own "Dowker complexes" paragraph -- DONE (updated to drop the "not yet wired in" caveat).
 
-Per CLAUDE.md's own "finalizing a user-visible capability" checklist, this session lands the streams-layer chunk
-only (with genuine, cross-validated correctness) -- the four other surfaces are real follow-up work, not
-forgotten.
+## Follow-up session: matlab.TDA4j/cli/docs wiring (2026-09-25, same day)
+
+Resolved the input-shape question flagged above: a relation is neither a point cloud nor a square/symmetric
+distance matrix, so it gets its own dedicated one-shot entry point, `computeFromRelation` (MATLAB/Java) /
+`--input-format csv-relation` (CLI) -- NOT a new `complex=` value on `computeFromPoints`/`computeFromDistanceMatrix`
+(mirroring the shape the two-step witness recipe's own separate entry points already established: a strict,
+smaller, own option allowlist via `parseOptionsWithKeys`, not the shared `recognizedKeys`/`dispatch`/
+`computeGeneric` machinery those two build around).
+
+- `matlab.TDA4j.computeFromRelation(relation, options)`: recognizes `"engine"` (`naive` default, refuses
+  `ripser`/`chunks` -- not a flag complex, same reasoning as `witness`/`witnessVariant=general`),
+  `"maxDimension"` (default 2, needs the same "+1 build, drop via fromBars" dance as Cech/general-witness since
+  the top dimension isn't naturally bounded), `"maxFiltrationValue"` (default `+Infinity`, no
+  `minimumEnclosingRadius`-style truncation available for an arbitrary relation), `"dual"` (new: computes the
+  `W`-side complex directly via `DowkerGeometry.dual`, so a caller never has to transpose the relation by hand
+  to get the OTHER side's representatives), `"field"`/`"prime"`/`"epsilon"`. Implementation mirrors
+  `computeWitnessFromLandmarks`'s `WitnessVariantKind.General` branch almost exactly (same
+  `LimitedCofaceSimplexStream`/`buildBoundaryMatrix`/`fromBars`/`PersistenceEngine.naive`/`.cohomology` shape).
+- `cli`: new `--input-format csv-relation` (reuses `CSV.readPointCloud` outright -- a Dowker relation is
+  exactly that reader's own "arbitrary rows x columns, no squareness" shape, just routed to a different TDA4j
+  entry point, not a new reader) and a new `ResolvedInput.Relation` case; `--dual` mirrors the new
+  `"dual"` option. `--complex`/`--select-landmarks`/`--landmarks-file` are all rejected for
+  `--input-format csv-relation`, mirroring the existing `CubicalGrid` guards exactly.
+- Tests: 7 new `TDA4jSpec` examples (conversion-layer only, per that file's own stated purpose -- cross-checks
+  the facade's dispatch against driving `DowkerCofaceSimplexStream` directly, including a `dual=true` check
+  exercising the functorial duality theorem through the facade) and 6 new `CLISpec` examples (end-to-end via a
+  real file on disk, plus the guard rejections). Full suite after this session: 599 examples, 0 failures, 11
+  skipped; `laikaSite` builds clean (pre-existing, unrelated scaladoc-link warnings only).
+- Docs: `persistence-engines.md` gained a `Dowker relation (computeFromRelation, no complex key)` table row
+  (grouped under "Not a flag complex" in the reasons list, alongside `cech`/`witness`-general/`sheehy-rips`) and
+  `class-diagrams.md` a `DowkerCofaceSimplexStream` node; `architecture.md` gained a full "Dowker complexes"
+  section (mirroring the "Witness complexes" section's own depth) between Witness and Sheehy; `user-guide/
+  README.md` gained a "Dowker complexes" walkthrough section (including `DowkerGeometry.fromBoolean` for the
+  classical case) between Witness and Cubical, plus entries in the entry-points paragraph, the CLI paragraph,
+  and the "Which persistence engine?" table.
+
+CLAUDE.md's own instructions were also updated this session (unrelated to Dowker itself, but landed in the same
+pass): a cloud session working on its own disposable `claude/...` branch may now commit and push at will,
+without asking first -- the earlier blanket "the project lead commits their own work" rule was scoped down to
+local/interactive sessions working directly on a shared branch.

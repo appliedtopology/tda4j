@@ -20,9 +20,9 @@ import org.scalacheck.*
   *
   * Validation order follows this codebase's established convention for a new complex type (see `WitnessStreamSpec`'s
   * own header): a hand-derived fixture with known, nontrivial topology (the classical "5 arcs cover a circle" nerve
-  * example, chosen specifically to exercise Dowker DUALITY -- the property that makes this construction worth having
-  * at all), an independent brute-force reimplementation of the filtration-value formula cross-checked on random
-  * relations, the duality cross-check itself on random relations, the bars-account-for-cells structural invariant, and
+  * example, chosen specifically to exercise Dowker DUALITY -- the property that makes this construction worth having at
+  * all), an independent brute-force reimplementation of the filtration-value formula cross-checked on random relations,
+  * the duality cross-check itself on random relations, the bars-account-for-cells structural invariant, and
   * cross-engine agreement (`CellularCohomologyContext` against the naive engine -- `engine="cohomology"`'s own
   * validation story, since this construction is not a flag complex and so is never expected to agree with
   * `PackedRipserCohomologyContext`/`chunks`, the same status Cech and the general witness complex already have).
@@ -49,17 +49,17 @@ class DowkerStreamSpec extends mutable.Specification with ScalaCheck:
         .diagramAt(Double.PositiveInfinity)
     )
 
-  /** Drops birth == death ("zero-persistence") bars -- an artifact of the total-order tie-break resolving several
-    * cells sharing one real filtration value (e.g. a vertex born at `t` immediately merged by an edge also born at
-    * `t`), not a genuine topological feature; CLAUDE.md/`WitnessStreamSpec` already document this as expected on a
-    * tie-heavy complex. Load-bearing here specifically: the functorial Dowker duality theorem (Chowdhury & Mémoli,
-    * 2018) guarantees the X-side and Y-side PERSISTENCE MODULES are naturally isomorphic, hence their interval
-    * decompositions are literally identical multisets -- but only once these zero-length artifacts are stripped.
-    * Confirmed necessary, not just theoretically tidy: a hand-worked 3x4 rectangular relation (`.claude/scratchpad`
-    * during this construction's own development) has `numLeft != numWitnesses`, so the RAW barcodes differ in H0 bar
-    * COUNT (exactly one birth event per vertex, unconditionally, so 3 vs 4 vertices cannot give equal raw multisets)
-    * even though the underlying spaces are honestly homotopy equivalent at every threshold -- the extra births are
-    * every one of them zero-persistence, and vanish under this filter.
+  /** Drops birth == death ("zero-persistence") bars -- an artifact of the total-order tie-break resolving several cells
+    * sharing one real filtration value (e.g. a vertex born at `t` immediately merged by an edge also born at `t`), not
+    * a genuine topological feature; CLAUDE.md/`WitnessStreamSpec` already document this as expected on a tie-heavy
+    * complex. Load-bearing here specifically: the functorial Dowker duality theorem (Chowdhury & Mémoli, 2018)
+    * guarantees the X-side and Y-side PERSISTENCE MODULES are naturally isomorphic, hence their interval decompositions
+    * are literally identical multisets -- but only once these zero-length artifacts are stripped. Confirmed necessary,
+    * not just theoretically tidy: a hand-worked 3x4 rectangular relation (`.claude/scratchpad` during this
+    * construction's own development) has `numLeft != numWitnesses`, so the RAW barcodes differ in H0 bar COUNT (exactly
+    * one birth event per vertex, unconditionally, so 3 vs 4 vertices cannot give equal raw multisets) even though the
+    * underlying spaces are honestly homotopy equivalent at every threshold -- the extra births are every one of them
+    * zero-persistence, and vanish under this filter.
     */
   private def dropZeroPersistence(bars: List[(Int, Double, Double)]): List[(Int, Double, Double)] =
     bars.filterNot(t => t._2 == t._3)

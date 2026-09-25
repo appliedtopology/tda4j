@@ -1156,3 +1156,69 @@ class TDA4jSpec extends mutable.Specification:
         )
       }
   }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // computeFromRelation (Dowker complex) -- conversion-layer checks only, per this file's own stated purpose:
+  // the underlying construction's own correctness (duality, monotonicity, the keptByThresholdAndCriterion
+  // infinity fix) is already cross-validated in streams.DowkerStreamSpec. A rectangular (numLeft != numWitnesses)
+  // relation is used deliberately, the same shape DowkerStreamSpec's own duality property test needed to expose
+  // a real bug during development -- see .claude/WORKLOG-dowker-complex.md.
+  // ---------------------------------------------------------------------------------------------------------
+
+  private val dowkerRelation: Array[Array[Double]] = Array(
+    Array(0.0, 1.0, 2.0, 3.0),
+    Array(1.0, 0.0, 1.0, 2.0),
+    Array(2.0, 1.0, 0.0, 1.0)
+  )
+
+  "TDA4j.computeFromRelation" should {
+    "default to engine=naive and match streams.DowkerCofaceSimplexStream driven directly" in {
+      given Double is Field = Field.DoubleApproximated(1e-9)
+      val direct = SimplicialHomologyContext[Int, Double, Double]()
+        .persistentHomology(DowkerCofaceSimplexStream(dowkerRelation))
+        .diagramAt(Double.PositiveInfinity)
+      val facade = triples(TDA4j.computeFromRelation(dowkerRelation).toArray())
+      facade must containTheSameElementsAs(direct)
+    }
+
+    "engine=cohomology agrees exactly with the default engine=naive" in {
+      val naive = triples(TDA4j.computeFromRelation(dowkerRelation).toArray())
+      val cohomology =
+        triples(TDA4j.computeFromRelation(dowkerRelation, Array("engine", "cohomology")).toArray())
+      naive must containTheSameElementsAs(cohomology)
+    }
+
+    "reject engine=ripser and engine=chunks (the Dowker complex is not a flag complex in general)" in {
+      (TDA4j
+        .computeFromRelation(dowkerRelation, Array("engine", "ripser")) must throwA[IllegalArgumentException]) and
+        (TDA4j.computeFromRelation(dowkerRelation, Array("engine", "chunks")) must throwA[IllegalArgumentException])
+    }
+
+    "reject a ragged or empty relation" in {
+      (TDA4j.computeFromRelation(Array(Array(0.0, 1.0), Array(0.0))) must throwA[IllegalArgumentException]) and
+        (TDA4j.computeFromRelation(Array.empty[Array[Double]]) must throwA[IllegalArgumentException])
+    }
+
+    "reject an unrecognized option (e.g. 'complex', which this entry point has no use for)" in {
+      TDA4j.computeFromRelation(dowkerRelation, Array("complex", "vr")) must throwA[IllegalArgumentException]
+    }
+
+    "dual=true matches streams.DowkerCofaceSimplexStream(...).dual driven directly -- the functorial Dowker " +
+      "duality theorem, exercised through the facade" in {
+        given Double is Field = Field.DoubleApproximated(1e-9)
+        val direct = SimplicialHomologyContext[Int, Double, Double]()
+          .persistentHomology(DowkerCofaceSimplexStream(dowkerRelation).dual)
+          .diagramAt(Double.PositiveInfinity)
+        val facade = triples(TDA4j.computeFromRelation(dowkerRelation, Array("dual", "true")).toArray())
+        facade must containTheSameElementsAs(direct)
+      }
+
+    "cycleVertices/cycleCoefficients are readable, same length, for engine=naive and engine=cohomology alike" in {
+      val naiveResult = TDA4j.computeFromRelation(dowkerRelation)
+      val cohomologyResult = TDA4j.computeFromRelation(dowkerRelation, Array("engine", "cohomology"))
+      def allReadable(r: PersistenceResult): Boolean =
+        (0 until r.size()).forall(i => r.cycleVertices(i).length == r.cycleCoefficients(i).length)
+      allReadable(naiveResult) must beTrue
+      allReadable(cohomologyResult) must beTrue
+    }
+  }

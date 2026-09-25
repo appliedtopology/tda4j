@@ -311,6 +311,56 @@ here too). The second invocation reads the landmarks file back in and computes t
 on the second line is optional (that combination of flags can only ever mean a witness complex) but
 accepted if you type it out of habit from the one-shot form.
 
+### Dowker complexes
+
+```scala 3
+val relation = Array(
+  Array(0.0, 1.0, 2.0),  // point 0's own relation value to each of 3 witnesses
+  Array(1.0, 0.0, 1.0),  // point 1's
+  Array(2.0, 1.0, 0.0)   // point 2's
+)
+val geometry = DowkerGeometry(relation)
+val stream = DowkerCofaceSimplexStream(geometry)
+val homology = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(stream)
+```
+
+Dowker's complex (1952), generalized to a real-valued, filtered relation `R: L x W -> [0, Infinity]` the way
+Chowdhury & Mémoli's "functorial Dowker theorem" does — unlike the witness complex above, `R` need not come
+from a metric at all, and `L`/`W` need not be the same set or even the same size. A subset `sigma` of `L`
+becomes a simplex at time `t` iff some witness relates to every point of `sigma` by time `t`:
+`f(sigma) = min_w max_{x in sigma} R(x,w)`. This directly generalizes witness's own `nu = 0` case — pass the
+landmark-to-witness distance matrix as `R` and you get the same construction — but also covers relations with
+no metric behind them at all, e.g. persistent homology of a directed/asymmetric network's own edge weights
+(`R(x,y)` = the weight of the edge from `x` to `y`, no symmetrization needed).
+
+For the classical (unfiltered) Dowker complex — a plain boolean "is `x` related to `w`" relation, no notion of
+time — use `DowkerGeometry.fromBoolean`:
+
+```scala 3
+val covers = Seq(
+  Seq(true, false, true),   // point 0 is covered by witnesses 0 and 2
+  Seq(true, true, false),
+  Seq(false, true, true)
+)
+val classical = DowkerGeometry.fromBoolean(covers)
+```
+
+**Duality is the whole point of this construction.** `geometry.dual` (equivalently `stream.dual`) gives the
+complex on the OTHER side — vertices = witnesses, related back to `L` via the transposed relation — and the
+functorial Dowker duality theorem guarantees its barcode agrees EXACTLY with the original side's, once
+zero-persistence (birth == death) bars are dropped from both (a real artifact when `L` and `W` differ in size:
+a simplicial filtration records one `H_0` birth per vertex, so differently-sized sides can't match bar-for-bar
+without dropping those). Pick whichever side is more convenient — e.g. if `W` is small but you want
+representatives over it, `stream.dual` gets you there directly without transposing `relation` by hand.
+
+Like Cech/witness/Sheehy above, this is **not a flag complex** in general (a witness for a whole simplex need
+not witness any of its edges), so `engine=ripser`/`chunks` don't apply — use `naive` or `cohomology`.
+
+From MATLAB/CLI, this is its own entry point (`computeFromRelation`/`--input-format csv-relation`), not a
+`complex=` value on `computeFromPoints`/`computeFromDistanceMatrix` — a relation isn't a point cloud or a
+square/symmetric distance matrix. See "Calling from MATLAB or Java" below; `"dual"`/`--dual` computes the
+`W`-side complex directly.
+
 ### Cubical complexes and images
 
 ```scala 3
@@ -414,11 +464,15 @@ any Scala:
 java -jar target/scala-3.9.0/TDA4j-<version>-assembly.jar [options] <input-file>
 ```
 
-It loads a point cloud, distance matrix, or cubical image in one of several formats (`--input-format`),
-computes persistence via the same facade the MATLAB bridge uses (below), and writes the result in one of
-several formats (`--output-format`: `text`, `csv`, `gudhi`, `dipha`, `perseus`). Run with `--help` for the
-full flag list; the main ones mirror the MATLAB options one-to-one: `--complex` (`vr`/`alpha`/`cech`/
-`witness`/`dtm-rips`/`dtm-alpha`/`sheehy-rips`), `--engine`, `--max-dimension`, `--max-filtration-value`,
+It loads a point cloud, distance matrix, cubical image, or Dowker relation (`--input-format csv-relation`,
+routed to `computeFromRelation` — a plain rows-x-columns CSV, the same shape `csv-points` already reads, just
+without any distance/coordinate meaning) in one of several formats (`--input-format`), computes persistence via
+the same facade the MATLAB bridge uses (below), and writes the result in one of several formats
+(`--output-format`: `text`, `csv`, `gudhi`, `dipha`, `perseus`). Run with `--help` for the full flag list; the
+main ones mirror the MATLAB options one-to-one: `--complex` (`vr`/`alpha`/`cech`/
+`witness`/`dtm-rips`/`dtm-alpha`/`sheehy-rips`, meaningless with `--input-format csv-relation`), `--dual`
+(`true`/`false`, only consulted with `--input-format csv-relation` — computes the transposed-relation complex),
+`--engine`, `--max-dimension`, `--max-filtration-value`,
 `--field`, `--representatives` (also print each bar's representative chain), and (for `--complex=witness`)
 `--num-landmarks`, `--witness-variant`, `--landmark-selector`, `--landmark-seed`, `--nu`. For
 `--complex=dtm-rips` or `--dtm-alpha`, use `--dtm-k` (required), `--dtm-q` (default 2.0), and `--dtm-p`
@@ -458,7 +512,11 @@ dtm-alpha/sheehy-rips, from a point cloud or a precomputed distance matrix — a
 real coordinates, so they're only available from the points overload; witness/dtm-rips/sheehy-rips work from
 either, exactly like `vr`, since none of the three needs real coordinates, only a metric),
 `computeFromCubicalImage`/`computeFromImage` (cubical persistence from a flat array + shape, 
-or a 2D pixel matrix directly), and the two-step witness recipe's own four entry points -- 
+or a 2D pixel matrix directly), `computeFromRelation` (Dowker complex persistence from a general relation
+matrix — see "Dowker complexes" above; its own OWN, much smaller options set, `"engine"`/`"maxDimension"`/
+`"maxFiltrationValue"`/`"dual"`/`"field"`/`"prime"`/`"epsilon"`, is not in the table below either, for the same
+reason the two-step witness recipe's own options aren't), and the two-step witness recipe's own four entry
+points -- 
 `selectLandmarksFromPoints`/`selectLandmarksFromDistanceMatrix` (→ `LandmarkSelectionResult`) and 
 `computeFromPointsAndLandmarks`/`computeFromDistanceMatrixAndLandmarks`, plus the 
 `coveringRadiusFromPoints`/`coveringRadiusFromDistanceMatrix` query pair -- covered in their own section
@@ -633,7 +691,7 @@ Guide](../developers-guide/architecture.md)'s `homology.CircularCoordinates` sec
 | Fastest, most memory-efficient — the default for `complex=vr` | `ripser` (`PackedRipserCohomologyContext`) |
 | Large complex, want representatives for every bar including essential ones | `chunks` (`CellularPersistenceInChunksContext`) |
 | Cohomology (cocycle representatives) on `Cube`/`FiniteSimplicialSet`, or on Alpha/Cech/DTM/Sheehy/witness, where `ripser` doesn't apply | `cohomology` (`CellularCohomologyContext`) |
-| Alpha or Cech or DTM or Sheehy complexes, or a general (non-flag) witness complex | `naive` or `cohomology` (`chunks` also works for Cech, DTM-Rips, and Sheehy-Rips — not Alpha/DTM-Alpha) |
+| Alpha or Cech or DTM or Sheehy complexes, a Dowker complex, or a general (non-flag) witness complex | `naive` or `cohomology` (`chunks` also works for Cech, DTM-Rips, and Sheehy-Rips — not Alpha/DTM-Alpha/Dowker) |
 | A lazy witness complex (the flag-complex variant) | `ripser` (`PackedRipserCohomologyContext`, run directly on `WitnessMetricSpace`) or `naive`/`chunks`/`cohomology` |
 | A cubical image, any ambient dimension `>= 2` — fastest option there | `fast-cubical` (`FastCubicalHomologyContext`; H0/H1 only, no `Chain` reduction at all, in 2D specifically; a `chunks` hybrid for the residual middle dimensions at 3D+) |
 | An alpha complex via `"helix"`, any ambient dimension `>= 2` — fastest option there | `fast-alpha` (`FastAlphaHomologyContext`; H0/H1 only, no `Chain` reduction at all, in 2D specifically; a `chunks` hybrid for the residual middle dimensions at 3D+; `"DQP"` needs `naive`/`chunks`/`cohomology` instead; higher ambient dimension and point count make `FastAlphaTriangulationException` noticeably more likely — see `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) |

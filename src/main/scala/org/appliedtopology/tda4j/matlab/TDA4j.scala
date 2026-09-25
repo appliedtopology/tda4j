@@ -252,6 +252,40 @@ object TDA4j:
     val opts = parseOptions(options)
     dispatch(opts, explicitMetricSpace(distances), None)
 
+  def computeFromRelation(relation: Array[Array[Double]]): PersistenceResult =
+    computeFromRelation(relation, Array.empty[String])
+
+  /** Dowker complex persistence from a general relation `R: L x W -> [0, Infinity]` (`relation(x)(w)`, one row per
+    * `L`-side point, one column per witness `w`) -- NOT a point cloud or a distance matrix, so this is a separate entry
+    * point rather than a `"complex"` value on `computeFromPoints`/`computeFromDistanceMatrix` (see
+    * `streams.DowkerGeometry`'s own doc for why: `R` need not be square, symmetric, or derived from any metric at all).
+    * `relation` values must be non-negative; `+Infinity` is the correct way to encode "never related" (see
+    * `streams.DowkerGeometry.fromBoolean` for lifting a classical boolean relation).
+    *
+    * Recognizes:
+    *   - `"engine"`: `"naive"` (default) or `"cohomology"` only -- the Dowker complex is not a flag complex in general
+    *     (a witness for a whole simplex need not witness any of its edges, see `streams.DowkerGeometry`'s own doc), so
+    *     `"ripser"`/`"chunks"` are refused, exactly like `complex=witness` with `witnessVariant=general`.
+    *   - `"maxDimension"`: integer, default `2` -- same "top homological degree reported" meaning as
+    *     `computeFromPoints`'s own option; both engines here need the internal "+1" build-and-drop dance since the
+    *     Dowker complex's own top dimension is not naturally bounded (up to `relation.length - 1`, same status as
+    *     `complex=cech`/`complex=witness` with `witnessVariant=general`).
+    *   - `"maxFiltrationValue"`: double, default `+Infinity` (NOT a `minimumEnclosingRadius`-style truncation -- an
+    *     arbitrary relation gives no cone argument to truncate against, same reasoning as
+    *     `complex=witness`/`witnessVariant=general`'s own default).
+    *   - `"dual"`: `"true"` or `"false"` (default) -- when `true`, computes the `W`-side complex (vertices = one per
+    *     COLUMN of `relation`, witnessed by rows) instead of the `L`-side complex, via `streams.DowkerGeometry.dual`
+    *     (the transposed relation). The functorial Dowker duality theorem guarantees the two sides' barcodes agree
+    *     exactly once zero-persistence bars are dropped -- see `.claude/WORKLOG-dowker-complex.md` -- so this is the
+    *     direct way to get the OTHER side's representatives (e.g. when `L` is small but `W`'s own representatives are
+    *     what a caller actually wants) without transposing `relation` by hand.
+    *   - `"field"`, `"prime"`, `"epsilon"`: same as `computeFromPoints`.
+    */
+  def computeFromRelation(relation: Array[Array[Double]], options: Array[String]): PersistenceResult =
+    validateRelation(relation)
+    val opts = parseOptionsWithKeys(options, dowkerKeys)
+    dispatchDowker(opts, relation)
+
   // ---------------------------------------------------------------------------------------------------------------
   // the two-step witness-complex recipe: select landmarks (and read back R), THEN compute -- an alternative to
   // computeFrom{Points,DistanceMatrix}'s own one-shot complex=witness path (which stays exactly as it was: pick
@@ -496,6 +530,13 @@ object TDA4j:
   private val witnessFromLandmarksKeys =
     Set("complex", "witnessvariant", "nu", "engine", "maxdimension", "maxfiltrationvalue", "field", "prime", "epsilon")
 
+  /** `computeFromRelation`'s own allowlist -- see that method's doc for what each key means. Separate from
+    * `recognizedKeys` for the same reason `witnessFromLandmarksKeys` is: this entry point takes a relation, not a point
+    * cloud or distance matrix, so `"complex"`/`"alphaBackend"`/`"numLandmarks"`/etc. would all be silently meaningless
+    * here rather than caught.
+    */
+  private val dowkerKeys = Set("engine", "maxdimension", "maxfiltrationvalue", "dual", "field", "prime", "epsilon")
+
   private def parseOptionsWithKeys(options: Array[String], allowedKeys: Set[String]): Map[String, String] =
     if options.length % 2 != 0 then
       throw new IllegalArgumentException(
@@ -555,6 +596,16 @@ object TDA4j:
 
   private def explicitMetricSpace(distances: Array[Array[Double]]): FiniteMetricSpace[Int] =
     ExplicitMetricSpace(distances.toIndexedSeq.map(_.toIndexedSeq))
+
+  /** Same shape check as `validatePoints` (non-empty, every row the same length), worded for a relation matrix rather
+    * than a point cloud -- `streams.DowkerGeometry`'s own constructor separately rejects a negative entry (which needs
+    * no MATLAB-specific rewording, it already names the right thing).
+    */
+  private def validateRelation(relation: Array[Array[Double]]): Unit =
+    if relation.isEmpty then throw new IllegalArgumentException("relation must have at least one row")
+    val w = relation(0).length
+    if relation.exists(_.length != w) then
+      throw new IllegalArgumentException("every row of relation must have the same number of columns")
 
   private def validateShape(shape: Array[Int], flatValues: Array[Double]): Unit =
     if shape.isEmpty then throw new IllegalArgumentException("shape must have at least one axis")
@@ -1400,6 +1451,94 @@ object TDA4j:
         toDouble
       )
     }
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // dispatch for computeFromRelation -- a separate function from dispatch/computeGeneric above (not a new
+  // "complex" branch inside them) because a Dowker relation carries no FiniteMetricSpace[Int]/point cloud at all,
+  // the type dispatch()/computeGeneric are built around (same reason dispatchCubical below is separate).
+  // ---------------------------------------------------------------------------------------------------------------
+
+  private def dispatchDowker(opts: Map[String, String], relation: Array[Array[Double]]): PersistenceResult =
+    val engine = EngineKind.parse(opts.getOrElse("engine", "naive"))
+    if engine == EngineKind.FastCubical then
+      throw new IllegalArgumentException(
+        "engine=fast-cubical is not offered for computeFromRelation: FastCubicalHomologyContext is specialized " +
+          "to CubicalGridStream and has no notion of a Dowker complex at all."
+      )
+    if engine == EngineKind.FastAlpha then
+      throw new IllegalArgumentException(
+        "engine=fast-alpha is not offered for computeFromRelation: FastAlphaHomologyContext is specialized to " +
+          "HelixDelaunay and has no notion of a Dowker complex at all."
+      )
+    if engine == EngineKind.Ripser then
+      throw new IllegalArgumentException(
+        "engine=ripser cannot be used with computeFromRelation: the Dowker complex is not a flag complex in " +
+          "general (see streams.DowkerGeometry's own doc), so PackedRipserCohomologyContext's diameter-based " +
+          "optimizations do not apply -- use engine=naive or engine=cohomology."
+      )
+    if engine == EngineKind.Chunks then
+      throw new IllegalArgumentException(
+        "engine=chunks is not offered for computeFromRelation -- use engine=naive or engine=cohomology " +
+          "(same status complex=witness/witnessVariant=general has)."
+      )
+    val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(2)
+    val maxFiltrationValue: Option[Double] =
+      opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
+    val dual = opts.get("dual").exists(v => parseBooleanOption("dual", v))
+    dispatchByField(opts) { [C] => (toDouble: C => Double) =>
+      computeDowker[C](relation, engine, maxDimension, maxFiltrationValue, dual, toDouble)
+    }
+
+  /** Not a flag complex -- `minimumEnclosingRadius` is not a valid truncation here (see
+    * `streams.DowkerCofaceSimplexStream`'s own doc), so an unset `maxFiltrationValue` means `+Infinity`, the same shape
+    * `computeWitnessFromLandmarks`'s own `WitnessVariantKind.General` branch uses. `requestedMaxDimension` needs the
+    * same "build one dimension higher via `LimitedCofaceSimplexStream`, drop it via `fromBars`" dance as
+    * Cech/general-witness, for the identical reason: the Dowker complex's own top dimension is not naturally bounded.
+    */
+  private def computeDowker[C](
+    relation: Array[Array[Double]],
+    engine: EngineKind,
+    requestedMaxDimension: Int,
+    maxFiltrationValue: Option[Double],
+    dual: Boolean,
+    toDouble: C => Double
+  )(using C is Field): PersistenceResult =
+    val geometry =
+      val base = DowkerGeometry(relation)
+      if dual then base.dual else base
+    val resolvedMaxFiltrationValue = maxFiltrationValue.getOrElse(Double.PositiveInfinity)
+    val cellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
+    val streamForBoundary = LimitedCofaceSimplexStream(
+      DowkerCofaceSimplexStream(geometry, resolvedMaxFiltrationValue),
+      requestedMaxDimension + 1
+    )
+    val boundaryMatrixOf = () =>
+      buildBoundaryMatrix[Simplex[Int], C](
+        streamForBoundary.iterator.toIndexedSeq,
+        cellVertices,
+        toDouble,
+        streamForBoundary.filtrationValue
+      )
+    engine match
+      case EngineKind.Naive =>
+        fromBars[Simplex[Int], C](
+          PersistenceEngine.naive[Simplex[Int], C].barcode(streamForBoundary),
+          cellVertices,
+          toDouble,
+          requestedMaxDimension,
+          boundaryMatrixOf
+        )
+      case EngineKind.Cohomology =>
+        fromBars[Simplex[Int], C](
+          PersistenceEngine.cohomology[Simplex[Int], C].barcode(streamForBoundary),
+          cellVertices,
+          toDouble,
+          requestedMaxDimension,
+          boundaryMatrixOf
+        )
+      case EngineKind.Ripser | EngineKind.Chunks | EngineKind.FastCubical | EngineKind.FastAlpha =>
+        // dispatchDowker already rejects every one of these before this method is ever reached.
+        throw new IllegalArgumentException(s"engine=$engine is not offered for computeFromRelation")
 
   // ---------------------------------------------------------------------------------------------------------------
   // dispatch for computeFromCubicalImage/computeFromImage -- a separate function from dispatch/computeGeneric
