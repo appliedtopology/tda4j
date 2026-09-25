@@ -5,6 +5,7 @@ import org.appliedtopology.tda4j.algebra.{given, *}
 import org.appliedtopology.tda4j.cells.{given, *}
 import org.appliedtopology.tda4j.streams.{given, *}
 import org.appliedtopology.tda4j.homology.{given, *}
+import org.appliedtopology.tda4j.barcode.{given, *}
 
 import collection.mutable
 import scala.math.{pow, sqrt}
@@ -179,9 +180,29 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
     cospherical.add(spherepoints.toSet)
     frontierCases.removeIf((fc: FrontierCase) => fc.facet.toSet.subsetOf(cosphericalPoints.toSet))
     spherepoints.subtractAll(newDelaunaySimplex.simplex.toSeq)
+    // EVERY facet of `newDelaunaySimplex`, not just the ones built from `frontierCase.facet`'s own vertices.
+    // `frontierCase.facet` is exactly `newDelaunaySimplex.simplex` minus the complement vertex (the one the
+    // main loop just added to resolve this frontier case) -- so iterating `fi` only over `frontierCase.facet`'s
+    // own vertices can never produce `frontierCase.facet` itself as one of the generated (facet, cofacet) pairs
+    // (`fi` never equals the complement). In the ordinary case that's harmless: there's nothing left to pull in
+    // on that side, so omitting it changes nothing. But when a genuinely different point is ALSO a valid,
+    // empty-circumsphere candidate for that SAME originating facet (near-cospherical with the one just chosen --
+    // exactly the situation this method exists to handle), omitting it means that candidate is never reachable:
+    // the cospherical branch never calls `addFrontierCase` for `frontierCase.facet` (only the non-cospherical
+    // `else` branch does), and `visitedFacets` already marked it visited at the top of the main loop before this
+    // method was ever called -- so the facet is structurally locked out from both the local search here AND the
+    // main frontier walk, and the second candidate is silently lost. Confirmed directly on a real 13-point,
+    // ambient-dimension-4 example: two points, 1 and 4, are each independently a genuine empty-circumsphere
+    // coface of facet `{2,3,6,9}` (circumradii differing by ~1.5e-5, each within `epsilon` of the other's own
+    // circumsphere), and `frontierCase.facet` there is exactly `{2,3,6,9}` -- the facet this omission drops.
+    // Iterating over EVERY vertex of `newDelaunaySimplex.simplex` includes that facet too (oriented correctly by
+    // this loop's own `candidateHP.isLight(points(complement))` check, exactly as for the other facets); in the
+    // ordinary case it then finds no remaining light spherepoints and falls through to `addFrontierCase`, which
+    // is a harmless no-op once picked up by the main loop (`visitedFacets` already has it) -- see
+    // `.claude/WORKLOG-helix-bootstrap-fix.md`.
     val facets: mutable.ArrayDeque[(Simplex[Int], Simplex[Int])] =
       mutable.ArrayDeque.from(
-        frontierCase.facet.toSeq.toSeq.map(fi => (newDelaunaySimplex.simplex - fi, newDelaunaySimplex.simplex))
+        newDelaunaySimplex.simplex.toSeq.toSeq.map(fi => (newDelaunaySimplex.simplex - fi, newDelaunaySimplex.simplex))
       )
     while facets.nonEmpty do
       // take a facet
@@ -542,8 +563,14 @@ object HelixDelaunay:
     * case measured a 33% total-tetrahedra-volume shortfall against the (violation-inflated) unrepaired triangulation,
     * alongside exactly one spurious essential `H_2` bar -- direct evidence of a genuine gap, not a
     * structurally-clean-but-topologically-wrong result (`.claude/DESIGN-helix-triangulation-repair.md`).
+    *
+    * Returns `None` when the complex is genuinely complete (no repair needed there); `Some(vertices)` when a void
+    * exists, where `vertices` is the vertex support of the essential `H_{d-1}` representative(s) `barcodeAt` returns --
+    * the actual boundary of the hole, not a guess -- a far more targeted retry seed than "every vertex on the complex's
+    * own outer hull" would be (which is most of the point cloud for an ordinary input, and would be true of ANY
+    * complete complex too, not just an incomplete one).
     */
-  private def hasNoInteriorVoid(simps: Set[DelaunaySimplex], ambientDimension: Int): Boolean =
+  private def interiorVoidVertices(simps: Set[DelaunaySimplex], ambientDimension: Int): Option[Set[Int]] =
     given Double is Field = Field.DoubleApproximated(1e-9)
     val builder = ExplicitStreamBuilder[Int, Double]()
     simps
@@ -551,8 +578,14 @@ object HelixDelaunay:
       .foreach(s => builder.addOne((0.0, s)))
     val bars = SimplicialHomologyContext[Int, Double, Double]()
       .persistentHomology(builder.result())
-      .diagramAt(Double.PositiveInfinity)
-    !bars.exists { case (dim, _, death) => dim == ambientDimension - 1 && death.isInfinite }
+      .barcodeAt(Double.PositiveInfinity)
+    val voidBars = bars.filter { b =>
+      b.dim == ambientDimension - 1 && (b.upper match
+        case PositiveInfinity() => true
+        case _                  => false)
+    }
+    if voidBars.isEmpty then None
+    else Some(voidBars.flatMap(_.annotation).flatMap(_.rawEntries.map(_._1)).flatMap(_.toSet).toSet)
 
   /** The `requireValidTriangulation = true` repair pass (`.claude/DESIGN-helix-triangulation-repair.md`) -- strictly a
     * post-processing step over an already-`compute()`d result. Rather than trying to hand-patch the conflicting region
@@ -571,21 +604,35 @@ object HelixDelaunay:
     * success. Gives up after `maxAttempts` and throws a named, actionable exception rather than ever returning an
     * unrepaired or partially-repaired result silently.
     *
-    * '''`hasNoInteriorVoid` exists because the facet-count check alone was measured to be insufficient''' -- an earlier
-    * version of this repair, checking only "no facet has `>2` claimants," passed its own self-check but had a real
-    * ~10.5% barcode-disagreement rate against the naive engine at `d=3` (656/6272 hit violations in a stress sweep).
-    * Root-caused, not just patched around: `HelixDelaunayBuilder`, re-run on jittered coordinates, can silently fail to
-    * place a tetrahedron's second coface, leaving a facet with exactly 1 claimant that looks like an ordinary hull
-    * facet but is actually a gap -- and a genuine Delaunay triangulation can never have a real interior gap (the convex
-    * hull is convex, hence contractible, so `H_{d-1}` of the complete, unfiltered triangulation must be trivial; a
-    * nonzero `H_{d-1}` is not a legitimate feature there, it is direct evidence of a missed simplex). Confirmed on the
-    * actual failing case before implementing the fix: the repaired complex's own total tetrahedra volume was measurably
-    * short (a real ~33% shortfall) and its naive-engine barcode carried exactly one spurious essential `H_2` bar that
-    * the facet-count check could not see. Adding `hasNoInteriorVoid` to the retry condition (widening the jitter set to
-    * the result's own boundary vertices on failure) resolved it completely: re-running the same two stress sweeps with
-    * the added check found ZERO barcode disagreements across 316 hit violations at `d=2` and 6272 at `d=3` (20000
-    * trials each, near-cospherical point clouds, the SAME `d=3` sweep that previously found 656 disagreements) -- see
-    * `.claude/DESIGN-helix-triangulation-repair.md`.
+    * '''`interiorVoidVertices` exists because the facet-count check alone was measured to be insufficient''' -- an
+    * earlier version of this repair, checking only "no facet has `>2` claimants," passed its own self-check but had a
+    * real ~10.5% barcode-disagreement rate against the naive engine at `d=3` (656/6272 hit violations in a stress
+    * sweep). Root-caused, not just patched around: `HelixDelaunayBuilder`, re-run on jittered coordinates, can silently
+    * fail to place a tetrahedron's second coface, leaving a facet with exactly 1 claimant that looks like an ordinary
+    * hull facet but is actually a gap -- and a genuine Delaunay triangulation can never have a real interior gap (the
+    * convex hull is convex, hence contractible, so `H_{d-1}` of the complete, unfiltered triangulation must be trivial;
+    * a nonzero `H_{d-1}` is not a legitimate feature there, it is direct evidence of a missed simplex). Confirmed on
+    * the actual failing case before implementing the fix: the repaired complex's own total tetrahedra volume was
+    * measurably short (a real ~33% shortfall) and its naive-engine barcode carried exactly one spurious essential `H_2`
+    * bar that the facet-count check could not see. Adding this check to the retry condition resolved it completely:
+    * re-running the same two stress sweeps with it added found ZERO barcode disagreements across 316 hit violations at
+    * `d=2` and 6272 at `d=3` (20000 trials each, near-cospherical point clouds, the SAME `d=3` sweep that previously
+    * found 656 disagreements).
+    *
+    * '''ALSO checked on the UNREPAIRED input, not just after a facet-multiplicity-driven retry''' -- a second, real
+    * failure mode, confirmed via direct trace on a real 13-point, ambient-dimension-4 example: `HelixDelaunayBuilder`
+    * can leave a whole local cluster's worth of simplices silently unbuilt with NO facet-multiplicity violation at all
+    * (so `requireValidTriangulation`'s original trigger, `badFacetsOf`, never fired). Root cause: `two` points can each
+    * independently be a genuine, empty-circumsphere coface of the same facet (circumradii differing by ~1e-7, both
+    * legitimately valid -- a real near-tie, not a bug in either candidate test), and `HelixDelaunayBuilder`'s own
+    * cospherical-cluster handling (`handleCosphericalPoints`) commits to whichever one it finds first via a plain
+    * hyperplane-side test with no empty-circumsphere check of its own, consuming that point and leaving the other
+    * candidate's own entire local neighborhood unreachable -- the same near-cospherical order-dependency already
+    * accepted as a limitation elsewhere in this class, here manifesting as missing content instead of a facet
+    * multiplicity. This repair now runs whenever EITHER `badFacetsOf` OR `interiorVoidVertices` fires on the raw input,
+    * using the void check's own essential-representative vertex support (not a facet-count heuristic) as the jitter
+    * seed when there is no explicit violation to seed from -- a far more targeted set than "every hull vertex" would
+    * be. See `.claude/WORKLOG-helix-bootstrap-fix.md` for the full trace and validation.
     */
   private def repairByJitterRetriangulation(
     pts: Array[Array[Double]],
@@ -593,9 +640,11 @@ object HelixDelaunay:
     seed: Long
   )(using epsilon: Epsilon): Set[DelaunaySimplex] =
     val initialBad = badFacetsOf(validatedIn)
-    if initialBad.isEmpty then validatedIn
+    val initialVoid = interiorVoidVertices(validatedIn, pts.head.length)
+    if initialBad.isEmpty && initialVoid.isEmpty then validatedIn
     else
-      var jitterVertices: Set[Int] = initialBad.values.flatten.toSet.flatMap(_.simplex.toSet)
+      var jitterVertices: Set[Int] =
+        initialBad.values.flatten.toSet.flatMap(_.simplex.toSet) ++ initialVoid.getOrElse(Set.empty)
       var result: Option[Set[DelaunaySimplex]] = None
       var attempt = 0
       val maxAttempts = 8
@@ -621,17 +670,16 @@ object HelixDelaunay:
           DelaunaySimplex(ds.simplex, Hypersphere(ds.simplex.toSeq.toSeq.map(v => Point(pts(v)))))
         }
         val stillBad = badFacetsOf(realized)
-        if stillBad.isEmpty && hasNoInteriorVoid(realized, pts.head.length) then result = Some(realized)
+        val stillVoid = interiorVoidVertices(realized, pts.head.length)
+        if stillBad.isEmpty && stillVoid.isEmpty then result = Some(realized)
         else
+          // `stillVoid.getOrElse` never falls through to a default here: reaching this `else` branch at all
+          // means `stillBad.nonEmpty || stillVoid.nonEmpty`, so whenever `stillVoid` is `None` (no void),
+          // `stillBad` is guaranteed nonempty and already contributes its own vertices below -- there is no
+          // "void present but its own representative already fully jittered" case to special-case separately,
+          // the essential representative's own vertex support IS the widened jitter set whenever a void persists.
           val extraJitterVertices =
-            if stillBad.nonEmpty then stillBad.values.flatten.toSet.flatMap(_.simplex.toSet)
-            else
-              // No facet-multiplicity violation remains, but the void check caught a gap: the builder silently
-              // failed to place some tetrahedron's second coface. The gap's own location isn't directly known,
-              // so widen to every vertex touching the result's current boundary (coface count 1) -- a real hull
-              // facet's vertices are harmless to re-jitter, and a spurious one (the actual gap site) is exactly
-              // what needs to move to get a fresh chance at the builder placing it correctly.
-              facetToSimplices(realized).collect { case (f, cs) if cs.size == 1 => f }.flatMap(_.toSet).toSet
+            stillBad.values.flatten.toSet.flatMap(_.simplex.toSet) ++ stillVoid.getOrElse(Set.empty)
           jitterVertices = jitterVertices ++ extraJitterVertices
         attempt += 1
 

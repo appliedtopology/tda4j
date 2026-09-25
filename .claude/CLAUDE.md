@@ -516,31 +516,33 @@ stress sweep against grid-like and near-grid point clouds (built specifically to
 pattern) went from 2226 failures before these fixes to 0 after; `AlphaComplexSpec`'s own property test, which
 previously excluded `"helix"` specifically for this bug, now includes it again.
 
-**Two SEPARATE, NOT fixed limitations remain, sharing one root mechanism** (near-cospherical clusters making the
-frontier walk's own facet-pivot choices order-dependent — `HelixDelaunayBuilder`'s own class doc, "Accepted
-limitation"): when a facet has more than one legitimately-empty-circumsphere candidate coface (a genuine near
-tie, not a bug in the candidate test itself), the walk commits to whichever one it finds first and never
-reconsiders, because `visitedFacets` permanently locks that facet closed once ANY side is resolved.
-1. **Order-dependent disagreement with DQP** (~1/170 at ambient dim 4, 20-30 points): the OTHER, equally-valid
-   candidate is a real, complete, internally-consistent Delaunay triangulation, just a different one than DQP's
-   own tie-break would pick — not wrong, just non-canonical. So Helix is **not reliable ground truth** for dim
-   ≥ 4 fuzzing; `AlphaCrossValidationSpec`'s comparisons stay as `unsafeCompare`/`unsafeFuzzCompare` diagnostics,
-   not wired into `sbt test` (and not `pendingUntilFixed`, wrong semantics for probabilistic failures).
-2. **Silently incomplete output**: root-caused to the exact same mechanism, not a separate bug -- confirmed by
-   direct trace on a real 13-point, ambient-dim-4 example where DQP found 45 top simplices to Helix's 43. Facet
-   `{2,3,6,9}` had (at least) two empty-circumsphere cofaces, via vertex 1 (DQP's pick, the correct one per a
-   from-scratch check) and via vertex 4 (Helix's pick); once Helix validates the vertex-4 side, that facet is
-   marked visited and NEVER reconsidered, so the entire subtree reachable only via vertex 1 (three top simplices
-   sharing the 2-face `{1,3,9}`, plus all of their own sub-faces) is silently never discovered -- not merely a
-   different valid triangulation this time, since a permanently one-sided lock-out is not itself a complete,
-   internally-consistent alternative. No exception, no assertion -- confirmed via `AlphaCrossValidationSpec`'s
-   own `unsafeCompare`-style subset check (`dqpSet -- helixSet`), not caught by `AlphaComplexSpec`'s own
-   face-closure property test (which checks internal self-consistency of whatever Helix DOES produce, not
-   completeness against an independent oracle). A genuine fix for either of these needs the same "joint near-tie
-   detection across every currently-competing candidate before committing to any one of them" (symbolic
-   perturbation, or an equivalent canonical tie-break shared with DQP) already on record as a deliberate
-   non-goal for this codebase, not a quick patch -- not attempted this session, pending the project lead's own
-   call on scope given its shared root cause with the already-WONTFIX'd disagreement issue above.
+**One root mechanism (near-cospherical clusters making the frontier walk's own facet-pivot choices
+order-dependent — `HelixDelaunayBuilder`'s own class doc, "Accepted limitation") produces two DIFFERENT outcomes,
+one WONTFIX and one fixed** — do not conflate them; a naive `dqpSet -- helixSet` diff alone cannot tell them
+apart (`.claude/WORKLOG-helix-bootstrap-fix.md`):
+1. **Order-dependent disagreement with DQP, still WONTFIX** (~1/170 at ambient dim 4, 20-30 points; project lead:
+   "I'm okay with C persisting as a WONTFIX issue"): when a facet has more than one legitimately-empty-circumsphere
+   candidate coface (a genuine near tie, not a bug in the candidate test), `visitedFacets` locks in whichever the
+   walk finds first and never reconsiders — but the discarded side is reachable some other way too, so Helix's own
+   output, though different from DQP's, is still a complete, internally-consistent triangulation, just a different
+   one than DQP's own tie-break would pick. So Helix is **not reliable ground truth** for dim ≥ 4 fuzzing;
+   `AlphaCrossValidationSpec`'s comparisons stay as `unsafeCompare`/`unsafeFuzzCompare` diagnostics, not wired into
+   `sbt test`.
+2. **Genuine incomplete triangulation (a real topological hole), fixed.** Same `visitedFacets` lock, but here the
+   discarded side is reachable NO OTHER WAY, so a whole local neighborhood is permanently lost — a real nonzero
+   `H_{ambientDim-1}` on the full unfiltered complex, not a different-but-complete triangulation (self-consistency
+   is the discriminator: check `H_{ambientDim-1}` triviality on the WHOLE complex, not a diff against DQP — a
+   20000-trial classification sweep found only 2 of 8 naive-diff hits were genuine holes, the rest were case 1 in
+   disguise). Root-caused to two compounding bugs: (a) a structural exclusion bug in
+   `handleCosphericalPoints`'s own facet-queue construction that made the originating facet itself unreachable
+   from its own local search (fixed — iterate every vertex of the new simplex, not just the triggering facet's
+   own); (b) `handleCosphericalPoints`'s greedy point-pull has no empty-circumsphere check and no joint
+   near-tie consideration (this part genuinely NOT fixed — same out-of-scope symbolic-perturbation redesign as
+   case 1 above). Worked around, not root-fixed, at the repair layer: `requireValidTriangulation`'s
+   jitter-and-recompute repair (see below) now also triggers on a genuine void detected on the RAW, unrepaired
+   output — `HelixDelaunay.interiorVoidVertices` returns the essential representative's own vertex support as a
+   targeted jitter seed. Validated against a confirmed genuine-void example (0 self-consistency failures across
+   a 20000-trial sweep with `requireValidTriangulation=true` applied unconditionally).
 
 **`FastAlphaHomologyContext` (`homology/FastAlphaHomology.scala`)** — `FastCubicalHomologyContext`'s own dual
 union-find (see "Cubical complexes" above), ported to `HelixDelaunay`'s top simplices; **valid at any ambient
@@ -600,12 +602,18 @@ had the identical failure mode as the rejected pruning design, caught the same w
 coordinates, could silently fail to place a tetrahedron's second coface, leaving a facet that looks like an
 ordinary hull facet but is actually a gap. Confirmed directly (not just inferred from the barcode) via a ~33%
 total-tetrahedra-volume shortfall on the failing case. Fixed with a second, independent self-check,
-`HelixDelaunay.hasNoInteriorVoid`: a genuine Delaunay triangulation's convex hull is convex, hence contractible,
-so the full unfiltered complex's own `H_{d-1}` must be trivial — checked directly (`SimplicialHomologyContext`
-on the candidate, single filtration value), retrying with a widened jitter set on failure. Re-validated on the
-SAME `d=3` sweep that found the 656 disagreements: 6272/6272 clean. Not attempted at `d>=4` — `HelixDelaunay` is
-already documented above as unreliable there for unrelated reasons, so this inherits that gap rather than adding
-a new one. A third avenue (recognizing the traced violation as a textbook 2D Delaunay diagonal flip — the
+`HelixDelaunay.interiorVoidVertices` (`Option[Set[Int]]`, not just a boolean — returns the essential
+`H_{d-1}` representative's own vertex support when a void exists, a far more targeted retry seed than a facet-
+count heuristic): a genuine Delaunay triangulation's convex hull is convex, hence contractible, so the full
+unfiltered complex's own `H_{d-1}` must be trivial — checked directly (`SimplicialHomologyContext` on the
+candidate, single filtration value), retrying with a widened jitter set on failure. Re-validated on the SAME
+`d=3` sweep that found the 656 disagreements: 6272/6272 clean. **Later extended to trigger on this same void
+check on the RAW, unrepaired input too, not just after a facet-multiplicity-driven retry** — fixes issue B
+above (a genuine incomplete triangulation with no facet-multiplicity violation to trigger the original repair
+at all); see the "Two DIFFERENT outcomes" entry above and `.claude/WORKLOG-helix-bootstrap-fix.md`. Not
+attempted at `d>=4` — `HelixDelaunay` is already documented above as unreliable there for unrelated reasons, so
+this inherits that gap rather than adding a new one. A third avenue (recognizing the traced violation as a
+textbook 2D Delaunay diagonal flip — the
 `{8,10}` facet's three claimants are actually a convex quadrilateral's two different diagonal choices, not a
 genuine 3-way tie, generalizing to a Radon-partition bistellar flip in higher dimension) was investigated and
 found promising but was not implemented; it remains a possible future alternative if the shipped design's own
