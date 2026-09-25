@@ -370,6 +370,34 @@ Two independent variants, both `Simplex[Int]` over LOCAL landmark indices, both 
   automatically downward-closed. Refuses `engine=ripser`/`chunks`; `maxFiltrationValue` defaults to `+Infinity`.
   The general complex's own 1-skeleton is provably identical to the lazy complex's at `nu=2`.
 
+## Dowker complexes
+
+`streams/DowkerStream.scala`, `WORKLOG-dowker-complex.md`. `DowkerGeometry(relation: Array[Array[Double]])`: a fully
+general `R: L x W -> [0, Infinity]`, not derived from any metric (generalizes witness's `nu=0` case, which is exactly
+this formula with `R` = the landmark-to-witness distance matrix — not implemented by delegating to `WitnessGeometry`,
+independently re-derived instead, since that class's shape doesn't fit a relation with no shared ambient space).
+`filtrationValue(sigma) = min_w max_{x in sigma} R(x,w)` is automatically monotone (proved directly from the formula,
+no recursive facet clamp needed, unlike witness's per-dimension `m_k`); NOT a flag complex in general, so built on
+`RipserCofaceSimplexStream`'s generic coface loop like Cech/general-witness, not the flag-specific machinery.
+`.fromBoolean` lifts a classical (unfiltered) relation (`true`→`0.0`, `false`→`+Infinity`).
+
+**`keptByThresholdAndCriterion`'s `<=` admits `+Infinity <= +Infinity`** — every other stream's `maxFiltrationValue
+= +Infinity` default is safe only because none of them ever compute a genuinely infinite filtration value; Dowker's
+boolean encoding does, on purpose, to mean "never witnessed." `DowkerCofaceSimplexStream` overrides
+`keptByThresholdAndCriterion` to additionally require `.isFinite` — without it, an untruncated stream silently
+collapses to the complete simplex on every vertex (confirmed empirically, `WORKLOG-dowker-complex.md`).
+
+**Duality is the point** (`.dual`, via `DowkerGeometry.dual` — the transpose relation): the functorial Dowker
+duality theorem (Chowdhury & Mémoli 2018) gives the X-side and Y-side persistence modules as naturally isomorphic,
+so their barcodes agree exactly — **but only after dropping zero-persistence (birth == death) bars from both**: a
+simplicial filtration records exactly one `H_0` birth per vertex, so when `numLeft != numWitnesses` the raw
+barcodes can't match bar-for-bar even in principle; the "extra" births are always zero-persistence
+(`DowkerStreamSpec.dropZeroPersistence`, confirmed on a hand-worked rectangular relation, not just asserted from
+the theorem).
+
+**Not yet wired into `matlab.TDA4j`/`cli`/docs** — this is a streams-layer-only capability so far; see
+`WORKLOG-dowker-complex.md`'s own "explicitly not done" section before assuming a `complex=dowker` option exists.
+
 ## Alpha complex: DQP vs Helix
 
 `WORKLOG-alpha-complex.md`, `HANDOFF-alpha-complex.md`. `AlphaShapes(points, dispatch)`: `"default"` → `"helix"`
