@@ -53,18 +53,21 @@ random points, isolated further to roughly 1-in-18700 at ambient dimension 2 alo
 frontier-walk weakness `AlphaCrossValidationSpec`'s own doc comment already reports (an incomplete complex,
 missing a connected sub-chain of genuinely-Delaunay faces, with no exception raised), observed through a
 different lens here (a bad facet-multiplicity count instead of a missing-face diff against DQP). This class
-validates the precondition explicitly and throws a specific, actionable `IllegalStateException` naming the
-offending facet(s) rather than building a silently-wrong dual graph — see `FastAlphaHomologySpec`'s own pinned
-regression fixture (a concrete 12-point set that reproduces it deterministically) for the exact exception shape.
+validates the precondition explicitly and throws the named `FastAlphaTriangulationException` (never a bare
+`IllegalStateException`) naming the offending facet(s) rather than building a silently-wrong dual graph — see
+`FastAlphaHomologySpec`'s own pinned regression fixture (a concrete 12-point set that reproduces it
+deterministically) for the exact exception shape. Unlike an internal-developer exception, this one's message is
+deliberately layered for an unsuspecting MATLAB/CLI end user first ("this is NOT an error in your data," a
+plain-language explanation of the HelixDelaunay limitation, and the concrete fix — retry with `engine="naive"`/
+`"chunks"`/`"cohomology"`, none of which are affected by it), with the facet-count technical detail kept as a
+secondary appendix for developers investigating this class itself.
 
-**Not yet wired into `matlab.TDA4j`/`cli`** (unlike the cubical engine, which is) — a deliberate scope
-decision, not an oversight: exposing a production option that can throw on a small but real fraction of
-ordinary-looking real-world point clouds is a judgment call about user experience the project lead should make
-directly, having now seen the measured rate, rather than one this session should make unilaterally the way it
-could for the cubical engine (which has no such risk at all). The engine itself is fully implemented, tested
-(hand-verified fixture, a richer cross-validated fixture exercising a genuine non-infinity dual merge, `Fp(3)`
-sign-genericity, the pinned exception regression, and a random-point property test that classifies rather than
-fails on either known `HelixDelaunay` limitation), and ready to wire in once that call is made.
+**Wired into `matlab.TDA4j`/`cli` as `engine="fast-alpha"`/`--engine fast-alpha`**, same as the cubical engine
+— valid only for `complex=alpha` with `alphaBackend=helix` (the default; `alphaBackend=DQP` is refused, since
+this engine cannot consume `AlphaShapeDQP`'s output at all) and ambient dimension 2 (a 3D point cloud is
+refused with a message naming the actual dimension). The project lead reviewed the measured ~1-in-18700 rate
+and the resulting exception message and signed off on shipping it as a production option rather than leaving it
+Scala-only — the judgment call the engine's earlier, unwired state above was deliberately left pending.
 
 ## `AlphaComplexDQP` — dual active-set QP, never builds Delaunay at all
 

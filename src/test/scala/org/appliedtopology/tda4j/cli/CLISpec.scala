@@ -288,6 +288,32 @@ class CLISpec extends mutable.Specification:
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
     }
 
+    "runs --complex alpha --engine fast-alpha end-to-end via a real file on disk, agreeing on bar COUNT with a " +
+      "direct engine=naive call on the same points" >> {
+        // Bar count, not exact-value comparison the way the fast-cubical test above uses: this engine goes
+        // through HelixDelaunay, whose own filtration-value computation touches a mutable.Set (construction-
+        // nondeterminism class TDA4jSpec's own "complex=alpha, through the facade" section already documents,
+        // last-ULP-level differences between two independent constructions of "the same" complex, not a
+        // reduction bug) -- the CLI run and the "direct" call below are two SEPARATE constructions, and
+        // PersistenceBar's own toString isn't a format worth re-parsing just to redo the numeric comparison
+        // FastAlphaHomologySpec/TDA4jSpec's own tests already make directly. This test's own job is CLI
+        // plumbing (does --engine fast-alpha actually reach engine=fast-alpha through Scallop and a file on
+        // disk, without crashing, and with the right SHAPE of result), not re-verifying engine correctness.
+        val points =
+          Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0), Array(0.5, 2.0), Array(2.0, 0.5))
+        val path = tempFile(".csv")
+        CSV.writePointCloud(path, points)
+
+        val buffer = new ByteArrayOutputStream()
+        val exitCode =
+          TDA4jCLI.run(Seq("--complex", "alpha", "--engine", "fast-alpha", path), new PrintStream(buffer))
+        val cliLineCount = buffer.toString.linesIterator.size
+
+        val naiveBarCount = TDA4j.computeFromPoints(points, Array("complex", "alpha")).size()
+
+        (exitCode must beEqualTo(0)) and (cliLineCount must beEqualTo(naiveBarCount))
+      }
+
     "reject --complex combined with a cubical-image --input-format" >> {
       val path = tempFile(".txt")
       java.nio.file.Files.write(java.nio.file.Paths.get(path), "2\n2\n2\n0\n1\n2\n3\n".getBytes)

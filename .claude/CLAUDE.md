@@ -488,17 +488,19 @@ comparisons stay as `unsafeCompare`/`unsafeFuzzCompare` diagnostics, not wired i
 
 **`FastAlphaHomologyContext` (`homology/FastAlphaHomology.scala`)** — `FastCubicalHomologyContext`'s own dual
 union-find (see "Cubical complexes" above), ported to `HelixDelaunay`'s top simplices; **ambient dimension 2
-only**, `HelixDelaunay` only (never `AlphaShapeDQP` — its cospherical-degeneracy hazard can violate the dual
-graph's own "every facet has ≤2 cofaces" precondition directly). That precondition is NOT guaranteed by
-construction the way it is for a cubical grid — measured at ~1-in-18700 on random points at ambient dimension 2
-(likely the same frontier-walk weakness as Helix's own limitation just above, viewed differently: a bad facet
-multiplicity rather than a missing-face diff against DQP) — validated explicitly, throwing a specific
-`IllegalStateException` naming the offending facet(s) rather than building a silently-wrong dual graph. A
-facet's own dual-edge value must come from `HelixDelaunay.filtrationValue` directly, never recomputed as `min`
-over containing top simplices (unlike cubical, these can genuinely differ — `edgeIsDelaunay`'s own shortcut).
-**Not wired into `matlab.TDA4j`/`cli`** — a deliberate scope decision (exposing a rare-but-real exception on
-ordinary user input as a production option is a call for the project lead to make having seen the measured
-rate, not one to make unilaterally), not a gap; the engine itself is complete and tested for direct Scala use.
+only**, `HelixDelaunay` only (never `AlphaShapeDQP` — it's incremental, per-candidate QP feasibility with no
+adjacency structure ever built, so it can't supply the dual graph's own "every facet has ≤2 cofaces"
+precondition regardless of truncation). That precondition is NOT guaranteed by construction the way it is for a
+cubical grid — measured at ~1-in-18700 on random points at ambient dimension 2 (likely the same frontier-walk
+weakness as Helix's own limitation just above, viewed differently: a bad facet multiplicity rather than a
+missing-face diff against DQP) — validated explicitly, throwing the named `FastAlphaTriangulationException`
+(not a bare `IllegalStateException`; message is layered plain-language-first for MATLAB/CLI callers, then the
+offending facet count as a technical appendix) rather than building a silently-wrong dual graph. A facet's own
+dual-edge value must come from `HelixDelaunay.filtrationValue` directly, never recomputed as `min` over
+containing top simplices (unlike cubical, these can genuinely differ — `edgeIsDelaunay`'s own shortcut).
+**Wired into `matlab.TDA4j`/`cli` as `engine="fast-alpha"`/`--engine fast-alpha`** (valid only for
+`complex=alpha` with `alphaBackend=helix`, ambient dimension 2) — the project lead signed off on shipping the
+measured exception rate as a production option, given the clear exception message.
 `WORKLOG-alpha-dual-unionfind.md`, `DESIGN-alpha-dual-unionfind.md`.
 
 **Degeneracy hazard**: in cospherical position the alpha complex is not a Delaunay subcomplex — `k` cospherical
@@ -657,9 +659,12 @@ PersistenceEngine.scala`) rather than re-matching the raw string at each branch.
   `persistence-engines.md`'s streams-vs-engines table for the full picture). `dtm-rips`/`dtm-alpha` need `dtmK`
   (required); `sheehy-rips` needs `sheehyEpsilon` (required, strictly in `(0,1)`); `dtm-rips`/`sheehy-rips` alone
   work from `computeFromDistanceMatrix` too (no coordinates needed), `dtm-alpha` needs `computeFromPoints` like
-  `alpha`/`cech`. `computeFromCubicalImage`/`computeFromImage` for cubes — same four `engine` values plus a
-  fifth, `fast-cubical` (`FastCubicalHomologyContext`), refused everywhere else and refused even here for a 3D
-  image (ambient dimension must be exactly 2) — see "Cubical complexes" above.
+  `alpha`/`cech`. A sixth `engine` value, `fast-alpha` (`FastAlphaHomologyContext`), is valid ONLY for
+  `complex=alpha` with `alphaBackend=helix` (the default) and ambient dimension 2 — refused for every other
+  `complex` and for `alphaBackend=DQP` — see "Alpha complex" above. `computeFromCubicalImage`/`computeFromImage`
+  for cubes — same four base `engine` values plus a fifth, `fast-cubical` (`FastCubicalHomologyContext`),
+  refused everywhere else and refused even here for a 3D image (ambient dimension must be exactly 2) — see
+  "Cubical complexes" above.
 - **Two-step witness recipe** (`WORKLOG-witness-two-step-api.md`), alongside the one-shot path:
   `selectLandmarksFrom{Points,DistanceMatrix}` (→ `LandmarkSelectionResult`) then
   `computeFrom{Points,DistanceMatrix}AndLandmarks` (takes that `int[]`, 0-based ambient indices, directly —

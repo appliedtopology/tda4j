@@ -171,7 +171,7 @@ place. See [Persistence engines](persistence-engines.md) for the full, current p
 `CellularPersistenceInChunksContext`/`PersistenceInChunksContext`,
 `RipserCohomologyContext`, `PackedRipserCohomologyContext`, `CellularCohomologyContext`,
 `FastCubicalHomologyContext` (2D cubical grids only), and `FastAlphaHomologyContext` (2D `HelixDelaunay`
-alpha complexes only, not yet wired into `matlab`/`cli`).
+alpha complexes only), both wired into `matlab`/`cli` as `engine="fast-cubical"`/`engine="fast-alpha"`.
 
 ## Circular coordinates (`homology/CircularCoordinates.scala`)
 

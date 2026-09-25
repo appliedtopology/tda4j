@@ -193,12 +193,15 @@ piece, not attempted here either).
 **Unlike engine 6, this precondition is not guaranteed by construction** and was measured directly this
 session: roughly 1-in-18700 on random points at ambient dimension 2 specifically (see `alpha-complex.md` for
 the full measurement) — real, but rare, a genuine `HelixDelaunay` limitation, not a flaw in this construction.
-Validates the precondition explicitly and throws a specific `IllegalStateException` on violation rather than
-building a silently-wrong dual graph.
+Validates the precondition explicitly and throws the named `FastAlphaTriangulationException` on violation
+rather than building a silently-wrong dual graph — its message is layered plain-language-first (for an
+unsuspecting MATLAB/CLI caller: "NOT an error in your data," the concrete retry) with the facet-count detail
+as a technical appendix, the same two-audience approach `NoIntegerCocycleException` already established for
+`CircularCoordinates`.
 
-**Not currently wired into `matlab.TDA4j`/`cli`**, unlike every other engine on this page — a deliberate scope
-decision given the newly-measured risk above, not an oversight; see `alpha-complex.md`'s own section for the
-reasoning. Fully implemented and tested for direct Scala use.
+**Wired into `matlab.TDA4j`/`cli` as `engine="fast-alpha"`/`--engine fast-alpha`**, like every other engine on
+this page — valid only for `complex=alpha` with `alphaBackend=helix` (the default) and ambient dimension 2;
+see `alpha-complex.md`'s own section for the full reasoning behind shipping the measured risk above.
 
 ## Streams × engines: what works with what
 
@@ -230,6 +233,12 @@ its own table column: it would be "no — not a cubical grid" for every row exce
 row that offers it, and even there **only when the image's own ambient dimension is exactly 2** (a 3D image
 must use `naive`/`chunks`/`cohomology` instead, refused with a message naming the actual dimension, not a bare
 `IllegalArgumentException`).
+
+A sixth engine value, `engine="fast-alpha"` (`FastAlphaHomologyContext`, engine 7 above), is symmetric: "no —
+not `HelixDelaunay`" for every row except `alpha`, the ONLY row that offers it, and even there **only when
+`alphaBackend=helix` (the default) and the point cloud's own ambient dimension is exactly 2** (`alphaBackend=
+DQP`, any other `complex`, or a 3D point cloud are all refused with a message naming the actual mismatch, not a
+bare `IllegalArgumentException`).
 
 Reading the "no" cells as one-line reasons, grouped by root cause:
 

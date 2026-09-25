@@ -17,8 +17,8 @@ import scala.util.control.NonFatal
 /** `FastAlphaHomologyContext` (`.claude/DESIGN-alpha-dual-unionfind.md`, a follow-on to the cubical engine,
   * `.claude/DESIGN-fast-cubical-engine.md`/`FastCubicalHomologySpec`) -- cross-validated against
   * `SimplicialHomologyContext` (the naive engine) the same way the cubical spec cross-validates against
-  * `CubicalHomologyContext`, for the same reason: the dual-graph construction's own correctness argument
-  * (Alexander duality) is independent of the naive engine's own general boundary-matrix reduction.
+  * `CubicalHomologyContext`, for the same reason: the dual-graph construction's own correctness argument (Alexander
+  * duality) is independent of the naive engine's own general boundary-matrix reduction.
   */
 class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
   given Epsilon = Epsilon(1e-5)
@@ -86,19 +86,18 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
 
   val handFixtures: Seq[HelixDelaunay] = Seq(fanFixture, richerFixture)
 
-  "every FastAlphaHomologyContext H1 representative has zero boundary, on the hand fixtures" >> {
+  "every FastAlphaHomologyContext H1 representative has zero boundary, on the hand fixtures" >>
     handFixtures
       .map { helix =>
         val bars = FastAlphaHomologyContext[Double]().persistentHomology(helix)
         bars.filter(_.dim == 1).forall(b => Chain.from(b.annotation.get.boundary).isZero()) must beTrue
       }
       .reduce(_ and _)
-  }
 
   val GF3 = new FiniteField(3)
   import GF3.given
 
-  "agrees with the Double run over Fp(3), including genuine-cycle representatives, on the hand fixtures" >> {
+  "agrees with the Double run over Fp(3), including genuine-cycle representatives, on the hand fixtures" >>
     handFixtures
       .map { helix =>
         val doubleBars = fastBars[Double](helix)
@@ -108,11 +107,16 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
         (f3Triples.sorted must beEqualTo(doubleBars.sorted)) and (allCycles must beTrue)
       }
       .reduce(_ and _)
-  }
 
   "requires ambient dimension 2" >> {
     val helix3d = HelixDelaunay(
-      Array(Array(0.0, 0.0, 0.0), Array(1.0, 0.0, 0.0), Array(0.0, 1.0, 0.0), Array(0.0, 0.0, 1.0), Array(0.3, 0.3, 0.3))
+      Array(
+        Array(0.0, 0.0, 0.0),
+        Array(1.0, 0.0, 0.0),
+        Array(0.0, 1.0, 0.0),
+        Array(0.0, 0.0, 1.0),
+        Array(0.3, 0.3, 0.3)
+      )
     )
     FastAlphaHomologyContext[Double]().persistentHomology(helix3d) must throwA[IllegalArgumentException]
   }
@@ -142,13 +146,18 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
     )
   )
 
-  "throws a specific, actionable IllegalStateException on a real facet-multiplicity violation, not a generic crash" >> {
-    try
-      FastAlphaHomologyContext[Double]().persistentHomology(facetMultiplicityViolationFixture)
-      ko("expected an IllegalStateException naming the facet-multiplicity violation, but none was thrown")
-    catch
-      case e: IllegalStateException => e.getMessage must contain("containing-top-simplex count")
-  }
+  "throws the specific, named FastAlphaTriangulationException on a real facet-multiplicity violation, with a " +
+    "message an unsuspecting caller (not just this class's own developers) can act on" >> {
+      try
+        FastAlphaHomologyContext[Double]().persistentHomology(facetMultiplicityViolationFixture)
+        ko("expected a FastAlphaTriangulationException naming the facet-multiplicity violation, but none was thrown")
+      catch
+        case e: FastAlphaTriangulationException =>
+          (e.getMessage must contain("NOT an error in your data")) and
+            (e.getMessage must contain("TO GET YOUR RESULT")) and
+            (e.getMessage must contain("\"naive\"")) and
+            (e.getMessage must contain("containing-top-simplex count"))
+    }
 
   // ---------------------------------------------------------------------------------------------------------
   // Random 2D point clouds, cross-validated against the naive engine. Two real, KNOWN HelixDelaunay limitations
@@ -156,9 +165,9 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
   // multiplicity precondition above (~1-in-18700 at this dimension) and HelixDelaunay's own separate,
   // pre-existing construction failure (AlphaCrossValidationSpec's own doc comment, ~1-in-600 across a wider
   // dimension range). Both are caught and classified rather than either failing the property outright or being
-  // silently swallowed: the facet-multiplicity case must be EXACTLY this class's own named IllegalStateException
-  // (anything else there is a genuine bug), and a HelixDelaunay construction failure is recorded but not
-  // asserted on (already covered, and not caused by anything in this file).
+  // silently swallowed: the facet-multiplicity case must be EXACTLY this class's own named
+  // FastAlphaTriangulationException (anything else there is a genuine bug), and a HelixDelaunay construction
+  // failure is recorded but not asserted on (already covered, and not caused by anything in this file).
   // ---------------------------------------------------------------------------------------------------------
 
   case class RandomPoints(points: Array[Array[Double]])
@@ -179,7 +188,8 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
           val allCycles = bars.filter(_.dim == 1).forall(b => Chain.from(b.annotation.get.boundary).isZero())
           allCycles && triples.sorted == naiveBars(helix).sorted
         catch
-          case e: IllegalStateException if e.getMessage.contains("containing-top-simplex count") => true
-          case NonFatal(_) => true // a pre-existing, unrelated HelixDelaunay construction failure -- not this class's bug
+          case _: FastAlphaTriangulationException => true
+          case NonFatal(_)                        =>
+            true // a pre-existing, unrelated HelixDelaunay construction failure -- not this class's bug
       }
     }

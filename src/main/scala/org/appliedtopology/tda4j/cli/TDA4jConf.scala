@@ -52,11 +52,15 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     opt[String](descr = "vr (default), alpha, cech, witness, dtm-rips, dtm-alpha, or sheehy-rips")
   val engine: ScallopOption[String] =
     opt[String](descr =
-      "ripser, naive, chunks, cohomology, or fast-cubical (default depends on --complex -- see TDA4j's own doc). " +
-        "cohomology is CellularCohomologyContext, generic over cell type and valid for every --complex value -- " +
-        "unlike ripser, not Vietoris-Rips-specialized, so it also works with --complex=alpha/cech. fast-cubical " +
-        "(FastCubicalHomologyContext) is valid ONLY for a cubical-image --input-format, and only when the image " +
-        "is 2-dimensional."
+      "ripser, naive, chunks, cohomology, fast-cubical, or fast-alpha (default depends on --complex -- see " +
+        "TDA4j's own doc). cohomology is CellularCohomologyContext, generic over cell type and valid for every " +
+        "--complex value -- unlike ripser, not Vietoris-Rips-specialized, so it also works with " +
+        "--complex=alpha/cech. fast-cubical (FastCubicalHomologyContext) is valid ONLY for a cubical-image " +
+        "--input-format, and only when the image is 2-dimensional. fast-alpha (FastAlphaHomologyContext) is " +
+        "valid ONLY for --complex=alpha with --alpha-backend=helix (the default), and only when the point " +
+        "cloud's own ambient dimension is exactly 2; on a small fraction of point clouds it throws a " +
+        "FastAlphaTriangulationException explaining a rare, known HelixDelaunay limitation and naming the fix " +
+        "(retry with --engine naive/chunks/cohomology)."
     )
   val alphaBackend: ScallopOption[String] =
     opt[String](descr = "helix (default) or DQP -- only consulted when --complex=alpha")
