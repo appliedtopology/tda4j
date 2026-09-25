@@ -4,46 +4,52 @@ package homology
 import org.appliedtopology.tda4j.algebra.{given, *}
 import org.appliedtopology.tda4j.cells.{given, *}
 import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.barcode.{BarcodeEndpoint, ClosedEndpoint, OpenEndpoint, PersistenceBar, PositiveInfinity}
+import org.appliedtopology.tda4j.barcode.{
+  BarcodeEndpoint,
+  ClosedEndpoint,
+  OpenEndpoint,
+  PersistenceBar,
+  PositiveInfinity
+}
 
 import scala.collection.mutable
 
 /** Flash Cubical's dual-graph union-find (Le Breton, Szustakowski, Piraud, arXiv:2606.04801) for `H_0` and the TOP
-  * homological degree (`H_{d-1}`, `d` = ambient dimension) of a `CubicalGridStream`, generic over `Field`
-  * coefficients and recording real representatives for every bar -- neither of which the source paper's own F2-only,
-  * barcode-only treatment provides; both are this codebase's own extension, derived independently
+  * homological degree (`H_{d-1}`, `d` = ambient dimension) of a `CubicalGridStream`, generic over `Field` coefficients
+  * and recording real representatives for every bar -- neither of which the source paper's own F2-only, barcode-only
+  * treatment provides; both are this codebase's own extension, derived independently
   * (`.claude/DESIGN-fast-cubical-engine.md`'s 2026-09-25 update has the full derivation and a hand-verified worked
-  * example -- this session could not reach the paper itself, network-blocked, and no reference implementation
-  * exists to port the way `streams.EdgeCollapse` could port GUDHI's; this is original work built on Alexander
-  * duality, not a translation).
+  * example -- this session could not reach the paper itself, network-blocked, and no reference implementation exists to
+  * port the way `streams.EdgeCollapse` could port GUDHI's; this is original work built on Alexander duality, not a
+  * translation).
   *
-  * '''Currently ambient dimension 2 only''' (`require`d) -- `H_0` (ordinary primal union-find) plus `H_1` (`=
-  * H_{d-1}` at `d=2`, via the dual union-find below) together account for every cell dimension a 2D grid has, with
-  * NO general `Chain.reduceBy` reduction needed at all. Ambient dimension 3 needs an additional piece this class
-  * does not attempt (`H_1` there needs general reduction on whichever cells are NOT already resolved by the `H_0`
-  * and `H_2` union-finds) -- deferred, not half-implemented; see the design note.
+  * '''Currently ambient dimension 2 only''' (`require`d) -- `H_0` (ordinary primal union-find) plus `H_1` (`= H_{d-1}`
+  * at `d=2`, via the dual union-find below) together account for every cell dimension a 2D grid has, with NO general
+  * `Chain.reduceBy` reduction needed at all. Ambient dimension 3 needs an additional piece this class does not attempt
+  * (`H_1` there needs general reduction on whichever cells are NOT already resolved by the `H_0` and `H_2` union-finds)
+  * -- deferred, not half-implemented; see the design note.
   *
   * '''The dual construction''': top cells (`dim == ambientDim`, i.e. pixels) are dual vertices; codimension-1 cells
-  * ("facets") are dual edges, each connecting the 1 or 2 top cells containing it as a face (always exactly 1 or 2
-  * for a grid), with a shared auxiliary vertex `∞` standing in for the missing side of a facet on the outer
-  * boundary of the whole grid. `∞` is fixed at value `+Infinity` (not `-Infinity` -- a real, easy mistake caught
-  * while deriving this: `∞` must belong to every SUPERLEVEL set `{value >= s}`, which requires the LARGEST possible
-  * value, not the smallest). Primal `H_{d-1}` of the sublevel filtration equals ordinary `H_0` of this dual graph's
-  * own SUPERLEVEL filtration (Alexander duality, `H_{d-1}(X) ~= H^0(S^d \ X)`), computed by the same elder-rule
-  * array union-find `CellularPersistenceInChunksContext.unionFindDim01` already uses, just processing dual
-  * vertices/edges together in DESCENDING order of their own primal value, with every resulting bar's endpoints
-  * SWAPPED (a dual merge at value `v` absorbing a younger dual component born at value `b` becomes a primal bar
-  * `(birth = v, death = b)`) and `∞`'s own component producing no bar at all (it is always the elder/surviving
-  * side of every merge it takes part in, by construction, so it never "dies" -- nothing to explicitly filter out).
+  * ("facets") are dual edges, each connecting the 1 or 2 top cells containing it as a face (always exactly 1 or 2 for a
+  * grid), with a shared auxiliary vertex `∞` standing in for the missing side of a facet on the outer boundary of the
+  * whole grid. `∞` is fixed at value `+Infinity` (not `-Infinity` -- a real, easy mistake caught while deriving this:
+  * `∞` must belong to every SUPERLEVEL set `{value >= s}`, which requires the LARGEST possible value, not the
+  * smallest). Primal `H_{d-1}` of the sublevel filtration equals ordinary `H_0` of this dual graph's own SUPERLEVEL
+  * filtration (Alexander duality, `H_{d-1}(X) ~= H^0(S^d \ X)`), computed by the same elder-rule array union-find
+  * `CellularPersistenceInChunksContext.unionFindDim01` already uses, just processing dual vertices/edges together in
+  * DESCENDING order of their own primal value, with every resulting bar's endpoints SWAPPED (a dual merge at value `v`
+  * absorbing a younger dual component born at value `b` becomes a primal bar `(birth = v, death = b)`) and `∞`'s own
+  * component producing no bar at all (it is always the elder/surviving side of every merge it takes part in, by
+  * construction, so it never "dies" -- nothing to explicitly filter out).
   *
   * '''Representatives''': each active dual component tracks its own running signed sum of top cells (a
   * `Map[Cube, CoefficientT]`, cheap to merge -- just a map union with one side's signs flipped as needed), oriented
-  * COHERENTLY as unions happen so that shared internal facets cancel in the sum's own boundary; when a component
-  * dies (is absorbed into an older one across some facet `f`), its `H_{d-1}` representative is `boundary(that
-  * running sum)` -- the internal facets cancel by construction, leaving exactly the (d-1)-cycle bounding the dual
-  * component, per the design note's own derivation. The orientation flip needed when merging two components across
-  * `f` is solved directly from `f`'s own boundary coefficients toward its two top cells (both always `+-1`, from
-  * `cubeIsOrderedCell`'s alternating-sign rule) and each side's own already-established sign for its half of `f`.
+  * COHERENTLY as unions happen so that shared internal facets cancel in the sum's own boundary; when a component dies
+  * (is absorbed into an older one across some facet `f`), its `H_{d-1}` representative is `boundary(that running sum)`
+  * -- the internal facets cancel by construction, leaving exactly the (d-1)-cycle bounding the dual component, per the
+  * design note's own derivation. The orientation flip needed when merging two components across `f` is solved directly
+  * from `f`'s own boundary coefficients toward its two top cells (both always `+-1`, from `cubeIsOrderedCell`'s
+  * alternating-sign rule) and each side's own already-established sign for its half of `f`.
   */
 class FastCubicalHomologyContext[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
@@ -57,7 +63,9 @@ class FastCubicalHomologyContext[CoefficientT: Field]:
     computeH0(stream) ++ computeDualTopDimension(stream)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
-    if !lower && v == Double.PositiveInfinity then PositiveInfinity() else if lower then ClosedEndpoint(v) else OpenEndpoint(v)
+    if !lower && v == Double.PositiveInfinity then PositiveInfinity()
+    else if lower then ClosedEndpoint(v)
+    else OpenEndpoint(v)
 
   // -------------------------------------------------------------------------------------------------------------
   // H_0: ordinary primal union-find, ascending value order, elder rule -- the dimension-0-only portion of
@@ -105,7 +113,12 @@ class FastCubicalHomologyContext[CoefficientT: Field]:
         )
     vertices.indices.foreach { i =>
       if find(i) == i then
-        bars += new PersistenceBar(0, endpoint(true)(stream.filtrationValue(vertices(i))), PositiveInfinity(), Some(Chain(vertices(i))))
+        bars += new PersistenceBar(
+          0,
+          endpoint(true)(stream.filtrationValue(vertices(i))),
+          PositiveInfinity(),
+          Some(Chain(vertices(i)))
+        )
     }
     bars.toList
 
@@ -113,12 +126,16 @@ class FastCubicalHomologyContext[CoefficientT: Field]:
   // H_{d-1} (= H_1 at d=2): the dual union-find. See the class doc and .claude/DESIGN-fast-cubical-engine.md for
   // the derivation this implements term-for-term.
   // -------------------------------------------------------------------------------------------------------------
-  private def computeDualTopDimension(stream: CubicalGridStream): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
+  private def computeDualTopDimension(
+    stream: CubicalGridStream
+  ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     val shape = stream.shape
     val ambientDim = stream.ambientDim
 
     def topCoordsIterator: Iterator[IndexedSeq[Int]] =
-      shape.foldLeft(Iterator(IndexedSeq.empty[Int])) { (acc, n) => for prefix <- acc; v <- (0 until n).iterator yield prefix :+ v }
+      shape.foldLeft(Iterator(IndexedSeq.empty[Int])) { (acc, n) =>
+        for prefix <- acc; v <- (0 until n).iterator yield prefix :+ v
+      }
 
     val topCoords: Vector[IndexedSeq[Int]] = topCoordsIterator.toVector
     val topIndex: Map[IndexedSeq[Int], Int] = topCoords.zipWithIndex.toMap
@@ -126,7 +143,8 @@ class FastCubicalHomologyContext[CoefficientT: Field]:
     val infinityId = numTop // one past the last real top-cell id
 
     def topCube(coords: IndexedSeq[Int]): Cube = Cube.unitCube(coords)
-    def topValue(id: Int): Double = if id == infinityId then Double.PositiveInfinity else stream.topCellValue(topCoords(id))
+    def topValue(id: Int): Double =
+      if id == infinityId then Double.PositiveInfinity else stream.topCellValue(topCoords(id))
 
     // Every codimension-1 cube (exactly one degenerate axis), with the 1 or 2 top-cell ids it borders (the
     // missing side, for a boundary facet of the whole grid, is `infinityId`) -- computed directly from grid
@@ -135,9 +153,11 @@ class FastCubicalHomologyContext[CoefficientT: Field]:
     case class FacetEvent(facet: Cube, value: Double, a: Int, b: Int)
     val facetEvents: Vector[FacetEvent] =
       (0 until ambientDim).flatMap { degenAxis =>
-        val axisRanges: IndexedSeq[Range] = (0 until ambientDim).map(i => if i == degenAxis then 0 to shape(i) else 0 until shape(i))
-        axisRanges.foldLeft(Iterator(IndexedSeq.empty[Int])) { (acc, r) => for prefix <- acc; v <- r.iterator yield prefix :+ v }.map {
-          lower =>
+        val axisRanges: IndexedSeq[Range] =
+          (0 until ambientDim).map(i => if i == degenAxis then 0 to shape(i) else 0 until shape(i))
+        axisRanges
+          .foldLeft(Iterator(IndexedSeq.empty[Int]))((acc, r) => for prefix <- acc; v <- r.iterator yield prefix :+ v)
+          .map { lower =>
             val facet = Cube(lower, (0 until ambientDim).toSet - degenAxis)
             val k = lower(degenAxis)
             val candidates = Seq(k - 1, k).filter(v => v >= 0 && v < shape(degenAxis))
@@ -145,15 +165,17 @@ class FastCubicalHomologyContext[CoefficientT: Field]:
             val ids = if topIds.size == 2 then topIds else topIds :+ infinityId
             val value = ids.map(topValue).min
             FacetEvent(facet, value, ids(0), ids(1))
-        }
+          }
       }.toVector
 
     // ONE combined descending pass: (value DESCENDING, isVertex DESCENDING [vertices before edges at a tied
     // value -- see the design note for why this specific tie-break is load-bearing, not stylistic], then a
     // deterministic tie-break so ties among same-kind-same-value items are still a total order).
-    sealed trait DualEvent { def value: Double }
+    sealed trait DualEvent:
+      def value: Double
     case class VertexEv(id: Int, value: Double) extends DualEvent
-    case class EdgeEv(fe: FacetEvent) extends DualEvent { def value: Double = fe.value }
+    case class EdgeEv(fe: FacetEvent) extends DualEvent:
+      def value: Double = fe.value
 
     // Explicit comparator (not `.sortBy` into a tuple carrying an `IndexedSeq[Int]`, which drags in an unrelated
     // `OrderedCell`-derived given-search path) -- (value DESCENDING, isVertex DESCENDING [0 for vertex, 1 for
@@ -175,12 +197,20 @@ class FastCubicalHomologyContext[CoefficientT: Field]:
         val byValue = -java.lang.Double.compare(x.value, y.value) // descending
         if byValue != 0 then byValue
         else
-          val xKind = x match { case _: VertexEv => 0; case _: EdgeEv => 1 }
-          val yKind = y match { case _: VertexEv => 0; case _: EdgeEv => 1 }
+          val xKind = x match
+            case _: VertexEv => 0;
+            case _: EdgeEv   => 1
+          val yKind = y match
+            case _: VertexEv => 0;
+            case _: EdgeEv   => 1
           if xKind != yKind then Integer.compare(xKind, yKind)
           else
-            val xKey = x match { case VertexEv(id, _) => topCoords(id); case EdgeEv(fe) => fe.facet.encoded }
-            val yKey = y match { case VertexEv(id, _) => topCoords(id); case EdgeEv(fe) => fe.facet.encoded }
+            val xKey = x match
+              case VertexEv(id, _) => topCoords(id);
+              case EdgeEv(fe)      => fe.facet.encoded
+            val yKey = y match
+              case VertexEv(id, _) => topCoords(id);
+              case EdgeEv(fe)      => fe.facet.encoded
             lexCompare(xKey, yKey)
     val allEvents: Vector[DualEvent] = (vertexEvents ++ edgeEvents).sorted(using eventOrdering)
 
@@ -241,7 +271,10 @@ class FastCubicalHomologyContext[CoefficientT: Field]:
             // `infinityId` never sits on the YOUNG side -- it is always the eldest of any merge it takes part
             // in (birthOf(infinityId) = +Infinity, the largest possible value), so it is never the smaller
             // side of the `birthOf(ra) <= birthOf(rb)` comparison above.
-            require(youngTopId != infinityId, "an engine bug: the infinity dual vertex was treated as the younger side of a merge")
+            require(
+              youngTopId != infinityId,
+              "an engine bug: the infinity dual vertex was treated as the younger side of a merge"
+            )
             val youngTopCube: Cube = topCube(topCoords(youngTopId))
             // Test the RESOLVED root, not the raw id: `oldTopId` can be a real id whose component already
             // merged into infinity's via an earlier tied-value edge this same pass, in which case
@@ -252,24 +285,30 @@ class FastCubicalHomologyContext[CoefficientT: Field]:
             val youngChain = chainOf(youngRoot)
             val youngCoeffAtTop = youngChain.getOrElse(
               youngTopCube,
-              throw new IllegalStateException(s"dual component missing its own boundary top cell $youngTopCube -- an engine bug")
+              throw new IllegalStateException(
+                s"dual component missing its own boundary top cell $youngTopCube -- an engine bug"
+              )
             )
             val coeffTowardYoung = facetBoundary.getOrElse(youngTopCube, fr.zero)
             val flip: CoefficientT =
               oldTopCube match
-                case None => fr.one // the surviving side is infinity -- nothing to cancel against
+                case None          => fr.one // the surviving side is infinity -- nothing to cancel against
                 case Some(oldCube) =>
                   val oldChain = chainOf(oldRoot)
                   val oldCoeffAtTop = oldChain.getOrElse(
                     oldCube,
-                    throw new IllegalStateException(s"dual component missing its own boundary top cell $oldCube -- an engine bug")
+                    throw new IllegalStateException(
+                      s"dual component missing its own boundary top cell $oldCube -- an engine bug"
+                    )
                   )
                   val coeffTowardOld = facetBoundary.getOrElse(oldCube, fr.zero)
                   // Want: flip * youngCoeffAtTop * coeffTowardYoung + oldCoeffAtTop * coeffTowardOld = 0, i.e.
                   // flip = -(oldCoeffAtTop * coeffTowardOld) / (youngCoeffAtTop * coeffTowardYoung); every factor
                   // is +-1 (facet coefficients from cubeIsOrderedCell; chain coefficients by this method's own
                   // invariant, propagated from +-1 seeds), so division is multiplication.
-                  fr.negate(fr.times(fr.times(oldCoeffAtTop, coeffTowardOld), fr.times(youngCoeffAtTop, coeffTowardYoung)))
+                  fr.negate(
+                    fr.times(fr.times(oldCoeffAtTop, coeffTowardOld), fr.times(youngCoeffAtTop, coeffTowardYoung))
+                  )
             val flippedYoung: Map[Cube, CoefficientT] = youngChain.view.mapValues(c => fr.times(flip, c)).toMap
             parent(youngRoot) = oldRoot
             if oldRoot != infinityId then
@@ -284,6 +323,13 @@ class FastCubicalHomologyContext[CoefficientT: Field]:
             chainOf -= youngRoot
 
             val rep: Chain[Cube, CoefficientT] =
-              Chain.from(flippedYoung.toSeq.flatMap((cube, c) => cube.boundary[CoefficientT].map((f, s) => (f, fr.times(c, s)))))
-            bars += new PersistenceBar(ambientDim - 1, endpoint(true)(v), endpoint(false)(birthOf(youngRoot)), Some(rep))
+              Chain.from(
+                flippedYoung.toSeq.flatMap((cube, c) => cube.boundary[CoefficientT].map((f, s) => (f, fr.times(c, s))))
+              )
+            bars += new PersistenceBar(
+              ambientDim - 1,
+              endpoint(true)(v),
+              endpoint(false)(birthOf(youngRoot)),
+              Some(rep)
+            )
     bars.toList

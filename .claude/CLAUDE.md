@@ -486,6 +486,21 @@ near-tie detection. So Helix is **not reliable ground truth** for dim ≥ 4 fuzz
 comparisons stay as `unsafeCompare`/`unsafeFuzzCompare` diagnostics, not wired into `sbt test` (and not
 `pendingUntilFixed`, wrong semantics for probabilistic failures).
 
+**`FastAlphaHomologyContext` (`homology/FastAlphaHomology.scala`)** — `FastCubicalHomologyContext`'s own dual
+union-find (see "Cubical complexes" above), ported to `HelixDelaunay`'s top simplices; **ambient dimension 2
+only**, `HelixDelaunay` only (never `AlphaShapeDQP` — its cospherical-degeneracy hazard can violate the dual
+graph's own "every facet has ≤2 cofaces" precondition directly). That precondition is NOT guaranteed by
+construction the way it is for a cubical grid — measured at ~1-in-18700 on random points at ambient dimension 2
+(likely the same frontier-walk weakness as Helix's own limitation just above, viewed differently: a bad facet
+multiplicity rather than a missing-face diff against DQP) — validated explicitly, throwing a specific
+`IllegalStateException` naming the offending facet(s) rather than building a silently-wrong dual graph. A
+facet's own dual-edge value must come from `HelixDelaunay.filtrationValue` directly, never recomputed as `min`
+over containing top simplices (unlike cubical, these can genuinely differ — `edgeIsDelaunay`'s own shortcut).
+**Not wired into `matlab.TDA4j`/`cli`** — a deliberate scope decision (exposing a rare-but-real exception on
+ordinary user input as a production option is a call for the project lead to make having seen the measured
+rate, not one to make unilaterally), not a gap; the engine itself is complete and tested for direct Scala use.
+`WORKLOG-alpha-dual-unionfind.md`, `DESIGN-alpha-dual-unionfind.md`.
+
 **Degeneracy hazard**: in cospherical position the alpha complex is not a Delaunay subcomplex — `k` cospherical
 sites give a `(k-1)`-simplex (unit grid in R² → 3-simplices). Truncating at ambient dimension gives the wrong
 homotopy type. Correct, not a bug.

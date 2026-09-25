@@ -37,6 +37,35 @@ DQP-vs-Helix comparisons in `AlphaCrossValidationSpec` are deliberately kept out
 manually-invoked diagnostic methods instead) — a real Helix failure would otherwise masquerade as a DQP
 regression or vice versa.
 
+### `FastAlphaHomologyContext` — dual union-find, and a second, MEASURED limitation this one is exposed to
+
+`homology/FastAlphaHomology.scala` (`.claude/DESIGN-alpha-dual-unionfind.md`), a follow-on to the cubical dual
+union-find engine (`FastCubicalHomologyContext`, `persistence-engines.md`'s engine 6): builds a dual graph over
+`HelixDelaunay`'s own top simplices (ambient dimension 2 only, currently) and computes `H_0`+`H_1` via the same
+Alexander-duality/elder-rule union-find, needing `HelixDelaunay` specifically (never `AlphaShapeDQP`, whose own
+documented cospherical-degeneracy hazard can emit an oversized simplex outright) because the dual graph needs
+the full, untruncated triangulation and "every facet has exactly 1 or 2 containing top simplices."
+
+That precondition is **not guaranteed by construction** the way it is for a cubical grid, and this session
+measured it directly rather than assuming it: 1-in-3000 combined across ambient dimension 2/3 on `Gen.double`
+random points, isolated further to roughly 1-in-18700 at ambient dimension 2 alone (`Gen.double`, `n∈[6,16]`,
+50000 trials) — real, but genuinely rare at the dimension this class targets, likely the SAME underlying
+frontier-walk weakness `AlphaCrossValidationSpec`'s own doc comment already reports (an incomplete complex,
+missing a connected sub-chain of genuinely-Delaunay faces, with no exception raised), observed through a
+different lens here (a bad facet-multiplicity count instead of a missing-face diff against DQP). This class
+validates the precondition explicitly and throws a specific, actionable `IllegalStateException` naming the
+offending facet(s) rather than building a silently-wrong dual graph — see `FastAlphaHomologySpec`'s own pinned
+regression fixture (a concrete 12-point set that reproduces it deterministically) for the exact exception shape.
+
+**Not yet wired into `matlab.TDA4j`/`cli`** (unlike the cubical engine, which is) — a deliberate scope
+decision, not an oversight: exposing a production option that can throw on a small but real fraction of
+ordinary-looking real-world point clouds is a judgment call about user experience the project lead should make
+directly, having now seen the measured rate, rather than one this session should make unilaterally the way it
+could for the cubical engine (which has no such risk at all). The engine itself is fully implemented, tested
+(hand-verified fixture, a richer cross-validated fixture exercising a genuine non-infinity dual merge, `Fp(3)`
+sign-genericity, the pinned exception regression, and a random-point property test that classifies rather than
+fails on either known `HelixDelaunay` limitation), and ready to wire in once that call is made.
+
 ## `AlphaComplexDQP` — dual active-set QP, never builds Delaunay at all
 
 Implements Erik Carlsson & John Carlsson, *Computing the alpha complex using dual active set quadratic

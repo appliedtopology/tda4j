@@ -12,12 +12,12 @@ import org.specs2.ScalaCheck
 import org.scalacheck.*
 
 /** `FastCubicalHomologyContext` (Flash Cubical's dual-graph union-find, `.claude/DESIGN-fast-cubical-engine.md`) --
-  * cross-validated against `CubicalHomologyContext` (the naive engine, this codebase's own reference oracle for
-  * cubical complexes) rather than re-derived by hand for every fixture: the dual-graph construction's own
-  * correctness argument (Alexander duality) is independent of the naive engine's own algorithm (general
-  * boundary-matrix reduction), so agreement between the two is real evidence, not two implementations of the same
-  * idea agreeing with itself. The two exact-bar-count fixtures below are reused verbatim from `CubicalStreamSpec`
-  * (already independently hand-derived and pinned there), specifically so this spec doesn't re-derive those counts.
+  * cross-validated against `CubicalHomologyContext` (the naive engine, this codebase's own reference oracle for cubical
+  * complexes) rather than re-derived by hand for every fixture: the dual-graph construction's own correctness argument
+  * (Alexander duality) is independent of the naive engine's own algorithm (general boundary-matrix reduction), so
+  * agreement between the two is real evidence, not two implementations of the same idea agreeing with itself. The two
+  * exact-bar-count fixtures below are reused verbatim from `CubicalStreamSpec` (already independently hand-derived and
+  * pinned there), specifically so this spec doesn't re-derive those counts.
   */
 class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
@@ -117,14 +117,13 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
     permanentlyMissingCenterFixture
   )
 
-  "every FastCubical H1 representative has zero boundary, on the hand-derived fixtures" >> {
+  "every FastCubical H1 representative has zero boundary, on the hand-derived fixtures" >>
     handFixtures
       .map { stream =>
         val bars = FastCubicalHomologyContext[Double]().persistentHomology(stream)
         bars.filter(_.dim == 1).forall(b => Chain.from(b.annotation.get.boundary).isZero()) must beTrue
       }
       .reduce(_ and _)
-  }
 
   // ---------------------------------------------------------------------------------------------------------
   // Sign genericity over Fp(3): Double/F2-style coefficients cannot distinguish a correct orientation flip from
@@ -136,7 +135,7 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
   val GF3 = new FiniteField(3)
   import GF3.given
 
-  "agrees with the Double run over Fp(3), including genuine-cycle representatives, on the hand-derived fixtures" >> {
+  "agrees with the Double run over Fp(3), including genuine-cycle representatives, on the hand-derived fixtures" >>
     handFixtures
       .map { stream =>
         val doubleBars = fastBars[Double](stream)
@@ -146,7 +145,6 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
         (f3Triples.sorted must beEqualTo(doubleBars.sorted)) and (allCycles must beTrue)
       }
       .reduce(_ and _)
-  }
 
   // ---------------------------------------------------------------------------------------------------------
   // Random 2D grids, cross-validated against the naive engine -- reusing CubicalStreamSpec's own genTestImage

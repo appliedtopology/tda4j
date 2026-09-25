@@ -1,10 +1,13 @@
 # Persistence engines: what to trust, and why
 
-`homology/Homology.scala`, `homology/PackedRipserCohomology.scala`, `homology/Cohomology.scala`, and
-`homology/FastCubicalHomology.scala` contain **five independently-implemented algorithms across six concrete
-classes**. They share the `Chain` reduction primitives from [Architecture](architecture.md), but they are not
-variants of one shared engine — a fix or bug found in one does not imply anything about the others. Read this
-page before choosing which engine to build on.
+`homology/Homology.scala`, `homology/PackedRipserCohomology.scala`, `homology/Cohomology.scala`,
+`homology/FastCubicalHomology.scala`, and `homology/FastAlphaHomology.scala` contain **five
+independently-implemented algorithms across seven concrete classes** (the last two classes share one
+algorithm — a dual-graph union-find via Alexander duality — applied to two different cell types, the same
+"one algorithm, several concrete classes" relationship engines 3/4 already have). They share the `Chain`
+reduction primitives from [Architecture](architecture.md), but they are not variants of one shared engine — a
+fix or bug found in one does not imply anything about the others. Read this page before choosing which engine
+to build on.
 
 Three of the five (`CellularHomologyContext`, `CellularPersistenceInChunksContext`, `CellularCohomologyContext`)
 additionally implement the common `homology.PersistenceEngine[CellT, C]` trait (`def barcode(stream): List[
@@ -175,6 +178,27 @@ No paper access (network-blocked) and no existing implementation to port (unlike
 edge-collapse precedent) meant this is an original derivation from Alexander duality, not a translation — see
 the design note for the full derivation and a hand-verified worked example, checked before any code was
 written.
+
+## 7. `FastAlphaHomologyContext` — engine 6's own dual union-find, ported to `HelixDelaunay`
+
+Same algorithm as engine 6, applied to `HelixDelaunay`'s top simplices instead of a cubical grid's top cells
+(`.claude/DESIGN-alpha-dual-unionfind.md`, `alpha-complex.md`'s own `FastAlphaHomologyContext` section for the
+full derivation and its own newly-measured risk). `HelixDelaunay` specifically, never `AlphaComplexDQP`/
+`AlphaShapeDQP` — the dual graph needs the full, untruncated triangulation (`AlphaComplexDQP.euclidean`'s own
+truncated mode is incompatible) and "every facet has <= 2 cofaces," which `AlphaShapeDQP`'s own documented
+cospherical-degeneracy hazard can violate directly by emitting an oversized simplex. Currently ambient
+dimension 2 only, for the identical reason as engine 6 (3D needs the same additional, harder residual-`H_1`
+piece, not attempted here either).
+
+**Unlike engine 6, this precondition is not guaranteed by construction** and was measured directly this
+session: roughly 1-in-18700 on random points at ambient dimension 2 specifically (see `alpha-complex.md` for
+the full measurement) — real, but rare, a genuine `HelixDelaunay` limitation, not a flaw in this construction.
+Validates the precondition explicitly and throws a specific `IllegalStateException` on violation rather than
+building a silently-wrong dual graph.
+
+**Not currently wired into `matlab.TDA4j`/`cli`**, unlike every other engine on this page — a deliberate scope
+decision given the newly-measured risk above, not an oversight; see `alpha-complex.md`'s own section for the
+reasoning. Fully implemented and tested for direct Scala use.
 
 ## Streams × engines: what works with what
 
