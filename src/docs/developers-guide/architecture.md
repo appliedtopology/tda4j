@@ -316,6 +316,55 @@ that functional — do not apply. `naive`/`chunks`/`cohomology` all consume it l
 [Persistence engines](persistence-engines.md)'s own streams-vs-engines table for the full picture across every
 construction, not just this one.
 
+### Flag-complex edge collapse
+
+`streams/EdgeCollapseStream.scala` (`EdgeCollapse.collapse`, `.claude/WORKLOG-edge-collapse.md`) implements
+Boissonnat-Pritam's edge collapse (SoCG 2020) and Glisse-Pritam's own refinement (SoCG 2022): reduces a
+Vietoris-Rips filtration's 1-skeleton to a smaller weighted graph whose flag complex has the SAME persistent
+homology at every filtration level, using only the graph itself — no higher simplices are ever built to decide
+what to remove. An edge is **dominated** by a vertex `w` (not one of its own endpoints) iff every vertex
+adjacent to both endpoints is also adjacent to `w` — for a flag complex this depends only on the graph, verified
+directly against `GUDHI`'s own edge-collapse module (`Flag_complex_edge_collapser.h`, co-authored by Pritam and
+Glisse themselves; the actual papers were unreachable from this session's network policy — see the worklog).
+Across a whole filtration, a dominated edge's own entry time is pushed forward to the largest time it remains
+dominated (by, in general, a succession of different dominators as new common neighbors arrive), or removed
+outright if that domination never breaks. Reified as `EdgeCollapsedMetricSpace`, a `FiniteMetricSpace[Int]` over
+the same vertex ids — exactly the pattern `WitnessMetricSpace` already established for a non-metric,
+construction-derived weighted graph — so it slots directly into `EnumeratingCofaceSimplexStream`/
+`RipserCofaceSimplexStream` unmodified. Vertices are never removed (only GENUINELY correcting the originating
+worklog's own first-draft phrasing, "dominated-vertex removal" — that is a *different* construction, strong
+collapse, `arXiv:1809.10945`); `+Infinity` marks a collapsed-away pair, matching `SparseMetricSpace`'s own
+"+Infinity past the cutoff" convention; `minimumEnclosingRadius` is overridden to the bound the collapse itself
+used, not computed from the (now partly-infinite) collapsed graph — the same enclosing-radius hazard
+`SheehyRipsSimplexStream`'s own truncation clamp already had to close, for an unrelated reason.
+
+**Representatives transfer through inclusion, not a separate lifting step**: at every filtration level, the
+collapsed complex is a literal subcomplex of the original (a collapse only ever removes cells or defers their
+entry, never adds or identifies anything), so a cycle/cocycle representative computed on the smaller complex is
+automatically a valid representative of the same class in the bigger one — contrast the MST-based simplicial-set
+collapse the originating worklog also considered and declined, where the analogous complex is a *quotient*, and
+lifting a representative back is a genuine extra step.
+
+**This implementation is a faithful port of the reference algorithm's own single-pass, descending-filtration-
+value, live-mutating-state structure — not an independently-designed alternative**, after an independently-
+designed "iterate a definition-driven resolution to a whole-graph fixed point" first draft was tried and proven
+wrong by this class's own cross-validation (two distinct over-collapsing bugs, each one silently turning a real,
+finite bar essential — see the worklog for both). The processing order is load-bearing, not an implementation
+convenience: reconsider it directly from the reference source before ever touching this file's core loop, don't
+re-derive a substitute. Cross-validated by barcode agreement against plain, uncollapsed VR (property-tested
+random point clouds, a tie-heavy grid, hand-built fixtures pinning both the shift and the outright-removal
+outcome) — the real oracle throughout, not agreement with any external tool.
+
+**Enumeration cost is not reduced uniformly** (checked from source, not assumed): `EnumeratingCofaceSimplexStream`
+and `PackedRipserCohomologyContext`'s own internal `CofacetCursor`-based enumeration both scan a fixed
+combinatorial range regardless of graph sparsity (vertices are never removed), though `EnumeratingCofaceSimplexStream`'s
+own downstream sort-and-cache pass over the *surviving* candidates does shrink; `RipserCofaceSimplexStream`'s
+own enumeration (built from the previous dimension's own survivors) benefits directly and proportionally.
+**Reduction cost benefits substantially regardless of engine** — measured 73-76% of edges removed and a 43-47x
+reduction-phase speedup on random point clouds (`EdgeCollapseBenchmarkSpec`, gated the same way
+`ApparentPairsBenchmarkSpec` is), against a far more modest 1.45-1.74x construction-phase speedup — see the
+worklog for the full table and the source-level reasoning behind the split.
+
 ### Metric spaces
 
 `FiniteMetricSpace.scala` abstracts "distance + finite point set": `ExplicitMetricSpace` (raw distance

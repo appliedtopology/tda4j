@@ -124,6 +124,49 @@ class TDA4jSpec extends mutable.Specification:
     }
   }
 
+  "complex=vr, edgeCollapse option validation" should {
+    "reject edgeCollapse=true combined with a non-vr complex" in {
+      TDA4j.computeFromPoints(
+        points,
+        Array("complex", "alpha", "edgeCollapse", "true")
+      ) must throwA[IllegalArgumentException]
+    }
+    "reject a non-boolean edgeCollapse value" in {
+      TDA4j.computeFromPoints(points, Array("edgeCollapse", "yes")) must throwA[IllegalArgumentException]
+    }
+  }
+
+  "complex=vr with edgeCollapse=true, through the facade" should {
+    // The real oracle (streams.EdgeCollapse's own worklog): edge collapse preserves persistent homology exactly,
+    // so the collapsed complex's own barcode must match plain complex=vr's, bar for bar -- not just "doesn't
+    // throw." A dropped edgeCollapse option, or one silently ignored inside computeGeneric, would still pass
+    // every other test in this file (nothing else here ever asks for it) but would fail this one immediately if
+    // it somehow changed the answer -- it should NOT change the answer at all, only how it's computed.
+    "agree exactly with edgeCollapse=false (the default), across every engine" in {
+      // Zero-persistence (birth == death) bars are dropped before comparing: edge collapse specifically
+      // eliminates exactly this kind of momentary flicker (see streams.EdgeCollapse's own worklog), so the
+      // uncollapsed baseline can have MORE of them while still agreeing with the collapsed result on every bar
+      // that represents a genuine feature -- the same filter EdgeCollapseStreamSpec's own barcode comparisons
+      // already need, for the identical reason.
+      def realBars(triples: List[(Int, Double, Double)]) = triples.filterNot((_, b, d) => b == d)
+      val baseline = realBars(triples(TDA4j.computeFromPoints(points).toArray()))
+      forall(Seq("ripser", "naive", "chunks", "cohomology")) { engine =>
+        val collapsed =
+          realBars(triples(TDA4j.computeFromPoints(points, Array("edgeCollapse", "true", "engine", engine)).toArray()))
+        collapsed must containTheSameElementsAs(baseline)
+      }
+    }
+
+    "still expose real representative chains for every bar (the collapsed stream still satisfies the ordering " +
+      "contract, not just that bar VALUES happen to survive)" in {
+        val result = TDA4j.computeFromPoints(points, Array("edgeCollapse", "true"))
+        result.size() must be_>(0)
+        (0 until result.size()).forall { i =>
+          result.cycleVertices(i).length == result.cycleCoefficients(i).length && result.cycleVertices(i).length > 0
+        } must beTrue
+      }
+  }
+
   "complex=alpha, through the facade" should {
     // Tolerance-based, not exact `containTheSameElementsAs` -- each facade call independently reconstructs its
     // own `AlphaShapes(pts, alphaBackend)`, and HelixDelaunay's own filtration-value computation touches a
@@ -386,7 +429,10 @@ class TDA4jSpec extends mutable.Specification:
     "produce a genuinely different (sparser) barcode than complex=vr, on a point cloud where sparsification fires" in {
       val sheehy = triples(
         TDA4j
-          .computeFromPoints(clusterPoints, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "maxDimension", "1"))
+          .computeFromPoints(
+            clusterPoints,
+            Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "maxDimension", "1")
+          )
           .toArray()
       )
       val vr = triples(
@@ -399,10 +445,15 @@ class TDA4jSpec extends mutable.Specification:
 
     "engine=cohomology agrees with the default engine=naive, on the same sparsifying point cloud" in {
       val naive =
-        triples(TDA4j.computeFromPoints(clusterPoints, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5")).toArray())
+        triples(
+          TDA4j.computeFromPoints(clusterPoints, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5")).toArray()
+        )
       val cohomology = triples(
         TDA4j
-          .computeFromPoints(clusterPoints, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "engine", "cohomology"))
+          .computeFromPoints(
+            clusterPoints,
+            Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "engine", "cohomology")
+          )
           .toArray()
       )
       naive must containTheSameElementsAs(cohomology)

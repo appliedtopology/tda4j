@@ -93,6 +93,26 @@ approximation to plain Vietoris-Rips; `epsilon` must be strictly between `0` and
 max-pairwise-distance filtration functional, which this construction's own sparsification and vertex
 "vanishing" don't satisfy (see the [Developer's Guide](../developers-guide/architecture.md)).
 
+### Flag-complex edge collapse
+
+```scala 3
+val collapsed = EdgeCollapse.collapse(metricSpace) // a FiniteMetricSpace[Int], drop-in for any VR-consuming stream
+val stream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(collapsed), 3)
+val homology = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(stream)
+```
+
+Unlike Sheehy's construction above, this is not an approximation: Boissonnat-Pritam/Glisse-Pritam edge
+collapse reduces a Vietoris-Rips filtration's own 1-skeleton to a smaller weighted graph with the EXACT same
+persistent homology at every filtration level, before anything is built on top of it. `EdgeCollapse.collapse`
+returns an ordinary `FiniteMetricSpace[Int]` (`EdgeCollapsedMetricSpace`), so it plugs into
+`EnumeratingCofaceSimplexStream`/`RipserCofaceSimplexStream` — and every engine that consumes them — with no
+other code changes; representatives transfer for free (the collapsed complex is a literal subcomplex of the
+original at every level). Measured 73-76% of edges removed and a 43-47x reduction-phase speedup on random
+point clouds — see the [Developer's Guide](../developers-guide/architecture.md)'s "Flag-complex edge collapse"
+section for the construction-vs-reduction breakdown and why they differ so much. `matlab.TDA4j`'s
+`edgeCollapse=true` option (and the CLI's `--edge-collapse`) apply this automatically for `complex=vr` — see
+"Calling from MATLAB or Java" below.
+
 ### Witness complexes
 
 ```scala 3
@@ -359,6 +379,7 @@ changes a method's call signature:
 | `landmarkSelector` | `maxmin`, `random` | `maxmin` (only consulted for `complex=witness`) |
 | `landmarkSeed` | integer | `0` (only for `complex=witness`/`landmarkSelector=random`) |
 | `nu` | `0`, `1`, `2` | `2` (only for `complex=witness`/`witnessVariant=lazy`) |
+| `edgeCollapse` | `true`, `false` | `false` (only consulted for `complex=vr`; `true` rejected for every other `complex`) |
 
 `alpha` refuses `engine=ripser` and `engine=chunks` (neither engine understands alpha complexes, and the
 chunks/alpha combination is a known stall risk in the underlying library); `cech`, `dtm-rips`, and
@@ -372,6 +393,18 @@ the same reason as `cech` (the general witness complex isn't a flag complex eith
 [Developer's Guide](../developers-guide/persistence-engines.md)'s streams-vs-engines table for the full
 picture, complex by complex. Unrecognized keys or values throw `IllegalArgumentException` immediately rather
 than silently falling back to a default.
+
+`edgeCollapse=true` (`complex=vr` only) preprocesses the point cloud's own Vietoris-Rips 1-skeleton with edge
+collapse (Boissonnat-Pritam/Glisse-Pritam) before building anything on top of it — a smaller weighted graph
+with the SAME persistent homology at every filtration level, so the resulting `PersistenceResult` is identical
+to what `edgeCollapse=false` (the default) would have produced, just computed from a much smaller complex.
+Applies uniformly to every `engine` value. Measured 73-76% of edges removed and a 43-47x reduction-phase
+speedup on random point clouds — construction-phase speedup is far smaller (1.45-1.74x), since the dominant
+cost this removes is REDUCING the resulting chain complex, not enumerating candidate simplices in the first
+place; see the [Developer's Guide](../developers-guide/architecture.md)'s "Flag-complex edge collapse" section
+for the full construction and measurement. `--edge-collapse` on the CLI mirrors this option exactly (unlike
+`--distance-to`/the vectorizations/the boundary-matrix export above, this one changes nothing about the output
+shape, so it needs no special CLI-side handling at all).
 
 Representative-chain vertex indices for `complex=witness` are **ambient point-cloud indices**, already
 mapped back from the stream's own local `0 until numLandmarks` landmark indices — `cycleVertices` never

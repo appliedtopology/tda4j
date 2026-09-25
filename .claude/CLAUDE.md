@@ -533,6 +533,46 @@ Refuses `engine=ripser` (not diameter-only); `naive`/`chunks`/`cohomology` wired
 every other complex — see `persistence-engines.md`'s streams-vs-engines table for the full picture across
 every construction, not just this one.
 
+## Flag-complex edge collapse
+
+`streams/EdgeCollapseStream.scala`, `WORKLOG-edge-collapse.md`. `EdgeCollapse.collapse` implements
+Boissonnat-Pritam (SoCG 2020) + Glisse-Pritam (SoCG 2022): reduces a VR filtration's own 1-skeleton to a
+smaller weighted graph with the SAME persistent homology at every level, using only the graph. An edge `{u,v}`
+is dominated by a vertex `w` iff every common neighbor of `u,v` is also adjacent to `w` — for a flag complex
+this depends only on the graph, verified directly against `GUDHI`'s own `Flag_complex_edge_collapser.h`
+(cloned via `add_repo`, since arXiv/Dagstuhl were both network-blocked this session). **Removes dominated
+EDGES, never vertices** — vertex domination is a different construction, strong collapse (`arXiv:1809.10945`);
+correcting this repo's own earlier gap-analysis phrasing. Across a filtration, a dominated edge's entry is
+pushed forward to the largest time it stays dominated (by a possibly-changing dominator), or removed outright
+if that never breaks. Reified as `EdgeCollapsedMetricSpace` (a `FiniteMetricSpace[Int]`, `WitnessMetricSpace`'s
+own reification pattern) — drop-in for `EnumeratingCofaceSimplexStream`/`RipserCofaceSimplexStream`.
+Representatives transfer through inclusion for free (the collapsed complex is a literal subcomplex at every
+level, never a quotient). `minimumEnclosingRadius` is overridden to the bound the collapse itself used, not
+computed from the partly-`+Infinity` collapsed graph (the same hazard class as Sheehy's own truncation clamp
+above) — and the initial edge-admission check is `d.isFinite && d <= bound`, not just `d <= bound`, for the
+identical `Infinity <= Infinity` reason.
+
+**This is a faithful port of the reference algorithm's own single-pass, descending-filtration-value,
+live-mutating-state structure — not an independent redesign.** An independently-designed "iterate a
+definition-driven resolution to a whole-graph fixed point" first draft was tried and PROVEN WRONG by this
+class's own barcode cross-validation: two distinct bugs (Gauss-Seidel-within-an-unordered-pass; permanent
+removal without reconsideration once a relied-upon common-neighbor edge later vanished too), each silently
+turning a real, finite bar essential on a 5-point counterexample found by targeted random search, not by
+further hand-tracing (which had already proven unreliable). The processing order is load-bearing, not an
+implementation convenience — re-derive nothing here without rereading the reference source first.
+
+Vertices are never removed, so enumeration cost does NOT drop uniformly (checked from source): both
+`EnumeratingCofaceSimplexStream` and `PackedRipserCohomologyContext`'s own `CofacetCursor`-based enumeration
+scan a fixed combinatorial range regardless of graph sparsity (though `EnumeratingCofaceSimplexStream`'s
+downstream sort-over-survivors pass does shrink); `RipserCofaceSimplexStream`'s own enumeration (built from
+the prior dimension's survivors) benefits directly. **Reduction cost benefits substantially regardless of
+engine** — measured 73–76% of edges removed and a 43–47x reduction-phase speedup on random clouds
+(`EdgeCollapseBenchmarkSpec`, gated like the other `*BenchmarkSpec`s), against a 1.45–1.74x construction-phase
+speedup. Wired through `matlab.TDA4j`'s `edgeCollapse` option (`complex=vr` only, `require`d `false` for every
+other complex — applies uniformly to every `engine`) and mirrored 1:1 in `cli` (`--edge-collapse`) — the one
+option among this session's items that changes nothing about `PersistenceResult`'s own output shape, so unlike
+`--distance-to`/vectorizations/boundary-matrix it gets the full, unqualified CLI mirror.
+
 ## File I/O
 
 `io`, `WORKLOG-io-module.md`. Every format was verified against its project's primary source; unverified formats

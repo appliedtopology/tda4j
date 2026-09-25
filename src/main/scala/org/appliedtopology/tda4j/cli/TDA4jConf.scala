@@ -115,6 +115,15 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
         "otherwise. The resulting barcode is a (1+epsilon)-multiplicative approximation to plain --complex=vr's " +
         "own barcode (Cavanna-Jahanseir-Sheehy 2015); see streams.SheehyRipsSimplexStream's own doc."
     )
+  // String, not Boolean -- same reasoning as --sublevel above (a genuinely optional flag, not an
+  // always-supplied toggle).
+  val edgeCollapse: ScallopOption[String] = opt[String](
+    descr = "true or false (default) -- only consulted for --complex=vr, rejected for any other --complex. " +
+      "Boissonnat-Pritam/Glisse-Pritam edge collapse (streams.EdgeCollapse): reduces the Vietoris-Rips " +
+      "1-skeleton to a smaller weighted graph with the SAME persistent homology, before anything is built on " +
+      "top of it -- a preprocessing step, changing nothing about the output shape. Measured 73-76% of edges " +
+      "removed and a 43-47x REDUCTION-phase speedup on random point clouds; see .claude/WORKLOG-edge-collapse.md."
+  )
 
   // CLI-LOCAL control flow, unlike every option above: neither is forwarded into TDA4j's own options array
   // (see buildOptions's own comment) -- they select which of TDA4j's ENTRY POINTS this run calls, not a value

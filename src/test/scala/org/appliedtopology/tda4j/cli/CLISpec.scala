@@ -202,6 +202,24 @@ class CLISpec extends mutable.Specification:
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
     }
 
+    "produce the exact same barcode as calling TDA4j directly for --edge-collapse=true, via a real file on disk" >> {
+      // Same 1:1-mirrored-flag argument as --sheehy-epsilon above -- --edge-collapse changes nothing about the
+      // OUTPUT shape (unlike --distance-to, which is the one CLI flag that does NOT mirror a compute option --
+      // see TDA4jConf.distanceTo's own doc), so it needs no special CLI-side handling at all.
+      val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0), Array(0.5, 2.0))
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, points)
+
+      val buffer = new ByteArrayOutputStream()
+      val exitCode = TDA4jCLI.run(Seq("--edge-collapse", "true", "--max-dimension", "1", path), new PrintStream(buffer))
+      val cliLines = buffer.toString.linesIterator.toSeq
+
+      val direct = TDA4j.computeFromPoints(points, Array("edgeCollapse", "true", "maxDimension", "1"))
+      val directLines = TDA4jCLI.toBars(direct).map(_.toString)
+
+      (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
+    }
+
     "produce the exact same barcode as calling TDA4j directly for --complex=dtm-alpha, via a real file on disk" >> {
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
       val path = tempFile(".csv")

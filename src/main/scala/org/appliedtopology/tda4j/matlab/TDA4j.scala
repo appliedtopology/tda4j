@@ -110,6 +110,18 @@ import scala.collection.mutable
   *     section) nor for `complex=witness` with `witnessVariant=general` (defaults to `+Infinity` there instead --
   *     `minimumEnclosingRadius` is NOT a valid truncation for a non-flag complex, see
   *     `streams.WitnessCofaceSimplexStream`'s own doc).
+  *   - `"edgeCollapse"`: `"true"` or `"false"` (default), only consulted when `complex=vr` -- `require`d `false` (or
+  *     omitted) for every other `complex` value. `streams.EdgeCollapse` (Boissonnat-Pritam/Glisse-Pritam, SoCG
+  *     2020/2022, `.claude/WORKLOG-edge-collapse.md`): reduces the Vietoris-Rips 1-skeleton to a smaller weighted graph
+  *     with the SAME persistent homology at every filtration level, before anything is built on top of it -- a
+  *     preprocessing step, not a different complex, so it changes nothing about `PersistenceResult`'s own output shape.
+  *     Measured 73-76% of edges removed and a 43-47x REDUCTION-phase speedup on random point clouds (n=30, 50);
+  *     construction-phase speedup is far more modest (1.45-1.74x) -- the dominant cost this helps with is reducing the
+  *     resulting (now much smaller) chain complex, not enumerating candidates in the first place, see the worklog for
+  *     the measurement and the source-level reason why. Applies uniformly to every `"engine"` value;
+  *     `engine="ripser"`'s own REDUCTION should benefit the same way `"naive"`/`"chunks"`/`"cohomology"`'s measured did
+  *     (fewer real simplices to reduce, regardless of which algorithm reduces them), but this specific combination has
+  *     not itself been measured, only the other three -- see the worklog.
   *   - `"field"`: `"Z"` (default -- a prime finite field, `prime=2` unless overridden; the standard convention in the
   *     TDA research literature, e.g. Ripser/GUDHI) or `"R"` (floating point with an epsilon tolerance,
   *     `Field.DoubleApproximated` -- notably what this codebase's own existing cross-validation specs default to
@@ -429,7 +441,8 @@ object TDA4j:
     "dtmk",
     "dtmq",
     "dtmp",
-    "sheehyepsilon"
+    "sheehyepsilon",
+    "edgecollapse"
   )
 
   /** `numLandmarks`/`landmarkSelector`/`landmarkSeed` only -- the STRICT allowlist `selectLandmarksFromPoints`/
@@ -689,6 +702,13 @@ object TDA4j:
       opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
     val alphaBackend = opts.getOrElse("alphabackend", "helix")
 
+    val edgeCollapse = opts.get("edgecollapse").exists(v => parseBooleanOption("edgeCollapse", v))
+    if edgeCollapse && complex != ComplexKind.VR then
+      throw new IllegalArgumentException(
+        s"option 'edgeCollapse' is only valid for complex=vr (streams.EdgeCollapse operates on a flag complex's " +
+          s"own 1-skeleton) -- got complex=${opts.getOrElse("complex", "vr")}"
+      )
+
     val witnessLandmarks: IndexedSeq[Int] =
       if complex == ComplexKind.Witness then resolveLandmarkSelection(opts, metricSpace).landmarks
       else IndexedSeq.empty // unused for any other complex
@@ -734,6 +754,7 @@ object TDA4j:
         dtmQ,
         dtmP,
         sheehyEpsilon,
+        edgeCollapse,
         toDouble
       )
     }
@@ -763,6 +784,7 @@ object TDA4j:
     dtmQ: Double,
     dtmP: Double,
     sheehyEpsilon: Double,
+    edgeCollapse: Boolean,
     toDouble: C => Double
   )(using C is Field): PersistenceResult =
     complex match
@@ -777,13 +799,22 @@ object TDA4j:
         // the manual `buildDimension = requestedMaxDimension + 1` dance via `PersistenceEngine`'s own adapters
         // below: neither `SimplicialHomologyContext` nor `CellularCohomologyContext` has a `maxDimension` of its
         // own at all -- the cap lives entirely in the stream each is handed.
+        // `edgeCollapse` replaces the metric space every engine branch below consumes (including `engine=ripser`'s
+        // own direct `PackedRipserCohomologyContext(collapsedMetricSpace, ...)` call, which takes a metric space,
+        // not a stream) -- one swap here benefits every engine uniformly, the same "wire once" shape the boundary
+        // matrix below already uses for a different property of the complex. `maxFiltrationValue` is passed
+        // straight through to `EdgeCollapse.collapse` too: a truncated collapse (only edges within that bound
+        // ever considered) composes correctly with the SAME bound applied again below when building the actual
+        // stream -- see `streams.EdgeCollapse`'s own doc for why restricting twice to the same bound is safe.
+        val collapsedMetricSpace: FiniteMetricSpace[Int] =
+          if edgeCollapse then EdgeCollapse.collapse(metricSpace, maxFiltrationValue) else metricSpace
         // Shared by every engine branch below: the boundary matrix is a property of the complex, not of which
         // reduction algorithm ran over it, so it's built ONCE here (the same construction engine=Naive/Cohomology
         // already need below) and reused -- see `buildBoundaryMatrix`'s own doc.
         val vrCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
         val vrStreamForBoundary =
           LimitedCofaceSimplexStream(
-            EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
+            EnumeratingCofaceSimplexStream(collapsedMetricSpace, maxFiltrationValue = maxFiltrationValue),
             requestedMaxDimension + 1
           )
         val vrBoundaryMatrixOf =
@@ -803,7 +834,7 @@ object TDA4j:
             // a second production option. Doesn't go through `PersistenceEngine`: it consumes a metric space
             // directly, not a stream -- see that trait's own doc for why this is an honest asymmetry.
             val ctx = PackedRipserCohomologyContext[C](
-              metricSpace,
+              collapsedMetricSpace,
               requestedMaxDimension,
               maxFiltrationValue = maxFiltrationValue
             )
@@ -838,7 +869,7 @@ object TDA4j:
             // OWN already-computed reduction state -- boundaries/cleared/paired/killer -- incrementally, via
             // vcolOf, rather than delegating to a second independent engine) and .claude/CLAUDE.md's
             // coefficients-and-representatives principle.
-            val stream = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue)
+            val stream = EnumeratingCofaceSimplexStream(collapsedMetricSpace, maxFiltrationValue = maxFiltrationValue)
             fromBars[Simplex[Int], C](
               PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(stream),
               vrCellVertices,
