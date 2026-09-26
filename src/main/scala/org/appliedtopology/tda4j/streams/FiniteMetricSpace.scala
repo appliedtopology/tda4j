@@ -70,12 +70,37 @@ object FiniteMetricSpace:
     def isDefinedAt(spx: Simplex[VertexT]): Boolean =
       spx.forall(v => metricSpace.contains(v))
 
+    /** Hand-rolled nested `while` loop, not `spx.flatMap(v => spx.toSeq.filter(_ > v).map(w => distance(v,
+      * w))).max` -- that chain allocates a fresh closure AND a filtered/mapped `Seq` per vertex, on top of the
+      * `SortedSet.flatMap` itself, for what's structurally a single pairwise-max reduction. `spx.underlying.
+      * toIndexedSeq` (not `.toArray`, which would need a `ClassTag[VertexT]` this class's own type parameter
+      * doesn't carry -- `VertexT` is fully generic here, unlike the `Simplex[Int]`-specialized hot-path methods
+      * elsewhere in this codebase) gives one O(d) snapshot with O(1) random access, walked with a plain `i < j`
+      * double loop -- same O(d^2) distance-comparison count as before (that part is the actual, unavoidable
+      * math), zero of the intermediate collection machinery. Found via the `o3_1024` compute-server JFR profile
+      * on `RipserCohomologyContext` (`.claude/WORKLOG-packed-ripser-engine.md`): this shared, generic method
+      * (used by 16 files across this codebase, not just the Ripser engines -- `VietorisRips`, `WitnessStream`,
+      * `CechStream`, `DtmRipsStream`, `SheehyRipsStream`, `DowkerStream`, `Cofacets`, `SimplexStream` among them)
+      * was the single largest remaining cost once the earlier apparent-pairs and encode-chain fixes cleared
+      * away what had been dominating before -- most of its call volume comes from `cohomologyOrdering.compare`
+      * (consulted on every `Chain.reduceBy` comparison, by design, per `memoizeFiltrationValue`'s own doc
+      * comment), not just the smaller number of once-per-simplex lookups.
+      */
     def apply(spx: Simplex[VertexT]): Double =
       if spx.dim <= 0 then 0.0
       else
-        spx
-          .flatMap(v => spx.toSeq.filter(_ > v).map(w => metricSpace.distance(v, w)))
-          .max
+        val vertices = spx.underlying.toIndexedSeq
+        val n = vertices.length
+        var maxD = 0.0
+        var i = 0
+        while i < n do
+          var j = i + 1
+          while j < n do
+            val d = metricSpace.distance(vertices(i), vertices(j))
+            if d > maxD then maxD = d
+            j += 1
+          i += 1
+        maxD
 
 /** Wrapper class to make any metricspace into a metricspace defined on indices 0 through `metricSpace.size`. This way,
   * code can assume that the index set is contiguous.
