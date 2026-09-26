@@ -120,6 +120,56 @@ the prior investigation concluded the opposite; (3) this is squarely the kind of
 dedicated, carefully-validated session per that worklog's own framing, not something to fold into this
 session's momentum reactively.
 
+## Update (2026-09-26): fractal-r SortedSet finished, corrected substitutionCount reading, a second fix to
+## `MaximumDistanceFiltrationValue`, and a serious open question about packed on this case
+
+**`substitutionCount` correction**: it only counts the LAZY FALLBACK firing (a later column's reduction hitting
+an apparent pair's `tau` as a missing pivot), not how many apparent pairs were found overall. A low count is the
+EXPECTED good case (most apparent pairs are never looked up again), not evidence of a low apparent-pairs hit
+rate — an earlier reading in this file's live discussion got this backwards; corrected here, not silently fixed
+in place (worklog convention).
+
+**SortedSet on `fractal-r` finished**: `totalSimplexCount=19,224,829` (bars: `0->512, 1->122324, 2->18979158` —
+the dimension-2 count alone is close to `C(512,3)≈22.5M`, i.e. this is a near-complete-on-triangles complex at
+its default `minimumEnclosingRadius` threshold, genuinely ~7.7x bigger than `o3_1024`'s complex). Timing:
+`1,020,414.1ms` (17.0 minutes) — a real **5.2x improvement** over the historical 88.8-minute number from the
+very first compute-server table, confirming this session's shared fixes (`7b17442` in particular, since it's not
+Euclidean-specific and applies to every `cohomologyOrdering` comparison regardless of metric space) helped this
+case too, even though `fractal-r` never touches `EuclideanMetricSpace` at all.
+
+**Fix 5 (`0657029`): `MaximumDistanceFiltrationValue.apply`, second pass.** A JFR profile of the SortedSet run
+above (taken right after fix 4 landed) showed `apply` itself still ~14% of CPU, and `VectorBuilder.<init>`/
+`Vector$.from`/`.result` at ~43% of ALL allocation bytes — fix 4's `.toIndexedSeq` snapshot (chosen to avoid
+needing a `ClassTag[VertexT]`) builds a full immutable `Vector`, real overhead for what's almost always a 2-4
+element collection (a simplex has only `dim+1` vertices). Replaced with a nested `SortedSet.iteratorFrom` walk
+(outer iterator, inner `iteratorFrom(v)` skipping `v` itself) — same O(d²) comparison count, no backing
+collection at all, still no `ClassTag` needed. Full `sbt test` clean both before and after the merge described
+below.
+
+**A genuine non-fast-forward mid-session**: while fix 5 was being validated, the project lead pushed directly to
+this same branch (`b7c4984`: toroidal coordinates/lattice reduction, `BUGS-IN-REFERENCES.md`, a condensed
+`CLAUDE.md`, `install-sbt.sh`). Resolved with a plain merge (`b91b2f9`, no conflicts — disjoint files), full
+suite re-verified after merging (622 examples, up from 600, the new toroidal-coordinates/lattice-reduction
+tests). Worth remembering for whoever else touches this branch: it is no longer exclusively this session's own
+disposable history.
+
+**The open, serious question: packed on `fractal-r` is at LEAST ~92x slower than SortedSet on this exact case,
+unexplained.** At the time of SortedSet's 17-minute finish, packed's own run (same case, launched much earlier)
+had been going for 94,625s (26.3 hours) with a CPU profile that scaled EXACTLY linearly with elapsed time across
+two snapshots taken 66,000 seconds apart (every frame's percentage within 0.1% of the earlier one) — consistent
+with steady, uninterrupted progress through a very large amount of real work, not a hang, but with no end in
+sight. Both engines' profiles are dominated by the SAME shared `Chain.reduceLoop`/`RedBlackTree` machinery
+(`Chain.scala`, used unchanged by packed), and packed's own `DiameterIndex` ordering (`compareDiamThenIndex`,
+pure primitive comparison) should if anything be CHEAPER per comparison than SortedSet's `Simplex[Int]`
+ordering (which needs `SimplexIndexing.apply` encode calls) — so there is no known mechanism explaining a 90x+
+inversion of the pattern this entire investigation otherwise found (packed faster, often dramatically,
+everywhere else). Recommended (not yet done, requires the compute server): kill the still-running packed job
+(two stable profile snapshots are unlikely to be followed by a third that looks qualitatively different) and
+either get packed's own `totalSimplexCount`/`substitutionCount` via a fresh, shorter attempt, or better,
+construct a smaller synthetic reproduction (similar structure -- a distance-matrix-based, near-complete-on-
+triangles complex -- but small enough to finish in seconds) to iterate on directly rather than spending another
+multi-day run per attempt.
+
 ## Next steps for whoever picks this up
 
 1. **Wait for `fractal-r`'s run to actually finish** (or `jcmd JFR.dump` again later for an updated
