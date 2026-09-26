@@ -279,9 +279,12 @@ classes' harmonic-cochain Gram matrix (plain sum-over-edges dot product) and red
 default), then applies the resulting unimodular `U` directly to the already-computed per-class `theta`s (valid
 by linearity of harmonic smoothing — no second linear solve). **Not a port of `scikit-tda/DREiMac`'s own
 `toroidalcoords.py`**: its `_gram_schmidt` projects onto the *original* basis vectors instead of the running
-orthogonalized ones — invisible at exactly `k=2`, corrupts `k≥3` — confirmed by numerical repro; see
-`.claude/BUGS-IN-REFERENCES.md` (a standing, cross-session log of bugs found in external papers/reference
-implementations — add to it, don't just note it in a topic worklog). MATLAB facade (`toroidalCoordinates` /
+orthogonalized ones — invisible at exactly `k=2`, produces a provably non-orthogonal *intermediate* result at
+`k≥3` (confirmed by numerical repro) — but an end-to-end search (the specific fixture plus 300 random 3×3 cases)
+found no case where this actually degrades `_lll`'s own *final* output; see `.claude/BUGS-IN-REFERENCES.md` (a
+standing, cross-session log of bugs found in external papers/reference implementations — add to it, don't just
+note it in a topic worklog, and don't overclaim its downstream impact beyond what's actually been checked).
+MATLAB facade (`toroidalCoordinates` /
 `ToroidalCoordinatesResult`, a separate class from `CircularCoordinatesResult` — MiMa) mirrors this; no CLI
 mirror, same reasoning as `circularCoordinates`. `WORKLOG-toroidal-coordinates.md`.
 

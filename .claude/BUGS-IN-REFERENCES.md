@@ -40,9 +40,28 @@ classes — the headline "two circles → one torus" case — because for `n=2` 
 classes at once (which DREiMac's own docstring explicitly anticipates: "it may be of interest to see other
 dimensions (e.g. for a torus)"). It does not invalidate DREiMac's output in the sense of producing a
 non-unimodular change of basis (that invariant is maintained separately, by construction, regardless of whether
-the guiding Gram-Schmidt vectors are correct) — it just means the reduction achieved for 3+ simultaneous classes
-may not actually be LLL-reduced (size-reduced + Lovász condition against the *true* Gram-Schmidt vectors), i.e.
-a correctness-of-optimality bug, not a soundness bug.
+the guiding Gram-Schmidt vectors are correct) — the *isolated* `_gram_schmidt` function is unambiguously wrong
+(the repro above proves it produces a non-orthogonal output), independent of what its caller does with it.
+
+**Checked, and did NOT find, an end-to-end failure**: whether the bug actually causes `_lll`'s own *final*
+output to fail to be genuinely LLL-reduced (size-reduced + Lovász condition, checked against a *correct*
+Gram-Schmidt of that output, independent of whichever Gram-Schmidt `_lll` used internally to get there) is a
+separate question from whether the isolated subroutine is wrong — and empirically, the answer on every case
+tried is no. Ported `_lll`'s own main loop (not just `_gram_schmidt`) to pure Python and ran it, buggy-GS vs.
+correct-GS, on: the specific 3×3 skewed-diagonal fixture this codebase uses in `LatticeReductionSpec`
+(`g0=diag(4,9,16)` skewed by unimodular `S=[[1,2,3],[0,1,4],[0,0,1]]`) — both give back exactly `diag(4,9,16)`,
+correctly and identically — and 300 random 3×3 integer bases (entries in `[-6,6]`, `seed=42`) — zero cases where
+the buggy-GS-guided run's final output failed the true-Gram-Schmidt size-reduction/Lovász check, and none took
+more than 60 main-loop iterations either (no near-infinite-loop symptom). A plausible mechanism (not proven):
+the discrepancy between buggy- and correct-GS is proportional to how much the *raw* input vectors already
+differ from their *orthogonalized* versions, which shrinks as `_lll`'s own main loop makes the working basis
+progressively more orthogonal — so by termination (a basis that IS nearly orthogonal, by the algorithm's own
+stopping condition), the two GS variants may simply have converged to near-agreement regardless of which one
+guided the intermediate steps. **This is a real, proven bug in an isolated subroutine, not a demonstrated
+end-to-end correctness bug** — don't cite this entry as "DREiMac's toroidal coordinates gives wrong answers for
+3+ simultaneous classes" without a repro backing that stronger claim; no such repro exists yet. If a future
+session finds one (a harder adversarial search, larger `n`, or ill-conditioned/near-singular input might), add
+it here rather than assuming this note's own search was exhaustive.
 
 **What tda4j did**: implemented textbook LLL from scratch (`homology/LatticeReduction.scala`) with correct
 Gram-Schmidt (projecting onto the running orthogonalized vectors), cross-checked against the paper's own

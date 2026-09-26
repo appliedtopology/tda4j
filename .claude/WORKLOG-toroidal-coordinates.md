@@ -96,18 +96,26 @@ numerical repro (feeding `(1,0,0),(1,1,0),(1,1,1)` produces a third output vecto
 see `.claude/BUGS-IN-REFERENCES.md` for the runnable repro), not just by reading the code. This is invisible for
 exactly `k=2` (this feature's own headline "two circles -> one torus" case: with only two vectors there is only
 ever a single projection step, and `A[:,0] == B[:,0]` identically, so the "wrong" and "right" formulas coincide)
-but corrupts the orthogonalization -- and therefore the quality, though not the soundness, of the reduction --
-for `k>=3` (which DREiMac's own docstring explicitly anticipates: "it may be of interest to see other dimensions
-(e.g. for a torus)"). `LatticeReduction` is a from-scratch textbook implementation instead (correct Gram-Schmidt,
-cross-checked against Wikipedia's own independently-stated algorithm and worked example), not a port of
-DREiMac's code -- the only thing carried over from reading DREiMac directly is the overall SHAPE of the
-computation (Cholesky factor -> LLL -> apply `U` to the original per-class quantities), which matches the
-paper's own Algorithm 4/8 independently of DREiMac's specific (buggy) implementation of the Gram-Schmidt step.
+but produces a provably non-orthogonal intermediate result for `k>=3` (which DREiMac's own docstring explicitly
+anticipates: "it may be of interest to see other dimensions (e.g. for a torus)"). **Checked, and did NOT find,
+whether this actually degrades `_lll`'s own final output** (a separate, harder question than whether the
+isolated subroutine is wrong): ported `_lll`'s own main loop to pure Python and ran it on the specific 3x3
+skewed-diagonal fixture below plus 300 random 3x3 integer bases -- every case, buggy-GS-guided and correct-GS-
+guided runs land on the identical, genuinely-LLL-reduced (checked against a correct Gram-Schmidt of the output,
+independent of whichever GS `_lll` used to get there) final basis. See `.claude/BUGS-IN-REFERENCES.md` for the
+full repro and a plausible (not proven) mechanism. **This entry is therefore precise: a real, proven bug in an
+isolated subroutine, not a demonstrated end-to-end correctness bug** -- don't restate it as "DREiMac gives wrong
+answers for 3+ classes" without a repro that actually shows that. `LatticeReduction` is a from-scratch textbook
+implementation instead (correct Gram-Schmidt, cross-checked against Wikipedia's own independently-stated
+algorithm and worked example), not a port of DREiMac's code -- the only thing carried over from reading DREiMac
+directly is the overall SHAPE of the computation (Cholesky factor -> LLL -> apply `U` to the original per-class
+quantities), which matches the paper's own Algorithm 4/8 independently of DREiMac's specific (buggy)
+implementation of the Gram-Schmidt step.
 
 ## Verification
 
-`LatticeReductionSpec`: property-based checks on 5 hand-built Gram matrices (2x2 through 4x4, including a 3x3
-case exercising exactly the scenario DREiMac's bug would have corrupted) -- unimodularity (`|det U| = 1`),
+`LatticeReductionSpec`: property-based checks on 5 hand-built Gram matrices (2x2 through 4x4, including the same
+3x3 skewed-diagonal case used above to check DREiMac's own `_lll` end-to-end) -- unimodularity (`|det U| = 1`),
 `reducedGram == U^T gram U` (checked with independent matrix-multiply code, not `LatticeReduction`'s own
 `congruence` helper), `isReduced(reducedGram)`, and the covolume-squared (`det(Gram)`) invariant under any
 unimodular change of basis. Plus: the "Edelsbrunner scenario" directly -- two orthogonal generators of norm 2

@@ -70,7 +70,9 @@ class LatticeReductionSpec extends Specification:
           (congruenceHoldsExternally(gram, result) must beTrue) and
           (LatticeReduction.isReduced(result.reducedGram) must beTrue) and
           // same lattice -> same covolume^2 = det(Gram), invariant under ANY unimodular change of basis
-          (math.abs(determinant2(result.reducedGram) - determinant2(gram)) must beLessThan(1e-6 * (1.0 + math.abs(determinant2(gram)))))
+          (math.abs(determinant2(result.reducedGram) - determinant2(gram)) must beLessThan(
+            1e-6 * (1.0 + math.abs(determinant2(gram)))
+          ))
       }
     }
 
@@ -92,8 +94,9 @@ class LatticeReductionSpec extends Specification:
           (diag must beEqualTo(Set(4L, 9L)))
       }
 
-    "handle 3 simultaneous generators correctly -- the case DREiMac's own _gram_schmidt bug would have " +
-      "corrupted (invisible at k=2, see .claude/BUGS-IN-REFERENCES.md)" >> {
+    "handle 3 simultaneous generators correctly -- exactly the k>=3 shape where DREiMac's own _gram_schmidt " +
+      "bug (invisible at k=2, see .claude/BUGS-IN-REFERENCES.md) produces a non-orthogonal intermediate result; " +
+      "this codebase's own from-scratch implementation must not do the same" >> {
         val g0 = Array(Array(4.0, 0.0, 0.0), Array(0.0, 9.0, 0.0), Array(0.0, 0.0, 16.0))
         val s = Array(Array(1, 2, 3), Array(0, 1, 4), Array(0, 0, 1)) // unimodular upper-triangular, det = 1
         val skewed = matMulIntDouble(transpose(s), matMulDoubleInt(g0, s))

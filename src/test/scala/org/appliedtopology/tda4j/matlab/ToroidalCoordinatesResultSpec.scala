@@ -7,8 +7,8 @@ import org.specs2.mutable.Specification
 
 /** Tests the `TDA4j.toroidalCoordinates` MATLAB facade -- that it is a faithful, correctly-marshalled pass-through to
   * `homology.CircularCoordinates.computeToroidal`, which already has its own thorough test suite
-  * (`ToroidalCoordinatesSpec`) -- not a re-test of the underlying math, mirroring `CircularCoordinatesResultSpec`'s
-  * own scope exactly.
+  * (`ToroidalCoordinatesSpec`) -- not a re-test of the underlying math, mirroring `CircularCoordinatesResultSpec`'s own
+  * scope exactly.
   */
 class ToroidalCoordinatesResultSpec extends Specification:
   /** Same wedge-of-two-circles fixture as `homology.ToroidalCoordinatesSpec` -- see that file's own doc for why this
