@@ -178,7 +178,7 @@ val theme = Helium.defaults.all
 
 lazy val root = (project in file("."))
   .enablePlugins(
-    LaikaPlugin,
+    LaikaPlugin
   )
   .settings(
     // Compiler options: language features (implicitConversions, adhocExtensions) and warning flags.
