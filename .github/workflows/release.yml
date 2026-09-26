@@ -17,6 +17,13 @@ on:
     tags:
       - "v*"
 
+# Shared with docs.yml on purpose: both workflows publish to the gh-pages branch via a plain fetch/commit/push
+# sequence with no merge logic, so two overlapping runs (a docs.yml push-to-scala run and a release.yml tag or
+# workflow_dispatch run, or two of either) can race and have one push rejected ("fetch first") -- confirmed for
+# real, not hypothetical. Same group name in both files means GitHub queues the second run instead of racing it.
+concurrency:
+  group: gh-pages-publish
+
 permissions:
   contents: write
 

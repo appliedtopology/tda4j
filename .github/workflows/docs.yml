@@ -5,6 +5,10 @@ on:
     branches:
       - scala
 
+# Shared with release.yml on purpose -- see its own copy of this comment for why.
+concurrency:
+  group: gh-pages-publish
+
 permissions:
   contents: write
 
