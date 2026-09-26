@@ -4,11 +4,11 @@
   </style>
   <rect x="0" y="0" width="192" height="192" rx="16" fill="#a67f07"/>
   <g transform="translate(38,8) scale(0.9667)">
-    <circle cx="20" cy="60" r="48" fill="#f8f7f4" fill-opacity="0.16" stroke="#f8f7f4" stroke-width="5"/>
-    <circle cx="100" cy="60" r="48" fill="#2a4657" fill-opacity="0.18" stroke="#2a4657" stroke-width="5"/>
-    <line x1="20" y1="60" x2="100" y2="60" stroke="#f8f7f4" stroke-width="6"/>
-    <circle cx="20" cy="60" r="10" fill="#f8f7f4"/>
-    <circle cx="100" cy="60" r="10" fill="#2a4657"/>
+    <circle cx="20" cy="60" r="48" fill="#3c5a6b" fill-opacity="0.16" stroke="#3c5a6b" stroke-width="5"/>
+    <circle cx="100" cy="60" r="48" fill="#f8f7f4" fill-opacity="0.18" stroke="#f8f7f4" stroke-width="5"/>
+    <line x1="20" y1="60" x2="100" y2="60" stroke="#3c5a6b" stroke-width="6"/>
+    <circle cx="20" cy="60" r="10" fill="#3c5a6b"/>
+    <circle cx="100" cy="60" r="10" fill="#f8f7f4"/>
   </g>
-  <text x="96" y="169" font-size="56" text-anchor="middle" fill="#f8f7f4">tda<tspan fill="#2a4657">4</tspan>j</text>
+  <text x="96" y="169" font-size="56" text-anchor="middle" fill="#3c5a6b">tda<tspan fill="#f8f7f4">4</tspan>j</text>
 </svg>

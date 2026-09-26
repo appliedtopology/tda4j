@@ -55,13 +55,25 @@ free for any use, no attribution beyond keeping the license file with redistribu
 loaded from Google Fonts). Chosen over Space Mono; the "shares a foundry with Space Grotesk" argument for Space
 Mono didn't hold up since Space Grotesk isn't used as body/heading type anywhere near this wordmark.
 
-**Square badge: two live variants**, not one, because they serve different jobs:
+**Square badge: three live variants**, not one, because they serve different jobs:
 - `badge-lowercase.svg` — light card, icon-dominant, text at real size below. For contexts where the badge is
   the whole artifact (README avatar, social preview) and needs to stand alone at a readable size.
 - `badge-sticker-slate.svg` — full-bleed slate background, inverted (cream + dark-mode gold) mark and text.
   For print/stickers specifically: a light-background square, however tightly cropped, still reads as "logo on
   a white card" once printed and die-cut. Full-bleed color removes that problem outright, and costs nothing new
   — it's the already-approved dark-mode palette applied to a solid field instead of a dark background.
+- `badge-sticker-gold.svg` — full-bleed brand-mark gold (`#a67f07`) background. The slate sticker's trick (reuse
+  an already-approved palette pair on a solid field) does NOT transfer to gold: darkening gold enough to get a
+  legible partner color makes it read as brown/olive, not gold — yellow-family hues collapse into a different
+  color name at much higher lightness than blue-family hues do, verified by rendering candidates rather than
+  assumed. Lightening the partner color the other way collapses it into the mark's own cream well before it
+  clears contrast against the gold field. What actually works: UI-safe slate (`#3c5a6b`, unchanged) for the
+  wordmark/primary ball/connecting line, cream (`#f8f7f4`, unchanged) for the "4"/accent ball — zero new colors.
+  **Accepted exception**: `#3c5a6b` on `#a67f07` measures 1.97:1, under this system's own 3:1 brand-mark floor;
+  kept anyway because the hue separation (cool slate vs. warm gold) carries it at logo weight/scale — confirmed
+  by rendering side by side with `badge-sticker-slate.svg`, not by contrast ratio alone. A darker same-hue slate
+  (`#253741`, 3.33:1) was tried first and rejected: it clears the number but reads as disconnected from the rest
+  of the palette, which is the thing this whole two-tier system exists to avoid.
 
 **Print caveat, stated plainly**: these SVGs use live `<text>` styled with `font-family: 'JetBrains Mono'`, which
 renders correctly in a browser (where the Google Fonts stylesheet is loaded) but will NOT render correctly in
@@ -96,10 +108,6 @@ looks right, and a botched auto-outline is worse than an honest gap.
   but Plum & Gold specifically read poorly once tested in the actual logo mark (plum and gold sit too close in
   lightness, so the two shapes fight for attention). Slate & Gold won on a direct three-way comparison holding
   the mark's shape constant.
-- **Gold as a dominant/full-bleed field** (`badge-sticker-gold.svg`) — built and kept as a file, but flagged
-  as unvalidated: gold hasn't carried a dominant background anywhere else in this system, unlike the slate
-  sticker, which just reuses the already-approved dark-mode palette in a new arrangement. Don't treat it as a
-  confirmed third sticker color without a real look first.
 
 ## Assets in this directory
 
