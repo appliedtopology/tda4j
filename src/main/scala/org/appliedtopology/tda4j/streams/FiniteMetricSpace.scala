@@ -70,36 +70,44 @@ object FiniteMetricSpace:
     def isDefinedAt(spx: Simplex[VertexT]): Boolean =
       spx.forall(v => metricSpace.contains(v))
 
-    /** Hand-rolled nested `while` loop, not `spx.flatMap(v => spx.toSeq.filter(_ > v).map(w => distance(v,
-      * w))).max` -- that chain allocates a fresh closure AND a filtered/mapped `Seq` per vertex, on top of the
-      * `SortedSet.flatMap` itself, for what's structurally a single pairwise-max reduction. `spx.underlying.
-      * toIndexedSeq` (not `.toArray`, which would need a `ClassTag[VertexT]` this class's own type parameter
-      * doesn't carry -- `VertexT` is fully generic here, unlike the `Simplex[Int]`-specialized hot-path methods
-      * elsewhere in this codebase) gives one O(d) snapshot with O(1) random access, walked with a plain `i < j`
-      * double loop -- same O(d^2) distance-comparison count as before (that part is the actual, unavoidable
-      * math), zero of the intermediate collection machinery. Found via the `o3_1024` compute-server JFR profile
-      * on `RipserCohomologyContext` (`.claude/WORKLOG-packed-ripser-engine.md`): this shared, generic method
-      * (used by 16 files across this codebase, not just the Ripser engines -- `VietorisRips`, `WitnessStream`,
-      * `CechStream`, `DtmRipsStream`, `SheehyRipsStream`, `DowkerStream`, `Cofacets`, `SimplexStream` among them)
-      * was the single largest remaining cost once the earlier apparent-pairs and encode-chain fixes cleared
-      * away what had been dominating before -- most of its call volume comes from `cohomologyOrdering.compare`
-      * (consulted on every `Chain.reduceBy` comparison, by design, per `memoizeFiltrationValue`'s own doc
-      * comment), not just the smaller number of once-per-simplex lookups.
+    /** Nested iterator walk, not `spx.flatMap(v => spx.toSeq.filter(_ > v).map(w => distance(v, w))).max` -- that
+      * chain allocates a fresh closure AND a filtered/mapped `Seq` per vertex, on top of the `SortedSet.flatMap`
+      * itself, for what's structurally a single pairwise-max reduction. Outer `spx.underlying.iterator`, inner
+      * `vertices.iteratorFrom(v)` (skipping `v` itself, since `iteratorFrom` is inclusive of its start element) --
+      * `SortedSet`'s own `iteratorFrom` gives "every remaining element greater than `v`" without re-scanning
+      * from the beginning or needing a `ClassTag[VertexT]` (this class's own type parameter doesn't carry one --
+      * `VertexT` is fully generic here, unlike the `Simplex[Int]`-specialized hot-path methods elsewhere in this
+      * codebase, so `.toArray` isn't an option). Same O(d^2) distance-comparison count as before (that part is
+      * the actual, unavoidable math), but no snapshot collection at all -- an EARLIER version of this fix used
+      * `spx.underlying.toIndexedSeq` for O(1) random access, avoiding `.toArray`'s `ClassTag` need the same way,
+      * but a full `Vector`/`VectorBuilder` construction turned out to be real overhead of its own for what's
+      * almost always a tiny collection (a simplex has only `dim+1` vertices): a follow-up JFR profile on
+      * `RipserCohomologyContext`'s `fractal-r` run found `VectorBuilder`/`Vector$.from` at ~43% of total
+      * allocation bytes, `apply` itself still ~14% of CPU, immediately after that first fix landed -- iterators
+      * need no such backing collection, only two small iterator objects.
+      *
+      * Found via the `o3_1024` compute-server JFR profile on `RipserCohomologyContext`
+      * (`.claude/WORKLOG-packed-ripser-engine.md`): this shared, generic method (used by 16 files across this
+      * codebase, not just the Ripser engines -- `VietorisRips`, `WitnessStream`, `CechStream`, `DtmRipsStream`,
+      * `SheehyRipsStream`, `DowkerStream`, `Cofacets`, `SimplexStream` among them) was the single largest
+      * remaining cost once the earlier apparent-pairs and encode-chain fixes cleared away what had been
+      * dominating before -- most of its call volume comes from `cohomologyOrdering.compare` (consulted on every
+      * `Chain.reduceBy` comparison, by design, per `memoizeFiltrationValue`'s own doc comment), not just the
+      * smaller number of once-per-simplex lookups.
       */
     def apply(spx: Simplex[VertexT]): Double =
       if spx.dim <= 0 then 0.0
       else
-        val vertices = spx.underlying.toIndexedSeq
-        val n = vertices.length
+        val vertices = spx.underlying
         var maxD = 0.0
-        var i = 0
-        while i < n do
-          var j = i + 1
-          while j < n do
-            val d = metricSpace.distance(vertices(i), vertices(j))
+        val outer = vertices.iterator
+        while outer.hasNext do
+          val v = outer.next()
+          val inner = vertices.iteratorFrom(v)
+          inner.next() // iteratorFrom(v) is inclusive of v itself -- discard it, we only want w > v
+          while inner.hasNext do
+            val d = metricSpace.distance(v, inner.next())
             if d > maxD then maxD = d
-            j += 1
-          i += 1
         maxD
 
 /** Wrapper class to make any metricspace into a metricspace defined on indices 0 through `metricSpace.size`. This way,
