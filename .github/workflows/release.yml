@@ -38,8 +38,8 @@ jobs:
       - name: Derive release version
         id: version
         run: |
-          VERSION="${{ github.event.inputs.tag || github.ref }}"
-          echo "version={$VERSION#v}" >> "$GITHUB_OUTPUT"
+          VERSION="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "version=${VERSION#v}" >> "$GITHUB_OUTPUT"
       - name: Build release artifacts
         env:
           TDA4J_DOCS_VERSION: ${{ steps.version.outputs.version }}
