@@ -8,6 +8,11 @@ name: Release
 # publishing that version's docs snapshot under its own path on GitHub Pages.
 
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to (re)publish"
+        required: true
   push:
     tags:
       - "v*"
@@ -22,6 +27,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          ref: ${{ github.event.inputs.tag || github.ref }}
       - name: Setup JDK
         uses: actions/setup-java@v4
         with:
@@ -32,8 +38,8 @@ jobs:
       - name: Derive release version
         id: version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          VERSION="${{ github.event.inputs.tag || github.ref }}"
+          echo "version={$VERSION#v}" >> "$GITHUB_OUTPUT"
       - name: Build release artifacts
         env:
           TDA4J_DOCS_VERSION: ${{ steps.version.outputs.version }}
