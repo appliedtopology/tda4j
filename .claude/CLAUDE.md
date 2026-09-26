@@ -531,7 +531,7 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
 - **Write a `.claude/WORKLOG-<topic>.md` by default** for any substantial investigation, debugging, or
   profiling arc, without being asked. Worklogs are point-in-time snapshots, never retroactively edited. At the
   end of the arc, update this file with **only the resulting rule/invariant/limitation plus a worklog pointer**
-  — no narrative, measurements, or repros here. Keep this file under ~40k characters; when it drifts past that,
+  — no narrative, measurements, or repros here. Keep this file under ~64k characters; when it drifts past that,
   condense it the same way (strip narrative to worklog pointers) and note the new condensing date/commit at top.
 - Performance claims need isolated A/B measurement (`git stash` A/B, median of trials, one engine per JVM);
   machine noise here often exceeds small effects — report unconfirmed effects as unconfirmed.
