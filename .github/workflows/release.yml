@@ -92,11 +92,17 @@ jobs:
           case "$VERSION" in
             0.*) PRERELEASE_FLAG="--prerelease" ;;
           esac
+          # A `*` prefix, not a hardcoded `TDA4j`/`tda4j`: these filenames come from `name.value`
+          # (`assemblyJarName`) and `moduleName.value` (packageSrc/packageDoc's own defaults, which lowercase
+          # regardless of what `name :=` says) respectively -- two different sbt conventions that don't
+          # necessarily agree in case with each other or with `name`. Confirmed broken once for real: v0.4.0's
+          # own run failed here after `name := "TDA4j"` became `name := "tda4j"` (matching the actual Maven
+          # coordinate), because this glob still hardcoded the old capitalization.
           gh release create "${{ github.ref_name }}" \
             --title "TDA4j ${VERSION}" \
             --generate-notes \
             $PRERELEASE_FLAG \
-            target/scala-3.9.0/TDA4j-${VERSION}-assembly.jar \
-            target/scala-3.9.0/TDA4j*-sources.jar \
-            target/scala-3.9.0/TDA4j*-javadoc.jar \
+            target/scala-3.9.0/*-${VERSION}-assembly.jar \
+            target/scala-3.9.0/*-sources.jar \
+            target/scala-3.9.0/*-javadoc.jar \
             "docs-${VERSION}.zip"
