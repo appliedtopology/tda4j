@@ -91,24 +91,52 @@ val theme = Helium.defaults.all
   )
   .all
   .themeColors(
-    primary = Color.hex("007c99"),
-    secondary = Color.hex("931813"),
-    primaryMedium = Color.hex("a7d4de"),
-    primaryLight = Color.hex("f2efe7"),
-    text = Color.hex("333333"),
-    background = Color.hex("faf8f4"),
-    bgGradient = (Color.hex("095269"), Color.hex("007c99"))
+    primary = Color.hex("5f3861"),
+    secondary = Color.hex("8f660f"),
+    primaryMedium = Color.hex("d3bcd4"),
+    primaryLight = Color.hex("f4eef4"),
+    text = Color.hex("2e2530"),
+    background = Color.hex("faf7f5"),
+    bgGradient = (Color.hex("432643"), Color.hex("5f3861"))
+  )
+  // messageColors drives @:callout(...)'s three roles (info/warning/error), each an accent + a tinted
+  // background -- entirely separate from themeColors above (confirmed via `javap -p` on the vendored
+  // laika-core jar's MessageColors/ColorOps classes, since Laika's own scaladoc doesn't spell out the
+  // positional order; passed positionally here rather than by name for exactly that reason). Without this
+  // call every callout renders in Laika's stock default blue regardless of themeColors.
+  // info/warning reuse primary/secondary (both already fit their role); error is the one new accent, pushed
+  // further toward red so it doesn't read as a duplicate of warning (`.claude/WORKLOG-docs-theme-colors.md`).
+  // `.themeColors(...)` returns plain `Helium`, not the `ColorOps`-mixing builder type, so `.all` must be
+  // re-stated before the next color-related call -- same reason `.site.darkMode` is re-stated below.
+  .all
+  .messageColors(
+    Color.hex("5f3861"), // info         (= primary)
+    Color.hex("f4eef4"), // infoLight    (= primaryLight)
+    Color.hex("8f660f"), // warning      (= secondary)
+    Color.hex("f4f2ee"), // warningLight
+    Color.hex("8c2a2a"), // error
+    Color.hex("f4efee")  // errorLight
   )
   .site
   .darkMode
   .themeColors(
-    primary = Color.hex("7fc2d6"),
-    secondary = Color.hex("f1c47b"),
-    primaryMedium = Color.hex("3a5a63"),
-    primaryLight = Color.hex("16323c"),
-    text = Color.hex("f0ede6"),
-    background = Color.hex("1e2124"),
-    bgGradient = (Color.hex("064458"), Color.hex("197286"))
+    primary = Color.hex("b98abb"),
+    secondary = Color.hex("e0b154"),
+    primaryMedium = Color.hex("4a3450"),
+    primaryLight = Color.hex("251c28"),
+    text = Color.hex("f2eef2"),
+    background = Color.hex("1a1420"),
+    bgGradient = (Color.hex("170f1c"), Color.hex("3d2540"))
+  )
+  .site
+  .darkMode
+  .messageColors(
+    Color.hex("b98abb"), // info         (= primary)
+    Color.hex("251c28"), // infoLight    (= primaryLight)
+    Color.hex("e0b154"), // warning      (= secondary)
+    Color.hex("28241c"), // warningLight
+    Color.hex("e17272"), // error
+    Color.hex("281c1c")  // errorLight
   )
   .build
 

@@ -183,6 +183,7 @@ classDiagram
         <<object>>
         h1Bars(metricSpace, maxFiltrationValue) IndexedSeq~(Double, Double)~
         compute(metricSpace, r, cocycleIndex, prime, maxFiltrationValue) Result
+        computeToroidal(metricSpace, r, cocycleIndices, prime, reduce, maxFiltrationValue) ToroidalResult
     }
     class Result {
         theta: Map~Int, Double~
@@ -191,17 +192,34 @@ classDiagram
         r: Double
         prime: Int
     }
+    class ToroidalResult {
+        theta: IndexedSeq~Map~Int, Double~~
+        cocycleIndices: IndexedSeq~Int~
+        basisChange: Array~Array~Int~~
+        originalGram: Array~Array~Double~~
+        reducedGram: Array~Array~Double~~
+        r: Double
+        prime: Int
+    }
     class NoIntegerCocycleException {
         <<RuntimeException>>
     }
-    CircularCoordinates --> Result : returns
+    class LatticeReduction {
+        <<object>>
+        reduce(gram, delta) Result
+        isReduced(gram, delta, tol) Boolean
+    }
+    CircularCoordinates --> Result : returns (compute)
+    CircularCoordinates --> ToroidalResult : returns (computeToroidal)
     CircularCoordinates ..> CellularCohomologyContext : computes K_r's cohomology with
     CircularCoordinates ..> NoIntegerCocycleException : throws (no ℤ-lift at prime)
+    CircularCoordinates ..> LatticeReduction : reduces the chosen classes' Gram matrix with
 ```
 
 A standalone construction, not a fifth persistence engine — see [Architecture](architecture.md)'s own
 `homology.CircularCoordinates` section for the truncated-complex reframing, the harmonic-smoothing linear
-system, and why the output is a per-point angle map rather than a barcode.
+system, why the output is a per-point angle map rather than a barcode, and (same section) `computeToroidal`/
+`LatticeReduction`'s own lattice-reduction extension to several simultaneous classes.
 
 ## Metric spaces (`FiniteMetricSpace.scala`)
 

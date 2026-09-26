@@ -70,12 +70,45 @@ object FiniteMetricSpace:
     def isDefinedAt(spx: Simplex[VertexT]): Boolean =
       spx.forall(v => metricSpace.contains(v))
 
+    /** Nested iterator walk, not `spx.flatMap(v => spx.toSeq.filter(_ > v).map(w => distance(v, w))).max` -- that
+      * chain allocates a fresh closure AND a filtered/mapped `Seq` per vertex, on top of the `SortedSet.flatMap`
+      * itself, for what's structurally a single pairwise-max reduction. Outer `spx.underlying.iterator`, inner
+      * `vertices.iteratorFrom(v)` (skipping `v` itself, since `iteratorFrom` is inclusive of its start element) --
+      * `SortedSet`'s own `iteratorFrom` gives "every remaining element greater than `v`" without re-scanning
+      * from the beginning or needing a `ClassTag[VertexT]` (this class's own type parameter doesn't carry one --
+      * `VertexT` is fully generic here, unlike the `Simplex[Int]`-specialized hot-path methods elsewhere in this
+      * codebase, so `.toArray` isn't an option). Same O(d^2) distance-comparison count as before (that part is
+      * the actual, unavoidable math), but no snapshot collection at all -- an EARLIER version of this fix used
+      * `spx.underlying.toIndexedSeq` for O(1) random access, avoiding `.toArray`'s `ClassTag` need the same way,
+      * but a full `Vector`/`VectorBuilder` construction turned out to be real overhead of its own for what's
+      * almost always a tiny collection (a simplex has only `dim+1` vertices): a follow-up JFR profile on
+      * `RipserCohomologyContext`'s `fractal-r` run found `VectorBuilder`/`Vector$.from` at ~43% of total
+      * allocation bytes, `apply` itself still ~14% of CPU, immediately after that first fix landed -- iterators
+      * need no such backing collection, only two small iterator objects.
+      *
+      * Found via the `o3_1024` compute-server JFR profile on `RipserCohomologyContext`
+      * (`.claude/WORKLOG-packed-ripser-engine.md`): this shared, generic method (used by 16 files across this
+      * codebase, not just the Ripser engines -- `VietorisRips`, `WitnessStream`, `CechStream`, `DtmRipsStream`,
+      * `SheehyRipsStream`, `DowkerStream`, `Cofacets`, `SimplexStream` among them) was the single largest
+      * remaining cost once the earlier apparent-pairs and encode-chain fixes cleared away what had been
+      * dominating before -- most of its call volume comes from `cohomologyOrdering.compare` (consulted on every
+      * `Chain.reduceBy` comparison, by design, per `memoizeFiltrationValue`'s own doc comment), not just the
+      * smaller number of once-per-simplex lookups.
+      */
     def apply(spx: Simplex[VertexT]): Double =
       if spx.dim <= 0 then 0.0
       else
-        spx
-          .flatMap(v => spx.toSeq.filter(_ > v).map(w => metricSpace.distance(v, w)))
-          .max
+        val vertices = spx.underlying
+        var maxD = 0.0
+        val outer = vertices.iterator
+        while outer.hasNext do
+          val v = outer.next()
+          val inner = vertices.iteratorFrom(v)
+          inner.next() // iteratorFrom(v) is inclusive of v itself -- discard it, we only want w > v
+          while inner.hasNext do
+            val d = metricSpace.distance(v, inner.next())
+            if d > maxD then maxD = d
+        maxD
 
 /** Wrapper class to make any metricspace into a metricspace defined on indices 0 through `metricSpace.size`. This way,
   * code can assume that the index set is contiguous.
@@ -119,23 +152,68 @@ class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricSpace[
   *   Point cloud matrix represented as a `Seq[Seq[Double]]`. The class expects but does not enforce:
   *
   *   - `pts(x1).size == pts(x2).size` for all `x1,x2`
+  * @param cacheDistances
+  *   Precompute every pairwise `distance(x, y)` once, in an `O(n^2 * ambientDim)` upfront pass (a `lazy val`,
+  *   so the cost is only paid the first time `distance` is actually called), and serve every subsequent
+  *   `distance` call as an `O(1)` array lookup. Default `true`.
+  *
+  *   Found via a same-machine JFR profile (see `.claude/WORKLOG-packed-ripser-engine.md`'s compute-server
+  *   session) on `o3_1024` (ambient dimension 9, not 3 like `sphere3`/`dragon`): `pointSqDistance` and
+  *   `insertionDiameter` (the O(vertexCount)-per-simplex cofacet-diameter check every VR engine in this
+  *   codebase does) together accounted for 82% of the PACKED Ripser engine's own CPU time and 43% of the
+  *   SortedSet engine's -- on THIS case, unlike every earlier profiling session in that arc (all measured on
+  *   ambient-dimension-3 data), raw geometry dominates over anything either engine's own representation
+  *   touches, which is why the packed engine's usual 15-45x advantage over SortedSet collapsed to ~1.7x there:
+  *   a large, engine-invariant cost sits on top of both, diluting a real ~5x representational win underneath.
+  *   The number of DISTINCT point pairs (`C(n,2)`) is almost always far smaller than the number of times
+  *   `distance` gets called (every cofacet candidate of every simplex re-derives its own vertex-pair
+  *   distances), so caching trades a small, bounded amount of memory for eliminating that redundant
+  *   recomputation -- bounded by point count alone, NOT by complex size, unlike `memoizeFiltrationValue`
+  *   (`RipserCohomologyContext`/`PackedRipserCohomologyContext`, `Homology.scala`/`PackedRipserCohomology.scala`),
+  *   which defaults `false` specifically because a per-SIMPLEX cache is unbounded as the complex grows. This
+  *   cache is `O(n^2)` `Double`s (8 bytes each): ~8MB at n=1024, ~128MB at n=4096 (this codebase's own
+  *   `RipserPaperBenchmarkSpec` upper end) -- trivial at that scale, but a genuinely large point cloud (tens
+  *   of thousands of points, e.g. `torus4`, deliberately excluded from that same benchmark for a related
+  *   reason) would make this cache itself gigabytes -- pass `cacheDistances = false` for a point count where
+  *   that matters.
   */
 
-class EuclideanMetricSpace(val pts: Array[Array[Double]]) extends FiniteMetricSpace[Int]:
+class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistances: Boolean = true)
+    extends FiniteMetricSpace[Int]:
   def pointSqDistance(x: Array[Double], y: Array[Double]): Double =
     var acc: Double = 0.0
+    val n = math.min(x.length, y.length)
     var i = 0
-    while i < math.min(x.length, y.length) do
+    while i < n do
       val d: Double = x(i) - y(i)
       acc += d * d
       i += 1
     acc
 
-  def distance(x: Int, y: Int): Double =
-    sqrt(pointSqDistance(pts(x), pts(y)))
   def size: Int = pts.size
   def elements: Iterable[Int] = Range(0, size)
   override def contains(x: Int): Boolean = 0 <= x & x < size
+
+  // Flattened, not Array[Array[Double]] -- one allocation instead of n, and a single multiply-add index
+  // computation per lookup rather than an extra array dereference. Filled via the full n x n range (not just
+  // the upper triangle) -- doubling the fill cost of an already-cheap, one-time O(n^2 * ambientDim) pass in
+  // exchange for a branch-free `distance` lookup afterward, which is the call this cache exists to make cheap.
+  private lazy val distanceCache: Array[Double] =
+    val n = size
+    val cache = new Array[Double](n * n)
+    var i = 0
+    while i < n do
+      var j = i
+      while j < n do
+        val d = sqrt(pointSqDistance(pts(i), pts(j)))
+        cache(i * n + j) = d
+        cache(j * n + i) = d
+        j += 1
+      i += 1
+    cache
+
+  def distance(x: Int, y: Int): Double =
+    if cacheDistances then distanceCache(x * size + y) else sqrt(pointSqDistance(pts(x), pts(y)))
 
   lazy val vpdf: DistanceFunction[Array[Double]] =
     new DistanceFunction[Array[Double]]:
@@ -149,10 +227,17 @@ class EuclideanMetricSpace(val pts: Array[Array[Double]]) extends FiniteMetricSp
     vpt.getAllWithinDistance(qp, eps).asScala.toSeq.map(pts.indexOf(_))
 
 object EuclideanMetricSpace:
+  // Two overloads per parameter type (Seq/Array), not one with a default `cacheDistances` each -- Scala
+  // rejects two overloaded `apply`s both carrying a default argument (ambiguous which default resolves a
+  // single-arg call), so the default lives only on the class's own primary constructor.
   def apply(points: Seq[Seq[Double]]): EuclideanMetricSpace =
     new EuclideanMetricSpace(points.map(_.toArray).toArray)
+  def apply(points: Seq[Seq[Double]], cacheDistances: Boolean): EuclideanMetricSpace =
+    new EuclideanMetricSpace(points.map(_.toArray).toArray, cacheDistances)
   def apply(points: Array[Array[Double]]): EuclideanMetricSpace =
     new EuclideanMetricSpace(points)
+  def apply(points: Array[Array[Double]], cacheDistances: Boolean): EuclideanMetricSpace =
+    new EuclideanMetricSpace(points, cacheDistances)
 
 /** ******* Efficient Spatial Queries *******
   */

@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **How this file works.** Each entry is a current rule, invariant, or known limitation, plus a pointer to the
 `.claude/WORKLOG-*.md`/`DESIGN-*.md` that holds its derivation (what was tried, measurements, repros). Derivations
-go in the worklog, not here. This file was condensed on 2026-09-22 from a ~190k-char version (preserved at commit
-`06a55dd`) and again on 2026-09-25 from a ~75k-char version (preserved at commit `b8739a8`) — `git show
-<commit>:.claude/CLAUDE.md` for either full text.
+go in the worklog, not here. This file was condensed on 2026-09-22 from a ~190k-char version (commit `06a55dd`),
+2026-09-25 from a ~75k-char version (commit `b8739a8`), and 2026-09-26 from a ~56k-char version (commit
+`e5e86ec`) — `git show <commit>:.claude/CLAUDE.md` for any of those full texts.
 
 ## What this is
 
@@ -56,26 +56,26 @@ sbt assembly                    # fat jar for CLI/MATLAB
 sbt -DrunBenchmarks=true test   # also run benchmark/profiling specs — NOT what CI runs
 ```
 
+If `sbt` isn't on `PATH` in this environment, see `.claude/scripts/install-sbt.sh` (bootstraps the launcher and
+paces around Maven Central's cold-cache rate limiting — `.claude/WORKLOG-toroidal-coordinates.md`'s own
+environment note has the story).
+
 No linter beyond scalafmt. Tests are specs2 (`org.specs2.mutable.Specification`). CI: `test.yml` (test + mima),
-`lint.yml` (scalafmt), `docs.yml` (Laika → GitHub Pages, push to `scala` only). `build.sbt` permanently enables
-`-feature -deprecation -unchecked` etc.; the ~319 `-Wunused:all` warnings (mostly unused wildcard imports) are
-deliberately left alone (`WORKLOG-compiler-warnings.md`).
+`lint.yml` (scalafmt), `docs.yml` (Laika → GitHub Pages, push to `scala` only). The ~319 `-Wunused:all` warnings
+(mostly unused wildcard imports) are deliberately left alone (`WORKLOG-compiler-warnings.md`).
 
 **`sbt scalafmtSbt`/`scalafmtSbtCheck` cover `project/*.scala` (sbt's own Scala 2.12 meta-build), not this
-project's Scala 3.9** — `.scalafmt.conf`'s global `runner.dialect = scala3` also reaches these files by default
-and will rewrite valid Scala 2 syntax into forms the meta-build compiler can't parse, breaking `sbt` itself.
-`project/SnipDirective.scala` carries a `// format: off` guard against exactly this (a `fileOverride` glob was
-tried first and did not take effect — don't re-attempt without confirming it works); see that file's own header
-comment for the full story.
+project's Scala 3.9** — `.scalafmt.conf`'s global `runner.dialect = scala3` also reaches these files and will
+rewrite valid Scala 2 syntax into forms the meta-build compiler can't parse, breaking `sbt` itself.
+`project/SnipDirective.scala` carries a `// format: off` guard against this (a `fileOverride` glob was tried
+first and did not take effect — don't re-attempt without confirming it works).
 
 **Docs site is Laika (Paradox fully removed)**, sources at `src/docs/`, Markdown with a `@:directive` syntax (not
 Paradox's `@@`/`@ref:`). `Markdown.GitHubFlavor` and `laika.config.SyntaxHighlighting` are both required
 `laikaExtensions` — without them un-fenced code silently parses as prose (any `[...]` becomes a dangling link
 reference and fails the build). `project/SnipDirective.scala` implements `@:snip(path, tag)` (extracts the region
-between two `// #tag` marker lines from a real source file at build time). Each directory needing a non-
-alphabetical left-nav order needs its own `directory.conf` with `laika.navigationOrder`.
-`src/docs/default.template.html` overrides Helium's default template to add `@:breadcrumb`. Full derivation:
-`WORKLOG-laika-migration.md`.
+between two `// #tag` marker lines from a real source file). Each directory needing a non-alphabetical left-nav
+order needs its own `directory.conf` with `laika.navigationOrder`. `WORKLOG-laika-migration.md`.
 
 **Never run two `sbt` invocations against this checkout at once** — the incremental compiler's own class-file
 writes from one process can be read mid-update by the other, producing a `NoClassDefFoundError` that looks like a
@@ -86,8 +86,7 @@ real regression but disappears on a clean, sequential rerun.
 print timing tables rather than assert; only an exception counts as a failure. All seven `skipAll` unless
 `-DrunBenchmarks=true` (a JVM system property, not specs2 `--` syntax); scope with `testOnly`
 (`EngineComparisonBenchmarkSpec` can take 15+ min; `RipserPaperBenchmarkSpec` also needs `-DdataDir`, optionally
-`-DripserBin=<path>` — see `.claude/scripts/run-ripser-paper-benchmark.sh`). `SingleEngineProfileDriver`/
-`CubicalProfileDriver`/`VRLowDimProfileDriver` are kept one-engine-per-JVM profiling drivers.
+`-DripserBin=<path>` — see `.claude/scripts/run-ripser-paper-benchmark.sh`).
 
 **`HomologySpec`'s `BarcodeRegressionSpec` is `skipAll`'d unconditionally and NOT on this flag**: chunks x
 `AlphaShapeDQP` on its own generator range produces enormous complexes (40 points/dim 4 → 102,090 simplices) that
@@ -180,95 +179,83 @@ recorded open class" `IllegalStateException` at least five times, or worse, a si
    could silently read stale/empty cache instead of rebuilding. Regression-pinned in `CofaceSimplexStreamSpec`
    (`WORKLOG-sheehy-rips.md`); still prefer `.iterator` for driving a stream.
 
-Checks for a new/changed stream: cross-validate against an independent stream/engine *cell-for-cell* and use
-tie-heavy fixtures; the `totalBarsAccountForAllCells` invariant alone is weaker. Filtration values consulted by
-`Chain` comparisons must be cheap: `EnumeratingCofaceSimplexStream` and `CubicalGridStream` memoize them
+Checks for a new/changed stream: cross-validate against an independent stream/engine *cell-for-cell* with
+tie-heavy fixtures; `totalBarsAccountForAllCells` alone is weaker. Filtration values consulted by `Chain`
+comparisons must be cheap: `EnumeratingCofaceSimplexStream`/`CubicalGridStream` memoize them
 (`WORKLOG-autonomous-session-2026-09-19.md`).
 
-**VR constructions** (all same output contract, alternate engines): `EnumeratingCofaceSimplexStream`,
+**VR constructions** (same output contract, alternate engines): `EnumeratingCofaceSimplexStream`,
 `RipserCofaceSimplexStream` (+ `SimplexIndexing`), `InorderCofaceSimplexStream`,
 `RecursiveStackVietorisRipsSimplexStream`, `IncrementalVietorisRipsSimplexStream` (Rieser's New-VR, arXiv:2301.07191
-— cross-validation baseline, not a fast engine); `CofacetIterator` for lazy coboundaries. `FiniteMetricSpace` has a
-VP-tree (`jvptree`) implementation and `SparseMetricSpace` (returns +∞ past its cutoff rather than excluding —
-don't use it to build a thresholded oracle).
+— cross-validation baseline, not a fast engine); `CofacetIterator` for lazy coboundaries. `FiniteMetricSpace` has
+a VP-tree (`jvptree`) impl and `SparseMetricSpace` (+∞ past its cutoff rather than excluding — don't use it as a
+thresholded oracle).
 
 **`maxFiltrationValue` defaults to `metricSpace.minimumEnclosingRadius`** (Ripser's own `enclosing_radius`) in the
-Enumerating/Ripser/Inorder/Incremental streams and both Ripser engines — bars past that radius are dropped. Pass
-`Some(Double.PositiveInfinity)` for untruncated. `RecursiveStackVietorisRipsSimplexStream` and alpha streams
-deliberately don't get this default (`WORKLOG-mst-and-perf.md`).
+Enumerating/Ripser/Inorder/Incremental streams and both Ripser engines. Pass `Some(Double.PositiveInfinity)` for
+untruncated. `RecursiveStackVietorisRipsSimplexStream` and alpha streams don't get this default
+(`WORKLOG-mst-and-perf.md`).
 
 ### Persistent homology: four independent engines
 
-Independent implementations sharing `Chain` primitives — a fix in one doesn't imply the others need it.
-**`maxDim`/`maxDimension` means "top homological degree reported" everywhere it exists** (engines internally build
-one dimension higher; `WORKLOG-maxdim-semantics-fix.md`). The naive engine and `CellularCohomologyContext` have no
-such parameter: callers truncate the stream (`LimitedCofaceSimplexStream(stream, k + 1)`) and drop `dim == k + 1`
-bars. Over a field, cohomology and homology barcodes coincide.
+Independent implementations sharing `Chain` primitives — a fix in one doesn't imply others need it. `maxDim`/
+`maxDimension` = top homological degree everywhere (engines build one dimension higher internally;
+`WORKLOG-maxdim-semantics-fix.md`). Naive and `CellularCohomologyContext` have no such param: callers truncate
+via `LimitedCofaceSimplexStream(stream, k+1)` and drop `dim==k+1` bars. Over a field, cohomology/homology
+barcodes coincide.
 
-1. **`CellularHomologyContext`/`SimplicialHomologyContext` (naive)** — single-pivot-table boundary reduction, no
-   clearing. The reference baseline others are validated against. Incremental (`advanceOne`/`advanceTo`/
-   `advanceAll`, `diagramAt`/`barcodeAt`); `barcodeAt` returns real representatives via V-columns. A raw-`UnionFind`
-   fast path was measured and rejected — after memoizing VR filtration values, what remains is general `Chain`
-   cost (`WORKLOG-autonomous-session-2026-09-19.md`).
-2. **`CellularPersistenceInChunksContext[CellT, CoefficientT]` (chunks)** — clear-and-compress chunked algorithm.
-   Walks `0..maxDim+1` internally, filters essential bars to `<= maxDim`. Dimensions 0/1 resolved up front by raw
-   union-find (`unionFindDim01`, safe because a fixed total order determines a unique reduced matrix,
-   `DESIGN-unionfind-in-chunks.md`). `barcodeAt` gives a real representative via memoized `vcolOf` (derived
-   term-for-term from the naive engine's V-column formula) — a delegate design running a second full naive
-   engine was **rejected by the project lead**, don't revive it (`WORKLOG-chunks-representatives-incremental.md`).
-   Invariants from fixed bugs: a paired cell must never become a pivot; `compress` runs to a fixpoint via
-   `reduceByUntil`; `compress`/`globalReduce` share `eliminationFallback`; a reconciliation step resolves every
-   "in limbo" cell first (`WORKLOG-benchmark-and-chunks-bug.md`, `WORKLOG-chunks-pairing-bug.md`). A parallel
-   redesign was attempted and invalidated by measurement (`WORKLOG-parallelization-survey.md`).
-3. **`RipserCohomologyContext`** — Bauer's Ripser (arXiv:1908.02518) on `Simplex[Int]` VR, one-shot. **Test/reference
-   oracle only** — production call sites use `PackedRipserCohomologyContext` (MATLAB `engine=ripser`); not
-   independent of `SimplexIndexing` (the naive engine is the independent oracle). Both share
-   (`WORKLOG-cohomology.md`, `WORKLOG-lazy-enumeration.md`): clearing is required for correctness, not an
-   optional speedup; apparent pairs (Def 3.2/Prop 3.9) with lazy substitution (a mutual apparent pair skips
-   `coboundaryOf(sigma)`; a later reduction hitting `tau` recomputes the full coboundary via `Chain.reduceBy`'s
-   `fallback`, uncached, exactly like `ripser.cpp` — the `zero*` helpers use full unrestricted iterators, NOT the
-   restricted, false-negative-prone `Cofacets.apparentVertex`; emergent pairs, Def 3.11, not implemented);
-   `insertionDiameter` (O(d) incremental cofacet diameter) avoids a filtration-value cache
-   (`memoizeFiltrationValue` defaults **false** on the project lead's instruction, memory frugality over speed).
-   Perf: the "quick win" tier is exhausted; still ~19–64x behind real `ripser.cpp` on `sphere3_*`, gap growing
-   with n — compare against **vanilla** `github.com/Ripser/ripser` only (`WORKLOG-ripser-profiling.md`,
-   `WORKLOG-ripser-comparison.md`, `WORKLOG-packed-ripser-engine.md`).
-4. **`CellularCohomologyContext`** (`Cohomology.scala`) — persistent cohomology generic over `CellT: OrderedCell`,
-   for fully-materialized streams: builds the coboundary relation by inverting each cell's `boundary`. No `maxDim`,
-   no apparent pairs. Only **essential** bars' V-columns are cocycles (`coboundaryOfChain(rep).isZero()`); finite
-   bars' V-columns equal their reduced pivot chain. Representatives are **not** expected to match
-   `RipserCohomologyContext` term-for-term (tie direction on `fv=0` differs) but bar values do match. Sign-tested
-   on RP² over `Fp(3)` (`WORKLOG-generic-cohomology.md`).
+1. **Naive** (`CellularHomologyContext`/`SimplicialHomologyContext`) — single-pivot-table reduction, no clearing;
+   the reference baseline. Incremental (`advanceOne`/`advanceTo`/`advanceAll`, `diagramAt`/`barcodeAt` via
+   V-columns). A raw-UnionFind fast path was measured and rejected (`WORKLOG-autonomous-session-2026-09-19.md`).
+2. **Chunks** (`CellularPersistenceInChunksContext`) — clear-and-compress chunked algorithm, walks `0..maxDim+1`,
+   filters essentials to `<=maxDim`. Dims 0/1 via raw union-find (`unionFindDim01`, `DESIGN-unionfind-in-chunks.md`).
+   `barcodeAt` via memoized `vcolOf` (a second full naive engine was **rejected by the project lead**, don't
+   revive — `WORKLOG-chunks-representatives-incremental.md`). Invariants: a paired cell never becomes a pivot;
+   `compress` runs to a fixpoint; a reconciliation step resolves "in limbo" cells first
+   (`WORKLOG-benchmark-and-chunks-bug.md`, `WORKLOG-chunks-pairing-bug.md`). Parallel redesign attempted and
+   invalidated by measurement (`WORKLOG-parallelization-survey.md`).
+3. **`RipserCohomologyContext`** — Bauer's Ripser (arXiv:1908.02518) on `Simplex[Int]` VR, one-shot. **Test/
+   reference oracle only** — production uses `PackedRipserCohomologyContext`. Clearing required for correctness;
+   apparent pairs with lazy substitution; emergent pairs (Def 3.11) not implemented; `memoizeFiltrationValue`
+   defaults **false** (project lead: memory over speed). ~19-64x behind vanilla `ripser.cpp`, gap growing with n
+   (`WORKLOG-ripser-profiling.md`, `WORKLOG-ripser-comparison.md`, `WORKLOG-packed-ripser-engine.md`).
+4. **`CellularCohomologyContext`** (`Cohomology.scala`) — generic over `CellT: OrderedCell`, fully-materialized
+   streams only, no `maxDim`/apparent pairs. Only essential bars' V-columns are cocycles; finite bars' V-columns
+   are their reduced pivot chain. Representatives don't match Ripser term-for-term (tie direction differs) but
+   bar values do. Sign-tested on RP² over Fp(3) (`WORKLOG-generic-cohomology.md`).
 
-Testing lessons that apply to every engine: F2 hides sign errors (use `Double` or `Fp(3)`) — and signed-field
-fixtures must include simplices with **≥5 vertices**: `Set1..Set4` iterate in insertion order, so anything
-accidentally routed through an unordered `Set` looks right up to 4 elements and is hash-ordered from 5 on
-(`SimplexBoundarySpec`, `SignedFieldBarcodeSpec`, `WORKLOG-code-critique.md` §1.1). Torsion-free F3-vs-F2 barcode
-agreement is a cheap sign oracle. Agreement between two engines isn't proof when both share a truncation or code
-path — hand-derived fixtures (e.g. `HomologyFixtures.elderRuleExpected`) are the real oracle.
+Testing lessons for every engine: F2 hides sign errors; signed-field fixtures need ≥5 vertices (`Set1..Set4`
+hash-order past 4 elements, `SimplexBoundarySpec`/`SignedFieldBarcodeSpec`, `WORKLOG-code-critique.md` §1.1).
+F3-vs-F2 agreement is a cheap sign oracle. Two engines agreeing isn't proof if they share a truncation/code path
+— hand-derived fixtures are the real oracle.
 
 `Barcode.scala`: `BarcodeEndpoint` (open/closed/±∞), `PersistenceBar`, algebra on finitely-presented persistence
 modules.
 
-**`BarcodeDistance`/`Vectorization`** (same package): bottleneck/Wasserstein distance and persistence
-landscapes/images, `PersistenceBar[Double, _]`-specialized (every real engine here produces `Double`; a metric
-needs real arithmetic). Ground-norm/aggregation convention matches Hera/GUDHI (`internal_p`/`order`);
-persistence-image construction matches `scikit-tda/persim`. Essential bars: for distance, matched only to each
-other by sorted birth (mismatched count → `+Infinity`); for vectorization, included by landscapes but dropped by
-images — a deliberate per-method difference. `matlab.PersistenceResult` exposes both; CLI (`--distance-to`)
-mirrors only the distance (vectorizations don't fit the CLI's diagram-shaped output model).
-`WORKLOG-bottleneck-wasserstein-vectorizations.md`.
+**`BarcodeDistance`/`Vectorization`**: bottleneck/Wasserstein distance and persistence landscapes/images,
+`PersistenceBar[Double,_]`-specialized. Ground-norm/aggregation matches Hera/GUDHI; persistence-image matches
+`scikit-tda/persim`. Essential bars: matched by sorted birth for distance (count mismatch → `+Infinity`);
+included by landscapes but dropped by images. `matlab.PersistenceResult` exposes both; CLI `--distance-to`
+mirrors only distance. `WORKLOG-bottleneck-wasserstein-vectorizations.md`.
 
 **`homology.CircularCoordinates`** (de Silva-Morozov-Vejdemo-Johansson 2011): `h1Bars` lists persistent H¹
-`(birth,death)` by persistence descending (required first call to pick `r`); `compute(metricSpace, r,
-cocycleIndex, prime=47, ...)` fixes `r` and computes cohomology of the *static* truncated complex `K_r` directly
-(essential there by construction). A `K_r`-essential class is matched back to its full-filtration bar by birth
-value alone. Cohomology runs over an odd prime field (never `p=2`); the integer lift is checked **exactly**
-against every triangle, throwing `NoIntegerCocycleException` rather than silently coordinatizing a mirage.
-Harmonic smoothing solves matrix-free via `commons-math3` `ConjugateGradient`, restricted to the cocycle's own
-connected component, one vertex anchored at `g=0`. Output is directly `theta(v) = frac(g(v))` — no
-path-integration step. MATLAB facade mirrors this; deliberately no CLI mirror (picking `r` is inherently
-two-step and data-dependent). `WORKLOG-circular-coordinates.md`.
+`(birth,death)` by persistence descending (pick `r` from this first); `compute(metricSpace, r, cocycleIndex,
+prime=47,...)` computes cohomology of the *static* truncated complex `K_r` directly (essential there by
+construction, matched to the full-filtration bar by birth value). Odd prime field only (p=2 can hide torsion);
+integer lift checked **exactly** per triangle, `NoIntegerCocycleException` otherwise. Harmonic smoothing via
+`commons-math3` `ConjugateGradient`, restricted to the cocycle's connected component, anchored at `g=0`;
+`theta(v)=frac(g(v))` directly, no path integration. MATLAB mirrors this; no CLI (picking `r` is two-step/
+data-dependent). `WORKLOG-circular-coordinates.md`.
+
+**Toroidal coordinates** (`computeToroidal`, Scoccola-Gakhar-Bush-Schonsheck-Rask-Zhou-Perea 2022,
+arXiv:2212.07201): combines `k` *simultaneously*-alive H¹ classes (common `r`, same connected component of
+`K_r` — checked) into one torus-valued map, via `homology.LatticeReduction` (hand-rolled LLL on the classes'
+harmonic-cochain Gram matrix's Cholesky factor, `delta=3/4`), applying the resulting unimodular `U` to the
+already-computed per-class `theta`s (linearity of harmonic smoothing). Not a port of `scikit-tda/DREiMac`'s
+`toroidalcoords.py`: its `_gram_schmidt` has a real orthogonalization bug (invisible at k=2, non-orthogonal
+intermediate result at k≥3), but an end-to-end search found no case degrading `_lll`'s final output — see
+`.claude/BUGS-IN-REFERENCES.md`, don't overclaim beyond what's checked there. MATLAB: `toroidalCoordinates`/
+`ToroidalCoordinatesResult` (separate class, MiMa); no CLI. `WORKLOG-toroidal-coordinates.md`.
 
 ### Cross-engine benchmark
 
@@ -283,37 +270,30 @@ degenerate, `2a+1` = `[a,a+1]`). `Vector`, not an array — structural `equals`/
 alternates by the axis's **rank among non-degenerate axes**, not raw position (invisible over F2;
 `CubicalSpec`'s dd=0 runs over F3).
 
-`CubicalGridStream`: dense T-construction (GUDHI/DIPHA/Perseus convention). `topCellValue` per pixel/voxel; lower
-cubes take the min over containing top cells, guaranteeing monotonicity. `filtrationOrdering` copies
-`EnumeratingCofaceSimplexStream`'s shape. `ExplicitCubicalStream` for sparse/hand-built complexes (same
-`FiltrationOrdering.canonical` combinator, not an independent copy). Sublevel/superlevel handled only in
-`CubicalImage.scala`'s loaders (negate on load). `CubicalImage.fromFlatArray` (row-major, last axis fastest) is
-the core; H0 oracle uses Moore (8/26-connected) adjacency, not 4-connected.
+`CubicalGridStream`: dense T-construction (GUDHI/DIPHA/Perseus convention); lower cubes take the min over
+containing top cells (monotonicity). `ExplicitCubicalStream` for sparse/hand-built complexes (same
+`FiltrationOrdering.canonical` combinator). Sublevel/superlevel handled only in `CubicalImage.scala`'s loaders.
+`CubicalImage.fromFlatArray` row-major, last axis fastest; H0 oracle uses Moore (8/26-connected) adjacency.
 
-Both naive and chunks engines consume cubes. A grid-exploiting engine dedicated to **3D** (CubicalRipser,
-Wagner-Chen-Vuçini) remains a valid future direction (`DESIGN-fast-cubical-engine.md`,
-`WORKLOG-cubical-chunks-benchmark.md`); every dimension `>= 2` now has a fast(er) option — see below.
+Both naive and chunks engines consume cubes. A grid-exploiting **3D** engine (CubicalRipser, Wagner-Chen-Vuçini)
+remains a valid future direction (`DESIGN-fast-cubical-engine.md`); every dimension `>= 2` now has a faster
+option below.
 
-**`FastCubicalHomologyContext` (`homology/FastCubicalHomology.scala`, `engine="fast-cubical"`)** — Flash Cubical
-(Le Breton-Szustakowski-Piraud, arXiv:2606.04801), an original derivation (no reference implementation to port).
-**Valid at any ambient dimension `>= 2`**. Top cells become vertices of a DUAL graph, codimension-1 cells become
-dual edges (`∞` sentinel for the grid's outer boundary), and primal `H_{d-1}` of the sublevel filtration is
-ordinary `H_0` of that dual graph's own SUPERLEVEL filtration (Alexander duality) via the same elder-rule
-union-find `unionFindDim01` uses, run in descending primal order with endpoints swapped; combined with a primal
-`H_0` union-find, this covers a 2D grid completely (`H_2 ≡ 0` for any planar subset) with no `Chain` reduction.
-**`∞` must be the unconditional elder of any merge it takes part in — checked explicitly, not inferred from
-`birthOf(∞)` being largest**: a real top cell can also carry `topValue = +Infinity` and tie against it — see the
-worklog before touching the young/old decision in `computeDualTopDimension`. Representatives: a running signed
-sum of top cells per active dual component, oriented via each merge's connecting facet's own `±1` boundary
+**`FastCubicalHomologyContext`** (`engine="fast-cubical"`) — Flash Cubical (Le Breton-Szustakowski-Piraud,
+arXiv:2606.04801), original derivation, valid any ambient dim `>= 2`. Top cells → dual graph vertices, codim-1
+cells → dual edges (`∞` sentinel for the outer boundary); primal `H_{d-1}` of the sublevel filtration = ordinary
+`H_0` of the dual's own SUPERLEVEL filtration (Alexander duality) via `unionFindDim01` run descending with
+endpoints swapped; combined with a primal `H_0` union-find, covers a 2D grid completely with no `Chain`
+reduction. **`∞` must be checked explicitly as unconditional elder of any merge, not inferred from `birthOf(∞)`
+being largest** — a real top cell can tie against it (see worklog before touching `computeDualTopDimension`).
+Representatives: running signed sum of top cells per dual component, oriented via each merge's facet boundary
 coefficients. `WORKLOG-fast-cubical-engine.md`.
 
-**At ambient dimension `>= 3`, a hybrid with `chunks` handles the residual "middle" dimensions**
-(`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): `H_0`/`H_{d-1}` stay the two union-finds above, and
-dimensions `1..d-2` (no duality shortcut exists) go to `CellularPersistenceInChunksContext` run on a
-`LimitedCubicalGridStream` view that hides the real top-dimensional cells entirely. `chunks`'s own pre-existing
-`maxDim = d-2` semantics already discards the incomplete bars a truncation would otherwise wrongly leave open.
-Cross-validated against the naive engine at `d=3` plus one `d=4` smoke test; **not** validated at `d >= 5`, and
-the win shrinks with `d` by design.
+**At ambient dim `>= 3`**, `chunks` handles residual middle dimensions `1..d-2` (no duality shortcut) via
+`CellularPersistenceInChunksContext` on a `LimitedCubicalGridStream` hiding real top cells (`chunks`'s own
+`maxDim=d-2` already discards the incomplete bars this would otherwise wrongly leave open). Cross-validated at
+d=3 + one d=4 smoke test; not validated d≥5, win shrinks with d by design.
+`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
 
 ## Simplicial sets
 
@@ -321,27 +301,25 @@ the win shrinks with `d` by design.
 
 - Eilenberg–Zilber presentation: non-degenerate generators per dimension, plus per generator `faces: G =>
   IndexedSeq[SSetElement[G]]`. `SSetElement(word, target)`: degeneracy word in normal form is **strictly
-  decreasing** (`s_0 s_0 = s_1 s_0` → `[1,0]`); `Nil` = bare generator.
-- `insertOuter`/`faceOf` implement the simplicial identities on arbitrary elements; `validate()` checks structure
-  then `d_i d_j = d_{j-1} d_i` — necessary, not sufficient; verify intended topology via homology.
-- `finiteSimplicialSetIsOrderedCell`: normalized chain complex boundary (only bare faces contribute), depends on
-  the set's own `faces` — thread it explicitly, never an ambient global given.
+  decreasing** (`s_0 s_0 = s_1 s_0` → `[1,0]`); `Nil` = bare generator. `insertOuter`/`faceOf` implement the
+  simplicial identities on arbitrary elements; `validate()` checks `d_i d_j = d_{j-1} d_i` — necessary, not
+  sufficient; verify intended topology via homology.
+- `finiteSimplicialSetIsOrderedCell`: normalized chain complex boundary (bare faces only), depends on the set's
+  own `faces` — thread explicitly, never an ambient global given.
 - **`FiniteSimplicialSet[G]`'s `using Ordering[G]` clause comes AFTER its value parameters, not before**:
-  `using`-first broke constructor call sites' own type inference for `G` (the compiler silently unified `G` with
-  whatever `Ordering` was found first in scope). `using`-first is safe only when the type parameter is already
-  fixed some other way.
-- `SimplicialSetStream`: constant-0 filtration; `filtrationOrdering` is dimension ascending then `Ordering[G]`.
-  `FilteredSimplicialSetStream`: real `StratifiedCellStream[G, Double]`, same ordering convention as VR.
-- `fromStream` takes `CellStream[Simplex[VertexT], ?]` (VR coface streams are not `SimplexStream`s).
-- `product`: `(X×Y)_n = X_n × Y_n`, pair non-degenerate iff words' index sets are disjoint — **not** EZ shuffles.
-  Face maps strip the common degeneracy set `J` and **relabel** survivors via rank, not delete. `coproduct`:
+  `using`-first broke constructor call sites' type inference for `G` (silently unified with whatever `Ordering`
+  was found first in scope) — safe only when `G` is already fixed some other way.
+- `SimplicialSetStream`: constant-0 filtration, dimension-then-`Ordering[G]`. `FilteredSimplicialSetStream`: real
+  `StratifiedCellStream[G, Double]`, same VR ordering convention. `fromStream` takes `CellStream[Simplex[VertexT],
+  ?]` (VR coface streams aren't `SimplexStream`s).
+- `product`: `(X×Y)_n = X_n × Y_n`, pair non-degenerate iff words' index sets are disjoint — **not** EZ shuffles;
+  face maps strip the common degeneracy set and **relabel** survivors via rank, not delete. `coproduct`:
   `Left`/`Right` tags.
-- `quotient(sset, quotientMap: G => SSetElement[G])` — degenerate targets needed (RP² from a triangle collapses
-  an edge to `s_0(v)`); must resolve in **one step** to fixed points (`require`d). `identify(pairs)` is the
-  union-find ergonomic layer (own union-find in `cells`; `streams.UnionFind` would be a backwards dependency).
-- Fixtures (`SimplicialSetFixtures`): `minimalSphere(n)`, `realProjectiveSpace(2|3)` (RP² is the sign
-  discriminator over F2 vs F3), `torus`, `triangle`/`realProjectiveSpaceViaQuotient`. No MATLAB/CLI entry for
-  simplicial sets (needs its own encoding design).
+- `quotient(sset, quotientMap: G => SSetElement[G])` needs degenerate targets (RP² from a triangle collapses an
+  edge to `s_0(v)`); must resolve in **one step** to fixed points (`require`d). `identify(pairs)` is the
+  union-find ergonomic layer (own union-find in `cells`).
+- Fixtures (`SimplicialSetFixtures`): `minimalSphere(n)`, `realProjectiveSpace(2|3)` (sign discriminator F2 vs
+  F3), `torus`, `triangle`/`realProjectiveSpaceViaQuotient`. No MATLAB/CLI entry (needs its own encoding design).
 
 ## Cech complexes
 
@@ -353,54 +331,40 @@ cohomology only.
 
 ## Witness complexes
 
-`streams/WitnessStream.scala`, `WORKLOG-witness-complex.md`. De Silva-Carlsson 2004, checked directly against
-JavaPlex's own Java source. `LandmarkSelector.maxmin`/`.random` pick a landmark subset of a
-`FiniteMetricSpace[Int]`; `maxmin` also exposes each chosen point's own insertion radius
-(`LandmarkSelection.insertionRadius`) and excludes already-chosen points from its own tie-break candidates
-(`WORKLOG-sheehy-rips.md`).
+`streams/WitnessStream.scala`, `WORKLOG-witness-complex.md`. De Silva-Carlsson 2004, checked against JavaPlex's
+own Java source. `LandmarkSelector.maxmin`/`.random` pick a landmark subset of a `FiniteMetricSpace[Int]`;
+`maxmin` also exposes each point's own insertion radius (`LandmarkSelection.insertionRadius`), excluding
+already-chosen points from its own tie-break candidates (`WORKLOG-sheehy-rips.md`).
 
-Two independent variants, both `Simplex[Int]` over LOCAL landmark indices, both built on
-`RipserCofaceSimplexStream` unchanged:
-- **`LazyWitnessSimplexStream`**: IS a flag complex by definition, so `WitnessMetricSpace` reifies its edge
-  weights as a `FiniteMetricSpace[Int]` (NOT a real metric — never hand it to `JVPTree`/`SparseMetricSpace`/
-  `alpha`). `PackedRipserCohomologyContext` (proven only for VR diameters) is *also* valid here — the one
-  exception. `nu ∈ {0,1,2}`, default 2. `maxFiltrationValue` defaults to `minimumEnclosingRadius`.
-- **`WitnessCofaceSimplexStream`** (general): NOT a flag complex — `filtrationValueOverride` computes a
-  **recursive** `max(own_k(σ), max over σ's own facets)`, `TrieMap`-memoized, making "the complex at threshold R"
-  automatically downward-closed. Refuses `engine=ripser`/`chunks`; `maxFiltrationValue` defaults to `+Infinity`.
-  The general complex's own 1-skeleton is provably identical to the lazy complex's at `nu=2`.
+Two independent variants, both `Simplex[Int]` over LOCAL landmark indices, both on `RipserCofaceSimplexStream`
+unchanged: **`LazyWitnessSimplexStream`** IS a flag complex, so `WitnessMetricSpace` reifies edge weights as a
+`FiniteMetricSpace[Int]` (NOT a real metric — never hand to `JVPTree`/`SparseMetricSpace`/`alpha`);
+`PackedRipserCohomologyContext` is *also* valid here (the one exception); `nu ∈ {0,1,2}`, default 2.
+**`WitnessCofaceSimplexStream`** (general) is NOT a flag complex — `filtrationValueOverride` computes a
+recursive `max(own_k(σ), max over facets)`, `TrieMap`-memoized; refuses `engine=ripser`/`chunks`,
+`maxFiltrationValue` defaults `+Infinity`. Its 1-skeleton is provably identical to the lazy complex's at `nu=2`.
 
 ## Dowker complexes
 
-`streams/DowkerStream.scala`, `WORKLOG-dowker-complex.md`. `DowkerGeometry(relation: Array[Array[Double]])`: a fully
-general `R: L x W -> [0, Infinity]`, not derived from any metric (generalizes witness's `nu=0` case, which is exactly
-this formula with `R` = the landmark-to-witness distance matrix — not implemented by delegating to `WitnessGeometry`,
-independently re-derived instead, since that class's shape doesn't fit a relation with no shared ambient space).
-`filtrationValue(sigma) = min_w max_{x in sigma} R(x,w)` is automatically monotone (proved directly from the formula,
-no recursive facet clamp needed, unlike witness's per-dimension `m_k`); NOT a flag complex in general, so built on
-`RipserCofaceSimplexStream`'s generic coface loop like Cech/general-witness, not the flag-specific machinery.
-`.fromBoolean` lifts a classical (unfiltered) relation (`true`→`0.0`, `false`→`+Infinity`).
+`streams/DowkerStream.scala`, `WORKLOG-dowker-complex.md`. `DowkerGeometry(relation: Array[Array[Double]])`: a
+fully general `R: L x W -> [0, Infinity]`, not metric-derived (generalizes witness's `nu=0` case, independently
+re-derived — doesn't fit `WitnessGeometry`'s shared-ambient-space shape). `filtrationValue(sigma) = min_w
+max_{x in sigma} R(x,w)` is automatically monotone; NOT a flag complex, built on `RipserCofaceSimplexStream`'s
+generic coface loop. `.fromBoolean` lifts an unfiltered relation (`true`→`0.0`, `false`→`+Infinity`).
 
-**`keptByThresholdAndCriterion`'s `<=` admits `+Infinity <= +Infinity`** — every other stream's `maxFiltrationValue
-= +Infinity` default is safe only because none of them ever compute a genuinely infinite filtration value; Dowker's
-boolean encoding does, on purpose, to mean "never witnessed." `DowkerCofaceSimplexStream` overrides
-`keptByThresholdAndCriterion` to additionally require `.isFinite` — without it, an untruncated stream silently
-collapses to the complete simplex on every vertex (confirmed empirically, `WORKLOG-dowker-complex.md`).
+**`keptByThresholdAndCriterion`'s `<=` admits `+Infinity <= +Infinity`** — safe elsewhere only because no other
+stream computes a genuinely infinite value; Dowker's boolean encoding does, on purpose ("never witnessed").
+`DowkerCofaceSimplexStream` overrides it to additionally require `.isFinite` — without it, an untruncated stream
+silently collapses to the complete simplex on every vertex (confirmed empirically).
 
-**Duality is the point** (`.dual`, via `DowkerGeometry.dual` — the transpose relation): the functorial Dowker
-duality theorem (Chowdhury & Mémoli 2018) gives the X-side and Y-side persistence modules as naturally isomorphic,
-so their barcodes agree exactly — **but only after dropping zero-persistence (birth == death) bars from both**: a
-simplicial filtration records exactly one `H_0` birth per vertex, so when `numLeft != numWitnesses` the raw
-barcodes can't match bar-for-bar even in principle; the "extra" births are always zero-persistence
-(`DowkerStreamSpec.dropZeroPersistence`, confirmed on a hand-worked rectangular relation, not just asserted from
-the theorem).
+**Duality is the point** (`.dual` — the transpose relation): the functorial Dowker duality theorem (Chowdhury &
+Mémoli 2018) gives X-side/Y-side barcodes agreeing exactly **only after dropping zero-persistence bars from
+both** (a simplicial filtration records exactly one `H_0` birth per vertex, so `numLeft != numWitnesses` can't
+match bar-for-bar otherwise — confirmed on a hand-worked fixture, not just asserted from the theorem).
 
-**Wired into `matlab.TDA4j`/`cli` as its own entry point**, not a `complex=` value: `computeFromRelation`
-(MATLAB/Java)/`--input-format csv-relation` (CLI, reusing `CSV.readPointCloud`'s own rectangular-matrix reader
-for the on-disk shape) — a relation isn't a point cloud or a square/symmetric distance matrix, so it doesn't fit
-`computeFromPoints`/`computeFromDistanceMatrix`'s shared dispatch. `engine` defaults to `naive`, refuses
-`ripser`/`chunks` (same reasoning as `witness`/`witnessVariant=general`); a `"dual"`/`--dual` option computes the
-`W`-side complex directly via `DowkerGeometry.dual`.
+Own MATLAB/CLI entry point (`computeFromRelation`/`--input-format csv-relation`), not a `complex=` value — a
+relation doesn't fit the point-cloud/distance-matrix dispatch. `engine` defaults `naive`, refuses `ripser`/
+`chunks`; `dual`/`--dual` computes the W-side directly.
 
 ## Alpha complex: DQP vs Helix
 
@@ -408,126 +372,72 @@ for the on-disk shape) — a relation isn't a point cloud or a square/symmetric 
 (`HelixDelaunay`); `"DQP"` must be explicit. Alpha and VR/Ripser are separate sections with minimal interaction
 (project lead's standing call). Never resurrect the ripped-out Miniball-Delaunay backend.
 
-`AlphaComplexDQP` implements Carlsson & Carlsson, Sci. Rep. 14:19824 (2024), with a DAQP-style dual active-set QP;
-`CholeskyWorkspace` is a hand-rolled incremental Cholesky update/downdate. Filtration values are squared radii
-internally; `radiusOf` takes sqrt so units match Helix. `AlphaShapeDQP` is always untruncated; use
-`AlphaComplexDQP.euclidean(points, maxRadius, ...)` for truncation.
+`AlphaComplexDQP` implements Carlsson & Carlsson (Sci. Rep. 14:19824, 2024), DAQP-style dual active-set QP;
+`CholeskyWorkspace` hand-rolled incremental Cholesky. Filtration values are squared radii internally; `radiusOf`
+takes sqrt. `AlphaShapeDQP` always untruncated; `AlphaComplexDQP.euclidean(points, maxRadius, ...)` for truncation.
 
-**Settled numerical decisions in `DualQP.solve` — don't retune:**
-- `rankTolerance = 1e-6` (safe range `[1e-7, 1e-5]`; smaller poisons the Cholesky factor and cycles forever,
-  `1e-4` gives wrong answers).
-- Ratio-test ties broken by **global** constraint index (Bland's rule), not working-set position.
-- **Accepted limitation**: small Schur complement with no swappable inequality → candidate treated as infeasible.
-  "Commit anyway" was tried and reverted: no fixed threshold separates safe from catastrophic.
-- Vertex filtration value is `-space.weight(x)` **only when `x` lies inside its own restricted power cell `V_x`**
-  — not a `0.0` default. When some Cech-neighbour dominates `x`, the correct value is the **minimum over `x`'s
-  own incident, already-solved edges** (dimension 1 solved before 0 for exactly this reason); a vertex with no
-  incident edges is genuinely hidden and **dropped from the complex entirely**. Found via DTM weights.
-  `AlphaComplexDQPVertexAttachmentSpec`, `WORKLOG-dtm-filtrations.md`.
-- Regressions pinned in `AlphaComplexDQPRegressionSpec`/`AlphaValidationSpec`; property suite uses
-  `minTestsOk = 2000`.
+**Settled `DualQP.solve` numerics — don't retune**: `rankTolerance=1e-6` (safe `[1e-7,1e-5]`); ratio-test ties
+broken by global constraint index (Bland's rule); small-Schur-complement-no-swappable-inequality → infeasible
+(accepted limitation, "commit anyway" tried and reverted). Vertex filtration value is `-space.weight(x)` only
+when `x` is inside its own restricted power cell `V_x`, else the min over `x`'s own incident already-solved
+edges (dim 1 before 0), and a vertex with no incident edges is dropped entirely
+(`AlphaComplexDQPVertexAttachmentSpec`, `WORKLOG-dtm-filtrations.md`). Regressions in
+`AlphaComplexDQPRegressionSpec`/`AlphaValidationSpec` (`minTestsOk=2000`).
 
-**HelixDelaunay's bootstrap crash is fixed** (`assert(validated.nonEmpty)`, `.claude/WORKLOG-helix-bootstrap-fix.md`)
-— three independent, additive fixes: (1) the hull-supporting-hyperplane refinement now retries EVERY
-affinely-independent candidate subset it can form (ordered by smallest total pairwise span), not just the first
-found greedily; (2) the "find a hull-supporting hyperplane" loop rejects an affinely-DEGENERATE candidate simplex
-outright rather than handing it to `Hyperplane.from` (whose SVD-based normal extraction is under-determined for
-such input); (3) a globally coplanar point cloud (own affine rank < declared ambient dimension) is transparently
-projected onto an orthonormal basis of its own true affine span before construction — exact, not approximate, a
-no-op for already-full-rank input. All three route rank computation through one shared `rankAtEpsilon` helper
-tied to `epsilon.epsilon` (`1e-5`) — `SingularValueDecomposition.getRank`'s default tolerance is far tighter and
-missed genuinely-degenerate-at-this-tolerance input.
+**HelixDelaunay's bootstrap crash is fixed** (`.claude/WORKLOG-helix-bootstrap-fix.md`) via three additive fixes
+routed through one shared `rankAtEpsilon` helper: retry every affinely-independent hyperplane candidate
+(smallest-span first); reject affinely-degenerate candidates outright; project a globally-coplanar cloud onto
+its true affine span first.
 
-**One root mechanism (near-cospherical clusters making the frontier walk's own facet-pivot choices
-order-dependent — `HelixDelaunayBuilder`'s own class doc, "Accepted limitation") produces two DIFFERENT outcomes,
-one WONTFIX and one fixed** — do not conflate them; a naive `dqpSet -- helixSet` diff alone cannot tell them
-apart (`.claude/WORKLOG-helix-bootstrap-fix.md`):
-1. **Order-dependent disagreement with DQP, still WONTFIX** (project lead: "I'm okay with C persisting as a
-   WONTFIX issue"): when a facet has more than one legitimately-empty-circumsphere candidate coface,
-   `visitedFacets` locks in whichever the walk finds first and never reconsiders — but the discarded side is
-   reachable some other way too, so Helix's own output, though different from DQP's, is still a complete,
-   internally-consistent triangulation. Helix is **not reliable ground truth** for dim ≥ 4 fuzzing;
-   `AlphaCrossValidationSpec`'s comparisons stay as `unsafeCompare`/`unsafeFuzzCompare` diagnostics, not wired
-   into `sbt test`.
-2. **Genuine incomplete triangulation (a real topological hole), fixed.** Same lock, but here the discarded side
-   is reachable NO OTHER WAY, so a whole local neighborhood is permanently lost — a real nonzero
-   `H_{ambientDim-1}` on the full unfiltered complex. Self-consistency (not a diff against DQP) is the
-   discriminator — a naive-diff check alone conflates the two (measured 2/8 genuine holes in one sweep). Two
-   compounding bugs: (a) a structural exclusion bug in `handleCosphericalPoints`'s own facet-queue construction
-   made the originating facet itself unreachable from its own local search (fixed — iterate every vertex of the
-   new simplex, not just the triggering facet's own); (b) `handleCosphericalPoints`'s greedy point-pull has no
-   empty-circumsphere check and no joint near-tie consideration (genuinely NOT fixed — same out-of-scope
-   symbolic-perturbation redesign as case 1). Worked around, not root-fixed, at the repair layer:
-   `requireValidTriangulation`'s jitter-and-recompute repair (see below) now also triggers on a genuine void
-   detected on the RAW, unrepaired output — `HelixDelaunay.interiorVoidVertices` returns the essential
-   representative's own vertex support as a targeted jitter seed.
+**One root mechanism (near-cospherical clusters, order-dependent facet-pivot choices) produces two DIFFERENT
+outcomes — don't conflate, a naive set-diff can't tell them apart**:
+1. Order-dependent disagreement with DQP, **WONTFIX** (project lead) — the discarded side is reachable some
+   other way too, still a complete triangulation. Helix is not reliable ground truth for dim≥4 fuzzing;
+   `AlphaCrossValidationSpec` comparisons stay diagnostic (`unsafeCompare`/`unsafeFuzzCompare`).
+2. Genuine incomplete triangulation (real topological hole), **fixed**. Self-consistency (not diff-vs-DQP) is
+   the discriminator. Two compounding bugs: (a) `handleCosphericalPoints`'s facet-queue excluded the originating
+   facet (fixed — iterate every vertex of the new simplex); (b) its greedy point-pull has no empty-circumsphere
+   check (not fixed, out-of-scope symbolic-perturbation redesign). Worked around at the repair layer:
+   `requireValidTriangulation`'s jitter-and-recompute also triggers on a genuine void on the RAW output.
 
-**`FastAlphaHomologyContext` (`homology/FastAlphaHomology.scala`)** — `FastCubicalHomologyContext`'s own dual
-union-find, ported to `HelixDelaunay`'s top simplices; **valid at any ambient dimension `>= 2`**, `HelixDelaunay`
-only (never `AlphaShapeDQP`, which builds no adjacency structure so can't supply the dual graph's "every facet
-has ≤2 cofaces" precondition). That precondition is NOT guaranteed by construction (unlike a cubical grid) —
-measured noticeably more likely at higher ambient dimension and with more points — validated explicitly, throwing
-the named `FastAlphaTriangulationException` rather than building a silently-wrong dual graph. A facet's own
-dual-edge value must come from `HelixDelaunay.filtrationValue` directly, never recomputed as `min` over containing
-top simplices (unlike cubical, these can genuinely differ). At ambient dimension `>= 3`, the same
-hybrid-with-`chunks` extension as `FastCubicalHomologyContext` handles middle dimensions `1 <= k <= d-2` via
-`PersistenceInChunksContext[Int, C]` on a new `alpha.LimitedAlphaShapesStream` view — cross-validated at `d=3`
-against the naive engine (the facet-multiplicity risk needed its own fresh `d=3` measurement, materially higher
-than `d=2`, not assumed to carry over). `WORKLOG-alpha-dual-unionfind.md`, `DESIGN-alpha-dual-unionfind.md`,
-`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
+**`FastAlphaHomologyContext`** — `FastCubicalHomologyContext`'s dual union-find ported to `HelixDelaunay`'s top
+simplices; valid any ambient dim≥2, Helix only (DQP builds no adjacency structure). The "every facet ≤2 cofaces"
+precondition is NOT guaranteed by construction (more likely violated at higher dim/more points) — validated
+explicitly, throws `FastAlphaTriangulationException` rather than a silently-wrong dual graph. Facet dual-edge
+value from `HelixDelaunay.filtrationValue` directly, never recomputed as min over top simplices. At dim≥3, same
+chunks-hybrid as cubical on `alpha.LimitedAlphaShapesStream`; cross-validated at d=3. Wired as
+`engine="fast-alpha"` (alpha+helix only, project lead signed off on the measured exception rate).
+`WORKLOG-alpha-dual-unionfind.md`, `DESIGN-alpha-dual-unionfind.md`.
 
-**Wired into `matlab.TDA4j`/`cli` as `engine="fast-alpha"`/`--engine fast-alpha`** (valid only for
-`complex=alpha` with `alphaBackend=helix`, any ambient dimension `>= 2`) — project lead signed off on shipping
-the measured exception rate as a production option, given the clear exception message.
+**`HelixDelaunay(pts, seed, requireValidTriangulation = true)` repairs facet-multiplicity violations** (off by
+default) — nudges near-tied vertices, re-runs the same builder, recomputes circumspheres from ORIGINAL
+coordinates ("simulation of simplicity"). Two earlier designs (coning from an apex; pruning to
+smallest-circumradius claimants) were rejected (wrong boundary cycle / can punch a real hole). **Its own first
+version had the identical failure mode as the rejected pruning design** (~10.5% barcode disagreement at d=3) —
+facet-count self-check alone insufficient; fixed with a second check, `HelixDelaunay.interiorVoidVertices` (a
+genuine Delaunay hull is convex hence contractible, so `H_{d-1}` of the full unfiltered complex must be trivial),
+also triggered on RAW unrepaired input. Not attempted d≥4. `.claude/DESIGN-helix-triangulation-repair.md`.
 
-**`HelixDelaunay(pts, seed, requireValidTriangulation = true)` repairs a real facet-multiplicity violation**
-(`.claude/DESIGN-helix-triangulation-repair.md`) — off by default, zero behavior change to the unflagged
-constructor. Two earlier designs were tried and rejected: coning the conflicting region from an arbitrary apex
-(fails — the discarded region's own boundary isn't a simple cycle); pruning each over-claimed facet down to its
-two smallest-circumradius claimants, discard-without-replacement (empirically shown wrong — can punch a genuine
-interior hole through the mesh). The shipped design nudges only the near-tied vertices by a small random
-perturbation and re-runs `HelixDelaunayBuilder` — the same already-tested global algorithm — on the full (mostly
-unperturbed) point set, then recomputes every resulting simplex's circumsphere from the ORIGINAL coordinates
-("simulation of simplicity"). **Its own first version had the identical failure mode as the rejected pruning
-design** (a real ~10.5% barcode-disagreement rate at `d=3`) — the "no facet has `>2` claimants" self-check alone
-was necessary but not sufficient, because the builder, re-run on jittered coordinates, could silently fail to
-place a tetrahedron's second coface, leaving a facet that looks like an ordinary hull facet but is actually a
-gap. Fixed with a second, independent self-check, `HelixDelaunay.interiorVoidVertices` (`Option[Set[Int]]` —
-returns the essential `H_{d-1}` representative's own vertex support when a void exists, a far more targeted
-retry seed than a facet-count heuristic): a genuine Delaunay triangulation's convex hull is convex, hence
-contractible, so the full unfiltered complex's own `H_{d-1}` must be trivial. **Later extended to trigger on
-this same void check on the RAW, unrepaired input too, not just after a facet-multiplicity-driven retry** —
-fixes the genuine-incompleteness case above. Not attempted at `d>=4` (HelixDelaunay already documented above as
-unreliable there for unrelated reasons). A third avenue (recognizing violations as textbook Delaunay diagonal
-flips / Radon-partition bistellar flips) was investigated and found promising but not implemented — a possible
-future alternative.
-
-**Degeneracy hazard**: in cospherical position the alpha complex is not a Delaunay subcomplex — `k` cospherical
-sites give a `(k-1)`-simplex (unit grid in R² → 3-simplices). Truncating at ambient dimension gives the wrong
-homotopy type. Correct, not a bug.
-
-Honest framing: the paper's benchmarks are mixed vs Ripser and qhull; the value is high ambient dimension, exact
-homology, and small complexes near low-dimensional data — not raw speed.
+**Degeneracy hazard**: cospherical `k` sites give a `(k-1)`-simplex (unit grid in R² → 3-simplices) — correct,
+not a bug; truncating at ambient dimension gives the wrong homotopy type. Honest framing: paper's benchmarks
+mixed vs Ripser/qhull; value is high ambient dimension + exact homology + small complexes, not raw speed.
 
 ## DTM-based filtrations
 
 `streams/DistanceToMeasure.scala`, `streams/DtmRipsStream.scala`, `alpha.AlphaComplexDQP.dtm`,
-`WORKLOG-dtm-filtrations.md`. `streams.DistanceToMeasure(metricSpace, k, q=2)`: Chazal-Cohen-Steiner-Merigot 2011,
-generic over any `FiniteMetricSpace[Int]`. `k` is **self-inclusive** (verified against GUDHI byte-for-byte) —
-`k=1` gives `f=0` everywhere. Defaults to `streams.BruteForce` for k-NN, not `JVPTree` (VP-tree pruning assumes
-the triangle inequality, which not every `FiniteMetricSpace` here satisfies).
+`WORKLOG-dtm-filtrations.md`. `streams.DistanceToMeasure(metricSpace, k, q=2)`: Chazal-Cohen-Steiner-Merigot
+2011, generic over any `FiniteMetricSpace[Int]`. `k` is **self-inclusive** (verified vs GUDHI byte-for-byte) —
+`k=1` gives `f=0` everywhere. Defaults to `BruteForce` for k-NN, not `JVPTree` (triangle-inequality assumption
+not universal here).
 
-**`streams.DtmRipsSimplexStream`** (Anai et al., arXiv:1811.04757, Def. 3.1/Prop. 3.5): doubled units. `p ∈
-{1.0, 2.0}`; `p=1` (default) checked byte-for-byte against GUDHI's `DTMRipsComplex`; `p=2` exists only as the
-cross-validation device against `AlphaComplexDQP.dtm`. **The first coface stream in this codebase with nonzero,
-distinct vertex filtration values** — overrides `case 0` explicitly. `maxFiltrationValue` defaults to the
-reified metric space's own `minimumEnclosingRadius`, proven safe for both `p` values. Refuses `engine=ripser` in
-`matlab.TDA4j`.
+**`streams.DtmRipsSimplexStream`** (Anai et al., arXiv:1811.04757): doubled units, `p∈{1.0,2.0}`, p=1 (default)
+checked byte-for-byte vs GUDHI's `DTMRipsComplex`, p=2 only for cross-validating `AlphaComplexDQP.dtm`. First
+coface stream with nonzero distinct vertex filtration values (overrides `case 0` explicitly).
+`maxFiltrationValue` defaults to `minimumEnclosingRadius`. Refuses `engine=ripser`.
 
-**`alpha.AlphaComplexDQP.dtm`**: `weight(i) = -f(i)²`, the `p=2` ball equation through the pre-existing
-weighted-alpha/power-distance machinery — derived, not copied from any external source. Cross-checked against
-`DtmRipsSimplexStream(p=2)`'s H0 via the persistent nerve lemma, NOT bar-for-bar (alpha correctly delays/omits
-vertices Rips can't; see the worklog for the full derivation).
+**`alpha.AlphaComplexDQP.dtm`**: `weight(i)=-f(i)²`, derived not copied. Cross-checked against
+`DtmRipsSimplexStream(p=2)`'s H0 via the persistent nerve lemma, not bar-for-bar (alpha correctly delays/omits
+vertices Rips can't).
 
 ## Sheehy's sparse/approximate Vietoris-Rips filtration
 
@@ -535,42 +445,35 @@ vertices Rips can't; see the worklog for the full derivation).
 Cavanna-Jahanseir-Sheehy 2015 (arXiv:1506.03797) — the two papers' `epsilon` values are **not** comparable.
 Deliberately `O(n²)` (every pairwise `edgeBirth` materialized directly), not the paper's own `O(n log n)`
 neighbor-search — a smaller complex to *reduce*, not a faster one to *build*. Built on `LandmarkSelector.maxmin`
-run to full size, extended to also expose each point's own insertion radius. One memoized
-`filtrationValueOverride` handles every dimension ≥ 1 uniformly (the `min`-over-vertices `vanish` exclusion check
-needs every vertex of a simplex at once).
+run to full size. One memoized `filtrationValueOverride` handles every dimension ≥ 1 uniformly (the
+`min`-over-vertices `vanish` exclusion check needs every vertex at once).
 
 **CJS 2015's own Algorithm 3 omits a check Section 5.3's own definition requires** (a `min`-over-vertices
 `vanish` clamp) — `edgeBirth` here applies that clamp to every edge, pinned by a hand-derived triangle fixture.
 
 Units doubled; reduces to plain VR exactly at a SMALL `epsilon` (not large). `maxFiltrationValue` is
-unconditionally clamped to `maxFiniteFiltrationValue` even when the caller passes `Some(Double.PositiveInfinity)`
-— plain IEEE-754 `<=` would otherwise admit every excluded pair's own `+Infinity`. Refuses `engine=ripser`;
-`naive`/`chunks`/`cohomology` wired through `matlab.TDA4j complex=sheehy-rips` (needs `sheehyEpsilon`) and `cli`
-`--sheehy-epsilon`.
+unconditionally clamped to `maxFiniteFiltrationValue` even when the caller passes `+Infinity` — plain IEEE-754
+`<=` would otherwise admit every excluded pair's own `+Infinity`. Refuses `engine=ripser`; wired through
+`matlab.TDA4j complex=sheehy-rips` (needs `sheehyEpsilon`) and `cli --sheehy-epsilon`.
 
 ## Flag-complex edge collapse
 
 `streams/EdgeCollapseStream.scala`, `WORKLOG-edge-collapse.md`. `EdgeCollapse.collapse` implements
 Boissonnat-Pritam (SoCG 2020) + Glisse-Pritam (SoCG 2022): reduces a VR filtration's 1-skeleton to a smaller
-weighted graph with the SAME persistent homology at every level. An edge `{u,v}` is dominated by `w` iff every
-common neighbor of `u,v` is also adjacent to `w`, verified directly against GUDHI's own
-`Flag_complex_edge_collapser.h`. **Removes dominated EDGES, never vertices** — vertex domination is strong
-collapse (`arXiv:1809.10945`), a different construction. A dominated edge's entry is pushed forward to the
-largest time it stays dominated, or removed if that never breaks. Reified as `EdgeCollapsedMetricSpace` — drop-in
-for `EnumeratingCofaceSimplexStream`/`RipserCofaceSimplexStream`. Representatives transfer through inclusion for
-free. `minimumEnclosingRadius` is overridden to the bound the collapse itself used; the initial edge-admission
-check is `d.isFinite && d <= bound`, not just `d <= bound`.
+weighted graph with the SAME persistent homology at every level. Edge `{u,v}` dominated by `w` iff every common
+neighbor of u,v is also adjacent to w (verified vs GUDHI's `Flag_complex_edge_collapser.h`). **Removes dominated
+EDGES, never vertices** (vertex domination = strong collapse, arXiv:1809.10945, different construction). Reified
+as `EdgeCollapsedMetricSpace` — drop-in for Enumerating/RipserCofaceSimplexStream; representatives transfer
+through inclusion free; `minimumEnclosingRadius` overridden to the collapse's own bound.
 
-**This is a faithful port of the reference algorithm's own single-pass, descending-filtration-value,
-live-mutating-state structure — not an independent redesign.** An independently-designed "fixed-point iteration"
-first draft was tried and PROVEN WRONG by barcode cross-validation (two distinct bugs, each silently turning a
-real bar essential on a 5-point counterexample). The processing order is load-bearing — re-derive nothing here
-without rereading the reference source first.
+**Faithful port of the reference's own single-pass, descending, live-mutating-state structure — not an
+independent redesign.** An independent "fixed-point iteration" draft was tried and PROVEN WRONG by barcode
+cross-validation (two bugs, each silently turning a real bar essential on a 5-point counterexample). Processing
+order is load-bearing — reread the reference before touching this.
 
-Vertices are never removed, so enumeration cost does NOT drop uniformly; reduction cost benefits substantially
-regardless of engine (measured 73–76% of edges removed, 43–47x reduction-phase speedup on random clouds,
-`EdgeCollapseBenchmarkSpec`). Wired through `matlab.TDA4j`'s `edgeCollapse` option (`complex=vr` only) and `cli`
-`--edge-collapse`.
+Vertices never removed (enumeration cost doesn't drop uniformly); measured 73-76% edges removed, 43-47x
+reduction-phase speedup (`EdgeCollapseBenchmarkSpec`). Wired through `matlab.TDA4j`'s `edgeCollapse` option
+(`complex=vr` only) and `cli --edge-collapse`.
 
 ## File I/O
 
@@ -586,55 +489,49 @@ regardless of engine (measured 73–76% of edges removed, 43–47x reduction-pha
 
 `cli`, `WORKLOG-cli-executable.md`. `sbt assembly` → `java -jar target/scala-3.9.0/TDA4j-<version>-assembly.jar`.
 Scallop (zero deps). Every compute flag mirrors a `matlab.TDA4j` option key 1:1 with **no Scallop default** —
-omitted keys let `TDA4j` apply its own defaults (one source of truth). `--output-format=perseus` is refused for
-non-integral filtrations. `TDA4jCLI.run(args, out): Int` is testable in-process, but Scallop's default `onError`
-calls `System.exit` on any parse error or `--help`/`--version` — `CLISpec` must never pass malformed flags.
-Scallop `opt[Boolean]` has always-supplied toggle semantics (`WORKLOG-naming-and-dispatch-expansion.md`).
-`--distance-to` (+ `--distance-format`/`-order`/`-ground-norm`) is the one exception to the "every flag mirrors a
-compute option" framing — it mirrors `barcode.BarcodeDistance` instead; only `--output-format=text` is supported
-with it.
+omitted keys let `TDA4j` apply its own defaults (one source of truth). `--output-format=perseus` refused for
+non-integral filtrations. `TDA4jCLI.run(args, out): Int` is testable in-process, but Scallop's `onError` calls
+`System.exit` on any parse error or `--help`/`--version` — `CLISpec` must never pass malformed flags. Scallop
+`opt[Boolean]` has always-supplied toggle semantics (`WORKLOG-naming-and-dispatch-expansion.md`). `--distance-to`
+(+`--distance-format`/`-order`/`-ground-norm`) mirrors `barcode.BarcodeDistance` instead; only
+`--output-format=text` works with it.
 
 ## MATLAB API
 
 `matlab` (`TDA4j.scala`, `PersistenceResult.scala`), `WORKLOG-matlab-api.md`. Java-facing facade: public methods
 take/return only `double`, `int`, `String`, `double[][]`, `String[]` — no `Map`, generics, or Scala types
-(project lead rejected a `Map`-based design). Options are a flat key/value `String[]`. `dispatch` parses each
-option exactly once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before anything else runs,
-and dispatches via `PersistenceEngine.naive`/`.chunks`/`.cohomology` rather than re-matching the raw string at
-each branch.
+(project lead rejected a `Map`-based design). Options are a flat key/value `String[]`; `dispatch` parses each
+once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before anything runs.
 - `computeFromPoints`/`computeFromDistanceMatrix`: `complex` = `vr`/`alpha`/`cech`/`witness`/`dtm-rips`/`dtm-alpha`/
   `sheehy-rips`; `engine` = `ripser`/`naive`/`chunks`/`cohomology` (Alpha and dtm-alpha refuse `ripser`/`chunks`;
   Cech, dtm-rips, sheehy-rips, and witness/general refuse `ripser`, witness/general also refuses `chunks` — see
-  `persistence-engines.md`'s streams-vs-engines table for the full picture). `dtm-rips`/`dtm-alpha` need `dtmK`;
-  `sheehy-rips` needs `sheehyEpsilon` (strictly in `(0,1)`); `dtm-rips`/`sheehy-rips` alone work from
-  `computeFromDistanceMatrix` too. A sixth `engine`, `fast-alpha`, is valid ONLY for `complex=alpha` with
-  `alphaBackend=helix`, any ambient dimension `>= 2`. `computeFromCubicalImage`/`computeFromImage` — same four
-  base `engine` values plus `fast-cubical`, refused only for a degenerate 1-axis image.
-- **Two-step witness recipe** (`WORKLOG-witness-two-step-api.md`): `selectLandmarksFrom{Points,DistanceMatrix}` →
-  `LandmarkSelectionResult`, then `computeFrom{Points,DistanceMatrix}AndLandmarks` (takes that `int[]` directly,
-  never re-selects); `coveringRadiusFrom{Points,DistanceMatrix}` queries R for a hand-picked set. CLI mirror:
-  `--select-landmarks`/`--landmarks-file`.
+  `persistence-engines.md`'s streams-vs-engines table). `dtm-rips`/`dtm-alpha` need `dtmK`; `sheehy-rips` needs
+  `sheehyEpsilon` (strictly `(0,1)`); those two alone also work from `computeFromDistanceMatrix`. A sixth
+  `engine`, `fast-alpha`, is valid ONLY for `complex=alpha`+`alphaBackend=helix`. `computeFromCubicalImage`/
+  `computeFromImage` — same four base engines plus `fast-cubical`.
+- **Two-step witness recipe**: `selectLandmarksFrom{Points,DistanceMatrix}` → `LandmarkSelectionResult`, then
+  `computeFrom{Points,DistanceMatrix}AndLandmarks` (takes that `int[]` directly, never re-selects);
+  `coveringRadiusFrom{Points,DistanceMatrix}` queries R for a hand-picked set. CLI: `--select-landmarks`/
+  `--landmarks-file`. `WORKLOG-witness-two-step-api.md`.
 - `maxDimension` (default 2) = top homological degree. `ripser`/`chunks` pass it straight through; `naive`/
-  `cohomology` wrap the stream in `LimitedCofaceSimplexStream(..., k + 1)` and drop `dim == k + 1` bars. Alpha
-  needs no +1.
-- Field: `Z` (prime field, default `prime=2`) or `R` (`Field.DoubleApproximated`, what internal specs default
-  to) — deliberate divergence.
-- `PersistenceResult`: `toArray()` eagerly; `cycleVertices`/`cycleCoefficients` lazily. `cycleVertices` throws
-  `UnsupportedOperationException` if a bar has no recorded representative — every engine now records one for
-  every bar, so this indicates an engine bug, not an expected gap.
+  `cohomology` wrap the stream in `LimitedCofaceSimplexStream(..., k+1)`. Alpha needs no +1.
+- Field: `Z` (prime, default `prime=2`) or `R` (`Field.DoubleApproximated`, internal specs' own default).
+- `PersistenceResult`: `toArray()` eager; `cycleVertices`/`cycleCoefficients` lazy, throwing
+  `UnsupportedOperationException` for a bar with no representative (every engine records one now — an engine
+  bug, not an expected gap).
 - **Boundary-matrix export**: `numCells`/`boundaryRows`/`boundaryCols`/`boundaryValues`/`columnDimension`/
-  `columnVertices`/`columnFiltrationValue`, lazy (one shared thunk per `complex` branch, reused across every
-  `engine` — confirmed byte-identical across engines).
+  `columnVertices`/`columnFiltrationValue`, lazy, byte-identical across engines.
 - **Circular coordinates**: `h1Bars(points)`/`circularCoordinates(points, r[, cocycleIndex, prime])` →
-  `CircularCoordinatesResult`, own small entry points rather than a `complex=` value. No CLI mirror.
-- Unverified: MATLAB's bundled JVM version and actual `double[][]`/`String[]`/`int[]` marshalling.
+  `CircularCoordinatesResult`. **Toroidal coordinates**: `toroidalCoordinates(points, r, cocycleIndices[, prime,
+  reduce])` → `ToroidalCoordinatesResult` (separate class). Neither has a CLI mirror.
+- Unverified: MATLAB's bundled JVM version and actual marshalling.
 
 ## Session practices
 
 - **Write a `.claude/WORKLOG-<topic>.md` by default** for any substantial investigation, debugging, or
   profiling arc, without being asked. Worklogs are point-in-time snapshots, never retroactively edited. At the
   end of the arc, update this file with **only the resulting rule/invariant/limitation plus a worklog pointer**
-  — no narrative, measurements, or repros here. Keep this file under ~40k characters; when it drifts past that,
+  — no narrative, measurements, or repros here. Keep this file under ~64k characters; when it drifts past that,
   condense it the same way (strip narrative to worklog pointers) and note the new condensing date/commit at top.
 - Performance claims need isolated A/B measurement (`git stash` A/B, median of trials, one engine per JVM);
   machine noise here often exceeds small effects — report unconfirmed effects as unconfirmed.
@@ -645,6 +542,14 @@ each branch.
 - A cloud session (working on its own `claude/...` branch) may commit and push its own work to that branch at
   will, without asking first — the branch is disposable/session-scoped, not shared history. A local/interactive
   session working directly on a shared branch still waits to be asked; the project lead commits that work.
+- **Found a bug in someone else's paper or reference implementation while validating a tda4j feature against
+  it?** Log it in `.claude/BUGS-IN-REFERENCES.md` (flat, never condensed away). State precisely what was verified
+  — don't extrapolate an isolated bug into an end-to-end correctness claim without a repro that actually shows
+  that (a real miss, corrected — `WORKLOG-toroidal-coordinates.md`). Two entries so far: CJS 2015 (Sheehy-Rips)
+  and DREiMac's `_gram_schmidt` (toroidal coordinates).
+- **This environment may start with no `sbt` and no dependency cache** — `.claude/scripts/install-sbt.sh`
+  bootstraps it. Add its contents to the environment's own setup script (cloud environment menu → Edit → Setup
+  script) so new sessions don't repeat the ~20-40 minutes this can take cold.
 
 ## Collaboration preferences
 
