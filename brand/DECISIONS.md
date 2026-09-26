@@ -25,7 +25,17 @@ not two unrelated colors — but they ARE two different hex values, and that dis
 | Slate, light | `#3c5a6b` | `#456f87` |
 | Slate, dark | `#8fb4c7` | `#8fb4c7` (unchanged — only light needed brightening) |
 | Gold, light | `#866504` | `#a67f07` |
-| Gold, dark | `#f3d068` | `#f3d068` (unchanged — already bright/safe at 11.9:1) |
+| Gold, dark | `#f0c647` | `#f0c647` (unchanged — see darkening note below) |
+
+**Gold, dark, darkened from `#f3d068` to `#f0c647`**: the original value read visibly thinner/paler than the
+light-mode gold (`#866504` on cream) when compared directly — light and dark golds are meant to differ in
+lightness by construction, but this was more than that, closer to a genuine weight mismatch. Same hue/sat
+(45°/85%), lightness dropped from 0.68 to 0.61 — a small step, not a re-hue. The binding constraint on how far
+this could go is `badge-sticker-slate.svg`'s own "4" against its `#456f87` field: contrast there was 3.62:1 and
+drops as this darkens, so the value was chosen to keep that at 3.32:1 (still clear of the 3:1 brand-mark floor)
+rather than picked from the site-theme side, which has enormous headroom (11.6:1 → 10.6:1 against the dark-mode
+background `#161b1e`, still far above the 4.5:1 UI-safe floor). Confirmed by rendering side by side against the
+`#866504` light-mode reference, not by contrast numbers alone — the numbers only bounded the search.
 
 Message colors (`@:callout(info\|warning\|error)`, wired via Laika's `messageColors`, entirely separate from
 `themeColors`): one triad, hue-rotated off the same gold, so all three read as a family instead of arbitrary
@@ -35,7 +45,7 @@ the earlier green (148°) didn't.
 | Role | Light | Dark |
 |---|---|---|
 | info (teal) | `#206f6f` | `#75c7c7` |
-| warning (= UI-safe gold) | `#866504` | `#f3d068` |
+| warning (= UI-safe gold) | `#866504` | `#f0c647` |
 | error | `#812318` | `#d88279` |
 
 Tinted callout backgrounds (`infoLight`/`warningLight`/`errorLight`), derived the same way as `themeColors`'

@@ -145,7 +145,7 @@ val theme = Helium.defaults.all
   .darkMode
   .themeColors(
     primary = Color.hex("8fb4c7"),
-    secondary = Color.hex("f3d068"),
+    secondary = Color.hex("f0c647"),
     primaryMedium = Color.hex("33474f"),
     primaryLight = Color.hex("1a262b"),
     text = Color.hex("eef1f2"),
@@ -157,7 +157,7 @@ val theme = Helium.defaults.all
   .messageColors(
     Color.hex("75c7c7"), // info
     Color.hex("1a2b2b"), // infoLight
-    Color.hex("f3d068"), // warning      (= secondary)
+    Color.hex("f0c647"), // warning      (= secondary)
     Color.hex("2b271a"), // warningLight
     Color.hex("d88279"), // error
     Color.hex("2b1c1a") // errorLight
