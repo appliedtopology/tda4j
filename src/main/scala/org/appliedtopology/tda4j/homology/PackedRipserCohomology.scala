@@ -210,15 +210,15 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
     * `cofacetIteratorWithVertex`: `maxByOption` boxes every `Long` comparison, and an `Iterator[(Int, Long)]` allocates
     * a fresh tuple per candidate on top of that.
     *
-    * Returns on the FIRST candidate tied at `sigma.diameter`, not a full sweep tracking a running max index --
-    * sound (not just faster) because `CofacetCursor.index` is STRICTLY DECREASING across successive `advance()`
-    * calls (`SimplexIndexingSpec`'s own property test pins this), so the first tied candidate encountered already
-    * has the maximum index among every candidate that will ever tie, and continuing the sweep after finding it
-    * can only ever confirm the same answer. This matches real `ripser.cpp`'s own `get_zero_pivot_cofacet`, which
-    * returns on first match with no further scan for the same reason. Found via the `o3_1024` compute-server JFR
-    * profile (`.claude/WORKLOG-packed-ripser-engine.md`): this method's own full, UNCONDITIONAL sweep (every
-    * candidate vertex, every one of the complex's simplices, regardless of threshold) was the largest remaining
-    * driver of `insertionDiameter` calls once the metric-space distance cache removed the earlier dominant cost.
+    * Returns on the FIRST candidate tied at `sigma.diameter`, not a full sweep tracking a running max index -- sound
+    * (not just faster) because `CofacetCursor.index` is STRICTLY DECREASING across successive `advance()` calls
+    * (`SimplexIndexingSpec`'s own property test pins this), so the first tied candidate encountered already has the
+    * maximum index among every candidate that will ever tie, and continuing the sweep after finding it can only ever
+    * confirm the same answer. This matches real `ripser.cpp`'s own `get_zero_pivot_cofacet`, which returns on first
+    * match with no further scan for the same reason. Found via the `o3_1024` compute-server JFR profile
+    * (`.claude/WORKLOG-packed-ripser-engine.md`): this method's own full, UNCONDITIONAL sweep (every candidate vertex,
+    * every one of the complex's simplices, regardless of threshold) was the largest remaining driver of
+    * `insertionDiameter` calls once the metric-space distance cache removed the earlier dominant cost.
     */
   private def zeroPivotCofacet(sigma: DiameterIndex, size: Int): Option[DiameterIndex] =
     if size - 1 > maxDimension then None

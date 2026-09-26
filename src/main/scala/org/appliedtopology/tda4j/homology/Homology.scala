@@ -1225,13 +1225,12 @@ class RipserCohomologyContext[CoefficientT: Field](
     */
   /** Returns on the FIRST candidate tied at `d`, not a full sweep tracking a running max index -- sound (not just
     * faster) because `CofacetCursor.index` is STRICTLY DECREASING across successive `advance()` calls
-    * (`SimplexIndexingSpec`'s own property test pins this), so the first tied candidate encountered already has
-    * the maximum index among every candidate that will ever tie. Matches real `ripser.cpp`'s own
-    * `get_zero_pivot_cofacet`, which returns on first match for the same reason. Found via the `o3_1024`
-    * compute-server JFR profile (`.claude/WORKLOG-packed-ripser-engine.md`): this method's own full,
-    * UNCONDITIONAL sweep (every candidate vertex, every simplex in the complex, regardless of threshold) was the
-    * largest remaining driver of `insertionDiameter` calls once the metric-space distance cache removed the
-    * earlier dominant cost.
+    * (`SimplexIndexingSpec`'s own property test pins this), so the first tied candidate encountered already has the
+    * maximum index among every candidate that will ever tie. Matches real `ripser.cpp`'s own `get_zero_pivot_cofacet`,
+    * which returns on first match for the same reason. Found via the `o3_1024` compute-server JFR profile
+    * (`.claude/WORKLOG-packed-ripser-engine.md`): this method's own full, UNCONDITIONAL sweep (every candidate vertex,
+    * every simplex in the complex, regardless of threshold) was the largest remaining driver of `insertionDiameter`
+    * calls once the metric-space distance cache removed the earlier dominant cost.
     */
   private def zeroPivotCofacet(sigma: Simplex[Int]): Option[Simplex[Int]] =
     if sigma.dim > maxDimension then None

@@ -33,10 +33,10 @@ import org.appliedtopology.tda4j.io.{given, *}
   * process per sample instead, driven externally by whatever wraps this.
   *
   * Prints `substitutionCount`/`totalSimplexCount` (both engines expose them, see their own doc comments in
-  * `Homology.scala`/`PackedRipserCohomology.scala`) alongside timing -- added specifically to let a profiling run on
-  * an anomalous case (e.g. `o3_1024`'s S/pack ratio collapsing to ~1.7x when every other case shows 15-45x, or
-  * `fractal-r` timing out for the packed engine while `RipserCohomologyContext` itself finishes) report the
-  * apparent-pairs hit rate alongside the timing, not just the wall-clock number alone.
+  * `Homology.scala`/`PackedRipserCohomology.scala`) alongside timing -- added specifically to let a profiling run on an
+  * anomalous case (e.g. `o3_1024`'s S/pack ratio collapsing to ~1.7x when every other case shows 15-45x, or `fractal-r`
+  * timing out for the packed engine while `RipserCohomologyContext` itself finishes) report the apparent-pairs hit rate
+  * alongside the timing, not just the wall-clock number alone.
   */
 object SingleEngineProfileDriver:
   def main(args: Array[String]): Unit =

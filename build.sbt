@@ -1,4 +1,4 @@
-name := "TDA4j"
+name := "tda4j"
 organization := "org.appliedtopology"
 scalaVersion := "3.9.0"
 
@@ -33,9 +33,10 @@ import laika.helium.config.VersionMenu
 // Docs versioning (RELEASE.md step 5): `release.yml` sets TDA4J_DOCS_VERSION to the tag's version
 // (e.g. "0.1.3") when publishing a tagged release; `docs.yml`'s push-to-`scala` build leaves it unset, which
 // publishes under the "dev" path segment instead of colliding with a real release's own directory. Both
-// workflows' own "Publish docs" step places this build's output at that path directly inside a checkout of
-// the actual gh-pages history (`.claude/WORKLOG-docs-publish-performance.md`), leaving every other
-// already-published version untouched by construction.
+// workflows' own "Stage versioned docs for publish" step nests this build's output under that path and
+// merges in whatever version directories already exist on `gh-pages` before publishing -- `sbt-github-pages`
+// has no setting to keep remote-only files, so any directory this build doesn't already contain, and doesn't
+// restore itself, would be lost on the next publish.
 val docsVersion = sys.env.getOrElse("TDA4J_DOCS_VERSION", "dev")
 
 // Older release tags, oldest-first exclusion of the one being (re)published -- drives Laika's version
@@ -177,7 +178,7 @@ val theme = Helium.defaults.all
 
 lazy val root = (project in file("."))
   .enablePlugins(
-    LaikaPlugin
+    LaikaPlugin,
   )
   .settings(
     // Compiler options: language features (implicitConversions, adhocExtensions) and warning flags.
@@ -224,4 +225,7 @@ libraryDependencySchemes ++= Seq(
   "org.scala-lang.modules" %% "scala-xml" % VersionScheme.Always
 )
 
-mimaPreviousArtifacts := Set.empty
+mimaPreviousArtifacts := priorReleaseVersions(baseDirectory.value)
+  .filter(v => !v.startsWith("0.1"))
+  .map(v => organization.value %% name.value % v)
+  .toSet
