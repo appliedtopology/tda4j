@@ -429,6 +429,47 @@ object TDA4j:
     result.theta.foreach((i, t) => thetaArray(i) = t)
     new CircularCoordinatesResult(thetaArray, result.birth, result.death, result.r, result.prime)
 
+  def toroidalCoordinates(
+    points: Array[Array[Double]],
+    r: Double,
+    cocycleIndices: Array[Int]
+  ): ToroidalCoordinatesResult =
+    toroidalCoordinates(points, r, cocycleIndices, 47, true)
+
+  /** Toroidal coordinates (Scoccola-Gakhar-Bush-Schonsheck-Rask-Zhou-Perea, "decorrelating circular coordinates with
+    * lattice reduction") for SEVERAL simultaneously-alive persistent H¹ classes of `points`' own Vietoris-Rips complex,
+    * combined into one torus-valued map -- see `homology.CircularCoordinates.computeToroidal`'s own doc for
+    * `r`/`cocycleIndices`/`prime`/`reduce`'s exact meaning and the full construction, and `h1Bars` above for how to
+    * find a valid `r`. Throws `IllegalArgumentException` for invalid/duplicate `cocycleIndices`, an `r` outside their
+    * common alive range, or classes that don't share a connected component; `NoIntegerCocycleException` (a
+    * `RuntimeException`, same bridge behavior as `circularCoordinates`) if some chosen class has no exact integer lift
+    * at `prime`.
+    */
+  def toroidalCoordinates(
+    points: Array[Array[Double]],
+    r: Double,
+    cocycleIndices: Array[Int],
+    prime: Int,
+    reduce: Boolean
+  ): ToroidalCoordinatesResult =
+    validatePoints(points)
+    val result =
+      CircularCoordinates.computeToroidal(EuclideanMetricSpace(points), r, cocycleIndices.toIndexedSeq, prime, reduce)
+    val thetaArrays = result.theta.map { thetaMap =>
+      val arr = Array.fill(points.length)(Double.NaN)
+      thetaMap.foreach((i, t) => arr(i) = t)
+      arr
+    }.toArray
+    new ToroidalCoordinatesResult(
+      thetaArrays,
+      result.cocycleIndices.toArray,
+      result.basisChange,
+      result.originalGram,
+      result.reducedGram,
+      result.r,
+      result.prime
+    )
+
   def computeFromCubicalImage(shape: Array[Int], flatValues: Array[Double]): PersistenceResult =
     computeFromCubicalImage(shape, flatValues, Array.empty[String])
 

@@ -564,6 +564,52 @@ above, deliberately not mirrored on the CLI: the natural output is a per-point a
 picking a meaningful `r` is an inherently interactive, data-dependent choice (`h1Bars` then `compute`) that
 doesn't reduce to a single flag the way `--distance-to` does for `BarcodeDistance`.
 
+## `homology.LatticeReduction` and `CircularCoordinates.computeToroidal` (toroidal coordinates)
+
+`computeToroidal` (`.claude/WORKLOG-toroidal-coordinates.md`) generalizes `compute` from one persistent H¹
+class to `k` SIMULTANEOUSLY-alive ones, combined into a single torus-valued map `K_r`'s shared connected
+component → `(R/Z)^k` — Scoccola, Gakhar, Bush, Schonsheck, Rask, Zhou, Perea, "Toroidal Coordinates:
+Decorrelating Circular Coordinates With Lattice Reduction" (arXiv:2212.07201). It answers the ambiguity
+Edelsbrunner raised in the original circular-coordinates Q&A (per the project lead): given `k` independent H¹
+generators, ANY unimodular integer combination of them is an equally valid choice of generators for the same
+rank-`k` sublattice of `H^1(K_r; Z)`, so "the" `k` coordinates a cohomology computation hands back are
+arbitrary, not canonical.
+
+Mechanically, `computeToroidalGeneric` computes the full-filtration H¹ bars and `K_r`'s own persistent
+cohomology ONCE regardless of `k` (only the per-class birth-match/lift/harmonic-smoothing tail genuinely runs
+once per chosen index), reusing a `harmonicSmoothOnComponent` helper factored out of `compute`'s own body for
+exactly this sharing. Every chosen class's own `[birth, death)` must contain `r` (the intersection of all of
+them, generalizing `compute`'s single-class check), and — a real, checked requirement, not a formality — every
+chosen class must be supported on the SAME connected component of `K_r`'s 1-skeleton (two classes native to two
+different components of a disconnected `K_r` have no joint domain to be coordinatized on).
+
+The per-class harmonic 1-cochains `h_i = z_i - d0 g_i` (already computed for the ordinary circular-coordinates
+construction) are exactly the vectors the paper's own dSMV inner product acts on — the plain, unweighted
+sum-over-edges dot product — so their `k x k` Gram matrix is built directly, with no new geometric computation.
+`LatticeReduction.reduce` factors that Gram matrix via Cholesky, runs LLL (Lenstra-Lenstra-Lovász, `delta=3/4`
+by default) on the Cholesky factor's rows — a concrete `R^k` stand-in realizing the same inner products, so LLL
+has actual vectors to work with without ever touching the (possibly much larger) edge-indexed space the
+harmonic cochains actually live in — and returns a unimodular integer change of basis `U` plus the reduced
+Gram matrix `U^T G U`. Because harmonic smoothing is linear in the chosen cocycle, the SAME `U` applied
+directly to the already-computed per-class `theta`s (as `newTheta_c(v) = frac(sum_i U(i)(c) * theta_i(v))`)
+gives exactly the coordinates combining the cocycles first and re-smoothing once would have given — no second
+linear solve needed.
+
+**Deliberately not a port of `scikit-tda/DREiMac`'s own `toroidalcoords.py`** (the reference implementation of
+the same paper): its `_gram_schmidt` projects onto the ORIGINAL input basis vectors instead of the running
+orthogonalized ones — a real bug, invisible at exactly `k=2` (where there's only one projection step and both
+choices coincide) but corrupting the orthogonalization for `k>=3`, confirmed by direct numerical repro rather
+than by inspection alone. `LatticeReduction` is a textbook implementation instead, cross-checked against
+Wikipedia's own independently-stated algorithm and worked example. See `.claude/BUGS-IN-REFERENCES.md` for this
+and other defects found in external papers/reference implementations while validating tda4j features against
+them — logged there specifically so they stay easy to find across sessions.
+
+`matlab.TDA4j.toroidalCoordinates` (returning `ToroidalCoordinatesResult`, a new class rather than generalizing
+`CircularCoordinatesResult` — `mimaReportBinaryIssues` is in CI) mirrors `computeToroidal` for a MATLAB caller,
+same reasoning as `circularCoordinates` above; deliberately not mirrored on the CLI either, for the same
+reasons plus the fact that `cocycleIndices` is itself a small array, awkward to fit the CLI's existing
+single-value-flag conventions.
+
 ```scala 3
 class TDAContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]
     extends SimplicialHomologyContext[VertexT, CoefficientT, FiltrationT]():

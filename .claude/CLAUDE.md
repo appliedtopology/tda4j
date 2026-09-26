@@ -270,6 +270,21 @@ connected component, one vertex anchored at `g=0`. Output is directly `theta(v) 
 path-integration step. MATLAB facade mirrors this; deliberately no CLI mirror (picking `r` is inherently
 two-step and data-dependent). `WORKLOG-circular-coordinates.md`.
 
+**Toroidal coordinates** (`computeToroidal`, Scoccola-Gakhar-Bush-Schonsheck-Rask-Zhou-Perea 2022,
+arXiv:2212.07201): combines `k` *simultaneously*-alive H¹ classes (common `r ∈ ∩[birth_i,death_i)`, all
+supported on the *same* connected component of `K_r` — checked, not assumed) into one torus-valued map, fixing
+the ambiguity that any unimodular integer combination of `k` independent generators is equally valid. Builds the
+classes' harmonic-cochain Gram matrix (plain sum-over-edges dot product) and reduces it via
+`homology.LatticeReduction` (own object: hand-rolled LLL on the Gram matrix's Cholesky factor, `delta=3/4`
+default), then applies the resulting unimodular `U` directly to the already-computed per-class `theta`s (valid
+by linearity of harmonic smoothing — no second linear solve). **Not a port of `scikit-tda/DREiMac`'s own
+`toroidalcoords.py`**: its `_gram_schmidt` projects onto the *original* basis vectors instead of the running
+orthogonalized ones — invisible at exactly `k=2`, corrupts `k≥3` — confirmed by numerical repro; see
+`.claude/BUGS-IN-REFERENCES.md` (a standing, cross-session log of bugs found in external papers/reference
+implementations — add to it, don't just note it in a topic worklog). MATLAB facade (`toroidalCoordinates` /
+`ToroidalCoordinatesResult`, a separate class from `CircularCoordinatesResult` — MiMa) mirrors this; no CLI
+mirror, same reasoning as `circularCoordinates`. `WORKLOG-toroidal-coordinates.md`.
+
 ### Cross-engine benchmark
 
 `EngineComparisonBenchmarkSpec` times every (construction x engine) pairing across point count/dimension/`maxDim`,
@@ -627,6 +642,8 @@ each branch.
   `engine` — confirmed byte-identical across engines).
 - **Circular coordinates**: `h1Bars(points)`/`circularCoordinates(points, r[, cocycleIndex, prime])` →
   `CircularCoordinatesResult`, own small entry points rather than a `complex=` value. No CLI mirror.
+- **Toroidal coordinates**: `toroidalCoordinates(points, r, cocycleIndices[, prime, reduce])` →
+  `ToroidalCoordinatesResult` (separate class from `CircularCoordinatesResult`). No CLI mirror.
 - Unverified: MATLAB's bundled JVM version and actual `double[][]`/`String[]`/`int[]` marshalling.
 
 ## Session practices
@@ -645,6 +662,11 @@ each branch.
 - A cloud session (working on its own `claude/...` branch) may commit and push its own work to that branch at
   will, without asking first — the branch is disposable/session-scoped, not shared history. A local/interactive
   session working directly on a shared branch still waits to be asked; the project lead commits that work.
+- **Found a bug in someone else's paper or reference implementation while validating a tda4j feature against
+  it?** Log it in `.claude/BUGS-IN-REFERENCES.md` (flat, not condensed away — the point is every instance stays
+  easy to find), not just in the topic worklog. Two entries there so far: a real gap in CJS 2015's own Algorithm
+  3 vs. its own Section 5.3 (Sheehy-Rips), and an orthogonalization bug in DREiMac's `_gram_schmidt` (toroidal
+  coordinates) invisible at exactly 2 simultaneous classes.
 
 ## Collaboration preferences
 
