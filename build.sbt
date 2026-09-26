@@ -101,6 +101,8 @@ val theme = Helium.defaults.all
       |.breadcrumb li { margin: 0; }
       |.breadcrumb li a { display: inline; padding: 0; }
       |.breadcrumb li:not(:last-child)::after { content: "\203A"; margin: 0 0.4em; color: var(--secondary-color); }
+      |.tda4j-mark { font-family: var(--header-font); font-weight: 700; color: var(--primary-color); }
+      |.tda4j-mark .tda4j-accent { color: var(--secondary-color); }
       |""".stripMargin
   )
   // Slate & Gold, replacing the earlier Plum & Gold (`brand/DECISIONS.md`): Plum & Gold tested poorly once
@@ -137,7 +139,7 @@ val theme = Helium.defaults.all
     Color.hex("866504"), // warning      (= secondary)
     Color.hex("f5f3ee"), // warningLight
     Color.hex("812318"), // error
-    Color.hex("f5efee")  // errorLight
+    Color.hex("f5efee") // errorLight
   )
   .site
   .darkMode
@@ -158,7 +160,7 @@ val theme = Helium.defaults.all
     Color.hex("f3d068"), // warning      (= secondary)
     Color.hex("2b271a"), // warningLight
     Color.hex("d88279"), // error
-    Color.hex("2b1c1a")  // errorLight
+    Color.hex("2b1c1a") // errorLight
   )
   // Heading font matches the logo's wordmark (`brand/DECISIONS.md`); body/code stay Helium's own Lato/Fira
   // Mono defaults, untouched. Loaded the same way Helium loads its own default fonts (confirmed via
@@ -204,6 +206,7 @@ lazy val root = (project in file("."))
     // (@:snip tokenizes its own extracted text separately -- see project/SnipDirective.scala.)
     laikaExtensions += laika.config.SyntaxHighlighting,
     laikaExtensions += new SnipDirective(baseDirectory.value),
+    laikaExtensions += Tda4jDirective,
     laikaConfig := {
       val older = priorReleaseVersions(baseDirectory.value).map(v => Version(v, v))
       laika.sbt.LaikaConfig.defaults.withConfigValue(
