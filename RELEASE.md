@@ -114,8 +114,24 @@ already-released coordinate.
   falling back to `sbt-pgp`'s own interactive/gpg-agent prompt otherwise — fine for a local run, set the env
   var if the key needs a passphrase and prompting is inconvenient.
 - **Sonatype Central Portal user token** (not the old OSSRH username/password — Central Portal auth is
-  token-based). Generate it from the Central Portal account settings and export as `SONATYPE_USERNAME`/
-  `SONATYPE_PASSWORD` before running `sbt release` — `sonatype.sbt` reads exactly those two env vars.
+  token-based). Generate it from the Central Portal account settings. Two ways to hand it to `sbt release`,
+  and `sonatype.sbt` picks whichever applies automatically — no build change needed to switch between them:
+  - **A credentials file at `~/.sbt/sonatype_credentials`** (sbt-sonatype's own documented convention, sbt's
+    native four-line format) — used whenever that file exists, in preference to the env vars below. Format:
+    ```
+    realm=Sonatype Central
+    host=central.sonatype.com
+    user=<token user>
+    password=<token password>
+    ```
+    `host` must say `central.sonatype.com` exactly (matching `sonatypeCredentialHost` in `sonatype.sbt`) — a
+    file left over from before the Central Portal migration may still say the old OSSRH host, which won't
+    match and leaves the build effectively uncredentialed. **Note**: this is a different file and format from
+    Maven's own `~/.m2/settings.xml` — sbt doesn't parse that XML format, so a token stored only there isn't
+    picked up here, whatever else might read it.
+  - **`SONATYPE_USERNAME`/`SONATYPE_PASSWORD` environment variables** — the fallback, used only when the file
+    above doesn't exist. This is what CI always uses (a runner has no personal dotfiles), and is also the
+    simplest local option if a credentials file feels like overkill for a one-off release.
 
 **GitHub Actions repo secrets** (for `release.yml` — it never touches Maven, so it needs none of the above):
 
