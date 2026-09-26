@@ -137,6 +137,7 @@
     <li class="level2 nav-leaf"><a href="#opt-in-parallelism">Opt-in parallelism</a></li>
     <li class="level1 nav-leaf"><a href="#barcode-scala-representing-the-output"><code>Barcode.scala</code>: representing the output</a></li>
     <li class="level1 nav-leaf"><a href="#homology-circularcoordinates-circularcoordinates-scala"><code>homology.CircularCoordinates</code> (<code>CircularCoordinates.scala</code>)</a></li>
+    <li class="level1 nav-leaf"><a href="#homology-latticereduction-and-circularcoordinates-computetoroidal-toroidal-coordinates"><code>homology.LatticeReduction</code> and <code>CircularCoordinates.computeToroidal</code> (toroidal coordinates)</a></li>
   </ul>
 
   <p class="footer"></p>
@@ -440,6 +441,14 @@ _ =&gt; 0.0)</code> is exactly this formula with <code>R = D</code> (the landmar
         own <code>recursiveFiltrationValue</code>) is needed here. Like Cech/Witness/Sheehy above, <code>DowkerCofaceSimplexStream</code>
         reuses <code>RipserCofaceSimplexStream</code>&#39;s generic coface-generation loop, since the Dowker complex is NOT a flag
         complex in general (a witness for a whole simplex need not witness any of its edges).</p>
+        <div class="callout warning">
+          <i class="icofont-laika warning">&#xf026;</i>
+          <p><code>+Infinity &lt;= +Infinity</code> is true, so a stream whose <code>maxFiltrationValue</code> defaults to <code>+Infinity</code> — safe
+          everywhere else in this codebase — would silently collapse an untruncated Dowker relation to the complete
+          simplex on every vertex. <code>DowkerCofaceSimplexStream</code> is the one stream that can compute a genuinely infinite
+          filtration value on purpose (<code>DowkerGeometry.fromBoolean</code>&#39;s &quot;never witnessed&quot; encoding), so it alone overrides
+          <code>keptByThresholdAndCriterion</code> to additionally require <code>.isFinite</code>.</p>
+        </div>
         <p>One real footgun this construction has that no earlier stream in this codebase did: <code>keptByThresholdAndCriterion</code>&#39;s
         <code>&lt;=</code> admits <code>+Infinity &lt;= +Infinity</code>, and <code>DowkerGeometry.fromBoolean</code> deliberately produces a literal <code>+Infinity</code>
         to mean &quot;never witnessed&quot; — every other stream&#39;s own <code>maxFiltrationValue = +Infinity</code> default is safe only
@@ -548,6 +557,12 @@ _ =&gt; 0.0)</code> is exactly this formula with <code>R = D</code> (the landmar
         matrix), <code>EuclideanMetricSpace</code> (coordinate array, on-demand Euclidean distance, VP-tree-backed <code>neighbors</code>
         query), <code>IntMetricSpace</code> (reindexes to contiguous <code>0 until size</code>), <code>SparseMetricSpace</code> (reports <code>+Infinity</code>
         beyond a fixed diameter cutoff, bounding Vietoris-Rips construction to a finite neighborhood per point).</p>
+        <div class="callout warning">
+          <i class="icofont-laika warning">&#xf026;</i>
+          <p><code>SparseMetricSpace</code> reports <code>+Infinity</code> past its cutoff rather than excluding those pairs — it is not a
+          thresholded neighbor oracle. Code that queries it expecting &quot;unreachable&quot; to mean &quot;absent&quot; will instead get
+          back a real (if unusable) <code>Double</code> value; check <code>.isFinite</code> explicitly rather than assuming exclusion.</p>
+        </div>
         
         <h3 id="opt-in-parallelism" class="section"><a class="anchor-link left" href="#opt-in-parallelism"><i class="icofont-laika link">&#xef71;</i></a>Opt-in parallelism</h3>
         <p>A few of the more expensive per-cell computations can run on the common <code>ForkJoinPool</code>, opt-in via a
@@ -657,6 +672,47 @@ _]</code> (unlike <code>Barcode</code>&#39;s own <code>FiltrationT: Ordering</co
         above, deliberately not mirrored on the CLI: the natural output is a per-point angle array, not a diagram, and
         picking a meaningful <code>r</code> is an inherently interactive, data-dependent choice (<code>h1Bars</code> then <code>compute</code>) that
         doesn&#39;t reduce to a single flag the way <code>--distance-to</code> does for <code>BarcodeDistance</code>.</p>
+        
+        <h2 id="homology-latticereduction-and-circularcoordinates-computetoroidal-toroidal-coordinates" class="section"><a class="anchor-link left" href="#homology-latticereduction-and-circularcoordinates-computetoroidal-toroidal-coordinates"><i class="icofont-laika link">&#xef71;</i></a><code>homology.LatticeReduction</code> and <code>CircularCoordinates.computeToroidal</code> (toroidal coordinates)</h2>
+        <p><code>computeToroidal</code> (<code>.claude/WORKLOG-toroidal-coordinates.md</code>) generalizes <code>compute</code> from one persistent H¹
+        class to <code>k</code> SIMULTANEOUSLY-alive ones, combined into a single torus-valued map <code>K_r</code>&#39;s shared connected
+        component → <code>(R/Z)^k</code> — Scoccola, Gakhar, Bush, Schonsheck, Rask, Zhou, Perea, &quot;Toroidal Coordinates:
+        Decorrelating Circular Coordinates With Lattice Reduction&quot; (arXiv:2212.07201). It answers the ambiguity
+        Edelsbrunner raised in the original circular-coordinates Q&amp;A (per the project lead): given <code>k</code> independent H¹
+        generators, ANY unimodular integer combination of them is an equally valid choice of generators for the same
+        rank-<code>k</code> sublattice of <code>H^1(K_r; Z)</code>, so &quot;the&quot; <code>k</code> coordinates a cohomology computation hands back are
+        arbitrary, not canonical.</p>
+        <p>Mechanically, <code>computeToroidalGeneric</code> computes the full-filtration H¹ bars and <code>K_r</code>&#39;s own persistent
+        cohomology ONCE regardless of <code>k</code> (only the per-class birth-match/lift/harmonic-smoothing tail genuinely runs
+        once per chosen index), reusing a <code>harmonicSmoothOnComponent</code> helper factored out of <code>compute</code>&#39;s own body for
+        exactly this sharing. Every chosen class&#39;s own <code>[birth, death)</code> must contain <code>r</code> (the intersection of all of
+        them, generalizing <code>compute</code>&#39;s single-class check), and — a real, checked requirement, not a formality — every
+        chosen class must be supported on the SAME connected component of <code>K_r</code>&#39;s 1-skeleton (two classes native to two
+        different components of a disconnected <code>K_r</code> have no joint domain to be coordinatized on).</p>
+        <p>The per-class harmonic 1-cochains <code>h_i = z_i - d0 g_i</code> (already computed for the ordinary circular-coordinates
+        construction) are exactly the vectors the paper&#39;s own dSMV inner product acts on — the plain, unweighted
+        sum-over-edges dot product — so their <code>k x k</code> Gram matrix is built directly, with no new geometric computation.
+        <code>LatticeReduction.reduce</code> factors that Gram matrix via Cholesky, runs LLL (Lenstra-Lenstra-Lovász, <code>delta=3/4</code>
+        by default) on the Cholesky factor&#39;s rows — a concrete <code>R^k</code> stand-in realizing the same inner products, so LLL
+        has actual vectors to work with without ever touching the (possibly much larger) edge-indexed space the
+        harmonic cochains actually live in — and returns a unimodular integer change of basis <code>U</code> plus the reduced
+        Gram matrix <code>U^T G U</code>. Because harmonic smoothing is linear in the chosen cocycle, the SAME <code>U</code> applied
+        directly to the already-computed per-class <code>theta</code>s (as <code>newTheta_c(v) = frac(sum_i U(i)(c) * theta_i(v))</code>)
+        gives exactly the coordinates combining the cocycles first and re-smoothing once would have given — no second
+        linear solve needed.</p>
+        <p><strong>Deliberately not a port of <code>scikit-tda/DREiMac</code>&#39;s own <code>toroidalcoords.py</code></strong> (the reference implementation of
+        the same paper): its <code>_gram_schmidt</code> projects onto the ORIGINAL input basis vectors instead of the running
+        orthogonalized ones — a real bug, invisible at exactly <code>k=2</code> (where there&#39;s only one projection step and both
+        choices coincide) but corrupting the orthogonalization for <code>k&gt;=3</code>, confirmed by direct numerical repro rather
+        than by inspection alone. <code>LatticeReduction</code> is a textbook implementation instead, cross-checked against
+        Wikipedia&#39;s own independently-stated algorithm and worked example. See <code>.claude/BUGS-IN-REFERENCES.md</code> for this
+        and other defects found in external papers/reference implementations while validating tda4j features against
+        them — logged there specifically so they stay easy to find across sessions.</p>
+        <p><code>matlab.TDA4j.toroidalCoordinates</code> (returning <code>ToroidalCoordinatesResult</code>, a new class rather than generalizing
+        <code>CircularCoordinatesResult</code> — <code>mimaReportBinaryIssues</code> is in CI) mirrors <code>computeToroidal</code> for a MATLAB caller,
+        same reasoning as <code>circularCoordinates</code> above; deliberately not mirrored on the CLI either, for the same
+        reasons plus the fact that <code>cocycleIndices</code> is itself a small array, awkward to fit the CLI&#39;s existing
+        single-value-flag conventions.</p>
         <pre class="keep-together pdf epub"><code class="nohighlight"><span class="keyword">class</span><span> </span><span class="type-name">TDAContext</span><span>[</span><span class="type-name">VertexT</span><span>: </span><span class="type-name">Ordering</span><span>, </span><span class="type-name">CoefficientT</span><span>: </span><span class="type-name">Field</span><span>, </span><span class="type-name">FiltrationT</span><span>: </span><span class="type-name">Ordering</span><span>]
     </span><span class="keyword">extends</span><span> </span><span class="type-name">SimplicialHomologyContext</span><span>[</span><span class="type-name">VertexT</span><span>, </span><span class="type-name">CoefficientT</span><span>, </span><span class="type-name">FiltrationT</span><span>]():
   </span><span class="keyword">val</span><span> </span><span class="identifier">chainIsRingModule</span><span> = </span><span class="identifier">summon</span><span>[</span><span class="type-name">Chain</span><span>[</span><span class="type-name">Simplex</span><span>[</span><span class="type-name">VertexT</span><span>], </span><span class="type-name">CoefficientT</span><span>] </span><span class="identifier">is</span><span> </span><span class="type-name">RingModule</span><span> { </span><span class="keyword">type</span><span> </span><span class="type-name">R</span><span> = </span><span class="type-name">CoefficientT</span><span> }]

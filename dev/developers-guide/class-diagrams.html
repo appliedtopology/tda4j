@@ -44,11 +44,11 @@ mermaid.initialize({
   theme: "base",
   themeVariables: {
     'darkMode': dark,
-    'primaryColor': dark ? '#16323c' : '#f2efe7', 
-    'primaryTextColor': dark ? '#7fc2d6' : '#007c99',
-    'primaryBorderColor': dark ? '#3a5a63' : '#a7d4de',
-    'lineColor': dark ? '#7fc2d6' : '#007c99',
-    'background': dark ? '#1e2124' : '#faf8f4',
+    'primaryColor': dark ? '#251c28' : '#f4eef4', 
+    'primaryTextColor': dark ? '#b98abb' : '#5f3861',
+    'primaryBorderColor': dark ? '#4a3450' : '#d3bcd4',
+    'lineColor': dark ? '#b98abb' : '#5f3861',
+    'background': dark ? '#1a1420' : '#faf7f5',
   }
 });
 
@@ -325,6 +325,7 @@ mermaid.initialize({
         &lt;&lt;object&gt;&gt;
         h1Bars(metricSpace, maxFiltrationValue) IndexedSeq~(Double, Double)~
         compute(metricSpace, r, cocycleIndex, prime, maxFiltrationValue) Result
+        computeToroidal(metricSpace, r, cocycleIndices, prime, reduce, maxFiltrationValue) ToroidalResult
     }
     class Result {
         theta: Map~Int, Double~
@@ -333,15 +334,32 @@ mermaid.initialize({
         r: Double
         prime: Int
     }
+    class ToroidalResult {
+        theta: IndexedSeq~Map~Int, Double~~
+        cocycleIndices: IndexedSeq~Int~
+        basisChange: Array~Array~Int~~
+        originalGram: Array~Array~Double~~
+        reducedGram: Array~Array~Double~~
+        r: Double
+        prime: Int
+    }
     class NoIntegerCocycleException {
         &lt;&lt;RuntimeException&gt;&gt;
     }
-    CircularCoordinates --&gt; Result : returns
+    class LatticeReduction {
+        &lt;&lt;object&gt;&gt;
+        reduce(gram, delta) Result
+        isReduced(gram, delta, tol) Boolean
+    }
+    CircularCoordinates --&gt; Result : returns (compute)
+    CircularCoordinates --&gt; ToroidalResult : returns (computeToroidal)
     CircularCoordinates ..&gt; CellularCohomologyContext : computes K_r&#39;s cohomology with
-    CircularCoordinates ..&gt; NoIntegerCocycleException : throws (no ℤ-lift at prime)</pre>
+    CircularCoordinates ..&gt; NoIntegerCocycleException : throws (no ℤ-lift at prime)
+    CircularCoordinates ..&gt; LatticeReduction : reduces the chosen classes&#39; Gram matrix with</pre>
         <p>A standalone construction, not a fifth persistence engine — see <a href="architecture.html">Architecture</a>&#39;s own
         <code>homology.CircularCoordinates</code> section for the truncated-complex reframing, the harmonic-smoothing linear
-        system, and why the output is a per-point angle map rather than a barcode.</p>
+        system, why the output is a per-point angle map rather than a barcode, and (same section) <code>computeToroidal</code>/
+        <code>LatticeReduction</code>&#39;s own lattice-reduction extension to several simultaneous classes.</p>
         
         <h2 id="metric-spaces-finitemetricspace-scala" class="section"><a class="anchor-link left" href="#metric-spaces-finitemetricspace-scala"><i class="icofont-laika link">&#xef71;</i></a>Metric spaces (<code>FiniteMetricSpace.scala</code>)</h2>
         <pre class="mermaid">classDiagram

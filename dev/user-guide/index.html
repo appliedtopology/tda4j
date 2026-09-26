@@ -139,6 +139,7 @@
     <li class="level2 nav-leaf"><a href="#comparing-diagrams-and-turning-them-into-vectors">Comparing diagrams and turning them into vectors</a></li>
     <li class="level2 nav-leaf"><a href="#boundary-matrix-export">Boundary-matrix export</a></li>
     <li class="level2 nav-leaf"><a href="#circular-coordinates">Circular coordinates</a></li>
+    <li class="level2 nav-leaf"><a href="#toroidal-coordinates">Toroidal coordinates</a></li>
     <li class="level1 nav-leaf"><a href="#which-persistence-engine">Which persistence engine?</a></li>
     <li class="level1 nav-leaf"><a href="#which-alpha-complex-backend">Which alpha-complex backend?</a></li>
     <li class="level1 nav-leaf"><a href="#performance-opt-in-parallelism">Performance: opt-in parallelism</a></li>
@@ -834,6 +835,32 @@ M = sparse(double(result.boundaryRows())+1, double(result.boundaryCols())+1, res
         array, not a diagram) plus the inherently two-step, data-dependent nature of picking <code>r</code> — see the <a href="../developers-guide/architecture.html">Developer&#39;s
         Guide</a>&#39;s <code>homology.CircularCoordinates</code> section for the full construction
         (the truncated-complex <code>K_r</code> reframing, the harmonic-smoothing linear system, and the integer-lift check).</p>
+        
+        <h3 id="toroidal-coordinates" class="section"><a class="anchor-link left" href="#toroidal-coordinates"><i class="icofont-laika link">&#xef71;</i></a>Toroidal coordinates</h3>
+        <p>When a data set has SEVERAL independent cyclic structures alive at once (e.g. samples on a torus), picking
+        <code>k</code> bars from <code>h1Bars</code> and calling <code>circularCoordinates</code> on each separately gives <code>k</code> valid angle maps, but not
+        a canonical ONE: any unimodular integer combination of <code>k</code> independent H¹ generators is an equally valid choice
+        of generators for the same cohomology, so which combination a persistent-cohomology computation happens to
+        return is arbitrary (this is the ambiguity Edelsbrunner raised about circular coordinates when the construction
+        was first presented). <code>TDA4j.toroidalCoordinates</code> picks the combination that is shortest and most nearly
+        orthogonal under the classes&#39; own harmonic-representative inner product, via lattice reduction (Scoccola,
+        Gakhar, Bush, Schonsheck, Rask, Zhou, Perea 2022, &quot;Toroidal Coordinates,&quot; arXiv:2212.07201):</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="type-name">double</span><span>[][] </span><span class="identifier">bars</span><span> = </span><span class="type-name">TDA4j</span><span>.</span><span class="identifier">h1Bars</span><span>(</span><span class="identifier">points</span><span>);
+</span><span class="comment">// pick k indices simultaneously alive over a common range, and an r inside that intersection
+</span><span class="type-name">ToroidalCoordinatesResult</span><span> </span><span class="identifier">result</span><span> = </span><span class="type-name">TDA4j</span><span>.</span><span class="identifier">toroidalCoordinates</span><span>(</span><span class="identifier">points</span><span>, </span><span class="identifier">r</span><span>, </span><span class="keyword">new</span><span> </span><span class="type-name">int</span><span>[] {</span><span class="number-literal">0</span><span>, </span><span class="number-literal">1</span><span>});
+
+</span><span class="type-name">double</span><span>[] </span><span class="identifier">theta0</span><span> = </span><span class="identifier">result</span><span>.</span><span class="identifier">theta</span><span>(</span><span class="number-literal">0</span><span>);           </span><span class="comment">// coordinate 0 across all points, Double.NaN outside the component
+</span><span class="type-name">double</span><span>[] </span><span class="identifier">theta1</span><span> = </span><span class="identifier">result</span><span>.</span><span class="identifier">theta</span><span>(</span><span class="number-literal">1</span><span>);           </span><span class="comment">// coordinate 1
+</span><span class="type-name">int</span><span>[][] </span><span class="identifier">basisChange</span><span> = </span><span class="identifier">result</span><span>.</span><span class="identifier">basisChange</span><span>();  </span><span class="comment">// the unimodular integer combination LLL settled on</span></code></pre>
+        <p>Pass <code>reduce=false</code> (the 5-argument overload) to get the SAME <code>k</code> coordinates without reduction (<code>basisChange</code>
+        the identity) — useful for comparing directly against the reduced version via <code>result.originalGram()</code>/
+        <code>result.reducedGram()</code>, or to opt out if the raw persistent-cohomology basis is already what you want. Same
+        <code>IllegalArgumentException</code>/<code>NoIntegerCocycleException</code> behavior as <code>circularCoordinates</code>, plus: <code>cocycleIndices</code>
+        must be duplicate-free, <code>r</code> must lie in every chosen class&#39;s own <code>[birth, death)</code> simultaneously, and every
+        chosen class must live on the same connected component of <code>K_r</code> (two classes native to disconnected pieces of
+        the data have no joint torus coordinate to be given). Not mirrored on the CLI, same reasoning as
+        <code>circularCoordinates</code> above — see the <a href="../developers-guide/architecture.html">Developer&#39;s Guide</a>&#39;s
+        <code>homology.LatticeReduction</code>/<code>computeToroidal</code> section for the full construction.</p>
         
         <h2 id="which-persistence-engine" class="section"><a class="anchor-link left" href="#which-persistence-engine"><i class="icofont-laika link">&#xef71;</i></a>Which persistence engine?</h2>
         <table>
