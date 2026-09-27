@@ -44,6 +44,14 @@ jobs:
       # every other already-published version, and root files like .nojekyll/CNAME, are left untouched by
       # construction rather than by a "copy forward what's not already here" loop.
       - name: Publish docs
+        env:
+          # Repo Settings -> Secrets and variables -> Actions -> Variables. When set (e.g. to "dev"), pins
+          # root's redirect to this verbatim, ahead of the sort -V-based auto-detection below -- for
+          # pinning root to "dev" while the latest tagged release's own published snapshot is known-broken,
+          # without giving up the auto-latest-stable-wins behavior for whenever a real fix is published.
+          # Clear the variable (empty/unset) to resume automatic detection. See
+          # .claude/WORKLOG-docs-site-fixes.md.
+          DOCS_DEFAULT_VERSION: ${{ vars.DOCS_DEFAULT_VERSION }}
         run: |
           set -e
           git config user.name "github-actions[bot]"
@@ -65,14 +73,8 @@ jobs:
           # versioning existed, never cleaned up because the old plugin could never delete remote-only content)
           # win a `sort -V` comparison and become the redirect target: this is not hypothetical, it's what the
           # site's root was actually doing (confirmed: redirected to "user-guide/") before this fix.
-          #
-          # `.default-version`, if present at the gh-pages root, overrides this entirely (its own content,
-          # e.g. "dev" or "0.4.1", is used verbatim as TARGET) -- for pinning root to "dev" while the latest
-          # tagged release's own published snapshot is known-broken, without giving up the auto-latest-stable
-          # behavior for whenever the next real release fixes that. Delete the file to resume automatic
-          # detection. See .claude/WORKLOG-docs-site-fixes.md.
-          if [ -f /tmp/gh-pages/.default-version ]; then
-            TARGET="$(cat /tmp/gh-pages/.default-version)/"
+          if [ -n "$DOCS_DEFAULT_VERSION" ]; then
+            TARGET="${DOCS_DEFAULT_VERSION}/"
           else
             LATEST=$(cd /tmp/gh-pages && find . -maxdepth 1 -type d -name '[0-9]*.[0-9]*.[0-9]*' -printf '%f\n' | sort -V | tail -n1)
             TARGET="${LATEST:-dev}/"

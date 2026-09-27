@@ -103,12 +103,19 @@ lazy val root = (project in file("."))
     // A real upstream scaladoc bug, not a Laika/tda4j config issue -- `$.get(url, cb)` is a drop-in match
     // for `fetch(url).then(r => r.text()).then(cb)` (the callback only ever receives raw HTML text here),
     // so patch the one call site post-generation rather than vendoring scaladoc's bundled JS ourselves.
-    // Runs after Laika's own `laikaSite` (an idiomatic sbt task augmentation, not a self-referential
-    // cycle: `key := f(key.value)` captures the plugin-provided task, same mechanism `+=`/`++=` desugar
-    // to). See .claude/WORKLOG-docs-site-fixes.md.
-    laikaSite := {
-      val result = laikaSite.value
-      val uxJs = target.value / "docs" / "site" / "api" / "scripts" / "ux.js"
+    //
+    // Patches `Compile / doc`'s own output directory (confirmed via `show Compile/doc`:
+    // `target/scala-3.9.0/api`), not `laikaSite`'s copy of it -- `laikaPreview` runs a live preview
+    // server (`startPreviewServer`/`buildPreviewServer` in sbt-laika's `Tasks.scala`) that is a
+    // completely separate task graph from `laikaSite`/`generate`, so a `laikaSite`-only patch is invisible
+    // there (confirmed: `laikaPreview`'s served `ux.js` was still unpatched). Patching at the actual
+    // source once means every consumer of `Compile / doc`'s output -- `laikaSite`'s own API-copy step
+    // included -- sees the fix, with no need to patch each consumer separately. (An idiomatic sbt task
+    // augmentation, not a self-referential cycle: `key := f(key.value)` captures the plugin/sbt-provided
+    // task, same mechanism `+=`/`++=` desugar to.) See .claude/WORKLOG-docs-site-fixes.md.
+    Compile / doc := {
+      val apiDir = (Compile / doc).value
+      val uxJs = apiDir / "scripts" / "ux.js"
       if (uxJs.exists()) {
         val original = IO.read(uxJs)
         val patched = original.replace(
@@ -117,7 +124,7 @@ lazy val root = (project in file("."))
         )
         if (patched != original) IO.write(uxJs, patched)
       }
-      result
+      apiDir
     },
     // Both settings are needed, not just one: `Compile / mainClass` is what `sbt run` uses; `assembly /
     // mainClass` is what sbt-assembly writes into the fat jar's manifest (`java -jar ... `). Neither is inferred
