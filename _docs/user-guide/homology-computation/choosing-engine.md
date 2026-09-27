@@ -15,7 +15,7 @@ All engines are generic over the coefficient field (a prime finite field or floa
 `chunks`, and `cohomology` are also generic over the cell type (simplices, cubes, or simplicial-set
 generators) — only `ripser`, `fast-cubical`, and `fast-alpha` are specialized (to Vietoris-Rips, to cubical
 grids, and to `HelixDelaunay` triangulations, respectively). See the
-[Developer's Guide's persistence-engines page](/developers-guide/persistence-engines.md) for the full
+[Developer's Guide's persistence-engines page](../../developers-guide/persistence-engines.md) for the full
 detail.
 
 

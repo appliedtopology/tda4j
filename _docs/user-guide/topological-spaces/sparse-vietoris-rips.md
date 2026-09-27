@@ -12,7 +12,7 @@ precision (Cavanna, Jahanseir & Sheehy 2015). Smaller `epsilon` means less spars
 approximation to plain Vietoris-Rips; `epsilon` must be strictly between `0` and `1`. Like Cech above, only
 `naive`/`chunks`/`cohomology` are used — the packed Ripser engine's optimizations assume a plain
 max-pairwise-distance filtration functional, which this construction's own sparsification and vertex
-"vanishing" don't satisfy (see the [Developer's Guide](/developers-guide/architecture.md)).
+"vanishing" don't satisfy (see the [Developer's Guide](../../developers-guide/architecture.md)).
 
 
 ### Witness complexes

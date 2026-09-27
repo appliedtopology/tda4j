@@ -44,7 +44,7 @@ flagged rather than resolved by guessing a convention.
   caught it. Read via a fresh `WebFetch` of the raw source, not recalled.
 - **DIPHA** (`github.com/DIPHA/dipha`): `include/dipha/file_types.h` (magic number `8067171840`, file-type enum:
   `WEIGHTED_BOUNDARY_MATRIX=0`, `IMAGE_DATA=1`, `PERSISTENCE_DIAGRAM=2`, `DISTANCE_MATRIX=7`,
-  `SPARSE_DISTANCE_MATRIX=8`) and `landing-page.md` (explicit "little-endian binary format" statement; exact `DISTANCE_MATRIX`/
+  `SPARSE_DISTANCE_MATRIX=8`) and `index.md` (explicit "little-endian binary format" statement; exact `DISTANCE_MATRIX`/
   `IMAGE_DATA`/`PERSISTENCE_DIAGRAM` payload layouts, including the "`x`-fastest" axis-order statement and the
   `dim(k) < 0` => essential class of dimension `-dim(k)-1` convention).
 - **GUDHI** (`gudhi.inria.fr`): the file-formats documentation page for OFF/nOFF and `.pers` (exact example text

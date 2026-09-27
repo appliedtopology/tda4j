@@ -79,12 +79,12 @@ order needs its own `directory.conf` with `laika.navigationOrder`. `WORKLOG-laik
 
 **Root's own title/index document must stay named `README.md`, matching every subdirectory** — Laika's
 `titleDocuments.inputName` defaults to `"README"`, and root is the one tree it's ever been renamed away
-from (`landing-page.md`, briefly, and only in a broken build). Separately, **`src/docs/landing-page.md` is
+from (`index.md`, briefly, and only in a broken build). Separately, **`src/docs/landing-page.md` is
 Laika's own documented mechanism** for content below `.landingPage(...)`'s templated hero/teasers/link-panel
 ("Additionally or alternatively you can also add a regular markup document called `landing-page.<suffix>`");
 it belongs in `src/docs/` alongside `README.md`, not exiled elsewhere. The two are NOT redundant copies of
-each other: Helium renders **both** the title document's own body and `landing-page.md`'s, back to back, so
-`README.md` should stay minimal-to-empty (this project's is 0 bytes) while `landing-page.md` alone holds the
+each other: Helium renders **both** the title document's own body and `index.md`'s, back to back, so
+`README.md` should stay minimal-to-empty (this project's is 0 bytes) while `index.md` alone holds the
 real prose — confirmed safe (site `<title>`, the landing page's own title/subtitle, and every other page's
 breadcrumb Home link all come from `SiteTheme.theme`'s own config, none from `README.md`'s content). Making
 them byte-identical (an earlier mistake this session) looks like the same paragraph rendered twice.

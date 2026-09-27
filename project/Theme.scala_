@@ -1,20 +1,10 @@
 // format: off
 // Required because project builds against Scala 2.12, but scalafmt expects Scala 3.7+
 
-import laika.ast.{Image, InternalTarget}
+import laika.ast.{Image, InternalTarget, Length, LengthUnit, SpanLink, Styles}
 import laika.ast.Path.Root
 import laika.helium.Helium
-import laika.helium.config.{
-  Favicon,
-  HeliumIcon,
-  IconLink,
-  ImageLink,
-  LinkGroup,
-  LinkPanel,
-  Teaser,
-  TextLink,
-  VersionMenu
-}
+import laika.helium.config.{Favicon, HeliumIcon, IconLink, ImageLink, LinkGroup, LinkPanel, Teaser, TextLink, VersionMenu}
 import laika.theme.config.{Color, Font, FontStyle, FontWeight}
 
 // Off-white/dark-charcoal (light) and dark-charcoal/off-white (dark) rather than Helium's stock blues; teal/red
@@ -45,9 +35,14 @@ object SiteTheme {
       // hero/teasers layout. See .claude/WORKLOG-docs-site-fixes.md for the fuller (and, on the way to
       // this fix, initially wrong) investigation, including a real, separate `.landingPage(...)`
       // StackOverflowError bug -- fixed below, at `linkPanel`, not here.
-      homeLink = ImageLink.internal(
-        Root / "README.md",
-        Image.internal(Root / "images" / "header-icon.svg", alt = Some("TDA4j"))
+      homeLink = LinkGroup.create(
+        ImageLink.internal(
+          Root / "README.md",
+          Image.internal(Root / "images" / "header-icon.svg",
+            alt = Some("TDA4j")
+          ).withOptions(Styles("header-logo"))
+        ),
+        TextLink.internal(Root / "README.md", "TDA4j")
       ),
       navLinks = Seq(
         IconLink.internal(Root / "api" / "index.html", HeliumIcon.api),
@@ -129,6 +124,22 @@ object SiteTheme {
         |.breadcrumb li:not(:last-child)::after { content: "\203A"; margin: 0 0.4em; color: var(--secondary-color); }
         |.tda4j-mark { font-family: var(--header-font); font-weight: 700; color: var(--primary-color); }
         |.tda4j-mark .tda4j-accent { color: var(--secondary-color); }
+        |header span.row.links {
+        |  display: inline-flex;
+        |  align-items: center;
+        |}
+        |header span.row.links a.image-link {
+        |  display: inline-flex;
+        |  margin-left: 0;
+        |}
+        |header span.row.links a.text-link {
+        |  margin-left: 0.5rem;
+        |  font-family: var(--header-font);
+        |  font-weight: 700;
+        |}
+        |header-logo {
+        |  height: 10%;
+        |}
         |/* The landing page's #header keeps a dark gradient background in BOTH color schemes (this
         | * project's own bgGradient choice, in both the light and dark themeColors calls above) -- unlike
         | * Helium's own stock default, where the header is only dark in light mode and already matches the

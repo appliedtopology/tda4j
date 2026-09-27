@@ -16,19 +16,7 @@ libraryDependencies += "com.dreizak"        % "miniball"                      % 
 libraryDependencies +=
   "org.scala-lang.modules"              %% "scala-parallel-collections" % "1.0.4"
 libraryDependencies += "org.scalacheck" %% "scalacheck"                 % "1.17.0" % "test"
-// CLI argument parsing for the `cli` package -- chosen over decline specifically because it has zero transitive
-// dependencies (decline pulls in cats-core, which nothing else in this codebase uses) -- see
-// .claude/WORKLOG-cli-executable.md.
 libraryDependencies += "org.rogach" %% "scallop" % "6.0.0"
-
-import laika.helium.Helium
-import laika.helium.config.{Favicon, HeliumIcon, IconLink, ImageLink}
-import laika.theme.config.{Color, Font, FontStyle, FontWeight}
-import laika.ast.Image
-import laika.format.Markdown
-import laika.ast.Path.Root
-import laika.config.{ApiLinks, LinkConfig, SourceLinks, Version, Versions}
-import laika.helium.config.VersionMenu
 
 // Docs versioning (RELEASE.md step 5): `release.yml` sets TDA4J_DOCS_VERSION to the tag's version
 // (e.g. "0.1.3") when publishing a tagged release; `docs.yml`'s push-to-`scala` build leaves it unset, which
@@ -38,6 +26,16 @@ import laika.helium.config.VersionMenu
 // has no setting to keep remote-only files, so any directory this build doesn't already contain, and doesn't
 // restore itself, would be lost on the next publish.
 val docsVersion = sys.env.getOrElse("TDA4J_DOCS_VERSION", "dev")
+
+Compile / doc / scalacOptions ++= Seq(
+  "-siteroot", baseDirectory.value.toString,
+  "-project", name.value,
+  "-project-version", docsVersion,
+  "-source-links", "github://appliedtopology/tda4j/scala",
+  "-Yapi-subdirectory",
+  //"-doc-canonical-base-url", "https://tda4j.appliedtopology.org",
+)
+Compile / doc / target := target.value / "api"
 
 // Older release tags, oldest-first exclusion of the one being (re)published -- drives Laika's version
 // switcher. Reads git tags directly rather than hand-maintaining a list; a tag with no matching docs
@@ -54,21 +52,17 @@ def priorReleaseVersions(baseDir: File): Seq[String] = {
     .filterNot(_ == docsVersion)
 }
 
-lazy val root = (project in file("."))
-  .enablePlugins(
-    LaikaPlugin
-  )
-  .settings(
-    // Compiler options: language features (implicitConversions, adhocExtensions) and warning flags.
-    scalacOptions ++= List(
-      "-source:future",
-      "-language:experimental.modularity",
-      "-language:implicitConversions",
-      "-language:adhocExtensions",
-      "-feature",
-      "-deprecation",
-      "-unchecked"
-    ),
+// Compiler options: language features (implicitConversions, adhocExtensions) and warning flags.
+scalacOptions ++= List(
+  "-source:future",
+  "-language:experimental.modularity",
+  "-language:implicitConversions",
+  "-language:adhocExtensions",
+  "-feature",
+  "-deprecation",
+  "-unchecked"
+)
+    /*
     // ***** laika ******
     Laika / sourceDirectories := Seq(sourceDirectory.value / "docs"),
     laikaIncludeAPI := true,
@@ -90,11 +84,13 @@ lazy val root = (project in file("."))
         .withConfigValue(
           Versions.forCurrentVersion(Version(docsVersion, docsVersion)).withOlderVersions(older: _*)
         )
-        .withConfigValue(LinkConfig.empty
-          .addApiLinks(ApiLinks(baseUri="https://tda4j.appliedtopology.org/dev"))
-          .addSourceLinks(SourceLinks(baseUri="https://github.com/appliedtopology/tda4j/", suffix="scala"))
+        .withConfigValue(
+          LinkConfig.empty
+            .addApiLinks(ApiLinks(baseUri = "https://tda4j.appliedtopology.org/dev"))
+            .addSourceLinks(SourceLinks(baseUri = "https://github.com/appliedtopology/tda4j/", suffix = "scala"))
         )
     },
+     */
     // Scala 3.9.0's own bundled scaladoc ships a `ux.js` that intercepts every same-origin link click
     // (sidebar navigation included) to do its own SPA-style AJAX page swap via `$.get(href, ...)` -- but
     // no page anywhere loads jQuery, so `$` is undefined. The click's own `e.preventDefault()` already
@@ -114,25 +110,25 @@ lazy val root = (project in file("."))
     // included -- sees the fix, with no need to patch each consumer separately. (An idiomatic sbt task
     // augmentation, not a self-referential cycle: `key := f(key.value)` captures the plugin/sbt-provided
     // task, same mechanism `+=`/`++=` desugar to.) See .claude/WORKLOG-docs-site-fixes.md.
-    Compile / doc := {
-      val apiDir = (Compile / doc).value
-      val uxJs = apiDir / "scripts" / "ux.js"
-      if (uxJs.exists()) {
-        val original = IO.read(uxJs)
-        val patched = original.replace(
-          "$.get(href, function (data) {",
-          "fetch(href).then((r) => r.text()).then(function (data) {"
-        )
-        if (patched != original) IO.write(uxJs, patched)
-      }
-      apiDir
-    },
-    // Both settings are needed, not just one: `Compile / mainClass` is what `sbt run` uses; `assembly /
-    // mainClass` is what sbt-assembly writes into the fat jar's manifest (`java -jar ... `). Neither is inferred
-    // from the other.
-    Compile / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI"),
-    assembly / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI")
-  )
+Compile / doc := {
+  val apiDir = (Compile / doc).value
+  val uxJs = apiDir / "scripts" / "ux.js"
+  if (uxJs.exists()) {
+    val original = IO.read(uxJs)
+    val patched = original.replace(
+      "$.get(href, function (data) {",
+      "fetch(href).then((r) => r.text()).then(function (data) {"
+    )
+    if (patched != original) IO.write(uxJs, patched)
+  }
+  apiDir
+}
+// Both settings are needed, not just one: `Compile / mainClass` is what `sbt run` uses; `assembly /
+// mainClass` is what sbt-assembly writes into the fat jar's manifest (`java -jar ... `). Neither is inferred
+// from the other.
+Compile / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI")
+assembly / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI")
+
 
 // Workaround for XML versioning issues
 // See: https://github.com/scala/bug/issues/12632

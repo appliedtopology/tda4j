@@ -34,7 +34,7 @@ a branch. Not resolved this session — insufficient visibility into the reporte
 Before touching anything: `sbt laikaSite` on `scala`'s HEAD (`9714462`) fails outright --
 `InvalidDocuments: unresolved internal reference: ../landing-page.md` on every single page plus the
 generated downloads page. Root cause: `dcc8dab` renamed the root docs page from `README.md` to
-`landing-page.md`, but every *subdirectory* (`tutorials/`, `user-guide/`, `developers-guide/`) still uses
+`index.md`, but every *subdirectory* (`tutorials/`, `user-guide/`, `developers-guide/`) still uses
 `README.md`, matching Laika's own hardcoded default for `laika.titleDocuments.inputName` ("README"). Root's
 title document was never findable after the rename, breaking every `@:breadcrumb`-generated link back home
 (and the theme's own `Root / "landing-page.md"` references in `homeLink`/`titleLinks`/`linkPanel`). This is
@@ -49,7 +49,7 @@ much nastier bug: an intermittent (later found: 100%-reproducible once isolated)
 
 Initial (WRONG) hypothesis: this was about `laika.titleDocuments.inputName` overrides. Spent a long time
 chasing that — tried a root-only override, a uniformly-renamed whole tree (all directories on
-`landing-page.md`), removing `@:breadcrumb` entirely, and none of it reliably fixed anything. Crucially,
+`index.md`), removing `@:breadcrumb` entirely, and none of it reliably fixed anything. Crucially,
 **even the plain, unmodified `README.md`-everywhere state (zero custom title-document config) intermittently
 stack-overflowed** — sometimes 0/6 consecutive clean (`rm -rf target/docs/site`) builds succeeded, sometimes
 1/6, never reliably 6/6. Confirmed genuinely infinite (not just deep) by bumping the JVM thread stack to
@@ -76,9 +76,9 @@ Never got to (and didn't need, once the real trigger was found) a laika-core-sou
 *why* that one link shape triggers infinite recursion. If this resurfaces (e.g. after a Laika version bump),
 start from `linkPanel`'s `TextLink.internal` targets, not from title-document naming.
 
-## 4. `landing-page.md` as a second, non-rendering file
+## 4. `index.md` as a second, non-rendering file
 
-Mid-session the project lead asked to keep `landing-page.md` as an actual file (not just rename it back to
+Mid-session the project lead asked to keep `index.md` as an actual file (not just rename it back to
 `README.md`), containing the same content, as a second, independent file alongside `README.md` — two files,
 not one driving the other.
 
@@ -89,7 +89,7 @@ suppresses entirely, replacing it with the hero/teasers layout (confirmed: with 
 **twice** underneath the teasers the moment a second markdown file existed at the root of the Laika source
 tree. `sbt-laika` exposes no per-file exclude filter (checked `LaikaPlugin`'s own keys via `javap` on the
 vendored jar — nothing like `Laika / excludeFilter`), so rather than fight a second Laika quirk, moved
-`landing-page.md` to the **repository root** (outside `Laika / sourceDirectories`, which is scoped to
+`index.md` to the **repository root** (outside `Laika / sourceDirectories`, which is scoped to
 `src/docs/` only) — it's a plain, inert repo file there, not part of the generated site at all, with zero
 risk of interacting with Laika/Helium again. Confirmed 0 occurrences of the duplicated body text after the
 move, across multiple clean rebuilds.
@@ -148,7 +148,7 @@ now actually navigates (`window.location` changes, page content swaps in) with z
 - Real headless-Chromium (Playwright, the environment's pre-installed Chromium) screenshots for light/dark
   landing page, and a real click-through test against the ScalaDoc nav, both before and after each fix.
 - Did NOT run the full `sbt test` suite this session (no `src/main`/`src/test` Scala changes — everything
-  touched was `project/Theme.scala`, `build.sbt`, and `src/docs/**` markdown/config) or `sbt
+  touched was `../project/Theme.scala_`, `build.sbt`, and `src/docs/**` markdown/config) or `sbt
   mimaReportBinaryIssues` (nothing library-API-shaped changed). If a future session touches library code in
   the same PR, both should still run before merge per the usual convention.
 - Did NOT get a real GitHub Pages deploy to confirm against (no push to `scala` from this session by
@@ -158,35 +158,35 @@ now actually navigates (`window.location` changes, page content swaps in) with z
 ## Correction (same session, after the project lead pushed back)
 
 **Section 4 above was wrong.** The project lead pointed out that Laika's own user guide documents
-`landing-page.<suffix>` (i.e. `landing-page.md`) as the intended, built-in mechanism for adding content
+`landing-page.<suffix>` (i.e. `index.md`) as the intended, built-in mechanism for adding content
 below `.landingPage(...)`'s templated hero/teasers — not something to route around. Confirmed directly
 against Laika's docs (`03-theme-settings.html`): *"Additionally or alternatively you can also add a regular
 markup document called `landing-page.<suffix>` to one of your input directories and its content will be
 inserted at the bottom of this page."*
 
-Re-tested with `landing-page.md` restored to `src/docs/` (its documented location) and looked at the actual
+Re-tested with `index.md` restored to `src/docs/` (its documented location) and looked at the actual
 rendered `<main>` block line-by-line instead of just grepping a match count. The earlier "duplication" was
-real, but the diagnosis was wrong: with `landing-page.md` present, Helium renders **both** the title
-document's (`README.md`'s) own body **and** `landing-page.md`'s body, back to back, in that order — matching
+real, but the diagnosis was wrong: with `index.md` present, Helium renders **both** the title
+document's (`README.md`'s) own body **and** `index.md`'s body, back to back, in that order — matching
 "additionally *or* alternatively" literally (either source works alone; both together both render). With
-`landing-page.md` absent, the title document's own body is suppressed entirely (confirmed earlier: 0
-occurrences) — so the suppression is conditional on `landing-page.md`'s absence, not unconditional as
-originally assumed. Since I'd made `README.md` and `landing-page.md` byte-identical, both bodies rendering
+`index.md` absent, the title document's own body is suppressed entirely (confirmed earlier: 0
+occurrences) — so the suppression is conditional on `index.md`'s absence, not unconditional as
+originally assumed. Since I'd made `README.md` and `index.md` byte-identical, both bodies rendering
 looked like one page duplicated, and I misattributed it to a same-directory conflict rather than to genuinely
 duplicate content across the two documents Laika was correctly, separately rendering.
 
-**Fix**: `landing-page.md` stays in `src/docs/`, holding the full descriptive prose. `README.md` was
+**Fix**: `index.md` stays in `src/docs/`, holding the full descriptive prose. `README.md` was
 shrunk to a single `# @:tda4j` heading trial, then to **fully empty** (0 bytes) — confirmed safe: the site's
 `<title>` tag, the landing page's own title/subtitle (from `SiteTheme.theme`'s explicit `title`/`subtitle`
 args), and every other page's breadcrumb "Home" link (driven by `homeLink`'s own config, not by `README.md`'s
 content) are all unaffected by an empty title document. Verified the rendered `<main>` now contains the
-heading and all four paragraphs exactly once, sourced from `landing-page.md` alone.
+heading and all four paragraphs exactly once, sourced from `index.md` alone.
 
 **Corrected rule**: root's title document (`README.md`) still must exist, named `README.md`, matching every
 subdirectory and Laika's own default (unrelated `StackOverflowError` bug from Section 3, still real, still
 avoided by keeping this naming) — but it should be kept minimal-to-empty when `.landingPage(...)` is in use
-and `landing-page.md` supplies the real content, specifically to avoid double-rendering identical prose.
-`landing-page.md` belongs in `src/docs/` (its documented location), not exiled to the repo root as this
+and `index.md` supplies the real content, specifically to avoid double-rendering identical prose.
+`index.md` belongs in `src/docs/` (its documented location), not exiled to the repo root as this
 worklog originally (wrongly) concluded.
 
 ## Second correction: the `ux.js` patch didn't cover `laikaPreview`
@@ -219,7 +219,7 @@ against `laikaPreview` from a normal terminal if this ever needs re-verifying.
 **Self-inflicted false alarm while re-verifying stability**: after moving the patch to `Compile / doc`,
 repeated `rm -rf target/scala-3.9.0/api` directly (bypassing sbt) between stability-loop iterations, and hit
 a NEW, 100%-reproducible failure — `unresolved internal reference: api/org/appliedtopology/tda4j.html` in
-`landing-page.md`. Confirmed by testing a completely no-op wrapper (`Compile / doc := (Compile / doc).value`)
+`index.md`. Confirmed by testing a completely no-op wrapper (`Compile / doc := (Compile / doc).value`)
 that this had nothing to do with the patch's own logic — it reproduced identically with zero added I/O.
 Actual cause: sbt's own incremental up-to-date tracking for `Compile / doc` is keyed on source-file input
 hashes, not on "does the output directory still physically exist" — manually `rm -rf`-ing a task's output

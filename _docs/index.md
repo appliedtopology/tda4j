@@ -6,7 +6,7 @@ For persistent homology and its capabilities, we recommend
 the book [Topological Data Analysis with Applications](https://www.cambridge.org/core/books/topological-data-analysis-with-applications/00B93B496EBB97FB6E7A9CA0176F0E12) by Gunnar Carlsson and Mikael Vejdemo-Johansson,
 and the survey article [Topology and Data](http://www.ams.org/journals/bull/2009-46-02/S0273-0979-09-01249-X/S0273-0979-09-01249-X.pdf) by Gunnar Carlsson
 
-On this site we include a fully compiled [ScalaDoc](api/org/appliedtopology/tda4j.html) documentation.
+On this site we include a fully compiled ScalaDoc [[org.appliedtopology.tda4j]] documentation.
 
 ## Vision and goals
 
