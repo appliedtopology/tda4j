@@ -60,6 +60,9 @@ jobs:
       - name: Publish versioned docs
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          # Repo Settings -> Secrets and variables -> Actions -> Variables. See docs.yml's own copy of this
+          # step for why.
+          DOCS_DEFAULT_VERSION: ${{ vars.DOCS_DEFAULT_VERSION }}
         run: |
           set -e
           git config user.name "github-actions[bot]"
@@ -79,10 +82,8 @@ jobs:
           # release version (digits/dots), not merely "not dev" -- see docs.yml's own copy of this step for
           # why a plain exclusion list is a real, already-observed bug (a stale non-version leftover directory
           # winning a `sort -V` comparison and becoming the redirect target).
-          #
-          # `.default-version` override: see docs.yml's own copy of this step for why.
-          if [ -f /tmp/gh-pages/.default-version ]; then
-            TARGET="$(cat /tmp/gh-pages/.default-version)/"
+          if [ -n "$DOCS_DEFAULT_VERSION" ]; then
+            TARGET="${DOCS_DEFAULT_VERSION}/"
           else
             LATEST=$(cd /tmp/gh-pages && find . -maxdepth 1 -type d -name '[0-9]*.[0-9]*.[0-9]*' -printf '%f\n' | sort -V | tail -n1)
             TARGET="${LATEST:-dev}/"
