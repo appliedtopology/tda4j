@@ -12,7 +12,7 @@ precision (Cavanna, Jahanseir & Sheehy 2015). Smaller `epsilon` means less spars
 approximation to plain Vietoris-Rips; `epsilon` must be strictly between `0` and `1`. Like Cech above, only
 `naive`/`chunks`/`cohomology` are used — the packed Ripser engine's optimizations assume a plain
 max-pairwise-distance filtration functional, which this construction's own sparsification and vertex
-"vanishing" don't satisfy (see the [Developer's Guide](../developers-guide/architecture.md)).
+"vanishing" don't satisfy (see the [Developer's Guide](/developers-guide/architecture.md)).
 
 
 ### Witness complexes
@@ -60,8 +60,7 @@ Prefer `witnessVariant=lazy` (the default) when the flag-complex behavior is acc
 selection's own covering radius, the JavaPlex tutorial's own recommended threshold) that engine choice is
 where nearly all the speed difference actually is: `lazy+ripser` ~0.2s vs. `lazy+naive` ~11.2s (same
 complex, same bar count, engine alone) vs. `general+naive` ~11.5s (variant alone, engine held to `naive`,
-indistinguishable from `lazy+naive` at single-trial resolution) — measured, not inferred (single-trial
-numbers on one machine; see `.claude/WORKLOG-witness-complex.md`).
+indistinguishable from `lazy+naive` at single-trial resolution).
 
 #### The two-step recipe from MATLAB/CLI: select landmarks, read R, then compute
 
