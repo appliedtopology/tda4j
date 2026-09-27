@@ -20,10 +20,11 @@ import laika.theme.config.{Color, Font, FontStyle, FontWeight}
 // Off-white/dark-charcoal (light) and dark-charcoal/off-white (dark) rather than Helium's stock blues; teal/red
 // stay as brand accent colors (links, headers, banner), not as the page's dominant wash.
 object SiteTheme {
+  val authors = Seq("Mikael Vejdemo-Johansson", "Jordan Matuszewski", "Kei Kebreau", "Trevor Gordon", "Daniel Hope")
   val theme = Helium.defaults.all
     .metadata(
       title = Some("TDA4j"),
-      authors = Seq("Mikael Vejdemo-Johansson", "Jordan Matuszewski", "Kei Kebreau", "Trevor Gordon", "Daniel Hope")
+      authors = authors
     )
     .site
     .baseURL("https://tda4j.appliedtopology.org")
@@ -73,11 +74,11 @@ object SiteTheme {
     .site
     .landingPage(
       logo = Some(Image(InternalTarget(Root / "images" / "large-logo.svg"))),
-      title = Some("TDA4j"),
+      title = None, // Some("TDA4j"),
       subtitle = Some("A Scala library for topological data analysis"),
       license = Some("MIT"),
       titleLinks = Seq(
-        VersionMenu.create(unversionedLabel = "Getting Started"),
+        //VersionMenu.create(unversionedLabel = "Getting Started"),
         LinkGroup.create(
           IconLink.external("https://github.com/appliedtopology/tda4j", HeliumIcon.github)
         )
@@ -210,8 +211,8 @@ object SiteTheme {
       Color.hex("d88279"), // error
       Color.hex("2b1c1a") // errorLight
     )
-    // Heading font matches the logo's wordmark (`brand/DECISIONS.md`); body/code stay Helium's own Lato/Fira
-    // Mono defaults, untouched. Loaded the same way Helium loads its own default fonts (confirmed via
+    // Heading font matches the logo's wordmark (`brand/DECISIONS.md`); body stay Helium's own Lato
+    // defaults, untouched. Loaded the same way Helium loads its own default fonts (confirmed via
     // `javap -p`/`strings` on the vendored jar: `HeliumDefaults` wires Lato through this exact
     // `Font.withWebCSS(...).definedAs(...)` + `addFontResources` mechanism, not a raw HTML head hack).
     .all
