@@ -154,3 +154,37 @@ now actually navigates (`window.location` changes, page content swaps in) with z
 - Did NOT get a real GitHub Pages deploy to confirm against (no push to `scala` from this session by
   default) — everything above is from a local `sbt laikaSite` build served over `python3 -m http.server` and
   inspected with a real headless browser, not merely by reading the generated HTML/CSS.
+
+## Correction (same session, after the project lead pushed back)
+
+**Section 4 above was wrong.** The project lead pointed out that Laika's own user guide documents
+`landing-page.<suffix>` (i.e. `landing-page.md`) as the intended, built-in mechanism for adding content
+below `.landingPage(...)`'s templated hero/teasers — not something to route around. Confirmed directly
+against Laika's docs (`03-theme-settings.html`): *"Additionally or alternatively you can also add a regular
+markup document called `landing-page.<suffix>` to one of your input directories and its content will be
+inserted at the bottom of this page."*
+
+Re-tested with `landing-page.md` restored to `src/docs/` (its documented location) and looked at the actual
+rendered `<main>` block line-by-line instead of just grepping a match count. The earlier "duplication" was
+real, but the diagnosis was wrong: with `landing-page.md` present, Helium renders **both** the title
+document's (`README.md`'s) own body **and** `landing-page.md`'s body, back to back, in that order — matching
+"additionally *or* alternatively" literally (either source works alone; both together both render). With
+`landing-page.md` absent, the title document's own body is suppressed entirely (confirmed earlier: 0
+occurrences) — so the suppression is conditional on `landing-page.md`'s absence, not unconditional as
+originally assumed. Since I'd made `README.md` and `landing-page.md` byte-identical, both bodies rendering
+looked like one page duplicated, and I misattributed it to a same-directory conflict rather than to genuinely
+duplicate content across the two documents Laika was correctly, separately rendering.
+
+**Fix**: `landing-page.md` stays in `src/docs/`, holding the full descriptive prose. `README.md` was
+shrunk to a single `# @:tda4j` heading trial, then to **fully empty** (0 bytes) — confirmed safe: the site's
+`<title>` tag, the landing page's own title/subtitle (from `SiteTheme.theme`'s explicit `title`/`subtitle`
+args), and every other page's breadcrumb "Home" link (driven by `homeLink`'s own config, not by `README.md`'s
+content) are all unaffected by an empty title document. Verified the rendered `<main>` now contains the
+heading and all four paragraphs exactly once, sourced from `landing-page.md` alone.
+
+**Corrected rule**: root's title document (`README.md`) still must exist, named `README.md`, matching every
+subdirectory and Laika's own default (unrelated `StackOverflowError` bug from Section 3, still real, still
+avoided by keeping this naming) — but it should be kept minimal-to-empty when `.landingPage(...)` is in use
+and `landing-page.md` supplies the real content, specifically to avoid double-rendering identical prose.
+`landing-page.md` belongs in `src/docs/` (its documented location), not exiled to the repo root as this
+worklog originally (wrongly) concluded.

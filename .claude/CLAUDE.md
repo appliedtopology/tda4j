@@ -79,10 +79,16 @@ order needs its own `directory.conf` with `laika.navigationOrder`. `WORKLOG-laik
 
 **Root's own title/index document must stay named `README.md`, matching every subdirectory** — Laika's
 `titleDocuments.inputName` defaults to `"README"`, and root is the one tree it's ever been renamed away
-from (`landing-page.md`, briefly). A second, non-title, non-rendering file can exist under the same name
-elsewhere (e.g. a plain `landing-page.md` at the repo root, outside `Laika / sourceDirectories`) but never
-inside `src/docs/` itself — Laika renders a second root-level markdown file's body underneath the landing
-page's teasers, doubled. Separately: `SiteTheme.theme`'s `.landingPage(...)` `linkPanel` must use
+from (`landing-page.md`, briefly, and only in a broken build). Separately, **`src/docs/landing-page.md` is
+Laika's own documented mechanism** for content below `.landingPage(...)`'s templated hero/teasers/link-panel
+("Additionally or alternatively you can also add a regular markup document called `landing-page.<suffix>`");
+it belongs in `src/docs/` alongside `README.md`, not exiled elsewhere. The two are NOT redundant copies of
+each other: Helium renders **both** the title document's own body and `landing-page.md`'s, back to back, so
+`README.md` should stay minimal-to-empty (this project's is 0 bytes) while `landing-page.md` alone holds the
+real prose — confirmed safe (site `<title>`, the landing page's own title/subtitle, and every other page's
+breadcrumb Home link all come from `SiteTheme.theme`'s own config, none from `README.md`'s content). Making
+them byte-identical (an earlier mistake this session) looks like the same paragraph rendered twice.
+Separately: `SiteTheme.theme`'s `.landingPage(...)` `linkPanel` must use
 `TextLink.external("dir/", ...)`-style root-relative paths, never `TextLink.internal(...)` targeting another
 directory's title document — that specific shape is a confirmed-by-bisection trigger for a genuine
 `StackOverflowError` (infinite recursion) in this vendored Laika (1.3.2)'s own config-fallback resolution.
