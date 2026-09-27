@@ -1,4 +1,4 @@
-# TDA4j
+# @:tda4j
 
 The @:tda4j library implements persistent homology and related techniques from computational and applied topology, in a library designed for ease of use, ease of access from Matlab and java-based systems, and ease of extensions for further research projects and approaches.
 

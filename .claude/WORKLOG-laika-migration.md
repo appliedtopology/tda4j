@@ -194,7 +194,7 @@ so left it alone rather than "fixing" scope I wasn't asked to touch.
    `@@@ index ... @@@` was navigation-only and never rendered in the page body; a plain bullet list, unlike the
    wrapped version, IS body content. Since `directory.conf`'s `navigationOrder` (fixed earlier) already drives the
    real left-sidebar nav with the identical curated order, the lists were pure redundant clutter — deleted both
-   (`src/docs/README.md`, `src/docs/developers-guide/README.md`). Root README.md's later prose ScalaDoc mention
+   (`../src/docs/landing-page.md`, `src/docs/developers-guide/README.md`). Root README.md's later prose ScalaDoc mention
    (an actual explanatory sentence, not a nav list) was left alone. To keep ScalaDoc reachable from every page (not
    just the root body text), added a ScalaDoc icon (`HeliumIcon.api`, linking to `Root / "api" / "index.html"`) to
    the top nav next to the GitHub icon — confirmed present and resolving on both root and non-root pages.
