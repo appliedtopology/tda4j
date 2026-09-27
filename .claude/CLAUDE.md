@@ -77,6 +77,29 @@ reference and fails the build). `project/SnipDirective.scala` implements `@:snip
 between two `// #tag` marker lines from a real source file). Each directory needing a non-alphabetical left-nav
 order needs its own `directory.conf` with `laika.navigationOrder`. `WORKLOG-laika-migration.md`.
 
+**Root's own title/index document must stay named `README.md`, matching every subdirectory** — Laika's
+`titleDocuments.inputName` defaults to `"README"`, and root is the one tree it's ever been renamed away
+from (`landing-page.md`, briefly). A second, non-title, non-rendering file can exist under the same name
+elsewhere (e.g. a plain `landing-page.md` at the repo root, outside `Laika / sourceDirectories`) but never
+inside `src/docs/` itself — Laika renders a second root-level markdown file's body underneath the landing
+page's teasers, doubled. Separately: `SiteTheme.theme`'s `.landingPage(...)` `linkPanel` must use
+`TextLink.external("dir/", ...)`-style root-relative paths, never `TextLink.internal(...)` targeting another
+directory's title document — that specific shape is a confirmed-by-bisection trigger for a genuine
+`StackOverflowError` (infinite recursion) in this vendored Laika (1.3.2)'s own config-fallback resolution.
+The landing page's `#header` also needs an explicit `@media (prefers-color-scheme: dark) { #header.dark-default
+{ ... } }` CSS override (in the `inlineCSS` block) restoring plain component colors — Helium ships no rule for
+`.dark-default` itself, so `.light-inverted`'s unconditional override otherwise makes header text/icons
+invisible in dark mode whenever (as here) the header's background stays dark in both color schemes.
+`WORKLOG-docs-site-fixes.md`.
+
+**Scala 3.9.0's bundled `scaladoc` has its own real navigation bug**: `ux.js` calls jQuery's `$.get(...)` to
+intercept every link click for its own AJAX page-swap, but no page loads jQuery, so the click's own
+`preventDefault()` fires and then the handler throws — every click on the API nav (or any same-origin link
+in the scaladoc) silently does nothing. Not a Laika/tda4j config issue; `build.sbt`'s `laikaSite` task is
+augmented (`laikaSite := { val result = laikaSite.value; ...patch...; result }`) to literally string-replace
+that one `$.get` call site with an equivalent `fetch(...)` call, immediately after Laika copies the API docs
+into the site. `WORKLOG-docs-site-fixes.md`.
+
 **Never run two `sbt` invocations against this checkout at once** — the incremental compiler's own class-file
 writes from one process can be read mid-update by the other, producing a `NoClassDefFoundError` that looks like a
 real regression but disappears on a clean, sequential rerun.

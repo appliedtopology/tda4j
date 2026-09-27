@@ -32,8 +32,20 @@ object SiteTheme {
     // own mark here, `brand/icon.svg`'s standard (translucent-fill) rendering copied to
     // `src/docs/images/header-icon.svg` -- see `brand/DECISIONS.md` for the full logo/color decision record.
     .topNavigationBar(
+      // Named README.md, not landing-page.md, to match every subdirectory's own title-document convention
+      // and Laika's own hardcoded default ("README") for `laika.titleDocuments.inputName` -- root is the
+      // ONLY tree whose title doc was ever renamed away from that default, and Laika's title-document
+      // lookup found nothing there, which is what broke every `@:breadcrumb`-generated link back to the
+      // home page (a real `sbt laikaSite` failure, not a style nit). `src/docs/landing-page.md` still
+      // exists too, as a second, ordinary (non-title-document) file with the same content, at the
+      // project lead's request -- it plays no role in Laika/Helium's own site machinery and isn't linked
+      // from anywhere; its markdown body never renders on the site regardless, since Helium's own
+      // `.landingPage(...)` config below fully replaces the title document's visible body with the
+      // hero/teasers layout. See .claude/WORKLOG-docs-site-fixes.md for the fuller (and, on the way to
+      // this fix, initially wrong) investigation, including a real, separate `.landingPage(...)`
+      // StackOverflowError bug -- fixed below, at `linkPanel`, not here.
       homeLink = ImageLink.internal(
-        Root / "landing-page.md",
+        Root / "README.md",
         Image.internal(Root / "images" / "header-icon.svg", alt = Some("TDA4j"))
       ),
       navLinks = Seq(
@@ -70,12 +82,19 @@ object SiteTheme {
           IconLink.external("https://github.com/appliedtopology/tda4j", HeliumIcon.github)
         )
       ),
+      // TextLink.internal(...) here (linking from the landing page to another directory's own title
+      // document) is what actually triggers the StackOverflowError below, not the landing page feature in
+      // general and not root's title-document filename (isolated by bisection: `linkPanel = None` is
+      // reliably stable across 6/6 clean builds; restoring these three `TextLink.internal` targets
+      // reliably reproduces the crash 6/6). `TextLink.external` with a root-relative path sidesteps
+      // Laika's own internal-reference resolution machinery entirely rather than fighting its bug -- see
+      // .claude/WORKLOG-docs-site-fixes.md.
       linkPanel = Some(
         LinkPanel(
           "Documentation",
-          TextLink.internal(Root / "user-guide" / "README.md", "User Guide"),
-          TextLink.internal(Root / "developers-guide" / "README.md", "Developer's Guide"),
-          TextLink.internal(Root / "tutorials" / "README.md", "Tutorials")
+          TextLink.external("user-guide/", "User Guide"),
+          TextLink.external("developers-guide/", "Developer's Guide"),
+          TextLink.external("tutorials/", "Tutorials")
         )
       ),
       projectLinks = Seq(
@@ -109,6 +128,29 @@ object SiteTheme {
         |.breadcrumb li:not(:last-child)::after { content: "\203A"; margin: 0 0.4em; color: var(--secondary-color); }
         |.tda4j-mark { font-family: var(--header-font); font-weight: 700; color: var(--primary-color); }
         |.tda4j-mark .tda4j-accent { color: var(--secondary-color); }
+        |/* The landing page's #header keeps a dark gradient background in BOTH color schemes (this
+        | * project's own bgGradient choice, in both the light and dark themeColors calls above) -- unlike
+        | * Helium's own stock default, where the header is only dark in light mode and already matches the
+        | * page background in dark mode. Helium marks the header `light-inverted dark-default`, expecting
+        | * dark mode to fall back to plain, uninverted component colors -- but ships no actual CSS rule for
+        | * `.dark-default`, so `.light-inverted`'s unconditional override (correct in light mode, where
+        | * --primary-medium is a light color) just carries into dark mode too, where --primary-medium is a
+        | * DARK color: title, subtitle, sidebar links, and the header GitHub icon (whose fill is also
+        | * --component-color) all render in a dark color on the header's own dark background, effectively
+        | * invisible. Confirmed with a real headless-browser screenshot, not just from reading the CSS.
+        | * This restores the plain (non-inverted) dark-mode component colors -- already correct at :root
+        | * for everything else on the page -- specifically for the header. See
+        | * .claude/WORKLOG-docs-site-fixes.md.
+        | */
+        |@media (prefers-color-scheme: dark) {
+        |  #header.dark-default {
+        |    --component-color: var(--primary-color);
+        |    --component-area-bg: var(--primary-light);
+        |    --component-hover: var(--secondary-color);
+        |    --component-border: var(--primary-medium);
+        |    --subtle-highlight: rgba(255, 255, 255, 0.15);
+        |  }
+        |}
         |""".stripMargin
     )
     // Slate & Gold, replacing the earlier Plum & Gold (`brand/DECISIONS.md`): Plum & Gold tested poorly once

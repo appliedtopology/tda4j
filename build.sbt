@@ -94,6 +94,31 @@ lazy val root = (project in file("."))
           .addSourceLinks(SourceLinks(baseUri="https://github.com/appliedtopology/tda4j/", suffix="scala"))
         )
     },
+    // Scala 3.9.0's own bundled scaladoc ships a `ux.js` that intercepts every same-origin link click
+    // (sidebar navigation included) to do its own SPA-style AJAX page swap via `$.get(href, ...)` -- but
+    // no page anywhere loads jQuery, so `$` is undefined. The click's own `e.preventDefault()` already
+    // ran by the time that throws, so the click's default navigation is cancelled AND the replacement
+    // AJAX navigation never happens: clicking a class in the API nav does nothing (confirmed against a
+    // real browser: `ReferenceError: $ is not defined` at ux.js:180, `HTMLAnchorElement` click handler).
+    // A real upstream scaladoc bug, not a Laika/tda4j config issue -- `$.get(url, cb)` is a drop-in match
+    // for `fetch(url).then(r => r.text()).then(cb)` (the callback only ever receives raw HTML text here),
+    // so patch the one call site post-generation rather than vendoring scaladoc's bundled JS ourselves.
+    // Runs after Laika's own `laikaSite` (an idiomatic sbt task augmentation, not a self-referential
+    // cycle: `key := f(key.value)` captures the plugin-provided task, same mechanism `+=`/`++=` desugar
+    // to). See .claude/WORKLOG-docs-site-fixes.md.
+    laikaSite := {
+      val result = laikaSite.value
+      val uxJs = target.value / "docs" / "site" / "api" / "scripts" / "ux.js"
+      if (uxJs.exists()) {
+        val original = IO.read(uxJs)
+        val patched = original.replace(
+          "$.get(href, function (data) {",
+          "fetch(href).then((r) => r.text()).then(function (data) {"
+        )
+        if (patched != original) IO.write(uxJs, patched)
+      }
+      result
+    },
     // Both settings are needed, not just one: `Compile / mainClass` is what `sbt run` uses; `assembly /
     // mainClass` is what sbt-assembly writes into the fat jar's manifest (`java -jar ... `). Neither is inferred
     // from the other.
