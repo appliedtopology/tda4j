@@ -99,10 +99,15 @@ val theme = Helium.defaults.all
     """
       |.breadcrumb { display: flex; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 1.5rem 0; }
       |.breadcrumb li { margin: 0; }
-      |.breadcrumb li a { display: inline; padding: 0; }
+      |.breadcrumb li a { display: inline-block; padding: 2px 8px; border-radius: 4px; }
       |.breadcrumb li:not(:last-child)::after { content: "\203A"; margin: 0 0.4em; color: var(--secondary-color); }
       |.tda4j-mark { font-family: var(--header-font); font-weight: 700; color: var(--primary-color); }
       |.tda4j-mark .tda4j-accent { color: var(--secondary-color); }
+      |/* Helium's stock active/hover nav highlight is a hard-edged rectangle flush with its container's own
+      | * edges (visible in the sidebar's current-page item and the version-menu dropdown) -- inset it slightly
+      | * so the rounding actually reads instead of being swallowed by the container's own straight edge. */
+      |.menu-content .nav-list li a { margin: 0 5px; border-radius: 4px; }
+      |#sidebar .nav-list li.level1 a { margin: 0 5px; border-radius: 4px; }
       |""".stripMargin
   )
   // Slate & Gold, replacing the earlier Plum & Gold (`brand/DECISIONS.md`): Plum & Gold tested poorly once
@@ -145,7 +150,7 @@ val theme = Helium.defaults.all
   .darkMode
   .themeColors(
     primary = Color.hex("8fb4c7"),
-    secondary = Color.hex("f3d068"),
+    secondary = Color.hex("f0c647"),
     primaryMedium = Color.hex("33474f"),
     primaryLight = Color.hex("1a262b"),
     text = Color.hex("eef1f2"),
@@ -157,7 +162,7 @@ val theme = Helium.defaults.all
   .messageColors(
     Color.hex("75c7c7"), // info
     Color.hex("1a2b2b"), // infoLight
-    Color.hex("f3d068"), // warning      (= secondary)
+    Color.hex("f0c647"), // warning      (= secondary)
     Color.hex("2b271a"), // warningLight
     Color.hex("d88279"), // error
     Color.hex("2b1c1a") // errorLight
