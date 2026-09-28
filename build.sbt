@@ -41,7 +41,9 @@ Compile / doc / scalacOptions ++= Seq(
   "_assets/images/header-icon.svg",
   "-doc-canonical-base-url",
   "https://tda4j.appliedtopology.org",
-  "-social-links:github::https://github.com/appliedtopology/tda4j"
+  "-social-links:github::https://github.com/appliedtopology/tda4j",
+  "-doc-footer", "TDA4j is built by the TDA @ CUNY workgroup",
+  "-quick-links:Applied Topology::https://appliedtopology.org"
 )
 Compile / doc / target := target.value / "api"
 
