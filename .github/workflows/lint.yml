@@ -22,4 +22,4 @@ jobs:
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
       - name: Formatting
-        run: sbt scalafmtSbtCheck ; scalafmtCheck
+        run: sbt scalafmtSbtCheck ; sbt scalafmtCheck
