@@ -1,3 +1,7 @@
+---
+layout: main
+---
+
 ## Which persistence engine?
 
 | Need | Engine (`engine=` for MATLAB/CLI) |

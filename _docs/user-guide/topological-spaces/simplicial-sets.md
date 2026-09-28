@@ -1,3 +1,7 @@
+---
+layout: main
+---
+
 ### Simplicial sets
 
 For homology of a space presented combinatorially (not as a metric-space complex), build a

@@ -1,3 +1,7 @@
+---
+layout: main
+---
+
 ### Sheehy's sparse/approximate Vietoris-Rips filtration
 
 ```scala 3

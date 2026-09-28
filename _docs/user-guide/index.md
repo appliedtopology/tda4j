@@ -1,9 +1,12 @@
-# User Guide for TDA4j
+---
+layout: main
+title: User Guide for TDA4j
+---
 
 TDA4j implements persistent homology and related techniques from computational and applied topology. This
 guide assumes you know what a simplicial complex, a filtration, and a persistence barcode are — it does not
 assume you know Scala. If you want to understand *why* the library is built the way it is, or you're
-planning to write new code against it, see the [Developer's Guide](../developers-guide/README.md)
+planning to write new code against it, see the [Developer's Guide](../developers-guide/index.md)
 instead; this page is about getting things done as a caller.
 
 ### Alpha complexes
@@ -51,7 +54,7 @@ a smaller win (a few percent) since the per-cell cost there is lighter.
 
 ## Tutorials
 
-[Tutorials](../tutorials/README.md) — currently a placeholder; porting Henry Adams' JavaPlex tutorials
+[Tutorials](../tutorials/index.md) — currently a placeholder; porting Henry Adams' JavaPlex tutorials
 to TDA4j is tracked there as future work, not yet done. The witness-complex construction those tutorials
 lean on heavily is now implemented (`LandmarkSelector`/`WitnessGeometry`/`LazyWitnessSimplexStream`/
 `WitnessCofaceSimplexStream`, see "Witness complexes" above) — a building block for that port, not the port

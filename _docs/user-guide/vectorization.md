@@ -1,4 +1,8 @@
-### Comparing diagrams and turning them into vectors
+---
+layout: main
+title: Comparing diagrams and turning them into vectors
+---
+
 
 `PersistenceResult` also answers "how different are these two barcodes" (bottleneck/Wasserstein distance) and
 "turn this barcode into a fixed-size array" (persistence landscapes/images, for feeding into ordinary ML

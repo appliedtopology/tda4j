@@ -1,4 +1,14 @@
-The @:tda4j library implements persistent homology and related techniques from computational and applied topology, in a library designed for ease of use, ease of access from Matlab and java-based systems, and ease of extensions for further research projects and approaches.
+---
+layout: main
+---
+
+<center>
+
+![TDA4j](/images/large-logo.svg)
+
+</center>
+
+The TDA4j library implements persistent homology and related techniques from computational and applied topology, in a library designed for ease of use, ease of access from Matlab and java-based systems, and ease of extensions for further research projects and approaches.
 
 The library is based on previous libraries from the Computational Topology workgroup at Stanford University.
 
@@ -10,7 +20,7 @@ On this site we include a fully compiled ScalaDoc [[org.appliedtopology.tda4j]] 
 
 ## Vision and goals
 
-@:tda4j exists to make persistent (co)homology computations that are correct and inspectable first, fast
+TDA4j exists to make persistent (co)homology computations that are correct and inspectable first, fast
 second — not the other way around. A handful of commitments run through essentially every engine and
 construction in this library, and they explain a lot of choices that might otherwise look like unnecessary
 extra work:
@@ -24,7 +34,7 @@ extra work:
   a representative cycle can. An optimization that can't produce one is treated as incomplete, not as a
   reasonable speed/completeness tradeoff — this is a standing, foundational design principle, not a
   per-engine judgment call.
-- **Cross-validated by construction, not by convention.** @:tda4j deliberately keeps independent
+- **Cross-validated by construction, not by convention.** TDA4j deliberately keeps independent
   implementations of the same computation side by side — four persistent homology engines, two independent
   Delaunay/alpha-complex backends, half a dozen Vietoris-Rips streaming strategies — and checks them against
   each other on hand-derived and randomized fixtures rather than trusting a single implementation and hoping
@@ -43,11 +53,11 @@ extra work:
   executable exist so the library is directly usable by people who will never write a line of Scala, not as
   an afterthought bolted onto an internal API.
 
-### What @:tda4j deliberately does not do
+### What TDA4j deliberately does not do
 
 - **It does not chase raw throughput as the primary goal.** Where a faster, more mature external tool exists
   for a specific job (`ripser.cpp` on plain Vietoris-Rips, qhull-based Delaunay at low ambient dimension),
-  @:tda4j does not try to win that benchmark outright. Its own value is genericity (any `Field`, several cell
+  TDA4j does not try to win that benchmark outright. Its own value is genericity (any `Field`, several cell
   types), representatives on every bar, and cross-validated correctness — not being the fastest tool for one
   narrow job.
 - **It does not implement every optimization in the literature.** Ripser's own "emergent pairs" (Def 3.11) are

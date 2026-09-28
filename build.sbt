@@ -33,7 +33,9 @@ Compile / doc / scalacOptions ++= Seq(
   "-project-version", docsVersion,
   "-source-links", "github://appliedtopology/tda4j/scala",
   "-Yapi-subdirectory",
-  //"-doc-canonical-base-url", "https://tda4j.appliedtopology.org",
+  "-project-logo", "_assets/images/header-icon.svg",
+  "-doc-canonical-base-url", "https://tda4j.appliedtopology.org",
+  "-social-links:github::https://github.com/appliedtopology/tda4j",
 )
 Compile / doc / target := target.value / "api"
 
@@ -62,35 +64,7 @@ scalacOptions ++= List(
   "-deprecation",
   "-unchecked"
 )
-    /*
-    // ***** laika ******
-    Laika / sourceDirectories := Seq(sourceDirectory.value / "docs"),
-    laikaIncludeAPI := true,
-    laikaIncludePDF := true,
-    laikaTheme := SiteTheme.theme,
-    // Without this, fenced/inline code spans aren't recognized as code at all (plain CommonMark Markdown, the
-    // laika-sbt default, doesn't include GFM fences) -- their contents get parsed as ordinary prose, so any `[...]`
-    // in a code example (a Scala type param, a Java array type, a bracketed comment) is treated as a dangling
-    // Markdown link/reference and fails the build.
-    laikaExtensions += Markdown.GitHubFlavor,
-    // Also opt-in, like GitHubFlavor: without it every fenced code block renders as plain, unstyled text.
-    // (@:snip tokenizes its own extracted text separately -- see project/SnipDirective.scala.)
-    laikaExtensions += laika.config.SyntaxHighlighting,
-    laikaExtensions += new SnipDirective(baseDirectory.value),
-    laikaExtensions += Tda4jDirective,
-    laikaConfig := {
-      val older = priorReleaseVersions(baseDirectory.value).map(v => Version(v, v))
-      laika.sbt.LaikaConfig.defaults
-        .withConfigValue(
-          Versions.forCurrentVersion(Version(docsVersion, docsVersion)).withOlderVersions(older: _*)
-        )
-        .withConfigValue(
-          LinkConfig.empty
-            .addApiLinks(ApiLinks(baseUri = "https://tda4j.appliedtopology.org/dev"))
-            .addSourceLinks(SourceLinks(baseUri = "https://github.com/appliedtopology/tda4j/", suffix = "scala"))
-        )
-    },
-     */
+
     // Scala 3.9.0's own bundled scaladoc ships a `ux.js` that intercepts every same-origin link click
     // (sidebar navigation included) to do its own SPA-style AJAX page swap via `$.get(href, ...)` -- but
     // no page anywhere loads jQuery, so `$` is undefined. The click's own `e.preventDefault()` already
@@ -123,6 +97,22 @@ Compile / doc := {
   }
   apiDir
 }
+
+// Patch the favicon generation
+Compile / doc := {
+  val docDir = (Compile / doc).value
+  val allHTML = (docDir ** "*.html").get()
+  allHTML.filter(_.isFile).foreach { file =>
+    val content = sbt.IO.read(file)
+    val patched = content.replace(
+      "<link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"favicon.ico\">",
+      "<link rel=\"shortcut icon\" type=\"image/png\" href=\"/images/header-icon.svg\"/>"
+    )
+    if (patched != content) sbt.IO.write(file, patched)
+  }
+  docDir
+}
+
 // Both settings are needed, not just one: `Compile / mainClass` is what `sbt run` uses; `assembly /
 // mainClass` is what sbt-assembly writes into the fat jar's manifest (`java -jar ... `). Neither is inferred
 // from the other.

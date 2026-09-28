@@ -1,4 +1,8 @@
-## Calling from MATLAB or Java
+---
+layout: main
+title: Calling from MATLAB or Java
+---
+
 
 `org.appliedtopology.tda4j.matlab.TDA4j`/`PersistenceResult` is a real, tested facade for calling TDA4j from
 MATLAB's built-in Java interface, or from any plain-Java caller — every public method and return type is a

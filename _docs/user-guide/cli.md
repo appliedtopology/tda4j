@@ -1,4 +1,8 @@
-## Command-line tool: `tda4j`
+---
+layout: main
+title: Command-line tool: `tda4j`
+---
+
 
 `sbt assembly` builds a runnable fat jar exposing the whole library as a command-line tool, without writing
 any Scala:

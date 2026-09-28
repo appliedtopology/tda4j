@@ -1,4 +1,8 @@
-### Boundary-matrix export
+---
+layout: main
+title: Boundary-matrix export
+---
+
 
 `PersistenceResult` also exports the boundary matrix of the full complex it was computed from, for anything
 that wants to do its own linear algebra over it (an optimal-cycle solver, harmonic smoothing for circular

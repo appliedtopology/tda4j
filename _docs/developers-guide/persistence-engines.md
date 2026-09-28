@@ -1,4 +1,7 @@
-# Persistence engines: what to trust, and why
+---
+layout: main
+title: Persistence engines: what to trust, and why
+---
 
 `homology/Homology.scala`, `homology/PackedRipserCohomology.scala`, `homology/Cohomology.scala`,
 `homology/FastCubicalHomology.scala`, and `homology/FastAlphaHomology.scala` contain **five

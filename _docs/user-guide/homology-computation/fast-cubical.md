@@ -1,3 +1,7 @@
+---
+layout: main
+---
+
 #### A faster engine for cubical images
 
 ```scala 3

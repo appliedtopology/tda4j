@@ -1,5 +1,8 @@
+---
+layout: main
+title: Quick-start: Scala
+---
 
-## Quick-start: Scala
 
 Snippets included via `@:snip` (with a source-file link) are compiled and exercised directly by the test
 suite. The rest are illustrative and hand-maintained, not mechanically checked — if you find one has

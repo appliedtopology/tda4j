@@ -1,4 +1,8 @@
-## Loading and saving data: the `io` module
+---
+layout: main
+title: Loading and saving data: the `io` module
+---
+
 
 `org.appliedtopology.tda4j.io` reads and writes the file formats the wider TDA ecosystem uses, so you don't
 have to hand-roll parsing:

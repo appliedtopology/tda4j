@@ -1,4 +1,8 @@
-# Mapping the library: class diagrams
+---
+layout: main
+title: Mapping the library: class diagrams
+---
+
 
 @:callout(info)
 This page is a structural sketch to help you get oriented, not an exhaustive or automatically generated

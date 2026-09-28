@@ -1,3 +1,7 @@
+---
+layout: main
+---
+
 #### A faster engine for alpha complexes
 
 ```scala 3

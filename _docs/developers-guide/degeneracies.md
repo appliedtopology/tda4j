@@ -1,4 +1,8 @@
-# Degeneracy behaviors that look like bugs but aren't
+---
+layout: main
+title: Degeneracy behaviors that look like bugs but aren't
+---
+
 
 A dedicated page so you don't "fix" correct-but-surprising behavior. Each of these has, at some point,
 looked like a bug to someone reading the output for the first time.

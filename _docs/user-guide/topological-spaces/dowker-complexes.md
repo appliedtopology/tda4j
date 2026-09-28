@@ -1,3 +1,6 @@
+---
+layout: main
+---
 
 ### Dowker complexes
 

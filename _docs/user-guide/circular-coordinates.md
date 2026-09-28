@@ -1,4 +1,8 @@
-### Circular coordinates
+---
+layout: main
+title: Circular coordinates
+---
+
 
 For a point cloud with cyclic/periodic structure (e.g. samples along a loop), `TDA4j.h1Bars`/
 `circularCoordinates` (de Silva-Morozov-Vejdemo-Johansson 2011) turn a persistent H¹ class into a map from

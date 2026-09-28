@@ -1,4 +1,8 @@
-# Hard-won invariants you must not break
+---
+layout: main
+title: Hard-won invariants you must not break
+---
+
 
 These are the load-bearing, non-obvious rules this codebase depends on. Every one of them was found by a
 real bug, not by reading a spec — which is itself the pattern worth internalizing (see

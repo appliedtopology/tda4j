@@ -1,4 +1,8 @@
-# Architecture: from algebra to a filtration stream
+---
+layout: main
+title: Architecture: from algebra to a filtration stream
+---
+
 
 This page walks the two lower layers of the library: the algebraic core (what a "chain" and a
 "coefficient" actually are) and complex construction (how a sequence of cells in filtration order gets
@@ -636,4 +640,4 @@ class TDAContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]
 `SimplicialHomologyContext` (see [Persistence engines](persistence-engines.md)), plus it exports
 chain-arithmetic operators (`+`, `-`, `⊠`, ...) into your namespace and provides an implicit
 `Simplex -> Chain` conversion so you can write `∆(1,2) - ∆(2,3)` directly — the basis for the
-[User's Guide](../user-guide/README.md)'s Scala quick-start.
+[User's Guide](../user-guide/index.md)'s Scala quick-start.

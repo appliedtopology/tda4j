@@ -33,9 +33,9 @@ a branch. Not resolved this session — insufficient visibility into the reporte
 
 Before touching anything: `sbt laikaSite` on `scala`'s HEAD (`9714462`) fails outright --
 `InvalidDocuments: unresolved internal reference: ../landing-page.md` on every single page plus the
-generated downloads page. Root cause: `dcc8dab` renamed the root docs page from `README.md` to
+generated downloads page. Root cause: `dcc8dab` renamed the root docs page from `index.md` to
 `index.md`, but every *subdirectory* (`tutorials/`, `user-guide/`, `developers-guide/`) still uses
-`README.md`, matching Laika's own hardcoded default for `laika.titleDocuments.inputName` ("README"). Root's
+`index.md`, matching Laika's own hardcoded default for `laika.titleDocuments.inputName` ("README"). Root's
 title document was never findable after the rename, breaking every `@:breadcrumb`-generated link back home
 (and the theme's own `Root / "landing-page.md"` references in `homeLink`/`titleLinks`/`linkPanel`). This is
 a real build failure, not a style nit — it should have failed `docs.yml` on push, so either that run failed
@@ -43,14 +43,14 @@ too (worth checking Actions) or nobody had run a truly clean `sbt laikaSite` sin
 
 ## 3. A real, separate Laika 1.3.2 StackOverflowError bug
 
-Fixing #2 by renaming root back to `README.md` (matching every subdirectory) surfaced a SECOND, unrelated,
+Fixing #2 by renaming root back to `index.md` (matching every subdirectory) surfaced a SECOND, unrelated,
 much nastier bug: an intermittent (later found: 100%-reproducible once isolated) infinite recursion in
 `laika.api.config.ObjectConfig.get`'s own fallback resolution, `java.lang.StackOverflowError`.
 
 Initial (WRONG) hypothesis: this was about `laika.titleDocuments.inputName` overrides. Spent a long time
 chasing that — tried a root-only override, a uniformly-renamed whole tree (all directories on
 `index.md`), removing `@:breadcrumb` entirely, and none of it reliably fixed anything. Crucially,
-**even the plain, unmodified `README.md`-everywhere state (zero custom title-document config) intermittently
+**even the plain, unmodified `index.md`-everywhere state (zero custom title-document config) intermittently
 stack-overflowed** — sometimes 0/6 consecutive clean (`rm -rf target/docs/site`) builds succeeded, sometimes
 1/6, never reliably 6/6. Confirmed genuinely infinite (not just deep) by bumping the JVM thread stack to
 512m via `.jvmopts` and still overflowing.
@@ -79,12 +79,12 @@ start from `linkPanel`'s `TextLink.internal` targets, not from title-document na
 ## 4. `index.md` as a second, non-rendering file
 
 Mid-session the project lead asked to keep `index.md` as an actual file (not just rename it back to
-`README.md`), containing the same content, as a second, independent file alongside `README.md` — two files,
+`index.md`), containing the same content, as a second, independent file alongside `index.md` — two files,
 not one driving the other.
 
-Tried this first inside `src/docs/` (alongside `README.md`, both same content). That reintroduced a
+Tried this first inside `src/docs/` (alongside `index.md`, both same content). That reintroduced a
 different, milder bug: the landing page's body content — which Helium's `.landingPage(...)` normally
-suppresses entirely, replacing it with the hero/teasers layout (confirmed: with only `README.md` present,
+suppresses entirely, replacing it with the hero/teasers layout (confirmed: with only `index.md` present,
 `grep`ing the rendered `index.html` for the README's own prose finds zero matches) — started rendering
 **twice** underneath the teasers the moment a second markdown file existed at the root of the Laika source
 tree. `sbt-laika` exposes no per-file exclude filter (checked `LaikaPlugin`'s own keys via `javap` on the
@@ -167,22 +167,22 @@ inserted at the bottom of this page."*
 Re-tested with `index.md` restored to `src/docs/` (its documented location) and looked at the actual
 rendered `<main>` block line-by-line instead of just grepping a match count. The earlier "duplication" was
 real, but the diagnosis was wrong: with `index.md` present, Helium renders **both** the title
-document's (`README.md`'s) own body **and** `index.md`'s body, back to back, in that order — matching
+document's (`index.md`'s) own body **and** `index.md`'s body, back to back, in that order — matching
 "additionally *or* alternatively" literally (either source works alone; both together both render). With
 `index.md` absent, the title document's own body is suppressed entirely (confirmed earlier: 0
 occurrences) — so the suppression is conditional on `index.md`'s absence, not unconditional as
-originally assumed. Since I'd made `README.md` and `index.md` byte-identical, both bodies rendering
+originally assumed. Since I'd made `index.md` and `index.md` byte-identical, both bodies rendering
 looked like one page duplicated, and I misattributed it to a same-directory conflict rather than to genuinely
 duplicate content across the two documents Laika was correctly, separately rendering.
 
-**Fix**: `index.md` stays in `src/docs/`, holding the full descriptive prose. `README.md` was
+**Fix**: `index.md` stays in `src/docs/`, holding the full descriptive prose. `index.md` was
 shrunk to a single `# @:tda4j` heading trial, then to **fully empty** (0 bytes) — confirmed safe: the site's
 `<title>` tag, the landing page's own title/subtitle (from `SiteTheme.theme`'s explicit `title`/`subtitle`
-args), and every other page's breadcrumb "Home" link (driven by `homeLink`'s own config, not by `README.md`'s
+args), and every other page's breadcrumb "Home" link (driven by `homeLink`'s own config, not by `index.md`'s
 content) are all unaffected by an empty title document. Verified the rendered `<main>` now contains the
 heading and all four paragraphs exactly once, sourced from `index.md` alone.
 
-**Corrected rule**: root's title document (`README.md`) still must exist, named `README.md`, matching every
+**Corrected rule**: root's title document (`index.md`) still must exist, named `index.md`, matching every
 subdirectory and Laika's own default (unrelated `StackOverflowError` bug from Section 3, still real, still
 avoided by keeping this naming) — but it should be kept minimal-to-empty when `.landingPage(...)` is in use
 and `index.md` supplies the real content, specifically to avoid double-rendering identical prose.

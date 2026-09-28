@@ -1,3 +1,7 @@
+---
+layout: main
+---
+
 ### Cubical complexes and images
 
 ```scala 3

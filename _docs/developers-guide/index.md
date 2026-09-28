@@ -1,4 +1,7 @@
-# Developer's Guide for TDA4j
+---
+layout: main
+title: Developer's Guide for TDA4j
+---
 
 TDA4j is meant to be a viable platform for algorithm development and research into topological data
 analysis, not just a library you call into as a black box. This guide gets you from "I understand

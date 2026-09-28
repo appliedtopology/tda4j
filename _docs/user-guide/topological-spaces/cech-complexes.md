@@ -1,3 +1,7 @@
+---
+layout: main
+---
+
 ### Cech complexes
 
 ```scala 3

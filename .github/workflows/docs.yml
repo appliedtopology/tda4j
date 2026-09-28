@@ -26,23 +26,7 @@ jobs:
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
       - name: Build docs site
-        run: sbt laikaSite
-      # Publishes with plain git against a `gh-pages` worktree, not a plugin. `sbt-github-pages` (removed --
-      # see git history and .claude/WORKLOG-docs-publish-performance.md) pushed via the GitHub Data API: one
-      # `createBlob` HTTP call per file, with a hardcoded 1-second sleep before each to dodge GitHub's own
-      # secondary rate limit, no batching at all. For ~1000 files (this build's own scaladoc output alone is
-      # most of that) that measured at 21+ minutes for this one step -- confirmed from the actual job log, not
-      # guessed: a single unbroken silent gap of 1268s between "about to add this file" and "pushed" -- and it
-      # can only get slower as more release versions accumulate. Native git hashes/writes objects locally and
-      # pushes once; the same operation is seconds regardless of file count.
-      #
-      # `laikaSite`'s own output (target/docs/site) is NOT version-prefixed (laikaConfig's Versions value only
-      # drives the version-switcher dropdown/laika/versionInfo.json, not physical output placement -- confirmed
-      # by inspecting a real build's output), so this step's job is to place it at its own path (`dev/` here;
-      # release.yml does the equivalent under the tag's own version) directly inside a checkout of the real
-      # gh-pages history -- editing in place, not staging a merged copy into a scratch directory first -- so
-      # every other already-published version, and root files like .nojekyll/CNAME, are left untouched by
-      # construction rather than by a "copy forward what's not already here" loop.
+        run: sbt doc
       - name: Publish docs
         env:
           # Repo Settings -> Secrets and variables -> Actions -> Variables. When set (e.g. to "dev"), pins
@@ -66,7 +50,7 @@ jobs:
             touch /tmp/gh-pages/.nojekyll
           fi
           rm -rf /tmp/gh-pages/dev
-          cp -r target/docs/site /tmp/gh-pages/dev
+          cp -r target/out/jvm/scala-3.9.0/api /tmp/gh-pages/dev
           # Root redirects to the newest released version if one has been published, else to "dev". Matches
           # only directory names that look like a real release version (digits/dots), not merely "not dev" --
           # a plain exclusion list here previously let stale non-version directories (leftover from before docs

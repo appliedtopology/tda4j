@@ -1,4 +1,7 @@
-# A Scala 3.7+ primer for this codebase
+---
+layout: main
+title: A Scala 3.7+ primer for this codebase
+---
 
 If you know topology cold but Scala 3's newest context-abstraction features are new to you, read this
 before anything else. TDA4j leans hard on Scala 3.7+ syntax that didn't exist a few years ago, and code

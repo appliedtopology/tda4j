@@ -1,0 +1,20 @@
+- index: index.md
+- subsection:
+  - subsection:
+    - index: tutorials/index.md
+  - subsection:
+    - index: developers-guide/index.md
+    - page: developers-guide/scala3-primer.md
+    - page: developers-guide/architecture.md
+    - page: developers-guide/persistence-engines.md
+    - page: developers-guide/gotchas.md
+    - page: developers-guide/degeneracies.md
+    - page: developers-guide/alpha-complex.md
+    - page: developers-guide/class-diagrams.md
+  - subsection:
+    - index: user-guide/index.md
+    - page: user-guide/quickstart.md
+    - page: user-guide/topological-spaces/index.md
+    - page: user-guide/homology-computation/index.md
+    - page: user-guide/cli.md
+    - page: user-guide/matlab.md

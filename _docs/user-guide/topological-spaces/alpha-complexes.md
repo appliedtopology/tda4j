@@ -1,3 +1,7 @@
+---
+layout: main
+---
+
 ### Alpha complexes
 
 ```scala 3
