@@ -17,6 +17,9 @@ libraryDependencies +=
   "org.scala-lang.modules"              %% "scala-parallel-collections" % "1.0.4"
 libraryDependencies += "org.scalacheck" %% "scalacheck"                 % "1.17.0" % "test"
 libraryDependencies += "org.rogach"     %% "scallop"                    % "6.0.0"
+libraryDependencies += "org.typelevel"  %% "cats-kernel"                % "2.13.0"
+libraryDependencies += "org.typelevel"  %% "cats-core"                  % "2.13.0"
+libraryDependencies += "org.typelevel"  %% "kittens"                    % "3.5.0"
 
 // Docs versioning (RELEASE.md step 5): `release.yml` sets TDA4J_DOCS_VERSION to the tag's version
 // (e.g. "0.1.3") when publishing a tagged release; `docs.yml`'s push-to-`scala` build leaves it unset, which

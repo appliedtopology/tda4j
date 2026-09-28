@@ -5,6 +5,7 @@ import org.appliedtopology.tda4j.algebra.{given, *}
 
 import scala.collection.immutable.SortedSet
 import scala.reflect.ClassTag
+import cats.Show
 
 /** Inherit a selection of the SortedSet methods and add other utility methods
   *
@@ -14,10 +15,11 @@ import scala.reflect.ClassTag
   * scopes lookup by nominal receiver type, so a future opaque type's extensions can reuse a name like
   * `show`/`underlying` without colliding with this one.
   */
+given [VertexT] => Show[Simplex[VertexT]] = Show.show(spx => spx.underlying.mkString(s"∆(", ",", ")"))
 trait SimplexOps:
   extension [VertexT](spx: Simplex[VertexT])
     // ----- rendering & dimension
-    def show: String = spx.underlying.mkString(s"∆(", ",", ")")
+    //def show: String = spx.underlying.mkString(s"∆(", ",", ")")
     def dim: Int = spx.underlying.size - 1
     // ----- size and membership
     def contains(elem: VertexT): Boolean = spx.underlying.contains(elem)
