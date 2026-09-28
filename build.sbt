@@ -112,7 +112,7 @@ Compile / doc := {
     val content = sbt.IO.read(file)
     val patched = content.replace(
       "<link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"favicon.ico\">",
-      "<link rel=\"shortcut icon\" type=\"image/png\" href=\"/images/header-icon.svg\"/>"
+      "<link rel=\"shortcut icon\" type=\"image/svg+xml\" href=\"/images/header-icon.svg\"/>"
     )
     if (patched != content) sbt.IO.write(file, patched)
   }
