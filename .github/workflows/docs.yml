@@ -50,6 +50,10 @@ jobs:
             touch /tmp/gh-pages/.nojekyll
           fi
           rm -rf /tmp/gh-pages/dev
+          ls target/
+          ls target/out
+          ls target/out/jvm 
+          ls target/out/jvm/scala-3.9.0
           cp -r target/out/jvm/scala-3.9.0/api /tmp/gh-pages/dev
           # Root redirects to the newest released version if one has been published, else to "dev". Matches
           # only directory names that look like a real release version (digits/dots), not merely "not dev" --
