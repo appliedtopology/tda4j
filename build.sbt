@@ -112,7 +112,26 @@ Compile / doc := {
     val content = sbt.IO.read(file)
     val patched = content.replace(
       "<link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"favicon.ico\">",
-      "<link rel=\"shortcut icon\" type=\"image/svg+xml\" href=\"/images/header-icon.svg\"/>"
+      """
+        |<link rel="shortcut icon" type="image/svg+xml" href="/images/header-icon.svg"/>
+        |<link rel="apple-touch-icon" sizes="180x180" href="/images/header-icon-180.png"/>
+        |<link rel="icon" sizes="16x16" type="image/png" href="/images/favicon-16.png"/>
+        |<link rel="icon" sizes="32x32" type="image/png" href="/images/favicon-32.png"/>
+        |<link rel="icon" sizes="48x48" type="image/png" href="/images/favicon-48.png"/>
+        |<link rel="icon" sizes="64x64" type="image/png" href="/images/favicon-64.png"/>
+        |<link rel="icon" sizes="128x128" type="image/png" href="/images/header-icon-128.png"/>
+        |<link rel="icon" sizes="256x256" type="image/png" href="/images/header-icon-256.png"/>
+        |<link rel="manifest" href="/images/manifest.json"/>
+        |<link rel="shortcut icon" type="image/svg+xml" href="/images/header-icon-dark.svg" media="(prefers-color-scheme: dark)" />
+        |<link rel="apple-touch-icon" sizes="180x180" href="/images/header-icon-dark-180.png" media="(prefers-color-scheme: dark)" />
+        |<link rel="icon" sizes="16x16" type="image/png" href="/images/favicon-16.png" media="(prefers-color-scheme: dark)" />
+        |<link rel="icon" sizes="32x32" type="image/png" href="/images/favicon-32.png" media="(prefers-color-scheme: dark)" />
+        |<link rel="icon" sizes="48x48" type="image/png" href="/images/favicon-48.png" media="(prefers-color-scheme: dark)" />
+        |<link rel="icon" sizes="64x64" type="image/png" href="/images/favicon-64.png" media="(prefers-color-scheme: dark)" />
+        |<link rel="icon" sizes="128x128" type="image/png" href="/images/header-icon-dark-128.png" media="(prefers-color-scheme: dark)" />
+        |<link rel="icon" sizes="256x256" type="image/png" href="/images/header-icon-dark-256.png" media="(prefers-color-scheme: dark)" />
+        |<link rel="manifest" href="/images/manifest-dark.json" media="(prefers-color-scheme: dark)" />
+        |        |""".stripMargin
     )
     if (patched != content) sbt.IO.write(file, patched)
   }
