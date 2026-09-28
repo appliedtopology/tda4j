@@ -34,7 +34,7 @@ where the `URL-ENCODED JSON` is something like this (replace the string pointed 
   },
   "libraries" : [ ],
   "librariesFromList" : [ ],
-  "sbtConfigExtra":"\nscalacOptions ++= Seq(\n  \"-deprecation\",\n  \"-encoding\", \"UTF-8\",\n  \"-feature\",\n  \"-unchecked\",\n  \"-source:future\", \n  \"-language:experimental.modularity\"\n)\nlibraryDependencies += \"org.appliedtopology\" %% \"tda4j\" % \"0.4.0\"\n",
+  "sbtConfigExtra":"scalacOptions ++= Seq(\n  \"-deprecation\",\n  \"-encoding\", \"UTF-8\",\n  \"-feature\",\n  \"-unchecked\",\n  \"-source:future\", \n  \"-language:experimental.modularity\",\n \"-language:implicitConversions\",\n \"-language:adhocExtensions\"\n)\nlibraryDependencies += \"org.appliedtopology\" %% \"tda4j\" % \"0.4.0\"\n",
   "sbtPluginsConfigExtra" : "",
   "isShowingInUserProfile" : true
 }
