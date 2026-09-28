@@ -1,6 +1,6 @@
 name := "tda4j"
 organization := "org.appliedtopology"
-scalaVersion := "3.9.0"
+scalaVersion := "3.8.4"
 
 versionScheme := Some("semver-spec")
 
@@ -44,16 +44,16 @@ Compile / doc / scalacOptions ++= Seq(
   "-social-links:github::https://github.com/appliedtopology/tda4j",
   "-doc-footer", "TDA4j is built by the TDA @ CUNY workgroup",
   "-quick-links:Applied Topology::https://appliedtopology.org,Playground::https://scastie.scala-lang.org/?inputs=%7B%0A%20%20%22_isWorksheetMode%22%20%3A%20true%2C%0A%20%20%22code%22%20%3A%20%22import%20org.appliedtopology.tda4j.*%5Cn%E2%88%86(1%2C2%2C3)%5Cn%22%2C%0A%20%20%22target%22%20%3A%20%7B%0A%20%20%20%20%22scalaVersion%22%20%3A%20%223.9.0%22%2C%0A%20%20%20%20%22tpe%22%20%3A%20%22Scala3%22%0A%20%20%7D%2C%0A%20%20%22libraries%22%20%3A%20%5B%20%5D%2C%0A%20%20%22librariesFromList%22%20%3A%20%5B%20%5D%2C%0A%20%20%22sbtConfigExtra%22%3A%22%5CnscalacOptions%20%2B%2B%3D%20Seq(%5Cn%20%20%5C%22-deprecation%5C%22%2C%5Cn%20%20%5C%22-encoding%5C%22%2C%20%5C%22UTF-8%5C%22%2C%5Cn%20%20%5C%22-feature%5C%22%2C%5Cn%20%20%5C%22-unchecked%5C%22%2C%5Cn%20%20%5C%22-source%3Afuture%5C%22%2C%20%5Cn%20%20%5C%22-language%3Aexperimental.modularity%5C%22%5Cn)%5CnlibraryDependencies%20%2B%3D%20%5C%22org.appliedtopology%5C%22%20%25%25%20%5C%22tda4j%5C%22%20%25%20%5C%220.4.0%5C%22%5Cn%22%2C%0A%20%20%22sbtPluginsConfigExtra%22%20%3A%20%22%22%2C%0A%20%20%22isShowingInUserProfile%22%20%3A%20true%0A%7D%0A",
-  "-scastie-configuration","""
+  "-scastie-configuration", """
     |  scalacOptions ++= Seq(
     |    "-deprecation",
     |    "-encoding", "UTF-8",
     |    "-feature", "-unchecked",
     |    "-source:future", "-language:experimental.modularity",
     |    "-language:implicitConversions", "-language:adhocExtensions"
-    |  )
+    |  ) ;
     |  libraryDependencies += "org.appliedtopology" %% "tda4j" % "0.4.0"
-    |""".stripMargin,
+    |""".stripMargin.replace("\n",""),
   //"-snippet-compiler:nocompile", "-snippet-compiler:tutorials/index.md=compile"
 )
 Compile / doc / target := target.value / "api"
@@ -83,39 +83,6 @@ scalacOptions ++= List(
   "-deprecation",
   "-unchecked"
 )
-
-// Scala 3.9.0's own bundled scaladoc ships a `ux.js` that intercepts every same-origin link click
-// (sidebar navigation included) to do its own SPA-style AJAX page swap via `$.get(href, ...)` -- but
-// no page anywhere loads jQuery, so `$` is undefined. The click's own `e.preventDefault()` already
-// ran by the time that throws, so the click's default navigation is cancelled AND the replacement
-// AJAX navigation never happens: clicking a class in the API nav does nothing (confirmed against a
-// real browser: `ReferenceError: $ is not defined` at ux.js:180, `HTMLAnchorElement` click handler).
-// A real upstream scaladoc bug, not a Laika/tda4j config issue -- `$.get(url, cb)` is a drop-in match
-// for `fetch(url).then(r => r.text()).then(cb)` (the callback only ever receives raw HTML text here),
-// so patch the one call site post-generation rather than vendoring scaladoc's bundled JS ourselves.
-//
-// Patches `Compile / doc`'s own output directory (confirmed via `show Compile/doc`:
-// `target/scala-3.9.0/api`), not `laikaSite`'s copy of it -- `laikaPreview` runs a live preview
-// server (`startPreviewServer`/`buildPreviewServer` in sbt-laika's `Tasks.scala`) that is a
-// completely separate task graph from `laikaSite`/`generate`, so a `laikaSite`-only patch is invisible
-// there (confirmed: `laikaPreview`'s served `ux.js` was still unpatched). Patching at the actual
-// source once means every consumer of `Compile / doc`'s output -- `laikaSite`'s own API-copy step
-// included -- sees the fix, with no need to patch each consumer separately. (An idiomatic sbt task
-// augmentation, not a self-referential cycle: `key := f(key.value)` captures the plugin/sbt-provided
-// task, same mechanism `+=`/`++=` desugar to.) See .claude/WORKLOG-docs-site-fixes.md.
-Compile / doc := {
-  val apiDir = (Compile / doc).value
-  val uxJs = apiDir / "scripts" / "ux.js"
-  if (uxJs.exists()) {
-    val original = IO.read(uxJs)
-    val patched = original.replace(
-      "$.get(href, function (data) {",
-      "fetch(href).then((r) => r.text()).then(function (data) {"
-    )
-    if (patched != original) IO.write(uxJs, patched)
-  }
-  apiDir
-}
 
 // Patch the favicon generation
 Compile / doc := {
@@ -148,6 +115,7 @@ Compile / doc := {
     )
     if (patched != content) sbt.IO.write(file, patched)
   }
+  val favicon = (docDir ** "favicon.ico").get().foreach { file => sbt.IO.delete(file) }
   docDir
 }
 
