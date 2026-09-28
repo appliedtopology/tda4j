@@ -55,9 +55,9 @@ trait FiniteMetricSpace[VertexT]:
   */
 object FiniteMetricSpace:
 
-  /** Creates a filtration value partial function implementing the functionality of a [[Filtration]] for a
-    * filtration generated from a metric space, where the filtration value is the maximum distance between vertices (or
-    * the diameter) of a simplex.
+  /** Creates a filtration value partial function implementing the functionality of a [[Filtration]] for a filtration
+    * generated from a metric space, where the filtration value is the maximum distance between vertices (or the
+    * diameter) of a simplex.
     *
     * @param metricSpace
     *   An instance of a finite metric space.
