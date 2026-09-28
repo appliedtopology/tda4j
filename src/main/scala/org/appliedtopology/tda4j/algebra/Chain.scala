@@ -1,6 +1,9 @@
 package org.appliedtopology.tda4j
 package algebra
 
+import cats.Show
+import cats.syntax.show.showInterpolator
+
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.compiletime.asMatchable
@@ -221,3 +224,7 @@ object Chain:
           .iterator
           .map((cellI, coeffI) => (cellI, coeffO * coeffI))
       }.toSeq
+
+given [CellT : {OrderedCell, Show}, CoefficientT : Field] =>  Show[Chain[CellT, CoefficientT]] = Show.show { c =>
+  c.rawEntries.map((cell, coeff) => show"$coeff⊠$cell").mkString(" + ")
+}

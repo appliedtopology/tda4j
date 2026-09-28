@@ -1,6 +1,8 @@
 package org.appliedtopology.tda4j
 package algebra
 
+import cats.Show
+
 trait Field:
   type Self
 
@@ -13,6 +15,8 @@ trait Field:
   def invert(x: Self): Self
   def zero: Self
   def one: Self
+
+  def showForSelf : Show[Self]
 
   extension (x: Self)
     infix def +(y: Self): Self = plus(x, y)
@@ -44,3 +48,7 @@ object Field:
     override def zero: Double = fr.zero
 
     override def one: Double = fr.one
+
+    override def showForSelf = Show.fromToString[Double]
+
+given [F : Field] => Show[F] = summon[F is Field].showForSelf
