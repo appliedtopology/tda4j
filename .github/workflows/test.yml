@@ -22,6 +22,6 @@ jobs:
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
       - name: Run tests
-        run: sbt clean test
+        run: sbt clean ; test
       - name: Binary Compatibility Checks
         run: sbt mimaReportBinaryIssues
