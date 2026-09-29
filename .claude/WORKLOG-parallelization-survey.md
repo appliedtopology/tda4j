@@ -21,8 +21,8 @@ still launched and awaited one at a time. No Akka, cats-effect, ZIO, or Scalaz d
 ## Framing: measured cost, not apparent loop shape
 
 The existing profiling worklogs (`WORKLOG-ripser-profiling.md` and its three follow-up sessions) already show
-where wall-clock time actually goes in the two production reduction engines (naive `CellularHomologyContext`,
-`PackedRipserCohomologyContext`): `Chain.reduceLoop`'s `TreeMap` churn, `insertionDiameter`'s distance-math
+where wall-clock time actually goes in the two production reduction engines (naive `CellularHomologyEngine`,
+`PackedRipserCohomologyEngine`): `Chain.reduceLoop`'s `TreeMap` churn, `insertionDiameter`'s distance-math
 loop, `SimplexIndexing`'s encode/decode, `zeroPivotFacet`'s `maxPairwiseDistance`. All of that lives *inside*
 the pivot-reduction algorithms themselves — sequential by the algorithm's own data dependency (a column's
 reduction can consume an earlier column's pivot), not by an accident of implementation. That's the honest
@@ -174,7 +174,7 @@ Full suite: 330 examples (up from 328), 0 failures.
 
 **Measured (same driver methodology, `CechParallelProfileDriver`, both stream-only construction time and full
 end-to-end persistent homology timed separately)**: full end-to-end timing turned out to be dominated by an
-UNRELATED, pre-existing cost — `SimplicialHomologyContext`'s own naive reduction scales badly with cell count
+UNRELATED, pre-existing cost — `SimplicialHomologyEngine`'s own naive reduction scales badly with cell count
 on an untruncated Cech complex (n=20/maxDim=2: 1350 cells, 1.4s; n=25: 2625 cells, 36.0s — a ~27x time jump for
 under 2x more cells, nothing to do with this change), so stream-only construction time (what this change
 actually touches) is the honest metric. At maxDimCap=2 (triangles, <=3 points per Miniball call), n=60
@@ -245,7 +245,7 @@ Pairwise distance computation (`EuclideanMetricSpace.distance`, `minimumEnclosin
 independent, no shared state. Smaller and more diffuse than 1-4 above (no single loop dominates), worth
 revisiting once a parallelization platform is chosen, not a flagship item on its own.
 
-### 6. Reduction engines themselves (naive, `RipserCohomologyContext`, `PackedRipserCohomologyContext`) — not a target here
+### 6. Reduction engines themselves (naive, `RipserCohomologyEngine`, `PackedRipserCohomologyEngine`) — not a target here
 
 Column-by-column pivot reduction has a genuine sequential data dependency (a later column's reduction can
 require an earlier column's already-resolved pivot). Real parallel/distributed persistent homology is an open

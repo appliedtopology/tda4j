@@ -15,8 +15,8 @@ import org.appliedtopology.tda4j.barcode.{
 
 import scala.collection.mutable
 
-/** Thrown by `FastAlphaHomologyContext` when `HelixDelaunay`'s own triangulation does not satisfy the "every facet has
-  * 1 or 2 containing top simplices" precondition this engine's dual graph needs (see the class doc's own "new finding"
+/** Thrown by `FastAlphaHomologyEngine` when `HelixDelaunay`'s own triangulation does not satisfy the "every facet has 1
+  * or 2 containing top simplices" precondition this engine's dual graph needs (see the class doc's own "new finding"
   * section) -- a real but rare (`~1-in-18700` measured, ambient dimension 2) `HelixDelaunay` limitation, not a sign the
   * input is malformed or that its persistent homology is somehow uncomputable. Deliberately a distinct, named,
   * `RuntimeException` subtype -- not a bare `IllegalStateException` -- so a caller (MATLAB/CLI included, where it
@@ -26,17 +26,17 @@ import scala.collection.mutable
   */
 class FastAlphaTriangulationException(message: String) extends RuntimeException(message)
 
-/** The `homology.FastCubicalHomologyContext` dual-graph union-find, ported to a `HelixDelaunay` alpha complex
+/** The `homology.FastCubicalHomologyEngine` dual-graph union-find, ported to a `HelixDelaunay` alpha complex
   * (`.claude/DESIGN-alpha-dual-unionfind.md`, item 7 of `.claude/WORKLOG-mainstream-feature-gap-analysis.md`, a
   * follow-on to item 6's cubical engine). `HelixDelaunay` specifically, not `AlphaComplexDQP`/`AlphaShapeDQP` -- the
   * dual graph needs the FULL, untruncated triangulation and "every facet has <= 2 cofaces," which `AlphaShapeDQP`'s own
   * documented cospherical-degeneracy hazard can violate directly (see the design note).
   *
-  * '''Valid at any ambient dimension `>= 2`''' (`require`d), same as `FastCubicalHomologyContext` (which this class
+  * '''Valid at any ambient dimension `>= 2`''' (`require`d), same as `FastCubicalHomologyEngine` (which this class
   * mirrors term-for-term): `H_0` (ordinary primal union-find) plus `H_{d-1}` (via the dual union-find below) together
   * account for every cell dimension a 2D triangulation has, with no general `Chain.reduceBy` reduction needed at all.
   * At `d >= 3` there are `d-2` "middle" dimensions (`1 <= k <= d-2`) with no duality shortcut; these are handed to
-  * `CellularPersistenceInChunksContext` run on a `LimitedAlphaShapesStream` view that hides the real top-dimensional
+  * `CellularPersistenceInChunksEngine` run on a `LimitedAlphaShapesStream` view that hides the real top-dimensional
   * simplices entirely -- still a net win, since the (often largest) top dimension never touches general `Chain`
   * reduction. See `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md` for the full derivation, including why the
   * dual union-find's own correctness doesn't depend on how the middle dimensions get resolved.
@@ -58,36 +58,36 @@ class FastAlphaTriangulationException(message: String) extends RuntimeException(
   * containing triangle's own circumradius; using anything else silently shifts some bars' birth values (see the design
   * note's own worked example for a concrete case where this matters).
   *
-  * See `FastCubicalHomologyContext`'s own doc for the shared parts of the construction (the dual graph itself, the `∞`
+  * See `FastCubicalHomologyEngine`'s own doc for the shared parts of the construction (the dual graph itself, the `∞`
   * sentinel and why it must be `+Infinity`, the birth/death swap, and the representative-tracking orientation-flip
   * scheme) -- identical here, `Simplex[Int]`'s alternating-sign boundary rule (`simplexIsOrderedCell`) standing in for
   * `Cube`'s rank-among-non-degenerate-axes rule.
   */
-class FastAlphaHomologyContext[CoefficientT: Field]:
+class FastAlphaHomologyEngine[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
   given Ordering[Simplex[Int]] = simplexOrdering[Int]
 
   def persistentHomology(helix: HelixDelaunay): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     require(
       helix.ambientDimension >= 2,
-      s"FastAlphaHomologyContext requires ambient dimension >= 2, got ${helix.ambientDimension}"
+      s"FastAlphaHomologyEngine requires ambient dimension >= 2, got ${helix.ambientDimension}"
     )
     if helix.ambientDimension == 2 then computeH0(helix) ++ computeDualTopDimension(helix)
     else computeMiddleDimensions(helix) ++ computeDualTopDimension(helix)
 
   // -------------------------------------------------------------------------------------------------------------
-  // d >= 3's "middle" dimensions (1 <= k <= d-2): see FastCubicalHomologyContext.computeMiddleDimensions, whose
+  // d >= 3's "middle" dimensions (1 <= k <= d-2): see FastCubicalHomologyEngine.computeMiddleDimensions, whose
   // structure this mirrors exactly (a stream truncated to hide the real top-dimensional cells, chunks's own
   // maxDim = d-2 semantics discarding the resulting incomplete top-dimension bars for free, H_0 coming along as
-  // a side effect of chunks's own unionFindDim01). PersistenceInChunksContext[Int, CoefficientT] is the
-  // Simplex[Int]-over-Ordering[Int] convenience wrapper for CellularPersistenceInChunksContext -- the same class
+  // a side effect of chunks's own unionFindDim01). PersistenceInChunksEngine[Int, CoefficientT] is the
+  // Simplex[Int]-over-Ordering[Int] convenience wrapper for CellularPersistenceInChunksEngine -- the same class
   // this codebase's naive/chunks/cohomology engines already use for alpha complexes elsewhere.
   // -------------------------------------------------------------------------------------------------------------
   private def computeMiddleDimensions(
     helix: HelixDelaunay
   ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     val truncated = LimitedAlphaShapesStream(helix, helix.ambientDimension - 1)
-    PersistenceInChunksContext[Int, CoefficientT](helix.ambientDimension - 2)
+    PersistenceInChunksEngine[Int, CoefficientT](helix.ambientDimension - 2)
       .persistentHomology(truncated)
       .barcodeAt(Double.PositiveInfinity)
 
@@ -98,7 +98,7 @@ class FastAlphaHomologyContext[CoefficientT: Field]:
 
   // -------------------------------------------------------------------------------------------------------------
   // H_0: ordinary primal union-find, ascending value order, elder rule -- identical in shape to
-  // FastCubicalHomologyContext.computeH0, just over Simplex[Int] vertices/edges instead of Cube ones.
+  // FastCubicalHomologyEngine.computeH0, just over Simplex[Int] vertices/edges instead of Cube ones.
   // -------------------------------------------------------------------------------------------------------------
   private def computeH0(helix: HelixDelaunay): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     val vertices: Vector[Simplex[Int]] = helix.iterateDimension.applyOrElse(0, (_: Int) => Iterator.empty).toVector
@@ -147,7 +147,7 @@ class FastAlphaHomologyContext[CoefficientT: Field]:
 
   // -------------------------------------------------------------------------------------------------------------
   // H_{d-1} (= H_1 at d=2): the dual union-find. See the class doc and .claude/DESIGN-alpha-dual-unionfind.md for
-  // the derivation, and .claude/DESIGN-fast-cubical-engine.md/FastCubicalHomologyContext for the shared mechanism
+  // the derivation, and .claude/DESIGN-fast-cubical-engine.md/FastCubicalHomologyEngine for the shared mechanism
   // this ports term-for-term (facet enumeration and facet-value lookup are the two genuinely new pieces here --
   // everything downstream of `facetEvents` is identical to the cubical engine, deliberately, since it's the
   // SAME generic dual-union-find/representative-tracking algorithm regardless of cell type).
@@ -183,7 +183,7 @@ class FastAlphaHomologyContext[CoefficientT: Field]:
     val badFacets = facetToTopIds.filter { case (_, ids) => ids.size < 1 || ids.size > 2 }
     if badFacets.nonEmpty then
       throw new FastAlphaTriangulationException(
-        "The fast alpha-complex engine (engine=\"fast-alpha\" / FastAlphaHomologyContext) could not compute a " +
+        "The fast alpha-complex engine (engine=\"fast-alpha\" / FastAlphaHomologyEngine) could not compute a " +
           "result for this specific set of points.\n\n" +
           "This is NOT an error in your data, and it does NOT mean this point cloud's persistent homology is " +
           "unusual or unsupported. It is a known limitation of HelixDelaunay, the Delaunay triangulation this " +
@@ -215,7 +215,7 @@ class FastAlphaHomologyContext[CoefficientT: Field]:
     }.toVector
 
     // ONE combined descending pass: (value DESCENDING, isVertex DESCENDING [vertices before edges at a tied
-    // value], then a deterministic tie-break) -- identical structure to FastCubicalHomologyContext's own.
+    // value], then a deterministic tie-break) -- identical structure to FastCubicalHomologyEngine's own.
     sealed trait DualEvent:
       def value: Double
     case class VertexEv(id: Int, value: Double) extends DualEvent
@@ -256,7 +256,7 @@ class FastAlphaHomologyContext[CoefficientT: Field]:
     val allEvents: Vector[DualEvent] = (vertexEvents ++ edgeEvents).sorted(using eventOrdering)
 
     // Union-find over `0 to numTop` (numTop itself = infinityId) -- identical mechanics to
-    // FastCubicalHomologyContext.computeDualTopDimension from here on, including both of that class's own
+    // FastCubicalHomologyEngine.computeDualTopDimension from here on, including both of that class's own
     // once-found bugs' fixes (the resolved-root vs. raw-id check for `oldTopCube`, and the explicit `infinityId`
     // special-case in the young/old decision) -- ported directly rather than risking rediscovering either.
     val parent: Array[Int] = Array.range(0, numTop + 1)

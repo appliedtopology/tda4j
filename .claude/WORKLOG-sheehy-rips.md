@@ -200,7 +200,7 @@ cannot.
    comparing two DIFFERENT thresholds, not real desparsification. Fixed by giving the comparison VR stream an
    explicit `Some(Double.PositiveInfinity)` threshold (always safe for plain VR, which never produces a literal
    `Infinity` filtration value itself).
-4. **Test bug, not a construction bug**: comparing `SimplicialHomologyContext`'s raw diagram against
+4. **Test bug, not a construction bug**: comparing `SimplicialHomologyEngine`'s raw diagram against
    `PersistenceInChunksContext(maxDim = homDim)`'s raw diagram, on a stream capped at cell-dimension
    `homDim + 1`, found spurious `dim == homDim + 1` "essential" bars on the naive side that chunks correctly
    omits -- a truncation artifact (a capped-dimension stream has no higher simplex a top-dimension cell could

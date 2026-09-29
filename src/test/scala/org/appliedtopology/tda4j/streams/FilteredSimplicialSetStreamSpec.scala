@@ -9,7 +9,7 @@ import org.appliedtopology.tda4j.homology.{given, *}
 import org.specs2.mutable
 
 /** Real (non-constant) filtration for `FiniteSimplicialSet`, and cross-validation of the newly-genericized
-  * `CellularPersistenceInChunksContext` against the already-trusted `CellularHomologyContext` on it. Full derivation,
+  * `CellularPersistenceInChunksEngine` against the already-trusted `CellularHomologyEngine` on it. Full derivation,
   * including the `advisor()`-driven design corrections, in `.claude/WORKLOG-simplicial-set-filtration.md`.
   */
 class FilteredSimplicialSetStreamSpec extends mutable.Specification:
@@ -36,10 +36,10 @@ class FilteredSimplicialSetStreamSpec extends mutable.Specification:
   ): (List[(Int, Double, Double)], List[(Int, Double, Double)]) =
     given (G is OrderedCell) = sset.cellInstance
     val stream = FilteredSimplicialSetStream(sset, PartialFunction.fromFunction(filtrationValue))
-    val naive = CellularHomologyContext[G, f11.Fp, Double]()
+    val naive = CellularHomologyEngine[G, f11.Fp, Double]()
       .persistentHomology(stream)
       .diagramAt(Double.PositiveInfinity)
-    val chunks = CellularPersistenceInChunksContext[G, f11.Fp]()
+    val chunks = CellularPersistenceInChunksEngine[G, f11.Fp]()
       .persistentHomology(stream)
       .diagramAt(Double.PositiveInfinity)
     (naive.sorted, chunks.sorted)
@@ -83,7 +83,7 @@ class FilteredSimplicialSetStreamSpec extends mutable.Specification:
     (bucketsAscending must beTrue).and(facesPrecedeCofaces must beTrue)
   }
 
-  "the torus's hand-picked non-dimension-aligned filtration: CellularHomologyContext and the chunks engine agree exactly, and the agreed answer matches the hand-derived structure" >> {
+  "the torus's hand-picked non-dimension-aligned filtration: CellularHomologyEngine and the chunks engine agree exactly, and the agreed answer matches the hand-derived structure" >> {
     val (naive, chunks) = diagramsFor(SimplicialSetFixtures.torus, torusFiltration)
 
     // Hand-derived structurally, without guessing the pivot-selection tie-break (see the WORKLOG): U (older,
@@ -119,7 +119,7 @@ class FilteredSimplicialSetStreamSpec extends mutable.Specification:
     def checkAllReps[G](sset: FiniteSimplicialSet[G], filtrationValue: G => Double): Boolean =
       given (G is OrderedCell) = sset.cellInstance
       val stream = FilteredSimplicialSetStream(sset, PartialFunction.fromFunction(filtrationValue))
-      val bars = CellularPersistenceInChunksContext[G, f3.Fp]()
+      val bars = CellularPersistenceInChunksEngine[G, f3.Fp]()
         .persistentHomology(stream)
         .barcodeAt(Double.PositiveInfinity)
       bars.nonEmpty && bars.forall { bar =>
@@ -139,7 +139,7 @@ class FilteredSimplicialSetStreamSpec extends mutable.Specification:
     (torusOk must beTrue) and (rp2Ok must beTrue)
   }
 
-  "a randomized dimension-band-plus-jitter filtration on every fixture: CellularHomologyContext and the chunks engine agree exactly, across several seeds" >> {
+  "a randomized dimension-band-plus-jitter filtration on every fixture: CellularHomologyEngine and the chunks engine agree exactly, across several seeds" >> {
     def randomFiltration[G](sset: FiniteSimplicialSet[G], seed: Long): G => Double =
       val rng = new scala.util.Random(seed)
       val jitter: Map[G, Double] = sset.generatorsByDim.flatten.map(g => g -> rng.nextDouble()).toMap

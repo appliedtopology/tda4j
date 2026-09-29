@@ -80,12 +80,12 @@ class EdgeCollapseBenchmarkSpec(args: Arguments) extends mutable.Specification:
       val warmupSpace = randomCloud(n, Random(seed.toLong * 7 - n))
       val warmupPlain = newStream(warmupSpace)
       warmupPlain.iterator.toVector
-      SimplicialHomologyContext[Int, Double, Double]()
+      SimplicialHomologyEngine[Int, Double, Double]()
         .persistentHomology(warmupPlain)
         .diagramAt(Double.PositiveInfinity)
       val warmupColl = newStream(EdgeCollapse.collapse(warmupSpace))
       warmupColl.iterator.toVector
-      SimplicialHomologyContext[Int, Double, Double]().persistentHomology(warmupColl).diagramAt(Double.PositiveInfinity)
+      SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(warmupColl).diagramAt(Double.PositiveInfinity)
 
       val plainStreams = clouds.map(newStream)
       val collStreams = clouds.map(c => newStream(EdgeCollapse.collapse(c)))
@@ -95,12 +95,12 @@ class EdgeCollapseBenchmarkSpec(args: Arguments) extends mutable.Specification:
 
       val reducePlainMs = plainStreams.map { s =>
         timeMs(
-          SimplicialHomologyContext[Int, Double, Double]().persistentHomology(s).diagramAt(Double.PositiveInfinity)
+          SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(s).diagramAt(Double.PositiveInfinity)
         )._2
       }
       val reduceCollMs = collStreams.map { s =>
         timeMs(
-          SimplicialHomologyContext[Int, Double, Double]().persistentHomology(s).diagramAt(Double.PositiveInfinity)
+          SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(s).diagramAt(Double.PositiveInfinity)
         )._2
       }
 

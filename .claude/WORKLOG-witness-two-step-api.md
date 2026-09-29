@@ -86,7 +86,7 @@ and the covering-radius query, one-shot-equals-step-1-then-step-2 for both varia
 discriminating test** (an advisor-review catch, following the same lesson `WORKLOG-witness-complex.md`'s own
 "measure, don't infer" episode already taught this session): landmarks `Array(5, 2, 0)` -- deliberately
 NOT what `maxmin(numLandmarks=3)` would choose from this exact cloud (`{0, 4, 5}`, confirmed by hand: points 4
-and 5 tie at `sqrt(4.25)`, 4 wins by lower index) -- checked against `PackedRipserCohomologyContext` built
+and 5 tie at `sqrt(4.25)`, 4 wins by lower index) -- checked against `PackedRipserCohomologyEngine` built
 directly over that SAME explicit, unsorted array, as sorted lists, plus a direct `cycleVertices` subset check.
 Without this specific fixture, a bug where step 2 silently ignored its own `landmarks` argument and re-ran
 maxmin internally would still pass every OTHER test in the suite, since they all happen to use maxmin-chosen

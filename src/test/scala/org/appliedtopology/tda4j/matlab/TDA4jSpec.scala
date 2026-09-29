@@ -38,8 +38,8 @@ class TDA4jSpec extends mutable.Specification:
     }
 
   "TDA4j.computeFromPoints with default options (complex=vr, engine=ripser, field=Z, prime=2, maxDimension=2)" should {
-    "match RipserCohomologyContext[Fp(2)] driven directly" in {
-      // RipserCohomologyContext's own maxDimension now means "top homological degree reported," fixed at its
+    "match RipserCohomologyEngine[Fp(2)] driven directly" in {
+      // RipserCohomologyEngine's own maxDimension now means "top homological degree reported," fixed at its
       // own source (see .claude/WORKLOG-maxdim-semantics-fix.md) -- so the facade's engine=ripser path
       // (TDA4j.computeGeneric) is now a fully transparent passthrough of requestedMaxDimension, with no
       // +1-and-filter workaround on either side of this comparison anymore.
@@ -55,7 +55,7 @@ class TDA4jSpec extends mutable.Specification:
         case ClosedEndpoint(v)  => v
         case OpenEndpoint(v)    => v
 
-      val direct = RipserCohomologyContext[ff.Fp](metricSpace, 2)
+      val direct = RipserCohomologyEngine[ff.Fp](metricSpace, 2)
         .persistentCohomology()
         .map(bar => (bar.dim, toDouble(bar.lower), toDouble(bar.upper)))
 
@@ -63,7 +63,7 @@ class TDA4jSpec extends mutable.Specification:
     }
   }
 
-  "RipserCohomologyContext's maxDimension semantics fix" should {
+  "RipserCohomologyEngine's maxDimension semantics fix" should {
     "resolve the same barcode whether asked for degree k directly or degree k+1 with the extra dimension filtered" in {
       // Regression pin for the fix itself (.claude/WORKLOG-maxdim-semantics-fix.md): before the fix, calling
       // directly at maxDimension=2 produced spurious essential dim-2 bars that calling at maxDimension=3 and
@@ -79,11 +79,11 @@ class TDA4jSpec extends mutable.Specification:
         case ClosedEndpoint(v)  => v
         case OpenEndpoint(v)    => v
 
-      val direct = RipserCohomologyContext[ff.Fp](metricSpace, 2)
+      val direct = RipserCohomologyEngine[ff.Fp](metricSpace, 2)
         .persistentCohomology()
         .map(bar => (bar.dim, toDouble(bar.lower), toDouble(bar.upper)))
 
-      val viaOneHigherFiltered = RipserCohomologyContext[ff.Fp](metricSpace, 3)
+      val viaOneHigherFiltered = RipserCohomologyEngine[ff.Fp](metricSpace, 3)
         .persistentCohomology()
         .map(bar => (bar.dim, toDouble(bar.lower), toDouble(bar.upper)))
         .filter(_._1 <= 2)
@@ -101,7 +101,7 @@ class TDA4jSpec extends mutable.Specification:
   }
 
   "engine=cohomology, through the facade" should {
-    // CellularCohomologyContext -- .claude/DESIGN-generic-cohomology.md. Bar VALUES should agree with
+    // CellularCohomologyEngine -- .claude/DESIGN-generic-cohomology.md. Bar VALUES should agree with
     // engine=ripser on complex=vr (both compute persistent cohomology of the same Vietoris-Rips complex,
     // just one generic/materialized and one VR-specialized) -- not representative CONTENT, which
     // `CohomologySpec`'s own comment explains isn't a sound cross-engine claim on VR input (dimension 0 is
@@ -476,14 +476,14 @@ class TDA4jSpec extends mutable.Specification:
   }
 
   "complex=dtm-rips, through the facade" should {
-    "match streams.DtmRipsSimplexStream/SimplicialHomologyContext driven directly" in {
+    "match streams.DtmRipsSimplexStream/SimplicialHomologyEngine driven directly" in {
       given Double is Field = Field.DoubleApproximated(1e-9)
       val viaFacade =
         triples(TDA4j.computeFromPoints(points, Array("complex", "dtm-rips", "dtmK", "3", "field", "R")).toArray())
       val metricSpace = EuclideanMetricSpace(points)
       val f = DistanceToMeasure(metricSpace, 3)
       val stream = LimitedCofaceSimplexStream(DtmRipsSimplexStream(metricSpace, f), 3)
-      val direct = SimplicialHomologyContext[Int, Double, Double]()
+      val direct = SimplicialHomologyEngine[Int, Double, Double]()
         .persistentHomology(stream)
         .diagramAt(Double.PositiveInfinity)
         .filter(_._1 <= 2)
@@ -529,14 +529,14 @@ class TDA4jSpec extends mutable.Specification:
   }
 
   "complex=sheehy-rips, through the facade" should {
-    "match streams.SheehyRipsSimplexStream/SimplicialHomologyContext driven directly" in {
+    "match streams.SheehyRipsSimplexStream/SimplicialHomologyEngine driven directly" in {
       given Double is Field = Field.DoubleApproximated(1e-9)
       val viaFacade = triples(
         TDA4j.computeFromPoints(points, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "field", "R")).toArray()
       )
       val metricSpace = EuclideanMetricSpace(points)
       val stream = LimitedCofaceSimplexStream(SheehyRipsSimplexStream(metricSpace, epsilon = 0.5), 3)
-      val direct = SimplicialHomologyContext[Int, Double, Double]()
+      val direct = SimplicialHomologyEngine[Int, Double, Double]()
         .persistentHomology(stream)
         .diagramAt(Double.PositiveInfinity)
         .filter(_._1 <= 2)
@@ -621,7 +621,7 @@ class TDA4jSpec extends mutable.Specification:
       val viaFacade =
         triples(TDA4j.computeFromPoints(points, Array("complex", "dtm-alpha", "dtmK", "3", "field", "R")).toArray())
       val ac = AlphaComplexDQP.dtm(points, 3, Double.PositiveInfinity, points.head.length)
-      val direct = SimplicialHomologyContext[Int, Double, Double]()
+      val direct = SimplicialHomologyEngine[Int, Double, Double]()
         .persistentHomology(AlphaComplexDQPStream(points, ac))
         .diagramAt(Double.PositiveInfinity)
         .map { case (d, b, dd) => (d, b, if dd.isPosInfinity then Double.PositiveInfinity else dd) }
@@ -652,12 +652,12 @@ class TDA4jSpec extends mutable.Specification:
       0.0
     )
 
-    "computeFromCubicalImage's default (engine=naive) matches CubicalHomologyContext driven directly" in {
+    "computeFromCubicalImage's default (engine=naive) matches CubicalHomologyEngine driven directly" in {
       val viaFacade = triples(TDA4j.computeFromCubicalImage(ringShape, ringFlat).toArray())
 
       val stream = CubicalImage.fromFlatArray(ringShape.toIndexedSeq, ringFlat.toIndexedSeq)
       given Double is Field = Field.DoubleApproximated(1e-9)
-      val direct = CubicalHomologyContext[Double, Double]()
+      val direct = CubicalHomologyEngine[Double, Double]()
         .persistentHomology(stream)
         .diagramAt(Double.PositiveInfinity)
         .map { case (d, b, e) => (d, b, e) }
@@ -775,7 +775,7 @@ class TDA4jSpec extends mutable.Specification:
       readable must contain(true).forall
     }
 
-    // CellularPersistenceInChunksContext.barcodeAt now records a real representative for EVERY bar, at every
+    // CellularPersistenceInChunksEngine.barcodeAt now records a real representative for EVERY bar, at every
     // dimension (see .claude/CLAUDE.md's coefficients-and-representatives principle and
     // .claude/WORKLOG-chunks-representatives-incremental.md) -- the earlier "dimension-0 only" gap is closed,
     // so this checks every reported bar, not just dimension 0.
@@ -808,7 +808,7 @@ class TDA4jSpec extends mutable.Specification:
       ) must throwA[IllegalArgumentException]
     }
 
-    "landmarkSelector=random with an explicit landmarkSeed matches PackedRipserCohomologyContext driven " +
+    "landmarkSelector=random with an explicit landmarkSeed matches PackedRipserCohomologyEngine driven " +
       "directly over the SAME LandmarkSelector.random(...) call" in {
         val numLandmarks = 4
         val seed = 7L
@@ -842,7 +842,7 @@ class TDA4jSpec extends mutable.Specification:
           case ClosedEndpoint(v)  => v
           case OpenEndpoint(v)    => v
 
-        val direct = PackedRipserCohomologyContext[ff.Fp](wms, 2)
+        val direct = PackedRipserCohomologyEngine[ff.Fp](wms, 2)
           .persistentCohomology()
           .map(bar => (bar.dim, toDouble(bar.lower), toDouble(bar.upper)))
 
@@ -860,7 +860,7 @@ class TDA4jSpec extends mutable.Specification:
         ) must throwA[IllegalArgumentException])
     }
 
-    "default witnessVariant=lazy, engine=ripser: matches PackedRipserCohomologyContext driven directly over " +
+    "default witnessVariant=lazy, engine=ripser: matches PackedRipserCohomologyEngine driven directly over " +
       "streams.WitnessMetricSpace, via the SAME maxmin landmark selection" in {
         val numLandmarks = 4
         val viaFacade = triples(
@@ -879,7 +879,7 @@ class TDA4jSpec extends mutable.Specification:
           case ClosedEndpoint(v)  => v
           case OpenEndpoint(v)    => v
 
-        val direct = PackedRipserCohomologyContext[ff.Fp](wms, 2)
+        val direct = PackedRipserCohomologyEngine[ff.Fp](wms, 2)
           .persistentCohomology()
           .map(bar => (bar.dim, toDouble(bar.lower), toDouble(bar.upper)))
 
@@ -1032,7 +1032,7 @@ class TDA4jSpec extends mutable.Specification:
     // computeFromPointsAndLandmarks silently ignored its own `landmarks` argument and re-ran maxmin internally
     // instead, this would still "pass" a test built on maxmin's own output (as the one-shot-equals-two-step
     // test above necessarily is, by construction) -- it can only be caught by landmarks maxmin would not have
-    // picked. Compared against PackedRipserCohomologyContext driven directly over the SAME explicit, UNSORTED
+    // picked. Compared against PackedRipserCohomologyEngine driven directly over the SAME explicit, UNSORTED
     // array, as sorted lists (not `.toSet` -- see .claude/WORKLOG-witness-complex.md's own lesson about
     // multiplicity), plus a direct cycleVertices check.
     "computeFromPointsAndLandmarks uses the landmarks it is GIVEN, not a freshly-selected set" in {
@@ -1051,7 +1051,7 @@ class TDA4jSpec extends mutable.Specification:
         case ClosedEndpoint(v)  => v
         case OpenEndpoint(v)    => v
 
-      val direct = PackedRipserCohomologyContext[ff.Fp](wms, 2)
+      val direct = PackedRipserCohomologyEngine[ff.Fp](wms, 2)
         .persistentCohomology()
         .map(bar => (bar.dim, toDouble(bar.lower), toDouble(bar.upper)))
         .sorted
@@ -1174,7 +1174,7 @@ class TDA4jSpec extends mutable.Specification:
   "TDA4j.computeFromRelation" should {
     "default to engine=naive and match streams.DowkerCofaceSimplexStream driven directly" in {
       given Double is Field = Field.DoubleApproximated(1e-9)
-      val direct = SimplicialHomologyContext[Int, Double, Double]()
+      val direct = SimplicialHomologyEngine[Int, Double, Double]()
         .persistentHomology(DowkerCofaceSimplexStream(dowkerRelation))
         .diagramAt(Double.PositiveInfinity)
       val facade = triples(TDA4j.computeFromRelation(dowkerRelation).toArray())
@@ -1206,7 +1206,7 @@ class TDA4jSpec extends mutable.Specification:
     "dual=true matches streams.DowkerCofaceSimplexStream(...).dual driven directly -- the functorial Dowker " +
       "duality theorem, exercised through the facade" in {
         given Double is Field = Field.DoubleApproximated(1e-9)
-        val direct = SimplicialHomologyContext[Int, Double, Double]()
+        val direct = SimplicialHomologyEngine[Int, Double, Double]()
           .persistentHomology(DowkerCofaceSimplexStream(dowkerRelation).dual)
           .diagramAt(Double.PositiveInfinity)
         val facade = triples(TDA4j.computeFromRelation(dowkerRelation, Array("dual", "true")).toArray())

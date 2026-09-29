@@ -21,7 +21,7 @@ private class MiniballPointSet(points: Array[Array[Double]]) extends PointSet:
   override def coord(i: Int, j: Int): Double = points(i)(j)
 
 /** The Cech radius of a simplex: the true minimum-enclosing-ball radius of its vertices' coordinates, computed once per
-  * simplex and cached forever -- a deliberate departure from `RipserCohomologyContext`'s "don't cache filtration values
+  * simplex and cached forever -- a deliberate departure from `RipserCohomologyEngine`'s "don't cache filtration values
   * by default" doctrine, since (unlike VR's diameter, which `insertionDiameter` recomputes incrementally in O(d)) there
   * is no incremental shortcut for a minimum-enclosing-ball radius: every filter check, sort, and `filtrationOrdering`
   * comparison would otherwise re-run a full Miniball solve.
@@ -46,7 +46,7 @@ object CechFiltration:
     *
     * '''Monotonicity is explicitly enforced here, not merely trusted from the math''': the Cech radius is
     * mathematically non-decreasing under vertex insertion, but Miniball's raw floating-point output can violate this by
-    * a few ULPs on near-degenerate inputs -- and `CellularHomologyContext`'s reduction requires it to hold exactly (see
+    * a few ULPs on near-degenerate inputs -- and `CellularHomologyEngine`'s reduction requires it to hold exactly (see
     * CLAUDE.md's ordering-contract rule 3). Fixed by clamping every computed radius to at least the max of its own
     * facets' ALREADY-CACHED radii (a plain lookup, never a fresh Miniball call): every facet of any simplex this method
     * is asked about is guaranteed already cached, because `filtrationValue` is only ever queried on simplices the

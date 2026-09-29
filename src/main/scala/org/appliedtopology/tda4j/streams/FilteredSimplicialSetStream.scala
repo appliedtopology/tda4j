@@ -23,7 +23,7 @@ def validateMonotoneFiltration[G](sset: FiniteSimplicialSet[G], filtrationValue:
 
 /** A `FiniteSimplicialSet` with a real, caller-supplied filtration -- unlike `SimplicialSetStream` (every generator at
   * filtration `0`, ordinary homology only), this is a genuine `StratifiedCellStream[G, Double]`, so it plugs into
-  * `CellularPersistenceInChunksContext`/`PersistenceInChunksContext` as well as `CellularHomologyContext`.
+  * `CellularPersistenceInChunksEngine`/`PersistenceInChunksEngine` as well as `CellularHomologyEngine`.
   * `filtrationValue` is defined only on generators (never on arbitrary, possibly degenerate `SSetElement`s) -- correct
   * because every engine here only ever queries a stream's `filtrationValue` on the actual `CellT` values it iterates,
   * and `SimplicialSetStream`/this class both only ever iterate generators, never degenerate elements
@@ -33,11 +33,10 @@ def validateMonotoneFiltration[G](sset: FiniteSimplicialSet[G], filtrationValue:
   * `iterateDimension` sorts each dimension's bucket by `filtrationOrdering.reverse` -- oldest first, the SAME
   * `Ordering` object reversed, not an independently-built comparator -- matching the established convention this
   * codebase has broken and fixed three separate times when two independently-tie-broken orders disagreed (see
-  * CLAUDE.md). Positional index within `PersistenceInChunksContext`'s `allCells` (built by dimension-major
-  * concatenation of `iterateDimension`'s buckets) stands in for chunk-boundary/local-reduction "how old is this cell"
-  * logic, so a bucket sorted any other way corrupts chunking even though it would still look like a valid total order
-  * in isolation -- `FilteredSimplicialSetStreamSpec` asserts this directly rather than only checking the resulting
-  * barcode.
+  * CLAUDE.md). Positional index within `PersistenceInChunksEngine`'s `allCells` (built by dimension-major concatenation
+  * of `iterateDimension`'s buckets) stands in for chunk-boundary/local-reduction "how old is this cell" logic, so a
+  * bucket sorted any other way corrupts chunking even though it would still look like a valid total order in isolation
+  * -- `FilteredSimplicialSetStreamSpec` asserts this directly rather than only checking the resulting barcode.
   */
 class FilteredSimplicialSetStream[G](
   sset: FiniteSimplicialSet[G],

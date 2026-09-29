@@ -223,7 +223,7 @@ class BarcodeDistanceSpec extends Specification with ScalaCheck:
   }
 
   "stability: perturbing points by at most epsilon changes VR bottleneck distance by at most 2*epsilon" >> {
-    given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+    given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
     import shc.{*, given}
 
     // A fixed, modest point cloud (kept small so naive-engine VR construction stays fast under ScalaCheck).

@@ -370,9 +370,9 @@ class AlphaComplexDQPRegressionSpec extends org.specs2.mutable.Specification:
 
 /** Regression test for a confirmed bug (found by `EngineComparisonBenchmarkSpec`, full writeup in CLAUDE.md's
   * "Cross-engine benchmark, and a bug it found on first run" section): both `HelixDelaunay` and `AlphaShapeDQP` used to
-  * define `filtrationOrdering` ascending instead of reversed, which crashed `SimplicialHomologyContext` ("Naive"
+  * define `filtrationOrdering` ascending instead of reversed, which crashed `SimplicialHomologyEngine` ("Naive"
   * engine) at `maxDim >= 2` with `IllegalStateException: reduction pivot ... was not a recorded open class`, while
-  * leaving `PersistenceInChunksContext` ("Chunks") unaffected. Pins both halves of the fix: no exception, AND agreement
+  * leaving `PersistenceInChunksEngine` ("Chunks") unaffected. Pins both halves of the fix: no exception, AND agreement
   * between the two engines -- the actual property that was broken, not just "doesn't crash".
   */
 class AlphaFiltrationOrderingRegressionSpec extends org.specs2.mutable.Specification with ScalaCheck:
@@ -409,11 +409,11 @@ class AlphaFiltrationOrderingRegressionSpec extends org.specs2.mutable.Specifica
         val streamB = bounded(AlphaShapes(points.toIndexedSeq, dispatch))
         val totalCells = streamB.iterator.size
         val naive =
-          SimplicialHomologyContext[Int, Double, Double]()
+          SimplicialHomologyEngine[Int, Double, Double]()
             .persistentHomology(streamB)
             .diagramAt(Double.PositiveInfinity)
         val chunks =
-          PersistenceInChunksContext[Int, Double](maxDim).persistentHomology(streamB).diagramAt(Double.PositiveInfinity)
+          PersistenceInChunksEngine[Int, Double](maxDim).persistentHomology(streamB).diagramAt(Double.PositiveInfinity)
         // No independent oracle stream exists for alpha complexes (unlike VR, where this test class's
         // sibling cross-checks against EnumeratingCofaceSimplexStream) -- so Naive's own structural
         // invariant (every cell opens or closes exactly one bar) is the strongest check available on its

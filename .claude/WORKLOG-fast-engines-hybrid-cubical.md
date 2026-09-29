@@ -39,7 +39,7 @@ note's own "Sequencing" section (mirrors item 6 before item 7 originally).
 
 ## Why this needed almost no NEW algorithm code
 
-Before writing anything, I re-read `FastCubicalHomologyContext`'s actual source rather than trusting its own
+Before writing anything, I re-read `FastCubicalHomologyEngine`'s actual source rather than trusting its own
 doc comment's framing. Both `computeH0` and `computeDualTopDimension` were ALREADY written generically in terms
 of `stream.ambientDim` (`bars += new PersistenceBar(ambientDim - 1, ...)`, the facet-enumeration loop over
 `(0 until ambientDim)`) -- neither hardcodes `2` anywhere. The ONLY thing gating either engine to `d=2` was the
@@ -48,7 +48,7 @@ union-find to arbitrary d" (already done, just gated off) -- it was "add a THIRD
 two union-finds were never going to cover, and combine."
 
 The middle-dimension piece turned out to reuse existing, already-validated machinery almost entirely:
-`CellularPersistenceInChunksContext`'s own `maxDim` semantics ("walk `0..maxDim+1`, report `<= maxDim`") is
+`CellularPersistenceInChunksEngine`'s own `maxDim` semantics ("walk `0..maxDim+1`, report `<= maxDim`") is
 EXACTLY the truncation contract needed once the stream itself is limited to `0..d-1` -- no new "discard the
 incomplete top bar" logic had to be written, because chunks already does that discarding as part of its normal
 operation (the same mechanism `naive`/`cohomology` already lean on for their own `maxDim`). And chunks already
@@ -121,7 +121,7 @@ matlab-wiring entry above, not narrated twice here.
   performance-claim discipline: "isolated A/B measurement... report unconfirmed effects as unconfirmed") --
   not measured yet. Should be a `CubicalBenchmarkSpec`-style addition before this is presented as a performance
   win rather than just a correctness-preserving capability extension.
-- **`FastAlphaHomologyContext`'s own `d >= 3` port.** Deliberately sequenced after this entry, not concurrent
+- **`FastAlphaHomologyEngine`'s own `d >= 3` port.** Deliberately sequenced after this entry, not concurrent
   with it (design note's own "Sequencing" section) -- alpha's dual-graph code is already exactly as
   dimension-generic as cubical's was before this session (same pattern, confirmed by reading it), so the PORT
   itself should be comparably small, but alpha ALSO carries its own, separate, likely-dimension-dependent risk

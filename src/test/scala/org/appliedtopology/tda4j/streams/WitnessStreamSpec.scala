@@ -29,7 +29,7 @@ import scala.collection.mutable as scmutable
   * with facets" step), an independent from-scratch brute-force reimplementation of the De Silva-Carlsson formula
   * cross-checked cell-for-cell, the general-vs-lazy(nu=2) cross-check the two constructions' shared math predicts,
   * monotonicity/downward-closure checks, the bars-account-for-cells structural invariant, and a cross-check that
-  * `PackedRipserCohomologyContext` (proven only for genuine VR diameters -- CLAUDE.md) also happens to be valid for the
+  * `PackedRipserCohomologyEngine` (proven only for genuine VR diameters -- CLAUDE.md) also happens to be valid for the
   * lazy stream specifically, since it IS a diameter under `WitnessMetricSpace`'s own "distance."
   */
 class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
@@ -278,7 +278,7 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
         val numLandmarks = math.max(2, points.length - 1)
         val landmarks = LandmarkSelector.maxmin(ms, numLandmarks).landmarks
         val stream = LazyWitnessSimplexStream(ms, landmarks, maxFiltrationValue = Some(Double.PositiveInfinity))
-        val barcode = SimplicialHomologyContext[Int, Double, Double]()
+        val barcode = SimplicialHomologyEngine[Int, Double, Double]()
           .persistentHomology(stream)
           .diagramAt(Double.PositiveInfinity)
         val cellCount = (0 until landmarks.size)
@@ -295,7 +295,7 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
         val numLandmarks = math.max(2, points.length - 1)
         val geometry = WitnessGeometry(ms, LandmarkSelector.maxmin(ms, numLandmarks).landmarks)
         val stream = WitnessCofaceSimplexStream(geometry)
-        val barcode = SimplicialHomologyContext[Int, Double, Double]()
+        val barcode = SimplicialHomologyEngine[Int, Double, Double]()
           .persistentHomology(stream)
           .diagramAt(Double.PositiveInfinity)
         val cellCount = (0 until geometry.L)
@@ -332,7 +332,7 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
       ms.elements.toIndexedSeq // every point is a landmark -- maximal ties
     )
 
-  "PackedRipserCohomologyContext, run directly on WitnessMetricSpace, agrees exactly (as a sorted list, not " +
+  "PackedRipserCohomologyEngine, run directly on WitnessMetricSpace, agrees exactly (as a sorted list, not " +
     "just a set) with the naive engine's own diagram on LazyWitnessSimplexStream, on random clouds, for both " +
     "a proper-subset and a maximal (every point is a landmark) landmark configuration" >> AsResult {
       prop { (points: Array[Array[Double]]) =>
@@ -342,7 +342,7 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
           val wms = WitnessMetricSpace(geometry, nu = 2)
           val cap = math.max(1, landmarks.size - 2)
           val naive = sortedTriples(
-            SimplicialHomologyContext[Int, Double, Double]()
+            SimplicialHomologyEngine[Int, Double, Double]()
               .persistentHomology(
                 LazyWitnessSimplexStream(ms, landmarks, maxFiltrationValue = Some(Double.PositiveInfinity))
               )
@@ -350,7 +350,7 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
               .filter(_._1 <= cap)
           )
           val ripser = sortedTriples(
-            PackedRipserCohomologyContext[Double](wms, cap, maxFiltrationValue = Some(Double.PositiveInfinity))
+            PackedRipserCohomologyEngine[Double](wms, cap, maxFiltrationValue = Some(Double.PositiveInfinity))
               .persistentCohomology()
               .map(bar => (bar.dim, endpointValue(bar.lower), endpointValue(bar.upper)))
               .filter(_._1 <= cap)
@@ -360,19 +360,19 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
       }
     }
 
-  "CellularPersistenceInChunksContext agrees exactly (as a sorted list) with the naive engine on " +
+  "CellularPersistenceInChunksEngine agrees exactly (as a sorted list) with the naive engine on " +
     "LazyWitnessSimplexStream, on random clouds, for both landmark configurations" >> AsResult {
       prop { (points: Array[Array[Double]]) =>
         val ms = EuclideanMetricSpace(points)
         landmarkConfigs(ms).forall { landmarks =>
           val stream = LazyWitnessSimplexStream(ms, landmarks, maxFiltrationValue = Some(Double.PositiveInfinity))
           val naive = sortedTriples(
-            SimplicialHomologyContext[Int, Double, Double]()
+            SimplicialHomologyEngine[Int, Double, Double]()
               .persistentHomology(stream)
               .diagramAt(Double.PositiveInfinity)
           )
           val chunks = sortedTriples(
-            CellularPersistenceInChunksContext[Simplex[Int], Double](landmarks.size)
+            CellularPersistenceInChunksEngine[Simplex[Int], Double](landmarks.size)
               .persistentHomology(stream)
               .diagramAt(Double.PositiveInfinity)
           )
@@ -386,25 +386,25 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
   ): List[(Int, Double, Double)] =
     sortedTriples(bars.map(bar => (bar.dim, endpointValue(bar.lower), endpointValue(bar.upper))))
 
-  "CellularCohomologyContext agrees exactly (as a sorted list) with the naive engine on LazyWitnessSimplexStream, " +
+  "CellularCohomologyEngine agrees exactly (as a sorted list) with the naive engine on LazyWitnessSimplexStream, " +
     "on random clouds, for both landmark configurations" >> AsResult {
       prop { (points: Array[Array[Double]]) =>
         val ms = EuclideanMetricSpace(points)
         landmarkConfigs(ms).forall { landmarks =>
           val stream = LazyWitnessSimplexStream(ms, landmarks, maxFiltrationValue = Some(Double.PositiveInfinity))
           val naive = sortedTriples(
-            SimplicialHomologyContext[Int, Double, Double]()
+            SimplicialHomologyEngine[Int, Double, Double]()
               .persistentHomology(stream)
               .diagramAt(Double.PositiveInfinity)
           )
           val cohomology =
-            cohomologyTriples(CellularCohomologyContext[Simplex[Int], Double, Double]().persistentCohomology(stream))
+            cohomologyTriples(CellularCohomologyEngine[Simplex[Int], Double, Double]().persistentCohomology(stream))
           naive == cohomology
         }
       }
     }
 
-  "CellularCohomologyContext agrees exactly (as a sorted list) with the naive engine on " +
+  "CellularCohomologyEngine agrees exactly (as a sorted list) with the naive engine on " +
     "WitnessCofaceSimplexStream (the general variant), on random clouds, for both landmark configurations" >>
     AsResult {
       prop { (points: Array[Array[Double]]) =>
@@ -412,12 +412,12 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
         landmarkConfigs(ms).forall { landmarks =>
           val stream = WitnessCofaceSimplexStream(WitnessGeometry(ms, landmarks))
           val naive = sortedTriples(
-            SimplicialHomologyContext[Int, Double, Double]()
+            SimplicialHomologyEngine[Int, Double, Double]()
               .persistentHomology(stream)
               .diagramAt(Double.PositiveInfinity)
           )
           val cohomology =
-            cohomologyTriples(CellularCohomologyContext[Simplex[Int], Double, Double]().persistentCohomology(stream))
+            cohomologyTriples(CellularCohomologyEngine[Simplex[Int], Double, Double]().persistentCohomology(stream))
           naive == cohomology
         }
       }
@@ -457,7 +457,7 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
     val ms = EuclideanMetricSpace(points)
     val landmarks = LandmarkSelector.maxmin(ms, numLandmarks = 10).landmarks
     val stream = LazyWitnessSimplexStream(ms, landmarks, maxFiltrationValue = Some(Double.PositiveInfinity))
-    val barcode = SimplicialHomologyContext[Int, Double, Double]()
+    val barcode = SimplicialHomologyEngine[Int, Double, Double]()
       .persistentHomology(stream)
       .diagramAt(Double.PositiveInfinity)
     val longestH1 = barcode.collect { case (1, b, d) if d.isFinite => d - b }.maxOption.getOrElse(0.0)

@@ -2,7 +2,7 @@
 
 Follow-up to `.claude/WORKLOG-chunks-representatives.md`, which shipped `CellularPersistenceInChunksContext.
 barcodeAt` for dimension >= 1 by delegating the whole representative computation to a fresh, independent
-`CellularHomologyContext` run over a dimension-capped copy of the same stream. That design is what this session
+`CellularHomologyEngine` run over a dimension-capped copy of the same stream. That design is what this session
 replaces -- not because it was incorrect (it was, and passed its own cross-validation), but because the project
 lead rejected it directly: "Asking for a full CellularHomologyContext run *as well as* the original run is
 nowhere near a reasonable request." The delegate design paid for a full independent sequential reduction over
@@ -12,7 +12,7 @@ every cell up to `internalMaxDim` on every `barcodeAt` call, throwing away all o
 looked reasonable at the time -- rather than edited to erase the history. This worklog documents what replaced
 it.
 
-The project lead pointed to `PackedRipserCohomologyContext` as existence proof that clearing + optimizations CAN
+The project lead pointed to `PackedRipserCohomologyEngine` as existence proof that clearing + optimizations CAN
 coexist with inline representative tracking (its `basis`/`generators` maps are threaded directly through the
 same reduction that finds pairs, no second pass). The ask: make chunks do the same -- reuse its own state
 incrementally, not run a second engine.
@@ -62,7 +62,7 @@ from source twice, after two wrong guesses from memory:
    triangle term it hit (no substitution available), producing `vcol = Chain(pivot)` -- wrong, nonzero boundary.
    Root-caused via a small 8-point-clique diagnostic dumping raw representatives and their boundaries directly.
    Fixed by adding `fallback = (c => if paired.contains(c) then Some(vcolOf(c)) else None)`, mirroring
-   `CellularHomologyContext`'s own `negativeVCols` mechanism -- found by reading the real source, not memory.
+   `CellularHomologyEngine`'s own `negativeVCols` mechanism -- found by reading the real source, not memory.
 
 2. **Second wrong guess**: the fold over the reduction log initially subtracted `coeff ⊠ vcolOf(eliminated)` for
    EVERY eliminated term, including paired-eliminated ones. Wrong per the naive engine's actual code (`if
@@ -93,7 +93,7 @@ and cached.
 ## The pairing bug this surfaced, and its own fix
 
 Validating `vcolOf` against the naive engine on a tie-heavy clique surfaced a genuine, pre-existing PAIRING bug
-in `CellularPersistenceInChunksContext` -- confirmed present on unmodified `HEAD`, unrelated to any
+in `CellularPersistenceInChunksEngine` -- confirmed present on unmodified `HEAD`, unrelated to any
 representative-tracking code, and a bigger issue than the original ask. The project lead was asked how to
 proceed (chose "root-cause and fix the pairing bug first") and then handed off for autonomous continuation. Full
 derivation, root cause (two distinct mechanisms), and fix are in `.claude/WORKLOG-chunks-pairing-bug.md` -- kept

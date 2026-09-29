@@ -42,7 +42,7 @@ into your original point cloud — map back through `landmarks(i)` yourself (`ma
 Two variants, matching JavaPlex's own two classes:
 
 - **`LazyWitnessSimplexStream`** (JavaPlex's `LazyWitnessStream`) — a flag/clique complex, so it also works
-  directly with the packed Ripser engine (`PackedRipserCohomologyContext`) by handing it a
+  directly with the packed Ripser engine (`PackedRipserCohomologyEngine`) by handing it a
   `WitnessMetricSpace` instead of a stream: `PackedRipserCohomologyContext(WitnessMetricSpace(WitnessGeometry(ambient,
   landmarks), nu = 2), maxDimension)`. The `nu` parameter (`0`, `1`, or `2`, default `2`) controls how
   forgiving a witness's own threshold is — see `WitnessMetricSpace`'s own doc.

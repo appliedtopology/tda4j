@@ -169,7 +169,7 @@ class EdgeCollapseStreamSpec extends org.specs2.mutable.Specification with Scala
       EnumeratingCofaceSimplexStream(space, maxFiltrationValue = maxFiltrationValue),
       homDim + 1
     )
-    SimplicialHomologyContext[Int, Double, Double]()
+    SimplicialHomologyEngine[Int, Double, Double]()
       .persistentHomology(stream)
       .diagramAt(Double.PositiveInfinity)
       .filter(t => t._1 <= homDim && t._2 != t._3)
@@ -226,7 +226,7 @@ class EdgeCollapseStreamSpec extends org.specs2.mutable.Specification with Scala
           3
         )
         val bars =
-          SimplicialHomologyContext[Int, Double, Double]().persistentHomology(stream).barcodeAt(Double.PositiveInfinity)
+          SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream).barcodeAt(Double.PositiveInfinity)
         forall(bars)(bar => Chain.from(bar.annotation.get.boundary).isZero() must beTrue)
       }
   }

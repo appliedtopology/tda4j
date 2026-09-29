@@ -9,7 +9,7 @@ import org.appliedtopology.tda4j.streams.{given, *}
 
 import org.specs2.mutable
 
-/** Homology of the hand-built `SimplicialSetFixtures`, computed through the real `CellularHomologyContext` engine via
+/** Homology of the hand-built `SimplicialSetFixtures`, computed through the real `CellularHomologyEngine` engine via
   * the trivial `SimplicialSetStream` adapter -- the actual evidence that `faceOf`/`insertOuter` (`SSetElement.scala`)
   * are correct, independent of `SSetElementSpec`'s direct algebra traces. Every generator sits at filtration value 0,
   * so a finite bar is always `(dim, 0, 0)` and an essential one `(dim, 0, Int.MaxValue)` -- see `SimplicialSetStream`'s
@@ -19,7 +19,7 @@ class SimplicialSetHomologySpec extends mutable.Specification:
 
   private def homologyOf[G, CoefficientT: Field](sset: FiniteSimplicialSet[G]): List[(Int, Int, Int)] =
     given (G is OrderedCell) = sset.cellInstance
-    val chc = CellularHomologyContext[G, CoefficientT, Int]()
+    val chc = CellularHomologyEngine[G, CoefficientT, Int]()
     chc.persistentHomology(SimplicialSetStream(sset)).diagramAt(0)
 
   private def essentialCountsByDim(diagram: List[(Int, Int, Int)]): Map[Int, Int] =

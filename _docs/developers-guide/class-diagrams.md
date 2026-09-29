@@ -65,7 +65,7 @@ Three concrete `OrderedCell` instances exist: `Simplex[VertexT]`, `Cube`, and a 
 own generators (that last one is a per-instance `given`, not a global one, since its boundary depends on
 that particular simplicial set's own face data). There is no dual `Cocell`/`OrderedCocell` trait pair (an
 earlier version had one; removed as the wrong shape for coboundary, which is extrinsic to a cell, not
-intrinsic like `boundary`) — `RipserCohomologyContext`/`PackedRipserCohomologyContext` compute coboundaries
+intrinsic like `boundary`) — `RipserCohomologyEngine`/`PackedRipserCohomologyEngine` compute coboundaries
 directly against `SimplexIndexing` instead (see [Persistence engines](persistence-engines.md)). See the
 [Scala 3 primer](scala3-primer.md) for what "typeclass: type Self" and "given instance" mean concretely in
 this codebase's syntax.
@@ -172,10 +172,10 @@ another** — see [Architecture](architecture.md). `CubicalGridStream`/`Explicit
 
 Deliberately *not* diagrammed field-by-field here — their exact state and trust status belongs in one
 place. See [Persistence engines](persistence-engines.md) for the full, current picture across
-`CellularHomologyContext`/`SimplicialHomologyContext`,
-`CellularPersistenceInChunksContext`/`PersistenceInChunksContext`,
-`RipserCohomologyContext`, `PackedRipserCohomologyContext`, `CellularCohomologyContext`,
-`FastCubicalHomologyContext` and `FastAlphaHomologyContext` (`HelixDelaunay` alpha complexes) -- both valid at
+`CellularHomologyEngine`/`SimplicialHomologyEngine`,
+`CellularPersistenceInChunksEngine`/`PersistenceInChunksEngine`,
+`RipserCohomologyEngine`, `PackedRipserCohomologyEngine`, `CellularCohomologyEngine`,
+`FastCubicalHomologyEngine` and `FastAlphaHomologyEngine` (`HelixDelaunay` alpha complexes) -- both valid at
 any ambient dimension `>= 2`, both via a `chunks` hybrid above 2D -- wired into `matlab`/`cli` as
 `engine="fast-cubical"`/`engine="fast-alpha"`.
 

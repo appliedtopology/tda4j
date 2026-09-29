@@ -300,14 +300,14 @@ class EnumeratingCofaceSimplexStream(
 
   // Memoized -- but ONLY the default MaximumDistanceFiltrationValue fallback, not a caller-supplied
   // filtrationValueOverride (e.g. CechFiltration already caches internally; double-wrapping it is pure
-  // waste). CellularHomologyContext and CellularPersistenceInChunksContext both re-derive
+  // waste). CellularHomologyEngine and CellularPersistenceInChunksEngine both re-derive
   // Ordering[CellT] = stream.filtrationOrdering and consult it on every chain-arithmetic comparison during
   // reduction, not just once per cell during this stream's own up-front sorts -- an uncached filtrationValue
   // means MaximumDistanceFiltrationValue's O(d^2) pairwise-distance recompute reruns on every one of those
   // comparisons. Measured (`.claude/WORKLOG-autonomous-session-2026-09-19.md`): memoizing this one fallback
   // cut reduction-phase wall-clock time by 32-46% across n=5000-20000 on a large, sparse, maxDim=1 complex.
   //
-  // This is NOT a reversal of RipserCohomologyContext's own `memoizeFiltrationValue = false` default: that
+  // This is NOT a reversal of RipserCohomologyEngine's own `memoizeFiltrationValue = false` default: that
   // decision is about a stream that never fully materializes (a genuinely unbounded-in-practice VR complex,
   // by design), where `insertionDiameter` gives an O(d) incremental alternative that makes not caching
   // viable in the first place. Neither condition holds here -- both engines already eagerly materialize
@@ -331,14 +331,14 @@ class EnumeratingCofaceSimplexStream(
   /** Filtration value, reversed (so smaller-under-this-ordering means YOUNGER, matching `SimplexStream`'s own
     * established convention), then dimension, then COLEXICOGRAPHIC order on the vertex set (via `simplexIndexing`'s own
     * combinatorial-number-system index) -- the "lexicographically refined" tie-break Ripser's own apparent-pairs
-    * machinery (Definition 3.2/Proposition 3.9, see `RipserCohomologyContext`) is defined in terms of, so using it here
+    * machinery (Definition 3.2/Proposition 3.9, see `RipserCohomologyEngine`) is defined in terms of, so using it here
     * keeps this stream's ordering consistent with every other Ripser-flavored piece of this codebase, not just
     * internally self-consistent -- deliberately not the plain lexicographic tie-break `FilteredSimplexOrdering` uses.
     *
     * Fixes a real, previously-confirmed bug (`.claude/WORKLOG-cohomology.md`): a bare `Ordering.by(filtrationValue)`
     * has no tie-break at all, so two DIFFERENT simplices tied at the same filtration value compare as *equal* -- not a
     * total order. This happens by construction on any Vietoris-Rips complex with a triangle, since a triangle's
-    * filtration value always equals that of its own longest edge; `CellularHomologyContext` bakes a stream's
+    * filtration value always equals that of its own longest edge; `CellularHomologyEngine` bakes a stream's
     * `filtrationOrdering` into `Chain.reduceBy`'s `SortedMap`, so two cells that compare equal collide as a single map
     * key and the reduction silently garbles pairings for that complex.
     *
@@ -360,8 +360,8 @@ class EnumeratingCofaceSimplexStream(
     * side-effect-free functions of the cell alone, so caching them for this one sort changes nothing about the
     * resulting order, only how many times each is computed. The cache is local to this call, not stored on the stream
     * instance, so it stays bounded to one dimension's bucket -- deliberately NOT a stream-lifetime cache like
-    * `RipserCohomologyContext.memoizeFiltrationValue`, off there for the same memory-frugality reasons. Delegates to
-    * the exact same `FiltrationOrdering.canonical` shape above, just memoized, so it cannot silently diverge from it.
+    * `RipserCohomologyEngine.memoizeFiltrationValue`, off there for the same memory-frugality reasons. Delegates to the
+    * exact same `FiltrationOrdering.canonical` shape above, just memoized, so it cannot silently diverge from it.
     */
   protected def sortedByFiltration(cells: IterableOnce[Simplex[Int]]): Vector[Simplex[Int]] =
     val fvCache = mutable.HashMap.empty[Simplex[Int], Option[Double]]
@@ -551,7 +551,7 @@ class InorderCofaceSimplexStream(
   *
   * `maxFiltrationValue` (default `+Infinity`) is the threshold defining the graph `G` whose clique complex the paper's
   * algorithm builds: `{i,j} ∈ E` iff `metricSpace.distance(i,j) <= maxFiltrationValue` (the same `<=` convention
-  * `RipserCohomologyContext`'s own sparse-Rips support uses, see `Homology.scala`). At the default `+Infinity`, `G` is
+  * `RipserCohomologyEngine`'s own sparse-Rips support uses, see `Homology.scala`). At the default `+Infinity`, `G` is
   * the complete graph, every vertex subset is a clique, and this degenerates to plain bounded subset enumeration -- the
   * New-VR algorithm's whole advantage over Incremental-VR is exploiting genuine non-edges in `G`, so a finite threshold
   * is where this class's construction actually differs in kind, not just in output, from

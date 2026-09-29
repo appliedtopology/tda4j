@@ -11,8 +11,8 @@ import org.specs2.execute.{AsResult, Result}
 import org.specs2.ScalaCheck
 import org.scalacheck.*
 
-/** `FastCubicalHomologyContext` (Flash Cubical's dual-graph union-find, `.claude/DESIGN-fast-cubical-engine.md`) --
-  * cross-validated against `CubicalHomologyContext` (the naive engine, this codebase's own reference oracle for cubical
+/** `FastCubicalHomologyEngine` (Flash Cubical's dual-graph union-find, `.claude/DESIGN-fast-cubical-engine.md`) --
+  * cross-validated against `CubicalHomologyEngine` (the naive engine, this codebase's own reference oracle for cubical
   * complexes) rather than re-derived by hand for every fixture: the dual-graph construction's own correctness argument
   * (Alexander duality) is independent of the naive engine's own algorithm (general boundary-matrix reduction), so
   * agreement between the two is real evidence, not two implementations of the same idea agreeing with itself. The two
@@ -29,12 +29,12 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
     case NegativeInfinity() => Double.NegativeInfinity
 
   def fastBars[C: Field](stream: CubicalGridStream): List[(Int, Double, Double)] =
-    FastCubicalHomologyContext[C]()
+    FastCubicalHomologyEngine[C]()
       .persistentHomology(stream)
       .map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
 
   def naiveBars(stream: CubicalGridStream): List[(Int, Double, Double)] =
-    CubicalHomologyContext[Double, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+    CubicalHomologyEngine[Double, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
 
   val twoHoleFixture: CubicalGridStream =
     val elevated = Set(IndexedSeq(1, 1), IndexedSeq(3, 3))
@@ -91,7 +91,7 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
 
   "A permanently-missing (topValue = +Infinity) center pixel produces the same essential H1 bar as a finite one, " +
     "and matches the naive engine" >> {
-      val bars = FastCubicalHomologyContext[Double]().persistentHomology(permanentlyMissingCenterFixture)
+      val bars = FastCubicalHomologyEngine[Double]().persistentHomology(permanentlyMissingCenterFixture)
       val triples = bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
       (triples.exists(_ == (1, 0.0, Double.PositiveInfinity)) must beTrue) and
         (bars.filter(_.dim == 1).forall(b => Chain.from(b.annotation.get.boundary).isZero()) must beTrue) and
@@ -99,14 +99,14 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
     }
 
   "requires ambient dimension at least 2" >> {
-    FastCubicalHomologyContext[Double]()
+    FastCubicalHomologyEngine[Double]()
       .persistentHomology(CubicalGridStream(IndexedSeq(3), _ => 0.0)) must throwA[IllegalArgumentException]
   }
 
   // ---------------------------------------------------------------------------------------------------------
   // d=3: the hybrid path (.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md). H_0/H_2 (= H_{d-1}) still
   // come from the two union-finds, unchanged; H_1 is the one "middle" dimension at d=3, handed to
-  // CellularPersistenceInChunksContext on a LimitedCubicalGridStream view. Direct 3D analogue of the 2D "single
+  // CellularPersistenceInChunksEngine on a LimitedCubicalGridStream view. Direct 3D analogue of the 2D "single
   // bright center pixel"/"two independent holes" fixtures above: a solid NxNxN block of voxels with one interior
   // voxel elevated is a solid ball with a small cubical CAVITY (not touching the outer boundary) once the
   // elevated voxel's own sublevel threshold is crossed -- homotopy equivalent to S^2, so exactly one persistent
@@ -147,7 +147,7 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
     "fixtures" >>
     handFixtures3D
       .map { stream =>
-        val bars = FastCubicalHomologyContext[Double]().persistentHomology(stream)
+        val bars = FastCubicalHomologyEngine[Double]().persistentHomology(stream)
         bars.filter(_.dim > 0).forall(b => Chain.from(b.annotation.get.boundary).isZero()) must beTrue
       }
       .reduce(_ and _)
@@ -184,7 +184,7 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
   "every FastCubical H1 representative has zero boundary, on the hand-derived fixtures" >>
     handFixtures
       .map { stream =>
-        val bars = FastCubicalHomologyContext[Double]().persistentHomology(stream)
+        val bars = FastCubicalHomologyEngine[Double]().persistentHomology(stream)
         bars.filter(_.dim == 1).forall(b => Chain.from(b.annotation.get.boundary).isZero()) must beTrue
       }
       .reduce(_ and _)
@@ -203,7 +203,7 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
     handFixtures
       .map { stream =>
         val doubleBars = fastBars[Double](stream)
-        val f3Bars = FastCubicalHomologyContext[GF3.Fp]().persistentHomology(stream)
+        val f3Bars = FastCubicalHomologyEngine[GF3.Fp]().persistentHomology(stream)
         val f3Triples = f3Bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
         val allCycles = f3Bars.filter(_.dim == 1).forall(b => Chain.from(b.annotation.get.boundary).isZero())
         (f3Triples.sorted must beEqualTo(doubleBars.sorted)) and (allCycles must beTrue)
@@ -215,7 +215,7 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
     handFixtures3D
       .map { stream =>
         val doubleBars = fastBars[Double](stream)
-        val f3Bars = FastCubicalHomologyContext[GF3.Fp]().persistentHomology(stream)
+        val f3Bars = FastCubicalHomologyEngine[GF3.Fp]().persistentHomology(stream)
         val f3Triples = f3Bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
         val allCycles = f3Bars.filter(_.dim > 0).forall(b => Chain.from(b.annotation.get.boundary).isZero())
         (f3Triples.sorted must beEqualTo(doubleBars.sorted)) and (allCycles must beTrue)
@@ -225,7 +225,7 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
   // ---------------------------------------------------------------------------------------------------------
   // Random 2D grids, cross-validated against the naive engine -- reusing CubicalStreamSpec's own genTestImage
   // shape (small integer values, tie-heavy by construction, exactly the regime this codebase's filtration-
-  // ordering/union-find bugs have historically hidden in), restricted to ambientDim=2, FastCubicalHomologyContext's
+  // ordering/union-find bugs have historically hidden in), restricted to ambientDim=2, FastCubicalHomologyEngine's
   // only currently-supported case. Level 4 is a sentinel for topValue = +Infinity (a permanently-missing cell,
   // ~1-in-5 per top cell) -- NOT just a larger finite value, since it ties against the dual graph's own
   // infinityId sentinel and exercises the young/old tie-break bug this file's own permanentlyMissingCenterFixture
@@ -255,7 +255,7 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
   // both endpoints as the literal Double +Infinity, which the helper's `upper.isFinite` check can't distinguish
   // from a true unpaired essential class (1-cell contribution) -- found via this exact generator (shape=(3,2),
   // values=[3,4,4,4,4,4]: 22 counted vs. 35 actual cells), and confirmed NOT an engine bug by checking the SAME
-  // fixture directly: this engine's own bars matched CubicalHomologyContext's bar-for-bar exactly (triples.sorted
+  // fixture directly: this engine's own bars matched CubicalHomologyEngine's bar-for-bar exactly (triples.sorted
   // == naive.sorted) on the failing case, so the helper would miscount the naive engine's own output identically.
   // The naive-agreement check below already subsumes what this invariant is meant to catch, so it stays out
   // rather than narrowing the generator to dodge a pre-existing, shared test-helper limitation.
@@ -263,7 +263,7 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
     AsResult {
       prop { (img: TestImage2D) =>
         val stream = CubicalGridStream(img.shape, valueFnOf(img))
-        val bars = FastCubicalHomologyContext[Double]().persistentHomology(stream)
+        val bars = FastCubicalHomologyEngine[Double]().persistentHomology(stream)
         val triples = bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
         val allCycles = bars.filter(_.dim == 1).forall(b => Chain.from(b.annotation.get.boundary).isZero())
         allCycles && triples.sorted == naiveBars(stream).sorted
@@ -301,7 +301,7 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
     AsResult {
       prop { (img: TestImage3D) =>
         val stream = CubicalGridStream(img.shape, valueFnOf(img))
-        val bars = FastCubicalHomologyContext[Double]().persistentHomology(stream)
+        val bars = FastCubicalHomologyEngine[Double]().persistentHomology(stream)
         val triples = bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
         val allCycles = bars.filter(_.dim > 0).forall(b => Chain.from(b.annotation.get.boundary).isZero())
         allCycles && triples.sorted == naiveBars(stream).sorted

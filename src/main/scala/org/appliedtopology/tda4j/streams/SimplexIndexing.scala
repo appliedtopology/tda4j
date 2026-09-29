@@ -86,7 +86,7 @@ class SimplexIndexing(val vertexCount: Int):
     apply(n - binomialEntry(d, id), d - 1, upperAccum + (id + d))
 
   /** Same decode as `apply(n, size)`, but returns the vertex set as a plain sorted `Array[Int]` instead of a
-    * `Simplex[Int]`/`SortedSet[Int]` -- for callers (`PackedRipserCohomologyContext.sparseCofacets`/`coboundaryOf`/
+    * `Simplex[Int]`/`SortedSet[Int]` -- for callers (`PackedRipserCohomologyEngine.sparseCofacets`/`coboundaryOf`/
     * `zeroPivotCofacet`) that only ever wanted `si(index, size).underlying.toArray` and threw the decoded `Simplex`
     * away immediately afterward. `apply`'s own `upperAccum + (id + d)` builds the result via `size` separate
     * persistent-tree insertions (each an O(log size) allocation this throwaway value never needs). This method performs
@@ -290,7 +290,7 @@ class SimplexIndexing(val vertexCount: Int):
     * access pattern -- `k` (the rank, `1..size`) small and bounded by simplex size, `n` (the vertex value) large and
     * bounded by `vertexCount` -- is exactly what `binomialChoose`'s row/column layout was built for (see its own doc,
     * added for `CofacetCursor`/`FacetCursor`'s stepping). Found via the `o3_1024` compute-server JFR profile on
-    * `RipserCohomologyContext` (`.claude/WORKLOG-ripser-profiling.md`): this chain (this method is the ONLY caller of
+    * `RipserCohomologyEngine` (`.claude/WORKLOG-ripser-profiling.md`): this chain (this method is the ONLY caller of
     * the encode direction from any per-simplex hot path) accounted for roughly 41% of that engine's remaining CPU time
     * once the metric-space cache and the apparent-pairs early-exit fix cleared away what had been dominating before,
     * with the un-cached `binomial`'s own `BinomialCoefficient`/`gcd` cost adding another ~18%.

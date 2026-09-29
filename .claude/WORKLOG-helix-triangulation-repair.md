@@ -7,7 +7,7 @@
 
 `HelixDelaunay(pts, seed, requireValidTriangulation = true)` (`alpha/AlphaShapes.scala`). Off by default (zero
 behavior change to every existing call site). When on, and `compute()` produces a facet-multiplicity violation
-(`FastAlphaHomologyContext`'s own precondition -- more than 2 top simplices independently claiming one facet),
+(`FastAlphaHomologyEngine`'s own precondition -- more than 2 top simplices independently claiming one facet),
 runs `HelixDelaunay.repairByJitterRetriangulation`:
 
 1. Nudge exactly the vertices involved in a violation by a small random perturbation.
@@ -21,7 +21,7 @@ runs `HelixDelaunay.repairByJitterRetriangulation`:
    actionable exception if all attempts are exhausted.
 
 `FastAlphaHomologySpec` carries two regression fixtures (`d=2` and a real `d=3` point cloud found by the stress
-sweep itself, not hand-built) confirming the repaired stream's `FastAlphaHomologyContext` barcode agrees with
+sweep itself, not hand-built) confirming the repaired stream's `FastAlphaHomologyEngine` barcode agrees with
 the naive engine's own barcode on the identical repaired stream.
 
 ## Why it took four designs
@@ -39,7 +39,7 @@ near-tie order-dependency, not the textbook cospherical-fat-simplex hazard.
 2. **Pruning** each over-claimed facet to its two smallest-circumradius claimants, discarding the rest with no
    replacement: implemented, provably cannot re-introduce a `>2`-claimant violation. But discarding a top
    simplex without replacement can punch a genuine interior hole through the mesh, which
-   `FastAlphaHomologyContext`'s single-`∞`-sentinel dual-graph technique can't see -- confirmed empirically (a
+   `FastAlphaHomologyEngine`'s single-`∞`-sentinel dual-graph technique can't see -- confirmed empirically (a
    missing essential `H_1` bar on the pinned fixture) via a standalone diagnostic script, not just argued.
    Reverted in full.
 3. **Diagonal/bistellar flip** (investigated, not implemented): the project lead's own follow-up proposal
@@ -57,7 +57,7 @@ near-tie order-dependency, not the textbook cospherical-fat-simplex hazard.
    project lead's own direct challenge to an initial "engine limitation" hypothesis ("Delaunay should fully
    triangulate the convex hull -- shouldn't be a possibility of interior voids. Is the naive engine struggling
    here?"), which was correct: a direct tetrahedra-volume measurement confirmed a real ~33% shortfall on the
-   failing case, meaning the repair itself -- not `FastAlphaHomologyContext` -- was silently producing an
+   failing case, meaning the repair itself -- not `FastAlphaHomologyEngine` -- was silently producing an
    incomplete triangulation. Fixed with the `hasNoInteriorVoid` check described above; re-validated on the SAME
    `d=3` sweep that found the 656 disagreements (now 6272/6272 clean) plus an independent 5000-trial sweep
    (1585/1585).

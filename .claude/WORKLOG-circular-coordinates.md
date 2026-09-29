@@ -22,12 +22,12 @@ existing convention).
 ## The reframing (the actual content of this item, not just a literature port)
 
 The originating worklog's own open question: does a *finite* H¹ bar's already-computed representative in
-`CellularCohomologyContext` actually restrict to a nonzero cocycle on a sub-level complex `K_r` for `r` inside
+`CellularCohomologyEngine` actually restrict to a nonzero cocycle on a sub-level complex `K_r` for `r` inside
 `[birth, death)`? CLAUDE.md only guarantees this for *essential* bars. The user's fix, carried out here exactly
 as specified: don't ask that question. Fix `r` up front, build the *static* truncated complex `K_r`
 (`LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(r)), 2)` —
 the same `maxFiltrationValue` knob enclosing-radius truncation already uses, no new subcomplex-extraction code),
-and compute `CellularCohomologyContext`'s persistent cohomology of *that fixed complex* directly. The target
+and compute `CellularCohomologyEngine`'s persistent cohomology of *that fixed complex* directly. The target
 class is essential there by construction — nothing survives past `r` in a view that stops at `r` — so the
 verification question dissolves rather than needing an answer.
 
@@ -102,9 +102,9 @@ integrated along some path, and not any further transform — is the coordinate.
   restricting, not merely present.
 - **Essential-representative cross-check** (the originating worklog's own suggested first correctness test,
   done as its own independent test rather than folded into `compute`'s internals): `K_r`'s essential H¹
-  representative from `CellularCohomologyContext` is checked to have zero coboundary against `K_r`'s own
+  representative from `CellularCohomologyEngine` is checked to have zero coboundary against `K_r`'s own
   triangles directly (`coboundaryOfChain(rep).isZero()`), and cross-checked for existence against
-  `PackedRipserCohomologyContext` computed independently over the same `K_r` — two genuinely independent
+  `PackedRipserCohomologyEngine` computed independently over the same `K_r` — two genuinely independent
   engines agreeing that an essential H¹ class exists there, not just one engine's internal consistency.
 
 `matlab.CircularCoordinatesResultSpec`, 4 examples, all passing: `h1Bars` row count/sort order; the facade's

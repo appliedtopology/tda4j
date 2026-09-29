@@ -1024,8 +1024,8 @@ class AlphaComplexDQPBuilder(
     // the primary key right and leaving an inconsistent tie-break (previously: c.show, a string) is
     // exactly the bug class documented in CLAUDE.md's "Bug found while cross-validating" section: it self
     // passes VietorisRipsSpec-style sortedness checks (those only look at filtration VALUES), but breaks
-    // PersistenceInChunksContext, whose chunk-boundary/local-reduction logic (Homology.scala's
-    // PersistenceInChunksContext.allCells) relies on positional index in iterateDimension's own emission
+    // PersistenceInChunksEngine, whose chunk-boundary/local-reduction logic (Homology.scala's
+    // PersistenceInChunksEngine.allCells) relies on positional index in iterateDimension's own emission
     // order standing in for filtrationOrdering position -- found via EngineComparisonBenchmarkSpec /
     // AlphaFiltrationOrderingRegressionSpec once the primary-key-direction half of this bug was fixed
     // and the crash it caused went away but disagreement with the naive engine remained. byDim(k) is

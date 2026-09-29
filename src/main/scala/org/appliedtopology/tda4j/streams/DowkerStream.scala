@@ -32,7 +32,7 @@ import scala.collection.immutable
   * condition, not a pairwise one). So this construction is built on `RipserCofaceSimplexStream`'s generic "try every
   * remaining vertex against every already-accepted lower-dimensional simplex" coface loop (valid for ANY
   * downward-closed criterion, per that class's own doc), never on the flag-specific incremental-diameter machinery
-  * `PackedRipserCohomologyContext`/`RipserCohomologyContext` depend on -- `engine=ripser`/`chunks` are not offered for
+  * `PackedRipserCohomologyEngine`/`RipserCohomologyEngine` depend on -- `engine=ripser`/`chunks` are not offered for
   * this construction (see `matlab.TDA4j`'s dispatch, once wired) for the same reason they aren't for the general
   * witness complex or Cech.
   *

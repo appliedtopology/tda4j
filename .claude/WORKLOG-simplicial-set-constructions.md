@@ -106,5 +106,5 @@ shipped:
   algebra" scope; would lean on `product` and quotients as building blocks once quotients exist. Not started.
 - **Real multi-scale filtration / persistence support** — unchanged, lives entirely in the `CellStream` adapter
   layer, untouched by this session's work.
-- **`PersistenceInChunksContext`/`SimplicialHomologyByDimensionContext`** — still hardcoded to
+- **`PersistenceInChunksEngine`/`SimplicialHomologyByDimensionContext`** — still hardcoded to
   `Simplex[VertexT]`, unrelated to this session.

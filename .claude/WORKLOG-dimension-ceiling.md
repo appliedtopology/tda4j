@@ -12,8 +12,8 @@ New spec: `DimensionCeilingBenchmarkSpec.scala`. Kept deliberately small/cheap u
 permanent `skipAll`), with a global wall-clock deadline so a misbehaving cell can't repeat the 15-minute sbt-lock
 incident CLAUDE.md already documents. A real sweep is run via explicit `-D` overrides through `testOnly`.
 
-For each of two engines (`RipserCohomologyContext` -- the production engine with genuine incremental sparse
-enumeration -- and `EnumeratingCofaceSimplexStream` x `SimplicialHomologyContext`, i.e. "VR-Enum+Naive" -- the raw
+For each of two engines (`RipserCohomologyEngine` -- the production engine with genuine incremental sparse
+enumeration -- and `EnumeratingCofaceSimplexStream` x `SimplicialHomologyEngine`, i.e. "VR-Enum+Naive" -- the raw
 stream + reference reduction algorithm, included specifically because WORKLOG-mst-and-perf.md Part 2/Part 4
 documented that bounding distance does NOT reduce its O(C(n,d+1)) enumeration cost, only its reduction cost), for
 each homological dimension of interest `H in {2,3,4}` (built as `maxDimension = H+1` simplices -- see
@@ -98,7 +98,7 @@ free lunch: dimension 3-4 on more than a few dozen unbounded points is inherentl
 
 ## New bugs found (neither chased to a fix this session -- both confirmed real, both localized)
 
-### 1. `SimplicialHomologyContext` crashes unconditionally past build-dimension 3 -- CONFIRMED, root cause not
+### 1. `SimplicialHomologyEngine` crashes unconditionally past build-dimension 3 -- CONFIRMED, root cause not
    isolated further than "engine-specific, not general combinatorics"
 
 On `EnumeratingCofaceSimplexStream` input, `SimplicialHomologyContext.HomologyState.advanceOne` throws
@@ -110,9 +110,9 @@ default, sparse alike), and via a standalone diagnostic on a fixed point cloud (
 - **Genuinely dimension-triggered, not a seed/threshold artifact**: `buildDim=2` and `buildDim=3` on the identical
   cloud succeed (470 and 1471 bars respectively); `buildDim=4` on the SAME cloud fails with the same pivot,
   `TreeSet(5, 8, 9, 11)`, every time.
-- **Not a general combinatorics bug**: `RipserCohomologyContext`, an independently implemented and separately
+- **Not a general combinatorics bug**: `RipserCohomologyEngine`, an independently implemented and separately
   cross-validated engine, computes the identical complex at the identical dimension successfully (see the H=4
-  unbounded row above -- n=20 ran fine on Ripser). So the fault is in `SimplicialHomologyContext`'s reduction
+  unbounded row above -- n=20 ran fine on Ripser). So the fault is in `SimplicialHomologyEngine`'s reduction
   bookkeeping or its interaction with `EnumeratingCofaceSimplexStream`, not in `Simplex.boundary`/`SimplexIndexing`
   machinery shared by both (`Simplex.scala`'s `boundary` extension was read directly and is dimension-general, no
   hardcoded bound).
@@ -123,19 +123,19 @@ default, sparse alike), and via a standalone diagnostic on a fixed point cloud (
 against, per its own class doc) cannot compute homology in dimension 3 or above on a Vietoris-Rips stream AT ALL
 right now, for any input, regardless of size or threshold. This was never caught before because
 `EngineComparisonBenchmarkSpec`'s own defaults (`maxMaxDim=2`) never built a 4-dimensional simplex, and no other
-existing spec happens to push `SimplicialHomologyContext` + `EnumeratingCofaceSimplexStream` that high either.
+existing spec happens to push `SimplicialHomologyEngine` + `EnumeratingCofaceSimplexStream` that high either.
 
 **Not investigated further this session**: the actual reduction-algorithm root cause (why a valid pivot goes
 missing specifically once 5-term boundaries exist) needs its own dedicated pass, not a same-session extension of a
 benchmarking sweep -- flagged here, left for the project lead to prioritize.
 
-### 2. `RipserCohomologyContext` crashes in the `sparse` threshold regime at high build dimension -- FIXED, see
+### 2. `RipserCohomologyEngine` crashes in the `sparse` threshold regime at high build dimension -- FIXED, see
    WORKLOG-simplexindexing-overflow.md
 
 **Update, later session**: root-caused and fixed. `SimplexIndexing`'s combinatorial indices were `Int`-typed and
 `binomial`'s `Int`-returning implementation silently truncated (via `BigInt.intValue`) once `C(n,k)` exceeded
 `Int.MaxValue` -- confirmed at exactly `n=230` (this repro), `k>=5`. Fixed by migrating combinatorial indices to
-`Long` throughout `SimplexIndexing`/`RipserCohomologyContext` (matching `ripser.cpp`'s own `int64_t` convention),
+`Long` throughout `SimplexIndexing`/`RipserCohomologyEngine` (matching `ripser.cpp`'s own `int64_t` convention),
 plus a second, related bug the fix exposed: `SimplexIndexing`'s `binomialTable` was eagerly computing a full
 `(vertexCount+1) x (vertexCount+1)` grid regardless of which entries were ever needed, now lazily memoized. Full
 account, including why `zeroPivotCofacet`'s own reasoning wasn't the actual bug, in

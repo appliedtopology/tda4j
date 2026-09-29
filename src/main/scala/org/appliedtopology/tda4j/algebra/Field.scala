@@ -16,7 +16,7 @@ trait Field:
   def zero: Self
   def one: Self
 
-  def showForSelf : Show[Self]
+  def showForSelf: Show[Self]
 
   extension (x: Self)
     infix def +(y: Self): Self = plus(x, y)
@@ -51,4 +51,4 @@ object Field:
 
     override def showForSelf = Show.fromToString[Double]
 
-given [F : Field] => Show[F] = summon[F is Field].showForSelf
+given [F: Field] => Show[F] = summon[F is Field].showForSelf

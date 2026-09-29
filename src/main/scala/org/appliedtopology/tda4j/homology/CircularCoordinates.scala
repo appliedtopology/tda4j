@@ -34,8 +34,8 @@ class NoIntegerCocycleException(message: String) extends RuntimeException(messag
   * representative restricts to a nonzero cocycle on some sub-level complex `K_r` (an open question about an
   * already-computed representative), fix `r` inside the target bar's own `[birth, death)` range up front, build the
   * *static* truncated complex `K_r` (`maxFiltrationValue = Some(r)`, the same knob that already implements
-  * enclosing-radius truncation, plus a cell-dimension cap so `CellularCohomologyContext` -- which fully materializes
-  * its input, no `maxDim` of its own -- doesn't build cells above what H¹ needs), and compute cohomology of *that fixed
+  * enclosing-radius truncation, plus a cell-dimension cap so `CellularCohomologyEngine` -- which fully materializes its
+  * input, no `maxDim` of its own -- doesn't build cells above what H¹ needs), and compute cohomology of *that fixed
   * complex* directly. The target class is essential there *by construction* (nothing survives past `r` in a view that
   * stops at `r`) -- the verification question dissolves rather than needing an answer. Matching multiple
   * simultaneously-alive classes at `K_r` back to a specific full-filtration bar turns out to need only a birth-value
@@ -101,7 +101,7 @@ object CircularCoordinates:
       EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
       2
     )
-    val ctx = CellularCohomologyContext[Simplex[Int], Double, Double]()
+    val ctx = CellularCohomologyEngine[Simplex[Int], Double, Double]()
     ctx
       .persistentCohomology(stream)
       .filter(_.dim == 1)
@@ -160,7 +160,7 @@ object CircularCoordinates:
   ): Result =
     given realField: (Double is Field) = Field.DoubleApproximated(1e-9)
 
-    val ctx = CellularCohomologyContext[Simplex[Int], C, Double]()
+    val ctx = CellularCohomologyEngine[Simplex[Int], C, Double]()
 
     // Full computation, dimension-capped one band above H^1 (triangles) so essential-vs-finite is resolved
     // correctly (H_1 needs 2-dimensional chains) -- the same "+1" every other maxDim-truncated engine in this
@@ -354,7 +354,7 @@ object CircularCoordinates:
       s"cocycleIndices must not contain duplicates, got $cocycleIndices"
     )
 
-    val ctx = CellularCohomologyContext[Simplex[Int], C, Double]()
+    val ctx = CellularCohomologyEngine[Simplex[Int], C, Double]()
 
     // Shared, computed ONCE regardless of how many classes are requested -- only the per-class tail below
     // (birth-match, lift+verify, harmonic smoothing) genuinely needs to run once per chosen index.

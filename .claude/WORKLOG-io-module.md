@@ -141,7 +141,7 @@ why `identify`'s union-find lives in `cells` rather than reusing `streams.UnionF
 37 new examples across 5 specs (`CsvSpec`, `RipserIOSpec`, `DiphaSpec`, `GudhiSpec`, `PerseusSpec`), all passing,
 plus a real end-to-end check per advisor's suggestion: `PerseusSpec`'s "-1 missing pixel" test builds a 3x3 grid
 with the center pixel missing (mapped to `Double.PositiveInfinity`), runs it through the actual
-`CellularHomologyContext`/`persistentHomology` machinery, and asserts a genuine ESSENTIAL dimension-1 bar exists --
+`CellularHomologyEngine`/`persistentHomology` machinery, and asserts a genuine ESSENTIAL dimension-1 bar exists --
 the topologically correct signature of an 8-pixel ring (homotopy-equivalent to $S^1$) rather than merely "the loader
 didn't crash." Full `sbt test`: 299 examples, 0 failures, 0 errors (294 passed, 5 skipped, 1 pending -- the
 pre-existing skip/pending count, unaffected by this session). `sbt scalafmtAll`/`scalafmtCheckAll` clean.

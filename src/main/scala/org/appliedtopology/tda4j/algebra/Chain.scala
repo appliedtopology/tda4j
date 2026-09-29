@@ -132,7 +132,7 @@ object Chain:
     * every time a pivot is hit, with no cache anywhere). Deliberately NOT written into `basis` here, for the same
     * reason: a caller relying on a stale substitute would be trusting a value real Ripser itself never trusts twice.
     * `fallback(sigma)`, if `Some`, must return a chain whose `leadingCell` is `sigma` itself -- the caller is
-    * responsible for that invariant (see `RipserCohomologyContext.zeroApparentFacet`'s doc for why it holds there).
+    * responsible for that invariant (see `RipserCohomologyEngine.zeroApparentFacet`'s doc for why it holds there).
     *
     * A `while` loop mutating `z`/`reductionLog` in place, not `@tailrec` recursion threading a fresh immutable
     * `SortedMap` through each step -- see `updateMap`'s doc above. `z.head`/`z.isEmpty` are used instead of
@@ -225,6 +225,6 @@ object Chain:
           .map((cellI, coeffI) => (cellI, coeffO * coeffI))
       }.toSeq
 
-given [CellT : {OrderedCell, Show}, CoefficientT : Field] =>  Show[Chain[CellT, CoefficientT]] = Show.show { c =>
+given [CellT: {OrderedCell, Show}, CoefficientT: Field] => Show[Chain[CellT, CoefficientT]] = Show.show { c =>
   c.rawEntries.map((cell, coeff) => show"$coeff⊠$cell").mkString(" + ")
 }

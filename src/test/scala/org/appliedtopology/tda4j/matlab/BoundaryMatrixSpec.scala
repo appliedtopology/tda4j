@@ -91,7 +91,7 @@ class BoundaryMatrixSpec extends Specification with ScalaCheck:
       // A generic (non-symmetric, non-cospherical) point set deliberately -- unrelated pre-existing bug found
       // while writing this spec: a highly symmetric configuration (a unit square plus its own center) makes
       // TDA4j.computeFromPoints(complex=alpha) throw IllegalStateException("reduction pivot ... was not a
-      // recorded open class") from CellularHomologyContext.advanceOne, reproducing with NO boundary-matrix code
+      // recorded open class") from CellularHomologyEngine.advanceOne, reproducing with NO boundary-matrix code
       // involved at all -- confirmed by calling that exact one-line combination directly. Out of scope for this
       // arc (a real but separate ordering/tie-handling bug, the same failure signature CLAUDE.md's "Streams:
       // the ordering contract" section already documents five prior instances of); flagged in this session's

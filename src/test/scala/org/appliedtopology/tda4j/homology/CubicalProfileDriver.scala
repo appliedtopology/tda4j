@@ -6,7 +6,7 @@ import org.appliedtopology.tda4j.cells.{given, *}
 import org.appliedtopology.tda4j.streams.{given, *}
 
 /** Test-scope driver, kept alongside `CubicalBenchmarkSpec.scala` -- a single-process JVM target for profiling
-  * `CellularHomologyContext`/`CellularPersistenceInChunksContext` on a `CubicalGridStream`, avoiding the sbt-hosted
+  * `CellularHomologyEngine`/`CellularPersistenceInChunksEngine` on a `CubicalGridStream`, avoiding the sbt-hosted
   * benchmark harness's own documented timeout/daemon-thread contamination risk (see `SingleEngineProfileDriver`'s own
   * doc, same reasoning). Invoked directly:
   *
@@ -18,7 +18,7 @@ import org.appliedtopology.tda4j.streams.{given, *}
   * with `n` in 3D but stays flat in 2D. See `.claude/WORKLOG-autonomous-session-2026-09-19.md`.
   *
   * `engine` (default `naive`) added in a later session (`.claude/WORKLOG-cubical-capacity-sweep.md`) to sweep the SAME
-  * grid shape through `CellularPersistenceInChunksContext` too -- CLAUDE.md's own cubical benchmark numbers show chunks
+  * grid shape through `CellularPersistenceInChunksEngine` too -- CLAUDE.md's own cubical benchmark numbers show chunks
   * is the substantially faster engine on `Cube` (25/18/23 vs 84/48/109 us/cell at n=8/16/24 in 3D), so a capacity sweep
   * asking "how large can we comfortably go" needs both engines measured, not just the one this driver originally
   * targeted.
@@ -53,7 +53,7 @@ object CubicalProfileDriver:
     val barCount =
       engine match
         case "naive" =>
-          given chc: CubicalHomologyContext[Double, Double] = CubicalHomologyContext()
+          given chc: CubicalHomologyEngine[Double, Double] = CubicalHomologyEngine()
           val state = chc.persistentHomology(freshStream())
           val t2 = System.nanoTime()
           val barcode = state.diagramAt(Double.PositiveInfinity)
@@ -61,7 +61,7 @@ object CubicalProfileDriver:
           report(dims, n, engine, cellCount, phase1Count, barcode.size, t0, t1, t2, t3)
           barcode.size
         case "chunks" =>
-          val chc = CellularPersistenceInChunksContext[Cube, Double](maxDim = dims)
+          val chc = CellularPersistenceInChunksEngine[Cube, Double](maxDim = dims)
           val state = chc.persistentHomology(freshStream())
           val t2 = System.nanoTime()
           val barcode = state.diagramAt(Double.PositiveInfinity)

@@ -12,23 +12,23 @@ reduction primitives from [Architecture](architecture.md), but they are not vari
 fix or bug found in one does not imply anything about the others. Read this page before choosing which engine
 to build on.
 
-Three of the five (`CellularHomologyContext`, `CellularPersistenceInChunksContext`, `CellularCohomologyContext`)
+Three of the five (`CellularHomologyEngine`, `CellularPersistenceInChunksEngine`, `CellularCohomologyEngine`)
 additionally implement the common `homology.PersistenceEngine[CellT, C]` trait (`def barcode(stream): List[
 PersistenceBar[Double, Chain[CellT, C]]]`) via `PersistenceEngine.naive`/`.chunks`/`.cohomology` factories — a
 thin, opt-in adapter over each engine's own incremental API, for a caller (the MATLAB/CLI facade) that just
 wants a finished barcode without hand-writing each engine's own construct/advance/read dance. It does not
 change any engine's own contract; the incremental API (`advanceTo`/`diagramAt`/`barcodeAt`) stays available on
-the concrete class. `PackedRipserCohomologyContext`/`RipserCohomologyContext` don't implement it — they consume
+the concrete class. `PackedRipserCohomologyEngine`/`RipserCohomologyEngine` don't implement it — they consume
 a `FiniteMetricSpace[Int]` directly, not a stream (see engine 4 below).
 
-## 1. `CellularHomologyContext` / `SimplicialHomologyContext` — reference-grade, generic
+## 1. `CellularHomologyEngine` / `SimplicialHomologyEngine` — reference-grade, generic
 
 `CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]` is the naive
 single-pivot-table boundary-reduction algorithm: process cells in filtration order, reduce each cell's
 boundary against pivots recorded so far via `Chain.reduceBy`, and the cell either opens a class (reduced
 boundary is zero) or closes one. No clearing, no chunking, no cohomology/twist optimization. Generic over
 *any* `CellT: OrderedCell` — this is what makes it the engine `Cube` and `FiniteSimplicialSet` slot into
-with no new engine code (`CubicalHomologyContext`, `SimplicialHomologyContext` are one-line specializations
+with no new engine code (`CubicalHomologyEngine`, `SimplicialHomologyEngine` are one-line specializations
 of it). It's the **oracle every other engine here gets cross-validated against**.
 
 It's also the only engine with genuine incremental querying: `HomologyState.advanceOne()`/`advanceTo(f)`/
@@ -36,12 +36,12 @@ It's also the only engine with genuine incremental querying: `HomologyState.adva
 filtration value `f`. `barcodeAt` annotates every bar with a real representative cycle, tracked via a
 parallel V-column alongside the ordinary reduction. `TDAContext` (root `package.scala`) extends this class.
 
-## 2. `CellularPersistenceInChunksContext` / `PersistenceInChunksContext` — chunked, generic
+## 2. `CellularPersistenceInChunksEngine` / `PersistenceInChunksEngine` — chunked, generic
 
 `CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field](maxDim: Int = 5)` implements the
 parallelizable "clear-and-compress" algorithm: local reduction per chunk, active-entry marking, then global
 column compression/reduction. `PersistenceInChunksContext[VertexT, CoefficientT]` is a one-line
-`Simplex`-specialized subclass, mirroring `SimplicialHomologyContext`'s relationship to engine 1 — the class
+`Simplex`-specialized subclass, mirroring `SimplicialHomologyEngine`'s relationship to engine 1 — the class
 has no `Simplex`-specific behavior anywhere in its body, so any `OrderedCell` slots in directly.
 
 Dimensions 0 and 1 go through a dedicated union-find fast path (`unionFindDim01`) instead of the general
@@ -53,14 +53,14 @@ essential classes — reconstructed incrementally from this class's own already-
 engine run. `advanceAll()` runs the whole pipeline in one shot; there is no incremental querying the way
 engine 1 has.
 
-## 3. `RipserCohomologyContext` — test/reference oracle for engine 4
+## 3. `RipserCohomologyEngine` — test/reference oracle for engine 4
 
 Persistent *co*homology via Ulrich Bauer's Ripser algorithm (arXiv:1908.02518), specialized to
 `Simplex[Int]` Vietoris-Rips/clique complexes via `SimplexIndexing`'s combinatorial number system — a
 deliberate narrowing from the generic `CellT: OrderedCell` engines above. One-shot only
 (`persistentCohomology()`, no incremental querying).
 
-**This class is not what production code calls.** `PackedRipserCohomologyContext` (engine 4) is a faithful
+**This class is not what production code calls.** `PackedRipserCohomologyEngine` (engine 4) is a faithful
 re-keying of the same algorithm onto a packed representation, and is what `matlab.TDA4j`'s
 `engine="ripser"` actually uses. This class's remaining value is narrower than "an independent check on the
 Ripser algorithm": both classes share `SimplexIndexing`, so a bug there passes both silently (engine 1 is the
@@ -83,7 +83,7 @@ Structural points worth knowing:
   simplices are enumerated in the first place (currently eager, unlike Ripser's own incrementally-assembled
   `columns_to_reduce`) — a larger, separate project.
 
-## 4. `PackedRipserCohomologyContext` — the production Ripser engine
+## 4. `PackedRipserCohomologyEngine` — the production Ripser engine
 
 Same algorithm as engine 3, method for method, keyed on a packed `(Double, Long)` diameter/combinatorial-
 index pair (`DiameterIndex`) instead of a materialized `Simplex[Int]`. This is what `matlab.TDA4j`'s
@@ -96,7 +96,7 @@ Vietoris-Rips/`SimplexIndexing` rather than a general engine.
 so "same simplex" is true by construction regardless of which floating-point path computed its diameter,
 sidestepping a real footgun (two carriers for the same simplex comparing unequal on floating-point noise).
 
-## 5. `CellularCohomologyContext` — generic cohomology, for every cell type
+## 5. `CellularCohomologyEngine` — generic cohomology, for every cell type
 
 Persistent *co*homology, generic over `CellT: OrderedCell` — the cohomology counterpart to engine 1, filling
 in what used to be a real asymmetry: cohomology in this codebase meant engines 3/4 only, both hardcoded to
@@ -141,7 +141,7 @@ pair was removed outright while building this class) — coboundary is *extrinsi
 which higher-dimensional cells exist in the ambient complex), not intrinsic the way `boundary` is, so a
 per-cell `coboundary` method with no complex to consult was never the right shape.
 
-## 6. `FastCubicalHomologyContext` — dual-graph union-find, any ambient dimension >= 2
+## 6. `FastCubicalHomologyEngine` — dual-graph union-find, any ambient dimension >= 2
 
 Flash Cubical (Le Breton-Szustakowski-Piraud, arXiv:2606.04801): a genuinely different algorithm from engines
 1/2 above, not a faster re-keying the way engine 4 is for engine 3. Specialized to `CubicalGridStream`
@@ -156,7 +156,7 @@ union-find, ascending filtration order, elder rule) plus `H_1` (via the dual con
 account for every nontrivial cell dimension a 2D grid has — `H_2` is identically zero for any subcomplex of a
 2D grid (a bounded planar region has no 2-dimensional voids to detect), so nothing is being skipped. At `d >=
 3` there are `d-2` "middle" dimensions (`1 <= k <= d-2`) with no duality shortcut; these are handed to
-`CellularPersistenceInChunksContext` run on a `LimitedCubicalGridStream` view that hides the real
+`CellularPersistenceInChunksEngine` run on a `LimitedCubicalGridStream` view that hides the real
 top-dimensional cells entirely, so the (often largest) top dimension never touches general `Chain` reduction —
 still a real, if shrinking-with-`d`, win, and no new hardcoded dimension ceiling (`chunks` is already fully
 general over `d`). See `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md` for the full derivation,
@@ -187,10 +187,10 @@ edge-collapse precedent) meant this is an original derivation from Alexander dua
 the design note for the full derivation and a hand-verified worked example, checked before any code was
 written.
 
-## 7. `FastAlphaHomologyContext` — engine 6's own dual union-find, ported to `HelixDelaunay`
+## 7. `FastAlphaHomologyEngine` — engine 6's own dual union-find, ported to `HelixDelaunay`
 
 Same algorithm as engine 6, applied to `HelixDelaunay`'s top simplices instead of a cubical grid's top cells
-(`.claude/DESIGN-alpha-dual-unionfind.md`, `alpha-complex.md`'s own `FastAlphaHomologyContext` section for the
+(`.claude/DESIGN-alpha-dual-unionfind.md`, `alpha-complex.md`'s own `FastAlphaHomologyEngine` section for the
 full derivation and its own newly-measured risk). `HelixDelaunay` specifically, never `AlphaComplexDQP`/
 `AlphaShapeDQP` — the dual graph needs the full, untruncated triangulation (`AlphaComplexDQP.euclidean`'s own
 truncated mode is incompatible) and "every facet has <= 2 cofaces," which `AlphaShapeDQP`'s own documented
@@ -259,14 +259,14 @@ construction's own doc; re-check that source if this table and the code ever dis
 | `dtm-alpha`                   | `naive`         | **no** — no notion of a Vietoris-Rips complex at all   | yes     | **no** — shares `AlphaComplexDQP`'s known stall/OOM risk (see `alpha-complex.md`) | yes | **no** | **no** — always uses `AlphaComplexDQP`, never `HelixDelaunay` |
 | `alpha`                       | `naive`         | **no** — no notion of a Vietoris-Rips complex at all   | yes     | **no** — known stall/OOM risk (`HomologySpec`'s `BarcodeRegressionSpec`) | yes | **no** | **yes** — only `alphaBackend=helix` (the default), any ambient dimension `>= 2` |
 | `sheehy-rips`                 | `naive`         | **no** — a simplex's value is not the maximum ambient pairwise distance among its vertices (some pairs sparsified away, others excluded outright) | yes | yes | yes | **no** | **no** |
-| cubical (`computeFromCubicalImage`/`computeFromImage`, no `complex` key) | `naive` | **no** — `PackedRipserCohomologyContext` is specialized to `Simplex[Int]` | yes | yes | yes | **yes** — any ambient dimension `>= 2` | **no** |
+| cubical (`computeFromCubicalImage`/`computeFromImage`, no `complex` key) | `naive` | **no** — `PackedRipserCohomologyEngine` is specialized to `Simplex[Int]` | yes | yes | yes | **yes** — any ambient dimension `>= 2` | **no** |
 | Dowker relation (`computeFromRelation`, no `complex` key) | `naive` | **no** — not a flag complex (a witness for a whole simplex need not witness any of its edges) | yes | **no** — same conservative refusal `witness`/general has (use `naive`/`cohomology`) | yes | **no** | **no** |
 | simplicial sets               | *(no `matlab`/`cli` entry point at all — construct `SimplicialSetStream`/`FilteredSimplicialSetStream` and drive any generic engine directly)* | | | | | | |
 
 The `fast-cubical`/`fast-alpha` columns are each a single "yes" surrounded by "no"s, for the SAME underlying
-reason in each row of "no"s: `FastCubicalHomologyContext` is specialized to the concrete `CubicalGridStream`
+reason in each row of "no"s: `FastCubicalHomologyEngine` is specialized to the concrete `CubicalGridStream`
 (it reads `.shape`/`.ambientDim`/`.topCellValue` directly, not a generic `CellT: OrderedCell`) and
-`FastAlphaHomologyContext` is specialized to the concrete `HelixDelaunay` triangulation the same way — neither
+`FastAlphaHomologyEngine` is specialized to the concrete `HelixDelaunay` triangulation the same way — neither
 has any notion of the OTHER constructions at all, so every other row's "no" is "not a cubical grid"/"not a
 `HelixDelaunay`" respectively, not a per-row special case. Both are additionally refused within their one
 "yes" row for a narrower reason: `fast-cubical` only for a degenerate 1-axis image (ambient dimension `< 2`);
@@ -287,18 +287,18 @@ Reading the "no" cells as one-line reasons, grouped by root cause:
   complex can never do. A Dowker relation's own witness condition is the same shape: a witness for a whole
   simplex need not witness any of that simplex's edges, so a triangle can appear with no valid edge-only
   justification the way `witness`/general's own dimension-specific threshold does.
-- **Not a Vietoris-Rips complex at all** (`alpha`, `dtm-alpha`): `PackedRipserCohomologyContext` consumes a
+- **Not a Vietoris-Rips complex at all** (`alpha`, `dtm-alpha`): `PackedRipserCohomologyEngine` consumes a
   `FiniteMetricSpace[Int]` directly and enumerates cliques via `SimplexIndexing` — there is no Delaunay/power-
   cell structure it could route through instead.
   These two also refuse `chunks`, but for a third, unrelated reason: a known stall/out-of-memory risk in
   `AlphaComplexDQP` at scale, not an algorithmic mismatch (see `alpha-complex.md`; `HomologySpec`'s
   `BarcodeRegressionSpec` stays `skipAll`'d for the same reason and is the regression pin, not a live check).
 - **A genuine flag complex, but vertices aren't born at 0 and the edge functional isn't plain max-pairwise-
-  distance** (`dtm-rips` only): `PackedRipserCohomologyContext`'s two production-critical optimizations
+  distance** (`dtm-rips` only): `PackedRipserCohomologyEngine`'s two production-critical optimizations
   (`insertionDiameter`, apparent pairs) are proven specifically for `MaximumDistanceFiltrationValue` on the
   metric space handed to it — a weighted filtration value invalidates both proofs even though the complex
   itself is, combinatorially, an ordinary flag/clique complex (unlike `sheehy-rips` above).
-- **Representation-specific** (cubical): `PackedRipserCohomologyContext`/`RipserCohomologyContext` are
+- **Representation-specific** (cubical): `PackedRipserCohomologyEngine`/`RipserCohomologyEngine` are
   hardcoded to `Simplex[Int]`'s combinatorial-number-system indexing (`SimplexIndexing`); `Cube` has no
   equivalent encoding built for it. Engine 6 (`fast-cubical`) is a dedicated fast engine in this spirit, but
   not a drop-in replacement for `ripser` here: it's a different algorithm (dual-graph union-find plus, at
@@ -306,7 +306,7 @@ Reading the "no" cells as one-line reasons, grouped by root cause:
   enumeration). A grid-exploiting engine dedicated to 3D specifically (`CubicalRipser`, Wagner-Chen-Vuçini)
   remains a documented future direction, `DESIGN-fast-cubical-engine.md`.
 
-`engine="cohomology"` (`CellularCohomologyContext`, engine 5 above) is the one column with no "no" cells for a
+`engine="cohomology"` (`CellularCohomologyEngine`, engine 5 above) is the one column with no "no" cells for a
 reason: it's generic over `CellT: OrderedCell` with no per-construction speed assumptions baked in, at the cost
 of none of engines 3/4's Vietoris-Rips-specific optimizations — see engine 5's own section above for what that
 tradeoff actually buys and costs.
@@ -315,10 +315,10 @@ tradeoff actually buys and costs.
 
 | Need | Engine |
 |---|---|
-| Exploration, intermediate-filtration queries, representative cycles, any `OrderedCell` type | **`CellularHomologyContext`**/`TDAContext` |
-| Large complex, chunked/parallelizable, representatives for every bar including essential ones | **`CellularPersistenceInChunksContext`** |
-| Fast, memory-efficient cohomology on a Vietoris-Rips/clique complex over integer vertex labels | **`PackedRipserCohomologyContext`** (what `engine="ripser"` uses) |
-| A `Simplex[Int]`-keyed reference implementation for hand-debugging engine 4 | `RipserCohomologyContext` (test oracle, not a production choice) |
-| Cohomology (real cocycle representatives) on `Cube`/`FiniteSimplicialSet`/Cech/Alpha/general witness complex, or any `OrderedCell` type engines 3/4 can't serve | **`CellularCohomologyContext`** (what `engine="cohomology"` uses) |
-| Fastest option for a cubical grid of any ambient dimension `>= 2` (no `Chain` reduction at all for `H_0`/`H_{d-1}`; a `chunks` hybrid for any residual middle dimensions at `d >= 3`) | **`FastCubicalHomologyContext`** (what `engine="fast-cubical"` uses) |
-| Fastest option for an alpha complex via `HelixDelaunay`, any ambient dimension `>= 2` (same hybrid shape as `FastCubicalHomologyContext`; noticeably more likely to throw `FastAlphaTriangulationException` at higher ambient dimension/point count) | **`FastAlphaHomologyContext`** (what `engine="fast-alpha"` uses) |
+| Exploration, intermediate-filtration queries, representative cycles, any `OrderedCell` type | **`CellularHomologyEngine`**/`TDAContext` |
+| Large complex, chunked/parallelizable, representatives for every bar including essential ones | **`CellularPersistenceInChunksEngine`** |
+| Fast, memory-efficient cohomology on a Vietoris-Rips/clique complex over integer vertex labels | **`PackedRipserCohomologyEngine`** (what `engine="ripser"` uses) |
+| A `Simplex[Int]`-keyed reference implementation for hand-debugging engine 4 | `RipserCohomologyEngine` (test oracle, not a production choice) |
+| Cohomology (real cocycle representatives) on `Cube`/`FiniteSimplicialSet`/Cech/Alpha/general witness complex, or any `OrderedCell` type engines 3/4 can't serve | **`CellularCohomologyEngine`** (what `engine="cohomology"` uses) |
+| Fastest option for a cubical grid of any ambient dimension `>= 2` (no `Chain` reduction at all for `H_0`/`H_{d-1}`; a `chunks` hybrid for any residual middle dimensions at `d >= 3`) | **`FastCubicalHomologyEngine`** (what `engine="fast-cubical"` uses) |
+| Fastest option for an alpha complex via `HelixDelaunay`, any ambient dimension `>= 2` (same hybrid shape as `FastCubicalHomologyEngine`; noticeably more likely to throw `FastAlphaTriangulationException` at higher ambient dimension/point count) | **`FastAlphaHomologyEngine`** (what `engine="fast-alpha"` uses) |

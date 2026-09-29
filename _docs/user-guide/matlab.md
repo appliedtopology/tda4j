@@ -77,7 +77,7 @@ the same reason as `cech` (the general witness complex isn't a flag complex eith
 the mirror image: refused everywhere EXCEPT `computeFromCubicalImage`/`computeFromImage`, and even there
 refused only for a degenerate 1-axis image (ambient dimension `< 2`) — no other ambient-dimension restriction.
 `engine=fast-alpha` is likewise refused everywhere except `complex=alpha` with `alphaBackend=helix` (the
-default; `alphaBackend=DQP` is refused too — `FastAlphaHomologyContext` cannot consume `AlphaShapeDQP`'s
+default; `alphaBackend=DQP` is refused too — `FastAlphaHomologyEngine` cannot consume `AlphaShapeDQP`'s
 output), with the same "any ambient dimension `>= 2`" rule as `fast-cubical` — though at higher ambient
 dimension and point count it's noticeably more likely to throw `FastAlphaTriangulationException` on a given
 point cloud (see "Which persistence engine?" below). Both `fast-*` exceptions name the actual mismatch

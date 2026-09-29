@@ -65,9 +65,9 @@ The probe printed the face order for the 5-vertex simplex as `0234 0134 0124 123
 
 | engine | shipped boundary, F3≠F2 | correct boundary, F3≠F2 |
 |---|---|---|
-| naive (`CellularHomologyContext`) | 1/20 | 0/20 |
-| chunks (`CellularPersistenceInChunksContext`) | **19/20** | 0/20 |
-| `CellularCohomologyContext` | 0/20 | 0/20 |
+| naive (`CellularHomologyEngine`) | 1/20 | 0/20 |
+| chunks (`CellularPersistenceInChunksEngine`) | **19/20** | 0/20 |
+| `CellularCohomologyEngine` | 0/20 | 0/20 |
 
 - **Over ℝ:** an earlier run of the same fixtures with `DoubleApproximated` showed naive ℝ≠F2 on 2/20. The bad
   barcodes include impossible bars, such as an essential H⁵ class in a 5-skeleton.
@@ -266,7 +266,7 @@ to scaladoc readers and outside contributors, who don't know `.claude/` exists.
 - **The facade and CLI help text claim a representative gap** that no longer exists (§1.7).
 - **Stacked scaladoc.** Three places have two or three consecutive `/** */` blocks, and scaladoc attaches only the
   last:
-  - `RipserCohomologyContext` (`Homology.scala:1109–1207`): ~70 lines orphaned from the generated docs;
+  - `RipserCohomologyEngine` (`Homology.scala:1109–1207`): ~70 lines orphaned from the generated docs;
   - `SimplexIndexing.binomialRows` (`RipserStream.scala:85–115`);
   - `PackedRipserCohomologyContext.insertionDiameter` (`PackedRipserCohomology.scala:~124–156`).
 - **Size mismatches:**
@@ -347,7 +347,7 @@ Removing all three is presumably free. Verify with `sbt compile`; this review di
 
 ### 5.2 Oracles shipped as public API
 
-- **`RipserCohomologyContext` (a decision for the project lead).** It is "test/reference oracle only" by its own
+- **`RipserCohomologyEngine` (a decision for the project lead).** It is "test/reference oracle only" by its own
   doc and CLAUDE.md, and has no non-comment reference in `main` **[grep]**. But its class doc also records a
   deliberate call: a legible paper-algorithm reference implementation has standing value of its own.
   - **Move it to `src/test`, next to `PackedRipserCohomologySpec`,** if that value is for developers only.
@@ -365,7 +365,7 @@ Removing all three is presumably free. Verify with `sbt compile`; this review di
 
 - **`RipserStream.scala`'s real content is `SimplexIndexing` + `binomial` + cursors.** Once §5.1 is done, rename the
   file to `SimplexIndexing.scala`.
-- **`CubicalHomologyContext` lives in `streams/CubicalStream.scala`.** It is a one-line subclass of a `homology`
+- **`CubicalHomologyEngine` lives in `streams/CubicalStream.scala`.** It is a one-line subclass of a `homology`
   class, and the *only* `streams → homology` edge in the package graph. Moving it to `homology` makes the layering
   acyclic.
 - **`Cell`/`OrderedCell`/`OrderedBasis`/`HasDimension` live in `Chain.scala`.** Move them to their own
@@ -402,7 +402,7 @@ Under CLAUDE.md's four-surface rule, every deletion or move in §5.1/§5.2 needs
 | `RipserCliqueFinder`, `SymmetricRipser…` | `architecture.md` |
 | `RipserStream(` | **`user-guide/index.md:50`** |
 | `SimplicialHomologyByDimensionContext` | `class-diagrams.md`, `persistence-engines.md` ×2, `user-guide/index.md:250` (framed correctly, as a cross-validation class) |
-| `RipserCohomologyContext` | 11 developer-guide references, plus 1 in the user guide |
+| `RipserCohomologyEngine` | 11 developer-guide references, plus 1 in the user guide |
 | `InorderCofaceSimplexStream` | `architecture.md` ×2, `class-diagrams.md` |
 
 **User-facing finding:** the user guide's *headline* "full Vietoris-Rips persistence computation" example
@@ -538,7 +538,7 @@ through implicit scope without any import. For tolerances, pass an explicit para
   - naive `advanceOne`;
   - chunks `vcolOf`;
   - both Ripser engines;
-  - `CellularCohomologyContext`.
+  - `CellularCohomologyEngine`.
 
   The V-column fold differs subtly between them (naive and chunks skip fallback-eliminated terms). A shared helper
   with that difference as an explicit parameter would make the difference *visible* instead of rediscovered each

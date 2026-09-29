@@ -27,7 +27,7 @@ Ripser's own paper (Bauer, arXiv:1908.02518, Table 1) used, and flagged that dra
   Table 1. `sphere3`/`o3_1024`/`o3_4096` are `ripser`'s own bundled examples; `random16`/`dragon`/`fractal-r`
   come from the Otter et al. "PH-roadmap" benchmark the paper cites (`n-otter/PH-roadmap` on GitHub).
 - `torus4` (50000 points) deliberately excluded: real `ripser.cpp` itself needs ~8GB for it (Table 1), and
-  `RipserCohomologyContext`'s `Simplex[Int]`/`SortedSet[Int]` per-simplex carrier is roughly two orders of
+  `RipserCohomologyEngine`'s `Simplex[Int]`/`SortedSet[Int]` per-simplex carrier is roughly two orders of
   magnitude heavier than Ripser's packed 64-bit `diameter_index_t` (already flagged as a deliberate deferred
   choice in `DiameterSimplex`'s own doc, `RipserStream.scala`) — extrapolating that ratio puts torus4 well past
   what any single machine reasonably has. Not run; stated instead of spending wall-clock time proving it.
@@ -38,7 +38,7 @@ Ripser's own paper (Bauer, arXiv:1908.02518, Table 1) used, and flagged that dra
   sbt -J-Xmx16G -DdataDir=<path> -DtimeoutSeconds=240 "testOnly org.appliedtopology.tda4j.RipserPaperBenchmarkSpec"
   ```
 
-## Finding #1: `RipserCohomologyContext`'s `maxDimension` parameter means "top simplex dimension built," not "top
+## Finding #1: `RipserCohomologyEngine`'s `maxDimension` parameter means "top simplex dimension built," not "top
 homological degree reported" — the same truncation-artifact class already documented for the MATLAB facade
 
 A first version of this spec passed the requested homological degree directly as `maxDimension`
@@ -46,7 +46,7 @@ A first version of this spec passed the requested homological degree directly as
 supposed `maxDim=2` — Table 2's entire non-zero-pair count for that exact data set is 18,145, two orders of
 magnitude smaller, which is what caught this before it reached a real comparison.
 
-Root cause, confirmed by reading `Homology.scala` directly: `coboundaryOf(sigma)` (`RipserCohomologyContext`,
+Root cause, confirmed by reading `Homology.scala` directly: `coboundaryOf(sigma)` (`RipserCohomologyEngine`,
 `Homology.scala`) is
 
 ```scala
@@ -60,7 +60,7 @@ top dimension comes out essential regardless of whether it actually is, because 
 ever gets built to potentially kill it. This is exactly the well-known "H_k needs (k+1)-chains" truncation
 artifact CLAUDE.md's MATLAB-facade section already documents and fixes for `Tda4j.computeFromPoints`/
 `computeFromDistanceMatrix` ("build to `maxDimension + 1` internally, report only `dim <= maxDimension`") — it
-had just never been applied to a *direct* caller of `RipserCohomologyContext` before, because every existing
+had just never been applied to a *direct* caller of `RipserCohomologyEngine` before, because every existing
 comparison of this engine (`RipserCohomologySpec`'s `cohomologyBars` vs. `naiveBars`) compares it against
 `LimitedCofaceSimplexStream(stream, maxDim)`, which truncates *simplices* at the same `maxDim` too — both sides
 consistently truncated the same way, so the existing cross-validation suite never exercised "does `maxDim`
@@ -72,7 +72,7 @@ Fixed in the spec (not in the engine — this is a benchmark-harness fix, not a 
 `RipserCohomologyContext(ms, requestedDim + 1, ...)` and discarding the `dim == requestedDim + 1` bars (all
 spuriously essential) before comparing. **This is worth a documentation note in `CLAUDE.md` itself** (added
 below in the "What actually shipped" section) since it's a real, non-obvious API footgun for any future direct
-caller of `RipserCohomologyContext`, not just a benchmark-harness bug.
+caller of `RipserCohomologyEngine`, not just a benchmark-harness bug.
 
 ## Finding #2: a large but roughly FLAT per-simplex constant-factor tax — not an algorithmic (superlinear)
 divergence, despite the raw slowdown ratio appearing to grow sharply
@@ -117,7 +117,7 @@ fact by this follow-up measurement, not assumed away.
 
 **The honest, measured finding is a large constant-factor tax, not a growing divergence**: tda4j pays
 **measured, directly**: roughly **~20 microseconds of wall-clock time per simplex** assembled and reduced by
-`RipserCohomologyContext` (`elapsed / totalSimplexCount`), flat to within ~11% across an 18x range of complex
+`RipserCohomologyEngine` (`elapsed / totalSimplexCount`), flat to within ~11% across an 18x range of complex
 sizes. Real `ripser.cpp`'s own per-simplex cost is NOT directly measured this session — `ripser.cpp` doesn't
 print a simplex/pair count by default, and the only wall-clock numbers available (10ms/50ms at n=48/96) are
 exactly the startup-dominated floor already flagged as unreliable above. What IS solid: `ripser.cpp` solves
@@ -140,7 +140,7 @@ cases, and 20µs x millions is minutes, regardless of whether the growth curve i
 | random16 (n=50, dim7) | — | 3,440 | — | timeout |
 | o3_4096 (n=4096, dim3, t=1.4) | — | 30,790 | — | timeout |
 
-**Honest headline: tda4j's `RipserCohomologyContext` completed 2 of 8 Table-1-derived rows inside a 240-second
+**Honest headline: tda4j's `RipserCohomologyEngine` completed 2 of 8 Table-1-derived rows inside a 240-second
 per-case budget. On the two that completed, it paid a roughly constant ~20µs/simplex — genuinely large (an
 order of magnitude or more versus real `ripser.cpp`) but NOT growing with problem size.** This is squarely the
 "dramatic slowdown, worth searching more carefully" case the project lead flagged in advance — just a constant-
@@ -207,7 +207,7 @@ of the gap.
 
 Per standing project practice on this exact engine (the reverted DQP "commit anyway" fix, the premature
 `BarcodeRegressionSpec` un-skip — both in CLAUDE.md), **this session characterizes the cost and stops short of
-fixing it.** `RipserCohomologyContext`'s reduction path is the reference every other cross-validation in this
+fixing it.** `RipserCohomologyEngine`'s reduction path is the reference every other cross-validation in this
 codebase either directly or indirectly touches; changing its representation is a deliberate, dedicated pass of
 its own, not a tail-end addition to a benchmarking session. The concrete next-step candidates this session's
 measurements point at, in likely-impact order: (1) a packed/lighter-weight simplex carrier through

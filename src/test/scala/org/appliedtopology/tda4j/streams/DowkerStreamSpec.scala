@@ -23,9 +23,9 @@ import org.scalacheck.*
   * example, chosen specifically to exercise Dowker DUALITY -- the property that makes this construction worth having at
   * all), an independent brute-force reimplementation of the filtration-value formula cross-checked on random relations,
   * the duality cross-check itself on random relations, the bars-account-for-cells structural invariant, and
-  * cross-engine agreement (`CellularCohomologyContext` against the naive engine -- `engine="cohomology"`'s own
+  * cross-engine agreement (`CellularCohomologyEngine` against the naive engine -- `engine="cohomology"`'s own
   * validation story, since this construction is not a flag complex and so is never expected to agree with
-  * `PackedRipserCohomologyContext`/`chunks`, the same status Cech and the general witness complex already have).
+  * `PackedRipserCohomologyEngine`/`chunks`, the same status Cech and the general witness complex already have).
   */
 class DowkerStreamSpec extends mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
@@ -44,7 +44,7 @@ class DowkerStreamSpec extends mutable.Specification with ScalaCheck:
 
   private def naiveBarcode(stream: DowkerCofaceSimplexStream): List[(Int, Double, Double)] =
     sortedTriples(
-      SimplicialHomologyContext[Int, Double, Double]()
+      SimplicialHomologyEngine[Int, Double, Double]()
         .persistentHomology(stream)
         .diagramAt(Double.PositiveInfinity)
     )
@@ -162,7 +162,7 @@ class DowkerStreamSpec extends mutable.Specification with ScalaCheck:
     AsResult {
       prop { (relation: Array[Array[Double]]) =>
         val stream = DowkerCofaceSimplexStream(relation)
-        val barcode = SimplicialHomologyContext[Int, Double, Double]()
+        val barcode = SimplicialHomologyEngine[Int, Double, Double]()
           .persistentHomology(stream)
           .diagramAt(Double.PositiveInfinity)
         val cellCount = (0 until stream.geometry.numLeft)
@@ -173,9 +173,9 @@ class DowkerStreamSpec extends mutable.Specification with ScalaCheck:
     }
 
   // ---------------------------------------------------------------------------------------------------------
-  // Cross-engine agreement: CellularCohomologyContext (engine="cohomology", the generic OrderedCell engine) vs
+  // Cross-engine agreement: CellularCohomologyEngine (engine="cohomology", the generic OrderedCell engine) vs
   // the naive engine -- the construction is not a flag complex (see DowkerStream.scala's own doc), so this is
-  // the relevant cross-check, not PackedRipserCohomologyContext/chunks (same status Cech/general-witness have).
+  // the relevant cross-check, not PackedRipserCohomologyEngine/chunks (same status Cech/general-witness have).
   // ---------------------------------------------------------------------------------------------------------
 
   private def cohomologyTriples[CellT](
@@ -183,13 +183,13 @@ class DowkerStreamSpec extends mutable.Specification with ScalaCheck:
   ): List[(Int, Double, Double)] =
     sortedTriples(bars.map(bar => (bar.dim, endpointValue(bar.lower), endpointValue(bar.upper))))
 
-  "CellularCohomologyContext agrees exactly (as a sorted list) with the naive engine on the Dowker complex, " +
+  "CellularCohomologyEngine agrees exactly (as a sorted list) with the naive engine on the Dowker complex, " +
     "on random relations" >> AsResult {
       prop { (relation: Array[Array[Double]]) =>
         val stream = DowkerCofaceSimplexStream(relation)
         val naive = naiveBarcode(stream)
         val cohomology =
-          cohomologyTriples(CellularCohomologyContext[Simplex[Int], Double, Double]().persistentCohomology(stream))
+          cohomologyTriples(CellularCohomologyEngine[Simplex[Int], Double, Double]().persistentCohomology(stream))
         naive must beEqualTo(cohomology)
       }
     }

@@ -64,11 +64,11 @@ The actual ask this session: "a comparative benchmark that checks all combinatio
 simplex stream construction (both VR and alpha) against each other on a range of dimensions and point
 counts." Built as a 2-D sweep (ambient point-cloud dimension × max homology dimension, per the project
 lead's explicit choice over a 1-D sweep) across every (stream, engine) pairing this codebase actually
-supports: 5 VR streams, 2 alpha backends (`helix`, `DQP`), `SimplicialHomologyContext` and
-`PersistenceInChunksContext` as decomposable pairs, plus `RipserCohomologyContext` as its own bundled row
+supports: 5 VR streams, 2 alpha backends (`helix`, `DQP`), `SimplicialHomologyEngine` and
+`PersistenceInChunksEngine` as decomposable pairs, plus `RipserCohomologyEngine` as its own bundled row
 (takes a `FiniteMetricSpace[Int]` directly, not a stream, and can't touch alpha complexes at all). Each
 cell runs under a per-cell timeout on a daemon-thread executor, per the project lead's explicit choice
-("include with a per-cell timeout") over skipping the known-stall `PersistenceInChunksContext` × alpha
+("include with a per-cell timeout") over skipping the known-stall `PersistenceInChunksEngine` × alpha
 combination outright — no engine here supports cooperative cancellation, so a "timeout" cell leaves a
 background thread running; the daemon flag only stops it from blocking JVM exit, it doesn't reclaim the
 work. See the spec's own doc comment for the construction/reduction timing-split rationale and why
@@ -76,10 +76,10 @@ alpha/VR bar counts are never compared against each other (circumradius vs. diam
 quantities).
 
 **First run immediately found a real, previously-unknown reduction bug** — this is the actual value the
-benchmark delivered, beyond its stated purpose: at `maxDim >= 2`, `SimplicialHomologyContext` threw
+benchmark delivered, beyond its stated purpose: at `maxDim >= 2`, `SimplicialHomologyEngine` threw
 `IllegalStateException: reduction pivot ... was not a recorded open class` for exactly three
 constructions (`RecursiveStackVietorisRipsSimplexStream`, `HelixDelaunay`, `AlphaShapeDQP`), while every
-other construction — and `PersistenceInChunksContext` on these same three — ran clean (no crash, but see
+other construction — and `PersistenceInChunksEngine` on these same three — ran clean (no crash, but see
 section 4: "no crash" turned out not to mean "correct").
 
 ## 4. The `filtrationOrdering` bug — two layers, both now fixed
@@ -87,8 +87,8 @@ section 4: "no crash" turned out not to mean "correct").
 **Layer 1, direction (fixed first, in an earlier pass this session)**: all three offending classes
 defined `filtrationOrdering` as plain ascending (`Ordering.by(filtrationValue)`, or
 `FilteredSimplexOrdering[Int,Double](this)` called without its own `filtrationOrdering` using-parameter,
-silently defaulting to ascending `Ordering[Double]`) — never reversed. `CellularHomologyContext`
-(`SimplicialHomologyContext`'s underlying machinery) bakes `stream.filtrationOrdering` directly into
+silently defaulting to ascending `Ordering[Double]`) — never reversed. `CellularHomologyEngine`
+(`SimplicialHomologyEngine`'s underlying machinery) bakes `stream.filtrationOrdering` directly into
 `Chain`'s pivot-selection machinery, which requires "smaller under this ordering" to mean "younger," not
 "older" — the exact convention `EnumeratingCofaceSimplexStream.filtrationOrdering` already documented
 and required, from an earlier session's fix (see CLAUDE.md's "Bug found while cross-validating (4)
@@ -97,14 +97,14 @@ against (1)" section). Fixed by reversing the primary key only in all three:
 
 **Layer 2, tie-break consistency (the deeper, previously-hidden bug this session found and fixed)**:
 fixing layer 1 alone was necessary but not sufficient. Verification used the *right* oracle from the
-start, on advisor's correction: don't compare `SimplicialHomologyContext` ("Naive") against
-`PersistenceInChunksContext` ("Chunks") as ground truth for a stream-ordering question, since Chunks'
+start, on advisor's correction: don't compare `SimplicialHomologyEngine` ("Naive") against
+`PersistenceInChunksEngine` ("Chunks") as ground truth for a stream-ordering question, since Chunks'
 own correctness on these streams had never been established — use a structural invariant
 (`HomologyFixtures.totalBarsAccountForAllCells`: every cell opens or closes exactly one bar) and, for VR
 specifically, cross-validate against `EnumeratingCofaceSimplexStream` (already independently trusted),
 same engine, same point cloud, only the stream varying.
 
-That check immediately failed for all three streams even after layer 1's fix — `SimplicialHomologyContext`
+That check immediately failed for all three streams even after layer 1's fix — `SimplicialHomologyEngine`
 was producing genuinely wrong barcodes, not just avoiding a crash. Root cause: each stream's own
 `iterateDimension` bucket order didn't match `filtrationOrdering.reverse` on cells that tie exactly —
 - `RecursiveStackVietorisRipsSimplexStream`'s dim-1 `edges` sorted ascending value + *ascending*
@@ -131,17 +131,17 @@ comparator. `AlphaShapeDQP`'s fix is the one exception in *mechanism*, not inten
 — exists, so it builds an explicit `Ordering.by(weight).orElse(simplexOrdering[Int].reverse)` at that
 point, written to match `filtrationOrdering.reverse` exactly rather than calling it directly.
 
-**Verified, not just asserted**: `SimplicialHomologyContext` on the now-fixed
-`RecursiveStackVietorisRipsSimplexStream` matches `SimplicialHomologyContext` on
+**Verified, not just asserted**: `SimplicialHomologyEngine` on the now-fixed
+`RecursiveStackVietorisRipsSimplexStream` matches `SimplicialHomologyEngine` on
 `EnumeratingCofaceSimplexStream` *exactly*, cell-for-cell, on every property-test trial — the strongest
 evidence available. No independent oracle stream exists for alpha complexes, so `HelixDelaunay`/
 `AlphaShapeDQP` are verified via `totalBarsAccountForAllCells` holding on every trial instead — weaker,
 but decisively better than before (that invariant used to fail constantly on these streams).
 
-## 5. A second, unrelated `PersistenceInChunksContext` bug, found in the process — also now fixed
+## 5. A second, unrelated `PersistenceInChunksEngine` bug, found in the process — also now fixed
 
-Even after layer 1 + layer 2 above were both fixed and `SimplicialHomologyContext` was fully
-cross-validated as correct, `PersistenceInChunksContext` *itself* still disagreed with it — and this
+Even after layer 1 + layer 2 above were both fixed and `SimplicialHomologyEngine` was fully
+cross-validated as correct, `PersistenceInChunksEngine` *itself* still disagreed with it — and this
 reproduced even on `EnumeratingCofaceSimplexStream`, the well-established, independently-trusted stream,
 proving it was never a stream-ordering problem at all. Root-caused by hand-tracing the minimal possible
 repro: 4 coincident points bounded at `maxDim=2` — the full 2-skeleton of a tetrahedron, i.e. the
@@ -219,7 +219,7 @@ well-defined regardless of which specific cell ties with which), consumed direct
 added in section 4/5 only ever check the two engines against each other — which is exactly the check this
 bug defeated for a while (both were self-consistent and still wrong, or one was silently corrupting the
 other's presumed-trustworthy answer). Added three more `PersistenceInChunksSpec` cases that check
-`PersistenceInChunksContext` directly against a hand-derived barcode, no other engine involved: the S²
+`PersistenceInChunksEngine` directly against a hand-derived barcode, no other engine involved: the S²
 fixture above, plus two reused from `RipserCohomologySpec`'s already-hand-verified `threePointLine` fixture
 (3-cycle graph → exactly one essential H¹, not three; filled triangle → zero essential H¹, one zero-length
 bar instead) and `HomologyFixtures.elderRuleExpected` (the filtration-order-vs-lexicographic-order
@@ -283,7 +283,7 @@ on *one* complex).
 ## Where things stand now
 
 All three streams flagged by the benchmark (`RecursiveStackVietorisRipsSimplexStream`, `HelixDelaunay`,
-`AlphaShapeDQP`) are fixed at both the direction and tie-break layers, and `PersistenceInChunksContext`
+`AlphaShapeDQP`) are fixed at both the direction and tie-break layers, and `PersistenceInChunksEngine`
 itself is fixed independent of any specific stream. CLAUDE.md's "Cross-engine benchmark, and a bug it
 found on first run" section has been rewritten to match this final state (was stale — described only the
 layer-1 fix as "not fixed as of this writing"). The `tda4j-ripser-status` memory file needs the same

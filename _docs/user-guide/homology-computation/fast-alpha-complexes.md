@@ -10,11 +10,11 @@ val bars = FastAlphaHomologyContext[Double]().persistentHomology(helix) // H0 an
 ```
 
 For a point cloud built via `"helix"` (never `"DQP"` — it never builds an adjacency-aware triangulation at all,
-so it can't supply what this engine needs), `FastAlphaHomologyContext` computes the same barcode (with real
+so it can't supply what this engine needs), `FastAlphaHomologyEngine` computes the same barcode (with real
 representatives) as the naive engine, via a dual-graph union-find rather than general `Chain` reduction, at any
 ambient dimension `>= 2`. At 2D specifically the two union-finds (`H_0`/`H_1`) cover everything; at 3D and
-beyond, the "middle" dimensions are handed to `PersistenceInChunksContext` on a view that hides the real
-top-dimensional simplices, the same hybrid `FastCubicalHomologyContext` uses above. On a fraction of point
+beyond, the "middle" dimensions are handed to `PersistenceInChunksEngine` on a view that hides the real
+top-dimensional simplices, the same hybrid `FastCubicalHomologyEngine` uses above. On a fraction of point
 clouds — more likely at higher ambient dimension and point count (measured at roughly 1-in-18700 at ambient
 dimension 2, but roughly 1-in-1666 at ambient dimension 3 with 20-30 points) — it throws
 `FastAlphaTriangulationException` — a message written for you, not just for a developer: it says plainly that

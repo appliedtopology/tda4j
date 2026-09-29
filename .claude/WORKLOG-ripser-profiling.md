@@ -51,7 +51,7 @@ cores throughout; swap 12.7–12.8GB/14.3GB used, roughly stable — a memory-sa
 codebase's own established lesson from the prior packed-engine session's OS-kill incident). Given that pressure,
 all profiling used small-to-moderate synthetic random Euclidean point clouds (n=48–150, ambient dimension 3,
 maxDim=2, `Double` coefficients) generated with a fixed seed via a scratch driver (`ProfileDriver.scala`, briefly
-added under `src/main/scala/.../profiling/` to run `RipserCohomologyContext`/`PackedRipserCohomologyContext`
+added under `src/main/scala/.../profiling/` to run `RipserCohomologyEngine`/`PackedRipserCohomologyEngine`
 directly outside sbt/specs2 for JFR profiling, removed again at the end of the session — not part of the shipped
 library). JDK: Temurin 21.0.1 (matching this project's documented target), invoked directly with
 `-XX:StartFlightRecording=settings=profile` (JFR ships in the JDK, no extra tooling install needed/attempted, given
@@ -75,8 +75,8 @@ result. JFR leaf-frame analysis (a 48-point random cloud, 3 warmup + 15/30 timed
 
 | engine | leaf samples in `binomialtail`/`binomialBigint` | as % of all CPU samples |
 |---|---|---|
-| `RipserCohomologyContext` (SortedSet) | 69 / 593 | 11.6% |
-| `PackedRipserCohomologyContext` (packed) | 56 / 220 | 25.5% |
+| `RipserCohomologyEngine` (SortedSet) | 69 / 593 | 11.6% |
+| `PackedRipserCohomologyEngine` (packed) | 56 / 220 | 25.5% |
 
 (A cruder "binomial anywhere in the call stack" count — 35.9%/44.1% — was computed first and is **not** the right
 number to quote: it double-counts every caller on the stack waiting for the leaf to return. The leaf-frame numbers
@@ -154,7 +154,7 @@ inside each).
 ## Finding #3: `(tau.underlying diff sigma.underlying).head` used a full tree-merge to find one element
 
 The single most surprising find, uncovered by re-profiling allocation *after* fixes #1–#2: `Tuple4` jumped to 12.5%
-of `RipserCohomologyContext`'s total allocation weight — traced via stack trace to
+of `RipserCohomologyEngine`'s total allocation weight — traced via stack trace to
 `scala.collection.immutable.RedBlackTree$.split`/`._difference`, called from `RipserCohomologyContext.coboundaryOf`
 and `.zeroPivotCofacet` via `TreeSet.diff`. Both compute `(tau.underlying diff sigma.underlying).head` purely to
 find the one vertex `tau` (a cofacet) has that `sigma` (its facet) doesn't — a question with exactly one right
@@ -162,14 +162,14 @@ answer by construction (`tau.underlying.size == sigma.underlying.size + 1`, alwa
 `TreeSet`'s general persistent-tree set-difference algorithm (`split`/`_difference`, itself built out of `Tuple4`
 and fresh tree nodes) — real overkill for the actual question being asked. This is the exact same expensive shape
 `SimplexIndexing.cofacetIteratorWithVertex`'s own doc comment already flagged the *packed* engine as deliberately
-avoiding (`PackedRipserCohomologyContext` never materializes this diff at all — it gets the inserted vertex
+avoiding (`PackedRipserCohomologyEngine` never materializes this diff at all — it gets the inserted vertex
 directly from `cofacetIteratorWithVertex`'s exposed `(Int, Long)` pair) — it just hadn't been fixed in the original,
-`Simplex[Int]`-based engine `coboundaryOf` itself, which is why `PackedRipserCohomologyContext` (untouched by this
+`Simplex[Int]`-based engine `coboundaryOf` itself, which is why `PackedRipserCohomologyEngine` (untouched by this
 specific fix, since it never had the cost) shows no equivalent line item.
 
 Fixed by replacing both call sites with `tau.underlying.find(v => !sigma.underlying.contains(v)).get` — a linear
 scan over `tau`'s own (small, already-sorted) vertex set, `O(sigma.size)`, zero tree-merge machinery. `coboundaryOf`
-is the main per-simplex reduction driver in `RipserCohomologyContext`, called once per non-cleared,
+is the main per-simplex reduction driver in `RipserCohomologyEngine`, called once per non-cleared,
 non-apparent-paired simplex, iterating essentially the full remaining vertex range internally — this was, by
 allocation weight, the single largest fixable cost found in this engine.
 
@@ -185,12 +185,12 @@ state (all four fixes), same fixed random seeds, 3 warmup + 10 timed iterations 
 
 | case | before | after | improvement |
 |---|---|---|---|
-| `PackedRipserCohomologyContext`, n=150, dim=3, maxDim=2 | 7487.7ms | 4774.5ms | **36.2%** |
-| `RipserCohomologyContext`, n=64, dim=3, maxDim=2 | 1308.7ms | 829.9ms | **36.6%** |
+| `PackedRipserCohomologyEngine`, n=150, dim=3, maxDim=2 | 7487.7ms | 4774.5ms | **36.2%** |
+| `RipserCohomologyEngine`, n=64, dim=3, maxDim=2 | 1308.7ms | 829.9ms | **36.6%** |
 
 (The packed engine's own improvement comes entirely from fixes #1–#2 — it never had finding #3's cost to begin
 with, confirmed directly: its own timing barely moved between the fixes-#1–#2 checkpoint, 4802.9ms, and the final
-state, 4774.5ms, both well inside the measured noise floor. `RipserCohomologyContext`'s improvement is spread across
+state, 4774.5ms, both well inside the measured noise floor. `RipserCohomologyEngine`'s improvement is spread across
 all four fixes: fixes #1–#2 alone measured 29.4% at this size, #3 added the remaining ~7 points.)
 
 Allocation weight (48-point cloud, main thread only, measured after fixes #1–#2 only — see Finding #3 above for
@@ -213,12 +213,12 @@ engine all cover the rewritten code paths directly, not just incidentally.
 all four fixes above, now the largest remaining identified cost in both engines: `RedBlackTree$Tree`/`Tree[]`/
 `KeysIterator` together are ~19% (packed) to ~24% (SortedSet, alongside a large but likely-related `$colon$colon`/
 `List` share) of remaining allocation weight, and this machinery is shared by *every* engine in `Homology.scala`
-(`CellularHomologyContext`, `PersistenceInChunksContext`, both cohomology engines) via `Chain.reduceByUntil`'s
+(`CellularHomologyEngine`, `PersistenceInChunksEngine`, both cohomology engines) via `Chain.reduceByUntil`'s
 `toSortedMap`/`updateMap` — each elimination step during reduction currently allocates through an immutable,
 persistent `SortedMap` (`scala.collection.immutable.TreeMap`) rather than mutating in place.
 
 **Deliberately not attempted this session**, on the advisor's explicit recommendation and for reasons specific to
-this codebase, not general caution: (1) `CellularHomologyContext` is the reference oracle every other engine in
+this codebase, not general caution: (1) `CellularHomologyEngine` is the reference oracle every other engine in
 this codebase is cross-validated against — a change here that's wrong in a subtle way could silently corrupt every
 other engine's own correctness story; (2) the packed engine's own design (`WORKLOG-packed-ripser-engine.md`) was
 built on an explicit standing instruction to go through `Chain.reduceBy` *unchanged*; (3) this session's own
@@ -338,7 +338,7 @@ cases (`PACKED_ONLY=true`, a reduced `RIPSER_TRIALS`, a larger `TIMEOUT_SECONDS`
 
 ### Finding #5: `insertionDiameter`'s `.iterator.map(...).max` allocated a closure and boxed every intermediate `Double`
 
-A dedicated follow-up profiling pass on `PackedRipserCohomologyContext` alone (JFR, real `sphere3_96` data, per the
+A dedicated follow-up profiling pass on `PackedRipserCohomologyEngine` alone (JFR, real `sphere3_96` data, per the
 third ask: "have we exhausted clear time sinks in the packed path?") found `insertionDiameter`'s own allocation
 signature dominating what was left: a `PackedRipserCohomologyContext$$Lambda` closure at 7.5% of total allocation
 weight, traced directly to
@@ -376,7 +376,7 @@ disappeared from the top 15 entirely, and `java.lang.Double`'s own share of tota
 
 ### Have we exhausted clear time sinks in the packed path? Yes, for now.
 
-The post-fix profile (real `sphere3_96` data, `PackedRipserCohomologyContext` alone) no longer shows any single
+The post-fix profile (real `sphere3_96` data, `PackedRipserCohomologyEngine` alone) no longer shows any single
 method consuming an outsized, obviously-wasteful share of CPU or allocation the way `binomialtail`/`TreeSet.diff`/
 `insertionDiameter`'s closure did before their respective fixes. What's left splits cleanly into two categories,
 neither of which is a "clear" (quick, safe, contained) fix:
@@ -436,7 +436,7 @@ earlier pass in this same worklog — eliminated the closure/boxing cost of `.ma
 `sigma.underlying.iterator` on every single call, and `TreeSet.iterator()` itself allocates a `KeysIterator`
 wrapping a `TreeIterator` (with its own `Tree[]` DFS-stack array) — a persistent-tree cost that has nothing to do
 with tail recursion or `Chain`'s own map. This was a bigger, lower-risk fish than the originally-scoped redesign:
-it doesn't touch the reference-oracle `CellularHomologyContext`/`Chain.reduceBy` machinery at all, just two
+it doesn't touch the reference-oracle `CellularHomologyEngine`/`Chain.reduceBy` machinery at all, just two
 already-experimental/already-fixed-once methods.
 
 **Fix #6 (insertionDiameter iterator elimination)**: `insertionDiameter` now takes an already-materialized
@@ -610,14 +610,14 @@ fix) and deleted each time, same convention as every prior session.
 
 Explicitly authorized ("if it only hits the ripser engines it is worth the changes. Go for it") after confirming
 via `grep` that `SimplexIndexing.cofacetIteratorWithVertex`/`cofacetIterator`/`facetIterator` are consumed only by
-`RipserCohomologyContext` and `PackedRipserCohomologyContext`, plus dead/deprecated legacy code
+`RipserCohomologyEngine` and `PackedRipserCohomologyEngine`, plus dead/deprecated legacy code
 (`RipserCliqueFinder`, `RipserStreamSparse`) and `SimplexIndexingSpec`'s own tests -- the previous session's flagged
 ~49.8%-of-allocation cost (the hand-rolled `Iterator[(Int, Long)]` boxing a fresh tuple on every candidate vertex
 considered) was safe to fix as an interface change.
 
-**`advisor()` was consulted before writing any code**, given this touches `RipserCohomologyContext` -- the
-reference oracle every other engine (`PackedRipserCohomologyContext` via `PackedRipserCohomologySpec`,
-`SimplicialHomologyContext` via `RipserCohomologySpec`) is cross-validated against. Two corrections came out of
+**`advisor()` was consulted before writing any code**, given this touches `RipserCohomologyEngine` -- the
+reference oracle every other engine (`PackedRipserCohomologyEngine` via `PackedRipserCohomologySpec`,
+`SimplicialHomologyEngine` via `RipserCohomologySpec`) is cross-validated against. Two corrections came out of
 that consult, both followed:
 
 1. **`sparseCofacets` keeps `Iterator[DiameterIndex]`, not `Seq`.** Both call sites
@@ -655,7 +655,7 @@ candidate's vertex ARRAY by removing one element from `tau`'s already-decoded `A
 `decodeToArray(facetIdx, size - 1)` call -- a plain O(d) array-copy-excluding-one-index versus `decodeToArray`'s own
 `searchRow`/`binomialEntry` search plus a final sort.
 
-**Call sites rewired, `RipserCohomologyContext` (`Homology.scala`, the reference oracle) -- a deeper rewrite than
+**Call sites rewired, `RipserCohomologyEngine` (`Homology.scala`, the reference oracle) -- a deeper rewrite than
 the packed engine's, not just a cursor swap**: the old `coboundaryOf`/`zeroPivotCofacet` used the vertex-less
 `si.cofacetIterator(sigma)` and had to fully decode each candidate back into a `Simplex[Int]`
 (`si(cofacetIdx, sigma.size + 1)`) and then linearly scan it (`tau.underlying.find(v =>
@@ -677,7 +677,7 @@ candidate either way.
 `FacetCursor` properties), `PackedRipserCohomologySpec` (9 examples, 805 expectations -- including cross-validation
 against the reference engine on random clouds and the apparent-pair collision regressions) and
 `RipserCohomologySpec` (17 examples, 1609 expectations -- including cross-validation against
-`SimplicialHomologyContext`, the independently-verified oracle, and the essential-cocycle/coboundary check) all
+`SimplicialHomologyEngine`, the independently-verified oracle, and the essential-cocycle/coboundary check) all
 green individually; full `sbt test` clean too (237 total, 232 passed/0 failed/5 skipped/1 pending -- the +1 over
 the third follow-up's 236/231 baseline is the new cursor-correctness property test).
 
@@ -691,7 +691,7 @@ gets its own fresh process)**:
 | engine | before | after | improvement |
 |---|---|---|---|
 | packed | 1006.4 ms | 941.0 ms | 6.5% faster |
-| SortedSet (`RipserCohomologyContext`) | 25690.7 ms | 19755.0 ms | 23.1% faster |
+| SortedSet (`RipserCohomologyEngine`) | 25690.7 ms | 19755.0 ms | 23.1% faster |
 
 The SortedSet engine's improvement is much larger than the packed engine's, and this is expected, not an
 inconsistency to chase: the packed engine's fix removed ONLY the tuple-boxing allocation (`DiameterIndex`'s
@@ -716,7 +716,7 @@ PRE-EXISTING cost, unchanged by this round, just no longer hidden behind somethi
 zeroPivotFacet` already fixed via its own array-based `maxPairwiseDistance`, but never applied to this engine's
 equivalent call) together now account for a substantial share of allocation. A future session wanting to chase
 this further has two concrete, already-scoped options: (a) give `RipserCohomologyContext.zeroPivotFacet` the same
-`maxPairwiseDistance(Array[Int])` treatment `PackedRipserCohomologyContext` already has, building the candidate's
+`maxPairwiseDistance(Array[Int])` treatment `PackedRipserCohomologyEngine` already has, building the candidate's
 array from `tau`'s own already-decoded vertices via `FacetCursor.vertex`-based removal rather than
 `filtrationValue`'s generic `SortedSet` path; (b) look at whether `apply(simplex)`'s `toSeq.sorted.reverse.
 zipWithIndex.map(...).sum` chain (five separate allocating stages for what's structurally a single reduction) can
@@ -737,8 +737,8 @@ own section below once it exists. Committed as `d0daec6`.
 ## Fifth follow-up session, same day (2026-09-19): time+memory comparison, then closing the packed-vs-SortedSet question
 
 Two asks: the time-and-memory comparison against real `ripser.cpp` this session's earlier request had flagged as
-still-pending, then (after seeing the numbers) whether any real setting still needs `RipserCohomologyContext`
-(SortedSet) now that `PackedRipserCohomologyContext` exists.
+still-pending, then (after seeing the numbers) whether any real setting still needs `RipserCohomologyEngine`
+(SortedSet) now that `PackedRipserCohomologyEngine` exists.
 
 **Time+memory comparison** (`sphere3_48`/`sphere3_96` only, per `advisor()`'s scope calibration -- the paper's
 other Table 1 cases already don't finish in a reasonable budget, and the point was orders-of-magnitude, not an
@@ -765,15 +765,15 @@ previously-quoted "18.8x/38.6x" gap figures (different baseline, different metho
 `ripserMs`-different-machine finding already warned about).
 
 **The packed-vs-SortedSet question, settled via `advisor()`, then two greps, not by reasoning alone**: asked
-whether ANY setting still requires `RipserCohomologyContext` now that `PackedRipserCohomologyContext` measures
+whether ANY setting still requires `RipserCohomologyEngine` now that `PackedRipserCohomologyEngine` measures
 faster and leaner on every axis. Initial read (both take the same `FiniteMetricSpace[Int]`, same options minus an
 unneeded `memoizeFiltrationValue`, share `SimplexIndexing`) was "no functional gap" -- `advisor()` confirmed that
 read but flagged two things to check with a grep, not just reasoning: whether anything outside specs consumes
 `.annotation` (a chain's representative-cycle data), and what the MATLAB facade's `engine="ripser"` actually calls.
 
 **Found a real, if narrow and closable, gap**: `Tda4j.scala`'s `engine="ripser"` option was wired directly to
-`RipserCohomologyContext`, and its `fromBars` helper's `cycleProvider` called `.underlying.toArray` directly on
-each chain cell -- `Simplex[Int]`-only. `PackedRipserCohomologyContext`'s cells are `DiameterIndex` (a
+`RipserCohomologyEngine`, and its `fromBars` helper's `cycleProvider` called `.underlying.toArray` directly on
+each chain cell -- `Simplex[Int]`-only. `PackedRipserCohomologyEngine`'s cells are `DiameterIndex` (a
 combinatorial index, no `.underlying`), and critically `DiameterIndex` doesn't carry its own vertex count, so
 decoding it back needs `size` from outside -- not plumbed through anywhere. This is the one place today a
 representation change would be a public-API change, not an internal one.
@@ -793,12 +793,12 @@ updating, since `PackedRipserCohomologySpec` already established the two engines
 
 **`advisor()`'s sharper framing of what to actually tell the project lead, adopted verbatim**: the honest answer
 isn't "SortedSet has no value" -- packed-vs-SortedSet agreement is weak evidence for the ALGORITHM (both share
-`SimplexIndexing`, so a shared bug there passes both identically; `SimplicialHomologyContext` is the genuinely
+`SimplexIndexing`, so a shared bug there passes both identically; `SimplicialHomologyEngine` is the genuinely
 independent oracle), but it's the ONLY thing that would catch a bug specific to packed's OWN representation layer
 -- `DiameterIndex`'s index-only `equals`/`hashCode` override, its index-keyed `basis`/`generators`/`cleared` maps.
-So `RipserCohomologyContext`'s remaining value is as a test oracle for packed's representation layer specifically,
+So `RipserCohomologyEngine`'s remaining value is as a test oracle for packed's representation layer specifically,
 not as a production alternative and not as an independent check on the Ripser algorithm itself. Per `advisor()`'s
-explicit caution, did NOT propose deprecating `RipserCohomologyContext` -- it's a correct, paper-faithful reference
+explicit caution, did NOT propose deprecating `RipserCohomologyEngine` -- it's a correct, paper-faithful reference
 implementation with standing value on its own, and "it's slower" isn't sufficient cause to remove it; the decision
 of whether to keep it a documented public class, mark it test-scope-only, or leave a doc note steering new callers
 to packed was left to the project lead, who chose to keep it (fully maintained) but mark it clearly as
@@ -816,9 +816,9 @@ existed). `Tda4jSpec` individually (12 examples, including the new `cellVertices
 "representative chains... be readable for at least one engine=ripser bar").
 
 **Files changed this session**: `PackedRipserCohomology.scala` (`si` made public, class doc marks it "the
-production engine"), `Homology.scala` (`RipserCohomologyContext`'s class doc marks it "test/reference oracle
+production engine"), `Homology.scala` (`RipserCohomologyEngine`'s class doc marks it "test/reference oracle
 only"), `Tda4j.scala` (`fromBars` generalized to `cellVertices: (Int, CellT) => Array[Int]`, `engine="ripser"`
-now builds `PackedRipserCohomologyContext` instead of `RipserCohomologyContext`, doc comments and error messages
+now builds `PackedRipserCohomologyEngine` instead of `RipserCohomologyEngine`, doc comments and error messages
 updated to match), `SingleEngineProfileDriver.scala` (moved from `src/main/.../profiling/` to
 `src/test/scala/.../homology/`, `totalSimplexCount` wired up for the `sortedset` branch).
 

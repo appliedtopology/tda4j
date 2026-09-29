@@ -5,13 +5,13 @@ import org.appliedtopology.tda4j.algebra.{given, *}
 import org.appliedtopology.tda4j.cells.{given, *}
 
 /** Adapts a `FiniteSimplicialSet[G]` into the `CellStream[G, Int]` the existing homology engines actually require
-  * (`CellularHomologyContext` takes a `stream: CellStream[CellT, FiltrationT]`, never a bare `OrderedCell` -- confirmed
+  * (`CellularHomologyEngine` takes a `stream: CellStream[CellT, FiltrationT]`, never a bare `OrderedCell` -- confirmed
   * by reading `Homology.scala`). Every generator sits at the same nominal filtration value `0`: this is ordinary
   * (unfiltered) homology of one fixed finite simplicial set, not real persistence -- the adapter exists only because
   * the engine has no entry point that skips the stream interface.
   *
   * `filtrationOrdering` is `Ordering.by(dimOf)` ascending, then `ord` as tiebreak -- traced from `Homology.scala`'s own
-  * `CellularHomologyContext.HomologyState.processingOrder` derivation comment (the reverted first attempt at that
+  * `CellularHomologyEngine.HomologyState.processingOrder` derivation comment (the reverted first attempt at that
   * comparator used `filtrationOrdering.reverse` wholesale and got faces-before-cofaces backwards precisely because
   * `filtrationOrdering` itself already sorts smaller dimension as smaller, un-negated): this matches that established
   * convention exactly, not a fresh interpretation for this new case. With every generator's filtration value tied,
@@ -37,7 +37,7 @@ object SimplicialSetStream:
     * increasing vertex tuple) are always non-degenerate -- removing one entry from a strictly increasing sequence
     * leaves it strictly increasing -- so every generator's face data is a bare (non-degenerate) generator, `word = Nil`
     * throughout. This exercises none of the degeneracy machinery in `SSetElement.scala`; it's a plumbing adapter,
-    * cross-validated against `SimplicialHomologyContext` run directly on the same stream, not evidence that
+    * cross-validated against `SimplicialHomologyEngine` run directly on the same stream, not evidence that
     * `faceOf`/`insertOuter` themselves are correct -- that comes only from the hand-built fixtures.
     *
     * Takes `CellStream[Simplex[VertexT], ?]`, not the narrower `SimplexStream[VertexT, ?]`: the actual Vietoris-Rips

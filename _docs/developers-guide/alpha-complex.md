@@ -40,10 +40,10 @@ DQP-vs-Helix comparisons in `AlphaCrossValidationSpec` are deliberately kept out
 manually-invoked diagnostic methods instead) — a real Helix failure would otherwise masquerade as a DQP
 regression or vice versa.
 
-### `FastAlphaHomologyContext` — dual union-find, and a second, MEASURED limitation this one is exposed to
+### `FastAlphaHomologyEngine` — dual union-find, and a second, MEASURED limitation this one is exposed to
 
 `homology/FastAlphaHomology.scala` (`.claude/DESIGN-alpha-dual-unionfind.md`), a follow-on to the cubical dual
-union-find engine (`FastCubicalHomologyContext`, `persistence-engines.md`'s engine 6): builds a dual graph over
+union-find engine (`FastCubicalHomologyEngine`, `persistence-engines.md`'s engine 6): builds a dual graph over
 `HelixDelaunay`'s own top simplices and computes `H_0`+`H_{d-1}` via the same Alexander-duality/elder-rule
 union-find, needing `HelixDelaunay` specifically (never `AlphaShapeDQP`, whose own documented
 cospherical-degeneracy hazard can emit an oversized simplex outright) because the dual graph needs the full,
@@ -68,7 +68,7 @@ and the concrete fix — retry with `engine="naive"`/`"chunks"`/`"cohomology"`, 
 with the facet-count technical detail kept as a secondary appendix for developers investigating this class
 itself.
 
-**At ambient dimension `>= 3`, the same hybrid-with-`chunks` extension as `FastCubicalHomologyContext`**
+**At ambient dimension `>= 3`, the same hybrid-with-`chunks` extension as `FastCubicalHomologyEngine`**
 (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): both union-finds were ALREADY written generically
 in terms of `ambientDimension`, not hardcoded to 2 — the only thing gating this engine to `d=2` was the single
 `require` check, so extending it is purely a matter of handing the residual "middle" dimensions (`1 <= k <=

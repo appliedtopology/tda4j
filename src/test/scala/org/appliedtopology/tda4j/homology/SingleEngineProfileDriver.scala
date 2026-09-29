@@ -20,7 +20,7 @@ import org.appliedtopology.tda4j.io.{given, *}
   * at directly, and (unlike the sbt-hosted spec) can be left running for as long as needed with no per-cell budget at
   * all -- just don't wrap it in a shell `timeout` unless you actually want it killed.
   *
-  * `engine` is `"sortedset"` (`RipserCohomologyContext`) or `"packed"` (`PackedRipserCohomologyContext`). `format` is
+  * `engine` is `"sortedset"` (`RipserCohomologyEngine`) or `"packed"` (`PackedRipserCohomologyEngine`). `format` is
   * `"point-cloud"` (whitespace/comma-separated coordinates, one point per line -- `dataFile` becomes an
   * `EuclideanMetricSpace`) or `"distance"` (a full, not just lower-triangular, whitespace/comma-separated distance
   * matrix -- `dataFile` becomes an `ExplicitMetricSpace`; this is what `fractal-r`'s own data file is, per
@@ -35,7 +35,7 @@ import org.appliedtopology.tda4j.io.{given, *}
   * Prints `substitutionCount`/`totalSimplexCount` (both engines expose them, see their own doc comments in
   * `Homology.scala`/`PackedRipserCohomology.scala`) alongside timing -- added specifically to let a profiling run on an
   * anomalous case (e.g. `o3_1024`'s S/pack ratio collapsing to ~1.7x when every other case shows 15-45x, or `fractal-r`
-  * timing out for the packed engine while `RipserCohomologyContext` itself finishes) report the apparent-pairs hit rate
+  * timing out for the packed engine while `RipserCohomologyEngine` itself finishes) report the apparent-pairs hit rate
   * alongside the timing, not just the wall-clock number alone.
   */
 object SingleEngineProfileDriver:
@@ -63,11 +63,11 @@ object SingleEngineProfileDriver:
       val t0 = System.nanoTime()
       val (totalSimplices, substCount, barCounts) = engine match
         case "sortedset" =>
-          val ctx = RipserCohomologyContext[Fp](ms, maxDim, maxFiltrationValue = threshold)
+          val ctx = RipserCohomologyEngine[Fp](ms, maxDim, maxFiltrationValue = threshold)
           val bars = ctx.persistentCohomology()
           (ctx.totalSimplexCount, ctx.substitutionCount, bars.groupBy(_.dim).view.mapValues(_.size).toMap)
         case "packed" =>
-          val ctx = PackedRipserCohomologyContext[Fp](ms, maxDim, maxFiltrationValue = threshold)
+          val ctx = PackedRipserCohomologyEngine[Fp](ms, maxDim, maxFiltrationValue = threshold)
           val bars = ctx.persistentCohomology()
           (ctx.totalSimplexCount, ctx.substitutionCount, bars.groupBy(_.dim).view.mapValues(_.size).toMap)
         case other => throw new IllegalArgumentException(s"unknown engine $other -- use sortedset or packed")

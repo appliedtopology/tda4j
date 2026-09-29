@@ -142,8 +142,8 @@ class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace
   // VietorisRipsSpec's "have sorted layers" test). Neither of those matches filtrationOrdering's tie-break on
   // cells that tie exactly -- `edges` tie-breaks ascending via simplexOrdering, and the DFS walk's tie order
   // comes from SortedSet[Int] neighbor traversal (ascending vertex id), not any filtration-aware order at
-  // all. PersistenceInChunksContext's chunk-boundary logic (Homology.scala's
-  // PersistenceInChunksContext.allCells) relies on this bucket's own position standing in for
+  // all. PersistenceInChunksEngine's chunk-boundary logic (Homology.scala's
+  // PersistenceInChunksEngine.allCells) relies on this bucket's own position standing in for
   // filtrationOrdering position, so an inconsistent tie-break there silently breaks it even though this
   // class's own crash (the un-reversed filtrationOrdering primary key, fixed separately above) is gone --
   // found via EngineComparisonBenchmarkSpec / the regression test below.

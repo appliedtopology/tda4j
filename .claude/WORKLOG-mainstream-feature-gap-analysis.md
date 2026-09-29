@@ -39,7 +39,7 @@ user-guide).
 
 ### 2. Circular coordinates — YES, with the user's own reframing
 
-Original open question (mine): does a *finite* H¹ bar's stored representative in `CellularCohomologyContext`
+Original open question (mine): does a *finite* H¹ bar's stored representative in `CellularCohomologyEngine`
 actually restrict to a nonzero cocycle on a sub-level complex `K_r` for `r` inside `[birth, death)`? CLAUDE.md
 says only *essential* bars' V-columns are guaranteed cocycles; finite bars' V-columns "equal their reduced pivot
 chain" — unverified whether that's good enough.
@@ -53,7 +53,7 @@ Mechanically cheap to build on existing plumbing:
 - `K_r` = re-threshold an existing coface/VR stream with `maxFiltrationValue = Some(r)` (the same knob that
   already implements enclosing-radius truncation) — no new subcomplex-extraction code needed.
 - Also truncate by dimension (`LimitedCofaceSimplexStream(stream, 2)`, drop dim-2 bars) so
-  `CellularCohomologyContext` (which fully materializes its input, no `maxDim` parameter) doesn't build cells
+  `CellularCohomologyEngine` (which fully materializes its input, no `maxDim` parameter) doesn't build cells
   above the dimension of interest.
 - Harmonic smoothing (`δᵀδ g = δᵀz`) is a sparse SPD least-squares solve, not really "optimization" in the
   LP/QP sense. `commons-math3-3.6.1` (already vendored — confirmed by listing the jar directly, not assumed)
@@ -71,7 +71,7 @@ Remaining real implementation points (not yet resolved, flag for whoever picks t
 - `∂(ℤ-lift) = 0` must be a runtime check, not assumed — use an odd, large-ish prime (not the `p=2` default);
   RP²-type classes exist over F₂ with no ℤ/real lift, so a mod-2 "cocycle" can be a mirage for coordinatization.
 - Cheap first correctness test: confirm `δ(rep) = 0` on the thresholded complex for essential H¹ bars, cross-check
-  both `CellularCohomologyContext` and `PackedRipserCohomologyContext`.
+  both `CellularCohomologyEngine` and `PackedRipserCohomologyEngine`.
 
 ### 3. Optimal cycles (OAT-style minimal representatives) — DEPRIORITIZED, not well-formed enough yet
 
@@ -168,7 +168,7 @@ engineering time until the payoff is measured, not inferred.
 ### 6. Dual union-find (cubical, "Flash Cubical") — YES; alpha-complex extension — plausible follow-on, not concurrent
 
 Cubical piece already has a design note: `.claude/DESIGN-fast-cubical-engine.md` (2026-09-20), phases already
-laid out — Phase 1 (genericize `SimplicialHomologyByDimensionContext` the same way `PersistenceInChunksContext`
+laid out — Phase 1 (genericize `SimplicialHomologyByDimensionContext` the same way `PersistenceInChunksEngine`
 was genericized, low-risk), Phase 2 (Flash Cubical's dual-graph top-dimension union-find, the real capacity-sweep
 win — covers H0+H1 completely by union-find alone in 2D, leaves only H1 to real reduction in 3D), Phase 3
 (pruning/lookup tables, constant factor), Phase 4 (discrete Morse, explicitly deprioritized there — its own

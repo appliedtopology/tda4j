@@ -23,14 +23,14 @@ under that name anywhere in current source. Grepping `CellularPersistenceInChunk
 the chunks engine's own `unionFindDim01` fast path so it works for `Cube`, not just `Simplex[Int]` — was
 **already done** in an earlier, undocumented session: `CellularPersistenceInChunksContext[Cube, CoefficientT]`
 was already cross-validated against the naive engine in `CubicalStreamSpec.scala`. The only missing piece was
-the ergonomic wrapper class matching `PersistenceInChunksContext`'s own one-line-subclass pattern:
+the ergonomic wrapper class matching `PersistenceInChunksEngine`'s own one-line-subclass pattern:
 
 ```scala
 class CubicalPersistenceInChunksContext[CoefficientT: Field](maxDim: Int = 5)
     extends CellularPersistenceInChunksContext[Cube, CoefficientT](maxDim) {}
 ```
 
-Added to `homology/Homology.scala`, right after `PersistenceInChunksContext`. Compiles clean; no new tests
+Added to `homology/Homology.scala`, right after `PersistenceInChunksEngine`. Compiles clean; no new tests
 needed beyond what already existed, since the underlying mechanism was already validated.
 
 ## Phase 2: no paper access, original derivation
@@ -101,7 +101,7 @@ afterward) with fresh random seeds each time; all clean.
 
 That same extreme fixture (`shape=(3,2)`, one finite pixel, five `+Infinity` pixels) initially FAILED the
 random property test — not with an exception, but a `false` boolean. Isolated via a throwaway diagnostic
-script (`Test/runMain`, deleted before commit) that this engine's own bars matched `CubicalHomologyContext`'s
+script (`Test/runMain`, deleted before commit) that this engine's own bars matched `CubicalHomologyEngine`'s
 (the naive oracle) bar-for-bar EXACTLY, and every `H_1` representative was a genuine cycle. The actual failing
 sub-check was `HomologyFixtures.totalBarsAccountForAllCells`, whose "essential iff `upper.isFinite == false`"
 proxy silently miscounts once a PRIMAL cell can itself carry filtration value `+Infinity`: a genuine PAIRING
@@ -130,7 +130,7 @@ sign errors" testing lesson; and the random 2D property test described above. Al
 
 ## Four-surface integration
 
-Unlike `RipserCohomologyContext` (kept deliberately internal/test-only because `PackedRipserCohomologyContext`
+Unlike `RipserCohomologyEngine` (kept deliberately internal/test-only because `PackedRipserCohomologyEngine`
 already supersedes it in production), this engine has no existing production alternative for what it does —
 it's a genuinely new, faster option for 2D cubical grids, not a redundant cross-check — so it was wired into
 all four surfaces per `CLAUDE.md`'s own "finalizing a user-visible capability" convention, not left as an
@@ -147,7 +147,7 @@ internal-only class:
   fixed all seven until compilation was silent again, rather than leaving warnings that mask a real
   `MatchError` risk if the earlier guards are ever refactored away. `dispatchCubical` validates
   `stream.ambientDim == 2` before calling the engine, with a message naming the actual dimension (not a bare,
-  unlabeled `IllegalArgumentException` from deep inside `FastCubicalHomologyContext`'s own `require`).
+  unlabeled `IllegalArgumentException` from deep inside `FastCubicalHomologyEngine`'s own `require`).
   `computeCubicalGeneric`'s new branch calls `FastCubicalHomologyContext[C]().persistentHomology(stream)`
   directly (bypassing `PersistenceEngine[CellT, C]`, the same way `engine=ripser` already does, for the same
   "specialized to a concrete stream type, not generic over `CellT`" reason `PersistenceEngine`'s own doc comment
@@ -155,7 +155,7 @@ internal-only class:
 - **`cli`**: `--engine`'s `ScallopOption[String]` was already a free-form passthrough (no Scallop-side enum), so
   `--engine fast-cubical` worked with zero code changes — confirmed this by checking `TDA4jConf.scala`'s own
   definition before assuming a change was needed. Only the description string needed updating.
-- **`src/docs/developers-guide/`**: new "6. `FastCubicalHomologyContext`" section in `persistence-engines.md`
+- **`src/docs/developers-guide/`**: new "6. `FastCubicalHomologyEngine`" section in `persistence-engines.md`
   (plus a note on why it isn't a table column, and an updated "Representation-specific (cubical)" reasoning
   bullet), a new "Dual union-find cubical engine (Flash Cubical)" subsection in `architecture.md` right after
   the existing "Cubical complexes" section, and a one-line class/file-list update in `class-diagrams.md`.

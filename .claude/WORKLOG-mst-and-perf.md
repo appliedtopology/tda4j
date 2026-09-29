@@ -22,7 +22,7 @@ Measured directly (`EngineComparisonBenchmarkSpec` at `n=100, ambientDim=3, maxD
 default 1GB heap/25s timeout and with `-J-Xmx6g`/30s):
 
 - **Every raw VR construction (`VR-Enumerating`, `VR-RipserCoface`, `VR-Inorder`, `VR-RecStack`, `VR-NewVR`) times
-  out, on BOTH the Naive and Chunks engines, and — critically — so does the built-in `RipserCohomologyContext`
+  out, on BOTH the Naive and Chunks engines, and — critically — so does the built-in `RipserCohomologyEngine`
   row**, the one engine with sparse-Rips support. Only the two alpha-complex rows finish (Alpha-DQP/Alpha-Helix,
   ~1790-1794 cells, ~17-24s total).
 - **Cause 1, combinatorial, not a bug**: none of `EnumeratingCofaceSimplexStream`/`RipserCofaceSimplexStream`/
@@ -82,7 +82,7 @@ regression suite it never had before (`SimplicialHomologyByDimensionSpec`, new t
    `PersistenceInChunksContext.recordPair` already uses.
 2. **(Previously documented) Missing filtration-ordering given** — `chainRM` was summoned before any
    `Ordering[Simplex[VertexT]]` was in scope, silently falling back to the generic lexicographic
-   `Simplex is OrderedCell` ordering instead of filtration order (the same bug class `CellularHomologyContext`'s
+   `Simplex is OrderedCell` ordering instead of filtration order (the same bug class `CellularHomologyEngine`'s
    own class doc describes at length). Fixed by adding `given Ordering[Simplex[VertexT]] =
    stream.filtrationOrdering` before `chainRM` is summoned.
 3. **(New) `mstIterator`'s naive dying-vertex selection, found immediately after fixing (1)/(2)** —
@@ -117,8 +117,8 @@ regression suite it never had before (`SimplicialHomologyByDimensionSpec`, new t
 5. **(New) Bars above dimension 0 were recorded one dimension too high** — `advanceOne`'s finite-bar recording
    used `barcode(currentDim) = ...`, i.e. the dimension of `sigma` (the cell doing the killing), not the
    dimension of the class actually being closed (`cycleBasis.leadingCell`'s own dimension, one lower — exactly
-   what `CellularHomologyContext` records via `pivot.dim`, not `sigma.dim`). A 1-cycle killed by a triangle was
-   filed under dimension 2. Fixed by computing `barDim = cycleBasis.leadingCell.map(_.dim).getOrElse(currentDim
+   what `CellularHomologyEngine` records via `pivot.dim`, not `sigma.dim`). A 1-cycle killed by a triangle was
+   filed under dimension 2. Fixed by computing `barDim = cycleBasis.leadingCell.map (_.dim).getOrElse (currentDim
    - 1)` and keying `barcode` by that instead.
 
 **A sixth, false alarm, worth recording because it looked identical to a real bug**: the first cross-validation
@@ -137,7 +137,7 @@ cross-validating" section already documents for several production streams (iter
 yet. Fixed by sorting each bucket with `.sorted(using filtrationOrdering.reverse)` in the helper. After this fix,
 all three specs in `SimplicialHomologyByDimensionSpec` pass clean: the 5 hand-verified fixtures (including the
 degenerate one), the bars-account-for-cells structural invariant, and 100 ScalaCheck trials cross-validating
-against `SimplicialHomologyContext` on random Vietoris-Rips point clouds.
+against `SimplicialHomologyEngine` on random Vietoris-Rips point clouds.
 
 ### Advisor guidance that shaped this (two calls, one reconciliation)
 
@@ -147,13 +147,13 @@ unused engine) — but this framing turned out to be based on incomplete informa
 the exact Kruskal/elder-rule correspondence (tree edge = `reduced != 0`, cycle edge = reduces to zero, younger
 root dies) and finding the logic was already debugged once before (commit `841bc83`, "Fixed bugs with the
 generation of representative cochains for degree 1 homology from Kruskal's algorithm"): reconciled to "do both,
-in order" — fix the isolated class first (cheap, zero risk to the reference oracle `CellularHomologyContext`),
-cross-validate it against `SimplicialHomologyContext` as an executable proof the logic is right, and ONLY THEN
-consider porting it into `CellularHomologyContext` as an actual engine fast path, with an explicit stop
+in order" — fix the isolated class first (cheap, zero risk to the reference oracle `CellularHomologyEngine`),
+cross-validate it against `SimplicialHomologyEngine` as an executable proof the logic is right, and ONLY THEN
+consider porting it into `CellularHomologyEngine` as an actual engine fast path, with an explicit stop
 condition: "if step 2 shows disagreement, stop before step 3 and report — don't port logic you've just shown to
 be wrong."
 
-### Decision: fixed and validated, but NOT ported into `CellularHomologyContext` this session
+### Decision: fixed and validated, but NOT ported into `CellularHomologyEngine` this session
 
 Step 2 (cross-validation) succeeded cleanly — see above. Step 3 (porting into the reference oracle) was
 deliberately NOT done this session, on a cost/benefit read made explicit here rather than silently dropped:
@@ -163,7 +163,7 @@ deliberately NOT done this session, on a cost/benefit read made explicit here ra
   of ~166,750 total. Even a large constant-factor speedup on dimension-0/1 processing specifically would not
   move the needle on that complaint, which is dominated by dimension-2 volume (Cause 1) and comparator overhead
   across ALL dimensions (Cause 2, already fixed above, and NOT specific to dimension 0/1).
-- **Risk is real and not symmetric.** `CellularHomologyContext` is the reference oracle every other engine in
+- **Risk is real and not symmetric.** `CellularHomologyEngine` is the reference oracle every other engine in
   this codebase is cross-validated against (see its own class doc). This session found FIVE distinct bugs while
   getting the MST logic right in an isolated class with no other consumers — a mistake ported into the shared
   oracle would be far more costly to detect and could masquerade as a regression in something else entirely.
@@ -172,7 +172,7 @@ deliberately NOT done this session, on a cost/benefit read made explicit here ra
   its own targeted benchmark before deciding it's worth the oracle risk.
 
 `SimplicialHomologyByDimensionContext` is left as a correct, validated, but not (yet) benchmarked or
-production-wired fourth engine. Porting its now-executable logic into `CellularHomologyContext` as a genuine
+production-wired fourth engine. Porting its now-executable logic into `CellularHomologyEngine` as a genuine
 speedup (using raw `UnionFind` rather than `Chain.reduceBy`, to actually avoid the `filtrationOrdering`
 comparator overhead for dimension 0/1 — the `Chain.reduceBy`-based version validated here is provably correct
 but not obviously faster than general reduction, since it still pays the same comparator cost) is the natural
@@ -235,7 +235,7 @@ actually justifies calling the default safe, not the theorem argument on its own
 `maxFiltrationValue` parameter, folded into a combined `keptByThresholdAndCriterion` predicate alongside the
 existing `keepCriterion` rather than a second independent filter, per advisor's specific steer), its two direct
 subclasses `RipserCofaceSimplexStream`/`InorderCofaceSimplexStream` (threaded the same parameter through, applied
-at every place each class's own bespoke coface-generation logic produces a candidate), `RipserCohomologyContext`
+at every place each class's own bespoke coface-generation logic produces a candidate), `RipserCohomologyEngine`
 and `IncrementalVietorisRipsSimplexStream` (already had the parameter for genuine sparse-Rips truncation -- only
 the default changed). Deliberately NOT touched: `RecursiveStackVietorisRipsSimplexStream` (`VietorisRips.scala`
 -- independent coface logic, explicitly documented as a cross-validation baseline rather than a speed-competitive
@@ -265,10 +265,10 @@ thresholded and one not. Full regression run after all fixes: 75 examples across
 | VR-Inorder | Naive/Chunks | timeout | 14.9s / 11.5s |
 | VR-NewVR (`IncrementalVietorisRipsSimplexStream`) | Naive/Chunks | timeout | 27.3s / 17.0s |
 | VR-RecStack (`RecursiveStackVietorisRipsSimplexStream`) | both | timeout | **still timeout** -- expected, this class was deliberately not touched (see above) |
-| VR (built-in) `RipserCohomologyContext` | -- | timeout | **1.34s** |
+| VR (built-in) `RipserCohomologyEngine` | -- | timeout | **1.34s** |
 
 Complex size dropped from 166,750 to 54,492 cells (a real ~3x reduction, not the whole story -- see below).
-`RipserCohomologyContext` is the standout: from timing out at 30s+ to 1.34s, because it already had genuine
+`RipserCohomologyEngine` is the standout: from timing out at 30s+ to 1.34s, because it already had genuine
 incremental sparse-aware enumeration (`sparseCofacets`/`insertionDiameter`, Part 4 of a much earlier session) that
 simply had nothing to bite on before this session (default threshold was always `+Infinity`) -- now that the
 default threshold is finite, that machinery is doing real, effective work for the first time in normal usage.

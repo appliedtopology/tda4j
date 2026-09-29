@@ -151,7 +151,7 @@ recording since each is a genuine methodological lesson, not just a nitpick:
    Checked for both `engine=ripser` (the `DiameterIndex` decode path) and `engine=naive`/general (the
    `Simplex[Int]` path) separately, since they're independent mapping code.
 2. **`chunks`/`cohomology` were offered by the facade for `complex=witness` but never once run against a
-   witness stream.** `CellularPersistenceInChunksContext` has a documented history of a real pairing bug on
+   witness stream.** `CellularPersistenceInChunksEngine` has a documented history of a real pairing bug on
    tie-heavy cliques (`WORKLOG-chunks-pairing-bug.md`), and `nu=2`'s per-witness clamp makes duplicate
    zero-length bars (`birth == death == 0.0`) genuinely common -- a similar tie-heavy shape. Added property
    tests: chunks-vs-naive and cohomology-vs-naive on `LazyWitnessSimplexStream`, cohomology-vs-naive on
@@ -241,7 +241,7 @@ documented, equally reachable option value).
     consistent with real double-counted materialization work, not a contradiction.) So: construction alone
     differs by a real ~50%, but end-to-end wall clock differs by under 10%, because reduction (~42-47s either
     way) dominates the total by roughly 10x over construction. The original "220x" was comparing
-    `PackedRipserCohomologyContext` (which never materializes the full complex at all) against full
+    `PackedRipserCohomologyEngine` (which never materializes the full complex at all) against full
     materialization-plus-naive-reduction of a quarter-million cells -- an engine-choice effect, not a variant
     effect.
   - **Isolating variant alone at the realistic threshold `2R`** (`R` = the landmark selection's own covering

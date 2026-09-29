@@ -25,10 +25,10 @@ class FiniteField(val p: Int):
     def toUInt: Int = ((fp % p) + p) % p // Have to get to the interval (0,p-1)
 
   given (Fp is Field) = new (Fp is Field):
-    override def showForSelf: Show[Fp] = Show.show[Fp](fpx => {
+    override def showForSelf: Show[Fp] = Show.show[Fp] { fpx =>
       val Fp(x) = fpx.norm
       s"Fp(${x})"
-    })
+    }
 
     def computeInverse(a: Fp): Fp =
       val aa: Int = a.toUInt
@@ -48,7 +48,7 @@ class FiniteField(val p: Int):
         x2 = x1
         x1 = x
       Fp(x1 % p)
-    
+
     val inverses: ArraySeq[Fp] = ArraySeq.tabulate(p)(j =>
       if j == 0 then 0
       else computeInverse(Fp(j))

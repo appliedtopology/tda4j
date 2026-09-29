@@ -74,7 +74,7 @@ oracle (naive-vs-chunks on the same stream) was cheap to write. Added a real pro
 `CechStreamSpec.scala` (naive vs. chunks, `diagramAt` agreement, on the file's existing random-2D-cloud
 generator) -- it passed cleanly, so `complex="cech"` supports both `engine="naive"` (default) and
 `engine="chunks"`; only `engine="ripser"` is refused, with a message naming the actual reason
-(`PackedRipserCohomologyContext`'s apparent-pairs/`insertionDiameter` optimizations are proven for the VR
+(`PackedRipserCohomologyEngine`'s apparent-pairs/`insertionDiameter` optimizations are proven for the VR
 max-pairwise-distance functional specifically, not circumradius -- CLAUDE.md's own Cech section). `maxFiltrationValue`
 is documented as being in Cech RADIUS units for this complex, not a VR diameter.
 
@@ -105,8 +105,8 @@ applied as a post-hoc filter on top of an always-fully-computed complex (same as
 risk either way, since filtering after full correct computation is always safe).
 
 `engine="naive"` (default) and `engine="chunks"` both supported (chunks-on-`Cube` representatives at dimension
->= 2 confirmed already validated by an existing `CubicalStreamSpec` test, read before trusting -- per
-`advisor()`'s flagged check); `engine="ripser"` refused (`PackedRipserCohomologyContext` is `Simplex[Int]`-
+> = 2 confirmed already validated by an existing `CubicalStreamSpec` test, read before trusting -- per
+`advisor()`'s flagged check); `engine="ripser"` refused (`PackedRipserCohomologyEngine` is `Simplex[Int]`-
 specific).
 
 **Representative-chain semantics needed a real design decision, not an assumption**: `PersistenceResult.cycleVertices`'s
@@ -120,7 +120,7 @@ Verification: a hand-derived 3x3-ring-with-a-permanently-missing-center fixture 
 `io`'s own `PerseusSpec` missing-pixel test uses -- the center must be `Double.PositiveInfinity`, not just a
 larger finite value, to get a genuinely essential H1 bar; an earlier draft of this fixture used `1.0` for the
 center and the "finds the ring's essential bar" test correctly failed, catching the mistake before it shipped).
-`TDA4jSpec` cross-validates `computeFromCubicalImage`'s naive path directly against `CubicalHomologyContext`,
+`TDA4jSpec` cross-validates `computeFromCubicalImage`'s naive path directly against `CubicalHomologyEngine`,
 confirms `engine="chunks"` agrees, confirms `computeFromImage`'s 2D convenience matches the general entry point,
 confirms `engine="ripser"` and a bad shape/flatValues length are both rejected, and confirms `sublevel=false` has
 a real effect. That last test's first draft asserted the SUBLEVEL barcode's birth/death values simply negate

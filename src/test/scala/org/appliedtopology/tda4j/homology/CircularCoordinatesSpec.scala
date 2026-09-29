@@ -26,7 +26,7 @@ class CircularCoordinatesSpec extends Specification:
     */
   private def mostPersistentH1Range(metricSpace: FiniteMetricSpace[Int]): (Double, Double) =
     val stream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = None), 2)
-    val ctx = CellularCohomologyContext[Simplex[Int], Double, Double]()
+    val ctx = CellularCohomologyEngine[Simplex[Int], Double, Double]()
     val bars = ctx.persistentCohomology(stream).filter(_.dim == 1)
     def value(e: BarcodeEndpoint[Double]): Double = e match
       case PositiveInfinity() => Double.PositiveInfinity
@@ -154,7 +154,7 @@ class CircularCoordinatesSpec extends Specification:
     }
 
   "essential representatives at K_r" should
-    "are genuine cocycles on both CellularCohomologyContext and PackedRipserCohomologyContext -- cross-checked " +
+    "are genuine cocycles on both CellularCohomologyEngine and PackedRipserCohomologyEngine -- cross-checked " +
     "independently of CircularCoordinates' own internals, per the originating worklog's own suggested first " +
     "correctness test" >> {
       val points = circlePoints(16)
@@ -165,7 +165,7 @@ class CircularCoordinatesSpec extends Specification:
       val krStream =
         LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(r)), 2)
 
-      val cellularCtx = CellularCohomologyContext[Simplex[Int], Double, Double]()
+      val cellularCtx = CellularCohomologyEngine[Simplex[Int], Double, Double]()
       val cellularEssential = cellularCtx
         .persistentCohomology(krStream)
         .filter(b => b.dim == 1 && b.upper == PositiveInfinity())
@@ -176,7 +176,7 @@ class CircularCoordinatesSpec extends Specification:
         cellularCtx.coboundaryOfChain(rep, triangles).isZero() must beTrue
       }
 
-      val ripserCtx = PackedRipserCohomologyContext[Double](metricSpace, 1, maxFiltrationValue = Some(r))
+      val ripserCtx = PackedRipserCohomologyEngine[Double](metricSpace, 1, maxFiltrationValue = Some(r))
       val ripserEssential = ripserCtx.persistentCohomology().filter(b => b.dim == 1 && b.upper == PositiveInfinity())
       ripserEssential must not(beEmpty)
     }

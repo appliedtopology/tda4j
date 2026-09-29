@@ -1,6 +1,6 @@
-# Worklog: chasing and fixing the `SimplicialHomologyContext` dimension >= 4 crash
+# Worklog: chasing and fixing the `SimplicialHomologyEngine` dimension >= 4 crash
 
-Session date: 2026-09-16. Direct follow-up to WORKLOG-dimension-ceiling.md's bug 1 (`SimplicialHomologyContext`
+Session date: 2026-09-16. Direct follow-up to WORKLOG-dimension-ceiling.md's bug 1 (`SimplicialHomologyEngine`
 throws `IllegalStateException: reduction pivot ... was not a recorded open class` once any dimension-4 simplex
 exists). The project lead asked to fix the reference engine's crash first, and separately floated switching the
 codebase's "wide default" VR stream from `EnumeratingCofaceSimplexStream` to `IncrementalVietorisRipsSimplexStream`
@@ -12,18 +12,18 @@ codebase's "wide default" VR stream from `EnumeratingCofaceSimplexStream` to `In
 (confirmed by reading `SimplexStream.scala` directly) -- it inherits the exact same `.iterator()` default every
 other stream here does. Reproduced the crash on NewVR directly, on the same point cloud: identical exception,
 identical pivot (`TreeSet(5, 8, 9, 11)`). This rules out the stream implementation entirely and confirms the bug
-lives in `CellularHomologyContext`/`SimplicialHomologyContext` itself, not in whichever stream feeds it. The
+lives in `CellularHomologyEngine`/`SimplicialHomologyEngine` itself, not in whichever stream feeds it. The
 "switch the default stream" question is a separate, valid decision on its own merits (VR construction strategy),
 but it does not bear on this crash and was not pursued further this session.
 
-## Fix 1 (real, kept): `CellularHomologyContext` consumed cells in dimension-major order, not true filtration order
+## Fix 1 (real, kept): `CellularHomologyEngine` consumed cells in dimension-major order, not true filtration order
 
 `HomologyState.CellIterator` was `stream.iterator.buffered`. For any `StratifiedCellStream` (every stream in this
 codebase besides a hand-built `.iterator` override), that default is dimension-major: all of dimension d, then all
 of dimension d+1, ... -- correct only *within* one dimension's own bucket (which every stream is careful to sort by
-`filtrationOrdering.reverse`). But `CellularHomologyContext`'s single shared pivot table (`boundaries`/`positives`,
+`filtrationOrdering.reverse`). But `CellularHomologyEngine`'s single shared pivot table (`boundaries`/`positives`,
 populated across ALL dimensions together) is the classical Algorithm 1, which requires cells consumed in one
-combined, true filtration order across every dimension -- unlike `RipserCohomologyContext`, whose `basis` map
+combined, true filtration order across every dimension -- unlike `RipserCohomologyEngine`, whose `basis` map
 resets per dimension and so never needs this.
 
 Confirmed empirically, not just reasoned through: on the 15-point, ambientDim=3 repro cloud built to dimension 4,
@@ -166,7 +166,7 @@ dimension whose leading term is the cell itself (same construction as any positi
 Recorded it in a new map, `negativeVCols: mutable.Map[CellT, Chain[CellT, CoefficientT]]`, keyed by the negative
 cell itself, written alongside `boundaries`/`generators` in `advanceOne`'s negative branch. Threaded it through
 `Chain.reduceBy`'s existing `fallback` parameter (`Chain.reduceBy(dsigma, boundaries, Chain.empty, fallback =
-negativeVCols.get)`) -- the exact same mechanism `RipserCohomologyContext` already uses for its own apparent-pairs
+negativeVCols.get)`) -- the exact same mechanism `RipserCohomologyEngine` already uses for its own apparent-pairs
 on-the-fly substitution (`zeroApparentFacet`), not a new pattern introduced for this fix.
 
 **A second-order bug surfaced immediately after wiring the fallback in, fixed in the same pass**: `vcol`'s own
@@ -185,9 +185,9 @@ correcting) any `log` entry whose key is in `negativeVCols` -- safe and unambigu
 negative).
 
 **Verified, not just "stopped crashing"**: both original repro streams (`EnumeratingCofaceSimplexStream` and
-NewVR) now succeed and agree *exactly* with `RipserCohomologyContext`'s independently-derived bar count (3473) on
+NewVR) now succeed and agree *exactly* with `RipserCohomologyEngine`'s independently-derived bar count (3473) on
 the same complex. A broader stress sweep (64 trials: varying seed/n/ambientDim/build-dimension 3-4, cross-
-validating `SimplicialHomologyContext` against `RipserCohomologyContext` on each) found 0 mismatches and 0
+validating `SimplicialHomologyEngine` against `RipserCohomologyEngine` on each) found 0 mismatches and 0
 crashes. Re-ran `DimensionCeilingBenchmarkSpec`'s previously-crashing cells (VR-Enum+Naive at H=3/H=4, all three
 threshold regimes) directly -- every one now hits a normal timeout ceiling instead of an exception.
 

@@ -86,7 +86,7 @@ amount of API design:
   — `field="Z"` builds `new FiniteField(prime)` and imports its `given ff.Fp is Field`, `field="R"` builds
   `Field.DoubleApproximated(epsilon)` — rather than any existential-type gymnastics.
 - **Capability matrix deliberately pruned, not exposed whole**: `complex=alpha` refuses `engine=ripser`
-  (`RipserCohomologyContext` only ever consumes a `FiniteMetricSpace[Int]`, has no notion of an alpha complex at
+  (`RipserCohomologyEngine` only ever consumes a `FiniteMetricSpace[Int]`, has no notion of an alpha complex at
   all) and refuses `engine=chunks` (the exact combination `HomologySpec`'s `BarcodeRegressionSpec` stays
   `skipAll`'d for — a documented stall/OOM risk, and a JVM OOM taking down a MATLAB session mid-demo is a bad
   failure mode to hand a collaborator). Both refusals throw immediately with an explanation, not a hang.
@@ -111,13 +111,13 @@ bounded by `d < metricSpace.size` (see CLAUDE.md's own note on this). The `engin
 directly and handed it to `SimplicialHomologyContext.persistentHomology`, which just consumes `stream.iterator`
 with no dimension enforcement of its own either — so despite `maxDimension` defaulting to 2, the naive path was
 silently computing through however many higher-dimensional simplices a 6-point cloud allows, and a 3-simplex at
-the same tied filtration value ended up killing the H₂ class ripser (correctly, via `RipserCohomologyContext`'s
+the same tied filtration value ended up killing the H₂ class ripser (correctly, via `RipserCohomologyEngine`'s
 own `maxDimension`-truncated `coboundaryOf`) reports as essential.
 
 First fix: wrap the stream in `LimitedCofaceSimplexStream(rawStream, maxDimension)` before handing it to
-`SimplicialHomologyContext` — exactly the wrapping `RipserCohomologySpec`'s own `naiveBars` test helper already
+`SimplicialHomologyEngine` — exactly the wrapping `RipserCohomologySpec`'s own `naiveBars` test helper already
 uses, which this facade code should have matched from the start. `engine=chunks` did not need the same fix:
-`PersistenceInChunksContext` walks `0.to(maxDim)` explicitly itself and never asks the stream for anything beyond
+`PersistenceInChunksEngine` walks `0.to(maxDim)` explicitly itself and never asks the stream for anything beyond
 that, regardless of the stream's own natural bound (confirmed by reading `Homology.scala`, not assumed). This alone
 made all 11 examples in `Tda4jSpec` pass at the time — but see below, this made the two engines *agree*, not
 *correct*.
@@ -159,7 +159,7 @@ scaffolding -- confirmed by re-reading `AlphaShapeDQP`/`HelixDelaunay`'s own alw
 just asserted.
 
 Pinned as a discriminating regression, not just re-verified for agreement: `Tda4jSpec` now also builds
-`RipserCohomologyContext` directly at the OLD, un-corrected `maxDimension=2` (no extra dimension, no drop) and
+`RipserCohomologyEngine` directly at the OLD, un-corrected `maxDimension=2` (no extra dimension, no drop) and
 asserts its output does NOT match the facade's actual (corrected) output on the same cloud -- proving this was a
 real, visible behavior change on this fixture, not merely an internal refactor that happened to keep passing the
 existing checks. All 12 examples in `Tda4jSpec` pass after this fix (up from 11 -- the new discriminating test is
@@ -214,5 +214,5 @@ accounted for elsewhere in this codebase (see CLAUDE.md) plus this new one; the 
 - Recasting the existing library test suite's own `Field` default from `Double` to a finite field to match the
   now-facade-default convention — a real, separate piece of work the project lead flagged as acceptable to take on,
   not done here.
-- Emergent pairs, `PersistenceInChunksContext` cycle recording, `SimplicialHomologyByDimensionContext` exposure —
+- Emergent pairs, `PersistenceInChunksEngine` cycle recording, `SimplicialHomologyByDimensionContext` exposure —
   all pre-existing library-level gaps/limitations this facade correctly declines to paper over (see CLAUDE.md).

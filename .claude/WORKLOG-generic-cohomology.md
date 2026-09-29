@@ -1,7 +1,7 @@
 # Generic persistent cohomology (2026-09-22)
 
-Point-in-time record of the arc that shipped `CellularCohomologyContext`. The design itself — the key idea,
-what carries over from `RipserCohomologyContext`/`PackedRipserCohomologyContext` and what deliberately
+Point-in-time record of the arc that shipped `CellularCohomologyEngine`. The design itself — the key idea,
+what carries over from `RipserCohomologyEngine`/`PackedRipserCohomologyEngine` and what deliberately
 doesn't, the advisor review, and the two corrections the project lead made to the original plan (drop
 apparent pairs; fully generic `FiltrationT`; own file) — lives in `.claude/DESIGN-generic-cohomology.md`,
 written and reviewed before any code. This worklog covers what happened once implementation actually started:
@@ -11,7 +11,7 @@ turned out to assert something false, not by inspection.
 ## What shipped
 
 `homology/Cohomology.scala`: `CellularCohomologyContext[CellT: OrderedCell, CoefficientT: Field, FiltrationT:
-Ordering]`, mirroring `CellularHomologyContext`'s genericity exactly. `persistentCohomology(stream)`
+Ordering]`, mirroring `CellularHomologyEngine`'s genericity exactly. `persistentCohomology(stream)`
 materializes the whole stream (`stream.iterator.toVector.groupBy(_.dim)` — no `StratifiedCellStream`/
 `iterateDimension` dependency, a drop-in for any `CellStream`), builds each dimension's coboundary block by
 inverting `boundary[CoefficientT]` on the next dimension up, runs Algorithm 1 against it via `Chain.reduceBy`
@@ -43,7 +43,7 @@ The first test written asserted `coboundaryOfChain(rep, cofacets).isZero()` for 
 Root cause, once traced through: Algorithm 1's invariant is `d(V_j) = R_j` throughout the reduction — `R_j` is
 the fully reduced column, `V_j` its own tracked V-column. `R_j` is zero exactly when the bar is essential; for
 a finite bar, `R_j` is the nonzero reduced pivot chain that made it finite in the first place, so `d(V_j)` is
-that same nonzero chain, not zero. This isn't a bug — `RipserCohomologyContext`'s own test suite already
+that same nonzero chain, not zero. This isn't a bug — `RipserCohomologyEngine`'s own test suite already
 encodes exactly this ("Essential representatives are genuine cocycles ... including at the top dimension",
 `RipserCohomologySpec.scala`), with a comment explicitly warning that asserting `isZero()` on a finite bar's
 representative "would be a test bug, not a property of the algorithm." The new engine's first test simply
@@ -59,7 +59,7 @@ cocycle over the whole complex," not merely as an exception to wave past.
 ## Finding 2: representative content need not match RipserCohomologyContext, even bar-for-bar
 
 A second test asserted something stronger: that matching bars' representative *chains* (not just their
-birth/death values) would agree exactly between `CellularCohomologyContext` and `RipserCohomologyContext` on
+birth/death values) would agree exactly between `CellularCohomologyEngine` and `RipserCohomologyEngine` on
 the same VR complex. The reasoning, written into the test's own comment before it was run: both engines'
 `cohomologyOrdering` reduce to the same tie-break (colex) when filtration values tie, and by the
 canonical-reduced-matrix argument this codebase already relies on elsewhere (`unionFindDim01`/`vcolOf` — "a
@@ -71,8 +71,8 @@ This failed on the very first randomly-generated point cloud tried — not a rar
 `threePointLine` fixture, since the sbt-hosted REPL wasn't usable in this environment — `jline`
 `NoSuchMethodError` under batch/non-interactive `Test/console`) rather than reasoned about further in the
 abstract. The two engines assign *different specific vertices* to the same `(dim, birth, death)` triple: on
-`threePointLine`, `CellularCohomologyContext` pairs vertex 1 with the bar dying at `1.0` where
-`RipserCohomologyContext` pairs vertex 0 with it.
+`threePointLine`, `CellularCohomologyEngine` pairs vertex 1 with the bar dying at `1.0` where
+`RipserCohomologyEngine` pairs vertex 0 with it.
 
 Root cause, worked out by hand from each engine's own comparator: VR's three vertices are *always* tied at
 `fv = 0` (every vertex is born at filtration value 0, by convention, for every point cloud) — dimension 0 is
@@ -99,7 +99,7 @@ claim isn't sound, so a future session doesn't re-attempt the same cross-check w
 checked and found false. `CohomologySpec.scala`'s own class doc, and the corresponding claim in
 `DESIGN-generic-cohomology.md`'s validation-plan item 1 (struck through, corrected in place rather than
 silently rewritten), were both updated to match: bar VALUES are cross-validated against
-`RipserCohomologyContext` (two tests, both green — calibration example and 100+ random point clouds);
+`RipserCohomologyEngine` (two tests, both green — calibration example and 100+ random point clouds);
 representative content is not.
 
 ## A third, smaller thing worth recording: alpha-complex construction nondeterminism in the MATLAB facade test
@@ -164,7 +164,7 @@ standing "call advisor before declaring done" practice. Four findings, all addre
    construction (`-1 == 1`). Nothing had ever exercised this engine's own coboundary-is-transpose-of-boundary
    construction over F3, or on a torsion-sensitive fixture. Closed with two new `CohomologySpec` examples: RP²
    (`SimplicialSetFixtures.realProjectiveSpace(2)`, this codebase's own established sign-discriminating fixture
-   — `H_1=H_2=F2` over F2, both `0` over F3) over `f3.Fp`, cross-validated against `CellularHomologyContext`
+   — `H_1=H_2=F2` over F2, both `0` over F3) over `f3.Fp`, cross-validated against `CellularHomologyEngine`
    AND against the independently hand-derived expected barcode (`(0,0,∞),(1,0,0)`, no essential `H_1`/`H_2`),
    plus the existing `essentialRepsAreCocycles` check (generalized from `Double`-only to generic
    `CoefficientT`/`FiltrationT` to allow reuse) run over the same F3 fixture. Both passed on the first run —
@@ -185,7 +185,7 @@ preconditions).
 
 ## What's still open, explicitly not attempted in this arc
 
-- A chunked/parallelizable cohomology engine (`CellularCohomologyContext`'s own `CellularPersistenceInChunksContext`-
+- A chunked/parallelizable cohomology engine (`CellularCohomologyEngine`'s own `CellularPersistenceInChunksEngine`-
   style counterpart) — real, natural, but a separate pass; see the design doc's own "Explicitly out of scope."
 - `complex=simplicialset` MATLAB/CLI dispatch — blocked on a real, separate design question (how to encode a
   simplicial set's face data through MATLAB's primitives-only bridge), not something this arc could extend.

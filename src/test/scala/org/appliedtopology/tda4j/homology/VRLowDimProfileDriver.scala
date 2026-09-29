@@ -8,7 +8,7 @@ import org.appliedtopology.tda4j.streams.{given, *}
 import scala.util.Random
 
 /** Test-scope driver, kept alongside `CubicalProfileDriver`/`SingleEngineProfileDriver` -- a single-process JVM target
-  * for profiling `SimplicialHomologyContext` (the naive engine) on a large, SPARSE, low-`maxDim` Vietoris-Rips complex.
+  * for profiling `SimplicialHomologyEngine` (the naive engine) on a large, SPARSE, low-`maxDim` Vietoris-Rips complex.
   * Invoked directly:
   *
   * {{{
@@ -50,7 +50,7 @@ object VRLowDimProfileDriver:
     val forceUncached = if args.length > 4 then args(4).toBoolean else false
 
     given Double is Field = Field.DoubleApproximated(1e-9)
-    given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+    given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
     import shc.{*, given}
 
     val rng = new Random(seed.toLong)

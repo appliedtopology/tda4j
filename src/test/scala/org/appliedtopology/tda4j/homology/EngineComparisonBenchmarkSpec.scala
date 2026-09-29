@@ -28,21 +28,21 @@ import scala.util.Random
   * }}}
   *
   * '''The grid is not a clean cross product, and the table says so rather than papering over it with N/A cells.'''
-  * Three engines exist (see `Homology.scala`'s class docs): `SimplicialHomologyContext` (naive) and
-  * `PersistenceInChunksContext` (chunked clear&compress) both take an arbitrary `CellStream`/`StratifiedCellStream`, so
-  * either can run on any of the 7 constructions below. `RipserCohomologyContext` is different in kind, not degree: it
+  * Three engines exist (see `Homology.scala`'s class docs): `SimplicialHomologyEngine` (naive) and
+  * `PersistenceInChunksEngine` (chunked clear&compress) both take an arbitrary `CellStream`/`StratifiedCellStream`, so
+  * either can run on any of the 7 constructions below. `RipserCohomologyEngine` is different in kind, not degree: it
   * takes a `FiniteMetricSpace[Int]` directly and builds its own internal sparse-Rips enumeration -- it cannot be
   * pointed at a stream at all, and specifically cannot touch an alpha complex (which isn't a metric-space clique
   * complex). It appears as its own bundled row (`construction = "VR (built-in)"`, `engine = "RipserCohomology"`), not
   * decomposed into a (construction, engine) pair like the other 14 cells.
   *
-  * '''Alpha complexes paired with `PersistenceInChunksContext` are a known, unresolved scale risk''' --
+  * '''Alpha complexes paired with `PersistenceInChunksEngine` are a known, unresolved scale risk''' --
   * `HomologySpec.scala`'s `BarcodeRegressionSpec` is `skipAll`'d with "currently stalls out" for exactly this
   * combination. A first attempt to un-skip it, based on a single small-sample run, wrongly declared it fixed; a later
   * run on a larger sample (still well inside the same test's own generator range) hit `OutOfMemoryError` after nearly 3
   * minutes -- measured cause was `AlphaShapeDQP`'s always-untruncated construction producing over 100,000 simplices
   * from a completely unremarkable-looking 40-point, dimension-4 input, not anything specific to
-  * `PersistenceInChunksContext`'s own algorithm (see CLAUDE.md's cross-engine benchmark section for the full account,
+  * `PersistenceInChunksEngine`'s own algorithm (see CLAUDE.md's cross-engine benchmark section for the full account,
   * including what was actually measured before re-`skipAll`ing it). Kept the per-cell timeout below regardless --
   * rather than exclude alpha x Chunks (and lose the chance to quantify it) or let a future regression hang the whole
   * run, every cell here runs under `timeoutSeconds` (default 3) on a daemon-thread executor and reports `"timeout"` if
@@ -61,7 +61,7 @@ import scala.util.Random
   * (`.iterator.toVector`, dimension-major, matching `StratifiedCellStream.iterator`'s own contract -- see its doc), and
   * "reduction" means "run the chosen engine over that already-materialized, `Vector`-backed `StratifiedCellStream`" --
   * so the reduction column measures only the homology algorithm, never a second pass through a possibly-expensive
-  * original enumeration. `RipserCohomologyContext`'s bundled row has no such split (its enumeration and reduction are
+  * original enumeration. `RipserCohomologyEngine`'s bundled row has no such split (its enumeration and reduction are
   * the same call); only its `total(ms)` column is filled.
   *
   * '''Alpha and VR filtration values are not the same quantity''' (circumradius vs. diameter -- see CLAUDE.md's
@@ -148,13 +148,13 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
 
     val engines: Seq[(String, (StratifiedCellStream[Simplex[Int], Double], Int) => Int)] = Seq(
       "Naive" -> ((stream, _) =>
-        SimplicialHomologyContext[Int, Double, Double]()
+        SimplicialHomologyEngine[Int, Double, Double]()
           .persistentHomology(stream)
           .diagramAt(Double.PositiveInfinity)
           .size
       ),
       "Chunks" -> ((stream, maxDim) =>
-        PersistenceInChunksContext[Int, Double](maxDim)
+        PersistenceInChunksEngine[Int, Double](maxDim)
           .persistentHomology(stream)
           .diagramAt(Double.PositiveInfinity)
           .size
@@ -235,7 +235,7 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
         withTimeout {
           val metricSpace = EuclideanMetricSpace(pts)
           val t0 = System.nanoTime()
-          val bars = RipserCohomologyContext[Double](metricSpace, maxDim).persistentCohomology()
+          val bars = RipserCohomologyEngine[Double](metricSpace, maxDim).persistentCohomology()
           ((System.nanoTime() - t0) / 1e6, bars.size)
         }
       }

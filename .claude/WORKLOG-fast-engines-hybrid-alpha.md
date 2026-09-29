@@ -13,7 +13,7 @@ done AFTER cubical's was implemented and validated, not concurrently.
   LimitedCofaceSimplexStream` (hardcoded to the latter) doesn't fit it. Same shape as the cubical wrapper:
   delegates `filtrationOrdering`/`filtrationValue` unchanged, hides dimensions `> maxDim`.
 - `homology/FastAlphaHomology.scala`: `persistentHomology` now branches on `helix.ambientDimension`, byte-for-
-  byte mirroring `FastCubicalHomologyContext`'s own structure. `d=2` is the unchanged old path. `d >= 3` adds
+  byte mirroring `FastCubicalHomologyEngine`'s own structure. `d=2` is the unchanged old path. `d >= 3` adds
   `computeMiddleDimensions`, running `PersistenceInChunksContext[Int, C](ambientDimension - 2)` on
   `LimitedAlphaShapesStream(helix, ambientDimension - 1)` and taking its `barcodeAt(+Infinity)` directly (covers
   `H_0` through `H_{ambientDimension-2}`), then appending `computeDualTopDimension(helix)` (unchanged, on the
@@ -28,13 +28,13 @@ done AFTER cubical's was implemented and validated, not concurrently.
 
 ## Why this needed almost no new algorithm code (same finding as cubical, confirmed again here)
 
-Re-read `FastAlphaHomologyContext`'s actual source before writing anything, exactly as the cubical entry did.
+Re-read `FastAlphaHomologyEngine`'s actual source before writing anything, exactly as the cubical entry did.
 Both `computeH0` and `computeDualTopDimension` were ALREADY written generically in terms of
 `helix.ambientDimension` (`bars += new PersistenceBar(ambientDim - 1, ...)`, the facet-to-top-id map built by a
 generic pass over "every top simplex's own `ambientDim+1` facets") -- neither hardcodes `2`. The only thing
 gating this engine to `d=2` was the single `require`. This is the SAME structural finding the cubical entry
 made, now confirmed on a second, independently-written engine that happens to share the same author's own
-"mirror the cubical engine term-for-term" design intent (`FastAlphaHomologyContext`'s own class doc already says
+"mirror the cubical engine term-for-term" design intent (`FastAlphaHomologyEngine`'s own class doc already says
 as much) -- not a coincidence, but not something to assume holds for a hypothetical THIRD such engine without
 checking its own source the same way, either.
 
@@ -69,7 +69,7 @@ Extended `FastAlphaHomologySpec` in place (mirroring `FastCubicalHomologySpec`'s
   found that `HelixDelaunay` itself throws its own `ArrayIndexOutOfBoundsException` deep in
   `HelixDelaunayBuilder.compute`/`Hypersphere.apply` when constructing a 1-dimensional triangulation at all --
   a pre-existing `HelixDelaunay` limitation unrelated to and out of scope for this work. So this test was
-  removed rather than rewritten to a broken assertion; `FastAlphaHomologyContext`'s own `require` is kept in
+  removed rather than rewritten to a broken assertion; `FastAlphaHomologyEngine`'s own `require` is kept in
   the source (documents the real constraint, mirrors the cubical engine's parallel structure, costs nothing)
   but is currently unreachable via any `HelixDelaunay` the public constructor can actually produce -- recorded
   in the spec's own comment so a future reader doesn't wonder why there's no test for it.

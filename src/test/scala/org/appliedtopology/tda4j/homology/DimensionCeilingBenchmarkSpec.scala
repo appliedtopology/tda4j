@@ -22,13 +22,13 @@ import scala.util.Random
   *
   * '''What "restricted to homological dimension H" actually requires building''': per CLAUDE.md's MATLAB-API section,
   * computing H_k correctly (not as a truncation artifact where every top-dimension class looks essential because no
-  * (k+1)-simplex exists to possibly kill it) needs (k+1)-dimensional simplices present. `RipserCohomologyContext`'s
+  * (k+1)-simplex exists to possibly kill it) needs (k+1)-dimensional simplices present. `RipserCohomologyEngine`'s
   * `maxDimension` constructor argument now means the highest HOMOLOGICAL DEGREE reported, fixed at its own source
   * (`.claude/WORKLOG-maxdim-semantics-fix.md`) -- it resolves the needed `(H+1)`-simplices internally, so
-  * `ripserAttempt` below passes `homDim` directly. `VR-Enum+Naive` (`SimplicialHomologyContext` fed a
+  * `ripserAttempt` below passes `homDim` directly. `VR-Enum+Naive` (`SimplicialHomologyEngine` fed a
   * `LimitedCofaceSimplexStream`) has NOT been fixed this way -- its dimension cap lives entirely in the stream it's
   * handed, so `vrEnumNaiveAttempt` still manually builds `buildDim = homDim + 1` simplices and lets
-  * `SimplicialHomologyContext` report every dimension it finds (the top one, `homDim + 1`, is then itself a truncation
+  * `SimplicialHomologyEngine` report every dimension it finds (the top one, `homDim + 1`, is then itself a truncation
   * artifact, but this spec never reads that row's own top-dimension bars individually -- only total `cells`/`bars`
   * counts, for ceiling-finding purposes, not correctness assertions).
   *
@@ -46,11 +46,11 @@ import scala.util.Random
   *     that isolates whether "longest distance" is a real, independent lever from "highest dimension."
   *
   * '''Two engine rows, not one''' -- per WORKLOG-mst-and-perf.md Part 2/Part 4, bounding `maxFiltrationValue` is NOT
-  * uniformly effective: `RipserCohomologyContext` has genuine incremental sparse-aware enumeration
+  * uniformly effective: `RipserCohomologyEngine` has genuine incremental sparse-aware enumeration
   * (`sparseCofacets`/`insertionDiameter`) that only enumerates candidates actually within threshold, while
   * `EnumeratingCofaceSimplexStream`-family streams filter AFTER `simplexIndexing` already constructed each candidate
   * (`keptByThresholdAndCriterion`, a post-hoc filter) -- so bounding distance cuts their reduction cost but not their
-  * O(C(n,d+1)) enumeration cost. `VR-Enumerating` x `SimplicialHomologyContext` (Naive) is included specifically to
+  * O(C(n,d+1)) enumeration cost. `VR-Enumerating` x `SimplicialHomologyEngine` (Naive) is included specifically to
   * show whether that documented asymmetry actually shows up as a ceiling difference, not assumed from the worklog
   * alone. `RecursiveStackVietorisRipsSimplexStream` is excluded -- already documented as not speed-competitive, would
   * just print "timeout" at every cell and waste budget.
@@ -81,8 +81,8 @@ import scala.util.Random
   * sbt -J-Xmx4g "testOnly org.appliedtopology.tda4j.DimensionCeilingBenchmarkSpec"
   * }}}
   *
-  * '''A previously-unknown correctness bug in `SimplicialHomologyContext`, found while building this spec, is now
-  * FIXED''' (`CellularHomologyContext.HomologyState` in `Homology.scala`, plus two structurally-related fixes found in
+  * '''A previously-unknown correctness bug in `SimplicialHomologyEngine`, found while building this spec, is now
+  * FIXED''' (`CellularHomologyEngine.HomologyState` in `Homology.scala`, plus two structurally-related fixes found in
   * the same pass -- see WORKLOG-dimension-ceiling.md for the original discovery and WORKLOG-reference-engine-fix.md for
   * the full derivation and fix). It used to throw `IllegalStateException: reduction pivot ... was not a recorded open
   * class` once simplices of dimension >= 4 (5+ vertices) were built, i.e. `homDim >= 3` here. Root cause: the
@@ -91,8 +91,8 @@ import scala.util.Random
   * already-matched NEGATIVE cell, `boundaries.get` correctly found nothing, but that did not mean reduction was
   * finished, only that the existing lookup couldn't see a negative cell's own substitute. Fixed by recording each
   * negative cell's own V-column (already computed, unused past its own branch) in a new `negativeVCols` map and wiring
-  * it through `Chain.reduceBy`'s existing `fallback` parameter -- the same mechanism `RipserCohomologyContext` already
-  * uses for its own apparent-pairs substitution. Verified against `RipserCohomologyContext`'s independently- derived
+  * it through `Chain.reduceBy`'s existing `fallback` parameter -- the same mechanism `RipserCohomologyEngine` already
+  * uses for its own apparent-pairs substitution. Verified against `RipserCohomologyEngine`'s independently- derived
   * bar count (exact agreement, not just "no crash") and a 64-trial cross-validation sweep, 0 mismatches. This spec's
   * own previously-crashing cells (VR-Enum+Naive at H=3/H=4) now hit ordinary timeout ceilings instead.
   */
@@ -147,7 +147,7 @@ class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specificati
 
     // thresholdFor's "default" regime uses Double.NaN as its own "no explicit threshold, fall back to the
     // engine/stream's own minimumEnclosingRadius default" sentinel -- a holdover from when
-    // RipserCohomologyContext/EnumeratingCofaceSimplexStream's own maxFiltrationValue parameter was itself a
+    // RipserCohomologyEngine/EnumeratingCofaceSimplexStream's own maxFiltrationValue parameter was itself a
     // raw NaN-sentineled Double, before it became Option[Double] (see CLAUDE.md's "maxFiltrationValue Option
     // refactor" entry). Wrapping it in `Some(...)` unconditionally -- as both call sites below used to do --
     // bypasses that default entirely (`Option[Double]`'s own `.getOrElse` is only consulted for `None`) and
@@ -200,7 +200,7 @@ class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specificati
         }
       (wrapped, cellVec.size)
 
-    // RipserCohomologyContext's own maxDimension now means "top homological degree reported," fixed at its
+    // RipserCohomologyEngine's own maxDimension now means "top homological degree reported," fixed at its
     // own source (see .claude/WORKLOG-maxdim-semantics-fix.md) -- homDim is passed directly, no +1 needed here
     // (unlike vrEnumNaiveAttempt below, which still builds one dimension higher manually).
     def ripserAttempt(n: Int, homDim: Int, regime: String): Either[String, (Double, Int, Int)] =
@@ -209,7 +209,7 @@ class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specificati
         val metricSpace = EuclideanMetricSpace(pts)
         val t0 = System.nanoTime()
         val ctx =
-          RipserCohomologyContext[Double](metricSpace, homDim, maxFiltrationValue = effectiveThreshold(regime, n))
+          RipserCohomologyEngine[Double](metricSpace, homDim, maxFiltrationValue = effectiveThreshold(regime, n))
         val bars = ctx.persistentCohomology()
         val ms = (System.nanoTime() - t0) / 1e6
         (ms, ctx.totalSimplexCount, bars.size)
@@ -226,7 +226,7 @@ class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specificati
             buildDim
           )
         val (wrapped, cellCount) = materializeAndWrap(stream)
-        val barCount = SimplicialHomologyContext[Int, Double, Double]()
+        val barCount = SimplicialHomologyEngine[Int, Double, Double]()
           .persistentHomology(wrapped)
           .diagramAt(Double.PositiveInfinity)
           .size

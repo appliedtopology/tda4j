@@ -19,7 +19,7 @@ given [VertexT] => Show[Simplex[VertexT]] = Show.show(spx => spx.underlying.mkSt
 trait SimplexOps:
   extension [VertexT](spx: Simplex[VertexT])
     // ----- rendering & dimension
-    //def show: String = spx.underlying.mkString(s"∆(", ",", ")")
+    // def show: String = spx.underlying.mkString(s"∆(", ",", ")")
     def dim: Int = spx.underlying.size - 1
     // ----- size and membership
     def contains(elem: VertexT): Boolean = spx.underlying.contains(elem)

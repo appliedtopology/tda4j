@@ -15,7 +15,7 @@ import scala.collection.parallel.CollectionConverters.*
   * of a piecewise-constant function on pixels" convention GUDHI/DIPHA/Perseus all use for image persistence (see
   * `.claude/WORKLOG-cubical.md` for the monotonicity proof: since every top cell containing an immediate coface of `c`
   * also contains `c`, `fv(coface) >= fv(c)` always holds by construction, which is exactly what
-  * `CellularHomologyContext.processingOrder`'s ascending sort requires).
+  * `CellularHomologyEngine.processingOrder`'s ascending sort requires).
   *
   * For a SUPERLEVEL-set convention instead, negate `topCellValue` before constructing (the standard trick -- see
   * `CubicalImage.scala`'s `sublevel` parameter, which does exactly this): sublevel persistence of `-f` is superlevel
@@ -83,13 +83,13 @@ class CubicalGridStream(
       for prefix <- acc; v <- opts yield prefix :+ v
     }
 
-  // Memoized: `CellularHomologyContext` re-derives `Ordering[CellT] = stream.filtrationOrdering` and consults it
+  // Memoized: `CellularHomologyEngine` re-derives `Ordering[CellT] = stream.filtrationOrdering` and consults it
   // on every chain-arithmetic comparison during reduction (Chain's SortedMap/PriorityQueue accumulator), not
   // just once per cell during the stream's own up-front sorts -- an UNCACHED filtrationValue means
   // containingTopCells (already O(2^(ambientDim - dim(c))) per call) gets recomputed on every single one of
-  // those comparisons. Unlike RipserCohomologyContext's `memoizeFiltrationValue` (opt-in, defaulting to false
+  // those comparisons. Unlike RipserCohomologyEngine's `memoizeFiltrationValue` (opt-in, defaulting to false
   // for memory frugality on potentially-huge VR complexes with a cheap incremental alternative,
-  // `insertionDiameter`), there is no equivalent incremental formula here, AND `CellularHomologyContext.
+  // `insertionDiameter`), there is no equivalent incremental formula here, AND `CellularHomologyEngine.
   // HomologyState.cellIterator` already materializes every cell of the stream into one in-memory Vector before
   // reduction even starts -- so a cache bounded by the same already-resident cell count adds no new
   // memory-frugality concern to weigh against. See `.claude/WORKLOG-autonomous-session-2026-09-19.md` for the
@@ -127,10 +127,10 @@ class CubicalGridStream(
 
   /** Bounded at `0 to ambientDim`, contiguous from 0 -- the contract `StratifiedCellStream.iterator`'s default
     * implementation (and this class's own callers) rely on. Each dimension's bucket is fully materialized and sorted by
-    * `filtrationOrdering.reverse` (oldest-first, what `CellularHomologyContext` -- via its own `processingOrder`
-    * re-sort -- and `iterateDimension`'s own established convention both expect); on a large grid this is the
-    * memory-heavy step, not `containingTopCells`. Recomputed and re-sorted from scratch on EVERY call, unlike
-    * `ExplicitCubicalStream.byDimension` below (a `lazy val`) -- fine for `CellularHomologyContext`, which calls
+    * `filtrationOrdering.reverse` (oldest-first, what `CellularHomologyEngine` -- via its own `processingOrder` re-sort
+    * -- and `iterateDimension`'s own established convention both expect); on a large grid this is the memory-heavy
+    * step, not `containingTopCells`. Recomputed and re-sorted from scratch on EVERY call, unlike
+    * `ExplicitCubicalStream.byDimension` below (a `lazy val`) -- fine for `CellularHomologyEngine`, which calls
     * `.iterator` (hence this) exactly once per `persistentHomology` run, but a caller that repeatedly calls
     * `iterateDimension(d)` directly (as some alpha-complex specs do for their own streams) would pay the full re-sort
     * every time; not measured as an actual problem, just flagged rather than silently left unmentioned.
@@ -153,8 +153,8 @@ class CubicalGridStream(
 
 /** Hides every cell of dimension `> maxDim` from `stream` -- the `Cube` analogue of `LimitedCofaceSimplexStream`
   * (`SimplexStream.scala`), needed because that class is hardcoded to `CofaceSimplexStream[Int, Double]` and doesn't
-  * fit `Cube` at all. Used by `homology.FastCubicalHomologyContext`'s own `d >= 3` path
-  * (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) to hand `CellularPersistenceInChunksContext` a view of
+  * fit `Cube` at all. Used by `homology.FastCubicalHomologyEngine`'s own `d >= 3` path
+  * (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) to hand `CellularPersistenceInChunksEngine` a view of
   * the grid that never contains a real top-dimensional cell, so that engine's own general `Chain` reduction never
   * touches them -- the whole point being to let the (cheaper) dual union-find handle the top dimension instead.
   *

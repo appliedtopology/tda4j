@@ -65,7 +65,7 @@ class ToroidalCoordinatesSpec extends Specification:
 
   private def det2(m: Array[Array[Double]]): Double = m(0)(0) * m(1)(1) - m(0)(1) * m(1)(0)
 
-  /** Drives `CellularCohomologyContext` directly to recover the SAME integer cocycle `computeToroidalGeneric` itself
+  /** Drives `CellularCohomologyEngine` directly to recover the SAME integer cocycle `computeToroidalGeneric` itself
     * would compute for `cocycleIndex` at `r` -- same pattern `CircularCoordinatesSpec`'s own "essential
     * representatives" test already uses to check the engine independently of `CircularCoordinates`' own internals, not
     * a new production-code hook. Returns the integer cocycle (as an edge -> Int map) and the `K_r` stream it was
@@ -85,7 +85,7 @@ class ToroidalCoordinatesSpec extends Specification:
       case ClosedEndpoint(v)  => v
     val ff = new FiniteField(prime)
     import ff.given
-    val ctx = CellularCohomologyContext[Simplex[Int], ff.Fp, Double]()
+    val ctx = CellularCohomologyEngine[Simplex[Int], ff.Fp, Double]()
     val fullStream =
       LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = None), 2)
     val bars = ctx.persistentCohomology(fullStream).filter(_.dim == 1).sortBy(b => -(value(b.upper) - value(b.lower)))

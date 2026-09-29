@@ -13,7 +13,7 @@ import java.nio.file.Files
 
 class PerseusSpec extends mutable.Specification:
   given Double is Field = Field.DoubleApproximated(1e-9)
-  given chc: CubicalHomologyContext[Double, Double] = CubicalHomologyContext()
+  given chc: CubicalHomologyEngine[Double, Double] = CubicalHomologyEngine()
   import chc.{*, given}
 
   private def tempFile(suffix: String): String =

@@ -70,7 +70,7 @@ this codebase has a specific, recorded history of exactly this class of bug.
 
 ## One genuine pre-existing cross-dependency surfaced, not introduced
 
-`streams/CubicalStream.scala` extends `CellularHomologyContext` directly (`CubicalHomologyContext` is defined
+`streams/CubicalStream.scala` extends `CellularHomologyEngine` directly (`CubicalHomologyEngine` is defined
 right there, one-line wrapper). This means `streams` has a real dependency on `homology` for that one file —
 already true before this session, just invisible when everything shared one package. Not treated as a bug or
 a layering violation to fix; documented in `CLAUDE.md`'s package-layout section as-is.

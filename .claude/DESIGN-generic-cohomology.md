@@ -7,10 +7,10 @@ without reducing genericity."
 
 ## The premise, confirmed
 
-Yes — cohomology in this codebase is exactly `RipserCohomologyContext`/`PackedRipserCohomologyContext`
+Yes — cohomology in this codebase is exactly `RipserCohomologyEngine`/`PackedRipserCohomologyEngine`
 (`Homology.scala`/`PackedRipserCohomology.scala`), and both are hardcoded to `Simplex[Int]` via
 `SimplexIndexing`'s combinatorial number system. There is no cohomology engine generic over `CellT:
-OrderedCell` the way homology has one (`CellularHomologyContext`) — the asymmetry is real, not imagined.
+OrderedCell` the way homology has one (`CellularHomologyEngine`) — the asymmetry is real, not imagined.
 Concretely, `Cube`, `FiniteSimplicialSet` generators, and even `Simplex[Int]` complexes that aren't
 Vietoris-Rips (Cech, Alpha) have **no cohomology option at all today**, even though Cech and Alpha already
 use `Simplex[Int]` as their cell type — CLAUDE.md is explicit that neither New-VR's pruning nor packed
@@ -37,7 +37,7 @@ call once, and you have the transpose for free, with **zero cell-type-specific c
 already provides everything needed.
 
 This is the whole plan in one sentence: **build `CellularCohomologyContext[CellT: OrderedCell, CoefficientT:
-Field, FiltrationT: Ordering]`, mirroring `CellularHomologyContext`'s genericity exactly, running Bauer's
+Field, FiltrationT: Ordering]`, mirroring `CellularHomologyEngine`'s genericity exactly, running Bauer's
 algorithm over a coboundary relation derived by inverting `boundary`** — not a new per-cell-type coboundary
 formula, and not a per-cell
 `coboundary` typeclass method (see "`Cocell`/`OrderedCocell`, removed" below for why that shape is wrong and
@@ -61,7 +61,7 @@ review — see the note after it.)
    ordering" below. Also: `Chain.scala:28`'s ambient `given [CellT: OrderedCell] => Ordering[CellT] =
    oCell.ordering` (filtration-blind) will silently win at any `Chain.from`/`Chain.apply` site where
    `cohomologyOrdering` isn't explicitly in scope — the exact `chainRM`-summoned-too-early bug class already
-   shipped once in `CellularHomologyContext`'s history. Scope `cohomologyOrdering` locally, not at class scope.
+   shipped once in `CellularHomologyEngine`'s history. Scope `cohomologyOrdering` locally, not at class scope.
 3. Build the transpose one dimension-block (d → d+1) at a time and discard it once dimension d's pass is done
    — `basis`/`generators` are already per-dimension-reset in both Ripser engines, so this is a natural fit, and
    it bounds peak memory to the largest single block rather than the whole matrix, honoring the project's
@@ -82,22 +82,22 @@ review — see the note after it.)
    `sparseCofacets` as a VR-specific optimization that has no problem left to solve once the complex is
    materialized.
 
-   Clearing stays a single `mutable.Set[CellT]` accumulated across all dimensions (`RipserCohomologyContext`'s
+   Clearing stays a single `mutable.Set[CellT]` accumulated across all dimensions (`RipserCohomologyEngine`'s
    style) — the packed engine's per-dimension clearing rotation exists only because a bare `Long` index
    collides across different simplex sizes, which doesn't apply to `CellT` (proper per-dimension-safe
    `equals`/`hashCode`).
 5. The genuinely new deliverable is the **cocycle representative**, not the barcode — over a field, the
    cohomology barcode is identical to the homology barcode (this is the whole reason Ripser computes
    cohomology at all: same answer, cheaper algorithm), so a bars-only engine would be redundant with
-   `CellularHomologyContext`, which already covers every one of these cell types. Expose a generic
+   `CellularHomologyEngine`, which already covers every one of these cell types. Expose a generic
    `coboundaryOfChain` and verify `coboundaryOfChain(rep).isZero()` per bar; use barcode-value-equality against
-   the already-trusted `CellularHomologyContext` as the correctness oracle for Cube/`FiniteSimplicialSet`/
+   the already-trusted `CellularHomologyEngine` as the correctness oracle for Cube/`FiniteSimplicialSet`/
    Cech/Alpha, none of which have ever had a cohomology cross-check before.
 
 ## What the new engine looks like
 
 `CellularCohomologyContext[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]` — own file,
-`homology/Cohomology.scala` (see "Where this lives" below) — mirroring `CellularHomologyContext`'s shape and
+`homology/Cohomology.scala` (see "Where this lives" below) — mirroring `CellularHomologyEngine`'s shape and
 genericity exactly, including `FiltrationT`:
 
 ```scala
@@ -107,8 +107,8 @@ class CellularCohomologyContext[CellT: OrderedCell, CoefficientT: Field, Filtrat
   ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]]
 ```
 
-**Resolved: fully generic `FiltrationT`, not `Double`-only** — matches `CellularHomologyContext`'s own
-genericity rather than `RipserCohomologyContext`'s narrower `Double` choice, on the project lead's own call.
+**Resolved: fully generic `FiltrationT`, not `Double`-only** — matches `CellularHomologyEngine`'s own
+genericity rather than `RipserCohomologyEngine`'s narrower `Double` choice, on the project lead's own call.
 Only `FiltrationT: Ordering` needs declaring explicitly on the class itself; `Filterable` (`smallest`/`largest`,
 needed for essential-bar endpoints and the missing-filtration-value fallback below) comes bundled via the
 `stream: CellStream[CellT, FiltrationT]` parameter's own `Filtration[CellT, FiltrationT]` supertype, exactly
@@ -147,7 +147,7 @@ val cohomologyOrdering: Ordering[CellT] =
 Ascending fv (the direction `RipserCohomologyContext.cohomologyOrdering`'s own doc establishes cohomology
 needs — opposite of homology's reversed convention), falling through to the stream's own
 `filtrationOrdering` **unreversed** as tie-break only when fv is genuinely tied. This is safe specifically
-because — and this must be checked, not assumed, the same way `CellularPersistenceInChunksContext`'s
+because — and this must be checked, not assumed, the same way `CellularPersistenceInChunksEngine`'s
 class-scope `chainRM` was checked against `Chain.reduceByUntil`'s per-call `Ordering` resolution before being
 trusted (CLAUDE.md, "Persistent homology" item 1) — **this algorithm never compares cells of different
 dimensions under `cohomologyOrdering`**: `simplicesAtD`'s own sort is within one dimension band, and every
@@ -164,7 +164,7 @@ simply never gets exercised — but this is an invariant of the algorithm's *str
 not at outer class scope) — every `Chain.from`/`Chain.apply`/`summon[Chain[CellT, CoefficientT] is RingModule]`
 call site needs it explicitly in scope, or `Chain.scala:28`'s ambient, filtration-blind `given Ordering[CellT]
 = oCell.ordering` silently wins instead. This is exactly the `chainRM`-summoned-too-early bug
-`CellularHomologyContext` shipped once (CLAUDE.md, item 1's opening paragraph) — the fix pattern is known, just
+`CellularHomologyEngine` shipped once (CLAUDE.md, item 1's opening paragraph) — the fix pattern is known, just
 needs to be applied here too, not re-discovered.
 
 ### The per-dimension loop
@@ -193,8 +193,8 @@ nonempty coboundary there):
 4. **Discard `coboundaryMap` here** (advisor point 3) — `cellsByDim(d + 1)` itself is not discarded, it's
    already the next iteration's outer-loop input.
 
-`cleared: mutable.Set[CellT]`, accumulated across the whole run, exactly like `RipserCohomologyContext`
-(advisor point 4) — not per-dimension-rotated the way `PackedRipserCohomologyContext` has to, since that
+`cleared: mutable.Set[CellT]`, accumulated across the whole run, exactly like `RipserCohomologyEngine`
+(advisor point 4) — not per-dimension-rotated the way `PackedRipserCohomologyEngine` has to, since that
 rotation exists only to work around `DiameterIndex`'s bare-`Long`-index collision across differently-sized
 simplices, a representation-specific problem `CellT` doesn't have.
 
@@ -215,8 +215,8 @@ entry point, not a hot-path method — it may rebuild a local coboundary block o
 though it's not this plan's job to act on: `Homology.scala` currently holds all four canonical homology
 engines plus commented-out prior art, and it might be worth splitting *every* engine out into its own file
 (mirroring `PackedRipserCohomology.scala`'s existing precedent) rather than only the new one. That's a real,
-separate refactor of already-working code — moving `CellularHomologyContext`, `CellularPersistenceInChunksContext`,
-`SimplicialHomologyByDimensionContext`, and `RipserCohomologyContext` each into their own file — genuinely
+separate refactor of already-working code — moving `CellularHomologyEngine`, `CellularPersistenceInChunksEngine`,
+`SimplicialHomologyByDimensionContext`, and `RipserCohomologyEngine` each into their own file — genuinely
 independent of shipping this new engine and not bundled into this plan. `Cohomology.scala` is named to fit
 that eventual split cleanly (parallel to `Homology.scala`, not `RipserCohomology.scala`/
 `CellularCohomology.scala`-style narrower naming) if and when it happens.
@@ -280,14 +280,14 @@ retroactively editing point-in-time records.
 
 Both prior open questions (`FiltrationT` genericity, file placement) are resolved above. One remains:
 
-1. **Naming** — `CellularCohomologyContext` mirrors `CellularHomologyContext`/`CellularPersistenceInChunksContext`
+1. **Naming** — `CellularCohomologyEngine` mirrors `CellularHomologyEngine`/`CellularPersistenceInChunksEngine`
    directly; open to a better name if one exists, but this keeps the existing convention.
 
 ## Validation plan
 
 Same discipline as every other engine in this codebase:
 
-1. **Cross-validate against `RipserCohomologyContext` on `Simplex[Int]` VR complexes** — bar VALUES
+1. **Cross-validate against `RipserCohomologyEngine` on `Simplex[Int]` VR complexes** — bar VALUES
    (birth/death), on `threePointLine` and random point clouds. **This item's original plan (below, struck
    through) turned out to be wrong once implemented, and is corrected here rather than silently fixed** —
    ~~bar-for-bar, including representative cocycle content, not just birth/death: a materialized-transpose
@@ -305,12 +305,12 @@ Same discipline as every other engine in this codebase:
    documents the identical point for homology's elder rule), and the canonical-reduced-matrix argument only
    guarantees a unique answer for a *single* fixed total order — never that two independently-chosen, each
    individually valid, total orders must agree. Representative-content cross-validation against
-   `RipserCohomologyContext` specifically is therefore not a sound claim on VR input and isn't attempted; see
+   `RipserCohomologyEngine` specifically is therefore not a sound claim on VR input and isn't attempted; see
    `CohomologySpec.scala`'s own comment (written after this was discovered) for the full account.
 2. **`coboundaryOfChain(rep).isZero()` for every ESSENTIAL bar** (the only bars whose V-column is a genuine
    cocycle by construction — see `Cohomology.scala`'s own doc), every cell type — the check that makes representatives
    (this plan's actual deliverable, per advisor point 5) trustworthy rather than merely present.
-3. **Barcode-value cross-validation against `CellularHomologyContext`** (already trusted, generic, and the
+3. **Barcode-value cross-validation against `CellularHomologyEngine`** (already trusted, generic, and the
    established oracle for exactly this purpose elsewhere in this codebase) on Cube, `FiniteSimplicialSet`
    (reusing the non-dimension-aligned `torus` filtration fixture that already discriminates a reversed
    `filtrationOrdering` — `.claude/WORKLOG-simplicial-set-filtration.md`), Cech, and Alpha — the free, strong
@@ -327,7 +327,7 @@ when the core engine is green — shipping this engine includes, not as a deferr
 1. **`matlab.TDA4j` dispatch.** A new `engine=` value (naming TBD at implementation time — something like
    `engine=cohomology`, distinct from `engine=ripser`/`naive`/`chunks`) routing `complex=cube`/`simplicialset`/
    `cech`/`alpha` (and, for completeness, `complex=vr` too, even though `engine=ripser` stays the faster choice
-   there) through `CellularCohomologyContext`. Needs `fromBars`-style wiring for representatives
+   there) through `CellularCohomologyEngine`. Needs `fromBars`-style wiring for representatives
    (`cycleVertices`/`cycleCoefficients`), matching the `cellVertices: (Int, CellT) => Array[Int]` pattern
    already generalized for `engine=ripser`'s packed cells — here simply `(_, cell) => cell.underlying.toArray`
    for `Simplex`, and the equivalent accessor for `Cube`/`FiniteSimplicialSet` generators.
@@ -346,7 +346,7 @@ when the core engine is green — shipping this engine includes, not as a deferr
 
 ## Explicitly out of scope for this plan
 
-- A chunked/parallelizable cohomology engine mirroring `CellularPersistenceInChunksContext` (local/global
+- A chunked/parallelizable cohomology engine mirroring `CellularPersistenceInChunksEngine` (local/global
   clear-and-compress) — a real, natural follow-up once the naive generic cohomology engine above is shipped
   and trusted, but its own local/global-split complexity (see `.claude/WORKLOG-chunks-pairing-bug.md` for how
   subtle that split's own correctness can get) warrants a dedicated pass, not folding into this one.

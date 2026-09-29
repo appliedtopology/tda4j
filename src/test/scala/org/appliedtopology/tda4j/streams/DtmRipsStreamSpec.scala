@@ -25,7 +25,7 @@ class DtmRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCheck
       val ambient = EuclideanMetricSpace(Array(Array(2.0, 2.0), Array(0.0, 1.0), Array(3.0, 4.0)))
       val f = DistanceToMeasure(ambient, 2)
       val stream = DtmRipsSimplexStream(ambient, f, p = 1.0)
-      val barcode = SimplicialHomologyContext[Int, Double, Double]()
+      val barcode = SimplicialHomologyEngine[Int, Double, Double]()
         .persistentHomology(stream)
         .diagramAt(Double.PositiveInfinity)
       val tol = 1e-6
@@ -55,7 +55,7 @@ class DtmRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCheck
       )
       val f = DistanceToMeasure(ambient, 2)
       val stream = DtmRipsSimplexStream(ambient, f, p = 1.0)
-      val barcode = SimplicialHomologyContext[Int, Double, Double]()
+      val barcode = SimplicialHomologyEngine[Int, Double, Double]()
         .persistentHomology(stream)
         .diagramAt(Double.PositiveInfinity)
       val tol = 1e-6
@@ -89,11 +89,11 @@ class DtmRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCheck
             dtmCells == vrCells && dtmCells.forall(c => dtmStream.filtrationValue(c) == vrStream.filtrationValue(c))
           }
           val dtmBarcode =
-            SimplicialHomologyContext[Int, Double, Double]()
+            SimplicialHomologyEngine[Int, Double, Double]()
               .persistentHomology(dtmStream)
               .diagramAt(Double.PositiveInfinity)
           val vrBarcode =
-            SimplicialHomologyContext[Int, Double, Double]()
+            SimplicialHomologyEngine[Int, Double, Double]()
               .persistentHomology(vrStream)
               .diagramAt(Double.PositiveInfinity)
           cellsMatch && dtmBarcode.toSet == vrBarcode.toSet

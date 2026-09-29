@@ -23,7 +23,7 @@ version of this directly: two near-collinear rows produce two "sliver" simplices
 
 ## Zero-persistence (zero-length) bars are real output, not noise to filter
 
-`RipserCohomologyContext` emits these deliberately — e.g. an edge tied in filtration value with the
+`RipserCohomologyEngine` emits these deliberately — e.g. an edge tied in filtration value with the
 triangle that immediately kills it. Definition 3.2/Proposition 3.9's *apparent pairs* (see
 [Persistence engines](persistence-engines.md))
 **are** exactly the zero-persistence pairs — dropping them silently at the engine level would be wrong at

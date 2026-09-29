@@ -18,7 +18,7 @@ JavaPlex/Ripser, from the Stanford Computational Topology workgroup lineage). Si
 
 Source/test directories mirror package names; file names mostly carry over from the old flat layout
 (`WORKLOG-package-reorg.md`), with a few later renames/moves to fix a file's content drifting from its name
-(`RipserStream.scala` → `SimplexIndexing.scala`; `CubicalHomologyContext` moved from `streams` to `homology`).
+(`RipserStream.scala` → `SimplexIndexing.scala`; `CubicalHomologyEngine` moved from `streams` to `homology`).
 
 - `algebra` — `RingModule`, `Field`, `FiniteField`, `Chain` (plus the `Cell`/`OrderedCell`/`OrderedBasis`
   contracts), `SSetElement` (degeneracy words + `insertOuter`/`faceOf`).
@@ -28,8 +28,8 @@ Source/test directories mirror package names; file names mostly carry over from 
 - `streams` — `SimplexStream`, `FiniteMetricSpace`, `VietorisRips`, `Cofacets`, `SimplexIndexing`, `CubicalStream`,
   `CubicalImage`, `UnionFind` (also defines `Kruskal`, which is metric-space-specific — hence
   here, and why no `util` package exists), `SimplicialSetStream`, `FilteredSimplicialSetStream`, `CechStream`.
-- `homology` — `Homology` (four engines, including `CubicalHomologyContext`), `PackedRipserCohomology`, `Cohomology`
-  (`CellularCohomologyContext`). The package graph is acyclic: `streams` never depends on `homology`.
+- `homology` — `Homology` (four engines, including `CubicalHomologyEngine`), `PackedRipserCohomology`, `Cohomology`
+  (`CellularCohomologyEngine`). The package graph is acyclic: `streams` never depends on `homology`.
 - `barcode` — `Barcode`. `alpha` — `AlphaShapes`, `AlphaComplexDQP`. `unicode` — `PrintingHelper` (unused).
 - `matlab` — MATLAB facade. `io` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus` (leaf package).
   `cli` — `TDA4jConf`, `TDA4jCLI` (thin translator over `matlab.TDA4j`/`io`).
@@ -166,7 +166,7 @@ proper nouns (external projects' own spellings), correctly titlecased.
 every homology implementation should (a) be generic over `Field` coefficients and (b) return representatives (a
 real chain witnessing each bar). An optimization that abandons representatives is probably not worth it. Every
 public interface (MATLAB facade included) should expose representatives; anywhere that doesn't is incomplete.
-**Current gaps**: none known — every engine, including `PackedRipserCohomologyContext`'s apparent-pairs shortcut,
+**Current gaps**: none known — every engine, including `PackedRipserCohomologyEngine`'s apparent-pairs shortcut,
 now records a representative for every bar.
 
 ### Algebraic core
@@ -232,29 +232,29 @@ untruncated. `RecursiveStackVietorisRipsSimplexStream` and alpha streams don't g
 
 Independent implementations sharing `Chain` primitives — a fix in one doesn't imply others need it. `maxDim`/
 `maxDimension` = top homological degree everywhere (engines build one dimension higher internally;
-`WORKLOG-maxdim-semantics-fix.md`). Naive and `CellularCohomologyContext` have no such param: callers truncate
+`WORKLOG-maxdim-semantics-fix.md`). Naive and `CellularCohomologyEngine` have no such param: callers truncate
 via `LimitedCofaceSimplexStream(stream, k+1)` and drop `dim==k+1` bars. Over a field, cohomology/homology
 barcodes coincide.
 
-1. **Naive** (`CellularHomologyContext`/`SimplicialHomologyContext`) — single-pivot-table reduction, no clearing;
+1. **Naive** (`CellularHomologyEngine`/`SimplicialHomologyEngine`) — single-pivot-table reduction, no clearing;
    the reference baseline. Incremental (`advanceOne`/`advanceTo`/`advanceAll`, `diagramAt`/`barcodeAt` via
    V-columns). A raw-UnionFind fast path was measured and rejected (`WORKLOG-autonomous-session-2026-09-19.md`).
-2. **Chunks** (`CellularPersistenceInChunksContext`) — clear-and-compress chunked algorithm, walks `0..maxDim+1`,
+2. **Chunks** (`CellularPersistenceInChunksEngine`) — clear-and-compress chunked algorithm, walks `0..maxDim+1`,
    filters essentials to `<=maxDim`. Dims 0/1 via raw union-find (`unionFindDim01`, `DESIGN-unionfind-in-chunks.md`).
    `barcodeAt` via memoized `vcolOf` (a second full naive engine was **rejected by the project lead**, don't
    revive — `WORKLOG-chunks-representatives-incremental.md`). Invariants: a paired cell never becomes a pivot;
    `compress` runs to a fixpoint; a reconciliation step resolves "in limbo" cells first
    (`WORKLOG-benchmark-and-chunks-bug.md`, `WORKLOG-chunks-pairing-bug.md`). Parallel redesign attempted and
    invalidated by measurement (`WORKLOG-parallelization-survey.md`).
-3. **`RipserCohomologyContext`** — Bauer's Ripser (arXiv:1908.02518) on `Simplex[Int]` VR, one-shot. **Test/
-   reference oracle only** — production uses `PackedRipserCohomologyContext`. Clearing required for correctness;
+3. **`RipserCohomologyEngine`** — Bauer's Ripser (arXiv:1908.02518) on `Simplex[Int]` VR, one-shot. **Test/
+   reference oracle only** — production uses `PackedRipserCohomologyEngine`. Clearing required for correctness;
    apparent pairs with lazy substitution; emergent pairs (Def 3.11) not implemented; `memoizeFiltrationValue`
    defaults **false** (project lead: memory over speed). ~19-64x behind vanilla `ripser.cpp`, gap growing with n
    (`WORKLOG-ripser-profiling.md`, `WORKLOG-ripser-comparison.md`, `WORKLOG-packed-ripser-engine.md`).
-4. **`CellularCohomologyContext`** (`Cohomology.scala`) — generic over `CellT: OrderedCell`, fully-materialized
+4. **`CellularCohomologyEngine`** (`Cohomology.scala`) — generic over `CellT: OrderedCell`, fully-materialized
    streams only, no `maxDim`/apparent pairs. Only essential bars' V-columns are cocycles; finite bars' V-columns
    are their reduced pivot chain. Representatives don't match Ripser term-for-term (tie direction differs) but
-   bar values do. Sign-tested on RP² over Fp(3) (`WORKLOG-generic-cohomology.md`).
+   bar values do. Sign-tested on RP² over Fp (3) (`WORKLOG-generic-cohomology.md`).
 
 Testing lessons for every engine: F2 hides sign errors; signed-field fixtures need ≥5 vertices (`Set1..Set4`
 hash-order past 4 elements, `SimplexBoundarySpec`/`SignedFieldBarcodeSpec`, `WORKLOG-code-critique.md` §1.1).
@@ -311,7 +311,7 @@ Both naive and chunks engines consume cubes. A grid-exploiting **3D** engine (Cu
 remains a valid future direction (`DESIGN-fast-cubical-engine.md`); every dimension `>= 2` now has a faster
 option below.
 
-**`FastCubicalHomologyContext`** (`engine="fast-cubical"`) — Flash Cubical (Le Breton-Szustakowski-Piraud,
+**`FastCubicalHomologyEngine`** (`engine="fast-cubical"`) — Flash Cubical (Le Breton-Szustakowski-Piraud,
 arXiv:2606.04801), original derivation, valid any ambient dim `>= 2`. Top cells → dual graph vertices, codim-1
 cells → dual edges (`∞` sentinel for the outer boundary); primal `H_{d-1}` of the sublevel filtration = ordinary
 `H_0` of the dual's own SUPERLEVEL filtration (Alexander duality) via `unionFindDim01` run descending with
@@ -322,7 +322,7 @@ Representatives: running signed sum of top cells per dual component, oriented vi
 coefficients. `WORKLOG-fast-cubical-engine.md`.
 
 **At ambient dim `>= 3`**, `chunks` handles residual middle dimensions `1..d-2` (no duality shortcut) via
-`CellularPersistenceInChunksContext` on a `LimitedCubicalGridStream` hiding real top cells (`chunks`'s own
+`CellularPersistenceInChunksEngine` on a `LimitedCubicalGridStream` hiding real top cells (`chunks`'s own
 `maxDim=d-2` already discards the incomplete bars this would otherwise wrongly leave open). Cross-validated at
 d=3 + one d=4 smoke test; not validated d≥5, win shrinks with d by design.
 `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
@@ -371,7 +371,7 @@ already-chosen points from its own tie-break candidates (`WORKLOG-sheehy-rips.md
 Two independent variants, both `Simplex[Int]` over LOCAL landmark indices, both on `RipserCofaceSimplexStream`
 unchanged: **`LazyWitnessSimplexStream`** IS a flag complex, so `WitnessMetricSpace` reifies edge weights as a
 `FiniteMetricSpace[Int]` (NOT a real metric — never hand to `JVPTree`/`SparseMetricSpace`/`alpha`);
-`PackedRipserCohomologyContext` is *also* valid here (the one exception); `nu ∈ {0,1,2}`, default 2.
+`PackedRipserCohomologyEngine` is *also* valid here (the one exception); `nu ∈ {0,1,2}`, default 2.
 **`WitnessCofaceSimplexStream`** (general) is NOT a flag complex — `filtrationValueOverride` computes a
 recursive `max(own_k(σ), max over facets)`, `TrieMap`-memoized; refuses `engine=ripser`/`chunks`,
 `maxFiltrationValue` defaults `+Infinity`. Its 1-skeleton is provably identical to the lazy complex's at `nu=2`.
@@ -432,7 +432,7 @@ outcomes — don't conflate, a naive set-diff can't tell them apart**:
    check (not fixed, out-of-scope symbolic-perturbation redesign). Worked around at the repair layer:
    `requireValidTriangulation`'s jitter-and-recompute also triggers on a genuine void on the RAW output.
 
-**`FastAlphaHomologyContext`** — `FastCubicalHomologyContext`'s dual union-find ported to `HelixDelaunay`'s top
+**`FastAlphaHomologyEngine`** — `FastCubicalHomologyEngine`'s dual union-find ported to `HelixDelaunay`'s top
 simplices; valid any ambient dim≥2, Helix only (DQP builds no adjacency structure). The "every facet ≤2 cofaces"
 precondition is NOT guaranteed by construction (more likely violated at higher dim/more points) — validated
 explicitly, throws `FastAlphaTriangulationException` rather than a silently-wrong dual graph. Facet dual-edge

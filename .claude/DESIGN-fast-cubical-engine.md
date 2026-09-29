@@ -41,7 +41,7 @@ Three genuinely different, real techniques, only one of them "discrete Morse the
      build a *dual graph* (top cells → dual vertices, shared facets → dual edges, boundary facets → one shared
      "infinity" dual vertex) and run union-find on it in *reverse* filtration order, in a cohomological sense
      (dual positive cells are negative in the ordinary-homology sense, and vice versa — a real sign/orientation
-     inversion to get right, the same class of care this codebase's own `RipserCohomologyContext` derivation
+     inversion to get right, the same class of care this codebase's own `RipserCohomologyEngine` derivation
      needed). Consequence: **in 2D, this covers H0 AND H1 completely by union-find — no matrix reduction at
      all.** In 3D, H0 and H2 are covered by (dual) union-find, leaving only H1 to real reduction, and only on
      the cells NOT already paired off by the other two.
@@ -76,8 +76,8 @@ Three genuinely different, real techniques, only one of them "discrete Morse the
 (`Homology.scala`) already does exactly this — validated, cross-checked, five bugs found and fixed
 (`.claude/WORKLOG-mst-and-perf.md`) — for `Simplex[VertexT]`. Its current, fixed implementation goes through
 the generic `Chain.reduceBy`/`OrderedCell.boundary` interface for dimension-1 cells (not raw simplex-vertex
-extraction), which is exactly the shape that made `PersistenceInChunksContext` a clean, low-risk genericization
-into `CellularPersistenceInChunksContext` in an earlier session (see CLAUDE.md's "Simplicial sets" section,
+extraction), which is exactly the shape that made `PersistenceInChunksEngine` a clean, low-risk genericization
+into `CellularPersistenceInChunksEngine` in an earlier session (see CLAUDE.md's "Simplicial sets" section,
 "genericized in a later session"). **The first, lowest-risk step here is checking whether
 `SimplicialHomologyByDimensionContext` has the same property (zero actual `Simplex`-specific behavior in its
 body) and, if so, genericizing it the same proven way** — not a new algorithm, a proven refactor pattern applied
@@ -97,15 +97,15 @@ not the dimension-0 piece by itself.
 
 ## Proposed phasing
 
-A new, dedicated class (tentatively `FastCubicalHomologyContext` or similar) — NOT a modification of
-`CellularHomologyContext`/`CubicalHomologyContext`, matching this codebase's own established pattern
-(`RipserCohomologyContext`/`PackedRipserCohomologyContext` are separate engines cross-validated against the
+A new, dedicated class (tentatively `FastCubicalHomologyEngine` or similar) — NOT a modification of
+`CellularHomologyEngine`/`CubicalHomologyEngine`, matching this codebase's own established pattern
+(`RipserCohomologyEngine`/`PackedRipserCohomologyEngine` are separate engines cross-validated against the
 generic reference oracle, never edits to it).
 
 1. **Phase 1 (low risk, likely modest win alone)**: investigate whether `SimplicialHomologyByDimensionContext`
-   generalizes the same way `PersistenceInChunksContext` did; if so, genericize it and wire up
+   generalizes the same way `PersistenceInChunksEngine` did; if so, genericize it and wire up
    `CubicalHomologyByDimensionContext` as a one-line wrapper, giving dimension-0 via the already-validated
-   elder-rule union-find. Cross-validate against `CubicalHomologyContext` on existing tie-heavy fixtures plus new
+   elder-rule union-find. Cross-validate against `CubicalHomologyEngine` on existing tie-heavy fixtures plus new
    property tests. Expected impact: modest on its own (~1/8 of cells in 3D), but validates the "port to `Cube`"
    mechanics cheaply, on a real precedent rather than a first-of-its-kind change.
 
@@ -135,10 +135,10 @@ Same sequence CLAUDE.md's own "Cubical complexes" validation section already use
 itself, since that ordering (dd=0, monotonicity, structural invariant, hand-derived tie-heavy fixtures with an
 exact bar-count via the spanning-tree/Euler-characteristic argument, independent union-find-over-present-pixels
 H0 oracle) is exactly built to catch the tie-heavy/degenerate cases a grid-specific algorithm is most likely to
-get wrong — NOT leading with cross-validation against `CubicalHomologyContext` on random large grids (an
+get wrong — NOT leading with cross-validation against `CubicalHomologyEngine` on random large grids (an
 unvalidated new engine against an already-trusted one can make a bug in either look like a bug in the other, the
 same trap this file's own Helix/DQP history and the cubical validation section both already document). Once the
-hand-derived fixtures pass, cross-validate against `CubicalHomologyContext` on 100+ random small grids, THEN
+hand-derived fixtures pass, cross-validate against `CubicalHomologyEngine` on 100+ random small grids, THEN
 re-run `.claude/WORKLOG-cubical-capacity-sweep.md`'s exact sweep methodology to measure the real speedup/memory
 reduction on this codebase specifically — not cite Flash Cubical's own numbers as if they transferred directly.
 
@@ -159,15 +159,15 @@ content, per this file's own role as a design record rather than a session log.
 
 `SimplicialHomologyByDimensionContext` (this file's own name from the 2026-09-20 pass) does not exist under
 that name in the current source — searched exhaustively, including every worklog that mentions it, and found
-no evidence it was ever a real, distinct class rather than a misremembered reference to `CellularPersistenceInChunksContext`'s
+no evidence it was ever a real, distinct class rather than a misremembered reference to `CellularPersistenceInChunksEngine`'s
 own `unionFindDim01`. That method IS already fully generic over `CellT: OrderedCell` (confirmed: `streams.UnionFind`,
 the reusable class, is used nowhere in `Homology.scala` at all — `unionFindDim01` is its own self-contained,
 already-generic array-based union-find), and `CellularPersistenceInChunksContext[Cube, ...]` was ALREADY
-cross-validated against `CubicalHomologyContext` directly in a later, undocumented-in-this-file session
+cross-validated against `CubicalHomologyEngine` directly in a later, undocumented-in-this-file session
 (`CubicalStreamSpec`'s "matches the naive engine" and "union-find fast path agrees with the naive engine on
 random tie-heavy images" sections, plus `CubicalBenchmarkSpec`/`CubicalProfileDriver`). The only genuinely
 missing piece was the ergonomic one-line wrapper this file's own Phase 1 description asked for
-(`CubicalPersistenceInChunksContext`, mirroring `PersistenceInChunksContext`'s relationship to `Simplex`) — added,
+(`CubicalPersistenceInChunksEngine`, mirroring `PersistenceInChunksEngine`'s relationship to `Simplex`) — added,
 zero new behavior, nothing else needed.
 
 ### Phase 2: the exact algorithm, derived from Alexander duality (no paper or reference implementation was

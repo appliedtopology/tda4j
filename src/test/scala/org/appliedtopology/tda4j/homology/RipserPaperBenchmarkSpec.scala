@@ -16,7 +16,7 @@ import scala.concurrent.duration.*
 import scala.concurrent.{Await, ExecutionContext, Future, TimeoutException}
 import scala.sys.process.*
 
-/** Compares `RipserCohomologyContext` (this codebase's own reproduction of Bauer's Ripser algorithm, `Homology.scala`)
+/** Compares `RipserCohomologyEngine` (this codebase's own reproduction of Bauer's Ripser algorithm, `Homology.scala`)
   * against real `ripser.cpp`, on the actual data sets used in Table 1 of the Ripser paper (arXiv:1908.02518, "Ripser:
   * efficient computation of Vietoris-Rips persistence barcodes") -- not the paper's own 2019-hardware numbers, which
   * aren't comparable to anything run today, but a same-machine, same-day re-measurement of real `ripser.cpp` (built
@@ -44,7 +44,7 @@ import scala.sys.process.*
   * `sphere_3_192_points.dat`. These are third-party benchmark files (not this project's own data), so they are
   * deliberately NOT checked into the repo -- point `-DdataDir=` at wherever you downloaded them.
   *
-  * '''`RipserCohomologyContext`'s `maxDimension` means "top homological degree reported," not "top simplex dimension
+  * '''`RipserCohomologyEngine`'s `maxDimension` means "top homological degree reported," not "top simplex dimension
   * built" -- fixed at its own source since this spec first caught it (`Homology.scala`, see
   * `.claude/WORKLOG-maxdim-semantics-fix.md` for the fix itself and `.claude/WORKLOG-ripser-comparison.md` for how it
   * was originally found).''' A first version of this spec passed `c.maxDim` straight through before the fix landed,
@@ -53,7 +53,7 @@ import scala.sys.process.*
   * k-cycles actually die), not this engine's bug specifically. Real `ripser --dim p` never had this problem because it
   * always builds the `(p+1)`-skeleton internally to resolve dimension-`p` pairs (the paper's own Section 3.2:
   * "computing persistent homology in dimensions `0 <= d <= p` still requires reduction of the full boundary matrix
-  * `d_{p+1}`") -- `RipserCohomologyContext` now does the same internally, so this spec passes `c.maxDim` directly with
+  * `d_{p+1}`") -- `RipserCohomologyEngine` now does the same internally, so this spec passes `c.maxDim` directly with
   * no `+1`-and-filter workaround. That first version's un-worked-around run reported a 192-point sphere at `--dim 2`
   * producing over one million "bars" -- Table 2's entire non-zero-pair count for that same data set is 18 145 -- which
   * is what caught the bug in the first place; see `.claude/WORKLOG-ripser-comparison.md`.
@@ -90,7 +90,7 @@ import scala.sys.process.*
   * problem), which a single-`n`-per-data-set table can't, since every row here already varies `n`, `maxDim`, ambient
   * dimension, and threshold simultaneously.
   *
-  * '''Three-way comparison, not two''': every case now also runs `PackedRipserCohomologyContext`
+  * '''Three-way comparison, not two''': every case now also runs `PackedRipserCohomologyEngine`
   * (`PackedRipserCohomology.scala`) -- the parallel packed-`(Double, Long)` engine built to test whether eliminating
   * `Simplex[Int]`/`SortedSet[Int]` as the reduction-time carrier actually closes some of the ~20µs/simplex
   * constant-factor tax this same spec first measured (`.claude/WORKLOG-ripser-comparison.md`). See
@@ -126,7 +126,7 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
   // section for the flag. Even with the flag set this spec self-skips its real work unless -DdataDir is also
   // given (see below) -- a second, independent gate on top of the shared one.
   if !args.commandLine.boolOr("runBenchmarks", false) then skipAll
-  "RipserCohomologyContext vs real ripser.cpp, on the paper's own data sets" >> {
+  "RipserCohomologyEngine vs real ripser.cpp, on the paper's own data sets" >> {
     val dataDir: Option[String] = sys.props.get("dataDir").filter(_.nonEmpty)
     val timeoutSeconds: Int = sys.props.get("timeoutSeconds").map(_.toInt).getOrElse(180)
 
@@ -291,7 +291,7 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
         // c.threshold uses Double.NaN as its own "no explicit threshold, fall back to this engine's own
         // minimumEnclosingRadius default" sentinel (matching real ripser's --threshold-omitted behavior, see
         // runRealRipser's own identical `if c.threshold.isNaN then Seq.empty else ...` check below) -- a
-        // holdover from when RipserCohomologyContext/PackedRipserCohomologyContext's own maxFiltrationValue
+        // holdover from when RipserCohomologyEngine/PackedRipserCohomologyEngine's own maxFiltrationValue
         // parameter was itself a raw NaN-sentineled Double, before it became Option[Double] (see CLAUDE.md's
         // "maxFiltrationValue Option refactor" entry). `Some(c.threshold)` unconditionally, as both engine
         // constructor calls below used to do, wraps that NaN sentinel in a Some instead of passing None --
@@ -369,13 +369,13 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
             f"${"S/pack"}%-8s${"simplices"}%-11s${"pk.subst"}%-10s${"bars ok"}%-9s${"status"}%-20s"
         )
 
-        // -DpackedOnly=true skips RipserCohomologyContext entirely and times only the packed engine. Added
+        // -DpackedOnly=true skips RipserCohomologyEngine entirely and times only the packed engine. Added
         // after this table's default dual-engine mode was found to give misleading numbers on the paper's
         // larger cases: `withTimeout`'s `Future` has no cooperative cancellation (per its own doc above), so
-        // once RipserCohomologyContext times out on a case, that computation keeps running on its daemon
+        // once RipserCohomologyEngine times out on a case, that computation keeps running on its daemon
         // thread, competing for CPU/heap with the packed engine's own timed run on the SAME case and every
         // case after it -- observed directly as growing JVM resident size and a cascade of spurious "packed:
-        // timeout" results once RipserCohomologyContext started timing out (`WORKLOG-packed-ripser-engine.md`).
+        // timeout" results once RipserCohomologyEngine started timing out (`WORKLOG-packed-ripser-engine.md`).
         // Only safe to trust the dual-engine table's ratio columns for cases where BOTH engines actually
         // finished; anything after the first timeout should be re-measured with this flag instead.
         val packedOnly = sys.props.get("packedOnly").contains("true")
@@ -405,11 +405,11 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
               withTimeout {
                 val ms = c.metricSpace()
                 val t0 = System.nanoTime()
-                // RipserCohomologyContext's own maxDimension now means "top homological degree reported" (fixed at
+                // RipserCohomologyEngine's own maxDimension now means "top homological degree reported" (fixed at
                 // the source -- see .claude/WORKLOG-maxdim-semantics-fix.md), so c.maxDim is passed directly; no
                 // manual +1-and-filter workaround needed anymore (a first version of this spec had one, which is
                 // exactly what caught the semantics bug in the first place -- see the class doc above).
-                val ctx = RipserCohomologyContext[Fp](ms, c.maxDim, maxFiltrationValue = effectiveThreshold(c))
+                val ctx = RipserCohomologyEngine[Fp](ms, c.maxDim, maxFiltrationValue = effectiveThreshold(c))
                 val allBars = ctx.persistentCohomology()
                 val elapsedMs = (System.nanoTime() - t0) / 1e6
                 val nonZero = allBars.filter(b => endpointValue(b.lower) != endpointValue(b.upper))
@@ -419,7 +419,7 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
           val packedOutcome = withTimeout {
             val ms = c.metricSpace()
             val t0 = System.nanoTime()
-            val ctx = PackedRipserCohomologyContext[Fp](ms, c.maxDim, maxFiltrationValue = effectiveThreshold(c))
+            val ctx = PackedRipserCohomologyEngine[Fp](ms, c.maxDim, maxFiltrationValue = effectiveThreshold(c))
             val allBars = ctx.persistentCohomology()
             val elapsedMs = (System.nanoTime() - t0) / 1e6
             val nonZero = allBars.filter(b => endpointValue(b.lower) != endpointValue(b.upper))

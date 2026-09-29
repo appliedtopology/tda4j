@@ -25,7 +25,7 @@ persistence-capable engine on top — appears to be genuinely rare.
    cycles from the persistence diagram** to delineate anatomical structure (evaluated on glioblastoma and fetal
    cortical-plate segmentation). Good fit specifically because it needs more than a bar-count histogram — it
    needs `barcodeAt`'s actual representative-cycle reconstruction (already implemented for
-   `CellularHomologyContext`/cubical), which CubicalRipser/GUDHI's cubical module don't expose as directly.
+   `CellularHomologyEngine`/cubical), which CubicalRipser/GUDHI's cubical module don't expose as directly.
 
 2. **Porous-media / materials characterization from micro-CT.** Established line (Moon et al. 2019 *Water
    Resources Research*; Thompson et al. 2023): the **signed Euclidean distance transform** (negative in pore

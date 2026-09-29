@@ -105,7 +105,7 @@ There is no dual `Cocell`/`OrderedCocell` trait pair — an earlier version of t
 removed: coboundary is *extrinsic* to a cell (it depends on which higher-dimensional cells actually exist in
 the ambient, possibly-truncated complex), not intrinsic the way `boundary` is, so a per-cell `coboundary`
 method with no complex to consult can only be correct when the complex is always the full
-combinatorially-possible one. `RipserCohomologyContext`/`PackedRipserCohomologyContext` compute coboundaries
+combinatorially-possible one. `RipserCohomologyEngine`/`PackedRipserCohomologyEngine` compute coboundaries
 directly against `SimplexIndexing`'s cofacet iterator instead (see
 [Persistence engines](persistence-engines.md)).
 
@@ -201,23 +201,23 @@ value, and every lower-dimensional cube's value is the `min` over the top cells 
 directly via the cartesian product over the cube's degenerate axes rather than a recursive coface walk.
 `CubicalImage` builds these from images/voxel grids (`fromFlatArray`/`fromBufferedImage`/`fromFile`/
 `fromVoxelGrid3D`); sublevel vs. superlevel filtration is handled by negating values on load, not as a flag
-on the stream itself. `CubicalHomologyContext` is a one-line `Cube`-specialized wrapper around
-`CellularHomologyContext` — cubical complexes needed no new engine code, only a new `OrderedCell` instance.
+on the stream itself. `CubicalHomologyEngine` is a one-line `Cube`-specialized wrapper around
+`CellularHomologyEngine` — cubical complexes needed no new engine code, only a new `OrderedCell` instance.
 
 #### Dual union-find cubical engine (Flash Cubical)
 
-`homology/FastCubicalHomology.scala` (`FastCubicalHomologyContext`, `.claude/DESIGN-fast-cubical-engine.md`,
+`homology/FastCubicalHomology.scala` (`FastCubicalHomologyEngine`, `.claude/DESIGN-fast-cubical-engine.md`,
 `.claude/WORKLOG-fast-cubical-engine.md`) implements Flash Cubical (Le Breton-Szustakowski-Piraud,
 arXiv:2606.04801): top cells become vertices of a DUAL graph, codimension-1 cells become dual edges (a shared
 `∞` sentinel standing in for a facet's missing side on the grid's outer boundary), and primal `H_{d-1}` of the
 sublevel filtration is computed as ordinary `H_0` of that dual graph's own SUPERLEVEL filtration — Alexander
-duality, `H_{d-1}(X) ≅ H^0(S^d \ X)` — via the same elder-rule array union-find `CellularPersistenceInChunksContext`'s
+duality, `H_{d-1}(X) ≅ H^0(S^d \ X)` — via the same elder-rule array union-find `CellularPersistenceInChunksEngine`'s
 own `unionFindDim01` uses, run in DESCENDING primal-value order with every resulting bar's endpoints swapped.
 Combined with an ordinary primal `H_0` union-find, this covers every nontrivial dimension a 2D grid has (`H_2`
 is identically zero for any subcomplex of a 2D grid) with no general `Chain` reduction at all — **valid at any
 ambient dimension `>= 2`** (`require`d, checked again with a clearer message at the `matlab.TDA4j`/`cli`
 layer). At `d >= 3`, the "middle" dimensions (`1 <= k <= d-2`, no duality shortcut) are handed to
-`CellularPersistenceInChunksContext` run on a view that hides the real top-dimensional cells entirely, so the
+`CellularPersistenceInChunksEngine` run on a view that hides the real top-dimensional cells entirely, so the
 (often largest) top dimension never touches general `Chain` reduction — see
 `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
 
@@ -272,7 +272,7 @@ since a raw Miniball call can violate monotonicity by a floating-point ULP on ne
 New-VR's Table-Lookup optimization and the packed Ripser engine's optimizations do **not** carry over to
 Cech: both are proven specifically for flag complexes / the max-pairwise-distance functional, and Cech is
 neither a flag complex nor governed by that functional. Cech complexes work with either generic engine
-(`CellularHomologyContext`/`CellularPersistenceInChunksContext`), cross-validated against each other; the
+(`CellularHomologyEngine`/`CellularPersistenceInChunksEngine`), cross-validated against each other; the
 packed and reference Ripser engines (specialized to the Vietoris-Rips functional) are not offered for it.
 
 ### Witness complexes
@@ -291,7 +291,7 @@ Two independent implementations, both reusing `RipserCofaceSimplexStream`'s gene
   ordinary `FiniteMetricSpace[Int]` (`distance(a,b)` = the edge witness value at a fixed `nu` in `{0,1,2}`)
   and hands it to `RipserCofaceSimplexStream` **unmodified** — no `filtrationValueOverride` at all; the
   inherited "max pairwise distance" flag extension is exactly what a lazy witness complex wants. Because it
-  really is a flag complex, `PackedRipserCohomologyContext` — proven only for genuine VR diameters — is
+  really is a flag complex, `PackedRipserCohomologyEngine` — proven only for genuine VR diameters — is
   *also* valid here (any `FiniteMetricSpace[Int]`'s own diameter, not something VR-specific despite the
   class's name), cross-validated directly in `WitnessStreamSpec` rather than assumed.
 - **`WitnessCofaceSimplexStream`** (JavaPlex's plain `WitnessStream`): NOT a flag complex — a `k`-dimensional
@@ -395,7 +395,7 @@ own `O(n log n)` neighbor-search algorithm (Section 5, Algorithms 1-4, not imple
 smaller complex to reduce, not a faster one to build, the same honest framing as Cech/Witness/alpha above.
 Refuses `engine="ripser"`: a simplex's value here is not simply the maximum ambient pairwise distance among
 its vertices (some pairs are sparsified to a smaller value, others excluded outright), so
-`PackedRipserCohomologyContext`'s `insertionDiameter`/apparent-pairs optimizations — proven specifically for
+`PackedRipserCohomologyEngine`'s `insertionDiameter`/apparent-pairs optimizations — proven specifically for
 that functional — do not apply. `naive`/`chunks`/`cohomology` all consume it like any other
 `CofaceSimplexStream[Int, Double]`; `chunks` is cross-validated fresh against `naive`
 (`SheehyRipsStreamSpec`), not assumed to carry over from any other construction — see
@@ -442,7 +442,7 @@ random point clouds, a tie-heavy grid, hand-built fixtures pinning both the shif
 outcome) — the real oracle throughout, not agreement with any external tool.
 
 **Enumeration cost is not reduced uniformly** (checked from source, not assumed): `EnumeratingCofaceSimplexStream`
-and `PackedRipserCohomologyContext`'s own internal `CofacetCursor`-based enumeration both scan a fixed
+and `PackedRipserCohomologyEngine`'s own internal `CofacetCursor`-based enumeration both scan a fixed
 combinatorial range regardless of graph sparsity (vertices are never removed), though `EnumeratingCofaceSimplexStream`'s
 own downstream sort-and-cache pass over the *surviving* candidates does shrink; `RipserCofaceSimplexStream`'s
 own enumeration (built from the previous dimension's own survivors) benefits directly and proportionally.
@@ -543,7 +543,7 @@ literature port): rather than asking whether a *finite* bar's already-computed r
 restrict to a nonzero cocycle on some sub-level complex — an open question about an existing artifact —
 `compute` fixes `r` inside the target bar's `[birth, death)` up front, builds the *static* truncated complex
 `K_r` (`maxFiltrationValue = Some(r)`, the same knob enclosing-radius truncation already uses), and computes
-`CellularCohomologyContext`'s persistent cohomology of that fixed complex directly. The target class is
+`CellularCohomologyEngine`'s persistent cohomology of that fixed complex directly. The target class is
 essential at `K_r` *by construction* — nothing survives past `r` in a view that stops at `r` — so the
 verification question dissolves rather than needing an answer. Matching one of possibly several
 simultaneously-alive `K_r`-essential classes back to the specific full-filtration bar `h1Bars` reported turns
@@ -637,7 +637,7 @@ class TDAContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]
 ```
 
 `TDAContext` takes **three** type parameters (`VertexT`, `CoefficientT`, `FiltrationT`). It *is* a
-`SimplicialHomologyContext` (see [Persistence engines](persistence-engines.md)), plus it exports
+`SimplicialHomologyEngine` (see [Persistence engines](persistence-engines.md)), plus it exports
 chain-arithmetic operators (`+`, `-`, `⊠`, ...) into your namespace and provides an implicit
 `Simplex -> Chain` conversion so you can write `∆(1,2) - ∆(2,3)` directly — the basis for the
 [User's Guide](../user-guide/index.md)'s Scala quick-start.

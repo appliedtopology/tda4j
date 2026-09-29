@@ -33,22 +33,22 @@ import scala.collection.mutable
   *   - `"complex"`: `"vr"` (default), `"alpha"`, `"cech"`, `"witness"`, `"dtm-rips"`, `"dtm-alpha"`, or
   *     `"sheehy-rips"`.
   *   - `"engine"`: `"ripser"` (default for `complex=vr`, and for `complex=witness` with `witnessVariant=lazy`; backed
-  *     by `PackedRipserCohomologyContext`, the fastest and most memory-efficient engine -- see CLAUDE.md), `"naive"`
+  *     by `PackedRipserCohomologyEngine`, the fastest and most memory-efficient engine -- see CLAUDE.md), `"naive"`
   *     (reference-grade, slower; the default for
   *     `complex=alpha`/`complex=cech`/`complex=dtm-rips`/`complex=dtm-alpha`/`complex=sheehy-rips`, and for
   *     `complex=witness` with `witnessVariant=general`), `"chunks"` (`complex=vr`/`complex=cech`/`complex=dtm-rips`/
   *     `complex=sheehy-rips`/`complex=witness` with `witnessVariant=lazy` only -- see below for why `complex=alpha`/
   *     `complex=dtm-alpha` refuse it, and why `complex=cech`/`complex=dtm-rips`/`complex=sheehy-rips`/
   *     `witnessVariant=general` refuse `engine=ripser` specifically), or `"cohomology"` (backed by
-  *     `CellularCohomologyContext` -- persistent COhomology, generic over `CellT: OrderedCell`, valid for every
+  *     `CellularCohomologyEngine` -- persistent COhomology, generic over `CellT: OrderedCell`, valid for every
   *     `complex` value including `alpha`; unlike `engine=ripser`, not specialized to Vietoris-Rips, so it also works
   *     for `complex=alpha`/`complex=cech`/`complex=witness`/`complex=dtm-rips`/`complex=dtm-alpha`/
   *     `complex=sheehy-rips`, but without `ripser`'s VR-specific speed optimizations -- see
   *     `.claude/DESIGN-generic-cohomology.md`). Every essential bar's representative is a genuine cocycle (`d(rep) =
   *     0`); a finite bar's representative is a valid witness on its own living interval but is NOT expected to have
   *     zero coboundary over the whole complex -- see `Cohomology.scala`'s own doc for why. `"fast-alpha"`
-  *     (`homology.FastAlphaHomologyContext`, a dual-graph union-find, extended past 2D by a hybrid with `chunks` for
-  *     the residual middle dimensions -- `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) is valid ONLY for
+  *     (`homology.FastAlphaHomologyEngine`, a dual-graph union-find, extended past 2D by a hybrid with `chunks` for the
+  *     residual middle dimensions -- `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) is valid ONLY for
   *     `complex=alpha` with `alphaBackend=helix` (the default) and ambient dimension `>= 2` -- see
   *     `.claude/DESIGN-alpha-dual-unionfind.md`. On a fraction of point clouds it throws
   *     `homology.FastAlphaTriangulationException`, a real (NOT a bug in your data) `HelixDelaunay` triangulation
@@ -106,10 +106,10 @@ import scala.collection.mutable
   *     H_0..H_k"), not the highest simplex dimension to build. Computing H_k correctly needs (k+1)-dimensional chains
   *     (H_k = ker(d_k)/im(d_{k+1}) -- with no (k+1)-chains at all there's no way to tell a genuine k-cycle from one a
   *     not-yet-built (k+1)-simplex would have killed). For `engine="ripser"`/`"chunks"`,
-  *     `PackedRipserCohomologyContext`/ `PersistenceInChunksContext` both now handle this internally (fixed at their
-  *     own source -- see `.claude/WORKLOG-maxdim-semantics-fix.md`); for `engine="naive"`, this facade still builds one
+  *     `PackedRipserCohomologyEngine`/ `PersistenceInChunksEngine` both now handle this internally (fixed at their own
+  *     source -- see `.claude/WORKLOG-maxdim-semantics-fix.md`); for `engine="naive"`, this facade still builds one
   *     dimension higher internally and drops that extra top dimension from what's reported, since
-  *     `SimplicialHomologyContext` has no `maxDimension` of its own at all -- it would otherwise look spuriously
+  *     `SimplicialHomologyEngine` has no `maxDimension` of its own at all -- it would otherwise look spuriously
   *     essential, a well-known truncation artifact of the top dimension of any truncated chain complex, not real
   *     information (confirmed the hard way in this facade's first pass -- see WORKLOG-matlab-api.md). `complex=alpha`/
   *     `complex=dtm-alpha` ignore this option entirely and report every dimension their complex naturally has: an alpha
@@ -484,8 +484,8 @@ object TDA4j:
     * `"complex"` value on `computeFromPoints`/`computeFromDistanceMatrix`. Recognized options:
     *
     *   - `"engine"`: `"naive"` (default), `"chunks"`, `"cohomology"`, or `"fast-cubical"` -- `"ripser"` is never
-    *     offered here: `PackedRipserCohomologyContext` is specialized to `Simplex[Int]` Vietoris-Rips complexes and has
-    *     no notion of a cubical complex at all. `"fast-cubical"` (`homology.FastCubicalHomologyContext`, Le Breton-
+    *     offered here: `PackedRipserCohomologyEngine` is specialized to `Simplex[Int]` Vietoris-Rips complexes and has
+    *     no notion of a cubical complex at all. `"fast-cubical"` (`homology.FastCubicalHomologyEngine`, Le Breton-
     *     Szustakowski-Piraud's dual-graph union-find, extended past 2D by a hybrid with `chunks` for the residual
     *     middle dimensions) is refused only for a degenerate 1-axis "image" (ambient dimension `< 2`) -- see
     *     CLAUDE.md's Cubical complexes section and `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
@@ -687,12 +687,12 @@ object TDA4j:
     )
     if engine == EngineKind.FastCubical then
       throw new IllegalArgumentException(
-        "engine=fast-cubical is not offered for complex=witness (either variant): FastCubicalHomologyContext is " +
+        "engine=fast-cubical is not offered for complex=witness (either variant): FastCubicalHomologyEngine is " +
           "specialized to CubicalGridStream and has no notion of a witness complex at all."
       )
     if engine == EngineKind.FastAlpha then
       throw new IllegalArgumentException(
-        "engine=fast-alpha is not offered for complex=witness (either variant): FastAlphaHomologyContext is " +
+        "engine=fast-alpha is not offered for complex=witness (either variant): FastAlphaHomologyEngine is " +
           "specialized to HelixDelaunay and has no notion of a witness complex at all. Use complex=alpha for " +
           "engine=fast-alpha."
       )
@@ -702,7 +702,7 @@ object TDA4j:
           throw new IllegalArgumentException(
             "engine=ripser cannot be used with complex=witness/witnessVariant=general: the general witness " +
               "complex is not a flag complex (see streams.WitnessCofaceSimplexStream's own doc), so " +
-              "PackedRipserCohomologyContext's diameter-based optimizations do not apply -- use " +
+              "PackedRipserCohomologyEngine's diameter-based optimizations do not apply -- use " +
               "witnessVariant=lazy instead, or engine=naive/cohomology."
           )
         case EngineKind.Chunks =>
@@ -787,19 +787,19 @@ object TDA4j:
     if engine == EngineKind.FastCubical then
       throw new IllegalArgumentException(
         "engine=fast-cubical is only valid for computeFromCubicalImage/computeFromImage: " +
-          "FastCubicalHomologyContext is specialized to CubicalGridStream and has no notion of a point cloud or " +
+          "FastCubicalHomologyEngine is specialized to CubicalGridStream and has no notion of a point cloud or " +
           "distance matrix at all (unlike ripser/naive/chunks/cohomology, which every complex here can offer some " +
           "subset of)."
       )
     if engine == EngineKind.FastAlpha && complex != ComplexKind.Alpha then
       throw new IllegalArgumentException(
-        s"engine=fast-alpha is only valid for complex=alpha: FastAlphaHomologyContext is specialized to " +
+        s"engine=fast-alpha is only valid for complex=alpha: FastAlphaHomologyEngine is specialized to " +
           s"HelixDelaunay and has no notion of complex=${opts.getOrElse("complex", "vr")} at all."
       )
     (complex, engine) match
       case (ComplexKind.Alpha, EngineKind.Ripser) =>
         throw new IllegalArgumentException(
-          "engine=ripser cannot be used with complex=alpha: PackedRipserCohomologyContext computes persistent " +
+          "engine=ripser cannot be used with complex=alpha: PackedRipserCohomologyEngine computes persistent " +
             "cohomology directly from a metric space's Vietoris-Rips complex and has no notion of an alpha complex at all."
         )
       case (ComplexKind.Alpha, EngineKind.Chunks) =>
@@ -810,14 +810,14 @@ object TDA4j:
         )
       case (ComplexKind.Cech, EngineKind.Ripser) =>
         throw new IllegalArgumentException(
-          "engine=ripser cannot be used with complex=cech: PackedRipserCohomologyContext's apparent-pairs and " +
+          "engine=ripser cannot be used with complex=cech: PackedRipserCohomologyEngine's apparent-pairs and " +
             "insertionDiameter optimizations are proven specifically for the max-pairwise-distance (Vietoris-Rips) " +
             "functional, not Cech's circumradius -- see CLAUDE.md's Cech complexes section. Use engine=naive or " +
             "engine=chunks for Cech complexes."
         )
       case (ComplexKind.DtmRips, EngineKind.Ripser) =>
         throw new IllegalArgumentException(
-          "engine=ripser cannot be used with complex=dtm-rips: PackedRipserCohomologyContext assumes vertices are " +
+          "engine=ripser cannot be used with complex=dtm-rips: PackedRipserCohomologyEngine assumes vertices are " +
             "born at filtration 0 and uses insertionDiameter, an incremental formula proven only for the plain " +
             "max-pairwise-distance functional -- neither holds for the DTM-weighted filtration. Use engine=naive, " +
             "engine=chunks, or engine=cohomology for complex=dtm-rips."
@@ -826,13 +826,13 @@ object TDA4j:
         throw new IllegalArgumentException(
           "engine=ripser cannot be used with complex=sheehy-rips: a simplex's filtration value here is not the " +
             "maximum ambient pairwise distance among its vertices (some pairs are excluded outright, others take a " +
-            "sparsified value), so PackedRipserCohomologyContext's insertionDiameter/apparent-pairs machinery does " +
+            "sparsified value), so PackedRipserCohomologyEngine's insertionDiameter/apparent-pairs machinery does " +
             "not apply -- see streams.SheehyRipsSimplexStream's own doc. Use engine=naive, engine=chunks, or " +
             "engine=cohomology for complex=sheehy-rips."
         )
       case (ComplexKind.DtmAlpha, EngineKind.Ripser) =>
         throw new IllegalArgumentException(
-          "engine=ripser cannot be used with complex=dtm-alpha: PackedRipserCohomologyContext has no notion of an " +
+          "engine=ripser cannot be used with complex=dtm-alpha: PackedRipserCohomologyEngine has no notion of an " +
             "alpha complex at all -- same reason as complex=alpha."
         )
       case (ComplexKind.DtmAlpha, EngineKind.Chunks) =>
@@ -950,16 +950,16 @@ object TDA4j:
       case ComplexKind.VR =>
         // Computing H_k needs (k+1)-dimensional chains -- H_k = ker(d_k)/im(d_{k+1}), so with no (k+1)-chains at
         // all there is no way to tell a genuine k-cycle from one that a not-yet-built (k+1)-simplex would have
-        // killed. Both `PackedRipserCohomologyContext` and `PersistenceInChunksContext` now handle this internally
+        // killed. Both `PackedRipserCohomologyEngine` and `PersistenceInChunksEngine` now handle this internally
         // (their own `maxDimension`/`maxDim` constructor parameters mean "top homological degree reported,"
         // fixed at the source -- see .claude/WORKLOG-maxdim-semantics-fix.md), so `engine=Ripser`/`Chunks`
         // both pass `requestedMaxDimension` straight through with no adjustment; `fromBars`'s
         // filter below is a defensive no-op for them now, not load-bearing. `engine=Naive`/`Cohomology` still need
         // the manual `buildDimension = requestedMaxDimension + 1` dance via `PersistenceEngine`'s own adapters
-        // below: neither `SimplicialHomologyContext` nor `CellularCohomologyContext` has a `maxDimension` of its
+        // below: neither `SimplicialHomologyEngine` nor `CellularCohomologyEngine` has a `maxDimension` of its
         // own at all -- the cap lives entirely in the stream each is handed.
         // `edgeCollapse` replaces the metric space every engine branch below consumes (including `engine=ripser`'s
-        // own direct `PackedRipserCohomologyContext(collapsedMetricSpace, ...)` call, which takes a metric space,
+        // own direct `PackedRipserCohomologyEngine(collapsedMetricSpace, ...)` call, which takes a metric space,
         // not a stream) -- one swap here benefits every engine uniformly, the same "wire once" shape the boundary
         // matrix below already uses for a different property of the complex. `maxFiltrationValue` is passed
         // straight through to `EdgeCollapse.collapse` too: a truncated collapse (only edges within that bound
@@ -987,12 +987,12 @@ object TDA4j:
 
         engine match
           case EngineKind.Ripser =>
-            // Backed by PackedRipserCohomologyContext, not RipserCohomologyContext -- see CLAUDE.md and that
-            // class's own doc: same algorithm, measured faster and far leaner on memory. RipserCohomologyContext
-            // stays in the codebase only as PackedRipserCohomologyContext's cross-validation test oracle, not as
+            // Backed by PackedRipserCohomologyEngine, not RipserCohomologyEngine -- see CLAUDE.md and that
+            // class's own doc: same algorithm, measured faster and far leaner on memory. RipserCohomologyEngine
+            // stays in the codebase only as PackedRipserCohomologyEngine's cross-validation test oracle, not as
             // a second production option. Doesn't go through `PersistenceEngine`: it consumes a metric space
             // directly, not a stream -- see that trait's own doc for why this is an honest asymmetry.
-            val ctx = PackedRipserCohomologyContext[C](
+            val ctx = PackedRipserCohomologyEngine[C](
               collapsedMetricSpace,
               requestedMaxDimension,
               maxFiltrationValue = maxFiltrationValue
@@ -1022,7 +1022,7 @@ object TDA4j:
               vrBoundaryMatrixOf
             )
           case EngineKind.Chunks =>
-            // barcodeAt, not diagramAt: CellularPersistenceInChunksContext now records a REAL representative for
+            // barcodeAt, not diagramAt: CellularPersistenceInChunksEngine now records a REAL representative for
             // every bar (any dimension <= requestedMaxDimension), via the SAME fromBars/Option[Chain] path
             // Ripser/Naive already use above -- see PersistenceEngine's own doc for how (it reuses this class's
             // OWN already-computed reduction state -- boundaries/cleared/paired/killer -- incrementally, via
@@ -1037,7 +1037,7 @@ object TDA4j:
               vrBoundaryMatrixOf
             )
           case EngineKind.Cohomology =>
-            // CellularCohomologyContext, generic over CellT: OrderedCell -- see
+            // CellularCohomologyEngine, generic over CellT: OrderedCell -- see
             // .claude/DESIGN-generic-cohomology.md. Same "build one dimension higher, drop it via fromBars"
             // dance as engine=Naive above, for the identical reason (H_k needs (k+1)-dimensional chains); this
             // engine has no maxDim/maxDimension parameter of its own at all (deliberately -- see that class's
@@ -1085,7 +1085,7 @@ object TDA4j:
             )
           case EngineKind.Cohomology =>
             // No stream-level dimension cap here either, for the same reason as engine=Naive above: an alpha
-            // complex's chain complex terminates on its own. CellularCohomologyContext accepts `alphaStream`
+            // complex's chain complex terminates on its own. CellularCohomologyEngine accepts `alphaStream`
             // directly -- it's a StratifiedSimplexStream[Int, Double], hence a CellStream[Simplex[Int], Double].
             fromBars[Simplex[Int], C](
               PersistenceEngine.cohomology[Simplex[Int], C].barcode(alphaStream),
@@ -1107,14 +1107,14 @@ object TDA4j:
                       s"${helix.ambientDimension}-dimensional point cloud. Use engine=naive, engine=chunks, or " +
                       s"engine=cohomology instead."
                   )
-                // FastAlphaHomologyContext's own FastAlphaTriangulationException (a rare, real HelixDelaunay
+                // FastAlphaHomologyEngine's own FastAlphaTriangulationException (a rare, real HelixDelaunay
                 // triangulation limitation -- see that class's own doc) is deliberately NOT caught and
                 // rewrapped here: its own message is already written for an unsuspecting MATLAB/CLI caller,
                 // not just a Scala developer, the same way NoIntegerCocycleException's own message already is
                 // for circularCoordinates -- catching and re-throwing a DIFFERENT exception here would only
                 // lose the original's own stack trace for no benefit.
                 fromBars[Simplex[Int], C](
-                  FastAlphaHomologyContext[C]().persistentHomology(helix),
+                  FastAlphaHomologyEngine[C]().persistentHomology(helix),
                   alphaCellVertices,
                   toDouble,
                   Int.MaxValue,
@@ -1122,7 +1122,7 @@ object TDA4j:
                 )
               case _ =>
                 throw new IllegalArgumentException(
-                  s"engine=fast-alpha requires alphaBackend=helix (FastAlphaHomologyContext is specialized to " +
+                  s"engine=fast-alpha requires alphaBackend=helix (FastAlphaHomologyEngine is specialized to " +
                     "HelixDelaunay's own triangulation and cannot consume AlphaShapeDQP's output at all) -- got " +
                     s"alphaBackend=$alphaBackend."
                 )
@@ -1164,7 +1164,7 @@ object TDA4j:
               cechBoundaryMatrixOf
             )
           case EngineKind.Chunks =>
-            // CellularPersistenceInChunksContext handles the "+1" dance internally (its own maxDim constructor
+            // CellularPersistenceInChunksEngine handles the "+1" dance internally (its own maxDim constructor
             // parameter means "top reported degree," fixed at the source -- see .claude/WORKLOG-maxdim-semantics-
             // fix.md), and CechCofaceSimplexStream's own iterateDimension is already naturally bounded (inherited
             // from RipserCofaceSimplexStream's `d < metricSpace.size` guard), so no LimitedCofaceSimplexStream
@@ -1378,13 +1378,13 @@ object TDA4j:
         engine match
           case EngineKind.Ripser =>
             // The lazy witness complex IS a flag complex under WitnessMetricSpace's own "distance" -- exactly
-            // the case PackedRipserCohomologyContext is proven for (any FiniteMetricSpace[Int] diameter), not
+            // the case PackedRipserCohomologyEngine is proven for (any FiniteMetricSpace[Int] diameter), not
             // VR-specific at all despite the class's own name -- see streams.WitnessMetricSpace's own doc and
             // WitnessStreamSpec's direct cross-check against the naive engine.
             val geometry = WitnessGeometry(metricSpace, landmarks)
             val wms = WitnessMetricSpace(geometry, nu)
             val ctx =
-              PackedRipserCohomologyContext[C](wms, requestedMaxDimension, maxFiltrationValue = maxFiltrationValue)
+              PackedRipserCohomologyEngine[C](wms, requestedMaxDimension, maxFiltrationValue = maxFiltrationValue)
             fromBars[ctx.DiameterIndex, C](
               ctx.persistentCohomology(),
               (dim, cell) => ctx.si.decodeToArray(cell.index, dim + 1).map(landmarks),
@@ -1401,7 +1401,7 @@ object TDA4j:
               lazyBoundaryMatrixOf
             )
           case EngineKind.Chunks =>
-            // No LimitedCofaceSimplexStream wrapping needed -- PersistenceInChunksContext handles the "+1"
+            // No LimitedCofaceSimplexStream wrapping needed -- PersistenceInChunksEngine handles the "+1"
             // dance internally, and LazyWitnessSimplexStream's own iterateDimension is already naturally
             // bounded (inherited from RipserCofaceSimplexStream), mirroring complex=cech's own chunks case.
             val stream = LazyWitnessSimplexStream(metricSpace, landmarks, nu, maxFiltrationValue = maxFiltrationValue)
@@ -1503,18 +1503,18 @@ object TDA4j:
     val engine = EngineKind.parse(opts.getOrElse("engine", "naive"))
     if engine == EngineKind.FastCubical then
       throw new IllegalArgumentException(
-        "engine=fast-cubical is not offered for computeFromRelation: FastCubicalHomologyContext is specialized " +
+        "engine=fast-cubical is not offered for computeFromRelation: FastCubicalHomologyEngine is specialized " +
           "to CubicalGridStream and has no notion of a Dowker complex at all."
       )
     if engine == EngineKind.FastAlpha then
       throw new IllegalArgumentException(
-        "engine=fast-alpha is not offered for computeFromRelation: FastAlphaHomologyContext is specialized to " +
+        "engine=fast-alpha is not offered for computeFromRelation: FastAlphaHomologyEngine is specialized to " +
           "HelixDelaunay and has no notion of a Dowker complex at all."
       )
     if engine == EngineKind.Ripser then
       throw new IllegalArgumentException(
         "engine=ripser cannot be used with computeFromRelation: the Dowker complex is not a flag complex in " +
-          "general (see streams.DowkerGeometry's own doc), so PackedRipserCohomologyContext's diameter-based " +
+          "general (see streams.DowkerGeometry's own doc), so PackedRipserCohomologyEngine's diameter-based " +
           "optimizations do not apply -- use engine=naive or engine=cohomology."
       )
     if engine == EngineKind.Chunks then
@@ -1591,17 +1591,17 @@ object TDA4j:
     val engine = EngineKind.parse(opts.getOrElse("engine", "naive"))
     if engine == EngineKind.Ripser then
       throw new IllegalArgumentException(
-        "engine=ripser cannot be used for a cubical complex: PackedRipserCohomologyContext is specialized to " +
+        "engine=ripser cannot be used for a cubical complex: PackedRipserCohomologyEngine is specialized to " +
           "Simplex[Int] Vietoris-Rips complexes and has no notion of a cubical complex at all. Use engine=naive, " +
           "engine=chunks, engine=cohomology, or (ambient dimension 2 only) engine=fast-cubical."
       )
     if engine == EngineKind.FastAlpha then
       throw new IllegalArgumentException(
-        "engine=fast-alpha cannot be used for a cubical complex: FastAlphaHomologyContext is specialized to " +
+        "engine=fast-alpha cannot be used for a cubical complex: FastAlphaHomologyEngine is specialized to " +
           "HelixDelaunay and has no notion of a cubical complex at all. Use engine=fast-cubical for a cubical " +
           "grid's own fast engine, or engine=naive/chunks/cohomology otherwise."
       )
-    // FastCubicalHomologyContext's own `require` throws IllegalArgumentException too, but with a message written
+    // FastCubicalHomologyEngine's own `require` throws IllegalArgumentException too, but with a message written
     // for a library caller who already has a `CubicalGridStream` in hand, not a MATLAB/CLI caller who only
     // supplied a `shape`/`flatValues` array -- catching it here first gives an error that names the actual
     // option/argument to change. ambientDim < 2 is the only remaining rejection (a degenerate 1-axis "image"):
@@ -1646,7 +1646,7 @@ object TDA4j:
         // No dimension cap is applied to the stream itself, on purpose, mirroring complex=alpha above: a cubical
         // grid's own chain complex terminates on its own (bounded by its ambient dimension), so it is never
         // artificially cut short the way a VR/Cech complex is -- nothing to build one dimension higher for.
-        // CellularHomologyContext[Cube, ...] has no maxDim of its own at all, same as Simplex[Int].
+        // CellularHomologyEngine[Cube, ...] has no maxDim of its own at all, same as Simplex[Int].
         fromBars[Cube, C](
           PersistenceEngine.naive[Cube, C].barcode(stream),
           cellVertices,
@@ -1656,7 +1656,7 @@ object TDA4j:
         )
       case EngineKind.Chunks =>
         // Unlike the naive path above, maxDimension IS passed through here as a genuine, correct truncation --
-        // CellularPersistenceInChunksContext handles the "+1" dance internally (see .claude/WORKLOG-maxdim-
+        // CellularPersistenceInChunksEngine handles the "+1" dance internally (see .claude/WORKLOG-maxdim-
         // semantics-fix.md), so this can skip real work for a caller who only wants low-dimensional homology, not
         // just filter what's reported after the fact.
         fromBars[Cube, C](
@@ -1668,7 +1668,7 @@ object TDA4j:
         )
       case EngineKind.Cohomology =>
         // Same shape as engine=Naive above: no stream-level dimension cap (a cubical grid's own top dimension
-        // is already naturally bounded), CellularCohomologyContext computes to that natural top dimension, and
+        // is already naturally bounded), CellularCohomologyEngine computes to that natural top dimension, and
         // maxDimension is applied purely as a post-hoc filter via fromBars.
         fromBars[Cube, C](
           PersistenceEngine.cohomology[Cube, C].barcode(stream),
@@ -1678,7 +1678,7 @@ object TDA4j:
           boundaryMatrixOf
         )
       case EngineKind.FastCubical =>
-        // Called directly, like engine=Ripser below, not through PersistenceEngine[CellT,C]: FastCubicalHomologyContext
+        // Called directly, like engine=Ripser below, not through PersistenceEngine[CellT,C]: FastCubicalHomologyEngine
         // is specialized to the concrete CubicalGridStream (its dual-graph construction reads `.shape`/`.ambientDim`/
         // `.topCellValue` directly), not generic over `CellT: OrderedCell` the way naive/chunks/cohomology are -- the
         // same "honest asymmetry" PersistenceEngine's own doc comment already states for Ripser. dispatchCubical
@@ -1686,7 +1686,7 @@ object TDA4j:
         // for real filtering now that ambientDim >= 3 is possible here too (unlike the old ambientDim=2-only
         // engine, where the grid's own natural top dimension was always <= 1 and nothing was ever filtered).
         fromBars[Cube, C](
-          FastCubicalHomologyContext[C]().persistentHomology(stream),
+          FastCubicalHomologyEngine[C]().persistentHomology(stream),
           cellVertices,
           toDouble,
           maxDimension,
@@ -1710,7 +1710,7 @@ object TDA4j:
     case ClosedEndpoint(v)  => v
 
   /** `cellVertices(dim, cell)` recovers a chain cell's vertex array -- generalized from a hardcoded `.underlying`
-    * (which only `Simplex[Int]` has) as of routing `engine="ripser"` through `PackedRipserCohomologyContext`: its cells
+    * (which only `Simplex[Int]` has) as of routing `engine="ripser"` through `PackedRipserCohomologyEngine`: its cells
     * are `DiameterIndex`, decoded via `ctx.si.decodeToArray(cell.index, dim + 1)` at the call site instead. Takes `dim`
     * (the bar's own dimension, hence the cocycle's -- every cell in one bar's annotation is a simplex of that same
     * dimension) because `DiameterIndex` doesn't carry its own vertex count the way `Simplex[Int]` does; a caller

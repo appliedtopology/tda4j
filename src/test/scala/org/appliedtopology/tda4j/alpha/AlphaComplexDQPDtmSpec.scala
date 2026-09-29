@@ -48,7 +48,7 @@ class AlphaComplexDQPDtmSpec extends org.specs2.mutable.Specification:
     val ac =
       AlphaComplexDQP.weighted(points, f.map(fi => -fi * fi).toArray, Double.PositiveInfinity, points.head.length)
     val stream = RawAlphaComplexStream(points, ac)
-    SimplicialHomologyContext[Int, Double, Double]()
+    SimplicialHomologyEngine[Int, Double, Double]()
       .persistentHomology(stream)
       .diagramAt(Double.PositiveInfinity)
       .collect { case (0, b, d) =>
@@ -59,7 +59,7 @@ class AlphaComplexDQPDtmSpec extends org.specs2.mutable.Specification:
 
   private def dtmRipsH0(ambient: FiniteMetricSpace[Int], f: IndexedSeq[Double]): Set[(Double, Double)] =
     val stream = DtmRipsSimplexStream(ambient, f, p = 2.0, maxFiltrationValue = Some(Double.PositiveInfinity))
-    SimplicialHomologyContext[Int, Double, Double]()
+    SimplicialHomologyEngine[Int, Double, Double]()
       .persistentHomology(stream)
       .diagramAt(Double.PositiveInfinity)
       .collect { case (0, b, d) => (b, d) }

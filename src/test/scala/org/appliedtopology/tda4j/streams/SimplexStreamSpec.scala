@@ -169,7 +169,7 @@ class CofaceSimplexStreamSpec extends mutable.Specification with org.specs2.Scal
   // Pins the memoization fix from .claude/WORKLOG-autonomous-session-2026-09-19.md (task #2): the default
   // MaximumDistanceFiltrationValue fallback is now cached per-instance, exactly the same fix (and same
   // justification) as CubicalGridStream's own filtrationValue cache. Mirrors RipserCohomologySpec's own
-  // "memoizing changes nothing about the computed barcode" property, but for SimplicialHomologyContext
+  // "memoizing changes nothing about the computed barcode" property, but for SimplicialHomologyEngine
   // (the naive engine actually consuming this stream's default filtrationValue), and comparing the FULL
   // bar list (dim, birth, death) rather than just counts.
   // maxDim capped at 2 (via LimitedCofaceSimplexStream) and point counts kept modest (6-12, matching
@@ -182,7 +182,7 @@ class CofaceSimplexStreamSpec extends mutable.Specification with org.specs2.Scal
   "Memoizing EnumeratingCofaceSimplexStream's default filtrationValue changes nothing about the computed barcode" >>
     forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
       given Double is Field = Field.DoubleApproximated(1e-9)
-      given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+      given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
 
       val metricSpace = EuclideanMetricSpace(points)
       val maxDim = 2
@@ -228,7 +228,7 @@ class CofaceSimplexStreamSpec extends mutable.Specification with org.specs2.Scal
   "parallelFiltrationValue = true produces the exact same barcode as the default, for plain VR" >>
     forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
       given Double is Field = Field.DoubleApproximated(1e-9)
-      given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+      given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
 
       val metricSpace = EuclideanMetricSpace(points)
       val maxDim = 2

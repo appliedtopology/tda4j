@@ -14,8 +14,8 @@ import org.specs2.mutable
 import org.specs2.ScalaCheck
 import org.specs2.scalacheck.Parameters
 
-/** Cross-validates `PackedRipserCohomologyContext` (`PackedRipserCohomology.scala`) against the reference
-  * `RipserCohomologyContext` (`Homology.scala`) -- NOT against hand-derived expected barcodes, since that would just
+/** Cross-validates `PackedRipserCohomologyEngine` (`PackedRipserCohomology.scala`) against the reference
+  * `RipserCohomologyEngine` (`Homology.scala`) -- NOT against hand-derived expected barcodes, since that would just
   * re-litigate `RipserCohomologySpec`'s own already-established correctness. The reference engine is itself extensively
   * cross-validated elsewhere (see CLAUDE.md); this spec's job is only to confirm the packed re-keying didn't change
   * behavior, on exactly the fixtures `RipserCohomologySpec` already uses (so a real behavioral difference here can't be
@@ -40,7 +40,7 @@ class PackedRipserCohomologySpec extends mutable.Specification with ScalaCheck:
     maxDim: Int,
     maxFiltrationValue: Option[Double] = None
   ): List[(Int, Double, Double)] =
-    RipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = maxFiltrationValue)
+    RipserCohomologyEngine[Double](metricSpace, maxDim, maxFiltrationValue = maxFiltrationValue)
       .persistentCohomology()
       .map(toTuple)
 
@@ -49,7 +49,7 @@ class PackedRipserCohomologySpec extends mutable.Specification with ScalaCheck:
     maxDim: Int,
     maxFiltrationValue: Option[Double] = None
   ): List[(Int, Double, Double)] =
-    PackedRipserCohomologyContext[Double](metricSpace, maxDim, maxFiltrationValue = maxFiltrationValue)
+    PackedRipserCohomologyEngine[Double](metricSpace, maxDim, maxFiltrationValue = maxFiltrationValue)
       .persistentCohomology()
       .map(toTuple)
 
@@ -101,13 +101,13 @@ class PackedRipserCohomologySpec extends mutable.Specification with ScalaCheck:
     // Mirrors RipserCohomologySpec's own discriminating check: not just "the barcode is unchanged" (which a
     // fallback that never fires could also produce if the shortcut path alone happens to be sufficient), but
     // that the on-the-fly recomputation this engine independently reimplements is genuinely exercised.
-    val ctx = PackedRipserCohomologyContext[Double](apparentPairCollisionCloud, 2)
+    val ctx = PackedRipserCohomologyEngine[Double](apparentPairCollisionCloud, 2)
     ctx.persistentCohomology()
     ctx.substitutionCount must be_>(0)
   }
 
   "The packed engine's substitution never fires when useApparentPairs is disabled" >> {
-    val ctx = PackedRipserCohomologyContext[Double](apparentPairCollisionCloud, 2, useApparentPairs = false)
+    val ctx = PackedRipserCohomologyEngine[Double](apparentPairCollisionCloud, 2, useApparentPairs = false)
     ctx.persistentCohomology()
     ctx.substitutionCount must be_==(0)
   }
@@ -129,9 +129,9 @@ class PackedRipserCohomologySpec extends mutable.Specification with ScalaCheck:
   "Packed engine's totalSimplexCount matches the reference's exactly, per random cloud" >>
     forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 15))) { points =>
       val metricSpace = EuclideanMetricSpace(points)
-      val refCtx = RipserCohomologyContext[Double](metricSpace, 2)
+      val refCtx = RipserCohomologyEngine[Double](metricSpace, 2)
       refCtx.persistentCohomology()
-      val packedCtx = PackedRipserCohomologyContext[Double](metricSpace, 2)
+      val packedCtx = PackedRipserCohomologyEngine[Double](metricSpace, 2)
       packedCtx.persistentCohomology()
       packedCtx.totalSimplexCount must be_==(refCtx.totalSimplexCount)
     }

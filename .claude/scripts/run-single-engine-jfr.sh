@@ -4,7 +4,7 @@
 # on one case. Built specifically to chase two anomalies found in a same-machine compute-server run against
 # real ripser.cpp (see .claude/WORKLOG-packed-ripser-engine.md/-ripser-profiling.md for the established
 # baseline): o3_1024's packed-vs-SortedSet advantage collapsing to ~1.7x (every other case: 15-45x), and
-# fractal-r timing out for the packed engine while RipserCohomologyContext itself finishes (in ~89 minutes).
+# fractal-r timing out for the packed engine while RipserCohomologyEngine itself finishes (in ~89 minutes).
 #
 # Unlike RipserPaperBenchmarkSpec (sbt-hosted, shared JVM across every case, a per-cell timeout with NO
 # cooperative cancellation), this gives each run its own clean process with no time budget at all -- let it

@@ -96,7 +96,7 @@ outcomes of the same `visitedFacets` lock:
   facet too, so Helix's own output, though different from DQP's, is still a complete, internally-consistent
   triangulation -- checked directly via a global self-consistency test (`H_{ambientDim-1}` of the full, unfiltered
   complex must be trivial, since a genuine Delaunay triangulation's convex hull is contractible; confirmed
-  independently by `FastAlphaHomologyContext` agreeing with the naive engine on the resulting stream). Not a bug:
+  independently by `FastAlphaHomologyEngine` agreeing with the naive engine on the resulting stream). Not a bug:
   a different, equally valid resolution of a real near-tie, exactly C's own accepted symptom.
 - **Genuine B**: the discarded side is reachable NO OTHER WAY, so an entire local neighborhood (here, the three
   simplices sharing `{1,3,9}`, plus their own sub-faces) is permanently lost -- a real topological hole (nonzero
@@ -146,7 +146,7 @@ genuinely broken.
 
 Fix 2 (extended repair) validated directly against a CONFIRMED genuine void, captured from the classification
 sweep (13 points, ambient dim 4, `seed=7447`): `HelixDelaunay(pts, seed=7447L)` (raw) is missing 3 top simplices
-vs `AlphaShapeDQP`; `HelixDelaunay(pts, seed=7447L, requireValidTriangulation=true)` -- `FastAlphaHomologyContext`
+vs `AlphaShapeDQP`; `HelixDelaunay(pts, seed=7447L, requireValidTriangulation=true)` -- `FastAlphaHomologyEngine`
 now agrees with the naive engine on the repaired stream (it did not before repair). A broader 20000-trial sweep
 with `requireValidTriangulation=true` applied unconditionally (uniform random, dim 2-4, n 5-14, same self-
 consistency check used to classify genuine voids above) found **zero** self-consistency failures across all 20000

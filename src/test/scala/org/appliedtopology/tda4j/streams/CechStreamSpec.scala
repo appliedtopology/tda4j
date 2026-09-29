@@ -177,10 +177,10 @@ class CechStreamSpec extends mutable.Specification with ScalaCheck:
     val ms = EuclideanMetricSpace(
       Array(Array(0.0, 0.0), Array(s, 0.0), Array(s / 2, s * math.sqrt(3) / 2))
     )
-    val sequentialBarcode = SimplicialHomologyContext[Int, Double, Double]()
+    val sequentialBarcode = SimplicialHomologyEngine[Int, Double, Double]()
       .persistentHomology(CechCofaceSimplexStream(ms, maxFiltrationValue = Some(Double.PositiveInfinity)))
       .diagramAt(Double.PositiveInfinity)
-    val parallelBarcode = SimplicialHomologyContext[Int, Double, Double]()
+    val parallelBarcode = SimplicialHomologyEngine[Int, Double, Double]()
       .persistentHomology(
         CechCofaceSimplexStream(ms, maxFiltrationValue = Some(Double.PositiveInfinity), parallelFiltrationValue = true)
       )
@@ -246,7 +246,7 @@ class CechStreamSpec extends mutable.Specification with ScalaCheck:
       prop { (points: Array[Array[Double]]) =>
         val ms = EuclideanMetricSpace(points)
         val stream = CechCofaceSimplexStream(ms, maxFiltrationValue = Some(Double.PositiveInfinity))
-        val state = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(stream)
+        val state = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream)
         // Thresholds to sweep, drawn from each EDGE's own reported Cech radius (via stream.filtrationValue),
         // not independently recomputed as `distance/2.0` -- the latter isn't guaranteed bit-identical to what
         // the stream itself uses to decide inclusion (see this section's own header comment), which produced a
@@ -302,7 +302,7 @@ class CechStreamSpec extends mutable.Specification with ScalaCheck:
       Array(Array(0.0, 0.0), Array(s, 0.0), Array(s / 2, s * math.sqrt(3) / 2))
     )
     val stream = CechCofaceSimplexStream(ms, maxFiltrationValue = Some(Double.PositiveInfinity))
-    val barcode = SimplicialHomologyContext[Int, Double, Double]()
+    val barcode = SimplicialHomologyEngine[Int, Double, Double]()
       .persistentHomology(stream)
       .diagramAt(Double.PositiveInfinity)
     val triangleRadius = s / math.sqrt(3)
@@ -325,9 +325,9 @@ class CechStreamSpec extends mutable.Specification with ScalaCheck:
   }
 
   // ---------------------------------------------------------------------------------------------------------
-  // Chunks vs. naive cross-validation on Cech streams -- `CellularPersistenceInChunksContext` has never been
+  // Chunks vs. naive cross-validation on Cech streams -- `CellularPersistenceInChunksEngine` has never been
   // exercised against `CechCofaceSimplexStream` before (CLAUDE.md's Cech section only ever validated the naive
-  // engine here). `CellularPersistenceInChunksContext[CellT: OrderedCell, ...]` has no Cech-specific code path
+  // engine here). `CellularPersistenceInChunksEngine[CellT: OrderedCell, ...]` has no Cech-specific code path
   // at all -- same as its already-validated use on `Cube`/`FiniteSimplicialSet` generators -- so there is no a
   // priori reason to expect it to fail here, but "no a priori reason to expect a bug" is exactly the standing
   // this codebase's own history warns against trusting without a real check (see e.g. the chunks pairing bug
@@ -335,16 +335,16 @@ class CechStreamSpec extends mutable.Specification with ScalaCheck:
   // top dimension for an n-point cloud), so nothing is truncated away that the naive engine would otherwise see.
   // ---------------------------------------------------------------------------------------------------------
 
-  "CellularPersistenceInChunksContext agrees with the naive engine's own diagram, exactly, on random Cech streams" >>
+  "CellularPersistenceInChunksEngine agrees with the naive engine's own diagram, exactly, on random Cech streams" >>
     AsResult {
       prop { (points: Array[Array[Double]]) =>
         val ms = EuclideanMetricSpace(points)
         val stream = CechCofaceSimplexStream(ms, maxFiltrationValue = Some(Double.PositiveInfinity))
-        val naive = SimplicialHomologyContext[Int, Double, Double]()
+        val naive = SimplicialHomologyEngine[Int, Double, Double]()
           .persistentHomology(stream)
           .diagramAt(Double.PositiveInfinity)
           .toSet
-        val chunks = CellularPersistenceInChunksContext[Simplex[Int], Double](points.length)
+        val chunks = CellularPersistenceInChunksEngine[Simplex[Int], Double](points.length)
           .persistentHomology(stream)
           .diagramAt(Double.PositiveInfinity)
           .toSet
