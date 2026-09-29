@@ -12,11 +12,12 @@ import scala.compiletime.asMatchable
 Implementation of the Chain trait using heaps for internal storage and deferred arithmetic.
  */
 
-into
-
-class Chain[CellT: Ordering, CoefficientT: Field] private[tda4j](
+// because scalafmt is too aggressive to use the `into` new scala3 syntax.
+// format: off
+into class Chain[CellT: Ordering, CoefficientT: Field] private[tda4j](
   private var entries: mutable.PriorityQueue[(CellT, CoefficientT)]
 ):
+  // format: on
   @tailrec
   final def collapseHead(): Unit =
     val fr = summon[CoefficientT is Field]
@@ -228,5 +229,5 @@ object Chain:
       }.toSeq
 
 given [CellT: {OrderedCell, Show}, CoefficientT: Field] => Show[Chain[CellT, CoefficientT]] = Show.show { c =>
-  c.rawEntries.map((cell, coeff) => show"$coeff⊠$cell").mkString(" + ")
+  c.rawEntries.map((cell, coeff) => show"$coeff ⊠ $cell").mkString(" + ")
 }

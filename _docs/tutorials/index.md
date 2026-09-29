@@ -12,19 +12,13 @@ Placeholder page; nothing ported yet. When per-language (Java/Scala) tabbed exam
 Here's a test for us.
 
 ```scala sc:compile
-import language.implicitConversions
-import language.adhocExtensions
 import language.experimental.modularity
 
-import org.appliedtopology.tda4j.TDAContext
-import org.appliedtopology.tda4j.algebra.*
-import org.appliedtopology.tda4j.cells.∆
+import org.appliedtopology.tda4j.TDAlab
+val tdalab = TDAlab(17)
+import tdalab.{*,given}
 
-given Double is Field = Field.DoubleApproximated(1e-9)
-val context = TDAContext[Int,Double,Double]()
-given TDAContext[Int,Double,Double] = context
-import context.{*,given}
 
-val chain = 1.0 ⊠ ∆(1, 2) - ∆(2, 3)
-println(chain)
+val chain = Fp(1) ⊠ ∆(1, 2) - ∆(2, 3)
+println(chain.show)
 ```
