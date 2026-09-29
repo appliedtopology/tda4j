@@ -1,6 +1,6 @@
 name := "tda4j"
 organization := "org.appliedtopology"
-scalaVersion := "3.8.4"
+scalaVersion := "3.8.4" // We would go 3.9.0, but the ScalaDoc handling of javascript is broken. Fixes expected for 3.9.1.
 
 versionScheme := Some("semver-spec")
 
@@ -82,7 +82,7 @@ def priorReleaseVersions(baseDir: File): Seq[String] = {
 scalacOptions ++= List(
   "-source:future",
   "-language:experimental.modularity",
-  "-language:implicitConversions",
+  "-preview", // for `into` - remove once we're on Scala 3.9.x.
   "-language:adhocExtensions",
   "-feature",
   "-deprecation",

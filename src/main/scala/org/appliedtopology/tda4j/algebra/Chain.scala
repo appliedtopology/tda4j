@@ -12,7 +12,9 @@ import scala.compiletime.asMatchable
 Implementation of the Chain trait using heaps for internal storage and deferred arithmetic.
  */
 
-class Chain[CellT: Ordering, CoefficientT: Field] private[tda4j] (
+into
+
+class Chain[CellT: Ordering, CoefficientT: Field] private[tda4j](
   private var entries: mutable.PriorityQueue[(CellT, CoefficientT)]
 ):
   @tailrec
