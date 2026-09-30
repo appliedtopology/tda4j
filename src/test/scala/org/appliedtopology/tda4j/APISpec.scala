@@ -23,6 +23,10 @@ class APISpec extends mutable.Specification:
       Chain(Simplex(1, 2) -> 1.0, Simplex(2, 3) -> -1.0)
     )
   }
+  
+  "should fail" >> {
+    false must beTrue
+  }
 
   "A full Vietoris-Rips persistence computation" >> {
     // #full-vr-computation
