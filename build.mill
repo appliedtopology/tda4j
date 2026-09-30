@@ -1,11 +1,28 @@
+//| mvnDeps:
+//|   - com.github.lolgab::mill-mima::0.2.2
+//|   - com.lihaoyi::mill-contrib-scoverage:$MILL_VERSION
+//|   - com.lihaoyi::mill-contrib-versionfile:$MILL_VERSION
+
 package build
 import mill.*, scalalib.*, scalalib.publish.*
 import mill.api.BuildCtx
+import mill.contrib.scoverage.ScoverageModule
+import com.github.lolgab.mill.mima.*
+import mill.contrib.versionfile.VersionFileModule
 
 object tda4j extends Cross[TDA4jModule]("3.8.3", "3.8.4", "3.9.0", "3.10.0-RC3")
-trait TDA4jModule extends CrossScalaModule, PublishModule {
+
+trait TDA4jModule extends CrossScalaModule
+
+, PublishModule
+, ScoverageModule
+, Mima
+, VersionFileModule {
   def artifactName = "tda4j"
-  def publishVersion = "0.5.0"
+
+  def publishVersion = this.currentVersion().toString
+
+  def mimaPreviousVersions = Seq("0.4.0")
 
   def pomSettings = PomSettings(
     description = "A Java Platform compatible library for topological data analysis (TDA).",
@@ -17,6 +34,8 @@ trait TDA4jModule extends CrossScalaModule, PublishModule {
   )
 
   def scalaVersion = "3.8.4" // change to 3.9.x once the javascript bugs in 3.9.0 scaladoc are fixed
+
+  def scoverageVersion = "2.5.2"
 
   def extraSources = Task.Sources("algebra", "alpha", "barcode", "cells", "cli", "homology", "io", "matlab", "streams", "unicode")
 
@@ -35,7 +54,10 @@ trait TDA4jModule extends CrossScalaModule, PublishModule {
     mvn"org.typelevel::cats-core:2.13.0",
     mvn"org.typelevel::kittens:3.5.0",
   )
-  object test extends ScalaTests, TestModule.Specs2 {
+
+  object test extends ScalaTests
+  , TestModule.Specs2
+  , ScoverageTests {
     def mvnDeps = Seq(
       mvn"org.specs2::specs2-core:5.5.1",
       mvn"org.specs2::specs2-matcher-extra:5.5.1",
@@ -83,5 +105,46 @@ trait TDA4jModule extends CrossScalaModule, PublishModule {
         |  libraryDependencies += "org.appliedtopology" %% "tda4j" % "0.4.0"
         |""".stripMargin.replace("\n", "")
     )
+  }
+
+  // ScalaDoc is aggressive about its favicon; we need post-processing to fix it:
+  def scalaDocGenerated = Task {
+    val sDG = super.scalaDocGenerated()
+    os.list(sDG.path).filter(_.last != ".DS_Store").foreach(fn => os.copy.into(fn, Task.dest, createFolders = true))
+    os.walk(Task.dest)
+      .foreach {
+        case fn if fn.last == "favicon.ico" => {
+          os.remove(fn)
+        }
+        case fn if fn.ext == "html" => {
+          val content = os.read(fn)
+          val patched = content.replace(
+            "<link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"favicon.ico\">",
+            """
+              |<link rel="shortcut icon" type="image/svg+xml" href="/images/header-icon.svg"/>
+              |<link rel="apple-touch-icon" sizes="180x180" href="/images/header-icon-180.png"/>
+              |<link rel="icon" sizes="16x16" type="image/png" href="/images/favicon-16.png"/>
+              |<link rel="icon" sizes="32x32" type="image/png" href="/images/favicon-32.png"/>
+              |<link rel="icon" sizes="48x48" type="image/png" href="/images/favicon-48.png"/>
+              |<link rel="icon" sizes="64x64" type="image/png" href="/images/favicon-64.png"/>
+              |<link rel="icon" sizes="128x128" type="image/png" href="/images/header-icon-128.png"/>
+              |<link rel="icon" sizes="256x256" type="image/png" href="/images/header-icon-256.png"/>
+              |<link rel="manifest" href="/images/manifest.json"/>
+              |<link rel="shortcut icon" type="image/svg+xml" href="/images/header-icon-dark.svg" media="(prefers-color-scheme: dark)" />
+              |<link rel="apple-touch-icon" sizes="180x180" href="/images/header-icon-dark-180.png" media="(prefers-color-scheme: dark)" />
+              |<link rel="icon" sizes="16x16" type="image/png" href="/images/favicon-16.png" media="(prefers-color-scheme: dark)" />
+              |<link rel="icon" sizes="32x32" type="image/png" href="/images/favicon-32.png" media="(prefers-color-scheme: dark)" />
+              |<link rel="icon" sizes="48x48" type="image/png" href="/images/favicon-48.png" media="(prefers-color-scheme: dark)" />
+              |<link rel="icon" sizes="64x64" type="image/png" href="/images/favicon-64.png" media="(prefers-color-scheme: dark)" />
+              |<link rel="icon" sizes="128x128" type="image/png" href="/images/header-icon-dark-128.png" media="(prefers-color-scheme: dark)" />
+              |<link rel="icon" sizes="256x256" type="image/png" href="/images/header-icon-dark-256.png" media="(prefers-color-scheme: dark)" />
+              |<link rel="manifest" href="/images/manifest-dark.json" media="(prefers-color-scheme: dark)" />
+              |        |""".stripMargin
+          )
+          if (patched != content) os.write.over(fn, patched)
+        }
+        case _ => ()
+      }
+    PathRef(Task.dest)
   }
 }
