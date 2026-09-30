@@ -48,7 +48,7 @@ jobs:
             touch /tmp/gh-pages/.nojekyll
           fi
           rm -rf /tmp/gh-pages/dev
-          cp -r out/tda4j/3.8.4/scalaDocGenerated.dest /tmp/gh-pages/
+          cp -r out/tda4j/3.8.4/scalaDocGenerated.dest/* /tmp/gh-pages/
           cd /tmp/gh-pages
           git add -A
           if git diff --cached --quiet; then
