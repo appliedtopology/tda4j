@@ -19,7 +19,5 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - name: Setup sbt launcher
-        uses: sbt/setup-sbt@v1
       - name: Formatting
-        run: sbt scalafmtSbtCheck ; sbt scalafmtCheck
+        run: ./mill --no-server --disable-ticker mill.scalalib.scalafmt/checkFormatAll

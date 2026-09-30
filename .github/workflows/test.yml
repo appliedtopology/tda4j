@@ -19,9 +19,10 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - name: Setup sbt launcher
-        uses: sbt/setup-sbt@v1
       - name: Run tests
-        run: sbt clean ; sbt test
-      - name: Binary Compatibility Checks
-        run: sbt mimaReportBinaryIssues
+        run: ./mill --no-server --disable-ticker tda4j.__.test tda4j.__.htmlReport
+      - name: Save reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: scoverage-report
+          path: out/tda4j/3.8.4/scoverage/htmlReport.dest

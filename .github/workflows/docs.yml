@@ -23,10 +23,8 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - name: Setup sbt launcher
-        uses: sbt/setup-sbt@v1
       - name: Build docs site
-        run: sbt doc
+        run: ./mill --no-server --disable-ticker tda4j.3_8_4.docJar # TODO: change to 3.9.1 when released
       - name: Publish docs
         env:
           # Repo Settings -> Secrets and variables -> Actions -> Variables. When set (e.g. to "dev"), pins
@@ -50,20 +48,7 @@ jobs:
             touch /tmp/gh-pages/.nojekyll
           fi
           rm -rf /tmp/gh-pages/dev
-          cp -r target/out/jvm/scala-3.9.0/tda4j/api /tmp/gh-pages/dev
-          # Root redirects to the newest released version if one has been published, else to "dev". Matches
-          # only directory names that look like a real release version (digits/dots), not merely "not dev" --
-          # a plain exclusion list here previously let stale non-version directories (leftover from before docs
-          # versioning existed, never cleaned up because the old plugin could never delete remote-only content)
-          # win a `sort -V` comparison and become the redirect target: this is not hypothetical, it's what the
-          # site's root was actually doing (confirmed: redirected to "user-guide/") before this fix.
-          if [ -n "$DOCS_DEFAULT_VERSION" ]; then
-            TARGET="${DOCS_DEFAULT_VERSION}/"
-          else
-            LATEST=$(cd /tmp/gh-pages && find . -maxdepth 1 -type d -name '[0-9]*.[0-9]*.[0-9]*' -printf '%f\n' | sort -V | tail -n1)
-            TARGET="${LATEST:-dev}/"
-          fi
-          printf '<!DOCTYPE html><meta charset="utf-8"><title>TDA4j docs</title><meta http-equiv="refresh" content="0; url=%s"><a href="%s">TDA4j docs</a>' "$TARGET" "$TARGET" > /tmp/gh-pages/index.html
+          cp -r out/tda4j/3.8.4/scalaDocGenerated.dest /tmp/gh-pages/
           cd /tmp/gh-pages
           git add -A
           if git diff --cached --quiet; then
