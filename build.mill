@@ -70,6 +70,8 @@ trait TDA4jModule extends CrossScalaModule
     def sources = Task {
       super.sources() ++ extraSources()
     }
+    
+    override def forkArgs=Seq("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005")
   }
 
   def mainClass = Some("\"org.appliedtopology.tda4j.cli.TDA4jCLI")
