@@ -1,0 +1,11 @@
+{
+  "versions": [
+    { "displayValue": "0.4.0", "pathSegment": "0.4.0", "fallbackLink": "/index.html", "canonical": false },
+    { "displayValue": "0.1.2", "pathSegment": "0.1.2", "fallbackLink": "/index.html", "canonical": false },
+    { "displayValue": "0.1.1", "pathSegment": "0.1.1", "fallbackLink": "/index.html", "canonical": false },
+    { "displayValue": "0.1.0-alpha", "pathSegment": "0.1.0-alpha", "fallbackLink": "/index.html", "canonical": false }
+  ],
+  "linkTargets": [
+    
+  ]
+}
