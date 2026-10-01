@@ -1,6 +1,6 @@
 name := "tda4j"
 organization := "org.appliedtopology"
-scalaVersion := "3.9.0" // We would go 3.9.0, but the ScalaDoc handling of javascript is broken. Fixes expected for 3.9.1.
+scalaVersion := "3.9.0"
 
 versionScheme := Some("semver-spec")
 
