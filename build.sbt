@@ -62,7 +62,7 @@ Compile / doc / scalacOptions ++= Seq(
     |  ) ;
     |  libraryDependencies += "org.appliedtopology" %% "tda4j" % "0.4.0"
     |""".stripMargin.replace("\n", ""),
-  // Every Scala fence in the docs is compiled; mark a purely illustrative fence `scala nocompile` instead.
+  // Every Scala fence in the docs is compiled; mark a purely illustrative fence `scala sc:nocompile` instead.
   "-snippet-compiler:compile"
 )
 Compile / doc / target := target.value / "api"

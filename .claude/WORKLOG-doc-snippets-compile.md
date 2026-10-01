@@ -20,3 +20,4 @@ for genuinely illustrative blocks) -> re-run until clean. Only one sbt at a time
   scala3-primer 4); the rest compile. No sub-agents used. Remaining warning: scaladoc's own
   "Option -classpath was updated" (unrelated).
 - Lesson: doc drift found by this was real (4 items above), so keep the flag on; add a new fence => it must compile.
+- Verified: scalafmtCheck+scalafmtSbtCheck clean; `sbt doc` on default 3.9.0 also clean (snippets compile there too).
