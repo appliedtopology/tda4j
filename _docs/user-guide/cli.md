@@ -8,7 +8,7 @@ title: Command-line tool: `tda4j`
 any Scala:
 
 ```
-java -jar target/scala-3.9.0/TDA4j-<version>-assembly.jar [options] <input-file>
+java -jar target/out/jvm/scala-3.9.0/tda4j/tda4j-<version>-assembly.jar [options] <input-file>
 ```
 
 It loads a point cloud, distance matrix, cubical image, or Dowker relation (`--input-format csv-relation`,
@@ -30,3 +30,19 @@ into the two-step recipe described above. `--distance-to <file>` (`--distance-fo
 to a file, printing bottleneck/Wasserstein distance per dimension instead of writing a diagram — see
 "Comparing diagrams and turning them into vectors" below for the underlying `PersistenceResult` methods this
 mirrors.
+
+### Which bars are reported
+
+Like the MATLAB facade (see "Which bars are reported" there), the CLI hides bars with persistence at most 1% of
+the connectivity scale by default — the range from the first birth to the value at which the data becomes
+connected (for Vietoris-Rips, 0 to the connectivity radius); essential bars are always reported. When anything
+was hidden, one line on stderr says how many and how to get them back:
+
+```
+tda4j: 412 bar(s) with persistence <= 0.0213 not reported (9 reported); pass --min-persistence 0 to report every bar
+```
+
+`--min-persistence-fraction <f>` changes the 1% (a fraction of the scale); `--min-persistence <p>` sets an absolute
+threshold in the barcode's own units instead — give at most one. `0` for either reports every bar. Both flags are
+rejected with `--select-landmarks` (no barcode is produced) and with `--distance-to` (the comparison always uses
+the complete barcode, so that the distance does not depend on this run's own scale).

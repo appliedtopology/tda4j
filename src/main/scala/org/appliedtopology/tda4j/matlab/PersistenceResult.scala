@@ -44,26 +44,73 @@ private[matlab] case class BoundaryMatrixData(
   * which.
   */
 final class PersistenceResult private[matlab] (
-  private val dims: Array[Int],
-  private val births: Array[Double],
-  private val deaths: Array[Double],
+  private val allDims: Array[Int],
+  private val allBirths: Array[Double],
+  private val allDeaths: Array[Double],
   private val cycleProvider: Int => (Array[Array[Int]], Array[Double]),
-  private val boundaryMatrixProvider: () => BoundaryMatrixData
+  private val boundaryMatrixProvider: () => BoundaryMatrixData,
+  private val visible: Array[Int],
+  private val threshold: Double
 ):
-  def size(): Int = dims.length
+  /** A result that reports every bar -- what `fromBars` builds; `TDA4j`'s dispatch then narrows it with
+    * [[withPersistenceThreshold]].
+    */
+  private[matlab] def this(
+    dims: Array[Int],
+    births: Array[Double],
+    deaths: Array[Double],
+    cycleProvider: Int => (Array[Array[Int]], Array[Double]),
+    boundaryMatrixProvider: () => BoundaryMatrixData
+  ) = this(dims, births, deaths, cycleProvider, boundaryMatrixProvider, Array.range(0, dims.length), 0.0)
+
+  // The REPORTED bars: row `i` below is full-barcode index `visible(i)`.
+  private def dims: Array[Int] = visible.map(allDims)
+  private def births: Array[Double] = visible.map(allBirths)
+  private def deaths: Array[Double] = visible.map(allDeaths)
+
+  /** The persistence threshold this result was filtered with (`0` means nothing was hidden by a threshold): bars with
+    * `death - birth` at or below it are not among the `size()` reported bars. Essential bars are never hidden. See
+    * `barcode.PersistenceFilter` for how the default is derived.
+    */
+  def persistenceThreshold(): Double = threshold
+
+  /** How many bars the threshold hid (the full barcode has `size() + hiddenCount()` bars). */
+  def hiddenCount(): Int = allDims.length - visible.length
+
+  /** The full, unfiltered barcode as an N-by-3 matrix (dimension, birth, death), same layout as [[toArray]]. */
+  def toArrayUnfiltered(): Array[Array[Double]] =
+    Array.tabulate(allDims.length)(i => Array(allDims(i).toDouble, allBirths(i), allDeaths(i)))
+
+  /** This same computation reporting only the bars that pass the threshold -- see `barcode.PersistenceFilter` for the
+    * rule (`minPersistence` absolute if given, otherwise `fraction` of the connectivity scale; `0` keeps everything).
+    * Computed from the FULL barcode, so it does not compound if applied twice.
+    */
+  private[matlab] def withPersistenceThreshold(minPersistence: Option[Double], fraction: Double): PersistenceResult =
+    val thr = PersistenceFilter.threshold(allDims, allBirths, allDeaths, minPersistence, fraction)
+    new PersistenceResult(
+      allDims,
+      allBirths,
+      allDeaths,
+      cycleProvider,
+      boundaryMatrixProvider,
+      PersistenceFilter.keptIndices(allBirths, allDeaths, thr),
+      thr
+    )
+
+  def size(): Int = visible.length
 
   /** The whole barcode as one N-by-3 matrix: column 0 is dimension, column 1 is birth, column 2 is death (`+Inf` for an
     * essential class). This is the primary, MATLAB-idiomatic way to consume a result -- immediately plottable,
     * sortable, filterable with ordinary MATLAB matrix operations.
     */
   def toArray(): Array[Array[Double]] =
-    Array.tabulate(dims.length) { i =>
-      Array(dims(i).toDouble, births(i), deaths(i))
+    Array.tabulate(visible.length) { i =>
+      Array(allDims(visible(i)).toDouble, allBirths(visible(i)), allDeaths(visible(i)))
     }
 
-  def dimension(i: Int): Int = dims(i)
-  def birth(i: Int): Double = births(i)
-  def death(i: Int): Double = deaths(i)
+  def dimension(i: Int): Int = allDims(visible(i))
+  def birth(i: Int): Double = allBirths(visible(i))
+  def death(i: Int): Double = allDeaths(visible(i))
 
   /** The cells making up bar `i`'s representative chain, each as an `int[]` identifying that cell -- the array's own
     * meaning depends on which complex this result came from, since the underlying cell type differs:
@@ -80,26 +127,29 @@ final class PersistenceResult private[matlab] (
     * an expected gap -- see `.claude/CLAUDE.md`'s coefficients-and-representatives design principle for why this
     * matters.
     */
-  def cycleVertices(i: Int): Array[Array[Int]] = cycleProvider(i)._1
+  def cycleVertices(i: Int): Array[Array[Int]] = cycleProvider(visible(i))._1
 
   /** Coefficients parallel to `cycleVertices(i)`. Reported as `double` regardless of the underlying coefficient field
     * -- for a finite field `Z/pZ` this is the representative integer value cast to `double`, for the default
     * real-valued field it's the value itself. See `cycleVertices` for the exceptions this can throw.
     */
-  def cycleCoefficients(i: Int): Array[Double] = cycleProvider(i)._2
+  def cycleCoefficients(i: Int): Array[Double] = cycleProvider(visible(i))._2
 
-  /** This result's own bars of dimension `dim`, as plain `PersistenceBar[Double, Nothing]` (no representative chain --
-    * `barcode.BarcodeDistance`/`barcode.Vectorization` only ever look at `dim`/`lower`/`upper`) for feeding into those
-    * two objects. An essential class (`death(i) == Double.PositiveInfinity`) becomes a `PositiveInfinity` upper
-    * endpoint, exactly what both consume directly for the essential-bar handling documented on each.
+  /** This result's own bars of dimension `dim` -- ALL of them, including any the persistence threshold hides from
+    * `size()`/`toArray()` (a distance or vectorization between two results must not depend on each one's own threshold,
+    * which differs with each one's own connectivity scale) -- as plain `PersistenceBar[Double, Nothing]` (no
+    * representative chain -- `barcode.BarcodeDistance`/`barcode.Vectorization` only ever look at `dim`/`lower`/`upper`)
+    * for feeding into those two objects. An essential class (`death(i) == Double.PositiveInfinity`) becomes a
+    * `PositiveInfinity` upper endpoint, exactly what both consume directly for the essential-bar handling documented on
+    * each.
     */
   private def barsOfDimension(dim: Int): IndexedSeq[PersistenceBar[Double, Nothing]] =
-    (0 until size())
-      .filter(dims(_) == dim)
+    (0 until allDims.length)
+      .filter(allDims(_) == dim)
       .map { i =>
         val upper: BarcodeEndpoint[Double] =
-          if deaths(i).isPosInfinity then PositiveInfinity[Double]() else OpenEndpoint(deaths(i))
-        PersistenceBar[Double, Nothing](dim, ClosedEndpoint(births(i)), upper)
+          if allDeaths(i).isPosInfinity then PositiveInfinity[Double]() else OpenEndpoint(allDeaths(i))
+        PersistenceBar[Double, Nothing](dim, ClosedEndpoint(allBirths(i)), upper)
       }
 
   /** `groundNorm` follows this facade's own existing `maxFiltrationValue` convention (`TDA4j`'s own doc: "pass a very

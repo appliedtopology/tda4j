@@ -511,6 +511,22 @@ produces `Double` filtration values, and a metric distance needs real arithmetic
   weighted Gaussian mass *exactly* (a product of 1D normal-CDF differences, since an isotropic Gaussian's mass
   over a rectangle factors along both axes), not by sampling the surface at the pixel center.
 
+**Which bars get reported** (`barcode.PersistenceFilter`, `.claude/WORKLOG-persistence-threshold.md`). Engines
+return EVERY bar — they are the cross-validation oracles, and a representative is recorded for each. Reading a
+real barcode is hopeless that way, so the *facade* (`matlab.TDA4j`, hence the CLI and MATLAB) applies a
+post-hoc filter by default: keep a bar iff it is essential or its persistence exceeds `0.01 *
+connectivityScale`, where the scale is (largest finite H0 death) - (smallest H0 birth), i.e. 0 to the
+connectivity radius for Vietoris-Rips, falling back to the full finite range when no H0 bar is finite. A
+threshold `<= 0` keeps everything, zero-persistence bars included. Design points worth knowing before changing
+it: (1) it is applied by thin `dispatch*` wrappers around the real dispatchers, after the full result exists, not
+inside `fromBars`; (2) `PersistenceResult` keeps the FULL arrays plus a `visible` index, and only
+`size`/`toArray`/`dimension`/`birth`/`death`/`cycle*` use the visible view — `barsOfDimension`, hence distances,
+landscapes and persistence images, always use the full barcode, because two results filtered at their own
+scales would otherwise be compared under different cuts; (3) every strict option allowlist
+(`recognizedKeys`, `witnessFromLandmarksKeys`, `dowkerKeys`) accepts `minPersistence`/`minPersistenceFraction`
+except `landmarkSelectionKeys`, since landmark selection produces no barcode; (4) existing tests that assert
+on complete barcodes call the test-only shims `FullBarcode`/`CliFull`, which switch the threshold off.
+
 `matlab.PersistenceResult` exposes both as instance methods (`bottleneckDistance`/`wassersteinDistance`
 against another `PersistenceResult`, `landscape`/`persistenceImage` on itself) — see that class's own doc.
 `cli.TDA4jCLI`'s `--distance-to` mirrors `BarcodeDistance` only (reading a second diagram via

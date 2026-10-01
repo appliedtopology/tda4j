@@ -77,6 +77,31 @@ It's a good default for exploration and for anything where you want to query the
 intermediate filtration values or get representative cycles back (`state.diagramAt(f)`/`state.barcodeAt(f)`)
 — see "Which persistence engine?" below for when a different engine is worth reaching for instead.
 
+### Dropping short bars
+
+Engines return every bar. The MATLAB facade and the CLI hide bars shorter than 1% of the connectivity scale by
+default; from Scala you opt in with `PersistenceFilter` (essential bars are always kept; a threshold of `0` keeps
+everything):
+
+```scala 3
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.homology.{given, *}
+import org.appliedtopology.tda4j.barcode.PersistenceFilter
+
+given Double is Field = Field.DoubleApproximated(1e-9)
+val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(0.001, 0.0), Array(1.0, 0.0))
+val stream = EnumeratingCofaceSimplexStream(EuclideanMetricSpace(points), maxFiltrationValue = Some(2.0))
+val state = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream)
+state.advanceAll()
+val bars = state.barcodeAt(Double.PositiveInfinity)
+
+val worthReporting = PersistenceFilter.significant(bars)                    // default: 1% of the connectivity scale
+val everything = PersistenceFilter.significant(bars, minPersistence = Some(0.0))
+val aTenthOfIt = PersistenceFilter.significant(bars, fraction = 0.1)
+```
+
 **A default worth knowing**: `EnumeratingCofaceSimplexStream` and the other Vietoris-Rips stream
 implementations default `maxFiltrationValue` to the point cloud's own *minimum enclosing radius*, not
 unbounded, since nothing past that radius contributes new homology. Pass `Some(Double.PositiveInfinity)`

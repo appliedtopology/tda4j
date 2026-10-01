@@ -12,7 +12,8 @@ go in the worklog, not here. This file was condensed on 2026-09-22 from a ~190k-
 
 TDA4j is a Scala 3 library for persistent homology and topological data analysis (a spiritual successor to
 JavaPlex/Ripser, from the Stanford Computational Topology workgroup lineage). Single sbt module, root package
-`org.appliedtopology.tda4j`, pre-1.0 (`0.4.1-SNAPSHOT`, see `version.sbt`), actively evolving API.
+`org.appliedtopology.tda4j`, pre-1.0 (`0.5.0-SNAPSHOT`, see `version.sbt`), actively evolving API. **0.5.0 deliberately does not keep binary
+compatibility with 0.4.x** (project lead: still in flux) — no compat shims for renames/signature changes.
 
 ## Package layout
 
@@ -32,7 +33,7 @@ Source/test directories mirror package names; file names mostly carry over from 
   `Simplicial`/`Cubical`/`PersistenceInChunks` wrappers), `RipserCohomology` (`RipserCohomologyEngine`, the oracle),
   `PackedRipserCohomology`, `Cohomology` (`CellularCohomologyEngine`), `FastCubicalHomology`, `FastAlphaHomology`,
   `PersistenceEngine` (one-shot dispatch trait), `CircularCoordinates`, `LatticeReduction`. The package graph is acyclic: `streams` never depends on `homology`.
-- `barcode` — `Barcode`. `alpha` — `AlphaShapes`, `AlphaComplexDQP`. `unicode` — `PrintingHelper` (unused).
+- `barcode` — `Barcode`, `PersistenceFilter`. `alpha` — `AlphaShapes`, `AlphaComplexDQP`. `unicode` — `PrintingHelper` (unused).
 - `matlab` — MATLAB facade. `io` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus` (leaf package).
   `cli` — `TDA4jConf`, `TDA4jCLI` (thin translator over `matlab.TDA4j`/`io`).
 - root — `package.scala` (`TDAlab`, the pylab-style user entry point, see "TDAlab" below); test side
@@ -118,6 +119,23 @@ Never consulted by an engine (generic-`given` capture, below). Growth direction:
 user should rarely need more than `import tdalab.{*, given}`). Cats (`cats-core`, `kittens`) is a dependency for
 `Show`; `Chain` is declared `into class` (needs `-preview`; `// format: off` around it because scalafmt can't
 parse `into`) and implicit conversions are enabled in-source, not by a flag.
+
+## Which bars are reported (persistence threshold)
+
+Engines return EVERY bar (they are the cross-validation oracles; every bar has a representative). The facade
+(`matlab.TDA4j`, hence CLI + MATLAB) hides bars by default: **kept iff essential or persistence > 1% of the
+connectivity scale**, scale = (largest finite H0 death) − (smallest H0 birth) (= 0..connectivity radius for VR; falls
+back to the full finite range when no H0 bar is finite; 0 for a single point), in the units the complex reports
+(VR diameters, Cech/alpha radii). Options `minPersistence` (absolute) / `minPersistenceFraction` (default `0.01`),
+at most one; **`0` keeps everything incl. zero-persistence bars**; CLI `--min-persistence`/`--min-persistence-fraction`
+(mirrored, no Scallop default; stderr note when bars were hidden; rejected with `--select-landmarks`/`--distance-to`).
+Logic lives in `barcode.PersistenceFilter` (opt-in for Scala callers: `PersistenceFilter.significant`). Invariants:
+filter is post-hoc, applied by the thin `dispatch*` wrappers (validated before computing); `PersistenceResult` keeps
+the FULL arrays + a `visible` index, and **distances/landscapes/persistence images and `--distance-to` always use the
+complete barcode**; new facade option keys must go in every strict allowlist except `landmarkSelectionKeys`.
+**Tests asserting on complete barcodes must call the test-only shims `FullBarcode` (matlab) / `CliFull` (cli)**, not
+`TDA4j`/`TDA4jCLI` directly — and a one-line search/replace misses call sites split across two lines (this bit once).
+`h1Bars`/`circularCoordinates` are unfiltered (`cocycleIndex` indexes `h1Bars`). `WORKLOG-persistence-threshold.md`.
 
 ## Scala style used throughout
 
