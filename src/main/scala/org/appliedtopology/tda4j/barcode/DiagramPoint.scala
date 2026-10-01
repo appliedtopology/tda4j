@@ -16,7 +16,7 @@ private[barcode] object DiagramPoint:
     case ClosedEndpoint(v)  => v
 
   /** Requires a finite birth value: every real engine in this codebase only ever produces those, and the alternative
-    * (silently propagating a `-Infinity` birth, e.g. from a hand-built `BarcodeContext.infcl` bar meant for
+    * (silently propagating a `-Infinity` birth, e.g. from a hand-built `BarcodeBuilder.infcl` bar meant for
     * [[Barcode]]'s kernel/cokernel algebra, not for a "real" diagram) is a `NaN` landmine in the distance/vectorization
     * arithmetic downstream rather than a meaningful answer.
     */

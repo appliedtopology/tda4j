@@ -72,6 +72,7 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
     org.appliedtopology.tda4j.cells.asSimplex
   export org.appliedtopology.tda4j.cells.Cube, org.appliedtopology.tda4j.cells.asCube
 
+  // Deliberate re-exports: `import tdalab.given` only sees givens that are members of `tdalab`.
   given Show[Simplex[VertexT]] = summon[Show[Simplex[VertexT]]]
 
   given Show[Chain[Simplex[VertexT], CoefficientT]] = summon[Show[Chain[Simplex[VertexT], CoefficientT]]]

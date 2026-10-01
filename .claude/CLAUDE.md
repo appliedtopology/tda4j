@@ -76,8 +76,10 @@ first and did not take effect — don't re-attempt without confirming it works).
 `WORKLOG-docs-site-fixes.md` are history only). Pages are Markdown in `_docs/` (front matter `layout: main`,
 `_layouts/main.html`), navigation in `sidebar.yml`, all configured through `Compile / doc / scalacOptions` in
 `build.sbt` (`-siteroot`, `-project-logo`, `-quick-links`, `-scastie-configuration`, ...). **No Laika directives**
-(`@:snip`, `@:callout`, ...) — use fenced code and blockquotes; code in a doc is hand-maintained unless a
-`sc:compile` fence is enabled (`-snippet-compiler` is currently commented out in `build.sbt`). Cross-links use
+(`@:snip`, `@:callout`, ...) — use fenced code and blockquotes; a single fence annotated `sc:compile` is compiled by the
+scaladoc snippet compiler, whereas the `-snippet-compiler` build argument makes *every* snippet compiled; the
+argument is commented out in `build.sbt` pending the doc-snippet cleanup, so until then only `sc:compile`-marked
+fences are checked and the rest are hand-maintained. Cross-links use
 scaladoc's `[[org.appliedtopology.tda4j.Foo]]`/relative `.md` links.
 
 **Docs are built with Scala 3.8.4, everything else with 3.9.0** (scaladoc 3.9.0's JavaScript is broken; this
@@ -104,7 +106,10 @@ stall/OOM. Don't un-skip without bounding the scale problem (`WORKLOG-benchmark-
 
 `TDAlab(characteristic, precision = 1e-9)` (root `package.scala`) is the pylab-style facade: `val tdalab =
 TDAlab(17); import tdalab.{*, given}` brings in `Fp(...)`, chain arithmetic (`⊠`, `+`, `-`), `∆`/`Simplex`/`Cube`
-literals, a `Simplex -> Chain` conversion and Cats `Show` syntax. `characteristic = 0` means `Double`; a prime `p`
+literals, a `Simplex -> Chain` conversion and Cats `Show` syntax. The odd-looking
+`given Show[Simplex[VertexT]] = summon[Show[Simplex[VertexT]]]` lines are **deliberate re-exports**: they make the
+existing givens visible through `import tdalab.given` (an instance's `given` import only brings in givens defined or
+exported as members of that instance). Don't "fix" them as self-referential. `characteristic = 0` means `Double`; a prime `p`
 means `Z/p`; anything else throws `IllegalArgumentException`. Vertices are fixed to `Int`. **`TDAContext` and the
 `TDAenvironment`/`FieldChoice`/`FiltrationChoice`/`TopologyChoice` sketches were removed on purpose** — engines are
 constructed explicitly (`SimplicialHomologyEngine[Int, Double, Double]()`), not inherited from a context class.

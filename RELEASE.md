@@ -8,11 +8,11 @@ keeps changing.
 
 All five gaps from the first pass at this document are closed:
 
-1. `project/plugins.sbt` now adds `sbt-sonatype` 3.12.2, which provides the `sonaUpload`/`sonaRelease`
-   commands `release.sbt` already called.
-2. `sonatype.sbt` now sets `sonatypeCredentialHost := "central.sonatype.com"` (Central Portal, not the legacy
-   OSSRH host) plus a `credentials` entry and `pgpPassphrase`, both read from environment variables — nothing
-   is hardcoded.
+1. Publishing to Maven Central uses **sbt 2's built-in Central Portal support** (`sonaUpload`/`sonaRelease`, which
+   `release.sbt` calls); there is no `sbt-sonatype` plugin in `project/plugins.sbt`.
+2. `sonatype.sbt` sets `publishTo` to the Central snapshots repository for `-SNAPSHOT` versions and to
+   `localStaging` otherwise (the bundle that `sonaUpload` sends), and holds the POM metadata. No credentials or
+   passphrases are in the build files.
 3. `LICENSE.md`'s copyright line now names its holders (matching `build.sbt`'s own site footer).
 4. `.github/workflows/release.yml` now runs on every `vX.Y.Z` tag push.
 5. The docs site is plain scaladoc (the Laika/Paradox generators were removed): `build.sbt`'s
@@ -118,12 +118,12 @@ already-released coordinate.
   user=<token user>
   password=<token password>
   ```
-  Nothing in this project's own build files references that path — sbt-sonatype/sbt-pgp pick it up through
+  Nothing in this project's own build files references that path — sbt's built-in Central support and sbt-pgp pick it up through
   their own default credential discovery, the same way for every project on the machine, not something wired
   up here. (An earlier version of `sonatype.sbt` added an explicit `credentials +=` pointing at this file,
   reasoning from `SONATYPE_USERNAME`/`SONATYPE_PASSWORD` env vars as the primary mechanism — removed once it
   became clear that framing didn't match how credentials actually get supplied here, which is entirely this
-  file, discovered by the plugins' own defaults; no env vars involved.) `host` must say `central.sonatype.com`
+  file, discovered by those defaults; no env vars involved.) `host` must say `central.sonatype.com`
   exactly (a file left over from before the Central Portal migration may still say the old OSSRH host, which
   won't match and leaves the build effectively uncredentialed). This is a different file and format from
   Maven's own `~/.m2/settings.xml` — sbt doesn't read that XML format, so a token stored only there isn't
