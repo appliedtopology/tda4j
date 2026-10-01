@@ -1,0 +1,302 @@
+<!DOCTYPE html><html data-githubContributorsUrl="https://api.github.com/repos/appliedtopology/tda4j" data-githubContributorsFilename="_docs/developers-guide/class-diagrams.md" data-pathToRoot="../" data-rawLocation="developers-guide/class-diagrams" data-dynamicSideMenu="false"><head><meta charset="utf-8"></meta><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"></meta><title>Mapping the library: class diagrams</title><link rel="canonical" href="https://tda4j.appliedtopology.org/developers-guide/class-diagrams.html"></link><link rel="shortcut icon" type="image/x-icon" href="../favicon.ico"></link><script type="text/javascript" src="../scripts/theme.js"></script><script type="text/javascript" src="../scripts/searchData.js" defer="true"></script><script type="text/javascript" src="../scripts/scastieConfiguration.js" defer="true"></script><link rel="stylesheet" href="../styles/theme/bundle.css"></link><link rel="stylesheet" href="../styles/theme/components/bundle.css"></link><link rel="stylesheet" href="../styles/theme/components/button/bundle.css"></link><link rel="stylesheet" href="../styles/theme/layout/bundle.css"></link><link rel="stylesheet" href="../styles/nord-light.css"></link><link rel="stylesheet" href="../styles/dotty-icons.css"></link><link rel="stylesheet" href="../styles/filter-bar.css"></link><link rel="stylesheet" href="../styles/code-snippets.css"></link><link rel="stylesheet" href="../styles/searchbar.css"></link><link rel="stylesheet" href="../styles/social-links.css"></link><link rel="stylesheet" href="../styles/versions-dropdown.css"></link><link rel="stylesheet" href="../styles/content-contributors.css"></link><link rel="stylesheet" href="../styles/fontawesome.css"></link><script type="text/javascript" src="../hljs/highlight.pack.js" defer="true"></script><script type="text/javascript" src="../scripts/hljs-scala3.js" defer="true"></script><script type="text/javascript" src="../scripts/ux.js" defer="true"></script><script type="text/javascript" src="../scripts/common/component.js" defer="true"></script><script type="text/javascript" src="../scripts/common/utils.js" defer="true"></script><script type="text/javascript" src="../scripts/components/FilterBar.js" defer="true"></script><script type="text/javascript" src="../scripts/components/DocumentableList.js" defer="true"></script><script type="text/javascript" src="../scripts/components/Input.js" defer="true"></script><script type="text/javascript" src="../scripts/components/FilterGroup.js" defer="true"></script><script type="text/javascript" src="../scripts/components/Filter.js" defer="true"></script><script type="text/javascript" src="../scripts/scaladoc-scalajs.js" defer="true"></script><script type="text/javascript" src="../scripts/contributors.js" defer="true"></script><script type="text/javascript" src="https://code.jquery.com/jquery-3.5.1.min.js" defer="true"></script><script type="text/javascript" src="https://d3js.org/d3.v6.min.js" defer="true"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/graphlib-dot@0.6.2/dist/graphlib-dot.min.js" defer="true"></script><script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dagre-d3/0.6.1/dagre-d3.min.js" defer="true"></script><script type="text/javascript" src="https://scastie.scala-lang.org/embedded.js" defer="true"></script><script type="text/javascript" src="../scripts/data.js" defer="true"></script><link rel="stylesheet" href="../styles/staticsitestyles.css"></link><script>var pathToRoot = "../";</script><style>
+     :root {
+          /* text */
+          --text-primary: #3c5a6b;
+          --text-secondary: #866504;
+          --text-text-tertiary: #206f6f;
+          --text-text-inverted: #eef3f5;
+
+          /* background */
+          --background-default: #f8f7f4;
+          --background-subtle: var(--grey2);
+          --background-neutral: var(--grey3);
+     }
+     :root.theme-dark {
+
+          /* text */
+          --text-primary: #8fb4c7;
+          --text-secondary: #f3d068;
+          --text-text-tertiary: #75c7c7;
+          --text-text-inverted: #1a262b;
+
+          /* background */
+          --background-default: #161b1e;
+          --background-subtle: var(--grey2);
+          --background-neutral: var(--grey3);
+
+
+     }
+     :is(#content h1, h2, h3, h4, h5, h6, .h50, .h100, .h200, .h300, .h400, .h500, .h600, .h700) {
+          color: var(--text-secondary);
+     }
+</style></head><body><div id=""><div id="header" class="body-small"><div class="header-container-left"><a href="../" class="logo-container"><span id="project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span id="dark-project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span class="project-name h300">tda4j</span></a><span onclick="dropdownHandler(event)" class="text-button with-arrow" id="dropdown-trigger"><a><div class="projectVersion">dev</div></a></span><div id="version-dropdown" class="dropdown-menu"></div></div><div class="header-container-right"><button id="search-toggle" class="icon-button"></button><a href="https://appliedtopology.org" class="text-button">Applied Topology</a><a href="https://scastie.scala-lang.org/?inputs=%7B%0A%20%20%22_isWorksheetMode%22%20%3A%20true%2C%0A%20%20%22code%22%20%3A%20%22import%20org.appliedtopology.tda4j.*%5Cn%E2%88%86(1%2C2%2C3)%5Cn%22%2C%0A%20%20%22target%22%20%3A%20%7B%0A%20%20%20%20%22scalaVersion%22%20%3A%20%223.9.0%22%2C%0A%20%20%20%20%22tpe%22%20%3A%20%22Scala3%22%0A%20%20%7D%2C%0A%20%20%22libraries%22%20%3A%20%5B%20%5D%2C%0A%20%20%22librariesFromList%22%20%3A%20%5B%20%5D%2C%0A%20%20%22sbtConfigExtra%22%3A%22%5CnscalacOptions%20%2B%2B%3D%20Seq(%5Cn%20%20%5C%22-deprecation%5C%22%2C%5Cn%20%20%5C%22-encoding%5C%22%2C%20%5C%22UTF-8%5C%22%2C%5Cn%20%20%5C%22-feature%5C%22%2C%5Cn%20%20%5C%22-unchecked%5C%22%2C%5Cn%20%20%5C%22-source%3Afuture%5C%22%2C%20%5Cn%20%20%5C%22-language%3Aexperimental.modularity%5C%22%5Cn)%5CnlibraryDependencies%20%2B%3D%20%5C%22org.appliedtopology%5C%22%20%25%25%20%5C%22tda4j%5C%22%20%25%20%5C%220.4.0%5C%22%5Cn%22%2C%0A%20%20%22sbtPluginsConfigExtra%22%20%3A%20%22%22%2C%0A%20%20%22isShowingInUserProfile%22%20%3A%20true%0A%7D%0A" class="text-button">Playground</a><span id="theme-toggle" class="icon-button"></span><span id="mobile-menu-toggle" class="icon-button hamburger"></span></div></div><div id="mobile-menu"><div class="mobile-menu-header body-small"><span class="mobile-menu-logo"><span id="project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span id="dark-project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span class="project-name h300">tda4j</span></span><button id="mobile-menu-close" class="icon-button close"></button></div><div class="mobile-menu-container body-medium"><input id="mobile-scaladoc-searchbar-input" class="scaladoc-searchbar-input" type="search" placeholder="Find anything"></input><a href="https://appliedtopology.org" class="mobile-menu-item">Applied Topology</a><a href="https://scastie.scala-lang.org/?inputs=%7B%0A%20%20%22_isWorksheetMode%22%20%3A%20true%2C%0A%20%20%22code%22%20%3A%20%22import%20org.appliedtopology.tda4j.*%5Cn%E2%88%86(1%2C2%2C3)%5Cn%22%2C%0A%20%20%22target%22%20%3A%20%7B%0A%20%20%20%20%22scalaVersion%22%20%3A%20%223.9.0%22%2C%0A%20%20%20%20%22tpe%22%20%3A%20%22Scala3%22%0A%20%20%7D%2C%0A%20%20%22libraries%22%20%3A%20%5B%20%5D%2C%0A%20%20%22librariesFromList%22%20%3A%20%5B%20%5D%2C%0A%20%20%22sbtConfigExtra%22%3A%22%5CnscalacOptions%20%2B%2B%3D%20Seq(%5Cn%20%20%5C%22-deprecation%5C%22%2C%5Cn%20%20%5C%22-encoding%5C%22%2C%20%5C%22UTF-8%5C%22%2C%5Cn%20%20%5C%22-feature%5C%22%2C%5Cn%20%20%5C%22-unchecked%5C%22%2C%5Cn%20%20%5C%22-source%3Afuture%5C%22%2C%20%5Cn%20%20%5C%22-language%3Aexperimental.modularity%5C%22%5Cn)%5CnlibraryDependencies%20%2B%3D%20%5C%22org.appliedtopology%5C%22%20%25%25%20%5C%22tda4j%5C%22%20%25%20%5C%220.4.0%5C%22%5Cn%22%2C%0A%20%20%22sbtPluginsConfigExtra%22%20%3A%20%22%22%2C%0A%20%20%22isShowingInUserProfile%22%20%3A%20true%0A%7D%0A" class="mobile-menu-item">Playground</a><span id="mobile-theme-toggle" class="mobile-menu-item mode"></span></div></div><span id="mobile-sidebar-toggle" class="floating-button"></span><div id="leftColumn" class="body-small"><div class="switcher-container"><a id="docs-nav-button" class="switcher h100 selected" href="../index.html">Docs</a><a id="api-nav-button" class="switcher h100 " href="../api/index.html">API</a></div><nav id="docs-nav" class="side-menu"><div class="ni n0 "><span class="nh de"><a href="../tutorials/index.html"><span>Tutorials for TDA4j</span></a></span></div><div class="ni n0 expanded"><span class="nh h100 expanded cs de"><button class="ar icon-button expanded"></button><a href="index.html"><span>Developer&apos;s Guide for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="scala3-primer.html"><span>A Scala 3.7+ primer for this codebase</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="architecture.html"><span>Architecture: from algebra to a filtration stream</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="persistence-engines.html"><span>Persistence engines: what to trust, and why</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="alpha-complex.html"><span>Alpha complex: DQP vs Helix</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="degeneracies.html"><span>Degeneracy behaviors that look like bugs but aren&apos;t</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="gotchas.html"><span>Hard-won invariants you must not break</span></a></span></div><div class="ni n1 expanded"><span class="nh h100 selected de"><a href="#"><span>Mapping the library: class diagrams</span></a></span></div></div><div class="ni n0"><span class="nh de"><button class="ar icon-button "></button><a href="../user-guide/index.html"><span>User Guide for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="../user-guide/quickstart.html"><span>Quick-start: Scala</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/cli.html"><span>Command-line tool: `tda4j`</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/matlab.html"><span>Calling from MATLAB or Java</span></a></span></div><div class="ni n1"><span class="nh de"><button class="ar icon-button "></button><a href="../user-guide/user-guide/topological-spaces/index.html"><span>Topological spaces</span></a></span><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/alpha-complexes.html"><span>alpha-complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/cech-complexes.html"><span>cech-complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/cubical-complexes.html"><span>cubical-complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/dowker-complexes.html"><span>dowker-complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/simplicial-sets.html"><span>simplicial-sets</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/sparse-vietoris-rips.html"><span>sparse-vietoris-rips</span></a></span></div></div><div class="ni n1"><span class="nh de"><button class="ar icon-button "></button><a href="../user-guide/user-guide/homology-computation/index.html"><span>Homology computation</span></a></span><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/choosing-engine.html"><span>choosing-engine</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/fast-alpha-complexes.html"><span>fast-alpha-complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/fast-cubical.html"><span>fast-cubical</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/index.html"><span>Homology computation</span></a></span></div></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/boundary-matrix.html"><span>Boundary-matrix export</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/circular-coordinates.html"><span>Circular coordinates</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/input-output.html"><span>Loading and saving data: the `io` module</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/vectorization.html"><span>Comparing diagrams and turning them into vectors</span></a></span></div></div></nav></div><div id="footer" class="body-small"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div><div id="scaladoc-searchBar"></div><div id="main"><div class="breadcrumbs container"><a href="../index.html">tda4j</a>/<a href="index.html">Developer&apos;s Guide for TDA4j</a>/<a href="class-diagrams.html">Mapping the library: class diagrams</a></div><div id="content" class="body-medium"><div><main>
+ <blockquote>
+  <p><strong>Note.</strong> This page is a structural sketch to help you get oriented, not an exhaustive or automatically generated reference — field names and signatures can drift out of sync with source over time. When a diagram and the actual <code>.scala</code> file disagree, trust the file.</p>
+ </blockquote>
+ <section id="typeclass-hierarchy-ringmodulescala-fieldscala-chainscala">
+  <h2 class="h500"><a href="#typeclass-hierarchy-ringmodulescala-fieldscala-chainscala" class="anchor"></a>Typeclass hierarchy (<code>RingModule.scala</code>, <code>Field.scala</code>, <code>Chain.scala</code>)</h2>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-mermaid"><span line-number="1" class=""><span class="tooltip-container"></span>classDiagram
+</span><span line-number="2" class=""><span class="tooltip-container"></span>    class RingModule {
+</span><span line-number="3" class=""><span class="tooltip-container"></span>        &lt;&lt;typeclass: type Self, type R&gt;&gt;
+</span><span line-number="4" class=""><span class="tooltip-container"></span>        zero: Self
+</span><span line-number="5" class=""><span class="tooltip-container"></span>        plus(x, y) Self
+</span><span line-number="6" class=""><span class="tooltip-container"></span>        minus(x, y) Self
+</span><span line-number="7" class=""><span class="tooltip-container"></span>        negate(x) Self
+</span><span line-number="8" class=""><span class="tooltip-container"></span>        scale(r, y) Self
+</span><span line-number="9" class=""><span class="tooltip-container"></span>        +(rhs) Self
+</span><span line-number="10" class=""><span class="tooltip-container"></span>        -(rhs) Self
+</span><span line-number="11" class=""><span class="tooltip-container"></span>        unary_-() Self
+</span><span line-number="12" class=""><span class="tooltip-container"></span>        R.⊠(t) Self
+</span><span line-number="13" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="14" class=""><span class="tooltip-container"></span>    class Field {
+</span><span line-number="15" class=""><span class="tooltip-container"></span>        &lt;&lt;typeclass: type Self&gt;&gt;
+</span><span line-number="16" class=""><span class="tooltip-container"></span>        plus(x, y) Self
+</span><span line-number="17" class=""><span class="tooltip-container"></span>        times(x, y) Self
+</span><span line-number="18" class=""><span class="tooltip-container"></span>        divide(x, y) Self
+</span><span line-number="19" class=""><span class="tooltip-container"></span>        invert(x) Self
+</span><span line-number="20" class=""><span class="tooltip-container"></span>        zero: Self
+</span><span line-number="21" class=""><span class="tooltip-container"></span>        one: Self
+</span><span line-number="22" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="23" class=""><span class="tooltip-container"></span>    class HasDimension {
+</span><span line-number="24" class=""><span class="tooltip-container"></span>        &lt;&lt;typeclass: type Self&gt;&gt;
+</span><span line-number="25" class=""><span class="tooltip-container"></span>        dim: Int
+</span><span line-number="26" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="27" class=""><span class="tooltip-container"></span>    class Cell {
+</span><span line-number="28" class=""><span class="tooltip-container"></span>        &lt;&lt;typeclass: type Self, extends HasDimension&gt;&gt;
+</span><span line-number="29" class=""><span class="tooltip-container"></span>        boundary~CoefficientT~() Seq~Tuple2~
+</span><span line-number="30" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="31" class=""><span class="tooltip-container"></span>    class OrderedCell {
+</span><span line-number="32" class=""><span class="tooltip-container"></span>        &lt;&lt;typeclass: type Self : Ordering as ordering, extends Cell&gt;&gt;
+</span><span line-number="33" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="34" class=""><span class="tooltip-container"></span>    class OrderedBasis {
+</span><span line-number="35" class=""><span class="tooltip-container"></span>        &lt;&lt;typeclass: type Self, requires CellT:Ordering, CoefficientT:Field&gt;&gt;
+</span><span line-number="36" class=""><span class="tooltip-container"></span>        leadingCell: Option~CellT~
+</span><span line-number="37" class=""><span class="tooltip-container"></span>        leadingCoefficient: CoefficientT
+</span><span line-number="38" class=""><span class="tooltip-container"></span>        leadingTerm: Tuple2
+</span><span line-number="39" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="40" class=""><span class="tooltip-container"></span>    HasDimension &lt;|-- Cell
+</span><span line-number="41" class=""><span class="tooltip-container"></span>    Cell &lt;|-- OrderedCell
+</span><span line-number="42" class=""><span class="tooltip-container"></span>    Simplex ..|&gt; OrderedCell : given instance
+</span><span line-number="43" class=""><span class="tooltip-container"></span>    Cube ..|&gt; OrderedCell : given instance
+</span><span line-number="44" class=""><span class="tooltip-container"></span>    FiniteSimplicialSet ..|&gt; OrderedCell : per-instance given (cellInstance)
+</span><span line-number="45" class=""><span class="tooltip-container"></span>    Chain ..|&gt; OrderedBasis : given instance
+</span><span line-number="46" class=""><span class="tooltip-container"></span>    Chain ..|&gt; RingModule : given instance
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>Three concrete <code>OrderedCell</code> instances exist: <code>Simplex[VertexT]</code>, <code>Cube</code>, and a <code>FiniteSimplicialSet[G]</code>'s own generators (that last one is a per-instance <code>given</code>, not a global one, since its boundary depends on that particular simplicial set's own face data). There is no dual <code>Cocell</code>/<code>OrderedCocell</code> trait pair (an earlier version had one; removed as the wrong shape for coboundary, which is extrinsic to a cell, not intrinsic like <code>boundary</code>) — <code>RipserCohomologyEngine</code>/<code>PackedRipserCohomologyEngine</code> compute coboundaries directly against <code>SimplexIndexing</code> instead (see <a href="persistence-engines.html">Persistence engines</a>). See the <a href="scala3-primer.html">Scala 3 primer</a> for what "typeclass: type Self" and "given instance" mean concretely in this codebase's syntax.</p>
+ </section>
+ <section id="chaincellt-coefficientt-chainscala">
+  <h2 class="h500"><a href="#chaincellt-coefficientt-chainscala" class="anchor"></a><code>Chain[CellT, CoefficientT]</code> (<code>Chain.scala</code>)</h2>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-mermaid"><span line-number="1" class=""><span class="tooltip-container"></span>classDiagram
+</span><span line-number="2" class=""><span class="tooltip-container"></span>    class Chain {
+</span><span line-number="3" class=""><span class="tooltip-container"></span>        -entries: PriorityQueue~Tuple2~
+</span><span line-number="4" class=""><span class="tooltip-container"></span>        collapseHead() Unit
+</span><span line-number="5" class=""><span class="tooltip-container"></span>        collapseAll() Unit
+</span><span line-number="6" class=""><span class="tooltip-container"></span>        isZero() Boolean
+</span><span line-number="7" class=""><span class="tooltip-container"></span>        items: Seq~Tuple2~
+</span><span line-number="8" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="9" class=""><span class="tooltip-container"></span>    class `Chain$` {
+</span><span line-number="10" class=""><span class="tooltip-container"></span>        &lt;&lt;companion object&gt;&gt;
+</span><span line-number="11" class=""><span class="tooltip-container"></span>        empty~CellT,CoefficientT~() Chain
+</span><span line-number="12" class=""><span class="tooltip-container"></span>        apply(cs: Tuple2*) Chain
+</span><span line-number="13" class=""><span class="tooltip-container"></span>        from(cs: Seq~Tuple2~) Chain
+</span><span line-number="14" class=""><span class="tooltip-container"></span>        reduceBy(z, basis, log) Tuple2
+</span><span line-number="15" class=""><span class="tooltip-container"></span>        reduceByUntil(z, basis, log, stop) Tuple2
+</span><span line-number="16" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="17" class=""><span class="tooltip-container"></span>    `Chain$` ..&gt; Chain : constructs
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p><code>reduceBy</code>/<code>reduceByUntil</code> are the shared reduction primitives every persistence engine in <code>Homology.scala</code> builds on — see <a href="architecture.html">Architecture</a> and <a href="gotchas.html">Hard-won invariants #4</a>.</p>
+ </section>
+ <section id="simplexvertext-simplexscala-simplexopsscala">
+  <h2 class="h500"><a href="#simplexvertext-simplexscala-simplexopsscala" class="anchor"></a><code>Simplex[VertexT]</code> (<code>Simplex.scala</code>, <code>SimplexOps.scala</code>)</h2>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-mermaid"><span line-number="1" class=""><span class="tooltip-container"></span>classDiagram
+</span><span line-number="2" class=""><span class="tooltip-container"></span>    class Simplex {
+</span><span line-number="3" class=""><span class="tooltip-container"></span>        &lt;&lt;opaque type = SortedSet~VertexT~&gt;&gt;
+</span><span line-number="4" class=""><span class="tooltip-container"></span>        underlying: SortedSet~VertexT~
+</span><span line-number="5" class=""><span class="tooltip-container"></span>        dim: Int
+</span><span line-number="6" class=""><span class="tooltip-container"></span>        boundary~CoefficientT~() Seq~Tuple2~
+</span><span line-number="7" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="8" class=""><span class="tooltip-container"></span>    class `Simplex$` {
+</span><span line-number="9" class=""><span class="tooltip-container"></span>        &lt;&lt;companion object&gt;&gt;
+</span><span line-number="10" class=""><span class="tooltip-container"></span>        apply(vertices: VertexT*) Simplex
+</span><span line-number="11" class=""><span class="tooltip-container"></span>        from(vertices: Seq~VertexT~) Simplex
+</span><span line-number="12" class=""><span class="tooltip-container"></span>        unapplySeq(s: Simplex) Option~Seq~
+</span><span line-number="13" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="14" class=""><span class="tooltip-container"></span>    Simplex ..|&gt; OrderedCell : given defaultSimplexIsOrderedCell
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p><code>SimplexOps.scala</code> adds a large <code>extension</code> block delegating most of <code>SortedSet</code>'s surface (<code>.size</code>, <code>.map</code>, <code>.union</code>, <code>.dropIndex</code>, ...) so <code>Simplex</code> "feels like" a set even though it's a zero-cost opaque wrapper at runtime — see the <a href="scala3-primer.html">primer</a>.</p>
+ </section>
+ <section id="streams-simplexstreamscala-simplexindexingscala-vietorisripsscala">
+  <h2 class="h500"><a href="#streams-simplexstreamscala-simplexindexingscala-vietorisripsscala" class="anchor"></a>Streams (<code>SimplexStream.scala</code>, <code>SimplexIndexing.scala</code>, <code>VietorisRips.scala</code>)</h2>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-mermaid"><span line-number="1" class=""><span class="tooltip-container"></span>classDiagram
+</span><span line-number="2" class=""><span class="tooltip-container"></span>    class Filtration {
+</span><span line-number="3" class=""><span class="tooltip-container"></span>        &lt;&lt;typeclass: CellT:Cell, FiltrationT:Ordering,FiltrationT:Filterable&gt;&gt;
+</span><span line-number="4" class=""><span class="tooltip-container"></span>        filtrationValue: PartialFunction
+</span><span line-number="5" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="6" class=""><span class="tooltip-container"></span>    class CellStream {
+</span><span line-number="7" class=""><span class="tooltip-container"></span>        &lt;&lt;typeclass: extends Filtration, IterableOnce&gt;&gt;
+</span><span line-number="8" class=""><span class="tooltip-container"></span>        filtrationOrdering: Ordering~CellT~
+</span><span line-number="9" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="10" class=""><span class="tooltip-container"></span>    class SimplexStream {
+</span><span line-number="11" class=""><span class="tooltip-container"></span>        &lt;&lt;CellStream specialized to Simplex~VertexT~&gt;&gt;
+</span><span line-number="12" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="13" class=""><span class="tooltip-container"></span>    class StratifiedCellStream {
+</span><span line-number="14" class=""><span class="tooltip-container"></span>        iterateDimension: PartialFunction~Int, Iterator~
+</span><span line-number="15" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="16" class=""><span class="tooltip-container"></span>    Filtration &lt;|-- CellStream
+</span><span line-number="17" class=""><span class="tooltip-container"></span>    CellStream &lt;|-- SimplexStream
+</span><span line-number="18" class=""><span class="tooltip-container"></span>    CellStream &lt;|-- StratifiedCellStream
+</span><span line-number="19" class=""><span class="tooltip-container"></span>    SimplexStream &lt;|-- StratifiedSimplexStream
+</span><span line-number="20" class=""><span class="tooltip-container"></span>    StratifiedCellStream &lt;|-- StratifiedSimplexStream
+</span><span line-number="21" class=""><span class="tooltip-container"></span>    StratifiedSimplexStream &lt;|-- CofaceSimplexStream
+</span><span line-number="22" class=""><span class="tooltip-container"></span>    CofaceSimplexStream &lt;|-- EnumeratingCofaceSimplexStream
+</span><span line-number="23" class=""><span class="tooltip-container"></span>    EnumeratingCofaceSimplexStream &lt;|-- RipserCofaceSimplexStream
+</span><span line-number="24" class=""><span class="tooltip-container"></span>    RipserCofaceSimplexStream &lt;|-- CechCofaceSimplexStream
+</span><span line-number="25" class=""><span class="tooltip-container"></span>    RipserCofaceSimplexStream &lt;|-- LazyWitnessSimplexStream
+</span><span line-number="26" class=""><span class="tooltip-container"></span>    RipserCofaceSimplexStream &lt;|-- WitnessCofaceSimplexStream
+</span><span line-number="27" class=""><span class="tooltip-container"></span>    RipserCofaceSimplexStream &lt;|-- SheehyRipsSimplexStream
+</span><span line-number="28" class=""><span class="tooltip-container"></span>    RipserCofaceSimplexStream &lt;|-- DowkerCofaceSimplexStream
+</span><span line-number="29" class=""><span class="tooltip-container"></span>    EnumeratingCofaceSimplexStream &lt;|-- InorderCofaceSimplexStream
+</span><span line-number="30" class=""><span class="tooltip-container"></span>    SimplexStream &lt;|-- ExplicitStream
+</span><span line-number="31" class=""><span class="tooltip-container"></span>    StratifiedSimplexStream &lt;|-- RecursiveStackVietorisRipsSimplexStream
+</span><span line-number="32" class=""><span class="tooltip-container"></span>    StratifiedSimplexStream &lt;|-- IncrementalVietorisRipsSimplexStream
+</span><span line-number="33" class=""><span class="tooltip-container"></span>    StratifiedSimplexStream &lt;|-- AlphaShapes
+</span><span line-number="34" class=""><span class="tooltip-container"></span>    AlphaShapes &lt;|-- HelixDelaunay
+</span><span line-number="35" class=""><span class="tooltip-container"></span>    AlphaShapes &lt;|-- AlphaShapeDQP
+</span><span line-number="36" class=""><span class="tooltip-container"></span>    StratifiedCellStream &lt;|-- CubicalGridStream
+</span><span line-number="37" class=""><span class="tooltip-container"></span>    StratifiedCellStream &lt;|-- ExplicitCubicalStream
+</span><span line-number="38" class=""><span class="tooltip-container"></span>    CellStream &lt;|-- SimplicialSetStream
+</span><span line-number="39" class=""><span class="tooltip-container"></span>    StratifiedCellStream &lt;|-- FilteredSimplicialSetStream
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>These are <strong>alternate stream implementations with a common output contract, not layers on top of one another</strong> — see <a href="architecture.html">Architecture</a>. <code>CubicalGridStream</code>/<code>ExplicitCubicalStream</code> produce <code>Cube</code>s rather than <code>Simplex</code>es; <code>SimplicialSetStream</code>/<code>FilteredSimplicialSetStream</code> produce a <code>FiniteSimplicialSet[G]</code>'s own generator type <code>G</code>.</p>
+ </section>
+ <section id="persistence-engines-homologyhomologyscala-homologypackedripsercohomologyscala-homologyfastcubicalhomologyscala-homologyfastalphahomologyscala">
+  <h2 class="h500"><a href="#persistence-engines-homologyhomologyscala-homologypackedripsercohomologyscala-homologyfastcubicalhomologyscala-homologyfastalphahomologyscala" class="anchor"></a>Persistence engines (<code>homology/Homology.scala</code>, <code>homology/PackedRipserCohomology.scala</code>, <code>homology/FastCubicalHomology.scala</code>, <code>homology/FastAlphaHomology.scala</code>)</h2>
+  <p>Deliberately <em>not</em> diagrammed field-by-field here — their exact state and trust status belongs in one place. See <a href="persistence-engines.html">Persistence engines</a> for the full, current picture across <code>CellularHomologyEngine</code>/<code>SimplicialHomologyEngine</code>, <code>CellularPersistenceInChunksEngine</code>/<code>PersistenceInChunksEngine</code>, <code>RipserCohomologyEngine</code>, <code>PackedRipserCohomologyEngine</code>, <code>CellularCohomologyEngine</code>, <code>FastCubicalHomologyEngine</code> and <code>FastAlphaHomologyEngine</code> (<code>HelixDelaunay</code> alpha complexes) -- both valid at any ambient dimension <code>&gt;= 2</code>, both via a <code>chunks</code> hybrid above 2D -- wired into <code>matlab</code>/<code>cli</code> as <code>engine="fast-cubical"</code>/<code>engine="fast-alpha"</code>.</p>
+ </section>
+ <section id="circular-coordinates-homologycircularcoordinatesscala">
+  <h2 class="h500"><a href="#circular-coordinates-homologycircularcoordinatesscala" class="anchor"></a>Circular coordinates (<code>homology/CircularCoordinates.scala</code>)</h2>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-mermaid"><span line-number="1" class=""><span class="tooltip-container"></span>classDiagram
+</span><span line-number="2" class=""><span class="tooltip-container"></span>    class CircularCoordinates {
+</span><span line-number="3" class=""><span class="tooltip-container"></span>        &lt;&lt;object&gt;&gt;
+</span><span line-number="4" class=""><span class="tooltip-container"></span>        h1Bars(metricSpace, maxFiltrationValue) IndexedSeq~(Double, Double)~
+</span><span line-number="5" class=""><span class="tooltip-container"></span>        compute(metricSpace, r, cocycleIndex, prime, maxFiltrationValue) Result
+</span><span line-number="6" class=""><span class="tooltip-container"></span>        computeToroidal(metricSpace, r, cocycleIndices, prime, reduce, maxFiltrationValue) ToroidalResult
+</span><span line-number="7" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="8" class=""><span class="tooltip-container"></span>    class Result {
+</span><span line-number="9" class=""><span class="tooltip-container"></span>        theta: Map~Int, Double~
+</span><span line-number="10" class=""><span class="tooltip-container"></span>        birth: Double
+</span><span line-number="11" class=""><span class="tooltip-container"></span>        death: Double
+</span><span line-number="12" class=""><span class="tooltip-container"></span>        r: Double
+</span><span line-number="13" class=""><span class="tooltip-container"></span>        prime: Int
+</span><span line-number="14" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="15" class=""><span class="tooltip-container"></span>    class ToroidalResult {
+</span><span line-number="16" class=""><span class="tooltip-container"></span>        theta: IndexedSeq~Map~Int, Double~~
+</span><span line-number="17" class=""><span class="tooltip-container"></span>        cocycleIndices: IndexedSeq~Int~
+</span><span line-number="18" class=""><span class="tooltip-container"></span>        basisChange: Array~Array~Int~~
+</span><span line-number="19" class=""><span class="tooltip-container"></span>        originalGram: Array~Array~Double~~
+</span><span line-number="20" class=""><span class="tooltip-container"></span>        reducedGram: Array~Array~Double~~
+</span><span line-number="21" class=""><span class="tooltip-container"></span>        r: Double
+</span><span line-number="22" class=""><span class="tooltip-container"></span>        prime: Int
+</span><span line-number="23" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="24" class=""><span class="tooltip-container"></span>    class NoIntegerCocycleException {
+</span><span line-number="25" class=""><span class="tooltip-container"></span>        &lt;&lt;RuntimeException&gt;&gt;
+</span><span line-number="26" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="27" class=""><span class="tooltip-container"></span>    class LatticeReduction {
+</span><span line-number="28" class=""><span class="tooltip-container"></span>        &lt;&lt;object&gt;&gt;
+</span><span line-number="29" class=""><span class="tooltip-container"></span>        reduce(gram, delta) Result
+</span><span line-number="30" class=""><span class="tooltip-container"></span>        isReduced(gram, delta, tol) Boolean
+</span><span line-number="31" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="32" class=""><span class="tooltip-container"></span>    CircularCoordinates --&gt; Result : returns (compute)
+</span><span line-number="33" class=""><span class="tooltip-container"></span>    CircularCoordinates --&gt; ToroidalResult : returns (computeToroidal)
+</span><span line-number="34" class=""><span class="tooltip-container"></span>    CircularCoordinates ..&gt; CellularCohomologyEngine : computes K_r's cohomology with
+</span><span line-number="35" class=""><span class="tooltip-container"></span>    CircularCoordinates ..&gt; NoIntegerCocycleException : throws (no ℤ-lift at prime)
+</span><span line-number="36" class=""><span class="tooltip-container"></span>    CircularCoordinates ..&gt; LatticeReduction : reduces the chosen classes' Gram matrix with
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>A standalone construction, not a fifth persistence engine — see <a href="architecture.html">Architecture</a>'s own <code>homology.CircularCoordinates</code> section for the truncated-complex reframing, the harmonic-smoothing linear system, why the output is a per-point angle map rather than a barcode, and (same section) <code>computeToroidal</code>/ <code>LatticeReduction</code>'s own lattice-reduction extension to several simultaneous classes.</p>
+ </section>
+ <section id="metric-spaces-finitemetricspacescala">
+  <h2 class="h500"><a href="#metric-spaces-finitemetricspacescala" class="anchor"></a>Metric spaces (<code>FiniteMetricSpace.scala</code>)</h2>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-mermaid"><span line-number="1" class=""><span class="tooltip-container"></span>classDiagram
+</span><span line-number="2" class=""><span class="tooltip-container"></span>    class FiniteMetricSpace {
+</span><span line-number="3" class=""><span class="tooltip-container"></span>        &lt;&lt;typeclass: type VertexT&gt;&gt;
+</span><span line-number="4" class=""><span class="tooltip-container"></span>        distance(x, y) Double
+</span><span line-number="5" class=""><span class="tooltip-container"></span>        size: Int
+</span><span line-number="6" class=""><span class="tooltip-container"></span>        elements: Iterable~VertexT~
+</span><span line-number="7" class=""><span class="tooltip-container"></span>        minimumEnclosingRadius: Double
+</span><span line-number="8" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="9" class=""><span class="tooltip-container"></span>    FiniteMetricSpace &lt;|-- IntMetricSpace
+</span><span line-number="10" class=""><span class="tooltip-container"></span>    FiniteMetricSpace &lt;|-- ExplicitMetricSpace
+</span><span line-number="11" class=""><span class="tooltip-container"></span>    FiniteMetricSpace &lt;|-- EuclideanMetricSpace
+</span><span line-number="12" class=""><span class="tooltip-container"></span>    FiniteMetricSpace &lt;|-- SparseMetricSpace
+</span><span line-number="13" class=""><span class="tooltip-container"></span>    class SpatialQuery {
+</span><span line-number="14" class=""><span class="tooltip-container"></span>        &lt;&lt;typeclass: type VertexT&gt;&gt;
+</span><span line-number="15" class=""><span class="tooltip-container"></span>        neighbors(v, epsilon) Set~VertexT~
+</span><span line-number="16" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="17" class=""><span class="tooltip-container"></span>    SpatialQuery &lt;|-- JVPTree
+</span><span line-number="18" class=""><span class="tooltip-container"></span>    SpatialQuery &lt;|-- BruteForce
+</span><span line-number="19" class=""><span class="tooltip-container"></span>    SparseMetricSpace --&gt; SpatialQuery : uses (JVPTree)
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+ </section>
+ <section id="barcode-representation-barcodescala-package-orgappliedtopologytda4jbarcode">
+  <h2 class="h500"><a href="#barcode-representation-barcodescala-package-orgappliedtopologytda4jbarcode" class="anchor"></a>Barcode representation (<code>Barcode.scala</code>, package <code>org.appliedtopology.tda4j.barcode</code>)</h2>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-mermaid"><span line-number="1" class=""><span class="tooltip-container"></span>classDiagram
+</span><span line-number="2" class=""><span class="tooltip-container"></span>    class BarcodeEndpoint {
+</span><span line-number="3" class=""><span class="tooltip-container"></span>        &lt;&lt;sealed trait&gt;&gt;
+</span><span line-number="4" class=""><span class="tooltip-container"></span>        flip() BarcodeEndpoint
+</span><span line-number="5" class=""><span class="tooltip-container"></span>        isFinite: Boolean
+</span><span line-number="6" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="7" class=""><span class="tooltip-container"></span>    BarcodeEndpoint &lt;|-- PositiveInfinity
+</span><span line-number="8" class=""><span class="tooltip-container"></span>    BarcodeEndpoint &lt;|-- NegativeInfinity
+</span><span line-number="9" class=""><span class="tooltip-container"></span>    BarcodeEndpoint &lt;|-- OpenEndpoint
+</span><span line-number="10" class=""><span class="tooltip-container"></span>    BarcodeEndpoint &lt;|-- ClosedEndpoint
+</span><span line-number="11" class=""><span class="tooltip-container"></span>    class PersistenceBar {
+</span><span line-number="12" class=""><span class="tooltip-container"></span>        dim: Int
+</span><span line-number="13" class=""><span class="tooltip-container"></span>        lower: BarcodeEndpoint
+</span><span line-number="14" class=""><span class="tooltip-container"></span>        upper: BarcodeEndpoint
+</span><span line-number="15" class=""><span class="tooltip-container"></span>        annotation: Option~AnnotationT~
+</span><span line-number="16" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="17" class=""><span class="tooltip-container"></span>    class Barcode {
+</span><span line-number="18" class=""><span class="tooltip-container"></span>        isMap(source, target, matrix) Boolean
+</span><span line-number="19" class=""><span class="tooltip-container"></span>        image(source, target, matrix) List~PersistenceBar~
+</span><span line-number="20" class=""><span class="tooltip-container"></span>        kernel(source, target, matrix) List~PersistenceBar~
+</span><span line-number="21" class=""><span class="tooltip-container"></span>        cokernel(source, target, matrix) List~PersistenceBar~
+</span><span line-number="22" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="23" class=""><span class="tooltip-container"></span>    class BarcodeDistance {
+</span><span line-number="24" class=""><span class="tooltip-container"></span>        &lt;&lt;object&gt;&gt;
+</span><span line-number="25" class=""><span class="tooltip-container"></span>        bottleneckDistance(diagram1, diagram2, groundNorm) Double
+</span><span line-number="26" class=""><span class="tooltip-container"></span>        wassersteinDistance(diagram1, diagram2, order, groundNorm) Double
+</span><span line-number="27" class=""><span class="tooltip-container"></span>        bottleneckDistanceByDimension(diagram1, diagram2, groundNorm) Map~Int, Double~
+</span><span line-number="28" class=""><span class="tooltip-container"></span>        wassersteinDistanceByDimension(diagram1, diagram2, order, groundNorm) Map~Int, Double~
+</span><span line-number="29" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="30" class=""><span class="tooltip-container"></span>    class Vectorization {
+</span><span line-number="31" class=""><span class="tooltip-container"></span>        &lt;&lt;object&gt;&gt;
+</span><span line-number="32" class=""><span class="tooltip-container"></span>        landscape(diagram, numLevels, tMin, tMax, resolution) Array~Array~Double~~
+</span><span line-number="33" class=""><span class="tooltip-container"></span>        persistenceImage(diagram, sigma, birthRange, persistenceRange, birthResolution, persistenceResolution, weightCap) Array~Array~Double~~
+</span><span line-number="34" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="35" class=""><span class="tooltip-container"></span>    BarcodeDistance ..&gt; PersistenceBar : reads
+</span><span line-number="36" class=""><span class="tooltip-container"></span>    Vectorization ..&gt; PersistenceBar : reads
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p><code>AnnotationT</code> in practice is always <code>Chain[CellT, CoefficientT]</code> — the representative cycle/cocycle for a bar, when an engine tracks one. <code>BarcodeDistance</code>/<code>Vectorization</code> only ever read a bar's <code>dim</code>/<code>lower</code>/<code>upper</code> (never <code>annotation</code>), and are specialized to <code>PersistenceBar[Double, _]</code> rather than sharing <code>Barcode</code>'s own <code>FiltrationT: Ordering</code> genericity — see <a href="architecture.html">Architecture</a>'s "<code>Barcode.scala</code>" section for why, and for <code>BipartiteMatching.scala</code>'s two package-private combinatorial primitives (<code>HopcroftKarp</code>/<code>Hungarian</code>) <code>BarcodeDistance</code> is built on, omitted here as an implementation detail rather than part of this package's public shape.</p>
+ </section>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#typeclass-hierarchy-ringmodulescala-fieldscala-chainscala">Typeclass hierarchy (RingModule.scala, Field.scala, Chain.scala)</a></li><li><a href="#chaincellt-coefficientt-chainscala">Chain[CellT, CoefficientT] (Chain.scala)</a></li><li><a href="#simplexvertext-simplexscala-simplexopsscala">Simplex[VertexT] (Simplex.scala, SimplexOps.scala)</a></li><li><a href="#streams-simplexstreamscala-simplexindexingscala-vietorisripsscala">Streams (SimplexStream.scala, SimplexIndexing.scala, VietorisRips.scala)</a></li><li><a href="#persistence-engines-homologyhomologyscala-homologypackedripsercohomologyscala-homologyfastcubicalhomologyscala-homologyfastalphahomologyscala">Persistence engines (homology/Homology.scala, homology/PackedRipserCohomology.scala, homology/FastCubicalHomology.scala, homology/FastAlphaHomology.scala)</a></li><li><a href="#circular-coordinates-homologycircularcoordinatesscala">Circular coordinates (homology/CircularCoordinates.scala)</a></li><li><a href="#metric-spaces-finitemetricspacescala">Metric spaces (FiniteMetricSpace.scala)</a></li><li><a href="#barcode-representation-barcodescala-package-orgappliedtopologytda4jbarcode">Barcode representation (Barcode.scala, package org.appliedtopology.tda4j.barcode)</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
