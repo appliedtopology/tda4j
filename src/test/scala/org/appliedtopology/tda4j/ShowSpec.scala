@@ -45,7 +45,7 @@ class ShowSpec extends mutable.Specification {
         given Double is Field = Field.DoubleApproximated(1e-9)
         given Ordering[Simplex[Int]] = simplexOrdering[Int]
         val chain = Chain(Simplex(1,2,3) -> 1.0, Simplex(4,5,6) -> 2.0)
-        (chain.show) must beEqualTo("1.0⊠∆(1,2,3) + 2.0⊠∆(4,5,6)")
+        (chain.show) must beEqualTo("1.0 ⊠ ∆(1,2,3) + 2.0 ⊠ ∆(4,5,6)")
       }
     }
   }

@@ -21,22 +21,20 @@ class TDAContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]
   given [T: Ordering] => Conversion[Simplex[T], Chain[Simplex[T], CoefficientT]] =
     Chain.apply
 
-
-/**
- * Here's an idea for how to build up these contexts?
- * Mix-in traits, each of which sets an internal fixed typename and imports some convenience functionality.
- * Combine to a context trait which you either extend or invoke to have access to all the corresponding types and functions.
- *
- * We **cannot** support (bc illegal in Scala) a syntax like `import tdacontext(p=3).{*,given}`.
- * We can support a syntax like `val tdac = tdacontext(p=3); import tdac.{*,given}`. This is likely to be the most
- * compact we can possibly hope for.
- *
- * What settings do we want to allow for? The generic setting just imports everything you need where you need it.
- *
- * - Choice of field.
- * - Choice of topological paradigm: simplex, cube, simplicial set.
- * - Choice of filtration paradigm: int, double
- */
+/** Here's an idea for how to build up these contexts? Mix-in traits, each of which sets an internal fixed typename and
+  * imports some convenience functionality. Combine to a context trait which you either extend or invoke to have access
+  * to all the corresponding types and functions.
+  *
+  * We **cannot** support (bc illegal in Scala) a syntax like `import tdacontext(p=3).{*,given}`. We can support a
+  * syntax like `val tdac = tdacontext(p=3); import tdac.{*,given}`. This is likely to be the most compact we can
+  * possibly hope for.
+  *
+  * What settings do we want to allow for? The generic setting just imports everything you need where you need it.
+  *
+  *   - Choice of field.
+  *   - Choice of topological paradigm: simplex, cube, simplicial set.
+  *   - Choice of filtration paradigm: int, double
+  */
 
 enum FieldChoice:
   case DoubleApproximated(precision: Double)
@@ -51,7 +49,7 @@ enum TopologyChoice:
   case Cube
   case SimplicialSet
 
-trait TDAenvironment {
+trait TDAenvironment:
   type CoefficientT
   type CellT
   type FiltrationT
@@ -62,9 +60,8 @@ trait TDAenvironment {
   given CoefficientT is Field = compiletime.deferred
 
   given CellT is Cell = compiletime.deferred
-}
 
-class TDAlab(characteristic: Int, precision: Double = 1e-9) {
+class TDAlab(characteristic: Int, precision: Double = 1e-9):
 
   import org.appliedtopology.tda4j.io
   import org.appliedtopology.tda4j.barcode
@@ -76,7 +73,7 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9) {
 
   import cats.syntax.all.*
 
-  trait FieldData {
+  trait FieldData:
     type CoefficientT
 
     given CoefficientT is Field = compiletime.deferred
@@ -84,43 +81,39 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9) {
     def coeff(x: Int): CoefficientT
 
     def Fp(x: Int): CoefficientT = coeff(x)
-  }
 
-  object FieldData {
-    def apply(): FieldData = characteristic match {
-      case 0 => new FieldData {
-        override type CoefficientT = Double
+  object FieldData:
+    def apply(): FieldData = characteristic match
+      case 0 =>
+        new FieldData:
+          override type CoefficientT = Double
 
-        override given CoefficientT is Field = Field.DoubleApproximated(precision)
+          override given CoefficientT is Field = Field.DoubleApproximated(precision)
 
-        override def coeff(x: Int): CoefficientT = x.toDouble
-      }
-      case p if BigInt(characteristic).isProbablePrime(certainty = 100) => {
+          override def coeff(x: Int): CoefficientT = x.toDouble
+      case p if BigInt(characteristic).isProbablePrime(certainty = 100) =>
         val ff = FiniteField(p)
         import ff.given
-        new FieldData {
+        new FieldData:
           override type CoefficientT = ff.Fp
 
           override given CoefficientT is Field = summon[ff.Fp is Field]
 
           override def coeff(x: Int): CoefficientT = ff.Fp(x)
-        }
-      }
-    }
-  }
 
   val fieldData = FieldData()
   export fieldData.{*, given}
 
   type VertexT = Int
-  val chainIsRingModule: Chain[Simplex[VertexT], CoefficientT] is RingModule {type R = CoefficientT} =
-    summon[Chain[Simplex[VertexT], CoefficientT] is RingModule {type R = CoefficientT}]
+  val chainIsRingModule: Chain[Simplex[VertexT], CoefficientT] is RingModule { type R = CoefficientT } =
+    summon[Chain[Simplex[VertexT], CoefficientT] is RingModule { type R = CoefficientT }]
   export chainIsRingModule.*
 
   given [T: Ordering] => Conversion[Simplex[T], Chain[Simplex[T], CoefficientT]] =
     Chain.apply
 
-  export org.appliedtopology.tda4j.cells.∆, org.appliedtopology.tda4j.cells.Simplex, org.appliedtopology.tda4j.cells.asSimplex
+  export org.appliedtopology.tda4j.cells.∆, org.appliedtopology.tda4j.cells.Simplex,
+    org.appliedtopology.tda4j.cells.asSimplex
   export org.appliedtopology.tda4j.cells.Cube, org.appliedtopology.tda4j.cells.asCube
 
   given Show[Simplex[VertexT]] = summon[Show[Simplex[VertexT]]]
@@ -128,4 +121,3 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9) {
   given Show[Chain[Simplex[VertexT], CoefficientT]] = summon[Show[Chain[Simplex[VertexT], CoefficientT]]]
 
   export cats.implicits.toShow
-}
