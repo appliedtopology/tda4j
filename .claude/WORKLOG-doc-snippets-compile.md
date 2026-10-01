@@ -16,7 +16,7 @@ for genuinely illustrative blocks) -> re-run until clean. Only one sbt at a time
 - Pass 1 compiler residuals were real doc drift: FiniteSimplicialSet ctor (explicit Ordering arg is wrong; it is a trailing using clause), FilteredSimplicialSetStream needs [G] ascription, HelixDelaunay needs a given Epsilon, AlphaShapes.apply signature in developers-guide/alpha-complex.md lacked requireValidTriangulation and the Epsilon default. Info string for illustrative fences must be `scala sc:nocompile` (`scala 3 nocompile` is silently ignored).
 - RESULT: `TDA4J_SCALA_VERSION=3.8.4 sbt doc` is clean with `-snippet-compiler:compile` on. Negative test (typo in the
   Cech snippet) made the build fail at cech-complexes.md:16, so the check is live, not a stale cache hit.
-  Final state: 29 fences; 8 are `sc:nocompile` (pure declaration restatements: alpha-complex 1, architecture 2,
-  scala3-primer 4 (+ none elsewhere)); the rest compile. No sub-agents used. Remaining warning: scaladoc's own
+  Final state: 29 fences; 7 are `sc:nocompile` (pure declaration restatements: alpha-complex 1, architecture 2,
+  scala3-primer 4); the rest compile. No sub-agents used. Remaining warning: scaladoc's own
   "Option -classpath was updated" (unrelated).
 - Lesson: doc drift found by this was real (4 items above), so keep the flag on; add a new fence => it must compile.
