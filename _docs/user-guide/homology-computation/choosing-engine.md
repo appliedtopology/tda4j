@@ -6,7 +6,7 @@ layout: main
 
 | Need | Engine (`engine=` for MATLAB/CLI) |
 |---|---|
-| Exploration, intermediate-filtration queries, representative cycles | `naive` (`CellularHomologyEngine`/`TDAContext`) |
+| Exploration, intermediate-filtration queries, representative cycles | `naive` (`CellularHomologyEngine`) |
 | Fastest, most memory-efficient — the default for `complex=vr` | `ripser` (`PackedRipserCohomologyEngine`) |
 | Large complex, want representatives for every bar including essential ones | `chunks` (`CellularPersistenceInChunksEngine`) |
 | Cohomology (cocycle representatives) on `Cube`/`FiniteSimplicialSet`, or on Alpha/Cech/DTM/Sheehy/witness, where `ripser` doesn't apply | `cohomology` (`CellularCohomologyEngine`) |

@@ -77,7 +77,12 @@ OrderedCell`-shaped, as satisfying the same bound).
 A concrete instance looks like this — `SimplexOrderedCell.scala`'s actual construction of `Simplex[VertexT] is
 OrderedCell`:
 
-@:snip(/src/main/scala/org/appliedtopology/tda4j/cells/SimplexOrderedCell.scala, given-example)
+```scala 3
+given defaultSimplexIsOrderedCell: [VertexT: Ordering] => (Simplex[VertexT] is OrderedCell) =
+  simplexIsOrderedCell[VertexT]()
+```
+
+_Source: `src/main/scala/org/appliedtopology/tda4j/cells/SimplexOrderedCell.scala`, region `given-example`._
 
 where `simplexIsOrderedCell` builds an anonymous `new (Simplex[VertexT] is OrderedCell):` instance,
 providing the `ordering` member `OrderedCell` requires and, in an `extension (spx: Simplex[VertexT])`

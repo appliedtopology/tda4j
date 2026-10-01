@@ -4,9 +4,9 @@ title: Quick-start: Scala
 ---
 
 
-Snippets included via `@:snip` (with a source-file link) are compiled and exercised directly by the test
-suite. The rest are illustrative and hand-maintained, not mechanically checked — if you find one has
-drifted, trust the source over this page.
+Snippets marked with a `Source:` line are copied from a region of a real source file that the test suite
+compiles and exercises. The rest are illustrative and hand-maintained, not mechanically checked — if you
+find one has drifted, trust the source over this page.
 
 ### Imports
 
@@ -35,13 +35,35 @@ val triangle = Simplex(1, 2, 3)      // same as ∆(1, 2, 3)
 triangle.boundary[Double]            // Seq((Simplex(2,3), 1.0), (Simplex(1,3), -1.0), (Simplex(1,2), 1.0))
 ```
 
+### Chain arithmetic with `TDAlab`
+
+For interactive use, `TDAlab` is a pylab-style entry point: pick a field once, import its members, and compute.
+
+```scala 3
+val tdalab = TDAlab(17)          // Z/17; TDAlab(0) uses Double coefficients
+import tdalab.{*, given}
+val chain = Fp(1) ⊠ ∆(1, 2) - ∆(2, 3)
+println(chain.show)
+```
+
 ### A full Vietoris-Rips persistence computation
 
-@:snip(/src/test/scala/org/appliedtopology/tda4j/APISpec.scala, full-vr-computation)
+```scala 3
+given Double is Field = Field.DoubleApproximated(1e-9)
+val engine = SimplicialHomologyEngine[Int, Double, Double]()
 
-`TDAContext[VertexT, CoefficientT, FiltrationT]` bundles the naive, reference-grade persistence engine
-together with chain-arithmetic operators, so `1.0 ⊠ ∆(1,2) - ∆(2,3)` works directly once `ctx`'s members are
-imported. It's a good default for exploration and for anything where you want to query the diagram at
+val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8))
+val metricSpace = EuclideanMetricSpace(points)
+val stream = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(2.0))
+
+val state = engine.persistentHomology(stream)
+state.barcodeAt(Double.PositiveInfinity).foreach(println)
+```
+
+_Source: `src/test/scala/org/appliedtopology/tda4j/APISpec.scala`, region `full-vr-computation`._
+
+`SimplicialHomologyEngine[VertexT, CoefficientT, FiltrationT]` is the naive, reference-grade persistence engine.
+It's a good default for exploration and for anything where you want to query the diagram at
 intermediate filtration values or get representative cycles back (`state.diagramAt(f)`/`state.barcodeAt(f)`)
 — see "Which persistence engine?" below for when a different engine is worth reaching for instead.
 

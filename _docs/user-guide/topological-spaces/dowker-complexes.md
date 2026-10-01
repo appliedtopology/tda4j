@@ -12,7 +12,7 @@ val relation = Array(
 )
 val geometry = DowkerGeometry(relation)
 val stream = DowkerCofaceSimplexStream(geometry)
-val homology = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(stream)
+val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream)
 ```
 
 Dowker's complex (1952), generalized to a real-valued, filtered relation `R: L x W -> [0, Infinity]` the way

@@ -24,7 +24,7 @@ circle.validate()   // Seq.empty -- no errors
 
 given (CircleGen is OrderedCell) = circle.cellInstance
 val stream = FilteredSimplicialSetStream(circle, { case V => 0.0; case E => 1.0 })
-CellularHomologyContext[CircleGen, Double, Double]()
+CellularHomologyEngine[CircleGen, Double, Double]()
   .persistentHomology(stream)
   .diagramAt(Double.PositiveInfinity)
 // List((1, 1.0, Infinity), (0, 0.0, Infinity)) -- H0 = H1 = one essential class each, as expected for S^1

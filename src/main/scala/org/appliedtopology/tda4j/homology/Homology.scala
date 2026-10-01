@@ -13,9 +13,6 @@ import scala.annotation.tailrec
 import math.Fractional.Implicits.infixFractionalOps
 import math.Ordering.Implicits.sortedSetOrdering
 
-//class ReducedSimplicialHomologyContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]()
-//  extends CellularHomologyEngine[Simplex[VertexT], CoefficientT, FiltrationT]() {}
-
 class SimplicialHomologyEngine[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]()
     extends CellularHomologyEngine[Simplex[VertexT], CoefficientT, FiltrationT] {}
 

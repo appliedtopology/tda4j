@@ -32,7 +32,7 @@ If a piece of Scala 3 syntax below looks unfamiliar, see the [Scala 3 primer](sc
 - **`cli`** — the `tda4j` executable (`TDA4jConf`, `TDA4jCLI`), a thin translator over `matlab.TDA4j`/`io`.
 - **`matlab`** — `TDA4j`/`PersistenceResult`/`LandmarkSelectionResult`, the plain-primitives facade for MATLAB
   and other Java callers.
-- root (`org.appliedtopology.tda4j` itself) — `package.scala` (`TDAContext`), the user-facing Scala facade.
+- root (`org.appliedtopology.tda4j` itself) — `package.scala` (`TDAlab`), the pylab-style user-facing Scala entry point.
 
 **Load-bearing import rule**: every file that reaches across a subpackage boundary does it via
 `import org.appliedtopology.tda4j.<pkg>.{given, *}` — the `given` matters. A plain `import pkg.*` does
@@ -330,13 +330,11 @@ own `recursiveFiltrationValue`) is needed here. Like Cech/Witness/Sheehy above, 
 reuses `RipserCofaceSimplexStream`'s generic coface-generation loop, since the Dowker complex is NOT a flag
 complex in general (a witness for a whole simplex need not witness any of its edges).
 
-@:callout(warning)
-`+Infinity <= +Infinity` is true, so a stream whose `maxFiltrationValue` defaults to `+Infinity` — safe
-everywhere else in this codebase — would silently collapse an untruncated Dowker relation to the complete
-simplex on every vertex. `DowkerCofaceSimplexStream` is the one stream that can compute a genuinely infinite
-filtration value on purpose (`DowkerGeometry.fromBoolean`'s "never witnessed" encoding), so it alone overrides
-`keptByThresholdAndCriterion` to additionally require `.isFinite`.
-@:@
+> **Warning.** `+Infinity <= +Infinity` is true, so a stream whose `maxFiltrationValue` defaults to `+Infinity` — safe
+> everywhere else in this codebase — would silently collapse an untruncated Dowker relation to the complete
+> simplex on every vertex. `DowkerCofaceSimplexStream` is the one stream that can compute a genuinely infinite
+> filtration value on purpose (`DowkerGeometry.fromBoolean`'s "never witnessed" encoding), so it alone overrides
+> `keptByThresholdAndCriterion` to additionally require `.isFinite`.
 
 One real footgun this construction has that no earlier stream in this codebase did: `keptByThresholdAndCriterion`'s
 `<=` admits `+Infinity <= +Infinity`, and `DowkerGeometry.fromBoolean` deliberately produces a literal `+Infinity`
@@ -458,11 +456,9 @@ matrix), `EuclideanMetricSpace` (coordinate array, on-demand Euclidean distance,
 query), `IntMetricSpace` (reindexes to contiguous `0 until size`), `SparseMetricSpace` (reports `+Infinity`
 beyond a fixed diameter cutoff, bounding Vietoris-Rips construction to a finite neighborhood per point).
 
-@:callout(warning)
-`SparseMetricSpace` reports `+Infinity` past its cutoff rather than excluding those pairs — it is not a
-thresholded neighbor oracle. Code that queries it expecting "unreachable" to mean "absent" will instead get
-back a real (if unusable) `Double` value; check `.isFinite` explicitly rather than assuming exclusion.
-@:@
+> **Warning.** `SparseMetricSpace` reports `+Infinity` past its cutoff rather than excluding those pairs — it is not a
+> thresholded neighbor oracle. Code that queries it expecting "unreachable" to mean "absent" will instead get
+> back a real (if unusable) `Double` value; check `.isFinite` explicitly rather than assuming exclusion.
 
 ### Opt-in parallelism
 
@@ -629,15 +625,16 @@ reasons plus the fact that `cocycleIndices` is itself a small array, awkward to 
 single-value-flag conventions.
 
 ```scala 3
-class TDAContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]
-    extends SimplicialHomologyContext[VertexT, CoefficientT, FiltrationT]():
-  val chainIsRingModule = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule { type R = CoefficientT }]
-  export chainIsRingModule.*
-  given [T: Ordering] => Conversion[Simplex[T], Chain[Simplex[T], CoefficientT]] = Chain.apply
+val tdalab = TDAlab(0)          // 0 = Double coefficients; a prime p = Z/p
+import tdalab.{*, given}
+Fp(1) ⊠ ∆(1, 2) - ∆(2, 3)       // a Chain
 ```
 
-`TDAContext` takes **three** type parameters (`VertexT`, `CoefficientT`, `FiltrationT`). It *is* a
-`SimplicialHomologyEngine` (see [Persistence engines](persistence-engines.md)), plus it exports
-chain-arithmetic operators (`+`, `-`, `⊠`, ...) into your namespace and provides an implicit
-`Simplex -> Chain` conversion so you can write `∆(1,2) - ∆(2,3)` directly — the basis for the
-[User's Guide](../user-guide/index.md)'s Scala quick-start.
+`TDAlab(characteristic, precision = 1e-9)` (root `package.scala`) is the pylab-style entry point: instantiate it
+once, then `import tdalab.{*, given}`. That brings into scope `Fp(...)` coefficients of the chosen field, the
+chain-arithmetic operators (`+`, `-`, `⊠`, ...), `∆`/`Simplex`/`Cube` literals, an implicit
+`Simplex -> Chain` conversion so `∆(1,2) - ∆(2,3)` works directly, and `cats` `Show` syntax (`.show`). Vertices are
+fixed to `Int`. It deliberately does **not** extend or wrap an engine: engines are constructed explicitly
+(e.g. `SimplicialHomologyEngine[Int, Double, Double]()`, see [Persistence engines](persistence-engines.md)). It
+is the basis for the [Tutorials](../tutorials/index.md) and the [User's Guide](../user-guide/index.md)'s Scala
+quick-start.

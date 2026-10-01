@@ -6,7 +6,7 @@ layout: main
 
 ```scala 3
 val helix = HelixDelaunay(points)
-val bars = FastAlphaHomologyContext[Double]().persistentHomology(helix) // H0 and H1, that's everything at 2D
+val bars = FastAlphaHomologyEngine[Double]().persistentHomology(helix) // H0 and H1, that's everything at 2D
 ```
 
 For a point cloud built via `"helix"` (never `"DQP"` — it never builds an adjacency-aware triangulation at all,
