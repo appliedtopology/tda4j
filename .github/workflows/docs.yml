@@ -26,7 +26,7 @@ jobs:
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
       - name: Build docs site
-        run: sbt doc
+        run: sbt ++3.8.4 doc
       - name: Publish docs
         run: |
           set -e
@@ -41,7 +41,7 @@ jobs:
             git -C /tmp/gh-pages rm -rf . > /dev/null 2>&1 || true
             touch /tmp/gh-pages/.nojekyll
           fi
-          cp -r target/out/jvm/scala-3.9.0/tda4j/api /tmp/gh-pages/
+          cp -r target/out/jvm/scala-3.8.4/tda4j/api /tmp/gh-pages/ # TODO: change directory when 3.9.1 releases
           cd /tmp/gh-pages
           git add -A
           if git diff --cached --quiet; then

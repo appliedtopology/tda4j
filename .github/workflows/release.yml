@@ -83,8 +83,8 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           git worktree remove /tmp/gh-pages --force
       - name: Zip docs snapshot
-        run: |
-          (cd "target/out/jvm/scala-3.9.0/tda4j/api" && zip -rq "$GITHUB_WORKSPACE/docs-${{ steps.version.outputs.version }}.zip" .)
+        run: | # TODO: Change when 3.9.1 comes out
+          (cd "target/out/jvm/scala-3.8.4/tda4j/api" && zip -rq "$GITHUB_WORKSPACE/docs-${{ steps.version.outputs.version }}.zip" .)
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
