@@ -72,7 +72,7 @@ itself.
 (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): both union-finds were ALREADY written generically
 in terms of `ambientDimension`, not hardcoded to 2 — the only thing gating this engine to `d=2` was the single
 `require` check, so extending it is purely a matter of handing the residual "middle" dimensions (`1 <= k <=
-d-2`) to `PersistenceInChunksContext[Int, C]` run on a new `alpha.LimitedAlphaShapesStream` view (the
+d-2`) to `PersistenceInChunksEngine[Int, C]` run on a new `alpha.LimitedAlphaShapesStream` view (the
 `Simplex[Int]` analogue of `streams.LimitedCubicalGridStream` — needed because `HelixDelaunay`/`AlphaShapes` is
 a `StratifiedSimplexStream`, not a `CofaceSimplexStream`, so the existing `LimitedCofaceSimplexStream` doesn't
 fit it) that hides the real top-dimensional simplices. Deliberately sequenced AFTER the cubical extension, not

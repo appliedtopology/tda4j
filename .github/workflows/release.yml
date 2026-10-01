@@ -51,8 +51,9 @@ jobs:
         env:
           TDA4J_DOCS_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          sbt "assembly ; packageSrc" 
-          sbt "++3.8.4 packageDoc ; doc" # remove ++3.8.4 when 3.9.1 is released
+          sbt "assembly ; packageSrc"
+          # Docs only are built with 3.8.4 (see build.sbt). TODO: remove this env var when 3.9.1 is released.
+          TDA4J_SCALA_VERSION=3.8.4 sbt "packageDoc ; doc"
       - name: Publish versioned docs
         env:
           VERSION: ${{ steps.version.outputs.version }}

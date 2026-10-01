@@ -1,6 +1,9 @@
 name := "tda4j"
 organization := "org.appliedtopology"
-scalaVersion := "3.9.0"
+// Docs are built with 3.8.4 (scaladoc 3.9.0 ships broken JavaScript); the docs workflows set
+// TDA4J_SCALA_VERSION=3.8.4 for their `sbt doc` step instead of using `++3.8.4`, which sbt refuses for a version
+// not listed in `crossScalaVersions`. TODO: delete the override when 3.9.1 is released.
+scalaVersion := sys.env.getOrElse("TDA4J_SCALA_VERSION", "3.9.0")
 
 versionScheme := Some("semver-spec")
 

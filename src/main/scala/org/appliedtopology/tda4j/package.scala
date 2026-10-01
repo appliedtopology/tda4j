@@ -7,60 +7,14 @@ import org.appliedtopology.tda4j.streams.{*, given}
 import org.appliedtopology.tda4j.homology.{*, given}
 import org.appliedtopology.tda4j.alpha.{*, given}
 
-/** Thin user-facing facade over `SimplicialHomologyEngine`: brings `Chain`'s own `RingModule` arithmetic
-  * (`+`/`-`/`⊠`/etc.) into scope on `Simplex` values directly, via `export` plus an implicit `Simplex -> Chain`
-  * widening -- convenience for interactive/notebook-style use, never itself consulted by an engine (see CLAUDE.md's
+/** Pylab-style single entry point: `val tdalab = TDAlab(characteristic); import tdalab.{*, given}` brings coefficient
+  * arithmetic (`Fp`, `⊠`, `+`, `-`), `∆`/`Simplex`/`Cube` literals, an implicit `Simplex -> Chain` widening and `Show`
+  * syntax into scope. `characteristic = 0` selects `Double` coefficients (compared within `precision`); a prime `p`
+  * selects `Z/p`. Convenience for interactive/notebook-style use only -- never consulted by an engine (see CLAUDE.md's
   * generic-`given`-capture note).
+  *
+  * Scala forbids `import tdalab(p = 3).{*, given}`, hence the `val` first.
   */
-class TDAContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]
-    extends SimplicialHomologyEngine[VertexT, CoefficientT, FiltrationT]():
-  val chainIsRingModule: Chain[Simplex[VertexT], CoefficientT] is RingModule { type R = CoefficientT } =
-    summon[Chain[Simplex[VertexT], CoefficientT] is RingModule { type R = CoefficientT }]
-  export chainIsRingModule.*
-  import scala.language.implicitConversions
-  given [T: Ordering] => Conversion[Simplex[T], Chain[Simplex[T], CoefficientT]] =
-    Chain.apply
-
-/** Here's an idea for how to build up these contexts? Mix-in traits, each of which sets an internal fixed typename and
-  * imports some convenience functionality. Combine to a context trait which you either extend or invoke to have access
-  * to all the corresponding types and functions.
-  *
-  * We **cannot** support (bc illegal in Scala) a syntax like `import tdacontext(p=3).{*,given}`. We can support a
-  * syntax like `val tdac = tdacontext(p=3); import tdac.{*,given}`. This is likely to be the most compact we can
-  * possibly hope for.
-  *
-  * What settings do we want to allow for? The generic setting just imports everything you need where you need it.
-  *
-  *   - Choice of field.
-  *   - Choice of topological paradigm: simplex, cube, simplicial set.
-  *   - Choice of filtration paradigm: int, double
-  */
-
-enum FieldChoice:
-  case DoubleApproximated(precision: Double)
-  case FiniteField(p: Int)
-
-enum FiltrationChoice:
-  case IntFiltration
-  case DoubleFiltration
-
-enum TopologyChoice:
-  case SimplexInt
-  case Cube
-  case SimplicialSet
-
-trait TDAenvironment:
-  type CoefficientT
-  type CellT
-  type FiltrationT
-
-  import org.appliedtopology.tda4j.io
-  import org.appliedtopology.tda4j.barcode
-
-  given CoefficientT is Field = compiletime.deferred
-
-  given CellT is Cell = compiletime.deferred
-
 class TDAlab(characteristic: Int, precision: Double = 1e-9):
 
   import org.appliedtopology.tda4j.io
@@ -100,6 +54,8 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
           override given CoefficientT is Field = summon[ff.Fp is Field]
 
           override def coeff(x: Int): CoefficientT = ff.Fp(x)
+      case _ =>
+        throw IllegalArgumentException(s"TDAlab: characteristic must be 0 or a prime, got $characteristic")
 
   val fieldData = FieldData()
   export fieldData.{*, given}

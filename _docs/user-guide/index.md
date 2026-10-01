@@ -28,7 +28,7 @@ val shape = AlphaShapes(points.toSeq, dispatch = "helix")   // or "DQP"
 ```scala 3
 val collapsed = EdgeCollapse.collapse(metricSpace) // a FiniteMetricSpace[Int], drop-in for any VR-consuming stream
 val stream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(collapsed), 3)
-val homology = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(stream)
+val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream)
 ```
 
 Unlike Sheehy's construction above, this is not an approximation: Boissonnat-Pritam/Glisse-Pritam edge

@@ -29,7 +29,7 @@ call site.
 
 **The fix pattern, everywhere it's been applied correctly**: declare `given Ordering[CellT] =
 stream.filtrationOrdering` as the *first* statement inside the state object that holds the stream, before
-summoning `chainRM`. See `CellularHomologyContext.HomologyState` (`Homology.scala:49`) for the canonical
+summoning `chainRM`. See `CellularHomologyEngine.HomologyState` (`Homology.scala:49`) for the canonical
 example.
 
 **Why this is genuinely dangerous, not just a style nit**: it compiles cleanly either way, produces a
@@ -60,7 +60,7 @@ site — the stale class-scope `chainRM`'s `⊠`/`-` operators are only used to 
 get fed straight back into a fresh `reduceByUntil` call, which re-establishes correct pivot order before
 anything trusts a `.leadingCell`. This is subtle enough that "should be inert" needs an empirical
 discriminating test, not a read-through — trust but verify, every time this pattern shows up, even when
-the reasoning "seems" sound. `TDAContext` (`package.scala`) has the same class-scope pattern but is a
+the reasoning "seems" sound. `TDAlab` (`package.scala`) has the same class-scope pattern but is a
 different case again: its `chainIsRingModule` is exported purely for user-facing chain-arithmetic
 convenience, never consumed by any engine's own reduction path, so a stale ordering there is a
 non-issue for correctness (though it could confuse a user manually combining chains outside the engine).
@@ -96,7 +96,7 @@ direction doesn't automatically stay consistent with a separately-reversed prima
 ### 3. Colex vs. lex tie-breaks are not interchangeable once Ripser-flavored code is involved
 
 `FilteredSimplexOrdering` (the generic, trait-level default) tie-breaks on plain lexicographic vertex-set
-order. `EnumeratingCofaceSimplexStream.filtrationOrdering` and `RipserCohomologyContext.cohomologyOrdering`
+order. `EnumeratingCofaceSimplexStream.filtrationOrdering` and `RipserCohomologyEngine.cohomologyOrdering`
 both deliberately use **colexicographic** order instead, via `SimplexIndexing`'s own combinatorial-number-
 system index — because that's the exact tie-break Ripser's Definition 3.2/Proposition 3.9 (apparent pairs)
 are stated in terms of. Don't casually "simplify" a colex ordering to the generic lex one in code that
@@ -108,7 +108,7 @@ need to agree with each other, not just each be "a valid tie-break."
 `Chain`'s `+`/`-`/`⊠` operators are correct but not efficient for iterative reduction: they only lazily
 collapse the *head* of the underlying `PriorityQueue`, so a hand-rolled fold that repeatedly subtracts
 terms builds an ever-growing backlog of uncollapsed duplicate entries. Confirmed directly: a first draft of
-`CellularHomologyContext.advanceOne` written this way hung/burned CPU for minutes on an 8-12 point VR
+`CellularHomologyEngine.advanceOne` written this way hung/burned CPU for minutes on an 8-12 point VR
 complex that should take milliseconds. `Chain.reduceBy`/`reduceByUntil` go through a `SortedMap` that
 collapses duplicates on every insertion — always use these for actual reduction, and reserve raw chain
 arithmetic (`+`/`-`/`⊠`) for small, one-shot combinations like building a V-column fold, not for anything
@@ -117,7 +117,7 @@ that accumulates over many reduction steps.
 ### 5. Combinatorial helpers over the full point set don't know about `maxDimension` truncation
 
 `SimplexIndexing.cofacetIterator`/`facetIterator` operate purely combinatorially over the complete n-point
-abstract simplex — they have no concept of any per-engine dimension cap. `RipserCohomologyContext
+abstract simplex — they have no concept of any per-engine dimension cap. `RipserCohomologyEngine
 .coboundaryOf`, by contrast, explicitly truncates (`Chain.empty` whenever `sigma.dim + 1 > maxDimension`),
 which is what makes top-dimension simplices come out essential. Any new code built directly on
 `SimplexIndexing`'s iterators rather than going through `coboundaryOf` inherits none of that truncation —

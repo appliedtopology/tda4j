@@ -26,7 +26,9 @@ jobs:
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
       - name: Build docs site
-        run: sbt "++3.8.4 doc"
+        env:
+          TDA4J_SCALA_VERSION: "3.8.4" # docs only; see build.sbt. TODO: remove when 3.9.1 is released.
+        run: sbt doc
       - name: Publish docs
         run: |
           set -e

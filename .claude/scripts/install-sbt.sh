@@ -23,7 +23,8 @@
 # this project's own library-dependency resolution, not just the sbt launcher itself.
 #
 # Env vars (optional):
-#   SBT_VERSION      sbt version to install (default: 1.12.11 -- must match project/build.properties)
+#   SBT_VERSION      sbt version to install (default: 1.12.11 -- this is only the launcher; it fetches the sbt version
+#                   named in project/build.properties, currently 2.0.x, on first run)
 #   INSTALL_DIR      where sbt-launch.jar lives (default: /opt/sbt-launcher)
 #   WRAPPER_PATH     where the `sbt` wrapper script is installed (default: /usr/local/bin/sbt)
 #   MAX_ATTEMPTS     retry attempts for the final warm-up compile (default: 20)
@@ -58,8 +59,7 @@ EOF
 chmod +x "${WRAPPER_PATH}"
 echo "install-sbt.sh: wrapper installed at ${WRAPPER_PATH}"
 
-# Warm-up: bootstraps the sbt launcher itself (project/plugins.sbt's own dependency graph --
-# Laika alone pulls in a large flexmark/jackson/netty tree) AND this project's own
+# Warm-up: bootstraps the sbt launcher itself (sbt 2's own dependency graph, plus project/plugins.sbt's) AND this project's own
 # libraryDependencies (commons-math3, specs2, jvptree, scallop, ...) in one pass, so a later
 # `sbt test`/`sbt compile` in the actual session starts from a fully warm cache. Deliberately an
 # EXTERNAL retry loop, not sbt's own interactive "(r)etry/(q)uit" project-loading prompt -- this

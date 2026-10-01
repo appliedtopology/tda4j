@@ -23,7 +23,7 @@ a `FiniteMetricSpace[Int]` directly, not a stream (see engine 4 below).
 
 ## 1. `CellularHomologyEngine` / `SimplicialHomologyEngine` — reference-grade, generic
 
-`CellularHomologyContext[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]` is the naive
+`CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]` is the naive
 single-pivot-table boundary-reduction algorithm: process cells in filtration order, reduce each cell's
 boundary against pivots recorded so far via `Chain.reduceBy`, and the cell either opens a class (reduced
 boundary is zero) or closes one. No clearing, no chunking, no cohomology/twist optimization. Generic over
@@ -34,13 +34,13 @@ of it). It's the **oracle every other engine here gets cross-validated against**
 It's also the only engine with genuine incremental querying: `HomologyState.advanceOne()`/`advanceTo(f)`/
 `advanceAll()`, and `diagramAt(f)`/`barcodeAt(f)` can be called mid-stream to get the diagram *as of*
 filtration value `f`. `barcodeAt` annotates every bar with a real representative cycle, tracked via a
-parallel V-column alongside the ordinary reduction. `TDAContext` (root `package.scala`) extends this class.
+parallel V-column alongside the ordinary reduction.
 
 ## 2. `CellularPersistenceInChunksEngine` / `PersistenceInChunksEngine` — chunked, generic
 
-`CellularPersistenceInChunksContext[CellT: OrderedCell, CoefficientT: Field](maxDim: Int = 5)` implements the
+`CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field](maxDim: Int = 5)` implements the
 parallelizable "clear-and-compress" algorithm: local reduction per chunk, active-entry marking, then global
-column compression/reduction. `PersistenceInChunksContext[VertexT, CoefficientT]` is a one-line
+column compression/reduction. `PersistenceInChunksEngine[VertexT, CoefficientT]` is a one-line
 `Simplex`-specialized subclass, mirroring `SimplicialHomologyEngine`'s relationship to engine 1 — the class
 has no `Simplex`-specific behavior anywhere in its body, so any `OrderedCell` slots in directly.
 
@@ -198,7 +198,7 @@ cospherical-degeneracy hazard can violate directly by emitting an oversized simp
 dimension `>= 2`, same as engine 6** (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): both
 union-finds were already dimension-generic before this extension (only the `require` gated them to `d=2`), so
 extending past 2D was purely a matter of handing the residual "middle" dimensions (`1 <= k <= d-2`) to
-`PersistenceInChunksContext[Int, C]` run on a new `alpha.LimitedAlphaShapesStream` view (the `Simplex[Int]`
+`PersistenceInChunksEngine[Int, C]` run on a new `alpha.LimitedAlphaShapesStream` view (the `Simplex[Int]`
 analogue of engine 6's own `LimitedCubicalGridStream` — needed because `HelixDelaunay`/`AlphaShapes` is a
 `StratifiedSimplexStream`, not a `CofaceSimplexStream`, so the existing `LimitedCofaceSimplexStream` doesn't fit
 it) that hides the real top-dimensional simplices. Sequenced AFTER engine 6's own hybrid was validated, not
@@ -315,7 +315,7 @@ tradeoff actually buys and costs.
 
 | Need | Engine |
 |---|---|
-| Exploration, intermediate-filtration queries, representative cycles, any `OrderedCell` type | **`CellularHomologyEngine`**/`TDAContext` |
+| Exploration, intermediate-filtration queries, representative cycles, any `OrderedCell` type | **`CellularHomologyEngine`** |
 | Large complex, chunked/parallelizable, representatives for every bar including essential ones | **`CellularPersistenceInChunksEngine`** |
 | Fast, memory-efficient cohomology on a Vietoris-Rips/clique complex over integer vertex labels | **`PackedRipserCohomologyEngine`** (what `engine="ripser"` uses) |
 | A `Simplex[Int]`-keyed reference implementation for hand-debugging engine 4 | `RipserCohomologyEngine` (test oracle, not a production choice) |

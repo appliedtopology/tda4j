@@ -6,7 +6,7 @@ layout: main
 
 ```scala 3
 val stream = CubicalImage.fromFlatArray(shape = IndexedSeq(3, 3), flatValues = pixelValues, sublevel = true)
-val homology = CubicalHomologyContext[Double, Double]().persistentHomology(stream)
+val homology = CubicalHomologyEngine[Double, Double]().persistentHomology(stream)
 homology.diagramAt(Double.PositiveInfinity)
 ```
 

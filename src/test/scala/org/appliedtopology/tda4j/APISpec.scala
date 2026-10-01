@@ -15,26 +15,30 @@ class APISpec extends mutable.Specification:
     |and the non-expert API functionality""".stripMargin
 
   given Double is Field = Field.DoubleApproximated(1e-25)
-  given ctx: TDAContext[Int, Double, Double]()
-  import ctx.{*, given}
+  val engine = SimplicialHomologyEngine[Int, Double, Double]()
 
-  "we should be able to create and compute with chains" >> {
-    1.0 ⊠ ∆(1, 2) - ∆(2, 3) must beEqualTo(
-      Chain(Simplex(1, 2) -> 1.0, Simplex(2, 3) -> -1.0)
+  "we should be able to create and compute with chains via TDAlab" >> {
+    val tdalab = TDAlab(0)
+    import tdalab.{*, given}
+    Fp(1) ⊠ ∆(1, 2) - ∆(2, 3) must beEqualTo(
+      Chain(Simplex(1, 2) -> Fp(1), Simplex(2, 3) -> Fp(-1))
     )
+  }
+
+  "TDAlab should reject a non-prime characteristic" >> {
+    TDAlab(4) must throwAn[IllegalArgumentException]
   }
 
   "A full Vietoris-Rips persistence computation" >> {
     // #full-vr-computation
     given Double is Field = Field.DoubleApproximated(1e-9)
-    given ctx: TDAContext[Int, Double, Double]()
-    import ctx.{*, given}
+    val engine = SimplicialHomologyEngine[Int, Double, Double]()
 
     val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8))
     val metricSpace = EuclideanMetricSpace(points)
     val stream = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(2.0))
 
-    val state = ctx.persistentHomology(stream)
+    val state = engine.persistentHomology(stream)
     state.barcodeAt(Double.PositiveInfinity).foreach(println)
     // #full-vr-computation
 
@@ -46,7 +50,7 @@ class APISpec extends mutable.Specification:
     val xys = as.toSeq.map(a => Seq(math.cos(a), math.sin(a)))
 
     val metricSpace = EuclideanMetricSpace(xys)
-    val homology = persistentHomology(LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), 4))
+    val homology = engine.persistentHomology(LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), 4))
 
     homology.advanceTo(0.15)
     homology.diagramAt(0.15) should not(beEmpty)

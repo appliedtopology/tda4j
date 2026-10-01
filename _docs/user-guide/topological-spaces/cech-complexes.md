@@ -6,7 +6,7 @@ layout: main
 
 ```scala 3
 val cechStream = CechCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(2.0))
-val homology = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(cechStream)
+val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(cechStream)
 ```
 
 `maxFiltrationValue` here is a Cech **radius**, not a Vietoris-Rips diameter — the two aren't

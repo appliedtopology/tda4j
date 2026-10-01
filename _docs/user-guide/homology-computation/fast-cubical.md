@@ -6,7 +6,7 @@ layout: main
 
 ```scala 3
 val stream = CubicalGridStream(IndexedSeq(rows, cols), topValue)
-val bars = FastCubicalHomologyContext[Double]().persistentHomology(stream) // H0 and H1, that's everything at 2D
+val bars = FastCubicalHomologyEngine[Double]().persistentHomology(stream) // H0 and H1, that's everything at 2D
 ```
 
 `FastCubicalHomologyEngine` computes the exact same barcode (with real representatives) as

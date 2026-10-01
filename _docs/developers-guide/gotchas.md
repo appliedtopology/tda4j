@@ -79,7 +79,7 @@ for anything that accumulates over many reduction steps.
 ## 5. Combinatorial helpers over the full point set don't know about `maxDimension` truncation
 
 `SimplexIndexing.cofacetIterator`/`facetIterator` operate purely combinatorially over the complete n-point
-abstract simplex — no concept of any per-engine dimension cap. `RipserCohomologyContext.coboundaryOf`
+abstract simplex — no concept of any per-engine dimension cap. `RipserCohomologyEngine.coboundaryOf`
 truncates explicitly instead, which is what makes top-dimension simplices come out essential. Any new code
 built directly on `SimplexIndexing`'s iterators inherits none of that truncation and needs its own manual
 guard at the call site — `SimplexIndexing` itself has no way to know what any particular caller's cap is.

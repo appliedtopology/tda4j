@@ -6,7 +6,7 @@ layout: main
 
 ```scala 3
 val sheehyStream = SheehyRipsSimplexStream(metricSpace, epsilon = 0.5)
-val homology = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(sheehyStream)
+val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(sheehyStream)
 ```
 
 A `(1+epsilon)`-multiplicative approximation to plain Vietoris-Rips's own barcode, built from a complex
@@ -26,7 +26,7 @@ val ambient = EuclideanMetricSpace(points)
 val landmarks = LandmarkSelector.maxmin(ambient, numLandmarks = 20).landmarks
 
 val lazyStream = LazyWitnessSimplexStream(ambient, landmarks)   // nu = 2, JavaPlex's own default
-val homology = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(lazyStream)
+val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(lazyStream)
 ```
 
 De Silva & Carlsson's witness complex (2004; the construction behind most of the JavaPlex tutorials) builds
@@ -43,7 +43,7 @@ Two variants, matching JavaPlex's own two classes:
 
 - **`LazyWitnessSimplexStream`** (JavaPlex's `LazyWitnessStream`) — a flag/clique complex, so it also works
   directly with the packed Ripser engine (`PackedRipserCohomologyEngine`) by handing it a
-  `WitnessMetricSpace` instead of a stream: `PackedRipserCohomologyContext(WitnessMetricSpace(WitnessGeometry(ambient,
+  `WitnessMetricSpace` instead of a stream: `PackedRipserCohomologyEngine(WitnessMetricSpace(WitnessGeometry(ambient,
   landmarks), nu = 2), maxDimension)`. The `nu` parameter (`0`, `1`, or `2`, default `2`) controls how
   forgiving a witness's own threshold is — see `WitnessMetricSpace`'s own doc.
 - **`WitnessCofaceSimplexStream`** (JavaPlex's plain `WitnessStream`) — NOT a flag complex, so `engine=ripser`/
