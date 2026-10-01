@@ -9,9 +9,11 @@ pick, and the honest tradeoffs), see the [User's Guide](../user-guide/index.md).
 
 ## Dispatch
 
-```scala 3
+```scala sc:nocompile
 object AlphaShapes:
-  def apply(pts: Seq[Array[Double]], dispatch: String = "default")(using epsilon: Epsilon): AlphaShapes
+  def apply(pts: Seq[Array[Double]], dispatch: String = "default", requireValidTriangulation: Boolean = false)(using
+    epsilon: Epsilon = Epsilon(1e-5)
+  ): AlphaShapes
 ```
 
 `dispatch = "default"` **always resolves to `"helix"` regardless of point-cloud shape** — `"DQP"` must be

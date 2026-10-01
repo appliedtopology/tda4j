@@ -76,10 +76,11 @@ first and did not take effect — don't re-attempt without confirming it works).
 `WORKLOG-docs-site-fixes.md` are history only). Pages are Markdown in `_docs/` (front matter `layout: main`,
 `_layouts/main.html`), navigation in `sidebar.yml`, all configured through `Compile / doc / scalacOptions` in
 `build.sbt` (`-siteroot`, `-project-logo`, `-quick-links`, `-scastie-configuration`, ...). **No Laika directives**
-(`@:snip`, `@:callout`, ...) — use fenced code and blockquotes; a single fence annotated `sc:compile` is compiled by the
-scaladoc snippet compiler, whereas the `-snippet-compiler` build argument makes *every* snippet compiled; the
-argument is commented out in `build.sbt` pending the doc-snippet cleanup, so until then only `sc:compile`-marked
-fences are checked and the rest are hand-maintained. Cross-links use
+(`@:snip`, `@:callout`, ...) — use fenced code and blockquotes; **every Scala fence is compiled** by scaladoc's snippet compiler
+(`"-snippet-compiler:compile"` in `build.sbt`), each fence independently — so each needs its own imports and data
+(no shared prelude). A fence that only restates a source declaration (`trait RingModule`, `opaque type ...`) is marked
+```` ```scala sc:nocompile ````; **`scala 3 nocompile` is silently ignored** (the info string must be `scala
+sc:nocompile`). A failing snippet fails `sbt doc` with page:line. `WORKLOG-doc-snippets-compile.md`. Cross-links use
 scaladoc's `[[org.appliedtopology.tda4j.Foo]]`/relative `.md` links.
 
 **Docs are built with Scala 3.8.4, everything else with 3.9.0** (scaladoc 3.9.0's JavaScript is broken; this

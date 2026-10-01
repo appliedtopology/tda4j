@@ -26,9 +26,11 @@ The rest of this guide assumes these four imports (plus `alpha.{given, *}` where
 ### Building and taking the boundary of a simplex
 
 ```scala 3
-// Coefficients need an explicit Field instance in scope -- there is no default one for Double.
-// DoubleApproximated treats two coefficients as equal within epsilon, which matters for the
-// zero-checks that drive chain reduction.
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.homology.{given, *}
+
 given Double is Field = Field.DoubleApproximated(1e-9)
 
 val triangle = Simplex(1, 2, 3)      // same as ∆(1, 2, 3)
@@ -40,6 +42,9 @@ triangle.boundary[Double]            // Seq((Simplex(2,3), 1.0), (Simplex(1,3), 
 For interactive use, `TDAlab` is a pylab-style entry point: pick a field once, import its members, and compute.
 
 ```scala 3
+import language.experimental.modularity
+import org.appliedtopology.tda4j.TDAlab
+
 val tdalab = TDAlab(17)          // Z/17; TDAlab(0) uses Double coefficients
 import tdalab.{*, given}
 val chain = Fp(1) ⊠ ∆(1, 2) - ∆(2, 3)
@@ -49,6 +54,11 @@ println(chain.show)
 ### A full Vietoris-Rips persistence computation
 
 ```scala 3
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.homology.{given, *}
+
 given Double is Field = Field.DoubleApproximated(1e-9)
 val engine = SimplicialHomologyEngine[Int, Double, Double]()
 

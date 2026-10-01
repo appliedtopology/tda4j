@@ -46,7 +46,7 @@ confusing "no given instance" error far from the missing import.
 
 `algebra/RingModule.scala` defines what it means for a type `Self` to be a module over a ring-like type `R`:
 
-```scala 3
+```scala sc:nocompile
 trait RingModule:
   type Self
   type R
@@ -74,6 +74,11 @@ extension operators. **There is no default `given Double is Field` anywhere in `
 explicitly:
 
 ```scala 3
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.homology.{given, *}
+
 given Double is Field = Field.DoubleApproximated(1e-9)
 ```
 
@@ -85,7 +90,7 @@ distinct, incompatible types), with exact arithmetic via a precomputed inverse t
 
 ### `Cell`, `OrderedCell`, and what `boundary` returns
 
-```scala 3
+```scala sc:nocompile
 trait Cell extends HasDimension:
   type Self
   extension (self: Self) def boundary[CoefficientT: Field]: Seq[(Self, CoefficientT)]
@@ -625,9 +630,12 @@ reasons plus the fact that `cocycleIndices` is itself a small array, awkward to 
 single-value-flag conventions.
 
 ```scala 3
+import language.experimental.modularity
+import org.appliedtopology.tda4j.TDAlab
+
 val tdalab = TDAlab(0)          // 0 = Double coefficients; a prime p = Z/p
 import tdalab.{*, given}
-Fp(1) ⊠ ∆(1, 2) - ∆(2, 3)       // a Chain
+val chain = Fp(1) ⊠ ∆(1, 2) - ∆(2, 3)       // a Chain
 ```
 
 `TDAlab(characteristic, precision = 1e-9)` (root `package.scala`) is the pylab-style entry point: instantiate it

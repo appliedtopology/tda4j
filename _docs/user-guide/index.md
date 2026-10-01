@@ -12,8 +12,15 @@ instead; this page is about getting things done as a caller.
 ### Alpha complexes
 
 ```scala 3
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.homology.{given, *}
+
+given Double is Field = Field.DoubleApproximated(1e-9)
 import org.appliedtopology.tda4j.alpha.{given, *}
 
+val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
 val shape = AlphaShapes(points.toSeq, dispatch = "helix")   // or "DQP"
 ```
 
@@ -26,6 +33,15 @@ val shape = AlphaShapes(points.toSeq, dispatch = "helix")   // or "DQP"
 ### Flag-complex edge collapse
 
 ```scala 3
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.homology.{given, *}
+
+given Double is Field = Field.DoubleApproximated(1e-9)
+val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
+val metricSpace = EuclideanMetricSpace(points)
+
 val collapsed = EdgeCollapse.collapse(metricSpace) // a FiniteMetricSpace[Int], drop-in for any VR-consuming stream
 val stream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(collapsed), 3)
 val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream)
