@@ -53,20 +53,11 @@ jobs:
         run: |
           sbt assembly 
           sbt packageSrc
-          sbt packageDoc
-          sbt doc
-      # Same rationale as docs.yml's own step of the same name (see there, and
-      # .claude/WORKLOG-docs-publish-performance.md, for why this no longer goes through sbt-github-pages):
-      # `laikaSite`'s output isn't version-prefixed on its own, so this step's job is to place it at its own
-      # version path directly inside a checkout of the real gh-pages history -- editing in place, not staging
-      # a merged copy into a scratch directory first -- so every other already-published version (including
-      # "dev"), and root files like .nojekyll/CNAME, are left untouched by construction.
+          sbt ++3.8.4 packageDoc # remove ++3.8.4 when 3.9.1 is released
+          sbt ++3.8.4 doc
       - name: Publish versioned docs
         env:
           VERSION: ${{ steps.version.outputs.version }}
-          # Repo Settings -> Secrets and variables -> Actions -> Variables. See docs.yml's own copy of this
-          # step for why.
-          DOCS_DEFAULT_VERSION: ${{ vars.DOCS_DEFAULT_VERSION }}
         run: |
           set -e
           git config user.name "github-actions[bot]"
@@ -80,7 +71,6 @@ jobs:
             git -C /tmp/gh-pages rm -rf . > /dev/null 2>&1 || true
             touch /tmp/gh-pages/.nojekyll
           fi
-          rm -rf "/tmp/gh-pages/$VERSION"
           cp -r target/out/jvm/scala-3.9.0/tda4j/api "/tmp/gh-pages/$VERSION"
           cd /tmp/gh-pages
           git add -A
