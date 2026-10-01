@@ -20,9 +20,7 @@ class APISpec extends mutable.Specification:
   "we should be able to create and compute with chains via TDAlab" >> {
     val tdalab = TDAlab(0)
     import tdalab.{*, given}
-    Fp(1) ⊠ ∆(1, 2) - ∆(2, 3) must beEqualTo(
-      Chain(Simplex(1, 2) -> Fp(1), Simplex(2, 3) -> Fp(-1))
-    )
+    Fp(1) ⊠ ∆(1, 2) - ∆(2, 3) must beEqualTo(Fp(1) ⊠ ∆(1, 2) + Fp(-1) ⊠ ∆(2, 3))
   }
 
   "TDAlab should reject a non-prime characteristic" >> {

@@ -60,7 +60,7 @@ silence means success. In particular:
 | Library jar | `sbt package` (part of `publishSigned`) | Maven Central |
 | Sources jar | `publishMavenStyle := true` + sbt's default `publishArtifact` behavior (`Compile / packageSrc`) | Maven Central + GitHub Release |
 | Scaladoc jar | sbt's default `Compile / packageDoc` | Maven Central + GitHub Release |
-| Fat jar (CLI/MATLAB) | `sbt assembly` → `target/out/jvm/scala-3.9.0/tda4j/tda4j-<version>-assembly.jar` (sbt 2 layout; verify the exact path with `sbt "show assembly"`) (name from `assembly / assemblyJarName` in `build.sbt`) | GitHub Release only (not published to Maven — fat jars with bundled deps are a poor Maven citizen) |
+| Fat jar (CLI/MATLAB) | `sbt assembly` → `target/out/jvm/scala-3.9.0/tda4j/tda4j-<version>-assembly.jar` (sbt 2 layout, verified) (name from `assembly / assemblyJarName` in `build.sbt`) | GitHub Release only (not published to Maven — fat jars with bundled deps are a poor Maven citizen) |
 | Docs site | `sbt doc` → `target/out/jvm/scala-<docs scala version>/tda4j/api` (scaladoc static site built from `_docs/`) | GitHub Pages, under a per-version path (`/X.Y.Z/`, `/dev/` for in-progress docs) + a zipped copy on the GitHub Release |
 
 All four Maven-bound artifacts (jar, sources, scaladoc, POM) are produced and signed in one shot by

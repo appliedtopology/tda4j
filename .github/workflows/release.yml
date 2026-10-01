@@ -70,7 +70,7 @@ jobs:
             git -C /tmp/gh-pages rm -rf . > /dev/null 2>&1 || true
             touch /tmp/gh-pages/.nojekyll
           fi
-          cp -r target/out/jvm/scala-3.9.0/tda4j/api "/tmp/gh-pages/$VERSION"
+          cp -r target/out/jvm/scala-3.8.4/tda4j/api "/tmp/gh-pages/$VERSION" # TODO: 3.9.0 when the docs pin is removed
           cd /tmp/gh-pages
           git add -A
           if git diff --cached --quiet; then
@@ -104,7 +104,7 @@ jobs:
             --title "TDA4j ${VERSION}" \
             --generate-notes \
             $PRERELEASE_FLAG \
-            target/scala-3.9.0/*-${VERSION}-assembly.jar \
-            target/scala-3.9.0/*-sources.jar \
-            target/scala-3.9.0/*-javadoc.jar \
+            target/out/jvm/scala-3.9.0/tda4j/*-${VERSION}-assembly.jar \
+            target/out/jvm/scala-3.9.0/tda4j/*-sources.jar \
+            target/out/jvm/scala-3.8.4/tda4j/*-javadoc.jar \
             "docs-${VERSION}.zip"
