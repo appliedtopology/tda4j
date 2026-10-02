@@ -7,7 +7,12 @@ import org.specs2.mutable.Specification
 class NetworksSpec extends Specification:
   sequential
 
-  private def page(): (List[(Int, Double, Double)], List[(Int, Double, Double)], List[(Int, Double, Double)], List[(Int, Double, Double)]) =
+  private def page(): (
+    List[(Int, Double, Double)],
+    List[(Int, Double, Double)],
+    List[(Int, Double, Double)],
+    List[(Int, Double, Double)]
+  ) =
     val lab = TDAlab(2)
     import lab.{*, given}
 
@@ -21,7 +26,10 @@ class NetworksSpec extends Specification:
 
     val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
     def barcode(dual: Boolean) =
-      engine.persistentHomology(streams.Dowker(relation, maxDimension = 1, dual = dual)).diagramAt(Double.PositiveInfinity).filter(_._1 <= 1)
+      engine
+        .persistentHomology(streams.Dowker(relation, maxDimension = 1, dual = dual))
+        .diagramAt(Double.PositiveInfinity)
+        .filter(_._1 <= 1)
     def withoutZeroLength(bars: List[(Int, Double, Double)]) =
       bars.filter((_, birth, death) => death.isInfinite || death > birth).sortBy(bar => (bar._1, bar._2, bar._3))
 
@@ -37,7 +45,13 @@ class NetworksSpec extends Specification:
     }
     "agree exactly afterwards: five merges, one component, one loop born at 2 and killed at 5" in {
       val expected = List(
-        (0, 1.0, 2.0), (0, 1.0, 2.0), (0, 1.0, 2.0), (0, 1.0, 2.0), (0, 1.0, 2.0), (0, 1.0, Double.PositiveInfinity), (1, 2.0, 5.0)
+        (0, 1.0, 2.0),
+        (0, 1.0, 2.0),
+        (0, 1.0, 2.0),
+        (0, 1.0, 2.0),
+        (0, 1.0, 2.0),
+        (0, 1.0, Double.PositiveInfinity),
+        (1, 2.0, 5.0)
       )
       (r._3 must beEqualTo(expected)).and(r._4 must beEqualTo(expected))
     }
