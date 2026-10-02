@@ -13,7 +13,7 @@
 ## Checks (run locally before requesting review)
 
 - [ ] `sbt scalafmtAll` -- formatter output on files you did not otherwise touch goes in its own `Format:` commit
-- [ ] `sbt scalafmtCheck scalafmtSbtCheck` -- what CI's lint job runs. `build.sbt` is covered by `scalafmtSbtCheck`, so format it too
+- [ ] `sbt scalafmtSbtCheck scalafmtCheck "Test / scalafmtCheck"` -- exactly what CI's lint job runs (`build.sbt` and test sources included)
 - [ ] `sbt testFull` (plain `sbt test` can run 0 specs in sbt 2 because of its disk cache)
 - [ ] `TDA4J_SCALA_VERSION=3.8.4 sbt doc` if `_docs/`, `_layouts/`, `sidebar.yml` or public scaladoc changed (every Scala fence is compiled)
 - [ ] `sbt mimaReportBinaryIssues` if public API changed, or the break is intentional and explained above

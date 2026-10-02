@@ -56,7 +56,7 @@ were sbt's own 1024MB default, not code (`WORKLOG-test-suite-memory-and-benchmar
 sbt testFull                    # full test suite, every spec (plain `test` is incremental+disk-cached in sbt 2 and can run 0 specs; CI's fresh runner is fine)
 sbt "testOnly *SimplexSpec"     # single specs2 spec (glob ok)
 sbt scalafmtAll                 # format everything — run before committing
-sbt scalafmtCheck scalafmtSbtCheck   # what CI's lint job checks (check only, no autofix)
+sbt scalafmtSbtCheck scalafmtCheck "Test / scalafmtCheck"   # exactly what CI's lint job runs (check only; fix with `sbt scalafmtAll scalafmtSbt`)
 sbt mimaReportBinaryIssues      # binary compat (CI test job)
 TDA4J_SCALA_VERSION=3.8.4 sbt doc   # docs site (_docs/ + sidebar.yml) via scaladoc -> target/out/jvm/scala-3.8.4/tda4j/api
 sbt assembly                    # fat jar for CLI/MATLAB
@@ -67,8 +67,8 @@ If `sbt` isn't on `PATH` in this environment, see `.claude/scripts/install-sbt.s
 paces around Maven Central's cold-cache rate limiting — `.claude/WORKLOG-toroidal-coordinates.md`'s own
 environment note has the story).
 
-No linter beyond scalafmt. Tests are specs2 (`org.specs2.mutable.Specification`). CI: `test.yml` (test + mima),
-`lint.yml` (scalafmt), `docs.yml` (scaladoc → GitHub Pages, push to `scala` only). The ~319 `-Wunused:all` warnings
+No linter beyond scalafmt. Tests are specs2 (`org.specs2.mutable.Specification`). CI: `test.yml` (three parallel jobs `test`, `docs`, `mima`),
+`lint.yml` (scalafmt: build files, main and test sources), both on every PR to `scala` and cancelled when the PR is pushed again; `docs.yml` (scaladoc → GitHub Pages, push to `scala` only). MiMa in CI compares against nothing (no git tags in the shallow checkout; see the comment in `test.yml`). The ~319 `-Wunused:all` warnings
 (mostly unused wildcard imports) are deliberately left alone (`WORKLOG-compiler-warnings.md`).
 
 **`sbt scalafmtSbt`/`scalafmtSbtCheck` cover `project/*.scala` (sbt's own Scala 2.12 meta-build), not this
@@ -640,8 +640,7 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
   condense it the same way (strip narrative to worklog pointers) and note the new condensing date/commit at top.
 - **Never revert the formatter's output.** If `scalafmtAll` touches files outside your change, commit that in its OWN
   commit ("Format: ... formatter output only, no behavior change") and say so — reverting only hides the debt, and a
-  clean lint beats a minimal diff. Note CI lint runs plain `scalafmtCheck` (main sources only); `Test / scalafmtCheck`
-  is a separate, stricter check.
+  clean lint beats a minimal diff. CI lint also runs `scalafmtSbtCheck` (`build.sbt`) and `Test / scalafmtCheck`, so run all three before pushing (a pushed `build.sbt` edit once failed lint for this).
 - Performance claims need isolated A/B measurement (`git stash` A/B, median of trials, one engine per JVM);
   machine noise here often exceeds small effects — report unconfirmed effects as unconfirmed.
 - **Finalizing a user-visible capability** (new complex, engine, or option) means checking four surfaces each

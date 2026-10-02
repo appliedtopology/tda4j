@@ -7,10 +7,20 @@ on:
   pull_request:
     branches:
       - scala
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a pull request cancels that PR's still-running lint; a push to `scala` itself is never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -21,5 +31,7 @@ jobs:
           java-version: 21
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
+      # One sbt launch, stops at the first failure: the build files (`build.sbt`), the main sources, and the test sources.
+      # Fix locally with `sbt scalafmtAll scalafmtSbt`.
       - name: Formatting
-        run: sbt scalafmtSbtCheck ; sbt scalafmtCheck
+        run: sbt scalafmtSbtCheck scalafmtCheck "Test / scalafmtCheck"
