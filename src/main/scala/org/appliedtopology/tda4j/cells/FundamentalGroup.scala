@@ -3,7 +3,8 @@ package cells
 
 import org.appliedtopology.tda4j.algebra.{given, *}
 
-/** A finite presentation `<generators | relations>`; a relation is a word, each letter `(generator index, +1 or -1)`. */
+/** A finite presentation `<generators | relations>`; a relation is a word, each letter `(generator index, +1 or -1)`.
+  */
 final case class GroupPresentation[G](generators: IndexedSeq[G], relations: IndexedSeq[List[(Int, Int)]]):
 
   /** The exponent-sum matrix of the relations: one row per relation, one column per generator. */
@@ -26,11 +27,13 @@ final case class GroupPresentation[G](generators: IndexedSeq[G], relations: Inde
   /** Evaluate every relation in any structure with a product and an inverse, given the value of each generator. */
   def relationsHold[E](value: Int => E, identity: E, multiply: (E, E) => E, inverse: E => E): Boolean =
     relations.forall { word =>
-      word.foldLeft(identity) { case (acc, (i, e)) => multiply(acc, if e > 0 then value(i) else inverse(value(i))) } == identity
+      word.foldLeft(identity) { case (acc, (i, e)) =>
+        multiply(acc, if e > 0 then value(i) else inverse(value(i)))
+      } == identity
     }
 
-/** The fundamental group of a connected finite simplicial set, as a presentation read off a one-vertex model:
-  * `reduce` collapses a spanning tree of the 1-skeleton to the base vertex, then every remaining non-degenerate edge is a
+/** The fundamental group of a connected finite simplicial set, as a presentation read off a one-vertex model: `reduce`
+  * collapses a spanning tree of the 1-skeleton to the base vertex, then every remaining non-degenerate edge is a
   * generator and every 2-simplex `σ` gives the relation `d_2 σ · d_0 σ = d_1 σ` (a degenerate edge is the identity).
   */
 object FundamentalGroup:

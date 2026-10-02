@@ -40,3 +40,9 @@ group cohomology). Keep going, don't stop.
 - `DESIGN-persistent-group-cohomology.md` + `groups/` package + `ClassifyingSpaceSpec` (12 examples, all hand-derived oracles).
 - Process slip: `pkill -f sbt-launch` killed my own shell too (exit 144) and the file creation after it never ran; recreate
   files in separate commands from anything that kills processes.
+
+## "Rest of the Sage list" (A-E), one commit each
+- A `SimplicialSet` trait + `Nerve`; B `SimplicialSets`; C `SSetMap`/`LinearAlgebra`; D `FundamentalGroup`; E `CupProduct`.
+- Klein bottle derived by hand: one vertex, faces (b,c,a) and (a,b,c); pi_1 = <a,b|aba=b>; verified (1,2,1)/(1,1,0).
+- Cup-product discrimination exposed that `SimplicialSetFixtures.torus` was S^1 v S^1 v S^2 (same Betti numbers). Fixed.
+- sbt `test` is cached; `testFull` is what counts. Process: new test files created only after `ls`.

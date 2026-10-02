@@ -20,7 +20,8 @@ class FundamentalGroupSpec extends Specification:
         .and(FundamentalGroup.presentation(simplex(3)).abelianRank(2) must beEqualTo(0))
     }
     "reject a disconnected set" in {
-      FundamentalGroup.reduce(fromSimplicialComplex(Seq(Simplex(0, 1), Simplex(2, 3)))) must throwAn[IllegalArgumentException]
+      FundamentalGroup
+        .reduce(fromSimplicialComplex(Seq(Simplex(0, 1), Simplex(2, 3)))) must throwAn[IllegalArgumentException]
     }
   }
 
@@ -37,10 +38,9 @@ class FundamentalGroupSpec extends Specification:
         hurewicz(simplex(3))
       ).forall(_.forall((a, b) => a == b)) must beTrue
     }
-    "give the right values: RP^2 has H_1 = F_2 over F_2 and 0 over F_3; the Klein bottle (2, 1)" in {
+    "give the right values: RP^2 has H_1 = F_2 over F_2 and 0 over F_3; the Klein bottle (2, 1)" in
       (hurewicz(realProjectiveSpace(2)) must beEqualTo(Seq((1, 1), (0, 0))))
         .and(hurewicz(kleinBottle) must beEqualTo(Seq((2, 2), (1, 1))))
-    }
   }
 
   "presentations" should {

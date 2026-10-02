@@ -65,3 +65,11 @@ two I would not volunteer for.
 - **Integer / torsion coefficients: not a priority**, a much-later problem if at all (design principle stays: generic over `Field`).
 - **Pullbacks (and equalizers): deferred** until it is clear they are needed.
 - Everything else above ("do the rest"): lazy sets, constructions, morphisms, fundamental-group presentation, cup products.
+
+## Status after "do the rest" (2026-10-02)
+Done, each with discriminating oracles in its own spec: A lazy `SimplicialSet` + `Nerve`/`ClassifyingSpace` on it; B cone,
+suspension, wedge, subcomplex/skeleton, Simplex/Point/Empty/Horn/Klein bottle, `fromSimplicialComplex`, `fVector`,
+`isConnected`; C `SSetMap` (+ mapping cone); D `FundamentalGroup`; E `CupProduct`. NOT done: pullbacks/equalizers,
+integer coefficients (deferred by the project lead), `smash_product`, `join`, `ComplexProjectiveSpace`, `HopfMap`,
+`PresentationComplex`, `Nerve`'s lazy `n_skeleton` beyond what `skeleton` gives, Steenrod operations. A finding along the way:
+the old `torus` fixture was not a torus (see CLAUDE.md); cup products are what showed it.

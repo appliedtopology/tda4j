@@ -91,16 +91,26 @@ object SimplicialSetFixtures:
     import TorusGenerator.*
     val byDim: IndexedSeq[Set[TorusGenerator]] = IndexedSeq(Set(Vertex), Set(A, B, C), Set(U, L))
     val loopFaces = IndexedSeq.fill(2)(SSetElement[TorusGenerator](Nil, Vertex))
-    val triangleFaces =
+    // U = (bl, br, tr): (d_0, d_1, d_2) = (B, C, A), i.e. a·b = c. L = (bl, tl, tr): (A, C, B), i.e. b·a = c. Together
+    // a·b = b·a: the torus. (An earlier version gave BOTH triangles (B, C, A): two discs on the same word, which has the
+    // torus's Betti numbers but is S^1 v S^1 v S^2 -- caught by the cup-product test, `CupProductSpec`.)
+    val upperFaces =
       IndexedSeq(
         SSetElement[TorusGenerator](Nil, B),
         SSetElement[TorusGenerator](Nil, C),
         SSetElement[TorusGenerator](Nil, A)
       )
+    val lowerFaces =
+      IndexedSeq(
+        SSetElement[TorusGenerator](Nil, A),
+        SSetElement[TorusGenerator](Nil, C),
+        SSetElement[TorusGenerator](Nil, B)
+      )
     def facesOf(g: TorusGenerator): IndexedSeq[SSetElement[TorusGenerator]] = g match
       case Vertex    => IndexedSeq.empty
       case A | B | C => loopFaces
-      case U | L     => triangleFaces
+      case U         => upperFaces
+      case L         => lowerFaces
     new FiniteSimplicialSet(byDim, facesOf)
 
   /** A single non-degenerate edge with two distinct endpoints -- raw material for `quotient`/`identify`

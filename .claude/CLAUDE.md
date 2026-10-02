@@ -370,6 +370,15 @@ d=3 + one d=4 smoke test; not validated d≥5, win shrinks with d by design.
 - `quotient(sset, quotientMap: G => SSetElement[G])` needs degenerate targets (RP² from a triangle collapses an
   edge to `s_0(v)`); must resolve in **one step** to fixed points (`require`d). `identify(pairs)` is the
   union-find ergonomic layer (own union-find in `cells`).
+- **Sage-parity layer** (`DESIGN-sage-simplicial-sets-comparison.md`; pullbacks and Z-coefficients deliberately deferred):
+  `trait SimplicialSet[G]` (lazy/infinite; `FiniteSimplicialSet` extends it; `.skeleton(n)` is correct only below degree n);
+  `SimplicialSets` (`fromSimplicialComplex`, `simplex`, `point`, `empty`, `horn`, `kleinBottle`, `subcomplex`, `cone`, `suspension`,
+  `wedge`, `fVector`, `isConnected`); `SSetMap` (validate/`andThen`/image/injective/surjective on SIMPLICES, `homologyRank`,
+  `mappingCone`, projections); `FundamentalGroup.presentation` (spanning-tree `reduce` + relation `d_2·d_0 = d_1`; checked by
+  Hurewicz against engine H_1); `CupProduct` (Alexander-Whitney, `cohomologyBasis`, `isCoboundary`); `algebra.LinearAlgebra`
+  (dense, small complexes). Oracles must DISCRIMINATE: equal Betti numbers prove little (cup products told the torus from
+  S^1∨S^1∨S^2 -- and caught that the old `torus` fixture WAS the latter: both triangles had faces (B,C,A); fixed, second is
+  (A,C,B)); use F_2 AND F_3 (suspension of RP², Klein bottle (1,2,1)/(1,1,0)).
 - Fixtures (`SimplicialSetFixtures`): `minimalSphere(n)`, `realProjectiveSpace(2|3)` (sign discriminator F2 vs
   F3), `torus`, `triangle`/`realProjectiveSpaceViaQuotient`. No MATLAB/CLI entry (needs its own encoding design).
 
