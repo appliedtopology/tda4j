@@ -26,6 +26,12 @@ class ComplexesSpec extends Specification:
     (listing(actual).nonEmpty must beTrue).and(listing(actual) must beEqualTo(listing(expected)))
 
   "Truncated" should {
+    "equal the hand-wrapped LimitedCofaceSimplexStream (public apply, not just ofCofaces), cell for cell and value for value" in
+      // fresh stream instances on each side: coface streams carry cache state
+      sameAs(
+        Truncated(EnumeratingCofaceSimplexStream(euclidean), 1),
+        LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(euclidean), 2)
+      )
     "keep simplices up to dimension maxDimension + 1" in {
       val s = Truncated(EnumeratingCofaceSimplexStream(euclidean), 1)
       (s.iterator.map(_.dim).max must beEqualTo(2))

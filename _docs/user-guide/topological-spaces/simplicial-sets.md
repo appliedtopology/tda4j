@@ -42,3 +42,26 @@ CellularHomologyEngine[CircleGen, Double, Double]()
 (attaching maps — glue generators together, or collapse one down onto a lower-dimensional target).
 `validate()` checks that hand-written or constructed face data actually satisfies the simplicial identities;
 it's a necessary sanity check, not proof the resulting space is the one you intended.
+
+### Ready-made spaces, constructions and cohomology operations
+
+`SimplicialSets` collects the usual examples and constructions: `simplex`, `horn`, `sphere`, `kleinBottle`,
+`complexProjectivePlane`, `hopfMap`, `fromSimplicialComplex` (from a list of facets), `presentationComplex` (from a group
+presentation), and `cone`, `suspension`, `wedge`, `smash` and `join`. `SSetMap` is a simplicial map (with `mappingCone`),
+`FundamentalGroup.presentation` reads a presentation of π₁ back off a connected set, and `CupProduct`/`Steenrod` compute
+cup products and Steenrod squares (over F₂) on cochains. Everything here is checked against homology computed by hand,
+and cup products are what tell spaces with equal Betti numbers apart. For example, `CP²` and `S² ∨ S⁴` have the same
+Betti numbers, but only in `CP²` is the square of the degree-2 class nonzero:
+
+```scala 3
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+
+val cp2 = SimplicialSets.complexProjectivePlaneKuhnel   // the 9-vertex triangulation of Kühnel and Banchoff
+val field = FiniteField(3)
+import field.given
+
+val x = CupProduct.cohomologyBasis[Simplex[Int], field.Fp](cp2, 2).head   // the generator of H^2
+val xSquared = CupProduct.cup(cp2, 2, 2, x, x)
+val nonzero = !CupProduct.isCoboundary(cp2, 4, xSquared)               // true: x^2 generates H^4
+```
