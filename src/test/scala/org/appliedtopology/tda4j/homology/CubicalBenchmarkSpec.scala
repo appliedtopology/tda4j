@@ -14,8 +14,8 @@ import java.util.concurrent.{Executors, ThreadFactory}
 import scala.concurrent.{Await, ExecutionContext, Future, TimeoutException}
 import scala.concurrent.duration.*
 
-/** Naive (`CellularHomologyEngine`) vs. chunks (`CellularPersistenceInChunksEngine`) scaling on cubical complexes,
-  * run on the SAME generated grid at each size for a fair comparison -- the naive engine's own scaling (2D roughly flat
+/** Naive (`CellularHomologyEngine`) vs. chunks (`CellularPersistenceInChunksEngine`) scaling on cubical complexes, run
+  * on the SAME generated grid at each size for a fair comparison -- the naive engine's own scaling (2D roughly flat
   * per-cell cost, 3D per-cell cost GROWING with `n`, not yet root-caused) is documented in CLAUDE.md; this spec adds
   * chunks as a second engine to see whether it handles the 3D case differently.
   * `CellularPersistenceInChunksEngine[Cube, ...]` had never been exercised anywhere in this codebase before -- see
