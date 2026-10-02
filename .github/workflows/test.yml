@@ -18,8 +18,8 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Three independent jobs (they run in parallel, and each shows up as its own check on a pull request): `test`, `docs`
-# and `mima`. A branch rule for `scala` can require any of them by job name.
+# Three independent jobs (they run in parallel, and each shows up as its own check on a pull request): `test`, `docs-build`
+# (named to differ from the deploying job `docs` in docs.yml) and `mima`. A branch rule for `scala` can require any of them by job name.
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -39,7 +39,7 @@ jobs:
 
   # Compiles every Scala fence in `_docs`. The tutorial specs run the same fences inside `test`; this job is what catches a
   # broken fence in a page that has no spec, and a broken site build.
-  docs:
+  docs-build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -57,14 +57,17 @@ jobs:
           TDA4J_SCALA_VERSION: "3.8.4" # docs only; see build.sbt. TODO: remove when 3.9.1 is released.
         run: sbt doc
 
-  # NB: `mimaPreviousArtifacts` is read from git tags (see build.sbt), and this shallow checkout has none, so the check
-  # currently compares against nothing. Fetching tags would compare 0.5.0 against 0.4.x, which 0.5.0 deliberately breaks.
+  # Binary compatibility is enforced within a compatibility series (0.5.x, later 1.x) and never across one; `build.sbt`
+  # (`mimaBaselineVersions`) derives the baseline from the `v*` git tags, so this job needs the full history and tags.
+  # While only 0.5.0-SNAPSHOT exists the baseline is empty and the job passes trivially.
   mima:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the MiMa baseline is read from git tags
       - name: Setup JDK
         uses: actions/setup-java@v5
         with:
