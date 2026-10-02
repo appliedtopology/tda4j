@@ -68,7 +68,7 @@ octahedron.toArray()           % rows [dimension birth death]: one [0 0 Inf], on
                                % born at 1 die at 1 and are not reported
 
 % Task 2: Vietoris-Rips barcode of the points in the file
-points = csvread('_docs/tutorials/examplepoints.csv');
+points = readmatrix('_docs/tutorials/examplepoints.csv');   % csvread on older releases
 result = TDA4j.computeFromPoints(points, {'maxDimension', '1'});
 bars = result.toArray();       % rows [dimension birth death]; death is Inf for an essential class
 bars(bars(:,1) == 1, :)        % the one loop, about [1 0.261 1.732]
@@ -102,7 +102,9 @@ import lab.{*,given}
 // the 12 edges and 6 vertices they contain.
 val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield ∆(a, b, c)
 val octahedron = homology.SimplicialHomologyEngine().persistentHomology(streams.ExplicitStreamBuilder.fromFacets(triangles))
-octahedron.barcodeAt(4.0)   // one essential class in dimension 0, one in dimension 2
+// Everything enters at 0.0 here, so the engine also lists a dozen zero-length bars (cells that cancel at once).
+// Dropping bars of persistence 0 leaves the answer: one class in dimension 0 and one in dimension 2.
+org.appliedtopology.tda4j.barcode.PersistenceFilter.significant(octahedron.barcodeAt(4.0), minPersistence = Some(1e-9))
 
 // Task #2: maxDimension is the highest homology degree you want, so H_0 and H_1 here. (The stream
 // itself also contains the triangles, which H_1 needs; classes in degree 2 are incomplete -- ignore them.)
@@ -133,6 +135,7 @@ object myComputation extends TDAlab(17) {
   val octahedronHomology = homology.SimplicialHomologyEngine().persistentHomology(
     streams.ExplicitStreamBuilder.fromFacets(triangles)
   )
+  // (includes zero-length bars; see the REPL example above for dropping them)
   val octahedronBarcode = octahedronHomology.barcodeAt(4.0)
 
   // Common setup

@@ -46,3 +46,8 @@ group cohomology). Keep going, don't stop.
 - Klein bottle derived by hand: one vertex, faces (b,c,a) and (a,b,c); pi_1 = <a,b|aba=b>; verified (1,2,1)/(1,1,0).
 - Cup-product discrimination exposed that `SimplicialSetFixtures.torus` was S^1 v S^1 v S^2 (same Betti numbers). Fixed.
 - sbt `test` is cached; `testFull` is what counts. Process: new test files created only after `ls`.
+- Advisor-driven tightening: cup-product oracles made non-vacuous (basis length 1 for B(Z/3); torus product itself nonzero);
+  tutorial octahedron snippet filters the 12 zero-length bars; MATLAB uses `readmatrix`.
+- `sbt mimaReportBinaryIssues` crashes locally with `AssertionError: illegal modifier tag BadTag(49)` (MiMa's TASTy reader);
+  IDENTICAL at the already-merged 3eb4ce9 and at 1692f24, so pre-existing/environment-specific, not from this session. CI
+  (which was green on 543d92e) is the arbiter; no CI has run on the commits since because no PR is open.

@@ -31,11 +31,13 @@ object CupProduct:
     a: Map[G, F],
     b: Map[G, F]
   ): Map[G, F] =
-    x.generatorsAt(p + q).flatMap { sigma =>
-      val (front, back) = alexanderWhitney(x, sigma, p)
-      val v = field.times(value(a, front), value(b, back))
-      if field.isEqual(v, field.zero) then None else Some(sigma -> v)
-    }.toMap
+    x.generatorsAt(p + q)
+      .flatMap { sigma =>
+        val (front, back) = alexanderWhitney(x, sigma, p)
+        val v = field.times(value(a, front), value(b, back))
+        if field.isEqual(v, field.zero) then None else Some(sigma -> v)
+      }
+      .toMap
 
   private def gens[G](x: FiniteSimplicialSet[G], n: Int): Vector[G] = x.generatorsAt(n).toVector.sorted(using x.ord)
 

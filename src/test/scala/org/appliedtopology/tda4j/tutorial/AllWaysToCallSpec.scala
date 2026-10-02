@@ -61,7 +61,7 @@ class AllWaysToCallSpec extends Specification:
     val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield ∆(a, b, c)
     val computation =
       homology.SimplicialHomologyEngine().persistentHomology(streams.ExplicitStreamBuilder.fromFacets(triangles))
-    val bars = computation.barcodeAt(4.0)
+    val bars = barcode.PersistenceFilter.significant(computation.barcodeAt(4.0), minPersistence = Some(1e-9))
     val essential = bars
       .filter(b => b.upper.toString.contains("∞") || b.upper.toString.contains("nfinity"))
       .groupBy(_.dim)
