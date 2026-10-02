@@ -14,8 +14,8 @@ given Double is Field = Field.DoubleApproximated(1e-9)
 val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
 val metricSpace = EuclideanMetricSpace(points)
 
-val sheehyStream = SparseRips(metricSpace, epsilon = 0.5)
-val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(sheehyStream)
+val sparseStream = SparseRips(metricSpace, epsilon = 0.5)
+val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(sparseStream)
 ```
 
 A `(1+epsilon)`-multiplicative approximation to plain Vietoris-Rips's own barcode, built from a complex

@@ -51,7 +51,7 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   )
 
   val complex: ScallopOption[String] =
-    opt[String](descr = "vr (default), alpha, cech, witness, dtm-rips, dtm-alpha, or sheehy-rips")
+    opt[String](descr = "vr (default), alpha, cech, witness, dtm-rips, dtm-alpha, or sparse-rips")
   val engine: ScallopOption[String] =
     opt[String](descr =
       "ripser, naive, chunks, cohomology, fast-cubical, or fast-alpha (default depends on --complex -- see " +
@@ -138,9 +138,9 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     opt[Double](descr =
       "ball-radius exponent for DTM-Rips (1.0 or 2.0, default 1.0) -- only consulted when --complex=dtm-rips"
     )
-  val sheehyEpsilon: ScallopOption[Double] =
+  val sparseEpsilon: ScallopOption[Double] =
     opt[Double](descr =
-      "sparsity/approximation-quality parameter in (0,1) -- REQUIRED when --complex=sheehy-rips, ignored " +
+      "sparsity/approximation-quality parameter in (0,1) -- REQUIRED when --complex=sparse-rips, ignored " +
         "otherwise. The resulting barcode is a (1+epsilon)-multiplicative approximation to plain --complex=vr's " +
         "own barcode (Cavanna-Jahanseir-Sheehy 2015); see streams.SheehyRipsSimplexStream's own doc."
     )

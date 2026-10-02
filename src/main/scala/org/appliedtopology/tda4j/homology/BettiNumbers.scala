@@ -5,12 +5,12 @@ import org.appliedtopology.tda4j.algebra.{given, *}
 import org.appliedtopology.tda4j.cells.{given, *}
 import org.appliedtopology.tda4j.streams.FilteredSimplicialSetStream
 
-/** Betti numbers of a simplicial set over a prime field `F_p`: `dim H_n(X; F_p)` for each degree `n`, the number of homology
-  * classes that are never killed. Computed with the chunks persistence engine on the unfiltered complex (every generator
-  * at filtration value `0`), so it is the ordinary homology of `X`.
+/** Betti numbers of a simplicial set over a prime field `F_p`: `dim H_n(X; F_p)` for each degree `n`, the number of
+  * homology classes that are never killed. Computed with the chunks persistence engine on the unfiltered complex (every
+  * generator at filtration value `0`), so it is the ordinary homology of `X`.
   *
-  * Only finite fields are offered, matching the library's field-generic design; integer homology (and with it torsion) is a
-  * deliberately deferred problem. Over `F_2` and `F_3` together you can see most small torsion.
+  * Only finite fields are offered, matching the library's field-generic design; integer homology (and with it torsion)
+  * is a deliberately deferred problem. Over `F_2` and `F_3` together you can see most small torsion.
   */
 object BettiNumbers:
 
@@ -31,8 +31,9 @@ object BettiNumbers:
         .diagramAt(Double.PositiveInfinity)
       Vector.tabulate(x.generatorsByDim.length)(n => diagram.count((dim, _, death) => dim == n && death.isPosInfinity))
 
-  /** `dim H_n(X; F_p)` for `n = 0 .. maxDegree` of a possibly infinite simplicial set, through its `(maxDegree + 1)`-skeleton
-    * (a skeleton's homology is right only below its top degree, which is why one more dimension is built and dropped).
+  /** `dim H_n(X; F_p)` for `n = 0 .. maxDegree` of a possibly infinite simplicial set, through its
+    * `(maxDegree + 1)`-skeleton (a skeleton's homology is right only below its top degree, which is why one more
+    * dimension is built and dropped).
     */
   def apply[G](x: SimplicialSet[G], maxDegree: Int, prime: Int): Vector[Int] =
     require(maxDegree >= 0, s"maxDegree must be >= 0, got $maxDegree")

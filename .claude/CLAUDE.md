@@ -537,7 +537,7 @@ run to full size. One memoized `filtrationValueOverride` handles every dimension
 Units doubled; reduces to plain VR exactly at a SMALL `epsilon` (not large). `maxFiltrationValue` is
 unconditionally clamped to `maxFiniteFiltrationValue` even when the caller passes `+Infinity` — plain IEEE-754
 `<=` would otherwise admit every excluded pair's own `+Infinity`. Refuses `engine=ripser`; wired through
-`matlab.TDA4j complex=sheehy-rips` (needs `sheehyEpsilon`) and `cli --sheehy-epsilon`.
+`matlab.TDA4j complex=sparse-rips` (needs `sparseEpsilon`) and `cli --sparse-epsilon`.
 
 ## Flag-complex edge collapse
 
@@ -586,10 +586,10 @@ take/return only `double`, `int`, `String`, `double[][]`, `String[]` — no `Map
 (project lead rejected a `Map`-based design). Options are a flat key/value `String[]`; `dispatch` parses each
 once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before anything runs.
 - `computeFromPoints`/`computeFromDistanceMatrix`: `complex` = `vr`/`alpha`/`cech`/`witness`/`dtm-rips`/`dtm-alpha`/
-  `sheehy-rips`; `engine` = `ripser`/`naive`/`chunks`/`cohomology` (Alpha and dtm-alpha refuse `ripser`/`chunks`;
-  Cech, dtm-rips, sheehy-rips, and witness/general refuse `ripser`, witness/general also refuses `chunks` — see
-  `persistence-engines.md`'s streams-vs-engines table). `dtm-rips`/`dtm-alpha` need `dtmK`; `sheehy-rips` needs
-  `sheehyEpsilon` (strictly `(0,1)`); those two alone also work from `computeFromDistanceMatrix`. A sixth
+  `sparse-rips`; `engine` = `ripser`/`naive`/`chunks`/`cohomology` (Alpha and dtm-alpha refuse `ripser`/`chunks`;
+  Cech, dtm-rips, sparse-rips, and witness/general refuse `ripser`, witness/general also refuses `chunks` — see
+  `persistence-engines.md`'s streams-vs-engines table). `dtm-rips`/`dtm-alpha` need `dtmK`; `sparse-rips` needs
+  `sparseEpsilon` (strictly `(0,1)`); those two alone also work from `computeFromDistanceMatrix`. A sixth
   `engine`, `fast-alpha`, is valid ONLY for `complex=alpha`+`alphaBackend=helix`. `computeFromCubicalImage`/
   `computeFromImage` — same four base engines plus `fast-cubical`.
 - **Two-step witness recipe**: `selectLandmarksFrom{Points,DistanceMatrix}` → `LandmarkSelectionResult`, then

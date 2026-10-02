@@ -530,25 +530,32 @@ class TDA4jSpec extends mutable.Specification:
     }
   }
 
-  "complex=sheehy-rips, option validation" should {
-    "require sheehyEpsilon" in {
-      FullBarcode.computeFromPoints(points, Array("complex", "sheehy-rips")) must throwA[IllegalArgumentException]
+  "complex=sparse-rips, option validation" should {
+    "say so when the pre-0.5.0 name sheehy-rips is used" in {
+      FullBarcode.computeFromPoints(points, Array("complex", "sheehy-rips", "sparseEpsilon", "0.5")) must throwA[
+        IllegalArgumentException
+      ](
+        "renamed 'sparse-rips'"
+      )
     }
-    "reject engine=ripser combined with complex=sheehy-rips" in {
+    "require sparseEpsilon" in {
+      FullBarcode.computeFromPoints(points, Array("complex", "sparse-rips")) must throwA[IllegalArgumentException]
+    }
+    "reject engine=ripser combined with complex=sparse-rips" in {
       FullBarcode.computeFromPoints(
         points,
-        Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "engine", "ripser")
+        Array("complex", "sparse-rips", "sparseEpsilon", "0.5", "engine", "ripser")
       ) must
         throwA[IllegalArgumentException]
     }
   }
 
-  "complex=sheehy-rips, through the facade" should {
+  "complex=sparse-rips, through the facade" should {
     "match streams.SheehyRipsSimplexStream/SimplicialHomologyEngine driven directly" in {
       given Double is Field = Field.DoubleApproximated(1e-9)
       val viaFacade = triples(
         FullBarcode
-          .computeFromPoints(points, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "field", "R"))
+          .computeFromPoints(points, Array("complex", "sparse-rips", "sparseEpsilon", "0.5", "field", "R"))
           .toArray()
       )
       val metricSpace = EuclideanMetricSpace(points)
@@ -565,13 +572,13 @@ class TDA4jSpec extends mutable.Specification:
     "works from a distance matrix too (SheehyRipsSimplexStream needs no coordinates, unlike complex=cech/alpha)" in {
       val viaPoints =
         triples(
-          FullBarcode.computeFromPoints(points, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5")).toArray()
+          FullBarcode.computeFromPoints(points, Array("complex", "sparse-rips", "sparseEpsilon", "0.5")).toArray()
         )
       val viaDistances = triples(
         FullBarcode
           .computeFromDistanceMatrix(
             euclideanDistanceMatrix(points),
-            Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5")
+            Array("complex", "sparse-rips", "sparseEpsilon", "0.5")
           )
           .toArray()
       )
@@ -581,11 +588,11 @@ class TDA4jSpec extends mutable.Specification:
     "default to engine=naive and agree with an explicit engine=chunks call" in {
       val naive =
         triples(
-          FullBarcode.computeFromPoints(points, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5")).toArray()
+          FullBarcode.computeFromPoints(points, Array("complex", "sparse-rips", "sparseEpsilon", "0.5")).toArray()
         )
       val chunks = triples(
         FullBarcode
-          .computeFromPoints(points, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "engine", "chunks"))
+          .computeFromPoints(points, Array("complex", "sparse-rips", "sparseEpsilon", "0.5", "engine", "chunks"))
           .toArray()
       )
       naive must containTheSameElementsAs(chunks)
@@ -593,7 +600,7 @@ class TDA4jSpec extends mutable.Specification:
 
     // The 6-point `points` fixture above almost certainly doesn't sparsify at all (SheehyRipsStreamSpec found
     // this needs either a wide scale spread or many more points) -- a dispatch bug that silently routed
-    // complex=sheehy-rips to plain VR, or dropped sheehyEpsilon entirely, could still pass every test above. The
+    // complex=sparse-rips to plain VR, or dropped sparseEpsilon entirely, could still pass every test above. The
     // three-cluster fixture (same construction, same seeds, as SheehyRipsStreamSpec's own deterministic
     // sparsification fixture -- 105 -> 26 edges at epsilon=0.5) is reused here specifically to close that gap.
     def clusterPoints: Array[Array[Double]] =
@@ -603,11 +610,11 @@ class TDA4jSpec extends mutable.Specification:
       cluster(0.0, 0.0, 1) ++ cluster(50.0, 0.0, 2) ++ cluster(25.0, 50.0, 3)
 
     "produce a genuinely different (sparser) barcode than complex=vr, on a point cloud where sparsification fires" in {
-      val sheehy = triples(
+      val sparse = triples(
         FullBarcode
           .computeFromPoints(
             clusterPoints,
-            Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "maxDimension", "1")
+            Array("complex", "sparse-rips", "sparseEpsilon", "0.5", "maxDimension", "1")
           )
           .toArray()
       )
@@ -616,21 +623,21 @@ class TDA4jSpec extends mutable.Specification:
           .computeFromPoints(clusterPoints, Array("maxFiltrationValue", "1000.0", "maxDimension", "1"))
           .toArray()
       )
-      sheehy must not(containTheSameElementsAs(vr))
+      sparse must not(containTheSameElementsAs(vr))
     }
 
     "engine=cohomology agrees with the default engine=naive, on the same sparsifying point cloud" in {
       val naive =
         triples(
           FullBarcode
-            .computeFromPoints(clusterPoints, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5"))
+            .computeFromPoints(clusterPoints, Array("complex", "sparse-rips", "sparseEpsilon", "0.5"))
             .toArray()
         )
       val cohomology = triples(
         FullBarcode
           .computeFromPoints(
             clusterPoints,
-            Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "engine", "cohomology")
+            Array("complex", "sparse-rips", "sparseEpsilon", "0.5", "engine", "cohomology")
           )
           .toArray()
       )

@@ -179,8 +179,8 @@ class CLISpec extends mutable.Specification:
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
     }
 
-    "produce the exact same barcode as calling TDA4j directly for --complex=sheehy-rips, via a real file on disk" >> {
-      // Same "no CLI-side code exists for this complex" argument as --complex=dtm-rips above -- --sheehy-epsilon
+    "produce the exact same barcode as calling TDA4j directly for --complex=sparse-rips, via a real file on disk" >> {
+      // Same "no CLI-side code exists for this complex" argument as --complex=dtm-rips above -- --sparse-epsilon
       // is just one more 1:1-mirrored flag.
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
       val path = tempFile(".csv")
@@ -188,14 +188,14 @@ class CLISpec extends mutable.Specification:
 
       val buffer = new ByteArrayOutputStream()
       val exitCode = CliFull.run(
-        Seq("--complex", "sheehy-rips", "--sheehy-epsilon", "0.5", "--max-dimension", "1", path),
+        Seq("--complex", "sparse-rips", "--sparse-epsilon", "0.5", "--max-dimension", "1", path),
         new PrintStream(buffer)
       )
       val cliLines = buffer.toString.linesIterator.toSeq
 
       val direct = FullBarcode.computeFromPoints(
         points,
-        Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "maxDimension", "1")
+        Array("complex", "sparse-rips", "sparseEpsilon", "0.5", "maxDimension", "1")
       )
       val directLines = TDA4jCLI.toBars(direct).map(_.toString)
 
@@ -203,7 +203,7 @@ class CLISpec extends mutable.Specification:
     }
 
     "produce the exact same barcode as calling TDA4j directly for --edge-collapse=true, via a real file on disk" >> {
-      // Same 1:1-mirrored-flag argument as --sheehy-epsilon above -- --edge-collapse changes nothing about the
+      // Same 1:1-mirrored-flag argument as --sparse-epsilon above -- --edge-collapse changes nothing about the
       // OUTPUT shape (unlike --distance-to, which is the one CLI flag that does NOT mirror a compute option --
       // see TDA4jConf.distanceTo's own doc), so it needs no special CLI-side handling at all.
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0), Array(0.5, 2.0))

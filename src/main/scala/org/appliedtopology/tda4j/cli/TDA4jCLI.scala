@@ -194,7 +194,7 @@ object TDA4jCLI:
     add("dtmK", conf.dtmK)
     add("dtmQ", conf.dtmQ)
     add("dtmP", conf.dtmP)
-    add("sheehyEpsilon", conf.sheehyEpsilon)
+    add("sparseEpsilon", conf.sparseEpsilon)
     add("edgeCollapse", conf.edgeCollapse)
     add("maxDimension", conf.maxDimension)
     add("maxFiltrationValue", conf.maxFiltrationValue)
