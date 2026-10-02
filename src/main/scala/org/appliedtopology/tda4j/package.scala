@@ -108,13 +108,36 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
   val chainIsRingModule: Chain[Simplex[VertexT], CoefficientT] is RingModule { type R = CoefficientT } =
     summon[Chain[Simplex[VertexT], CoefficientT] is RingModule { type R = CoefficientT }]
   export chainIsRingModule.*
-
   given [T: Ordering] => Conversion[Simplex[T], Chain[Simplex[T], CoefficientT]] =
     Chain.apply
+
+  export cells.defaultSimplexIsOrderedCell
+  export cells.defaultCubeIsOrderedCell
 
   export org.appliedtopology.tda4j.cells.∆, org.appliedtopology.tda4j.cells.Simplex,
     org.appliedtopology.tda4j.cells.asSimplex
   export org.appliedtopology.tda4j.cells.Cube, org.appliedtopology.tda4j.cells.asCube
+  object streams {
+    export org.appliedtopology.tda4j.streams.{
+      ExplicitStreamBuilder, CubicalGridStream, CechCofaceSimplexStream, CubicalImage, DistanceToMeasure,
+      DowkerCofaceSimplexStream, DowkerGeometry, DtmRipsSimplexStream, EuclideanMetricSpace, ExplicitMetricSpace,
+      IncrementalVietorisRipsSimplexStream, LazyWitnessSimplexStream, LandmarkSelector, LimitedCofaceSimplexStream,
+      LimitedCubicalGridStream, RecursiveStackVietorisRipsSimplexStream, SheehyRipsSimplexStream, WitnessCofaceSimplexStream,
+      WitnessGeometry, WitnessMetricSpace
+    }
+  }
+  object homology {
+    export org.appliedtopology.tda4j.homology.{
+      CellularHomologyEngine, CellularPersistenceInChunksEngine,
+      SimplicialHomologyEngine, PersistenceInChunksEngine,
+      CubicalHomologyEngine, CubicalPersistenceInChunksEngine,
+      RipserCohomologyEngine, PackedRipserCohomologyEngine,
+      CircularCoordinates
+    }
+  }
+  object io {
+    export org.appliedtopology.tda4j.io.{CSV, Dipha, Gudhi, Perseus, Ripser}
+  }
 
   given Show[Simplex[VertexT]] = summon[Show[Simplex[VertexT]]]
 

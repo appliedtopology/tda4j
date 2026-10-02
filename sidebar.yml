@@ -2,6 +2,8 @@ index: index.md
 subsection:
   - index: tutorials/index.md
     directory: tutorials
+    subsection:
+      - page: tutorials/all-ways-to-call.md
   - index: developers-guide/index.md
     directory: developers-guide
     subsection:
