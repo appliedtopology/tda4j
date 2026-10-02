@@ -18,7 +18,7 @@ val relation = Array(
   Array(2.0, 1.0, 0.0)   // point 2's
 )
 val geometry = DowkerGeometry(relation)
-val stream = DowkerCofaceSimplexStream(geometry)
+val stream = Dowker(relation)
 val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream)
 ```
 

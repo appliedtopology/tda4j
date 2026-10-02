@@ -14,7 +14,7 @@ given Double is Field = Field.DoubleApproximated(1e-9)
 val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
 val metricSpace = EuclideanMetricSpace(points)
 
-val sheehyStream = SheehyRipsSimplexStream(metricSpace, epsilon = 0.5)
+val sheehyStream = SparseRips(metricSpace, epsilon = 0.5)
 val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(sheehyStream)
 ```
 
@@ -42,7 +42,7 @@ val points: Array[Array[Double]] = Array.tabulate(30)(i => Array(math.cos(i * 0.
 val ambient = EuclideanMetricSpace(points)
 val landmarks = LandmarkSelector.maxmin(ambient, numLandmarks = 20).landmarks
 
-val lazyStream = LazyWitnessSimplexStream(ambient, landmarks)   // nu = 2, JavaPlex's own default
+val lazyStream = Witness(ambient, landmarks)   // lazy variant, nu = 2, JavaPlex's own default
 val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(lazyStream)
 ```
 
@@ -58,12 +58,12 @@ into your original point cloud — map back through `landmarks(i)` yourself (`ma
 
 Two variants, matching JavaPlex's own two classes:
 
-- **`LazyWitnessSimplexStream`** (JavaPlex's `LazyWitnessStream`) — a flag/clique complex, so it also works
+- **`Witness(..., variant = Witness.Variant.Lazy)`** (JavaPlex's `LazyWitnessStream`) — a flag/clique complex, so it also works
   directly with the packed Ripser engine (`PackedRipserCohomologyEngine`) by handing it a
   `WitnessMetricSpace` instead of a stream: `PackedRipserCohomologyEngine(WitnessMetricSpace(WitnessGeometry(ambient,
   landmarks), nu = 2), maxDimension)`. The `nu` parameter (`0`, `1`, or `2`, default `2`) controls how
   forgiving a witness's own threshold is — see `WitnessMetricSpace`'s own doc.
-- **`WitnessCofaceSimplexStream`** (JavaPlex's plain `WitnessStream`) — NOT a flag complex, so `engine=ripser`/
+- **`Witness(..., variant = Witness.Variant.General)`** (JavaPlex's plain `WitnessStream`) — NOT a flag complex, so `engine=ripser`/
   `chunks` don't apply; use the naive or cohomology engine instead. `maxFiltrationValue` here defaults to
   `+Infinity` (untruncated), not the point cloud's enclosing radius — the enclosing-radius shortcut is only
   valid for flag complexes.
@@ -80,13 +80,11 @@ val points: Array[Array[Double]] = Array.tabulate(30)(i => Array(math.cos(i * 0.
 val ambient = EuclideanMetricSpace(points)
 val landmarks = LandmarkSelector.maxmin(ambient, numLandmarks = 20).landmarks
 
-val geometry = WitnessGeometry(ambient, landmarks)
-val generalStream = WitnessCofaceSimplexStream(geometry, maxFiltrationValue = 2.0)
+val generalStream = Witness(ambient, landmarks, variant = Witness.Variant.General, maxFiltrationValue = Some(2.0))
 ```
 
-**Pick a finite `maxFiltrationValue` for the general variant, or cap dimension with
-`LimitedCofaceSimplexStream`** — its default is `+Infinity`, and nothing prunes an unbounded enumeration, so
-a direct call can reach the full `2^landmarks.size` power set. `matlab.TDA4j` always caps dimension for you.
+**The general variant's `maxFiltrationValue` defaults to `+Infinity`, so keep `maxDimension` small (the default `2` is fine) or pass a finite value** — nothing prunes an unbounded enumeration, so an uncapped
+direct use of the underlying stream can reach the full `2^landmarks.size` power set; `Witness` and `matlab.TDA4j` both cap the dimension for you.
 Prefer `witnessVariant=lazy` (the default) when the flag-complex behavior is acceptable — it unlocks
 `engine=ripser`, and at tutorial scale (1000 points, 50 landmarks, threshold `2R` — `R` the landmark
 selection's own covering radius, the JavaPlex tutorial's own recommended threshold) that engine choice is

@@ -75,25 +75,22 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
   export org.appliedtopology.tda4j.cells.Cube, org.appliedtopology.tda4j.cells.asCube
   object streams:
     export org.appliedtopology.tda4j.streams.{
-      CechCofaceSimplexStream,
+      Cech,
       CubicalGridStream,
       CubicalImage,
       DistanceToMeasure,
-      DowkerCofaceSimplexStream,
+      Dowker,
       DowkerGeometry,
-      DtmRipsSimplexStream,
+      DtmRips,
       EuclideanMetricSpace,
       ExplicitMetricSpace,
       ExplicitStreamBuilder,
-      IncrementalVietorisRipsSimplexStream,
       LandmarkSelector,
-      LazyWitnessSimplexStream,
-      LimitedCofaceSimplexStream,
       LimitedCubicalGridStream,
-      RecursiveStackVietorisRipsSimplexStream,
-      SheehyRipsSimplexStream,
+      SparseRips,
+      Truncated,
       VietorisRips,
-      WitnessCofaceSimplexStream,
+      Witness,
       WitnessGeometry,
       WitnessMetricSpace
     }

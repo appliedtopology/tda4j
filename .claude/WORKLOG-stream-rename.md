@@ -9,3 +9,5 @@ implementation classes `private[tda4j]`, then `StratifiedSimplexStream` -> `Leve
   stratified trait gets the public name; MATLAB/CLI option strings (`sheehy-rips`, ...) untouched.
 - Block 1 (additive): `streams/Complexes.scala` + `ComplexesSpec` (each object == the implementation class wrapped at k+1,
   cell-for-cell AND value-for-value). Passed first run.
+- Block 2: user-guide fences/prose, TDAlab `streams` exports, architecture.md note moved to the public objects (3.8.4 doc build
+  clean). Developer-guide prose still names the implementation classes on purpose (they describe internals).

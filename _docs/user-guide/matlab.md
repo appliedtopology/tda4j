@@ -82,7 +82,7 @@ changes a method's call signature:
 | `dtmP` | double | `1.0` (only consulted for `complex=dtm-rips`; must be `1.0` or `2.0`) |
 | `sheehyEpsilon` | double | REQUIRED for `complex=sheehy-rips`, no default; strictly between `0` and `1` |
 | `maxDimension` | integer | `2` — highest H_k reported, not highest simplex dimension built |
-| `maxFiltrationValue` | double | the point cloud's own minimum enclosing radius (`+Infinity` for `witness`/`witnessVariant=general`; `SheehyRipsSimplexStream`'s own `maxFiniteFiltrationValue` for `complex=sheehy-rips`) |
+| `maxFiltrationValue` | double | the point cloud's own minimum enclosing radius (`+Infinity` for `witness`/`witnessVariant=general`; `SparseRips`'s own maximum finite filtration value for `complex=sheehy-rips`) |
 | `minPersistence` | double | unset — a bar is reported only if essential or its persistence exceeds 1% of the minimum enclosing radius (see "Which bars are reported" above); an absolute threshold in the barcode's own units, `0` reports every bar. Accepted by every `computeFrom*` method (not the landmark-selection ones, which produce no barcode) |
 | `minPersistenceFraction` | double | `0.01` — the same threshold as a fraction of the minimum enclosing radius; `0` reports every bar. Give at most one of the two |
 | `field` | `Z` (finite field), `R` (floating point) | `Z`, `prime=2` |

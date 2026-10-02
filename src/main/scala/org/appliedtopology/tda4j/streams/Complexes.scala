@@ -28,7 +28,11 @@ object Cech:
     parallelFiltrationValue: Boolean = false
   ): StratifiedSimplexStream[Int, Double] =
     Truncated(
-      CechCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue, parallelFiltrationValue = parallelFiltrationValue),
+      CechCofaceSimplexStream(
+        metricSpace,
+        maxFiltrationValue = maxFiltrationValue,
+        parallelFiltrationValue = parallelFiltrationValue
+      ),
       maxDimension
     )
 
@@ -54,7 +58,10 @@ object Witness:
   ): StratifiedSimplexStream[Int, Double] =
     variant match
       case Variant.Lazy =>
-        Truncated(LazyWitnessSimplexStream(metricSpace, landmarks, nu, maxFiltrationValue = maxFiltrationValue), maxDimension)
+        Truncated(
+          LazyWitnessSimplexStream(metricSpace, landmarks, nu, maxFiltrationValue = maxFiltrationValue),
+          maxDimension
+        )
       case Variant.General =>
         Truncated(
           WitnessCofaceSimplexStream(metricSpace, landmarks, maxFiltrationValue.getOrElse(Double.PositiveInfinity)),
@@ -87,7 +94,9 @@ object DtmRips:
   ): StratifiedSimplexStream[Int, Double] =
     Truncated(DtmRipsSimplexStream(metricSpace, f, p, maxFiltrationValue = maxFiltrationValue), maxDimension)
 
-  /** With the weights computed as the distance to the measure with `k` nearest neighbours (self-inclusive) and exponent `q`. */
+  /** With the weights computed as the distance to the measure with `k` nearest neighbours (self-inclusive) and exponent
+    * `q`.
+    */
   def fromNeighbours(
     metricSpace: FiniteMetricSpace[Int],
     k: Int,

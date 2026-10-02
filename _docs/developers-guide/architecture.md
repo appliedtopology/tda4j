@@ -137,6 +137,13 @@ constantly.
 
 ## Complex construction: streams
 
+**Public entry points.** Ask for a complex through one object per kind: `VietorisRips`, `Cech`, `Witness`, `Dowker`,
+`DtmRips`, `SparseRips` (plus `Truncated` to cut any coface stream off), each taking `maxDimension` as the top
+homological degree you want and building one dimension higher internally. The sections below describe the implementation
+classes those objects choose between (`EnumeratingCofaceSimplexStream`, `CechCofaceSimplexStream`, ...); those are
+internal detail, kept for cross-validation, and not what a user should reach for. See
+`.claude/DESIGN-stream-naming.md`.
+
 A `CellStream[CellT, FiltrationT]` is the abstract interface every persistence engine consumes: an iterator
 over cells in filtration order, plus a `filtrationValue: PartialFunction[CellT, FiltrationT]` and a
 `Filterable` (smallest/largest sentinel values, `±Infinity` for `Double`). Trait hierarchy, most-general to

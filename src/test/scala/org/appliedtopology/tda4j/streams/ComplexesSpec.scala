@@ -9,7 +9,13 @@ import org.specs2.mutable.Specification
   */
 class ComplexesSpec extends Specification:
   private val points = Array(
-    Array(0.0, 0.0), Array(1.0, 0.1), Array(0.5, 0.9), Array(1.6, 1.1), Array(-0.4, 1.3), Array(0.9, 1.7), Array(2.0, 0.2)
+    Array(0.0, 0.0),
+    Array(1.0, 0.1),
+    Array(0.5, 0.9),
+    Array(1.6, 1.1),
+    Array(-0.4, 1.3),
+    Array(0.9, 1.7),
+    Array(2.0, 0.2)
   )
   private val euclidean = EuclideanMetricSpace(points)
 
@@ -22,15 +28,17 @@ class ComplexesSpec extends Specification:
   "Truncated" should {
     "keep simplices up to dimension maxDimension + 1" in {
       val s = Truncated(EnumeratingCofaceSimplexStream(euclidean), 1)
-      (s.iterator.map(_.dim).max must beEqualTo(2)).and(Truncated(EnumeratingCofaceSimplexStream(euclidean), 1) must not(beNull))
+      (s.iterator.map(_.dim).max must beEqualTo(2))
+        .and(Truncated(EnumeratingCofaceSimplexStream(euclidean), 1) must not(beNull))
     }
-    "reject a negative degree" in { Truncated(EnumeratingCofaceSimplexStream(euclidean), -1) must throwAn[IllegalArgumentException] }
+    "reject a negative degree" in {
+      Truncated(EnumeratingCofaceSimplexStream(euclidean), -1) must throwAn[IllegalArgumentException]
+    }
   }
 
   "the complex objects" should {
-    "Cech matches CechCofaceSimplexStream wrapped by hand" in {
+    "Cech matches CechCofaceSimplexStream wrapped by hand" in
       sameAs(Cech(euclidean, 1), LimitedCofaceSimplexStream(CechCofaceSimplexStream(euclidean), 2))
-    }
     "Witness (lazy) matches LazyWitnessSimplexStream wrapped by hand" in {
       val landmarks = IndexedSeq(0, 2, 4, 6)
       sameAs(
@@ -58,7 +66,6 @@ class ComplexesSpec extends Specification:
       sameAs(DtmRips(euclidean, f, 1), LimitedCofaceSimplexStream(DtmRipsSimplexStream(euclidean, f), 2))
         .and(sameAs(DtmRips.fromNeighbours(euclidean, 2, 1), DtmRips(euclidean, f, 1)))
     }
-    "SparseRips matches SheehyRipsSimplexStream wrapped by hand" in {
+    "SparseRips matches SheehyRipsSimplexStream wrapped by hand" in
       sameAs(SparseRips(euclidean, 0.5, 1), LimitedCofaceSimplexStream(SheehyRipsSimplexStream(euclidean, 0.5), 2))
-    }
   }
