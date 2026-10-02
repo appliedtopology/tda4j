@@ -42,122 +42,149 @@
   <div class="buttons"></div>
  </div>
  <div class="snippet mono-small-block">
-  <pre><code class="language-matlab"><span line-number="1" class=""><span class="tooltip-container"></span>javaaddpath('target/scala-3.9.0/TDA4j-&lt;version&gt;-assembly.jar');
+  <pre><code class="language-matlab"><span line-number="1" class=""><span class="tooltip-container"></span>javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-&lt;version&gt;-assembly.jar');
 </span><span line-number="2" class=""><span class="tooltip-container"></span>points = [0.0 0.0; 1.0 0.0; 0.5 0.8];
 </span><span line-number="3" class=""><span class="tooltip-container"></span>result = org.appliedtopology.tda4j.matlab.TDA4j.computeFromPoints(points);
 </span><span line-number="4" class=""><span class="tooltip-container"></span>bars = result.toArray();
 </span></code></pre>
   <div class="buttons"></div>
  </div>
- <p>Entry points: <code>computeFromPoints</code>/<code>computeFromDistanceMatrix</code> (Vietoris-Rips/alpha/Cech/witness/dtm-rips/ dtm-alpha/sheehy-rips, from a point cloud or a precomputed distance matrix — alpha, Cech, and dtm-alpha need real coordinates, so they're only available from the points overload; witness/dtm-rips/sheehy-rips work from either, exactly like <code>vr</code>, since none of the three needs real coordinates, only a metric), <code>computeFromCubicalImage</code>/<code>computeFromImage</code> (cubical persistence from a flat array + shape, or a 2D pixel matrix directly), <code>computeFromRelation</code> (Dowker complex persistence from a general relation matrix — see "Dowker complexes" above; its own OWN, much smaller options set, <code>"engine"</code>/<code>"maxDimension"</code>/ <code>"maxFiltrationValue"</code>/<code>"dual"</code>/<code>"field"</code>/<code>"prime"</code>/<code>"epsilon"</code>, is not in the table below either, for the same reason the two-step witness recipe's own options aren't), and the two-step witness recipe's own four entry points -- <code>selectLandmarksFromPoints</code>/<code>selectLandmarksFromDistanceMatrix</code> (→ <code>LandmarkSelectionResult</code>) and <code>computeFromPointsAndLandmarks</code>/<code>computeFromDistanceMatrixAndLandmarks</code>, plus the <code>coveringRadiusFromPoints</code>/<code>coveringRadiusFromDistanceMatrix</code> query pair -- covered in their own section above rather than the table below, since they take an explicit <code>int[] landmarks</code> parameter and each has its OWN (stricter) recognized-options set rather than sharing the table's. Every method here has a no-options overload and one taking a flat, alternating key/value <code>String[]</code> of options — so adding a new option in the future never changes a method's call signature:</p>
- <table>
-  <thead>
-   <tr>
-    <th>Option</th>
-    <th>Values</th>
-    <th>Default</th>
-   </tr>
-  </thead>
-  <tbody>
-   <tr>
-    <td><code>complex</code></td>
-    <td><code>vr</code>, <code>alpha</code>, <code>cech</code>, <code>witness</code>, <code>dtm-rips</code>, <code>dtm-alpha</code>, <code>sheehy-rips</code></td>
-    <td><code>vr</code></td>
-   </tr>
-   <tr>
-    <td><code>engine</code></td>
-    <td><code>ripser</code>, <code>naive</code>, <code>chunks</code>, <code>cohomology</code>, <code>fast-cubical</code>, <code>fast-alpha</code></td>
-    <td><code>ripser</code> for <code>vr</code> and <code>witness</code>/<code>witnessVariant=lazy</code>; <code>naive</code> for <code>alpha</code>/<code>cech</code>/<code>dtm-rips</code>/<code>dtm-alpha</code>/<code>sheehy-rips</code>/<code>witness</code>/<code>witnessVariant=general</code>/cubical images. <code>fast-cubical</code> is valid ONLY for <code>computeFromCubicalImage</code>/<code>computeFromImage</code>, for any ambient dimension <code>&gt;= 2</code>. <code>fast-alpha</code> is valid ONLY for <code>complex=alpha</code> with <code>alphaBackend=helix</code>, for any ambient dimension <code>&gt;= 2</code></td>
-   </tr>
-   <tr>
-    <td><code>alphaBackend</code></td>
-    <td><code>helix</code>, <code>DQP</code></td>
-    <td><code>helix</code> (only consulted for <code>complex=alpha</code>)</td>
-   </tr>
-   <tr>
-    <td><code>requireValidTriangulation</code></td>
-    <td><code>true</code>, <code>false</code></td>
-    <td><code>false</code> (only consulted for <code>complex=alpha</code>/<code>alphaBackend=helix</code>; rejected for any other <code>complex</code> or <code>alphaBackend=DQP</code>) — repairs a <code>HelixDelaunay</code> facet-multiplicity violation instead of letting it surface as <code>FastAlphaTriangulationException</code>; validated at ambient dimension 2 and 3, not yet at <code>d &gt;= 4</code></td>
-   </tr>
-   <tr>
-    <td><code>dtmK</code></td>
-    <td>integer</td>
-    <td>REQUIRED for <code>complex=dtm-rips</code> or <code>complex=dtm-alpha</code>, no default</td>
-   </tr>
-   <tr>
-    <td><code>dtmQ</code></td>
-    <td>double</td>
-    <td><code>2.0</code> (only consulted for <code>complex=dtm-rips</code> or <code>complex=dtm-alpha</code>)</td>
-   </tr>
-   <tr>
-    <td><code>dtmP</code></td>
-    <td>double</td>
-    <td><code>1.0</code> (only consulted for <code>complex=dtm-rips</code>; must be <code>1.0</code> or <code>2.0</code>)</td>
-   </tr>
-   <tr>
-    <td><code>sheehyEpsilon</code></td>
-    <td>double</td>
-    <td>REQUIRED for <code>complex=sheehy-rips</code>, no default; strictly between <code>0</code> and <code>1</code></td>
-   </tr>
-   <tr>
-    <td><code>maxDimension</code></td>
-    <td>integer</td>
-    <td><code>2</code> — highest H_k reported, not highest simplex dimension built</td>
-   </tr>
-   <tr>
-    <td><code>maxFiltrationValue</code></td>
-    <td>double</td>
-    <td>the point cloud's own minimum enclosing radius (<code>+Infinity</code> for <code>witness</code>/<code>witnessVariant=general</code>; <code>SheehyRipsSimplexStream</code>'s own <code>maxFiniteFiltrationValue</code> for <code>complex=sheehy-rips</code>)</td>
-   </tr>
-   <tr>
-    <td><code>field</code></td>
-    <td><code>Z</code> (finite field), <code>R</code> (floating point)</td>
-    <td><code>Z</code>, <code>prime=2</code></td>
-   </tr>
-   <tr>
-    <td><code>prime</code></td>
-    <td>integer</td>
-    <td><code>2</code> (only for <code>field=Z</code>)</td>
-   </tr>
-   <tr>
-    <td><code>epsilon</code></td>
-    <td>double</td>
-    <td><code>1e-9</code> (only for <code>field=R</code>; unrelated to <code>sheehyEpsilon</code> above)</td>
-   </tr>
-   <tr>
-    <td><code>numLandmarks</code></td>
-    <td>integer</td>
-    <td>REQUIRED for <code>complex=witness</code>, no default</td>
-   </tr>
-   <tr>
-    <td><code>witnessVariant</code></td>
-    <td><code>lazy</code>, <code>general</code></td>
-    <td><code>lazy</code> (only consulted for <code>complex=witness</code>)</td>
-   </tr>
-   <tr>
-    <td><code>landmarkSelector</code></td>
-    <td><code>maxmin</code>, <code>random</code></td>
-    <td><code>maxmin</code> (only consulted for <code>complex=witness</code>)</td>
-   </tr>
-   <tr>
-    <td><code>landmarkSeed</code></td>
-    <td>integer</td>
-    <td><code>0</code> (only for <code>complex=witness</code>/<code>landmarkSelector=random</code>)</td>
-   </tr>
-   <tr>
-    <td><code>nu</code></td>
-    <td><code>0</code>, <code>1</code>, <code>2</code></td>
-    <td><code>2</code> (only for <code>complex=witness</code>/<code>witnessVariant=lazy</code>)</td>
-   </tr>
-   <tr>
-    <td><code>edgeCollapse</code></td>
-    <td><code>true</code>, <code>false</code></td>
-    <td><code>false</code> (only consulted for <code>complex=vr</code>; <code>true</code> rejected for every other <code>complex</code>)</td>
-   </tr>
-  </tbody>
- </table>
- <p><code>alpha</code> refuses <code>engine=ripser</code> and <code>engine=chunks</code> (neither engine understands alpha complexes, and the chunks/alpha combination is a known stall risk in the underlying library); <code>cech</code>, <code>dtm-rips</code>, and <code>sheehy-rips</code> all refuse <code>engine=ripser</code> (the packed Ripser engine's optimizations are proven for Vietoris-Rips's plain max-pairwise-distance functional specifically, not for Cech's circumradius, DTM's weighted filtration, or Sheehy's sparsified/vanishing one); <code>dtm-alpha</code> refuses both <code>engine=ripser</code> and <code>engine=chunks</code>; <code>witness</code> with <code>witnessVariant=general</code> refuses both <code>engine=ripser</code> and <code>engine=chunks</code> for the same reason as <code>cech</code> (the general witness complex isn't a flag complex either) — use <code>witnessVariant=lazy</code> (the default) for <code>engine=ripser</code>/<code>chunks</code>. <code>engine=cohomology</code> is accepted everywhere <code>engine=naive</code> is (<code>vr</code>, <code>alpha</code>, <code>cech</code>, <code>dtm-rips</code>, <code>dtm-alpha</code>, <code>sheehy-rips</code>, and <code>witness</code> alike). <code>engine=fast-cubical</code> is the mirror image: refused everywhere EXCEPT <code>computeFromCubicalImage</code>/<code>computeFromImage</code>, and even there refused only for a degenerate 1-axis image (ambient dimension <code>&lt; 2</code>) — no other ambient-dimension restriction. <code>engine=fast-alpha</code> is likewise refused everywhere except <code>complex=alpha</code> with <code>alphaBackend=helix</code> (the default; <code>alphaBackend=DQP</code> is refused too — <code>FastAlphaHomologyEngine</code> cannot consume <code>AlphaShapeDQP</code>'s output), with the same "any ambient dimension <code>&gt;= 2</code>" rule as <code>fast-cubical</code> — though at higher ambient dimension and point count it's noticeably more likely to throw <code>FastAlphaTriangulationException</code> on a given point cloud (see "Which persistence engine?" below). Both <code>fast-*</code> exceptions name the actual mismatch (dimension, backend, or complex) rather than throwing a bare <code>IllegalArgumentException</code>. See the <a href="../developers-guide/persistence-engines.html">Developer's Guide</a>'s streams-vs-engines table for the full picture, complex by complex. Unrecognized keys or values throw <code>IllegalArgumentException</code> immediately rather than silently falling back to a default.</p>
- <p><code>edgeCollapse=true</code> (<code>complex=vr</code> only) preprocesses the point cloud's own Vietoris-Rips 1-skeleton with edge collapse (Boissonnat-Pritam/Glisse-Pritam) before building anything on top of it — a smaller weighted graph with the SAME persistent homology at every filtration level, so the resulting <code>PersistenceResult</code> is identical to what <code>edgeCollapse=false</code> (the default) would have produced, just computed from a much smaller complex. Applies uniformly to every <code>engine</code> value. Measured 73-76% of edges removed and a 43-47x reduction-phase speedup on random point clouds — construction-phase speedup is far smaller (1.45-1.74x), since the dominant cost this removes is REDUCING the resulting chain complex, not enumerating candidate simplices in the first place; see the <a href="../developers-guide/architecture.html">Developer's Guide</a>'s "Flag-complex edge collapse" section for the full construction and measurement. <code>--edge-collapse</code> on the CLI mirrors this option exactly (unlike <code>--distance-to</code>/the vectorizations/the boundary-matrix export above, this one changes nothing about the output shape, so it needs no special CLI-side handling at all).</p>
- <p>Representative-chain vertex indices for <code>complex=witness</code> are <strong>ambient point-cloud indices</strong>, already mapped back from the stream's own local <code>0 until numLandmarks</code> landmark indices — <code>cycleVertices</code> never reports a raw local landmark index.</p>
- <p><code>PersistenceResult.cycleVertices</code>/<code>cycleCoefficients</code> give you each bar's representative chain: every engine records one for every bar — though for <code>engine=cohomology</code>, only an <em>essential</em> bar's representative is guaranteed to be a genuine cocycle (zero coboundary); a finite bar's is a valid witness on its own living interval, not over the whole complex (see the developer's guide's persistence-engines page for why).</p>
-</main></div><div id="toc" class="body-small"></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+ <section id="which-bars-are-reported">
+  <h3 class="h400"><a href="#which-bars-are-reported" class="anchor"></a>Which bars are reported</h3>
+  <p>A barcode computed from real data is mostly noise: thousands of bars of negligible length next to the few that carry the shape. So by default <code>toArray()</code>/<code>size()</code>/<code>birth</code>/<code>death</code>/<code>cycleVertices</code>/... report a bar only if it is <strong>essential</strong> (never dies) or its persistence <code>death - birth</code> is <strong>greater than 1% of the input's minimum enclosing radius</strong> — Ripser's enclosing radius, <code>min over points of (max distance to another point)</code>: beyond it the Vietoris-Rips complex is a cone, so every bar lives between 0 and it. The scale is in the units the complex reports (diameters for <code>vr</code>, radii for <code>cech</code>/<code>alpha</code>). A cubical image and a Dowker relation have no metric, so their own value range (max − min) is the scale instead. A single point has scale 0, so nothing is hidden, and an infinite enclosing radius (a disconnected distance matrix with infinite entries) falls back to the span of the barcode's own finite endpoints.</p>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-java"><span line-number="1" class=""><span class="tooltip-container"></span>// a different cut: 5% of the scale, or an absolute persistence of 0.1, or no cut at all
+</span><span line-number="2" class=""><span class="tooltip-container"></span>TDA4j.computeFromPoints(points, new String[] {"minPersistenceFraction", "0.05"});
+</span><span line-number="3" class=""><span class="tooltip-container"></span>TDA4j.computeFromPoints(points, new String[] {"minPersistence", "0.1"});
+</span><span line-number="4" class=""><span class="tooltip-container"></span>PersistenceResult everything = TDA4j.computeFromPoints(points, new String[] {"minPersistence", "0"});
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>int hidden = result.hiddenCount();                 // how many bars the threshold hid
+</span><span line-number="7" class=""><span class="tooltip-container"></span>double cut = result.persistenceThreshold();        // the persistence a bar had to exceed
+</span><span line-number="8" class=""><span class="tooltip-container"></span>double[][] all = result.toArrayUnfiltered();       // the complete barcode, same layout as toArray()
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>The threshold only changes what is <em>reported</em>: bottleneck/Wasserstein distances, landscapes and persistence images always use the complete barcode, so they do not depend on each result's own scale. It is applied after the computation, so it does not make the computation itself cheaper (<code>maxFiltrationValue</code> and <code>maxDimension</code> do that). <code>circularCoordinates</code>/<code>toroidalCoordinates</code>' <code>h1Bars</code> are not filtered.</p>
+  <p>Entry points: <code>computeFromPoints</code>/<code>computeFromDistanceMatrix</code> (Vietoris-Rips/alpha/Cech/witness/dtm-rips/ dtm-alpha/sheehy-rips, from a point cloud or a precomputed distance matrix — alpha, Cech, and dtm-alpha need real coordinates, so they're only available from the points overload; witness/dtm-rips/sheehy-rips work from either, exactly like <code>vr</code>, since none of the three needs real coordinates, only a metric), <code>computeFromCubicalImage</code>/<code>computeFromImage</code> (cubical persistence from a flat array + shape, or a 2D pixel matrix directly), <code>computeFromRelation</code> (Dowker complex persistence from a general relation matrix — see "Dowker complexes" above; its own OWN, much smaller options set, <code>"engine"</code>/<code>"maxDimension"</code>/ <code>"maxFiltrationValue"</code>/<code>"dual"</code>/<code>"field"</code>/<code>"prime"</code>/<code>"epsilon"</code>, is not in the table below either, for the same reason the two-step witness recipe's own options aren't), and the two-step witness recipe's own four entry points -- <code>selectLandmarksFromPoints</code>/<code>selectLandmarksFromDistanceMatrix</code> (→ <code>LandmarkSelectionResult</code>) and <code>computeFromPointsAndLandmarks</code>/<code>computeFromDistanceMatrixAndLandmarks</code>, plus the <code>coveringRadiusFromPoints</code>/<code>coveringRadiusFromDistanceMatrix</code> query pair -- covered in their own section above rather than the table below, since they take an explicit <code>int[] landmarks</code> parameter and each has its OWN (stricter) recognized-options set rather than sharing the table's. Every method here has a no-options overload and one taking a flat, alternating key/value <code>String[]</code> of options — so adding a new option in the future never changes a method's call signature:</p>
+  <table>
+   <thead>
+    <tr>
+     <th>Option</th>
+     <th>Values</th>
+     <th>Default</th>
+    </tr>
+   </thead>
+   <tbody>
+    <tr>
+     <td><code>complex</code></td>
+     <td><code>vr</code>, <code>alpha</code>, <code>cech</code>, <code>witness</code>, <code>dtm-rips</code>, <code>dtm-alpha</code>, <code>sheehy-rips</code></td>
+     <td><code>vr</code></td>
+    </tr>
+    <tr>
+     <td><code>engine</code></td>
+     <td><code>ripser</code>, <code>naive</code>, <code>chunks</code>, <code>cohomology</code>, <code>fast-cubical</code>, <code>fast-alpha</code></td>
+     <td><code>ripser</code> for <code>vr</code> and <code>witness</code>/<code>witnessVariant=lazy</code>; <code>naive</code> for <code>alpha</code>/<code>cech</code>/<code>dtm-rips</code>/<code>dtm-alpha</code>/<code>sheehy-rips</code>/<code>witness</code>/<code>witnessVariant=general</code>/cubical images. <code>fast-cubical</code> is valid ONLY for <code>computeFromCubicalImage</code>/<code>computeFromImage</code>, for any ambient dimension <code>&gt;= 2</code>. <code>fast-alpha</code> is valid ONLY for <code>complex=alpha</code> with <code>alphaBackend=helix</code>, for any ambient dimension <code>&gt;= 2</code></td>
+    </tr>
+    <tr>
+     <td><code>alphaBackend</code></td>
+     <td><code>helix</code>, <code>DQP</code></td>
+     <td><code>helix</code> (only consulted for <code>complex=alpha</code>)</td>
+    </tr>
+    <tr>
+     <td><code>requireValidTriangulation</code></td>
+     <td><code>true</code>, <code>false</code></td>
+     <td><code>false</code> (only consulted for <code>complex=alpha</code>/<code>alphaBackend=helix</code>; rejected for any other <code>complex</code> or <code>alphaBackend=DQP</code>) — repairs a <code>HelixDelaunay</code> facet-multiplicity violation instead of letting it surface as <code>FastAlphaTriangulationException</code>; validated at ambient dimension 2 and 3, not yet at <code>d &gt;= 4</code></td>
+    </tr>
+    <tr>
+     <td><code>dtmK</code></td>
+     <td>integer</td>
+     <td>REQUIRED for <code>complex=dtm-rips</code> or <code>complex=dtm-alpha</code>, no default</td>
+    </tr>
+    <tr>
+     <td><code>dtmQ</code></td>
+     <td>double</td>
+     <td><code>2.0</code> (only consulted for <code>complex=dtm-rips</code> or <code>complex=dtm-alpha</code>)</td>
+    </tr>
+    <tr>
+     <td><code>dtmP</code></td>
+     <td>double</td>
+     <td><code>1.0</code> (only consulted for <code>complex=dtm-rips</code>; must be <code>1.0</code> or <code>2.0</code>)</td>
+    </tr>
+    <tr>
+     <td><code>sheehyEpsilon</code></td>
+     <td>double</td>
+     <td>REQUIRED for <code>complex=sheehy-rips</code>, no default; strictly between <code>0</code> and <code>1</code></td>
+    </tr>
+    <tr>
+     <td><code>maxDimension</code></td>
+     <td>integer</td>
+     <td><code>2</code> — highest H_k reported, not highest simplex dimension built</td>
+    </tr>
+    <tr>
+     <td><code>maxFiltrationValue</code></td>
+     <td>double</td>
+     <td>the point cloud's own minimum enclosing radius (<code>+Infinity</code> for <code>witness</code>/<code>witnessVariant=general</code>; <code>SheehyRipsSimplexStream</code>'s own <code>maxFiniteFiltrationValue</code> for <code>complex=sheehy-rips</code>)</td>
+    </tr>
+    <tr>
+     <td><code>minPersistence</code></td>
+     <td>double</td>
+     <td>unset — a bar is reported only if essential or its persistence exceeds 1% of the minimum enclosing radius (see "Which bars are reported" above); an absolute threshold in the barcode's own units, <code>0</code> reports every bar. Accepted by every <code>computeFrom*</code> method (not the landmark-selection ones, which produce no barcode)</td>
+    </tr>
+    <tr>
+     <td><code>minPersistenceFraction</code></td>
+     <td>double</td>
+     <td><code>0.01</code> — the same threshold as a fraction of the minimum enclosing radius; <code>0</code> reports every bar. Give at most one of the two</td>
+    </tr>
+    <tr>
+     <td><code>field</code></td>
+     <td><code>Z</code> (finite field), <code>R</code> (floating point)</td>
+     <td><code>Z</code>, <code>prime=2</code></td>
+    </tr>
+    <tr>
+     <td><code>prime</code></td>
+     <td>integer</td>
+     <td><code>2</code> (only for <code>field=Z</code>)</td>
+    </tr>
+    <tr>
+     <td><code>epsilon</code></td>
+     <td>double</td>
+     <td><code>1e-9</code> (only for <code>field=R</code>; unrelated to <code>sheehyEpsilon</code> above)</td>
+    </tr>
+    <tr>
+     <td><code>numLandmarks</code></td>
+     <td>integer</td>
+     <td>REQUIRED for <code>complex=witness</code>, no default</td>
+    </tr>
+    <tr>
+     <td><code>witnessVariant</code></td>
+     <td><code>lazy</code>, <code>general</code></td>
+     <td><code>lazy</code> (only consulted for <code>complex=witness</code>)</td>
+    </tr>
+    <tr>
+     <td><code>landmarkSelector</code></td>
+     <td><code>maxmin</code>, <code>random</code></td>
+     <td><code>maxmin</code> (only consulted for <code>complex=witness</code>)</td>
+    </tr>
+    <tr>
+     <td><code>landmarkSeed</code></td>
+     <td>integer</td>
+     <td><code>0</code> (only for <code>complex=witness</code>/<code>landmarkSelector=random</code>)</td>
+    </tr>
+    <tr>
+     <td><code>nu</code></td>
+     <td><code>0</code>, <code>1</code>, <code>2</code></td>
+     <td><code>2</code> (only for <code>complex=witness</code>/<code>witnessVariant=lazy</code>)</td>
+    </tr>
+    <tr>
+     <td><code>edgeCollapse</code></td>
+     <td><code>true</code>, <code>false</code></td>
+     <td><code>false</code> (only consulted for <code>complex=vr</code>; <code>true</code> rejected for every other <code>complex</code>)</td>
+    </tr>
+   </tbody>
+  </table>
+  <p><code>alpha</code> refuses <code>engine=ripser</code> and <code>engine=chunks</code> (neither engine understands alpha complexes, and the chunks/alpha combination is a known stall risk in the underlying library); <code>cech</code>, <code>dtm-rips</code>, and <code>sheehy-rips</code> all refuse <code>engine=ripser</code> (the packed Ripser engine's optimizations are proven for Vietoris-Rips's plain max-pairwise-distance functional specifically, not for Cech's circumradius, DTM's weighted filtration, or Sheehy's sparsified/vanishing one); <code>dtm-alpha</code> refuses both <code>engine=ripser</code> and <code>engine=chunks</code>; <code>witness</code> with <code>witnessVariant=general</code> refuses both <code>engine=ripser</code> and <code>engine=chunks</code> for the same reason as <code>cech</code> (the general witness complex isn't a flag complex either) — use <code>witnessVariant=lazy</code> (the default) for <code>engine=ripser</code>/<code>chunks</code>. <code>engine=cohomology</code> is accepted everywhere <code>engine=naive</code> is (<code>vr</code>, <code>alpha</code>, <code>cech</code>, <code>dtm-rips</code>, <code>dtm-alpha</code>, <code>sheehy-rips</code>, and <code>witness</code> alike). <code>engine=fast-cubical</code> is the mirror image: refused everywhere EXCEPT <code>computeFromCubicalImage</code>/<code>computeFromImage</code>, and even there refused only for a degenerate 1-axis image (ambient dimension <code>&lt; 2</code>) — no other ambient-dimension restriction. <code>engine=fast-alpha</code> is likewise refused everywhere except <code>complex=alpha</code> with <code>alphaBackend=helix</code> (the default; <code>alphaBackend=DQP</code> is refused too — <code>FastAlphaHomologyEngine</code> cannot consume <code>AlphaShapeDQP</code>'s output), with the same "any ambient dimension <code>&gt;= 2</code>" rule as <code>fast-cubical</code> — though at higher ambient dimension and point count it's noticeably more likely to throw <code>FastAlphaTriangulationException</code> on a given point cloud (see "Which persistence engine?" below). Both <code>fast-*</code> exceptions name the actual mismatch (dimension, backend, or complex) rather than throwing a bare <code>IllegalArgumentException</code>. See the <a href="../developers-guide/persistence-engines.html">Developer's Guide</a>'s streams-vs-engines table for the full picture, complex by complex. Unrecognized keys or values throw <code>IllegalArgumentException</code> immediately rather than silently falling back to a default.</p>
+  <p><code>edgeCollapse=true</code> (<code>complex=vr</code> only) preprocesses the point cloud's own Vietoris-Rips 1-skeleton with edge collapse (Boissonnat-Pritam/Glisse-Pritam) before building anything on top of it — a smaller weighted graph with the SAME persistent homology at every filtration level, so the resulting <code>PersistenceResult</code> is identical to what <code>edgeCollapse=false</code> (the default) would have produced, just computed from a much smaller complex. Applies uniformly to every <code>engine</code> value. Measured 73-76% of edges removed and a 43-47x reduction-phase speedup on random point clouds — construction-phase speedup is far smaller (1.45-1.74x), since the dominant cost this removes is REDUCING the resulting chain complex, not enumerating candidate simplices in the first place; see the <a href="../developers-guide/architecture.html">Developer's Guide</a>'s "Flag-complex edge collapse" section for the full construction and measurement. <code>--edge-collapse</code> on the CLI mirrors this option exactly (unlike <code>--distance-to</code>/the vectorizations/the boundary-matrix export above, this one changes nothing about the output shape, so it needs no special CLI-side handling at all).</p>
+  <p>Representative-chain vertex indices for <code>complex=witness</code> are <strong>ambient point-cloud indices</strong>, already mapped back from the stream's own local <code>0 until numLandmarks</code> landmark indices — <code>cycleVertices</code> never reports a raw local landmark index.</p>
+  <p><code>PersistenceResult.cycleVertices</code>/<code>cycleCoefficients</code> give you each bar's representative chain: every engine records one for every bar — though for <code>engine=cohomology</code>, only an <em>essential</em> bar's representative is guaranteed to be a genuine cocycle (zero coboundary); a finite bar's is a valid witness on its own living interval, not over the whole complex (see the developer's guide's persistence-engines page for why).</p>
+ </section>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#which-bars-are-reported">Which bars are reported</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

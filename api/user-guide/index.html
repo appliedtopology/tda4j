@@ -33,10 +33,17 @@
  <p>TDA4j implements persistent homology and related techniques from computational and applied topology. This guide assumes you know what a simplicial complex, a filtration, and a persistence barcode are — it does not assume you know Scala. If you want to understand <em>why</em> the library is built the way it is, or you're planning to write new code against it, see the <a href="../developers-guide/index.html">Developer's Guide</a> instead; this page is about getting things done as a caller.</p>
  <section id="alpha-complexes">
   <h3 class="h400"><a href="#alpha-complexes" class="anchor"></a>Alpha complexes</h3>
-  <div class="snippet mono-small-block" scala-snippet="">
-   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.alpha.{given, *}
-</span><span line-number="2" class=""><span class="tooltip-container"></span>
-</span><span line-number="3" class=""><span class="tooltip-container"></span>val shape = AlphaShapes(points.toSeq, dispatch = "helix")   // or "DQP"
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.algebra.{given, *}
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.cells.{given, *}
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.streams.{given, *}
+</span><span line-number="4" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.homology.{given, *}
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>given Double is Field = Field.DoubleApproximated(1e-9)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.alpha.{given, *}
+</span><span line-number="8" class=""><span class="tooltip-container"></span>
+</span><span line-number="9" class=""><span class="tooltip-container"></span>val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
+</span><span line-number="10" class=""><span class="tooltip-container"></span>val shape = AlphaShapes(points.toSeq, dispatch = "helix")   // or "DQP"
 </span></code></pre>
    <div class="buttons"></div>
   </div>
@@ -44,10 +51,19 @@
  </section>
  <section id="flag-complex-edge-collapse">
   <h3 class="h400"><a href="#flag-complex-edge-collapse" class="anchor"></a>Flag-complex edge collapse</h3>
-  <div class="snippet mono-small-block" scala-snippet="">
-   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>val collapsed = EdgeCollapse.collapse(metricSpace) // a FiniteMetricSpace[Int], drop-in for any VR-consuming stream
-</span><span line-number="2" class=""><span class="tooltip-container"></span>val stream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(collapsed), 3)
-</span><span line-number="3" class=""><span class="tooltip-container"></span>val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream)
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.algebra.{given, *}
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.cells.{given, *}
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.streams.{given, *}
+</span><span line-number="4" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.homology.{given, *}
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>given Double is Field = Field.DoubleApproximated(1e-9)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
+</span><span line-number="8" class=""><span class="tooltip-container"></span>val metricSpace = EuclideanMetricSpace(points)
+</span><span line-number="9" class=""><span class="tooltip-container"></span>
+</span><span line-number="10" class=""><span class="tooltip-container"></span>val collapsed = EdgeCollapse.collapse(metricSpace) // a FiniteMetricSpace[Int], drop-in for any VR-consuming stream
+</span><span line-number="11" class=""><span class="tooltip-container"></span>val stream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(collapsed), 3)
+</span><span line-number="12" class=""><span class="tooltip-container"></span>val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream)
 </span></code></pre>
    <div class="buttons"></div>
   </div>

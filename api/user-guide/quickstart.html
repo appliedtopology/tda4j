@@ -34,7 +34,7 @@
  <section id="imports">
   <h3 class="h400"><a href="#imports" class="anchor"></a>Imports</h3>
   <p>TDA4j's package is split into subpackages (<code>algebra</code>, <code>cells</code>, <code>streams</code>, <code>homology</code>, <code>alpha</code>, ...). Bring in what you need with the <code>{given, *}</code> form — a plain <code>import pkg.*</code> does <strong>not</strong> bring <code>given</code> instances (coefficient fields, orderings) into scope in Scala 3:</p>
-  <div class="snippet mono-small-block" scala-snippet="">
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
    <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.algebra.{given, *}
 </span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.cells.{given, *}
 </span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.streams.{given, *}
@@ -46,14 +46,16 @@
  </section>
  <section id="building-and-taking-the-boundary-of-a-simplex">
   <h3 class="h400"><a href="#building-and-taking-the-boundary-of-a-simplex" class="anchor"></a>Building and taking the boundary of a simplex</h3>
-  <div class="snippet mono-small-block" scala-snippet="">
-   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>// Coefficients need an explicit Field instance in scope -- there is no default one for Double.
-</span><span line-number="2" class=""><span class="tooltip-container"></span>// DoubleApproximated treats two coefficients as equal within epsilon, which matters for the
-</span><span line-number="3" class=""><span class="tooltip-container"></span>// zero-checks that drive chain reduction.
-</span><span line-number="4" class=""><span class="tooltip-container"></span>given Double is Field = Field.DoubleApproximated(1e-9)
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.algebra.{given, *}
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.cells.{given, *}
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.streams.{given, *}
+</span><span line-number="4" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.homology.{given, *}
 </span><span line-number="5" class=""><span class="tooltip-container"></span>
-</span><span line-number="6" class=""><span class="tooltip-container"></span>val triangle = Simplex(1, 2, 3)      // same as ∆(1, 2, 3)
-</span><span line-number="7" class=""><span class="tooltip-container"></span>triangle.boundary[Double]            // Seq((Simplex(2,3), 1.0), (Simplex(1,3), -1.0), (Simplex(1,2), 1.0))
+</span><span line-number="6" class=""><span class="tooltip-container"></span>given Double is Field = Field.DoubleApproximated(1e-9)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>
+</span><span line-number="8" class=""><span class="tooltip-container"></span>val triangle = Simplex(1, 2, 3)      // same as ∆(1, 2, 3)
+</span><span line-number="9" class=""><span class="tooltip-container"></span>triangle.boundary[Double]            // Seq((Simplex(2,3), 1.0), (Simplex(1,3), -1.0), (Simplex(1,2), 1.0))
 </span></code></pre>
    <div class="buttons"></div>
   </div>
@@ -61,32 +63,67 @@
  <section id="chain-arithmetic-with-tdalab">
   <h3 class="h400"><a href="#chain-arithmetic-with-tdalab" class="anchor"></a>Chain arithmetic with <code>TDAlab</code></h3>
   <p>For interactive use, <code>TDAlab</code> is a pylab-style entry point: pick a field once, import its members, and compute.</p>
-  <div class="snippet mono-small-block" scala-snippet="">
-   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>val tdalab = TDAlab(17)          // Z/17; TDAlab(0) uses Double coefficients
-</span><span line-number="2" class=""><span class="tooltip-container"></span>import tdalab.{*, given}
-</span><span line-number="3" class=""><span class="tooltip-container"></span>val chain = Fp(1) ⊠ ∆(1, 2) - ∆(2, 3)
-</span><span line-number="4" class=""><span class="tooltip-container"></span>println(chain.show)
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.TDAlab
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>val tdalab = TDAlab(17)          // Z/17; TDAlab(0) uses Double coefficients
+</span><span line-number="5" class=""><span class="tooltip-container"></span>import tdalab.{*, given}
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val chain = Fp(1) ⊠ ∆(1, 2) - ∆(2, 3)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>println(chain.show)
 </span></code></pre>
    <div class="buttons"></div>
   </div>
  </section>
  <section id="a-full-vietoris-rips-persistence-computation">
   <h3 class="h400"><a href="#a-full-vietoris-rips-persistence-computation" class="anchor"></a>A full Vietoris-Rips persistence computation</h3>
-  <div class="snippet mono-small-block" scala-snippet="">
-   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>given Double is Field = Field.DoubleApproximated(1e-9)
-</span><span line-number="2" class=""><span class="tooltip-container"></span>val engine = SimplicialHomologyEngine[Int, Double, Double]()
-</span><span line-number="3" class=""><span class="tooltip-container"></span>
-</span><span line-number="4" class=""><span class="tooltip-container"></span>val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8))
-</span><span line-number="5" class=""><span class="tooltip-container"></span>val metricSpace = EuclideanMetricSpace(points)
-</span><span line-number="6" class=""><span class="tooltip-container"></span>val stream = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(2.0))
-</span><span line-number="7" class=""><span class="tooltip-container"></span>
-</span><span line-number="8" class=""><span class="tooltip-container"></span>val state = engine.persistentHomology(stream)
-</span><span line-number="9" class=""><span class="tooltip-container"></span>state.barcodeAt(Double.PositiveInfinity).foreach(println)
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.algebra.{given, *}
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.cells.{given, *}
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.streams.{given, *}
+</span><span line-number="4" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.homology.{given, *}
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>given Double is Field = Field.DoubleApproximated(1e-9)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>val engine = SimplicialHomologyEngine[Int, Double, Double]()
+</span><span line-number="8" class=""><span class="tooltip-container"></span>
+</span><span line-number="9" class=""><span class="tooltip-container"></span>val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8))
+</span><span line-number="10" class=""><span class="tooltip-container"></span>val metricSpace = EuclideanMetricSpace(points)
+</span><span line-number="11" class=""><span class="tooltip-container"></span>val stream = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(2.0))
+</span><span line-number="12" class=""><span class="tooltip-container"></span>
+</span><span line-number="13" class=""><span class="tooltip-container"></span>val state = engine.persistentHomology(stream)
+</span><span line-number="14" class=""><span class="tooltip-container"></span>state.barcodeAt(Double.PositiveInfinity).foreach(println)
 </span></code></pre>
    <div class="buttons"></div>
   </div>
   <p><em>Source: <code>src/test/scala/org/appliedtopology/tda4j/APISpec.scala</code>, region <code>full-vr-computation</code>.</em></p>
   <p><code>SimplicialHomologyEngine[VertexT, CoefficientT, FiltrationT]</code> is the naive, reference-grade persistence engine. It's a good default for exploration and for anything where you want to query the diagram at intermediate filtration values or get representative cycles back (<code>state.diagramAt(f)</code>/<code>state.barcodeAt(f)</code>) — see "Which persistence engine?" below for when a different engine is worth reaching for instead.</p>
+ </section>
+ <section id="dropping-short-bars">
+  <h3 class="h400"><a href="#dropping-short-bars" class="anchor"></a>Dropping short bars</h3>
+  <p>Engines return every bar. The MATLAB facade and the CLI hide bars shorter than 1% of the input's minimum enclosing radius by default; from Scala you opt in with <code>PersistenceFilter</code> (essential bars are always kept; a threshold of <code>0</code> keeps everything):</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.algebra.{given, *}
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.cells.{given, *}
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.streams.{given, *}
+</span><span line-number="4" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.homology.{given, *}
+</span><span line-number="5" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.barcode.PersistenceFilter
+</span><span line-number="6" class=""><span class="tooltip-container"></span>
+</span><span line-number="7" class=""><span class="tooltip-container"></span>given Double is Field = Field.DoubleApproximated(1e-9)
+</span><span line-number="8" class=""><span class="tooltip-container"></span>val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(0.001, 0.0), Array(1.0, 0.0))
+</span><span line-number="9" class=""><span class="tooltip-container"></span>val stream = EnumeratingCofaceSimplexStream(EuclideanMetricSpace(points), maxFiltrationValue = Some(2.0))
+</span><span line-number="10" class=""><span class="tooltip-container"></span>val state = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream)
+</span><span line-number="11" class=""><span class="tooltip-container"></span>state.advanceAll()
+</span><span line-number="12" class=""><span class="tooltip-container"></span>val bars = state.barcodeAt(Double.PositiveInfinity)
+</span><span line-number="13" class=""><span class="tooltip-container"></span>
+</span><span line-number="14" class=""><span class="tooltip-container"></span>val metricSpace = EuclideanMetricSpace(points)
+</span><span line-number="15" class=""><span class="tooltip-container"></span>val scale = Some(metricSpace.minimumEnclosingRadius)
+</span><span line-number="16" class=""><span class="tooltip-container"></span>
+</span><span line-number="17" class=""><span class="tooltip-container"></span>val worthReporting = PersistenceFilter.significant(bars, scale = scale)          // default: 1% of the scale
+</span><span line-number="18" class=""><span class="tooltip-container"></span>val everything = PersistenceFilter.significant(bars, minPersistence = Some(0.0))
+</span><span line-number="19" class=""><span class="tooltip-container"></span>val aTenthOfIt = PersistenceFilter.significant(bars, fraction = 0.1, scale = scale)
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
   <p><strong>A default worth knowing</strong>: <code>EnumeratingCofaceSimplexStream</code> and the other Vietoris-Rips stream implementations default <code>maxFiltrationValue</code> to the point cloud's own <em>minimum enclosing radius</em>, not unbounded, since nothing past that radius contributes new homology. Pass <code>Some(Double.PositiveInfinity)</code> explicitly if you want the old always-unbounded behavior.</p>
  </section>
-</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#imports">Imports</a></li><li><a href="#building-and-taking-the-boundary-of-a-simplex">Building and taking the boundary of a simplex</a></li><li><a href="#chain-arithmetic-with-tdalab">Chain arithmetic with TDAlab</a></li><li><a href="#a-full-vietoris-rips-persistence-computation">A full Vietoris-Rips persistence computation</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#imports">Imports</a></li><li><a href="#building-and-taking-the-boundary-of-a-simplex">Building and taking the boundary of a simplex</a></li><li><a href="#chain-arithmetic-with-tdalab">Chain arithmetic with TDAlab</a></li><li><a href="#a-full-vietoris-rips-persistence-computation">A full Vietoris-Rips persistence computation</a></li><li><a href="#dropping-short-bars">Dropping short bars</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

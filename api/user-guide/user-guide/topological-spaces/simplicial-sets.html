@@ -33,26 +33,33 @@
  <section id="simplicial-sets">
   <h3 class="h400"><a href="#simplicial-sets" class="anchor"></a>Simplicial sets</h3>
   <p>For homology of a space presented combinatorially (not as a metric-space complex), build a <code>FiniteSimplicialSet[G]</code> by giving each generator's faces directly. A minimal circle (one vertex, one loop edge):</p>
-  <div class="snippet mono-small-block" scala-snippet="">
-   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>enum CircleGen { case V, E }
-</span><span line-number="2" class=""><span class="tooltip-container"></span>import CircleGen.*
-</span><span line-number="3" class=""><span class="tooltip-container"></span>given Ordering[CircleGen] = Ordering.by(_.ordinal)
-</span><span line-number="4" class=""><span class="tooltip-container"></span>
-</span><span line-number="5" class=""><span class="tooltip-container"></span>val circle = FiniteSimplicialSet[CircleGen](summon[Ordering[CircleGen]])(
-</span><span line-number="6" class=""><span class="tooltip-container"></span>  generatorsByDim = IndexedSeq(Set(V), Set(E)),
-</span><span line-number="7" class=""><span class="tooltip-container"></span>  faces = {
-</span><span line-number="8" class=""><span class="tooltip-container"></span>    case V =&gt; IndexedSeq.empty
-</span><span line-number="9" class=""><span class="tooltip-container"></span>    case E =&gt; IndexedSeq(SSetElement(Nil, V), SSetElement(Nil, V)) // both faces of the loop are V
-</span><span line-number="10" class=""><span class="tooltip-container"></span>  }
-</span><span line-number="11" class=""><span class="tooltip-container"></span>)
-</span><span line-number="12" class=""><span class="tooltip-container"></span>circle.validate()   // Seq.empty -- no errors
-</span><span line-number="13" class=""><span class="tooltip-container"></span>
-</span><span line-number="14" class=""><span class="tooltip-container"></span>given (CircleGen is OrderedCell) = circle.cellInstance
-</span><span line-number="15" class=""><span class="tooltip-container"></span>val stream = FilteredSimplicialSetStream(circle, { case V =&gt; 0.0; case E =&gt; 1.0 })
-</span><span line-number="16" class=""><span class="tooltip-container"></span>CellularHomologyEngine[CircleGen, Double, Double]()
-</span><span line-number="17" class=""><span class="tooltip-container"></span>  .persistentHomology(stream)
-</span><span line-number="18" class=""><span class="tooltip-container"></span>  .diagramAt(Double.PositiveInfinity)
-</span><span line-number="19" class=""><span class="tooltip-container"></span>// List((1, 1.0, Infinity), (0, 0.0, Infinity)) -- H0 = H1 = one essential class each, as expected for S^1
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.algebra.{given, *}
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.cells.{given, *}
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.streams.{given, *}
+</span><span line-number="4" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.homology.{given, *}
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>given Double is Field = Field.DoubleApproximated(1e-9)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>
+</span><span line-number="8" class=""><span class="tooltip-container"></span>enum CircleGen { case V, E }
+</span><span line-number="9" class=""><span class="tooltip-container"></span>import CircleGen.*
+</span><span line-number="10" class=""><span class="tooltip-container"></span>given Ordering[CircleGen] = Ordering.by(_.ordinal)
+</span><span line-number="11" class=""><span class="tooltip-container"></span>
+</span><span line-number="12" class=""><span class="tooltip-container"></span>val circle = FiniteSimplicialSet[CircleGen](
+</span><span line-number="13" class=""><span class="tooltip-container"></span>  generatorsByDim = IndexedSeq(Set(V), Set(E)),
+</span><span line-number="14" class=""><span class="tooltip-container"></span>  faces = {
+</span><span line-number="15" class=""><span class="tooltip-container"></span>    case V =&gt; IndexedSeq.empty
+</span><span line-number="16" class=""><span class="tooltip-container"></span>    case E =&gt; IndexedSeq(SSetElement(Nil, V), SSetElement(Nil, V)) // both faces of the loop are V
+</span><span line-number="17" class=""><span class="tooltip-container"></span>  }
+</span><span line-number="18" class=""><span class="tooltip-container"></span>)
+</span><span line-number="19" class=""><span class="tooltip-container"></span>circle.validate()   // Seq.empty -- no errors
+</span><span line-number="20" class=""><span class="tooltip-container"></span>
+</span><span line-number="21" class=""><span class="tooltip-container"></span>given (CircleGen is OrderedCell) = circle.cellInstance
+</span><span line-number="22" class=""><span class="tooltip-container"></span>val stream = FilteredSimplicialSetStream[CircleGen](circle, { case V =&gt; 0.0; case E =&gt; 1.0 })
+</span><span line-number="23" class=""><span class="tooltip-container"></span>CellularHomologyEngine[CircleGen, Double, Double]()
+</span><span line-number="24" class=""><span class="tooltip-container"></span>  .persistentHomology(stream)
+</span><span line-number="25" class=""><span class="tooltip-container"></span>  .diagramAt(Double.PositiveInfinity)
+</span><span line-number="26" class=""><span class="tooltip-container"></span>// List((1, 1.0, Infinity), (0, 0.0, Infinity)) -- H0 = H1 = one essential class each, as expected for S^1
 </span></code></pre>
    <div class="buttons"></div>
   </div>
