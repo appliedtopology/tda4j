@@ -238,3 +238,28 @@ object SimplicialSets:
   /** The presentation complex of a [[GroupPresentation]] (e.g. one read off with [[FundamentalGroup.presentation]]). */
   def presentationComplex[G](p: GroupPresentation[G]): FiniteSimplicialSet[PresentationCell] =
     presentationComplex(p.generators.length, p.relations)
+
+  /** The smash product `X ∧ Y = (X × Y) / (X ∨ Y)` of pointed simplicial sets (base points = the chosen vertices `vx`,
+    * `vy`): the product with the whole wedge `X × {vy} ∪ {vx} × Y` collapsed to the single base vertex `(vx, vy)`.
+    * Built with [[FiniteSimplicialSet.quotient]], sending each wedge simplex of dimension `n` to the `n`-fold
+    * degeneracy of that vertex.
+    */
+  def smash[GX, GY](
+    x: FiniteSimplicialSet[GX],
+    vx: GX,
+    y: FiniteSimplicialSet[GY],
+    vy: GY
+  ): FiniteSimplicialSet[ProductGenerator[GX, GY]] =
+    require(x.dimOf(vx) == 0 && y.dimOf(vy) == 0, "smash base points must be vertices")
+    given Ordering[GX] = x.ord
+    given Ordering[GY] = y.ord
+    val product = FiniteSimplicialSet.product(x, y)
+    given Ordering[ProductGenerator[GX, GY]] = product.ord
+    val base = ProductGenerator(SSetElement[GX](Nil, vx), SSetElement[GY](Nil, vy))
+    def inWedge(g: ProductGenerator[GX, GY]): Boolean = g.x.generator == vx || g.y.generator == vy
+    def collapse(g: ProductGenerator[GX, GY]): SSetElement[ProductGenerator[GX, GY]] =
+      if g == base || !inWedge(g) then SSetElement(Nil, g)
+      else
+        val n = product.dimOf(g)
+        SSetElement(((n - 1) to 0 by -1).toList, base)
+    FiniteSimplicialSet.quotient(product, collapse)

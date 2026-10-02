@@ -7,3 +7,4 @@ simplicial set with explicit face tuples, `HopfMap` S^3 model, `PresentationComp
 model summarizes the page, so every transcription is verified by `validate()` + Betti numbers + cup products, never trusted).
 - CP^3 / CP^4: Sage builds them from Kenzo output files (not reachable here) => NOT done.
 - Block 1 presentation complex (SimplicialSets.presentationComplex): 7 specs incl. torus cup, Klein, RP2 over F_2/F_3, Hurewicz round trip.
+- Block 2 smash (product / wedge via quotient): S^p^S^q ~ S^(p+q), X^S^0 ~ X (RP^2), RP^2^S^1 ~ suspension; passed first run.

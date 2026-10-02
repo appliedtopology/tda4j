@@ -81,3 +81,32 @@ class SimplicialSetsSpec extends Specification:
       (w.validate() must beEmpty).and(betti(w, 2) must beEqualTo(Vector(1, 2)))
     }
   }
+
+  "smash" should {
+    import SimplicialSetFixtures.*
+    val v = SphereGenerator.Vertex
+    "send S^p ^ S^q to a space with the homology of S^(p+q), valid, over F_2 and F_3" in {
+      val cases = Seq((1, 1), (1, 2), (2, 2))
+      cases.map { (p, q) =>
+        val s = smash(minimalSphere(p), v, minimalSphere(q), v)
+        (s.validate(), betti(s, 2), betti(s, 3))
+      } must beEqualTo(cases.map { (p, q) =>
+        val expected = Vector(1) ++ Vector.fill(p + q - 1)(0) ++ Vector(1)
+        (Seq.empty[String], expected, expected)
+      })
+    }
+    "have X ^ S^0 with the homology of X (RP^2 is not trivial, so this discriminates)" in {
+      val s0 = fromSimplicialComplex(Seq(Simplex(0), Simplex(1)))
+      val rp2 = realProjectiveSpace(2)
+      val s = smash(rp2, ProjectiveGenerator.E(0), s0, Simplex(0))
+      (s.validate() must beEmpty)
+        .and(betti(s, 2) must beEqualTo(betti(rp2, 2)))
+        .and(betti(s, 3) must beEqualTo(betti(rp2, 3)))
+    }
+    "RP^2 ^ S^1 matches the suspension of RP^2: (1,0,1,1) over F_2, (1,0,0,0) over F_3" in {
+      val s = smash(realProjectiveSpace(2), ProjectiveGenerator.E(0), minimalSphere(1), v)
+      (s.validate() must beEmpty)
+        .and(betti(s, 2) must beEqualTo(Vector(1, 0, 1, 1)))
+        .and(betti(s, 3) must beEqualTo(Vector(1, 0, 0, 0)))
+    }
+  }

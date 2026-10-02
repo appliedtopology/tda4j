@@ -23,10 +23,9 @@ class PresentationComplexSpec extends Specification:
     "of <a, b | > be a wedge of two circles" in {
       betti(Seq.empty, 2, 3)._2 must beEqualTo(Vector(1, 2, 0))
     }
-    "of <a | a^2> (relator a a) be RP^2: (1,1,1) over F_2, (1,0,0) over F_3" in {
+    "of <a | a^2> (relator a a) be RP^2: (1,1,1) over F_2, (1,0,0) over F_3" in
       (betti(Seq(List(a, a)), 1, 2) must beEqualTo((Seq.empty[String], Vector(1, 1, 1))))
         .and(betti(Seq(List(a, a)), 1, 3)._2 must beEqualTo(Vector(1, 0, 0)))
-    }
     "of <a, b | a b a^-1 b^-1> be the torus: (1,2,1) over every field, with a nonzero cup product" in {
       val commutator = List(a, b, aInv, bInv)
       val x = presentationComplex(2, Seq(commutator))
