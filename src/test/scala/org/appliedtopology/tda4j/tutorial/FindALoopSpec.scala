@@ -67,19 +67,16 @@ class FindALoopSpec extends Specification:
       println(r)
       (r.points must beEqualTo(60)).and(r.simplices must beEqualTo(24711))
     }
-    "report 1544 bars, nearly all zero-length, and 58 shown at the default threshold" in {
+    "report 1544 bars, nearly all zero-length, and 58 shown at the default threshold" in
       (r.totalBars must beEqualTo(1544))
         .and(r.zeroLength must beEqualTo(1483))
         .and(r.shownByDim must beEqualTo(Map(0 -> 57, 1 -> 1)))
-    }
-    "find one loop, far more persistent than any sampling gap" in {
+    "find one loop, far more persistent than any sampling gap" in
       (r.loop._1 must beCloseTo(0.595, 0.001))
         .and(r.loop._2 must beCloseTo(1.707, 0.001))
         .and(r.longestFiniteH0 must beCloseTo(0.484, 0.001))
         .and((r.loop._2 - r.loop._1) must beGreaterThan(2 * r.longestFiniteH0))
-    }
     "come with a representative cycle of 52 edges" in { r.cycleEdges must beEqualTo(52) }
-    "keep the loop alive to the horizon when the complex is cut at 1.0" in {
+    "keep the loop alive to the horizon when the complex is cut at 1.0" in
       (r.truncatedLoopDeath.isInfinite must beTrue).and(r.truncatedSimplices must beLessThan(r.simplices))
-    }
   }

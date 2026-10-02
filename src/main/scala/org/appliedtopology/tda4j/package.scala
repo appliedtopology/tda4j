@@ -86,6 +86,7 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
       ExplicitMetricSpace,
       ExplicitStreamBuilder,
       LandmarkSelector,
+      LevelwiseSimplexStream,
       LimitedCubicalGridStream,
       SparseRips,
       Truncated,
@@ -109,6 +110,8 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
     }
   object io:
     export org.appliedtopology.tda4j.io.{CSV, Dipha, Gudhi, Perseus, Ripser}
+  object alpha:
+    export org.appliedtopology.tda4j.alpha.{AlphaComplexDQP, AlphaShapes}
   object barcode:
     export org.appliedtopology.tda4j.barcode.{BarcodeDistance, PersistenceFilter, Vectorization}
   object cells:
