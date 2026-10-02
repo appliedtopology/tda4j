@@ -22,7 +22,9 @@ class NoiseAndOutliersSpec extends Specification:
     val lab = TDAlab(2)
     import lab.{*, given}
 
-    val metricSpace = io.CSV.readEuclideanMetricSpace("_docs/tutorials/data/circle-with-outliers.csv")   // 70 ring points, then 25 outliers
+    val metricSpace = io.CSV.readEuclideanMetricSpace(
+      "_docs/tutorials/data/circle-with-outliers.csv"
+    ) // 70 ring points, then 25 outliers
     val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
 
     def twoLongestLoops(stream: streams.LevelwiseSimplexStream[Int, Double]): List[Double] =
@@ -64,12 +66,10 @@ class NoiseAndOutliersSpec extends Specification:
       println(r)
       r.points must beEqualTo(95)
     }
-    "have Vietoris-Rips find the loop with a visible runner-up (about 7 to 1)" in {
+    "have Vietoris-Rips find the loop with a visible runner-up (about 7 to 1)" in
       (r.vrTwo(0) must beCloseTo(0.901, 0.001)).and(r.vrTwo(1) must beCloseTo(0.127, 0.001))
-    }
-    "have DTM-Rips push the runner-up down to almost nothing (over 100 to 1)" in {
+    "have DTM-Rips push the runner-up down to almost nothing (over 100 to 1)" in
       (r.dtmTwo(0) / r.dtmTwo(1) must beGreaterThan(100.0)).and(r.dtmTwo(0) must beCloseTo(0.815, 0.001))
-    }
     "show the runner-up loop is made mostly of outliers, the real one of ring points" in {
       r.cycles must beEqualTo(List((66, 2), (8, 5)))
     }

@@ -103,6 +103,7 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
       CircularCoordinates,
       CubicalHomologyEngine,
       CubicalPersistenceInChunksEngine,
+      FastCubicalHomologyEngine,
       PackedRipserCohomologyEngine,
       PersistenceInChunksEngine,
       RipserCohomologyEngine,
