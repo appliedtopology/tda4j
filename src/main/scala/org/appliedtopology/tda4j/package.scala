@@ -73,27 +73,43 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
   export org.appliedtopology.tda4j.cells.∆, org.appliedtopology.tda4j.cells.Simplex,
     org.appliedtopology.tda4j.cells.asSimplex
   export org.appliedtopology.tda4j.cells.Cube, org.appliedtopology.tda4j.cells.asCube
-  object streams {
+  object streams:
     export org.appliedtopology.tda4j.streams.{
-      ExplicitStreamBuilder, CubicalGridStream, CechCofaceSimplexStream, CubicalImage, DistanceToMeasure,
-      DowkerCofaceSimplexStream, DowkerGeometry, DtmRipsSimplexStream, EuclideanMetricSpace, ExplicitMetricSpace,
-      IncrementalVietorisRipsSimplexStream, LazyWitnessSimplexStream, LandmarkSelector, LimitedCofaceSimplexStream,
-      LimitedCubicalGridStream, RecursiveStackVietorisRipsSimplexStream, SheehyRipsSimplexStream, WitnessCofaceSimplexStream,
-      WitnessGeometry, WitnessMetricSpace
+      CechCofaceSimplexStream,
+      CubicalGridStream,
+      CubicalImage,
+      DistanceToMeasure,
+      DowkerCofaceSimplexStream,
+      DowkerGeometry,
+      DtmRipsSimplexStream,
+      EuclideanMetricSpace,
+      ExplicitMetricSpace,
+      ExplicitStreamBuilder,
+      IncrementalVietorisRipsSimplexStream,
+      LandmarkSelector,
+      LazyWitnessSimplexStream,
+      LimitedCofaceSimplexStream,
+      LimitedCubicalGridStream,
+      RecursiveStackVietorisRipsSimplexStream,
+      SheehyRipsSimplexStream,
+      WitnessCofaceSimplexStream,
+      WitnessGeometry,
+      WitnessMetricSpace
     }
-  }
-  object homology {
+  object homology:
     export org.appliedtopology.tda4j.homology.{
-      CellularHomologyEngine, CellularPersistenceInChunksEngine,
-      SimplicialHomologyEngine, PersistenceInChunksEngine,
-      CubicalHomologyEngine, CubicalPersistenceInChunksEngine,
-      RipserCohomologyEngine, PackedRipserCohomologyEngine,
-      CircularCoordinates
+      CellularHomologyEngine,
+      CellularPersistenceInChunksEngine,
+      CircularCoordinates,
+      CubicalHomologyEngine,
+      CubicalPersistenceInChunksEngine,
+      PackedRipserCohomologyEngine,
+      PersistenceInChunksEngine,
+      RipserCohomologyEngine,
+      SimplicialHomologyEngine
     }
-  }
-  object io {
+  object io:
     export org.appliedtopology.tda4j.io.{CSV, Dipha, Gudhi, Perseus, Ripser}
-  }
 
   // Deliberate re-exports: `import tdalab.given` only sees givens that are members of `tdalab`.
   given Show[Simplex[VertexT]] = summon[Show[Simplex[VertexT]]]

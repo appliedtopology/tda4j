@@ -49,7 +49,7 @@ Java 21, Scala 3.9.0 LTS (`WORKLOG-scala-3.9-lts-upgrade.md`). `.jvmopts` sets `
 were sbt's own 1024MB default, not code (`WORKLOG-test-suite-memory-and-benchmark-gating.md`).
 
 ```
-sbt clean test                  # full test suite (what CI runs)
+sbt testFull                    # full test suite, every spec (plain `test` is incremental+disk-cached in sbt 2 and can run 0 specs; CI's fresh runner is fine)
 sbt "testOnly *SimplexSpec"     # single specs2 spec (glob ok)
 sbt scalafmtAll                 # format everything — run before committing
 sbt scalafmtCheck scalafmtSbtCheck   # what CI's lint job checks (check only, no autofix)
@@ -366,6 +366,11 @@ d=3 + one d=4 smoke test; not validated d≥5, win shrinks with d by design.
   union-find ergonomic layer (own union-find in `cells`).
 - Fixtures (`SimplicialSetFixtures`): `minimalSphere(n)`, `realProjectiveSpace(2|3)` (sign discriminator F2 vs
   F3), `torus`, `triangle`/`realProjectiveSpaceViaQuotient`. No MATLAB/CLI entry (needs its own encoding design).
+
+**`ExplicitStreamBuilder`** — `Filterable` sentinels come from `Filterable.optionalFilterable` (±∞ for `Double`); before it the
+builder silently used the data's own min/max, mislabelling bars. `fromFacets(facets)` / `fromFilteredFacets((value, facet)*)`
+close a list of maximal cells under faces (unlisted face = min value of cells containing it). The naive engine on a VR
+stream needs `maxDimension = k+1` for H_k (it sees only streamed simplices). `WORKLOG-tutorial-all-ways.md`.
 
 ## Cech complexes
 

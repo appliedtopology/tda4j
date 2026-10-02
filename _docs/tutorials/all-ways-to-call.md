@@ -5,7 +5,7 @@ title: All the ways to call TDA4j
 
 There are several ways to access the methods in the TDA4j library, depending on how much code you want to write, what systems you want to interact with, and what you are ready to learn. In the following snippets we will show off the primary ways available. Some set-up and tasks:
 
-1. We want to build an empty octahedron by hand and compute its homology.
+1. We want to build a hollow octahedron by hand (6 vertices, 12 edges, 8 triangles) and compute its homology. It is a 2-sphere, so we expect one connected component, no loops and one void.
 2. We have the following file with data points, and we want the Vietoris-Rips barcode:
 ``` sc:nocompile
 1.0, 4.2e-15
@@ -44,14 +44,45 @@ Task 1 is not possible from the command line.
 
 Task 2 can be done as follows:
 ```shell sc:nocompile
-java -jar target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar -r --max-dimension 1 examplepoints.csv
+java -jar target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar -r --max-dimension 1 _docs/tutorials/examplepoints.csv
 ```
 
 Task 3 is not possible from the command line.
 
 ## Matlab
 
-Calling from Matlab, we can handle both tasks. I think? Need to work out details and fill in this example here. Maybe delegate.
+MATLAB talks to TDA4j through its built-in Java interface: put the assembly jar (`sbt assembly`) on the Java path and call `org.appliedtopology.tda4j.matlab.TDA4j` directly. MATLAB can handle all three tasks. See [Calling from MATLAB or Java](../user-guide/matlab.md) for the complete list of options.
+
+```matlab
+javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');
+TDA4j = org.appliedtopology.tda4j.matlab.TDA4j;
+
+% Task 1: the octahedron is the flag complex of its own edge graph, so a distance matrix is enough.
+% Vertices 1..6; the antipodal pairs (1,2), (3,4), (5,6) are NOT joined by an edge.
+D = ones(6) - eye(6);          % every pair at distance 1 ...
+D(1,2) = 2; D(2,1) = 2;        % ... except the antipodal pairs, which are never adjacent at scale 1
+D(3,4) = 2; D(4,3) = 2;
+D(5,6) = 2; D(6,5) = 2;
+octahedron = TDA4j.computeFromDistanceMatrix(D, {'maxDimension', '2', 'maxFiltrationValue', '1.5'});
+octahedron.toArray()           % rows [dimension birth death]: one [0 0 Inf], one [2 1 Inf]; the H1 classes
+                               % born at 1 die at 1 and are not reported
+
+% Task 2: Vietoris-Rips barcode of the points in the file
+points = csvread('_docs/tutorials/examplepoints.csv');
+result = TDA4j.computeFromPoints(points, {'maxDimension', '1'});
+bars = result.toArray();       % rows [dimension birth death]; death is Inf for an essential class
+bars(bars(:,1) == 1, :)        % the one loop, about [1 0.261 1.732]
+result.hiddenCount()           % number of negligible bars that were left out (see the options table)
+
+% Task 3: circular coordinates
+h1 = TDA4j.h1Bars(points);     % one row (birth, death) per H1 class, most persistent first
+r = h1(1,1) + 0.5 * (h1(1,2) - h1(1,1));   % a scale at which the most persistent class is alive
+coordinate = TDA4j.circularCoordinates(points, r);
+theta = coordinate.theta();    % one angle in [0,1) per point
+plot(cos(2*pi*theta), sin(2*pi*theta), 'o');
+```
+
+Two details worth knowing: MATLAB passes the Java `String[]` of options as a cell array of character vectors, and a MATLAB `double` matrix becomes a Java `double[][]` automatically.
 
 ## Scala REPL
 
@@ -66,30 +97,20 @@ import org.appliedtopology.tda4j.TDAlab
 val lab = new TDAlab(17)
 import lab.{*,given}
 
-// Task #1
-val stream = streams.ExplicitStreamBuilder()
-  .addOne((0.0, ∆(1)))
-  .addOne((0.1, ∆(2)))
-  .addOne((0.2, ∆(3)))
-  .addOne((0.3, ∆(4)))
-  .addOne((1.0, ∆(1,2)))
-  .addOne((1.1, ∆(1,3)))
-  .addOne((1.2, ∆(1,4)))
-  .addOne((1.3, ∆(2,3)))
-  .addOne((1.4, ∆(2,4)))
-  .addOne((1.5, ∆(3,4)))
-  .addOne((2.0, ∆(1,2,3)))
-  .addOne((2.1, ∆(1,2,4)))
-  .addOne((2.2, ∆(1,3,4)))
-  .addOne((2.3, ∆(2,3,4)))
-  .result()
-val homologyComputation = homology.SimplicialHomologyEngine().persistentHomology(stream)
-homologyComputation.barcodeAt(4.0)
+// Task #1: the vertices are 1..6, and 1-2, 3-4, 5-6 are the antipodal pairs, which are never joined.
+// A triangle takes one vertex from each pair, so the 8 triangles are all we have to list: fromFacets adds
+// the 12 edges and 6 vertices they contain.
+val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield ∆(a, b, c)
+val octahedron = homology.SimplicialHomologyEngine().persistentHomology(streams.ExplicitStreamBuilder.fromFacets(triangles))
+octahedron.barcodeAt(4.0)   // one essential class in dimension 0, one in dimension 2
 
-// Task #2
-val metricSpace = io.CSV.readEuclideanMetricSpace("examplepoints.csv")
-val homologyComputation2 = homology.SimplicialHomologyEngine().persistentHomology(streams.IncrementalVietorisRipsSimplexStream(metricSpace, maxDimension=1))
-homologyComputation2.barcodeAt(1.5)
+// Task #2: this engine only sees the simplices in the stream, so to get H1 right the stream
+// must include the triangles too -- maxDimension = 2.
+val metricSpace = io.CSV.readEuclideanMetricSpace("_docs/tutorials/examplepoints.csv")
+val circle = homology.SimplicialHomologyEngine().persistentHomology(streams.IncrementalVietorisRipsSimplexStream(metricSpace, maxDimension=2))
+val allBars = circle.barcodeAt(1.5)
+// The engines report every bar, mostly noise. Keep the ones longer than 1% of the enclosing radius:
+org.appliedtopology.tda4j.barcode.PersistenceFilter.significant(allBars, scale = Some(metricSpace.minimumEnclosingRadius))
 
 // Task #3
 // Pick a likely parameter at which your coordinate is alive, say 1.5
@@ -107,34 +128,23 @@ import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.TDAlab
 
 object myComputation extends TDAlab(17) {
-    // Task 1
-    val stream = streams.ExplicitStreamBuilder()
-      .addOne((0.0, ∆(1)))
-      .addOne((0.1, ∆(2)))
-      .addOne((0.2, ∆(3)))
-      .addOne((0.3, ∆(4)))
-      .addOne((1.0, ∆(1,2)))
-      .addOne((1.1, ∆(1,3)))
-      .addOne((1.2, ∆(1,4)))
-      .addOne((1.3, ∆(2,3)))
-      .addOne((1.4, ∆(2,4)))
-      .addOne((1.5, ∆(3,4)))
-      .addOne((2.0, ∆(1,2,3)))
-      .addOne((2.1, ∆(1,2,4)))
-      .addOne((2.2, ∆(1,3,4)))
-      .addOne((2.3, ∆(2,3,4)))
-      .result()
-    val homologyComputation = homology.SimplicialHomologyEngine().persistentHomology(stream)
-    val barcode = homologyComputation.barcodeAt(4.0)
-  
-    // Common setup
-    val metricSpace = io.CSV.readEuclideanMetricSpace("examplepoints.csv")
+  // Task 1
+  val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield ∆(a, b, c)
+  val octahedronHomology = homology.SimplicialHomologyEngine().persistentHomology(
+    streams.ExplicitStreamBuilder.fromFacets(triangles)
+  )
+  val octahedronBarcode = octahedronHomology.barcodeAt(4.0)
 
-    // Task 2
-    val homologyComputation = homology.SimplicialHomologyEngine().persistentHomology(streams.IncrementalVietorisRipsSimplexStream(metricSpace, maxDimension=1))
-    val barcode = homologyComputation.barcodeAt(1.5)
+  // Common setup
+  val metricSpace = io.CSV.readEuclideanMetricSpace("_docs/tutorials/examplepoints.csv")
 
-    // Task 3
-    val coordinate = homology.CircularCoordinates.compute(metricSpace, 1.5, 0)
+  // Task 2
+  val circleHomology = homology.SimplicialHomologyEngine().persistentHomology(
+    streams.IncrementalVietorisRipsSimplexStream(metricSpace, maxDimension = 2)
+  )
+  val circleBarcode = circleHomology.barcodeAt(1.5)
+
+  // Task 3
+  val coordinate = homology.CircularCoordinates.compute(metricSpace, 1.5, 0)
 }
 ```
