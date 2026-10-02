@@ -31,6 +31,15 @@ enum PresentationCell derives CanEqual:
   /** The `k`-th triangle of the fan triangulation of relator `r`. */
   case Triangle(r: Int, k: Int)
 
+/** The generators of the minimal simplicial-set model of the complex projective plane (see
+  * [[SimplicialSets.complexProjectivePlane]]).
+  */
+enum ComplexProjectivePlaneGenerator derives CanEqual:
+  case V, Rho0, Rho1, Sigma0, Sigma1, Sigma2, Tau0, Tau1, Tau2
+
+object ComplexProjectivePlaneGenerator:
+  given Ordering[ComplexProjectivePlaneGenerator] = Ordering.by(_.ordinal)
+
 /** A non-degenerate simplex of the join `X ⋆ Y`: a simplex of `X` alone, of `Y` alone, or a pair `(a, b)` of
   * non-degenerate simplices of both, of dimension `dim a + dim b + 1`.
   */
@@ -329,3 +338,76 @@ object SimplicialSets:
               SSetElement(e.word.map(_ + i + 1), Both(a, e.generator): J)
         }
     new FiniteSimplicialSet(byDim.reverse.dropWhile(_.isEmpty).reverse, facesOf)(using summon[Ordering[J]])
+
+  /** A minimal simplicial-set model of `CP^2`: one vertex, two 2-simplices, three 3-simplices and three 4-simplices.
+    * Transcribed from Sage's `simplicial_sets.ComplexProjectiveSpace(2)` (`simplicial_set_examples.py`), whose face
+    * tuples are listed `d_0, d_1, ...`. Checked here by `validate()` (simplicial identities), by Betti numbers
+    * `(1, 0, 1, 0, 1)` over every field, and by `x ∪ x ≠ 0` for the degree-2 class (which tells it from `S^2 ∨ S^4`);
+    * not trusted on the transcription alone. `CP^3`/`CP^4` are not available: Sage builds them from Kenzo data files.
+    */
+  def complexProjectivePlane: FiniteSimplicialSet[ComplexProjectivePlaneGenerator] =
+    import ComplexProjectivePlaneGenerator.*
+    type G = ComplexProjectivePlaneGenerator
+    def bare(g: G) = SSetElement[G](Nil, g)
+    def degenerate(g: G, word: Int*) = SSetElement[G](word.toList, g)
+    val sv = degenerate(V, 0)
+    val ssv = degenerate(V, 1, 0)
+    def facesOf(g: G): IndexedSeq[SSetElement[G]] = g match
+      case V           => IndexedSeq.empty
+      case Rho0 | Rho1 => IndexedSeq(sv, sv, sv)
+      case Sigma0      => IndexedSeq(bare(Rho0), bare(Rho1), bare(Rho0), ssv)
+      case Sigma1      => IndexedSeq(bare(Rho0), bare(Rho0), bare(Rho0), bare(Rho0))
+      case Sigma2      => IndexedSeq(ssv, bare(Rho0), bare(Rho1), bare(Rho0))
+      case Tau0        =>
+        IndexedSeq(degenerate(Rho0, 0), degenerate(Rho0, 0), bare(Sigma1), degenerate(Rho0, 2), degenerate(Rho0, 2))
+      case Tau1 => IndexedSeq(degenerate(Rho0, 1), bare(Sigma2), bare(Sigma1), bare(Sigma0), degenerate(Rho0, 1))
+      case Tau2 => IndexedSeq(degenerate(Rho0, 2), bare(Sigma2), degenerate(Rho0, 1), bare(Sigma0), degenerate(Rho0, 0))
+    new FiniteSimplicialSet(
+      IndexedSeq(Set(V), Set.empty[G], Set(Rho0, Rho1), Set(Sigma0, Sigma1, Sigma2), Set(Tau0, Tau1, Tau2)),
+      facesOf
+    )
+
+  /** The 9-vertex triangulation of `CP^2` of Kühnel and Banchoff (1983): 36 four-simplices, f-vector
+    * `(9, 36, 84, 90, 36)`. Facet list from Sage's `simplicial_complexes.ComplexProjectivePlane()`; an independent
+    * model to cross-check [[complexProjectivePlane]] against.
+    */
+  def complexProjectivePlaneKuhnel: FiniteSimplicialSet[Simplex[Int]] =
+    val facets = Seq(
+      Seq(1, 2, 4, 5, 6),
+      Seq(2, 3, 5, 6, 4),
+      Seq(3, 1, 6, 4, 5),
+      Seq(1, 2, 4, 5, 9),
+      Seq(2, 3, 5, 6, 7),
+      Seq(3, 1, 6, 4, 8),
+      Seq(2, 3, 6, 4, 9),
+      Seq(3, 1, 4, 5, 7),
+      Seq(1, 2, 5, 6, 8),
+      Seq(3, 1, 5, 6, 9),
+      Seq(1, 2, 6, 4, 7),
+      Seq(2, 3, 4, 5, 8),
+      Seq(4, 5, 7, 8, 9),
+      Seq(5, 6, 8, 9, 7),
+      Seq(6, 4, 9, 7, 8),
+      Seq(4, 5, 7, 8, 3),
+      Seq(5, 6, 8, 9, 1),
+      Seq(6, 4, 9, 7, 2),
+      Seq(5, 6, 9, 7, 3),
+      Seq(6, 4, 7, 8, 1),
+      Seq(4, 5, 8, 9, 2),
+      Seq(6, 4, 8, 9, 3),
+      Seq(4, 5, 9, 7, 1),
+      Seq(5, 6, 7, 8, 2),
+      Seq(7, 8, 1, 2, 3),
+      Seq(8, 9, 2, 3, 1),
+      Seq(9, 7, 3, 1, 2),
+      Seq(7, 8, 1, 2, 6),
+      Seq(8, 9, 2, 3, 4),
+      Seq(9, 7, 3, 1, 5),
+      Seq(8, 9, 3, 1, 6),
+      Seq(9, 7, 1, 2, 4),
+      Seq(7, 8, 2, 3, 5),
+      Seq(9, 7, 2, 3, 6),
+      Seq(7, 8, 3, 1, 4),
+      Seq(8, 9, 1, 2, 5)
+    )
+    fromSimplicialComplex(facets.map(f => Simplex.from(f.toList)))

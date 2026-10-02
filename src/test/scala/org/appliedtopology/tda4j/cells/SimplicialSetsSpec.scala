@@ -141,3 +141,39 @@ class SimplicialSetsSpec extends Specification:
         .and(betti(b, 3) must beEqualTo(Vector(1, 0, 0, 0, 1)))
     }
   }
+
+  "the complex projective plane" should {
+    def squareOfH2Nonzero[G](x: FiniteSimplicialSet[G], p: Int): Boolean =
+      val field = new org.appliedtopology.tda4j.algebra.FiniteField(p)
+      import field.given
+      val basis = CupProduct.cohomologyBasis[G, field.Fp](x, 2)
+      basis.length == 1 && !CupProduct.isCoboundary(x, 4, CupProduct.cup(x, 2, 2, basis.head, basis.head))
+    "the Kuhnel-Banchoff triangulation has f-vector (9,36,84,90,36), Betti (1,0,1,0,1) and x^2 != 0" in {
+      val k = complexProjectivePlaneKuhnel
+      (fVector(k) must beEqualTo(Vector(9, 36, 84, 90, 36)))
+        .and(k.validate() must beEmpty)
+        .and(betti(k, 2) must beEqualTo(Vector(1, 0, 1, 0, 1)))
+        .and(betti(k, 3) must beEqualTo(Vector(1, 0, 1, 0, 1)))
+        .and(squareOfH2Nonzero(k, 2) must beTrue)
+        .and(squareOfH2Nonzero(k, 3) must beTrue)
+    }
+    "Sage's one-vertex model is valid, has the same Betti numbers and the same nonzero cup square" in {
+      val m = complexProjectivePlane
+      (m.validate() must beEmpty)
+        .and(fVector(m) must beEqualTo(Vector(1, 0, 2, 3, 3)))
+        .and(betti(m, 2) must beEqualTo(Vector(1, 0, 1, 0, 1)))
+        .and(betti(m, 3) must beEqualTo(Vector(1, 0, 1, 0, 1)))
+        .and(squareOfH2Nonzero(m, 2) must beTrue)
+        .and(squareOfH2Nonzero(m, 3) must beTrue)
+    }
+    "the cup square is what separates CP^2 from S^2 v S^4 (same Betti numbers, zero square)" in {
+      import SimplicialSetFixtures.minimalSphere
+      val wedge24 = wedge(
+        minimalSphere(2),
+        SimplicialSetFixtures.SphereGenerator.Vertex,
+        minimalSphere(4),
+        SimplicialSetFixtures.SphereGenerator.Vertex
+      )
+      (betti(wedge24, 2) must beEqualTo(Vector(1, 0, 1, 0, 1))).and(squareOfH2Nonzero(wedge24, 2) must beFalse)
+    }
+  }
