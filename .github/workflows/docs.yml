@@ -43,7 +43,15 @@ jobs:
             git -C /tmp/gh-pages rm -rf . > /dev/null 2>&1 || true
             touch /tmp/gh-pages/.nojekyll
           fi
-          cp -r target/out/jvm/scala-3.8.4/tda4j/api /tmp/gh-pages/ # TODO: change directory when 3.9.1 releases
+          # The site is the CONTENTS of the doc output directory (its own `api/` subdirectory is the scaladoc API), published at
+          # the ROOT of gh-pages. `cp -r .../api /tmp/gh-pages/` (the previous line here) nested the whole site under /api/
+          # and left whatever an earlier publish had put at the root serving as the live site. The `find` clears stale files first;
+          # CNAME, .nojekyll, .gitignore, the worktree's own .git file and the released-version directories (0.4.0/, ...,
+          # published by release.yml) are excluded, so they are neither overwritten nor deleted.
+          find /tmp/gh-pages -mindepth 1 -maxdepth 1 \
+            ! -name .git ! -name CNAME ! -name .nojekyll ! -name .gitignore ! -name '[0-9]*.[0-9]*.[0-9]*' \
+            -exec rm -rf {} +
+          cp -a target/out/jvm/scala-3.8.4/tda4j/api/. /tmp/gh-pages/ # TODO: change directory when 3.9.1 releases
           cd /tmp/gh-pages
           git add -A
           if git diff --cached --quiet; then
