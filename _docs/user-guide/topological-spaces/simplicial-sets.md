@@ -65,3 +65,16 @@ val x = CupProduct.cohomologyBasis[Simplex[Int], field.Fp](cp2, 2).head   // the
 val xSquared = CupProduct.cup(cp2, 2, 2, x, x)
 val nonzero = !CupProduct.isCoboundary(cp2, 4, xSquared)               // true: x^2 generates H^4
 ```
+
+`BettiNumbers` (in `homology`) answers the first question you ask of any of these: `dim H_n(X; F_p)` over a prime field,
+for a finite simplicial set, or for an infinite one (such as the nerve of a group) up to a chosen degree. Over `F_2` and `F_3`
+together you can see most small torsion — the Klein bottle has Betti numbers `(1, 2, 1)` over `F_2` but `(1, 1, 0)` over `F_3`:
+
+```scala 3
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.homology.BettiNumbers
+
+val klein = SimplicialSets.kleinBottle
+val overF2 = BettiNumbers(klein, 2)   // Vector(1, 2, 1)
+val overF3 = BettiNumbers(klein, 3)   // Vector(1, 1, 0)
+```

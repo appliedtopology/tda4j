@@ -3,7 +3,7 @@ package groups
 
 import org.appliedtopology.tda4j.algebra.{given, *}
 import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.homology.CellularPersistenceInChunksEngine
+import org.appliedtopology.tda4j.homology.{BettiNumbers, CellularPersistenceInChunksEngine}
 import org.appliedtopology.tda4j.streams.FilteredSimplicialSetStream
 
 /** A non-degenerate simplex of the nerve `BG` of a finite group: the tuple `(g_1, ..., g_n)` of NON-identity elements
@@ -110,18 +110,8 @@ object ClassifyingSpace:
       .filter((dim, birth, death) => dim <= maxDegree && death > birth)
       .sorted
 
-  /** Dimension of `H_n(X; F_p)` for `n = 0..maxDegree` of a nerve (group or monoid), via its `(maxDegree+1)`-skeleton.
-    */
-  def bettiNumbers(nerve: Nerve, maxDegree: Int, prime: Int): Vector[Int] =
-    val sset = nerve.skeleton(maxDegree + 1)
-    val field = new FiniteField(prime)
-    import field.given
-    given (NerveSimplex is OrderedCell) = sset.cellInstance
-    val stream = FilteredSimplicialSetStream(sset, PartialFunction.fromFunction((_: NerveSimplex) => 0.0))
-    val diagram = CellularPersistenceInChunksEngine[NerveSimplex, field.Fp]()
-      .persistentHomology(stream)
-      .diagramAt(Double.PositiveInfinity)
-    Vector.tabulate(maxDegree + 1)(n => diagram.count((dim, _, death) => dim == n && death.isPosInfinity))
+  /** Dimension of `H_n(X; F_p)` for `n = 0..maxDegree` of a nerve (group or monoid); see [[homology.BettiNumbers]]. */
+  def bettiNumbers(nerve: Nerve, maxDegree: Int, prime: Int): Vector[Int] = BettiNumbers(nerve, maxDegree, prime)
 
   /** Dimension of `H_n(G; F_p)` for `n = 0..maxDegree`: the classes that are never killed. */
   def bettiNumbers(g: FiniteGroup, maxDegree: Int, prime: Int): Vector[Int] =
