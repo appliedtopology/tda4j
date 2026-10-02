@@ -114,7 +114,7 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
   object alpha:
     export org.appliedtopology.tda4j.alpha.{AlphaComplexDQP, AlphaShapes}
   object barcode:
-    export org.appliedtopology.tda4j.barcode.{BarcodeDistance, PersistenceFilter, Vectorization}
+    export org.appliedtopology.tda4j.barcode.{BarcodeDistance, PersistenceBar, PersistenceFilter, Vectorization}
   object cells:
     export org.appliedtopology.tda4j.cells.{
       CupProduct,

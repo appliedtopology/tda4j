@@ -55,6 +55,7 @@ object TutorialData:
   /** file name -> exact file contents */
   def files: Map[String, String] = Map(
     "noisy-circle.csv" -> csv(noisyCircle(60, 0.05, 1L)),
+    "noisy-circle-b.csv" -> csv(noisyCircle(60, 0.05, 11L)),
     "circle-with-outliers.csv" -> csv(circleWithOutliers(70, 0.03, 25, 2.0, 7L)),
     "figure-eight.csv" -> csv(figureEight(70, 0.02, 3L)),
     "flat-torus.csv" -> csv(flatTorus(120, 4L))

@@ -29,14 +29,16 @@ class CoordinatesSpec extends Specification:
       (for
         sign <- Seq(1.0, -1.0)
         offset <- (0 until 200).map(_ / 200.0)
-      yield theta.map((i, t) => circularDistance(((sign * t + offset) % 1.0 + 1.0) % 1.0, truth(i))).sum / theta.size).min
+      yield theta
+        .map((i, t) => circularDistance(((sign * t + offset) % 1.0 + 1.0) % 1.0, truth(i)))
+        .sum / theta.size).min
 
     def turn(y: Double, x: Double): Double = (math.atan2(y, x) / (2 * math.Pi) + 1.0) % 1.0
 
     // ---- a circle
     val circlePoints = io.CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
     val circle = streams.EuclideanMetricSpace(circlePoints)
-    val circleBars = homology.CircularCoordinates.h1Bars(circle)          // (birth, death), longest-lived first
+    val circleBars = homology.CircularCoordinates.h1Bars(circle) // (birth, death), longest-lived first
     val (birth, death) = circleBars.head
     val circleCoordinate = homology.CircularCoordinates.compute(circle, r = (birth + death) / 2, cocycleIndex = 0)
     val circleError = alignmentError(circleCoordinate.theta, i => turn(circlePoints(i)(1), circlePoints(i)(0)))
@@ -45,7 +47,8 @@ class CoordinatesSpec extends Specification:
     val torusPoints = io.CSV.readPointCloud("_docs/tutorials/data/flat-torus.csv")
     val torus = streams.EuclideanMetricSpace(torusPoints)
     val torusBars = homology.CircularCoordinates.h1Bars(torus, maxFiltrationValue = Some(1.8))
-    val r = (torusBars.take(2).map(_._1).max + torusBars.take(2).map(_._2).min) / 2     // a scale where both classes are alive
+    val r =
+      (torusBars.take(2).map(_._1).max + torusBars.take(2).map(_._2).min) / 2 // a scale where both classes are alive
     val coordinates =
       homology.CircularCoordinates.computeToroidal(torus, r, cocycleIndices = Seq(0, 1), maxFiltrationValue = Some(1.8))
     val torusErrors = coordinates.theta.toList.map { theta =>
@@ -72,14 +75,14 @@ class CoordinatesSpec extends Specification:
         .and(r.circleBars(1)._1 must beCloseTo(r.circleBars(1)._2, 1e-9)) // the runner-up has zero persistence
         .and(r.circleCovered must beEqualTo(60))
     }
-    "recover the angle to within 0.07 of a turn on average" in {
+    "recover the angle to within 0.07 of a turn on average" in
       (r.circleError must beLessThan(0.07)).and(r.circleError must beGreaterThan(0.05))
-    }
     "find two long-lived loops on the torus, and then a clear drop" in {
       val persistences = r.torusBars.map((b, d) => d - b)
-      (persistences(0) must beGreaterThan(1.0)).and(persistences(1) must beGreaterThan(1.0)).and(persistences(2) must beLessThan(0.7))
+      (persistences(0) must beGreaterThan(1.0))
+        .and(persistences(1) must beGreaterThan(1.0))
+        .and(persistences(2) must beLessThan(0.7))
     }
-    "give every point both torus coordinates, each following one true angle, much better than chance (0.25)" in {
+    "give every point both torus coordinates, each following one true angle, much better than chance (0.25)" in
       (r.torusCovered must beEqualTo(List(120, 120))).and(r.torusErrors.forall(e => e > 0.1 && e < 0.17) must beTrue)
-    }
   }
