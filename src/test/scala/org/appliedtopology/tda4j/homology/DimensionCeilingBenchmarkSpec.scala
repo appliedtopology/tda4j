@@ -169,10 +169,10 @@ class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specificati
     // the class doc above (both wrappers reproduce the identical failure on the identical input), kept as this one
     // since it's the established convention elsewhere in this codebase's benchmarks.
     def bounded(
-      stream: StratifiedSimplexStream[Int, Double],
+      stream: LevelwiseSimplexStream[Int, Double],
       maxDim: Int
-    ): StratifiedSimplexStream[Int, Double] =
-      new StratifiedSimplexStream[Int, Double]:
+    ): LevelwiseSimplexStream[Int, Double] =
+      new LevelwiseSimplexStream[Int, Double]:
         def filtrationValue = stream.filtrationValue
         def filtrationOrdering = stream.filtrationOrdering
         val smallest = stream.smallest

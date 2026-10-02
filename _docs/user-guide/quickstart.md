@@ -64,7 +64,7 @@ val engine = SimplicialHomologyEngine[Int, Double, Double]()
 
 val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8))
 val metricSpace = EuclideanMetricSpace(points)
-val stream = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(2.0))
+val stream = VietorisRips(metricSpace, maxFiltrationValue = Some(2.0))
 
 val state = engine.persistentHomology(stream)
 state.barcodeAt(Double.PositiveInfinity).foreach(println)
@@ -92,7 +92,7 @@ import org.appliedtopology.tda4j.barcode.PersistenceFilter
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(0.001, 0.0), Array(1.0, 0.0))
-val stream = EnumeratingCofaceSimplexStream(EuclideanMetricSpace(points), maxFiltrationValue = Some(2.0))
+val stream = VietorisRips(EuclideanMetricSpace(points), maxFiltrationValue = Some(2.0))
 val state = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream)
 state.advanceAll()
 val bars = state.barcodeAt(Double.PositiveInfinity)
@@ -105,7 +105,6 @@ val everything = PersistenceFilter.significant(bars, minPersistence = Some(0.0))
 val aTenthOfIt = PersistenceFilter.significant(bars, fraction = 0.1, scale = scale)
 ```
 
-**A default worth knowing**: `EnumeratingCofaceSimplexStream` and the other Vietoris-Rips stream
-implementations default `maxFiltrationValue` to the point cloud's own *minimum enclosing radius*, not
+**A default worth knowing**: `VietorisRips` (whichever implementation you pick) defaults `maxFiltrationValue` to the point cloud's own *minimum enclosing radius*, not
 unbounded, since nothing past that radius contributes new homology. Pass `Some(Double.PositiveInfinity)`
 explicitly if you want the old always-unbounded behavior.

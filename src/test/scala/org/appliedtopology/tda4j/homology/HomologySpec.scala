@@ -349,7 +349,7 @@ class BarcodeRegressionSpec extends org.specs2.mutable.Specification with ScalaC
 
   val shc = PersistenceInChunksEngine[Int, Double](3)
 
-  val cases: Seq[(String, Array[Array[Double]] => StratifiedSimplexStream[Int, Double])] = Seq(
+  val cases: Seq[(String, Array[Array[Double]] => LevelwiseSimplexStream[Int, Double])] = Seq(
     ("Alpha DQP", (pts: Array[Array[Double]]) => AlphaShapes(pts.toIndexedSeq, "DQP")),
     ("Alpha Helix", (pts: Array[Array[Double]]) => AlphaShapes(pts.toIndexedSeq, "helix")),
     (
@@ -361,7 +361,7 @@ class BarcodeRegressionSpec extends org.specs2.mutable.Specification with ScalaC
   val points = matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(25, 150)).sample.get
   for (name, streamBuilder) <- cases do
     s"$name complex should have births before deaths" >> {
-      // matrixGen is defined in VietorisRipsSpec.scala
+      // matrixGen is defined in streams/Generators.scala
       // forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(25, 250))) { (points: Array[Array[Double]]) =>
       val vrstream = streamBuilder(points)
       val homology = shc.persistentHomology(vrstream)

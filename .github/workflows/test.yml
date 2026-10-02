@@ -23,5 +23,9 @@ jobs:
         uses: sbt/setup-sbt@v1
       - name: Run tests
         run: sbt "clean ; test"
+      - name: Build docs (compiles every Scala fence in _docs)
+        env:
+          TDA4J_SCALA_VERSION: "3.8.4" # docs only; see build.sbt. TODO: remove when 3.9.1 is released.
+        run: sbt doc
       - name: Binary Compatibility Checks
         run: sbt mimaReportBinaryIssues

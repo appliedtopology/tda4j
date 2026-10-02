@@ -67,33 +67,68 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
   given [T: Ordering] => Conversion[Simplex[T], Chain[Simplex[T], CoefficientT]] =
     Chain.apply
 
-  export cells.defaultSimplexIsOrderedCell
-  export cells.defaultCubeIsOrderedCell
+  export org.appliedtopology.tda4j.cells.defaultSimplexIsOrderedCell
+  export org.appliedtopology.tda4j.cells.defaultCubeIsOrderedCell
 
   export org.appliedtopology.tda4j.cells.∆, org.appliedtopology.tda4j.cells.Simplex,
     org.appliedtopology.tda4j.cells.asSimplex
   export org.appliedtopology.tda4j.cells.Cube, org.appliedtopology.tda4j.cells.asCube
-  object streams {
+  object streams:
     export org.appliedtopology.tda4j.streams.{
-      ExplicitStreamBuilder, CubicalGridStream, CechCofaceSimplexStream, CubicalImage, DistanceToMeasure,
-      DowkerCofaceSimplexStream, DowkerGeometry, DtmRipsSimplexStream, EuclideanMetricSpace, ExplicitMetricSpace,
-      IncrementalVietorisRipsSimplexStream, LazyWitnessSimplexStream, LandmarkSelector, LimitedCofaceSimplexStream,
-      LimitedCubicalGridStream, RecursiveStackVietorisRipsSimplexStream, SheehyRipsSimplexStream, WitnessCofaceSimplexStream,
-      WitnessGeometry, WitnessMetricSpace
+      Cech,
+      CubicalGridStream,
+      CubicalImage,
+      DistanceToMeasure,
+      Dowker,
+      DowkerGeometry,
+      DtmRips,
+      EdgeCollapse,
+      EuclideanMetricSpace,
+      ExplicitMetricSpace,
+      ExplicitStreamBuilder,
+      LandmarkSelector,
+      LevelwiseSimplexStream,
+      LimitedCubicalGridStream,
+      SparseRips,
+      Truncated,
+      VietorisRips,
+      Witness,
+      WitnessGeometry,
+      WitnessMetricSpace
     }
-  }
-  object homology {
+  object homology:
     export org.appliedtopology.tda4j.homology.{
-      CellularHomologyEngine, CellularPersistenceInChunksEngine,
-      SimplicialHomologyEngine, PersistenceInChunksEngine,
-      CubicalHomologyEngine, CubicalPersistenceInChunksEngine,
-      RipserCohomologyEngine, PackedRipserCohomologyEngine,
-      CircularCoordinates
+      BettiNumbers,
+      CellularCohomologyEngine,
+      CellularHomologyEngine,
+      CellularPersistenceInChunksEngine,
+      CircularCoordinates,
+      CubicalHomologyEngine,
+      CubicalPersistenceInChunksEngine,
+      FastCubicalHomologyEngine,
+      PackedRipserCohomologyEngine,
+      PersistenceInChunksEngine,
+      RipserCohomologyEngine,
+      SimplicialHomologyEngine
     }
-  }
-  object io {
+  object io:
     export org.appliedtopology.tda4j.io.{CSV, Dipha, Gudhi, Perseus, Ripser}
-  }
+  object alpha:
+    export org.appliedtopology.tda4j.alpha.{AlphaComplexDQP, AlphaShapes}
+  object barcode:
+    export org.appliedtopology.tda4j.barcode.{BarcodeDistance, PersistenceBar, PersistenceFilter, Vectorization}
+  object cells:
+    export org.appliedtopology.tda4j.cells.{
+      CupProduct,
+      FiniteSimplicialSet,
+      FundamentalGroup,
+      GroupPresentation,
+      SSetMap,
+      SimplicialSets,
+      Steenrod
+    }
+  object groups:
+    export org.appliedtopology.tda4j.groups.{ClassifyingSpace, FiniteGroup, Nerve}
 
   // Deliberate re-exports: `import tdalab.given` only sees givens that are members of `tdalab`.
   given Show[Simplex[VertexT]] = summon[Show[Simplex[VertexT]]]

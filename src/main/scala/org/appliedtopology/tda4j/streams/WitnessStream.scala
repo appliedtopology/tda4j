@@ -218,7 +218,7 @@ class WitnessMetricSpace(val geometry: WitnessGeometry, val nu: Int = 2) extends
   * Vertex ids in every emitted `Simplex[Int]` are LOCAL landmark indices (`0 until landmarks.size`) -- translate back
   * through `landmarks(i)` for the caller's own ambient point cloud (`matlab.TDA4j` does this for `cycleVertices`).
   */
-class LazyWitnessSimplexStream(
+private[tda4j] class LazyWitnessSimplexStream(
   ambientMetricSpace: FiniteMetricSpace[Int],
   val landmarks: IndexedSeq[Int],
   nu: Int = 2,
@@ -270,7 +270,7 @@ class LazyWitnessSimplexStream(
   * class directly should do the same, or pass a finite `maxFiltrationValue` -- see `.claude/WORKLOG-witness-complex.md`
   * for tutorial-scale timing measurements (machine-specific, kept there rather than here).
   */
-class WitnessCofaceSimplexStream(
+private[tda4j] class WitnessCofaceSimplexStream(
   val geometry: WitnessGeometry,
   maxFiltrationValue: Double = Double.PositiveInfinity,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
@@ -282,7 +282,7 @@ class WitnessCofaceSimplexStream(
     ):
   def landmarks: IndexedSeq[Int] = geometry.landmarks
 
-object WitnessCofaceSimplexStream:
+private[tda4j] object WitnessCofaceSimplexStream:
   def apply(
     ambientMetricSpace: FiniteMetricSpace[Int],
     landmarks: IndexedSeq[Int],

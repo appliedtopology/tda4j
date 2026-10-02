@@ -17,13 +17,13 @@ without any distance/coordinate meaning) in one of several formats (`--input-for
 the same facade the MATLAB bridge uses (below), and writes the result in one of several formats
 (`--output-format`: `text`, `csv`, `gudhi`, `dipha`, `perseus`). Run with `--help` for the full flag list; the
 main ones mirror the MATLAB options one-to-one: `--complex` (`vr`/`alpha`/`cech`/
-`witness`/`dtm-rips`/`dtm-alpha`/`sheehy-rips`, meaningless with `--input-format csv-relation`), `--dual`
+`witness`/`dtm-rips`/`dtm-alpha`/`sparse-rips`, meaningless with `--input-format csv-relation`), `--dual`
 (`true`/`false`, only consulted with `--input-format csv-relation` — computes the transposed-relation complex),
 `--engine`, `--max-dimension`, `--max-filtration-value`,
 `--field`, `--representatives` (also print each bar's representative chain), and (for `--complex=witness`)
 `--num-landmarks`, `--witness-variant`, `--landmark-selector`, `--landmark-seed`, `--nu`. For
 `--complex=dtm-rips` or `--dtm-alpha`, use `--dtm-k` (required), `--dtm-q` (default 2.0), and `--dtm-p`
-(default 1.0, only for `dtm-rips`). For `--complex=sheehy-rips`, use `--sheehy-epsilon` (required, strictly
+(default 1.0, only for `dtm-rips`). For `--complex=sparse-rips`, use `--sparse-epsilon` (required, strictly
 between `0` and `1`). `--select-landmarks`/`--landmarks-file` split that same witness-complex computation
 into the two-step recipe described above. `--distance-to <file>` (`--distance-format csv`/`gudhi`/`dipha`,
 `--distance-order`, `--distance-ground-norm`) compares the freshly-computed diagram against one already saved

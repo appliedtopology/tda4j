@@ -23,6 +23,34 @@ def finiteSimplicialSetIsOrderedCell[G](using
           (target, if i % 2 == 0 then fr.one else fr.negate(fr.one))
         }
 
+/** A simplicial set presented, as `FiniteSimplicialSet` is, by its non-degenerate simplices ("generators") and each
+  * generator's faces -- but without insisting that every dimension be materialized, so it can be INFINITE (the nerve of
+  * a finite group has `(|G|-1)^n` generators in every dimension `n`) and generated lazily.
+  *
+  * `skeleton(n)` materializes dimensions `0..n` as a [[FiniteSimplicialSet]]. The homology of an `n`-skeleton agrees
+  * with the full set's only in degrees `< n`: degree `n` classes of the skeleton include ones the missing
+  * `(n+1)`-simplices would kill. To get `H_k` of the full set, take `skeleton(k + 1)` and ignore the top degree.
+  */
+trait SimplicialSet[G]:
+  /** Ordering used to tie-break generators (same role as in [[FiniteSimplicialSet]]). */
+  def ord: Ordering[G]
+
+  /** The non-degenerate simplices of dimension `n` (empty for a negative `n`, or beyond a finite set's top dimension).
+    */
+  def generatorsAt(n: Int): Iterable[G]
+
+  /** Dimension of a generator. */
+  def dimOf(g: G): Int
+
+  /** `faces(g)` for `g` of dimension `n`: exactly `n+1` normalized `SSetElement`s of dimension `n-1` (none if `n = 0`).
+    */
+  def faces: G => IndexedSeq[SSetElement[G]]
+
+  /** Dimensions `0..n` as a finite simplicial set (see the trait doc for what its homology means). */
+  def skeleton(n: Int): FiniteSimplicialSet[G] =
+    require(n >= 0, s"skeleton dimension must be >= 0, got $n")
+    new FiniteSimplicialSet(IndexedSeq.tabulate(n + 1)(d => generatorsAt(d).toSet), faces)(using ord)
+
 /** A finite simplicial set presented by generators (non-degenerate simplices) and, for each generator, its primitive
   * face data -- from which everything else (arbitrary `d_i`/`s_j`, the `OrderedCell` instance feeding the homology
   * engines) is inferred via `faceOf`/`insertOuter` (`SSetElement.scala`).
@@ -34,13 +62,16 @@ def finiteSimplicialSetIsOrderedCell[G](using
 class FiniteSimplicialSet[G](
   val generatorsByDim: IndexedSeq[Set[G]],
   val faces: G => IndexedSeq[SSetElement[G]]
-)(using val ord: Ordering[G]):
+)(using val ord: Ordering[G])
+    extends SimplicialSet[G]:
+  def generatorsAt(n: Int): Iterable[G] = generatorsByDim.lift(n).getOrElse(Set.empty)
+
   // Precomputed once: dim is hot (sort keys, pivot lookups), and this also gives dimOf a real error on an
   // unregistered generator instead of silently returning -1.
   private val dimByGenerator: Map[G, Int] =
     generatorsByDim.zipWithIndex.flatMap((gs, d) => gs.map(_ -> d)).toMap
 
-  def dimOf(g: G): Int = dimByGenerator(g)
+  override def dimOf(g: G): Int = dimByGenerator(g)
 
   given cellInstance: (G is OrderedCell) = finiteSimplicialSetIsOrderedCell(using ord)(dimOf, faces)
 

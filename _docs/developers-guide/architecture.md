@@ -137,6 +137,13 @@ constantly.
 
 ## Complex construction: streams
 
+**Public entry points.** Ask for a complex through one object per kind: `VietorisRips`, `Cech`, `Witness`, `Dowker`,
+`DtmRips`, `SparseRips` (plus `Truncated` to cut any coface stream off), each taking `maxDimension` as the top
+homological degree you want and building one dimension higher internally. The sections below describe the implementation
+classes those objects choose between (`EnumeratingCofaceSimplexStream`, `CechCofaceSimplexStream`, ...); those are
+internal detail, kept for cross-validation, and not what a user should reach for. See
+`.claude/DESIGN-stream-naming.md`.
+
 A `CellStream[CellT, FiltrationT]` is the abstract interface every persistence engine consumes: an iterator
 over cells in filtration order, plus a `filtrationValue: PartialFunction[CellT, FiltrationT]` and a
 `Filterable` (smallest/largest sentinel values, `±Infinity` for `Double`). Trait hierarchy, most-general to
@@ -263,6 +270,15 @@ from any simplex stream. `streams/FilteredSimplicialSetStream.scala` is the genu
 `StratifiedCellStream[G, Double]`, with a caller-supplied `filtrationValue` and
 `validateMonotoneFiltration` to check the one precondition every engine needs (a face's value never exceeds
 its coface's).
+
+On top of that core, `cells/SimplicialSets.scala` provides the usual constructions and examples (`cone`, `suspension`, `wedge`,
+`smash`, `join`, `subcomplex`, `fromSimplicialComplex`, `presentationComplex`, `kleinBottle`, `horn`, `sphere`,
+`complexProjectivePlane`, `hopfMap`), `cells/SSetMap.scala` simplicial maps (with `mappingCone` and the induced rank on
+homology), `cells/FundamentalGroup.scala` a presentation of the fundamental group, and `cells/CupProduct.scala` and
+`cells/Steenrod.scala` the Alexander-Whitney cup product and the Steenrod squares over F₂. `groups.Nerve`/`ClassifyingSpace`
+use the lazy `SimplicialSet` trait for the infinite nerve of a finite group. None of this has a MATLAB or CLI entry point
+(a simplicial set needs its own input encoding), and every construction is checked against homology computed by hand
+over F₂ and F₃ rather than by `validate()` alone.
 
 ### Cech complexes
 

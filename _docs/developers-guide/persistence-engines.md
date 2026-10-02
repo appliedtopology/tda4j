@@ -200,7 +200,7 @@ union-finds were already dimension-generic before this extension (only the `requ
 extending past 2D was purely a matter of handing the residual "middle" dimensions (`1 <= k <= d-2`) to
 `PersistenceInChunksEngine[Int, C]` run on a new `alpha.LimitedAlphaShapesStream` view (the `Simplex[Int]`
 analogue of engine 6's own `LimitedCubicalGridStream` — needed because `HelixDelaunay`/`AlphaShapes` is a
-`StratifiedSimplexStream`, not a `CofaceSimplexStream`, so the existing `LimitedCofaceSimplexStream` doesn't fit
+`LevelwiseSimplexStream`, not a `CofaceSimplexStream`, so the existing `LimitedCofaceSimplexStream` doesn't fit
 it) that hides the real top-dimensional simplices. Sequenced AFTER engine 6's own hybrid was validated, not
 concurrently, because this engine ALSO carries the facet-multiplicity risk below, which needed its own fresh
 measurement at `d=3` rather than assuming the `d=2` rate carried over — it does not.

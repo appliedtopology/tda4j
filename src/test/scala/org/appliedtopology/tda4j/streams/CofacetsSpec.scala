@@ -16,7 +16,7 @@ import org.specs2.scalacheck.Parameters
 
 class CofacetsSpec extends org.specs2.mutable.Specification with ScalaCheck:
   "The Cofacets Iterator should" >> {
-    // matrixGen is defined in VietorisRipsSpec.scala
+    // matrixGen is defined in streams/Generators.scala
     "create and compute" >> forAll(matrixGen[Double](Gen.double, Gen.const(5), Gen.chooseNum(25, 250))) {
       (points: Array[Array[Double]]) =>
         val sms = SparseMetricSpace(EuclideanMetricSpace(points), Gen.double.sample.getOrElse(50.0))

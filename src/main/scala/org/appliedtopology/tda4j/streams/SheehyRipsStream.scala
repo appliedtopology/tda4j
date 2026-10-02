@@ -89,7 +89,7 @@ import scala.collection.concurrent.TrieMap
   * like any other `CofaceSimplexStream[Int, Double]`; `chunks` is cross-validated fresh against `naive`
   * (`SheehyRipsStreamSpec`), not assumed to carry over.
   */
-class SheehyRipsSimplexStream(
+private[tda4j] class SheehyRipsSimplexStream(
   val ambientMetricSpace: FiniteMetricSpace[Int],
   val permutation: GreedyPermutation,
   val epsilon: Double,
@@ -119,7 +119,7 @@ class SheehyRipsSimplexStream(
     "permutation must be a full greedy permutation of every point in ambientMetricSpace"
   )
 
-object SheehyRipsSimplexStream:
+private[tda4j] object SheehyRipsSimplexStream:
 
   /** Builds the greedy permutation itself (via `LandmarkSelector.maxmin` run to full size, see that method's own doc)
     * before delegating to the primary constructor -- the convenience entry point most callers want. Validates `epsilon`

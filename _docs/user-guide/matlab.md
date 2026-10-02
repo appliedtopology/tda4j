@@ -54,8 +54,8 @@ is applied after the computation, so it does not make the computation itself che
 `maxDimension` do that). `circularCoordinates`/`toroidalCoordinates`' `h1Bars` are not filtered.
 
 Entry points: `computeFromPoints`/`computeFromDistanceMatrix` (Vietoris-Rips/alpha/Cech/witness/dtm-rips/
-dtm-alpha/sheehy-rips, from a point cloud or a precomputed distance matrix — alpha, Cech, and dtm-alpha need
-real coordinates, so they're only available from the points overload; witness/dtm-rips/sheehy-rips work from
+dtm-alpha/sparse-rips, from a point cloud or a precomputed distance matrix — alpha, Cech, and dtm-alpha need
+real coordinates, so they're only available from the points overload; witness/dtm-rips/sparse-rips work from
 either, exactly like `vr`, since none of the three needs real coordinates, only a metric),
 `computeFromCubicalImage`/`computeFromImage` (cubical persistence from a flat array + shape,
 or a 2D pixel matrix directly), `computeFromRelation` (Dowker complex persistence from a general relation
@@ -73,21 +73,21 @@ changes a method's call signature:
 
 | Option | Values | Default |
 |---|---|---|
-| `complex` | `vr`, `alpha`, `cech`, `witness`, `dtm-rips`, `dtm-alpha`, `sheehy-rips` | `vr` |
-| `engine` | `ripser`, `naive`, `chunks`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and `witness`/`witnessVariant=lazy`; `naive` for `alpha`/`cech`/`dtm-rips`/`dtm-alpha`/`sheehy-rips`/`witness`/`witnessVariant=general`/cubical images. `fast-cubical` is valid ONLY for `computeFromCubicalImage`/`computeFromImage`, for any ambient dimension `>= 2`. `fast-alpha` is valid ONLY for `complex=alpha` with `alphaBackend=helix`, for any ambient dimension `>= 2` |
+| `complex` | `vr`, `alpha`, `cech`, `witness`, `dtm-rips`, `dtm-alpha`, `sparse-rips` | `vr` |
+| `engine` | `ripser`, `naive`, `chunks`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and `witness`/`witnessVariant=lazy`; `naive` for `alpha`/`cech`/`dtm-rips`/`dtm-alpha`/`sparse-rips`/`witness`/`witnessVariant=general`/cubical images. `fast-cubical` is valid ONLY for `computeFromCubicalImage`/`computeFromImage`, for any ambient dimension `>= 2`. `fast-alpha` is valid ONLY for `complex=alpha` with `alphaBackend=helix`, for any ambient dimension `>= 2` |
 | `alphaBackend` | `helix`, `DQP` | `helix` (only consulted for `complex=alpha`) |
 | `requireValidTriangulation` | `true`, `false` | `false` (only consulted for `complex=alpha`/`alphaBackend=helix`; rejected for any other `complex` or `alphaBackend=DQP`) — repairs a `HelixDelaunay` facet-multiplicity violation instead of letting it surface as `FastAlphaTriangulationException`; validated at ambient dimension 2 and 3, not yet at `d >= 4` |
 | `dtmK` | integer | REQUIRED for `complex=dtm-rips` or `complex=dtm-alpha`, no default |
 | `dtmQ` | double | `2.0` (only consulted for `complex=dtm-rips` or `complex=dtm-alpha`) |
 | `dtmP` | double | `1.0` (only consulted for `complex=dtm-rips`; must be `1.0` or `2.0`) |
-| `sheehyEpsilon` | double | REQUIRED for `complex=sheehy-rips`, no default; strictly between `0` and `1` |
+| `sparseEpsilon` | double | REQUIRED for `complex=sparse-rips`, no default; strictly between `0` and `1` |
 | `maxDimension` | integer | `2` — highest H_k reported, not highest simplex dimension built |
-| `maxFiltrationValue` | double | the point cloud's own minimum enclosing radius (`+Infinity` for `witness`/`witnessVariant=general`; `SheehyRipsSimplexStream`'s own `maxFiniteFiltrationValue` for `complex=sheehy-rips`) |
+| `maxFiltrationValue` | double | the point cloud's own minimum enclosing radius (`+Infinity` for `witness`/`witnessVariant=general`; `SparseRips`'s own maximum finite filtration value for `complex=sparse-rips`) |
 | `minPersistence` | double | unset — a bar is reported only if essential or its persistence exceeds 1% of the minimum enclosing radius (see "Which bars are reported" above); an absolute threshold in the barcode's own units, `0` reports every bar. Accepted by every `computeFrom*` method (not the landmark-selection ones, which produce no barcode) |
 | `minPersistenceFraction` | double | `0.01` — the same threshold as a fraction of the minimum enclosing radius; `0` reports every bar. Give at most one of the two |
 | `field` | `Z` (finite field), `R` (floating point) | `Z`, `prime=2` |
 | `prime` | integer | `2` (only for `field=Z`) |
-| `epsilon` | double | `1e-9` (only for `field=R`; unrelated to `sheehyEpsilon` above) |
+| `epsilon` | double | `1e-9` (only for `field=R`; unrelated to `sparseEpsilon` above) |
 | `numLandmarks` | integer | REQUIRED for `complex=witness`, no default |
 | `witnessVariant` | `lazy`, `general` | `lazy` (only consulted for `complex=witness`) |
 | `landmarkSelector` | `maxmin`, `random` | `maxmin` (only consulted for `complex=witness`) |
@@ -97,13 +97,13 @@ changes a method's call signature:
 
 `alpha` refuses `engine=ripser` and `engine=chunks` (neither engine understands alpha complexes, and the
 chunks/alpha combination is a known stall risk in the underlying library); `cech`, `dtm-rips`, and
-`sheehy-rips` all refuse `engine=ripser` (the packed Ripser engine's optimizations are proven for
+`sparse-rips` all refuse `engine=ripser` (the packed Ripser engine's optimizations are proven for
 Vietoris-Rips's plain max-pairwise-distance functional specifically, not for Cech's circumradius, DTM's
 weighted filtration, or Sheehy's sparsified/vanishing one); `dtm-alpha` refuses both `engine=ripser` and
 `engine=chunks`; `witness` with `witnessVariant=general` refuses both `engine=ripser` and `engine=chunks` for
 the same reason as `cech` (the general witness complex isn't a flag complex either) — use `witnessVariant=lazy`
 (the default) for `engine=ripser`/`chunks`. `engine=cohomology` is accepted everywhere `engine=naive` is
-(`vr`, `alpha`, `cech`, `dtm-rips`, `dtm-alpha`, `sheehy-rips`, and `witness` alike). `engine=fast-cubical` is
+(`vr`, `alpha`, `cech`, `dtm-rips`, `dtm-alpha`, `sparse-rips`, and `witness` alike). `engine=fast-cubical` is
 the mirror image: refused everywhere EXCEPT `computeFromCubicalImage`/`computeFromImage`, and even there
 refused only for a degenerate 1-axis image (ambient dimension `< 2`) — no other ambient-dimension restriction.
 `engine=fast-alpha` is likewise refused everywhere except `complex=alpha` with `alphaBackend=helix` (the

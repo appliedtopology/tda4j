@@ -32,6 +32,51 @@
           color: var(--text-secondary);
      }
 </style>
+<style>
+     /* Language tabsets: <div class="tabset"><div class="tab" data-lang="Scala">...</div>...</div>; see WORKLOG-tutorial-tabs.md */
+     .tabset { margin: 1em 0; }
+     .tabset > .tab-bar { display: flex; gap: 0.25em; border-bottom: 1px solid var(--text-primary); }
+     .tabset > .tab-bar > button { background: none; border: 1px solid transparent; border-bottom: none; padding: 0.3em 0.9em; cursor: pointer; color: var(--text-primary); font: inherit; }
+     .tabset > .tab-bar > button[aria-selected="true"] { border-color: var(--text-primary); background: var(--background-subtle); font-weight: bold; }
+     .tabset.js-ready > .tab:not(.active) { display: none; }
+     .tabset > .tab > *:first-child { margin-top: 0.5em; }
+</style>
+<script>
+     // Builds a tab bar for each .tabset from its .tab children's data-lang, and keeps every tabset on the page (and on later pages) on the same language.
+     document.addEventListener("DOMContentLoaded", function () {
+          var KEY = "tda4j-language";
+          var saved = null;
+          try { saved = localStorage.getItem(KEY); } catch (e) {}
+          var sets = Array.prototype.slice.call(document.querySelectorAll(".tabset"));
+          function show(lang) {
+               sets.forEach(function (set) {
+                    var tabs = Array.prototype.slice.call(set.children).filter(function (c) { return c.classList.contains("tab"); });
+                    var chosen = tabs.some(function (t) { return t.dataset.lang === lang; }) ? lang : tabs[0].dataset.lang;
+                    tabs.forEach(function (t) { t.classList.toggle("active", t.dataset.lang === chosen); });
+                    set.querySelectorAll(".tab-bar > button").forEach(function (b) { b.setAttribute("aria-selected", b.textContent === chosen ? "true" : "false"); });
+               });
+          }
+          sets.forEach(function (set) {
+               var bar = document.createElement("div");
+               bar.className = "tab-bar";
+               bar.setAttribute("role", "tablist");
+               Array.prototype.slice.call(set.children).filter(function (c) { return c.classList.contains("tab"); }).forEach(function (t) {
+                    var b = document.createElement("button");
+                    b.type = "button";
+                    b.setAttribute("role", "tab");
+                    b.textContent = t.dataset.lang;
+                    b.addEventListener("click", function () {
+                         try { localStorage.setItem(KEY, t.dataset.lang); } catch (e) {}
+                         show(t.dataset.lang);
+                    });
+                    bar.appendChild(b);
+               });
+               set.insertBefore(bar, set.firstChild);
+               set.classList.add("js-ready");
+          });
+          show(saved);
+     });
+</script>
 <main>
      {{ content }}
 </main>

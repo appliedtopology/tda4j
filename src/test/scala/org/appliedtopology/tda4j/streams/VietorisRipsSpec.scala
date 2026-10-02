@@ -20,13 +20,6 @@ import scala.collection.mutable
 import scala.math.{cos, sin}
 import scala.reflect.ClassTag
 
-def matrixGen[T: ClassTag](g: Gen[T], dimension: Gen[Int], size: Gen[Int]): Gen[Array[Array[T]]] =
-  for
-    dim <- dimension
-    sz <- size
-    values <- Gen.listOfN(dim * sz, g)
-  yield values.toArray.grouped(dim).toArray
-
 class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck with AllExpectations:
   "This is a specification of the Vietoris-Rips simplex stream implementation\n\n".txt
 
@@ -63,7 +56,7 @@ class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck with AllE
     given Double is Field = Field.DoubleApproximated(1e-9)
     val maxDim = 2
 
-    def bounded(stream: StratifiedSimplexStream[Int, Double]): StratifiedCellStream[Simplex[Int], Double] =
+    def bounded(stream: LevelwiseSimplexStream[Int, Double]): StratifiedCellStream[Simplex[Int], Double] =
       val cells =
         (0 to maxDim).iterator.flatMap(d => stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty)).toVector
       val byDim = cells.groupBy(_.dim)

@@ -138,9 +138,9 @@ classDiagram
     Filtration <|-- CellStream
     CellStream <|-- SimplexStream
     CellStream <|-- StratifiedCellStream
-    SimplexStream <|-- StratifiedSimplexStream
-    StratifiedCellStream <|-- StratifiedSimplexStream
-    StratifiedSimplexStream <|-- CofaceSimplexStream
+    SimplexStream <|-- LevelwiseSimplexStream
+    StratifiedCellStream <|-- LevelwiseSimplexStream
+    LevelwiseSimplexStream <|-- CofaceSimplexStream
     CofaceSimplexStream <|-- EnumeratingCofaceSimplexStream
     EnumeratingCofaceSimplexStream <|-- RipserCofaceSimplexStream
     RipserCofaceSimplexStream <|-- CechCofaceSimplexStream
@@ -150,9 +150,9 @@ classDiagram
     RipserCofaceSimplexStream <|-- DowkerCofaceSimplexStream
     EnumeratingCofaceSimplexStream <|-- InorderCofaceSimplexStream
     SimplexStream <|-- ExplicitStream
-    StratifiedSimplexStream <|-- RecursiveStackVietorisRipsSimplexStream
-    StratifiedSimplexStream <|-- IncrementalVietorisRipsSimplexStream
-    StratifiedSimplexStream <|-- AlphaShapes
+    LevelwiseSimplexStream <|-- RecursiveStackVietorisRipsSimplexStream
+    LevelwiseSimplexStream <|-- IncrementalVietorisRipsSimplexStream
+    LevelwiseSimplexStream <|-- AlphaShapes
     AlphaShapes <|-- HelixDelaunay
     AlphaShapes <|-- AlphaShapeDQP
     StratifiedCellStream <|-- CubicalGridStream

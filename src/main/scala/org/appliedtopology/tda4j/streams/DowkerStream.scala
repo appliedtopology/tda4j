@@ -147,7 +147,7 @@ private class DowkerPlaceholderMetricSpace(n: Int) extends FiniteMetricSpace[Int
   * `.dual` gives the complex on the other side (`geometry.dual`'s rows, `geometry`'s original columns), which Dowker's
   * theorem guarantees is homotopy equivalent to this one at every threshold.
   */
-class DowkerCofaceSimplexStream(
+private[tda4j] class DowkerCofaceSimplexStream(
   val geometry: DowkerGeometry,
   val maxFiltrationValue: Double = Double.PositiveInfinity,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
@@ -197,7 +197,7 @@ class DowkerCofaceSimplexStream(
   def dual: DowkerCofaceSimplexStream =
     new DowkerCofaceSimplexStream(geometry.dual, maxFiltrationValue, keepCriterion)
 
-object DowkerCofaceSimplexStream:
+private[tda4j] object DowkerCofaceSimplexStream:
   def apply(
     relation: Array[Array[Double]],
     maxFiltrationValue: Double = Double.PositiveInfinity,

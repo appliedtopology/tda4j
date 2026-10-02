@@ -25,7 +25,7 @@ import java.util.concurrent.*
   */
 final case class Epsilon(epsilon: Double)
 
-abstract class AlphaShapes extends StratifiedSimplexStream[Int, Double]() with DoubleFiltration[Simplex[Int]]():
+abstract class AlphaShapes extends LevelwiseSimplexStream[Int, Double]() with DoubleFiltration[Simplex[Int]]():
   val metricSpace: FiniteMetricSpace[Int]
 
 /** `apply`/`Point` are scoped here rather than as bare top-level `alpha` package defs (a generic name like `Point`, or
@@ -695,7 +695,7 @@ object HelixDelaunay:
 /** Hides every simplex of dimension `> maxDim` from `helix` -- the `HelixDelaunay` analogue of
   * `streams.LimitedCubicalGridStream` (itself needed because `streams.LimitedCofaceSimplexStream` is hardcoded to
   * `CofaceSimplexStream[Int, Double]`, which `AlphaShapes`/`HelixDelaunay` is not -- it's the smaller
-  * `StratifiedSimplexStream[Int, Double]`, with no `currentDimension`/`keepCriterion`/etc. to forward). Used by
+  * `LevelwiseSimplexStream[Int, Double]`, with no `currentDimension`/`keepCriterion`/etc. to forward). Used by
   * `homology.FastAlphaHomologyEngine`'s own `d >= 3` path (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`)
   * to hand `CellularPersistenceInChunksEngine` a view of the triangulation that never contains a real top-dimensional
   * simplex, so that engine's own general `Chain` reduction never touches them -- the whole point being to let the
@@ -706,7 +706,7 @@ object HelixDelaunay:
   * for free: truncating a contiguous `0..helix.ambientDimension` domain to `0..maxDim` is still contiguous from 0.
   */
 class LimitedAlphaShapesStream(helix: HelixDelaunay, maxDim: Int)
-    extends StratifiedSimplexStream[Int, Double]
+    extends LevelwiseSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]():
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case d: Int if d >= 0 && d <= maxDim && helix.iterateDimension.isDefinedAt(d) => helix.iterateDimension(d)

@@ -26,13 +26,17 @@ Source/test directories mirror package names; file names mostly carry over from 
 - `cells` — `Simplex`/`SimplexOps`/`SimplexOrderedCell`, `Cubical`/`CubicalOrderedCell`, `SimplicialSet`
   (`FiniteSimplicialSet`, with `.product`/`.coproduct`/`.quotient`/`.identify` on its companion object, also in
   `SimplicialSet.scala`), `SimplicialSetConstructions` (shared ordering helpers those draw on).
-- `streams` — `SimplexStream`, `FiniteMetricSpace`, `VietorisRips`, `Cofacets`, `SimplexIndexing`, `CubicalStream`,
+- `streams` — `SimplexStream`, `FiniteMetricSpace`, `VietorisRips` (also the `streams.VietorisRips(...)` dispatcher: homological-degree `maxDimension`, pick this over the individual constructions; `DESIGN-stream-naming.md`), `Cofacets`, `SimplexIndexing`, `CubicalStream`,
   `CubicalImage`, `UnionFind` (also defines `Kruskal`, which is metric-space-specific — hence
   here, and why no `util` package exists), `SimplicialSetStream`, `FilteredSimplicialSetStream`, `CechStream`.
 - `homology` — `Homology` (`CellularHomologyEngine` naive + `CellularPersistenceInChunksEngine` chunks, plus the thin
   `Simplicial`/`Cubical`/`PersistenceInChunks` wrappers), `RipserCohomology` (`RipserCohomologyEngine`, the oracle),
   `PackedRipserCohomology`, `Cohomology` (`CellularCohomologyEngine`), `FastCubicalHomology`, `FastAlphaHomology`,
   `PersistenceEngine` (one-shot dispatch trait), `CircularCoordinates`, `LatticeReduction`. The package graph is acyclic: `streams` never depends on `homology`.
+- `groups` — `FiniteGroup`, `ClassifyingSpace` (nerve `BG` of a finite group as a truncated `FiniteSimplicialSet`, filtered by a
+  subgroup chain = persistent group homology). **Library-only proof of concept**: depends on `cells`/`streams`/`homology`, nothing
+  depends on it; no MATLAB/CLI/user docs. Cost is `(|G|-1)^n` cells: S₄ to H₂ ≈ 4 s, H₃ and S₅ H₂ take > 8 min
+  (`DESIGN-persistent-group-cohomology.md`).
 - `barcode` — `Barcode`, `PersistenceFilter`. `alpha` — `AlphaShapes`, `AlphaComplexDQP`. `unicode` — `PrintingHelper` (unused).
 - `matlab` — MATLAB facade. `io` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus` (leaf package).
   `cli` — `TDA4jConf`, `TDA4jCLI` (thin translator over `matlab.TDA4j`/`io`).
@@ -49,7 +53,7 @@ Java 21, Scala 3.9.0 LTS (`WORKLOG-scala-3.9-lts-upgrade.md`). `.jvmopts` sets `
 were sbt's own 1024MB default, not code (`WORKLOG-test-suite-memory-and-benchmark-gating.md`).
 
 ```
-sbt clean test                  # full test suite (what CI runs)
+sbt testFull                    # full test suite, every spec (plain `test` is incremental+disk-cached in sbt 2 and can run 0 specs; CI's fresh runner is fine)
 sbt "testOnly *SimplexSpec"     # single specs2 spec (glob ok)
 sbt scalafmtAll                 # format everything — run before committing
 sbt scalafmtCheck scalafmtSbtCheck   # what CI's lint job checks (check only, no autofix)
@@ -83,6 +87,28 @@ first and did not take effect — don't re-attempt without confirming it works).
 ```` ```scala sc:nocompile ````; **`scala 3 nocompile` is silently ignored** (the info string must be `scala
 sc:nocompile`). A failing snippet fails `sbt doc` with page:line. `WORKLOG-doc-snippets-compile.md`. Cross-links use
 scaladoc's `[[org.appliedtopology.tda4j.Foo]]`/relative `.md` links.
+
+**Tutorial pages** (`_docs/tutorials/`, `WORKLOG-tutorial-pages.md`): compute first, write second — run the code, read the output, then write
+the prose around what you saw; if a dataset does not show the intended effect, change the dataset, never the claim. **The docs ARE the tests** (`WORKLOG-tutorial-docs-as-tests.md`): `build.sbt`'s `Test / sourceGenerators` copies each page's
+`## The whole script` fence (the first `scala` fence after that heading) into a generated `object <Page>Script` (package `tutorial`) and
+joins the page's `scala sc:nocompile` narrative fences into a never-called `<Page>Narrative.narrative()`, so a drifted narrative fence fails
+`Test/compile`. `src/test/.../tutorial/<Page>Spec` asserts every quoted number on `<Page>Script.<val>` -- never re-type page code in a spec;
+if a spec needs a value the script doesn't define, add that `val` to the page (the narrative should show it) or compute it in the spec from
+exposed values. The first narrative fence must carry the `TDAlab` imports (the narrative compiles alone). `sbt doc` (CI `test.yml` runs it,
+with `TDA4J_SCALA_VERSION=3.8.4`) compiles every fence but runs none; the generated objects are what execute. Not covered:
+`all-ways-to-call.md` (no whole-script section; `AllWaysToCallSpec` still mirrors it by hand) and MATLAB tabs (`MatlabTabsSpec`, below).
+Narrative fences are `scala sc:nocompile` (they share values, and the snippet compiler compiles each fence alone), and each page ends
+with a "whole script" fence that IS compiled by the docs build. Shared point clouds live in `_docs/tutorials/data/`, written by the seeded `tutorial/TutorialData` (change the generator, run
+`sbt "Test/runMain org.appliedtopology.tda4j.tutorial.TutorialData"`; `TutorialDataSpec` guards drift). Style: `TDAlab` throughout
+(its `streams`/`homology`/`io`/`barcode`/`cells`/`groups`/`alpha` objects exist for this); `diagramAt`/`diagramWithGeneratorsAt` triples,
+not `PersistenceBar`; no `barcodeAt(f)` at an intermediate `f`; public API only (a fence naming a `private[tda4j]` class or a test fixture
+fails `sbt doc`); no timings in prose. `Map[G, Fp]` equality compares raw representatives (-1 vs 1 over F_2 differ): compare cochains with
+`CupProduct.isCoboundary`, never `==`. Tutorial specs add ~90 s to `testFull`.
+**Language tabs** (`WORKLOG-tutorial-tabs.md`): where `matlab.TDA4j` supports the task, show the code in a `<div class="tabset">` with
+`<div class="tab" data-lang="Scala">` / `"MATLAB"` children (always in that order), a BLANK LINE between each HTML line and the fence
+(otherwise the strict markdown parser eats it). Every MATLAB tab needs a spec calling `matlab.TDA4j` directly (not `FullBarcode`)
+with the same options, asserting the numbers the tab quotes; the facade hides bars <= 1% of the enclosing radius, so quote
+`hiddenCount()` or pass `minPersistence 0`. MATLAB syntax/marshalling are never run here -- say so.
 
 **Docs are built with Scala 3.8.4, everything else with 3.9.0** (scaladoc 3.9.0's JavaScript is broken; this
 includes the `ux.js` `$.get` navigation bug). The pin is the `TDA4J_SCALA_VERSION` env var read by `scalaVersion`
@@ -164,6 +190,8 @@ separate files; (2) a companion extension can lose to a same-named stdlib extens
 (`math.Ordering.Implicits.*`'s `min`/`max`) — so `min`/`max` stay top-level. `asSimplex`/`asCube` are top-level
 because their receiver is the raw `SortedSet`/`Vector`.
 
+**Shared test generators** (`matrixGen`) live in `src/test/.../streams/Generators.scala`, not in a spec (a spec file got overwritten once and took it with it) — put any new cross-spec generator there. Before creating a test file, `ls` for its name: `Write` overwrites silently.
+
 **specs2 gotcha**: in a class mixing `ScalaCheck`, give a `Seq[Simplex[_]]` an explicit type ascription before
 `.forall` — otherwise it can resolve to specs2's `ValueCheck` extension with confusing errors.
 
@@ -230,6 +258,16 @@ tie-heavy fixtures; `totalBarsAccountForAllCells` alone is weaker. Filtration va
 comparisons must be cheap: `EnumeratingCofaceSimplexStream`/`CubicalGridStream` memoize them
 (`WORKLOG-autonomous-session-2026-09-19.md`).
 
+**Public entry points** (`DESIGN-stream-naming.md`, `WORKLOG-stream-rename.md`): users build complexes through `VietorisRips`, `Cech`,
+`Witness(variant = Lazy | General)`, `Dowker`, `DtmRips`, `SparseRips` and `Truncated` — each takes `maxDimension` as the top
+HOMOLOGICAL degree and returns a `LevelwiseSimplexStream[Int, Double]` (the old `StratifiedSimplexStream`). The implementation classes
+named below (`Enumerating...`, `Ripser...`, `Inorder...`, `Incremental...`, `RecursiveStack...`, `Cech...`, `LazyWitness...`,
+`WitnessCoface...`, `DowkerCoface...`, `DtmRips...`, `SheehyRips...`, `LimitedCoface...`, `CofaceSimplexStream`) are
+`private[tda4j]`: use them inside the library, tests and `matlab`, never in docs fences (the snippet compiler runs outside the
+package, so a fence using one fails `sbt doc`). No `Cubical`/`Alpha` objects: `CubicalImage` and `AlphaShapes` already are the
+dispatching entry points. Any new object must be tested against the hand-wrapped class cell for cell AND value for value
+(`ComplexesSpec`) — Betti numbers would not catch a wrong `+1`.
+
 **VR constructions** (same output contract, alternate engines): `EnumeratingCofaceSimplexStream`,
 `RipserCofaceSimplexStream` (+ `SimplexIndexing`), `InorderCofaceSimplexStream`,
 `RecursiveStackVietorisRipsSimplexStream`, `IncrementalVietorisRipsSimplexStream` (Rieser's New-VR, arXiv:2301.07191
@@ -245,7 +283,7 @@ untruncated. `RecursiveStackVietorisRipsSimplexStream` and alpha streams don't g
 ### Persistent homology: four independent engines
 
 Independent implementations sharing `Chain` primitives — a fix in one doesn't imply others need it. `maxDim`/
-`maxDimension` = top homological degree everywhere (engines build one dimension higher internally;
+`maxDimension` = top homological degree in the engines and the facade (engines build one dimension higher internally; NOT the stream constructors: `IncrementalVietorisRipsSimplexStream.maxDimension` is the top SIMPLEX dimension, coface streams have none — use `streams.VietorisRips`, which takes the homological degree; `DESIGN-stream-naming.md`;
 `WORKLOG-maxdim-semantics-fix.md`). Naive and `CellularCohomologyEngine` have no such param: callers truncate
 via `LimitedCofaceSimplexStream(stream, k+1)` and drop `dim==k+1` bars. Over a field, cohomology/homology
 barcodes coincide.
@@ -364,8 +402,29 @@ d=3 + one d=4 smoke test; not validated d≥5, win shrinks with d by design.
 - `quotient(sset, quotientMap: G => SSetElement[G])` needs degenerate targets (RP² from a triangle collapses an
   edge to `s_0(v)`); must resolve in **one step** to fixed points (`require`d). `identify(pairs)` is the
   union-find ergonomic layer (own union-find in `cells`).
+- **Sage-parity layer** (`DESIGN-sage-simplicial-sets-comparison.md`; pullbacks and Z-coefficients deliberately deferred):
+  `trait SimplicialSet[G]` (lazy/infinite; `FiniteSimplicialSet` extends it; `.skeleton(n)` is correct only below degree n);
+  `SimplicialSets` (`fromSimplicialComplex`, `simplex`, `point`, `empty`, `horn`, `kleinBottle`, `subcomplex`, `cone`, `suspension`,
+  `wedge`, `fVector`, `isConnected`); `SSetMap` (validate/`andThen`/image/injective/surjective on SIMPLICES, `homologyRank`,
+  `mappingCone`, projections); `FundamentalGroup.presentation` (spanning-tree `reduce` + relation `d_2·d_0 = d_1`; checked by
+  Hurewicz against engine H_1); `CupProduct` (Alexander-Whitney, `cohomologyBasis`, `isCoboundary`); `algebra.LinearAlgebra`
+  (dense, small complexes). Oracles must DISCRIMINATE: equal Betti numbers prove little (cup products told the torus from
+  S^1∨S^1∨S^2 -- and caught that the old `torus` fixture WAS the latter: both triangles had faces (B,C,A); fixed, second is
+  (A,C,B)); use F_2 AND F_3 (suspension of RP², Klein bottle (1,2,1)/(1,1,0)).
+- **Second Sage batch** (`WORKLOG-sage-additions.md`): `SimplicialSets.presentationComplex` (inverse of `FundamentalGroup.presentation`;
+  inverse edges + fan-triangulated relators), `smash` (product / wedge via `quotient`), `join` (`JoinGenerator` OfX/OfY/Both),
+  `sphere(n)`, `complexProjectivePlane` (Sage's one-vertex model) and `complexProjectivePlaneKuhnel` (9 vertices), `hopfMap`
+  (Sage's S³ model; checked by the mapping cone's cohomology RING having x² ≠ 0), and `Steenrod.sq` (F₂ only, Steenrod's
+  cup-i formula, checked by Wu's formula on B(Z/2)). CP³/CP⁴ NOT available (Sage builds them from Kenzo data files). Sage sources
+  were read through WebFetch (a small model summarises the page) — every transcribed data table is verified by `validate()`,
+  Betti numbers AND cup products, never trusted.
 - Fixtures (`SimplicialSetFixtures`): `minimalSphere(n)`, `realProjectiveSpace(2|3)` (sign discriminator F2 vs
   F3), `torus`, `triangle`/`realProjectiveSpaceViaQuotient`. No MATLAB/CLI entry (needs its own encoding design).
+
+**`ExplicitStreamBuilder`** — `Filterable` sentinels come from `Filterable.optionalFilterable` (±∞ for `Double`); before it the
+builder silently used the data's own min/max, mislabelling bars. `fromFacets(facets)` / `fromFilteredFacets((value, facet)*)`
+close a list of maximal cells under faces (unlisted face = min value of cells containing it). The naive engine on a VR
+stream needs `maxDimension = k+1` for H_k (it sees only streamed simplices). `WORKLOG-tutorial-all-ways.md`.
 
 ## Cech complexes
 
@@ -500,7 +559,7 @@ run to full size. One memoized `filtrationValueOverride` handles every dimension
 Units doubled; reduces to plain VR exactly at a SMALL `epsilon` (not large). `maxFiltrationValue` is
 unconditionally clamped to `maxFiniteFiltrationValue` even when the caller passes `+Infinity` — plain IEEE-754
 `<=` would otherwise admit every excluded pair's own `+Infinity`. Refuses `engine=ripser`; wired through
-`matlab.TDA4j complex=sheehy-rips` (needs `sheehyEpsilon`) and `cli --sheehy-epsilon`.
+`matlab.TDA4j complex=sparse-rips` (needs `sparseEpsilon`) and `cli --sparse-epsilon`.
 
 ## Flag-complex edge collapse
 
@@ -549,10 +608,10 @@ take/return only `double`, `int`, `String`, `double[][]`, `String[]` — no `Map
 (project lead rejected a `Map`-based design). Options are a flat key/value `String[]`; `dispatch` parses each
 once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before anything runs.
 - `computeFromPoints`/`computeFromDistanceMatrix`: `complex` = `vr`/`alpha`/`cech`/`witness`/`dtm-rips`/`dtm-alpha`/
-  `sheehy-rips`; `engine` = `ripser`/`naive`/`chunks`/`cohomology` (Alpha and dtm-alpha refuse `ripser`/`chunks`;
-  Cech, dtm-rips, sheehy-rips, and witness/general refuse `ripser`, witness/general also refuses `chunks` — see
-  `persistence-engines.md`'s streams-vs-engines table). `dtm-rips`/`dtm-alpha` need `dtmK`; `sheehy-rips` needs
-  `sheehyEpsilon` (strictly `(0,1)`); those two alone also work from `computeFromDistanceMatrix`. A sixth
+  `sparse-rips`; `engine` = `ripser`/`naive`/`chunks`/`cohomology` (Alpha and dtm-alpha refuse `ripser`/`chunks`;
+  Cech, dtm-rips, sparse-rips, and witness/general refuse `ripser`, witness/general also refuses `chunks` — see
+  `persistence-engines.md`'s streams-vs-engines table). `dtm-rips`/`dtm-alpha` need `dtmK`; `sparse-rips` needs
+  `sparseEpsilon` (strictly `(0,1)`); those two alone also work from `computeFromDistanceMatrix`. A sixth
   `engine`, `fast-alpha`, is valid ONLY for `complex=alpha`+`alphaBackend=helix`. `computeFromCubicalImage`/
   `computeFromImage` — same four base engines plus `fast-cubical`.
 - **Two-step witness recipe**: `selectLandmarksFrom{Points,DistanceMatrix}` → `LandmarkSelectionResult`, then

@@ -76,7 +76,7 @@ in terms of `ambientDimension`, not hardcoded to 2 — the only thing gating thi
 `require` check, so extending it is purely a matter of handing the residual "middle" dimensions (`1 <= k <=
 d-2`) to `PersistenceInChunksEngine[Int, C]` run on a new `alpha.LimitedAlphaShapesStream` view (the
 `Simplex[Int]` analogue of `streams.LimitedCubicalGridStream` — needed because `HelixDelaunay`/`AlphaShapes` is
-a `StratifiedSimplexStream`, not a `CofaceSimplexStream`, so the existing `LimitedCofaceSimplexStream` doesn't
+a `LevelwiseSimplexStream`, not a `CofaceSimplexStream`, so the existing `LimitedCofaceSimplexStream` doesn't
 fit it) that hides the real top-dimensional simplices. Deliberately sequenced AFTER the cubical extension, not
 concurrently: this engine carries the additional facet-multiplicity risk above, which needed its own fresh
 measurement at `d=3` (done, and reported above) rather than assuming the `d=2` rate carried over — it does not,

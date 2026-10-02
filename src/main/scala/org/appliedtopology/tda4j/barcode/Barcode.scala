@@ -97,6 +97,22 @@ case class PersistenceBar[FiltrationT: Ordering, AnnotationT](
   */
 object PersistenceBar:
 
+  private def numeric(e: BarcodeEndpoint[Double]): Double = e match
+    case ClosedEndpoint(v)  => v
+    case OpenEndpoint(v)    => v
+    case PositiveInfinity() => Double.PositiveInfinity
+    case NegativeInfinity() => Double.NegativeInfinity
+
+  /** Plain numbers for a bar over `Double` filtration values, so callers need not pattern-match on the endpoint types
+    * (open/closed makes no difference to the numbers): `birth` and `death` (`Infinity` for an essential class),
+    * `persistence = death - birth`, and `toTriple = (dim, birth, death)`, the same shape `diagramAt` returns.
+    */
+  extension [A](bar: PersistenceBar[Double, A])
+    def birth: Double = numeric(bar.lower)
+    def death: Double = numeric(bar.upper)
+    def persistence: Double = death - birth
+    def toTriple: (Int, Double, Double) = (bar.dim, birth, death)
+
   /** If we know nothing, assume the user is asking for $(-\infty,\infty)$.
     */
   def apply[FiltrationT: Ordering](dim: Int) =
