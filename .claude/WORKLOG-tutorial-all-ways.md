@@ -32,3 +32,11 @@ group cohomology). Keep going, don't stop.
   (it held the shared `matrixGen`); caught by the compile errors in unrelated specs, restored from git. `matrixGen` now
   lives in `streams/Generators.scala` (user request).
 - Full suite 674 pass; scalafmt (main/test/sbt) clean; 3.8.4 doc build clean.
+
+## Follow-ups 2 and 3
+- `DESIGN-sage-simplicial-sets-comparison.md` (read from the Sage web docs only). User then said: integer coefficients and
+  pullbacks are NOT priorities (later/maybe never); "do the rest" => lazy/infinite sets, constructions, morphisms, cup
+  products, fundamental group presentation.
+- `DESIGN-persistent-group-cohomology.md` + `groups/` package + `ClassifyingSpaceSpec` (12 examples, all hand-derived oracles).
+- Process slip: `pkill -f sbt-launch` killed my own shell too (exit 144) and the file creation after it never ran; recreate
+  files in separate commands from anything that kills processes.

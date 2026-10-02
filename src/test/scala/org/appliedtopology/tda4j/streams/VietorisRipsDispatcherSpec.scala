@@ -19,7 +19,13 @@ class VietorisRipsDispatcherSpec extends Specification:
       .persistentHomology(VietorisRips(circle, maxDim, implementation = impl))
       .diagramAt(Double.PositiveInfinity)
       .filter((dim, b, d) => dim <= maxDim && d > b + 1e-9)
-      .map((dim, b, d) => (dim, BigDecimal(b).setScale(9, BigDecimal.RoundingMode.HALF_UP).toDouble, if d.isInfinity then d else BigDecimal(d).setScale(9, BigDecimal.RoundingMode.HALF_UP).toDouble))
+      .map((dim, b, d) =>
+        (
+          dim,
+          BigDecimal(b).setScale(9, BigDecimal.RoundingMode.HALF_UP).toDouble,
+          if d.isInfinity then d else BigDecimal(d).setScale(9, BigDecimal.RoundingMode.HALF_UP).toDouble
+        )
+      )
       .sortBy(t => (t._1, t._2, t._3))
 
   "VietorisRips" should {
