@@ -5,15 +5,19 @@ import org.appliedtopology.tda4j.algebra.{FiniteField, given}
 import org.appliedtopology.tda4j.groups.{ClassifyingSpace, FiniteGroup, NerveSimplex}
 import org.specs2.mutable.Specification
 
-/** Steenrod squares against Wu's formula on B(Z/2) = RP^infinity, `Sq^i(x^k) = C(k, i) x^(k+i)`, which uses cup-i for every
-  * `i`, and on CP^2 and RP^2.
+/** Steenrod squares against Wu's formula on B(Z/2) = RP^infinity, `Sq^i(x^k) = C(k, i) x^(k+i)`, which uses cup-i for
+  * every `i`, and on CP^2 and RP^2.
   */
 class SteenrodSpec extends Specification:
   private val f2 = new FiniteField(2)
   import f2.given
 
   private def binomialMod2(k: Int, i: Int): Int =
-    if i < 0 || i > k then 0 else (BigInt(k).toLong.toInt, i) match { case (kk, ii) => (BigInt(1) to BigInt(ii)).foldLeft(BigInt(1))((acc, j) => acc * (kk - ii + j.toInt) / j).mod(2).toInt }
+    if i < 0 || i > k then 0
+    else
+      (BigInt(k).toLong.toInt, i) match
+        case (kk, ii) =>
+          (BigInt(1) to BigInt(ii)).foldLeft(BigInt(1))((acc, j) => acc * (kk - ii + j.toInt) / j).mod(2).toInt
 
   "Steenrod squares on B(Z/2)" should {
     // B(Z/2) has one non-degenerate simplex per dimension, so dimension 9 is trivially cheap; the skeleton is exact below its top.
@@ -21,7 +25,8 @@ class SteenrodSpec extends Specification:
 
     "satisfy Wu's formula: Sq^i(x^k) is cohomologous to C(k, i) x^(k+i)" in {
       val x = CupProduct.cohomologyBasis[NerveSimplex, f2.Fp](bz2, 1).head
-      val powers: Vector[Map[NerveSimplex, f2.Fp]] = (1 to 8).scanLeft(x)((acc, k) => CupProduct.cup(bz2, k, 1, acc, x)).toVector.take(8)
+      val powers: Vector[Map[NerveSimplex, f2.Fp]] =
+        (1 to 8).scanLeft(x)((acc, k) => CupProduct.cup(bz2, k, 1, acc, x)).toVector.take(8)
       val failures = for
         k <- 1 to 4
         i <- 0 to k
@@ -58,6 +63,8 @@ class SteenrodSpec extends Specification:
       val f3 = new FiniteField(3)
       import f3.given
       val rp2 = SimplicialSetFixtures.realProjectiveSpace(2)
-      Steenrod.cupI(rp2, 0, 1, 1, Map.empty[SimplicialSetFixtures.ProjectiveGenerator, f3.Fp], Map.empty) must throwAn[IllegalArgumentException]
+      Steenrod.cupI(rp2, 0, 1, 1, Map.empty[SimplicialSetFixtures.ProjectiveGenerator, f3.Fp], Map.empty) must throwAn[
+        IllegalArgumentException
+      ]
     }
   }
