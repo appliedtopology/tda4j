@@ -389,6 +389,13 @@ d=3 + one d=4 smoke test; not validated d≥5, win shrinks with d by design.
   (dense, small complexes). Oracles must DISCRIMINATE: equal Betti numbers prove little (cup products told the torus from
   S^1∨S^1∨S^2 -- and caught that the old `torus` fixture WAS the latter: both triangles had faces (B,C,A); fixed, second is
   (A,C,B)); use F_2 AND F_3 (suspension of RP², Klein bottle (1,2,1)/(1,1,0)).
+- **Second Sage batch** (`WORKLOG-sage-additions.md`): `SimplicialSets.presentationComplex` (inverse of `FundamentalGroup.presentation`;
+  inverse edges + fan-triangulated relators), `smash` (product / wedge via `quotient`), `join` (`JoinGenerator` OfX/OfY/Both),
+  `sphere(n)`, `complexProjectivePlane` (Sage's one-vertex model) and `complexProjectivePlaneKuhnel` (9 vertices), `hopfMap`
+  (Sage's S³ model; checked by the mapping cone's cohomology RING having x² ≠ 0), and `Steenrod.sq` (F₂ only, Steenrod's
+  cup-i formula, checked by Wu's formula on B(Z/2)). CP³/CP⁴ NOT available (Sage builds them from Kenzo data files). Sage sources
+  were read through WebFetch (a small model summarises the page) — every transcribed data table is verified by `validate()`,
+  Betti numbers AND cup products, never trusted.
 - Fixtures (`SimplicialSetFixtures`): `minimalSphere(n)`, `realProjectiveSpace(2|3)` (sign discriminator F2 vs
   F3), `torus`, `triangle`/`realProjectiveSpaceViaQuotient`. No MATLAB/CLI entry (needs its own encoding design).
 

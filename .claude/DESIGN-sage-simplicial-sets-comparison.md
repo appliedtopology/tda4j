@@ -73,3 +73,7 @@ suspension, wedge, subcomplex/skeleton, Simplex/Point/Empty/Horn/Klein bottle, `
 integer coefficients (deferred by the project lead), `smash_product`, `join`, `ComplexProjectiveSpace`, `HopfMap`,
 `PresentationComplex`, `Nerve`'s lazy `n_skeleton` beyond what `skeleton` gives, Steenrod operations. A finding along the way:
 the old `torus` fixture was not a torus (see CLAUDE.md); cup products are what showed it.
+
+## Second batch (2026-10-02, after "smash, join, CPn, Hopf, presentation complex, maybe Steenrod")
+Done: presentation complex, smash, join, CP^2 (two independent models), Hopf map, Steenrod squares (F_2). Not done: CP^3, CP^4
+(Sage derives them from Kenzo output files, unreachable), pullbacks and integer coefficients (deferred by the project lead).

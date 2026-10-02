@@ -271,6 +271,15 @@ from any simplex stream. `streams/FilteredSimplicialSetStream.scala` is the genu
 `validateMonotoneFiltration` to check the one precondition every engine needs (a face's value never exceeds
 its coface's).
 
+On top of that core, `cells/SimplicialSets.scala` provides the usual constructions and examples (`cone`, `suspension`, `wedge`,
+`smash`, `join`, `subcomplex`, `fromSimplicialComplex`, `presentationComplex`, `kleinBottle`, `horn`, `sphere`,
+`complexProjectivePlane`, `hopfMap`), `cells/SSetMap.scala` simplicial maps (with `mappingCone` and the induced rank on
+homology), `cells/FundamentalGroup.scala` a presentation of the fundamental group, and `cells/CupProduct.scala` and
+`cells/Steenrod.scala` the Alexander-Whitney cup product and the Steenrod squares over F₂. `groups.Nerve`/`ClassifyingSpace`
+use the lazy `SimplicialSet` trait for the infinite nerve of a finite group. None of this has a MATLAB or CLI entry point
+(a simplicial set needs its own input encoding), and every construction is checked against homology computed by hand
+over F₂ and F₃ rather than by `validate()` alone.
+
 ### Cech complexes
 
 `streams/CechStream.scala` (`CechCofaceSimplexStream`/`CechFiltration`) builds Cech complexes over
