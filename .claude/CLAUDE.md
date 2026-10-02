@@ -26,13 +26,17 @@ Source/test directories mirror package names; file names mostly carry over from 
 - `cells` — `Simplex`/`SimplexOps`/`SimplexOrderedCell`, `Cubical`/`CubicalOrderedCell`, `SimplicialSet`
   (`FiniteSimplicialSet`, with `.product`/`.coproduct`/`.quotient`/`.identify` on its companion object, also in
   `SimplicialSet.scala`), `SimplicialSetConstructions` (shared ordering helpers those draw on).
-- `streams` — `SimplexStream`, `FiniteMetricSpace`, `VietorisRips`, `Cofacets`, `SimplexIndexing`, `CubicalStream`,
+- `streams` — `SimplexStream`, `FiniteMetricSpace`, `VietorisRips` (also the `streams.VietorisRips(...)` dispatcher: homological-degree `maxDimension`, pick this over the individual constructions; `DESIGN-stream-naming.md`), `Cofacets`, `SimplexIndexing`, `CubicalStream`,
   `CubicalImage`, `UnionFind` (also defines `Kruskal`, which is metric-space-specific — hence
   here, and why no `util` package exists), `SimplicialSetStream`, `FilteredSimplicialSetStream`, `CechStream`.
 - `homology` — `Homology` (`CellularHomologyEngine` naive + `CellularPersistenceInChunksEngine` chunks, plus the thin
   `Simplicial`/`Cubical`/`PersistenceInChunks` wrappers), `RipserCohomology` (`RipserCohomologyEngine`, the oracle),
   `PackedRipserCohomology`, `Cohomology` (`CellularCohomologyEngine`), `FastCubicalHomology`, `FastAlphaHomology`,
   `PersistenceEngine` (one-shot dispatch trait), `CircularCoordinates`, `LatticeReduction`. The package graph is acyclic: `streams` never depends on `homology`.
+- `groups` — `FiniteGroup`, `ClassifyingSpace` (nerve `BG` of a finite group as a truncated `FiniteSimplicialSet`, filtered by a
+  subgroup chain = persistent group homology). **Library-only proof of concept**: depends on `cells`/`streams`/`homology`, nothing
+  depends on it; no MATLAB/CLI/user docs. Cost is `(|G|-1)^n` cells: S₄ to H₂ ≈ 4 s, H₃ and S₅ H₂ take > 8 min
+  (`DESIGN-persistent-group-cohomology.md`).
 - `barcode` — `Barcode`, `PersistenceFilter`. `alpha` — `AlphaShapes`, `AlphaComplexDQP`. `unicode` — `PrintingHelper` (unused).
 - `matlab` — MATLAB facade. `io` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus` (leaf package).
   `cli` — `TDA4jConf`, `TDA4jCLI` (thin translator over `matlab.TDA4j`/`io`).

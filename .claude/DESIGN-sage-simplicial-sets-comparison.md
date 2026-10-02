@@ -35,7 +35,7 @@ dimension) and `faces(g)`, with `FiniteSimplicialSet` as the all-dimensions-mate
 
 ### C. Maps: `SimplicialSetMorphism` (18 methods in the docs)
 We have no morphism type at all. Sage: composition, `image`, `is_injective/surjective/bijective/constant/identity`
-(by homology), `induced_homology_morphism`, `associated_chain_complex_morphism`, pushout/pullback/coequalizer along maps,
+(CORRECTION: Sage's docs do not say what these test; an earlier note here said "by homology", which was a summarizer's inference from the examples. We implement them on SIMPLICES, the standard meaning, and treat Sage's exact semantics as unconfirmed), `induced_homology_morphism`, `associated_chain_complex_morphism`, pushout/pullback/coequalizer along maps,
 `mapping_cone`, `n_skeleton`. **To match:** `SSetMap[G,H]` = generator -> `SSetElement[H]` respecting faces (checkable
 like `validate()`), the chain map it induces, and the induced map on (persistent) homology. Moderate. High value for us:
 a persistence MODULE morphism is exactly what a filtered map induces (inclusion of subgroup chain steps, below).
@@ -60,3 +60,8 @@ coefficients as typeclass, alternative engines cross-checked.
 4. D: cup products via Alexander-Whitney; `fundamental_group` presentation.
 Rough size: A+B+fixtures ≈ a day of focused work with tests; C ≈ a day; D-cup ≈ half a day; pullback and Z-coefficients are the
 two I would not volunteer for.
+
+## Decisions (project lead, 2026-10-02)
+- **Integer / torsion coefficients: not a priority**, a much-later problem if at all (design principle stays: generic over `Field`).
+- **Pullbacks (and equalizers): deferred** until it is clear they are needed.
+- Everything else above ("do the rest"): lazy sets, constructions, morphisms, fundamental-group presentation, cup products.
