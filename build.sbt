@@ -67,11 +67,8 @@ Compile / doc / scalacOptions ++= Seq(
 )
 Compile / doc / target := target.value / "api"
 
-// Older release tags, oldest-first exclusion of the one being (re)published -- drives Laika's version
-// switcher. Reads git tags directly rather than hand-maintaining a list; a tag with no matching docs
-// directory on `gh-pages` yet (or one from before docs versioning existed) just won't have a working link
-// until it's actually published once.
-def priorReleaseVersions(baseDir: File): Seq[String] = {
+// Release tags (`vX.Y.Z`), newest first, read straight from git rather than hand-maintained.
+def releaseTags(baseDir: File): Seq[String] = {
   import scala.sys.process._
   scala.util
     .Try(Process(Seq("git", "tag", "--list", "v*", "--sort=-v:refname"), baseDir).!!)
@@ -79,7 +76,30 @@ def priorReleaseVersions(baseDir: File): Seq[String] = {
     .linesIterator
     .toList
     .map(_.stripPrefix("v"))
-    .filterNot(_ == docsVersion)
+}
+
+// MiMa baseline: binary compatibility is enforced WITHIN a compatibility series and never across one. A series is
+// "0.Y" while the major version is 0 (semver-spec: a 0.x minor bump may break anything, as 0.5.0 deliberately does
+// from 0.4.x) and "X" from 1.0 on (a minor bump must stay compatible, a major bump may not). The baseline of a build is
+// every earlier plain release (no -alpha/-RC suffix) of its own series: `0.5.0-SNAPSHOT` therefore has none, `0.5.1-SNAPSHOT`
+// is checked against `0.5.0`, and the first `0.6.x` build starts a fresh, empty baseline. Needs the tags in the checkout
+// (CI fetches full history), and a tag with no published Maven artifact fails dependency resolution -- see RELEASE.md.
+// A deliberate break inside a series is allowed with a commented entry in `mimaBinaryIssueFilters`, reviewed in the PR.
+def mimaBaselineVersions(current: String, tags: Seq[String]): Seq[String] = {
+  val Release = """(\d+)\.(\d+)\.(\d+)""".r
+  val Versioned = """(\d+)\.(\d+)\.(\d+)(?:-.+)?""".r
+  def series(major: Int, minor: Int): String = if (major == 0) s"0.$minor" else s"$major"
+  current match {
+    case Versioned(major, minor, patch) =>
+      val here = (major.toInt, minor.toInt, patch.toInt)
+      tags.collect {
+        case v @ Release(ma, mi, pa)
+            if series(ma.toInt, mi.toInt) == series(here._1, here._2) &&
+              Ordering[(Int, Int, Int)].lt((ma.toInt, mi.toInt, pa.toInt), here) =>
+          v
+      }
+    case _ => Nil
+  }
 }
 
 // Compiler options: language features (implicitConversions, adhocExtensions) and warning flags.
@@ -140,8 +160,7 @@ libraryDependencySchemes ++= Seq(
   "org.scala-lang.modules" %% "scala-xml" % VersionScheme.Always
 )
 
-mimaPreviousArtifacts := priorReleaseVersions(baseDirectory.value)
-  .filter(v => !v.startsWith("0.1"))
+mimaPreviousArtifacts := mimaBaselineVersions(version.value, releaseTags(baseDirectory.value))
   .map(v => organization.value %% name.value % v)
   .toSet
 
@@ -164,8 +183,8 @@ Test / sourceGenerators += Def.uncached(Def.task {
     lines.foreach { line =>
       if (line.startsWith("```")) {
         info match {
-          case None       => info = Some(line.stripPrefix("```").trim); body.clear()
-          case Some(i)    => out += ((i, body.toString)); info = None
+          case None    => info = Some(line.stripPrefix("```").trim); body.clear()
+          case Some(i) => out += ((i, body.toString)); info = None
         }
       } else if (info.isDefined) body.append(line).append("\n")
     }
@@ -181,7 +200,8 @@ Test / sourceGenerators += Def.uncached(Def.task {
     if (at < 0) Nil
     else {
       val narrative = fences(text.substring(0, at).linesIterator.toList).collect { case ("scala sc:nocompile", b) => b }
-      val script = fences(text.substring(at).linesIterator.toList).collectFirst { case ("scala", b) => b }
+      val script = fences(text.substring(at).linesIterator.toList)
+        .collectFirst { case ("scala", b) => b }
         .getOrElse(sys.error(s"${page.getName}: no `scala` fence after '$marker'"))
       val name = objectName(page)
       val source =

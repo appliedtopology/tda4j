@@ -36,8 +36,9 @@ real test of the Maven/GitHub-Release half of this pipeline either way — watch
 silence means success. In particular:
 
 - No secrets are configured yet — see [Credentials and secrets](#2-credentials-and-secrets).
-- `mimaPreviousArtifacts` is still `Set.empty` (correct today, since nothing has published to Maven) — the
-  first release must update it, see [Pre-flight](#1-pre-flight).
+- `mimaPreviousArtifacts` is derived from git tags by `mimaBaselineVersions` in `build.sbt`: every earlier plain
+  release of the SAME compatibility series (`0.Y` while the major is 0, `X` from 1.0). So `0.5.0-SNAPSHOT` has no
+  baseline, `0.5.1-SNAPSHOT` is checked against `0.5.0`, and nothing is checked across a minor bump while we are 0.x.
 
 ## Versioning
 
@@ -97,9 +98,10 @@ already-released coordinate.
   `release.yml`'s `gh release create --generate-notes` will produce a commit-based changelog automatically,
   but it's worth reading over and editing by hand for anything a commit-log summary won't convey (this repo's
   worklog discipline — `.claude/WORKLOG-*.md` — is the fastest way to reconstruct what actually happened).
-- Confirm `mimaPreviousArtifacts`: `build.sbt` derives it from the `v*` git tags (excluding the version being
-  published and any `0.1.*` tag). A tag with no published Maven artifact makes `mimaReportBinaryIssues` fail to
-  resolve, so check that the most recent tags really were published.
+- Confirm `mimaPreviousArtifacts` (`sbt show mimaPreviousArtifacts`): `build.sbt` derives it from the `v*` git tags of
+  the version's own compatibility series that are older than it. A tag with no published Maven artifact makes
+  `mimaReportBinaryIssues` fail to resolve, so check that those tags really were published. A deliberate break inside a
+  series needs a commented `mimaBinaryIssueFilters` entry.
 
 ### 2. Credentials and secrets
 
@@ -216,8 +218,8 @@ but not yet through a real `docs.yml`/`release.yml` run — see the warning in [
   even though the artifact is immediately resolvable by exact coordinates).
 - Verify a fresh `libraryDependencies += "org.appliedtopology" %% "TDA4j" % "X.Y.Z"` resolves in a scratch
   project.
-- Set `mimaPreviousArtifacts` to the just-released version if this was the first Maven publish (see
-  [Pre-flight](#1-pre-flight) above) or confirm it's already tracking the prior release otherwise.
+- Confirm `show mimaPreviousArtifacts` on the new `-SNAPSHOT` now includes the just-released version (same
+  series only; a new minor starts with an empty baseline).
 - Skim the new `-SNAPSHOT` commit `sbt release` pushed — confirm it actually landed on `scala` and the version
   bump is sane before walking away.
 - Confirm `release.yml` finished green in the Actions tab and the GitHub Release looks right (all four files
