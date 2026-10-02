@@ -22,7 +22,7 @@ object HomologyFixtures:
   /** The naive engine's own barcode on an already-built stream -- the independent oracle every other engine's barcode
     * is cross-checked against.
     */
-  def naiveBars(source: StratifiedSimplexStream[Int, Double])(using Double is Field): List[(Int, Double, Double)] =
+  def naiveBars(source: LevelwiseSimplexStream[Int, Double])(using Double is Field): List[(Int, Double, Double)] =
     SimplicialHomologyEngine[Int, Double, Double]()
       .persistentHomology(source)
       .diagramAt(Double.PositiveInfinity)

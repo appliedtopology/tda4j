@@ -19,10 +19,10 @@ class ComplexesSpec extends Specification:
   )
   private val euclidean = EuclideanMetricSpace(points)
 
-  private def listing(s: StratifiedSimplexStream[Int, Double]): List[(Simplex[Int], Double)] =
+  private def listing(s: LevelwiseSimplexStream[Int, Double]): List[(Simplex[Int], Double)] =
     s.iterator.toList.map(c => (c, s.filtrationValue(c)))
 
-  private def sameAs(actual: StratifiedSimplexStream[Int, Double], expected: StratifiedSimplexStream[Int, Double]) =
+  private def sameAs(actual: LevelwiseSimplexStream[Int, Double], expected: LevelwiseSimplexStream[Int, Double]) =
     (listing(actual).nonEmpty must beTrue).and(listing(actual) must beEqualTo(listing(expected)))
 
   "Truncated" should {

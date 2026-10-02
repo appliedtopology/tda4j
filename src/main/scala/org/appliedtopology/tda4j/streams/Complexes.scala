@@ -6,7 +6,7 @@ import org.appliedtopology.tda4j.cells.{given, *}
 /** One entry point per kind of complex, each with the shape of [[VietorisRips]]: `maxDimension` is the top HOMOLOGICAL
   * degree you want (`H_0 .. H_maxDimension` computable by any engine; the stream itself contains one dimension more,
   * and an engine run on it reports incomplete classes in degree `maxDimension + 1` -- drop them), and the result is a
-  * [[StratifiedSimplexStream]] you hand to an engine.
+  * [[LevelwiseSimplexStream]] you hand to an engine.
   *
   * These replace reaching for the implementation classes (`CechCofaceSimplexStream`, `LazyWitnessSimplexStream`,
   * `WitnessCofaceSimplexStream`, `DowkerCofaceSimplexStream`, `DtmRipsSimplexStream`, `SheehyRipsSimplexStream`) and
@@ -15,7 +15,7 @@ import org.appliedtopology.tda4j.cells.{given, *}
 object Truncated:
 
   /** `stream` cut off above homological degree `maxDimension` (keeps simplices of dimension `<= maxDimension + 1`). */
-  def apply(stream: StratifiedSimplexStream[Int, Double], maxDimension: Int): StratifiedSimplexStream[Int, Double] =
+  def apply(stream: LevelwiseSimplexStream[Int, Double], maxDimension: Int): LevelwiseSimplexStream[Int, Double] =
     require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
     new TruncatedSimplexStream(stream, maxDimension + 1)
 
@@ -23,15 +23,15 @@ object Truncated:
   private[tda4j] def ofCofaces(
     stream: CofaceSimplexStream[Int, Double],
     maxDimension: Int
-  ): StratifiedSimplexStream[Int, Double] =
+  ): LevelwiseSimplexStream[Int, Double] =
     require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
     LimitedCofaceSimplexStream(stream, maxDimension + 1)
 
 /** A stratified simplex stream cut off above simplex dimension `maxSimplexDimension`; filtration order and values are
   * the wrapped stream's own. (Use [[Truncated]], whose argument is a homological degree.)
   */
-private final class TruncatedSimplexStream(stream: StratifiedSimplexStream[Int, Double], maxSimplexDimension: Int)
-    extends StratifiedSimplexStream[Int, Double]
+private final class TruncatedSimplexStream(stream: LevelwiseSimplexStream[Int, Double], maxSimplexDimension: Int)
+    extends LevelwiseSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]:
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case d if d >= 0 && d <= maxSimplexDimension && stream.iterateDimension.isDefinedAt(d) => stream.iterateDimension(d)
@@ -46,7 +46,7 @@ object Cech:
     maxDimension: Int = 2,
     maxFiltrationValue: Option[Double] = None,
     parallelFiltrationValue: Boolean = false
-  ): StratifiedSimplexStream[Int, Double] =
+  ): LevelwiseSimplexStream[Int, Double] =
     Truncated.ofCofaces(
       CechCofaceSimplexStream(
         metricSpace,
@@ -75,7 +75,7 @@ object Witness:
     variant: Variant = Variant.Lazy,
     nu: Int = 2,
     maxFiltrationValue: Option[Double] = None
-  ): StratifiedSimplexStream[Int, Double] =
+  ): LevelwiseSimplexStream[Int, Double] =
     variant match
       case Variant.Lazy =>
         Truncated.ofCofaces(
@@ -97,7 +97,7 @@ object Dowker:
     maxDimension: Int = 2,
     maxFiltrationValue: Double = Double.PositiveInfinity,
     dual: Boolean = false
-  ): StratifiedSimplexStream[Int, Double] =
+  ): LevelwiseSimplexStream[Int, Double] =
     val geometry = if dual then DowkerGeometry(relation).dual else DowkerGeometry(relation)
     Truncated.ofCofaces(DowkerCofaceSimplexStream(geometry, maxFiltrationValue), maxDimension)
 
@@ -111,7 +111,7 @@ object DtmRips:
     maxDimension: Int = 2,
     p: Double = 1.0,
     maxFiltrationValue: Option[Double] = None
-  ): StratifiedSimplexStream[Int, Double] =
+  ): LevelwiseSimplexStream[Int, Double] =
     Truncated.ofCofaces(DtmRipsSimplexStream(metricSpace, f, p, maxFiltrationValue = maxFiltrationValue), maxDimension)
 
   /** With the weights computed as the distance to the measure with `k` nearest neighbours (self-inclusive) and exponent
@@ -124,7 +124,7 @@ object DtmRips:
     q: Double = 2.0,
     p: Double = 1.0,
     maxFiltrationValue: Option[Double] = None
-  ): StratifiedSimplexStream[Int, Double] =
+  ): LevelwiseSimplexStream[Int, Double] =
     apply(metricSpace, DistanceToMeasure(metricSpace, k, q), maxDimension, p, maxFiltrationValue)
 
 /** Sheehy's sparse (approximate) Rips complex, Cavanna-Jahanseir-Sheehy 2015; `epsilon` strictly in `(0, 1)`. */
@@ -135,7 +135,7 @@ object SparseRips:
     maxDimension: Int = 2,
     firstPoint: Int = 0,
     maxFiltrationValue: Option[Double] = None
-  ): StratifiedSimplexStream[Int, Double] =
+  ): LevelwiseSimplexStream[Int, Double] =
     Truncated.ofCofaces(
       SheehyRipsSimplexStream(metricSpace, epsilon, firstPoint, maxFiltrationValue = maxFiltrationValue),
       maxDimension

@@ -11,3 +11,6 @@ implementation classes `private[tda4j]`, then `StratifiedSimplexStream` -> `Leve
   cell-for-cell AND value-for-value). Passed first run.
 - Block 2: user-guide fences/prose, TDAlab `streams` exports, architecture.md note moved to the public objects (3.8.4 doc build
   clean). Developer-guide prose still names the implementation classes on purpose (they describe internals).
+- Block 3: classes `private[tda4j]` (compiles, docs fences prove nothing public names them); `Truncated` generalized (own
+  wrapper class) so its signature mentions no hidden type; `Truncated.ofCofaces` internal.
+- Block 4: `StratifiedSimplexStream` -> `LevelwiseSimplexStream` (word-boundary perl over src/_docs/CLAUDE.md; worklogs untouched).

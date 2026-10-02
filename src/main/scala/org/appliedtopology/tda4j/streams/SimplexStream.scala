@@ -294,11 +294,11 @@ trait StratifiedCellStream[CellT: OrderedCell, FiltrationT: Filterable] extends 
       .takeWhile(iterateDimension.isDefinedAt)
       .flatMap(iterateDimension)
 
-trait StratifiedSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
+trait LevelwiseSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
     extends StratifiedCellStream[Simplex[VertexT], FiltrationT] {}
 
 private[tda4j] trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
-    extends StratifiedSimplexStream[VertexT, FiltrationT]:
+    extends LevelwiseSimplexStream[VertexT, FiltrationT]:
 
   def currentDimension: Int
 

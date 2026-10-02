@@ -118,7 +118,7 @@ class RecursiveStackSimplexEnumerator(val metricSpace: FiniteMetricSpace[Int], v
   * for the canonical VR streams, not a speed-competitive production engine in its own right.
   */
 private[tda4j] class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace[Int])
-    extends StratifiedSimplexStream[Int, Double]
+    extends LevelwiseSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]:
   override def filtrationValue: PartialFunction[Simplex[Int], Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
@@ -194,7 +194,7 @@ object VietorisRips:
     maxDimension: Int = 2,
     maxFiltrationValue: Option[Double] = None,
     implementation: Implementation = Implementation.Enumerating
-  ): StratifiedSimplexStream[Int, Double] =
+  ): LevelwiseSimplexStream[Int, Double] =
     require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
     val topSimplexDimension = maxDimension + 1
     implementation match

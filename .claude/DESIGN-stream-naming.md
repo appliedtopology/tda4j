@@ -52,3 +52,11 @@ degree and the object does the +1.
 2. Add `Cech`, `Witness`, `Dowker`, `DtmRips`, `SparseRips` dispatcher objects the same way (additive, no breakage).
 3. Make the old classes `private[streams]` in one commit with the doc/test search-replace (66 files) once the lead agrees
    on names.
+
+## Status (2026-10-02, project lead approved the names)
+Done: `Truncated`, `Cech`, `Witness(variant)`, `Dowker`, `DtmRips`, `SparseRips` (+ earlier `VietorisRips`) as public objects;
+implementation classes hidden `private[tda4j]`; `StratifiedSimplexStream` renamed `LevelwiseSimplexStream`; docs, tutorial exports
+and TDAlab moved over. Deviations from the table above: `Witness` takes a `variant` enum (`lazy` is a keyword); hiding is
+`private[tda4j]` (homology/matlab/tests use the classes), not `private[streams]`; no `Cubical`/`Alpha` objects (already
+dispatching: `CubicalImage`, `AlphaShapes`); `CofaceSimplexStream` is hidden rather than renamed (it carries cache state); MATLAB/CLI
+option strings (`sheehy-rips`, `--sheehy-epsilon`, ...) unchanged — say if they should follow (`sparse-rips`).

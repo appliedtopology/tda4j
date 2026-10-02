@@ -381,7 +381,7 @@ class AlphaFiltrationOrderingRegressionSpec extends org.specs2.mutable.Specifica
   private val dispatches = Seq("helix", "DQP")
   private val maxDim = 2
 
-  private def bounded(stream: StratifiedSimplexStream[Int, Double]): StratifiedCellStream[Simplex[Int], Double] =
+  private def bounded(stream: LevelwiseSimplexStream[Int, Double]): StratifiedCellStream[Simplex[Int], Double] =
     val cells =
       (0 to maxDim).iterator.flatMap(d => stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty)).toVector
     val byDim = cells.groupBy(_.dim)

@@ -236,6 +236,16 @@ tie-heavy fixtures; `totalBarsAccountForAllCells` alone is weaker. Filtration va
 comparisons must be cheap: `EnumeratingCofaceSimplexStream`/`CubicalGridStream` memoize them
 (`WORKLOG-autonomous-session-2026-09-19.md`).
 
+**Public entry points** (`DESIGN-stream-naming.md`, `WORKLOG-stream-rename.md`): users build complexes through `VietorisRips`, `Cech`,
+`Witness(variant = Lazy | General)`, `Dowker`, `DtmRips`, `SparseRips` and `Truncated` — each takes `maxDimension` as the top
+HOMOLOGICAL degree and returns a `LevelwiseSimplexStream[Int, Double]` (the old `StratifiedSimplexStream`). The implementation classes
+named below (`Enumerating...`, `Ripser...`, `Inorder...`, `Incremental...`, `RecursiveStack...`, `Cech...`, `LazyWitness...`,
+`WitnessCoface...`, `DowkerCoface...`, `DtmRips...`, `SheehyRips...`, `LimitedCoface...`, `CofaceSimplexStream`) are
+`private[tda4j]`: use them inside the library, tests and `matlab`, never in docs fences (the snippet compiler runs outside the
+package, so a fence using one fails `sbt doc`). No `Cubical`/`Alpha` objects: `CubicalImage` and `AlphaShapes` already are the
+dispatching entry points. Any new object must be tested against the hand-wrapped class cell for cell AND value for value
+(`ComplexesSpec`) — Betti numbers would not catch a wrong `+1`.
+
 **VR constructions** (same output contract, alternate engines): `EnumeratingCofaceSimplexStream`,
 `RipserCofaceSimplexStream` (+ `SimplexIndexing`), `InorderCofaceSimplexStream`,
 `RecursiveStackVietorisRipsSimplexStream`, `IncrementalVietorisRipsSimplexStream` (Rieser's New-VR, arXiv:2301.07191

@@ -1165,7 +1165,7 @@ object TDA4j:
           case EngineKind.Cohomology =>
             // No stream-level dimension cap here either, for the same reason as engine=Naive above: an alpha
             // complex's chain complex terminates on its own. CellularCohomologyEngine accepts `alphaStream`
-            // directly -- it's a StratifiedSimplexStream[Int, Double], hence a CellStream[Simplex[Int], Double].
+            // directly -- it's a LevelwiseSimplexStream[Int, Double], hence a CellStream[Simplex[Int], Double].
             fromBars[Simplex[Int], C](
               PersistenceEngine.cohomology[Simplex[Int], C].barcode(alphaStream),
               alphaCellVertices,
