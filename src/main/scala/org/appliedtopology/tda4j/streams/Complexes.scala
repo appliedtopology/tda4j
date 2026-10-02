@@ -15,9 +15,29 @@ import org.appliedtopology.tda4j.cells.{given, *}
 object Truncated:
 
   /** `stream` cut off above homological degree `maxDimension` (keeps simplices of dimension `<= maxDimension + 1`). */
-  def apply(stream: CofaceSimplexStream[Int, Double], maxDimension: Int): StratifiedSimplexStream[Int, Double] =
+  def apply(stream: StratifiedSimplexStream[Int, Double], maxDimension: Int): StratifiedSimplexStream[Int, Double] =
+    require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
+    new TruncatedSimplexStream(stream, maxDimension + 1)
+
+  /** Internal: the same cut for a coface stream, keeping the coface-cache members the engines' own wrappers expect. */
+  private[tda4j] def ofCofaces(
+    stream: CofaceSimplexStream[Int, Double],
+    maxDimension: Int
+  ): StratifiedSimplexStream[Int, Double] =
     require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
     LimitedCofaceSimplexStream(stream, maxDimension + 1)
+
+/** A stratified simplex stream cut off above simplex dimension `maxSimplexDimension`; filtration order and values are
+  * the wrapped stream's own. (Use [[Truncated]], whose argument is a homological degree.)
+  */
+private final class TruncatedSimplexStream(stream: StratifiedSimplexStream[Int, Double], maxSimplexDimension: Int)
+    extends StratifiedSimplexStream[Int, Double]
+    with DoubleFiltration[Simplex[Int]]:
+  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+    case d if d >= 0 && d <= maxSimplexDimension && stream.iterateDimension.isDefinedAt(d) => stream.iterateDimension(d)
+  }
+  override def filtrationOrdering: Ordering[Simplex[Int]] = stream.filtrationOrdering
+  override def filtrationValue: PartialFunction[Simplex[Int], Double] = stream.filtrationValue
 
 /** The Cech complex of a Euclidean point cloud; `maxFiltrationValue` is in Cech RADIUS units. */
 object Cech:
@@ -27,7 +47,7 @@ object Cech:
     maxFiltrationValue: Option[Double] = None,
     parallelFiltrationValue: Boolean = false
   ): StratifiedSimplexStream[Int, Double] =
-    Truncated(
+    Truncated.ofCofaces(
       CechCofaceSimplexStream(
         metricSpace,
         maxFiltrationValue = maxFiltrationValue,
@@ -58,12 +78,12 @@ object Witness:
   ): StratifiedSimplexStream[Int, Double] =
     variant match
       case Variant.Lazy =>
-        Truncated(
+        Truncated.ofCofaces(
           LazyWitnessSimplexStream(metricSpace, landmarks, nu, maxFiltrationValue = maxFiltrationValue),
           maxDimension
         )
       case Variant.General =>
-        Truncated(
+        Truncated.ofCofaces(
           WitnessCofaceSimplexStream(metricSpace, landmarks, maxFiltrationValue.getOrElse(Double.PositiveInfinity)),
           maxDimension
         )
@@ -79,7 +99,7 @@ object Dowker:
     dual: Boolean = false
   ): StratifiedSimplexStream[Int, Double] =
     val geometry = if dual then DowkerGeometry(relation).dual else DowkerGeometry(relation)
-    Truncated(DowkerCofaceSimplexStream(geometry, maxFiltrationValue), maxDimension)
+    Truncated.ofCofaces(DowkerCofaceSimplexStream(geometry, maxFiltrationValue), maxDimension)
 
 /** The distance-to-measure-weighted Rips complex (Anai et al.); `p` is `1.0` (default) or `2.0`. */
 object DtmRips:
@@ -92,7 +112,7 @@ object DtmRips:
     p: Double = 1.0,
     maxFiltrationValue: Option[Double] = None
   ): StratifiedSimplexStream[Int, Double] =
-    Truncated(DtmRipsSimplexStream(metricSpace, f, p, maxFiltrationValue = maxFiltrationValue), maxDimension)
+    Truncated.ofCofaces(DtmRipsSimplexStream(metricSpace, f, p, maxFiltrationValue = maxFiltrationValue), maxDimension)
 
   /** With the weights computed as the distance to the measure with `k` nearest neighbours (self-inclusive) and exponent
     * `q`.
@@ -116,7 +136,7 @@ object SparseRips:
     firstPoint: Int = 0,
     maxFiltrationValue: Option[Double] = None
   ): StratifiedSimplexStream[Int, Double] =
-    Truncated(
+    Truncated.ofCofaces(
       SheehyRipsSimplexStream(metricSpace, epsilon, firstPoint, maxFiltrationValue = maxFiltrationValue),
       maxDimension
     )

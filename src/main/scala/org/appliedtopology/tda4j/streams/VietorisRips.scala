@@ -117,7 +117,7 @@ class RecursiveStackSimplexEnumerator(val metricSpace: FiniteMetricSpace[Int], v
   * neighbor query rather than `SimplexIndexing`'s combinatorial-number-system enumeration. A cross-validation baseline
   * for the canonical VR streams, not a speed-competitive production engine in its own right.
   */
-class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace[Int])
+private[tda4j] class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace[Int])
     extends StratifiedSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]:
   override def filtrationValue: PartialFunction[Simplex[Int], Double] =

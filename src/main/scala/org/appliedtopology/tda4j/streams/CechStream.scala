@@ -99,7 +99,7 @@ object CechFiltration:
   * separate VR-diameter-based edge-graph precomputation is used once `iterateDimension` is overridden, so there is no
   * VR-units quantity anywhere in this class to convert from).
   */
-class CechCofaceSimplexStream(
+private[tda4j] class CechCofaceSimplexStream(
   val euclideanMetricSpace: EuclideanMetricSpace,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
   maxFiltrationValue: Option[Double] = None,

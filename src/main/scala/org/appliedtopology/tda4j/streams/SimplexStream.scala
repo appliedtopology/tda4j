@@ -297,7 +297,7 @@ trait StratifiedCellStream[CellT: OrderedCell, FiltrationT: Filterable] extends 
 trait StratifiedSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
     extends StratifiedCellStream[Simplex[VertexT], FiltrationT] {}
 
-trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
+private[tda4j] trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
     extends StratifiedSimplexStream[VertexT, FiltrationT]:
 
   def currentDimension: Int
@@ -308,7 +308,7 @@ trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
 
   def keepCriterion: PartialFunction[Simplex[VertexT], Boolean]
 
-class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDim: Int)
+private[tda4j] class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDim: Int)
     extends CofaceSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]():
   // `d <= maxDim` alone is not sufficient: the WRAPPED stream has its own natural bound (e.g.
@@ -330,7 +330,7 @@ class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDi
   override def filtrationOrdering: Ordering[Simplex[Int]] = stream.filtrationOrdering
   override def filtrationValue: PartialFunction[Simplex[Int], Double] = stream.filtrationValue
 
-class EnumeratingCofaceSimplexStream(
+private[tda4j] class EnumeratingCofaceSimplexStream(
   val metricSpace: FiniteMetricSpace[Int],
   var keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
   // None means "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below (a constant
@@ -474,7 +474,7 @@ class EnumeratingCofaceSimplexStream(
       ).iterator
   }
 
-class RipserCofaceSimplexStream(
+private[tda4j] class RipserCofaceSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ =>
     true
@@ -532,7 +532,7 @@ class RipserCofaceSimplexStream(
   * structure. A cross-validation baseline for the canonical VR streams, not a speed-competitive production engine in
   * its own right.
   */
-class InorderCofaceSimplexStream(
+private[tda4j] class InorderCofaceSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
   maxFiltrationValue: Option[Double] = None
@@ -651,7 +651,7 @@ class InorderCofaceSimplexStream(
   * serve -- so `maxDimension = 0` yields vertices only, with no edges, unlike the paper's own Σ. This matches every
   * other bounded stream in this codebase and is what a caller building up dimension-by-dimension would expect.
   */
-class IncrementalVietorisRipsSimplexStream(
+private[tda4j] class IncrementalVietorisRipsSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
   val maxDimension: Int,
   // Same default as EnumeratingCofaceSimplexStream's identical parameter (see there): resolved to

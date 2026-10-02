@@ -57,7 +57,7 @@ import scala.collection.immutable
   * incremental formula); `naive`/`chunks`/`cohomology` all consume this like any other
   * `CofaceSimplexStream[Int, Double]`.
   */
-class DtmRipsSimplexStream(
+private[tda4j] class DtmRipsSimplexStream(
   val reified: DtmRipsSimplexStream.DtmMetricSpace,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
   maxFiltrationValue: Option[Double] = None,
@@ -87,7 +87,7 @@ class DtmRipsSimplexStream(
     }
     dim0.orElse(super.iterateDimension)
 
-object DtmRipsSimplexStream:
+private[tda4j] object DtmRipsSimplexStream:
 
   def apply(
     ambientMetricSpace: FiniteMetricSpace[Int],
