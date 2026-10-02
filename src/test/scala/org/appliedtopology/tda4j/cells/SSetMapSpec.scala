@@ -30,7 +30,11 @@ class SSetMapSpec extends Specification:
     }
     "reject a map that does not commute with the faces" in {
       // send the loop A to the vertex and keep B: A's triangle faces no longer match
-      val bad = SSetMap[TorusGenerator, TorusGenerator](torus, torus, g => if g == TorusGenerator.A then SSetElement(Nil, TorusGenerator.B) else SSetElement(Nil, g))
+      val bad = SSetMap[TorusGenerator, TorusGenerator](
+        torus,
+        torus,
+        g => if g == TorusGenerator.A then SSetElement(Nil, TorusGenerator.B) else SSetElement(Nil, g)
+      )
       bad.validate() must not(beEmpty)
     }
   }

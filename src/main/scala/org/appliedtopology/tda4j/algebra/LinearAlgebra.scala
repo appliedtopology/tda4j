@@ -9,8 +9,8 @@ import scala.collection.mutable.ArrayBuffer
   */
 object LinearAlgebra:
 
-  /** Reduced row echelon form of `rows` (a list of rows, all of the same length), and the pivot column of each
-    * nonzero row of the result.
+  /** Reduced row echelon form of `rows` (a list of rows, all of the same length), and the pivot column of each nonzero
+    * row of the result.
     */
   def rref[F: Field as field](rows: Seq[Seq[F]]): (Vector[Vector[F]], Vector[Int]) =
     val m = ArrayBuffer.from(rows.map(r => ArrayBuffer.from(r)))
@@ -38,15 +38,18 @@ object LinearAlgebra:
   /** The rank of the matrix whose rows are `rows`. */
   def rank[F: Field](rows: Seq[Seq[F]]): Int = rref(rows)._2.length
 
-  /** A basis of `{ x : A x = 0 }` for the matrix `A` given by `rows`, with `nCols` columns (needed because `rows` may be
-    * empty); each basis vector has length `nCols`.
+  /** A basis of `{ x : A x = 0 }` for the matrix `A` given by `rows`, with `nCols` columns (needed because `rows` may
+    * be empty); each basis vector has length `nCols`.
     */
   def nullspace[F: Field as field](rows: Seq[Seq[F]], nCols: Int): Vector[Vector[F]] =
     val (reduced, pivots) = rref(if rows.isEmpty then Seq(Seq.fill(nCols)(field.zero)) else rows)
     val pivotSet = pivots.toSet
-    (0 until nCols).filterNot(pivotSet.contains).map { free =>
-      val x = ArrayBuffer.fill(nCols)(field.zero)
-      x(free) = field.one
-      for (row, pivotColumn) <- reduced.zip(pivots) do x(pivotColumn) = field.negate(row(free))
-      x.toVector
-    }.toVector
+    (0 until nCols)
+      .filterNot(pivotSet.contains)
+      .map { free =>
+        val x = ArrayBuffer.fill(nCols)(field.zero)
+        x(free) = field.one
+        for (row, pivotColumn) <- reduced.zip(pivots) do x(pivotColumn) = field.negate(row(free))
+        x.toVector
+      }
+      .toVector

@@ -4,11 +4,12 @@ package cells
 import org.appliedtopology.tda4j.algebra.{given, *}
 
 /** A simplicial map `f : X -> Y` between finite simplicial sets, given -- as everything here is -- on generators:
-  * `onGenerators(g)` is the image of the non-degenerate simplex `g`, an arbitrary (possibly degenerate) element of `Y` of
-  * the same dimension. A degenerate simplex `s_J g` goes to `s_J f(g)`, which is how `apply` extends it.
+  * `onGenerators(g)` is the image of the non-degenerate simplex `g`, an arbitrary (possibly degenerate) element of `Y`
+  * of the same dimension. A degenerate simplex `s_J g` goes to `s_J f(g)`, which is how `apply` extends it.
   *
-  * Injectivity and surjectivity are properties of the map on SIMPLICES (the standard meaning). Sage's docs do not say what
-  * its own `is_injective`/`is_surjective` test (`DESIGN-sage-simplicial-sets-comparison.md`), so no claim of agreement.
+  * Injectivity and surjectivity are properties of the map on SIMPLICES (the standard meaning). Sage's docs do not say
+  * what its own `is_injective`/`is_surjective` test (`DESIGN-sage-simplicial-sets-comparison.md`), so no claim of
+  * agreement.
   */
 final class SSetMap[GX, GY](
   val source: FiniteSimplicialSet[GX],
@@ -99,7 +100,8 @@ final class SSetMap[GX, GY](
       val cycles = LinearAlgebra.nullspace(boundaryX, xs.length)
       val fCycles: Seq[Seq[F]] = cycles.map { z =>
         val out = scala.collection.mutable.ArrayBuffer.fill(ys.length)(field.zero)
-        for x <- xs; (y, c) <- chainMap[F](x) do out(yIndex(y)) = field.plus(out(yIndex(y)), field.times(c, z(xIndex(x))))
+        for x <- xs; (y, c) <- chainMap[F](x) do
+          out(yIndex(y)) = field.plus(out(yIndex(y)), field.times(c, z(xIndex(x))))
         out.toVector
       }
       val above = target.generatorsAt(n + 1).toVector
@@ -118,7 +120,11 @@ object SSetMap:
     SSetMap(sub, ambient, g => SSetElement(Nil, g))
 
   /** The quotient map `X -> quotient(X, quotientMap)`. */
-  def quotientMap[G](x: FiniteSimplicialSet[G], quotient: FiniteSimplicialSet[G], quotientMap: G => SSetElement[G]): SSetMap[G, G] =
+  def quotientMap[G](
+    x: FiniteSimplicialSet[G],
+    quotient: FiniteSimplicialSet[G],
+    quotientMap: G => SSetElement[G]
+  ): SSetMap[G, G] =
     SSetMap(x, quotient, quotientMap)
 
   /** The projection of a product onto its first factor. */
