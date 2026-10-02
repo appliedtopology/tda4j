@@ -79,7 +79,7 @@ intermediate filtration values or get representative cycles back (`state.diagram
 
 ### Dropping short bars
 
-Engines return every bar. The MATLAB facade and the CLI hide bars shorter than 1% of the connectivity scale by
+Engines return every bar. The MATLAB facade and the CLI hide bars shorter than 1% of the input's minimum enclosing radius by
 default; from Scala you opt in with `PersistenceFilter` (essential bars are always kept; a threshold of `0` keeps
 everything):
 
@@ -97,9 +97,12 @@ val state = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(s
 state.advanceAll()
 val bars = state.barcodeAt(Double.PositiveInfinity)
 
-val worthReporting = PersistenceFilter.significant(bars)                    // default: 1% of the connectivity scale
+val metricSpace = EuclideanMetricSpace(points)
+val scale = Some(metricSpace.minimumEnclosingRadius)
+
+val worthReporting = PersistenceFilter.significant(bars, scale = scale)          // default: 1% of the scale
 val everything = PersistenceFilter.significant(bars, minPersistence = Some(0.0))
-val aTenthOfIt = PersistenceFilter.significant(bars, fraction = 0.1)
+val aTenthOfIt = PersistenceFilter.significant(bars, fraction = 0.1, scale = scale)
 ```
 
 **A default worth knowing**: `EnumeratingCofaceSimplexStream` and the other Vietoris-Rips stream

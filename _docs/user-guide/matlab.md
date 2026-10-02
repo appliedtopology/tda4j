@@ -29,11 +29,13 @@ bars = result.toArray();
 
 A barcode computed from real data is mostly noise: thousands of bars of negligible length next to the few that
 carry the shape. So by default `toArray()`/`size()`/`birth`/`death`/`cycleVertices`/... report a bar only if it
-is **essential** (never dies) or its persistence `death - birth` is **greater than 1% of the connectivity
-scale** — the range from the first birth to the value at which the data becomes connected (the longest finite
-dimension-0 bar; for Vietoris-Rips, 0 to the connectivity radius). The scale is measured in the units the
-complex reports (diameters for `vr`, radii for `cech`/`alpha`). When there is no finite dimension-0 bar the full
-finite range is used instead, and a single point has scale 0, so nothing is hidden.
+is **essential** (never dies) or its persistence `death - birth` is **greater than 1% of the input's minimum
+enclosing radius** — Ripser's enclosing radius, `min over points of (max distance to another point)`: beyond it the
+Vietoris-Rips complex is a cone, so every bar lives between 0 and it. The scale is in the units the complex
+reports (diameters for `vr`, radii for `cech`/`alpha`). A cubical image and a Dowker relation have no metric, so
+their own value range (max − min) is the scale instead. A single point has scale 0, so nothing is hidden, and an
+infinite enclosing radius (a disconnected distance matrix with infinite entries) falls back to the span of the
+barcode's own finite endpoints.
 
 ```java
 // a different cut: 5% of the scale, or an absolute persistence of 0.1, or no cut at all
@@ -47,7 +49,7 @@ double[][] all = result.toArrayUnfiltered();       // the complete barcode, same
 ```
 
 The threshold only changes what is *reported*: bottleneck/Wasserstein distances, landscapes and persistence
-images always use the complete barcode, so they do not depend on each result's own connectivity scale. It
+images always use the complete barcode, so they do not depend on each result's own scale. It
 is applied after the computation, so it does not make the computation itself cheaper (`maxFiltrationValue` and
 `maxDimension` do that). `circularCoordinates`/`toroidalCoordinates`' `h1Bars` are not filtered.
 
@@ -81,8 +83,8 @@ changes a method's call signature:
 | `sheehyEpsilon` | double | REQUIRED for `complex=sheehy-rips`, no default; strictly between `0` and `1` |
 | `maxDimension` | integer | `2` — highest H_k reported, not highest simplex dimension built |
 | `maxFiltrationValue` | double | the point cloud's own minimum enclosing radius (`+Infinity` for `witness`/`witnessVariant=general`; `SheehyRipsSimplexStream`'s own `maxFiniteFiltrationValue` for `complex=sheehy-rips`) |
-| `minPersistence` | double | unset — a bar is reported only if essential or its persistence exceeds 1% of the connectivity scale (see "Which bars are reported" below); an absolute threshold in the barcode's own units, `0` reports every bar. Accepted by every `computeFrom*` method (not the landmark-selection ones, which produce no barcode) |
-| `minPersistenceFraction` | double | `0.01` — the same threshold as a fraction of the connectivity scale; `0` reports every bar. Give at most one of the two |
+| `minPersistence` | double | unset — a bar is reported only if essential or its persistence exceeds 1% of the minimum enclosing radius (see "Which bars are reported" above); an absolute threshold in the barcode's own units, `0` reports every bar. Accepted by every `computeFrom*` method (not the landmark-selection ones, which produce no barcode) |
+| `minPersistenceFraction` | double | `0.01` — the same threshold as a fraction of the minimum enclosing radius; `0` reports every bar. Give at most one of the two |
 | `field` | `Z` (finite field), `R` (floating point) | `Z`, `prime=2` |
 | `prime` | integer | `2` (only for `field=Z`) |
 | `epsilon` | double | `1e-9` (only for `field=R`; unrelated to `sheehyEpsilon` above) |

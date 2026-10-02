@@ -70,7 +70,7 @@ final class PersistenceResult private[matlab] (
 
   /** The persistence threshold this result was filtered with (`0` means nothing was hidden by a threshold): bars with
     * `death - birth` at or below it are not among the `size()` reported bars. Essential bars are never hidden. See
-    * `barcode.PersistenceFilter` for how the default is derived.
+    * `barcode.PersistenceFilter` for how the default (1% of the minimum enclosing radius) is derived.
     */
   def persistenceThreshold(): Double = threshold
 
@@ -82,11 +82,21 @@ final class PersistenceResult private[matlab] (
     Array.tabulate(allDims.length)(i => Array(allDims(i).toDouble, allBirths(i), allDeaths(i)))
 
   /** This same computation reporting only the bars that pass the threshold -- see `barcode.PersistenceFilter` for the
-    * rule (`minPersistence` absolute if given, otherwise `fraction` of the connectivity scale; `0` keeps everything).
-    * Computed from the FULL barcode, so it does not compound if applied twice.
+    * rule (`minPersistence` absolute if given, otherwise `fraction` of `scale` -- the input's minimum enclosing radius,
+    * or a cubical image's value range; by-name, evaluated only when needed; `0` keeps everything). Computed from the
+    * FULL barcode, so it does not compound if applied twice.
     */
-  private[matlab] def withPersistenceThreshold(minPersistence: Option[Double], fraction: Double): PersistenceResult =
-    val thr = PersistenceFilter.threshold(allDims, allBirths, allDeaths, minPersistence, fraction)
+  private[matlab] def withPersistenceThreshold(
+    minPersistence: Option[Double],
+    fraction: Double,
+    scale: => Double
+  ): PersistenceResult =
+    val thr = PersistenceFilter.threshold(
+      minPersistence,
+      fraction,
+      scale,
+      PersistenceFilter.filtrationRange(allBirths, allDeaths)
+    )
     new PersistenceResult(
       allDims,
       allBirths,
@@ -137,11 +147,10 @@ final class PersistenceResult private[matlab] (
 
   /** This result's own bars of dimension `dim` -- ALL of them, including any the persistence threshold hides from
     * `size()`/`toArray()` (a distance or vectorization between two results must not depend on each one's own threshold,
-    * which differs with each one's own connectivity scale) -- as plain `PersistenceBar[Double, Nothing]` (no
-    * representative chain -- `barcode.BarcodeDistance`/`barcode.Vectorization` only ever look at `dim`/`lower`/`upper`)
-    * for feeding into those two objects. An essential class (`death(i) == Double.PositiveInfinity`) becomes a
-    * `PositiveInfinity` upper endpoint, exactly what both consume directly for the essential-bar handling documented on
-    * each.
+    * which differs with each one's own scale) -- as plain `PersistenceBar[Double, Nothing]` (no representative chain --
+    * `barcode.BarcodeDistance`/`barcode.Vectorization` only ever look at `dim`/`lower`/`upper`) for feeding into those
+    * two objects. An essential class (`death(i) == Double.PositiveInfinity`) becomes a `PositiveInfinity` upper
+    * endpoint, exactly what both consume directly for the essential-bar handling documented on each.
     */
   private def barsOfDimension(dim: Int): IndexedSeq[PersistenceBar[Double, Nothing]] =
     (0 until allDims.length)

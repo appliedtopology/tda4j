@@ -34,8 +34,8 @@ mirrors.
 ### Which bars are reported
 
 Like the MATLAB facade (see "Which bars are reported" there), the CLI hides bars with persistence at most 1% of
-the connectivity scale by default — the range from the first birth to the value at which the data becomes
-connected (for Vietoris-Rips, 0 to the connectivity radius); essential bars are always reported. When anything
+the input's minimum enclosing radius by default (Ripser's enclosing radius — every bar lives between 0 and it;
+for a cubical image or Dowker relation, the range of its values); essential bars are always reported. When anything
 was hidden, one line on stderr says how many and how to get them back:
 
 ```

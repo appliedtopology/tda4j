@@ -57,7 +57,7 @@ object TDA4jCLI:
         )
 
       // A persistence threshold only means something for a reported barcode: --select-landmarks produces none, and
-      // --distance-to always compares COMPLETE barcodes (a distance must not depend on this run's own connectivity
+      // --distance-to always compares COMPLETE barcodes (a distance must not depend on this run's own
       // scale) -- silently ignoring a flag the user typed is exactly the trap this CLI avoids.
       if conf.minPersistence.isSupplied || conf.minPersistenceFraction.isSupplied then
         if conf.selectLandmarks() then
@@ -344,7 +344,7 @@ object TDA4jCLI:
     (0 until result.size()).map(i => asBar(result.dimension(i), result.birth(i), result.death(i)))
 
   /** EVERY bar, threshold or not: `--distance-to` compares against an external diagram (typically unfiltered Ripser/
-    * GUDHI output), and a distance that depended on this run's own connectivity scale would not be comparable.
+    * GUDHI output), and a distance that depended on this run's own scale would not be comparable.
     */
   private[cli] def toBarsUnfiltered(result: PersistenceResult): IndexedSeq[PersistenceBar[Double, Nothing]] =
     result.toArrayUnfiltered().toIndexedSeq.map(row => asBar(row(0).toInt, row(1), row(2)))

@@ -124,9 +124,10 @@ parse `into`) and implicit conversions are enabled in-source, not by a flag.
 
 Engines return EVERY bar (they are the cross-validation oracles; every bar has a representative). The facade
 (`matlab.TDA4j`, hence CLI + MATLAB) hides bars by default: **kept iff essential or persistence > 1% of the
-connectivity scale**, scale = (largest finite H0 death) − (smallest H0 birth) (= 0..connectivity radius for VR; falls
-back to the full finite range when no H0 bar is finite; 0 for a single point), in the units the complex reports
-(VR diameters, Cech/alpha radii). Options `minPersistence` (absolute) / `minPersistenceFraction` (default `0.01`),
+input's minimum enclosing radius** (`metricSpace.minimumEnclosingRadius`, Ripser's enclosing radius, NOT the
+connectivity radius; for a cubical image / Dowker relation, the range max − min of its values; 0 for a single point;
+non-finite → the barcode's own finite range), in the units the complex reports (VR diameters, Cech/alpha radii);
+the scale is passed by-name and only computed when a fraction of it is needed. Options `minPersistence` (absolute) / `minPersistenceFraction` (default `0.01`),
 at most one; **`0` keeps everything incl. zero-persistence bars**; CLI `--min-persistence`/`--min-persistence-fraction`
 (mirrored, no Scallop default; stderr note when bars were hidden; rejected with `--select-landmarks`/`--distance-to`).
 Logic lives in `barcode.PersistenceFilter` (opt-in for Scala callers: `PersistenceFilter.significant`). Invariants:

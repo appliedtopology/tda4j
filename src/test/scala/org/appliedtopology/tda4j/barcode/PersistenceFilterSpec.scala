@@ -6,28 +6,14 @@ import org.specs2.mutable.Specification
 class PersistenceFilterSpec extends Specification:
   private val inf = Double.PositiveInfinity
 
-  "connectivityScale" should {
-    "be (largest finite H0 death) - (smallest H0 birth), ignoring higher dimensions" >> {
-      // H0 deaths 0.5 and 2.0 -> scale 2.0, even though an H1 bar dies later at 9.0.
-      PersistenceFilter.connectivityScale(
-        Array(0, 0, 0, 1),
-        Array(0.0, 0.0, 0.0, 1.0),
-        Array(0.5, 2.0, inf, 9.0)
-      ) must beEqualTo(2.0)
-    }
-
-    "subtract the smallest H0 birth, so an offset filtration (e.g. image values) has the same scale" >> {
-      PersistenceFilter.connectivityScale(Array(0, 0), Array(10.0, 10.0), Array(12.0, inf)) must beEqualTo(2.0)
-    }
-
-    "fall back to the full finite range when no H0 bar is finite" >> {
-      // one component from the start (a one-basin image): only essential H0, plus an H1 bar [3, 8).
-      PersistenceFilter.connectivityScale(Array(0, 1), Array(1.0, 3.0), Array(inf, 8.0)) must beEqualTo(7.0)
+  "filtrationRange" should {
+    "be (largest finite endpoint) - (smallest finite birth), ignoring infinite endpoints" >> {
+      PersistenceFilter.filtrationRange(Array(0.0, 0.0, 1.0), Array(0.5, inf, 8.0)) must beEqualTo(8.0)
     }
 
     "be 0 when there is no finite endpoint at all (e.g. a single point)" >> {
-      PersistenceFilter.connectivityScale(Array(0), Array(0.0), Array(inf)) must beEqualTo(0.0)
-      PersistenceFilter.connectivityScale(Array.empty[Int], Array.empty[Double], Array.empty[Double]) must beEqualTo(0.0)
+      (PersistenceFilter.filtrationRange(Array(0.0), Array(inf)) must beEqualTo(0.0)) and
+        (PersistenceFilter.filtrationRange(Array.empty[Double], Array.empty[Double]) must beEqualTo(0.0))
     }
   }
 
@@ -46,23 +32,32 @@ class PersistenceFilterSpec extends Specification:
   }
 
   "threshold" should {
-    val dims = Array(0, 0, 0)
-    val births = Array(0.0, 0.0, 0.0)
-    val deaths = Array(0.001, 1.0, inf) // scale 1.0
-
-    "default to 1% of the connectivity scale" >> {
-      PersistenceFilter.threshold(dims, births, deaths) must beCloseTo(0.01, 1e-12)
+    "default to a fraction of the supplied scale" >> {
+      PersistenceFilter.threshold(None, PersistenceFilter.DefaultFraction, 2.0, 99.0) must beCloseTo(0.02, 1e-12)
     }
 
-    "let an absolute minPersistence win over the fraction" >> {
-      PersistenceFilter.threshold(dims, births, deaths, Some(0.3), 0.5) must beEqualTo(0.3)
+    "let an absolute minPersistence win over the fraction, without ever evaluating the scale" >> {
+      PersistenceFilter.threshold(Some(0.3), 0.5, throw new AssertionError("scale evaluated"), 99.0) must beEqualTo(0.3)
+    }
+
+    "not evaluate the scale for fraction 0 (it can be expensive and is pointless)" >> {
+      PersistenceFilter.threshold(None, 0.0, throw new AssertionError("scale evaluated"), 99.0) must beEqualTo(0.0)
+    }
+
+    "fall back to the barcode's own range when the scale is not finite" >> {
+      (PersistenceFilter.threshold(None, 0.1, inf, 5.0) must beCloseTo(0.5, 1e-12)) and
+        (PersistenceFilter.threshold(None, 0.1, Double.NaN, 5.0) must beCloseTo(0.5, 1e-12))
+    }
+
+    "be 0 for a scale of 0 (a single point: nothing is hidden)" >> {
+      PersistenceFilter.threshold(None, 0.01, 0.0, 0.0) must beEqualTo(0.0)
     }
 
     "reject negative or non-finite values" >> {
-      (PersistenceFilter.threshold(dims, births, deaths, Some(-1.0)) must throwAn[IllegalArgumentException]) and
-        (PersistenceFilter.threshold(dims, births, deaths, None, -0.1) must throwAn[IllegalArgumentException]) and
-        (PersistenceFilter.threshold(dims, births, deaths, Some(inf)) must throwAn[IllegalArgumentException]) and
-        (PersistenceFilter.threshold(dims, births, deaths, None, Double.NaN) must throwAn[IllegalArgumentException])
+      (PersistenceFilter.threshold(Some(-1.0), 0.01, 1.0, 1.0) must throwAn[IllegalArgumentException]) and
+        (PersistenceFilter.threshold(None, -0.1, 1.0, 1.0) must throwAn[IllegalArgumentException]) and
+        (PersistenceFilter.threshold(Some(inf), 0.01, 1.0, 1.0) must throwAn[IllegalArgumentException]) and
+        (PersistenceFilter.threshold(None, Double.NaN, 1.0, 1.0) must throwAn[IllegalArgumentException])
     }
   }
 
@@ -82,7 +77,10 @@ class PersistenceFilterSpec extends Specification:
         (PersistenceFilter.significant(bars, None, 0.0).size must beEqualTo(3))
     }
 
-    "agree with connectivityScale on the same bars" >> {
-      PersistenceFilter.connectivityScale(bars) must beEqualTo(1.0)
+    "use the supplied scale, else the bars' own finite range" >> {
+      // finite range of these bars is 1.0, so by default the cut is 0.01 and the 0.001 bar goes; with scale 0.05 the
+      // cut is 0.0005 and it stays
+      (PersistenceFilter.significant(bars).size must beEqualTo(2)) and
+        (PersistenceFilter.significant(bars, scale = Some(0.05)).size must beEqualTo(3))
     }
   }

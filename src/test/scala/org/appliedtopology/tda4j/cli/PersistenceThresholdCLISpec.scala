@@ -6,7 +6,8 @@ import org.appliedtopology.tda4j.io.{given, *}
 import org.specs2.mutable
 import java.io.{ByteArrayOutputStream, File, PrintStream}
 
-/** The persistence-threshold flags, through the real `TDA4jCLI.run` (NOT `CliFull`, which switches the threshold off). */
+/** The persistence-threshold flags, through the real `TDA4jCLI.run` (NOT `CliFull`, which switches the threshold off).
+  */
 class PersistenceThresholdCLISpec extends mutable.Specification:
   sequential // captures System.err
 
@@ -31,30 +32,27 @@ class PersistenceThresholdCLISpec extends mutable.Specification:
       finally System.setErr(oldErr)
     (code, out.toString.linesIterator.toSeq, err.toString)
 
-  "by default" should {
+  "by default" should
     "report 2 of the 3 bars and say on stderr how to see the rest" >> {
       val (code, lines, err) = run("--max-dimension", "1", pointsFile)
       (code must beEqualTo(0)) and (lines.size must beEqualTo(2)) and
         (err must contain("1 bar(s)")) and (err must contain("--min-persistence 0"))
     }
-  }
 
-  "--min-persistence 0 / --min-persistence-fraction 0" should {
+  "--min-persistence 0 / --min-persistence-fraction 0" should
     "report every bar, with no stderr note" >> {
       val (c1, l1, e1) = run("--min-persistence", "0", "--max-dimension", "1", pointsFile)
       val (c2, l2, e2) = run("--min-persistence-fraction", "0", "--max-dimension", "1", pointsFile)
       (c1 must beEqualTo(0)) and (l1.size must beEqualTo(3)) and (e1 must beEmpty) and
         (c2 must beEqualTo(0)) and (l2.size must beEqualTo(3)) and (e2 must beEmpty)
     }
-  }
 
-  "a different threshold" should {
+  "a different threshold" should
     "be honoured: absolute in the barcode's units, or as a fraction of the scale" >> {
       val (_, absolute, _) = run("--min-persistence", "2", "--max-dimension", "1", pointsFile)
       val (_, fraction, _) = run("--min-persistence-fraction", "0.0005", "--max-dimension", "1", pointsFile)
       (absolute.size must beEqualTo(1)) and (fraction.size must beEqualTo(3))
     }
-  }
 
   "invalid combinations" should {
     "be rejected: both flags together" >> {
@@ -72,9 +70,8 @@ class PersistenceThresholdCLISpec extends mutable.Specification:
     }
   }
 
-  "buildOptions" should {
+  "buildOptions" should
     "forward exactly the threshold flags the user passed" >> {
       val conf = new TDA4jConf(Seq("--min-persistence", "0.25", "some-input-file"))
       TDA4jCLI.buildOptions(conf).toSeq must beEqualTo(Seq("minPersistence", "0.25"))
     }
-  }

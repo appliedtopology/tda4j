@@ -514,9 +514,12 @@ produces `Double` filtration values, and a metric distance needs real arithmetic
 **Which bars get reported** (`barcode.PersistenceFilter`, `.claude/WORKLOG-persistence-threshold.md`). Engines
 return EVERY bar — they are the cross-validation oracles, and a representative is recorded for each. Reading a
 real barcode is hopeless that way, so the *facade* (`matlab.TDA4j`, hence the CLI and MATLAB) applies a
-post-hoc filter by default: keep a bar iff it is essential or its persistence exceeds `0.01 *
-connectivityScale`, where the scale is (largest finite H0 death) - (smallest H0 birth), i.e. 0 to the
-connectivity radius for Vietoris-Rips, falling back to the full finite range when no H0 bar is finite. A
+post-hoc filter by default: keep a bar iff it is essential or its persistence exceeds `0.01 * scale`, where the
+scale is a property of the INPUT, supplied by the facade: `metricSpace.minimumEnclosingRadius` for a point cloud or
+distance matrix (Ripser's enclosing radius, already the default VR truncation — every bar lives in `[0, scale]`;
+used as-is in the complex's reported units), or max − min of the values for a cubical image / Dowker relation
+(which have no metric). It is passed by-name and only evaluated when a fraction of it is needed (it is quadratic);
+a non-finite scale falls back to the span of the barcode's own finite endpoints. A
 threshold `<= 0` keeps everything, zero-persistence bars included. Design points worth knowing before changing
 it: (1) it is applied by thin `dispatch*` wrappers around the real dispatchers, after the full result exists, not
 inside `fromBars`; (2) `PersistenceResult` keeps the FULL arrays plus a `visible` index, and only
