@@ -67,8 +67,8 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
   given [T: Ordering] => Conversion[Simplex[T], Chain[Simplex[T], CoefficientT]] =
     Chain.apply
 
-  export cells.defaultSimplexIsOrderedCell
-  export cells.defaultCubeIsOrderedCell
+  export org.appliedtopology.tda4j.cells.defaultSimplexIsOrderedCell
+  export org.appliedtopology.tda4j.cells.defaultCubeIsOrderedCell
 
   export org.appliedtopology.tda4j.cells.∆, org.appliedtopology.tda4j.cells.Simplex,
     org.appliedtopology.tda4j.cells.asSimplex
@@ -109,6 +109,20 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
     }
   object io:
     export org.appliedtopology.tda4j.io.{CSV, Dipha, Gudhi, Perseus, Ripser}
+  object barcode:
+    export org.appliedtopology.tda4j.barcode.{BarcodeDistance, PersistenceFilter, Vectorization}
+  object cells:
+    export org.appliedtopology.tda4j.cells.{
+      CupProduct,
+      FiniteSimplicialSet,
+      FundamentalGroup,
+      GroupPresentation,
+      SSetMap,
+      SimplicialSets,
+      Steenrod
+    }
+  object groups:
+    export org.appliedtopology.tda4j.groups.{ClassifyingSpace, FiniteGroup, Nerve}
 
   // Deliberate re-exports: `import tdalab.given` only sees givens that are members of `tdalab`.
   given Show[Simplex[VertexT]] = summon[Show[Simplex[VertexT]]]
