@@ -13,7 +13,8 @@ class CoordinatesSpec extends Specification:
     circleCovered: Int,
     torusBars: List[(Double, Double)],
     torusErrors: List[Double],
-    torusCovered: List[Int]
+    torusCovered: List[Int],
+    torusScale: Double
   )
 
   private def page(): Result =
@@ -63,7 +64,8 @@ class CoordinatesSpec extends Specification:
       circleCoordinate.theta.size,
       torusBars.take(4).toList,
       torusErrors,
-      coordinates.theta.map(_.size).toList
+      coordinates.theta.map(_.size).toList,
+      r
     )
 
   "circular-and-toroidal-coordinates.md" should {
@@ -77,6 +79,7 @@ class CoordinatesSpec extends Specification:
     }
     "recover the angle to within 0.07 of a turn on average" in
       (r.circleError must beLessThan(0.07)).and(r.circleError must beGreaterThan(0.05))
+    "pick the scale 1.225 on the torus" in { r.torusScale must beCloseTo(1.225, 0.001) }
     "find two long-lived loops on the torus, and then a clear drop" in {
       val persistences = r.torusBars.map((b, d) => d - b)
       (persistences(0) must beGreaterThan(1.0))

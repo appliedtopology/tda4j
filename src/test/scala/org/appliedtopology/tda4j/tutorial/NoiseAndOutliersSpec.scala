@@ -73,7 +73,8 @@ class NoiseAndOutliersSpec extends Specification:
     "show the runner-up loop is made mostly of outliers, the real one of ring points" in {
       r.cycles must beEqualTo(List((66, 2), (8, 5)))
     }
-    "give the outliers much larger weights than the ring points" in {
-      r.outlierWeight / r.ringWeight must beGreaterThan(3.0)
-    }
+    "give the outliers much larger weights than the ring points" in
+      (r.ringWeight must beCloseTo(0.176, 0.001))
+        .and(r.outlierWeight must beCloseTo(0.543, 0.001))
+        .and(r.outlierWeight / r.ringWeight must beGreaterThan(3.0))
   }

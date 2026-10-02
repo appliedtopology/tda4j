@@ -18,6 +18,7 @@ class FindALoopSpec extends Specification:
     longestFiniteH0: Double,
     cycleEdges: Int,
     truncatedSimplices: Int,
+    truncatedLoopBirth: Double,
     truncatedLoopDeath: Double
   )
 
@@ -58,6 +59,7 @@ class FindALoopSpec extends Specification:
       longestFiniteH0,
       cycle.rawEntries.size,
       shortStream.iterator.size,
+      shortLoop._2,
       shortLoop._3
     )
 
@@ -77,6 +79,8 @@ class FindALoopSpec extends Specification:
         .and(r.longestFiniteH0 must beCloseTo(0.484, 0.001))
         .and((r.loop._2 - r.loop._1) must beGreaterThan(2 * r.longestFiniteH0))
     "come with a representative cycle of 52 edges" in { r.cycleEdges must beEqualTo(52) }
+    "quote the enclosing radius, and the loop's birth in the cut complex" in
+      (r.enclosingRadius must beCloseTo(1.95, 0.005)).and(r.truncatedLoopBirth must beCloseTo(0.595, 0.001))
     "keep the loop alive to the horizon when the complex is cut at 1.0" in
       (r.truncatedLoopDeath.isInfinite must beTrue).and(r.truncatedSimplices must beLessThan(r.simplices))
   }

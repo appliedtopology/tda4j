@@ -79,7 +79,7 @@ bars.size    // 1625
 
 Noise makes 1,625 bars again, nearly all negligible. Because we know the noise is at most 0.1, a sensible cut-off is "persists for
 more than 0.3", three times the noise amplitude. (With point clouds the scale of the data suggested a cut-off; here the noise
-level of the camera does. The command-line and MATLAB default, 1% of the range, would keep far more.)
+level of the camera does. The command-line and MATLAB default, 1% of the range, would keep 170 of the 1,625 bars.)
 
 ```scala sc:nocompile
 def significant(bars: List[(Int, Double, Double)]) =

@@ -11,6 +11,12 @@ Every complex below is built the same way, an object that takes your points and 
 dimension you want) and returns a stream of simplices that any engine can read. So one small function is enough to compare them:
 
 ```scala sc:nocompile
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.TDAlab
+
+val lab = TDAlab(2)
+import lab.{*, given}
+
 val points = io.CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
 val metricSpace = streams.EuclideanMetricSpace(points)
 val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
@@ -25,11 +31,11 @@ def summarize(stream: streams.LevelwiseSimplexStream[Int, Double]): (Int, (Doubl
 ## The five complexes
 
 ```scala sc:nocompile
-val vr      = summarize(streams.VietorisRips(metricSpace, maxDimension = 1))
-val cech    = summarize(streams.Cech(metricSpace, maxDimension = 1))
-val alpha   = summarize(alpha.AlphaShapes(points.toSeq))
-val sparse  = summarize(streams.SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1))
-val witness = summarize(streams.Witness(metricSpace, streams.LandmarkSelector.maxmin(metricSpace, 15).landmarks, maxDimension = 1))
+val vr       = summarize(streams.VietorisRips(metricSpace, maxDimension = 1))
+val cech     = summarize(streams.Cech(metricSpace, maxDimension = 1))
+val delaunay = summarize(alpha.AlphaShapes(points.toSeq))
+val sparse   = summarize(streams.SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1))
+val witness  = summarize(streams.Witness(metricSpace, streams.LandmarkSelector.maxmin(metricSpace, 15).landmarks, maxDimension = 1))
 ```
 
 | complex | simplices | the loop (birth, death) |

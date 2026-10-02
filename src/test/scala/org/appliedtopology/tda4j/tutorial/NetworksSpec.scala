@@ -25,7 +25,7 @@ class NetworksSpec extends Specification:
     }
 
     val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
-    def barcode(dual: Boolean) =
+    def dowkerBars(dual: Boolean) =
       engine
         .persistentHomology(streams.Dowker(relation, maxDimension = 1, dual = dual))
         .diagramAt(Double.PositiveInfinity)
@@ -33,8 +33,8 @@ class NetworksSpec extends Specification:
     def withoutZeroLength(bars: List[(Int, Double, Double)]) =
       bars.filter((_, birth, death) => death.isInfinite || death > birth).sortBy(bar => (bar._1, bar._2, bar._3))
 
-    val people = barcode(dual = false)
-    val clubs = barcode(dual = true)
+    val people = dowkerBars(dual = false)
+    val clubs = dowkerBars(dual = true)
     (people, clubs, withoutZeroLength(people), withoutZeroLength(clubs))
 
   "networks-and-relations.md" should {

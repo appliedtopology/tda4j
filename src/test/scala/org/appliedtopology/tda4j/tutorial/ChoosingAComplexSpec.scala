@@ -7,7 +7,7 @@ import org.specs2.mutable.Specification
 class ChoosingAComplexSpec extends Specification:
   sequential
 
-  private def page(): Map[String, (Int, (Double, Double))] =
+  private def page(): Map[String, (Int, (Double, Double), Int)] =
     val lab = TDAlab(2)
     import lab.{*, given}
 
@@ -15,11 +15,11 @@ class ChoosingAComplexSpec extends Specification:
     val metricSpace = streams.EuclideanMetricSpace(points)
     val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
 
-    def summarize(stream: streams.LevelwiseSimplexStream[Int, Double]): (Int, (Double, Double)) =
+    def summarize(stream: streams.LevelwiseSimplexStream[Int, Double]): (Int, (Double, Double), Int) =
       val size = stream.iterator.size
       val bars = engine.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
       val loop = bars.filter(_._1 == 1).maxBy((_, birth, death) => death - birth)
-      (size, (loop._2, loop._3))
+      (size, (loop._2, loop._3), bars.count((dim, _, death) => dim == 0 && death.isInfinite))
 
     val landmarks = streams.LandmarkSelector.maxmin(metricSpace, 15).landmarks
     Map(
@@ -38,8 +38,9 @@ class ChoosingAComplexSpec extends Specification:
         Map("vietoris-rips" -> 24711, "cech" -> 36050, "alpha" -> 325, "sparse-rips" -> 1730, "witness" -> 441)
       )
     }
+    "find exactly one connected component in all five" in { r.values.map(_._3).toList must beEqualTo(List.fill(5)(1)) }
     "find the loop in every complex" in {
-      r.values.forall((_, loop) => loop._2 - loop._1 > 0.4) must beTrue
+      r.values.forall((_, loop, _) => loop._2 - loop._1 > 0.4) must beTrue
     }
     "give Cech and alpha the same loop, to six digits" in
       (r("cech")._2._1 must beCloseTo(r("alpha")._2._1, 1e-6))

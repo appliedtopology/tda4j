@@ -46,10 +46,10 @@ club, at time 5.
 
 ```scala sc:nocompile
 val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
-def barcode(dual: Boolean) =
+def dowkerBars(dual: Boolean) =
   engine.persistentHomology(streams.Dowker(relation, maxDimension = 1, dual = dual)).diagramAt(Double.PositiveInfinity).filter(_._1 <= 1)
 
-val people = barcode(dual = false)
+val people = dowkerBars(dual = false)
 people.size    // 16 bars
 ```
 
@@ -79,7 +79,7 @@ A table has two sides. We built the complex on the *people*, using clubs as witn
 using people as witnesses. `Dowker(..., dual = true)` does exactly that:
 
 ```scala sc:nocompile
-val clubs = barcode(dual = true)
+val clubs = dowkerBars(dual = true)
 clubs.size    // 13 bars, not 16
 withoutZeroLength(clubs) == withoutZeroLength(people)    // true
 ```
@@ -118,12 +118,12 @@ val relation: Array[Array[Double]] = Array.tabulate(6, 7) { (person, club) =>
 }
 
 val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
-def barcode(dual: Boolean) =
+def dowkerBars(dual: Boolean) =
   engine.persistentHomology(streams.Dowker(relation, maxDimension = 1, dual = dual)).diagramAt(Double.PositiveInfinity).filter(_._1 <= 1)
 def withoutZeroLength(bars: List[(Int, Double, Double)]) =
   bars.filter((_, birth, death) => death.isInfinite || death > birth).sortBy(bar => (bar._1, bar._2, bar._3))
 
-val people = barcode(dual = false)
-val clubs = barcode(dual = true)
+val people = dowkerBars(dual = false)
+val clubs = dowkerBars(dual = true)
 val agree = withoutZeroLength(people) == withoutZeroLength(clubs)
 ```

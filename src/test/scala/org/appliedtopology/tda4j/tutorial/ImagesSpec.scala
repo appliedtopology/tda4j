@@ -13,7 +13,8 @@ class ImagesSpec extends Specification:
     bars: Int,
     enginesAgree: Boolean,
     sublevel: List[(Int, Double, Double)],
-    superlevel: List[(Int, Double, Double)]
+    superlevel: List[(Int, Double, Double)],
+    keptByOnePercentOfRange: Int
   )
 
   private def page(): Result =
@@ -45,6 +46,10 @@ class ImagesSpec extends Specification:
     val sublevelBars = engine.persistentHomology(sublevelStream).diagramAt(Double.PositiveInfinity)
     val superlevelBars = engine.persistentHomology(superlevelStream).diagramAt(Double.PositiveInfinity)
 
+    val range = pixels.flatten.max - pixels.flatten.min
+    val keptByOnePercentOfRange =
+      sublevelBars.count((_, birth, death) => death.isInfinite || death - birth > 0.01 * range)
+
     val fast = homology.FastCubicalHomologyEngine[CoefficientT]()
     def rounded(bars: List[(Int, Double, Double)]) =
       bars.map((dim, birth, death) => (dim, math.round(birth * 1e9), math.round(death * 1e9))).sorted
@@ -56,7 +61,8 @@ class ImagesSpec extends Specification:
       sublevelBars.size,
       rounded(sublevelBars) == rounded(fastBars),
       significant(sublevelBars),
-      significant(superlevelBars)
+      significant(superlevelBars),
+      keptByOnePercentOfRange
     )
 
   "images.md" should {
@@ -64,6 +70,10 @@ class ImagesSpec extends Specification:
     "print the picture and count the cells" in {
       r.picture.foreach(println)
       (r.cells must beEqualTo(57 * 57)).and(r.bars must beEqualTo(1625))
+    }
+    "keep far more bars at the 1%-of-range default than the noise-based cut-off does" in {
+      println("kept by 1% of range: " + r.keptByOnePercentOfRange)
+      r.keptByOnePercentOfRange must beGreaterThan(100)
     }
     "agree between the generic and the fast cubical engine, bar for bar" in { r.enginesAgree must beTrue }
     "find in the dark: a background, an enclosed dark disc, and two holes (the ring and the blob)" in {
