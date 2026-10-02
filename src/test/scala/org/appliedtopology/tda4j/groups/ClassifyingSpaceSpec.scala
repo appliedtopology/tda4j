@@ -59,7 +59,8 @@ class ClassifyingSpaceSpec extends Specification:
 
   "persistent group homology over a subgroup chain" should {
     "S_4 over F_2, along <(01)> < <(01),(23)> < D_8 < S_4: nothing is born at S_4 (the Sylow 2-subgroup D_8 surjects)" in {
-      val (s4, gens) = FiniteGroup.permutationGroup(4, Seq(Seq(1, 0, 2, 3), Seq(0, 1, 3, 2), Seq(2, 3, 0, 1), Seq(1, 2, 3, 0)))
+      val (s4, gens) =
+        FiniteGroup.permutationGroup(4, Seq(Seq(1, 0, 2, 3), Seq(0, 1, 3, 2), Seq(2, 3, 0, 1), Seq(1, 2, 3, 0)))
       val a = gens(0); val b = gens(1); val c = gens(2)
       val chain = Seq(
         s4.subgroupGeneratedBy(Seq(a)),
@@ -72,5 +73,28 @@ class ClassifyingSpaceSpec extends Specification:
       val essential = diagram.filter(_._3.isPosInfinity)
       (Vector.tabulate(3)(n => essential.count(_._1 == n)) must beEqualTo(Vector(1, 1, 2)))
         .and(essential.forall(_._2 < 3.0) must beTrue)
+    }
+  }
+
+  "the lazy nerve" should {
+    "be infinite: generators in every dimension, (|G|-1)^n of them" in {
+      val nerve = ClassifyingSpace.nerve(FiniteGroup.symmetric(3))
+      Seq(0, 1, 2, 3, 6).map(n => nerve.generatorsAt(n).size) must beEqualTo(Seq(1, 5, 25, 125, 15625))
+    }
+    "have skeletons whose homology is right only below the top degree" in {
+      val nerve = ClassifyingSpace.nerve(FiniteGroup.cyclic(3))
+      // B(Z/3) over F_2 is acyclic. Its 1-skeleton (a bouquet of 2 circles) has H_1 of rank 2, so the top degree is wrong
+      // exactly as the `skeleton` doc warns; asking for degree 1 via the 2-skeleton gets it right.
+      (ClassifyingSpace.bettiNumbers(nerve, 1, 2) must beEqualTo(Vector(1, 0)))
+        .and(nerve.skeleton(1).generatorsByDim.map(_.size) must beEqualTo(Vector(1, 2)))
+    }
+    "model a monoid: the multiplicative monoid mod 4 has an absorbing 0, so its nerve is contractible" in {
+      val monoid = FiniteMonoid.multiplicativeResidues(4)
+      (monoid.validateMonoid() must beEmpty)
+        .and(Nerve(monoid).skeleton(4).validate() must beEmpty)
+        .and(ClassifyingSpace.bettiNumbers(Nerve(monoid), 3, 2) must beEqualTo(Vector(1, 0, 0, 0)))
+    }
+    "reject a subset that is not closed under multiplication" in {
+      Nerve(FiniteGroup.cyclic(4), Some(Set(0, 1))) must throwAn[IllegalArgumentException]
     }
   }
