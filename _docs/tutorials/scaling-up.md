@@ -47,6 +47,9 @@ naive engine on the collapsed space gives the same 61 bars.
 
 ## The whole script
 
+<div class="tabset">
+<div class="tab" data-lang="Scala">
+
 ```scala
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.TDAlab
@@ -77,3 +80,33 @@ val collapsedBars = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]
 
 println((answer(naive).size, collapsed.stats))
 ```
+
+</div>
+<div class="tab" data-lang="MATLAB">
+
+```matlab
+javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+import org.appliedtopology.tda4j.matlab.*;
+
+points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
+
+% Four engines. minPersistence 1e-9 hides only the bars of zero length, which is what the Scala script drops
+engines = {'naive', 'chunks', 'cohomology', 'ripser'};
+answers = cell(1, 4);
+for e = 1:4
+    result = TDA4j.computeFromPoints(points, {'maxDimension', '1', 'minPersistence', '1e-9', 'engine', engines{e}});
+    answers{e} = sortrows(round(result.toArray() * 1e6));   % rounded to 1e-6 and sorted, so they can be compared
+    size(answers{e}, 1)                                      % 61 bars from each
+end
+isequal(answers{:})                                          % true: the engines agree
+
+% Edge collapse: remove the edges of the Vietoris-Rips graph that cannot matter, before any triangle is built
+collapsed = TDA4j.computeFromPoints(points, {'maxDimension', '1', 'minPersistence', '1e-9', 'edgeCollapse', 'true'});
+collapsed.numCells()                                         % 1547 simplices instead of 24711
+isequal(sortrows(round(collapsed.toArray() * 1e6)), answers{1})   % true: the same barcode
+```
+
+</div>
+</div>
+
+The `engine` option takes `naive`, `chunks`, `cohomology` and `ripser`, and `edgeCollapse` applies to the Vietoris-Rips complex only. `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.

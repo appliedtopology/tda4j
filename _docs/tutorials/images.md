@@ -146,6 +146,9 @@ page covers three-dimensional volumes.
 
 ## The whole script
 
+<div class="tabset">
+<div class="tab" data-lang="Scala">
+
 ```scala
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.TDAlab
@@ -181,3 +184,47 @@ val fastBars = fast.persistentHomology(sublevelStream).map(_.toTriple)
 val dark = significant(sublevelBars)
 val bright = significant(superlevelBars)
 ```
+
+</div>
+<div class="tab" data-lang="MATLAB">
+
+```matlab
+javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+import org.appliedtopology.tda4j.matlab.*;
+
+% The same image as the Scala script, drawn from the same Java random number generator
+random = java.util.Random(int64(5));
+pixels = zeros(28, 28);
+for row = 0:27
+    for column = 0:27
+        distanceToRingCentre = hypot(row - 12, column - 12);
+        distanceToBlobCentre = hypot(row - 23, column - 23);
+        if distanceToRingCentre >= 6 && distanceToRingCentre <= 8
+            signal = 1.0;
+        elseif distanceToBlobCentre <= 2.5
+            signal = 0.8;
+        else
+            signal = 0.0;
+        end
+        pixels(row + 1, column + 1) = signal + 0.1 * random.nextDouble();
+    end
+end
+
+% minPersistence 0.3 keeps the bars longer than 0.3, which is the Scala script's 'significant'
+dark = TDA4j.computeFromImage(pixels, {'sublevel', 'true', 'minPersistence', '0.3'});
+dark.toArray()          % four rows: [0 0 Inf], [0 0.001 1.002], [1 0.062 1.099], [1 0.064 0.900]
+
+% With sublevel false the facade works on the negated image: births and deaths are NEGATED intensities
+bright = TDA4j.computeFromImage(pixels, {'sublevel', 'false', 'minPersistence', '0.3'});
+bright.toArray()        % three rows: [0 -1.099 Inf], [0 -0.900 -0.063], [1 -1.004 -0.001]
+
+% The fast engine gives the same bars
+fast = TDA4j.computeFromImage(pixels, {'sublevel', 'true', 'engine', 'fast-cubical', 'minPersistence', '0.3'});
+isequal(sortrows(fast.toArray()), sortrows(dark.toArray()))      % true
+size(dark.toArrayUnfiltered(), 1)                                 % 1625 bars in the full barcode
+```
+
+</div>
+</div>
+
+The facade takes an image as a matrix and has the engine choice as an option. `sublevel` false filters the *negated* image, which is why the bright features have negative births and deaths. `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.

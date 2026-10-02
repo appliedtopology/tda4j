@@ -86,6 +86,9 @@ command-line and MATLAB spelling (`complex=dtm-rips`, `dtmK`).
 
 ## The whole script
 
+<div class="tabset">
+<div class="tab" data-lang="Scala">
+
 ```scala
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.TDAlab
@@ -115,3 +118,38 @@ val cycles = loops.map { (_, _, _, cycle) =>
 
 val results = (twoLongestLoops(vr), twoLongestLoops(dtm), ring.sum / ring.size, outliers.sum / outliers.size, cycles)
 ```
+
+</div>
+<div class="tab" data-lang="MATLAB">
+
+```matlab
+javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+import org.appliedtopology.tda4j.matlab.*;
+
+points = readmatrix('_docs/tutorials/data/circle-with-outliers.csv');
+
+% The two longest-lived loops of a barcode, as lengths (death - birth)
+loopLengths = @(bars) sort(bars(bars(:,1) == 1, 3) - bars(bars(:,1) == 1, 2), 'descend');
+
+vr  = TDA4j.computeFromPoints(points, {'maxDimension', '1', 'engine', 'naive'});
+dtm = TDA4j.computeFromPoints(points, {'maxDimension', '1', 'complex', 'dtm-rips', 'dtmK', '8', 'dtmP', '1.0'});
+
+vrLengths = loopLengths(vr.toArrayUnfiltered());
+dtmLengths = loopLengths(dtm.toArrayUnfiltered());
+vrLengths(1:2)'                       % 0.901  0.127
+dtmLengths(1:2)'                      % 0.815  0.005
+
+% Which points make up the two longest Vietoris-Rips loops? Points 70 onwards (0-based) are the outliers
+bars = vr.toArray();
+loopRows = find(bars(:,1) == 1);
+[~, order] = sort(bars(loopRows,3) - bars(loopRows,2), 'descend');
+for row = loopRows(order(1:2))'
+    onCycle = unique(double(vr.cycleVertices(row - 1)));   % Java index: row - 1
+    fprintf('%d points, %d of them outliers\n', numel(onCycle), sum(onCycle >= 70));   % 66 and 2, then 8 and 5
+end
+```
+
+</div>
+</div>
+
+The MATLAB entry point takes `dtmK` and `dtmP` for the DTM-weighted Rips complex; it does not expose the weights themselves, so the average-weight comparison above has no MATLAB counterpart. `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.

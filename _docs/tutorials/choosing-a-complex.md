@@ -100,6 +100,9 @@ variants.
 
 ## The whole script
 
+<div class="tabset">
+<div class="tab" data-lang="Scala">
+
 ```scala
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.TDAlab
@@ -126,3 +129,35 @@ val results = Map(
   "witness" -> summarize(streams.Witness(metricSpace, landmarks, maxDimension = 1))
 )
 ```
+
+</div>
+<div class="tab" data-lang="MATLAB">
+
+```matlab
+javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+import org.appliedtopology.tda4j.matlab.*;
+
+points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
+
+% Each row: the value of the 'complex' option and any extra options it needs
+settings = {
+    'vr',          {}
+    'cech',        {}
+    'alpha',       {}
+    'sparse-rips', {'sparseEpsilon', '0.5'}
+    'witness',     {'numLandmarks', '15'}};
+
+for s = 1:size(settings, 1)
+    options = [{'maxDimension', '1', 'complex', settings{s,1}}, settings{s,2}];
+    result = TDA4j.computeFromPoints(points, options);
+    bars = result.toArray();
+    loops = bars(bars(:,1) == 1, :);
+    [~, longest] = max(loops(:,3) - loops(:,2));
+    fprintf('%-12s %6d simplices, loop [%.3f, %.3f)\n', settings{s,1}, result.numCells(), loops(longest,2), loops(longest,3));
+end
+```
+
+</div>
+</div>
+
+In MATLAB a complex is a value of the `complex` option rather than a function, and `numCells()` is the number of simplices the engine had to process. `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.

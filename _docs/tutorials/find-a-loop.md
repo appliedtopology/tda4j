@@ -110,6 +110,9 @@ and the loop is reported as `[0.595, Infinity)`: it was born, and had not died b
 The fragments above, in one piece (this block is compiled with the documentation, and `FindALoopSpec` runs it and checks every
 number quoted on this page):
 
+<div class="tabset">
+<div class="tab" data-lang="Scala">
+
 ```scala
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.TDAlab
@@ -136,6 +139,46 @@ val (_, _, _, cycle) = withCycles.maxBy((_, birth, death, _) => death - birth)
 
 val shortStream = streams.VietorisRips(metricSpace, maxDimension = 1, maxFiltrationValue = Some(1.0))
 ```
+
+</div>
+<div class="tab" data-lang="MATLAB">
+
+```matlab
+javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+import org.appliedtopology.tda4j.matlab.*;
+
+points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
+
+% Vietoris-Rips with the naive engine, the one the Scala script uses; dimensions 0 and 1
+result = TDA4j.computeFromPoints(points, {'maxDimension', '1', 'engine', 'naive'});
+
+% The facade hides bars shorter than 1% of the enclosing radius, so toArray() has 58 rows [dimension birth death]
+bars = result.toArray();
+result.hiddenCount()                  % 1486 bars hidden
+everything = result.toArrayUnfiltered();
+size(everything, 1)                   % 1544 bars in all
+sum(everything(:,3) - everything(:,2) <= 1e-12)   % 1483 of them have zero length
+
+loop = bars(bars(:,1) == 1, :)        % [1 0.595 1.707]
+h0 = bars(bars(:,1) == 0 & isfinite(bars(:,3)), :);
+longestFiniteH0 = max(h0(:,3) - h0(:,2))          % 0.484
+
+% The representative cycle. Java counts from 0, so the bar's index is its row number minus 1
+k = find(bars(:,1) == 1) - 1;
+edges = double(result.cycleVertices(k)) + 1;       % 52 rows, one edge each, as 1-based row numbers of the CSV
+coefficients = result.cycleCoefficients(k);
+
+% Cutting the complex off early
+shortResult = TDA4j.computeFromPoints(points, {'maxDimension', '1', 'engine', 'naive', 'maxFiltrationValue', '1.0'});
+shortResult.numCells()                % 3629 simplices instead of 24711
+shortBars = shortResult.toArray();
+shortBars(shortBars(:,1) == 1, :)     % [1 0.595 Inf]: born, not dead by the cut-off
+```
+
+</div>
+</div>
+
+The MATLAB tab makes the same calls through the `TDA4j` facade. Two things differ from the Scala script: the facade hides short bars unless you ask for `toArrayUnfiltered()`, and it counts bars and cycles from 0 (Java's convention), so `cycleVertices(k)` takes the bar's row number minus 1. `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.
 
 ## Where to go next
 

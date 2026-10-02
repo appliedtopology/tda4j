@@ -116,6 +116,9 @@ dimensions, and the loops are only barely separated from the noise bars. More po
 
 ## The whole script
 
+<div class="tabset">
+<div class="tab" data-lang="Scala">
+
 ```scala
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.TDAlab
@@ -156,3 +159,37 @@ val torusErrors = coordinates.theta.map { theta =>
   math.min(first, second)
 }
 ```
+
+</div>
+<div class="tab" data-lang="MATLAB">
+
+```matlab
+javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+import org.appliedtopology.tda4j.matlab.*;
+
+% A circle
+points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
+bars = TDA4j.h1Bars(points);            % one row [birth death] per H1 class, most persistent first
+bars(1:2, :)                            % [0.595 1.707] then [1.950 1.950]
+r = (bars(1,1) + bars(1,2)) / 2;
+coordinate = TDA4j.circularCoordinates(points, r);       % the most persistent class, over the field with 47 elements
+theta = coordinate.theta();             % one value in [0,1) per point: a fraction of a turn
+
+truth = mod(atan2(points(:,2), points(:,1)) / (2*pi), 1);
+scatter(truth, theta);                  % a diagonal line, up to the sign and the offset the coordinate is free to choose
+
+% A torus
+torusPoints = readmatrix('_docs/tutorials/data/flat-torus.csv');
+torusBars = TDA4j.h1Bars(torusPoints);  % runs on the whole complex; this entry point has no maxFiltrationValue
+torusBars(1:4, :)                       % two long bars, then a drop
+r = (max(torusBars(1:2,1)) + min(torusBars(1:2,2))) / 2;     % a scale where both long bars are alive
+coordinates = TDA4j.toroidalCoordinates(torusPoints, r, int32([0 1]));   % classes 0 and 1 (counted from 0)
+theta1 = coordinates.theta(0);          % one value per point for each of the two circle coordinates
+theta2 = coordinates.theta(1);
+plot(theta1, theta2, '.');
+```
+
+</div>
+</div>
+
+`h1Bars` returns the bars most persistent first, and `circularCoordinates`/`toroidalCoordinates` take the class numbers counted from 0, like every Java index. Unlike the Scala version, these MATLAB entry points cannot cap the complex with `maxFiltrationValue`, so the torus takes noticeably longer. `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.

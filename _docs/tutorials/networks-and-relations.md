@@ -102,6 +102,9 @@ your data pipeline: if the two sides ever disagree, something is wrong with the 
 
 ## The whole script
 
+<div class="tabset">
+<div class="tab" data-lang="Scala">
+
 ```scala
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.TDAlab
@@ -127,3 +130,32 @@ val people = dowkerBars(dual = false)
 val clubs = dowkerBars(dual = true)
 val agree = withoutZeroLength(people) == withoutZeroLength(clubs)
 ```
+
+</div>
+<div class="tab" data-lang="MATLAB">
+
+```matlab
+javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+import org.appliedtopology.tda4j.matlab.*;
+
+% 6 people (rows) and 7 clubs (columns); Inf means 'never a member'
+relation = Inf(6, 7);
+for person = 0:5
+    relation(person + 1, person + 1) = 1;                 % the person's own club, from time 1
+    relation(person + 1, mod(person + 1, 6) + 1) = 2;     % the next person's club, from time 2
+end
+relation(:, 7) = 5;                                       % a club everyone joins at time 5
+
+people = TDA4j.computeFromRelation(relation, {'maxDimension', '1'});
+clubs  = TDA4j.computeFromRelation(relation, {'maxDimension', '1', 'dual', 'true'});
+
+people.toArray()        % seven bars, one of them the loop [1 2 5]
+clubs.toArray()         % exactly the same seven bars
+size(people.toArrayUnfiltered(), 1)    % 16 bars before the zero-length ones are hidden
+size(clubs.toArrayUnfiltered(), 1)     % 13
+```
+
+</div>
+</div>
+
+`computeFromRelation` takes the relation as a matrix, with `Inf` for pairs that are never related; `dual` selects the transposed relation. `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.

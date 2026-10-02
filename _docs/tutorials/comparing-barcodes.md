@@ -128,6 +128,9 @@ format). Save the barcode of one cloud with `--output`, then compare other cloud
 
 ## The whole script
 
+<div class="tabset">
+<div class="tab" data-lang="Scala">
+
 ```scala
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.TDAlab
@@ -167,3 +170,42 @@ val images = Map(
 val landscapeDistance = l2(landscapes("A"), landscapes("8"))
 val imageDistance = l2(images("A"), images("8"))
 ```
+
+</div>
+<div class="tab" data-lang="MATLAB">
+
+```matlab
+javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+import org.appliedtopology.tda4j.matlab.*;
+
+circleA = TDA4j.computeFromPoints(readmatrix('_docs/tutorials/data/noisy-circle.csv'), {'maxDimension', '1'});
+circleB = TDA4j.computeFromPoints(readmatrix('_docs/tutorials/data/noisy-circle-b.csv'), {'maxDimension', '1'});
+eight   = TDA4j.computeFromPoints(readmatrix('_docs/tutorials/data/figure-eight.csv'), {'maxDimension', '1'});
+
+% Distances between the dimension-1 bars (the second argument is the dimension)
+circleA.bottleneckDistance(circleB, 1)      % 0.040
+circleA.bottleneckDistance(eight, 1)        % 0.556
+circleB.bottleneckDistance(eight, 1)        % 0.518
+circleA.wassersteinDistance(circleB, 1)     % 0.045
+circleA.wassersteinDistance(eight, 1)       % 0.864
+circleB.wassersteinDistance(eight, 1)       % 0.830
+
+% Landscapes: the first 3 levels, sampled at 100 points of [0, 2]
+landscapeA = circleA.landscape(1, 3, 0, 2, 100);
+landscapeB = circleB.landscape(1, 3, 0, 2, 100);
+landscapeEight = eight.landscape(1, 3, 0, 2, 100);
+norm(landscapeA(:) - landscapeB(:))         % 0.279
+norm(landscapeA(:) - landscapeEight(:))     % 2.430
+
+% Persistence images: sigma 0.1, birth and persistence both over [0, 2], 40 x 40 pixels, weight capped at 1
+imageA = circleA.persistenceImage(1, 0.1, 0, 2, 0, 2, 40, 40, 1.0);
+imageB = circleB.persistenceImage(1, 0.1, 0, 2, 0, 2, 40, 40, 1.0);
+imageEight = eight.persistenceImage(1, 0.1, 0, 2, 0, 2, 40, 40, 1.0);
+norm(imageA(:) - imageB(:))                 % 0.080
+norm(imageA(:) - imageEight(:))             % 0.163
+```
+
+</div>
+</div>
+
+Through the facade, distances, landscapes and images always use the *complete* barcode of each result, including the many tiny bars the Scala script removed first with `PersistenceFilter`. The bottleneck distance does not notice them; the Wasserstein distance, a sum, does, so it comes out slightly larger here (0.045 against 0.040, and 0.830 against 0.826). `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.
