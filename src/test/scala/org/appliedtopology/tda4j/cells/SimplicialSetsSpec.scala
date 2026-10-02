@@ -110,3 +110,34 @@ class SimplicialSetsSpec extends Specification:
         .and(betti(s, 3) must beEqualTo(Vector(1, 0, 0, 0)))
     }
   }
+
+  "join" should {
+    import SimplicialSetFixtures.*
+    "of two simplices be the simplex on all vertices: Delta^1 * Delta^1 has the f-vector of Delta^3" in {
+      val j = join(simplex(1), simplex(1))
+      (fVector(j) must beEqualTo(fVector(simplex(3))))
+        .and(j.validate() must beEmpty)
+        .and(betti(j, 2) must beEqualTo(Vector(1, 0, 0, 0)))
+    }
+    "pt * X is a cone: contractible even for the torus" in {
+      val j = join(point, torus)
+      (j.validate() must beEmpty)
+        .and(betti(j, 2) must beEqualTo(Vector(1, 0, 0, 0)))
+        .and(betti(j, 3) must beEqualTo(Vector(1, 0, 0, 0)))
+    }
+    "S^0 * RP^2 is its suspension: (1,0,1,1) over F_2, (1,0,0,0) over F_3" in {
+      val s0 = fromSimplicialComplex(Seq(Simplex(0), Simplex(1)))
+      val j = join(s0, realProjectiveSpace(2))
+      (j.validate() must beEmpty)
+        .and(betti(j, 2) must beEqualTo(Vector(1, 0, 1, 1)))
+        .and(betti(j, 3) must beEqualTo(Vector(1, 0, 0, 0)))
+    }
+    "S^1 * S^1 has the homology of S^3, and S^1 * S^2 that of S^4" in {
+      val a = join(minimalSphere(1), minimalSphere(1))
+      val b = join(minimalSphere(1), minimalSphere(2))
+      (a.validate() must beEmpty)
+        .and(betti(a, 2) must beEqualTo(Vector(1, 0, 0, 1)))
+        .and(b.validate() must beEmpty)
+        .and(betti(b, 3) must beEqualTo(Vector(1, 0, 0, 0, 1)))
+    }
+  }

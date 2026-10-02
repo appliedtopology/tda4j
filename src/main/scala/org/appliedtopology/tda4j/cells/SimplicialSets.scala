@@ -31,6 +31,28 @@ enum PresentationCell derives CanEqual:
   /** The `k`-th triangle of the fan triangulation of relator `r`. */
   case Triangle(r: Int, k: Int)
 
+/** A non-degenerate simplex of the join `X ⋆ Y`: a simplex of `X` alone, of `Y` alone, or a pair `(a, b)` of
+  * non-degenerate simplices of both, of dimension `dim a + dim b + 1`.
+  */
+enum JoinGenerator[+GX, +GY]:
+  case OfX(x: GX)
+  case OfY(y: GY)
+  case Both(x: GX, y: GY)
+
+object JoinGenerator:
+  given joinGeneratorOrdering: [GX: Ordering as ox, GY: Ordering as oy] => Ordering[JoinGenerator[GX, GY]]:
+    private def tag(j: JoinGenerator[GX, GY]): Int = j match
+      case OfX(_)     => 0
+      case OfY(_)     => 1
+      case Both(_, _) => 2
+    def compare(a: JoinGenerator[GX, GY], b: JoinGenerator[GX, GY]): Int = (a, b) match
+      case (OfX(p), OfX(q))             => ox.compare(p, q)
+      case (OfY(p), OfY(q))             => oy.compare(p, q)
+      case (Both(p1, p2), Both(q1, q2)) =>
+        val c = ox.compare(p1, q1)
+        if c != 0 then c else oy.compare(p2, q2)
+      case _ => Ordering.Int.compare(tag(a), tag(b))
+
 object PresentationCell:
   private def key(c: PresentationCell): (Int, Int, Int) = c match
     case Vertex         => (0, 0, 0)
@@ -263,3 +285,47 @@ object SimplicialSets:
         val n = product.dimOf(g)
         SSetElement(((n - 1) to 0 by -1).toList, base)
     FiniteSimplicialSet.quotient(product, collapse)
+
+  /** The join `X ⋆ Y`. A simplex of the join is a pair `(a, b)` with `a ∈ X_i ∪ {∅}`, `b ∈ Y_j ∪ {∅}` (not both empty),
+    * of dimension `i + j + 1`; `(a, b)` is non-degenerate iff `a` and `b` both are (an empty side is never degenerate).
+    * Faces: `d_k (a, b) = (d_k a, b)` for `k <= i` and `(a, d_{k-i-1} b)` for `k > i`, where removing the only vertex
+    * of a side leaves the other side alone, and a degenerate face on the `Y` side shifts its degeneracy indices by
+    * `i + 1`. `S^0 ⋆ X` is the unreduced suspension, `pt ⋆ X` the cone, and `S^p ⋆ S^q = S^(p+q+1)`.
+    */
+  def join[GX, GY](x: FiniteSimplicialSet[GX], y: FiniteSimplicialSet[GY]): FiniteSimplicialSet[JoinGenerator[GX, GY]] =
+    import JoinGenerator.*
+    given Ordering[GX] = x.ord
+    given Ordering[GY] = y.ord
+    type J = JoinGenerator[GX, GY]
+    val topDim = (x.generatorsByDim.length - 1) + (y.generatorsByDim.length - 1) + 1
+    val byDim: IndexedSeq[Set[J]] = IndexedSeq.tabulate(topDim + 1) { n =>
+      val ofX: Set[J] = x.generatorsAt(n).map(g => OfX(g): J).toSet
+      val ofY: Set[J] = y.generatorsAt(n).map(g => OfY(g): J).toSet
+      val both: Set[J] =
+        (for
+          i <- 0 until n
+          a <- x.generatorsAt(i)
+          b <- y.generatorsAt(n - 1 - i)
+        yield Both(a, b): J).toSet
+      ofX ++ ofY ++ both
+    }
+    def facesOf(g: J): IndexedSeq[SSetElement[J]] = g match
+      case OfX(a)     => x.faces(a).map(e => SSetElement(e.word, OfX(e.generator): J))
+      case OfY(b)     => y.faces(b).map(e => SSetElement(e.word, OfY(e.generator): J))
+      case Both(a, b) =>
+        val i = x.dimOf(a)
+        val j = y.dimOf(b)
+        IndexedSeq.tabulate(i + j + 2) { k =>
+          if k <= i then
+            if i == 0 then SSetElement(Nil, OfY(b): J)
+            else
+              val e = x.faces(a)(k)
+              SSetElement(e.word, Both(e.generator, b): J)
+          else
+            val m = k - i - 1
+            if j == 0 then SSetElement(Nil, OfX(a): J)
+            else
+              val e = y.faces(b)(m)
+              SSetElement(e.word.map(_ + i + 1), Both(a, e.generator): J)
+        }
+    new FiniteSimplicialSet(byDim.reverse.dropWhile(_.isEmpty).reverse, facesOf)(using summon[Ordering[J]])
