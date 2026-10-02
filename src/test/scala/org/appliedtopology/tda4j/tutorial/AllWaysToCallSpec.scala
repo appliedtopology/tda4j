@@ -5,10 +5,10 @@ import org.appliedtopology.tda4j.cells.{given, *}
 import org.appliedtopology.tda4j.matlab.TDA4j
 import org.specs2.mutable.Specification
 
-/** Pins the three tasks of `_docs/tutorials/all-ways-to-call.md`: the octahedron, the circle's barcode, and its circular
-  * coordinate. The Scala snippets in the tutorial are compiled by the docs build; this spec RUNS the same code (the
-  * MATLAB snippet drives exactly the Java calls below, which is the closest thing to running it that this repository's
-  * CI can do).
+/** Pins the three tasks of `_docs/tutorials/all-ways-to-call.md`: the octahedron, the circle's barcode, and its
+  * circular coordinate. The Scala snippets in the tutorial are compiled by the docs build; this spec RUNS the same code
+  * (the MATLAB snippet drives exactly the Java calls below, which is the closest thing to running it that this
+  * repository's CI can do).
   */
 class AllWaysToCallSpec extends Specification:
   sequential
@@ -22,7 +22,8 @@ class AllWaysToCallSpec extends Specification:
 
   "task 1 (octahedron)" should {
     "have Betti numbers 1, 0, 1 via TDA4j.computeFromDistanceMatrix" in {
-      val r = TDA4j.computeFromDistanceMatrix(octahedronDistances, Array("maxDimension", "2", "maxFiltrationValue", "1.5"))
+      val r =
+        TDA4j.computeFromDistanceMatrix(octahedronDistances, Array("maxDimension", "2", "maxFiltrationValue", "1.5"))
       val bars = r.toArray().toList.map(_.toList)
       bars.count(b => b(0) == 0.0 && b(2).isInfinity) must beEqualTo(1)
       bars.count(b => b(0) == 1.0 && b(2).isInfinity) must beEqualTo(0)
@@ -61,16 +62,23 @@ class AllWaysToCallSpec extends Specification:
     val computation =
       homology.SimplicialHomologyEngine().persistentHomology(streams.ExplicitStreamBuilder.fromFacets(triangles))
     val bars = computation.barcodeAt(4.0)
-    val essential = bars.filter(b => b.upper.toString.contains("∞") || b.upper.toString.contains("nfinity")).groupBy(_.dim).view.mapValues(_.size).toMap
+    val essential = bars
+      .filter(b => b.upper.toString.contains("∞") || b.upper.toString.contains("nfinity"))
+      .groupBy(_.dim)
+      .view
+      .mapValues(_.size)
+      .toMap
     (triangles.size, essential)
 
   private def circleViaTDAlab(): (Int, Int, Int) =
     val lab = new TDAlab(17)
     import lab.{*, given}
     val metricSpace = io.CSV.readEuclideanMetricSpace(csv)
-    val computation = homology.SimplicialHomologyEngine().persistentHomology(
-      streams.IncrementalVietorisRipsSimplexStream(metricSpace, maxDimension = 2)
-    )
+    val computation = homology
+      .SimplicialHomologyEngine()
+      .persistentHomology(
+        streams.IncrementalVietorisRipsSimplexStream(metricSpace, maxDimension = 2)
+      )
     val all = computation.barcodeAt(1.5)
     val bars = barcode.PersistenceFilter.significant(all, scale = Some(metricSpace.minimumEnclosingRadius))
     val h1 = homology.CircularCoordinates.h1Bars(metricSpace, Some(1.5))
@@ -87,5 +95,10 @@ class AllWaysToCallSpec extends Specification:
       stream.filtrationValue(Simplex(2)) must beEqualTo(1.0)
       stream.filtrationValue(Simplex(1)) must beEqualTo(2.0)
       stream.filtrationValue(Simplex(1, 2)) must beEqualTo(2.0)
+    }
+    "reject a listed value that contradicts a listed coface" in {
+      streams.ExplicitStreamBuilder.fromFilteredFacets(List((2.0, Simplex(1)), (1.0, Simplex(1, 2)))) must throwAn[
+        IllegalArgumentException
+      ]
     }
   }

@@ -55,7 +55,7 @@ MATLAB talks to TDA4j through its built-in Java interface: put the assembly jar 
 
 ```matlab
 javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');
-TDA4j = org.appliedtopology.tda4j.matlab.TDA4j;
+import org.appliedtopology.tda4j.matlab.*;   % makes TDA4j (a static Java class, not an object to construct) callable by its short name
 
 % Task 1: the octahedron is the flag complex of its own edge graph, so a distance matrix is enough.
 % Vertices 1..6; the antipodal pairs (1,2), (3,4), (5,6) are NOT joined by an edge.

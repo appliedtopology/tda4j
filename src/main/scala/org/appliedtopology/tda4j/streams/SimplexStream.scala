@@ -187,8 +187,8 @@ object ExplicitStreamBuilder:
 
   /** As [[fromFacets]], with a filtration value per facet. A face that is not itself listed gets the smallest value
     * among the listed cells it belongs to -- the earliest moment it is forced to exist -- which keeps the filtration
-    * monotone (`value(face) <= value(coface)`). A cell listed more than once also keeps its smallest value, and a
-    * listed face of a facet keeps its own value only if that is no larger than that of every cell containing it.
+    * monotone (`value(face) <= value(coface)`). A value the caller listed is never overridden: listing a cell with a
+    * larger value than a cell containing it (or listing it twice with different values) is an error.
     */
   def fromFilteredFacets[VertexT: Ordering, FiltrationT: {Ordering, Filterable}](
     facets: Iterable[(FiltrationT, Simplex[VertexT])]
@@ -203,6 +203,11 @@ object ExplicitStreamBuilder:
           case Some(old) if ordering.lteq(old, value) => Some(old)
           case _                                      => Some(value)
         }
+    for (value, cell) <- facets.map((v, f) => (v, Simplex.from(f.toList))) do
+      require(
+        ordering.equiv(values(cell), value),
+        s"cell $cell is listed with filtration value $value but is forced to appear earlier, at ${values(cell)}, by a cell containing it (or listed twice)"
+      )
     given Option[Filterable[FiltrationT]] = Some(summon[Filterable[FiltrationT]])
     val builder = new ExplicitStreamBuilder[VertexT, FiltrationT]()
     values.foreach((cell, value) => builder.addOne((value, cell)))
