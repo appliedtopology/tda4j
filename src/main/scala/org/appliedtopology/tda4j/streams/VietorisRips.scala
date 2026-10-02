@@ -154,3 +154,64 @@ class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace
     case d if d >= 2 && d < metricSpace.size =>
       RecursiveStackSimplexEnumerator(metricSpace, d - 1)().toVector.sorted(using filtrationOrdering.reverse).iterator
   }
+
+/** The one place to ask for a Vietoris-Rips filtration, whichever of the several constructions does the work.
+  *
+  * Unlike the constructions' own constructors -- where `maxDimension` is sometimes the top SIMPLEX dimension
+  * (`IncrementalVietorisRipsSimplexStream`) and sometimes absent (the coface streams are unbounded and wrapped in
+  * `LimitedCofaceSimplexStream`) -- `maxDimension` here is, as everywhere user-facing, the top HOMOLOGICAL degree: you
+  * get what is needed to compute `H_0 .. H_maxDimension` with ANY engine, so one dimension higher gets built internally
+  * -- so an engine run directly on the stream also reports incomplete classes in dimension `maxDimension + 1` (the
+  * stream stops there): drop them (`dim <= maxDimension`), as `matlab.TDA4j` does. Pass the stream to an engine that
+  * wants it as-is (`SimplicialHomologyEngine`, `PersistenceInChunksEngine`, `CellularCohomologyEngine`);
+  * `RipserCohomologyEngine`/`PackedRipserCohomologyEngine` take the metric space directly and do not need a stream at
+  * all.
+  *
+  * `maxFiltrationValue` defaults to `metricSpace.minimumEnclosingRadius` (Ripser's enclosing radius: beyond it nothing
+  * new is born); `Some(Double.PositiveInfinity)` for the untruncated complex.
+  *
+  * The default implementation is [[Implementation.Enumerating]], what `matlab.TDA4j` itself builds for the naive and
+  * chunks engines; the constructions agree cell for cell (they are cross-validated in the test suite) and differ in
+  * speed by factors of ~1-2 in the benchmarks (`WORKLOG-mst-and-perf.md`). `RecursiveStackVietorisRipsSimplexStream` is
+  * deliberately not offered: it cannot truncate by dimension or radius and times out beyond toy sizes.
+  */
+object VietorisRips:
+  enum Implementation:
+    /** Breadth-first coface enumeration; the default. */
+    case Enumerating
+
+    /** Ripser's coface order, via its combinatorial number system indexing. */
+    case RipserCoface
+
+    /** Cofaces generated in filtration order. */
+    case Inorder
+
+    /** Rieser's New-VR (arXiv:2301.07191): a cross-validation baseline, not a fast construction. */
+    case Incremental
+
+  def apply(
+    metricSpace: FiniteMetricSpace[Int],
+    maxDimension: Int = 2,
+    maxFiltrationValue: Option[Double] = None,
+    implementation: Implementation = Implementation.Enumerating
+  ): StratifiedSimplexStream[Int, Double] =
+    require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
+    val topSimplexDimension = maxDimension + 1
+    implementation match
+      case Implementation.Enumerating =>
+        LimitedCofaceSimplexStream(
+          EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
+          topSimplexDimension
+        )
+      case Implementation.RipserCoface =>
+        LimitedCofaceSimplexStream(
+          RipserCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
+          topSimplexDimension
+        )
+      case Implementation.Inorder =>
+        LimitedCofaceSimplexStream(
+          InorderCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
+          topSimplexDimension
+        )
+      case Implementation.Incremental =>
+        IncrementalVietorisRipsSimplexStream(metricSpace, topSimplexDimension, maxFiltrationValue)

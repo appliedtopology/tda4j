@@ -104,11 +104,11 @@ val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield ∆(
 val octahedron = homology.SimplicialHomologyEngine().persistentHomology(streams.ExplicitStreamBuilder.fromFacets(triangles))
 octahedron.barcodeAt(4.0)   // one essential class in dimension 0, one in dimension 2
 
-// Task #2: this engine only sees the simplices in the stream, so to get H1 right the stream
-// must include the triangles too -- maxDimension = 2.
+// Task #2: maxDimension is the highest homology degree you want, so H_0 and H_1 here. (The stream
+// itself also contains the triangles, which H_1 needs; classes in degree 2 are incomplete -- ignore them.)
 val metricSpace = io.CSV.readEuclideanMetricSpace("_docs/tutorials/examplepoints.csv")
-val circle = homology.SimplicialHomologyEngine().persistentHomology(streams.IncrementalVietorisRipsSimplexStream(metricSpace, maxDimension=2))
-val allBars = circle.barcodeAt(1.5)
+val circle = homology.SimplicialHomologyEngine().persistentHomology(streams.VietorisRips(metricSpace, maxDimension = 1))
+val allBars = circle.barcodeAt(1.5).filter(_.dim <= 1)
 // The engines report every bar, mostly noise. Keep the ones longer than 1% of the enclosing radius:
 org.appliedtopology.tda4j.barcode.PersistenceFilter.significant(allBars, scale = Some(metricSpace.minimumEnclosingRadius))
 
@@ -140,7 +140,7 @@ object myComputation extends TDAlab(17) {
 
   // Task 2
   val circleHomology = homology.SimplicialHomologyEngine().persistentHomology(
-    streams.IncrementalVietorisRipsSimplexStream(metricSpace, maxDimension = 2)
+    streams.VietorisRips(metricSpace, maxDimension = 1)
   )
   val circleBarcode = circleHomology.barcodeAt(1.5)
 

@@ -361,7 +361,7 @@ class BarcodeRegressionSpec extends org.specs2.mutable.Specification with ScalaC
   val points = matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(25, 150)).sample.get
   for (name, streamBuilder) <- cases do
     s"$name complex should have births before deaths" >> {
-      // matrixGen is defined in VietorisRipsSpec.scala
+      // matrixGen is defined in streams/Generators.scala
       // forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(25, 250))) { (points: Array[Array[Double]]) =>
       val vrstream = streamBuilder(points)
       val homology = shc.persistentHomology(vrstream)

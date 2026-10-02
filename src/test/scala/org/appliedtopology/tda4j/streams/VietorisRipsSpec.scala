@@ -20,13 +20,6 @@ import scala.collection.mutable
 import scala.math.{cos, sin}
 import scala.reflect.ClassTag
 
-def matrixGen[T: ClassTag](g: Gen[T], dimension: Gen[Int], size: Gen[Int]): Gen[Array[Array[T]]] =
-  for
-    dim <- dimension
-    sz <- size
-    values <- Gen.listOfN(dim * sz, g)
-  yield values.toArray.grouped(dim).toArray
-
 class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck with AllExpectations:
   "This is a specification of the Vietoris-Rips simplex stream implementation\n\n".txt
 

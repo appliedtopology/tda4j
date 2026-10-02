@@ -77,9 +77,9 @@ class AllWaysToCallSpec extends Specification:
     val computation = homology
       .SimplicialHomologyEngine()
       .persistentHomology(
-        streams.IncrementalVietorisRipsSimplexStream(metricSpace, maxDimension = 2)
+        streams.VietorisRips(metricSpace, maxDimension = 1)
       )
-    val all = computation.barcodeAt(1.5)
+    val all = computation.barcodeAt(1.5).filter(_.dim <= 1)
     val bars = barcode.PersistenceFilter.significant(all, scale = Some(metricSpace.minimumEnclosingRadius))
     val h1 = homology.CircularCoordinates.h1Bars(metricSpace, Some(1.5))
     val coordinate = homology.CircularCoordinates.compute(metricSpace, 1.5, 0)
@@ -98,6 +98,25 @@ class AllWaysToCallSpec extends Specification:
     }
     "reject a listed value that contradicts a listed coface" in {
       streams.ExplicitStreamBuilder.fromFilteredFacets(List((2.0, Simplex(1)), (1.0, Simplex(1, 2)))) must throwAn[
+        IllegalArgumentException
+      ]
+    }
+    "keep different listed values on overlapping facets and give the overlap the minimum" in {
+      val stream =
+        streams.ExplicitStreamBuilder.fromFilteredFacets(List((3.0, Simplex(1, 2, 3)), (1.0, Simplex(2, 3, 4))))
+      stream.filtrationValue(Simplex(2, 3)) must beEqualTo(1.0)
+      stream.filtrationValue(Simplex(1, 2)) must beEqualTo(3.0)
+      stream.filtrationValue(Simplex(1, 2, 3)) must beEqualTo(3.0)
+    }
+    "offer a constant value for the unlisted cells, rejected if not monotone" in {
+      import streams.ExplicitStreamBuilder.UnlistedValues
+      val ok =
+        streams.ExplicitStreamBuilder.fromFilteredFacets(List((2.0, Simplex(1, 2))), UnlistedValues.Constant(0.0))
+      ok.filtrationValue(Simplex(1)) must beEqualTo(0.0)
+      streams.ExplicitStreamBuilder.fromFilteredFacets(
+        List((2.0, Simplex(1, 2))),
+        UnlistedValues.Constant(5.0)
+      ) must throwAn[
         IllegalArgumentException
       ]
     }

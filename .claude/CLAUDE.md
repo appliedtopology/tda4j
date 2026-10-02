@@ -164,6 +164,8 @@ separate files; (2) a companion extension can lose to a same-named stdlib extens
 (`math.Ordering.Implicits.*`'s `min`/`max`) — so `min`/`max` stay top-level. `asSimplex`/`asCube` are top-level
 because their receiver is the raw `SortedSet`/`Vector`.
 
+**Shared test generators** (`matrixGen`) live in `src/test/.../streams/Generators.scala`, not in a spec (a spec file got overwritten once and took it with it) — put any new cross-spec generator there. Before creating a test file, `ls` for its name: `Write` overwrites silently.
+
 **specs2 gotcha**: in a class mixing `ScalaCheck`, give a `Seq[Simplex[_]]` an explicit type ascription before
 `.forall` — otherwise it can resolve to specs2's `ValueCheck` extension with confusing errors.
 
@@ -245,7 +247,7 @@ untruncated. `RecursiveStackVietorisRipsSimplexStream` and alpha streams don't g
 ### Persistent homology: four independent engines
 
 Independent implementations sharing `Chain` primitives — a fix in one doesn't imply others need it. `maxDim`/
-`maxDimension` = top homological degree everywhere (engines build one dimension higher internally;
+`maxDimension` = top homological degree in the engines and the facade (engines build one dimension higher internally; NOT the stream constructors: `IncrementalVietorisRipsSimplexStream.maxDimension` is the top SIMPLEX dimension, coface streams have none — use `streams.VietorisRips`, which takes the homological degree; `DESIGN-stream-naming.md`;
 `WORKLOG-maxdim-semantics-fix.md`). Naive and `CellularCohomologyEngine` have no such param: callers truncate
 via `LimitedCofaceSimplexStream(stream, k+1)` and drop `dim==k+1` bars. Over a field, cohomology/homology
 barcodes coincide.

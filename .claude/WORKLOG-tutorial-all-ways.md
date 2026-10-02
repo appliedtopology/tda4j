@@ -23,3 +23,12 @@ group cohomology). Keep going, don't stop.
   octahedron is a flag complex), points via `csvread`, `h1Bars`, `circularCoordinates`. NOT run in MATLAB (none here);
   every call is exercised through the same Java facade in `tutorial/AllWaysToCallSpec`. Unverified: cell-array ->
   `String[]` conversion and `javaaddpath` paths.
+
+## Follow-up 1 (stream names) — done as proposal + additive dispatcher
+- `streams.VietorisRips` (see `DESIGN-stream-naming.md`); `ExplicitStreamBuilder.fromFilteredFacets` got `UnlistedValues`
+  strategies (`EarliestCoface` default per project lead: overlapping facets with different values give the overlap the
+  min; `Constant(v)`), listed values never overridden, non-monotone result rejected.
+- Mistake worth recording: I overwrote the existing `streams/VietorisRipsSpec.scala` with a new spec of the same name
+  (it held the shared `matrixGen`); caught by the compile errors in unrelated specs, restored from git. `matrixGen` now
+  lives in `streams/Generators.scala` (user request).
+- Full suite 674 pass; scalafmt (main/test/sbt) clean; 3.8.4 doc build clean.

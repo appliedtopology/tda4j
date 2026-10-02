@@ -92,6 +92,7 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
       LimitedCubicalGridStream,
       RecursiveStackVietorisRipsSimplexStream,
       SheehyRipsSimplexStream,
+      VietorisRips,
       WitnessCofaceSimplexStream,
       WitnessGeometry,
       WitnessMetricSpace
