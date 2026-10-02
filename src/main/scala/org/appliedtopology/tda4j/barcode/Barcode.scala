@@ -128,7 +128,7 @@ object PersistenceBar:
       OpenEndpoint(upper)
     )
 
-class BarcodeContext[FiltrationT: Ordering]():
+class BarcodeBuilder[FiltrationT: Ordering]():
   type Bar = PersistenceBar[FiltrationT, Nothing]
 
   /** Infix notation for hand-building explicit persistence bars: `lower <infix> upper` constructs a `BarAssembly`,
@@ -139,7 +139,7 @@ class BarcodeContext[FiltrationT: Ordering]():
     * `a opop b` is `(a, b)`; `a opcl b` is `(a, b]`; `clinf(a)`/`opinf(a)` are `[a, ∞)`/`(a, ∞)`; `infcl(b)`/`infop(b)`
     * are `(-∞, b]`/`(-∞, b)`.
     * {{{
-    * val ctx = BarcodeContext[Double]()
+    * val ctx = BarcodeBuilder[Double]()
     * import ctx.*
     * ctx.dim(1)(3.0 clop 5.0)   // PersistenceBar(1, ClosedEndpoint(3.0), OpenEndpoint(5.0))
     * ctx.dim(0)(clinf(2.0))     // PersistenceBar(0, ClosedEndpoint(2.0), PositiveInfinity())

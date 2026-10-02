@@ -5,8 +5,17 @@ layout: main
 #### A faster engine for cubical images
 
 ```scala 3
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.homology.{given, *}
+
+given Double is Field = Field.DoubleApproximated(1e-9)
+
+val (rows, cols) = (4, 4)
+val topValue: IndexedSeq[Int] => Double = c => (c(0) * 3 + c(1) * 5) % 7 // value of each top-dimensional cell
 val stream = CubicalGridStream(IndexedSeq(rows, cols), topValue)
-val bars = FastCubicalHomologyContext[Double]().persistentHomology(stream) // H0 and H1, that's everything at 2D
+val bars = FastCubicalHomologyEngine[Double]().persistentHomology(stream) // H0 and H1, that's everything at 2D
 ```
 
 `FastCubicalHomologyEngine` computes the exact same barcode (with real representatives) as

@@ -79,7 +79,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
     }
   }
   "valid and non-valid maps of barcodes" >> {
-    given bc: BarcodeContext[Int]()
+    given bc: BarcodeBuilder[Int]()
     import bc.*
 
     "One interval maps into another interval" ==> (
@@ -193,7 +193,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
     ) must beFalse)
   }
   "Cokernel, kernel, image computation" >> {
-    given bc: BarcodeContext[Double]()
+    given bc: BarcodeBuilder[Double]()
     import bc.*
 
     val source = List(dim(0)(2.bc(5)), dim(0)(3.bc(7)))

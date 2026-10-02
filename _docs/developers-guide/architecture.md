@@ -32,7 +32,7 @@ If a piece of Scala 3 syntax below looks unfamiliar, see the [Scala 3 primer](sc
 - **`cli`** — the `tda4j` executable (`TDA4jConf`, `TDA4jCLI`), a thin translator over `matlab.TDA4j`/`io`.
 - **`matlab`** — `TDA4j`/`PersistenceResult`/`LandmarkSelectionResult`, the plain-primitives facade for MATLAB
   and other Java callers.
-- root (`org.appliedtopology.tda4j` itself) — `package.scala` (`TDAContext`), the user-facing Scala facade.
+- root (`org.appliedtopology.tda4j` itself) — `package.scala` (`TDAlab`), the pylab-style user-facing Scala entry point.
 
 **Load-bearing import rule**: every file that reaches across a subpackage boundary does it via
 `import org.appliedtopology.tda4j.<pkg>.{given, *}` — the `given` matters. A plain `import pkg.*` does
@@ -46,7 +46,7 @@ confusing "no given instance" error far from the missing import.
 
 `algebra/RingModule.scala` defines what it means for a type `Self` to be a module over a ring-like type `R`:
 
-```scala 3
+```scala sc:nocompile
 trait RingModule:
   type Self
   type R
@@ -74,6 +74,11 @@ extension operators. **There is no default `given Double is Field` anywhere in `
 explicitly:
 
 ```scala 3
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.homology.{given, *}
+
 given Double is Field = Field.DoubleApproximated(1e-9)
 ```
 
@@ -85,7 +90,7 @@ distinct, incompatible types), with exact arithmetic via a precomputed inverse t
 
 ### `Cell`, `OrderedCell`, and what `boundary` returns
 
-```scala 3
+```scala sc:nocompile
 trait Cell extends HasDimension:
   type Self
   extension (self: Self) def boundary[CoefficientT: Field]: Seq[(Self, CoefficientT)]
@@ -330,13 +335,11 @@ own `recursiveFiltrationValue`) is needed here. Like Cech/Witness/Sheehy above, 
 reuses `RipserCofaceSimplexStream`'s generic coface-generation loop, since the Dowker complex is NOT a flag
 complex in general (a witness for a whole simplex need not witness any of its edges).
 
-@:callout(warning)
-`+Infinity <= +Infinity` is true, so a stream whose `maxFiltrationValue` defaults to `+Infinity` — safe
-everywhere else in this codebase — would silently collapse an untruncated Dowker relation to the complete
-simplex on every vertex. `DowkerCofaceSimplexStream` is the one stream that can compute a genuinely infinite
-filtration value on purpose (`DowkerGeometry.fromBoolean`'s "never witnessed" encoding), so it alone overrides
-`keptByThresholdAndCriterion` to additionally require `.isFinite`.
-@:@
+> **Warning.** `+Infinity <= +Infinity` is true, so a stream whose `maxFiltrationValue` defaults to `+Infinity` — safe
+> everywhere else in this codebase — would silently collapse an untruncated Dowker relation to the complete
+> simplex on every vertex. `DowkerCofaceSimplexStream` is the one stream that can compute a genuinely infinite
+> filtration value on purpose (`DowkerGeometry.fromBoolean`'s "never witnessed" encoding), so it alone overrides
+> `keptByThresholdAndCriterion` to additionally require `.isFinite`.
 
 One real footgun this construction has that no earlier stream in this codebase did: `keptByThresholdAndCriterion`'s
 `<=` admits `+Infinity <= +Infinity`, and `DowkerGeometry.fromBoolean` deliberately produces a literal `+Infinity`
@@ -458,11 +461,9 @@ matrix), `EuclideanMetricSpace` (coordinate array, on-demand Euclidean distance,
 query), `IntMetricSpace` (reindexes to contiguous `0 until size`), `SparseMetricSpace` (reports `+Infinity`
 beyond a fixed diameter cutoff, bounding Vietoris-Rips construction to a finite neighborhood per point).
 
-@:callout(warning)
-`SparseMetricSpace` reports `+Infinity` past its cutoff rather than excluding those pairs — it is not a
-thresholded neighbor oracle. Code that queries it expecting "unreachable" to mean "absent" will instead get
-back a real (if unusable) `Double` value; check `.isFinite` explicitly rather than assuming exclusion.
-@:@
+> **Warning.** `SparseMetricSpace` reports `+Infinity` past its cutoff rather than excluding those pairs — it is not a
+> thresholded neighbor oracle. Code that queries it expecting "unreachable" to mean "absent" will instead get
+> back a real (if unusable) `Double` value; check `.isFinite` explicitly rather than assuming exclusion.
 
 ### Opt-in parallelism
 
@@ -509,6 +510,25 @@ produces `Double` filtration values, and a metric distance needs real arithmetic
   dropped outright rather than left to silently underflow to zero. Persistence images integrate each pixel's
   weighted Gaussian mass *exactly* (a product of 1D normal-CDF differences, since an isotropic Gaussian's mass
   over a rectangle factors along both axes), not by sampling the surface at the pixel center.
+
+**Which bars get reported** (`barcode.PersistenceFilter`, `.claude/WORKLOG-persistence-threshold.md`). Engines
+return EVERY bar — they are the cross-validation oracles, and a representative is recorded for each. Reading a
+real barcode is hopeless that way, so the *facade* (`matlab.TDA4j`, hence the CLI and MATLAB) applies a
+post-hoc filter by default: keep a bar iff it is essential or its persistence exceeds `0.01 * scale`, where the
+scale is a property of the INPUT, supplied by the facade: `metricSpace.minimumEnclosingRadius` for a point cloud or
+distance matrix (Ripser's enclosing radius, already the default VR truncation — every bar lives in `[0, scale]`;
+used as-is in the complex's reported units), or max − min of the values for a cubical image / Dowker relation
+(which have no metric). It is passed by-name and only evaluated when a fraction of it is needed (it is quadratic);
+a non-finite scale falls back to the span of the barcode's own finite endpoints. A
+threshold `<= 0` keeps everything, zero-persistence bars included. Design points worth knowing before changing
+it: (1) it is applied by thin `dispatch*` wrappers around the real dispatchers, after the full result exists, not
+inside `fromBars`; (2) `PersistenceResult` keeps the FULL arrays plus a `visible` index, and only
+`size`/`toArray`/`dimension`/`birth`/`death`/`cycle*` use the visible view — `barsOfDimension`, hence distances,
+landscapes and persistence images, always use the full barcode, because two results filtered at their own
+scales would otherwise be compared under different cuts; (3) every strict option allowlist
+(`recognizedKeys`, `witnessFromLandmarksKeys`, `dowkerKeys`) accepts `minPersistence`/`minPersistenceFraction`
+except `landmarkSelectionKeys`, since landmark selection produces no barcode; (4) existing tests that assert
+on complete barcodes call the test-only shims `FullBarcode`/`CliFull`, which switch the threshold off.
 
 `matlab.PersistenceResult` exposes both as instance methods (`bottleneckDistance`/`wassersteinDistance`
 against another `PersistenceResult`, `landscape`/`persistenceImage` on itself) — see that class's own doc.
@@ -629,15 +649,19 @@ reasons plus the fact that `cocycleIndices` is itself a small array, awkward to 
 single-value-flag conventions.
 
 ```scala 3
-class TDAContext[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]
-    extends SimplicialHomologyContext[VertexT, CoefficientT, FiltrationT]():
-  val chainIsRingModule = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule { type R = CoefficientT }]
-  export chainIsRingModule.*
-  given [T: Ordering] => Conversion[Simplex[T], Chain[Simplex[T], CoefficientT]] = Chain.apply
+import language.experimental.modularity
+import org.appliedtopology.tda4j.TDAlab
+
+val tdalab = TDAlab(0)          // 0 = Double coefficients; a prime p = Z/p
+import tdalab.{*, given}
+val chain = Fp(1) ⊠ ∆(1, 2) - ∆(2, 3)       // a Chain
 ```
 
-`TDAContext` takes **three** type parameters (`VertexT`, `CoefficientT`, `FiltrationT`). It *is* a
-`SimplicialHomologyEngine` (see [Persistence engines](persistence-engines.md)), plus it exports
-chain-arithmetic operators (`+`, `-`, `⊠`, ...) into your namespace and provides an implicit
-`Simplex -> Chain` conversion so you can write `∆(1,2) - ∆(2,3)` directly — the basis for the
-[User's Guide](../user-guide/index.md)'s Scala quick-start.
+`TDAlab(characteristic, precision = 1e-9)` (root `package.scala`) is the pylab-style entry point: instantiate it
+once, then `import tdalab.{*, given}`. That brings into scope `Fp(...)` coefficients of the chosen field, the
+chain-arithmetic operators (`+`, `-`, `⊠`, ...), `∆`/`Simplex`/`Cube` literals, an implicit
+`Simplex -> Chain` conversion so `∆(1,2) - ∆(2,3)` works directly, and `cats` `Show` syntax (`.show`). Vertices are
+fixed to `Int`. It deliberately does **not** extend or wrap an engine: engines are constructed explicitly
+(e.g. `SimplicialHomologyEngine[Int, Double, Double]()`, see [Persistence engines](persistence-engines.md)). It
+is the basis for the [Tutorials](../tutorials/index.md) and the [User's Guide](../user-guide/index.md)'s Scala
+quick-start.

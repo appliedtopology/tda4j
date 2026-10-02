@@ -117,6 +117,17 @@ import scala.collection.mutable
   *     CLAUDE.md), it is never artificially cut short the way a VR complex is by this option, so its own top dimension
   *     is genuine information, not scaffolding. `complex=dtm-rips`/`complex=sheehy-rips` need the same "build one
   *     dimension higher, drop it" handling as `complex=vr`/`complex=cech` (both are just as unboundedly deep).
+  *   - `"minPersistence"` / `"minPersistenceFraction"`: which bars are reported. By default a bar is reported only if
+  *     it is essential (never dies) or its persistence `death - birth` is greater than 1% of the input's minimum
+  *     enclosing radius (`FiniteMetricSpace.minimumEnclosingRadius`, Ripser's enclosing radius: the range `0` to it
+  *     holds every bar), in the units the complex reports (diameters for `vr`, radii for `cech`/`alpha`); a cubical
+  *     image or Dowker relation has no metric, so its own value range (max - min) is the scale.
+  *     `"minPersistenceFraction"` changes that 1% (a fraction of the scale); `"minPersistence"` sets an absolute
+  *     threshold in the barcode's own units instead. Give at most one; `0` for either reports EVERY bar, which is what
+  *     every engine computes and what cross-engine comparisons want. Only
+  *     `size()`/`toArray()`/`dimension`/`birth`/`death`/`cycle*` are filtered:
+  *     `PersistenceResult.hiddenCount()`/`persistenceThreshold()`/`toArrayUnfiltered()` say what was hidden, and
+  *     distances/landscapes/persistence images always use the complete barcode. See `barcode.PersistenceFilter`.
   *   - `"maxFiltrationValue"`: double, default (when omitted) is the point cloud's own `minimumEnclosingRadius`
   *     (Ripser's own default truncation, not unbounded -- see CLAUDE.md's "enclosing-radius default" note). Pass a very
   *     large number for the old always-unbounded behavior. Consulted for `complex=vr` (a diameter), `complex=cech` (a
@@ -509,7 +520,8 @@ object TDA4j:
     val opts = parseOptions(options)
     val sublevel = opts.get("sublevel").forall(v => parseBooleanOption("sublevel", v))
     val stream = CubicalImage.fromFlatArray(shape.toIndexedSeq, flatValues.toIndexedSeq, sublevel)
-    dispatchCubical(opts, stream)
+    // The range is the same under sublevel=false (values are negated, not rescaled).
+    dispatchCubical(opts, stream, valueRange(flatValues.iterator))
 
   def computeFromImage(pixels: Array[Array[Double]]): PersistenceResult =
     computeFromImage(pixels, Array.empty[String])
@@ -547,7 +559,9 @@ object TDA4j:
     "dtmp",
     "sheehyepsilon",
     "edgecollapse",
-    "requirevalidtriangulation"
+    "requirevalidtriangulation",
+    "minpersistence",
+    "minpersistencefraction"
   )
 
   /** `numLandmarks`/`landmarkSelector`/`landmarkSeed` only -- the STRICT allowlist `selectLandmarksFromPoints`/
@@ -569,14 +583,36 @@ object TDA4j:
     * silently ignoring it.
     */
   private val witnessFromLandmarksKeys =
-    Set("complex", "witnessvariant", "nu", "engine", "maxdimension", "maxfiltrationvalue", "field", "prime", "epsilon")
+    Set(
+      "complex",
+      "witnessvariant",
+      "nu",
+      "engine",
+      "maxdimension",
+      "maxfiltrationvalue",
+      "field",
+      "prime",
+      "epsilon",
+      "minpersistence",
+      "minpersistencefraction"
+    )
 
   /** `computeFromRelation`'s own allowlist -- see that method's doc for what each key means. Separate from
     * `recognizedKeys` for the same reason `witnessFromLandmarksKeys` is: this entry point takes a relation, not a point
     * cloud or distance matrix, so `"complex"`/`"alphaBackend"`/`"numLandmarks"`/etc. would all be silently meaningless
     * here rather than caught.
     */
-  private val dowkerKeys = Set("engine", "maxdimension", "maxfiltrationvalue", "dual", "field", "prime", "epsilon")
+  private val dowkerKeys = Set(
+    "engine",
+    "maxdimension",
+    "maxfiltrationvalue",
+    "dual",
+    "field",
+    "prime",
+    "epsilon",
+    "minpersistence",
+    "minpersistencefraction"
+  )
 
   private def parseOptionsWithKeys(options: Array[String], allowedKeys: Set[String]): Map[String, String] =
     if options.length % 2 != 0 then
@@ -757,7 +793,50 @@ object TDA4j:
         given Double is Field = Field.DoubleApproximated(epsilon)
         compute[Double](identity)
 
+  /** The persistence threshold, resolved from `minPersistence`/`minPersistenceFraction` -- validated BEFORE any
+    * computation starts (a typo should not cost a long Vietoris-Rips run), applied to the finished result by the thin
+    * `dispatch*` wrappers below. Default: [[PersistenceFilter.DefaultFraction]] of the input's scale (its minimum
+    * enclosing radius, or a cubical image's / Dowker relation's value range -- passed by-name, so it is only computed
+    * when a fraction of it is needed); `0` for either option means "report every bar".
+    */
+  private final case class ThresholdSpec(minPersistence: Option[Double], fraction: Double):
+    def apply(result: PersistenceResult, scale: => Double): PersistenceResult =
+      result.withPersistenceThreshold(minPersistence, fraction, scale)
+
+  /** max - min of the finite values -- the "scale" of an input with no metric (a cubical image's pixels, a Dowker
+    * relation's entries); `0` if there are none.
+    */
+  private def valueRange(values: Iterator[Double]): Double =
+    val finite = values.filter(v => !v.isInfinite && !v.isNaN).toArray
+    if finite.isEmpty then 0.0 else finite.max - finite.min
+
+  private def parseThresholdSpec(opts: Map[String, String]): ThresholdSpec =
+    val absolute = opts.get("minpersistence").map(parseDoubleOption("minPersistence", _))
+    val fraction = opts.get("minpersistencefraction").map(parseDoubleOption("minPersistenceFraction", _))
+    if absolute.isDefined && fraction.isDefined then
+      throw new IllegalArgumentException(
+        "minPersistence (an absolute threshold) and minPersistenceFraction (a fraction of the input's scale) " +
+          "are alternatives: pass at most one of them"
+      )
+    absolute.foreach(a =>
+      if !(a >= 0.0) || a.isInfinite then
+        throw new IllegalArgumentException(s"option 'minPersistence' must be a finite number >= 0, got '$a'")
+    )
+    fraction.foreach(f =>
+      if !(f >= 0.0) || f.isInfinite then
+        throw new IllegalArgumentException(s"option 'minPersistenceFraction' must be a finite number >= 0, got '$f'")
+    )
+    ThresholdSpec(absolute, fraction.getOrElse(PersistenceFilter.DefaultFraction))
+
   private def dispatch(
+    opts: Map[String, String],
+    metricSpace: FiniteMetricSpace[Int],
+    points: Option[Array[Array[Double]]]
+  ): PersistenceResult =
+    val threshold = parseThresholdSpec(opts)
+    threshold(dispatchFull(opts, metricSpace, points), metricSpace.minimumEnclosingRadius)
+
+  private def dispatchFull(
     opts: Map[String, String],
     metricSpace: FiniteMetricSpace[Int],
     points: Option[Array[Array[Double]]]
@@ -1473,6 +1552,14 @@ object TDA4j:
     metricSpace: FiniteMetricSpace[Int],
     landmarks: IndexedSeq[Int]
   ): PersistenceResult =
+    val threshold = parseThresholdSpec(opts)
+    threshold(dispatchWitnessFromLandmarksFull(opts, metricSpace, landmarks), metricSpace.minimumEnclosingRadius)
+
+  private def dispatchWitnessFromLandmarksFull(
+    opts: Map[String, String],
+    metricSpace: FiniteMetricSpace[Int],
+    landmarks: IndexedSeq[Int]
+  ): PersistenceResult =
     parseWitnessComplexOption(opts)
     val witnessVariant = resolveWitnessVariant(opts)
     val engine = resolveWitnessEngine(opts, witnessVariant)
@@ -1500,6 +1587,10 @@ object TDA4j:
   // ---------------------------------------------------------------------------------------------------------------
 
   private def dispatchDowker(opts: Map[String, String], relation: Array[Array[Double]]): PersistenceResult =
+    val threshold = parseThresholdSpec(opts)
+    threshold(dispatchDowkerFull(opts, relation), valueRange(relation.iterator.flatten))
+
+  private def dispatchDowkerFull(opts: Map[String, String], relation: Array[Array[Double]]): PersistenceResult =
     val engine = EngineKind.parse(opts.getOrElse("engine", "naive"))
     if engine == EngineKind.FastCubical then
       throw new IllegalArgumentException(
@@ -1587,7 +1678,15 @@ object TDA4j:
   // all, the type dispatch()/computeGeneric are built around.
   // ---------------------------------------------------------------------------------------------------------------
 
-  private def dispatchCubical(opts: Map[String, String], stream: CubicalGridStream): PersistenceResult =
+  private def dispatchCubical(
+    opts: Map[String, String],
+    stream: CubicalGridStream,
+    valueRangeOfImage: => Double
+  ): PersistenceResult =
+    val threshold = parseThresholdSpec(opts)
+    threshold(dispatchCubicalFull(opts, stream), valueRangeOfImage)
+
+  private def dispatchCubicalFull(opts: Map[String, String], stream: CubicalGridStream): PersistenceResult =
     val engine = EngineKind.parse(opts.getOrElse("engine", "naive"))
     if engine == EngineKind.Ripser then
       throw new IllegalArgumentException(

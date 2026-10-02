@@ -5,6 +5,13 @@ layout: main
 ### Dowker complexes
 
 ```scala 3
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.homology.{given, *}
+
+given Double is Field = Field.DoubleApproximated(1e-9)
+
 val relation = Array(
   Array(0.0, 1.0, 2.0),  // point 0's own relation value to each of 3 witnesses
   Array(1.0, 0.0, 1.0),  // point 1's
@@ -12,7 +19,7 @@ val relation = Array(
 )
 val geometry = DowkerGeometry(relation)
 val stream = DowkerCofaceSimplexStream(geometry)
-val homology = SimplicialHomologyContext[Int, Double, Double]().persistentHomology(stream)
+val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream)
 ```
 
 Dowker's complex (1952), generalized to a real-valued, filtered relation `R: L x W -> [0, Infinity]` the way
@@ -28,6 +35,13 @@ For the classical (unfiltered) Dowker complex — a plain boolean "is `x` relate
 time — use `DowkerGeometry.fromBoolean`:
 
 ```scala 3
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.homology.{given, *}
+
+given Double is Field = Field.DoubleApproximated(1e-9)
+
 val covers = Seq(
   Seq(true, false, true),   // point 0 is covered by witnesses 0 and 2
   Seq(true, true, false),

@@ -31,7 +31,7 @@ this codebase:
 **Named context bounds** (`as`). Instead of writing a context bound and then separately summoning it, you
 can name the bound's evidence inline:
 
-```scala 3
+```scala sc:nocompile
 trait OrderedCell extends Cell:
   type Self: Ordering as ordering
 ```
@@ -50,7 +50,7 @@ This is the single most important piece of syntax to internalize before reading 
 `Homology.scala`. A typeclass in this style is a trait with an abstract *type member* called `Self`,
 rather than a type parameter:
 
-```scala 3
+```scala sc:nocompile
 trait HasDimension:
   type Self
   extension (self: Self) def dim: Int
@@ -77,7 +77,12 @@ OrderedCell`-shaped, as satisfying the same bound).
 A concrete instance looks like this — `SimplexOrderedCell.scala`'s actual construction of `Simplex[VertexT] is
 OrderedCell`:
 
-@:snip(/src/main/scala/org/appliedtopology/tda4j/cells/SimplexOrderedCell.scala, given-example)
+```scala sc:nocompile
+given defaultSimplexIsOrderedCell: [VertexT: Ordering] => (Simplex[VertexT] is OrderedCell) =
+  simplexIsOrderedCell[VertexT]()
+```
+
+_Source: `src/main/scala/org/appliedtopology/tda4j/cells/SimplexOrderedCell.scala`, region `given-example`._
 
 where `simplexIsOrderedCell` builds an anonymous `new (Simplex[VertexT] is OrderedCell):` instance,
 providing the `ordering` member `OrderedCell` requires and, in an `extension (spx: Simplex[VertexT])`
@@ -109,7 +114,7 @@ as the next section explains, it technically isn't one at runtime.
 
 ## Opaque types
 
-```scala 3
+```scala sc:nocompile
 opaque type Simplex[VertexT] = SortedSet[VertexT]
 ```
 

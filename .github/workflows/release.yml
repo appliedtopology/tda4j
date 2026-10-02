@@ -51,8 +51,9 @@ jobs:
         env:
           TDA4J_DOCS_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          sbt "assembly ; packageSrc" 
-          sbt "++3.8.4 packageDoc ; doc" # remove ++3.8.4 when 3.9.1 is released
+          sbt "assembly ; packageSrc"
+          # Docs only are built with 3.8.4 (see build.sbt). TODO: remove this env var when 3.9.1 is released.
+          TDA4J_SCALA_VERSION=3.8.4 sbt "packageDoc ; doc"
       - name: Publish versioned docs
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -69,7 +70,7 @@ jobs:
             git -C /tmp/gh-pages rm -rf . > /dev/null 2>&1 || true
             touch /tmp/gh-pages/.nojekyll
           fi
-          cp -r target/out/jvm/scala-3.9.0/tda4j/api "/tmp/gh-pages/$VERSION"
+          cp -r target/out/jvm/scala-3.8.4/tda4j/api "/tmp/gh-pages/$VERSION" # TODO: 3.9.0 when the docs pin is removed
           cd /tmp/gh-pages
           git add -A
           if git diff --cached --quiet; then
@@ -103,7 +104,7 @@ jobs:
             --title "TDA4j ${VERSION}" \
             --generate-notes \
             $PRERELEASE_FLAG \
-            target/scala-3.9.0/*-${VERSION}-assembly.jar \
-            target/scala-3.9.0/*-sources.jar \
-            target/scala-3.9.0/*-javadoc.jar \
+            target/out/jvm/scala-3.9.0/tda4j/*-${VERSION}-assembly.jar \
+            target/out/jvm/scala-3.9.0/tda4j/*-sources.jar \
+            target/out/jvm/scala-3.8.4/tda4j/*-javadoc.jar \
             "docs-${VERSION}.zip"

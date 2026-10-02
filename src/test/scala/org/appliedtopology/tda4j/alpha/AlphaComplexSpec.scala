@@ -370,10 +370,10 @@ class AlphaComplexDQPRegressionSpec extends org.specs2.mutable.Specification:
 
 /** Regression test for a confirmed bug (found by `EngineComparisonBenchmarkSpec`, full writeup in CLAUDE.md's
   * "Cross-engine benchmark, and a bug it found on first run" section): both `HelixDelaunay` and `AlphaShapeDQP` used to
-  * define `filtrationOrdering` ascending instead of reversed, which crashed `SimplicialHomologyEngine` ("Naive"
-  * engine) at `maxDim >= 2` with `IllegalStateException: reduction pivot ... was not a recorded open class`, while
-  * leaving `PersistenceInChunksEngine` ("Chunks") unaffected. Pins both halves of the fix: no exception, AND agreement
-  * between the two engines -- the actual property that was broken, not just "doesn't crash".
+  * define `filtrationOrdering` ascending instead of reversed, which crashed `SimplicialHomologyEngine` ("Naive" engine)
+  * at `maxDim >= 2` with `IllegalStateException: reduction pivot ... was not a recorded open class`, while leaving
+  * `PersistenceInChunksEngine` ("Chunks") unaffected. Pins both halves of the fix: no exception, AND agreement between
+  * the two engines -- the actual property that was broken, not just "doesn't crash".
   */
 class AlphaFiltrationOrderingRegressionSpec extends org.specs2.mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)

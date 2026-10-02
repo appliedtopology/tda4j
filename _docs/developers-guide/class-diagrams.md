@@ -4,11 +4,9 @@ title: Mapping the library: class diagrams
 ---
 
 
-@:callout(info)
-This page is a structural sketch to help you get oriented, not an exhaustive or automatically generated
-reference — field names and signatures can drift out of sync with source over time. When a diagram and the
-actual `.scala` file disagree, trust the file.
-@:@
+> **Note.** This page is a structural sketch to help you get oriented, not an exhaustive or automatically generated
+> reference — field names and signatures can drift out of sync with source over time. When a diagram and the
+> actual `.scala` file disagree, trust the file.
 
 ## Typeclass hierarchy (`RingModule.scala`, `Field.scala`, `Chain.scala`)
 
@@ -215,7 +213,7 @@ classDiagram
     }
     CircularCoordinates --> Result : returns (compute)
     CircularCoordinates --> ToroidalResult : returns (computeToroidal)
-    CircularCoordinates ..> CellularCohomologyContext : computes K_r's cohomology with
+    CircularCoordinates ..> CellularCohomologyEngine : computes K_r's cohomology with
     CircularCoordinates ..> NoIntegerCocycleException : throws (no ℤ-lift at prime)
     CircularCoordinates ..> LatticeReduction : reduces the chosen classes' Gram matrix with
 ```

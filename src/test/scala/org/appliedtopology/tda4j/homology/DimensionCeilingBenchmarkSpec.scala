@@ -50,10 +50,10 @@ import scala.util.Random
   * (`sparseCofacets`/`insertionDiameter`) that only enumerates candidates actually within threshold, while
   * `EnumeratingCofaceSimplexStream`-family streams filter AFTER `simplexIndexing` already constructed each candidate
   * (`keptByThresholdAndCriterion`, a post-hoc filter) -- so bounding distance cuts their reduction cost but not their
-  * O(C(n,d+1)) enumeration cost. `VR-Enumerating` x `SimplicialHomologyEngine` (Naive) is included specifically to
-  * show whether that documented asymmetry actually shows up as a ceiling difference, not assumed from the worklog
-  * alone. `RecursiveStackVietorisRipsSimplexStream` is excluded -- already documented as not speed-competitive, would
-  * just print "timeout" at every cell and waste budget.
+  * O(C(n,d+1)) enumeration cost. `VR-Enumerating` x `SimplicialHomologyEngine` (Naive) is included specifically to show
+  * whether that documented asymmetry actually shows up as a ceiling difference, not assumed from the worklog alone.
+  * `RecursiveStackVietorisRipsSimplexStream` is excluded -- already documented as not speed-competitive, would just
+  * print "timeout" at every cell and waste budget.
   *
   * '''Methodology: grow `n` until a per-attempt timeout fires, rather than time a fixed guessed grid''' -- the
   * point-cloud-size ceiling IS the answer to "how big can my point cloud be," so it's measured directly: for each
@@ -92,9 +92,9 @@ import scala.util.Random
   * finished, only that the existing lookup couldn't see a negative cell's own substitute. Fixed by recording each
   * negative cell's own V-column (already computed, unused past its own branch) in a new `negativeVCols` map and wiring
   * it through `Chain.reduceBy`'s existing `fallback` parameter -- the same mechanism `RipserCohomologyEngine` already
-  * uses for its own apparent-pairs substitution. Verified against `RipserCohomologyEngine`'s independently- derived
-  * bar count (exact agreement, not just "no crash") and a 64-trial cross-validation sweep, 0 mismatches. This spec's
-  * own previously-crashing cells (VR-Enum+Naive at H=3/H=4) now hit ordinary timeout ceilings instead.
+  * uses for its own apparent-pairs substitution. Verified against `RipserCohomologyEngine`'s independently- derived bar
+  * count (exact agreement, not just "no crash") and a 64-trial cross-validation sweep, 0 mismatches. This spec's own
+  * previously-crashing cells (VR-Enum+Naive at H=3/H=4) now hit ordinary timeout ceilings instead.
   */
 class DimensionCeilingBenchmarkSpec(args: Arguments) extends mutable.Specification:
   // Gated on -DrunBenchmarks=true, same as every other *BenchmarkSpec/ProfilingSpec in this package (see

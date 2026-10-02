@@ -8,25 +8,22 @@ keeps changing.
 
 All five gaps from the first pass at this document are closed:
 
-1. `project/plugins.sbt` now adds `sbt-sonatype` 3.12.2, which provides the `sonaUpload`/`sonaRelease`
-   commands `release.sbt` already called.
-2. `sonatype.sbt` now sets `sonatypeCredentialHost := "central.sonatype.com"` (Central Portal, not the legacy
-   OSSRH host) plus a `credentials` entry and `pgpPassphrase`, both read from environment variables — nothing
-   is hardcoded.
+1. Publishing to Maven Central uses **sbt 2's built-in Central Portal support** (`sonaUpload`/`sonaRelease`, which
+   `release.sbt` calls); there is no `sbt-sonatype` plugin in `project/plugins.sbt`.
+2. `sonatype.sbt` sets `publishTo` to the Central snapshots repository for `-SNAPSHOT` versions and to
+   `localStaging` otherwise (the bundle that `sonaUpload` sends), and holds the POM metadata. No credentials or
+   passphrases are in the build files.
 3. `LICENSE.md`'s copyright line now names its holders (matching `build.sbt`'s own site footer).
 4. `.github/workflows/release.yml` now runs on every `vX.Y.Z` tag push.
-5. `build.sbt` now configures Laika's `Versions` support (`laikaConfig`), and both `docs.yml` and
-   `release.yml` publish by committing directly into a `gh-pages` git worktree, so every other
+5. The docs site is plain scaladoc (the Laika/Paradox generators were removed): `build.sbt`'s
+   `Compile / doc / scalacOptions` configure scaladoc's static-site mode (`-siteroot`, with pages in `_docs/` and
+   navigation in `sidebar.yml`). `docs.yml` publishes by committing the generated `api` directory into a
+   `gh-pages` git worktree, and `release.yml` does the same under a per-version directory, so every
    already-published version is left untouched by construction rather than by an explicit merge-forward step.
+   `TDA4J_DOCS_VERSION` (set by `release.yml`) becomes scaladoc's `-project-version`.
 
-`sbt compile` and `sbt laikaSite` were both run successfully against these changes (after retrying through this
-sandbox's Maven Central rate limiting), confirming `build.sbt`/`sonatype.sbt`/`release.sbt` all load and the
-Laika `Versions`/`VersionMenu` API calls type-check and execute — that includes discovering, the hard way, that
-`laikaConfig`'s `Versions` value does **not** physically nest a build's output under its own version path
-(confirmed by inspecting real `laikaSite` output: `index.html` etc. land at the site root regardless; only
-`laika/versionInfo.json` and the version-switcher dropdown reflect it). `docs.yml`/`release.yml` do that nesting
-themselves in a "Stage versioned docs for publish" step, which was dry-run locally (see each workflow's own
-comments for why).
+**Docs are currently built with Scala 3.8.4 while everything else is 3.9.0** (a scaladoc 3.9.0 JavaScript bug);
+the docs steps set `TDA4J_SCALA_VERSION=3.8.4` (read by `scalaVersion` in `build.sbt`); see the TODOs there and in both workflows to remove this when 3.9.1 is released.
 
 **None of this has been exercised against the real Sonatype Central Portal or a real tag push yet** — it's
 wired up and locally verified as far as this sandbox allows, not proven end-to-end. The overall
@@ -44,7 +41,7 @@ silence means success. In particular:
 
 ## Versioning
 
-- `version.sbt` (`ThisBuild / version := "0.1.3-SNAPSHOT"`) is the single source of truth for the Scala/Maven
+- `version.sbt` (`ThisBuild / version := "0.4.1-SNAPSHOT"`) is the single source of truth for the Scala/Maven
   artifact version. `versionScheme := Some("semver-spec")` in `build.sbt` means MiMa and Maven Central
   itself will hold later releases to semver compatibility rules against whatever the last non-SNAPSHOT
   version was — bump `MAJOR` for a binary-incompatible break, `MINOR` for additive-only, `PATCH` for
@@ -63,8 +60,8 @@ silence means success. In particular:
 | Library jar | `sbt package` (part of `publishSigned`) | Maven Central |
 | Sources jar | `publishMavenStyle := true` + sbt's default `publishArtifact` behavior (`Compile / packageSrc`) | Maven Central + GitHub Release |
 | Scaladoc jar | sbt's default `Compile / packageDoc` | Maven Central + GitHub Release |
-| Fat jar (CLI/MATLAB) | `sbt assembly` → `target/scala-3.9.0/TDA4j-<version>-assembly.jar` (name from `assembly / assemblyJarName` in `build.sbt`) | GitHub Release only (not published to Maven — fat jars with bundled deps are a poor Maven citizen) |
-| Docs site | `sbt laikaSite` → `target/docs/site` (includes linked scaladoc via `laikaIncludeAPI`, and a PDF via `laikaIncludePDF`) | GitHub Pages, under a per-version path (`/X.Y.Z/`, `/dev/` for in-progress docs) + a zipped copy on the GitHub Release |
+| Fat jar (CLI/MATLAB) | `sbt assembly` → `target/out/jvm/scala-3.9.0/tda4j/tda4j-<version>-assembly.jar` (sbt 2 layout, verified) (name from `assembly / assemblyJarName` in `build.sbt`) | GitHub Release only (not published to Maven — fat jars with bundled deps are a poor Maven citizen) |
+| Docs site | `sbt doc` → `target/out/jvm/scala-<docs scala version>/tda4j/api` (scaladoc static site built from `_docs/`) | GitHub Pages, under a per-version path (`/X.Y.Z/`, `/dev/` for in-progress docs) + a zipped copy on the GitHub Release |
 
 All four Maven-bound artifacts (jar, sources, scaladoc, POM) are produced and signed in one shot by
 `publishSigned` (`sbt-pgp`) — nothing bespoke needed there beyond having a valid PGP key configured (see
@@ -100,10 +97,9 @@ already-released coordinate.
   `release.yml`'s `gh release create --generate-notes` will produce a commit-based changelog automatically,
   but it's worth reading over and editing by hand for anything a commit-log summary won't convey (this repo's
   worklog discipline — `.claude/WORKLOG-*.md` — is the fastest way to reconstruct what actually happened).
-- Confirm `mimaPreviousArtifacts` — it's currently `Set.empty` in `build.sbt`, which is correct only because
-  nothing has published to Maven yet and there's nothing to diff against. **The first real Maven publish must
-  be followed by setting `mimaPreviousArtifacts` to that version**, or every later release silently stops
-  checking binary compatibility (`mimaReportBinaryIssues` passes vacuously against an empty set).
+- Confirm `mimaPreviousArtifacts`: `build.sbt` derives it from the `v*` git tags (excluding the version being
+  published and any `0.1.*` tag). A tag with no published Maven artifact makes `mimaReportBinaryIssues` fail to
+  resolve, so check that the most recent tags really were published.
 
 ### 2. Credentials and secrets
 
@@ -122,12 +118,12 @@ already-released coordinate.
   user=<token user>
   password=<token password>
   ```
-  Nothing in this project's own build files references that path — sbt-sonatype/sbt-pgp pick it up through
+  Nothing in this project's own build files references that path — sbt's built-in Central support and sbt-pgp pick it up through
   their own default credential discovery, the same way for every project on the machine, not something wired
   up here. (An earlier version of `sonatype.sbt` added an explicit `credentials +=` pointing at this file,
   reasoning from `SONATYPE_USERNAME`/`SONATYPE_PASSWORD` env vars as the primary mechanism — removed once it
   became clear that framing didn't match how credentials actually get supplied here, which is entirely this
-  file, discovered by the plugins' own defaults; no env vars involved.) `host` must say `central.sonatype.com`
+  file, discovered by those defaults; no env vars involved.) `host` must say `central.sonatype.com`
   exactly (a file left over from before the Central Portal migration may still say the old OSSRH host, which
   won't match and leaves the build effectively uncredentialed). This is a different file and format from
   Maven's own `~/.m2/settings.xml` — sbt doesn't read that XML format, so a token stored only there isn't

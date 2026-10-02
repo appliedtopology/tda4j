@@ -12,7 +12,8 @@ go in the worklog, not here. This file was condensed on 2026-09-22 from a ~190k-
 
 TDA4j is a Scala 3 library for persistent homology and topological data analysis (a spiritual successor to
 JavaPlex/Ripser, from the Stanford Computational Topology workgroup lineage). Single sbt module, root package
-`org.appliedtopology.tda4j`, pre-1.0 (`0.1.3-SNAPSHOT`), actively evolving API.
+`org.appliedtopology.tda4j`, pre-1.0 (`0.5.0-SNAPSHOT`, see `version.sbt`), actively evolving API. **0.5.0 deliberately does not keep binary
+compatibility with 0.4.x** (project lead: still in flux) — no compat shims for renames/signature changes.
 
 ## Package layout
 
@@ -28,13 +29,15 @@ Source/test directories mirror package names; file names mostly carry over from 
 - `streams` — `SimplexStream`, `FiniteMetricSpace`, `VietorisRips`, `Cofacets`, `SimplexIndexing`, `CubicalStream`,
   `CubicalImage`, `UnionFind` (also defines `Kruskal`, which is metric-space-specific — hence
   here, and why no `util` package exists), `SimplicialSetStream`, `FilteredSimplicialSetStream`, `CechStream`.
-- `homology` — `Homology` (four engines, including `CubicalHomologyEngine`), `PackedRipserCohomology`, `Cohomology`
-  (`CellularCohomologyEngine`). The package graph is acyclic: `streams` never depends on `homology`.
-- `barcode` — `Barcode`. `alpha` — `AlphaShapes`, `AlphaComplexDQP`. `unicode` — `PrintingHelper` (unused).
+- `homology` — `Homology` (`CellularHomologyEngine` naive + `CellularPersistenceInChunksEngine` chunks, plus the thin
+  `Simplicial`/`Cubical`/`PersistenceInChunks` wrappers), `RipserCohomology` (`RipserCohomologyEngine`, the oracle),
+  `PackedRipserCohomology`, `Cohomology` (`CellularCohomologyEngine`), `FastCubicalHomology`, `FastAlphaHomology`,
+  `PersistenceEngine` (one-shot dispatch trait), `CircularCoordinates`, `LatticeReduction`. The package graph is acyclic: `streams` never depends on `homology`.
+- `barcode` — `Barcode`, `PersistenceFilter`. `alpha` — `AlphaShapes`, `AlphaComplexDQP`. `unicode` — `PrintingHelper` (unused).
 - `matlab` — MATLAB facade. `io` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus` (leaf package).
   `cli` — `TDA4jConf`, `TDA4jCLI` (thin translator over `matlab.TDA4j`/`io`).
-- root — `package.scala` (`TDAContext`, a top-level class, thin user facade); test side `APISpec.scala`, kept flat
-  as a cross-cutting test.
+- root — `package.scala` (`TDAlab`, the pylab-style user entry point, see "TDAlab" below); test side
+  `APISpec.scala`/`ShowSpec.scala`, kept flat as cross-cutting tests.
 
 Cross-package references use `import org.appliedtopology.tda4j.<pkg>.{given, *}` — **the `given` matters**: a plain
 `import pkg.*` does NOT import `given` instances in Scala 3, and this codebase's `Ordering`/`RingModule`/`Field`
@@ -51,7 +54,7 @@ sbt "testOnly *SimplexSpec"     # single specs2 spec (glob ok)
 sbt scalafmtAll                 # format everything — run before committing
 sbt scalafmtCheck scalafmtSbtCheck   # what CI's lint job checks (check only, no autofix)
 sbt mimaReportBinaryIssues      # binary compat (CI test job)
-sbt laikaSite                   # docs site (src/docs) -> target/docs/site, linked scaladoc included
+TDA4J_SCALA_VERSION=3.8.4 sbt doc   # docs site (_docs/ + sidebar.yml) via scaladoc -> target/out/jvm/scala-3.8.4/tda4j/api
 sbt assembly                    # fat jar for CLI/MATLAB
 sbt -DrunBenchmarks=true test   # also run benchmark/profiling specs — NOT what CI runs
 ```
@@ -61,7 +64,7 @@ paces around Maven Central's cold-cache rate limiting — `.claude/WORKLOG-toroi
 environment note has the story).
 
 No linter beyond scalafmt. Tests are specs2 (`org.specs2.mutable.Specification`). CI: `test.yml` (test + mima),
-`lint.yml` (scalafmt), `docs.yml` (Laika → GitHub Pages, push to `scala` only). The ~319 `-Wunused:all` warnings
+`lint.yml` (scalafmt), `docs.yml` (scaladoc → GitHub Pages, push to `scala` only). The ~319 `-Wunused:all` warnings
 (mostly unused wildcard imports) are deliberately left alone (`WORKLOG-compiler-warnings.md`).
 
 **`sbt scalafmtSbt`/`scalafmtSbtCheck` cover `project/*.scala` (sbt's own Scala 2.12 meta-build), not this
@@ -70,44 +73,21 @@ rewrite valid Scala 2 syntax into forms the meta-build compiler can't parse, bre
 `project/SnipDirective.scala` carries a `// format: off` guard against this (a `fileOverride` glob was tried
 first and did not take effect — don't re-attempt without confirming it works).
 
-**Docs site is Laika (Paradox fully removed)**, sources at `src/docs/`, Markdown with a `@:directive` syntax (not
-Paradox's `@@`/`@ref:`). `Markdown.GitHubFlavor` and `laika.config.SyntaxHighlighting` are both required
-`laikaExtensions` — without them un-fenced code silently parses as prose (any `[...]` becomes a dangling link
-reference and fails the build). `project/SnipDirective.scala` implements `@:snip(path, tag)` (extracts the region
-between two `// #tag` marker lines from a real source file). Each directory needing a non-alphabetical left-nav
-order needs its own `directory.conf` with `laika.navigationOrder`. `WORKLOG-laika-migration.md`.
+**Docs site is pure scaladoc** (Laika/Paradox fully removed; `WORKLOG-laika-migration.md` and
+`WORKLOG-docs-site-fixes.md` are history only). Pages are Markdown in `_docs/` (front matter `layout: main`,
+`_layouts/main.html`), navigation in `sidebar.yml`, all configured through `Compile / doc / scalacOptions` in
+`build.sbt` (`-siteroot`, `-project-logo`, `-quick-links`, `-scastie-configuration`, ...). **No Laika directives**
+(`@:snip`, `@:callout`, ...) — use fenced code and blockquotes; **every Scala fence is compiled** by scaladoc's snippet compiler
+(`"-snippet-compiler:compile"` in `build.sbt`), each fence independently — so each needs its own imports and data
+(no shared prelude). A fence that only restates a source declaration (`trait RingModule`, `opaque type ...`) is marked
+```` ```scala sc:nocompile ````; **`scala 3 nocompile` is silently ignored** (the info string must be `scala
+sc:nocompile`). A failing snippet fails `sbt doc` with page:line. `WORKLOG-doc-snippets-compile.md`. Cross-links use
+scaladoc's `[[org.appliedtopology.tda4j.Foo]]`/relative `.md` links.
 
-**Root's own title/index document must stay named `index.md`, matching every subdirectory** — Laika's
-`titleDocuments.inputName` defaults to `"README"`, and root is the one tree it's ever been renamed away
-from (`index.md`, briefly, and only in a broken build). Separately, **`src/docs/landing-page.md` is
-Laika's own documented mechanism** for content below `.landingPage(...)`'s templated hero/teasers/link-panel
-("Additionally or alternatively you can also add a regular markup document called `landing-page.<suffix>`");
-it belongs in `src/docs/` alongside `index.md`, not exiled elsewhere. The two are NOT redundant copies of
-each other: Helium renders **both** the title document's own body and `index.md`'s, back to back, so
-`index.md` should stay minimal-to-empty (this project's is 0 bytes) while `index.md` alone holds the
-real prose — confirmed safe (site `<title>`, the landing page's own title/subtitle, and every other page's
-breadcrumb Home link all come from `SiteTheme.theme`'s own config, none from `index.md`'s content). Making
-them byte-identical (an earlier mistake this session) looks like the same paragraph rendered twice.
-Separately: `SiteTheme.theme`'s `.landingPage(...)` `linkPanel` must use
-`TextLink.external("dir/", ...)`-style root-relative paths, never `TextLink.internal(...)` targeting another
-directory's title document — that specific shape is a confirmed-by-bisection trigger for a genuine
-`StackOverflowError` (infinite recursion) in this vendored Laika (1.3.2)'s own config-fallback resolution.
-The landing page's `#header` also needs an explicit `@media (prefers-color-scheme: dark) { #header.dark-default
-{ ... } }` CSS override (in the `inlineCSS` block) restoring plain component colors — Helium ships no rule for
-`.dark-default` itself, so `.light-inverted`'s unconditional override otherwise makes header text/icons
-invisible in dark mode whenever (as here) the header's background stays dark in both color schemes.
-`WORKLOG-docs-site-fixes.md`.
-
-**Scala 3.9.0's bundled `scaladoc` has its own real navigation bug**: `ux.js` calls jQuery's `$.get(...)` to
-intercept every link click for its own AJAX page-swap, but no page loads jQuery, so the click's own
-`preventDefault()` fires and then the handler throws — every click on the API nav (or any same-origin link
-in the scaladoc) silently does nothing. Not a Laika/tda4j config issue. The patch (a literal string-replace of
-that one `$.get` call site with an equivalent `fetch(...)` call) must wrap `Compile / doc` itself
-(`Compile / doc := { val apiDir = (Compile / doc).value; ...patch apiDir / "scripts" / "ux.js"...; apiDir }`),
-**not** `laikaSite` — `laikaPreview` (sbt-laika's own live preview server) is a separate task graph from
-`laikaSite`/`generate` that independently copies from `Compile / doc`'s own output, so a `laikaSite`-only
-patch is invisible to it (confirmed: patching only `laikaSite` left `laikaPreview` serving the unpatched
-file). Patching the shared source once covers every consumer. `WORKLOG-docs-site-fixes.md`.
+**Docs are built with Scala 3.8.4, everything else with 3.9.0** (scaladoc 3.9.0's JavaScript is broken; this
+includes the `ux.js` `$.get` navigation bug). The pin is the `TDA4J_SCALA_VERSION` env var read by `scalaVersion`
+in `build.sbt`, set only on the docs steps of `docs.yml`/`release.yml` (not `++3.8.4`). sbt 2 puts output under
+`target/out/jvm/scala-<ver>/tda4j/`. Remove the pin when 3.9.1 releases.
 
 **Never run two `sbt` invocations against this checkout at once** — the incremental compiler's own class-file
 writes from one process can be read mid-update by the other, producing a `NoClassDefFoundError` that looks like a
@@ -123,6 +103,40 @@ print timing tables rather than assert; only an exception counts as a failure. A
 **`HomologySpec`'s `BarcodeRegressionSpec` is `skipAll`'d unconditionally and NOT on this flag**: chunks x
 `AlphaShapeDQP` on its own generator range produces enormous complexes (40 points/dim 4 → 102,090 simplices) that
 stall/OOM. Don't un-skip without bounding the scale problem (`WORKLOG-benchmark-and-chunks-bug.md`).
+
+## TDAlab: the user-facing entry point
+
+`TDAlab(characteristic, precision = 1e-9)` (root `package.scala`) is the pylab-style facade: `val tdalab =
+TDAlab(17); import tdalab.{*, given}` brings in `Fp(...)`, chain arithmetic (`⊠`, `+`, `-`), `∆`/`Simplex`/`Cube`
+literals, a `Simplex -> Chain` conversion and Cats `Show` syntax. The odd-looking
+`given Show[Simplex[VertexT]] = summon[Show[Simplex[VertexT]]]` lines are **deliberate re-exports**: they make the
+existing givens visible through `import tdalab.given` (an instance's `given` import only brings in givens defined or
+exported as members of that instance). Don't "fix" them as self-referential. `characteristic = 0` means `Double`; a prime `p`
+means `Z/p`; anything else throws `IllegalArgumentException`. Vertices are fixed to `Int`. **`TDAContext` and the
+`TDAenvironment`/`FieldChoice`/`FiltrationChoice`/`TopologyChoice` sketches were removed on purpose** — engines are
+constructed explicitly (`SimplicialHomologyEngine[Int, Double, Double]()`), not inherited from a context class.
+Never consulted by an engine (generic-`given` capture, below). Growth direction: pylab-like ambition (a casual
+user should rarely need more than `import tdalab.{*, given}`). Cats (`cats-core`, `kittens`) is a dependency for
+`Show`; `Chain` is declared `into class` (needs `-preview`; `// format: off` around it because scalafmt can't
+parse `into`) and implicit conversions are enabled in-source, not by a flag.
+
+## Which bars are reported (persistence threshold)
+
+Engines return EVERY bar (they are the cross-validation oracles; every bar has a representative). The facade
+(`matlab.TDA4j`, hence CLI + MATLAB) hides bars by default: **kept iff essential or persistence > 1% of the
+input's minimum enclosing radius** (`metricSpace.minimumEnclosingRadius`, Ripser's enclosing radius, NOT the
+connectivity radius; for a cubical image / Dowker relation, the range max − min of its values; 0 for a single point;
+non-finite → the barcode's own finite range), in the units the complex reports (VR diameters, Cech/alpha radii);
+the scale is passed by-name and only computed when a fraction of it is needed. Options `minPersistence` (absolute) / `minPersistenceFraction` (default `0.01`),
+at most one; **`0` keeps everything incl. zero-persistence bars**; CLI `--min-persistence`/`--min-persistence-fraction`
+(mirrored, no Scallop default; stderr note when bars were hidden; rejected with `--select-landmarks`/`--distance-to`).
+Logic lives in `barcode.PersistenceFilter` (opt-in for Scala callers: `PersistenceFilter.significant`). Invariants:
+filter is post-hoc, applied by the thin `dispatch*` wrappers (validated before computing); `PersistenceResult` keeps
+the FULL arrays + a `visible` index, and **distances/landscapes/persistence images and `--distance-to` always use the
+complete barcode**; new facade option keys must go in every strict allowlist except `landmarkSelectionKeys`.
+**Tests asserting on complete barcodes must call the test-only shims `FullBarcode` (matlab) / `CliFull` (cli)**, not
+`TDA4j`/`TDA4jCLI` directly — and a one-line search/replace misses call sites split across two lines (this bit once).
+`h1Bars`/`circularCoordinates` are unfiltered (`cocycleIndex` indexes `h1Bars`). `WORKLOG-persistence-threshold.md`.
 
 ## Scala style used throughout
 
@@ -185,7 +199,7 @@ now records a representative for every bar.
 - **Generic-`given` capture gotcha**: a `given` like `chainRM` resolves its implicit `Ordering[CellT]` once, where
   it's summoned. Summoned at class scope (before the stream's filtration ordering exists) it silently pivots on
   lexicographic order. Summon it where the per-stream ordering is in scope (`WORKLOG-naive-homology.md`).
-  `TDAContext`'s class-scope `chainIsRingModule` is user-arithmetic convenience only, never used by an engine.
+  `TDAlab`'s class-scope `chainIsRingModule` is user-arithmetic convenience only, never used by an engine.
 
 ### Streams: the ordering contract (the #1 historical bug source)
 
@@ -519,7 +533,7 @@ reduction-phase speedup (`EdgeCollapseBenchmarkSpec`). Wired through `matlab.TDA
 
 ## CLI executable
 
-`cli`, `WORKLOG-cli-executable.md`. `sbt assembly` → `java -jar target/scala-3.9.0/TDA4j-<version>-assembly.jar`.
+`cli`, `WORKLOG-cli-executable.md`. `sbt assembly` → `java -jar tda4j-<version>-assembly.jar` (sbt 2: under `target/out/jvm/scala-3.9.0/tda4j/`).
 Scallop (zero deps). Every compute flag mirrors a `matlab.TDA4j` option key 1:1 with **no Scallop default** —
 omitted keys let `TDA4j` apply its own defaults (one source of truth). `--output-format=perseus` refused for
 non-integral filtrations. `TDA4jCLI.run(args, out): Int` is testable in-process, but Scallop's `onError` calls
@@ -565,12 +579,16 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
   end of the arc, update this file with **only the resulting rule/invariant/limitation plus a worklog pointer**
   — no narrative, measurements, or repros here. Keep this file under ~64k characters; when it drifts past that,
   condense it the same way (strip narrative to worklog pointers) and note the new condensing date/commit at top.
+- **Never revert the formatter's output.** If `scalafmtAll` touches files outside your change, commit that in its OWN
+  commit ("Format: ... formatter output only, no behavior change") and say so — reverting only hides the debt, and a
+  clean lint beats a minimal diff. Note CI lint runs plain `scalafmtCheck` (main sources only); `Test / scalafmtCheck`
+  is a separate, stricter check.
 - Performance claims need isolated A/B measurement (`git stash` A/B, median of trials, one engine per JVM);
   machine noise here often exceeds small effects — report unconfirmed effects as unconfirmed.
 - **Finalizing a user-visible capability** (new complex, engine, or option) means checking four surfaces each
   session that lands a chunk of it: (1) `matlab.TDA4j` dispatch, (2) `cli.TDA4jCLI`/`TDA4jConf` (1:1 mirror),
-  (3) `src/docs/developers-guide/` (`persistence-engines.md`, `architecture.md`, `class-diagrams.md`),
-  (4) `src/docs/user-guide/README.md`. Internal refactors and bug fixes with no new surface are exempt.
+  (3) `_docs/developers-guide/` (`persistence-engines.md`, `architecture.md`, `class-diagrams.md`),
+  (4) `_docs/user-guide/`. Internal refactors and bug fixes with no new surface are exempt.
 - A cloud session (working on its own `claude/...` branch) may commit and push its own work to that branch at
   will, without asking first — the branch is disposable/session-scoped, not shared history. A local/interactive
   session working directly on a shared branch still waits to be asked; the project lead commits that work.

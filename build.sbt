@@ -1,6 +1,9 @@
 name := "tda4j"
 organization := "org.appliedtopology"
-scalaVersion := "3.9.0"
+// Docs are built with 3.8.4 (scaladoc 3.9.0 ships broken JavaScript); the docs workflows set
+// TDA4J_SCALA_VERSION=3.8.4 for their `sbt doc` step. `sbt "++3.8.4 doc"` does NOT work in sbt 2: "no subprojects
+// list 3.8.4 ... in crossScalaVersions" (`++ 3.8.4!` would). TODO: delete the override when 3.9.1 is released.
+scalaVersion := sys.env.getOrElse("TDA4J_SCALA_VERSION", "3.9.0")
 
 versionScheme := Some("semver-spec")
 
@@ -58,8 +61,9 @@ Compile / doc / scalacOptions ++= Seq(
     |    "-language:implicitConversions", "-language:adhocExtensions"
     |  ) ;
     |  libraryDependencies += "org.appliedtopology" %% "tda4j" % "0.4.0"
-    |""".stripMargin.replace("\n", "")
-  // "-snippet-compiler:nocompile", "-snippet-compiler:tutorials/index.md=compile"
+    |""".stripMargin.replace("\n", ""),
+  // Every Scala fence in the docs is compiled; mark a purely illustrative fence `scala sc:nocompile` instead.
+  "-snippet-compiler:compile"
 )
 Compile / doc / target := target.value / "api"
 

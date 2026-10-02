@@ -8,7 +8,7 @@ import org.appliedtopology.tda4j.homology.{given, *}
 
 import org.appliedtopology.tda4j.barcode.*
 import org.appliedtopology.tda4j.homology.HomologyFixtures
-import org.appliedtopology.tda4j.matlab.TDA4j
+import org.appliedtopology.tda4j.matlab.{FullBarcode, TDA4j}
 
 import org.specs2.mutable
 import org.specs2.execute.{AsResult, Result}
@@ -432,11 +432,11 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
         sortedTriples(m.toList.map(row => (row(0).toInt, row(1), row(2))))
       val lazyOpts = Array("complex", "witness", "numLandmarks", "4")
       val generalOpts = Array("complex", "witness", "numLandmarks", "4", "witnessVariant", "general")
-      (triples(TDA4j.computeFromDistanceMatrix(distances, lazyOpts).toArray()) must beEqualTo(
-        triples(TDA4j.computeFromPoints(points, lazyOpts).toArray())
+      (triples(FullBarcode.computeFromDistanceMatrix(distances, lazyOpts).toArray()) must beEqualTo(
+        triples(FullBarcode.computeFromPoints(points, lazyOpts).toArray())
       )) and
-        (triples(TDA4j.computeFromDistanceMatrix(distances, generalOpts).toArray()) must beEqualTo(
-          triples(TDA4j.computeFromPoints(points, generalOpts).toArray())
+        (triples(FullBarcode.computeFromDistanceMatrix(distances, generalOpts).toArray()) must beEqualTo(
+          triples(FullBarcode.computeFromPoints(points, generalOpts).toArray())
         ))
     }
 

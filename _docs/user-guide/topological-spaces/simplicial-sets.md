@@ -9,11 +9,18 @@ For homology of a space presented combinatorially (not as a metric-space complex
 edge):
 
 ```scala 3
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.homology.{given, *}
+
+given Double is Field = Field.DoubleApproximated(1e-9)
+
 enum CircleGen { case V, E }
 import CircleGen.*
 given Ordering[CircleGen] = Ordering.by(_.ordinal)
 
-val circle = FiniteSimplicialSet[CircleGen](summon[Ordering[CircleGen]])(
+val circle = FiniteSimplicialSet[CircleGen](
   generatorsByDim = IndexedSeq(Set(V), Set(E)),
   faces = {
     case V => IndexedSeq.empty
@@ -23,8 +30,8 @@ val circle = FiniteSimplicialSet[CircleGen](summon[Ordering[CircleGen]])(
 circle.validate()   // Seq.empty -- no errors
 
 given (CircleGen is OrderedCell) = circle.cellInstance
-val stream = FilteredSimplicialSetStream(circle, { case V => 0.0; case E => 1.0 })
-CellularHomologyContext[CircleGen, Double, Double]()
+val stream = FilteredSimplicialSetStream[CircleGen](circle, { case V => 0.0; case E => 1.0 })
+CellularHomologyEngine[CircleGen, Double, Double]()
   .persistentHomology(stream)
   .diagramAt(Double.PositiveInfinity)
 // List((1, 1.0, Infinity), (0, 0.0, Infinity)) -- H0 = H1 = one essential class each, as expected for S^1
