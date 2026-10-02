@@ -31,7 +31,8 @@ jobs:
           java-version: 21
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
-      # One sbt launch, stops at the first failure: the build files (`build.sbt`), the main sources, and the test sources.
+      # One sbt launch, stops at the first failure (a single quoted `;` string: CI's sbt thin client re-joins separate arguments and
+      # loses the quotes around `Test / scalafmtCheck`): the build files (`build.sbt`), the main sources, and the test sources.
       # Fix locally with `sbt scalafmtAll scalafmtSbt`.
       - name: Formatting
-        run: sbt scalafmtSbtCheck scalafmtCheck "Test / scalafmtCheck"
+        run: sbt "scalafmtSbtCheck ; scalafmtCheck ; Test / scalafmtCheck"

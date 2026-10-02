@@ -56,7 +56,7 @@ were sbt's own 1024MB default, not code (`WORKLOG-test-suite-memory-and-benchmar
 sbt testFull                    # full test suite, every spec (plain `test` is incremental+disk-cached in sbt 2 and can run 0 specs; CI's fresh runner is fine)
 sbt "testOnly *SimplexSpec"     # single specs2 spec (glob ok)
 sbt scalafmtAll                 # format everything — run before committing
-sbt scalafmtSbtCheck scalafmtCheck "Test / scalafmtCheck"   # exactly what CI's lint job runs (check only; fix with `sbt scalafmtAll scalafmtSbt`)
+sbt "scalafmtSbtCheck ; scalafmtCheck ; Test / scalafmtCheck"   # exactly what CI's lint job runs (check only; fix with `sbt scalafmtAll scalafmtSbt`)
 sbt mimaReportBinaryIssues      # binary compat (CI test job)
 TDA4J_SCALA_VERSION=3.8.4 sbt doc   # docs site (_docs/ + sidebar.yml) via scaladoc -> target/out/jvm/scala-3.8.4/tda4j/api
 sbt assembly                    # fat jar for CLI/MATLAB
