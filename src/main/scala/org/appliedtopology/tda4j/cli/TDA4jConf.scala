@@ -83,6 +83,16 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     descr = "truncate the filtration at this value (default: the point cloud's own minimum enclosing radius); " +
       "a diameter for --complex=vr, a RADIUS for --complex=cech"
   )
+  val minPersistence: ScallopOption[Double] = opt[Double](descr =
+    "only report bars with persistence (death - birth) greater than this, in the filtration's own units; essential " +
+      "(never-dying) bars are always reported. 0 reports every bar. Default: a bar must exceed 1% of the " +
+      "input's minimum enclosing radius (--min-persistence-fraction); give at most one of the two"
+  )
+  val minPersistenceFraction: ScallopOption[Double] = opt[Double](descr =
+    "like --min-persistence, but as a fraction of the input's scale: its minimum enclosing radius (Ripser's " +
+      "enclosing radius -- every bar lives between 0 and it), or, for a cubical image / Dowker relation, the range " +
+      "of its values. Default 0.01; 0 reports every bar. See barcode.PersistenceFilter"
+  )
   val field: ScallopOption[String] = opt[String](descr = "Z (default, a prime finite field) or R (floating point)")
   val prime: ScallopOption[Int] = opt[Int](descr = "prime for --field=Z (default: 2)")
   val epsilon: ScallopOption[Double] = opt[Double](descr = "tolerance for --field=R (default: 1e-9)")

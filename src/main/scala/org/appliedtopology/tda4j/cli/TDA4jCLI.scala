@@ -56,6 +56,21 @@ object TDA4jCLI:
             "(step 1), the second CONSUMES one (step 2) -- run them as two separate invocations"
         )
 
+      // A persistence threshold only means something for a reported barcode: --select-landmarks produces none, and
+      // --distance-to always compares COMPLETE barcodes (a distance must not depend on this run's own
+      // scale) -- silently ignoring a flag the user typed is exactly the trap this CLI avoids.
+      if conf.minPersistence.isSupplied || conf.minPersistenceFraction.isSupplied then
+        if conf.selectLandmarks() then
+          throw new IllegalArgumentException(
+            "--min-persistence/--min-persistence-fraction are meaningless with --select-landmarks: there is no " +
+              "barcode here, only a landmark set"
+          )
+        if conf.distanceTo.isSupplied then
+          throw new IllegalArgumentException(
+            "--min-persistence/--min-persistence-fraction are meaningless with --distance-to: the comparison " +
+              "always uses the complete barcode"
+          )
+
       if conf.distanceTo.isSupplied then
         if conf.selectLandmarks() then
           throw new IllegalArgumentException(
@@ -142,7 +157,9 @@ object TDA4jCLI:
               case ResolvedInput.CubicalGrid(shape, flatVals) => TDA4j.computeFromCubicalImage(shape, flatVals, options)
               case ResolvedInput.Relation(relation)           => TDA4j.computeFromRelation(relation, options)
         if conf.distanceTo.isSupplied then writeDistance(conf, result, out)
-        else writeOutput(conf, result, out)
+        else
+          writeOutput(conf, result, out)
+          noteHiddenBars(result)
         0
     catch
       case e: IllegalArgumentException =>
@@ -181,6 +198,8 @@ object TDA4jCLI:
     add("edgeCollapse", conf.edgeCollapse)
     add("maxDimension", conf.maxDimension)
     add("maxFiltrationValue", conf.maxFiltrationValue)
+    add("minPersistence", conf.minPersistence)
+    add("minPersistenceFraction", conf.minPersistenceFraction)
     add("field", conf.field)
     add("prime", conf.prime)
     add("epsilon", conf.epsilon)
@@ -317,13 +336,26 @@ object TDA4jCLI:
   // is exactly the class of bug that silently broke round-tripping in that module.
   // -----------------------------------------------------------------------------------------------------------
 
+  private def asBar(dim: Int, birth: Double, death: Double): PersistenceBar[Double, Nothing] =
+    if death.isPosInfinity then PersistenceBar[Double](dim, birth) else PersistenceBar[Double](dim, birth, death)
+
+  /** The bars the persistence threshold lets through -- what every output format writes. */
   private[cli] def toBars(result: PersistenceResult): IndexedSeq[PersistenceBar[Double, Nothing]] =
-    (0 until result.size()).map { i =>
-      val dim = result.dimension(i)
-      val birth = result.birth(i)
-      val death = result.death(i)
-      if death.isPosInfinity then PersistenceBar[Double](dim, birth) else PersistenceBar[Double](dim, birth, death)
-    }
+    (0 until result.size()).map(i => asBar(result.dimension(i), result.birth(i), result.death(i)))
+
+  /** EVERY bar, threshold or not: `--distance-to` compares against an external diagram (typically unfiltered Ripser/
+    * GUDHI output), and a distance that depended on this run's own scale would not be comparable.
+    */
+  private[cli] def toBarsUnfiltered(result: PersistenceResult): IndexedSeq[PersistenceBar[Double, Nothing]] =
+    result.toArrayUnfiltered().toIndexedSeq.map(row => asBar(row(0).toInt, row(1), row(2)))
+
+  /** One stderr line when the threshold hid anything, so a user is never left wondering where bars went. */
+  private[cli] def noteHiddenBars(result: PersistenceResult): Unit =
+    if result.hiddenCount() > 0 then
+      System.err.println(
+        s"tda4j: ${result.hiddenCount()} bar(s) with persistence <= ${result.persistenceThreshold()} not reported " +
+          s"(${result.size()} reported); pass --min-persistence 0 to report every bar"
+      )
 
   // -----------------------------------------------------------------------------------------------------------
   // output
@@ -378,7 +410,7 @@ object TDA4jCLI:
         throw new IllegalArgumentException(s"unrecognized --distance-format '$other'; expected csv, gudhi, or dipha")
 
   private[cli] def writeDistance(conf: TDA4jConf, result: PersistenceResult, out: java.io.PrintStream): Unit =
-    val bars = toBars(result)
+    val bars = toBarsUnfiltered(result)
     val comparison = readComparisonDiagram(conf.distanceFormat(), conf.distanceTo())
     val order = conf.distanceOrder.toOption.getOrElse(1.0)
     val groundNorm = conf.distanceGroundNorm.toOption match

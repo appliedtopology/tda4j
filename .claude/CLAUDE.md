@@ -12,7 +12,8 @@ go in the worklog, not here. This file was condensed on 2026-09-22 from a ~190k-
 
 TDA4j is a Scala 3 library for persistent homology and topological data analysis (a spiritual successor to
 JavaPlex/Ripser, from the Stanford Computational Topology workgroup lineage). Single sbt module, root package
-`org.appliedtopology.tda4j`, pre-1.0 (`0.4.1-SNAPSHOT`, see `version.sbt`), actively evolving API.
+`org.appliedtopology.tda4j`, pre-1.0 (`0.5.0-SNAPSHOT`, see `version.sbt`), actively evolving API. **0.5.0 deliberately does not keep binary
+compatibility with 0.4.x** (project lead: still in flux) — no compat shims for renames/signature changes.
 
 ## Package layout
 
@@ -32,7 +33,7 @@ Source/test directories mirror package names; file names mostly carry over from 
   `Simplicial`/`Cubical`/`PersistenceInChunks` wrappers), `RipserCohomology` (`RipserCohomologyEngine`, the oracle),
   `PackedRipserCohomology`, `Cohomology` (`CellularCohomologyEngine`), `FastCubicalHomology`, `FastAlphaHomology`,
   `PersistenceEngine` (one-shot dispatch trait), `CircularCoordinates`, `LatticeReduction`. The package graph is acyclic: `streams` never depends on `homology`.
-- `barcode` — `Barcode`. `alpha` — `AlphaShapes`, `AlphaComplexDQP`. `unicode` — `PrintingHelper` (unused).
+- `barcode` — `Barcode`, `PersistenceFilter`. `alpha` — `AlphaShapes`, `AlphaComplexDQP`. `unicode` — `PrintingHelper` (unused).
 - `matlab` — MATLAB facade. `io` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus` (leaf package).
   `cli` — `TDA4jConf`, `TDA4jCLI` (thin translator over `matlab.TDA4j`/`io`).
 - root — `package.scala` (`TDAlab`, the pylab-style user entry point, see "TDAlab" below); test side
@@ -76,10 +77,11 @@ first and did not take effect — don't re-attempt without confirming it works).
 `WORKLOG-docs-site-fixes.md` are history only). Pages are Markdown in `_docs/` (front matter `layout: main`,
 `_layouts/main.html`), navigation in `sidebar.yml`, all configured through `Compile / doc / scalacOptions` in
 `build.sbt` (`-siteroot`, `-project-logo`, `-quick-links`, `-scastie-configuration`, ...). **No Laika directives**
-(`@:snip`, `@:callout`, ...) — use fenced code and blockquotes; a single fence annotated `sc:compile` is compiled by the
-scaladoc snippet compiler, whereas the `-snippet-compiler` build argument makes *every* snippet compiled; the
-argument is commented out in `build.sbt` pending the doc-snippet cleanup, so until then only `sc:compile`-marked
-fences are checked and the rest are hand-maintained. Cross-links use
+(`@:snip`, `@:callout`, ...) — use fenced code and blockquotes; **every Scala fence is compiled** by scaladoc's snippet compiler
+(`"-snippet-compiler:compile"` in `build.sbt`), each fence independently — so each needs its own imports and data
+(no shared prelude). A fence that only restates a source declaration (`trait RingModule`, `opaque type ...`) is marked
+```` ```scala sc:nocompile ````; **`scala 3 nocompile` is silently ignored** (the info string must be `scala
+sc:nocompile`). A failing snippet fails `sbt doc` with page:line. `WORKLOG-doc-snippets-compile.md`. Cross-links use
 scaladoc's `[[org.appliedtopology.tda4j.Foo]]`/relative `.md` links.
 
 **Docs are built with Scala 3.8.4, everything else with 3.9.0** (scaladoc 3.9.0's JavaScript is broken; this
@@ -117,6 +119,24 @@ Never consulted by an engine (generic-`given` capture, below). Growth direction:
 user should rarely need more than `import tdalab.{*, given}`). Cats (`cats-core`, `kittens`) is a dependency for
 `Show`; `Chain` is declared `into class` (needs `-preview`; `// format: off` around it because scalafmt can't
 parse `into`) and implicit conversions are enabled in-source, not by a flag.
+
+## Which bars are reported (persistence threshold)
+
+Engines return EVERY bar (they are the cross-validation oracles; every bar has a representative). The facade
+(`matlab.TDA4j`, hence CLI + MATLAB) hides bars by default: **kept iff essential or persistence > 1% of the
+input's minimum enclosing radius** (`metricSpace.minimumEnclosingRadius`, Ripser's enclosing radius, NOT the
+connectivity radius; for a cubical image / Dowker relation, the range max − min of its values; 0 for a single point;
+non-finite → the barcode's own finite range), in the units the complex reports (VR diameters, Cech/alpha radii);
+the scale is passed by-name and only computed when a fraction of it is needed. Options `minPersistence` (absolute) / `minPersistenceFraction` (default `0.01`),
+at most one; **`0` keeps everything incl. zero-persistence bars**; CLI `--min-persistence`/`--min-persistence-fraction`
+(mirrored, no Scallop default; stderr note when bars were hidden; rejected with `--select-landmarks`/`--distance-to`).
+Logic lives in `barcode.PersistenceFilter` (opt-in for Scala callers: `PersistenceFilter.significant`). Invariants:
+filter is post-hoc, applied by the thin `dispatch*` wrappers (validated before computing); `PersistenceResult` keeps
+the FULL arrays + a `visible` index, and **distances/landscapes/persistence images and `--distance-to` always use the
+complete barcode**; new facade option keys must go in every strict allowlist except `landmarkSelectionKeys`.
+**Tests asserting on complete barcodes must call the test-only shims `FullBarcode` (matlab) / `CliFull` (cli)**, not
+`TDA4j`/`TDA4jCLI` directly — and a one-line search/replace misses call sites split across two lines (this bit once).
+`h1Bars`/`circularCoordinates` are unfiltered (`cocycleIndex` indexes `h1Bars`). `WORKLOG-persistence-threshold.md`.
 
 ## Scala style used throughout
 
@@ -559,6 +579,10 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
   end of the arc, update this file with **only the resulting rule/invariant/limitation plus a worklog pointer**
   — no narrative, measurements, or repros here. Keep this file under ~64k characters; when it drifts past that,
   condense it the same way (strip narrative to worklog pointers) and note the new condensing date/commit at top.
+- **Never revert the formatter's output.** If `scalafmtAll` touches files outside your change, commit that in its OWN
+  commit ("Format: ... formatter output only, no behavior change") and say so — reverting only hides the debt, and a
+  clean lint beats a minimal diff. Note CI lint runs plain `scalafmtCheck` (main sources only); `Test / scalafmtCheck`
+  is a separate, stricter check.
 - Performance claims need isolated A/B measurement (`git stash` A/B, median of trials, one engine per JVM);
   machine noise here often exceeds small effects — report unconfirmed effects as unconfirmed.
 - **Finalizing a user-visible capability** (new complex, engine, or option) means checking four surfaces each
