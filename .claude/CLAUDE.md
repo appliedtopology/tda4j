@@ -98,6 +98,11 @@ compiled. Shared point clouds live in `_docs/tutorials/data/`, written by the se
 not `PersistenceBar`; no `barcodeAt(f)` at an intermediate `f`; public API only (a fence naming a `private[tda4j]` class or a test fixture
 fails `sbt doc`); no timings in prose. `Map[G, Fp]` equality compares raw representatives (-1 vs 1 over F_2 differ): compare cochains with
 `CupProduct.isCoboundary`, never `==`. Tutorial specs add ~90 s to `testFull`.
+**Language tabs** (`WORKLOG-tutorial-tabs.md`): where `matlab.TDA4j` supports the task, show the code in a `<div class="tabset">` with
+`<div class="tab" data-lang="Scala">` / `"MATLAB"` children (always in that order), a BLANK LINE between each HTML line and the fence
+(otherwise the strict markdown parser eats it). Every MATLAB tab needs a spec calling `matlab.TDA4j` directly (not `FullBarcode`)
+with the same options, asserting the numbers the tab quotes; the facade hides bars <= 1% of the enclosing radius, so quote
+`hiddenCount()` or pass `minPersistence 0`. MATLAB syntax/marshalling are never run here -- say so.
 
 **Docs are built with Scala 3.8.4, everything else with 3.9.0** (scaladoc 3.9.0's JavaScript is broken; this
 includes the `ux.js` `$.get` navigation bug). The pin is the `TDA4J_SCALA_VERSION` env var read by `scalaVersion`
