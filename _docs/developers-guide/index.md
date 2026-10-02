@@ -17,10 +17,10 @@ recent), is most of the actual gap.
 2. **Where a given piece of functionality lives, and what layer it's in.** The library is built in clear
    layers — algebra, then complex construction (streams), then the persistence engines that consume a
    stream — and each has its own subpackage. See [Architecture](architecture.md).
-3. **Which persistence algorithm, and which of its implementations, to build on.** `homology` ships four
-   independently-implemented algorithms across five concrete classes; they are not layers on one shared
-   core, and their intended roles (production vs. reference oracle) are not something you can infer just
-   because all five compile and share a file. See [Persistence engines](persistence-engines.md).
+3. **Which persistence algorithm, and which implementation, to build on.**
+   The persistence engines are independent implementations with different
+   assumptions and intended roles; they are not layers on one shared core.
+   See [Persistence engines](persistence-engines.md).
 4. **What traps look fine, compile fine, and only produce a wrong answer on specific inputs.** Ordering and
    reduction code in this codebase has a real history of exactly this failure mode. See
    [Hard-won invariants](gotchas.md) before you trust your own "this looks obviously correct" judgment

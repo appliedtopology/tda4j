@@ -50,7 +50,7 @@ entirely onto a degenerate point over a vertex. If you're building a new attachi
 wanting to map a generator to a lower-dimensional target, that's expected, not a sign the API is being
 misused.
 
-## A cubical or Cech complex having "extra" simplices/cubes at a shared tie is not a bug
+## A cubical complex having "extra" cubes at a shared tie is not a bug
 
 The same underlying fact as the alpha-complex case above shows up differently in other constructions: a
 cubical grid's dense T-construction cell count (`prod_i (2*shape(i)+1)`) is much larger than the pixel/voxel

@@ -59,14 +59,11 @@ classDiagram
     Chain ..|> RingModule : given instance
 ```
 
-Three concrete `OrderedCell` instances exist: `Simplex[VertexT]`, `Cube`, and a `FiniteSimplicialSet[G]`'s
-own generators (that last one is a per-instance `given`, not a global one, since its boundary depends on
-that particular simplicial set's own face data). There is no dual `Cocell`/`OrderedCocell` trait pair (an
-earlier version had one; removed as the wrong shape for coboundary, which is extrinsic to a cell, not
-intrinsic like `boundary`) — `RipserCohomologyEngine`/`PackedRipserCohomologyEngine` compute coboundaries
-directly against `SimplexIndexing` instead (see [Persistence engines](persistence-engines.md)). See the
-[Scala 3 primer](scala3-primer.md) for what "typeclass: type Self" and "given instance" mean concretely in
-this codebase's syntax.
+Three concrete `OrderedCell` instances exist: `Simplex[VertexT]`, `Cube`, and a
+`FiniteSimplicialSet[G]`'s own generators. The latter is a per-instance `given`
+because its boundary depends on that simplicial set's face data.
+
+See the [Scala 3 primer](scala3-primer.md) for the typeclass and `given` syntax.
 
 ## `Chain[CellT, CoefficientT]` (`Chain.scala`)
 
@@ -166,16 +163,11 @@ another** — see [Architecture](architecture.md). `CubicalGridStream`/`Explicit
 `Cube`s rather than `Simplex`es; `SimplicialSetStream`/`FilteredSimplicialSetStream` produce a
 `FiniteSimplicialSet[G]`'s own generator type `G`.
 
-## Persistence engines (`homology/Homology.scala`, `homology/PackedRipserCohomology.scala`, `homology/FastCubicalHomology.scala`, `homology/FastAlphaHomology.scala`)
+## Persistence engines
 
-Deliberately *not* diagrammed field-by-field here — their exact state and trust status belongs in one
-place. See [Persistence engines](persistence-engines.md) for the full, current picture across
-`CellularHomologyEngine`/`SimplicialHomologyEngine`,
-`CellularPersistenceInChunksEngine`/`PersistenceInChunksEngine`,
-`RipserCohomologyEngine`, `PackedRipserCohomologyEngine`, `CellularCohomologyEngine`,
-`FastCubicalHomologyEngine` and `FastAlphaHomologyEngine` (`HelixDelaunay` alpha complexes) -- both valid at
-any ambient dimension `>= 2`, both via a `chunks` hybrid above 2D -- wired into `matlab`/`cli` as
-`engine="fast-cubical"`/`engine="fast-alpha"`.
+Persistence-engine state is deliberately not diagrammed here. See
+[Persistence engines](persistence-engines.md) for the current engine hierarchy,
+roles, and supported complex types.
 
 ## Circular coordinates (`homology/CircularCoordinates.scala`)
 
@@ -218,10 +210,10 @@ classDiagram
     CircularCoordinates ..> LatticeReduction : reduces the chosen classes' Gram matrix with
 ```
 
-A standalone construction, not a fifth persistence engine — see [Architecture](architecture.md)'s own
-`homology.CircularCoordinates` section for the truncated-complex reframing, the harmonic-smoothing linear
-system, why the output is a per-point angle map rather than a barcode, and (same section) `computeToroidal`/
-`LatticeReduction`'s own lattice-reduction extension to several simultaneous classes.
+A standalone construction rather than a persistence engine.
+`compute` produces circle-valued coordinates from one persistent H¹ class;
+`computeToroidal` extends this to several simultaneous classes using
+`LatticeReduction`.
 
 ## Metric spaces (`FiniteMetricSpace.scala`)
 
@@ -287,11 +279,6 @@ classDiagram
     BarcodeDistance ..> PersistenceBar : reads
     Vectorization ..> PersistenceBar : reads
 ```
-
-`AnnotationT` in practice is always `Chain[CellT, CoefficientT]` — the representative cycle/cocycle for a
-bar, when an engine tracks one. `BarcodeDistance`/`Vectorization` only ever read a bar's `dim`/`lower`/`upper`
-(never `annotation`), and are specialized to `PersistenceBar[Double, _]` rather than sharing `Barcode`'s own
-`FiltrationT: Ordering` genericity — see [Architecture](architecture.md)'s "`Barcode.scala`" section
-for why, and for `BipartiteMatching.scala`'s two package-private combinatorial primitives
-(`HopcroftKarp`/`Hungarian`) `BarcodeDistance` is built on, omitted here as an implementation detail rather
-than part of this package's public shape.
+`AnnotationT` is typically a representative `Chain`.
+`BarcodeDistance` and `Vectorization` operate only on persistence-bar endpoints
+and do not use annotations.

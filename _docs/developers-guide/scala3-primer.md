@@ -131,24 +131,21 @@ Practical consequence for writing new code: you cannot pattern-match structurall
 contents without going through its extension-method API or the provided `unapplySeq` (`Simplex.from(...)`
 constructs; `Simplex.unapplySeq` deconstructs, letting you write `case Simplex(a, b, c) => ...`).
 
-## `given`/summon resolution: static, not dynamic — and why this matters more than usual here
+## `given`/summon resolution is static
 
-This is ordinary Scala 3 implicit-resolution behavior, but it is unusually load-bearing in this codebase,
-enough that it has caused real, confirmed bugs (see [Hard-won invariants](gotchas.md) for the full story).
-The short version: when a `given` instance's body summons another `given` (e.g. `Chain[CellT,
-CoefficientT] is RingModule`'s implementation needs an `Ordering[CellT]` in scope to build its internal
-`SortedMap`/`PriorityQueue`), that inner summon happens **once, when the outer `given` is first
-constructed** — not fresh on every later call to the outer instance's methods. If you construct a `given`
-too early, before the specific `Ordering` you actually wanted is in scope, the instance permanently closes
-over whatever fallback *was* in scope at that moment, and no later import or context change will fix it.
-This is exactly why every `HomologyState` in `homology/Homology.scala` declares `given Ordering[CellT] =
-stream.filtrationOrdering` as its *first* line, before summoning `Chain[CellT,CoefficientT] is RingModule`
-on the next line — order matters, and it isn't stylistic.
+A `given` instance captures the context available when it is constructed; it
+does not re-resolve dependencies on each later method call. In TDA4j this is
+particularly important for `Ordering[CellT]`: persistence state must establish
+the stream's `filtrationOrdering` before constructing `Chain` typeclass
+instances.
+
+See [Hard-won invariants](gotchas.md) for the full failure mode and fix pattern.
 
 ## What to read next
 
-[Architecture](architecture.md) walks the algebraic core and complex-construction layers using the
-concepts above; [Persistence engines](persistence-engines.md) covers the four homology algorithms and
-their trust status; [Hard-won invariants](gotchas.md) is the concentrated list of non-obvious rules (like
-the `given`-timing one above) that this codebase depends on and that are easy to violate even once you
-know they exist.
+[Architecture](architecture.md) walks the algebraic core and
+complex-construction layers using the concepts above;
+[Persistence engines](persistence-engines.md) describes the available
+persistence algorithms and their roles; and
+[Hard-won invariants](gotchas.md) collects the non-obvious rules that are easy
+to violate even after the Scala syntax is familiar.
