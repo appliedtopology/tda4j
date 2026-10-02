@@ -21,11 +21,11 @@ val points = io.CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
 val metricSpace = streams.EuclideanMetricSpace(points)
 val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
 
-def summarize(stream: streams.LevelwiseSimplexStream[Int, Double]): (Int, (Double, Double)) =
+def summarize(stream: streams.LevelwiseSimplexStream[Int, Double]): (Int, (Double, Double), Int) =
   val size = stream.iterator.size                    // how many simplices the engine will have to process
   val bars = engine.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
   val loop = bars.filter(_._1 == 1).maxBy((_, birth, death) => death - birth)   // the longest-lived loop
-  (size, (loop._2, loop._3))
+  (size, (loop._2, loop._3), bars.count((dim, _, death) => dim == 0 && death.isInfinite))   // and the number of components
 ```
 
 ## The five complexes
@@ -114,11 +114,11 @@ val points = io.CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
 val metricSpace = streams.EuclideanMetricSpace(points)
 val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
 
-def summarize(stream: streams.LevelwiseSimplexStream[Int, Double]): (Int, (Double, Double)) =
+def summarize(stream: streams.LevelwiseSimplexStream[Int, Double]): (Int, (Double, Double), Int) =
   val size = stream.iterator.size
   val bars = engine.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
   val loop = bars.filter(_._1 == 1).maxBy((_, birth, death) => death - birth)
-  (size, (loop._2, loop._3))
+  (size, (loop._2, loop._3), bars.count((dim, _, death) => dim == 0 && death.isInfinite))   // and the number of components
 
 val landmarks = streams.LandmarkSelector.maxmin(metricSpace, 15).landmarks
 val results = Map(

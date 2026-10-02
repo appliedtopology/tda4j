@@ -3,37 +3,16 @@ package tutorial
 
 import org.specs2.mutable.Specification
 
-/** Runs the code of `_docs/tutorials/choosing-a-complex.md` and asserts every number the page quotes. */
+/** Asserts every number `_docs/tutorials/choosing-a-complex.md` quotes, on the values its "whole script" fence defines
+  * (see `build.sbt`).
+  */
 class ChoosingAComplexSpec extends Specification:
   sequential
 
-  private def page(): Map[String, (Int, (Double, Double), Int)] =
-    val lab = TDAlab(2)
-    import lab.{*, given}
-
-    val points = io.CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
-    val metricSpace = streams.EuclideanMetricSpace(points)
-    val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
-
-    def summarize(stream: streams.LevelwiseSimplexStream[Int, Double]): (Int, (Double, Double), Int) =
-      val size = stream.iterator.size
-      val bars = engine.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
-      val loop = bars.filter(_._1 == 1).maxBy((_, birth, death) => death - birth)
-      (size, (loop._2, loop._3), bars.count((dim, _, death) => dim == 0 && death.isInfinite))
-
-    val landmarks = streams.LandmarkSelector.maxmin(metricSpace, 15).landmarks
-    Map(
-      "vietoris-rips" -> summarize(streams.VietorisRips(metricSpace, maxDimension = 1)),
-      "cech" -> summarize(streams.Cech(metricSpace, maxDimension = 1)),
-      "alpha" -> summarize(alpha.AlphaShapes(points.toSeq)),
-      "sparse-rips" -> summarize(streams.SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1)),
-      "witness" -> summarize(streams.Witness(metricSpace, landmarks, maxDimension = 1))
-    )
+  private val r = ChoosingAComplexScript.results
 
   "choosing-a-complex.md" should {
-    lazy val r = page()
     "report the simplex counts it quotes" in {
-      println(r)
       r.view.mapValues(_._1).toMap must beEqualTo(
         Map("vietoris-rips" -> 24711, "cech" -> 36050, "alpha" -> 325, "sparse-rips" -> 1730, "witness" -> 441)
       )

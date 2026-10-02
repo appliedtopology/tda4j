@@ -20,6 +20,12 @@ in how much raw output they return: the naive and cohomology engines list every 
 (23,168 here), while chunks and packed Ripser return 1,544.
 
 ```scala sc:nocompile
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.TDAlab
+
+val lab = TDAlab(2)
+import lab.{*, given}
+
 val metricSpace = io.CSV.readEuclideanMetricSpace("_docs/tutorials/data/noisy-circle.csv")
 def stream = streams.VietorisRips(metricSpace, maxDimension = 1)
 
@@ -54,8 +60,8 @@ naive engine on the collapsed space gives the same 61 bars.
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.TDAlab
 
-val tdalab = TDAlab(2)
-import tdalab.{*, given}
+val lab = TDAlab(2)
+import lab.{*, given}
 
 val metricSpace = io.CSV.readEuclideanMetricSpace("_docs/tutorials/data/noisy-circle.csv")
 def stream = streams.VietorisRips(metricSpace, maxDimension = 1)
@@ -75,10 +81,9 @@ def answer(bars: Seq[(Int, Double, Double)]) =
 
 // Edge collapse: remove the edges of the Vietoris-Rips graph that cannot matter, before any triangle is built
 val collapsed = streams.EdgeCollapse.collapse(metricSpace)
+val collapsedStream = streams.VietorisRips(collapsed, maxDimension = 1)
 val collapsedBars = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
-  .persistentHomology(streams.VietorisRips(collapsed, maxDimension = 1)).diagramAt(Double.PositiveInfinity)
-
-println((answer(naive).size, collapsed.stats))
+  .persistentHomology(collapsedStream).diagramAt(Double.PositiveInfinity)
 ```
 
 </div>

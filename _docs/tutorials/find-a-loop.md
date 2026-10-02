@@ -100,6 +100,9 @@ care about:
 ```scala sc:nocompile
 val shortStream = streams.VietorisRips(metricSpace, maxDimension = 1, maxFiltrationValue = Some(1.0))
 shortStream.iterator.size    // 3629 simplices instead of 24711
+
+val shortLoop = engine.persistentHomology(shortStream).diagramAt(Double.PositiveInfinity).filter(_._1 == 1).maxBy((_, birth, death) => death - birth)
+// shortLoop == (1, 0.595, Infinity)
 ```
 
 The cost is that features still alive at the cut-off have no death inside the window. Run the same engine on this short stream
@@ -128,6 +131,7 @@ val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
 val state = engine.persistentHomology(stream)
 
 val bars = state.diagramAt(Double.PositiveInfinity).filter((dim, _, _) => dim <= 1)
+val zeroLength = bars.count((_, birth, death) => death - birth <= 1e-12)
 val threshold = 0.01 * enclosingRadius
 val shown = bars.filter((_, birth, death) => death.isInfinite || death - birth > threshold)
 
@@ -138,6 +142,7 @@ val withCycles = state.diagramWithGeneratorsAt(Double.PositiveInfinity).filter((
 val (_, _, _, cycle) = withCycles.maxBy((_, birth, death, _) => death - birth)
 
 val shortStream = streams.VietorisRips(metricSpace, maxDimension = 1, maxFiltrationValue = Some(1.0))
+val shortLoop = engine.persistentHomology(shortStream).diagramAt(Double.PositiveInfinity).filter(_._1 == 1).maxBy((_, birth, death) => death - birth)
 ```
 
 </div>

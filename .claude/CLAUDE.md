@@ -89,10 +89,16 @@ sc:nocompile`). A failing snippet fails `sbt doc` with page:line. `WORKLOG-doc-s
 scaladoc's `[[org.appliedtopology.tda4j.Foo]]`/relative `.md` links.
 
 **Tutorial pages** (`_docs/tutorials/`, `WORKLOG-tutorial-pages.md`): compute first, write second — run the code, read the output, then write
-the prose around what you saw; if a dataset does not show the intended effect, change the dataset, never the claim. Each page has a spec in
-`src/test/.../tutorial/` that runs the SAME code and asserts every number the prose quotes; narrative fences are `scala sc:nocompile`
-(they share values, and the snippet compiler compiles each fence alone), and each page ends with a "whole script" fence that IS
-compiled. Shared point clouds live in `_docs/tutorials/data/`, written by the seeded `tutorial/TutorialData` (change the generator, run
+the prose around what you saw; if a dataset does not show the intended effect, change the dataset, never the claim. **The docs ARE the tests** (`WORKLOG-tutorial-docs-as-tests.md`): `build.sbt`'s `Test / sourceGenerators` copies each page's
+`## The whole script` fence (the first `scala` fence after that heading) into a generated `object <Page>Script` (package `tutorial`) and
+joins the page's `scala sc:nocompile` narrative fences into a never-called `<Page>Narrative.narrative()`, so a drifted narrative fence fails
+`Test/compile`. `src/test/.../tutorial/<Page>Spec` asserts every quoted number on `<Page>Script.<val>` -- never re-type page code in a spec;
+if a spec needs a value the script doesn't define, add that `val` to the page (the narrative should show it) or compute it in the spec from
+exposed values. The first narrative fence must carry the `TDAlab` imports (the narrative compiles alone). `sbt doc` (CI `test.yml` runs it,
+with `TDA4J_SCALA_VERSION=3.8.4`) compiles every fence but runs none; the generated objects are what execute. Not covered:
+`all-ways-to-call.md` (no whole-script section; `AllWaysToCallSpec` still mirrors it by hand) and MATLAB tabs (`MatlabTabsSpec`, below).
+Narrative fences are `scala sc:nocompile` (they share values, and the snippet compiler compiles each fence alone), and each page ends
+with a "whole script" fence that IS compiled by the docs build. Shared point clouds live in `_docs/tutorials/data/`, written by the seeded `tutorial/TutorialData` (change the generator, run
 `sbt "Test/runMain org.appliedtopology.tda4j.tutorial.TutorialData"`; `TutorialDataSpec` guards drift). Style: `TDAlab` throughout
 (its `streams`/`homology`/`io`/`barcode`/`cells`/`groups`/`alpha` objects exist for this); `diagramAt`/`diagramWithGeneratorsAt` triples,
 not `PersistenceBar`; no `barcodeAt(f)` at an intermediate `f`; public API only (a fence naming a `private[tda4j]` class or a test fixture
