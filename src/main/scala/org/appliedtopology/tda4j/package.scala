@@ -82,6 +82,7 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
       Dowker,
       DowkerGeometry,
       DtmRips,
+      EdgeCollapse,
       EuclideanMetricSpace,
       ExplicitMetricSpace,
       ExplicitStreamBuilder,
@@ -98,6 +99,7 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
   object homology:
     export org.appliedtopology.tda4j.homology.{
       BettiNumbers,
+      CellularCohomologyEngine,
       CellularHomologyEngine,
       CellularPersistenceInChunksEngine,
       CircularCoordinates,

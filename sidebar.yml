@@ -13,6 +13,7 @@ subsection:
       - page: tutorials/networks-and-relations.md
       - page: tutorials/telling-spaces-apart.md
       - page: tutorials/persistent-group-cohomology.md
+      - page: tutorials/scaling-up.md
   - index: developers-guide/index.md
     directory: developers-guide
     subsection:

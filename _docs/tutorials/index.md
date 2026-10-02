@@ -19,6 +19,7 @@ quietly drift apart.
 **Point clouds**
 
 * [Choosing a complex](choosing-a-complex.md): Vietoris-Rips, Čech, alpha, sparse Rips and witness complexes on the same data.
+* [Scaling up](scaling-up.md): four engines and edge collapse giving the same barcode at different cost.
 * [Noise and outliers](noise-and-outliers.md): when stray points plant false holes, and how distance-to-measure weighting copes.
 * [Circular and toroidal coordinates](circular-and-toroidal-coordinates.md): not just *that* there is a loop, but where each point is on it.
 * [Comparing barcodes](comparing-barcodes.md): distances between barcodes, and barcodes as vectors for machine learning.
