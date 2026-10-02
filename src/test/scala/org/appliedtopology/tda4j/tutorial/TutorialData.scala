@@ -23,20 +23,17 @@ object TutorialData:
       Seq(math.cos(a) + noise * rng.nextGaussian(), math.sin(a) + noise * rng.nextGaussian())
     }
 
-  /** A noisy unit circle with `outliers` further points scattered uniformly over the disc of radius `0.7` it encloses.
+  /** A noisy unit circle plus `outliers` further points scattered uniformly over the square `[-half, half]^2` around
+    * it.
     */
-  def circleWithInnerClutter(n: Int, noise: Double, outliers: Int, seed: Long): Seq[Seq[Double]] =
+  def circleWithOutliers(n: Int, noise: Double, outliers: Int, half: Double, seed: Long): Seq[Seq[Double]] =
     val rng = new Random(seed)
     val ring = Seq.fill(n) {
       val a = 2 * math.Pi * rng.nextDouble()
       Seq(math.cos(a) + noise * rng.nextGaussian(), math.sin(a) + noise * rng.nextGaussian())
     }
-    val clutter = Seq.fill(outliers) {
-      val r = 0.7 * math.sqrt(rng.nextDouble())
-      val a = 2 * math.Pi * rng.nextDouble()
-      Seq(r * math.cos(a), r * math.sin(a))
-    }
-    ring ++ clutter
+    val background = Seq.fill(outliers)(Seq(half * (2 * rng.nextDouble() - 1), half * (2 * rng.nextDouble() - 1)))
+    ring ++ background
 
   /** Gerono's lemniscate (a figure eight), `(cos t, sin t cos t)`, with Gaussian noise. */
   def figureEight(n: Int, noise: Double, seed: Long): Seq[Seq[Double]] =
@@ -58,7 +55,7 @@ object TutorialData:
   /** file name -> exact file contents */
   def files: Map[String, String] = Map(
     "noisy-circle.csv" -> csv(noisyCircle(60, 0.05, 1L)),
-    "circle-with-clutter.csv" -> csv(circleWithInnerClutter(60, 0.03, 25, 2L)),
+    "circle-with-outliers.csv" -> csv(circleWithOutliers(70, 0.03, 25, 2.0, 7L)),
     "figure-eight.csv" -> csv(figureEight(70, 0.02, 3L)),
     "flat-torus.csv" -> csv(flatTorus(120, 4L))
   )
