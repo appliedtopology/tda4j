@@ -40,6 +40,21 @@ enum ComplexProjectivePlaneGenerator derives CanEqual:
 object ComplexProjectivePlaneGenerator:
   given Ordering[ComplexProjectivePlaneGenerator] = Ordering.by(_.ordinal)
 
+/** The two generators of the minimal `n`-sphere ([[SimplicialSets.sphere]]): its vertex and its single `n`-simplex. */
+enum MinimalSphereGenerator derives CanEqual:
+  case Vertex, Top
+
+object MinimalSphereGenerator:
+  given Ordering[MinimalSphereGenerator] = Ordering.by(_.ordinal)
+
+/** The generators of Sage's simplicial model of `S^3` ([[SimplicialSets.hopfMap]]'s source). */
+enum HopfSphereGenerator derives CanEqual:
+  case W, B11, B22, B23, B44, Beta1, Beta2, Beta3, Beta4, A12, A23, A34, A45, A56, Alpha1, Alpha2, Alpha3, Alpha4,
+    Alpha5, Alpha6
+
+object HopfSphereGenerator:
+  given Ordering[HopfSphereGenerator] = Ordering.by(_.ordinal)
+
 /** A non-degenerate simplex of the join `X ⋆ Y`: a simplex of `X` alone, of `Y` alone, or a pair `(a, b)` of
   * non-degenerate simplices of both, of dimension `dim a + dim b + 1`.
   */
@@ -411,3 +426,87 @@ object SimplicialSets:
       Seq(8, 9, 1, 2, 5)
     )
     fromSimplicialComplex(facets.map(f => Simplex.from(f.toList)))
+
+  /** The minimal `n`-sphere (`n >= 1`): one vertex and one non-degenerate `n`-simplex, all of whose faces are
+    * degenerate.
+    */
+  def sphere(n: Int): FiniteSimplicialSet[MinimalSphereGenerator] =
+    require(n >= 1, "sphere is only defined for n >= 1")
+    import MinimalSphereGenerator.*
+    val degenerateVertex = SSetElement[MinimalSphereGenerator](((n - 2) to 0 by -1).toList, Vertex)
+    def facesOf(g: MinimalSphereGenerator): IndexedSeq[SSetElement[MinimalSphereGenerator]] = g match
+      case Vertex => IndexedSeq.empty
+      case Top    =>
+        if n == 1 then IndexedSeq.fill(2)(SSetElement(Nil, Vertex)) else IndexedSeq.fill(n + 1)(degenerateVertex)
+    new FiniteSimplicialSet(
+      IndexedSeq(Set(Vertex)) ++ IndexedSeq.fill(n - 1)(Set.empty[MinimalSphereGenerator]) :+ Set(Top),
+      facesOf
+    )
+
+  /** A simplicial model of the Hopf map `S^3 -> S^2`: Sage's S^3 (one vertex, four edges, nine triangles, six
+    * 3-simplices) and its map to the minimal 2-sphere, which sends the 3-simplices to degeneracies of the 2-simplex.
+    * Transcribed from Sage's `simplicial_sets.HopfMap()`; the images of the lower-dimensional cells are not listed
+    * there and are derived from the faces of the 3-simplices (and checked consistent). The check that it really is the
+    * Hopf map: its mapping cone has the cohomology RING of `CP^2` (`x ∪ x ≠ 0`, Hopf invariant ±1).
+    */
+  def hopfMap: SSetMap[HopfSphereGenerator, MinimalSphereGenerator] =
+    import HopfSphereGenerator.*
+    type G = HopfSphereGenerator
+    def bare(g: G) = SSetElement[G](Nil, g)
+    def deg(g: G, word: Int*) = SSetElement[G](word.toList, g)
+    val w1 = deg(W, 0)
+    val w2 = deg(W, 1, 0)
+    val table: Map[G, IndexedSeq[SSetElement[G]]] = Map(
+      W -> IndexedSeq.empty,
+      B11 -> IndexedSeq(bare(W), bare(W)),
+      B22 -> IndexedSeq(bare(W), bare(W)),
+      B23 -> IndexedSeq(bare(W), bare(W)),
+      B44 -> IndexedSeq(bare(W), bare(W)),
+      Beta1 -> IndexedSeq(w1, bare(B11), w1),
+      Beta2 -> IndexedSeq(w1, bare(B22), bare(B23)),
+      Beta3 -> IndexedSeq(w1, bare(B23), w1),
+      Beta4 -> IndexedSeq(w1, bare(B44), w1),
+      A12 -> IndexedSeq(bare(B11), bare(B23), w1),
+      A23 -> IndexedSeq(bare(B11), bare(B22), w1),
+      A34 -> IndexedSeq(bare(B11), bare(B22), bare(B44)),
+      A45 -> IndexedSeq(w1, bare(B23), bare(B44)),
+      A56 -> IndexedSeq(w1, bare(B23), w1),
+      Alpha1 -> IndexedSeq(bare(Beta1), bare(Beta3), bare(A12), w2),
+      Alpha2 -> IndexedSeq(deg(B11, 1), bare(Beta2), bare(A23), bare(A12)),
+      Alpha3 -> IndexedSeq(deg(B11, 0), bare(A34), bare(A23), bare(Beta4)),
+      Alpha4 -> IndexedSeq(bare(Beta1), bare(Beta2), bare(A34), bare(A45)),
+      Alpha5 -> IndexedSeq(w2, bare(A45), bare(A56), bare(Beta4)),
+      Alpha6 -> IndexedSeq(w2, bare(Beta3), bare(A56), w2)
+    )
+    val byDim = IndexedSeq(
+      Set[G](W),
+      Set[G](B11, B22, B23, B44),
+      Set[G](Beta1, Beta2, Beta3, Beta4, A12, A23, A34, A45, A56),
+      Set[G](Alpha1, Alpha2, Alpha3, Alpha4, Alpha5, Alpha6)
+    )
+    val source = new FiniteSimplicialSet(byDim, table)
+    val target = sphere(2)
+    import MinimalSphereGenerator.{Top, Vertex as V}
+    def tgt(word: Int*)(g: MinimalSphereGenerator) = SSetElement[MinimalSphereGenerator](word.toList, g)
+    val top: Map[G, SSetElement[MinimalSphereGenerator]] = Map(
+      Alpha1 -> tgt(0)(Top),
+      Alpha2 -> tgt(1)(Top),
+      Alpha3 -> tgt(2)(Top),
+      Alpha4 -> tgt(0)(Top),
+      Alpha5 -> tgt(2)(Top),
+      Alpha6 -> tgt(1)(Top)
+    )
+    // Triangles: the image of a bare face of a 3-simplex is the matching face of that 3-simplex's image.
+    val triangleImages = scala.collection.mutable.Map.empty[G, SSetElement[MinimalSphereGenerator]]
+    for (a, image) <- top; (face, k) <- table(a).zipWithIndex if face.word.isEmpty do
+      val derived = target.dOp(k, image)
+      require(
+        triangleImages.getOrElseUpdate(face.generator, derived) == derived,
+        s"inconsistent image for ${face.generator}"
+      )
+    def image(g: G): SSetElement[MinimalSphereGenerator] =
+      if byDim(0).contains(g) then SSetElement(Nil, V)
+      else if byDim(1).contains(g) then tgt(0)(V)
+      else if byDim(2).contains(g) then triangleImages(g)
+      else top(g)
+    SSetMap(source, target, image)

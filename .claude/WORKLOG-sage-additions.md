@@ -10,3 +10,4 @@ model summarizes the page, so every transcription is verified by `validate()` + 
 - Block 2 smash (product / wedge via quotient): S^p^S^q ~ S^(p+q), X^S^0 ~ X (RP^2), RP^2^S^1 ~ suspension; passed first run.
 - Block 3 join (OfX/OfY/Both generators): Delta^1*Delta^1 has Delta^3's f-vector (exact), pt*X contractible, S^0*RP^2 = suspension, S^p*S^q ~ S^(p+q+1); passed after a syntax fix.
 - Block 4 CP^2: Sage's 1-vertex model (transcribed, validate() passes) AND Kuhnel-Banchoff 9 vertices (f-vector (9,36,84,90,36)); both Betti (1,0,1,0,1) over F_2,F_3 with x^2 != 0; S^2 v S^4 has zero square.
+- Block 5 Hopf map (Sage's S^3 model transcribed; lower-cell images derived from 3-cell faces + consistency check): mapping cone has CP^2's ring (x^2 != 0, F_2 and F_3); constant map's cone (S^2 v S^4) has zero square. Added SimplicialSets.sphere(n).

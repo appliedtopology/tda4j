@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j
 package cells
 
+import org.appliedtopology.tda4j.algebra.SSetElement
 import org.specs2.mutable.Specification
 
 /** `SimplicialSets`: every construction is checked by `validate()` AND against homology derived by hand, over F_2 and
@@ -175,5 +176,41 @@ class SimplicialSetsSpec extends Specification:
         SimplicialSetFixtures.SphereGenerator.Vertex
       )
       (betti(wedge24, 2) must beEqualTo(Vector(1, 0, 1, 0, 1))).and(squareOfH2Nonzero(wedge24, 2) must beFalse)
+    }
+  }
+
+  "the Hopf map" should {
+    def squareNonzero[G](x: FiniteSimplicialSet[G], p: Int): Boolean =
+      val field = new org.appliedtopology.tda4j.algebra.FiniteField(p)
+      import field.given
+      val basis = CupProduct.cohomologyBasis[G, field.Fp](x, 2)
+      basis.length == 1 && !CupProduct.isCoboundary(x, 4, CupProduct.cup(x, 2, 2, basis.head, basis.head))
+    "have a valid S^3 source with the homology of S^3, a valid target and a simplicial map" in {
+      val f = hopfMap
+      (f.source.validate() must beEmpty)
+        .and(f.target.validate() must beEmpty)
+        .and(f.validate() must beEmpty)
+        .and(betti(f.source, 2) must beEqualTo(Vector(1, 0, 0, 1)))
+        .and(betti(f.source, 3) must beEqualTo(Vector(1, 0, 0, 1)))
+    }
+    "have a mapping cone with the cohomology ring of CP^2: x^2 != 0, so Hopf invariant +-1" in {
+      val cone = SSetMap.mappingCone(hopfMap)
+      (cone.validate() must beEmpty)
+        .and(betti(cone, 2) must beEqualTo(Vector(1, 0, 1, 0, 1)))
+        .and(betti(cone, 3) must beEqualTo(Vector(1, 0, 1, 0, 1)))
+        .and(squareNonzero(cone, 2) must beTrue)
+        .and(squareNonzero(cone, 3) must beTrue)
+    }
+    "contrast with the constant map: its mapping cone is S^2 v S^4 with a zero square" in {
+      val f = hopfMap
+      val constant = SSetMap[HopfSphereGenerator, MinimalSphereGenerator](
+        f.source,
+        f.target,
+        g => SSetElement(((f.source.dimOf(g) - 1) to 0 by -1).toList, MinimalSphereGenerator.Vertex)
+      )
+      val cone = SSetMap.mappingCone(constant)
+      (constant.validate() must beEmpty)
+        .and(betti(cone, 2) must beEqualTo(Vector(1, 0, 1, 0, 1)))
+        .and(squareNonzero(cone, 2) must beFalse)
     }
   }
