@@ -1,0 +1,242 @@
+<!DOCTYPE html><html data-githubContributorsUrl="https://api.github.com/repos/appliedtopology/tda4j" data-githubContributorsFilename="_docs/tutorials/choosing-a-complex.md" data-pathToRoot="../" data-rawLocation="tutorials/choosing-a-complex" data-dynamicSideMenu="false"><head><meta charset="utf-8"></meta><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"></meta><title>Choosing a complex</title><link rel="canonical" href="https://tda4j.appliedtopology.org/tutorials/choosing-a-complex.html"></link><link rel="shortcut icon" type="image/x-icon" href="../favicon.ico"></link><script type="text/javascript" src="../scripts/theme.js"></script><script type="text/javascript" src="../scripts/searchData.js" defer="true"></script><script type="text/javascript" src="../scripts/scastieConfiguration.js" defer="true"></script><link rel="stylesheet" href="../styles/theme/bundle.css"></link><link rel="stylesheet" href="../styles/theme/components/bundle.css"></link><link rel="stylesheet" href="../styles/theme/components/button/bundle.css"></link><link rel="stylesheet" href="../styles/theme/layout/bundle.css"></link><link rel="stylesheet" href="../styles/nord-light.css"></link><link rel="stylesheet" href="../styles/dotty-icons.css"></link><link rel="stylesheet" href="../styles/filter-bar.css"></link><link rel="stylesheet" href="../styles/code-snippets.css"></link><link rel="stylesheet" href="../styles/searchbar.css"></link><link rel="stylesheet" href="../styles/social-links.css"></link><link rel="stylesheet" href="../styles/versions-dropdown.css"></link><link rel="stylesheet" href="../styles/content-contributors.css"></link><link rel="stylesheet" href="../styles/fontawesome.css"></link><script type="text/javascript" src="../hljs/highlight.pack.js" defer="true"></script><script type="text/javascript" src="../scripts/hljs-scala3.js" defer="true"></script><script type="text/javascript" src="../scripts/ux.js" defer="true"></script><script type="text/javascript" src="../scripts/common/component.js" defer="true"></script><script type="text/javascript" src="../scripts/common/utils.js" defer="true"></script><script type="text/javascript" src="../scripts/components/FilterBar.js" defer="true"></script><script type="text/javascript" src="../scripts/components/DocumentableList.js" defer="true"></script><script type="text/javascript" src="../scripts/components/Input.js" defer="true"></script><script type="text/javascript" src="../scripts/components/FilterGroup.js" defer="true"></script><script type="text/javascript" src="../scripts/components/Filter.js" defer="true"></script><script type="text/javascript" src="../scripts/scaladoc-scalajs.js" defer="true"></script><script type="text/javascript" src="../scripts/contributors.js" defer="true"></script><script type="text/javascript" src="https://code.jquery.com/jquery-3.5.1.min.js" defer="true"></script><script type="text/javascript" src="https://d3js.org/d3.v6.min.js" defer="true"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/graphlib-dot@0.6.2/dist/graphlib-dot.min.js" defer="true"></script><script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dagre-d3/0.6.1/dagre-d3.min.js" defer="true"></script><script type="text/javascript" src="https://scastie.scala-lang.org/embedded.js" defer="true"></script><script type="text/javascript" src="../scripts/data.js" defer="true"></script><link rel="stylesheet" href="../styles/staticsitestyles.css"></link><script>var pathToRoot = "../";</script><style>
+     :root {
+          /* text */
+          --text-primary: #3c5a6b;
+          --text-secondary: #866504;
+          --text-text-tertiary: #206f6f;
+          --text-text-inverted: #eef3f5;
+
+          /* background */
+          --background-default: #f8f7f4;
+          --background-subtle: var(--grey2);
+          --background-neutral: var(--grey3);
+     }
+     :root.theme-dark {
+
+          /* text */
+          --text-primary: #8fb4c7;
+          --text-secondary: #f3d068;
+          --text-text-tertiary: #75c7c7;
+          --text-text-inverted: #1a262b;
+
+          /* background */
+          --background-default: #161b1e;
+          --background-subtle: var(--grey2);
+          --background-neutral: var(--grey3);
+
+
+     }
+     :is(#content h1, h2, h3, h4, h5, h6, .h50, .h100, .h200, .h300, .h400, .h500, .h600, .h700) {
+          color: var(--text-secondary);
+     }
+</style>
+<style>
+     /* Language tabsets: <div class="tabset"><div class="tab" data-lang="Scala">...</div>...</div>; see WORKLOG-tutorial-tabs.md */
+     .tabset { margin: 1em 0; }
+     .tabset > .tab-bar { display: flex; gap: 0.25em; border-bottom: 1px solid var(--text-primary); }
+     .tabset > .tab-bar > button { background: none; border: 1px solid transparent; border-bottom: none; padding: 0.3em 0.9em; cursor: pointer; color: var(--text-primary); font: inherit; }
+     .tabset > .tab-bar > button[aria-selected="true"] { border-color: var(--text-primary); background: var(--background-subtle); font-weight: bold; }
+     .tabset.js-ready > .tab:not(.active) { display: none; }
+     .tabset > .tab > *:first-child { margin-top: 0.5em; }
+</style>
+<script>
+     // Builds a tab bar for each .tabset from its .tab children's data-lang, and keeps every tabset on the page (and on later pages) on the same language.
+     document.addEventListener("DOMContentLoaded", function () {
+          var KEY = "tda4j-language";
+          var saved = null;
+          try { saved = localStorage.getItem(KEY); } catch (e) {}
+          var sets = Array.prototype.slice.call(document.querySelectorAll(".tabset"));
+          function show(lang) {
+               sets.forEach(function (set) {
+                    var tabs = Array.prototype.slice.call(set.children).filter(function (c) { return c.classList.contains("tab"); });
+                    var chosen = tabs.some(function (t) { return t.dataset.lang === lang; }) ? lang : tabs[0].dataset.lang;
+                    tabs.forEach(function (t) { t.classList.toggle("active", t.dataset.lang === chosen); });
+                    set.querySelectorAll(".tab-bar > button").forEach(function (b) { b.setAttribute("aria-selected", b.textContent === chosen ? "true" : "false"); });
+               });
+          }
+          sets.forEach(function (set) {
+               var bar = document.createElement("div");
+               bar.className = "tab-bar";
+               bar.setAttribute("role", "tablist");
+               Array.prototype.slice.call(set.children).filter(function (c) { return c.classList.contains("tab"); }).forEach(function (t) {
+                    var b = document.createElement("button");
+                    b.type = "button";
+                    b.setAttribute("role", "tab");
+                    b.textContent = t.dataset.lang;
+                    b.addEventListener("click", function () {
+                         try { localStorage.setItem(KEY, t.dataset.lang); } catch (e) {}
+                         show(t.dataset.lang);
+                    });
+                    bar.appendChild(b);
+               });
+               set.insertBefore(bar, set.firstChild);
+               set.classList.add("js-ready");
+          });
+          show(saved);
+     });
+</script></head><body><div id=""><div id="header" class="body-small"><div class="header-container-left"><a href="../" class="logo-container"><span id="project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span id="dark-project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span class="project-name h300">tda4j</span></a><span onclick="dropdownHandler(event)" class="text-button with-arrow" id="dropdown-trigger"><a><div class="projectVersion">dev</div></a></span><div id="version-dropdown" class="dropdown-menu"></div></div><div class="header-container-right"><button id="search-toggle" class="icon-button"></button><a href="https://appliedtopology.org" class="text-button">Applied Topology</a><a href="https://scastie.scala-lang.org/?inputs=%7B%0A%20%20%22_isWorksheetMode%22%20%3A%20true%2C%0A%20%20%22code%22%20%3A%20%22import%20org.appliedtopology.tda4j.*%5Cn%E2%88%86(1%2C2%2C3)%5Cn%22%2C%0A%20%20%22target%22%20%3A%20%7B%0A%20%20%20%20%22scalaVersion%22%20%3A%20%223.9.0%22%2C%0A%20%20%20%20%22tpe%22%20%3A%20%22Scala3%22%0A%20%20%7D%2C%0A%20%20%22libraries%22%20%3A%20%5B%20%5D%2C%0A%20%20%22librariesFromList%22%20%3A%20%5B%20%5D%2C%0A%20%20%22sbtConfigExtra%22%3A%22%5CnscalacOptions%20%2B%2B%3D%20Seq(%5Cn%20%20%5C%22-deprecation%5C%22%2C%5Cn%20%20%5C%22-encoding%5C%22%2C%20%5C%22UTF-8%5C%22%2C%5Cn%20%20%5C%22-feature%5C%22%2C%5Cn%20%20%5C%22-unchecked%5C%22%2C%5Cn%20%20%5C%22-source%3Afuture%5C%22%2C%20%5Cn%20%20%5C%22-language%3Aexperimental.modularity%5C%22%5Cn)%5CnlibraryDependencies%20%2B%3D%20%5C%22org.appliedtopology%5C%22%20%25%25%20%5C%22tda4j%5C%22%20%25%20%5C%220.4.0%5C%22%5Cn%22%2C%0A%20%20%22sbtPluginsConfigExtra%22%20%3A%20%22%22%2C%0A%20%20%22isShowingInUserProfile%22%20%3A%20true%0A%7D%0A" class="text-button">Playground</a><span id="theme-toggle" class="icon-button"></span><span id="mobile-menu-toggle" class="icon-button hamburger"></span></div></div><div id="mobile-menu"><div class="mobile-menu-header body-small"><span class="mobile-menu-logo"><span id="project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span id="dark-project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span class="project-name h300">tda4j</span></span><button id="mobile-menu-close" class="icon-button close"></button></div><div class="mobile-menu-container body-medium"><input id="mobile-scaladoc-searchbar-input" class="scaladoc-searchbar-input" type="search" placeholder="Find anything"></input><a href="https://appliedtopology.org" class="mobile-menu-item">Applied Topology</a><a href="https://scastie.scala-lang.org/?inputs=%7B%0A%20%20%22_isWorksheetMode%22%20%3A%20true%2C%0A%20%20%22code%22%20%3A%20%22import%20org.appliedtopology.tda4j.*%5Cn%E2%88%86(1%2C2%2C3)%5Cn%22%2C%0A%20%20%22target%22%20%3A%20%7B%0A%20%20%20%20%22scalaVersion%22%20%3A%20%223.9.0%22%2C%0A%20%20%20%20%22tpe%22%20%3A%20%22Scala3%22%0A%20%20%7D%2C%0A%20%20%22libraries%22%20%3A%20%5B%20%5D%2C%0A%20%20%22librariesFromList%22%20%3A%20%5B%20%5D%2C%0A%20%20%22sbtConfigExtra%22%3A%22%5CnscalacOptions%20%2B%2B%3D%20Seq(%5Cn%20%20%5C%22-deprecation%5C%22%2C%5Cn%20%20%5C%22-encoding%5C%22%2C%20%5C%22UTF-8%5C%22%2C%5Cn%20%20%5C%22-feature%5C%22%2C%5Cn%20%20%5C%22-unchecked%5C%22%2C%5Cn%20%20%5C%22-source%3Afuture%5C%22%2C%20%5Cn%20%20%5C%22-language%3Aexperimental.modularity%5C%22%5Cn)%5CnlibraryDependencies%20%2B%3D%20%5C%22org.appliedtopology%5C%22%20%25%25%20%5C%22tda4j%5C%22%20%25%20%5C%220.4.0%5C%22%5Cn%22%2C%0A%20%20%22sbtPluginsConfigExtra%22%20%3A%20%22%22%2C%0A%20%20%22isShowingInUserProfile%22%20%3A%20true%0A%7D%0A" class="mobile-menu-item">Playground</a><span id="mobile-theme-toggle" class="mobile-menu-item mode"></span></div></div><span id="mobile-sidebar-toggle" class="floating-button"></span><div id="leftColumn" class="body-small"><div class="switcher-container"><a id="docs-nav-button" class="switcher h100 selected" href="../index.html">Docs</a><a id="api-nav-button" class="switcher h100 " href="../api/index.html">API</a></div><nav id="docs-nav" class="side-menu"><div class="ni n0 expanded"><span class="nh h100 expanded cs de"><button class="ar icon-button expanded"></button><a href="index.html"><span>Tutorials for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="all-ways-to-call.html"><span>All the ways to call TDA4j</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="find-a-loop.html"><span>Finding a loop in noisy data</span></a></span></div><div class="ni n1 expanded"><span class="nh h100 selected de"><a href="#"><span>Choosing a complex</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="noise-and-outliers.html"><span>Noise and outliers</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="circular-and-toroidal-coordinates.html"><span>Circular and toroidal coordinates</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="comparing-barcodes.html"><span>Comparing barcodes</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="images.html"><span>Topology of an image</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="networks-and-relations.html"><span>Networks and relations</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="telling-spaces-apart.html"><span>Telling spaces apart</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="persistent-group-cohomology.html"><span>Persistent group cohomology</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="scaling-up.html"><span>Scaling up</span></a></span></div></div><div class="ni n0"><span class="nh de"><button class="ar icon-button "></button><a href="../developers-guide/index.html"><span>Developer&apos;s Guide for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="../developers-guide/scala3-primer.html"><span>A Scala 3.7+ primer for this codebase</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/architecture.html"><span>Architecture: from algebra to a filtration stream</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/persistence-engines.html"><span>Persistence engines: what to trust, and why</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/alpha-complex.html"><span>Alpha complex: DQP vs Helix</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/degeneracies.html"><span>Degeneracy behaviors that look like bugs but aren&apos;t</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/gotchas.html"><span>Hard-won invariants you must not break</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/class-diagrams.html"><span>Mapping the library: class diagrams</span></a></span></div></div><div class="ni n0"><span class="nh de"><button class="ar icon-button "></button><a href="../user-guide/index.html"><span>User Guide for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="../user-guide/quickstart.html"><span>Quick-start: Scala</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/cli.html"><span>Command-line tool: `tda4j`</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/matlab.html"><span>Calling from MATLAB or Java</span></a></span></div><div class="ni n1"><span class="nh de"><button class="ar icon-button "></button><a href="../user-guide/user-guide/topological-spaces/index.html"><span>Topological spaces</span></a></span><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/alpha-complexes.html"><span>alpha-complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/cech-complexes.html"><span>cech-complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/cubical-complexes.html"><span>cubical-complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/dowker-complexes.html"><span>dowker-complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/simplicial-sets.html"><span>simplicial-sets</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/sparse-vietoris-rips.html"><span>sparse-vietoris-rips</span></a></span></div></div><div class="ni n1"><span class="nh de"><button class="ar icon-button "></button><a href="../user-guide/user-guide/homology-computation/index.html"><span>Homology computation</span></a></span><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/choosing-engine.html"><span>choosing-engine</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/fast-alpha-complexes.html"><span>fast-alpha-complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/fast-cubical.html"><span>fast-cubical</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/index.html"><span>Homology computation</span></a></span></div></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/boundary-matrix.html"><span>Boundary-matrix export</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/circular-coordinates.html"><span>Circular coordinates</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/input-output.html"><span>Loading and saving data: the `io` module</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/vectorization.html"><span>Comparing diagrams and turning them into vectors</span></a></span></div></div></nav></div><div id="footer" class="body-small"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div><div id="scaladoc-searchBar"></div><div id="main"><div class="breadcrumbs container"><a href="../index.html">tda4j</a>/<a href="index.html">Tutorials for TDA4j</a>/<a href="choosing-a-complex.html">Choosing a complex</a></div><div id="content" class="body-medium"><div><main>
+ <p><a href="find-a-loop.html">Finding a loop</a> used the Vietoris-Rips complex because it is the default. TDA4j offers several other ways to turn a point cloud into a filtered complex, and they trade off size, exactness and what they need to know about your data. This tutorial runs the <em>same</em> data, <a href="https://github.com/appliedtopology/tda4j/blob/scala/_docs/tutorials/data/noisy-circle.csv"><code>data/noisy-circle.csv</code></a>, through five of them and compares what comes out.</p>
+ <p>Every complex below is built the same way, an object that takes your points and a <code>maxDimension</code> (the highest homology dimension you want) and returns a stream of simplices that any engine can read. So one small function is enough to compare them:</p>
+ <div class="snippet mono-small-block" scala-snippet="">
+  <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.TDAlab
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>val lab = TDAlab(2)
+</span><span line-number="5" class=""><span class="tooltip-container"></span>import lab.{*, given}
+</span><span line-number="6" class=""><span class="tooltip-container"></span>
+</span><span line-number="7" class=""><span class="tooltip-container"></span>val points = io.CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+</span><span line-number="8" class=""><span class="tooltip-container"></span>val metricSpace = streams.EuclideanMetricSpace(points)
+</span><span line-number="9" class=""><span class="tooltip-container"></span>val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
+</span><span line-number="10" class=""><span class="tooltip-container"></span>
+</span><span line-number="11" class=""><span class="tooltip-container"></span>def summarize(stream: streams.LevelwiseSimplexStream[Int, Double]): (Int, (Double, Double), Int) =
+</span><span line-number="12" class=""><span class="tooltip-container"></span>  val size = stream.iterator.size                    // how many simplices the engine will have to process
+</span><span line-number="13" class=""><span class="tooltip-container"></span>  val bars = engine.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+</span><span line-number="14" class=""><span class="tooltip-container"></span>  val loop = bars.filter(_._1 == 1).maxBy((_, birth, death) =&gt; death - birth)   // the longest-lived loop
+</span><span line-number="15" class=""><span class="tooltip-container"></span>  (size, (loop._2, loop._3), bars.count((dim, _, death) =&gt; dim == 0 &amp;&amp; death.isInfinite))   // and the number of components
+</span></code></pre>
+  <div class="buttons"></div>
+ </div>
+ <section id="the-five-complexes">
+  <h2 class="h500"><a href="#the-five-complexes" class="anchor"></a>The five complexes</h2>
+  <div class="snippet mono-small-block" scala-snippet="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>val vr       = summarize(streams.VietorisRips(metricSpace, maxDimension = 1))
+</span><span line-number="2" class=""><span class="tooltip-container"></span>val cech     = summarize(streams.Cech(metricSpace, maxDimension = 1))
+</span><span line-number="3" class=""><span class="tooltip-container"></span>val delaunay = summarize(alpha.AlphaShapes(points.toSeq))
+</span><span line-number="4" class=""><span class="tooltip-container"></span>val sparse   = summarize(streams.SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1))
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val witness  = summarize(streams.Witness(metricSpace, streams.LandmarkSelector.maxmin(metricSpace, 15).landmarks, maxDimension = 1))
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <table>
+   <thead>
+    <tr>
+     <th>complex</th>
+     <th>simplices</th>
+     <th>the loop (birth, death)</th>
+    </tr>
+   </thead>
+   <tbody>
+    <tr>
+     <td>Vietoris-Rips</td>
+     <td>24,711</td>
+     <td>(0.595, 1.707)</td>
+    </tr>
+    <tr>
+     <td>Čech</td>
+     <td>36,050</td>
+     <td>(0.297, 0.935)</td>
+    </tr>
+    <tr>
+     <td>alpha</td>
+     <td>325</td>
+     <td>(0.297, 0.935)</td>
+    </tr>
+    <tr>
+     <td>sparse Rips (ε = 0.5)</td>
+     <td>1,730</td>
+     <td>(0.708, 1.789)</td>
+    </tr>
+    <tr>
+     <td>witness (15 landmarks)</td>
+     <td>441</td>
+     <td>(0.278, 0.742)</td>
+    </tr>
+   </tbody>
+  </table>
+  <p>All five find the loop, and all five find exactly one connected component. What differs is the cost and the units.</p>
+ </section>
+ <section id="vietoris-rips-the-default">
+  <h3 class="h400"><a href="#vietoris-rips-the-default" class="anchor"></a>Vietoris-Rips: the default</h3>
+  <p>The Vietoris-Rips complex joins any group of points whose <em>pairwise distances</em> are all at most <code>r</code>. It needs only distances, not coordinates, so it works on any distance matrix, and it has the fastest engines (the Ripser-style engine behind the command line and MATLAB defaults is specific to it). Its drawback is size: 60 points already give 24,711 simplices, and the count grows quickly with the number of points and the dimension you ask for.</p>
+ </section>
+ <section id="čech-the-geometrically-exact-one">
+  <h3 class="h400"><a href="#čech-the-geometrically-exact-one" class="anchor"></a>Čech: the geometrically exact one</h3>
+  <p>The Čech complex at scale <code>r</code> joins any group of points whose balls of radius <code>r</code> have a common point. It is the complex the "nerve theorem" speaks about directly: it has the same shape as the union of the balls. It also needs coordinates (it finds the smallest ball around each group), and it is the largest of the five (36,050 simplices here).</p>
+  <p>Notice the units. Čech scale is a <em>radius</em>, Vietoris-Rips scale is a <em>diameter</em>, so the two loops are born at scales that differ by a factor of two (0.595 against 0.297) and die at different places, √3 = 1.73 for Rips against 1 for Čech. Bars from different complexes must not be compared by their endpoints, only by their shape: here, one clear loop, far longer-lived than anything else.</p>
+ </section>
+ <section id="alpha-čech-without-the-bulk">
+  <h3 class="h400"><a href="#alpha-čech-without-the-bulk" class="anchor"></a>Alpha: Čech without the bulk</h3>
+  <p>The alpha complex is a subcomplex of the Delaunay triangulation of the points, chosen so that at each scale it has the same shape as the union of balls, which is to say the same shape as the Čech complex. So the two give <strong>identical bars</strong>, the same loop to six digits, from 325 simplices instead of 36,050. When you can use it, that is a hundredfold saving for nothing.</p>
+  <p>You can use it when your points have coordinates in a low-dimensional space (the Delaunay triangulation is what limits it: fine in two or three dimensions, rapidly harder beyond). The <code>fast-alpha</code> engine, described in the <a href="../user-guide/user-guide/homology-computation/fast-alpha-complexes.html">user guide</a>, goes further by skipping the generic reduction.</p>
+ </section>
+ <section id="sparse-rips-rips-for-many-points">
+  <h3 class="h400"><a href="#sparse-rips-rips-for-many-points" class="anchor"></a>Sparse Rips: Rips for many points</h3>
+  <p>Sparse Rips (Cavanna, Jahanseir and Sheehy) keeps only a well-spread subset of the points at each scale, which makes the complex linear in the number of points. The price is approximation: bars are guaranteed correct only up to a factor <code>1 + ε</code>. Here the loop is born at 0.708 instead of 0.595 and dies at 1.789 instead of 1.707, so it is clearly the same loop, with the endpoints shifted by the approximation. Smaller <code>ε</code> is closer to plain Rips and larger complexes. Use it when plain Vietoris-Rips is too big.</p>
+ </section>
+ <section id="witness-a-few-landmarks-all-the-points">
+  <h3 class="h400"><a href="#witness-a-few-landmarks-all-the-points" class="anchor"></a>Witness: a few landmarks, all the points</h3>
+  <p>The witness complex first picks a small set of landmark points (here 15, chosen by the furthest-point rule so that they cover the cloud evenly) and builds the complex on them only, using the other points as witnesses that decide which simplices exist. That makes it tiny (441 simplices) and very cheap, at the cost of thinking about landmarks. The loop is still there, at its own scale. See the <a href="../user-guide/user-guide/topological-spaces/sparse-vietoris-rips.html">user guide</a> for choosing landmarks and the two witness variants.</p>
+ </section>
+ <section id="which-one">
+  <h2 class="h500"><a href="#which-one" class="anchor"></a>Which one?</h2>
+  <ul>
+   <li><strong>Start with Vietoris-Rips.</strong> It needs the least and is the fastest to compute with.</li>
+   <li><strong>Low-dimensional coordinates, want the exact geometry:</strong> alpha. It is the same answer as Čech at a hundredth of the size.</li>
+   <li><strong>Too many points for Vietoris-Rips:</strong> sparse Rips if you want to keep all the points and accept an approximation, witness if you are happy to work with landmarks.</li>
+   <li><strong>Noisy data, or outliers:</strong> none of these is robust; see <a href="noise-and-outliers.html">the next tutorial</a>.</li>
+  </ul>
+ </section>
+ <section id="the-whole-script">
+  <h2 class="h500"><a href="#the-whole-script" class="anchor"></a>The whole script</h2>
+  <div class="tabset">
+   <div class="tab" data-lang="Scala">
+    <div class="snippet mono-small-block" scala-snippet="" runnable="">
+     <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.TDAlab
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>val lab = TDAlab(2)
+</span><span line-number="5" class=""><span class="tooltip-container"></span>import lab.{*, given}
+</span><span line-number="6" class=""><span class="tooltip-container"></span>
+</span><span line-number="7" class=""><span class="tooltip-container"></span>val points = io.CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+</span><span line-number="8" class=""><span class="tooltip-container"></span>val metricSpace = streams.EuclideanMetricSpace(points)
+</span><span line-number="9" class=""><span class="tooltip-container"></span>val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
+</span><span line-number="10" class=""><span class="tooltip-container"></span>
+</span><span line-number="11" class=""><span class="tooltip-container"></span>def summarize(stream: streams.LevelwiseSimplexStream[Int, Double]): (Int, (Double, Double), Int) =
+</span><span line-number="12" class=""><span class="tooltip-container"></span>  val size = stream.iterator.size
+</span><span line-number="13" class=""><span class="tooltip-container"></span>  val bars = engine.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+</span><span line-number="14" class=""><span class="tooltip-container"></span>  val loop = bars.filter(_._1 == 1).maxBy((_, birth, death) =&gt; death - birth)
+</span><span line-number="15" class=""><span class="tooltip-container"></span>  (size, (loop._2, loop._3), bars.count((dim, _, death) =&gt; dim == 0 &amp;&amp; death.isInfinite))   // and the number of components
+</span><span line-number="16" class=""><span class="tooltip-container"></span>
+</span><span line-number="17" class=""><span class="tooltip-container"></span>val landmarks = streams.LandmarkSelector.maxmin(metricSpace, 15).landmarks
+</span><span line-number="18" class=""><span class="tooltip-container"></span>val results = Map(
+</span><span line-number="19" class=""><span class="tooltip-container"></span>  "vietoris-rips" -&gt; summarize(streams.VietorisRips(metricSpace, maxDimension = 1)),
+</span><span line-number="20" class=""><span class="tooltip-container"></span>  "cech" -&gt; summarize(streams.Cech(metricSpace, maxDimension = 1)),
+</span><span line-number="21" class=""><span class="tooltip-container"></span>  "alpha" -&gt; summarize(alpha.AlphaShapes(points.toSeq)),
+</span><span line-number="22" class=""><span class="tooltip-container"></span>  "sparse-rips" -&gt; summarize(streams.SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1)),
+</span><span line-number="23" class=""><span class="tooltip-container"></span>  "witness" -&gt; summarize(streams.Witness(metricSpace, landmarks, maxDimension = 1))
+</span><span line-number="24" class=""><span class="tooltip-container"></span>)
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
+   <div class="tab" data-lang="MATLAB">
+    <div class="snippet mono-small-block">
+     <pre><code class="language-matlab"><span line-number="1" class=""><span class="tooltip-container"></span>javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.matlab.*;
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>% Each row: the value of the 'complex' option and any extra options it needs
+</span><span line-number="7" class=""><span class="tooltip-container"></span>settings = {
+</span><span line-number="8" class=""><span class="tooltip-container"></span>    'vr',          {}
+</span><span line-number="9" class=""><span class="tooltip-container"></span>    'cech',        {}
+</span><span line-number="10" class=""><span class="tooltip-container"></span>    'alpha',       {}
+</span><span line-number="11" class=""><span class="tooltip-container"></span>    'sparse-rips', {'sparseEpsilon', '0.5'}
+</span><span line-number="12" class=""><span class="tooltip-container"></span>    'witness',     {'numLandmarks', '15'}};
+</span><span line-number="13" class=""><span class="tooltip-container"></span>
+</span><span line-number="14" class=""><span class="tooltip-container"></span>for s = 1:size(settings, 1)
+</span><span line-number="15" class=""><span class="tooltip-container"></span>    options = [{'maxDimension', '1', 'complex', settings{s,1}}, settings{s,2}];
+</span><span line-number="16" class=""><span class="tooltip-container"></span>    result = TDA4j.computeFromPoints(points, options);
+</span><span line-number="17" class=""><span class="tooltip-container"></span>    bars = result.toArray();
+</span><span line-number="18" class=""><span class="tooltip-container"></span>    loops = bars(bars(:,1) == 1, :);
+</span><span line-number="19" class=""><span class="tooltip-container"></span>    [~, longest] = max(loops(:,3) - loops(:,2));
+</span><span line-number="20" class=""><span class="tooltip-container"></span>    fprintf('%-12s %6d simplices, loop [%.3f, %.3f)\n', settings{s,1}, result.numCells(), loops(longest,2), loops(longest,3));
+</span><span line-number="21" class=""><span class="tooltip-container"></span>end
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
+  </div>
+  <p>In MATLAB a complex is a value of the <code>complex</code> option rather than a function, and <code>numCells()</code> is the number of simplices the engine had to process. <code>MatlabTabsSpec</code> makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.</p>
+ </section>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#the-five-complexes">The five complexes</a><ul><li><a href="#vietoris-rips-the-default">Vietoris-Rips: the default</a></li><li><a href="#čech-the-geometrically-exact-one">Čech: the geometrically exact one</a></li><li><a href="#alpha-čech-without-the-bulk">Alpha: Čech without the bulk</a></li><li><a href="#sparse-rips-rips-for-many-points">Sparse Rips: Rips for many points</a></li><li><a href="#witness-a-few-landmarks-all-the-points">Witness: a few landmarks, all the points</a></li></ul></li><li><a href="#which-one">Which one?</a></li><li><a href="#the-whole-script">The whole script</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
