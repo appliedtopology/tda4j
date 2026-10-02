@@ -17,22 +17,21 @@ class SimplicialSetsSpec extends Specification:
         (0 to 3).map(n => (Seq.empty[String], Vector(1) ++ Vector.fill(n)(0)))
       )
     }
-    "the horn Lambda^3_1 is valid and contractible" in {
+    "the horn Lambda^3_1 is valid and contractible" in
       (horn(3, 1).validate() must beEmpty).and(betti(horn(3, 1), 2) must beEqualTo(Vector(1, 0, 0)))
-    }
-    "Klein bottle: valid; (1,2,1) over F_2 but (1,1,0) over F_3" in {
+    "Klein bottle: valid; (1,2,1) over F_2 but (1,1,0) over F_3" in
       (kleinBottle.validate() must beEmpty)
         .and(betti(kleinBottle, 2) must beEqualTo(Vector(1, 2, 1)))
         .and(betti(kleinBottle, 3) must beEqualTo(Vector(1, 1, 0)))
-    }
     "an octahedron from its facets is a 2-sphere" in {
       val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield Simplex(a, b, c)
       val oct = fromSimplicialComplex(triangles)
-      (fVector(oct) must beEqualTo(Vector(6, 12, 8))).and(oct.validate() must beEmpty).and(betti(oct, 3) must beEqualTo(Vector(1, 0, 1)))
+      (fVector(oct) must beEqualTo(Vector(6, 12, 8)))
+        .and(oct.validate() must beEmpty)
+        .and(betti(oct, 3) must beEqualTo(Vector(1, 0, 1)))
     }
-    "the empty set and the point" in {
+    "the empty set and the point" in
       (empty.generatorsByDim must beEmpty).and(betti(point, 2) must beEqualTo(Vector(1)))
-    }
   }
 
   "subcomplex, connectivity" should {
@@ -42,11 +41,10 @@ class SimplicialSetsSpec extends Specification:
       (subcomplex(t, edges).generatorsByDim.map(_.size) must beEqualTo(Vector(3, 3)))
         .and(subcomplex(t, Set(Simplex(0, 1))) must throwAn[IllegalArgumentException])
     }
-    "isConnected" in {
+    "isConnected" in
       (isConnected(simplex(2)) must beTrue)
         .and(isConnected(empty) must beFalse)
         .and(isConnected(fromSimplicialComplex(Seq(Simplex(0, 1), Simplex(2, 3)))) must beFalse)
-    }
   }
 
   "cone" should {

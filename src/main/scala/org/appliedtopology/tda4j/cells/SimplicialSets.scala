@@ -25,8 +25,8 @@ object ConeGenerator:
   * `.claude/DESIGN-sage-simplicial-sets-comparison.md`). Everything here is additive and finite; pullbacks and integer
   * coefficients are deliberately not here.
   *
-  * Complexes given by vertices use [[Simplex]]`[Int]` as the generator type; the faces of a simplex are `d_i` = omit its
-  * `i`-th vertex, so the simplicial identities hold automatically.
+  * Complexes given by vertices use [[Simplex]]`[Int]` as the generator type; the faces of a simplex are `d_i` = omit
+  * its `i`-th vertex, so the simplicial identities hold automatically.
   */
 object SimplicialSets:
   import ConeGenerator.*
@@ -70,8 +70,8 @@ object SimplicialSets:
   object KleinGenerator:
     given Ordering[KleinGenerator] = Ordering.by(_.ordinal)
 
-  /** The Klein bottle as a Δ-complex with one vertex, edges `a, b, c` and two triangles whose faces `(d_0, d_1, d_2)` are
-    * `(b, c, a)` and `(a, b, c)`. Derived by hand: `π_1 = <a, b | a b a = b>` (Klein group), `∂T1 = a + b - c`,
+  /** The Klein bottle as a Δ-complex with one vertex, edges `a, b, c` and two triangles whose faces `(d_0, d_1, d_2)`
+    * are `(b, c, a)` and `(a, b, c)`. Derived by hand: `π_1 = <a, b | a b a = b>` (Klein group), `∂T1 = a + b - c`,
     * `∂T2 = a - b + c` give `H_1 = Z ⊕ Z/2`, `H_2 = 0` -- so Betti numbers `(1, 2, 1)` over `F_2` and `(1, 1, 0)` over
     * `F_3`, which is what distinguishes it from the torus.
     */
@@ -92,8 +92,8 @@ object SimplicialSets:
     val byDim = sset.generatorsByDim.map(_.filter(keep.contains))
     new FiniteSimplicialSet(byDim.reverse.dropWhile(_.isEmpty).reverse, sset.faces)(using sset.ord)
 
-  /** The unreduced cone `CX = X ⋆ pt`: apex last, so `d_{n+1} Cone(g) = g` and `d_i Cone(g) = Cone(d_i g)` (a degenerate
-    * face `s_J h` becomes `s_J Cone(h)`: no degeneracy ever touches the apex). Contractible.
+  /** The unreduced cone `CX = X ⋆ pt`: apex last, so `d_{n+1} Cone(g) = g` and `d_i Cone(g) = Cone(d_i g)` (a
+    * degenerate face `s_J h` becomes `s_J Cone(h)`: no degeneracy ever touches the apex). Contractible.
     */
   def cone[G](x: FiniteSimplicialSet[G]): FiniteSimplicialSet[ConeGenerator[G]] =
     given Ordering[G] = x.ord
@@ -106,8 +106,8 @@ object SimplicialSets:
     def mapped(e: SSetElement[G])(wrap: G => ConeGenerator[G]): SSetElement[ConeGenerator[G]] =
       SSetElement(e.word, wrap(e.generator))
     def facesOf(g: ConeGenerator[G]): IndexedSeq[SSetElement[ConeGenerator[G]]] = g match
-      case Apex     => IndexedSeq.empty
-      case Base(h)  => x.faces(h).map(mapped(_)(Base(_)))
+      case Apex    => IndexedSeq.empty
+      case Base(h) => x.faces(h).map(mapped(_)(Base(_)))
       case Cone(h) =>
         val n = x.dimOf(h)
         if n == 0 then IndexedSeq(SSetElement(Nil, Apex), SSetElement(Nil, Base(h)))
@@ -121,7 +121,10 @@ object SimplicialSets:
     val both = FiniteSimplicialSet.coproduct(c, c)
     given Ordering[Either[ConeGenerator[G], ConeGenerator[G]]] = both.ord
     val glue = x.generatorsByDim.flatten.toSeq.map { g =>
-      (Left(Base(g)): Either[ConeGenerator[G], ConeGenerator[G]], Right(Base(g)): Either[ConeGenerator[G], ConeGenerator[G]])
+      (
+        Left(Base(g)): Either[ConeGenerator[G], ConeGenerator[G]],
+        Right(Base(g)): Either[ConeGenerator[G], ConeGenerator[G]]
+      )
     }
     FiniteSimplicialSet.identify(both, glue)
 
@@ -148,7 +151,9 @@ object SimplicialSets:
     if vertices.isEmpty then false
     else
       val parent = scala.collection.mutable.Map.from(vertices.map(v => v -> v))
-      def find(v: G): G = if parent(v) == v then v else { val r = find(parent(v)); parent(v) = r; r }
+      def find(v: G): G = if parent(v) == v then v
+      else
+        val r = find(parent(v)); parent(v) = r; r
       for e <- x.generatorsAt(1) do
         val ends = x.faces(e).map(f => find(f.generator))
         if ends(0) != ends(1) then parent(ends(0)) = ends(1)
