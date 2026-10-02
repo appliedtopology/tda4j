@@ -579,6 +579,10 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
   end of the arc, update this file with **only the resulting rule/invariant/limitation plus a worklog pointer**
   — no narrative, measurements, or repros here. Keep this file under ~64k characters; when it drifts past that,
   condense it the same way (strip narrative to worklog pointers) and note the new condensing date/commit at top.
+- **Never revert the formatter's output.** If `scalafmtAll` touches files outside your change, commit that in its OWN
+  commit ("Format: ... formatter output only, no behavior change") and say so — reverting only hides the debt, and a
+  clean lint beats a minimal diff. Note CI lint runs plain `scalafmtCheck` (main sources only); `Test / scalafmtCheck`
+  is a separate, stricter check.
 - Performance claims need isolated A/B measurement (`git stash` A/B, median of trials, one engine per JVM);
   machine noise here often exceeds small effects — report unconfirmed effects as unconfirmed.
 - **Finalizing a user-visible capability** (new complex, engine, or option) means checking four surfaces each
