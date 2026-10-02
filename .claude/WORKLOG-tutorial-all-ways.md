@@ -51,3 +51,4 @@ group cohomology). Keep going, don't stop.
 - `sbt mimaReportBinaryIssues` crashes locally with `AssertionError: illegal modifier tag BadTag(49)` (MiMa's TASTy reader);
   IDENTICAL at the already-merged 3eb4ce9 and at 1692f24, so pre-existing/environment-specific, not from this session. CI
   (which was green on 543d92e) is the arbiter; no CI has run on the commits since because no PR is open.
+- Tutorial: added 'Scala with explicit imports' (no TDAlab; own FiniteField given), run in AllWaysToCallSpec and compiled by the doc build (verified the fence is really compiled by injecting a type error).

@@ -121,3 +121,43 @@ class AllWaysToCallSpec extends Specification:
       ]
     }
   }
+
+  "the explicit-imports version (no TDAlab)" should {
+    "compute the same three things" in {
+      val (essentialByDim, significantH1, h1Count, thetaSize) = explicitImports()
+      essentialByDim must beEqualTo(Map(0 -> 1, 2 -> 1))
+      significantH1 must beEqualTo(1)
+      h1Count must beGreaterThanOrEqualTo(1)
+      thetaSize must beEqualTo(25)
+    }
+  }
+
+  // Exactly the tutorial's "Scala with explicit imports" snippet, wrapped in a method.
+  private def explicitImports(): (Map[Int, Int], Int, Int, Int) =
+    import org.appliedtopology.tda4j.algebra.{given, *}
+    import org.appliedtopology.tda4j.cells.{given, *}
+    import org.appliedtopology.tda4j.streams.{given, *}
+    import org.appliedtopology.tda4j.homology.{given, *}
+    import org.appliedtopology.tda4j.barcode.PersistenceFilter
+    import org.appliedtopology.tda4j.io.CSV
+
+    val field = FiniteField(17)
+    import field.given
+    val engine = SimplicialHomologyEngine[Int, field.Fp, Double]()
+
+    val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield Simplex(a, b, c)
+    val octahedron = engine.persistentHomology(ExplicitStreamBuilder.fromFacets(triangles))
+    val octahedronBars = PersistenceFilter.significant(octahedron.barcodeAt(4.0), minPersistence = Some(1e-9))
+    val essential =
+      octahedronBars.filter(b => b.upper.toString.contains("nfinity")).groupBy(_.dim).view.mapValues(_.size).toMap
+
+    val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/examplepoints.csv")
+    val circle = engine.persistentHomology(VietorisRips(metricSpace, maxDimension = 1))
+    val circleBars =
+      PersistenceFilter.significant(
+        circle.barcodeAt(1.5).filter(_.dim <= 1),
+        scale = Some(metricSpace.minimumEnclosingRadius)
+      )
+    val h1 = CircularCoordinates.h1Bars(metricSpace, Some(1.5))
+    val coordinate = CircularCoordinates.compute(metricSpace, 1.5, 0)
+    (essential, circleBars.count(_.dim == 1), h1.size, coordinate.theta.size)

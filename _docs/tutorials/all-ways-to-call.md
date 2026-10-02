@@ -151,3 +151,46 @@ object myComputation extends TDAlab(17) {
   val coordinate = homology.CircularCoordinates.compute(metricSpace, 1.5, 0)
 }
 ```
+
+## Scala with explicit imports
+
+`TDAlab` is a convenience: it picks the coefficient field for you and brings a pile of names into scope. Nothing in it is
+magic, and you can do without it. The version below uses no helper class at all. It imports each package it needs (with
+`given`, which matters: a plain `*` import does **not** bring in Scala 3 `given` instances such as the ordering and
+`OrderedCell` instances the engines look for), and it declares for itself the one thing `TDAlab` was choosing, the
+coefficient field.
+
+```scala
+import org.appliedtopology.tda4j.algebra.{given, *}
+import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.homology.{given, *}
+import org.appliedtopology.tda4j.barcode.PersistenceFilter
+import org.appliedtopology.tda4j.io.CSV
+
+// The coefficients. FiniteField(17) is the field with 17 elements; importing its givens makes `field.Fp` a Field.
+// (For floating point instead, drop these two lines and declare: given Double is Field = Field.DoubleApproximated(1e-9))
+val field = FiniteField(17)
+import field.given
+
+// The engine is generic over vertex type, coefficient type and filtration type, so we name all three.
+val engine = SimplicialHomologyEngine[Int, field.Fp, Double]()
+
+// Task #1: a triangle takes one vertex from each antipodal pair (1,2), (3,4), (5,6); fromFacets adds the faces.
+val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield Simplex(a, b, c)
+val octahedron = engine.persistentHomology(ExplicitStreamBuilder.fromFacets(triangles))
+PersistenceFilter.significant(octahedron.barcodeAt(4.0), minPersistence = Some(1e-9))
+
+// Task #2
+val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/examplepoints.csv")
+val circle = engine.persistentHomology(VietorisRips(metricSpace, maxDimension = 1))
+PersistenceFilter.significant(circle.barcodeAt(1.5).filter(_.dim <= 1), scale = Some(metricSpace.minimumEnclosingRadius))
+
+// Task #3: circular coordinates need no engine and no field of ours (they work over their own prime, 47 by default)
+CircularCoordinates.h1Bars(metricSpace, Some(1.5))
+CircularCoordinates.compute(metricSpace, 1.5, 0)
+```
+
+What you gave up by not using `TDAlab`: the `∆(...)` literal (here `Simplex(...)`), the `Fp(...)` constructor, and chain
+arithmetic, none of which this computation needed. What you gained: every name in the snippet is a name you can look up, and
+the same imports work unchanged inside a library of your own.
