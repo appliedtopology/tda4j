@@ -11,3 +11,4 @@ public API only; TDAlab is the style (exports `barcode`, `cells`, `groups`, `alp
   clutter is dense enough that DTM does not see it as outliers. Sparse uniform background noise over a 4x4 square does (VR margin 7x,
   DTM(k=8,p=1) margin 170x). The claim "runner-up loop is made of outliers" was checked against its representative cycle (8 points,
   5 outliers; the real loop 66 points, 2 outliers) before being written.
+- Page 4 images: sublevel vs superlevel, CubicalHomologyEngine vs FastCubicalHomologyEngine agree bar for bar (1625). Caught and fixed a wrong mechanism in the prose for the enclosed dark disc (it MERGES into the background when the ring's pixels enter, it is not sealed off). Added PersistenceBar.birth/death/persistence/toTriple for tutorials.

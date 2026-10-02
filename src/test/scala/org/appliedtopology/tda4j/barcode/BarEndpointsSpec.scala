@@ -14,6 +14,8 @@ class BarEndpointsSpec extends Specification:
     }
     "give an essential bar an infinite death and persistence" in {
       val bar = PersistenceBar[Double](0, 0.0)
-      (bar.death.isPosInfinity must beTrue).and(bar.persistence.isPosInfinity must beTrue).and(bar.toTriple must beEqualTo((0, 0.0, Double.PositiveInfinity)))
+      (bar.death.isPosInfinity must beTrue)
+        .and(bar.persistence.isPosInfinity must beTrue)
+        .and(bar.toTriple must beEqualTo((0, 0.0, Double.PositiveInfinity)))
     }
   }
