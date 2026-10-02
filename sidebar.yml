@@ -4,6 +4,15 @@ subsection:
     directory: tutorials
     subsection:
       - page: tutorials/all-ways-to-call.md
+      - page: tutorials/find-a-loop.md
+      - page: tutorials/choosing-a-complex.md
+      - page: tutorials/noise-and-outliers.md
+      - page: tutorials/circular-and-toroidal-coordinates.md
+      - page: tutorials/comparing-barcodes.md
+      - page: tutorials/images.md
+      - page: tutorials/networks-and-relations.md
+      - page: tutorials/telling-spaces-apart.md
+      - page: tutorials/persistent-group-cohomology.md
   - index: developers-guide/index.md
     directory: developers-guide
     subsection:

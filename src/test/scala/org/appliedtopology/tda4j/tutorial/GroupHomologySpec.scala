@@ -26,7 +26,12 @@ class GroupHomologySpec extends Specification:
     // S_4, built from permutations, and a chain of subgroups: <(01)> < <(01),(23)> < D_8 < S_4
     val (s4, generators) = groups.FiniteGroup.permutationGroup(
       4,
-      Seq(Seq(1, 0, 2, 3), Seq(0, 1, 3, 2), Seq(2, 3, 0, 1), Seq(1, 2, 3, 0))     // (01), (23), (02)(13) and the 4-cycle (0123)
+      Seq(
+        Seq(1, 0, 2, 3),
+        Seq(0, 1, 3, 2),
+        Seq(2, 3, 0, 1),
+        Seq(1, 2, 3, 0)
+      ) // (01), (23), (02)(13) and the 4-cycle (0123)
     )
     val Seq(swap01, swap23, doubleSwap, _) = generators
     val chain = Seq(
@@ -38,7 +43,12 @@ class GroupHomologySpec extends Specification:
 
     // The persistent homology of the classifying spaces of the subgroups in the chain, in degrees 0, 1, 2
     def bars(prime: Int) =
-      groups.ClassifyingSpace.persistentGroupHomology(s4, chain, maxDegree = 2, prime = prime).groupBy(identity).view.mapValues(_.size).toMap
+      groups.ClassifyingSpace
+        .persistentGroupHomology(s4, chain, maxDegree = 2, prime = prime)
+        .groupBy(identity)
+        .view
+        .mapValues(_.size)
+        .toMap
 
     // How many cells a classifying space has in each dimension: (|G| - 1)^n
     val cells = for g <- Seq(6, 24, 120); n <- Seq(2, 3, 4) yield BigInt(g - 1).pow(n).toLong

@@ -8,8 +8,8 @@ three is the odd one out? Did the topology change between yesterday's scan and t
 how far apart two barcodes are, and a way to turn a barcode into a vector of numbers that a classifier can use. This tutorial does
 both, on three small point clouds: two independent samples of the same circle, and a figure eight.
 
-**The data.** [`data/noisy-circle.csv`](data/noisy-circle.csv) and [`data/noisy-circle-b.csv`](data/noisy-circle-b.csv) are two samples
-of 60 points from the unit circle with different random angles and noise. [`data/figure-eight.csv`](data/figure-eight.csv) is 70 points
+**The data.** [`data/noisy-circle.csv`](https://github.com/appliedtopology/tda4j/blob/scala/_docs/tutorials/data/noisy-circle.csv) and [`data/noisy-circle-b.csv`](https://github.com/appliedtopology/tda4j/blob/scala/_docs/tutorials/data/noisy-circle-b.csv) are two samples
+of 60 points from the unit circle with different random angles and noise. [`data/figure-eight.csv`](https://github.com/appliedtopology/tda4j/blob/scala/_docs/tutorials/data/figure-eight.csv) is 70 points
 from a figure eight, which has two loops. Call them A, B and 8. A and B should be close, and 8 should be far from both.
 
 ## One diagram per cloud

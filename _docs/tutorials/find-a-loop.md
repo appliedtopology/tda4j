@@ -7,7 +7,7 @@ The most common question in topological data analysis is also the simplest: *doe
 answers it for a small noisy point cloud, from reading the file to reading the barcode, and introduces the pieces every other
 tutorial uses: the Vietoris-Rips complex, a persistence engine, and the question of which bars are signal.
 
-**The data.** [`data/noisy-circle.csv`](data/noisy-circle.csv) holds 60 points sampled at random angles from the unit circle, each
+**The data.** [`data/noisy-circle.csv`](https://github.com/appliedtopology/tda4j/blob/scala/_docs/tutorials/data/noisy-circle.csv) holds 60 points sampled at random angles from the unit circle, each
 coordinate then perturbed by Gaussian noise of size 0.05. (Every data file in these tutorials is produced by a seeded generator
 checked into the repository, so you can rebuild or change it.) There is one obvious hole in this data, and no point lies on it.
 

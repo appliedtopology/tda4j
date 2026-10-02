@@ -5,7 +5,7 @@ title: Choosing a complex
 
 [Finding a loop](find-a-loop.md) used the Vietoris-Rips complex because it is the default. TDA4j offers several other ways to
 turn a point cloud into a filtered complex, and they trade off size, exactness and what they need to know about your data. This
-tutorial runs the *same* data, [`data/noisy-circle.csv`](data/noisy-circle.csv), through five of them and compares what comes out.
+tutorial runs the *same* data, [`data/noisy-circle.csv`](https://github.com/appliedtopology/tda4j/blob/scala/_docs/tutorials/data/noisy-circle.csv), through five of them and compares what comes out.
 
 Every complex below is built the same way, an object that takes your points and a `maxDimension` (the highest homology
 dimension you want) and returns a stream of simplices that any engine can read. So one small function is enough to compare them:

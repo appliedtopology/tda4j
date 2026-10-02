@@ -88,6 +88,17 @@ first and did not take effect — don't re-attempt without confirming it works).
 sc:nocompile`). A failing snippet fails `sbt doc` with page:line. `WORKLOG-doc-snippets-compile.md`. Cross-links use
 scaladoc's `[[org.appliedtopology.tda4j.Foo]]`/relative `.md` links.
 
+**Tutorial pages** (`_docs/tutorials/`, `WORKLOG-tutorial-pages.md`): compute first, write second — run the code, read the output, then write
+the prose around what you saw; if a dataset does not show the intended effect, change the dataset, never the claim. Each page has a spec in
+`src/test/.../tutorial/` that runs the SAME code and asserts every number the prose quotes; narrative fences are `scala sc:nocompile`
+(they share values, and the snippet compiler compiles each fence alone), and each page ends with a "whole script" fence that IS
+compiled. Shared point clouds live in `_docs/tutorials/data/`, written by the seeded `tutorial/TutorialData` (change the generator, run
+`sbt "Test/runMain org.appliedtopology.tda4j.tutorial.TutorialData"`; `TutorialDataSpec` guards drift). Style: `TDAlab` throughout
+(its `streams`/`homology`/`io`/`barcode`/`cells`/`groups`/`alpha` objects exist for this); `diagramAt`/`diagramWithGeneratorsAt` triples,
+not `PersistenceBar`; no `barcodeAt(f)` at an intermediate `f`; public API only (a fence naming a `private[tda4j]` class or a test fixture
+fails `sbt doc`); no timings in prose. `Map[G, Fp]` equality compares raw representatives (-1 vs 1 over F_2 differ): compare cochains with
+`CupProduct.isCoboundary`, never `==`. Tutorial specs add ~90 s to `testFull`.
+
 **Docs are built with Scala 3.8.4, everything else with 3.9.0** (scaladoc 3.9.0's JavaScript is broken; this
 includes the `ux.js` `$.get` navigation bug). The pin is the `TDA4J_SCALA_VERSION` env var read by `scalaVersion`
 in `build.sbt`, set only on the docs steps of `docs.yml`/`release.yml` (not `++3.8.4`). sbt 2 puts output under

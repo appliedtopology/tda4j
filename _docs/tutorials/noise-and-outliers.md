@@ -8,7 +8,7 @@ in. The Vietoris-Rips complex treats every point as equally trustworthy, so a fe
 This tutorial shows the problem and one standard remedy, the **distance-to-measure** (DTM) weighting, which makes the complex
 trust points in dense regions more than points on their own. If you have not read [Finding a loop](find-a-loop.md) yet, start there.
 
-**The data.** [`data/circle-with-outliers.csv`](data/circle-with-outliers.csv) has 95 points: a noisy unit circle of 70 points
+**The data.** [`data/circle-with-outliers.csv`](https://github.com/appliedtopology/tda4j/blob/scala/_docs/tutorials/data/circle-with-outliers.csv) has 95 points: a noisy unit circle of 70 points
 (the first 70 rows), then 25 outliers scattered uniformly over the square `[-2, 2] × [-2, 2]`, with nothing to do with the circle.
 The true answer is still one loop.
 

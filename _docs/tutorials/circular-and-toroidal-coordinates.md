@@ -14,7 +14,7 @@ of Scoccola, Gakhar, Bush, Schonsheck, Rask, Zhou and Perea for the torus.
 
 ## A circle
 
-We already know the answer for [`data/noisy-circle.csv`](data/noisy-circle.csv): the points were sampled from a circle, so each
+We already know the answer for [`data/noisy-circle.csv`](https://github.com/appliedtopology/tda4j/blob/scala/_docs/tutorials/data/noisy-circle.csv): the points were sampled from a circle, so each
 has a true angle, which we can compute from its coordinates and use to check what the algorithm recovered. First, ask for the loops
 in the data (the algorithm works with cohomology rather than homology, which is why it has its own entry point):
 
@@ -73,7 +73,7 @@ here that is all 60, and `theta.size` tells you in general.
 
 ## A torus
 
-The data in [`data/flat-torus.csv`](data/flat-torus.csv) is 120 points on the flat torus in four dimensions, `(cos a, sin a, cos b, sin b)`
+The data in [`data/flat-torus.csv`](https://github.com/appliedtopology/tda4j/blob/scala/_docs/tutorials/data/flat-torus.csv) is 120 points on the flat torus in four dimensions, `(cos a, sin a, cos b, sin b)`
 with the two angles `a` and `b` independent and random. The torus has two independent loops, one for each angle, so we expect two
 long bars in dimension 1:
 
