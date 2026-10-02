@@ -164,8 +164,8 @@ Test / sourceGenerators += Def.uncached(Def.task {
     lines.foreach { line =>
       if (line.startsWith("```")) {
         info match {
-          case None       => info = Some(line.stripPrefix("```").trim); body.clear()
-          case Some(i)    => out += ((i, body.toString)); info = None
+          case None    => info = Some(line.stripPrefix("```").trim); body.clear()
+          case Some(i) => out += ((i, body.toString)); info = None
         }
       } else if (info.isDefined) body.append(line).append("\n")
     }
@@ -181,7 +181,8 @@ Test / sourceGenerators += Def.uncached(Def.task {
     if (at < 0) Nil
     else {
       val narrative = fences(text.substring(0, at).linesIterator.toList).collect { case ("scala sc:nocompile", b) => b }
-      val script = fences(text.substring(at).linesIterator.toList).collectFirst { case ("scala", b) => b }
+      val script = fences(text.substring(at).linesIterator.toList)
+        .collectFirst { case ("scala", b) => b }
         .getOrElse(sys.error(s"${page.getName}: no `scala` fence after '$marker'"))
       val name = objectName(page)
       val source =
