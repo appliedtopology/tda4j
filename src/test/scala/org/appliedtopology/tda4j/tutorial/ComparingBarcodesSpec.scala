@@ -54,8 +54,16 @@ class ComparingBarcodesSpec extends Specification:
       Map("A" -> circleA.size, "B" -> circleB.size, "8" -> eight.size),
       bottleneck,
       wasserstein,
-      Map("A-B" -> l2(landscapes("A"), landscapes("B")), "A-8" -> l2(landscapes("A"), landscapes("8")), "B-8" -> l2(landscapes("B"), landscapes("8"))),
-      Map("A-B" -> l2(imageOf("A"), imageOf("B")), "A-8" -> l2(imageOf("A"), imageOf("8")), "B-8" -> l2(imageOf("B"), imageOf("8")))
+      Map(
+        "A-B" -> l2(landscapes("A"), landscapes("B")),
+        "A-8" -> l2(landscapes("A"), landscapes("8")),
+        "B-8" -> l2(landscapes("B"), landscapes("8"))
+      ),
+      Map(
+        "A-B" -> l2(imageOf("A"), imageOf("B")),
+        "A-8" -> l2(imageOf("A"), imageOf("8")),
+        "B-8" -> l2(imageOf("B"), imageOf("8"))
+      )
     )
 
   "comparing-barcodes.md" should {
@@ -65,13 +73,14 @@ class ComparingBarcodesSpec extends Specification:
       r.barCounts must beEqualTo(Map("A" -> 1, "B" -> 1, "8" -> 2))
     }
     "put the two circles close together and the figure eight far from both, in every measure" in {
-      List(r.bottleneck, r.wasserstein, r.landscape, r.image).forall(m => m("A-B") < m("A-8") && m("A-B") < m("B-8")) must beTrue
+      List(r.bottleneck, r.wasserstein, r.landscape, r.image).forall(m =>
+        m("A-B") < m("A-8") && m("A-B") < m("B-8")
+      ) must beTrue
     }
-    "quote the distances" in {
+    "quote the distances" in
       (r.bottleneck("A-B") must beCloseTo(0.040, 0.001))
         .and(r.bottleneck("A-8") must beCloseTo(0.556, 0.001))
         .and(r.bottleneck("B-8") must beCloseTo(0.518, 0.001))
         .and(r.wasserstein("A-8") must beCloseTo(0.864, 0.001))
         .and(r.bottleneck("A-8") / r.bottleneck("A-B") must beGreaterThan(10.0))
-    }
   }
