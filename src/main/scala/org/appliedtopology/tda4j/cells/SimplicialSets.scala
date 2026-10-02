@@ -11,6 +11,40 @@ enum ConeGenerator[+G]:
   case Base(g: G)
   case Cone(g: G)
 
+/** A cell of the simplicial set of a group presentation (see [[SimplicialSets.presentationComplex]]). */
+enum PresentationCell derives CanEqual:
+  /** The single vertex. */
+  case Vertex
+
+  /** The edge for generator `i`. */
+  case Gen(i: Int)
+
+  /** The edge standing for the inverse of generator `i`. */
+  case Inv(i: Int)
+
+  /** The triangle saying `Gen(i) · Inv(i) = 1`. */
+  case InvTriangle(i: Int)
+
+  /** The diagonal `c_k` (product of the first `k` letters) in the fan triangulation of relator `r`. */
+  case Diagonal(r: Int, k: Int)
+
+  /** The `k`-th triangle of the fan triangulation of relator `r`. */
+  case Triangle(r: Int, k: Int)
+
+object PresentationCell:
+  private def key(c: PresentationCell): (Int, Int, Int) = c match
+    case Vertex         => (0, 0, 0)
+    case Gen(i)         => (1, i, 0)
+    case Inv(i)         => (2, i, 0)
+    case Diagonal(r, k) => (3, r, k)
+    case InvTriangle(i) => (4, i, 0)
+    case Triangle(r, k) => (5, r, k)
+
+  given Ordering[PresentationCell] =
+    Ordering.by[PresentationCell, (Int, Int, Int)](key)(using
+      Ordering.Tuple3(using Ordering.Int, Ordering.Int, Ordering.Int)
+    )
+
 object ConeGenerator:
   given coneGeneratorOrdering: [G: Ordering as ord] => Ordering[ConeGenerator[G]]:
     private def key(c: ConeGenerator[G]): (Int, Option[G]) = c match
@@ -158,3 +192,49 @@ object SimplicialSets:
         val ends = x.faces(e).map(f => find(f.generator))
         if ends(0) != ends(1) then parent(ends(0)) = ends(1)
       vertices.map(find).distinct.size == 1
+
+  /** The presentation complex of `<g_0..g_{n-1} | relations>`: one vertex; an edge per generator plus one for its
+    * inverse (tied to it by a triangle `g · g^{-1} = 1`); and each relator, a word of letters `(generator, +1 or -1)`,
+    * filled by a fan of triangles over its polygon, whose last triangle's third edge is the degenerate (identity) edge.
+    * Its `π_1` is the presented group, and it is the inverse of [[FundamentalGroup.presentation]] up to homotopy.
+    */
+  def presentationComplex(
+    numGenerators: Int,
+    relations: Seq[List[(Int, Int)]]
+  ): FiniteSimplicialSet[PresentationCell] =
+    import PresentationCell.*
+    relations.foreach(
+      _.foreach((i, e) => require(i >= 0 && i < numGenerators && (e == 1 || e == -1), s"bad letter ($i,$e)"))
+    )
+    val identityEdge = SSetElement[PresentationCell](List(0), Vertex)
+    def bare(c: PresentationCell) = SSetElement[PresentationCell](Nil, c)
+    def letter(l: (Int, Int)): PresentationCell = if l._2 > 0 then Gen(l._1) else Inv(l._1)
+
+    val faceTable =
+      scala.collection.mutable.LinkedHashMap.empty[PresentationCell, IndexedSeq[SSetElement[PresentationCell]]]
+    faceTable(Vertex) = IndexedSeq.empty
+    for i <- 0 until numGenerators do
+      faceTable(Gen(i)) = IndexedSeq(bare(Vertex), bare(Vertex))
+      faceTable(Inv(i)) = IndexedSeq(bare(Vertex), bare(Vertex))
+      faceTable(InvTriangle(i)) = IndexedSeq(bare(Inv(i)), identityEdge, bare(Gen(i)))
+    for (word, r) <- relations.zipWithIndex do
+      word.length match
+        case 0 => faceTable(Triangle(r, 1)) = IndexedSeq(identityEdge, identityEdge, identityEdge)
+        case 1 => faceTable(Triangle(r, 1)) = IndexedSeq(bare(letter(word.head)), identityEdge, identityEdge)
+        case l =>
+          // c_1 = e_1, c_k = c_{k-1} · e_k; the last diagonal is the identity.
+          def diagonal(k: Int): SSetElement[PresentationCell] =
+            if k == 1 then bare(letter(word.head)) else if k == l then identityEdge else bare(Diagonal(r, k))
+          for k <- 2 until l do faceTable(Diagonal(r, k)) = IndexedSeq(bare(Vertex), bare(Vertex))
+          for k <- 2 to l do
+            faceTable(Triangle(r, k)) = IndexedSeq(bare(letter(word(k - 1))), diagonal(k), diagonal(k - 1))
+    def dim(c: PresentationCell): Int = c match
+      case Vertex                           => 0
+      case Gen(_) | Inv(_) | Diagonal(_, _) => 1
+      case InvTriangle(_) | Triangle(_, _)  => 2
+    val byDim = IndexedSeq.tabulate(3)(d => faceTable.keySet.filter(dim(_) == d).toSet)
+    new FiniteSimplicialSet(byDim.reverse.dropWhile(_.isEmpty).reverse, faceTable)
+
+  /** The presentation complex of a [[GroupPresentation]] (e.g. one read off with [[FundamentalGroup.presentation]]). */
+  def presentationComplex[G](p: GroupPresentation[G]): FiniteSimplicialSet[PresentationCell] =
+    presentationComplex(p.generators.length, p.relations)
