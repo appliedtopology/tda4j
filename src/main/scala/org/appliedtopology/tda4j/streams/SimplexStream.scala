@@ -269,6 +269,12 @@ trait StratifiedCellStream[CellT: OrderedCell, FiltrationT: Filterable] extends 
     */
   def iterateDimension: PartialFunction[Int, Iterator[CellT]]
 
+  /** `Some(k)` for a complex cut off to compute homology in degrees `0..k` (what `VietorisRips(points, maxDimension =
+    * k)` returns, holding cells up to dimension `k + 1`): its higher degrees are not the homology of the full complex.
+    * `None` (the default) for a complete complex.
+    */
+  def homologyDegreeLimit: Option[Int] = None
+
   /** All the cells, dimension by dimension. Stops at the first undefined dimension (`takeWhile`, never `filter`, which
     * would search forever past the last one).
     */
@@ -295,6 +301,8 @@ private[tda4j] trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filtera
 private[tda4j] class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDim: Int)
     extends CofaceSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]():
+  override def homologyDegreeLimit: Option[Int] =
+    Some(stream.homologyDegreeLimit.fold(maxDim - 1)(math.min(_, maxDim - 1)))
   // `d <= maxDim` alone is not sufficient: the WRAPPED stream has its own natural bound (e.g.
   // EnumeratingCofaceSimplexStream's `d < metricSpace.size`, needed because a d-simplex needs d+1 distinct
   // vertices), which can be tighter than `maxDim` for a small point cloud. Calling `stream.iterateDimension(d)`
@@ -592,6 +600,8 @@ private[tda4j] class IncrementalVietorisRipsSimplexStream(
     */
   useLargestNeighborBound: Boolean = true
 ) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion):
+
+  override def homologyDegreeLimit: Option[Int] = Some(maxDimension - 1)
 
   private val resolvedMaxFiltrationValue: Double =
     maxFiltrationValue.getOrElse(metricSpace.minimumEnclosingRadius)

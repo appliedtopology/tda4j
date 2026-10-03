@@ -44,6 +44,9 @@ report a class alive at `f` as `[birth, f]` (closed end), so a class born exactl
 `[b, d)`. Fast cubical/alpha drop equal-value pairs at construction (a pair at `+Inf, +Inf` is otherwise indistinguishable
 from an essential class). `ZeroLengthBarsSpec`.
 
+The opt-in pairing checks (`totalBarsAccountForAllCells` with `includeZeroLength = true`) stay in the engine specs
+(project lead, 2026-10-03): they test the pairing invariant on purpose; nothing else should count bars against cells.
+
 Testing lessons for every engine: F2 hides sign errors; signed-field fixtures need ≥5 vertices (`Set1..Set4`
 hash-order past 4 elements, `SimplexBoundarySpec`/`SignedFieldBarcodeSpec`, `WORKLOG-code-critique.md` §1.1).
 F3-vs-F2 agreement is a cheap sign oracle. Two engines agreeing isn't proof if they share a truncation/code path

@@ -93,6 +93,29 @@ class PersistenceVerbSpec extends Specification:
     }
   }
 
+  "Persistence(stream)" should {
+    "compute the degrees a truncated stream was built for, and refuse a higher one" in {
+      val ms = EuclideanMetricSpace(circle(8))
+      val forH1 = VietorisRips(ms, maxDimension = 1, maxFiltrationValue = Double.PositiveInfinity)
+      val forH2 = VietorisRips(ms, maxDimension = 2, maxFiltrationValue = Double.PositiveInfinity)
+      // forH1 holds every triangle and no tetrahedra: read off H2, each triangle would be a fake essential class
+      (Persistence(forH1).maxDimension must beEqualTo(1))
+        .and(Persistence(forH2).maxDimension must beEqualTo(2))
+        .and(Persistence(forH2).bettiNumbers must beEqualTo(Vector(1, 0, 0)))
+        .and(
+          Persistence(forH1, maxDimension = 2) must throwAn[IllegalArgumentException](message =
+            "built for degrees 0..1"
+          )
+        )
+        .and(Persistence(Truncated(forH2, 1), maxDimension = 2) must throwAn[IllegalArgumentException])
+    }
+    "compute every degree of a complete complex, such as the octahedron's boundary" in {
+      val triangles = for a <- Seq(0, 1); b <- Seq(2, 3); c <- Seq(4, 5) yield Simplex(a, b, c)
+      val sphere = ExplicitStreamBuilder.fromFacets(triangles)
+      Persistence(sphere, maxDimension = 2).bettiNumbers must beEqualTo(Vector(1, 0, 1))
+    }
+  }
+
   "the coefficient field" should {
     "default to F_17 and be selectable, with torsion visible only where it should be (RP^2)" in {
       val rp2 = SimplicialSet.realProjectiveSpace(2)

@@ -24,7 +24,7 @@ object Image:
   * Persistence(points, complex = Cech, maxDimension = 2)
   * Persistence(points, maxFiltrationValue = 0.5)
   * Persistence(Image(pixels))                            // cubical, sublevel
-  * Persistence(stream, maxDimension = 2)                 // any complex you built yourself (witness, Dowker, ...)
+  * Persistence(stream)                                   // any complex you built yourself (witness, Dowker, ...)
   * }}}
   *
   * Returns a [[PersistenceDiagram]]: the bars of degree `0 .. maxDimension`, each with its representative (a cycle, or
@@ -37,7 +37,9 @@ object Image:
   *   points (`Array[Array[Double]]`, `Seq[Seq[Double]]`, `Seq[Array[Double]]`), a `FiniteMetricSpace[Int]`, an
   *   [[Image]], or any `StratifiedCellStream` -- converted to [[Persistence.Input]] at the call site.
   * @param maxDimension
-  *   the top homological degree to compute (point clouds and metric spaces; for a stream, the degrees reported).
+  *   the top homological degree to compute (default [[Persistence.DefaultMaxDimension]]). For a stream built for
+  *   degrees `0..k` (such as `VietorisRips(points, maxDimension = k)`), the default is `k` and a larger value is an
+  *   error.
   * @param maxFiltrationValue
   *   for point clouds and metric spaces: where to stop the filtration (a number; default: the minimum enclosing radius,
   *   past which nothing new happens). Ignored for images and streams.
@@ -144,23 +146,43 @@ object Persistence:
           def scale = None
           def cells = oc
 
+  /** The top homological degree computed when `maxDimension` is not given (and the input does not fix it). */
+  val DefaultMaxDimension: Int = 1
+
   def apply[CellT](
     input: Input[CellT],
-    maxDimension: Int = 1,
+    maxDimension: Optional[Int] = Optional.empty,
     maxFiltrationValue: Optional[Double] = Optional.empty,
     complex: PointCloudComplex = VietorisRips,
     characteristic: Int = FiniteField.DefaultPrime,
     engine: Engine = Engine.Chunks,
     includeZeroLength: Boolean = false
   ): PersistenceDiagram[CellT] =
-    require(maxDimension >= 0, s"Persistence: maxDimension must be >= 0, got $maxDimension")
+    val requested = maxDimension.toOption
+    requested.foreach(k => require(k >= 0, s"Persistence: maxDimension must be >= 0, got $k"))
     given (CellT is OrderedCell) = input.cells
     if engine == Engine.Ripser then
-      input.ripser(maxDimension, maxFiltrationValue.toOption, complex, characteristic, includeZeroLength)
+      input.ripser(
+        requested.getOrElse(DefaultMaxDimension),
+        maxFiltrationValue.toOption,
+        complex,
+        characteristic,
+        includeZeroLength
+      )
     else
+      val stream = input.stream(requested.getOrElse(DefaultMaxDimension), maxFiltrationValue.toOption, complex)
+      val degree = (requested, stream.homologyDegreeLimit) match
+        case (Some(k), Some(limit)) if k > limit =>
+          throw new IllegalArgumentException(
+            s"Persistence: this complex was built for degrees 0..$limit, so degree $k would be wrong; " +
+              s"build it with maxDimension = $k"
+          )
+        case (Some(k), _)        => k
+        case (None, Some(limit)) => limit
+        case (None, None)        => DefaultMaxDimension
       compute(
-        input.stream(maxDimension, maxFiltrationValue.toOption, complex),
-        maxDimension,
+        stream,
+        degree,
         characteristic,
         engine,
         input.scale,

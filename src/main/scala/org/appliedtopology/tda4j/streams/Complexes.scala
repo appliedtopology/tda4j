@@ -26,6 +26,8 @@ object Truncated:
 private final class TruncatedSimplexStream(stream: LevelwiseSimplexStream[Int, Double], maxSimplexDimension: Int)
     extends LevelwiseSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]:
+  override def homologyDegreeLimit: Option[Int] =
+    Some(stream.homologyDegreeLimit.fold(maxSimplexDimension - 1)(math.min(_, maxSimplexDimension - 1)))
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case d if d >= 0 && d <= maxSimplexDimension && stream.iterateDimension.isDefinedAt(d) => stream.iterateDimension(d)
   }

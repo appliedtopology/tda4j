@@ -268,7 +268,8 @@ file before changing that subsystem; this table is the index, in case a rule did
   condensing date/commit at top.
 - **Docs carry the contract, worklogs carry the history.** Scaladoc, user guide and tutorials say what the code does and
   what to call (Li Haoyi's "easy": one import, defaults, errors that say what to do); no "used to", "fixed in session
-  X", "confirmed by", worklog pointers or measurements there -- those go in `.claude/`. Error messages and `--help`
+  X", "confirmed by", worklog pointers or measurements there -- those go in `.claude/`. `//` implementation comments
+  MAY carry history and worklog pointers (project lead, 2026-10-03), as long as none of it moves into scaladoc. Error messages and `--help`
   never name `.claude/` files or private classes. The Developer's Guide is being edited by a student: touch it only to
   fix facts.
 - **Never revert the formatter's output.** If `scalafmtAll` touches files outside your change, commit that in its OWN
