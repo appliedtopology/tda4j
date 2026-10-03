@@ -65,7 +65,7 @@ object BarcodeEndpoint:
   * @tparam FiltrationT
   *   Type of the filtration parameter
   * @tparam AnnotationT
-  *   Type of the annotation (we would expect this to be [[algebra.Chain]]).
+  *   Type of the annotation (we would expect this to be [[Chain]]).
   */
 case class PersistenceBar[FiltrationT: Ordering, AnnotationT](
   dim: Int,

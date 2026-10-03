@@ -19,6 +19,7 @@ EXCLUDE = {"TDAlab", "SimplexOps", "SimplexInstances", "CubeInstances"}  # the f
 DECL = re.compile(
     r"^(?:(?:sealed|final|case|abstract|open|opaque|transparent|infix)\s+)*(?:class|trait|object|type|enum)\s+([^\s\[\(:=]+)"
 )
+EXTRA_TERMS = ["∆"]  # val aliases also re-exported (a val forwarder is not ambiguous; a def forwarder is)
 BEGIN, END = "  // BEGIN generated re-exports", "  // END generated re-exports"
 
 
@@ -40,7 +41,7 @@ def block():
     for pkg, lines in [(PKG, [f"package {PKG}"])] + [
         (f"{PKG}.{a}", [f"package {PKG}", f"package {a}"]) for a in ADDONS
     ]:
-        names = public_names(lines)
+        names = sorted(public_names(lines) + (EXTRA_TERMS if pkg == PKG else []))
         if names:
             out.append(f"  export {pkg}.{{")
             out.append(",\n".join(f"    {n}" for n in names))

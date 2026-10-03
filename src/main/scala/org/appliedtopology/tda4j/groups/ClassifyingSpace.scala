@@ -107,7 +107,7 @@ object ClassifyingSpace:
       .filter((dim, birth, death) => dim <= maxDegree && death > birth)
       .sorted
 
-  /** Dimension of `H_n(X; F_p)` for `n = 0..maxDegree` of a nerve (group or monoid); see [[homology.BettiNumbers]]. */
+  /** Dimension of `H_n(X; F_p)` for `n = 0..maxDegree` of a nerve (group or monoid); see [[BettiNumbers]]. */
   def bettiNumbers(nerve: Nerve, maxDegree: Int, prime: Int): Vector[Int] = BettiNumbers(nerve, maxDegree, prime)
 
   /** Dimension of `H_n(G; F_p)` for `n = 0..maxDegree`: the classes that are never killed. */

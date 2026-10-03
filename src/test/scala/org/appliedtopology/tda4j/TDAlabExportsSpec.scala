@@ -31,21 +31,23 @@ class TDAlabExportsSpec extends Specification:
 
   private val exported: Set[String] =
     val text = Files.readString(root.resolve("package.scala"))
-    val block = text.substring(text.indexOf("// BEGIN generated re-exports"), text.indexOf("// END generated re-exports"))
+    val block =
+      text.substring(text.indexOf("// BEGIN generated re-exports"), text.indexOf("// END generated re-exports"))
     """(?m)^\s{4}([^\s,]+),?\s*$""".r.findAllMatchIn(block).map(_.group(1)).toSet
 
   private val addons = Seq("groups") // TEMP: Seq("sset") once groups and the simplicial-set files move there
-  private def addonNames = addons.flatMap(a => publicNames(Seq("package org.appliedtopology.tda4j", s"package $a"))).toSet
+  private def addonNames =
+    addons.flatMap(a => publicNames(Seq("package org.appliedtopology.tda4j", s"package $a"))).toSet
 
   "TDAlab's re-export block" should {
     "cover every public top-level type of the root package" in {
-      (publicNames(Seq("package org.appliedtopology.tda4j")) -- exported) must beEqualTo(Set.empty[String])
+      (publicNames(Seq("package org.appliedtopology.tda4j")) + "∆" -- exported) must beEqualTo(Set.empty[String])
     }
     "cover every public top-level type of the add-on packages" in {
       (addonNames -- exported) must beEqualTo(Set.empty[String])
     }
     "contain nothing that no longer exists" in {
-      val all = publicNames(Seq("package org.appliedtopology.tda4j")) ++ addonNames
+      val all = publicNames(Seq("package org.appliedtopology.tda4j")) ++ addonNames + "∆"
       (exported -- all) must beEqualTo(Set.empty[String])
     }
   }
