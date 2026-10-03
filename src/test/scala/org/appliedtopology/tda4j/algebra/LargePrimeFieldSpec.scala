@@ -12,7 +12,8 @@ class LargePrimeFieldSpec extends Specification:
     import ff.given
     val fld = summon[ff.Fp is Field]
     val rnd = new scala.util.Random(p)
-    val samples = Seq(p - 1, p - 2, -(p - 1), (p - 1) / 2, -(p - 1) / 2, 1, -1) ++ Seq.fill(200)(rnd.nextInt(2 * p - 1) - (p - 1))
+    val samples =
+      Seq(p - 1, p - 2, -(p - 1), (p - 1) / 2, -(p - 1) / 2, 1, -1) ++ Seq.fill(200)(rnd.nextInt(2 * p - 1) - (p - 1))
     def residue(x: ff.Fp): BigInt = BigInt(ff.toUInt(x))
     samples.forall { a =>
       samples.take(40).forall { b =>
@@ -26,7 +27,7 @@ class LargePrimeFieldSpec extends Specification:
   "FiniteField arithmetic" should {
     "be exact at p = 65537 (products of residues exceed Int.MaxValue)" in { check(65537) must beTrue }
     "be exact at p = 46349, just past the overflow threshold" in { check(46349) must beTrue }
-    "still be exact at the default prime 17 and at 2" in { (check(17) must beTrue).and(check(2) must beTrue) }
+    "still be exact at the default prime 17 and at 2" in (check(17) must beTrue).and(check(2) must beTrue)
   }
 
   "a homology computation over a large prime" should {
@@ -39,7 +40,10 @@ class LargePrimeFieldSpec extends Specification:
           .persistentHomology(VietorisRips(EuclideanMetricSpace(pts), 1, Some(2.0)))
           .diagramAt(Double.PositiveInfinity)
           .filter((d, b, e) => d <= 1 && e - b > 0.1)
-          .groupBy(_._1).view.mapValues(_.size).toMap
+          .groupBy(_._1)
+          .view
+          .mapValues(_.size)
+          .toMap
       betti(65537) must beEqualTo(betti(17))
     }
   }
@@ -53,4 +57,3 @@ class LargePrimeFieldSpec extends Specification:
         .and(f2.norm(f2.norm(f2.Fp(1))) must beEqualTo(f2.norm(f2.Fp(1))))
     }
   }
-

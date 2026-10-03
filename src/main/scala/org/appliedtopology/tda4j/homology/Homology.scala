@@ -82,8 +82,18 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
         .by[CellT, FiltrationT](c => stream.filtrationValue.applyOrElse(c, (_: CellT) => stream.smallest))
         .orElse(Ordering.by[CellT, Int](_.dim))
         .orElse(stream.filtrationOrdering.reverse)
-    val cellIterator: collection.BufferedIterator[CellT] =
-      stream.iterator.toVector.sorted(using processingOrder).iterator.buffered
+    private val processingSequence: Vector[CellT] = stream.iterator.toVector.sorted(using processingOrder)
+    val cellIterator: collection.BufferedIterator[CellT] = processingSequence.iterator.buffered
+
+    /** How many cells the cursor has consumed, out of `totalCells`: progress of a long run. */
+    var processedCells: Int = 0
+    def totalCells: Int = processingSequence.size
+
+    /** Filtration value of the last cell the stream will ever produce: a class alive at `f` is essential exactly when
+      * no cell enters after `f`, which is a property of the STREAM, not of how far the cursor happens to have run.
+      */
+    private lazy val lastFiltrationValue: Option[FiltrationT] =
+      processingSequence.lastOption.map(c => cellFiltrationValue(c, filtration.smallest))
 
     private def cellFiltrationValue(cell: CellT, fallback: FiltrationT): FiltrationT =
       stream.filtrationValue.applyOrElse(cell, (_: CellT) => fallback)
@@ -104,6 +114,7 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
     def advanceOne(): Unit =
       if cellIterator.hasNext then
         val sigma: CellT = cellIterator.next()
+        processedCells += 1
         val dsigma: Chain[CellT, CoefficientT] = Chain.from(sigma.boundary[CoefficientT])
         // Chain.reduceBy (the SortedMap-based object-level primitive shared with
         // PersistenceInChunksEngine), not a hand-rolled reduction over raw Chain arithmetic: `-`/`⊠`
@@ -193,6 +204,17 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
     def advanceAll(): Unit =
       while cellIterator.hasNext do advanceOne()
 
+    /** Advance for at most `budget` of wall-clock time (checked after every cell), so a long computation can be run in
+      * slices and inspected -- `diagramAt(f)` gives the diagram truncated at `f` whatever the cursor position --
+      * instead of committing to a run that may never report. Returns `true` once the stream is exhausted. Always
+      * processes at least one cell when any remain, so repeated calls make progress even with a zero budget.
+      */
+    def advanceFor(budget: scala.concurrent.duration.FiniteDuration): Boolean =
+      val deadline = budget.fromNow
+      advanceOne()
+      while cellIterator.hasNext && deadline.hasTimeLeft() do advanceOne()
+      !cellIterator.hasNext
+
     /** Full diagram at f, each bar annotated with its representative cycle (the class's generator at birth for a
       * finished bar; the still-open generator for an essential class).
       *
@@ -208,7 +230,11 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
       // A class still open at query time f is only truly essential (dies at +infinity) once the
       // whole stream is exhausted; mid-stream it merely hasn't died *yet*, so its death is capped at
       // the query value f rather than reported as infinite.
-      val essentialUpper: FiltrationT = if cellIterator.hasNext then f else filtration.largest
+      // Was `if cellIterator.hasNext then f else largest`: right for a cursor sitting at f, wrong once the cursor had
+      // run past f (to the end) -- diagramAt(3.0) then diagramAt(0.5) reported a class alive at 0.5 as essential.
+      val essentialUpper: FiltrationT = lastFiltrationValue match
+        case Some(last) if f < last => f
+        case _                      => filtration.largest
       val essential: List[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT])] =
         positives.toList.collect {
           case (sigma, (birth, rep)) if birth <= f => (sigma.dim, birth, essentialUpper, rep)
@@ -469,6 +495,15 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
           essentialRepresentatives(edge) = Chain(edge) - (c0 ⊠ pathFromRoot(v0)) - (c1 ⊠ pathFromRoot(v1))
         }
 
+    private lazy val lastFiltrationValue: Double =
+      allCells.iterator
+        .map(c => stream.filtrationValue.applyOrElse(c, (_: CellT) => Double.NegativeInfinity))
+        .maxOption
+        .getOrElse(Double.NegativeInfinity)
+
+    /** A class alive at `f` dies "at f" in the diagram truncated at `f`, unless no cell enters after `f`. */
+    private def essentialUpperAt(f: Double): Double = if f < lastFiltrationValue then f else Double.PositiveInfinity
+
     def diagramAt(f: Double): List[(Int, Double, Double)] =
       advanceAll()
 
@@ -483,11 +518,13 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
       // (nothing of dimension maxDim + 2 was ever considered to possibly kill IT), but that's scaffolding for
       // correctly resolving maxDim, not information the caller asked for -- see the class doc above. Finite
       // bars need no equivalent filter (recordPair's barDim = pivot.dim is always <= maxDim already).
+      // Born at or before f, and essential only if no cell enters after f -- the same truncation semantics as the
+      // naive engine's cursor (`DiagramQuerySpec`). Used to include classes born AFTER f, always at +infinity.
       val essentialBars: List[(Int, Double, Double)] =
-        essentialSimplices.toList.filter(_.dim <= maxDim).map { sigma =>
+        essentialSimplices.toList.filter(_.dim <= maxDim).flatMap { sigma =>
           val lower =
             stream.filtrationValue.applyOrElse(sigma, (_: CellT) => Double.NegativeInfinity)
-          (sigma.dim, lower, Double.PositiveInfinity)
+          Option.when(lower <= f)((sigma.dim, lower, essentialUpperAt(f)))
         }
 
       pairs ++ essentialBars
@@ -642,16 +679,13 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
         }
 
       val essential: List[PersistenceBar[Double, Chain[CellT, CoefficientT]]] =
-        essentialSimplices.toList.filter(_.dim <= maxDim).map { sigma =>
+        essentialSimplices.toList.filter(_.dim <= maxDim).flatMap { sigma =>
           val lower =
             stream.filtrationValue.applyOrElse(sigma, (_: CellT) => Double.NegativeInfinity)
-          val rep = essentialRepresentatives.getOrElseUpdate(sigma, vcolOf(sigma))
-          new PersistenceBar(
-            sigma.dim,
-            endpoint(true)(lower),
-            PositiveInfinity(),
-            Some(rep)
-          )
+          Option.when(lower <= f) {
+            val rep = essentialRepresentatives.getOrElseUpdate(sigma, vcolOf(sigma))
+            new PersistenceBar(sigma.dim, endpoint(true)(lower), endpoint(false)(essentialUpperAt(f)), Some(rep))
+          }
         }
 
       finite ++ essential

@@ -87,3 +87,10 @@ never compared (circumradius vs diameter).
 **`HomologySpec`'s `BarcodeRegressionSpec` is `skipAll`'d unconditionally and NOT on this flag**: chunks x
 `AlphaShapeDQP` on its own generator range produces enormous complexes (40 points/dim 4 → 102,090 simplices) that
 stall/OOM. Don't un-skip without bounding the scale problem (`WORKLOG-benchmark-and-chunks-bug.md`).
+
+**Query contract (naive + chunks, `DiagramQuerySpec`, `WORKLOG-cursor-and-verb.md`)**: `diagramAt(f)`/`barcodeAt(f)`/
+`diagramWithGeneratorsAt(f)` give the diagram truncated at `f` -- bars born `<= f`, deaths capped at `f`, a class alive
+at `f` reported as dying at `f` unless no cell enters after `f` (then essential) -- REGARDLESS of where the naive
+cursor is (it used to report a class as essential after the cursor had run past `f`; chunks used to include
+essentials born after `f`). The cursor is kept on purpose (project lead): long runs must be inspectable and keep their
+output if they die; `advanceFor(budget)` runs it in time slices, `processedCells`/`totalCells` report progress.

@@ -39,7 +39,7 @@ with a "whole script" fence that IS compiled by the docs build. Shared point clo
 (`import tdalab.{*, given}` is the page's only import: it re-exports the whole library and the `sset` add-on, flat --
 write `VietorisRips(...)`, not `tdalab.streams.VietorisRips`; the namespace objects are gone); user-guide fences use
 `import org.appliedtopology.tda4j.*` (+ `.sset.*` for simplicial sets) instead; `diagramAt`/`diagramWithGeneratorsAt` triples,
-not `PersistenceBar`; no `barcodeAt(f)` at an intermediate `f`; public API only (a fence naming a `private[tda4j]` class or a test fixture
+not `PersistenceBar`; `barcodeAt(f)` at an intermediate `f` is safe since the query-contract fix (`rules/engines.md`); public API only (a fence naming a `private[tda4j]` class or a test fixture
 fails `sbt doc`); no timings in prose. `Map[G, Fp]` equality compares raw representatives (-1 vs 1 over F_2 differ): compare cochains with
 `CupProduct.isCoboundary`, never `==`. Tutorial specs add ~90 s to `testFull`.
 **Language tabs** (`WORKLOG-tutorial-tabs.md`): where `matlab.TDA4j` supports the task, show the code in a `<div class="tabset">` with
