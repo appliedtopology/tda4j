@@ -1347,6 +1347,19 @@ class RipserCohomologyContext[CoefficientT: Field](
     */
   def totalSimplexCount: Int = _totalSimplexCount
 
+  private var _apparentPairCount: Int = 0
+
+  /** How many simplices were resolved directly via the cheap `zeroApparentCofacet` skip-and-emit path (top of
+    * the main loop), i.e. never reached `coboundaryOf`/`Chain.reduceBy` at all -- distinct from
+    * `substitutionCount`, which only counts the much rarer LAZY FALLBACK firing when some OTHER column's
+    * reduction later needs an apparent pair's tau as a missing pivot. A low `substitutionCount` says nothing
+    * about this number (most apparent pairs, once found, are never looked up again). Added specifically to
+    * test whether `PackedRipserCohomologyContext`'s independently-reimplemented apparent-pairs check finds
+    * pairs at the same rate this engine's does on a given input -- see `fractal-r`'s own entry in
+    * `.claude/WORKLOG-o3-1024-fractal-r-session-2026-09-25.md` for why this matters there.
+    */
+  def apparentPairCount: Int = _apparentPairCount
+
   def persistentCohomology(): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     // Summoned here, not any earlier -- see class doc above and CellularHomologyContext's class doc for
     // why a Chain[...] is RingModule instance's summon-time Ordering[CellT] scoping matters.
@@ -1355,6 +1368,7 @@ class RipserCohomologyContext[CoefficientT: Field](
 
     _substitutionCount = 0
     _totalSimplexCount = 0
+    _apparentPairCount = 0
     val bars = mutable.ArrayDeque.empty[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]]
 
     // Clearing: a d-simplex that was already claimed as the PIVOT of some (d-1)-simplex's reduction
@@ -1433,6 +1447,7 @@ class RipserCohomologyContext[CoefficientT: Field](
             // by ANY later column whose reduction log has a `tau` entry, whether tau was reached via
             // ordinary `basis` or via `basisFallback` -- omitting it reintroduces the "pivot has a basis
             // entry but no generators entry" throw below.
+            _apparentPairCount += 1
             val vcol = Chain[Simplex[Int], CoefficientT](sigma)
             generators(tau) = vcol
             cleared += tau

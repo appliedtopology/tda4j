@@ -280,12 +280,26 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
   private var _totalSimplexCount: Int = 0
   def totalSimplexCount: Int = _totalSimplexCount
 
+  private var _apparentPairCount: Int = 0
+
+  /** How many simplices were resolved directly via the cheap `zeroApparentCofacet` skip-and-emit path (top of the
+    * main loop), i.e. never reached `coboundaryOf`/`Chain.reduceBy` at all -- distinct from `substitutionCount`,
+    * which only counts the much rarer LAZY FALLBACK firing when some OTHER column's reduction later needs an
+    * apparent pair's tau as a missing pivot. A low `substitutionCount` says nothing about this number (most
+    * apparent pairs, once found, are never looked up again -- `WORKLOG-lazy-enumeration.md`'s own point). Added
+    * specifically to test whether packed's independently-reimplemented apparent-pairs check finds pairs at the
+    * same rate `RipserCohomologyContext`'s does on a given input -- see `fractal-r`'s own entry in
+    * `.claude/WORKLOG-o3-1024-fractal-r-session-2026-09-25.md` for why this matters there.
+    */
+  def apparentPairCount: Int = _apparentPairCount
+
   def persistentCohomology(): List[PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]]] =
     val chainRM = summon[Chain[DiameterIndex, CoefficientT] is RingModule]
     import chainRM.*
 
     _substitutionCount = 0
     _totalSimplexCount = 0
+    _apparentPairCount = 0
     val bars = mutable.ArrayDeque.empty[PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]]]
 
     // Rotating per-dimension cleared set, keyed by bare Long index -- NOT a single set accumulated across all
@@ -341,6 +355,7 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
         val sigmaFv = sigma.diameter
         (if useApparentPairs then zeroApparentCofacet(sigma, size) else None) match
           case Some(tau) =>
+            _apparentPairCount += 1
             val vcol = Chain[DiameterIndex, CoefficientT](sigma)
             generators(tau) = vcol
             nextCleared += tau.index

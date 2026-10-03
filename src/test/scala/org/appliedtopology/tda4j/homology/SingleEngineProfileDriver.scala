@@ -61,23 +61,23 @@ object SingleEngineProfileDriver:
     val times = (1 to trials).map { _ =>
       val ms = buildMetricSpace()
       val t0 = System.nanoTime()
-      val (totalSimplices, substCount, barCounts) = engine match
+      val (totalSimplices, substCount, apparentCount, barCounts) = engine match
         case "sortedset" =>
           val ctx = RipserCohomologyContext[Fp](ms, maxDim, maxFiltrationValue = threshold)
           val bars = ctx.persistentCohomology()
-          (ctx.totalSimplexCount, ctx.substitutionCount, bars.groupBy(_.dim).view.mapValues(_.size).toMap)
+          (ctx.totalSimplexCount, ctx.substitutionCount, ctx.apparentPairCount, bars.groupBy(_.dim).view.mapValues(_.size).toMap)
         case "packed" =>
           val ctx = PackedRipserCohomologyContext[Fp](ms, maxDim, maxFiltrationValue = threshold)
           val bars = ctx.persistentCohomology()
-          (ctx.totalSimplexCount, ctx.substitutionCount, bars.groupBy(_.dim).view.mapValues(_.size).toMap)
+          (ctx.totalSimplexCount, ctx.substitutionCount, ctx.apparentPairCount, bars.groupBy(_.dim).view.mapValues(_.size).toMap)
         case other => throw new IllegalArgumentException(s"unknown engine $other -- use sortedset or packed")
       val elapsedMs = (System.nanoTime() - t0) / 1e6
-      (elapsedMs, totalSimplices, substCount, barCounts)
+      (elapsedMs, totalSimplices, substCount, apparentCount, barCounts)
     }
 
     val sortedTimes = times.map(_._1).sorted
     val medianMs = sortedTimes(sortedTimes.size / 2)
-    val (_, totalSimplices, substCount, barCounts) = times.last
+    val (_, totalSimplices, substCount, apparentCount, barCounts) = times.last
     println(s"engine=$engine format=$format dataFile=$dataFile maxDim=$maxDim threshold=$thresholdArg trials=$trials")
     println(f"medianMs=$medianMs%.1f allTimes=${times.map(t => f"${t._1}%.1f").mkString(",")}")
-    println(s"totalSimplexCount=$totalSimplices substitutionCount=$substCount bars=$barCounts")
+    println(s"totalSimplexCount=$totalSimplices substitutionCount=$substCount apparentPairCount=$apparentCount bars=$barCounts")
