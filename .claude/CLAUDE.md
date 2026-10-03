@@ -124,17 +124,18 @@ part (~100 errors without it). With that one line, a plain downstream project ne
 `into` conversions work), checked against the packaged jar (`WORKLOG-cursor-and-verb.md`). Doc fences must include the
 line even though the docs build (project flags) would compile them without it.
 
-**`Persistence(input, maxDimension = 1, maxFiltrationValue, complex = VietorisRips, characteristic = 17, engine)`**
+**`Persistence(input, maxDimension = 2, maxFiltrationValue, complex = VietorisRips, characteristic = 17, engine = Auto)`**
 (`homology/Persistence.scala`) is the one-call verb: points/metric space/`Image`/any stream in, an immutable
 `PersistenceDiagram` (bars + representatives; coefficient type is a member, `import d.given`; `dim`, `at(f)`,
-`longest`, `longerThan(x)`, `significant()`, `bettiNumbers`) out. `engine = Chunks | Naive | Cohomology | Ripser` (Ripser
-only for `VietorisRips` on points or a metric space).
+`longest`, `longerThan(x)`, `significant()`, `bettiNumbers`) out. **Default: degrees 0..2, cocycles** (project lead):
+`Auto` = Ripser for `VietorisRips` on points/metric space, `Cohomology` otherwise; `Chunks`/`Naive` give cycles but
+reduce every top cell (VR/Cech H2 on ~100 points: minutes or OOM), so docs pair them with `maxDimension = 1`. A
+truncated stream's own degree (`homologyDegreeLimit`) is the default for streams. `WORKLOG-default-degree-2.md`.
 
 **Zero-length bars are dropped by default** (project lead: seeing them is the opt-in, never hiding them): every engine,
 the verb, MATLAB and the CLI take `includeZeroLength` (default `false`); short bars are one call away
 (`longerThan(x)`, `significant()`, also on `List[PersistenceBar]` with no import). Tests must not use `#bars == #cells` as
-an oracle unless they opt in; check the ordering contract or the actual barcode (`rules/facade.md`, `rules/streams.md`). `Input` is an `into` type, so one `apply` with defaults covers every
-input (Scala forbids defaults on more than one overload). `VietorisRips`/`Cech`/`AlphaShapes` implement
+an oracle unless they opt in; check the ordering contract or the actual barcode (`rules/facade.md`, `rules/streams.md`). `Input` is an `into` type: one `apply` with defaults covers every input. `VietorisRips`/`Cech`/`AlphaShapes` implement
 `PointCloudComplex` and double as the `complex` choice. **Default field: `FiniteField.DefaultPrime = 17`** (project
 lead: never F₂ by default -- it hides signs and odd torsion); also the MATLAB/CLI default. The verb runs to the end;
 long runs use an engine's **cursor**, which is kept on purpose: `advanceFor(budget)`, `processedCells`/`totalCells`,
@@ -158,9 +159,8 @@ generated re-exports` markers) and guarded by `TDAlabExportsSpec` -- rerun the s
 types and val aliases are re-exported (a re-exported def is ambiguous for users who import both). Hence `∆`
 is `val ∆ : Simplex.type = Simplex`, and top-level defs have companion spellings that ride along with the re-exported
 objects (`Simplex.fromSortedSet`/`ordering`/`isOrderedCell`, `Cube.fromVector`/`ordering`/`isOrderedCell`). No namespace objects (`tdalab.streams.X` is gone) and no given re-exports (defaults
-come from companions). `characteristic = 0` means `Double`, a prime `p` `Z/p`. Labs are opinionated by design (project lead): `TDAlab` fixes
-`Int` vertices. **`TDAContext`/`TDAenvironment`-style context classes were removed on purpose** -- a lab is never
-consulted by an engine. Cats (`cats-core`,
+come from companions). `characteristic = 0` means `Double`, a prime `p` `Z/p`. `TDAlab` fixes `Int` vertices (opinionated by design). A lab is never consulted by an engine (no
+`TDAContext`-style context classes). Cats (`cats-core`,
 `kittens`) is a dependency for `Show`; `Chain` is declared `into class` (needs `-preview`; `// format: off` around it
 because scalafmt can't parse `into`) and implicit conversions are enabled in-source, not by a flag.
 

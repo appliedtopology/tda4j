@@ -99,7 +99,7 @@ val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield Simp
 val octahedron = Persistence(ExplicitStreamBuilder.fromFacets(triangles), maxDimension = 2)
 octahedron.bettiNumbers     // Vector(1, 0, 1): one component, no loops, one void
 
-// Task 2: the Vietoris-Rips diagram in degrees 0 and 1, up to scale 1.5
+// Task 2: the Vietoris-Rips diagram, up to scale 1.5
 val points = CSV.readPointCloud("_docs/tutorials/examplepoints.csv")
 val circle = Persistence(points, maxFiltrationValue = 1.5)
 circle.longerThan(0.3)      // the component [0, Infinity) and the loop [0.261, Infinity), still open at 1.5

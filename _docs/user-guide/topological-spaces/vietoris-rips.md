@@ -13,11 +13,11 @@ import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
 val points = Array.tabulate(20)(i => Array(math.cos(i * 0.31), math.sin(i * 0.31)))
-val diagram = Persistence(points)                                  // degrees 0 and 1
+val diagram = Persistence(points)                                  // degrees 0, 1 and 2, with Ripser
 
 val metricSpace = EuclideanMetricSpace(points)                     // or any FiniteMetricSpace[Int]
 val stream = VietorisRips(metricSpace, maxDimension = 1, maxFiltrationValue = 1.5)
-Persistence(stream)                                                // the same, from the stream
+Persistence(stream)                                                // degrees 0 and 1, from the stream
 ```
 
 `maxFiltrationValue` defaults to the *minimum enclosing radius* of the points (the smallest `r` at which some point is
@@ -26,9 +26,9 @@ diagram. Pass `Double.PositiveInfinity` for the whole complex. `maxDimension` is
 contains simplices one dimension higher, which is what lets a class of that degree die.
 
 `VietorisRips(..., implementation = VietorisRips.Implementation.RipserCoface)` (or `Inorder`, `Incremental`) picks
-another construction of the same complex, cell for cell; the default, `Enumerating`, is a good choice. For the fastest
-computation, `Persistence(points, engine = Persistence.Engine.Ripser)` runs Ripser's algorithm on the metric space
-without building a stream at all.
+another construction of the same complex, cell for cell; the default, `Enumerating`, is a good choice. `Persistence(points)` does
+not build a stream at all: it runs Ripser's algorithm on the metric space, which is much faster, especially in degree
+2. A stream is for the other engines, such as `Engine.Chunks` for cycles as representatives.
 
 Distance matrices: `ExplicitMetricSpace(rows)` wraps a full symmetric matrix (a `Seq[Seq[Double]]`), and the readers in
 [files](../input-output.md) produce one from Ripser, DIPHA and CSV formats.

@@ -24,5 +24,7 @@ here. The Čech complex is larger than the Vietoris-Rips complex at the same sca
 has the same diagram at a fraction of the size, for points in low dimension. `parallelFiltrationValue = true` computes
 the radii on several threads (the output is the same).
 
-The Čech complex is not a flag complex, so the Ripser engine does not apply; the chunks (default), naive and cohomology
-engines do.
+The Čech complex is not a flag complex, so the Ripser engine does not apply; the cohomology (the default here), chunks
+and naive engines do. It is expensive: each simplex needs its own smallest enclosing ball, and it has many more
+simplices than the Vietoris-Rips complex at the same scale. Pass `maxDimension = 1` when you only need components and
+loops, and use the chunks engine only with `maxDimension = 1`.

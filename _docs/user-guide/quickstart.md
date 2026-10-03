@@ -13,7 +13,7 @@ val points = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21
 val diagram = Persistence(points)
 println(diagram)          // a summary: bars per degree, the longest first
 diagram.dim(1).longest    // the most persistent loop
-diagram.bettiNumbers      // Vector(1, 1): one component, one loop alive at the end
+diagram.bettiNumbers      // Vector(1, 0, 0): one component; the loop is filled in by the end
 ```
 
 `Persistence(...)` builds a filtered complex, computes its persistent homology and returns a `PersistenceDiagram`: the
@@ -28,11 +28,11 @@ and the options, all with defaults:
 
 | option | default | |
 |---|---|---|
-| `maxDimension` | `1` | the top homological degree: components (0) and loops (1) |
+| `maxDimension` | `2` | the top homological degree: components (0), loops (1) and voids (2) |
 | `maxFiltrationValue` | the minimum enclosing radius | where to stop the filtration; past the default nothing new is born |
 | `complex` | `VietorisRips` | or `Cech`, `AlphaShapes`, for points |
 | `characteristic` | `17` | the coefficients: a prime `p` for the field with `p` elements, `0` for real numbers |
-| `engine` | `Persistence.Engine.Chunks` | or `Naive`, `Cohomology`, `Ripser` (see [engines](homology-computation/choosing-engine.md)) |
+| `engine` | `Persistence.Engine.Auto` | Ripser for Vietoris-Rips, cohomology otherwise; `Chunks` for cycles (see [engines](homology-computation/choosing-engine.md)) |
 | `includeZeroLength` | `false` | also report bars `[v, v)`, cells paired with cells entering at the same value |
 
 The default field has 17 elements rather than 2: over the field with 2 elements signs disappear, and so do classes
@@ -79,7 +79,15 @@ engine returns: `bars.longerThan(0.1)`, `bars.significant()`.
 
 ### Representatives
 
-Every bar carries a representative: a cycle (or, from the cohomology engines, a cocycle) that witnesses the class.
+Every bar carries a representative that witnesses the class. There are two kinds:
+
+* **cocycles**, the default: `Persistence` computes persistent cohomology, which is much faster in degree 2. A cocycle
+  of a loop is a set of edges that cuts *across* it. Circular coordinates are built from cocycles.
+* **cycles**, from `engine = Persistence.Engine.Chunks` (or `Naive`): a cycle of a loop is a path of edges going
+  *around* it, which shows where the loop is. These engines compute homology, which is slow in degree 2 on
+  Vietoris-Rips and Čech complexes, so ask them for `maxDimension = 1` there.
+
+The bars are the same either way.
 
 ```scala 3
 import scala.language.experimental.modularity
@@ -87,8 +95,11 @@ import org.appliedtopology.tda4j.*
 
 val points = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21)))
 val loop = Persistence(points).dim(1).longest.get
-val cycle = loop.representative     // a chain of edges going around the loop
-cycle.cells                         // the edges, each a Simplex of two point indices
+loop.representative.cells           // a cocycle: 50 edges cutting across the loop
+
+val withCycles = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Chunks)
+val cycle = withCycles.dim(1).longest.get.representative
+cycle.cells                         // a cycle: 30 edges going around the loop, each a Simplex of two point indices
 cycle.terms                         // the edges with their coefficients
 ```
 

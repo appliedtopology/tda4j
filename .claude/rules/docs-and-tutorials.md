@@ -39,7 +39,8 @@ with a "whole script" fence that IS compiled by the docs build. Shared point clo
 `org.appliedtopology.tda4j.*` (+ `.sset.*` for simplicial sets), and the computation is the `Persistence` verb returning a
 `PersistenceDiagram` (`dim`, `longest`, `significant()`, `longerThan`); reach for a stream + engine only where the page is
 about them (cursor, engine choice), and for a lab (`import TDAlab.F17.{*, given}`) only where hand-written chain algebra
-is the point. No implementation history, worklog pointers or "we fixed X" in pages -- state what the library does.
+is the point. Representatives are cocycles by default: a page that shows WHERE a feature is uses
+`engine = Persistence.Engine.Chunks, maxDimension = 1` and says why (find-a-loop explains the choice; link there). No implementation history, worklog pointers or "we fixed X" in pages -- state what the library does.
 `barcodeAt(f)` at an intermediate `f` is safe since the query-contract fix (`rules/engines.md`); public API only (a fence naming a `private[tda4j]` class or a test fixture
 fails `sbt doc`); no timings in prose. `Map[G, Fp]` equality compares raw representatives (-1 vs 1 over F_2 differ): compare cochains with
 `CupProduct.isCoboundary`, never `==`. Tutorial specs add ~90 s to `testFull`.

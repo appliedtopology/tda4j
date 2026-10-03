@@ -20,18 +20,22 @@ object Image:
 /** Persistent homology in one call: `Persistence(points)`.
   *
   * {{{
-  * Persistence(points)                                   // Vietoris-Rips, degrees 0..1, coefficients F_17
-  * Persistence(points, complex = Cech, maxDimension = 2)
+  * Persistence(points)                                   // Vietoris-Rips, degrees 0..2, coefficients F_17
+  * Persistence(points, engine = Persistence.Engine.Chunks) // the same bars, with cycles as representatives
+  * Persistence(points, complex = Cech, maxDimension = 1)
   * Persistence(points, maxFiltrationValue = 0.5)
   * Persistence(Image(pixels))                            // cubical, sublevel
   * Persistence(stream)                                   // any complex you built yourself (witness, Dowker, ...)
   * }}}
   *
-  * Returns a [[PersistenceDiagram]]: the bars of degree `0 .. maxDimension`, each with its representative (a cycle, or
-  * a cocycle for the cohomology engines), as an immutable value. Zero-length bars are left out; short ones are one call
-  * away (`diagram.longerThan(0.05)`, `diagram.significant()`). This runs the computation to the end; for a long run you
-  * want to inspect while it goes (or keep if it dies), build an engine and use its cursor (`advanceFor`, `diagramAt`)
-  * instead.
+  * Returns a [[PersistenceDiagram]]: the bars of degree `0 .. maxDimension`, each with its representative, as an
+  * immutable value. By default the representatives are '''cocycles''' (the default engines compute cohomology, which is
+  * much faster in degree 2): a cocycle of a loop is a set of edges cutting across it. For '''cycles''', which run
+  * around a loop and show where it is, pass `engine = Persistence.Engine.Chunks`; that engine is slow in degree 2 on
+  * Vietoris-Rips and Čech complexes, so ask for `maxDimension = 1` with it there. Zero-length bars are left out; short
+  * ones are one call away (`diagram.longerThan(0.05)`, `diagram.significant()`). This runs the computation to the end;
+  * for a long run you want to inspect while it goes (or keep if it dies), build an engine and use its cursor
+  * (`advanceFor`, `diagramAt`) instead.
   *
   * @param input
   *   points (`Array[Array[Double]]`, `Seq[Seq[Double]]`, `Seq[Array[Double]]`), a `FiniteMetricSpace[Int]`, an
@@ -49,22 +53,26 @@ object Image:
   *   the coefficient field: a prime `p` for `Z/p` (default `FiniteField.DefaultPrime`, 17), or `0` for real
   *   coefficients.
   * @param engine
-  *   `Persistence.Engine.Chunks` (default), `Naive`, `Cohomology` or `Ripser` (Vietoris-Rips only, the fastest there);
-  *   see [[Persistence.Engine]].
+  *   `Persistence.Engine.Auto` (default: Ripser for Vietoris-Rips of points or a metric space, cohomology otherwise),
+  *   `Chunks` (cycles), `Naive`, `Cohomology` or `Ripser`; see [[Persistence.Engine]].
   * @param includeZeroLength
   *   also report zero-length bars `[v, v)` (cells paired with cells entering at the same value). Default `false`.
   */
 object Persistence:
-  /** Which algorithm computes the diagram. All four give the same bars; they differ in cost and representatives.
+  /** Which algorithm computes the diagram. All give the same bars; they differ in cost and in the representatives.
     *
-    *   - `Chunks` (default): clearing and compression, union-find in degrees 0 and 1. Representatives are cycles.
+    *   - `Auto` (default): `Ripser` for the Vietoris-Rips complex of points or a metric space, `Cohomology` for
+    *     everything else. Representatives are cocycles.
+    *   - `Chunks`: clearing and compression, union-find in degrees 0 and 1. Representatives are cycles: use it to see
+    *     where a feature is (a loop's cycle runs around it). Slow in degree 2 and up on Vietoris-Rips and Čech
+    *     complexes, which have many cells of the top dimension.
     *   - `Naive`: the reference algorithm, one cell at a time. Representatives are cycles.
     *   - `Cohomology`: persistent cohomology of the same complex. Representatives are cocycles.
     *   - `Ripser`: Bauer's Ripser, for the Vietoris-Rips complex of points or a metric space only; the fastest there.
     *     Representatives are cocycles.
     */
   enum Engine:
-    case Chunks, Naive, Cohomology, Ripser
+    case Auto, Chunks, Naive, Cohomology, Ripser
 
   /** What `Persistence` can take; never written by hand -- each kind of input converts to one where it's expected. */
   into sealed trait Input[CellT]:
@@ -75,6 +83,7 @@ object Persistence:
     ): StratifiedCellStream[CellT, Double]
     private[tda4j] def scale: Option[Double]
     private[tda4j] def cells: CellT is OrderedCell
+    private[tda4j] def ripserApplies(complex: PointCloudComplex): Boolean = false
     private[tda4j] def ripser(
       maxDimension: Int,
       maxFiltrationValue: Option[Double],
@@ -98,6 +107,7 @@ object Persistence:
               VietorisRips(ms, maxDimension, maxFiltrationValue)
         lazy val scale = Some(ms.minimumEnclosingRadius)
         def cells = summon[Simplex[Int] is OrderedCell]
+        override def ripserApplies(complex: PointCloudComplex) = complex eq VietorisRips
         override def ripser(
           maxDimension: Int,
           maxFiltrationValue: Option[Double],
@@ -147,7 +157,7 @@ object Persistence:
           def cells = oc
 
   /** The top homological degree computed when `maxDimension` is not given (and the input does not fix it). */
-  val DefaultMaxDimension: Int = 1
+  val DefaultMaxDimension: Int = 2
 
   def apply[CellT](
     input: Input[CellT],
@@ -155,13 +165,16 @@ object Persistence:
     maxFiltrationValue: Optional[Double] = Optional.empty,
     complex: PointCloudComplex = VietorisRips,
     characteristic: Int = FiniteField.DefaultPrime,
-    engine: Engine = Engine.Chunks,
+    engine: Engine = Engine.Auto,
     includeZeroLength: Boolean = false
   ): PersistenceDiagram[CellT] =
+    val chosen = engine match
+      case Engine.Auto => if input.ripserApplies(complex) then Engine.Ripser else Engine.Cohomology
+      case other       => other
     val requested = maxDimension.toOption
     requested.foreach(k => require(k >= 0, s"Persistence: maxDimension must be >= 0, got $k"))
     given (CellT is OrderedCell) = input.cells
-    if engine == Engine.Ripser then
+    if chosen == Engine.Ripser then
       input.ripser(
         requested.getOrElse(DefaultMaxDimension),
         maxFiltrationValue.toOption,
@@ -184,7 +197,7 @@ object Persistence:
         stream,
         degree,
         characteristic,
-        engine,
+        chosen,
         input.scale,
         includeZeroLength
       )
@@ -215,5 +228,6 @@ object Persistence:
           CellularCohomologyEngine[CellT, coefficients.C, Double]().persistentCohomology(stream, includeZeroLength)
         val fv = stream.filtrationValue
         (bars, stream.iterator.map(c => fv.applyOrElse(c, _ => Double.NegativeInfinity)).maxOption.getOrElse(0.0))
-      case Engine.Ripser => throw new IllegalStateException("unreachable: Ripser is dispatched before compute")
+      case Engine.Ripser | Engine.Auto =>
+        throw new IllegalStateException("unreachable: Ripser and Auto are resolved before compute")
     PersistenceDiagram[CellT, coefficients.C](bars.filter(_.dim <= maxDimension), maxDimension, last, scale)

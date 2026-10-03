@@ -17,8 +17,8 @@ import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
 val points = Array.tabulate(40)(i => Array(math.cos(i * 0.16), math.sin(i * 0.16)))
-val diagram = Persistence(points)          // the Vietoris-Rips diagram, degrees 0 and 1
-diagram.dim(1).longest                     // the loop, with a cycle that goes around it
+val diagram = Persistence(points)          // the Vietoris-Rips diagram in degrees 0, 1 and 2
+diagram.dim(1).longest                     // the loop, with a cocycle that witnesses it
 ```
 
 ## What it offers

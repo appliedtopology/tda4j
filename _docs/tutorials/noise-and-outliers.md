@@ -21,7 +21,8 @@ import org.appliedtopology.tda4j.*
 val points = CSV.readPointCloud("_docs/tutorials/data/circle-with-outliers.csv")
 val metricSpace = EuclideanMetricSpace(points)
 
-val vr = Persistence(points)
+// cycles as representatives, to see which points make up each loop (find-a-loop explains the choice)
+val vr = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Chunks)
 val vrLoops = vr.dim(1).longest(2)            // the two longest-lived loops
 vrLoops.map(_.persistence)                     // List(0.901, 0.127)
 
@@ -87,7 +88,7 @@ import org.appliedtopology.tda4j.*
 val points = CSV.readPointCloud("_docs/tutorials/data/circle-with-outliers.csv")
 val metricSpace = EuclideanMetricSpace(points)
 
-val vr = Persistence(points)
+val vr = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Chunks)
 val vrLoops = vr.dim(1).longest(2)
 val cycles = vrLoops.map { loop =>
   val pointsOnCycle = loop.representative.cells.flatMap(_.toList).distinct

@@ -45,3 +45,51 @@ Which default makes degree 2 affordable (put to the project lead):
 - Ripser by default for Vietoris-Rips, giving cocycle representatives;
 - or a hybrid: chunks with cycles in degrees 0-1, plus Ripser for degree 2;
 - and what Cech should default to.
+
+## Decision and second probe (same day)
+
+Project lead: default to Ripser and report cocycles, with the docs clear about the choice. Implemented:
+- `Engine.Auto` (the default): Ripser for Vietoris-Rips on points or a metric space, `Cohomology` otherwise;
+- `DefaultMaxDimension = 2`.
+
+Where the time goes (noisy-circle, 60 points, Vietoris-Rips, degree 2: 257k cells in all, 231,961 of them
+tetrahedra):
+
+| step | time |
+|---|---|
+| enumerating every cell | 3.7-5.5 s |
+| chunks | 112.8 s |
+| naive | 115.7 s |
+| `CellularCohomologyEngine` | 23.6 s |
+| Ripser | 0.37 s |
+
+- The cost is the reduction, not the construction.
+- Homology must reduce one column per tetrahedron, and nearly all of them reduce to zero. Cohomology clears them.
+- Chunks with clearing is no faster than naive here.
+
+Other complexes, chunks against cohomology (both build the complex themselves):
+
+| input | chunks | cohomology |
+|---|---|---|
+| Cech, 60 points, degree 2 (34,220 triangles, 487,635 tetrahedra; construction 16.2 s) | >180 s | 58.1 s |
+| alpha, noisy-circle, degree 2 | 0.47 s | 0.44 s |
+| alpha, flat-torus (R⁴), degree 2 | 51.0 s | 42.8 s |
+| 200x200 synthetic image | 34.9 s | 4.6 s |
+
+Cohomology is never slower, which is why `Auto` uses it everywhere Ripser does not apply.
+
+Doc changes:
+- find-a-loop, quickstart, the landing page, the Vietoris-Rips and Cech pages and the engine guide explain cocycles
+  (the default) against cycles (`Engine.Chunks` with `maxDimension = 1`);
+- noise-and-outliers asks for cycles explicitly (it needs to know which points are on each loop);
+- scaling-up gained a "Degree 2" section.
+
+Found while re-deriving the numbers: the quickstart's `bettiNumbers // Vector(1, 1)` was already wrong (it was
+`Vector(1, 0)`: the loop is filled in before the enclosing radius); it is now `Vector(1, 0, 0)`.
+
+## Profiling candidates (not started)
+
+- `CellularCohomologyEngine`: 64x behind Ripser on the same VR input, and the only route for Cech, alpha, witness,
+  Dowker and images.
+- Chunks on images: 35 s for 200x200 against 4.6 s for cohomology; something there is not clearing.
+- Cech construction: 16 s for 520k cells, one Miniball per simplex.

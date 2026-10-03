@@ -21,8 +21,8 @@ class PersistenceVerbSpec extends Specification:
       .sorted
 
   "Persistence(points)" should {
-    "find the circle's loop as its longest H1 bar, with a representative cycle" in {
-      val d = Persistence(circle(16), maxFiltrationValue = 2.0)
+    "find the circle's loop as its longest H1 bar, with a representative cycle from Engine.Chunks" in {
+      val d = Persistence(circle(16), maxFiltrationValue = 2.0, engine = Persistence.Engine.Chunks)
       import d.given
       val loop = d.dim(1).longest.get
       val rep = loop.annotation.get
@@ -74,9 +74,30 @@ class PersistenceVerbSpec extends Specification:
         norm(d.at(f).triples) == norm(cursor.diagramAt(f).filter(_._1 <= 1))
       ) must beTrue
     }
+    "compute degrees 0..2 with Ripser by default: the same bars as Engine.Chunks, cocycles as representatives" in {
+      val pts = circle(12, noise = 0.05)
+      val auto = Persistence(pts, maxFiltrationValue = 1.5)
+      val chunks = Persistence(pts, maxFiltrationValue = 1.5, engine = Persistence.Engine.Chunks)
+      import auto.given
+      // a 1-cocycle evaluates to zero on every triangle's boundary: check it on all triangles up to the threshold
+      val ms = EuclideanMetricSpace(pts)
+      val cocycle = auto.dim(1).longest.get.representative.terms.toMap
+      val triangles = for
+        a <- 0 until 12; b <- a + 1 until 12; c <- b + 1 until 12
+        if Seq(ms.distance(a, b), ms.distance(a, c), ms.distance(b, c)).max <= 1.5
+      yield Simplex(a, b, c)
+      val fieldOps = auto.coefficientField
+      def onBoundary(t: Simplex[Int]) = t
+        .boundary[auto.Coefficient]
+        .map((e, sign) => fieldOps.times(sign, cocycle.getOrElse(e, fieldOps.zero)))
+        .foldLeft(fieldOps.zero)(fieldOps.plus)
+      (auto.maxDimension must beEqualTo(2))
+        .and(norm(auto.triples) must beEqualTo(norm(chunks.triples)))
+        .and(triangles.forall(t => fieldOps.isEqual(onBoundary(t), fieldOps.zero)) must beTrue)
+    }
     "report bettiNumbers and hide nothing until asked: significant() drops the short bars" in {
       val d = Persistence(circle(16, noise = 0.02), maxFiltrationValue = 2.0)
-      (d.bettiNumbers must beEqualTo(Vector(1, 0)))
+      (d.bettiNumbers must beEqualTo(Vector(1, 0, 0)))
         .and(d.significant().size must beLessThanOrEqualTo(d.size))
     }
     "build Cech and alpha complexes, and say what to do when alpha gets a threshold" in {
@@ -140,7 +161,7 @@ class PersistenceVerbSpec extends Specification:
     "see the ring in a ring-shaped image as one H1 bar from 0 to 1 (the whole grid is contractible at the end)" in {
       val ring = Array.tabulate(7, 7)((i, j) => if math.abs(math.hypot(i - 3, j - 3) - 2.2) < 0.8 then 0.0 else 1.0)
       val d = Persistence(Image(ring))
-      (d.bettiNumbers must beEqualTo(Vector(1, 0)))
+      (d.bettiNumbers must beEqualTo(Vector(1, 0, 0)))
         .and(d.dim(1).significant().triples must beEqualTo(List((1, 0.0, 1.0))))
     }
   }

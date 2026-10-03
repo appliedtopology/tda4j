@@ -19,19 +19,23 @@ import org.appliedtopology.tda4j.*
 val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
 val diagram = Persistence(points)
 println(diagram)
-// PersistenceDiagram(61 bars, degrees 0..1)
+// PersistenceDiagram(64 bars, degrees 0..2)
 //   H0: 60 bars, longest [0.000, Infinity) [0.000, 0.4836) [0.000, 0.3752) [0.000, 0.2874) [0.000, 0.2747) ...
 //   H1: 1 bar, longest [0.5945, 1.707)
+//   H2: 3 bars, longest [1.710, 1.813) [1.750, 1.800) [1.739, 1.761)
 ```
 
 `Persistence(points)` builds the Vietoris-Rips complex of the points (at each scale, join every group of points that
-are pairwise within that distance of each other), computes its persistent homology in degrees 0 and 1 (components and
-loops), and returns the diagram: one bar per feature, from the scale where it appears to the scale where it disappears.
+are pairwise within that distance of each other), computes its persistent homology in degrees 0, 1 and 2 (components,
+loops and voids), and returns the diagram: one bar per feature, from the scale where it appears to the scale where it
+disappears.
 
 ## Reading the diagram
 
 There is one bar in degree 1: one loop. The 60 bars in degree 0 are the 60 points, merging into one component as the
-scale grows; the one that never dies, `[0, Infinity)`, says the data is one connected piece.
+scale grows; the one that never dies, `[0, Infinity)`, says the data is one connected piece. The three bars in degree 2
+are small voids that open for a moment while the loop is being filled in, around scale 1.7, and close again; on data
+from a circle they are noise.
 
 ```scala sc:nocompile
 val loop = diagram.dim(1).longest.get             // [0.595, 1.707): born at scale 0.59, filled in at 1.71
@@ -48,8 +52,8 @@ Many bars in degree 0 are short: points that are close to each other merge early
 the spacing of your sample, not its shape. Two ways to set them aside:
 
 ```scala sc:nocompile
-diagram.longerThan(0.1).size     // 23 bars: everything that lives longer than 0.1
-diagram.significant().size       // 58 bars: longer than 1% of the point cloud's enclosing radius (1.95)
+diagram.longerThan(0.1).size     // 24 bars: everything that lives longer than 0.1
+diagram.significant().size       // 61 bars: longer than 1% of the point cloud's enclosing radius (1.95)
 ```
 
 `longerThan` takes a threshold in the units of the diagram; `significant()` takes a fraction of the data's own scale, which
@@ -57,21 +61,36 @@ is what the command line and MATLAB show by default.
 
 ## Seeing the loop itself
 
-The diagram does not only say *that* there is a loop: every bar carries a representative, here a cycle of edges going
-around the hole.
+The diagram does not only say *that* there is a loop: every bar carries a representative. There are two kinds, and you
+choose between them with the engine.
+
+By default `Persistence` computes persistent *cohomology* (with Ripser's algorithm, much the fastest way to reach degree
+2), and a representative is a **cocycle**: a set of edges that cuts *across* the loop, like a cut through a ring. It is
+what [circular coordinates](circular-and-toroidal-coordinates.md) are built from.
 
 ```scala sc:nocompile
-val cycle = loop.representative
-cycle.cells.size                 // 52 edges, each a pair of row numbers in the CSV
+val cocycle = loop.representative
+cocycle.cells.size               // 121 edges, each a pair of row numbers in the CSV
 ```
 
-Each cell is an edge between two points of your data (by row number, starting at 0). Having the cycle means you can mark
-which points make up the hole, which is often the real answer to "where is it?". On noisy data the cycle is a jagged path
-rather than a clean polygon: it is *a* representative of the loop, one of many equivalent ones.
+To see *where* the loop is, ask for a **cycle**, a path of edges going around it. The chunks engine computes homology and
+gives cycles; it is slow in degree 2 on a Vietoris-Rips complex, so ask it for degrees 0 and 1 only:
+
+```scala sc:nocompile
+val withCycles = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Chunks)
+val cycle = withCycles.dim(1).longest.get.representative
+cycle.cells.size                 // 52 edges
+```
+
+The bars are the same either way. Each cell is an edge between two points of your data (by row number, starting at 0).
+Having the cycle means you can mark which points make up the hole, which is often the real answer to "where is it?". On
+noisy data the cycle is a jagged path rather than a clean polygon: it is *a* representative of the loop, one of many
+equivalent ones.
 
 ## Cutting the complex off early
 
-The Vietoris-Rips complex grows fast: up to triangles, these 60 points already give 24,711 simplices. `Persistence` stops
+The Vietoris-Rips complex grows fast: up to triangles, these 60 points already give 24,711 simplices (and 231,961
+tetrahedra on top of those for degree 2). `Persistence` stops
 at the enclosing radius by default, past which nothing new is born. You can stop earlier when you know what scale you
 care about:
 
@@ -102,7 +121,9 @@ val longestGap = diagram.dim(0).bars.map(_.persistence).filter(_.isFinite).max
 val longerThanATenth = diagram.longerThan(0.1)
 val significant = diagram.significant()
 
-val cycle = loop.representative
+val cocycle = loop.representative
+val withCycles = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Chunks)
+val cycle = withCycles.dim(1).longest.get.representative
 
 val complexSize = VietorisRips(EuclideanMetricSpace(points), maxDimension = 1).iterator.size
 val short = Persistence(points, maxFiltrationValue = 1.0)
@@ -118,7 +139,7 @@ import org.appliedtopology.tda4j.matlab.*;
 
 points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
 
-% Vietoris-Rips in degrees 0 and 1, with the chunks engine (the one Persistence uses)
+% Vietoris-Rips in degrees 0 and 1, with the chunks engine, for cycles as representatives
 result = TDA4j.computeFromPoints(points, {'maxDimension', '1', 'engine', 'chunks'});
 
 % Short bars (up to 1% of the enclosing radius) are hidden by default

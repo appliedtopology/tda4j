@@ -3,7 +3,7 @@ layout: main
 title: User Guide for TDA4j
 ---
 
-TDA4j computes persistent homology and related invariants: barcodes with representative cycles, from point clouds,
+TDA4j computes persistent homology and related invariants: barcodes with representatives (cocycles or cycles), from point clouds,
 distance matrices, images, relations and spaces you build yourself, over any prime field or the reals. This guide
 assumes you know what a filtered complex and a persistence barcode are; it does not assume you know Scala. For how
 the library is built, see the [Developer's Guide](../developers-guide/index.md); for worked examples on real-looking
