@@ -19,19 +19,13 @@ We compare the loops, so for each cloud we keep the dimension-1 bars that surviv
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+import org.appliedtopology.tda4j.*
 
-val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
+def loops(file: String) = Persistence(CSV.readPointCloud(s"_docs/tutorials/data/$file")).dim(1).significant()
 
-def loopDiagram(file: String) =
-  val metricSpace = CSV.readEuclideanMetricSpace(s"_docs/tutorials/data/$file")
-  val stream = VietorisRips(metricSpace, maxDimension = 1)
-  val bars = engine.persistentHomology(stream).barcodeAt(Double.PositiveInfinity)
-  PersistenceFilter.significant(bars.filter(_.dim == 1), scale = Some(metricSpace.minimumEnclosingRadius))
-
-val circleA = loopDiagram("noisy-circle.csv")      // one loop, (0.595, 1.707)
-val circleB = loopDiagram("noisy-circle-b.csv")    // one loop, (0.631, 1.667)
-val eight = loopDiagram("figure-eight.csv")        // two loops, (0.412, 0.704) and (0.375, 0.698)
+val circleA = loops("noisy-circle.csv")      // one loop, [0.595, 1.707)
+val circleB = loops("noisy-circle-b.csv")    // one loop, [0.631, 1.667)
+val eight = loops("figure-eight.csv")        // two loops, [0.412, 0.704) and [0.375, 0.698)
 ```
 
 Already you can read the difference by eye: the circles have one long-lived loop each, the figure eight has two shorter-lived
@@ -52,8 +46,8 @@ that is, to disappear, which is how a short-lived bar gets matched away. The two
 ```scala sc:nocompile
 val pairs = List("A-B" -> (circleA, circleB), "A-8" -> (circleA, eight), "B-8" -> (circleB, eight))
 
-val bottleneck = pairs.map((name, ds) => name -> BarcodeDistance.bottleneckDistance(ds._1, ds._2)).toMap
-val wasserstein = pairs.map((name, ds) => name -> BarcodeDistance.wassersteinDistance(ds._1, ds._2)).toMap
+val bottleneck = pairs.map((name, ds) => name -> BarcodeDistance.bottleneckDistance(ds._1.bars, ds._2.bars)).toMap
+val wasserstein = pairs.map((name, ds) => name -> BarcodeDistance.wassersteinDistance(ds._1.bars, ds._2.bars)).toMap
 ```
 
 | pair | bottleneck | Wasserstein |
@@ -88,14 +82,14 @@ want each data set to be a vector of numbers. Two standard ways of turning a bar
 
 ```scala sc:nocompile
 val landscapes = Map(
-  "A" -> Vectorization.landscape(circleA, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
-  "B" -> Vectorization.landscape(circleB, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
-  "8" -> Vectorization.landscape(eight, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100)
+  "A" -> Vectorization.landscape(circleA.bars, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
+  "B" -> Vectorization.landscape(circleB.bars, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
+  "8" -> Vectorization.landscape(eight.bars, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100)
 )
 val images = Map(
-  "A" -> Vectorization.persistenceImage(circleA, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0)),
-  "B" -> Vectorization.persistenceImage(circleB, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0)),
-  "8" -> Vectorization.persistenceImage(eight, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0))
+  "A" -> Vectorization.persistenceImage(circleA.bars, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, weightCap = 1.0),
+  "B" -> Vectorization.persistenceImage(circleB.bars, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, weightCap = 1.0),
+  "8" -> Vectorization.persistenceImage(eight.bars, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, weightCap = 1.0)
 )
 
 def l2(x: Array[Array[Double]], y: Array[Array[Double]]): Double =
@@ -130,36 +124,30 @@ format). Save the barcode of one cloud with `--output`, then compare other cloud
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+import org.appliedtopology.tda4j.*
 
-val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
+def loops(file: String) = Persistence(CSV.readPointCloud(s"_docs/tutorials/data/$file")).dim(1).significant()
 
-def loopDiagram(file: String) =
-  val metricSpace = CSV.readEuclideanMetricSpace(s"_docs/tutorials/data/$file")
-  val stream = VietorisRips(metricSpace, maxDimension = 1)
-  val bars = engine.persistentHomology(stream).barcodeAt(Double.PositiveInfinity)
-  PersistenceFilter.significant(bars.filter(_.dim == 1), scale = Some(metricSpace.minimumEnclosingRadius))
-
-val circleA = loopDiagram("noisy-circle.csv")
-val circleB = loopDiagram("noisy-circle-b.csv")
-val eight = loopDiagram("figure-eight.csv")
+val circleA = loops("noisy-circle.csv")
+val circleB = loops("noisy-circle-b.csv")
+val eight = loops("figure-eight.csv")
 
 val pairs = List("A-B" -> (circleA, circleB), "A-8" -> (circleA, eight), "B-8" -> (circleB, eight))
-val bottleneck = pairs.map((name, ds) => name -> BarcodeDistance.bottleneckDistance(ds._1, ds._2)).toMap
-val wasserstein = pairs.map((name, ds) => name -> BarcodeDistance.wassersteinDistance(ds._1, ds._2)).toMap
+val bottleneck = pairs.map((name, ds) => name -> BarcodeDistance.bottleneckDistance(ds._1.bars, ds._2.bars)).toMap
+val wasserstein = pairs.map((name, ds) => name -> BarcodeDistance.wassersteinDistance(ds._1.bars, ds._2.bars)).toMap
 
 def l2(x: Array[Array[Double]], y: Array[Array[Double]]): Double =
   math.sqrt(x.flatten.zip(y.flatten).map((p, q) => (p - q) * (p - q)).sum)
 
 val landscapes = Map(
-  "A" -> Vectorization.landscape(circleA, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
-  "B" -> Vectorization.landscape(circleB, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
-  "8" -> Vectorization.landscape(eight, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100)
+  "A" -> Vectorization.landscape(circleA.bars, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
+  "B" -> Vectorization.landscape(circleB.bars, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
+  "8" -> Vectorization.landscape(eight.bars, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100)
 )
 val images = Map(
-  "A" -> Vectorization.persistenceImage(circleA, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0)),
-  "B" -> Vectorization.persistenceImage(circleB, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0)),
-  "8" -> Vectorization.persistenceImage(eight, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0))
+  "A" -> Vectorization.persistenceImage(circleA.bars, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, weightCap = 1.0),
+  "B" -> Vectorization.persistenceImage(circleB.bars, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, weightCap = 1.0),
+  "8" -> Vectorization.persistenceImage(eight.bars, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, weightCap = 1.0)
 )
 val landscapeDistance = l2(landscapes("A"), landscapes("8"))
 val imageDistance = l2(images("A"), images("8"))
@@ -202,4 +190,4 @@ norm(imageA(:) - imageEight(:))             % 0.163
 </div>
 </div>
 
-Through the facade, distances, landscapes and images always use the *complete* barcode of each result, including the many tiny bars the Scala script removed first with `PersistenceFilter`. The bottleneck distance does not notice them; the Wasserstein distance, a sum, does, so it comes out slightly larger here (0.045 against 0.040, and 0.830 against 0.826). `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.
+Through the facade, distances, landscapes and images always use the *complete* barcode of each result, including the short bars the Scala script set aside with `significant()`. The bottleneck distance does not notice them; the Wasserstein distance, a sum, does, so it comes out slightly larger here (0.045 against 0.040, and 0.830 against 0.826). `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.

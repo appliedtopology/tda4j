@@ -111,16 +111,25 @@ object SimplexStream:
     override def iterator: Iterator[Simplex[VertexT]] =
       stream.iterator
 
+/** A complex given cell by cell (built by [[ExplicitStreamBuilder]], e.g. `ExplicitStreamBuilder.fromFacets(...)`). */
 class ExplicitStream[VertexT: Ordering, FiltrationT](
   protected val filtrationValues: Map[Simplex[VertexT], FiltrationT],
   protected val simplices: Seq[Simplex[VertexT]]
 )(using filterable: Filterable[FiltrationT])(using ordering: Ordering[FiltrationT])
-    extends SimplexStream[VertexT, FiltrationT]:
+    extends SimplexStream[VertexT, FiltrationT]
+    with StratifiedCellStream[Simplex[VertexT], FiltrationT]:
   self =>
 
   def filtrationValue: PartialFunction[Simplex[VertexT], FiltrationT] = filtrationValues
 
-  def iterator: Iterator[Simplex[VertexT]] = simplices.iterator
+  override def iterator: Iterator[Simplex[VertexT]] = simplices.iterator
+
+  private lazy val byDimension: Map[Int, Seq[Simplex[VertexT]]] =
+    simplices.groupBy(_.dim).view.mapValues(_.sorted(using filtrationOrdering.reverse)).toMap
+
+  def iterateDimension: PartialFunction[Int, Iterator[Simplex[VertexT]]] = {
+    case d if byDimension.contains(d) => byDimension(d).iterator
+  }
 
   def apply(i: Int): Simplex[VertexT] = simplices(i)
 

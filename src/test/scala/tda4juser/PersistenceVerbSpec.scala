@@ -133,3 +133,24 @@ class PersistenceVerbSpec extends Specification:
       norm(snap.triples.filter(_._1 <= 1)) must beEqualTo(norm(state.diagramAt(0.5).filter(_._1 <= 1)))
     }
   }
+
+/** All four engines of the verb give the same bars; the Ripser engine's cocycles come back over simplices. */
+class PersistenceEnginesSpec extends org.specs2.mutable.Specification:
+  import org.appliedtopology.tda4j.*
+
+  "Persistence(points, engine = ...)" should {
+    "give the same bars with every engine, and Ripser's representatives over simplices" in {
+      val rnd = new scala.util.Random(7)
+      val points = Array.fill(15)(Array(rnd.nextDouble(), rnd.nextDouble()))
+      def rounded(d: PersistenceDiagram[Simplex[Int]]) =
+        d.triples.map((k, b, e) => (k, math.rint(b * 1e9), if e.isInfinite then e else math.rint(e * 1e9))).sorted
+      val diagrams = Persistence.Engine.values.toList.map(e => Persistence(points, engine = e))
+      val ripser = Persistence(points, engine = Persistence.Engine.Ripser)
+      (diagrams.map(rounded).distinct.size must beEqualTo(1)) and
+        (ripser.bars.forall(b => b.representative.cells.forall(_.size == b.dim + 1)) must beTrue)
+    }
+    "refuse engine = Ripser for an input that is not a Vietoris-Rips complex of points" in {
+      Persistence(Image(Array(Array(0.0, 1.0), Array(1.0, 0.0))), engine = Persistence.Engine.Ripser) must
+        throwAn[IllegalArgumentException]
+    }
+  }

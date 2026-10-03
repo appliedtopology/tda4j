@@ -10,16 +10,21 @@ class NoiseAndOutliersSpec extends Specification:
   sequential
 
   private val page = NoiseAndOutliersScript
-  private val (vrTwo, dtmTwo, ringWeight, outlierWeight, cycles) = page.results
+  private val vrTwo = page.vrLoops.map(_.persistence)
+  private val dtmTwo = page.dtmLoops.map(_.persistence)
+  private val ringWeight = page.ring.sum / page.ring.size
+  private val outlierWeight = page.outliers.sum / page.outliers.size
 
   "noise-and-outliers.md" should {
     "report the data" in { page.metricSpace.size must beEqualTo(95) }
     "have Vietoris-Rips find the loop with a visible runner-up (about 7 to 1)" in
       (vrTwo(0) must beCloseTo(0.901, 0.001)).and(vrTwo(1) must beCloseTo(0.127, 0.001))
     "have DTM-Rips push the runner-up down to almost nothing (over 100 to 1)" in
-      (dtmTwo(0) / dtmTwo(1) must beGreaterThan(100.0)).and(dtmTwo(0) must beCloseTo(0.815, 0.001))
+      (dtmTwo(0) / dtmTwo(1) must beGreaterThan(100.0))
+        .and(dtmTwo(0) must beCloseTo(0.815, 0.001))
+        .and(dtmTwo(1) must beCloseTo(0.005, 0.001))
     "show the runner-up loop is made mostly of outliers, the real one of ring points" in {
-      cycles must beEqualTo(List((66, 2), (8, 5)))
+      page.cycles must beEqualTo(List((66, 2), (8, 5)))
     }
     "give the outliers much larger weights than the ring points" in
       (ringWeight must beCloseTo(0.176, 0.001))

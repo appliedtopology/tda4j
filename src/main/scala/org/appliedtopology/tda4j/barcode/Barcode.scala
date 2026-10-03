@@ -84,6 +84,12 @@ case class PersistenceBar[FiltrationT: Ordering, AnnotationT](
     case (OpenEndpoint(a), OpenEndpoint(b))   => summon[Ordering[FiltrationT]].equiv(a, b)
     case _                                    => false
 
+  /** The representative recorded with this bar (every engine records one: a cycle, or a cocycle for the cohomology
+    * engines).
+    */
+  def representative: AnnotationT =
+    annotation.getOrElse(throw new NoSuchElementException(s"bar $this carries no representative"))
+
   override def toString: String =
     val open: String = lower match
       case PositiveInfinity()    => "(∞" // should never happen

@@ -9,6 +9,9 @@ final case class Image(values: IndexedSeq[Double], shape: IndexedSeq[Int], suble
     s"Image: ${values.length} values for shape $shape (${shape.product} expected)"
   )
 
+  /** The same image filtered from the bright end (superlevel sets). Filtration values are then negated intensities. */
+  def superlevel: Image = copy(sublevel = false)
+
 object Image:
   /** A 2-D image from its rows. */
   def apply(rows: Array[Array[Double]]): Image =
@@ -24,10 +27,11 @@ object Image:
   * Persistence(stream, maxDimension = 2)                 // any complex you built yourself (witness, Dowker, ...)
   * }}}
   *
-  * Returns a [[PersistenceDiagram]]: the bars of degree `0 .. maxDimension`, each with its representative cycle, as an
-  * immutable value. Zero-length bars are left out; short ones are one call away (`diagram.longerThan(0.05)`,
-  * `diagram.significant()`). This runs the computation to the end; for a long run you want to inspect while it goes (or
-  * keep if it dies), build an engine and use its cursor (`advanceFor`, `diagramAt`) instead.
+  * Returns a [[PersistenceDiagram]]: the bars of degree `0 .. maxDimension`, each with its representative (a cycle, or
+  * a cocycle for the cohomology engines), as an immutable value. Zero-length bars are left out; short ones are one call
+  * away (`diagram.longerThan(0.05)`, `diagram.significant()`). This runs the computation to the end; for a long run you
+  * want to inspect while it goes (or keep if it dies), build an engine and use its cursor (`advanceFor`, `diagramAt`)
+  * instead.
   *
   * @param input
   *   points (`Array[Array[Double]]`, `Seq[Seq[Double]]`, `Seq[Array[Double]]`), a `FiniteMetricSpace[Int]`, an
@@ -43,13 +47,22 @@ object Image:
   *   the coefficient field: a prime `p` for `Z/p` (default `FiniteField.DefaultPrime`, 17), or `0` for real
   *   coefficients.
   * @param engine
-  *   `Engine.Chunks` (default: the clearing/chunks algorithm) or `Engine.Naive` (the reference algorithm).
+  *   `Persistence.Engine.Chunks` (default), `Naive`, `Cohomology` or `Ripser` (Vietoris-Rips only, the fastest there);
+  *   see [[Persistence.Engine]].
   * @param includeZeroLength
   *   also report zero-length bars `[v, v)` (cells paired with cells entering at the same value). Default `false`.
   */
 object Persistence:
+  /** Which algorithm computes the diagram. All four give the same bars; they differ in cost and representatives.
+    *
+    *   - `Chunks` (default): clearing and compression, union-find in degrees 0 and 1. Representatives are cycles.
+    *   - `Naive`: the reference algorithm, one cell at a time. Representatives are cycles.
+    *   - `Cohomology`: persistent cohomology of the same complex. Representatives are cocycles.
+    *   - `Ripser`: Bauer's Ripser, for the Vietoris-Rips complex of points or a metric space only; the fastest there.
+    *     Representatives are cocycles.
+    */
   enum Engine:
-    case Chunks, Naive
+    case Chunks, Naive, Cohomology, Ripser
 
   /** What `Persistence` can take; never written by hand -- each kind of input converts to one where it's expected. */
   into sealed trait Input[CellT]:
@@ -60,6 +73,17 @@ object Persistence:
     ): StratifiedCellStream[CellT, Double]
     private[tda4j] def scale: Option[Double]
     private[tda4j] def cells: CellT is OrderedCell
+    private[tda4j] def ripser(
+      maxDimension: Int,
+      maxFiltrationValue: Option[Double],
+      complex: PointCloudComplex,
+      characteristic: Int,
+      includeZeroLength: Boolean
+    ): PersistenceDiagram[CellT] =
+      throw new IllegalArgumentException(
+        "Persistence: engine = Ripser computes the Vietoris-Rips complex of points or a metric space; " +
+          "for this input use Engine.Chunks, Engine.Naive or Engine.Cohomology"
+      )
 
   object Input:
     private def ofMetricSpace(ms: FiniteMetricSpace[Int], points: Option[PointCloud]): Input[Simplex[Int]] =
@@ -72,6 +96,32 @@ object Persistence:
               VietorisRips(ms, maxDimension, maxFiltrationValue)
         lazy val scale = Some(ms.minimumEnclosingRadius)
         def cells = summon[Simplex[Int] is OrderedCell]
+        override def ripser(
+          maxDimension: Int,
+          maxFiltrationValue: Option[Double],
+          complex: PointCloudComplex,
+          characteristic: Int,
+          includeZeroLength: Boolean
+        ) =
+          require(complex eq VietorisRips, "Persistence: engine = Ripser needs complex = VietorisRips")
+          val coefficients = Coefficients(characteristic)
+          import coefficients.given
+          val engine =
+            PackedRipserCohomologyEngine[coefficients.C](ms, maxDimension, maxFiltrationValue = maxFiltrationValue)
+          val threshold = maxFiltrationValue.getOrElse(ms.minimumEnclosingRadius)
+          // Cells come back packed (diameter, combinatorial index): decode them to simplices.
+          def decode(bar: PersistenceBar[Double, Chain[engine.DiameterIndex, coefficients.C]]) =
+            val chain = Chain.from(bar.representative.terms.map { (cell, c) =>
+              (Simplex(engine.si.decodeToArray(cell.index, bar.dim + 1)*), c)
+            })
+            new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(chain))
+          val distances = for x <- ms.elements; y <- ms.elements if x < y yield ms.distance(x, y)
+          PersistenceDiagram[Simplex[Int], coefficients.C](
+            engine.persistentCohomology(includeZeroLength).map(decode),
+            maxDimension,
+            distances.filter(_ <= threshold).maxOption.getOrElse(0.0),
+            scale
+          )
 
     given fromPointCloud: Conversion[PointCloud, Input[Simplex[Int]]] = pc => ofMetricSpace(pc.metricSpace, Some(pc))
     given fromArrays: Conversion[Array[Array[Double]], Input[Simplex[Int]]] = a => fromPointCloud(PointCloud(a))
@@ -105,14 +155,17 @@ object Persistence:
   ): PersistenceDiagram[CellT] =
     require(maxDimension >= 0, s"Persistence: maxDimension must be >= 0, got $maxDimension")
     given (CellT is OrderedCell) = input.cells
-    compute(
-      input.stream(maxDimension, maxFiltrationValue.toOption, complex),
-      maxDimension,
-      characteristic,
-      engine,
-      input.scale,
-      includeZeroLength
-    )
+    if engine == Engine.Ripser then
+      input.ripser(maxDimension, maxFiltrationValue.toOption, complex, characteristic, includeZeroLength)
+    else
+      compute(
+        input.stream(maxDimension, maxFiltrationValue.toOption, complex),
+        maxDimension,
+        characteristic,
+        engine,
+        input.scale,
+        includeZeroLength
+      )
 
   private def compute[CellT: OrderedCell](
     stream: StratifiedCellStream[CellT, Double],
@@ -135,4 +188,10 @@ object Persistence:
           state.barcodeAt(Double.PositiveInfinity, includeZeroLength),
           state.lastFiltrationValue.getOrElse(Double.NegativeInfinity)
         )
+      case Engine.Cohomology =>
+        val bars =
+          CellularCohomologyEngine[CellT, coefficients.C, Double]().persistentCohomology(stream, includeZeroLength)
+        val fv = stream.filtrationValue
+        (bars, stream.iterator.map(c => fv.applyOrElse(c, _ => Double.NegativeInfinity)).maxOption.getOrElse(0.0))
+      case Engine.Ripser => throw new IllegalStateException("unreachable: Ripser is dispatched before compute")
     PersistenceDiagram[CellT, coefficients.C](bars.filter(_.dim <= maxDimension), maxDimension, last, scale)

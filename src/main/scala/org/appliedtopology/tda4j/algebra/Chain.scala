@@ -49,9 +49,16 @@ into class Chain[CellT: Ordering, CoefficientT: Field] private[tda4j](
     val fr = summon[CoefficientT is Field]
     entries.isEmpty || fr.isEqual(entries.head._2, fr.zero)
 
-  /** Raw, uncollapsed entries: deferred arithmetic means a term like `(a + a)` can appear as two separate `(a, coeff)`
-    * pairs rather than one. Callers that need one coefficient per cell must collapse themselves (e.g.
-    * `groupMapReduce`).
+  /** The terms of the chain: each cell with its (nonzero) coefficient, once, in cell order. */
+  def terms: Seq[(CellT, CoefficientT)] =
+    collapseAll()
+    entries.toSeq.sortBy(_._1)
+
+  /** The cells with a nonzero coefficient, in cell order. */
+  def cells: Seq[CellT] = terms.map(_._1)
+
+  /** The stored entries without collapsing: arithmetic is deferred, so a cell can appear more than once (`a + a` as two
+    * `(a, 1)` pairs) or with a zero total. Cheap; use [[terms]] for one coefficient per cell.
     */
   def rawEntries: Seq[(CellT, CoefficientT)] = entries.toSeq
 

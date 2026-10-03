@@ -14,9 +14,9 @@ class CoordinatesSpec extends Specification:
   "circular-and-toroidal-coordinates.md" should {
     "find one long loop on the circle and a coordinate for every point" in {
       val bars = page.circleBars
-      (bars.head._1 must beCloseTo(0.595, 0.001))
+      (bars.size must beEqualTo(1))
+        .and(bars.head._1 must beCloseTo(0.595, 0.001))
         .and(bars.head._2 must beCloseTo(1.707, 0.001))
-        .and(bars(1)._1 must beCloseTo(bars(1)._2, 1e-9)) // the runner-up has zero persistence
         .and(page.circleCoordinate.theta.size must beEqualTo(60))
     }
     "recover the angle to within 0.07 of a turn on average" in

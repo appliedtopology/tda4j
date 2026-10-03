@@ -9,8 +9,8 @@ import org.specs2.mutable.Specification
   *   - filtering AFTER truncation: a class born at exactly `f` and alive there is reported as `(dim, f, f)` by
   *     `diagramAt(f)`, which looks zero-length but is a real class (`diagramAt(0.0)` on `n` points must still give `n`
   *     classes in degree 0);
-  *   - filtering a different set of bars in different engines: the default output must be exactly the full output
-  *     minus its zero-length bars, engine by engine.
+  *   - filtering a different set of bars in different engines: the default output must be exactly the full output minus
+  *     its zero-length bars, engine by engine.
   */
 class ZeroLengthBarsSpec extends Specification:
   given Double is Field = Field.DoubleApproximated(1e-9)
@@ -80,7 +80,8 @@ class ZeroLengthBarsSpec extends Specification:
   "the cohomology and Ripser engines" should {
     "leave zero-length bars out by default and return them on request" in {
       val coh = CellularCohomologyEngine[Simplex[Int], Double, Double]()
-      def limited = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(squareSpace, maxFiltrationValue = Some(3.0)), 2)
+      def limited =
+        LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(squareSpace, maxFiltrationValue = Some(3.0)), 2)
       val ripser = RipserCohomologyEngine[Double](squareSpace, 1, maxFiltrationValue = Some(3.0))
       val packed = PackedRipserCohomologyEngine[Double](squareSpace, 1, maxFiltrationValue = Some(3.0))
       consistent(coh.persistentCohomology(limited), coh.persistentCohomology(limited, includeZeroLength = true)) and
@@ -110,12 +111,14 @@ class ZeroLengthBarsSpec extends Specification:
           .persistentHomology(stream)
           .barcodeAt(Double.PositiveInfinity)
           .count(b => b.persistence > 0 && b.persistence < 1e-9)
-      (1 to 5).map { seed =>
-        val rnd = new scala.util.Random(seed)
-        val points = Array.fill(25)(Array(rnd.nextDouble(), rnd.nextDouble()))
-        (nearZero(Cech(EuclideanMetricSpace(points), 1)) must beEqualTo(0)) and
-          (nearZero(AlphaShapes(points, AlphaBackend.DQP)) must beEqualTo(0))
-      }.reduce(_ and _)
+      (1 to 5)
+        .map { seed =>
+          val rnd = new scala.util.Random(seed)
+          val points = Array.fill(25)(Array(rnd.nextDouble(), rnd.nextDouble()))
+          (nearZero(Cech(EuclideanMetricSpace(points), 1)) must beEqualTo(0)) and
+            (nearZero(AlphaShapes(points, AlphaBackend.DQP)) must beEqualTo(0))
+        }
+        .reduce(_ and _)
     }
   }
 

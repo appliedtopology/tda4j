@@ -89,7 +89,7 @@ object Vectorization:
     persistenceRange: (Double, Double),
     birthResolution: Int,
     persistenceResolution: Int,
-    weightCap: Option[Double] = None
+    weightCap: Optional[Double] = Optional.empty
   ): Array[Array[Double]] =
     require(sigma > 0.0, s"persistenceImage requires sigma > 0.0, got $sigma")
     require(birthResolution > 0, s"persistenceImage requires birthResolution > 0, got $birthResolution")
@@ -103,7 +103,7 @@ object Vectorization:
     require(pHi > pLo, s"persistenceImage requires persistenceRange._2 > persistenceRange._1, got $persistenceRange")
 
     val points = diagram.map(DiagramPoint.of).filterNot(DiagramPoint.isEssential)
-    val cap = weightCap.getOrElse(points.map(_.persistence).maxOption.getOrElse(0.0))
+    val cap = weightCap.toOption.getOrElse(points.map(_.persistence).maxOption.getOrElse(0.0))
 
     val bEdges = Array.tabulate(birthResolution + 1)(i => bLo + i * (bHi - bLo) / birthResolution)
     val pEdges = Array.tabulate(persistenceResolution + 1)(i => pLo + i * (pHi - pLo) / persistenceResolution)

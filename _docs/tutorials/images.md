@@ -46,7 +46,7 @@ one half:
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+import org.appliedtopology.tda4j.*
 
 val random = new java.util.Random(5L)
 val size = 28
@@ -68,53 +68,52 @@ pixels around it.
 ## Flooding from the dark: sublevel sets
 
 ```scala sc:nocompile
-val sublevelStream = CubicalImage.fromGrayscale2D(pixels, sublevel = true)
-val engine = CubicalHomologyEngine[CoefficientT, Double]()
-val bars = engine.persistentHomology(sublevelStream).diagramAt(Double.PositiveInfinity)
-bars.size    // 1625
+val image = Image(pixels)
+val dark = Persistence(image)     // sublevel sets: the darkest pixels first
+dark.size                         // 221 bars
 ```
 
-Noise makes 1,625 bars again, nearly all negligible. Because we know the noise is at most 0.1, a sensible cut-off is "persists for
-more than 0.3", three times the noise amplitude. (With point clouds the scale of the data suggested a cut-off; here the noise
-level of the camera does. The command-line and MATLAB default, 1% of the range, would keep 170 of the 1,625 bars.)
+Noise makes 221 bars, nearly all of them short. Because we know the noise is at most 0.1, a sensible cut-off is "persists
+for more than 0.3", three times the noise amplitude. (With point clouds the scale of the data suggested a cut-off; here
+the noise level of the camera does. `dark.significant()`, the command-line and MATLAB default of 1% of the range, would
+keep 170.)
 
 ```scala sc:nocompile
-def significant(bars: List[(Int, Double, Double)]) =
-  bars.filter((_, birth, death) => death.isInfinite || death - birth > 0.3).sortBy(bar => (bar._1, bar._2))
-
-significant(bars)
-// (0, 0.00, Infinity)   (0, 0.00, 1.00)   (1, 0.06, 1.10)   (1, 0.06, 0.90)
+dark.longerThan(0.3)
+// [0.000, Infinity)   [0.001, 1.002)   in degree 0
+// [0.062, 1.099)      [0.064, 0.900)   in degree 1
 ```
 
 Four features survive, and each one is something you can point at in the picture. Starting from the darkest pixels:
 
-* **`(0, 0.00, Infinity)`**: the dark background, which exists from the start and is never swallowed.
-* **`(0, 0.00, 1.00)`**: the dark disc *inside the ring*. It is a separate piece of darkness, walled in by the ring, until the
+* **`[0, Infinity)`** in degree 0: the dark background, which exists from the start and is never swallowed.
+* **`[0, 1.00)`** in degree 0: the dark disc *inside the ring*. It is a separate piece of darkness, walled in by the ring, until the
   flood reaches the ring's brightness (about 1.0). Then the ring's own pixels begin to enter, the disc is joined to the
   background, and its bar ends.
-* **`(1, 0.06, 1.10)`**: a hole. The dark background, once it has formed a connected band around the ring, encircles it, a loop
+* **`[0.06, 1.10)`** in degree 1: a hole. The dark background, once it has formed a connected band around the ring, encircles it, a loop
   that stays until the ring itself is flooded (at 1.1, the brightest pixel of the ring).
-* **`(1, 0.06, 0.90)`**: the same, around the blob, which is flooded at 0.9.
+* **`[0.06, 0.90)`** in degree 1: the same, around the blob, which is flooded at 0.9.
 
 The death values of the two loops, 1.10 and 0.90, are the brightness of the ring and of the blob: sublevel sets read the
-*brightness of obstacles*. Everything else in the 1,625 bars is noise.
+*brightness of obstacles*. Everything else is noise.
 
 ## Flooding from the bright: superlevel sets
 
-Run the threshold the other way and you track the *bright* structures instead. There is no separate setting for it: pass
-`sublevel = false` and the image is negated, so the engine's "smallest first" becomes "brightest first". The numbers you read
-back are negative brightnesses (a bar from `-1.10` is something born at brightness 1.10):
+Run the threshold the other way and you track the *bright* structures instead. `image.superlevel` is the same image
+filtered from the bright end; internally the image is negated, so the engine's "smallest first" becomes "brightest
+first", and the numbers you read back are negative brightnesses (a bar from `-1.10` is something born at brightness 1.10):
 
 ```scala sc:nocompile
-val superlevelStream = CubicalImage.fromGrayscale2D(pixels, sublevel = false)
-significant(engine.persistentHomology(superlevelStream).diagramAt(Double.PositiveInfinity))
-// (0, -1.10, Infinity)   (0, -0.90, -0.06)   (1, -1.00, -0.00)
+val bright = Persistence(image.superlevel)
+bright.longerThan(0.3)
+// [-1.099, Infinity)   [-0.900, -0.063)   in degree 0
+// [-1.004, -0.001)                        in degree 1
 ```
 
-* **`(0, -1.10, Infinity)`**: the ring, a bright piece born at its brightest pixel, never merged into anything.
-* **`(0, -0.90, -0.06)`**: the blob, born at brightness 0.90 and absorbed into the ring's piece when the threshold falls to the
+* **`[-1.10, Infinity)`** in degree 0: the ring, a bright piece born at its brightest pixel, never merged into anything.
+* **`[-0.90, -0.06)`** in degree 0: the blob, born at brightness 0.90 and absorbed into the ring's piece when the threshold falls to the
   background level, 0.06.
-* **`(1, -1.00, -0.00)`**: the ring's loop. It is born at brightness 1.00, when the weakest pixel of the ring closes the circle,
+* **`[-1.00, -0.00)`** in degree 1: the ring's loop. It is born at brightness 1.00, when the weakest pixel of the ring closes the circle,
   and dies at 0 when the dark disc in the middle has been flooded as well.
 
 Compare the two views. The bright view says "a ring and a blob, and the ring has a hole"; the dark view says "a background with
@@ -123,14 +122,15 @@ easier to read depends on whether the objects you care about are brighter or dar
 
 ## A faster engine
 
-For images the generic engine above works on all 3,249 cells with the same machinery as for point clouds. Images are so regular
-that there is a much faster approach, exploiting the grid (the `fast-cubical` engine, described in the
-[user guide](../user-guide/homology-computation/fast-cubical.md)), and it gives *the same answer*, bar for bar:
+`Persistence` runs a general engine, the same as for point clouds, on all 3,249 cells. Images are so regular that there
+is a much faster approach exploiting the grid, the `fast-cubical` engine (see the
+[user guide](../user-guide/homology-computation/fast-cubical.md)). Using an engine directly means choosing the
+coefficient field yourself:
 
 ```scala sc:nocompile
-val fast = FastCubicalHomologyEngine[CoefficientT]()
-val fastBars = fast.persistentHomology(sublevelStream).map(_.toTriple)   // (dimension, birth, death) for each bar
-// the same 1,625 bars as engine.persistentHomology(sublevelStream).diagramAt(Double.PositiveInfinity)
+given Double is Field = Field.DoubleApproximated(1e-9)
+val fastBars = FastCubicalHomologyEngine[Double]().persistentHomology(CubicalImage.fromGrayscale2D(pixels))
+// the same bars as dark.bars
 ```
 
 On a 28 × 28 image you will not feel the difference. On a photograph of a few megapixels you will.
@@ -148,7 +148,7 @@ page covers three-dimensional volumes.
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+import org.appliedtopology.tda4j.*
 
 val random = new java.util.Random(5L)
 val size = 28
@@ -162,21 +162,13 @@ val pixels = Array.tabulate(size, size) { (row, column) =>
   signal + 0.1 * random.nextDouble()
 }
 
-def significant(bars: List[(Int, Double, Double)]) =
-  bars.filter((_, birth, death) => death.isInfinite || death - birth > 0.3).sortBy(bar => (bar._1, bar._2))
+val image = Image(pixels)
+val dark = Persistence(image)
+val bright = Persistence(image.superlevel)
 
-val sublevelStream = CubicalImage.fromGrayscale2D(pixels, sublevel = true)
-val superlevelStream = CubicalImage.fromGrayscale2D(pixels, sublevel = false)
-
-val engine = CubicalHomologyEngine[CoefficientT, Double]()
-val sublevelBars = engine.persistentHomology(sublevelStream).diagramAt(Double.PositiveInfinity)
-val superlevelBars = engine.persistentHomology(superlevelStream).diagramAt(Double.PositiveInfinity)
-
-val fast = FastCubicalHomologyEngine[CoefficientT]()
-val fastBars = fast.persistentHomology(sublevelStream).map(_.toTriple)
-
-val dark = significant(sublevelBars)
-val bright = significant(superlevelBars)
+val stream = CubicalImage.fromGrayscale2D(pixels)   // the cubical complex itself
+given Double is Field = Field.DoubleApproximated(1e-9)
+val fastBars = FastCubicalHomologyEngine[Double]().persistentHomology(stream)
 ```
 
 </div>
@@ -215,7 +207,7 @@ bright.toArray()        % three rows: [0 -1.099 Inf], [0 -0.900 -0.063], [1 -1.0
 % The fast engine gives the same bars
 fast = TDA4j.computeFromImage(pixels, {'sublevel', 'true', 'engine', 'fast-cubical', 'minPersistence', '0.3'});
 isequal(sortrows(fast.toArray()), sortrows(dark.toArray()))      % true
-size(dark.toArrayUnfiltered(), 1)                                 % 1625 bars in the full barcode
+size(dark.toArrayUnfiltered(), 1)                                 % 221 bars in the full barcode
 ```
 
 </div>

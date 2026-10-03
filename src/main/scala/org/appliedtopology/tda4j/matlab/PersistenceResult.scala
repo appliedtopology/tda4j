@@ -276,7 +276,7 @@ final class PersistenceResult private[matlab] (
       (persistenceMin, persistenceMax),
       birthResolution,
       persistenceResolution,
-      Some(weightCap)
+      weightCap
     )
 
   /** Computed once, lazily (a caller who never asks for the boundary matrix never pays for it -- unlike `toArray()`/

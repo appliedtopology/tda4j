@@ -21,7 +21,7 @@ Smaller means a stronger tie, as a distance would:
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+import org.appliedtopology.tda4j.*
 
 val never = Double.PositiveInfinity
 val relation: Array[Array[Double]] = Array.tabulate(6, 7) { (person, club) =>
@@ -42,22 +42,8 @@ person appears when their cheapest club does (here at 1). Two neighbours around 
 club, at time 5.
 
 ```scala sc:nocompile
-val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
-def dowkerBars(dual: Boolean) =
-  engine.persistentHomology(Dowker(relation, maxDimension = 1, dual = dual)).diagramAt(Double.PositiveInfinity).filter(_._1 <= 1)
-
-val people = dowkerBars(dual = false)
-people.size    // 16 bars
-```
-
-Sixteen bars, nine of them born and dead at the same instant (the same harmless zero-length bars as in the
-[first tutorial](find-a-loop.md)). Dropping those:
-
-```scala sc:nocompile
-def withoutZeroLength(bars: List[(Int, Double, Double)]) =
-  bars.filter((_, birth, death) => death.isInfinite || death > birth).sortBy(bar => (bar._1, bar._2, bar._3))
-
-withoutZeroLength(people)
+val people = Persistence(Dowker(relation, maxDimension = 1))
+people.triples.sorted
 // (0, 1.0, 2.0) five times, (0, 1.0, Infinity), (1, 2.0, 5.0)
 ```
 
@@ -76,16 +62,15 @@ A table has two sides. We built the complex on the *people*, using clubs as witn
 using people as witnesses. `Dowker(..., dual = true)` does exactly that:
 
 ```scala sc:nocompile
-val clubs = dowkerBars(dual = true)
-clubs.size    // 13 bars, not 16
-withoutZeroLength(clubs) == withoutZeroLength(people)    // true
+val clubs = Persistence(Dowker(relation, maxDimension = 1, dual = true))
+clubs.triples.sorted == people.triples.sorted    // true
 ```
 
-There are 13 bars here against 16 for the people (the two sides have different numbers of zero-length bars, which carry no
-information), yet after dropping them the barcodes are **exactly the same**. This is **Dowker duality**, a theorem: the complex of
-the rows and the complex of the columns of a relation have the same persistent homology. In practice it is a freedom: build
-the complex on whichever side is smaller (people or clubs, genes or drugs) and you get the same loops. It is also a good check on
-your data pipeline: if the two sides ever disagree, something is wrong with the table.
+The barcodes are **exactly the same**. This is **Dowker duality**, a theorem: the complex of the rows and the complex of the
+columns of a relation have the same persistent homology. (The two complexes are different, and so are their zero-length bars,
+which carry no information and are left out.) In practice it is a freedom: build the complex on whichever side is smaller
+(people or clubs, genes or drugs) and you get the same loops. It is also a good check on your data pipeline: if the two
+sides ever disagree, something is wrong with the table.
 
 ## On your own tables
 
@@ -104,7 +89,7 @@ your data pipeline: if the two sides ever disagree, something is wrong with the 
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+import org.appliedtopology.tda4j.*
 
 val never = Double.PositiveInfinity
 val relation: Array[Array[Double]] = Array.tabulate(6, 7) { (person, club) =>
@@ -114,15 +99,9 @@ val relation: Array[Array[Double]] = Array.tabulate(6, 7) { (person, club) =>
   else never
 }
 
-val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
-def dowkerBars(dual: Boolean) =
-  engine.persistentHomology(Dowker(relation, maxDimension = 1, dual = dual)).diagramAt(Double.PositiveInfinity).filter(_._1 <= 1)
-def withoutZeroLength(bars: List[(Int, Double, Double)]) =
-  bars.filter((_, birth, death) => death.isInfinite || death > birth).sortBy(bar => (bar._1, bar._2, bar._3))
-
-val people = dowkerBars(dual = false)
-val clubs = dowkerBars(dual = true)
-val agree = withoutZeroLength(people) == withoutZeroLength(clubs)
+val people = Persistence(Dowker(relation, maxDimension = 1))
+val clubs = Persistence(Dowker(relation, maxDimension = 1, dual = true))
+val agree = clubs.triples.sorted == people.triples.sorted
 ```
 
 </div>
@@ -145,8 +124,6 @@ clubs  = TDA4j.computeFromRelation(relation, {'maxDimension', '1', 'dual', 'true
 
 people.toArray()        % seven bars, one of them the loop [1 2 5]
 clubs.toArray()         % exactly the same seven bars
-size(people.toArrayUnfiltered(), 1)    % 16 bars before the zero-length ones are hidden
-size(clubs.toArrayUnfiltered(), 1)     % 13
 ```
 
 </div>

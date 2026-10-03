@@ -25,7 +25,8 @@ It is infinite, but the homology up to a given degree needs only finitely many c
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.sset.*
 
 val s3 = FiniteGroup.symmetric(3)
 val s3Homology = Seq(2, 3).map(p => p -> ClassifyingSpace.bettiNumbers(s3, 4, p)).toMap
@@ -119,7 +120,8 @@ filtration: it is the natural way to ask the *persistent* question, and the mach
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.sset.*
 
 val s3 = FiniteGroup.symmetric(3)
 val s3Homology = Seq(2, 3).map(p => p -> ClassifyingSpace.bettiNumbers(s3, 4, p)).toMap

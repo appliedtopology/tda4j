@@ -78,8 +78,8 @@ trait PersistenceDiagram[CellT]:
     val byDim = bars.groupBy(_.dim).toList.sortBy(_._1)
     val lines = byDim.map { (d, bs) =>
       val shown = bs.sortBy(-_.persistence).take(5).map(b => f"[${b.birth}%.4g, ${b.death}%.4g)").mkString(" ")
-      s"  H$d: ${bs.size} bars" + (if bs.nonEmpty then s", longest $shown" else "") + (if bs.size > 5 then " ..."
-                                                                                       else "")
+      val count = if bs.size == 1 then "1 bar" else s"${bs.size} bars"
+      s"  H$d: $count" + (if bs.nonEmpty then s", longest $shown" else "") + (if bs.size > 5 then " ..." else "")
     }
     (s"PersistenceDiagram(${bars.size} bars, degrees 0..$maxDimension)" :: lines).mkString("\n")
 
