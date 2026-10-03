@@ -64,3 +64,31 @@ instead of 231,961.
 
 Caveat: the pairing depends on the total order. The homology pass must use exactly the order Ripser paired under:
 diameter, then colexicographic index, with the same direction for ties.
+
+## Size limits of a packed (combinatorial-index) cell, computed (2026-10-04)
+
+A packed simplex is a `Long` index in the combinatorial number system, so a `k`-simplex on `n` vertices fits while
+`C(n, k + 1) <= 2^63 - 1`. The largest `n` for each `k`, computed exactly:
+
+| simplex dim k | max points n | needed for |
+|---|---|---|
+| 1 | 4,294,967,296 (but vertices are `Int`: 2^31) | H0 |
+| 2 | 3,810,779 | H1 |
+| 3 | 121,977 | H2 |
+| 4 | 16,175 | H3 |
+| 5 | 4,337 | H4 |
+| 6 | 1,733 | |
+| 8 | 534 | |
+| 10 | 265 | |
+
+- The limit is on the number of **input points**, not on the size of the complex.
+- `SimplexIndexing.binomial` throws on `Long` overflow, so going past it fails loudly, never silently.
+- The packed form covers only simplices on `Int` vertices.
+  - Cubes, simplicial-set generators and explicit streams of other cell types need a different encoding.
+  - The general engines must keep a generic path (project lead).
+
+Alternative that keeps generality: each cell gets a dense `Int` id per stream in filtration order, with boundaries
+precomputed as id arrays.
+- It works for any `CellT`, and its limit is 2^31 cells; memory runs out first.
+- It attacks exactly the profiled overhead: order and value become array lookups.
+- Unmeasured; needs an A/B before any claim.
