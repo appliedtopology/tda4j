@@ -12,10 +12,7 @@ dimension you want) and returns a stream of simplices that any engine can read. 
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
 val metricSpace = EuclideanMetricSpace(points)
@@ -105,10 +102,7 @@ variants.
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
 val metricSpace = EuclideanMetricSpace(points)

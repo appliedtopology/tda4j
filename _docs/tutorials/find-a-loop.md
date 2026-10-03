@@ -13,10 +13,7 @@ checked into the repository, so you can rebuild or change it.) There is one obvi
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)          // coefficients in the field with 2 elements
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/data/noisy-circle.csv")
 val enclosingRadius = metricSpace.minimumEnclosingRadius   // 1.95: beyond this radius nothing new can be born
@@ -118,10 +115,7 @@ number quoted on this page):
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/data/noisy-circle.csv")
 val enclosingRadius = metricSpace.minimumEnclosingRadius

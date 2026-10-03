@@ -19,10 +19,7 @@ We compare the loops, so for each cloud we keep the dimension-1 bars that surviv
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
 
@@ -133,10 +130,7 @@ format). Save the barcode of one cloud with `--output`, then compare other cloud
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
 

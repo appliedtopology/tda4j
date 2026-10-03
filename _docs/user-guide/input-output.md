@@ -19,6 +19,7 @@ Each object offers a raw loader (`readPointCloud`/`readFullDistanceMatrix`/...) 
 constructor on top (`readEuclideanMetricSpace`/`readExplicitMetricSpace`/`readCubicalGridStream`/...):
 
 ```scala 3
+import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
 val metricSpace = Ripser.readEuclideanMetricSpace("points.txt")

@@ -13,10 +13,7 @@ simplices, with the freedom to glue them to themselves, which keeps the models t
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 ```
 
 ## Betti numbers over two fields
@@ -144,10 +141,7 @@ same idea, a filtration of such a space by subspaces, see [persistent group coho
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 def betti[G](x: FiniteSimplicialSet[G]) = (BettiNumbers(x, 2), BettiNumbers(x, 3))
 def basis[G](x: FiniteSimplicialSet[G], degree: Int) = CupProduct.cohomologyBasis[G, CoefficientT](x, degree)

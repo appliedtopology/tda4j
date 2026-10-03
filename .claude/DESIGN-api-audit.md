@@ -1,5 +1,21 @@
 # API audit: easy, not simple (2026-10-03)
 
+> **Status (same day, after the project lead's review).** Accepted except two points, both changed:
+> 1. **Default field: F₁₇, not F₂** (lead: two decades of pushing back on "F₂ and call it a day"; 65537 considered and
+>    judged provocative). `FiniteField.DefaultPrime = 17`, used by `Persistence`, the prebuilt labs and the MATLAB/CLI
+>    facade. Large primes are now exact (Long products).
+> 2. **The cursor stays.** It exists so a days-long run can be inspected and keeps its output if it dies; finding 1's
+>    order-dependence is a presentation bug, fixed in place (`diagramAt(f)` exact at any `f`), plus `advanceFor(budget)`
+>    for time-boxed slices. `PersistenceDiagram` is the immutable value the VERB returns and `snapshotAt(f)` takes from a
+>    cursor -- not a replacement for it.
+>
+> Implemented: findings 1 (as above), 2 (`Persistence` verb), 3 (inferring companion forms; the class API stays), 4
+> (`@implicitNotFound`, default as a parameter), 5 (`Optional[Double]` via `into`), 6 (`PointCloud`), 7
+> (`AlphaBackend`), 8 (`Lab` base, `TDAlab.F17` etc., `CubicalLab`, companion spellings). New finding while doing it:
+> every user file needs `import scala.language.experimental.modularity` -- the library is compiled with that flag, so
+> all of it is `@experimental`; the `Self`-member typeclass context bounds are what need it (~100 errors without).
+> A decision for the lead, not changed. Derivation: `WORKLOG-cursor-and-verb.md`.
+
 Written for the project lead after the package flatten (`WORKLOG-package-flatten.md`). An audit only: nothing here is
 implemented. Proposed code is marked **(uncompiled)**; feasibility checks are marked **(spike)** and were run on Scala
 3.9.0 with this repo's flags.

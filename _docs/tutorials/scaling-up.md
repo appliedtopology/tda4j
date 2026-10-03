@@ -21,10 +21,7 @@ in how much raw output they return: the naive and cohomology engines list every 
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/data/noisy-circle.csv")
 def stream = VietorisRips(metricSpace, maxDimension = 1)
@@ -58,10 +55,7 @@ naive engine on the collapsed space gives the same 61 bars.
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/data/noisy-circle.csv")
 def stream = VietorisRips(metricSpace, maxDimension = 1)

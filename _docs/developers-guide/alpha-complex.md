@@ -3,7 +3,7 @@ layout: main
 title: Alpha complex: DQP vs Helix
 ---
 
-Two independent backends compute alpha complexes; `AlphaShapes(points, dispatch)` (`alpha/AlphaShapes.scala`)
+Two independent backends compute alpha complexes; `AlphaShapes(points, backend)` (`alpha/AlphaShapes.scala`)
 chooses between them. This page is the developer-facing view. For the user-facing framing (which one to
 pick, and the honest tradeoffs), see the [User's Guide](../user-guide/index.md).
 
@@ -11,13 +11,13 @@ pick, and the honest tradeoffs), see the [User's Guide](../user-guide/index.md).
 
 ```scala sc:nocompile
 object AlphaShapes:
-  def apply(pts: Seq[Array[Double]], dispatch: String = "default", requireValidTriangulation: Boolean = false)(using
-    epsilon: Epsilon = Epsilon(1e-5)
+  def apply(points: PointCloud, backend: AlphaBackend = AlphaBackend.Default, requireValidTriangulation: Boolean = false)(
+    using epsilon: Epsilon = Epsilon(1e-5)
   ): AlphaShapes
 ```
 
-`dispatch = "default"` **always resolves to `"helix"` regardless of point-cloud shape** — `"DQP"` must be
-requested explicitly. Both backends extend the common `AlphaShapes` abstract class, so they're
+`AlphaBackend.Default` **always resolves to `AlphaBackend.Helix` regardless of point-cloud shape** — `AlphaBackend.DQP`
+must be requested explicitly (the MATLAB/CLI facade's `alphaBackend` string goes through `AlphaBackend.parse`). Both backends extend the common `AlphaShapes` abstract class, so they're
 dispatch-interchangeable as far as any code consuming the resulting stream is concerned —
 `AlphaComplexSpec` runs identical property checks against both to enforce this.
 

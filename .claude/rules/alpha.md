@@ -63,3 +63,8 @@ also triggered on RAW unrepaired input. Not attempted d≥4. `.claude/DESIGN-hel
 **Degeneracy hazard**: cospherical `k` sites give a `(k-1)`-simplex (unit grid in R² → 3-simplices) — correct,
 not a bug; truncating at ambient dimension gives the wrong homotopy type. Honest framing: paper's benchmarks
 mixed vs Ripser/qhull; value is high ambient dimension + exact homology + small complexes, not raw speed.
+
+**Backend choice is typed** (`WORKLOG-cursor-and-verb.md`): `AlphaShapes(points: PointCloud, backend: AlphaBackend =
+Default)`, `AlphaBackend.Default | Helix | DQP` (Default resolves to Helix); the facade's `alphaBackend` string goes
+through `AlphaBackend.parse`. `AlphaShapes` is also a `PointCloudComplex` (`Persistence(points, complex = AlphaShapes)`),
+which refuses `maxFiltrationValue` with a message pointing at `diagram.at(f)`.

@@ -53,3 +53,7 @@ untruncated. `RecursiveStackVietorisRipsSimplexStream` and alpha streams don't g
 builder silently used the data's own min/max, mislabelling bars. `fromFacets(facets)` / `fromFilteredFacets((value, facet)*)`
 close a list of maximal cells under faces (unlisted face = min value of cells containing it). The naive engine on a VR
 stream needs `maxDimension = k+1` for H_k (it sees only streamed simplices). `WORKLOG-tutorial-all-ways.md`.
+
+**Public dispatcher thresholds are `Optional[Double]`** (`into`, `algebra/Optional.scala`): `maxFiltrationValue = 1.5`,
+`2`, `Some(1.5)` and `None` all work; bodies use `.toOption`. `EuclideanMetricSpace(points: PointCloud)` accepts every
+point-collection shape. `VietorisRips`/`Cech` implement `PointCloudComplex.fromPoints` for the `Persistence` verb.

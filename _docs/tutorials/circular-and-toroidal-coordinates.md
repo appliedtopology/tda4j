@@ -20,10 +20,7 @@ in the data (the algorithm works with cohomology rather than homology, which is 
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val circlePoints = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
 val circle = EuclideanMetricSpace(circlePoints)
@@ -121,10 +118,7 @@ dimensions, and the loops are only barely separated from the noise bars. More po
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 def circularDistance(a: Double, b: Double): Double =
   val d = math.abs(a - b) % 1.0

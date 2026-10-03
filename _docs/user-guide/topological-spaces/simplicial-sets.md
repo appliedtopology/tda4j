@@ -12,6 +12,7 @@ squares of spheres, tori, projective spaces and classifying spaces of groups.
 Simplicial sets are an add-on to the core library. Import both:
 
 ```scala 3
+import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.sset.*
 ```
@@ -26,6 +27,7 @@ Everything is in two places:
 #### Ready-made spaces
 
 ```scala 3
+import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.sset.*
 
@@ -47,6 +49,7 @@ and `SimplicialSet.presentationComplex(...)` builds the presentation complex of 
 #### Looking inside
 
 ```scala 3
+import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.sset.*
 
@@ -72,6 +75,7 @@ return it in that normal form.
 Give the generators per dimension and, for each generator of dimension `n > 0`, its `n + 1` faces:
 
 ```scala 3
+import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.sset.*
 
@@ -96,6 +100,7 @@ not face data that describes a different space than you meant. Check the homolog
 #### New spaces from old
 
 ```scala 3
+import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.sset.*
 
@@ -119,6 +124,7 @@ torsion: the Klein bottle has Betti numbers `(1, 2, 1)` over `F_2` but `(1, 1, 0
 `(1, 1, 1)` over `F_2` but `(1, 0, 0)` over `F_3`:
 
 ```scala 3
+import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.sset.*
 
@@ -133,6 +139,7 @@ before its faces; this is checked), bring the set's cell structure into scope wi
 engine:
 
 ```scala 3
+import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.sset.*
 
@@ -159,6 +166,7 @@ Equal Betti numbers prove little. `CP²` and `S² ∨ S⁴` have the same Betti 
 the degree-2 class nonzero:
 
 ```scala 3
+import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.sset.*
 

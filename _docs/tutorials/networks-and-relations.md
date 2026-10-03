@@ -21,10 +21,7 @@ Smaller means a stronger tie, as a distance would:
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val never = Double.PositiveInfinity
 val relation: Array[Array[Double]] = Array.tabulate(6, 7) { (person, club) =>
@@ -107,10 +104,7 @@ your data pipeline: if the two sides ever disagree, something is wrong with the 
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val never = Double.PositiveInfinity
 val relation: Array[Array[Double]] = Array.tabulate(6, 7) { (person, club) =>

@@ -39,16 +39,12 @@ see "Givens" below). The core's source directories are **file organization only,
   `LinearAlgebra` (dense, small complexes).
 - `cells/` — `Simplex`/`SimplexOps`/`SimplexOrderedCell` (+ `SimplexInstances`), `Cubical`/`CubicalOrderedCell`
   (+ `CubeInstances`).
-- `streams/` — `SimplexStream`, `FiniteMetricSpace`, `VietorisRips` (also the dispatcher: homological-degree `maxDimension`,
-  pick it over the individual constructions; `DESIGN-stream-naming.md`), `Complexes` (`Cech`/`Witness`/`Dowker`/`DtmRips`/
-  `SparseRips`/`Truncated`), `Cofacets`, `SimplexIndexing`, `CubicalStream`, `CubicalImage`, `UnionFind` (+ `Kruskal`),
-  `CechStream`, `WitnessStream`, `DowkerStream`, `DtmRipsStream`, `SheehyRipsStream`, `EdgeCollapseStream`.
-- `homology/` — `Homology` (`CellularHomologyEngine` naive + `CellularPersistenceInChunksEngine` chunks, plus the thin
-  `Simplicial`/`Cubical`/`PersistenceInChunks` wrappers), `RipserCohomology` (the oracle), `PackedRipserCohomology`,
-  `Cohomology` (`CellularCohomologyEngine`), `FastCubicalHomology`, `FastAlphaHomology`, `PersistenceEngine`,
-  `CircularCoordinates`, `LatticeReduction`. Streams never use engines (convention only now; nothing enforces it).
-- `barcode/` — `Barcode`, `PersistenceFilter`, `BarcodeDistance`, `Vectorization`. `alpha/` — `AlphaShapes`,
-  `AlphaComplexDQP`. `io/` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
+- `streams/` — streams, metric spaces, `PointCloud`, the dispatchers (`VietorisRips`, `Cech`, `Witness`, `Dowker`,
+  `DtmRips`, `SparseRips`, `Truncated`; `DESIGN-stream-naming.md`), cubical streams/images, `UnionFind`/`Kruskal`.
+- `homology/` — the engines (naive `CellularHomologyEngine`, chunks, cohomology, Ripser, fast cubical/alpha),
+  `Persistence` (the verb), `CircularCoordinates`, `LatticeReduction`. Streams never use engines (convention only).
+- `barcode/` — `Barcode`, `PersistenceDiagram`, `PersistenceFilter`, distances, vectorizations. `alpha/` — `AlphaShapes`
+  (+ `AlphaBackend`), `AlphaComplexDQP`. `io/` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
 - root `package.scala` — `TDAlab` (below).
 - **add-on `sset`** (`org.appliedtopology.tda4j.sset`, directory `sset/`; users opt in with
   `import org.appliedtopology.tda4j.sset.*`) — simplicial sets (the Sage-parity layer) AND group classifying spaces
@@ -114,27 +110,53 @@ includes the `ux.js` `$.get` navigation bug). The pin is the `TDA4J_SCALA_VERSIO
 in `build.sbt`, set only on the docs steps of `test.yml` (`docs-build`), `docs.yml` and `release.yml` (not `++3.8.4`). sbt 2 puts output under
 `target/out/jvm/scala-<ver>/tda4j/`. Remove the pin when 3.9.1 releases.
 
+**After `sbt package` or a 3.8.4 docs build, a test compile can see no main classes at all** ("Not found: TDAlab");
+`sbt clean` fixes it -- stale incremental state, not code.
+
 **Never run two `sbt` invocations against this checkout at once** — the incremental compiler's own class-file
 writes from one process can be read mid-update by the other, producing a `NoClassDefFoundError` that looks like a
 real regression but disappears on a clean, sequential rerun.
 
-## TDAlab: the user-facing entry point
+## User-facing entry points: `Persistence`, labs, the cursor
 
-`TDAlab(characteristic, precision = 1e-9)` (root `package.scala`) is the pylab-style facade: `val tdalab =
-TDAlab(17); import tdalab.{*, given}` must be the ONLY import a lab user needs. It brings `CoefficientT`, `Fp(...)`, the
+**Every user file needs `import scala.language.experimental.modularity`** (or `-experimental`): the library is
+compiled with that flag, so every definition in it is `@experimental` and Scala refuses to let non-experimental code
+use it. Removing the flag is not cheap -- the `Self`-member typeclass context bounds (`C: Field`) are the experimental
+part (~100 errors without it). With that one line, a plain downstream project needs nothing else (no `-preview`: the
+`into` conversions work), checked against the packaged jar (`WORKLOG-cursor-and-verb.md`). Doc fences must include the
+line even though the docs build (project flags) would compile them without it.
+
+**`Persistence(input, maxDimension = 1, maxFiltrationValue, complex = VietorisRips, characteristic = 17, engine)`**
+(`homology/Persistence.scala`) is the one-call verb: points/metric space/`Image`/any stream in, an immutable
+`PersistenceDiagram` (bars + representatives; coefficient type is a member, `import d.given`; `dim`, `at(f)`,
+`longest`, `significant()`, `bettiNumbers`) out. `Input` is an `into` type, so one `apply` with defaults covers every
+input (Scala forbids defaults on more than one overload). `VietorisRips`/`Cech`/`AlphaShapes` implement
+`PointCloudComplex` and double as the `complex` choice. **Default field: `FiniteField.DefaultPrime = 17`** (project
+lead: never F₂ by default -- it hides signs and odd torsion); also the MATLAB/CLI default. The verb runs to the end;
+long runs use an engine's **cursor**, which is kept on purpose: `advanceFor(budget)`, `processedCells`/`totalCells`,
+`diagramAt(f)` exact at any `f` wherever the cursor is, `snapshotAt(f)` (`rules/engines.md` query contract).
+Engines also have inferring companion forms: `SimplicialHomologyEngine.persistentHomology(stream)`.
+
+**`into` parameter types** (`Optional[Double]`, `PointCloud`): public numeric options take `2.0`, `2`, `Some(2.0)` or
+`None`; point inputs take `Array[Array[Double]]`, `Seq[Seq[Double]]`, `Seq[Array[Double]]`. Use them for new public
+signatures instead of `Option[Double]` / a fixed collection type. `AlphaBackend` (enum) replaced string dispatch.
+
+### TDAlab and the other labs
+
+`abstract class Lab(characteristic, precision = 1e-9)` (root `package.scala`) carries what every lab shares
+(coefficients via `Coefficients`, `Fp`, the re-exports, `.show`); `TDAlab` (simplicial) and `CubicalLab` extend it,
+with prebuilt objects `TDAlab.F2`/`F3`/`F17`/`Reals` (likewise `CubicalLab`): `import TDAlab.F17.{*, given}` must be the
+ONLY library import a lab user needs. It brings `CoefficientT`, `Fp(...)`, the
 field's given, chain arithmetic (`⊠`, `+`, `-`) on `Chain[Simplex[Int], CoefficientT]`, a `Simplex -> Chain` conversion,
 Cats `.show` syntax, and flat re-exports of every public top-level class/trait/object/type/enum of the core and the
 `sset` add-on, plus the `∆` val. The re-export block is GENERATED (`.claude/scripts/tdalab-exports.py`, between `BEGIN/END
 generated re-exports` markers) and guarded by `TDAlabExportsSpec` -- rerun the script after adding a public type. Only
-types and val aliases are re-exported: Scala 3.9 reports a re-exported def as ambiguous (and loses a re-exported
-extension) for users who import both the package and a TDAlab, but not a re-exported object/class/type/val. Hence `∆`
-is `val ∆ : Simplex.type = Simplex`, and top-level defs (`simplexIsOrderedCell`, `asSimplex`, ...) still need the package
-import (`DESIGN-api-audit.md`). No namespace objects (`tdalab.streams.X` is gone) and no given re-exports (defaults
-come from companions). `characteristic = 0` means `Double`; a prime `p` means `Z/p`; anything else throws. Vertices are
-fixed to `Int`: this lab is simplicial and opinionated, and the project lead is open to several labs for different
-settings (a cubical lab would not want the `Simplex -> Chain` conversion). **`TDAContext` and the
-`TDAenvironment`/`FieldChoice`/`FiltrationChoice`/`TopologyChoice` sketches were removed on purpose** -- engines are
-constructed explicitly, never inherited from a context class; a lab is never consulted by an engine. Cats (`cats-core`,
+types and val aliases are re-exported (a re-exported def is ambiguous for users who import both). Hence `∆`
+is `val ∆ : Simplex.type = Simplex`, and top-level defs have companion spellings that ride along with the re-exported
+objects (`Simplex.fromSortedSet`/`ordering`/`isOrderedCell`, `Cube.fromVector`/`ordering`/`isOrderedCell`). No namespace objects (`tdalab.streams.X` is gone) and no given re-exports (defaults
+come from companions). `characteristic = 0` means `Double`, a prime `p` `Z/p`. Labs are opinionated by design (project lead): `TDAlab` fixes
+`Int` vertices. **`TDAContext`/`TDAenvironment`-style context classes were removed on purpose** -- a lab is never
+consulted by an engine. Cats (`cats-core`,
 `kittens`) is a dependency for `Show`; `Chain` is declared `into class` (needs `-preview`; `// format: off` around it
 because scalafmt can't parse `into`) and implicit conversions are enabled in-source, not by a flag.
 

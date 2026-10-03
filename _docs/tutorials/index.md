@@ -49,11 +49,8 @@ Placeholder page; nothing ported yet. When per-language (Java/Scala) tabbed exam
 Here's a test for us.
 
 ```scala sc:compile
-import language.experimental.modularity
-
-import org.appliedtopology.tda4j.TDAlab
-val tdalab = TDAlab(17)
-import tdalab.{*,given}
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.TDAlab.F17.{*, given}
 
 
 val chain = Fp(1) ⊠ ∆(1, 2) - ∆(2, 3)

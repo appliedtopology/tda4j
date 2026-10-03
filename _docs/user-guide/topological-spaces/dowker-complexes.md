@@ -5,6 +5,7 @@ layout: main
 ### Dowker complexes
 
 ```scala 3
+import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
@@ -32,6 +33,7 @@ For the classical (unfiltered) Dowker complex — a plain boolean "is `x` relate
 time — use `DowkerGeometry.fromBoolean`:
 
 ```scala 3
+import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)

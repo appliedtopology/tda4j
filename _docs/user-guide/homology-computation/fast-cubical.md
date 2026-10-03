@@ -5,6 +5,7 @@ layout: main
 #### A faster engine for cubical images
 
 ```scala 3
+import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)

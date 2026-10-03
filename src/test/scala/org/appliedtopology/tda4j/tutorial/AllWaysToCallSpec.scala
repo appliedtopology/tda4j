@@ -56,8 +56,7 @@ class AllWaysToCallSpec extends Specification:
   }
 
   private def octahedronViaTDAlab(): (Int, Map[Int, Int]) =
-    val lab = new TDAlab(17)
-    import lab.{*, given}
+    import TDAlab.F17.{*, given}
     val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield ∆(a, b, c)
     val computation =
       SimplicialHomologyEngine().persistentHomology(ExplicitStreamBuilder.fromFacets(triangles))
@@ -71,8 +70,7 @@ class AllWaysToCallSpec extends Specification:
     (triangles.size, essential)
 
   private def circleViaTDAlab(): (Int, Int, Int) =
-    val lab = new TDAlab(17)
-    import lab.{*, given}
+    import TDAlab.F17.{*, given}
     val metricSpace = CSV.readEuclideanMetricSpace(csv)
     val computation =
       SimplicialHomologyEngine()

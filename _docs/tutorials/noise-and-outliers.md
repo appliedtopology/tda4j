@@ -16,10 +16,7 @@ The true answer is still one loop.
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/data/circle-with-outliers.csv")
 val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
@@ -91,10 +88,7 @@ command-line and MATLAB spelling (`complex=dtm-rips`, `dtmK`).
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/data/circle-with-outliers.csv")
 val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()

@@ -87,6 +87,7 @@ extension operators. **There is no default `given Double is Field` anywhere in `
 explicitly:
 
 ```scala 3
+import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
