@@ -35,7 +35,7 @@ class TDAlabExportsSpec extends Specification:
       text.substring(text.indexOf("// BEGIN generated re-exports"), text.indexOf("// END generated re-exports"))
     """(?m)^\s{4}([^\s,]+),?\s*$""".r.findAllMatchIn(block).map(_.group(1)).toSet
 
-  private val addons = Seq("groups") // TEMP: Seq("sset") once groups and the simplicial-set files move there
+  private val addons = Seq("sset")
   private def addonNames =
     addons.flatMap(a => publicNames(Seq("package org.appliedtopology.tda4j", s"package $a"))).toSet
 

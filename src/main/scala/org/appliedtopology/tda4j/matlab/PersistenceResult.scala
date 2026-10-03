@@ -1,6 +1,6 @@
 package org.appliedtopology.tda4j.matlab
 
-import org.appliedtopology.tda4j.{given, *}
+import org.appliedtopology.tda4j.*
 
 /** The boundary matrix of the full complex a [[PersistenceResult]] was computed from, one column per cell in filtration
   * order (column `j`'s own dimension/vertices are `columnDims(j)`/`columnVertices(j)`) -- `TDA4j`'s own

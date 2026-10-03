@@ -15,7 +15,7 @@ in what you need with the `{given, *}` form — a plain `import pkg.*` does **no
 (coefficient fields, orderings) into scope in Scala 3:
 
 ```scala 3
-import org.appliedtopology.tda4j.{given, *}
+import org.appliedtopology.tda4j.*
 ```
 
 The rest of this guide assumes these four imports (plus `alpha.{given, *}` where alpha complexes come up).
@@ -23,7 +23,7 @@ The rest of this guide assumes these four imports (plus `alpha.{given, *}` where
 ### Building and taking the boundary of a simplex
 
 ```scala 3
-import org.appliedtopology.tda4j.{given, *}
+import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 
@@ -48,7 +48,7 @@ println(chain.show)
 ### A full Vietoris-Rips persistence computation
 
 ```scala 3
-import org.appliedtopology.tda4j.{given, *}
+import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 val engine = SimplicialHomologyEngine[Int, Double, Double]()
@@ -75,7 +75,7 @@ default; from Scala you opt in with `PersistenceFilter` (essential bars are alwa
 everything):
 
 ```scala 3
-import org.appliedtopology.tda4j.{given, *}
+import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(0.001, 0.0), Array(1.0, 0.0))

@@ -1,5 +1,6 @@
 package org.appliedtopology.tda4j
 
+import org.appliedtopology.tda4j.sset.*
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
 import org.specs2.mutable

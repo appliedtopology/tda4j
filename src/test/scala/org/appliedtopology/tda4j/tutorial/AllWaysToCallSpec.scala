@@ -1,7 +1,7 @@
 package org.appliedtopology.tda4j
 package tutorial
 
-import org.appliedtopology.tda4j.{given, *}
+import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.matlab.TDA4j
 import org.specs2.mutable.Specification
 
@@ -134,7 +134,7 @@ class AllWaysToCallSpec extends Specification:
 
   // Exactly the tutorial's "Scala with explicit imports" snippet, wrapped in a method.
   private def explicitImports(): (Map[Int, Int], Int, Int, Int) =
-    import org.appliedtopology.tda4j.{given, *}
+    import org.appliedtopology.tda4j.*
 
     val field = FiniteField(17)
     import field.given

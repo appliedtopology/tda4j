@@ -1,5 +1,6 @@
 package org.appliedtopology.tda4j
 
+import org.appliedtopology.tda4j.sset.*
 import org.specs2.mutable
 import org.specs2.execute.{AsResult, Result}
 import org.specs2.ScalaCheck

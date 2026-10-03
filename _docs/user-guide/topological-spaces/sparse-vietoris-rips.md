@@ -5,7 +5,7 @@ layout: main
 ### Sheehy's sparse/approximate Vietoris-Rips filtration
 
 ```scala 3
-import org.appliedtopology.tda4j.{given, *}
+import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
@@ -28,7 +28,7 @@ max-pairwise-distance filtration functional, which this construction's own spars
 ### Witness complexes
 
 ```scala 3
-import org.appliedtopology.tda4j.{given, *}
+import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 
@@ -63,7 +63,7 @@ Two variants, matching JavaPlex's own two classes:
   valid for flag complexes.
 
 ```scala 3
-import org.appliedtopology.tda4j.{given, *}
+import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 

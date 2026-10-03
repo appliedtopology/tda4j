@@ -30,35 +30,57 @@ compatibility with 0.4.x** (project lead: still in flux) — no compat shims for
 
 ## Package layout
 
-Source/test directories mirror package names; file names mostly carry over from the old flat layout
-(`WORKLOG-package-reorg.md`), with a few later renames/moves to fix a file's content drifting from its name
-(`RipserStream.scala` → `SimplexIndexing.scala`; `CubicalHomologyEngine` moved from `streams` to `homology`).
+**One flat core package plus one add-on** (`DESIGN-package-structure.md`, derivation `WORKLOG-package-flatten.md`;
+the 2026-09 subpackage split it replaced is `WORKLOG-package-reorg.md`). Everything a persistent-homology user needs is
+in `org.appliedtopology.tda4j` itself, so users write `import org.appliedtopology.tda4j.*` (no `given` selector needed,
+see "Givens" below). The core's source directories are **file organization only, not packages**:
 
-- `algebra` — `RingModule`, `Field`, `FiniteField`, `Chain` (plus the `Cell`/`OrderedCell`/`OrderedBasis`
-  contracts), `SSetElement` (degeneracy words + `insertOuter`/`faceOf`).
-- `cells` — `Simplex`/`SimplexOps`/`SimplexOrderedCell`, `Cubical`/`CubicalOrderedCell`, `SimplicialSet`
-  (`FiniteSimplicialSet`, with `.product`/`.coproduct`/`.quotient`/`.identify` on its companion object, also in
-  `SimplicialSet.scala`), `SimplicialSetConstructions` (shared ordering helpers those draw on).
-- `streams` — `SimplexStream`, `FiniteMetricSpace`, `VietorisRips` (also the `streams.VietorisRips(...)` dispatcher: homological-degree `maxDimension`, pick this over the individual constructions; `DESIGN-stream-naming.md`), `Cofacets`, `SimplexIndexing`, `CubicalStream`,
-  `CubicalImage`, `UnionFind` (also defines `Kruskal`, which is metric-space-specific — hence
-  here, and why no `util` package exists), `SimplicialSetStream`, `FilteredSimplicialSetStream`, `CechStream`.
-- `homology` — `Homology` (`CellularHomologyEngine` naive + `CellularPersistenceInChunksEngine` chunks, plus the thin
-  `Simplicial`/`Cubical`/`PersistenceInChunks` wrappers), `RipserCohomology` (`RipserCohomologyEngine`, the oracle),
-  `PackedRipserCohomology`, `Cohomology` (`CellularCohomologyEngine`), `FastCubicalHomology`, `FastAlphaHomology`,
-  `PersistenceEngine` (one-shot dispatch trait), `CircularCoordinates`, `LatticeReduction`. The package graph is acyclic: `streams` never depends on `homology`.
-- `groups` — `FiniteGroup`, `ClassifyingSpace` (nerve `BG` of a finite group as a truncated `FiniteSimplicialSet`, filtered by a
-  subgroup chain = persistent group homology). **Library-only proof of concept**: depends on `cells`/`streams`/`homology`, nothing
-  depends on it; no MATLAB/CLI/user docs. Cost is `(|G|-1)^n` cells: S₄ to H₂ ≈ 4 s, H₃ and S₅ H₂ take > 8 min
-  (`DESIGN-persistent-group-cohomology.md`).
-- `barcode` — `Barcode`, `PersistenceFilter`. `alpha` — `AlphaShapes`, `AlphaComplexDQP`. `unicode` — `PrintingHelper` (unused).
-- `matlab` — MATLAB facade. `io` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus` (leaf package).
-  `cli` — `TDA4jConf`, `TDA4jCLI` (thin translator over `matlab.TDA4j`/`io`).
-- root — `package.scala` (`TDAlab`, the pylab-style user entry point, see "TDAlab" below); test side
-  `APISpec.scala`/`ShowSpec.scala`, kept flat as cross-cutting tests.
+- `algebra/` — `RingModule`, `Field`, `FiniteField`, `Chain`, the `Cell`/`OrderedCell`/`OrderedBasis` contracts,
+  `LinearAlgebra` (dense, small complexes).
+- `cells/` — `Simplex`/`SimplexOps`/`SimplexOrderedCell` (+ `SimplexInstances`), `Cubical`/`CubicalOrderedCell`
+  (+ `CubeInstances`).
+- `streams/` — `SimplexStream`, `FiniteMetricSpace`, `VietorisRips` (also the dispatcher: homological-degree `maxDimension`,
+  pick it over the individual constructions; `DESIGN-stream-naming.md`), `Complexes` (`Cech`/`Witness`/`Dowker`/`DtmRips`/
+  `SparseRips`/`Truncated`), `Cofacets`, `SimplexIndexing`, `CubicalStream`, `CubicalImage`, `UnionFind` (+ `Kruskal`),
+  `CechStream`, `WitnessStream`, `DowkerStream`, `DtmRipsStream`, `SheehyRipsStream`, `EdgeCollapseStream`.
+- `homology/` — `Homology` (`CellularHomologyEngine` naive + `CellularPersistenceInChunksEngine` chunks, plus the thin
+  `Simplicial`/`Cubical`/`PersistenceInChunks` wrappers), `RipserCohomology` (the oracle), `PackedRipserCohomology`,
+  `Cohomology` (`CellularCohomologyEngine`), `FastCubicalHomology`, `FastAlphaHomology`, `PersistenceEngine`,
+  `CircularCoordinates`, `LatticeReduction`. Streams never use engines (convention only now; nothing enforces it).
+- `barcode/` — `Barcode`, `PersistenceFilter`, `BarcodeDistance`, `Vectorization`. `alpha/` — `AlphaShapes`,
+  `AlphaComplexDQP`. `io/` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
+- root `package.scala` — `TDAlab` (below).
+- **add-on `sset`** (`org.appliedtopology.tda4j.sset`, directory `sset/`; users opt in with
+  `import org.appliedtopology.tda4j.sset.*`) — simplicial sets (the Sage-parity layer) AND group classifying spaces
+  (`FiniteGroup`, `ClassifyingSpace`: nerve `BG` filtered by a subgroup chain = persistent group homology; library-only,
+  no MATLAB/CLI; cost `(|G|-1)^n` cells, S₄ to H₂ ≈ 4 s, `DESIGN-persistent-group-cohomology.md`), `BettiNumbers`,
+  `SimplicialSetStream`/`FilteredSimplicialSetStream`. Depends on the core; nothing in the core uses it except `TDAlab`'s
+  generated re-exports. Detail: `rules/simplicial-sets.md`.
+- subpackages `matlab` (MATLAB facade) and `cli` (`TDA4jConf`/`TDA4jCLI`, thin translator over `matlab.TDA4j`) — leaves.
+- Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
+  sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
+  `sbt doc` checks that doc fences resolve from outside.
 
-Cross-package references use `import org.appliedtopology.tda4j.<pkg>.{given, *}` — **the `given` matters**: a plain
-`import pkg.*` does NOT import `given` instances in Scala 3, and this codebase's `Ordering`/`RingModule`/`Field`
-instances are all givens. Broad wildcard imports are deliberate (mirroring the old same-package visibility).
+Every file in a subpackage (`sset`, `matlab`, `cli`, `tutorial`) starts with an explicit `import
+org.appliedtopology.tda4j.*`, not just the chained `package` clause. **Flat-package name-binding hazard**: a wildcard
+import of an external library (`import cats.syntax.all.*`) silently BEATS a same-named definition from another file of
+this package -- no error, no warning (under subpackages it was a loud ambiguity). Prefer importing external libraries by
+name in core files; when adding a top-level name to the core, re-run the audit (inject `import
+org.appliedtopology.tda4j.*` next to each file-level external wildcard and compile -- ambiguity errors are the hits;
+`WORKLOG-package-flatten.md`).
+
+### Givens: the rule the flat layout depends on
+
+**The core package has no top-level givens.** Default instances live in the companion of the DATA type they serve
+(`Simplex`, `Cube`, `Chain`, `BarcodeEndpoint`, `Fp`, generator enums) -- implicit scope: found with no import, consulted
+only when nothing lexical matches, so a user's or a stream's given always wins and never ties. Never put an instance in
+a TYPECLASS companion (`Field`, `OrderedCell`, `RingModule`): that companion is searched for `?T is Field` with `T`
+still unknown, so a lone instance there silently decides type inference (a default `Double is Field` would turn a
+forgotten `F_p` import into real coefficients and wrong torsion answers). A top-level generic given is worse still:
+visible everywhere in the flat package, `[CellT: OrderedCell] => Ordering[CellT]` made `SimplicialHomologyEngine()`
+infer `VertexT = BarcodeEndpoint[Cube]`. Opt-in derivations are named givens imported by name: `import
+OrderedCell.cellOrdering` (generic code holding only `CellT: OrderedCell`), `Field.showFromField`. `UserImportsSpec`
+pins this from the user's side.
 
 ## Commands
 
@@ -99,18 +121,22 @@ real regression but disappears on a clean, sequential rerun.
 ## TDAlab: the user-facing entry point
 
 `TDAlab(characteristic, precision = 1e-9)` (root `package.scala`) is the pylab-style facade: `val tdalab =
-TDAlab(17); import tdalab.{*, given}` brings in `Fp(...)`, chain arithmetic (`⊠`, `+`, `-`), `∆`/`Simplex`/`Cube`
-literals, a `Simplex -> Chain` conversion and Cats `Show` syntax. The odd-looking
-`given Show[Simplex[VertexT]] = summon[Show[Simplex[VertexT]]]` lines are **deliberate re-exports**: they make the
-existing givens visible through `import tdalab.given` (an instance's `given` import only brings in givens defined or
-exported as members of that instance). Don't "fix" them as self-referential. `characteristic = 0` means `Double`; a prime `p`
-means `Z/p`; anything else throws `IllegalArgumentException`. Vertices are fixed to `Int`. **`TDAContext` and the
-`TDAenvironment`/`FieldChoice`/`FiltrationChoice`/`TopologyChoice` sketches were removed on purpose** — engines are
-constructed explicitly (`SimplicialHomologyEngine[Int, Double, Double]()`), not inherited from a context class.
-Never consulted by an engine (generic-`given` capture, below). Growth direction: pylab-like ambition (a casual
-user should rarely need more than `import tdalab.{*, given}`). Cats (`cats-core`, `kittens`) is a dependency for
-`Show`; `Chain` is declared `into class` (needs `-preview`; `// format: off` around it because scalafmt can't
-parse `into`) and implicit conversions are enabled in-source, not by a flag.
+TDAlab(17); import tdalab.{*, given}` must be the ONLY import a lab user needs. It brings `CoefficientT`, `Fp(...)`, the
+field's given, chain arithmetic (`⊠`, `+`, `-`) on `Chain[Simplex[Int], CoefficientT]`, a `Simplex -> Chain` conversion,
+Cats `.show` syntax, and flat re-exports of every public top-level class/trait/object/type/enum of the core and the
+`sset` add-on, plus the `∆` val. The re-export block is GENERATED (`.claude/scripts/tdalab-exports.py`, between `BEGIN/END
+generated re-exports` markers) and guarded by `TDAlabExportsSpec` -- rerun the script after adding a public type. Only
+types and val aliases are re-exported: Scala 3.9 reports a re-exported def as ambiguous (and loses a re-exported
+extension) for users who import both the package and a TDAlab, but not a re-exported object/class/type/val. Hence `∆`
+is `val ∆ : Simplex.type = Simplex`, and top-level defs (`simplexIsOrderedCell`, `asSimplex`, ...) still need the package
+import (`DESIGN-api-audit-notes.md`). No namespace objects (`tdalab.streams.X` is gone) and no given re-exports (defaults
+come from companions). `characteristic = 0` means `Double`; a prime `p` means `Z/p`; anything else throws. Vertices are
+fixed to `Int`: this lab is simplicial and opinionated, and the project lead is open to several labs for different
+settings (a cubical lab would not want the `Simplex -> Chain` conversion). **`TDAContext` and the
+`TDAenvironment`/`FieldChoice`/`FiltrationChoice`/`TopologyChoice` sketches were removed on purpose** -- engines are
+constructed explicitly, never inherited from a context class; a lab is never consulted by an engine. Cats (`cats-core`,
+`kittens`) is a dependency for `Show`; `Chain` is declared `into class` (needs `-preview`; `// format: off` around it
+because scalafmt can't parse `into`) and implicit conversions are enabled in-source, not by a flag.
 
 ## Scala style used throughout
 
@@ -173,9 +199,12 @@ records a representative for every bar.
 - `Cocell`/`OrderedCocell` were **removed on purpose**: coboundary is extrinsic (depends on the ambient complex),
   so a per-cell `coboundary` is the wrong shape. Don't reintroduce (`DESIGN-generic-cohomology.md`).
 - **Generic-`given` capture gotcha**: a `given` like `chainRM` resolves its implicit `Ordering[CellT]` once, where
-  it's summoned. Summoned at class scope (before the stream's filtration ordering exists) it silently pivots on
-  lexicographic order. Summon it where the per-stream ordering is in scope (`WORKLOG-naive-homology.md`).
-  `TDAlab`'s class-scope `chainIsRingModule` is user-arithmetic convenience only, never used by an engine.
+  it's summoned. Summoned at class scope (before the stream's filtration ordering exists) it silently pivots on the
+  cell's intrinsic (lexicographic) order. Summon it where the per-stream ordering is in scope
+  (`WORKLOG-naive-homology.md`). The intrinsic order is now opt-in (`import OrderedCell.cellOrdering`), so a new
+  class-scope summon without it fails to compile instead of capturing silently -- but `Homology.scala`/`Cohomology.scala`
+  import it file-wide (behaviour-preserving), so the hazard is still live there. `TDAlab`'s class-scope
+  `chainIsRingModule` is user-arithmetic convenience only, never used by an engine.
 
 ### Streams and complexes (ordering contract and constructions: `rules/streams.md`)
 
@@ -199,7 +228,7 @@ file before changing that subsystem; this table is the index, in case a rule did
 | `rules/streams.md` | the ordering contract every stream must satisfy (the #1 historical bug source), VR constructions, `maxFiltrationValue` default, `ExplicitStreamBuilder` | `streams/` |
 | `rules/engines.md` | the four persistence engines, `BarcodeDistance`/`Vectorization`, circular and toroidal coordinates, benchmark specs | `homology/`, `barcode/` |
 | `rules/cubical.md` | cubical complexes, `FastCubicalHomologyEngine` | cubical files |
-| `rules/simplicial-sets.md` | simplicial sets, the Sage-parity layer, group classifying spaces | `cells/`, `groups/` |
+| `rules/simplicial-sets.md` | the `sset` add-on: simplicial sets, the Sage-parity layer, group classifying spaces | `sset/` |
 | `rules/filtered-complexes.md` | Cech, witness, Dowker, DTM, sparse Rips, edge collapse | those files |
 | `rules/alpha.md` | alpha complexes (DQP, Helix, fast alpha) | `alpha/`, alpha files |
 | `rules/facade.md` | MATLAB facade, CLI, file I/O, the persistence threshold (which bars are reported) | `matlab/`, `cli/`, `io/` |

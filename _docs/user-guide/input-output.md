@@ -19,7 +19,7 @@ Each object offers a raw loader (`readPointCloud`/`readFullDistanceMatrix`/...) 
 constructor on top (`readEuclideanMetricSpace`/`readExplicitMetricSpace`/`readCubicalGridStream`/...):
 
 ```scala 3
-import org.appliedtopology.tda4j.{given, *}
+import org.appliedtopology.tda4j.*
 
 val metricSpace = Ripser.readEuclideanMetricSpace("points.txt")
 val stream = Perseus.readCubicalToplex("image.txt")

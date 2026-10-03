@@ -1,7 +1,7 @@
 package org.appliedtopology.tda4j
 package cli
 
-import org.appliedtopology.tda4j.{given, *}
+import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.matlab.{LandmarkSelectionResult, PersistenceResult, TDA4j}
 
 import org.rogach.scallop.ScallopOption

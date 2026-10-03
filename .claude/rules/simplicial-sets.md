@@ -1,15 +1,15 @@
 ---
 paths:
-  - "src/**/cells/**"
-  - "src/**/groups/**"
-  - "src/**/algebra/SSetElement*.scala"
+  - "src/**/sset/**"
   - "src/**/*SimplicialSet*.scala"
-  - "src/**/homology/BettiNumbers*.scala"
+  - "_docs/**/simplicial-sets.md"
+  - "_docs/tutorials/telling-spaces-apart.md"
+  - "_docs/tutorials/persistent-group-cohomology.md"
 ---
 
 # Simplicial sets (the Sage-parity layer) and group classifying spaces
 
-Loads when you work in `cells/`, `groups/` or on a simplicial-set file. Project-wide rules are in `.claude/CLAUDE.md`.
+Loads when you work in the `sset` add-on (`org.appliedtopology.tda4j.sset`, directory `sset/`: simplicial sets AND group classifying spaces) or its docs. Project-wide rules are in `.claude/CLAUDE.md`.
 
 ## Simplicial sets
 

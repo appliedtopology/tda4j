@@ -14,7 +14,7 @@ import pathlib, re
 
 ROOT = pathlib.Path("src/main/scala/org/appliedtopology/tda4j")
 PKG = "org.appliedtopology.tda4j"
-ADDONS = ["groups"]  # TEMP: becomes ["sset"] when groups moves  # add-on packages TDAlab also re-exports
+ADDONS = ["sset"]  # add-on packages TDAlab also re-exports
 EXCLUDE = {"TDAlab", "SimplexOps", "SimplexInstances", "CubeInstances"}  # the facade itself; companion mixins
 DECL = re.compile(
     r"^(?:(?:sealed|final|case|abstract|open|opaque|transparent|infix)\s+)*(?:class|trait|object|type|enum)\s+([^\s\[\(:=]+)"

@@ -1,7 +1,7 @@
 package org.appliedtopology.tda4j
 package matlab
 
-import org.appliedtopology.tda4j.{given, *}
+import org.appliedtopology.tda4j.*
 
 import org.specs2.mutable.Specification
 

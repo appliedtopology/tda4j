@@ -5,7 +5,7 @@ layout: main
 ### Alpha complexes
 
 ```scala 3
-import org.appliedtopology.tda4j.{given, *}
+import org.appliedtopology.tda4j.*
 
 val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
 val shape = AlphaShapes(points.toSeq, dispatch = "helix")   // or "DQP"

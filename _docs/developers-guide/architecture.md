@@ -74,7 +74,7 @@ extension operators. **There is no default `given Double is Field` anywhere in `
 explicitly:
 
 ```scala 3
-import org.appliedtopology.tda4j.{given, *}
+import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 ```

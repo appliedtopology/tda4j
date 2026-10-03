@@ -161,7 +161,7 @@ magic, and you can do without it. The version below uses no helper class at all.
 coefficient field.
 
 ```scala
-import org.appliedtopology.tda4j.{given, *}
+import org.appliedtopology.tda4j.*
 
 // The coefficients. FiniteField(17) is the field with 17 elements; importing its givens makes `field.Fp` a Field.
 // (For floating point instead, drop these two lines and declare: given Double is Field = Field.DoubleApproximated(1e-9))
