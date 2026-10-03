@@ -35,8 +35,8 @@ final class SSetMap[GX, GY](
           Seq(s"$g (dim $n) maps to an element of dimension ${target.dimOf(image.generator) + image.word.length}")
         else
           source.faces(g).zipWithIndex.collect {
-            case (face, i) if apply(face) != target.dOp(i, image) =>
-              s"$g (dim $n): f(d_$i g) = ${apply(face)} but d_$i f(g) = ${target.dOp(i, image)}"
+            case (face, i) if apply(face) != target.face(i, image) =>
+              s"$g (dim $n): f(d_$i g) = ${apply(face)} but d_$i f(g) = ${target.face(i, image)}"
           }
       }
     }
@@ -54,7 +54,7 @@ final class SSetMap[GX, GY](
   }.toSet
 
   /** The image of `f`, as a sub-simplicial set of the target. */
-  def image: FiniteSimplicialSet[GY] = SimplicialSets.subcomplex(target, hitGenerators)
+  def image: FiniteSimplicialSet[GY] = target.subcomplex(hitGenerators)
 
   /** Every non-degenerate simplex of the target is `f` of a simplex of the source. */
   def isSurjective: Boolean = target.generatorsByDim.flatten.forall(hitGenerators.contains)
@@ -66,7 +66,7 @@ final class SSetMap[GX, GY](
   def isInjective: Boolean =
     val top = math.max(source.generatorsByDim.length, target.generatorsByDim.length)
     (0 to top).forall { n =>
-      val images = FiniteSimplicialSet.elementsAtDim(source, n).map(apply)
+      val images = source.simplices(n).map(apply)
       images.distinct.length == images.length
     }
 
@@ -83,13 +83,13 @@ final class SSetMap[GX, GY](
   def homologyRank[F: Field as field](n: Int): Int =
     given (GX is OrderedCell) = source.cellInstance
     given (GY is OrderedCell) = target.cellInstance
-    val xs = source.generatorsAt(n).toVector.sorted(using source.ord)
-    val ys = target.generatorsAt(n).toVector.sorted(using target.ord)
+    val xs = source.generators(n).toVector.sorted(using source.ord)
+    val ys = target.generators(n).toVector.sorted(using target.ord)
     if xs.isEmpty || ys.isEmpty then 0
     else
       val xIndex = xs.zipWithIndex.toMap
       val yIndex = ys.zipWithIndex.toMap
-      val below = source.generatorsAt(n - 1).toVector.sorted(using source.ord)
+      val below = source.generators(n - 1).toVector.sorted(using source.ord)
       val belowIndex = below.zipWithIndex.toMap
       val boundaryX: Seq[Seq[F]] = below.map { b =>
         val row = scala.collection.mutable.ArrayBuffer.fill(xs.length)(field.zero)
@@ -104,7 +104,7 @@ final class SSetMap[GX, GY](
           out(yIndex(y)) = field.plus(out(yIndex(y)), field.times(c, z(xIndex(x))))
         out.toVector
       }
-      val above = target.generatorsAt(n + 1).toVector
+      val above = target.generators(n + 1).toVector
       val boundariesY: Seq[Seq[F]] = above.map { a =>
         val out = scala.collection.mutable.ArrayBuffer.fill(ys.length)(field.zero)
         for (cell, c) <- a.boundary[F] do out(yIndex(cell)) = field.plus(out(yIndex(cell)), c)
@@ -143,12 +143,12 @@ object SSetMap:
   def mappingCone[GX, GY](f: SSetMap[GX, GY]): FiniteSimplicialSet[Either[ConeGenerator[GX], GY]] =
     given Ordering[GX] = f.source.ord
     given Ordering[GY] = f.target.ord
-    val cx = SimplicialSets.cone(f.source)
-    val both = FiniteSimplicialSet.coproduct(cx, f.target)
+    val cx = f.source.cone
+    val both = cx.coproduct(f.target)
     type G = Either[ConeGenerator[GX], GY]
     def collapse(g: G): SSetElement[G] = g match
       case Left(ConeGenerator.Base(x)) =>
         val image = f.onGenerators(x)
         SSetElement(image.word, Right(image.generator): G)
       case other => SSetElement(Nil, other)
-    FiniteSimplicialSet.quotient(both, collapse)(using both.ord)
+    both.quotient(collapse)

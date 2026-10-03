@@ -10,7 +10,7 @@ import org.specs2.mutable.Specification
   */
 class CupProductSpec extends Specification:
   import SimplicialSetFixtures.*
-  import SimplicialSets.*
+  import SimplicialSet.*
 
   /** (number of basis classes of H^1, whether SOME product of two H^1 basis classes is nonzero in H^2). */
   private def h1Cups[G](x: FiniteSimplicialSet[G], p: Int): (Int, Boolean) =
@@ -38,8 +38,8 @@ class CupProductSpec extends Specification:
 
   "the torus and S^1 v S^1 v S^2 have the same Betti numbers but different cup products" should {
     val circle = minimalSphere(1)
-    val twoCircles = wedge(circle, SphereGenerator.Vertex, circle, SphereGenerator.Vertex)
-    val wedged = wedge(twoCircles, Left(SphereGenerator.Vertex), minimalSphere(2), SphereGenerator.Vertex)
+    val twoCircles = circle.wedge(SphereGenerator.Vertex, circle, SphereGenerator.Vertex)
+    val wedged = twoCircles.wedge(Left(SphereGenerator.Vertex), minimalSphere(2), SphereGenerator.Vertex)
     "agree on Betti numbers" in
       (SSetBetti(torus, 2) must beEqualTo(Vector(1, 2, 1))).and(SSetBetti(wedged, 2) must beEqualTo(Vector(1, 2, 1)))
     "disagree on cup products, over F_2 and F_3" in
@@ -66,7 +66,7 @@ class CupProductSpec extends Specification:
     "give x ∪ y = - y ∪ x in H^2 of the torus" in {
       val field = new FiniteField(3)
       import field.given
-      val basis = CupProduct.cohomologyBasis[SimplicialSetFixtures.TorusGenerator, field.Fp](torus, 1)
+      val basis = CupProduct.cohomologyBasis[TorusGenerator, field.Fp](torus, 1)
       val xy = CupProduct.cup(torus, 1, 1, basis(0), basis(1))
       val yx = CupProduct.cup(torus, 1, 1, basis(1), basis(0))
       val sum =

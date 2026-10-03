@@ -45,7 +45,9 @@ object SimplicialSetStream:
     * -- `SimplexStream` alone would silently reject the streams "any simplicial stream" actually means in practice,
     * caught by trying this against a real VR stream while validating this builder.
     */
-  def fromStream[VertexT: Ordering](stream: CellStream[Simplex[VertexT], ?]): FiniteSimplicialSet[Simplex[VertexT]] =
+  private[sset] def fromStream[VertexT: Ordering](
+    stream: CellStream[Simplex[VertexT], ?]
+  ): FiniteSimplicialSet[Simplex[VertexT]] =
     val all: Set[Simplex[VertexT]] = stream.iterator.toSet
     val maxDim = if all.isEmpty then -1 else all.iterator.map(_.dim).max
     val byDim: IndexedSeq[Set[Simplex[VertexT]]] =

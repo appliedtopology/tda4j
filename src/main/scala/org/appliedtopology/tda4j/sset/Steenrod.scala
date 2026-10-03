@@ -26,7 +26,7 @@ object Steenrod:
   def faceOnVertices[G](x: FiniteSimplicialSet[G], sigma: G, vertices: Seq[Int]): SSetElement[G] =
     val n = x.dimOf(sigma)
     val keep = vertices.toSet
-    (n to 0 by -1).filterNot(keep.contains).foldLeft(SSetElement[G](Nil, sigma))((e, k) => x.dOp(k, e))
+    (n to 0 by -1).filterNot(keep.contains).foldLeft(SSetElement[G](Nil, sigma))((e, k) => x.face(k, e))
 
   private def requireCharacteristicTwo[F: Field as field]: Unit =
     require(
@@ -48,7 +48,7 @@ object Steenrod:
     val n = p + q - i
     def value(c: Map[G, F], e: SSetElement[G]): F =
       if e.word.nonEmpty then field.zero else c.getOrElse(e.generator, field.zero)
-    x.generatorsAt(n)
+    x.generators(n)
       .flatMap { sigma =>
         val total = (0 to n).toList.combinations(i + 1).foldLeft(field.zero) { (acc, cuts) =>
           // block m = [cuts(m-1), cuts(m)] with cuts(-1) = 0, cuts(i+1) = n; even blocks go to the front face, odd ones to the back

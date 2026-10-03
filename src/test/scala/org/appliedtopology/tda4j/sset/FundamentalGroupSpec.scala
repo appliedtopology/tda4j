@@ -7,7 +7,7 @@ import org.specs2.mutable.Specification
 
 class FundamentalGroupSpec extends Specification:
   import SimplicialSetFixtures.*
-  import SimplicialSets.*
+  import SimplicialSet.*
 
   /** Hurewicz, with no word-problem solver: `#generators - rank_p(exponent sums) = dim H_1(X; F_p)`. */
   private def hurewicz[G](x: FiniteSimplicialSet[G]) =
@@ -17,7 +17,7 @@ class FundamentalGroupSpec extends Specification:
     "leave a valid one-vertex set: a 3-simplex keeps its 6 - 3 = 3 non-tree edges, which its triangles kill" in {
       val r = FundamentalGroup.reduce(simplex(3))
       (r.validate() must beEmpty)
-        .and(fVector(r).take(2) must beEqualTo(Vector(1, 3)))
+        .and(r.fVector.take(2) must beEqualTo(Vector(1, 3)))
         .and(FundamentalGroup.presentation(simplex(3)).abelianRank(2) must beEqualTo(0))
     }
     "reject a disconnected set" in {

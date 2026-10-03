@@ -81,7 +81,7 @@ class ClassifyingSpaceSpec extends Specification:
   "the lazy nerve" should {
     "be infinite: generators in every dimension, (|G|-1)^n of them" in {
       val nerve = ClassifyingSpace.nerve(FiniteGroup.symmetric(3))
-      Seq(0, 1, 2, 3, 6).map(n => nerve.generatorsAt(n).size) must beEqualTo(Seq(1, 5, 25, 125, 15625))
+      Seq(0, 1, 2, 3, 6).map(n => nerve.generators(n).size) must beEqualTo(Seq(1, 5, 25, 125, 15625))
     }
     "have skeletons whose homology is right only below the top degree" in {
       val nerve = ClassifyingSpace.nerve(FiniteGroup.cyclic(3))

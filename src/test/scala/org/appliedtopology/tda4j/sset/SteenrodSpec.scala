@@ -49,21 +49,21 @@ class SteenrodSpec extends Specification:
 
   "Steenrod squares elsewhere" should {
     "Sq^2 on H^2(CP^2) is the cup square, nonzero; Sq^1 on it vanishes" in {
-      val cp2 = SimplicialSets.complexProjectivePlaneKuhnel
+      val cp2 = SimplicialSet.complexProjectivePlaneKuhnel
       val x = CupProduct.cohomologyBasis[Simplex[Int], f2.Fp](cp2, 2).head
       (CupProduct.isCoboundary(cp2, 4, Steenrod.sq(cp2, 2, 2, x)) must beFalse)
         .and(CupProduct.isCoboundary(cp2, 3, Steenrod.sq(cp2, 1, 2, x)) must beTrue)
     }
     "Sq^1 on H^1(RP^2) is nonzero (x^2 != 0)" in {
-      val rp2 = SimplicialSetFixtures.realProjectiveSpace(2)
-      val x = CupProduct.cohomologyBasis[SimplicialSetFixtures.ProjectiveGenerator, f2.Fp](rp2, 1).head
+      val rp2 = SimplicialSet.realProjectiveSpace(2)
+      val x = CupProduct.cohomologyBasis[RealProjectiveGenerator, f2.Fp](rp2, 1).head
       CupProduct.isCoboundary(rp2, 2, Steenrod.sq(rp2, 1, 1, x)) must beFalse
     }
     "reject odd characteristic" in {
       val f3 = new FiniteField(3)
       import f3.given
-      val rp2 = SimplicialSetFixtures.realProjectiveSpace(2)
-      Steenrod.cupI(rp2, 0, 1, 1, Map.empty[SimplicialSetFixtures.ProjectiveGenerator, f3.Fp], Map.empty) must throwAn[
+      val rp2 = SimplicialSet.realProjectiveSpace(2)
+      Steenrod.cupI(rp2, 0, 1, 1, Map.empty[RealProjectiveGenerator, f3.Fp], Map.empty) must throwAn[
         IllegalArgumentException
       ]
     }

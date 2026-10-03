@@ -11,7 +11,7 @@ enum ConeGenerator[+G]:
   case Base(g: G)
   case Cone(g: G)
 
-/** A cell of the simplicial set of a group presentation (see [[SimplicialSets.presentationComplex]]). */
+/** A cell of the simplicial set of a group presentation (see [[SimplicialSet.presentationComplex]]). */
 enum PresentationCell derives CanEqual:
   /** The single vertex. */
   case Vertex
@@ -32,7 +32,7 @@ enum PresentationCell derives CanEqual:
   case Triangle(r: Int, k: Int)
 
 /** The generators of the minimal simplicial-set model of the complex projective plane (see
-  * [[SimplicialSets.complexProjectivePlane]]).
+  * [[SimplicialSet.complexProjectivePlane]]).
   */
 enum ComplexProjectivePlaneGenerator derives CanEqual:
   case V, Rho0, Rho1, Sigma0, Sigma1, Sigma2, Tau0, Tau1, Tau2
@@ -40,14 +40,14 @@ enum ComplexProjectivePlaneGenerator derives CanEqual:
 object ComplexProjectivePlaneGenerator:
   given Ordering[ComplexProjectivePlaneGenerator] = Ordering.by(_.ordinal)
 
-/** The two generators of the minimal `n`-sphere ([[SimplicialSets.sphere]]): its vertex and its single `n`-simplex. */
+/** The two generators of the minimal `n`-sphere ([[SimplicialSet.sphere]]): its vertex and its single `n`-simplex. */
 enum MinimalSphereGenerator derives CanEqual:
   case Vertex, Top
 
 object MinimalSphereGenerator:
   given Ordering[MinimalSphereGenerator] = Ordering.by(_.ordinal)
 
-/** The generators of Sage's simplicial model of `S^3` ([[SimplicialSets.hopfMap]]'s source). */
+/** The generators of Sage's simplicial model of `S^3` ([[SimplicialSet.hopfMap]]'s source). */
 enum HopfSphereGenerator derives CanEqual:
   case W, B11, B22, B23, B44, Beta1, Beta2, Beta3, Beta4, A12, A23, A34, A45, A56, Alpha1, Alpha2, Alpha3, Alpha4,
     Alpha5, Alpha6
@@ -101,15 +101,88 @@ object ConeGenerator:
       Ordering.Tuple2(using Ordering.Int, Ordering.Option(using ord))
     def compare(x: ConeGenerator[G], y: ConeGenerator[G]): Int = keyOrdering.compare(key(x), key(y))
 
-/** Ready-made finite simplicial sets and constructions on them (the Sage `simplicial_sets.*` gap list; see
-  * `.claude/DESIGN-sage-simplicial-sets-comparison.md`). Everything here is additive and finite; pullbacks and integer
-  * coefficients are deliberately not here.
+/** The generators of [[SimplicialSet.kleinBottle]]: one vertex, edges `a, b, c`, triangles `T1, T2`. */
+enum KleinGenerator derives CanEqual:
+  case V, A, B, C, T1, T2
+
+object KleinGenerator:
+  given Ordering[KleinGenerator] = Ordering.by(_.ordinal)
+
+/** The generators of [[SimplicialSet.torus]]: one vertex, loops `A, B` and diagonal `C`, triangles `U, L`. */
+enum TorusGenerator derives CanEqual:
+  case Vertex, A, B, C, U, L
+
+object TorusGenerator:
+  given Ordering[TorusGenerator] = Ordering.by(_.ordinal)
+
+/** The generators of [[SimplicialSet.realProjectiveSpace]]: one cell `E(n)` per dimension. */
+enum RealProjectiveGenerator derives CanEqual:
+  case E(n: Int)
+
+object RealProjectiveGenerator:
+  given Ordering[RealProjectiveGenerator] = Ordering.by { case E(n) => n }
+
+/** The catalog behind `object SimplicialSet` (mixed in there, so every entry is `SimplicialSet.<name>`): ready-made
+  * finite simplicial sets -- the Sage `simplicial_sets.*` gap list, `.claude/DESIGN-sage-simplicial-sets-comparison.md`
+  * -- plus the constructors that build one from data. Operations on an existing set (`product`, `wedge`, `cone`,
+  * `quotient`, ...) are methods of [[FiniteSimplicialSet]] instead. Pullbacks and integer coefficients are deliberately
+  * not here.
   *
   * Complexes given by vertices use [[Simplex]]`[Int]` as the generator type; the faces of a simplex are `d_i` = omit
   * its `i`-th vertex, so the simplicial identities hold automatically.
   */
-object SimplicialSets:
-  import ConeGenerator.*
+trait SimplicialSetCatalog:
+
+  /** A finite simplicial set given by hand: its generators (non-degenerate simplices) per dimension, and for each
+    * generator `g` of dimension `n > 0` its `n + 1` faces `d_0 g, ..., d_n g`, each an `SSetElement` (a generator,
+    * possibly under a degeneracy word). Check the result with `validate()`.
+    */
+  def apply[G: Ordering](
+    generatorsByDim: IndexedSeq[Set[G]],
+    faces: G => IndexedSeq[SSetElement[G]]
+  ): FiniteSimplicialSet[G] = new FiniteSimplicialSet(generatorsByDim, faces)
+
+  /** The simplicial set of every simplex a stream produces (each simplex a generator, `d_i` dropping vertex `i`) --
+    * e.g. a Vietoris-Rips complex as a simplicial set. Degeneracy never arises this way.
+    */
+  def fromStream[VertexT: Ordering](stream: CellStream[Simplex[VertexT], ?]): FiniteSimplicialSet[Simplex[VertexT]] =
+    SimplicialSetStream.fromStream(stream)
+
+  /** The minimal torus: Hatcher's Δ-complex (*Algebraic Topology*, Example 2.4) -- one vertex, loops `a, b`, diagonal
+    * `c`, triangles `U` (`a·b = c`) and `L` (`b·a = c`). `H = (F, F², F)` over every field, and the cup product of the
+    * two degree-1 classes is nonzero (which tells it from `S¹ ∨ S¹ ∨ S²`, whose Betti numbers agree).
+    */
+  def torus: FiniteSimplicialSet[TorusGenerator] =
+    import TorusGenerator.*
+    def bare(g: TorusGenerator) = SSetElement[TorusGenerator](Nil, g)
+    def facesOf(g: TorusGenerator): IndexedSeq[SSetElement[TorusGenerator]] = g match
+      case Vertex    => IndexedSeq.empty
+      case A | B | C => IndexedSeq(bare(Vertex), bare(Vertex))
+      case U         => IndexedSeq(bare(B), bare(C), bare(A)) // (d_0, d_1, d_2): a·b = c
+      case L         => IndexedSeq(bare(A), bare(C), bare(B)) // b·a = c
+    new FiniteSimplicialSet(IndexedSeq(Set(Vertex), Set(A, B, C), Set(U, L)), facesOf)
+
+  /** Real projective space `RP^n` as the `n`-skeleton of the minimal model of `RP^∞ = B(Z/2)`: one cell `E(k)` per
+    * dimension `k = 0..n`, with `d_0 E(k) = d_k E(k) = E(k-1)` and `d_i E(k) = s_{i-1} E(k-2)` for `0 < i < k`. Over
+    * `F_2` every Betti number up to `n` is 1; over `F_3` only `H_0`, and `H_n` when `n` is odd.
+    */
+  def realProjectiveSpace(n: Int): FiniteSimplicialSet[RealProjectiveGenerator] =
+    require(n >= 0, s"realProjectiveSpace needs n >= 0, got $n")
+    import RealProjectiveGenerator.*
+    def facesOf(g: RealProjectiveGenerator): IndexedSeq[SSetElement[RealProjectiveGenerator]] = g match
+      case E(0) => IndexedSeq.empty
+      case E(k) =>
+        val outer = SSetElement[RealProjectiveGenerator](Nil, E(k - 1))
+        IndexedSeq.tabulate(k + 1)(i =>
+          if i == 0 || i == k then outer else SSetElement[RealProjectiveGenerator](List(i - 1), E(k - 2))
+        )
+    new FiniteSimplicialSet(IndexedSeq.tabulate(n + 1)(k => Set[RealProjectiveGenerator](E(k))), facesOf)
+
+  /** The classifying space `BG` of a finite group (its nerve; infinite -- take `.skeleton(n)`, or use
+    * `BettiNumbers(SimplicialSet.classifyingSpace(g), maxDegree, p)`). See [[ClassifyingSpace]] for persistent group
+    * homology along a subgroup chain.
+    */
+  def classifyingSpace(group: FiniteGroup): Nerve = ClassifyingSpace.nerve(group)
 
   /** The simplicial set of the abstract simplicial complex generated by `facets` (every nonempty face of a facet is a
     * generator). Vertices need not be `0..n`; their natural order orients each simplex.
@@ -144,12 +217,6 @@ object SimplicialSets:
     require(n >= 1 && k >= 0 && k <= n)
     fromSimplicialComplex((0 to n).filter(_ != k).map(i => Simplex.from((0 to n).filter(_ != i).toList)))
 
-  enum KleinGenerator derives CanEqual:
-    case V, A, B, C, T1, T2
-
-  object KleinGenerator:
-    given Ordering[KleinGenerator] = Ordering.by(_.ordinal)
-
   /** The Klein bottle as a Δ-complex with one vertex, edges `a, b, c` and two triangles whose faces `(d_0, d_1, d_2)`
     * are `(b, c, a)` and `(a, b, c)`. Derived by hand: `π_1 = <a, b | a b a = b>` (Klein group), `∂T1 = a + b - c`,
     * `∂T2 = a - b + c` give `H_1 = Z ⊕ Z/2`, `H_2 = 0` -- so Betti numbers `(1, 2, 1)` over `F_2` and `(1, 1, 0)` over
@@ -164,80 +231,6 @@ object SimplicialSets:
       case T1        => IndexedSeq(v(B), v(C), v(A))
       case T2        => IndexedSeq(v(A), v(B), v(C))
     new FiniteSimplicialSet(IndexedSeq(Set(V), Set(A, B, C), Set(T1, T2)), facesOf)
-
-  /** The sub-simplicial set on `keep` -- which must be closed under taking faces. */
-  def subcomplex[G](sset: FiniteSimplicialSet[G], keep: Set[G]): FiniteSimplicialSet[G] =
-    for g <- keep; face <- sset.faces(g) do
-      require(keep.contains(face.generator), s"subcomplex: $g is kept but its face generator ${face.generator} is not")
-    val byDim = sset.generatorsByDim.map(_.filter(keep.contains))
-    new FiniteSimplicialSet(byDim.reverse.dropWhile(_.isEmpty).reverse, sset.faces)(using sset.ord)
-
-  /** The unreduced cone `CX = X ⋆ pt`: apex last, so `d_{n+1} Cone(g) = g` and `d_i Cone(g) = Cone(d_i g)` (a
-    * degenerate face `s_J h` becomes `s_J Cone(h)`: no degeneracy ever touches the apex). Contractible.
-    */
-  def cone[G](x: FiniteSimplicialSet[G]): FiniteSimplicialSet[ConeGenerator[G]] =
-    given Ordering[G] = x.ord
-    val byDim: IndexedSeq[Set[ConeGenerator[G]]] =
-      IndexedSeq.tabulate(x.generatorsByDim.length + 1) { d =>
-        val base: Set[ConeGenerator[G]] = x.generatorsAt(d).map(g => Base(g): ConeGenerator[G]).toSet
-        val cones: Set[ConeGenerator[G]] = x.generatorsAt(d - 1).map(g => Cone(g): ConeGenerator[G]).toSet
-        (if d == 0 then Set[ConeGenerator[G]](Apex) else Set.empty[ConeGenerator[G]]) ++ base ++ cones
-      }
-    def mapped(e: SSetElement[G])(wrap: G => ConeGenerator[G]): SSetElement[ConeGenerator[G]] =
-      SSetElement(e.word, wrap(e.generator))
-    def facesOf(g: ConeGenerator[G]): IndexedSeq[SSetElement[ConeGenerator[G]]] = g match
-      case Apex    => IndexedSeq.empty
-      case Base(h) => x.faces(h).map(mapped(_)(Base(_)))
-      case Cone(h) =>
-        val n = x.dimOf(h)
-        if n == 0 then IndexedSeq(SSetElement(Nil, Apex), SSetElement(Nil, Base(h)))
-        else x.faces(h).map(mapped(_)(Cone(_))) :+ SSetElement(Nil, Base(h))
-    new FiniteSimplicialSet(byDim, facesOf)
-
-  /** The unreduced suspension `SX`: two cones on `X` glued along their common base. */
-  def suspension[G](x: FiniteSimplicialSet[G]): FiniteSimplicialSet[Either[ConeGenerator[G], ConeGenerator[G]]] =
-    given Ordering[G] = x.ord
-    val c = cone(x)
-    val both = FiniteSimplicialSet.coproduct(c, c)
-    given Ordering[Either[ConeGenerator[G], ConeGenerator[G]]] = both.ord
-    val glue = x.generatorsByDim.flatten.toSeq.map { g =>
-      (
-        Left(Base(g)): Either[ConeGenerator[G], ConeGenerator[G]],
-        Right(Base(g)): Either[ConeGenerator[G], ConeGenerator[G]]
-      )
-    }
-    FiniteSimplicialSet.identify(both, glue)
-
-  /** The wedge `X ∨ Y` at the vertices `vx` of `X` and `vy` of `Y` (a base point is just a chosen vertex). */
-  def wedge[GX, GY](
-    x: FiniteSimplicialSet[GX],
-    vx: GX,
-    y: FiniteSimplicialSet[GY],
-    vy: GY
-  ): FiniteSimplicialSet[Either[GX, GY]] =
-    require(x.dimOf(vx) == 0 && y.dimOf(vy) == 0, "wedge points must be vertices")
-    given Ordering[GX] = x.ord
-    given Ordering[GY] = y.ord
-    val both = FiniteSimplicialSet.coproduct(x, y)
-    given Ordering[Either[GX, GY]] = both.ord
-    FiniteSimplicialSet.identify(both, Seq((Left(vx): Either[GX, GY], Right(vy): Either[GX, GY])))
-
-  /** Non-degenerate simplex counts per dimension (Sage's `f_vector`). */
-  def fVector[G](x: FiniteSimplicialSet[G]): Vector[Int] = x.generatorsByDim.map(_.size).toVector
-
-  /** Whether the 1-skeleton is connected (the empty set counts as not connected). */
-  def isConnected[G](x: FiniteSimplicialSet[G]): Boolean =
-    val vertices = x.generatorsAt(0).toVector
-    if vertices.isEmpty then false
-    else
-      val parent = scala.collection.mutable.Map.from(vertices.map(v => v -> v))
-      def find(v: G): G = if parent(v) == v then v
-      else
-        val r = find(parent(v)); parent(v) = r; r
-      for e <- x.generatorsAt(1) do
-        val ends = x.faces(e).map(f => find(f.generator))
-        if ends(0) != ends(1) then parent(ends(0)) = ends(1)
-      vertices.map(find).distinct.size == 1
 
   /** The presentation complex of `<g_0..g_{n-1} | relations>`: one vertex; an edge per generator plus one for its
     * inverse (tied to it by a triangle `g · g^{-1} = 1`); and each relator, a word of letters `(generator, +1 or -1)`,
@@ -284,75 +277,6 @@ object SimplicialSets:
   /** The presentation complex of a [[GroupPresentation]] (e.g. one read off with [[FundamentalGroup.presentation]]). */
   def presentationComplex[G](p: GroupPresentation[G]): FiniteSimplicialSet[PresentationCell] =
     presentationComplex(p.generators.length, p.relations)
-
-  /** The smash product `X ∧ Y = (X × Y) / (X ∨ Y)` of pointed simplicial sets (base points = the chosen vertices `vx`,
-    * `vy`): the product with the whole wedge `X × {vy} ∪ {vx} × Y` collapsed to the single base vertex `(vx, vy)`.
-    * Built with [[FiniteSimplicialSet.quotient]], sending each wedge simplex of dimension `n` to the `n`-fold
-    * degeneracy of that vertex.
-    */
-  def smash[GX, GY](
-    x: FiniteSimplicialSet[GX],
-    vx: GX,
-    y: FiniteSimplicialSet[GY],
-    vy: GY
-  ): FiniteSimplicialSet[ProductGenerator[GX, GY]] =
-    require(x.dimOf(vx) == 0 && y.dimOf(vy) == 0, "smash base points must be vertices")
-    given Ordering[GX] = x.ord
-    given Ordering[GY] = y.ord
-    val product = FiniteSimplicialSet.product(x, y)
-    given Ordering[ProductGenerator[GX, GY]] = product.ord
-    val base = ProductGenerator(SSetElement[GX](Nil, vx), SSetElement[GY](Nil, vy))
-    def inWedge(g: ProductGenerator[GX, GY]): Boolean = g.x.generator == vx || g.y.generator == vy
-    def collapse(g: ProductGenerator[GX, GY]): SSetElement[ProductGenerator[GX, GY]] =
-      if g == base || !inWedge(g) then SSetElement(Nil, g)
-      else
-        val n = product.dimOf(g)
-        SSetElement(((n - 1) to 0 by -1).toList, base)
-    FiniteSimplicialSet.quotient(product, collapse)
-
-  /** The join `X ⋆ Y`. A simplex of the join is a pair `(a, b)` with `a ∈ X_i ∪ {∅}`, `b ∈ Y_j ∪ {∅}` (not both empty),
-    * of dimension `i + j + 1`; `(a, b)` is non-degenerate iff `a` and `b` both are (an empty side is never degenerate).
-    * Faces: `d_k (a, b) = (d_k a, b)` for `k <= i` and `(a, d_{k-i-1} b)` for `k > i`, where removing the only vertex
-    * of a side leaves the other side alone, and a degenerate face on the `Y` side shifts its degeneracy indices by
-    * `i + 1`. `S^0 ⋆ X` is the unreduced suspension, `pt ⋆ X` the cone, and `S^p ⋆ S^q = S^(p+q+1)`.
-    */
-  def join[GX, GY](x: FiniteSimplicialSet[GX], y: FiniteSimplicialSet[GY]): FiniteSimplicialSet[JoinGenerator[GX, GY]] =
-    import JoinGenerator.*
-    given Ordering[GX] = x.ord
-    given Ordering[GY] = y.ord
-    type J = JoinGenerator[GX, GY]
-    val topDim = (x.generatorsByDim.length - 1) + (y.generatorsByDim.length - 1) + 1
-    val byDim: IndexedSeq[Set[J]] = IndexedSeq.tabulate(topDim + 1) { n =>
-      val ofX: Set[J] = x.generatorsAt(n).map(g => OfX(g): J).toSet
-      val ofY: Set[J] = y.generatorsAt(n).map(g => OfY(g): J).toSet
-      val both: Set[J] =
-        (for
-          i <- 0 until n
-          a <- x.generatorsAt(i)
-          b <- y.generatorsAt(n - 1 - i)
-        yield Both(a, b): J).toSet
-      ofX ++ ofY ++ both
-    }
-    def facesOf(g: J): IndexedSeq[SSetElement[J]] = g match
-      case OfX(a)     => x.faces(a).map(e => SSetElement(e.word, OfX(e.generator): J))
-      case OfY(b)     => y.faces(b).map(e => SSetElement(e.word, OfY(e.generator): J))
-      case Both(a, b) =>
-        val i = x.dimOf(a)
-        val j = y.dimOf(b)
-        IndexedSeq.tabulate(i + j + 2) { k =>
-          if k <= i then
-            if i == 0 then SSetElement(Nil, OfY(b): J)
-            else
-              val e = x.faces(a)(k)
-              SSetElement(e.word, Both(e.generator, b): J)
-          else
-            val m = k - i - 1
-            if j == 0 then SSetElement(Nil, OfX(a): J)
-            else
-              val e = y.faces(b)(m)
-              SSetElement(e.word.map(_ + i + 1), Both(a, e.generator): J)
-        }
-    new FiniteSimplicialSet(byDim.reverse.dropWhile(_.isEmpty).reverse, facesOf)(using summon[Ordering[J]])
 
   /** A minimal simplicial-set model of `CP^2`: one vertex, two 2-simplices, three 3-simplices and three 4-simplices.
     * Transcribed from Sage's `simplicial_sets.ComplexProjectiveSpace(2)` (`simplicial_set_examples.py`), whose face
@@ -499,7 +423,7 @@ object SimplicialSets:
     // Triangles: the image of a bare face of a 3-simplex is the matching face of that 3-simplex's image.
     val triangleImages = scala.collection.mutable.Map.empty[G, SSetElement[MinimalSphereGenerator]]
     for (a, image) <- top; (face, k) <- table(a).zipWithIndex if face.word.isEmpty do
-      val derived = target.dOp(k, image)
+      val derived = target.face(k, image)
       require(
         triangleImages.getOrElseUpdate(face.generator, derived) == derived,
         s"inconsistent image for ${face.generator}"

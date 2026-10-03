@@ -42,11 +42,11 @@ object FundamentalGroup:
     * degenerate edge `s_0(root)`, so this is exactly `FiniteSimplicialSet.quotient` with a one-step map.
     */
   def reduce[G](x: FiniteSimplicialSet[G]): FiniteSimplicialSet[G] =
-    require(SimplicialSets.isConnected(x), "reduce: the simplicial set must be connected")
-    val vertices = x.generatorsAt(0).toVector.sorted(using x.ord)
+    require(x.isConnected, "reduce: the simplicial set must be connected")
+    val vertices = x.generators(0).toVector.sorted(using x.ord)
     val root = vertices.head
     val incident = scala.collection.mutable.Map.empty[G, List[(G, G)]].withDefaultValue(Nil)
-    for e <- x.generatorsAt(1) do
+    for e <- x.generators(1) do
       val ends = x.faces(e).map(_.generator)
       incident(ends(0)) = (e, ends(1)) :: incident(ends(0))
       incident(ends(1)) = (e, ends(0)) :: incident(ends(1))
@@ -63,16 +63,16 @@ object FundamentalGroup:
       if x.dimOf(g) == 0 then SSetElement(Nil, root)
       else if treeEdges(g) then SSetElement(List(0), root)
       else SSetElement(Nil, g)
-    FiniteSimplicialSet.quotient(x, collapse)(using x.ord)
+    x.quotient(collapse)
 
   /** The presentation of `π_1` (of a connected simplicial set) from the one-vertex model. */
   def presentation[G](x: FiniteSimplicialSet[G]): GroupPresentation[G] =
     val reduced = reduce(x)
-    val generators = reduced.generatorsAt(1).toVector.sorted(using reduced.ord)
+    val generators = reduced.generators(1).toVector.sorted(using reduced.ord)
     val index = generators.zipWithIndex.toMap
     def letter(e: SSetElement[G], exponent: Int): List[(Int, Int)] =
       if e.word.nonEmpty then Nil else List((index(e.generator), exponent))
-    val relations = reduced.generatorsAt(2).toVector.sorted(using reduced.ord).map { triangle =>
+    val relations = reduced.generators(2).toVector.sorted(using reduced.ord).map { triangle =>
       val f = reduced.faces(triangle) // d_0, d_1, d_2
       letter(f(2), 1) ++ letter(f(0), 1) ++ letter(f(1), -1)
     }

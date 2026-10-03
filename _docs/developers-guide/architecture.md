@@ -268,7 +268,7 @@ from any simplex stream. `streams/FilteredSimplicialSetStream.scala` is the genu
 `validateMonotoneFiltration` to check the one precondition every engine needs (a face's value never exceeds
 its coface's).
 
-On top of that core, `cells/SimplicialSets.scala` provides the usual constructions and examples (`cone`, `suspension`, `wedge`,
+On top of that core, `cells/SimplicialSet.scala` provides the usual constructions and examples (`cone`, `suspension`, `wedge`,
 `smash`, `join`, `subcomplex`, `fromSimplicialComplex`, `presentationComplex`, `kleinBottle`, `horn`, `sphere`,
 `complexProjectivePlane`, `hopfMap`), `cells/SSetMap.scala` simplicial maps (with `mappingCone` and the induced rank on
 homology), `cells/FundamentalGroup.scala` a presentation of the fundamental group, and `cells/CupProduct.scala` and

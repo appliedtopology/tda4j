@@ -30,9 +30,9 @@ def betti[G](x: FiniteSimplicialSet[G]) = (BettiNumbers(x, 2), BettiNumbers(x, 3
 
 // A space can be described by a presentation: generators (loops), and relations (disks glued in along words in the loops).
 // A letter is (generator number, +1 or -1). The torus is <a, b | a b a^-1 b^-1>: "going round a then b is the same as b then a".
-val torus = SimplicialSets.presentationComplex(2, Seq(List((0, 1), (1, 1), (0, -1), (1, -1))))
-val projectivePlane = SimplicialSets.presentationComplex(1, Seq(List((0, 1), (0, 1))))     // <a | a^2>
-val kleinBottle = SimplicialSets.kleinBottle
+val torus = SimplicialSet.presentationComplex(2, Seq(List((0, 1), (1, 1), (0, -1), (1, -1))))
+val projectivePlane = SimplicialSet.presentationComplex(1, Seq(List((0, 1), (0, 1))))     // <a | a^2>
+val kleinBottle = SimplicialSet.kleinBottle
 
 betti(torus)             // (Vector(1, 2, 1), Vector(1, 2, 1))
 betti(projectivePlane)   // (Vector(1, 1, 1), Vector(1, 0, 0))
@@ -50,10 +50,10 @@ elements, but can by comparing the two fields.
 Now the interesting case. Glue a sphere to two circles at a single point:
 
 ```scala sc:nocompile
-val circle = SimplicialSets.sphere(1)
-val twoCircles = SimplicialSets.wedge(circle, circle.generatorsAt(0).head, circle, circle.generatorsAt(0).head)
-val sphere = SimplicialSets.sphere(2)
-val notATorus = SimplicialSets.wedge(twoCircles, twoCircles.generatorsAt(0).head, sphere, sphere.generatorsAt(0).head)
+val circle = SimplicialSet.sphere(1)
+val twoCircles = circle.wedge(circle.generators(0).head, circle, circle.generators(0).head)
+val sphere = SimplicialSet.sphere(2)
+val notATorus = twoCircles.wedge(twoCircles.generators(0).head, sphere, sphere.generators(0).head)
 
 betti(notATorus)         // (Vector(1, 2, 1), Vector(1, 2, 1))
 ```
@@ -88,9 +88,9 @@ information. The next pair of spaces: the complex projective plane (the space of
 a four-dimensional manifold), and a sphere of dimension 2 glued to one of dimension 4.
 
 ```scala sc:nocompile
-val cp2 = SimplicialSets.complexProjectivePlaneKuhnel          // a 9-vertex triangulation of the complex projective plane
-val sphere4 = SimplicialSets.sphere(4)
-val s2s4 = SimplicialSets.wedge(sphere, sphere.generatorsAt(0).head, sphere4, sphere4.generatorsAt(0).head)
+val cp2 = SimplicialSet.complexProjectivePlaneKuhnel          // a 9-vertex triangulation of the complex projective plane
+val sphere4 = SimplicialSet.sphere(4)
+val s2s4 = sphere.wedge(sphere.generators(0).head, sphere4, sphere4.generators(0).head)
 
 betti(cp2)               // (Vector(1, 0, 1, 0, 1), Vector(1, 0, 1, 0, 1))
 betti(s2s4)              // the same
@@ -116,10 +116,10 @@ isNonzero(projectivePlane, 2, Steenrod.sq(projectivePlane, 1, 1, x))    // true
 
 Constructions are what make this a calculator rather than a catalogue. The complex projective plane is not just something you can look
 up: it is what you get by gluing a four-dimensional disc onto a two-dimensional sphere along the **Hopf map** from the three-sphere,
-that is, the *mapping cone* of the Hopf map. `SimplicialSets.hopfMap` is a simplicial model of that map, and `SSetMap.mappingCone` does the gluing:
+that is, the *mapping cone* of the Hopf map. `SimplicialSet.hopfMap` is a simplicial model of that map, and `SSetMap.mappingCone` does the gluing:
 
 ```scala sc:nocompile
-val hopfCone = SSetMap.mappingCone(SimplicialSets.hopfMap)
+val hopfCone = SSetMap.mappingCone(SimplicialSet.hopfMap)
 val hopfClass = basis(hopfCone, 2).head
 isNonzero(hopfCone, 4, cup(hopfCone, 2, 2, hopfClass, hopfClass))    // true: it has the cohomology ring of the projective plane
 ```
@@ -127,9 +127,11 @@ isNonzero(hopfCone, 4, cup(hopfCone, 2, 2, hopfClass, hopfClass))    // true: it
 So the construction really is the complex projective plane as far as cohomology is concerned: its degree-2 class squares to
 a nonzero class. A map with a *constant* image instead gives the sphere pair, with square zero. The Hopf map is exactly the map for which the square is nonzero.
 
-`SimplicialSets` also has `cone`, `suspension`, `join`, `smash`, `horn`, `simplex` and `fromSimplicialComplex` (for a space
-given as a list of top-dimensional simplices, such as a triangulated surface), and `FundamentalGroup.presentation` reads a presentation
-of the fundamental group back off a connected space: the inverse of `presentationComplex`.
+The catalog `SimplicialSet` also has `torus`, `realProjectiveSpace(n)`, `horn`, `simplex` and `fromSimplicialComplex` (for a
+space given as a list of top-dimensional simplices, such as a triangulated surface); every space has the methods `cone`,
+`suspension`, `join`, `smash`, `wedge` and `product`; and `FundamentalGroup.presentation` reads a presentation of the
+fundamental group back off a connected space: the inverse of `presentationComplex`. The user guide's
+[Simplicial sets](../user-guide/topological-spaces/simplicial-sets.md) page tours all of it.
 
 ## Limits
 
@@ -152,28 +154,28 @@ def basis[G](x: FiniteSimplicialSet[G], degree: Int) = CupProduct.cohomologyBasi
 def cup[G](x: FiniteSimplicialSet[G], p: Int, q: Int, a: Map[G, CoefficientT], b: Map[G, CoefficientT]) = CupProduct.cup(x, p, q, a, b)
 def isNonzero[G](x: FiniteSimplicialSet[G], degree: Int, cochain: Map[G, CoefficientT]) = !CupProduct.isCoboundary(x, degree, cochain)
 
-val torus = SimplicialSets.presentationComplex(2, Seq(List((0, 1), (1, 1), (0, -1), (1, -1))))
-val projectivePlane = SimplicialSets.presentationComplex(1, Seq(List((0, 1), (0, 1))))
-val kleinBottle = SimplicialSets.kleinBottle
+val torus = SimplicialSet.presentationComplex(2, Seq(List((0, 1), (1, 1), (0, -1), (1, -1))))
+val projectivePlane = SimplicialSet.presentationComplex(1, Seq(List((0, 1), (0, 1))))
+val kleinBottle = SimplicialSet.kleinBottle
 
-val circle = SimplicialSets.sphere(1)
-val twoCircles = SimplicialSets.wedge(circle, circle.generatorsAt(0).head, circle, circle.generatorsAt(0).head)
-val sphere = SimplicialSets.sphere(2)
-val notATorus = SimplicialSets.wedge(twoCircles, twoCircles.generatorsAt(0).head, sphere, sphere.generatorsAt(0).head)
+val circle = SimplicialSet.sphere(1)
+val twoCircles = circle.wedge(circle.generators(0).head, circle, circle.generators(0).head)
+val sphere = SimplicialSet.sphere(2)
+val notATorus = twoCircles.wedge(twoCircles.generators(0).head, sphere, sphere.generators(0).head)
 
 def someProductOfOneClassesIsNonzero[G](x: FiniteSimplicialSet[G]): Boolean =
   val classes = basis(x, 1)
   classes.exists(a => classes.exists(b => isNonzero(x, 2, cup(x, 1, 1, a, b))))
 
-val cp2 = SimplicialSets.complexProjectivePlaneKuhnel
-val sphere4 = SimplicialSets.sphere(4)
-val s2s4 = SimplicialSets.wedge(sphere, sphere.generatorsAt(0).head, sphere4, sphere4.generatorsAt(0).head)
+val cp2 = SimplicialSet.complexProjectivePlaneKuhnel
+val sphere4 = SimplicialSet.sphere(4)
+val s2s4 = sphere.wedge(sphere.generators(0).head, sphere4, sphere4.generators(0).head)
 def squareOfTheTwoClassIsSq2[G](x: FiniteSimplicialSet[G]): Boolean = isNonzero(x, 4, Steenrod.sq(x, 2, 2, basis(x, 2).head))
 
 val x = basis(projectivePlane, 1).head
 val sq1IsNonzero = isNonzero(projectivePlane, 2, Steenrod.sq(projectivePlane, 1, 1, x))
 
-val hopfCone = SSetMap.mappingCone(SimplicialSets.hopfMap)
+val hopfCone = SSetMap.mappingCone(SimplicialSet.hopfMap)
 val hopfClass = basis(hopfCone, 2).head
 val hopfSquareIsNonzero = isNonzero(hopfCone, 4, cup(hopfCone, 2, 2, hopfClass, hopfClass))
 

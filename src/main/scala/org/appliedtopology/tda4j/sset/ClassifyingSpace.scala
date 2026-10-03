@@ -31,7 +31,7 @@ final class Nerve(monoid: FiniteMonoid, subset: Option[Set[Int]] = None) extends
 
   override def ord: Ordering[NerveSimplex] = summon[Ordering[NerveSimplex]]
 
-  override def generatorsAt(n: Int): Iterable[NerveSimplex] =
+  override def generators(n: Int): Iterable[NerveSimplex] =
     if n < 0 then Iterable.empty
     else
       (0 until n).foldLeft(Iterable(NerveSimplex(Vector.empty)))((previous, _) =>

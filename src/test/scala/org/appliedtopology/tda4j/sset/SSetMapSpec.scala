@@ -7,6 +7,7 @@ import org.specs2.mutable.Specification
 
 class SSetMapSpec extends Specification:
   import SimplicialSetFixtures.*
+  import org.appliedtopology.tda4j.sset.SimplicialSet.{realProjectiveSpace, torus}
   private val f2 = new FiniteField(2)
   private val f3 = new FiniteField(3)
 
@@ -42,7 +43,7 @@ class SSetMapSpec extends Specification:
 
   "inclusion of a circle in the torus" should {
     "be injective, not surjective, with an image equal to the circle, and have rank 1 on H_1 over F_2 and F_3" in {
-      val circle = SimplicialSets.subcomplex(torus, Set(TorusGenerator.Vertex, TorusGenerator.A))
+      val circle = torus.subcomplex(Set(TorusGenerator.Vertex, TorusGenerator.A))
       val inc = SSetMap.inclusion(circle, torus)
       (inc.validate() must beEmpty)
         .and(inc.isInjective must beTrue)
@@ -57,7 +58,7 @@ class SSetMapSpec extends Specification:
   "the base circle into its cone" should {
     "have rank 0 on H_1 (the cone kills it) and rank 1 on H_0" in {
       val circle = minimalSphere(1)
-      val cone = SimplicialSets.cone(circle)
+      val cone = circle.cone
       val base = SSetMap(circle, cone, g => SSetElement(Nil, ConeGenerator.Base(g)))
       (base.validate() must beEmpty).and(rank(base, 1, 2) must beEqualTo(0)).and(rank(base, 0, 2) must beEqualTo(1))
     }
@@ -66,7 +67,7 @@ class SSetMapSpec extends Specification:
   "the projection of a product of circles" should {
     "have rank 1 on H_1 and be surjective but not injective" in {
       val circle = minimalSphere(1)
-      val product = FiniteSimplicialSet.product(circle, circle)
+      val product = circle.product(circle)
       val p = SSetMap.projectionFirst(product, circle)
       (p.validate() must beEmpty)
         .and(rank(p, 1, 2) must beEqualTo(1))
@@ -89,7 +90,7 @@ class SSetMapSpec extends Specification:
       (c.validate() must beEmpty).and(SSetBetti(c, 2) must beEqualTo(Vector(1, 0, 0, 0)))
     }
     "of the circle's inclusion in the torus have Betti numbers (1, 1, 1): the disk kills the circle" in {
-      val circle = SimplicialSets.subcomplex(torus, Set(TorusGenerator.Vertex, TorusGenerator.A))
+      val circle = torus.subcomplex(Set(TorusGenerator.Vertex, TorusGenerator.A))
       val c = SSetMap.mappingCone(SSetMap.inclusion(circle, torus))
       (c.validate() must beEmpty)
         .and(SSetBetti(c, 2) must beEqualTo(Vector(1, 1, 1)))

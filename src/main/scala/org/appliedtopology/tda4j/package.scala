@@ -185,17 +185,20 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
     GroupPresentation,
     HopfSphereGenerator,
     JoinGenerator,
+    KleinGenerator,
     MinimalSphereGenerator,
     Nerve,
     NerveSimplex,
     PresentationCell,
     ProductGenerator,
+    RealProjectiveGenerator,
     SSetElement,
     SSetMap,
     SimplicialSet,
+    SimplicialSetCatalog,
     SimplicialSetStream,
-    SimplicialSets,
-    Steenrod
+    Steenrod,
+    TorusGenerator
   }
   // END generated re-exports
 

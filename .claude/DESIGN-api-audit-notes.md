@@ -23,3 +23,4 @@ Collected while doing the package flatten (2026-10-03). Unsorted observations; t
   companion = an implicit-scope anchor of every `?C is Field`) would silently decide `CoefficientT = Double` whenever a
   user forgot their `F_p` import -- real coefficients instead of F_p, wrong torsion answers, no compile error. Decision
   for the project lead; the rule adopted: defaults go in the companion of the DATA type, never of the typeclass.
+- In a block, `given Double is Field = ...` AFTER statements that do implicit search fails: 'given instance given_is_Double_Field needs result type because its right-hand side attempts implicit search' (forward reference). Must come first, or be named with an explicit type.

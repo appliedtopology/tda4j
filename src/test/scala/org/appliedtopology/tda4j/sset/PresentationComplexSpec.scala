@@ -7,7 +7,7 @@ import org.specs2.mutable.Specification
 
 /** Presentation complexes against the spaces the presentations are known to describe. */
 class PresentationComplexSpec extends Specification:
-  import SimplicialSets.*
+  import SimplicialSet.*
 
   private def a = (0, 1)
   private def b = (1, 1)

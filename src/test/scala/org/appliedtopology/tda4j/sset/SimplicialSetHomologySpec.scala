@@ -3,8 +3,6 @@ package sset
 
 import org.appliedtopology.tda4j.*
 
-import org.appliedtopology.tda4j.sset.FiniteSimplicialSet.*
-
 import org.specs2.mutable
 
 /** Homology of the hand-built `SimplicialSetFixtures`, computed through the real `CellularHomologyEngine` engine via
@@ -42,9 +40,9 @@ class SimplicialSetHomologySpec extends mutable.Specification:
     import f3.given
 
     val overF2 =
-      homologyOf[SimplicialSetFixtures.ProjectiveGenerator, f2.Fp](SimplicialSetFixtures.realProjectiveSpace(2))
+      homologyOf[RealProjectiveGenerator, f2.Fp](SimplicialSet.realProjectiveSpace(2))
     val overF3 =
-      homologyOf[SimplicialSetFixtures.ProjectiveGenerator, f3.Fp](SimplicialSetFixtures.realProjectiveSpace(2))
+      homologyOf[RealProjectiveGenerator, f3.Fp](SimplicialSet.realProjectiveSpace(2))
 
     (overF2 must containTheSameElementsAs(List((0, 0, Int.MaxValue), (1, 0, Int.MaxValue), (2, 0, Int.MaxValue))))
       .and(overF3 must containTheSameElementsAs(List((0, 0, Int.MaxValue), (1, 0, 0))))
@@ -57,9 +55,9 @@ class SimplicialSetHomologySpec extends mutable.Specification:
     import f3.given
 
     val overF2 =
-      homologyOf[SimplicialSetFixtures.ProjectiveGenerator, f2.Fp](SimplicialSetFixtures.realProjectiveSpace(3))
+      homologyOf[RealProjectiveGenerator, f2.Fp](SimplicialSet.realProjectiveSpace(3))
     val overF3 =
-      homologyOf[SimplicialSetFixtures.ProjectiveGenerator, f3.Fp](SimplicialSetFixtures.realProjectiveSpace(3))
+      homologyOf[RealProjectiveGenerator, f3.Fp](SimplicialSet.realProjectiveSpace(3))
 
     (overF2 must containTheSameElementsAs(
       List((0, 0, Int.MaxValue), (1, 0, Int.MaxValue), (2, 0, Int.MaxValue), (3, 0, Int.MaxValue))
@@ -67,12 +65,12 @@ class SimplicialSetHomologySpec extends mutable.Specification:
   }
 
   "Torus has Betti numbers (1, 2, 1) for every coefficient field" >> {
-    val diagram = homologyOf[SimplicialSetFixtures.TorusGenerator, f11.Fp](SimplicialSetFixtures.torus)
+    val diagram = homologyOf[TorusGenerator, f11.Fp](SimplicialSet.torus)
     (essentialCountsByDim(diagram) === Map(0 -> 1, 1 -> 2, 2 -> 1)).and(finiteCount(diagram) === 1)
   }
 
   "product(minimalSphere(1), minimalSphere(1)) has the torus's Betti numbers (1, 2, 1), via a completely different construction than the hand-built torus fixture" >> {
-    val prod = product(SimplicialSetFixtures.minimalSphere(1), SimplicialSetFixtures.minimalSphere(1))
+    val prod = SimplicialSetFixtures.minimalSphere(1).product(SimplicialSetFixtures.minimalSphere(1))
     val diagram = homologyOf[
       ProductGenerator[SimplicialSetFixtures.SphereGenerator, SimplicialSetFixtures.SphereGenerator],
       f11.Fp
@@ -81,7 +79,7 @@ class SimplicialSetHomologySpec extends mutable.Specification:
   }
 
   "product(minimalSphere(1), minimalSphere(2)) matches Kunneth's S^1 x S^2 Betti numbers (1, 1, 1, 1) -- this is the case that exercises the common-degeneracy stripping path in product's face maps" >> {
-    val prod = product(SimplicialSetFixtures.minimalSphere(1), SimplicialSetFixtures.minimalSphere(2))
+    val prod = SimplicialSetFixtures.minimalSphere(1).product(SimplicialSetFixtures.minimalSphere(2))
     val diagram = homologyOf[
       ProductGenerator[SimplicialSetFixtures.SphereGenerator, SimplicialSetFixtures.SphereGenerator],
       f11.Fp
@@ -90,7 +88,7 @@ class SimplicialSetHomologySpec extends mutable.Specification:
   }
 
   "coproduct(minimalSphere(1), minimalSphere(2)) has Betti numbers (2, 1, 1) -- unreduced H_0 adds directly across a disjoint union" >> {
-    val coprod = coproduct(SimplicialSetFixtures.minimalSphere(1), SimplicialSetFixtures.minimalSphere(2))
+    val coprod = SimplicialSetFixtures.minimalSphere(1).coproduct(SimplicialSetFixtures.minimalSphere(2))
     val diagram =
       homologyOf[Either[SimplicialSetFixtures.SphereGenerator, SimplicialSetFixtures.SphereGenerator], f11.Fp](coprod)
     essentialCountsByDim(diagram) === Map(0 -> 2, 1 -> 1, 2 -> 1)
@@ -104,10 +102,9 @@ class SimplicialSetHomologySpec extends mutable.Specification:
     given Ordering[G] = eitherOrdering[EdgeGenerator, EdgeGenerator]
 
     val bigon: FiniteSimplicialSet[G] =
-      identify(
-        coproduct(SimplicialSetFixtures.edge, SimplicialSetFixtures.edge),
-        Seq[(G, G)]((Left(V0), Right(V0)), (Left(V1), Right(V1)))
-      )
+      SimplicialSetFixtures.edge
+        .coproduct(SimplicialSetFixtures.edge)
+        .identify(Seq[(G, G)]((Left(V0), Right(V0)), (Left(V1), Right(V1))))
 
     (bigon.validate() must beEmpty)
       .and(bigon.generatorsByDim.map(_.size).toList === List(2, 2))
@@ -143,10 +140,10 @@ class SimplicialSetHomologySpec extends mutable.Specification:
       finite.size * 2 + essential.size == cells
 
     val s3 = SimplicialSetFixtures.minimalSphere(3)
-    val rp3 = SimplicialSetFixtures.realProjectiveSpace(3)
-    val torus = SimplicialSetFixtures.torus
+    val rp3 = SimplicialSet.realProjectiveSpace(3)
+    val torus = SimplicialSet.torus
 
     accountsForAllCells(homologyOf[SimplicialSetFixtures.SphereGenerator, f11.Fp](s3), totalCells(s3)) must beTrue
-    accountsForAllCells(homologyOf[SimplicialSetFixtures.ProjectiveGenerator, f11.Fp](rp3), totalCells(rp3)) must beTrue
-    accountsForAllCells(homologyOf[SimplicialSetFixtures.TorusGenerator, f11.Fp](torus), totalCells(torus)) must beTrue
+    accountsForAllCells(homologyOf[RealProjectiveGenerator, f11.Fp](rp3), totalCells(rp3)) must beTrue
+    accountsForAllCells(homologyOf[TorusGenerator, f11.Fp](torus), totalCells(torus)) must beTrue
   }

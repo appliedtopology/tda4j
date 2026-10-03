@@ -3,7 +3,7 @@ package sset
 
 import org.appliedtopology.tda4j.*
 
-import org.appliedtopology.tda4j.sset.SimplicialSetFixtures.ProjectiveGenerator
+import org.appliedtopology.tda4j.sset.RealProjectiveGenerator
 import org.appliedtopology.tda4j.sset.SimplicialSetFixtures.SphereGenerator
 
 import org.specs2.mutable
@@ -32,12 +32,12 @@ class SSetElementSpec extends mutable.Specification:
   }
 
   "faceOf" >> {
-    val rp3 = SimplicialSetFixtures.realProjectiveSpace(3)
-    import ProjectiveGenerator.*
+    val rp3 = SimplicialSet.realProjectiveSpace(3)
+    import RealProjectiveGenerator.*
 
-    def d(i: Int, elt: SSetElement[ProjectiveGenerator]): SSetElement[ProjectiveGenerator] =
+    def d(i: Int, elt: SSetElement[RealProjectiveGenerator]): SSetElement[RealProjectiveGenerator] =
       faceOf(i, elt.word, elt.generator, rp3.faces)
-    def bare(g: ProjectiveGenerator): SSetElement[ProjectiveGenerator] = SSetElement(Nil, g)
+    def bare(g: RealProjectiveGenerator): SSetElement[RealProjectiveGenerator] = SSetElement(Nil, g)
 
     "all six d_i d_j = d_{j-1} d_i instances on RP3's top generator agree" >> {
       val pairs = for i <- 0 to 3; j <- (i + 1) to 3 yield (i, j)

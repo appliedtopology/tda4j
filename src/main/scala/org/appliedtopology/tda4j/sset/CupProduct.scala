@@ -16,8 +16,8 @@ object CupProduct:
     val n = x.dimOf(sigma)
     require(p >= 0 && p <= n, s"split degree $p outside 0..$n")
     val start = SSetElement[G](Nil, sigma)
-    val front = (n until p by -1).foldLeft(start)((e, i) => x.dOp(i, e))
-    val back = (0 until p).foldLeft(start)((e, _) => x.dOp(0, e))
+    val front = (n until p by -1).foldLeft(start)((e, i) => x.face(i, e))
+    val back = (0 until p).foldLeft(start)((e, _) => x.face(0, e))
     (front, back)
 
   private def value[G, F: Field as field](c: Map[G, F], e: SSetElement[G]): F =
@@ -31,7 +31,7 @@ object CupProduct:
     a: Map[G, F],
     b: Map[G, F]
   ): Map[G, F] =
-    x.generatorsAt(p + q)
+    x.generators(p + q)
       .flatMap { sigma =>
         val (front, back) = alexanderWhitney(x, sigma, p)
         val v = field.times(value(a, front), value(b, back))
@@ -39,7 +39,7 @@ object CupProduct:
       }
       .toMap
 
-  private def gens[G](x: FiniteSimplicialSet[G], n: Int): Vector[G] = x.generatorsAt(n).toVector.sorted(using x.ord)
+  private def gens[G](x: FiniteSimplicialSet[G], n: Int): Vector[G] = x.generators(n).toVector.sorted(using x.ord)
 
   private def toVector[G, F: Field as field](x: FiniteSimplicialSet[G], n: Int, c: Map[G, F]): Vector[F] =
     gens(x, n).map(g => c.getOrElse(g, field.zero))

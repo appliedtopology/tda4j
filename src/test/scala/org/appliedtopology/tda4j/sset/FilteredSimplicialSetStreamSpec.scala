@@ -12,8 +12,7 @@ import org.specs2.mutable
   * including the `advisor()`-driven design corrections, in `.claude/WORKLOG-simplicial-set-filtration.md`.
   */
 class FilteredSimplicialSetStreamSpec extends mutable.Specification:
-  import SimplicialSetFixtures.TorusGenerator
-  import SimplicialSetFixtures.TorusGenerator.*
+  import TorusGenerator.*
 
   private val f11 = new FiniteField(11)
   import f11.given
@@ -52,16 +51,16 @@ class FilteredSimplicialSetStreamSpec extends mutable.Specification:
       case U      => 0.5 // U's own face B (2.0) has a LARGER value than U (0.5) -- not monotone.
       case L      => 5.0
 
-    (validateMonotoneFiltration(SimplicialSetFixtures.torus, torusFiltration) must beEmpty)
-      .and(validateMonotoneFiltration(SimplicialSetFixtures.torus, broken) must not(beEmpty))
+    (validateMonotoneFiltration(SimplicialSet.torus, torusFiltration) must beEmpty)
+      .and(validateMonotoneFiltration(SimplicialSet.torus, broken) must not(beEmpty))
   }
 
   "FilteredSimplicialSetStream's iterateDimension buckets are oldest-first, and every bare direct face precedes its generator in dimension-major order" >> {
-    given (TorusGenerator is OrderedCell) = SimplicialSetFixtures.torus.cellInstance
-    val stream = FilteredSimplicialSetStream(SimplicialSetFixtures.torus, torusFiltration)
+    given (TorusGenerator is OrderedCell) = SimplicialSet.torus.cellInstance
+    val stream = FilteredSimplicialSetStream(SimplicialSet.torus, torusFiltration)
 
     val byDim: IndexedSeq[Vector[TorusGenerator]] =
-      (0 until SimplicialSetFixtures.torus.generatorsByDim.length).map(d => stream.iterateDimension(d).toVector)
+      (0 until SimplicialSet.torus.generatorsByDim.length).map(d => stream.iterateDimension(d).toVector)
 
     val bucketsAscending: Boolean = byDim.forall { (bucket: Vector[TorusGenerator]) =>
       val values: Vector[Double] = bucket.map(torusFiltration)
@@ -75,7 +74,7 @@ class FilteredSimplicialSetStreamSpec extends mutable.Specification:
     val position: Map[TorusGenerator, Int] = allCellsLike.zipWithIndex.toMap
     val facesPrecedeCofaces: Boolean = allCellsLike.zipWithIndex.forall { (g: TorusGenerator, i: Int) =>
       val bareFaces: IndexedSeq[TorusGenerator] =
-        SimplicialSetFixtures.torus.faces(g).collect { case SSetElement(Nil, target) => target }
+        SimplicialSet.torus.faces(g).collect { case SSetElement(Nil, target) => target }
       bareFaces.forall(f => position(f) < i)
     }
 
@@ -83,7 +82,7 @@ class FilteredSimplicialSetStreamSpec extends mutable.Specification:
   }
 
   "the torus's hand-picked non-dimension-aligned filtration: CellularHomologyEngine and the chunks engine agree exactly, and the agreed answer matches the hand-derived structure" >> {
-    val (naive, chunks) = diagramsFor(SimplicialSetFixtures.torus, torusFiltration)
+    val (naive, chunks) = diagramsFor(SimplicialSet.torus, torusFiltration)
 
     // Hand-derived structurally, without guessing the pivot-selection tie-break (see the WORKLOG): U (older,
     // fv=4.0) must be the one that kills a 1-cycle among {A,B,C} (its raw boundary is nonzero and nothing has
@@ -129,10 +128,10 @@ class FilteredSimplicialSetStreamSpec extends mutable.Specification:
             rep.rawEntries.size <= sset.generatorsByDim.map(_.size).sum
       }
 
-    val torusOk = checkAllReps(SimplicialSetFixtures.torus, torusFiltration)
-    val rp2 = SimplicialSetFixtures.realProjectiveSpace(2)
-    val rp2Filtration: SimplicialSetFixtures.ProjectiveGenerator => Double = {
-      case SimplicialSetFixtures.ProjectiveGenerator.E(n) => n.toDouble
+    val torusOk = checkAllReps(SimplicialSet.torus, torusFiltration)
+    val rp2 = SimplicialSet.realProjectiveSpace(2)
+    val rp2Filtration: RealProjectiveGenerator => Double = { case RealProjectiveGenerator.E(n) =>
+      n.toDouble
     }
     val rp2Ok = checkAllReps(rp2, rp2Filtration)
     (torusOk must beTrue) and (rp2Ok must beTrue)
@@ -154,8 +153,8 @@ class FilteredSimplicialSetStreamSpec extends mutable.Specification:
 
     val sphereChecks = (1 to 3).forall(n => seeds.forall(s => check(SimplicialSetFixtures.minimalSphere(n), s)))
     val projectiveChecks =
-      (2 to 3).forall(n => seeds.forall(s => check(SimplicialSetFixtures.realProjectiveSpace(n), s)))
-    val torusChecks = seeds.forall(s => check(SimplicialSetFixtures.torus, s))
+      (2 to 3).forall(n => seeds.forall(s => check(SimplicialSet.realProjectiveSpace(n), s)))
+    val torusChecks = seeds.forall(s => check(SimplicialSet.torus, s))
 
     (sphereChecks must beTrue).and(projectiveChecks must beTrue).and(torusChecks must beTrue)
   }
