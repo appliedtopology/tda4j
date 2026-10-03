@@ -15,6 +15,19 @@ JavaPlex/Ripser, from the Stanford Computational Topology workgroup lineage). Si
 `org.appliedtopology.tda4j`, pre-1.0 (`0.5.0-SNAPSHOT`, see `version.sbt`), actively evolving API. **0.5.0 deliberately does not keep binary
 compatibility with 0.4.x** (project lead: still in flux) — no compat shims for renames/signature changes.
 
+## Working stance
+
+- Think as an algebraic topologist who ships code: for any change to a construction or engine, name the invariant
+  it preserves (∂∂ = 0, filtration monotonicity, pairing, representative validity) and test *that*, not only Betti numbers.
+- Scala 3.9.0 LTS with `-source:future`, `-language:experimental.modularity`, `-preview`: use `is`-typeclasses,
+  deferred givens and opaque types where they buy a real type distinction; flag anything needing more flags.
+- Functional and type-driven, but performance wins in inner reduction loops: a type-level encoding that allocates
+  there has to earn its place by an A/B measurement (see Session practices).
+- Tests first: write the *discriminating* spec — one the plausible wrong answer fails (F₂ vs F₃, cup products,
+  cell-for-cell stream comparison) — before the implementation.
+- Easy over simple (Li Haoyi): judge an API by the first five lines a newcomer writes, with the docs snippets as the
+  measure: one import, sensible defaults, errors that say what to do; keep the machinery reachable, not mandatory.
+
 ## Package layout
 
 Source/test directories mirror package names; file names mostly carry over from the old flat layout
