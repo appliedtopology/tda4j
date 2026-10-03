@@ -16,7 +16,7 @@ in degree 2 on Vietoris-Rips and Čech complexes.
 
 | engine | `Persistence.Engine` / MATLAB `engine=` | takes | representatives | use it for |
 |---|---|---|---|---|
-| chunks (`CellularPersistenceInChunksEngine`) | `Chunks` / `chunks` | any stream | cycles | cycles as representatives; degrees 0 and 1 of large complexes |
+| chunks (`CellularPersistenceInChunksEngine`) | `Chunks` / `chunks` | any stream | cycles | queries at intermediate scales (`diagramAt`); degrees 0 and 1 |
 | naive (`CellularHomologyEngine`) | `Naive` / `naive` | any stream | cycles | stepping through a computation, reference results |
 | cohomology (`CellularCohomologyEngine`) | `Cohomology` / `cohomology` | any stream | cycles or cocycles | the default for everything but Vietoris-Rips and images |
 | Ripser (`PackedRipserCohomologyEngine`) | `Ripser` / `ripser` | a metric space | cycles or cocycles | Vietoris-Rips: the fastest there, and the default |

@@ -597,8 +597,8 @@ out to need only a birth-value comparison: truncating the *end* of a filtration 
 something is born, so `K_r`'s persistent cohomology (fed the same filtration values, just cut off at `r`)
 assigns every bar the same birth it has in the full computation.
 
-The chosen cocycle is computed over an odd prime field (`prime`, default `47` — not this library's usual `2`
-default, since an RP²-type class exists over `F_2` with no real/integer lift at all, making a mod-2 "cocycle"
+The chosen cocycle is computed over an odd prime field (`prime`, default `47`; it must be odd,
+since an RP²-type class exists over `F_2` with no real/integer lift at all, making a mod-2 "cocycle"
 a mirage for coordinatization specifically), lifted to an integer cochain, and checked EXACTLY (not just mod
 `prime`, which the field computation already guarantees trivially) against every triangle of `K_r` —
 `NoIntegerCocycleException` (a `RuntimeException`, crossing the MATLAB bridge the same way

@@ -32,9 +32,8 @@ vrLoops.map { loop =>
 ```
 
 The circle is found: one loop persists for 0.90. But there is a second loop of persistence 0.13, about 14% of the first. It is
-not on the circle. The representative cycle of the long loop passes through 25 points, 17 of them on the ring (the cycle
-takes a few shortcuts through strays that sit near it); that of the short one passes through just 7 points, 5 of which are
-outliers.
+not on the circle. The representative cycle of the long loop passes through 25 points, 17 of them on the ring; that of the
+short one passes through just 7 points, 5 of which are outliers.
 It is a hole between strays, which exists only because they happen to be arranged around an empty patch. On this data you can
 tell the two apart by eye. With more strays, or a messier circle, the
 second bar grows, and nothing in the barcode itself says which loop is the real one.

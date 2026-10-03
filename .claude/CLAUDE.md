@@ -92,9 +92,7 @@ sbt assembly                    # fat jar for CLI/MATLAB
 sbt -DrunBenchmarks=true test   # also run benchmark/profiling specs — NOT what CI runs
 ```
 
-If `sbt` isn't on `PATH` in this environment, see `.claude/scripts/install-sbt.sh` (bootstraps the launcher and
-paces around Maven Central's cold-cache rate limiting — `.claude/WORKLOG-toroidal-coordinates.md`'s own
-environment note has the story).
+If `sbt` isn't on `PATH`, run `.claude/scripts/install-sbt.sh` (paces around Maven Central's cold-cache rate limits).
 
 No linter beyond scalafmt. Tests are specs2 (`org.specs2.mutable.Specification`). CI: `test.yml` (three parallel jobs `test`, `docs-build`, `mima`),
 `lint.yml` (scalafmt: build files, main and test sources), both on every PR to `scala` and cancelled when the PR is pushed again; `docs.yml` (scaladoc → GitHub Pages, push to `scala` only). MiMa's baseline is every earlier plain release of the same compatibility series (`mimaBaselineVersions` in `build.sbt`), so it compares against nothing while only `0.5.0-SNAPSHOT` exists. The ~319 `-Wunused:all` warnings
@@ -193,7 +191,8 @@ a wildcard-imported stdlib extension of the same name wins (so `min`/`max` stay 
 JVM under a POSIX locale cannot encode it (`sbt doc` dies with `InvalidPathException`). `∆` is therefore `val ∆ :
 Simplex.type = Simplex` (`WORKLOG-package-flatten.md`); unicode extension methods and vals are fine.
 
-**Shared test generators** (`matrixGen`) live in `src/test/.../streams/Generators.scala`, not in a spec (a spec file got overwritten once and took it with it) — put any new cross-spec generator there. Before creating a test file, `ls` for its name: `Write` overwrites silently.
+**Shared test generators** (`matrixGen`) live in `src/test/.../streams/Generators.scala`, never in a spec. Before
+creating a test file, `ls` for its name: `Write` overwrites silently.
 
 **specs2 gotcha**: in a class mixing `ScalaCheck`, give a `Seq[Simplex[_]]` an explicit type ascription before
 `.forall` — otherwise it can resolve to specs2's `ValueCheck` extension with confusing errors.
@@ -292,9 +291,8 @@ file before changing that subsystem; this table is the index, in case a rule did
   — don't extrapolate an isolated bug into an end-to-end correctness claim without a repro that actually shows
   that (a real miss, corrected — `WORKLOG-toroidal-coordinates.md`). Two entries so far: CJS 2015 (Sheehy-Rips)
   and DREiMac's `_gram_schmidt` (toroidal coordinates).
-- **This environment may start with no `sbt` and no dependency cache** — `.claude/scripts/install-sbt.sh`
-  bootstraps it. Add its contents to the environment's own setup script (cloud environment menu → Edit → Setup
-  script) so new sessions don't repeat the ~20-40 minutes this can take cold.
+- **No `sbt` or dependency cache at start?** `.claude/scripts/install-sbt.sh`; put it in the cloud environment's setup
+  script so new sessions skip the ~20-40 minute cold start.
 
 ## Collaboration preferences
 

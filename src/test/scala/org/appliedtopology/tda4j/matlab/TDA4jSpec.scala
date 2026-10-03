@@ -139,6 +139,27 @@ class TDA4jSpec extends mutable.Specification:
         )
     }
 
+    "honour representativeType: cocycles from cohomology for an image, refused by homology engines and bad values" in {
+      val pixels = Array(Array(0.0, 1.0, 0.0), Array(1.0, 2.0, 1.0), Array(0.0, 1.0, 0.0))
+      val cocycles = FullBarcode.computeFromImage(pixels, Array("representativeType", "cocycles"))
+      val explicit =
+        FullBarcode.computeFromImage(pixels, Array("engine", "cohomology", "representativeType", "cocycles"))
+      (triples(cocycles.toArray()) must beEqualTo(triples(explicit.toArray())))
+        .and(
+          (0 until cocycles.size()).forall(i =>
+            cocycles.cycleVertices(i).map(_.toList).toList == explicit.cycleVertices(i).map(_.toList).toList
+          ) must beTrue
+        )
+        .and(
+          TDA4j.computeFromPoints(points, Array("engine", "chunks", "representativeType", "cocycles")) must
+            throwAn[IllegalArgumentException](message = "for cocycles use engine=cohomology")
+        )
+        .and(
+          TDA4j.computeFromPoints(points, Array("representativeType", "both")) must
+            throwAn[IllegalArgumentException](message = "must be cycles or cocycles")
+        )
+    }
+
     "have representative chains readable for every bar, with matching vertex/coefficient array lengths" in {
       val result = FullBarcode.computeFromPoints(points, Array("engine", "cohomology"))
       result.size() must be_>(0)

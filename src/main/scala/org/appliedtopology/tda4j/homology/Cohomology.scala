@@ -31,13 +31,22 @@ class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtrati
 
   /** The same bars with '''cycles''' as representatives: the pairing is computed by cohomology, then only the boundary
     * columns of the death cells are reduced ([[Involution]]). A finite bar's cycle is the reduced boundary of its death
-    * cell; an essential bar's is a cycle whose youngest cell is its birth cell.
+    * cell; an essential bar's is a cycle whose youngest cell is its birth cell. For a stream built for degrees `0..k`
+    * (its `homologyDegreeLimit`), bars of higher degree are left out: they are not the complex's homology.
     */
   def persistentHomology(
     stream: => CellStream[CellT, FiltrationT],
     includeZeroLength: Boolean = false
   ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
-    val (paired, olderFirst) = pairedCohomology(stream)
+    val theStream = stream
+    // A stream truncated for degrees 0..k leaves its top cells as "essential" classes of degree k + 1 that are not
+    // the complex's homology; reducing their boundaries would redo all the work the involution skips. Essential pairs
+    // are never pivots, so leaving them out changes no other cycle.
+    val limit = theStream match
+      case s: StratifiedCellStream[?, ?] => s.homologyDegreeLimit.getOrElse(Int.MaxValue)
+      case _                             => Int.MaxValue
+    val (allPaired, olderFirst) = pairedCohomology(theStream)
+    val paired = allPaired.filter(_._2.dim <= limit)
     val cycles = Involution.cycles[CellT, CoefficientT](
       paired.map(_._2).toIndexedSeq,
       olderFirst.reverse,

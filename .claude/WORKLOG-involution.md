@@ -67,3 +67,20 @@ For comparison, chunks takes 113 s, more than 180 s, and runs out of memory on t
   - The claim "the runner-up is mostly outliers" still holds: 5 of 7.
 - **Cycle quality:** representatives are not unique, and nothing here optimizes them; shortest or optimal cycles are a
   separate topic.
+
+## Follow-up the same day: the general engine on truncated streams
+
+`CellularCohomologyEngine.pairedCohomology` runs through the stream's top dimension. On a stream truncated for degrees
+`0..k`, every unpaired top cell becomes an "essential" pair of degree `k + 1`. The involution reduced each of their
+boundaries to zero, which is exactly the work it exists to skip, and the verb and facade then dropped those bars.
+
+| Cech, noisy-circle (60 points), degree 2 | before | after |
+|---|---|---|
+| cocycles | 47.6 s | 48.7 s |
+| cycles | 374.1 s | 50.7 s |
+
+The full test suite went from 256 s to 533 s before the fix.
+
+Fix: `persistentHomology` skips pairs above the stream's `homologyDegreeLimit`. Essential pairs are never pivots, so no
+other cycle changes. `InvolutionSpec` pins it. The packed engine never had the problem: its loop stops at
+`maxDimension`.

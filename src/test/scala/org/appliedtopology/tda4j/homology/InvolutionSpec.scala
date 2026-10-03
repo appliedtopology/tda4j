@@ -65,6 +65,13 @@ class InvolutionSpec extends Specification:
       val grid = for i <- 0 until 4; j <- 0 until 3; k <- 0 until 2 yield Array(i.toDouble, j.toDouble, k.toDouble)
       validPacked(grid.toArray, 2, 2.0) must beGreaterThan(100)
     }
+    "leave out the degree above a truncated stream's limit (its top cells are not essential classes)" in {
+      val grid = for i <- 0 until 4; j <- 0 until 3 yield Array(i.toDouble, j.toDouble)
+      val vr = VietorisRips(EuclideanMetricSpace(grid.toArray), maxDimension = 1, maxFiltrationValue = 2.5)
+      val engine = CellularCohomologyEngine[Simplex[Int], ff.Fp, Double]()
+      (engine.persistentCohomology(vr).exists(_.dim == 2) must beTrue)
+        .and(engine.persistentHomology(vr).exists(_.dim == 2) must beFalse)
+    }
     "refuse a pairing computed under a different order than the reduction (the pivot check)" in {
       val grid = for i <- 0 until 3; j <- 0 until 3 yield Array(i.toDouble, j.toDouble)
       val vr = VietorisRips(EuclideanMetricSpace(grid.toArray), maxDimension = 1, maxFiltrationValue = 2.5)

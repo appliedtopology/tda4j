@@ -29,9 +29,9 @@ val cohomology = Persistence(points, maxDimension = 1, engine = Persistence.Engi
 List(ripser, chunks, naive, cohomology).map(_.size)        // List(61, 61, 61, 61)
 ```
 
-Rounded to 1e-6, all four diagrams are equal. The choice is about cost and about the representatives: the chunks and
-naive engines compute homology and give cycles, the Ripser and cohomology engines compute cohomology and give cocycles.
-Ripser works only for the Vietoris-Rips complex of points or a metric space, and is the fastest there; the others take
+Rounded to 1e-6, all four diagrams are equal, and all four give cycles as representatives: the chunks and naive
+engines compute homology, and the Ripser and cohomology engines compute cohomology and then the cycles from its pairing
+(they give cocycles instead with `representatives = Representatives.Cocycles`). The choice is about cost. Ripser works only for the Vietoris-Rips complex of points or a metric space, and is the fastest there; the others take
 any complex, and the naive engine can also be run step by step (see the [quickstart](../user-guide/quickstart.md)).
 
 ## Degree 2

@@ -206,6 +206,11 @@ class PersistenceEnginesSpec extends org.specs2.mutable.Specification:
       (diagrams.map(rounded).distinct.size must beEqualTo(1)) and
         (ripser.bars.forall(b => b.representative.cells.forall(_.size == b.dim + 1)) must beTrue)
     }
+    "refuse cocycles from an engine that computes homology, naming the fix" in {
+      val points = Array.tabulate(8)(i => Array(math.cos(i * 0.8), math.sin(i * 0.8)))
+      Persistence(points, engine = Persistence.Engine.Chunks, representatives = Representatives.Cocycles) must
+        throwAn[IllegalArgumentException](message = "for cocycles use Engine.Auto")
+    }
     "refuse engine = Ripser for an input that is not a Vietoris-Rips complex of points" in {
       Persistence(Image(Array(Array(0.0, 1.0), Array(1.0, 0.0))), engine = Persistence.Engine.Ripser) must
         throwAn[IllegalArgumentException]
