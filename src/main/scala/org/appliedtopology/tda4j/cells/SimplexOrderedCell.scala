@@ -33,6 +33,21 @@ def simplexIsOrderedCell[VertexT](using
   * the same opaque-transparency reason as `simplexIsOrderedCell`.
   */
 trait SimplexInstances:
+  /** The simplex on an already-sorted vertex set, without copying (the companion spelling of `.asSimplex`, so it is
+    * reachable through a lab's re-exported `Simplex`).
+    */
+  def fromSortedSet[VertexT](vertices: scala.collection.immutable.SortedSet[VertexT]): Simplex[VertexT] =
+    vertices.asSimplex
+
+  /** The lexicographic order on simplices (`simplexOrdering`). */
+  def ordering[VertexT: Ordering]: Ordering[Simplex[VertexT]] = simplexOrdering[VertexT]
+
+  /** A `Simplex is OrderedCell` instance with a chosen order, e.g. a stream's filtration order
+    * (`simplexIsOrderedCell`).
+    */
+  def isOrderedCell[VertexT: Ordering](order: Ordering[Simplex[VertexT]]): Simplex[VertexT] is OrderedCell =
+    simplexIsOrderedCell[VertexT](order)
+
   // #given-example
   given defaultSimplexIsOrderedCell: [VertexT: Ordering] => (Simplex[VertexT] is OrderedCell) =
     simplexIsOrderedCell[VertexT]()

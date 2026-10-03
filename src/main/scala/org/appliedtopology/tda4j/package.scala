@@ -2,61 +2,19 @@ package org.appliedtopology.tda4j
 
 import cats.Show
 
-/** A coefficient-field context for interactive/notebook-style work: `val tdalab = TDAlab(characteristic); import
-  * tdalab.{*, given}` brings in `CoefficientT`, `Fp(...)`, the field's `given`, chain arithmetic (`⊠`, `+`, `-`) on
-  * `Chain[Simplex[Int], CoefficientT]`, an implicit `Simplex -> Chain` widening and cats' `.show` syntax.
-  * `characteristic = 0` selects `Double` coefficients (compared within `precision`); a prime `p` selects `Z/p`.
-  *
-  * Everything else -- `∆`, `Simplex`, `VietorisRips`, the engines, `CSV`, ... -- comes from the library itself (`import
-  * org.appliedtopology.tda4j.*`), and default instances (`Simplex[Int] is OrderedCell`, `Show[Simplex[Int]]`, ...) come
-  * from the types' own companions, so `TDAlab` neither re-exports nor shadows any of them. Never consulted by an engine
-  * (see CLAUDE.md's generic-`given`-capture note).
-  *
-  * Scala forbids `import TDAlab(p = 3).{*, given}`, hence the `val` first.
+/** What every lab shares: a coefficient field chosen by its characteristic (`0` for `Double` compared within
+  * `precision`, a prime `p` for `Z/p`), with `CoefficientT`, `Fp(...)` and the field's `given`; flat re-exports of the
+  * whole library and the `sset` add-on (generated, see below), so `import lab.{*, given}` is the only import a lab user
+  * needs; and cats' `.show` syntax. Concrete labs add the conveniences of their setting: [[TDAlab]] (simplicial),
+  * [[CubicalLab]]. A lab is never consulted by an engine (CLAUDE.md's generic-`given`-capture note).
   */
-class TDAlab(characteristic: Int, precision: Double = 1e-9):
+abstract class Lab(characteristic: Int, precision: Double = 1e-9):
+  val coefficients: Coefficients = Coefficients(characteristic, precision)
+  type CoefficientT = coefficients.C
+  given coefficientField: (CoefficientT is Field) = coefficients.field
 
-  import cats.syntax.all.*
-
-  trait FieldData:
-    type CoefficientT
-
-    given CoefficientT is Field = compiletime.deferred
-
-    def coeff(x: Int): CoefficientT
-
-    def Fp(x: Int): CoefficientT = coeff(x)
-
-  object FieldData:
-    def apply(): FieldData = characteristic match
-      case 0 =>
-        new FieldData:
-          override type CoefficientT = Double
-
-          override given CoefficientT is Field = Field.DoubleApproximated(precision)
-
-          override def coeff(x: Int): CoefficientT = x.toDouble
-      case p if BigInt(characteristic).isProbablePrime(certainty = 100) =>
-        val ff = FiniteField(p)
-        import ff.given
-        new FieldData:
-          override type CoefficientT = ff.Fp
-
-          override given CoefficientT is Field = summon[ff.Fp is Field]
-
-          override def coeff(x: Int): CoefficientT = ff.Fp(x)
-      case _ =>
-        throw IllegalArgumentException(s"TDAlab: characteristic must be 0 or a prime, got $characteristic")
-
-  val fieldData = FieldData()
-  export fieldData.{*, given}
-
-  type VertexT = Int
-  val chainIsRingModule: Chain[Simplex[VertexT], CoefficientT] is RingModule { type R = CoefficientT } =
-    summon[Chain[Simplex[VertexT], CoefficientT] is RingModule { type R = CoefficientT }]
-  export chainIsRingModule.*
-  given [T: Ordering] => Conversion[Simplex[T], Chain[Simplex[T], CoefficientT]] =
-    Chain.apply
+  /** A coefficient from an integer (reduced mod p, or as a Double). */
+  def Fp(x: Int): CoefficientT = coefficients.fromInt(x)
 
   // BEGIN generated re-exports
   // regenerate: python3 .claude/scripts/tdalab-exports.py (checked by TDAlabExportsSpec)
@@ -210,3 +168,40 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
   // END generated re-exports
 
   export cats.implicits.toShow
+
+/** The simplicial lab: `import TDAlab.F17.{*, given}` (or `val lab = TDAlab(p); import lab.{*, given}` for another
+  * prime) brings in everything [[Lab]] does, plus chain arithmetic (`⊠`, `+`, `-`) on `Chain[Simplex[Int],
+  * CoefficientT]` and an implicit `Simplex -> Chain` widening, so chains can be written straight up and down: `Fp(2) ⊠
+  * ∆(1, 2) - ∆(2, 3)`.
+  */
+class TDAlab(characteristic: Int, precision: Double = 1e-9) extends Lab(characteristic, precision):
+  type VertexT = Int
+  val chainIsRingModule: Chain[Simplex[VertexT], CoefficientT] is RingModule { type R = CoefficientT } =
+    summon[Chain[Simplex[VertexT], CoefficientT] is RingModule { type R = CoefficientT }]
+  export chainIsRingModule.*
+  given [T: Ordering] => Conversion[Simplex[T], Chain[Simplex[T], CoefficientT]] =
+    Chain.apply
+
+/** Prebuilt simplicial labs: `import TDAlab.F17.{*, given}`. F17 is the library default (`FiniteField.DefaultPrime`).
+  */
+object TDAlab:
+  object F2 extends TDAlab(2)
+  object F3 extends TDAlab(3)
+  object F17 extends TDAlab(17)
+  object Reals extends TDAlab(0)
+
+/** The cubical lab: [[Lab]] plus chain arithmetic on `Chain[Cube, CoefficientT]` and a `Cube -> Chain` widening (and no
+  * simplex conveniences). `import CubicalLab.F17.{*, given}`.
+  */
+class CubicalLab(characteristic: Int, precision: Double = 1e-9) extends Lab(characteristic, precision):
+  val chainIsRingModule: Chain[Cube, CoefficientT] is RingModule { type R = CoefficientT } =
+    summon[Chain[Cube, CoefficientT] is RingModule { type R = CoefficientT }]
+  export chainIsRingModule.*
+  given Conversion[Cube, Chain[Cube, CoefficientT]] = Chain.apply
+
+/** Prebuilt cubical labs: `import CubicalLab.F17.{*, given}`. */
+object CubicalLab:
+  object F2 extends CubicalLab(2)
+  object F3 extends CubicalLab(3)
+  object F17 extends CubicalLab(17)
+  object Reals extends CubicalLab(0)

@@ -23,15 +23,17 @@ trait PersistenceDiagram[CellT]:
   /** The scale `significant` measures persistence against by default (a point cloud's minimum enclosing radius). */
   def scale: Option[Double]
 
-  private def withBars(bs: List[PersistenceBar[Double, Chain[CellT, Coefficient]]]): PersistenceDiagram.Of[CellT, Coefficient] =
+  private def withBars(
+    bs: List[PersistenceBar[Double, Chain[CellT, Coefficient]]]
+  ): PersistenceDiagram.Of[CellT, Coefficient] =
     PersistenceDiagram[CellT, Coefficient](bs, maxDimension, lastFiltrationValue, scale)
 
   /** The bars of degree `k`. */
   def dim(k: Int): PersistenceDiagram.Of[CellT, Coefficient] = withBars(bars.filter(_.dim == k))
 
-  /** The diagram truncated at `f`: bars born at or before `f`, deaths capped at `f`; a class alive at `f` dies "at
-    * `f`" unless `f` is at or past `lastFiltrationValue`, where it is essential. Pure: the same `f` always gives the
-    * same answer.
+  /** The diagram truncated at `f`: bars born at or before `f`, deaths capped at `f`; a class alive at `f` dies "at `f`"
+    * unless `f` is at or past `lastFiltrationValue`, where it is essential. Pure: the same `f` always gives the same
+    * answer.
     */
   def at(f: Double): PersistenceDiagram.Of[CellT, Coefficient] =
     withBars(bars.filter(_.birth <= f).map { b =>
@@ -71,7 +73,8 @@ trait PersistenceDiagram[CellT]:
     val byDim = bars.groupBy(_.dim).toList.sortBy(_._1)
     val lines = byDim.map { (d, bs) =>
       val shown = bs.sortBy(-_.persistence).take(5).map(b => f"[${b.birth}%.4g, ${b.death}%.4g)").mkString(" ")
-      s"  H$d: ${bs.size} bars" + (if bs.nonEmpty then s", longest $shown" else "") + (if bs.size > 5 then " ..." else "")
+      s"  H$d: ${bs.size} bars" + (if bs.nonEmpty then s", longest $shown" else "") + (if bs.size > 5 then " ..."
+                                                                                       else "")
     }
     (s"PersistenceDiagram(${bars.size} bars, degrees 0..$maxDimension)" :: lines).mkString("\n")
 

@@ -54,5 +54,14 @@ def cubeIsOrderedCell(setOrdering: Ordering[Cube] = cubeOrdering): Cube is Order
 
 /** `Cube`'s default instances, mixed into `object Cube` (implicit scope; see `SimplexInstances`). */
 trait CubeInstances:
+  /** The cube with these doubled coordinates (the companion spelling of `.asCube`). */
+  def fromVector(coords: Vector[Int]): Cube = coords.asCube
+
+  /** The default order on cubes (`cubeOrdering`). */
+  def ordering: Ordering[Cube] = cubeOrdering
+
+  /** A `Cube is OrderedCell` instance with a chosen order (`cubeIsOrderedCell`). */
+  def isOrderedCell(order: Ordering[Cube]): Cube is OrderedCell = cubeIsOrderedCell(order)
+
   given defaultCubeIsOrderedCell: (Cube is OrderedCell) = cubeIsOrderedCell()
   given cubeOrderingFromCell: (cell: Cube is OrderedCell) => Ordering[Cube] = cell.ordering

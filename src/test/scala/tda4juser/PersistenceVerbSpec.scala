@@ -2,8 +2,8 @@ package tda4juser
 
 import org.specs2.mutable.Specification
 
-/** The one-call verb, from a user's side of the package boundary: one import, every input shape, and answers that
-  * agree with the explicit engine path, between engines, and with the cursor's own truncation contract.
+/** The one-call verb, from a user's side of the package boundary: one import, every input shape, and answers that agree
+  * with the explicit engine path, between engines, and with the cursor's own truncation contract.
   */
 class PersistenceVerbSpec extends Specification:
   import org.appliedtopology.tda4j.*
@@ -16,7 +16,9 @@ class PersistenceVerbSpec extends Specification:
       Array(math.cos(t) + noise * rnd.nextGaussian(), math.sin(t) + noise * rnd.nextGaussian())
     }
   private def norm(ts: List[(Int, Double, Double)]) =
-    ts.filter((d, b, e) => e > b).map((d, b, e) => (d, math.rint(b * 1e9) / 1e9, if e.isInfinite then e else math.rint(e * 1e9) / 1e9)).sorted
+    ts.filter((d, b, e) => e > b)
+      .map((d, b, e) => (d, math.rint(b * 1e9) / 1e9, if e.isInfinite then e else math.rint(e * 1e9) / 1e9))
+      .sorted
 
   "Persistence(points)" should {
     "find the circle's loop as its longest H1 bar, with a representative cycle" in {
@@ -49,7 +51,11 @@ class PersistenceVerbSpec extends Specification:
         Persistence(EuclideanMetricSpace(pts), maxFiltrationValue = 1.5)
       )
       (shapes.map(d => norm(d.triples)) must contain(be_==(reference)).forall)
-        .and(norm(Persistence(pts, maxFiltrationValue = 2).triples) must beEqualTo(norm(Persistence(pts, maxFiltrationValue = 2.0).triples)))
+        .and(
+          norm(Persistence(pts, maxFiltrationValue = 2).triples) must beEqualTo(
+            norm(Persistence(pts, maxFiltrationValue = 2.0).triples)
+          )
+        )
     }
     "give the same diagram with the naive and the chunks engine" in {
       val pts = circle(11, noise = 0.1, seed = 5)
@@ -64,7 +70,9 @@ class PersistenceVerbSpec extends Specification:
       import ff.given
       val cursor = SimplicialHomologyEngine[Int, ff.Fp, Double]()
         .persistentHomology(VietorisRips(EuclideanMetricSpace(pts), 1, Some(1.5)))
-      Seq(1.5, 0.1, 0.4, 0.7, 5.0).forall(f => norm(d.at(f).triples) == norm(cursor.diagramAt(f).filter(_._1 <= 1))) must beTrue
+      Seq(1.5, 0.1, 0.4, 0.7, 5.0).forall(f =>
+        norm(d.at(f).triples) == norm(cursor.diagramAt(f).filter(_._1 <= 1))
+      ) must beTrue
     }
     "report bettiNumbers and hide nothing until asked: significant() drops the short bars" in {
       val d = Persistence(circle(16, noise = 0.02), maxFiltrationValue = 2.0)
@@ -77,9 +85,11 @@ class PersistenceVerbSpec extends Specification:
       val alpha = Persistence(pts, complex = AlphaShapes)
       (cech.dim(1).longest must beSome)
         .and(alpha.dim(1).longest.map(_.persistence) must beSome(beGreaterThan(0.1)))
-        .and(Persistence(pts, complex = AlphaShapes, maxFiltrationValue = 1.0) must throwAn[IllegalArgumentException](
-          message = "diagram.at"
-        ))
+        .and(
+          Persistence(pts, complex = AlphaShapes, maxFiltrationValue = 1.0) must throwAn[IllegalArgumentException](
+            message = "diagram.at"
+          )
+        )
     }
   }
 
@@ -90,10 +100,16 @@ class PersistenceVerbSpec extends Specification:
       val atZero = rp2.filtered(_ => 0.0)
       (Persistence(atZero, maxDimension = 2, characteristic = 2).bettiNumbers must beEqualTo(Vector(1, 1, 1)))
         .and(Persistence(rp2.filtered(_ => 0.0), maxDimension = 2).bettiNumbers must beEqualTo(Vector(1, 0, 0)))
-        .and(Persistence(rp2.filtered(_ => 0.0), maxDimension = 2, characteristic = 0).bettiNumbers must beEqualTo(Vector(1, 0, 0)))
+        .and(
+          Persistence(rp2.filtered(_ => 0.0), maxDimension = 2, characteristic = 0).bettiNumbers must beEqualTo(
+            Vector(1, 0, 0)
+          )
+        )
     }
     "reject a characteristic that is neither 0 nor a prime, saying so" in {
-      Persistence(circle(5), characteristic = 4) must throwAn[IllegalArgumentException](message = "0 \\(reals\\) or a prime")
+      Persistence(circle(5), characteristic = 4) must throwAn[IllegalArgumentException](message =
+        "0 \\(reals\\) or a prime"
+      )
     }
   }
 

@@ -4,7 +4,10 @@ package org.appliedtopology.tda4j
   * axis. Sublevel filtration by default (dark regions first); `sublevel = false` for superlevel.
   */
 final case class Image(values: IndexedSeq[Double], shape: IndexedSeq[Int], sublevel: Boolean = true):
-  require(values.length == shape.product, s"Image: ${values.length} values for shape $shape (${shape.product} expected)")
+  require(
+    values.length == shape.product,
+    s"Image: ${values.length} values for shape $shape (${shape.product} expected)"
+  )
 
 object Image:
   /** A 2-D image from its rows. */
@@ -22,8 +25,8 @@ object Image:
   * }}}
   *
   * Returns a [[PersistenceDiagram]]: every bar of degree `0 .. maxDimension` with its representative cycle, as an
-  * immutable value. This runs the computation to the end; for a long run you want to inspect while it goes (or keep
-  * if it dies), build an engine and use its cursor (`advanceFor`, `diagramAt`) instead.
+  * immutable value. This runs the computation to the end; for a long run you want to inspect while it goes (or keep if
+  * it dies), build an engine and use its cursor (`advanceFor`, `diagramAt`) instead.
   *
   * @param input
   *   points (`Array[Array[Double]]`, `Seq[Seq[Double]]`, `Seq[Array[Double]]`), a `FiniteMetricSpace[Int]`, an
@@ -98,7 +101,13 @@ object Persistence:
   ): PersistenceDiagram[CellT] =
     require(maxDimension >= 0, s"Persistence: maxDimension must be >= 0, got $maxDimension")
     given (CellT is OrderedCell) = input.cells
-    compute(input.stream(maxDimension, maxFiltrationValue.toOption, complex), maxDimension, characteristic, engine, input.scale)
+    compute(
+      input.stream(maxDimension, maxFiltrationValue.toOption, complex),
+      maxDimension,
+      characteristic,
+      engine,
+      input.scale
+    )
 
   private def compute[CellT: OrderedCell](
     stream: StratifiedCellStream[CellT, Double],

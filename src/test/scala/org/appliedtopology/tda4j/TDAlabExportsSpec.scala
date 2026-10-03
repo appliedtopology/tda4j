@@ -15,7 +15,7 @@ import scala.jdk.CollectionConverters.*
   */
 class TDAlabExportsSpec extends Specification:
   private val root = Paths.get("src/main/scala/org/appliedtopology/tda4j")
-  private val excluded = Set("TDAlab", "SimplexOps", "SimplexInstances", "CubeInstances")
+  private val excluded = Set("TDAlab", "Lab", "CubicalLab", "SimplexOps", "SimplexInstances", "CubeInstances")
   private val decl =
     """^(?:(?:sealed|final|case|abstract|open|opaque|transparent|infix)\s+)*(?:class|trait|object|type|enum)\s+([^\s\[\(:=]+)""".r
 
