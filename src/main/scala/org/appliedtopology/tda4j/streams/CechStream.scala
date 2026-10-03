@@ -17,8 +17,8 @@ private class MiniballPointSet(points: Array[Array[Double]]) extends PointSet:
   */
 object CechFiltration:
 
-  /** The Cech filtration value (minimal enclosing radius) of a simplex, with its own cache. Each value is clamped to
-    * at least its facets' values, so floating-point error cannot break monotonicity.
+  /** The Cech filtration value (minimal enclosing radius) of a simplex, with its own cache. Each value is clamped to at
+    * least its facets' values, so floating-point error cannot break monotonicity.
     */
   def apply(euclideanMetricSpace: EuclideanMetricSpace): PartialFunction[Simplex[Int], Double] =
     // TrieMap, not mutable.HashMap: RipserCofaceSimplexStream's parallelFiltrationValue pre-warm step calls

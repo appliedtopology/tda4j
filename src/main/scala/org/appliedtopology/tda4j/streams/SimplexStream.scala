@@ -389,9 +389,9 @@ private[tda4j] class EnumeratingCofaceSimplexStream(
     }
 
   /** Filtration value reversed, then dimension, then colexicographic order of the vertex sets (their combinatorial
-    * index), the refinement Ripser's apparent pairs are defined with. A total order: without a tie-break, a triangle and
-    * its longest edge would compare equal and collide in the reduction. `iterateDimension` sorts by this same ordering
-    * reversed, so iteration order and pivot order agree.
+    * index), the refinement Ripser's apparent pairs are defined with. A total order: without a tie-break, a triangle
+    * and its longest edge would compare equal and collide in the reduction. `iterateDimension` sorts by this same
+    * ordering reversed, so iteration order and pivot order agree.
     */
   override val filtrationOrdering: Ordering[Simplex[Int]] =
     FiltrationOrdering.canonical(filtrationValue, _.size, Ordering.by(simplexIndexing(_)))
@@ -569,10 +569,10 @@ private[tda4j] class InorderCofaceSimplexStream(
         newSpx
   }
 
-/** A reference Vietoris-Rips construction following Rieser's New-VR algorithm ("A New Construction of the
-  * Vietoris-Rips Complex", arXiv:2301.07191v3, Algorithms 1-4), kept close to the paper as a baseline for the faster
-  * constructions. Built eagerly, layer by layer (layer `k + 1` from layer `k` and its candidate lists), the
-  * breadth-first reading of the paper's recursion, so any dimension can be served in any order.
+/** A reference Vietoris-Rips construction following Rieser's New-VR algorithm ("A New Construction of the Vietoris-Rips
+  * Complex", arXiv:2301.07191v3, Algorithms 1-4), kept close to the paper as a baseline for the faster constructions.
+  * Built eagerly, layer by layer (layer `k + 1` from layer `k` and its candidate lists), the breadth-first reading of
+  * the paper's recursion, so any dimension can be served in any order.
   *
   * `maxFiltrationValue` (default `Infinity`) defines the graph whose clique complex is built: `{i, j}` is an edge iff
   * `distance(i, j) <= maxFiltrationValue`. The `largestNeighbor` table (`L` in Algorithm 2) only shortens scans. Every

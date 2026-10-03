@@ -4,9 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **How this file works.** Each entry is a current rule, invariant, or known limitation, plus a pointer to the
 `.claude/WORKLOG-*.md`/`DESIGN-*.md` that holds its derivation (what was tried, measurements, repros). Derivations
-go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes"). This file was condensed on 2026-09-22 from a ~190k-char version (commit `06a55dd`),
-2026-09-25 from a ~75k-char version (commit `b8739a8`), and 2026-09-26 from a ~56k-char version (commit
-`e5e86ec`) — `git show <commit>:.claude/CLAUDE.md` for any of those full texts.
+go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes"). Last condensed 2026-10-03; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md` (and the commits named there).
 
 ## What this is
 
@@ -129,7 +127,13 @@ line even though the docs build (project flags) would compile them without it.
 **`Persistence(input, maxDimension = 1, maxFiltrationValue, complex = VietorisRips, characteristic = 17, engine)`**
 (`homology/Persistence.scala`) is the one-call verb: points/metric space/`Image`/any stream in, an immutable
 `PersistenceDiagram` (bars + representatives; coefficient type is a member, `import d.given`; `dim`, `at(f)`,
-`longest`, `significant()`, `bettiNumbers`) out. `Input` is an `into` type, so one `apply` with defaults covers every
+`longest`, `longerThan(x)`, `significant()`, `bettiNumbers`) out. `engine = Chunks | Naive | Cohomology | Ripser` (Ripser
+only for `VietorisRips` on points or a metric space).
+
+**Zero-length bars are dropped by default** (project lead: seeing them is the opt-in, never hiding them): every engine,
+the verb, MATLAB and the CLI take `includeZeroLength` (default `false`); short bars are one call away
+(`longerThan(x)`, `significant()`, also on `List[PersistenceBar]` with no import). Tests must not use `#bars == #cells` as
+an oracle unless they opt in; check the ordering contract or the actual barcode (`rules/facade.md`, `rules/streams.md`). `Input` is an `into` type, so one `apply` with defaults covers every
 input (Scala forbids defaults on more than one overload). `VietorisRips`/`Cech`/`AlphaShapes` implement
 `PointCloudComplex` and double as the `complex` choice. **Default field: `FiniteField.DefaultPrime = 17`** (project
 lead: never F₂ by default -- it hides signs and odd torsion); also the MATLAB/CLI default. The verb runs to the end;
@@ -170,21 +174,17 @@ Uses Scala 3.7+'s newest context-abstraction syntax — don't "correct" it to ol
   `Field.scala`).
 - `opaque type Simplex[VertexT] = SortedSet[VertexT]` / `opaque type Cube = Vector[Int]` — no runtime wrapper; API
   is extension methods.
-- Prefer `Option` over sentinel values (e.g. `maxFiltrationValue: Option[Double] = None`). A default can't
-  reference an earlier parameter in the *same* list (`-source:future`), and curried parameter lists would force
-  `()` at every call site — `None` + `.getOrElse(...)` inside is the pattern.
+- Optional parameters, never sentinels: `Optional[Double]` (below) for public ones, `None` + `.getOrElse(...)` inside
+  (a default cannot reference an earlier parameter of the same list).
 - A method's own `[T: Ordering, C: Field]`-style context bounds desugar to a `using` clause appended AFTER every
   explicit parameter list — so a default value earlier in that same signature cannot reference the given that
   default itself needs. No workaround short of every caller passing the value explicitly, or restructuring the
   signature so the context bound is a `using` clause of its own, ahead of that parameter (`Chain.reduceByUntil`).
 
-**Opaque-type extension methods** (`WORKLOG-extension-companion-objects.md`): extensions whose receiver is the
-opaque type live in its companion (`object Simplex`/`object Cube`), so different opaque types can reuse names. Two
-hazards: (1) opaque transparency is file-scoped, so same-file code calling the type's extensions by dot-syntax
-breaks or silently hits the underlying type's member — hence `simplexIsOrderedCell`/`cubeIsOrderedCell` live in
-separate files; (2) a companion extension can lose to a same-named stdlib extension from a wildcard import
-(`math.Ordering.Implicits.*`'s `min`/`max`) — so `min`/`max` stay top-level. `asSimplex`/`asCube` are top-level
-because their receiver is the raw `SortedSet`/`Vector`.
+**Opaque-type extension methods** live in the type's companion (`object Simplex`/`Cube`), found by implicit scope.
+Hazards: opaque transparency is file-scoped (so `simplexIsOrderedCell`/`cubeIsOrderedCell` live in their own files), and
+a wildcard-imported stdlib extension of the same name wins (so `min`/`max` stay top-level).
+`WORKLOG-extension-companion-objects.md`.
 
 **No top-level `object`/`class` with a non-ASCII name**: scaladoc writes one page FILE per such type (`∆$.html`), and a
 JVM under a POSIX locale cannot encode it (`sbt doc` dies with `InvalidPathException`). `∆` is therefore `val ∆ :
@@ -234,14 +234,11 @@ records a representative for every bar.
 
 ### Streams and complexes (ordering contract and constructions: `rules/streams.md`)
 
-**Public entry points** (`DESIGN-stream-naming.md`, `WORKLOG-stream-rename.md`): users build complexes through `VietorisRips`, `Cech`,
-`Witness(variant = Lazy | General)`, `Dowker`, `DtmRips`, `SparseRips` and `Truncated` — each takes `maxDimension` as the top
-HOMOLOGICAL degree and returns a `LevelwiseSimplexStream[Int, Double]` (the old `StratifiedSimplexStream`). The implementation classes
-(`Enumerating...`, `Ripser...`, `Inorder...`, `Incremental...`, `RecursiveStack...`, `Cech...`, `LazyWitness...`,
-`WitnessCoface...`, `DowkerCoface...`, `DtmRips...`, `SheehyRips...`, `LimitedCoface...`, `CofaceSimplexStream`) are
-`private[tda4j]`: use them inside the library, tests and `matlab`, never in docs fences (the snippet compiler runs outside the
-package, so a fence using one fails `sbt doc`). No `Cubical`/`Alpha` objects: `CubicalImage` and `AlphaShapes` already are the
-dispatching entry points. Any new object must be tested against the hand-wrapped class cell for cell AND value for value
+**Public entry points** (`DESIGN-stream-naming.md`): `VietorisRips`, `Cech`, `Witness(variant = Lazy | General)`,
+`Dowker`, `DtmRips`, `SparseRips`, `Truncated`, plus `CubicalImage` and `AlphaShapes`; `maxDimension` is the top
+HOMOLOGICAL degree, the result a `LevelwiseSimplexStream[Int, Double]`. The construction classes (`...CofaceSimplexStream`,
+`Incremental...`, `LazyWitness...`, `SheehyRips...`, `LimitedCoface...`) are `private[tda4j]`: never in docs fences
+(they fail `sbt doc`). A new entry point is tested against the hand-wrapped class cell for cell AND value for value
 (`ComplexesSpec`) — Betti numbers would not catch a wrong `+1`.
 
 ## Subsystem notes (`.claude/rules/`)
@@ -269,6 +266,11 @@ file before changing that subsystem; this table is the index, in case a rule did
   every session: keep it under ~25k characters (and each rule file under ~12k); when one drifts past that, condense it
   the same way (strip narrative to worklog pointers, move single-subsystem detail into a rule file) and note the new
   condensing date/commit at top.
+- **Docs carry the contract, worklogs carry the history.** Scaladoc, user guide and tutorials say what the code does and
+  what to call (Li Haoyi's "easy": one import, defaults, errors that say what to do); no "used to", "fixed in session
+  X", "confirmed by", worklog pointers or measurements there -- those go in `.claude/`. Error messages and `--help`
+  never name `.claude/` files or private classes. The Developer's Guide is being edited by a student: touch it only to
+  fix facts.
 - **Never revert the formatter's output.** If `scalafmtAll` touches files outside your change, commit that in its OWN
   commit ("Format: ... formatter output only, no behavior change") and say so — reverting only hides the debt, and a
   clean lint beats a minimal diff. CI lint also runs `scalafmtSbtCheck` (`build.sbt`) and `Test / scalafmtCheck`, so run all three before pushing (a pushed `build.sbt` edit once failed lint for this).
@@ -293,6 +295,4 @@ file before changing that subsystem; this table is the index, in case a rule did
 ## Collaboration preferences
 
 The project lead values intellectual honesty and direct pushback over agreement — say plainly when an approach is
-a dead end, when benchmarks are mixed, or when a deliverable is unverified, rather than softening it. This has been
-well received repeatedly (mixed paper benchmarks, uncompiled deliverables, drifted oracles, bugs in existing code,
-"fixes" that had to be reverted) — don't reflexively hedge findings like these.
+a dead end, when benchmarks are mixed, or when a deliverable is unverified, rather than softening it. Don't reflexively hedge findings.

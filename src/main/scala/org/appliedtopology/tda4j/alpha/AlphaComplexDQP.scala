@@ -216,8 +216,8 @@ end PowerDistance
   *   max active set size; 0 means "ambient dimension + 2", which is a hard bound since the active rows live in R^m.
   *   Raise it only if you hit the corresponding exception.
   * @param enforceMonotonicity
-  *   make each value at least the largest of its facets', and equal to it within solver accuracy (see
-  *   `clampMonotone`): the values are monotone mathematically, and the persistence algorithms need it exactly.
+  *   make each value at least the largest of its facets', and equal to it within solver accuracy (see `clampMonotone`):
+  *   the values are monotone mathematically, and the persistence algorithms need it exactly.
   * @param parallel
   *   run the per-vertex loop on the common ForkJoinPool. Output is deterministic.
   * @param verbose

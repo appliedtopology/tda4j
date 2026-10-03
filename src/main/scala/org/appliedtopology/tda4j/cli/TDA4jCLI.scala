@@ -351,8 +351,8 @@ object TDA4jCLI:
       throw new IllegalArgumentException(s"--output is required for --output-format=$format")
     )
 
-  /** Perseus's interval format stores integer filtration steps, so bars with non-integral values are refused rather than
-    * rounded.
+  /** Perseus's interval format stores integer filtration steps, so bars with non-integral values are refused rather
+    * than rounded.
     */
   private def requireIntegralForPerseus(bars: IndexedSeq[PersistenceBar[Double, Nothing]]): Unit =
     def isIntegral(v: Double): Boolean = v == math.round(v).toDouble

@@ -3,8 +3,8 @@ package sset
 
 import org.appliedtopology.tda4j.*
 
-/** The violations of monotonicity in `filtrationValue` (a non-degenerate face with a larger value than its coface),
-  * as messages; empty if there are none. Degenerate faces do not enter boundaries and are not checked.
+/** The violations of monotonicity in `filtrationValue` (a non-degenerate face with a larger value than its coface), as
+  * messages; empty if there are none. Degenerate faces do not enter boundaries and are not checked.
   */
 def validateMonotoneFiltration[G](sset: FiniteSimplicialSet[G], filtrationValue: G => Double): Seq[String] =
   sset.generatorsByDim.zipWithIndex.flatMap { case (gens, n) =>

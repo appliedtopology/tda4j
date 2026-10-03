@@ -3,8 +3,8 @@ package org.appliedtopology.tda4j
 import scala.io.Source
 import java.io.PrintWriter
 
-/** GUDHI's OFF/nOFF point-cloud format and its `.pers` persistence-diagram format. For GUDHI's cubical input, which
-  * is Perseus's format, see [[Perseus]].
+/** GUDHI's OFF/nOFF point-cloud format and its `.pers` persistence-diagram format. For GUDHI's cubical input, which is
+  * Perseus's format, see [[Perseus]].
   */
 object Gudhi:
 

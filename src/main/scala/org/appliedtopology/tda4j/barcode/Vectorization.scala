@@ -60,9 +60,9 @@ object Vectorization:
     else persistence / cap
 
   /** The persistence image (Adams et al. 2017) of `diagram`. Each finite bar becomes the point
-    * `(birth, death - birth)`, then a Gaussian of standard deviation `sigma` weighted by [[piecewiseLinearWeight]] of its
-    * persistence (`weightCap` defaults to the largest finite persistence). Each pixel holds the exact integral of the
-    * surface over the pixel, as in persim.
+    * `(birth, death - birth)`, then a Gaussian of standard deviation `sigma` weighted by [[piecewiseLinearWeight]] of
+    * its persistence (`weightCap` defaults to the largest finite persistence). Each pixel holds the exact integral of
+    * the surface over the pixel, as in persim.
     *
     * Returns `image(r)(c)`: `r` indexes `birthResolution` pixels spanning `birthRange`, `c` indexes
     * `persistenceResolution` pixels spanning `persistenceRange`. Essential bars are dropped.

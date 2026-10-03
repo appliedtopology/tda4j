@@ -9,16 +9,16 @@ import scala.collection.mutable
   */
 class FastAlphaTriangulationException(message: String) extends RuntimeException(message)
 
-/** Persistent homology of a Helix alpha complex by union-find instead of matrix reduction: degree 0 on the vertices
-  * and edges, the top degree `d - 1` on the dual graph of the top-dimensional simplices, as in
+/** Persistent homology of a Helix alpha complex by union-find instead of matrix reduction: degree 0 on the vertices and
+  * edges, the top degree `d - 1` on the dual graph of the top-dimensional simplices, as in
   * [[FastCubicalHomologyEngine]]. In the plane those cover everything; in dimension 3 and up the degrees in between are
   * computed by the chunks engine on the complex without its top simplices. Works in any ambient dimension from 2, with
   * representatives for every bar.
   *
-  * The dual graph needs every facet to have one or two top-dimensional cofaces. Unlike a grid, a triangulation does
-  * not guarantee it, so it is checked first, throwing [[FastAlphaTriangulationException]] when it fails (about 1 cloud
-  * in 18,700 at dimension 2, 1 in 1,700 at dimension 3 with 20-30 points). A facet's dual-edge value is its own
-  * filtration value, which can be smaller than its cofaces' circumradii (a Gabriel edge).
+  * The dual graph needs every facet to have one or two top-dimensional cofaces. Unlike a grid, a triangulation does not
+  * guarantee it, so it is checked first, throwing [[FastAlphaTriangulationException]] when it fails (about 1 cloud in
+  * 18,700 at dimension 2, 1 in 1,700 at dimension 3 with 20-30 points). A facet's dual-edge value is its own filtration
+  * value, which can be smaller than its cofaces' circumradii (a Gabriel edge).
   */
 class FastAlphaHomologyEngine[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]

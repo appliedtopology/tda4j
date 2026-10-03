@@ -78,8 +78,8 @@ private object CoefficientKind:
   * defaults are listed in the user guide's "Calling from MATLAB or Java" page: `complex`, `engine`, `maxDimension`,
   * `maxFiltrationValue`, `field`, `prime`, `epsilon`, `minPersistence`, `minPersistenceFraction`, `includeZeroLength`,
   * `alphaBackend`, `requireValidTriangulation`, `dtmK`, `dtmQ`, `dtmP`, `sparseEpsilon`, `numLandmarks`,
-  * `witnessVariant`, `landmarkSelector`, `landmarkSeed`, `nu`, `edgeCollapse`, `sublevel`, `dual`. An unknown option, an
-  * unknown value, or a combination that does not apply (an engine for a complex it cannot read) throws
+  * `witnessVariant`, `landmarkSelector`, `landmarkSeed`, `nu`, `edgeCollapse`, `sublevel`, `dual`. An unknown option,
+  * an unknown value, or a combination that does not apply (an engine for a complex it cannot read) throws
   * `IllegalArgumentException` naming it, before anything is computed.
   *
   * By default a result reports the essential bars and the bars longer than 1% of the input's scale (its minimum
@@ -452,8 +452,9 @@ object TDA4j:
   private def resolveWitnessVariant(opts: Map[String, String]): WitnessVariantKind =
     WitnessVariantKind.parse(opts.getOrElse("witnessvariant", "lazy"))
 
-  /** The witness complex's engine: `general` (not a flag complex) defaults to `naive` and refuses `ripser` and `chunks`;
-    * `lazy` (a flag complex) defaults to `ripser` and allows all four. Shared by the one-shot and two-step paths.
+  /** The witness complex's engine: `general` (not a flag complex) defaults to `naive` and refuses `ripser` and
+    * `chunks`; `lazy` (a flag complex) defaults to `ripser` and allows all four. Shared by the one-shot and two-step
+    * paths.
     */
   private def resolveWitnessEngine(opts: Map[String, String], witnessVariant: WitnessVariantKind): EngineKind =
     val engine = EngineKind.parse(
@@ -1163,9 +1164,10 @@ object TDA4j:
           toDouble
         )
 
-  /** The witness complex's persistence for a resolved landmark set, shared by the one-shot and two-step paths. Its cells
-    * are over landmark numbers `0 until landmarks.size`; `cellVertices` maps them back to point numbers. Both variants
-    * are built one dimension above `requestedMaxDimension` for the naive and cohomology engines, which `fromBars` drops.
+  /** The witness complex's persistence for a resolved landmark set, shared by the one-shot and two-step paths. Its
+    * cells are over landmark numbers `0 until landmarks.size`; `cellVertices` maps them back to point numbers. Both
+    * variants are built one dimension above `requestedMaxDimension` for the naive and cohomology engines, which
+    * `fromBars` drops.
     */
   private def computeWitnessFromLandmarks[C](
     metricSpace: FiniteMetricSpace[Int],

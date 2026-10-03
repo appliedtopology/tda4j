@@ -14,8 +14,8 @@ private[matlab] case class BoundaryMatrixData(
   columnFiltrationValues: Array[Double]
 )
 
-/** A finished persistence computation, for MATLAB and Java: every method takes and returns only `int`, `double`,
-  * arrays of those, or another `PersistenceResult`.
+/** A finished persistence computation, for MATLAB and Java: every method takes and returns only `int`, `double`, arrays
+  * of those, or another `PersistenceResult`.
   *
   * Bars are numbered `0 until size()`, in no guaranteed order; an essential bar has `death(i) == Infinity`. The bars
   * reported are those that pass the persistence threshold (see [[persistenceThreshold]]); [[toArrayUnfiltered]] has all
@@ -117,13 +117,13 @@ final class PersistenceResult private[matlab] (
     */
   def cycleVertices(i: Int): Array[Array[Int]] = cycleProvider(visible(i))._1
 
-  /** The coefficients of bar `i`'s representative, parallel to `cycleVertices(i)`: over `Z/p` an integer
-    * representative of the residue, over the reals the value.
+  /** The coefficients of bar `i`'s representative, parallel to `cycleVertices(i)`: over `Z/p` an integer representative
+    * of the residue, over the reals the value.
     */
   def cycleCoefficients(i: Int): Array[Double] = cycleProvider(visible(i))._2
 
-  /** All the bars of dimension `dim`, threshold or not, without representatives: what the distances and
-    * vectorizations compare (so they do not depend on each result's own threshold).
+  /** All the bars of dimension `dim`, threshold or not, without representatives: what the distances and vectorizations
+    * compare (so they do not depend on each result's own threshold).
     */
   private def barsOfDimension(dim: Int): IndexedSeq[PersistenceBar[Double, Nothing]] =
     (0 until allDims.length)

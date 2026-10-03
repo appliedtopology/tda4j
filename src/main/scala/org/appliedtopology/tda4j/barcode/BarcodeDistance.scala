@@ -3,18 +3,18 @@ package org.appliedtopology.tda4j
 /** Bottleneck and Wasserstein distances between persistence diagrams, by bipartite matching where each point may also
   * be matched to its projection on the diagonal.
   *
-  * The parameters follow GUDHI and Hera: `groundNorm` (their `internal_p`) measures one matched pair in the
-  * birth-death plane; `order` (their `order`, `q` in Kerber-Morozov-Nigmetov 2017) is the exponent the costs of all
-  * pairs are combined with. Wasserstein distance tends to bottleneck distance as `order -> Infinity`; use
-  * [[bottleneckDistance]] for that case.
+  * The parameters follow GUDHI and Hera: `groundNorm` (their `internal_p`) measures one matched pair in the birth-death
+  * plane; `order` (their `order`, `q` in Kerber-Morozov-Nigmetov 2017) is the exponent the costs of all pairs are
+  * combined with. Wasserstein distance tends to bottleneck distance as `order -> Infinity`; use [[bottleneckDistance]]
+  * for that case.
   *
-  * '''Essential bars''' are matched only to essential bars, in order of birth (which is optimal for both distances).
-  * If the diagrams have different numbers of essential bars, the distance is `Infinity`.
+  * '''Essential bars''' are matched only to essential bars, in order of birth (which is optimal for both distances). If
+  * the diagrams have different numbers of essential bars, the distance is `Infinity`.
   */
 object BarcodeDistance:
 
-  /** The norm on the birth-death plane that measures one matched pair (GUDHI and Hera's `internal_p`). `LInfinity`,
-    * the default there and here, is the usual choice.
+  /** The norm on the birth-death plane that measures one matched pair (GUDHI and Hera's `internal_p`). `LInfinity`, the
+    * default there and here, is the usual choice.
     */
   enum GroundNorm:
     case LInfinity
@@ -65,7 +65,8 @@ object BarcodeDistance:
       Some((essentialCosts, fin1, fin2))
 
   /** The square cost matrix of the matching problem, size `left.size + right.size`: point-to-point costs, each point's
-    * distance to the diagonal, and zeros between the diagonal copies. All entries are finite (no essential points here).
+    * distance to the diagonal, and zeros between the diagonal copies. All entries are finite (no essential points
+    * here).
     */
   private def augmentedCostMatrix(left: Seq[Point], right: Seq[Point], groundNorm: GroundNorm): Array[Array[Double]] =
     val nL = left.size

@@ -2,10 +2,10 @@ package org.appliedtopology.tda4j
 
 /** Lenstra-Lenstra-Lovász lattice basis reduction of a Gram matrix (Scoccola, Gakhar, Bush, Schonsheck, Rask, Zhou,
   * Perea, "Toroidal Coordinates: Decorrelating Circular Coordinates With Lattice Reduction", arXiv:2212.07201,
-  * Algorithm 4). Given the Gram matrix `G` of `k` independent vectors, factor `G = C Cᵀ` (Cholesky), run LLL on the rows
-  * of `C`, and return the unimodular integer change of basis: the shortest, most nearly orthogonal basis of the same
-  * lattice. [[CircularCoordinates.computeToroidal]] uses it to choose among the equally valid bases of a group of H¹
-  * classes.
+  * Algorithm 4). Given the Gram matrix `G` of `k` independent vectors, factor `G = C Cᵀ` (Cholesky), run LLL on the
+  * rows of `C`, and return the unimodular integer change of basis: the shortest, most nearly orthogonal basis of the
+  * same lattice. [[CircularCoordinates.computeToroidal]] uses it to choose among the equally valid bases of a group of
+  * H¹ classes.
   *
   * The Gram-Schmidt step projects onto the orthogonalized vectors, as in the textbook algorithm. DREiMac's
   * `_gram_schmidt` projects onto the original ones, which agrees for `k = 2` but not for `k >= 3`, so results can

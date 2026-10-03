@@ -3,9 +3,9 @@ package sset
 
 import org.appliedtopology.tda4j.*
 
-/** A simplicial map `f : X -> Y` between finite simplicial sets, given on generators: `onGenerators(g)` is the image
-  * of the non-degenerate simplex `g`, an element of `Y` of the same dimension, possibly degenerate. A degenerate
-  * simplex `s_J g` goes to `s_J f(g)`. Injectivity and surjectivity refer to the map on all simplices.
+/** A simplicial map `f : X -> Y` between finite simplicial sets, given on generators: `onGenerators(g)` is the image of
+  * the non-degenerate simplex `g`, an element of `Y` of the same dimension, possibly degenerate. A degenerate simplex
+  * `s_J g` goes to `s_J f(g)`. Injectivity and surjectivity refer to the map on all simplices.
   */
 final class SSetMap[GX, GY](
   val source: FiniteSimplicialSet[GX],

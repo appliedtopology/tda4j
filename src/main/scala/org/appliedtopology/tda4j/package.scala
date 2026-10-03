@@ -5,8 +5,8 @@ import cats.Show
 /** What every lab shares: a coefficient field chosen by its characteristic (`0` for `Double` compared within
   * `precision`, a prime `p` for `Z/p`), with `CoefficientT`, `Fp(...)` and the field's `given`; flat re-exports of the
   * whole library and the `sset` add-on, so `import lab.{*, given}` is the only import a lab user needs; and cats'
-  * `.show` syntax. Concrete labs add the conveniences of their setting: [[TDAlab]] (simplicial), [[CubicalLab]]. Engines
-  * never consult a lab: it is for writing chain algebra by hand.
+  * `.show` syntax. Concrete labs add the conveniences of their setting: [[TDAlab]] (simplicial), [[CubicalLab]].
+  * Engines never consult a lab: it is for writing chain algebra by hand.
   */
 abstract class Lab(characteristic: Int, precision: Double = 1e-9):
   val coefficients: Coefficients = Coefficients(characteristic, precision)

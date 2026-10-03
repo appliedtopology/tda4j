@@ -27,8 +27,8 @@ final class ToroidalCoordinatesResult private[matlab] (
   /** The loops combined (numbered as in `TDA4j.h1Bars`), in the order of the coordinates. */
   def cocycleIndices(): Array[Int] = cocycleIndicesArray
 
-  /** The `k x k` integer matrix `U`: column `c` gives coordinate `c` in terms of the circular coordinates of the
-    * loops in [[cocycleIndices]] (the identity without reduction, or for one loop).
+  /** The `k x k` integer matrix `U`: column `c` gives coordinate `c` in terms of the circular coordinates of the loops
+    * in [[cocycleIndices]] (the identity without reduction, or for one loop).
     */
   def basisChange(): Array[Array[Int]] = basisChangeArray
 

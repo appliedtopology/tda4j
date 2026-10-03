@@ -12,7 +12,8 @@ import scala.collection.concurrent.TrieMap
   *
   * ==The construction==
   *
-  * Given a greedy permutation with insertion radii `lambda_p` (`Infinity` for the first point) and `epsilon` in `(0, 1)`:
+  * Given a greedy permutation with insertion radii `lambda_p` (`Infinity` for the first point) and `epsilon` in
+  * `(0, 1)`:
   *
   *   - the ball of `p` at scale `alpha` has radius `min(alpha, lambda_p (1 + epsilon) / epsilon)`;
   *   - it is empty from `alpha > lambda_p (1 + epsilon)^2 / epsilon` on (`vanish(p)`): no new simplex uses `p` after
@@ -66,7 +67,9 @@ private[tda4j] class SheehyRipsSimplexStream(
 
 private[tda4j] object SheehyRipsSimplexStream:
 
-  /** The sparse Rips filtration of `ambientMetricSpace`, computing the greedy permutation (with `epsilon` checked first). */
+  /** The sparse Rips filtration of `ambientMetricSpace`, computing the greedy permutation (with `epsilon` checked
+    * first).
+    */
   def apply(
     ambientMetricSpace: FiniteMetricSpace[Int],
     epsilon: Double,

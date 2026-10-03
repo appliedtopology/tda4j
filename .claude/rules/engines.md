@@ -38,6 +38,12 @@ barcodes coincide.
    are their reduced pivot chain. Representatives don't match Ripser term-for-term (tie direction differs) but
    bar values do. Sign-tested on RP² over Fp (3) (`WORKLOG-generic-cohomology.md`).
 
+Every engine takes `includeZeroLength` (default `false`) on its bar-returning methods and drops `birth == death` pairs
+from the pairing itself; `PersistenceBar.dropZeroLength` is the shared filter. The naive and chunks engines' `diagramAt(f)`
+report a class alive at `f` as `[birth, f]` (closed end), so a class born exactly at `f` survives the filter; a finished bar is
+`[b, d)`. Fast cubical/alpha drop equal-value pairs at construction (a pair at `+Inf, +Inf` is otherwise indistinguishable
+from an essential class). `ZeroLengthBarsSpec`.
+
 Testing lessons for every engine: F2 hides sign errors; signed-field fixtures need ≥5 vertices (`Set1..Set4`
 hash-order past 4 elements, `SimplexBoundarySpec`/`SignedFieldBarcodeSpec`, `WORKLOG-code-critique.md` §1.1).
 F3-vs-F2 agreement is a cheap sign oracle. Two engines agreeing isn't proof if they share a truncation/code path

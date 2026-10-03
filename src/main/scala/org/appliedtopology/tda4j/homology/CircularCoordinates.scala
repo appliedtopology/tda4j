@@ -16,10 +16,10 @@ class NoIntegerCocycleException(message: String) extends RuntimeException(messag
   *
   * Pick a scale `r` inside the class's bar (see [[h1Bars]]). The class is then an essential class of the fixed complex
   * `K_r`, the complex truncated at `r`; it is matched to the bar of the full computation with the same birth, since
-  * truncation never changes a birth. Its cocycle, computed over `F_prime` and lifted to the integers, is smoothed to the
-  * harmonic representative: `g` minimizing `||z - d0 g||²` over the connected component of `K_r` carrying the class,
-  * solved by conjugate gradients on the normal equations with one vertex fixed at `0`. The coordinate of a point is
-  * `g(v) mod 1`. The solve follows DREiMac's `toroidalcoords.py`.
+  * truncation never changes a birth. Its cocycle, computed over `F_prime` and lifted to the integers, is smoothed to
+  * the harmonic representative: `g` minimizing `||z - d0 g||²` over the connected component of `K_r` carrying the
+  * class, solved by conjugate gradients on the normal equations with one vertex fixed at `0`. The coordinate of a point
+  * is `g(v) mod 1`. The solve follows DREiMac's `toroidalcoords.py`.
   */
 object CircularCoordinates:
 
@@ -73,8 +73,9 @@ object CircularCoordinates:
     * @param cocycleIndex
     *   the class, `0` being the most persistent (as in [[h1Bars]] and DREiMac's `cocycle_idx`).
     * @param prime
-    *   the odd prime cohomology is computed over before the cocycle is lifted to the integers (`F_2` would admit classes
-    *   with no lift). If [[NoIntegerCocycleException]] is thrown for a class that is not torsion, try a larger one.
+    *   the odd prime cohomology is computed over before the cocycle is lifted to the integers (`F_2` would admit
+    *   classes with no lift). If [[NoIntegerCocycleException]] is thrown for a class that is not torsion, try a larger
+    *   one.
     * @param maxFiltrationValue
     *   the truncation of the full computation that finds the classes (default: the minimum enclosing radius).
     */

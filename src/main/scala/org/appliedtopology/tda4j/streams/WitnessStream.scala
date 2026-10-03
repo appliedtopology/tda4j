@@ -4,9 +4,9 @@ import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 import scala.util.Random
 
-/** Choosing the landmarks of a witness complex (de Silva and Carlsson, "Topological estimation using witness complexes",
-  * 2004), as JavaPlex does: landmarks are a subset of the points, given by their numbers. Assumes the metric space's
-  * elements are `0 until size`.
+/** Choosing the landmarks of a witness complex (de Silva and Carlsson, "Topological estimation using witness
+  * complexes", 2004), as JavaPlex does: landmarks are a subset of the points, given by their numbers. Assumes the
+  * metric space's elements are `0 until size`.
   */
 object LandmarkSelector:
 
@@ -44,8 +44,8 @@ object LandmarkSelector:
       for x <- sortedElements do minDistToLandmarks(x) = math.min(minDistToLandmarks(x), metricSpace.distance(x, next))
     LandmarkSelection(landmarks.toIndexedSeq, sortedElements.map(minDistToLandmarks(_)).max, insertionRadius.toMap)
 
-  /** `numLandmarks` distinct points chosen uniformly at random (reproducibly, from `seed`). Cheaper than `maxmin`, with no
-    * covering guarantee; the covering radius is still computed and returned.
+  /** `numLandmarks` distinct points chosen uniformly at random (reproducibly, from `seed`). Cheaper than `maxmin`, with
+    * no covering guarantee; the covering radius is still computed and returned.
     */
   def random(metricSpace: FiniteMetricSpace[Int], numLandmarks: Int, seed: Long): LandmarkSelection =
     require(
@@ -78,8 +78,8 @@ case class LandmarkSelection(
 )
 
 /** The distances between landmarks and witnesses that a witness complex is built from (de Silva and Carlsson 2004;
-  * JavaPlex's `WitnessStream`). Every point is a witness, landmarks included. Landmark `i` (`0 until landmarks.size`) is
-  * point `landmarks(i)`; `D(l)(n)` is the distance from landmark `l` to witness `n`, an `L x N` matrix built once.
+  * JavaPlex's `WitnessStream`). Every point is a witness, landmarks included. Landmark `i` (`0 until landmarks.size`)
+  * is point `landmarks(i)`; `D(l)(n)` is the distance from landmark `l` to witness `n`, an `L x N` matrix built once.
   * Assumes the metric space's elements are `0 until size`.
   */
 class WitnessGeometry(val ambientMetricSpace: FiniteMetricSpace[Int], val landmarks: IndexedSeq[Int]):
@@ -107,8 +107,8 @@ class WitnessGeometry(val ambientMetricSpace: FiniteMetricSpace[Int], val landma
     */
   def mDim(k: Int, witness: Int): Double = sortedByWitness(witness)(k)
 
-  /** The witness value of the landmark set `sigma` for the per-witness threshold `m`: the minimum over witnesses `n`
-    * of `max(0, max over l in sigma of D(l)(n) - m(n))`, as in JavaPlex.
+  /** The witness value of the landmark set `sigma` for the per-witness threshold `m`: the minimum over witnesses `n` of
+    * `max(0, max over l in sigma of D(l)(n) - m(n))`, as in JavaPlex.
     */
   def witnessValue(sigma: IndexedSeq[Int], m: Int => Double): Double =
     var best = Double.PositiveInfinity
@@ -177,8 +177,8 @@ private[tda4j] class LazyWitnessSimplexStream(
 
 /** The general witness complex (JavaPlex's `WitnessStream`). Not a flag complex: a `k`-simplex is witnessed with a
   * threshold depending on `k` (the `(k+1)`-th nearest landmark), so its filtration value is the larger of its own
-  * witness value and its facets' values (JavaPlex's `addCofaces_`), which makes the complex monotone. Its 1-skeleton
-  * is that of the lazy complex with `nu = 2`.
+  * witness value and its facets' values (JavaPlex's `addCofaces_`), which makes the complex monotone. Its 1-skeleton is
+  * that of the lazy complex with `nu = 2`.
   *
   * `maxFiltrationValue` defaults to `Infinity`: the enclosing radius is no cutoff for a complex that is not a flag
   * complex. Without a finite value or a dimension cap, the stream enumerates every subset of the landmarks; `Witness`

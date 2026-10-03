@@ -11,8 +11,8 @@ import java.io.PrintWriter
   */
 object Perseus:
 
-  /** The shape and values of a cubical toplex file, converted to the axis order of [[CubicalImage.fromFlatArray]],
-    * with `-1` read as `Infinity`. Format: the dimension `d`, `d` positive sizes, then the values with the first axis
+  /** The shape and values of a cubical toplex file, converted to the axis order of [[CubicalImage.fromFlatArray]], with
+    * `-1` read as `Infinity`. Format: the dimension `d`, `d` positive sizes, then the values with the first axis
     * fastest.
     */
   def readCubicalImageData(path: String): (IndexedSeq[Int], IndexedSeq[Double]) =

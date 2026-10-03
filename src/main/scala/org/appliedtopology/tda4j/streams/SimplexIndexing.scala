@@ -47,8 +47,8 @@ class SimplexIndexing(val vertexCount: Int):
       if binomialEntry(d, mid) <= n then lo = mid else hi = mid - 1
     lo
 
-  /** The `n`th subset of size `d` of the vertices (a `(d-1)`-simplex) in the combinatorial number system. For `n` beyond
-    * `vertexCount` choose `d` the result is not a subset of size `d`.
+  /** The `n`th subset of size `d` of the vertices (a `(d-1)`-simplex) in the combinatorial number system. For `n`
+    * beyond `vertexCount` choose `d` the result is not a subset of size `d`.
     */
   @tailrec
   final def apply(n: Long, d: Int, upperAccum: Simplex[Int] = ∆()): Simplex[Int] =
@@ -256,8 +256,8 @@ class SimplexIndexing(val vertexCount: Int):
     acc
 
 object SimplexIndexing:
-  /** `n` choose `k` as a `Long` (an index can exceed `Int` long before `n` does: `C(229, 5) > 5·10⁹`), `0` when `k < 0`,
-    * `n < 0` or `k > n`. Throws `IllegalArgumentException` on `Long` overflow.
+  /** `n` choose `k` as a `Long` (an index can exceed `Int` long before `n` does: `C(229, 5) > 5·10⁹`), `0` when
+    * `k < 0`, `n < 0` or `k > n`. Throws `IllegalArgumentException` on `Long` overflow.
     */
   def binomial(n: Int, k: Int): Long =
     if k < 0 || n < 0 || n < k then 0L

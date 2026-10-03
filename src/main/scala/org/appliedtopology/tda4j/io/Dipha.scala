@@ -1,8 +1,8 @@
 package org.appliedtopology.tda4j
 
-/** DIPHA's binary formats: little-endian, each file starting with the magic number `8067171840` and an `Int64`
-  * file type. DIPHA images list the first axis fastest, the opposite of [[CubicalImage.fromFlatArray]]; the readers
-  * and writers convert.
+/** DIPHA's binary formats: little-endian, each file starting with the magic number `8067171840` and an `Int64` file
+  * type. DIPHA images list the first axis fastest, the opposite of [[CubicalImage.fromFlatArray]]; the readers and
+  * writers convert.
   */
 object Dipha:
   private val Magic: Long = 8067171840L
@@ -91,7 +91,8 @@ object Dipha:
     BinaryIO.writeLE(path, buf)
 
   /** A `PERSISTENCE_DIAGRAM` file (type 2): the count, then `(dim, birth, death)` triples (`Int64`, `Float64`,
-    * `Float64`). A dimension `-k` marks an essential class of dimension `k - 1`, whose death is ignored (written `0.0`).
+    * `Float64`). A dimension `-k` marks an essential class of dimension `k - 1`, whose death is ignored (written
+    * `0.0`).
     */
   def readPersistenceDiagram(path: String): Seq[PersistenceBar[Double, Nothing]] =
     val buf = BinaryIO.readAllLE(path)

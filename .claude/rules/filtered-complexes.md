@@ -51,8 +51,8 @@ stream computes a genuinely infinite value; Dowker's boolean encoding does, on p
 silently collapses to the complete simplex on every vertex (confirmed empirically).
 
 **Duality is the point** (`.dual` — the transpose relation): the functorial Dowker duality theorem (Chowdhury &
-Mémoli 2018) gives X-side/Y-side barcodes agreeing exactly **only after dropping zero-persistence bars from
-both** (a simplicial filtration records exactly one `H_0` birth per vertex, so `numLeft != numWitnesses` can't
+Mémoli 2018) gives X-side/Y-side barcodes agreeing exactly **without zero-length bars** (the default; with
+`includeZeroLength = true` they differ) (a simplicial filtration records exactly one `H_0` birth per vertex, so `numLeft != numWitnesses` can't
 match bar-for-bar otherwise — confirmed on a hand-worked fixture, not just asserted from the theorem).
 
 Own MATLAB/CLI entry point (`computeFromRelation`/`--input-format csv-relation`), not a `complex=` value — a

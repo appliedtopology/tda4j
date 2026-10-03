@@ -21,8 +21,8 @@ private[sset] def isNonDegeneratePair[GX, GY](a: SSetElement[GX], b: SSetElement
   a.word.toSet.intersect(b.word.toSet).isEmpty
 
 /** A non-degenerate `n`-simplex of `X x Y`: a pair of `n`-simplices of `X` and `Y`, each possibly degenerate, whose
-  * degeneracy words are disjoint. (Not an Eilenberg-Zilber shuffle: `(e_X, e_Y)` for two non-degenerate 1-simplices is a
-  * non-degenerate 1-simplex of the product.)
+  * degeneracy words are disjoint. (Not an Eilenberg-Zilber shuffle: `(e_X, e_Y)` for two non-degenerate 1-simplices is
+  * a non-degenerate 1-simplex of the product.)
   */
 case class ProductGenerator[GX, GY](x: SSetElement[GX], y: SSetElement[GY])
 
@@ -145,9 +145,10 @@ private[sset] object Constructions:
     new FiniteSimplicialSet(generatorsByDim, facesOf)
 
   /** The quotient of a finite simplicial set by `quotientMap`, which says what each generator becomes: itself
-    * (`SSetElement(Nil, g)`, a surviving generator) or an element over another surviving generator, possibly degenerate.
-    * A generator can therefore collapse to a lower dimension, as the third edge of the triangle does in the one-simplex
-    * model of RP² (Hatcher, Example 2.4). For identifying generators of equal dimension, [[identify]] is simpler.
+    * (`SSetElement(Nil, g)`, a surviving generator) or an element over another surviving generator, possibly
+    * degenerate. A generator can therefore collapse to a lower dimension, as the third edge of the triangle does in the
+    * one-simplex model of RP² (Hatcher, Example 2.4). For identifying generators of equal dimension, [[identify]] is
+    * simpler.
     *
     * Requirements, checked: `quotientMap` preserves dimension (the generator's dimension plus the word's length), and
     * maps every generator to an element over a surviving generator in one step (it is not iterated).

@@ -11,9 +11,8 @@ import scala.reflect.ClassTag
 
 opaque type Simplex[VertexT] = SortedSet[VertexT]
 
-/** Constructors and operations of [[Simplex]]: `Simplex(1, 2, 3)` (also spelled `∆(1, 2, 3)`), `Simplex.from(seq)`,
-  * and the extension methods of [[SimplexOps]] (`dim`, `+`, `union`, `toList`, ...), found without an
-  * import.
+/** Constructors and operations of [[Simplex]]: `Simplex(1, 2, 3)` (also spelled `∆(1, 2, 3)`), `Simplex.from(seq)`, and
+  * the extension methods of [[SimplexOps]] (`dim`, `+`, `union`, `toList`, ...), found without an import.
   */
 object Simplex extends SimplexOps, SimplexInstances:
   def from[VertexT: Ordering, T <: Seq[VertexT]](vertices: T): Simplex[VertexT] = SortedSet.from(vertices)

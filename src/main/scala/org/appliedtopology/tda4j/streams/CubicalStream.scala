@@ -104,7 +104,8 @@ class CubicalGridStream(
       for prefix <- acc; v <- r.iterator yield prefix :+ v
     }
 
-  /** The cubes of dimension `d` (`0 <= d <= ambientDim`), oldest first. Each call builds and sorts the whole dimension. */
+  /** The cubes of dimension `d` (`0 <= d <= ambientDim`), oldest first. Each call builds and sorts the whole dimension.
+    */
   override def iterateDimension: PartialFunction[Int, Iterator[Cube]] = {
     case d if d >= 0 && d <= ambientDim =>
       val cubes = cubesOfDimension(d).toVector

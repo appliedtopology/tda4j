@@ -5,8 +5,8 @@ import scala.annotation.targetName
 /** An elementary cube: a product `I_1 x ... x I_n` of intervals, each a point `[a, a]` or a unit interval `[a, a+1]`.
   * Its dimension is the number of unit intervals; `n`, the ambient dimension, is the same for every cube of a complex.
   *
-  * Coordinates are doubled (Kaczynski, Mischaikow, Mrozek, ''Computational Homology''): `[a, a]` is `2a` and
-  * `[a, a+1]` is `2a + 1`, so a cube is one `Vector[Int]` (with structural equality, which the reductions rely on).
+  * Coordinates are doubled (Kaczynski, Mischaikow, Mrozek, ''Computational Homology''): `[a, a]` is `2a` and `[a, a+1]`
+  * is `2a + 1`, so a cube is one `Vector[Int]` (with structural equality, which the reductions rely on).
   */
 opaque type Cube = Vector[Int]
 

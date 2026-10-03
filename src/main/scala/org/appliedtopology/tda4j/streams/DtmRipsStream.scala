@@ -3,15 +3,15 @@ package org.appliedtopology.tda4j
 import scala.collection.concurrent.TrieMap
 import scala.collection.immutable
 
-/** The DTM-filtration of Anai, Chazal, Glisse, Ike, Lecci, Rouvreau, Saulnier and Wasserman, "DTM-based
-  * filtrations" (arXiv:1811.04757, Prop. 3.5), a weighted Rips filtration with weights `f(x)` the distance to measure
+/** The DTM-filtration of Anai, Chazal, Glisse, Ike, Lecci, Rouvreau, Saulnier and Wasserman, "DTM-based filtrations"
+  * (arXiv:1811.04757, Prop. 3.5), a weighted Rips filtration with weights `f(x)` the distance to measure
   * ([[DistanceToMeasure]]). Values are diameters, as in Vietoris-Rips and GUDHI; with `f = 0` (as for `k = 1`) this is
   * the Vietoris-Rips filtration. For `p = 1` it agrees with GUDHI's `DTMRipsComplex`.
   *
   * `p` is the ball-radius exponent of Def. 3.1 (not the exponent `q` of the distance to measure), `1` or `2`:
   *   - `p = 1`: `t(f_x, f_y, d) = max(f_x, f_y, (d + f_x + f_y) / 2)`, as in GUDHI;
-  *   - `p = 2`: `t = max(f_x, f_y, sqrt(u² + f_x²))` with `u = (d² + f_y² - f_x²) / (2d)` when `|f_y² - f_x²| <= d²`, and
-  *     `max(f_x, f_y)` otherwise (one ball contains the other).
+  *   - `p = 2`: `t = max(f_x, f_y, sqrt(u² + f_x²))` with `u = (d² + f_y² - f_x²) / (2d)` when `|f_y² - f_x²| <= d²`,
+  *     and `max(f_x, f_y)` otherwise (one ball contains the other).
   *
   * A flag complex on the weighted distances `2 t`, with vertex `x` born at `2 f(x)`. `maxFiltrationValue` defaults to
   * the minimum enclosing radius of the weighted distances, which is at least every vertex's birth and beyond which the

@@ -9,8 +9,8 @@ import scala.util.chaining.*
 
 import java.util.concurrent.*
 
-/** The numerical tolerance of the triangulation's geometric tests (near-zero singular values and circumsphere
-  * margins). `AlphaShapes(...)` supplies `Epsilon(1e-5)`; pass a `given Epsilon` to change it.
+/** The numerical tolerance of the triangulation's geometric tests (near-zero singular values and circumsphere margins).
+  * `AlphaShapes(...)` supplies `Epsilon(1e-5)`; pass a `given Epsilon` to change it.
   */
 final case class Epsilon(epsilon: Double)
 
@@ -539,8 +539,8 @@ object HelixDelaunay:
 
   /** A Delaunay triangulation fills its convex hull, so the whole complex has no homology in degree `d - 1`. `None` if
     * that holds; otherwise the vertices of the essential degree-`(d - 1)` representatives, the boundary of the hole,
-    * which seed the repair. (A facet with one coface can be a missing simplex rather than a hull facet; only this global
-    * check sees it.)
+    * which seed the repair. (A facet with one coface can be a missing simplex rather than a hull facet; only this
+    * global check sees it.)
     */
   private def interiorVoidVertices(simps: Set[DelaunaySimplex], ambientDimension: Int): Option[Set[Int]] =
     given Double is Field = Field.DoubleApproximated(1e-9)
@@ -559,12 +559,12 @@ object HelixDelaunay:
     if voidBars.isEmpty then None
     else Some(voidBars.flatMap(_.annotation).flatMap(_.rawEntries.map(_._1)).flatMap(_.toSet).toSet)
 
-  /** The repair of `requireValidTriangulation = true`: move the vertices involved in a facet with too many cofaces, or on
-    * the boundary of a hole ([[interiorVoidVertices]]), by a small random amount; triangulate the whole point set again;
-    * recompute every circumsphere from the original coordinates. Retried with a fresh seed and a widened set of moved
-    * points while either problem remains, up to `maxAttempts`, then an exception: never an unrepaired result. Runs on
-    * the unrepaired input too, since a near tie between two valid cofaces of one facet can leave a hole with no facet
-    * violation at all.
+  /** The repair of `requireValidTriangulation = true`: move the vertices involved in a facet with too many cofaces, or
+    * on the boundary of a hole ([[interiorVoidVertices]]), by a small random amount; triangulate the whole point set
+    * again; recompute every circumsphere from the original coordinates. Retried with a fresh seed and a widened set of
+    * moved points while either problem remains, up to `maxAttempts`, then an exception: never an unrepaired result.
+    * Runs on the unrepaired input too, since a near tie between two valid cofaces of one facet can leave a hole with no
+    * facet violation at all.
     */
   private def repairByJitterRetriangulation(
     pts: Array[Array[Double]],

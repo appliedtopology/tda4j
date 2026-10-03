@@ -1,7 +1,7 @@
 package org.appliedtopology.tda4j.matlab
 
-/** Landmarks chosen by `TDA4j.selectLandmarksFromPoints` or `selectLandmarksFromDistanceMatrix`, step 1 of the
-  * two-step witness complex.
+/** Landmarks chosen by `TDA4j.selectLandmarksFromPoints` or `selectLandmarksFromDistanceMatrix`, step 1 of the two-step
+  * witness complex.
   */
 final class LandmarkSelectionResult private[matlab] (
   private val landmarkIndices: Array[Int],
