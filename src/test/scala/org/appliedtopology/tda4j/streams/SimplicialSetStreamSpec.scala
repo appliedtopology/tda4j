@@ -1,10 +1,5 @@
 package org.appliedtopology.tda4j
-package streams
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.homology.HomologyFixtures
 import SimplicialSetStream.fromStream
 
 import org.scalacheck.Gen

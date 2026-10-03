@@ -1,10 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.barcode.*
 
 import org.apache.commons.math3.linear.{ArrayRealVector, ConjugateGradient, RealLinearOperator, RealVector}
 
@@ -224,7 +218,7 @@ object CircularCoordinates:
     * [[LatticeReduction]]'s Gram matrix is built from (the paper's own dSMV inner product is the plain sum-over-edges
     * dot product of these).
     */
-  private[homology] def harmonicSmoothOnComponent(
+  private[tda4j] def harmonicSmoothOnComponent(
     krStream: CellStream[Simplex[Int], Double],
     zInt: Map[Simplex[Int], Int]
   )(using Double is Field): (Map[Int, Double], Map[Simplex[Int], Double], Set[Simplex[Int]]) =

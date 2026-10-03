@@ -9,10 +9,7 @@ For homology of a space presented combinatorially (not as a metric-space complex
 edge):
 
 ```scala 3
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
+import org.appliedtopology.tda4j.{given, *}
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 
@@ -54,8 +51,7 @@ and cup products are what tell spaces with equal Betti numbers apart. For exampl
 Betti numbers, but only in `CP²` is the square of the degree-2 class nonzero:
 
 ```scala 3
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.{given, *}
 
 val cp2 = SimplicialSets.complexProjectivePlaneKuhnel   // the 9-vertex triangulation of Kühnel and Banchoff
 val field = FiniteField(3)
@@ -71,8 +67,7 @@ for a finite simplicial set, or for an infinite one (such as the nerve of a grou
 together you can see most small torsion — the Klein bottle has Betti numbers `(1, 2, 1)` over `F_2` but `(1, 1, 0)` over `F_3`:
 
 ```scala 3
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.homology.BettiNumbers
+import org.appliedtopology.tda4j.{given, *}
 
 val klein = SimplicialSets.kleinBottle
 val overF2 = BettiNumbers(klein, 2)   // Vector(1, 2, 1)

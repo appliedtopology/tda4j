@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package barcode
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.apache.commons.math3.linear.*
 import org.specs2.ScalaCheck
@@ -14,7 +7,6 @@ import org.specs2.mutable.Specification
 import scala.collection.immutable.Seq
 
 import org.appliedtopology.tda4j.given
-import org.appliedtopology.tda4j.barcode.{*, given}
 
 class BarcodeAlgebraSpec extends Specification with ScalaCheck:
   "Comparing endpoints" >> {

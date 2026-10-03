@@ -1,7 +1,5 @@
 package org.appliedtopology.tda4j
-package cells
 
-import org.appliedtopology.tda4j.algebra.SSetElement
 import org.specs2.mutable.Specification
 
 /** `SimplicialSets`: every construction is checked by `validate()` AND against homology derived by hand, over F_2 and
@@ -145,7 +143,7 @@ class SimplicialSetsSpec extends Specification:
 
   "the complex projective plane" should {
     def squareOfH2Nonzero[G](x: FiniteSimplicialSet[G], p: Int): Boolean =
-      val field = new org.appliedtopology.tda4j.algebra.FiniteField(p)
+      val field = new org.appliedtopology.tda4j.FiniteField(p)
       import field.given
       val basis = CupProduct.cohomologyBasis[G, field.Fp](x, 2)
       basis.length == 1 && !CupProduct.isCoboundary(x, 4, CupProduct.cup(x, 2, 2, basis.head, basis.head))
@@ -181,7 +179,7 @@ class SimplicialSetsSpec extends Specification:
 
   "the Hopf map" should {
     def squareNonzero[G](x: FiniteSimplicialSet[G], p: Int): Boolean =
-      val field = new org.appliedtopology.tda4j.algebra.FiniteField(p)
+      val field = new org.appliedtopology.tda4j.FiniteField(p)
       import field.given
       val basis = CupProduct.cohomologyBasis[G, field.Fp](x, 2)
       basis.length == 1 && !CupProduct.isCoboundary(x, 4, CupProduct.cup(x, 2, 2, basis.head, basis.head))

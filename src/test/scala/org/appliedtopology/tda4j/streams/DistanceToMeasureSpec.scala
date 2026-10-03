@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 /** `streams.DistanceToMeasure` checked byte-for-byte against GUDHI's own `gudhi.point_cloud.dtm.DistanceToMeasure`
   * (Chazal-Cohen-Steiner-Merigot 2011), not merely against a hand re-derivation of the formula -- every expected value

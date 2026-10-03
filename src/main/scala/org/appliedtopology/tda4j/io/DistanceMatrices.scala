@@ -1,12 +1,11 @@
 package org.appliedtopology.tda4j
-package io
 
 /** Shared triangular-distance-matrix arithmetic, used by both `CSV` and `Ripser` -- the two families of format that
   * store a distance matrix as a flat list of triangular entries rather than a dense grid. Kept as one implementation
   * rather than two so the "which row has how many entries, in what order" convention can't silently drift apart between
   * the two call sites.
   */
-private[io] object DistanceMatrices:
+private[tda4j] object DistanceMatrices:
 
   /** Solve `n*(n-1)/2 = count` for `n`, the number of points implied by a flat triangular list of pairwise distances
     * with no diagonal. Fails loudly (rather than silently flooring or truncating) if `count` is not exactly of this

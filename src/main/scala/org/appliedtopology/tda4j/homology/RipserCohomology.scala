@@ -1,10 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{*, given}
-import org.appliedtopology.tda4j.barcode.{*, given}
-import org.appliedtopology.tda4j.cells.{*, given}
-import org.appliedtopology.tda4j.streams.{*, given}
 
 import scala.collection.mutable
 
@@ -91,7 +85,6 @@ class RipserCohomologyEngine[CoefficientT: Field](
   maxFiltrationValue: Option[Double] = None,
   memoizeFiltrationValue: Boolean = false
 ):
-  import barcode.*
 
   private val resolvedMaxFiltrationValue: Double =
     maxFiltrationValue.getOrElse(metricSpace.minimumEnclosingRadius)

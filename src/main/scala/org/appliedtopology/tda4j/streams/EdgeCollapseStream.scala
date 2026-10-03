@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
 
 import scala.collection.mutable
 
@@ -177,7 +176,7 @@ object EdgeCollapse:
   * explicit bound) -- so a downstream `maxFiltrationValue = None` is always safe by construction, with nothing for a
   * caller to remember.
   */
-class EdgeCollapsedMetricSpace private[streams] (
+class EdgeCollapsedMetricSpace private[tda4j] (
   val originalMetricSpace: FiniteMetricSpace[Int],
   private val neighbors: Array[mutable.TreeMap[Int, Double]],
   val validUpTo: Double,

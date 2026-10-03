@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
 
 import org.scalacheck.Gen
 

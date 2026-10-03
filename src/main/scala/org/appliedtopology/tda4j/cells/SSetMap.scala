@@ -1,7 +1,4 @@
 package org.appliedtopology.tda4j
-package cells
-
-import org.appliedtopology.tda4j.algebra.{given, *}
 
 /** A simplicial map `f : X -> Y` between finite simplicial sets, given -- as everything here is -- on generators:
   * `onGenerators(g)` is the image of the non-degenerate simplex `g`, an arbitrary (possibly degenerate) element of `Y`

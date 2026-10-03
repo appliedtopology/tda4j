@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package cells
 
 import org.appliedtopology.tda4j.groups.{ClassifyingSpace, FiniteGroup, NerveSimplex}
 import org.specs2.mutable.Specification

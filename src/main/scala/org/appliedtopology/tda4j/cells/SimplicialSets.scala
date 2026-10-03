@@ -1,7 +1,4 @@
 package org.appliedtopology.tda4j
-package cells
-
-import org.appliedtopology.tda4j.algebra.{given, *}
 
 /** A generator of the cone on a simplicial set `X`: the apex, a copy of each generator of `X` (the base), or the cone
   * `Cone(g)` over a generator `g` (one dimension up).

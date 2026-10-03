@@ -101,24 +101,24 @@ import lab.{*,given}
 // A triangle takes one vertex from each pair, so the 8 triangles are all we have to list: fromFacets adds
 // the 12 edges and 6 vertices they contain.
 val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield ∆(a, b, c)
-val octahedron = homology.SimplicialHomologyEngine().persistentHomology(streams.ExplicitStreamBuilder.fromFacets(triangles))
+val octahedron = SimplicialHomologyEngine().persistentHomology(ExplicitStreamBuilder.fromFacets(triangles))
 // Everything enters at 0.0 here, so the engine also lists a dozen zero-length bars (cells that cancel at once).
 // Dropping bars of persistence 0 leaves the answer: one class in dimension 0 and one in dimension 2.
-org.appliedtopology.tda4j.barcode.PersistenceFilter.significant(octahedron.barcodeAt(4.0), minPersistence = Some(1e-9))
+org.appliedtopology.tda4j.PersistenceFilter.significant(octahedron.barcodeAt(4.0), minPersistence = Some(1e-9))
 
 // Task #2: maxDimension is the highest homology degree you want, so H_0 and H_1 here. (The stream
 // itself also contains the triangles, which H_1 needs; classes in degree 2 are incomplete -- ignore them.)
-val metricSpace = io.CSV.readEuclideanMetricSpace("_docs/tutorials/examplepoints.csv")
-val circle = homology.SimplicialHomologyEngine().persistentHomology(streams.VietorisRips(metricSpace, maxDimension = 1))
+val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/examplepoints.csv")
+val circle = SimplicialHomologyEngine().persistentHomology(VietorisRips(metricSpace, maxDimension = 1))
 val allBars = circle.barcodeAt(1.5).filter(_.dim <= 1)
 // The engines report every bar, mostly noise. Keep the ones longer than 1% of the enclosing radius:
-org.appliedtopology.tda4j.barcode.PersistenceFilter.significant(allBars, scale = Some(metricSpace.minimumEnclosingRadius))
+org.appliedtopology.tda4j.PersistenceFilter.significant(allBars, scale = Some(metricSpace.minimumEnclosingRadius))
 
 // Task #3
 // Pick a likely parameter at which your coordinate is alive, say 1.5
-homology.CircularCoordinates.h1Bars(metricSpace, Some(1.5))
+CircularCoordinates.h1Bars(metricSpace, Some(1.5))
 // observe index of the bar you're interested in, say 0
-homology.CircularCoordinates.compute(metricSpace, 1.5, 0)
+CircularCoordinates.compute(metricSpace, 1.5, 0)
 ```
 
 ## Scala by extension
@@ -132,23 +132,23 @@ import org.appliedtopology.tda4j.TDAlab
 object myComputation extends TDAlab(17) {
   // Task 1
   val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield ∆(a, b, c)
-  val octahedronHomology = homology.SimplicialHomologyEngine().persistentHomology(
-    streams.ExplicitStreamBuilder.fromFacets(triangles)
+  val octahedronHomology = SimplicialHomologyEngine().persistentHomology(
+    ExplicitStreamBuilder.fromFacets(triangles)
   )
   // (includes zero-length bars; see the REPL example above for dropping them)
   val octahedronBarcode = octahedronHomology.barcodeAt(4.0)
 
   // Common setup
-  val metricSpace = io.CSV.readEuclideanMetricSpace("_docs/tutorials/examplepoints.csv")
+  val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/examplepoints.csv")
 
   // Task 2
-  val circleHomology = homology.SimplicialHomologyEngine().persistentHomology(
-    streams.VietorisRips(metricSpace, maxDimension = 1)
+  val circleHomology = SimplicialHomologyEngine().persistentHomology(
+    VietorisRips(metricSpace, maxDimension = 1)
   )
   val circleBarcode = circleHomology.barcodeAt(1.5)
 
   // Task 3
-  val coordinate = homology.CircularCoordinates.compute(metricSpace, 1.5, 0)
+  val coordinate = CircularCoordinates.compute(metricSpace, 1.5, 0)
 }
 ```
 
@@ -161,12 +161,7 @@ magic, and you can do without it. The version below uses no helper class at all.
 coefficient field.
 
 ```scala
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.barcode.PersistenceFilter
-import org.appliedtopology.tda4j.io.CSV
+import org.appliedtopology.tda4j.{given, *}
 
 // The coefficients. FiniteField(17) is the field with 17 elements; importing its givens makes `field.Fp` a Field.
 // (For floating point instead, drop these two lines and declare: given Double is Field = Field.DoubleApproximated(1e-9))

@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package barcode
 
 import scala.collection.mutable
 
@@ -7,7 +6,7 @@ import scala.collection.mutable
   * feasibility check inside a binary search over candidate distances: "does a perfect matching exist using only edges
   * of cost <= threshold". Package-private -- [[BarcodeDistance]] is the public surface.
   */
-private[barcode] object HopcroftKarp:
+private[tda4j] object HopcroftKarp:
 
   /** `nLeft`/`nRight` left/right vertices, numbered `0 until nLeft`/`0 until nRight`. `adjacency(u)` lists `u`'s
     * right-neighbours. Returns `matchLeft` where `matchLeft(u)` is `u`'s matched right-vertex, or `-1` if `u` is
@@ -62,7 +61,7 @@ private[barcode] object HopcroftKarp:
   * entry (that would poison the potential-update arithmetic with `Infinity - Infinity = NaN`). Package-private --
   * [[BarcodeDistance]] is the public surface.
   */
-private[barcode] object Hungarian:
+private[tda4j] object Hungarian:
 
   /** `cost` must be square (`n x n`), all entries finite. Returns `(assignment, totalCost)` where `assignment(j)` is
     * the row matched to column `j`, and `totalCost = sum_j cost(assignment(j))(j)`.

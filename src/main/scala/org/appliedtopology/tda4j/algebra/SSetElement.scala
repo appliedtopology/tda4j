@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package algebra
 
 /** A simplex of a finitely-generated simplicial set, in Eilenberg–Zilber normal form: `word` is the strictly decreasing
   * list of degeneracy indices `[w1 > w2 > ... > wk]` such that this element is `s_w1 s_w2 ... s_wk (generator)`, read

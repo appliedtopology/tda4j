@@ -1,11 +1,6 @@
 package org.appliedtopology.tda4j
-package homology
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.cells.FiniteSimplicialSet.*
-import org.appliedtopology.tda4j.cells.SimplicialSetFixtures
-import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.FiniteSimplicialSet.*
 
 import org.specs2.mutable
 

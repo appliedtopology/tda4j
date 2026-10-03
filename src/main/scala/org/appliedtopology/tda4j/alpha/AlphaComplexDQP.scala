@@ -1,10 +1,4 @@
 package org.appliedtopology.tda4j
-package alpha
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
 
 import scala.collection.immutable.ArraySeq
 import scala.collection.mutable
@@ -803,7 +797,7 @@ object AlphaComplexDQP:
     apply(PowerDistance.euclidean(points, Some(powerWeights)), maxPower, maxDimension, settings)
 
   /** DTM-weighted alpha complex: `weight(i) = -f(i)^2`, where `f` is the empirical distance-to-measure
-    * (`streams.DistanceToMeasure`, Chazal-Cohen-Steiner-Merigot 2011) with `k` neighbours and exponent `q`.
+    * (`DistanceToMeasure`, Chazal-Cohen-Steiner-Merigot 2011) with `k` neighbours and exponent `q`.
     *
     * This is exactly the `p = 2` ball equation of Anai et al., "DTM-based filtrations" (arXiv:1811.04757, Def.
     * 3.1/Prop. 3.5) -- `r_x(t)^2 = t^2 - f(x)^2` -- read against THIS class's own power-distance convention
@@ -833,8 +827,8 @@ object AlphaComplexDQP:
     q: Double = 2.0,
     settings: AlphaDQPSettings = AlphaDQPSettings()
   ): AlphaComplexDQP =
-    val ambient = streams.EuclideanMetricSpace(points)
-    val f = streams.DistanceToMeasure(ambient, streams.JVPTree(ambient), k, q)
+    val ambient = EuclideanMetricSpace(points)
+    val f = DistanceToMeasure(ambient, JVPTree(ambient), k, q)
     weighted(points, f.toArray.map(fi => -fi * fi), maxRadius * maxRadius, maxDimension, settings)
 
   def apply(

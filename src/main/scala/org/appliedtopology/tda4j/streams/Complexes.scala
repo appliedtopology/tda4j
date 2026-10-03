@@ -1,7 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.cells.{given, *}
 
 /** One entry point per kind of complex, each with the shape of [[VietorisRips]]: `maxDimension` is the top HOMOLOGICAL
   * degree you want (`H_0 .. H_maxDimension` computable by any engine; the stream itself contains one dimension more,

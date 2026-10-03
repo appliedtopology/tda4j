@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package barcode
 
 /** Dropping short bars -- the "noise" end of a barcode -- relative to the scale of the input.
   *

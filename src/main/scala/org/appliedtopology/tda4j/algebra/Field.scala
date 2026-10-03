@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package algebra
 
 import cats.Show
 
@@ -51,4 +50,7 @@ object Field:
 
     override def showForSelf = Show.fromToString[Double]
 
-given [F: Field] => Show[F] = summon[F is Field].showForSelf
+  /** Opt-in (`import Field.showFromField`): `Show` for any coefficient type via its `Field`'s `showForSelf`. Not a
+    * top-level given -- `Double` already has cats' `Show`, and `Fp` has its own in `FiniteField`.
+    */
+  given showFromField: [F: Field] => Show[F] = summon[F is Field].showForSelf

@@ -1,11 +1,6 @@
 package org.appliedtopology.tda4j
-package homology
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-
-import org.appliedtopology.tda4j.barcode.PersistenceBar
+import OrderedCell.cellOrdering
 
 import scala.collection.mutable
 
@@ -65,7 +60,6 @@ import scala.collection.mutable
   * ever had a cocycle representative to check in the first place.
   */
 class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]:
-  import barcode.*
 
   /** Full persistent cohomology of `stream`, one dimension-band coboundary block at a time (built by inverting
     * `boundary`, then discarded once that dimension's cells are all processed -- the block is a fresh local `val` per

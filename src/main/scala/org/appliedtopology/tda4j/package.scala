@@ -1,29 +1,20 @@
 package org.appliedtopology.tda4j
 
 import cats.Show
-import org.appliedtopology.tda4j.algebra.{*, given}
-import org.appliedtopology.tda4j.cells.{*, given}
-import org.appliedtopology.tda4j.streams.{*, given}
-import org.appliedtopology.tda4j.homology.{*, given}
-import org.appliedtopology.tda4j.alpha.{*, given}
 
-/** Pylab-style single entry point: `val tdalab = TDAlab(characteristic); import tdalab.{*, given}` brings coefficient
-  * arithmetic (`Fp`, `⊠`, `+`, `-`), `∆`/`Simplex`/`Cube` literals, an implicit `Simplex -> Chain` widening and `Show`
-  * syntax into scope. `characteristic = 0` selects `Double` coefficients (compared within `precision`); a prime `p`
-  * selects `Z/p`. Convenience for interactive/notebook-style use only -- never consulted by an engine (see CLAUDE.md's
-  * generic-`given`-capture note).
+/** A coefficient-field context for interactive/notebook-style work: `val tdalab = TDAlab(characteristic); import
+  * tdalab.{*, given}` brings in `CoefficientT`, `Fp(...)`, the field's `given`, chain arithmetic (`⊠`, `+`, `-`) on
+  * `Chain[Simplex[Int], CoefficientT]`, an implicit `Simplex -> Chain` widening and cats' `.show` syntax.
+  * `characteristic = 0` selects `Double` coefficients (compared within `precision`); a prime `p` selects `Z/p`.
   *
-  * Scala forbids `import tdalab(p = 3).{*, given}`, hence the `val` first.
+  * Everything else -- `∆`, `Simplex`, `VietorisRips`, the engines, `CSV`, ... -- comes from the library itself (`import
+  * org.appliedtopology.tda4j.*`), and default instances (`Simplex[Int] is OrderedCell`, `Show[Simplex[Int]]`, ...) come
+  * from the types' own companions, so `TDAlab` neither re-exports nor shadows any of them. Never consulted by an engine
+  * (see CLAUDE.md's generic-`given`-capture note).
+  *
+  * Scala forbids `import TDAlab(p = 3).{*, given}`, hence the `val` first.
   */
 class TDAlab(characteristic: Int, precision: Double = 1e-9):
-
-  import org.appliedtopology.tda4j.io
-  import org.appliedtopology.tda4j.barcode
-  import org.appliedtopology.tda4j.homology
-  import org.appliedtopology.tda4j.streams
-  import org.appliedtopology.tda4j.alpha
-  import org.appliedtopology.tda4j.algebra.{*, given}
-  import org.appliedtopology.tda4j.cells.{*, given}
 
   import cats.syntax.all.*
 
@@ -67,72 +58,139 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
   given [T: Ordering] => Conversion[Simplex[T], Chain[Simplex[T], CoefficientT]] =
     Chain.apply
 
-  export org.appliedtopology.tda4j.cells.defaultSimplexIsOrderedCell
-  export org.appliedtopology.tda4j.cells.defaultCubeIsOrderedCell
-
-  export org.appliedtopology.tda4j.cells.∆, org.appliedtopology.tda4j.cells.Simplex,
-    org.appliedtopology.tda4j.cells.asSimplex
-  export org.appliedtopology.tda4j.cells.Cube, org.appliedtopology.tda4j.cells.asCube
-  object streams:
-    export org.appliedtopology.tda4j.streams.{
-      Cech,
-      CubicalGridStream,
-      CubicalImage,
-      DistanceToMeasure,
-      Dowker,
-      DowkerGeometry,
-      DtmRips,
-      EdgeCollapse,
-      EuclideanMetricSpace,
-      ExplicitMetricSpace,
-      ExplicitStreamBuilder,
-      LandmarkSelector,
-      LevelwiseSimplexStream,
-      LimitedCubicalGridStream,
-      SparseRips,
-      Truncated,
-      VietorisRips,
-      Witness,
-      WitnessGeometry,
-      WitnessMetricSpace
-    }
-  object homology:
-    export org.appliedtopology.tda4j.homology.{
-      BettiNumbers,
-      CellularCohomologyEngine,
-      CellularHomologyEngine,
-      CellularPersistenceInChunksEngine,
-      CircularCoordinates,
-      CubicalHomologyEngine,
-      CubicalPersistenceInChunksEngine,
-      FastCubicalHomologyEngine,
-      PackedRipserCohomologyEngine,
-      PersistenceInChunksEngine,
-      RipserCohomologyEngine,
-      SimplicialHomologyEngine
-    }
-  object io:
-    export org.appliedtopology.tda4j.io.{CSV, Dipha, Gudhi, Perseus, Ripser}
-  object alpha:
-    export org.appliedtopology.tda4j.alpha.{AlphaComplexDQP, AlphaShapes}
-  object barcode:
-    export org.appliedtopology.tda4j.barcode.{BarcodeDistance, PersistenceBar, PersistenceFilter, Vectorization}
-  object cells:
-    export org.appliedtopology.tda4j.cells.{
-      CupProduct,
-      FiniteSimplicialSet,
-      FundamentalGroup,
-      GroupPresentation,
-      SSetMap,
-      SimplicialSets,
-      Steenrod
-    }
-  object groups:
-    export org.appliedtopology.tda4j.groups.{ClassifyingSpace, FiniteGroup, Nerve}
-
-  // Deliberate re-exports: `import tdalab.given` only sees givens that are members of `tdalab`.
-  given Show[Simplex[VertexT]] = summon[Show[Simplex[VertexT]]]
-
-  given Show[Chain[Simplex[VertexT], CoefficientT]] = summon[Show[Chain[Simplex[VertexT], CoefficientT]]]
+  // BEGIN generated re-exports
+  // regenerate: python3 .claude/scripts/tdalab-exports.py (checked by TDAlabExportsSpec)
+  export org.appliedtopology.tda4j.{
+    ∆,
+    AlphaComplexDQP,
+    AlphaComplexDQPBuilder,
+    AlphaComplexDQPException,
+    AlphaComplexDQPStream,
+    AlphaDQPSettings,
+    AlphaShapeDQP,
+    AlphaShapes,
+    Barcode,
+    BarcodeBuilder,
+    BarcodeDistance,
+    BarcodeEndpoint,
+    BarcodeGenerators,
+    BettiNumbers,
+    BruteForce,
+    CSV,
+    Cech,
+    CechFiltration,
+    Cell,
+    CellStream,
+    CellularCohomologyEngine,
+    CellularHomologyEngine,
+    CellularPersistenceInChunksEngine,
+    Chain,
+    CholeskyWorkspace,
+    CircularCoordinates,
+    ClosedEndpoint,
+    CofacetIterator,
+    ComplexProjectivePlaneGenerator,
+    ConeGenerator,
+    Cube,
+    CubicalGridStream,
+    CubicalHomologyEngine,
+    CubicalImage,
+    CubicalPersistenceInChunksEngine,
+    CupProduct,
+    DelaunaySimplex,
+    Dipha,
+    DistanceToMeasure,
+    DoubleFiltration,
+    Dowker,
+    DowkerFiltration,
+    DowkerGeometry,
+    DtmRips,
+    DualQP,
+    EdgeCollapse,
+    EdgeCollapsedMetricSpace,
+    Epsilon,
+    EuclideanMetricSpace,
+    ExplicitCubicalStream,
+    ExplicitMetricSpace,
+    ExplicitStream,
+    ExplicitStreamBuilder,
+    FastAlphaHomologyEngine,
+    FastAlphaTriangulationException,
+    FastCubicalHomologyEngine,
+    Field,
+    Filterable,
+    FilteredSimplexOrdering,
+    FilteredSimplicialSetStream,
+    Filtration,
+    FiltrationOrdering,
+    FiniteField,
+    FiniteMetricSpace,
+    FiniteSimplicialSet,
+    FundamentalGroup,
+    GreedyPermutation,
+    GroupPresentation,
+    Gudhi,
+    HasDimension,
+    HelixDelaunay,
+    HopfSphereGenerator,
+    Hyperplane,
+    Hypersphere,
+    IntMetricSpace,
+    JVPTree,
+    JoinGenerator,
+    Kruskal,
+    LandmarkSelection,
+    LandmarkSelector,
+    LatticeReduction,
+    LevelwiseSimplexStream,
+    LimitedAlphaShapesStream,
+    LimitedCubicalGridStream,
+    LinearAlgebra,
+    MinimalSphereGenerator,
+    NegativeInfinity,
+    NoIntegerCocycleException,
+    OpenEndpoint,
+    OrderedBasis,
+    OrderedCell,
+    PackedRipserCohomologyEngine,
+    Perseus,
+    PersistenceBar,
+    PersistenceEngine,
+    PersistenceFilter,
+    PersistenceInChunksEngine,
+    PositiveInfinity,
+    PowerDistance,
+    PresentationCell,
+    ProductGenerator,
+    RecursiveStackSimplexEnumerator,
+    RingModule,
+    Ripser,
+    RipserCohomologyEngine,
+    SSetElement,
+    SSetMap,
+    Simplex,
+    SimplexEdge,
+    SimplexIndexing,
+    SimplexStream,
+    SimplicialHomologyEngine,
+    SimplicialSet,
+    SimplicialSetStream,
+    SimplicialSets,
+    SparseMetricSpace,
+    SparseRips,
+    SpatialQuery,
+    Steenrod,
+    StratifiedCellStream,
+    TopCofacetEnumerator,
+    Truncated,
+    UnionFind,
+    Vectorization,
+    VietorisRips,
+    Witness,
+    WitnessGeometry,
+    WitnessMetricSpace
+  }
+  export org.appliedtopology.tda4j.groups.{ClassifyingSpace, FiniteGroup, FiniteMonoid, Nerve, NerveSimplex}
+  // END generated re-exports
 
   export cats.implicits.toShow

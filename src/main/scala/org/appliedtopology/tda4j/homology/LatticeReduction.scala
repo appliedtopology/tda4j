@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
 
 /** Lenstra--Lenstra--Lovász lattice basis reduction on a Gram matrix, following Scoccola, Gakhar, Bush, Schonsheck,
   * Rask, Zhou, Perea, "Toroidal Coordinates: Decorrelating Circular Coordinates With Lattice Reduction"

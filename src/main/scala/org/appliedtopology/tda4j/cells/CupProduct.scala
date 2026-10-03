@@ -1,7 +1,4 @@
 package org.appliedtopology.tda4j
-package cells
-
-import org.appliedtopology.tda4j.algebra.{given, *}
 
 /** Cochains, the Alexander-Whitney cup product and cohomology classes of a finite simplicial set, over a [[Field]].
   *

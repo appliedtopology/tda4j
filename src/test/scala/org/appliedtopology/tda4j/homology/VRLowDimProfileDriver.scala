@@ -1,9 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
 
 import scala.util.Random
 
@@ -12,7 +7,7 @@ import scala.util.Random
   * Invoked directly:
   *
   * {{{
-  * java -cp $CP org.appliedtopology.tda4j.homology.VRLowDimProfileDriver <n> <maxDim> [seed] [thresholdScale] [forceUncached]
+  * java -cp $CP org.appliedtopology.tda4j.VRLowDimProfileDriver <n> <maxDim> [seed] [thresholdScale] [forceUncached]
   * }}}
   *
   * Built to answer the question item #2 of `.claude/WORKLOG-autonomous-session-2026-09-19.md` needed answered BEFORE

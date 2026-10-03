@@ -1,7 +1,5 @@
 package org.appliedtopology.tda4j
-package homology
 
-import org.appliedtopology.tda4j.cells.{given, *}
 import org.appliedtopology.tda4j.groups.{ClassifyingSpace, FiniteGroup}
 import org.specs2.mutable.Specification
 

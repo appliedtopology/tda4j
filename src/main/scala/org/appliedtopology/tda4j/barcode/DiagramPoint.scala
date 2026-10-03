@@ -1,14 +1,13 @@
 package org.appliedtopology.tda4j
-package barcode
 
 /** A diagram point extracted from a [[PersistenceBar]]'s `(lower, upper)` endpoints as plain `Double`s, shared by
   * [[BarcodeDistance]] and [[Vectorization]] so both apply the same finite-birth requirement and essential-bar test
   * rather than two independently-drifting copies.
   */
-private[barcode] case class DiagramPoint(birth: Double, death: Double):
+private[tda4j] case class DiagramPoint(birth: Double, death: Double):
   def persistence: Double = death - birth
 
-private[barcode] object DiagramPoint:
+private[tda4j] object DiagramPoint:
   def endpointValue(e: BarcodeEndpoint[Double]): Double = e match
     case PositiveInfinity() => Double.PositiveInfinity
     case NegativeInfinity() => Double.NegativeInfinity

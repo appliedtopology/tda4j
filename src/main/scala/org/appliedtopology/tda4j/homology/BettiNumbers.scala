@@ -1,9 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.FilteredSimplicialSetStream
 
 /** Betti numbers of a simplicial set over a prime field `F_p`: `dim H_n(X; F_p)` for each degree `n`, the number of
   * homology classes that are never killed. Computed with the chunks persistence engine on the unfiltered complex (every

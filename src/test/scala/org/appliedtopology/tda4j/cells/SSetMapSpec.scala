@@ -1,7 +1,5 @@
 package org.appliedtopology.tda4j
-package cells
 
-import org.appliedtopology.tda4j.algebra.{given, *}
 import org.specs2.mutable.Specification
 
 class SSetMapSpec extends Specification:

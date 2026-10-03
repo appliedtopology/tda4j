@@ -1,10 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.io.{given, *}
 
 /** Test-scope driver, NOT a scratch file (unlike this arc's earlier `PackedProfileDriver.scala`/ `ProfileDriver.scala`,
   * each written fresh and deleted before its session ended) -- kept alongside `RipserPaperBenchmarkSpec.scala` as the

@@ -45,9 +45,9 @@ person appears when their cheapest club does (here at 1). Two neighbours around 
 club, at time 5.
 
 ```scala sc:nocompile
-val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
+val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
 def dowkerBars(dual: Boolean) =
-  engine.persistentHomology(streams.Dowker(relation, maxDimension = 1, dual = dual)).diagramAt(Double.PositiveInfinity).filter(_._1 <= 1)
+  engine.persistentHomology(Dowker(relation, maxDimension = 1, dual = dual)).diagramAt(Double.PositiveInfinity).filter(_._1 <= 1)
 
 val people = dowkerBars(dual = false)
 people.size    // 16 bars
@@ -120,9 +120,9 @@ val relation: Array[Array[Double]] = Array.tabulate(6, 7) { (person, club) =>
   else never
 }
 
-val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
+val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
 def dowkerBars(dual: Boolean) =
-  engine.persistentHomology(streams.Dowker(relation, maxDimension = 1, dual = dual)).diagramAt(Double.PositiveInfinity).filter(_._1 <= 1)
+  engine.persistentHomology(Dowker(relation, maxDimension = 1, dual = dual)).diagramAt(Double.PositiveInfinity).filter(_._1 <= 1)
 def withoutZeroLength(bars: List[(Int, Double, Double)]) =
   bars.filter((_, birth, death) => death.isInfinite || death > birth).sortBy(bar => (bar._1, bar._2, bar._3))
 

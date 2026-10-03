@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package cells
 
 import org.specs2.mutable.Specification
 
@@ -29,7 +28,7 @@ class PresentationComplexSpec extends Specification:
     "of <a, b | a b a^-1 b^-1> be the torus: (1,2,1) over every field, with a nonzero cup product" in {
       val commutator = List(a, b, aInv, bInv)
       val x = presentationComplex(2, Seq(commutator))
-      val field = new org.appliedtopology.tda4j.algebra.FiniteField(3)
+      val field = new org.appliedtopology.tda4j.FiniteField(3)
       import field.given
       val basis = CupProduct.cohomologyBasis[PresentationCell, field.Fp](x, 1)
       (x.validate() must beEmpty)

@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
 
 /** The empirical distance-to-measure function (Chazal, Cohen-Steiner & Merigot, "Geometric inference for probability
   * measures", Foundations of Computational Mathematics 11:733-751, 2011): for a point set X with the uniform empirical

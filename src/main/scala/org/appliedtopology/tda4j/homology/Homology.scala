@@ -1,11 +1,6 @@
 package org.appliedtopology.tda4j
-package homology
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-
-import org.appliedtopology.tda4j.barcode.PersistenceBar
+import OrderedCell.cellOrdering
 
 import collection.{immutable, mutable}
 import scala.annotation.tailrec
@@ -41,8 +36,6 @@ class CubicalHomologyEngine[CoefficientT: Field, FiltrationT: Ordering]()
   * call to its methods). A real, confirmed bug -- see `.claude/WORKLOG-naive-homology.md`.
   */
 class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]:
-
-  import barcode.*
 
   class HomologyState(
     boundaries: mutable.Map[CellT, Chain[CellT, CoefficientT]], // pivot cell -> reduced boundary column
@@ -265,7 +258,6 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
 class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field](maxDim: Int = 5):
   val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
   import chainRM.*
-  import barcode.*
 
   // The real internal ceiling: one dimension higher than what's reported, so a class born AT maxDim can still be
   // correctly killed by a genuine (maxDim + 1)-cell rather than looking essential purely because nothing above

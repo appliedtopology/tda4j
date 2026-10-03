@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package algebra
 
 import cats.Show
 
@@ -11,6 +10,8 @@ class FiniteField(val p: Int):
   object Fp:
     def apply(a: Int): Fp = a % p
     def unapply(a: Fp): Some[Int] = Some(a)
+    // In the opaque type's companion = its implicit scope: `x.show` works with no import.
+    given showFp: Show[Fp] = Show.show(x => summon[Fp is Field].showForSelf.show(x))
 
   extension (fp: Fp)
     def norm: Fp =

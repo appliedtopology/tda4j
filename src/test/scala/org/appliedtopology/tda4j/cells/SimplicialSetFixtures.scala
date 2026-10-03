@@ -1,7 +1,5 @@
 package org.appliedtopology.tda4j
-package cells
 
-import org.appliedtopology.tda4j.algebra.{given, *}
 import FiniteSimplicialSet.*
 
 /** Hand-verified finitely-generated simplicial sets with known homology, used to validate `faceOf`/`insertOuter`

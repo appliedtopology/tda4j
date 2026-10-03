@@ -1,7 +1,4 @@
 package org.appliedtopology.tda4j
-package cells
-
-import org.appliedtopology.tda4j.algebra.{given, *}
 
 /** Steenrod squares `Sq^i : H^n(X; F_2) -> H^(n+i)(X; F_2)` of a finite simplicial set, from Steenrod's explicit
   * cup-`i` products on cochains:

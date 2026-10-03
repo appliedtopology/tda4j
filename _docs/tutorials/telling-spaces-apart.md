@@ -17,17 +17,16 @@ import org.appliedtopology.tda4j.TDAlab
 
 val lab = TDAlab(2)
 import lab.{*, given}
-import cells.{CupProduct, FiniteSimplicialSet, SSetMap, SimplicialSets, Steenrod}
 ```
 
 ## Betti numbers over two fields
 
-`homology.BettiNumbers(space, p)` returns the dimensions of the homology groups of `space` with coefficients in the field with `p`
+`BettiNumbers(space, p)` returns the dimensions of the homology groups of `space` with coefficients in the field with `p`
 elements, `Vector(b0, b1, b2, ...)`. We ask for two fields, `p = 2` and `p = 3`, because comparing them exposes a subtle kind of hole
 that counting over one field can hide:
 
 ```scala sc:nocompile
-def betti[G](x: FiniteSimplicialSet[G]) = (homology.BettiNumbers(x, 2), homology.BettiNumbers(x, 3))
+def betti[G](x: FiniteSimplicialSet[G]) = (BettiNumbers(x, 2), BettiNumbers(x, 3))
 
 // A space can be described by a presentation: generators (loops), and relations (disks glued in along words in the loops).
 // A letter is (generator number, +1 or -1). The torus is <a, b | a b a^-1 b^-1>: "going round a then b is the same as b then a".
@@ -129,7 +128,7 @@ So the construction really is the complex projective plane as far as cohomology 
 a nonzero class. A map with a *constant* image instead gives the sphere pair, with square zero. The Hopf map is exactly the map for which the square is nonzero.
 
 `SimplicialSets` also has `cone`, `suspension`, `join`, `smash`, `horn`, `simplex` and `fromSimplicialComplex` (for a space
-given as a list of top-dimensional simplices, such as a triangulated surface), and `cells.FundamentalGroup.presentation` reads a presentation
+given as a list of top-dimensional simplices, such as a triangulated surface), and `FundamentalGroup.presentation` reads a presentation
 of the fundamental group back off a connected space: the inverse of `presentationComplex`.
 
 ## Limits
@@ -147,9 +146,8 @@ import org.appliedtopology.tda4j.TDAlab
 
 val lab = TDAlab(2)
 import lab.{*, given}
-import cells.{CupProduct, FiniteSimplicialSet, SSetMap, SimplicialSets, Steenrod}
 
-def betti[G](x: FiniteSimplicialSet[G]) = (homology.BettiNumbers(x, 2), homology.BettiNumbers(x, 3))
+def betti[G](x: FiniteSimplicialSet[G]) = (BettiNumbers(x, 2), BettiNumbers(x, 3))
 def basis[G](x: FiniteSimplicialSet[G], degree: Int) = CupProduct.cohomologyBasis[G, CoefficientT](x, degree)
 def cup[G](x: FiniteSimplicialSet[G], p: Int, q: Int, a: Map[G, CoefficientT], b: Map[G, CoefficientT]) = CupProduct.cup(x, p, q, a, b)
 def isNonzero[G](x: FiniteSimplicialSet[G], degree: Int, cochain: Map[G, CoefficientT]) = !CupProduct.isCoboundary(x, degree, cochain)

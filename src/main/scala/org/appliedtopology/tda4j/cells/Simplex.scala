@@ -1,7 +1,4 @@
 package org.appliedtopology.tda4j
-package cells
-
-import org.appliedtopology.tda4j.algebra.{given, *}
 
 import scala.collection.mutable
 import scala.collection.immutable.SortedSet
@@ -28,7 +25,7 @@ opaque type Simplex[VertexT] = SortedSet[VertexT]
   * receiver. It was also never part of the naming collision in the first place (`asSimplex`/`asCube` don't share a
   * name), so there's no reason to move it either.
   */
-object Simplex extends SimplexOps:
+object Simplex extends SimplexOps, SimplexInstances:
   def from[VertexT: Ordering, T <: Seq[VertexT]](vertices: T): Simplex[VertexT] = SortedSet.from(vertices)
   def apply[VertexT: Ordering](vertices: VertexT*): Simplex[VertexT] = from(vertices)
   def unapplySeq[VertexT: Ordering](simplex: Simplex[VertexT]): Option[Seq[VertexT]] = Some(simplex.toSeq)
@@ -41,7 +38,9 @@ extension [VertexT](vertices: SortedSet[VertexT]) def asSimplex: Simplex[VertexT
   *
   * The character ∆ is typed as Alt+J on Mac GB layout, and has unicode code 0x0394.
   */
-def ∆[VertexT: Ordering](vertices: VertexT*): Simplex[VertexT] = Simplex.from(vertices)
+object ∆ :
+  def apply[VertexT: Ordering](vertices: VertexT*): Simplex[VertexT] = Simplex.from(vertices)
+  def unapplySeq[VertexT](simplex: Simplex[VertexT]): Option[Seq[VertexT]] = Some(simplex.toSeq)
 
 /** Stays in this file (needs `Simplex[VertexT]`'s own opaque-type transparency for the `Ordering[SortedSet[ VertexT]]
   * -> Ordering[Simplex[VertexT]]` coercion below), unlike `simplexIsOrderedCell` (`SimplexOrderedCell.scala`) -- this

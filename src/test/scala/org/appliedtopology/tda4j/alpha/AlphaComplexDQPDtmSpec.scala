@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package alpha
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 /** Cross-validates `AlphaComplexDQP.dtm`'s `weight(i) = -f(i)^2` power weighting against
   * `streams.DtmRipsSimplexStream(..., p = 2.0)` -- the two constructions are the SAME `p = 2` ball union (Anai et al.,

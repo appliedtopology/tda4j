@@ -1,9 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
 
 import scala.util.Random
 
@@ -13,7 +8,7 @@ import scala.util.Random
   * `.claude/WORKLOG-parallelization-survey.md` item 3. Invoked directly:
   *
   * {{{
-  * java -cp $CP org.appliedtopology.tda4j.homology.CubicalParallelProfileDriver <parallel> <dims> <n> [seed] [trials]
+  * java -cp $CP org.appliedtopology.tda4j.CubicalParallelProfileDriver <parallel> <dims> <n> [seed] [trials]
   * }}}
   */
 object CubicalParallelProfileDriver:

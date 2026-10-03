@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package algebra
 
 trait HasDimension:
   type Self
@@ -12,7 +11,17 @@ trait Cell extends HasDimension:
 trait OrderedCell extends Cell:
   type Self: Ordering as ordering
 
-given [CellT: OrderedCell as oCell] => Ordering[CellT] = oCell.ordering
+object OrderedCell:
+  /** A cell type's intrinsic order (`Simplex`: lexicographic), for generic code that holds only `CellT: OrderedCell`
+    * and no stream: `import OrderedCell.cellOrdering`.
+    *
+    * Deliberately NOT a top-level given. A top-level `[CellT: OrderedCell] => Ordering[CellT]` is visible everywhere in
+    * the package and matches `Ordering[?T]` for any not-yet-inferred `T`, so it competed at equal priority with a
+    * stream's filtration ordering and silently decided type inference (`SimplicialHomologyEngine()` inferred
+    * `VertexT = BarcodeEndpoint[Cube]`). Concrete cell types get their default `Ordering` from their own companion
+    * (implicit scope), which any lexically visible given beats. `.claude/WORKLOG-package-flatten.md`.
+    */
+  given cellOrdering: [CellT: OrderedCell as oCell] => Ordering[CellT] = oCell.ordering
 
 /** The "leading term" (highest-priority cell and its coefficient, under `CellT`'s own order) a formal sum needs to
   * support pivot-based reduction. Currently has exactly one instance in this codebase, `Chain`'s own

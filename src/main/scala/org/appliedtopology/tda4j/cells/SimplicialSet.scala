@@ -1,7 +1,4 @@
 package org.appliedtopology.tda4j
-package cells
-
-import org.appliedtopology.tda4j.algebra.{given, *}
 
 /** `OrderedCell` instance for the generators (non-degenerate simplices) of a finite simplicial set: `dim` is the
   * generator's own dimension, and `boundary` is the normalized-chain-complex differential -- only faces that are

@@ -1,12 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
-import org.appliedtopology.tda4j.io.{given, *}
 
 import org.specs2.mutable
 import org.specs2.main.Arguments
@@ -155,11 +147,11 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
         // lower/upper are different BarcodeEndpoint wrapper types (ClosedEndpoint at birth vs.
         // OpenEndpoint/PositiveInfinity at death) even for a genuine zero-persistence bar, so `lower != upper`
         // would always be true regardless of the actual values -- extract the underlying Double first.
-        def endpointValue(e: barcode.BarcodeEndpoint[Double]): Double = e match
-          case barcode.NegativeInfinity() => Double.NegativeInfinity
-          case barcode.PositiveInfinity() => Double.PositiveInfinity
-          case barcode.ClosedEndpoint(v)  => v
-          case barcode.OpenEndpoint(v)    => v
+        def endpointValue(e: BarcodeEndpoint[Double]): Double = e match
+          case NegativeInfinity() => Double.NegativeInfinity
+          case PositiveInfinity() => Double.PositiveInfinity
+          case ClosedEndpoint(v)  => v
+          case OpenEndpoint(v)    => v
 
         val daemonExecutor = Executors.newCachedThreadPool(new ThreadFactory:
           def newThread(r: Runnable): Thread =

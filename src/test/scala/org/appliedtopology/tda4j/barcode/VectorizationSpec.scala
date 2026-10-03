@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package barcode
 
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll

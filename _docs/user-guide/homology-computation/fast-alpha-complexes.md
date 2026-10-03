@@ -5,13 +5,9 @@ layout: main
 #### A faster engine for alpha complexes
 
 ```scala 3
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
+import org.appliedtopology.tda4j.{given, *}
 
 given Double is Field = Field.DoubleApproximated(1e-9)
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
 given Epsilon = Epsilon(1e-5) // numerical tolerance for rank decisions in the triangulation

@@ -1,8 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
 
 /** Checks the one precondition every persistence engine in this codebase needs from a filtration: a face's value is
   * never larger than its coface's. Only BARE (`word = Nil`) direct faces matter here -- those are the only faces

@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package barcode
 
 import org.apache.commons.math3.special.Erf
 

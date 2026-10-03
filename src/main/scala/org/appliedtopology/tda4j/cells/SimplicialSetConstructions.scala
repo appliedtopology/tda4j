@@ -1,7 +1,4 @@
 package org.appliedtopology.tda4j
-package cells
-
-import org.appliedtopology.tda4j.algebra.{given, *}
 
 def ssetElementOrdering[G](using ordG: Ordering[G]): Ordering[SSetElement[G]] =
   given Ordering[List[Int]] = scala.math.Ordering.Implicits.seqOrdering

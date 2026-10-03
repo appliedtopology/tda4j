@@ -5,10 +5,7 @@ layout: main
 ### Dowker complexes
 
 ```scala 3
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
+import org.appliedtopology.tda4j.{given, *}
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 
@@ -35,10 +32,7 @@ For the classical (unfiltered) Dowker complex — a plain boolean "is `x` relate
 time — use `DowkerGeometry.fromBoolean`:
 
 ```scala 3
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
+import org.appliedtopology.tda4j.{given, *}
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 

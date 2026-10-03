@@ -1,10 +1,7 @@
 package org.appliedtopology.tda4j
-package algebra
 
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.cells.SimplicialSetFixtures
-import org.appliedtopology.tda4j.cells.SimplicialSetFixtures.ProjectiveGenerator
-import org.appliedtopology.tda4j.cells.SimplicialSetFixtures.SphereGenerator
+import org.appliedtopology.tda4j.SimplicialSetFixtures.ProjectiveGenerator
+import org.appliedtopology.tda4j.SimplicialSetFixtures.SphereGenerator
 
 import org.specs2.mutable
 

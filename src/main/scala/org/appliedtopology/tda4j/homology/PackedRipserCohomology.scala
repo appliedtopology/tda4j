@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-
-import org.appliedtopology.tda4j.barcode.PersistenceBar
 
 import scala.collection.mutable
 import scala.compiletime.asMatchable
@@ -58,7 +51,7 @@ import scala.compiletime.asMatchable
   * considered within one enumeration call, so each caller decodes/materializes its vertex array exactly ONCE and passes
   * the same array to every `insertionDiameter` call in that enumeration.
   */
-private[homology] def insertionDiameter(
+private[tda4j] def insertionDiameter(
   metricSpace: FiniteMetricSpace[Int],
   vertices: Array[Int],
   sigmaFv: Double,
@@ -80,7 +73,6 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
   // RipserCohomologyEngine's identical parameter for the full derivation of why Option, not a NaN sentinel.
   maxFiltrationValue: Option[Double] = None
 ):
-  import org.appliedtopology.tda4j.barcode.*
 
   private val resolvedMaxFiltrationValue: Double =
     maxFiltrationValue.getOrElse(metricSpace.minimumEnclosingRadius)

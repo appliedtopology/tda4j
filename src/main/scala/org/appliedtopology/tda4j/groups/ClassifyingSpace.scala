@@ -1,10 +1,7 @@
 package org.appliedtopology.tda4j
 package groups
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.homology.{BettiNumbers, CellularPersistenceInChunksEngine}
-import org.appliedtopology.tda4j.streams.FilteredSimplicialSetStream
+import org.appliedtopology.tda4j.{given, *}
 
 /** A non-degenerate simplex of the nerve `BG` of a finite group: the tuple `(g_1, ..., g_n)` of NON-identity elements
   * (a tuple containing the identity is degenerate). The empty tuple is the single vertex.

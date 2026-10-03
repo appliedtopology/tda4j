@@ -1,7 +1,4 @@
 package org.appliedtopology.tda4j
-package cells
-
-import org.appliedtopology.tda4j.algebra.{given, *}
 
 import scala.collection.immutable.SortedSet
 import scala.reflect.ClassTag
@@ -15,7 +12,6 @@ import cats.Show
   * scopes lookup by nominal receiver type, so a future opaque type's extensions can reuse a name like
   * `show`/`underlying` without colliding with this one.
   */
-given [VertexT] => Show[Simplex[VertexT]] = Show.show(spx => spx.underlying.mkString(s"∆(", ",", ")"))
 trait SimplexOps:
   extension [VertexT](spx: Simplex[VertexT])
     // ----- rendering & dimension

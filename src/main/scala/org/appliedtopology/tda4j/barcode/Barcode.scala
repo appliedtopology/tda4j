@@ -5,9 +5,7 @@ package org.appliedtopology.tda4j
   * This sub-package implements both a useful representation for persistence bars and barcodes, and also algebraic
   * operations on finitely presented persistence modules.
   */
-package barcode
 
-import org.appliedtopology.tda4j.algebra.{given, *}
 import org.apache.commons.math3.linear.*
 
 sealed trait BarcodeEndpoint[FiltrationT: Ordering]:
@@ -29,35 +27,36 @@ case class ClosedEndpoint[FiltrationT: Ordering](value: FiltrationT) extends Bar
   override val isFinite = true
 
 import math.Ordered.orderingToOrdered
-given [FiltrationT: Ordering as ord] => Ordering[BarcodeEndpoint[FiltrationT]]:
-  def compare(
-    x: BarcodeEndpoint[FiltrationT],
-    y: BarcodeEndpoint[FiltrationT]
-  ) = x match
-    case NegativeInfinity() =>
-      y match
-        case NegativeInfinity() => 0
-        case _                  => -1
-    case PositiveInfinity() =>
-      y match
-        case PositiveInfinity() => 0
-        case _                  => +1
-    case ClosedEndpoint(xvalue) =>
-      y match
-        case NegativeInfinity()     => +1
-        case PositiveInfinity()     => -1
-        case ClosedEndpoint(yvalue) => ord.compare(xvalue, yvalue)
-        case OpenEndpoint(yvalue)   =>
-          if ord.compare(xvalue, yvalue) == 0 then -1
-          else ord.compare(xvalue, yvalue)
-    case OpenEndpoint(xvalue) =>
-      y match
-        case NegativeInfinity()     => +1
-        case PositiveInfinity()     => -1
-        case ClosedEndpoint(yvalue) =>
-          if ord.compare(xvalue, yvalue) == 0 then +1
-          else ord.compare(xvalue, yvalue)
-        case OpenEndpoint(yvalue) => ord.compare(xvalue, yvalue)
+object BarcodeEndpoint:
+  given endpointOrdering: [FiltrationT: Ordering as ord] => Ordering[BarcodeEndpoint[FiltrationT]]:
+    def compare(
+      x: BarcodeEndpoint[FiltrationT],
+      y: BarcodeEndpoint[FiltrationT]
+    ) = x match
+      case NegativeInfinity() =>
+        y match
+          case NegativeInfinity() => 0
+          case _                  => -1
+      case PositiveInfinity() =>
+        y match
+          case PositiveInfinity() => 0
+          case _                  => +1
+      case ClosedEndpoint(xvalue) =>
+        y match
+          case NegativeInfinity()     => +1
+          case PositiveInfinity()     => -1
+          case ClosedEndpoint(yvalue) => ord.compare(xvalue, yvalue)
+          case OpenEndpoint(yvalue)   =>
+            if ord.compare(xvalue, yvalue) == 0 then -1
+            else ord.compare(xvalue, yvalue)
+      case OpenEndpoint(xvalue) =>
+        y match
+          case NegativeInfinity()     => +1
+          case PositiveInfinity()     => -1
+          case ClosedEndpoint(yvalue) =>
+            if ord.compare(xvalue, yvalue) == 0 then +1
+            else ord.compare(xvalue, yvalue)
+          case OpenEndpoint(yvalue) => ord.compare(xvalue, yvalue)
 
 /** A persistence bar has a lower and upper endpoint, where we assume (but do not enforce) that `lower < upper` in the
   * expected ordering on the filtration type; a dimension; and optionally some annotation (this will be used extensively

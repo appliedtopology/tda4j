@@ -1,10 +1,6 @@
 package org.appliedtopology.tda4j
-package streams
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-
-import org.appliedtopology.tda4j.streams.FiniteMetricSpace.MaximumDistanceFiltrationValue
+import org.appliedtopology.tda4j.FiniteMetricSpace.MaximumDistanceFiltrationValue
 
 import scala.collection.immutable.{LazyList, SortedSet}
 import scala.math.Ordering.Implicits.*

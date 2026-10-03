@@ -1,8 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
 
 /** Adapts a `FiniteSimplicialSet[G]` into the `CellStream[G, Int]` the existing homology engines actually require
   * (`CellularHomologyEngine` takes a `stream: CellStream[CellT, FiltrationT]`, never a bare `OrderedCell` -- confirmed

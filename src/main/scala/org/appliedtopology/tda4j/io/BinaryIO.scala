@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package io
 
 import java.nio.{ByteBuffer, ByteOrder}
 import java.nio.file.{Files, Paths}
@@ -11,7 +10,7 @@ import java.nio.file.{Files, Paths}
   * format" outright) -- so `ByteBuffer.order(LITTLE_ENDIAN)` is used unconditionally here rather than detecting host
   * order, matching both.
   */
-private[io] object BinaryIO:
+private[tda4j] object BinaryIO:
   def readAllLE(path: String): ByteBuffer =
     ByteBuffer.wrap(Files.readAllBytes(Paths.get(path))).order(ByteOrder.LITTLE_ENDIAN)
 

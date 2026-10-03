@@ -1,8 +1,4 @@
 package org.appliedtopology.tda4j
-package io
-
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.barcode.{given, *}
 
 import scala.io.Source
 import java.io.PrintWriter

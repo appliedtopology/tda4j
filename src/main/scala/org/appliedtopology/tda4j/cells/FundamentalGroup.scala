@@ -1,7 +1,4 @@
 package org.appliedtopology.tda4j
-package cells
-
-import org.appliedtopology.tda4j.algebra.{given, *}
 
 /** A finite presentation `<generators | relations>`; a relation is a word, each letter `(generator index, +1 or -1)`.
   */

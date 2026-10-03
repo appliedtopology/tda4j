@@ -21,15 +21,15 @@ import org.appliedtopology.tda4j.TDAlab
 val lab = TDAlab(2)
 import lab.{*, given}
 
-val metricSpace = io.CSV.readEuclideanMetricSpace("_docs/tutorials/data/circle-with-outliers.csv")
-val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
+val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/data/circle-with-outliers.csv")
+val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
 
 // The persistences (death - birth) of the two longest-lived loops, longest first
-def twoLongestLoops(stream: streams.LevelwiseSimplexStream[Int, Double]): List[Double] =
+def twoLongestLoops(stream: LevelwiseSimplexStream[Int, Double]): List[Double] =
   val bars = engine.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
   bars.filter(_._1 == 1).map((_, birth, death) => death - birth).sorted.reverse.take(2)
 
-val vr = streams.VietorisRips(metricSpace, maxDimension = 1)
+val vr = VietorisRips(metricSpace, maxDimension = 1)
 twoLongestLoops(vr)          // List(0.901, 0.127)
 
 val loops = engine.persistentHomology(vr).diagramWithGeneratorsAt(Double.PositiveInfinity)
@@ -53,7 +53,7 @@ The distance-to-measure of a point is, roughly, the typical distance from it to 
 data is dense and large where it is sparse. Compute it for every point and look at where the outliers fall:
 
 ```scala sc:nocompile
-val weights = streams.DistanceToMeasure(metricSpace, 8, 2.0)   // k = 8 neighbours, exponent 2
+val weights = DistanceToMeasure(metricSpace, 8, 2.0)   // k = 8 neighbours, exponent 2
 val (ring, outliers) = weights.splitAt(70)
 ring.sum / ring.size          // 0.176: the typical weight of a ring point
 outliers.sum / outliers.size  // 0.543: more than three times as much for an outlier
@@ -64,7 +64,7 @@ sparse points enter late, after the dense structure has formed. The loop through
 complex fills the ring, long before the outliers matter:
 
 ```scala sc:nocompile
-val dtm = streams.DtmRips.fromNeighbours(metricSpace, k = 8, maxDimension = 1, p = 1.0)
+val dtm = DtmRips.fromNeighbours(metricSpace, k = 8, maxDimension = 1, p = 1.0)
 twoLongestLoops(dtm)          // List(0.815, 0.005)
 ```
 
@@ -96,17 +96,17 @@ import org.appliedtopology.tda4j.TDAlab
 val lab = TDAlab(2)
 import lab.{*, given}
 
-val metricSpace = io.CSV.readEuclideanMetricSpace("_docs/tutorials/data/circle-with-outliers.csv")
-val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
+val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/data/circle-with-outliers.csv")
+val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
 
-def twoLongestLoops(stream: streams.LevelwiseSimplexStream[Int, Double]): List[Double] =
+def twoLongestLoops(stream: LevelwiseSimplexStream[Int, Double]): List[Double] =
   val bars = engine.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
   bars.filter(_._1 == 1).map((_, birth, death) => death - birth).sorted.reverse.take(2)
 
-val vr = streams.VietorisRips(metricSpace, maxDimension = 1)
-val dtm = streams.DtmRips.fromNeighbours(metricSpace, k = 8, maxDimension = 1, p = 1.0)
+val vr = VietorisRips(metricSpace, maxDimension = 1)
+val dtm = DtmRips.fromNeighbours(metricSpace, k = 8, maxDimension = 1, p = 1.0)
 
-val weights = streams.DistanceToMeasure(metricSpace, 8, 2.0)
+val weights = DistanceToMeasure(metricSpace, 8, 2.0)
 val (ring, outliers) = weights.splitAt(70)
 
 val loops = engine.persistentHomology(vr).diagramWithGeneratorsAt(Double.PositiveInfinity)
