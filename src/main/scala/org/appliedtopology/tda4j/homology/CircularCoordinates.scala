@@ -88,11 +88,11 @@ object CircularCoordinates:
     */
   def h1Bars(
     metricSpace: FiniteMetricSpace[Int],
-    maxFiltrationValue: Option[Double] = None
+    maxFiltrationValue: Optional[Double] = Optional.empty
   ): IndexedSeq[(Double, Double)] =
     given Double is Field = Field.DoubleApproximated(1e-9)
     val stream = LimitedCofaceSimplexStream(
-      EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
+      EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
       2
     )
     val ctx = CellularCohomologyEngine[Simplex[Int], Double, Double]()
@@ -134,7 +134,7 @@ object CircularCoordinates:
     r: Double,
     cocycleIndex: Int = 0,
     prime: Int = 47,
-    maxFiltrationValue: Option[Double] = None
+    maxFiltrationValue: Optional[Double] = Optional.empty
   ): Result =
     require(
       prime % 2 != 0 && isPrime(prime),
@@ -142,7 +142,7 @@ object CircularCoordinates:
     )
     val ff = new FiniteField(prime)
     import ff.given
-    computeGeneric[ff.Fp](metricSpace, r, cocycleIndex, prime, maxFiltrationValue, _.toInt)
+    computeGeneric[ff.Fp](metricSpace, r, cocycleIndex, prime, maxFiltrationValue.toOption, _.toInt)
 
   private def computeGeneric[C: Field](
     metricSpace: FiniteMetricSpace[Int],
@@ -322,7 +322,7 @@ object CircularCoordinates:
     cocycleIndices: Seq[Int],
     prime: Int = 47,
     reduce: Boolean = true,
-    maxFiltrationValue: Option[Double] = None
+    maxFiltrationValue: Optional[Double] = Optional.empty
   ): ToroidalResult =
     require(
       prime % 2 != 0 && isPrime(prime),
@@ -330,7 +330,7 @@ object CircularCoordinates:
     )
     val ff = new FiniteField(prime)
     import ff.given
-    computeToroidalGeneric[ff.Fp](metricSpace, r, cocycleIndices, prime, reduce, maxFiltrationValue, _.toInt)
+    computeToroidalGeneric[ff.Fp](metricSpace, r, cocycleIndices, prime, reduce, maxFiltrationValue.toOption, _.toInt)
 
   private def computeToroidalGeneric[C: Field](
     metricSpace: FiniteMetricSpace[Int],

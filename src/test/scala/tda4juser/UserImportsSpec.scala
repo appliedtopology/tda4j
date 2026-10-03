@@ -84,3 +84,36 @@ class TDAlabAloneSpec extends Specification:
       ) must beEmpty
     }
   }
+
+/** Engines with every type argument inferred, from the user's side. */
+class InferredEngineSpec extends Specification:
+  import org.appliedtopology.tda4j.*
+  private val pts = Array.tabulate(10)(i => Array(math.cos(i * 0.628), math.sin(i * 0.628)))
+
+  "SimplicialHomologyEngine.persistentHomology(stream)" should {
+    "infer vertex, coefficient and filtration types and agree with the explicit form" in {
+      given Double is Field = Field.DoubleApproximated(1e-9)
+      val s = VietorisRips(EuclideanMetricSpace(pts), 1, 1.5)
+      SimplicialHomologyEngine.persistentHomology(s).diagramAt(Double.PositiveInfinity).sorted must beEqualTo(
+        SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(s).diagramAt(Double.PositiveInfinity).sorted
+      )
+    }
+    "refuse loudly, never guess, when no coefficient field or two of them are in scope" in {
+      val none =
+        typeCheckErrors("SimplicialHomologyEngine.persistentHomology(VietorisRips(EuclideanMetricSpace(pts), 1))")
+      val two =
+        val f3 = FiniteField(3)
+        import f3.given
+        given Double is Field = Field.DoubleApproximated(1e-9)
+        typeCheckErrors("SimplicialHomologyEngine.persistentHomology(VietorisRips(EuclideanMetricSpace(pts), 1))")
+      (none.map(_.message).mkString must contain("tda4j: no coefficient field")).and(two must not(beEmpty))
+    }
+    "work the same way for the chunks engine" in {
+      val f5 = FiniteField(5)
+      import f5.given
+      val s = VietorisRips(EuclideanMetricSpace(pts.toSeq), 1, 1.5)
+      PersistenceInChunksEngine.persistentHomology(s, 1).diagramAt(Double.PositiveInfinity).sorted must beEqualTo(
+        PersistenceInChunksEngine[Int, f5.Fp](1).persistentHomology(s).diagramAt(Double.PositiveInfinity).sorted
+      )
+    }
+  }

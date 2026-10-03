@@ -18,6 +18,21 @@ import java.util.concurrent.*
   */
 final case class Epsilon(epsilon: Double)
 
+/** Which alpha-complex construction `AlphaShapes(points, backend)` uses: `Helix` (Delaunay by the Helix algorithm, the
+  * default), `DQP` (dual quadratic programs), or `Default` (whatever the library currently picks -- Helix).
+  */
+enum AlphaBackend:
+  case Default, Helix, DQP
+
+object AlphaBackend:
+  /** The facade's string spelling (`"default"`, `"helix"`, `"dqp"`, any case). */
+  def parse(name: String): AlphaBackend = name.toLowerCase match
+    case "default" => Default
+    case "helix"   => Helix
+    case "dqp"     => DQP
+    case other     =>
+      throw IllegalArgumentException(s"Unknown alpha complex backend: '$other' (expected default/helix/DQP)")
+
 abstract class AlphaShapes extends LevelwiseSimplexStream[Int, Double]() with DoubleFiltration[Simplex[Int]]():
   val metricSpace: FiniteMetricSpace[Int]
 
@@ -34,42 +49,40 @@ object AlphaShapes extends PointCloudComplex:
       "tda4j: AlphaShapes builds the whole alpha complex, so maxFiltrationValue is not supported for it -- read the " +
         "result at a smaller parameter with diagram.at(f) instead"
     )
-    Truncated(apply(points.points.toSeq), maxDimension)
+    Truncated(apply(points), maxDimension)
 
   /** @param requireValidTriangulation
     *   OFF by default. Only meaningful for the `"helix"`/`"default"` backend -- threaded straight through to
     *   `HelixDelaunay`'s own constructor parameter of the same name (`.claude/DESIGN-helix-triangulation-repair.md`).
-    *   `require`d `false` for `dispatch="dqp"`: `AlphaShapeDQP` has no facet-multiplicity precondition to repair in the
-    *   first place (it is not `FastAlphaHomologyEngine`'s own backend), so a caller passing `true` there almost
-    *   certainly mis-set the option rather than intending a silent no-op.
+    *   `require`d `false` for `backend = AlphaBackend.DQP`: `AlphaShapeDQP` has no facet-multiplicity precondition to
+    *   repair in the first place (it is not `FastAlphaHomologyEngine`'s own backend), so a caller passing `true` there
+    *   almost certainly mis-set the option rather than intending a silent no-op.
     */
-  def apply(pts: Seq[Array[Double]], dispatch: String = "default", requireValidTriangulation: Boolean = false)(using
+  def apply(
+    points: PointCloud,
+    backend: AlphaBackend = AlphaBackend.Default,
+    requireValidTriangulation: Boolean = false
+  )(using
     epsilon: Epsilon = Epsilon(1e-5)
   ): AlphaShapes =
-    dispatch.toLowerCase match
-      case "default" =>
-        // These three branches all resolve to "helix" today: no regime (point count / ambient dimension) has been
-        // measured yet to pick a backend by. They're placeholders for that dispatch, not dead code -- keep them
-        // distinct rather than collapsing to a single case.
-        pts match
-          case pts if pts.isEmpty         => apply(pts, dispatch = "helix", requireValidTriangulation)
-          case pts if pts.head.length > 7 => apply(pts, dispatch = "helix", requireValidTriangulation)
-          case _                          => apply(pts, dispatch = "helix", requireValidTriangulation)
-      case "helix" =>
-        HelixDelaunay(
-          pts.toArray,
-          requireValidTriangulation = requireValidTriangulation
-        ) // Helix should be faster for dim: 7 - 17. Adjust this check when additional impl exists.
-      case "dqp" =>
+    backend match
+      case AlphaBackend.Default =>
+        // All three branches resolve to Helix today: no regime (point count / ambient dimension) has been measured yet
+        // to pick a backend by. They're placeholders for that dispatch, not dead code -- keep them distinct.
+        points match
+          case pc if pc.size == 0            => apply(pc, AlphaBackend.Helix, requireValidTriangulation)
+          case pc if pc.ambientDimension > 7 => apply(pc, AlphaBackend.Helix, requireValidTriangulation)
+          case pc                            => apply(pc, AlphaBackend.Helix, requireValidTriangulation)
+      case AlphaBackend.Helix =>
+        HelixDelaunay(points.points, requireValidTriangulation = requireValidTriangulation)
+      case AlphaBackend.DQP =>
         require(
           !requireValidTriangulation,
-          "requireValidTriangulation=true is not valid for dispatch=\"dqp\": AlphaShapeDQP has no facet-" +
+          "requireValidTriangulation=true is not valid for backend = AlphaBackend.DQP: AlphaShapeDQP has no facet-" +
             "multiplicity precondition to repair (FastAlphaHomologyEngine is specialized to HelixDelaunay's own " +
             "triangulation and never consumes AlphaShapeDQP's output) -- this option would be a silent no-op there."
         )
-        AlphaShapeDQP(pts.toArray)
-      case other =>
-        throw IllegalArgumentException(s"Unknown alpha complex backend: '$other' (expected default/helix/DQP)")
+        AlphaShapeDQP(points.points)
 
   // utilities for Delaunay computations
   type Point = RealVector

@@ -17,7 +17,7 @@ import org.appliedtopology.tda4j.*
 given Double is Field = Field.DoubleApproximated(1e-9)
 
 val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
-val shape = AlphaShapes(points.toSeq, dispatch = "helix")   // or "DQP"
+val shape = AlphaShapes(points.toSeq, AlphaBackend.Helix)   // or "DQP"
 ```
 
 `AlphaShapes(points)` with no `dispatch`, or `dispatch = "default"`, always resolves to `"helix"` — ask for

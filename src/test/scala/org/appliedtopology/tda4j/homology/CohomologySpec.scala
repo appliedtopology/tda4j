@@ -227,7 +227,7 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
   "Alpha: generic cohomology's barcode matches CellularHomologyEngine's, and accounts for every cell" >> {
     val points: IndexedSeq[Array[Double]] =
       IndexedSeq(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.3, 0.9), Array(-0.4, 0.2), Array(0.6, -0.5))
-    val stream = AlphaShapes(points, "helix")
+    val stream = AlphaShapes(points, AlphaBackend.Helix)
     val totalCells = stream.iterator.size
     val cohomologyBars = vrCtx.persistentCohomology(stream).map(toTuple)
     val homologyBars =

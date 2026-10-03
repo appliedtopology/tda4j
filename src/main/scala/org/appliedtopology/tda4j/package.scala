@@ -20,6 +20,7 @@ abstract class Lab(characteristic: Int, precision: Double = 1e-9):
   // regenerate: python3 .claude/scripts/tdalab-exports.py (checked by TDAlabExportsSpec)
   export org.appliedtopology.tda4j.{
     ∆,
+    AlphaBackend,
     AlphaComplexDQP,
     AlphaComplexDQPBuilder,
     AlphaComplexDQPException,

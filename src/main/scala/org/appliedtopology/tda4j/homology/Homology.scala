@@ -19,6 +19,29 @@ class SimplicialHomologyEngine[VertexT: Ordering, CoefficientT: Field, Filtratio
 class CubicalHomologyEngine[CoefficientT: Field, FiltrationT: Ordering]()
     extends CellularHomologyEngine[Cube, CoefficientT, FiltrationT] {}
 
+/* Companion forms with every type argument inferred: the cell/vertex and filtration types from the stream, the
+ * coefficient type from the one `Field` given in scope (none: an error saying how to pick one; two: an ambiguity --
+ * `Field`'s companion holds no instances, so nothing can silently decide it). `SimplicialHomologyEngine[Int, Double,
+ * Double]().persistentHomology(s)` becomes `SimplicialHomologyEngine.persistentHomology(s)`.
+ */
+object SimplicialHomologyEngine:
+  def persistentHomology[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering](
+    stream: CellStream[Simplex[VertexT], FiltrationT]
+  ): CellularHomologyEngine[Simplex[VertexT], CoefficientT, FiltrationT]#HomologyState =
+    SimplicialHomologyEngine[VertexT, CoefficientT, FiltrationT]().persistentHomology(stream)
+
+object CubicalHomologyEngine:
+  def persistentHomology[CoefficientT: Field, FiltrationT: Ordering](
+    stream: CellStream[Cube, FiltrationT]
+  ): CellularHomologyEngine[Cube, CoefficientT, FiltrationT]#HomologyState =
+    CubicalHomologyEngine[CoefficientT, FiltrationT]().persistentHomology(stream)
+
+object CellularHomologyEngine:
+  def persistentHomology[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering](
+    stream: CellStream[CellT, FiltrationT]
+  ): CellularHomologyEngine[CellT, CoefficientT, FiltrationT]#HomologyState =
+    CellularHomologyEngine[CellT, CoefficientT, FiltrationT]().persistentHomology(stream)
+
 /** Naive persistent homology via the standard single-pivot-table reduction algorithm: process cells in filtration
   * order, reduce each cell's boundary against the pivots recorded so far, and every cell either opens a class (reduced
   * boundary is zero) or closes one (reduced boundary is nonzero, and its leading cell -- the pivot -- is necessarily a
@@ -976,3 +999,18 @@ class PersistenceInChunksEngine[VertexT: Ordering, CoefficientT: Field](maxDim: 
   */
 class CubicalPersistenceInChunksEngine[CoefficientT: Field](maxDim: Int = 5)
     extends CellularPersistenceInChunksEngine[Cube, CoefficientT](maxDim) {}
+
+object CellularPersistenceInChunksEngine:
+  /** Every type argument inferred (see `SimplicialHomologyEngine.persistentHomology`). */
+  def persistentHomology[CellT: OrderedCell, CoefficientT: Field](
+    stream: StratifiedCellStream[CellT, Double],
+    maxDim: Int = 5
+  ): CellularPersistenceInChunksEngine[CellT, CoefficientT]#HomologyState =
+    CellularPersistenceInChunksEngine[CellT, CoefficientT](maxDim).persistentHomology(stream)
+
+object PersistenceInChunksEngine:
+  def persistentHomology[VertexT: Ordering, CoefficientT: Field](
+    stream: StratifiedCellStream[Simplex[VertexT], Double],
+    maxDim: Int = 5
+  ): CellularPersistenceInChunksEngine[Simplex[VertexT], CoefficientT]#HomologyState =
+    PersistenceInChunksEngine[VertexT, CoefficientT](maxDim).persistentHomology(stream)

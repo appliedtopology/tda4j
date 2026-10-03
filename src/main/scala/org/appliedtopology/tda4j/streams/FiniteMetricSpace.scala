@@ -221,17 +221,11 @@ class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistances: Bo
     vpt.getAllWithinDistance(qp, eps).asScala.toSeq.map(pts.indexOf(_))
 
 object EuclideanMetricSpace:
-  // Two overloads per parameter type (Seq/Array), not one with a default `cacheDistances` each -- Scala
-  // rejects two overloaded `apply`s both carrying a default argument (ambiguous which default resolves a
-  // single-arg call), so the default lives only on the class's own primary constructor.
-  def apply(points: Seq[Seq[Double]]): EuclideanMetricSpace =
-    new EuclideanMetricSpace(points.map(_.toArray).toArray)
-  def apply(points: Seq[Seq[Double]], cacheDistances: Boolean): EuclideanMetricSpace =
-    new EuclideanMetricSpace(points.map(_.toArray).toArray, cacheDistances)
-  def apply(points: Array[Array[Double]]): EuclideanMetricSpace =
-    new EuclideanMetricSpace(points)
-  def apply(points: Array[Array[Double]], cacheDistances: Boolean): EuclideanMetricSpace =
-    new EuclideanMetricSpace(points, cacheDistances)
+  // Two overloads, not one with a default `cacheDistances`: the class's own constructor carries that default. Every
+  // point shape (Array[Array[Double]], Seq[Seq[Double]], Seq[Array[Double]]) converts to a PointCloud here.
+  def apply(points: PointCloud): EuclideanMetricSpace = new EuclideanMetricSpace(points.points)
+  def apply(points: PointCloud, cacheDistances: Boolean): EuclideanMetricSpace =
+    new EuclideanMetricSpace(points.points, cacheDistances)
 
 /** ******* Efficient Spatial Queries *******
   */

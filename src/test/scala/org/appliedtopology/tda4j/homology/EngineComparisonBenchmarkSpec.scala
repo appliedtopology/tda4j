@@ -135,8 +135,8 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
         bounded(RecursiveStackVietorisRipsSimplexStream(EuclideanMetricSpace(pts)), maxDim)
       ),
       "VR-NewVR" -> ((pts, maxDim) => IncrementalVietorisRipsSimplexStream(EuclideanMetricSpace(pts), maxDim)),
-      "Alpha-DQP" -> ((pts, maxDim) => bounded(AlphaShapes(pts.toIndexedSeq, "DQP"), maxDim)),
-      "Alpha-Helix" -> ((pts, maxDim) => bounded(AlphaShapes(pts.toIndexedSeq, "helix"), maxDim))
+      "Alpha-DQP" -> ((pts, maxDim) => bounded(AlphaShapes(pts.toIndexedSeq, AlphaBackend.DQP), maxDim)),
+      "Alpha-Helix" -> ((pts, maxDim) => bounded(AlphaShapes(pts.toIndexedSeq, AlphaBackend.Helix), maxDim))
     )
 
     val engines: Seq[(String, (StratifiedCellStream[Simplex[Int], Double], Int) => Int)] = Seq(

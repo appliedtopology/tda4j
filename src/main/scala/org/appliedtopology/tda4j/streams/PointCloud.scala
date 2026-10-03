@@ -8,7 +8,7 @@ package org.appliedtopology.tda4j
 into final case class PointCloud(points: Array[Array[Double]]):
   def size: Int = points.length
   def ambientDimension: Int = if points.isEmpty then 0 else points.head.length
-  lazy val metricSpace: EuclideanMetricSpace = EuclideanMetricSpace(points)
+  lazy val metricSpace: EuclideanMetricSpace = new EuclideanMetricSpace(points)
 // format: on
 
 object PointCloud:

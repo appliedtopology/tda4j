@@ -88,13 +88,17 @@ object PersistenceFilter:
     */
   def significant[A](
     bars: List[PersistenceBar[Double, A]],
-    minPersistence: Option[Double] = None,
+    minPersistence: Optional[Double] = Optional.empty,
     fraction: Double = DefaultFraction,
-    scale: Option[Double] = None
+    scale: Optional[Double] = Optional.empty
   ): List[PersistenceBar[Double, A]] =
     val bs = bars.toArray
     val births = bs.map(b => endpointValue(b.lower))
     val deaths = bs.map(b => endpointValue(b.upper))
     val fallback = filtrationRange(births, deaths)
-    val kept = keptIndices(births, deaths, threshold(minPersistence, fraction, scale.getOrElse(fallback), fallback))
+    val kept = keptIndices(
+      births,
+      deaths,
+      threshold(minPersistence.toOption, fraction, scale.toOption.getOrElse(fallback), fallback)
+    )
     kept.toList.map(bs)

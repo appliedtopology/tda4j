@@ -191,7 +191,7 @@ object VietorisRips extends PointCloudComplex:
   def apply(
     metricSpace: FiniteMetricSpace[Int],
     maxDimension: Int = 2,
-    maxFiltrationValue: Option[Double] = None,
+    maxFiltrationValue: Optional[Double] = Optional.empty,
     implementation: Implementation = Implementation.Enumerating
   ): LevelwiseSimplexStream[Int, Double] =
     require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
@@ -199,18 +199,18 @@ object VietorisRips extends PointCloudComplex:
     implementation match
       case Implementation.Enumerating =>
         LimitedCofaceSimplexStream(
-          EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
+          EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
           topSimplexDimension
         )
       case Implementation.RipserCoface =>
         LimitedCofaceSimplexStream(
-          RipserCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
+          RipserCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
           topSimplexDimension
         )
       case Implementation.Inorder =>
         LimitedCofaceSimplexStream(
-          InorderCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
+          InorderCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
           topSimplexDimension
         )
       case Implementation.Incremental =>
-        IncrementalVietorisRipsSimplexStream(metricSpace, topSimplexDimension, maxFiltrationValue)
+        IncrementalVietorisRipsSimplexStream(metricSpace, topSimplexDimension, maxFiltrationValue.toOption)
