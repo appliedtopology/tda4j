@@ -129,7 +129,7 @@ generated re-exports` markers) and guarded by `TDAlabExportsSpec` -- rerun the s
 types and val aliases are re-exported: Scala 3.9 reports a re-exported def as ambiguous (and loses a re-exported
 extension) for users who import both the package and a TDAlab, but not a re-exported object/class/type/val. Hence `∆`
 is `val ∆ : Simplex.type = Simplex`, and top-level defs (`simplexIsOrderedCell`, `asSimplex`, ...) still need the package
-import (`DESIGN-api-audit-notes.md`). No namespace objects (`tdalab.streams.X` is gone) and no given re-exports (defaults
+import (`DESIGN-api-audit.md`). No namespace objects (`tdalab.streams.X` is gone) and no given re-exports (defaults
 come from companions). `characteristic = 0` means `Double`; a prime `p` means `Z/p`; anything else throws. Vertices are
 fixed to `Int`: this lab is simplicial and opinionated, and the project lead is open to several labs for different
 settings (a cubical lab would not want the `Simplex -> Chain` conversion). **`TDAContext` and the
