@@ -3,54 +3,8 @@ package org.appliedtopology.tda4j
 import scala.collection.mutable
 import scala.compiletime.asMatchable
 
-/** '''The production Ripser persistent-cohomology engine''' -- this is what `TDA4j.scala`'s public `engine="ripser"`
-  * MATLAB-facing option actually calls, not `RipserCohomologyEngine`. `RipserCohomologyEngine` (`Homology.scala`) stays
-  * in the codebase deliberately, but ONLY as this class's cross-validation test oracle -- see that class's own doc for
-  * why its remaining value is narrower than "a second production option" (it catches representation-specific bugs in
-  * `DiameterIndex`'s index-only `equals`/`hashCode` and this class's index-keyed `basis`/`generators`/ `cleared` maps
-  * that no other spec would; it does NOT independently validate the Ripser algorithm itself, since both engines share
-  * `SimplexIndexing` -- that job belongs to `SimplicialHomologyEngine`, a genuinely different algorithm). Measured
-  * faster and dramatically leaner on memory than `RipserCohomologyEngine` on real paper data.
-  *
-  * Keyed on a packed `(Double, Long)` diameter/combinatorial-index pair instead of a materialized
-  * `Simplex[Int]`/`SortedSet[Int]` -- Ripser's own `diameter_index_t` representation, deliberately NOT adopted by
-  * `RipserCohomologyEngine` (see `DiameterSimplex`'s own doc in `Homology.scala`). Eliminating `SortedSet[Int]` as the
-  * thing carried/hashed/compared through `Chain.reduceBy`'s reduction closes most of the constant-factor tax measured
-  * against real `ripser.cpp` (`.claude/WORKLOG-ripser-comparison.md`). A genuinely SEPARATE file from `Homology.scala`
-  * on purpose: this representation is specific to Vietoris-Rips/`SimplexIndexing`, not a general `OrderedCell` engine
-  * the way the other engines are.
-  *
-  * Implements `RipserCohomologyEngine`'s `maxDimension` semantics (top homological degree reported, not top simplex
-  * dimension built -- `.claude/WORKLOG-maxdim-semantics-fix.md`) method for method, rather than re-deriving the
-  * algorithm independently -- a faithful re-keying, not a redesign.
-  *
-  * '''Why `DiameterIndex`, not a bare `(Double, Long)` tuple''': a bare tuple risks Scala's own stdlib
-  * `Ordering.Tuple2` competing with this class's own intended ordering (ascending diameter, ties broken by DESCENDING
-  * index -- Definition 3.2/Proposition 3.9's "lexicographically refined" tie-break, the opposite of a tuple's natural
-  * ascending-both-fields order). A small named carrier, exactly `DiameterSimplex`'s own pattern one class up, sidesteps
-  * the ambiguity entirely.
-  *
-  * '''Why `DiameterIndex` overrides `equals`/`hashCode` to consider only `index`, not `diameter`''':
-  * `DiameterSimplex`'s own doc warns against using it as a Set/Map key for exactly this reason -- case-class equality
-  * including the Double diameter means two carriers for the textually-same simplex could compare unequal on
-  * floating-point noise. This class's `basis`/`generators` are genuinely keyed by the FULL `DiameterIndex` (required:
-  * `Chain.reduceBy`'s basis map key type must match the chain's own cell type, and a pivot extracted via
-  * `chain.leadingCell` is a `DiameterIndex`, not a bare `Long`), so instead of requiring callers to strip the diameter
-  * by discipline, `equals`/`hashCode` depend on `index` alone, making "same combinatorial index = same key" true by
-  * construction regardless of which floating-point path computed the diameter.
-  */
-/** Ripser's own cofacet-diameter recurrence: `sigma`'s cofacet diameter after inserting vertex `v` is the max of
-  * `sigma`'s own diameter and `v`'s distance to every one of `sigma`'s vertices -- an O(d) formula needing `sigma`'s
-  * materialized vertex set, with no index-only shortcut. Shared by `PackedRipserCohomologyEngine` and
-  * `RipserCohomologyEngine` (`Homology.scala`) -- `metricSpace` is threaded explicitly, rather than each engine's own
-  * field, so one function serves both.
-  *
-  * Takes `sigma`'s vertex set as an already-materialized `Array[Int]`, not a `Simplex[Int]`/`SortedSet[Int]`:
-  * `sigma.underlying.iterator` (a persistent red-black tree with no cheaper iteration path) allocates a fresh
-  * `KeysIterator`/`TreeIterator`/`Tree[]` DFS-stack on every call. `sigma` is fixed across every candidate vertex
-  * considered within one enumeration call, so each caller decodes/materializes its vertex array exactly ONCE and passes
-  * the same array to every `insertionDiameter` call in that enumeration.
-  */
+// The diameter of `sigma` plus vertex `v`: max of sigma's diameter and the distances from `v` to sigma's vertices
+// (Ripser's cofacet recurrence, O(d)). `vertices` is sigma's vertex array, decoded once per enumeration by the caller.
 private[tda4j] def insertionDiameter(
   metricSpace: FiniteMetricSpace[Int],
   vertices: Array[Int],
@@ -65,64 +19,49 @@ private[tda4j] def insertionDiameter(
     i += 1
   maxD
 
+/** Persistent cohomology of the Vietoris-Rips complex of a metric space by Bauer's Ripser algorithm (arXiv:1908.02518):
+  * the fast engine for Vietoris-Rips, and the MATLAB/CLI default there. Cells are packed as (diameter, combinatorial
+  * index) pairs ([[DiameterIndex]], Ripser's `diameter_index_t`); clearing, apparent pairs and the enclosing-radius
+  * cutoff as in Ripser.
+  *
+  * Reports degrees `0 .. maxDimension`, each bar with its representative cocycle over `DiameterIndex` cells: decode a
+  * cell of a degree-`k` bar with `si.decodeToArray(cell.index, k + 1)`. `maxFiltrationValue` defaults to the minimum
+  * enclosing radius, past which nothing new is born. `useApparentPairs = false` turns off the apparent-pair shortcut,
+  * which changes no output (for benchmarking).
+  */
 class PackedRipserCohomologyEngine[CoefficientT: Field](
   metricSpace: FiniteMetricSpace[Int],
   maxDimension: Int,
   useApparentPairs: Boolean = true,
-  // None means "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below -- see
-  // RipserCohomologyEngine's identical parameter for the full derivation of why Option, not a NaN sentinel.
+  // None: the minimum enclosing radius.
   maxFiltrationValue: Option[Double] = None
 ):
 
   private val resolvedMaxFiltrationValue: Double =
     maxFiltrationValue.getOrElse(metricSpace.minimumEnclosingRadius)
 
-  /** Not `private`, as of `TDA4j.scala` routing `engine="ripser"` through this class instead of
-    * `RipserCohomologyEngine`: a caller decoding a bar's `DiameterIndex` cells back to vertex arrays (e.g.
-    * `PersistenceResult.cycleVertices`) needs this same `SimplexIndexing` instance -- constructing a fresh one from
-    * `metricSpace.size` would work too (the class is a pure function of vertex count), but would rebuild
-    * `binomialEntry`'s lazily-grown cache from scratch rather than reusing the one this context already populated
-    * during its own reduction.
-    */
+  /** The combinatorial number system of this metric space's simplices, for decoding the cells of returned chains. */
   val si: SimplexIndexing = SimplexIndexing(metricSpace.size)
   private val fr = summon[CoefficientT is Field]
 
-  /** A simplex carried purely as (diameter, combinatorial index) -- see the class doc above for why equality
-    * deliberately ignores `diameter`. Not `private`: it's the actual `Chain` cell type `persistentCohomology()` returns
-    * bars over, so callers need to be able to name the type (e.g. to decode a bar's cells back to `Simplex[Int]` via
-    * `SimplexIndexing.apply(index, size)` for display or cross-validation).
+  /** A simplex as its (diameter, combinatorial index): the cell type of the returned chains. Equality and hash use the
+    * index alone, so the same simplex reached by different floating-point paths is one key.
     */
   final case class DiameterIndex(diameter: Double, index: Long):
-    // `.asMatchable` is a compile-time-only cast (satisfies Scala 3's Matchable safety check on an `Any`
-    // selector -- `equals` must take `Any`, which isn't itself `Matchable`), not a runtime operation -- zero
-    // added cost on this hot path (`equals`/`hashCode` run on every `basis`/`generators`/`cleared` map/set
-    // operation in `persistentCohomology`). No `@unchecked` needed here, unlike `Chain.equals`: `DiameterIndex`
-    // has no type parameters to erase.
+    // `.asMatchable` only satisfies the Matchable check on an `Any` selector; no runtime cost.
     override def equals(other: Any): Boolean = other.asMatchable match
       case that: DiameterIndex => this.index == that.index
       case _                   => false
     override def hashCode(): Int = index.hashCode()
 
-  /** Ascending by diameter; ties broken so a LARGER index sorts as OLDER (smaller under this ordering) -- the exact
-    * same tie-break `RipserCohomologyEngine.compareFvThenIndex`/`cohomologyOrdering` use, just operating directly on
-    * the already-carried pair with no `si(x)`/`si(y)` ENCODE step at all (that engine's `si(simplex): Long` is an O(d
-    * log d) sort-and-sum, paid TWICE per comparator call -- here the index is already sitting in the pair being
-    * compared).
-    */
+  // Ascending by diameter; on a tie the larger index is older (as RipserCohomologyEngine.cohomologyOrdering).
   private def compareDiamThenIndex(x: DiameterIndex, y: DiameterIndex): Int =
     val fc = java.lang.Double.compare(x.diameter, y.diameter)
     if fc != 0 then fc else java.lang.Long.compare(y.index, x.index)
 
   given packedOrdering: Ordering[DiameterIndex] = compareDiamThenIndex(_, _)
 
-  /** Plain O(d^2) pairwise-maximum over an already-decoded `Array[Int]` -- the array-based equivalent of
-    * `FiniteMetricSpace.MaximumDistanceFiltrationValue.apply(Simplex[Int])`, used ONLY by `zeroPivotFacet` below. That
-    * method has no incremental shortcut (removing a vertex, unlike inserting one via `insertionDiameter`, admits no
-    * O(d) recurrence -- see its own doc), so each candidate facet's filtration value must be recomputed from scratch
-    * regardless; this exists so that recompute can work directly off `decodeToArray`'s cheap array decode instead of
-    * needing a `Simplex[Int]`. `MaximumDistanceFiltrationValue` itself is untouched; every other caller of it is
-    * unaffected.
-    */
+  // The diameter of a decoded vertex array, O(d^2): for facets, where removing a vertex has no cheap update rule.
   private def maxPairwiseDistance(vertices: Array[Int]): Double =
     var maxD = 0.0
     var i = 0
@@ -135,17 +74,9 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
       i += 1
     maxD
 
-  /** The canonical (insert-above-own-maximum) cofacets of `sigma`, one per higher simplex that has `sigma` as its own
-    * canonical facet -- packed analogue of `RipserCohomologyEngine.sparseCofacets`. `size` is `sigma`'s own vertex
-    * count (dimension + 1); a `DiameterIndex` doesn't carry its own dimension the way a `Simplex[Int]` does, so callers
-    * thread `size` explicitly instead (constant within one outer-loop iteration -- see `persistentCohomology`).
-    *
-    * Returns `Iterator[DiameterIndex]`, not `Seq[DiameterIndex]`, even though both call sites immediately materialize
-    * the flattened result: `Seq` would force every SOURCE simplex's own cofacet list to be fully built before
-    * flattening, where `Iterator` keeps only one source simplex's cofacets live at a time -- real memory pressure at
-    * this class's own scale. Built directly on `CofacetCursor` (not `cofacetIteratorWithVertex`), so this keeps the
-    * allocation win -- no `(Int, Long)` tuple per candidate -- while keeping the lazy `Iterator` contract.
-    */
+  // The canonical cofacets of `sigma` (insert a vertex above its largest) within `maxFiltrationValue`; `size` is sigma's
+  // vertex count (a DiameterIndex does not know its dimension). Lazy, so one source simplex's cofacets are live at a
+  // time.
   private def sparseCofacets(sigma: DiameterIndex, size: Int): Iterator[DiameterIndex] =
     if size > maxDimension then Iterator.empty
     else
@@ -170,14 +101,8 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
           step()
           result
 
-  /** Packed analogue of `RipserCohomologyEngine.coboundaryOf`: decodes `sigma` exactly ONCE (never decodes any `tau` --
-    * each cofacet's diameter comes from `insertionDiameter`, its identity from the index `CofacetCursor` already
-    * produces). Guard mirrors the fixed `maxDimension` semantics: empty only past `maxDimension + 1` (`size - 1 >
-    * maxDimension`, i.e. `sigma`'s own dimension exceeds what's requested), not AT it -- see
-    * `.claude/WORKLOG-maxdim-semantics-fix.md`.
-    *
-    * Built directly on `CofacetCursor`, not `cofacetIteratorWithVertex`: the latter allocates a fresh `(Int, Long)`
-    * tuple on every candidate vertex considered, once the largest identified allocation cost in this class.
+  /** The coboundary of `sigma` (with `size` vertices) in the complex truncated at `maxFiltrationValue`, as in
+    * [[RipserCohomologyEngine.coboundaryOf]]. Defined up to dimension `maxDimension`.
     */
   def coboundaryOf(sigma: DiameterIndex, size: Int): Chain[DiameterIndex, CoefficientT] =
     if size - 1 > maxDimension then Chain.empty
@@ -188,9 +113,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
       while cur.hasNext do
         val tauFv = insertionDiameter(metricSpace, vertices, sigma.diameter, cur.vertex)
         if tauFv <= resolvedMaxFiltrationValue then
-          // `vertices` is sorted ascending (from `TreeSet.toArray`), so counting entries below `cur.vertex` is a
-          // plain linear scan, not `decoded.underlying.count(_ < v)` -- see `insertionDiameter`'s doc above for why
-          // a `SortedSet` operation here allocates an iterator on every single candidate `v`.
+          // `vertices` is sorted ascending: a plain scan counts the entries below `cur.vertex`.
           var position = 0
           while position < vertices.length && vertices(position) < cur.vertex do position += 1
           val sign = if position % 2 == 0 then fr.one else fr.negate(fr.one)
@@ -198,20 +121,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
         cur.advance()
       Chain.from(buffer.toSeq)
 
-  /** A hand-rolled `while` loop over `CofacetCursor` directly, not `.filter(...).maxByOption(_.index)` or
-    * `cofacetIteratorWithVertex`: `maxByOption` boxes every `Long` comparison, and an `Iterator[(Int, Long)]` allocates
-    * a fresh tuple per candidate on top of that.
-    *
-    * Returns on the FIRST candidate tied at `sigma.diameter`, not a full sweep tracking a running max index -- sound
-    * (not just faster) because `CofacetCursor.index` is STRICTLY DECREASING across successive `advance()` calls
-    * (`SimplexIndexingSpec`'s own property test pins this), so the first tied candidate encountered already has the
-    * maximum index among every candidate that will ever tie, and continuing the sweep after finding it can only ever
-    * confirm the same answer. This matches real `ripser.cpp`'s own `get_zero_pivot_cofacet`, which returns on first
-    * match with no further scan for the same reason. Found via the `o3_1024` compute-server JFR profile
-    * (`.claude/WORKLOG-packed-ripser-engine.md`): this method's own full, UNCONDITIONAL sweep (every candidate vertex,
-    * every one of the complex's simplices, regardless of threshold) was the largest remaining driver of
-    * `insertionDiameter` calls once the metric-space distance cache removed the earlier dominant cost.
-    */
+  // The oldest same-diameter cofacet (largest index): the cursor's index decreases strictly, so the first tie is it.
   private def zeroPivotCofacet(sigma: DiameterIndex, size: Int): Option[DiameterIndex] =
     if size - 1 > maxDimension then None
     else
@@ -223,18 +133,8 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
         cur.advance()
       None
 
-  /** `tau`'s facet tied at `tau`'s own value with the smallest index. No incremental shortcut exists for removing a
-    * vertex's DIAMETER (same scope boundary `RipserCohomologyEngine.zeroPivotFacet` documents -- `maxPairwiseDistance`
-    * must still be fully recomputed per candidate), but `FacetCursor` yields the removed vertex directly, so the
-    * candidate's own VERTEX SET is built by array-removal from `tau`'s already-decoded vertices rather than a fresh
-    * `decodeToArray(facetIdx, size - 1)` call -- verified sound by `SimplexIndexingSpec`'s `FacetCursor` correctness
-    * property (`decodeToArray(cur.index, size-1).toSet == decodeToArray(startIndex, size).toSet - cur.vertex`).
-    *
-    * Returns on the FIRST tied candidate for the same reason `zeroPivotCofacet` above does, mirrored: `FacetCursor.
-    * index` is STRICTLY INCREASING across successive `advance()` calls (same property test), so the first tied
-    * candidate already has the MINIMUM index -- the direction this method wants, matching its own `bestIdx`
-    * initialization at `Long.MaxValue` before this change.
-    */
+  // The youngest same-diameter facet (smallest index): the facet cursor's index increases strictly, so the first tie is
+  // it. Facet diameters are recomputed from the vertex array.
   private def zeroPivotFacet(tau: DiameterIndex, size: Int): Option[DiameterIndex] =
     val tauVertices = si.decodeToArray(tau.index, size)
     val candidate = new Array[Int](size - 1)
@@ -272,7 +172,12 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
   private var _totalSimplexCount: Int = 0
   def totalSimplexCount: Int = _totalSimplexCount
 
-  def persistentCohomology(): List[PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]]] =
+  /** Every bar of degree `0 .. maxDimension`, each with its representative cocycle (over [[DiameterIndex]] cells;
+    * decode with `si`); zero-length bars only if `includeZeroLength`.
+    */
+  def persistentCohomology(
+    includeZeroLength: Boolean = false
+  ): List[PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]]] =
     val chainRM = summon[Chain[DiameterIndex, CoefficientT] is RingModule]
     import chainRM.*
 
@@ -361,4 +266,4 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
 
       activeCleared = nextCleared
 
-    bars.toList
+    PersistenceBar.dropZeroLength(bars, includeZeroLength)

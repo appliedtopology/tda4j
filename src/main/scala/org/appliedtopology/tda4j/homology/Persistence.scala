@@ -24,9 +24,10 @@ object Image:
   * Persistence(stream, maxDimension = 2)                 // any complex you built yourself (witness, Dowker, ...)
   * }}}
   *
-  * Returns a [[PersistenceDiagram]]: every bar of degree `0 .. maxDimension` with its representative cycle, as an
-  * immutable value. This runs the computation to the end; for a long run you want to inspect while it goes (or keep if
-  * it dies), build an engine and use its cursor (`advanceFor`, `diagramAt`) instead.
+  * Returns a [[PersistenceDiagram]]: the bars of degree `0 .. maxDimension`, each with its representative cycle, as an
+  * immutable value. Zero-length bars are left out; short ones are one call away (`diagram.longerThan(0.05)`,
+  * `diagram.significant()`). This runs the computation to the end; for a long run you want to inspect while it goes (or
+  * keep if it dies), build an engine and use its cursor (`advanceFor`, `diagramAt`) instead.
   *
   * @param input
   *   points (`Array[Array[Double]]`, `Seq[Seq[Double]]`, `Seq[Array[Double]]`), a `FiniteMetricSpace[Int]`, an
@@ -43,6 +44,8 @@ object Image:
   *   coefficients.
   * @param engine
   *   `Engine.Chunks` (default: the clearing/chunks algorithm) or `Engine.Naive` (the reference algorithm).
+  * @param includeZeroLength
+  *   also report zero-length bars `[v, v)` (cells paired with cells entering at the same value). Default `false`.
   */
 object Persistence:
   enum Engine:
@@ -97,7 +100,8 @@ object Persistence:
     maxFiltrationValue: Optional[Double] = Optional.empty,
     complex: PointCloudComplex = VietorisRips,
     characteristic: Int = FiniteField.DefaultPrime,
-    engine: Engine = Engine.Chunks
+    engine: Engine = Engine.Chunks,
+    includeZeroLength: Boolean = false
   ): PersistenceDiagram[CellT] =
     require(maxDimension >= 0, s"Persistence: maxDimension must be >= 0, got $maxDimension")
     given (CellT is OrderedCell) = input.cells
@@ -106,7 +110,8 @@ object Persistence:
       maxDimension,
       characteristic,
       engine,
-      input.scale
+      input.scale,
+      includeZeroLength
     )
 
   private def compute[CellT: OrderedCell](
@@ -114,16 +119,20 @@ object Persistence:
     maxDimension: Int,
     characteristic: Int,
     engine: Engine,
-    scale: Option[Double]
+    scale: Option[Double],
+    includeZeroLength: Boolean
   ): PersistenceDiagram[CellT] =
     val coefficients = Coefficients(characteristic)
     import coefficients.given
     val (bars, last) = engine match
       case Engine.Chunks =>
         val state = CellularPersistenceInChunksEngine[CellT, coefficients.C](maxDimension).persistentHomology(stream)
-        (state.barcodeAt(Double.PositiveInfinity), state.lastFiltrationValue)
+        (state.barcodeAt(Double.PositiveInfinity, includeZeroLength), state.lastFiltrationValue)
       case Engine.Naive =>
         val state = CellularHomologyEngine[CellT, coefficients.C, Double]().persistentHomology(stream)
         state.advanceAll()
-        (state.barcodeAt(Double.PositiveInfinity), state.lastFiltrationValue.getOrElse(Double.NegativeInfinity))
+        (
+          state.barcodeAt(Double.PositiveInfinity, includeZeroLength),
+          state.lastFiltrationValue.getOrElse(Double.NegativeInfinity)
+        )
     PersistenceDiagram[CellT, coefficients.C](bars.filter(_.dim <= maxDimension), maxDimension, last, scale)

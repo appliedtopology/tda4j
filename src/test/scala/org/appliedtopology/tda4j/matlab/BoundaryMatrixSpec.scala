@@ -46,7 +46,7 @@ class BoundaryMatrixSpec extends Specification with ScalaCheck:
         bars += ((result.columnDimension(low), result.columnFiltrationValue(low), result.columnFiltrationValue(j)))
     for j <- 0 until n do
       if !paired(j) then bars += ((result.columnDimension(j), result.columnFiltrationValue(j), Double.PositiveInfinity))
-    bars.toSet
+    bars.toSet.filter((_, birth, death) => birth != death) // the facade leaves zero-length bars out by default
 
   private def barsAsTriples(result: PersistenceResult): Set[(Int, Double, Double)] =
     (0 until result.size()).map(i => (result.dimension(i), result.birth(i), result.death(i))).toSet

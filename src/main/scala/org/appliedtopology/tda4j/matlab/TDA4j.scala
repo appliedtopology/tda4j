@@ -117,11 +117,13 @@ import scala.collection.mutable
   *     holds every bar), in the units the complex reports (diameters for `vr`, radii for `cech`/`alpha`); a cubical
   *     image or Dowker relation has no metric, so its own value range (max - min) is the scale.
   *     `"minPersistenceFraction"` changes that 1% (a fraction of the scale); `"minPersistence"` sets an absolute
-  *     threshold in the barcode's own units instead. Give at most one; `0` for either reports EVERY bar, which is what
-  *     every engine computes and what cross-engine comparisons want. Only
+  *     threshold in the barcode's own units instead. Give at most one; `0` for either reports every bar. Only
   *     `size()`/`toArray()`/`dimension`/`birth`/`death`/`cycle*` are filtered:
   *     `PersistenceResult.hiddenCount()`/`persistenceThreshold()`/`toArrayUnfiltered()` say what was hidden, and
   *     distances/landscapes/persistence images always use the complete barcode. See `PersistenceFilter`.
+  *   - `"includeZeroLength"`: `"true"` to also compute zero-length bars (`birth == death`: a cell paired with one
+  *     entering at the same value), which are otherwise left out of the result entirely (not counted by
+  *     `hiddenCount()`). With `"minPersistence", "0"` they are reported too.
   *   - `"maxFiltrationValue"`: double, default (when omitted) is the point cloud's own `minimumEnclosingRadius`
   *     (Ripser's own default truncation, not unbounded -- see CLAUDE.md's "enclosing-radius default" note). Pass a very
   *     large number for the old always-unbounded behavior. Consulted for `complex=vr` (a diameter), `complex=cech` (a
@@ -559,7 +561,8 @@ object TDA4j:
     "edgecollapse",
     "requirevalidtriangulation",
     "minpersistence",
-    "minpersistencefraction"
+    "minpersistencefraction",
+    "includezerolength"
   )
 
   /** `numLandmarks`/`landmarkSelector`/`landmarkSeed` only -- the STRICT allowlist `selectLandmarksFromPoints`/
@@ -592,7 +595,8 @@ object TDA4j:
       "prime",
       "epsilon",
       "minpersistence",
-      "minpersistencefraction"
+      "minpersistencefraction",
+      "includezerolength"
     )
 
   /** `computeFromRelation`'s own allowlist -- see that method's doc for what each key means. Separate from
@@ -609,7 +613,8 @@ object TDA4j:
     "prime",
     "epsilon",
     "minpersistence",
-    "minpersistencefraction"
+    "minpersistencefraction",
+    "includezerolength"
   )
 
   private def parseOptionsWithKeys(options: Array[String], allowedKeys: Set[String]): Map[String, String] =
@@ -796,9 +801,13 @@ object TDA4j:
     * enclosing radius, or a cubical image's / Dowker relation's value range -- passed by-name, so it is only computed
     * when a fraction of it is needed); `0` for either option means "report every bar".
     */
-  private final case class ThresholdSpec(minPersistence: Option[Double], fraction: Double):
+  private final case class ThresholdSpec(minPersistence: Option[Double], fraction: Double, includeZeroLength: Boolean):
     def apply(result: PersistenceResult, scale: => Double): PersistenceResult =
-      result.withPersistenceThreshold(minPersistence, fraction, scale)
+      (if includeZeroLength then result else result.withoutZeroLength).withPersistenceThreshold(
+        minPersistence,
+        fraction,
+        scale
+      )
 
   /** max - min of the finite values -- the "scale" of an input with no metric (a cubical image's pixels, a Dowker
     * relation's entries); `0` if there are none.
@@ -823,7 +832,11 @@ object TDA4j:
       if !(f >= 0.0) || f.isInfinite then
         throw new IllegalArgumentException(s"option 'minPersistenceFraction' must be a finite number >= 0, got '$f'")
     )
-    ThresholdSpec(absolute, fraction.getOrElse(PersistenceFilter.DefaultFraction))
+    ThresholdSpec(
+      absolute,
+      fraction.getOrElse(PersistenceFilter.DefaultFraction),
+      opts.get("includezerolength").exists(v => parseBooleanOption("includeZeroLength", v))
+    )
 
   private def dispatch(
     opts: Map[String, String],
@@ -1079,7 +1092,7 @@ object TDA4j:
             // `dim + 1` (vertex count) is exactly the `size` `si.decodeToArray` needs -- known from the bar, not
             // guessed.
             fromBars[ctx.DiameterIndex, C](
-              ctx.persistentCohomology(),
+              ctx.persistentCohomology(includeZeroLength = true),
               (dim, cell) => ctx.si.decodeToArray(cell.index, dim + 1),
               toDouble,
               requestedMaxDimension,
@@ -1091,7 +1104,7 @@ object TDA4j:
             // RipserCohomologySpec's own naiveBars helper uses. Reuses vrStreamForBoundary directly -- an
             // identical construction to what this branch built for itself before the boundary matrix existed.
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(vrStreamForBoundary),
+              PersistenceEngine.naive[Simplex[Int], C].barcode(vrStreamForBoundary, includeZeroLength = true),
               vrCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1106,7 +1119,9 @@ object TDA4j:
             // coefficients-and-representatives principle.
             val stream = EnumeratingCofaceSimplexStream(collapsedMetricSpace, maxFiltrationValue = maxFiltrationValue)
             fromBars[Simplex[Int], C](
-              PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(stream),
+              PersistenceEngine
+                .chunks[Simplex[Int], C](requestedMaxDimension)
+                .barcode(stream, includeZeroLength = true),
               vrCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1120,7 +1135,7 @@ object TDA4j:
             // own doc), so the cap lives entirely in the stream, exactly like engine=Naive. Reuses
             // vrStreamForBoundary directly, same as engine=Naive above.
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(vrStreamForBoundary),
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(vrStreamForBoundary, includeZeroLength = true),
               vrCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1153,7 +1168,7 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(alphaStream),
+              PersistenceEngine.naive[Simplex[Int], C].barcode(alphaStream, includeZeroLength = true),
               alphaCellVertices,
               toDouble,
               Int.MaxValue,
@@ -1164,7 +1179,7 @@ object TDA4j:
             // complex's chain complex terminates on its own. CellularCohomologyEngine accepts `alphaStream`
             // directly -- it's a LevelwiseSimplexStream[Int, Double], hence a CellStream[Simplex[Int], Double].
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(alphaStream),
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(alphaStream, includeZeroLength = true),
               alphaCellVertices,
               toDouble,
               Int.MaxValue,
@@ -1190,7 +1205,7 @@ object TDA4j:
                 // for circularCoordinates -- catching and re-throwing a DIFFERENT exception here would only
                 // lose the original's own stack trace for no benefit.
                 fromBars[Simplex[Int], C](
-                  FastAlphaHomologyEngine[C]().persistentHomology(helix),
+                  FastAlphaHomologyEngine[C]().persistentHomology(helix, includeZeroLength = true),
                   alphaCellVertices,
                   toDouble,
                   Int.MaxValue,
@@ -1233,7 +1248,7 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(cechStreamForBoundary),
+              PersistenceEngine.naive[Simplex[Int], C].barcode(cechStreamForBoundary, includeZeroLength = true),
               cechCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1250,7 +1265,9 @@ object TDA4j:
             // before).
             val stream = CechCofaceSimplexStream(euclideanMetricSpace, maxFiltrationValue = maxFiltrationValue)
             fromBars[Simplex[Int], C](
-              PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(stream),
+              PersistenceEngine
+                .chunks[Simplex[Int], C](requestedMaxDimension)
+                .barcode(stream, includeZeroLength = true),
               cechCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1261,7 +1278,7 @@ object TDA4j:
             // bounded, so the same "build one dimension higher via LimitedCofaceSimplexStream, drop it via
             // fromBars" dance applies, for the identical reason as complex=vr's own engine=Cohomology branch.
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(cechStreamForBoundary),
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(cechStreamForBoundary, includeZeroLength = true),
               cechCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1290,7 +1307,7 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(dtmStreamForBoundary),
+              PersistenceEngine.naive[Simplex[Int], C].barcode(dtmStreamForBoundary, includeZeroLength = true),
               dtmCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1298,7 +1315,9 @@ object TDA4j:
             )
           case EngineKind.Chunks =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(dtmStream),
+              PersistenceEngine
+                .chunks[Simplex[Int], C](requestedMaxDimension)
+                .barcode(dtmStream, includeZeroLength = true),
               dtmCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1306,7 +1325,7 @@ object TDA4j:
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(dtmStreamForBoundary),
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(dtmStreamForBoundary, includeZeroLength = true),
               dtmCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1336,7 +1355,7 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(sparseStreamForBoundary),
+              PersistenceEngine.naive[Simplex[Int], C].barcode(sparseStreamForBoundary, includeZeroLength = true),
               sparseCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1344,7 +1363,9 @@ object TDA4j:
             )
           case EngineKind.Chunks =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(sparseStream),
+              PersistenceEngine
+                .chunks[Simplex[Int], C](requestedMaxDimension)
+                .barcode(sparseStream, includeZeroLength = true),
               sparseCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1352,7 +1373,7 @@ object TDA4j:
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(sparseStreamForBoundary),
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(sparseStreamForBoundary, includeZeroLength = true),
               sparseCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1382,7 +1403,7 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(dtmAlphaStream),
+              PersistenceEngine.naive[Simplex[Int], C].barcode(dtmAlphaStream, includeZeroLength = true),
               dtmAlphaCellVertices,
               toDouble,
               Int.MaxValue,
@@ -1390,7 +1411,7 @@ object TDA4j:
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(dtmAlphaStream),
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(dtmAlphaStream, includeZeroLength = true),
               dtmAlphaCellVertices,
               toDouble,
               Int.MaxValue,
@@ -1462,7 +1483,7 @@ object TDA4j:
             val ctx =
               PackedRipserCohomologyEngine[C](wms, requestedMaxDimension, maxFiltrationValue = maxFiltrationValue)
             fromBars[ctx.DiameterIndex, C](
-              ctx.persistentCohomology(),
+              ctx.persistentCohomology(includeZeroLength = true),
               (dim, cell) => ctx.si.decodeToArray(cell.index, dim + 1).map(landmarks),
               toDouble,
               requestedMaxDimension,
@@ -1470,7 +1491,7 @@ object TDA4j:
             )
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(lazyStreamForBoundary),
+              PersistenceEngine.naive[Simplex[Int], C].barcode(lazyStreamForBoundary, includeZeroLength = true),
               cellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1482,7 +1503,9 @@ object TDA4j:
             // bounded (inherited from RipserCofaceSimplexStream), mirroring complex=cech's own chunks case.
             val stream = LazyWitnessSimplexStream(metricSpace, landmarks, nu, maxFiltrationValue = maxFiltrationValue)
             fromBars[Simplex[Int], C](
-              PersistenceEngine.chunks[Simplex[Int], C](requestedMaxDimension).barcode(stream),
+              PersistenceEngine
+                .chunks[Simplex[Int], C](requestedMaxDimension)
+                .barcode(stream, includeZeroLength = true),
               cellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1490,7 +1513,7 @@ object TDA4j:
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(lazyStreamForBoundary),
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(lazyStreamForBoundary, includeZeroLength = true),
               cellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1520,7 +1543,7 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(generalStreamForBoundary),
+              PersistenceEngine.naive[Simplex[Int], C].barcode(generalStreamForBoundary, includeZeroLength = true),
               cellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1528,7 +1551,7 @@ object TDA4j:
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(generalStreamForBoundary),
+              PersistenceEngine.cohomology[Simplex[Int], C].barcode(generalStreamForBoundary, includeZeroLength = true),
               cellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1651,7 +1674,7 @@ object TDA4j:
     engine match
       case EngineKind.Naive =>
         fromBars[Simplex[Int], C](
-          PersistenceEngine.naive[Simplex[Int], C].barcode(streamForBoundary),
+          PersistenceEngine.naive[Simplex[Int], C].barcode(streamForBoundary, includeZeroLength = true),
           cellVertices,
           toDouble,
           requestedMaxDimension,
@@ -1659,7 +1682,7 @@ object TDA4j:
         )
       case EngineKind.Cohomology =>
         fromBars[Simplex[Int], C](
-          PersistenceEngine.cohomology[Simplex[Int], C].barcode(streamForBoundary),
+          PersistenceEngine.cohomology[Simplex[Int], C].barcode(streamForBoundary, includeZeroLength = true),
           cellVertices,
           toDouble,
           requestedMaxDimension,
@@ -1744,7 +1767,7 @@ object TDA4j:
         // artificially cut short the way a VR/Cech complex is -- nothing to build one dimension higher for.
         // CellularHomologyEngine[Cube, ...] has no maxDim of its own at all, same as Simplex[Int].
         fromBars[Cube, C](
-          PersistenceEngine.naive[Cube, C].barcode(stream),
+          PersistenceEngine.naive[Cube, C].barcode(stream, includeZeroLength = true),
           cellVertices,
           toDouble,
           maxDimension,
@@ -1756,7 +1779,7 @@ object TDA4j:
         // semantics-fix.md), so this can skip real work for a caller who only wants low-dimensional homology, not
         // just filter what's reported after the fact.
         fromBars[Cube, C](
-          PersistenceEngine.chunks[Cube, C](maxDimension).barcode(stream),
+          PersistenceEngine.chunks[Cube, C](maxDimension).barcode(stream, includeZeroLength = true),
           cellVertices,
           toDouble,
           maxDimension,
@@ -1767,7 +1790,7 @@ object TDA4j:
         // is already naturally bounded), CellularCohomologyEngine computes to that natural top dimension, and
         // maxDimension is applied purely as a post-hoc filter via fromBars.
         fromBars[Cube, C](
-          PersistenceEngine.cohomology[Cube, C].barcode(stream),
+          PersistenceEngine.cohomology[Cube, C].barcode(stream, includeZeroLength = true),
           cellVertices,
           toDouble,
           maxDimension,
@@ -1782,7 +1805,7 @@ object TDA4j:
         // for real filtering now that ambientDim >= 3 is possible here too (unlike the old ambientDim=2-only
         // engine, where the grid's own natural top dimension was always <= 1 and nothing was ever filtered).
         fromBars[Cube, C](
-          FastCubicalHomologyEngine[C]().persistentHomology(stream),
+          FastCubicalHomologyEngine[C]().persistentHomology(stream, includeZeroLength = true),
           cellVertices,
           toDouble,
           maxDimension,

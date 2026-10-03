@@ -48,13 +48,22 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
   given Ordering[Cube] = cubeOrdering
 
-  def persistentHomology(stream: CubicalGridStream): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
+  /** Every bar of the image's sublevel (or superlevel) filtration, with representatives; zero-length bars (a plateau's
+    * cells pairing off at one value) only if `includeZeroLength`.
+    */
+  def persistentHomology(
+    stream: CubicalGridStream,
+    includeZeroLength: Boolean = false
+  ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     require(
       stream.ambientDim >= 2,
       s"FastCubicalHomologyEngine requires ambient dimension >= 2, got ${stream.ambientDim}"
     )
-    if stream.ambientDim == 2 then computeH0(stream) ++ computeDualTopDimension(stream)
-    else computeMiddleDimensions(stream) ++ computeDualTopDimension(stream)
+    val bars =
+      if stream.ambientDim == 2 then
+        computeH0(stream, includeZeroLength) ++ computeDualTopDimension(stream, includeZeroLength)
+      else computeMiddleDimensions(stream, includeZeroLength) ++ computeDualTopDimension(stream, includeZeroLength)
+    bars
 
   // -------------------------------------------------------------------------------------------------------------
   // d >= 3's "middle" dimensions (1 <= k <= d-2): no duality shortcut exists for these, so they're handed to
@@ -70,12 +79,13 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
   // See .claude/DESIGN-fast-engines-hybrid-middle-dimensions.md for the full derivation.
   // -------------------------------------------------------------------------------------------------------------
   private def computeMiddleDimensions(
-    stream: CubicalGridStream
+    stream: CubicalGridStream,
+    includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     val truncated = LimitedCubicalGridStream(stream, stream.ambientDim - 1)
     CellularPersistenceInChunksEngine[Cube, CoefficientT](stream.ambientDim - 2)
       .persistentHomology(truncated)
-      .barcodeAt(Double.PositiveInfinity)
+      .barcodeAt(Double.PositiveInfinity, includeZeroLength)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
     if !lower && v == Double.PositiveInfinity then PositiveInfinity()
@@ -87,7 +97,10 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
   // CellularPersistenceInChunksEngine.unionFindDim01's own already-validated pattern (no dimension-1
   // cycle-tracking needed here, since H_1 comes from the dual mechanism below instead).
   // -------------------------------------------------------------------------------------------------------------
-  private def computeH0(stream: CubicalGridStream): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
+  private def computeH0(
+    stream: CubicalGridStream,
+    includeZeroLength: Boolean
+  ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     val vertices: Vector[Cube] = stream.iterateDimension.applyOrElse(0, (_: Int) => Iterator.empty).toVector
     val vertexIndex: Map[Cube, Int] = vertices.zipWithIndex.toMap
     val parent: Array[Int] = Array.range(0, vertices.size)
@@ -120,12 +133,9 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
         val (youngRoot, oldRoot) = if v0Val <= v1Val then (r1, r0) else (r0, r1)
         parent(youngRoot) = oldRoot
         val dying = vertices(youngRoot)
-        bars += new PersistenceBar(
-          0,
-          endpoint(true)(stream.filtrationValue(dying)),
-          endpoint(false)(stream.filtrationValue(edge)),
-          Some(Chain(dying))
-        )
+        val (birth, death) = (stream.filtrationValue(dying), stream.filtrationValue(edge))
+        if includeZeroLength || birth != death then
+          bars += new PersistenceBar(0, endpoint(true)(birth), endpoint(false)(death), Some(Chain(dying)))
     vertices.indices.foreach { i =>
       if find(i) == i then
         bars += new PersistenceBar(
@@ -142,7 +152,8 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
   // the derivation this implements term-for-term.
   // -------------------------------------------------------------------------------------------------------------
   private def computeDualTopDimension(
-    stream: CubicalGridStream
+    stream: CubicalGridStream,
+    includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     val shape = stream.shape
     val ambientDim = stream.ambientDim
@@ -341,10 +352,11 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
               Chain.from(
                 flippedYoung.toSeq.flatMap((cube, c) => cube.boundary[CoefficientT].map((f, s) => (f, fr.times(c, s))))
               )
-            bars += new PersistenceBar(
-              ambientDim - 1,
-              endpoint(true)(v),
-              endpoint(false)(birthOf(youngRoot)),
-              Some(rep)
-            )
+            if includeZeroLength || v != birthOf(youngRoot) then
+              bars += new PersistenceBar(
+                ambientDim - 1,
+                endpoint(true)(v),
+                endpoint(false)(birthOf(youngRoot)),
+                Some(rep)
+              )
     bars.toList

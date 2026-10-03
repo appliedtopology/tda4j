@@ -102,6 +102,19 @@ final class PersistenceResult private[matlab] (
       thr
     )
 
+  /** This result without its zero-length bars (`birth == death`): what every entry point returns unless the
+    * `includeZeroLength` option is set. Applied before [[withPersistenceThreshold]].
+    */
+  private[matlab] def withoutZeroLength: PersistenceResult =
+    val keep = allDims.indices.filter(i => allBirths(i) != allDeaths(i)).toArray
+    new PersistenceResult(
+      keep.map(allDims),
+      keep.map(allBirths),
+      keep.map(allDeaths),
+      i => cycleProvider(keep(i)),
+      boundaryMatrixProvider
+    )
+
   def size(): Int = visible.length
 
   /** The whole barcode as one N-by-3 matrix: column 0 is dimension, column 1 is birth, column 2 is death (`+Inf` for an

@@ -4,84 +4,28 @@ import OrderedCell.cellOrdering
 
 import scala.collection.mutable
 
-/** Persistent cohomology (Bauer's algorithm, arXiv:1908.02518) generic over `CellT: OrderedCell` -- the cohomology
-  * counterpart to `CellularHomologyEngine`, filling in what CLAUDE.md's own architecture notes call a real,
-  * previously-unfilled asymmetry: cohomology in this codebase used to mean `RipserCohomologyEngine`/
-  * `PackedRipserCohomologyEngine` only, both hardcoded to `Simplex[Int]` via `SimplexIndexing`'s combinatorial number
-  * system. This class instead works for any `CellT: OrderedCell` this library has -- `Simplex`, `Cube`,
-  * `FiniteSimplicialSet` generators alike -- including complexes that already use `Simplex[Int]` but aren't flag
-  * complexes (Cech, Alpha), which the VR-specialized engines can't serve either way. See
-  * `.claude/DESIGN-generic-cohomology.md` for the full design derivation (including an `advisor()` review and a later
-  * correction dropping apparent pairs from the design entirely); this doc summarizes the load-bearing points, not the
-  * exploration.
+/** Persistent cohomology for any cell type (simplices, cubes, simplicial-set generators): the reduction of the
+  * coboundary matrix, following Bauer's Ripser (arXiv:1908.02518) without its Vietoris-Rips-specific shortcuts. Over a
+  * field the barcode is the same as the homology barcode; what this engine adds is cocycle representatives, and it
+  * works where the Ripser engines do not (Cech, alpha, cubical, simplicial sets, non-flag complexes).
   *
-  * '''The key idea''': the coboundary matrix persistent cohomology reduces is the transpose of the ordinary boundary
-  * matrix, same coefficients -- if `tau.boundary` contains `(sigma, c)`, `sigma`'s coboundary contains `(tau, c)`.
-  * Every stream this class targets (Cube, `FiniteSimplicialSet`, Cech, Alpha, and even ordinary `Simplex[Int]` VR
-  * complexes at a size where the reference/oracle engines matter more than raw speed) already gets fully materialized
-  * before persistence runs, unlike Vietoris-Rips at the scale `RipserCohomologyEngine` targets -- so unlike that
-  * class's elaborate `SimplexIndexing`/`insertionDiameter`/`sparseCofacets` apparatus (built specifically to avoid ever
-  * materializing a combinatorially-exploding full flag complex), this class builds the coboundary relation directly, by
-  * inverting each materialized cell's own already-generic `boundary[CoefficientT]` call -- no cell-type-specific
-  * coboundary formula needed anywhere, and no dual `Cocell`/`OrderedCocell` typeclass either (removed from
-  * `Chain.scala`, on the same understanding: coboundary is extrinsic to a cell, not intrinsic the way `boundary` is,
-  * since it depends on which higher-dimensional cells actually exist in the ambient complex).
+  * The coboundary is built by inverting the boundaries of the stream's cells, so the stream is read in full first.
+  * There is no `maxDim`: the stream decides the top degree. For degrees `0 .. k`, pass a stream with cells up to
+  * dimension `k + 1` (`LimitedCofaceSimplexStream(stream, k + 1)` for a coface stream) and ignore the degree-`(k + 1)`
+  * bars.
   *
-  * '''No `maxDim` parameter''', unlike every other engine in this codebase's history -- deliberately, not by oversight:
-  * this class simply computes cohomology up to whatever top dimension the materialized stream actually contains, which
-  * deletes the whole "does `maxDim` mean top *built* or top *reported* degree" footgun class
-  * (`CellularPersistenceInChunksEngine`, `RipserCohomologyEngine`, and `PackedRipserCohomologyEngine` each had to fix
-  * this exact bug once -- see `.claude/WORKLOG-maxdim-semantics-fix.md`) rather than reimplementing it a fourth time. A
-  * caller wanting only `H_0..H_k` wraps the *input* stream first -- `LimitedCofaceSimplexStream(stream, k + 1)`, the
-  * mechanism `RipserCohomologySpec`'s own oracle and the MATLAB facade's `engine=naive` path already use for exactly
-  * this -- so real `(k+1)`-dimensional cells exist to correctly resolve whether a `k`-born class is finite or
-  * essential, and drops any `dim == k + 1` bars from the returned list itself afterward.
-  *
-  * '''No apparent pairs''', also deliberately: Definition 3.2/Proposition 3.9's whole point is avoiding coboundary
-  * *enumeration* for cells that turn out to be trivially paired -- and this class has no enumeration to avoid, because
-  * it must materialize the coboundary relation for every cell up front just to have "coboundary" exist at all. What
-  * would be left after porting the mutual-pair check (skip one `basis` write, skip one call into an already-cheap
-  * `Chain.reduceBy` miss) is noise, plausibly a net loss once the pair- detection scan itself is counted, and not worth
-  * the extra machinery. See the design doc's "What does NOT carry over" section for the full argument.
-  *
-  * '''Representatives''': every bar carries a V-column (tracked exactly the way
-  * `RipserCohomologyEngine.persistentCohomology` already does), satisfying this codebase's standing "every engine needs
-  * generic `Field` + real representatives" principle automatically -- this is also this class's actual point, not an
-  * afterthought: over a field the cohomology barcode is identical to the homology barcode (the reason Ripser computes
-  * cohomology at all -- same answer, cheaper algorithm), so a bars-only version of this class would be entirely
-  * redundant with `CellularHomologyEngine`, which already covers every cell type this class does. Only an ''essential''
-  * bar's V-column is a genuine cocycle (`d(vcol) = 0`) by construction -- Algorithm 1's invariant is `d(V_j) = R_j`
-  * throughout, and `R_j` is zero exactly when the bar is essential; a finite bar's V-column has coboundary equal to its
-  * own nonzero reduced pivot chain instead (still a valid representative -- it witnesses the class on the sub-level set
-  * strictly before the bar's death, since every term of that nonzero coboundary is born at or after the death value --
-  * just not a cocycle over the whole complex). `coboundaryOfChain` exists specifically so a caller (in practice, a
-  * test) can verify this directly for essential bars (`coboundaryOfChain(rep, ...).isZero()`) -- something no engine in
-  * this codebase could check for Cube/`FiniteSimplicialSet`/Cech/Alpha before this class existed, since none of them
-  * ever had a cocycle representative to check in the first place.
+  * Representatives: every bar carries its V-column. For an essential bar it is a cocycle of the whole complex; for a
+  * finite bar its coboundary is the bar's reduced column, which is born at or after the bar's death, so it is a cocycle
+  * on the subcomplex before the death. `coboundaryOfChain` checks either.
   */
 class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]:
 
-  /** Full persistent cohomology of `stream`, one dimension-band coboundary block at a time (built by inverting
-    * `boundary`, then discarded once that dimension's cells are all processed -- the block is a fresh local `val` per
-    * loop iteration, so nothing needs an explicit "discard" beyond simply not keeping a reference around; peak memory
-    * is bounded by the single largest block, not the whole coboundary matrix).
-    *
-    * `cohomologyOrdering` is built explicitly here (ascending filtration value, then the stream's own
-    * `filtrationOrdering` unreversed as tie-break), never via `stream.filtrationOrdering.reverse` -- `.reverse` on that
-    * whole ordering would flip its dimension and within-dimension tie-break too, not just the filtration-value key (the
-    * same hazard `CellularHomologyEngine.processingOrder`'s own doc documents and works around). Safe here specifically
-    * because this algorithm never compares cells of different dimensions under `cohomologyOrdering` -- every sort and
-    * every `Chain.reduceBy` call below operates within one dimension band at a time, by construction of the
-    * per-dimension loop -- unlike `CellularHomologyEngine`, which genuinely needs a single cross-dimension pivot table
-    * and therefore needs the more careful construction it uses.
-    *
-    * `cohomologyOrdering` is summoned as a `given` right here, before anything that constructs a `Chain` --
-    * `Chain.scala`'s own ambient `given [CellT: OrderedCell] => Ordering[CellT] = oCell.ordering` (filtration-blind)
-    * would otherwise silently win at every `Chain.from`/`Chain.apply`/`RingModule` summon site below, exactly the
-    * `chainRM`-summoned-too-early bug class `CellularHomologyEngine` shipped once (see that class's own doc).
+  /** Every bar of `stream`'s persistent cohomology with its representative (see the class doc); zero-length bars only
+    * if `includeZeroLength`. Works one degree at a time, so memory is bounded by the largest coboundary block.
     */
   def persistentCohomology(
-    stream: => CellStream[CellT, FiltrationT]
+    stream: => CellStream[CellT, FiltrationT],
+    includeZeroLength: Boolean = false
   ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
     val theStream = stream
     val cellsByDim: Map[Int, Vector[CellT]] = theStream.iterator.toVector.groupBy(_.dim)
@@ -91,6 +35,8 @@ class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtrati
       val fv: PartialFunction[CellT, FiltrationT] = theStream.filtrationValue
       def cellFv(c: CellT): FiltrationT = fv.applyOrElse(c, (_: CellT) => theStream.smallest)
 
+      // Ascending filtration value, then the stream's tie-break. Not `filtrationOrdering.reverse`: that would also flip
+      // the tie-break. Only cells of one dimension are ever compared under it. Summoned before any `Chain` is built.
       given cohomologyOrdering: Ordering[CellT] =
         Ordering.by[CellT, FiltrationT](cellFv).orElse(theStream.filtrationOrdering)
 
@@ -166,27 +112,11 @@ class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtrati
         // `coboundaryMap` goes out of scope here, at the end of this dimension's own iteration -- nothing
         // keeps it alive into the next one.
 
-      bars.toList
+      PersistenceBar.dropZeroLength(bars, includeZeroLength)
 
-  /** The coboundary of `chain` (a chain of dimension-`d` cells), computed against `cofacets` (the candidate
-    * dimension-`(d+1)` cells to check) by the same boundary-inversion this class's own `persistentCohomology` uses
-    * internally -- exposed publicly purely for verification, not as a hot-path method:
-    * `coboundaryOfChain(representative, cellsAtDPlusOne).isZero()` is what makes a returned representative *checkable*
-    * as a genuine cocycle, rather than merely present. `persistentCohomology`'s own per-dimension coboundary block is
-    * discarded once that dimension's cells are processed (see its own doc), so this method rebuilds whatever it needs
-    * from the supplied `cofacets` on demand rather than assuming any of that state is still around.
-    *
-    * Uses the ambient, filtration-blind `Ordering[CellT]` (`Chain.scala`'s `given` derived from `OrderedCell` itself),
-    * not `cohomologyOrdering` -- deliberately: this method only needs *some* total order under which structurally-equal
-    * cells collapse correctly for `isZero()`'s own purposes, not a filtration-consistent one (unlike
-    * `persistentCohomology`'s internal pivot selection, where the specific ordering is load-bearing).
-    *
-    * `chain` must be homogeneous (every cell the same dimension `d`) and every cell `cofacets` yields must be dimension
-    * `d + 1` -- both checked with `require`, not merely documented: this method has no way to detect a caller mixing
-    * dimensions or passing the wrong band on its own (`Chain.from` over mismatched dimensions still type-checks and
-    * silently computes a partial, meaningless sum), and every caller in this codebase already satisfies both
-    * (`persistentCohomology`'s own internal use, and every test, always passes a single bar's own-dimension
-    * representative alongside `cellsByDim(bar.dim + 1)`).
+  /** The coboundary of `chain`, a chain of dimension-`d` cells, computed against `cofacets`, the dimension-`(d + 1)`
+    * cells to consider. For checking representatives: `coboundaryOfChain(rep, cellsOfDimension(d + 1)).isZero()`.
+    * Requires every cell of `chain` to have the same dimension `d` and every cofacet dimension `d + 1`.
     */
   def coboundaryOfChain(
     chain: Chain[CellT, CoefficientT],

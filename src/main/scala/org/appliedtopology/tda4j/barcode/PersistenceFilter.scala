@@ -1,23 +1,18 @@
 package org.appliedtopology.tda4j
 
-/** Dropping short bars -- the "noise" end of a barcode -- relative to the scale of the input.
-  *
-  * Every engine returns EVERY bar, which is what the cross-validation machinery needs but is overwhelming to read: a
-  * point cloud of a few hundred points has thousands of bars, nearly all of them negligible next to the few that carry
-  * the shape. This object is the opt-in, post-hoc filter (the same approach `ripser.py`/GUDHI users take; engines are
-  * deliberately NOT filtered, so nothing here changes what an engine computes or any representative it records). The
-  * `matlab.TDA4j` facade (hence the CLI and MATLAB) applies it by default with [[DefaultFraction]]; Scala callers using
-  * an engine directly call it themselves.
+/** Dropping short bars, relative to the scale of the input: the policy behind `diagram.significant()`,
+  * `bars.significant()` and the MATLAB/CLI default. (Zero-length bars are already gone: engines leave them out unless
+  * asked. For a fixed threshold, `longerThan(eps)` is simpler.)
   *
   * '''The scale.''' A bar is judged against a scale the caller supplies: for a point cloud or distance matrix,
-  * `metricSpace.minimumEnclosingRadius` (Ripser's enclosing radius -- beyond it the Vietoris-Rips complex is a cone and
-  * nothing new is born, so every bar lives in `[0, scale]`; it is also this library's default Vietoris-Rips
-  * truncation); for a cubical image, the range of the pixel values. It is used as-is in the units the complex reports
-  * (diameters for Vietoris-Rips, radii for Cech/alpha), so "1% of the scale" is 1% in those units. A caller with no
-  * such quantity at hand can use [[filtrationRange]], the span of the barcode's own finite endpoints.
+  * `metricSpace.minimumEnclosingRadius` (Ripser's enclosing radius: past it the Vietoris-Rips complex is a cone and
+  * nothing new is born, so every bar lies in `[0, scale]`; it is also the default Vietoris-Rips truncation); for a
+  * cubical image, the range of its values. It is used in the units the complex reports (diameters for Vietoris-Rips,
+  * radii for Cech/alpha). Without such a quantity, [[filtrationRange]], the span of the barcode's own finite endpoints,
+  * is the fallback.
   *
-  * '''The rule.''' A bar is kept iff it never dies (essential bars are always kept) or its persistence is strictly
-  * greater than the threshold. A threshold `<= 0` keeps EVERYTHING, including zero-persistence bars.
+  * '''The rule.''' A bar is kept iff it is essential or its persistence is strictly greater than the threshold. A
+  * threshold `<= 0` keeps everything.
   */
 object PersistenceFilter:
 

@@ -40,6 +40,17 @@ class UserImportsSpec extends Specification:
     }
   }
 
+  "short-bar filtering" should {
+    "need no import beyond the package, on a diagram and on an engine's bar list" in {
+      given Double is Field = Field.DoubleApproximated(1e-9)
+      val d = Persistence(points)
+      val bars = SimplicialHomologyEngine.persistentHomology(stream).barcodeAt(2.0).filter(_.dim <= 1)
+      (d.longerThan(1.0).size must beEqualTo(1)) and
+        (bars.longerThan(1.0).map(_.dim) must beEqualTo(List(0))) and
+        (bars.significant().size must beLessThanOrEqualTo(bars.size))
+    }
+  }
+
   "a missing coefficient field or cell structure" should {
     "produce a message that says what to do, not just 'no given instance'" in {
       // separate blocks: a given declared later in the same block would be visible to the earlier check

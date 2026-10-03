@@ -54,13 +54,20 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
   given Ordering[Simplex[Int]] = simplexOrdering[Int]
 
-  def persistentHomology(helix: HelixDelaunay): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
+  /** Every bar of the alpha filtration, with representatives; zero-length bars only if `includeZeroLength`. */
+  def persistentHomology(
+    helix: HelixDelaunay,
+    includeZeroLength: Boolean = false
+  ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     require(
       helix.ambientDimension >= 2,
       s"FastAlphaHomologyEngine requires ambient dimension >= 2, got ${helix.ambientDimension}"
     )
-    if helix.ambientDimension == 2 then computeH0(helix) ++ computeDualTopDimension(helix)
-    else computeMiddleDimensions(helix) ++ computeDualTopDimension(helix)
+    val bars =
+      if helix.ambientDimension == 2 then
+        computeH0(helix, includeZeroLength) ++ computeDualTopDimension(helix, includeZeroLength)
+      else computeMiddleDimensions(helix, includeZeroLength) ++ computeDualTopDimension(helix, includeZeroLength)
+    bars
 
   // -------------------------------------------------------------------------------------------------------------
   // d >= 3's "middle" dimensions (1 <= k <= d-2): see FastCubicalHomologyEngine.computeMiddleDimensions, whose
@@ -71,12 +78,13 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
   // this codebase's naive/chunks/cohomology engines already use for alpha complexes elsewhere.
   // -------------------------------------------------------------------------------------------------------------
   private def computeMiddleDimensions(
-    helix: HelixDelaunay
+    helix: HelixDelaunay,
+    includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     val truncated = LimitedAlphaShapesStream(helix, helix.ambientDimension - 1)
     PersistenceInChunksEngine[Int, CoefficientT](helix.ambientDimension - 2)
       .persistentHomology(truncated)
-      .barcodeAt(Double.PositiveInfinity)
+      .barcodeAt(Double.PositiveInfinity, includeZeroLength)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
     if !lower && v == Double.PositiveInfinity then PositiveInfinity()
@@ -87,7 +95,10 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
   // H_0: ordinary primal union-find, ascending value order, elder rule -- identical in shape to
   // FastCubicalHomologyEngine.computeH0, just over Simplex[Int] vertices/edges instead of Cube ones.
   // -------------------------------------------------------------------------------------------------------------
-  private def computeH0(helix: HelixDelaunay): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
+  private def computeH0(
+    helix: HelixDelaunay,
+    includeZeroLength: Boolean
+  ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     val vertices: Vector[Simplex[Int]] = helix.iterateDimension.applyOrElse(0, (_: Int) => Iterator.empty).toVector
     val vertexIndex: Map[Simplex[Int], Int] = vertices.zipWithIndex.toMap
     val parent: Array[Int] = Array.range(0, vertices.size)
@@ -115,12 +126,9 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
         val (youngRoot, oldRoot) = if v0Val <= v1Val then (r1, r0) else (r0, r1)
         parent(youngRoot) = oldRoot
         val dying = vertices(youngRoot)
-        bars += new PersistenceBar(
-          0,
-          endpoint(true)(helix.filtrationValue(dying)),
-          endpoint(false)(helix.filtrationValue(edge)),
-          Some(Chain(dying))
-        )
+        val (birth, death) = (helix.filtrationValue(dying), helix.filtrationValue(edge))
+        if includeZeroLength || birth != death then
+          bars += new PersistenceBar(0, endpoint(true)(birth), endpoint(false)(death), Some(Chain(dying)))
     vertices.indices.foreach { i =>
       if find(i) == i then
         bars += new PersistenceBar(
@@ -140,7 +148,8 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
   // SAME generic dual-union-find/representative-tracking algorithm regardless of cell type).
   // -------------------------------------------------------------------------------------------------------------
   private def computeDualTopDimension(
-    helix: HelixDelaunay
+    helix: HelixDelaunay,
+    includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     val ambientDim = helix.ambientDimension
     val topSimplices: Vector[Simplex[Int]] = helix.iterateDimension(ambientDim).toVector
@@ -329,10 +338,11 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
                   simplex.boundary[CoefficientT].map((f, s) => (f, fr.times(c, s)))
                 )
               )
-            bars += new PersistenceBar(
-              ambientDim - 1,
-              endpoint(true)(v),
-              endpoint(false)(birthOf(youngRoot)),
-              Some(rep)
-            )
+            if includeZeroLength || v != birthOf(youngRoot) then
+              bars += new PersistenceBar(
+                ambientDim - 1,
+                endpoint(true)(v),
+                endpoint(false)(birthOf(youngRoot)),
+                Some(rep)
+              )
     bars.toList

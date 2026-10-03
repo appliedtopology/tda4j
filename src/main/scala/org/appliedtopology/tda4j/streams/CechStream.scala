@@ -33,9 +33,6 @@ private class MiniballPointSet(points: Array[Array[Double]]) extends PointSet:
   * (restricted-Delaunay membership, dependent on the whole point cloud, not just a simplex's own vertices).
   */
 object CechFiltration:
-  private def cechRadius(vertexCoords: Array[Array[Double]]): Double =
-    if vertexCoords.length <= 1 then 0.0 // matches MaximumDistanceFiltrationValue's own dim<=0 convention
-    else math.sqrt(Miniball(MiniballPointSet(vertexCoords)).squaredRadius())
 
   /** A fresh `PartialFunction` with its own private cache -- one call to `CechFiltration(...)` per stream instance, not
     * a shared/global cache, matching every other per-stream filtration value in this codebase.
@@ -59,12 +56,22 @@ object CechFiltration:
     // ever read while dimension d's own candidates are being computed.
     val cache = TrieMap.empty[Simplex[Int], Double]
     def computeRadius(spx: Simplex[Int]): Double =
-      val raw = cechRadius(spx.underlying.toArray.map(euclideanMetricSpace.pts))
-      val facetFloor = spx.underlying.iterator
-        .map(v => cache.getOrElse((spx.underlying - v).asSimplex, 0.0))
-        .maxOption
-        .getOrElse(0.0)
-      math.max(raw, facetFloor)
+      val vertices = spx.underlying.toArray
+      val coords = vertices.map(euclideanMetricSpace.pts)
+      val ball = Miniball(MiniballPointSet(coords))
+      val raw = math.sqrt(ball.squaredRadius())
+      def facet(i: Int) = (spx.underlying - vertices(i)).asSimplex
+      val facetFloor = vertices.indices.map(i => cache.getOrElse(facet(i), 0.0)).max
+      // A vertex strictly inside the ball is not on its boundary sphere, so the ball is also the smallest ball around
+      // the facet without that vertex: reuse that facet's radius exactly, so their pair has length zero rather than a
+      // few ULPs (Miniball computes the two radii along different floating-point paths).
+      val center = ball.center()
+      def distanceToCenter(i: Int) = math.sqrt(coords(i).indices.map(k => math.pow(coords(i)(k) - center(k), 2)).sum)
+      val radius = vertices.indices
+        .find(i => distanceToCenter(i) < raw * (1 - 1e-9))
+        .flatMap(i => cache.get(facet(i)))
+        .getOrElse(raw)
+      math.max(radius, facetFloor)
     new PartialFunction[Simplex[Int], Double]:
       def isDefinedAt(spx: Simplex[Int]): Boolean =
         spx.forall(v => euclideanMetricSpace.contains(v))

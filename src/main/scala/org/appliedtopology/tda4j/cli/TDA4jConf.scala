@@ -85,13 +85,18 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   )
   val minPersistence: ScallopOption[Double] = opt[Double](descr =
     "only report bars with persistence (death - birth) greater than this, in the filtration's own units; essential " +
-      "(never-dying) bars are always reported. 0 reports every bar. Default: a bar must exceed 1% of the " +
-      "input's minimum enclosing radius (--min-persistence-fraction); give at most one of the two"
+      "(never-dying) bars are always reported. 0 reports every bar of positive length. Default: a bar must exceed " +
+      "1% of the input's minimum enclosing radius (--min-persistence-fraction); give at most one of the two"
   )
   val minPersistenceFraction: ScallopOption[Double] = opt[Double](descr =
     "like --min-persistence, but as a fraction of the input's scale: its minimum enclosing radius (Ripser's " +
       "enclosing radius -- every bar lives between 0 and it), or, for a cubical image / Dowker relation, the range " +
-      "of its values. Default 0.01; 0 reports every bar. See PersistenceFilter"
+      "of its values. Default 0.01; 0 reports every bar of positive length. See PersistenceFilter"
+  )
+  // String, not Boolean, like --edge-collapse below.
+  val includeZeroLength: ScallopOption[String] = opt[String](descr =
+    "true or false (default): also compute zero-length bars (a cell paired with one entering at the same value). " +
+      "With --min-persistence 0 they are reported too"
   )
   val field: ScallopOption[String] = opt[String](descr = "Z (default, a prime finite field) or R (floating point)")
   val prime: ScallopOption[Int] = opt[Int](descr = "prime for --field=Z (default: 17)")

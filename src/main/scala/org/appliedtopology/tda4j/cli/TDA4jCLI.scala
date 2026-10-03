@@ -69,6 +69,11 @@ object TDA4jCLI:
               "always uses the complete barcode"
           )
 
+      if conf.includeZeroLength.isSupplied && conf.selectLandmarks() then
+        throw new IllegalArgumentException(
+          "--include-zero-length is meaningless with --select-landmarks: there is no barcode here, only a landmark set"
+        )
+
       if conf.distanceTo.isSupplied then
         if conf.selectLandmarks() then
           throw new IllegalArgumentException(
@@ -198,6 +203,7 @@ object TDA4jCLI:
     add("maxFiltrationValue", conf.maxFiltrationValue)
     add("minPersistence", conf.minPersistence)
     add("minPersistenceFraction", conf.minPersistenceFraction)
+    add("includeZeroLength", conf.includeZeroLength)
     add("field", conf.field)
     add("prime", conf.prime)
     add("epsilon", conf.epsilon)
@@ -352,7 +358,7 @@ object TDA4jCLI:
     if result.hiddenCount() > 0 then
       System.err.println(
         s"tda4j: ${result.hiddenCount()} bar(s) with persistence <= ${result.persistenceThreshold()} not reported " +
-          s"(${result.size()} reported); pass --min-persistence 0 to report every bar"
+          s"(${result.size()} reported); pass --min-persistence 0 to report them"
       )
 
   // -----------------------------------------------------------------------------------------------------------

@@ -1194,7 +1194,9 @@ class AlphaComplexDQPBuilder(
 
   /** w is monotone along faces by construction -- the QP for a face has strictly fewer equality constraints, hence a
     * larger feasible set and a smaller optimum -- but floating point can violate it by an ulp or two, which some
-    * persistence algorithms will not forgive.
+    * persistence algorithms will not forgive. So each w(sigma) is raised to the largest value of its facets, and set
+    * equal to it when the two agree to [[SnapTolerance]] (relative): a facet whose optimum is attained on sigma's power
+    * face has the same value as sigma, and the two QP solves only agree to solver accuracy.
     */
   def clampMonotone(
     byDim: IndexedSeq[mutable.IndexedBuffer[Simplex[Int]]],
@@ -1203,12 +1205,13 @@ class AlphaComplexDQPBuilder(
     for k <- 1 until byDim.length do
       val cells = byDim(k)
       cells.foreach { sigma =>
-        var w = weights(sigma)
-        sigma
-          .map(v => sigma - v)
-          .foreach(facet => weights.get(facet).foreach(fw => if fw > w then w = fw))
-        weights(sigma) = w
+        val w = weights(sigma)
+        val facetMax = sigma.iterator.flatMap(v => weights.get(sigma - v)).maxOption.getOrElse(w)
+        weights(sigma) = if facetMax >= w || w - facetMax <= SnapTolerance * math.abs(w) then facetMax else w
       }
+
+  /** Relative difference below which a simplex's value is taken to equal its largest facet's (see `clampMonotone`). */
+  val SnapTolerance: Double = 1e-10
 end AlphaComplexDQPBuilder
 
 class AlphaShapeDQP(val points: Array[Array[Double]]) extends AlphaShapes:

@@ -35,32 +35,31 @@ class FastCubicalHomologySpec extends mutable.Specification with ScalaCheck:
     CubicalGridStream(IndexedSeq(5, 5), idx => if elevated(idx) then 1.0 else 0.0)
 
   // ---------------------------------------------------------------------------------------------------------
-  // Hand-derived, exact-bar-count fixtures (reused verbatim from CubicalStreamSpec -- see that file's own header
-  // comment for the general Euler-characteristic argument pinning these counts).
+  // Hand-derived fixtures (the same as CubicalStreamSpec's): the full barcode, plus agreement with the naive engine
+  // on every pair, the zero-length ones included.
   // ---------------------------------------------------------------------------------------------------------
 
-  "A constant-valued 2x2 image (9 vertices, 12 edges, 4 pixels, totalCells=25) reduces correctly" >> {
+  private def allBars(stream: CubicalGridStream) =
+    FastCubicalHomologyEngine[Double]()
+      .persistentHomology(stream, includeZeroLength = true)
+      .map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
+  private def allNaiveBars(stream: CubicalGridStream) =
+    CubicalHomologyEngine[Double, Double]()
+      .persistentHomology(stream)
+      .diagramAt(Double.PositiveInfinity, includeZeroLength = true)
+
+  "A constant-valued 2x2 image is one component" >> {
     val stream = CubicalGridStream(IndexedSeq(2, 2), _ => 5.0)
-    val bars = fastBars[Double](stream)
-    (HomologyFixtures.totalBarsAccountForAllCells(bars, 25) must beTrue) and
-      (bars.count(_._1 == 0) must beEqualTo(9)) and
-      (bars.count { case (0, _, d) => d.isInfinite; case _ => false } must beEqualTo(1)) and
-      (bars.count { case (0, b, d) => b == d; case _ => false } must beEqualTo(8)) and
-      (bars.count(_._1 == 1) must beEqualTo(4)) and
-      (bars.forall { case (1, b, d) => b == d; case _ => true } must beTrue) and
-      (bars.sorted must beEqualTo(naiveBars(stream).sorted))
+    (fastBars[Double](stream) must beEqualTo(List((0, 5.0, Double.PositiveInfinity)))) and
+      (HomologyFixtures.totalBarsAccountForAllCells(allBars(stream), 25) must beTrue) and
+      (allBars(stream).sorted must beEqualTo(allNaiveBars(stream).sorted))
   }
 
-  "A single bright center pixel in an otherwise dark 3x3 image produces exactly one persistent H1 bar" >> {
+  "A single bright center pixel in an otherwise dark 3x3 image produces exactly one H1 bar" >> {
     val stream = CubicalGridStream(IndexedSeq(3, 3), idx => if idx == IndexedSeq(1, 1) then 1.0 else 0.0)
-    val bars = fastBars[Double](stream)
-    (HomologyFixtures.totalBarsAccountForAllCells(bars, 49) must beTrue) and
-      (bars.count(_._1 == 0) must beEqualTo(16)) and
-      (bars.count { case (0, _, d) => d.isInfinite; case _ => false } must beEqualTo(1)) and
-      (bars.count(_._1 == 1) must beEqualTo(9)) and
-      (bars.count { case (1, b, d) => b == d; case _ => false } must beEqualTo(8)) and
-      (bars.exists(_ == (1, 0.0, 1.0)) must beTrue) and
-      (bars.sorted must beEqualTo(naiveBars(stream).sorted))
+    (fastBars[Double](stream).sorted must beEqualTo(List((0, 0.0, Double.PositiveInfinity), (1, 0.0, 1.0)))) and
+      (HomologyFixtures.totalBarsAccountForAllCells(allBars(stream), 49) must beTrue) and
+      (allBars(stream).sorted must beEqualTo(allNaiveBars(stream).sorted))
   }
 
   "Two independent single-pixel holes in a 5x5 image produce exactly two persistent H1 bars" >> {

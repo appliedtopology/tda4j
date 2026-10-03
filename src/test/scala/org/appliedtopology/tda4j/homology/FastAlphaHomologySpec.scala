@@ -46,10 +46,18 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
 
   "The hand-verified 5-point fan fixture matches the naive engine exactly (see the design note for the full hand trace)" >> {
     val bars = fastBars[Double](fanFixture)
+    val all = FastAlphaHomologyEngine[Double]()
+      .persistentHomology(fanFixture, includeZeroLength = true)
+      .map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
+    val allNaive = SimplicialHomologyEngine[Int, Double, Double]()
+      .persistentHomology(fanFixture)
+      .diagramAt(Double.PositiveInfinity, includeZeroLength = true)
     (bars.count(_._1 == 0) must beEqualTo(5)) and
       (bars.count { case (0, _, d) => d.isInfinite; case _ => false } must beEqualTo(1)) and
-      (bars.count(_._1 == 1) must beEqualTo(4)) and
-      (bars.sorted must beEqualTo(naiveBars(fanFixture).sorted))
+      (bars.count(_._1 == 1) must beEqualTo(2)) and // and two zero-length H1 pairs, below
+      (all.count(_._1 == 1) must beEqualTo(4)) and
+      (bars.sorted must beEqualTo(naiveBars(fanFixture).sorted)) and
+      (all.sorted must beEqualTo(allNaive.sorted))
   }
 
   // ---------------------------------------------------------------------------------------------------------
