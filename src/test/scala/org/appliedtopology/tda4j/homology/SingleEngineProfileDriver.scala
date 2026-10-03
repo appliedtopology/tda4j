@@ -65,11 +65,21 @@ object SingleEngineProfileDriver:
         case "sortedset" =>
           val ctx = RipserCohomologyContext[Fp](ms, maxDim, maxFiltrationValue = threshold)
           val bars = ctx.persistentCohomology()
-          (ctx.totalSimplexCount, ctx.substitutionCount, ctx.apparentPairCount, bars.groupBy(_.dim).view.mapValues(_.size).toMap)
+          (
+            ctx.totalSimplexCount,
+            ctx.substitutionCount,
+            ctx.apparentPairCount,
+            bars.groupBy(_.dim).view.mapValues(_.size).toMap
+          )
         case "packed" =>
           val ctx = PackedRipserCohomologyContext[Fp](ms, maxDim, maxFiltrationValue = threshold)
           val bars = ctx.persistentCohomology()
-          (ctx.totalSimplexCount, ctx.substitutionCount, ctx.apparentPairCount, bars.groupBy(_.dim).view.mapValues(_.size).toMap)
+          (
+            ctx.totalSimplexCount,
+            ctx.substitutionCount,
+            ctx.apparentPairCount,
+            bars.groupBy(_.dim).view.mapValues(_.size).toMap
+          )
         case other => throw new IllegalArgumentException(s"unknown engine $other -- use sortedset or packed")
       val elapsedMs = (System.nanoTime() - t0) / 1e6
       (elapsedMs, totalSimplices, substCount, apparentCount, barCounts)
@@ -80,4 +90,6 @@ object SingleEngineProfileDriver:
     val (_, totalSimplices, substCount, apparentCount, barCounts) = times.last
     println(s"engine=$engine format=$format dataFile=$dataFile maxDim=$maxDim threshold=$thresholdArg trials=$trials")
     println(f"medianMs=$medianMs%.1f allTimes=${times.map(t => f"${t._1}%.1f").mkString(",")}")
-    println(s"totalSimplexCount=$totalSimplices substitutionCount=$substCount apparentPairCount=$apparentCount bars=$barCounts")
+    println(
+      s"totalSimplexCount=$totalSimplices substitutionCount=$substCount apparentPairCount=$apparentCount bars=$barCounts"
+    )

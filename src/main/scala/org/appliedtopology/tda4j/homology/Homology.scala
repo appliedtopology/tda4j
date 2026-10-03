@@ -1348,14 +1348,14 @@ class RipserCohomologyContext[CoefficientT: Field](
 
   private var _apparentPairCount: Int = 0
 
-  /** How many simplices were resolved directly via the cheap `zeroApparentCofacet` skip-and-emit path (top of
-    * the main loop), i.e. never reached `coboundaryOf`/`Chain.reduceBy` at all -- distinct from
-    * `substitutionCount`, which only counts the much rarer LAZY FALLBACK firing when some OTHER column's
-    * reduction later needs an apparent pair's tau as a missing pivot. A low `substitutionCount` says nothing
-    * about this number (most apparent pairs, once found, are never looked up again). Added specifically to
-    * test whether `PackedRipserCohomologyContext`'s independently-reimplemented apparent-pairs check finds
-    * pairs at the same rate this engine's does on a given input -- see `fractal-r`'s own entry in
-    * `.claude/WORKLOG-o3-1024-fractal-r-session-2026-09-25.md` for why this matters there.
+  /** How many simplices were resolved directly via the cheap `zeroApparentCofacet` skip-and-emit path (top of the main
+    * loop), i.e. never reached `coboundaryOf`/`Chain.reduceBy` at all -- distinct from `substitutionCount`, which only
+    * counts the much rarer LAZY FALLBACK firing when some OTHER column's reduction later needs an apparent pair's tau
+    * as a missing pivot. A low `substitutionCount` says nothing about this number (most apparent pairs, once found, are
+    * never looked up again). Added specifically to test whether `PackedRipserCohomologyContext`'s
+    * independently-reimplemented apparent-pairs check finds pairs at the same rate this engine's does on a given input
+    * -- see `fractal-r`'s own entry in `.claude/WORKLOG-o3-1024-fractal-r-session-2026-09-25.md` for why this matters
+    * there.
     */
   def apparentPairCount: Int = _apparentPairCount
 

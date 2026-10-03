@@ -116,10 +116,24 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
     * the already-carried pair with no `si(x)`/`si(y)` ENCODE step at all (that engine's `si(simplex): Long` is an O(d
     * log d) sort-and-sum, paid TWICE per comparator call -- here the index is already sitting in the pair being
     * compared).
+    *
+    * Same-index pairs compare EQUAL unconditionally, never falling through to the diameter comparison, so this agrees
+    * with `DiameterIndex.equals` (also index-only) even if two carriers for the SAME index somehow ended up with
+    * different `diameter` fields (an under-specified `FiniteMetricSpace.distance` that isn't exactly symmetric can do
+    * this to `insertionDiameter`'s incrementally-computed value, depending on which facet a simplex was reached from --
+    * `ExplicitMetricSpace` itself is now fixed to never produce this, but this ordering no longer depends on every
+    * `FiniteMetricSpace` getting that right). Before this, a same-index/different-diameter pair were DISTINCT keys
+    * under this Ordering but the SAME key under `.equals`/`.hashCode` -- `basis` (a `HashMap`, keyed by `.equals`)
+    * could then return a chain for a `DiameterIndex` that `z` (a `TreeMap`, keyed by this Ordering) treats as a
+    * different entry, so eliminating it never actually removed `z`'s own entry: a genuine infinite loop in
+    * `Chain.reduceLoop`, confirmed directly against real `fractal_9_5_2` data (`.claude/
+    * WORKLOG-o3-1024-fractal-r-session-2026-09-25.md`).
     */
   private def compareDiamThenIndex(x: DiameterIndex, y: DiameterIndex): Int =
-    val fc = java.lang.Double.compare(x.diameter, y.diameter)
-    if fc != 0 then fc else java.lang.Long.compare(y.index, x.index)
+    if x.index == y.index then 0
+    else
+      val fc = java.lang.Double.compare(x.diameter, y.diameter)
+      if fc != 0 then fc else java.lang.Long.compare(y.index, x.index)
 
   given packedOrdering: Ordering[DiameterIndex] = compareDiamThenIndex(_, _)
 
@@ -282,14 +296,14 @@ class PackedRipserCohomologyContext[CoefficientT: Field](
 
   private var _apparentPairCount: Int = 0
 
-  /** How many simplices were resolved directly via the cheap `zeroApparentCofacet` skip-and-emit path (top of the
-    * main loop), i.e. never reached `coboundaryOf`/`Chain.reduceBy` at all -- distinct from `substitutionCount`,
-    * which only counts the much rarer LAZY FALLBACK firing when some OTHER column's reduction later needs an
-    * apparent pair's tau as a missing pivot. A low `substitutionCount` says nothing about this number (most
-    * apparent pairs, once found, are never looked up again -- `WORKLOG-lazy-enumeration.md`'s own point). Added
-    * specifically to test whether packed's independently-reimplemented apparent-pairs check finds pairs at the
-    * same rate `RipserCohomologyContext`'s does on a given input -- see `fractal-r`'s own entry in
-    * `.claude/WORKLOG-o3-1024-fractal-r-session-2026-09-25.md` for why this matters there.
+  /** How many simplices were resolved directly via the cheap `zeroApparentCofacet` skip-and-emit path (top of the main
+    * loop), i.e. never reached `coboundaryOf`/`Chain.reduceBy` at all -- distinct from `substitutionCount`, which only
+    * counts the much rarer LAZY FALLBACK firing when some OTHER column's reduction later needs an apparent pair's tau
+    * as a missing pivot. A low `substitutionCount` says nothing about this number (most apparent pairs, once found, are
+    * never looked up again -- `WORKLOG-lazy-enumeration.md`'s own point). Added specifically to test whether packed's
+    * independently-reimplemented apparent-pairs check finds pairs at the same rate `RipserCohomologyContext`'s does on
+    * a given input -- see `fractal-r`'s own entry in `.claude/WORKLOG-o3-1024-fractal-r-session-2026-09-25.md` for why
+    * this matters there.
     */
   def apparentPairCount: Int = _apparentPairCount
 

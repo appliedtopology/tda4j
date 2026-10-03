@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # Runs SingleEngineProfileDriver directly (one engine, one JVM process, no sbt/timeout/daemon-thread
 # machinery -- see that class's own doc comment) under JDK Flight Recorder, for a targeted profiling pass
-# on one case. Built specifically to chase two anomalies found in a same-machine compute-server run against
-# real ripser.cpp (see .claude/WORKLOG-packed-ripser-engine.md/-ripser-profiling.md for the established
-# baseline): o3_1024's packed-vs-SortedSet advantage collapsing to ~1.7x (every other case: 15-45x), and
-# fractal-r timing out for the packed engine while RipserCohomologyContext itself finishes (in ~89 minutes).
+# on one case. Built to chase two anomalies found in a same-machine compute-server run against real ripser.cpp
+# (see .claude/WORKLOG-packed-ripser-engine.md/-ripser-profiling.md for the established baseline): o3_1024's
+# packed-vs-SortedSet advantage collapsing to ~1.7x (every other case: 15-45x; fixed, 5 commits, same
+# WORKLOG-o3-1024-fractal-r-session-2026-09-25.md), and fractal-r timing out for the packed engine while
+# RipserCohomologyContext itself finishes (root-caused and fixed 2026-10-03, same worklog's final "Update"
+# section -- a genuine infinite loop in PackedRipserCohomologyContext triggered by ExplicitMetricSpace's
+# distance lookup not being exactly symmetric on real-world data, not a slow reduction). Still useful for
+# profiling any FUTURE anomaly on a single case/engine, not retired just because its original two targets
+# are resolved.
 #
 # Unlike RipserPaperBenchmarkSpec (sbt-hosted, shared JVM across every case, a per-cell timeout with NO
 # cooperative cancellation), this gives each run its own clean process with no time budget at all -- let it

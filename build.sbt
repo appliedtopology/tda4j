@@ -86,12 +86,14 @@ lazy val root = (project in file("."))
     laikaExtensions += Tda4jDirective,
     laikaConfig := {
       val older = priorReleaseVersions(baseDirectory.value).map(v => Version(v, v))
-      laika.sbt.LaikaConfig.defaults.withConfigValue(
-        Versions.forCurrentVersion(Version(docsVersion, docsVersion)).withOlderVersions(older: _*)
-      )
-        .withConfigValue(LinkConfig.empty
-          .addApiLinks(ApiLinks(baseUri="https://tda4j.appliedtopology.org/dev"))
-          .addSourceLinks(SourceLinks(baseUri="https://github.com/appliedtopology/tda4j/", suffix="scala"))
+      laika.sbt.LaikaConfig.defaults
+        .withConfigValue(
+          Versions.forCurrentVersion(Version(docsVersion, docsVersion)).withOlderVersions(older: _*)
+        )
+        .withConfigValue(
+          LinkConfig.empty
+            .addApiLinks(ApiLinks(baseUri = "https://tda4j.appliedtopology.org/dev"))
+            .addSourceLinks(SourceLinks(baseUri = "https://github.com/appliedtopology/tda4j/", suffix = "scala"))
         )
     },
     // Scala 3.9.0's own bundled scaladoc ships a `ux.js` that intercepts every same-origin link click
