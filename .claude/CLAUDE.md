@@ -128,7 +128,8 @@ line even though the docs build (project flags) would compile them without it.
 (`homology/Persistence.scala`) is the one-call verb: points/metric space/`Image`/any stream in, an immutable
 `PersistenceDiagram` (bars + representatives; coefficient type is a member, `import d.given`; `dim`, `at(f)`,
 `longest`, `longerThan(x)`, `significant()`, `bettiNumbers`) out. **Default: degrees 0..2, cocycles** (project lead):
-`Auto` = Ripser for `VietorisRips` on points/metric space, `Cohomology` otherwise; `Chunks`/`Naive` give cycles but
+`Auto` = Ripser for `VietorisRips` on points/metric space, `FastCubical` (cycles) for images/cubical grids of
+dimension >= 2, `Cohomology` otherwise; `Chunks`/`Naive` give cycles but
 reduce every top cell (VR/Cech H2 on ~100 points: minutes or OOM), so docs pair them with `maxDimension = 1`. A
 truncated stream's own degree (`homologyDegreeLimit`) is the default for streams. `WORKLOG-default-degree-2.md`.
 

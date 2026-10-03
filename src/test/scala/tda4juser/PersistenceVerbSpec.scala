@@ -158,6 +158,18 @@ class PersistenceVerbSpec extends Specification:
   }
 
   "Persistence(Image(...))" should {
+    "use the fast cubical engine by default: the bars of Engine.Chunks, with cycles as representatives" in {
+      val rnd = new scala.util.Random(5)
+      val pixels = Array.tabulate(12, 12)((i, j) => math.sin(i / 2.0) * math.cos(j / 3.0) + 0.2 * rnd.nextDouble())
+      val auto = Persistence(Image(pixels))
+      val fast = Persistence(Image(pixels), engine = Persistence.Engine.FastCubical)
+      val chunks = Persistence(Image(pixels), engine = Persistence.Engine.Chunks)
+      import auto.given
+      (norm(auto.triples) must beEqualTo(norm(chunks.triples)))
+        .and(norm(auto.triples) must beEqualTo(norm(fast.triples)))
+        .and(auto.bars.forall(b => Chain.from(b.representative.boundary).isZero()) must beTrue)
+        .and(Persistence(circle(6), engine = Persistence.Engine.FastCubical) must throwAn[IllegalArgumentException])
+    }
     "see the ring in a ring-shaped image as one H1 bar from 0 to 1 (the whole grid is contractible at the end)" in {
       val ring = Array.tabulate(7, 7)((i, j) => if math.abs(math.hypot(i - 3, j - 3) - 2.2) < 0.8 then 0.0 else 1.0)
       val d = Persistence(Image(ring))
@@ -188,7 +200,8 @@ class PersistenceEnginesSpec extends org.specs2.mutable.Specification:
       val points = Array.fill(15)(Array(rnd.nextDouble(), rnd.nextDouble()))
       def rounded(d: PersistenceDiagram[Simplex[Int]]) =
         d.triples.map((k, b, e) => (k, math.rint(b * 1e9), if e.isInfinite then e else math.rint(e * 1e9))).sorted
-      val diagrams = Persistence.Engine.values.toList.map(e => Persistence(points, engine = e))
+      val forPoints = Persistence.Engine.values.toList.filterNot(_ == Persistence.Engine.FastCubical)
+      val diagrams = forPoints.map(e => Persistence(points, engine = e))
       val ripser = Persistence(points, engine = Persistence.Engine.Ripser)
       (diagrams.map(rounded).distinct.size must beEqualTo(1)) and
         (ripser.bars.forall(b => b.representative.cells.forall(_.size == b.dim + 1)) must beTrue)

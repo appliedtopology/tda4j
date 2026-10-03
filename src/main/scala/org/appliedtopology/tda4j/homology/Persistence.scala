@@ -61,8 +61,8 @@ object Image:
 object Persistence:
   /** Which algorithm computes the diagram. All give the same bars; they differ in cost and in the representatives.
     *
-    *   - `Auto` (default): `Ripser` for the Vietoris-Rips complex of points or a metric space, `Cohomology` for
-    *     everything else. Representatives are cocycles.
+    *   - `Auto` (default): `Ripser` for the Vietoris-Rips complex of points or a metric space, `FastCubical` for an
+    *     image (or cubical grid) of dimension 2 and up, `Cohomology` for everything else.
     *   - `Chunks`: clearing and compression, union-find in degrees 0 and 1. Representatives are cycles: use it to see
     *     where a feature is (a loop's cycle runs around it). Slow in degree 2 and up on Vietoris-Rips and Čech
     *     complexes, which have many cells of the top dimension.
@@ -70,9 +70,11 @@ object Persistence:
     *   - `Cohomology`: persistent cohomology of the same complex. Representatives are cocycles.
     *   - `Ripser`: Bauer's Ripser, for the Vietoris-Rips complex of points or a metric space only; the fastest there.
     *     Representatives are cocycles.
+    *   - `FastCubical`: union-find on an image and its dual grid, for images of dimension 2 and up; the fastest there.
+    *     Representatives are cycles.
     */
   enum Engine:
-    case Auto, Chunks, Naive, Cohomology, Ripser
+    case Auto, Chunks, Naive, Cohomology, Ripser, FastCubical
 
   /** What `Persistence` can take; never written by hand -- each kind of input converts to one where it's expected. */
   into sealed trait Input[CellT]:
@@ -84,6 +86,7 @@ object Persistence:
     private[tda4j] def scale: Option[Double]
     private[tda4j] def cells: CellT is OrderedCell
     private[tda4j] def ripserApplies(complex: PointCloudComplex): Boolean = false
+    private[tda4j] def cubicalGrid: Option[CubicalGridStream] = None
     private[tda4j] def ripser(
       maxDimension: Int,
       maxFiltrationValue: Option[Double],
@@ -144,8 +147,9 @@ object Persistence:
 
     given fromImage: Conversion[Image, Input[Cube]] = img =>
       new Input[Cube]:
-        def stream(maxDimension: Int, maxFiltrationValue: Option[Double], complex: PointCloudComplex) =
-          CubicalImage.fromFlatArray(img.shape, img.values, img.sublevel)
+        private lazy val grid = CubicalImage.fromFlatArray(img.shape, img.values, img.sublevel)
+        def stream(maxDimension: Int, maxFiltrationValue: Option[Double], complex: PointCloudComplex) = grid
+        override def cubicalGrid = Some(grid)
         def scale = None
         def cells = summon[Cube is OrderedCell]
 
@@ -153,6 +157,9 @@ object Persistence:
       s =>
         new Input[CellT]:
           def stream(maxDimension: Int, maxFiltrationValue: Option[Double], complex: PointCloudComplex) = s
+          override def cubicalGrid = s match
+            case g: CubicalGridStream => Some(g)
+            case _                    => None
           def scale = None
           def cells = oc
 
@@ -169,8 +176,11 @@ object Persistence:
     includeZeroLength: Boolean = false
   ): PersistenceDiagram[CellT] =
     val chosen = engine match
-      case Engine.Auto => if input.ripserApplies(complex) then Engine.Ripser else Engine.Cohomology
-      case other       => other
+      case Engine.Auto =>
+        if input.ripserApplies(complex) then Engine.Ripser
+        else if input.cubicalGrid.exists(_.ambientDim >= 2) then Engine.FastCubical
+        else Engine.Cohomology
+      case other => other
     val requested = maxDimension.toOption
     requested.foreach(k => require(k >= 0, s"Persistence: maxDimension must be >= 0, got $k"))
     given (CellT is OrderedCell) = input.cells
@@ -182,6 +192,16 @@ object Persistence:
         characteristic,
         includeZeroLength
       )
+    else if chosen == Engine.FastCubical then
+      val grid = input.cubicalGrid.getOrElse(
+        throw new IllegalArgumentException(
+          "Persistence: engine = FastCubical computes the cubical complex of an image; for this input use " +
+            "Engine.Chunks, Engine.Naive or Engine.Cohomology"
+        )
+      )
+      require(grid.ambientDim >= 2, "Persistence: engine = FastCubical needs an image of dimension 2 or more")
+      fastCubical(grid, requested.getOrElse(DefaultMaxDimension), characteristic, includeZeroLength)
+        .asInstanceOf[PersistenceDiagram[CellT]]
     else
       val stream = input.stream(requested.getOrElse(DefaultMaxDimension), maxFiltrationValue.toOption, complex)
       val degree = (requested, stream.homologyDegreeLimit) match
@@ -201,6 +221,22 @@ object Persistence:
         input.scale,
         includeZeroLength
       )
+
+  private def fastCubical(
+    grid: CubicalGridStream,
+    maxDimension: Int,
+    characteristic: Int,
+    includeZeroLength: Boolean
+  ): PersistenceDiagram[Cube] =
+    val coefficients = Coefficients(characteristic)
+    import coefficients.given
+    val bars = FastCubicalHomologyEngine[coefficients.C]().persistentHomology(grid, includeZeroLength)
+    // Every cell takes the smallest value of the top cells containing it, so the largest value is a top cell's.
+    val topCells = grid.shape.foldLeft(Iterator(IndexedSeq.empty[Int]))((acc, n) =>
+      acc.flatMap(prefix => (0 until n).iterator.map(prefix :+ _))
+    )
+    val last = topCells.map(grid.topCellValue).maxOption.getOrElse(0.0)
+    PersistenceDiagram[Cube, coefficients.C](bars.filter(_.dim <= maxDimension), maxDimension, last, None)
 
   private def compute[CellT: OrderedCell](
     stream: StratifiedCellStream[CellT, Double],
@@ -228,6 +264,6 @@ object Persistence:
           CellularCohomologyEngine[CellT, coefficients.C, Double]().persistentCohomology(stream, includeZeroLength)
         val fv = stream.filtrationValue
         (bars, stream.iterator.map(c => fv.applyOrElse(c, _ => Double.NegativeInfinity)).maxOption.getOrElse(0.0))
-      case Engine.Ripser | Engine.Auto =>
-        throw new IllegalStateException("unreachable: Ripser and Auto are resolved before compute")
+      case Engine.Ripser | Engine.Auto | Engine.FastCubical =>
+        throw new IllegalStateException("unreachable: resolved before compute")
     PersistenceDiagram[CellT, coefficients.C](bars.filter(_.dim <= maxDimension), maxDimension, last, scale)

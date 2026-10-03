@@ -110,7 +110,7 @@ class TDA4jSpec extends mutable.Specification:
     // Every bar carries a real annotation (this engine never resolves a bar via a shortcut that skips
     // recording one, unlike engine=ripser's apparent-pairs case) -- mirrors the equivalent engine=chunks
     // check below.
-    "be the default for every complex Ripser does not take: the same bars and representatives as asking for it" in {
+    "be the default for every complex but vr (ripser) and images (fast-cubical): same bars and representatives" in {
       def same(default: PersistenceResult, explicit: PersistenceResult) =
         default.size() == explicit.size() &&
           triples(default.toArray()) == triples(explicit.toArray()) &&
@@ -128,7 +128,7 @@ class TDA4jSpec extends mutable.Specification:
         .and(
           same(
             FullBarcode.computeFromImage(pixels),
-            FullBarcode.computeFromImage(pixels, Array("engine", "cohomology"))
+            FullBarcode.computeFromImage(pixels, Array("engine", "fast-cubical"))
           ) must beTrue
         )
         .and(

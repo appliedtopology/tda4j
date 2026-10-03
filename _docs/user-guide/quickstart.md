@@ -32,7 +32,7 @@ and the options, all with defaults:
 | `maxFiltrationValue` | the minimum enclosing radius | where to stop the filtration; past the default nothing new is born |
 | `complex` | `VietorisRips` | or `Cech`, `AlphaShapes`, for points |
 | `characteristic` | `17` | the coefficients: a prime `p` for the field with `p` elements, `0` for real numbers |
-| `engine` | `Persistence.Engine.Auto` | Ripser for Vietoris-Rips, cohomology otherwise; `Chunks` for cycles (see [engines](homology-computation/choosing-engine.md)) |
+| `engine` | `Persistence.Engine.Auto` | Ripser for Vietoris-Rips, `FastCubical` for images, cohomology otherwise; `Chunks` for cycles (see [engines](homology-computation/choosing-engine.md)) |
 | `includeZeroLength` | `false` | also report bars `[v, v)`, cells paired with cells entering at the same value |
 
 The default field has 17 elements rather than 2: over the field with 2 elements signs disappear, and so do classes

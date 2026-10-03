@@ -39,6 +39,7 @@ Persistence(stream)
 `CubicalImage` also has `fromGrayscale2D` and `fromVoxelGrid3D` (arrays), `fromBufferedImage` and `fromFile` (image
 files); [files](../input-output.md) reads Perseus and DIPHA grids. A pixel with value `Infinity` never enters (a mask).
 
-For large images, the [fast cubical engine](../homology-computation/fast-cubical.md) computes the same diagram much faster;
-the [images tutorial](../../tutorials/images.md) works through an example. From MATLAB, `TDA4j.computeFromImage(pixels,
+`Persistence` computes the diagram of an image of two or more dimensions with the
+[fast cubical engine](../homology-computation/fast-cubical.md), which is much faster than matrix reduction and gives
+cycles as representatives. The [images tutorial](../../tutorials/images.md) works through an example. From MATLAB, `TDA4j.computeFromImage(pixels,
 options)` or `computeFromCubicalImage(shape, values, options)`, with the option `sublevel`.

@@ -1426,7 +1426,8 @@ object TDA4j:
     threshold(dispatchCubicalFull(opts, stream), valueRangeOfImage)
 
   private def dispatchCubicalFull(opts: Map[String, String], stream: CubicalGridStream): PersistenceResult =
-    val engine = EngineKind.parse(opts.getOrElse("engine", "cohomology"))
+    val engine =
+      EngineKind.parse(opts.getOrElse("engine", if stream.ambientDim >= 2 then "fast-cubical" else "cohomology"))
     if engine == EngineKind.Ripser then
       throw new IllegalArgumentException(
         "engine=ripser cannot be used for a cubical complex: PackedRipserCohomologyEngine is specialized to " +
