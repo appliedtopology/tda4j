@@ -1,7 +1,11 @@
 package org.appliedtopology.tda4j
 
 import cats.Show
+import scala.annotation.implicitNotFound
 
+// format: off
+@implicitNotFound("tda4j: no coefficient field for ${Self}. Pick one: `given Double is Field = Field.DoubleApproximated(1e-9)` for real coefficients; `val ff = FiniteField(17); import ff.given` for Z/17 (any prime); or use a lab, `import TDAlab.F17.{*, given}`.")
+// format: on
 trait Field:
   type Self
 

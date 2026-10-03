@@ -40,6 +40,22 @@ class UserImportsSpec extends Specification:
     }
   }
 
+  "a missing coefficient field or cell structure" should {
+    "produce a message that says what to do, not just 'no given instance'" in {
+      // separate blocks: a given declared later in the same block would be visible to the earlier check
+      val noField = typeCheckErrors("SimplicialHomologyEngine[Int, Double, Double]()").map(_.message).mkString
+      val noCell =
+        enum G:
+          case V
+        given Ordering[G] = Ordering.by(_.ordinal)
+        given doubles: (Double is Field) = Field.DoubleApproximated(1e-9)
+        typeCheckErrors("CellularHomologyEngine[G, Double, Double]()").map(_.message).mkString
+      (noField must contain("tda4j: no coefficient field for Double"))
+        .and(noCell must contain("tda4j: no cell structure for"))
+        .and(noCell must contain("import x.given"))
+    }
+  }
+
   "importing both the package and a TDAlab" should {
     "not make re-exported names ambiguous" in {
       val tdalab = TDAlab(2)

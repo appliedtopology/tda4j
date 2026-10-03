@@ -1,5 +1,7 @@
 package org.appliedtopology.tda4j
 
+import scala.annotation.implicitNotFound
+
 trait HasDimension:
   type Self
   extension (self: Self) def dim: Int
@@ -8,6 +10,9 @@ trait Cell extends HasDimension:
   type Self
   extension (self: Self) def boundary[CoefficientT: Field]: Seq[(Self, CoefficientT)]
 
+// format: off
+@implicitNotFound("tda4j: no cell structure for ${Self}. Simplex and Cube have one built in; for the generators of a simplicial set `x`, write `import x.given` first; for your own cell type, provide a `given (${Self} is OrderedCell)`.")
+// format: on
 trait OrderedCell extends Cell:
   type Self: Ordering as ordering
 
