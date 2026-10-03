@@ -77,6 +77,38 @@ reference and fails the build). `project/SnipDirective.scala` implements `@:snip
 between two `// #tag` marker lines from a real source file). Each directory needing a non-alphabetical left-nav
 order needs its own `directory.conf` with `laika.navigationOrder`. `WORKLOG-laika-migration.md`.
 
+**Root's own title/index document must stay named `README.md`, matching every subdirectory** — Laika's
+`titleDocuments.inputName` defaults to `"README"`, and root is the one tree it's ever been renamed away
+from (`landing-page.md`, briefly, and only in a broken build). Separately, **`src/docs/landing-page.md` is
+Laika's own documented mechanism** for content below `.landingPage(...)`'s templated hero/teasers/link-panel
+("Additionally or alternatively you can also add a regular markup document called `landing-page.<suffix>`");
+it belongs in `src/docs/` alongside `README.md`, not exiled elsewhere. The two are NOT redundant copies of
+each other: Helium renders **both** the title document's own body and `landing-page.md`'s, back to back, so
+`README.md` should stay minimal-to-empty (this project's is 0 bytes) while `landing-page.md` alone holds the
+real prose — confirmed safe (site `<title>`, the landing page's own title/subtitle, and every other page's
+breadcrumb Home link all come from `SiteTheme.theme`'s own config, none from `README.md`'s content). Making
+them byte-identical (an earlier mistake this session) looks like the same paragraph rendered twice.
+Separately: `SiteTheme.theme`'s `.landingPage(...)` `linkPanel` must use
+`TextLink.external("dir/", ...)`-style root-relative paths, never `TextLink.internal(...)` targeting another
+directory's title document — that specific shape is a confirmed-by-bisection trigger for a genuine
+`StackOverflowError` (infinite recursion) in this vendored Laika (1.3.2)'s own config-fallback resolution.
+The landing page's `#header` also needs an explicit `@media (prefers-color-scheme: dark) { #header.dark-default
+{ ... } }` CSS override (in the `inlineCSS` block) restoring plain component colors — Helium ships no rule for
+`.dark-default` itself, so `.light-inverted`'s unconditional override otherwise makes header text/icons
+invisible in dark mode whenever (as here) the header's background stays dark in both color schemes.
+`WORKLOG-docs-site-fixes.md`.
+
+**Scala 3.9.0's bundled `scaladoc` has its own real navigation bug**: `ux.js` calls jQuery's `$.get(...)` to
+intercept every link click for its own AJAX page-swap, but no page loads jQuery, so the click's own
+`preventDefault()` fires and then the handler throws — every click on the API nav (or any same-origin link
+in the scaladoc) silently does nothing. Not a Laika/tda4j config issue. The patch (a literal string-replace of
+that one `$.get` call site with an equivalent `fetch(...)` call) must wrap `Compile / doc` itself
+(`Compile / doc := { val apiDir = (Compile / doc).value; ...patch apiDir / "scripts" / "ux.js"...; apiDir }`),
+**not** `laikaSite` — `laikaPreview` (sbt-laika's own live preview server) is a separate task graph from
+`laikaSite`/`generate` that independently copies from `Compile / doc`'s own output, so a `laikaSite`-only
+patch is invisible to it (confirmed: patching only `laikaSite` left `laikaPreview` serving the unpatched
+file). Patching the shared source once covers every consumer. `WORKLOG-docs-site-fixes.md`.
+
 **Never run two `sbt` invocations against this checkout at once** — the incremental compiler's own class-file
 writes from one process can be read mid-update by the other, producing a `NoClassDefFoundError` that looks like a
 real regression but disappears on a clean, sequential rerun.

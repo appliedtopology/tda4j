@@ -16,8 +16,8 @@ All five gaps from the first pass at this document are closed:
 3. `LICENSE.md`'s copyright line now names its holders (matching `build.sbt`'s own site footer).
 4. `.github/workflows/release.yml` now runs on every `vX.Y.Z` tag push.
 5. `build.sbt` now configures Laika's `Versions` support (`laikaConfig`), and both `docs.yml` and
-   `release.yml` merge forward previously-published doc versions before publishing so `sbt-github-pages`
-   (which has no "keep remote-only files" option) doesn't delete them.
+   `release.yml` publish by committing directly into a `gh-pages` git worktree, so every other
+   already-published version is left untouched by construction rather than by an explicit merge-forward step.
 
 `sbt compile` and `sbt laikaSite` were both run successfully against these changes (after retrying through this
 sandbox's Maven Central rate limiting), confirming `build.sbt`/`sonatype.sbt`/`release.sbt` all load and the
@@ -28,17 +28,19 @@ Laika `Versions`/`VersionMenu` API calls type-check and execute — that include
 themselves in a "Stage versioned docs for publish" step, which was dry-run locally (see each workflow's own
 comments for why).
 
-**None of this has been exercised against the real Sonatype Central Portal, a real tag push, or a real
-`publishToGitHubPages` run yet** — it's wired up and locally verified as far as this sandbox allows, not proven
-end-to-end. Treat the first release as the first real test of this whole pipeline, not a routine run: watch
-every step, don't assume silence means success. In particular:
+**None of this has been exercised against the real Sonatype Central Portal or a real tag push yet** — it's
+wired up and locally verified as far as this sandbox allows, not proven end-to-end. The overall
+versioned-docs-publish *concept* has a real track record (`docs.yml` has run successfully dozens of times) —
+but the git-native publish mechanism described in [Docs site](#5-docs-site-versioned-publish) below,
+replacing `sbt-github-pages`, has only been dry-run locally against a scratch repo, not through a real
+`docs.yml`/`release.yml` run yet (that workflow only fires on push to `scala`, which a feature branch can't
+trigger). Treat its first real run as the actual first test, and treat the first tagged release as the first
+real test of the Maven/GitHub-Release half of this pipeline either way — watch every step, don't assume
+silence means success. In particular:
 
 - No secrets are configured yet — see [Credentials and secrets](#2-credentials-and-secrets).
 - `mimaPreviousArtifacts` is still `Set.empty` (correct today, since nothing has published to Maven) — the
   first release must update it, see [Pre-flight](#1-pre-flight).
-- The "Stage versioned docs for publish" steps were only exercised against a synthetic fixture directory in
-  this sandbox, not against a real `gh-pages` branch or a second real version to merge alongside — run the
-  first docs publish somewhere it's easy to inspect (or revert) before trusting it unattended.
 
 ## Versioning
 
@@ -108,17 +110,34 @@ already-released coordinate.
 **Local machine** (for `sbt release`):
 
 - **PGP signing key**: a key in the local GPG keyring (or one `sbt-pgp` can otherwise reach). `publishSigned`
-  fails without one. `sonatype.sbt`'s `pgpPassphrase` reads `PGP_PASSPHRASE` from the environment if set,
-  falling back to `sbt-pgp`'s own interactive/gpg-agent prompt otherwise — fine for a local run, set the env
-  var if the key needs a passphrase and prompting is inconvenient.
+  fails without one. `sonatype.sbt` has no `pgpPassphrase` setting of its own — signing goes through
+  `sbt-pgp`'s own default resolution (the local gpg-agent's cached passphrase, or an interactive prompt if
+  none is cached), not anything project-specific.
 - **Sonatype Central Portal user token** (not the old OSSRH username/password — Central Portal auth is
-  token-based). Generate it from the Central Portal account settings and export as `SONATYPE_USERNAME`/
-  `SONATYPE_PASSWORD` before running `sbt release` — `sonatype.sbt` reads exactly those two env vars.
+  token-based). Generate it from the Central Portal account settings and put it in a credentials file at
+  `~/.sbt/sonatype_credentials` (sbt's native four-line format):
+  ```
+  realm=Sonatype Central
+  host=central.sonatype.com
+  user=<token user>
+  password=<token password>
+  ```
+  Nothing in this project's own build files references that path — sbt-sonatype/sbt-pgp pick it up through
+  their own default credential discovery, the same way for every project on the machine, not something wired
+  up here. (An earlier version of `sonatype.sbt` added an explicit `credentials +=` pointing at this file,
+  reasoning from `SONATYPE_USERNAME`/`SONATYPE_PASSWORD` env vars as the primary mechanism — removed once it
+  became clear that framing didn't match how credentials actually get supplied here, which is entirely this
+  file, discovered by the plugins' own defaults; no env vars involved.) `host` must say `central.sonatype.com`
+  exactly (a file left over from before the Central Portal migration may still say the old OSSRH host, which
+  won't match and leaves the build effectively uncredentialed). This is a different file and format from
+  Maven's own `~/.m2/settings.xml` — sbt doesn't read that XML format, so a token stored only there isn't
+  picked up here, whatever else might read it.
 
 **GitHub Actions repo secrets** (for `release.yml` — it never touches Maven, so it needs none of the above):
 
 - **`GITHUB_TOKEN`**: automatic, no setup needed — the workflow's `permissions: contents: write` covers both
-  `gh release create` and the `publishToGitHubPages` push.
+  `gh release create` and the plain `git push` to `gh-pages` (via `actions/checkout`'s own persisted
+  credentials, which cover any git operation against the same repo, not just the checked-out ref).
 
 Nothing else is required in CI today. If Maven publishing is later moved into CI (see the note above), add
 `SONATYPE_USERNAME`/`SONATYPE_PASSWORD`/`PGP_PASSPHRASE` (plus the PGP private key itself, e.g. base64 in a
@@ -145,16 +164,16 @@ whole sequence, per `sbt-release`'s own resume support.
 The tag push from step 3 triggers `.github/workflows/release.yml`, which:
 
 1. Builds `sbt assembly packageSrc packageDoc laikaSite` with `TDA4J_DOCS_VERSION` set to the tag's version.
-2. Merges the freshly-built docs into whatever's already on `gh-pages` (see
-   [Docs versioning](#5-docs-site-versioned-publish) below) and publishes.
-3. Zips this version's staged docs (`target/docs/publish/X.Y.Z`, see step 5) into `docs-X.Y.Z.zip`.
+2. Commits the freshly-built docs directly into a `gh-pages` worktree, at their own version path, alongside
+   whatever's already there (see [Docs versioning](#5-docs-site-versioned-publish) below), and pushes.
+3. Zips this version's docs (`target/docs/site`, the same build step 2 just published) into `docs-X.Y.Z.zip`.
 4. Runs `gh release create` on the pushed tag, title `TDA4j X.Y.Z`, `--generate-notes`, `--prerelease` while
    the version is still `0.x`, with the fat jar, sources jar, scaladoc jar, and docs zip attached.
 
 If it fails partway (e.g. a transient GitHub API error), it's safe to just re-run the workflow from the
-Actions tab — nothing it does touches Maven, and `gh release create`/`publishToGitHubPages` are both safe to
-repeat for the same tag. If it needs to be done by hand instead, replicate steps 1–4 locally; the commands are
-in the workflow file.
+Actions tab — nothing it does touches Maven, and `gh release create`/the docs `git push` are both safe to
+repeat for the same tag (the push is a no-op if the content hasn't changed). If it needs to be done by hand
+instead, replicate steps 1–4 locally; the commands are in the workflow file.
 
 ### 5. Docs site: versioned publish
 
@@ -169,23 +188,31 @@ and the list of older versions is read directly from `git tag --list 'v*'` rathe
 **Laika does not physically nest a build's own output under its version path** — confirmed by inspecting a
 real `sbt laikaSite` run: `index.html` and friends land at `target/docs/site`'s root regardless of the
 configured version. The `Versions` config only drives the switcher dropdown and the `versionInfo.json`
-manifest (whose entries point at URLs like `/0.1.3/...` that something else has to make real). So
-`gitHubPagesSiteDir` is set to a separate `target/docs/publish` directory that `laikaSite` itself never
-touches, and each workflow's own "Stage versioned docs for publish" step (not `sbt`) does the real work,
-after `laikaSite` and before `publishToGitHubPages`:
+manifest (whose entries point at URLs like `/0.1.3/...` that something else has to make real). So each
+workflow's own "Publish docs"/"Publish versioned docs" step (not `sbt`) does the real work, after `laikaSite`:
 
-1. Copy `target/docs/site` into `target/docs/publish/<version>/` (`<version>` = `dev` or the release tag).
-2. Fetch the `gh-pages` branch into a throwaway worktree and copy forward any other top-level version
-   directory already published there that this build doesn't already have — `sbt-github-pages` has no option
-   to preserve remote-only content, so skipping this would delete every other version's docs on next publish.
-3. Write a root `index.html` that redirects to the newest released version's directory (or to `dev/` if none
-   has been released yet).
+1. Check out (or, the first time, create) the `gh-pages` branch into a throwaway git worktree — a real
+   checkout of the actual published history, not a scratch copy assembled by hand.
+2. Inside that worktree, replace only `<version>/` (`<version>` = `dev` or the release tag) with this build's
+   fresh `target/docs/site` output. Every other already-published version, and root files like `.nojekyll`/
+   `CNAME`, are untouched by construction — there's no "copy forward what's not already here" step to get
+   wrong, because nothing outside `<version>/` is ever removed in the first place.
+3. Recompute the root `index.html` redirect: the newest directory whose name looks like a real release
+   version (matched by a `[0-9]*.[0-9]*.[0-9]*` glob, not by "isn't dev"), or `dev/` if none has been released
+   yet. Matching on the version shape rather than excluding known names is deliberate — a plain exclusion
+   list let stale, no-longer-updated directories from before docs versioning existed outrank real versions in
+   a `sort -V` comparison and become the redirect target, which is exactly what was found live on the
+   published site (root redirecting to a leftover `user-guide/` directory) before this fix.
+4. `git add -A`, then commit and push only if anything actually changed.
 
-This means every publish — dev or release — re-uploads the entire accumulated site, not just what changed;
-that's expected and is what keeps old versions from disappearing. Steps 1–3 were dry-run against a synthetic
-fixture directory in this sandbox (real `laikaSite` output plus a fake second version) and produced the
-expected `dev/`, `<fake-version>/`, and a correctly-targeted redirect `index.html` — but not against a real
-`gh-pages` branch or a real second release, so treat the first real docs publish as the actual first test.
+This replaced an earlier design (and, before that, a plugin — `sbt-github-pages` — that pushed via the GitHub
+API, one `createBlob` HTTP call per file with a hardcoded 1-second sleep before each; measured at 21+ minutes
+for the ~1000 files a single `dev` build already produces, from a real job log, and only getting slower as
+more release versions accumulate: `.claude/WORKLOG-docs-publish-performance.md`). Committing directly into a
+real checkout means git only ever hashes and writes objects for what actually changed, and pushes once,
+regardless of how large the accumulated site gets. The new steps were dry-run against a scratch git repo in
+this sandbox (bootstrap-from-nothing, an existing `dev` update, and a new version landing alongside `dev`),
+but not yet through a real `docs.yml`/`release.yml` run — see the warning in [Status](#status) above.
 
 ## Post-release
 

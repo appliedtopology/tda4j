@@ -151,15 +151,14 @@ class SimplexIndexingSpec extends Specification with ScalaCheck:
     }
 
     /** Backs an early-exit optimization in `zeroPivotCofacet`/`zeroPivotFacet` (both engines,
-      * `Homology.scala`/`PackedRipserCohomology.scala`): those methods want the cofacet with the MAXIMUM index
-      * (resp. facet with the MINIMUM index) among candidates tied at the target diameter, and previously found
-      * it by sweeping every candidate and tracking a running best -- wasted work if the cursor's own
-      * enumeration order already visits candidates in strict index order, since the FIRST tied match would then
-      * already be the extremal one. Confirmed here, not assumed: `CofacetCursor`'s `.index` is strictly
-      * DECREASING across successive `advance()` calls (so first tied match = max index) and `FacetCursor`'s is
-      * strictly INCREASING (so first tied match = min index) -- matching real `ripser.cpp`'s own
-      * `get_zero_pivot_cofacet`, which returns on the first diameter-tied cofacet with no further scan, relying
-      * on the same combinatorial-number-system property.
+      * `Homology.scala`/`PackedRipserCohomology.scala`): those methods want the cofacet with the MAXIMUM index (resp.
+      * facet with the MINIMUM index) among candidates tied at the target diameter, and previously found it by sweeping
+      * every candidate and tracking a running best -- wasted work if the cursor's own enumeration order already visits
+      * candidates in strict index order, since the FIRST tied match would then already be the extremal one. Confirmed
+      * here, not assumed: `CofacetCursor`'s `.index` is strictly DECREASING across successive `advance()` calls (so
+      * first tied match = max index) and `FacetCursor`'s is strictly INCREASING (so first tied match = min index) --
+      * matching real `ripser.cpp`'s own `get_zero_pivot_cofacet`, which returns on the first diameter-tied cofacet with
+      * no further scan, relying on the same combinatorial-number-system property.
       */
     "CofacetCursor's index is strictly decreasing and FacetCursor's is strictly increasing across successive advance() calls" >> {
       val validCase = for

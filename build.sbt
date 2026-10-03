@@ -1,4 +1,4 @@
-name := "TDA4j"
+name := "tda4j"
 organization := "org.appliedtopology"
 scalaVersion := "3.9.0"
 
@@ -22,11 +22,12 @@ libraryDependencies += "org.scalacheck" %% "scalacheck"                 % "1.17.
 libraryDependencies += "org.rogach" %% "scallop" % "6.0.0"
 
 import laika.helium.Helium
-import laika.helium.config.{HeliumIcon, IconLink}
-import laika.theme.config.Color
+import laika.helium.config.{Favicon, HeliumIcon, IconLink, ImageLink}
+import laika.theme.config.{Color, Font, FontStyle, FontWeight}
+import laika.ast.Image
 import laika.format.Markdown
 import laika.ast.Path.Root
-import laika.config.{Version, Versions}
+import laika.config.{ApiLinks, LinkConfig, SourceLinks, Version, Versions}
 import laika.helium.config.VersionMenu
 
 // Docs versioning (RELEASE.md step 5): `release.yml` sets TDA4J_DOCS_VERSION to the tag's version
@@ -53,69 +54,9 @@ def priorReleaseVersions(baseDir: File): Seq[String] = {
     .filterNot(_ == docsVersion)
 }
 
-// Off-white/dark-charcoal (light) and dark-charcoal/off-white (dark) rather than Helium's stock blues; teal/red
-// stay as brand accent colors (links, headers, banner), not as the page's dominant wash.
-val theme = Helium.defaults.all
-  .metadata(
-    title = Some("TDA4j"),
-    authors = Seq("Mikael Vejdemo-Johansson", "Jordan Matuszewski", "Kei Kebreau")
-  )
-  .site
-  .baseURL("https://appliedtopology.github.io/tda4j")
-  .site
-  .topNavigationBar(
-    navLinks = Seq(
-      IconLink.internal(Root / "api" / "index.html", HeliumIcon.api),
-      IconLink.external("https://github.com/appliedtopology/tda4j", HeliumIcon.github)
-    ),
-    // Renders the version-switcher dropdown driven by the `laikaConfig`'s Versions value below -- links to
-    // sibling versions only resolve once those versions are actually published side by side on gh-pages (see
-    // RELEASE.md step 5), not from this setting alone.
-    versionMenu = VersionMenu.default
-  )
-  .site
-  .footer("MIT License © Mikael Vejdemo-Johansson, Daniel Hope")
-  // The breadcrumb (added via a default.template.html override, since Helium doesn't include one) reuses the
-  // `nav-list` class the sidebar nav uses, whose `li a { display: block }` stacks entries vertically -- there is
-  // no dedicated `.breadcrumb` rule in Helium's own CSS to override that. Lay it out as a horizontal trail instead.
-  .site
-  .downloadPage("Downloads", None)
-  .site
-  .inlineCSS(
-    """
-      |.breadcrumb { display: flex; flex-wrap: wrap; list-style: none; padding: 0; margin: 0 0 1.5rem 0; }
-      |.breadcrumb li { margin: 0; }
-      |.breadcrumb li a { display: inline; padding: 0; }
-      |.breadcrumb li:not(:last-child)::after { content: "\203A"; margin: 0 0.4em; color: var(--secondary-color); }
-      |""".stripMargin
-  )
-  .all
-  .themeColors(
-    primary = Color.hex("007c99"),
-    secondary = Color.hex("931813"),
-    primaryMedium = Color.hex("a7d4de"),
-    primaryLight = Color.hex("f2efe7"),
-    text = Color.hex("333333"),
-    background = Color.hex("faf8f4"),
-    bgGradient = (Color.hex("095269"), Color.hex("007c99"))
-  )
-  .site
-  .darkMode
-  .themeColors(
-    primary = Color.hex("7fc2d6"),
-    secondary = Color.hex("f1c47b"),
-    primaryMedium = Color.hex("3a5a63"),
-    primaryLight = Color.hex("16323c"),
-    text = Color.hex("f0ede6"),
-    background = Color.hex("1e2124"),
-    bgGradient = (Color.hex("064458"), Color.hex("197286"))
-  )
-  .build
-
 lazy val root = (project in file("."))
   .enablePlugins(
-    LaikaPlugin,
-    GitHubPagesPlugin
+    LaikaPlugin
   )
   .settings(
     // Compiler options: language features (implicitConversions, adhocExtensions) and warning flags.
@@ -132,7 +73,7 @@ lazy val root = (project in file("."))
     Laika / sourceDirectories := Seq(sourceDirectory.value / "docs"),
     laikaIncludeAPI := true,
     laikaIncludePDF := true,
-    laikaTheme := theme,
+    laikaTheme := SiteTheme.theme,
     // Without this, fenced/inline code spans aren't recognized as code at all (plain CommonMark Markdown, the
     // laika-sbt default, doesn't include GFM fences) -- their contents get parsed as ordinary prose, so any `[...]`
     // in a code example (a Scala type param, a Java array type, a bracketed comment) is treated as a dangling
@@ -142,24 +83,49 @@ lazy val root = (project in file("."))
     // (@:snip tokenizes its own extracted text separately -- see project/SnipDirective.scala.)
     laikaExtensions += laika.config.SyntaxHighlighting,
     laikaExtensions += new SnipDirective(baseDirectory.value),
+    laikaExtensions += Tda4jDirective,
     laikaConfig := {
       val older = priorReleaseVersions(baseDirectory.value).map(v => Version(v, v))
       laika.sbt.LaikaConfig.defaults.withConfigValue(
         Versions.forCurrentVersion(Version(docsVersion, docsVersion)).withOlderVersions(older: _*)
       )
+        .withConfigValue(LinkConfig.empty
+          .addApiLinks(ApiLinks(baseUri="https://tda4j.appliedtopology.org/dev"))
+          .addSourceLinks(SourceLinks(baseUri="https://github.com/appliedtopology/tda4j/", suffix="scala"))
+        )
     },
-    // ***** gh-pages *****
-    gitHubPagesOrgName := "appliedtopology",
-    gitHubPagesRepoName := "tda4j",
-    // NOT (laikaSite / target).value directly: `laikaSite` renders this build's own docs unnested (confirmed
-    // by inspecting its actual output -- `laikaConfig`'s Versions value drives the version-switcher dropdown
-    // and `laika/versionInfo.json`, not physical output placement). Each CI workflow's own "Stage versioned
-    // docs for publish" step populates this directory itself: copy `(laikaSite / target).value`'s contents
-    // into `<this dir>/<docsVersion>/`, then copy forward every other already-published version directory
-    // from `gh-pages` before running `publishToGitHubPages`. A bare local `sbt publishToGitHubPages` run (no
-    // such staging step first) would publish this directory empty -- always run through a workflow, or
-    // replicate its staging steps by hand.
-    gitHubPagesSiteDir := baseDirectory.value / "target" / "docs" / "publish",
+    // Scala 3.9.0's own bundled scaladoc ships a `ux.js` that intercepts every same-origin link click
+    // (sidebar navigation included) to do its own SPA-style AJAX page swap via `$.get(href, ...)` -- but
+    // no page anywhere loads jQuery, so `$` is undefined. The click's own `e.preventDefault()` already
+    // ran by the time that throws, so the click's default navigation is cancelled AND the replacement
+    // AJAX navigation never happens: clicking a class in the API nav does nothing (confirmed against a
+    // real browser: `ReferenceError: $ is not defined` at ux.js:180, `HTMLAnchorElement` click handler).
+    // A real upstream scaladoc bug, not a Laika/tda4j config issue -- `$.get(url, cb)` is a drop-in match
+    // for `fetch(url).then(r => r.text()).then(cb)` (the callback only ever receives raw HTML text here),
+    // so patch the one call site post-generation rather than vendoring scaladoc's bundled JS ourselves.
+    //
+    // Patches `Compile / doc`'s own output directory (confirmed via `show Compile/doc`:
+    // `target/scala-3.9.0/api`), not `laikaSite`'s copy of it -- `laikaPreview` runs a live preview
+    // server (`startPreviewServer`/`buildPreviewServer` in sbt-laika's `Tasks.scala`) that is a
+    // completely separate task graph from `laikaSite`/`generate`, so a `laikaSite`-only patch is invisible
+    // there (confirmed: `laikaPreview`'s served `ux.js` was still unpatched). Patching at the actual
+    // source once means every consumer of `Compile / doc`'s output -- `laikaSite`'s own API-copy step
+    // included -- sees the fix, with no need to patch each consumer separately. (An idiomatic sbt task
+    // augmentation, not a self-referential cycle: `key := f(key.value)` captures the plugin/sbt-provided
+    // task, same mechanism `+=`/`++=` desugar to.) See .claude/WORKLOG-docs-site-fixes.md.
+    Compile / doc := {
+      val apiDir = (Compile / doc).value
+      val uxJs = apiDir / "scripts" / "ux.js"
+      if (uxJs.exists()) {
+        val original = IO.read(uxJs)
+        val patched = original.replace(
+          "$.get(href, function (data) {",
+          "fetch(href).then((r) => r.text()).then(function (data) {"
+        )
+        if (patched != original) IO.write(uxJs, patched)
+      }
+      apiDir
+    },
     // Both settings are needed, not just one: `Compile / mainClass` is what `sbt run` uses; `assembly /
     // mainClass` is what sbt-assembly writes into the fat jar's manifest (`java -jar ... `). Neither is inferred
     // from the other.
@@ -173,4 +139,7 @@ libraryDependencySchemes ++= Seq(
   "org.scala-lang.modules" %% "scala-xml" % VersionScheme.Always
 )
 
-mimaPreviousArtifacts := Set.empty
+mimaPreviousArtifacts := priorReleaseVersions(baseDirectory.value)
+  .filter(v => !v.startsWith("0.1"))
+  .map(v => organization.value %% name.value % v)
+  .toSet

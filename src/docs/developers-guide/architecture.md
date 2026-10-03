@@ -326,6 +326,14 @@ own `recursiveFiltrationValue`) is needed here. Like Cech/Witness/Sheehy above, 
 reuses `RipserCofaceSimplexStream`'s generic coface-generation loop, since the Dowker complex is NOT a flag
 complex in general (a witness for a whole simplex need not witness any of its edges).
 
+@:callout(warning)
+`+Infinity <= +Infinity` is true, so a stream whose `maxFiltrationValue` defaults to `+Infinity` — safe
+everywhere else in this codebase — would silently collapse an untruncated Dowker relation to the complete
+simplex on every vertex. `DowkerCofaceSimplexStream` is the one stream that can compute a genuinely infinite
+filtration value on purpose (`DowkerGeometry.fromBoolean`'s "never witnessed" encoding), so it alone overrides
+`keptByThresholdAndCriterion` to additionally require `.isFinite`.
+@:@
+
 One real footgun this construction has that no earlier stream in this codebase did: `keptByThresholdAndCriterion`'s
 `<=` admits `+Infinity <= +Infinity`, and `DowkerGeometry.fromBoolean` deliberately produces a literal `+Infinity`
 to mean "never witnessed" — every other stream's own `maxFiltrationValue = +Infinity` default is safe only
@@ -445,6 +453,12 @@ worklog for the full table and the source-level reasoning behind the split.
 matrix), `EuclideanMetricSpace` (coordinate array, on-demand Euclidean distance, VP-tree-backed `neighbors`
 query), `IntMetricSpace` (reindexes to contiguous `0 until size`), `SparseMetricSpace` (reports `+Infinity`
 beyond a fixed diameter cutoff, bounding Vietoris-Rips construction to a finite neighborhood per point).
+
+@:callout(warning)
+`SparseMetricSpace` reports `+Infinity` past its cutoff rather than excluding those pairs — it is not a
+thresholded neighbor oracle. Code that queries it expecting "unreachable" to mean "absent" will instead get
+back a real (if unusable) `Double` value; check `.isFinite` explicitly rather than assuming exclusion.
+@:@
 
 ### Opt-in parallelism
 
