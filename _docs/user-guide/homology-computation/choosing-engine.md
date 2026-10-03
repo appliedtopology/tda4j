@@ -1,25 +1,30 @@
 ---
 layout: main
+title: Which persistence engine?
 ---
 
 ## Which persistence engine?
 
-| Need | Engine (`engine=` for MATLAB/CLI) |
-|---|---|
-| Exploration, intermediate-filtration queries, representative cycles | `naive` (`CellularHomologyEngine`) |
-| Fastest, most memory-efficient — the default for `complex=vr` | `ripser` (`PackedRipserCohomologyEngine`) |
-| Large complex, want representatives for every bar including essential ones | `chunks` (`CellularPersistenceInChunksEngine`) |
-| Cohomology (cocycle representatives) on `Cube`/`FiniteSimplicialSet`, or on Alpha/Cech/DTM/Sheehy/witness, where `ripser` doesn't apply | `cohomology` (`CellularCohomologyEngine`) |
-| Alpha or Cech or DTM or Sheehy complexes, a Dowker complex, or a general (non-flag) witness complex | `naive` or `cohomology` (`chunks` also works for Cech, DTM-Rips, and Sheehy-Rips — not Alpha/DTM-Alpha/Dowker) |
-| A lazy witness complex (the flag-complex variant) | `ripser` (`PackedRipserCohomologyEngine`, run directly on `WitnessMetricSpace`) or `naive`/`chunks`/`cohomology` |
-| A cubical image, any ambient dimension `>= 2` — fastest option there | `fast-cubical` (`FastCubicalHomologyEngine`; H0/H1 only, no `Chain` reduction at all, in 2D specifically; a `chunks` hybrid for the residual middle dimensions at 3D+) |
-| An alpha complex via `"helix"`, any ambient dimension `>= 2` — fastest option there | `fast-alpha` (`FastAlphaHomologyEngine`; H0/H1 only, no `Chain` reduction at all, in 2D specifically; a `chunks` hybrid for the residual middle dimensions at 3D+; `"DQP"` needs `naive`/`chunks`/`cohomology` instead; higher ambient dimension and point count make `FastAlphaTriangulationException` noticeably more likely — see `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) |
+All engines compute the same bars; they differ in speed, in what they accept, and in their representatives.
 
-All engines are generic over the coefficient field (a prime finite field or floating point); `naive`,
-`chunks`, and `cohomology` are also generic over the cell type (simplices, cubes, or simplicial-set
-generators) — only `ripser`, `fast-cubical`, and `fast-alpha` are specialized (to Vietoris-Rips, to cubical
-grids, and to `HelixDelaunay` triangulations, respectively). See the
-[Developer's Guide's persistence-engines page](../../developers-guide/persistence-engines.md) for the full
-detail.
+| engine | `Persistence.Engine` / MATLAB `engine=` | takes | representatives | use it for |
+|---|---|---|---|---|
+| chunks (`CellularPersistenceInChunksEngine`) | `Chunks` / `chunks` | any stream | cycles | the default: large complexes of any kind |
+| naive (`CellularHomologyEngine`) | `Naive` / `naive` | any stream | cycles | stepping through a computation, reference results |
+| cohomology (`CellularCohomologyEngine`) | `Cohomology` / `cohomology` | any stream | cocycles | cocycle representatives on any complex |
+| Ripser (`PackedRipserCohomologyEngine`) | `Ripser` / `ripser` | a metric space | cocycles | Vietoris-Rips: the fastest there, and the MATLAB default |
+| fast cubical (`FastCubicalHomologyEngine`) | MATLAB `fast-cubical` | a cubical grid, 2-D and up | cycles | large images ([details](fast-cubical.md)) |
+| fast alpha (`FastAlphaHomologyEngine`) | MATLAB `fast-alpha` | a Helix alpha complex | cycles | large planar point clouds ([details](fast-alpha-complexes.md)) |
 
+What each complex allows:
 
+* **Ripser** needs the Vietoris-Rips complex of points or a metric space (including a lazy witness complex, through
+  `WitnessMetricSpace`): its shortcuts rely on a filtration by diameter.
+* **Chunks** takes any stream; the MATLAB facade does not offer it for alpha, DTM-alpha and the general witness complex.
+* **Naive** and **cohomology** take every complex.
+
+The naive and chunks engines take any stream and answer queries at intermediate scales (`diagramAt(f)`); the naive
+engine also advances step by step (`advanceTo`, `advanceFor`). The cohomology and Ripser engines run to the end in one
+call. Over a field, homology and cohomology have the same bars, so the choice between cycles and cocycles is only about
+the representatives you need: cocycles for [circular coordinates](../circular-coordinates.md), cycles to see where a
+hole is. The [scaling up](../../tutorials/scaling-up.md) tutorial compares the four general engines on one data set.

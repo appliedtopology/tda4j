@@ -1,5 +1,6 @@
 ---
 layout: main
+title: The fast cubical engine
 ---
 
 #### A faster engine for cubical images
@@ -10,20 +11,15 @@ import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 
-val (rows, cols) = (4, 4)
-val topValue: IndexedSeq[Int] => Double = c => (c(0) * 3 + c(1) * 5) % 7 // value of each top-dimensional cell
-val stream = CubicalGridStream(IndexedSeq(rows, cols), topValue)
-val bars = FastCubicalHomologyEngine[Double]().persistentHomology(stream) // H0 and H1, that's everything at 2D
+val topValue: IndexedSeq[Int] => Double = c => (c(0) * 3 + c(1) * 5) % 7 // the value of each pixel
+val stream = CubicalGridStream(IndexedSeq(4, 4), topValue)
+val bars = FastCubicalHomologyEngine[Double]().persistentHomology(stream)
 ```
 
-`FastCubicalHomologyEngine` computes the exact same barcode (with real representatives) as
-`CubicalHomologyEngine` above, via a different algorithm entirely — a dual-graph union-find (Alexander
-duality) rather than general `Chain` reduction, valid at any ambient dimension `>= 2` (it throws
-`IllegalArgumentException` only for a degenerate 1-axis grid). At a 2D grid specifically, the two union-finds
-(`H_0` and `H_1`) cover everything; at 3D and beyond, the "middle" dimensions (no duality shortcut applies to
-them) are handed to `CellularPersistenceInChunksEngine` on a view that hides the real top-dimensional cells,
-so the top dimension still skips general `Chain` reduction entirely — still a real win, though a shrinking one
-as the ambient dimension grows, since the fraction of dimensions the two union-finds can cover for free shrinks
-with it. See the [Developer's Guide](../../developers-guide/persistence-engines.md)'s engine 6 section for the
-full picture. `matlab.TDA4j`'s `engine="fast-cubical"` option (and the CLI's `--engine fast-cubical`) use this
-automatically for any `computeFromCubicalImage`/`computeFromImage` call at ambient dimension `>= 2`.
+`FastCubicalHomologyEngine` gives the same bars, with representatives, as the general engines, by union-find instead of
+matrix reduction: on the pixels for degree 0, and on the dual graph of the top-dimensional cells for the top degree
+(Alexander duality). On a 2-D image those two cover everything. In 3-D and above, the degrees in between are computed
+by the chunks engine on the complex without its top cells. It needs an image of at least two dimensions.
+
+From MATLAB and the command line: `engine=fast-cubical` with `computeFromImage`/`computeFromCubicalImage` or a cubical
+`--input-format`. The [images tutorial](../../tutorials/images.md) uses it.

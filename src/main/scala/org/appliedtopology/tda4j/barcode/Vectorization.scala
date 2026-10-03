@@ -31,8 +31,8 @@ object Vectorization:
     * `sum_k integral(level_k) = sum_i integral(tent_i)` because integration is linear and, at each fixed t, the
     * multiset of order statistics `{level_k(t)}` is exactly the multiset `{tent_i(t)}` reordered.
     */
-  def landscape[A](
-    diagram: Seq[PersistenceBar[Double, A]],
+  def landscape(
+    diagram: Seq[PersistenceBar[Double, ?]],
     numLevels: Int,
     tMin: Double,
     tMax: Double,
@@ -82,8 +82,8 @@ object Vectorization:
     *
     * '''Essential (never-dying) bars are dropped''' -- see the class doc for why, unlike [[landscape]].
     */
-  def persistenceImage[A](
-    diagram: Seq[PersistenceBar[Double, A]],
+  def persistenceImage(
+    diagram: Seq[PersistenceBar[Double, ?]],
     sigma: Double,
     birthRange: (Double, Double),
     persistenceRange: (Double, Double),

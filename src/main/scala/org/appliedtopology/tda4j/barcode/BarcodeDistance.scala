@@ -67,9 +67,9 @@ object BarcodeDistance:
     * returns the sorted-by-birth essential pairing costs (see the class doc for why sorted pairing is optimal) plus the
     * two finite-point lists left for the caller to solve with the general bipartite machinery.
     */
-  private def essentialAndFinite[A, B](
-    diagram1: Seq[PersistenceBar[Double, A]],
-    diagram2: Seq[PersistenceBar[Double, B]]
+  private def essentialAndFinite(
+    diagram1: Seq[PersistenceBar[Double, ?]],
+    diagram2: Seq[PersistenceBar[Double, ?]]
   ): Option[(Seq[Double], Seq[Point], Seq[Point])] =
     val pts1 = diagram1.map(toPoint)
     val pts2 = diagram2.map(toPoint)
@@ -128,9 +128,9 @@ object BarcodeDistance:
     * [[bottleneckDistanceByDimension]]) is treated as a deliberate choice, not a mistake to guard against. See the
     * class doc for the essential-bar policy and the ground-metric/aggregation convention.
     */
-  def bottleneckDistance[A, B](
-    diagram1: Seq[PersistenceBar[Double, A]],
-    diagram2: Seq[PersistenceBar[Double, B]],
+  def bottleneckDistance(
+    diagram1: Seq[PersistenceBar[Double, ?]],
+    diagram2: Seq[PersistenceBar[Double, ?]],
     groundNorm: GroundNorm = GroundNorm.LInfinity
   ): Double =
     groundNorm.require1()
@@ -159,9 +159,9 @@ object BarcodeDistance:
     * [[bottleneckDistance]] -- see the class doc. `order` must be finite and `>= 1.0`; call [[bottleneckDistance]]
     * directly for the `order = Infinity` case.
     */
-  def wassersteinDistance[A, B](
-    diagram1: Seq[PersistenceBar[Double, A]],
-    diagram2: Seq[PersistenceBar[Double, B]],
+  def wassersteinDistance(
+    diagram1: Seq[PersistenceBar[Double, ?]],
+    diagram2: Seq[PersistenceBar[Double, ?]],
     order: Double = 1.0,
     groundNorm: GroundNorm = GroundNorm.LInfinity
   ): Double =
@@ -176,10 +176,10 @@ object BarcodeDistance:
         val finitePow = finiteWassersteinPow(fin1, fin2, order, groundNorm)
         math.pow(essentialPow + finitePow, 1.0 / order)
 
-  private def byDimension[A, B, R](
-    diagram1: Seq[PersistenceBar[Double, A]],
-    diagram2: Seq[PersistenceBar[Double, B]]
-  )(f: (Seq[PersistenceBar[Double, A]], Seq[PersistenceBar[Double, B]]) => R): Map[Int, R] =
+  private def byDimension[R](
+    diagram1: Seq[PersistenceBar[Double, ?]],
+    diagram2: Seq[PersistenceBar[Double, ?]]
+  )(f: (Seq[PersistenceBar[Double, ?]], Seq[PersistenceBar[Double, ?]]) => R): Map[Int, R] =
     val dims = (diagram1.map(_.dim) ++ diagram2.map(_.dim)).distinct
     val byDim1 = diagram1.groupBy(_.dim).withDefaultValue(Seq.empty)
     val byDim2 = diagram2.groupBy(_.dim).withDefaultValue(Seq.empty)
@@ -190,17 +190,17 @@ object BarcodeDistance:
     * as the empty diagram on that side, i.e. every bar on the other side must die to the diagonal, or the comparison is
     * `Infinity` if any of them is essential).
     */
-  def bottleneckDistanceByDimension[A, B](
-    diagram1: Seq[PersistenceBar[Double, A]],
-    diagram2: Seq[PersistenceBar[Double, B]],
+  def bottleneckDistanceByDimension(
+    diagram1: Seq[PersistenceBar[Double, ?]],
+    diagram2: Seq[PersistenceBar[Double, ?]],
     groundNorm: GroundNorm = GroundNorm.LInfinity
   ): Map[Int, Double] =
     byDimension(diagram1, diagram2)((d1, d2) => bottleneckDistance(d1, d2, groundNorm))
 
   /** As [[bottleneckDistanceByDimension]], but for [[wassersteinDistance]]. */
-  def wassersteinDistanceByDimension[A, B](
-    diagram1: Seq[PersistenceBar[Double, A]],
-    diagram2: Seq[PersistenceBar[Double, B]],
+  def wassersteinDistanceByDimension(
+    diagram1: Seq[PersistenceBar[Double, ?]],
+    diagram2: Seq[PersistenceBar[Double, ?]],
     order: Double = 1.0,
     groundNorm: GroundNorm = GroundNorm.LInfinity
   ): Map[Int, Double] =

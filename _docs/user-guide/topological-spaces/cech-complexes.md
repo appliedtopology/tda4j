@@ -1,8 +1,13 @@
 ---
 layout: main
+title: Čech complexes
 ---
 
-### Cech complexes
+### Čech complexes
+
+At scale `r`, the Čech complex has a simplex for every set of points whose balls of radius `r` have a common point; a
+simplex enters at the radius of its smallest enclosing ball. By the nerve theorem it has the shape of the union of the
+balls at every scale. It needs coordinates.
 
 ```scala 3
 import scala.language.experimental.modularity
@@ -11,13 +16,13 @@ import org.appliedtopology.tda4j.*
 val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
 val diagram = Persistence(points, complex = Cech, maxFiltrationValue = 2.0)
 
-// or the stream itself, for an engine of your choice:
-given Double is Field = Field.DoubleApproximated(1e-9)
-val cechStream = Cech(EuclideanMetricSpace(points), maxFiltrationValue = 2.0)
-val homology = SimplicialHomologyEngine.persistentHomology(cechStream)
+val stream = Cech(EuclideanMetricSpace(points), maxDimension = 1, maxFiltrationValue = 2.0)   // the complex itself
 ```
 
-`maxFiltrationValue` here is a Cech **radius**, not a Vietoris-Rips diameter — the two aren't
-interchangeable units. Only the naive engine (`SimplicialHomologyEngine`/`CellularHomologyEngine`) is used
-for Cech complexes; the packed Ripser engine's optimizations don't carry over (see the
-[Developer's Guide](../../developers-guide/architecture.md)).
+Filtration values are radii, not diameters: a loop born at diameter `d` in Vietoris-Rips is born near radius `d / 2`
+here. The Čech complex is larger than the Vietoris-Rips complex at the same scale; the [alpha complex](alpha-complexes.md)
+has the same diagram at a fraction of the size, for points in low dimension. `parallelFiltrationValue = true` computes
+the radii on several threads (the output is the same).
+
+The Čech complex is not a flag complex, so the Ripser engine does not apply; the chunks (default), naive and cohomology
+engines do.

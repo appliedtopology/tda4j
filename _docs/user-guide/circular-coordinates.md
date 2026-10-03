@@ -1,62 +1,63 @@
 ---
 layout: main
-title: Circular coordinates
+title: Circular and toroidal coordinates
 ---
 
+### Circular coordinates
 
-For a point cloud with cyclic/periodic structure (e.g. samples along a loop), `TDA4j.h1Bars`/
-`circularCoordinates` (de Silva-Morozov-Vejdemo-Johansson 2011) turn a persistent H¹ class into a map from
-each point to an angle in `[0, 1)` — a genuinely topological coordinate, not a barcode, so these are their own
-entry points rather than a new `complex=` value on `computeFromPoints`:
+A persistent loop in the data gives each point an angle: a map to the circle, `[0, 1)` as a fraction of a turn, that
+goes once around the loop (de Silva, Morozov and Vejdemo-Johansson 2011).
 
-```java
-double[][] bars = TDA4j.h1Bars(points);      // row i: (birth_i, death_i), sorted by persistence descending
-double r = bars[0][0] + (bars[0][1] - bars[0][0]) * 0.5; // pick r inside the most persistent bar's own range
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
 
-CircularCoordinatesResult result = TDA4j.circularCoordinates(points, r); // cocycleIndex=0, prime=47 defaults
-double[] theta = result.theta();             // one entry per input point, Double.NaN outside the class's own
-                                              // connected component -- not every point necessarily gets one
-boolean covered = result.hasCoordinate(3);
+val points = Array.tabulate(40)(i => Array(math.cos(i * 0.16), math.sin(i * 0.16)))
+val metricSpace = EuclideanMetricSpace(points)
+
+val loops = CircularCoordinates.h1Bars(metricSpace)          // (birth, death) of each loop, most persistent first
+val (birth, death) = loops.head
+val coordinate = CircularCoordinates.compute(metricSpace, r = (birth + death) / 2, cocycleIndex = 0)
+coordinate.theta                                              // point index -> angle in [0, 1)
 ```
 
-`h1Bars` is the required first call: there is no way to pick a meaningful `r` without first knowing a target
-bar's own `[birth, death)` range. `circularCoordinates` throws `IllegalArgumentException` for an `r` outside
-that range (or a bad `cocycleIndex`/`prime`), and `NoIntegerCocycleException` (also a plain `RuntimeException`,
-so it crosses the MATLAB bridge the same way) if the chosen class has no exact integer lift at `prime` —
-usually resolved by retrying with a larger odd prime; a genuinely torsion class (no real/integer lift at any
-prime, RP²'s own fundamental class being the standard example) will keep failing regardless. Not mirrored on
-the CLI, for the same reason as the vectorizations and boundary-matrix export above (its output is a per-point
-array, not a diagram) plus the inherently two-step, data-dependent nature of picking `r` — see the [Developer's
-Guide](../developers-guide/architecture.md)'s `CircularCoordinates` section for the full construction
-(the truncated-complex `K_r` reframing, the harmonic-smoothing linear system, and the integer-lift check).
+Choose the loop (`cocycleIndex`, counted in the order of `h1Bars`) and a scale `r` at which it is alive, between its
+birth and death; the middle is a natural choice. The coordinate is computed from the cohomology of the Vietoris-Rips
+complex at scale `r`: an integer cocycle, smoothed to the harmonic one. Only the points in the same connected piece as the
+loop get an angle; `theta` maps point indices to angles.
+
+The computation is over a field with an odd prime number of elements (`prime`, 47 by default), and the cocycle is lifted
+to integer coefficients, which is checked exactly. If the class has no integer lift at that prime,
+`NoIntegerCocycleException` says so; a larger prime usually helps, and a class that is truly torsion (the loop of the
+projective plane) has none at any prime.
 
 ### Toroidal coordinates
 
-When a data set has SEVERAL independent cyclic structures alive at once (e.g. samples on a torus), picking
-`k` bars from `h1Bars` and calling `circularCoordinates` on each separately gives `k` valid angle maps, but not
-a canonical ONE: any unimodular integer combination of `k` independent H¹ generators is an equally valid choice
-of generators for the same cohomology, so which combination a persistent-cohomology computation happens to
-return is arbitrary (this is the ambiguity Edelsbrunner raised about circular coordinates when the construction
-was first presented). `TDA4j.toroidalCoordinates` picks the combination that is shortest and most nearly
-orthogonal under the classes' own harmonic-representative inner product, via lattice reduction (Scoccola,
-Gakhar, Bush, Schonsheck, Rask, Zhou, Perea 2022, "Toroidal Coordinates," arXiv:2212.07201):
+When several loops are alive at the same scale, as on a torus, `computeToroidal` gives each point one angle per loop
+(Scoccola, Gakhar, Bush, Schonsheck, Rask, Zhou and Perea 2022):
 
-```java
-double[][] bars = TDA4j.h1Bars(points);
-// pick k indices simultaneously alive over a common range, and an r inside that intersection
-ToroidalCoordinatesResult result = TDA4j.toroidalCoordinates(points, r, new int[] {0, 1});
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
 
-double[] theta0 = result.theta(0);           // coordinate 0 across all points, Double.NaN outside the component
-double[] theta1 = result.theta(1);           // coordinate 1
-int[][] basisChange = result.basisChange();  // the unimodular integer combination LLL settled on
+val random = new scala.util.Random(1)
+val points = Array.fill(120) {
+  val (a, b) = (random.nextDouble() * 2 * math.Pi, random.nextDouble() * 2 * math.Pi)
+  Array(math.cos(a), math.sin(a), math.cos(b), math.sin(b))
+}
+val metricSpace = EuclideanMetricSpace(points)
+val loops = CircularCoordinates.h1Bars(metricSpace, maxFiltrationValue = 1.8)
+val r = (loops.take(2).map(_._1).max + loops.take(2).map(_._2).min) / 2    // both loops alive
+val coordinates = CircularCoordinates.computeToroidal(metricSpace, r, cocycleIndices = Seq(0, 1), maxFiltrationValue = 1.8)
+coordinates.theta          // one map from point to angle per loop
+coordinates.basisChange    // the integer change of basis chosen
 ```
 
-Pass `reduce=false` (the 5-argument overload) to get the SAME `k` coordinates without reduction (`basisChange`
-the identity) — useful for comparing directly against the reduced version via `result.originalGram()`/
-`result.reducedGram()`, or to opt out if the raw persistent-cohomology basis is already what you want. Same
-`IllegalArgumentException`/`NoIntegerCocycleException` behavior as `circularCoordinates`, plus: `cocycleIndices`
-must be duplicate-free, `r` must lie in every chosen class's own `[birth, death)` simultaneously, and every
-chosen class must live on the same connected component of `K_r` (two classes native to disconnected pieces of
-the data have no joint torus coordinate to be given). Not mirrored on the CLI, same reasoning as
-`circularCoordinates` above — see the [Developer's Guide](../developers-guide/architecture.md)'s
-`LatticeReduction`/`computeToroidal` section for the full construction.
+Any invertible integer combination of the loops describes the same torus, so the coordinates are first changed to the
+shortest, most nearly orthogonal combination, by lattice reduction (`reduce = false` keeps the original one). The loops
+must be alive at `r` together and lie in one connected piece of the complex. The
+[circular and toroidal coordinates](../tutorials/circular-and-toroidal-coordinates.md) tutorial checks both against
+known angles.
+
+From MATLAB: `TDA4j.h1Bars(points)`, `circularCoordinates(points, r)`, `toroidalCoordinates(points, r, indices)`, with
+indices counted from 0.
