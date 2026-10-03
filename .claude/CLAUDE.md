@@ -164,6 +164,10 @@ separate files; (2) a companion extension can lose to a same-named stdlib extens
 (`math.Ordering.Implicits.*`'s `min`/`max`) — so `min`/`max` stay top-level. `asSimplex`/`asCube` are top-level
 because their receiver is the raw `SortedSet`/`Vector`.
 
+**No top-level `object`/`class` with a non-ASCII name**: scaladoc writes one page FILE per such type (`∆$.html`), and a
+JVM under a POSIX locale cannot encode it (`sbt doc` dies with `InvalidPathException`). `∆` is therefore `val ∆ :
+Simplex.type = Simplex` (`WORKLOG-package-flatten.md`); unicode extension methods and vals are fine.
+
 **Shared test generators** (`matrixGen`) live in `src/test/.../streams/Generators.scala`, not in a spec (a spec file got overwritten once and took it with it) — put any new cross-spec generator there. Before creating a test file, `ls` for its name: `Write` overwrites silently.
 
 **specs2 gotcha**: in a class mixing `ScalaCheck`, give a `Seq[Simplex[_]]` an explicit type ascription before
