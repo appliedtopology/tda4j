@@ -57,7 +57,7 @@ sbt testFull                    # full test suite, every spec (plain `test` is i
 sbt "testOnly *SimplexSpec"     # single specs2 spec (glob ok)
 sbt scalafmtAll                 # format everything — run before committing
 sbt "scalafmtSbtCheck ; scalafmtCheck ; Test / scalafmtCheck"   # exactly what CI's lint job runs (check only; fix with `sbt scalafmtAll scalafmtSbt`)
-sbt mimaReportBinaryIssues      # binary compat (CI test job)
+sbt mimaReportBinaryIssues      # binary compat (CI `mima` job)
 TDA4J_SCALA_VERSION=3.8.4 sbt doc   # docs site (_docs/ + sidebar.yml) via scaladoc -> target/out/jvm/scala-3.8.4/tda4j/api
 sbt assembly                    # fat jar for CLI/MATLAB
 sbt -DrunBenchmarks=true test   # also run benchmark/profiling specs — NOT what CI runs
@@ -67,15 +67,12 @@ If `sbt` isn't on `PATH` in this environment, see `.claude/scripts/install-sbt.s
 paces around Maven Central's cold-cache rate limiting — `.claude/WORKLOG-toroidal-coordinates.md`'s own
 environment note has the story).
 
-No linter beyond scalafmt. Tests are specs2 (`org.specs2.mutable.Specification`). CI: `test.yml` (three parallel jobs `test`, `docs`, `mima`),
-`lint.yml` (scalafmt: build files, main and test sources), both on every PR to `scala` and cancelled when the PR is pushed again; `docs.yml` (scaladoc → GitHub Pages, push to `scala` only). MiMa in CI compares against nothing (no git tags in the shallow checkout; see the comment in `test.yml`). The ~319 `-Wunused:all` warnings
+No linter beyond scalafmt. Tests are specs2 (`org.specs2.mutable.Specification`). CI: `test.yml` (three parallel jobs `test`, `docs-build`, `mima`),
+`lint.yml` (scalafmt: build files, main and test sources), both on every PR to `scala` and cancelled when the PR is pushed again; `docs.yml` (scaladoc → GitHub Pages, push to `scala` only). MiMa's baseline is every earlier plain release of the same compatibility series (`mimaBaselineVersions` in `build.sbt`), so it compares against nothing while only `0.5.0-SNAPSHOT` exists. The ~319 `-Wunused:all` warnings
 (mostly unused wildcard imports) are deliberately left alone (`WORKLOG-compiler-warnings.md`).
 
-**`sbt scalafmtSbt`/`scalafmtSbtCheck` cover `project/*.scala` (sbt's own Scala 2.12 meta-build), not this
-project's Scala 3.9** — `.scalafmt.conf`'s global `runner.dialect = scala3` also reaches these files and will
-rewrite valid Scala 2 syntax into forms the meta-build compiler can't parse, breaking `sbt` itself.
-`project/SnipDirective.scala` carries a `// format: off` guard against this (a `fileOverride` glob was tried
-first and did not take effect — don't re-attempt without confirming it works).
+**`sbt scalafmtSbt`/`scalafmtSbtCheck` format the build definition** (`build.sbt`, `project/*.sbt`), and CI's lint job
+runs the check: format `build.sbt` before pushing it.
 
 **Docs site is pure scaladoc** (Laika/Paradox fully removed; `WORKLOG-laika-migration.md` and
 `WORKLOG-docs-site-fixes.md` are history only). Pages are Markdown in `_docs/` (front matter `layout: main`,
@@ -112,7 +109,7 @@ with the same options, asserting the numbers the tab quotes; the facade hides ba
 
 **Docs are built with Scala 3.8.4, everything else with 3.9.0** (scaladoc 3.9.0's JavaScript is broken; this
 includes the `ux.js` `$.get` navigation bug). The pin is the `TDA4J_SCALA_VERSION` env var read by `scalaVersion`
-in `build.sbt`, set only on the docs steps of `docs.yml`/`release.yml` (not `++3.8.4`). sbt 2 puts output under
+in `build.sbt`, set only on the docs steps of `test.yml` (`docs-build`), `docs.yml` and `release.yml` (not `++3.8.4`). sbt 2 puts output under
 `target/out/jvm/scala-<ver>/tda4j/`. Remove the pin when 3.9.1 releases.
 
 **Never run two `sbt` invocations against this checkout at once** — the incremental compiler's own class-file
@@ -120,8 +117,8 @@ writes from one process can be read mid-update by the other, producing a `NoClas
 real regression but disappears on a clean, sequential rerun.
 
 **Benchmark specs** (`ProfilingSpec`, `ApparentPairsBenchmarkSpec`, `CubicalBenchmarkSpec`, `SparseRipsBenchmarkSpec`,
-`DimensionCeilingBenchmarkSpec`, `EngineComparisonBenchmarkSpec`, `RipserPaperBenchmarkSpec`, all in `homology`)
-print timing tables rather than assert; only an exception counts as a failure. All seven `skipAll` unless
+`DimensionCeilingBenchmarkSpec`, `EngineComparisonBenchmarkSpec`, `RipserPaperBenchmarkSpec`, `EdgeCollapseBenchmarkSpec`, all in
+`homology`) print timing tables rather than assert; only an exception counts as a failure. All of them `skipAll` unless
 `-DrunBenchmarks=true` (a JVM system property, not specs2 `--` syntax); scope with `testOnly`
 (`EngineComparisonBenchmarkSpec` can take 15+ min; `RipserPaperBenchmarkSpec` also needs `-DdataDir`, optionally
 `-DripserBin=<path>` — see `.claude/scripts/run-ripser-paper-benchmark.sh`).
@@ -209,7 +206,7 @@ every homology implementation should (a) be generic over `Field` coefficients an
 real chain witnessing each bar). An optimization that abandons representatives is probably not worth it. Every
 public interface (MATLAB facade included) should expose representatives; anywhere that doesn't is incomplete.
 **Current gaps**: none known — every engine, including `PackedRipserCohomologyEngine`'s apparent-pairs shortcut,
-now records a representative for every bar.
+records a representative for every bar.
 
 ### Algebraic core
 
@@ -360,7 +357,7 @@ containing top cells (monotonicity). `ExplicitCubicalStream` for sparse/hand-bui
 `CubicalImage.fromFlatArray` row-major, last axis fastest; H0 oracle uses Moore (8/26-connected) adjacency.
 
 Both naive and chunks engines consume cubes. A grid-exploiting **3D** engine (CubicalRipser, Wagner-Chen-Vuçini)
-remains a valid future direction (`DESIGN-fast-cubical-engine.md`); every dimension `>= 2` now has a faster
+remains a valid future direction (`DESIGN-fast-cubical-engine.md`); every dimension `>= 2` has a faster
 option below.
 
 **`FastCubicalHomologyEngine`** (`engine="fast-cubical"`) — Flash Cubical (Le Breton-Szustakowski-Piraud,
@@ -622,7 +619,7 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
   `cohomology` wrap the stream in `LimitedCofaceSimplexStream(..., k+1)`. Alpha needs no +1.
 - Field: `Z` (prime, default `prime=2`) or `R` (`Field.DoubleApproximated`, internal specs' own default).
 - `PersistenceResult`: `toArray()` eager; `cycleVertices`/`cycleCoefficients` lazy, throwing
-  `UnsupportedOperationException` for a bar with no representative (every engine records one now — an engine
+  `UnsupportedOperationException` for a bar with no representative (every engine records one — an engine
   bug, not an expected gap).
 - **Boundary-matrix export**: `numCells`/`boundaryRows`/`boundaryCols`/`boundaryValues`/`columnDimension`/
   `columnVertices`/`columnFiltrationValue`, lazy, byte-identical across engines.
