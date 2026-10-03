@@ -452,13 +452,13 @@ object TDA4j:
   private def resolveWitnessVariant(opts: Map[String, String]): WitnessVariantKind =
     WitnessVariantKind.parse(opts.getOrElse("witnessvariant", "lazy"))
 
-  /** The witness complex's engine: `general` (not a flag complex) defaults to `naive` and refuses `ripser` and
+  /** The witness complex's engine: `general` (not a flag complex) defaults to `cohomology` and refuses `ripser` and
     * `chunks`; `lazy` (a flag complex) defaults to `ripser` and allows all four. Shared by the one-shot and two-step
     * paths.
     */
   private def resolveWitnessEngine(opts: Map[String, String], witnessVariant: WitnessVariantKind): EngineKind =
     val engine = EngineKind.parse(
-      opts.getOrElse("engine", if witnessVariant == WitnessVariantKind.General then "naive" else "ripser")
+      opts.getOrElse("engine", if witnessVariant == WitnessVariantKind.General then "cohomology" else "ripser")
     )
     if engine == EngineKind.FastCubical then
       throw new IllegalArgumentException(
@@ -591,7 +591,7 @@ object TDA4j:
 
     // Parsed BEFORE the engine default below, since complex=witness's own default depends on it (lazy behaves
     // like complex=vr -- a flag complex, defaults to ripser; general behaves like complex=alpha/cech -- not a
-    // flag complex, defaults to naive).
+    // flag complex, defaults to cohomology).
     val witnessVariant =
       if complex == ComplexKind.Witness then resolveWitnessVariant(opts)
       else WitnessVariantKind.Lazy // unused for any other complex; a harmless placeholder, never consulted below
@@ -605,7 +605,7 @@ object TDA4j:
             "engine",
             if complex == ComplexKind.Alpha || complex == ComplexKind.Cech || isDtm ||
               complex == ComplexKind.SparseRips
-            then "naive"
+            then "cohomology"
             else "ripser"
           )
         )
@@ -1334,7 +1334,7 @@ object TDA4j:
     threshold(dispatchDowkerFull(opts, relation), valueRange(relation.iterator.flatten))
 
   private def dispatchDowkerFull(opts: Map[String, String], relation: Array[Array[Double]]): PersistenceResult =
-    val engine = EngineKind.parse(opts.getOrElse("engine", "naive"))
+    val engine = EngineKind.parse(opts.getOrElse("engine", "cohomology"))
     if engine == EngineKind.FastCubical then
       throw new IllegalArgumentException(
         "engine=fast-cubical is not offered for computeFromRelation: FastCubicalHomologyEngine is specialized " +
@@ -1426,7 +1426,7 @@ object TDA4j:
     threshold(dispatchCubicalFull(opts, stream), valueRangeOfImage)
 
   private def dispatchCubicalFull(opts: Map[String, String], stream: CubicalGridStream): PersistenceResult =
-    val engine = EngineKind.parse(opts.getOrElse("engine", "naive"))
+    val engine = EngineKind.parse(opts.getOrElse("engine", "cohomology"))
     if engine == EngineKind.Ripser then
       throw new IllegalArgumentException(
         "engine=ripser cannot be used for a cubical complex: PackedRipserCohomologyEngine is specialized to " +

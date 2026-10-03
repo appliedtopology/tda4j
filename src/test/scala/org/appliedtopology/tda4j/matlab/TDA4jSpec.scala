@@ -110,6 +110,35 @@ class TDA4jSpec extends mutable.Specification:
     // Every bar carries a real annotation (this engine never resolves a bar via a shortcut that skips
     // recording one, unlike engine=ripser's apparent-pairs case) -- mirrors the equivalent engine=chunks
     // check below.
+    "be the default for every complex Ripser does not take: the same bars and representatives as asking for it" in {
+      def same(default: PersistenceResult, explicit: PersistenceResult) =
+        default.size() == explicit.size() &&
+          triples(default.toArray()) == triples(explicit.toArray()) &&
+          (0 until default.size()).forall(i =>
+            default.cycleVertices(i).map(_.toList).toList == explicit.cycleVertices(i).map(_.toList).toList
+          )
+      val cech = Array("complex", "cech", "maxDimension", "1")
+      val pixels = Array(Array(0.0, 1.0, 0.0), Array(1.0, 2.0, 1.0), Array(0.0, 1.0, 0.0))
+      val relation = Array(Array(0.0, 1.0, 2.0), Array(1.0, 0.0, 1.0), Array(2.0, 1.0, 0.0))
+      same(
+        FullBarcode.computeFromPoints(points, cech),
+        FullBarcode.computeFromPoints(points, cech ++ Array("engine", "cohomology"))
+      )
+        .must(beTrue)
+        .and(
+          same(
+            FullBarcode.computeFromImage(pixels),
+            FullBarcode.computeFromImage(pixels, Array("engine", "cohomology"))
+          ) must beTrue
+        )
+        .and(
+          same(
+            TDA4j.computeFromRelation(relation),
+            TDA4j.computeFromRelation(relation, Array("engine", "cohomology"))
+          ) must beTrue
+        )
+    }
+
     "have representative chains readable for every bar, with matching vertex/coefficient array lengths" in {
       val result = FullBarcode.computeFromPoints(points, Array("engine", "cohomology"))
       result.size() must be_>(0)

@@ -27,8 +27,8 @@ diagram.dim(1).longest                     // the loop, with a cocycle that witn
   complexes, and simplicial sets for spaces you build yourself, down to classifying spaces of finite groups.
 * **Any coefficients**: every engine works over any prime field or the reals. The default is the field with 17
   elements, where signs and odd torsion are visible.
-* **Representatives**: every bar comes with a cycle (or cocycle) that witnesses it, so you can see where a feature is,
-  and compute circular and toroidal coordinates from it.
+* **Representatives**: every bar comes with a chain that witnesses it: a cocycle by default (what circular and toroidal
+  coordinates are built from), or on request a cycle, which shows where a feature is.
 * **Several engines** for the same computation, from a reference implementation to Ripser's algorithm and specialized
   engines for images and alpha complexes, checked against each other.
 * **Long computations** that can be advanced in steps and read at any scale while they run.

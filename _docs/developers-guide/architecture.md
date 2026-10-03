@@ -386,7 +386,7 @@ births pair off at once); the engines leave those out by default (checked on a h
 Wired into `matlab.TDA4j`/`cli` as a dedicated entry point (`computeFromRelation`/`--input-format csv-relation`),
 separate from `computeFromPoints`/`computeFromDistanceMatrix`: a Dowker relation is neither a point cloud nor a
 square/symmetric distance matrix, so it doesn't fit the `complex=` dispatch those methods share. `engine`
-defaults to `naive` and refuses `ripser`/`chunks`, exactly like `complex=witness` with `witnessVariant=general` —
+defaults to `cohomology` and refuses `ripser`/`chunks`, exactly like `complex=witness` with `witnessVariant=general` —
 same non-flag-complex reasoning. A `"dual"`/`--dual` option computes the `W`-side complex directly via
 `DowkerGeometry.dual`, without the caller having to transpose the relation by hand.
 

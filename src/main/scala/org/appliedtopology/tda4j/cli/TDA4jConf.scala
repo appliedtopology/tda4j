@@ -44,7 +44,7 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   val engine: ScallopOption[String] =
     opt[String](descr =
       "ripser, chunks, naive, cohomology, fast-cubical or fast-alpha. Default: ripser for vr and the lazy " +
-        "witness complex, naive otherwise. ripser needs vr or --witness-variant=lazy; fast-cubical is for images " +
+        "witness complex, cohomology otherwise. ripser needs vr or --witness-variant=lazy; fast-cubical is for images " +
         "of dimension 2 and up; fast-alpha for --complex=alpha with the helix backend"
     )
   val alphaBackend: ScallopOption[String] =

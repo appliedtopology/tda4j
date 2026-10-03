@@ -56,7 +56,7 @@ Mémoli 2018) gives X-side/Y-side barcodes agreeing exactly **without zero-lengt
 match bar-for-bar otherwise — confirmed on a hand-worked fixture, not just asserted from the theorem).
 
 Own MATLAB/CLI entry point (`computeFromRelation`/`--input-format csv-relation`), not a `complex=` value — a
-relation doesn't fit the point-cloud/distance-matrix dispatch. `engine` defaults `naive`, refuses `ripser`/
+relation doesn't fit the point-cloud/distance-matrix dispatch. `engine` defaults `cohomology`, refuses `ripser`/
 `chunks`; `dual`/`--dual` computes the W-side directly.
 
 ## DTM-based filtrations

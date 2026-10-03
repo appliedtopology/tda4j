@@ -93,3 +93,16 @@ Found while re-deriving the numbers: the quickstart's `bettiNumbers // Vector(1,
   Dowker and images.
 - Chunks on images: 35 s for 200x200 against 4.6 s for cohomology; something there is not clearing.
 - Cech construction: 16 s for 520k cells, one Miniball per simplex.
+
+## Facade follow-up
+
+MATLAB and the CLI already defaulted to degree 2, but used `naive` for every complex except Vietoris-Rips and the lazy
+witness complex. That is exactly the slow path: 116 s on the 60-point circle at degree 2. The non-VR default is now
+`cohomology`, at all four dispatch sites:
+- point-cloud complexes;
+- the general witness complex;
+- relations;
+- images.
+
+The rows are bar-for-bar and representative-for-representative equal to an explicit `engine=cohomology` call.
+`TDA4jSpec` checks this, and the test fails when the old `naive` default is restored (checked).
