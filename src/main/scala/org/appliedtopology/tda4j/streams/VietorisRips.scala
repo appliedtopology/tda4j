@@ -171,7 +171,10 @@ private[tda4j] class RecursiveStackVietorisRipsSimplexStream(val metricSpace: Fi
   * speed by factors of ~1-2 in the benchmarks (`WORKLOG-mst-and-perf.md`). `RecursiveStackVietorisRipsSimplexStream` is
   * deliberately not offered: it cannot truncate by dimension or radius and times out beyond toy sizes.
   */
-object VietorisRips:
+object VietorisRips extends PointCloudComplex:
+  def fromPoints(points: PointCloud, maxDimension: Int, maxFiltrationValue: Option[Double]) =
+    apply(points.metricSpace, maxDimension, maxFiltrationValue)
+
   enum Implementation:
     /** Breadth-first coface enumeration; the default. */
     case Enumerating

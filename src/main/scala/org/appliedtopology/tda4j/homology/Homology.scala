@@ -92,7 +92,7 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
     /** Filtration value of the last cell the stream will ever produce: a class alive at `f` is essential exactly when
       * no cell enters after `f`, which is a property of the STREAM, not of how far the cursor happens to have run.
       */
-    private lazy val lastFiltrationValue: Option[FiltrationT] =
+    lazy val lastFiltrationValue: Option[FiltrationT] =
       processingSequence.lastOption.map(c => cellFiltrationValue(c, filtration.smallest))
 
     private def cellFiltrationValue(cell: CellT, fallback: FiltrationT): FiltrationT =
@@ -243,6 +243,18 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
 
     def diagramAt(f: FiltrationT): List[(Int, FiltrationT, FiltrationT)] =
       diagramWithGeneratorsAt(f).map { case (dim, lower, upper, _) => (dim, lower, upper) }
+
+    /** An immutable [[PersistenceDiagram]] of everything up to `f` (advancing the cursor to `f` if it isn't there yet):
+      * take a stable view of a long run part-way through. Covers the filtration up to `f` only.
+      */
+    def snapshotAt(f: FiltrationT)(using toDouble: FiltrationT =:= Double): PersistenceDiagram.Of[CellT, CoefficientT] =
+      val bars =
+        barcodeAt(f).asInstanceOf[List[PersistenceBar[Double, Chain[CellT, CoefficientT]]]] // FiltrationT = Double
+      PersistenceDiagram[CellT, CoefficientT](
+        bars,
+        bars.map(_.dim).maxOption.getOrElse(0),
+        lastFiltrationValue.map(toDouble).getOrElse(Double.NegativeInfinity)
+      )
 
     def barcodeAt(f: FiltrationT): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
       diagramWithGeneratorsAt(f).map { (dim, l, u, rep) =>
@@ -495,7 +507,7 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
           essentialRepresentatives(edge) = Chain(edge) - (c0 ⊠ pathFromRoot(v0)) - (c1 ⊠ pathFromRoot(v1))
         }
 
-    private lazy val lastFiltrationValue: Double =
+    lazy val lastFiltrationValue: Double =
       allCells.iterator
         .map(c => stream.filtrationValue.applyOrElse(c, (_: CellT) => Double.NegativeInfinity))
         .maxOption

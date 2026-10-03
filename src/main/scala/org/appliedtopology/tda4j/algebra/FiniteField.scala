@@ -26,7 +26,7 @@ class FiniteField(val p: Int):
     def toInt: Int = fp.norm
     def toUInt: Int = ((fp % p) + p) % p // Have to get to the interval (0,p-1)
 
-  given (Fp is Field) = new (Fp is Field):
+  given fpField: (Fp is Field) = new (Fp is Field):
     override def showForSelf: Show[Fp] = Show.show[Fp] { fpx =>
       val Fp(x) = fpx.norm
       s"Fp(${x})"
@@ -76,3 +76,10 @@ class FiniteField(val p: Int):
     // Long product: inputs need not be normalized (`Fp(a)` and the inverse table are not), and for p > 46341 an Int
     // product of two residues overflows.
     def times(x: Fp, y: Fp): Fp = norm(Fp(((x.toLong * y.toLong) % p).toInt))
+
+object FiniteField:
+  /** The library's default coefficient characteristic (the `Persistence` verb, prebuilt labs, the MATLAB/CLI facade):
+    * 17, deliberately not 2 -- F₂ hides every sign error and all odd torsion, and the project lead has spent a long
+    * time pushing back on "F₂ and call it a day". Any prime works; arithmetic is exact up to `Int` range.
+    */
+  val DefaultPrime: Int = 17

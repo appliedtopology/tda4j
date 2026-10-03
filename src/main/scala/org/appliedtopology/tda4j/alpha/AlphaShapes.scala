@@ -27,7 +27,14 @@ abstract class AlphaShapes extends LevelwiseSimplexStream[Int, Double]() with Do
   * below brings both the type and its factory back into unqualified scope for the rest of this file, where `Point` is
   * used pervasively by `Hyperplane`/`Hypersphere`/`HelixDelaunay`.
   */
-object AlphaShapes:
+object AlphaShapes extends PointCloudComplex:
+  def fromPoints(points: PointCloud, maxDimension: Int, maxFiltrationValue: Option[Double]) =
+    require(
+      maxFiltrationValue.isEmpty,
+      "tda4j: AlphaShapes builds the whole alpha complex, so maxFiltrationValue is not supported for it -- read the " +
+        "result at a smaller parameter with diagram.at(f) instead"
+    )
+    Truncated(apply(points.points.toSeq), maxDimension)
 
   /** @param requireValidTriangulation
     *   OFF by default. Only meaningful for the `"helix"`/`"default"` backend -- threaded straight through to

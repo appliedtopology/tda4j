@@ -37,7 +37,10 @@ private final class TruncatedSimplexStream(stream: LevelwiseSimplexStream[Int, D
   override def filtrationValue: PartialFunction[Simplex[Int], Double] = stream.filtrationValue
 
 /** The Cech complex of a Euclidean point cloud; `maxFiltrationValue` is in Cech RADIUS units. */
-object Cech:
+object Cech extends PointCloudComplex:
+  def fromPoints(points: PointCloud, maxDimension: Int, maxFiltrationValue: Option[Double]) =
+    apply(points.metricSpace, maxDimension, maxFiltrationValue)
+
   def apply(
     metricSpace: EuclideanMetricSpace,
     maxDimension: Int = 2,

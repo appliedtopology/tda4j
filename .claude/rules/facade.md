@@ -71,7 +71,7 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
   `--landmarks-file`. `WORKLOG-witness-two-step-api.md`.
 - `maxDimension` (default 2) = top homological degree. `ripser`/`chunks` pass it straight through; `naive`/
   `cohomology` wrap the stream in `LimitedCofaceSimplexStream(..., k+1)`. Alpha needs no +1.
-- Field: `Z` (prime, default `prime=2`) or `R` (`Field.DoubleApproximated`, internal specs' own default).
+- Field: `Z` (prime, default `prime=17` = `FiniteField.DefaultPrime`, was 2) or `R` (`Field.DoubleApproximated`, internal specs' own default).
 - `PersistenceResult`: `toArray()` eager; `cycleVertices`/`cycleCoefficients` lazy, throwing
   `UnsupportedOperationException` for a bar with no representative (every engine records one — an engine
   bug, not an expected gap).

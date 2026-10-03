@@ -4,11 +4,11 @@ import org.specs2.mutable.Specification
 
 import scala.concurrent.duration.*
 
-/** The cursor contract: `diagramAt(f)` is the diagram of the filtration truncated at `f` -- bars born at or before
-  * `f`, deaths capped at `f`, a class alive at `f` reported as dying at `f` unless no cell enters after `f` (then it
-  * is essential) -- NO MATTER WHERE THE CURSOR IS. The cursor exists so a long run can be inspected (and survive a
-  * crash with output) before it finishes; reading a lower parameter from a cursor that has moved past it must give
-  * the same answer a fresh cursor would. `.claude/WORKLOG-cursor-and-verb.md`.
+/** The cursor contract: `diagramAt(f)` is the diagram of the filtration truncated at `f` -- bars born at or before `f`,
+  * deaths capped at `f`, a class alive at `f` reported as dying at `f` unless no cell enters after `f` (then it is
+  * essential) -- NO MATTER WHERE THE CURSOR IS. The cursor exists so a long run can be inspected (and survive a crash
+  * with output) before it finishes; reading a lower parameter from a cursor that has moved past it must give the same
+  * answer a fresh cursor would. `.claude/WORKLOG-cursor-and-verb.md`.
   */
 class DiagramQuerySpec extends Specification:
   given Double is Field = Field.DoubleApproximated(1e-9)
@@ -19,7 +19,8 @@ class DiagramQuerySpec extends Specification:
 
   private def stream(pts: Array[Array[Double]]) = VietorisRips(EuclideanMetricSpace(pts), 1, Some(0.8))
 
-  private def fresh(pts: Array[Array[Double]]) = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream(pts))
+  private def fresh(pts: Array[Array[Double]]) =
+    SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream(pts))
 
   /** Bars of degree <= 1 (degree 2 is truncation scaffolding), zero-length tie bars dropped, as a sorted multiset. */
   private def norm(bars: List[(Int, Double, Double)]): List[(Int, Double, Double)] =
@@ -69,7 +70,11 @@ class DiagramQuerySpec extends Specification:
       (finishedAtOnce must beFalse)
         .and(partial must beLessThan(boxed.totalCells))
         .and(boxed.processedCells must beEqualTo(boxed.totalCells))
-        .and(norm(boxed.diagramAt(Double.PositiveInfinity)) must beEqualTo(norm(fresh(pts).diagramAt(Double.PositiveInfinity))))
+        .and(
+          norm(boxed.diagramAt(Double.PositiveInfinity)) must beEqualTo(
+            norm(fresh(pts).diagramAt(Double.PositiveInfinity))
+          )
+        )
     }
     "return true straight away when the budget covers the whole stream" in {
       fresh(cloud(7, 6)).advanceFor(1.minute) must beTrue

@@ -94,7 +94,7 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "of its values. Default 0.01; 0 reports every bar. See PersistenceFilter"
   )
   val field: ScallopOption[String] = opt[String](descr = "Z (default, a prime finite field) or R (floating point)")
-  val prime: ScallopOption[Int] = opt[Int](descr = "prime for --field=Z (default: 2)")
+  val prime: ScallopOption[Int] = opt[Int](descr = "prime for --field=Z (default: 17)")
   val epsilon: ScallopOption[Double] = opt[Double](descr = "tolerance for --field=R (default: 1e-9)")
   // String, not Boolean -- Scallop's opt[Boolean] is a no-argument toggle flag whose ScallopOption is ALWAYS
   // supplied (defaulting to false when the flag is absent), unlike every other option here, which is genuinely

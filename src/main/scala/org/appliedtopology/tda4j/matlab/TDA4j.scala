@@ -150,12 +150,12 @@ import scala.collection.mutable
   *     `engine="ripser"`'s own REDUCTION should benefit the same way `"naive"`/`"chunks"`/`"cohomology"`'s measured did
   *     (fewer real simplices to reduce, regardless of which algorithm reduces them), but this specific combination has
   *     not itself been measured, only the other three -- see the worklog.
-  *   - `"field"`: `"Z"` (default -- a prime finite field, `prime=2` unless overridden; the standard convention in the
-  *     TDA research literature, e.g. Ripser/GUDHI) or `"R"` (floating point with an epsilon tolerance,
-  *     `Field.DoubleApproximated` -- notably what this codebase's own existing cross-validation specs default to
-  *     instead, an established-convention-vs-existing-test-suite mismatch worth knowing about, not silently resolved
-  *     either way; see WORKLOG-matlab-api.md).
-  *   - `"prime"`: integer, default `2`, only consulted when `field=Z`.
+  *   - `"field"`: `"Z"` (default -- a prime finite field, `prime=17` (`FiniteField.DefaultPrime`) unless overridden;
+  *     was 2 until 0.5.0, the convention in the TDA research literature, e.g. Ripser/GUDHI) or `"R"` (floating point
+  *     with an epsilon tolerance, `Field.DoubleApproximated` -- notably what this codebase's own existing
+  *     cross-validation specs default to instead, an established-convention-vs-existing-test-suite mismatch worth
+  *     knowing about, not silently resolved either way; see WORKLOG-matlab-api.md).
+  *   - `"prime"`: integer, default `17` (`FiniteField.DefaultPrime`), only consulted when `field=Z`.
   *   - `"epsilon"`: double, default `1e-9`, only consulted when `field=R`.
   *
   * Unrecognized keys, and unrecognized values for `complex`/`engine`/`field`, throw `IllegalArgumentException`
@@ -781,7 +781,7 @@ object TDA4j:
   private def dispatchByField[T](opts: Map[String, String])(compute: [C] => (C => Double) => (C is Field) ?=> T): T =
     CoefficientKind.parse(opts.getOrElse("field", "z")) match
       case CoefficientKind.Z =>
-        val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(2)
+        val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(FiniteField.DefaultPrime)
         val ff = new FiniteField(prime)
         import ff.given
         compute[ff.Fp](_.toInt.toDouble)
@@ -1716,7 +1716,7 @@ object TDA4j:
 
     CoefficientKind.parse(opts.getOrElse("field", "z")) match
       case CoefficientKind.Z =>
-        val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(2)
+        val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(FiniteField.DefaultPrime)
         val ff = new FiniteField(prime)
         import ff.given
         computeCubicalGeneric[ff.Fp](stream, engine, maxDimension, _.toInt.toDouble)
