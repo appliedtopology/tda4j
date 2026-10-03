@@ -7,8 +7,7 @@ import org.appliedtopology.tda4j.*
   * homology classes that are never killed. Computed with the chunks persistence engine on the unfiltered complex (every
   * generator at filtration value `0`), so it is the ordinary homology of `X`.
   *
-  * Only finite fields are offered, matching the library's field-generic design; integer homology (and with it torsion)
-  * is a deliberately deferred problem. Over `F_2` and `F_3` together you can see most small torsion.
+  * Integer homology is not computed; comparing `F_2`, `F_3`, ... shows small torsion.
   */
 object BettiNumbers:
 

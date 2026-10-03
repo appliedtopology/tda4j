@@ -3,15 +3,8 @@ package org.appliedtopology.tda4j
 import scala.io.Source
 import java.io.PrintWriter
 
-/** Ripser's own input file formats (`ripser.cpp`'s `read_point_cloud`/`read_lower_distance_matrix`/
-  * `read_upper_distance_matrix`/`read_distance_matrix`/`read_binary`) -- verified directly against
-  * `github.com/Ripser/ripser`'s own source (see `.claude/WORKLOG-io-module.md`), not reconstructed from documentation:
-  * a wrong flat-index convention here would silently produce a plausible-looking wrong matrix rather than an error.
-  *
-  * '''Not implemented''': `--format sparse` (a triplet edge list -- tda4j has no "only these edges are known, the rest
-  * are unknown rather than infinite" metric-space type, so this is a real, open design question, not an oversight --
-  * see the worklog) and `--format dipha` (use `Dipha.scala` directly instead, which reads the exact same file DIPHA
-  * itself produces).
+/** Ripser's input formats (`point-cloud`, `lower-distance`, `upper-distance`, `distance`, `binary`), with the
+  * conventions of `ripser.cpp`. Not supported: `sparse` (an edge list) and `dipha` (use [[Dipha]]).
   */
 object Ripser:
   private val delimiterRegex = "[\\s,]+"
@@ -58,11 +51,7 @@ object Ripser:
     try out.println(DistanceMatrices.flattenLowerTriangular(matrix).mkString(","))
     finally out.close()
 
-  /** `--format upper-distance`: row `i` (`i = 0 until n-1`) contributes `n-1-i` entries `d(i,i+1),...,d(i,n-1)`, rows
-    * concatenated -- confirmed against `read_upper_distance_matrix`/`compressed_upper_distance_matrix`'s `init_rows`
-    * pointer arithmetic in `ripser.cpp` directly, traced term-by-term rather than assumed symmetric with the lower case
-    * (see `.claude/WORKLOG-io-module.md`).
-    */
+  /** `upper-distance`: the entries above the diagonal, row by row (`d(0,1), ..., d(0,n-1), d(1,2), ...`). */
   def readUpperDistanceMatrix(path: String): Array[Array[Double]] =
     val flat = readFlatValues(path)
     DistanceMatrices.expandUpperTriangular(flat, DistanceMatrices.sizeFromTriangularCount(flat.size))

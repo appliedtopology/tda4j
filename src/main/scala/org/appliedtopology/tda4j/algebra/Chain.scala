@@ -62,14 +62,9 @@ into class Chain[CellT: Ordering, CoefficientT: Field] private[tda4j](
     */
   def rawEntries: Seq[(CellT, CoefficientT)] = entries.toSeq
 
-  /** WARNING - this is potentially an expensive operation
-    *
-    * `.asMatchable` (not a runtime operation -- purely a compile-time cast satisfying Scala 3's Matchable safety check,
-    * since `equals` must take `Any`, which isn't itself `Matchable`) plus `@unchecked` on the pattern (the type test
-    * can only check erasure-level `Chain[_, _]` at runtime, not that `other`'s own `CellT`/`CoefficientT` genuinely
-    * match `this`'s -- accepted here exactly as it always has been: `other`'s type parameters are assumed to line up
-    * with `this`'s so `other.collapseAll()` can reuse `this`'s own `Ordering`/`Field` givens, the same assumption every
-    * generic-class `equals` in this style makes).
+  /** Equality as formal sums: both chains are collapsed first, so this costs a pass over each. Assumes `obj` has the
+    * same cell and coefficient types (only `Chain` is checked at runtime). Not consistent with `hashCode`: do not use
+    * chains as keys of a hash set or map.
     */
   override def equals(obj: Any): Boolean = obj.asMatchable match
     case other: Chain[CellT, CoefficientT] @unchecked =>
@@ -110,19 +105,7 @@ object Chain:
         val head: Option[(CellT, CoefficientT)] = self.entries.headOption
         (head.map(_._1), head.map(_._2).getOrElse(fld.zero))
 
-  /** Mutates `m` in place and returns `Unit`, NOT a new `SortedMap`, as of a later follow-up session (see
-    * `.claude/WORKLOG-ripser-profiling.md`'s "the reduceLoop redesign" section): the persistent (immutable)
-    * `SortedMap.updated`/`.removed` this used to call allocates O(log n) fresh red-black tree nodes on EVERY
-    * elimination step, purely to preserve structural sharing that `reduceLoop`'s own accumulator never actually needs
-    * -- `z`/`reductionLog` are built fresh at the top of `reduceByUntil` and never observed at any intermediate
-    * (pre-mutation) state by anything else, so nothing here relies on the old, functional "each call returns an
-    * independent snapshot" behavior. Measured (real `sphere3_96` paper data, packed engine): this was `Chain`'s own
-    * accumulator churn, ~7% of total allocation weight once accurately attributed -- NOT the "48%" figure
-    * `WORKLOG-ripser-profiling.md`'s first pass over this data reported, which turned out to conflate three unrelated
-    * allocation sources sharing a `RedBlackTree` class-name prefix (see that section for the corrected breakdown; the
-    * other two, larger sources were `insertionDiameter`'s repeated `SortedSet.iterator` calls and `SimplexIndexing`'s
-    * own index-to-`Simplex` decode, fixed separately and NOT part of this change).
-    */
+  /** Adds `coeff` to the entry of `cell` in `m`, removing it if the result is zero. Mutates `m`. */
   private def updateMap[CellT: Ordering, CoefficientT: Field](
     m: mutable.TreeMap[CellT, CoefficientT],
     cell: CellT,
@@ -140,21 +123,8 @@ object Chain:
     z.entries.foreach { case (cell, coeff) => updateMap(m, cell, coeff) }
     m
 
-  /** `fallback` is consulted only when `sigma` has no `basis` entry -- Ripser's `compute_pairs` on-the-fly
-    * apparent-pair substitution (confirmed against `ripser.cpp` directly: it recomputes the substitute column fresh
-    * every time a pivot is hit, with no cache anywhere). Deliberately NOT written into `basis` here, for the same
-    * reason: a caller relying on a stale substitute would be trusting a value real Ripser itself never trusts twice.
-    * `fallback(sigma)`, if `Some`, must return a chain whose `leadingCell` is `sigma` itself -- the caller is
-    * responsible for that invariant (see `RipserCohomologyEngine.zeroApparentFacet`'s doc for why it holds there).
-    *
-    * A `while` loop mutating `z`/`reductionLog` in place, not `@tailrec` recursion threading a fresh immutable
-    * `SortedMap` through each step -- see `updateMap`'s doc above. `z.head`/`z.isEmpty` are used instead of
-    * `z.headOption`: `mutable.TreeMap` does NOT override `headOption` itself, and `IterableOnceOps`'s inherited default
-    * (`if (it.hasNext) Some(it.next())`, built on `.iterator`) would silently reintroduce a
-    * `KeysIterator`/`TreeIterator` allocation on every single loop iteration -- exactly the class of cost this whole
-    * session's investigation was chasing. `head` IS separately overridden (confirmed by decompiling `TreeMap.class`: it
-    * calls `RedBlackTree.min` directly, one O(log n) descent, zero iterator) -- checked empirically, not assumed, per
-    * this session's own "measure, don't infer" lesson from the `insertionDiameter` misattribution above.
+  /** Reduces `z` by the columns in `basis`, in place. `fallback` is consulted when a pivot `sigma` has no `basis` entry
+    * (Ripser's on-the-fly apparent pairs); its result must have leading cell `sigma`, and it is not cached.
     */
   private def reduceLoop[CellT: Ordering, CoefficientT: Field](
     z: mutable.TreeMap[CellT, CoefficientT],

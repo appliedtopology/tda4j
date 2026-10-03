@@ -78,8 +78,7 @@ class FiniteField(val p: Int):
     def times(x: Fp, y: Fp): Fp = norm(Fp(((x.toLong * y.toLong) % p).toInt))
 
 object FiniteField:
-  /** The library's default coefficient characteristic (the `Persistence` verb, prebuilt labs, the MATLAB/CLI facade):
-    * 17, deliberately not 2 -- F₂ hides every sign error and all odd torsion, and the project lead has spent a long
-    * time pushing back on "F₂ and call it a day". Any prime works; arithmetic is exact up to `Int` range.
+  /** The default characteristic of the library (the `Persistence` verb, the labs, MATLAB and the CLI): 17. Unlike F₂,
+    * it shows signs and odd torsion.
     */
   val DefaultPrime: Int = 17

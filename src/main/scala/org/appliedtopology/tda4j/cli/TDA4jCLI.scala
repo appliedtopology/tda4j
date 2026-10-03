@@ -9,38 +9,19 @@ import org.rogach.scallop.ScallopOption
 import java.io.PrintWriter
 import scala.collection.mutable
 
-/** The `tda4j` executable: a command-line front end for `org.appliedtopology.tda4j.matlab.TDA4j`, the same facade the
-  * MATLAB bridge uses -- see that class's own doc for what every `--complex`/`--engine`/`--field`/etc. option actually
-  * means, and `.claude/WORKLOG-cli-executable.md` for why this file's own logic is split the way it is (`run` returns
-  * an exit code rather than calling `sys.exit` itself, specifically so `CLISpec` can call it in-process without killing
-  * the test JVM -- `main` is the only place that actually exits).
-  *
-  * Built via `sbt assembly` into a runnable fat jar (`java -jar target/scala-3.9.0/TDA4j-<version>-assembly.jar
-  * [options] <input-file>`) -- see `build.sbt`'s `assembly / mainClass` setting.
+/** The `tda4j` executable, a command-line front end for [[org.appliedtopology.tda4j.matlab.TDA4j]] (flags in
+  * [[TDA4jConf]]). Built by `sbt assembly`: `java -jar tda4j-<version>-assembly.jar [options] <input-file>`.
   */
 object TDA4jCLI:
   def main(args: Array[String]): Unit =
     val exitCode = run(args.toIndexedSeq, System.out)
     if exitCode != 0 then sys.exit(exitCode)
 
-  /** The whole CLI, minus process exit -- `main` is a two-line wrapper around this. Returns `0` on success, `1` on any
-    * recognized failure (a bad `TDA4j` option value, a malformed input file, an unsupported `--output-format`
-    * combination), printing a one-line `tda4j: <message>` to `System.err` in that case rather than a stack trace,
-    * matching `TDA4j`'s own convention of throwing `IllegalArgumentException` with an actionable message rather than
-    * silently falling back to a default.
+  /** The CLI without the process exit, so it can run in-process: returns `0` on success and `1` on a reported failure
+    * (a bad option, a malformed file), which is printed as one line `tda4j: <message>` on standard error.
     *
-    * '''Known, deliberate limitation, checked directly rather than assumed''': a PARSE-level error -- a malformed flag
-    * (`--max-dimension notanumber`), a missing required argument, or `--help`/`--version` themselves -- is NOT caught
-    * here at all. `new TDA4jConf(args)` (inside `Scallop`'s `verify()`) calls Scallop's own default `onError`, which
-    * prints directly to stdout/stderr and calls `System.exit` unconditionally, before this method ever gets control
-    * back -- confirmed by tracing Scallop's own `ScallopConfBase.onError`/`exitHandler` source, not assumed from the
-    * library's documentation. This is the normal, desired behavior for a real CLI invocation (`main`, a fresh process)
-    * and IS what a real user sees for e.g. `--help` -- but it means `run` is not safe to call from a long-lived
-    * embedding process (a test suite included) with input that could hit this path; Scallop does offer an escape hatch
-    * for exactly this (`org.rogach.scallop.throwError`, a `DynamicVariable[Boolean]` that makes `onError` re-throw
-    * instead of exiting), deliberately not used here since it would also have to reimplement `--help`/`--version`'s own
-    * printing by hand to keep working -- a real cost for a case `CLISpec` simply avoids exercising instead. See
-    * `.claude/WORKLOG-cli-executable.md`.
+    * Parse errors, `--help` and `--version` are handled by Scallop, which prints and calls `System.exit` before this
+    * method returns: do not call it with such arguments from a process that must keep running.
     */
   private[cli] def run(args: Seq[String], out: java.io.PrintStream): Int =
     try
@@ -100,7 +81,7 @@ object TDA4jCLI:
         case ResolvedInput.CubicalGrid(_, _) if conf.complex.isSupplied =>
           throw new IllegalArgumentException(
             s"--complex is not meaningful with --input-format=${conf.inputFormat()}: a cubical grid has no " +
-              "'complex' option (see TDA4j.computeFromCubicalImage's own doc) -- remove --complex, or choose a " +
+              "'complex' option. Remove --complex, or choose a " +
               "point-cloud/distance-matrix --input-format instead"
           )
         case ResolvedInput.CubicalGrid(_, _) if conf.selectLandmarks() || conf.landmarksFile.isSupplied =>
@@ -111,7 +92,7 @@ object TDA4jCLI:
         case ResolvedInput.Relation(_) if conf.complex.isSupplied =>
           throw new IllegalArgumentException(
             s"--complex is not meaningful with --input-format=${conf.inputFormat()}: TDA4j.computeFromRelation " +
-              "has its own, separate option set (see that method's own doc) -- remove --complex, or choose a " +
+              "builds the Dowker complex and takes no --complex. Remove --complex, or choose a " +
               "point-cloud/distance-matrix --input-format instead"
           )
         case ResolvedInput.Relation(_) if conf.selectLandmarks() || conf.landmarksFile.isSupplied =>
@@ -370,12 +351,8 @@ object TDA4jCLI:
       throw new IllegalArgumentException(s"--output is required for --output-format=$format")
     )
 
-  /** Perseus's own persistence-interval format stores INTEGER filtration-step indices, not raw filtration values (see
-    * `Perseus.writePersistenceIntervals`'s own doc) -- silently rounding a typical Vietoris-Rips barcode's real-valued
-    * birth/death (often well under 1.0) would collapse nearly every bar to `0 0` and produce output that LOOKS valid
-    * but reports no real information. Refused outright with an actionable message rather than shipped as an
-    * equal-looking output choice; a caller who genuinely has integer-valued bars (e.g. hand-built from an
-    * already-step-indexed source) can still use it.
+  /** Perseus's interval format stores integer filtration steps, so bars with non-integral values are refused rather than
+    * rounded.
     */
   private def requireIntegralForPerseus(bars: IndexedSeq[PersistenceBar[Double, Nothing]]): Unit =
     def isIntegral(v: Double): Boolean = v == math.round(v).toDouble
@@ -401,10 +378,7 @@ object TDA4jCLI:
         .mkString(" + ")
     catch case _: UnsupportedOperationException => "(no representative recorded)"
 
-  /** `--distance-format`'s three supported values -- NOT `--input-format`'s reader set: these read an ALREADY-COMPUTED
-    * multi-dimension diagram (`io.*.readPersistenceDiagram`), not raw point/distance/cubical data. `perseus` is
-    * deliberately excluded -- see `TDA4jConf.distanceFormat`'s own doc for why.
-    */
+  /** Reads the saved diagram of `--distance-to` in format `csv`, `gudhi` or `dipha`. */
   private[cli] def readComparisonDiagram(format: String, path: String): Seq[PersistenceBar[Double, Nothing]] =
     format match
       case "csv"   => CSV.readPersistenceDiagram(path)

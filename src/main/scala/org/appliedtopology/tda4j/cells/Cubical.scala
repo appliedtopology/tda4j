@@ -2,23 +2,11 @@ package org.appliedtopology.tda4j
 
 import scala.annotation.targetName
 
-/** Elementary cubes for cubical complexes.
+/** An elementary cube: a product `I_1 x ... x I_n` of intervals, each a point `[a, a]` or a unit interval `[a, a+1]`.
+  * Its dimension is the number of unit intervals; `n`, the ambient dimension, is the same for every cube of a complex.
   *
-  * An elementary cube in ambient dimension `n` is a product `I_1 x I_2 x ... x I_n` where each factor `I_k` is either a
-  * degenerate interval `[a,a]` (a single lattice point) or a unit interval `[a,a+1]`. The cube's own dimension is the
-  * number of non-degenerate (unit-interval) factors, not `n` -- `n` (the ambient/embedding dimension) is fixed per
-  * complex, the length of every `Cube`'s own coordinate vector.
-  *
-  * Represented via the standard "doubled coordinate" encoding used throughout the cubical-homology literature
-  * (Kaczynski-Mischaikow-Mrozek, *Computational Homology*): axis `k` is encoded as `2*a` for the degenerate interval
-  * `[a,a]`, or `2*a+1` for the unit interval `[a,a+1]`. This makes both "is this axis degenerate" (parity) and "what is
-  * its lower lattice coordinate" (halve, rounding down) O(1) per axis, and gives a cube a single `Vector[Int]` as its
-  * entire representation -- no separate bitmask needed.
-  *
-  * `opaque type` over `Vector[Int]`, not `Array`/`IArray`: `Vector` has structural `equals`/`hashCode`, which `Chain`'s
-  * pivot tables (`mutable.Map[CellT, Chain[...]]`, `SortedMap[CellT, CoefficientT]`) depend on to collide two
-  * structurally-identical cubes -- an array-backed opaque type would silently use reference equality instead and
-  * corrupt every reduction that touches two independently-constructed copies of the same cube.
+  * Coordinates are doubled (Kaczynski, Mischaikow, Mrozek, ''Computational Homology''): `[a, a]` is `2a` and
+  * `[a, a+1]` is `2a + 1`, so a cube is one `Vector[Int]` (with structural equality, which the reductions rely on).
   */
 opaque type Cube = Vector[Int]
 

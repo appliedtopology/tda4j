@@ -7,10 +7,8 @@ package org.appliedtopology.tda4j
   */
 private[tda4j] object DistanceMatrices:
 
-  /** Solve `n*(n-1)/2 = count` for `n`, the number of points implied by a flat triangular list of pairwise distances
-    * with no diagonal. Fails loudly (rather than silently flooring or truncating) if `count` is not exactly of this
-    * form -- a truncated or malformed input file would otherwise silently produce a smaller-than-intended, wrong matrix
-    * instead of an error.
+  /** The `n` with `n(n-1)/2 = count`: the number of points of a triangular distance list without diagonal. Throws if
+    * there is none (a truncated file).
     */
   def sizeFromTriangularCount(count: Int): Int =
     val approx = (1 + math.sqrt(1 + 8.0 * count)) / 2
@@ -47,10 +45,8 @@ private[tda4j] object DistanceMatrices:
     do out += m(i)(j)
     out.result()
 
-  /** `flat` holds, for `i = 0 until n-1`, the `n-1-i` entries `d(i,i+1),...,d(i,n-1)`, rows concatenated -- Ripser's
-    * own `UPPER_DISTANCE_MATRIX` convention (confirmed against `compressed_upper_distance_matrix`'s `init_rows` pointer
-    * arithmetic in `ripser.cpp` directly, not guessed by symmetry with the lower case -- see
-    * `.claude/WORKLOG-io-module.md`). Expanded the same way as `expandLowerTriangular`.
+  /** The full matrix from its entries above the diagonal, row by row (`d(0,1), ..., d(0,n-1), d(1,2), ...`), Ripser's
+    * upper-distance convention.
     */
   def expandUpperTriangular(flat: IndexedSeq[Double], n: Int): Array[Array[Double]] =
     val m = Array.ofDim[Double](n, n)

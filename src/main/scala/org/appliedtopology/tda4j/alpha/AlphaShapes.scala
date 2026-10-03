@@ -340,9 +340,8 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
     assert(
       validated.nonEmpty,
       s"HelixDelaunayBuilder: no empty-circumsphere seed simplex found across ${candidateStartingSimplices.size} " +
-        s"candidate starting simplices (hull-supporting hyperplane has ${vs.size} coincident points) -- this is a " +
-        "genuine construction failure, not user error; please report it with the exact point cloud, per " +
-        ".claude/WORKLOG-helix-bootstrap-fix.md."
+        s"candidate starting simplices (hull-supporting hyperplane has ${vs.size} coincident points) . This is a bug, " +
+        "not an input error: please report it with the point cloud."
     )
 
     visitedFacets.add(Simplex.from(startingSimplex.toSeq))
@@ -619,9 +618,9 @@ object HelixDelaunay:
       result.getOrElse(
         throw new IllegalStateException(
           s"HelixDelaunay.repairByJitterRetriangulation: could not resolve the facet-multiplicity violation " +
-            s"after $maxAttempts jitter attempts on vertex set $jitterVertices; this may indicate a genuinely " +
-            "higher-order degeneracy this repair pass isn't designed for -- please report it with the exact " +
-            "point cloud that triggered this, per .claude/DESIGN-helix-triangulation-repair.md."
+            s"after $maxAttempts jitter attempts on vertex set $jitterVertices; the point cloud may have a " +
+            "degeneracy this repair does not handle. Please report it with the point cloud; the DQP backend " +
+            "(alphaBackend=DQP) avoids the problem."
         )
       )
 

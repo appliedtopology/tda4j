@@ -11,19 +11,9 @@ import scala.reflect.ClassTag
 
 opaque type Simplex[VertexT] = SortedSet[VertexT]
 
-/** `object Simplex` mixes in `SimplexOps` (`SimplexOps.scala`) rather than the trait's methods living as a separate
-  * top-level `extension` clause: extension methods declared in the opaque type's own companion object are found via the
-  * receiver type's implicit scope, not via blanket top-level visibility across the package -- the fix for the
-  * same-named top-level extension collisions documented in `.claude/WORKLOG-extension-companion-objects.md`.
-  * `underlying` moved in here for the same reason, even though nothing currently collides on that name -- keeping every
-  * `Simplex[VertexT]`-receiver extension routed through one place is what makes "a future opaque type may reuse this
-  * name" actually hold.
-  *
-  * `asSimplex` (below, top-level, NOT moved in here) is a real exception, not an oversight: its RECEIVER is
-  * `SortedSet[VertexT]`, not `Simplex[VertexT]` -- companion-object extension lookup is keyed by the receiver type, so
-  * an extension on `SortedSet[VertexT]` placed inside `Simplex`'s companion is never found from a `SortedSet[VertexT]`
-  * receiver. It was also never part of the naming collision in the first place (`asSimplex`/`asCube` don't share a
-  * name), so there's no reason to move it either.
+/** Constructors and operations of [[Simplex]]: `Simplex(1, 2, 3)` (also spelled `∆(1, 2, 3)`), `Simplex.from(seq)`,
+  * and the extension methods of [[SimplexOps]] (`dim`, `+`, `union`, `toList`, ...), found without an
+  * import.
   */
 object Simplex extends SimplexOps, SimplexInstances:
   def from[VertexT: Ordering, T <: Seq[VertexT]](vertices: T): Simplex[VertexT] = SortedSet.from(vertices)
@@ -42,11 +32,7 @@ val ∆ : Simplex.type = Simplex // `∆(1, 2, 3)` and `case ∆(a, b) =>`; a va
 // TDAlab can re-export a val without making it ambiguous for users who also import the package (a def would be), and
 // scaladoc writes no page FILE named after it (an `object ∆` became `∆$.html`, which a POSIX-locale JVM cannot encode).
 
-/** Stays in this file (needs `Simplex[VertexT]`'s own opaque-type transparency for the `Ordering[SortedSet[ VertexT]]
-  * -> Ordering[Simplex[VertexT]]` coercion below), unlike `simplexIsOrderedCell` (`SimplexOrderedCell.scala`) -- this
-  * function makes no `.someExtensionMethod` call on any `Simplex[VertexT]` value, so it isn't exposed to the same-file
-  * dealiasing hazard that forced that one out. See `SimplexOrderedCell.scala`'s own doc for the full explanation.
-  */
+/** The lexicographic order of simplices, given an order of the vertices. */
 def simplexOrdering[VertexT](using vtxOrd: Ordering[VertexT]): Ordering[Simplex[VertexT]] = sortedSetOrdering(using
   vtxOrd
 )

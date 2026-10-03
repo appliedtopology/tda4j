@@ -1,13 +1,9 @@
 package org.appliedtopology.tda4j
 
-/** One entry point per kind of complex, each with the shape of [[VietorisRips]]: `maxDimension` is the top HOMOLOGICAL
-  * degree you want (`H_0 .. H_maxDimension` computable by any engine; the stream itself contains one dimension more,
-  * and an engine run on it reports incomplete classes in degree `maxDimension + 1` -- drop them), and the result is a
-  * [[LevelwiseSimplexStream]] you hand to an engine.
-  *
-  * These replace reaching for the implementation classes (`CechCofaceSimplexStream`, `LazyWitnessSimplexStream`,
-  * `WitnessCofaceSimplexStream`, `DowkerCofaceSimplexStream`, `DtmRipsSimplexStream`, `SheehyRipsSimplexStream`) and
-  * wrapping them in `LimitedCofaceSimplexStream(stream, k + 1)` by hand. See `.claude/DESIGN-stream-naming.md`.
+/** A complex truncated at a homological degree. Like every complex entry point ([[VietorisRips]], [[Cech]],
+  * [[Witness]], [[Dowker]], [[DtmRips]], [[SparseRips]]), `maxDimension` is the top homological degree: the stream
+  * holds one dimension more, so an engine run on it also reports classes of degree `maxDimension + 1`, which are
+  * incomplete (the `Persistence` verb drops them).
   */
 object Truncated:
 

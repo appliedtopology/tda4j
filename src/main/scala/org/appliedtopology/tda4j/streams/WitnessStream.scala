@@ -10,24 +10,12 @@ import scala.util.Random
   */
 object LandmarkSelector:
 
-  /** Sequential maxmin (furthest-point) sampling: start from `firstLandmark`, then repeatedly add the point currently
-    * furthest (in the ambient metric) from every landmark chosen so far. Deterministic given `firstLandmark` -- ties
-    * are broken by lowest ambient index (iterating `sortedElements` ascending and using `maxBy`, whose "first
-    * occurrence wins a tie" behavior does this for free), both for reproducibility and so tests can pin an exact
-    * landmark set.
+  /** Maxmin (farthest-point) sampling: start from `firstLandmark` and repeatedly add the point farthest from the
+    * landmarks so far, ties to the lowest index.
     *
-    * Also returns the resulting covering radius `R = max_x min_{l in L} d(x,l)` (JavaPlex's own
-    * `getMaxDistanceFromPointsToLandmarks()`) -- free, since the greedy loop already tracks `minDistToLandmarks` for
-    * every point; callers use it to pick a `maxFiltrationValue` (e.g. `2R`, as the tutorial does).
-    *
-    * Also returns each chosen landmark's OWN insertion radius (`LandmarkSelection.insertionRadius`), lambda in the
-    * greedy-permutation literature: `lambda_p = d(p, {landmarks already chosen when p was added})`, i.e. exactly
-    * `minDistToLandmarks(next)` read just before that iteration's update -- free for the same reason the covering
-    * radius is. `firstLandmark`'s own lambda is `Double.PositiveInfinity` (there is no "distance to the empty set");
-    * every later entry is a real, finite, non-increasing (in selection order) value. `numLandmarks = metricSpace.size`
-    * gives the FULL greedy permutation of the whole space, not just a landmark subset -- this is how
-    * `SheehyRipsSimplexStream` (Cavanna-Jahanseir-Sheehy 2015's sparse-filtration construction) gets its own greedy
-    * permutation, reusing this loop rather than a second copy of it.
+    * Also returns the covering radius `R = max_x min_l d(x, l)` (a natural `maxFiltrationValue` is `2R`) and each
+    * landmark's insertion radius (its distance to the earlier landmarks; `Infinity` for the first). With
+    * `numLandmarks = metricSpace.size` this is a greedy permutation of the whole space.
     */
   def maxmin(metricSpace: FiniteMetricSpace[Int], numLandmarks: Int, firstLandmark: Int = 0): LandmarkSelection =
     require(

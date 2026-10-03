@@ -104,17 +104,11 @@ private[tda4j] object SheehyRipsSimplexStream:
   private def vanish(lambda: Double, epsilon: Double): Double =
     lambda * (1.0 + epsilon) * (1.0 + epsilon) / epsilon
 
-  /** The doubled (diameter-units) vanish time -- the scale beyond which `p`'s ball is empty and it can no longer
-    * participate in any newly-appearing simplex.
-    */
+  /** `vanish`, doubled (in diameter units): after it, `p` enters no new simplex. */
   def vanishDoubled(lambda: Double, epsilon: Double): Double = 2.0 * vanish(lambda, epsilon)
 
-  /** Dimension 0 => 0.0 (every point is born at scale 0, exactly like plain VR -- `b_p(0) = ball(p,0) = {p}`, always
-    * nonempty); dimension >= 1 => `max` over the simplex's own pairwise `edgeBirth`s, `Double.PositiveInfinity` if any
-    * pairwise value already is one OR if that max exceeds the smallest `vanishDoubled` among the simplex's own vertices
-    * (CJS 2015 Section 5.3's `SimplexBirthTime`, applied uniformly from dimension 1 up -- see the class doc's note on
-    * why `edgeBirth` alone is not sufficient at dimension 1 either). Memoized: `Chain`'s reduction consults
-    * `filtrationValue` on every pivot comparison, and this is an `O(k^2)` pairwise scan per simplex.
+  /** The value of a simplex: `0` for a vertex; otherwise the largest `edgeBirth` of its edges, or `Infinity` if that
+    * exceeds the earliest `vanishDoubled` of its vertices (Section 5.3). Memoized.
     */
   def filtrationValueOverride(
     ambientMetricSpace: FiniteMetricSpace[Int],

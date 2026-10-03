@@ -616,9 +616,7 @@ private[tda4j] class IncrementalVietorisRipsSimplexStream(
       else N.maxOption.getOrElse(v)
     N.filter(w => w > v && w <= bound && isEdge(v, w))
 
-  /** Algorithm 3 (New-Add-Cofaces), restructured to stop one layer early each call instead of recursing all the way to
-    * `maxDimension` in a single pass -- see the class doc for why.
-    */
+  /** Algorithm 3 (New-Add-Cofaces), one layer per call. */
   private def addCofaces(
     tau: Simplex[Int],
     N: SortedSet[Int],

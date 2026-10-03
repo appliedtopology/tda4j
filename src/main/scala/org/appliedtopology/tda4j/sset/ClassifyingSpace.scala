@@ -55,10 +55,9 @@ final class Nerve(monoid: FiniteMonoid, subset: Option[Set[Int]] = None) extends
       }
 
 /** The classifying space `BG` of a finite group `G` (the [[Nerve]] of `G`), truncated, and its filtration by a chain of
-  * subgroups -- which makes persistent group (co)homology an ordinary persistence computation.
+  * subgroups, which makes persistent group (co)homology an ordinary persistence computation.
   *
-  * `BG` has `(|G| - 1)^n` non-degenerate `n`-simplices, so this is only feasible for small groups and low degrees
-  * (`.claude/DESIGN-persistent-group-cohomology.md` tabulates it).
+  * `BG` has `(|G| - 1)^n` non-degenerate `n`-simplices, so this is feasible only for small groups and low degrees.
   */
 object ClassifyingSpace:
 

@@ -166,10 +166,7 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
           "(Technical detail, for developers investigating this class itself: " +
           s"${badFacets.size} facet(s) had a containing-top-simplex count other than 1 or 2 " +
           s"(${badFacets.map { case (f, ids) => s"$f -> ${ids.size} cofaces" }.mkString("; ")}), meaning the dual " +
-          "graph this engine's own algorithm needs is not well-defined for this triangulation -- see " +
-          ".claude/DESIGN-alpha-dual-unionfind.md's 'new finding' section and " +
-          ".claude/DESIGN-fast-engines-hybrid-middle-dimensions.md's own dimension-dependent measurement for the " +
-          "full investigation.)"
+          "graph this engine needs is not well-defined for this triangulation.)"
       )
 
     // Value from helix.filtrationValue(facet) directly, NOT ids.map(topValue).min -- see the class doc's own

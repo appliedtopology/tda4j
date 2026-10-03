@@ -4,20 +4,12 @@ import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
 
-/** Converting greyscale images and dense voxel grids into `CubicalGridStream`s. Every constructor here reduces to
-  * `fromFlatArray`: a dense n-dimensional grid from a flat, row-major array of values plus an explicit `shape`.
+/** Cubical complexes of images and voxel grids. Every constructor reduces to [[fromFlatArray]]: values in row-major
+  * order (last axis fastest) and a `shape`.
   *
-  * `sublevel = true` (the default, matching GUDHI/DIPHA/Perseus's own convention) treats pixel intensity directly as
-  * filtration value -- ascending intensity = later in the filtration. `sublevel = false` negates every value before
-  * handing it to `CubicalGridStream` -- the standard "sublevel of `-f` is superlevel of `f`, reparametrized" trick (see
-  * `CubicalStream.scala`'s own doc for why `CubicalGridStream` itself deliberately carries no direction flag). Reported
-  * birth/death values under `sublevel = false` are then in NEGATED-intensity units, not raw `0..255` -- documented,
-  * expected behavior of this trick, not a bug to "fix" by flipping signs back.
-  *
-  * No image-I/O dependency is added for voxel (3D+) data -- there is no single standard JDK-readable volumetric format,
-  * so voxel constructors here take an already-in-memory array; callers with a specific file format (NRRD, NIfTI, a raw
-  * slice stack, ...) are expected to load it into an array upstream, with whatever library that needs, and hand the
-  * result to `fromFlatArray`/`fromVoxelGrid3D` directly.
+  * `sublevel = true` (the default, as in GUDHI, DIPHA and Perseus) filters by the values; `sublevel = false` by the
+  * negated values, so bars of a superlevel filtration are reported in negated units. Voxel data of any file format is
+  * loaded into an array first.
   */
 object CubicalImage:
 

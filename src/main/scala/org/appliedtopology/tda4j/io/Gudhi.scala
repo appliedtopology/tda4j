@@ -3,11 +3,8 @@ package org.appliedtopology.tda4j
 import scala.io.Source
 import java.io.PrintWriter
 
-/** GUDHI's own OFF/nOFF point-cloud format and `.pers` persistence-diagram format -- verified against
-  * `gudhi.inria.fr`'s own file-format documentation (see `.claude/WORKLOG-io-module.md`). GUDHI's cubical-complex
-  * module also reads Perseus's cubical toplex format directly, byte-for-byte the same as real Perseus (confirmed
-  * against GUDHI's own `Bitmap_cubical_complex_base.h` reader source) -- see `Perseus.readCubicalToplex` for that, not
-  * duplicated here.
+/** GUDHI's OFF/nOFF point-cloud format and its `.pers` persistence-diagram format. For GUDHI's cubical input, which
+  * is Perseus's format, see [[Perseus]].
   */
 object Gudhi:
 

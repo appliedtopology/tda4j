@@ -324,7 +324,7 @@ object TDA4j:
   private val landmarkSelectionKeys = Set("numlandmarks", "landmarkselector", "landmarkseed")
 
   /** The options of step 2 of the two-step witness complex: no landmark-selection options (the landmarks are given),
-    * and `complex` accepted only as `"witness"` (callers used to the one-shot form type it).
+    * and `complex` accepted only as `"witness"`.
     */
   private val witnessFromLandmarksKeys =
     Set(
@@ -342,11 +342,7 @@ object TDA4j:
       "includezerolength"
     )
 
-  /** `computeFromRelation`'s own allowlist -- see that method's doc for what each key means. Separate from
-    * `recognizedKeys` for the same reason `witnessFromLandmarksKeys` is: this entry point takes a relation, not a point
-    * cloud or distance matrix, so `"complex"`/`"alphaBackend"`/`"numLandmarks"`/etc. would all be silently meaningless
-    * here rather than caught.
-    */
+  /** The options of `computeFromRelation`: a relation has no `complex`, landmarks or alpha backend. */
   private val dowkerKeys = Set(
     "engine",
     "maxdimension",
@@ -479,8 +475,7 @@ object TDA4j:
         case EngineKind.Ripser =>
           throw new IllegalArgumentException(
             "engine=ripser cannot be used with complex=witness/witnessVariant=general: the general witness " +
-              "complex is not a flag complex (see WitnessCofaceSimplexStream's own doc), so " +
-              "PackedRipserCohomologyEngine's diameter-based optimizations do not apply -- use " +
+              "complex is not a flag complex, so the Ripser engine does not apply. Use " +
               "witnessVariant=lazy instead, or engine=naive/cohomology."
           )
         case EngineKind.Chunks =>
@@ -633,16 +628,13 @@ object TDA4j:
         )
       case (ComplexKind.Alpha, EngineKind.Chunks) =>
         throw new IllegalArgumentException(
-          "engine=chunks is not offered for complex=alpha: this exact combination is a known stall/out-of-memory " +
-            "risk in the underlying library (see CLAUDE.md and HomologySpec's BarcodeRegressionSpec, which stays " +
-            "skipped for exactly this reason). Use engine=naive for alpha complexes."
+          "engine=chunks is not offered for complex=alpha: it can stall or run out of memory on alpha complexes. " +
+            "Use engine=naive, engine=cohomology or (with the helix backend) engine=fast-alpha."
         )
       case (ComplexKind.Cech, EngineKind.Ripser) =>
         throw new IllegalArgumentException(
-          "engine=ripser cannot be used with complex=cech: PackedRipserCohomologyEngine's apparent-pairs and " +
-            "insertionDiameter optimizations are proven specifically for the max-pairwise-distance (Vietoris-Rips) " +
-            "functional, not Cech's circumradius -- see CLAUDE.md's Cech complexes section. Use engine=naive or " +
-            "engine=chunks for Cech complexes."
+          "engine=ripser cannot be used with complex=cech: the Ripser engine relies on simplices being filtered " +
+            "by diameter, and a Cech filtration is by radius. Use engine=chunks, engine=naive or engine=cohomology."
         )
       case (ComplexKind.DtmRips, EngineKind.Ripser) =>
         throw new IllegalArgumentException(
@@ -655,8 +647,7 @@ object TDA4j:
         throw new IllegalArgumentException(
           "engine=ripser cannot be used with complex=sparse-rips: a simplex's filtration value here is not the " +
             "maximum ambient pairwise distance among its vertices (some pairs are excluded outright, others take a " +
-            "sparsified value), so PackedRipserCohomologyEngine's insertionDiameter/apparent-pairs machinery does " +
-            "not apply -- see SheehyRipsSimplexStream's own doc. Use engine=naive, engine=chunks, or " +
+            "sparsified value), so the Ripser engine does not apply. Use engine=naive, engine=chunks, or " +
             "engine=cohomology for complex=sparse-rips."
         )
       case (ComplexKind.DtmAlpha, EngineKind.Ripser) =>
@@ -1355,8 +1346,7 @@ object TDA4j:
     if engine == EngineKind.Ripser then
       throw new IllegalArgumentException(
         "engine=ripser cannot be used with computeFromRelation: the Dowker complex is not a flag complex in " +
-          "general (see DowkerGeometry's own doc), so PackedRipserCohomologyEngine's diameter-based " +
-          "optimizations do not apply -- use engine=naive or engine=cohomology."
+          "general, so the Ripser engine does not apply. Use engine=naive or engine=cohomology."
       )
     if engine == EngineKind.Chunks then
       throw new IllegalArgumentException(

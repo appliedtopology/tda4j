@@ -4,9 +4,8 @@ import cats.Show
 
 /** `Simplex[VertexT] is OrderedCell`, with an injectable ordering so a stream can supply its own filtration order.
   *
-  * Must live outside `Simplex.scala`: an opaque type is transparent throughout its defining file, so there
-  * `spx.size`/`spx.iterator`/`spx - v` would resolve to `SortedSet`'s own members (or fail to compile) instead of
-  * `SimplexOps`'s. See `.claude/WORKLOG-extension-companion-objects.md`.
+  * Kept out of `Simplex.scala`: there the opaque type is transparent, and `spx.size`, `spx - v` would resolve to
+  * `SortedSet`'s members instead of [[SimplexOps]]'.
   */
 def simplexIsOrderedCell[VertexT](using
   vtxOrd: Ordering[VertexT]

@@ -3,13 +3,9 @@ package sset
 
 import org.appliedtopology.tda4j.*
 
-/** A simplicial map `f : X -> Y` between finite simplicial sets, given -- as everything here is -- on generators:
-  * `onGenerators(g)` is the image of the non-degenerate simplex `g`, an arbitrary (possibly degenerate) element of `Y`
-  * of the same dimension. A degenerate simplex `s_J g` goes to `s_J f(g)`, which is how `apply` extends it.
-  *
-  * Injectivity and surjectivity are properties of the map on SIMPLICES (the standard meaning). Sage's docs do not say
-  * what its own `is_injective`/`is_surjective` test (`DESIGN-sage-simplicial-sets-comparison.md`), so no claim of
-  * agreement.
+/** A simplicial map `f : X -> Y` between finite simplicial sets, given on generators: `onGenerators(g)` is the image
+  * of the non-degenerate simplex `g`, an element of `Y` of the same dimension, possibly degenerate. A degenerate
+  * simplex `s_J g` goes to `s_J f(g)`. Injectivity and surjectivity refer to the map on all simplices.
   */
 final class SSetMap[GX, GY](
   val source: FiniteSimplicialSet[GX],

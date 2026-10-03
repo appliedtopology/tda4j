@@ -4,13 +4,8 @@ import scala.collection.immutable.SortedSet
 import scala.reflect.ClassTag
 import cats.Show
 
-/** Inherit a selection of the SortedSet methods and add other utility methods
-  *
-  * A `trait`, mixed into `object Simplex` (`Simplex.scala`), rather than a top-level `extension` clause: Scala 3 does
-  * not allow same-named top-level extension methods for unrelated receiver types across different files in one package
-  * (`.claude/WORKLOG-extension-companion-objects.md`). Routing through the opaque type's own companion object instead
-  * scopes lookup by nominal receiver type, so a future opaque type's extensions can reuse a name like
-  * `show`/`underlying` without colliding with this one.
+/** The operations on a [[Simplex]]: a selection of `SortedSet`'s methods, and simplex-specific ones. Mixed into
+  * `object Simplex`, so they are found without an import.
   */
 trait SimplexOps:
   extension [VertexT](spx: Simplex[VertexT])
@@ -84,14 +79,8 @@ trait SimplexOps:
       spx.underlying.toIndexedSeq.zipAll(that, thisElem, thatElem)
     def zipWithIndex: IndexedSeq[(VertexT, Int)] = spx.underlying.toIndexedSeq.zipWithIndex
 
-/** `min`/`max` stay a top-level extension, not moved into `SimplexOps`/`object Simplex`'s companion scope like
-  * everything else above: Scala 3 tries phase-1 extension candidates (lexical scope, including any wildcard
-  * `import math.Ordering.Implicits.*` a call site has, which brings in `infixOrderingOps`'s binary `min(rhs)`/
-  * `max(rhs)`) before phase-2 (the receiver's own companion). Moving these into the companion drops them to phase 2, so
-  * a call site with that import silently rebinds `spx.max` to the stdlib's binary version instead -- a hard type error
-  * (wrong arity), not a silent behavior change, but only caught at those call sites, not here. General lesson: an
-  * opaque type's extension name that collides with a wildcard-importable stdlib extension (`min`/`max`/`<`/`compare`
-  * from `Ordering.Implicits`, possibly others) needs to stay top-level.
+/** `min` and `max` of a simplex. Top-level rather than in `object Simplex`: a call site importing
+  * `math.Ordering.Implicits.*` would otherwise get that import's binary `min`/`max`, which is found first.
   */
 extension [VertexT](spx: Simplex[VertexT])
   def min[B >: VertexT: Ordering]: VertexT = spx.underlying.min

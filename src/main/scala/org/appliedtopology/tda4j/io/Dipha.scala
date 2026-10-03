@@ -1,16 +1,8 @@
 package org.appliedtopology.tda4j
 
-/** DIPHA's own binary container format -- little-endian throughout, every file starting with the magic number
-  * `8067171840` followed by an `Int64` file-type tag -- verified directly against `DIPHA/dipha`'s own
-  * `include/dipha/file_types.h` and `README.md` (see `.claude/WORKLOG-io-module.md`), not reconstructed from a
-  * secondhand description.
-  *
-  * '''Axis order''': DIPHA's `IMAGE_DATA` format is explicitly "x-fastest" (`g(1)` varies fastest) -- the OPPOSITE of
-  * `CubicalImage.fromFlatArray`'s own convention (its LAST shape axis is fastest, matching ordinary row-major
-  * `Array[Array[...]].flatten`). `readImageData`/`writeImageData` reverse the shape to line the two conventions up (a
-  * flat array with axis-0 fastest is, by definition, already in row-major order for the REVERSED shape) -- pinned with
-  * a hand-built asymmetric-shape fixture, not just reasoned through, since transposing an image preserves its homology
-  * and a barcode-only test cannot catch getting this backwards.
+/** DIPHA's binary formats: little-endian, each file starting with the magic number `8067171840` and an `Int64`
+  * file type. DIPHA images list the first axis fastest, the opposite of [[CubicalImage.fromFlatArray]]; the readers
+  * and writers convert.
   */
 object Dipha:
   private val Magic: Long = 8067171840L
@@ -98,12 +90,8 @@ object Dipha:
     flatValues.foreach(v => buf.putDouble(v))
     BinaryIO.writeLE(path, buf)
 
-  /** `PERSISTENCE_DIAGRAM` (file type 2): magic, type, `p` (Int64), then `p` `(dim, birth, death)` triples as
-    * `Int64`/`Float64`/`Float64`. A negative `dim` value `-k` encodes an ESSENTIAL class of real dimension `k - 1` (the
-    * README's own convention -- the `-1` offset exists specifically so a dimension-0 essential class, the single most
-    * common case, doesn't collide with an ordinary finite `dim == 0`); confirmed with a dedicated dimension-0-essential
-    * fixture, not just read from the README (see `.claude/WORKLOG-io-module.md`). The `death` field of an essential
-    * triple is unspecified by the format and is written here as `0.0`, ignored on read.
+  /** A `PERSISTENCE_DIAGRAM` file (type 2): the count, then `(dim, birth, death)` triples (`Int64`, `Float64`,
+    * `Float64`). A dimension `-k` marks an essential class of dimension `k - 1`, whose death is ignored (written `0.0`).
     */
   def readPersistenceDiagram(path: String): Seq[PersistenceBar[Double, Nothing]] =
     val buf = BinaryIO.readAllLE(path)
