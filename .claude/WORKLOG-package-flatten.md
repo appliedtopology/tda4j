@@ -139,7 +139,7 @@ New `SimplicialSetApiSpec` (13): `X_n = generators(n) ∪ {s_j e : e ∈ X_(n-1)
 simplicial identities on every simplex up to dimension 3; RP^n's F₂/F₃ pattern; `B(Z/2)`; every number quoted on the
 rewritten user-guide page (`S¹ × S¹` has the torus's f-vector `(1, 3, 2)` and Betti numbers `(1, 2, 1)`).
 
-## Friction found along the way (recorded in DESIGN-api-audit-notes.md)
+## Friction found along the way (recorded in DESIGN-api-audit.md)
 
 - In a block, `given Double is Field = ...` placed AFTER a statement that does implicit search fails with "given
   instance given_is_Double_Field needs result type because its right-hand side attempts implicit search".
