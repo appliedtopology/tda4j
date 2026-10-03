@@ -11,8 +11,8 @@ import scala.collection.immutable
   * for the identical reason: consistency with plain, unweighted Rips, whose edge filtration is the raw pairwise
   * distance, not half of it).
   *
-  * `f(x)` is the empirical distance-to-measure per ambient point (`streams.DistanceToMeasure`); at `f = 0` everywhere
-  * (in particular at `k = 1`, `DistanceToMeasure`'s own degenerate case) this reduces EXACTLY to plain Vietoris-Rips,
+  * `f(x)` is the empirical distance-to-measure per ambient point (`DistanceToMeasure`); at `f = 0` everywhere (in
+  * particular at `k = 1`, `DistanceToMeasure`'s own degenerate case) this reduces EXACTLY to plain Vietoris-Rips,
   * threshold included -- `DtmRipsStreamSpec` checks this too.
   *
   * `p` selects the ball-radius exponent of Def. 3.1 -- NOT `DistanceToMeasure`'s own exponent `q`, a different knob
@@ -25,7 +25,7 @@ import scala.collection.immutable
   *     directly (the closed form overshoots outside that regime: e.g. `f_x=0, f_y=10, d=1` gives 50.5 from the raw
   *     formula against a true value of 10). GUDHI's own Python bindings do not implement this case at all, so unlike
   *     `p = 1` it is NOT checked against an external reference implementation here -- it exists only as a
-  *     cross-validation device against `alpha.PowerDistance`'s own DTM weighting (both are the `p = 2` ball equation,
+  *     cross-validation device against `PowerDistance`'s own DTM weighting (both are the `p = 2` ball equation,
   *     `.claude/WORKLOG-dtm-filtrations.md`'s cross-check), not as a recommended production default.
   *   - `p = Infinity` (Def. 3.1's third named case) is NOT implemented: no user need identified.
   *

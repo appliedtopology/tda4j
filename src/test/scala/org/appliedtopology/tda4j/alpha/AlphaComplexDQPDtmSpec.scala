@@ -1,11 +1,11 @@
 package org.appliedtopology.tda4j
 
 /** Cross-validates `AlphaComplexDQP.dtm`'s `weight(i) = -f(i)^2` power weighting against
-  * `streams.DtmRipsSimplexStream(..., p = 2.0)` -- the two constructions are the SAME `p = 2` ball union (Anai et al.,
-  * "DTM-based filtrations", Def. 3.1/Prop. 3.5; see `alpha.AlphaComplexDQP.dtm`'s own doc for the exact
-  * correspondence), so by the persistent nerve lemma they must report the SAME number of path components at every
-  * threshold -- i.e. the same H0 barcode, once alpha's `alpha = t^2` (squared-radius) units are converted to Rips's
-  * `2*t` (doubled-diameter) units via `birth -> 2*sqrt(birth)`.
+  * `DtmRipsSimplexStream(..., p = 2.0)` -- the two constructions are the SAME `p = 2` ball union (Anai et al.,
+  * "DTM-based filtrations", Def. 3.1/Prop. 3.5; see `AlphaComplexDQP.dtm`'s own doc for the exact correspondence), so
+  * by the persistent nerve lemma they must report the SAME number of path components at every threshold -- i.e. the
+  * same H0 barcode, once alpha's `alpha = t^2` (squared-radius) units are converted to Rips's `2*t` (doubled-diameter)
+  * units via `birth -> 2*sqrt(birth)`.
   *
   * '''Zero-length bars are dropped before comparing''', deliberately: a vertex the alpha complex correctly DELAYS or
   * OMITS entirely (its own restricted power cell is not yet, or never, nonempty -- see
@@ -17,9 +17,9 @@ package org.appliedtopology.tda4j
   * not a discrepancy. `.claude/WORKLOG-dtm-filtrations.md` works out both fixtures below by hand, including this exact
   * phenomenon on the two-point one.
   *
-  * Fixtures use HAND-PICKED `f`, not `streams.DistanceToMeasure`-derived ones: a DTM-derived `f` on a fixture small
-  * enough to hand-verify tends to put every point inside its own restricted cell (no delay/omission at all), which
-  * would make this cross-check pass trivially without ever exercising the vertex-attachment fix it exists to guard.
+  * Fixtures use HAND-PICKED `f`, not `DistanceToMeasure`-derived ones: a DTM-derived `f` on a fixture small enough to
+  * hand-verify tends to put every point inside its own restricted cell (no delay/omission at all), which would make
+  * this cross-check pass trivially without ever exercising the vertex-attachment fix it exists to guard.
   */
 class AlphaComplexDQPDtmSpec extends org.specs2.mutable.Specification:
   given Double is Field = Field.DoubleApproximated(1e-9)

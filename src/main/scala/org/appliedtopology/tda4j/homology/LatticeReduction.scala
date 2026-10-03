@@ -112,10 +112,10 @@ object LatticeReduction:
       (gram(i)(j) + gram(j)(i)) / 2.0
     }
 
-  /** Cholesky-Banachiewicz, row by row -- hand-rolled (mirroring `alpha.CholeskyWorkspace`'s own precedent of not
-    * reaching for `commons-math3`'s `CholeskyDecomposition` here) so a linearly-dependent input fails with an
-    * actionable message pinned to the failing pivot, not whatever `commons-math3`'s own symmetry/PD thresholds happen
-    * to do with a matrix assembled from many small floating-point-summed terms.
+  /** Cholesky-Banachiewicz, row by row -- hand-rolled (mirroring `CholeskyWorkspace`'s own precedent of not reaching
+    * for `commons-math3`'s `CholeskyDecomposition` here) so a linearly-dependent input fails with an actionable message
+    * pinned to the failing pivot, not whatever `commons-math3`'s own symmetry/PD thresholds happen to do with a matrix
+    * assembled from many small floating-point-summed terms.
     */
   private def cholesky(gram: Array[Array[Double]]): Array[Array[Double]] =
     val n = gram.length

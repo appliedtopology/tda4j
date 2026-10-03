@@ -241,7 +241,7 @@ trait SpatialQuery[VertexT]:
 
   /** The `k` nearest points to `v` (by `metricSpace.distance`), sorted ascending by distance, `v` itself included when
     * it belongs to the underlying metric space (a real metric always has `distance(v,v) = 0`, the smallest possible, so
-    * `v` is always its own nearest neighbour) -- this is the convention `streams.DistanceToMeasure` needs
+    * `v` is always its own nearest neighbour) -- this is the convention `DistanceToMeasure` needs
     * (Chazal-Cohen-Steiner-Merigot 2011's empirical DTM counts a point among its own `k` neighbours; verified against
     * GUDHI's own `DistanceToMeasure`/`KNearestNeighbors` docstring AND a worked numeric example, see
     * `.claude/WORKLOG-dtm-filtrations.md`). `require(1 <= k && k <= metricSpace.size)`: a `k` outside that range has no
@@ -263,7 +263,7 @@ class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQ
   // metric space in this codebase, but NOT of every FiniteMetricSpace instance (ExplicitMetricSpace enforces
   // nothing; a correlation-derived "distance" matrix, as GUDHI's own docs use, can violate it). A violated
   // triangle inequality means the tree can silently prune away a genuine nearest neighbour. Callers over an
-  // arbitrary/unverified FiniteMetricSpace should use BruteForce instead -- see streams.DistanceToMeasure, which
+  // arbitrary/unverified FiniteMetricSpace should use BruteForce instead -- see DistanceToMeasure, which
   // defaults to it for exactly this reason.
   override def nearestNeighbors(v: VertexT, k: Int): IndexedSeq[VertexT] =
     require(1 <= k && k <= metricSpace.size, s"k must be between 1 and ${metricSpace.size}, got $k")

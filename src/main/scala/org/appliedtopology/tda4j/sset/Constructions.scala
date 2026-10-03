@@ -33,7 +33,10 @@ object ProductGenerator:
   given productGeneratorOrder: [GX: Ordering, GY: Ordering] => Ordering[ProductGenerator[GX, GY]] =
     productGeneratorOrdering[GX, GY]
 
-private[sset] def productGeneratorOrdering[GX, GY](using ox: Ordering[GX], oy: Ordering[GY]): Ordering[ProductGenerator[GX, GY]] =
+private[sset] def productGeneratorOrdering[GX, GY](using
+  ox: Ordering[GX],
+  oy: Ordering[GY]
+): Ordering[ProductGenerator[GX, GY]] =
   given ordX: Ordering[SSetElement[GX]] = ssetElementOrdering[GX]
   given ordY: Ordering[SSetElement[GY]] = ssetElementOrdering[GY]
   Ordering.by(g => (g.x, g.y))
@@ -205,11 +208,11 @@ private[sset] object Constructions:
   /** Ergonomic layer over `quotient` for the common case: identify PAIRS of same-dimension generators with each other
     * directly (never a degenerate collapse down a dimension -- see `quotient`'s own doc for that more general case).
     * Computes the quotient map via a small union-find over the transitive closure of `pairs`, implemented fresh right
-    * here rather than reusing `streams.UnionFind`: `cells` sits below `streams` in this codebase's package layering
-    * (`algebra -> cells -> streams -> homology`), so importing it here would be a backwards dependency, and a
-    * hand-built, small-scale set of generators has no performance need for anything beyond the simplest union-find
-    * anyway. Each connected component's `Ordering[G]`-minimum member is its canonical representative -- a
-    * deterministic, reproducible choice rather than an arbitrary one.
+    * here rather than reusing `UnionFind`: `cells` sits below `streams` in this codebase's package layering (`algebra
+    * -> cells -> streams -> homology`), so importing it here would be a backwards dependency, and a hand-built,
+    * small-scale set of generators has no performance need for anything beyond the simplest union-find anyway. Each
+    * connected component's `Ordering[G]`-minimum member is its canonical representative -- a deterministic,
+    * reproducible choice rather than an arbitrary one.
     */
   def identify[G: Ordering](
     sset: FiniteSimplicialSet[G],

@@ -133,7 +133,7 @@ class RipserPaperBenchmarkSpec(args: Arguments) extends mutable.Specification:
         import IntMod2.given
 
         // Routed through the `io` module (added in a later session -- see `.claude/WORKLOG-io-module.md`) instead
-        // of this spec's own ad hoc parsing, which is exactly what motivated building `io.CSV` in the first
+        // of this spec's own ad hoc parsing, which is exactly what motivated building `CSV` in the first
         // place: `CSV.readPointCloud`/`CSV.readFullDistanceMatrix` implement the identical
         // trim-filter-split-on-`[\s,]+` logic this spec used to hand-roll.
         def loadPointCloud(path: String): Array[Array[Double]] = CSV.readPointCloud(path)

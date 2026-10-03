@@ -148,7 +148,7 @@ class CubicalGridStream(
 
 /** Hides every cell of dimension `> maxDim` from `stream` -- the `Cube` analogue of `LimitedCofaceSimplexStream`
   * (`SimplexStream.scala`), needed because that class is hardcoded to `CofaceSimplexStream[Int, Double]` and doesn't
-  * fit `Cube` at all. Used by `homology.FastCubicalHomologyEngine`'s own `d >= 3` path
+  * fit `Cube` at all. Used by `FastCubicalHomologyEngine`'s own `d >= 3` path
   * (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) to hand `CellularPersistenceInChunksEngine` a view of
   * the grid that never contains a real top-dimensional cell, so that engine's own general `Chain` reduction never
   * touches them -- the whole point being to let the (cheaper) dual union-find handle the top dimension instead.

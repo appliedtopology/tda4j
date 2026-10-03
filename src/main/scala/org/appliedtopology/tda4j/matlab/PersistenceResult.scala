@@ -65,7 +65,7 @@ final class PersistenceResult private[matlab] (
 
   /** The persistence threshold this result was filtered with (`0` means nothing was hidden by a threshold): bars with
     * `death - birth` at or below it are not among the `size()` reported bars. Essential bars are never hidden. See
-    * `barcode.PersistenceFilter` for how the default (1% of the minimum enclosing radius) is derived.
+    * `PersistenceFilter` for how the default (1% of the minimum enclosing radius) is derived.
     */
   def persistenceThreshold(): Double = threshold
 
@@ -76,10 +76,10 @@ final class PersistenceResult private[matlab] (
   def toArrayUnfiltered(): Array[Array[Double]] =
     Array.tabulate(allDims.length)(i => Array(allDims(i).toDouble, allBirths(i), allDeaths(i)))
 
-  /** This same computation reporting only the bars that pass the threshold -- see `barcode.PersistenceFilter` for the
-    * rule (`minPersistence` absolute if given, otherwise `fraction` of `scale` -- the input's minimum enclosing radius,
-    * or a cubical image's value range; by-name, evaluated only when needed; `0` keeps everything). Computed from the
-    * FULL barcode, so it does not compound if applied twice.
+  /** This same computation reporting only the bars that pass the threshold -- see `PersistenceFilter` for the rule
+    * (`minPersistence` absolute if given, otherwise `fraction` of `scale` -- the input's minimum enclosing radius, or a
+    * cubical image's value range; by-name, evaluated only when needed; `0` keeps everything). Computed from the FULL
+    * barcode, so it does not compound if applied twice.
     */
   private[matlab] def withPersistenceThreshold(
     minPersistence: Option[Double],
@@ -143,9 +143,9 @@ final class PersistenceResult private[matlab] (
   /** This result's own bars of dimension `dim` -- ALL of them, including any the persistence threshold hides from
     * `size()`/`toArray()` (a distance or vectorization between two results must not depend on each one's own threshold,
     * which differs with each one's own scale) -- as plain `PersistenceBar[Double, Nothing]` (no representative chain --
-    * `barcode.BarcodeDistance`/`barcode.Vectorization` only ever look at `dim`/`lower`/`upper`) for feeding into those
-    * two objects. An essential class (`death(i) == Double.PositiveInfinity`) becomes a `PositiveInfinity` upper
-    * endpoint, exactly what both consume directly for the essential-bar handling documented on each.
+    * `BarcodeDistance`/`Vectorization` only ever look at `dim`/`lower`/`upper`) for feeding into those two objects. An
+    * essential class (`death(i) == Double.PositiveInfinity`) becomes a `PositiveInfinity` upper endpoint, exactly what
+    * both consume directly for the essential-bar handling documented on each.
     */
   private def barsOfDimension(dim: Int): IndexedSeq[PersistenceBar[Double, Nothing]] =
     (0 until allDims.length)
@@ -165,8 +165,8 @@ final class PersistenceResult private[matlab] (
     if groundNorm.isPosInfinity then BarcodeDistance.GroundNorm.LInfinity else BarcodeDistance.GroundNorm.LP(groundNorm)
 
   /** Bottleneck distance (`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 4) between this result's and
-    * `other`'s dimension-`dimension` bars, under the L-infinity ground norm -- see `barcode.BarcodeDistance` for the
-    * full matching/essential-bar policy this implements. `Double.PositiveInfinity` back means the two diagrams have
+    * `other`'s dimension-`dimension` bars, under the L-infinity ground norm -- see `BarcodeDistance` for the full
+    * matching/essential-bar policy this implements. `Double.PositiveInfinity` back means the two diagrams have
     * different numbers of essential (never-dying) classes in this dimension, so no finite matching exists; that is a
     * real answer, not a failure.
     */
@@ -183,8 +183,8 @@ final class PersistenceResult private[matlab] (
       toGroundNorm(groundNorm)
     )
 
-  /** Wasserstein distance, order `1.0`, L-infinity ground norm -- see [[bottleneckDistance]] and
-    * `barcode.BarcodeDistance` for the shared essential-bar policy and ground-norm convention.
+  /** Wasserstein distance, order `1.0`, L-infinity ground norm -- see [[bottleneckDistance]] and `BarcodeDistance` for
+    * the shared essential-bar policy and ground-norm convention.
     */
   def wassersteinDistance(other: PersistenceResult, dimension: Int): Double =
     wassersteinDistance(other, dimension, 1.0, Double.PositiveInfinity)
@@ -206,9 +206,9 @@ final class PersistenceResult private[matlab] (
 
   /** The first `numLevels` persistence landscape functions (Bubenik 2013, `.claude/WORKLOG-mainstream-feature-gap-
     * analysis.md` item 8) of this result's dimension-`dimension` bars, sampled at `resolution` evenly-spaced points
-    * across `[tMin, tMax]` -- see `barcode.Vectorization.landscape` for the exact sampling convention, the closed-form
-    * check it satisfies, and why an essential (never-dying) bar needs no special handling here. Returns `levels(k)(j)`:
-    * level `k` (`0` = the outer envelope) at the `j`-th sample point.
+    * across `[tMin, tMax]` -- see `Vectorization.landscape` for the exact sampling convention, the closed-form check it
+    * satisfies, and why an essential (never-dying) bar needs no special handling here. Returns `levels(k)(j)`: level
+    * `k` (`0` = the outer envelope) at the `j`-th sample point.
     */
   def landscape(dimension: Int, numLevels: Int, tMin: Double, tMax: Double, resolution: Int): Array[Array[Double]] =
     Vectorization.landscape(barsOfDimension(dimension), numLevels, tMin, tMax, resolution)
@@ -216,7 +216,7 @@ final class PersistenceResult private[matlab] (
   /** The persistence image (Adams et al. 2017, `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 8) of this
     * result's dimension-`dimension` bars, with the weight cap defaulted to that diagram's own maximum finite
     * persistence (the paper's suggested default) -- see the eight-argument overload to pass one explicitly, and
-    * `barcode.Vectorization.persistenceImage` for the exact construction (isotropic Gaussian bumps in birth-persistence
+    * `Vectorization.persistenceImage` for the exact construction (isotropic Gaussian bumps in birth-persistence
     * coordinates, exact per-pixel integration, piecewise-linear weighting) and why essential (never-dying) bars are
     * dropped rather than given a special-cased value. Returns `image(r)(c)`: `r` indexes `birthResolution` pixels
     * spanning `[birthMin, birthMax]`, `c` indexes `persistenceResolution` pixels spanning `[persistenceMin,
@@ -242,8 +242,8 @@ final class PersistenceResult private[matlab] (
     )
 
   /** As the eight-argument [[persistenceImage]], with an explicit weight cap (the persistence value at and beyond which
-    * `barcode.Vectorization`'s piecewise-linear weighting saturates to `1.0`) instead of the diagram's own maximum
-    * finite persistence.
+    * `Vectorization`'s piecewise-linear weighting saturates to `1.0`) instead of the diagram's own maximum finite
+    * persistence.
     */
   def persistenceImage(
     dimension: Int,

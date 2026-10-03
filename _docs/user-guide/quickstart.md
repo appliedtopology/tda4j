@@ -10,15 +10,17 @@ find one has drifted, trust the source over this page.
 
 ### Imports
 
-TDA4j's package is split into subpackages (`algebra`, `cells`, `streams`, `homology`, `alpha`, ...). Bring
-in what you need with the `{given, *}` form — a plain `import pkg.*` does **not** bring `given` instances
-(coefficient fields, orderings) into scope in Scala 3:
+One import brings in the whole library: complexes, engines, barcodes, file formats. Default instances (a simplex's
+order and boundary, `Show` for simplices and chains) are found automatically, with no `given` import:
 
 ```scala 3
 import org.appliedtopology.tda4j.*
 ```
 
-The rest of this guide assumes these four imports (plus `alpha.{given, *}` where alpha complexes come up).
+Simplicial sets and group classifying spaces are an add-on with their own import,
+`import org.appliedtopology.tda4j.sset.*` (see [Simplicial sets](topological-spaces/simplicial-sets.md)). For
+interactive work, `val tdalab = TDAlab(p); import tdalab.{*, given}` replaces both and also fixes a coefficient field
+(below).
 
 ### Building and taking the boundary of a simplex
 

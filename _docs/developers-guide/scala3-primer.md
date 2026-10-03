@@ -82,26 +82,26 @@ given defaultSimplexIsOrderedCell: [VertexT: Ordering] => (Simplex[VertexT] is O
   simplexIsOrderedCell[VertexT]()
 ```
 
-_Source: `src/main/scala/org/appliedtopology/tda4j/cells/SimplexOrderedCell.scala`, region `given-example`._
+_Source: `src/main/scala/org/appliedtopology/tda4j/cells/SimplexOrderedCell.scala`, region `given-example` (inside
+`trait SimplexInstances`, which `object Simplex` mixes in)._
 
 where `simplexIsOrderedCell` builds an anonymous `new (Simplex[VertexT] is OrderedCell):` instance,
 providing the `ordering` member `OrderedCell` requires and, in an `extension (spx: Simplex[VertexT])`
-block, concrete implementations of `dim` and `boundary`. Once this `given` is in scope, **any**
-`Simplex[Int]` value can call `.dim` and `.boundary[Double]` directly, with no explicit typeclass-dictionary
-plumbing at the call site — that's the entire payoff of the pattern. **One gotcha specific to this
-codebase's own package split**: a `given` only comes into scope via a wildcard import that explicitly says
-so — `import org.appliedtopology.tda4j.cells.{given, *}`, not just `import
-org.appliedtopology.tda4j.cells.*`. A plain `import pkg.*` does **not** bring `given` instances into scope
-in Scala 3; every file in this codebase that reaches across a subpackage boundary uses the `{given, *}`
-form for exactly this reason — see [Architecture](architecture.md)'s package-layout section.
+block, concrete implementations of `dim` and `boundary`. Because the `given` is a member of `Simplex`'s companion, it
+is in the *implicit scope* of `Simplex[V] is OrderedCell`: **any** `Simplex[Int]` value can call `.dim` and
+`.boundary[Double]` directly, with no import of the instance and no explicit dictionary plumbing at the call site —
+that's the entire payoff of the pattern. And because implicit scope is searched only when no given is *lexically*
+visible, a stream or a user can supply a different `Simplex[V] is OrderedCell` (one carrying a filtration order) and it
+wins outright, with no ambiguity. This is the library's rule: default instances live in the companion of the type
+they serve, never as top-level givens ([Architecture](architecture.md)'s package-layout section says why).
 
-One syntax detail worth flagging because it trips people up: `given [CellT: OrderedCell as oCell] =>
-Ordering[CellT] = oCell.ordering` (`algebra/Chain.scala`) is the "anonymous given via arrow" form — a `given`
-with no name, whose *value* is given after `=>`, parametrized by a context-bound clause on the left of the
-arrow. Read `given [bounds] => Body = value` as "for any type satisfying `[bounds]`, here is a value of
-type `Body`." This is how the library bridges its own `OrderedCell.ordering` member back into the
-standard-library `Ordering[T]` typeclass, so anything that's `OrderedCell` automatically also participates
-in ordinary Scala code (`.sorted`, `SortedMap`, etc.) that expects a plain `Ordering`.
+One syntax detail worth flagging because it trips people up: `given cellOrdering: [CellT: OrderedCell as oCell] =>
+Ordering[CellT] = oCell.ordering` (`algebra/Cell.scala`, in `object OrderedCell`) is the given-via-arrow form,
+parametrized by a context-bound clause on the left of the arrow. Read `given [bounds] => Body = value` as "for any type
+satisfying `[bounds]`, here is a value of type `Body`." It bridges the library's own `OrderedCell.ordering` member back
+into the standard-library `Ordering[T]` typeclass for generic code that holds only `CellT: OrderedCell`; such code opts
+in with `import OrderedCell.cellOrdering`. (Concrete cell types don't need it: `Ordering[Simplex[V]]` comes from
+`Simplex`'s companion.)
 
 ## Extension methods
 

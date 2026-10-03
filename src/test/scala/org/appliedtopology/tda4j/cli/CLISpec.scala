@@ -492,7 +492,7 @@ class CLISpec extends mutable.Specification:
       }
   }
 
-  "--distance-to (barcode.BarcodeDistance mirror)" should {
+  "--distance-to (BarcodeDistance mirror)" should {
     def writeComparisonDiagram(points: Array[Array[Double]]): String =
       val result = FullBarcode.computeFromPoints(points, Array("maxDimension", "1"))
       val path = tempFile(".csv")

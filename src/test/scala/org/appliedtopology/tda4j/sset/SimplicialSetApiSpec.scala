@@ -65,13 +65,12 @@ class SimplicialSetApiSpec extends Specification:
         (name, x.eulerCharacteristic, x.eulerCharacteristic, x.eulerCharacteristic)
       })
     }
-    "take the known values" in {
+    "take the known values" in
       (SimplicialSet.torus.eulerCharacteristic must beEqualTo(0))
         .and(SimplicialSet.kleinBottle.eulerCharacteristic must beEqualTo(0))
         .and(SimplicialSet.realProjectiveSpace(2).eulerCharacteristic must beEqualTo(1))
         .and(SimplicialSet.complexProjectivePlane.eulerCharacteristic must beEqualTo(3))
         .and(SimplicialSet.sphere(3).eulerCharacteristic must beEqualTo(0))
-    }
   }
 
   "face and degeneracy maps" should {
@@ -92,11 +91,10 @@ class SimplicialSetApiSpec extends Specification:
   }
 
   "the catalog" should {
-    "give RP^n with Betti numbers all 1 over F_2 but only H_0 (and H_n for odd n) over F_3" in {
+    "give RP^n with Betti numbers all 1 over F_2 but only H_0 (and H_n for odd n) over F_3" in
       (SimplicialSet.realProjectiveSpace(2).bettiNumbers(2) must beEqualTo(Vector(1, 1, 1)))
         .and(SimplicialSet.realProjectiveSpace(2).bettiNumbers(3) must beEqualTo(Vector(1, 0, 0)))
         .and(SimplicialSet.realProjectiveSpace(3).bettiNumbers(3) must beEqualTo(Vector(1, 0, 0, 1)))
-    }
     "give the classifying space of Z/2, whose F_2 homology is F_2 in every degree" in {
       BettiNumbers(SimplicialSet.classifyingSpace(FiniteGroup.cyclic(2)), 3, 2) must beEqualTo(Vector(1, 1, 1, 1))
     }
@@ -104,10 +102,13 @@ class SimplicialSetApiSpec extends Specification:
       enum G derives CanEqual:
         case V, E
       given Ordering[G] = Ordering.by(_.ordinal)
-      val circle = SimplicialSet[G](IndexedSeq(Set(G.V), Set(G.E)), {
-        case G.V => IndexedSeq.empty
-        case G.E => IndexedSeq(SSetElement(Nil, G.V), SSetElement(Nil, G.V))
-      })
+      val circle = SimplicialSet[G](
+        IndexedSeq(Set(G.V), Set(G.E)),
+        {
+          case G.V => IndexedSeq.empty
+          case G.E => IndexedSeq(SSetElement(Nil, G.V), SSetElement(Nil, G.V))
+        }
+      )
       (circle.validate() must beEmpty).and(circle.bettiNumbers(2) must beEqualTo(Vector(1, 1)))
     }
   }
@@ -118,10 +119,13 @@ class SimplicialSetApiSpec extends Specification:
       enum G derives CanEqual:
         case V, E
       given Ordering[G] = Ordering.by(_.ordinal)
-      val circle = SimplicialSet[G](IndexedSeq(Set(G.V), Set(G.E)), {
-        case G.V => IndexedSeq.empty
-        case G.E => IndexedSeq(SSetElement(Nil, G.V), SSetElement(Nil, G.V))
-      })
+      val circle = SimplicialSet[G](
+        IndexedSeq(Set(G.V), Set(G.E)),
+        {
+          case G.V => IndexedSeq.empty
+          case G.E => IndexedSeq(SSetElement(Nil, G.V), SSetElement(Nil, G.V))
+        }
+      )
       import circle.given
       val diagram = CellularHomologyEngine[G, Double, Double]()
         .persistentHomology(circle.filtered { case G.V => 0.0; case G.E => 1.0 })
@@ -155,10 +159,8 @@ class SimplicialSetApiSpec extends Specification:
         .and(circle.suspension.bettiNumbers(3) must beEqualTo(Vector(1, 0, 1)))
         .and(circle.coproduct(circle).bettiNumbers(2) must beEqualTo(Vector(2, 2)))
     }
-    "hold for the homology examples" in {
+    "hold for the homology examples" in
       (SimplicialSet.kleinBottle.bettiNumbers(2) must beEqualTo(Vector(1, 2, 1)))
         .and(SimplicialSet.kleinBottle.bettiNumbers(3) must beEqualTo(Vector(1, 1, 0)))
         .and(SimplicialSet.realProjectiveSpace(2).bettiNumbers(3) must beEqualTo(Vector(1, 0, 0)))
-    }
   }
-

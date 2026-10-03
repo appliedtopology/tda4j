@@ -13,7 +13,7 @@ Loads when you work in `homology/` or `barcode/` (main or test). Project-wide ru
 ## Persistent homology: four independent engines
 
 Independent implementations sharing `Chain` primitives — a fix in one doesn't imply others need it. `maxDim`/
-`maxDimension` = top homological degree in the engines and the facade (engines build one dimension higher internally; NOT the stream constructors: `IncrementalVietorisRipsSimplexStream.maxDimension` is the top SIMPLEX dimension, coface streams have none — use `streams.VietorisRips`, which takes the homological degree; `DESIGN-stream-naming.md`;
+`maxDimension` = top homological degree in the engines and the facade (engines build one dimension higher internally; NOT the stream constructors: `IncrementalVietorisRipsSimplexStream.maxDimension` is the top SIMPLEX dimension, coface streams have none — use `VietorisRips`, which takes the homological degree; `DESIGN-stream-naming.md`;
 `WORKLOG-maxdim-semantics-fix.md`). Naive and `CellularCohomologyEngine` have no such param: callers truncate
 via `LimitedCofaceSimplexStream(stream, k+1)` and drop `dim==k+1` bars. Over a field, cohomology/homology
 barcodes coincide.
@@ -52,7 +52,7 @@ modules.
 included by landscapes but dropped by images. `matlab.PersistenceResult` exposes both; CLI `--distance-to`
 mirrors only distance. `WORKLOG-bottleneck-wasserstein-vectorizations.md`.
 
-**`homology.CircularCoordinates`** (de Silva-Morozov-Vejdemo-Johansson 2011): `h1Bars` lists persistent H¹
+**`CircularCoordinates`** (de Silva-Morozov-Vejdemo-Johansson 2011): `h1Bars` lists persistent H¹
 `(birth,death)` by persistence descending (pick `r` from this first); `compute(metricSpace, r, cocycleIndex,
 prime=47,...)` computes cohomology of the *static* truncated complex `K_r` directly (essential there by
 construction, matched to the full-filtration bar by birth value). Odd prime field only (p=2 can hide torsion);
@@ -63,7 +63,7 @@ data-dependent). `WORKLOG-circular-coordinates.md`.
 
 **Toroidal coordinates** (`computeToroidal`, Scoccola-Gakhar-Bush-Schonsheck-Rask-Zhou-Perea 2022,
 arXiv:2212.07201): combines `k` *simultaneously*-alive H¹ classes (common `r`, same connected component of
-`K_r` — checked) into one torus-valued map, via `homology.LatticeReduction` (hand-rolled LLL on the classes'
+`K_r` — checked) into one torus-valued map, via `LatticeReduction` (hand-rolled LLL on the classes'
 harmonic-cochain Gram matrix's Cholesky factor, `delta=3/4`), applying the resulting unimodular `U` to the
 already-computed per-class `theta`s (linearity of harmonic smoothing). Not a port of `scikit-tda/DREiMac`'s
 `toroidalcoords.py`: its `_gram_schmidt` has a real orthogonalization bug (invisible at k=2, non-orthogonal

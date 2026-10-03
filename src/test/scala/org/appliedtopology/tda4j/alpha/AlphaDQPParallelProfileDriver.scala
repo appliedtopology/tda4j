@@ -2,7 +2,7 @@ package org.appliedtopology.tda4j
 
 import scala.util.Random
 
-/** Test-scope driver, kept alongside `homology.SingleEngineProfileDriver`/`CubicalProfileDriver` as the same kind of
+/** Test-scope driver, kept alongside `SingleEngineProfileDriver`/`CubicalProfileDriver` as the same kind of
   * one-engine-per-process timing tool -- not a scratch file. Measures `AlphaComplexDQP.compute()`'s wall-clock time
   * with `AlphaDQPSettings.parallel` on vs off, on a synthetic random point cloud (a fixed seed per (n, dim) so both
   * settings solve the identical point cloud, hence the identical amount of QP work -- required for the comparison to

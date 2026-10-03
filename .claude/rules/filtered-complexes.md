@@ -61,18 +61,18 @@ relation doesn't fit the point-cloud/distance-matrix dispatch. `engine` defaults
 
 ## DTM-based filtrations
 
-`streams/DistanceToMeasure.scala`, `streams/DtmRipsStream.scala`, `alpha.AlphaComplexDQP.dtm`,
-`WORKLOG-dtm-filtrations.md`. `streams.DistanceToMeasure(metricSpace, k, q=2)`: Chazal-Cohen-Steiner-Merigot
+`streams/DistanceToMeasure.scala`, `streams/DtmRipsStream.scala`, `AlphaComplexDQP.dtm`,
+`WORKLOG-dtm-filtrations.md`. `DistanceToMeasure(metricSpace, k, q=2)`: Chazal-Cohen-Steiner-Merigot
 2011, generic over any `FiniteMetricSpace[Int]`. `k` is **self-inclusive** (verified vs GUDHI byte-for-byte) —
 `k=1` gives `f=0` everywhere. Defaults to `BruteForce` for k-NN, not `JVPTree` (triangle-inequality assumption
 not universal here).
 
-**`streams.DtmRipsSimplexStream`** (Anai et al., arXiv:1811.04757): doubled units, `p∈{1.0,2.0}`, p=1 (default)
+**`DtmRipsSimplexStream`** (Anai et al., arXiv:1811.04757): doubled units, `p∈{1.0,2.0}`, p=1 (default)
 checked byte-for-byte vs GUDHI's `DTMRipsComplex`, p=2 only for cross-validating `AlphaComplexDQP.dtm`. First
 coface stream with nonzero distinct vertex filtration values (overrides `case 0` explicitly).
 `maxFiltrationValue` defaults to `minimumEnclosingRadius`. Refuses `engine=ripser`.
 
-**`alpha.AlphaComplexDQP.dtm`**: `weight(i)=-f(i)²`, derived not copied. Cross-checked against
+**`AlphaComplexDQP.dtm`**: `weight(i)=-f(i)²`, derived not copied. Cross-checked against
 `DtmRipsSimplexStream(p=2)`'s H0 via the persistent nerve lemma, not bar-for-bar (alpha correctly delays/omits
 vertices Rips can't).
 

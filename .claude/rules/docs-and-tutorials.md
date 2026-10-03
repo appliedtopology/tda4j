@@ -36,7 +36,9 @@ with `TDA4J_SCALA_VERSION=3.8.4`) compiles every fence but runs none; the genera
 Narrative fences are `scala sc:nocompile` (they share values, and the snippet compiler compiles each fence alone), and each page ends
 with a "whole script" fence that IS compiled by the docs build. Shared point clouds live in `_docs/tutorials/data/`, written by the seeded `tutorial/TutorialData` (change the generator, run
 `sbt "Test/runMain org.appliedtopology.tda4j.tutorial.TutorialData"`; `TutorialDataSpec` guards drift). Style: `TDAlab` throughout
-(its `streams`/`homology`/`io`/`barcode`/`cells`/`groups`/`alpha` objects exist for this); `diagramAt`/`diagramWithGeneratorsAt` triples,
+(`import tdalab.{*, given}` is the page's only import: it re-exports the whole library and the `sset` add-on, flat --
+write `VietorisRips(...)`, not `tdalab.streams.VietorisRips`; the namespace objects are gone); user-guide fences use
+`import org.appliedtopology.tda4j.*` (+ `.sset.*` for simplicial sets) instead; `diagramAt`/`diagramWithGeneratorsAt` triples,
 not `PersistenceBar`; no `barcodeAt(f)` at an intermediate `f`; public API only (a fence naming a `private[tda4j]` class or a test fixture
 fails `sbt doc`); no timings in prose. `Map[G, Fp]` equality compares raw representatives (-1 vs 1 over F_2 differ): compare cochains with
 `CupProduct.isCoboundary`, never `==`. Tutorial specs add ~90 s to `testFull`.

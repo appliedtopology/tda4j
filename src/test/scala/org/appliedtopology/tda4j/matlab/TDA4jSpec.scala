@@ -132,14 +132,14 @@ class TDA4jSpec extends mutable.Specification:
   }
 
   "complex=vr with edgeCollapse=true, through the facade" should {
-    // The real oracle (streams.EdgeCollapse's own worklog): edge collapse preserves persistent homology exactly,
+    // The real oracle (EdgeCollapse's own worklog): edge collapse preserves persistent homology exactly,
     // so the collapsed complex's own barcode must match plain complex=vr's, bar for bar -- not just "doesn't
     // throw." A dropped edgeCollapse option, or one silently ignored inside computeGeneric, would still pass
     // every other test in this file (nothing else here ever asks for it) but would fail this one immediately if
     // it somehow changed the answer -- it should NOT change the answer at all, only how it's computed.
     "agree exactly with edgeCollapse=false (the default), across every engine" in {
       // Zero-persistence (birth == death) bars are dropped before comparing: edge collapse specifically
-      // eliminates exactly this kind of momentary flicker (see streams.EdgeCollapse's own worklog), so the
+      // eliminates exactly this kind of momentary flicker (see EdgeCollapse's own worklog), so the
       // uncollapsed baseline can have MORE of them while still agreeing with the collapsed result on every bar
       // that represents a genuine feature -- the same filter EdgeCollapseStreamSpec's own barcode comparisons
       // already need, for the identical reason.
@@ -480,7 +480,7 @@ class TDA4jSpec extends mutable.Specification:
   }
 
   "complex=dtm-rips, through the facade" should {
-    "match streams.DtmRipsSimplexStream/SimplicialHomologyEngine driven directly" in {
+    "match DtmRipsSimplexStream/SimplicialHomologyEngine driven directly" in {
       given Double is Field = Field.DoubleApproximated(1e-9)
       val viaFacade =
         triples(
@@ -498,7 +498,7 @@ class TDA4jSpec extends mutable.Specification:
       viaFacade must containTheSameElementsAs(direct)
     }
 
-    "works from a distance matrix too (streams.DistanceToMeasure needs no coordinates, unlike complex=cech/alpha)" in {
+    "works from a distance matrix too (DistanceToMeasure needs no coordinates, unlike complex=cech/alpha)" in {
       val viaPoints =
         triples(FullBarcode.computeFromPoints(points, Array("complex", "dtm-rips", "dtmK", "3")).toArray())
       val viaDistances = triples(
@@ -546,7 +546,7 @@ class TDA4jSpec extends mutable.Specification:
   }
 
   "complex=sparse-rips, through the facade" should {
-    "match streams.SheehyRipsSimplexStream/SimplicialHomologyEngine driven directly" in {
+    "match SheehyRipsSimplexStream/SimplicialHomologyEngine driven directly" in {
       given Double is Field = Field.DoubleApproximated(1e-9)
       val viaFacade = triples(
         FullBarcode
@@ -641,7 +641,7 @@ class TDA4jSpec extends mutable.Specification:
   }
 
   "complex=dtm-alpha, through the facade" should {
-    "match alpha.AlphaComplexDQP.dtm driven directly, in radius (not squared-power) units" in {
+    "match AlphaComplexDQP.dtm driven directly, in radius (not squared-power) units" in {
       given Double is Field = Field.DoubleApproximated(1e-9)
       val viaFacade =
         triples(
@@ -820,7 +820,7 @@ class TDA4jSpec extends mutable.Specification:
 
   // ---------------------------------------------------------------------------------------------------------
   // complex=witness: only the facade's own conversion layer (option parsing, landmark-selector dispatch,
-  // local-to-ambient vertex remapping) -- streams.WitnessStreamSpec already cross-validates the underlying
+  // local-to-ambient vertex remapping) -- WitnessStreamSpec already cross-validates the underlying
   // construction itself (brute-force oracle, general-vs-lazy agreement, Ripser-on-lazy, downward closure).
   // ---------------------------------------------------------------------------------------------------------
 
@@ -889,7 +889,7 @@ class TDA4jSpec extends mutable.Specification:
     }
 
     "default witnessVariant=lazy, engine=ripser: matches PackedRipserCohomologyEngine driven directly over " +
-      "streams.WitnessMetricSpace, via the SAME maxmin landmark selection" in {
+      "WitnessMetricSpace, via the SAME maxmin landmark selection" in {
         val numLandmarks = 4
         val viaFacade = triples(
           FullBarcode
@@ -1195,7 +1195,7 @@ class TDA4jSpec extends mutable.Specification:
   // ---------------------------------------------------------------------------------------------------------
   // computeFromRelation (Dowker complex) -- conversion-layer checks only, per this file's own stated purpose:
   // the underlying construction's own correctness (duality, monotonicity, the keptByThresholdAndCriterion
-  // infinity fix) is already cross-validated in streams.DowkerStreamSpec. A rectangular (numLeft != numWitnesses)
+  // infinity fix) is already cross-validated in DowkerStreamSpec. A rectangular (numLeft != numWitnesses)
   // relation is used deliberately, the same shape DowkerStreamSpec's own duality property test needed to expose
   // a real bug during development -- see .claude/WORKLOG-dowker-complex.md.
   // ---------------------------------------------------------------------------------------------------------
@@ -1207,7 +1207,7 @@ class TDA4jSpec extends mutable.Specification:
   )
 
   "TDA4j.computeFromRelation" should {
-    "default to engine=naive and match streams.DowkerCofaceSimplexStream driven directly" in {
+    "default to engine=naive and match DowkerCofaceSimplexStream driven directly" in {
       given Double is Field = Field.DoubleApproximated(1e-9)
       val direct = SimplicialHomologyEngine[Int, Double, Double]()
         .persistentHomology(DowkerCofaceSimplexStream(dowkerRelation))
@@ -1239,7 +1239,7 @@ class TDA4jSpec extends mutable.Specification:
       FullBarcode.computeFromRelation(dowkerRelation, Array("complex", "vr")) must throwA[IllegalArgumentException]
     }
 
-    "dual=true matches streams.DowkerCofaceSimplexStream(...).dual driven directly -- the functorial Dowker " +
+    "dual=true matches DowkerCofaceSimplexStream(...).dual driven directly -- the functorial Dowker " +
       "duality theorem, exercised through the facade" in {
         given Double is Field = Field.DoubleApproximated(1e-9)
         val direct = SimplicialHomologyEngine[Int, Double, Double]()

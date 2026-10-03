@@ -12,7 +12,7 @@ package org.appliedtopology.tda4j
   * worked doctest byte-for-byte (`DistanceToMeasureSpec`; see `.claude/WORKLOG-dtm-filtrations.md` for the full
   * derivation and every oracle value checked against). One consequence: `k = 1` always gives `f = 0` everywhere (a
   * point's own nearest neighbour, itself, is at distance 0) -- the degenerate case every consumer of this function
-  * (`DtmRipsSimplexStream`, DTM-weighted `alpha.PowerDistance`) should reduce to its un-weighted construction at.
+  * (`DtmRipsSimplexStream`, DTM-weighted `PowerDistance`) should reduce to its un-weighted construction at.
   *
   * Takes a `SpatialQuery`, not a `FiniteMetricSpace` alone, so callers choose the k-NN strategy: `BruteForce` is the
   * safe default (`apply`'s own convenience overload) since VP-tree pruning assumes the triangle inequality, which not

@@ -803,11 +803,11 @@ object AlphaComplexDQP:
     * 3.1/Prop. 3.5) -- `r_x(t)^2 = t^2 - f(x)^2` -- read against THIS class's own power-distance convention
     * `pi_i(y) = ||y-x_i||^2 - weight(i)` (Definition 6/10 above): setting `weight(i) = -f(i)^2` makes
     * `pi_i(y) = ||y-x_i||^2 + f(i)^2`, so `pi_i(y) <= alpha` iff `||y-x_i||^2 <= alpha - f(i)^2 = r_x(sqrt(alpha))^2`
-    * exactly. `alpha.PowerDistance`/`AlphaComplexDQP` already implement the general weighted-alpha/restricted- nerve
+    * exactly. `PowerDistance`/`AlphaComplexDQP` already implement the general weighted-alpha/restricted- nerve
     * machinery this needs -- DTM-alpha is that machinery fed these specific weights, not a new construction.
-    * Cross-checked (not merely asserted) against `streams.DtmRipsSimplexStream(..., p = 2.0)`: both are the SAME
-    * `p = 2` weighted-ball union, so their H0 barcodes agree once alpha's own `sqrt(alpha)` units are doubled to match
-    * Rips's -- `.claude/WORKLOG-dtm-filtrations.md` has the full derivation and the cross-check itself
+    * Cross-checked (not merely asserted) against `DtmRipsSimplexStream(..., p = 2.0)`: both are the SAME `p = 2`
+    * weighted-ball union, so their H0 barcodes agree once alpha's own `sqrt(alpha)` units are doubled to match Rips's
+    * -- `.claude/WORKLOG-dtm-filtrations.md` has the full derivation and the cross-check itself
     * (`AlphaComplexDQPDtmSpec`).
     *
     * Uses `JVPTree` for the `k`-NN search (`DistanceToMeasure`'s own default is the safer-but-slower `BruteForce`,

@@ -23,7 +23,7 @@ non-finite → the barcode's own finite range), in the units the complex reports
 the scale is passed by-name and only computed when a fraction of it is needed. Options `minPersistence` (absolute) / `minPersistenceFraction` (default `0.01`),
 at most one; **`0` keeps everything incl. zero-persistence bars**; CLI `--min-persistence`/`--min-persistence-fraction`
 (mirrored, no Scallop default; stderr note when bars were hidden; rejected with `--select-landmarks`/`--distance-to`).
-Logic lives in `barcode.PersistenceFilter` (opt-in for Scala callers: `PersistenceFilter.significant`). Invariants:
+Logic lives in `PersistenceFilter` (opt-in for Scala callers: `PersistenceFilter.significant`). Invariants:
 filter is post-hoc, applied by the thin `dispatch*` wrappers (validated before computing); `PersistenceResult` keeps
 the FULL arrays + a `visible` index, and **distances/landscapes/persistence images and `--distance-to` always use the
 complete barcode**; new facade option keys must go in every strict allowlist except `landmarkSelectionKeys`.
@@ -49,7 +49,7 @@ omitted keys let `TDA4j` apply its own defaults (one source of truth). `--output
 non-integral filtrations. `TDA4jCLI.run(args, out): Int` is testable in-process, but Scallop's `onError` calls
 `System.exit` on any parse error or `--help`/`--version` — `CLISpec` must never pass malformed flags. Scallop
 `opt[Boolean]` has always-supplied toggle semantics (`WORKLOG-naming-and-dispatch-expansion.md`). `--distance-to`
-(+`--distance-format`/`-order`/`-ground-norm`) mirrors `barcode.BarcodeDistance` instead; only
+(+`--distance-format`/`-order`/`-ground-norm`) mirrors `BarcodeDistance` instead; only
 `--output-format=text` works with it.
 
 ## MATLAB API
