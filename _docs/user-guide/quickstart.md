@@ -32,7 +32,8 @@ and the options, all with defaults:
 | `maxFiltrationValue` | the minimum enclosing radius | where to stop the filtration; past the default nothing new is born |
 | `complex` | `VietorisRips` | or `Cech`, `AlphaShapes`, for points |
 | `characteristic` | `17` | the coefficients: a prime `p` for the field with `p` elements, `0` for real numbers |
-| `engine` | `Persistence.Engine.Auto` | Ripser for Vietoris-Rips, `FastCubical` for images, cohomology otherwise; `Chunks` for cycles (see [engines](homology-computation/choosing-engine.md)) |
+| `engine` | `Persistence.Engine.Auto` | Ripser for Vietoris-Rips, `FastCubical` for images, cohomology otherwise (see [engines](homology-computation/choosing-engine.md)) |
+| `representatives` | `Representatives.Cycles` | or `Representatives.Cocycles` (see below) |
 | `includeZeroLength` | `false` | also report bars `[v, v)`, cells paired with cells entering at the same value |
 
 The default field has 17 elements rather than 2: over the field with 2 elements signs disappear, and so do classes
@@ -79,15 +80,14 @@ engine returns: `bars.longerThan(0.1)`, `bars.significant()`.
 
 ### Representatives
 
-Every bar carries a representative that witnesses the class. There are two kinds:
+Every bar carries a representative that witnesses the class. There are two kinds, and `representatives` chooses:
 
-* **cocycles**, the default: `Persistence` computes persistent cohomology, which is much faster in degree 2. A cocycle
-  of a loop is a set of edges that cuts *across* it. Circular coordinates are built from cocycles.
-* **cycles**, from `engine = Persistence.Engine.Chunks` (or `Naive`): a cycle of a loop is a path of edges going
-  *around* it, which shows where the loop is. These engines compute homology, which is slow in degree 2 on
-  Vietoris-Rips and Čech complexes, so ask them for `maxDimension = 1` there.
+* **cycles**, the default: a cycle of a loop is a path of edges going *around* it, which shows where the loop is.
+* **cocycles**: a cocycle of a loop is a set of edges that cuts *across* it. Circular coordinates are built from
+  cocycles.
 
-The bars are the same either way.
+The bars are the same either way. Cohomology computes the pairing in both cases (it is much faster in degree 2); for
+cycles, the boundaries of the cells that end bars are reduced once more.
 
 ```scala 3
 import scala.language.experimental.modularity
@@ -95,12 +95,12 @@ import org.appliedtopology.tda4j.*
 
 val points = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21)))
 val loop = Persistence(points).dim(1).longest.get
-loop.representative.cells           // a cocycle: 50 edges cutting across the loop
-
-val withCycles = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Chunks)
-val cycle = withCycles.dim(1).longest.get.representative
-cycle.cells                         // a cycle: 30 edges going around the loop, each a Simplex of two point indices
+val cycle = loop.representative     // a cycle: 30 edges going around the loop
+cycle.cells                         // the edges, each a Simplex of two point indices
 cycle.terms                         // the edges with their coefficients
+
+val withCocycles = Persistence(points, representatives = Representatives.Cocycles)
+withCocycles.dim(1).longest.get.representative.cells   // a cocycle: 50 edges cutting across the loop
 ```
 
 ### Long computations: the cursor

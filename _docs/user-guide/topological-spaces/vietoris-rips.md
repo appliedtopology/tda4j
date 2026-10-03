@@ -26,9 +26,9 @@ diagram. Pass `Double.PositiveInfinity` for the whole complex. `maxDimension` is
 contains simplices one dimension higher, which is what lets a class of that degree die.
 
 `VietorisRips(..., implementation = VietorisRips.Implementation.RipserCoface)` (or `Inorder`, `Incremental`) picks
-another construction of the same complex, cell for cell; the default, `Enumerating`, is a good choice. `Persistence(points)` does
-not build a stream at all: it runs Ripser's algorithm on the metric space, which is much faster, especially in degree
-2. A stream is for the other engines, such as `Engine.Chunks` for cycles as representatives.
+another construction of the same complex, cell for cell; the default, `Enumerating`, is a good choice. `Persistence(points)`
+does not build a stream at all: it runs Ripser's algorithm on the metric space, which is much faster, especially in
+degree 2. A stream is for the other engines, such as the naive engine, whose computation can be followed step by step.
 
 Distance matrices: `ExplicitMetricSpace(rows)` wraps a full symmetric matrix (a `Seq[Seq[Double]]`), and the readers in
 [files](../input-output.md) produce one from Ripser, DIPHA and CSV formats.

@@ -74,9 +74,9 @@ class PersistenceVerbSpec extends Specification:
         norm(d.at(f).triples) == norm(cursor.diagramAt(f).filter(_._1 <= 1))
       ) must beTrue
     }
-    "compute degrees 0..2 with Ripser by default: the same bars as Engine.Chunks, cocycles as representatives" in {
+    "compute degrees 0..2 with Ripser, the same bars as Engine.Chunks, with cocycles when asked for" in {
       val pts = circle(12, noise = 0.05)
-      val auto = Persistence(pts, maxFiltrationValue = 1.5)
+      val auto = Persistence(pts, maxFiltrationValue = 1.5, representatives = Representatives.Cocycles)
       val chunks = Persistence(pts, maxFiltrationValue = 1.5, engine = Persistence.Engine.Chunks)
       import auto.given
       // a 1-cocycle evaluates to zero on every triangle's boundary: check it on all triangles up to the threshold

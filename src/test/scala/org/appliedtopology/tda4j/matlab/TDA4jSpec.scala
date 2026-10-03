@@ -1013,7 +1013,17 @@ class TDA4jSpec extends mutable.Specification:
       val landmarks = LandmarkSelector.maxmin(EuclideanMetricSpace(points), numLandmarks).landmarks.toSet
       val result = FullBarcode.computeFromPoints(
         points,
-        Array("complex", "witness", "numLandmarks", numLandmarks.toString, "witnessVariant", "general")
+        // cocycles: they touch landmarks beyond the first numLandmarks point numbers, which the last check needs
+        Array(
+          "complex",
+          "witness",
+          "numLandmarks",
+          numLandmarks.toString,
+          "witnessVariant",
+          "general",
+          "representativeType",
+          "cocycles"
+        )
       )
       val vertices = (0 until result.size()).flatMap(i => result.cycleVertices(i).flatten).toSet
       (vertices.nonEmpty must beTrue) and
@@ -1096,7 +1106,8 @@ class TDA4jSpec extends mutable.Specification:
     // multiplicity), plus a direct cycleVertices check.
     "computeFromPointsAndLandmarks uses the landmarks it is GIVEN, not a freshly-selected set" in {
       val landmarks = Array(5, 2, 0)
-      val result = FullBarcode.computeFromPointsAndLandmarks(points, landmarks)
+      // cocycles: they touch landmarks beyond the first landmarks.length point numbers, which the last check needs
+      val result = FullBarcode.computeFromPointsAndLandmarks(points, landmarks, Array("representativeType", "cocycles"))
       val viaFacade = triples(result.toArray()).sorted
 
       val ff = new FiniteField(2)

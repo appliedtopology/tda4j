@@ -23,10 +23,10 @@ class MatlabTabsSpec extends Specification:
       .sorted
 
   "find-a-loop.md (MATLAB tab)" should {
-    lazy val result = TDA4j.computeFromPoints(points, Array("maxDimension", "1", "engine", "chunks"))
-    "report 58 bars, hide 3, and find the loop" in {
+    lazy val result = TDA4j.computeFromPoints(points)
+    "report 61 bars, hide 3, and find the loop" in {
       val bars = result.toArray()
-      (bars.length must beEqualTo(58))
+      (bars.length must beEqualTo(61))
         .and(result.hiddenCount() must beEqualTo(3))
         .and(rows(dim(bars, 1)) must beEqualTo(List(List(1.0, 0.595, 1.707))))
     }
@@ -34,16 +34,16 @@ class MatlabTabsSpec extends Specification:
       val h0 = dim(result.toArray(), 0).filter(_(2).isFinite)
       r3(h0.map(b => b(2) - b(1)).max) must beEqualTo(0.484)
     }
-    "give a 52-edge representative of the loop (0-based CSV row numbers) using the 0-based index of the bar" in {
+    "give an 18-edge cycle of the loop (0-based CSV row numbers) using the 0-based index of the bar" in {
       val k = result.toArray().indexWhere(_(0) == 1.0)
       val edges = result.cycleVertices(k)
-      (edges.length must beEqualTo(52))
+      (edges.length must beEqualTo(18))
         .and(edges.forall(_.length == 2) must beTrue)
-        .and(result.cycleCoefficients(k).length must beEqualTo(52))
+        .and(result.cycleCoefficients(k).length must beEqualTo(18))
     }
     "cut off at 1.0: the loop is born at 0.595 and never dies" in {
       val short =
-        TDA4j.computeFromPoints(points, Array("maxDimension", "1", "engine", "chunks", "maxFiltrationValue", "1.0"))
+        TDA4j.computeFromPoints(points, Array("maxFiltrationValue", "1.0"))
       rows(dim(short.toArray(), 1)) must beEqualTo(List(List(1.0, 0.595, Double.PositiveInfinity)))
     }
   }
@@ -71,7 +71,7 @@ class MatlabTabsSpec extends Specification:
     def twoLongest(r: matlab.PersistenceResult) =
       dim(r.toArrayUnfiltered(), 1).map(b => r3(b(2) - b(1))).sorted.reverse.take(2).toList
     "show the two longest loops for VR and DTM, and the cycles of the VR ones" in {
-      val vr = TDA4j.computeFromPoints(outliers, Array("maxDimension", "1", "engine", "chunks"))
+      val vr = TDA4j.computeFromPoints(outliers)
       val dtm =
         TDA4j.computeFromPoints(outliers, Array("maxDimension", "1", "complex", "dtm-rips", "dtmK", "8", "dtmP", "1.0"))
       val top = vr.toArray().zipWithIndex.filter(_._1(0) == 1.0).sortBy(x => -(x._1(2) - x._1(1))).take(2).map(_._2)
@@ -80,7 +80,7 @@ class MatlabTabsSpec extends Specification:
       }.toList
       (twoLongest(vr) must beEqualTo(List(0.901, 0.127)))
         .and(twoLongest(dtm) must beEqualTo(List(0.815, 0.005)))
-        .and(cycles must beEqualTo(List((66, 2), (8, 5))))
+        .and(cycles must beEqualTo(List((25, 8), (7, 5))))
     }
   }
 

@@ -24,7 +24,7 @@ class NoiseAndOutliersSpec extends Specification:
         .and(dtmTwo(0) must beCloseTo(0.815, 0.001))
         .and(dtmTwo(1) must beCloseTo(0.005, 0.001))
     "show the runner-up loop is made mostly of outliers, the real one of ring points" in {
-      page.cycles must beEqualTo(List((66, 2), (8, 5)))
+      page.cycles must beEqualTo(List((25, 8), (7, 5)))
     }
     "give the outliers much larger weights than the ring points" in
       (ringWeight must beCloseTo(0.176, 0.001))

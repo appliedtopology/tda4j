@@ -6,8 +6,8 @@ import scala.collection.mutable
   * computation of persistent homology representatives with involuted persistent homology", arXiv:2105.03629).
   *
   * Given the pairing a cohomology engine found, only the boundary columns of death cells are reduced: a column that
-  * reduces to zero never supplies a pivot, so leaving those out changes no reduced column. For a finite bar `(σ, τ)` the
-  * cycle is `R_τ`, the reduced boundary of `τ`: its youngest cell is `σ`, and it is the boundary of a chain whose
+  * reduces to zero never supplies a pivot, so leaving those out changes no reduced column. For a finite bar `(σ, τ)`
+  * the cycle is `R_τ`, the reduced boundary of `τ`: its youngest cell is `σ`, and it is the boundary of a chain whose
   * youngest cell is `τ`. For an essential bar it is the cycle `σ - Σ c V_τ'` that the reduction of `∂σ` to zero
   * produces.
   *
@@ -61,7 +61,7 @@ private[tda4j] object Involution:
     for (deathDim, idxs) <- finite.groupBy(i => pairs(i).dim + 1).toSeq.sortBy(_._1) do
       val ordered = idxs.sortBy(i => pairs(i).death.get)(using youngestFirst.reverse)
       for i <- ordered do
-        val Pair(_, sigma, Some(tau)) = (pairs(i): @unchecked)
+        val Pair(_, sigma, Some(tau)) = pairs(i): @unchecked
         val (reduced, vcol) = reduce(Chain.from(boundary(tau, deathDim)), tau, deathDim)
         reduced.leadingCell match
           case Some(pivot) if youngestFirst.equiv(pivot, sigma) =>

@@ -69,6 +69,10 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     "report only bars longer than this fraction of the input's scale: the minimum enclosing radius, " +
       "or the range of values of an image or relation (default: 0.01)"
   )
+  val representativeType: ScallopOption[String] = opt[String](descr =
+    "cycles (default) or cocycles: the kind of representative each bar gets. Cocycles need --engine ripser or " +
+      "cohomology (or no --engine)"
+  )
   val includeZeroLength: ScallopOption[String] = opt[String](descr =
     "true or false (default): also compute bars of length zero. They are reported with " +
       "--min-persistence 0"

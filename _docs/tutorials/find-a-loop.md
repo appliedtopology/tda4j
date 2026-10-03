@@ -61,31 +61,26 @@ is what the command line and MATLAB show by default.
 
 ## Seeing the loop itself
 
-The diagram does not only say *that* there is a loop: every bar carries a representative. There are two kinds, and you
-choose between them with the engine.
-
-By default `Persistence` computes persistent *cohomology* (with Ripser's algorithm, much the fastest way to reach degree
-2), and a representative is a **cocycle**: a set of edges that cuts *across* the loop, like a cut through a ring. It is
-what [circular coordinates](circular-and-toroidal-coordinates.md) are built from.
+The diagram does not only say *that* there is a loop: every bar carries a representative, here a **cycle**, a path of
+edges going around the hole.
 
 ```scala sc:nocompile
-val cocycle = loop.representative
-cocycle.cells.size               // 121 edges, each a pair of row numbers in the CSV
+val cycle = loop.representative
+cycle.cells.size                 // 18 edges, each a pair of row numbers in the CSV
 ```
 
-To see *where* the loop is, ask for a **cycle**, a path of edges going around it. The chunks engine computes homology and
-gives cycles; it is slow in degree 2 on a Vietoris-Rips complex, so ask it for degrees 0 and 1 only:
+Each cell is an edge between two points of your data (by row number, starting at 0). Having the cycle means you can mark
+which points make up the hole, which is often the real answer to "where is it?". On noisy data the cycle is a jagged path
+rather than a clean polygon: it is *a* representative of the loop, one of many equivalent ones.
+
+The other kind of representative is a **cocycle**: a set of edges that cuts *across* the loop, like a cut through a ring.
+It is what [circular coordinates](circular-and-toroidal-coordinates.md) are built from. Ask for it by name; the bars are
+the same:
 
 ```scala sc:nocompile
-val withCycles = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Chunks)
-val cycle = withCycles.dim(1).longest.get.representative
-cycle.cells.size                 // 52 edges
+val withCocycles = Persistence(points, representatives = Representatives.Cocycles)
+withCocycles.dim(1).longest.get.representative.cells.size   // 121 edges
 ```
-
-The bars are the same either way. Each cell is an edge between two points of your data (by row number, starting at 0).
-Having the cycle means you can mark which points make up the hole, which is often the real answer to "where is it?". On
-noisy data the cycle is a jagged path rather than a clean polygon: it is *a* representative of the loop, one of many
-equivalent ones.
 
 ## Cutting the complex off early
 
@@ -121,9 +116,9 @@ val longestGap = diagram.dim(0).bars.map(_.persistence).filter(_.isFinite).max
 val longerThanATenth = diagram.longerThan(0.1)
 val significant = diagram.significant()
 
-val cocycle = loop.representative
-val withCycles = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Chunks)
-val cycle = withCycles.dim(1).longest.get.representative
+val cycle = loop.representative
+val withCocycles = Persistence(points, representatives = Representatives.Cocycles)
+val cocycle = withCocycles.dim(1).longest.get.representative
 
 val complexSize = VietorisRips(EuclideanMetricSpace(points), maxDimension = 1).iterator.size
 val short = Persistence(points, maxFiltrationValue = 1.0)
@@ -139,11 +134,11 @@ import org.appliedtopology.tda4j.matlab.*;
 
 points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
 
-% Vietoris-Rips in degrees 0 and 1, with the chunks engine, for cycles as representatives
-result = TDA4j.computeFromPoints(points, {'maxDimension', '1', 'engine', 'chunks'});
+% Vietoris-Rips in degrees 0 to 2, with cycles as representatives (the defaults)
+result = TDA4j.computeFromPoints(points);
 
 % Short bars (up to 1% of the enclosing radius) are hidden by default
-bars = result.toArray();               % 58 rows [dimension birth death]
+bars = result.toArray();               % 61 rows [dimension birth death]
 result.hiddenCount()                   % 3 more, shorter than the threshold
 
 loop = bars(bars(:,1) == 1, :)         % [1 0.595 1.707]
@@ -152,10 +147,10 @@ longestGap = max(h0(:,3) - h0(:,2))    % 0.484
 
 % The representative cycle. Java counts from 0, so the bar's index is its row number minus 1
 k = find(bars(:,1) == 1) - 1;
-edges = double(result.cycleVertices(k)) + 1;   % 52 rows, one edge each, as 1-based row numbers of the CSV
+edges = double(result.cycleVertices(k)) + 1;   % 18 rows, one edge each, as 1-based row numbers of the CSV
 
 % Cutting the complex off early
-short = TDA4j.computeFromPoints(points, {'maxDimension', '1', 'engine', 'chunks', 'maxFiltrationValue', '1.0'});
+short = TDA4j.computeFromPoints(points, {'maxFiltrationValue', '1.0'});
 shortBars = short.toArray();
 shortBars(shortBars(:,1) == 1, :)      % [1 0.595 Inf]: born, not dead by the cut-off
 ```

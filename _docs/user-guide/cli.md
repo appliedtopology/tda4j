@@ -20,7 +20,8 @@ one:
   `--sparse-epsilon`, `--dual` (relations);
 * the witness complex: `--num-landmarks`, `--witness-variant`, `--landmark-selector`, `--landmark-seed`, `--nu`, and the
   two-step `--select-landmarks` / `--landmarks-file` (see [witness complexes](topological-spaces/witness-complexes.md));
-* which bars: `--min-persistence`, `--min-persistence-fraction`, `--include-zero-length`;
+* which bars: `--min-persistence`, `--min-persistence-fraction`, `--include-zero-length`; and which representatives:
+  `--representative-type` (`cycles` or `cocycles`);
 * comparing: `--distance-to saved-diagram` (with `--distance-format`, `--distance-order`, `--distance-ground-norm`)
   prints the bottleneck and Wasserstein distances per dimension to a diagram saved earlier, instead of a diagram.
 

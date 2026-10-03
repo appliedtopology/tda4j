@@ -39,6 +39,15 @@ object PersistenceEngine:
           .persistentHomology(stream)
           .barcodeAt(Double.PositiveInfinity, includeZeroLength)
 
+  /** The cohomology engine's pairing, with cycles as representatives ([[Involution]]). */
+  def cohomologyCycles[CellT: OrderedCell, C: Field]: PersistenceEngine[CellT, C] =
+    new PersistenceEngine[CellT, C]:
+      def barcode(
+        stream: StratifiedCellStream[CellT, Double],
+        includeZeroLength: Boolean
+      ): List[PersistenceBar[Double, Chain[CellT, C]]] =
+        CellularCohomologyEngine[CellT, C, Double]().persistentHomology(stream, includeZeroLength)
+
   def cohomology[CellT: OrderedCell, C: Field]: PersistenceEngine[CellT, C] =
     new PersistenceEngine[CellT, C]:
       def barcode(

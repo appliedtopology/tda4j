@@ -34,10 +34,10 @@ class FindALoopSpec extends Specification:
       (page.longerThanATenth.size must beEqualTo(24))
         .and(page.significant.size must beEqualTo(61))
         .and(EuclideanMetricSpace(page.points).minimumEnclosingRadius must beCloseTo(1.95, 0.005))
-    "come with a cocycle of 121 edges by default and a cycle of 52 edges from Engine.Chunks, for the same loop" in
-      (page.cocycle.cells.size must beEqualTo(121))
-        .and(page.cycle.cells.size must beEqualTo(52))
-        .and(page.withCycles.dim(1).longest.get.toTriple must beEqualTo(page.diagram.dim(1).longest.get.toTriple))
+    "come with a cycle of 18 edges by default and a cocycle of 121 edges on request, for the same loop" in
+      (page.cycle.cells.size must beEqualTo(18))
+        .and(page.cocycle.cells.size must beEqualTo(121))
+        .and(page.withCocycles.dim(1).longest.get.toTriple must beEqualTo(page.diagram.dim(1).longest.get.toTriple))
     "build 24711 simplices, and keep the loop alive to the horizon when cut at 1.0" in
       (page.complexSize must beEqualTo(24711))
         .and(page.shortLoop.birth must beCloseTo(0.595, 0.001))

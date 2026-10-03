@@ -18,7 +18,7 @@ import org.appliedtopology.tda4j.*
 
 val points = Array.tabulate(40)(i => Array(math.cos(i * 0.16), math.sin(i * 0.16)))
 val diagram = Persistence(points)          // the Vietoris-Rips diagram in degrees 0, 1 and 2
-diagram.dim(1).longest                     // the loop, with a cocycle that witnesses it
+diagram.dim(1).longest                     // the loop, with a cycle that goes around it
 ```
 
 ## What it offers
@@ -27,8 +27,8 @@ diagram.dim(1).longest                     // the loop, with a cocycle that witn
   complexes, and simplicial sets for spaces you build yourself, down to classifying spaces of finite groups.
 * **Any coefficients**: every engine works over any prime field or the reals. The default is the field with 17
   elements, where signs and odd torsion are visible.
-* **Representatives**: every bar comes with a chain that witnesses it: a cocycle by default (what circular and toroidal
-  coordinates are built from), or on request a cycle, which shows where a feature is.
+* **Representatives**: every bar comes with a chain that witnesses it: a cycle, which shows where a feature is, or on
+  request a cocycle, what circular and toroidal coordinates are built from.
 * **Several engines** for the same computation, from a reference implementation to Ripser's algorithm and specialized
   engines for images and alpha complexes, checked against each other.
 * **Long computations** that can be advanced in steps and read at any scale while they run.

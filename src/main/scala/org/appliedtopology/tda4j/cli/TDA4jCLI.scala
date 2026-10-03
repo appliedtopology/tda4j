@@ -50,6 +50,11 @@ object TDA4jCLI:
               "always uses the complete barcode"
           )
 
+      if conf.representativeType.isSupplied && conf.selectLandmarks() then
+        throw new IllegalArgumentException(
+          "--representative-type is meaningless with --select-landmarks: there is no barcode here, only a landmark set"
+        )
+
       if conf.includeZeroLength.isSupplied && conf.selectLandmarks() then
         throw new IllegalArgumentException(
           "--include-zero-length is meaningless with --select-landmarks: there is no barcode here, only a landmark set"
@@ -185,6 +190,7 @@ object TDA4jCLI:
     add("minPersistence", conf.minPersistence)
     add("minPersistenceFraction", conf.minPersistenceFraction)
     add("includeZeroLength", conf.includeZeroLength)
+    add("representativeType", conf.representativeType)
     add("field", conf.field)
     add("prime", conf.prime)
     add("epsilon", conf.epsilon)

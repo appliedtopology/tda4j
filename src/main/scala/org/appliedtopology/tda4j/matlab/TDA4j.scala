@@ -295,6 +295,7 @@ object TDA4j:
   private val recognizedKeys = Set(
     "complex",
     "engine",
+    "representativetype",
     "alphabackend",
     "maxdimension",
     "maxfiltrationvalue",
@@ -332,6 +333,7 @@ object TDA4j:
       "witnessvariant",
       "nu",
       "engine",
+      "representativetype",
       "maxdimension",
       "maxfiltrationvalue",
       "field",
@@ -345,6 +347,7 @@ object TDA4j:
   /** The options of `computeFromRelation`: a relation has no `complex`, landmarks or alpha backend. */
   private val dowkerKeys = Set(
     "engine",
+    "representativetype",
     "maxdimension",
     "maxfiltrationvalue",
     "dual",
@@ -609,6 +612,7 @@ object TDA4j:
             else "ripser"
           )
         )
+    val cycles = wantsCycles(opts, engine)
     if engine == EngineKind.FastCubical then
       throw new IllegalArgumentException(
         "engine=fast-cubical is only valid for computeFromCubicalImage/computeFromImage: " +
@@ -722,6 +726,7 @@ object TDA4j:
         points,
         complex,
         engine,
+        cycles,
         alphaBackend,
         requireValidTriangulation,
         maxDimension,
@@ -748,11 +753,33 @@ object TDA4j:
   // per-field computation, shared across both coefficient-field choices
   // ---------------------------------------------------------------------------------------------------------------
 
+  /** Whether to report cycles: the `representativeType` option, `cycles` (the default) or `cocycles`. Only `ripser` and
+    * `cohomology` give cocycles; with them, cycles come from the cohomology pairing ([[Involution]]).
+    */
+  private def wantsCycles(opts: Map[String, String], engine: EngineKind): Boolean =
+    val cohomological = engine == EngineKind.Ripser || engine == EngineKind.Cohomology
+    opts.get("representativetype").map(_.toLowerCase) match
+      case None             => true
+      case Some("cycles")   => true
+      case Some("cocycles") =>
+        if cohomological then false
+        else
+          throw new IllegalArgumentException(
+            s"engine=${engine.toString.toLowerCase} gives cycles; for cocycles use engine=cohomology (or engine=ripser " +
+              "for complex=vr), or leave engine unset"
+          )
+      case Some(other) =>
+        throw new IllegalArgumentException(s"option 'representativeType' must be cycles or cocycles, got '$other'")
+
+  private def cohomologyFor[CellT: OrderedCell, C: Field](cycles: Boolean): PersistenceEngine[CellT, C] =
+    if cycles then PersistenceEngine.cohomologyCycles[CellT, C] else PersistenceEngine.cohomology[CellT, C]
+
   private def computeGeneric[C](
     metricSpace: FiniteMetricSpace[Int],
     points: Option[Array[Array[Double]]],
     complex: ComplexKind,
     engine: EngineKind,
+    cycles: Boolean,
     alphaBackend: String,
     requireValidTriangulation: Boolean,
     requestedMaxDimension: Int,
@@ -824,7 +851,8 @@ object TDA4j:
             // `dim + 1` (vertex count) is exactly the `size` `si.decodeToArray` needs -- known from the bar, not
             // guessed.
             fromBars[ctx.DiameterIndex, C](
-              ctx.persistentCohomology(includeZeroLength = true),
+              if cycles then ctx.persistentHomology(includeZeroLength = true)
+              else ctx.persistentCohomology(includeZeroLength = true),
               (dim, cell) => ctx.si.decodeToArray(cell.index, dim + 1),
               toDouble,
               requestedMaxDimension,
@@ -867,7 +895,7 @@ object TDA4j:
             // own doc), so the cap lives entirely in the stream, exactly like engine=Naive. Reuses
             // vrStreamForBoundary directly, same as engine=Naive above.
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(vrStreamForBoundary, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles).barcode(vrStreamForBoundary, includeZeroLength = true),
               vrCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -911,7 +939,7 @@ object TDA4j:
             // complex's chain complex terminates on its own. CellularCohomologyEngine accepts `alphaStream`
             // directly -- it's a LevelwiseSimplexStream[Int, Double], hence a CellStream[Simplex[Int], Double].
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(alphaStream, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles).barcode(alphaStream, includeZeroLength = true),
               alphaCellVertices,
               toDouble,
               Int.MaxValue,
@@ -1010,7 +1038,7 @@ object TDA4j:
             // bounded, so the same "build one dimension higher via LimitedCofaceSimplexStream, drop it via
             // fromBars" dance applies, for the identical reason as complex=vr's own engine=Cohomology branch.
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(cechStreamForBoundary, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles).barcode(cechStreamForBoundary, includeZeroLength = true),
               cechCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1057,7 +1085,7 @@ object TDA4j:
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(dtmStreamForBoundary, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles).barcode(dtmStreamForBoundary, includeZeroLength = true),
               dtmCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1105,7 +1133,7 @@ object TDA4j:
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(sparseStreamForBoundary, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles).barcode(sparseStreamForBoundary, includeZeroLength = true),
               sparseCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1143,7 +1171,7 @@ object TDA4j:
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(dtmAlphaStream, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles).barcode(dtmAlphaStream, includeZeroLength = true),
               dtmAlphaCellVertices,
               toDouble,
               Int.MaxValue,
@@ -1158,6 +1186,7 @@ object TDA4j:
           witnessLandmarks,
           witnessVariant,
           engine,
+          cycles,
           witnessNu,
           requestedMaxDimension,
           maxFiltrationValue,
@@ -1174,6 +1203,7 @@ object TDA4j:
     landmarks: IndexedSeq[Int],
     witnessVariant: WitnessVariantKind,
     engine: EngineKind,
+    cycles: Boolean,
     nu: Int,
     requestedMaxDimension: Int,
     maxFiltrationValue: Option[Double],
@@ -1206,7 +1236,8 @@ object TDA4j:
             val ctx =
               PackedRipserCohomologyEngine[C](wms, requestedMaxDimension, maxFiltrationValue = maxFiltrationValue)
             fromBars[ctx.DiameterIndex, C](
-              ctx.persistentCohomology(includeZeroLength = true),
+              if cycles then ctx.persistentHomology(includeZeroLength = true)
+              else ctx.persistentCohomology(includeZeroLength = true),
               (dim, cell) => ctx.si.decodeToArray(cell.index, dim + 1).map(landmarks),
               toDouble,
               requestedMaxDimension,
@@ -1236,7 +1267,7 @@ object TDA4j:
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(lazyStreamForBoundary, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles).barcode(lazyStreamForBoundary, includeZeroLength = true),
               cellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1274,7 +1305,7 @@ object TDA4j:
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.cohomology[Simplex[Int], C].barcode(generalStreamForBoundary, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles).barcode(generalStreamForBoundary, includeZeroLength = true),
               cellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1306,6 +1337,7 @@ object TDA4j:
     parseWitnessComplexOption(opts)
     val witnessVariant = resolveWitnessVariant(opts)
     val engine = resolveWitnessEngine(opts, witnessVariant)
+    val cycles = wantsCycles(opts, engine)
     val nu = resolveWitnessNu(opts)
     val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(2)
     val maxFiltrationValue: Option[Double] =
@@ -1316,6 +1348,7 @@ object TDA4j:
         landmarks,
         witnessVariant,
         engine,
+        cycles,
         nu,
         maxDimension,
         maxFiltrationValue,
@@ -1335,6 +1368,7 @@ object TDA4j:
 
   private def dispatchDowkerFull(opts: Map[String, String], relation: Array[Array[Double]]): PersistenceResult =
     val engine = EngineKind.parse(opts.getOrElse("engine", "cohomology"))
+    val cycles = wantsCycles(opts, engine)
     if engine == EngineKind.FastCubical then
       throw new IllegalArgumentException(
         "engine=fast-cubical is not offered for computeFromRelation: FastCubicalHomologyEngine is specialized " +
@@ -1360,7 +1394,7 @@ object TDA4j:
       opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
     val dual = opts.get("dual").exists(v => parseBooleanOption("dual", v))
     dispatchByField(opts) { [C] => (toDouble: C => Double) =>
-      computeDowker[C](relation, engine, maxDimension, maxFiltrationValue, dual, toDouble)
+      computeDowker[C](relation, engine, cycles, maxDimension, maxFiltrationValue, dual, toDouble)
     }
 
   /** The Dowker complex is not a flag complex, so the enclosing radius is no cutoff: an unset `maxFiltrationValue` is
@@ -1369,6 +1403,7 @@ object TDA4j:
   private def computeDowker[C](
     relation: Array[Array[Double]],
     engine: EngineKind,
+    cycles: Boolean,
     requestedMaxDimension: Int,
     maxFiltrationValue: Option[Double],
     dual: Boolean,
@@ -1401,7 +1436,7 @@ object TDA4j:
         )
       case EngineKind.Cohomology =>
         fromBars[Simplex[Int], C](
-          PersistenceEngine.cohomology[Simplex[Int], C].barcode(streamForBoundary, includeZeroLength = true),
+          cohomologyFor[Simplex[Int], C](cycles).barcode(streamForBoundary, includeZeroLength = true),
           cellVertices,
           toDouble,
           requestedMaxDimension,
@@ -1427,7 +1462,15 @@ object TDA4j:
 
   private def dispatchCubicalFull(opts: Map[String, String], stream: CubicalGridStream): PersistenceResult =
     val engine =
-      EngineKind.parse(opts.getOrElse("engine", if stream.ambientDim >= 2 then "fast-cubical" else "cohomology"))
+      EngineKind.parse(
+        opts.getOrElse(
+          "engine",
+          if stream.ambientDim >= 2 && !opts.get("representativetype").exists(_.equalsIgnoreCase("cocycles"))
+          then "fast-cubical"
+          else "cohomology"
+        )
+      )
+    val cycles = wantsCycles(opts, engine)
     if engine == EngineKind.Ripser then
       throw new IllegalArgumentException(
         "engine=ripser cannot be used for a cubical complex: PackedRipserCohomologyEngine is specialized to " +
@@ -1462,15 +1505,16 @@ object TDA4j:
         val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(FiniteField.DefaultPrime)
         val ff = new FiniteField(prime)
         import ff.given
-        computeCubicalGeneric[ff.Fp](stream, engine, maxDimension, _.toInt.toDouble)
+        computeCubicalGeneric[ff.Fp](stream, engine, cycles, maxDimension, _.toInt.toDouble)
       case CoefficientKind.R =>
         val epsilon = opts.get("epsilon").map(parseDoubleOption("epsilon", _)).getOrElse(1e-9)
         given Double is Field = Field.DoubleApproximated(epsilon)
-        computeCubicalGeneric[Double](stream, engine, maxDimension, identity)
+        computeCubicalGeneric[Double](stream, engine, cycles, maxDimension, identity)
 
   private def computeCubicalGeneric[C](
     stream: CubicalGridStream,
     engine: EngineKind,
+    cycles: Boolean,
     maxDimension: Int,
     toDouble: C => Double
   )(using C is Field): PersistenceResult =
@@ -1510,7 +1554,7 @@ object TDA4j:
         // is already naturally bounded), CellularCohomologyEngine computes to that natural top dimension, and
         // maxDimension is applied purely as a post-hoc filter via fromBars.
         fromBars[Cube, C](
-          PersistenceEngine.cohomology[Cube, C].barcode(stream, includeZeroLength = true),
+          cohomologyFor[Cube, C](cycles).barcode(stream, includeZeroLength = true),
           cellVertices,
           toDouble,
           maxDimension,

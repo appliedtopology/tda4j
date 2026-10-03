@@ -42,7 +42,11 @@ class InvolutionSpec extends Specification:
     checkAll(paired.map(_._2).toIndexedSeq, olderFirst.reverse, (cell, _) => cell.boundary[ff.Fp])
 
   private def validPacked(points: Array[Array[Double]], maxDimension: Int, threshold: Double): Int =
-    val engine = PackedRipserCohomologyEngine[ff.Fp](EuclideanMetricSpace(points), maxDimension, maxFiltrationValue = Some(threshold))
+    val engine = PackedRipserCohomologyEngine[ff.Fp](
+      EuclideanMetricSpace(points),
+      maxDimension,
+      maxFiltrationValue = Some(threshold)
+    )
     checkAll(engine.pairedCohomology().map(_._2).toIndexedSeq, engine.packedOrdering.reverse, engine.boundaryOf)
 
   "Involution" should {

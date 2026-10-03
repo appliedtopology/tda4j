@@ -21,20 +21,20 @@ import org.appliedtopology.tda4j.*
 val points = CSV.readPointCloud("_docs/tutorials/data/circle-with-outliers.csv")
 val metricSpace = EuclideanMetricSpace(points)
 
-// cycles as representatives, to see which points make up each loop (find-a-loop explains the choice)
-val vr = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Chunks)
+val vr = Persistence(points)
 val vrLoops = vr.dim(1).longest(2)            // the two longest-lived loops
 vrLoops.map(_.persistence)                     // List(0.901, 0.127)
 
 vrLoops.map { loop =>
   val pointsOnCycle = loop.representative.cells.flatMap(_.toList).distinct
   (pointsOnCycle.size, pointsOnCycle.count(_ >= 70))   // rows 70 and up are the outliers
-}                                              // List((66, 2), (8, 5))
+}                                              // List((25, 8), (7, 5))
 ```
 
 The circle is found: one loop persists for 0.90. But there is a second loop of persistence 0.13, about 14% of the first. It is
-not on the circle. The representative cycle of the long loop passes through 66 points, 2 of them outliers (a few strays happen
-to sit close enough to the ring to be on the path); that of the short one passes through just 8 points, 5 of which are outliers.
+not on the circle. The representative cycle of the long loop passes through 25 points, 17 of them on the ring (the cycle
+takes a few shortcuts through strays that sit near it); that of the short one passes through just 7 points, 5 of which are
+outliers.
 It is a hole between strays, which exists only because they happen to be arranged around an empty patch. On this data you can
 tell the two apart by eye. With more strays, or a messier circle, the
 second bar grows, and nothing in the barcode itself says which loop is the real one.
@@ -88,7 +88,7 @@ import org.appliedtopology.tda4j.*
 val points = CSV.readPointCloud("_docs/tutorials/data/circle-with-outliers.csv")
 val metricSpace = EuclideanMetricSpace(points)
 
-val vr = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Chunks)
+val vr = Persistence(points)
 val vrLoops = vr.dim(1).longest(2)
 val cycles = vrLoops.map { loop =>
   val pointsOnCycle = loop.representative.cells.flatMap(_.toList).distinct
@@ -114,7 +114,7 @@ points = readmatrix('_docs/tutorials/data/circle-with-outliers.csv');
 % The two longest-lived loops of a barcode, as lengths (death - birth)
 loopLengths = @(bars) sort(bars(bars(:,1) == 1, 3) - bars(bars(:,1) == 1, 2), 'descend');
 
-vr  = TDA4j.computeFromPoints(points, {'maxDimension', '1', 'engine', 'chunks'});
+vr  = TDA4j.computeFromPoints(points);
 dtm = TDA4j.computeFromPoints(points, {'maxDimension', '1', 'complex', 'dtm-rips', 'dtmK', '8', 'dtmP', '1.0'});
 
 vrLengths = loopLengths(vr.toArrayUnfiltered());
@@ -128,7 +128,7 @@ loopRows = find(bars(:,1) == 1);
 [~, order] = sort(bars(loopRows,3) - bars(loopRows,2), 'descend');
 for row = loopRows(order(1:2))'
     onCycle = unique(double(vr.cycleVertices(row - 1)));   % Java index: row - 1
-    fprintf('%d points, %d of them outliers\n', numel(onCycle), sum(onCycle >= 70));   % 66 and 2, then 8 and 5
+    fprintf('%d points, %d of them outliers\n', numel(onCycle), sum(onCycle >= 70));   % 25 and 8, then 7 and 5
 end
 ```
 

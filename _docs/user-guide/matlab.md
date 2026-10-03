@@ -46,7 +46,8 @@ Each `compute...` method also has an overload without options.
 | option | values | default |
 |---|---|---|
 | `complex` | `vr`, `alpha`, `cech`, `witness`, `dtm-rips`, `dtm-alpha`, `sparse-rips` | `vr` |
-| `engine` | `ripser`, `chunks`, `naive`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and the lazy witness complex, `fast-cubical` for images of dimension 2 and up, `cohomology` otherwise (cocycles, except `fast-cubical`; `chunks` or `naive` for cycles) |
+| `engine` | `ripser`, `chunks`, `naive`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and the lazy witness complex, `fast-cubical` for images of dimension 2 and up, `cohomology` otherwise |
+| `representativeType` | `cycles`, `cocycles` | `cycles` (cocycles need `ripser` or `cohomology`, or no `engine`) |
 | `maxDimension` | integer | `2`: the top homological degree (for an image: its dimension) |
 | `maxFiltrationValue` | number | the minimum enclosing radius (`Infinity` for the general witness complex) |
 | `field` | `Z` (a prime field), `R` (floating point) | `Z` |
@@ -97,7 +98,7 @@ its threshold.
 ### Representatives
 
 `cycleVertices(i)` and `cycleCoefficients(i)` give the representative of bar `i`: the simplices (each as its sorted
-vertex numbers) and their coefficients. For `engine=ripser` and `cohomology` it is a cocycle, for the others a cycle.
+vertex numbers) and their coefficients: a cycle, or a cocycle with `representativeType=cocycles`.
 For the witness complex the vertices are point numbers, not landmark numbers. For an image, a cell is given by its
 coordinates in the doubled grid (a pixel `(i, j)` is `(2i + 1, 2j + 1)`). The [boundary matrix](boundary-matrix.md) of
 the complex is also available.

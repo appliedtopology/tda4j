@@ -48,8 +48,8 @@ Almost none of those tetrahedra matter: only 3 voids are born, and most tetrahed
 filled. Homology (the chunks and naive engines) still reduces a column for every one of them. Cohomology runs the
 reduction the other way round, so these columns are cleared without work, and Ripser's version of it never even
 builds most of them. That is why `Persistence` uses Ripser for Vietoris-Rips and the cohomology engine for every other
-complex by default. When you want cycles, ask for `engine = Persistence.Engine.Chunks` with `maxDimension = 1`, as
-[Find a loop](find-a-loop.md) does.
+complex by default, and computes cycles from their pairing by reducing only the 21,624 tetrahedra that end a bar's life,
+not all 231,961.
 
 ## Edge collapse
 

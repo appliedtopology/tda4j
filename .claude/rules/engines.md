@@ -38,6 +38,15 @@ barcodes coincide.
    are their reduced pivot chain. Representatives don't match Ripser term-for-term (tie direction differs) but
    bar values do. Sign-tested on RP² over Fp (3) (`WORKLOG-generic-cohomology.md`).
 
+**Cycles from cohomology (`Involution`, `homology/Involution.scala`)**: both cohomology engines expose
+`pairedCohomology` (bars + birth/death cells, zero-length pairs INCLUDED: their columns are pivots) and
+`persistentHomology` (same bars, cycles). Only death columns are reduced, under the engine's own order reversed
+(youngest = `Chain` leading term); a pivot that is not the paired birth cell throws (a pairing/order mismatch is a
+bug, never fall back). Finite bar cycle = `R_τ` (closed, youngest cell σ, `= ∂V_τ` with youngest τ); essential = `V_σ`.
+Different valid cycles from chunks/naive (they report `V_σ` after their own substitutions): never compare
+representatives cell for cell across engines; `InvolutionSpec` checks validity on tie-heavy inputs. Cost: 2.5-3x
+cocycles (`WORKLOG-involution.md`).
+
 Every engine takes `includeZeroLength` (default `false`) on its bar-returning methods and drops `birth == death` pairs
 from the pairing itself; `PersistenceBar.dropZeroLength` is the shared filter. The naive and chunks engines' `diagramAt(f)`
 report a class alive at `f` as `[birth, f]` (closed end), so a class born exactly at `f` survives the filter; a finished bar is

@@ -76,6 +76,8 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
   `computeFrom{Points,DistanceMatrix}AndLandmarks` (takes that `int[]` directly, never re-selects);
   `coveringRadiusFrom{Points,DistanceMatrix}` queries R for a hand-picked set. CLI: `--select-landmarks`/
   `--landmarks-file`. `WORKLOG-witness-two-step-api.md`.
+- `representativeType` = `cycles` (default) / `cocycles` (only `ripser`/`cohomology`; others throw); with
+  cocycles an image defaults to `cohomology`, not `fast-cubical`. In every allowlist but `landmarkSelectionKeys`.
 - Default `engine`: `ripser` for `vr`/lazy witness, `fast-cubical` for images of dimension >= 2, **`cohomology` for
   everything else** (relations, general witness included): the homology engines reduce every top cell and take minutes at degree 2
   (`WORKLOG-default-degree-2.md`); `TDA4jSpec` pins the default against an explicit `engine=cohomology`.

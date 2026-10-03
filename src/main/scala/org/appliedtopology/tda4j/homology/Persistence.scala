@@ -20,8 +20,8 @@ object Image:
 /** Persistent homology in one call: `Persistence(points)`.
   *
   * {{{
-  * Persistence(points)                                   // Vietoris-Rips, degrees 0..2, coefficients F_17
-  * Persistence(points, engine = Persistence.Engine.Chunks) // the same bars, with cycles as representatives
+  * Persistence(points)                                   // Vietoris-Rips, degrees 0..2, coefficients F_17, cycles
+  * Persistence(points, representatives = Representatives.Cocycles)   // the same bars, with cocycles
   * Persistence(points, complex = Cech, maxDimension = 1)
   * Persistence(points, maxFiltrationValue = 0.5)
   * Persistence(Image(pixels))                            // cubical, sublevel
@@ -29,12 +29,12 @@ object Image:
   * }}}
   *
   * Returns a [[PersistenceDiagram]]: the bars of degree `0 .. maxDimension`, each with its representative, as an
-  * immutable value. By default the representatives are '''cocycles''' (the default engines compute cohomology, which is
-  * much faster in degree 2): a cocycle of a loop is a set of edges cutting across it. For '''cycles''', which run
-  * around a loop and show where it is, pass `engine = Persistence.Engine.Chunks`; that engine is slow in degree 2 on
-  * Vietoris-Rips and Čech complexes, so ask for `maxDimension = 1` with it there. Zero-length bars are left out; short
-  * ones are one call away (`diagram.longerThan(0.05)`, `diagram.significant()`). This runs the computation to the end;
-  * for a long run you want to inspect while it goes (or keep if it dies), build an engine and use its cursor
+  * immutable value. Representatives are '''cycles''' by default (a loop's cycle runs around it, showing where it is);
+  * `representatives = Representatives.Cocycles` gives '''cocycles''' instead (a loop's cocycle cuts across it; circular
+  * coordinates are built from cocycles). The pairing is computed by cohomology either way, which is fast in degree 2;
+  * cycles then cost one more reduction, of the boundaries of the cells that end bars. Zero-length bars are left out;
+  * short ones are one call away (`diagram.longerThan(0.05)`, `diagram.significant()`). This runs the computation to the
+  * end; for a long run you want to inspect while it goes (or keep if it dies), build an engine and use its cursor
   * (`advanceFor`, `diagramAt`) instead.
   *
   * @param input
@@ -53,25 +53,32 @@ object Image:
   *   the coefficient field: a prime `p` for `Z/p` (default `FiniteField.DefaultPrime`, 17), or `0` for real
   *   coefficients.
   * @param engine
-  *   `Persistence.Engine.Auto` (default: Ripser for Vietoris-Rips of points or a metric space, cohomology otherwise),
-  *   `Chunks` (cycles), `Naive`, `Cohomology` or `Ripser`; see [[Persistence.Engine]].
+  *   `Persistence.Engine.Auto` (default) picks one for the input and `representatives`; see [[Persistence.Engine]].
+  *   Most users never set it.
   * @param includeZeroLength
   *   also report zero-length bars `[v, v)` (cells paired with cells entering at the same value). Default `false`.
+  * @param representatives
+  *   `Representatives.Cycles` (default) or `Representatives.Cocycles`.
   */
+/** Which representative `Persistence` gives each bar: a '''cycle''' (a chain without boundary, born at the bar's start
+  * and a boundary at its end; for a loop, a path of edges around it) or a '''cocycle''' (a cochain whose coboundary is
+  * zero; for a loop, a set of edges cutting across it, what circular coordinates are built from).
+  */
+enum Representatives:
+  case Cycles, Cocycles
+
 object Persistence:
   /** Which algorithm computes the diagram. All give the same bars; they differ in cost and in the representatives.
     *
     *   - `Auto` (default): `Ripser` for the Vietoris-Rips complex of points or a metric space, `FastCubical` for an
-    *     image (or cubical grid) of dimension 2 and up, `Cohomology` for everything else.
-    *   - `Chunks`: clearing and compression, union-find in degrees 0 and 1. Representatives are cycles: use it to see
-    *     where a feature is (a loop's cycle runs around it). Slow in degree 2 and up on Vietoris-Rips and Čech
-    *     complexes, which have many cells of the top dimension.
-    *   - `Naive`: the reference algorithm, one cell at a time. Representatives are cycles.
-    *   - `Cohomology`: persistent cohomology of the same complex. Representatives are cocycles.
+    *     image (or cubical grid) of dimension 2 and up when cycles are asked for, `Cohomology` for everything else.
     *   - `Ripser`: Bauer's Ripser, for the Vietoris-Rips complex of points or a metric space only; the fastest there.
-    *     Representatives are cocycles.
-    *   - `FastCubical`: union-find on an image and its dual grid, for images of dimension 2 and up; the fastest there.
-    *     Representatives are cycles.
+    *     Cycles or cocycles.
+    *   - `Cohomology`: persistent cohomology of any complex. Cycles or cocycles.
+    *   - `FastCubical`: union-find on an image and its dual grid, for images of dimension 2 and up. Cycles.
+    *   - `Chunks`: homology by clearing and compression, with union-find in degrees 0 and 1. Cycles. Slow in degree 2
+    *     and up on Vietoris-Rips and Čech complexes, which have many cells of the top dimension.
+    *   - `Naive`: the reference algorithm, one cell at a time. Cycles.
     */
   enum Engine:
     case Auto, Chunks, Naive, Cohomology, Ripser, FastCubical
@@ -92,7 +99,8 @@ object Persistence:
       maxFiltrationValue: Option[Double],
       complex: PointCloudComplex,
       characteristic: Int,
-      includeZeroLength: Boolean
+      includeZeroLength: Boolean,
+      cycles: Boolean
     ): PersistenceDiagram[CellT] =
       throw new IllegalArgumentException(
         "Persistence: engine = Ripser computes the Vietoris-Rips complex of points or a metric space; " +
@@ -116,7 +124,8 @@ object Persistence:
           maxFiltrationValue: Option[Double],
           complex: PointCloudComplex,
           characteristic: Int,
-          includeZeroLength: Boolean
+          includeZeroLength: Boolean,
+          cycles: Boolean
         ) =
           require(complex eq VietorisRips, "Persistence: engine = Ripser needs complex = VietorisRips")
           val coefficients = Coefficients(characteristic)
@@ -132,7 +141,8 @@ object Persistence:
             new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(chain))
           val distances = for x <- ms.elements; y <- ms.elements if x < y yield ms.distance(x, y)
           PersistenceDiagram[Simplex[Int], coefficients.C](
-            engine.persistentCohomology(includeZeroLength).map(decode),
+            (if cycles then engine.persistentHomology(includeZeroLength)
+             else engine.persistentCohomology(includeZeroLength)).map(decode),
             maxDimension,
             distances.filter(_ <= threshold).maxOption.getOrElse(0.0),
             scale
@@ -173,14 +183,21 @@ object Persistence:
     complex: PointCloudComplex = VietorisRips,
     characteristic: Int = FiniteField.DefaultPrime,
     engine: Engine = Engine.Auto,
-    includeZeroLength: Boolean = false
+    includeZeroLength: Boolean = false,
+    representatives: Representatives = Representatives.Cycles
   ): PersistenceDiagram[CellT] =
+    val cycles = representatives == Representatives.Cycles
     val chosen = engine match
       case Engine.Auto =>
         if input.ripserApplies(complex) then Engine.Ripser
-        else if input.cubicalGrid.exists(_.ambientDim >= 2) then Engine.FastCubical
+        else if cycles && input.cubicalGrid.exists(_.ambientDim >= 2) then Engine.FastCubical
         else Engine.Cohomology
       case other => other
+    if !cycles && (chosen == Engine.Chunks || chosen == Engine.Naive || chosen == Engine.FastCubical) then
+      throw new IllegalArgumentException(
+        s"Persistence: engine = $chosen gives cycles; for cocycles use Engine.Auto, Engine.Cohomology or (for " +
+          "Vietoris-Rips) Engine.Ripser"
+      )
     val requested = maxDimension.toOption
     requested.foreach(k => require(k >= 0, s"Persistence: maxDimension must be >= 0, got $k"))
     given (CellT is OrderedCell) = input.cells
@@ -190,7 +207,8 @@ object Persistence:
         maxFiltrationValue.toOption,
         complex,
         characteristic,
-        includeZeroLength
+        includeZeroLength,
+        cycles
       )
     else if chosen == Engine.FastCubical then
       val grid = input.cubicalGrid.getOrElse(
@@ -219,7 +237,8 @@ object Persistence:
         characteristic,
         chosen,
         input.scale,
-        includeZeroLength
+        includeZeroLength,
+        cycles
       )
 
   private def fastCubical(
@@ -244,7 +263,8 @@ object Persistence:
     characteristic: Int,
     engine: Engine,
     scale: Option[Double],
-    includeZeroLength: Boolean
+    includeZeroLength: Boolean,
+    cycles: Boolean
   ): PersistenceDiagram[CellT] =
     val coefficients = Coefficients(characteristic)
     import coefficients.given
@@ -260,8 +280,10 @@ object Persistence:
           state.lastFiltrationValue.getOrElse(Double.NegativeInfinity)
         )
       case Engine.Cohomology =>
+        val engine = CellularCohomologyEngine[CellT, coefficients.C, Double]()
         val bars =
-          CellularCohomologyEngine[CellT, coefficients.C, Double]().persistentCohomology(stream, includeZeroLength)
+          if cycles then engine.persistentHomology(stream, includeZeroLength)
+          else engine.persistentCohomology(stream, includeZeroLength)
         val fv = stream.filtrationValue
         (bars, stream.iterator.map(c => fv.applyOrElse(c, _ => Double.NegativeInfinity)).maxOption.getOrElse(0.0))
       case Engine.Ripser | Engine.Auto | Engine.FastCubical =>

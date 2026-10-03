@@ -127,11 +127,13 @@ line even though the docs build (project flags) would compile them without it.
 **`Persistence(input, maxDimension = 2, maxFiltrationValue, complex = VietorisRips, characteristic = 17, engine = Auto)`**
 (`homology/Persistence.scala`) is the one-call verb: points/metric space/`Image`/any stream in, an immutable
 `PersistenceDiagram` (bars + representatives; coefficient type is a member, `import d.given`; `dim`, `at(f)`,
-`longest`, `longerThan(x)`, `significant()`, `bettiNumbers`) out. **Default: degrees 0..2, cocycles** (project lead):
-`Auto` = Ripser for `VietorisRips` on points/metric space, `FastCubical` (cycles) for images/cubical grids of
-dimension >= 2, `Cohomology` otherwise; `Chunks`/`Naive` give cycles but
-reduce every top cell (VR/Cech H2 on ~100 points: minutes or OOM), so docs pair them with `maxDimension = 1`. A
-truncated stream's own degree (`homologyDegreeLimit`) is the default for streams. `WORKLOG-default-degree-2.md`.
+`longest`, `longerThan(x)`, `significant()`, `bettiNumbers`) out. **Default: degrees 0..2, cycles**;
+`representatives = Representatives.Cycles | Cocycles` (MATLAB `representativeType`, CLI `--representative-type`).
+`Auto` = Ripser for `VietorisRips` on points/metric space, `FastCubical` for images of dimension >= 2 (cycles only),
+`Cohomology` otherwise. The pairing always comes from cohomology; cycles from it by `Involution` (reduce only death
+columns, every pivot checked). `Chunks`/`Naive` give cycles only and reduce every top cell (VR/Cech H2 on ~100 points:
+minutes or OOM). A truncated stream's own degree (`homologyDegreeLimit`) is the default for streams.
+`WORKLOG-default-degree-2.md`, `WORKLOG-involution.md`.
 
 **Zero-length bars are dropped by default** (project lead: seeing them is the opt-in, never hiding them): every engine,
 the verb, MATLAB and the CLI take `includeZeroLength` (default `false`); short bars are one call away
