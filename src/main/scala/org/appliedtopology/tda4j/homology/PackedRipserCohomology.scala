@@ -178,12 +178,47 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
   def persistentCohomology(
     includeZeroLength: Boolean = false
   ): List[PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]]] =
+    PersistenceBar.dropZeroLength(pairedCohomology().map(_._1), includeZeroLength)
+
+  /** The same bars with '''cycles''' as representatives (over [[DiameterIndex]] cells): the pairing comes from the
+    * cohomology computation, and only the boundary columns of the death simplices are reduced ([[Involution]]).
+    */
+  def persistentHomology(
+    includeZeroLength: Boolean = false
+  ): List[PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]]] =
+    val paired = pairedCohomology()
+    val cycles = Involution.cycles[DiameterIndex, CoefficientT](
+      paired.map(_._2).toIndexedSeq,
+      packedOrdering.reverse,
+      boundaryOf
+    )
+    val bars = paired.zip(cycles).map { case ((bar, _), (cycle, _)) =>
+      new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(cycle))
+    }
+    PersistenceBar.dropZeroLength(bars, includeZeroLength)
+
+  /** The boundary of a `dim`-simplex: the facet without its `i`-th smallest vertex, with sign `(-1)^i`. */
+  private[tda4j] def boundaryOf(tau: DiameterIndex, dim: Int): Seq[(DiameterIndex, CoefficientT)] =
+    if dim == 0 then Seq.empty
+    else
+      val vertices = si.decodeToArray(tau.index, dim + 1).sorted
+      vertices.indices.map { i =>
+        val facet = vertices.patch(i, Nil, 1)
+        val cell = DiameterIndex(maxPairwiseDistance(facet), si(Simplex(facet*)))
+        (cell, if i % 2 == 0 then fr.one else fr.negate(fr.one))
+      }
+
+  /** Every bar, zero-length ones included, with the cells that open and close it. */
+  private[tda4j] def pairedCohomology()
+    : List[(PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]], Involution.Pair[DiameterIndex])] =
     val chainRM = summon[Chain[DiameterIndex, CoefficientT] is RingModule]
     import chainRM.*
 
     _substitutionCount = 0
     _totalSimplexCount = 0
-    val bars = mutable.ArrayDeque.empty[PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]]]
+    val bars =
+      mutable.ArrayDeque
+        .empty[(PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]], Involution.Pair[DiameterIndex])]
 
     // Rotating per-dimension cleared set, keyed by bare Long index -- NOT a single set accumulated across all
     // dimensions the way RipserCohomologyEngine's Simplex[Int]-keyed `cleared` safely is. A combinatorial-
@@ -241,7 +276,12 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
             val vcol = Chain[DiameterIndex, CoefficientT](sigma)
             generators(tau) = vcol
             nextCleared += tau.index
-            bars.append(PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(tau.diameter), Some(vcol)))
+            bars.append(
+              (
+                PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(tau.diameter), Some(vcol)),
+                Involution.Pair(d, sigma, Some(tau))
+              )
+            )
           case None =>
             val z = coboundaryOf(sigma, size)
             val (reduced, log) = Chain.reduceBy(z, basis, Chain.empty, basisFallback)
@@ -254,16 +294,26 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
               }
             vcol.collapseAll()
             if reduced.isZero() then
-              bars.append(PersistenceBar(d, ClosedEndpoint(sigmaFv), PositiveInfinity(), Some(vcol)))
+              bars.append(
+                (
+                  PersistenceBar(d, ClosedEndpoint(sigmaFv), PositiveInfinity(), Some(vcol)),
+                  Involution.Pair(d, sigma, None)
+                )
+              )
             else
               val pivot = reduced.leadingCell.get
               basis(pivot) = reduced
               generators(pivot) = vcol
               nextCleared += pivot.index
-              bars.append(PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(pivot.diameter), Some(vcol)))
+              bars.append(
+                (
+                  PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(pivot.diameter), Some(vcol)),
+                  Involution.Pair(d, sigma, Some(pivot))
+                )
+              )
 
       if d < maxDimension then currentLevel = simplicesAtD.iterator.flatMap(sparseCofacets(_, size)).toSeq
 
       activeCleared = nextCleared
 
-    PersistenceBar.dropZeroLength(bars, includeZeroLength)
+    bars.toList

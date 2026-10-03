@@ -27,10 +27,37 @@ class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtrati
     stream: => CellStream[CellT, FiltrationT],
     includeZeroLength: Boolean = false
   ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
+    PersistenceBar.dropZeroLength(pairedCohomology(stream)._1.map(_._1), includeZeroLength)
+
+  /** The same bars with '''cycles''' as representatives: the pairing is computed by cohomology, then only the boundary
+    * columns of the death cells are reduced ([[Involution]]). A finite bar's cycle is the reduced boundary of its death
+    * cell; an essential bar's is a cycle whose youngest cell is its birth cell.
+    */
+  def persistentHomology(
+    stream: => CellStream[CellT, FiltrationT],
+    includeZeroLength: Boolean = false
+  ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
+    val (paired, olderFirst) = pairedCohomology(stream)
+    val cycles = Involution.cycles[CellT, CoefficientT](
+      paired.map(_._2).toIndexedSeq,
+      olderFirst.reverse,
+      (cell, _) => cell.boundary[CoefficientT]
+    )
+    val bars = paired.zip(cycles).map { case ((bar, _), (cycle, _)) =>
+      new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(cycle))
+    }
+    PersistenceBar.dropZeroLength(bars, includeZeroLength)
+
+  /** Every bar, zero-length ones included, with the cells that open and close it, and the order (oldest first within a
+    * dimension) the pairing was computed under.
+    */
+  private[tda4j] def pairedCohomology(
+    stream: => CellStream[CellT, FiltrationT]
+  ): (List[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])], Ordering[CellT]) =
     val theStream = stream
     val cellsByDim: Map[Int, Vector[CellT]] = theStream.iterator.toVector.groupBy(_.dim)
 
-    if cellsByDim.isEmpty then List.empty
+    if cellsByDim.isEmpty then (List.empty, Ordering.by[CellT, Int](_ => 0))
     else
       val fv: PartialFunction[CellT, FiltrationT] = theStream.filtrationValue
       def cellFv(c: CellT): FiltrationT = fv.applyOrElse(c, (_: CellT) => theStream.smallest)
@@ -43,7 +70,8 @@ class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtrati
       val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
       import chainRM.*
 
-      val bars = mutable.ArrayDeque.empty[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]]
+      val bars =
+        mutable.ArrayDeque.empty[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])]
       // Accumulated across every dimension, not per-dimension-rotated -- unlike
       // `PackedRipserCohomologyEngine.activeCleared`, whose rotation exists only to work around a bare `Long`
       // combinatorial index colliding across differently-sized simplices. `CellT` values carry their own
@@ -102,17 +130,27 @@ class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtrati
           }
           vcol.collapseAll()
           if reduced.isZero() then
-            bars.append(PersistenceBar(d, ClosedEndpoint(sigmaFv), PositiveInfinity(), Some(vcol)))
+            bars.append(
+              (
+                PersistenceBar(d, ClosedEndpoint(sigmaFv), PositiveInfinity(), Some(vcol)),
+                Involution.Pair(d, sigma, None)
+              )
+            )
           else
             val pivot = reduced.leadingCell.get
             basis(pivot) = reduced
             generators(pivot) = vcol
             cleared += pivot
-            bars.append(PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(cellFv(pivot)), Some(vcol)))
+            bars.append(
+              (
+                PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(cellFv(pivot)), Some(vcol)),
+                Involution.Pair(d, sigma, Some(pivot))
+              )
+            )
         // `coboundaryMap` goes out of scope here, at the end of this dimension's own iteration -- nothing
         // keeps it alive into the next one.
 
-      PersistenceBar.dropZeroLength(bars, includeZeroLength)
+      (bars.toList, cohomologyOrdering)
 
   /** The coboundary of `chain`, a chain of dimension-`d` cells, computed against `cofacets`, the dimension-`(d + 1)`
     * cells to consider. For checking representatives: `coboundaryOfChain(rep, cellsOfDimension(d + 1)).isZero()`.
