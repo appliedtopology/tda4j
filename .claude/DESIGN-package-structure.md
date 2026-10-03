@@ -11,8 +11,9 @@ session. Supersedes nothing yet: `WORKLOG-package-reorg.md` is the derivation of
 - **User-facing code pays the same tax.** The user-guide quickstart fences open with 4–6 imports before the first
   line of TDA (`_docs/user-guide/quickstart.md`, see "Before/after" below). This is the opposite of "easy".
 - **There are no name collisions to protect against.** A scan of every public top-level `class`/`trait`/
-  `object`/`type`/`def`/`val`/`given` across the subpackages found **zero** names defined in two packages. Only
-  8 top-level givens exist in total.
+  `object`/`type`/`def`/`val`/`given`, plus `private[pkg]` top-level names and methods of the 3 top-level
+  `extension` blocks (`asSimplex`, `asCube`, `min`, `max`), found **zero** names defined in two packages. Only 8
+  top-level givens exist in total.
 - **The packages never enforced layering anyway.** Nothing stops `streams` importing `homology` except review;
   the one real cross-edge (`CubicalHomologyEngine`) was fixed by moving a file, not caught by the compiler.
   Only separate sbt modules would enforce dependency direction.
@@ -50,6 +51,7 @@ make the stream catalog harder to find, not easier.
 | Build/CI/doc/MiMa complexity | unchanged | **high**: multi-project build, per-module MiMa baselines, unified scaladoc + snippet-compiler classpath across modules, assembly jar aggregation | unchanged | unchanged |
 | Real third-party dependency isolation | none | scallop out of core; miniball/jvptree/commons-math are small | none (not needed: no heavy dependency exists today) | none |
 | Name-binding risk from flattening (see "Spike") | present | n/a | present, same size as A | n/a |
+| Standing rule it adds | "no external wildcard imports in core" (spike 2) | none | same as A | n/a |
 | Given-ambiguity problems | unchanged | unchanged | unchanged | unchanged (plus forwarder givens: an extra copy to be ambiguous with) |
 | Reversibility | easy (it is the pre-reorg layout) | hard | easy; an add-on can become a module later with no source change | easy |
 | Overnight risk | low–medium (mechanical, full-suite gated) | **high** | low–medium | n/a: **does not compile** (spike 1) |
@@ -155,6 +157,11 @@ Run in a scratch sbt project on Scala 3.9.0 with this repo's flags (`-source:fut
    `org.rogach.scallop.*`, collection converters, `scala.util.chaining.*`, `scala.sys.process.*`,
    `scala.util.control.*`). Intersect their member names with the core's top-level names before flattening and
    rename or narrow the import on any hit. Test counts staying identical is the second check, not the only one.
+   First suspects: `cells`' top-level `min`/`max` extensions (kept top-level precisely because a wildcard
+   `math.Ordering.Implicits.*` beat them as companion extensions) and the 8 tda4j imports that sit *inside*
+   class/method bodies (`TDAlab` among them), where an outer external wildcard can now outrank them.
+   **This is a standing cost, not only a migration risk:** nothing warns about it later either, so A and C come
+   with a permanent CLAUDE.md rule: in core, import external libraries by name, not by wildcard.
 
 ## Simplicial-set consolidation (stretch; natural to do as part of creating `tda4j.sset`)
 
@@ -183,6 +190,14 @@ Proposed direction (to refine overnight, not frozen):
 - A user-guide page "Simplicial sets" walking construct → inspect/enumerate → homology/cup products/Steenrod →
   maps → filtered, with every fence compiled (the docs-are-tests convention).
 
+## Defaults (a one-word "C" or "go" means all of these)
+
+- C, with `sset` as an add-on; `groups`/`io`/`matlab`/`cli` stay subpackages.
+- sset consolidation tonight, as separate commits after the flatten is green.
+- Delete the unused `unicode.PrintingHelper`.
+- `TDAlab` does **not** re-export the add-ons.
+- Givens ambiguity: investigated separately (worklog), not mixed into the restructuring commits.
+
 ## Overnight plan (if C is chosen)
 
 Gates (each must pass before the next step; failures stop and are reported, not papered over):
@@ -197,7 +212,8 @@ Gates (each must pass before the next step; failures stop and are reported, not 
 5. Rewrite every docs fence and tutorial-spec import; `TDA4J_SCALA_VERSION=3.8.4 sbt doc` (the snippet compiler
    runs here — fences are tests).
 6. `sbt scalafmtAll scalafmtSbt`, then `scalafmtSbtCheck ; scalafmtCheck ; Test / scalafmtCheck`.
-7. Update CLAUDE.md (package layout, the `{given, *}` import rule, import examples) and the relevant `rules/` files;
+7. Update CLAUDE.md (package layout, the `{given, *}` import rule, import examples, the new no-external-wildcard
+   rule) and the relevant `rules/` files;
    write `WORKLOG-package-flatten.md`.
 8. sset consolidation as separate commits after 1–7 are green, so it can be reviewed or reverted on its own.
 
