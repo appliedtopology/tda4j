@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.specs2.mutable
 import org.specs2.main.Arguments
@@ -142,8 +135,8 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
         bounded(RecursiveStackVietorisRipsSimplexStream(EuclideanMetricSpace(pts)), maxDim)
       ),
       "VR-NewVR" -> ((pts, maxDim) => IncrementalVietorisRipsSimplexStream(EuclideanMetricSpace(pts), maxDim)),
-      "Alpha-DQP" -> ((pts, maxDim) => bounded(AlphaShapes(pts.toIndexedSeq, "DQP"), maxDim)),
-      "Alpha-Helix" -> ((pts, maxDim) => bounded(AlphaShapes(pts.toIndexedSeq, "helix"), maxDim))
+      "Alpha-DQP" -> ((pts, maxDim) => bounded(AlphaShapes(pts.toIndexedSeq, AlphaBackend.DQP), maxDim)),
+      "Alpha-Helix" -> ((pts, maxDim) => bounded(AlphaShapes(pts.toIndexedSeq, AlphaBackend.Helix), maxDim))
     )
 
     val engines: Seq[(String, (StratifiedCellStream[Simplex[Int], Double], Int) => Int)] = Seq(

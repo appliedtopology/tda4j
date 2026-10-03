@@ -1,17 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
-import org.appliedtopology.tda4j.barcode.{
-  BarcodeEndpoint,
-  ClosedEndpoint,
-  OpenEndpoint,
-  PersistenceBar,
-  PositiveInfinity
-}
 
 import scala.collection.mutable
 
@@ -26,7 +13,7 @@ import scala.collection.mutable
   */
 class FastAlphaTriangulationException(message: String) extends RuntimeException(message)
 
-/** The `homology.FastCubicalHomologyEngine` dual-graph union-find, ported to a `HelixDelaunay` alpha complex
+/** The `FastCubicalHomologyEngine` dual-graph union-find, ported to a `HelixDelaunay` alpha complex
   * (`.claude/DESIGN-alpha-dual-unionfind.md`, item 7 of `.claude/WORKLOG-mainstream-feature-gap-analysis.md`, a
   * follow-on to item 6's cubical engine). `HelixDelaunay` specifically, not `AlphaComplexDQP`/`AlphaShapeDQP` -- the
   * dual graph needs the FULL, untruncated triangulation and "every facet has <= 2 cofaces," which `AlphaShapeDQP`'s own

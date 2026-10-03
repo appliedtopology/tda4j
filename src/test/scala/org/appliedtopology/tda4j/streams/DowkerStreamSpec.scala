@@ -1,13 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-
-import org.appliedtopology.tda4j.barcode.*
-import org.appliedtopology.tda4j.homology.HomologyFixtures
 
 import org.specs2.mutable
 import org.specs2.execute.AsResult

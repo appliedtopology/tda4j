@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 /** Hand-verified simplicial complexes with known barcodes, shared across homology-engine test suites so that different
   * persistence algorithms (naive reduction, clear&compress, ...) can be checked against the exact same input and are

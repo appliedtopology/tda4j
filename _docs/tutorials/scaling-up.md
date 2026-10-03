@@ -21,18 +21,15 @@ in how much raw output they return: the naive and cohomology engines list every 
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
-val lab = TDAlab(2)
-import lab.{*, given}
+val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/data/noisy-circle.csv")
+def stream = VietorisRips(metricSpace, maxDimension = 1)
 
-val metricSpace = io.CSV.readEuclideanMetricSpace("_docs/tutorials/data/noisy-circle.csv")
-def stream = streams.VietorisRips(metricSpace, maxDimension = 1)
-
-val naive = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
-val chunks = homology.CellularPersistenceInChunksEngine[org.appliedtopology.tda4j.cells.Simplex[Int], CoefficientT](1).persistentHomology(stream).diagramAt(Double.PositiveInfinity)
-val cohomology = homology.CellularCohomologyEngine[org.appliedtopology.tda4j.cells.Simplex[Int], CoefficientT, Double]().persistentCohomology(stream).map(_.toTriple)
-val ripser = homology.PackedRipserCohomologyEngine[CoefficientT](metricSpace, 1).persistentCohomology().map(_.toTriple)
+val naive = SimplicialHomologyEngine[Int, CoefficientT, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+val chunks = CellularPersistenceInChunksEngine[org.appliedtopology.tda4j.Simplex[Int], CoefficientT](1).persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+val cohomology = CellularCohomologyEngine[org.appliedtopology.tda4j.Simplex[Int], CoefficientT, Double]().persistentCohomology(stream).map(_.toTriple)
+val ripser = PackedRipserCohomologyEngine[CoefficientT](metricSpace, 1).persistentCohomology().map(_.toTriple)
 ```
 
 After dropping zero-length bars and anything above dimension 1, and rounding to 1e-6, all four agree: 61 bars each.
@@ -45,7 +42,7 @@ Many edges of the Vietoris-Rips graph are dominated by another vertex and cannot
 `EdgeCollapse.collapse` removes them before any triangle is built.
 
 ```scala sc:nocompile
-val collapsed = streams.EdgeCollapse.collapse(metricSpace)
+val collapsed = EdgeCollapse.collapse(metricSpace)
 ```
 
 On this data it keeps 321 of the 1,543 edges, and the complex drops from 24,711 to 1,547 simplices. Running the
@@ -58,19 +55,16 @@ naive engine on the collapsed space gives the same 61 bars.
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
-val lab = TDAlab(2)
-import lab.{*, given}
-
-val metricSpace = io.CSV.readEuclideanMetricSpace("_docs/tutorials/data/noisy-circle.csv")
-def stream = streams.VietorisRips(metricSpace, maxDimension = 1)
+val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/data/noisy-circle.csv")
+def stream = VietorisRips(metricSpace, maxDimension = 1)
 
 // Four engines on the same data. Each returns bars in its own way, so reduce them to comparable (dimension, birth, death) triples
-val naive = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
-val chunks = homology.CellularPersistenceInChunksEngine[org.appliedtopology.tda4j.cells.Simplex[Int], CoefficientT](1).persistentHomology(stream).diagramAt(Double.PositiveInfinity)
-val cohomology = homology.CellularCohomologyEngine[org.appliedtopology.tda4j.cells.Simplex[Int], CoefficientT, Double]().persistentCohomology(stream).map(_.toTriple)
-val ripser = homology.PackedRipserCohomologyEngine[CoefficientT](metricSpace, 1).persistentCohomology().map(_.toTriple)
+val naive = SimplicialHomologyEngine[Int, CoefficientT, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+val chunks = CellularPersistenceInChunksEngine[org.appliedtopology.tda4j.Simplex[Int], CoefficientT](1).persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+val cohomology = CellularCohomologyEngine[org.appliedtopology.tda4j.Simplex[Int], CoefficientT, Double]().persistentCohomology(stream).map(_.toTriple)
+val ripser = PackedRipserCohomologyEngine[CoefficientT](metricSpace, 1).persistentCohomology().map(_.toTriple)
 
 // Drop what is not part of the answer (zero-length bars, and any dimension above the one asked for), and round the rest
 def answer(bars: Seq[(Int, Double, Double)]) =
@@ -80,9 +74,9 @@ def answer(bars: Seq[(Int, Double, Double)]) =
     .sorted
 
 // Edge collapse: remove the edges of the Vietoris-Rips graph that cannot matter, before any triangle is built
-val collapsed = streams.EdgeCollapse.collapse(metricSpace)
-val collapsedStream = streams.VietorisRips(collapsed, maxDimension = 1)
-val collapsedBars = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
+val collapsed = EdgeCollapse.collapse(metricSpace)
+val collapsedStream = VietorisRips(collapsed, maxDimension = 1)
+val collapsedBars = SimplicialHomologyEngine[Int, CoefficientT, Double]()
   .persistentHomology(collapsedStream).diagramAt(Double.PositiveInfinity)
 ```
 

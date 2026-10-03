@@ -12,20 +12,16 @@ instead; this page is about getting things done as a caller.
 ### Alpha complexes
 
 ```scala 3
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-
-given Double is Field = Field.DoubleApproximated(1e-9)
-import org.appliedtopology.tda4j.alpha.{given, *}
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
 
 val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
-val shape = AlphaShapes(points.toSeq, dispatch = "helix")   // or "DQP"
+val shape = AlphaShapes(points, AlphaBackend.Helix)            // or AlphaBackend.DQP: the alpha complex as a stream
+val diagram = Persistence(points, complex = AlphaShapes)       // or straight to its persistence diagram
 ```
 
-`AlphaShapes(points)` with no `dispatch`, or `dispatch = "default"`, always resolves to `"helix"` — ask for
-`"DQP"` explicitly if you want it. See "Which alpha-complex backend?" below for the tradeoffs.
+`AlphaShapes(points)` with no backend, or `AlphaBackend.Default`, always resolves to `AlphaBackend.Helix` — ask for
+`AlphaBackend.DQP` explicitly if you want it. See "Which alpha-complex backend?" below for the tradeoffs.
 
 
 
@@ -33,10 +29,8 @@ val shape = AlphaShapes(points.toSeq, dispatch = "helix")   // or "DQP"
 ### Flag-complex edge collapse
 
 ```scala 3
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
@@ -44,7 +38,7 @@ val metricSpace = EuclideanMetricSpace(points)
 
 val collapsed = EdgeCollapse.collapse(metricSpace) // a FiniteMetricSpace[Int], drop-in for any VR-consuming stream
 val stream = VietorisRips(collapsed, maxDimension = 2)
-val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream)
+val homology = SimplicialHomologyEngine.persistentHomology(stream)   // every type argument inferred
 ```
 
 Unlike Sheehy's construction above, this is not an approximation: Boissonnat-Pritam/Glisse-Pritam edge

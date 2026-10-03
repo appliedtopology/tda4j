@@ -46,10 +46,7 @@ one half:
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val random = new java.util.Random(5L)
 val size = 28
@@ -71,8 +68,8 @@ pixels around it.
 ## Flooding from the dark: sublevel sets
 
 ```scala sc:nocompile
-val sublevelStream = streams.CubicalImage.fromGrayscale2D(pixels, sublevel = true)
-val engine = homology.CubicalHomologyEngine[CoefficientT, Double]()
+val sublevelStream = CubicalImage.fromGrayscale2D(pixels, sublevel = true)
+val engine = CubicalHomologyEngine[CoefficientT, Double]()
 val bars = engine.persistentHomology(sublevelStream).diagramAt(Double.PositiveInfinity)
 bars.size    // 1625
 ```
@@ -109,7 +106,7 @@ Run the threshold the other way and you track the *bright* structures instead. T
 back are negative brightnesses (a bar from `-1.10` is something born at brightness 1.10):
 
 ```scala sc:nocompile
-val superlevelStream = streams.CubicalImage.fromGrayscale2D(pixels, sublevel = false)
+val superlevelStream = CubicalImage.fromGrayscale2D(pixels, sublevel = false)
 significant(engine.persistentHomology(superlevelStream).diagramAt(Double.PositiveInfinity))
 // (0, -1.10, Infinity)   (0, -0.90, -0.06)   (1, -1.00, -0.00)
 ```
@@ -131,7 +128,7 @@ that there is a much faster approach, exploiting the grid (the `fast-cubical` en
 [user guide](../user-guide/homology-computation/fast-cubical.md)), and it gives *the same answer*, bar for bar:
 
 ```scala sc:nocompile
-val fast = homology.FastCubicalHomologyEngine[CoefficientT]()
+val fast = FastCubicalHomologyEngine[CoefficientT]()
 val fastBars = fast.persistentHomology(sublevelStream).map(_.toTriple)   // (dimension, birth, death) for each bar
 // the same 1,625 bars as engine.persistentHomology(sublevelStream).diagramAt(Double.PositiveInfinity)
 ```
@@ -151,10 +148,7 @@ page covers three-dimensional volumes.
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val random = new java.util.Random(5L)
 val size = 28
@@ -171,14 +165,14 @@ val pixels = Array.tabulate(size, size) { (row, column) =>
 def significant(bars: List[(Int, Double, Double)]) =
   bars.filter((_, birth, death) => death.isInfinite || death - birth > 0.3).sortBy(bar => (bar._1, bar._2))
 
-val sublevelStream = streams.CubicalImage.fromGrayscale2D(pixels, sublevel = true)
-val superlevelStream = streams.CubicalImage.fromGrayscale2D(pixels, sublevel = false)
+val sublevelStream = CubicalImage.fromGrayscale2D(pixels, sublevel = true)
+val superlevelStream = CubicalImage.fromGrayscale2D(pixels, sublevel = false)
 
-val engine = homology.CubicalHomologyEngine[CoefficientT, Double]()
+val engine = CubicalHomologyEngine[CoefficientT, Double]()
 val sublevelBars = engine.persistentHomology(sublevelStream).diagramAt(Double.PositiveInfinity)
 val superlevelBars = engine.persistentHomology(superlevelStream).diagramAt(Double.PositiveInfinity)
 
-val fast = homology.FastCubicalHomologyEngine[CoefficientT]()
+val fast = FastCubicalHomologyEngine[CoefficientT]()
 val fastBars = fast.persistentHomology(sublevelStream).map(_.toTriple)
 
 val dark = significant(sublevelBars)

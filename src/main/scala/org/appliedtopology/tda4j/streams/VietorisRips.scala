@@ -1,10 +1,6 @@
 package org.appliedtopology.tda4j
-package streams
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-
-import org.appliedtopology.tda4j.streams.FiniteMetricSpace.MaximumDistanceFiltrationValue
+import org.appliedtopology.tda4j.FiniteMetricSpace.MaximumDistanceFiltrationValue
 
 import scala.collection.immutable.{LazyList, SortedSet}
 import scala.math.Ordering.Implicits.*
@@ -175,7 +171,10 @@ private[tda4j] class RecursiveStackVietorisRipsSimplexStream(val metricSpace: Fi
   * speed by factors of ~1-2 in the benchmarks (`WORKLOG-mst-and-perf.md`). `RecursiveStackVietorisRipsSimplexStream` is
   * deliberately not offered: it cannot truncate by dimension or radius and times out beyond toy sizes.
   */
-object VietorisRips:
+object VietorisRips extends PointCloudComplex:
+  def fromPoints(points: PointCloud, maxDimension: Int, maxFiltrationValue: Option[Double]) =
+    apply(points.metricSpace, maxDimension, maxFiltrationValue)
+
   enum Implementation:
     /** Breadth-first coface enumeration; the default. */
     case Enumerating
@@ -192,7 +191,7 @@ object VietorisRips:
   def apply(
     metricSpace: FiniteMetricSpace[Int],
     maxDimension: Int = 2,
-    maxFiltrationValue: Option[Double] = None,
+    maxFiltrationValue: Optional[Double] = Optional.empty,
     implementation: Implementation = Implementation.Enumerating
   ): LevelwiseSimplexStream[Int, Double] =
     require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
@@ -200,18 +199,18 @@ object VietorisRips:
     implementation match
       case Implementation.Enumerating =>
         LimitedCofaceSimplexStream(
-          EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
+          EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
           topSimplexDimension
         )
       case Implementation.RipserCoface =>
         LimitedCofaceSimplexStream(
-          RipserCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
+          RipserCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
           topSimplexDimension
         )
       case Implementation.Inorder =>
         LimitedCofaceSimplexStream(
-          InorderCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
+          InorderCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
           topSimplexDimension
         )
       case Implementation.Incremental =>
-        IncrementalVietorisRipsSimplexStream(metricSpace, topSimplexDimension, maxFiltrationValue)
+        IncrementalVietorisRipsSimplexStream(metricSpace, topSimplexDimension, maxFiltrationValue.toOption)

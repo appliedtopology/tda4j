@@ -1,7 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.cells.{given, *}
 
 /** One entry point per kind of complex, each with the shape of [[VietorisRips]]: `maxDimension` is the top HOMOLOGICAL
   * degree you want (`H_0 .. H_maxDimension` computable by any engine; the stream itself contains one dimension more,
@@ -40,17 +37,20 @@ private final class TruncatedSimplexStream(stream: LevelwiseSimplexStream[Int, D
   override def filtrationValue: PartialFunction[Simplex[Int], Double] = stream.filtrationValue
 
 /** The Cech complex of a Euclidean point cloud; `maxFiltrationValue` is in Cech RADIUS units. */
-object Cech:
+object Cech extends PointCloudComplex:
+  def fromPoints(points: PointCloud, maxDimension: Int, maxFiltrationValue: Option[Double]) =
+    apply(points.metricSpace, maxDimension, maxFiltrationValue)
+
   def apply(
     metricSpace: EuclideanMetricSpace,
     maxDimension: Int = 2,
-    maxFiltrationValue: Option[Double] = None,
+    maxFiltrationValue: Optional[Double] = Optional.empty,
     parallelFiltrationValue: Boolean = false
   ): LevelwiseSimplexStream[Int, Double] =
     Truncated.ofCofaces(
       CechCofaceSimplexStream(
         metricSpace,
-        maxFiltrationValue = maxFiltrationValue,
+        maxFiltrationValue = maxFiltrationValue.toOption,
         parallelFiltrationValue = parallelFiltrationValue
       ),
       maxDimension
@@ -74,17 +74,21 @@ object Witness:
     maxDimension: Int = 2,
     variant: Variant = Variant.Lazy,
     nu: Int = 2,
-    maxFiltrationValue: Option[Double] = None
+    maxFiltrationValue: Optional[Double] = Optional.empty
   ): LevelwiseSimplexStream[Int, Double] =
     variant match
       case Variant.Lazy =>
         Truncated.ofCofaces(
-          LazyWitnessSimplexStream(metricSpace, landmarks, nu, maxFiltrationValue = maxFiltrationValue),
+          LazyWitnessSimplexStream(metricSpace, landmarks, nu, maxFiltrationValue = maxFiltrationValue.toOption),
           maxDimension
         )
       case Variant.General =>
         Truncated.ofCofaces(
-          WitnessCofaceSimplexStream(metricSpace, landmarks, maxFiltrationValue.getOrElse(Double.PositiveInfinity)),
+          WitnessCofaceSimplexStream(
+            metricSpace,
+            landmarks,
+            maxFiltrationValue.toOption.getOrElse(Double.PositiveInfinity)
+          ),
           maxDimension
         )
 
@@ -110,9 +114,12 @@ object DtmRips:
     f: IndexedSeq[Double],
     maxDimension: Int = 2,
     p: Double = 1.0,
-    maxFiltrationValue: Option[Double] = None
+    maxFiltrationValue: Optional[Double] = Optional.empty
   ): LevelwiseSimplexStream[Int, Double] =
-    Truncated.ofCofaces(DtmRipsSimplexStream(metricSpace, f, p, maxFiltrationValue = maxFiltrationValue), maxDimension)
+    Truncated.ofCofaces(
+      DtmRipsSimplexStream(metricSpace, f, p, maxFiltrationValue = maxFiltrationValue.toOption),
+      maxDimension
+    )
 
   /** With the weights computed as the distance to the measure with `k` nearest neighbours (self-inclusive) and exponent
     * `q`.
@@ -123,9 +130,9 @@ object DtmRips:
     maxDimension: Int = 2,
     q: Double = 2.0,
     p: Double = 1.0,
-    maxFiltrationValue: Option[Double] = None
+    maxFiltrationValue: Optional[Double] = Optional.empty
   ): LevelwiseSimplexStream[Int, Double] =
-    apply(metricSpace, DistanceToMeasure(metricSpace, k, q), maxDimension, p, maxFiltrationValue)
+    apply(metricSpace, DistanceToMeasure(metricSpace, k, q), maxDimension, p, maxFiltrationValue.toOption)
 
 /** Sheehy's sparse (approximate) Rips complex, Cavanna-Jahanseir-Sheehy 2015; `epsilon` strictly in `(0, 1)`. */
 object SparseRips:
@@ -134,9 +141,9 @@ object SparseRips:
     epsilon: Double,
     maxDimension: Int = 2,
     firstPoint: Int = 0,
-    maxFiltrationValue: Option[Double] = None
+    maxFiltrationValue: Optional[Double] = Optional.empty
   ): LevelwiseSimplexStream[Int, Double] =
     Truncated.ofCofaces(
-      SheehyRipsSimplexStream(metricSpace, epsilon, firstPoint, maxFiltrationValue = maxFiltrationValue),
+      SheehyRipsSimplexStream(metricSpace, epsilon, firstPoint, maxFiltrationValue = maxFiltrationValue.toOption),
       maxDimension
     )

@@ -91,10 +91,10 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   val minPersistenceFraction: ScallopOption[Double] = opt[Double](descr =
     "like --min-persistence, but as a fraction of the input's scale: its minimum enclosing radius (Ripser's " +
       "enclosing radius -- every bar lives between 0 and it), or, for a cubical image / Dowker relation, the range " +
-      "of its values. Default 0.01; 0 reports every bar. See barcode.PersistenceFilter"
+      "of its values. Default 0.01; 0 reports every bar. See PersistenceFilter"
   )
   val field: ScallopOption[String] = opt[String](descr = "Z (default, a prime finite field) or R (floating point)")
-  val prime: ScallopOption[Int] = opt[Int](descr = "prime for --field=Z (default: 2)")
+  val prime: ScallopOption[Int] = opt[Int](descr = "prime for --field=Z (default: 17)")
   val epsilon: ScallopOption[Double] = opt[Double](descr = "tolerance for --field=R (default: 1e-9)")
   // String, not Boolean -- Scallop's opt[Boolean] is a no-argument toggle flag whose ScallopOption is ALWAYS
   // supplied (defaulting to false when the flag is absent), unlike every other option here, which is genuinely
@@ -124,7 +124,7 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   val nu: ScallopOption[Int] =
     opt[Int](descr =
       "0, 1, or 2 (default: 2) -- only consulted when --complex=witness and --witness-variant=lazy, see " +
-        "streams.WitnessMetricSpace's own doc"
+        "WitnessMetricSpace's own doc"
     )
 
   val dtmK: ScallopOption[Int] =
@@ -142,13 +142,13 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     opt[Double](descr =
       "sparsity/approximation-quality parameter in (0,1) -- REQUIRED when --complex=sparse-rips, ignored " +
         "otherwise. The resulting barcode is a (1+epsilon)-multiplicative approximation to plain --complex=vr's " +
-        "own barcode (Cavanna-Jahanseir-Sheehy 2015); see streams.SheehyRipsSimplexStream's own doc."
+        "own barcode (Cavanna-Jahanseir-Sheehy 2015); see SheehyRipsSimplexStream's own doc."
     )
   // String, not Boolean -- same reasoning as --sublevel above (a genuinely optional flag, not an
   // always-supplied toggle).
   val edgeCollapse: ScallopOption[String] = opt[String](
     descr = "true or false (default) -- only consulted for --complex=vr, rejected for any other --complex. " +
-      "Boissonnat-Pritam/Glisse-Pritam edge collapse (streams.EdgeCollapse): reduces the Vietoris-Rips " +
+      "Boissonnat-Pritam/Glisse-Pritam edge collapse (EdgeCollapse): reduces the Vietoris-Rips " +
       "1-skeleton to a smaller weighted graph with the SAME persistent homology, before anything is built on " +
       "top of it -- a preprocessing step, changing nothing about the output shape. Measured 73-76% of edges " +
       "removed and a 43-47x REDUCTION-phase speedup on random point clouds; see .claude/WORKLOG-edge-collapse.md."
@@ -157,7 +157,7 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   val dual: ScallopOption[String] = opt[String](
     descr = "true or false (default) -- only consulted for --input-format=csv-relation. Computes the W-side " +
       "(transposed-relation) Dowker complex instead of the L-side one -- see TDA4j.computeFromRelation's own " +
-      "doc and streams.DowkerGeometry.dual. The functorial Dowker duality theorem guarantees the two sides' " +
+      "doc and DowkerGeometry.dual. The functorial Dowker duality theorem guarantees the two sides' " +
       "barcodes agree exactly once zero-persistence bars are dropped."
   )
 
@@ -180,7 +180,7 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "witness; --num-landmarks/--landmark-selector/--landmark-seed are not meaningful together with this"
   )
 
-  // barcode.BarcodeDistance mirror (`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 4). Landscapes/
+  // BarcodeDistance mirror (`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 4). Landscapes/
   // persistence images (item 8) are deliberately NOT mirrored here: they produce a matrix, not a diagram, which
   // doesn't fit this CLI's existing single-diagram text/csv/gudhi/dipha/perseus output model the way a second
   // diagram-shaped comparison does -- a real matrix-output CLI mode is its own design question (output format,
@@ -194,14 +194,14 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   val distanceFormat: ScallopOption[String] = opt[String](
     default = Some("csv"),
     descr = "file format of --distance-to: csv (default), gudhi, or dipha -- NOT perseus, whose format is " +
-      "inherently single-dimension (see io.Perseus.readPersistenceIntervals's own `dim` parameter), not a fit " +
+      "inherently single-dimension (see Perseus.readPersistenceIntervals's own `dim` parameter), not a fit " +
       "for this multi-dimension comparison"
   )
   val distanceOrder: ScallopOption[Double] =
     opt[Double](descr = "Wasserstein order (default: 1.0) -- only consulted with --distance-to")
   val distanceGroundNorm: ScallopOption[Double] = opt[Double](
     descr = "ground norm on the birth-death plane: a finite p >= 1.0, or omit for the default L-infinity -- " +
-      "only consulted with --distance-to. See barcode.BarcodeDistance.GroundNorm's own doc."
+      "only consulted with --distance-to. See BarcodeDistance.GroundNorm's own doc."
   )
 
   val input: ScallopOption[String] = trailArg[String](name = "input-file", descr = "input file", required = true)

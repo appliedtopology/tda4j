@@ -1,12 +1,6 @@
 package org.appliedtopology.tda4j
-package streams
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
-
+import org.appliedtopology.tda4j.sset.*
 import org.specs2.mutable
 import org.specs2.execute.{AsResult, Result}
 import org.specs2.ScalaCheck

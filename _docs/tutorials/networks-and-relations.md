@@ -21,10 +21,7 @@ Smaller means a stronger tie, as a distance would:
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val never = Double.PositiveInfinity
 val relation: Array[Array[Double]] = Array.tabulate(6, 7) { (person, club) =>
@@ -45,9 +42,9 @@ person appears when their cheapest club does (here at 1). Two neighbours around 
 club, at time 5.
 
 ```scala sc:nocompile
-val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
+val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
 def dowkerBars(dual: Boolean) =
-  engine.persistentHomology(streams.Dowker(relation, maxDimension = 1, dual = dual)).diagramAt(Double.PositiveInfinity).filter(_._1 <= 1)
+  engine.persistentHomology(Dowker(relation, maxDimension = 1, dual = dual)).diagramAt(Double.PositiveInfinity).filter(_._1 <= 1)
 
 val people = dowkerBars(dual = false)
 people.size    // 16 bars
@@ -107,10 +104,7 @@ your data pipeline: if the two sides ever disagree, something is wrong with the 
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 val never = Double.PositiveInfinity
 val relation: Array[Array[Double]] = Array.tabulate(6, 7) { (person, club) =>
@@ -120,9 +114,9 @@ val relation: Array[Array[Double]] = Array.tabulate(6, 7) { (person, club) =>
   else never
 }
 
-val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
+val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
 def dowkerBars(dual: Boolean) =
-  engine.persistentHomology(streams.Dowker(relation, maxDimension = 1, dual = dual)).diagramAt(Double.PositiveInfinity).filter(_._1 <= 1)
+  engine.persistentHomology(Dowker(relation, maxDimension = 1, dual = dual)).diagramAt(Double.PositiveInfinity).filter(_._1 <= 1)
 def withoutZeroLength(bars: List[(Int, Double, Double)]) =
   bars.filter((_, birth, death) => death.isInfinite || death > birth).sortBy(bar => (bar._1, bar._2, bar._3))
 

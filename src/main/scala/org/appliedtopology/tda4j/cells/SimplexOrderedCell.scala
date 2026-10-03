@@ -1,7 +1,6 @@
 package org.appliedtopology.tda4j
-package cells
 
-import org.appliedtopology.tda4j.algebra.{given, *}
+import cats.Show
 
 /** `Simplex[VertexT] is OrderedCell`, with an injectable ordering so a stream can supply its own filtration order.
   *
@@ -27,7 +26,38 @@ def simplexIsOrderedCell[VertexT](using
           spx.iterator.zipWithIndex.map { (vtx, i) =>
             (spx - vtx, if i % 2 == 0 then fr.one else fr.negate(fr.one))
           }.toVector
-// #given-example
-given defaultSimplexIsOrderedCell: [VertexT: Ordering] => (Simplex[VertexT] is OrderedCell) =
-  simplexIsOrderedCell[VertexT]()
-// #given-example
+
+/** `Simplex`'s default instances, mixed into `object Simplex` so they sit in the type's IMPLICIT scope: found with no
+  * import at all, and consulted only when no given is lexically visible -- a stream's or a user's own
+  * `Simplex[V] is OrderedCell`/`Ordering[Simplex[V]]` always wins, never ties. Lives here (not in `Simplex.scala`) for
+  * the same opaque-transparency reason as `simplexIsOrderedCell`.
+  */
+trait SimplexInstances:
+  /** The simplex on an already-sorted vertex set, without copying (the companion spelling of `.asSimplex`, so it is
+    * reachable through a lab's re-exported `Simplex`).
+    */
+  def fromSortedSet[VertexT](vertices: scala.collection.immutable.SortedSet[VertexT]): Simplex[VertexT] =
+    vertices.asSimplex
+
+  /** The lexicographic order on simplices (`simplexOrdering`). */
+  def ordering[VertexT: Ordering]: Ordering[Simplex[VertexT]] = simplexOrdering[VertexT]
+
+  /** A `Simplex is OrderedCell` instance with a chosen order, e.g. a stream's filtration order
+    * (`simplexIsOrderedCell`).
+    */
+  def isOrderedCell[VertexT: Ordering](order: Ordering[Simplex[VertexT]]): Simplex[VertexT] is OrderedCell =
+    simplexIsOrderedCell[VertexT](order)
+
+  // #given-example
+  given defaultSimplexIsOrderedCell: [VertexT: Ordering] => (Simplex[VertexT] is OrderedCell) =
+    simplexIsOrderedCell[VertexT]()
+  // #given-example
+
+  /** The order of whichever `Simplex[V] is OrderedCell` instance is in scope at the use site (a user's filtration-aware
+    * one, else the lexicographic default above).
+    */
+  given simplexOrderingFromCell: [VertexT] => (cell: Simplex[VertexT] is OrderedCell) => Ordering[Simplex[VertexT]] =
+    cell.ordering
+
+  given simplexShow: [VertexT] => Show[Simplex[VertexT]] =
+    Show.show(spx => Simplex.underlying(spx).mkString("∆(", ",", ")"))

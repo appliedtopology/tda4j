@@ -1,9 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
 
 /** Test-scope driver, kept alongside `CubicalBenchmarkSpec.scala` -- a single-process JVM target for profiling
   * `CellularHomologyEngine`/`CellularPersistenceInChunksEngine` on a `CubicalGridStream`, avoiding the sbt-hosted
@@ -11,7 +6,7 @@ import org.appliedtopology.tda4j.streams.{given, *}
   * doc, same reasoning). Invoked directly:
   *
   * {{{
-  * java -cp $CP org.appliedtopology.tda4j.homology.CubicalProfileDriver <dims> <n> [seed] [engine=naive|chunks]
+  * java -cp $CP org.appliedtopology.tda4j.CubicalProfileDriver <dims> <n> [seed] [engine=naive|chunks]
   * }}}
   *
   * Built to root-cause CLAUDE.md's documented-but-unexplained finding: the naive cubical engine's per-cell cost GROWS

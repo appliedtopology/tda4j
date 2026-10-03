@@ -32,7 +32,7 @@ exists"), not a failure. `--distance-to <file>` mirrors the distance methods on 
 selects which), printing one `dim <k>: bottleneck=... wasserstein=...` line per dimension instead of writing
 a diagram; the two vectorizations are MATLAB/Java-only for now (they produce a matrix, not a diagram, which
 doesn't fit the CLI's diagram-in-diagram-out shape). From plain Scala, use
-`org.appliedtopology.tda4j.barcode.BarcodeDistance`/`Vectorization` directly on `List[PersistenceBar[Double,
+`org.appliedtopology.tda4j.BarcodeDistance`/`Vectorization` directly on `List[PersistenceBar[Double,
 _]]` — see the [Developer's Guide](../developers-guide/architecture.md)'s "`Barcode.scala`" section for the
 ground-metric convention, the essential-bar policy (the two vectorizations handle it differently, on
 purpose), and the literature this follows (Kerber-Morozov-Nigmetov 2017 for the distances; Bubenik 2013 for

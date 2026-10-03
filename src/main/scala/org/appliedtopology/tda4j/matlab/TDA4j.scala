@@ -1,13 +1,8 @@
 package org.appliedtopology.tda4j.matlab
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
+import org.appliedtopology.tda4j.*
 
 import org.appliedtopology.tda4j.*
-import org.appliedtopology.tda4j.barcode.*
 
 import scala.collection.mutable
 
@@ -47,13 +42,13 @@ import scala.collection.mutable
   *     `.claude/DESIGN-generic-cohomology.md`). Every essential bar's representative is a genuine cocycle (`d(rep) =
   *     0`); a finite bar's representative is a valid witness on its own living interval but is NOT expected to have
   *     zero coboundary over the whole complex -- see `Cohomology.scala`'s own doc for why. `"fast-alpha"`
-  *     (`homology.FastAlphaHomologyEngine`, a dual-graph union-find, extended past 2D by a hybrid with `chunks` for the
-  *     residual middle dimensions -- `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) is valid ONLY for
+  *     (`FastAlphaHomologyEngine`, a dual-graph union-find, extended past 2D by a hybrid with `chunks` for the residual
+  *     middle dimensions -- `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) is valid ONLY for
   *     `complex=alpha` with `alphaBackend=helix` (the default) and ambient dimension `>= 2` -- see
   *     `.claude/DESIGN-alpha-dual-unionfind.md`. On a fraction of point clouds it throws
-  *     `homology.FastAlphaTriangulationException`, a real (NOT a bug in your data) `HelixDelaunay` triangulation
-  *     limitation whose likelihood grows with ambient dimension and point count -- roughly 1-in-18700 measured at
-  *     ambient dimension 2, roughly 1-in-1666 at ambient dimension 3 with 20-30 points -- its own message explains the
+  *     `FastAlphaTriangulationException`, a real (NOT a bug in your data) `HelixDelaunay` triangulation limitation
+  *     whose likelihood grows with ambient dimension and point count -- roughly 1-in-18700 measured at ambient
+  *     dimension 2, roughly 1-in-1666 at ambient dimension 3 with 20-30 points -- its own message explains the
   *     situation and names the fix (retry with `engine="naive"`/`"chunks"`/`"cohomology"`, which are never affected by
   *     it).
   *   - `"alphaBackend"`: `"helix"` (default) or `"DQP"`, only consulted when `complex=alpha`. `complex=dtm-alpha`
@@ -74,26 +69,25 @@ import scala.collection.mutable
   *     precondition of their own to repair, so there is usually no reason to set this unless also using
   *     `engine=fast-alpha`.
   *   - `"dtmK"`: integer, REQUIRED when `complex=dtm-rips` or `complex=dtm-alpha` (no default -- there is no
-  *     universally sensible neighbour count). The `k` of `streams.DistanceToMeasure`: how many nearest neighbours (self
-  *     included) define each point's own distance-to-measure value. See `alpha.AlphaComplexDQP.dtm`/
-  *     `streams.DtmRipsSimplexStream`'s own docs (Chazal-Cohen-Steiner-Merigot 2011; Anai et al., "DTM-based
-  *     filtrations," arXiv:1811.04757).
+  *     universally sensible neighbour count). The `k` of `DistanceToMeasure`: how many nearest neighbours (self
+  *     included) define each point's own distance-to-measure value. See `AlphaComplexDQP.dtm`/ `DtmRipsSimplexStream`'s
+  *     own docs (Chazal-Cohen-Steiner-Merigot 2011; Anai et al., "DTM-based filtrations," arXiv:1811.04757).
   *   - `"dtmQ"`: double, default `2.0`, only consulted when `complex=dtm-rips` or `complex=dtm-alpha` -- the DTM's own
-  *     exponent (`streams.DistanceToMeasure`'s `q`), not the filtration's ball-radius exponent below.
+  *     exponent (`DistanceToMeasure`'s `q`), not the filtration's ball-radius exponent below.
   *   - `"dtmP"`: double, default `1.0` (GUDHI's own default, and the only variant checked against an external reference
-  *     implementation -- see `streams.DtmRipsSimplexStream`'s own doc), only consulted when `complex=dtm-rips`; must be
-  *     `1.0` or `2.0`. Not consulted for `complex=dtm-alpha`, which is inherently the `p=2` ball equation by
-  *     construction (see `alpha.AlphaComplexDQP.dtm`'s own doc).
+  *     implementation -- see `DtmRipsSimplexStream`'s own doc), only consulted when `complex=dtm-rips`; must be `1.0`
+  *     or `2.0`. Not consulted for `complex=dtm-alpha`, which is inherently the `p=2` ball equation by construction
+  *     (see `AlphaComplexDQP.dtm`'s own doc).
   *   - `"sparseEpsilon"`: double, REQUIRED when `complex=sparse-rips` (no default -- there is no universally sensible
   *     sparsity/approximation-quality tradeoff, and silently picking one could produce a barely-sparsified or
   *     wildly-approximate complex without the caller noticing). Must be strictly between `0` and `1`. Cavanna,
   *     Jahanseir & Sheehy's own `epsilon` (arXiv:1506.03797): the resulting barcode is a `(1+epsilon)`-multiplicative
-  *     approximation to plain `complex=vr`'s own barcode -- see `streams.SheehyRipsSimplexStream`'s own doc for the
-  *     full construction, its units convention, and a documented gap in the source paper's own published algorithm this
+  *     approximation to plain `complex=vr`'s own barcode -- see `SheehyRipsSimplexStream`'s own doc for the full
+  *     construction, its units convention, and a documented gap in the source paper's own published algorithm this
   *     implementation closes.
   *   - `"numLandmarks"`: integer, REQUIRED when `complex=witness` (no default -- there is no universally sensible
   *     landmark count). The number of landmarks to select from the input point cloud/distance matrix via
-  *     `"landmarkSelector"` -- see `streams.LandmarkSelector`.
+  *     `"landmarkSelector"` -- see `LandmarkSelector`.
   *   - `"witnessVariant"`: `"lazy"` (default) or `"general"`, only consulted when `complex=witness` -- see
   *     `WitnessVariantKind`'s own doc for the distinction (flag complex vs. not).
   *   - `"landmarkSelector"`: `"maxmin"` (default, sequential furthest-point sampling -- a covering-radius guarantee,
@@ -101,7 +95,7 @@ import scala.collection.mutable
   *     `complex=witness`.
   *   - `"landmarkSeed"`: integer, default `0`, only consulted when `complex=witness` and `landmarkSelector=random`.
   *   - `"nu"`: integer, default `2` (JavaPlex's own default), only consulted when `complex=witness` and
-  *     `witnessVariant=lazy` -- see `streams.WitnessMetricSpace`'s own doc; must be `0`, `1`, or `2`.
+  *     `witnessVariant=lazy` -- see `WitnessMetricSpace`'s own doc; must be `0`, `1`, or `2`.
   *   - `"maxDimension"`: integer, default `2` -- the highest HOMOLOGICAL degree you want back (i.e. "give me
   *     H_0..H_k"), not the highest simplex dimension to build. Computing H_k correctly needs (k+1)-dimensional chains
   *     (H_k = ker(d_k)/im(d_{k+1}) -- with no (k+1)-chains at all there's no way to tell a genuine k-cycle from one a
@@ -127,41 +121,41 @@ import scala.collection.mutable
   *     every engine computes and what cross-engine comparisons want. Only
   *     `size()`/`toArray()`/`dimension`/`birth`/`death`/`cycle*` are filtered:
   *     `PersistenceResult.hiddenCount()`/`persistenceThreshold()`/`toArrayUnfiltered()` say what was hidden, and
-  *     distances/landscapes/persistence images always use the complete barcode. See `barcode.PersistenceFilter`.
+  *     distances/landscapes/persistence images always use the complete barcode. See `PersistenceFilter`.
   *   - `"maxFiltrationValue"`: double, default (when omitted) is the point cloud's own `minimumEnclosingRadius`
   *     (Ripser's own default truncation, not unbounded -- see CLAUDE.md's "enclosing-radius default" note). Pass a very
   *     large number for the old always-unbounded behavior. Consulted for `complex=vr` (a diameter), `complex=cech` (a
   *     RADIUS -- Cech's own filtration units, not doubled the way a VR diameter would be), `complex=dtm-rips` (DOUBLED
-  *     units, exactly like `complex=vr` -- see `streams.DtmRipsSimplexStream`'s own doc for why its default is safe
-  *     there too), and `complex=witness` with `witnessVariant=lazy` (`WitnessMetricSpace`'s own "distance" units -- the
-  *     enclosing-radius default is valid here too, see `streams.LazyWitnessSimplexStream`'s own doc); also consulted
-  *     for `complex=sparse-rips` (DOUBLED units, exactly like `complex=vr`) but with a DIFFERENT omitted-key default --
+  *     units, exactly like `complex=vr` -- see `DtmRipsSimplexStream`'s own doc for why its default is safe there too),
+  *     and `complex=witness` with `witnessVariant=lazy` (`WitnessMetricSpace`'s own "distance" units -- the
+  *     enclosing-radius default is valid here too, see `LazyWitnessSimplexStream`'s own doc); also consulted for
+  *     `complex=sparse-rips` (DOUBLED units, exactly like `complex=vr`) but with a DIFFERENT omitted-key default --
   *     `minimumEnclosingRadius` would itself be unbounded here, since an edge to this construction's own anchor point
   *     can be arbitrarily large, so omitting this key instead resolves to
-  *     `streams.SheehyRipsSimplexStream.maxFiniteFiltrationValue`, and any value given here only ever narrows that,
-  *     never widens past it (see that class's own doc for why it is always clamped regardless of what is passed); not
+  *     `SheehyRipsSimplexStream.maxFiniteFiltrationValue`, and any value given here only ever narrows that, never
+  *     widens past it (see that class's own doc for why it is always clamped regardless of what is passed); not
   *     consulted for `complex=alpha`/`complex=dtm-alpha` (always untruncated -- see CLAUDE.md's "Alpha complex"
   *     section) nor for `complex=witness` with `witnessVariant=general` (defaults to `+Infinity` there instead --
-  *     `minimumEnclosingRadius` is NOT a valid truncation for a non-flag complex, see
-  *     `streams.WitnessCofaceSimplexStream`'s own doc).
+  *     `minimumEnclosingRadius` is NOT a valid truncation for a non-flag complex, see `WitnessCofaceSimplexStream`'s
+  *     own doc).
   *   - `"edgeCollapse"`: `"true"` or `"false"` (default), only consulted when `complex=vr` -- `require`d `false` (or
-  *     omitted) for every other `complex` value. `streams.EdgeCollapse` (Boissonnat-Pritam/Glisse-Pritam, SoCG
-  *     2020/2022, `.claude/WORKLOG-edge-collapse.md`): reduces the Vietoris-Rips 1-skeleton to a smaller weighted graph
-  *     with the SAME persistent homology at every filtration level, before anything is built on top of it -- a
-  *     preprocessing step, not a different complex, so it changes nothing about `PersistenceResult`'s own output shape.
-  *     Measured 73-76% of edges removed and a 43-47x REDUCTION-phase speedup on random point clouds (n=30, 50);
+  *     omitted) for every other `complex` value. `EdgeCollapse` (Boissonnat-Pritam/Glisse-Pritam, SoCG 2020/2022,
+  *     `.claude/WORKLOG-edge-collapse.md`): reduces the Vietoris-Rips 1-skeleton to a smaller weighted graph with the
+  *     SAME persistent homology at every filtration level, before anything is built on top of it -- a preprocessing
+  *     step, not a different complex, so it changes nothing about `PersistenceResult`'s own output shape. Measured
+  *     73-76% of edges removed and a 43-47x REDUCTION-phase speedup on random point clouds (n=30, 50);
   *     construction-phase speedup is far more modest (1.45-1.74x) -- the dominant cost this helps with is reducing the
   *     resulting (now much smaller) chain complex, not enumerating candidates in the first place, see the worklog for
   *     the measurement and the source-level reason why. Applies uniformly to every `"engine"` value;
   *     `engine="ripser"`'s own REDUCTION should benefit the same way `"naive"`/`"chunks"`/`"cohomology"`'s measured did
   *     (fewer real simplices to reduce, regardless of which algorithm reduces them), but this specific combination has
   *     not itself been measured, only the other three -- see the worklog.
-  *   - `"field"`: `"Z"` (default -- a prime finite field, `prime=2` unless overridden; the standard convention in the
-  *     TDA research literature, e.g. Ripser/GUDHI) or `"R"` (floating point with an epsilon tolerance,
-  *     `Field.DoubleApproximated` -- notably what this codebase's own existing cross-validation specs default to
-  *     instead, an established-convention-vs-existing-test-suite mismatch worth knowing about, not silently resolved
-  *     either way; see WORKLOG-matlab-api.md).
-  *   - `"prime"`: integer, default `2`, only consulted when `field=Z`.
+  *   - `"field"`: `"Z"` (default -- a prime finite field, `prime=17` (`FiniteField.DefaultPrime`) unless overridden;
+  *     was 2 until 0.5.0, the convention in the TDA research literature, e.g. Ripser/GUDHI) or `"R"` (floating point
+  *     with an epsilon tolerance, `Field.DoubleApproximated` -- notably what this codebase's own existing
+  *     cross-validation specs default to instead, an established-convention-vs-existing-test-suite mismatch worth
+  *     knowing about, not silently resolved either way; see WORKLOG-matlab-api.md).
+  *   - `"prime"`: integer, default `17` (`FiniteField.DefaultPrime`), only consulted when `field=Z`.
   *   - `"epsilon"`: double, default `1e-9`, only consulted when `field=R`.
   *
   * Unrecognized keys, and unrecognized values for `complex`/`engine`/`field`, throw `IllegalArgumentException`
@@ -200,9 +194,9 @@ private object ComplexKind:
       )
 
 /** `complex=witness` only: `"lazy"` (JavaPlex's `LazyWitnessStream` -- a flag complex, so `engine=ripser` is valid; see
-  * `streams.LazyWitnessSimplexStream`) or `"general"` (JavaPlex's plain `WitnessStream` -- NOT a flag complex, so
+  * `LazyWitnessSimplexStream`) or `"general"` (JavaPlex's plain `WitnessStream` -- NOT a flag complex, so
   * `engine=ripser`/`"chunks"` are refused, exactly like `complex=cech`'s own `engine=ripser` refusal; see
-  * `streams.WitnessCofaceSimplexStream`).
+  * `WitnessCofaceSimplexStream`).
   */
 private enum WitnessVariantKind:
   case Lazy, General
@@ -272,14 +266,14 @@ object TDA4j:
 
   /** Dowker complex persistence from a general relation `R: L x W -> [0, Infinity]` (`relation(x)(w)`, one row per
     * `L`-side point, one column per witness `w`) -- NOT a point cloud or a distance matrix, so this is a separate entry
-    * point rather than a `"complex"` value on `computeFromPoints`/`computeFromDistanceMatrix` (see
-    * `streams.DowkerGeometry`'s own doc for why: `R` need not be square, symmetric, or derived from any metric at all).
-    * `relation` values must be non-negative; `+Infinity` is the correct way to encode "never related" (see
-    * `streams.DowkerGeometry.fromBoolean` for lifting a classical boolean relation).
+    * point rather than a `"complex"` value on `computeFromPoints`/`computeFromDistanceMatrix` (see `DowkerGeometry`'s
+    * own doc for why: `R` need not be square, symmetric, or derived from any metric at all). `relation` values must be
+    * non-negative; `+Infinity` is the correct way to encode "never related" (see `DowkerGeometry.fromBoolean` for
+    * lifting a classical boolean relation).
     *
     * Recognizes:
     *   - `"engine"`: `"naive"` (default) or `"cohomology"` only -- the Dowker complex is not a flag complex in general
-    *     (a witness for a whole simplex need not witness any of its edges, see `streams.DowkerGeometry`'s own doc), so
+    *     (a witness for a whole simplex need not witness any of its edges, see `DowkerGeometry`'s own doc), so
     *     `"ripser"`/`"chunks"` are refused, exactly like `complex=witness` with `witnessVariant=general`.
     *   - `"maxDimension"`: integer, default `2` -- same "top homological degree reported" meaning as
     *     `computeFromPoints`'s own option; both engines here need the internal "+1" build-and-drop dance since the
@@ -289,11 +283,11 @@ object TDA4j:
     *     arbitrary relation gives no cone argument to truncate against, same reasoning as
     *     `complex=witness`/`witnessVariant=general`'s own default).
     *   - `"dual"`: `"true"` or `"false"` (default) -- when `true`, computes the `W`-side complex (vertices = one per
-    *     COLUMN of `relation`, witnessed by rows) instead of the `L`-side complex, via `streams.DowkerGeometry.dual`
-    *     (the transposed relation). The functorial Dowker duality theorem guarantees the two sides' barcodes agree
-    *     exactly once zero-persistence bars are dropped -- see `.claude/WORKLOG-dowker-complex.md` -- so this is the
-    *     direct way to get the OTHER side's representatives (e.g. when `L` is small but `W`'s own representatives are
-    *     what a caller actually wants) without transposing `relation` by hand.
+    *     COLUMN of `relation`, witnessed by rows) instead of the `L`-side complex, via `DowkerGeometry.dual` (the
+    *     transposed relation). The functorial Dowker duality theorem guarantees the two sides' barcodes agree exactly
+    *     once zero-persistence bars are dropped -- see `.claude/WORKLOG-dowker-complex.md` -- so this is the direct way
+    *     to get the OTHER side's representatives (e.g. when `L` is small but `W`'s own representatives are what a
+    *     caller actually wants) without transposing `relation` by hand.
     *   - `"field"`, `"prime"`, `"epsilon"`: same as `computeFromPoints`.
     */
   def computeFromRelation(relation: Array[Array[Double]], options: Array[String]): PersistenceResult =
@@ -406,7 +400,7 @@ object TDA4j:
     LandmarkSelector.coveringRadius(metricSpace, landmarks.toIndexedSeq)
 
   // ---------------------------------------------------------------------------------------------------------------
-  // circular coordinates (homology.CircularCoordinates, .claude/WORKLOG-mainstream-feature-gap-analysis.md item 2)
+  // circular coordinates (CircularCoordinates, .claude/WORKLOG-mainstream-feature-gap-analysis.md item 2)
   // -- a genuinely different SHAPE of result from PersistenceResult (a per-point angle, not a barcode), so its own
   // small entry points rather than a new complex=circular value on computeFromPoints.
   // ---------------------------------------------------------------------------------------------------------------
@@ -415,7 +409,7 @@ object TDA4j:
     * (column 0 birth, column 1 death, `+Inf` for an essential bar), sorted by persistence descending -- row `i` here is
     * exactly `circularCoordinates`'s own `cocycleIndex = i`. There is no way to pick a meaningful `r` for
     * `circularCoordinates` without first knowing a target bar's own range, so this is the intended first call for a
-    * MATLAB caller, not merely a diagnostic -- see `homology.CircularCoordinates.h1Bars`'s own doc.
+    * MATLAB caller, not merely a diagnostic -- see `CircularCoordinates.h1Bars`'s own doc.
     */
   def h1Bars(points: Array[Array[Double]]): Array[Array[Double]] =
     validatePoints(points)
@@ -425,8 +419,8 @@ object TDA4j:
     circularCoordinates(points, r, 0, 47)
 
   /** Circular coordinates (de Silva-Morozov-Vejdemo-Johansson) for one persistent H¹ class of `points`' own
-    * Vietoris-Rips complex -- see `homology.CircularCoordinates.compute`'s own doc for `r`/`cocycleIndex`/`prime`'s
-    * exact meaning and the full construction, and `h1Bars` above for how to find a valid `r`. Throws
+    * Vietoris-Rips complex -- see `CircularCoordinates.compute`'s own doc for `r`/`cocycleIndex`/`prime`'s exact
+    * meaning and the full construction, and `h1Bars` above for how to find a valid `r`. Throws
     * `IllegalArgumentException` for an invalid `r`/`cocycleIndex`/`prime`, or `NoIntegerCocycleException` (a
     * `RuntimeException`, so it crosses MATLAB's Java bridge the same way `IllegalArgumentException` already does) if
     * the chosen class has no exact integer lift at `prime` -- see that exception's own doc for what to do about it
@@ -453,7 +447,7 @@ object TDA4j:
 
   /** Toroidal coordinates (Scoccola-Gakhar-Bush-Schonsheck-Rask-Zhou-Perea, "decorrelating circular coordinates with
     * lattice reduction") for SEVERAL simultaneously-alive persistent H¹ classes of `points`' own Vietoris-Rips complex,
-    * combined into one torus-valued map -- see `homology.CircularCoordinates.computeToroidal`'s own doc for
+    * combined into one torus-valued map -- see `CircularCoordinates.computeToroidal`'s own doc for
     * `r`/`cocycleIndices`/`prime`/`reduce`'s exact meaning and the full construction, and `h1Bars` above for how to
     * find a valid `r`. Throws `IllegalArgumentException` for invalid/duplicate `cocycleIndices`, an `r` outside their
     * common alive range, or classes that don't share a connected component; `NoIntegerCocycleException` (a
@@ -500,7 +494,7 @@ object TDA4j:
     *
     *   - `"engine"`: `"naive"` (default), `"chunks"`, `"cohomology"`, or `"fast-cubical"` -- `"ripser"` is never
     *     offered here: `PackedRipserCohomologyEngine` is specialized to `Simplex[Int]` Vietoris-Rips complexes and has
-    *     no notion of a cubical complex at all. `"fast-cubical"` (`homology.FastCubicalHomologyEngine`, Le Breton-
+    *     no notion of a cubical complex at all. `"fast-cubical"` (`FastCubicalHomologyEngine`, Le Breton-
     *     Szustakowski-Piraud's dual-graph union-find, extended past 2D by a hybrid with `chunks` for the residual
     *     middle dimensions) is refused only for a degenerate 1-axis "image" (ambient dimension `< 2`) -- see
     *     CLAUDE.md's Cubical complexes section and `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
@@ -679,8 +673,8 @@ object TDA4j:
     ExplicitMetricSpace(distances.toIndexedSeq.map(_.toIndexedSeq))
 
   /** Same shape check as `validatePoints` (non-empty, every row the same length), worded for a relation matrix rather
-    * than a point cloud -- `streams.DowkerGeometry`'s own constructor separately rejects a negative entry (which needs
-    * no MATLAB-specific rewording, it already names the right thing).
+    * than a point cloud -- `DowkerGeometry`'s own constructor separately rejects a negative entry (which needs no
+    * MATLAB-specific rewording, it already names the right thing).
     */
   private def validateRelation(relation: Array[Array[Double]]): Unit =
     if relation.isEmpty then throw new IllegalArgumentException("relation must have at least one row")
@@ -716,10 +710,9 @@ object TDA4j:
 
   /** `"engine"`, defaulted and validated against `witnessVariant`: `witnessVariant=general` defaults to `naive` (not a
     * flag complex, same reasoning as `complex=alpha`/`complex=cech`'s own defaults) and refuses `ripser`/`chunks`
-    * outright; `witnessVariant=lazy` defaults to `ripser` (it really is a flag complex -- see
-    * `streams.WitnessMetricSpace`'s own doc) and allows all four. Pulled out of `dispatch`'s own
-    * `(complex, engine) match` refusal block so step 2 gets the identical default-and-refusal behavior without
-    * re-deriving it.
+    * outright; `witnessVariant=lazy` defaults to `ripser` (it really is a flag complex -- see `WitnessMetricSpace`'s
+    * own doc) and allows all four. Pulled out of `dispatch`'s own `(complex, engine) match` refusal block so step 2
+    * gets the identical default-and-refusal behavior without re-deriving it.
     */
   private def resolveWitnessEngine(opts: Map[String, String], witnessVariant: WitnessVariantKind): EngineKind =
     val engine = EngineKind.parse(
@@ -741,7 +734,7 @@ object TDA4j:
         case EngineKind.Ripser =>
           throw new IllegalArgumentException(
             "engine=ripser cannot be used with complex=witness/witnessVariant=general: the general witness " +
-              "complex is not a flag complex (see streams.WitnessCofaceSimplexStream's own doc), so " +
+              "complex is not a flag complex (see WitnessCofaceSimplexStream's own doc), so " +
               "PackedRipserCohomologyEngine's diameter-based optimizations do not apply -- use " +
               "witnessVariant=lazy instead, or engine=naive/cohomology."
           )
@@ -788,7 +781,7 @@ object TDA4j:
   private def dispatchByField[T](opts: Map[String, String])(compute: [C] => (C => Double) => (C is Field) ?=> T): T =
     CoefficientKind.parse(opts.getOrElse("field", "z")) match
       case CoefficientKind.Z =>
-        val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(2)
+        val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(FiniteField.DefaultPrime)
         val ff = new FiniteField(prime)
         import ff.given
         compute[ff.Fp](_.toInt.toDouble)
@@ -910,7 +903,7 @@ object TDA4j:
           "engine=ripser cannot be used with complex=sparse-rips: a simplex's filtration value here is not the " +
             "maximum ambient pairwise distance among its vertices (some pairs are excluded outright, others take a " +
             "sparsified value), so PackedRipserCohomologyEngine's insertionDiameter/apparent-pairs machinery does " +
-            "not apply -- see streams.SheehyRipsSimplexStream's own doc. Use engine=naive, engine=chunks, or " +
+            "not apply -- see SheehyRipsSimplexStream's own doc. Use engine=naive, engine=chunks, or " +
             "engine=cohomology for complex=sparse-rips."
         )
       case (ComplexKind.DtmAlpha, EngineKind.Ripser) =>
@@ -945,7 +938,7 @@ object TDA4j:
     val edgeCollapse = opts.get("edgecollapse").exists(v => parseBooleanOption("edgeCollapse", v))
     if edgeCollapse && complex != ComplexKind.VR then
       throw new IllegalArgumentException(
-        s"option 'edgeCollapse' is only valid for complex=vr (streams.EdgeCollapse operates on a flag complex's " +
+        s"option 'edgeCollapse' is only valid for complex=vr (EdgeCollapse operates on a flag complex's " +
           s"own 1-skeleton) -- got complex=${opts.getOrElse("complex", "vr")}"
       )
 
@@ -1047,7 +1040,7 @@ object TDA4j:
         // matrix below already uses for a different property of the complex. `maxFiltrationValue` is passed
         // straight through to `EdgeCollapse.collapse` too: a truncated collapse (only edges within that bound
         // ever considered) composes correctly with the SAME bound applied again below when building the actual
-        // stream -- see `streams.EdgeCollapse`'s own doc for why restricting twice to the same bound is safe.
+        // stream -- see `EdgeCollapse`'s own doc for why restricting twice to the same bound is safe.
         val collapsedMetricSpace: FiniteMetricSpace[Int] =
           if edgeCollapse then EdgeCollapse.collapse(metricSpace, maxFiltrationValue) else metricSpace
         // Shared by every engine branch below: the boundary matrix is a property of the complex, not of which
@@ -1147,7 +1140,7 @@ object TDA4j:
             "complex=alpha requires point coordinates -- use computeFromPoints, not computeFromDistanceMatrix"
           )
         )
-        val alphaStream = AlphaShapes(pts.toIndexedSeq, alphaBackend, requireValidTriangulation)
+        val alphaStream = AlphaShapes(pts.toIndexedSeq, AlphaBackend.parse(alphaBackend), requireValidTriangulation)
         val alphaCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
         val alphaBoundaryMatrixOf =
           () =>
@@ -1280,9 +1273,9 @@ object TDA4j:
       case ComplexKind.DtmRips =>
         // Just as unboundedly deep as complex=vr/complex=cech -- the same "build one dimension higher, drop it"
         // dance for engine=Naive/Cohomology, for the identical reason (H_k needs (k+1)-dimensional chains).
-        // Unlike complex=alpha/complex=cech, needs no real coordinates -- streams.DistanceToMeasure only needs a
+        // Unlike complex=alpha/complex=cech, needs no real coordinates -- DistanceToMeasure only needs a
         // FiniteMetricSpace, so this works from computeFromDistanceMatrix too (BruteForce k-NN, not JVPTree:
-        // metricSpace here may not obey the triangle inequality -- see streams.DistanceToMeasure's own doc).
+        // metricSpace here may not obey the triangle inequality -- see DistanceToMeasure's own doc).
         val f = DistanceToMeasure(metricSpace, dtmK, dtmQ)
         val dtmStream = DtmRipsSimplexStream(metricSpace, f, dtmP, maxFiltrationValue = maxFiltrationValue)
         val dtmCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
@@ -1325,7 +1318,7 @@ object TDA4j:
       case ComplexKind.SparseRips =>
         // Just as unboundedly deep as complex=vr/complex=cech/complex=dtm-rips -- the same "build one dimension
         // higher, drop it" dance for engine=Naive/Cohomology, for the identical reason (H_k needs (k+1)-dimensional
-        // chains). Needs no real coordinates -- streams.SheehyRipsSimplexStream only needs a FiniteMetricSpace (the
+        // chains). Needs no real coordinates -- SheehyRipsSimplexStream only needs a FiniteMetricSpace (the
         // greedy permutation it builds on is purely metric), so this works from computeFromDistanceMatrix too.
         // maxFiltrationValue is passed straight through: SheehyRipsSimplexStream's own constructor always clamps
         // it to maxFiniteFiltrationValue regardless (see that class's own doc), so there is no separate "resolve
@@ -1430,7 +1423,7 @@ object TDA4j:
     * need the same "build one dimension higher, drop it via fromBars" dance those use. Cells are `Simplex[Int]` over
     * LOCAL landmark indices (`0 until landmarks.size`) -- every `cellVertices` below maps back through `landmarks(i)`
     * to the caller's own ambient point cloud, exactly the translation
-    * `streams.LazyWitnessSimplexStream`/`WitnessCofaceSimplexStream`'s own docs call for.
+    * `LazyWitnessSimplexStream`/`WitnessCofaceSimplexStream`'s own docs call for.
     */
   private def computeWitnessFromLandmarks[C](
     metricSpace: FiniteMetricSpace[Int],
@@ -1462,7 +1455,7 @@ object TDA4j:
           case EngineKind.Ripser =>
             // The lazy witness complex IS a flag complex under WitnessMetricSpace's own "distance" -- exactly
             // the case PackedRipserCohomologyEngine is proven for (any FiniteMetricSpace[Int] diameter), not
-            // VR-specific at all despite the class's own name -- see streams.WitnessMetricSpace's own doc and
+            // VR-specific at all despite the class's own name -- see WitnessMetricSpace's own doc and
             // WitnessStreamSpec's direct cross-check against the naive engine.
             val geometry = WitnessGeometry(metricSpace, landmarks)
             val wms = WitnessMetricSpace(geometry, nu)
@@ -1509,7 +1502,7 @@ object TDA4j:
             throw new IllegalArgumentException(s"engine=$engine is not offered for witnessVariant=lazy")
       case WitnessVariantKind.General =>
         // Not a flag complex -- minimumEnclosingRadius is not a valid truncation here (see
-        // streams.WitnessCofaceSimplexStream's own doc), so an unset maxFiltrationValue means +Infinity,
+        // WitnessCofaceSimplexStream's own doc), so an unset maxFiltrationValue means +Infinity,
         // NOT "fall back to the metric space's own enclosing radius" the way every other complex above does.
         val geometry = WitnessGeometry(metricSpace, landmarks)
         val resolvedMaxFiltrationValue = maxFiltrationValue.getOrElse(Double.PositiveInfinity)
@@ -1609,7 +1602,7 @@ object TDA4j:
     if engine == EngineKind.Ripser then
       throw new IllegalArgumentException(
         "engine=ripser cannot be used with computeFromRelation: the Dowker complex is not a flag complex in " +
-          "general (see streams.DowkerGeometry's own doc), so PackedRipserCohomologyEngine's diameter-based " +
+          "general (see DowkerGeometry's own doc), so PackedRipserCohomologyEngine's diameter-based " +
           "optimizations do not apply -- use engine=naive or engine=cohomology."
       )
     if engine == EngineKind.Chunks then
@@ -1625,11 +1618,11 @@ object TDA4j:
       computeDowker[C](relation, engine, maxDimension, maxFiltrationValue, dual, toDouble)
     }
 
-  /** Not a flag complex -- `minimumEnclosingRadius` is not a valid truncation here (see
-    * `streams.DowkerCofaceSimplexStream`'s own doc), so an unset `maxFiltrationValue` means `+Infinity`, the same shape
-    * `computeWitnessFromLandmarks`'s own `WitnessVariantKind.General` branch uses. `requestedMaxDimension` needs the
-    * same "build one dimension higher via `LimitedCofaceSimplexStream`, drop it via `fromBars`" dance as
-    * Cech/general-witness, for the identical reason: the Dowker complex's own top dimension is not naturally bounded.
+  /** Not a flag complex -- `minimumEnclosingRadius` is not a valid truncation here (see `DowkerCofaceSimplexStream`'s
+    * own doc), so an unset `maxFiltrationValue` means `+Infinity`, the same shape `computeWitnessFromLandmarks`'s own
+    * `WitnessVariantKind.General` branch uses. `requestedMaxDimension` needs the same "build one dimension higher via
+    * `LimitedCofaceSimplexStream`, drop it via `fromBars`" dance as Cech/general-witness, for the identical reason: the
+    * Dowker complex's own top dimension is not naturally bounded.
     */
   private def computeDowker[C](
     relation: Array[Array[Double]],
@@ -1723,7 +1716,7 @@ object TDA4j:
 
     CoefficientKind.parse(opts.getOrElse("field", "z")) match
       case CoefficientKind.Z =>
-        val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(2)
+        val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(FiniteField.DefaultPrime)
         val ff = new FiniteField(prime)
         import ff.given
         computeCubicalGeneric[ff.Fp](stream, engine, maxDimension, _.toInt.toDouble)

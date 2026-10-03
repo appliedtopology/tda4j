@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j
 package tutorial
 
+import org.appliedtopology.tda4j.sset.*
 import org.specs2.mutable.Specification
 
 /** Asserts every number `_docs/tutorials/telling-spaces-apart.md` quotes, on the values its "whole script" fence

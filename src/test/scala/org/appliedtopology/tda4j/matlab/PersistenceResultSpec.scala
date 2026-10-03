@@ -1,15 +1,15 @@
 package org.appliedtopology.tda4j
 package matlab
 
-import org.appliedtopology.tda4j.barcode.{given, *}
+import org.appliedtopology.tda4j.*
 
 import org.specs2.mutable.Specification
 
 /** Tests the [[PersistenceResult]] additions from `.claude/WORKLOG-mainstream-feature-gap-analysis.md` items 4/8
   * (bottleneck/Wasserstein distance, landscapes, persistence images) -- specifically that this MATLAB-facing wrapper is
-  * a faithful, correctly-marshalled pass-through to [[org.appliedtopology.tda4j.barcode.BarcodeDistance]]/
-  * [[org.appliedtopology.tda4j.barcode.Vectorization]], which already have their own thorough, independently- oracled
-  * test suites (`BarcodeDistanceSpec`/`VectorizationSpec`) -- not a re-test of the underlying math.
+  * a faithful, correctly-marshalled pass-through to [[org.appliedtopology.tda4j.BarcodeDistance]]/
+  * [[org.appliedtopology.tda4j.Vectorization]], which already have their own thorough, independently- oracled test
+  * suites (`BarcodeDistanceSpec`/`VectorizationSpec`) -- not a re-test of the underlying math.
   */
 class PersistenceResultSpec extends Specification:
   private val triangle = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.9))

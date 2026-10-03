@@ -219,7 +219,7 @@ classDiagram
 ```
 
 A standalone construction, not a fifth persistence engine — see [Architecture](architecture.md)'s own
-`homology.CircularCoordinates` section for the truncated-complex reframing, the harmonic-smoothing linear
+`CircularCoordinates` section for the truncated-complex reframing, the harmonic-smoothing linear
 system, why the output is a per-point angle map rather than a barcode, and (same section) `computeToroidal`/
 `LatticeReduction`'s own lattice-reduction extension to several simultaneous classes.
 
@@ -247,7 +247,7 @@ classDiagram
     SparseMetricSpace --> SpatialQuery : uses (JVPTree)
 ```
 
-## Barcode representation (`Barcode.scala`, package `org.appliedtopology.tda4j.barcode`)
+## Barcode representation (`barcode/Barcode.scala`)
 
 ```mermaid
 classDiagram

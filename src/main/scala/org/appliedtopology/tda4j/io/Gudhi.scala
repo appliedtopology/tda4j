@@ -1,8 +1,4 @@
 package org.appliedtopology.tda4j
-package io
-
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.barcode.{given, *}
 
 import scala.io.Source
 import java.io.PrintWriter
@@ -53,8 +49,8 @@ object Gudhi:
   /** GUDHI's `.pers` diagram format: `#`-prefixed comment lines are ignored; every other line has 2, 3, or 4
     * whitespace-separated fields, `[[field] dimension] birth death`. This reads the LAST two fields as birth/death
     * always, and: 4 fields -> `dimension` is the second field (the first, the coefficient-field characteristic, is not
-    * represented in [[barcode.PersistenceBar]] and is discarded); 3 fields -> the first field is `dimension`; 2 fields
-    * -> `dimension` defaults to `0`. `inf`/`-inf` (any case) are infinite endpoints.
+    * represented in [[PersistenceBar]] and is discarded); 3 fields -> the first field is `dimension`; 2 fields ->
+    * `dimension` defaults to `0`. `inf`/`-inf` (any case) are infinite endpoints.
     */
   def readPersistenceDiagram(path: String): Seq[PersistenceBar[Double, Nothing]] =
     val src = Source.fromFile(path)

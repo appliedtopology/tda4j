@@ -1,11 +1,6 @@
 package org.appliedtopology.tda4j
-package homology
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-
-import org.appliedtopology.tda4j.barcode.PersistenceBar
+import OrderedCell.cellOrdering
 
 import collection.{immutable, mutable}
 import scala.annotation.tailrec
@@ -24,6 +19,29 @@ class SimplicialHomologyEngine[VertexT: Ordering, CoefficientT: Field, Filtratio
 class CubicalHomologyEngine[CoefficientT: Field, FiltrationT: Ordering]()
     extends CellularHomologyEngine[Cube, CoefficientT, FiltrationT] {}
 
+/* Companion forms with every type argument inferred: the cell/vertex and filtration types from the stream, the
+ * coefficient type from the one `Field` given in scope (none: an error saying how to pick one; two: an ambiguity --
+ * `Field`'s companion holds no instances, so nothing can silently decide it). `SimplicialHomologyEngine[Int, Double,
+ * Double]().persistentHomology(s)` becomes `SimplicialHomologyEngine.persistentHomology(s)`.
+ */
+object SimplicialHomologyEngine:
+  def persistentHomology[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering](
+    stream: CellStream[Simplex[VertexT], FiltrationT]
+  ): CellularHomologyEngine[Simplex[VertexT], CoefficientT, FiltrationT]#HomologyState =
+    SimplicialHomologyEngine[VertexT, CoefficientT, FiltrationT]().persistentHomology(stream)
+
+object CubicalHomologyEngine:
+  def persistentHomology[CoefficientT: Field, FiltrationT: Ordering](
+    stream: CellStream[Cube, FiltrationT]
+  ): CellularHomologyEngine[Cube, CoefficientT, FiltrationT]#HomologyState =
+    CubicalHomologyEngine[CoefficientT, FiltrationT]().persistentHomology(stream)
+
+object CellularHomologyEngine:
+  def persistentHomology[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering](
+    stream: CellStream[CellT, FiltrationT]
+  ): CellularHomologyEngine[CellT, CoefficientT, FiltrationT]#HomologyState =
+    CellularHomologyEngine[CellT, CoefficientT, FiltrationT]().persistentHomology(stream)
+
 /** Naive persistent homology via the standard single-pivot-table reduction algorithm: process cells in filtration
   * order, reduce each cell's boundary against the pivots recorded so far, and every cell either opens a class (reduced
   * boundary is zero) or closes one (reduced boundary is nonzero, and its leading cell -- the pivot -- is necessarily a
@@ -41,8 +59,6 @@ class CubicalHomologyEngine[CoefficientT: Field, FiltrationT: Ordering]()
   * call to its methods). A real, confirmed bug -- see `.claude/WORKLOG-naive-homology.md`.
   */
 class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]:
-
-  import barcode.*
 
   class HomologyState(
     boundaries: mutable.Map[CellT, Chain[CellT, CoefficientT]], // pivot cell -> reduced boundary column
@@ -89,8 +105,18 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
         .by[CellT, FiltrationT](c => stream.filtrationValue.applyOrElse(c, (_: CellT) => stream.smallest))
         .orElse(Ordering.by[CellT, Int](_.dim))
         .orElse(stream.filtrationOrdering.reverse)
-    val cellIterator: collection.BufferedIterator[CellT] =
-      stream.iterator.toVector.sorted(using processingOrder).iterator.buffered
+    private val processingSequence: Vector[CellT] = stream.iterator.toVector.sorted(using processingOrder)
+    val cellIterator: collection.BufferedIterator[CellT] = processingSequence.iterator.buffered
+
+    /** How many cells the cursor has consumed, out of `totalCells`: progress of a long run. */
+    var processedCells: Int = 0
+    def totalCells: Int = processingSequence.size
+
+    /** Filtration value of the last cell the stream will ever produce: a class alive at `f` is essential exactly when
+      * no cell enters after `f`, which is a property of the STREAM, not of how far the cursor happens to have run.
+      */
+    lazy val lastFiltrationValue: Option[FiltrationT] =
+      processingSequence.lastOption.map(c => cellFiltrationValue(c, filtration.smallest))
 
     private def cellFiltrationValue(cell: CellT, fallback: FiltrationT): FiltrationT =
       stream.filtrationValue.applyOrElse(cell, (_: CellT) => fallback)
@@ -111,6 +137,7 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
     def advanceOne(): Unit =
       if cellIterator.hasNext then
         val sigma: CellT = cellIterator.next()
+        processedCells += 1
         val dsigma: Chain[CellT, CoefficientT] = Chain.from(sigma.boundary[CoefficientT])
         // Chain.reduceBy (the SortedMap-based object-level primitive shared with
         // PersistenceInChunksEngine), not a hand-rolled reduction over raw Chain arithmetic: `-`/`⊠`
@@ -200,6 +227,17 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
     def advanceAll(): Unit =
       while cellIterator.hasNext do advanceOne()
 
+    /** Advance for at most `budget` of wall-clock time (checked after every cell), so a long computation can be run in
+      * slices and inspected -- `diagramAt(f)` gives the diagram truncated at `f` whatever the cursor position --
+      * instead of committing to a run that may never report. Returns `true` once the stream is exhausted. Always
+      * processes at least one cell when any remain, so repeated calls make progress even with a zero budget.
+      */
+    def advanceFor(budget: scala.concurrent.duration.FiniteDuration): Boolean =
+      val deadline = budget.fromNow
+      advanceOne()
+      while cellIterator.hasNext && deadline.hasTimeLeft() do advanceOne()
+      !cellIterator.hasNext
+
     /** Full diagram at f, each bar annotated with its representative cycle (the class's generator at birth for a
       * finished bar; the still-open generator for an essential class).
       *
@@ -215,7 +253,11 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
       // A class still open at query time f is only truly essential (dies at +infinity) once the
       // whole stream is exhausted; mid-stream it merely hasn't died *yet*, so its death is capped at
       // the query value f rather than reported as infinite.
-      val essentialUpper: FiltrationT = if cellIterator.hasNext then f else filtration.largest
+      // Was `if cellIterator.hasNext then f else largest`: right for a cursor sitting at f, wrong once the cursor had
+      // run past f (to the end) -- diagramAt(3.0) then diagramAt(0.5) reported a class alive at 0.5 as essential.
+      val essentialUpper: FiltrationT = lastFiltrationValue match
+        case Some(last) if f < last => f
+        case _                      => filtration.largest
       val essential: List[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT])] =
         positives.toList.collect {
           case (sigma, (birth, rep)) if birth <= f => (sigma.dim, birth, essentialUpper, rep)
@@ -224,6 +266,18 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
 
     def diagramAt(f: FiltrationT): List[(Int, FiltrationT, FiltrationT)] =
       diagramWithGeneratorsAt(f).map { case (dim, lower, upper, _) => (dim, lower, upper) }
+
+    /** An immutable [[PersistenceDiagram]] of everything up to `f` (advancing the cursor to `f` if it isn't there yet):
+      * take a stable view of a long run part-way through. Covers the filtration up to `f` only.
+      */
+    def snapshotAt(f: FiltrationT)(using toDouble: FiltrationT =:= Double): PersistenceDiagram.Of[CellT, CoefficientT] =
+      val bars =
+        barcodeAt(f).asInstanceOf[List[PersistenceBar[Double, Chain[CellT, CoefficientT]]]] // FiltrationT = Double
+      PersistenceDiagram[CellT, CoefficientT](
+        bars,
+        bars.map(_.dim).maxOption.getOrElse(0),
+        lastFiltrationValue.map(toDouble).getOrElse(Double.NegativeInfinity)
+      )
 
     def barcodeAt(f: FiltrationT): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
       diagramWithGeneratorsAt(f).map { (dim, l, u, rep) =>
@@ -265,7 +319,6 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
 class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field](maxDim: Int = 5):
   val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
   import chainRM.*
-  import barcode.*
 
   // The real internal ceiling: one dimension higher than what's reported, so a class born AT maxDim can still be
   // correctly killed by a genuine (maxDim + 1)-cell rather than looking essential purely because nothing above
@@ -477,6 +530,15 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
           essentialRepresentatives(edge) = Chain(edge) - (c0 ⊠ pathFromRoot(v0)) - (c1 ⊠ pathFromRoot(v1))
         }
 
+    lazy val lastFiltrationValue: Double =
+      allCells.iterator
+        .map(c => stream.filtrationValue.applyOrElse(c, (_: CellT) => Double.NegativeInfinity))
+        .maxOption
+        .getOrElse(Double.NegativeInfinity)
+
+    /** A class alive at `f` dies "at f" in the diagram truncated at `f`, unless no cell enters after `f`. */
+    private def essentialUpperAt(f: Double): Double = if f < lastFiltrationValue then f else Double.PositiveInfinity
+
     def diagramAt(f: Double): List[(Int, Double, Double)] =
       advanceAll()
 
@@ -491,11 +553,13 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
       // (nothing of dimension maxDim + 2 was ever considered to possibly kill IT), but that's scaffolding for
       // correctly resolving maxDim, not information the caller asked for -- see the class doc above. Finite
       // bars need no equivalent filter (recordPair's barDim = pivot.dim is always <= maxDim already).
+      // Born at or before f, and essential only if no cell enters after f -- the same truncation semantics as the
+      // naive engine's cursor (`DiagramQuerySpec`). Used to include classes born AFTER f, always at +infinity.
       val essentialBars: List[(Int, Double, Double)] =
-        essentialSimplices.toList.filter(_.dim <= maxDim).map { sigma =>
+        essentialSimplices.toList.filter(_.dim <= maxDim).flatMap { sigma =>
           val lower =
             stream.filtrationValue.applyOrElse(sigma, (_: CellT) => Double.NegativeInfinity)
-          (sigma.dim, lower, Double.PositiveInfinity)
+          Option.when(lower <= f)((sigma.dim, lower, essentialUpperAt(f)))
         }
 
       pairs ++ essentialBars
@@ -650,16 +714,13 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
         }
 
       val essential: List[PersistenceBar[Double, Chain[CellT, CoefficientT]]] =
-        essentialSimplices.toList.filter(_.dim <= maxDim).map { sigma =>
+        essentialSimplices.toList.filter(_.dim <= maxDim).flatMap { sigma =>
           val lower =
             stream.filtrationValue.applyOrElse(sigma, (_: CellT) => Double.NegativeInfinity)
-          val rep = essentialRepresentatives.getOrElseUpdate(sigma, vcolOf(sigma))
-          new PersistenceBar(
-            sigma.dim,
-            endpoint(true)(lower),
-            PositiveInfinity(),
-            Some(rep)
-          )
+          Option.when(lower <= f) {
+            val rep = essentialRepresentatives.getOrElseUpdate(sigma, vcolOf(sigma))
+            new PersistenceBar(sigma.dim, endpoint(true)(lower), endpoint(false)(essentialUpperAt(f)), Some(rep))
+          }
         }
 
       finite ++ essential
@@ -938,3 +999,18 @@ class PersistenceInChunksEngine[VertexT: Ordering, CoefficientT: Field](maxDim: 
   */
 class CubicalPersistenceInChunksEngine[CoefficientT: Field](maxDim: Int = 5)
     extends CellularPersistenceInChunksEngine[Cube, CoefficientT](maxDim) {}
+
+object CellularPersistenceInChunksEngine:
+  /** Every type argument inferred (see `SimplicialHomologyEngine.persistentHomology`). */
+  def persistentHomology[CellT: OrderedCell, CoefficientT: Field](
+    stream: StratifiedCellStream[CellT, Double],
+    maxDim: Int = 5
+  ): CellularPersistenceInChunksEngine[CellT, CoefficientT]#HomologyState =
+    CellularPersistenceInChunksEngine[CellT, CoefficientT](maxDim).persistentHomology(stream)
+
+object PersistenceInChunksEngine:
+  def persistentHomology[VertexT: Ordering, CoefficientT: Field](
+    stream: StratifiedCellStream[Simplex[VertexT], Double],
+    maxDim: Int = 5
+  ): CellularPersistenceInChunksEngine[Simplex[VertexT], CoefficientT]#HomologyState =
+    PersistenceInChunksEngine[VertexT, CoefficientT](maxDim).persistentHomology(stream)

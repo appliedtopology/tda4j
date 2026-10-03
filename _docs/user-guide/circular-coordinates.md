@@ -27,7 +27,7 @@ usually resolved by retrying with a larger odd prime; a genuinely torsion class 
 prime, RP²'s own fundamental class being the standard example) will keep failing regardless. Not mirrored on
 the CLI, for the same reason as the vectorizations and boundary-matrix export above (its output is a per-point
 array, not a diagram) plus the inherently two-step, data-dependent nature of picking `r` — see the [Developer's
-Guide](../developers-guide/architecture.md)'s `homology.CircularCoordinates` section for the full construction
+Guide](../developers-guide/architecture.md)'s `CircularCoordinates` section for the full construction
 (the truncated-complex `K_r` reframing, the harmonic-smoothing linear system, and the integer-lift check).
 
 ### Toroidal coordinates
@@ -59,4 +59,4 @@ must be duplicate-free, `r` must lie in every chosen class's own `[birth, death)
 chosen class must live on the same connected component of `K_r` (two classes native to disconnected pieces of
 the data have no joint torus coordinate to be given). Not mirrored on the CLI, same reasoning as
 `circularCoordinates` above — see the [Developer's Guide](../developers-guide/architecture.md)'s
-`homology.LatticeReduction`/`computeToroidal` section for the full construction.
+`LatticeReduction`/`computeToroidal` section for the full construction.

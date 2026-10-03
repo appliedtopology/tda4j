@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package algebra
 
 import cats.Show
 import cats.syntax.show.showInterpolator
@@ -77,6 +76,10 @@ into class Chain[CellT: Ordering, CoefficientT: Field] private[tda4j](
     else entries.iterator.map((c, x) => s"${x.toString}⊠${c.toString}").mkString(" + ")
 
 object Chain:
+  given chainShow: [CellT: {OrderedCell, Show}, CoefficientT: Field as field] => Show[Chain[CellT, CoefficientT]] =
+    given Show[CoefficientT] = field.showForSelf
+    Show.show(c => c.rawEntries.map((cell, coeff) => show"$coeff ⊠ $cell").mkString(" + "))
+
   def empty[CellT: Ordering, CoefficientT: Field] = from(Seq())
 
   def apply[CellT: Ordering, CoefficientT: Field](
@@ -227,7 +230,3 @@ object Chain:
           .iterator
           .map((cellI, coeffI) => (cellI, coeffO * coeffI))
       }.toSeq
-
-given [CellT: {OrderedCell, Show}, CoefficientT: Field] => Show[Chain[CellT, CoefficientT]] = Show.show { c =>
-  c.rawEntries.map((cell, coeff) => show"$coeff ⊠ $cell").mkString(" + ")
-}

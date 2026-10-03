@@ -1,12 +1,6 @@
 package org.appliedtopology.tda4j
-package barcode
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-
-import org.appliedtopology.tda4j.barcode.BarcodeDistance.GroundNorm
+import org.appliedtopology.tda4j.BarcodeDistance.GroundNorm
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
 import org.specs2.ScalaCheck

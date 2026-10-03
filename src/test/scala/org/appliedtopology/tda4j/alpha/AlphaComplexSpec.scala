@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package alpha
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.scalacheck.{Gen, Prop}
 import org.scalacheck.Prop.forAll
@@ -45,13 +38,13 @@ class AlphaValidationSpec extends org.specs2.mutable.Specification with ScalaChe
 
   for dispatch <- dispatches do
     s"validate $dispatch" in {
-      val alpha = AlphaShapes(grid, dispatch)
+      val alpha = AlphaShapes(grid, AlphaBackend.parse(dispatch))
       val sizes = (0 to 2).map(d => alpha.iterateDimension(d).size).toVector
       sizes must be_==(expectedSizesByDimension)
     }
 
   "DQP must include the boundary slivers, not just the ordinary grid triangles" in {
-    val dqp = AlphaShapes(grid, "DQP")
+    val dqp = AlphaShapes(grid, AlphaBackend.DQP)
     val allCells = (0 to 2).flatMap(d => dqp.iterateDimension(d).toSeq).toSet
     val slivers = Seq(
       Simplex(0, 2),
@@ -78,7 +71,7 @@ class AlphaComplexSpec extends org.specs2.mutable.Specification with ScalaCheck:
     points: Array[Array[Double]],
     dispatch: String
   ): Seq[Seq[Simplex[Int]]] =
-    val alpha = AlphaShapes(points.toIndexedSeq, dispatch)
+    val alpha = AlphaShapes(points.toIndexedSeq, AlphaBackend.parse(dispatch))
     (0 to points.head.length).map(d => alpha.iterateDimension(d).toSeq)
 
   private def everySimplexHasExpectedFaces(
@@ -95,7 +88,7 @@ class AlphaComplexSpec extends org.specs2.mutable.Specification with ScalaCheck:
     }
 
   private def alphaProperties(points: Array[Array[Double]], dispatch: String): Prop =
-    val alpha = AlphaShapes(points.toIndexedSeq, dispatch)
+    val alpha = AlphaShapes(points.toIndexedSeq, AlphaBackend.parse(dispatch))
     val layerByDimension = (0 to points.head.length).map(d => alpha.iterateDimension(d).toSeq)
     val allSimplices: IndexedSeq[Simplex[Int]] = layerByDimension.flatten
     val simplicesByDimension = layerByDimension.map(_.toSet)
@@ -220,8 +213,8 @@ class AlphaCrossValidationSpec extends org.specs2.mutable.Specification with Sca
     * cloud: reports where DQP and Helix disagree, without assuming either side is ground truth.
     */
   def unsafeCompare(points: Array[Array[Double]]): String =
-    val dqp = AlphaShapes(points.toIndexedSeq, "DQP")
-    val helix = AlphaShapes(points.toIndexedSeq, "helix")
+    val dqp = AlphaShapes(points.toIndexedSeq, AlphaBackend.DQP)
+    val helix = AlphaShapes(points.toIndexedSeq, AlphaBackend.Helix)
     val dim = points.head.length
     val report = (0 to dim).map { d =>
       val dqpSet = dqp.iterateDimension(d).toSet
@@ -244,8 +237,8 @@ class AlphaCrossValidationSpec extends org.specs2.mutable.Specification with Sca
     for _ <- 1 to samples do
       pointsGen.sample.foreach { points =>
         try
-          val dqp = AlphaShapes(points.toIndexedSeq, "DQP")
-          val helix = AlphaShapes(points.toIndexedSeq, "helix")
+          val dqp = AlphaShapes(points.toIndexedSeq, AlphaBackend.DQP)
+          val helix = AlphaShapes(points.toIndexedSeq, AlphaBackend.Helix)
           val dim = points.head.length
           if (0 to dim).exists(d => (dqp.iterateDimension(d).toSet -- helix.iterateDimension(d).toSet).nonEmpty)
           then subsetViolations += 1
@@ -321,7 +314,7 @@ class AlphaComplexDQPRegressionSpec extends org.specs2.mutable.Specification:
   )
 
   private def hasCleanFaceClosure(points: Array[Array[Double]]): Boolean =
-    val dqp = AlphaShapes(points.toIndexedSeq, "DQP")
+    val dqp = AlphaShapes(points.toIndexedSeq, AlphaBackend.DQP)
     val layerByDimension = (0 to points.head.length).map(d => dqp.iterateDimension(d).toSeq)
     val byDim = layerByDimension.map(_.toSet)
     layerByDimension.zipWithIndex.forall { case (layer, dimension) =>
@@ -343,9 +336,12 @@ class AlphaComplexDQPRegressionSpec extends org.specs2.mutable.Specification:
       // here), but if a future fix shrinks it to empty, that's progress, not a
       // failure -- so only the "DQP is a subset" direction is asserted with must.
       val d = facetClosureCounterexample
-      val dqpSet = (0 to d.head.length).flatMap(k => AlphaShapes(d.toIndexedSeq, "DQP").iterateDimension(k).toSeq).toSet
+      val dqpSet =
+        (0 to d.head.length).flatMap(k => AlphaShapes(d.toIndexedSeq, AlphaBackend.DQP).iterateDimension(k).toSeq).toSet
       val helixSet =
-        (0 to d.head.length).flatMap(k => AlphaShapes(d.toIndexedSeq, "helix").iterateDimension(k).toSeq).toSet
+        (0 to d.head.length)
+          .flatMap(k => AlphaShapes(d.toIndexedSeq, AlphaBackend.Helix).iterateDimension(k).toSeq)
+          .toSet
       println(
         s"AlphaComplexDQPRegressionSpec: facetClosureCounterexample currently missing ${helixSet -- dqpSet} relative to Helix"
       )
@@ -357,13 +353,16 @@ class AlphaComplexDQPRegressionSpec extends org.specs2.mutable.Specification:
     "compute without AlphaComplexDQPException (no active-set cycling)" in {
       // AlphaShapeDQP.alphaComplexDQP is an eager val, so construction alone forces
       // the full computation across every dimension.
-      AlphaShapes(cyclingCounterexample.toIndexedSeq, "DQP") must not(throwAn[AlphaComplexDQPException])
+      AlphaShapes(cyclingCounterexample.toIndexedSeq, AlphaBackend.DQP) must not(throwAn[AlphaComplexDQPException])
     }
     "agree exactly with Helix" in {
       val d = cyclingCounterexample
-      val dqpSet = (0 to d.head.length).flatMap(k => AlphaShapes(d.toIndexedSeq, "DQP").iterateDimension(k).toSeq).toSet
+      val dqpSet =
+        (0 to d.head.length).flatMap(k => AlphaShapes(d.toIndexedSeq, AlphaBackend.DQP).iterateDimension(k).toSeq).toSet
       val helixSet =
-        (0 to d.head.length).flatMap(k => AlphaShapes(d.toIndexedSeq, "helix").iterateDimension(k).toSeq).toSet
+        (0 to d.head.length)
+          .flatMap(k => AlphaShapes(d.toIndexedSeq, AlphaBackend.Helix).iterateDimension(k).toSeq)
+          .toSet
       dqpSet must be_==(helixSet)
     }
   }
@@ -406,7 +405,7 @@ class AlphaFiltrationOrderingRegressionSpec extends org.specs2.mutable.Specifica
         // exact-equality comparison) then reported as "missing"/"must not contain" on otherwise-identical
         // bars. Sharing one construction is also simply the more faithful test of the property this spec
         // actually cares about: two engines agreeing on ONE complex, not on two independently-rebuilt ones.
-        val streamB = bounded(AlphaShapes(points.toIndexedSeq, dispatch))
+        val streamB = bounded(AlphaShapes(points.toIndexedSeq, AlphaBackend.parse(dispatch)))
         val totalCells = streamB.iterator.size
         val naive =
           SimplicialHomologyEngine[Int, Double, Double]()

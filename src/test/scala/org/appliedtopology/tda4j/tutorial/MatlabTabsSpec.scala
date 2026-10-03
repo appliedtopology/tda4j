@@ -15,7 +15,7 @@ class MatlabTabsSpec extends Specification:
   private def r3(x: Double): Double = if x.isInfinite then x else math.round(x * 1000) / 1000.0
   private def rows(bars: Array[Array[Double]]): List[List[Double]] = bars.toList.map(_.toList.map(r3))
   private def dim(bars: Array[Array[Double]], d: Int) = bars.filter(_(0) == d.toDouble)
-  private val points = io.CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+  private val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
   private def cleaned(r: matlab.PersistenceResult) =
     r.toArray()
       .toList
@@ -73,7 +73,7 @@ class MatlabTabsSpec extends Specification:
   }
 
   "noise-and-outliers.md (MATLAB tab)" should {
-    val outliers = io.CSV.readPointCloud("_docs/tutorials/data/circle-with-outliers.csv")
+    val outliers = CSV.readPointCloud("_docs/tutorials/data/circle-with-outliers.csv")
     def twoLongest(r: matlab.PersistenceResult) =
       dim(r.toArrayUnfiltered(), 1).map(b => r3(b(2) - b(1))).sorted.reverse.take(2).toList
     "show the two longest loops for VR and DTM, and the cycles of the VR ones" in {
@@ -139,7 +139,7 @@ class MatlabTabsSpec extends Specification:
         .and(r3(alignmentError(c.theta(), i => turn(points(i)(1), points(i)(0)))) must beEqualTo(0.064))
     }
     "recover a torus (two coordinates, errors near 0.13 and 0.15)" in {
-      val torus = io.CSV.readPointCloud("_docs/tutorials/data/flat-torus.csv")
+      val torus = CSV.readPointCloud("_docs/tutorials/data/flat-torus.csv")
       val h1 = TDA4j.h1Bars(torus)
       val r = (h1.take(2).map(_(0)).max + h1.take(2).map(_(1)).min) / 2
       val c = TDA4j.toroidalCoordinates(torus, r, Array(0, 1))
@@ -159,7 +159,7 @@ class MatlabTabsSpec extends Specification:
 
   "comparing-barcodes.md (MATLAB tab)" should {
     def loops(file: String) =
-      TDA4j.computeFromPoints(io.CSV.readPointCloud(s"_docs/tutorials/data/$file"), Array("maxDimension", "1"))
+      TDA4j.computeFromPoints(CSV.readPointCloud(s"_docs/tutorials/data/$file"), Array("maxDimension", "1"))
     def l2(x: Array[Array[Double]], y: Array[Array[Double]]) =
       math.sqrt(x.flatten.zip(y.flatten).map((p, q) => (p - q) * (p - q)).sum)
     lazy val (a, b, e) = (loops("noisy-circle.csv"), loops("noisy-circle-b.csv"), loops("figure-eight.csv"))

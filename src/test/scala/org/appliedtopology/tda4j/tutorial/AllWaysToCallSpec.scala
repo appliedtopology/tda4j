@@ -1,7 +1,7 @@
 package org.appliedtopology.tda4j
 package tutorial
 
-import org.appliedtopology.tda4j.cells.{given, *}
+import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.matlab.TDA4j
 import org.specs2.mutable.Specification
 
@@ -38,7 +38,7 @@ class AllWaysToCallSpec extends Specification:
 
   "tasks 2 and 3 (circle)" should {
     "find one persistent H1 bar and a circular coordinate through the facade (the MATLAB route)" in {
-      val points = io.CSV.readPointCloud(csv)
+      val points = CSV.readPointCloud(csv)
       val r = TDA4j.computeFromPoints(points, Array("maxDimension", "1"))
       val bars = r.toArray().toList.map(_.toList)
       val h1 = TDA4j.h1Bars(points)
@@ -56,12 +56,11 @@ class AllWaysToCallSpec extends Specification:
   }
 
   private def octahedronViaTDAlab(): (Int, Map[Int, Int]) =
-    val lab = new TDAlab(17)
-    import lab.{*, given}
+    import TDAlab.F17.{*, given}
     val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield ∆(a, b, c)
     val computation =
-      homology.SimplicialHomologyEngine().persistentHomology(streams.ExplicitStreamBuilder.fromFacets(triangles))
-    val bars = barcode.PersistenceFilter.significant(computation.barcodeAt(4.0), minPersistence = Some(1e-9))
+      SimplicialHomologyEngine().persistentHomology(ExplicitStreamBuilder.fromFacets(triangles))
+    val bars = PersistenceFilter.significant(computation.barcodeAt(4.0), minPersistence = Some(1e-9))
     val essential = bars
       .filter(b => b.upper.toString.contains("∞") || b.upper.toString.contains("nfinity"))
       .groupBy(_.dim)
@@ -71,49 +70,48 @@ class AllWaysToCallSpec extends Specification:
     (triangles.size, essential)
 
   private def circleViaTDAlab(): (Int, Int, Int) =
-    val lab = new TDAlab(17)
-    import lab.{*, given}
-    val metricSpace = io.CSV.readEuclideanMetricSpace(csv)
-    val computation = homology
-      .SimplicialHomologyEngine()
-      .persistentHomology(
-        streams.VietorisRips(metricSpace, maxDimension = 1)
-      )
+    import TDAlab.F17.{*, given}
+    val metricSpace = CSV.readEuclideanMetricSpace(csv)
+    val computation =
+      SimplicialHomologyEngine()
+        .persistentHomology(
+          VietorisRips(metricSpace, maxDimension = 1)
+        )
     val all = computation.barcodeAt(1.5).filter(_.dim <= 1)
-    val bars = barcode.PersistenceFilter.significant(all, scale = Some(metricSpace.minimumEnclosingRadius))
-    val h1 = homology.CircularCoordinates.h1Bars(metricSpace, Some(1.5))
-    val coordinate = homology.CircularCoordinates.compute(metricSpace, 1.5, 0)
+    val bars = PersistenceFilter.significant(all, scale = Some(metricSpace.minimumEnclosingRadius))
+    val h1 = CircularCoordinates.h1Bars(metricSpace, Some(1.5))
+    val coordinate = CircularCoordinates.compute(metricSpace, 1.5, 0)
     (bars.count(_.dim == 1), h1.size, coordinate.theta.size)
 
   "ExplicitStreamBuilder.fromFacets" should {
     "close a facet list under faces" in {
-      val stream = streams.ExplicitStreamBuilder.fromFacets(List(Simplex(1, 2, 3), Simplex(3, 4)))
+      val stream = ExplicitStreamBuilder.fromFacets(List(Simplex(1, 2, 3), Simplex(3, 4)))
       stream.iterator.toList.size must beEqualTo(9) // the triangle's 7 cells, plus vertex 4 and edge {3,4}
     }
     "give an unlisted face the earliest value of a cell containing it" in {
-      val stream = streams.ExplicitStreamBuilder.fromFilteredFacets(List((2.0, Simplex(1, 2)), (1.0, Simplex(2, 3))))
+      val stream = ExplicitStreamBuilder.fromFilteredFacets(List((2.0, Simplex(1, 2)), (1.0, Simplex(2, 3))))
       stream.filtrationValue(Simplex(2)) must beEqualTo(1.0)
       stream.filtrationValue(Simplex(1)) must beEqualTo(2.0)
       stream.filtrationValue(Simplex(1, 2)) must beEqualTo(2.0)
     }
     "reject a listed value that contradicts a listed coface" in {
-      streams.ExplicitStreamBuilder.fromFilteredFacets(List((2.0, Simplex(1)), (1.0, Simplex(1, 2)))) must throwAn[
+      ExplicitStreamBuilder.fromFilteredFacets(List((2.0, Simplex(1)), (1.0, Simplex(1, 2)))) must throwAn[
         IllegalArgumentException
       ]
     }
     "keep different listed values on overlapping facets and give the overlap the minimum" in {
       val stream =
-        streams.ExplicitStreamBuilder.fromFilteredFacets(List((3.0, Simplex(1, 2, 3)), (1.0, Simplex(2, 3, 4))))
+        ExplicitStreamBuilder.fromFilteredFacets(List((3.0, Simplex(1, 2, 3)), (1.0, Simplex(2, 3, 4))))
       stream.filtrationValue(Simplex(2, 3)) must beEqualTo(1.0)
       stream.filtrationValue(Simplex(1, 2)) must beEqualTo(3.0)
       stream.filtrationValue(Simplex(1, 2, 3)) must beEqualTo(3.0)
     }
     "offer a constant value for the unlisted cells, rejected if not monotone" in {
-      import streams.ExplicitStreamBuilder.UnlistedValues
+      import ExplicitStreamBuilder.UnlistedValues
       val ok =
-        streams.ExplicitStreamBuilder.fromFilteredFacets(List((2.0, Simplex(1, 2))), UnlistedValues.Constant(0.0))
+        ExplicitStreamBuilder.fromFilteredFacets(List((2.0, Simplex(1, 2))), UnlistedValues.Constant(0.0))
       ok.filtrationValue(Simplex(1)) must beEqualTo(0.0)
-      streams.ExplicitStreamBuilder.fromFilteredFacets(
+      ExplicitStreamBuilder.fromFilteredFacets(
         List((2.0, Simplex(1, 2))),
         UnlistedValues.Constant(5.0)
       ) must throwAn[
@@ -134,12 +132,7 @@ class AllWaysToCallSpec extends Specification:
 
   // Exactly the tutorial's "Scala with explicit imports" snippet, wrapped in a method.
   private def explicitImports(): (Map[Int, Int], Int, Int, Int) =
-    import org.appliedtopology.tda4j.algebra.{given, *}
-    import org.appliedtopology.tda4j.cells.{given, *}
-    import org.appliedtopology.tda4j.streams.{given, *}
-    import org.appliedtopology.tda4j.homology.{given, *}
-    import org.appliedtopology.tda4j.barcode.PersistenceFilter
-    import org.appliedtopology.tda4j.io.CSV
+    import org.appliedtopology.tda4j.*
 
     val field = FiniteField(17)
     import field.given

@@ -5,10 +5,8 @@ layout: main
 ### Sheehy's sparse/approximate Vietoris-Rips filtration
 
 ```scala 3
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
@@ -31,10 +29,8 @@ max-pairwise-distance filtration functional, which this construction's own spars
 ### Witness complexes
 
 ```scala 3
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 
@@ -69,10 +65,8 @@ Two variants, matching JavaPlex's own two classes:
   valid for flag complexes.
 
 ```scala 3
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 
@@ -80,7 +74,7 @@ val points: Array[Array[Double]] = Array.tabulate(30)(i => Array(math.cos(i * 0.
 val ambient = EuclideanMetricSpace(points)
 val landmarks = LandmarkSelector.maxmin(ambient, numLandmarks = 20).landmarks
 
-val generalStream = Witness(ambient, landmarks, variant = Witness.Variant.General, maxFiltrationValue = Some(2.0))
+val generalStream = Witness(ambient, landmarks, variant = Witness.Variant.General, maxFiltrationValue = 2.0)
 ```
 
 **The general variant's `maxFiltrationValue` defaults to `+Infinity`, so keep `maxDimension` small (the default `2` is fine) or pass a finite value** — nothing prunes an unbounded enumeration, so an uncapped
@@ -103,6 +97,7 @@ into two steps for exactly this: `selectLandmarksFrom{Points,DistanceMatrix}` (s
 work from Scala too, not just MATLAB:
 
 ```scala 3
+import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.matlab.TDA4j
 
 val points: Array[Array[Double]] = Array.tabulate(60)(i => Array(math.cos(i * 0.9), math.sin(i * 0.9)))

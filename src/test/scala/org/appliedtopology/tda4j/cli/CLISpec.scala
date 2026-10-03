@@ -1,9 +1,7 @@
 package org.appliedtopology.tda4j
 package cli
 
-import org.appliedtopology.tda4j.barcode.{given, *}
-import org.appliedtopology.tda4j.io.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.matlab.{FullBarcode, TDA4j}
 
 import org.specs2.mutable
@@ -494,7 +492,7 @@ class CLISpec extends mutable.Specification:
       }
   }
 
-  "--distance-to (barcode.BarcodeDistance mirror)" should {
+  "--distance-to (BarcodeDistance mirror)" should {
     def writeComparisonDiagram(points: Array[Array[Double]]): String =
       val result = FullBarcode.computeFromPoints(points, Array("maxDimension", "1"))
       val path = tempFile(".csv")

@@ -1,16 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.barcode.{
-  BarcodeEndpoint,
-  ClosedEndpoint,
-  OpenEndpoint,
-  PersistenceBar,
-  PositiveInfinity
-}
 
 import scala.collection.mutable
 
@@ -20,7 +8,7 @@ import scala.collection.mutable
   * treatment provides; both are this codebase's own extension, derived independently
   * (`.claude/DESIGN-fast-cubical-engine.md`'s 2026-09-25 update has the full derivation and a hand-verified worked
   * example -- this session could not reach the paper itself, network-blocked, and no reference implementation exists to
-  * port the way `streams.EdgeCollapse` could port GUDHI's; this is original work built on Alexander duality, not a
+  * port the way `EdgeCollapse` could port GUDHI's; this is original work built on Alexander duality, not a
   * translation).
   *
   * '''Valid at any ambient dimension `>= 2`''' (`require`d). At `d=2`, `H_0` (ordinary primal union-find) plus `H_1`

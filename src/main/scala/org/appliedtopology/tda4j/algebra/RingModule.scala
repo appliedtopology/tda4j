@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package algebra
 
 import scala.annotation.targetName
 

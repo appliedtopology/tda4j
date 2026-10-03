@@ -13,32 +13,45 @@ If a piece of Scala 3 syntax below looks unfamiliar, see the [Scala 3 primer](sc
 
 ## Package layout
 
-`org.appliedtopology.tda4j` is split into subpackages, each a layer:
+The core is **one package**, `org.appliedtopology.tda4j`: `import org.appliedtopology.tda4j.*` brings in all of it.
+Its source directories are file organization only (they are not packages), and each is a layer:
 
-- **`algebra`** — `RingModule`, `Field`, `FiniteField`, `Chain` (including the `Cell`/
-  `OrderedCell`/`OrderedBasis` contracts), `SSetElement` (the degeneracy-word algebra underlying simplicial
-  sets). The typeclasses and formal-sum machinery everything else builds on.
-- **`cells`** — `Simplex`, `Cube`, `FiniteSimplicialSet` — the three concrete `OrderedCell` instances — plus
-  `FiniteSimplicialSet`'s companion (`product`/`coproduct`/`quotient`/`identify`), which draws on shared
-  ordering helpers kept in the separate `SimplicialSetConstructions.scala`.
-- **`streams`** — everything that produces cells in filtration order: `SimplexStream`/`CellStream`, the
-  Vietoris-Rips family, `FiniteMetricSpace`, `CubicalStream`/`CubicalImage`, `SimplicialSetStream`/
-  `FilteredSimplicialSetStream`, `CechStream`, `WitnessStream`, `UnionFind`.
-- **`homology`** — the persistence algorithms (`Homology.scala`, `PackedRipserCohomology.scala`,
-  `Cohomology.scala`).
-- **`barcode`** — `Barcode`, `PersistenceBar`, `BarcodeEndpoint`.
-- **`alpha`** — `AlphaShapes` (`HelixDelaunay`/`AlphaShapeDQP`), `AlphaComplexDQP`.
-- **`io`** — file-format adaptors: `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
-- **`cli`** — the `tda4j` executable (`TDA4jConf`, `TDA4jCLI`), a thin translator over `matlab.TDA4j`/`io`.
-- **`matlab`** — `TDA4j`/`PersistenceResult`/`LandmarkSelectionResult`, the plain-primitives facade for MATLAB
-  and other Java callers.
-- root (`org.appliedtopology.tda4j` itself) — `package.scala` (`TDAlab`), the pylab-style user-facing Scala entry point.
+- **`algebra/`** — `RingModule`, `Field`, `FiniteField`, `Chain` (including the `Cell`/`OrderedCell`/`OrderedBasis`
+  contracts), `LinearAlgebra`. The typeclasses and formal-sum machinery everything else builds on.
+- **`cells/`** — `Simplex` and `Cube`, the concrete `OrderedCell` instances, with their default instances in their
+  companions.
+- **`streams/`** — everything that produces cells in filtration order: `SimplexStream`/`CellStream`, the
+  Vietoris-Rips family, `FiniteMetricSpace`, `CubicalStream`/`CubicalImage`, `CechStream`, `WitnessStream`,
+  `DowkerStream`, `UnionFind`, and the dispatchers (`VietorisRips`, `Cech`, `Witness`, `Dowker`, ...).
+- **`homology/`** — the persistence algorithms (`Homology.scala`, `PackedRipserCohomology.scala`, `Cohomology.scala`,
+  the fast cubical/alpha engines) and circular coordinates.
+- **`barcode/`** — `Barcode`, `PersistenceBar`, `BarcodeEndpoint`, distances and vectorizations.
+- **`alpha/`** — `AlphaShapes` (`HelixDelaunay`/`AlphaShapeDQP`), `AlphaComplexDQP`.
+- **`io/`** — file-format adaptors: `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
+- `package.scala` — `TDAlab`, the pylab-style user-facing Scala entry point.
 
-**Load-bearing import rule**: every file that reaches across a subpackage boundary does it via
-`import org.appliedtopology.tda4j.<pkg>.{given, *}` — the `given` matters. A plain `import pkg.*` does
-**not** bring `given` instances into scope in Scala 3, and this codebase's `Ordering`/`RingModule`/`Field`
-instances are all `given`s. Forgetting `given` compiles cleanly and fails at a summon site with a
-confusing "no given instance" error far from the missing import.
+Outside the core:
+
+- **`sset`** (`org.appliedtopology.tda4j.sset`, an opt-in add-on) — simplicial sets (`SimplicialSet`,
+  `FiniteSimplicialSet`, `SSetElement`, `SSetMap`, `CupProduct`, `Steenrod`, `FundamentalGroup`, `BettiNumbers`, the
+  simplicial-set streams) and group classifying spaces (`FiniteGroup`, `ClassifyingSpace`). It depends on the core;
+  the core never uses it (except `TDAlab`, which re-exports it).
+- **`cli`** — the `tda4j` executable (`TDA4jConf`, `TDA4jCLI`), a thin translator over `matlab.TDA4j`.
+- **`matlab`** — `TDA4j`/`PersistenceResult`/`LandmarkSelectionResult`, the plain-primitives facade for MATLAB and
+  other Java callers.
+
+**Load-bearing rule for givens**: the core package has no top-level `given`s. Default instances live in the companion
+of the data type they serve (`object Simplex` holds `Simplex[V] is OrderedCell`, the `Ordering` derived from it and
+`Show`; likewise `Cube`, `Chain`, `BarcodeEndpoint`, `Fp`). That puts them in the type's *implicit scope*: they are
+found without any import, and are consulted only when no given is lexically visible, so a stream's or a user's own
+given always wins instead of tying with them. A top-level generic given would be visible everywhere in the flat
+package and would even decide type inference (an unconstrained `[V: Ordering]` once inferred `V =
+BarcodeEndpoint[Cube]` that way). Never put an instance in a *typeclass's* companion (`Field`, `OrderedCell`): that
+companion is searched whenever the instance type is still unknown. Generic code that holds only `CellT: OrderedCell`
+and wants the cell's intrinsic order opts in with `import OrderedCell.cellOrdering`.
+
+**Name-binding hazard of the flat package**: a wildcard import of an external library silently beats a same-named
+definition from another file of this package. Prefer named imports of external libraries in core files.
 
 ## The algebraic core
 
@@ -74,10 +87,8 @@ extension operators. **There is no default `given Double is Field` anywhere in `
 explicitly:
 
 ```scala 3
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
 ```
@@ -104,7 +115,7 @@ trait OrderedCell extends Cell:
 
 `Simplex[VertexT]`, `Cube`, and `FiniteSimplicialSet[G]`'s generators are the library's three concrete
 `OrderedCell` instances (`cells/SimplexOrderedCell.scala`, `cells/CubicalOrderedCell.scala`,
-`cells/SimplicialSet.scala`): `boundary` returns each codimension-1 face paired with alternating signs.
+`sset/SimplicialSet.scala`): `boundary` returns each codimension-1 face paired with alternating signs.
 
 There is no dual `Cocell`/`OrderedCocell` trait pair — an earlier version of this codebase had one, and it was
 removed: coboundary is *extrinsic* to a cell (it depends on which higher-dimensional cells actually exist in
@@ -236,7 +247,7 @@ layer). At `d >= 3`, the "middle" dimensions (`1 <= k <= d-2`, no duality shortc
 `∞` must be the unconditional elder of any merge it takes part in — its own chain is deliberately never
 populated, since it never dies — which is NOT automatically guaranteed by comparing birth values alone: a real
 top cell can also carry `topValue = +Infinity` (this codebase's own "permanently missing cell" convention, the
-same one `io.Perseus`'s `-1` already maps to) and tie against `∞`'s own `birthOf`, so the young/old decision
+same one `Perseus`'s `-1` already maps to) and tie against `∞`'s own `birthOf`, so the young/old decision
 special-cases `∞` explicitly rather than relying on the birth-value comparison alone. Representatives: each
 active dual component tracks a running signed sum of top cells, oriented coherently as merges happen (the
 orientation flip is solved from the connecting facet's own `±1` boundary coefficients toward each side) so a
@@ -245,39 +256,39 @@ source paper, which is F2-only and barcode-only. No paper access (network-blocke
 implementation to port meant this was derived from Alexander duality directly, not translated from a reference
 source the way `EdgeCollapse` below could be from GUDHI's.
 
-### Simplicial sets
+### Simplicial sets (the `sset` add-on)
 
-`SSetElement[G](word, generator)` (`algebra/SSetElement.scala`) plus `FiniteSimplicialSet[G]`
-(`cells/SimplicialSet.scala`) implement finite simplicial sets in the classical Eilenberg-Zilber
-presentation: a finite set of non-degenerate generators per dimension, plus primitive face data
-`faces: G => IndexedSeq[SSetElement[G]]`. `word` is the degeneracy indices in normal form — **strictly
-decreasing**, not increasing, a direct consequence of the simplicial identity `s_i s_j = s_{j+1} s_i`
-(`i <= j`). `insertOuter`/`faceOf` implement the full operator algebra (`s_i`/`d_i` on arbitrary, possibly
-degenerate elements), which is what lets `FiniteSimplicialSet.validate()` check that hand-supplied face data
+Everything here is in `org.appliedtopology.tda4j.sset` (directory `sset/`). `SSetElement[G](word, generator)`
+(`SSetElement.scala`) plus `FiniteSimplicialSet[G]` (`SimplicialSet.scala`) implement finite simplicial sets in the
+classical Eilenberg-Zilber presentation: a finite set of non-degenerate generators per dimension, plus primitive face
+data `faces: G => IndexedSeq[SSetElement[G]]`. `word` is the degeneracy indices in normal form — **strictly
+decreasing**, not increasing, a direct consequence of the simplicial identity `s_i s_j = s_{j+1} s_i` (`i <= j`).
+`insertOuter`/`faceOf` implement the full operator algebra (`s_i`/`d_i` on arbitrary, possibly degenerate elements,
+exposed as `x.degeneracy(j, e)`/`x.face(i, e)`), which is what lets `validate()` check that hand-supplied face data
 actually satisfies the simplicial identities.
 
-`FiniteSimplicialSet`'s companion object (`cells/SimplicialSet.scala`; the ordering helpers it uses live in
-`cells/SimplicialSetConstructions.scala`) builds new simplicial sets from old: `product`/`coproduct`
-(categorical product/coproduct — a product's non-degenerate simplices
-are pairs `(a, b)` with *disjoint* degeneracy words, not Eilenberg-Zilber shuffles, and its top dimension is
-`maxDim(x) + maxDim(y)`), and `quotient`/`identify` (attaching maps — `quotient` takes `G => SSetElement[G]`
-rather than `G => G` specifically so a cell can collapse down a dimension onto a degenerate point, the
-Δ-complex model of ℝP² needs exactly this for one of a triangle's three edges).
+The API has two halves. `object SimplicialSet` (the trait's companion; the catalog itself is in
+`SimplicialSetCatalog.scala`) *builds* spaces: `SimplicialSet(generatorsByDim, faces)`, `fromSimplicialComplex`,
+`fromStream`, and ready-made `simplex`/`horn`/`sphere`/`torus`/`realProjectiveSpace`/`kleinBottle`/
+`complexProjectivePlane`/`presentationComplex`/`hopfMap`/`classifyingSpace`. Methods of `FiniteSimplicialSet` do
+everything else: enumeration (`generators(n)`, `allGenerators`, `simplices(n)` with the degenerate ones, `fVector`,
+`eulerCharacteristic`, `bettiNumbers(p)`), and constructions (`product`/`coproduct`, `wedge`, `smash`, `join`, `cone`,
+`suspension`, `quotient`/`identify`, `subcomplex`), implemented in `Constructions.scala`. A product's non-degenerate
+simplices are pairs `(a, b)` with *disjoint* degeneracy words, not Eilenberg-Zilber shuffles, and its top dimension is
+`maxDim(x) + maxDim(y)`; `quotient` takes `G => SSetElement[G]` rather than `G => G` specifically so a cell can collapse
+down a dimension onto a degenerate point (the Δ-complex model of ℝP² needs exactly this for one of a triangle's three
+edges).
 
-`streams/SimplicialSetStream.scala` adapts a `FiniteSimplicialSet[G]` to `CellStream` for ordinary,
-unfiltered homology (every generator at filtration value `0`); `fromStream` builds a `FiniteSimplicialSet`
-from any simplex stream. `streams/FilteredSimplicialSetStream.scala` is the genuine
-`StratifiedCellStream[G, Double]`, with a caller-supplied `filtrationValue` and
-`validateMonotoneFiltration` to check the one precondition every engine needs (a face's value never exceeds
-its coface's).
+`x.stream` (`SimplicialSetStream.scala`) adapts a set to `CellStream` for ordinary, unfiltered homology (every
+generator at filtration value `0`); `x.filtered(f)` (`FilteredSimplicialSetStream.scala`) is the genuine
+`StratifiedCellStream[G, Double]`, with `validateMonotoneFiltration` checking the one precondition every engine needs
+(a face's value never exceeds its coface's). Engines need the set's cell structure in scope: `import x.given`.
 
-On top of that core, `cells/SimplicialSets.scala` provides the usual constructions and examples (`cone`, `suspension`, `wedge`,
-`smash`, `join`, `subcomplex`, `fromSimplicialComplex`, `presentationComplex`, `kleinBottle`, `horn`, `sphere`,
-`complexProjectivePlane`, `hopfMap`), `cells/SSetMap.scala` simplicial maps (with `mappingCone` and the induced rank on
-homology), `cells/FundamentalGroup.scala` a presentation of the fundamental group, and `cells/CupProduct.scala` and
-`cells/Steenrod.scala` the Alexander-Whitney cup product and the Steenrod squares over F₂. `groups.Nerve`/`ClassifyingSpace`
-use the lazy `SimplicialSet` trait for the infinite nerve of a finite group. None of this has a MATLAB or CLI entry point
-(a simplicial set needs its own input encoding), and every construction is checked against homology computed by hand
+`SSetMap.scala` has simplicial maps (with `mappingCone` and the induced rank on homology), `FundamentalGroup.scala` a
+presentation of the fundamental group, and `CupProduct.scala` and `Steenrod.scala` the Alexander-Whitney cup product
+and the Steenrod squares over F₂. `Nerve`/`ClassifyingSpace` (`ClassifyingSpace.scala`, with `FiniteGroup.scala`) use the
+lazy `SimplicialSet` trait for the infinite nerve of a finite group. None of this has a MATLAB or CLI entry point (a
+simplicial set needs its own input encoding), and every construction is checked against homology computed by hand
 over F₂ and F₃ rather than by `validate()` alone.
 
 ### Cech complexes
@@ -494,7 +505,7 @@ above, where each per-vertex solve is genuinely expensive.
 
 ## `Barcode.scala`: representing the output
 
-`org.appliedtopology.tda4j.barcode` defines `BarcodeEndpoint` (`PositiveInfinity`/`NegativeInfinity`/
+`barcode/Barcode.scala` defines `BarcodeEndpoint` (`PositiveInfinity`/`NegativeInfinity`/
 `OpenEndpoint`/`ClosedEndpoint`, with a total order that correctly interleaves finite and infinite
 endpoints) and `PersistenceBar[FiltrationT, AnnotationT]` (dimension, lower/upper endpoint, an optional
 annotation — in practice always the representative `Chain`). `Barcode` additionally implements algebra on
@@ -527,7 +538,7 @@ produces `Double` filtration values, and a metric distance needs real arithmetic
   weighted Gaussian mass *exactly* (a product of 1D normal-CDF differences, since an isotropic Gaussian's mass
   over a rectangle factors along both axes), not by sampling the surface at the pixel center.
 
-**Which bars get reported** (`barcode.PersistenceFilter`, `.claude/WORKLOG-persistence-threshold.md`). Engines
+**Which bars get reported** (`PersistenceFilter`, `.claude/WORKLOG-persistence-threshold.md`). Engines
 return EVERY bar — they are the cross-validation oracles, and a representative is recorded for each. Reading a
 real barcode is hopeless that way, so the *facade* (`matlab.TDA4j`, hence the CLI and MATLAB) applies a
 post-hoc filter by default: keep a bar iff it is essential or its persistence exceeds `0.01 * scale`, where the
@@ -565,9 +576,9 @@ that way: `naive`/`ripser`/`chunks`/`cohomology` all export byte-for-byte identi
 input). Like the vectorizations above, deliberately not mirrored on the CLI — a sparse matrix doesn't fit the
 CLI's diagram-in-diagram-out shape any better than a landscape/image array does.
 
-## `homology.CircularCoordinates` (`CircularCoordinates.scala`)
+## `CircularCoordinates` (`CircularCoordinates.scala`)
 
-`org.appliedtopology.tda4j.homology` also holds a standalone construction rather than a fifth persistence
+`homology/` also holds a standalone construction rather than a fifth persistence
 engine: circular coordinates (de Silva-Morozov-Vejdemo-Johansson 2011,
 `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 2), which turns one persistent H¹ class of a
 Vietoris-Rips complex into a map from (a connected subset of) the point cloud to the circle `R/Z`. `h1Bars`
@@ -618,7 +629,7 @@ above, deliberately not mirrored on the CLI: the natural output is a per-point a
 picking a meaningful `r` is an inherently interactive, data-dependent choice (`h1Bars` then `compute`) that
 doesn't reduce to a single flag the way `--distance-to` does for `BarcodeDistance`.
 
-## `homology.LatticeReduction` and `CircularCoordinates.computeToroidal` (toroidal coordinates)
+## `LatticeReduction` and `CircularCoordinates.computeToroidal` (toroidal coordinates)
 
 `computeToroidal` (`.claude/WORKLOG-toroidal-coordinates.md`) generalizes `compute` from one persistent H¹
 class to `k` SIMULTANEOUSLY-alive ones, combined into a single torus-valued map `K_r`'s shared connected

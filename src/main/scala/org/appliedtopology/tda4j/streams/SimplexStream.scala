@@ -1,8 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
 
 import org.apache.commons.numbers.combinatorics.BinomialCoefficient
 
@@ -129,9 +125,6 @@ class ExplicitStream[VertexT: Ordering, FiltrationT](
   def apply(i: Int): Simplex[VertexT] = simplices(i)
 
   def length: Int = simplices.length
-
-given [FiltrationT: Filterable] => Option[Filterable[FiltrationT]] =
-  Some(summon[Filterable[FiltrationT]])
 
 class ExplicitStreamBuilder[VertexT: Ordering, FiltrationT](using
   ordering: Ordering[FiltrationT]

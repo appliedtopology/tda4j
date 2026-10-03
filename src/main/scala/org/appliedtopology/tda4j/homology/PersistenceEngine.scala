@@ -1,9 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.barcode.PersistenceBar
-import org.appliedtopology.tda4j.streams.{given, *}
 
 /** A common shape for the three engines that consume an already-built `StratifiedCellStream` and are generic over
   * `CellT: OrderedCell` -- `CellularHomologyEngine` (naive), `CellularPersistenceInChunksEngine` (chunks), and

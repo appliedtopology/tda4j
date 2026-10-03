@@ -1,8 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
@@ -37,8 +33,8 @@ object LandmarkSelector:
     * radius is. `firstLandmark`'s own lambda is `Double.PositiveInfinity` (there is no "distance to the empty set");
     * every later entry is a real, finite, non-increasing (in selection order) value. `numLandmarks = metricSpace.size`
     * gives the FULL greedy permutation of the whole space, not just a landmark subset -- this is how
-    * `streams.SheehyRipsSimplexStream` (Cavanna-Jahanseir-Sheehy 2015's sparse-filtration construction) gets its own
-    * greedy permutation, reusing this loop rather than a second copy of it.
+    * `SheehyRipsSimplexStream` (Cavanna-Jahanseir-Sheehy 2015's sparse-filtration construction) gets its own greedy
+    * permutation, reusing this loop rather than a second copy of it.
     */
   def maxmin(metricSpace: FiniteMetricSpace[Int], numLandmarks: Int, firstLandmark: Int = 0): LandmarkSelection =
     require(

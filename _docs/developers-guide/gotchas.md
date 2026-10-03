@@ -18,8 +18,9 @@ summoned — every method built on it permanently closes over that one resolutio
 static (compile-time, lexical), not dynamic; calling those methods later, from a scope where a *different*
 `Ordering[CellT]` given is available, does not re-resolve anything.
 
-Concretely: `Simplex[VertexT] is OrderedCell`'s own `.ordering` is a fixed lexicographic order, and
-`Chain.scala`'s `given [CellT: OrderedCell] => Ordering[CellT] = oCell.ordering` fallback means any
+Concretely: `Simplex[VertexT] is OrderedCell`'s own `.ordering` is a fixed lexicographic order, and the
+default `Ordering[Simplex[VertexT]]` in `Simplex`'s companion (or, in generic code, the opt-in
+`import OrderedCell.cellOrdering` derivation) means any
 `chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]` written *before* a stream-specific
 `given Ordering[Simplex[VertexT]] = stream.filtrationOrdering` is in scope silently captures that
 lexicographic fallback instead — every chain built through `⊠`/`.scale` afterward pivots on vertex label

@@ -12,16 +12,13 @@ dimension you want) and returns a stream of simplices that any engine can read. 
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
-val lab = TDAlab(2)
-import lab.{*, given}
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val metricSpace = EuclideanMetricSpace(points)
+val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
 
-val points = io.CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
-val metricSpace = streams.EuclideanMetricSpace(points)
-val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
-
-def summarize(stream: streams.LevelwiseSimplexStream[Int, Double]): (Int, (Double, Double), Int) =
+def summarize(stream: LevelwiseSimplexStream[Int, Double]): (Int, (Double, Double), Int) =
   val size = stream.iterator.size                    // how many simplices the engine will have to process
   val bars = engine.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
   val loop = bars.filter(_._1 == 1).maxBy((_, birth, death) => death - birth)   // the longest-lived loop
@@ -31,11 +28,11 @@ def summarize(stream: streams.LevelwiseSimplexStream[Int, Double]): (Int, (Doubl
 ## The five complexes
 
 ```scala sc:nocompile
-val vr       = summarize(streams.VietorisRips(metricSpace, maxDimension = 1))
-val cech     = summarize(streams.Cech(metricSpace, maxDimension = 1))
-val delaunay = summarize(alpha.AlphaShapes(points.toSeq))
-val sparse   = summarize(streams.SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1))
-val witness  = summarize(streams.Witness(metricSpace, streams.LandmarkSelector.maxmin(metricSpace, 15).landmarks, maxDimension = 1))
+val vr       = summarize(VietorisRips(metricSpace, maxDimension = 1))
+val cech     = summarize(Cech(metricSpace, maxDimension = 1))
+val delaunay = summarize(AlphaShapes(points.toSeq))
+val sparse   = summarize(SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1))
+val witness  = summarize(Witness(metricSpace, LandmarkSelector.maxmin(metricSpace, 15).landmarks, maxDimension = 1))
 ```
 
 | complex | simplices | the loop (birth, death) |
@@ -105,28 +102,25 @@ variants.
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
-val lab = TDAlab(2)
-import lab.{*, given}
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val metricSpace = EuclideanMetricSpace(points)
+val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
 
-val points = io.CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
-val metricSpace = streams.EuclideanMetricSpace(points)
-val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
-
-def summarize(stream: streams.LevelwiseSimplexStream[Int, Double]): (Int, (Double, Double), Int) =
+def summarize(stream: LevelwiseSimplexStream[Int, Double]): (Int, (Double, Double), Int) =
   val size = stream.iterator.size
   val bars = engine.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
   val loop = bars.filter(_._1 == 1).maxBy((_, birth, death) => death - birth)
   (size, (loop._2, loop._3), bars.count((dim, _, death) => dim == 0 && death.isInfinite))   // and the number of components
 
-val landmarks = streams.LandmarkSelector.maxmin(metricSpace, 15).landmarks
+val landmarks = LandmarkSelector.maxmin(metricSpace, 15).landmarks
 val results = Map(
-  "vietoris-rips" -> summarize(streams.VietorisRips(metricSpace, maxDimension = 1)),
-  "cech" -> summarize(streams.Cech(metricSpace, maxDimension = 1)),
-  "alpha" -> summarize(alpha.AlphaShapes(points.toSeq)),
-  "sparse-rips" -> summarize(streams.SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1)),
-  "witness" -> summarize(streams.Witness(metricSpace, landmarks, maxDimension = 1))
+  "vietoris-rips" -> summarize(VietorisRips(metricSpace, maxDimension = 1)),
+  "cech" -> summarize(Cech(metricSpace, maxDimension = 1)),
+  "alpha" -> summarize(AlphaShapes(points.toSeq)),
+  "sparse-rips" -> summarize(SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1)),
+  "witness" -> summarize(Witness(metricSpace, landmarks, maxDimension = 1))
 )
 ```
 

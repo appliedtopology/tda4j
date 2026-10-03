@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
-import org.appliedtopology.tda4j.barcode.*
-import org.appliedtopology.tda4j.streams.matrixGen
 
 import org.specs2.mutable
 import org.specs2.execute.{AsResult, Result}

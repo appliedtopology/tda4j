@@ -13,7 +13,7 @@ fix or bug found in one does not imply anything about the others. Read this page
 to build on.
 
 Three of the five (`CellularHomologyEngine`, `CellularPersistenceInChunksEngine`, `CellularCohomologyEngine`)
-additionally implement the common `homology.PersistenceEngine[CellT, C]` trait (`def barcode(stream): List[
+additionally implement the common `PersistenceEngine[CellT, C]` trait (`def barcode(stream): List[
 PersistenceBar[Double, Chain[CellT, C]]]`) via `PersistenceEngine.naive`/`.chunks`/`.cohomology` factories — a
 thin, opt-in adapter over each engine's own incremental API, for a caller (the MATLAB/CLI facade) that just
 wants a finished barcode without hand-writing each engine's own construct/advance/read dance. It does not
@@ -198,7 +198,7 @@ cospherical-degeneracy hazard can violate directly by emitting an oversized simp
 dimension `>= 2`, same as engine 6** (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): both
 union-finds were already dimension-generic before this extension (only the `require` gated them to `d=2`), so
 extending past 2D was purely a matter of handing the residual "middle" dimensions (`1 <= k <= d-2`) to
-`PersistenceInChunksEngine[Int, C]` run on a new `alpha.LimitedAlphaShapesStream` view (the `Simplex[Int]`
+`PersistenceInChunksEngine[Int, C]` run on a new `LimitedAlphaShapesStream` view (the `Simplex[Int]`
 analogue of engine 6's own `LimitedCubicalGridStream` — needed because `HelixDelaunay`/`AlphaShapes` is a
 `LevelwiseSimplexStream`, not a `CofaceSimplexStream`, so the existing `LimitedCofaceSimplexStream` doesn't fit
 it) that hides the real top-dimensional simplices. Sequenced AFTER engine 6's own hybrid was validated, not

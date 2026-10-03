@@ -1,7 +1,7 @@
 package org.appliedtopology.tda4j
 package cli
 
-import org.appliedtopology.tda4j.io.{given, *}
+import org.appliedtopology.tda4j.*
 
 import org.specs2.mutable
 import java.io.{ByteArrayOutputStream, File, PrintStream}

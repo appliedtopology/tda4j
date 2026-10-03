@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package alpha
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 /** Regression tests for the vertex-value/presence fix to `AlphaComplexDQPBuilder.compute()`: a vertex's own filtration
   * value is `-weight(x)` ONLY when x's own point lies inside its own restricted power cell V_x -- unconditionally

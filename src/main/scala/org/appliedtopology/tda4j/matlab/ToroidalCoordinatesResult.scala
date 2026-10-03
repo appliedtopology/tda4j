@@ -1,6 +1,6 @@
 package org.appliedtopology.tda4j.matlab
 
-/** A finished toroidal-coordinates computation (`homology.CircularCoordinates.computeToroidal`,
+/** A finished toroidal-coordinates computation (`CircularCoordinates.computeToroidal`,
   * `.claude/WORKLOG-toroidal-coordinates.md`), in the same MATLAB-marshalable shape `CircularCoordinatesResult` uses --
   * see `TDA4j.toroidalCoordinates`'s own doc for how this gets constructed. A separate class rather than generalizing
   * `CircularCoordinatesResult` itself (which stays exactly as it was: a single `theta` array, unchanged for
@@ -23,7 +23,7 @@ final class ToroidalCoordinatesResult private[matlab] (
 
   /** Coordinate `c`'s value at each input point (same row order as the `points`/`distances` this was computed from),
     * each in `[0, 1)` -- or `Double.NaN` for a point outside the shared connected component (see
-    * `homology.CircularCoordinates.computeToroidal`'s own doc).
+    * `CircularCoordinates.computeToroidal`'s own doc).
     */
   def theta(c: Int): Array[Double] = thetaArrays(c)
 

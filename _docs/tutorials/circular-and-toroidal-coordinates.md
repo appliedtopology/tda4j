@@ -20,14 +20,11 @@ in the data (the algorithm works with cohomology rather than homology, which is 
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
-val lab = TDAlab(2)
-import lab.{*, given}
-
-val circlePoints = io.CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
-val circle = streams.EuclideanMetricSpace(circlePoints)
-val circleBars = homology.CircularCoordinates.h1Bars(circle)     // (birth, death), longest-lived first
+val circlePoints = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val circle = EuclideanMetricSpace(circlePoints)
+val circleBars = CircularCoordinates.h1Bars(circle)     // (birth, death), longest-lived first
 circleBars.take(2)    // (0.595, 1.707), then (1.950, 1.950): one real loop, then a bar with no length at all
 ```
 
@@ -36,7 +33,7 @@ natural choice, and the computation takes the loop's number in the list above:
 
 ```scala sc:nocompile
 val (birth, death) = circleBars.head
-val circleCoordinate = homology.CircularCoordinates.compute(circle, r = (birth + death) / 2, cocycleIndex = 0)
+val circleCoordinate = CircularCoordinates.compute(circle, r = (birth + death) / 2, cocycleIndex = 0)
 circleCoordinate.theta.size      // 60: an angle for every point
 circleCoordinate.theta(0)        // the angle of point 0 (row 0 of the file), in [0, 1)
 ```
@@ -78,9 +75,9 @@ with the two angles `a` and `b` independent and random. The torus has two indepe
 long bars in dimension 1:
 
 ```scala sc:nocompile
-val torusPoints = io.CSV.readPointCloud("_docs/tutorials/data/flat-torus.csv")
-val torus = streams.EuclideanMetricSpace(torusPoints)
-val torusBars = homology.CircularCoordinates.h1Bars(torus, maxFiltrationValue = Some(1.8))
+val torusPoints = CSV.readPointCloud("_docs/tutorials/data/flat-torus.csv")
+val torus = EuclideanMetricSpace(torusPoints)
+val torusBars = CircularCoordinates.h1Bars(torus, maxFiltrationValue = Some(1.8))
 torusBars.take(4)
 // (0.680, 1.751), (0.699, 1.755), (0.771, 1.419), (0.771, 1.407)
 ```
@@ -92,7 +89,7 @@ two births and the earlier of the two deaths, and ask for both:
 ```scala sc:nocompile
 val r = (torusBars.take(2).map(_._1).max + torusBars.take(2).map(_._2).min) / 2     // 1.225
 val coordinates =
-  homology.CircularCoordinates.computeToroidal(torus, r, cocycleIndices = Seq(0, 1), maxFiltrationValue = Some(1.8))
+  CircularCoordinates.computeToroidal(torus, r, cocycleIndices = Seq(0, 1), maxFiltrationValue = Some(1.8))
 coordinates.theta.map(_.size)      // Vector(120, 120): two angles for each of the 120 points
 ```
 
@@ -121,10 +118,7 @@ dimensions, and the loops are only barely separated from the noise bars. More po
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val lab = TDAlab(2)
-import lab.{*, given}
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
 def circularDistance(a: Double, b: Double): Double =
   val d = math.abs(a - b) % 1.0
@@ -139,20 +133,20 @@ def alignmentError(theta: Map[Int, Double], truth: Int => Double): Double =
 def turn(y: Double, x: Double): Double = (math.atan2(y, x) / (2 * math.Pi) + 1.0) % 1.0
 
 // A circle
-val circlePoints = io.CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
-val circle = streams.EuclideanMetricSpace(circlePoints)
-val circleBars = homology.CircularCoordinates.h1Bars(circle)
+val circlePoints = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val circle = EuclideanMetricSpace(circlePoints)
+val circleBars = CircularCoordinates.h1Bars(circle)
 val (birth, death) = circleBars.head
-val circleCoordinate = homology.CircularCoordinates.compute(circle, r = (birth + death) / 2, cocycleIndex = 0)
+val circleCoordinate = CircularCoordinates.compute(circle, r = (birth + death) / 2, cocycleIndex = 0)
 val circleError = alignmentError(circleCoordinate.theta, i => turn(circlePoints(i)(1), circlePoints(i)(0)))
 
 // A torus
-val torusPoints = io.CSV.readPointCloud("_docs/tutorials/data/flat-torus.csv")
-val torus = streams.EuclideanMetricSpace(torusPoints)
-val torusBars = homology.CircularCoordinates.h1Bars(torus, maxFiltrationValue = Some(1.8))
+val torusPoints = CSV.readPointCloud("_docs/tutorials/data/flat-torus.csv")
+val torus = EuclideanMetricSpace(torusPoints)
+val torusBars = CircularCoordinates.h1Bars(torus, maxFiltrationValue = Some(1.8))
 val r = (torusBars.take(2).map(_._1).max + torusBars.take(2).map(_._2).min) / 2
 val coordinates =
-  homology.CircularCoordinates.computeToroidal(torus, r, cocycleIndices = Seq(0, 1), maxFiltrationValue = Some(1.8))
+  CircularCoordinates.computeToroidal(torus, r, cocycleIndices = Seq(0, 1), maxFiltrationValue = Some(1.8))
 val torusErrors = coordinates.theta.map { theta =>
   val first = alignmentError(theta, i => turn(torusPoints(i)(1), torusPoints(i)(0)))
   val second = alignmentError(theta, i => turn(torusPoints(i)(3), torusPoints(i)(2)))

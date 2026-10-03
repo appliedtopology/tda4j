@@ -13,20 +13,17 @@ checked into the repository, so you can rebuild or change it.) There is one obvi
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
-val lab = TDAlab(2)          // coefficients in the field with 2 elements
-import lab.{*, given}
-
-val metricSpace = io.CSV.readEuclideanMetricSpace("_docs/tutorials/data/noisy-circle.csv")
+val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/data/noisy-circle.csv")
 val enclosingRadius = metricSpace.minimumEnclosingRadius   // 1.95: beyond this radius nothing new can be born
 
 // 1. The complex: at each scale r, join every group of points that are pairwise within r of each other.
-val stream = streams.VietorisRips(metricSpace, maxDimension = 1)
+val stream = VietorisRips(metricSpace, maxDimension = 1)
 stream.iterator.size         // 24711 simplices in all
 
 // 2. The engine: it reads the simplices in order of when they appear and tracks when holes are born and die.
-val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
+val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
 val state = engine.persistentHomology(stream)
 
 // 3. The barcode, as (dimension, birth, death) triples. Death is Infinity for a hole that never fills in.
@@ -98,7 +95,7 @@ the enclosing radius, past which the complex is just a cone and nothing is born.
 care about:
 
 ```scala sc:nocompile
-val shortStream = streams.VietorisRips(metricSpace, maxDimension = 1, maxFiltrationValue = Some(1.0))
+val shortStream = VietorisRips(metricSpace, maxDimension = 1, maxFiltrationValue = Some(1.0))
 shortStream.iterator.size    // 3629 simplices instead of 24711
 
 val shortLoop = engine.persistentHomology(shortStream).diagramAt(Double.PositiveInfinity).filter(_._1 == 1).maxBy((_, birth, death) => death - birth)
@@ -118,16 +115,13 @@ number quoted on this page):
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
-val lab = TDAlab(2)
-import lab.{*, given}
-
-val metricSpace = io.CSV.readEuclideanMetricSpace("_docs/tutorials/data/noisy-circle.csv")
+val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/data/noisy-circle.csv")
 val enclosingRadius = metricSpace.minimumEnclosingRadius
 
-val stream = streams.VietorisRips(metricSpace, maxDimension = 1)
-val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
+val stream = VietorisRips(metricSpace, maxDimension = 1)
+val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
 val state = engine.persistentHomology(stream)
 
 val bars = state.diagramAt(Double.PositiveInfinity).filter((dim, _, _) => dim <= 1)
@@ -141,7 +135,7 @@ val longestFiniteH0 = bars.filter(b => b._1 == 0 && b._3.isFinite).map(b => b._3
 val withCycles = state.diagramWithGeneratorsAt(Double.PositiveInfinity).filter((dim, _, _, _) => dim == 1)
 val (_, _, _, cycle) = withCycles.maxBy((_, birth, death, _) => death - birth)
 
-val shortStream = streams.VietorisRips(metricSpace, maxDimension = 1, maxFiltrationValue = Some(1.0))
+val shortStream = VietorisRips(metricSpace, maxDimension = 1, maxFiltrationValue = Some(1.0))
 val shortLoop = engine.persistentHomology(shortStream).diagramAt(Double.PositiveInfinity).filter(_._1 == 1).maxBy((_, birth, death) => death - birth)
 ```
 

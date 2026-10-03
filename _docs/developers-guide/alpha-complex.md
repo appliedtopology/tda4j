@@ -3,7 +3,7 @@ layout: main
 title: Alpha complex: DQP vs Helix
 ---
 
-Two independent backends compute alpha complexes; `AlphaShapes(points, dispatch)` (`alpha/AlphaShapes.scala`)
+Two independent backends compute alpha complexes; `AlphaShapes(points, backend)` (`alpha/AlphaShapes.scala`)
 chooses between them. This page is the developer-facing view. For the user-facing framing (which one to
 pick, and the honest tradeoffs), see the [User's Guide](../user-guide/index.md).
 
@@ -11,13 +11,13 @@ pick, and the honest tradeoffs), see the [User's Guide](../user-guide/index.md).
 
 ```scala sc:nocompile
 object AlphaShapes:
-  def apply(pts: Seq[Array[Double]], dispatch: String = "default", requireValidTriangulation: Boolean = false)(using
-    epsilon: Epsilon = Epsilon(1e-5)
+  def apply(points: PointCloud, backend: AlphaBackend = AlphaBackend.Default, requireValidTriangulation: Boolean = false)(
+    using epsilon: Epsilon = Epsilon(1e-5)
   ): AlphaShapes
 ```
 
-`dispatch = "default"` **always resolves to `"helix"` regardless of point-cloud shape** — `"DQP"` must be
-requested explicitly. Both backends extend the common `AlphaShapes` abstract class, so they're
+`AlphaBackend.Default` **always resolves to `AlphaBackend.Helix` regardless of point-cloud shape** — `AlphaBackend.DQP`
+must be requested explicitly (the MATLAB/CLI facade's `alphaBackend` string goes through `AlphaBackend.parse`). Both backends extend the common `AlphaShapes` abstract class, so they're
 dispatch-interchangeable as far as any code consuming the resulting stream is concerned —
 `AlphaComplexSpec` runs identical property checks against both to enforce this.
 
@@ -74,8 +74,8 @@ itself.
 (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): both union-finds were ALREADY written generically
 in terms of `ambientDimension`, not hardcoded to 2 — the only thing gating this engine to `d=2` was the single
 `require` check, so extending it is purely a matter of handing the residual "middle" dimensions (`1 <= k <=
-d-2`) to `PersistenceInChunksEngine[Int, C]` run on a new `alpha.LimitedAlphaShapesStream` view (the
-`Simplex[Int]` analogue of `streams.LimitedCubicalGridStream` — needed because `HelixDelaunay`/`AlphaShapes` is
+d-2`) to `PersistenceInChunksEngine[Int, C]` run on a new `LimitedAlphaShapesStream` view (the
+`Simplex[Int]` analogue of `LimitedCubicalGridStream` — needed because `HelixDelaunay`/`AlphaShapes` is
 a `LevelwiseSimplexStream`, not a `CofaceSimplexStream`, so the existing `LimitedCofaceSimplexStream` doesn't
 fit it) that hides the real top-dimensional simplices. Deliberately sequenced AFTER the cubical extension, not
 concurrently: this engine carries the additional facet-multiplicity risk above, which needed its own fresh

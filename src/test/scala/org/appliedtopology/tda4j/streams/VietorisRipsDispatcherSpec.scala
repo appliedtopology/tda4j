@@ -1,9 +1,5 @@
 package org.appliedtopology.tda4j
-package streams
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.homology.SimplicialHomologyEngine
 import org.specs2.mutable.Specification
 
 /** The `VietorisRips` dispatcher: `maxDimension` is a homological degree and every implementation agrees. */

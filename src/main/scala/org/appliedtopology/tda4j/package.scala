@@ -1,65 +1,181 @@
 package org.appliedtopology.tda4j
 
 import cats.Show
-import org.appliedtopology.tda4j.algebra.{*, given}
-import org.appliedtopology.tda4j.cells.{*, given}
-import org.appliedtopology.tda4j.streams.{*, given}
-import org.appliedtopology.tda4j.homology.{*, given}
-import org.appliedtopology.tda4j.alpha.{*, given}
 
-/** Pylab-style single entry point: `val tdalab = TDAlab(characteristic); import tdalab.{*, given}` brings coefficient
-  * arithmetic (`Fp`, `⊠`, `+`, `-`), `∆`/`Simplex`/`Cube` literals, an implicit `Simplex -> Chain` widening and `Show`
-  * syntax into scope. `characteristic = 0` selects `Double` coefficients (compared within `precision`); a prime `p`
-  * selects `Z/p`. Convenience for interactive/notebook-style use only -- never consulted by an engine (see CLAUDE.md's
-  * generic-`given`-capture note).
-  *
-  * Scala forbids `import tdalab(p = 3).{*, given}`, hence the `val` first.
+/** What every lab shares: a coefficient field chosen by its characteristic (`0` for `Double` compared within
+  * `precision`, a prime `p` for `Z/p`), with `CoefficientT`, `Fp(...)` and the field's `given`; flat re-exports of the
+  * whole library and the `sset` add-on (generated, see below), so `import lab.{*, given}` is the only import a lab user
+  * needs; and cats' `.show` syntax. Concrete labs add the conveniences of their setting: [[TDAlab]] (simplicial),
+  * [[CubicalLab]]. A lab is never consulted by an engine (CLAUDE.md's generic-`given`-capture note).
   */
-class TDAlab(characteristic: Int, precision: Double = 1e-9):
+abstract class Lab(characteristic: Int, precision: Double = 1e-9):
+  val coefficients: Coefficients = Coefficients(characteristic, precision)
+  type CoefficientT = coefficients.C
+  given coefficientField: (CoefficientT is Field) = coefficients.field
 
-  import org.appliedtopology.tda4j.io
-  import org.appliedtopology.tda4j.barcode
-  import org.appliedtopology.tda4j.homology
-  import org.appliedtopology.tda4j.streams
-  import org.appliedtopology.tda4j.alpha
-  import org.appliedtopology.tda4j.algebra.{*, given}
-  import org.appliedtopology.tda4j.cells.{*, given}
+  /** A coefficient from an integer (reduced mod p, or as a Double). */
+  def Fp(x: Int): CoefficientT = coefficients.fromInt(x)
 
-  import cats.syntax.all.*
+  // BEGIN generated re-exports
+  // regenerate: python3 .claude/scripts/tdalab-exports.py (checked by TDAlabExportsSpec)
+  export org.appliedtopology.tda4j.{
+    ∆,
+    AlphaBackend,
+    AlphaComplexDQP,
+    AlphaComplexDQPBuilder,
+    AlphaComplexDQPException,
+    AlphaComplexDQPStream,
+    AlphaDQPSettings,
+    AlphaShapeDQP,
+    AlphaShapes,
+    Barcode,
+    BarcodeBuilder,
+    BarcodeDistance,
+    BarcodeEndpoint,
+    BarcodeGenerators,
+    BruteForce,
+    CSV,
+    Cech,
+    CechFiltration,
+    Cell,
+    CellStream,
+    CellularCohomologyEngine,
+    CellularHomologyEngine,
+    CellularPersistenceInChunksEngine,
+    Chain,
+    CholeskyWorkspace,
+    CircularCoordinates,
+    ClosedEndpoint,
+    Coefficients,
+    CofacetIterator,
+    Cube,
+    CubicalGridStream,
+    CubicalHomologyEngine,
+    CubicalImage,
+    CubicalPersistenceInChunksEngine,
+    DelaunaySimplex,
+    Dipha,
+    DistanceToMeasure,
+    DoubleFiltration,
+    Dowker,
+    DowkerFiltration,
+    DowkerGeometry,
+    DtmRips,
+    DualQP,
+    EdgeCollapse,
+    EdgeCollapsedMetricSpace,
+    Epsilon,
+    EuclideanMetricSpace,
+    ExplicitCubicalStream,
+    ExplicitMetricSpace,
+    ExplicitStream,
+    ExplicitStreamBuilder,
+    FastAlphaHomologyEngine,
+    FastAlphaTriangulationException,
+    FastCubicalHomologyEngine,
+    Field,
+    Filterable,
+    FilteredSimplexOrdering,
+    Filtration,
+    FiltrationOrdering,
+    FiniteField,
+    FiniteMetricSpace,
+    GreedyPermutation,
+    Gudhi,
+    HasDimension,
+    HelixDelaunay,
+    Hyperplane,
+    Hypersphere,
+    Image,
+    IntMetricSpace,
+    JVPTree,
+    Kruskal,
+    LandmarkSelection,
+    LandmarkSelector,
+    LatticeReduction,
+    LevelwiseSimplexStream,
+    LimitedAlphaShapesStream,
+    LimitedCubicalGridStream,
+    LinearAlgebra,
+    NegativeInfinity,
+    NoIntegerCocycleException,
+    OpenEndpoint,
+    Optional,
+    OrderedBasis,
+    OrderedCell,
+    PackedRipserCohomologyEngine,
+    Perseus,
+    Persistence,
+    PersistenceBar,
+    PersistenceDiagram,
+    PersistenceEngine,
+    PersistenceFilter,
+    PersistenceInChunksEngine,
+    PointCloud,
+    PointCloudComplex,
+    PositiveInfinity,
+    PowerDistance,
+    RecursiveStackSimplexEnumerator,
+    RingModule,
+    Ripser,
+    RipserCohomologyEngine,
+    Simplex,
+    SimplexEdge,
+    SimplexIndexing,
+    SimplexStream,
+    SimplicialHomologyEngine,
+    SparseMetricSpace,
+    SparseRips,
+    SpatialQuery,
+    StratifiedCellStream,
+    TopCofacetEnumerator,
+    Truncated,
+    UnionFind,
+    Vectorization,
+    VietorisRips,
+    Witness,
+    WitnessGeometry,
+    WitnessMetricSpace
+  }
+  export org.appliedtopology.tda4j.sset.{
+    BettiNumbers,
+    ClassifyingSpace,
+    ComplexProjectivePlaneGenerator,
+    ConeGenerator,
+    CupProduct,
+    FilteredSimplicialSetStream,
+    FiniteGroup,
+    FiniteMonoid,
+    FiniteSimplicialSet,
+    FundamentalGroup,
+    GroupPresentation,
+    HopfSphereGenerator,
+    JoinGenerator,
+    KleinGenerator,
+    MinimalSphereGenerator,
+    Nerve,
+    NerveSimplex,
+    PresentationCell,
+    ProductGenerator,
+    RealProjectiveGenerator,
+    SSetElement,
+    SSetMap,
+    SimplicialSet,
+    SimplicialSetCatalog,
+    SimplicialSetStream,
+    Steenrod,
+    TorusGenerator
+  }
+  // END generated re-exports
 
-  trait FieldData:
-    type CoefficientT
+  export cats.implicits.toShow
 
-    given CoefficientT is Field = compiletime.deferred
-
-    def coeff(x: Int): CoefficientT
-
-    def Fp(x: Int): CoefficientT = coeff(x)
-
-  object FieldData:
-    def apply(): FieldData = characteristic match
-      case 0 =>
-        new FieldData:
-          override type CoefficientT = Double
-
-          override given CoefficientT is Field = Field.DoubleApproximated(precision)
-
-          override def coeff(x: Int): CoefficientT = x.toDouble
-      case p if BigInt(characteristic).isProbablePrime(certainty = 100) =>
-        val ff = FiniteField(p)
-        import ff.given
-        new FieldData:
-          override type CoefficientT = ff.Fp
-
-          override given CoefficientT is Field = summon[ff.Fp is Field]
-
-          override def coeff(x: Int): CoefficientT = ff.Fp(x)
-      case _ =>
-        throw IllegalArgumentException(s"TDAlab: characteristic must be 0 or a prime, got $characteristic")
-
-  val fieldData = FieldData()
-  export fieldData.{*, given}
-
+/** The simplicial lab: `import TDAlab.F17.{*, given}` (or `val lab = TDAlab(p); import lab.{*, given}` for another
+  * prime) brings in everything [[Lab]] does, plus chain arithmetic (`⊠`, `+`, `-`) on `Chain[Simplex[Int],
+  * CoefficientT]` and an implicit `Simplex -> Chain` widening, so chains can be written straight up and down: `Fp(2) ⊠
+  * ∆(1, 2) - ∆(2, 3)`.
+  */
+class TDAlab(characteristic: Int, precision: Double = 1e-9) extends Lab(characteristic, precision):
   type VertexT = Int
   val chainIsRingModule: Chain[Simplex[VertexT], CoefficientT] is RingModule { type R = CoefficientT } =
     summon[Chain[Simplex[VertexT], CoefficientT] is RingModule { type R = CoefficientT }]
@@ -67,72 +183,26 @@ class TDAlab(characteristic: Int, precision: Double = 1e-9):
   given [T: Ordering] => Conversion[Simplex[T], Chain[Simplex[T], CoefficientT]] =
     Chain.apply
 
-  export org.appliedtopology.tda4j.cells.defaultSimplexIsOrderedCell
-  export org.appliedtopology.tda4j.cells.defaultCubeIsOrderedCell
+/** Prebuilt simplicial labs: `import TDAlab.F17.{*, given}`. F17 is the library default (`FiniteField.DefaultPrime`).
+  */
+object TDAlab:
+  object F2 extends TDAlab(2)
+  object F3 extends TDAlab(3)
+  object F17 extends TDAlab(17)
+  object Reals extends TDAlab(0)
 
-  export org.appliedtopology.tda4j.cells.∆, org.appliedtopology.tda4j.cells.Simplex,
-    org.appliedtopology.tda4j.cells.asSimplex
-  export org.appliedtopology.tda4j.cells.Cube, org.appliedtopology.tda4j.cells.asCube
-  object streams:
-    export org.appliedtopology.tda4j.streams.{
-      Cech,
-      CubicalGridStream,
-      CubicalImage,
-      DistanceToMeasure,
-      Dowker,
-      DowkerGeometry,
-      DtmRips,
-      EdgeCollapse,
-      EuclideanMetricSpace,
-      ExplicitMetricSpace,
-      ExplicitStreamBuilder,
-      LandmarkSelector,
-      LevelwiseSimplexStream,
-      LimitedCubicalGridStream,
-      SparseRips,
-      Truncated,
-      VietorisRips,
-      Witness,
-      WitnessGeometry,
-      WitnessMetricSpace
-    }
-  object homology:
-    export org.appliedtopology.tda4j.homology.{
-      BettiNumbers,
-      CellularCohomologyEngine,
-      CellularHomologyEngine,
-      CellularPersistenceInChunksEngine,
-      CircularCoordinates,
-      CubicalHomologyEngine,
-      CubicalPersistenceInChunksEngine,
-      FastCubicalHomologyEngine,
-      PackedRipserCohomologyEngine,
-      PersistenceInChunksEngine,
-      RipserCohomologyEngine,
-      SimplicialHomologyEngine
-    }
-  object io:
-    export org.appliedtopology.tda4j.io.{CSV, Dipha, Gudhi, Perseus, Ripser}
-  object alpha:
-    export org.appliedtopology.tda4j.alpha.{AlphaComplexDQP, AlphaShapes}
-  object barcode:
-    export org.appliedtopology.tda4j.barcode.{BarcodeDistance, PersistenceBar, PersistenceFilter, Vectorization}
-  object cells:
-    export org.appliedtopology.tda4j.cells.{
-      CupProduct,
-      FiniteSimplicialSet,
-      FundamentalGroup,
-      GroupPresentation,
-      SSetMap,
-      SimplicialSets,
-      Steenrod
-    }
-  object groups:
-    export org.appliedtopology.tda4j.groups.{ClassifyingSpace, FiniteGroup, Nerve}
+/** The cubical lab: [[Lab]] plus chain arithmetic on `Chain[Cube, CoefficientT]` and a `Cube -> Chain` widening (and no
+  * simplex conveniences). `import CubicalLab.F17.{*, given}`.
+  */
+class CubicalLab(characteristic: Int, precision: Double = 1e-9) extends Lab(characteristic, precision):
+  val chainIsRingModule: Chain[Cube, CoefficientT] is RingModule { type R = CoefficientT } =
+    summon[Chain[Cube, CoefficientT] is RingModule { type R = CoefficientT }]
+  export chainIsRingModule.*
+  given Conversion[Cube, Chain[Cube, CoefficientT]] = Chain.apply
 
-  // Deliberate re-exports: `import tdalab.given` only sees givens that are members of `tdalab`.
-  given Show[Simplex[VertexT]] = summon[Show[Simplex[VertexT]]]
-
-  given Show[Chain[Simplex[VertexT], CoefficientT]] = summon[Show[Chain[Simplex[VertexT], CoefficientT]]]
-
-  export cats.implicits.toShow
+/** Prebuilt cubical labs: `import CubicalLab.F17.{*, given}`. */
+object CubicalLab:
+  object F2 extends CubicalLab(2)
+  object F3 extends CubicalLab(3)
+  object F17 extends CubicalLab(17)
+  object Reals extends CubicalLab(0)

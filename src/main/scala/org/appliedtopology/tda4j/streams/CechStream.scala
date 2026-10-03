@@ -1,8 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
 
 import scala.collection.concurrent.TrieMap
 
@@ -33,7 +29,7 @@ private class MiniballPointSet(points: Array[Array[Double]]) extends PointSet:
   *
   * Cech's own value over Vietoris-Rips is exactly this quantity: unlike VR's purely combinatorial max-pairwise-
   * distance, the Cech radius needs the vertices' real coordinates and a minimum-enclosing-ball computation (Welzl's
-  * algorithm, via Miniball) -- not `alpha.AlphaComplexDQP`'s dual active-set QP, which answers a different question
+  * algorithm, via Miniball) -- not `AlphaComplexDQP`'s dual active-set QP, which answers a different question
   * (restricted-Delaunay membership, dependent on the whole point cloud, not just a simplex's own vertices).
   */
 object CechFiltration:

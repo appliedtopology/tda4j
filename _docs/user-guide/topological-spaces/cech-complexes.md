@@ -5,16 +5,16 @@ layout: main
 ### Cech complexes
 
 ```scala 3
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
 
+val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
+val diagram = Persistence(points, complex = Cech, maxFiltrationValue = 2.0)
+
+// or the stream itself, for an engine of your choice:
 given Double is Field = Field.DoubleApproximated(1e-9)
-
-val metricSpace = EuclideanMetricSpace(Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5)))
-val cechStream = Cech(metricSpace, maxFiltrationValue = Some(2.0))
-val homology = SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(cechStream)
+val cechStream = Cech(EuclideanMetricSpace(points), maxFiltrationValue = 2.0)
+val homology = SimplicialHomologyEngine.persistentHomology(cechStream)
 ```
 
 `maxFiltrationValue` here is a Cech **radius**, not a Vietoris-Rips diameter — the two aren't

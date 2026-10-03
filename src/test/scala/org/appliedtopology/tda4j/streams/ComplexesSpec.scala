@@ -1,7 +1,5 @@
 package org.appliedtopology.tda4j
-package streams
 
-import org.appliedtopology.tda4j.cells.{given, *}
 import org.specs2.mutable.Specification
 
 /** Each public complex object must reproduce, cell for cell AND value for value, the implementation class wrapped at

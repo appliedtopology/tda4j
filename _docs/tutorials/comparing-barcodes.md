@@ -19,18 +19,15 @@ We compare the loops, so for each cloud we keep the dimension-1 bars that surviv
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
-val lab = TDAlab(2)
-import lab.{*, given}
-
-val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
+val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
 
 def loopDiagram(file: String) =
-  val metricSpace = io.CSV.readEuclideanMetricSpace(s"_docs/tutorials/data/$file")
-  val stream = streams.VietorisRips(metricSpace, maxDimension = 1)
+  val metricSpace = CSV.readEuclideanMetricSpace(s"_docs/tutorials/data/$file")
+  val stream = VietorisRips(metricSpace, maxDimension = 1)
   val bars = engine.persistentHomology(stream).barcodeAt(Double.PositiveInfinity)
-  barcode.PersistenceFilter.significant(bars.filter(_.dim == 1), scale = Some(metricSpace.minimumEnclosingRadius))
+  PersistenceFilter.significant(bars.filter(_.dim == 1), scale = Some(metricSpace.minimumEnclosingRadius))
 
 val circleA = loopDiagram("noisy-circle.csv")      // one loop, (0.595, 1.707)
 val circleB = loopDiagram("noisy-circle-b.csv")    // one loop, (0.631, 1.667)
@@ -55,8 +52,8 @@ that is, to disappear, which is how a short-lived bar gets matched away. The two
 ```scala sc:nocompile
 val pairs = List("A-B" -> (circleA, circleB), "A-8" -> (circleA, eight), "B-8" -> (circleB, eight))
 
-val bottleneck = pairs.map((name, ds) => name -> barcode.BarcodeDistance.bottleneckDistance(ds._1, ds._2)).toMap
-val wasserstein = pairs.map((name, ds) => name -> barcode.BarcodeDistance.wassersteinDistance(ds._1, ds._2)).toMap
+val bottleneck = pairs.map((name, ds) => name -> BarcodeDistance.bottleneckDistance(ds._1, ds._2)).toMap
+val wasserstein = pairs.map((name, ds) => name -> BarcodeDistance.wassersteinDistance(ds._1, ds._2)).toMap
 ```
 
 | pair | bottleneck | Wasserstein |
@@ -91,14 +88,14 @@ want each data set to be a vector of numbers. Two standard ways of turning a bar
 
 ```scala sc:nocompile
 val landscapes = Map(
-  "A" -> barcode.Vectorization.landscape(circleA, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
-  "B" -> barcode.Vectorization.landscape(circleB, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
-  "8" -> barcode.Vectorization.landscape(eight, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100)
+  "A" -> Vectorization.landscape(circleA, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
+  "B" -> Vectorization.landscape(circleB, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
+  "8" -> Vectorization.landscape(eight, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100)
 )
 val images = Map(
-  "A" -> barcode.Vectorization.persistenceImage(circleA, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0)),
-  "B" -> barcode.Vectorization.persistenceImage(circleB, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0)),
-  "8" -> barcode.Vectorization.persistenceImage(eight, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0))
+  "A" -> Vectorization.persistenceImage(circleA, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0)),
+  "B" -> Vectorization.persistenceImage(circleB, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0)),
+  "8" -> Vectorization.persistenceImage(eight, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0))
 )
 
 def l2(x: Array[Array[Double]], y: Array[Array[Double]]): Double =
@@ -133,39 +130,36 @@ format). Save the barcode of one cloud with `--output`, then compare other cloud
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
+import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
 
-val lab = TDAlab(2)
-import lab.{*, given}
-
-val engine = homology.SimplicialHomologyEngine[Int, CoefficientT, Double]()
+val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
 
 def loopDiagram(file: String) =
-  val metricSpace = io.CSV.readEuclideanMetricSpace(s"_docs/tutorials/data/$file")
-  val stream = streams.VietorisRips(metricSpace, maxDimension = 1)
+  val metricSpace = CSV.readEuclideanMetricSpace(s"_docs/tutorials/data/$file")
+  val stream = VietorisRips(metricSpace, maxDimension = 1)
   val bars = engine.persistentHomology(stream).barcodeAt(Double.PositiveInfinity)
-  barcode.PersistenceFilter.significant(bars.filter(_.dim == 1), scale = Some(metricSpace.minimumEnclosingRadius))
+  PersistenceFilter.significant(bars.filter(_.dim == 1), scale = Some(metricSpace.minimumEnclosingRadius))
 
 val circleA = loopDiagram("noisy-circle.csv")
 val circleB = loopDiagram("noisy-circle-b.csv")
 val eight = loopDiagram("figure-eight.csv")
 
 val pairs = List("A-B" -> (circleA, circleB), "A-8" -> (circleA, eight), "B-8" -> (circleB, eight))
-val bottleneck = pairs.map((name, ds) => name -> barcode.BarcodeDistance.bottleneckDistance(ds._1, ds._2)).toMap
-val wasserstein = pairs.map((name, ds) => name -> barcode.BarcodeDistance.wassersteinDistance(ds._1, ds._2)).toMap
+val bottleneck = pairs.map((name, ds) => name -> BarcodeDistance.bottleneckDistance(ds._1, ds._2)).toMap
+val wasserstein = pairs.map((name, ds) => name -> BarcodeDistance.wassersteinDistance(ds._1, ds._2)).toMap
 
 def l2(x: Array[Array[Double]], y: Array[Array[Double]]): Double =
   math.sqrt(x.flatten.zip(y.flatten).map((p, q) => (p - q) * (p - q)).sum)
 
 val landscapes = Map(
-  "A" -> barcode.Vectorization.landscape(circleA, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
-  "B" -> barcode.Vectorization.landscape(circleB, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
-  "8" -> barcode.Vectorization.landscape(eight, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100)
+  "A" -> Vectorization.landscape(circleA, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
+  "B" -> Vectorization.landscape(circleB, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100),
+  "8" -> Vectorization.landscape(eight, numLevels = 3, tMin = 0.0, tMax = 2.0, resolution = 100)
 )
 val images = Map(
-  "A" -> barcode.Vectorization.persistenceImage(circleA, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0)),
-  "B" -> barcode.Vectorization.persistenceImage(circleB, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0)),
-  "8" -> barcode.Vectorization.persistenceImage(eight, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0))
+  "A" -> Vectorization.persistenceImage(circleA, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0)),
+  "B" -> Vectorization.persistenceImage(circleB, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0)),
+  "8" -> Vectorization.persistenceImage(eight, 0.1, (0.0, 2.0), (0.0, 2.0), 40, 40, Some(1.0))
 )
 val landscapeDistance = l2(landscapes("A"), landscapes("8"))
 val imageDistance = l2(images("A"), images("8"))
