@@ -57,10 +57,11 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     opt[Int](descr = "the highest homological degree to compute (default: 2; for an image, its dimension)")
   val maxFiltrationValue: ScallopOption[Double] = opt[Double](
     descr = "stop the filtration at this value (default: the minimum enclosing radius); in the units of the " +
-      "complex: a diameter for vr, a radius for cech and alpha"
+      "complex: a diameter for vr, a radius for cech"
   )
   val minPersistence: ScallopOption[Double] = opt[Double](descr =
-    "report only bars longer than this (essential bars are always reported); 0 reports every bar. " +
+    "report only bars longer than this (essential bars are always reported); 0 reports every bar of positive " +
+      "length. " +
       "Default: --min-persistence-fraction 0.01. Give at most one of the two"
   )
   val minPersistenceFraction: ScallopOption[Double] = opt[Double](descr =

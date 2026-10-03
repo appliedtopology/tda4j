@@ -620,7 +620,7 @@ object HelixDelaunay:
           s"HelixDelaunay.repairByJitterRetriangulation: could not resolve the facet-multiplicity violation " +
             s"after $maxAttempts jitter attempts on vertex set $jitterVertices; the point cloud may have a " +
             "degeneracy this repair does not handle. Please report it with the point cloud; the DQP backend " +
-            "(alphaBackend=DQP) avoids the problem."
+            "(AlphaBackend.DQP; alphaBackend=DQP in MATLAB, --alpha-backend DQP on the command line) avoids the problem."
         )
       )
 

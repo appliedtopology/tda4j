@@ -15,7 +15,7 @@ import scala.collection.immutable
   *
   * The filtration is monotone (`f(tau) <= f(sigma)` for `tau` a face of `sigma`, since the max over a subset is smaller
   * for every `w`), vertices have values `min_w R(x, w)` that are generally nonzero, and the complex is not a flag
-  * complex, so the Ripser and chunks engines do not apply.
+  * complex, so the Ripser engines do not apply (MATLAB and the CLI also do not offer chunks for relations).
   *
   * '''Duality''': the complexes of `R` (on the rows) and of its transpose ([[dual]], on the columns) are homotopy
   * equivalent at every `t`, and their persistence modules are isomorphic, so their barcodes agree. This holds for the
