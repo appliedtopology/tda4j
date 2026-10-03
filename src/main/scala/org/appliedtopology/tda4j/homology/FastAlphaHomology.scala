@@ -2,53 +2,23 @@ package org.appliedtopology.tda4j
 
 import scala.collection.mutable
 
-/** Thrown by `FastAlphaHomologyEngine` when `HelixDelaunay`'s own triangulation does not satisfy the "every facet has 1
-  * or 2 containing top simplices" precondition this engine's dual graph needs (see the class doc's own "new finding"
-  * section) -- a real but rare (`~1-in-18700` measured, ambient dimension 2) `HelixDelaunay` limitation, not a sign the
-  * input is malformed or that its persistent homology is somehow uncomputable. Deliberately a distinct, named,
-  * `RuntimeException` subtype -- not a bare `IllegalStateException` -- so a caller (MATLAB/CLI included, where it
-  * crosses the bridge the same way `NoIntegerCocycleException` already does) can catch and handle it specifically, and
-  * so its own message can afford to explain the situation in plain language rather than only in this engine's own
-  * internal vocabulary (top-cell ids, facet counts).
+/** Thrown by [[FastAlphaHomologyEngine]] when the Helix triangulation has a facet with more than two top-dimensional
+  * cofaces, which its dual graph cannot represent. A rare limitation of the triangulation (about 1 cloud in 18,700 in
+  * the plane, more often in higher dimension), not a problem with the data: the general engines handle the same points,
+  * and `requireValidTriangulation` repairs the triangulation. The message says so.
   */
 class FastAlphaTriangulationException(message: String) extends RuntimeException(message)
 
-/** The `FastCubicalHomologyEngine` dual-graph union-find, ported to a `HelixDelaunay` alpha complex
-  * (`.claude/DESIGN-alpha-dual-unionfind.md`, item 7 of `.claude/WORKLOG-mainstream-feature-gap-analysis.md`, a
-  * follow-on to item 6's cubical engine). `HelixDelaunay` specifically, not `AlphaComplexDQP`/`AlphaShapeDQP` -- the
-  * dual graph needs the FULL, untruncated triangulation and "every facet has <= 2 cofaces," which `AlphaShapeDQP`'s own
-  * documented cospherical-degeneracy hazard can violate directly (see the design note).
+/** Persistent homology of a Helix alpha complex by union-find instead of matrix reduction: degree 0 on the vertices
+  * and edges, the top degree `d - 1` on the dual graph of the top-dimensional simplices, as in
+  * [[FastCubicalHomologyEngine]]. In the plane those cover everything; in dimension 3 and up the degrees in between are
+  * computed by the chunks engine on the complex without its top simplices. Works in any ambient dimension from 2, with
+  * representatives for every bar.
   *
-  * '''Valid at any ambient dimension `>= 2`''' (`require`d), same as `FastCubicalHomologyEngine` (which this class
-  * mirrors term-for-term): `H_0` (ordinary primal union-find) plus `H_{d-1}` (via the dual union-find below) together
-  * account for every cell dimension a 2D triangulation has, with no general `Chain.reduceBy` reduction needed at all.
-  * At `d >= 3` there are `d-2` "middle" dimensions (`1 <= k <= d-2`) with no duality shortcut; these are handed to
-  * `CellularPersistenceInChunksEngine` run on a `LimitedAlphaShapesStream` view that hides the real top-dimensional
-  * simplices entirely -- still a net win, since the (often largest) top dimension never touches general `Chain`
-  * reduction. See `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md` for the full derivation, including why the
-  * dual union-find's own correctness doesn't depend on how the middle dimensions get resolved.
-  *
-  * '''Unlike the cubical grid, "every facet has 1 or 2 cofaces" is not guaranteed by construction''' -- validated
-  * explicitly up front, throwing [[FastAlphaTriangulationException]] (a message written for an unsuspecting caller, not
-  * just this engine's own developers -- what happened, why it isn't a bug in their data, and the concrete fix) on
-  * violation, rather than silently building a wrong dual graph. Measured at roughly 1-in-18700 on random points at
-  * ambient dimension 2 (the original measurement) -- but this is a real, genuine `HelixDelaunay` limitation (a
-  * cospherical tiling choice or its own documented frontier-walk incompleteness bug), and it is NOTICEABLY MORE LIKELY
-  * at higher ambient dimension and with more points, not a flat rate: roughly 1-in-1666 measured at ambient dimension 3
-  * with 20-30 points (vs. no violations at all in 20000 trials with 6-16 points at the same dimension). See
-  * `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`'s own measurement and the design note's "new finding"
-  * section.
-  *
-  * '''A facet's own dual-edge value is `helix.filtrationValue(facet)` directly, never recomputed as `min` over its
-  * containing top simplices''' -- unlike a cubical grid (where those two quantities are the same by construction),
-  * `HelixDelaunay.computeFVal`'s own `edgeIsDelaunay` shortcut can give a genuinely SMALLER value than either
-  * containing triangle's own circumradius; using anything else silently shifts some bars' birth values (see the design
-  * note's own worked example for a concrete case where this matters).
-  *
-  * See `FastCubicalHomologyEngine`'s own doc for the shared parts of the construction (the dual graph itself, the `∞`
-  * sentinel and why it must be `+Infinity`, the birth/death swap, and the representative-tracking orientation-flip
-  * scheme) -- identical here, `Simplex[Int]`'s alternating-sign boundary rule (`simplexIsOrderedCell`) standing in for
-  * `Cube`'s rank-among-non-degenerate-axes rule.
+  * The dual graph needs every facet to have one or two top-dimensional cofaces. Unlike a grid, a triangulation does
+  * not guarantee it, so it is checked first, throwing [[FastAlphaTriangulationException]] when it fails (about 1 cloud
+  * in 18,700 at dimension 2, 1 in 1,700 at dimension 3 with 20-30 points). A facet's dual-edge value is its own
+  * filtration value, which can be smaller than its cofaces' circumradii (a Gabriel edge).
   */
 class FastAlphaHomologyEngine[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]

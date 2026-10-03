@@ -1,11 +1,7 @@
 package org.appliedtopology.tda4j.matlab
 
-/** A finished toroidal-coordinates computation (`CircularCoordinates.computeToroidal`,
-  * `.claude/WORKLOG-toroidal-coordinates.md`), in the same MATLAB-marshalable shape `CircularCoordinatesResult` uses --
-  * see `TDA4j.toroidalCoordinates`'s own doc for how this gets constructed. A separate class rather than generalizing
-  * `CircularCoordinatesResult` itself (which stays exactly as it was: a single `theta` array, unchanged for
-  * `mimaReportBinaryIssues`) since this result's shape is genuinely different -- `k` coordinates per point, plus the
-  * basis-change/Gram-matrix diagnostics `CircularCoordinatesResult` has no field for at all.
+/** Toroidal coordinates from `TDA4j.toroidalCoordinates` (see `CircularCoordinates.computeToroidal`): `k` angles per
+  * point, with the lattice-reduction diagnostics.
   */
 final class ToroidalCoordinatesResult private[matlab] (
   private val thetaArrays: Array[
@@ -21,32 +17,27 @@ final class ToroidalCoordinatesResult private[matlab] (
   /** Number of combined coordinates (`k`, the length of `cocycleIndices`). */
   def dimension(): Int = thetaArrays.length
 
-  /** Coordinate `c`'s value at each input point (same row order as the `points`/`distances` this was computed from),
-    * each in `[0, 1)` -- or `Double.NaN` for a point outside the shared connected component (see
-    * `CircularCoordinates.computeToroidal`'s own doc).
+  /** Coordinate `c` at each point (in the input's row order), in `[0, 1)`, or `NaN` for a point outside the loops'
+    * connected component.
     */
   def theta(c: Int): Array[Double] = thetaArrays(c)
 
   def hasCoordinate(i: Int): Boolean = !thetaArrays(0)(i).isNaN
 
-  /** Which persistent H¹ classes (same indexing as `h1Bars`/`circularCoordinates`'s own `cocycleIndex`) were combined,
-    * in the same order as `theta`'s own rows.
-    */
+  /** The loops combined (numbered as in `TDA4j.h1Bars`), in the order of the coordinates. */
   def cocycleIndices(): Array[Int] = cocycleIndicesArray
 
-  /** `U`, `k x k`: column `c` gives coordinate `c`'s integer coefficients against the ORIGINAL (un-reduced) per-class
-    * circular coordinates, in `cocycleIndices`' own order -- the identity matrix if `reduce = false` was passed to
-    * `toroidalCoordinates`, or if only one class was requested.
+  /** The `k x k` integer matrix `U`: column `c` gives coordinate `c` in terms of the circular coordinates of the
+    * loops in [[cocycleIndices]] (the identity without reduction, or for one loop).
     */
   def basisChange(): Array[Array[Int]] = basisChangeArray
 
-  /** The chosen classes' own harmonic-representative Gram matrix (the paper's dSMV inner product) before
-    * ([[originalGram]]) and after ([[reducedGram]]) lattice reduction -- smaller off-diagonal entries in `reducedGram`
-    * is the evidence reduction actually decorrelated the coordinates on this data.
+  /** The Gram matrix of the loops' harmonic cocycles before ([[originalGram]]) and after ([[reducedGram]]) lattice
+    * reduction: smaller off-diagonal entries after mean less correlated coordinates.
     */
   def originalGram(): Array[Array[Double]] = originalGramArray
   def reducedGram(): Array[Array[Double]] = reducedGramArray
 
-  /** The `r` and `prime` this result was actually computed with (echoing the caller's own arguments back). */
+  /** The `r` and `prime` this result was computed with. */
   def r(): Double = rValue
   def prime(): Int = primeValue

@@ -2,177 +2,10 @@ package org.appliedtopology.tda4j.matlab
 
 import org.appliedtopology.tda4j.*
 
-import org.appliedtopology.tda4j.*
-
 import scala.collection.mutable
 
-/** Static entry point for computing persistent (co)homology from MATLAB (or any plain-Java caller) via MATLAB's
-  * built-in Java interface. Every public method takes/returns only `double`, `int`, `String`, `double[][]`, `int[]`, or
-  * `String[]` -- deliberately not `java.util.Map` or anything generic, since MATLAB's Java bridge doesn't marshal those
-  * reliably. See `WORKLOG-matlab-api.md` for the full design rationale and what's still open, `PersistenceResult` for
-  * what `computeFrom*` returns, and `LandmarkSelectionResult` for what `selectLandmarksFrom*` returns.
-  *
-  * `selectLandmarksFrom{Points,DistanceMatrix}`/`computeFrom{Points,DistanceMatrix}AndLandmarks`/
-  * `coveringRadiusFrom{Points,DistanceMatrix}` (further down this file) are a separate, TWO-STEP alternative to the
-  * one-shot `complex=witness` path below -- pick landmarks and read back the covering radius `R` first, then compute
-  * (or query `R` for a landmark set you picked yourself) -- for the JavaPlex tutorial's own "pick landmarks, read R,
-  * use 2R" recipe, which the one-shot path can't reproduce (it never reports `R` back). Each of those entry points
-  * documents its own, STRICTER recognized-options set on itself, separate from the list below (see
-  * `.claude/WORKLOG-witness-two-step-api.md`).
-  *
-  * Options are passed as a flat, alternating key/value `String[]` (`{"engine","ripser","maxDimension","3"}`) rather
-  * than fixed parameters, so that adding a new option never changes any method's call signature. Recognized keys
-  * (`computeFromPoints`/`computeFromDistanceMatrix`/`computeFromCubicalImage`/`computeFromImage` only -- see above for
-  * the two-step entry points' own separate lists):
-  *
-  *   - `"complex"`: `"vr"` (default), `"alpha"`, `"cech"`, `"witness"`, `"dtm-rips"`, `"dtm-alpha"`, or
-  *     `"sparse-rips"`.
-  *   - `"engine"`: `"ripser"` (default for `complex=vr`, and for `complex=witness` with `witnessVariant=lazy`; backed
-  *     by `PackedRipserCohomologyEngine`, the fastest and most memory-efficient engine -- see CLAUDE.md), `"naive"`
-  *     (reference-grade, slower; the default for
-  *     `complex=alpha`/`complex=cech`/`complex=dtm-rips`/`complex=dtm-alpha`/`complex=sparse-rips`, and for
-  *     `complex=witness` with `witnessVariant=general`), `"chunks"` (`complex=vr`/`complex=cech`/`complex=dtm-rips`/
-  *     `complex=sparse-rips`/`complex=witness` with `witnessVariant=lazy` only -- see below for why `complex=alpha`/
-  *     `complex=dtm-alpha` refuse it, and why `complex=cech`/`complex=dtm-rips`/`complex=sparse-rips`/
-  *     `witnessVariant=general` refuse `engine=ripser` specifically), or `"cohomology"` (backed by
-  *     `CellularCohomologyEngine` -- persistent COhomology, generic over `CellT: OrderedCell`, valid for every
-  *     `complex` value including `alpha`; unlike `engine=ripser`, not specialized to Vietoris-Rips, so it also works
-  *     for `complex=alpha`/`complex=cech`/`complex=witness`/`complex=dtm-rips`/`complex=dtm-alpha`/
-  *     `complex=sparse-rips`, but without `ripser`'s VR-specific speed optimizations -- see
-  *     `.claude/DESIGN-generic-cohomology.md`). Every essential bar's representative is a genuine cocycle (`d(rep) =
-  *     0`); a finite bar's representative is a valid witness on its own living interval but is NOT expected to have
-  *     zero coboundary over the whole complex -- see `Cohomology.scala`'s own doc for why. `"fast-alpha"`
-  *     (`FastAlphaHomologyEngine`, a dual-graph union-find, extended past 2D by a hybrid with `chunks` for the residual
-  *     middle dimensions -- `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) is valid ONLY for
-  *     `complex=alpha` with `alphaBackend=helix` (the default) and ambient dimension `>= 2` -- see
-  *     `.claude/DESIGN-alpha-dual-unionfind.md`. On a fraction of point clouds it throws
-  *     `FastAlphaTriangulationException`, a real (NOT a bug in your data) `HelixDelaunay` triangulation limitation
-  *     whose likelihood grows with ambient dimension and point count -- roughly 1-in-18700 measured at ambient
-  *     dimension 2, roughly 1-in-1666 at ambient dimension 3 with 20-30 points -- its own message explains the
-  *     situation and names the fix (retry with `engine="naive"`/`"chunks"`/`"cohomology"`, which are never affected by
-  *     it).
-  *   - `"alphaBackend"`: `"helix"` (default) or `"DQP"`, only consulted when `complex=alpha`. `complex=dtm-alpha`
-  *     always uses DQP (needs power/weighted Delaunay, which Helix does not support) -- this option is not consulted
-  *     there.
-  *   - `"requireValidTriangulation"`: `"true"` or `"false"` (default), only consulted when `complex=alpha` with
-  *     `alphaBackend=helix` (the default) -- `require`d `false`/omitted for `alphaBackend=DQP` and every other
-  *     `complex`. When `true`, repairs a `HelixDelaunay` facet-multiplicity violation (the precondition
-  *     `engine=fast-alpha` needs) rather than leaving it to surface as `FastAlphaTriangulationException` --
-  *     `HelixDelaunay.repairByJitterRetriangulation`'s own doc and `.claude/DESIGN-helix-triangulation-repair.md` have
-  *     the full mechanism and validation. Off by default: zero effect unless a violation is actually present, and even
-  *     then only changes the RESULTING triangulation for the (rare) point clouds that would otherwise throw --
-  *     validated at ambient dimension 2 and 3 (`engine=fast-alpha`'s own primary use case); not validated at dimension
-  *     `>= 4`, where `HelixDelaunay` construction itself is already a documented unreliable-ground-truth regime for
-  *     unrelated reasons. Meaningful with any `"engine"` value (the flag lives on the triangulation itself, not on
-  *     `engine=fast-alpha` specifically), but its only practical effect on `engine=naive`/`"chunks"`/ `"cohomology"` is
-  *     to silently change which (rare, near-tied) triangulation gets built -- those engines have no facet-multiplicity
-  *     precondition of their own to repair, so there is usually no reason to set this unless also using
-  *     `engine=fast-alpha`.
-  *   - `"dtmK"`: integer, REQUIRED when `complex=dtm-rips` or `complex=dtm-alpha` (no default -- there is no
-  *     universally sensible neighbour count). The `k` of `DistanceToMeasure`: how many nearest neighbours (self
-  *     included) define each point's own distance-to-measure value. See `AlphaComplexDQP.dtm`/ `DtmRipsSimplexStream`'s
-  *     own docs (Chazal-Cohen-Steiner-Merigot 2011; Anai et al., "DTM-based filtrations," arXiv:1811.04757).
-  *   - `"dtmQ"`: double, default `2.0`, only consulted when `complex=dtm-rips` or `complex=dtm-alpha` -- the DTM's own
-  *     exponent (`DistanceToMeasure`'s `q`), not the filtration's ball-radius exponent below.
-  *   - `"dtmP"`: double, default `1.0` (GUDHI's own default, and the only variant checked against an external reference
-  *     implementation -- see `DtmRipsSimplexStream`'s own doc), only consulted when `complex=dtm-rips`; must be `1.0`
-  *     or `2.0`. Not consulted for `complex=dtm-alpha`, which is inherently the `p=2` ball equation by construction
-  *     (see `AlphaComplexDQP.dtm`'s own doc).
-  *   - `"sparseEpsilon"`: double, REQUIRED when `complex=sparse-rips` (no default -- there is no universally sensible
-  *     sparsity/approximation-quality tradeoff, and silently picking one could produce a barely-sparsified or
-  *     wildly-approximate complex without the caller noticing). Must be strictly between `0` and `1`. Cavanna,
-  *     Jahanseir & Sheehy's own `epsilon` (arXiv:1506.03797): the resulting barcode is a `(1+epsilon)`-multiplicative
-  *     approximation to plain `complex=vr`'s own barcode -- see `SheehyRipsSimplexStream`'s own doc for the full
-  *     construction, its units convention, and a documented gap in the source paper's own published algorithm this
-  *     implementation closes.
-  *   - `"numLandmarks"`: integer, REQUIRED when `complex=witness` (no default -- there is no universally sensible
-  *     landmark count). The number of landmarks to select from the input point cloud/distance matrix via
-  *     `"landmarkSelector"` -- see `LandmarkSelector`.
-  *   - `"witnessVariant"`: `"lazy"` (default) or `"general"`, only consulted when `complex=witness` -- see
-  *     `WitnessVariantKind`'s own doc for the distinction (flag complex vs. not).
-  *   - `"landmarkSelector"`: `"maxmin"` (default, sequential furthest-point sampling -- a covering-radius guarantee,
-  *     JavaPlex's own recommended default) or `"random"` (uniform, seeded by `"landmarkSeed"`), only consulted when
-  *     `complex=witness`.
-  *   - `"landmarkSeed"`: integer, default `0`, only consulted when `complex=witness` and `landmarkSelector=random`.
-  *   - `"nu"`: integer, default `2` (JavaPlex's own default), only consulted when `complex=witness` and
-  *     `witnessVariant=lazy` -- see `WitnessMetricSpace`'s own doc; must be `0`, `1`, or `2`.
-  *   - `"maxDimension"`: integer, default `2` -- the highest HOMOLOGICAL degree you want back (i.e. "give me
-  *     H_0..H_k"), not the highest simplex dimension to build. Computing H_k correctly needs (k+1)-dimensional chains
-  *     (H_k = ker(d_k)/im(d_{k+1}) -- with no (k+1)-chains at all there's no way to tell a genuine k-cycle from one a
-  *     not-yet-built (k+1)-simplex would have killed). For `engine="ripser"`/`"chunks"`,
-  *     `PackedRipserCohomologyEngine`/ `PersistenceInChunksEngine` both now handle this internally (fixed at their own
-  *     source -- see `.claude/WORKLOG-maxdim-semantics-fix.md`); for `engine="naive"`, this facade still builds one
-  *     dimension higher internally and drops that extra top dimension from what's reported, since
-  *     `SimplicialHomologyEngine` has no `maxDimension` of its own at all -- it would otherwise look spuriously
-  *     essential, a well-known truncation artifact of the top dimension of any truncated chain complex, not real
-  *     information (confirmed the hard way in this facade's first pass -- see WORKLOG-matlab-api.md). `complex=alpha`/
-  *     `complex=dtm-alpha` ignore this option entirely and report every dimension their complex naturally has: an alpha
-  *     complex's chain complex terminates on its own (bounded by ambient dimension, or higher under cosphericity -- see
-  *     CLAUDE.md), it is never artificially cut short the way a VR complex is by this option, so its own top dimension
-  *     is genuine information, not scaffolding. `complex=dtm-rips`/`complex=sparse-rips` need the same "build one
-  *     dimension higher, drop it" handling as `complex=vr`/`complex=cech` (both are just as unboundedly deep).
-  *   - `"minPersistence"` / `"minPersistenceFraction"`: which bars are reported. By default a bar is reported only if
-  *     it is essential (never dies) or its persistence `death - birth` is greater than 1% of the input's minimum
-  *     enclosing radius (`FiniteMetricSpace.minimumEnclosingRadius`, Ripser's enclosing radius: the range `0` to it
-  *     holds every bar), in the units the complex reports (diameters for `vr`, radii for `cech`/`alpha`); a cubical
-  *     image or Dowker relation has no metric, so its own value range (max - min) is the scale.
-  *     `"minPersistenceFraction"` changes that 1% (a fraction of the scale); `"minPersistence"` sets an absolute
-  *     threshold in the barcode's own units instead. Give at most one; `0` for either reports every bar. Only
-  *     `size()`/`toArray()`/`dimension`/`birth`/`death`/`cycle*` are filtered:
-  *     `PersistenceResult.hiddenCount()`/`persistenceThreshold()`/`toArrayUnfiltered()` say what was hidden, and
-  *     distances/landscapes/persistence images always use the complete barcode. See `PersistenceFilter`.
-  *   - `"includeZeroLength"`: `"true"` to also compute zero-length bars (`birth == death`: a cell paired with one
-  *     entering at the same value), which are otherwise left out of the result entirely (not counted by
-  *     `hiddenCount()`). With `"minPersistence", "0"` they are reported too.
-  *   - `"maxFiltrationValue"`: double, default (when omitted) is the point cloud's own `minimumEnclosingRadius`
-  *     (Ripser's own default truncation, not unbounded -- see CLAUDE.md's "enclosing-radius default" note). Pass a very
-  *     large number for the old always-unbounded behavior. Consulted for `complex=vr` (a diameter), `complex=cech` (a
-  *     RADIUS -- Cech's own filtration units, not doubled the way a VR diameter would be), `complex=dtm-rips` (DOUBLED
-  *     units, exactly like `complex=vr` -- see `DtmRipsSimplexStream`'s own doc for why its default is safe there too),
-  *     and `complex=witness` with `witnessVariant=lazy` (`WitnessMetricSpace`'s own "distance" units -- the
-  *     enclosing-radius default is valid here too, see `LazyWitnessSimplexStream`'s own doc); also consulted for
-  *     `complex=sparse-rips` (DOUBLED units, exactly like `complex=vr`) but with a DIFFERENT omitted-key default --
-  *     `minimumEnclosingRadius` would itself be unbounded here, since an edge to this construction's own anchor point
-  *     can be arbitrarily large, so omitting this key instead resolves to
-  *     `SheehyRipsSimplexStream.maxFiniteFiltrationValue`, and any value given here only ever narrows that, never
-  *     widens past it (see that class's own doc for why it is always clamped regardless of what is passed); not
-  *     consulted for `complex=alpha`/`complex=dtm-alpha` (always untruncated -- see CLAUDE.md's "Alpha complex"
-  *     section) nor for `complex=witness` with `witnessVariant=general` (defaults to `+Infinity` there instead --
-  *     `minimumEnclosingRadius` is NOT a valid truncation for a non-flag complex, see `WitnessCofaceSimplexStream`'s
-  *     own doc).
-  *   - `"edgeCollapse"`: `"true"` or `"false"` (default), only consulted when `complex=vr` -- `require`d `false` (or
-  *     omitted) for every other `complex` value. `EdgeCollapse` (Boissonnat-Pritam/Glisse-Pritam, SoCG 2020/2022,
-  *     `.claude/WORKLOG-edge-collapse.md`): reduces the Vietoris-Rips 1-skeleton to a smaller weighted graph with the
-  *     SAME persistent homology at every filtration level, before anything is built on top of it -- a preprocessing
-  *     step, not a different complex, so it changes nothing about `PersistenceResult`'s own output shape. Measured
-  *     73-76% of edges removed and a 43-47x REDUCTION-phase speedup on random point clouds (n=30, 50);
-  *     construction-phase speedup is far more modest (1.45-1.74x) -- the dominant cost this helps with is reducing the
-  *     resulting (now much smaller) chain complex, not enumerating candidates in the first place, see the worklog for
-  *     the measurement and the source-level reason why. Applies uniformly to every `"engine"` value;
-  *     `engine="ripser"`'s own REDUCTION should benefit the same way `"naive"`/`"chunks"`/`"cohomology"`'s measured did
-  *     (fewer real simplices to reduce, regardless of which algorithm reduces them), but this specific combination has
-  *     not itself been measured, only the other three -- see the worklog.
-  *   - `"field"`: `"Z"` (default -- a prime finite field, `prime=17` (`FiniteField.DefaultPrime`) unless overridden;
-  *     was 2 until 0.5.0, the convention in the TDA research literature, e.g. Ripser/GUDHI) or `"R"` (floating point
-  *     with an epsilon tolerance, `Field.DoubleApproximated` -- notably what this codebase's own existing
-  *     cross-validation specs default to instead, an established-convention-vs-existing-test-suite mismatch worth
-  *     knowing about, not silently resolved either way; see WORKLOG-matlab-api.md).
-  *   - `"prime"`: integer, default `17` (`FiniteField.DefaultPrime`), only consulted when `field=Z`.
-  *   - `"epsilon"`: double, default `1e-9`, only consulted when `field=R`.
-  *
-  * Unrecognized keys, and unrecognized values for `complex`/`engine`/`field`, throw `IllegalArgumentException`
-  * immediately rather than silently falling back to a default -- a typo in a MATLAB string literal should fail loudly,
-  * not produce a quietly-wrong barcode.
-  */
-
-/** Parsed, validated forms of the `"complex"`/`"engine"`/`"field"` string options -- `TDA4j`'s public methods still
-  * take/return only MATLAB-marshalable primitives (`String[]` included), so the string parsing itself can't go away,
-  * but every dispatch decision downstream of `dispatch`/`dispatchCubical` matches on these enums instead of
-  * re-lowercasing and re-comparing the same raw strings at each of several call sites. The CLI (`cli.TDA4jCLI`) stays a
-  * thin translator passing strings straight through to this same facade -- it does not get its own copy of this
-  * parsing, by design (see CLAUDE.md's CLI section: the CLI was chosen to mirror this facade 1:1 specifically to avoid
-  * a second dispatch system to keep in sync).
-  */
+// The "complex"/"engine"/"field" options, parsed once into enums before anything runs. The CLI passes its flags through
+// as strings and relies on this same parsing.
 private enum ComplexKind:
   case VR, Alpha, Cech, Witness, DtmRips, DtmAlpha, SparseRips
 
@@ -236,14 +69,28 @@ private object CoefficientKind:
     case "r"   => R
     case other => throw new IllegalArgumentException(s"unrecognized field '$other'; expected 'Z' or 'R'")
 
+/** TDA4j for MATLAB (through its built-in Java support) and plain Java: every method takes and returns only `int`,
+  * `double`, `String`, arrays of those, and result objects ([[PersistenceResult]], [[LandmarkSelectionResult]],
+  * [[CircularCoordinatesResult]], [[ToroidalCoordinatesResult]]).
+  *
+  * Options are a flat, alternating name/value `String[]` (`{"engine", "ripser", "maxDimension", "3"}`), so a new option
+  * never changes a signature; every `compute...` method also has an overload without options. The options and their
+  * defaults are listed in the user guide's "Calling from MATLAB or Java" page: `complex`, `engine`, `maxDimension`,
+  * `maxFiltrationValue`, `field`, `prime`, `epsilon`, `minPersistence`, `minPersistenceFraction`, `includeZeroLength`,
+  * `alphaBackend`, `requireValidTriangulation`, `dtmK`, `dtmQ`, `dtmP`, `sparseEpsilon`, `numLandmarks`,
+  * `witnessVariant`, `landmarkSelector`, `landmarkSeed`, `nu`, `edgeCollapse`, `sublevel`, `dual`. An unknown option, an
+  * unknown value, or a combination that does not apply (an engine for a complex it cannot read) throws
+  * `IllegalArgumentException` naming it, before anything is computed.
+  *
+  * By default a result reports the essential bars and the bars longer than 1% of the input's scale (its minimum
+  * enclosing radius, or the value range of an image or relation); zero-length bars are left out unless
+  * `includeZeroLength` is `true`. See [[PersistenceResult]].
+  */
 object TDA4j:
   def computeFromPoints(points: Array[Array[Double]]): PersistenceResult =
     computeFromPoints(points, Array.empty[String])
 
-  /** Vietoris-Rips or alpha-complex persistence from a point cloud (one row per point, Euclidean distance). This is the
-    * only entry point that supports `complex=alpha`, since alpha complexes need actual coordinates, not just pairwise
-    * distances.
-    */
+  /** Persistence of a point cloud, one row per point, with Euclidean distances: any `complex`. */
   def computeFromPoints(points: Array[Array[Double]], options: Array[String]): PersistenceResult =
     validatePoints(points)
     val opts = parseOptions(options)
@@ -253,10 +100,8 @@ object TDA4j:
   def computeFromDistanceMatrix(distances: Array[Array[Double]]): PersistenceResult =
     computeFromDistanceMatrix(distances, Array.empty[String])
 
-  /** Vietoris-Rips persistence from a precomputed pairwise-distance matrix (square, symmetric, zero diagonal --
-    * expected but not checked beyond squareness, matching `ExplicitMetricSpace`'s own contract). Use this when your
-    * dissimilarity measure isn't Euclidean distance on the rows you'd otherwise pass to `computeFromPoints`.
-    * `complex=alpha` is not available here -- alpha complexes need real coordinates.
+  /** Persistence from a square, symmetric distance matrix (zero diagonal): every `complex` that needs only distances
+    * (`vr`, `witness`, `dtm-rips`, `sparse-rips`), not `alpha`, `cech` or `dtm-alpha`.
     */
   def computeFromDistanceMatrix(distances: Array[Array[Double]], options: Array[String]): PersistenceResult =
     validateSquare(distances)
@@ -266,45 +111,19 @@ object TDA4j:
   def computeFromRelation(relation: Array[Array[Double]]): PersistenceResult =
     computeFromRelation(relation, Array.empty[String])
 
-  /** Dowker complex persistence from a general relation `R: L x W -> [0, Infinity]` (`relation(x)(w)`, one row per
-    * `L`-side point, one column per witness `w`) -- NOT a point cloud or a distance matrix, so this is a separate entry
-    * point rather than a `"complex"` value on `computeFromPoints`/`computeFromDistanceMatrix` (see `DowkerGeometry`'s
-    * own doc for why: `R` need not be square, symmetric, or derived from any metric at all). `relation` values must be
-    * non-negative; `+Infinity` is the correct way to encode "never related" (see `DowkerGeometry.fromBoolean` for
-    * lifting a classical boolean relation).
-    *
-    * Recognizes:
-    *   - `"engine"`: `"naive"` (default) or `"cohomology"` only -- the Dowker complex is not a flag complex in general
-    *     (a witness for a whole simplex need not witness any of its edges, see `DowkerGeometry`'s own doc), so
-    *     `"ripser"`/`"chunks"` are refused, exactly like `complex=witness` with `witnessVariant=general`.
-    *   - `"maxDimension"`: integer, default `2` -- same "top homological degree reported" meaning as
-    *     `computeFromPoints`'s own option; both engines here need the internal "+1" build-and-drop dance since the
-    *     Dowker complex's own top dimension is not naturally bounded (up to `relation.length - 1`, same status as
-    *     `complex=cech`/`complex=witness` with `witnessVariant=general`).
-    *   - `"maxFiltrationValue"`: double, default `+Infinity` (NOT a `minimumEnclosingRadius`-style truncation -- an
-    *     arbitrary relation gives no cone argument to truncate against, same reasoning as
-    *     `complex=witness`/`witnessVariant=general`'s own default).
-    *   - `"dual"`: `"true"` or `"false"` (default) -- when `true`, computes the `W`-side complex (vertices = one per
-    *     COLUMN of `relation`, witnessed by rows) instead of the `L`-side complex, via `DowkerGeometry.dual` (the
-    *     transposed relation). The functorial Dowker duality theorem guarantees the two sides' barcodes agree exactly
-    *     once zero-persistence bars are dropped -- see `.claude/WORKLOG-dowker-complex.md` -- so this is the direct way
-    *     to get the OTHER side's representatives (e.g. when `L` is small but `W`'s own representatives are what a
-    *     caller actually wants) without transposing `relation` by hand.
-    *   - `"field"`, `"prime"`, `"epsilon"`: same as `computeFromPoints`.
+  /** Persistence of the Dowker complex of a relation: `relation(x)(w)` is the strength of the tie between row `x` and
+    * column `w` (smaller is stronger, `Infinity` for never; non-negative). The matrix need not be square or symmetric.
+    * Options: `engine` (`naive`, the default, or `cohomology`: the complex is not a flag complex), `maxDimension`
+    * (default 2), `maxFiltrationValue` (default `Infinity`), `dual` (`true` for the complex on the columns, which has
+    * the same diagram), `field`, `prime`, `epsilon`, and the bar options.
     */
   def computeFromRelation(relation: Array[Array[Double]], options: Array[String]): PersistenceResult =
     validateRelation(relation)
     val opts = parseOptionsWithKeys(options, dowkerKeys)
     dispatchDowker(opts, relation)
 
-  // ---------------------------------------------------------------------------------------------------------------
-  // the two-step witness-complex recipe: select landmarks (and read back R), THEN compute -- an alternative to
-  // computeFrom{Points,DistanceMatrix}'s own one-shot complex=witness path (which stays exactly as it was: pick
-  // landmarks internally, compute, return only the barcode). Use the two-step form when you want the JavaPlex
-  // tutorial's own recipe (pick landmarks, read R, pass 2R as maxFiltrationValue) or want to reuse/inspect/
-  // hand-edit a landmark set across more than one computation. See the user guide's "Witness complexes" section
-  // for a worked MATLAB example.
-  // ---------------------------------------------------------------------------------------------------------------
+  // The witness complex in two steps: select landmarks (and read the covering radius R), then compute, e.g. with
+  // maxFiltrationValue 2R as in the JavaPlex tutorials. The one-shot complex=witness path never reports R.
 
   def selectLandmarksFromPoints(points: Array[Array[Double]], options: Array[String]): LandmarkSelectionResult =
     validatePoints(points)
@@ -312,12 +131,8 @@ object TDA4j:
     val selection = resolveLandmarkSelection(opts, EuclideanMetricSpace(points))
     new LandmarkSelectionResult(selection.landmarks.toArray, selection.coveringRadius)
 
-  /** Step 1 (point-cloud input) of the two-step witness recipe: pick landmarks via `"landmarkSelector"` (`"maxmin"`
-    * default or `"random"`, seeded by `"landmarkSeed"`) and read back the covering radius `R` -- without yet building
-    * any complex. Recognizes ONLY `"numLandmarks"` (REQUIRED), `"landmarkSelector"`, and `"landmarkSeed"` -- a STRICTER
-    * allowlist than `computeFromPoints`'s own (see `landmarkSelectionKeys`'s own doc for why). Pass
-    * `LandmarkSelectionResult.landmarks()` straight into `computeFromPointsAndLandmarks` for step 2, or into
-    * `coveringRadiusFromPoints` if you want `R` for a DIFFERENT (e.g. hand-edited) landmark set.
+  /** Step 1 of the two-step witness complex: select landmarks (options `numLandmarks`, required, `landmarkSelector`,
+    * `landmarkSeed`, and no others) and report them, 0-based, with their covering radius.
     */
   def selectLandmarksFromPoints(points: Array[Array[Double]]): LandmarkSelectionResult =
     selectLandmarksFromPoints(points, Array.empty[String])
@@ -331,9 +146,7 @@ object TDA4j:
     val selection = resolveLandmarkSelection(opts, explicitMetricSpace(distances))
     new LandmarkSelectionResult(selection.landmarks.toArray, selection.coveringRadius)
 
-  /** Step 1 (distance-matrix input) -- see `selectLandmarksFromPoints`'s own doc; identical recipe, just from a
-    * precomputed pairwise-distance matrix instead of point coordinates.
-    */
+  /** As [[selectLandmarksFromPoints]], from a distance matrix. */
   def selectLandmarksFromDistanceMatrix(distances: Array[Array[Double]]): LandmarkSelectionResult =
     selectLandmarksFromDistanceMatrix(distances, Array.empty[String])
 
@@ -348,20 +161,10 @@ object TDA4j:
     val opts = parseOptionsWithKeys(options, witnessFromLandmarksKeys)
     dispatchWitnessFromLandmarks(opts, metricSpace, landmarks.toIndexedSeq)
 
-  /** Step 2 (point-cloud input) of the two-step witness recipe: compute the witness complex barcode for an EXPLICIT,
-    * caller-supplied landmark set (0-based ambient indices into `points`) -- typically
-    * `LandmarkSelectionResult.landmarks()` from step 1, but any hand-picked or reused set works too; this method never
-    * re-selects landmarks itself. Always computes `complex=witness` (there is nothing else it could compute) --
-    * `"complex"` is accepted as an option ONLY when its value is `"witness"`, so a caller migrating from the one-shot
-    * `computeFromPoints` who still types that flag out of habit isn't silently ignored, but a genuine mismatch (e.g. a
-    * stray `"complex","vr"`) IS caught. Recognizes `"witnessVariant"`, `"nu"`, `"engine"`, `"maxDimension"`,
-    * `"maxFiltrationValue"`, `"field"`, `"prime"`, `"epsilon"` -- see `computeFromPoints`'s own doc for what each
-    * means; NOT `"numLandmarks"`/`"landmarkSelector"`/ `"landmarkSeed"`, since landmarks are supplied directly here,
-    * not selected.
-    *
-    * `landmarks` must be non-empty, every entry in `[0, points.length)`, and free of duplicates -- checked eagerly with
-    * an actionable message (an out-of-range index equal to `points.length` specifically hints at a 1-based-indexing
-    * mistake, MATLAB's own default convention).
+  /** Step 2 of the two-step witness complex: its persistence for the given landmarks (0-based row numbers of `points`,
+    * non-empty, distinct; a number equal to `points.length` is reported as a likely 1-based index). Options:
+    * `witnessVariant`, `nu`, `engine`, `maxDimension`, `maxFiltrationValue`, `field`, `prime`, `epsilon`, the bar
+    * options, and `complex` only as `"witness"`.
     */
   def computeFromPointsAndLandmarks(points: Array[Array[Double]], landmarks: Array[Int]): PersistenceResult =
     computeFromPointsAndLandmarks(points, landmarks, Array.empty[String])
@@ -377,41 +180,26 @@ object TDA4j:
     val opts = parseOptionsWithKeys(options, witnessFromLandmarksKeys)
     dispatchWitnessFromLandmarks(opts, metricSpace, landmarks.toIndexedSeq)
 
-  /** Step 2 (distance-matrix input) -- see `computeFromPointsAndLandmarks`'s own doc; identical recipe, just from a
-    * precomputed pairwise-distance matrix instead of point coordinates.
-    */
+  /** As [[computeFromPointsAndLandmarks]], from a distance matrix. */
   def computeFromDistanceMatrixAndLandmarks(distances: Array[Array[Double]], landmarks: Array[Int]): PersistenceResult =
     computeFromDistanceMatrixAndLandmarks(distances, landmarks, Array.empty[String])
 
-  /** The covering radius `R = max_x min_{l in landmarks} d(x,l)` of an ARBITRARY landmark set -- not necessarily one
-    * `selectLandmarksFrom*` chose (e.g. a hand-picked or externally-computed set) -- for the same `2R` threshold recipe
-    * `LandmarkSelectionResult.coveringRadius()` supports for a `selectLandmarksFrom*`-chosen set. Same landmark
-    * validation as `computeFromPointsAndLandmarks`.
-    */
+  /** The covering radius `R = max over x of min over landmarks l of d(x, l)` of any landmark set. */
   def coveringRadiusFromPoints(points: Array[Array[Double]], landmarks: Array[Int]): Double =
     validatePoints(points)
     val metricSpace = EuclideanMetricSpace(points)
     validateLandmarks(landmarks, metricSpace.size)
     LandmarkSelector.coveringRadius(metricSpace, landmarks.toIndexedSeq)
 
-  /** See `coveringRadiusFromPoints`'s own doc; identical, just from a precomputed pairwise-distance matrix. */
+  /** As [[coveringRadiusFromPoints]], from a distance matrix. */
   def coveringRadiusFromDistanceMatrix(distances: Array[Array[Double]], landmarks: Array[Int]): Double =
     validateSquare(distances)
     val metricSpace = explicitMetricSpace(distances)
     validateLandmarks(landmarks, metricSpace.size)
     LandmarkSelector.coveringRadius(metricSpace, landmarks.toIndexedSeq)
 
-  // ---------------------------------------------------------------------------------------------------------------
-  // circular coordinates (CircularCoordinates, .claude/WORKLOG-mainstream-feature-gap-analysis.md item 2)
-  // -- a genuinely different SHAPE of result from PersistenceResult (a per-point angle, not a barcode), so its own
-  // small entry points rather than a new complex=circular value on computeFromPoints.
-  // ---------------------------------------------------------------------------------------------------------------
-
-  /** The `(birth, death)` range of every persistent H¹ class of `points`' own Vietoris-Rips complex, as an N-by-2 array
-    * (column 0 birth, column 1 death, `+Inf` for an essential bar), sorted by persistence descending -- row `i` here is
-    * exactly `circularCoordinates`'s own `cocycleIndex = i`. There is no way to pick a meaningful `r` for
-    * `circularCoordinates` without first knowing a target bar's own range, so this is the intended first call for a
-    * MATLAB caller, not merely a diagnostic -- see `CircularCoordinates.h1Bars`'s own doc.
+  /** The loops of the point cloud's Vietoris-Rips complex: one row `(birth, death)` per persistent H¹ class, most
+    * persistent first. Row `i` is `cocycleIndex = i` of [[circularCoordinates]]; pick `r` between its birth and death.
     */
   def h1Bars(points: Array[Array[Double]]): Array[Array[Double]] =
     validatePoints(points)
@@ -420,13 +208,9 @@ object TDA4j:
   def circularCoordinates(points: Array[Array[Double]], r: Double): CircularCoordinatesResult =
     circularCoordinates(points, r, 0, 47)
 
-  /** Circular coordinates (de Silva-Morozov-Vejdemo-Johansson) for one persistent H¹ class of `points`' own
-    * Vietoris-Rips complex -- see `CircularCoordinates.compute`'s own doc for `r`/`cocycleIndex`/`prime`'s exact
-    * meaning and the full construction, and `h1Bars` above for how to find a valid `r`. Throws
-    * `IllegalArgumentException` for an invalid `r`/`cocycleIndex`/`prime`, or `NoIntegerCocycleException` (a
-    * `RuntimeException`, so it crosses MATLAB's Java bridge the same way `IllegalArgumentException` already does) if
-    * the chosen class has no exact integer lift at `prime` -- see that exception's own doc for what to do about it
-    * (usually: retry with a larger `prime`).
+  /** Circular coordinates for loop `cocycleIndex` of [[h1Bars]] at scale `r`, over the field with `prime` elements (an
+    * odd prime; default 47): see `CircularCoordinates.compute`. Throws `NoIntegerCocycleException` if the class has no
+    * integer lift at `prime` (retry with a larger prime), `IllegalArgumentException` for an invalid argument.
     */
   def circularCoordinates(
     points: Array[Array[Double]],
@@ -447,14 +231,8 @@ object TDA4j:
   ): ToroidalCoordinatesResult =
     toroidalCoordinates(points, r, cocycleIndices, 47, true)
 
-  /** Toroidal coordinates (Scoccola-Gakhar-Bush-Schonsheck-Rask-Zhou-Perea, "decorrelating circular coordinates with
-    * lattice reduction") for SEVERAL simultaneously-alive persistent H¹ classes of `points`' own Vietoris-Rips complex,
-    * combined into one torus-valued map -- see `CircularCoordinates.computeToroidal`'s own doc for
-    * `r`/`cocycleIndices`/`prime`/`reduce`'s exact meaning and the full construction, and `h1Bars` above for how to
-    * find a valid `r`. Throws `IllegalArgumentException` for invalid/duplicate `cocycleIndices`, an `r` outside their
-    * common alive range, or classes that don't share a connected component; `NoIntegerCocycleException` (a
-    * `RuntimeException`, same bridge behavior as `circularCoordinates`) if some chosen class has no exact integer lift
-    * at `prime`.
+  /** Toroidal coordinates for several loops of [[h1Bars]] alive together at `r`: see
+    * `CircularCoordinates.computeToroidal`. `reduce` (default `true`) applies the lattice reduction.
     */
   def toroidalCoordinates(
     points: Array[Array[Double]],
@@ -484,32 +262,10 @@ object TDA4j:
   def computeFromCubicalImage(shape: Array[Int], flatValues: Array[Double]): PersistenceResult =
     computeFromCubicalImage(shape, flatValues, Array.empty[String])
 
-  /** Cubical persistence of a dense n-dimensional grid (an image or voxel volume): a flat, row-major array of
-    * per-pixel/voxel values plus an explicit `shape` -- the same convention `CubicalImage.fromFlatArray` uses (last
-    * axis fastest-varying, so `shape=(rows,cols)`/a flattened `Array[Array[Double]]` matches an ordinary 2D image).
-    * `computeFromImage` below is a `double[][]`-typed 2D convenience wrapper over this, MATLAB's own natural matrix
-    * shape for the common image case.
-    *
-    * There is no `"complex"` option here -- a cubical grid is a different SHAPE of input entirely (no metric space, no
-    * point coordinates), not a different value for an existing option, so it gets its own entry point rather than a new
-    * `"complex"` value on `computeFromPoints`/`computeFromDistanceMatrix`. Recognized options:
-    *
-    *   - `"engine"`: `"naive"` (default), `"chunks"`, `"cohomology"`, or `"fast-cubical"` -- `"ripser"` is never
-    *     offered here: `PackedRipserCohomologyEngine` is specialized to `Simplex[Int]` Vietoris-Rips complexes and has
-    *     no notion of a cubical complex at all. `"fast-cubical"` (`FastCubicalHomologyEngine`, Le Breton-
-    *     Szustakowski-Piraud's dual-graph union-find, extended past 2D by a hybrid with `chunks` for the residual
-    *     middle dimensions) is refused only for a degenerate 1-axis "image" (ambient dimension `< 2`) -- see
-    *     CLAUDE.md's Cubical complexes section and `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
-    *   - `"maxDimension"`: integer, default is the grid's own ambient dimension (i.e. "give me everything"). Unlike
-    *     `complex=vr`/`"cech"` above, a cubical grid's own top dimension is ALREADY naturally bounded by its ambient
-    *     dimension (an image's own dimensionality) and is never artificially cut short the way an unbounded VR/Cech
-    *     complex is -- so this option is purely an opt-in performance cap for a caller who only wants low-dimensional
-    *     homology, not a correctness necessity.
-    *   - `"sublevel"`: `"true"` (default) or `"false"` -- sublevel-set (ascending intensity) filtration, GUDHI/DIPHA/
-    *     Perseus's own convention, or superlevel-set (`"false"` -- the standard "sublevel of -f is superlevel of f"
-    *     trick, see `CubicalImage.scala`'s own doc). Reported birth/death values under `sublevel=false` are in
-    *     NEGATED-intensity units, not raw pixel values -- documented, expected behavior of this trick, not a bug.
-    *   - `"field"`/`"prime"`/`"epsilon"`: same as `computeFromPoints` above.
+  /** Persistence of an image or voxel grid of any dimension: the values in row-major order (last axis fastest) and the
+    * size along each axis. Options: `engine` (`naive`, the default, `chunks`, `cohomology`, or `fast-cubical` for two
+    * dimensions and up), `maxDimension` (default: the grid's dimension), `sublevel` (`false` for superlevel sets, whose
+    * filtration values are negated intensities), `field`, `prime`, `epsilon`, and the bar options.
     */
   def computeFromCubicalImage(
     shape: Array[Int],
@@ -526,10 +282,7 @@ object TDA4j:
   def computeFromImage(pixels: Array[Array[Double]]): PersistenceResult =
     computeFromImage(pixels, Array.empty[String])
 
-  /** 2D convenience over `computeFromCubicalImage`: `pixels(i)(j)` as a dense grid, shape `(pixels.length,
-    * pixels(0).length)` -- MATLAB's own natural matrix type, so the common 2D image case needs no explicit
-    * shape/flattening. See `computeFromCubicalImage` for recognized options; this delegates to it directly.
-    */
+  /** [[computeFromCubicalImage]] for a 2-D image given as a matrix, `pixels(row)(column)`. */
   def computeFromImage(pixels: Array[Array[Double]], options: Array[String]): PersistenceResult =
     validatePoints(pixels) // reuses the existing "non-empty, rectangular" check -- the same shape requirement
     val cols = pixels(0).length
@@ -565,23 +318,13 @@ object TDA4j:
     "includezerolength"
   )
 
-  /** `numLandmarks`/`landmarkSelector`/`landmarkSeed` only -- the STRICT allowlist `selectLandmarksFromPoints`/
-    * `selectLandmarksFromDistanceMatrix` (step 1 of the two-step witness recipe) parse against, via
-    * `parseOptionsWithKeys` below rather than the permissive `recognizedKeys` every one-shot method uses. This matters
-    * more here than it would elsewhere: a caller who passes `numLandmarks` alongside an ALREADY-CHOSEN landmark array
-    * in step 2 (`witnessFromLandmarksKeys` below, which deliberately excludes it) would otherwise have that option
-    * silently dropped -- a quiet, easy-to-make footgun a strict, per-entry-point allowlist catches immediately instead.
+  /** The options of landmark selection (step 1 of the two-step witness complex), and no others: a landmark option
+    * passed in step 2 (whose landmarks are given) is an error rather than silently ignored.
     */
   private val landmarkSelectionKeys = Set("numlandmarks", "landmarkselector", "landmarkseed")
 
-  /** Step 2 of the two-step witness recipe (`computeFromPointsAndLandmarks`/`computeFromDistanceMatrixAndLandmarks`):
-    * landmarks are supplied directly, so `numLandmarks`/`landmarkSelector`/`landmarkSeed` are deliberately NOT here
-    * (see `landmarkSelectionKeys`'s own doc for why silently accepting them would be worse than rejecting them).
-    * `"complex"` IS allowed, but only ever checked against `"witness"` -- these methods are inherently
-    * `complex=witness` (there is nothing else they could compute), but a CLI/MATLAB caller migrating from the one-shot
-    * entry point will naturally still type `--complex witness`/`"complex","witness"` out of habit; accepting that exact
-    * value and rejecting any OTHER value catches a genuine mismatch (e.g. a copy-pasted `complex=vr`) instead of
-    * silently ignoring it.
+  /** The options of step 2 of the two-step witness complex: no landmark-selection options (the landmarks are given),
+    * and `complex` accepted only as `"witness"` (callers used to the one-shot form type it).
     */
   private val witnessFromLandmarksKeys =
     Set(
@@ -713,11 +456,8 @@ object TDA4j:
   private def resolveWitnessVariant(opts: Map[String, String]): WitnessVariantKind =
     WitnessVariantKind.parse(opts.getOrElse("witnessvariant", "lazy"))
 
-  /** `"engine"`, defaulted and validated against `witnessVariant`: `witnessVariant=general` defaults to `naive` (not a
-    * flag complex, same reasoning as `complex=alpha`/`complex=cech`'s own defaults) and refuses `ripser`/`chunks`
-    * outright; `witnessVariant=lazy` defaults to `ripser` (it really is a flag complex -- see `WitnessMetricSpace`'s
-    * own doc) and allows all four. Pulled out of `dispatch`'s own `(complex, engine) match` refusal block so step 2
-    * gets the identical default-and-refusal behavior without re-deriving it.
+  /** The witness complex's engine: `general` (not a flag complex) defaults to `naive` and refuses `ripser` and `chunks`;
+    * `lazy` (a flag complex) defaults to `ripser` and allows all four. Shared by the one-shot and two-step paths.
     */
   private def resolveWitnessEngine(opts: Map[String, String], witnessVariant: WitnessVariantKind): EngineKind =
     val engine = EngineKind.parse(
@@ -1432,19 +1172,9 @@ object TDA4j:
           toDouble
         )
 
-  /** The actual witness-complex computation, given an ALREADY-RESOLVED landmark set -- shared by `computeGeneric`'s
-    * `ComplexKind.Witness` case (one-shot: landmarks were just selected from `numLandmarks`/`landmarkSelector` a few
-    * lines up in `dispatch`) and `dispatchWitnessFromLandmarks` below (step 2 of the two-step recipe: `landmarks` is
-    * whatever the caller passed to `computeFromPointsAndLandmarks`/ `computeFromDistanceMatrixAndLandmarks`, already
-    * validated). Neither caller-specific concern (how landmarks were obtained, how `witnessVariant`/`engine`/`nu` were
-    * parsed and defaulted) appears here at all -- this function only knows how to build a barcode from a metric space
-    * and an already-decided landmark set.
-    *
-    * Both variants grow unboundedly in dimension just like VR/Cech (up to `landmarks.size - 1`), so naive/ cohomology
-    * need the same "build one dimension higher, drop it via fromBars" dance those use. Cells are `Simplex[Int]` over
-    * LOCAL landmark indices (`0 until landmarks.size`) -- every `cellVertices` below maps back through `landmarks(i)`
-    * to the caller's own ambient point cloud, exactly the translation
-    * `LazyWitnessSimplexStream`/`WitnessCofaceSimplexStream`'s own docs call for.
+  /** The witness complex's persistence for a resolved landmark set, shared by the one-shot and two-step paths. Its cells
+    * are over landmark numbers `0 until landmarks.size`; `cellVertices` maps them back to point numbers. Both variants
+    * are built one dimension above `requestedMaxDimension` for the naive and cohomology engines, which `fromBars` drops.
     */
   private def computeWitnessFromLandmarks[C](
     metricSpace: FiniteMetricSpace[Int],
@@ -1641,11 +1371,8 @@ object TDA4j:
       computeDowker[C](relation, engine, maxDimension, maxFiltrationValue, dual, toDouble)
     }
 
-  /** Not a flag complex -- `minimumEnclosingRadius` is not a valid truncation here (see `DowkerCofaceSimplexStream`'s
-    * own doc), so an unset `maxFiltrationValue` means `+Infinity`, the same shape `computeWitnessFromLandmarks`'s own
-    * `WitnessVariantKind.General` branch uses. `requestedMaxDimension` needs the same "build one dimension higher via
-    * `LimitedCofaceSimplexStream`, drop it via `fromBars`" dance as Cech/general-witness, for the identical reason: the
-    * Dowker complex's own top dimension is not naturally bounded.
+  /** The Dowker complex is not a flag complex, so the enclosing radius is no cutoff: an unset `maxFiltrationValue` is
+    * `Infinity`. Built one dimension above `requestedMaxDimension`, which `fromBars` drops.
     */
   private def computeDowker[C](
     relation: Array[Array[Double]],
@@ -1828,20 +1555,11 @@ object TDA4j:
     case OpenEndpoint(v)    => v
     case ClosedEndpoint(v)  => v
 
-  /** `cellVertices(dim, cell)` recovers a chain cell's vertex array -- generalized from a hardcoded `.underlying`
-    * (which only `Simplex[Int]` has) as of routing `engine="ripser"` through `PackedRipserCohomologyEngine`: its cells
-    * are `DiameterIndex`, decoded via `ctx.si.decodeToArray(cell.index, dim + 1)` at the call site instead. Takes `dim`
-    * (the bar's own dimension, hence the cocycle's -- every cell in one bar's annotation is a simplex of that same
-    * dimension) because `DiameterIndex` doesn't carry its own vertex count the way `Simplex[Int]` does; a caller
-    * decoding it needs `size` from somewhere else, and the bar itself already has it.
+  /** `cellVertices(dim, cell)` gives a chain cell's vertex array; it takes the bar's degree `dim` because the Ripser
+    * engine's packed cells do not carry their size.
     */
-  /** The boundary matrix of `cells` (already in filtration order), one column per cell -- shared by every `fromBars`
-    * call site below via a `() => BoundaryMatrixData` thunk each complex branch builds once (from the SAME
-    * stream/metric-space construction `engine=naive` already consumes for that complex, regardless of which engine
-    * actually computed this result's own bars -- see `PersistenceResult.BoundaryMatrixData`'s own doc for why that's
-    * the right choice) and reuses across all of that complex's engine branches, so the boundary matrix a MATLAB caller
-    * sees is consistent across `engine` choices by construction, not by keeping several copies of "how do you build the
-    * stream for this complex" in sync by hand.
+  /** The boundary matrix of `cells` (in filtration order), one column per cell. Built from the same stream the naive
+    * engine reads for that complex, whichever engine computed the bars, so it is the same for every `engine`.
     */
   private def buildBoundaryMatrix[CellT: OrderedCell, C: Field](
     cells: Iterable[CellT],

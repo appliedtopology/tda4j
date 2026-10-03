@@ -20,7 +20,8 @@ What each complex allows:
 
 * **Ripser** needs the Vietoris-Rips complex of points or a metric space (including a lazy witness complex, through
   `WitnessMetricSpace`): its shortcuts rely on a filtration by diameter.
-* **Chunks** takes any stream; the MATLAB facade does not offer it for alpha, DTM-alpha and the general witness complex.
+* **Chunks** takes any stream; the MATLAB facade does not offer it for alpha, DTM-alpha, the general witness complex and
+  relations.
 * **Naive** and **cohomology** take every complex.
 
 The naive and chunks engines take any stream and answer queries at intermediate scales (`diagramAt(f)`); the naive

@@ -47,7 +47,7 @@ Each `compute...` method also has an overload without options.
 |---|---|---|
 | `complex` | `vr`, `alpha`, `cech`, `witness`, `dtm-rips`, `dtm-alpha`, `sparse-rips` | `vr` |
 | `engine` | `ripser`, `chunks`, `naive`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and the lazy witness complex, `naive` otherwise |
-| `maxDimension` | integer | `2`: the top homological degree |
+| `maxDimension` | integer | `2`: the top homological degree (for an image: its dimension) |
 | `maxFiltrationValue` | number | the minimum enclosing radius (`Infinity` for the general witness complex) |
 | `field` | `Z` (a prime field), `R` (floating point) | `Z` |
 | `prime` | prime | `17` |
@@ -69,7 +69,7 @@ Each `compute...` method also has an overload without options.
 | `edgeCollapse` | `true`, `false` | `false` (`vr` only; the same result from a smaller complex) |
 
 Which engine goes with which complex: `ripser` needs `vr` or the lazy witness complex; `chunks` works with every
-complex except `alpha`, `dtm-alpha` and the general witness complex; `naive` and `cohomology` work with all;
+complex except `alpha`, `dtm-alpha`, the general witness complex and relations; `naive` and `cohomology` work with all;
 `fast-cubical` is for images of dimension 2 and up, `fast-alpha` for `alpha` with the `helix` backend. A mismatch, an
 unknown option or an unknown value throws an `IllegalArgumentException` that names it.
 
