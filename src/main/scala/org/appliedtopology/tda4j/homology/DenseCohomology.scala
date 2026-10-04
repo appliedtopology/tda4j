@@ -3,9 +3,9 @@ package org.appliedtopology.tda4j
 import scala.collection.mutable
 
 /** Experimental: [[CellularCohomologyEngine]]'s algorithm on dense cell numbers. Each dimension's cells are numbered
-  * `0, 1, 2, ...` in the engine's own order (oldest first), and coboundaries are precomputed as arrays of those numbers,
-  * so the reduction compares and hashes `Int`s instead of cells. Same bars and same representatives as the general
-  * engine, term for term. For measurement only; not wired into `Persistence`.
+  * `0, 1, 2, ...` in the engine's own order (oldest first), and coboundaries are precomputed as arrays of those
+  * numbers, so the reduction compares and hashes `Int`s instead of cells. Same bars and same representatives as the
+  * general engine, term for term. For measurement only; not wired into `Persistence`.
   */
 private[tda4j] class DenseCohomologyEngine[CellT: OrderedCell, CoefficientT: Field]:
 
@@ -26,7 +26,10 @@ private[tda4j] class DenseCohomologyEngine[CellT: OrderedCell, CoefficientT: Fie
     val cellsByDim: IndexedSeq[Vector[CellT]] =
       val grouped = stream.iterator.toVector.groupBy(_.dim)
       if grouped.isEmpty then IndexedSeq.empty
-      else (0 to grouped.keys.max(using Ordering.Int)).map(d => grouped.getOrElse(d, Vector.empty).sorted(using olderFirst))
+      else
+        (0 to grouped.keys.max(using Ordering.Int)).map(d =>
+          grouped.getOrElse(d, Vector.empty).sorted(using olderFirst)
+        )
     val valuesByDim: IndexedSeq[Array[Double]] = cellsByDim.map(_.map(cellFv).toArray)
     val idByDim: IndexedSeq[mutable.HashMap[CellT, Int]] = cellsByDim.map { cells =>
       val m = new mutable.HashMap[CellT, Int](cells.length * 2, mutable.HashMap.defaultLoadFactor)

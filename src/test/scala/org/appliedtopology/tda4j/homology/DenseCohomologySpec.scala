@@ -10,7 +10,8 @@ class DenseCohomologySpec extends Specification:
   import ff.given
 
   private def same[CellT: OrderedCell](stream: StratifiedCellStream[CellT, Double]): Boolean =
-    val general = CellularCohomologyEngine[CellT, ff.Fp, Double]().persistentCohomology(stream, includeZeroLength = true)
+    val general =
+      CellularCohomologyEngine[CellT, ff.Fp, Double]().persistentCohomology(stream, includeZeroLength = true)
     val dense = DenseCohomologyEngine[CellT, ff.Fp]().persistentCohomology(stream, includeZeroLength = true)
     def key(b: PersistenceBar[Double, Chain[CellT, ff.Fp]]) = (b.toTriple, b.representative.terms.toSet)
     general.size == dense.size && general.map(key).toSet == dense.map(key).toSet
