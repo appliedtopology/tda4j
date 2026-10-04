@@ -15,9 +15,9 @@ import scala.collection.mutable
   *     relative to that root.
   *
   * A merge therefore costs nearly constant time, and a representative costs time proportional to its region, paid only
-  * for the bars that are reported. The engines used to keep a coefficient map per component and copy the surviving
-  * one on every merge, which is quadratic when one large component absorbs many small ones -- the common case of a
-  * bright object on a dark background (`.claude/WORKLOG-fast-cubical-representatives.md`).
+  * for the bars that are reported. The engines used to keep a coefficient map per component and copy the surviving one
+  * on every merge, which is quadratic when one large component absorbs many small ones -- the common case of a bright
+  * object on a dark background (`.claude/WORKLOG-fast-cubical-representatives.md`).
   */
 private[tda4j] final class SignedUnionFind[C](size: Int)(using fr: C is Field):
   private val parent: Array[Int] = Array.range(0, size)

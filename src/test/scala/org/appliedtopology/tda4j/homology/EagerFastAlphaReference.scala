@@ -3,10 +3,10 @@ package org.appliedtopology.tda4j
 import scala.collection.mutable
 
 /** Test oracle: the fast alpha engine as it was before its representative bookkeeping moved to a signed union-find
-  * (`.claude/WORKLOG-fast-cubical-representatives.md`),
-  * kept verbatim apart from the class name. It keeps a running coefficient map per dual component and copies the
-  * surviving component's map on every merge -- quadratic, but obviously right. `FastRepresentativesSpec` checks that
-  * the production engine returns exactly the same bars and representatives, in the same order.
+  * (`.claude/WORKLOG-fast-cubical-representatives.md`), kept verbatim apart from the class name. It keeps a running
+  * coefficient map per dual component and copies the surviving component's map on every merge -- quadratic, but
+  * obviously right. `FastRepresentativesSpec` checks that the production engine returns exactly the same bars and
+  * representatives, in the same order.
   */
 class EagerFastAlphaReference[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]

@@ -1,6 +1,6 @@
 package org.appliedtopology.tda4j
 
-import java.io.{DataInputStream, FileInputStream, BufferedInputStream, PrintWriter}
+import java.io.{BufferedInputStream, DataInputStream, FileInputStream, PrintWriter}
 import java.nio.{ByteBuffer, ByteOrder}
 
 /** TDA4j's side of the cross-platform benchmark (`bench/`, `.claude/PLAN-paper.md` §3). One computation per JVM: read

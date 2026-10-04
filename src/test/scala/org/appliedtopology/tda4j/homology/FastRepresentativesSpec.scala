@@ -88,7 +88,6 @@ class FastRepresentativesSpec extends mutable.Specification:
       stream <- images(seed)
       bar <- FastCubicalHomologyEngine[f3.Fp]().persistentHomology(stream)
       if bar.dim == stream.ambientDim - 1
-    yield
-      Chain.from(bar.representative.boundary).isZero()
+    yield Chain.from(bar.representative.boundary).isZero()
     checks.forall(identity) must beTrue
   }
