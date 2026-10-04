@@ -594,7 +594,8 @@ S is about one session, M a few sessions, L weeks or the compute machine.
 1. **Decisions** (§0). Before anything else.
 2. **Literature checks** for A, B and C, finishing what was started here (§8).
    - Tool feature matrix: Ripserer.jl, OAT, GUDHI, giotto-ph, CubicalRipser, HomCloud, JavaPlex. S to M.
-3. **Blockers 2.1, 2.2, 2.4, 2.5, 2.7.** M each, mostly independent. 2.2 gates every cubical and alpha benchmark.
+3. **Blockers 2.1, 2.2, 2.4, 2.5, 2.7 and 2.8.** Mostly independent; each is M, except 2.7 and 2.8, which are S. 2.2 gates
+   every cubical and alpha benchmark.
 4. **Harness:** the Docker stages, dataset scripts, a TDA4j driver with cold and warm modes, the agreement checker, and a
    results schema. M to L.
 5. **VR baseline** on the dedicated machine, then decision 0.2, then possibly the accumulator and unboxing work. M, or L if
