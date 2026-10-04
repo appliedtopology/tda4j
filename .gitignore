@@ -34,3 +34,6 @@ ci/secrets.tar
 
 .bsp/
 .Rproj.user
+
+# Python bytecode (bench/)
+__pycache__/

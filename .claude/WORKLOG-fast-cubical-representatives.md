@@ -28,9 +28,10 @@ uniform noise.
 | image | n=100 | n=200 | n=300 |
 |---|---|---|---|
 | random | 0.28 s | 1.87 s | 3.28 s |
-| blob | 4.65 s | **79.6 s** | not run |
+| blob | 4.65 s | **79.6 s** | **453.8 s** |
 
-Blob from 100² to 200² is 17x for 4x the pixels: quadratic.
+Blob costs 17x from 100² to 200², and 5.7x from 200² to 300²; the pixel count grows 4x and 2.25x. That is
+quadratic.
 
 ## The fix: a signed union-find with a merge forest (`homology/SignedUnionFind.scala`)
 
@@ -80,7 +81,8 @@ The spec passes, and `FastCubicalHomologySpec` and `FastAlphaHomologySpec` pass 
 | random | 0.23 s | 1.28 s | 3.35 s | 4.05 s | 11.5 s |
 | blob | 0.20 s | **0.82 s** | 2.29 s | 6.03 s | 10.6 s |
 
-- Blob at 200² goes from 79.6 s to 0.82 s, about 97x. Random is unchanged within noise.
+- Blob at 200² goes from 79.6 s to 0.82 s, about 97x; at 300², from 453.8 s to 2.29 s, about 200x. Random is
+  unchanged within noise.
 - At 600² (360k pixels) both images cost ~30 µs per pixel.
 - For comparison, the general dense cohomology engine (`CellularCohomologyEngine`, cycles) at n=200/400: 3.6 s / 12.7 s
   on random, 2.3 s / 20.1 s on blob. The fast engine now beats it at every size measured; before the fix it did not even
