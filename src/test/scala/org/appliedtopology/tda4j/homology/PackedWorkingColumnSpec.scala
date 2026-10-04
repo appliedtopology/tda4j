@@ -28,14 +28,15 @@ class PackedWorkingColumnSpec extends mutable.Specification:
     )
 
   def same(field: FiniteField)(
-    space: EuclideanMetricSpace,
+    space: FiniteMetricSpace[Int],
     apparent: Boolean,
     cycles: Boolean,
-    threshold: Option[Double] = None
+    threshold: Option[Double] = None,
+    referenceSpace: Option[FiniteMetricSpace[Int]] = None
   ): Boolean =
     import field.given
     val heap = PackedRipserCohomologyEngine[field.Fp](space, 2, apparent, threshold)
-    val chain = ChainPackedRipserReference[field.Fp](space, 2, apparent, threshold)
+    val chain = ChainPackedRipserReference[field.Fp](referenceSpace.getOrElse(space), 2, apparent, threshold)
     def heapCell(c: Any) = c match
       case x: heap.DiameterIndex => (x.diameter, x.index)
       case _                     => (Double.NaN, -1L)
@@ -85,4 +86,28 @@ class PackedWorkingColumnSpec extends mutable.Specification:
         .count(b => b.dim >= 1 && b.upper.isInstanceOf[PositiveInfinity[?]])
       (seed, threshold, essentials, same(FiniteField(3))(space, true, cycles = true, Some(threshold)))
     (runs.filterNot(_._4) must beEmpty) and (runs.map(_._3).sum[Int] must beGreaterThan(5))
+  }
+
+  "A distance that is not exactly symmetric is read symmetrically: same result as the symmetrized space" >> {
+    // d(i, j) and d(j, i) differ in the last bits; read in both orders, one simplex would get two diameters, which the
+    // heap working column never combines.
+    def skewed(base: FiniteMetricSpace[Int]): FiniteMetricSpace[Int] = new FiniteMetricSpace[Int]:
+      def distance(x: Int, y: Int): Double = base.distance(x, y) * (if x > y then 1 + 1e-12 else 1.0)
+      def size: Int = base.size
+      def elements: Iterable[Int] = base.elements
+      def contains(x: Int): Boolean = base.contains(x)
+    def symmetrized(s: FiniteMetricSpace[Int]): FiniteMetricSpace[Int] = new FiniteMetricSpace[Int]:
+      def distance(x: Int, y: Int): Double = s.distance(math.min(x, y), math.max(x, y))
+      def size: Int = s.size
+      def elements: Iterable[Int] = s.elements
+      def contains(x: Int): Boolean = s.contains(x)
+    val failures = for
+      seed <- 0L until 6L
+      space <- clouds(seed)
+      asym = skewed(space)
+      threshold = Some(symmetrized(asym).minimumEnclosingRadius)
+      cycles <- Seq(false, true)
+      if !same(FiniteField(3))(asym, apparent = true, cycles, threshold, Some(symmetrized(asym)))
+    yield (seed, cycles)
+    failures must beEmpty
   }

@@ -42,6 +42,28 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
 
   /** The combinatorial number system of this metric space's simplices, for decoding the cells of returned chains. */
   val si: SimplexIndexing = SimplexIndexing(metricSpace.size)
+
+  // A simplex must get one diameter whichever path computes it: the heap working column combines equal cells only if
+  // they carry the same diameter, and otherwise grows without end. Euclidean distances are exactly symmetric and
+  // `ExplicitMetricSpace` reads one triangle, so those are read as given; any other metric is read as d(min, max).
+  // Reading every metric that way cost ~15% on o3_1024: the row-wise walk of the distance cache is lost
+  // (`.claude/WORKLOG-vr-working-column.md`).
+  private val symmetricByConstruction: Boolean = metricSpace match
+    case _: EuclideanMetricSpace | _: ExplicitMetricSpace => true
+    case _                                                => false
+  private inline def distance(x: Int, y: Int): Double =
+    if symmetricByConstruction then metricSpace.distance(x, y)
+    else metricSpace.distance(math.min(x, y), math.max(x, y))
+
+  /** `insertionDiameter` with every distance read through `distance` above. */
+  private def cofacetDiameter(vertices: Array[Int], sigmaFv: Double, v: Int): Double =
+    var maxD = sigmaFv
+    var i = 0
+    while i < vertices.length do
+      val d = distance(vertices(i), v)
+      if d > maxD then maxD = d
+      i += 1
+    maxD
   private val fr = summon[CoefficientT is Field]
 
   /** A simplex as its (diameter, combinatorial index): the cell type of the returned chains. Equality and hash use the
@@ -79,8 +101,8 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
   /** The column being reduced, as Ripser keeps it: a binary min-heap of (diameter, index, coefficient) entries in
     * primitive arrays. Adding a column only pushes its entries; equal cells are combined lazily, when they reach the
     * top. Ordered by `packedOrdering` (diameter ascending, then the larger index first) for the cohomology reduction,
-    * by its reverse for the cycles. Equal indices meet at the top together because a simplex has one diameter, which
-    * holds for a symmetric distance, as Vietoris-Rips assumes.
+    * by its reverse for the cycles. Equal indices meet at the top together because a simplex has one diameter (every
+    * distance is read in one order, `distance`).
     */
   private final class WorkingColumn(youngestFirst: Boolean):
     private var diam = new Array[Double](64)
@@ -184,7 +206,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
     while i < vertices.length do
       var j = i + 1
       while j < vertices.length do
-        val d = metricSpace.distance(vertices(i), vertices(j))
+        val d = distance(vertices(i), vertices(j))
         if d > maxD then maxD = d
         j += 1
       i += 1
@@ -204,7 +226,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
         private def step(): Unit =
           havePending = false
           while !havePending && cur.hasNext do
-            val tauFv = insertionDiameter(metricSpace, vertices, sigma.diameter, cur.vertex)
+            val tauFv = cofacetDiameter(vertices, sigma.diameter, cur.vertex)
             if tauFv <= resolvedMaxFiltrationValue then
               pending = DiameterIndex(tauFv, cur.index)
               havePending = true
@@ -233,7 +255,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
       val vertices = si.decodeToArray(sigma.index, size)
       val cur = si.cofacetCursor(sigma.index, size, allCofacets = true)
       while cur.hasNext do
-        val tauFv = insertionDiameter(metricSpace, vertices, sigma.diameter, cur.vertex)
+        val tauFv = cofacetDiameter(vertices, sigma.diameter, cur.vertex)
         if tauFv <= resolvedMaxFiltrationValue then
           // `vertices` is sorted ascending: a plain scan counts the entries below `cur.vertex`.
           var position = 0
@@ -248,7 +270,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
       val vertices = si.decodeToArray(sigma.index, size)
       val cur = si.cofacetCursor(sigma.index, size, allCofacets = true)
       while cur.hasNext do
-        val tauFv = insertionDiameter(metricSpace, vertices, sigma.diameter, cur.vertex)
+        val tauFv = cofacetDiameter(vertices, sigma.diameter, cur.vertex)
         if tauFv == sigma.diameter then return Some(DiameterIndex(sigma.diameter, cur.index))
         cur.advance()
       None
@@ -550,8 +572,9 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
         (if useApparentPairs then zeroApparentCofacet(sigma, size) else None) match
           case Some(tau) =>
             _apparentPairCount += 1
-            seeds(tau.index) = sigma
-            logs(tau.index) = Array.empty
+            if cocycles then
+              seeds(tau.index) = sigma
+              logs(tau.index) = Array.empty
             nextCleared += tau.index
             report(
               PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(tau.diameter), None),
@@ -570,7 +593,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
                 case Some(column) =>
                   val redCoeff = fr.divide(working.pivotCoefficient, column.leadingCoefficient)
                   working.addScaled(column, fr.negate(redCoeff))
-                  log += ((pivotCell, redCoeff))
+                  if cocycles then log += ((pivotCell, redCoeff))
                   reducing = working.pivot()
             val reduced = working.drain()
             val reductionLog = log.toArray
@@ -583,8 +606,9 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
             else
               val pivot = DiameterIndex(reduced.diameters(0), reduced.indices(0))
               basis(pivot.index) = reduced
-              seeds(pivot.index) = sigma
-              logs(pivot.index) = reductionLog
+              if cocycles then
+                seeds(pivot.index) = sigma
+                logs(pivot.index) = reductionLog
               nextCleared += pivot.index
               report(
                 PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(pivot.diameter), None),

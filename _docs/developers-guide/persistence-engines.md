@@ -104,7 +104,8 @@ remaining terms uncombined. Cocycles (the V-columns) are recorded as a reduction
 for the bars that are reported, so `persistentCohomology()` builds none for zero-length bars and
 `persistentHomology()` builds none at all. Cycles come from the engine's own specialization of `Involution.cycles`
 on the same heap, which returns exactly what the generic involution returns. The heap relies on a simplex having
-one diameter, true for a symmetric distance, as Vietoris-Rips assumes.
+one diameter: a metric that is not symmetric by construction (anything but `EuclideanMetricSpace` and
+`ExplicitMetricSpace`) is read as `d(min(i, j), max(i, j))`.
 
 ## 5. `CellularCohomologyEngine` — generic cohomology, for every cell type
 

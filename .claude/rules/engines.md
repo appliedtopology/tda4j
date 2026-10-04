@@ -37,7 +37,9 @@ barcodes coincide.
    reduction logs (only for reported bars), and derives cycles with its own copy of `Involution.cycles`. It must
    equal the `Chain`-based engine kept in the test tree (`ChainPackedRipserReference`) term for term, cocycles and
    cycles, essentials included (`PackedWorkingColumnSpec`): re-run it after any change to the reduction
-   (`WORKLOG-vr-working-column.md`).
+   (`WORKLOG-vr-working-column.md`). The heap needs ONE diameter per simplex: non-trusted metrics are read as
+   `d(min, max)` (an asymmetric one otherwise grows the column until OOM); Euclidean/Explicit are read as given,
+   since `d(min, max)` costs ~15% there (it breaks the distance cache's row-wise walk).
 4. **`CellularCohomologyEngine`** (`Cohomology.scala`) — generic over `CellT: OrderedCell`, fully-materialized
    streams only, no `maxDim`/apparent pairs. Only essential bars' V-columns are cocycles; finite bars' V-columns
    are their reduced pivot chain. Representatives don't match Ripser term-for-term (tie direction differs) but

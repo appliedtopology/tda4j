@@ -17,9 +17,10 @@ builds a V-column `Chain` for every death column.
    arrays (coefficients boxed as `Any`: `CoefficientT` is generic). Adding a column pushes; `pivot()` pops the top and
    every entry with the same index, sums, pushes the sum back if non-zero. Same pivots and log as `Chain.reduceBy`
    (each pivot occurs once per reduction: after subtracting a column with pivot `p`, everything left is past `p`).
-   Correct only if a simplex always gets ONE diameter, i.e. a symmetric distance (ripser.cpp assumes the same). The
-   old comparator comment mentions a non-symmetric `distance` giving one index two diameters; no test or worklog for
-   that case could be found. Documented, not guarded (a symmetry check is O(n²) distance calls).
+   Correct only if a simplex always gets ONE diameter. With a distance that is not bit-symmetric, the same index
+   reached by two paths gets two diameters, never meets itself at the top, never cancels, and the column grows until
+   the heap is exhausted (confirmed: a space with `d(i,j)·(1+1e-12)` for `i > j` runs out of memory). HEAD's `TreeMap`
+   merged equal indices regardless of diameter. Fix (see "Follow-up" below): read distances in one order.
 2. **Reduced columns stored unsorted** (`Column`): pivot first (combined), the rest as they lie in the heap, NOT
    combined. Re-pushing them combines them in the next working column. Sorting/combining on store (`drain` popping
    everything) was a large share of the first heap version's profile.
@@ -55,6 +56,8 @@ before this change (`git show HEAD:...` swapped in, recompiled).
 | sphere3_96 cycles | 1.11 s | 0.698 s | 1.6x |
 | sphere3_192 cocycles | 11.30 s | 5.51 s | 2.0x |
 | sphere3_192 cycles | 19.2 s | 6.73 s | 2.9x |
+| o3_1024 (deg 3) cocycles | 29.4 s | 30.9 s | ~1x (noise) |
+| o3_1024 (deg 3) cycles | 52.3 s | 37.8 s | 1.4x |
 
 Step by step at 192 points (medians, same settings): heap + sorted store 8.9 / 16.3 s (cocycles / cycles); unsorted
 store 6.4 / 13.4; packed involution 6.4 / 12.9 (barely moved: the cocycles it still built were the cost); lazy
@@ -67,6 +70,27 @@ for both cocycles and cycles; after, cocycles finish (15.7 s, GC-bound) and cycl
 
 Against ripser.cpp's 0.82 s at 192 points (earlier session's smoke run): from ~14x to ~6.7x for cocycles, ~8x for
 cycles. For the paper's "quantifiably low slowdown" this is still the largest gap of any segment.
+
+## Follow-up (same day, after review)
+
+- **Asymmetric distances.** `distance(x, y)` in the engine reads `d(min, max)` for any metric that is not symmetric
+  by construction; `EuclideanMetricSpace` (exact: `(a-b)² = (b-a)²`) and `ExplicitMetricSpace` (reads one triangle)
+  are read as given. Reading EVERY metric as `d(min, max)` cost ~15% on o3_1024 cocycles (29.3 → 33.9-36.9 s, with a
+  wrapping metric space, an `if`, or `math.min/max` alike): it breaks the row-wise walk of the 8 MB distance cache
+  (`d(vertices(i), v)` with `v` advancing), not a branch or dispatch cost. Fixture in `PackedWorkingColumnSpec`
+  (skewed space vs the reference on the symmetrized space); without the fix it runs out of memory.
+- **Uncombined stored columns stay small.** Instrumented once (stored entries vs distinct cells, cumulative over
+  dimensions): sphere3_192 3.13M vs 3.06M (worst column 1.22x); fractal-r through degree 1 3.21M vs 3.10M (1.26x);
+  o3_1024 to degree 3 1.74M vs 1.61M (2.15x). No compaction needed.
+- **Logs skipped on the cycles path** (`cocycles = false` records none).
+- **Larger cases, HEAD vs after** (`-Xms8g -Xmx8g`, ParallelGC, cold single runs, 3 each unless noted):
+  o3_1024 (degree 3, threshold 1.8) cocycles 29.4 → 30.9 s (within noise), cycles 52.3 → 37.8 s (2 runs).
+  fractal-r (degree 2): out of memory at 8 GB in BOTH (`GC overhead limit exceeded`), pre-existing.
+- Final sphere3_192 medians (5 trials): cocycles 5.73 s, cycles 6.84 s. At `-Xmx1g` cycles still run out of memory.
+
+So the gain is concentrated where the reduction dominates (sphere3: dense columns, many non-apparent pairs) and in
+the cycles path everywhere; on o3_1024 cocycles the time is in cofacet enumeration and apparent-pair checks, which
+this change does not touch.
 
 ## Not done / next
 
