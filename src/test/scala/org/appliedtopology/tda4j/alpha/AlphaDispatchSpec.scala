@@ -2,8 +2,8 @@ package org.appliedtopology.tda4j
 
 import org.specs2.mutable
 
-/** With a radius, `AlphaShapes(points, Default, maxRadius = r)` picks Helix (whole triangulation, then the simplices with
-  * value at most `r`) or DQP (built only up to `r`), whichever it expects to be faster (`AlphaShapes.prefersDQP`).
+/** With a radius, `AlphaShapes(points, Default, maxRadius = r)` picks Helix (whole triangulation, then the simplices
+  * with value at most `r`) or DQP (built only up to `r`), whichever it expects to be faster (`AlphaShapes.prefersDQP`).
   * The choice must never change the result: on random clouds in 2-D, 3-D and 4-D, both backends give the same simplices
   * with the same values, and the verb with `maxFiltrationValue` gives the same bars.
   */
@@ -15,7 +15,11 @@ class AlphaDispatchSpec extends mutable.Specification:
     Array.fill(n)(Array.fill(dim)(rng.nextDouble()))
 
   def contents(stream: AlphaShapes, topDimension: Int): Map[Simplex[Int], Double] =
-    (0 to topDimension).filter(stream.iterateDimension.isDefinedAt).flatMap(d => stream.iterateDimension(d)).map(s => s -> stream.filtrationValue(s)).toMap
+    (0 to topDimension)
+      .filter(stream.iterateDimension.isDefinedAt)
+      .flatMap(d => stream.iterateDimension(d))
+      .map(s => s -> stream.filtrationValue(s))
+      .toMap
 
   "Helix and DQP give the same radius-limited alpha complex" >> {
     val problems = for
@@ -27,7 +31,8 @@ class AlphaDispatchSpec extends mutable.Specification:
       dqp = contents(AlphaShapes(pts, AlphaBackend.DQP, maxRadius = r), dim)
       problem <- Seq(
         Option.when(helix.keySet != dqp.keySet)(s"different simplices (${helix.size} vs ${dqp.size})"),
-        Option.when(helix.keySet == dqp.keySet && helix.exists((s, v) => math.abs(v - dqp(s)) > 1e-9))("different values")
+        Option
+          .when(helix.keySet == dqp.keySet && helix.exists((s, v) => math.abs(v - dqp(s)) > 1e-9))("different values")
       ).flatten
     yield s"dim $dim seed $seed r $r: $problem"
     problems must beEmpty
@@ -41,16 +46,29 @@ class AlphaDispatchSpec extends mutable.Specification:
       pts = cloud(dim, 50, 77L * dim + seed)
     yield
       def bars(backend: AlphaBackend) =
-        Persistence(Truncated(AlphaShapes(pts, backend, maxRadius = r, maxDimension = dim - 1), dim - 1), characteristic = 3).triples
-          .filter((_, b, d) => d - b > 1e-7).sorted
-      val viaVerb = Persistence(pts, complex = AlphaShapes, maxDimension = dim - 1, maxFiltrationValue = r, characteristic = 3).triples
-        .filter((_, b, d) => d - b > 1e-7).sorted
+        Persistence(
+          Truncated(AlphaShapes(pts, backend, maxRadius = r, maxDimension = dim - 1), dim - 1),
+          characteristic = 3
+        ).triples
+          .filter((_, b, d) => d - b > 1e-7)
+          .sorted
+      val viaVerb = Persistence(
+        pts,
+        complex = AlphaShapes,
+        maxDimension = dim - 1,
+        maxFiltrationValue = r,
+        characteristic = 3
+      ).triples
+        .filter((_, b, d) => d - b > 1e-7)
+        .sorted
       val (h, q) = (bars(AlphaBackend.Helix), bars(AlphaBackend.DQP))
       def same(a: List[(Int, Double, Double)], b: List[(Int, Double, Double)]) =
         a.size == b.size && a.zip(b).forall { case ((d1, b1, e1), (d2, b2, e2)) =>
           d1 == d2 && math.abs(b1 - b2) <= 1e-9 && (e1 == e2 || math.abs(e1 - e2) <= 1e-9)
         }
-      Option.when(!same(h, q) || !same(h, viaVerb))(s"dim $dim seed $seed r $r: ${h.size} / ${q.size} / ${viaVerb.size} bars")
+      Option.when(!same(h, q) || !same(h, viaVerb))(
+        s"dim $dim seed $seed r $r: ${h.size} / ${q.size} / ${viaVerb.size} bars"
+      )
     problems.flatten must beEmpty
   }
 
