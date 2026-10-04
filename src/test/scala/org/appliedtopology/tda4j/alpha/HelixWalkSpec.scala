@@ -39,7 +39,9 @@ class HelixWalkSpec extends mutable.Specification:
   /** (Euler characteristic, total top volume, facets in more than two top simplices) of the default triangulation. */
   def gridCheck(side: Int, dim: Int): (Int, Double, Int) =
     val coords: IndexedSeq[IndexedSeq[Double]] =
-      (0 until math.pow(side, dim).toInt).map(k => (0 until dim).map(a => ((k / math.pow(side, a).toInt) % side).toDouble))
+      (0 until math.pow(side, dim).toInt).map(k =>
+        (0 until dim).map(a => ((k / math.pow(side, a).toInt) % side).toDouble)
+      )
     val helix = HelixDelaunay(coords.map(_.toArray).toArray)
     val simplices = helix.simplices().toSeq
     val euler = simplices.map(s => if s.toSeq.size % 2 == 1 then 1 else -1).sum
