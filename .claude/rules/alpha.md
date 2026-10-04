@@ -31,11 +31,19 @@ routed through one shared `rankAtEpsilon` helper: retry every affinely-independe
 (smallest-span first); reject affinely-degenerate candidates outright; project a globally-coplanar cloud onto
 its true affine span first.
 
+**Helix alpha values are computed top-down** (`alphaValues`): top cells take the smallest containing circumradius;
+below that a simplex takes its own smallest circumradius (centre in its affine hull, `smallestCircumsphere`, never
+`Hypersphere.apply`) if Gabriel w.r.t. its cofaces' opposite vertices, else the min over its immediate cofaces. The
+Gabriel rule once covered edges only, so 3-D lost most `H_2` (`WORKLOG-helix-alpha-values.md`). **In general position
+Helix must equal DQP bar for bar** (`HelixDqpAgreementSpec`, a CI gate in 2-D/3-D/4-D); only degenerate inputs stay
+diagnostic.
+
 **One root mechanism (near-cospherical clusters, order-dependent facet-pivot choices) produces two DIFFERENT
 outcomes — don't conflate, a naive set-diff can't tell them apart**:
 1. Order-dependent disagreement with DQP, **WONTFIX** (project lead) — the discarded side is reachable some
-   other way too, still a complete triangulation. Helix is not reliable ground truth for dim≥4 fuzzing;
-   `AlphaCrossValidationSpec` comparisons stay diagnostic (`unsafeCompare`/`unsafeFuzzCompare`).
+   other way too, still a complete triangulation. Helix is not reliable ground truth for dim≥4 fuzzing on
+   degenerate input; `AlphaCrossValidationSpec`'s degenerate comparisons stay diagnostic (`unsafeCompare`/
+   `unsafeFuzzCompare`).
 2. Genuine incomplete triangulation (real topological hole), **fixed**. Self-consistency (not diff-vs-DQP) is
    the discriminator. Two compounding bugs: (a) `handleCosphericalPoints`'s facet-queue excluded the originating
    facet (fixed — iterate every vertex of the new simplex); (b) its greedy point-pull has no empty-circumsphere

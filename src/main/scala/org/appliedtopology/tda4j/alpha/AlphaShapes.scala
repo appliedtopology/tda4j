@@ -446,33 +446,60 @@ class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTria
     )
   )
 
-  def edgeIsDelaunay(s: Simplex[Int]): Option[Double] =
-    val Seq(src, tgt) = s.toSeq.toSeq
-    val circumcenter: Point = points(src).add(points(tgt)).mapMultiply(0.5)
-    val circumsphere = Hypersphere(circumcenter, circumcenter.getDistance(points(src)))
-    if points.filter(p => circumcenter.getDistance(p) < circumsphere.radius - epsilon.epsilon).size > 0 then None
-    else Some(circumsphere.radius)
+  /** The smallest sphere through every vertex of `s`: its centre lies in `s`'s own affine hull, at `p0 + Σ λ_i (p_i -
+    * p0)` with `Σ_j 2 (p_i - p0)·(p_j - p0) λ_j = |p_i - p0|²`. (`Hypersphere.apply` is for full-dimensional simplices:
+    * below full dimension its least-squares centre is the minimum-norm one, off the affine hull.)
+    */
+  def smallestCircumsphere(s: Simplex[Int]): (Point, Double) =
+    val vs = s.toSeq.toIndexedSeq
+    val p0 = points(vs.head)
+    val k = vs.size - 1
+    if k == 0 then (p0, 0.0)
+    else
+      val diffs = vs.tail.map(v => points(v).subtract(p0))
+      val gram = MatrixUtils.createRealMatrix(k, k)
+      val rhs = new Array[Double](k)
+      for i <- 0 until k do
+        rhs(i) = diffs(i).dotProduct(diffs(i))
+        for j <- 0 until k do gram.setEntry(i, j, 2 * diffs(i).dotProduct(diffs(j)))
+      val lambda = SingularValueDecomposition(gram).getSolver.solve(createRealVector(rhs))
+      val center = (0 until k).foldLeft(p0)((c, i) => c.add(diffs(i).mapMultiply(lambda.getEntry(i))))
+      (center, center.getDistance(p0))
 
-  def computeFVal(s: Simplex[Int]): Double = s.dim match
-    case 0 => 0.0
-    case 1 =>
-      edgeIsDelaunay(s) match
-        case Some(alpha) => alpha
-        case None        =>
-          validated
-            .filter(v => s.toSet.subsetOf(v.simplex.toSet))
-            .map(ds => ds.circumsphere.radius)
-            .min
-    case _ =>
-      validated
-        .filter(v => s.toSet.subsetOf(v.simplex.toSet))
-        .map(ds => ds.circumsphere.radius)
+  /** Alpha values, top dimension first:
+    *   - a top-dimensional simplex: the smallest circumradius among the Delaunay simplices containing it (its own,
+    *     unless a cospherical cluster was tiled as one larger cell);
+    *   - a lower simplex `σ`: if `σ` is Gabriel -- no vertex of a coface strictly inside its smallest circumsphere --
+    *     that sphere's radius, otherwise the smallest value among its immediate cofaces. A Gabriel simplex's radius is
+    *     already at most its cofaces' values; taking the minimum anyway keeps the filtration monotone to the last bit.
+    *   - a vertex: 0.
+    */
+  private lazy val alphaValues: Map[Simplex[Int], Double] =
+    val values = mutable.HashMap.empty[Simplex[Int], Double]
+    val containing: Map[Int, Seq[DelaunaySimplex]] =
+      validated.toSeq.flatMap(ds => ds.simplex.toSeq.map(v => (v, ds))).groupMap(_._1)(_._2)
+    simplicesMap(ambientDimension).foreach { s =>
+      values(s) = containing(s.toSeq.head)
+        .filter(ds => s.toSet.subsetOf(ds.simplex.toSet))
+        .map(_.circumsphere.radius)
         .min
-  val filtrationValuesMemo: mutable.Map[Simplex[Int], Double] = mutable.Map.empty
+    }
+    for k <- (ambientDimension - 1) to 1 by -1 do
+      val cofaces = mutable.HashMap.empty[Simplex[Int], mutable.ArrayBuffer[(Simplex[Int], Int)]]
+      simplicesMap(k + 1).foreach { t =>
+        t.toSeq.foreach(v => cofaces.getOrElseUpdate(t - v, mutable.ArrayBuffer.empty) += ((t, v)))
+      }
+      simplicesMap(k).foreach { s =>
+        val (center, r) = smallestCircumsphere(s)
+        val cs = cofaces.getOrElse(s, mutable.ArrayBuffer.empty)
+        val gabriel = cs.forall((_, v) => center.getDistance(points(v)) >= r - epsilon.epsilon)
+        val cofaceMin = cs.map((t, _) => values(t)).minOption.getOrElse(Double.PositiveInfinity)
+        values(s) = if gabriel then math.min(r, cofaceMin) else cofaceMin
+      }
+    simplicesMap(0).foreach(s => values(s) = 0.0)
+    values.toMap
 
-  override def filtrationValue: PartialFunction[Simplex[Int], Double] = { case spx =>
-    filtrationValuesMemo.getOrElseUpdate(spx, computeFVal(spx))
-  }
+  override def filtrationValue: PartialFunction[Simplex[Int], Double] = { case spx => alphaValues(spx) }
 
   // Must be the exact reverse of filtrationOrdering below, not merely "ascending by filtrationValue" --
   // sortBy(filtrationValue) alone has no explicit tie-break (falls back to simplicesMap's own insertion

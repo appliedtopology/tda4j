@@ -101,8 +101,6 @@ runs.
 
 ## Before quoting numbers
 
-- **Alpha (`--tasks alpha`) is not trustworthy yet.** The default Helix backend is wrong in 3-D: it loses most `H_2`
-  classes, while the DQP backend and Čech match GUDHI to 1e-15. Until that is fixed, start with `--tasks vr,cubical`.
 
 - Run on a quiet machine. Record it, and fix its frequency governor if you can.
 - Pin the pip versions for the final run (`setup_python` in `run.sh`). `env.json` records what was used either way.
