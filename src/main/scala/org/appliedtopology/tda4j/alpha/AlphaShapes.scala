@@ -708,34 +708,50 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
   /** The alpha value of a top-dimensional simplex. */
   protected def topValue(s: Simplex[Int]): Double
 
+  /** Points that coincide exactly with another one (the key), which is the one in the triangulation. Each becomes a
+    * vertex joined to it by an edge of value 0, so every input point is in the complex and none adds an `H_0` class.
+    */
+  protected def duplicates: Map[Int, Int] = Map.empty
+
   lazy val simplicesMap: Map[Int, Seq[Simplex[Int]]] = Map.from(
-    (0 to ambientDimension).map(d =>
-      d -> topSimplices.toSet
+    (0 to ambientDimension).map { d =>
+      val faces = topSimplices.toSet
         .flatMap((top: Simplex[Int]) => top.toSet.subsets(d + 1))
         .map((s: Set[Int]) => Simplex.from(s.toSeq))
         .toSeq
-    )
+      d -> (d match
+        case 0 => faces ++ duplicates.keys.map(Simplex(_))
+        case 1 => faces ++ duplicates.map((dup, kept) => Simplex(dup, kept))
+        case _ => faces)
+    }
   )
 
-  /** The smallest sphere through every vertex of `s`: its centre lies in `s`'s own affine hull, at `p0 + Σ λ_i (p_i -
-    * p0)` with `Σ_j 2 (p_i - p0)·(p_j - p0) λ_j = |p_i - p0|²`. (`Hypersphere.apply` is for full-dimensional simplices:
-    * below full dimension its least-squares centre is the minimum-norm one, off the affine hull.)
+  /** The smallest sphere through every vertex of `s`: its centre lies in `s`'s own affine hull. With `D` the matrix
+    * whose columns are the edge vectors `p_i - p0` and `D = Q R` its thin QR factorization, the centre is `p0 + Q y`
+    * with `R^T y = |p_i - p0|^2 / 2`. (The Gram system `D^T D` squares the condition number, which on slivers lost
+    * about half the digits; `Hypersphere.apply` is for full-dimensional simplices only.)
     */
   def smallestCircumsphere(s: Simplex[Int]): (Point, Double) =
     val vs = s.toSeq.toIndexedSeq
-    val p0 = points(vs.head)
+    val p0 = points(vs.head).toArray
     val k = vs.size - 1
-    if k == 0 then (p0, 0.0)
+    if k == 0 then (points(vs.head), 0.0)
     else
-      val diffs = vs.tail.map(v => points(v).subtract(p0))
-      val gram = MatrixUtils.createRealMatrix(k, k)
-      val rhs = new Array[Double](k)
+      val dim = p0.length
+      val edges = Array.tabulate(dim, k)((r, c) => points(vs(c + 1)).getEntry(r) - p0(r))
+      val qr = new org.apache.commons.math3.linear.QRDecomposition(MatrixUtils.createRealMatrix(edges))
+      val q = qr.getQ // dim x dim; its first k columns span the edges
+      val rr = qr.getR // dim x k, upper triangular in its first k rows
+      val rhs = Array.tabulate(k)(c => (0 until dim).map(r => edges(r)(c) * edges(r)(c)).sum / 2)
+      // Forward substitution for R^T y = rhs (R^T is lower triangular).
+      val y = new Array[Double](k)
       for i <- 0 until k do
-        rhs(i) = diffs(i).dotProduct(diffs(i))
-        for j <- 0 until k do gram.setEntry(i, j, 2 * diffs(i).dotProduct(diffs(j)))
-      val lambda = SingularValueDecomposition(gram).getSolver.solve(createRealVector(rhs))
-      val center = (0 until k).foldLeft(p0)((c, i) => c.add(diffs(i).mapMultiply(lambda.getEntry(i))))
-      (center, center.getDistance(p0))
+        var acc = rhs(i)
+        for j <- 0 until i do acc -= rr.getEntry(j, i) * y(j)
+        y(i) = acc / rr.getEntry(i, i)
+      val offset = Array.tabulate(dim)(r => (0 until k).map(c => q.getEntry(r, c) * y(c)).sum)
+      val center = Point(Array.tabulate(dim)(r => p0(r) + offset(r)))
+      (center, math.sqrt(offset.map(x => x * x).sum))
 
   /** Alpha values, top dimension first:
     *   - a top-dimensional simplex: `topValue` (its circumradius);
@@ -760,6 +776,7 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
         values(s) = if gabriel then math.min(r, cofaceMin) else cofaceMin
       }
     simplicesMap(0).foreach(s => values(s) = 0.0)
+    duplicates.foreach((dup, kept) => values(Simplex(dup, kept)) = 0.0)
     values.toMap
 
   override def filtrationValue: PartialFunction[Simplex[Int], Double] = { case spx => alphaValues(spx) }
@@ -868,7 +885,7 @@ object HelixDelaunay:
   /** Points whose affine span has lower dimension than their coordinates, re-expressed in an orthonormal basis of that
     * span (distances are unchanged, so the triangulation is the true one); other point sets are returned as they are.
     */
-  private def projectToAffineRank(pts: Array[Array[Double]])(using epsilon: Epsilon): Array[Array[Double]] =
+  private[tda4j] def projectToAffineRank(pts: Array[Array[Double]])(using epsilon: Epsilon): Array[Array[Double]] =
     if pts.length < 2 then pts
     else
       val dim = pts.head.length
