@@ -1,5 +1,6 @@
 ---
 layout: main
+title: Simplicial sets
 ---
 
 ### Simplicial sets
@@ -17,7 +18,7 @@ import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.sset.*
 ```
 
-(With a lab, `val tdalab = TDAlab(2); import tdalab.{*, given}` already covers both.)
+(A lab, such as `import org.appliedtopology.tda4j.TDAlab.F2.{*, given}`, covers both.)
 
 Everything is in two places:
 
@@ -135,15 +136,13 @@ BettiNumbers(SimplicialSet.classifyingSpace(FiniteGroup.cyclic(2)), 3, 2)   // V
 ```
 
 For persistent homology, give each generator a filtration value with `x.filtered(...)` (a generator may not appear
-before its faces; this is checked), bring the set's cell structure into scope with `import x.given`, and use any
-engine:
+before its faces; this is checked), bring the set's cell structure into scope with `import x.given`, and pass the
+result to `Persistence`:
 
 ```scala 3
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.sset.*
-
-given Double is Field = Field.DoubleApproximated(1e-9)
 
 enum CircleGen derives CanEqual { case V, E }
 import CircleGen.*
@@ -154,9 +153,7 @@ val circle = SimplicialSet[CircleGen](
 )
 
 import circle.given
-CellularHomologyEngine[CircleGen, Double, Double]()
-  .persistentHomology(circle.filtered { case V => 0.0; case E => 1.0 })
-  .diagramAt(Double.PositiveInfinity)
+Persistence(circle.filtered { case V => 0.0; case E => 1.0 }).triples
 // (0, 0.0, Infinity) and (1, 1.0, Infinity): H0 is born at 0, H1 when the loop closes at 1
 ```
 

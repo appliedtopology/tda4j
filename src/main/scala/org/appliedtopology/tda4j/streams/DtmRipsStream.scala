@@ -3,55 +3,19 @@ package org.appliedtopology.tda4j
 import scala.collection.concurrent.TrieMap
 import scala.collection.immutable
 
-/** The DTM-based (weighted Rips) filtration of Anai, Chazal, Glisse, Ike, Lecci, Rouvreau, Saulnier & Wasserman,
-  * "DTM-based filtrations" (arXiv:1811.04757, Prop. 3.5), checked byte-for-byte against GUDHI's own
-  * `gudhi.dtm_rips_complex.DTMRipsComplex`/`gudhi.weighted_rips_complex.WeightedRipsComplex` for `p = 1`
-  * (`DtmRipsStreamSpec`; see `.claude/WORKLOG-dtm-filtrations.md` for the fetched source and every oracle value).
-  * Values are in the same "doubled"/diameter units every other VR stream in this codebase uses (GUDHI's own choice too,
-  * for the identical reason: consistency with plain, unweighted Rips, whose edge filtration is the raw pairwise
-  * distance, not half of it).
+/** The DTM-filtration of Anai, Chazal, Glisse, Ike, Lecci, Rouvreau, Saulnier and Wasserman, "DTM-based filtrations"
+  * (arXiv:1811.04757, Prop. 3.5), a weighted Rips filtration with weights `f(x)` the distance to measure
+  * ([[DistanceToMeasure]]). Values are diameters, as in Vietoris-Rips and GUDHI; with `f = 0` (as for `k = 1`) this is
+  * the Vietoris-Rips filtration. For `p = 1` it agrees with GUDHI's `DTMRipsComplex`.
   *
-  * `f(x)` is the empirical distance-to-measure per ambient point (`DistanceToMeasure`); at `f = 0` everywhere (in
-  * particular at `k = 1`, `DistanceToMeasure`'s own degenerate case) this reduces EXACTLY to plain Vietoris-Rips,
-  * threshold included -- `DtmRipsStreamSpec` checks this too.
+  * `p` is the ball-radius exponent of Def. 3.1 (not the exponent `q` of the distance to measure), `1` or `2`:
+  *   - `p = 1`: `t(f_x, f_y, d) = max(f_x, f_y, (d + f_x + f_y) / 2)`, as in GUDHI;
+  *   - `p = 2`: `t = max(f_x, f_y, sqrt(u² + f_x²))` with `u = (d² + f_y² - f_x²) / (2d)` when `|f_y² - f_x²| <= d²`,
+  *     and `max(f_x, f_y)` otherwise (one ball contains the other).
   *
-  * `p` selects the ball-radius exponent of Def. 3.1 -- NOT `DistanceToMeasure`'s own exponent `q`, a different knob
-  * entirely. Only `p = 1` and `p = 2` are implemented:
-  *   - `p = 1`: `t(f_x, f_y, d) = max(f_x, f_y, (d + f_x + f_y) / 2)`. The only variant GUDHI's own Python bindings
-  *     implement, and the one every published worked example (including this class's own regression oracle) targets.
-  *   - `p = 2`: closed form `t(f_x, f_y, d) = max(f_x, f_y, sqrt(u^2 + f_x^2))` where
-  *     `u = (d^2 + f_y^2 - f_x^2) / (2d)`, valid (and symmetric in x/y -- verified algebraically, not just numerically)
-  *     whenever `|f_y^2 - f_x^2| <= d^2`; otherwise one ball already contains the other and `t = max(f_x, f_y)`
-  *     directly (the closed form overshoots outside that regime: e.g. `f_x=0, f_y=10, d=1` gives 50.5 from the raw
-  *     formula against a true value of 10). GUDHI's own Python bindings do not implement this case at all, so unlike
-  *     `p = 1` it is NOT checked against an external reference implementation here -- it exists only as a
-  *     cross-validation device against `PowerDistance`'s own DTM weighting (both are the `p = 2` ball equation,
-  *     `.claude/WORKLOG-dtm-filtrations.md`'s cross-check), not as a recommended production default.
-  *   - `p = Infinity` (Def. 3.1's third named case) is NOT implemented: no user need identified.
-  *
-  * A FLAG complex, exactly like plain Vietoris-Rips: `t` above is only ever used to build a reified, non-metric
-  * `FiniteMetricSpace[Int]` (`DtmMetricSpace`, doubled: `2*t`) that gets handed to `RipserCofaceSimplexStream`
-  * unchanged for every dimension `>= 1` -- the inherited default "max pairwise distance" filtration functional is
-  * already exactly the flag-complex extension this construction wants (same relationship `WitnessMetricSpace` has to
-  * `LazyWitnessSimplexStream`). The only override needed is at dimension 0: unlike plain VR (where every vertex is born
-  * at filtration 0, so the base class's hardcoded `dim <= 0 => 0.0` and its unsorted, unfiltered `case 0` vertex
-  * emission are both harmless -- see `.claude/WORKLOG-dtm-filtrations.md` for why), THIS is the first coface stream in
-  * this codebase whose vertices have distinct, nonzero filtration values, so `case 0` MUST be sorted by
-  * `filtrationOrdering.reverse` and filtered by threshold like every other dimension (ordering contract rule 2 in
-  * CLAUDE.md) -- silently violating that would corrupt `Chain`'s pivot table exactly like the historical "no tie-break"
-  * bugs did, and would let vertices past `maxFiltrationValue` leak into the complex as spurious isolated components.
-  *
-  * `maxFiltrationValue` defaults (via `None`) to the reified space's own `minimumEnclosingRadius`, the same convention
-  * every other flag-complex VR stream in this codebase uses (not GUDHI's own `max_filtration = +Infinity` default) --
-  * valid here for a real, checked reason, not just by analogy: `t(f_x, f_y, d) >= max(f_x, f_y)` by construction for
-  * both `p = 1` and `p = 2` (immediate for `p=1`'s outer max; for `p=2`, `t^2 = u^2 + f_x^2 >= f_x^2` and the symmetric
-  * `v = d - u` form gives `t^2 = v^2 + f_y^2 >= f_y^2` too), so taking `x* = argmin_x max_y distance(x,y)` and
-  * `R = distance(x*,·)`'s own max: for every vertex `z`, `2*f(z) <= distance(x*,z) <= R` (since
-  * `distance(x*,z) = 2*t(f_{x*},f_z,d) >= 2*f_z`) -- every vertex's own birth is `<= R`, so truncating there cannot
-  * silently drop a vertex, and beyond `R` the complex is a cone from `x*` exactly as in the unweighted case. Refuses
-  * `engine=ripser` in `matlab.TDA4j`'s dispatch (both Ripser engines assume vertex births at 0 and a diameter-only
-  * incremental formula); `naive`/`chunks`/`cohomology` all consume this like any other
-  * `CofaceSimplexStream[Int, Double]`.
+  * A flag complex on the weighted distances `2 t`, with vertex `x` born at `2 f(x)`. `maxFiltrationValue` defaults to
+  * the minimum enclosing radius of the weighted distances, which is at least every vertex's birth and beyond which the
+  * complex is a cone. Vertices are born at nonzero values, so the Ripser engines do not apply.
   */
 private[tda4j] class DtmRipsSimplexStream(
   val reified: DtmRipsSimplexStream.DtmMetricSpace,
@@ -100,7 +64,7 @@ private[tda4j] object DtmRipsSimplexStream:
       parallelFiltrationValue
     )
 
-  /** `t(f_x, f_y, d)` of Prop. 3.5, undoubled -- see the class doc for both closed forms and their derivations. */
+  /** `t(f_x, f_y, d)` of Prop. 3.5 (a radius; the filtration uses `2 t`). */
   def edgeValue(fx: Double, fy: Double, d: Double, p: Double): Double =
     if p == 1.0 then math.max(fx, math.max(fy, (d + fx + fy) / 2.0))
     else if d <= 0.0 || math.abs(fy * fy - fx * fx) >= d * d then math.max(fx, fy)

@@ -64,8 +64,7 @@ D(1,2) = 2; D(2,1) = 2;        % ... except the antipodal pairs, which are never
 D(3,4) = 2; D(4,3) = 2;
 D(5,6) = 2; D(6,5) = 2;
 octahedron = TDA4j.computeFromDistanceMatrix(D, {'maxDimension', '2', 'maxFiltrationValue', '1.5'});
-octahedron.toArray()           % rows [dimension birth death]: one [0 0 Inf], one [2 1 Inf]; the H1 classes
-                               % born at 1 die at 1 and are not reported
+octahedron.toArray()           % rows [dimension birth death]: one [0 0 Inf], one [2 1 Inf]
 
 % Task 2: Vietoris-Rips barcode of the points in the file
 points = readmatrix('_docs/tutorials/examplepoints.csv');   % csvread on older releases
@@ -86,59 +85,48 @@ Two details worth knowing: MATLAB passes the Java `String[]` of options as a cel
 
 ## Scala REPL
 
-When working in a Scala interpreter, where you may want to go step by step, a *lab* gets you a fairly comprehensive
-setup with some default choices made for you: `import org.appliedtopology.tda4j.TDAlab.F17.{*, given}` brings in the
-whole library plus coefficients in the field with 17 elements (`TDAlab.F2`, `TDAlab.F3` and `TDAlab.Reals` are the other
-prebuilt labs; `val lab = TDAlab(p); import lab.{*, given}` makes one for any prime `p`, or `0` for `Double`
-coefficients).
-
-Some techniques we use to make the code easier to use are fairly experimental -- with the result that we currently
-cannot avoid one pure boilerplate line of code in any file that uses the library: telling Scala that we are okay with
-specific experimental features.
-
-```scala
-import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F17.{*, given}
-
-// Task #1: the vertices are 1..6, and 1-2, 3-4, 5-6 are the antipodal pairs, which are never joined.
-// A triangle takes one vertex from each pair, so the 8 triangles are all we have to list: fromFacets adds
-// the 12 edges and 6 vertices they contain.
-val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield ∆(a, b, c)
-val octahedron = SimplicialHomologyEngine().persistentHomology(ExplicitStreamBuilder.fromFacets(triangles))
-// Everything enters at 0.0 here, so the engine also lists a dozen zero-length bars (cells that cancel at once).
-// Dropping bars of persistence 0 leaves the answer: one class in dimension 0 and one in dimension 2.
-PersistenceFilter.significant(octahedron.barcodeAt(4.0), minPersistence = 1e-9)
-
-// Task #2: maxDimension is the highest homology degree you want, so H_0 and H_1 here. (The stream
-// itself also contains the triangles, which H_1 needs; classes in degree 2 are incomplete -- ignore them.)
-val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/examplepoints.csv")
-val circle = SimplicialHomologyEngine().persistentHomology(VietorisRips(metricSpace, maxDimension = 1))
-val allBars = circle.barcodeAt(1.5).filter(_.dim <= 1)
-// The engines report every bar, mostly noise. Keep the ones longer than 1% of the enclosing radius:
-PersistenceFilter.significant(allBars, scale = metricSpace.minimumEnclosingRadius)
-
-// Task #3
-// Pick a likely parameter at which your coordinate is alive, say 1.5
-CircularCoordinates.h1Bars(metricSpace, 1.5)
-// observe index of the bar you're interested in, say 0
-CircularCoordinates.compute(metricSpace, 1.5, 0)
-```
-
-The same circle in one call, if you don't need the step-by-step objects: `Persistence` builds the complex, runs an
-engine to the end and hands back an immutable diagram (bars with their representative cycles):
+Every Scala file that uses TDA4j starts with two lines. The first accepts the experimental language features the library
+is built with (its typeclasses use them, so Scala asks every user file to opt in); the second brings in the library:
 
 ```scala
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
-val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/examplepoints.csv")
-val diagram = Persistence(metricSpace, maxFiltrationValue = 1.5)   // degrees 0..1, coefficients F_17
-diagram.significant().dim(1)                                      // the loop, with its cycle
+// Task 1: the vertices are 1..6, and 1-2, 3-4, 5-6 are the antipodal pairs, which are never joined.
+// A triangle takes one vertex from each pair, so the 8 triangles are all we have to list: fromFacets adds
+// the 12 edges and 6 vertices they contain, all at filtration value 0.
+val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield Simplex(a, b, c)
+val octahedron = Persistence(ExplicitStreamBuilder.fromFacets(triangles), maxDimension = 2)
+octahedron.bettiNumbers     // Vector(1, 0, 1): one component, no loops, one void
+
+// Task 2: the Vietoris-Rips diagram, up to scale 1.5
+val points = CSV.readPointCloud("_docs/tutorials/examplepoints.csv")
+val circle = Persistence(points, maxFiltrationValue = 1.5)
+circle.longerThan(0.3)      // the component [0, Infinity) and the loop [0.261, Infinity), still open at 1.5
+
+// Task 3: circular coordinates, for the loop alive at 1.0
+val metricSpace = EuclideanMetricSpace(points)
+CircularCoordinates.h1Bars(metricSpace, 1.5)       // the loops, longest first: (0.261, Infinity) up to 1.5
+CircularCoordinates.compute(metricSpace, 1.0, 0)   // an angle in [0, 1) for every point
+```
+
+For interactive work with chains, a *lab* is a one-import setup that also fixes a coefficient field and brings chain
+arithmetic: `import org.appliedtopology.tda4j.TDAlab.F17.{*, given}` (also `TDAlab.F2`, `TDAlab.F3`, `TDAlab.Reals`, or
+`val lab = TDAlab(p); import lab.{*, given}` for any prime `p`). With it, `∆(1, 2, 3)` is a simplex, simplices are chains,
+and `Fp(2) ⊠ ∆(1, 2) - ∆(2, 3)` is a chain over the field with 17 elements:
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.TDAlab.F17.{*, given}
+
+val chain = Fp(2) ⊠ ∆(1, 2) - ∆(2, 3)
+println(chain.show)
 ```
 
 ## Scala by extension
 
-If you are not working interactively, one useful approach is instead to extend the `TDAlab` instance. That way it sets up your environment inside your extension for you. The resulting code may looks like this:
+If you are not working interactively, one useful approach is instead to extend a lab, which sets up the environment
+inside your object:
 
 ```scala
 import scala.language.experimental.modularity
@@ -147,60 +135,37 @@ import org.appliedtopology.tda4j.TDAlab
 object myComputation extends TDAlab(17) {
   // Task 1
   val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield ∆(a, b, c)
-  val octahedronHomology = SimplicialHomologyEngine().persistentHomology(
-    ExplicitStreamBuilder.fromFacets(triangles)
-  )
-  // (includes zero-length bars; see the REPL example above for dropping them)
-  val octahedronBarcode = octahedronHomology.barcodeAt(4.0)
-
-  // Common setup
-  val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/examplepoints.csv")
+  val octahedron = Persistence(ExplicitStreamBuilder.fromFacets(triangles), maxDimension = 2)
 
   // Task 2
-  val circleHomology = SimplicialHomologyEngine().persistentHomology(
-    VietorisRips(metricSpace, maxDimension = 1)
-  )
-  val circleBarcode = circleHomology.barcodeAt(1.5)
+  val points = CSV.readPointCloud("_docs/tutorials/examplepoints.csv")
+  val circle = Persistence(points, maxFiltrationValue = 1.5).longerThan(0.3)
 
   // Task 3
-  val coordinate = CircularCoordinates.compute(metricSpace, 1.5, 0)
+  val coordinate = CircularCoordinates.compute(EuclideanMetricSpace(points), 1.0, 0)
 }
 ```
 
-## Scala with explicit imports
+## An engine by hand
 
-`TDAlab` is a convenience: it picks the coefficient field for you and brings a pile of names into scope. Nothing in it is
-magic, and you can do without it. The version below uses no lab at all: one import brings in the library (the default
-instances the engines look for, such as a simplex's order and boundary, are found without importing them), and it
-declares for itself the one thing `TDAlab` was choosing, the coefficient field.
+`Persistence` picks the engine and the coefficient field for you (the field with 17 elements, unless you pass
+`characteristic`). Running an engine yourself means choosing the field, and in exchange you get the engine's cursor: a
+computation you can advance in steps or in slices of time, and query at any scale while it runs.
 
 ```scala
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
 // The coefficients. FiniteField(17) is the field with 17 elements; importing its givens makes `field.Fp` a Field.
-// (For floating point instead, drop these two lines and declare: given Double is Field = Field.DoubleApproximated(1e-9))
+// (For floating point instead: given Double is Field = Field.DoubleApproximated(1e-9))
 val field = FiniteField(17)
 import field.given
 
-// The engine is generic over vertex type, coefficient type and filtration type, so we name all three.
-val engine = SimplicialHomologyEngine[Int, field.Fp, Double]()
-
-// Task #1: a triangle takes one vertex from each antipodal pair (1,2), (3,4), (5,6); fromFacets adds the faces.
-val triangles = for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield Simplex(a, b, c)
-val octahedron = engine.persistentHomology(ExplicitStreamBuilder.fromFacets(triangles))
-PersistenceFilter.significant(octahedron.barcodeAt(4.0), minPersistence = 1e-9)
-
-// Task #2
 val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/examplepoints.csv")
-val circle = engine.persistentHomology(VietorisRips(metricSpace, maxDimension = 1))
-PersistenceFilter.significant(circle.barcodeAt(1.5).filter(_.dim <= 1), scale = metricSpace.minimumEnclosingRadius)
-
-// Task #3: circular coordinates need no engine and no field of ours (they work over their own prime, 47 by default)
-CircularCoordinates.h1Bars(metricSpace, 1.5)
-CircularCoordinates.compute(metricSpace, 1.5, 0)
+val state = SimplicialHomologyEngine[Int, field.Fp, Double]().persistentHomology(VietorisRips(metricSpace, maxDimension = 1))
+state.advanceTo(1.0)                        // process the complex up to scale 1.0
+state.barcodeAt(1.0).filter(_.dim <= 1)     // the diagram at 1.0: the loop is alive, [0.261, 1.0]
 ```
 
-What you gave up by not using `TDAlab`: the `Fp(...)` constructor and chain arithmetic, neither of which this computation
-needed. What you gained: every name in the snippet is a name you can look up, and
-the same imports work unchanged inside a library of your own.
+The stream for degrees 0 and 1 contains the triangles too, which is how a loop can be filled in; the engine reports the
+degree-2 bars of that stream as well, and they are incomplete, hence the filter. `Persistence` does that for you.

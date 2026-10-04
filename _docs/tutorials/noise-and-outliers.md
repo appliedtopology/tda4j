@@ -16,30 +16,24 @@ The true answer is still one loop.
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+import org.appliedtopology.tda4j.*
 
-val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/data/circle-with-outliers.csv")
-val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
+val points = CSV.readPointCloud("_docs/tutorials/data/circle-with-outliers.csv")
+val metricSpace = EuclideanMetricSpace(points)
 
-// The persistences (death - birth) of the two longest-lived loops, longest first
-def twoLongestLoops(stream: LevelwiseSimplexStream[Int, Double]): List[Double] =
-  val bars = engine.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
-  bars.filter(_._1 == 1).map((_, birth, death) => death - birth).sorted.reverse.take(2)
+val vr = Persistence(points)
+val vrLoops = vr.dim(1).longest(2)            // the two longest-lived loops
+vrLoops.map(_.persistence)                     // List(0.901, 0.127)
 
-val vr = VietorisRips(metricSpace, maxDimension = 1)
-twoLongestLoops(vr)          // List(0.901, 0.127)
-
-val loops = engine.persistentHomology(vr).diagramWithGeneratorsAt(Double.PositiveInfinity)
-  .filter(_._1 == 1).sortBy((_, birth, death, _) => -(death - birth)).take(2)
-loops.map { (_, _, _, cycle) =>
-  val pointsOnCycle = cycle.rawEntries.flatMap((edge, _) => edge.toList).distinct
-  (pointsOnCycle.size, pointsOnCycle.count(_ >= 70))    // 70 and up are the outliers
-}                            // List((66, 2), (8, 5))
+vrLoops.map { loop =>
+  val pointsOnCycle = loop.representative.cells.flatMap(_.toList).distinct
+  (pointsOnCycle.size, pointsOnCycle.count(_ >= 70))   // rows 70 and up are the outliers
+}                                              // List((25, 8), (7, 5))
 ```
 
 The circle is found: one loop persists for 0.90. But there is a second loop of persistence 0.13, about 14% of the first. It is
-not on the circle. The representative cycle of the long loop passes through 66 points, 2 of them outliers (a few strays happen
-to sit close enough to the ring to be on the path); that of the short one passes through just 8 points, 5 of which are outliers.
+not on the circle. The representative cycle of the long loop passes through 25 points, 17 of them on the ring; that of the
+short one passes through just 7 points, 5 of which are outliers.
 It is a hole between strays, which exists only because they happen to be arranged around an empty patch. On this data you can
 tell the two apart by eye. With more strays, or a messier circle, the
 second bar grows, and nothing in the barcode itself says which loop is the real one.
@@ -61,8 +55,8 @@ sparse points enter late, after the dense structure has formed. The loop through
 complex fills the ring, long before the outliers matter:
 
 ```scala sc:nocompile
-val dtm = DtmRips.fromNeighbours(metricSpace, k = 8, maxDimension = 1, p = 1.0)
-twoLongestLoops(dtm)          // List(0.815, 0.005)
+val dtm = Persistence(DtmRips.fromNeighbours(metricSpace, k = 8, maxDimension = 1, p = 1.0))
+dtm.dim(1).longest(2).map(_.persistence)       // List(0.815, 0.005)
 ```
 
 The circle's loop persists for 0.81. The runner-up has dropped from 0.13 to 0.005, a margin of over a hundred to one, against
@@ -88,29 +82,23 @@ command-line and MATLAB spelling (`complex=dtm-rips`, `dtmK`).
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+import org.appliedtopology.tda4j.*
 
-val metricSpace = CSV.readEuclideanMetricSpace("_docs/tutorials/data/circle-with-outliers.csv")
-val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
+val points = CSV.readPointCloud("_docs/tutorials/data/circle-with-outliers.csv")
+val metricSpace = EuclideanMetricSpace(points)
 
-def twoLongestLoops(stream: LevelwiseSimplexStream[Int, Double]): List[Double] =
-  val bars = engine.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
-  bars.filter(_._1 == 1).map((_, birth, death) => death - birth).sorted.reverse.take(2)
-
-val vr = VietorisRips(metricSpace, maxDimension = 1)
-val dtm = DtmRips.fromNeighbours(metricSpace, k = 8, maxDimension = 1, p = 1.0)
+val vr = Persistence(points)
+val vrLoops = vr.dim(1).longest(2)
+val cycles = vrLoops.map { loop =>
+  val pointsOnCycle = loop.representative.cells.flatMap(_.toList).distinct
+  (pointsOnCycle.size, pointsOnCycle.count(_ >= 70))
+}
 
 val weights = DistanceToMeasure(metricSpace, 8, 2.0)
 val (ring, outliers) = weights.splitAt(70)
 
-val loops = engine.persistentHomology(vr).diagramWithGeneratorsAt(Double.PositiveInfinity)
-  .filter(_._1 == 1).sortBy((_, birth, death, _) => -(death - birth)).take(2)
-val cycles = loops.map { (_, _, _, cycle) =>
-  val pointsOnCycle = cycle.rawEntries.flatMap((edge, _) => edge.toList).distinct
-  (pointsOnCycle.size, pointsOnCycle.count(_ >= 70))
-}
-
-val results = (twoLongestLoops(vr), twoLongestLoops(dtm), ring.sum / ring.size, outliers.sum / outliers.size, cycles)
+val dtm = Persistence(DtmRips.fromNeighbours(metricSpace, k = 8, maxDimension = 1, p = 1.0))
+val dtmLoops = dtm.dim(1).longest(2)
 ```
 
 </div>
@@ -125,7 +113,7 @@ points = readmatrix('_docs/tutorials/data/circle-with-outliers.csv');
 % The two longest-lived loops of a barcode, as lengths (death - birth)
 loopLengths = @(bars) sort(bars(bars(:,1) == 1, 3) - bars(bars(:,1) == 1, 2), 'descend');
 
-vr  = TDA4j.computeFromPoints(points, {'maxDimension', '1', 'engine', 'naive'});
+vr  = TDA4j.computeFromPoints(points);
 dtm = TDA4j.computeFromPoints(points, {'maxDimension', '1', 'complex', 'dtm-rips', 'dtmK', '8', 'dtmP', '1.0'});
 
 vrLengths = loopLengths(vr.toArrayUnfiltered());
@@ -139,7 +127,7 @@ loopRows = find(bars(:,1) == 1);
 [~, order] = sort(bars(loopRows,3) - bars(loopRows,2), 'descend');
 for row = loopRows(order(1:2))'
     onCycle = unique(double(vr.cycleVertices(row - 1)));   % Java index: row - 1
-    fprintf('%d points, %d of them outliers\n', numel(onCycle), sum(onCycle >= 70));   % 66 and 2, then 8 and 5
+    fprintf('%d points, %d of them outliers\n', numel(onCycle), sum(onCycle >= 70));   % 25 and 8, then 7 and 5
 end
 ```
 

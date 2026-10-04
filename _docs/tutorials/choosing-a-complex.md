@@ -7,33 +7,35 @@ title: Choosing a complex
 turn a point cloud into a filtered complex, and they trade off size, exactness and what they need to know about your data. This
 tutorial runs the *same* data, [`data/noisy-circle.csv`](https://github.com/appliedtopology/tda4j/blob/scala/_docs/tutorials/data/noisy-circle.csv), through five of them and compares what comes out.
 
-Every complex below is built the same way, an object that takes your points and a `maxDimension` (the highest homology
-dimension you want) and returns a stream of simplices that any engine can read. So one small function is enough to compare them:
+`Persistence` takes the complex as an option for the three that need only the points, and any complex you build
+yourself as its input:
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+import org.appliedtopology.tda4j.*
 
 val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
 val metricSpace = EuclideanMetricSpace(points)
-val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
+val landmarks = LandmarkSelector.maxmin(metricSpace, 15).landmarks
 
-def summarize(stream: LevelwiseSimplexStream[Int, Double]): (Int, (Double, Double), Int) =
-  val size = stream.iterator.size                    // how many simplices the engine will have to process
-  val bars = engine.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
-  val loop = bars.filter(_._1 == 1).maxBy((_, birth, death) => death - birth)   // the longest-lived loop
-  (size, (loop._2, loop._3), bars.count((dim, _, death) => dim == 0 && death.isInfinite))   // and the number of components
+val vr = Persistence(points)                                  // Vietoris-Rips, the default
+val cech = Persistence(points, complex = Cech)
+val alpha = Persistence(points, complex = AlphaShapes)
+val sparse = Persistence(SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1))
+val witness = Persistence(Witness(metricSpace, landmarks, maxDimension = 1))
+
+val diagrams = List(vr, cech, alpha, sparse, witness)
+val loops = diagrams.map(_.dim(1).longest.get)   // the longest-lived loop of each: the table below
+diagrams.map(_.bettiNumbers(0))                  // one connected component in each
+```
+
+What they cost is the size of the complex, the number of simplices the engine has to process:
+
+```scala sc:nocompile
+VietorisRips(metricSpace, maxDimension = 1).iterator.size   // 24711
 ```
 
 ## The five complexes
-
-```scala sc:nocompile
-val vr       = summarize(VietorisRips(metricSpace, maxDimension = 1))
-val cech     = summarize(Cech(metricSpace, maxDimension = 1))
-val delaunay = summarize(AlphaShapes(points.toSeq))
-val sparse   = summarize(SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1))
-val witness  = summarize(Witness(metricSpace, LandmarkSelector.maxmin(metricSpace, 15).landmarks, maxDimension = 1))
-```
 
 | complex | simplices | the loop (birth, death) |
 |---|---|---|
@@ -102,26 +104,27 @@ variants.
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+import org.appliedtopology.tda4j.*
 
 val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
 val metricSpace = EuclideanMetricSpace(points)
-val engine = SimplicialHomologyEngine[Int, CoefficientT, Double]()
-
-def summarize(stream: LevelwiseSimplexStream[Int, Double]): (Int, (Double, Double), Int) =
-  val size = stream.iterator.size
-  val bars = engine.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
-  val loop = bars.filter(_._1 == 1).maxBy((_, birth, death) => death - birth)
-  (size, (loop._2, loop._3), bars.count((dim, _, death) => dim == 0 && death.isInfinite))   // and the number of components
-
 val landmarks = LandmarkSelector.maxmin(metricSpace, 15).landmarks
-val results = Map(
-  "vietoris-rips" -> summarize(VietorisRips(metricSpace, maxDimension = 1)),
-  "cech" -> summarize(Cech(metricSpace, maxDimension = 1)),
-  "alpha" -> summarize(AlphaShapes(points.toSeq)),
-  "sparse-rips" -> summarize(SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1)),
-  "witness" -> summarize(Witness(metricSpace, landmarks, maxDimension = 1))
-)
+
+val vr = Persistence(points)
+val cech = Persistence(points, complex = Cech)
+val alpha = Persistence(points, complex = AlphaShapes)
+val sparse = Persistence(SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1))
+val witness = Persistence(Witness(metricSpace, landmarks, maxDimension = 1))
+val diagrams = List(vr, cech, alpha, sparse, witness)
+val loops = diagrams.map(_.dim(1).longest.get)
+
+val sizes = List(
+  VietorisRips(metricSpace, maxDimension = 1),
+  Cech(metricSpace, maxDimension = 1),
+  AlphaShapes(points),
+  SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1),
+  Witness(metricSpace, landmarks, maxDimension = 1)
+).map(_.iterator.size)
 ```
 
 </div>

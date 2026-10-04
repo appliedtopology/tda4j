@@ -20,12 +20,9 @@ private[sset] def ssetElementOrdering[G](using ordG: Ordering[G]): Ordering[SSet
 private[sset] def isNonDegeneratePair[GX, GY](a: SSetElement[GX], b: SSetElement[GY]): Boolean =
   a.word.toSet.intersect(b.word.toSet).isEmpty
 
-/** A non-degenerate `n`-simplex of `X x Y`, presented as the pair of `SSetElement`s (each possibly itself degenerate
-  * over its own non-degenerate generator) whose word-sets are disjoint -- NOT an Eilenberg-Zilber shuffle triple. The
-  * shuffle family indexes the classical chain MAP between `C_*(X) tensor C_*(Y)` and `C_*(X x Y)`, not the product's
-  * own non-degenerate simplices: `(e_X, e_Y)`, both non-degenerate of dimension 1, is a non-degenerate 1-simplex of
-  * `X x Y` that no `(p,q)`-shuffle with `p+q=1` could ever produce, since a shuffle needs `p+q=n` but here `p=q=1=n`.
-  * See `.claude/WORKLOG-simplicial-set-constructions.md`.
+/** A non-degenerate `n`-simplex of `X x Y`: a pair of `n`-simplices of `X` and `Y`, each possibly degenerate, whose
+  * degeneracy words are disjoint. (Not an Eilenberg-Zilber shuffle: `(e_X, e_Y)` for two non-degenerate 1-simplices is
+  * a non-degenerate 1-simplex of the product.)
   */
 case class ProductGenerator[GX, GY](x: SSetElement[GX], y: SSetElement[GY])
 
@@ -147,39 +144,17 @@ private[sset] object Constructions:
 
     new FiniteSimplicialSet(generatorsByDim, facesOf)
 
-  /** Quotient of a finite simplicial set by an arbitrary map from generators to elements: `quotientMap(g)` says what
-    * `g` becomes in the quotient -- either a genuine surviving representative (`SSetElement(Nil, g)`, a FIXED POINT) or
-    * a properly degenerate collapse (`SSetElement(word, rep)` for some OTHER representative `rep`). This is
-    * deliberately more general than `G => G` (generator-to-generator only), because identifying cells can crush one of
-    * them down a dimension, not just merge same-dimension cells with a peer. Concretely: Hatcher's own single-2-simplex
-    * Delta-complex model of RP^2 (`Algebraic Topology`, Example 2.4 -- cross-validated against the
-    * independently-hand-built `SimplicialSetFixtures.realProjectiveSpace(2)` in `SimplicialSetConstructionsSpec`) glues
-    * two of a filled triangle's three edges together into one loop, but the THIRD edge doesn't glue to anything else --
-    * it collapses entirely to a degenerate point over the surviving vertex. A `G => G` quotient map cannot express that
-    * third case at all, only `G => SSetElement[G]` can (`identify`, below, covers the common generator-to-generator
-    * case ergonomically without ever needing this extra generality itself).
+  /** The quotient of a finite simplicial set by `quotientMap`, which says what each generator becomes: itself
+    * (`SSetElement(Nil, g)`, a surviving generator) or an element over another surviving generator, possibly
+    * degenerate. A generator can therefore collapse to a lower dimension, as the third edge of the triangle does in the
+    * one-simplex model of RP² (Hatcher, Example 2.4). For identifying generators of equal dimension, [[identify]] is
+    * simpler.
     *
-    * `quotientMap` must be dimension-consistent (`dimOf(quotientMap(g).generator) + quotientMap(g).word.length ==
-    * dimOf(g)`) and every generator must resolve to a fixed point IN ONE STEP (some generator `rep` with
-    * `quotientMap(rep) == SSetElement(Nil, rep)`) -- `quotientMap` is not itself iterated to a fixpoint, so a *chain*
-    * (`quotientMap(a) = SSetElement(Nil, b)`, `quotientMap(b) = SSetElement(Nil, c)`, `b` never a fixed point) is a
-    * caller error, checked explicitly below rather than left to `validate()`: `validate()`'s own structural check only
-    * inspects `faces(g)` for `g` already in the surviving `generatorsByDim`, so a chain would slip through silently
-    * whenever no surviving cell's face happens to target the broken link directly (`identify` is immune to this by
-    * construction -- its own `find` always path-compresses to a genuine root -- so this exposure is specific to a
-    * hand-written `quotientMap` passed to `quotient` directly).
+    * Requirements, checked: `quotientMap` preserves dimension (the generator's dimension plus the word's length), and
+    * maps every generator to an element over a surviving generator in one step (it is not iterated).
     *
-    * `facesOf` reuses the ORIGINAL face data of a surviving representative, then pushes each face's own target through
-    * `quotientMap` too, composing the two degeneracy words via `insertOuter` one step at a time
-    * (`word.foldRight(mapped.word)(insertOuter)`) -- a face that was already degenerate, whose target ALSO collapses
-    * further under the quotient, needs both effects combined into one normalized word, exactly the composition
-    * `s_word(s_word2(rep2))` that `insertOuter` is built to accumulate.
-    *
-    * `validate()` on the RESULT is a necessary precondition beyond the fixed-point check above -- it will flag a
-    * `quotientMap` that isn't dimension-consistent as a structural error -- but NOT a sufficient correctness check: it
-    * verifies the simplicial identities hold, not that the quotient is the intended one, and an over-eager
-    * `quotientMap` can produce an internally-consistent but topologically wrong space. Homology cross-checks against an
-    * independently-derived expectation are what actually establish correctness.
+    * `validate()` on the result checks the simplicial identities, not that the quotient is the space you meant; compare
+    * its homology with what you expect.
     */
   def quotient[G: Ordering](
     sset: FiniteSimplicialSet[G],
@@ -205,14 +180,9 @@ private[sset] object Constructions:
 
     new FiniteSimplicialSet(generatorsByDim, facesOf)
 
-  /** Ergonomic layer over `quotient` for the common case: identify PAIRS of same-dimension generators with each other
-    * directly (never a degenerate collapse down a dimension -- see `quotient`'s own doc for that more general case).
-    * Computes the quotient map via a small union-find over the transitive closure of `pairs`, implemented fresh right
-    * here rather than reusing `UnionFind`: `cells` sits below `streams` in this codebase's package layering (`algebra
-    * -> cells -> streams -> homology`), so importing it here would be a backwards dependency, and a hand-built,
-    * small-scale set of generators has no performance need for anything beyond the simplest union-find anyway. Each
-    * connected component's `Ordering[G]`-minimum member is its canonical representative -- a deterministic,
-    * reproducible choice rather than an arbitrary one.
+  /** The quotient identifying the generators in each of `pairs` (of equal dimension), and everything that follows by
+    * transitivity. Each class is represented by its least member. For collapsing a generator to a lower dimension, use
+    * [[quotient]].
     */
   def identify[G: Ordering](
     sset: FiniteSimplicialSet[G],

@@ -20,12 +20,12 @@ in the data (the algorithm works with cohomology rather than homology, which is 
 
 ```scala sc:nocompile
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+import org.appliedtopology.tda4j.*
 
 val circlePoints = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
 val circle = EuclideanMetricSpace(circlePoints)
 val circleBars = CircularCoordinates.h1Bars(circle)     // (birth, death), longest-lived first
-circleBars.take(2)    // (0.595, 1.707), then (1.950, 1.950): one real loop, then a bar with no length at all
+circleBars            // Vector((0.595, 1.707)): one loop
 ```
 
 Now choose a scale `r` at which the loop you want is alive, that is, between its birth and its death. The middle of the bar is the
@@ -77,7 +77,7 @@ long bars in dimension 1:
 ```scala sc:nocompile
 val torusPoints = CSV.readPointCloud("_docs/tutorials/data/flat-torus.csv")
 val torus = EuclideanMetricSpace(torusPoints)
-val torusBars = CircularCoordinates.h1Bars(torus, maxFiltrationValue = Some(1.8))
+val torusBars = CircularCoordinates.h1Bars(torus, maxFiltrationValue = 1.8)
 torusBars.take(4)
 // (0.680, 1.751), (0.699, 1.755), (0.771, 1.419), (0.771, 1.407)
 ```
@@ -89,7 +89,7 @@ two births and the earlier of the two deaths, and ask for both:
 ```scala sc:nocompile
 val r = (torusBars.take(2).map(_._1).max + torusBars.take(2).map(_._2).min) / 2     // 1.225
 val coordinates =
-  CircularCoordinates.computeToroidal(torus, r, cocycleIndices = Seq(0, 1), maxFiltrationValue = Some(1.8))
+  CircularCoordinates.computeToroidal(torus, r, cocycleIndices = Seq(0, 1), maxFiltrationValue = 1.8)
 coordinates.theta.map(_.size)      // Vector(120, 120): two angles for each of the 120 points
 ```
 
@@ -108,7 +108,7 @@ coordinates.theta.map { theta =>
 ```
 
 Each recovered coordinate follows one true angle with an average error of 0.13 and 0.15 of a turn, against 0.25 for unrelated angles.
-That is clearly there but rough, and honest data would be rougher: 120 points is a thin sample of a two-dimensional surface in four
+That is clearly there but rough, and real data would be rougher: 120 points is a thin sample of a two-dimensional surface in four
 dimensions, and the loops are only barely separated from the noise bars. More points, or less noise, sharpen it.
 
 ## The whole script
@@ -118,7 +118,7 @@ dimensions, and the loops are only barely separated from the noise bars. More po
 
 ```scala
 import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+import org.appliedtopology.tda4j.*
 
 def circularDistance(a: Double, b: Double): Double =
   val d = math.abs(a - b) % 1.0
@@ -143,10 +143,10 @@ val circleError = alignmentError(circleCoordinate.theta, i => turn(circlePoints(
 // A torus
 val torusPoints = CSV.readPointCloud("_docs/tutorials/data/flat-torus.csv")
 val torus = EuclideanMetricSpace(torusPoints)
-val torusBars = CircularCoordinates.h1Bars(torus, maxFiltrationValue = Some(1.8))
+val torusBars = CircularCoordinates.h1Bars(torus, maxFiltrationValue = 1.8)
 val r = (torusBars.take(2).map(_._1).max + torusBars.take(2).map(_._2).min) / 2
 val coordinates =
-  CircularCoordinates.computeToroidal(torus, r, cocycleIndices = Seq(0, 1), maxFiltrationValue = Some(1.8))
+  CircularCoordinates.computeToroidal(torus, r, cocycleIndices = Seq(0, 1), maxFiltrationValue = 1.8)
 val torusErrors = coordinates.theta.map { theta =>
   val first = alignmentError(theta, i => turn(torusPoints(i)(1), torusPoints(i)(0)))
   val second = alignmentError(theta, i => turn(torusPoints(i)(3), torusPoints(i)(2)))
@@ -164,7 +164,7 @@ import org.appliedtopology.tda4j.matlab.*;
 % A circle
 points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
 bars = TDA4j.h1Bars(points);            % one row [birth death] per H1 class, most persistent first
-bars(1:2, :)                            % [0.595 1.707] then [1.950 1.950]
+bars                                    % [0.595 1.707]: one loop
 r = (bars(1,1) + bars(1,2)) / 2;
 coordinate = TDA4j.circularCoordinates(points, r);       % the most persistent class, over the field with 47 elements
 theta = coordinate.theta();             % one value in [0,1) per point: a fraction of a turn

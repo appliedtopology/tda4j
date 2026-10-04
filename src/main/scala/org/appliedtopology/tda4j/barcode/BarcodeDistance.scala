@@ -1,37 +1,20 @@
 package org.appliedtopology.tda4j
 
-/** Bottleneck and Wasserstein distance between two persistence diagrams, plus the ground-metric convention they share.
-  * Hand-rolled per `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 4: pure bipartite matching over diagram
-  * points (each also matchable to its own projection onto the diagonal `birth = death`), not a boundary- matrix
-  * optimization like the circular-coordinates/optimal-cycles items -- no relation to [[Barcode]]'s map/kernel/cokernel
-  * algebra, hence its own file/object.
+/** Bottleneck and Wasserstein distances between persistence diagrams, by bipartite matching where each point may also
+  * be matched to its projection on the diagonal.
   *
-  * Parameter naming and the ground-metric/aggregation split follow Hera (`anigmetov/hera`) and GUDHI's own
-  * `wasserstein_distance`, cross-checked against both (not recalled from memory, and independently re-derived below)
-  * rather than assumed: `groundNorm` (GUDHI/Hera's `internal_p`) is the norm on the birth-death plane used to cost a
-  * single matched pair; `order` (GUDHI/Hera's `order`/`wasserstein_power`, called `q` in Kerber-Morozov-Nigmetov 2017)
-  * is the exponent used to aggregate all matched pairs' costs into one number. As `order -> Infinity` this aggregation
-  * becomes a max, i.e. Wasserstein converges to bottleneck -- but `wassersteinDistance` below only accepts finite
-  * `order` (seeding a Hungarian cost matrix with `cost^Infinity` is not meaningful); call `bottleneckDistance` directly
-  * for that case, matching how GUDHI/Hera expose them as separate entry points rather than one function with an
-  * infinite default.
+  * The parameters follow GUDHI and Hera: `groundNorm` (their `internal_p`) measures one matched pair in the birth-death
+  * plane; `order` (their `order`, `q` in Kerber-Morozov-Nigmetov 2017) is the exponent the costs of all pairs are
+  * combined with. Wasserstein distance tends to bottleneck distance as `order -> Infinity`; use [[bottleneckDistance]]
+  * for that case.
   *
-  * '''Essential (never-dying) bars''': matched only to other essential bars, never to the diagonal (infinite
-  * persistence means infinite distance to the diagonal under any ground norm) and never to a finite bar (infinite vs.
-  * finite death is likewise infinitely bad). If the two diagrams have different numbers of essential bars, the distance
-  * is `Double.PositiveInfinity` -- there is no finite matching. When the counts agree, essential bars carry no usable
-  * death coordinate (both are "the same" point at infinity, contributing nothing to the cost), so they are matched
-  * purely by ascending birth value; this is provably cost-minimal for both the sum-of- powers (Wasserstein) and max
-  * (bottleneck) aggregations, by the standard line-matching exchange argument (for any `x1 < x2`, `y1 < y2`: `max/sum`
-  * of the sorted pairing `(x1,y1),(x2,y2)` never exceeds the crossed pairing `(x1,y2),(x2,y1)`), so it can be resolved
-  * directly instead of routed through the general bipartite solvers below. This also keeps `Infinity` values out of the
-  * Hungarian/Hopcroft-Karp cost matrices entirely (an `Infinity - Infinity = NaN` landmine in the Hungarian potential
-  * updates, avoided by construction rather than guarded against).
+  * '''Essential bars''' are matched only to essential bars, in order of birth (which is optimal for both distances). If
+  * the diagrams have different numbers of essential bars, the distance is `Infinity`.
   */
 object BarcodeDistance:
 
-  /** The ground metric on the birth-death plane used to cost one matched pair of diagram points (GUDHI/Hera's
-    * `internal_p`). `LInfinity` (the default in both) is the usual TDA convention.
+  /** The norm on the birth-death plane that measures one matched pair (GUDHI and Hera's `internal_p`). `LInfinity`, the
+    * default there and here, is the usual choice.
     */
   enum GroundNorm:
     case LInfinity
@@ -67,9 +50,9 @@ object BarcodeDistance:
     * returns the sorted-by-birth essential pairing costs (see the class doc for why sorted pairing is optimal) plus the
     * two finite-point lists left for the caller to solve with the general bipartite machinery.
     */
-  private def essentialAndFinite[A, B](
-    diagram1: Seq[PersistenceBar[Double, A]],
-    diagram2: Seq[PersistenceBar[Double, B]]
+  private def essentialAndFinite(
+    diagram1: Seq[PersistenceBar[Double, ?]],
+    diagram2: Seq[PersistenceBar[Double, ?]]
   ): Option[(Seq[Double], Seq[Point], Seq[Point])] =
     val pts1 = diagram1.map(toPoint)
     val pts2 = diagram2.map(toPoint)
@@ -81,12 +64,9 @@ object BarcodeDistance:
         ess1.map(_.birth).sorted.zip(ess2.map(_.birth).sorted).map((a, b) => math.abs(a - b))
       Some((essentialCosts, fin1, fin2))
 
-  /** The augmented square cost matrix for matching `left` against `right` allowing either side to die on the diagonal
-    * instead: size `(left.size + right.size)`, real-real entries under `groundNorm`, real-diagonal entries each point's
-    * own `diagonalDistance`, and `0` for the diagonal-vs-diagonal padding needed to balance the bipartite sizes into a
-    * square (standard reduction from "partial matching with a diagonal of infinite capacity" to plain perfect bipartite
-    * matching -- see class doc / worklog for the construction). All entries are finite because essential points are
-    * never passed in here.
+  /** The square cost matrix of the matching problem, size `left.size + right.size`: point-to-point costs, each point's
+    * distance to the diagonal, and zeros between the diagonal copies. All entries are finite (no essential points
+    * here).
     */
   private def augmentedCostMatrix(left: Seq[Point], right: Seq[Point], groundNorm: GroundNorm): Array[Array[Double]] =
     val nL = left.size
@@ -128,9 +108,9 @@ object BarcodeDistance:
     * [[bottleneckDistanceByDimension]]) is treated as a deliberate choice, not a mistake to guard against. See the
     * class doc for the essential-bar policy and the ground-metric/aggregation convention.
     */
-  def bottleneckDistance[A, B](
-    diagram1: Seq[PersistenceBar[Double, A]],
-    diagram2: Seq[PersistenceBar[Double, B]],
+  def bottleneckDistance(
+    diagram1: Seq[PersistenceBar[Double, ?]],
+    diagram2: Seq[PersistenceBar[Double, ?]],
     groundNorm: GroundNorm = GroundNorm.LInfinity
   ): Double =
     groundNorm.require1()
@@ -154,14 +134,12 @@ object BarcodeDistance:
       val matrix = augmentedCostMatrix(left, right, groundNorm).map(_.map(c => math.pow(c, order)))
       Hungarian.minCostPerfectMatching(matrix)._2
 
-  /** Wasserstein distance (order `order`, default `1.0`) between two persistence diagrams of a single homological
-    * dimension. Same single-dimension-per-list requirement, essential-bar policy, and ground-metric convention as
-    * [[bottleneckDistance]] -- see the class doc. `order` must be finite and `>= 1.0`; call [[bottleneckDistance]]
-    * directly for the `order = Infinity` case.
+  /** The Wasserstein distance of order `order` (finite, at least `1.0`) between the diagrams of one homological
+    * dimension, essential bars handled as in [[bottleneckDistance]].
     */
-  def wassersteinDistance[A, B](
-    diagram1: Seq[PersistenceBar[Double, A]],
-    diagram2: Seq[PersistenceBar[Double, B]],
+  def wassersteinDistance(
+    diagram1: Seq[PersistenceBar[Double, ?]],
+    diagram2: Seq[PersistenceBar[Double, ?]],
     order: Double = 1.0,
     groundNorm: GroundNorm = GroundNorm.LInfinity
   ): Double =
@@ -176,10 +154,10 @@ object BarcodeDistance:
         val finitePow = finiteWassersteinPow(fin1, fin2, order, groundNorm)
         math.pow(essentialPow + finitePow, 1.0 / order)
 
-  private def byDimension[A, B, R](
-    diagram1: Seq[PersistenceBar[Double, A]],
-    diagram2: Seq[PersistenceBar[Double, B]]
-  )(f: (Seq[PersistenceBar[Double, A]], Seq[PersistenceBar[Double, B]]) => R): Map[Int, R] =
+  private def byDimension[R](
+    diagram1: Seq[PersistenceBar[Double, ?]],
+    diagram2: Seq[PersistenceBar[Double, ?]]
+  )(f: (Seq[PersistenceBar[Double, ?]], Seq[PersistenceBar[Double, ?]]) => R): Map[Int, R] =
     val dims = (diagram1.map(_.dim) ++ diagram2.map(_.dim)).distinct
     val byDim1 = diagram1.groupBy(_.dim).withDefaultValue(Seq.empty)
     val byDim2 = diagram2.groupBy(_.dim).withDefaultValue(Seq.empty)
@@ -190,17 +168,17 @@ object BarcodeDistance:
     * as the empty diagram on that side, i.e. every bar on the other side must die to the diagonal, or the comparison is
     * `Infinity` if any of them is essential).
     */
-  def bottleneckDistanceByDimension[A, B](
-    diagram1: Seq[PersistenceBar[Double, A]],
-    diagram2: Seq[PersistenceBar[Double, B]],
+  def bottleneckDistanceByDimension(
+    diagram1: Seq[PersistenceBar[Double, ?]],
+    diagram2: Seq[PersistenceBar[Double, ?]],
     groundNorm: GroundNorm = GroundNorm.LInfinity
   ): Map[Int, Double] =
     byDimension(diagram1, diagram2)((d1, d2) => bottleneckDistance(d1, d2, groundNorm))
 
   /** As [[bottleneckDistanceByDimension]], but for [[wassersteinDistance]]. */
-  def wassersteinDistanceByDimension[A, B](
-    diagram1: Seq[PersistenceBar[Double, A]],
-    diagram2: Seq[PersistenceBar[Double, B]],
+  def wassersteinDistanceByDimension(
+    diagram1: Seq[PersistenceBar[Double, ?]],
+    diagram2: Seq[PersistenceBar[Double, ?]],
     order: Double = 1.0,
     groundNorm: GroundNorm = GroundNorm.LInfinity
   ): Map[Int, Double] =

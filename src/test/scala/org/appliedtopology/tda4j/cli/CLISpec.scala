@@ -431,6 +431,19 @@ class CLISpec extends mutable.Specification:
       ) must beEqualTo(1)
     }
 
+    "carry --representative-type to the facade, and reject it with --select-landmarks" >> {
+      val conf = new TDA4jConf(Seq("--representative-type", "cocycles", "some-input-file"))
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, points)
+      def run(args: String*) = CliFull.run(args, new PrintStream(new ByteArrayOutputStream()))
+      (TDA4jCLI.buildOptions(conf).toSeq must beEqualTo(Seq("representativeType", "cocycles")))
+        .and(run("--representative-type", "cocycles", "--engine", "chunks", path) must beEqualTo(0))
+        .and(run("--representative-type", "cocycles", path) must beEqualTo(0))
+        .and(
+          run("--select-landmarks", "--num-landmarks", "3", "--representative-type", "cycles", path) must beEqualTo(1)
+        )
+    }
+
     "reject --select-landmarks combined with --representatives" >> {
       val path = tempFile(".csv")
       CSV.writePointCloud(path, points)

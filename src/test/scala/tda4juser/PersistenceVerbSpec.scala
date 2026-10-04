@@ -21,8 +21,8 @@ class PersistenceVerbSpec extends Specification:
       .sorted
 
   "Persistence(points)" should {
-    "find the circle's loop as its longest H1 bar, with a representative cycle" in {
-      val d = Persistence(circle(16), maxFiltrationValue = 2.0)
+    "find the circle's loop as its longest H1 bar, with a representative cycle from Engine.Chunks" in {
+      val d = Persistence(circle(16), maxFiltrationValue = 2.0, engine = Persistence.Engine.Chunks)
       import d.given
       val loop = d.dim(1).longest.get
       val rep = loop.annotation.get
@@ -74,9 +74,30 @@ class PersistenceVerbSpec extends Specification:
         norm(d.at(f).triples) == norm(cursor.diagramAt(f).filter(_._1 <= 1))
       ) must beTrue
     }
+    "compute degrees 0..2 with Ripser, the same bars as Engine.Chunks, with cocycles when asked for" in {
+      val pts = circle(12, noise = 0.05)
+      val auto = Persistence(pts, maxFiltrationValue = 1.5, representatives = Representatives.Cocycles)
+      val chunks = Persistence(pts, maxFiltrationValue = 1.5, engine = Persistence.Engine.Chunks)
+      import auto.given
+      // a 1-cocycle evaluates to zero on every triangle's boundary: check it on all triangles up to the threshold
+      val ms = EuclideanMetricSpace(pts)
+      val cocycle = auto.dim(1).longest.get.representative.terms.toMap
+      val triangles = for
+        a <- 0 until 12; b <- a + 1 until 12; c <- b + 1 until 12
+        if Seq(ms.distance(a, b), ms.distance(a, c), ms.distance(b, c)).max <= 1.5
+      yield Simplex(a, b, c)
+      val fieldOps = auto.coefficientField
+      def onBoundary(t: Simplex[Int]) = t
+        .boundary[auto.Coefficient]
+        .map((e, sign) => fieldOps.times(sign, cocycle.getOrElse(e, fieldOps.zero)))
+        .foldLeft(fieldOps.zero)(fieldOps.plus)
+      (auto.maxDimension must beEqualTo(2))
+        .and(norm(auto.triples) must beEqualTo(norm(chunks.triples)))
+        .and(triangles.forall(t => fieldOps.isEqual(onBoundary(t), fieldOps.zero)) must beTrue)
+    }
     "report bettiNumbers and hide nothing until asked: significant() drops the short bars" in {
       val d = Persistence(circle(16, noise = 0.02), maxFiltrationValue = 2.0)
-      (d.bettiNumbers must beEqualTo(Vector(1, 0)))
+      (d.bettiNumbers must beEqualTo(Vector(1, 0, 0)))
         .and(d.significant().size must beLessThanOrEqualTo(d.size))
     }
     "build Cech and alpha complexes, and say what to do when alpha gets a threshold" in {
@@ -90,6 +111,29 @@ class PersistenceVerbSpec extends Specification:
             message = "diagram.at"
           )
         )
+    }
+  }
+
+  "Persistence(stream)" should {
+    "compute the degrees a truncated stream was built for, and refuse a higher one" in {
+      val ms = EuclideanMetricSpace(circle(8))
+      val forH1 = VietorisRips(ms, maxDimension = 1, maxFiltrationValue = Double.PositiveInfinity)
+      val forH2 = VietorisRips(ms, maxDimension = 2, maxFiltrationValue = Double.PositiveInfinity)
+      // forH1 holds every triangle and no tetrahedra: read off H2, each triangle would be a fake essential class
+      (Persistence(forH1).maxDimension must beEqualTo(1))
+        .and(Persistence(forH2).maxDimension must beEqualTo(2))
+        .and(Persistence(forH2).bettiNumbers must beEqualTo(Vector(1, 0, 0)))
+        .and(
+          Persistence(forH1, maxDimension = 2) must throwAn[IllegalArgumentException](message =
+            "built for degrees 0..1"
+          )
+        )
+        .and(Persistence(Truncated(forH2, 1), maxDimension = 2) must throwAn[IllegalArgumentException])
+    }
+    "compute every degree of a complete complex, such as the octahedron's boundary" in {
+      val triangles = for a <- Seq(0, 1); b <- Seq(2, 3); c <- Seq(4, 5) yield Simplex(a, b, c)
+      val sphere = ExplicitStreamBuilder.fromFacets(triangles)
+      Persistence(sphere, maxDimension = 2).bettiNumbers must beEqualTo(Vector(1, 0, 1))
     }
   }
 
@@ -114,10 +158,22 @@ class PersistenceVerbSpec extends Specification:
   }
 
   "Persistence(Image(...))" should {
+    "use the fast cubical engine by default: the bars of Engine.Chunks, with cycles as representatives" in {
+      val rnd = new scala.util.Random(5)
+      val pixels = Array.tabulate(12, 12)((i, j) => math.sin(i / 2.0) * math.cos(j / 3.0) + 0.2 * rnd.nextDouble())
+      val auto = Persistence(Image(pixels))
+      val fast = Persistence(Image(pixels), engine = Persistence.Engine.FastCubical)
+      val chunks = Persistence(Image(pixels), engine = Persistence.Engine.Chunks)
+      import auto.given
+      (norm(auto.triples) must beEqualTo(norm(chunks.triples)))
+        .and(norm(auto.triples) must beEqualTo(norm(fast.triples)))
+        .and(auto.bars.forall(b => Chain.from(b.representative.boundary).isZero()) must beTrue)
+        .and(Persistence(circle(6), engine = Persistence.Engine.FastCubical) must throwAn[IllegalArgumentException])
+    }
     "see the ring in a ring-shaped image as one H1 bar from 0 to 1 (the whole grid is contractible at the end)" in {
       val ring = Array.tabulate(7, 7)((i, j) => if math.abs(math.hypot(i - 3, j - 3) - 2.2) < 0.8 then 0.0 else 1.0)
       val d = Persistence(Image(ring))
-      (d.bettiNumbers must beEqualTo(Vector(1, 0)))
+      (d.bettiNumbers must beEqualTo(Vector(1, 0, 0)))
         .and(d.dim(1).significant().triples must beEqualTo(List((1, 0.0, 1.0))))
     }
   }
@@ -131,5 +187,44 @@ class PersistenceVerbSpec extends Specification:
       val snap = state.snapshotAt(0.5)
       state.advanceAll()
       norm(snap.triples.filter(_._1 <= 1)) must beEqualTo(norm(state.diagramAt(0.5).filter(_._1 <= 1)))
+    }
+  }
+
+/** All four engines of the verb give the same bars; the Ripser engine's cocycles come back over simplices. */
+class PersistenceEnginesSpec extends org.specs2.mutable.Specification:
+  import org.appliedtopology.tda4j.*
+
+  "Persistence(points, engine = ...)" should {
+    "give the same bars with every engine, and Ripser's representatives over simplices" in {
+      val rnd = new scala.util.Random(7)
+      val points = Array.fill(15)(Array(rnd.nextDouble(), rnd.nextDouble()))
+      def rounded(d: PersistenceDiagram[Simplex[Int]]) =
+        d.triples.map((k, b, e) => (k, math.rint(b * 1e9), if e.isInfinite then e else math.rint(e * 1e9))).sorted
+      val forPoints = Persistence.Engine.values.toList.filterNot(_ == Persistence.Engine.FastCubical)
+      val diagrams = forPoints.map(e => Persistence(points, engine = e))
+      val ripser = Persistence(points, engine = Persistence.Engine.Ripser)
+      (diagrams.map(rounded).distinct.size must beEqualTo(1)) and
+        (ripser.bars.forall(b => b.representative.cells.forall(_.size == b.dim + 1)) must beTrue)
+    }
+    "give cocycles from every engine but FastCubical: the same bars and cocycles as the cohomology engine's" in {
+      val points = Array.tabulate(9)(i => Array(math.cos(i * 0.7), math.sin(i * 0.7)))
+      def norm(ts: List[(Int, Double, Double)]) =
+        ts.map((d, b, e) => (d, math.rint(b * 1e9), if e.isInfinite then e else math.rint(e * 1e9))).sorted
+      def run(e: Persistence.Engine) =
+        Persistence(points, engine = e, maxDimension = 1, representatives = Representatives.Cocycles)
+      val engines = List(Persistence.Engine.Chunks, Persistence.Engine.Naive, Persistence.Engine.Ripser)
+      val reference = run(Persistence.Engine.Cohomology)
+      (engines.map(e => norm(run(e).triples)).distinct must beEqualTo(List(norm(reference.triples))))
+        .and(
+          Persistence(
+            Image(Array(Array(0.0, 1.0), Array(1.0, 0.0))),
+            engine = Persistence.Engine.FastCubical,
+            representatives = Representatives.Cocycles
+          ) must throwAn[IllegalArgumentException](message = "Engine.Cohomology")
+        )
+    }
+    "refuse engine = Ripser for an input that is not a Vietoris-Rips complex of points" in {
+      Persistence(Image(Array(Array(0.0, 1.0), Array(1.0, 0.0))), engine = Persistence.Engine.Ripser) must
+        throwAn[IllegalArgumentException]
     }
   }

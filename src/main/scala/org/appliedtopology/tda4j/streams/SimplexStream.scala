@@ -55,15 +55,9 @@ trait CellStream[CellT: Cell, FiltrationT: Ordering] extends Filtration[CellT, F
   def filtrationOrdering: Ordering[CellT]
 
 object FiltrationOrdering:
-  /** The canonical `filtrationOrdering` shape every stream in this codebase's ordering contract must produce
-    * (CLAUDE.md's stream rules 1/2): primary key filtration value REVERSED (smaller-under-this-ordering means younger
-    * -- `Chain`'s pivot-selection machinery needs "smaller" to mean "younger"), then dimension ascending, then a
-    * caller-supplied tie-break. A cell either side's `fv` is undefined for falls through to the dimension/tie-break
-    * keys alone, matching every existing call site's behavior.
-    *
-    * `fv` stays a `PartialFunction`, not `C => Option[Double]`: every call site already had one on hand (no `.lift`
-    * allocation needed), and this sits directly on `Chain.reduceBy`'s `SortedMap`/`PriorityQueue` comparison path --
-    * the hottest loop in every engine.
+  /** The `filtrationOrdering` every stream uses: filtration value reversed (smaller under the ordering means younger,
+    * which is what `Chain` pivots on), then dimension, then `tieBreak`. A cell outside `fv`'s domain is ordered by the
+    * last two keys alone. `fv` stays a `PartialFunction`: this is on the hottest path of every engine.
     */
   def canonical[C](fv: PartialFunction[C, Double], dim: C => Int, tieBreak: Ordering[C]): Ordering[C] =
     new Ordering[C]:
@@ -111,16 +105,25 @@ object SimplexStream:
     override def iterator: Iterator[Simplex[VertexT]] =
       stream.iterator
 
+/** A complex given cell by cell (built by [[ExplicitStreamBuilder]], e.g. `ExplicitStreamBuilder.fromFacets(...)`). */
 class ExplicitStream[VertexT: Ordering, FiltrationT](
   protected val filtrationValues: Map[Simplex[VertexT], FiltrationT],
   protected val simplices: Seq[Simplex[VertexT]]
 )(using filterable: Filterable[FiltrationT])(using ordering: Ordering[FiltrationT])
-    extends SimplexStream[VertexT, FiltrationT]:
+    extends SimplexStream[VertexT, FiltrationT]
+    with StratifiedCellStream[Simplex[VertexT], FiltrationT]:
   self =>
 
   def filtrationValue: PartialFunction[Simplex[VertexT], FiltrationT] = filtrationValues
 
-  def iterator: Iterator[Simplex[VertexT]] = simplices.iterator
+  override def iterator: Iterator[Simplex[VertexT]] = simplices.iterator
+
+  private lazy val byDimension: Map[Int, Seq[Simplex[VertexT]]] =
+    simplices.groupBy(_.dim).view.mapValues(_.sorted(using filtrationOrdering.reverse)).toMap
+
+  def iterateDimension: PartialFunction[Int, Iterator[Simplex[VertexT]]] = {
+    case d if byDimension.contains(d) => byDimension(d).iterator
+  }
 
   def apply(i: Int): Simplex[VertexT] = simplices(i)
 
@@ -261,25 +264,19 @@ class FilteredSimplexOrdering[VertexT, FiltrationT](
       else Ordering.Int.compare(x.size, y.size)
 
 trait StratifiedCellStream[CellT: OrderedCell, FiltrationT: Filterable] extends CellStream[CellT, FiltrationT]:
-  /** Contract `.iterator` below relies on: the domain must be contiguous starting at 0 -- defined for `0, 1, ..., k`
-    * for some `k` (or empty, or all of the non-negative integers), never with a gap. `.iterator` stops at the first
-    * dimension this is undefined for, so a non-contiguous domain (defined at `d` but not at `d - 1`) would silently
-    * truncate iteration instead of skipping the gap. Every implementation in this codebase already satisfies this (a
-    * simplicial complex can't have a `d`-simplex without its `(d-1)`-dimensional faces, so "no cells at `d`" implies
-    * "no cells at any dimension beyond `d`" too); a new implementation must preserve it.
+  /** The cells of dimension `d`, oldest first. The domain must be contiguous from 0 (`0, 1, ..., k`, or empty, or all
+    * of the naturals): [[iterator]] stops at the first dimension where this is undefined.
     */
   def iterateDimension: PartialFunction[Int, Iterator[CellT]]
 
-  /** Dimension-major: all of dimension `d` before any of dimension `d + 1`.
-    *
-    * MUST NOT be implemented as `Iterator.from(0).filter(iterateDimension.isDefinedAt)....fold(...)` (a real, confirmed
-    * bug this replaced -- see `.claude/WORKLOG-cohomology.md`): `Iterator.filter` on an infinite source can never prove
-    * "no more matches ahead", so once past the last dimension `iterateDimension` is defined for, it spins forever
-    * searching for a `d` that will never come -- and `Int` silently wrapping from `Int.MaxValue` to `Int.MinValue`
-    * after ~2^31 iterations can eventually feed a huge negative `d` straight to `iterateDimension` instead, surfacing
-    * as a `BinomialCoefficient` range exception rather than a hang. `.takeWhile` instead stops at the first `d` this is
-    * undefined for and never asks about any `d` beyond it, relying on exactly the contiguous-domain contract documented
-    * on `iterateDimension` above.
+  /** `Some(k)` for a complex cut off to compute homology in degrees `0..k` (what `VietorisRips(points, maxDimension =
+    * k)` returns, holding cells up to dimension `k + 1`): its higher degrees are not the homology of the full complex.
+    * `None` (the default) for a complete complex.
+    */
+  def homologyDegreeLimit: Option[Int] = None
+
+  /** All the cells, dimension by dimension. Stops at the first undefined dimension (`takeWhile`, never `filter`, which
+    * would search forever past the last one).
     */
   override def iterator: Iterator[CellT] =
     Iterator
@@ -304,6 +301,8 @@ private[tda4j] trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filtera
 private[tda4j] class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDim: Int)
     extends CofaceSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]():
+  override def homologyDegreeLimit: Option[Int] =
+    Some(stream.homologyDegreeLimit.fold(maxDim - 1)(math.min(_, maxDim - 1)))
   // `d <= maxDim` alone is not sufficient: the WRAPPED stream has its own natural bound (e.g.
   // EnumeratingCofaceSimplexStream's `d < metricSpace.size`, needed because a d-simplex needs d+1 distinct
   // vertices), which can be tighter than `maxDim` for a small point cloud. Calling `stream.iterateDimension(d)`
@@ -397,40 +396,18 @@ private[tda4j] class EnumeratingCofaceSimplexStream(
         def apply(spx: Simplex[Int]): Double = filtrationValueCache.getOrElseUpdate(spx, base(spx))
     }
 
-  /** Filtration value, reversed (so smaller-under-this-ordering means YOUNGER, matching `SimplexStream`'s own
-    * established convention), then dimension, then COLEXICOGRAPHIC order on the vertex set (via `simplexIndexing`'s own
-    * combinatorial-number-system index) -- the "lexicographically refined" tie-break Ripser's own apparent-pairs
-    * machinery (Definition 3.2/Proposition 3.9, see `RipserCohomologyEngine`) is defined in terms of, so using it here
-    * keeps this stream's ordering consistent with every other Ripser-flavored piece of this codebase, not just
-    * internally self-consistent -- deliberately not the plain lexicographic tie-break `FilteredSimplexOrdering` uses.
-    *
-    * Fixes a real, previously-confirmed bug (`.claude/WORKLOG-cohomology.md`): a bare `Ordering.by(filtrationValue)`
-    * has no tie-break at all, so two DIFFERENT simplices tied at the same filtration value compare as *equal* -- not a
-    * total order. This happens by construction on any Vietoris-Rips complex with a triangle, since a triangle's
-    * filtration value always equals that of its own longest edge; `CellularHomologyEngine` bakes a stream's
-    * `filtrationOrdering` into `Chain.reduceBy`'s `SortedMap`, so two cells that compare equal collide as a single map
-    * key and the reduction silently garbles pairings for that complex.
-    *
-    * `iterateDimension` sorts each dimension's bucket by `filtrationOrdering.reverse` -- deliberately `.reverse` on
-    * this SAME `Ordering` object, not an independently-built "oldest first" comparator: two individually-valid
-    * orderings that disagree on tie-break direction let a coface sort before its own tied facet, corrupting
-    * `Chain.reduceBy`'s pivot table the same way the no-tie-break bug did. A stream's iteration order and its
-    * `filtrationOrdering` (pivot order) must be THE SAME total order, one the consistent reverse of the other.
+  /** Filtration value reversed, then dimension, then colexicographic order of the vertex sets (their combinatorial
+    * index), the refinement Ripser's apparent pairs are defined with. A total order: without a tie-break, a triangle
+    * and its longest edge would compare equal and collide in the reduction. `iterateDimension` sorts by this same
+    * ordering reversed, so iteration order and pivot order agree.
     */
   override val filtrationOrdering: Ordering[Simplex[Int]] =
     FiltrationOrdering.canonical(filtrationValue, _.size, Ordering.by(simplexIndexing(_)))
 
   lazy val simplexIndexing: SimplexIndexing = SimplexIndexing(metricSpace.size)
 
-  /** Sorts `cells` by `filtrationOrdering.reverse` -- semantically identical to `.sorted(using
-    * filtrationOrdering.reverse)`, but memoizes each cell's filtrationValue/simplexIndexing for the duration of this
-    * one call instead of letting TimSort's O(m log m) comparisons each recompute both from scratch
-    * (`MaximumDistanceFiltrationValue.apply` is O(d^2); `simplexIndexing`'s tie-break sorts a list). Both are pure,
-    * side-effect-free functions of the cell alone, so caching them for this one sort changes nothing about the
-    * resulting order, only how many times each is computed. The cache is local to this call, not stored on the stream
-    * instance, so it stays bounded to one dimension's bucket -- deliberately NOT a stream-lifetime cache like
-    * `RipserCohomologyEngine.memoizeFiltrationValue`, off there for the same memory-frugality reasons. Delegates to the
-    * exact same `FiltrationOrdering.canonical` shape above, just memoized, so it cannot silently diverge from it.
+  /** `cells` sorted by `filtrationOrdering.reverse`, computing each cell's value and index once for the sort rather
+    * than on every comparison.
     */
   protected def sortedByFiltration(cells: IterableOnce[Simplex[Int]]): Vector[Simplex[Int]] =
     val fvCache = mutable.HashMap.empty[Simplex[Int], Option[Double]]
@@ -600,49 +577,15 @@ private[tda4j] class InorderCofaceSimplexStream(
         newSpx
   }
 
-/** A straightforward, non-optimized reference implementation of a Vietoris-Rips coface stream, following Antonio
-  * Rieser's New-VR algorithm ("A New Construction of the Vietoris-Rips Complex", arXiv:2301.07191v3) -- an explicit
-  * refinement of Zomorodian's own Incremental-VR algorithm (Algorithms 6/7 in that paper's Section 4; the algorithm
-  * `EnumeratingCofaceSimplexStream` and its siblings above are alternate, independently-optimized engines for the same
-  * construction). Kept intentionally close to the paper's own Algorithms 1-4, as a solid baseline the other, more
-  * experimental streams in this file can be cross-validated against, rather than as a speed-competitive engine in its
-  * own right.
+/** A reference Vietoris-Rips construction following Rieser's New-VR algorithm ("A New Construction of the Vietoris-Rips
+  * Complex", arXiv:2301.07191v3, Algorithms 1-4), kept close to the paper as a baseline for the faster constructions.
+  * Built eagerly, layer by layer (layer `k + 1` from layer `k` and its candidate lists), the breadth-first reading of
+  * the paper's recursion, so any dimension can be served in any order.
   *
-  * The paper phrases the construction as a depth-first recursion over a simplex tree (`New-Add-Cofaces`, Algorithm 3),
-  * but its own prose description of the "inductive step" (Section 3, immediately above Algorithm 1) is equivalently a
-  * breadth-first, layer-by-layer construction: layer `D(k+1)` is built entirely from layer `D(k)` and each of that
-  * layer's own candidate/sibling lists. This class uses that framing so it can slot into `iterateDimension`'s
-  * per-dimension contract like every other `CofaceSimplexStream` here. Since `iterateDimension` is a `PartialFunction`
-  * that may be called for any dimension in any order (unlike a genuinely incremental engine such as
-  * `RipserCofaceSimplexStream`, which depends on being driven dimension-by-dimension), the whole complex is built
-  * eagerly, once, into `byDimension`, and every call just serves a bucket from it -- simpler and safer than making the
-  * recursive construction itself resumable/order-independent.
-  *
-  * `maxFiltrationValue` (default `+Infinity`) is the threshold defining the graph `G` whose clique complex the paper's
-  * algorithm builds: `{i,j} ∈ E` iff `metricSpace.distance(i,j) <= maxFiltrationValue` (the same `<=` convention
-  * `RipserCohomologyEngine`'s own sparse-Rips support uses, see `Homology.scala`). At the default `+Infinity`, `G` is
-  * the complete graph, every vertex subset is a clique, and this degenerates to plain bounded subset enumeration -- the
-  * New-VR algorithm's whole advantage over Incremental-VR is exploiting genuine non-edges in `G`, so a finite threshold
-  * is where this class's construction actually differs in kind, not just in output, from
-  * `EnumeratingCofaceSimplexStream`'s. The inherited `keepCriterion` is a separate, per-simplex filter for callers who
-  * want to prune the output further -- it does not define the graph.
-  *
-  * `largestNeighbor`, the paper's own precomputed "largest neighbor of `v`" table (`L` in Algorithm 2) used by
-  * `Table-Lookup` to early-exit the scan over a candidate list once it is provably exhausted, is a pure optimization on
-  * top of `Table-Lookup`'s definition (`M = {w ∈ N : w > v, {v,w} ∈ E}`) -- see `IncrementalVietorisRipsSpec` for a
-  * pinned test that including it changes nothing about the output.
-  *
-  * No deduplication is needed anywhere in this construction: every simplex is reached via exactly one recursive path,
-  * built by always appending vertices in increasing order from a candidate list that only ever contains vertices
-  * greater than every vertex already in `tau` (Theorem 2.5's minimal-pair bijection, in the paper's own terms). If a
-  * bug ever makes a simplex appear twice, that is a sign the recursion itself is wrong, not a reason to add a dedup
-  * step.
-  *
-  * One deliberate departure from Algorithm 4 as written: the paper's own pseudocode does `Σ ← V ∪ E` unconditionally,
-  * before the main loop, so the full 1-skeleton is always present regardless of `d`. Here `maxDimension` instead
-  * behaves exactly like `LimitedCofaceSimplexStream`'s `maxDim` -- the highest dimension `iterateDimension` will ever
-  * serve -- so `maxDimension = 0` yields vertices only, with no edges, unlike the paper's own Σ. This matches every
-  * other bounded stream in this codebase and is what a caller building up dimension-by-dimension would expect.
+  * `maxFiltrationValue` (default `Infinity`) defines the graph whose clique complex is built: `{i, j}` is an edge iff
+  * `distance(i, j) <= maxFiltrationValue`. The `largestNeighbor` table (`L` in Algorithm 2) only shortens scans. Every
+  * simplex is reached exactly once, so nothing needs deduplicating. Unlike Algorithm 4, which always includes the
+  * edges, `maxDimension` is the top simplex dimension served, so `maxDimension = 0` gives the vertices only.
   */
 private[tda4j] class IncrementalVietorisRipsSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
@@ -657,6 +600,8 @@ private[tda4j] class IncrementalVietorisRipsSimplexStream(
     */
   useLargestNeighborBound: Boolean = true
 ) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion):
+
+  override def homologyDegreeLimit: Option[Int] = Some(maxDimension - 1)
 
   private val resolvedMaxFiltrationValue: Double =
     maxFiltrationValue.getOrElse(metricSpace.minimumEnclosingRadius)
@@ -681,9 +626,7 @@ private[tda4j] class IncrementalVietorisRipsSimplexStream(
       else N.maxOption.getOrElse(v)
     N.filter(w => w > v && w <= bound && isEdge(v, w))
 
-  /** Algorithm 3 (New-Add-Cofaces), restructured to stop one layer early each call instead of recursing all the way to
-    * `maxDimension` in a single pass -- see the class doc for why.
-    */
+  /** Algorithm 3 (New-Add-Cofaces), one layer per call. */
   private def addCofaces(
     tau: Simplex[Int],
     N: SortedSet[Int],

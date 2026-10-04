@@ -3,63 +3,24 @@ package org.appliedtopology.tda4j
 import scala.collection.concurrent.TrieMap
 import scala.collection.immutable
 
-/** The (filtered) Dowker complex of a relation `R: L x W -> [0, Infinity]` between two, generally distinct, finite sets
-  * `L` ("left") and `W` ("witnesses"), after Dowker's own theorem (C.H. Dowker, "Homology groups of relations", Ann. of
-  * Math. 56 (1952)), in the real-valued generalization used e.g. by Chowdhury & Mémoli ("A functorial Dowker theorem
-  * and persistent homology of asymmetric networks", 2018): a subset `sigma subseteq L` is a simplex at filtration value
-  * `t` iff some `w in W` witnesses every element of `sigma` by time `t`, i.e.
-  * `f(sigma) = min_{w in W} max_{x in sigma} R(x, w) <= t`. Unlike De Silva-Carlsson's witness complex (`nu`-indexed,
-  * `WitnessStream.scala`), `R` here is an ARBITRARY non-negative relation -- not necessarily derived from a metric, and
-  * `L`/`W` need not be subsets of a common ambient space or of each other. The classical (unfiltered, boolean) Dowker
-  * complex is the special case `R(x,w) in {0, Infinity}` (`DowkerGeometry.fromBoolean`): `sigma` is a simplex iff some
-  * `w` relates to every `x in sigma`, exactly as usual, with no notion of "when."
+/** The filtered Dowker complex of a relation `R: L x W -> [0, Infinity]` between two finite sets (C. H. Dowker,
+  * "Homology groups of relations", Ann. of Math. 56 (1952); filtered as in Chowdhury and Mémoli, "A functorial Dowker
+  * theorem and persistent homology of asymmetric networks", 2018). A set `sigma` of rows is a simplex at `t` when one
+  * witness `w` sees all of it by then:
+  * {{{
+  * f(sigma) = min_w max_{x in sigma} R(x, w)
+  * }}}
+  * `R` need not come from a metric. The unfiltered Dowker complex is the case `R(x, w)` in `{0, Infinity}`
+  * ([[DowkerGeometry.fromBoolean]]); the witness complex with `nu = 0` is the case `R` = landmark-to-witness distances.
   *
-  * '''Monotone by construction, no recursive facet clamp needed''' (contrast `WitnessCofaceSimplexStream`'s own
-  * `recursiveFiltrationValue`, needed there only because its per-dimension threshold `m_k` genuinely changes the
-  * formula from one dimension to the next): for `tau subseteq sigma`,
-  * `max_{x in tau} R(x,w) <= max_{x in sigma} R(x,w)` for every single `w`, so taking `min_w` on both sides preserves
-  * the inequality: `f(tau) <= f(sigma)`. This is CLAUDE.md's ordering-contract rule 3 (`fv(face) <= fv(coface)`),
-  * proved directly from the formula rather than enforced by a facet-floor clamp the way `CechFiltration`'s own ULP
-  * guard is.
+  * The filtration is monotone (`f(tau) <= f(sigma)` for `tau` a face of `sigma`, since the max over a subset is smaller
+  * for every `w`), vertices have values `min_w R(x, w)` that are generally nonzero, and the complex is not a flag
+  * complex, so the Ripser engines do not apply (MATLAB and the CLI also do not offer chunks for relations).
   *
-  * '''Not a flag complex, in general''': `f(sigma)` is not determined by `sigma`'s own edges alone (the minimizing
-  * witness `w` for a triangle need not be the one that witnesses any of its edges) -- same non-flag status as Cech and
-  * the general witness complex, and for the identical underlying reason (a "some witness sees the whole set at once"
-  * condition, not a pairwise one). So this construction is built on `RipserCofaceSimplexStream`'s generic "try every
-  * remaining vertex against every already-accepted lower-dimensional simplex" coface loop (valid for ANY
-  * downward-closed criterion, per that class's own doc), never on the flag-specific incremental-diameter machinery
-  * `PackedRipserCohomologyEngine`/`RipserCohomologyEngine` depend on -- `engine=ripser`/`chunks` are not offered for
-  * this construction (see `matlab.TDA4j`'s dispatch, once wired) for the same reason they aren't for the general
-  * witness complex or Cech.
-  *
-  * '''Vertices carry real, possibly distinct, nonzero filtration values''' (`f({x}) = min_w R(x,w)`) -- the same
-  * situation `DtmRipsSimplexStream` was the first stream in this codebase to hit, and the same fix applies:
-  * `DowkerCofaceSimplexStream`'s own `case 0` must be sorted by `filtrationOrdering.reverse` and filtered by threshold
-  * like every other dimension, unlike plain VR's base-class shortcut (every vertex tied at 0, so sorting/filtering is a
-  * harmless no-op there but a correctness requirement here).
-  *
-  * '''Duality is the point''': Dowker's theorem says the `L`-side complex (this class, vertices = rows of `R`) and the
-  * `W`-side complex (vertices = columns, built from `R`'s transpose -- `DowkerGeometry.dual`/`.dual` below) are
-  * homotopy equivalent at EVERY threshold `t` (the simplicial complexes of the relation and its transpose are
-  * simplicially homotopy equivalent, not merely isomorphic in homology), and the FUNCTORIAL form of the theorem
-  * (Chowdhury & Mémoli, "A functorial Dowker theorem and persistent homology of asymmetric networks", 2018) extends
-  * this to the whole filtration at once: the two sides' persistence MODULES are naturally isomorphic, so their barcodes
-  * agree exactly -- '''once zero-persistence (birth == death) bars are dropped from both'''
-  * (`DowkerStreamSpec.dropZeroPersistence`). Those are a total-order tie-break artifact, not a real topological feature
-  * (same status they already have elsewhere in this codebase, e.g. `WitnessStreamSpec`'s own tie-heavy witness
-  * complexes) -- but they matter more here than usual: if `numLeft != numWitnesses`, the RAW barcodes can't possibly
-  * match bar-for-bar even in principle, since a simplicial filtration records exactly one `H_0` birth event per VERTEX,
-  * unconditionally, so a 3-row/4-column relation's two sides literally have 3 vs. 4 raw `H_0` births -- confirmed by
-  * construction during this class's own development (a hand-worked 3x4 example), not merely a theoretical aside. Every
-  * one of those extra raw births is zero-persistence (the "extra" vertex is always born already-tied to an edge born at
-  * the identical filtration value), so the filtered barcodes still agree exactly, as the theorem promises.
-  *
-  * This also directly subsumes the "witness complex from a distance matrix" special case:
-  * `WitnessGeometry.witnessValue(sigma, m = _ => 0.0)` (De Silva-Carlsson's `nu = 0`) is EXACTLY this class's
-  * `filtrationValue` with `R = D` (the landmark-to-witness distance matrix) -- not implemented by delegating to
-  * `WitnessGeometry` (that class's own shape -- an ambient metric space plus a landmark subset -- doesn't fit a general
-  * relation with no shared ambient space at all), but the same formula, independently re-derived, is worth knowing
-  * about if the two ever need to be cross-checked against each other.
+  * '''Duality''': the complexes of `R` (on the rows) and of its transpose ([[dual]], on the columns) are homotopy
+  * equivalent at every `t`, and their persistence modules are isomorphic, so their barcodes agree. This holds for the
+  * barcodes without zero-length bars, the default: with `includeZeroLength = true` the two sides differ, since each
+  * vertex contributes an H₀ birth and the sides have different numbers of vertices.
   */
 class DowkerGeometry(val relation: Array[Array[Double]]):
   val numLeft: Int = relation.length
@@ -70,10 +31,7 @@ class DowkerGeometry(val relation: Array[Array[Double]]):
   require(relation.forall(_.length == numWitnesses), "every row of `relation` must have the same length")
   require(relation.forall(_.forall(v => v >= 0.0)), "a Dowker relation's values must be non-negative")
 
-  /** `min_{w} max_{x in sigma} R(x, w)` -- see the class doc for the monotonicity proof. `O(numWitnesses * sigma.size)`
-    * per call, the same shape as `WitnessGeometry.witnessValue` (with an always-zero threshold `m`), independently
-    * written here since this formula has no per-witness clamp to share code with.
-    */
+  /** `min_w max_{x in sigma} R(x, w)`, in time `O(numWitnesses * sigma.size)`. */
   def filtrationValue(sigma: IndexedSeq[Int]): Double =
     var best = Double.PositiveInfinity
     var w = 0
@@ -88,10 +46,7 @@ class DowkerGeometry(val relation: Array[Array[Double]]):
       w += 1
     best
 
-  /** The dual geometry (transpose of `relation`): vertices become the ORIGINAL witnesses, witnessed in turn by the
-    * original left-side points. Dowker's theorem is exactly the statement that the complex built from this and the
-    * complex built from `this` are homotopy equivalent at every threshold -- see the class doc.
-    */
+  /** The transposed relation: the columns become the vertices, witnessed by the rows. */
   lazy val dual: DowkerGeometry =
     new DowkerGeometry(Array.tabulate(numWitnesses, numLeft)((w, x) => relation(x)(w)))
 
@@ -107,12 +62,7 @@ object DowkerGeometry:
   def fromBoolean(relation: Seq[Seq[Boolean]]): DowkerGeometry =
     apply(relation.map(_.map(b => if b then 0.0 else Double.PositiveInfinity)))
 
-/** `DowkerGeometry.filtrationValue`, memoized -- the same "a caller-supplied `filtrationValueOverride` is not cached by
-  * `RipserCofaceSimplexStream` itself, so a genuinely expensive one must cache itself" reasoning as
-  * `CechFiltration`/`WitnessCofaceSimplexStream.recursiveFiltrationValue`. Deliberately no `spx.dim <= 0 => 0.0`
-  * special case (contrast `CechFiltration`/`MaximumDistanceFiltrationValue`): a Dowker vertex's own filtration value is
-  * generally nonzero and meaningful, not a VR-style convention-only placeholder -- see the class doc.
-  */
+/** [[DowkerGeometry.filtrationValue]], memoized. Vertices get their own (generally nonzero) value. */
 object DowkerFiltration:
   def apply(geometry: DowkerGeometry): PartialFunction[Simplex[Int], Double] =
     val cache = TrieMap.empty[Simplex[Int], Double]
@@ -133,15 +83,8 @@ private class DowkerPlaceholderMetricSpace(n: Int) extends FiniteMetricSpace[Int
   def elements: Iterable[Int] = 0 until n
   def contains(x: Int): Boolean = 0 <= x && x < n
 
-/** The (filtered) Dowker complex on the LEFT side of `geometry` -- see the class doc on `DowkerGeometry` above for the
-  * full mathematical picture, monotonicity proof, and non-flag status. `maxFiltrationValue` defaults to `+Infinity`,
-  * not `metricSpace.minimumEnclosingRadius`-style truncation (contrast every genuine-flag-complex VR stream in this
-  * codebase): an arbitrary relation gives no cone argument to truncate against, the same reasoning
-  * `WitnessCofaceSimplexStream`'s general (non-lazy) variant already documents for its own dimension-specific formula.
-  *
-  * Vertex ids in every emitted `Simplex[Int]` are indices into `geometry.relation`'s rows (`0 until geometry.numLeft`);
-  * `.dual` gives the complex on the other side (`geometry.dual`'s rows, `geometry`'s original columns), which Dowker's
-  * theorem guarantees is homotopy equivalent to this one at every threshold.
+/** The filtered Dowker complex on the rows of `geometry.relation` (vertex `i` is row `i`); [[dual]] gives the one on
+  * the columns. `maxFiltrationValue` defaults to `Infinity`: a relation has no enclosing radius to truncate at.
   */
 private[tda4j] class DowkerCofaceSimplexStream(
   val geometry: DowkerGeometry,
@@ -185,10 +128,8 @@ private[tda4j] class DowkerCofaceSimplexStream(
     }
     dim0.orElse(super.iterateDimension)
 
-  /** The dual-side Dowker complex (`geometry.dual`), same threshold and keep-criterion -- see the class doc's "duality
-    * is the point" paragraph. Not memoized: cheap to construct (just wraps `geometry.dual`, itself memoized on
-    * `DowkerGeometry`), and a caller driving both sides concurrently would otherwise share mutable coface-generation
-    * state (`currentDimensionCache` et al.) it should not share.
+  /** The Dowker complex on the columns, with the same threshold. A new stream each call, so the two sides can be
+    * iterated independently.
     */
   def dual: DowkerCofaceSimplexStream =
     new DowkerCofaceSimplexStream(geometry.dual, maxFiltrationValue, keepCriterion)

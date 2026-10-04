@@ -30,16 +30,18 @@ the prose around what you saw; if a dataset does not show the intended effect, c
 joins the page's `scala sc:nocompile` narrative fences into a never-called `<Page>Narrative.narrative()`, so a drifted narrative fence fails
 `Test/compile`. `src/test/.../tutorial/<Page>Spec` asserts every quoted number on `<Page>Script.<val>` -- never re-type page code in a spec;
 if a spec needs a value the script doesn't define, add that `val` to the page (the narrative should show it) or compute it in the spec from
-exposed values. The first narrative fence must carry the `TDAlab` imports (the narrative compiles alone). `sbt doc` (CI `test.yml` runs it,
+exposed values. The first narrative fence must carry the page's imports (the narrative compiles alone). `sbt doc` (CI `test.yml` runs it,
 with `TDA4J_SCALA_VERSION=3.8.4`) compiles every fence but runs none; the generated objects are what execute. Not covered:
 `all-ways-to-call.md` (no whole-script section; `AllWaysToCallSpec` still mirrors it by hand) and MATLAB tabs (`MatlabTabsSpec`, below).
 Narrative fences are `scala sc:nocompile` (they share values, and the snippet compiler compiles each fence alone), and each page ends
 with a "whole script" fence that IS compiled by the docs build. Shared point clouds live in `_docs/tutorials/data/`, written by the seeded `tutorial/TutorialData` (change the generator, run
-`sbt "Test/runMain org.appliedtopology.tda4j.tutorial.TutorialData"`; `TutorialDataSpec` guards drift). Style: `TDAlab` throughout
-(`import tdalab.{*, given}` is the page's only import: it re-exports the whole library and the `sset` add-on, flat --
-write `VietorisRips(...)`, not `tdalab.streams.VietorisRips`; the namespace objects are gone); user-guide fences use
-`import org.appliedtopology.tda4j.*` (+ `.sset.*` for simplicial sets) instead; `diagramAt`/`diagramWithGeneratorsAt` triples,
-not `PersistenceBar`; `barcodeAt(f)` at an intermediate `f` is safe since the query-contract fix (`rules/engines.md`); public API only (a fence naming a `private[tda4j]` class or a test fixture
+`sbt "Test/runMain org.appliedtopology.tda4j.tutorial.TutorialData"`; `TutorialDataSpec` guards drift). Style (Li Haoyi's "easy"): the page's imports are `scala.language.experimental.modularity` and
+`org.appliedtopology.tda4j.*` (+ `.sset.*` for simplicial sets), and the computation is the `Persistence` verb returning a
+`PersistenceDiagram` (`dim`, `longest`, `significant()`, `longerThan`); reach for a stream + engine only where the page is
+about them (cursor, engine choice), and for a lab (`import TDAlab.F17.{*, given}`) only where hand-written chain algebra
+is the point. Representatives are cocycles by default: a page that shows WHERE a feature is uses
+`engine = Persistence.Engine.Chunks, maxDimension = 1` and says why (find-a-loop explains the choice; link there). No implementation history, worklog pointers or "we fixed X" in pages -- state what the library does.
+`barcodeAt(f)` at an intermediate `f` is safe since the query-contract fix (`rules/engines.md`); public API only (a fence naming a `private[tda4j]` class or a test fixture
 fails `sbt doc`); no timings in prose. `Map[G, Fp]` equality compares raw representatives (-1 vs 1 over F_2 differ): compare cochains with
 `CupProduct.isCoboundary`, never `==`. Tutorial specs add ~90 s to `testFull`.
 **Language tabs** (`WORKLOG-tutorial-tabs.md`): where `matlab.TDA4j` supports the task, show the code in a `<div class="tabset">` with

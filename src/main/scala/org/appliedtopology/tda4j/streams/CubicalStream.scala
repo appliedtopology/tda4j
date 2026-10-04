@@ -4,23 +4,13 @@ import scala.collection.immutable.Map
 import scala.collection.mutable
 import scala.collection.parallel.CollectionConverters.*
 
-/** Dense cubical complex over a full rectangular grid, filtration values assigned via the T-construction: a
-  * caller-supplied `topCellValue` gives every top-dimensional cube (pixel/voxel) its own value directly, and every
-  * lower-dimensional cube's value is the min over all top cells that contain it as a face -- exactly the "sublevel set
-  * of a piecewise-constant function on pixels" convention GUDHI/DIPHA/Perseus all use for image persistence (see
-  * `.claude/WORKLOG-cubical.md` for the monotonicity proof: since every top cell containing an immediate coface of `c`
-  * also contains `c`, `fv(coface) >= fv(c)` always holds by construction, which is exactly what
-  * `CellularHomologyEngine.processingOrder`'s ascending sort requires).
+/** The cubical complex of a full rectangular grid, filtered by the values of its top cells (pixels, voxels): every
+  * other cube gets the minimum value of the top cells containing it, the sublevel-set convention of GUDHI, DIPHA and
+  * Perseus. A face is contained in every top cell its cofaces are, so the filtration is monotone. For superlevel sets,
+  * negate the values (what [[CubicalImage]]'s `sublevel = false` does).
   *
-  * For a SUPERLEVEL-set convention instead, negate `topCellValue` before constructing (the standard trick -- see
-  * `CubicalImage.scala`'s `sublevel` parameter, which does exactly this): sublevel persistence of `-f` is superlevel
-  * persistence of `f`, reparametrized, so this type deliberately does not carry its own sign-direction flag -- one code
-  * path, always "min over cofaces," is easier to get right and to verify than baking a direction switch into the core
-  * stream.
-  *
-  * `shape(i)` is the number of PIXELS along axis `i` (not lattice points -- there are `shape(i) + 1` of those). The
-  * full grid complex has `prod_i (2*shape(i)+1)` cells total (`totalCellCount`) -- e.g. a 256x256 image has 513*513 =
-  * 263169 cells, not 65536.
+  * `shape(i)` is the number of pixels along axis `i`. The complex has `prod_i (2 shape(i) + 1)` cells
+  * (`totalCellCount`): a 256x256 image has 513² = 263169.
   */
 class CubicalGridStream(
   val shape: IndexedSeq[Int],
@@ -57,12 +47,8 @@ class CubicalGridStream(
       coord >= 0 && coord <= 2 * shape(i)
     }
 
-  /** Every top-dimensional cell (grid index) containing `c` as a face, computed directly rather than via a recursive
-    * "immediate cofaces" walk -- mathematically equivalent (see class doc) and cheaper: for each degenerate axis of `c`
-    * at lattice point `k`, a containing top cell's own index along that axis is `k-1` or `k` (whichever lies in range);
-    * for each non-degenerate axis, it's forced to `c`'s own index there. Cost is O(2^(ambient dim - dim(c))) per call
-    * -- fine at the ambient dimensions cubical complexes are actually used at (2D/3D), not memoized here on purpose
-    * (see class doc's note on deferring optimization until measured).
+  /** The grid indices of the top cells containing `c`: along an axis where `c` is a point `k`, index `k - 1` or `k`;
+    * along an axis where it is an interval, its own index. `O(2^(ambient dimension - dim c))` per call.
     */
   private def containingTopCells(c: Cube): Seq[IndexedSeq[Int]] =
     val perAxisChoices: IndexedSeq[Seq[Int]] = (0 until ambientDim).map { i =>
@@ -97,10 +83,8 @@ class CubicalGridStream(
     def apply(c: Cube): Double =
       filtrationValueCache.getOrElseUpdate(c, containingTopCells(c).map(topCellValue).min)
 
-  /** The shared `FiltrationOrdering.canonical` shape (fv reversed, then dimension, then the canonical `cubeOrdering`
-    * tie-break). Ties on filtration value are the COMMON case here, not an edge case: every non-top face shares its
-    * value with at least one of its cofaces by construction (min-over-cofaces), so a broken tie-break would corrupt
-    * essentially every reduction, not just rare coincidences.
+  /** `FiltrationOrdering.canonical` with `cubeOrdering` as tie-break. Ties are common here: a face shares its value
+    * with at least one coface.
     */
   override val filtrationOrdering: Ordering[Cube] =
     FiltrationOrdering.canonical(filtrationValue, _.dim, cubeOrdering)
@@ -120,15 +104,7 @@ class CubicalGridStream(
       for prefix <- acc; v <- r.iterator yield prefix :+ v
     }
 
-  /** Bounded at `0 to ambientDim`, contiguous from 0 -- the contract `StratifiedCellStream.iterator`'s default
-    * implementation (and this class's own callers) rely on. Each dimension's bucket is fully materialized and sorted by
-    * `filtrationOrdering.reverse` (oldest-first, what `CellularHomologyEngine` -- via its own `processingOrder` re-sort
-    * -- and `iterateDimension`'s own established convention both expect); on a large grid this is the memory-heavy
-    * step, not `containingTopCells`. Recomputed and re-sorted from scratch on EVERY call, unlike
-    * `ExplicitCubicalStream.byDimension` below (a `lazy val`) -- fine for `CellularHomologyEngine`, which calls
-    * `.iterator` (hence this) exactly once per `persistentHomology` run, but a caller that repeatedly calls
-    * `iterateDimension(d)` directly (as some alpha-complex specs do for their own streams) would pay the full re-sort
-    * every time; not measured as an actual problem, just flagged rather than silently left unmentioned.
+  /** The cubes of dimension `d` (`0 <= d <= ambientDim`), oldest first. Each call builds and sorts the whole dimension.
     */
   override def iterateDimension: PartialFunction[Int, Iterator[Cube]] = {
     case d if d >= 0 && d <= ambientDim =>
@@ -146,17 +122,7 @@ class CubicalGridStream(
       cubes.sorted(using filtrationOrdering.reverse).iterator
   }
 
-/** Hides every cell of dimension `> maxDim` from `stream` -- the `Cube` analogue of `LimitedCofaceSimplexStream`
-  * (`SimplexStream.scala`), needed because that class is hardcoded to `CofaceSimplexStream[Int, Double]` and doesn't
-  * fit `Cube` at all. Used by `FastCubicalHomologyEngine`'s own `d >= 3` path
-  * (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) to hand `CellularPersistenceInChunksEngine` a view of
-  * the grid that never contains a real top-dimensional cell, so that engine's own general `Chain` reduction never
-  * touches them -- the whole point being to let the (cheaper) dual union-find handle the top dimension instead.
-  *
-  * Delegates `filtrationOrdering`/`filtrationValue` to `stream` unchanged (removing higher-dimensional cells from the
-  * DOMAIN doesn't change either), and preserves `StratifiedCellStream.iterator`'s own contiguous-from-0 contract for
-  * free: truncating a contiguous `0..stream.ambientDim` domain to `0..maxDim` is still contiguous from 0.
-  */
+/** `stream` without its cells of dimension above `maxDim`, with the same values and order. */
 class LimitedCubicalGridStream(stream: CubicalGridStream, maxDim: Int)
     extends StratifiedCellStream[Cube, Double]
     with DoubleFiltration[Cube]():
@@ -166,10 +132,8 @@ class LimitedCubicalGridStream(stream: CubicalGridStream, maxDim: Int)
   override def filtrationOrdering: Ordering[Cube] = stream.filtrationOrdering
   override def filtrationValue: PartialFunction[Cube, Double] = stream.filtrationValue
 
-/** A sparse/arbitrary finite set of cubes with explicit filtration values -- mirrors `ExplicitStream` for simplices.
-  * Useful for hand-built fixtures and for genuinely non-grid cubical complexes (arbitrary unions of products of
-  * intervals, per the original ask -- `CubicalGridStream` is the important special case for images, not the only shape
-  * a cubical complex can take).
+/** A finite set of cubes with explicit filtration values, the cubical counterpart of `ExplicitStream`: for small
+  * hand-built complexes and cubical complexes that are not a full grid.
   */
 class ExplicitCubicalStream(
   protected val filtrationValues: Map[Cube, Double],

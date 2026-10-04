@@ -28,10 +28,6 @@ class SimplicialSetStreamSpec extends s2mutable.Specification with ScalaCheck:
       .mapValues(_.size)
       .toMap
 
-  private def accountsForAllCells(diagram: List[(Int, Int, Int)], cells: Int): Boolean =
-    val (finite, essential) = diagram.partition { case (_, _, death) => death != Int.MaxValue }
-    finite.size * 2 + essential.size == cells
-
   private def ourBetti(stream: CellStream[Simplex[Int], ?]): (Map[Int, Int], Int) =
     val sset = fromStream(stream)
     given (Simplex[Int] is OrderedCell) = sset.cellInstance
@@ -52,15 +48,11 @@ class SimplicialSetStreamSpec extends s2mutable.Specification with ScalaCheck:
     }
   }
 
-  "fromStream's diagram accounts for exactly one bar-cell-slot per generator, hand-built fixtures" >> {
+  "fromStream has one generator per simplex of the stream, hand-built fixtures" >> {
     val cases = List(HomologyFixtures.triangleCells, HomologyFixtures.tetrahedronCells, HomologyFixtures.torusCells)
     forall(cases) { cells =>
-      val stream = StreamFixtures.explicitStream(cells)
-      val sset = fromStream(stream)
-      given (Simplex[Int] is OrderedCell) = sset.cellInstance
-      val diagram =
-        CellularHomologyEngine[Simplex[Int], Double, Int]().persistentHomology(SimplicialSetStream(sset)).diagramAt(0)
-      accountsForAllCells(diagram, cells.size) must beTrue
+      val sset = fromStream(StreamFixtures.explicitStream(cells))
+      sset.allGenerators.toSet must beEqualTo(cells.map(_._2).toSet)
     }
   }
 

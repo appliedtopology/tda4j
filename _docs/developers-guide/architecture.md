@@ -378,16 +378,15 @@ because none of them ever compute a genuinely infinite filtration value. `Dowker
 
 **Duality is the entire point of this construction, not an afterthought**: `DowkerGeometry.dual` (the transposed
 relation) gives the `W`-side complex, and the functorial Dowker duality theorem guarantees its persistence
-module is naturally isomorphic to the `L`-side one — so the two sides' barcodes agree exactly, but only AFTER
-dropping zero-persistence (birth == death) bars from both. A simplicial filtration records exactly one `H_0`
-birth event per vertex, so when `L` and `W` differ in size the raw barcodes cannot possibly match bar-for-bar
-even in principle; every "extra" birth turns out to be zero-persistence (confirmed on a hand-worked rectangular
-relation, not just asserted from the theorem — `DowkerStreamSpec.dropZeroPersistence`).
+module is naturally isomorphic to the `L`-side one — so the two sides' barcodes agree exactly. Their zero-length bars
+differ (a simplicial filtration records one `H_0` birth per vertex, so when `L` and `W` differ in size the extra
+births pair off at once); the engines leave those out by default (checked on a hand-worked rectangular relation,
+`DowkerStreamSpec`).
 
 Wired into `matlab.TDA4j`/`cli` as a dedicated entry point (`computeFromRelation`/`--input-format csv-relation`),
 separate from `computeFromPoints`/`computeFromDistanceMatrix`: a Dowker relation is neither a point cloud nor a
 square/symmetric distance matrix, so it doesn't fit the `complex=` dispatch those methods share. `engine`
-defaults to `naive` and refuses `ripser`/`chunks`, exactly like `complex=witness` with `witnessVariant=general` —
+defaults to `cohomology` and refuses `ripser`/`chunks`, exactly like `complex=witness` with `witnessVariant=general` —
 same non-flag-complex reasoning. A `"dual"`/`--dual` option computes the `W`-side complex directly via
 `DowkerGeometry.dual`, without the caller having to transpose the relation by hand.
 
@@ -538,16 +537,16 @@ produces `Double` filtration values, and a metric distance needs real arithmetic
   weighted Gaussian mass *exactly* (a product of 1D normal-CDF differences, since an isotropic Gaussian's mass
   over a rectangle factors along both axes), not by sampling the surface at the pixel center.
 
-**Which bars get reported** (`PersistenceFilter`, `.claude/WORKLOG-persistence-threshold.md`). Engines
-return EVERY bar — they are the cross-validation oracles, and a representative is recorded for each. Reading a
-real barcode is hopeless that way, so the *facade* (`matlab.TDA4j`, hence the CLI and MATLAB) applies a
-post-hoc filter by default: keep a bar iff it is essential or its persistence exceeds `0.01 * scale`, where the
+**Which bars get reported** (`PersistenceFilter`, `.claude/WORKLOG-persistence-threshold.md`). Engines leave
+zero-length bars out unless asked (`includeZeroLength = true`, see [degeneracies](degeneracies.md)) and return every
+other bar, each with a representative. Short bars are mostly sampling noise, so the *facade* (`matlab.TDA4j`, hence
+the CLI and MATLAB) applies a post-hoc filter by default, the same one `diagram.significant()` applies in Scala: keep a bar iff it is essential or its persistence exceeds `0.01 * scale`, where the
 scale is a property of the INPUT, supplied by the facade: `metricSpace.minimumEnclosingRadius` for a point cloud or
 distance matrix (Ripser's enclosing radius, already the default VR truncation — every bar lives in `[0, scale]`;
 used as-is in the complex's reported units), or max − min of the values for a cubical image / Dowker relation
 (which have no metric). It is passed by-name and only evaluated when a fraction of it is needed (it is quadratic);
 a non-finite scale falls back to the span of the barcode's own finite endpoints. A
-threshold `<= 0` keeps everything, zero-persistence bars included. Design points worth knowing before changing
+threshold `<= 0` keeps every computed bar (zero-length ones are only computed with the `includeZeroLength` option). Design points worth knowing before changing
 it: (1) it is applied by thin `dispatch*` wrappers around the real dispatchers, after the full result exists, not
 inside `fromBars`; (2) `PersistenceResult` keeps the FULL arrays plus a `visible` index, and only
 `size`/`toArray`/`dimension`/`birth`/`death`/`cycle*` use the visible view — `barsOfDimension`, hence distances,
@@ -598,8 +597,8 @@ out to need only a birth-value comparison: truncating the *end* of a filtration 
 something is born, so `K_r`'s persistent cohomology (fed the same filtration values, just cut off at `r`)
 assigns every bar the same birth it has in the full computation.
 
-The chosen cocycle is computed over an odd prime field (`prime`, default `47` — not this library's usual `2`
-default, since an RP²-type class exists over `F_2` with no real/integer lift at all, making a mod-2 "cocycle"
+The chosen cocycle is computed over an odd prime field (`prime`, default `47`; it must be odd,
+since an RP²-type class exists over `F_2` with no real/integer lift at all, making a mod-2 "cocycle"
 a mirage for coordinatization specifically), lifted to an integer cochain, and checked EXACTLY (not just mod
 `prime`, which the field computation already guarantees trivially) against every triangle of `K_r` —
 `NoIntegerCocycleException` (a `RuntimeException`, crossing the MATLAB bridge the same way

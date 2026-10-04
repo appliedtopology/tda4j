@@ -9,12 +9,8 @@ import scala.util.chaining.*
 
 import java.util.concurrent.*
 
-/** A numerical tolerance, threaded via `using` through `Hyperplane.from`/`Hypersphere`/`HelixDelaunay`'s internal
-  * geometric comparisons (near-zero singular values, near-zero circumsphere margins). Deliberately NOT a package- level
-  * `given` (the earlier shape here): `Hyperplane`/`Hypersphere`/`HelixDelaunay` are never constructed from outside this
-  * file (every external caller goes through `AlphaShapes.apply` below), so the one default value this codebase actually
-  * uses only needs to live on `apply`'s own `using` parameter -- an ordinary default value, not an ambient given every
-  * file that happens to wildcard-import `alpha.{given, *}` would otherwise pick up silently.
+/** The numerical tolerance of the triangulation's geometric tests (near-zero singular values and circumsphere margins).
+  * `AlphaShapes(...)` supplies `Epsilon(1e-5)`; pass a `given Epsilon` to change it.
   */
 final case class Epsilon(epsilon: Double)
 
@@ -36,12 +32,7 @@ object AlphaBackend:
 abstract class AlphaShapes extends LevelwiseSimplexStream[Int, Double]() with DoubleFiltration[Simplex[Int]]():
   val metricSpace: FiniteMetricSpace[Int]
 
-/** `apply`/`Point` are scoped here rather than as bare top-level `alpha` package defs (a generic name like `Point`, or
-  * a dispatch function as central as `Alpha` used to be, is exactly the kind of top-level-name collision hazard
-  * documented elsewhere in this codebase) -- callers write `AlphaShapes(points, dispatch)`. `import AlphaShapes.Point`
-  * below brings both the type and its factory back into unqualified scope for the rest of this file, where `Point` is
-  * used pervasively by `Hyperplane`/`Hypersphere`/`HelixDelaunay`.
-  */
+/** Alpha complexes of point clouds: `AlphaShapes(points)`, or `Persistence(points, complex = AlphaShapes)`. */
 object AlphaShapes extends PointCloudComplex:
   def fromPoints(points: PointCloud, maxDimension: Int, maxFiltrationValue: Option[Double]) =
     require(
@@ -51,12 +42,11 @@ object AlphaShapes extends PointCloudComplex:
     )
     Truncated(apply(points), maxDimension)
 
-  /** @param requireValidTriangulation
-    *   OFF by default. Only meaningful for the `"helix"`/`"default"` backend -- threaded straight through to
-    *   `HelixDelaunay`'s own constructor parameter of the same name (`.claude/DESIGN-helix-triangulation-repair.md`).
-    *   `require`d `false` for `backend = AlphaBackend.DQP`: `AlphaShapeDQP` has no facet-multiplicity precondition to
-    *   repair in the first place (it is not `FastAlphaHomologyEngine`'s own backend), so a caller passing `true` there
-    *   almost certainly mis-set the option rather than intending a silent no-op.
+  /** The alpha complex of `points`, built by `backend` (`Helix`, the default, or `DQP`; see [[AlphaBackend]]).
+    *
+    * @param requireValidTriangulation
+    *   `Helix` only: repair an invalid triangulation instead of leaving it to `FastAlphaHomologyEngine` to reject (see
+    *   [[HelixDelaunay]]). Off by default.
     */
   def apply(
     points: PointCloud,
@@ -350,9 +340,8 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
     assert(
       validated.nonEmpty,
       s"HelixDelaunayBuilder: no empty-circumsphere seed simplex found across ${candidateStartingSimplices.size} " +
-        s"candidate starting simplices (hull-supporting hyperplane has ${vs.size} coincident points) -- this is a " +
-        "genuine construction failure, not user error; please report it with the exact point cloud, per " +
-        ".claude/WORKLOG-helix-bootstrap-fix.md."
+        s"candidate starting simplices (hull-supporting hyperplane has ${vs.size} coincident points) . This is a bug, " +
+        "not an input error: please report it with the point cloud."
     )
 
     visitedFacets.add(Simplex.from(startingSimplex.toSeq))
@@ -406,34 +395,22 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
 
     validated.toSet
 
-/** Based on https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10917453&tag=1
+/** The Delaunay triangulation of a point cloud, built by an incremental frontier walk
+  * (https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10917453), filtered as an alpha complex.
   *
-  * '''Accepted limitation''': near-cospherical clusters make the frontier walk order-dependent (~1/170 at ambient
-  * dimension 4, 20-30 points) -- a real fix needs joint near-tie detection, not attempted here. So Helix is not
-  * reliable ground truth for dimension >= 4 fuzzing (`AlphaCrossValidationSpec`'s comparisons stay as
-  * `unsafeCompare`/`unsafeFuzzCompare` diagnostics, not wired into `sbt test`). `seed` makes a given `(pts, seed)` pair
-  * deterministic, but does not remove this order-dependency -- see `HelixDelaunayBuilder`'s own doc.
+  * Limitation: near-cospherical clusters make the walk depend on the order of the points, and at ambient dimension 4
+  * with 20-30 points about one cloud in 170 gets an invalid triangulation; do not treat the result as ground truth in
+  * dimension 4 and above.
   *
   * @param pts
-  *   the input points to triangulate
+  *   the points to triangulate
   * @param seed
-  *   seeds the bootstrap frontier-selection shuffle (`HelixDelaunayBuilder`); same `pts` and `seed` always produce the
-  *   same triangulation.
+  *   seeds the order of the walk; the same `pts` and `seed` give the same triangulation.
   * @param requireValidTriangulation
-  *   OFF by default -- changes nothing above when `false`. When `true`, and `compute()` produces a facet- multiplicity
-  *   violation (`FastAlphaHomologyEngine`'s own precondition), runs `HelixDelaunay.repairByJitterRetriangulation`
-  *   (`.claude/DESIGN-helix-triangulation-repair.md`): a "simulation of simplicity"-style repair that nudges exactly
-  *   the offending, near-tied points by a tiny random perturbation and re-runs this SAME `HelixDelaunayBuilder` on the
-  *   full (mostly unperturbed) point set, then recomputes every resulting simplex's own circumsphere from the ORIGINAL,
-  *   un-nudged coordinates so the perturbation never leaks into a real filtration value -- only into the combinatorial
-  *   tie-break, plus a direct check that the repaired result has no interior gap (see that method's own doc for why the
-  *   facet-count check alone was found insufficient). Two other designs (discarding the conflicting region and
-  *   re-filling it via coning from an arbitrary apex; discarding the extra claimants outright with no replacement) were
-  *   tried first and rejected after being checked against the actual failing fixture -- see the design note's own
-  *   "First"/"Second design attempt (rejected)" sections. Validated by targeted stress sweep at `d=2` and `d=3`
-  *   (`FastAlphaHomologyEngine`'s own primary use case); `d>=4` is untested -- `HelixDelaunayBuilder` itself is already
-  *   "not reliable ground truth" there for unrelated reasons (this class's own doc above), so this repair inherits that
-  *   pre-existing limitation rather than introducing a new one.
+  *   off by default. When on and the triangulation is invalid (a facet with more than two cofaces, or a hole inside the
+  *   convex hull), the points involved are moved by a tiny random amount, the whole point set is triangulated again,
+  *   and every radius is recomputed from the original coordinates, so the perturbation only decides the combinatorics.
+  *   Repeated until the result is valid, or an exception after a few attempts. Tested in dimensions 2 and 3.
   */
 class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTriangulation: Boolean = false)(using
   epsilon: Epsilon
@@ -529,15 +506,8 @@ class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTria
 
 object HelixDelaunay:
 
-  /** If `pts` is globally coplanar -- its own affine rank (via SVD of the points centered at `pts.head`) is strictly
-    * less than the declared ambient dimension (`pts.head.length`) -- re-expresses every point in an orthonormal basis
-    * of that actual affine span, dropping the genuinely-unused extra coordinates; returns `pts` completely unchanged
-    * (not even re-centered) when the input already has full rank, so this is a no-op for every ordinary, non-degenerate
-    * point cloud. An orthogonal projection onto the affine span containing every input point preserves every pairwise
-    * Euclidean distance among them EXACTLY (nothing is discarded that any of the points actually extend into), so the
-    * returned points' own Delaunay triangulation is the genuine one for the true (lower-dimensional) point
-    * configuration, not an approximation -- see this class's own constructor doc and
-    * `.claude/WORKLOG-helix-bootstrap-fix.md`.
+  /** Points whose affine span has lower dimension than their coordinates, re-expressed in an orthonormal basis of that
+    * span (distances are unchanged, so the triangulation is the true one); other point sets are returned as they are.
     */
   private def projectToAffineRank(pts: Array[Array[Double]])(using epsilon: Epsilon): Array[Array[Double]] =
     if pts.length < 2 then pts
@@ -567,21 +537,10 @@ object HelixDelaunay:
   private def badFacetsOf(simps: Set[DelaunaySimplex]): Map[Simplex[Int], Vector[DelaunaySimplex]] =
     facetToSimplices(simps).filter { case (_, claimants) => claimants.size > 2 }
 
-  /** A genuine Delaunay triangulation always fully tetrahedralizes its own convex hull -- the hull is convex, hence
-    * contractible, so the STATIC (unfiltered, every cell at once) complex's own `H_{d-1}` must be trivial. "Every facet
-    * has `<=2` claimants" (`badFacetsOf`) is necessary for that but NOT sufficient: a facet can end up with exactly 1
-    * claimant not because it is genuinely on the outer hull, but because the builder's own search, run on jittered
-    * coordinates, simply failed to place its second coface -- indistinguishable from a real hull facet by the local
-    * claimant-count check alone, but detectable by this global one. Confirmed empirically, not assumed: a real failing
-    * case measured a 33% total-tetrahedra-volume shortfall against the (violation-inflated) unrepaired triangulation,
-    * alongside exactly one spurious essential `H_2` bar -- direct evidence of a genuine gap, not a
-    * structurally-clean-but-topologically-wrong result (`.claude/DESIGN-helix-triangulation-repair.md`).
-    *
-    * Returns `None` when the complex is genuinely complete (no repair needed there); `Some(vertices)` when a void
-    * exists, where `vertices` is the vertex support of the essential `H_{d-1}` representative(s) `barcodeAt` returns --
-    * the actual boundary of the hole, not a guess -- a far more targeted retry seed than "every vertex on the complex's
-    * own outer hull" would be (which is most of the point cloud for an ordinary input, and would be true of ANY
-    * complete complex too, not just an incomplete one).
+  /** A Delaunay triangulation fills its convex hull, so the whole complex has no homology in degree `d - 1`. `None` if
+    * that holds; otherwise the vertices of the essential degree-`(d - 1)` representatives, the boundary of the hole,
+    * which seed the repair. (A facet with one coface can be a missing simplex rather than a hull facet; only this
+    * global check sees it.)
     */
   private def interiorVoidVertices(simps: Set[DelaunaySimplex], ambientDimension: Int): Option[Set[Int]] =
     given Double is Field = Field.DoubleApproximated(1e-9)
@@ -600,52 +559,12 @@ object HelixDelaunay:
     if voidBars.isEmpty then None
     else Some(voidBars.flatMap(_.annotation).flatMap(_.rawEntries.map(_._1)).flatMap(_.toSet).toSet)
 
-  /** The `requireValidTriangulation = true` repair pass (`.claude/DESIGN-helix-triangulation-repair.md`) -- strictly a
-    * post-processing step over an already-`compute()`d result. Rather than trying to hand-patch the conflicting region
-    * (both a coning re-fill and a discard-without-replacement prune were tried and rejected -- see the design note),
-    * this reruns `HelixDelaunayBuilder` -- the SAME already-tested global algorithm -- on the full point set with only
-    * the vertices actually involved in a violation nudged by a small random perturbation, so it never needs to manually
-    * reconstruct or "glue" a local patch: the builder's own global frontier walk does that implicitly, correctly,
-    * exactly as it does for any other input. The perturbation is discarded once it has done its job of breaking the
-    * combinatorial tie -- every simplex in the final result gets its own circumsphere recomputed from the ORIGINAL,
-    * un-nudged coordinates, so no filtration value is ever contaminated by jitter (the classic "simulation of
-    * simplicity" discipline: perturb only to choose a combinatorial structure, then discard the perturbation for every
-    * numeric output).
-    *
-    * Retries with a fresh seed (and a widened jitter set, folding in any newly-implicated vertices) if a retry still
-    * has EITHER problem -- rare, but not assumed away: only a direct re-check, not the fix's own optimism, decides
-    * success. Gives up after `maxAttempts` and throws a named, actionable exception rather than ever returning an
-    * unrepaired or partially-repaired result silently.
-    *
-    * '''`interiorVoidVertices` exists because the facet-count check alone was measured to be insufficient''' -- an
-    * earlier version of this repair, checking only "no facet has `>2` claimants," passed its own self-check but had a
-    * real ~10.5% barcode-disagreement rate against the naive engine at `d=3` (656/6272 hit violations in a stress
-    * sweep). Root-caused, not just patched around: `HelixDelaunayBuilder`, re-run on jittered coordinates, can silently
-    * fail to place a tetrahedron's second coface, leaving a facet with exactly 1 claimant that looks like an ordinary
-    * hull facet but is actually a gap -- and a genuine Delaunay triangulation can never have a real interior gap (the
-    * convex hull is convex, hence contractible, so `H_{d-1}` of the complete, unfiltered triangulation must be trivial;
-    * a nonzero `H_{d-1}` is not a legitimate feature there, it is direct evidence of a missed simplex). Confirmed on
-    * the actual failing case before implementing the fix: the repaired complex's own total tetrahedra volume was
-    * measurably short (a real ~33% shortfall) and its naive-engine barcode carried exactly one spurious essential `H_2`
-    * bar that the facet-count check could not see. Adding this check to the retry condition resolved it completely:
-    * re-running the same two stress sweeps with it added found ZERO barcode disagreements across 316 hit violations at
-    * `d=2` and 6272 at `d=3` (20000 trials each, near-cospherical point clouds, the SAME `d=3` sweep that previously
-    * found 656 disagreements).
-    *
-    * '''ALSO checked on the UNREPAIRED input, not just after a facet-multiplicity-driven retry''' -- a second, real
-    * failure mode, confirmed via direct trace on a real 13-point, ambient-dimension-4 example: `HelixDelaunayBuilder`
-    * can leave a whole local cluster's worth of simplices silently unbuilt with NO facet-multiplicity violation at all
-    * (so `requireValidTriangulation`'s original trigger, `badFacetsOf`, never fired). Root cause: `two` points can each
-    * independently be a genuine, empty-circumsphere coface of the same facet (circumradii differing by ~1e-7, both
-    * legitimately valid -- a real near-tie, not a bug in either candidate test), and `HelixDelaunayBuilder`'s own
-    * cospherical-cluster handling (`handleCosphericalPoints`) commits to whichever one it finds first via a plain
-    * hyperplane-side test with no empty-circumsphere check of its own, consuming that point and leaving the other
-    * candidate's own entire local neighborhood unreachable -- the same near-cospherical order-dependency already
-    * accepted as a limitation elsewhere in this class, here manifesting as missing content instead of a facet
-    * multiplicity. This repair now runs whenever EITHER `badFacetsOf` OR `interiorVoidVertices` fires on the raw input,
-    * using the void check's own essential-representative vertex support (not a facet-count heuristic) as the jitter
-    * seed when there is no explicit violation to seed from -- a far more targeted set than "every hull vertex" would
-    * be. See `.claude/WORKLOG-helix-bootstrap-fix.md` for the full trace and validation.
+  /** The repair of `requireValidTriangulation = true`: move the vertices involved in a facet with too many cofaces, or
+    * on the boundary of a hole ([[interiorVoidVertices]]), by a small random amount; triangulate the whole point set
+    * again; recompute every circumsphere from the original coordinates. Retried with a fresh seed and a widened set of
+    * moved points while either problem remains, up to `maxAttempts`, then an exception: never an unrepaired result.
+    * Runs on the unrepaired input too, since a near tie between two valid cofaces of one facet can leave a hole with no
+    * facet violation at all.
     */
   private def repairByJitterRetriangulation(
     pts: Array[Array[Double]],
@@ -699,24 +618,14 @@ object HelixDelaunay:
       result.getOrElse(
         throw new IllegalStateException(
           s"HelixDelaunay.repairByJitterRetriangulation: could not resolve the facet-multiplicity violation " +
-            s"after $maxAttempts jitter attempts on vertex set $jitterVertices; this may indicate a genuinely " +
-            "higher-order degeneracy this repair pass isn't designed for -- please report it with the exact " +
-            "point cloud that triggered this, per .claude/DESIGN-helix-triangulation-repair.md."
+            s"after $maxAttempts jitter attempts on vertex set $jitterVertices; the point cloud may have a " +
+            "degeneracy this repair does not handle. Please report it with the point cloud; the DQP backend " +
+            "(AlphaBackend.DQP; alphaBackend=DQP in MATLAB, --alpha-backend DQP on the command line) avoids the problem."
         )
       )
 
-/** Hides every simplex of dimension `> maxDim` from `helix` -- the `HelixDelaunay` analogue of
-  * `LimitedCubicalGridStream` (itself needed because `LimitedCofaceSimplexStream` is hardcoded to
-  * `CofaceSimplexStream[Int, Double]`, which `AlphaShapes`/`HelixDelaunay` is not -- it's the smaller
-  * `LevelwiseSimplexStream[Int, Double]`, with no `currentDimension`/`keepCriterion`/etc. to forward). Used by
-  * `FastAlphaHomologyEngine`'s own `d >= 3` path (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) to hand
-  * `CellularPersistenceInChunksEngine` a view of the triangulation that never contains a real top-dimensional simplex,
-  * so that engine's own general `Chain` reduction never touches them -- the whole point being to let the (cheaper) dual
-  * union-find handle the top dimension instead.
-  *
-  * Delegates `filtrationOrdering`/`filtrationValue` to `helix` unchanged (removing higher-dimensional simplices from
-  * the DOMAIN doesn't change either), and preserves `StratifiedCellStream.iterator`'s own contiguous-from-0 contract
-  * for free: truncating a contiguous `0..helix.ambientDimension` domain to `0..maxDim` is still contiguous from 0.
+/** `helix` without its simplices of dimension greater than `maxDim`: what the fast alpha engine hands the chunks engine
+  * for the degrees between 0 and the top. Filtration values and order are those of `helix`.
   */
 class LimitedAlphaShapesStream(helix: HelixDelaunay, maxDim: Int)
     extends LevelwiseSimplexStream[Int, Double]

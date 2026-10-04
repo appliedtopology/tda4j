@@ -4,9 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **How this file works.** Each entry is a current rule, invariant, or known limitation, plus a pointer to the
 `.claude/WORKLOG-*.md`/`DESIGN-*.md` that holds its derivation (what was tried, measurements, repros). Derivations
-go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes"). This file was condensed on 2026-09-22 from a ~190k-char version (commit `06a55dd`),
-2026-09-25 from a ~75k-char version (commit `b8739a8`), and 2026-09-26 from a ~56k-char version (commit
-`e5e86ec`) — `git show <commit>:.claude/CLAUDE.md` for any of those full texts.
+go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes"). Last condensed 2026-10-03; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md` (and the commits named there).
 
 ## What this is
 
@@ -94,9 +92,7 @@ sbt assembly                    # fat jar for CLI/MATLAB
 sbt -DrunBenchmarks=true test   # also run benchmark/profiling specs — NOT what CI runs
 ```
 
-If `sbt` isn't on `PATH` in this environment, see `.claude/scripts/install-sbt.sh` (bootstraps the launcher and
-paces around Maven Central's cold-cache rate limiting — `.claude/WORKLOG-toroidal-coordinates.md`'s own
-environment note has the story).
+If `sbt` isn't on `PATH`, run `.claude/scripts/install-sbt.sh` (paces around Maven Central's cold-cache rate limits).
 
 No linter beyond scalafmt. Tests are specs2 (`org.specs2.mutable.Specification`). CI: `test.yml` (three parallel jobs `test`, `docs-build`, `mima`),
 `lint.yml` (scalafmt: build files, main and test sources), both on every PR to `scala` and cancelled when the PR is pushed again; `docs.yml` (scaladoc → GitHub Pages, push to `scala` only). MiMa's baseline is every earlier plain release of the same compatibility series (`mimaBaselineVersions` in `build.sbt`), so it compares against nothing while only `0.5.0-SNAPSHOT` exists. The ~319 `-Wunused:all` warnings
@@ -126,11 +122,22 @@ part (~100 errors without it). With that one line, a plain downstream project ne
 `into` conversions work), checked against the packaged jar (`WORKLOG-cursor-and-verb.md`). Doc fences must include the
 line even though the docs build (project flags) would compile them without it.
 
-**`Persistence(input, maxDimension = 1, maxFiltrationValue, complex = VietorisRips, characteristic = 17, engine)`**
+**`Persistence(input, maxDimension = 2, maxFiltrationValue, complex = VietorisRips, characteristic = 17, engine = Auto)`**
 (`homology/Persistence.scala`) is the one-call verb: points/metric space/`Image`/any stream in, an immutable
 `PersistenceDiagram` (bars + representatives; coefficient type is a member, `import d.given`; `dim`, `at(f)`,
-`longest`, `significant()`, `bettiNumbers`) out. `Input` is an `into` type, so one `apply` with defaults covers every
-input (Scala forbids defaults on more than one overload). `VietorisRips`/`Cech`/`AlphaShapes` implement
+`longest`, `longerThan(x)`, `significant()`, `bettiNumbers`) out. **Default: degrees 0..2, cycles**;
+`representatives = Representatives.Cycles | Cocycles` (MATLAB `representativeType`, CLI `--representative-type`).
+`Auto` = Ripser for `VietorisRips` on points/metric space, `FastCubical` for images of dimension >= 2 (cycles only),
+`Cohomology` otherwise. Every engine but the fast ones gives both kinds: its native kind (cocycles for Ripser/
+Cohomology, cycles for Chunks/Naive/FastCubical) and the other derived from its pairing by `Involution` (reduce only
+death columns, or birth coboundaries; every pivot checked). `Chunks`/`Naive` reduce every top cell (VR/Cech H2 on
+~100 points: minutes or OOM). A truncated stream's own degree (`homologyDegreeLimit`) is the default for streams.
+`WORKLOG-default-degree-2.md`, `WORKLOG-involution.md`.
+
+**Zero-length bars are dropped by default** (project lead: seeing them is the opt-in, never hiding them): every engine,
+the verb, MATLAB and the CLI take `includeZeroLength` (default `false`); short bars are one call away
+(`longerThan(x)`, `significant()`, also on `List[PersistenceBar]` with no import). Tests must not use `#bars == #cells` as
+an oracle unless they opt in; check the ordering contract or the actual barcode (`rules/facade.md`, `rules/streams.md`). `Input` is an `into` type: one `apply` with defaults covers every input. `VietorisRips`/`Cech`/`AlphaShapes` implement
 `PointCloudComplex` and double as the `complex` choice. **Default field: `FiniteField.DefaultPrime = 17`** (project
 lead: never F₂ by default -- it hides signs and odd torsion); also the MATLAB/CLI default. The verb runs to the end;
 long runs use an engine's **cursor**, which is kept on purpose: `advanceFor(budget)`, `processedCells`/`totalCells`,
@@ -154,9 +161,8 @@ generated re-exports` markers) and guarded by `TDAlabExportsSpec` -- rerun the s
 types and val aliases are re-exported (a re-exported def is ambiguous for users who import both). Hence `∆`
 is `val ∆ : Simplex.type = Simplex`, and top-level defs have companion spellings that ride along with the re-exported
 objects (`Simplex.fromSortedSet`/`ordering`/`isOrderedCell`, `Cube.fromVector`/`ordering`/`isOrderedCell`). No namespace objects (`tdalab.streams.X` is gone) and no given re-exports (defaults
-come from companions). `characteristic = 0` means `Double`, a prime `p` `Z/p`. Labs are opinionated by design (project lead): `TDAlab` fixes
-`Int` vertices. **`TDAContext`/`TDAenvironment`-style context classes were removed on purpose** -- a lab is never
-consulted by an engine. Cats (`cats-core`,
+come from companions). `characteristic = 0` means `Double`, a prime `p` `Z/p`. `TDAlab` fixes `Int` vertices (opinionated by design). A lab is never consulted by an engine (no
+`TDAContext`-style context classes). Cats (`cats-core`,
 `kittens`) is a dependency for `Show`; `Chain` is declared `into class` (needs `-preview`; `// format: off` around it
 because scalafmt can't parse `into`) and implicit conversions are enabled in-source, not by a flag.
 
@@ -170,27 +176,24 @@ Uses Scala 3.7+'s newest context-abstraction syntax — don't "correct" it to ol
   `Field.scala`).
 - `opaque type Simplex[VertexT] = SortedSet[VertexT]` / `opaque type Cube = Vector[Int]` — no runtime wrapper; API
   is extension methods.
-- Prefer `Option` over sentinel values (e.g. `maxFiltrationValue: Option[Double] = None`). A default can't
-  reference an earlier parameter in the *same* list (`-source:future`), and curried parameter lists would force
-  `()` at every call site — `None` + `.getOrElse(...)` inside is the pattern.
+- Optional parameters, never sentinels: `Optional[Double]` (below) for public ones, `None` + `.getOrElse(...)` inside
+  (a default cannot reference an earlier parameter of the same list).
 - A method's own `[T: Ordering, C: Field]`-style context bounds desugar to a `using` clause appended AFTER every
   explicit parameter list — so a default value earlier in that same signature cannot reference the given that
   default itself needs. No workaround short of every caller passing the value explicitly, or restructuring the
   signature so the context bound is a `using` clause of its own, ahead of that parameter (`Chain.reduceByUntil`).
 
-**Opaque-type extension methods** (`WORKLOG-extension-companion-objects.md`): extensions whose receiver is the
-opaque type live in its companion (`object Simplex`/`object Cube`), so different opaque types can reuse names. Two
-hazards: (1) opaque transparency is file-scoped, so same-file code calling the type's extensions by dot-syntax
-breaks or silently hits the underlying type's member — hence `simplexIsOrderedCell`/`cubeIsOrderedCell` live in
-separate files; (2) a companion extension can lose to a same-named stdlib extension from a wildcard import
-(`math.Ordering.Implicits.*`'s `min`/`max`) — so `min`/`max` stay top-level. `asSimplex`/`asCube` are top-level
-because their receiver is the raw `SortedSet`/`Vector`.
+**Opaque-type extension methods** live in the type's companion (`object Simplex`/`Cube`), found by implicit scope.
+Hazards: opaque transparency is file-scoped (so `simplexIsOrderedCell`/`cubeIsOrderedCell` live in their own files), and
+a wildcard-imported stdlib extension of the same name wins (so `min`/`max` stay top-level).
+`WORKLOG-extension-companion-objects.md`.
 
 **No top-level `object`/`class` with a non-ASCII name**: scaladoc writes one page FILE per such type (`∆$.html`), and a
 JVM under a POSIX locale cannot encode it (`sbt doc` dies with `InvalidPathException`). `∆` is therefore `val ∆ :
 Simplex.type = Simplex` (`WORKLOG-package-flatten.md`); unicode extension methods and vals are fine.
 
-**Shared test generators** (`matrixGen`) live in `src/test/.../streams/Generators.scala`, not in a spec (a spec file got overwritten once and took it with it) — put any new cross-spec generator there. Before creating a test file, `ls` for its name: `Write` overwrites silently.
+**Shared test generators** (`matrixGen`) live in `src/test/.../streams/Generators.scala`, never in a spec. Before
+creating a test file, `ls` for its name: `Write` overwrites silently.
 
 **specs2 gotcha**: in a class mixing `ScalaCheck`, give a `Seq[Simplex[_]]` an explicit type ascription before
 `.forall` — otherwise it can resolve to specs2's `ValueCheck` extension with confusing errors.
@@ -234,14 +237,11 @@ records a representative for every bar.
 
 ### Streams and complexes (ordering contract and constructions: `rules/streams.md`)
 
-**Public entry points** (`DESIGN-stream-naming.md`, `WORKLOG-stream-rename.md`): users build complexes through `VietorisRips`, `Cech`,
-`Witness(variant = Lazy | General)`, `Dowker`, `DtmRips`, `SparseRips` and `Truncated` — each takes `maxDimension` as the top
-HOMOLOGICAL degree and returns a `LevelwiseSimplexStream[Int, Double]` (the old `StratifiedSimplexStream`). The implementation classes
-(`Enumerating...`, `Ripser...`, `Inorder...`, `Incremental...`, `RecursiveStack...`, `Cech...`, `LazyWitness...`,
-`WitnessCoface...`, `DowkerCoface...`, `DtmRips...`, `SheehyRips...`, `LimitedCoface...`, `CofaceSimplexStream`) are
-`private[tda4j]`: use them inside the library, tests and `matlab`, never in docs fences (the snippet compiler runs outside the
-package, so a fence using one fails `sbt doc`). No `Cubical`/`Alpha` objects: `CubicalImage` and `AlphaShapes` already are the
-dispatching entry points. Any new object must be tested against the hand-wrapped class cell for cell AND value for value
+**Public entry points** (`DESIGN-stream-naming.md`): `VietorisRips`, `Cech`, `Witness(variant = Lazy | General)`,
+`Dowker`, `DtmRips`, `SparseRips`, `Truncated`, plus `CubicalImage` and `AlphaShapes`; `maxDimension` is the top
+HOMOLOGICAL degree, the result a `LevelwiseSimplexStream[Int, Double]`. The construction classes (`...CofaceSimplexStream`,
+`Incremental...`, `LazyWitness...`, `SheehyRips...`, `LimitedCoface...`) are `private[tda4j]`: never in docs fences
+(they fail `sbt doc`). A new entry point is tested against the hand-wrapped class cell for cell AND value for value
 (`ComplexesSpec`) — Betti numbers would not catch a wrong `+1`.
 
 ## Subsystem notes (`.claude/rules/`)
@@ -269,6 +269,12 @@ file before changing that subsystem; this table is the index, in case a rule did
   every session: keep it under ~25k characters (and each rule file under ~12k); when one drifts past that, condense it
   the same way (strip narrative to worklog pointers, move single-subsystem detail into a rule file) and note the new
   condensing date/commit at top.
+- **Docs carry the contract, worklogs carry the history.** Scaladoc, user guide and tutorials say what the code does and
+  what to call (Li Haoyi's "easy": one import, defaults, errors that say what to do); no "used to", "fixed in session
+  X", "confirmed by", worklog pointers or measurements there -- those go in `.claude/`. `//` implementation comments
+  MAY carry history and worklog pointers (project lead, 2026-10-03), as long as none of it moves into scaladoc. Error messages and `--help`
+  never name `.claude/` files or private classes. The Developer's Guide is being edited by a student: touch it only to
+  fix facts.
 - **Never revert the formatter's output.** If `scalafmtAll` touches files outside your change, commit that in its OWN
   commit ("Format: ... formatter output only, no behavior change") and say so — reverting only hides the debt, and a
   clean lint beats a minimal diff. CI lint also runs `scalafmtSbtCheck` (`build.sbt`) and `Test / scalafmtCheck`, so run all three before pushing (a pushed `build.sbt` edit once failed lint for this).
@@ -286,13 +292,10 @@ file before changing that subsystem; this table is the index, in case a rule did
   — don't extrapolate an isolated bug into an end-to-end correctness claim without a repro that actually shows
   that (a real miss, corrected — `WORKLOG-toroidal-coordinates.md`). Two entries so far: CJS 2015 (Sheehy-Rips)
   and DREiMac's `_gram_schmidt` (toroidal coordinates).
-- **This environment may start with no `sbt` and no dependency cache** — `.claude/scripts/install-sbt.sh`
-  bootstraps it. Add its contents to the environment's own setup script (cloud environment menu → Edit → Setup
-  script) so new sessions don't repeat the ~20-40 minutes this can take cold.
+- **No `sbt` or dependency cache at start?** `.claude/scripts/install-sbt.sh`; put it in the cloud environment's setup
+  script so new sessions skip the ~20-40 minute cold start.
 
 ## Collaboration preferences
 
 The project lead values intellectual honesty and direct pushback over agreement — say plainly when an approach is
-a dead end, when benchmarks are mixed, or when a deliverable is unverified, rather than softening it. This has been
-well received repeatedly (mixed paper benchmarks, uncompiled deliverables, drifted oracles, bugs in existing code,
-"fixes" that had to be reverted) — don't reflexively hedge findings like these.
+a dead end, when benchmarks are mixed, or when a deliverable is unverified, rather than softening it. Don't reflexively hedge findings.

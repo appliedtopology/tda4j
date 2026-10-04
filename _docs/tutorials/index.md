@@ -13,13 +13,13 @@ quietly drift apart.
 **Start here**
 
 * [All the ways to call TDA4j](all-ways-to-call.md): the same three tasks (a hand-built octahedron, a barcode from a file, circular
-  coordinates) from the command line, MATLAB, the Scala REPL, a Scala object, and plain Scala with explicit imports.
+  coordinates) from the command line, MATLAB, Scala, a lab, and an engine run by hand.
 * [Finding a loop in noisy data](find-a-loop.md): a first barcode, how to read it, and which bars to ignore.
 
 **Point clouds**
 
 * [Choosing a complex](choosing-a-complex.md): Vietoris-Rips, Čech, alpha, sparse Rips and witness complexes on the same data.
-* [Scaling up](scaling-up.md): four engines and edge collapse giving the same barcode at different cost.
+* [Scaling up](scaling-up.md): four engines and edge collapse giving the same diagram at different cost.
 * [Noise and outliers](noise-and-outliers.md): when stray points plant false holes, and how distance-to-measure weighting copes.
 * [Circular and toroidal coordinates](circular-and-toroidal-coordinates.md): not just *that* there is a loop, but where each point is on it.
 * [Comparing barcodes](comparing-barcodes.md): distances between barcodes, and barcodes as vectors for machine learning.
@@ -38,21 +38,3 @@ quietly drift apart.
 **The data sets.** The point clouds are in [`data/`](https://github.com/appliedtopology/tda4j/blob/scala/_docs/tutorials/data/noisy-circle.csv) and are produced by a seeded generator in the repository's
 tests (`TutorialData`), which also checks that the files are exactly what the generator makes. Every other data set is generated in
 the code on its page.
-
-## Still to come
-
-
-TODO: We want to port Henry Adams' excellent JavaPlex tutorials.
-
-Placeholder page; nothing ported yet. When per-language (Java/Scala) tabbed examples are needed here we want some solution with tabsets.
-
-Here's a test for us.
-
-```scala sc:compile
-import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab.F17.{*, given}
-
-
-val chain = Fp(1) ⊠ ∆(1, 2) - ∆(2, 3)
-println(chain.show)
-```

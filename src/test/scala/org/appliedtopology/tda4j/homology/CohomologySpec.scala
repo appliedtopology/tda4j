@@ -176,7 +176,8 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
 
   // ---------------------------------------------------------------------------------------------------------
   // 3 & 4. Barcode-value cross-validation against CellularHomologyEngine (already trusted, generic, and this
-  // codebase's own established oracle for exactly this purpose), plus the structural invariant, for the four
+  // codebase's own established oracle for exactly this purpose), plus the pairing invariant (so on every pair,
+  // the zero-length ones included), for the four
   // cell types/constructions that have never had a cohomology cross-check before this class existed.
   // ---------------------------------------------------------------------------------------------------------
 
@@ -184,9 +185,13 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
     val stream = CubicalGridStream(IndexedSeq(2, 2), (_: IndexedSeq[Int]) => 5.0)
     val totalCells = stream.iterator.size
     val cohomologyBars =
-      CellularCohomologyEngine[Cube, Double, Double]().persistentCohomology(stream).map(toTuple)
+      CellularCohomologyEngine[Cube, Double, Double]()
+        .persistentCohomology(stream, includeZeroLength = true)
+        .map(toTuple)
     val homologyBars =
-      CellularHomologyEngine[Cube, Double, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+      CellularHomologyEngine[Cube, Double, Double]()
+        .persistentHomology(stream)
+        .diagramAt(Double.PositiveInfinity, includeZeroLength = true)
     (cohomologyBars must containTheSameElementsAs(homologyBars)) and
       (HomologyFixtures.totalBarsAccountForAllCells(cohomologyBars, totalCells) must beTrue)
   }
@@ -204,10 +209,12 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
     val stream = FilteredSimplicialSetStream(SimplicialSet.torus, filtrationValue)
     val totalCells = stream.iterator.size
     val cohomologyBars =
-      CellularCohomologyEngine[TorusGenerator, Double, Double]().persistentCohomology(stream).map(toTuple)
+      CellularCohomologyEngine[TorusGenerator, Double, Double]()
+        .persistentCohomology(stream, includeZeroLength = true)
+        .map(toTuple)
     val homologyBars = CellularHomologyEngine[TorusGenerator, Double, Double]()
       .persistentHomology(stream)
-      .diagramAt(Double.PositiveInfinity)
+      .diagramAt(Double.PositiveInfinity, includeZeroLength = true)
     (cohomologyBars must containTheSameElementsAs(homologyBars)) and
       (HomologyFixtures.totalBarsAccountForAllCells(cohomologyBars, totalCells) must beTrue)
   }
@@ -217,9 +224,11 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
     val ms = EuclideanMetricSpace(Array(Array(0.0, 0.0), Array(s, 0.0), Array(s / 2, s * math.sqrt(3) / 2)))
     val stream = CechCofaceSimplexStream(ms, maxFiltrationValue = Some(Double.PositiveInfinity))
     val totalCells = stream.iterator.size
-    val cohomologyBars = vrCtx.persistentCohomology(stream).map(toTuple)
+    val cohomologyBars = vrCtx.persistentCohomology(stream, includeZeroLength = true).map(toTuple)
     val homologyBars =
-      SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+      SimplicialHomologyEngine[Int, Double, Double]()
+        .persistentHomology(stream)
+        .diagramAt(Double.PositiveInfinity, includeZeroLength = true)
     (cohomologyBars must containTheSameElementsAs(homologyBars)) and
       (HomologyFixtures.totalBarsAccountForAllCells(cohomologyBars, totalCells) must beTrue)
   }
@@ -229,9 +238,11 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
       IndexedSeq(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.3, 0.9), Array(-0.4, 0.2), Array(0.6, -0.5))
     val stream = AlphaShapes(points, AlphaBackend.Helix)
     val totalCells = stream.iterator.size
-    val cohomologyBars = vrCtx.persistentCohomology(stream).map(toTuple)
+    val cohomologyBars = vrCtx.persistentCohomology(stream, includeZeroLength = true).map(toTuple)
     val homologyBars =
-      SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+      SimplicialHomologyEngine[Int, Double, Double]()
+        .persistentHomology(stream)
+        .diagramAt(Double.PositiveInfinity, includeZeroLength = true)
     (cohomologyBars must containTheSameElementsAs(homologyBars)) and
       (HomologyFixtures.totalBarsAccountForAllCells(cohomologyBars, totalCells) must beTrue)
   }
@@ -255,7 +266,7 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
   private def toTupleInt[CellT, CoefficientT](bar: PersistenceBar[Int, Chain[CellT, CoefficientT]]): (Int, Int, Int) =
     (bar.dim, endpointValueInt(bar.lower), endpointValueInt(bar.upper))
 
-  "RP^2 over F3: generic cohomology's barcode matches CellularHomologyEngine's, accounts for every cell, and " +
+  "RP^2 over F3: generic cohomology's barcode matches CellularHomologyEngine's and " +
     "matches the independently hand-derived F3 answer (no essential H_1/H_2, confirming signs are inherited " +
     "correctly through the coboundary-is-transpose-of-boundary construction, not just self-consistent)" >> {
       val rp2 = SimplicialSet.realProjectiveSpace(2)
@@ -269,11 +280,9 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
       val homologyBars =
         CellularHomologyEngine[RealProjectiveGenerator, f3.Fp, Int]().persistentHomology(stream).diagramAt(0)
 
-      // `HomologyFixtures.totalBarsAccountForAllCells` is `Double`-specific (`upper.isFinite`) -- not reused
-      // here; matching the independently hand-derived expected list already implies cell-accounting
-      // correctness for this one fixture.
+      // Over F3, RP^2 has the homology of a point: one essential class (the zero-length H_1 pair is left out).
       (cohomologyBars must containTheSameElementsAs(homologyBars)) and
-        (cohomologyBars must containTheSameElementsAs(List((0, 0, Int.MaxValue), (1, 0, 0))))
+        (cohomologyBars must containTheSameElementsAs(List((0, 0, Int.MaxValue))))
     }
 
   "RP^2 over F3: every essential representative genuinely has zero coboundary" >> {

@@ -2,20 +2,11 @@ package org.appliedtopology.tda4j
 
 import org.apache.commons.math3.special.Erf
 
-/** Diagram vectorizations: persistence landscapes (Bubenik 2013) and persistence images (Adams et al. 2017), turning a
-  * barcode into a fixed-size numeric array for downstream (e.g. ML) use. Per
-  * `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 8 -- pure array/geometry code on [[PersistenceBar]], no
-  * relation to [[BarcodeDistance]]'s matching machinery beyond sharing [[DiagramPoint]]'s extraction helper.
+/** Persistence landscapes (Bubenik 2013) and persistence images (Adams et al. 2017): fixed-size arrays of numbers from
+  * a barcode, for statistics and machine learning.
   *
-  * '''Essential (never-dying) bars''' are handled differently by the two vectorizations below, and deliberately so
-  * rather than by one blanket policy -- each is documented at its own `def`:
-  *   - [[landscape]] includes them: a tent function `max(0, min(t - birth, death - t))` degrades to the unbounded ramp
-  *     `t - birth` exactly at `death = Infinity`, which is already finite and meaningful at every `t` the caller's own
-  *     finite grid ever evaluates, so no special-casing is needed.
-  *   - [[persistenceImage]] drops them: a Gaussian centered at `(birth, Infinity)` in birth-persistence coordinates has
-  *     no overlap with any finite pixel grid, so silently keeping it would either underflow to an all-zero contribution
-  *     (an implicit policy, not a decided one) or need an arbitrary finite substitute death value (which
-  *     [[landscape]]'s case doesn't need and this one has no principled way to choose either).
+  * Essential bars count in [[landscape]] (their tent is the ramp `t - birth`, finite on any grid) and are dropped by
+  * [[persistenceImage]] (a Gaussian at infinite persistence has no mass on a finite grid).
   */
 object Vectorization:
 
@@ -31,8 +22,8 @@ object Vectorization:
     * `sum_k integral(level_k) = sum_i integral(tent_i)` because integration is linear and, at each fixed t, the
     * multiset of order statistics `{level_k(t)}` is exactly the multiset `{tent_i(t)}` reordered.
     */
-  def landscape[A](
-    diagram: Seq[PersistenceBar[Double, A]],
+  def landscape(
+    diagram: Seq[PersistenceBar[Double, ?]],
     numLevels: Int,
     tMin: Double,
     tMax: Double,
@@ -68,28 +59,22 @@ object Vectorization:
     else if persistence >= cap then 1.0
     else persistence / cap
 
-  /** The persistence image (Adams et al. 2017) of `diagram`: diagram points are first transformed to birth-persistence
-    * coordinates `(birth, death - birth)` (the paper's own `T`), then each becomes an isotropic Gaussian bump of
-    * standard deviation `sigma`, weighted by [[piecewiseLinearWeight]] evaluated at that point's own persistence value
-    * (`weightCap` defaults to the diagram's own maximum finite persistence, the paper's suggested default). Each
-    * pixel's value is the *exact* integral of the weighted surface over that pixel's box -- via the product of 1D
-    * normal-CDF differences along each axis, since an isotropic Gaussian's mass over a rectangle factors along the two
-    * axes -- not a point sample of the surface at the pixel center, cross-checked against `scikit-tda/persim`'s own
-    * CDF-difference implementation.
+  /** The persistence image (Adams et al. 2017) of `diagram`. Each finite bar becomes the point
+    * `(birth, death - birth)`, then a Gaussian of standard deviation `sigma` weighted by [[piecewiseLinearWeight]] of
+    * its persistence (`weightCap` defaults to the largest finite persistence). Each pixel holds the exact integral of
+    * the surface over the pixel, as in persim.
     *
-    * Returns `image(r)(c)`: `r` indexes `birthResolution` pixels evenly spanning `birthRange`, `c` indexes
-    * `persistenceResolution` pixels evenly spanning `persistenceRange`.
-    *
-    * '''Essential (never-dying) bars are dropped''' -- see the class doc for why, unlike [[landscape]].
+    * Returns `image(r)(c)`: `r` indexes `birthResolution` pixels spanning `birthRange`, `c` indexes
+    * `persistenceResolution` pixels spanning `persistenceRange`. Essential bars are dropped.
     */
-  def persistenceImage[A](
-    diagram: Seq[PersistenceBar[Double, A]],
+  def persistenceImage(
+    diagram: Seq[PersistenceBar[Double, ?]],
     sigma: Double,
     birthRange: (Double, Double),
     persistenceRange: (Double, Double),
     birthResolution: Int,
     persistenceResolution: Int,
-    weightCap: Option[Double] = None
+    weightCap: Optional[Double] = Optional.empty
   ): Array[Array[Double]] =
     require(sigma > 0.0, s"persistenceImage requires sigma > 0.0, got $sigma")
     require(birthResolution > 0, s"persistenceImage requires birthResolution > 0, got $birthResolution")
@@ -103,7 +88,7 @@ object Vectorization:
     require(pHi > pLo, s"persistenceImage requires persistenceRange._2 > persistenceRange._1, got $persistenceRange")
 
     val points = diagram.map(DiagramPoint.of).filterNot(DiagramPoint.isEssential)
-    val cap = weightCap.getOrElse(points.map(_.persistence).maxOption.getOrElse(0.0))
+    val cap = weightCap.toOption.getOrElse(points.map(_.persistence).maxOption.getOrElse(0.0))
 
     val bEdges = Array.tabulate(birthResolution + 1)(i => bLo + i * (bHi - bLo) / birthResolution)
     val pEdges = Array.tabulate(persistenceResolution + 1)(i => pLo + i * (pHi - pLo) / persistenceResolution)

@@ -151,25 +151,14 @@ private[tda4j] class RecursiveStackVietorisRipsSimplexStream(val metricSpace: Fi
       RecursiveStackSimplexEnumerator(metricSpace, d - 1)().toVector.sorted(using filtrationOrdering.reverse).iterator
   }
 
-/** The one place to ask for a Vietoris-Rips filtration, whichever of the several constructions does the work.
+/** The Vietoris-Rips complex, as a stream for any engine. (The `Persistence` verb is the shorter way to its diagram.)
   *
-  * Unlike the constructions' own constructors -- where `maxDimension` is sometimes the top SIMPLEX dimension
-  * (`IncrementalVietorisRipsSimplexStream`) and sometimes absent (the coface streams are unbounded and wrapped in
-  * `LimitedCofaceSimplexStream`) -- `maxDimension` here is, as everywhere user-facing, the top HOMOLOGICAL degree: you
-  * get what is needed to compute `H_0 .. H_maxDimension` with ANY engine, so one dimension higher gets built internally
-  * -- so an engine run directly on the stream also reports incomplete classes in dimension `maxDimension + 1` (the
-  * stream stops there): drop them (`dim <= maxDimension`), as `matlab.TDA4j` does. Pass the stream to an engine that
-  * wants it as-is (`SimplicialHomologyEngine`, `PersistenceInChunksEngine`, `CellularCohomologyEngine`);
-  * `RipserCohomologyEngine`/`PackedRipserCohomologyEngine` take the metric space directly and do not need a stream at
-  * all.
+  * `maxDimension` is the top homological degree: the stream holds one dimension more, so an engine run on it also
+  * reports classes of degree `maxDimension + 1`, which are incomplete; drop them. `maxFiltrationValue` defaults to the
+  * minimum enclosing radius (beyond it nothing new is born); pass `Double.PositiveInfinity` for the whole complex.
   *
-  * `maxFiltrationValue` defaults to `metricSpace.minimumEnclosingRadius` (Ripser's enclosing radius: beyond it nothing
-  * new is born); `Some(Double.PositiveInfinity)` for the untruncated complex.
-  *
-  * The default implementation is [[Implementation.Enumerating]], what `matlab.TDA4j` itself builds for the naive and
-  * chunks engines; the constructions agree cell for cell (they are cross-validated in the test suite) and differ in
-  * speed by factors of ~1-2 in the benchmarks (`WORKLOG-mst-and-perf.md`). `RecursiveStackVietorisRipsSimplexStream` is
-  * deliberately not offered: it cannot truncate by dimension or radius and times out beyond toy sizes.
+  * The constructions ([[Implementation]]) give the same complex, cell for cell, at different speeds;
+  * [[Implementation.Enumerating]] is the default.
   */
 object VietorisRips extends PointCloudComplex:
   def fromPoints(points: PointCloud, maxDimension: Int, maxFiltrationValue: Option[Double]) =

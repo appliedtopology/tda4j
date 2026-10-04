@@ -225,9 +225,12 @@ class PersistenceInChunksSpec extends mutable.Specification:
     streamBuilder.addAll(HomologyFixtures.tetrahedronBoundaryDegenerateCells)
     val stream = explicitToStratifiedCellStream(streamBuilder)
     val homology = persistentHomology(stream)
-    homology.diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(
+    // All pairs, the zero-length ones included: how the tied cells pair off is the point of this fixture.
+    (homology.diagramAt(Double.PositiveInfinity, includeZeroLength = true) must containTheSameElementsAs(
       HomologyFixtures.tetrahedronBoundaryDegenerateExpected
-    )
+    )) and (homology.diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(
+      HomologyFixtures.tetrahedronBoundaryDegenerateExpected.filter((_, b, d) => b != d)
+    ))
   }
 
   // Ground-truth checks reusing RipserCohomologySpec's hand-verified fixtures (threePointLine: 3 colinear
@@ -268,14 +271,12 @@ class PersistenceInChunksSpec extends mutable.Specification:
       EnumeratingCofaceSimplexStream(threePointLine, maxFiltrationValue = Some(Double.PositiveInfinity)),
       2
     )
-    persistentHomology(stream).diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(
-      List(
-        (0, 0.0, 1.0),
-        (0, 0.0, 2.0),
-        (0, 0.0, Double.PositiveInfinity),
-        (1, 3.0, 3.0) // zero-length: {0,2} paired with the triangle, both born at 3.0
-      )
-    )
+    val h0 = List((0, 0.0, 1.0), (0, 0.0, 2.0), (0, 0.0, Double.PositiveInfinity))
+    val state = persistentHomology(stream)
+    (state.diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(h0)) and
+      (state.diagramAt(Double.PositiveInfinity, includeZeroLength = true) must containTheSameElementsAs(
+        h0 :+ (1, 3.0, 3.0) // {0,2} paired with the triangle, both born at 3.0
+      ))
   }
 
   "Homology of the elder-rule fixture picks the filtration-order pivot, not the lexicographic one" >> {

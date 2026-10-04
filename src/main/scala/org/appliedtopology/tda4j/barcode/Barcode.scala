@@ -58,9 +58,11 @@ object BarcodeEndpoint:
             else ord.compare(xvalue, yvalue)
           case OpenEndpoint(yvalue) => ord.compare(xvalue, yvalue)
 
-/** A persistence bar has a lower and upper endpoint, where we assume (but do not enforce) that `lower < upper` in the
-  * expected ordering on the filtration type; a dimension; and optionally some annotation (this will be used extensively
-  * to carry representative chains in homology computations)
+/** One bar of a barcode: a degree `dim`, a `lower` and an `upper` endpoint, and optionally an annotation -- in every
+  * engine's output, the bar's representative chain.
+  *
+  * A finished bar is `[birth, death)`; a class still alive at the end of the filtration is `[birth, ∞)`; a class alive
+  * at the value a diagram was truncated at, `f`, is `[birth, f]` (closed: it exists at `f`).
   *
   * @tparam FiltrationT
   *   Type of the filtration parameter
@@ -73,6 +75,21 @@ case class PersistenceBar[FiltrationT: Ordering, AnnotationT](
   upper: BarcodeEndpoint[FiltrationT],
   annotation: Option[AnnotationT] = None
 ):
+
+  /** True for `[v, v)`: a cell paired with one entering at the same filtration value, so no class ever exists. Engines
+    * leave these out unless asked (`includeZeroLength = true`).
+    */
+  def isZeroLength: Boolean = (lower, upper) match
+    case (ClosedEndpoint(a), OpenEndpoint(b)) => summon[Ordering[FiltrationT]].equiv(a, b)
+    case (OpenEndpoint(a), OpenEndpoint(b))   => summon[Ordering[FiltrationT]].equiv(a, b)
+    case _                                    => false
+
+  /** The representative recorded with this bar (every engine records one: a cycle, or a cocycle for the cohomology
+    * engines).
+    */
+  def representative: AnnotationT =
+    annotation.getOrElse(throw new NoSuchElementException(s"bar $this carries no representative"))
+
   override def toString: String =
     val open: String = lower match
       case PositiveInfinity()    => "(∞" // should never happen
@@ -111,6 +128,28 @@ object PersistenceBar:
     def death: Double = numeric(bar.upper)
     def persistence: Double = death - birth
     def toTriple: (Int, Double, Double) = (bar.dim, birth, death)
+
+  /** Filtering a list of bars (no import needed: these are found through the bar type's companion).
+    *
+    *   - `bars.longerThan(0.1)`: essential bars and bars with persistence strictly greater than `0.1`.
+    *   - `bars.significant()`: the same, with the threshold 1% of the bars' own filtration range (the MATLAB/CLI
+    *     default policy; see [[PersistenceFilter]] for the scale to pass).
+    */
+  extension [A](bars: List[PersistenceBar[Double, A]])
+    def longerThan(minPersistence: Double): List[PersistenceBar[Double, A]] =
+      bars.filter(b => b.death.isPosInfinity || b.persistence > minPersistence)
+    def significant(
+      fraction: Double = PersistenceFilter.DefaultFraction,
+      scale: Optional[Double] = Optional.empty
+    ): List[PersistenceBar[Double, A]] =
+      PersistenceFilter.significant(bars, fraction = fraction, scale = scale)
+
+  /** `bars` without the zero-length ones, unless `includeZeroLength`: what every engine applies to its output. */
+  def dropZeroLength[F, A](
+    bars: Iterable[PersistenceBar[F, A]],
+    includeZeroLength: Boolean
+  ): List[PersistenceBar[F, A]] =
+    if includeZeroLength then bars.toList else bars.iterator.filterNot(_.isZeroLength).toList
 
   /** If we know nothing, assume the user is asking for $(-\infty,\infty)$.
     */

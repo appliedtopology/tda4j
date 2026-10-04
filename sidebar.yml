@@ -33,19 +33,20 @@ subsection:
       - index: user-guide/topological-spaces/index.md
         directory: user-guide/topological-spaces
         subsection:
-          - page: user-guide/topological-spaces/alpha-complexes.md
+          - page: user-guide/topological-spaces/vietoris-rips.md
           - page: user-guide/topological-spaces/cech-complexes.md
-          - page: user-guide/topological-spaces/cubical-complexes.md
-          - page: user-guide/topological-spaces/dowker-complexes.md
-          - page: user-guide/topological-spaces/simplicial-sets.md
+          - page: user-guide/topological-spaces/alpha-complexes.md
           - page: user-guide/topological-spaces/sparse-vietoris-rips.md
+          - page: user-guide/topological-spaces/witness-complexes.md
+          - page: user-guide/topological-spaces/dowker-complexes.md
+          - page: user-guide/topological-spaces/cubical-complexes.md
+          - page: user-guide/topological-spaces/simplicial-sets.md
       - index: user-guide/homology-computation/index.md
         directory: user-guide/homology-computation
         subsection:
         - page: user-guide/homology-computation/choosing-engine.md
-        - page: user-guide/homology-computation/fast-alpha-complexes.md
         - page: user-guide/homology-computation/fast-cubical.md
-        - page: user-guide/homology-computation/index.md
+        - page: user-guide/homology-computation/fast-alpha-complexes.md
       - page: user-guide/boundary-matrix.md
       - page: user-guide/circular-coordinates.md
       - page: user-guide/input-output.md

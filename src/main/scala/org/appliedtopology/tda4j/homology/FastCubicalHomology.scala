@@ -2,59 +2,42 @@ package org.appliedtopology.tda4j
 
 import scala.collection.mutable
 
-/** Flash Cubical's dual-graph union-find (Le Breton, Szustakowski, Piraud, arXiv:2606.04801) for `H_0` and the TOP
-  * homological degree (`H_{d-1}`, `d` = ambient dimension) of a `CubicalGridStream`, generic over `Field` coefficients
-  * and recording real representatives for every bar -- neither of which the source paper's own F2-only, barcode-only
-  * treatment provides; both are this codebase's own extension, derived independently
-  * (`.claude/DESIGN-fast-cubical-engine.md`'s 2026-09-25 update has the full derivation and a hand-verified worked
-  * example -- this session could not reach the paper itself, network-blocked, and no reference implementation exists to
-  * port the way `EdgeCollapse` could port GUDHI's; this is original work built on Alexander duality, not a
-  * translation).
+/** Persistent homology of a cubical grid by union-find instead of matrix reduction (after Le Breton, Szustakowski and
+  * Piraud, arXiv:2606.04801, extended here to any coefficient field and to representatives): degree 0 by union-find on
+  * the vertices and edges, the top degree `d - 1` (`d` the grid's dimension) by union-find on the dual graph. In 2-D
+  * those cover everything; in dimension 3 and up the degrees in between are computed by the chunks engine on the grid
+  * without its top cells. Requires `d >= 2`.
   *
-  * '''Valid at any ambient dimension `>= 2`''' (`require`d). At `d=2`, `H_0` (ordinary primal union-find) plus `H_1`
-  * (`= H_{d-1}` at `d=2`, via the dual union-find below) together account for every cell dimension a 2D grid has, with
-  * NO general `Chain.reduceBy` reduction needed at all. At `d >= 3` there are `d-2` "middle" dimensions (`1 <= k <=
-  * d-2`) with no duality shortcut -- `H_0`/`H_{d-1}` stay union-find-only (neither computation degrades with `d`; only
-  * the FRACTION of the total homology they cover for free shrinks), and the middle dimensions are handed to
-  * `CellularPersistenceInChunksEngine` run on a `LimitedCubicalGridStream` view that hides the real top-dimensional
-  * cells entirely -- still a net win over running `chunks` on the whole complex, since the (often largest) top
-  * dimension never touches general `Chain` reduction at all. See
-  * `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md` for the full derivation, including why the dual
-  * union-find's own correctness doesn't depend on how the middle dimensions get resolved.
+  * The dual graph: the top cells (pixels) are vertices, the codimension-1 cells (facets) edges between the one or two
+  * top cells containing them, with one extra vertex `∞`, at value `+Infinity`, on the far side of every facet on the
+  * boundary of the grid. By Alexander duality, degree `d - 1` of the sublevel filtration is degree 0 of the dual
+  * graph's superlevel filtration: union-find in decreasing value with the elder rule, each merge giving the primal bar
+  * with birth and death swapped. `∞`'s component never dies.
   *
-  * '''The dual construction''': top cells (`dim == ambientDim`, i.e. pixels) are dual vertices; codimension-1 cells
-  * ("facets") are dual edges, each connecting the 1 or 2 top cells containing it as a face (always exactly 1 or 2 for a
-  * grid), with a shared auxiliary vertex `∞` standing in for the missing side of a facet on the outer boundary of the
-  * whole grid. `∞` is fixed at value `+Infinity` (not `-Infinity` -- a real, easy mistake caught while deriving this:
-  * `∞` must belong to every SUPERLEVEL set `{value >= s}`, which requires the LARGEST possible value, not the
-  * smallest). Primal `H_{d-1}` of the sublevel filtration equals ordinary `H_0` of this dual graph's own SUPERLEVEL
-  * filtration (Alexander duality, `H_{d-1}(X) ~= H^0(S^d \ X)`), computed by the same elder-rule array union-find
-  * `CellularPersistenceInChunksEngine.unionFindDim01` already uses, just processing dual vertices/edges together in
-  * DESCENDING order of their own primal value, with every resulting bar's endpoints SWAPPED (a dual merge at value `v`
-  * absorbing a younger dual component born at value `b` becomes a primal bar `(birth = v, death = b)`) and `∞`'s own
-  * component producing no bar at all (it is always the elder/surviving side of every merge it takes part in, by
-  * construction, so it never "dies" -- nothing to explicitly filter out).
-  *
-  * '''Representatives''': each active dual component tracks its own running signed sum of top cells (a
-  * `Map[Cube, CoefficientT]`, cheap to merge -- just a map union with one side's signs flipped as needed), oriented
-  * COHERENTLY as unions happen so that shared internal facets cancel in the sum's own boundary; when a component dies
-  * (is absorbed into an older one across some facet `f`), its `H_{d-1}` representative is `boundary(that running sum)`
-  * -- the internal facets cancel by construction, leaving exactly the (d-1)-cycle bounding the dual component, per the
-  * design note's own derivation. The orientation flip needed when merging two components across `f` is solved directly
-  * from `f`'s own boundary coefficients toward its two top cells (both always `+-1`, from `cubeIsOrderedCell`'s
-  * alternating-sign rule) and each side's own already-established sign for its half of `f`.
+  * Representatives: each dual component keeps a signed sum of its top cells, oriented consistently as components merge
+  * (the sign flip is solved from the merging facet's two boundary coefficients, both `±1`), so that interior facets
+  * cancel; when a component dies, its representative is the boundary of that sum.
   */
 class FastCubicalHomologyEngine[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
   given Ordering[Cube] = cubeOrdering
 
-  def persistentHomology(stream: CubicalGridStream): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
+  /** Every bar of the image's sublevel (or superlevel) filtration, with representatives; zero-length bars (a plateau's
+    * cells pairing off at one value) only if `includeZeroLength`.
+    */
+  def persistentHomology(
+    stream: CubicalGridStream,
+    includeZeroLength: Boolean = false
+  ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     require(
       stream.ambientDim >= 2,
       s"FastCubicalHomologyEngine requires ambient dimension >= 2, got ${stream.ambientDim}"
     )
-    if stream.ambientDim == 2 then computeH0(stream) ++ computeDualTopDimension(stream)
-    else computeMiddleDimensions(stream) ++ computeDualTopDimension(stream)
+    val bars =
+      if stream.ambientDim == 2 then
+        computeH0(stream, includeZeroLength) ++ computeDualTopDimension(stream, includeZeroLength)
+      else computeMiddleDimensions(stream, includeZeroLength) ++ computeDualTopDimension(stream, includeZeroLength)
+    bars
 
   // -------------------------------------------------------------------------------------------------------------
   // d >= 3's "middle" dimensions (1 <= k <= d-2): no duality shortcut exists for these, so they're handed to
@@ -70,12 +53,13 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
   // See .claude/DESIGN-fast-engines-hybrid-middle-dimensions.md for the full derivation.
   // -------------------------------------------------------------------------------------------------------------
   private def computeMiddleDimensions(
-    stream: CubicalGridStream
+    stream: CubicalGridStream,
+    includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     val truncated = LimitedCubicalGridStream(stream, stream.ambientDim - 1)
     CellularPersistenceInChunksEngine[Cube, CoefficientT](stream.ambientDim - 2)
       .persistentHomology(truncated)
-      .barcodeAt(Double.PositiveInfinity)
+      .barcodeAt(Double.PositiveInfinity, includeZeroLength)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
     if !lower && v == Double.PositiveInfinity then PositiveInfinity()
@@ -87,7 +71,10 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
   // CellularPersistenceInChunksEngine.unionFindDim01's own already-validated pattern (no dimension-1
   // cycle-tracking needed here, since H_1 comes from the dual mechanism below instead).
   // -------------------------------------------------------------------------------------------------------------
-  private def computeH0(stream: CubicalGridStream): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
+  private def computeH0(
+    stream: CubicalGridStream,
+    includeZeroLength: Boolean
+  ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     val vertices: Vector[Cube] = stream.iterateDimension.applyOrElse(0, (_: Int) => Iterator.empty).toVector
     val vertexIndex: Map[Cube, Int] = vertices.zipWithIndex.toMap
     val parent: Array[Int] = Array.range(0, vertices.size)
@@ -120,12 +107,9 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
         val (youngRoot, oldRoot) = if v0Val <= v1Val then (r1, r0) else (r0, r1)
         parent(youngRoot) = oldRoot
         val dying = vertices(youngRoot)
-        bars += new PersistenceBar(
-          0,
-          endpoint(true)(stream.filtrationValue(dying)),
-          endpoint(false)(stream.filtrationValue(edge)),
-          Some(Chain(dying))
-        )
+        val (birth, death) = (stream.filtrationValue(dying), stream.filtrationValue(edge))
+        if includeZeroLength || birth != death then
+          bars += new PersistenceBar(0, endpoint(true)(birth), endpoint(false)(death), Some(Chain(dying)))
     vertices.indices.foreach { i =>
       if find(i) == i then
         bars += new PersistenceBar(
@@ -142,7 +126,8 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
   // the derivation this implements term-for-term.
   // -------------------------------------------------------------------------------------------------------------
   private def computeDualTopDimension(
-    stream: CubicalGridStream
+    stream: CubicalGridStream,
+    includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     val shape = stream.shape
     val ambientDim = stream.ambientDim
@@ -341,10 +326,11 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
               Chain.from(
                 flippedYoung.toSeq.flatMap((cube, c) => cube.boundary[CoefficientT].map((f, s) => (f, fr.times(c, s))))
               )
-            bars += new PersistenceBar(
-              ambientDim - 1,
-              endpoint(true)(v),
-              endpoint(false)(birthOf(youngRoot)),
-              Some(rep)
-            )
+            if includeZeroLength || v != birthOf(youngRoot) then
+              bars += new PersistenceBar(
+                ambientDim - 1,
+                endpoint(true)(v),
+                endpoint(false)(birthOf(youngRoot)),
+                Some(rep)
+              )
     bars.toList

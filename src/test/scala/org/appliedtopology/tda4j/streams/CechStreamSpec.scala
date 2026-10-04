@@ -235,7 +235,7 @@ class CechStreamSpec extends mutable.Specification with ScalaCheck:
     do uf.union(UFSet(i), UFSet(j))
     elems.map(i => uf.find(UFSet(i))).toSet.size
 
-  "the bars-account-for-cells structural invariant holds, and H0 matches an independent union-find count, on random small clouds" >>
+  "the stream ordering contract holds, and H0 matches an independent union-find count, on random small clouds" >>
     AsResult {
       prop { (points: Array[Array[Double]]) =>
         val ms = EuclideanMetricSpace(points)
@@ -257,20 +257,7 @@ class CechStreamSpec extends mutable.Specification with ScalaCheck:
           val reported = state.positives.count { case (sigma, _) => sigma.dim == 0 }
           reported == independentH0Count(points, r)
         }
-        // The structural invariant is checked LAST, via a final advanceAll-equivalent (diagramAt at
-        // +Infinity) -- doing this BEFORE the incremental h0Ok sweep above would fully advance `state` first,
-        // making every subsequent `advanceTo(r)` for a small r a no-op on an already-finished stream (the
-        // exact ordering mistake caught while writing this test, not a hypothetical one).
-        val barcode = state.diagramAt(Double.PositiveInfinity)
-        // Every dimension up to points.length - 1 (an n-point cloud's own top simplex dimension) -- an earlier
-        // version of this test hardcoded (0 to 3), which silently undercounted cellCount (and so broke the
-        // structural invariant, which needs the TRUE total) on any generated cloud with more than 4 points,
-        // since maxFiltrationValue = +Infinity here means every combinatorial subset is a real cell.
-        val cellCount = (0 until points.length)
-          .flatMap(d => stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty))
-          .size
-        val structuralOk = HomologyFixtures.totalBarsAccountForAllCells(barcode, cellCount)
-        structuralOk && h0Ok
+        HomologyFixtures.respectsOrderingContract(stream) && h0Ok
       }
     }
 

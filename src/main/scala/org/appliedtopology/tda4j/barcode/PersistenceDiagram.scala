@@ -1,8 +1,8 @@
 package org.appliedtopology.tda4j
 
-/** A finished persistence computation as a plain, immutable value: every bar with its representative chain, plus what
-  * is needed to read it at a smaller parameter. What `Persistence(...)` returns, and what `HomologyState.snapshotAt(f)`
-  * takes from a cursor.
+/** A finished persistence computation as a plain, immutable value: the bars with their representative chains, plus what
+  * is needed to read them at a smaller parameter. What `Persistence(...)` returns, and what
+  * `HomologyState.snapshotAt(f)` takes from a cursor.
   *
   * The coefficient field is chosen at runtime (`characteristic = 17`, ...), so its type is the member `Coefficient`;
   * `import diagram.given` brings the field into scope for arithmetic on representatives.
@@ -11,7 +11,9 @@ trait PersistenceDiagram[CellT]:
   type Coefficient
   given coefficientField: (Coefficient is Field) = compiletime.deferred
 
-  /** Every bar of degree `0 .. maxDimension`, each with its representative (a cycle at birth). */
+  /** The bars of degree `0 .. maxDimension`, each with its representative (a cycle at birth). Zero-length bars are
+    * absent unless the diagram was computed with `includeZeroLength = true`.
+    */
   def bars: List[PersistenceBar[Double, Chain[CellT, Coefficient]]]
 
   /** The top homological degree computed. */
@@ -31,15 +33,14 @@ trait PersistenceDiagram[CellT]:
   /** The bars of degree `k`. */
   def dim(k: Int): PersistenceDiagram.Of[CellT, Coefficient] = withBars(bars.filter(_.dim == k))
 
-  /** The diagram truncated at `f`: bars born at or before `f`, deaths capped at `f`; a class alive at `f` dies "at `f`"
-    * unless `f` is at or past `lastFiltrationValue`, where it is essential. Pure: the same `f` always gives the same
-    * answer.
+  /** The diagram truncated at `f`: bars born at or before `f`; a class alive at `f` becomes `[birth, f]`, or stays
+    * essential when `f` is at or past `lastFiltrationValue`.
     */
   def at(f: Double): PersistenceDiagram.Of[CellT, Coefficient] =
     withBars(bars.filter(_.birth <= f).map { b =>
       if b.death <= f then b
       else if f >= lastFiltrationValue then new PersistenceBar(b.dim, b.lower, PositiveInfinity[Double](), b.annotation)
-      else new PersistenceBar(b.dim, b.lower, OpenEndpoint(f), b.annotation)
+      else new PersistenceBar(b.dim, b.lower, ClosedEndpoint(f), b.annotation)
     })
 
   /** Bars that never die. */
@@ -51,8 +52,12 @@ trait PersistenceDiagram[CellT]:
   /** The `n` most persistent bars, longest first. */
   def longest(n: Int): List[PersistenceBar[Double, Chain[CellT, Coefficient]]] = bars.sortBy(-_.persistence).take(n)
 
-  /** Bars worth reporting: essential, or persistence above `fraction` of `scale` (default: the diagram's own scale,
-    * else the filtration range) -- the MATLAB/CLI facade's default policy, `PersistenceFilter.significant`.
+  /** Essential bars and bars with persistence strictly greater than `minPersistence`: `diagram.longerThan(0.1)`. */
+  def longerThan(minPersistence: Double): PersistenceDiagram.Of[CellT, Coefficient] =
+    withBars(bars.filter(b => b.death.isPosInfinity || b.persistence > minPersistence))
+
+  /** Essential bars and bars longer than `fraction` of `scale` (default: the diagram's own scale -- a point cloud's
+    * minimum enclosing radius -- else its filtration range). With the defaults, the bars the MATLAB/CLI facade shows.
     */
   def significant(
     fraction: Double = PersistenceFilter.DefaultFraction,
@@ -73,8 +78,8 @@ trait PersistenceDiagram[CellT]:
     val byDim = bars.groupBy(_.dim).toList.sortBy(_._1)
     val lines = byDim.map { (d, bs) =>
       val shown = bs.sortBy(-_.persistence).take(5).map(b => f"[${b.birth}%.4g, ${b.death}%.4g)").mkString(" ")
-      s"  H$d: ${bs.size} bars" + (if bs.nonEmpty then s", longest $shown" else "") + (if bs.size > 5 then " ..."
-                                                                                       else "")
+      val count = if bs.size == 1 then "1 bar" else s"${bs.size} bars"
+      s"  H$d: $count" + (if bs.nonEmpty then s", longest $shown" else "") + (if bs.size > 5 then " ..." else "")
     }
     (s"PersistenceDiagram(${bars.size} bars, degrees 0..$maxDimension)" :: lines).mkString("\n")
 

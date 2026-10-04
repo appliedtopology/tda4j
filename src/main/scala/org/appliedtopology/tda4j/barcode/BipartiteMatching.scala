@@ -55,11 +55,8 @@ private[tda4j] object HopcroftKarp:
 
     matchLeft
 
-/** Minimum-cost perfect matching on a square cost matrix (the Hungarian / Kuhn-Munkres algorithm, O(n^3) via shortest
-  * augmenting paths with vertex potentials). Used by [[BarcodeDistance.wassersteinDistance]]. All matrix entries must
-  * be finite -- see `BarcodeDistance`'s essential/finite split for why the caller never has to hand this an `Infinity`
-  * entry (that would poison the potential-update arithmetic with `Infinity - Infinity = NaN`). Package-private --
-  * [[BarcodeDistance]] is the public surface.
+/** Minimum-cost perfect matching on a square matrix of finite costs (the Hungarian algorithm, `O(n³)`, by shortest
+  * augmenting paths with potentials), for [[BarcodeDistance.wassersteinDistance]].
   */
 private[tda4j] object Hungarian:
 

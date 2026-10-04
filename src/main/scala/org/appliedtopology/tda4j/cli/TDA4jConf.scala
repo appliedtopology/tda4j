@@ -3,23 +3,16 @@ package cli
 
 import org.rogach.scallop.*
 
-/** Command-line argument definitions for the `tda4j` executable. Deliberately a thin mirror of
-  * `org.appliedtopology.tda4j.matlab.TDA4j`'s own flat key/value option set (see that class's doc) -- every `--foo`
-  * flag here corresponds 1:1 to an option key `TDA4j.computeFromPoints`/`computeFromDistanceMatrix` already recognizes
-  * and validates, so this class does no validation of its own: an unset flag is simply omitted from the options array
-  * `TDA4jCLI` builds (see that object's `buildOptions`), letting `TDA4j`'s own defaults and `IllegalArgumentException`
-  * messages apply unchanged rather than duplicating them here.
+/** The flags of the `tda4j` executable. Each compute flag is an option of [[org.appliedtopology.tda4j.matlab.TDA4j]]
+  * under its kebab-case name, with no default here: an unset flag is left out, so defaults and validation are the
+  * facade's.
   */
 class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   banner(
-    """tda4j: compute persistent (co)homology of a point cloud, distance matrix, cubical image, or Dowker relation.
+    """tda4j: persistent homology of a point cloud, distance matrix, image or relation.
       |
-      |Loads one of several file formats (see --input-format), computes a Vietoris-Rips/alpha/Cech/witness complex's
-      |persistence (point-cloud/distance-matrix formats), a cubical image's persistence (cubical-image formats), or
-      |a Dowker complex's persistence (csv-relation format) via the same TDA4j/PersistenceResult facade the MATLAB
-      |bridge uses (see org.appliedtopology.tda4j.matlab.TDA4j's own doc for the underlying --complex/--engine/
-      |--field options, computeFromCubicalImage's own doc for --sublevel, and computeFromRelation's own doc for
-      |--dual), and writes the resulting persistence diagram in one of several formats (see --output-format).
+      |Reads the input (--input-format), builds a complex (--complex; a cubical complex for an image, the Dowker
+      |complex for a relation), computes its persistence and writes the diagram (--output-format).
       |
       |Usage: tda4j [options] <input-file>
       |""".stripMargin
@@ -27,12 +20,10 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
 
   val inputFormat: ScallopOption[String] = opt[String](
     default = Some("csv-points"),
-    descr = "input file format: csv-points, csv-distances, csv-lower, ripser-points, ripser-lower, ripser-upper, " +
-      "ripser-distance, ripser-binary, dipha-distance, off (point-cloud/distance-matrix formats -- --complex " +
-      "applies), perseus-cubical, dipha-image, image (cubical-image formats -- --complex does not apply, " +
-      "--sublevel does), or csv-relation (a Dowker relation, R x C, one row per left-side point one column per " +
-      "witness -- --complex does not apply, --dual does; see TDA4j.computeFromRelation's own doc) (default: " +
-      "csv-points)"
+    descr = "input format. Point clouds and distance matrices: csv-points (default), csv-distances, " +
+      "csv-lower, ripser-points, ripser-lower, ripser-upper, ripser-distance, ripser-binary, dipha-distance, off. " +
+      "Images: perseus-cubical, dipha-image, image. Relations: csv-relation (one row per point, one column per " +
+      "witness), for the Dowker complex"
   )
 
   val output: ScallopOption[String] = opt[String](
@@ -45,163 +36,123 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   )
   val representatives: ScallopOption[Boolean] = opt[Boolean](
     default = Some(false),
-    descr = "also print each bar's representative chain (--output-format=text only). Every engine records a " +
-      "representative for every bar; a printed '(no representative recorded)' would indicate an engine bug, not " +
-      "an expected gap."
+    descr = "also print each bar's representative (--output-format=text only)"
   )
 
   val complex: ScallopOption[String] =
     opt[String](descr = "vr (default), alpha, cech, witness, dtm-rips, dtm-alpha, or sparse-rips")
   val engine: ScallopOption[String] =
     opt[String](descr =
-      "ripser, naive, chunks, cohomology, fast-cubical, or fast-alpha (default depends on --complex -- see " +
-        "TDA4j's own doc). cohomology is CellularCohomologyEngine, generic over cell type and valid for every " +
-        "--complex value -- unlike ripser, not Vietoris-Rips-specialized, so it also works with " +
-        "--complex=alpha/cech. fast-cubical (FastCubicalHomologyEngine) is valid ONLY for a cubical-image " +
-        "--input-format (any dimension >= 2 -- a hybrid with chunks handles dimensions above 2). fast-alpha " +
-        "(FastAlphaHomologyEngine) is valid ONLY for --complex=alpha with --alpha-backend=helix (the default), " +
-        "for any ambient dimension >= 2 (a hybrid with chunks handles dimensions above 2, same as fast-cubical); " +
-        "on a fraction of point clouds -- more likely at higher ambient dimension and point count -- it throws a " +
-        "FastAlphaTriangulationException explaining a known HelixDelaunay limitation and naming the fix (retry " +
-        "with --engine naive/chunks/cohomology)."
+      "ripser, chunks, naive, cohomology, fast-cubical or fast-alpha. Default: ripser for vr and the lazy " +
+        "witness complex, fast-cubical for images of dimension 2 and up, cohomology otherwise. ripser needs vr or " +
+        "--witness-variant=lazy; fast-cubical is for images " +
+        "of dimension 2 and up; fast-alpha for --complex=alpha with the helix backend"
     )
   val alphaBackend: ScallopOption[String] =
-    opt[String](descr = "helix (default) or DQP -- only consulted when --complex=alpha")
-  // String, not Boolean -- same reasoning as --sublevel/--edge-collapse below (a genuinely optional flag, not an
-  // always-supplied toggle).
+    opt[String](descr = "helix (default) or DQP, for --complex=alpha")
   val requireValidTriangulation: ScallopOption[String] = opt[String](
-    descr = "true or false (default) -- only consulted for --complex=alpha with --alpha-backend=helix (the " +
-      "default), rejected for any other --complex or --alpha-backend=DQP. Repairs a HelixDelaunay facet-" +
-      "multiplicity violation (the precondition --engine=fast-alpha needs) instead of leaving it to surface as " +
-      "FastAlphaTriangulationException -- see HelixDelaunay.repairByJitterRetriangulation's own doc and " +
-      ".claude/DESIGN-helix-triangulation-repair.md. Validated at ambient dimension 2 and 3; not validated at " +
-      "dimension >= 4."
+    descr = "true or false (default), for --complex=alpha with the helix backend: repair a degenerate " +
+      "triangulation (needed by --engine=fast-alpha) instead of failing. Tested in dimensions 2 and 3"
   )
   val maxDimension: ScallopOption[Int] =
-    opt[Int](descr = "highest homological degree to report, i.e. \"give me H_0..H_k\" (default: 2)")
+    opt[Int](descr = "the highest homological degree to compute (default: 2; for an image, its dimension)")
   val maxFiltrationValue: ScallopOption[Double] = opt[Double](
-    descr = "truncate the filtration at this value (default: the point cloud's own minimum enclosing radius); " +
-      "a diameter for --complex=vr, a RADIUS for --complex=cech"
+    descr = "stop the filtration at this value (default: the minimum enclosing radius); in the units of the " +
+      "complex: a diameter for vr, a radius for cech"
   )
   val minPersistence: ScallopOption[Double] = opt[Double](descr =
-    "only report bars with persistence (death - birth) greater than this, in the filtration's own units; essential " +
-      "(never-dying) bars are always reported. 0 reports every bar. Default: a bar must exceed 1% of the " +
-      "input's minimum enclosing radius (--min-persistence-fraction); give at most one of the two"
+    "report only bars longer than this (essential bars are always reported); 0 reports every bar of positive " +
+      "length. " +
+      "Default: --min-persistence-fraction 0.01. Give at most one of the two"
   )
   val minPersistenceFraction: ScallopOption[Double] = opt[Double](descr =
-    "like --min-persistence, but as a fraction of the input's scale: its minimum enclosing radius (Ripser's " +
-      "enclosing radius -- every bar lives between 0 and it), or, for a cubical image / Dowker relation, the range " +
-      "of its values. Default 0.01; 0 reports every bar. See PersistenceFilter"
+    "report only bars longer than this fraction of the input's scale: the minimum enclosing radius, " +
+      "or the range of values of an image or relation (default: 0.01)"
+  )
+  val representativeType: ScallopOption[String] = opt[String](descr =
+    "cycles (default) or cocycles: the kind of representative each bar gets. Every --engine gives both except " +
+      "fast-cubical and fast-alpha (cycles only); ripser and cohomology compute cocycles natively, the others cycles"
+  )
+  val includeZeroLength: ScallopOption[String] = opt[String](descr =
+    "true or false (default): also compute bars of length zero. They are reported with " +
+      "--min-persistence 0"
   )
   val field: ScallopOption[String] = opt[String](descr = "Z (default, a prime finite field) or R (floating point)")
   val prime: ScallopOption[Int] = opt[Int](descr = "prime for --field=Z (default: 17)")
   val epsilon: ScallopOption[Double] = opt[Double](descr = "tolerance for --field=R (default: 1e-9)")
-  // String, not Boolean -- Scallop's opt[Boolean] is a no-argument toggle flag whose ScallopOption is ALWAYS
-  // supplied (defaulting to false when the flag is absent), unlike every other option here, which is genuinely
-  // unset (None) until the user passes it. That would silently force sublevel=false into buildOptions's output
-  // on every run regardless of whether the user ever mentioned it -- caught by buildOptions's own "empty when no
-  // flags passed" test. A String mirrors TDA4j's own "true"/"false" string option exactly and has the same
-  // genuinely-optional `.toOption` behavior as every other mirrored flag here.
+  // Boolean-valued options are Strings: Scallop's opt[Boolean] is always supplied (false when absent), which would
+  // pass an explicit value to the facade on every run instead of leaving its default in charge.
   val sublevel: ScallopOption[String] = opt[String](
-    descr = "true (default, sublevel) or false (superlevel) filtration -- only consulted for a cubical-image " +
-      "--input-format (perseus-cubical, dipha-image, image)"
+    descr = "true (default) for the sublevel filtration of an image, false for the superlevel one"
   )
 
   val numLandmarks: ScallopOption[Int] =
-    opt[Int](descr = "number of landmarks to select -- REQUIRED when --complex=witness, ignored otherwise")
+    opt[Int](descr = "the number of landmarks, required for --complex=witness")
   val witnessVariant: ScallopOption[String] =
     opt[String](descr =
-      "lazy (default, a flag complex -- supports --engine=ripser) or general (not a flag complex -- " +
-        "--engine=ripser/chunks refused) -- only consulted when --complex=witness"
+      "lazy (default) or general, for --complex=witness. The lazy complex is a flag complex and runs " +
+        "with --engine=ripser; the general one needs naive or cohomology"
     )
   val landmarkSelector: ScallopOption[String] =
     opt[String](descr =
-      "maxmin (default, sequential furthest-point sampling) or random (seeded by --landmark-seed) -- only " +
-        "consulted when --complex=witness"
+      "maxmin (default, farthest-point sampling) or random (seeded by --landmark-seed), for " +
+        "--complex=witness"
     )
   val landmarkSeed: ScallopOption[Int] =
-    opt[Int](descr = "seed for --landmark-selector=random (default: 0) -- only consulted when --complex=witness")
+    opt[Int](descr = "the seed of --landmark-selector=random (default: 0)")
   val nu: ScallopOption[Int] =
-    opt[Int](descr =
-      "0, 1, or 2 (default: 2) -- only consulted when --complex=witness and --witness-variant=lazy, see " +
-        "WitnessMetricSpace's own doc"
-    )
+    opt[Int](descr = "0, 1 or 2 (default: 2): the nu of the lazy witness complex")
 
   val dtmK: ScallopOption[Int] =
     opt[Int](descr =
-      "number of nearest neighbours (self included) for distance-to-measure filtration -- REQUIRED when " +
-        "--complex=dtm-rips or --complex=dtm-alpha, ignored otherwise"
+      "the number of nearest neighbours (the point itself included) of the distance to measure, " +
+        "required for --complex=dtm-rips and dtm-alpha"
     )
   val dtmQ: ScallopOption[Double] =
-    opt[Double](descr = "DTM exponent, default 2.0 -- only consulted when --complex=dtm-rips or --complex=dtm-alpha")
+    opt[Double](descr = "the exponent of the distance to measure (default: 2.0), for dtm-rips and dtm-alpha")
   val dtmP: ScallopOption[Double] =
-    opt[Double](descr =
-      "ball-radius exponent for DTM-Rips (1.0 or 2.0, default 1.0) -- only consulted when --complex=dtm-rips"
-    )
+    opt[Double](descr = "1.0 (default) or 2.0: how vertex weights combine with distances, for dtm-rips")
   val sparseEpsilon: ScallopOption[Double] =
     opt[Double](descr =
-      "sparsity/approximation-quality parameter in (0,1) -- REQUIRED when --complex=sparse-rips, ignored " +
-        "otherwise. The resulting barcode is a (1+epsilon)-multiplicative approximation to plain --complex=vr's " +
-        "own barcode (Cavanna-Jahanseir-Sheehy 2015); see SheehyRipsSimplexStream's own doc."
+      "the approximation parameter in (0, 1), required for --complex=sparse-rips: the barcode is " +
+        "within a factor 1 + epsilon of the Vietoris-Rips barcode (Cavanna, Jahanseir, Sheehy 2015)"
     )
-  // String, not Boolean -- same reasoning as --sublevel above (a genuinely optional flag, not an
-  // always-supplied toggle).
   val edgeCollapse: ScallopOption[String] = opt[String](
-    descr = "true or false (default) -- only consulted for --complex=vr, rejected for any other --complex. " +
-      "Boissonnat-Pritam/Glisse-Pritam edge collapse (EdgeCollapse): reduces the Vietoris-Rips " +
-      "1-skeleton to a smaller weighted graph with the SAME persistent homology, before anything is built on " +
-      "top of it -- a preprocessing step, changing nothing about the output shape. Measured 73-76% of edges " +
-      "removed and a 43-47x REDUCTION-phase speedup on random point clouds; see .claude/WORKLOG-edge-collapse.md."
+    descr = "true or false (default), for --complex=vr: collapse edges first (Boissonnat-Pritam, " +
+      "Glisse-Pritam). Same diagram, often a much smaller complex"
   )
-  // String, not Boolean -- same reasoning as --sublevel/--edge-collapse above.
   val dual: ScallopOption[String] = opt[String](
-    descr = "true or false (default) -- only consulted for --input-format=csv-relation. Computes the W-side " +
-      "(transposed-relation) Dowker complex instead of the L-side one -- see TDA4j.computeFromRelation's own " +
-      "doc and DowkerGeometry.dual. The functorial Dowker duality theorem guarantees the two sides' " +
-      "barcodes agree exactly once zero-persistence bars are dropped."
+    descr = "true or false (default), for --input-format=csv-relation: the Dowker complex on the columns " +
+      "instead of the rows. By Dowker duality both have the same diagram"
   )
 
-  // CLI-LOCAL control flow, unlike every option above: neither is forwarded into TDA4j's own options array
-  // (see buildOptions's own comment) -- they select which of TDA4j's ENTRY POINTS this run calls, not a value
-  // passed to one fixed entry point. opt[Boolean] here has the same always-supplied-defaulting-to-false
-  // semantics --representatives already relies on (Scallop's own toggle-flag behavior, not a genuinely
-  // optional value) -- fine for exactly the same reason: read only as `conf.selectLandmarks()`, a plain
-  // Boolean, never through `.toOption`/`.isSupplied`.
+  // These two choose which facade entry point runs; they are not facade options. --select-landmarks is a plain
+  // toggle, read as `conf.selectLandmarks()`.
   val selectLandmarks: ScallopOption[Boolean] = opt[Boolean](
     default = Some(false),
-    descr = "step 1 of the two-step witness recipe: select landmarks only (requires --num-landmarks), " +
-      "writing one 0-based landmark index per line to --output (or stdout) plus a '# coveringRadius=...' " +
-      "line, and printing R to stderr -- see --landmarks-file for step 2. Only --output-format=text (the " +
-      "default) is supported, and --representatives is meaningless here (there is no barcode)."
+    descr = "step 1 of the two-step witness complex: select --num-landmarks landmarks and write them, one " +
+      "0-based index per line, with a '# coveringRadius=...' line, to --output or standard output. Then run " +
+      "step 2 with --landmarks-file"
   )
   val landmarksFile: ScallopOption[String] = opt[String](
-    descr = "step 2 of the two-step witness recipe: read landmark indices from this file (one 0-based index " +
-      "per line, as --select-landmarks writes) instead of selecting them internally -- implies --complex " +
-      "witness; --num-landmarks/--landmark-selector/--landmark-seed are not meaningful together with this"
+    descr = "step 2 of the two-step witness complex: read the landmarks from this file (as written by " +
+      "--select-landmarks) instead of selecting them; implies --complex witness"
   )
 
-  // BarcodeDistance mirror (`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 4). Landscapes/
-  // persistence images (item 8) are deliberately NOT mirrored here: they produce a matrix, not a diagram, which
-  // doesn't fit this CLI's existing single-diagram text/csv/gudhi/dipha/perseus output model the way a second
-  // diagram-shaped comparison does -- a real matrix-output CLI mode is its own design question (output format,
-  // file layout for a multi-row/column result), left as a follow-up rather than bolted on here. See
-  // matlab.PersistenceResult.landscape/persistenceImage for that capability's MATLAB-facing form.
+  // Diagram distances, as in BarcodeDistance.
   val distanceTo: ScallopOption[String] = opt[String](
-    descr = "compare the computed diagram against an already-computed one read from this file (see " +
-      "--distance-format), printing per-dimension bottleneck/Wasserstein distance instead of writing the " +
-      "computed diagram -- --output/--output-format (text only) apply to THAT printed comparison, not a barcode"
+    descr = "instead of writing the diagram, print its bottleneck and Wasserstein distances in each " +
+      "dimension to the diagram in this file (--output-format text only)"
   )
   val distanceFormat: ScallopOption[String] = opt[String](
     default = Some("csv"),
-    descr = "file format of --distance-to: csv (default), gudhi, or dipha -- NOT perseus, whose format is " +
-      "inherently single-dimension (see Perseus.readPersistenceIntervals's own `dim` parameter), not a fit " +
-      "for this multi-dimension comparison"
+    descr = "the format of --distance-to: csv (default), gudhi or dipha"
   )
   val distanceOrder: ScallopOption[Double] =
-    opt[Double](descr = "Wasserstein order (default: 1.0) -- only consulted with --distance-to")
+    opt[Double](descr = "the order of the Wasserstein distance (default: 1.0), with --distance-to")
   val distanceGroundNorm: ScallopOption[Double] = opt[Double](
-    descr = "ground norm on the birth-death plane: a finite p >= 1.0, or omit for the default L-infinity -- " +
-      "only consulted with --distance-to. See BarcodeDistance.GroundNorm's own doc."
+    descr = "the ground norm on the birth-death plane: a finite p >= 1.0 (default: L-infinity), with " +
+      "--distance-to"
   )
 
   val input: ScallopOption[String] = trailArg[String](name = "input-file", descr = "input file", required = true)

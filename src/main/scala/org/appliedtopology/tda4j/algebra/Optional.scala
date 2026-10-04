@@ -1,10 +1,9 @@
 package org.appliedtopology.tda4j
 
 // format: off
-/** An optional parameter that a call site can give as a plain value: `maxFiltrationValue = 2.0` (or an `Int`), as well
-  * as `Some(2.0)` / `None` / any `Option[Double]` -- so `Option` keeps its meaning (CLAUDE.md: options over sentinels)
-  * without making every user write `Some(...)`. `into` lets the conversions below apply at exactly the parameters typed
-  * `Optional[...]`, with no `implicitConversions` import at the call site (`.claude/WORKLOG-cursor-and-verb.md`).
+/** An optional parameter that a call site can give as a plain value: `maxFiltrationValue = 2.0` (or `2`), as well as
+  * `Some(2.0)`, `None` or any `Option[Double]`. The conversions apply only at parameters of type `Optional[...]`, with
+  * no import at the call site.
   */
 into final case class Optional[+A](toOption: Option[A]):
   def getOrElse[B >: A](default: => B): B = toOption.getOrElse(default)

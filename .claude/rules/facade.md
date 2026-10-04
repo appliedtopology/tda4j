@@ -15,19 +15,24 @@ Loads when you work in `matlab/`, `cli/` or `io/`, or on the persistence thresho
 
 ## Which bars are reported (persistence threshold)
 
-Engines return EVERY bar (they are the cross-validation oracles; every bar has a representative). The facade
+**Zero-length bars (`birth == death`) are dropped by default everywhere** -- engines, `Persistence`, facade, CLI
+(project lead: seeing them is the opt-in). Engines take `includeZeroLength = false` and filter on the true pairing,
+never after truncation; the facade asks engines for everything and drops them in `ThresholdSpec` unless option
+`includeZeroLength` (CLI `--include-zero-length true`) is set. Tests that check `#bars` against `#cells` must opt in
+(`HomologyFixtures.totalBarsAccountForAllCells`); stream specs check `respectsOrderingContract` instead of counting
+bars. `ZeroLengthBarsSpec`, `WORKLOG-zero-length-and-docs-audit.md`. Beyond that, the facade
 (`matlab.TDA4j`, hence CLI + MATLAB) hides bars by default: **kept iff essential or persistence > 1% of the
 input's minimum enclosing radius** (`metricSpace.minimumEnclosingRadius`, Ripser's enclosing radius, NOT the
 connectivity radius; for a cubical image / Dowker relation, the range max − min of its values; 0 for a single point;
 non-finite → the barcode's own finite range), in the units the complex reports (VR diameters, Cech/alpha radii);
 the scale is passed by-name and only computed when a fraction of it is needed. Options `minPersistence` (absolute) / `minPersistenceFraction` (default `0.01`),
-at most one; **`0` keeps everything incl. zero-persistence bars**; CLI `--min-persistence`/`--min-persistence-fraction`
+at most one; **`0` keeps every bar of positive length**; CLI `--min-persistence`/`--min-persistence-fraction`
 (mirrored, no Scallop default; stderr note when bars were hidden; rejected with `--select-landmarks`/`--distance-to`).
 Logic lives in `PersistenceFilter` (opt-in for Scala callers: `PersistenceFilter.significant`). Invariants:
 filter is post-hoc, applied by the thin `dispatch*` wrappers (validated before computing); `PersistenceResult` keeps
 the FULL arrays + a `visible` index, and **distances/landscapes/persistence images and `--distance-to` always use the
 complete barcode**; new facade option keys must go in every strict allowlist except `landmarkSelectionKeys`.
-**Tests asserting on complete barcodes must call the test-only shims `FullBarcode` (matlab) / `CliFull` (cli)**, not
+**Tests asserting on complete barcodes (every positive-length bar) must call the test-only shims `FullBarcode` (matlab) / `CliFull` (cli)**, not
 `TDA4j`/`TDA4jCLI` directly — and a one-line search/replace misses call sites split across two lines (this bit once).
 `h1Bars`/`circularCoordinates` are unfiltered (`cocycleIndex` indexes `h1Bars`). `WORKLOG-persistence-threshold.md`.
 
@@ -58,6 +63,8 @@ non-integral filtrations. `TDA4jCLI.run(args, out): Int` is testable in-process,
 take/return only `double`, `int`, `String`, `double[][]`, `String[]` — no `Map`, generics, or Scala types
 (project lead rejected a `Map`-based design). Options are a flat key/value `String[]`; `dispatch` parses each
 once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before anything runs.
+- Error messages and `--help` text say what to do, in user terms: never point at `.claude/`, CLAUDE.md or a private
+  class's doc.
 - `computeFromPoints`/`computeFromDistanceMatrix`: `complex` = `vr`/`alpha`/`cech`/`witness`/`dtm-rips`/`dtm-alpha`/
   `sparse-rips`; `engine` = `ripser`/`naive`/`chunks`/`cohomology` (Alpha and dtm-alpha refuse `ripser`/`chunks`;
   Cech, dtm-rips, sparse-rips, and witness/general refuse `ripser`, witness/general also refuses `chunks` — see
@@ -69,6 +76,13 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
   `computeFrom{Points,DistanceMatrix}AndLandmarks` (takes that `int[]` directly, never re-selects);
   `coveringRadiusFrom{Points,DistanceMatrix}` queries R for a hand-picked set. CLI: `--select-landmarks`/
   `--landmarks-file`. `WORKLOG-witness-two-step-api.md`.
+- `representativeType` = `cycles` (default) / `cocycles`: every engine gives both via `naiveFor`/`chunksFor`/
+  `cohomologyFor` and Ripser's `persistentHomology`, except `fast-cubical`/`fast-alpha` (cycles only; cocycles throw,
+  naming `engine=cohomology`). With cocycles an image defaults to `cohomology`. In every allowlist but
+  `landmarkSelectionKeys`.
+- Default `engine`: `ripser` for `vr`/lazy witness, `fast-cubical` for images of dimension >= 2, **`cohomology` for
+  everything else** (relations, general witness included): the homology engines reduce every top cell and take minutes at degree 2
+  (`WORKLOG-default-degree-2.md`); `TDA4jSpec` pins the default against an explicit `engine=cohomology`.
 - `maxDimension` (default 2) = top homological degree. `ripser`/`chunks` pass it straight through; `naive`/
   `cohomology` wrap the stream in `LimitedCofaceSimplexStream(..., k+1)`. Alpha needs no +1.
 - Field: `Z` (prime, default `prime=17` = `FiniteField.DefaultPrime`, was 2) or `R` (`Field.DoubleApproximated`, internal specs' own default).

@@ -1,29 +1,15 @@
 package org.appliedtopology.tda4j
 
-/** Lenstra--Lenstra--Lovász lattice basis reduction on a Gram matrix, following Scoccola, Gakhar, Bush, Schonsheck,
-  * Rask, Zhou, Perea, "Toroidal Coordinates: Decorrelating Circular Coordinates With Lattice Reduction"
-  * (arXiv:2212.07201), Algorithm 4: given the Gram matrix `G` of `k` linearly independent generators under some inner
-  * product (`CircularCoordinates.computeToroidal` uses the paper's own dSMV form -- the plain unweighted sum-over-edges
-  * dot product of harmonic cocycles), factor `G = C C^T` (Cholesky), run LLL on the rows of `C` (a concrete `R^k`
-  * stand-in for the abstract generators, chosen purely so LLL has actual vectors to work with -- any such stand-in
-  * gives the same answer, since every quantity LLL consults is an inner product, and `C`'s rows reproduce `G`'s inner
-  * products exactly by construction), and return the resulting unimodular integer change of basis.
+/** Lenstra-Lenstra-Lovász lattice basis reduction of a Gram matrix (Scoccola, Gakhar, Bush, Schonsheck, Rask, Zhou,
+  * Perea, "Toroidal Coordinates: Decorrelating Circular Coordinates With Lattice Reduction", arXiv:2212.07201,
+  * Algorithm 4). Given the Gram matrix `G` of `k` independent vectors, factor `G = C Cᵀ` (Cholesky), run LLL on the
+  * rows of `C`, and return the unimodular integer change of basis: the shortest, most nearly orthogonal basis of the
+  * same lattice. [[CircularCoordinates.computeToroidal]] uses it to choose among the equally valid bases of a group of
+  * H¹ classes.
   *
-  * This is the fix for the ambiguity Edelsbrunner raised in the original circular-coordinates Q&A: given `k`
-  * independent generators of a cohomology class's rank-`k` free abelian group, ANY unimodular integer combination of
-  * them is an equally valid set of generators (same subgroup, different basis) -- so "the" generators a cohomology
-  * computation hands back are arbitrary, not canonical. LLL picks the combination that's shortest and most nearly
-  * orthogonal under the given inner product, a principled, deterministic criterion instead of whatever a reduction
-  * algorithm's pivot order happened to produce.
-  *
-  * '''Deliberately not a port of `scikit-tda/DREiMac`'s own `toroidalcoords.py`''' (the reference implementation of the
-  * same paper): its own `_gram_schmidt` projects each new vector onto the ORIGINAL input basis vectors instead of the
-  * already-orthogonalized ones -- a real bug, invisible for exactly `k=2` (this library's own headline "two circles ->
-  * one torus" case, where there is only ever one projection step and it trivially agrees either way) but corrupting the
-  * orthogonalization for `k>=3`, confirmed by direct numerical repro, not just by reading the code -- see
-  * `.claude/BUGS-IN-REFERENCES.md`. This is a textbook implementation instead (standard Gram-Schmidt, projecting onto
-  * the running orthogonalized vectors), cross-checked against Wikipedia's own independently-stated algorithm and worked
-  * example (`LatticeReductionSpec`).
+  * The Gram-Schmidt step projects onto the orthogonalized vectors, as in the textbook algorithm. DREiMac's
+  * `_gram_schmidt` projects onto the original ones, which agrees for `k = 2` but not for `k >= 3`, so results can
+  * differ from DREiMac's there.
   */
 object LatticeReduction:
 
@@ -76,12 +62,8 @@ object LatticeReduction:
 
     Result(basisChange, congruence(basisChange, sym))
 
-  /** Whether `gram` is already LLL-reduced (size-reduced and satisfying the Lovász condition) at the given `delta`,
-    * i.e. whether calling [[reduce]] on it would leave it alone (`basisChange` the identity, up to `reduce`'s own
-    * internal tie-breaking). Recomputes the same Cholesky-factor/Gram-Schmidt machinery `reduce` itself uses, purely as
-    * a read-only diagnostic -- a caller (or a test) uses this to confirm a Gram matrix that came from `reduce` or from
-    * anywhere else is genuinely reduced, not merely to re-run `reduce` and check the identity showed up (which would
-    * only prove THIS implementation's own idea of "reduced", not the textbook definition independently).
+  /** Whether `gram` is LLL-reduced at `delta` (size-reduced, and satisfying the Lovász condition), checked from the
+    * definition.
     */
   def isReduced(gram: Array[Array[Double]], delta: Double = 0.75, tol: Double = 1e-6): Boolean =
     val n = gram.length
@@ -134,9 +116,8 @@ object LatticeReduction:
         else L(i)(j) = sum / L(j)(j)
     L
 
-  /** Standard (textbook) Gram-Schmidt, without normalization: `star(0) = basis(0)`, `star(i) = basis(i) - sum_{j<i}
-    * mu(i,j) * star(j)` -- projecting onto the running ORTHOGONALIZED vectors `star(j)`, not the original `basis(j)`
-    * (the bug documented on the class -- see `.claude/BUGS-IN-REFERENCES.md`).
+  /** Gram-Schmidt without normalization: `star(i) = basis(i) - sum_{j<i} mu(i,j) star(j)`, projecting onto the
+    * orthogonalized vectors `star(j)`.
     */
   private def gramSchmidt(basis: Array[Array[Double]]): Array[Array[Double]] =
     val n = basis.length

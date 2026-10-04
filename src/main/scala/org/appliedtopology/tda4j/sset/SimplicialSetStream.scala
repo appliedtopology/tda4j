@@ -3,23 +3,10 @@ package sset
 
 import org.appliedtopology.tda4j.*
 
-/** Adapts a `FiniteSimplicialSet[G]` into the `CellStream[G, Int]` the existing homology engines actually require
-  * (`CellularHomologyEngine` takes a `stream: CellStream[CellT, FiltrationT]`, never a bare `OrderedCell` -- confirmed
-  * by reading `Homology.scala`). Every generator sits at the same nominal filtration value `0`: this is ordinary
-  * (unfiltered) homology of one fixed finite simplicial set, not real persistence -- the adapter exists only because
-  * the engine has no entry point that skips the stream interface.
-  *
-  * `filtrationOrdering` is `Ordering.by(dimOf)` ascending, then `ord` as tiebreak -- traced from `Homology.scala`'s own
-  * `CellularHomologyEngine.HomologyState.processingOrder` derivation comment (the reverted first attempt at that
-  * comparator used `filtrationOrdering.reverse` wholesale and got faces-before-cofaces backwards precisely because
-  * `filtrationOrdering` itself already sorts smaller dimension as smaller, un-negated): this matches that established
-  * convention exactly, not a fresh interpretation for this new case. With every generator's filtration value tied,
-  * `processingOrder` collapses to exactly this ascending-dimension order, so it alone determines faces-before-cofaces
-  * here.
-  *
-  * `G is OrderedCell` is threaded explicitly (via the companion `apply`) rather than resolved as an ambient global
-  * given: unlike `Simplex`/`Cube`, a `FiniteSimplicialSet`'s `OrderedCell` instance depends on that one simplicial
-  * set's own `faces` data, not on `G` alone, so it cannot be a single global instance for a given `G`.
+/** A finite simplicial set as a stream with every generator at `0`, for its ordinary (unfiltered) homology; for a
+  * filtration, use [[FilteredSimplicialSetStream]]. Generators are ordered by dimension, then by `ord`. The
+  * `OrderedCell` instance comes from the simplicial set (its faces), so it is passed explicitly by the companion's
+  * `apply`.
   */
 class SimplicialSetStream[G](sset: FiniteSimplicialSet[G])(using G is OrderedCell) extends CellStream[G, Int]:
   def filtrationValue: PartialFunction[G, Int] = { case _ => 0 }
@@ -32,19 +19,7 @@ object SimplicialSetStream:
     given (G is OrderedCell) = sset.cellInstance
     new SimplicialSetStream(sset)
 
-  /** Builds a `FiniteSimplicialSet` from any stream of simplices: the faces of a genuinely-ordered simplex (a strictly
-    * increasing vertex tuple) are always non-degenerate -- removing one entry from a strictly increasing sequence
-    * leaves it strictly increasing -- so every generator's face data is a bare (non-degenerate) generator, `word = Nil`
-    * throughout. This exercises none of the degeneracy machinery in `SSetElement.scala`; it's a plumbing adapter,
-    * cross-validated against `SimplicialHomologyEngine` run directly on the same stream, not evidence that
-    * `faceOf`/`insertOuter` themselves are correct -- that comes only from the hand-built fixtures.
-    *
-    * Takes `CellStream[Simplex[VertexT], ?]`, not the narrower `SimplexStream[VertexT, ?]`: the actual Vietoris-Rips
-    * streams in this codebase (`EnumeratingCofaceSimplexStream` and its relatives) are
-    * `CofaceSimplexStream`/`StratifiedCellStream`, a sibling of `SimplexStream` under `CellStream`, not a subtype of it
-    * -- `SimplexStream` alone would silently reject the streams "any simplicial stream" actually means in practice,
-    * caught by trying this against a real VR stream while validating this builder.
-    */
+  /** The simplicial set of a stream of simplices. Every face of a simplex is a simplex, so no degeneracies occur. */
   private[sset] def fromStream[VertexT: Ordering](
     stream: CellStream[Simplex[VertexT], ?]
   ): FiniteSimplicialSet[Simplex[VertexT]] =

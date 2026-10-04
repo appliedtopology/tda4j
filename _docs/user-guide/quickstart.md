@@ -1,29 +1,7 @@
 ---
 layout: main
-title: Quick-start: Scala
+title: Quickstart
 ---
-
-
-Snippets marked with a `Source:` line are copied from a region of a real source file that the test suite
-compiles and exercises. The rest are illustrative and hand-maintained, not mechanically checked — if you
-find one has drifted, trust the source over this page.
-
-### Imports
-
-Two lines start every file. The first tells Scala that you accept the experimental language features the library is
-built with (its typeclasses use them, so every user file needs this line, or the `-experimental` compiler flag); the
-second brings in the whole library: complexes, engines, barcodes, file formats. Default instances (a simplex's order
-and boundary, `Show` for simplices and chains) are found automatically, with no `given` import:
-
-```scala 3
-import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.*
-```
-
-Simplicial sets and group classifying spaces are an add-on with their own import,
-`import org.appliedtopology.tda4j.sset.*` (see [Simplicial sets](topological-spaces/simplicial-sets.md)). For
-interactive work, a lab (`import org.appliedtopology.tda4j.TDAlab.F17.{*, given}`) replaces both and also fixes a
-coefficient field (below).
 
 ### Persistent homology in one call
 
@@ -31,108 +9,147 @@ coefficient field (below).
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
-val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8))
-val diagram = Persistence(points, maxFiltrationValue = 2.0)   // Vietoris-Rips, degrees 0..1, coefficients F_17
-diagram.bettiNumbers                                          // Vector(1, 0): one component, no loop left at 2.0
-diagram.dim(0).longest                                        // the essential component, with its representative
+val points = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21)))
+val diagram = Persistence(points)
+println(diagram)          // a summary: bars per degree, the longest first
+diagram.dim(1).longest    // the most persistent loop
+diagram.bettiNumbers      // Vector(1, 0, 0): one component; the loop is filled in by the end
 ```
 
-`Persistence(...)` takes points (an `Array[Array[Double]]`, a `Seq[Seq[Double]]`, ...), a metric space, an
-`Image(...)`, or any stream you built yourself, and returns an immutable `PersistenceDiagram`: every bar with its
-representative cycle, plus `dim(k)`, `at(f)` (the diagram truncated at `f`), `longest`, `significant()` and
-`bettiNumbers`. Named options: `maxDimension` (top homological degree, default 1), `maxFiltrationValue` (a number),
-`complex = VietorisRips | Cech | AlphaShapes`, `characteristic` (a prime, default 17 -- deliberately not 2, which hides
-signs and odd torsion -- or 0 for real coefficients), `engine`.
+`Persistence(...)` builds a filtered complex, computes its persistent homology and returns a `PersistenceDiagram`: the
+bars with their representatives, as an immutable value. It takes
+
+* points (`Array[Array[Double]]`, `Seq[Seq[Double]]`, ...) or a metric space, for the Vietoris-Rips complex by default;
+* an `Image(...)`, for a cubical complex (see [cubical complexes](topological-spaces/cubical-complexes.md));
+* any complex you built yourself, such as `Witness(...)`, `Dowker(...)` or `SparseRips(...)`
+  (see [complexes](topological-spaces/index.md)).
+
+and the options, all with defaults:
+
+| option | default | |
+|---|---|---|
+| `maxDimension` | `2` | the top homological degree: components (0), loops (1) and voids (2) |
+| `maxFiltrationValue` | the minimum enclosing radius | where to stop the filtration; past the default nothing new is born |
+| `complex` | `VietorisRips` | or `Cech`, `AlphaShapes`, for points |
+| `characteristic` | `17` | the coefficients: a prime `p` for the field with `p` elements, `0` for real numbers |
+| `engine` | `Persistence.Engine.Auto` | Ripser for Vietoris-Rips, `FastCubical` for images, cohomology otherwise (see [engines](homology-computation/choosing-engine.md)) |
+| `representatives` | `Representatives.Cycles` | or `Representatives.Cocycles` (see below) |
+| `includeZeroLength` | `false` | also report bars `[v, v)`, cells paired with cells entering at the same value |
+
+The default field has 17 elements rather than 2: over the field with 2 elements signs disappear, and so do classes
+that only exist with odd coefficients.
+
+### Reading a diagram
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val points = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21)))
+val diagram = Persistence(points)
+
+diagram.bars                    // every bar, as PersistenceBar
+diagram.dim(0)                  // the diagram restricted to degree 0
+diagram.longest(3)              // the three most persistent bars
+diagram.essential               // the bars that never die
+diagram.at(0.5)                 // the diagram of the filtration up to 0.5
+diagram.triples                 // (degree, birth, death) for each bar; death is Infinity for an essential bar
+
+val loop = diagram.dim(1).longest.get
+(loop.birth, loop.death, loop.persistence)
+```
+
+### Short bars
+
+Zero-length bars are left out (pass `includeZeroLength = true` to see them). Short bars are usually sampling noise, and
+are one call away:
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val points = Array(Array(0.0, 0.0), Array(0.001, 0.0), Array(1.0, 0.0), Array(0.5, 0.9))
+val diagram = Persistence(points)
+diagram.longerThan(0.1)         // essential bars, and bars that persist for more than 0.1
+diagram.significant()           // longer than 1% of the point cloud's scale, its minimum enclosing radius
+diagram.significant(0.1)        // longer than 10% of it
+```
+
+`significant()` is what the command line and MATLAB show by default. The same two calls work on any list of bars an
+engine returns: `bars.longerThan(0.1)`, `bars.significant()`.
+
+### Representatives
+
+Every bar carries a representative that witnesses the class. There are two kinds, and `representatives` chooses:
+
+* **cycles**, the default: a cycle of a loop is a path of edges going *around* it, which shows where the loop is.
+* **cocycles**: a cocycle of a loop is a set of edges that cuts *across* it. Circular coordinates are built from
+  cocycles.
+
+The bars are the same either way. Each engine computes one kind natively and derives the other from its pairing, at a
+little extra cost (more in degree 2). The default engines for points compute cohomology, so cocycles are the slightly
+faster choice there; for images, the fast cubical engine computes cycles. See [engines](homology-computation/choosing-engine.md).
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val points = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21)))
+val loop = Persistence(points).dim(1).longest.get
+val cycle = loop.representative     // a cycle: 30 edges going around the loop
+cycle.cells                         // the edges, each a Simplex of two point indices
+cycle.terms                         // the edges with their coefficients
+
+val withCocycles = Persistence(points, representatives = Representatives.Cocycles)
+withCocycles.dim(1).longest.get.representative.cells   // a cocycle: 50 edges cutting across the loop
+```
 
 ### Long computations: the cursor
 
-`Persistence` runs to the end. For a computation that may take days, use an engine directly: its state is a *cursor*
-that you can advance in slices and inspect at any time, so a run that dies still leaves you its output so far.
+`Persistence` runs to the end. For a computation that may take days, run an engine yourself: its state is a cursor
+that processes the complex in steps, and can be read at any scale while it runs, so a run that is stopped still leaves
+its output so far. Running an engine means choosing the coefficient field yourself.
 
 ```scala 3
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 import scala.concurrent.duration.*
 
-given Double is Field = Field.DoubleApproximated(1e-9)
+given Double is Field = Field.DoubleApproximated(1e-9)   // or: val f = FiniteField(17); import f.given
 val points = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21)))
 val state = SimplicialHomologyEngine.persistentHomology(VietorisRips(EuclideanMetricSpace(points), maxDimension = 1))
 
 while !state.advanceFor(10.seconds) do          // true once the whole complex is processed
   println(s"${state.processedCells} / ${state.totalCells} cells")
-state.diagramAt(0.5)                            // exact at any f, wherever the cursor is
-val sofar = state.snapshotAt(0.5)               // an immutable PersistenceDiagram of everything up to 0.5
+state.barcodeAt(0.5)                            // the bars of the filtration up to 0.5, wherever the cursor is
+val sofar = state.snapshotAt(0.5)               // the same, as a PersistenceDiagram
 ```
 
-### Building and taking the boundary of a simplex
+A stream built for degrees `0 .. k` contains cells up to dimension `k + 1`, which is what lets a degree-`k` class die;
+an engine run on it directly also reports the degree-`(k + 1)` bars, which are incomplete. `Persistence` leaves them
+out for you.
+
+### Chains, and a lab for interactive work
+
+`Simplex(1, 2, 3)` (also written `∆(1, 2, 3)`) is a simplex; its boundary has coefficients in whatever field you
+choose:
 
 ```scala 3
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
-
-val triangle = Simplex(1, 2, 3)      // same as ∆(1, 2, 3)
-triangle.boundary[Double]            // Seq((Simplex(2,3), 1.0), (Simplex(1,3), -1.0), (Simplex(1,2), 1.0))
+Simplex(1, 2, 3).boundary[Double]    // (∆(2,3), 1.0), (∆(1,3), -1.0), (∆(1,2), 1.0)
 ```
 
-### Chain arithmetic with a lab
-
-For interactive use, a lab is a pylab-style entry point: one import picks a coefficient field and brings in the library
-and chain arithmetic. `TDAlab.F2`, `TDAlab.F3`, `TDAlab.F17` and `TDAlab.Reals` are prebuilt (`val lab = TDAlab(p);
-import lab.{*, given}` for any other prime); `CubicalLab.F17` etc. do the same for chains of cubes.
+For interactive work with chains, a *lab* is one import that also fixes a coefficient field and turns on chain
+arithmetic: `TDAlab.F2`, `TDAlab.F3`, `TDAlab.F17` and `TDAlab.Reals` are ready-made, `val lab = TDAlab(p); import
+lab.{*, given}` makes one for any prime, and `CubicalLab.F17` and friends do the same for cubes.
 
 ```scala 3
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.TDAlab.F17.{*, given}
 
-val chain = Fp(1) ⊠ ∆(1, 2) - ∆(2, 3)
+val chain = Fp(2) ⊠ ∆(1, 2) - ∆(2, 3)
 println(chain.show)
 ```
-
-### A full Vietoris-Rips persistence computation
-
-```scala 3
-import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.*
-
-given Double is Field = Field.DoubleApproximated(1e-9)
-val engine = SimplicialHomologyEngine[Int, Double, Double]()
-
-val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8))
-val metricSpace = EuclideanMetricSpace(points)
-val stream = VietorisRips(metricSpace, maxFiltrationValue = 2.0)
-
-val state = engine.persistentHomology(stream)
-state.barcodeAt(Double.PositiveInfinity).foreach(println)
-```
-
-_Source: `src/test/scala/org/appliedtopology/tda4j/APISpec.scala`, region `full-vr-computation`._
-
-`SimplicialHomologyEngine[VertexT, CoefficientT, FiltrationT]` is the naive, reference-grade persistence engine.
-It's a good default for exploration and for anything where you want to query the diagram at
-intermediate filtration values or get representative cycles back (`state.diagramAt(f)`/`state.barcodeAt(f)`)
-— see "Which persistence engine?" below for when a different engine is worth reaching for instead.
-
-### Dropping short bars
-
-Engines return every bar. The MATLAB facade and the CLI hide bars shorter than 1% of the input's minimum enclosing radius by
-default; from Scala, `diagram.significant()` does the same for a `PersistenceDiagram`, and `PersistenceFilter` for a list of
-bars (essential bars are always kept; a threshold of `0` keeps everything):
-
-```scala 3
-import scala.language.experimental.modularity
-import org.appliedtopology.tda4j.*
-
-val points: Array[Array[Double]] = Array(Array(0.0, 0.0), Array(0.001, 0.0), Array(1.0, 0.0))
-val diagram = Persistence(points, maxFiltrationValue = 2.0)
-val worthReporting = diagram.significant()                  // default: 1% of the minimum enclosing radius
-val aTenthOfIt = diagram.significant(fraction = 0.1)
-
-val bars = diagram.bars
-val everything = PersistenceFilter.significant(bars, minPersistence = 0.0)
-```
-
-**A default worth knowing**: `VietorisRips` (whichever implementation you pick) defaults `maxFiltrationValue` to the point cloud's own *minimum enclosing radius*, not
-unbounded, since nothing past that radius contributes new homology. Pass `maxFiltrationValue = Double.PositiveInfinity`
-explicitly if you want the old always-unbounded behavior.

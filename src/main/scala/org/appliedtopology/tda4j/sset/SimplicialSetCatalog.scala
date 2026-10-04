@@ -122,14 +122,10 @@ enum RealProjectiveGenerator derives CanEqual:
 object RealProjectiveGenerator:
   given Ordering[RealProjectiveGenerator] = Ordering.by { case E(n) => n }
 
-/** The catalog behind `object SimplicialSet` (mixed in there, so every entry is `SimplicialSet.<name>`): ready-made
-  * finite simplicial sets -- the Sage `simplicial_sets.*` gap list, `.claude/DESIGN-sage-simplicial-sets-comparison.md`
-  * -- plus the constructors that build one from data. Operations on an existing set (`product`, `wedge`, `cone`,
-  * `quotient`, ...) are methods of [[FiniteSimplicialSet]] instead. Pullbacks and integer coefficients are deliberately
-  * not here.
-  *
-  * Complexes given by vertices use [[Simplex]]`[Int]` as the generator type; the faces of a simplex are `d_i` = omit
-  * its `i`-th vertex, so the simplicial identities hold automatically.
+/** The catalog behind `object SimplicialSet` (every entry is `SimplicialSet.<name>`): ready-made finite simplicial
+  * sets, mostly those of Sage's `simplicial_sets`, and constructors that build one from data. Operations on a set
+  * (`product`, `wedge`, `cone`, `quotient`, ...) are methods of [[FiniteSimplicialSet]]. Pullbacks and integer
+  * coefficients are not supported.
   */
 trait SimplicialSetCatalog:
 

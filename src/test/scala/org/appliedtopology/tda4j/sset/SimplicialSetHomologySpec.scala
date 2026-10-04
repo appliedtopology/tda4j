@@ -8,8 +8,8 @@ import org.specs2.mutable
 /** Homology of the hand-built `SimplicialSetFixtures`, computed through the real `CellularHomologyEngine` engine via
   * the trivial `SimplicialSetStream` adapter -- the actual evidence that `faceOf`/`insertOuter` (`SSetElement.scala`)
   * are correct, independent of `SSetElementSpec`'s direct algebra traces. Every generator sits at filtration value 0,
-  * so a finite bar is always `(dim, 0, 0)` and an essential one `(dim, 0, Int.MaxValue)` -- see `SimplicialSetStream`'s
-  * own doc. Expected answers hand-derived in `.claude/WORKLOG-simplicial-sets.md`.
+  * so every finite bar is zero-length (and left out) and the diagram is the essential classes `(dim, 0, Int.MaxValue)`,
+  * one per homology generator. Expected answers hand-derived in `.claude/WORKLOG-simplicial-sets.md`.
   */
 class SimplicialSetHomologySpec extends mutable.Specification:
 
@@ -20,9 +20,6 @@ class SimplicialSetHomologySpec extends mutable.Specification:
 
   private def essentialCountsByDim(diagram: List[(Int, Int, Int)]): Map[Int, Int] =
     diagram.collect { case (dim, _, Int.MaxValue) => dim }.groupBy(identity).view.mapValues(_.size).toMap
-
-  private def finiteCount(diagram: List[(Int, Int, Int)]): Int =
-    diagram.count { case (_, _, death) => death != Int.MaxValue }
 
   private val f11 = new FiniteField(11)
   import f11.given
@@ -45,7 +42,7 @@ class SimplicialSetHomologySpec extends mutable.Specification:
       homologyOf[RealProjectiveGenerator, f3.Fp](SimplicialSet.realProjectiveSpace(2))
 
     (overF2 must containTheSameElementsAs(List((0, 0, Int.MaxValue), (1, 0, Int.MaxValue), (2, 0, Int.MaxValue))))
-      .and(overF3 must containTheSameElementsAs(List((0, 0, Int.MaxValue), (1, 0, 0))))
+      .and(overF3 must containTheSameElementsAs(List((0, 0, Int.MaxValue))))
   }
 
   "RP3 has an essential H_3 over every field, but H_1=H_2=0 over F3 (vs. F2 = F2 everywhere)" >> {
@@ -61,12 +58,12 @@ class SimplicialSetHomologySpec extends mutable.Specification:
 
     (overF2 must containTheSameElementsAs(
       List((0, 0, Int.MaxValue), (1, 0, Int.MaxValue), (2, 0, Int.MaxValue), (3, 0, Int.MaxValue))
-    )).and(overF3 must containTheSameElementsAs(List((0, 0, Int.MaxValue), (1, 0, 0), (3, 0, Int.MaxValue))))
+    )).and(overF3 must containTheSameElementsAs(List((0, 0, Int.MaxValue), (3, 0, Int.MaxValue))))
   }
 
   "Torus has Betti numbers (1, 2, 1) for every coefficient field" >> {
     val diagram = homologyOf[TorusGenerator, f11.Fp](SimplicialSet.torus)
-    (essentialCountsByDim(diagram) === Map(0 -> 1, 1 -> 2, 2 -> 1)).and(finiteCount(diagram) === 1)
+    essentialCountsByDim(diagram) === Map(0 -> 1, 1 -> 2, 2 -> 1)
   }
 
   "product(minimalSphere(1), minimalSphere(1)) has the torus's Betti numbers (1, 2, 1), via a completely different construction than the hand-built torus fixture" >> {
@@ -130,20 +127,5 @@ class SimplicialSetHomologySpec extends mutable.Specification:
     (rp2ViaQuotient.validate() must beEmpty)
       .and(rp2ViaQuotient.generatorsByDim.map(_.size).toList === List(1, 1, 1))
       .and(overF2 must containTheSameElementsAs(List((0, 0, Int.MaxValue), (1, 0, Int.MaxValue), (2, 0, Int.MaxValue))))
-      .and(overF3 must containTheSameElementsAs(List((0, 0, Int.MaxValue), (1, 0, 0))))
-  }
-
-  "Every fixture's diagram accounts for exactly one bar-cell-slot per generator" >> {
-    def totalCells[G](sset: FiniteSimplicialSet[G]): Int = sset.generatorsByDim.map(_.size).sum
-    def accountsForAllCells(diagram: List[(Int, Int, Int)], cells: Int): Boolean =
-      val (finite, essential) = diagram.partition { case (_, _, death) => death != Int.MaxValue }
-      finite.size * 2 + essential.size == cells
-
-    val s3 = SimplicialSetFixtures.minimalSphere(3)
-    val rp3 = SimplicialSet.realProjectiveSpace(3)
-    val torus = SimplicialSet.torus
-
-    accountsForAllCells(homologyOf[SimplicialSetFixtures.SphereGenerator, f11.Fp](s3), totalCells(s3)) must beTrue
-    accountsForAllCells(homologyOf[RealProjectiveGenerator, f11.Fp](rp3), totalCells(rp3)) must beTrue
-    accountsForAllCells(homologyOf[TorusGenerator, f11.Fp](torus), totalCells(torus)) must beTrue
+      .and(overF3 must containTheSameElementsAs(List((0, 0, Int.MaxValue))))
   }

@@ -2,65 +2,42 @@ package org.appliedtopology.tda4j
 
 import scala.collection.mutable
 
-/** Thrown by `FastAlphaHomologyEngine` when `HelixDelaunay`'s own triangulation does not satisfy the "every facet has 1
-  * or 2 containing top simplices" precondition this engine's dual graph needs (see the class doc's own "new finding"
-  * section) -- a real but rare (`~1-in-18700` measured, ambient dimension 2) `HelixDelaunay` limitation, not a sign the
-  * input is malformed or that its persistent homology is somehow uncomputable. Deliberately a distinct, named,
-  * `RuntimeException` subtype -- not a bare `IllegalStateException` -- so a caller (MATLAB/CLI included, where it
-  * crosses the bridge the same way `NoIntegerCocycleException` already does) can catch and handle it specifically, and
-  * so its own message can afford to explain the situation in plain language rather than only in this engine's own
-  * internal vocabulary (top-cell ids, facet counts).
+/** Thrown by [[FastAlphaHomologyEngine]] when the Helix triangulation has a facet with more than two top-dimensional
+  * cofaces, which its dual graph cannot represent. A rare limitation of the triangulation (about 1 cloud in 18,700 in
+  * the plane, more often in higher dimension), not a problem with the data: the general engines handle the same points,
+  * and `requireValidTriangulation` repairs the triangulation. The message says so.
   */
 class FastAlphaTriangulationException(message: String) extends RuntimeException(message)
 
-/** The `FastCubicalHomologyEngine` dual-graph union-find, ported to a `HelixDelaunay` alpha complex
-  * (`.claude/DESIGN-alpha-dual-unionfind.md`, item 7 of `.claude/WORKLOG-mainstream-feature-gap-analysis.md`, a
-  * follow-on to item 6's cubical engine). `HelixDelaunay` specifically, not `AlphaComplexDQP`/`AlphaShapeDQP` -- the
-  * dual graph needs the FULL, untruncated triangulation and "every facet has <= 2 cofaces," which `AlphaShapeDQP`'s own
-  * documented cospherical-degeneracy hazard can violate directly (see the design note).
+/** Persistent homology of a Helix alpha complex by union-find instead of matrix reduction: degree 0 on the vertices and
+  * edges, the top degree `d - 1` on the dual graph of the top-dimensional simplices, as in
+  * [[FastCubicalHomologyEngine]]. In the plane those cover everything; in dimension 3 and up the degrees in between are
+  * computed by the chunks engine on the complex without its top simplices. Works in any ambient dimension from 2, with
+  * representatives for every bar.
   *
-  * '''Valid at any ambient dimension `>= 2`''' (`require`d), same as `FastCubicalHomologyEngine` (which this class
-  * mirrors term-for-term): `H_0` (ordinary primal union-find) plus `H_{d-1}` (via the dual union-find below) together
-  * account for every cell dimension a 2D triangulation has, with no general `Chain.reduceBy` reduction needed at all.
-  * At `d >= 3` there are `d-2` "middle" dimensions (`1 <= k <= d-2`) with no duality shortcut; these are handed to
-  * `CellularPersistenceInChunksEngine` run on a `LimitedAlphaShapesStream` view that hides the real top-dimensional
-  * simplices entirely -- still a net win, since the (often largest) top dimension never touches general `Chain`
-  * reduction. See `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md` for the full derivation, including why the
-  * dual union-find's own correctness doesn't depend on how the middle dimensions get resolved.
-  *
-  * '''Unlike the cubical grid, "every facet has 1 or 2 cofaces" is not guaranteed by construction''' -- validated
-  * explicitly up front, throwing [[FastAlphaTriangulationException]] (a message written for an unsuspecting caller, not
-  * just this engine's own developers -- what happened, why it isn't a bug in their data, and the concrete fix) on
-  * violation, rather than silently building a wrong dual graph. Measured at roughly 1-in-18700 on random points at
-  * ambient dimension 2 (the original measurement) -- but this is a real, genuine `HelixDelaunay` limitation (a
-  * cospherical tiling choice or its own documented frontier-walk incompleteness bug), and it is NOTICEABLY MORE LIKELY
-  * at higher ambient dimension and with more points, not a flat rate: roughly 1-in-1666 measured at ambient dimension 3
-  * with 20-30 points (vs. no violations at all in 20000 trials with 6-16 points at the same dimension). See
-  * `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`'s own measurement and the design note's "new finding"
-  * section.
-  *
-  * '''A facet's own dual-edge value is `helix.filtrationValue(facet)` directly, never recomputed as `min` over its
-  * containing top simplices''' -- unlike a cubical grid (where those two quantities are the same by construction),
-  * `HelixDelaunay.computeFVal`'s own `edgeIsDelaunay` shortcut can give a genuinely SMALLER value than either
-  * containing triangle's own circumradius; using anything else silently shifts some bars' birth values (see the design
-  * note's own worked example for a concrete case where this matters).
-  *
-  * See `FastCubicalHomologyEngine`'s own doc for the shared parts of the construction (the dual graph itself, the `∞`
-  * sentinel and why it must be `+Infinity`, the birth/death swap, and the representative-tracking orientation-flip
-  * scheme) -- identical here, `Simplex[Int]`'s alternating-sign boundary rule (`simplexIsOrderedCell`) standing in for
-  * `Cube`'s rank-among-non-degenerate-axes rule.
+  * The dual graph needs every facet to have one or two top-dimensional cofaces. Unlike a grid, a triangulation does not
+  * guarantee it, so it is checked first, throwing [[FastAlphaTriangulationException]] when it fails (about 1 cloud in
+  * 18,700 at dimension 2, 1 in 1,700 at dimension 3 with 20-30 points). A facet's dual-edge value is its own filtration
+  * value, which can be smaller than its cofaces' circumradii (a Gabriel edge).
   */
 class FastAlphaHomologyEngine[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
   given Ordering[Simplex[Int]] = simplexOrdering[Int]
 
-  def persistentHomology(helix: HelixDelaunay): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
+  /** Every bar of the alpha filtration, with representatives; zero-length bars only if `includeZeroLength`. */
+  def persistentHomology(
+    helix: HelixDelaunay,
+    includeZeroLength: Boolean = false
+  ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     require(
       helix.ambientDimension >= 2,
       s"FastAlphaHomologyEngine requires ambient dimension >= 2, got ${helix.ambientDimension}"
     )
-    if helix.ambientDimension == 2 then computeH0(helix) ++ computeDualTopDimension(helix)
-    else computeMiddleDimensions(helix) ++ computeDualTopDimension(helix)
+    val bars =
+      if helix.ambientDimension == 2 then
+        computeH0(helix, includeZeroLength) ++ computeDualTopDimension(helix, includeZeroLength)
+      else computeMiddleDimensions(helix, includeZeroLength) ++ computeDualTopDimension(helix, includeZeroLength)
+    bars
 
   // -------------------------------------------------------------------------------------------------------------
   // d >= 3's "middle" dimensions (1 <= k <= d-2): see FastCubicalHomologyEngine.computeMiddleDimensions, whose
@@ -71,12 +48,13 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
   // this codebase's naive/chunks/cohomology engines already use for alpha complexes elsewhere.
   // -------------------------------------------------------------------------------------------------------------
   private def computeMiddleDimensions(
-    helix: HelixDelaunay
+    helix: HelixDelaunay,
+    includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     val truncated = LimitedAlphaShapesStream(helix, helix.ambientDimension - 1)
     PersistenceInChunksEngine[Int, CoefficientT](helix.ambientDimension - 2)
       .persistentHomology(truncated)
-      .barcodeAt(Double.PositiveInfinity)
+      .barcodeAt(Double.PositiveInfinity, includeZeroLength)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
     if !lower && v == Double.PositiveInfinity then PositiveInfinity()
@@ -87,7 +65,10 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
   // H_0: ordinary primal union-find, ascending value order, elder rule -- identical in shape to
   // FastCubicalHomologyEngine.computeH0, just over Simplex[Int] vertices/edges instead of Cube ones.
   // -------------------------------------------------------------------------------------------------------------
-  private def computeH0(helix: HelixDelaunay): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
+  private def computeH0(
+    helix: HelixDelaunay,
+    includeZeroLength: Boolean
+  ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     val vertices: Vector[Simplex[Int]] = helix.iterateDimension.applyOrElse(0, (_: Int) => Iterator.empty).toVector
     val vertexIndex: Map[Simplex[Int], Int] = vertices.zipWithIndex.toMap
     val parent: Array[Int] = Array.range(0, vertices.size)
@@ -115,12 +96,9 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
         val (youngRoot, oldRoot) = if v0Val <= v1Val then (r1, r0) else (r0, r1)
         parent(youngRoot) = oldRoot
         val dying = vertices(youngRoot)
-        bars += new PersistenceBar(
-          0,
-          endpoint(true)(helix.filtrationValue(dying)),
-          endpoint(false)(helix.filtrationValue(edge)),
-          Some(Chain(dying))
-        )
+        val (birth, death) = (helix.filtrationValue(dying), helix.filtrationValue(edge))
+        if includeZeroLength || birth != death then
+          bars += new PersistenceBar(0, endpoint(true)(birth), endpoint(false)(death), Some(Chain(dying)))
     vertices.indices.foreach { i =>
       if find(i) == i then
         bars += new PersistenceBar(
@@ -140,7 +118,8 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
   // SAME generic dual-union-find/representative-tracking algorithm regardless of cell type).
   // -------------------------------------------------------------------------------------------------------------
   private def computeDualTopDimension(
-    helix: HelixDelaunay
+    helix: HelixDelaunay,
+    includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     val ambientDim = helix.ambientDimension
     val topSimplices: Vector[Simplex[Int]] = helix.iterateDimension(ambientDim).toVector
@@ -187,10 +166,7 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
           "(Technical detail, for developers investigating this class itself: " +
           s"${badFacets.size} facet(s) had a containing-top-simplex count other than 1 or 2 " +
           s"(${badFacets.map { case (f, ids) => s"$f -> ${ids.size} cofaces" }.mkString("; ")}), meaning the dual " +
-          "graph this engine's own algorithm needs is not well-defined for this triangulation -- see " +
-          ".claude/DESIGN-alpha-dual-unionfind.md's 'new finding' section and " +
-          ".claude/DESIGN-fast-engines-hybrid-middle-dimensions.md's own dimension-dependent measurement for the " +
-          "full investigation.)"
+          "graph this engine needs is not well-defined for this triangulation.)"
       )
 
     // Value from helix.filtrationValue(facet) directly, NOT ids.map(topValue).min -- see the class doc's own
@@ -329,10 +305,11 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
                   simplex.boundary[CoefficientT].map((f, s) => (f, fr.times(c, s)))
                 )
               )
-            bars += new PersistenceBar(
-              ambientDim - 1,
-              endpoint(true)(v),
-              endpoint(false)(birthOf(youngRoot)),
-              Some(rep)
-            )
+            if includeZeroLength || v != birthOf(youngRoot) then
+              bars += new PersistenceBar(
+                ambientDim - 1,
+                endpoint(true)(v),
+                endpoint(false)(birthOf(youngRoot)),
+                Some(rep)
+              )
     bars.toList

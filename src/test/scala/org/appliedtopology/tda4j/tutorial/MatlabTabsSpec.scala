@@ -23,34 +23,28 @@ class MatlabTabsSpec extends Specification:
       .sorted
 
   "find-a-loop.md (MATLAB tab)" should {
-    lazy val result = TDA4j.computeFromPoints(points, Array("maxDimension", "1", "engine", "naive"))
-    "report 58 bars, hide 1486, and find the loop" in {
+    lazy val result = TDA4j.computeFromPoints(points)
+    "report 61 bars, hide 3, and find the loop" in {
       val bars = result.toArray()
-      (bars.length must beEqualTo(58))
-        .and(result.hiddenCount() must beEqualTo(1486))
+      (bars.length must beEqualTo(61))
+        .and(result.hiddenCount() must beEqualTo(3))
         .and(rows(dim(bars, 1)) must beEqualTo(List(List(1.0, 0.595, 1.707))))
-        .and(dim(bars, 0).length must beEqualTo(57))
-    }
-    "see the full barcode through toArrayUnfiltered: 1544 bars, 1483 of zero length" in {
-      val all = result.toArrayUnfiltered()
-      (all.length must beEqualTo(1544)).and(all.count(b => b(2) - b(1) <= 1e-12) must beEqualTo(1483))
     }
     "find the longest finite gap in dimension 0 (0.484) among the reported bars" in {
       val h0 = dim(result.toArray(), 0).filter(_(2).isFinite)
       r3(h0.map(b => b(2) - b(1)).max) must beEqualTo(0.484)
     }
-    "give a 52-edge representative of the loop (0-based CSV row numbers) using the 0-based index of the bar" in {
+    "give an 18-edge cycle of the loop (0-based CSV row numbers) using the 0-based index of the bar" in {
       val k = result.toArray().indexWhere(_(0) == 1.0)
       val edges = result.cycleVertices(k)
-      (edges.length must beEqualTo(52))
+      (edges.length must beEqualTo(18))
         .and(edges.forall(_.length == 2) must beTrue)
-        .and(result.cycleCoefficients(k).length must beEqualTo(52))
+        .and(result.cycleCoefficients(k).length must beEqualTo(18))
     }
-    "cut off at 1.0: 3629 cells, and the loop is born at 0.595 and never dies" in {
+    "cut off at 1.0: the loop is born at 0.595 and never dies" in {
       val short =
-        TDA4j.computeFromPoints(points, Array("maxDimension", "1", "engine", "naive", "maxFiltrationValue", "1.0"))
-      (short.numCells() must beEqualTo(3629))
-        .and(rows(dim(short.toArray(), 1)) must beEqualTo(List(List(1.0, 0.595, Double.PositiveInfinity))))
+        TDA4j.computeFromPoints(points, Array("maxFiltrationValue", "1.0"))
+      rows(dim(short.toArray(), 1)) must beEqualTo(List(List(1.0, 0.595, Double.PositiveInfinity)))
     }
   }
 
@@ -77,7 +71,7 @@ class MatlabTabsSpec extends Specification:
     def twoLongest(r: matlab.PersistenceResult) =
       dim(r.toArrayUnfiltered(), 1).map(b => r3(b(2) - b(1))).sorted.reverse.take(2).toList
     "show the two longest loops for VR and DTM, and the cycles of the VR ones" in {
-      val vr = TDA4j.computeFromPoints(outliers, Array("maxDimension", "1", "engine", "naive"))
+      val vr = TDA4j.computeFromPoints(outliers)
       val dtm =
         TDA4j.computeFromPoints(outliers, Array("maxDimension", "1", "complex", "dtm-rips", "dtmK", "8", "dtmP", "1.0"))
       val top = vr.toArray().zipWithIndex.filter(_._1(0) == 1.0).sortBy(x => -(x._1(2) - x._1(1))).take(2).map(_._2)
@@ -86,7 +80,7 @@ class MatlabTabsSpec extends Specification:
       }.toList
       (twoLongest(vr) must beEqualTo(List(0.901, 0.127)))
         .and(twoLongest(dtm) must beEqualTo(List(0.815, 0.005)))
-        .and(cycles must beEqualTo(List((66, 2), (8, 5))))
+        .and(cycles must beEqualTo(List((25, 8), (7, 5))))
     }
   }
 
@@ -117,8 +111,8 @@ class MatlabTabsSpec extends Specification:
         .and(significant("true", "fast-cubical") must beEqualTo(dark))
         .and(significant("false", "naive") must beEqualTo(bright))
     }
-    "have 1625 bars in the full barcode" in {
-      TDA4j.computeFromImage(pixels, Array("sublevel", "true")).toArrayUnfiltered().length must beEqualTo(1625)
+    "have 221 bars in the full barcode" in {
+      TDA4j.computeFromImage(pixels, Array("sublevel", "true")).toArrayUnfiltered().length must beEqualTo(221)
     }
   }
 
@@ -134,7 +128,7 @@ class MatlabTabsSpec extends Specification:
     "recover the circle's angle to 0.064 of a turn" in {
       val h1 = TDA4j.h1Bars(points)
       val c = TDA4j.circularCoordinates(points, (h1(0)(0) + h1(0)(1)) / 2)
-      (rows(h1.take(2)) must beEqualTo(List(List(0.595, 1.707), List(1.95, 1.95))))
+      (rows(h1) must beEqualTo(List(List(0.595, 1.707))))
         .and(c.theta().length must beEqualTo(60))
         .and(r3(alignmentError(c.theta(), i => turn(points(i)(1), points(i)(0)))) must beEqualTo(0.064))
     }
@@ -185,20 +179,19 @@ class MatlabTabsSpec extends Specification:
     val relation = Array.tabulate(6, 7) { (person, club) =>
       if club == 6 then 5.0 else if club == person then 1.0 else if club == (person + 1) % 6 then 2.0 else never
     }
-    "see the same loop [2,5) from both sides, 16 and 13 bars in the raw barcodes" in {
+    "see the same seven bars, among them the loop [2,5), from both sides" in {
       val people = TDA4j.computeFromRelation(relation, Array("maxDimension", "1"))
       val clubs = TDA4j.computeFromRelation(relation, Array("maxDimension", "1", "dual", "true"))
       (rows(dim(people.toArray(), 1)) must beEqualTo(List(List(1.0, 2.0, 5.0))))
         .and(rows(dim(clubs.toArray(), 1)) must beEqualTo(List(List(1.0, 2.0, 5.0))))
-        .and(people.toArrayUnfiltered().length must beEqualTo(16))
-        .and(clubs.toArrayUnfiltered().length must beEqualTo(13))
-        .and(rows(people.toArray()) must beEqualTo(rows(clubs.toArray())))
+        .and(people.toArray().length must beEqualTo(7))
+        .and(rows(people.toArray()).sortBy(_.toString) must beEqualTo(rows(clubs.toArray()).sortBy(_.toString)))
     }
   }
 
   "scaling-up.md (MATLAB tab)" should {
     def run(extra: String*) =
-      TDA4j.computeFromPoints(points, Array("maxDimension", "1", "minPersistence", "1e-9") ++ extra)
+      TDA4j.computeFromPoints(points, Array("maxDimension", "1", "minPersistence", "0") ++ extra)
     "give 61 bars for every engine, and the same bars" in {
       val all = List("naive", "chunks", "cohomology", "ripser").map(e => cleaned(run("engine", e)))
       (all.map(_.size) must beEqualTo(List(61, 61, 61, 61))).and(all.forall(_ == all.head) must beTrue)

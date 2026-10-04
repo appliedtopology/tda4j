@@ -191,9 +191,10 @@ object HomologyFixtures:
     (2, 0.0, Double.PositiveInfinity)
   )
 
-  /** For every cell in a stream, it either opens exactly one bar (as a birth, whether finite or essential) or closes
-    * exactly one bar (as a death); a finite bar accounts for 2 cells, an essential bar for 1. This is a cheap
-    * structural invariant that catches most reduction bugs without needing an external oracle.
+  /** The pairing invariant of a reduction: every cell opens exactly one bar or closes exactly one, so a finite bar
+    * accounts for 2 cells and an essential bar for 1. A check of an ENGINE (it holds for any processing order), so the
+    * barcode must include the zero-length bars: pass the output of `diagramAt(f, includeZeroLength = true)` or the
+    * like. To check a STREAM, use [[respectsOrderingContract]].
     *
     * `topDimension` (default `Int.MaxValue`, i.e. no special case -- every other caller of this helper feeds a
     * complete, untruncated complex) accounts for one specific, legitimate exception: an engine like
@@ -212,3 +213,19 @@ object HomologyFixtures:
     val (finite, essential) = barcode.partition((_, _, upper) => upper.isFinite)
     val (finiteAtTop, finiteBelowTop) = finite.partition((dim, _, _) => dim == topDimension)
     finiteBelowTop.size * 2 + finiteAtTop.size + essential.size == totalCells
+
+  /** The stream ordering contract (`.claude/rules/streams.md`): every face of every cell is in the stream and enters no
+    * later than the cell, and each dimension from 1 up is listed oldest first in the stream's own order. (Coface
+    * streams list their vertices in index order, which the engines do not rely on.)
+    */
+  def respectsOrderingContract[CellT: OrderedCell](stream: StratifiedCellStream[CellT, Double]): Boolean =
+    given Double is Field = Field.DoubleApproximated(1e-9)
+    val fv = stream.filtrationValue
+    val cells = stream.iterator.toVector
+    val present = cells.toSet
+    val facesFirst = cells.forall(c => c.boundary[Double].forall((face, _) => present(face) && fv(face) <= fv(c)))
+    val bucketsSorted = Iterator.from(1).takeWhile(stream.iterateDimension.isDefinedAt).forall { d =>
+      val bucket = stream.iterateDimension(d).toVector
+      bucket == bucket.sorted(using stream.filtrationOrdering.reverse)
+    }
+    facesFirst && bucketsSorted

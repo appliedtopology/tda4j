@@ -263,37 +263,25 @@ class WitnessStreamSpec extends mutable.Specification with ScalaCheck:
   // sanity net every stream in this codebase gets (CLAUDE.md's "#1 historical bug source").
   // ---------------------------------------------------------------------------------------------------------
 
-  "the bars-account-for-cells structural invariant holds for the lazy witness complex, on random clouds" >>
+  "the lazy witness complex satisfies the stream ordering contract, on random clouds" >>
     AsResult {
       prop { (points: Array[Array[Double]]) =>
         val ms = EuclideanMetricSpace(points)
         val numLandmarks = math.max(2, points.length - 1)
         val landmarks = LandmarkSelector.maxmin(ms, numLandmarks).landmarks
-        val stream = LazyWitnessSimplexStream(ms, landmarks, maxFiltrationValue = Some(Double.PositiveInfinity))
-        val barcode = SimplicialHomologyEngine[Int, Double, Double]()
-          .persistentHomology(stream)
-          .diagramAt(Double.PositiveInfinity)
-        val cellCount = (0 until landmarks.size)
-          .flatMap(d => stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty))
-          .size
-        HomologyFixtures.totalBarsAccountForAllCells(barcode, cellCount)
+        HomologyFixtures.respectsOrderingContract(
+          LazyWitnessSimplexStream(ms, landmarks, maxFiltrationValue = Some(Double.PositiveInfinity))
+        )
       }
     }
 
-  "the bars-account-for-cells structural invariant holds for the general witness complex, on random clouds" >>
+  "the general witness complex satisfies the stream ordering contract, on random clouds" >>
     AsResult {
       prop { (points: Array[Array[Double]]) =>
         val ms = EuclideanMetricSpace(points)
         val numLandmarks = math.max(2, points.length - 1)
         val geometry = WitnessGeometry(ms, LandmarkSelector.maxmin(ms, numLandmarks).landmarks)
-        val stream = WitnessCofaceSimplexStream(geometry)
-        val barcode = SimplicialHomologyEngine[Int, Double, Double]()
-          .persistentHomology(stream)
-          .diagramAt(Double.PositiveInfinity)
-        val cellCount = (0 until geometry.L)
-          .flatMap(d => stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty))
-          .size
-        HomologyFixtures.totalBarsAccountForAllCells(barcode, cellCount)
+        HomologyFixtures.respectsOrderingContract(WitnessCofaceSimplexStream(geometry))
       }
     }
 

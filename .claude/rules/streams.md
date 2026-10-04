@@ -57,3 +57,16 @@ stream needs `maxDimension = k+1` for H_k (it sees only streamed simplices). `WO
 **Public dispatcher thresholds are `Optional[Double]`** (`into`, `algebra/Optional.scala`): `maxFiltrationValue = 1.5`,
 `2`, `Some(1.5)` and `None` all work; bodies use `.toOption`. `EuclideanMetricSpace(points: PointCloud)` accepts every
 point-collection shape. `VietorisRips`/`Cech` implement `PointCloudComplex.fromPoints` for the `Persistence` verb.
+
+**Testing a stream: check the contract, not bar counts.** `HomologyFixtures.respectsOrderingContract(stream)` checks
+that every face is present, values are monotone along faces, and each dimension's bucket (dimension >= 1) is sorted by
+`filtrationOrdering.reverse` (vertices are listed in index order, so dimension 0 is exempt). With zero-length bars
+dropped by default, `#bars` no longer equals anything about `#cells`; a construction is pinned by comparing cells and
+values against an oracle (`ComplexesSpec`). `ExplicitStream` is stratified, so the verb accepts `fromFacets(...)`.
+
+**A truncated stream says so: `homologyDegreeLimit`.** `VietorisRips(..., maxDimension = k)` and every other
+dispatcher, `Truncated`, `LimitedCofaceSimplexStream` and `IncrementalVietorisRipsSimplexStream` report `Some(k)`: the
+stream holds cells up to dimension `k + 1`, so its degree-`(k + 1)` "classes" are artifacts (every unfilled top cell
+looks essential). `Persistence(stream)` defaults to that `k` and throws for a larger `maxDimension`; complete complexes
+(`ExplicitStream`, cubical, alpha, simplicial sets) report `None`. A new truncating wrapper must override it (taking
+the min with the wrapped stream's). `PersistenceVerbSpec`, `WORKLOG-default-degree-2.md`.

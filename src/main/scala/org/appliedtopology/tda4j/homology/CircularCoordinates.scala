@@ -4,56 +4,22 @@ import org.apache.commons.math3.linear.{ArrayRealVector, ConjugateGradient, Real
 
 import scala.collection.mutable
 
-/** No valid `Z`-lift of the chosen cocycle exists for the chosen `prime` -- either the underlying cohomology class is
-  * genuinely torsion (no real/integer lift can exist at any prime -- an RP²-type class is the standard example), or
-  * `prime` was too small relative to the true integer cocycle's own magnitudes for the mod-`prime` reduction to be
-  * injective on the relevant range (retry with a larger prime). Thrown rather than silently coordinatizing against a
-  * mod-`prime` mirage -- see `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 2's own framing: "`∂(ℤ-lift) =
-  * 0` must be a runtime check, not assumed."
+/** The chosen cocycle has no integer lift at the chosen `prime`: either the class is torsion (as on RP²) and has no
+  * circle-valued coordinate at all, or `prime` is too small for the integer cocycle's entries; in the second case a
+  * larger prime helps.
   */
 class NoIntegerCocycleException(message: String) extends RuntimeException(message)
 
-/** Circular coordinates (de Silva, Morozov, Vejdemo-Johansson, "Persistent Cohomology and Circular Coordinates,"
-  * Discrete & Computational Geometry 45:737-759, 2011): given a persistent H¹ class of a Vietoris-Rips complex, produce
-  * a map from (a connected subset of) the point cloud to the circle `R/Z` representing that class -- a genuinely
-  * topological coordinate capturing periodic/cyclic structure in data. `.claude/WORKLOG-mainstream-
-  * feature-gap-analysis.md` item 2, including the user's own reframing of the original open question (see that worklog
-  * for the full derivation this implementation follows) and cross-checked against a real reference implementation
-  * (`scikit-tda/DREiMac`'s `toroidalcoords.py`, fetched directly -- not recalled from memory, matching this codebase's
-  * own io-module verification ethos) for the exact harmonic-smoothing linear system and the "coordinate is literally
-  * the smoothed potential itself, mod 1" formula, which is less obvious from the paper's own more abstract framing than
-  * it looks once seen written out as code.
+/** Circular coordinates (de Silva, Morozov, Vejdemo-Johansson, "Persistent Cohomology and Circular Coordinates",
+  * Discrete & Computational Geometry 45:737-759, 2011): a map from the points to the circle `R/Z` that represents a
+  * persistent H¹ class of the Vietoris-Rips complex.
   *
-  * '''The reframing''' (this is what makes the construction tractable): rather than asking whether a *finite* H¹ bar's
-  * representative restricts to a nonzero cocycle on some sub-level complex `K_r` (an open question about an
-  * already-computed representative), fix `r` inside the target bar's own `[birth, death)` range up front, build the
-  * *static* truncated complex `K_r` (`maxFiltrationValue = Some(r)`, the same knob that already implements
-  * enclosing-radius truncation, plus a cell-dimension cap so `CellularCohomologyEngine` -- which fully materializes its
-  * input, no `maxDim` of its own -- doesn't build cells above what H¹ needs), and compute cohomology of *that fixed
-  * complex* directly. The target class is essential there *by construction* (nothing survives past `r` in a view that
-  * stops at `r`) -- the verification question dissolves rather than needing an answer. Matching multiple
-  * simultaneously-alive classes at `K_r` back to a specific full-filtration bar turns out to need only a birth-value
-  * comparison, not a more elaborate algorithm: `K_r`'s own persistent cohomology (fed the same filtration values, just
-  * cut off at `r`) assigns every bar the SAME birth it would have in the full computation (truncating the end of a
-  * filtration cannot change how early something is born), so an essential bar at `K_r` with birth `b` is unambiguously
-  * "the same" class as a full-computation bar with that same birth `b`, found by direct comparison -- no separate
-  * matching machinery needed.
-  *
-  * '''Harmonic smoothing''': the chosen cocycle `z` (an integer 1-cochain, lifted from a large-prime field
-  * representative -- see `prime`'s own doc) is smoothed by solving `min_g ||z - d0 g||^2` for a real-valued vertex
-  * function `g` (`d0`, the 0-coboundary map, is `(d0 g)(edge [i,j]) = g(j) - g(i)`), via the normal equations
-  * `d0^T d0 g = d0^T z` -- a sparse SPD least-squares solve, not "optimization" in the LP/QP sense. Solved matrix-free
-  * (`org.apache.commons.math3.linear.ConjugateGradient` against a `RealLinearOperator` built directly from
-  * `Simplex.boundary[Double]`, no dense matrix ever materialized, no new dependency -- `commons-math3` is already
-  * vendored) over the connected component of `K_r`'s 1-skeleton containing the cocycle's own support (a class is only
-  * meaningful there -- other components have no path along which it could be defined at all), with one
-  * arbitrarily-chosen vertex in that component anchored at `g = 0` to make the reduced system genuinely positive
-  * *definite*, not just semi-definite (the unreduced graph Laplacian is singular on constants, one dimension of null
-  * space per connected component -- anchoring one vertex removes exactly that one dimension, rather than disabling
-  * `ConjugateGradient`'s own positive-definiteness check and hoping).
-  *
-  * The output coordinate is then, remarkably directly, `theta(v) = frac(g(v))`: no separate path-integration step is
-  * needed (confirmed against DREiMac's own code, not derived from the paper's more abstract statement alone).
+  * Pick a scale `r` inside the class's bar (see [[h1Bars]]). The class is then an essential class of the fixed complex
+  * `K_r`, the complex truncated at `r`; it is matched to the bar of the full computation with the same birth, since
+  * truncation never changes a birth. Its cocycle, computed over `F_prime` and lifted to the integers, is smoothed to
+  * the harmonic representative: `g` minimizing `||z - d0 g||²` over the connected component of `K_r` carrying the
+  * class, solved by conjugate gradients on the normal equations with one vertex fixed at `0`. The coordinate of a point
+  * is `g(v) mod 1`. The solve follows DREiMac's `toroidalcoords.py`.
   */
 object CircularCoordinates:
 
@@ -77,14 +43,8 @@ object CircularCoordinates:
   private def persistenceOf(bar: PersistenceBar[Double, ?]): Double =
     endpointValue(bar.upper) - endpointValue(bar.lower)
 
-  /** The `(birth, death)` range of every persistent H¹ class of `metricSpace`'s Vietoris-Rips complex, sorted by
-    * persistence descending -- index `i` here is exactly `compute`'s own `cocycleIndex = i`. A caller has no way to
-    * pick a meaningful `r` for `compute` without first knowing a target bar's own range, so this is the intended first
-    * call, not merely a diagnostic. Computed over `Double` coefficients (this library's usual default for reading off
-    * bar values) regardless of the `prime` a later `compute` call will use -- the `(birth, death)` values themselves
-    * agree across coefficient fields for any class `compute` could actually succeed on (a genuinely torsion class,
-    * where they might not, is exactly the case `compute` itself reports via [[NoIntegerCocycleException]] rather than
-    * silently coordinatizing).
+  /** The `(birth, death)` of every persistent H¹ class of the Vietoris-Rips complex of `metricSpace`, most persistent
+    * first: index `i` is `cocycleIndex = i` in [[compute]]. Call this first to choose `r`.
     */
   def h1Bars(
     metricSpace: FiniteMetricSpace[Int],
@@ -103,31 +63,21 @@ object CircularCoordinates:
       .map(b => (endpointValue(b.lower), endpointValue(b.upper)))
       .toIndexedSeq
 
-  /** Circular coordinates for one persistent H¹ class of `metricSpace`'s Vietoris-Rips complex.
+  /** Circular coordinates for one persistent H¹ class of the Vietoris-Rips complex of `metricSpace`.
     *
     * @param metricSpace
-    *   the point cloud (or precomputed distance data) to coordinatize.
+    *   the points, or a metric space.
     * @param r
-    *   the fixed threshold defining the static complex `K_r` cohomology is actually computed on -- must lie in
-    *   `[birth, death)` of the `cocycleIndex`-th class (checked; an actionable message names the valid range, since
-    *   picking `r` is a real, data-dependent choice this method cannot make for the caller -- see the class doc's
-    *   "reframing" paragraph for why this parameter exists at all).
+    *   the scale at which the coordinates are computed; it must lie in `[birth, death)` of the chosen class (the error
+    *   names that range otherwise).
     * @param cocycleIndex
-    *   selects which persistent H¹ class to coordinatize, `0` = the most persistent (matching DREiMac's own
-    *   `cocycle_idx` convention, checked directly rather than assumed) -- ties broken by this codebase's own
-    *   `Ordering`/sort stability, not meaningful to rely on.
+    *   the class, `0` being the most persistent (as in [[h1Bars]] and DREiMac's `cocycle_idx`).
     * @param prime
-    *   the field cohomology is computed over before lifting to an integer cocycle -- must be an ODD prime (not the
-    *   library-wide default of `2`: an RP²-type class exists over `F_2` with no real/integer lift at all, so a mod-2
-    *   "cocycle" can be a mirage for coordinatization here specifically, even though `F_2` is perfectly fine for
-    *   ordinary barcodes). "Large-ish" per the originating worklog: large enough that the true integer cocycle's own
-    *   entries don't exceed the field's centered representative range and wrap around -- `47` is an unremarkable
-    *   default, not a value with any special significance; raise it if [[NoIntegerCocycleException]] is thrown and the
-    *   class is not, in fact, torsion.
+    *   the odd prime cohomology is computed over before the cocycle is lifted to the integers (`F_2` would admit
+    *   classes with no lift). If [[NoIntegerCocycleException]] is thrown for a class that is not torsion, try a larger
+    *   one.
     * @param maxFiltrationValue
-    *   truncation for the FULL computation used only to pick the target bar (`None` defaults to the metric space's own
-    *   minimum enclosing radius, this library's usual convention) -- unrelated to `r`, which truncates the separate,
-    *   smaller complex actually used for cohomology.
+    *   the truncation of the full computation that finds the classes (default: the minimum enclosing radius).
     */
   def compute(
     metricSpace: FiniteMetricSpace[Int],
@@ -292,29 +242,19 @@ object CircularCoordinates:
   )
 
   /** Toroidal coordinates (Scoccola, Gakhar, Bush, Schonsheck, Rask, Zhou, Perea, "Toroidal Coordinates: Decorrelating
-    * Circular Coordinates With Lattice Reduction," arXiv:2212.07201): circular coordinates for SEVERAL
-    * simultaneously-alive persistent H¹ classes, combined into one torus-valued map, with the combination chosen by
-    * [[LatticeReduction]] rather than left to whatever a cohomology computation's pivot order happened to produce.
+    * Circular Coordinates With Lattice Reduction", arXiv:2212.07201): circular coordinates for several H¹ classes alive
+    * at `r`, combined into one map to a torus.
     *
-    * '''Why this exists''' (Edelsbrunner's own point in the original circular-coordinates Q&A, per the project lead):
-    * given `k` independent H¹ generators, ANY unimodular integer combination of them is an equally valid choice of
-    * generators for the same rank-`k` sublattice of `H^1(K_r; Z)` -- so "the" `k` circular coordinates a cohomology
-    * computation hands back are arbitrary, not canonical, and could in principle be an arbitrarily skewed mix of
-    * whatever a data set's "obviously" independent cycles are. This picks the combination that's shortest and most
-    * nearly orthogonal under the classes' own harmonic-representative inner product (the paper's dSMV form: the plain
-    * sum-over-edges dot product of two harmonic 1-cochains, i.e. the discrete Dirichlet form up to a constant) via LLL.
+    * Any unimodular integer recombination of `k` classes generates the same lattice of classes, so the `k` coordinates
+    * a cohomology computation returns are an arbitrary choice. This picks the shortest, most nearly orthogonal
+    * recombination ([[LatticeReduction]], LLL) under the inner product of the harmonic representatives.
     *
     * @param cocycleIndices
-    *   which persistent H¹ classes to combine (same indexing as `compute`'s own `cocycleIndex` / `h1Bars`), at least
-    *   one, no duplicates. Every chosen class's own `[birth, death)` must contain `r` (checked -- an actionable message
-    *   names the empty intersection otherwise), generalizing `compute`'s own single-class requirement to
-    *   "simultaneously alive," not a new constraint. The chosen classes must also all be supported on the SAME
-    *   connected component of `K_r`'s 1-skeleton (checked -- two classes native to two different components of a
-    *   disconnected `K_r` have no joint domain to be coordinatized on at all).
+    *   the classes (indexed as in [[h1Bars]]), at least one and without repeats. Each bar must contain `r`, and all of
+    *   them must live on the same connected component of `K_r`.
     * @param reduce
-    *   `true` (default) applies the lattice reduction; `false` returns the SAME `k` coordinates un-reduced (still
-    *   validated/matched/lifted identically, `basisChange` the identity) -- so a caller can compare directly against
-    *   the reduced version, or opt out entirely if the raw persistent-cohomology basis is already what they want.
+    *   `false` returns the coordinates of the classes as given, without recombining them (`basisChange` is then the
+    *   identity).
     */
   def computeToroidal(
     metricSpace: FiniteMetricSpace[Int],

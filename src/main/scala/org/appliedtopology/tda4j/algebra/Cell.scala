@@ -18,21 +18,13 @@ trait OrderedCell extends Cell:
 
 object OrderedCell:
   /** A cell type's intrinsic order (`Simplex`: lexicographic), for generic code that holds only `CellT: OrderedCell`
-    * and no stream: `import OrderedCell.cellOrdering`.
-    *
-    * Deliberately NOT a top-level given. A top-level `[CellT: OrderedCell] => Ordering[CellT]` is visible everywhere in
-    * the package and matches `Ordering[?T]` for any not-yet-inferred `T`, so it competed at equal priority with a
-    * stream's filtration ordering and silently decided type inference (`SimplicialHomologyEngine()` inferred
-    * `VertexT = BarcodeEndpoint[Cube]`). Concrete cell types get their default `Ordering` from their own companion
-    * (implicit scope), which any lexically visible given beats. `.claude/WORKLOG-package-flatten.md`.
+    * and no stream: `import OrderedCell.cellOrdering`. It is not a top-level given because it would compete with every
+    * stream's filtration order and decide type inference.
     */
   given cellOrdering: [CellT: OrderedCell as oCell] => Ordering[CellT] = oCell.ordering
 
-/** The "leading term" (highest-priority cell and its coefficient, under `CellT`'s own order) a formal sum needs to
-  * support pivot-based reduction. Currently has exactly one instance in this codebase, `Chain`'s own
-  * `chainIsOrderedBasis` (`Chain.scala`) -- kept as a separate typeclass, in the same `is`-typeclass style as
-  * `Cell`/`OrderedCell`, rather than folded into `Chain` as ordinary methods, so `leadingCell`/`leadingCoefficient`
-  * read as a documented contract rather than incidental `Chain` API.
+/** A formal sum with a leading term (its first cell under `CellT`'s order, and that cell's coefficient), which pivot
+  * reduction needs. `Chain` is the instance.
   */
 trait OrderedBasis[CellT: Ordering, CoefficientT: Field]:
   type Self

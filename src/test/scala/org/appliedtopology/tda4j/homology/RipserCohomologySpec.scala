@@ -65,56 +65,26 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
   // spurious essential H^1 classes.
   private val threePointLine = EuclideanMetricSpace(Array(Array(0.0), Array(1.0), Array(3.0)))
 
-  "Persistent cohomology at requested H^1, 3-point line: the cycle dies at the same value its filling triangle appears" >> {
-    // Pre-maxDim-semantics-fix, this test requested maxDimension=1 expecting NO triangle to ever be built
-    // (the old, buggy "maxDimension = top simplex dimension" semantics) and asserted the resulting 1-cycle
-    // stayed essential. That premise is no longer achievable for THIS fixture: maxDimension now means "top
-    // HOMOLOGICAL DEGREE reported" (see .claude/WORKLOG-maxdim-semantics-fix.md), so correctly resolving H^1
-    // REQUIRES considering the real dimension-2 coboundary regardless of what's requested -- and for exactly
-    // 3 points, the triangle {0,1,2} unavoidably exists (and is born at the same value, 3.0, as its own
-    // longest edge {0,2}) the instant all three edges do. There is no threshold or maxDimension choice that
-    // gives this specific 3-point fixture edges but not the triangle. This is the mathematically CORRECT
-    // answer, not a truncation artifact: the "hole" the 3-cycle would otherwise trace is filled in the same
-    // instant it closes, a genuine zero-persistence bar -- exactly what real `ripser --dim 1` would also
-    // report on this same point cloud, since Ripser always builds one dimension higher internally too. The
-    // "filled triangle" test right below covers the same zero-persistence pairing at maxDimension=2; this
-    // test's remaining value is confirming maxDimension=1 produces the IDENTICAL answer (not merely "some
-    // essential-looking placeholder"), i.e. that requesting a lower degree changes only what's REPORTED, not
-    // what's correctly computed underneath it.
-    val bars =
-      RipserCohomologyEngine[Double](threePointLine, 1, maxFiltrationValue = Some(Double.PositiveInfinity))
-        .persistentCohomology()
-        .map(toTuple)
-    bars must containTheSameElementsAs(
-      List(
-        (0, 0.0, 1.0),
-        (0, 0.0, 2.0),
-        (0, 0.0, Double.PositiveInfinity),
-        (1, 3.0, 3.0)
-      )
-    )
+  private val threePointLineH0 = List((0, 0.0, 1.0), (0, 0.0, 2.0), (0, 0.0, Double.PositiveInfinity))
+
+  "Persistent cohomology at requested H^1, 3-point line: the cycle is filled the instant it closes" >> {
+    // The triangle {0,1,2} enters at 3.0 with its longest edge {0,2}, so H^1 resolves correctly at maxDimension = 1
+    // (the engine considers the 2-simplices it needs) to a zero-length pair: absent by default, present on request.
+    def engine = RipserCohomologyEngine[Double](threePointLine, 1, maxFiltrationValue = Some(Double.PositiveInfinity))
+    (engine.persistentCohomology().map(toTuple) must containTheSameElementsAs(threePointLineH0)) and
+      (engine.persistentCohomology(includeZeroLength = true).map(toTuple) must containTheSameElementsAs(
+        threePointLineH0 :+ (1, 3.0, 3.0)
+      ))
   }
 
   "Persistent cohomology of the filled triangle has zero essential H^1 classes (contractible)" >> {
-    // maxDimension = 2: the triangle now exists, born at 3.0 (its longest edge), tied with edge {0,2}'s
-    // own filtration value -- a genuine zero-persistence pair (also the apparent-pairs shortcut's own
-    // canonical example, see `zeroApparentCofacet`'s doc), which must still be EMITTED, not dropped. A
-    // first draft that skipped clearing reported 2 spurious essential H^1 classes instead of 0.
-    // maxFiltrationValue = +Infinity, explicitly: {0,2} and the triangle are both born at 3.0, past
-    // threePointLine's own minimumEnclosingRadius (2.0) -- the default would exclude both entirely rather
-    // than emit the zero-length pair this test exists to check.
-    val bars =
-      RipserCohomologyEngine[Double](threePointLine, 2, maxFiltrationValue = Some(Double.PositiveInfinity))
-        .persistentCohomology()
-        .map(toTuple)
-    bars must containTheSameElementsAs(
-      List(
-        (0, 0.0, 1.0),
-        (0, 0.0, 2.0),
-        (0, 0.0, Double.PositiveInfinity),
-        (1, 3.0, 3.0) // zero-length: {0,2} paired with the triangle, both born at 3.0
-      )
-    )
+    // Without clearing, a first draft reported 2 spurious essential H^1 classes here. maxFiltrationValue = +Infinity:
+    // the triangle enters at 3.0, past the minimum enclosing radius (2.0).
+    def engine = RipserCohomologyEngine[Double](threePointLine, 2, maxFiltrationValue = Some(Double.PositiveInfinity))
+    (engine.persistentCohomology().map(toTuple) must containTheSameElementsAs(threePointLineH0)) and
+      (engine.persistentCohomology(includeZeroLength = true).map(toTuple) must containTheSameElementsAs(
+        threePointLineH0 :+ (1, 3.0, 3.0) // {0,2} paired with the triangle, both at 3.0
+      ))
   }
 
   "Cohomology's finite bars agree with the naive homology engine on the calibration example" >> {
@@ -213,7 +183,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       // metricSpace.minimumEnclosingRadius, so ctx.totalSimplexCount (the count of what was actually
       // assembled) is the only correct total here too, same as the explicit-threshold test below.
       val ctx = RipserCohomologyEngine[Double](metricSpace, maxDim)
-      val bars = ctx.persistentCohomology().map(toTuple)
+      val bars = ctx.persistentCohomology(includeZeroLength = true).map(toTuple)
       HomologyFixtures.totalBarsAccountForAllCells(bars, ctx.totalSimplexCount, topDimension = maxDim) must beTrue
     }
 
@@ -330,7 +300,7 @@ class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
       val maxDim = 2
       val t = midThreshold(metricSpace)
       val ctx = RipserCohomologyEngine[Double](metricSpace, maxDim, maxFiltrationValue = Some(t))
-      val bars = ctx.persistentCohomology().map(toTuple)
+      val bars = ctx.persistentCohomology(includeZeroLength = true).map(toTuple)
       // NOT totalSimplices(n, maxDim) (the binomial formula): that assumes every combinatorially-possible
       // subset exists, true only at maxFiltrationValue = +Infinity. A thresholded complex genuinely
       // excludes most subsets outright (see sparseCofacets) -- ctx.totalSimplexCount is the count of what

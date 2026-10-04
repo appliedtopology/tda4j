@@ -1,49 +1,77 @@
 package org.appliedtopology.tda4j
 
-/** A common shape for the three engines that consume an already-built `StratifiedCellStream` and are generic over
-  * `CellT: OrderedCell` -- `CellularHomologyEngine` (naive), `CellularPersistenceInChunksEngine` (chunks), and
-  * `CellularCohomologyEngine` (cohomology). Each has its own incremental API beyond this (`advanceTo`/`diagramAt` for
-  * naive and chunks), which stays available on the concrete class -- this trait exists only to give callers that just
-  * want "the finished barcode" (the MATLAB/CLI facade) one shape to dispatch on, instead of hand-writing each engine's
-  * own construct/advance/read dance at every call site.
+/** "Run to the end and give me the barcode", for the engines that take a stream and work for any cell type: naive
+  * (`CellularHomologyEngine`), chunks (`CellularPersistenceInChunksEngine`) and cohomology
+  * (`CellularCohomologyEngine`). The engines themselves offer more (a cursor, queries at intermediate values); this is
+  * the common denominator, used where the engine is chosen at runtime.
   *
-  * `PackedRipserCohomologyEngine`/`RipserCohomologyEngine` deliberately do NOT implement this: they consume a
-  * `FiniteMetricSpace[Int]` directly (building their own internal sparse-Rips enumeration), not a stream, and are
-  * specialized to `Simplex[Int]`/`DiameterIndex` rather than generic over `CellT` -- an honest asymmetry, not a gap
-  * (see CLAUDE.md's persistence-engines section). Callers needing Ripser call it directly.
+  * The Ripser engines are not instances: they take a metric space rather than a stream.
   *
-  * Deliberately does NOT own the "build one dimension higher than requested, then drop it" dance
-  * (`WORKLOG-maxdim-semantics-fix.md`'s `maxDim`-means-top-reported-degree fix): that dance is about how the INPUT
-  * stream gets bounded, which is complex-type-specific (`LimitedCofaceSimplexStream` only wraps a
-  * `CofaceSimplexStream[Int, Double]`, so it can truncate a Vietoris-Rips/Cech stream but not a cubical or
-  * simplicial-set one -- see CLAUDE.md's `LimitedCofaceSimplexStream` note), not engine-specific. Callers build the
-  * appropriately-bounded stream first (as they already did before this trait existed) and pass it in; this trait only
-  * unifies what happens AFTER that -- running the engine and reading back a finished barcode.
+  * For `naive` and `cohomology` the stream decides the top degree: to get degrees `0 .. k`, hand them a stream with
+  * cells up to dimension `k + 1` and ignore the bars of degree `k + 1`. `chunks(maxDim)` takes the degree itself.
   */
 trait PersistenceEngine[CellT, C]:
-  def barcode(stream: StratifiedCellStream[CellT, Double]): List[PersistenceBar[Double, Chain[CellT, C]]]
+  /** The finished barcode of `stream`; zero-length bars only if `includeZeroLength`. */
+  def barcode(
+    stream: StratifiedCellStream[CellT, Double],
+    includeZeroLength: Boolean = false
+  ): List[PersistenceBar[Double, Chain[CellT, C]]]
 
 object PersistenceEngine:
   def naive[CellT: OrderedCell, C: Field]: PersistenceEngine[CellT, C] =
     new PersistenceEngine[CellT, C]:
-      def barcode(stream: StratifiedCellStream[CellT, Double]): List[PersistenceBar[Double, Chain[CellT, C]]] =
+      def barcode(
+        stream: StratifiedCellStream[CellT, Double],
+        includeZeroLength: Boolean
+      ): List[PersistenceBar[Double, Chain[CellT, C]]] =
         val state = CellularHomologyEngine[CellT, C, Double]().persistentHomology(stream)
         state.advanceAll()
-        state.barcodeAt(Double.PositiveInfinity)
+        state.barcodeAt(Double.PositiveInfinity, includeZeroLength)
 
-  /** `maxDim` is a constructor-time parameter of `CellularPersistenceInChunksEngine` itself (its own `maxDim`
-    * constructor argument means "top reported degree," fixed at the source -- see
-    * `.claude/WORKLOG-maxdim-semantics-fix.md`), not part of `barcode`'s signature: unlike `naive`/`cohomology`, this
-    * engine needs no `LimitedCofaceSimplexStream` wrapping on the input stream at all.
-    */
+  /** The chunks engine reporting degrees `0 .. maxDim`. */
   def chunks[CellT: OrderedCell, C: Field](maxDim: Int): PersistenceEngine[CellT, C] =
     new PersistenceEngine[CellT, C]:
-      def barcode(stream: StratifiedCellStream[CellT, Double]): List[PersistenceBar[Double, Chain[CellT, C]]] =
+      def barcode(
+        stream: StratifiedCellStream[CellT, Double],
+        includeZeroLength: Boolean
+      ): List[PersistenceBar[Double, Chain[CellT, C]]] =
         CellularPersistenceInChunksEngine[CellT, C](maxDim)
           .persistentHomology(stream)
-          .barcodeAt(Double.PositiveInfinity)
+          .barcodeAt(Double.PositiveInfinity, includeZeroLength)
+
+  /** The naive engine's pairing, with cocycles as representatives ([[Involution.cocycleBars]]). */
+  def naiveCocycles[CellT: OrderedCell, C: Field]: PersistenceEngine[CellT, C] =
+    new PersistenceEngine[CellT, C]:
+      def barcode(
+        stream: StratifiedCellStream[CellT, Double],
+        includeZeroLength: Boolean
+      ): List[PersistenceBar[Double, Chain[CellT, C]]] =
+        val pairs = CellularHomologyEngine[CellT, C, Double]().persistentHomology(stream).pairing
+        Involution.cocycleBars[CellT, C](stream, pairs, stream.filtrationOrdering.reverse, includeZeroLength)
+
+  /** The chunks engine's pairing (degrees `0 .. maxDim`), with cocycles as representatives. */
+  def chunksCocycles[CellT: OrderedCell, C: Field](maxDim: Int): PersistenceEngine[CellT, C] =
+    new PersistenceEngine[CellT, C]:
+      def barcode(
+        stream: StratifiedCellStream[CellT, Double],
+        includeZeroLength: Boolean
+      ): List[PersistenceBar[Double, Chain[CellT, C]]] =
+        val pairs = CellularPersistenceInChunksEngine[CellT, C](maxDim).persistentHomology(stream).pairing
+        Involution.cocycleBars[CellT, C](stream, pairs, stream.filtrationOrdering.reverse, includeZeroLength)
+
+  /** The cohomology engine's pairing, with cycles as representatives ([[Involution]]). */
+  def cohomologyCycles[CellT: OrderedCell, C: Field]: PersistenceEngine[CellT, C] =
+    new PersistenceEngine[CellT, C]:
+      def barcode(
+        stream: StratifiedCellStream[CellT, Double],
+        includeZeroLength: Boolean
+      ): List[PersistenceBar[Double, Chain[CellT, C]]] =
+        CellularCohomologyEngine[CellT, C, Double]().persistentHomology(stream, includeZeroLength)
 
   def cohomology[CellT: OrderedCell, C: Field]: PersistenceEngine[CellT, C] =
     new PersistenceEngine[CellT, C]:
-      def barcode(stream: StratifiedCellStream[CellT, Double]): List[PersistenceBar[Double, Chain[CellT, C]]] =
-        CellularCohomologyEngine[CellT, C, Double]().persistentCohomology(stream)
+      def barcode(
+        stream: StratifiedCellStream[CellT, Double],
+        includeZeroLength: Boolean
+      ): List[PersistenceBar[Double, Chain[CellT, C]]] =
+        CellularCohomologyEngine[CellT, C, Double]().persistentCohomology(stream, includeZeroLength)

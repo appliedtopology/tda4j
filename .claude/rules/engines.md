@@ -38,6 +38,29 @@ barcodes coincide.
    are their reduced pivot chain. Representatives don't match Ripser term-for-term (tie direction differs) but
    bar values do. Sign-tested on RP² over Fp (3) (`WORKLOG-generic-cohomology.md`).
 
+**Cycles from cohomology (`Involution`, `homology/Involution.scala`)**: both cohomology engines expose
+`pairedCohomology` (bars + birth/death cells, zero-length pairs INCLUDED: their columns are pivots) and
+`persistentHomology` (same bars, cycles). Only death columns are reduced, under the engine's own order reversed
+(youngest = `Chain` leading term); a pivot that is not the paired birth cell throws (a pairing/order mismatch is a
+bug, never fall back). Finite bar cycle = `R_τ` (closed, youngest cell σ, `= ∂V_τ` with youngest τ); essential = `V_σ`.
+Dual direction (`Involution.cocycles`/`cocycleBars`): from a homology pairing (naive/chunks `pairing`, under
+`stream.filtrationOrdering`), reduce only birth cells' coboundaries (built by `coboundariesOf` from the stream),
+youngest first; representative `V_σ` (as the cohomology engines report). Chunks' and naive's pairings are identical,
+union-find included (`InvolutionSpec`). Fast cubical's union-find ties by value, not the stream order: no dual path,
+image cocycles go through the cohomology engine. Native kind is faster: derived costs ~1.1-1.3x in degrees 0-1,
+~2.5x for VR cycles in degree 2. Different valid cycles from chunks/naive (they report `V_σ` after their own substitutions): never compare
+representatives cell for cell across engines; `InvolutionSpec` checks validity on tie-heavy inputs. Cost: 2.5-3x
+cocycles (`WORKLOG-involution.md`).
+
+Every engine takes `includeZeroLength` (default `false`) on its bar-returning methods and drops `birth == death` pairs
+from the pairing itself; `PersistenceBar.dropZeroLength` is the shared filter. The naive and chunks engines' `diagramAt(f)`
+report a class alive at `f` as `[birth, f]` (closed end), so a class born exactly at `f` survives the filter; a finished bar is
+`[b, d)`. Fast cubical/alpha drop equal-value pairs at construction (a pair at `+Inf, +Inf` is otherwise indistinguishable
+from an essential class). `ZeroLengthBarsSpec`.
+
+The opt-in pairing checks (`totalBarsAccountForAllCells` with `includeZeroLength = true`) stay in the engine specs
+(project lead, 2026-10-03): they test the pairing invariant on purpose; nothing else should count bars against cells.
+
 Testing lessons for every engine: F2 hides sign errors; signed-field fixtures need ≥5 vertices (`Set1..Set4`
 hash-order past 4 elements, `SimplexBoundarySpec`/`SignedFieldBarcodeSpec`, `WORKLOG-code-critique.md` §1.1).
 F3-vs-F2 agreement is a cheap sign oracle. Two engines agreeing isn't proof if they share a truncation/code path

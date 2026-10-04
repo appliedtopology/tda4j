@@ -410,9 +410,11 @@ class AlphaFiltrationOrderingRegressionSpec extends org.specs2.mutable.Specifica
         val naive =
           SimplicialHomologyEngine[Int, Double, Double]()
             .persistentHomology(streamB)
-            .diagramAt(Double.PositiveInfinity)
+            .diagramAt(Double.PositiveInfinity, includeZeroLength = true)
         val chunks =
-          PersistenceInChunksEngine[Int, Double](maxDim).persistentHomology(streamB).diagramAt(Double.PositiveInfinity)
+          PersistenceInChunksEngine[Int, Double](maxDim)
+            .persistentHomology(streamB)
+            .diagramAt(Double.PositiveInfinity, includeZeroLength = true)
         // No independent oracle stream exists for alpha complexes (unlike VR, where this test class's
         // sibling cross-checks against EnumeratingCofaceSimplexStream) -- so Naive's own structural
         // invariant (every cell opens or closes exactly one bar) is the strongest check available on its

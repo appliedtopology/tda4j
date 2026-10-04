@@ -98,35 +98,26 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
 
   "parallelFiltrationValue = true produces the exact same barcode as the default, on the tie-heavy fixtures" >> {
     val fixtures = Seq(
-      (IndexedSeq(2, 2), (_: IndexedSeq[Int]) => 5.0, 25),
-      (IndexedSeq(3, 3), (idx: IndexedSeq[Int]) => if idx == IndexedSeq(1, 1) then 1.0 else 0.0, 49),
-      (IndexedSeq(3), (idx: IndexedSeq[Int]) => if idx(0) == 1 then 2.0 else 0.0, 7)
+      (IndexedSeq(2, 2), (_: IndexedSeq[Int]) => 5.0),
+      (IndexedSeq(3, 3), (idx: IndexedSeq[Int]) => if idx == IndexedSeq(1, 1) then 1.0 else 0.0),
+      (IndexedSeq(3), (idx: IndexedSeq[Int]) => if idx(0) == 1 then 2.0 else 0.0)
     )
     fixtures
-      .map { case (shape, valueFn, cellCount) =>
+      .map { case (shape, valueFn) =>
         val sequentialBarcode =
           persistentHomology(CubicalGridStream(shape, valueFn, parallelFiltrationValue = false))
             .diagramAt(Double.PositiveInfinity)
         val parallelBarcode =
           persistentHomology(CubicalGridStream(shape, valueFn, parallelFiltrationValue = true))
             .diagramAt(Double.PositiveInfinity)
-        (HomologyFixtures.totalBarsAccountForAllCells(parallelBarcode, cellCount) must beTrue) and
-          (parallelBarcode must containTheSameElementsAs(sequentialBarcode))
+        parallelBarcode must containTheSameElementsAs(sequentialBarcode)
       }
       .reduce(_ and _)
   }
 
-  // ---------------------------------------------------------------------------------------------------------
-  // Structural invariant (bars-account-for-cells), reusing HomologyFixtures' existing helper.
-  // ---------------------------------------------------------------------------------------------------------
-
-  "The bars-account-for-cells structural invariant holds on random small images" >>
+  "The stream ordering contract holds on random small images" >>
     AsResult {
-      prop { (img: TestImage) =>
-        val stream = CubicalGridStream(img.shape, valueFnOf(img))
-        val barcode = persistentHomology(stream).diagramAt(Double.PositiveInfinity)
-        HomologyFixtures.totalBarsAccountForAllCells(barcode, stream.totalCellCount.toInt)
-      }
+      prop((img: TestImage) => HomologyFixtures.respectsOrderingContract(CubicalGridStream(img.shape, valueFnOf(img))))
     }
 
   // ---------------------------------------------------------------------------------------------------------
@@ -172,63 +163,31 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
       }
     }
 
-  // ---------------------------------------------------------------------------------------------------------
-  // Hand-derived fixtures. Every count below comes from a general fact, not a guess: for a d-cell grid's FULL
-  // 1-skeleton (V vertices, E edges, connected), the elder-rule/reduction algorithm opens exactly V classes at
-  // dimension 0, of which exactly (V-1) get killed by "tree" edges (one component always survives) and the
-  // remaining (E-(V-1)) "extra" edges each open a NEW dimension-1 class -- a standard planar-graph fact
-  // (E-V+1 = number of bounded faces = number of pixels, by Euler's formula), so the count of dimension-1
-  // births always equals the pixel count exactly, and since there is no dimension-3 cell to make a pixel
-  // itself essential, every pixel is guaranteed to kill exactly one dimension-1 class. Combined with "all
-  // vertices/edges tie at the same value in these fixtures, so H0/H1 births are simultaneous," this pins down
-  // the EXACT bar-count breakdown below, not just the presence of the topologically meaningful bars -- see
-  // WORKLOG-cubical.md for the full derivation (this matters BECAUSE these fixtures are tie-heavy, exactly the
-  // regime this codebase's filtrationOrdering bugs have historically hidden in).
-  // ---------------------------------------------------------------------------------------------------------
+  // Hand-derived fixtures: the full barcode, tie-heavy on purpose (ties are where ordering bugs hide).
 
-  "A constant-valued 2x2 image (9 vertices, 12 edges, 4 pixels, totalCells=25) reduces correctly" >> {
-    val shape = IndexedSeq(2, 2)
-    val stream = CubicalGridStream(shape, _ => 5.0)
-    val barcode = persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+  "A constant-valued 2x2 image is one component, born at its value" >> {
+    val stream = CubicalGridStream(IndexedSeq(2, 2), _ => 5.0)
     (stream.totalCellCount must beEqualTo(25L)) and
-      (HomologyFixtures.totalBarsAccountForAllCells(barcode, 25) must beTrue) and
-      (barcode.count(_._1 == 0) must beEqualTo(9)) and
-      (barcode.count { case (0, _, d) => d.isInfinite; case _ => false } must beEqualTo(1)) and
-      (barcode.count { case (0, b, d) => b == d; case _ => false } must beEqualTo(8)) and
-      (barcode.count(_._1 == 1) must beEqualTo(4)) and
-      (barcode.forall { case (1, b, d) => b == d; case _ => true } must beTrue) and
-      (barcode.count(_._1 >= 2) must beEqualTo(0))
+      (HomologyFixtures.respectsOrderingContract(stream) must beTrue) and
+      (persistentHomology(stream).diagramAt(Double.PositiveInfinity) must beEqualTo(
+        List((0, 5.0, Double.PositiveInfinity))
+      ))
   }
 
-  "A single bright center pixel in an otherwise dark 3x3 image (16 vertices, 24 edges, 9 pixels, " +
-    "totalCells=49) produces exactly one persistent H1 bar (the hollow center)" >> {
-      val shape = IndexedSeq(3, 3)
-      val valueFn: IndexedSeq[Int] => Double = idx => if idx == IndexedSeq(1, 1) then 1.0 else 0.0
-      val stream = CubicalGridStream(shape, valueFn)
-      val barcode = persistentHomology(stream).diagramAt(Double.PositiveInfinity)
-      (stream.totalCellCount must beEqualTo(49L)) and
-        (HomologyFixtures.totalBarsAccountForAllCells(barcode, 49) must beTrue) and
-        (barcode.count(_._1 == 0) must beEqualTo(16)) and
-        (barcode.count { case (0, _, d) => d.isInfinite; case _ => false } must beEqualTo(1)) and
-        (barcode.count { case (0, b, d) => b == d; case _ => false } must beEqualTo(15)) and
-        (barcode.count(_._1 == 1) must beEqualTo(9)) and
-        (barcode.count { case (1, b, d) => b == d; case _ => false } must beEqualTo(8)) and
-        (barcode.exists(_ == (1, 0.0, 1.0)) must beTrue) and
-        (barcode.count(_._1 >= 2) must beEqualTo(0))
-    }
+  "A single bright center pixel in an otherwise dark 3x3 image is a hole from 0 until the pixel enters at 1" >> {
+    val valueFn: IndexedSeq[Int] => Double = idx => if idx == IndexedSeq(1, 1) then 1.0 else 0.0
+    val stream = CubicalGridStream(IndexedSeq(3, 3), valueFn)
+    (stream.totalCellCount must beEqualTo(49L)) and
+      (persistentHomology(stream).diagramAt(Double.PositiveInfinity).sorted must beEqualTo(
+        List((0, 0.0, Double.PositiveInfinity), (1, 0.0, 1.0))
+      ))
+  }
 
-  "Two separated 1D blobs (values [0,2,0], 4 vertices, 3 pixels, totalCells=7) merge into one component" >> {
-    val shape = IndexedSeq(3)
-    val valueFn: IndexedSeq[Int] => Double = idx => if idx(0) == 1 then 2.0 else 0.0
-    val stream = CubicalGridStream(shape, valueFn)
-    val barcode = persistentHomology(stream).diagramAt(Double.PositiveInfinity)
-    (stream.totalCellCount must beEqualTo(7L)) and
-      (HomologyFixtures.totalBarsAccountForAllCells(barcode, 7) must beTrue) and
-      (barcode.count(_._1 == 0) must beEqualTo(4)) and
-      (barcode.count { case (0, _, d) => d.isInfinite; case _ => false } must beEqualTo(1)) and
-      (barcode.count { case (0, b, d) => b == d; case _ => false } must beEqualTo(2)) and
-      (barcode.exists(_ == (0, 0.0, 2.0)) must beTrue) and
-      (barcode.count(_._1 >= 1) must beEqualTo(0))
+  "Two separated 1D blobs (values [0,2,0]) are two components until the middle pixel enters at 2" >> {
+    val stream = CubicalGridStream(IndexedSeq(3), idx => if idx(0) == 1 then 2.0 else 0.0)
+    persistentHomology(stream).diagramAt(Double.PositiveInfinity).sorted must beEqualTo(
+      List((0, 0.0, 2.0), (0, 0.0, Double.PositiveInfinity))
+    )
   }
 
   "The same two-blobs fixture's independent union-find H0 count matches the reduction engine's, at both thresholds" >> {
@@ -276,7 +235,6 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
     val explicitBarcode = persistentHomology(explicitStream).diagramAt(Double.PositiveInfinity)
 
     (explicitBarcode must containTheSameElementsAs(gridBarcode)) and
-      (HomologyFixtures.totalBarsAccountForAllCells(explicitBarcode, 7) must beTrue) and
       (explicitBarcode.exists(_ == (0, 0.0, 2.0)) must beTrue)
   }
 
@@ -289,9 +247,8 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
   //
   // Naive and chunks run on the SAME stream, so they share CubicalGridStream.filtrationOrdering -- a bug in that
   // ordering would make both sides wrong the SAME way and naive-vs-chunks agreement alone couldn't catch it.
-  // That's why HomologyFixtures.totalBarsAccountForAllCells is also run on chunks' OWN output: an independent
-  // structural invariant that doesn't depend on naive being right, catching a chunks-specific defect even if the
-  // shared ordering were somehow broken. Reuses these same tie-heavy fixtures (not the random-image generator
+  // That's why the pairing invariant (HomologyFixtures.totalBarsAccountForAllCells, on the full barcode including
+  // zero-length bars) is also checked on chunks' OWN output: it doesn't depend on naive being right. Reuses these same tie-heavy fixtures (not the random-image generator
   // above) on purpose -- see the hand-derived-fixtures header comment above for why tie-heavy is where
   // filtrationOrdering bugs in this codebase have historically hidden.
   //
@@ -316,10 +273,10 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
     )
     cases
       .map { c =>
-        val naiveBarcode = persistentHomology(c.stream).diagramAt(Double.PositiveInfinity)
+        val naiveBarcode = persistentHomology(c.stream).diagramAt(Double.PositiveInfinity, includeZeroLength = true)
         val chunksBarcode = CellularPersistenceInChunksEngine[Cube, Double](c.maxDim)
           .persistentHomology(c.stream)
-          .diagramAt(Double.PositiveInfinity)
+          .diagramAt(Double.PositiveInfinity, includeZeroLength = true)
         (HomologyFixtures.totalBarsAccountForAllCells(chunksBarcode, c.cellCount) must beTrue) and
           (chunksBarcode must containTheSameElementsAs(naiveBarcode))
       }
@@ -377,10 +334,10 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
       prop { (img: TestImage) =>
         val stream = CubicalGridStream(img.shape, valueFnOf(img))
         val cellCount = stream.totalCellCount
-        val naiveBarcode = persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+        val naiveBarcode = persistentHomology(stream).diagramAt(Double.PositiveInfinity, includeZeroLength = true)
         val chunksBarcode = CellularPersistenceInChunksEngine[Cube, Double](img.shape.size)
           .persistentHomology(stream)
-          .diagramAt(Double.PositiveInfinity)
+          .diagramAt(Double.PositiveInfinity, includeZeroLength = true)
         (HomologyFixtures.totalBarsAccountForAllCells(chunksBarcode, cellCount.toInt) must beTrue) and
           (chunksBarcode must containTheSameElementsAs(naiveBarcode))
       }
