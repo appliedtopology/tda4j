@@ -47,7 +47,7 @@ Each `compute...` method also has an overload without options.
 |---|---|---|
 | `complex` | `vr`, `alpha`, `cech`, `witness`, `dtm-rips`, `dtm-alpha`, `sparse-rips` | `vr` |
 | `engine` | `ripser`, `chunks`, `naive`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and the lazy witness complex, `fast-cubical` for images of dimension 2 and up, `cohomology` otherwise |
-| `representativeType` | `cycles`, `cocycles` | `cycles` (cocycles need `ripser` or `cohomology`, or no `engine`) |
+| `representativeType` | `cycles`, `cocycles` | `cycles` (every engine gives both except `fast-cubical` and `fast-alpha`, which give cycles; `ripser` and `cohomology` compute cocycles natively and cycles a little more slowly, the others the other way round) |
 | `maxDimension` | integer | `2`: the top homological degree (for an image: its dimension) |
 | `maxFiltrationValue` | number | the minimum enclosing radius (`Infinity` for the general witness complex) |
 | `field` | `Z` (a prime field), `R` (floating point) | `Z` |

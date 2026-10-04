@@ -68,6 +68,16 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
     import Ordering.Implicits.infixOrderingOps
     given filtration: Filtration[CellT, FiltrationT] = stream
 
+    private val pairedCells = mutable.ArrayBuffer.empty[(CellT, CellT)]
+
+    /** The whole pairing (running the cursor to the end): every finite bar's birth and death cells, zero-length ones
+      * included, and every essential bar's birth cell. Computed under `stream.filtrationOrdering`.
+      */
+    private[tda4j] def pairing: IndexedSeq[Involution.Pair[CellT]] =
+      advanceAll()
+      pairedCells.toIndexedSeq.map((b, d) => Involution.Pair(b.dim, b, Some(d))) ++
+        positives.keys.toIndexedSeq.map(b => Involution.Pair(b.dim, b, None))
+
     // Summoned here, not at CellularHomologyEngine scope -- see class doc above.
     val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
     import chainRM.*
@@ -208,6 +218,7 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
           // is never silently placed before its own (already-recorded) birth.
           val deathFv = cellFiltrationValue(sigma, filtration.largest)
           barcode.append((pivot.dim, pivotFv, deathFv, representative))
+          pairedCells.append((pivot, sigma))
           current = deathFv
 
     def advanceTo(f: FiltrationT): Unit =
@@ -390,6 +401,14 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
     // own (it always re-derives the same pairs from scratch), so without this flag a second diagramAt call
     // would append a duplicate bar to barcode(0) for every dimension-0/1 pair, every time.
     private var dim01Resolved: Boolean = false
+
+    /** The whole pairing (running the reduction): every finite bar's birth and death cells, zero-length ones included,
+      * and every essential bar's birth cell of degree at most `maxDim`. Computed under `stream.filtrationOrdering`.
+      */
+    private[tda4j] def pairing: IndexedSeq[Involution.Pair[CellT]] =
+      advanceAll()
+      killer.toIndexedSeq.map((b, d) => Involution.Pair(b.dim, b, Some(d))) ++
+        essentialSimplices.toIndexedSeq.filter(_.dim <= maxDim).map(b => Involution.Pair(b.dim, b, None))
 
     /** Degrees 0 and 1 by elder-rule union-find over the vertices and edges, in filtration order, instead of chain
       * reduction. The reduced boundary matrix in these two dimensions is determined by the cell order, so this gives

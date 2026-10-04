@@ -206,10 +206,22 @@ class PersistenceEnginesSpec extends org.specs2.mutable.Specification:
       (diagrams.map(rounded).distinct.size must beEqualTo(1)) and
         (ripser.bars.forall(b => b.representative.cells.forall(_.size == b.dim + 1)) must beTrue)
     }
-    "refuse cocycles from an engine that computes homology, naming the fix" in {
-      val points = Array.tabulate(8)(i => Array(math.cos(i * 0.8), math.sin(i * 0.8)))
-      Persistence(points, engine = Persistence.Engine.Chunks, representatives = Representatives.Cocycles) must
-        throwAn[IllegalArgumentException](message = "for cocycles use Engine.Auto")
+    "give cocycles from every engine but FastCubical: the same bars and cocycles as the cohomology engine's" in {
+      val points = Array.tabulate(9)(i => Array(math.cos(i * 0.7), math.sin(i * 0.7)))
+      def norm(ts: List[(Int, Double, Double)]) =
+        ts.map((d, b, e) => (d, math.rint(b * 1e9), if e.isInfinite then e else math.rint(e * 1e9))).sorted
+      def run(e: Persistence.Engine) =
+        Persistence(points, engine = e, maxDimension = 1, representatives = Representatives.Cocycles)
+      val engines = List(Persistence.Engine.Chunks, Persistence.Engine.Naive, Persistence.Engine.Ripser)
+      val reference = run(Persistence.Engine.Cohomology)
+      (engines.map(e => norm(run(e).triples)).distinct must beEqualTo(List(norm(reference.triples))))
+        .and(
+          Persistence(
+            Image(Array(Array(0.0, 1.0), Array(1.0, 0.0))),
+            engine = Persistence.Engine.FastCubical,
+            representatives = Representatives.Cocycles
+          ) must throwAn[IllegalArgumentException](message = "Engine.Cohomology")
+        )
     }
     "refuse engine = Ripser for an input that is not a Vietoris-Rips complex of points" in {
       Persistence(Image(Array(Array(0.0, 1.0), Array(1.0, 0.0))), engine = Persistence.Engine.Ripser) must

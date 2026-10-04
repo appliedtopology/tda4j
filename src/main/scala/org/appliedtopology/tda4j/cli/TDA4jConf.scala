@@ -70,8 +70,8 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "or the range of values of an image or relation (default: 0.01)"
   )
   val representativeType: ScallopOption[String] = opt[String](descr =
-    "cycles (default) or cocycles: the kind of representative each bar gets. Cocycles need --engine ripser or " +
-      "cohomology (or no --engine)"
+    "cycles (default) or cocycles: the kind of representative each bar gets. Every --engine gives both except " +
+      "fast-cubical and fast-alpha (cycles only); ripser and cohomology compute cocycles natively, the others cycles"
   )
   val includeZeroLength: ScallopOption[String] = opt[String](descr =
     "true or false (default): also compute bars of length zero. They are reported with " +

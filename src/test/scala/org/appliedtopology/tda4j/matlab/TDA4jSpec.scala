@@ -151,8 +151,14 @@ class TDA4jSpec extends mutable.Specification:
           ) must beTrue
         )
         .and(
-          TDA4j.computeFromPoints(points, Array("engine", "chunks", "representativeType", "cocycles")) must
+          TDA4j.computeFromImage(pixels, Array("engine", "fast-cubical", "representativeType", "cocycles")) must
             throwAn[IllegalArgumentException](message = "for cocycles use engine=cohomology")
+        )
+        .and(
+          triples(
+            FullBarcode.computeFromPoints(points, Array("engine", "chunks", "representativeType", "cocycles")).toArray()
+          ).sorted
+            must beEqualTo(triples(FullBarcode.computeFromPoints(points, Array("engine", "chunks")).toArray()).sorted)
         )
         .and(
           TDA4j.computeFromPoints(points, Array("representativeType", "both")) must

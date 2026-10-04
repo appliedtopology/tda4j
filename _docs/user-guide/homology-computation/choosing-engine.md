@@ -9,17 +9,20 @@ All engines compute the same bars; they differ in speed, in what they accept, an
 `Persistence` picks one for you (`Engine.Auto`): Ripser for the Vietoris-Rips complex of points or a metric space, the
 fast cubical engine for images of two or more dimensions, and the cohomology engine for everything else. Ripser and the
 cohomology engine compute cohomology, which is much faster than homology in degree 2 (most cells of the top dimension
-are cleared without work). They give **cycles** or **cocycles**, whichever `representatives` asks for: cycles are
-computed from the cohomology pairing by reducing the boundaries of the cells that end bars, and nothing else
-(involuted persistent homology). The chunks and naive engines compute homology and give cycles only; they are slow
-in degree 2 on Vietoris-Rips and Čech complexes.
+are cleared without work).
+
+Every engine but the two fast ones gives **cycles** or **cocycles**, whichever `representatives` asks for. Each
+computes one kind natively, and that kind is the faster one; the other is derived from the engine's pairing by one more
+reduction (involuted persistent homology), which adds a little in degrees 0 and 1 and more in degree 2. The table
+marks the native kind in bold. The fast cubical and fast alpha engines give cycles only; for cocycles of an image or
+an alpha complex, `Persistence` uses the cohomology engine.
 
 | engine | `Persistence.Engine` / MATLAB `engine=` | takes | representatives | use it for |
 |---|---|---|---|---|
-| chunks (`CellularPersistenceInChunksEngine`) | `Chunks` / `chunks` | any stream | cycles | queries at intermediate scales (`diagramAt`); degrees 0 and 1 |
-| naive (`CellularHomologyEngine`) | `Naive` / `naive` | any stream | cycles | stepping through a computation, reference results |
-| cohomology (`CellularCohomologyEngine`) | `Cohomology` / `cohomology` | any stream | cycles or cocycles | the default for everything but Vietoris-Rips and images |
-| Ripser (`PackedRipserCohomologyEngine`) | `Ripser` / `ripser` | a metric space | cycles or cocycles | Vietoris-Rips: the fastest there, and the default |
+| chunks (`CellularPersistenceInChunksEngine`) | `Chunks` / `chunks` | any stream | **cycles**, cocycles | queries at intermediate scales (`diagramAt`); degrees 0 and 1 |
+| naive (`CellularHomologyEngine`) | `Naive` / `naive` | any stream | **cycles**, cocycles | stepping through a computation, reference results |
+| cohomology (`CellularCohomologyEngine`) | `Cohomology` / `cohomology` | any stream | cycles, **cocycles** | the default for everything but Vietoris-Rips and images |
+| Ripser (`PackedRipserCohomologyEngine`) | `Ripser` / `ripser` | a metric space | cycles, **cocycles** | Vietoris-Rips: the fastest there, and the default |
 | fast cubical (`FastCubicalHomologyEngine`) | `FastCubical` / `fast-cubical` | a cubical grid, 2-D and up | cycles | large images ([details](fast-cubical.md)) |
 | fast alpha (`FastAlphaHomologyEngine`) | MATLAB `fast-alpha` | a Helix alpha complex | cycles | large planar point clouds ([details](fast-alpha-complexes.md)) |
 

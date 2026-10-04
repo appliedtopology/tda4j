@@ -43,7 +43,12 @@ barcodes coincide.
 `persistentHomology` (same bars, cycles). Only death columns are reduced, under the engine's own order reversed
 (youngest = `Chain` leading term); a pivot that is not the paired birth cell throws (a pairing/order mismatch is a
 bug, never fall back). Finite bar cycle = `R_τ` (closed, youngest cell σ, `= ∂V_τ` with youngest τ); essential = `V_σ`.
-Different valid cycles from chunks/naive (they report `V_σ` after their own substitutions): never compare
+Dual direction (`Involution.cocycles`/`cocycleBars`): from a homology pairing (naive/chunks `pairing`, under
+`stream.filtrationOrdering`), reduce only birth cells' coboundaries (built by `coboundariesOf` from the stream),
+youngest first; representative `V_σ` (as the cohomology engines report). Chunks' and naive's pairings are identical,
+union-find included (`InvolutionSpec`). Fast cubical's union-find ties by value, not the stream order: no dual path,
+image cocycles go through the cohomology engine. Native kind is faster: derived costs ~1.1-1.3x in degrees 0-1,
+~2.5x for VR cycles in degree 2. Different valid cycles from chunks/naive (they report `V_σ` after their own substitutions): never compare
 representatives cell for cell across engines; `InvolutionSpec` checks validity on tie-heavy inputs. Cost: 2.5-3x
 cocycles (`WORKLOG-involution.md`).
 

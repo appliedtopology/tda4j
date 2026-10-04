@@ -128,9 +128,10 @@ line even though the docs build (project flags) would compile them without it.
 `longest`, `longerThan(x)`, `significant()`, `bettiNumbers`) out. **Default: degrees 0..2, cycles**;
 `representatives = Representatives.Cycles | Cocycles` (MATLAB `representativeType`, CLI `--representative-type`).
 `Auto` = Ripser for `VietorisRips` on points/metric space, `FastCubical` for images of dimension >= 2 (cycles only),
-`Cohomology` otherwise. The pairing always comes from cohomology; cycles from it by `Involution` (reduce only death
-columns, every pivot checked). `Chunks`/`Naive` give cycles only and reduce every top cell (VR/Cech H2 on ~100 points:
-minutes or OOM). A truncated stream's own degree (`homologyDegreeLimit`) is the default for streams.
+`Cohomology` otherwise. Every engine but the fast ones gives both kinds: its native kind (cocycles for Ripser/
+Cohomology, cycles for Chunks/Naive/FastCubical) and the other derived from its pairing by `Involution` (reduce only
+death columns, or birth coboundaries; every pivot checked). `Chunks`/`Naive` reduce every top cell (VR/Cech H2 on
+~100 points: minutes or OOM). A truncated stream's own degree (`homologyDegreeLimit`) is the default for streams.
 `WORKLOG-default-degree-2.md`, `WORKLOG-involution.md`.
 
 **Zero-length bars are dropped by default** (project lead: seeing them is the opt-in, never hiding them): every engine,

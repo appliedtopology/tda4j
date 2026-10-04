@@ -39,6 +39,26 @@ object PersistenceEngine:
           .persistentHomology(stream)
           .barcodeAt(Double.PositiveInfinity, includeZeroLength)
 
+  /** The naive engine's pairing, with cocycles as representatives ([[Involution.cocycleBars]]). */
+  def naiveCocycles[CellT: OrderedCell, C: Field]: PersistenceEngine[CellT, C] =
+    new PersistenceEngine[CellT, C]:
+      def barcode(
+        stream: StratifiedCellStream[CellT, Double],
+        includeZeroLength: Boolean
+      ): List[PersistenceBar[Double, Chain[CellT, C]]] =
+        val pairs = CellularHomologyEngine[CellT, C, Double]().persistentHomology(stream).pairing
+        Involution.cocycleBars[CellT, C](stream, pairs, stream.filtrationOrdering.reverse, includeZeroLength)
+
+  /** The chunks engine's pairing (degrees `0 .. maxDim`), with cocycles as representatives. */
+  def chunksCocycles[CellT: OrderedCell, C: Field](maxDim: Int): PersistenceEngine[CellT, C] =
+    new PersistenceEngine[CellT, C]:
+      def barcode(
+        stream: StratifiedCellStream[CellT, Double],
+        includeZeroLength: Boolean
+      ): List[PersistenceBar[Double, Chain[CellT, C]]] =
+        val pairs = CellularPersistenceInChunksEngine[CellT, C](maxDim).persistentHomology(stream).pairing
+        Involution.cocycleBars[CellT, C](stream, pairs, stream.filtrationOrdering.reverse, includeZeroLength)
+
   /** The cohomology engine's pairing, with cycles as representatives ([[Involution]]). */
   def cohomologyCycles[CellT: OrderedCell, C: Field]: PersistenceEngine[CellT, C] =
     new PersistenceEngine[CellT, C]:

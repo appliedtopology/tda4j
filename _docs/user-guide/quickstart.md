@@ -86,8 +86,9 @@ Every bar carries a representative that witnesses the class. There are two kinds
 * **cocycles**: a cocycle of a loop is a set of edges that cuts *across* it. Circular coordinates are built from
   cocycles.
 
-The bars are the same either way. Cohomology computes the pairing in both cases (it is much faster in degree 2); for
-cycles, the boundaries of the cells that end bars are reduced once more.
+The bars are the same either way. Each engine computes one kind natively and derives the other from its pairing, at a
+little extra cost (more in degree 2). The default engines for points compute cohomology, so cocycles are the slightly
+faster choice there; for images, the fast cubical engine computes cycles. See [engines](homology-computation/choosing-engine.md).
 
 ```scala 3
 import scala.language.experimental.modularity

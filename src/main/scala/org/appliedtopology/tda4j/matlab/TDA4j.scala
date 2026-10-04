@@ -753,23 +753,29 @@ object TDA4j:
   // per-field computation, shared across both coefficient-field choices
   // ---------------------------------------------------------------------------------------------------------------
 
-  /** Whether to report cycles: the `representativeType` option, `cycles` (the default) or `cocycles`. Only `ripser` and
-    * `cohomology` give cocycles; with them, cycles come from the cohomology pairing ([[Involution]]).
+  /** Whether to report cycles: the `representativeType` option, `cycles` (the default) or `cocycles`. Every engine but
+    * `fast-cubical` and `fast-alpha` gives both, the other kind from its pairing ([[Involution]]).
     */
   private def wantsCycles(opts: Map[String, String], engine: EngineKind): Boolean =
-    val cohomological = engine == EngineKind.Ripser || engine == EngineKind.Cohomology
+    val cyclesOnly = engine == EngineKind.FastCubical || engine == EngineKind.FastAlpha
     opts.get("representativetype").map(_.toLowerCase) match
       case None             => true
       case Some("cycles")   => true
       case Some("cocycles") =>
-        if cohomological then false
+        if !cyclesOnly then false
         else
           throw new IllegalArgumentException(
-            s"engine=${engine.toString.toLowerCase} gives cycles; for cocycles use engine=cohomology (or engine=ripser " +
-              "for complex=vr), or leave engine unset"
+            s"engine=${if engine == EngineKind.FastCubical then "fast-cubical" else "fast-alpha"} gives cycles " +
+              "only; for cocycles use engine=cohomology, or leave engine unset"
           )
       case Some(other) =>
         throw new IllegalArgumentException(s"option 'representativeType' must be cycles or cocycles, got '$other'")
+
+  private def naiveFor[CellT: OrderedCell, C: Field](cycles: Boolean): PersistenceEngine[CellT, C] =
+    if cycles then PersistenceEngine.naive[CellT, C] else PersistenceEngine.naiveCocycles[CellT, C]
+
+  private def chunksFor[CellT: OrderedCell, C: Field](maxDim: Int, cycles: Boolean): PersistenceEngine[CellT, C] =
+    if cycles then PersistenceEngine.chunks[CellT, C](maxDim) else PersistenceEngine.chunksCocycles[CellT, C](maxDim)
 
   private def cohomologyFor[CellT: OrderedCell, C: Field](cycles: Boolean): PersistenceEngine[CellT, C] =
     if cycles then PersistenceEngine.cohomologyCycles[CellT, C] else PersistenceEngine.cohomology[CellT, C]
@@ -864,7 +870,7 @@ object TDA4j:
             // RipserCohomologySpec's own naiveBars helper uses. Reuses vrStreamForBoundary directly -- an
             // identical construction to what this branch built for itself before the boundary matrix existed.
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(vrStreamForBoundary, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles).barcode(vrStreamForBoundary, includeZeroLength = true),
               vrCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -879,8 +885,7 @@ object TDA4j:
             // coefficients-and-representatives principle.
             val stream = EnumeratingCofaceSimplexStream(collapsedMetricSpace, maxFiltrationValue = maxFiltrationValue)
             fromBars[Simplex[Int], C](
-              PersistenceEngine
-                .chunks[Simplex[Int], C](requestedMaxDimension)
+              chunksFor[Simplex[Int], C](requestedMaxDimension, cycles)
                 .barcode(stream, includeZeroLength = true),
               vrCellVertices,
               toDouble,
@@ -928,7 +933,7 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(alphaStream, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles).barcode(alphaStream, includeZeroLength = true),
               alphaCellVertices,
               toDouble,
               Int.MaxValue,
@@ -1008,7 +1013,7 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(cechStreamForBoundary, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles).barcode(cechStreamForBoundary, includeZeroLength = true),
               cechCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1025,8 +1030,7 @@ object TDA4j:
             // before).
             val stream = CechCofaceSimplexStream(euclideanMetricSpace, maxFiltrationValue = maxFiltrationValue)
             fromBars[Simplex[Int], C](
-              PersistenceEngine
-                .chunks[Simplex[Int], C](requestedMaxDimension)
+              chunksFor[Simplex[Int], C](requestedMaxDimension, cycles)
                 .barcode(stream, includeZeroLength = true),
               cechCellVertices,
               toDouble,
@@ -1067,7 +1071,7 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(dtmStreamForBoundary, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles).barcode(dtmStreamForBoundary, includeZeroLength = true),
               dtmCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1075,8 +1079,7 @@ object TDA4j:
             )
           case EngineKind.Chunks =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine
-                .chunks[Simplex[Int], C](requestedMaxDimension)
+              chunksFor[Simplex[Int], C](requestedMaxDimension, cycles)
                 .barcode(dtmStream, includeZeroLength = true),
               dtmCellVertices,
               toDouble,
@@ -1115,7 +1118,7 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(sparseStreamForBoundary, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles).barcode(sparseStreamForBoundary, includeZeroLength = true),
               sparseCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1123,8 +1126,7 @@ object TDA4j:
             )
           case EngineKind.Chunks =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine
-                .chunks[Simplex[Int], C](requestedMaxDimension)
+              chunksFor[Simplex[Int], C](requestedMaxDimension, cycles)
                 .barcode(sparseStream, includeZeroLength = true),
               sparseCellVertices,
               toDouble,
@@ -1163,7 +1165,7 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(dtmAlphaStream, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles).barcode(dtmAlphaStream, includeZeroLength = true),
               dtmAlphaCellVertices,
               toDouble,
               Int.MaxValue,
@@ -1245,7 +1247,7 @@ object TDA4j:
             )
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(lazyStreamForBoundary, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles).barcode(lazyStreamForBoundary, includeZeroLength = true),
               cellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1257,8 +1259,7 @@ object TDA4j:
             // bounded (inherited from RipserCofaceSimplexStream), mirroring complex=cech's own chunks case.
             val stream = LazyWitnessSimplexStream(metricSpace, landmarks, nu, maxFiltrationValue = maxFiltrationValue)
             fromBars[Simplex[Int], C](
-              PersistenceEngine
-                .chunks[Simplex[Int], C](requestedMaxDimension)
+              chunksFor[Simplex[Int], C](requestedMaxDimension, cycles)
                 .barcode(stream, includeZeroLength = true),
               cellVertices,
               toDouble,
@@ -1297,7 +1298,7 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              PersistenceEngine.naive[Simplex[Int], C].barcode(generalStreamForBoundary, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles).barcode(generalStreamForBoundary, includeZeroLength = true),
               cellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1428,7 +1429,7 @@ object TDA4j:
     engine match
       case EngineKind.Naive =>
         fromBars[Simplex[Int], C](
-          PersistenceEngine.naive[Simplex[Int], C].barcode(streamForBoundary, includeZeroLength = true),
+          naiveFor[Simplex[Int], C](cycles).barcode(streamForBoundary, includeZeroLength = true),
           cellVertices,
           toDouble,
           requestedMaxDimension,
@@ -1531,7 +1532,7 @@ object TDA4j:
         // artificially cut short the way a VR/Cech complex is -- nothing to build one dimension higher for.
         // CellularHomologyEngine[Cube, ...] has no maxDim of its own at all, same as Simplex[Int].
         fromBars[Cube, C](
-          PersistenceEngine.naive[Cube, C].barcode(stream, includeZeroLength = true),
+          naiveFor[Cube, C](cycles).barcode(stream, includeZeroLength = true),
           cellVertices,
           toDouble,
           maxDimension,
@@ -1543,7 +1544,7 @@ object TDA4j:
         // semantics-fix.md), so this can skip real work for a caller who only wants low-dimensional homology, not
         // just filter what's reported after the fact.
         fromBars[Cube, C](
-          PersistenceEngine.chunks[Cube, C](maxDimension).barcode(stream, includeZeroLength = true),
+          chunksFor[Cube, C](maxDimension, cycles).barcode(stream, includeZeroLength = true),
           cellVertices,
           toDouble,
           maxDimension,

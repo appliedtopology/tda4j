@@ -75,10 +75,13 @@ object Persistence:
     *   - `Ripser`: Bauer's Ripser, for the Vietoris-Rips complex of points or a metric space only; the fastest there.
     *     Cycles or cocycles.
     *   - `Cohomology`: persistent cohomology of any complex. Cycles or cocycles.
-    *   - `FastCubical`: union-find on an image and its dual grid, for images of dimension 2 and up. Cycles.
-    *   - `Chunks`: homology by clearing and compression, with union-find in degrees 0 and 1. Cycles. Slow in degree 2
-    *     and up on Vietoris-Rips and Čech complexes, which have many cells of the top dimension.
-    *   - `Naive`: the reference algorithm, one cell at a time. Cycles.
+    *   - `FastCubical`: union-find on an image and its dual grid, for images of dimension 2 and up. Cycles only.
+    *   - `Chunks`: homology by clearing and compression, with union-find in degrees 0 and 1. Cycles or cocycles. Slow
+    *     in degree 2 and up on Vietoris-Rips and Čech complexes, which have many cells of the top dimension.
+    *   - `Naive`: the reference algorithm, one cell at a time. Cycles or cocycles.
+    *
+    * Each engine computes one kind natively and derives the other from its pairing ([[Involution]]), which costs one
+    * more reduction: cocycles are native to `Ripser` and `Cohomology`, cycles to the others.
     */
   enum Engine:
     case Auto, Chunks, Naive, Cohomology, Ripser, FastCubical
@@ -193,10 +196,9 @@ object Persistence:
         else if cycles && input.cubicalGrid.exists(_.ambientDim >= 2) then Engine.FastCubical
         else Engine.Cohomology
       case other => other
-    if !cycles && (chosen == Engine.Chunks || chosen == Engine.Naive || chosen == Engine.FastCubical) then
+    if !cycles && chosen == Engine.FastCubical then
       throw new IllegalArgumentException(
-        s"Persistence: engine = $chosen gives cycles; for cocycles use Engine.Auto, Engine.Cohomology or (for " +
-          "Vietoris-Rips) Engine.Ripser"
+        "Persistence: engine = FastCubical gives cycles only; for cocycles use Engine.Auto or Engine.Cohomology"
       )
     val requested = maxDimension.toOption
     requested.foreach(k => require(k >= 0, s"Persistence: maxDimension must be >= 0, got $k"))
@@ -271,14 +273,17 @@ object Persistence:
     val (bars, last) = engine match
       case Engine.Chunks =>
         val state = CellularPersistenceInChunksEngine[CellT, coefficients.C](maxDimension).persistentHomology(stream)
-        (state.barcodeAt(Double.PositiveInfinity, includeZeroLength), state.lastFiltrationValue)
+        val bars =
+          if cycles then state.barcodeAt(Double.PositiveInfinity, includeZeroLength)
+          else Involution.cocycleBars(stream, state.pairing, stream.filtrationOrdering.reverse, includeZeroLength)
+        (bars, state.lastFiltrationValue)
       case Engine.Naive =>
         val state = CellularHomologyEngine[CellT, coefficients.C, Double]().persistentHomology(stream)
         state.advanceAll()
-        (
-          state.barcodeAt(Double.PositiveInfinity, includeZeroLength),
-          state.lastFiltrationValue.getOrElse(Double.NegativeInfinity)
-        )
+        val bars =
+          if cycles then state.barcodeAt(Double.PositiveInfinity, includeZeroLength)
+          else Involution.cocycleBars(stream, state.pairing, stream.filtrationOrdering.reverse, includeZeroLength)
+        (bars, state.lastFiltrationValue.getOrElse(Double.NegativeInfinity))
       case Engine.Cohomology =>
         val engine = CellularCohomologyEngine[CellT, coefficients.C, Double]()
         val bars =

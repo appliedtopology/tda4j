@@ -84,3 +84,40 @@ The full test suite went from 256 s to 533 s before the fix.
 Fix: `persistentHomology` skips pairs above the stream's `homologyDegreeLimit`. Essential pairs are never pivots, so no
 other cycle changes. `InvolutionSpec` pins it. The packed engine never had the problem: its loop stops at
 `maxDimension`.
+
+## Cocycles from a homology pairing (2026-10-04)
+
+The project lead asked whether the involution runs the other way, and wanted both kinds of representative everywhere.
+It does.
+
+**The algorithm, `Involution.cocycles`:**
+- Reduce the coboundaries of the birth cells of finite pairs, youngest first. The leading term is the oldest cell, so
+  the `Chain` ordering is oldest-first.
+- Each pivot must be the paired death cell.
+- An essential birth's coboundary must reduce to zero.
+- The representative is `V_σ`, the convention the cohomology engines already use.
+- Coboundaries come from inverting the boundaries of the stream's cells one dimension up (`coboundariesOf`).
+
+**Checks:**
+- On the cohomology engine's own pairing, it reproduces that engine's cocycles term for term.
+- It gives valid cocycles on an all-zero torus triangulation.
+- Chunks' and naive's `pairing` agree exactly on tie-heavy inputs (integer grid, all-zero torus), chunks' union-find
+  included.
+
+**Fast cubical:** no dual path. Its degree-0 union-find breaks ties by value only, and its top degree comes from the
+dual graph, so its pairing need not follow the stream's tie-break. Image cocycles go through the cohomology engine;
+`FastCubical` / `fast-cubical` / `fast-alpha` with cocycles throws, naming the fix.
+
+**Cost** of native against derived, medians of three in separate JVMs, `-Xmx2G`:
+
+| engine, input | native | derived |
+|---|---|---|
+| chunks, noisy-circle VR degrees 0-1 | cycles 4.40 s | cocycles 5.65 s (1.3x) |
+| naive, same | cycles 4.52 s | cocycles 5.52 s (1.2x) |
+| Ripser, same | cocycles 0.31 s | cycles 0.38 s (1.2x) |
+| Ripser, noisy-circle degrees 0-2 (earlier) | cocycles 0.28 s | cycles 0.67 s (2.4x) |
+| cohomology, 200x200 image | cocycles 4.96 s | cycles 5.48 s (1.1x) |
+| chunks, 200x200 image | cycles 27.3 s | cocycles 30.0 s (1.1x) |
+| fast cubical, 200x200 image | cycles 2.55 s | none |
+
+"Slightly faster" holds in degrees 0 and 1. For VR cycles in degree 2 the derived kind costs about 2.5x.

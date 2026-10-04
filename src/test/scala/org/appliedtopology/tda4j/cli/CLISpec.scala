@@ -437,7 +437,7 @@ class CLISpec extends mutable.Specification:
       CSV.writePointCloud(path, points)
       def run(args: String*) = CliFull.run(args, new PrintStream(new ByteArrayOutputStream()))
       (TDA4jCLI.buildOptions(conf).toSeq must beEqualTo(Seq("representativeType", "cocycles")))
-        .and(run("--representative-type", "cocycles", "--engine", "chunks", path) must beEqualTo(1))
+        .and(run("--representative-type", "cocycles", "--engine", "chunks", path) must beEqualTo(0))
         .and(run("--representative-type", "cocycles", path) must beEqualTo(0))
         .and(
           run("--select-landmarks", "--num-landmarks", "3", "--representative-type", "cycles", path) must beEqualTo(1)
