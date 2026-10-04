@@ -55,7 +55,9 @@ Planning document for the project lead. Nothing here is implemented.
 
    Whatever we choose, measure DQP's speed there first.
 5. **Showcases (§5).** Pick two or three.
-6. **Authorship and an AI-use statement.** The commit history shows Claude's share of the code. Check the venue's policy and
+6. **Which triangle of a full distance matrix to read (§2.8).** Today we read the upper triangle; Ripser and GUDHI read the
+   lower one. Recommendation: switch to the lower triangle, and canonicalize every input in the harness anyway.
+7. **Authorship and an AI-use statement.** The commit history shows Claude's share of the code. Check the venue's policy and
    decide what the paper says. (Springer, which publishes JACT, does not accept LLMs as authors and asks for use to be
    documented; re-check the current wording.)
 
@@ -86,11 +88,15 @@ Planning document for the project lead. Nothing here is implemented.
     through the whole filtration in `O((#K)^2)`, over a field, for complexes that triangulate `S^{d+1}`.
 - **The checks that decide it:**
   1. Make representatives lazy (§2.2); today they cost quadratic time too.
-  2. Prove, and test on tie-heavy inputs (including the `+∞`-valued missing-pixel case), that our representative is `∂Φ(c)`
-     for the complement component `c` at birth. If it is, the claim becomes "volume-optimal codimension-1 representatives at
-     birth, at union-find cost plus output size, over any field".
-  3. Benchmark against CubicalRipser and GUDHI in T mode, and against HomCloud for representatives (§3.3).
-  4. Measure, by ambient dimension and point count, how often the alpha precondition (every facet has at most two
+  2. Prove that our representative is `∂Φ(c)` for the complement component `c` at birth. Then test it internally,
+     including tie-heavy inputs and the `+∞`-valued missing-pixel case. If it holds, the claim becomes "volume-optimal
+     codimension-1 representatives at birth, at union-find cost plus output size, over any field".
+  3. Compare with HomCloud's volume-optimal cycles cell for cell, but **only on inputs with distinct filtration values**.
+     - With ties, which bar gets which complement component depends on the tie-break, so representatives can legitimately
+       differ; Thm 8 is about a minimal basis at one level, not about which bar gets which cycle.
+     - First check which cubical construction HomCloud's bitmap filtration uses, T or V.
+  4. Benchmark against CubicalRipser and GUDHI in T mode (§3.3).
+  5. Measure, by ambient dimension and point count, how often the alpha precondition (every facet has at most two
      cofaces) fails.
 
 **B. Representatives as a design invariant.**
@@ -230,7 +236,9 @@ Planning document for the project lead. Nothing here is implemented.
 
 **2.1 The MATLAB facade has never run in MATLAB.** (S to M)
 - Our classes are Java 17 bytecode (class-file major version 61, **verified**).
-- MathWorks lists OpenJDK 17 as supported only from R2024a; R2023b and earlier take Java 8 and 11 at most (**verified**).
+- MathWorks lists OpenJDK 17 as supported only from R2024a; R2023b and earlier take Java 8 and 11 at most.
+  - This was read through a summarizer of MathWorks' "Versions of OpenJDK Compatible with MATLAB by Release" page. The raw
+    page did not load here. Re-check before relying on it.
 - So: test in R2024a or later, with `jenv` pointing at a JDK 17 or 21, end to end:
   - `matlab_example.m`;
   - one tutorial MATLAB tab;
@@ -292,6 +300,20 @@ Planning document for the project lead. Nothing here is implemented.
 - Finish S₄ to `H_3` on the dense cohomology engine.
 - Add one sentence to the tutorial: HAP computes the same barcode from resolutions. That is a docs fact, not history.
 
+**2.8 We read the other triangle from Ripser.** (S)
+- **The mismatch:**
+  - `ExplicitMetricSpace.distance(x, y)` reads `dist(min)(max)`, the upper triangle;
+  - `ripser.cpp`'s default `distance` format reads "only [the] lower triangular part" (row i, columns j < i, **verified**
+    in its source);
+  - GUDHI's CSV reader is also lower-triangular (from memory; check before relying on it).
+- **The consequence:** on an asymmetric file such as fractal-r (§1e), we and Ripser compute from different inputs, so every
+  agreement check there would show discrepancies of about 1e-5 that come from us.
+- **Options:**
+  - switch to `dist(max)(min)`: one line plus a spec, and a lead decision because ~20 files use `ExplicitMetricSpace`;
+  - or leave the library alone and have the harness give every tool a symmetrized copy.
+
+  Recommended: both (decision 0.6).
+
 ## 3. Benchmarks and comparisons, by part of the library
 
 ### 3.0 Methodology rules for every table
@@ -309,6 +331,8 @@ Planning document for the project lead. Nothing here is implemented.
 
   Add stages for TDA4j, giotto-ph, Ripserer.jl, OAT, JavaPlex, CubicalRipser, HomCloud and Hera. Reviewers know that
   harness.
+  - Its base image is `ubuntu:20.10`, which is end of life and probably will not build as it stands. Rebase it and re-pin,
+    and say in the paper that the baseline comes from a rebuilt harness.
 - **Invocations come from primary sources:** the Dockerfile's flags, the tools' own docs.
   - Ripser's `--ratio` only filters printed pairs (its help text, **verified**). Drop it for agreement runs, or filter our
     output the same way.
@@ -331,6 +355,7 @@ Planning document for the project lead. Nothing here is implemented.
   - every run's barcode is compared with a reference by bottleneck distance, per degree;
   - the tolerance follows from the inputs: `ripser.cpp` computes in float32 (`typedef float value_t`, **verified**), and
     fractal-r is asymmetric at 1e-5;
+  - every tool is given the same symmetrized input (§2.8);
   - zero-length and essential bars use one stated convention;
   - alpha radius against squared radius is converted explicitly.
 
@@ -385,7 +410,8 @@ Planning document for the project lead. Nothing here is implemented.
   - overhead against bars only;
   - representative size, in cells and in diameter;
   - validity: closed, correct birth cell, correct death cell;
-  - for codimension 1, equality with HomCloud's volume-optimal cycles (decides claim A).
+  - for codimension 1, equality with HomCloud's volume-optimal cycles, on inputs with distinct filtration values only
+    (decides claim A, §1a).
 
 ### 3.3 Cubical images (the fast cubical engine; `CubicalGridStream` uses the T-construction)
 
@@ -613,19 +639,22 @@ S is about one session, M a few sessions, L weeks or the compute machine.
   - A web summarizer claimed the opposite (subgroup chains). Never trust summaries for prior-art claims.
 - **Lenzen–Renkin**, Thm 8, setting and complexity: the arXiv PDF, pp. 1–5.
   - It cites Obayashi's volume-optimal codimension-1 cycles and their implementation in HomCloud.
-- **Flash Cubical's abstract** (V-construction, F₂, 2D/3D, "generalise naturally to T-filtrations"): arXiv abstract page.
-  Its code is at `github.com/T-prog123/FlashCubical`, per the search result, not visited.
-- **GUDHI's `FilteredComplex` concept** with an integer `Simplex_key` per simplex: the GUDHI documentation page, through a
-  summarizer.
-  - The definitions were quoted; which classes model the concept was not stated there.
-  - Check the docs directly before citing.
-- **`ripser.cpp`:** `typedef float value_t;`, with `USE_COEFFICIENTS` off by default; `--ratio` only filters printed pairs.
+- **Flash Cubical's abstract** (V-construction, F₂, 2D/3D, "generalise naturally to T-filtrations"): the arXiv abstract
+  page, fetched raw. Its code is at `github.com/T-prog123/FlashCubical`, per the search result, not visited.
+- **GUDHI's `FilteredComplex` concept:** the raw documentation page (`concept/Persistent_cohomology/FilteredComplex.h`) says
+  of `Simplex_key`, "Data stored for each simplex. Must be an integer type". The page does not list which classes model
+  the concept.
+- **`ripser.cpp`:**
+  - `typedef float value_t;`, with `USE_COEFFICIENTS` off by default;
+  - `--ratio` only filters printed pairs;
+  - the default input format `distance` reads only the lower triangle.
+
   Read from the source.
 - **The ripser-benchmark Dockerfile's** cases, flags and tool stages: read from the file.
 - **fractal-r asymmetry:** the full 512×512 file, scanned with Python.
 - **Our bytecode:** the class-file major version is 61, read with `od` on `Persistence.class`.
-- **MATLAB's supported OpenJDK versions by release:** the MathWorks requirements page, through a summarizer.
-  - Re-check before printing it in the paper.
+- **MATLAB's supported OpenJDK versions by release:** the MathWorks requirements page, through a summarizer only; the raw
+  page did not load. **Not verified**: re-check before relying on it.
 
 ## Sources
 

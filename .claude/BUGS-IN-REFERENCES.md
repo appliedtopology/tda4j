@@ -112,3 +112,9 @@ misbehaves on it.
 
 **What tda4j did**: `ExplicitMetricSpace.distance(x, y)` reads `dist(min)(max)`, one fixed triangle. The packed
 engine's ordering compares indices first, so the same simplex is never two different keys. Not reported upstream.
+
+**Open: the triangle is the wrong one for comparisons.** `dist(min)(max)` is the **upper** triangle. `ripser.cpp`'s
+default input format, `distance`, reads "only [the] lower triangular part": row i, columns j < i, per its
+`read_distance_matrix` and help text. On this file, then, tda4j and Ripser compute from different inputs. Whether to
+switch to `dist(max)(min)`, symmetrize the inputs in the benchmark harness, or both is a decision for the lead
+(`PLAN-paper.md` §2.8).
