@@ -93,8 +93,9 @@ object PaperBenchmarkDriver:
               .barsWithoutTopRepresentatives(grid)
               .filter(_.dim <= dim)
               .map(_.toTriple)
-        else () =>
-          Persistence(image, maxDimension = dim, characteristic = p, engine = engine, representatives = reps).triples
+        else
+          () =>
+            Persistence(image, maxDimension = dim, characteristic = p, engine = engine, representatives = reps).triples
       case "alpha" =>
         val pts = readMatrix(input)
         val backend = AlphaBackend.parse(opts.getOrElse("backend", "default"))
