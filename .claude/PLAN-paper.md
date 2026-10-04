@@ -660,6 +660,77 @@ S is about one session, M a few sessions, L weeks or the compute machine.
   - **(2.10) The 3-D `Auto` default for images.** Should it be `Cohomology` for d ≥ 3? Decide after a size sweep.
   - **(2.11) Helix construction speed.**
 
+## Update, after PRs #40 and #41 (2026-10-04, evening): what is out of date above
+
+Checked item by item against the merged code and the #40/#41 worklogs. Two items were re-measured or re-read for this
+update; they are marked **(checked)**. Everything else cites its worklog and stays uncitable sandbox data.
+
+**Resolved, or no longer accurate:**
+- **Decision 0.4 (alpha default at d ≥ 4): mostly decided.**
+  - At d = 4 the default is now Bowyer–Watson with exact predicates, valid by construction (`WORKLOG-bowyer-watson.md`).
+  - The "1 in 170 invalid at d = 4" figure was Helix's old candidate search. The minimal-centre walk produced no invalid
+    triangulation in 500 random 4-D clouds of 25 points (`WORKLOG-helix-construction-speed.md`).
+  - DQP was measured first, as the decision asked: untruncated, about 100x slower than Helix in 2-D.
+  - What is left is the default at d ≥ 5 (today: Helix without a radius, `prefersDQP` with one).
+- **§2.5, 512 vs 1029 bars on the flat torus: gone (checked).**
+  - Current code, `_docs/tutorials/data/flat-torus.csv` (120 points in R⁴): 338 bars through the verb (degrees 0–2),
+    339 from `AlphaShapes(pts)` with degrees up to 3 (one extra `H_3` bar), identical for Bowyer–Watson and Helix;
+    5864 with zero-length bars kept.
+  - Neither old count reproduces. They came from older code, most likely before the Helix Gabriel fix; which change
+    removed the discrepancy is not established.
+  - The verb now takes 0.24 s warm, against the old probe's 43 s.
+- **Claim A (§1a) wording:**
+  - the middle degrees (d ≥ 3) go to the **cohomology** engine, not chunks (#40);
+  - the alpha side works on any `DelaunayAlphaShapes` triangulation: Bowyer–Watson up to 4-D, Helix in any dimension;
+  - check 5 (how often the facet precondition fails) concerns Helix only; Bowyer–Watson guarantees it.
+- **Decision 0.2 (VR levers):**
+  - the heap working column with lazy cancellation is done (`WORKLOG-vr-working-column.md`);
+  - unboxed `F_p` arithmetic is not done (coefficients are still boxed);
+  - emergent pairs are not done;
+  - "no valid profile shows a dominant cost" no longer holds: at sphere3_192 the `TreeMap` accumulator was about 62%
+    of the samples, and that is what the heap replaced.
+- **Claim B's "about 2.5x for VR cycles in degree 2":** with the packed involution, cycles cost about 1.2x cocycles at
+  sphere3_192 and on o3_1024, and about 1.55x at sphere3_96.
+- **§2.3 and the earlier update's VR numbers predate #40.**
+  - Measured in the #40 session: sphere3_192 cocycles 11.3 → 5.5 s, cycles 19.2 → 6.7 s.
+  - Against an earlier `ripser.cpp` timing that is roughly 6.7x for cocycles and 8x for cycles, not the 3–90x above.
+  - Still not citable (sandbox, mixed sessions). The 336 MB vs 8.3 MB peak RSS was not re-measured.
+- **Cubical 3-D ("Auto 31 s against Cohomology 3 s, about 600x"): out of date, and blocker 2.10 is decided.**
+  - With the middle degrees on cohomology and cell values in a flat array, 32³ noise takes 4.0 s, against about 5.3 s
+    for plain cohomology (`WORKLOG-fast-cubical-representatives.md`).
+  - The fast cubical hybrid beats plain cohomology at every size measured, so it stays the `Auto` default for images.
+- **Cubical 2-D ("50–80x behind CubicalRipser"):** predates blocker 2.9 (done; 400² noise 4.05 → 1.05 s). The new ratio
+  against CubicalRipser has not been measured.
+- **Alpha ("about 200x behind GUDHI; Helix construction dominates"):** no longer describes the default.
+  - Bowyer–Watson builds the whole alpha complex of 1000 uniform 3-D points in about 0.1 s.
+  - GUDHI's earlier harness figure for the same size is about 0.07 s, but from a different run, and end to end with
+    homology was not compared. Run it in the harness before saying anything.
+- **Blockers 2.9 and 2.11: done.** 2.11 is also mostly superseded, since Helix is now the default only above 4-D.
+- **§3.3 "Missing: everything after §2.2":** partly done. The size sweep (`bench/sweep_cubical.py`) and a bars-only mode
+  for the representatives-on/off comparison exist.
+- **§7 Limitations:** "Helix at d ≥ 4" becomes "Helix at d ≥ 5".
+
+**Still accurate:**
+- not a speed paper; VR remains the largest gap;
+- §2.1: the MATLAB facade has never run in MATLAB;
+- §2.4: the cursor engines are not on dense numbering;
+- §2.6 (release with a DOI) and §2.7 (HAP cross-check): not done;
+- §2.8 **(checked)**: `ExplicitMetricSpace.distance` still reads `dist(min)(max)`, the upper triangle. #40 only made the
+  packed engine read every metric in one fixed order (the infinite-loop fix);
+- §2.5's Čech-against-alpha oracle: not a spec (the harness's smoke run compared them; the test suite does not);
+- §1d, §1e, the §3.0 methodology rules, and claim A's open checks (the volume-optimality proof, HomCloud, CubicalRipser
+  and GUDHI).
+
+**New material:**
+- **§1c breadth:** Bowyer–Watson with exact predicates. Filtered floating-point determinants with an exact `BigDecimal`
+  fallback, and a symbolic perturbation by point index, so the triangulation is the same for every insertion order.
+  Cite Bowyer 1981, Watson 1981, Shewchuk's adaptive predicates (for the filter idea; ours is not an adaptive
+  expansion), Edelsbrunner–Mücke (simulation of simplicity).
+- **§1a C pitfall catalogue:** a bar of length about 2e-16 whose existence depended on which diagonal of a cocircular
+  square the triangulation chose. A simplex's own radius and its coface's radius, mathematically equal, were computed
+  separately (`WORKLOG-bowyer-watson.md`). Same family as the Miniball one-ULP entry.
+- **§3.4:** Bowyer–Watson is the alpha entry for d = 2 to 4. Failure rates by (d, n) now concern Helix at d ≥ 5 only.
+
 ## 8. Facts verified this session, and how
 
 - **HAP** `PersistentHomologyOfSubGroupSeries`: the manual's §11.1-9, read as raw HTML from the GitHub Pages mirror
