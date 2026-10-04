@@ -37,6 +37,10 @@ barcodes coincide.
    streams only, no `maxDim`/apparent pairs. Only essential bars' V-columns are cocycles; finite bars' V-columns
    are their reduced pivot chain. Representatives don't match Ripser term-for-term (tie direction differs) but
    bar values do. Sign-tested on RP² over Fp (3) (`WORKLOG-generic-cohomology.md`).
+   Reduces over **dense cell numbers** (per-dimension position in the engine's order), its involution too; must
+   equal the cell-keyed reduction kept in the test tree (`CellKeyedCohomologyReference`) bar for bar, pair for pair,
+   term for term and in list order (`CohomologyNumberingSpec`): re-run it after any change to the reduction
+   (`WORKLOG-dense-cohomology.md`).
 
 **Cycles from cohomology (`Involution`, `homology/Involution.scala`)**: both cohomology engines expose
 `pairedCohomology` (bars + birth/death cells, zero-length pairs INCLUDED: their columns are pivots) and
