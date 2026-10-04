@@ -5,10 +5,10 @@ import scala.collection.mutable
 /** The Delaunay triangulation of a point cloud by Bowyer–Watson insertion, filtered as an alpha complex: for point
   * clouds in 2 to 4 dimensions (of their affine span), the fast way to the whole alpha complex.
   *
-  * Points are inserted one at a time in a randomized, spatially sorted order; each insertion removes the simplices whose
-  * circumspheres contain the new point and fills the hole with simplices through it. The hull is handled with a vertex
-  * at infinity. Every geometric decision is exact ([[DelaunayPredicates]]), and points exactly on a circumsphere are
-  * decided by a perturbation that depends only on the points' order in the input, so the result is a valid
+  * Points are inserted one at a time in a randomized, spatially sorted order; each insertion removes the simplices
+  * whose circumspheres contain the new point and fills the hole with simplices through it. The hull is handled with a
+  * vertex at infinity. Every geometric decision is exact ([[DelaunayPredicates]]), and points exactly on a circumsphere
+  * are decided by a perturbation that depends only on the points' order in the input, so the result is a valid
   * triangulation for any input, degenerate ones (grids, cospherical points) included, and the same for every `seed`.
   * Points that coincide exactly with an earlier one are joined to it by an edge of value 0.
   *
@@ -34,13 +34,17 @@ class BowyerWatsonDelaunay(pts: Array[Array[Double]], seed: Long = 0L)(using eps
   protected def topValue(s: Simplex[Int]): Double = smallestCircumsphere(s)._2
   override protected def duplicates: Map[Int, Int] = triangulation.duplicates
 
-/** The triangulation behind [[BowyerWatsonDelaunay]], on flat arrays: cell `c` has vertices `vertex(c, 0 .. d)` and, for
-  * each position `i`, the neighbouring cell across the facet opposite `vertex(c, i)`. Finite cells are positively
+/** The triangulation behind [[BowyerWatsonDelaunay]], on flat arrays: cell `c` has vertices `vertex(c, 0 .. d)` and,
+  * for each position `i`, the neighbouring cell across the facet opposite `vertex(c, i)`. Finite cells are positively
   * oriented. The vertex at infinity is the index `n`; a cell containing it (an "infinite" cell, one per hull facet) is
   * stored so that replacing the vertex at infinity by a point beyond its hull facet gives a positive orientation, which
   * makes "copy the cell and put the new point where the removed vertex was" correct for every cell.
   */
-private[tda4j] final class BowyerWatsonTriangulation(coordinates: Array[Array[Double]], seed: Long, checkEveryStep: Boolean = false):
+private[tda4j] final class BowyerWatsonTriangulation(
+  coordinates: Array[Array[Double]],
+  seed: Long,
+  checkEveryStep: Boolean = false
+):
   val n: Int = coordinates.length
   val d: Int = coordinates.headOption.map(_.length).getOrElse(0)
   private val infinite = n
@@ -84,8 +88,8 @@ private[tda4j] final class BowyerWatsonTriangulation(coordinates: Array[Array[Do
 
   // ---- construction ---------------------------------------------------------------------------------------------------
 
-  /** Insertion order: random rounds of doubling size (BRIO), each sorted along a Z-order curve, so consecutive points are
-    * close (short walks) while the order stays random enough for the expected running time.
+  /** Insertion order: random rounds of doubling size (BRIO), each sorted along a Z-order curve, so consecutive points
+    * are close (short walks) while the order stays random enough for the expected running time.
     */
   private def insertionOrder(): Array[Int] =
     val shuffled = rng.shuffle((0 until n).toVector).toArray
@@ -175,7 +179,8 @@ private[tda4j] final class BowyerWatsonTriangulation(coordinates: Array[Array[Do
       step += 1
       if checkEveryStep then
         val problems = invariantProblems()
-        if problems.nonEmpty then insertionErrors = s"after inserting point $p: ${problems.take(3).mkString("; ")}" :: insertionErrors
+        if problems.nonEmpty then
+          insertionErrors = s"after inserting point $p: ${problems.take(3).mkString("; ")}" :: insertionErrors
 
   /** Links every pair of the given cells that share a facet (used once, for the initial cells). */
   private def linkByFacets(cells: Seq[Int]): Unit =
@@ -195,8 +200,8 @@ private[tda4j] final class BowyerWatsonTriangulation(coordinates: Array[Array[Do
     vs(i) = p
     vs
 
-  /** A cell in conflict with `p` (containing it, or an infinite cell whose hull facet it lies beyond), or `-1 - v` if `p`
-    * coincides with vertex `v`.
+  /** A cell in conflict with `p` (containing it, or an infinite cell whose hull facet it lies beyond), or `-1 - v` if
+    * `p` coincides with vertex `v`.
     */
   private def locate(p: Int): Int =
     var c = if lastCell >= 0 && alive(lastCell) then lastCell else (0 until cellCount).find(alive(_)).get
@@ -225,7 +230,8 @@ private[tda4j] final class BowyerWatsonTriangulation(coordinates: Array[Array[Do
             moved = true
           k += 1
         if !moved then
-          val same = (0 until width).map(vertex(c, _)).find(v => java.util.Arrays.equals(coordinates(v), coordinates(p)))
+          val same =
+            (0 until width).map(vertex(c, _)).find(v => java.util.Arrays.equals(coordinates(v), coordinates(p)))
           located = same.fold(c)(v => -1 - v)
           done = true
     located

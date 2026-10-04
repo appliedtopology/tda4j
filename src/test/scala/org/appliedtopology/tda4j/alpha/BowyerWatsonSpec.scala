@@ -15,7 +15,9 @@ class BowyerWatsonSpec extends mutable.Specification:
     Array.fill(n)(Array.fill(dim)(rng.nextDouble()))
 
   def grid(side: Int, dim: Int): Array[Array[Double]] =
-    Array.tabulate(math.pow(side, dim).toInt)(k => Array.tabulate(dim)(a => ((k / math.pow(side, a).toInt) % side).toDouble))
+    Array.tabulate(math.pow(side, dim).toInt)(k =>
+      Array.tabulate(dim)(a => ((k / math.pow(side, a).toInt) % side).toDouble)
+    )
 
   /** Small integer coordinates: collinear, cocircular and repeated points everywhere. */
   def integerCloud(dim: Int, n: Int, seed: Long): Array[Array[Double]] =
@@ -23,7 +25,11 @@ class BowyerWatsonSpec extends mutable.Specification:
     Array.fill(n)(Array.fill(dim)(rng.nextInt(4).toDouble))
 
   def contents(a: DelaunayAlphaShapes, dim: Int): Map[Simplex[Int], Double] =
-    (0 to dim).filter(a.iterateDimension.isDefinedAt).flatMap(k => a.iterateDimension(k)).map(s => s -> a.filtrationValue(s)).toMap
+    (0 to dim)
+      .filter(a.iterateDimension.isDefinedAt)
+      .flatMap(k => a.iterateDimension(k))
+      .map(s => s -> a.filtrationValue(s))
+      .toMap
 
   "keeps its invariants after every insertion (orientation, neighbours, local Delaunay)" >> {
     val problems = for
@@ -92,7 +98,8 @@ class BowyerWatsonSpec extends mutable.Specification:
     val alpha = BowyerWatsonDelaunay(pts)
     val vertices = alpha.iterateDimension(0).toSet
     val repeats = pts.indices.filter(i => pts.indices.exists(j => j < i && pts(j).sameElements(pts(i))))
-    val zeroEdges = repeats.forall(i => alpha.iterateDimension(1).exists(e => e.contains(i) && alpha.filtrationValue(e) == 0.0))
+    val zeroEdges =
+      repeats.forall(i => alpha.iterateDimension(1).exists(e => e.contains(i) && alpha.filtrationValue(e) == 0.0))
     (vertices must be_==(pts.indices.map(Simplex(_)).toSet)) and (repeats must not(beEmpty)) and (zeroEdges must beTrue)
   }
 
