@@ -175,10 +175,12 @@ endpoints swapped. `∞` must be the unconditional elder of any merge it takes p
 also carry `topValue = +Infinity` (this codebase's own "permanently missing cell" convention, e.g. Perseus's
 `-1`) and tie against it.
 
-**Representatives**: each active dual component tracks its own running signed sum of top cells, oriented
-coherently as merges happen so a dying component's boundary is exactly the `H_{d-1}` cycle bounding it — the
-orientation flip needed at each merge is solved directly from the connecting facet's own boundary coefficients
-(always `±1`, `cubeIsOrderedCell`'s alternating-sign rule) and each side's own already-established sign,
+**Representatives**: every top cell carries a sign relative to the root of its dual component, kept in a signed
+union-find (`SignedUnionFind`: path compression composes the signs, a merge only re-links two roots), so a dying
+component's signed sum of top cells has exactly the `H_{d-1}` cycle bounding it as its boundary. The orientation flip
+at each merge is solved from the connecting facet's own boundary coefficients (always `±1`, `cubeIsOrderedCell`'s
+alternating-sign rule) and each side's sign; the dying region is read off the merge forest only for a bar that is
+reported, so a merge costs nearly constant time and a representative costs the size of its region,
 matching this codebase's design principle of representatives from every engine, not just this one's own
 speed. This is this codebase's *own* extension: the source paper is F2-only and barcode-only.
 

@@ -4,9 +4,9 @@ import org.specs2.mutable
 
 /** For points in general position, the alpha filtration is unique, so the two backends must give the same barcode:
   * Helix (a Delaunay triangulation, then alpha values top-down by the Gabriel rule) and DQP (each simplex's value from
-  * its own dual quadratic program, no triangulation). They share no construction code, which makes this an
-  * independent check. A Helix that dropped the Gabriel rule above dimension 1 lost most `H_2` classes in 3-D while
-  * this was only a diagnostic (`.claude/WORKLOG-helix-alpha-values.md`).
+  * its own dual quadratic program, no triangulation). They share no construction code, which makes this an independent
+  * check. A Helix that dropped the Gabriel rule above dimension 1 lost most `H_2` classes in 3-D while this was only a
+  * diagnostic (`.claude/WORKLOG-helix-alpha-values.md`).
   *
   * Random uniform clouds in 2-D, 3-D and 4-D; bars shorter than `1e-7` are ignored (floating-point near-ties can split
   * a zero-length pair into a tiny bar in one backend and not the other), the rest must match within `1e-9`.

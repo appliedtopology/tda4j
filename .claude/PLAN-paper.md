@@ -632,6 +632,34 @@ S is about one session, M a few sessions, L weeks or the compute machine.
    - MATLAB R2024a or later.
 9. Availability: version, DOI, licence, harness.
 
+## Update, 2026-10-04 (later the same day): what the first measurements changed
+
+- **§2.2 is done.**
+  - The fast engines' representatives use a signed union-find. Blob images: 200² from 79.6 s to 0.82 s, 300² from
+    453.8 s to 2.29 s.
+  - The output is equal term for term to the old implementation, which is kept as a test oracle
+    (`WORKLOG-fast-cubical-representatives.md`).
+- **The harness exists:** `bench/`, which extends the ripser-benchmark cases with timing and agreement checks.
+- **Claim C gained its best evidence.** On its first smoke run, the agreement check found a bug in **our own default**:
+  - Helix alpha in 3-D lost most `H_2` classes (Gabriel rule applied to edges only); DQP, Čech and GUDHI agreed to
+    1e-15;
+  - it is fixed and gated by `HelixDqpAgreementSpec` (`WORKLOG-helix-alpha-values.md`);
+  - the paper should report it plainly, as an example of what a cross-library study catches.
+- **The smoke run's slowdown picture.** It comes from 2 trials on a 4-core cloud sandbox, so it is **not citable**, but
+  its shape is clear:
+  - **Vietoris–Rips, cocycles** (the bars-only-equivalent output): 3x `ripser.cpp` at sphere3_48, 8x at sphere3_96.
+    This is the only family where "a quantified low slowdown" holds today.
+  - **Vietoris–Rips, cycles** (the `Persistence` default): 9–30x. The fair comparison is Ripserer.jl's involuted
+    cycles, not run yet.
+  - **Cubical 2-D**, after §2.2: 50–80x behind CubicalRipser.
+  - **Cubical 3-D**, at 32³: `Auto`, which is the fast cubical engine with the chunks hybrid, took 31 s against 3 s
+    for `Cohomology`. That is about 600x behind CubicalRipser. This is one size only.
+  - **Alpha**, after the fix: about 200x behind GUDHI. Helix construction dominates.
+- **New blockers:**
+  - **(2.9) A flat-array primal `H_0` pass in the fast cubical engine.** It is 66% of the profile; see the worklog.
+  - **(2.10) The 3-D `Auto` default for images.** Should it be `Cohomology` for d ≥ 3? Decide after a size sweep.
+  - **(2.11) Helix construction speed.**
+
 ## 8. Facts verified this session, and how
 
 - **HAP** `PersistentHomologyOfSubGroupSeries`: the manual's §11.1-9, read as raw HTML from the GitHub Pages mirror

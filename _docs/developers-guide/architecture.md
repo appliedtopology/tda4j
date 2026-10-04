@@ -249,9 +249,10 @@ populated, since it never dies — which is NOT automatically guaranteed by comp
 top cell can also carry `topValue = +Infinity` (this codebase's own "permanently missing cell" convention, the
 same one `Perseus`'s `-1` already maps to) and tie against `∞`'s own `birthOf`, so the young/old decision
 special-cases `∞` explicitly rather than relying on the birth-value comparison alone. Representatives: each
-active dual component tracks a running signed sum of top cells, oriented coherently as merges happen (the
-orientation flip is solved from the connecting facet's own `±1` boundary coefficients toward each side) so a
-dying component's boundary is exactly its bounding `H_{d-1}` cycle — this codebase's own extension beyond the
+top cell carries a sign relative to its dual component's root in a signed union-find (`SignedUnionFind`), so a dying
+component's signed sum of top cells -- read off the merge forest only for reported bars -- has exactly its bounding
+`H_{d-1}` cycle as boundary (the flip at each merge is solved from the connecting facet's own `±1` boundary
+coefficients toward each side) — this codebase's own extension beyond the
 source paper, which is F2-only and barcode-only. No paper access (network-blocked) and no existing
 implementation to port meant this was derived from Alexander duality directly, not translated from a reference
 source the way `EdgeCollapse` below could be from GUDHI's.

@@ -25,7 +25,11 @@ dispatch-interchangeable as far as any code consuming the resulting stream is co
 
 Builds an actual Delaunay triangulation incrementally: finds a bootstrap simplex, then walks the frontier of
 facets, testing candidate points against each facet's supporting hyperplane and circumsphere.
-`filtrationValue` returns the unsquared circumradius, matching DQP's own units after `radiusOf`.
+`filtrationValue` returns unsquared radii, matching DQP's own units after `radiusOf`. Values are assigned top-down: a
+top-dimensional simplex gets its circumradius; a lower simplex gets the radius of its own smallest circumsphere (centre
+in its affine hull) if it is Gabriel -- no vertex of a coface strictly inside that sphere -- and otherwise the smallest
+value among its immediate cofaces. For points in general position this is the alpha filtration exactly, and
+`HelixDqpAgreementSpec` checks that Helix and DQP give the same barcode in dimensions 2, 3 and 4.
 
 **Known, quantified limitation**: on point clouds with a near-cospherical local cluster (competing
 candidate simplices' circumradii agreeing to 4-5 significant figures — closer than the tiling logic's own
@@ -36,9 +40,9 @@ sweeps at ambient dimension 2 and 5, but roughly 1-in-170 at ambient dimension 4
 ordinary-looking inputs, not contrived counterexamples. A real fix needs joint near-tie detection across all
 competing candidates before committing to one; this is a genuine algorithm change, not a bounded bug fix.
 
-**Practical consequence**: Helix is not a fully reliable ground truth for automated cross-validation fuzzing
-at ambient dimension ≥ 4 without an assurance against near-cospherical local structure. Broad `forAll`-based
-DQP-vs-Helix comparisons in `AlphaCrossValidationSpec` are deliberately kept out of `sbt test` (available as
+**Practical consequence**: on degenerate (near-cospherical) input, Helix is not a fully reliable ground truth for
+automated cross-validation fuzzing at ambient dimension ≥ 4. Broad `forAll`-based DQP-vs-Helix comparisons on such
+input in `AlphaCrossValidationSpec` are deliberately kept out of `sbt test` (available as
 manually-invoked diagnostic methods instead) — a real Helix failure would otherwise masquerade as a DQP
 regression or vice versa.
 

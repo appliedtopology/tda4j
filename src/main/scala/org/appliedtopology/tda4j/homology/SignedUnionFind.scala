@@ -2,6 +2,8 @@ package org.appliedtopology.tda4j
 
 import scala.collection.mutable
 
+// Replaces a coefficient map per component that was copied on every merge: quadratic when one large component absorbs
+// many small ones, as a bright object on a dark background does (`.claude/WORKLOG-fast-cubical-representatives.md`).
 /** Union-find over `0 until size` in which every element carries an orientation, a unit of the field `C`, relative to
   * the root of its component. It is the bookkeeping behind the representatives of the dual union-find engines
   * ([[FastCubicalHomologyEngine]], [[FastAlphaHomologyEngine]]): an element is a top cell, a component a region of top
@@ -15,9 +17,7 @@ import scala.collection.mutable
   *     relative to that root.
   *
   * A merge therefore costs nearly constant time, and a representative costs time proportional to its region, paid only
-  * for the bars that are reported. The engines used to keep a coefficient map per component and copy the surviving one
-  * on every merge, which is quadratic when one large component absorbs many small ones -- the common case of a bright
-  * object on a dark background (`.claude/WORKLOG-fast-cubical-representatives.md`).
+  * for the bars that are reported.
   */
 private[tda4j] final class SignedUnionFind[C](size: Int)(using fr: C is Field):
   private val parent: Array[Int] = Array.range(0, size)
