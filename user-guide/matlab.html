@@ -172,7 +172,7 @@
     <tr>
      <td><code>maxFiltrationValue</code></td>
      <td>number</td>
-     <td>the minimum enclosing radius (<code>Infinity</code> for the general witness complex)</td>
+     <td>the minimum enclosing radius (<code>Infinity</code> for the general witness complex and for <code>alpha</code>, which then builds the whole complex)</td>
     </tr>
     <tr>
      <td><code>field</code></td>
@@ -211,13 +211,13 @@
     </tr>
     <tr>
      <td><code>alphaBackend</code></td>
-     <td><code>helix</code>, <code>DQP</code></td>
-     <td><code>helix</code></td>
+     <td><code>default</code>, <code>helix</code>, <code>DQP</code></td>
+     <td><code>default</code>: <code>helix</code>, or with <code>maxFiltrationValue</code> whichever of the two is expected to be faster (same result in general position)</td>
     </tr>
     <tr>
      <td><code>requireValidTriangulation</code></td>
      <td><code>true</code>, <code>false</code></td>
-     <td><code>false</code> (alpha with <code>helix</code>: repair the triangulation)</td>
+     <td><code>false</code> (alpha with <code>helix</code>: also check for cavities, and fail rather than return a triangulation that could not be repaired)</td>
     </tr>
     <tr>
      <td><code>dtmK</code></td>

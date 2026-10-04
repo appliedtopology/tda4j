@@ -86,18 +86,20 @@
 </span><span line-number="5" class=""><span class="tooltip-container"></span>val diagram = Persistence(points, complex = AlphaShapes)
 </span><span line-number="6" class=""><span class="tooltip-container"></span>
 </span><span line-number="7" class=""><span class="tooltip-container"></span>val stream = AlphaShapes(points, AlphaBackend.Helix)     // the complex itself
+</span><span line-number="8" class=""><span class="tooltip-container"></span>val upTo = Persistence(points, complex = AlphaShapes, maxFiltrationValue = 0.4)  // only radii up to 0.4
 </span></code></pre>
    <div class="buttons"></div>
   </div>
-  <p>The whole complex is built (there is no <code>maxFiltrationValue</code>); read it at a smaller scale with <code>diagram.at(r)</code>. Filtration values are radii.</p>
+  <p>Filtration values are radii. Without <code>maxFiltrationValue</code> the whole complex is built; with it, only the simplices of radius at most that value (also <code>AlphaShapes(points, maxRadius = r)</code>), and for a small radius that is much cheaper.</p>
  </section>
- <section id="two-backends">
-  <h3 class="h400"><a href="#two-backends" class="anchor"></a>Two backends</h3>
+ <section id="backends">
+  <h3 class="h400"><a href="#backends" class="anchor"></a>Backends</h3>
   <ul>
-   <li><strong><code>AlphaBackend.Helix</code></strong> (the default, <code>HelixDelaunay</code>): builds the Delaunay triangulation incrementally. On point clouds with nearly cospherical clusters the triangulation can come out invalid; at ambient dimension 4 with 20-30 points this happens for about one cloud in 170, while no failures were seen in dimensions 2 and 5. Treat its output in dimension 4 and above with care.</li>
-   <li><strong><code>AlphaBackend.DQP</code></strong> (<code>AlphaShapeDQP</code>): decides each simplex by a dual active-set quadratic program (Carlsson and Carlsson 2024) without building a triangulation. It works in high ambient dimension, where a Delaunay triangulation is out of reach. It is not generally faster.</li>
+   <li><strong><code>AlphaBackend.Helix</code></strong> (<code>HelixDelaunay</code>): builds the whole Delaunay triangulation, then reads the alpha values off it. It checks every triangulation it builds and repairs one that fails, so degenerate inputs such as grids come out valid.</li>
+   <li><strong><code>AlphaBackend.DQP</code></strong> (<code>AlphaShapeDQP</code>): decides each simplex by a dual active-set quadratic program (Carlsson and Carlsson 2024), dimension by dimension, among points within twice the radius of each other. It never builds the whole triangulation, so a small radius makes it cheap, and in high ambient dimension it reaches the low-dimensional simplices where a Delaunay triangulation is out of reach. Without a radius it is much slower than Helix.</li>
+   <li><strong><code>AlphaBackend.Default</code></strong> (the default): Helix without a radius; with one, whichever of the two is expected to be faster, judged from how many points lie within twice the radius of a point. In general position the result is the same either way.</li>
   </ul>
-  <p>In degenerate position the alpha complex contains higher-dimensional simplices than a triangulation would: four cospherical points span a 3-simplex, so a square grid in the plane produces 3-simplices. Both backends do this, and it is correct.</p>
+  <p>In degenerate position the alpha complex contains higher-dimensional simplices than a triangulation would: four cospherical points span a 3-simplex, so a square grid in the plane produces 3-simplices with DQP. Helix triangulates such a cluster instead. The persistent homology is the same, up to zero-length bars.</p>
   <p>For large planar point clouds, the <a href="../homology-computation/fast-alpha-complexes.html">fast alpha engine</a> computes the diagram of the Helix complex without general matrix reduction.</p>
  </section>
-</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#alpha-complexes">Alpha complexes</a></li><li><a href="#two-backends">Two backends</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#alpha-complexes">Alpha complexes</a></li><li><a href="#backends">Backends</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
