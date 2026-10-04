@@ -52,8 +52,9 @@ object AlphaShapes extends PointCloudComplex:
     *   - `Default` picks between them: Helix without a `maxRadius`, otherwise whichever is expected to be faster for
     *     this radius, from the average number of points within `2 maxRadius` of a point (`AlphaShapes.prefersDQP`).
     *
-    * Every backend gives the same complex: the simplices whose alpha value (radius) is at most `maxRadius`, with the
-    * same values.
+    * In general position every backend gives the same complex: the simplices whose alpha value (radius) is at most
+    * `maxRadius`, with the same values. On cospherical points DQP keeps the higher-dimensional simplex they span where
+    * Helix triangulates it; the barcode is the same up to zero-length bars.
     *
     * @param maxRadius
     *   keep only simplices with alpha value (radius) at most this. Default: no limit.
@@ -113,16 +114,21 @@ object AlphaShapes extends PointCloudComplex:
     val pts = points.points
     val n = pts.length
     val d = pts.head.length
-    meanNeighbours(pts, 2 * r) <= dqpNeighbourThreshold(n, d)
+    // DQP's cost is a sum over points of k_i^1.6, so the sampled k_i^1.6 are averaged, not k_i: on clustered data the
+    // mean of k would understate it.
+    meanNeighbourCost(pts, 2 * r) <= math.pow(dqpNeighbourThreshold(n, d), 1.6)
 
-  /** The average number of other points within `distance` of a point, over up to 64 evenly spaced sample points. */
-  private[tda4j] def meanNeighbours(pts: Array[Array[Double]], distance: Double): Double =
+  /** The average of `k^1.6` over up to 64 evenly spaced sample points, `k` a point's number of other points within
+    * `distance`.
+    */
+  private[tda4j] def meanNeighbourCost(pts: Array[Array[Double]], distance: Double): Double =
     val n = pts.length
     val samples = math.min(n, 64)
     val limit = distance * distance
-    var total = 0L
+    var total = 0.0
     for s <- 0 until samples do
       val i = (s.toLong * n / samples).toInt
+      var count = 0
       var j = 0
       while j < n do
         if j != i then
@@ -132,9 +138,10 @@ object AlphaShapes extends PointCloudComplex:
             val diff = pts(i)(a) - pts(j)(a)
             sq += diff * diff
             a += 1
-          if sq <= limit then total += 1
+          if sq <= limit then count += 1
         j += 1
-    total.toDouble / samples
+      total += math.pow(count, 1.6)
+    total / samples
 
   /** The average neighbour count (within `2r`) up to which DQP is expected to be faster than Helix, for `n` points in
     * ambient dimension `d`. Per point, DQP took about `c_d k^1.6` ms (`c_d = 0.004 * 2.35^(d-2)`, the constant from
@@ -690,8 +697,9 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
   * sphere through the facet is met first: one pass over the points per facet. Points that are exactly cospherical
   * (grids) are tiled as a cluster. Every result is checked cheaply (each point a vertex, no facet in three top
   * simplices, every boundary facet on the convex hull); a result that fails is re-triangulated from slightly perturbed
-  * points, with every radius recomputed from the original coordinates, so the perturbation only decides how ties are
-  * broken. The same `pts` and `seed` always give the same triangulation.
+  * points, with every radius recomputed from the original coordinates. The perturbation (1e-4 of the point spacing)
+  * decides how exact ties are broken, and can also flip a near-tie closer than that. The same `pts` and `seed` always
+  * give the same triangulation.
   *
   * Limitation: a very small `Epsilon` (far below the default `1e-5`) can leave an exactly degenerate input (a 3-D grid)
   * with an invalid triangulation when the perturbed retriangulation does not converge.
@@ -740,7 +748,7 @@ class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTria
     if requireValidTriangulation then HelixDelaunay.repairByJitterRetriangulation(reducedPts, raw, seed)
     else if !HelixDelaunay.looksValid(raw, builder.points) then
       try HelixDelaunay.repairByJitterRetriangulation(reducedPts, raw, seed)
-      catch case _: RuntimeException => raw
+      catch case _: IllegalStateException => raw // the repair did not converge; anything else is a bug and propagates
     else raw
 
   val simplicesMap: Map[Int, Seq[Simplex[Int]]] = Map.from(

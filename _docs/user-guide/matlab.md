@@ -57,7 +57,7 @@ Each `compute...` method also has an overload without options.
 | `minPersistenceFraction` | number | `0.01`: the threshold as a fraction of the input's scale |
 | `includeZeroLength` | `true`, `false` | `false` |
 | `sublevel` | `true`, `false` | `true` (images) |
-| `alphaBackend` | `default`, `helix`, `DQP` | `default`: `helix`, or with `maxFiltrationValue` whichever of the two is expected to be faster (same result) |
+| `alphaBackend` | `default`, `helix`, `DQP` | `default`: `helix`, or with `maxFiltrationValue` whichever of the two is expected to be faster (same result in general position) |
 | `requireValidTriangulation` | `true`, `false` | `false` (alpha with `helix`: also check for cavities, and fail rather than return a triangulation that could not be repaired) |
 | `dtmK` | integer | required for `dtm-rips` and `dtm-alpha` |
 | `dtmQ`, `dtmP` | number | `2.0`, `1.0` (`dtmP` is `1.0` or `2.0`, for `dtm-rips`) |

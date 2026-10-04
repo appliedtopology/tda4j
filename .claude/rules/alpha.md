@@ -50,10 +50,11 @@ structural check fails; on the PROJECTED points). Exact grids are valid by defau
 smaller epsilon (`1e-9`) a 3-D grid can still fail to repair (near-coplanar float predicates) and the raw walk is
 returned. Agreement with GUDHI at scale (bench harness): bottleneck <= 1e-8 at 1000/5000 3-D, 6e-7 at 10000 2-D.
 **Dispatch with a radius** (`AlphaShapes(points, maxRadius = r)`, the verb's and facade's `maxFiltrationValue`):
-`Default` = Helix without a radius, else `prefersDQP` (mean neighbours within `2r`, 64 samples, vs a fitted cost model:
+`Default` = Helix without a radius, else `prefersDQP` (mean of `k^1.6`, k = neighbours within `2r`, 64 samples, vs a fitted cost model:
 DQP `0.004·2.35^(d-2)·k^1.6`, Helix `h_d (n/1000)^0.4`, h = 0.53/1.7/10/150 for d = 2..5, d >= 6 always DQP). Helix is
 filtered (`RadiusLimitedAlphaShapes`), DQP truncated (`AlphaComplexDQPStream`, top dim `maxDimension + 1`); the
-results must be identical (`AlphaDispatchSpec`). Untruncated DQP is ~100x slower than Helix. fast-alpha refuses a
+results must be identical in general position (`AlphaDispatchSpec`; cospherical: DQP keeps the spanned simplex, Helix
+triangulates). The facade passes no `Epsilon`: alpha uses `AlphaShapes`' default `1e-5` (the `epsilon` option is `field=R`). Untruncated DQP is ~100x slower than Helix. fast-alpha refuses a
 radius. Measurements: `WORKLOG-helix-construction-speed.md`.
 
 **One root mechanism (near-cospherical clusters, order-dependent facet-pivot choices) produces two DIFFERENT

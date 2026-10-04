@@ -154,3 +154,15 @@ complex there is far beyond these sizes).
   reaches alpha (it was silently ignored), facade default `alphaBackend` is `default`; `fast-alpha` + radius refuses.
 - Gate `AlphaDispatchSpec`: Helix-filtered == DQP-truncated (simplices and values to 1e-9) on random 2-D/3-D/4-D clouds
   at three radii; verb bars equal across backends and through `maxFiltrationValue`; the rule picks DQP at small r.
+
+### Review follow-ups (same day)
+
+- The facade passes no `Epsilon`: alpha gets `AlphaShapes`' default 1e-5 (the facade's `epsilon` option is the
+  `field=R` tolerance only), so the small-epsilon grid limitation does not affect MATLAB/CLI defaults. New facade
+  example: 4x4x4 grid, `fast-alpha` (needs a valid triangulation) agrees with `naive`.
+- The unasked repair catches only the non-convergence `IllegalStateException`; any other exception propagates.
+- `prefersDQP` averages `k^1.6` over the samples (DQP's cost is a sum of per-point `k^1.6`; the mean of `k` understates
+  it on clustered data). Results never depend on the choice.
+- Claims narrowed: backends agree in general position (on cospherical points DQP keeps the spanned simplex, Helix
+  triangulates; same barcode up to zero-length bars); repair jitter (1e-4 of the spacing) can flip near-ties closer
+  than that, not only exact ties.

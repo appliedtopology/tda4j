@@ -51,7 +51,7 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   val alphaBackend: ScallopOption[String] =
     opt[String](descr =
       "default, helix or DQP, for --complex=alpha. default: helix, or with --max-filtration-value whichever of " +
-        "helix and DQP is expected to be faster for that radius (same result)"
+        "helix and DQP is expected to be faster for that radius (same result in general position)"
     )
   val requireValidTriangulation: ScallopOption[String] = opt[String](
     descr = "true or false (default), for --complex=alpha with the helix backend: also check the triangulation for " +

@@ -20,8 +20,8 @@ object AlphaShapes:
   )(using epsilon: Epsilon = Epsilon(1e-5)): AlphaShapes
 ```
 
-With a `maxRadius`, every backend returns exactly the simplices of alpha value at most `maxRadius`, with the same
-values: `Helix` builds the whole triangulation and filters it (`RadiusLimitedAlphaShapes`); `DQP` builds only up to the
+With a `maxRadius`, every backend returns the simplices of alpha value at most `maxRadius`, with the same values (in
+general position; on cospherical points DQP keeps the simplex they span where Helix triangulates): `Helix` builds the whole triangulation and filters it (`RadiusLimitedAlphaShapes`); `DQP` builds only up to the
 radius, dimension by dimension, up to `maxDimension + 1` (`AlphaComplexDQPStream`). `AlphaBackend.Default` resolves to
 `Helix` without a radius and otherwise to whichever `AlphaShapes.prefersDQP` expects to be faster: it estimates the
 mean number of points within `2 maxRadius` of a point (64 sample points) and compares a per-point cost model fitted to

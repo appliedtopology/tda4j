@@ -308,6 +308,26 @@ class TDA4jSpec extends mutable.Specification:
       agree must beTrue
     }
 
+    "engine=fast-alpha on an exact 4x4x4 grid (cospherical cubes) agrees with engine=naive" in {
+      // fast-alpha needs a valid triangulation (it throws otherwise); the facade's default epsilon is AlphaShapes' own.
+      val grid =
+        (for i <- 0 until 4; j <- 0 until 4; k <- 0 until 4 yield Array(i.toDouble, j.toDouble, k.toDouble)).toArray
+      def nonTrivial(opts: Array[String]) =
+        triples(FullBarcode.computeFromPoints(grid, opts).toArray())
+          .filter(t => t._3 - t._2 > 1e-9)
+          .sortBy(t => (t._1, t._2, t._3))
+      val naive = nonTrivial(Array("complex", "alpha"))
+      val fastAlpha = nonTrivial(Array("complex", "alpha", "engine", "fast-alpha"))
+      (naive.length must be_==(fastAlpha.length)) and
+        naive
+          .zip(fastAlpha)
+          .forall { case ((d1, b1, e1), (d2, b2, e2)) =>
+            d1 == d2 && math
+              .abs(b1 - b2) < 1e-9 && (e1.isInfinite == e2.isInfinite) && (e1.isInfinite || math.abs(e1 - e2) < 1e-9)
+          }
+          .must(beTrue)
+    }
+
     "engine=fast-alpha computes the point set whose triangulation once broke it, and agrees with engine=naive" in {
       // The 12-point set FastAlphaHomologySpec pins: Helix's earlier candidate search gave one facet three cofaces
       // here, and the engine threw FastAlphaTriangulationException. The facade has no catch on this path; the

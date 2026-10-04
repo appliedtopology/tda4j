@@ -34,7 +34,8 @@ radius at most that value (also `AlphaShapes(points, maxRadius = r)`), and for a
   whole triangulation, so a small radius makes it cheap, and in high ambient dimension it reaches the low-dimensional
   simplices where a Delaunay triangulation is out of reach. Without a radius it is much slower than Helix.
 * **`AlphaBackend.Default`** (the default): Helix without a radius; with one, whichever of the two is expected to be
-  faster, judged from how many points lie within twice the radius of a point. The result is the same either way.
+  faster, judged from how many points lie within twice the radius of a point. In general position the result is the
+  same either way.
 
 In degenerate position the alpha complex contains higher-dimensional simplices than a triangulation would: four
 cospherical points span a 3-simplex, so a square grid in the plane produces 3-simplices with DQP. Helix triangulates

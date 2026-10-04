@@ -926,7 +926,7 @@ object TDA4j:
               "maxFiltrationValue out, or use engine=cohomology or engine=naive for the complex up to that radius."
           )
         // With maxFiltrationValue, alphaBackend=default builds the complex up to that radius with whichever of Helix
-        // and DQP is expected to be faster (AlphaShapes.prefersDQP); the result is the same either way.
+        // and DQP is expected to be faster (AlphaShapes.prefersDQP); the same complex in general position.
         val alphaStream =
           AlphaShapes(pts.toIndexedSeq, AlphaBackend.parse(alphaBackend), requireValidTriangulation, maxFiltrationValue)
         val alphaCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
