@@ -93,3 +93,22 @@ A = gram_schmidt_dreimac(B)
 print(A)                 # [[1,0,0], [0.0,1.0,0.0], [-0.5,0.5,1.0]]
 print(dot(A[0], A[2]))   # -0.5 -- should be 0 if A[2] is really orthogonal to A[0]
 ```
+
+## PH-roadmap's `fractal_9_5_2` distance matrix is not symmetric
+
+2026-10-04, while planning the paper's benchmarks (`.claude/PLAN-paper.md`). The file
+`data_sets/roadmap_datasets_distmat/fractal_9_5_2_random_edge_list.txt_0.19795_distmat.txt` in `n-otter/PH-roadmap`
+(Otter et al. 2017; the "fractal-r" case of the Ripser paper's benchmark, pulled by `Ripser/ripser-benchmark`'s
+Dockerfile) is supposed to be a distance matrix. It is a full 512x512 text matrix with a zero diagonal, but **2,135 of
+its 130,816 unordered pairs (1.6%) have `d(i,j) != d(j,i)`**: differences up to 1e-5 absolute and 1e-4 relative, all
+of which survive rounding to float32. Verified by scanning the whole file with Python (downloaded from
+raw.githubusercontent.com). A 100x100 submatrix had first shown it on 2026-10-03, with 168 of 10,000 entries differing.
+
+**Consequence, precisely scoped**: a tool that reads the lower triangle and one that reads the upper triangle compute
+from different inputs, so barcodes can differ by up to ~1e-5 on this case. Cross-tool comparisons need that tolerance,
+or a canonicalized input. For tda4j the asymmetry was fatal before the fix: the packed Ripser engine looped forever
+(`WORKLOG-o3-1024-fractal-r-session-2026-09-25.md`, 2026-10-03 update). **Not checked**: whether any other tool
+misbehaves on it.
+
+**What tda4j did**: `ExplicitMetricSpace.distance(x, y)` reads `dist(min)(max)`, one fixed triangle. The packed
+engine's ordering compares indices first, so the same simplex is never two different keys. Not reported upstream.

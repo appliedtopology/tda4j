@@ -74,3 +74,20 @@ this kind of complex, or switch to a minimal resolution.
 
 Not done / unverified: no MATLAB/CLI/user-docs surface; fields other than F_p not exercised; D_8/Q_8/other chains only S_4
 tested; the S_4 H_3 value (3) is by hand from H*(S_4;F_2) = F_2[σ1,σ2,c3]/(σ1c3), unconfirmed by computation.
+
+## 2026-10-04 update: prior art (found while planning the paper)
+
+The subgroup-chain persistence computed here **already exists** in HAP (GAP):
+- `PersistentHomologyOfSubGroupSeries(S, n[, p, Resolution_Algorithm])` "returns the bar code of the persistent mod p
+  homology in degree n of the sequence of inclusion homomorphisms S_k → S_{k-1} → ... → S_1 = G". Quoted from the HAP
+  manual, chapter 11, §11.1-9.
+- By default it takes finite p-groups; other groups take a prime and a resolution algorithm.
+
+HAP also has `PersistentHomologyOfQuotientGroupSeries`, the variant of Ellis–King, "Persistent homology of groups",
+J. Group Theory 14 (2011), arXiv:1006.2237. That paper filters by quotients `G → G/F_i(G)` along five central series
+(checked in the PDF).
+
+Consequences:
+- this is not a new idea, and the paper must not present it as one (`PLAN-paper.md` §1d);
+- HAP is the natural oracle: cross-check the S_4 chain with the four-argument form, `p = 2`;
+- the tutorial should say that HAP computes the same barcode from resolutions.
