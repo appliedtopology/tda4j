@@ -35,10 +35,11 @@ value among its immediate cofaces. For points in general position this is the al
 candidate simplices' circumradii agreeing to 4-5 significant figures — closer than the tiling logic's own
 near-tie detection catches, since that logic only checks ties against one already-chosen candidate, not
 across competing candidates), the frontier walk's greedy search becomes order-dependent and can converge on
-a locally-consistent but globally wrong triangulation. Measured: zero failures across 20,000-trial fuzz
-sweeps at ambient dimension 2 and 5, but roughly 1-in-170 at ambient dimension 4 with 20-30 points —
-ordinary-looking inputs, not contrived counterexamples. A real fix needs joint near-tie detection across all
-competing candidates before committing to one; this is a genuine algorithm change, not a bounded bug fix.
+a locally-consistent but globally wrong triangulation. Measured for the earlier candidate search: roughly
+1-in-170 at ambient dimension 4 with 20-30 points. The current walk takes, across each frontier facet, the point
+whose sphere through the facet is met first (one pass, no candidate ordering), treats only exactly cospherical
+points as a cluster, and checks and repairs every result; no invalid triangulation occurred in 500 random 4-D
+clouds of 25 points.
 
 **Practical consequence**: on degenerate (near-cospherical) input, Helix is not a fully reliable ground truth for
 automated cross-validation fuzzing at ambient dimension ≥ 4. Broad `forAll`-based DQP-vs-Helix comparisons on such

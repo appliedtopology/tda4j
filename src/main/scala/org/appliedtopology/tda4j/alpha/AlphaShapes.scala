@@ -2,7 +2,13 @@ package org.appliedtopology.tda4j
 
 import collection.mutable
 import scala.math.{pow, sqrt}
-import org.apache.commons.math3.linear.{MatrixUtils, RealMatrix, RealVector, SingularValueDecomposition}
+import org.apache.commons.math3.linear.{
+  LUDecomposition,
+  MatrixUtils,
+  RealMatrix,
+  RealVector,
+  SingularValueDecomposition
+}
 import org.apache.commons.math3.linear.MatrixUtils.createRealVector
 import scala.util.Random
 import scala.util.chaining.*
@@ -203,6 +209,115 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
         next = Some(fc)
     next
 
+  // Cospherical (to be tiled as a cluster) means on the sphere up to floating-point error, not up to `epsilon`: the
+  // minimal-centre choice resolves near-ties exactly, and tiling a merely near-cospherical group as a cluster gives a
+  // tiling that does not match its neighbours (at the default epsilon 1e-5 that happened routinely on a few thousand
+  // random points; `.claude/WORKLOG-helix-construction-speed.md`). Exact degeneracies (grids) are off by ~1e-15.
+  private def onSphere(distance: Double, radius: Double): Boolean =
+    math.abs(distance - radius) <= 1e-10 * math.max(radius, Double.MinPositiveValue)
+
+  /** Frontier cases whose cofacet came from `bySphereScan` because `byMinimalCentre` failed its own emptiness check. */
+  private[tda4j] var sphereScanFallbacks: Int = 0
+
+  /** The Delaunay simplex on the light side of a frontier facet, if any: `byMinimalCentre`, checked to have an empty
+    * circumsphere; `bySphereScan` if that check fails (floating-point trouble near a degenerate facet).
+    */
+  private def delaunayCofacet(fc: FrontierCase): Option[DelaunaySimplex] =
+    def fallback() =
+      sphereScanFallbacks += 1
+      bySphereScan(fc)
+    facetCentre(fc.facet) match
+      case None         => fallback()
+      case Some(centre) =>
+        byMinimalCentre(fc.facet, fc.hyperplane, centre) match
+          case None                                                                => None // a hull facet
+          case Some(ds) if !pts.exists(sphereStrictlyContains(ds.circumsphere, _)) => Some(ds)
+          case Some(_)                                                             => fallback()
+
+  // Every sphere through the facet has its centre on the line c0 + t n (c0 the facet's circumcentre in its own
+  // hyperplane, n the normal towards the light side), and passes through a light point p at
+  //   t(p) = (|p - c0|² - r0²) / (2 n·(p - c0)).
+  // Growing t from the side of the known cofacet, the first light point the sphere meets -- the smallest t -- gives
+  // the empty one: the Delaunay cofacet. Ties (cospherical points) go to the smallest index. One O(n d) pass, no
+  // sorting, no allocation per point; points within epsilon of the facet's hyperplane cannot span a simplex with it
+  // and are skipped. (`.claude/WORKLOG-helix-construction-speed.md`.)
+  private def byMinimalCentre(
+    facet: Simplex[Int],
+    hyperplane: Hyperplane,
+    centre: (Array[Double], Double)
+  ): Option[DelaunaySimplex] =
+    val (c0, r0sq) = centre
+    locally {
+      val n = hyperplane.normal.toArray
+      val facetVertices = facet.toSeq.toArray
+      var best = -1
+      var bestT = Double.PositiveInfinity
+      var q = 0
+      while q < pts.length do
+        val p = pts(q)
+        var s = 0.0
+        var sq = 0.0
+        var i = 0
+        while i < ambientDimension do
+          val d = p(i) - c0(i)
+          s += n(i) * d
+          sq += d * d
+          i += 1
+        // c0 lies on the facet's hyperplane, so s is q's signed distance from it.
+        if s > epsilon.epsilon && !facetVertices.contains(q) then
+          val tq = (sq - r0sq) / (2 * s)
+          if tq < bestT then
+            bestT = tq
+            best = q
+        q += 1
+      // The sphere is the one the choice was made on: centre c0 + t n, radius² r0² + t². Solving for it again from the
+      // simplex's vertices is ill-conditioned on slivers (near-coplanar points), where it can be far off.
+      Option.when(best >= 0) {
+        val centre = Array.tabulate(ambientDimension)(i => c0(i) + bestT * n(i))
+        DelaunaySimplex(facet + best, new Hypersphere(Point(centre), math.sqrt(r0sq + bestT * bestT)))
+      }
+    }
+
+  /** The facet's circumcentre in its own affine hull and squared circumradius; `None` if the facet is degenerate. */
+  private def facetCentre(facet: Simplex[Int]): Option[(Array[Double], Double)] =
+    val vs = facet.toSeq.toArray
+    val p0 = pts(vs(0))
+    val k = vs.length - 1
+    val diffs = Array.tabulate(k, ambientDimension)((i, j) => pts(vs(i + 1))(j) - p0(j))
+    def dot(a: Array[Double], b: Array[Double]) = a.indices.foldLeft(0.0)((s, j) => s + a(j) * b(j))
+    if k == 0 then Some((p0.clone(), 0.0))
+    else
+      val gram = MatrixUtils.createRealMatrix(Array.tabulate(k, k)((i, j) => 2 * dot(diffs(i), diffs(j))))
+      val solver = new LUDecomposition(gram, 1e-14).getSolver
+      if !solver.isNonSingular then None
+      else
+        val lambda = solver.solve(createRealVector(Array.tabulate(k)(i => dot(diffs(i), diffs(i))))).toArray
+        val c0 = Array.tabulate(ambientDimension)(j => p0(j) + (0 until k).map(i => lambda(i) * diffs(i)(j)).sum)
+        val r0sq = (0 until ambientDimension).map(j => (c0(j) - p0(j)) * (c0(j) - p0(j))).sum
+        Some((c0, r0sq))
+
+  private def sphereStrictlyContains(sphere: Hypersphere, p: Array[Double]): Boolean =
+    val c = sphere.center
+    var sq = 0.0
+    var i = 0
+    while i < p.length do
+      val d = p(i) - c.getEntry(i)
+      sq += d * d
+      i += 1
+    math.sqrt(sq) < sphere.radius - epsilon.epsilon
+
+  /** The walk's original candidate search: light points in order of distance to the facet's circumcentre, the first
+    * whose simplex has an empty circumsphere. Quadratic overall; kept as the fallback.
+    */
+  private def bySphereScan(fc: FrontierCase): Option[DelaunaySimplex] =
+    val circumsphere = Hypersphere(fc.facet.toSeq.toSeq.map(points))
+    (points.indices.toSet -- fc.facet.toSeq).toSeq
+      .filter(pi => fc.hyperplane.isLight(points(pi)))
+      .sortBy(pi => circumsphere.center.getDistance(points(pi)))
+      .view
+      .map(pi => DelaunaySimplex(fc.facet + pi, Hypersphere((fc.facet + pi).toSeq.toSeq.map(points))))
+      .collectFirst { case ds if !points.exists(ds.circumsphere.contains) => ds }
+
   private def addFrontierCase(simplex: DelaunaySimplex, complement: Int): Unit =
     if !cancel(simplex.simplex - complement) then enqueue(FrontierCase(simplex, complement))
 
@@ -292,15 +407,70 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
         chosenVecs = trialVecs
     chosen.toSet
 
+  /** `ambientDimension` points spanning a facet of the convex hull, by gift wrapping: start at the lexicographically
+    * smallest point with the supporting hyperplane `x_0 = min`, then repeatedly rotate the hyperplane about the points
+    * chosen so far, towards a direction orthogonal to them and to its normal, until it first meets another point. Each
+    * step is one pass over the points; ties go to the smallest index. Needs full affine rank (which `HelixDelaunay`'s
+    * projection guarantees): then some direction always moves at least one point.
+    */
+  private def hullFacet(): Set[Int] =
+    val d = ambientDimension
+    def dot(a: Array[Double], b: Array[Double]) =
+      var s = 0.0
+      var i = 0
+      while i < d do
+        s += a(i) * b(i)
+        i += 1
+      s
+    def unit(a: Array[Double]) =
+      val norm = math.sqrt(dot(a, a))
+      a.map(_ / norm)
+    val p0 = pts.indices.minBy(i => pts(i).toSeq)(using Ordering.Implicits.seqOrdering[Seq, Double])
+    val chosen = mutable.ArrayBuffer(p0)
+    var normal = Array.tabulate(d)(i => if i == 0 then -1.0 else 0.0) // outward: every point has normal·(q - p0) <= 0
+    while chosen.size < d do
+      // Orthonormal basis of the span of the normal and the chosen points' differences; directions outside it rotate.
+      val basis = mutable.ArrayBuffer(normal)
+      def addOrthogonal(v: Array[Double]): Option[Array[Double]] =
+        val w = v.clone()
+        basis.foreach { b =>
+          val c = dot(w, b); for i <- 0 until d do w(i) -= c * b(i)
+        }
+        Option.when(math.sqrt(dot(w, w)) > 1e-12)(unit(w))
+      chosen.tail.foreach(c => addOrthogonal(Array.tabulate(d)(i => pts(c)(i) - pts(p0)(i))).foreach(basis += _))
+      val directions =
+        (0 until d).iterator.flatMap(axis => addOrthogonal(Array.tabulate(d)(i => if i == axis then 1.0 else 0.0)))
+      var found = false
+      while !found && directions.hasNext do
+        val w = directions.next()
+        // Rotating the normal to cos θ n + sin θ w, point q (a = n·(q-p0) <= 0, b = w·(q-p0)) reaches the hyperplane at
+        // θ = atan2(-a, b); the first point met has the smallest θ in [0, π). θ = 0 is a point already on the hyperplane
+        // with b > 0, which must join before any rotation. Points on the chosen flat (a = b = 0) are never met.
+        var best = -1
+        var bestTheta = Double.PositiveInfinity
+        var q = 0
+        while q < pts.length do
+          if !chosen.contains(q) then
+            val diff = Array.tabulate(d)(i => pts(q)(i) - pts(p0)(i))
+            val a = math.min(dot(normal, diff), 0.0)
+            val b = dot(w, diff)
+            if b > epsilon.epsilon || -a > epsilon.epsilon then
+              val theta = math.atan2(-a, b)
+              if theta < bestTheta then
+                bestTheta = theta
+                best = q
+          q += 1
+        if best >= 0 then
+          val c = math.cos(bestTheta)
+          val s = math.sin(bestTheta)
+          normal = unit(Array.tabulate(d)(i => c * normal(i) + s * w(i)))
+          chosen += best
+          found = true
+      if !found then throw new IllegalStateException("HelixDelaunayBuilder: no hull facet found (input not full rank)")
+    chosen.toSet
+
   def compute(): Set[DelaunaySimplex] =
-    var startingSimplex: Set[Int] = affinelyIndependentPick(points.indices)
-    var convexHullHP: Boolean = false
-    while !convexHullHP do
-      val currentHP: Hyperplane = Hyperplane.from(startingSimplex.map(p => points(p)).toSeq)
-      val lightPoints: Set[Int] =
-        (points.indices.toSet -- startingSimplex).filter(pi => currentHP.dist(points(pi)) > epsilon.epsilon)
-      if lightPoints.isEmpty then convexHullHP = true
-      else startingSimplex = affinelyIndependentPick((lightPoints ++ startingSimplex).toSeq.pipe(rng.shuffle))
+    var startingSimplex: Set[Int] = hullFacet()
     val vs = points.indices.filter(pi =>
       Hyperplane.from(startingSimplex.map(points).toSeq).dist(points(pi)).abs < epsilon.epsilon
     )
@@ -364,6 +534,20 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
     val candidateIter = candidateStartingSimplices.iterator
     while !done && candidateIter.hasNext do
       val candidate = candidateIter.next()
+      // The candidate is a hull facet: every point lies on one side of its hyperplane, so the Delaunay simplex on it
+      // is the frontier walk's minimal-centre choice, found in one pass. The search below (every point, each with a
+      // full emptiness scan: quadratic) remains for a candidate where that fails.
+      val facet = Simplex.from(candidate.toSeq)
+      val plane = Hyperplane.from(candidate.toSeq.map(points))
+      val inward = if points.exists(p => plane.dist(p) < -epsilon.epsilon) then plane.reverse else plane
+      for
+        centre <- facetCentre(facet)
+        ds <- byMinimalCentre(facet, inward, centre)
+        if !pts.exists(sphereStrictlyContains(ds.circumsphere, _))
+      do
+        done = true
+        startingSimplex = candidate
+        accept(ds)
       for pi <- points.indices do
         if !done then
           if !candidate.contains(pi) then
@@ -385,7 +569,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
     val seedDelaunaySimplex: DelaunaySimplex = validated.head
     points.indices
       .map(i => (i, seedDelaunaySimplex.circumsphere.center.getDistance(points(i))))
-      .filter((i, d) => math.abs(d - seedDelaunaySimplex.circumsphere.radius) <= epsilon.epsilon)
+      .filter((i, d) => onSphere(d, seedDelaunaySimplex.circumsphere.radius))
       .map(_._1)
       .to(mutable.SortedSet) match
       case spherepoints if spherepoints.size > ambientDimension + 1 =>
@@ -406,21 +590,12 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
       val frontierCase = pending.get
       if !visitedFacets.contains(frontierCase.facet) then
         visitedFacets.add(frontierCase.facet)
-        // "light points" (in front of the facet) split into inside and outside a small circumsphere of the facet
-        val circumsphere = Hypersphere(frontierCase.facet.toSeq.toSeq.map(points))
-        (points.indices.toSet -- frontierCase.facet.toSeq).toSeq
-          .filter(pi => frontierCase.hyperplane.isLight(points(pi)))
-          .sortBy(pi => circumsphere.center.getDistance(points(pi)))
-          .view
-          .map(pi =>
-            DelaunaySimplex(frontierCase.facet + pi, Hypersphere((frontierCase.facet + pi).toSeq.toSeq.map(points)))
-          )
-          .collectFirst { case ds if !points.exists(ds.circumsphere.contains) => ds } match
+        delaunayCofacet(frontierCase) match
           case Some(newDelaunaySimplex) if !validatedSimplices.contains(newDelaunaySimplex.simplex) =>
             // check whether we have "too many" cospherical points; in that case we have to tile them on our own
             val spherepoints: mutable.SortedSet[Int] = points.indices
               .map(i => (i, newDelaunaySimplex.circumsphere.center.getDistance(points(i))))
-              .filter((i, d) => math.abs(d - newDelaunaySimplex.circumsphere.radius) <= epsilon.epsilon)
+              .filter((i, d) => onSphere(d, newDelaunaySimplex.circumsphere.radius))
               .map(_._1)
               .to(mutable.SortedSet)
             if spherepoints.size > ambientDimension + 1 then
@@ -439,19 +614,23 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
 /** The Delaunay triangulation of a point cloud, built by an incremental frontier walk
   * (https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10917453), filtered as an alpha complex.
   *
-  * Limitation: near-cospherical clusters make the walk depend on the order of the points, and at ambient dimension 4
-  * with 20-30 points about one cloud in 170 gets an invalid triangulation; do not treat the result as ground truth in
-  * dimension 4 and above.
+  * The walk starts from a hull facet found by gift wrapping and, across each frontier facet, takes the point whose
+  * sphere through the facet is met first: one pass over the points per facet. Points that are exactly cospherical
+  * (grids) are tiled as a cluster. Every result is checked cheaply (each point a vertex, no facet in three top
+  * simplices, every boundary facet on the convex hull); a result that fails is re-triangulated from slightly perturbed
+  * points, with every radius recomputed from the original coordinates, so the perturbation only decides how ties are
+  * broken. The same `pts` and `seed` always give the same triangulation.
+  *
+  * Limitation: a very small `Epsilon` (far below the default `1e-5`) can leave an exactly degenerate input (a 3-D grid)
+  * with an invalid triangulation when the perturbed retriangulation does not converge.
   *
   * @param pts
   *   the points to triangulate
   * @param seed
-  *   seeds the order of the walk; the same `pts` and `seed` give the same triangulation.
+  *   seeds the perturbation used when a triangulation has to be repaired; general-position input does not depend on it.
   * @param requireValidTriangulation
-  *   off by default. When on and the triangulation is invalid (a facet with more than two cofaces, or a hole inside the
-  *   convex hull), the points involved are moved by a tiny random amount, the whole point set is triangulated again,
-  *   and every radius is recomputed from the original coordinates, so the perturbation only decides the combinatorics.
-  *   Repeated until the result is valid, or an exception after a few attempts. Tested in dimensions 2 and 3.
+  *   off by default. When on, the triangulation is also checked for cavities (a homology computation), and a result
+  *   that cannot be repaired raises an exception instead of being returned as it is.
   */
 class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTriangulation: Boolean = false)(using
   epsilon: Epsilon
@@ -471,12 +650,26 @@ class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTria
   // alpha complex, not a degenerate "3D" one. See `.claude/WORKLOG-helix-bootstrap-fix.md`.
   private val reducedPts: Array[Array[Double]] = HelixDelaunay.projectToAffineRank(pts)
   private val builder = HelixDelaunayBuilder(reducedPts, seed)
+  private var _sphereScanFallbacks = 0
+
+  /** Frontier facets where the walk fell back to its slow candidate search (diagnostics and tests). */
+  private[tda4j] def sphereScanFallbacks: Int = _sphereScanFallbacks
   val points: Seq[Point] = builder.points
   override val metricSpace: EuclideanMetricSpace = EuclideanMetricSpace(reducedPts)
   val ambientDimension: Int = builder.ambientDimension
   val validated: Set[DelaunaySimplex] =
     val raw = builder.compute()
-    if requireValidTriangulation then HelixDelaunay.repairByJitterRetriangulation(pts, raw, seed) else raw
+    _sphereScanFallbacks = builder.sphereScanFallbacks
+    // Tiling exactly cospherical clusters one at a time can leave gaps (adjacent clusters may split a shared face along
+    // different diagonals; an exact grid in 3-D is the standard case). So every walk gets the cheap structural checks
+    // of `looksValid` even when the caller did not ask, and the full check and jitter repair only if they fail; a
+    // generic cloud passes and is returned as walked. Unasked, a repair that fails returns the raw walk rather than
+    // throwing (`.claude/WORKLOG-helix-construction-speed.md`).
+    if requireValidTriangulation then HelixDelaunay.repairByJitterRetriangulation(reducedPts, raw, seed)
+    else if !HelixDelaunay.looksValid(raw, builder.points) then
+      try HelixDelaunay.repairByJitterRetriangulation(reducedPts, raw, seed)
+      catch case _: RuntimeException => raw
+    else raw
 
   val simplicesMap: Map[Int, Seq[Simplex[Int]]] = Map.from(
     (0 to ambientDimension).map(d =>
@@ -602,15 +795,39 @@ object HelixDelaunay:
       .mapValues(_.toVector)
       .toMap
 
-  private def badFacetsOf(simps: Set[DelaunaySimplex]): Map[Simplex[Int], Vector[DelaunaySimplex]] =
-    facetToSimplices(simps).filter { case (_, claimants) => claimants.size > 2 }
+  /** Cheap structural checks that a top-simplex set triangulates the convex hull of `points`: every point is a vertex,
+    * no facet lies in more than two top simplices, and every facet in exactly one lies on the hull (all points on one
+    * side of it). One pass over the points per boundary facet. A torn or partial walk fails the last.
+    */
+  private[tda4j] def looksValid(simps: Set[DelaunaySimplex], points: Seq[Point])(using epsilon: Epsilon): Boolean =
+    val tops = simps.map(_.simplex)
+    val vertices = tops.flatMap(_.toSeq)
+    lazy val facetCounts = tops.toSeq.flatMap(t => t.toSeq.map(v => t - v)).groupMapReduce(identity)(_ => 1)(_ + _)
+    def onHull(facet: Simplex[Int]): Boolean =
+      val plane = Hyperplane.from(facet.toSeq.map(points))
+      var above = false
+      var below = false
+      val it = points.iterator
+      while !(above && below) && it.hasNext do
+        val s = plane.dist(it.next())
+        if s > epsilon.epsilon then above = true
+        if s < -epsilon.epsilon then below = true
+      !(above && below)
+    vertices.size == points.size &&
+    facetCounts.values.forall(_ <= 2) &&
+    facetCounts.iterator.filter(_._2 == 1).forall((f, _) => onHull(f))
+
+  private[tda4j] def badFacetsOf(simps: Set[DelaunaySimplex]): Map[Simplex[Int], Vector[DelaunaySimplex]] =
+    // Distinct simplices: a cospherical tiling can record a simplex the walk also found, with the cluster's sphere
+    // instead of its own; that is one simplex, not a third claimant.
+    facetToSimplices(simps).filter { case (_, claimants) => claimants.map(_.simplex).distinct.size > 2 }
 
   /** A Delaunay triangulation fills its convex hull, so the whole complex has no homology in degree `d - 1`. `None` if
     * that holds; otherwise the vertices of the essential degree-`(d - 1)` representatives, the boundary of the hole,
     * which seed the repair. (A facet with one coface can be a missing simplex rather than a hull facet; only this
     * global check sees it.)
     */
-  private def interiorVoidVertices(simps: Set[DelaunaySimplex], ambientDimension: Int): Option[Set[Int]] =
+  private[tda4j] def interiorVoidVertices(simps: Set[DelaunaySimplex], ambientDimension: Int): Option[Set[Int]] =
     given Double is Field = Field.DoubleApproximated(1e-9)
     val builder = ExplicitStreamBuilder[Int, Double]()
     simps
@@ -639,12 +856,16 @@ object HelixDelaunay:
     validatedIn: Set[DelaunaySimplex],
     seed: Long
   )(using epsilon: Epsilon): Set[DelaunaySimplex] =
+    val originalPoints = pts.toIndexedSeq.map(Point(_))
     val initialBad = badFacetsOf(validatedIn)
     val initialVoid = interiorVoidVertices(validatedIn, pts.head.length)
-    if initialBad.isEmpty && initialVoid.isEmpty then validatedIn
+    val structurallyValid = looksValid(validatedIn, originalPoints)
+    if initialBad.isEmpty && initialVoid.isEmpty && structurallyValid then validatedIn
     else
-      var jitterVertices: Set[Int] =
-        initialBad.values.flatten.toSet.flatMap(_.simplex.toSet) ++ initialVoid.getOrElse(Set.empty)
+      // A torn or partial walk (failing the structural check) has no reliable local culprit -- the parts left exactly
+      // degenerate tear again -- so then every point is jittered; otherwise the vertices of the bad facets and voids.
+      val culprits = initialBad.values.flatten.toSet.flatMap(_.simplex.toSet) ++ initialVoid.getOrElse(Set.empty)
+      var jitterVertices: Set[Int] = if !structurallyValid || culprits.isEmpty then pts.indices.toSet else culprits
       var result: Option[Set[DelaunaySimplex]] = None
       var attempt = 0
       val maxAttempts = 8
@@ -659,7 +880,10 @@ object HelixDelaunay:
               i <- jitterPoints.indices
               j <- (i + 1) until jitterPoints.size
             yield jitterPoints(i).getDistance(jitterPoints(j))).min
-        val jitterMagnitude = math.max(epsilon.epsilon * 100, minPairwiseSpacing * 1e-6)
+        // Large enough that the jittered points are comfortably in general position: at 1e-6 of the spacing, a jittered
+        // row of grid points is collinear to 1e-6 and its facets' circumcentres are too ill-conditioned for the walk.
+        // The jitter only breaks ties; every value is recomputed from the original coordinates below.
+        val jitterMagnitude = math.max(epsilon.epsilon * 100, minPairwiseSpacing * 1e-4)
         val perturbedPts: Array[Array[Double]] = pts.zipWithIndex.map { case (p, i) =>
           if jitterVertices.contains(i) then p.map(_ + (rng.nextDouble() - 0.5) * 2 * jitterMagnitude)
           else p
@@ -671,7 +895,9 @@ object HelixDelaunay:
         }
         val stillBad = badFacetsOf(realized)
         val stillVoid = interiorVoidVertices(realized, pts.head.length)
-        if stillBad.isEmpty && stillVoid.isEmpty then result = Some(realized)
+        val stillStructural = looksValid(realized, originalPoints)
+        if stillBad.isEmpty && stillVoid.isEmpty && stillStructural then result = Some(realized)
+        else if !stillStructural then jitterVertices = pts.indices.toSet
         else
           // `stillVoid.getOrElse` never falls through to a default here: reaching this `else` branch at all
           // means `stillBad.nonEmpty || stillVoid.nonEmpty`, so whenever `stillVoid` is `None` (no void),

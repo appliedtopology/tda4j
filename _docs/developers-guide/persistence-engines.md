@@ -218,12 +218,10 @@ it) that hides the real top-dimensional simplices. Sequenced AFTER engine 6's ow
 concurrently, because this engine ALSO carries the facet-multiplicity risk below, which needed its own fresh
 measurement at `d=3` rather than assuming the `d=2` rate carried over — it does not.
 
-**Unlike engine 6, this precondition is not guaranteed by construction**, and the rate is NOT flat across
-dimension or point count: roughly 1-in-18700 on random points at ambient dimension 2 (the original measurement)
-but roughly 1-in-1666 at ambient dimension 3 with 20-30 points (vs. zero violations in 20000 trials with only
-6-16 points at the same dimension) — see `alpha-complex.md` for the full measurement. A real `HelixDelaunay`
-limitation, not a flaw in this construction, but a materially bigger one at `d=3` than the `d=2` figure alone
-would suggest. Validates the precondition explicitly and throws the named `FastAlphaTriangulationException` on
+**Unlike engine 6, this precondition is not guaranteed by construction.** `HelixDelaunay` checks every
+triangulation it builds (each point a vertex, no facet in three top simplices, every boundary facet on the hull)
+and re-triangulates from perturbed points when the check fails; with its minimal-centre frontier walk no
+violation occurred in 20000 random 2-D, 3000 3-D and 500 4-D clouds. Validates the precondition explicitly and throws the named `FastAlphaTriangulationException` on
 violation rather than building a silently-wrong dual graph — its message is layered plain-language-first (for
 an unsuspecting MATLAB/CLI caller: "NOT an error in your data," naming the ambient dimension and the measured
 rates, the concrete retry) with the facet-count detail as a technical appendix, the same two-audience approach

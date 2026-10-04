@@ -190,10 +190,22 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
     )
   )
 
-  "throws the specific, named FastAlphaTriangulationException on a real facet-multiplicity violation, with a " +
+  "the frontier walk now triangulates the pinned facet-multiplicity fixture validly (its earlier candidate search " +
+    "gave one facet three cofaces here)" >> {
+      HelixDelaunay.badFacetsOf(facetMultiplicityViolationFixture.validated).isEmpty must beTrue
+    }
+
+  "throws the specific, named FastAlphaTriangulationException on a facet-multiplicity violation, with a " +
     "message an unsuspecting caller (not just this class's own developers) can act on" >> {
+      // Three triangles on one edge: no walk produces this any more on the inputs we know, so the check is tested on
+      // a hand-built facet map.
+      val threeCofaces = Map(
+        Simplex(0, 1) -> Vector(0, 1, 2),
+        Simplex(0, 2) -> Vector(0),
+        Simplex(1, 2) -> Vector(0)
+      )
       try
-        FastAlphaHomologyEngine[Double]().persistentHomology(facetMultiplicityViolationFixture)
+        FastAlphaHomologyEngine.requireDualGraph(threeCofaces, 2)
         ko("expected a FastAlphaTriangulationException naming the facet-multiplicity violation, but none was thrown")
       catch
         case e: FastAlphaTriangulationException =>

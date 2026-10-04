@@ -38,11 +38,19 @@ Gabriel rule once covered edges only, so 3-D lost most `H_2` (`WORKLOG-helix-alp
 Helix must equal DQP bar for bar** (`HelixDqpAgreementSpec`, a CI gate in 2-D/3-D/4-D); only degenerate inputs stay
 diagnostic.
 
-**Helix construction speed** (`WORKLOG-helix-construction-speed.md`): DQP is ~100x slower than Helix (2-D, 1000
-points), so Helix stays the default. The frontier walk is all of Helix's time; accepted simplices and queued facets are
-hash-indexed (cancelled frontier cases are skipped when taken, preserving queue order). The candidate order per facet
-(HashSet iteration, then a stable sort by distance) is the tie-break on cospherical input: changing it changes the
-tiling, so treat it as behaviour, not an optimization detail.
+**Helix walk** (`WORKLOG-helix-construction-speed.md`): hull facet by gift wrapping (deterministic, no RNG); across
+each frontier facet the cofacet is the light point with the smallest centre parameter `t` (sphere centre `c0 + t n`),
+ties to the smallest index, its sphere taken from `t` (never re-solved from the vertices: ill-conditioned on slivers),
+then checked empty; the old candidate scan is only the fallback (`sphereScanFallbacks`, 0 on random clouds,
+`HelixWalkSpec`). Cospherical = within `1e-10 r`, NOT `epsilon` (at the default `1e-5` near-ties got tiled as clusters
+on a few thousand random points and tore the triangulation). EVERY result gets `looksValid` (each point a vertex, no
+facet in 3 tops, every boundary facet on the hull -- Euler characteristic is NOT enough: a partial contractible walk
+passes it); a failure goes to `repairByJitterRetriangulation` (jitter `1e-4` of the spacing, all points when the
+structural check fails; on the PROJECTED points). Exact grids are valid by default at the default epsilon; at a far
+smaller epsilon (`1e-9`) a 3-D grid can still fail to repair (near-coplanar float predicates) and the raw walk is
+returned. Agreement with GUDHI at scale (bench harness): bottleneck <= 1e-8 at 1000/5000 3-D, 6e-7 at 10000 2-D.
+DQP is ~100x slower than Helix untruncated, but with a radius cutoff it builds skeleton by skeleton and wins at small
+radius (dispatch: `WORKLOG-helix-construction-speed.md`).
 
 **One root mechanism (near-cospherical clusters, order-dependent facet-pivot choices) produces two DIFFERENT
 outcomes — don't conflate, a naive set-diff can't tell them apart**:

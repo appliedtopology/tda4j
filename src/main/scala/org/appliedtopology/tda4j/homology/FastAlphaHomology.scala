@@ -3,9 +3,8 @@ package org.appliedtopology.tda4j
 import scala.collection.mutable
 
 /** Thrown by [[FastAlphaHomologyEngine]] when the Helix triangulation has a facet with more than two top-dimensional
-  * cofaces, which its dual graph cannot represent. A rare limitation of the triangulation (about 1 cloud in 18,700 in
-  * the plane, more often in higher dimension), not a problem with the data: the general engines handle the same points,
-  * and `requireValidTriangulation` repairs the triangulation. The message says so.
+  * cofaces, which its dual graph cannot represent. Not expected on ordinary input (Helix checks and repairs its own
+  * triangulation), and never a problem with the data: the general engines handle the same points. The message says so.
   */
 class FastAlphaTriangulationException(message: String) extends RuntimeException(message)
 
@@ -16,9 +15,9 @@ class FastAlphaTriangulationException(message: String) extends RuntimeException(
   * with representatives for every bar.
   *
   * The dual graph needs every facet to have one or two top-dimensional cofaces. Unlike a grid, a triangulation does not
-  * guarantee it, so it is checked first, throwing [[FastAlphaTriangulationException]] when it fails (about 1 cloud in
-  * 18,700 at dimension 2, 1 in 1,700 at dimension 3 with 20-30 points). A facet's dual-edge value is its own filtration
-  * value, which can be smaller than its cofaces' circumradii (a Gabriel edge).
+  * guarantee it, so it is checked first, throwing [[FastAlphaTriangulationException]] when it fails (rare on random
+  * points). A facet's dual-edge value is its own filtration value, which can be smaller than its cofaces' circumradii
+  * (a Gabriel edge).
   */
 class FastAlphaHomologyEngine[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
@@ -137,34 +136,7 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
         .mapValues(_.toVector)
         .toMap
 
-    // See the class doc's own note: unlike a cubical grid, this is a real precondition that can genuinely fail --
-    // measured at roughly 1-in-18700 on random points at ambient dimension 2, but NOTICEABLY MORE LIKELY at
-    // higher ambient dimension and with more points (roughly 1-in-1666 measured at ambient dimension 3 with
-    // 20-30 points -- see .claude/DESIGN-fast-engines-hybrid-middle-dimensions.md's own measurement) -- fail
-    // loudly and specifically, and (per the class's own doc) in language that doesn't assume the reader knows
-    // this engine's internals.
-    val badFacets = facetToTopIds.filter { case (_, ids) => ids.size < 1 || ids.size > 2 }
-    if badFacets.nonEmpty then
-      throw new FastAlphaTriangulationException(
-        "The fast alpha-complex engine (engine=\"fast-alpha\" / FastAlphaHomologyEngine) could not compute a " +
-          "result for this specific set of points.\n\n" +
-          "This is NOT an error in your data, and it does NOT mean this point cloud's persistent homology is " +
-          "unusual or unsupported. It is a known limitation of HelixDelaunay, the Delaunay triangulation this " +
-          s"engine's fast algorithm depends on, at ambient dimension ${helix.ambientDimension}: on a fraction of " +
-          "point sets, HelixDelaunay's own triangulation comes out subtly inconsistent in a way this engine can " +
-          "detect but cannot safely work around. This is rare at ambient dimension 2 (roughly 1-in-18700 on " +
-          "random points) but noticeably more likely at higher ambient dimension and with more points (roughly " +
-          "1-in-1666 measured at ambient dimension 3 with 20-30 points).\n\n" +
-          "TO GET YOUR RESULT: recompute the SAME point cloud with a different engine -- \"naive\", \"chunks\", " +
-          "or \"cohomology\" all give the exact same, fully correct persistent homology, via a completely " +
-          "different algorithm that this limitation does not affect at all. For example (MATLAB/Java):\n" +
-          "  TDA4j.computeFromPoints(points, new String[]{\"complex\", \"alpha\", \"engine\", \"naive\"})\n" +
-          "or on the command line: --complex alpha --engine naive\n\n" +
-          "(Technical detail, for developers investigating this class itself: " +
-          s"${badFacets.size} facet(s) had a containing-top-simplex count other than 1 or 2 " +
-          s"(${badFacets.map { case (f, ids) => s"$f -> ${ids.size} cofaces" }.mkString("; ")}), meaning the dual " +
-          "graph this engine needs is not well-defined for this triangulation.)"
-      )
+    FastAlphaHomologyEngine.requireDualGraph(facetToTopIds, helix.ambientDimension)
 
     // Value from helix.filtrationValue(facet) directly, NOT ids.map(topValue).min -- see the class doc's own
     // note on why these can genuinely differ for an alpha complex (unlike a cubical grid).
@@ -272,3 +244,34 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
               )
             uf.union(youngRoot, oldRoot, flip)
     bars.toList
+
+object FastAlphaHomologyEngine:
+  /** Throws [[FastAlphaTriangulationException]] unless every facet has one or two top-dimensional cofaces: the dual
+    * graph the engine walks is not defined otherwise.
+    */
+  private[tda4j] def requireDualGraph(facetToTopIds: Map[Simplex[Int], Vector[Int]], ambientDimension: Int): Unit =
+    // Unlike a cubical grid, this is a real precondition: HelixDelaunay does not guarantee it. With the frontier walk
+    // before its minimal-centre candidate search, roughly 1 in 18700 random 2-D clouds and 1 in 1666 3-D clouds of
+    // 20-30 points failed it (.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md); with the current walk none of
+    // 20000 2-D, 3000 3-D and 500 4-D random clouds did (.claude/WORKLOG-helix-construction-speed.md). Fail loudly,
+    // in language that doesn't assume the reader knows this engine's internals.
+    val badFacets = facetToTopIds.filter { case (_, ids) => ids.size < 1 || ids.size > 2 }
+    if badFacets.nonEmpty then
+      throw new FastAlphaTriangulationException(
+        "The fast alpha-complex engine (engine=\"fast-alpha\" / FastAlphaHomologyEngine) could not compute a " +
+          "result for this specific set of points.\n\n" +
+          "This is NOT an error in your data, and it does NOT mean this point cloud's persistent homology is " +
+          "unusual or unsupported. It is a known limitation of HelixDelaunay, the Delaunay triangulation this " +
+          s"engine's fast algorithm depends on, at ambient dimension ${ambientDimension}: on a fraction of " +
+          "point sets, HelixDelaunay's own triangulation comes out subtly inconsistent in a way this engine can " +
+          "detect but cannot safely work around. This is rare on random points.\n\n" +
+          "TO GET YOUR RESULT: recompute the SAME point cloud with a different engine -- \"naive\", \"chunks\", " +
+          "or \"cohomology\" all give the exact same, fully correct persistent homology, via a completely " +
+          "different algorithm that this limitation does not affect at all. For example (MATLAB/Java):\n" +
+          "  TDA4j.computeFromPoints(points, new String[]{\"complex\", \"alpha\", \"engine\", \"naive\"})\n" +
+          "or on the command line: --complex alpha --engine naive\n\n" +
+          "(Technical detail, for developers investigating this class itself: " +
+          s"${badFacets.size} facet(s) had a containing-top-simplex count other than 1 or 2 " +
+          s"(${badFacets.map { case (f, ids) => s"$f -> ${ids.size} cofaces" }.mkString("; ")}), meaning the dual " +
+          "graph this engine needs is not well-defined for this triangulation.)"
+      )
