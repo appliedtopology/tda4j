@@ -31,11 +31,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench  # noqa: E402  (run_proc, last_json, blob)
 
 SIZES = {2: [128, 256, 512, 1024, 2048, 4096], 3: [16, 24, 32, 48, 64, 96, 128], 4: [6, 8, 10, 12, 16]}
-ENGINES = [  # (label, engine, reps, dims)
-    ("fastcubical", "fastcubical", "cycles", {2, 3, 4}),
-    ("cohomology-cycles", "cohomology", "cycles", {2, 3, 4}),
-    ("cohomology-cocycles", "cohomology", "cocycles", {2, 3, 4}),
-    ("chunks", "chunks", "cycles", {2}),
+ENGINES = [  # (label, engine, reps, dims, largest pixel count or 0 for no cap)
+    ("fastcubical", "fastcubical", "cycles", {2, 3, 4}, 0),
+    ("cohomology-cycles", "cohomology", "cycles", {2, 3, 4}, 0),
+    ("cohomology-cocycles", "cohomology", "cocycles", {2, 3, 4}, 0),
+    ("chunks", "chunks", "cycles", {2}, 512 * 512),  # already 78 s at 256²: a reference point, not a contender
 ]
 
 
@@ -51,6 +51,9 @@ def main():
     ap.add_argument("--python", default=sys.executable)
     ap.add_argument("--no-reference", action="store_true", help="skip CubicalRipser and GUDHI")
     ap.add_argument("--max-pixels", type=int, default=0, help="skip sizes with more pixels (0: no cap)")
+    ap.add_argument("--engines", default="", help="comma-separated labels (default: all; see ENGINES, plus cripser,gudhi)")
+    ap.add_argument("--warm-cap", type=float, default=60,
+                    help="repeat a computation (warm-up + trials) only if one cold run took less than this (s)")
     args = ap.parse_args()
 
     out = Path(args.out or Path(os.environ.get("WORKDIR", ".")) / "sweeps" /
@@ -75,23 +78,38 @@ def main():
                     path = data / f"{image}{d}d_{n}.npy"
                     if not path.exists():
                         np.save(path, rng.random(shape) if image == "random" else bench.blob(shape, rng))
-                    runs = [(label, ["java", f"-Xmx{args.jvm_heap}", "-cp", cp,
-                                     "org.appliedtopology.tda4j.PaperBenchmarkDriver", "task=cubical",
-                                     f"input={path}", f"dim={d - 1}", "p=2", f"engine={engine}", f"reps={reps}",
-                                     "warmup=1", f"trials={args.trials}"])
-                            for label, engine, reps, dims in ENGINES if d in dims]
+                    wanted = set(args.engines.split(",")) if args.engines else None
+
+                    def command(label, warmup, trials):
+                        for lab, engine, reps, dims, cap in ENGINES:
+                            if lab == label:
+                                return ["java", f"-Xmx{args.jvm_heap}", f"-Xms{args.jvm_heap}", "-XX:+UseParallelGC",
+                                        "-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver", "task=cubical",
+                                        f"input={path}", f"dim={d - 1}", "p=2", f"engine={engine}", f"reps={reps}",
+                                        f"warmup={warmup}", f"trials={trials}"]
+                        return [args.python, str(bench.HERE / "workers" / "py_worker.py"), f"tool={label}",
+                                "task=cubical", f"input={path}", f"dim={d - 1}", "p=2", f"warmup={warmup}",
+                                f"trials={trials}"]
+
+                    labels = [lab for lab, _, _, dims, cap in ENGINES if d in dims and (not cap or n ** d <= cap)]
                     if not args.no_reference:
-                        for tool in ["cripser", "gudhi"]:
-                            runs.append((tool, [args.python, str(bench.HERE / "workers" / "py_worker.py"),
-                                                f"tool={tool}", "task=cubical", f"input={path}", f"dim={d - 1}",
-                                                "p=2", "warmup=1", f"trials={args.trials}"]))
-                    for label, cmd in runs:
-                        if label in stopped:
+                        labels += ["cripser", "gudhi"]
+                    for label in labels:
+                        if label in stopped or (wanted and label not in wanted):
                             continue
                         tag = f"{d}d_{image}_{n}_{label}"
-                        status, wall, rss, text = bench.run_proc(cmd, args.timeout * (args.trials + 1),
-                                                                 out / "logs" / tag)
+                        # Cold first: one computation, bounded by --timeout. Repeat only when that was quick enough
+                        # for warm-up to matter; past --warm-cap the cold time is the measurement.
+                        status, wall, rss, text = bench.run_proc(command(label, 0, 1), args.timeout,
+                                                                 out / "logs" / (tag + "__cold"))
                         j = bench.last_json(text) if status == "ok" else None
+                        if j and j["times_s"][0] < args.warm_cap and args.trials > 0:
+                            s2, wall2, rss2, text2 = bench.run_proc(command(label, 1, args.trials),
+                                                                    args.timeout * (args.trials + 1),
+                                                                    out / "logs" / (tag + "__warm"))
+                            j2 = bench.last_json(text2) if s2 == "ok" else None
+                            if j2:
+                                j, rss = j2, max(rss, rss2)
                         med = statistics.median(j["times_s"]) if j else None
                         upp = med / (n ** d) * 1e6 if med else None
                         w.writerow([d, image, n, n ** d, label, status, med, json.dumps(j["times_s"]) if j else "",

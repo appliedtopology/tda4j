@@ -39,6 +39,24 @@ Useful options of `run`:
 | `--warm-cap S` | if one cold computation takes longer than this (default 60 s), the warm run reuses it instead of repeating |
 | `--jvm-heap 32g` | `-Xmx` for TDA4j and JavaPlex. fractal-r needs about 12g; clifford50000 more |
 
+## The image-engine size sweep
+
+`bench/run.sh sweep-cubical` decides which engine `Persistence(Image(...))` should pick by default. It times:
+- fast cubical, today's `Auto`;
+- cohomology, with cycles and with cocycles;
+- chunks, 2-D only and capped at 512²;
+- CubicalRipser and GUDHI, alongside for scale.
+
+The images are noise and a blob, in 2-D up to 4096² and 3-D up to 128³.
+
+Each point runs cold first. It is repeated (one warm-up, then `--trials`) only if the cold run took under `--warm-cap`
+seconds. A series stops at its first timeout. Output: `sweep.csv`, and `sweep.md` with µs per pixel and the
+fast/cohomology ratio.
+
+```sh
+bench/run.sh sweep-cubical --dims 2,3 --jvm-heap 32g --timeout 1800
+```
+
 ## What is measured
 
 - **cold:** one process, one computation, from launch to exit: startup, JIT, reading the input. This is what a

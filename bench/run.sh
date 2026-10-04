@@ -123,6 +123,11 @@ PY
 
 export_env() {
   export TDA4J_CP="$TOOLS/tda4j.classpath"
+  # The classpath points at sbt's class directories: after an `sbt clean` (or a docs build) they are gone.
+  if [ -s "$TDA4J_CP" ] && ! java -cp "$(cat "$TDA4J_CP")" org.appliedtopology.tda4j.PaperBenchmarkDriver \
+      task=vr input="$BENCH/smoke-points.txt" dim=1 warmup=0 trials=1 >/dev/null 2>&1; then
+    echo "TDA4j's compiled classes are missing (sbt clean?): rerun 'bench/run.sh setup' first"; exit 1
+  fi
   export RIPSER_BIN="$TOOLS/ripser/ripser"
   export RIPSER_COEFF_BIN="$TOOLS/ripser/ripser-coeff"
   [ -x "$RIPSER_BIN" ] || unset RIPSER_BIN
