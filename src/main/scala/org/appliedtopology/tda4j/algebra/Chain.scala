@@ -1,5 +1,7 @@
 package org.appliedtopology.tda4j
-package algebra
+
+import cats.Show
+import cats.syntax.show.showInterpolator
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -9,9 +11,12 @@ import scala.compiletime.asMatchable
 Implementation of the Chain trait using heaps for internal storage and deferred arithmetic.
  */
 
-class Chain[CellT: Ordering, CoefficientT: Field] private[tda4j] (
+// because scalafmt is too aggressive to use the `into` new scala3 syntax.
+// format: off
+into class Chain[CellT: Ordering, CoefficientT: Field] private[tda4j](
   private var entries: mutable.PriorityQueue[(CellT, CoefficientT)]
 ):
+  // format: on
   @tailrec
   final def collapseHead(): Unit =
     val fr = summon[CoefficientT is Field]
@@ -71,6 +76,10 @@ class Chain[CellT: Ordering, CoefficientT: Field] private[tda4j] (
     else entries.iterator.map((c, x) => s"${x.toString}⊠${c.toString}").mkString(" + ")
 
 object Chain:
+  given chainShow: [CellT: {OrderedCell, Show}, CoefficientT: Field as field] => Show[Chain[CellT, CoefficientT]] =
+    given Show[CoefficientT] = field.showForSelf
+    Show.show(c => c.rawEntries.map((cell, coeff) => show"$coeff ⊠ $cell").mkString(" + "))
+
   def empty[CellT: Ordering, CoefficientT: Field] = from(Seq())
 
   def apply[CellT: Ordering, CoefficientT: Field](
@@ -129,7 +138,7 @@ object Chain:
     * every time a pivot is hit, with no cache anywhere). Deliberately NOT written into `basis` here, for the same
     * reason: a caller relying on a stale substitute would be trusting a value real Ripser itself never trusts twice.
     * `fallback(sigma)`, if `Some`, must return a chain whose `leadingCell` is `sigma` itself -- the caller is
-    * responsible for that invariant (see `RipserCohomologyContext.zeroApparentFacet`'s doc for why it holds there).
+    * responsible for that invariant (see `RipserCohomologyEngine.zeroApparentFacet`'s doc for why it holds there).
     *
     * A `while` loop mutating `z`/`reductionLog` in place, not `@tailrec` recursion threading a fresh immutable
     * `SortedMap` through each step -- see `updateMap`'s doc above. `z.head`/`z.isEmpty` are used instead of

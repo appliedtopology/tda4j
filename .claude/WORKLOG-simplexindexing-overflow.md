@@ -1,7 +1,7 @@
 # Worklog: `SimplexIndexing`'s silent `Int` overflow, and migrating combinatorial indices to `Long`
 
 Session date: 2026-09-16/17 (continuing from WORKLOG-reference-engine-fix.md's session). Direct follow-up to
-WORKLOG-dimension-ceiling.md's bug 2 (`RipserCohomologyContext` throws `ArrayIndexOutOfBoundsException` in the
+WORKLOG-dimension-ceiling.md's bug 2 (`RipserCohomologyEngine` throws `ArrayIndexOutOfBoundsException` in the
 sparse-threshold regime at higher build dimensions, localized but not fixed there). Picked back up on the
 project lead's prompt ("we needed to pick up an indexing error in RipserCohomologyContext too, right?").
 
@@ -23,7 +23,7 @@ actually a silent-corruption bug much earlier in the call chain.
 ## Scope decision -- asked, not assumed
 
 Two fixes were possible: (a) make `binomial` fail loudly on overflow instead of silently truncating (small, safe,
-but leaves the actual size ceiling unchanged -- `RipserCohomologyContext` still couldn't compute this case, just
+but leaves the actual size ceiling unchanged -- `RipserCohomologyEngine` still couldn't compute this case, just
 fails clearly instead of confusingly), or (b) migrate combinatorial indices from `Int` to `Long` throughout
 `SimplexIndexing` and its consumers (actually raises the ceiling, but touches many call sites and needs its own
 validation). Asked the project lead directly rather than picking for them (AskUserQuestion) -- answer: **(b), the
@@ -41,10 +41,10 @@ Every call site of `binomial`/`SimplexIndexing`/`.si(...)` in `../src/main`, fou
   `cofacetIterator`, `facetIterator`); and, below the file's own "Maybe @deprecate or outright everything below
   here?" marker, five more classes that ALSO call `SimplexIndexing`/`binomial` directly: `RipserStreamSparse`,
   `RipserStreamBase` (and its subclasses `RipserStream`, `SymmetricRipserStream`), `MaskedSymmetricRipserStream`.
-  These are legacy/pre-`RipserCohomologyContext` code, but NOT dead in the "excluded from the build" sense --
+  These are legacy/pre-`RipserCohomologyEngine` code, but NOT dead in the "excluded from the build" sense --
   they're exercised by `SimplexIndexingSpec.scala`'s own `RipserStreamSpec` class (apparent-pairs tests, a
   hypercube-symmetry cross-validation), so they need to keep compiling AND keep passing, not just compile.
-- **`Homology.scala`**: `RipserCohomologyContext`'s `si: SimplexIndexing` field, `compareFvThenIndex` (the shared
+- **`Homology.scala`**: `RipserCohomologyEngine`'s `si: SimplexIndexing` field, `compareFvThenIndex` (the shared
   tie-break comparator, currently `java.lang.Integer.compare`), `cohomologyOrdering`/`diameterSimplexOrdering`,
   `coboundaryOf`, `zeroPivotCofacet`, `zeroPivotFacet` -- everywhere `si(...)` is called to encode/decode.
 - **`SimplexIndexingSpec.scala`**: direct test coverage of `SimplexIndexing.apply`/`cofacetIterator`/
@@ -54,8 +54,8 @@ Every call site of `binomial`/`SimplexIndexing`/`.si(...)` in `../src/main`, fou
   `binomial`/`SimplexIndexing` -- and those call sites are already self-limiting (`(0 until n).toSeq` needs an
   actual `Int`-sized range to iterate at all, so a genuinely astronomical `C(n,k)` there means an impractically
   slow/memory-exhausting enumeration long before an overflow would matter, not a silent-corruption risk the way
-  `SimplexIndexing`'s O(1) encode/decode arithmetic is). `SymmetryGroup.scala`/`SymmetricZomorodianIncremental`:
-  grepped directly, no `SimplexIndexing`/`binomial` usage at all. `totalSimplexCount` (`RipserCohomologyContext`,
+  `SimplexIndexing`'s O (1) encode/decode arithmetic is). `SymmetryGroup.scala`/`SymmetricZomorodianIncremental`:
+  grepped directly, no `SimplexIndexing`/`binomial` usage at all. `totalSimplexCount` (`RipserCohomologyEngine`,
   and every benchmark spec that reads it): a plain simplex counter, unrelated to combinatorial index magnitude,
   bounded by available memory long before `Int` range regardless -- left untouched.
 
@@ -87,7 +87,7 @@ Changed in `RipserStream.scala`:
   `zeroApparentFacet` all re-typed from `index: Int` to `index: Long`; `(0 until binomial(...))` changed to
   `(0L until binomial(...))` so the range itself is `Long`-indexed.
 
-Changed in `Homology.scala` (`RipserCohomologyContext`): `compareFvThenIndex`'s `xIdx`/`yIdx` parameters
+Changed in `Homology.scala` (`RipserCohomologyEngine`): `compareFvThenIndex`'s `xIdx`/`yIdx` parameters
 `Int -> Long`, its tie-break `java.lang.Integer.compare -> java.lang.Long.compare`. `cohomologyOrdering`,
 `diameterSimplexOrdering`, `coboundaryOf`, `zeroPivotCofacet`, `zeroPivotFacet` needed no direct edits -- they
 call `si(...)` and consume whatever it returns, so the type change propagated through inference once the
@@ -142,6 +142,6 @@ This is why the scope map above was verified by compiling, not trusted from grep
 
 ## Status: resolved
 
-Both bugs from WORKLOG-dimension-ceiling.md are now fixed: the `SimplicialHomologyContext` reference-engine
-crash (WORKLOG-reference-engine-fix.md) and this `RipserCohomologyContext` indexing bug. Not committed -- per
+Both bugs from WORKLOG-dimension-ceiling.md are now fixed: the `SimplicialHomologyEngine` reference-engine
+crash (WORKLOG-reference-engine-fix.md) and this `RipserCohomologyEngine` indexing bug. Not committed -- per
 standing project convention, the project lead commits their own work.

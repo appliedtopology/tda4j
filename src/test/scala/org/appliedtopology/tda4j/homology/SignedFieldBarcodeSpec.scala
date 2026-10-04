@@ -1,10 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.barcode.*
 
 import org.specs2.mutable
 
@@ -55,14 +49,14 @@ class SignedFieldBarcodeSpec extends mutable.Specification:
     case NegativeInfinity() => Double.NegativeInfinity
 
   def naive[C: Field](cells: Seq[(Double, Simplex[Int])]): Diagram =
-    normalize(SimplicialHomologyContext[Int, C, Double]().persistentHomology(stratified(cells)).diagramAt(1e9))
+    normalize(SimplicialHomologyEngine[Int, C, Double]().persistentHomology(stratified(cells)).diagramAt(1e9))
 
   def chunks[C: Field](cells: Seq[(Double, Simplex[Int])]): Diagram =
-    normalize(PersistenceInChunksContext[Int, C](5).persistentHomology(stratified(cells)).diagramAt(1e9))
+    normalize(PersistenceInChunksEngine[Int, C](5).persistentHomology(stratified(cells)).diagramAt(1e9))
 
   def cohomology[C: Field](cells: Seq[(Double, Simplex[Int])]): Diagram =
     normalize(
-      CellularCohomologyContext[Simplex[Int], C, Double]()
+      CellularCohomologyEngine[Simplex[Int], C, Double]()
         .persistentCohomology(stratified(cells))
         .map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
     )

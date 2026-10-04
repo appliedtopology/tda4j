@@ -1,15 +1,15 @@
 package org.appliedtopology.tda4j
 package matlab
 
-import org.appliedtopology.tda4j.barcode.{given, *}
+import org.appliedtopology.tda4j.*
 
 import org.specs2.mutable.Specification
 
 /** Tests the [[PersistenceResult]] additions from `.claude/WORKLOG-mainstream-feature-gap-analysis.md` items 4/8
   * (bottleneck/Wasserstein distance, landscapes, persistence images) -- specifically that this MATLAB-facing wrapper is
-  * a faithful, correctly-marshalled pass-through to [[org.appliedtopology.tda4j.barcode.BarcodeDistance]]/
-  * [[org.appliedtopology.tda4j.barcode.Vectorization]], which already have their own thorough, independently- oracled
-  * test suites (`BarcodeDistanceSpec`/`VectorizationSpec`) -- not a re-test of the underlying math.
+  * a faithful, correctly-marshalled pass-through to [[org.appliedtopology.tda4j.BarcodeDistance]]/
+  * [[org.appliedtopology.tda4j.Vectorization]], which already have their own thorough, independently- oracled test
+  * suites (`BarcodeDistanceSpec`/`VectorizationSpec`) -- not a re-test of the underlying math.
   */
 class PersistenceResultSpec extends Specification:
   private val triangle = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.9))
@@ -17,7 +17,7 @@ class PersistenceResultSpec extends Specification:
 
   "bottleneckDistance / wassersteinDistance" should {
     "be exactly 0 between a result and itself, at every dimension it reports" >> {
-      val result = TDA4j.computeFromPoints(triangle, Array("maxDimension", "1"))
+      val result = FullBarcode.computeFromPoints(triangle, Array("maxDimension", "1"))
       val dims = (0 until result.size()).map(result.dimension).distinct
       dims.forall { d =>
         (result.bottleneckDistance(result, d) == 0.0) && (result.wassersteinDistance(result, d) == 0.0)
@@ -25,8 +25,8 @@ class PersistenceResultSpec extends Specification:
     }
 
     "agree with a direct BarcodeDistance call on the same bars, extracted via cli-style toBars logic" >> {
-      val r1 = TDA4j.computeFromPoints(triangle, Array("maxDimension", "1"))
-      val r2 = TDA4j.computeFromPoints(square, Array("maxDimension", "1"))
+      val r1 = FullBarcode.computeFromPoints(triangle, Array("maxDimension", "1"))
+      val r2 = FullBarcode.computeFromPoints(square, Array("maxDimension", "1"))
 
       def barsOf(r: PersistenceResult, dim: Int): IndexedSeq[PersistenceBar[Double, Nothing]] =
         (0 until r.size())
@@ -46,36 +46,36 @@ class PersistenceResultSpec extends Specification:
     }
 
     "are symmetric" >> {
-      val r1 = TDA4j.computeFromPoints(triangle, Array("maxDimension", "1"))
-      val r2 = TDA4j.computeFromPoints(square, Array("maxDimension", "1"))
+      val r1 = FullBarcode.computeFromPoints(triangle, Array("maxDimension", "1"))
+      val r2 = FullBarcode.computeFromPoints(square, Array("maxDimension", "1"))
       (r1.bottleneckDistance(r2, 0) must beEqualTo(r2.bottleneckDistance(r1, 0))) and
         (r1.wassersteinDistance(r2, 0) must beEqualTo(r2.wassersteinDistance(r1, 0)))
     }
 
     "the explicit-ground-norm overload with Double.PositiveInfinity matches the default (L-infinity) overload" >> {
-      val r1 = TDA4j.computeFromPoints(triangle, Array("maxDimension", "1"))
-      val r2 = TDA4j.computeFromPoints(square, Array("maxDimension", "1"))
+      val r1 = FullBarcode.computeFromPoints(triangle, Array("maxDimension", "1"))
+      val r2 = FullBarcode.computeFromPoints(square, Array("maxDimension", "1"))
       (r1.bottleneckDistance(r2, 0) must beEqualTo(r1.bottleneckDistance(r2, 0, Double.PositiveInfinity))) and
         (r1.wassersteinDistance(r2, 0) must beEqualTo(r1.wassersteinDistance(r2, 0, 1.0, Double.PositiveInfinity)))
     }
 
     "a finite ground norm (L-2) gives a genuinely different value than the L-infinity default, on a diagram " +
       "with more than one bar" >> {
-        val r1 = TDA4j.computeFromPoints(triangle, Array("maxDimension", "1"))
-        val r2 = TDA4j.computeFromPoints(square, Array("maxDimension", "1"))
+        val r1 = FullBarcode.computeFromPoints(triangle, Array("maxDimension", "1"))
+        val r2 = FullBarcode.computeFromPoints(square, Array("maxDimension", "1"))
         r1.bottleneckDistance(r2, 0, 2.0) must not(beEqualTo(r1.bottleneckDistance(r2, 0)))
       }
   }
 
   "landscape" should {
     "returns numLevels x resolution, matching the request exactly" >> {
-      val result = TDA4j.computeFromPoints(triangle, Array("maxDimension", "1"))
+      val result = FullBarcode.computeFromPoints(triangle, Array("maxDimension", "1"))
       val levels = result.landscape(0, numLevels = 2, tMin = 0.0, tMax = 2.0, resolution = 21)
       (levels.length must beEqualTo(2)) and (levels.forall(_.length == 21) must beTrue)
     }
 
     "is all-zero for a dimension this result has no bars in" >> {
-      val result = TDA4j.computeFromPoints(triangle, Array("maxDimension", "1"))
+      val result = FullBarcode.computeFromPoints(triangle, Array("maxDimension", "1"))
       val levels = result.landscape(5, numLevels = 1, tMin = 0.0, tMax = 1.0, resolution = 5)
       levels.flatten.forall(_ == 0.0) must beTrue
     }
@@ -83,7 +83,7 @@ class PersistenceResultSpec extends Specification:
 
   "persistenceImage" should {
     "returns birthResolution x persistenceResolution, non-negative throughout" >> {
-      val result = TDA4j.computeFromPoints(square, Array("maxDimension", "1"))
+      val result = FullBarcode.computeFromPoints(square, Array("maxDimension", "1"))
       val image = result.persistenceImage(
         1,
         sigma = 0.2,
@@ -101,7 +101,7 @@ class PersistenceResultSpec extends Specification:
 
     "the explicit-weightCap overload, given the diagram's own max finite persistence, matches the default " +
       "overload exactly" >> {
-        val result = TDA4j.computeFromPoints(square, Array("maxDimension", "1"))
+        val result = FullBarcode.computeFromPoints(square, Array("maxDimension", "1"))
         val dim = 1
         val maxPersistence = (0 until result.size())
           .filter(result.dimension(_) == dim)

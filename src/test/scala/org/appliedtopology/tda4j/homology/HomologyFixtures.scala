@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 /** Hand-verified simplicial complexes with known barcodes, shared across homology-engine test suites so that different
   * persistence algorithms (naive reduction, clear&compress, ...) can be checked against the exact same input and are
@@ -22,8 +15,8 @@ object HomologyFixtures:
   /** The naive engine's own barcode on an already-built stream -- the independent oracle every other engine's barcode
     * is cross-checked against.
     */
-  def naiveBars(source: StratifiedSimplexStream[Int, Double])(using Double is Field): List[(Int, Double, Double)] =
-    SimplicialHomologyContext[Int, Double, Double]()
+  def naiveBars(source: LevelwiseSimplexStream[Int, Double])(using Double is Field): List[(Int, Double, Double)] =
+    SimplicialHomologyEngine[Int, Double, Double]()
       .persistentHomology(source)
       .diagramAt(Double.PositiveInfinity)
 
@@ -156,7 +149,7 @@ object HomologyFixtures:
 
   // Elder-rule regression fixture: two vertices at deliberately DIFFERENT, non-tied filtration
   // values, connected by one edge. Discriminates "pivot by filtration order" (correct) from "pivot
-  // by lexicographic vertex order" (a confirmed historical bug in CellularHomologyContext -- see
+  // by lexicographic vertex order" (a confirmed historical bug in CellularHomologyEngine -- see
   // WORKLOG-naive-homology.md). The vertex with the SMALLER label is born LATER, so a lexicographic-
   // order bug and a filtration-order-correct implementation disagree about which component dies.
   val elderRuleCells: Seq[(Double, Simplex[Int])] =
@@ -167,7 +160,7 @@ object HomologyFixtures:
     (0, 0.0, Double.PositiveInfinity) // older component (vertex 1, born 0.0) survives
   )
 
-  // Regression fixture for a confirmed PersistenceInChunksContext bug (see WORKLOG-benchmark-and-chunks-bug.md
+  // Regression fixture for a confirmed PersistenceInChunksEngine bug (see WORKLOG-benchmark-and-chunks-bug.md
   // section 5): the full 2-skeleton of a tetrahedron -- its own boundary, i.e. deliberately NOT including
   // the solid 3-simplex -- topologically S^2, with every cell tied at the SAME filtration value. The tie is
   // what actually exercises the bug: compress/globalReduce's elimination loop needing more than one round to
@@ -204,10 +197,10 @@ object HomologyFixtures:
     *
     * `topDimension` (default `Int.MaxValue`, i.e. no special case -- every other caller of this helper feeds a
     * complete, untruncated complex) accounts for one specific, legitimate exception: an engine like
-    * `RipserCohomologyContext` that reports homology only up to some requested top dimension `maxDimension` can have a
+    * `RipserCohomologyEngine` that reports homology only up to some requested top dimension `maxDimension` can have a
     * genuine finite bar BORN at `dim == maxDimension` whose death cell lives at `maxDimension + 1` -- a real simplex,
     * needed to correctly resolve that pairing, but never itself one of the `totalCells` counted (it was never
-    * independently considered as its own reduction column; see `RipserCohomologyContext.coboundaryOf`'s doc and
+    * independently considered as its own reduction column; see `RipserCohomologyEngine.coboundaryOf`'s doc and
     * `.claude/WORKLOG-maxdim-semantics-fix.md`). Such a bar consumes only its birth cell for this invariant's purposes,
     * same as an essential bar -- not 2, since its death cell isn't part of the counted set.
     */

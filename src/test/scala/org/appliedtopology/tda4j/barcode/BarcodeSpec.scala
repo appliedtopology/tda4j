@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package barcode
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.apache.commons.math3.linear.*
 import org.specs2.ScalaCheck
@@ -14,7 +7,6 @@ import org.specs2.mutable.Specification
 import scala.collection.immutable.Seq
 
 import org.appliedtopology.tda4j.given
-import org.appliedtopology.tda4j.barcode.{*, given}
 
 class BarcodeAlgebraSpec extends Specification with ScalaCheck:
   "Comparing endpoints" >> {
@@ -79,7 +71,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
     }
   }
   "valid and non-valid maps of barcodes" >> {
-    given bc: BarcodeContext[Int]()
+    given bc: BarcodeBuilder[Int]()
     import bc.*
 
     "One interval maps into another interval" ==> (
@@ -193,7 +185,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
     ) must beFalse)
   }
   "Cokernel, kernel, image computation" >> {
-    given bc: BarcodeContext[Double]()
+    given bc: BarcodeBuilder[Double]()
     import bc.*
 
     val source = List(dim(0)(2.bc(5)), dim(0)(3.bc(7)))

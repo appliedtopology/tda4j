@@ -9,7 +9,7 @@ suspect). The project lead's explicit direction: try a paired `(Double, Long)` c
 ## Design
 
 `PackedRipserCohomology.scala`, a new class `PackedRipserCohomologyContext[CoefficientT: Field]` living
-alongside `RipserCohomologyContext`, not replacing it. Same algorithm end to end — clearing, apparent pairs
+alongside `RipserCohomologyEngine`, not replacing it. Same algorithm end to end — clearing, apparent pairs
 (mutual + on-the-fly substitution), sparse-Rips threshold, `maxDim`-means-top-reported-degree semantics
 inherited correctly from Phase 1 — re-keyed onto a packed cell:
 
@@ -28,7 +28,7 @@ combinatorial-number-system index alone carries no filtration-order information 
 this with separate sort/compare code operating on its own `diameter_index_t` struct, not on a bare index. Here
 that becomes a paired cell type plus one `Ordering` instance, so `Chain[DiameterIndex, CoefficientT]` reduces
 correctly with zero changes to `Chain.reduceBy`/`reduceByUntil` — confirmed directly against `Chain.scala`
-before writing any code: every reduction primitive `RipserCohomologyContext` actually uses is bounded on bare
+before writing any code: every reduction primitive `RipserCohomologyEngine` actually uses is bounded on bare
 `Ordering`, never on `OrderedCell`/`.boundary`. The paired approach worked on the first attempt; the fallback
 (a hand-rolled, non-`Chain`-based reduction) was never needed and stays out of scope, per the original plan.
 
@@ -51,7 +51,7 @@ so there's nothing to memoize and nothing that can go stale.
 
 ## Cross-validation (`PackedRipserCohomologySpec.scala`)
 
-9 tests, all passing, cross-validated against `RipserCohomologyContext` (not against hand-derived barcodes —
+9 tests, all passing, cross-validated against `RipserCohomologyEngine` (not against hand-derived barcodes —
 that would just re-litigate `RipserCohomologySpec`'s own already-established correctness):
 
 - Hand fixtures: `threePointLine` at `maxDim=1` and `maxDim=2`, and the apparent-pair collision cloud
@@ -72,7 +72,7 @@ the rotating-`cleared`-set and vertex-exposing changes above were in from the st
 ## Measured performance
 
 Two measurement passes were needed. The first (`RipserPaperBenchmarkSpec`'s default dual-engine mode — real
-`ripser.cpp` / `RipserCohomologyContext` / `PackedRipserCohomologyContext`, one JVM, one run) produced a
+`ripser.cpp` / `RipserCohomologyEngine` / `PackedRipserCohomologyEngine`, one JVM, one run) produced a
 methodology problem worth recording as its own finding before the actual numbers.
 
 ### A benchmark-harness bug found while measuring, not a result
@@ -81,14 +81,14 @@ methodology problem worth recording as its own finding before the actual numbers
 says so, for the reason `EngineComparisonBenchmarkSpec` established earlier: neither engine here supports it.
 What wasn't previously exercised is what happens when **two** engines are timed back-to-back in the same
 process and the first one times out: `Await.result` gives up waiting, but the abandoned `Future` keeps running
-on its daemon thread. Once `RipserCohomologyContext` (SortedSet) started timing out at `sphere3_192`, every
+on its daemon thread. Once `RipserCohomologyEngine` (SortedSet) started timing out at `sphere3_192`, every
 case after it ran with an accumulating pile of abandoned SortedSet computations still consuming CPU and heap in
 the background — observed directly as JVM resident size climbing from ~1.8GB to ~5.6GB over four supposedly
 independent cases, and confirmed by the packed engine's own reported times going to `"timeout"` for cases where
 it should have been fast (`dragon`, `o3_1024`, `fractal-r` all reported `packed(ms) = "-"`, status
 `"SortedSet: timeout"` masking whatever packed actually did). **This is a real gap in the benchmark harness,
 not a finding about either engine** — fixed by adding a `-DpackedOnly=true` flag that skips
-`RipserCohomologyContext` entirely, so the packed engine's own scaling could be measured in a clean process
+`RipserCohomologyEngine` entirely, so the packed engine's own scaling could be measured in a clean process
 (see the flag's own doc comment in `RipserPaperBenchmarkSpec.scala` for the mechanism). The dual-engine table's
 ratio columns are only trustworthy for cases where **both** engines actually finished — anything after the
 first timeout needs re-measuring with the flag instead, which is what was done here.
@@ -98,7 +98,7 @@ first timeout needs re-measuring with the flag instead, which is what was done h
 Only two cases ran to completion on both engines in the same (uncontaminated) process, both from the very
 start of that run before any timeout had occurred:
 
-| case | ripser.cpp | SortedSet (`RipserCohomologyContext`) | packed | S/pack |
+| case | ripser.cpp | SortedSet (`RipserCohomologyEngine`) | packed | S/pack |
 |---|---|---|---|---|
 | sphere3_48 (n=48) | 10.0ms | 1779.0ms (177.9x) | 377.0ms (37.7x) | **4.72x** |
 | sphere3_96 (n=96) | 50.0ms | 33730.0ms (674.6x) | 3394.3ms (67.9x) | **9.94x** |
@@ -110,7 +110,7 @@ exact match — different JVM/run, and this run's packed engine ran second, inhe
 shared generic `Chain.reduceBy` machinery from SortedSet's immediately-preceding run on the same case, a real
 if modest confound noted in the code's own comment). Packed costs ~2.76µs/simplex and ~1.37µs/simplex. **The
 speedup is real and growing with size, not flat** — 4.72x at n=48, 9.94x at n=96 — consistent with removing a
-genuine per-comparison cost (the `SimplexIndexing.apply` encode `RipserCohomologyContext`'s comparator pays
+genuine per-comparison cost (the `SimplexIndexing.apply` encode `RipserCohomologyEngine`'s comparator pays
 twice per comparison, replaced here by pure `Long`/`Double` comparison on an already-decoded pair) rather than
 a one-time fixed overhead that would wash out at scale.
 
@@ -175,7 +175,7 @@ on a supplementary `Double`-coefficient run — a flat or ambiguous headline num
 
 ## Status
 
-Both engines live side by side in the codebase (`RipserCohomologyContext`, `Homology.scala`; the packed engine,
+Both engines live side by side in the codebase (`RipserCohomologyEngine`, `Homology.scala`; the packed engine,
 `PackedRipserCohomology.scala`), per the original plan's explicit "parallel, not a replacement" scope. The
 packed engine is not wired into any facade (`matlab/Tda4j.scala`) or `EngineComparisonBenchmarkSpec` — that
 was out of scope for this pass, and remains the project lead's own call, per [[tda4j-commit-workflow]] and the
@@ -283,7 +283,7 @@ table, distinguishable from a timeout -- exactly what this session's earlier pri
 supposed to finally let this spec show). This was the AGENT HARNESS'S background-task process itself being
 killed externally ("stopped because the system is running low on memory") -- `ps`/`vm.swapusage` immediately
 after showed the java process gone entirely and no case row ever printed past the table header, so this landed
-somewhere in `fractal-r`'s own `metricSpace()`/`PackedRipserCohomologyContext` construction, before the first
+somewhere in `fractal-r`'s own `metricSpace()`/`PackedRipserCohomologyEngine` construction, before the first
 case's timing block even completed.
 
 Diagnosed, not just observed, before deciding whether to retry: `uptime` showed load averages of 20.38/15.44/

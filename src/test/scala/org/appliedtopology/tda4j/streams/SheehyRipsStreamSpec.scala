@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.scalacheck.Gen
 import org.specs2.ScalaCheck
@@ -194,7 +187,7 @@ class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCh
     }
 
     "cross-validate chunks against naive on a small random point cloud (fresh, not assumed from any other stream)" >>
-      // Both streams limited to cell-dimension <= 3 (homological degree <= 2, matching PersistenceInChunksContext's
+      // Both streams limited to cell-dimension <= 3 (homological degree <= 2, matching PersistenceInChunksEngine's
       // own maxDim = 2 below) -- NOT "maxDim = ambient.size" (CechStreamSpec's own convention for its typically-tiny
       // clouds): bounding the dimension costs nothing this test cares about, since it's checking
       // reduction-ALGORITHM agreement, not exercising every dimension the construction can produce, and it keeps
@@ -217,19 +210,19 @@ class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCh
             val stream = LimitedCofaceSimplexStream(SheehyRipsSimplexStream(ambient, epsilon = 0.5), 3)
             // homDim = 2 (top homological degree compared) needs cell-dimension <= homDim+1 = 3 (matching
             // CLAUDE.md's "engines internally build one dimension higher" convention), which is exactly the cap
-            // above. PersistenceInChunksContext(maxDim=2) correctly drops its own dim==3 ESSENTIAL bars internally
+            // above. PersistenceInChunksEngine(maxDim=2) correctly drops its own dim==3 ESSENTIAL bars internally
             // (truncation artifacts: a capped cell-dim-3 stream has no dimension-4 simplex a tetrahedron could be
             // a boundary of, so every not-otherwise-paired tetrahedron looks spuriously "essential");
-            // SimplicialHomologyContext has no such awareness and reports them anyway. An earlier draft of this
+            // SimplicialHomologyEngine has no such awareness and reports them anyway. An earlier draft of this
             // test compared the two diagrams raw and got a real-looking "chunks is missing bars" discrepancy that
             // was actually this artifact, not a chunks bug -- filtering both to dim <= homDim before comparing is
             // what every other maxDim-aware cross-validation in this codebase already does.
             val homDim = 2
-            val naiveBarcode = SimplicialHomologyContext[Int, Double, Double]()
+            val naiveBarcode = SimplicialHomologyEngine[Int, Double, Double]()
               .persistentHomology(stream)
               .diagramAt(Double.PositiveInfinity)
               .filter(_._1 <= homDim)
-            val chunksBarcode = PersistenceInChunksContext[Int, Double](homDim)
+            val chunksBarcode = PersistenceInChunksEngine[Int, Double](homDim)
               .persistentHomology(stream)
               .diagramAt(Double.PositiveInfinity)
               .filter(_._1 <= homDim)
@@ -256,18 +249,18 @@ class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCh
           .count(_.dim == 1)
       val sheehyEdgeCount = stream.iterator.count(_.dim == 1)
       val homDim = ambient.size - 1
-      val naiveBarcode = SimplicialHomologyContext[Int, Double, Double]()
+      val naiveBarcode = SimplicialHomologyEngine[Int, Double, Double]()
         .persistentHomology(stream)
         .diagramAt(Double.PositiveInfinity)
       val chunksBarcode =
-        PersistenceInChunksContext[Int, Double](homDim).persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+        PersistenceInChunksEngine[Int, Double](homDim).persistentHomology(stream).diagramAt(Double.PositiveInfinity)
 
       // Also checks CJS 2015 Theorem 5's H0 claim on THIS fixture specifically (not just the random-cloud
       // property below, which rarely sparsifies at all -- see that test's own note): asserts at least one
       // sparse/VR death ratio is genuinely > 1, i.e. sparsification actually changes a reported value here, not
       // just the edge count.
       def finiteH0Deaths(s: CofaceSimplexStream[Int, Double]): Seq[Double] =
-        SimplicialHomologyContext[Int, Double, Double]()
+        SimplicialHomologyEngine[Int, Double, Double]()
           .persistentHomology(s)
           .diagramAt(Double.PositiveInfinity)
           .collect { case (0, _, d) if d.isFinite => d }
@@ -310,7 +303,7 @@ class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCh
         val sheehyH0 = LimitedCofaceSimplexStream(SheehyRipsSimplexStream(ambient, epsilon = eps), 1)
         val vrH0 = LimitedCofaceSimplexStream(RipserCofaceSimplexStream(ambient), 1)
         def finiteDeaths(s: CofaceSimplexStream[Int, Double]): Seq[Double] =
-          SimplicialHomologyContext[Int, Double, Double]()
+          SimplicialHomologyEngine[Int, Double, Double]()
             .persistentHomology(s)
             .diagramAt(Double.PositiveInfinity)
             .collect { case (0, _, d) if d.isFinite => d }

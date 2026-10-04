@@ -1,8 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.immutable
@@ -32,7 +28,7 @@ import scala.collection.immutable
   * condition, not a pairwise one). So this construction is built on `RipserCofaceSimplexStream`'s generic "try every
   * remaining vertex against every already-accepted lower-dimensional simplex" coface loop (valid for ANY
   * downward-closed criterion, per that class's own doc), never on the flag-specific incremental-diameter machinery
-  * `PackedRipserCohomologyContext`/`RipserCohomologyContext` depend on -- `engine=ripser`/`chunks` are not offered for
+  * `PackedRipserCohomologyEngine`/`RipserCohomologyEngine` depend on -- `engine=ripser`/`chunks` are not offered for
   * this construction (see `matlab.TDA4j`'s dispatch, once wired) for the same reason they aren't for the general
   * witness complex or Cech.
   *
@@ -147,7 +143,7 @@ private class DowkerPlaceholderMetricSpace(n: Int) extends FiniteMetricSpace[Int
   * `.dual` gives the complex on the other side (`geometry.dual`'s rows, `geometry`'s original columns), which Dowker's
   * theorem guarantees is homotopy equivalent to this one at every threshold.
   */
-class DowkerCofaceSimplexStream(
+private[tda4j] class DowkerCofaceSimplexStream(
   val geometry: DowkerGeometry,
   val maxFiltrationValue: Double = Double.PositiveInfinity,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
@@ -197,7 +193,7 @@ class DowkerCofaceSimplexStream(
   def dual: DowkerCofaceSimplexStream =
     new DowkerCofaceSimplexStream(geometry.dual, maxFiltrationValue, keepCriterion)
 
-object DowkerCofaceSimplexStream:
+private[tda4j] object DowkerCofaceSimplexStream:
   def apply(
     relation: Array[Array[Double]],
     maxFiltrationValue: Double = Double.PositiveInfinity,

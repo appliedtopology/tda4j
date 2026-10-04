@@ -1,20 +1,13 @@
 package org.appliedtopology.tda4j
-package streams
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
-
-/** `streams.DistanceToMeasure` checked byte-for-byte against GUDHI's own `gudhi.point_cloud.dtm.DistanceToMeasure`
+/** `DistanceToMeasure` checked byte-for-byte against GUDHI's own `gudhi.point_cloud.dtm.DistanceToMeasure`
   * (Chazal-Cohen-Steiner-Merigot 2011), not merely against a hand re-derivation of the formula -- every expected value
   * below is copied from that project's own doctest/unit-test output (`src/python/doc/rips_complex_user.rst`,
   * `src/python/test/test_dtm.py`, GUDHI/gudhi-devel@master), fetched and cross-checked during this session; see
   * `.claude/WORKLOG-dtm-filtrations.md` for the full derivation, including confirming self-inclusive k-NN.
   */
 class DistanceToMeasureSpec extends org.specs2.mutable.Specification:
-  "streams.DistanceToMeasure" should {
+  "DistanceToMeasure" should {
     // gudhi.point_cloud.dtm.DistanceToMeasure(2, q=2, metric="neighbors").fit_transform(
     //   [[2.0, 2], [0, 1], [3, 4]]
     // ) == [2.0, 0.707, 3.5355] (rel=0.01) -- with metric="neighbors" each row IS the pair of neighbour distances

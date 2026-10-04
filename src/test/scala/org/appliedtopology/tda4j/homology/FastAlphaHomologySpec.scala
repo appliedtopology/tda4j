@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
-import org.appliedtopology.tda4j.barcode.*
-import org.appliedtopology.tda4j.streams.matrixGen
 
 import org.specs2.mutable
 import org.specs2.execute.{AsResult, Result}
@@ -14,10 +7,10 @@ import org.scalacheck.*
 
 import scala.util.control.NonFatal
 
-/** `FastAlphaHomologyContext` (`.claude/DESIGN-alpha-dual-unionfind.md`, a follow-on to the cubical engine,
+/** `FastAlphaHomologyEngine` (`.claude/DESIGN-alpha-dual-unionfind.md`, a follow-on to the cubical engine,
   * `.claude/DESIGN-fast-cubical-engine.md`/`FastCubicalHomologySpec`) -- cross-validated against
-  * `SimplicialHomologyContext` (the naive engine) the same way the cubical spec cross-validates against
-  * `CubicalHomologyContext`, for the same reason: the dual-graph construction's own correctness argument (Alexander
+  * `SimplicialHomologyEngine` (the naive engine) the same way the cubical spec cross-validates against
+  * `CubicalHomologyEngine`, for the same reason: the dual-graph construction's own correctness argument (Alexander
   * duality) is independent of the naive engine's own general boundary-matrix reduction.
   */
 class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
@@ -31,12 +24,12 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
     case NegativeInfinity() => Double.NegativeInfinity
 
   def fastBars[C: Field](helix: HelixDelaunay): List[(Int, Double, Double)] =
-    FastAlphaHomologyContext[C]()
+    FastAlphaHomologyEngine[C]()
       .persistentHomology(helix)
       .map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
 
   def naiveBars(helix: HelixDelaunay): List[(Int, Double, Double)] =
-    SimplicialHomologyContext[Int, Double, Double]().persistentHomology(helix).diagramAt(Double.PositiveInfinity)
+    SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(helix).diagramAt(Double.PositiveInfinity)
 
   // ---------------------------------------------------------------------------------------------------------
   // Hand-verified fixture (see the design note for the full hand trace): 5 points, a fan triangulation of 4
@@ -86,10 +79,10 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
 
   val handFixtures: Seq[HelixDelaunay] = Seq(fanFixture, richerFixture)
 
-  "every FastAlphaHomologyContext H1 representative has zero boundary, on the hand fixtures" >>
+  "every FastAlphaHomologyEngine H1 representative has zero boundary, on the hand fixtures" >>
     handFixtures
       .map { helix =>
-        val bars = FastAlphaHomologyContext[Double]().persistentHomology(helix)
+        val bars = FastAlphaHomologyEngine[Double]().persistentHomology(helix)
         bars.filter(_.dim == 1).forall(b => Chain.from(b.annotation.get.boundary).isZero()) must beTrue
       }
       .reduce(_ and _)
@@ -101,21 +94,21 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
     handFixtures
       .map { helix =>
         val doubleBars = fastBars[Double](helix)
-        val f3Bars = FastAlphaHomologyContext[GF3.Fp]().persistentHomology(helix)
+        val f3Bars = FastAlphaHomologyEngine[GF3.Fp]().persistentHomology(helix)
         val f3Triples = f3Bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
         val allCycles = f3Bars.filter(_.dim == 1).forall(b => Chain.from(b.annotation.get.boundary).isZero())
         (f3Triples.sorted must beEqualTo(doubleBars.sorted)) and (allCycles must beTrue)
       }
       .reduce(_ and _)
 
-  // No test exercises FastAlphaHomologyContext's own `require(ambientDimension >= 2, ...)` directly (unlike
+  // No test exercises FastAlphaHomologyEngine's own `require(ambientDimension >= 2, ...)` directly (unlike
   // FastCubicalHomologySpec's own "requires ambient dimension at least 2," which uses a legitimate 1-axis
   // CubicalGridStream): HelixDelaunay itself does not appear to support constructing a 1-dimensional
   // triangulation at all -- `HelixDelaunay(Array(Array(0.0), Array(1.0), Array(2.0), Array(3.0)))` throws its
   // OWN `ArrayIndexOutOfBoundsException` deep in `HelixDelaunayBuilder.compute`/`Hypersphere.apply`, before
-  // `FastAlphaHomologyContext.persistentHomology` is ever reached -- a pre-existing HelixDelaunay limitation,
+  // `FastAlphaHomologyEngine.persistentHomology` is ever reached -- a pre-existing HelixDelaunay limitation,
   // not something introduced or fixed by this session's own work, and out of scope for it. The `require` is
-  // kept anyway (documents the actual constraint, matches `FastCubicalHomologyContext`'s parallel structure,
+  // kept anyway (documents the actual constraint, matches `FastCubicalHomologyEngine`'s parallel structure,
   // costs nothing), just currently unreachable via any `HelixDelaunay` this codebase's own constructor can
   // produce.
 
@@ -123,7 +116,7 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
   // d=3: the hybrid path (.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md), mirroring
   // FastCubicalHomologySpec's own d=3 additions exactly -- H_0/H_2 (= H_{d-1}) still come from the two
   // union-finds, unchanged; H_1 is the one "middle" dimension at d=3, handed to
-  // CellularPersistenceInChunksContext on a LimitedAlphaShapesStream view. This exact 8-point set was found by
+  // CellularPersistenceInChunksEngine on a LimitedAlphaShapesStream view. This exact 8-point set was found by
   // a targeted search (not hand-derived -- Delaunay triangulations in 3D aren't practical to hand-verify the
   // way a cubical grid's cell counts are) and is pinned here deterministically, the same discipline
   // facetMultiplicityViolationFixture below already uses: it has a genuine nonzero-persistence H1 bar and
@@ -152,13 +145,13 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
 
   "every representative (H1, from chunks, and H2, from the dual union-find) has zero boundary, on the d3 " +
     "fixture" >> {
-      val bars = FastAlphaHomologyContext[Double]().persistentHomology(d3Fixture)
+      val bars = FastAlphaHomologyEngine[Double]().persistentHomology(d3Fixture)
       bars.filter(_.dim > 0).forall(b => Chain.from(b.annotation.get.boundary).isZero()) must beTrue
     }
 
   "agrees with the Double run over Fp(3), including genuine-cycle representatives, on the d3 fixture" >> {
     val doubleBars = fastBars[Double](d3Fixture)
-    val f3Bars = FastAlphaHomologyContext[GF3.Fp]().persistentHomology(d3Fixture)
+    val f3Bars = FastAlphaHomologyEngine[GF3.Fp]().persistentHomology(d3Fixture)
     val f3Triples = f3Bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
     val allCycles = f3Bars.filter(_.dim > 0).forall(b => Chain.from(b.annotation.get.boundary).isZero())
     (f3Triples.sorted must beEqualTo(doubleBars.sorted)) and (allCycles must beTrue)
@@ -192,7 +185,7 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
   "throws the specific, named FastAlphaTriangulationException on a real facet-multiplicity violation, with a " +
     "message an unsuspecting caller (not just this class's own developers) can act on" >> {
       try
-        FastAlphaHomologyContext[Double]().persistentHomology(facetMultiplicityViolationFixture)
+        FastAlphaHomologyEngine[Double]().persistentHomology(facetMultiplicityViolationFixture)
         ko("expected a FastAlphaTriangulationException naming the facet-multiplicity violation, but none was thrown")
       catch
         case e: FastAlphaTriangulationException =>
@@ -228,7 +221,7 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
 
   "requireValidTriangulation=true fixes the pinned facet-multiplicity violation fixture: no exception, and the " +
     "barcode agrees with the naive engine's own barcode on the SAME repaired stream" >> {
-      val bars = FastAlphaHomologyContext[Double]().persistentHomology(repairedFixture)
+      val bars = FastAlphaHomologyEngine[Double]().persistentHomology(repairedFixture)
       val triples = bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
       val allCycles = bars.filter(_.dim > 0).forall(b => Chain.from(b.annotation.get.boundary).isZero())
       (allCycles must beTrue) and (triples.sorted must beEqualTo(naiveBars(repairedFixture).sorted))
@@ -258,7 +251,7 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
       prop { (rp: RandomPoints) =>
         try
           val helix = HelixDelaunay(rp.points)
-          val bars = FastAlphaHomologyContext[Double]().persistentHomology(helix)
+          val bars = FastAlphaHomologyEngine[Double]().persistentHomology(helix)
           val triples = bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
           val allCycles = bars.filter(_.dim == 1).forall(b => Chain.from(b.annotation.get.boundary).isZero())
           allCycles && triples.sorted == naiveBars(helix).sorted
@@ -297,7 +290,7 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
       prop { (rp: RandomPoints3D) =>
         try
           val helix = HelixDelaunay(rp.points)
-          val bars = FastAlphaHomologyContext[Double]().persistentHomology(helix)
+          val bars = FastAlphaHomologyEngine[Double]().persistentHomology(helix)
           val triples = bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
           val allCycles = bars.filter(_.dim > 0).forall(b => Chain.from(b.annotation.get.boundary).isZero())
           allCycles && triples.sorted == naiveBars(helix).sorted
@@ -347,7 +340,7 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
 
   "requireValidTriangulation=true fixes a real d=3 facet-multiplicity violation found by a stress sweep: no " +
     "exception, and the barcode agrees with the naive engine's own barcode on the SAME repaired stream" >> {
-      val bars = FastAlphaHomologyContext[Double]().persistentHomology(repairedFixture3D)
+      val bars = FastAlphaHomologyEngine[Double]().persistentHomology(repairedFixture3D)
       val triples = bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
       val allCycles = bars.filter(_.dim > 0).forall(b => Chain.from(b.annotation.get.boundary).isZero())
       (allCycles must beTrue) and (triples.sorted must beEqualTo(naiveBars(repairedFixture3D).sorted))

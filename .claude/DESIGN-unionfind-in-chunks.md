@@ -5,7 +5,7 @@ acceleration to the clearing engine, right? With dual union find kept as an opti
 matters?" This supersedes `.claude/DESIGN-fast-cubical-engine.md`'s Phase 1/2 plan (a wholly separate new
 engine class, genericizing `SimplicialHomologyByDimensionContext` as a stepping stone) — that plan was the
 right shape when the target was a standalone cubical engine; it's the wrong shape once the target is the
-existing production `CellularPersistenceInChunksContext` itself. `DESIGN-fast-cubical-engine.md`'s
+existing production `CellularPersistenceInChunksEngine` itself. `DESIGN-fast-cubical-engine.md`'s
 survey of the literature (CubicalRipser, Flash Cubical arXiv:2606.04801, discrete Morse theory) and its
 correction to CLAUDE.md's Wagner-Chen-Vuçini citation both stand; only the "what do we build" section changes.
 
@@ -13,7 +13,7 @@ correction to CLAUDE.md's Wagner-Chen-Vuçini citation both stand; only the "wha
 
 CLAUDE.md already records a raw-`UnionFind` port being scoped out once: "a live design attempt found needs
 delicate, not-yet-fully-converged elder-rule/V-column coefficient bookkeeping to stay correct for a LATER
-dimension-2+ cell's reduction." That attempt targeted `CellularHomologyContext` (the naive engine), which
+dimension-2+ cell's reduction." That attempt targeted `CellularHomologyEngine` (the naive engine), which
 reconstructs representative cycles via V-columns for `barcodeAt` — a union-find fast path there has to keep a
 V-column consistent for every dimension-0/1 cell it resolves without going through the general reduction, which
 is exactly the bookkeeping that didn't converge.
@@ -52,7 +52,7 @@ dimension 0 and 1 specifically (`Homology.scala`):
   union-find pass over dimension-0/1 cells, processed strictly in `filtrationOrdering`, computes exactly this
   same canonical reduced matrix restricted to dimensions 0/1 — it is a different, cheaper *algorithm* for the
   identical *linear-algebra problem*, not an approximation of it. `SimplicialHomologyByDimensionContext`'s own
-  cross-validation (100+ random VR clouds against `SimplicialHomologyContext`) is existing empirical evidence of
+  cross-validation (100+ random VR clouds against `SimplicialHomologyEngine`) is existing empirical evidence of
   exactly this equivalence, just for a different engine.
 - **No `R` entry is needed for cycle-forming ("survivor") edges.** Traced every place `R`/`killer` get consulted
   for a lower cell: `markColumn(k)` only iterates `R.keys` (so a cell with no `R` entry is simply never visited
@@ -75,7 +75,7 @@ have populated anything beyond what's listed above.
 
 ## Scope, per your question
 
-1. **Generic dimension-0/1 union-find, always on, inside `CellularPersistenceInChunksContext`** — works for any
+1. **Generic dimension-0/1 union-find, always on, inside `CellularPersistenceInChunksEngine`** — works for any
    `CellT: OrderedCell` (`Simplex`, `Cube`, `FiniteSimplicialSet` generators alike), since elder-rule union-find
    over a graph's vertices/edges has no cubical-specific precondition. This makes
    `SimplicialHomologyByDimensionContext` redundant as a *standalone* class once it's cross-validated in place —
@@ -87,7 +87,7 @@ have populated anything beyond what's listed above.
    (arXiv:2606.04801): valid only when every (d-1)-facet has exactly 1 or 2 d-dimensional cofacets, true for a
    cubical grid, not true in general (a VR triangle's edge can have arbitrarily many triangle cofacets). This
    cannot be a default on the generic class. Concretely: a constructor flag or a small `Cube`-specific subclass
-   (parallel to how `PersistenceInChunksContext` is `Simplex`-specific) that additionally resolves the
+   (parallel to how `PersistenceInChunksEngine` is `Simplex`-specific) that additionally resolves the
    top-dimension-vs-second-top-dimension pairing via the dual graph, leaving every middle dimension to the
    generic machinery unchanged. Scoped as phase 2, after phase 1 is shipped and measured — the capacity sweep
    (`WORKLOG-cubical-capacity-sweep.md`) already shows dimension 1 (edges) is by far the largest cell count in a
@@ -101,7 +101,7 @@ Same discipline as every other engine change in this codebase:
    `tetrahedronBoundaryDegenerateCells`, `elderRuleExpected`, the 3-cycle-graph/filled-triangle fixtures — these
    already exercise degenerate all-tied filtrations, exactly the regime an order-dependent bug would show up in
    first, per advisor).
-2. Cross-validate against `CellularHomologyContext`/`SimplicialHomologyContext` (the untouched naive engine, a
+2. Cross-validate against `CellularHomologyEngine`/`SimplicialHomologyEngine` (the untouched naive engine, a
    different algorithm with no shared code) on:
    - 100+ random Vietoris-Rips point clouds (`Simplex`, mirroring `SimplicialHomologyByDimensionSpec`'s own
      existing coverage),

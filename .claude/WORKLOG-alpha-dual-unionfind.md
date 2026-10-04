@@ -48,7 +48,7 @@ chosen specifically to avoid a cospherical tie among the corners), a 4-triangle 
 dual union-find completely by hand against `HelixDelaunay`'s own already-computed filtration values (not
 re-deriving Helix's own geometry, which is already validated elsewhere — verifying only the new dual
 construction on top of it, the same division of labor the cubical example used). Predicted bars matched
-`SimplicialHomologyContext`'s own output exactly, full floating-point precision, first try — no bugs found in
+`SimplicialHomologyEngine`'s own output exactly, full floating-point precision, first try — no bugs found in
 this particular trace, unlike item 6, because the two bug fixes item 6 needed (resolved-root vs. raw-id for
 the "old" side's top-cell lookup; explicit `infinityId` special-casing in the young/old decision, rather than
 relying on a birth-value comparison alone) were ported directly into this implementation from the start, not
@@ -60,7 +60,7 @@ assertion, not by re-reading the numbers, and fixed in both the note and the tes
 
 `homology/FastAlphaHomology.scala`, `FastAlphaHomologyContext[CoefficientT: Field]`, compiled clean on the
 first attempt and matched the hand-verified example immediately. Structure mirrors
-`FastCubicalHomologyContext` closely (`computeH0`, `computeDualTopDimension`, the event-ordering/union-find
+`FastCubicalHomologyEngine` closely (`computeH0`, `computeDualTopDimension`, the event-ordering/union-find
 core) with the two adaptations above plus one new piece: an explicit, up-front validation pass over
 `facetToTopIds`, throwing `IllegalStateException` (naming the offending facet(s) and their coface count, and
 pointing at the specific `HelixDelaunay` limitation likely responsible) if any facet has a coface count other

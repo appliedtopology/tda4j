@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.specs2.mutable
 
@@ -120,7 +113,7 @@ class CubicalImageSpec extends mutable.Specification:
       y <- 0 until 3
     do img.setRGB(x, y, if x == 1 && y == 1 then 0xffffff else 0x000000)
     val stream = CubicalImage.fromBufferedImage(img)
-    given chc: CubicalHomologyContext[Double, Double] = CubicalHomologyContext()
+    given chc: CubicalHomologyEngine[Double, Double] = CubicalHomologyEngine()
     import chc.{*, given}
     val barcode = persistentHomology(stream).diagramAt(Double.PositiveInfinity)
     // The white pixel's own luma (birth of the killing cell) isn't exactly 255.0 in binary floating point

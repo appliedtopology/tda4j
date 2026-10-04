@@ -1,19 +1,14 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
 
 import scala.util.Random
 
 /** Test-scope driver, kept alongside `AlphaDQPParallelProfileDriver`/`SingleEngineProfileDriver` as the same kind of
-  * one-engine-per-process timing tool. Measures end-to-end `CellularHomologyContext.persistentHomology(...).
+  * one-engine-per-process timing tool. Measures end-to-end `CellularHomologyEngine.persistentHomology(...).
   * diagramAt(...)` wall-clock time on a `CubicalGridStream` with `parallelFiltrationValue` on vs off -- see
   * `.claude/WORKLOG-parallelization-survey.md` item 3. Invoked directly:
   *
   * {{{
-  * java -cp $CP org.appliedtopology.tda4j.homology.CubicalParallelProfileDriver <parallel> <dims> <n> [seed] [trials]
+  * java -cp $CP org.appliedtopology.tda4j.CubicalParallelProfileDriver <parallel> <dims> <n> [seed] [trials]
   * }}}
   */
 object CubicalParallelProfileDriver:
@@ -41,7 +36,7 @@ object CubicalParallelProfileDriver:
 
     val times = (1 to trials).map { _ =>
       val t0 = System.nanoTime()
-      given chc: CubicalHomologyContext[Double, Double] = CubicalHomologyContext()
+      given chc: CubicalHomologyEngine[Double, Double] = CubicalHomologyEngine()
       val barcode = chc.persistentHomology(freshStream()).diagramAt(Double.PositiveInfinity)
       val elapsedMs = (System.nanoTime() - t0) / 1e6
       (elapsedMs, barcode.size)

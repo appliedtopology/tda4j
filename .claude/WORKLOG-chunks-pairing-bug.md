@@ -1,4 +1,4 @@
-# A pre-existing `CellularPersistenceInChunksContext` pairing bug, found while validating representatives (2026-09-20/21)
+# A pre-existing `CellularPersistenceInChunksEngine` pairing bug, found while validating representatives (2026-09-20/21)
 
 Found while root-causing the representative-tracking work (`WORKLOG-chunks-representatives.md`): validating the
 new `vcolOf`-based `barcodeAt` against the naive engine on a tie-heavy clique surfaced a *pairing* disagreement,

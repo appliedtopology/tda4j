@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package barcode
 
 /** Bottleneck and Wasserstein distance between two persistence diagrams, plus the ground-metric convention they share.
   * Hand-rolled per `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 4: pure bipartite matching over diagram
@@ -38,7 +37,7 @@ object BarcodeDistance:
     case LInfinity
     case LP(p: Double)
 
-    private[barcode] def require1(): Unit = this match
+    private[tda4j] def require1(): Unit = this match
       case LP(p) => require(p >= 1.0, s"GroundNorm.LP requires p >= 1.0, got $p")
       case _     => ()
 

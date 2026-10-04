@@ -1,10 +1,4 @@
 package org.appliedtopology.tda4j
-package alpha
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
 
 import scala.collection.immutable.ArraySeq
 import scala.collection.mutable
@@ -803,17 +797,17 @@ object AlphaComplexDQP:
     apply(PowerDistance.euclidean(points, Some(powerWeights)), maxPower, maxDimension, settings)
 
   /** DTM-weighted alpha complex: `weight(i) = -f(i)^2`, where `f` is the empirical distance-to-measure
-    * (`streams.DistanceToMeasure`, Chazal-Cohen-Steiner-Merigot 2011) with `k` neighbours and exponent `q`.
+    * (`DistanceToMeasure`, Chazal-Cohen-Steiner-Merigot 2011) with `k` neighbours and exponent `q`.
     *
     * This is exactly the `p = 2` ball equation of Anai et al., "DTM-based filtrations" (arXiv:1811.04757, Def.
     * 3.1/Prop. 3.5) -- `r_x(t)^2 = t^2 - f(x)^2` -- read against THIS class's own power-distance convention
     * `pi_i(y) = ||y-x_i||^2 - weight(i)` (Definition 6/10 above): setting `weight(i) = -f(i)^2` makes
     * `pi_i(y) = ||y-x_i||^2 + f(i)^2`, so `pi_i(y) <= alpha` iff `||y-x_i||^2 <= alpha - f(i)^2 = r_x(sqrt(alpha))^2`
-    * exactly. `alpha.PowerDistance`/`AlphaComplexDQP` already implement the general weighted-alpha/restricted- nerve
+    * exactly. `PowerDistance`/`AlphaComplexDQP` already implement the general weighted-alpha/restricted- nerve
     * machinery this needs -- DTM-alpha is that machinery fed these specific weights, not a new construction.
-    * Cross-checked (not merely asserted) against `streams.DtmRipsSimplexStream(..., p = 2.0)`: both are the SAME
-    * `p = 2` weighted-ball union, so their H0 barcodes agree once alpha's own `sqrt(alpha)` units are doubled to match
-    * Rips's -- `.claude/WORKLOG-dtm-filtrations.md` has the full derivation and the cross-check itself
+    * Cross-checked (not merely asserted) against `DtmRipsSimplexStream(..., p = 2.0)`: both are the SAME `p = 2`
+    * weighted-ball union, so their H0 barcodes agree once alpha's own `sqrt(alpha)` units are doubled to match Rips's
+    * -- `.claude/WORKLOG-dtm-filtrations.md` has the full derivation and the cross-check itself
     * (`AlphaComplexDQPDtmSpec`).
     *
     * Uses `JVPTree` for the `k`-NN search (`DistanceToMeasure`'s own default is the safer-but-slower `BruteForce`,
@@ -833,8 +827,8 @@ object AlphaComplexDQP:
     q: Double = 2.0,
     settings: AlphaDQPSettings = AlphaDQPSettings()
   ): AlphaComplexDQP =
-    val ambient = streams.EuclideanMetricSpace(points)
-    val f = streams.DistanceToMeasure(ambient, streams.JVPTree(ambient), k, q)
+    val ambient = EuclideanMetricSpace(points)
+    val f = DistanceToMeasure(ambient, JVPTree(ambient), k, q)
     weighted(points, f.toArray.map(fi => -fi * fi), maxRadius * maxRadius, maxDimension, settings)
 
   def apply(
@@ -1024,8 +1018,8 @@ class AlphaComplexDQPBuilder(
     // the primary key right and leaving an inconsistent tie-break (previously: c.show, a string) is
     // exactly the bug class documented in CLAUDE.md's "Bug found while cross-validating" section: it self
     // passes VietorisRipsSpec-style sortedness checks (those only look at filtration VALUES), but breaks
-    // PersistenceInChunksContext, whose chunk-boundary/local-reduction logic (Homology.scala's
-    // PersistenceInChunksContext.allCells) relies on positional index in iterateDimension's own emission
+    // PersistenceInChunksEngine, whose chunk-boundary/local-reduction logic (Homology.scala's
+    // PersistenceInChunksEngine.allCells) relies on positional index in iterateDimension's own emission
     // order standing in for filtrationOrdering position -- found via EngineComparisonBenchmarkSpec /
     // AlphaFiltrationOrderingRegressionSpec once the primary-key-direction half of this bug was fixed
     // and the crash it caused went away but disagreement with the naive engine remained. byDim(k) is

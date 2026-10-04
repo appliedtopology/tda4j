@@ -58,9 +58,9 @@ Session: 2026-09-25. First-ever exercise of a Dowker complex anywhere in this co
   example, chosen specifically for nontrivial `H_1`, unlike a tree/chain example which would validate duality only
   vacuously), independent brute-force cross-check of `filtrationValue` + monotonicity property test, the duality
   cross-check itself (property test across random relations, X-side vs. Y-side barcodes after
-  `dropZeroPersistence`), the bars-account-for-cells structural invariant, and `CellularCohomologyContext` vs. the
+  `dropZeroPersistence`), the bars-account-for-cells structural invariant, and `CellularCohomologyEngine` vs. the
   naive engine cross-check (the relevant cross-engine check here, since this is not a flag complex --
-  `PackedRipserCohomologyContext`/`chunks` are not expected to apply, same status Cech/general-witness have).
+  `PackedRipserCohomologyEngine`/`chunks` are not expected to apply, same status Cech/general-witness have).
 - Full suite: 586 examples, 0 failures, 11 skipped (pre-existing benchmark `skipAll`s), after `scalafmtAll`
   (no reformatting needed).
 

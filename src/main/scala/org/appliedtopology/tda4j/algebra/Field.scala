@@ -1,6 +1,11 @@
 package org.appliedtopology.tda4j
-package algebra
 
+import cats.Show
+import scala.annotation.implicitNotFound
+
+// format: off
+@implicitNotFound("tda4j: no coefficient field for ${Self}. Pick one: `given Double is Field = Field.DoubleApproximated(1e-9)` for real coefficients; `val ff = FiniteField(17); import ff.given` for Z/17 (any prime); or use a lab, `import TDAlab.F17.{*, given}`.")
+// format: on
 trait Field:
   type Self
 
@@ -13,6 +18,8 @@ trait Field:
   def invert(x: Self): Self
   def zero: Self
   def one: Self
+
+  def showForSelf: Show[Self]
 
   extension (x: Self)
     infix def +(y: Self): Self = plus(x, y)
@@ -44,3 +51,10 @@ object Field:
     override def zero: Double = fr.zero
 
     override def one: Double = fr.one
+
+    override def showForSelf = Show.fromToString[Double]
+
+  /** Opt-in (`import Field.showFromField`): `Show` for any coefficient type via its `Field`'s `showForSelf`. Not a
+    * top-level given -- `Double` already has cats' `Show`, and `Fp` has its own in `FiniteField`.
+    */
+  given showFromField: [F: Field] => Show[F] = summon[F is Field].showForSelf

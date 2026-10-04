@@ -47,7 +47,7 @@ at every one of those sites until each is updated. Concretely:
   `AlphaShapes.apply`'s own dispatch), so checking the constructed type is what correctly accepts that case
   too, not just the literal string `"helix"`. Rejects ambient dimension != 2 with a message naming the actual
   dimension; rejects any non-`HelixDelaunay` stream (i.e. `alphaBackend=DQP`) with a message explaining WHY
-  (`FastAlphaHomologyContext` cannot consume `AlphaShapeDQP`'s output at all, not just "wrong backend").
+  (`FastAlphaHomologyEngine` cannot consume `AlphaShapeDQP`'s output at all, not just "wrong backend").
   `FastAlphaTriangulationException` itself is deliberately NOT caught/rewrapped here — it already carries an
   end-user-appropriate message, and rewrapping would only lose the original stack trace for nothing.
 - Every other `EngineKind` match (the eight sites above, plus `resolveWitnessEngine` and `dispatch`'s own
@@ -55,7 +55,7 @@ at every one of those sites until each is updated. Concretely:
   `FastCubical` where those two now share a message, e.g. "engine=fast-alpha is not offered for
   complex=witness... Use complex=alpha for engine=fast-alpha"), each with a reason specific to why THAT
   complex can't use this engine (no notion of a Vietoris-Rips complex / cubical complex / witness complex at
-  all — `FastAlphaHomologyContext` is `HelixDelaunay`-specialized, full stop).
+  all — `FastAlphaHomologyEngine` is `HelixDelaunay`-specialized, full stop).
 - `sbt compile` confirmed zero exhaustiveness warnings after all nine sites were updated.
 
 Updated `computeFromPoints`/`computeFromDistanceMatrix`'s own doc comment (`"engine"` bullet) to describe
@@ -127,8 +127,8 @@ the "Which persistence engine?" table).
 
 ## Explicitly out of scope for this entry
 
-The project lead separately asked (mid-session, before this wiring was finished) for BOTH `FastCubicalHomologyContext`
-and `FastAlphaHomologyContext` to be extended to ambient dimension >= 3 via a hybrid approach — fast union-find
+The project lead separately asked (mid-session, before this wiring was finished) for BOTH `FastCubicalHomologyEngine`
+and `FastAlphaHomologyEngine` to be extended to ambient dimension >= 3 via a hybrid approach — fast union-find
 for `H_0`/`H_{d-1}` at any dimension, general `Chain` reduction for the residual "middle" dimensions
 (`1 <= k <= d-2`) — since the mechanism itself doesn't degrade with dimension, only the FRACTION of total
 homology it resolves for free shrinks as `d` grows (there are zero middle dimensions at `d=2`, `d-2` of them in

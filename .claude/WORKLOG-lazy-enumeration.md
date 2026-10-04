@@ -16,7 +16,7 @@ shortly after kicking this off, with instructions to keep going and log decision
 
 Re-read (from this same day's earlier session, still fresh): `WORKLOG-cohomology.md` in full,
 `WORKLOG-naive-homology.md`'s Phase 2 plan section, `.claude/NOTES-for-guides.md`. Read the current
-`RipserCohomologyContext`/`persistentCohomology` (`Homology.scala:563-786`), `Chain.scala` in full
+`RipserCohomologyEngine`/`persistentCohomology` (`Homology.scala:563-786`), `Chain.scala` in full
 (`reduceLoop`/`reduceByUntil`/`reduceBy`, all private-to-object except the two `final def`s), and
 `SimplexIndexing`/`RipserStreamBase` (`RipserStream.scala`) for the existing `cofacetIterator`/
 `topCofacetIterator`/`zero*` primitives.
@@ -58,7 +58,7 @@ already-known index, and it can be driven straight off the previous dimension's 
 mass-generating and mass-sorting a fresh `binomial(n,d+1)`-sized array.
 
 **But it is NOT an asymptotic win for this specific codebase's design**, and this needs to be said before
-implementing anything rather than discovered afterward: `RipserCohomologyContext` deliberately has no
+implementing anything rather than discovered afterward: `RipserCohomologyEngine` deliberately has no
 `maxFiltrationValue`/threshold parameter (CLAUDE.md: "deliberately dropped... not required by the
 phase-2 plan," matching `AlphaShapeDQP`'s established untruncated-by-default precedent). Ripser's real
 enumeration savings come from `threshold` pruning cofacets *before* they're ever counted — with no
@@ -132,7 +132,7 @@ Called before touching `Chain.scala`/`Homology.scala`. Two corrections, both ado
 
 ## What shipped this session
 
-1. **`filtrationValue` memoization** (`RipserCohomologyContext`): a `mutable.HashMap` wrapper around the
+1. **`filtrationValue` memoization** (`RipserCohomologyEngine`): a `mutable.HashMap` wrapper around the
    existing `MaximumDistanceFiltrationValue` partial function. `Simplex[Int]` is an opaque type over
    `SortedSet[Int]`, so it has correct structural `hashCode`/`equals` for free as a map key -- no bridging
    needed. The single biggest, unconditional win: median times at the same benchmark sizes dropped by
@@ -141,9 +141,9 @@ Called before touching `Chain.scala`/`Homology.scala`. Two corrections, both ado
 2. **On-the-fly apparent-pair substitution**, matching Ripser's `compute_pairs` exactly (confirmed via
    direct `ripser.cpp` fetch, not recalled): `Chain.scala`'s `reduceLoop`/`reduceByUntil`/`reduceBy` gained
    an optional `fallback: CellT => Option[Chain[CellT, CoefficientT]]` parameter (default
-   `(_: CellT) => Option.empty[...]`, so every pre-existing call site -- `CellularHomologyContext`,
-   `PersistenceInChunksContext`, `SimplicialHomologyByDimensionContext` -- is unaffected). Consulted only
-   when a working chain's leading pivot has no `basis` entry. `RipserCohomologyContext` wires this to a
+   `(_: CellT) => Option.empty[...]`, so every pre-existing call site -- `CellularHomologyEngine`,
+   `PersistenceInChunksEngine`, `SimplicialHomologyByDimensionContext` -- is unaffected). Consulted only
+   when a working chain's leading pivot has no `basis` entry. `RipserCohomologyEngine` wires this to a
    new `zeroApparentFacet` (the mirror-image of `zeroApparentCofacet`) that recomputes the apparent pair's
    birth-side partner combinatorially, then recomputes `coboundaryOf` on that partner FRESH, every time --
    no caching, matching the confirmed Ripser source behavior. The apparent-pair branch in
@@ -215,7 +215,7 @@ codebase.
       and grows at larger n, just not attributed to memoization specifically -- corrected from the earlier,
       overreaching "the memoization is why the ratio changed" framing.
 - [x] `scalafmtAll`/`scalafmtCheck`/`scalafmtSbtCheck` clean.
-- [x] `CLAUDE.md` updated: `RipserCohomologyContext`'s entry now describes the lazy substitution and the
+- [x] `CLAUDE.md` updated: `RipserCohomologyEngine`'s entry now describes the lazy substitution and the
   memoization, and points at this file for the deferred threshold/enumeration-restructuring piece.
 - [x] This section: the distance-threshold API-redesign note for the next session (see below), per the
       project lead's explicit request mid-session.
@@ -228,7 +228,7 @@ the next session has to re-derive. This is NOT attempted here -- it's a genuinel
 (see the scope-split reasoning above: it's what would make cofacet-expansion-based enumeration an
 asymptotic win rather than just an architectural one). Concretely, what it would touch:
 
-1. **`RipserCohomologyContext`'s constructor** gains a `maxFiltrationValue: Double =
+1. **`RipserCohomologyEngine`'s constructor** gains a `maxFiltrationValue: Double =
    Double.PositiveInfinity` parameter, matching `RipserStreamBase`'s existing convention elsewhere in this
    codebase (`RipserStream.scala`) -- default preserves today's always-untruncated behavior exactly, so
    every existing call site is unaffected (the same "no-op default" pattern `useApparentPairs` already
@@ -262,13 +262,13 @@ asymptotic win rather than just an architectural one). Concretely, what it would
    iterator as they are now, and use the restricted one only for the NEW enumeration-assembly code path.
 5. **`SparseMetricSpace`** (`FiniteMetricSpace.scala`, already exists, used elsewhere to bound Vietoris-
    Rips construction) is the natural fit for dimension-1's own bootstrap (edges within the threshold) --
-   worth wiring `RipserCohomologyContext` to accept or construct one internally rather than reinventing
+   worth wiring `RipserCohomologyEngine` to accept or construct one internally rather than reinventing
    edge-cutoff logic, but the SAME single `maxFiltrationValue` threshold applies uniformly at every higher
    dimension too (a simplex's filtration value is the max of its pairwise distances, so the one cutoff
    value is enough; no separate per-dimension threshold is needed).
 6. **Cross-validation gets a new dimension.** Every existing test compares two engines running on the SAME
    (untruncated) complex. A threshold changes WHICH simplices exist at all, so validating a thresholded
-   `RipserCohomologyContext` against `CellularHomologyContext`/`PersistenceInChunksContext` requires
+   `RipserCohomologyEngine` against `CellularHomologyEngine`/`PersistenceInChunksEngine` requires
    feeding those engines an equivalently-thresholded stream (e.g. via `SparseMetricSpace` combined with
    `LimitedCofaceSimplexStream`, or an explicit filter) -- not just re-running the existing fixtures with a
    new constructor argument, since those fixtures were built assuming the full complex exists.
@@ -286,7 +286,7 @@ session's memoization work: **memoization should be optional, not the default**,
 historical design goal was memory frugality (the classic bottleneck for persistent homology
 implementations) -- the speedups were a side effect of THAT, not the primary goal. A global
 `mutable.HashMap` cache of every filtration value ever touched runs directly against that goal for large
-complexes. Also explicitly approved: changing `RipserCohomologyContext`'s constructor signature, and
+complexes. Also explicitly approved: changing `RipserCohomologyEngine`'s constructor signature, and
 NOT trying to keep this compatible with `AlphaShapeDQP`'s always-untruncated convention -- "alpha shapes
 and ripser reproduction are different sections of the library with minimal interactions."
 
@@ -299,7 +299,7 @@ sorted within-threshold neighbor list once). **Decision: build the new sparse ma
 `SimplexIndexing`/`Simplex[Int]` + `SparseMetricSpace`, NOT on `Cofacets.scala`'s `CofacetIterator`.**
 `CofacetIterator` is more sophisticated (a genuine lazy multi-way merge, not a brute-force scan) but its
 own code comment flags it as unverified against the paper's actual apparent-pair definition, and
-`RipserCohomologyContext`'s entire existing machinery (this session's predecessor and the one before it)
+`RipserCohomologyEngine`'s entire existing machinery (this session's predecessor and the one before it)
 is already built on `SimplexIndexing`'s combinatorial-index primitives, which ARE independently verified
 (`SimplexIndexingSpec` against the paper's own worked examples). Reusing an unverified primitive here
 would undercut the same "verify before trusting" discipline this codebase's history keeps re-learning the
@@ -337,7 +337,7 @@ tradeoff on a smaller complex.
 
 ### Plan (to be sanity-checked with the advisor before implementing)
 
-1. `RipserCohomologyContext` constructor gains `maxFiltrationValue: Double = Double.PositiveInfinity` and
+1. `RipserCohomologyEngine` constructor gains `maxFiltrationValue: Double = Double.PositiveInfinity` and
    `memoizeFiltrationValue: Boolean = false`.
 2. Factor `cohomologyOrdering`'s comparator logic (fv primary, `si(y) compareTo si(x)` tie-break) into a
    shared, reusable function of `(fv, index)` pairs, so a NEW ordering over diameter-carrying candidates
@@ -393,7 +393,7 @@ mechanism. Also: never key a `Set`/`Map` by `DiameterSimplex` (its case-class eq
 ## Session 2: implementation, measurement, and final status
 
 Implemented exactly as planned above (Sections 1-6; emergent pairs deferred per the advisor verdict).
-`RipserCohomologyContext` gained `maxFiltrationValue: Double = Double.PositiveInfinity` and
+`RipserCohomologyEngine` gained `maxFiltrationValue: Double = Double.PositiveInfinity` and
 `memoizeFiltrationValue: Boolean = false` as new trailing constructor parameters (both defaulted, so no
 existing call site needed updating); `Chain.scala`'s `reduceLoop`/`reduceByUntil`/`reduceBy` were untouched
 this session (already had the `fallback` parameter from Session 1). New: `compareFvThenIndex` (factored

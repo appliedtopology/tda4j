@@ -1,30 +1,26 @@
 package org.appliedtopology.tda4j
 
-/** Loading and saving file formats used across the TDA ecosystem: this package's own `CSV` (generic delimited-text
-  * point clouds, distance matrices, and persistence diagrams -- what `RipserPaperBenchmarkSpec` used to hand-roll ad
-  * hoc, now routed through here instead), plus adaptors for the formats other major TDA projects actually use: Ripser's
-  * point-cloud/distance-matrix/packed-binary formats (`Ripser.scala`), DIPHA's binary container format (`Dipha.scala`),
-  * GUDHI's OFF point-cloud and `.pers` diagram formats (`Gudhi.scala`), and Perseus's cubical toplex format
-  * (`Perseus.scala`, also what GUDHI's own cubical-complex module reads). Dionysus and JavaPlex need no dedicated
-  * adaptor: both consume the same plain whitespace/comma-separated point-cloud and distance-matrix text `CSV`/`Ripser`
-  * already read.
-  *
-  * Every format here that has a primary source (a project's own source code, not a secondhand description) was verified
-  * against that source directly before being implemented -- see `.claude/WORKLOG-io-module.md` for exactly what was
-  * checked and where, including two real, easy-to-get-backwards details that would have silently produced a
-  * plausible-looking wrong answer rather than an error: Ripser's binary format is packed 32-bit `float`, not `double`;
-  * and DIPHA's/Perseus's cubical grid axis order is the OPPOSITE of `CubicalImage.fromFlatArray`'s own convention.
-  * Formats deliberately NOT implemented here (Perseus's simplicial toplex format, PHAT's boundary-matrix format) are
-  * left out because no such verification was done for them, not because they're unimportant -- a wrong parser is worse
-  * than a missing one.
-  *
-  * '''Layering''': this package is a leaf. It imports `streams` (for `EuclideanMetricSpace`/`ExplicitMetricSpace`/
-  * `CubicalGridStream`) and `barcode` (for `PersistenceBar`); nothing outside `io` imports `io` back.
-  */
-package io
-
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.barcode.{given, *}
+/* File I/O (the `io/` directory). Loading and saving file formats used across the TDA ecosystem: this package's own `CSV` (generic delimited-text
+ * point clouds, distance matrices, and persistence diagrams -- what `RipserPaperBenchmarkSpec` used to hand-roll ad
+ * hoc, now routed through here instead), plus adaptors for the formats other major TDA projects actually use: Ripser's
+ * point-cloud/distance-matrix/packed-binary formats (`Ripser.scala`), DIPHA's binary container format (`Dipha.scala`),
+ * GUDHI's OFF point-cloud and `.pers` diagram formats (`Gudhi.scala`), and Perseus's cubical toplex format
+ * (`Perseus.scala`, also what GUDHI's own cubical-complex module reads). Dionysus and JavaPlex need no dedicated
+ * adaptor: both consume the same plain whitespace/comma-separated point-cloud and distance-matrix text `CSV`/`Ripser`
+ * already read.
+ *
+ * Every format here that has a primary source (a project's own source code, not a secondhand description) was verified
+ * against that source directly before being implemented -- see `.claude/WORKLOG-io-module.md` for exactly what was
+ * checked and where, including two real, easy-to-get-backwards details that would have silently produced a
+ * plausible-looking wrong answer rather than an error: Ripser's binary format is packed 32-bit `float`, not `double`;
+ * and DIPHA's/Perseus's cubical grid axis order is the OPPOSITE of `CubicalImage.fromFlatArray`'s own convention.
+ * Formats deliberately NOT implemented here (Perseus's simplicial toplex format, PHAT's boundary-matrix format) are
+ * left out because no such verification was done for them, not because they're unimportant -- a wrong parser is worse
+ * than a missing one.
+ *
+ * '''Layering''': the `io/` files are a leaf. They use the stream types (`EuclideanMetricSpace`/`ExplicitMetricSpace`/
+ * `CubicalGridStream`) and `PersistenceBar`; nothing outside `io/` (apart from the MATLAB facade and CLI) uses them.
+ */
 
 import scala.io.Source
 import java.io.PrintWriter

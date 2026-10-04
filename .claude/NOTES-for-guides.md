@@ -29,7 +29,7 @@ call site.
 
 **The fix pattern, everywhere it's been applied correctly**: declare `given Ordering[CellT] =
 stream.filtrationOrdering` as the *first* statement inside the state object that holds the stream, before
-summoning `chainRM`. See `CellularHomologyContext.HomologyState` (`Homology.scala:49`) for the canonical
+summoning `chainRM`. See `CellularHomologyEngine.HomologyState` (`Homology.scala:49`) for the canonical
 example.
 
 **Why this is genuinely dangerous, not just a style nit**: it compiles cleanly either way, produces a
@@ -53,14 +53,14 @@ script or permanent module, needs the ordering-in-scope check applied freshly �
 item for code review, not a thing you can rely on having learned.
 
 **Audit needed, but genuinely inert where checked**: not every `chainRM`-at-wrong-scope instance is
-actually a live bug. `PersistenceInChunksContext` summons `chainRM` at class scope (before any stream
+actually a live bug. `PersistenceInChunksEngine` summons `chainRM` at class scope (before any stream
 exists) but is *confirmed correct* by direct testing, because its actual reduction path goes through
 `Chain.reduceByUntil`, a `def` with its own `[CellT: Ordering]` context bound resolved fresh at each call
 site — the stale class-scope `chainRM`'s `⊠`/`-` operators are only used to build intermediate values that
 get fed straight back into a fresh `reduceByUntil` call, which re-establishes correct pivot order before
 anything trusts a `.leadingCell`. This is subtle enough that "should be inert" needs an empirical
 discriminating test, not a read-through — trust but verify, every time this pattern shows up, even when
-the reasoning "seems" sound. `TDAContext` (`package.scala`) has the same class-scope pattern but is a
+the reasoning "seems" sound. `TDAlab` (`package.scala`) has the same class-scope pattern but is a
 different case again: its `chainIsRingModule` is exported purely for user-facing chain-arithmetic
 convenience, never consumed by any engine's own reduction path, so a stale ordering there is a
 non-issue for correctness (though it could confuse a user manually combining chains outside the engine).
@@ -96,11 +96,11 @@ direction doesn't automatically stay consistent with a separately-reversed prima
 ### 3. Colex vs. lex tie-breaks are not interchangeable once Ripser-flavored code is involved
 
 `FilteredSimplexOrdering` (the generic, trait-level default) tie-breaks on plain lexicographic vertex-set
-order. `EnumeratingCofaceSimplexStream.filtrationOrdering` and `RipserCohomologyContext.cohomologyOrdering`
+order. `EnumeratingCofaceSimplexStream.filtrationOrdering` and `RipserCohomologyEngine.cohomologyOrdering`
 both deliberately use **colexicographic** order instead, via `SimplexIndexing`'s own combinatorial-number-
 system index — because that's the exact tie-break Ripser's Definition 3.2/Proposition 3.9 (apparent pairs)
 are stated in terms of. Don't casually "simplify" a colex ordering to the generic lex one in code that
-touches the Ripser-derived machinery (`SimplexIndexing`, `RipserCohomologyContext`, apparent pairs); they
+touches the Ripser-derived machinery (`SimplexIndexing`, `RipserCohomologyEngine`, apparent pairs); they
 need to agree with each other, not just each be "a valid tie-break."
 
 ### 4. `Chain.reduceBy`/`reduceByUntil`, never hand-rolled `Chain` arithmetic, inside a reduction loop
@@ -108,7 +108,7 @@ need to agree with each other, not just each be "a valid tie-break."
 `Chain`'s `+`/`-`/`⊠` operators are correct but not efficient for iterative reduction: they only lazily
 collapse the *head* of the underlying `PriorityQueue`, so a hand-rolled fold that repeatedly subtracts
 terms builds an ever-growing backlog of uncollapsed duplicate entries. Confirmed directly: a first draft of
-`CellularHomologyContext.advanceOne` written this way hung/burned CPU for minutes on an 8-12 point VR
+`CellularHomologyEngine.advanceOne` written this way hung/burned CPU for minutes on an 8-12 point VR
 complex that should take milliseconds. `Chain.reduceBy`/`reduceByUntil` go through a `SortedMap` that
 collapses duplicates on every insertion — always use these for actual reduction, and reserve raw chain
 arithmetic (`+`/`-`/`⊠`) for small, one-shot combinations like building a V-column fold, not for anything
@@ -117,7 +117,7 @@ that accumulates over many reduction steps.
 ### 5. Combinatorial helpers over the full point set don't know about `maxDimension` truncation
 
 `SimplexIndexing.cofacetIterator`/`facetIterator` operate purely combinatorially over the complete n-point
-abstract simplex — they have no concept of any per-engine dimension cap. `RipserCohomologyContext
+abstract simplex — they have no concept of any per-engine dimension cap. `RipserCohomologyEngine
 .coboundaryOf`, by contrast, explicitly truncates (`Chain.empty` whenever `sigma.dim + 1 > maxDimension`),
 which is what makes top-dimension simplices come out essential. Any new code built directly on
 `SimplexIndexing`'s iterators rather than going through `coboundaryOf` inherits none of that truncation —
@@ -135,10 +135,10 @@ As of this session, `Homology.scala` has four persistence engines. They are inde
 layered on a shared core — a fix or bug in one does not imply anything about the others. Status matters
 enough to a new contributor that it belongs up front in a guide, not buried in a class doc:
 
-- **`CellularHomologyContext`/`SimplicialHomologyContext`** — reference-grade. Naive single-pivot-table
+- **`CellularHomologyEngine`/`SimplicialHomologyEngine`** — reference-grade. Naive single-pivot-table
   reduction, no clearing/chunking/optimization, incremental querying. This is the oracle every other engine
   gets cross-validated against. Trustworthy.
-- **`PersistenceInChunksContext`** — trustworthy, audited twice now (once for the `chainRM`-at-class-scope
+- **`PersistenceInChunksEngine`** — trustworthy, audited twice now (once for the `chainRM`-at-class-scope
   pattern in phase 1's own history, once this session for the same pattern found in a sibling class).
   Confirmed correct both times by discriminating test, not by inspection alone.
 - **`SimplicialHomologyByDimensionContext`** — **non-functional**. `HomologyState`'s constructor throws
@@ -148,7 +148,7 @@ enough to a new contributor that it belongs up front in a guide, not buried in a
   also need the `given Ordering = stream.filtrationOrdering` fix from item 1 above before its output can be
   trusted — it currently has neither. Don't point a new user at this engine; don't assume "it's in the
   file, so it must work."
-- **`RipserCohomologyContext`** — trustworthy for what it currently does (persistent cohomology with
+- **`RipserCohomologyEngine`** — trustworthy for what it currently does (persistent cohomology with
   clearing, cross-validated against the naive engine on hundreds of random inputs plus hand-derived
   fixtures). Apparent pairs (a further optimization, not needed for correctness) is explicitly not landed:
   two candidate designs (identify a pivot inline via the Definition 3.2 check; remove both pair members in
@@ -178,7 +178,7 @@ Worth a dedicated section so a new contributor doesn't "fix" correct-but-surpris
   sites sharing a Voronoi vertex contribute a `(k-1)`-simplex — a unit grid in the plane produces
   3-simplices (one per unit square), not just triangles from a triangulation. Truncating at ambient
   dimension gives the wrong homotopy type. CGAL/GUDHI users will not expect this; it's correct.
-- **Zero-persistence (zero-length) bars are real output, not noise to filter.** `RipserCohomologyContext`
+- **Zero-persistence (zero-length) bars are real output, not noise to filter.** `RipserCohomologyEngine`
   emits them deliberately (e.g. an edge tied with the triangle that immediately kills it) — Definition
   3.2/Proposition 3.9's apparent pairs *are* zero-persistence pairs, and dropping them silently would be
   wrong at this stage of the pipeline, even though a downstream visualization might reasonably filter them.
@@ -194,7 +194,7 @@ whether clearing is optional, whether an ordering fix is complete, whether an op
 through at least one empirical discriminating test before being trusted — never a plausibility argument
 alone, even when the plausibility argument came from a careful re-derivation. Concretely: reasoning that
 "the class-scope `chainRM` should be inert here because X" was correct in one case
-(`PersistenceInChunksContext`) but the *same style* of reasoning about a "full apparent-pairs skip" was
+(`PersistenceInChunksEngine`) but the *same style* of reasoning about a "full apparent-pairs skip" was
 contradicted by a two-minute empirical check on random input. The pattern to carry into a guide: **when a
 change to reduction/ordering logic seems obviously sound by inspection, build the cheap discriminating
 test anyway before implementing** — this codebase's history is that "obviously sound" has been wrong at
@@ -214,8 +214,8 @@ roughly the same rate as "seems fine, ship it."
   a measured one. A user's guide operating at higher ambient dimension should mention this rather than
   assume Helix is unconditionally reliable there.
 - Four persistence engines exist; a user's guide needs to point people at the right one for their use case
-  (incremental querying → `CellularHomologyContext`; large complexes/parallelism →
-  `PersistenceInChunksContext`; cohomology → `RipserCohomologyContext`) and explicitly warn off
+  (incremental querying → `CellularHomologyEngine`; large complexes/parallelism →
+  `PersistenceInChunksEngine`; cohomology → `RipserCohomologyEngine`) and explicitly warn off
   `SimplicialHomologyByDimensionContext` until it's fixed (see above) — a user's guide that lists all four
   without that caveat would actively mislead someone into using the broken one.
 

@@ -1,18 +1,11 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.specs2.mutable
 import org.specs2.main.Arguments
 
 import scala.util.Random
 
-/** Benchmarks `RipserCohomologyContext`'s apparent-pairs shortcut (`zeroApparentCofacet`, wired into
+/** Benchmarks `RipserCohomologyEngine`'s apparent-pairs shortcut (`zeroApparentCofacet`, wired into
   * `persistentCohomology` -- see WORKLOG-cohomology.md's "Apparent pairs: resolved" section for the full derivation)
   * against the exact same engine with the shortcut disabled via `useApparentPairs = false`. Timing the same algorithm
   * with one optimization toggled, rather than a different engine entirely, isolates this specific change's effect from
@@ -53,7 +46,7 @@ class ApparentPairsBenchmarkSpec(args: Arguments) extends mutable.Specification:
       EuclideanMetricSpace(HomologyFixtures.randomCloud(n, ambientDim, rng))
 
     def timeOne(metricSpace: FiniteMetricSpace[Int], useApparentPairs: Boolean): Long =
-      val ctx = RipserCohomologyContext[Double](metricSpace, maxDim, useApparentPairs)
+      val ctx = RipserCohomologyEngine[Double](metricSpace, maxDim, useApparentPairs)
       val start = System.nanoTime()
       ctx.persistentCohomology()
       System.nanoTime() - start

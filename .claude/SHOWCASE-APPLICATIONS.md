@@ -25,7 +25,7 @@ persistence-capable engine on top — appears to be genuinely rare.
    cycles from the persistence diagram** to delineate anatomical structure (evaluated on glioblastoma and fetal
    cortical-plate segmentation). Good fit specifically because it needs more than a bar-count histogram — it
    needs `barcodeAt`'s actual representative-cycle reconstruction (already implemented for
-   `CellularHomologyContext`/cubical), which CubicalRipser/GUDHI's cubical module don't expose as directly.
+   `CellularHomologyEngine`/cubical), which CubicalRipser/GUDHI's cubical module don't expose as directly.
 
 2. **Porous-media / materials characterization from micro-CT.** Established line (Moon et al. 2019 *Water
    Resources Research*; Thompson et al. 2023): the **signed Euclidean distance transform** (negative in pore
@@ -47,7 +47,7 @@ persistence-capable engine on top — appears to be genuinely rare.
    — only needs 2D grayscale images (`CubicalImage.fromBufferedImage`, already built and PNG-round-trip-tested).
 
 **Honest caveat, now backed by a measured capacity sweep** (`.claude/WORKLOG-cubical-capacity-sweep.md`,
-2026-09-20): the chunks engine (`CellularPersistenceInChunksContext[Cube, Double]`) comfortably handles a
+2026-09-20): the chunks engine (`CellularPersistenceInChunksEngine[Cube, Double]`) comfortably handles a
 single functional-MRI-sized volume (~140k voxels) in well under a second. A modest cosmological grid (128^3 =
 2.1M cells) is workable as a batch job (~90s, ~10GB heap) but not interactive. A full-resolution anatomical MRI
 (256^3 ≈ 16.7M voxels) or a typical micro-CT porous-media scan (often tens of millions of voxels) are both well

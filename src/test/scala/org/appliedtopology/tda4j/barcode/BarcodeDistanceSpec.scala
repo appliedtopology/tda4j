@@ -1,12 +1,6 @@
 package org.appliedtopology.tda4j
-package barcode
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-
-import org.appliedtopology.tda4j.barcode.BarcodeDistance.GroundNorm
+import org.appliedtopology.tda4j.BarcodeDistance.GroundNorm
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
 import org.specs2.ScalaCheck
@@ -223,7 +217,7 @@ class BarcodeDistanceSpec extends Specification with ScalaCheck:
   }
 
   "stability: perturbing points by at most epsilon changes VR bottleneck distance by at most 2*epsilon" >> {
-    given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+    given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
     import shc.{*, given}
 
     // A fixed, modest point cloud (kept small so naive-engine VR construction stays fast under ScalaCheck).

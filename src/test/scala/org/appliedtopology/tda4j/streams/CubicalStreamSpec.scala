@@ -1,18 +1,11 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.specs2.mutable
 import org.specs2.execute.{AsResult, Result}
 import org.specs2.ScalaCheck
 import org.scalacheck.*
 
-/** `CubicalGridStream` + `CubicalHomologyContext` correctness. Validation order deliberately follows the advisor's
+/** `CubicalGridStream` + `CubicalHomologyEngine` correctness. Validation order deliberately follows the advisor's
   * corrected priority (see `.claude/WORKLOG-cubical.md`): dd=0/canonical ordering already covered by `CubicalSpec`;
   * here, monotonicity, the structural (bars-account-for-cells) invariant, hand-derived fixtures, and an independent
   * H0-via-union-find cross-check -- NOT a cubical-to-simplicial triangulation cross-check, which would need its own
@@ -20,12 +13,12 @@ import org.scalacheck.*
   */
 class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
-  given chc: CubicalHomologyContext[Double, Double] = CubicalHomologyContext()
+  given chc: CubicalHomologyEngine[Double, Double] = CubicalHomologyEngine()
   import chc.{*, given}
 
   // ---------------------------------------------------------------------------------------------------------
   // Monotonicity: fv(face) <= fv(coface) for every boundary relationship, exhaustively on small random images.
-  // This is FORCED by CellularHomologyContext.processingOrder's ascending sort (see Homology.scala), not a style
+  // This is FORCED by CellularHomologyEngine.processingOrder's ascending sort (see Homology.scala), not a style
   // choice -- getting it backwards produces the exact "reduction pivot ... was not a recorded open class" crash
   // this codebase has already hit three times for other streams (see WORKLOG-cubical.md's advisor-consult
   // section).
@@ -138,7 +131,7 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
 
   // ---------------------------------------------------------------------------------------------------------
   // Independent H0 cross-check via union-find on the sublevel set of PRESENT PIXELS -- fully independent of
-  // Cube/Chain/CellularHomologyContext. Connectivity here MUST be Moore/Chebyshev (8-connected in 2D,
+  // Cube/Chain/CellularHomologyEngine. Connectivity here MUST be Moore/Chebyshev (8-connected in 2D,
   // 26-connected in 3D: any two present pixels whose indices differ by at most 1 in every coordinate), not
   // face/edge (4-connected in 2D) adjacency -- two pixels touching only at a shared CORNER vertex are genuinely
   // in the same path component of the cubical complex whenever that shared vertex is present (its fv is the min
@@ -288,9 +281,9 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
   }
 
   // ---------------------------------------------------------------------------------------------------------
-  // CellularPersistenceInChunksContext[Cube, ...] cross-validation. This exact combination -- the generic chunks
+  // CellularPersistenceInChunksEngine[Cube, ...] cross-validation. This exact combination -- the generic chunks
   // engine plugged into Cube -- had never been exercised anywhere in this codebase before (grep confirmed zero
-  // hits for `CellularPersistenceInChunksContext[Cube`), a genuine gap given the chunks engine's own history
+  // hits for `CellularPersistenceInChunksEngine[Cube`), a genuine gap given the chunks engine's own history
   // (CLAUDE.md's "Cross-engine benchmark" section: a real, previously-unknown bug at multiple tied essential
   // classes under a bounded maxDim, caught only once a case exercising that combination was tried).
   //
@@ -311,7 +304,7 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
 
   case class ChunksCase(stream: CubicalGridStream, cellCount: Int, maxDim: Int)
 
-  "CellularPersistenceInChunksContext[Cube,...] matches the naive engine and its own structural invariant on the tie-heavy fixtures" >> {
+  "CellularPersistenceInChunksEngine[Cube,...] matches the naive engine and its own structural invariant on the tie-heavy fixtures" >> {
     val cases = Seq(
       ChunksCase(CubicalGridStream(IndexedSeq(2, 2), _ => 5.0), 25, 2),
       ChunksCase(
@@ -324,7 +317,7 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
     cases
       .map { c =>
         val naiveBarcode = persistentHomology(c.stream).diagramAt(Double.PositiveInfinity)
-        val chunksBarcode = CellularPersistenceInChunksContext[Cube, Double](c.maxDim)
+        val chunksBarcode = CellularPersistenceInChunksEngine[Cube, Double](c.maxDim)
           .persistentHomology(c.stream)
           .diagramAt(Double.PositiveInfinity)
         (HomologyFixtures.totalBarsAccountForAllCells(chunksBarcode, c.cellCount) must beTrue) and
@@ -335,11 +328,11 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
 
   // Generic-over-CellT coverage for barcodeAt's incremental representative tracking
   // (.claude/WORKLOG-chunks-representatives-incremental.md) -- Cube is exactly the kind of non-Simplex
-  // OrderedCell instance that motivated genericizing CellularPersistenceInChunksContext in the first place,
+  // OrderedCell instance that motivated genericizing CellularPersistenceInChunksEngine in the first place,
   // so it's real coverage, not a formality: vcolOf's own reduction and fold logic both need to work for
   // Cube specifically, not just Simplex[Int] (which every fixture elsewhere in this file, and every fixture
   // barcodeAt was originally developed against, happens to use).
-  "CellularPersistenceInChunksContext[Cube,...]'s barcodeAt gives every bar a genuine-cycle representative matching the naive engine's exactly" >> {
+  "CellularPersistenceInChunksEngine[Cube,...]'s barcodeAt gives every bar a genuine-cycle representative matching the naive engine's exactly" >> {
     val cases = Seq(
       ChunksCase(CubicalGridStream(IndexedSeq(2, 2), _ => 5.0), 25, 2),
       ChunksCase(
@@ -352,7 +345,7 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
     cases
       .map { c =>
         val naiveBars = persistentHomology(c.stream).barcodeAt(Double.PositiveInfinity)
-        val chunksBars = CellularPersistenceInChunksContext[Cube, Double](c.maxDim)
+        val chunksBars = CellularPersistenceInChunksEngine[Cube, Double](c.maxDim)
           .persistentHomology(c.stream)
           .barcodeAt(Double.PositiveInfinity)
 
@@ -374,18 +367,18 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
       .reduce(_ and _)
   }
 
-  // Broader fuzz for the dimension-0/1 raw-union-find fast path added to CellularPersistenceInChunksContext
+  // Broader fuzz for the dimension-0/1 raw-union-find fast path added to CellularPersistenceInChunksEngine
   // (.claude/WORKLOG-unionfind-in-chunks.md) -- reuses genTestImage above (small integer values, so
   // low-effort-tied by construction) rather than the fixed tie-heavy fixtures alone, since that's exactly the
   // hazard an order-dependent union-find bug would show up in first, per this codebase's own established
   // cubical validation discipline (CLAUDE.md: "hand-derived fixtures... deliberately chosen TIE-HEAVY").
-  "CellularPersistenceInChunksContext[Cube,...]'s union-find fast path agrees with the naive engine on random tie-heavy images" >>
+  "CellularPersistenceInChunksEngine[Cube,...]'s union-find fast path agrees with the naive engine on random tie-heavy images" >>
     AsResult {
       prop { (img: TestImage) =>
         val stream = CubicalGridStream(img.shape, valueFnOf(img))
         val cellCount = stream.totalCellCount
         val naiveBarcode = persistentHomology(stream).diagramAt(Double.PositiveInfinity)
-        val chunksBarcode = CellularPersistenceInChunksContext[Cube, Double](img.shape.size)
+        val chunksBarcode = CellularPersistenceInChunksEngine[Cube, Double](img.shape.size)
           .persistentHomology(stream)
           .diagramAt(Double.PositiveInfinity)
         (HomologyFixtures.totalBarsAccountForAllCells(chunksBarcode, cellCount.toInt) must beTrue) and

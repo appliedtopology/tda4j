@@ -1,8 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
 
 import scala.collection.concurrent.TrieMap
 
@@ -21,7 +17,7 @@ private class MiniballPointSet(points: Array[Array[Double]]) extends PointSet:
   override def coord(i: Int, j: Int): Double = points(i)(j)
 
 /** The Cech radius of a simplex: the true minimum-enclosing-ball radius of its vertices' coordinates, computed once per
-  * simplex and cached forever -- a deliberate departure from `RipserCohomologyContext`'s "don't cache filtration values
+  * simplex and cached forever -- a deliberate departure from `RipserCohomologyEngine`'s "don't cache filtration values
   * by default" doctrine, since (unlike VR's diameter, which `insertionDiameter` recomputes incrementally in O(d)) there
   * is no incremental shortcut for a minimum-enclosing-ball radius: every filter check, sort, and `filtrationOrdering`
   * comparison would otherwise re-run a full Miniball solve.
@@ -33,7 +29,7 @@ private class MiniballPointSet(points: Array[Array[Double]]) extends PointSet:
   *
   * Cech's own value over Vietoris-Rips is exactly this quantity: unlike VR's purely combinatorial max-pairwise-
   * distance, the Cech radius needs the vertices' real coordinates and a minimum-enclosing-ball computation (Welzl's
-  * algorithm, via Miniball) -- not `alpha.AlphaComplexDQP`'s dual active-set QP, which answers a different question
+  * algorithm, via Miniball) -- not `AlphaComplexDQP`'s dual active-set QP, which answers a different question
   * (restricted-Delaunay membership, dependent on the whole point cloud, not just a simplex's own vertices).
   */
 object CechFiltration:
@@ -46,7 +42,7 @@ object CechFiltration:
     *
     * '''Monotonicity is explicitly enforced here, not merely trusted from the math''': the Cech radius is
     * mathematically non-decreasing under vertex insertion, but Miniball's raw floating-point output can violate this by
-    * a few ULPs on near-degenerate inputs -- and `CellularHomologyContext`'s reduction requires it to hold exactly (see
+    * a few ULPs on near-degenerate inputs -- and `CellularHomologyEngine`'s reduction requires it to hold exactly (see
     * CLAUDE.md's ordering-contract rule 3). Fixed by clamping every computed radius to at least the max of its own
     * facets' ALREADY-CACHED radii (a plain lookup, never a fresh Miniball call): every facet of any simplex this method
     * is asked about is guaranteed already cached, because `filtrationValue` is only ever queried on simplices the
@@ -99,7 +95,7 @@ object CechFiltration:
   * separate VR-diameter-based edge-graph precomputation is used once `iterateDimension` is overridden, so there is no
   * VR-units quantity anywhere in this class to convert from).
   */
-class CechCofaceSimplexStream(
+private[tda4j] class CechCofaceSimplexStream(
   val euclideanMetricSpace: EuclideanMetricSpace,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
   maxFiltrationValue: Option[Double] = None,

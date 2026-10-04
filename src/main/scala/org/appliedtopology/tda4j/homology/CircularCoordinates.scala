@@ -1,10 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.barcode.*
 
 import org.apache.commons.math3.linear.{ArrayRealVector, ConjugateGradient, RealLinearOperator, RealVector}
 
@@ -34,8 +28,8 @@ class NoIntegerCocycleException(message: String) extends RuntimeException(messag
   * representative restricts to a nonzero cocycle on some sub-level complex `K_r` (an open question about an
   * already-computed representative), fix `r` inside the target bar's own `[birth, death)` range up front, build the
   * *static* truncated complex `K_r` (`maxFiltrationValue = Some(r)`, the same knob that already implements
-  * enclosing-radius truncation, plus a cell-dimension cap so `CellularCohomologyContext` -- which fully materializes
-  * its input, no `maxDim` of its own -- doesn't build cells above what H¹ needs), and compute cohomology of *that fixed
+  * enclosing-radius truncation, plus a cell-dimension cap so `CellularCohomologyEngine` -- which fully materializes its
+  * input, no `maxDim` of its own -- doesn't build cells above what H¹ needs), and compute cohomology of *that fixed
   * complex* directly. The target class is essential there *by construction* (nothing survives past `r` in a view that
   * stops at `r`) -- the verification question dissolves rather than needing an answer. Matching multiple
   * simultaneously-alive classes at `K_r` back to a specific full-filtration bar turns out to need only a birth-value
@@ -94,14 +88,14 @@ object CircularCoordinates:
     */
   def h1Bars(
     metricSpace: FiniteMetricSpace[Int],
-    maxFiltrationValue: Option[Double] = None
+    maxFiltrationValue: Optional[Double] = Optional.empty
   ): IndexedSeq[(Double, Double)] =
     given Double is Field = Field.DoubleApproximated(1e-9)
     val stream = LimitedCofaceSimplexStream(
-      EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue),
+      EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
       2
     )
-    val ctx = CellularCohomologyContext[Simplex[Int], Double, Double]()
+    val ctx = CellularCohomologyEngine[Simplex[Int], Double, Double]()
     ctx
       .persistentCohomology(stream)
       .filter(_.dim == 1)
@@ -140,7 +134,7 @@ object CircularCoordinates:
     r: Double,
     cocycleIndex: Int = 0,
     prime: Int = 47,
-    maxFiltrationValue: Option[Double] = None
+    maxFiltrationValue: Optional[Double] = Optional.empty
   ): Result =
     require(
       prime % 2 != 0 && isPrime(prime),
@@ -148,7 +142,7 @@ object CircularCoordinates:
     )
     val ff = new FiniteField(prime)
     import ff.given
-    computeGeneric[ff.Fp](metricSpace, r, cocycleIndex, prime, maxFiltrationValue, _.toInt)
+    computeGeneric[ff.Fp](metricSpace, r, cocycleIndex, prime, maxFiltrationValue.toOption, _.toInt)
 
   private def computeGeneric[C: Field](
     metricSpace: FiniteMetricSpace[Int],
@@ -160,7 +154,7 @@ object CircularCoordinates:
   ): Result =
     given realField: (Double is Field) = Field.DoubleApproximated(1e-9)
 
-    val ctx = CellularCohomologyContext[Simplex[Int], C, Double]()
+    val ctx = CellularCohomologyEngine[Simplex[Int], C, Double]()
 
     // Full computation, dimension-capped one band above H^1 (triangles) so essential-vs-finite is resolved
     // correctly (H_1 needs 2-dimensional chains) -- the same "+1" every other maxDim-truncated engine in this
@@ -224,7 +218,7 @@ object CircularCoordinates:
     * [[LatticeReduction]]'s Gram matrix is built from (the paper's own dSMV inner product is the plain sum-over-edges
     * dot product of these).
     */
-  private[homology] def harmonicSmoothOnComponent(
+  private[tda4j] def harmonicSmoothOnComponent(
     krStream: CellStream[Simplex[Int], Double],
     zInt: Map[Simplex[Int], Int]
   )(using Double is Field): (Map[Int, Double], Map[Simplex[Int], Double], Set[Simplex[Int]]) =
@@ -328,7 +322,7 @@ object CircularCoordinates:
     cocycleIndices: Seq[Int],
     prime: Int = 47,
     reduce: Boolean = true,
-    maxFiltrationValue: Option[Double] = None
+    maxFiltrationValue: Optional[Double] = Optional.empty
   ): ToroidalResult =
     require(
       prime % 2 != 0 && isPrime(prime),
@@ -336,7 +330,7 @@ object CircularCoordinates:
     )
     val ff = new FiniteField(prime)
     import ff.given
-    computeToroidalGeneric[ff.Fp](metricSpace, r, cocycleIndices, prime, reduce, maxFiltrationValue, _.toInt)
+    computeToroidalGeneric[ff.Fp](metricSpace, r, cocycleIndices, prime, reduce, maxFiltrationValue.toOption, _.toInt)
 
   private def computeToroidalGeneric[C: Field](
     metricSpace: FiniteMetricSpace[Int],
@@ -354,7 +348,7 @@ object CircularCoordinates:
       s"cocycleIndices must not contain duplicates, got $cocycleIndices"
     )
 
-    val ctx = CellularCohomologyContext[Simplex[Int], C, Double]()
+    val ctx = CellularCohomologyEngine[Simplex[Int], C, Double]()
 
     // Shared, computed ONCE regardless of how many classes are requested -- only the per-class tail below
     // (birth-match, lift+verify, harmonic smoothing) genuinely needs to run once per chosen index.

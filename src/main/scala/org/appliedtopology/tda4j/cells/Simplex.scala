@@ -1,7 +1,4 @@
 package org.appliedtopology.tda4j
-package cells
-
-import org.appliedtopology.tda4j.algebra.{given, *}
 
 import scala.collection.mutable
 import scala.collection.immutable.SortedSet
@@ -28,7 +25,7 @@ opaque type Simplex[VertexT] = SortedSet[VertexT]
   * receiver. It was also never part of the naming collision in the first place (`asSimplex`/`asCube` don't share a
   * name), so there's no reason to move it either.
   */
-object Simplex extends SimplexOps:
+object Simplex extends SimplexOps, SimplexInstances:
   def from[VertexT: Ordering, T <: Seq[VertexT]](vertices: T): Simplex[VertexT] = SortedSet.from(vertices)
   def apply[VertexT: Ordering](vertices: VertexT*): Simplex[VertexT] = from(vertices)
   def unapplySeq[VertexT: Ordering](simplex: Simplex[VertexT]): Option[Seq[VertexT]] = Some(simplex.toSeq)
@@ -39,9 +36,11 @@ extension [VertexT](vertices: SortedSet[VertexT]) def asSimplex: Simplex[VertexT
 
 /** Convenience method for defining simplices
   *
-  * The character ∆ is typed as Alt+J on Mac GB layout, and has unicode code 0x0394.
+  * The character ∆ (U+2206 INCREMENT -- not the Greek capital Δ, U+0394) is typed as Alt+J on a Mac GB layout.
   */
-def ∆[VertexT: Ordering](vertices: VertexT*): Simplex[VertexT] = Simplex.from(vertices)
+val ∆ : Simplex.type = Simplex // `∆(1, 2, 3)` and `case ∆(a, b) =>`; a val alias rather than a def or an object:
+// TDAlab can re-export a val without making it ambiguous for users who also import the package (a def would be), and
+// scaladoc writes no page FILE named after it (an `object ∆` became `∆$.html`, which a POSIX-locale JVM cannot encode).
 
 /** Stays in this file (needs `Simplex[VertexT]`'s own opaque-type transparency for the `Ordering[SortedSet[ VertexT]]
   * -> Ordering[Simplex[VertexT]]` coercion below), unlike `simplexIsOrderedCell` (`SimplexOrderedCell.scala`) -- this

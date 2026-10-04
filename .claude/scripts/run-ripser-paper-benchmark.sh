@@ -19,8 +19,8 @@
 #   RIPSER_TRIALS   how many times to re-run real ripser.cpp per case for a median (default: 5;
 #                   lower this for the largest cases, e.g. RIPSER_TRIALS=1, if a 30s case x 5
 #                   trials is more time than you want to spend on the ripser side alone)
-#   PACKED_ONLY     set to "true" to skip RipserCohomologyContext (SortedSet) entirely and time
-#                   only PackedRipserCohomologyContext -- recommended for the larger cases
+#   PACKED_ONLY     set to "true" to skip RipserCohomologyEngine (SortedSet) entirely and time
+#                   only PackedRipserCohomologyEngine -- recommended for the larger cases
 #                   (dragon, o3_1024, fractal-r, random16, o3_4096), where SortedSet is known to
 #                   be far slower and, per this spec's own doc, contaminates the packed engine's
 #                   timing on every case after it times out (no cooperative cancellation).

@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.specs2.mutable
 import org.specs2.main.Arguments
@@ -22,7 +15,7 @@ import scala.util.Random
   *
   * Like `ApparentPairsBenchmarkSpec`, a profiling script, not a correctness check: prints tables, only an exception is
   * a real failure. `sbt -DrunBenchmarks=true -DminSize=... testOnly
-  * org.appliedtopology.tda4j.homology.EdgeCollapseBenchmarkSpec`.
+  * org.appliedtopology.tda4j.EdgeCollapseBenchmarkSpec`.
   */
 class EdgeCollapseBenchmarkSpec(args: Arguments) extends mutable.Specification:
   if !args.commandLine.boolOr("runBenchmarks", false) then skipAll
@@ -80,12 +73,12 @@ class EdgeCollapseBenchmarkSpec(args: Arguments) extends mutable.Specification:
       val warmupSpace = randomCloud(n, Random(seed.toLong * 7 - n))
       val warmupPlain = newStream(warmupSpace)
       warmupPlain.iterator.toVector
-      SimplicialHomologyContext[Int, Double, Double]()
+      SimplicialHomologyEngine[Int, Double, Double]()
         .persistentHomology(warmupPlain)
         .diagramAt(Double.PositiveInfinity)
       val warmupColl = newStream(EdgeCollapse.collapse(warmupSpace))
       warmupColl.iterator.toVector
-      SimplicialHomologyContext[Int, Double, Double]().persistentHomology(warmupColl).diagramAt(Double.PositiveInfinity)
+      SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(warmupColl).diagramAt(Double.PositiveInfinity)
 
       val plainStreams = clouds.map(newStream)
       val collStreams = clouds.map(c => newStream(EdgeCollapse.collapse(c)))
@@ -95,12 +88,12 @@ class EdgeCollapseBenchmarkSpec(args: Arguments) extends mutable.Specification:
 
       val reducePlainMs = plainStreams.map { s =>
         timeMs(
-          SimplicialHomologyContext[Int, Double, Double]().persistentHomology(s).diagramAt(Double.PositiveInfinity)
+          SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(s).diagramAt(Double.PositiveInfinity)
         )._2
       }
       val reduceCollMs = collStreams.map { s =>
         timeMs(
-          SimplicialHomologyContext[Int, Double, Double]().persistentHomology(s).diagramAt(Double.PositiveInfinity)
+          SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(s).diagramAt(Double.PositiveInfinity)
         )._2
       }
 

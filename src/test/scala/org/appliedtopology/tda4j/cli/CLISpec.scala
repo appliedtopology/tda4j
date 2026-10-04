@@ -1,10 +1,8 @@
 package org.appliedtopology.tda4j
 package cli
 
-import org.appliedtopology.tda4j.barcode.{given, *}
-import org.appliedtopology.tda4j.io.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.matlab.TDA4j
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.matlab.{FullBarcode, TDA4j}
 
 import org.specs2.mutable
 import java.io.{ByteArrayOutputStream, File, PrintStream}
@@ -81,10 +79,10 @@ class CLISpec extends mutable.Specification:
       CSV.writePointCloud(path, points)
 
       val buffer = new ByteArrayOutputStream()
-      val exitCode = TDA4jCLI.run(Seq("--max-dimension", "1", path), new PrintStream(buffer))
+      val exitCode = CliFull.run(Seq("--max-dimension", "1", path), new PrintStream(buffer))
       val cliLines = buffer.toString.linesIterator.toSeq
 
-      val direct = TDA4j.computeFromPoints(points, Array("maxDimension", "1"))
+      val direct = FullBarcode.computeFromPoints(points, Array("maxDimension", "1"))
       val directBars = TDA4jCLI.toBars(direct)
       val directLines = directBars.map(_.toString)
 
@@ -98,10 +96,10 @@ class CLISpec extends mutable.Specification:
 
       val buffer = new ByteArrayOutputStream()
       val exitCode =
-        TDA4jCLI.run(Seq("--engine", "cohomology", "--max-dimension", "1", path), new PrintStream(buffer))
+        CliFull.run(Seq("--engine", "cohomology", "--max-dimension", "1", path), new PrintStream(buffer))
       val cliLines = buffer.toString.linesIterator.toSeq
 
-      val direct = TDA4j.computeFromPoints(points, Array("engine", "cohomology", "maxDimension", "1"))
+      val direct = FullBarcode.computeFromPoints(points, Array("engine", "cohomology", "maxDimension", "1"))
       val directBars = TDA4jCLI.toBars(direct)
       val directLines = directBars.map(_.toString)
 
@@ -112,7 +110,7 @@ class CLISpec extends mutable.Specification:
       val path = tempFile(".csv")
       CSV.writePointCloud(path, Array(Array(0.0, 0.0), Array(1.0, 0.0)))
       val buffer = new ByteArrayOutputStream()
-      TDA4jCLI.run(Seq("--complex", "bogus", path), new PrintStream(buffer)) must beEqualTo(1)
+      CliFull.run(Seq("--complex", "bogus", path), new PrintStream(buffer)) must beEqualTo(1)
     }
 
     "produce the exact same barcode as calling TDA4j directly for --complex=cech, via a real file on disk" >> {
@@ -124,10 +122,10 @@ class CLISpec extends mutable.Specification:
       CSV.writePointCloud(path, points)
 
       val buffer = new ByteArrayOutputStream()
-      val exitCode = TDA4jCLI.run(Seq("--complex", "cech", "--max-dimension", "1", path), new PrintStream(buffer))
+      val exitCode = CliFull.run(Seq("--complex", "cech", "--max-dimension", "1", path), new PrintStream(buffer))
       val cliLines = buffer.toString.linesIterator.toSeq
 
-      val direct = TDA4j.computeFromPoints(points, Array("complex", "cech", "maxDimension", "1"))
+      val direct = FullBarcode.computeFromPoints(points, Array("complex", "cech", "maxDimension", "1"))
       val directLines = TDA4jCLI.toBars(direct).map(_.toString)
 
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
@@ -141,13 +139,13 @@ class CLISpec extends mutable.Specification:
       CSV.writePointCloud(path, points)
 
       val buffer = new ByteArrayOutputStream()
-      val exitCode = TDA4jCLI.run(
+      val exitCode = CliFull.run(
         Seq("--complex", "witness", "--num-landmarks", "4", "--witness-variant", "general", path),
         new PrintStream(buffer)
       )
       val cliLines = buffer.toString.linesIterator.toSeq
 
-      val direct = TDA4j.computeFromPoints(
+      val direct = FullBarcode.computeFromPoints(
         points,
         Array("complex", "witness", "numLandmarks", "4", "witnessVariant", "general")
       )
@@ -164,13 +162,13 @@ class CLISpec extends mutable.Specification:
       CSV.writePointCloud(path, points)
 
       val buffer = new ByteArrayOutputStream()
-      val exitCode = TDA4jCLI.run(
+      val exitCode = CliFull.run(
         Seq("--complex", "dtm-rips", "--dtm-k", "3", "--max-dimension", "1", path),
         new PrintStream(buffer)
       )
       val cliLines = buffer.toString.linesIterator.toSeq
 
-      val direct = TDA4j.computeFromPoints(
+      val direct = FullBarcode.computeFromPoints(
         points,
         Array("complex", "dtm-rips", "dtmK", "3", "maxDimension", "1")
       )
@@ -179,23 +177,23 @@ class CLISpec extends mutable.Specification:
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
     }
 
-    "produce the exact same barcode as calling TDA4j directly for --complex=sheehy-rips, via a real file on disk" >> {
-      // Same "no CLI-side code exists for this complex" argument as --complex=dtm-rips above -- --sheehy-epsilon
+    "produce the exact same barcode as calling TDA4j directly for --complex=sparse-rips, via a real file on disk" >> {
+      // Same "no CLI-side code exists for this complex" argument as --complex=dtm-rips above -- --sparse-epsilon
       // is just one more 1:1-mirrored flag.
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
       val path = tempFile(".csv")
       CSV.writePointCloud(path, points)
 
       val buffer = new ByteArrayOutputStream()
-      val exitCode = TDA4jCLI.run(
-        Seq("--complex", "sheehy-rips", "--sheehy-epsilon", "0.5", "--max-dimension", "1", path),
+      val exitCode = CliFull.run(
+        Seq("--complex", "sparse-rips", "--sparse-epsilon", "0.5", "--max-dimension", "1", path),
         new PrintStream(buffer)
       )
       val cliLines = buffer.toString.linesIterator.toSeq
 
-      val direct = TDA4j.computeFromPoints(
+      val direct = FullBarcode.computeFromPoints(
         points,
-        Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "maxDimension", "1")
+        Array("complex", "sparse-rips", "sparseEpsilon", "0.5", "maxDimension", "1")
       )
       val directLines = TDA4jCLI.toBars(direct).map(_.toString)
 
@@ -203,7 +201,7 @@ class CLISpec extends mutable.Specification:
     }
 
     "produce the exact same barcode as calling TDA4j directly for --edge-collapse=true, via a real file on disk" >> {
-      // Same 1:1-mirrored-flag argument as --sheehy-epsilon above -- --edge-collapse changes nothing about the
+      // Same 1:1-mirrored-flag argument as --sparse-epsilon above -- --edge-collapse changes nothing about the
       // OUTPUT shape (unlike --distance-to, which is the one CLI flag that does NOT mirror a compute option --
       // see TDA4jConf.distanceTo's own doc), so it needs no special CLI-side handling at all.
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0), Array(0.5, 2.0))
@@ -211,10 +209,10 @@ class CLISpec extends mutable.Specification:
       CSV.writePointCloud(path, points)
 
       val buffer = new ByteArrayOutputStream()
-      val exitCode = TDA4jCLI.run(Seq("--edge-collapse", "true", "--max-dimension", "1", path), new PrintStream(buffer))
+      val exitCode = CliFull.run(Seq("--edge-collapse", "true", "--max-dimension", "1", path), new PrintStream(buffer))
       val cliLines = buffer.toString.linesIterator.toSeq
 
-      val direct = TDA4j.computeFromPoints(points, Array("edgeCollapse", "true", "maxDimension", "1"))
+      val direct = FullBarcode.computeFromPoints(points, Array("edgeCollapse", "true", "maxDimension", "1"))
       val directLines = TDA4jCLI.toBars(direct).map(_.toString)
 
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
@@ -241,13 +239,13 @@ class CLISpec extends mutable.Specification:
         CSV.writePointCloud(path, points)
 
         val buffer = new ByteArrayOutputStream()
-        val exitCode = TDA4jCLI.run(
+        val exitCode = CliFull.run(
           Seq("--complex", "alpha", "--engine", "fast-alpha", "--require-valid-triangulation", "true", path),
           new PrintStream(buffer)
         )
         val cliLines = buffer.toString.linesIterator.toSeq
 
-        val direct = TDA4j.computeFromPoints(
+        val direct = FullBarcode.computeFromPoints(
           points,
           Array("complex", "alpha", "engine", "fast-alpha", "requireValidTriangulation", "true")
         )
@@ -262,13 +260,13 @@ class CLISpec extends mutable.Specification:
       CSV.writePointCloud(path, points)
 
       val buffer = new ByteArrayOutputStream()
-      val exitCode = TDA4jCLI.run(
+      val exitCode = CliFull.run(
         Seq("--complex", "dtm-alpha", "--dtm-k", "3", path),
         new PrintStream(buffer)
       )
       val cliLines = buffer.toString.linesIterator.toSeq
 
-      val direct = TDA4j.computeFromPoints(
+      val direct = FullBarcode.computeFromPoints(
         points,
         Array("complex", "dtm-alpha", "dtmK", "3")
       )
@@ -288,12 +286,12 @@ class CLISpec extends mutable.Specification:
       )
 
       val buffer = new ByteArrayOutputStream()
-      val exitCode = TDA4jCLI.run(Seq("--input-format", "perseus-cubical", path), new PrintStream(buffer))
+      val exitCode = CliFull.run(Seq("--input-format", "perseus-cubical", path), new PrintStream(buffer))
       val cliLines = buffer.toString.linesIterator.toSeq
 
       val (shape, flatValues) =
         TDA4jCLI.flattenGridStream(Perseus.readCubicalToplex(path, sublevel = true))
-      val direct = TDA4j.computeFromCubicalImage(shape, flatValues)
+      val direct = FullBarcode.computeFromCubicalImage(shape, flatValues)
       val directLines = TDA4jCLI.toBars(direct).map(_.toString)
 
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
@@ -309,7 +307,7 @@ class CLISpec extends mutable.Specification:
 
       val buffer = new ByteArrayOutputStream()
       val exitCode =
-        TDA4jCLI.run(
+        CliFull.run(
           Seq("--input-format", "perseus-cubical", "--engine", "fast-cubical", path),
           new PrintStream(buffer)
         )
@@ -317,7 +315,7 @@ class CLISpec extends mutable.Specification:
 
       val (shape, flatValues) =
         TDA4jCLI.flattenGridStream(Perseus.readCubicalToplex(path, sublevel = true))
-      val direct = TDA4j.computeFromCubicalImage(shape, flatValues, Array("engine", "fast-cubical"))
+      val direct = FullBarcode.computeFromCubicalImage(shape, flatValues, Array("engine", "fast-cubical"))
       val directLines = TDA4jCLI.toBars(direct).map(_.toString)
 
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
@@ -341,10 +339,10 @@ class CLISpec extends mutable.Specification:
 
         val buffer = new ByteArrayOutputStream()
         val exitCode =
-          TDA4jCLI.run(Seq("--complex", "alpha", "--engine", "fast-alpha", path), new PrintStream(buffer))
+          CliFull.run(Seq("--complex", "alpha", "--engine", "fast-alpha", path), new PrintStream(buffer))
         val cliLineCount = buffer.toString.linesIterator.size
 
-        val naiveBarCount = TDA4j.computeFromPoints(points, Array("complex", "alpha")).size()
+        val naiveBarCount = FullBarcode.computeFromPoints(points, Array("complex", "alpha")).size()
 
         (exitCode must beEqualTo(0)) and (cliLineCount must beEqualTo(naiveBarCount))
       }
@@ -353,7 +351,7 @@ class CLISpec extends mutable.Specification:
       val path = tempFile(".txt")
       java.nio.file.Files.write(java.nio.file.Paths.get(path), "2\n2\n2\n0\n1\n2\n3\n".getBytes)
       val buffer = new ByteArrayOutputStream()
-      TDA4jCLI.run(
+      CliFull.run(
         Seq("--input-format", "perseus-cubical", "--complex", "vr", path),
         new PrintStream(buffer)
       ) must beEqualTo(1)
@@ -378,26 +376,26 @@ class CLISpec extends mutable.Specification:
         val landmarksPath = tempFile(".txt")
 
         val step1Buffer = new ByteArrayOutputStream()
-        val step1Exit = TDA4jCLI.run(
+        val step1Exit = CliFull.run(
           Seq("--select-landmarks", "--num-landmarks", "4", "--output", landmarksPath, inputPath),
           new PrintStream(step1Buffer)
         )
 
         val step2Buffer = new ByteArrayOutputStream()
-        val step2Exit = TDA4jCLI.run(
+        val step2Exit = CliFull.run(
           Seq("--landmarks-file", landmarksPath, "--complex", "witness", inputPath),
           new PrintStream(step2Buffer)
         )
         val cliLines = step2Buffer.toString.linesIterator.toSeq
 
         val landmarks = TDA4jCLI.readLandmarksFile(landmarksPath)
-        val direct = TDA4j.computeFromPointsAndLandmarks(points, landmarks)
+        val direct = FullBarcode.computeFromPointsAndLandmarks(points, landmarks)
         val directLines = TDA4jCLI.toBars(direct).map(_.toString)
 
         // The actual "reproduces the ONE-SHOT barcode" claim in this test's own name -- maxmin(numLandmarks=4)
         // is deterministic (firstLandmark=0 by default), so the one-shot path picks the SAME landmarks the
         // two-step run above did, and must agree exactly.
-        val oneShot = TDA4j.computeFromPoints(points, Array("complex", "witness", "numLandmarks", "4"))
+        val oneShot = FullBarcode.computeFromPoints(points, Array("complex", "witness", "numLandmarks", "4"))
         val oneShotLines = TDA4jCLI.toBars(oneShot).map(_.toString)
 
         (step1Exit must beEqualTo(0)) and (step2Exit must beEqualTo(0)) and
@@ -410,7 +408,7 @@ class CLISpec extends mutable.Specification:
         CSV.writePointCloud(inputPath, points)
         val landmarksPath = tempFile(".txt")
 
-        TDA4jCLI.run(
+        CliFull.run(
           Seq("--select-landmarks", "--num-landmarks", "4", "--output", landmarksPath, inputPath),
           new PrintStream(new ByteArrayOutputStream())
         )
@@ -427,7 +425,7 @@ class CLISpec extends mutable.Specification:
       val path = tempFile(".csv")
       CSV.writePointCloud(path, points)
       val buffer = new ByteArrayOutputStream()
-      TDA4jCLI.run(
+      CliFull.run(
         Seq("--select-landmarks", "--landmarks-file", "somefile.txt", "--num-landmarks", "1", path),
         new PrintStream(buffer)
       ) must beEqualTo(1)
@@ -437,7 +435,7 @@ class CLISpec extends mutable.Specification:
       val path = tempFile(".csv")
       CSV.writePointCloud(path, points)
       val buffer = new ByteArrayOutputStream()
-      TDA4jCLI.run(
+      CliFull.run(
         Seq("--select-landmarks", "--num-landmarks", "3", "--representatives", path),
         new PrintStream(buffer)
       ) must beEqualTo(1)
@@ -447,7 +445,7 @@ class CLISpec extends mutable.Specification:
       val path = tempFile(".csv")
       CSV.writePointCloud(path, points)
       val buffer = new ByteArrayOutputStream()
-      TDA4jCLI.run(
+      CliFull.run(
         Seq("--select-landmarks", "--num-landmarks", "3", "--output-format", "csv", "--output", "out.csv", path),
         new PrintStream(buffer)
       ) must beEqualTo(1)
@@ -457,7 +455,7 @@ class CLISpec extends mutable.Specification:
       val path = tempFile(".txt")
       java.nio.file.Files.write(java.nio.file.Paths.get(path), "2\n2\n2\n0\n1\n2\n3\n".getBytes)
       val buffer = new ByteArrayOutputStream()
-      TDA4jCLI.run(
+      CliFull.run(
         Seq("--input-format", "perseus-cubical", "--select-landmarks", "--num-landmarks", "1", path),
         new PrintStream(buffer)
       ) must beEqualTo(1)
@@ -467,7 +465,7 @@ class CLISpec extends mutable.Specification:
       val path = tempFile(".txt")
       java.nio.file.Files.write(java.nio.file.Paths.get(path), "2\n2\n2\n0\n1\n2\n3\n".getBytes)
       val buffer = new ByteArrayOutputStream()
-      TDA4jCLI.run(
+      CliFull.run(
         Seq("--input-format", "perseus-cubical", "--landmarks-file", "somefile.txt", path),
         new PrintStream(buffer)
       ) must beEqualTo(1)
@@ -487,16 +485,16 @@ class CLISpec extends mutable.Specification:
         // to the landmarks file alone, not an unrelated bad --input-format
 
         (TDA4jCLI.readLandmarksFile(path) must beEqualTo(Array(0, 2, 5))) and
-          (TDA4jCLI.run(
+          (CliFull.run(
             Seq("--landmarks-file", badPath, "--complex", "witness", inputPath),
             new PrintStream(new ByteArrayOutputStream())
           ) must beEqualTo(1))
       }
   }
 
-  "--distance-to (barcode.BarcodeDistance mirror)" should {
+  "--distance-to (BarcodeDistance mirror)" should {
     def writeComparisonDiagram(points: Array[Array[Double]]): String =
-      val result = TDA4j.computeFromPoints(points, Array("maxDimension", "1"))
+      val result = FullBarcode.computeFromPoints(points, Array("maxDimension", "1"))
       val path = tempFile(".csv")
       CSV.writePersistenceDiagram(path, TDA4jCLI.toBars(result))
       path
@@ -510,13 +508,13 @@ class CLISpec extends mutable.Specification:
         val comparisonPath = writeComparisonDiagram(comparisonPoints)
 
         val buffer = new ByteArrayOutputStream()
-        val exitCode = TDA4jCLI.run(
+        val exitCode = CliFull.run(
           Seq("--max-dimension", "1", "--distance-to", comparisonPath, inputPath),
           new PrintStream(buffer)
         )
         val lines = buffer.toString.linesIterator.toSeq
 
-        val computed = TDA4j.computeFromPoints(points, Array("maxDimension", "1"))
+        val computed = FullBarcode.computeFromPoints(points, Array("maxDimension", "1"))
         val computedBars = TDA4jCLI.toBars(computed)
         val comparisonBars = CSV.readPersistenceDiagram(comparisonPath)
         val expectedBottleneck = BarcodeDistance.bottleneckDistanceByDimension(computedBars, comparisonBars)
@@ -533,7 +531,7 @@ class CLISpec extends mutable.Specification:
       val path = tempFile(".csv")
       CSV.writePointCloud(path, Array(Array(0.0, 0.0), Array(1.0, 0.0)))
       val comparisonPath = writeComparisonDiagram(Array(Array(0.0, 0.0), Array(1.0, 0.0)))
-      TDA4jCLI.run(
+      CliFull.run(
         Seq("--select-landmarks", "--num-landmarks", "1", "--distance-to", comparisonPath, path),
         new PrintStream(new ByteArrayOutputStream())
       ) must beEqualTo(1)
@@ -543,7 +541,7 @@ class CLISpec extends mutable.Specification:
       val path = tempFile(".csv")
       CSV.writePointCloud(path, Array(Array(0.0, 0.0), Array(1.0, 0.0)))
       val comparisonPath = writeComparisonDiagram(Array(Array(0.0, 0.0), Array(1.0, 0.0)))
-      TDA4jCLI.run(
+      CliFull.run(
         Seq("--output-format", "csv", "--output", tempFile(".csv"), "--distance-to", comparisonPath, path),
         new PrintStream(new ByteArrayOutputStream())
       ) must beEqualTo(1)
@@ -553,7 +551,7 @@ class CLISpec extends mutable.Specification:
       val path = tempFile(".csv")
       CSV.writePointCloud(path, Array(Array(0.0, 0.0), Array(1.0, 0.0)))
       val comparisonPath = writeComparisonDiagram(Array(Array(0.0, 0.0), Array(1.0, 0.0)))
-      TDA4jCLI.run(
+      CliFull.run(
         Seq("--distance-to", comparisonPath, "--distance-format", "perseus", path),
         new PrintStream(new ByteArrayOutputStream())
       ) must beEqualTo(1)
@@ -583,26 +581,26 @@ class CLISpec extends mutable.Specification:
       CSV.writePointCloud(path, dowkerRelation)
 
       val buffer = new ByteArrayOutputStream()
-      val exitCode = TDA4jCLI.run(Seq("--input-format", "csv-relation", path), new PrintStream(buffer))
+      val exitCode = CliFull.run(Seq("--input-format", "csv-relation", path), new PrintStream(buffer))
       val cliLines = buffer.toString.linesIterator.toSeq
 
-      val direct = TDA4j.computeFromRelation(dowkerRelation)
+      val direct = FullBarcode.computeFromRelation(dowkerRelation)
       val directLines = TDA4jCLI.toBars(direct).map(_.toString)
 
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
     }
 
-    "--dual produces the exact same barcode as TDA4j.computeFromRelation(relation, Array(\"dual\", \"true\")) " +
+    "--dual produces the exact same barcode as FullBarcode.computeFromRelation(relation, Array(\"dual\", \"true\")) " +
       "directly" >> {
         val path = tempFile(".csv")
         CSV.writePointCloud(path, dowkerRelation)
 
         val buffer = new ByteArrayOutputStream()
         val exitCode =
-          TDA4jCLI.run(Seq("--input-format", "csv-relation", "--dual", "true", path), new PrintStream(buffer))
+          CliFull.run(Seq("--input-format", "csv-relation", "--dual", "true", path), new PrintStream(buffer))
         val cliLines = buffer.toString.linesIterator.toSeq
 
-        val direct = TDA4j.computeFromRelation(dowkerRelation, Array("dual", "true"))
+        val direct = FullBarcode.computeFromRelation(dowkerRelation, Array("dual", "true"))
         val directLines = TDA4jCLI.toBars(direct).map(_.toString)
 
         (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
@@ -612,7 +610,7 @@ class CLISpec extends mutable.Specification:
       val path = tempFile(".csv")
       CSV.writePointCloud(path, dowkerRelation)
       val buffer = new ByteArrayOutputStream()
-      TDA4jCLI.run(
+      CliFull.run(
         Seq("--input-format", "csv-relation", "--complex", "vr", path),
         new PrintStream(buffer)
       ) must beEqualTo(1)
@@ -622,7 +620,7 @@ class CLISpec extends mutable.Specification:
       val path = tempFile(".csv")
       CSV.writePointCloud(path, dowkerRelation)
       val buffer = new ByteArrayOutputStream()
-      TDA4jCLI.run(
+      CliFull.run(
         Seq("--input-format", "csv-relation", "--select-landmarks", "--num-landmarks", "1", path),
         new PrintStream(buffer)
       ) must beEqualTo(1)
@@ -632,7 +630,7 @@ class CLISpec extends mutable.Specification:
       val path = tempFile(".csv")
       CSV.writePointCloud(path, dowkerRelation)
       val buffer = new ByteArrayOutputStream()
-      TDA4jCLI.run(
+      CliFull.run(
         Seq("--input-format", "csv-relation", "--engine", "ripser", path),
         new PrintStream(buffer)
       ) must beEqualTo(1)

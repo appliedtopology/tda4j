@@ -8,7 +8,7 @@ and timings that didn't grow monotonically with `n` (`sphere3_48` SortedSet 163.
 
 ## Root cause: not concurrency
 
-`RipserCohomologyContext`/`PackedRipserCohomologyContext`'s `maxFiltrationValue` parameter is `Option[Double] =
+`RipserCohomologyEngine`/`PackedRipserCohomologyEngine`'s `maxFiltrationValue` parameter is `Option[Double] =
 None`, resolved internally via `.getOrElse(metricSpace.minimumEnclosingRadius)` (`.claude/CLAUDE.md`'s
 "maxFiltrationValue Option refactor" entry, 2026-09-19) -- this used to be a raw `Double` parameter with
 `Double.NaN` as its own "no threshold, use the default" sentinel, before that refactor.

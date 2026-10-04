@@ -1,0 +1,52 @@
+index: index.md
+subsection:
+  - index: tutorials/index.md
+    directory: tutorials
+    subsection:
+      - page: tutorials/all-ways-to-call.md
+      - page: tutorials/find-a-loop.md
+      - page: tutorials/choosing-a-complex.md
+      - page: tutorials/noise-and-outliers.md
+      - page: tutorials/circular-and-toroidal-coordinates.md
+      - page: tutorials/comparing-barcodes.md
+      - page: tutorials/images.md
+      - page: tutorials/networks-and-relations.md
+      - page: tutorials/telling-spaces-apart.md
+      - page: tutorials/persistent-group-cohomology.md
+      - page: tutorials/scaling-up.md
+  - index: developers-guide/index.md
+    directory: developers-guide
+    subsection:
+      - page: developers-guide/scala3-primer.md
+      - page: developers-guide/architecture.md
+      - page: developers-guide/persistence-engines.md
+      - page: developers-guide/alpha-complex.md
+      - page: developers-guide/degeneracies.md
+      - page: developers-guide/gotchas.md
+      - page: developers-guide/class-diagrams.md
+  - index: user-guide/index.md
+    directory: user-guide
+    subsection:
+      - page: user-guide/quickstart.md
+      - page: user-guide/cli.md
+      - page: user-guide/matlab.md
+      - index: user-guide/topological-spaces/index.md
+        directory: user-guide/topological-spaces
+        subsection:
+          - page: user-guide/topological-spaces/alpha-complexes.md
+          - page: user-guide/topological-spaces/cech-complexes.md
+          - page: user-guide/topological-spaces/cubical-complexes.md
+          - page: user-guide/topological-spaces/dowker-complexes.md
+          - page: user-guide/topological-spaces/simplicial-sets.md
+          - page: user-guide/topological-spaces/sparse-vietoris-rips.md
+      - index: user-guide/homology-computation/index.md
+        directory: user-guide/homology-computation
+        subsection:
+        - page: user-guide/homology-computation/choosing-engine.md
+        - page: user-guide/homology-computation/fast-alpha-complexes.md
+        - page: user-guide/homology-computation/fast-cubical.md
+        - page: user-guide/homology-computation/index.md
+      - page: user-guide/boundary-matrix.md
+      - page: user-guide/circular-coordinates.md
+      - page: user-guide/input-output.md
+      - page: user-guide/vectorization.md

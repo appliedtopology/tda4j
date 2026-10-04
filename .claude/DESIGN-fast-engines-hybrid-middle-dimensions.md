@@ -6,7 +6,7 @@ validated (mirrors how item 7 followed item 6 originally) -- see "Sequencing" be
 
 ## The request, and a correction to how I'd been framing it
 
-Both `FastCubicalHomologyContext` and `FastAlphaHomologyContext` currently `require(ambientDim == 2, ...)`.
+Both `FastCubicalHomologyEngine` and `FastAlphaHomologyEngine` currently `require(ambientDim == 2, ...)`.
 My own framing of that limit, going into this note, was "the union-find trick isn't viable above d=2" --
 the project lead corrected this directly: it's still worth having at d>=3 even though the win shrinks, for
 both engines, and the correction is right. The mechanism itself (Alexander duality reducing `H_0`/`H_{d-1}`
@@ -24,7 +24,7 @@ engine this codebase already has -- not "gate the fast engine off above d=2," wh
 ## Key finding: the two union-finds are ALREADY dimension-generic in the existing code
 
 Before designing anything new, I re-read both engines' actual code rather than assuming from the doc
-comments. `FastCubicalHomologyContext.computeDualTopDimension` and `FastAlphaHomologyContext`'s own
+comments. `FastCubicalHomologyContext.computeDualTopDimension` and `FastAlphaHomologyEngine`'s own
 `computeDualTopDimension` are BOTH already written in terms of `stream.ambientDim`/`helix.ambientDimension`
 symbolically -- `bars += new PersistenceBar(ambientDim - 1, ...)`, the facet-enumeration loop
 (`(0 until ambientDim).flatMap { degenAxis => ... }` for cubical), the vertex/facet event construction -- none
@@ -148,10 +148,10 @@ should say what was actually tested, not claim unbounded confidence.
 - **Representative correctness through `chunks` on a truncated stream**: the barcode argument above
   (truncation can't affect lower boundary maps) is standard, but this codebase's own culture is "agreement
   between two engines isn't proof... which tied cell dies at a tied time is order-dependent" -- needs a real
-  cross-validation run against `CellularHomologyContext`/`CubicalHomologyContext` (the naive engine) on 3D
+  cross-validation run against `CellularHomologyEngine`/`CubicalHomologyEngine` (the naive engine) on 3D
   fixtures, both bars AND representative chains (`Chain.from(...).isZero()` cycle checks), not merely assumed
   from the argument being sound on paper.
-- **Alpha's own risk is separate and likely WORSE at higher d, not the same rate**: `FastAlphaHomologyContext`
+- **Alpha's own risk is separate and likely WORSE at higher d, not the same rate**: `FastAlphaHomologyEngine`
   additionally carries the facet-multiplicity precondition risk (`FastAlphaTriangulationException`, measured
   ~1-in-18700 at `d=2` specifically). `HelixDelaunay`'s OWN, separate, already-documented near-cospherical
   limitation is known to get MUCH worse with ambient dimension (`AlphaCrossValidationSpec`'s own doc: ~1-in-170

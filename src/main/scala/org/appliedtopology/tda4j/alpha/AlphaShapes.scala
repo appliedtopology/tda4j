@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package alpha
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.barcode.{given, *}
 
 import collection.mutable
 import scala.math.{pow, sqrt}
@@ -25,7 +18,22 @@ import java.util.concurrent.*
   */
 final case class Epsilon(epsilon: Double)
 
-abstract class AlphaShapes extends StratifiedSimplexStream[Int, Double]() with DoubleFiltration[Simplex[Int]]():
+/** Which alpha-complex construction `AlphaShapes(points, backend)` uses: `Helix` (Delaunay by the Helix algorithm, the
+  * default), `DQP` (dual quadratic programs), or `Default` (whatever the library currently picks -- Helix).
+  */
+enum AlphaBackend:
+  case Default, Helix, DQP
+
+object AlphaBackend:
+  /** The facade's string spelling (`"default"`, `"helix"`, `"dqp"`, any case). */
+  def parse(name: String): AlphaBackend = name.toLowerCase match
+    case "default" => Default
+    case "helix"   => Helix
+    case "dqp"     => DQP
+    case other     =>
+      throw IllegalArgumentException(s"Unknown alpha complex backend: '$other' (expected default/helix/DQP)")
+
+abstract class AlphaShapes extends LevelwiseSimplexStream[Int, Double]() with DoubleFiltration[Simplex[Int]]():
   val metricSpace: FiniteMetricSpace[Int]
 
 /** `apply`/`Point` are scoped here rather than as bare top-level `alpha` package defs (a generic name like `Point`, or
@@ -34,42 +42,47 @@ abstract class AlphaShapes extends StratifiedSimplexStream[Int, Double]() with D
   * below brings both the type and its factory back into unqualified scope for the rest of this file, where `Point` is
   * used pervasively by `Hyperplane`/`Hypersphere`/`HelixDelaunay`.
   */
-object AlphaShapes:
+object AlphaShapes extends PointCloudComplex:
+  def fromPoints(points: PointCloud, maxDimension: Int, maxFiltrationValue: Option[Double]) =
+    require(
+      maxFiltrationValue.isEmpty,
+      "tda4j: AlphaShapes builds the whole alpha complex, so maxFiltrationValue is not supported for it -- read the " +
+        "result at a smaller parameter with diagram.at(f) instead"
+    )
+    Truncated(apply(points), maxDimension)
 
   /** @param requireValidTriangulation
     *   OFF by default. Only meaningful for the `"helix"`/`"default"` backend -- threaded straight through to
     *   `HelixDelaunay`'s own constructor parameter of the same name (`.claude/DESIGN-helix-triangulation-repair.md`).
-    *   `require`d `false` for `dispatch="dqp"`: `AlphaShapeDQP` has no facet-multiplicity precondition to repair in the
-    *   first place (it is not `FastAlphaHomologyContext`'s own backend), so a caller passing `true` there almost
-    *   certainly mis-set the option rather than intending a silent no-op.
+    *   `require`d `false` for `backend = AlphaBackend.DQP`: `AlphaShapeDQP` has no facet-multiplicity precondition to
+    *   repair in the first place (it is not `FastAlphaHomologyEngine`'s own backend), so a caller passing `true` there
+    *   almost certainly mis-set the option rather than intending a silent no-op.
     */
-  def apply(pts: Seq[Array[Double]], dispatch: String = "default", requireValidTriangulation: Boolean = false)(using
+  def apply(
+    points: PointCloud,
+    backend: AlphaBackend = AlphaBackend.Default,
+    requireValidTriangulation: Boolean = false
+  )(using
     epsilon: Epsilon = Epsilon(1e-5)
   ): AlphaShapes =
-    dispatch.toLowerCase match
-      case "default" =>
-        // These three branches all resolve to "helix" today: no regime (point count / ambient dimension) has been
-        // measured yet to pick a backend by. They're placeholders for that dispatch, not dead code -- keep them
-        // distinct rather than collapsing to a single case.
-        pts match
-          case pts if pts.isEmpty         => apply(pts, dispatch = "helix", requireValidTriangulation)
-          case pts if pts.head.length > 7 => apply(pts, dispatch = "helix", requireValidTriangulation)
-          case _                          => apply(pts, dispatch = "helix", requireValidTriangulation)
-      case "helix" =>
-        HelixDelaunay(
-          pts.toArray,
-          requireValidTriangulation = requireValidTriangulation
-        ) // Helix should be faster for dim: 7 - 17. Adjust this check when additional impl exists.
-      case "dqp" =>
+    backend match
+      case AlphaBackend.Default =>
+        // All three branches resolve to Helix today: no regime (point count / ambient dimension) has been measured yet
+        // to pick a backend by. They're placeholders for that dispatch, not dead code -- keep them distinct.
+        points match
+          case pc if pc.size == 0            => apply(pc, AlphaBackend.Helix, requireValidTriangulation)
+          case pc if pc.ambientDimension > 7 => apply(pc, AlphaBackend.Helix, requireValidTriangulation)
+          case pc                            => apply(pc, AlphaBackend.Helix, requireValidTriangulation)
+      case AlphaBackend.Helix =>
+        HelixDelaunay(points.points, requireValidTriangulation = requireValidTriangulation)
+      case AlphaBackend.DQP =>
         require(
           !requireValidTriangulation,
-          "requireValidTriangulation=true is not valid for dispatch=\"dqp\": AlphaShapeDQP has no facet-" +
-            "multiplicity precondition to repair (FastAlphaHomologyContext is specialized to HelixDelaunay's own " +
+          "requireValidTriangulation=true is not valid for backend = AlphaBackend.DQP: AlphaShapeDQP has no facet-" +
+            "multiplicity precondition to repair (FastAlphaHomologyEngine is specialized to HelixDelaunay's own " +
             "triangulation and never consumes AlphaShapeDQP's output) -- this option would be a silent no-op there."
         )
-        AlphaShapeDQP(pts.toArray)
-      case other =>
-        throw IllegalArgumentException(s"Unknown alpha complex backend: '$other' (expected default/helix/DQP)")
+        AlphaShapeDQP(points.points)
 
   // utilities for Delaunay computations
   type Point = RealVector
@@ -408,7 +421,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
   *   same triangulation.
   * @param requireValidTriangulation
   *   OFF by default -- changes nothing above when `false`. When `true`, and `compute()` produces a facet- multiplicity
-  *   violation (`FastAlphaHomologyContext`'s own precondition), runs `HelixDelaunay.repairByJitterRetriangulation`
+  *   violation (`FastAlphaHomologyEngine`'s own precondition), runs `HelixDelaunay.repairByJitterRetriangulation`
   *   (`.claude/DESIGN-helix-triangulation-repair.md`): a "simulation of simplicity"-style repair that nudges exactly
   *   the offending, near-tied points by a tiny random perturbation and re-runs this SAME `HelixDelaunayBuilder` on the
   *   full (mostly unperturbed) point set, then recomputes every resulting simplex's own circumsphere from the ORIGINAL,
@@ -418,9 +431,9 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
   *   re-filling it via coning from an arbitrary apex; discarding the extra claimants outright with no replacement) were
   *   tried first and rejected after being checked against the actual failing fixture -- see the design note's own
   *   "First"/"Second design attempt (rejected)" sections. Validated by targeted stress sweep at `d=2` and `d=3`
-  *   (`FastAlphaHomologyContext`'s own primary use case); `d>=4` is untested -- `HelixDelaunayBuilder` itself is
-  *   already "not reliable ground truth" there for unrelated reasons (this class's own doc above), so this repair
-  *   inherits that pre-existing limitation rather than introducing a new one.
+  *   (`FastAlphaHomologyEngine`'s own primary use case); `d>=4` is untested -- `HelixDelaunayBuilder` itself is already
+  *   "not reliable ground truth" there for unrelated reasons (this class's own doc above), so this repair inherits that
+  *   pre-existing limitation rather than introducing a new one.
   */
 class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTriangulation: Boolean = false)(using
   epsilon: Epsilon
@@ -487,8 +500,8 @@ class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTria
   // Must be the exact reverse of filtrationOrdering below, not merely "ascending by filtrationValue" --
   // sortBy(filtrationValue) alone has no explicit tie-break (falls back to simplicesMap's own insertion
   // order among ties), which doesn't match filtrationOrdering's simplexOrdering[Int] tie-break. This
-  // passes VietorisRipsSpec-style sortedness checks (value-only) but breaks PersistenceInChunksContext,
-  // whose chunk-boundary logic (Homology.scala's PersistenceInChunksContext.allCells) relies on
+  // passes VietorisRipsSpec-style sortedness checks (value-only) but breaks PersistenceInChunksEngine,
+  // whose chunk-boundary logic (Homology.scala's PersistenceInChunksEngine.allCells) relies on
   // iterateDimension's own emission order standing in for filtrationOrdering position -- found via
   // EngineComparisonBenchmarkSpec / AlphaFiltrationOrderingRegressionSpec (see CLAUDE.md).
   val simplicesSortedMap: Map[Int, Seq[Simplex[Int]]] =
@@ -576,7 +589,7 @@ object HelixDelaunay:
     simps
       .flatMap(ds => ds.simplex.toSet.subsets().filter(_.nonEmpty).map(s => Simplex.from(s.toSeq)))
       .foreach(s => builder.addOne((0.0, s)))
-    val bars = SimplicialHomologyContext[Int, Double, Double]()
+    val bars = SimplicialHomologyEngine[Int, Double, Double]()
       .persistentHomology(builder.result())
       .barcodeAt(Double.PositiveInfinity)
     val voidBars = bars.filter { b =>
@@ -693,20 +706,20 @@ object HelixDelaunay:
       )
 
 /** Hides every simplex of dimension `> maxDim` from `helix` -- the `HelixDelaunay` analogue of
-  * `streams.LimitedCubicalGridStream` (itself needed because `streams.LimitedCofaceSimplexStream` is hardcoded to
+  * `LimitedCubicalGridStream` (itself needed because `LimitedCofaceSimplexStream` is hardcoded to
   * `CofaceSimplexStream[Int, Double]`, which `AlphaShapes`/`HelixDelaunay` is not -- it's the smaller
-  * `StratifiedSimplexStream[Int, Double]`, with no `currentDimension`/`keepCriterion`/etc. to forward). Used by
-  * `homology.FastAlphaHomologyContext`'s own `d >= 3` path (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`)
-  * to hand `CellularPersistenceInChunksContext` a view of the triangulation that never contains a real top-dimensional
-  * simplex, so that engine's own general `Chain` reduction never touches them -- the whole point being to let the
-  * (cheaper) dual union-find handle the top dimension instead.
+  * `LevelwiseSimplexStream[Int, Double]`, with no `currentDimension`/`keepCriterion`/etc. to forward). Used by
+  * `FastAlphaHomologyEngine`'s own `d >= 3` path (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) to hand
+  * `CellularPersistenceInChunksEngine` a view of the triangulation that never contains a real top-dimensional simplex,
+  * so that engine's own general `Chain` reduction never touches them -- the whole point being to let the (cheaper) dual
+  * union-find handle the top dimension instead.
   *
   * Delegates `filtrationOrdering`/`filtrationValue` to `helix` unchanged (removing higher-dimensional simplices from
   * the DOMAIN doesn't change either), and preserves `StratifiedCellStream.iterator`'s own contiguous-from-0 contract
   * for free: truncating a contiguous `0..helix.ambientDimension` domain to `0..maxDim` is still contiguous from 0.
   */
 class LimitedAlphaShapesStream(helix: HelixDelaunay, maxDim: Int)
-    extends StratifiedSimplexStream[Int, Double]
+    extends LevelwiseSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]():
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case d: Int if d >= 0 && d <= maxDim && helix.iterateDimension.isDefinedAt(d) => helix.iterateDimension(d)

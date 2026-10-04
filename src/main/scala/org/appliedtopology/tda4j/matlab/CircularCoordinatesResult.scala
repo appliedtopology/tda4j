@@ -1,6 +1,6 @@
 package org.appliedtopology.tda4j.matlab
 
-/** A finished circular-coordinates computation (`homology.CircularCoordinates`, `.claude/WORKLOG-mainstream-
+/** A finished circular-coordinates computation (`CircularCoordinates`, `.claude/WORKLOG-mainstream-
   * feature-gap-analysis.md` item 2), in the same MATLAB-marshalable shape `PersistenceResult` uses -- see
   * `TDA4j.circularCoordinates`'s own doc for how this gets constructed.
   */
@@ -12,9 +12,8 @@ final class CircularCoordinatesResult private[matlab] (
   private val primeValue: Int
 ):
   /** One entry per input point (same row order as the `points`/`distances` this was computed from), each in `[0, 1)` --
-    * or `Double.NaN` for a point outside the connected component the chosen class lives in (see
-    * `homology.CircularCoordinates`'s own class doc for why other components have no meaningful coordinate at all, not
-    * a zero or an arbitrary default).
+    * or `Double.NaN` for a point outside the connected component the chosen class lives in (see `CircularCoordinates`'s
+    * own class doc for why other components have no meaningful coordinate at all, not a zero or an arbitrary default).
     */
   def theta(): Array[Double] = thetaArray
 

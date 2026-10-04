@@ -7,8 +7,8 @@ future session or by the project lead reviewing after the fact.
 
 ## Decisions made with the project lead (interview, before any code)
 
-- **Coexistence, not replacement, in general**: new engine(s) should not silently absorb the other
-  two existing algorithms (`PersistenceInChunksContext`, `SimplicialHomologyByDimensionContext`).
+- **Coexistence, not replacement, in general**: new engine (s) should not silently absorb the other
+  two existing algorithms (`PersistenceInChunksEngine`, `SimplicialHomologyByDimensionContext`).
   Independent implementations have cross-validation value (same reasoning as keeping DQP and Helix
   separate) — a shared engine would let one bug corrupt both the oracle and the thing being checked
   against it.
@@ -21,12 +21,12 @@ future session or by the project lead reviewing after the fact.
   matching Ripser's actual scope — general `OrderedCell` streams don't have cheap enough implicit
   cofacet enumeration for the apparent-pairs trick to pay off.
 - **Mid-course correction**: rather than write a brand-new, structurally-separate class for the
-  naive engine, rework `CellularHomologyContext` in place. Justification below — it turned out to
+  naive engine, rework `CellularHomologyEngine` in place. Justification below — it turned out to
   be broken, and its broken state is the reason a from-scratch parallel class looked necessary in
-  the first place. `PersistenceInChunksContext` (already passing 3/3 tests) is fine to serve as the
+  the first place. `PersistenceInChunksEngine` (already passing 3/3 tests) is fine to serve as the
   independent cross-validation partner instead of needing a third redundant implementation.
 
-## Pre-existing bug found in `CellularHomologyContext` (confirmed, root-caused)
+## Pre-existing bug found in `CellularHomologyEngine` (confirmed, root-caused)
 
 `HomologySpec`'s one test ("Homology of a triangle") was already failing on `scala` HEAD, before
 any of this session's changes — confirmed by running `sbt testOnly` before touching anything.
@@ -34,7 +34,7 @@ Expected `(1, 3.0, 4.0)`; got `(1,-Infinity,4.0)` and `(1,1.0,Infinity)` instead
 not one wrong endpoint).
 
 **Root cause** (confirmed by instrumenting `advanceOne` and tracing the triangle example — see
-below, not guessed): `CellularHomologyContext` does
+below, not guessed): `CellularHomologyEngine` does
 
 ```scala
 val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
@@ -47,7 +47,7 @@ aware ordering that makes `leadingCell` mean "youngest cell by filtration value,
 whole reduction algorithm depends on for correctness.
 
 The problem: `chainRM`'s `summon` call resolves its `Ordering[CellT]` implicit *once*, at the point
-the given `RingModule` instance is constructed (`CellularHomologyContext` class scope) — and at that
+the given `RingModule` instance is constructed (`CellularHomologyEngine` class scope) — and at that
 point `stream.filtrationOrdering` doesn't exist yet (no stream has been supplied). The only
 `Ordering[CellT]` available at that scope is the generic `given [CellT: OrderedCell as oCell] =>
 Ordering[CellT] = oCell.ordering` from `Chain.scala`, which for `Simplex[VertexT]` is a plain
@@ -69,7 +69,7 @@ actually-youngest one. That is the direct cause of the wrong bars.
 
 This is not patchable with a tiebreak fix — the `chainRM`-at-class-scope pattern is unsound whenever
 the correct `Ordering[CellT]` is stream-dependent and only known later, which is exactly
-`CellularHomologyContext`'s situation (that's the whole reason `HomologyState` redeclares the
+`CellularHomologyEngine`'s situation (that's the whole reason `HomologyState` redeclares the
 `given` in the first place — that redeclaration just doesn't reach the already-baked `chainRM`).
 
 **Separate, independent design smell found in the same method** (not itself the cause of the
@@ -86,13 +86,13 @@ so no second reduction or auxiliary `cyclesBornBy` map is needed.
       query API, phase-2 scope).
 - [x] Rename `WORKLOG.md` → `WORKLOG-alpha-complex.md`, `HANDOFF.md` → `.claude/HANDOFF-alpha-complex.md`.
 - [x] Confirm current `sbt test` state: `HomologySpec` fails (1/1), `PersistenceInChunksSpec` passes
-      (3/3) — establishes `PersistenceInChunksContext` as the cross-validation partner.
-- [x] Root-cause the `CellularHomologyContext` failure with concrete evidence (this file, above).
+  (3/3) — establishes `PersistenceInChunksEngine` as the cross-validation partner.
+- [x] Root-cause the `CellularHomologyEngine` failure with concrete evidence (this file, above).
 - [x] Wrote a discriminating regression test (elder-rule fixture, non-tied filtration values) that
       pins the pivot-selection bug directly; confirmed it fails on unfixed code for the *original*
       triangle test (the elder-rule test itself didn't discriminate — see judgment-call note below —
       but the pre-existing triangle test already did, and is kept as the primary regression pin).
-- [x] Rewrite `CellularHomologyContext`/`HomologyState`:
+- [x] Rewrite `CellularHomologyEngine`/`HomologyState`:
   - [x] Single unified pivot table (`boundaries: Map[CellT, Chain]`), no separate `cycles`/
         `coboundaries`/`boundariesBornBy`/`cyclesBornBy` bookkeeping duplicating what the pivot table
         already encodes.
@@ -118,7 +118,7 @@ so no second reduction or auxiliary `cyclesBornBy` map is needed.
   - [x] Shared fixture object (`HomologyFixtures.scala`) with the triangle/tetrahedron/torus
         complexes hand-verified in `PersistenceInChunksSpec`, plus the new elder-rule fixture.
   - [x] Tetrahedron + torus now also run through the naive engine (previously only exercised via
-        `PersistenceInChunksContext`).
+        `PersistenceInChunksEngine`).
   - [x] Bars-account-for-cells structural invariant (`2*finite + essential == totalCells`) — project
         lead corrected my first draft of this (I initially wrote a stray comment implying `bars ==
         cells`; the actual check I coded was already right).
@@ -129,10 +129,10 @@ so no second reduction or auxiliary `cyclesBornBy` map is needed.
         hand-derived check on the elder-rule fixture (dying class's representative is exactly
         `Chain(∆(9))`, essential class's is exactly `Chain(∆(1))` — worked out by hand from the
         algorithm's own recursion, not just asserting whatever the code happened to produce).
-  - [x] Cross-validation against `PersistenceInChunksContext` on all three fixtures.
+  - [x] Cross-validation against `PersistenceInChunksEngine` on all three fixtures.
   - [x] Field-independence property (`F_2`, `F_3`, `Q`/`Double` agree) on all three fixtures.
 - [x] Full `sbt test` run to check for regressions elsewhere.
-- [x] Update `CLAUDE.md`'s description of `CellularHomologyContext` to reflect the rewrite.
+- [x] Update `CLAUDE.md`'s description of `CellularHomologyEngine` to reflect the rewrite.
 - [x] `scalafmtAll` run and `scalafmtCheck`/`scalafmtSbtCheck` verified clean.
 - [x] Fixed a birth/death filtration-value fallback bug found in advisor review (see below).
 - [x] Added real Vietoris-Rips stream coverage (advisor review flagged this as the load-bearing gap:
@@ -157,7 +157,7 @@ algorithm phase 1 implements:
 
 1. **Clear&Compress**: once a `(d-1)`-cell is identified as the birth side of a persistence pair
    (paired with a `d`-cell), its own `d`-dimensional column can be cleared/skipped in higher-dimension
-   reduction, since it's already known to be non-essential. `PersistenceInChunksContext` already
+   reduction, since it's already known to be non-essential. `PersistenceInChunksEngine` already
    implements a *homological* version of clear&compress (chunk-local reduction + global column
    compression) — phase 2 needs the *cohomological* analogue, which is structurally different (Ripser
    reduces coboundary columns dimension-by-dimension in increasing order, clearing forward into the
@@ -229,7 +229,7 @@ assume any of the following is correct just because it compiles and existed befo
    holds the stream, never at an enclosing class scope. This exact mistake caused phase 1's original
    bug; the same shape of mistake would be easy to reintroduce in a from-scratch cohomology engine.
    Two other latent instances of this same pattern are already known and documented but NOT fixed:
-   `PersistenceInChunksContext` (`Homology.scala`, `chainRM` at class scope) and `package.scala`'s
+   `PersistenceInChunksEngine` (`Homology.scala`, `chainRM` at class scope) and `package.scala`'s
    `TDAContext`. A third, different manifestation (a specific `given Ordering[BarcodeEndpoint[Double]]`
    not being found due to a more generic `given` intercepting the search) is noted in the judgment-
    calls list below. If phase 2 needs a coboundary/cochain analogue of `RingModule`, watch for this
@@ -250,7 +250,7 @@ assume any of the following is correct just because it compiles and existed befo
    not an afterthought added under review pressure the way it was in phase 1.
 4. **`Fp` (exact arithmetic) as the primary correctness coefficient, `Double` only for an interop
    smoke test.** Zero-detection during reduction must not be confused with floating-point noise.
-5. **`StratifiedCellStream`'s default `.iterator` hangs** (documented in `PersistenceInChunksContext`'s
+5. **`StratifiedCellStream`'s default `.iterator` hangs** (documented in `PersistenceInChunksEngine`'s
    and `PersistenceInChunksSpec`'s comments, and worked around directly in
    `HomologySpec.flattenToCellStream`). If phase 2's engine consumes a stream via `.iterator`, either
    feed it something with a correct `.iterator` override, or fix the default — don't rediscover this
@@ -258,12 +258,12 @@ assume any of the following is correct just because it compiles and existed befo
 
 ### Validation strategy
 
-- **Primary oracle: agreement with phase 1's naive engine and/or `PersistenceInChunksContext` on the
+- **Primary oracle: agreement with phase 1's naive engine and/or `PersistenceInChunksEngine` on the
   *same* Vietoris–Rips streams.** Persistent homology and persistent cohomology over a field have
   provably identical barcodes (standard duality result) — so any real VR complex's cohomology barcode
-  from the new engine must exactly match `SimplicialHomologyContext`'s (or `PersistenceInChunksContext`'s)
+  from the new engine must exactly match `SimplicialHomologyEngine`'s (or `PersistenceInChunksEngine`'s)
   barcode on the same input. This is a strong, free correctness check, analogous to how DQP was
-  cross-validated against Helix for alpha complexes — with the same caveat: `PersistenceInChunksContext`
+  cross-validated against Helix for alpha complexes — with the same caveat: `PersistenceInChunksEngine`
   has its own not-yet-audited latent `chainRM`-scope issue (see above), so treat agreement with it as
   weaker evidence than agreement with phase 1's engine specifically (which has now had its ordering
   bug fixed and confirmed via the elder-rule regression test).
@@ -321,7 +321,7 @@ chain through several previously-recorded pivots, the backlog compounds across c
 superlinearly.
 
 **Fix**: replaced the hand-rolled `reduceBy` with the existing `Chain.reduceBy` (the object-level,
-`SortedMap`-based primitive `PersistenceInChunksContext` already uses) — which collapses duplicates by
+`SortedMap`-based primitive `PersistenceInChunksEngine` already uses) — which collapses duplicates by
 construction on every insertion, since a `SortedMap` update can't accumulate stale entries the way a
 raw priority-queue merge can. Also added an explicit `vcol.collapseAll()` before storing/using it,
 since the `vcol` fold itself is separate, still-raw-`Chain`-arithmetic code that `Chain.reduceBy`
@@ -344,7 +344,7 @@ once, so both assertions are checked against the exact same computation.
 **Why this matters beyond just this bug**: `Chain.scala`'s own doc language already says the object-
 level `reduceBy`/`reduceByUntil` are "the generic matrix-reduction primitives... the homology
 algorithms build on" — i.e., the intended design was already to reuse these, not hand-roll fresh
-reduction logic per algorithm. The original (buggy) `CellularHomologyContext` also hand-rolled its own
+reduction logic per algorithm. The original (buggy) `CellularHomologyEngine` also hand-rolled its own
 `reduceBy` over raw `Chain` arithmetic rather than using the object-level one; this may well have had
 the *same* latent performance characteristic (impossible to say for certain post-rewrite, since it's
 gone now, but the mechanism -- raw `Chain` `-`/`⊠` never fully collapsing -- was identical). Worth
@@ -393,14 +393,14 @@ and in isolated re-runs. `scalafmtCheck`/`scalafmtSbtCheck` clean after `scalafm
 
 ### Files changed this session
 
-- `../src/main/scala/org/appliedtopology/tda4j/Homology.scala` — `CellularHomologyContext`/
-  `HomologyState` rewritten (see above); `PersistenceInChunksContext` and
+- `../src/main/scala/org/appliedtopology/tda4j/Homology.scala` — `CellularHomologyEngine`/
+  `HomologyState` rewritten (see above); `PersistenceInChunksEngine` and
   `SimplicialHomologyByDimensionContext` untouched.
 - `../src/test/scala/org/appliedtopology/tda4j/HomologySpec.scala` — extended with 9 new examples (kept
   the original 2, for 11 total); `BarcodeRegressionSpec` in the same file untouched.
 - `../src/test/scala/org/appliedtopology/tda4j/HomologyFixtures.scala` (new) — shared triangle/
   tetrahedron/torus/elder-rule fixtures and the bars-account-for-cells invariant helper.
-- `CLAUDE.md` — `CellularHomologyContext` description updated to reflect the rewrite and the
+- `CLAUDE.md` — `CellularHomologyEngine` description updated to reflect the rewrite and the
   confirmed root cause.
 - `WORKLOG.md` → `WORKLOG-alpha-complex.md`, `HANDOFF.md` → `.claude/HANDOFF-alpha-complex.md` (renamed,
   content untouched) — both describe the prior, now-separate alpha-complex work.
@@ -432,7 +432,7 @@ class-scope-`chainRM` pattern, noted above, not fixed).
   three already-multi-term chains. I kept the elder-rule fixture anyway since it's a real, useful,
   independent correctness check (elder rule under non-tied filtration values) — it just isn't the
   bug's regression pin; the original triangle test is.
-- **`PersistenceInChunksContext` has the identical `chainRM`-at-class-scope pattern** (line ~148,
+- **`PersistenceInChunksEngine` has the identical `chainRM`-at-class-scope pattern** (line ~148,
   same shape as the bug just fixed). Not touched — its 3/3 tests still pass, and cross-validating the
   new naive engine against it is part of this session's test suite, so if this latent pattern were
   actually causing wrong answers there too, agreement between the two engines would be weaker evidence

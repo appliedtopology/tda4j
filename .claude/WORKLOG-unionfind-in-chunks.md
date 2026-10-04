@@ -12,7 +12,7 @@ this worklog assumes as read.
 CLAUDE.md's `SimplicialHomologyByDimensionContext` section records an earlier session's live design attempt at
 a raw `UnionFind` port that "needs delicate, not-yet-fully-converged elder-rule/V-column coefficient
 bookkeeping to stay correct for a LATER dimension-2+ cell's reduction" -- scoped out as real risk for a small
-gain. That target was `CellularHomologyContext` (the naive engine), which reconstructs representative cycles
+gain. That target was `CellularHomologyEngine` (the naive engine), which reconstructs representative cycles
 via V-columns for `barcodeAt`. Re-reading `CellularPersistenceInChunksContext.HomologyState` in full confirmed
 it carries no such state at all (`boundaries`, `cleared`, `paired`, `essentialSimplices`, `killer`, `R`,
 `activeRows`, `barcode` -- nothing V-column-shaped), matching the MATLAB facade's own documented
@@ -59,7 +59,7 @@ one-shot `dim01Resolved: Boolean` flag on `HomologyState`.
 
 ## What was built
 
-`HomologyState.unionFindDim01()` (`Homology.scala`, `CellularPersistenceInChunksContext`): builds a plain
+`HomologyState.unionFindDim01()` (`Homology.scala`, `CellularPersistenceInChunksEngine`): builds a plain
 `Array[Int]` parent array over the stream's dimension-0 cells (indexed via a local `vertexIndex` map, not the
 class's own `cellIndex`, to avoid sizing the array to the full cell count when only vertices need slots -- a
 deliberate memory-hygiene choice given the capacity sweep found memory, not time, is the actual ceiling at
@@ -118,7 +118,7 @@ dimension-0 bars made it slightly more entrenched (the general machinery it repl
 even though nothing read it).
 
 **Advisor's staged plan, followed in order**: (1) dimension 0/1 via union-find -- trivial, no new machinery,
-since `Chain(dyingVertex)`/`Chain(rootVertex)` is exactly what `CellularHomologyContext`'s own `cycles` map
+since `Chain(dyingVertex)`/`Chain(rootVertex)` is exactly what `CellularHomologyEngine`'s own `cycles` map
 holds at dimension 0. (2) finite bars dim >= 2 (needs `reduceByUntil`'s reduction-log captured at three call
 sites plus a `coboundaries`-shaped map). (3) essential bars dim >= 2 (needs the `cycles` map itself). (4) MATLAB
 facade (mechanical once 1-3 land). Explicitly NOT doing 2 and 3 in one pass with 1.
@@ -131,12 +131,12 @@ CoefficientT]]]` mirrors `CellularHomologyContext.barcodeAt`'s exact output shap
 `dim == 0` is used as a proxy for "populated by `unionFindDim01`, hence trustworthy" (safe today since that
 method is the *only* populator of `barcode(0)`); every other bar (dim >= 1 finite -- still routed through the
 general machinery, which stores a chain proven to be *a* valid cycle by the boundary-of-a-boundary argument but
-NOT verified to match what `CellularHomologyContext`'s own `cycles`/`coboundaries` mechanism would report for
+NOT verified to match what `CellularHomologyEngine`'s own `cycles`/`coboundaries` mechanism would report for
 the same bar -- and every essential bar above dimension 0, which has no tracking mechanism at all) reports
 `annotation = None`, matching `PersistenceBar`'s existing `Option`-based design rather than fabricating a value.
 
 **Verified, not just asserted**: a new `HomologySpec` test cross-checks chunks' dimension-0 representatives
-against `CellularHomologyContext`'s own `barcodeAt` for EXACT equality (not homology-equivalence) on the
+against `CellularHomologyEngine`'s own `barcodeAt` for EXACT equality (not homology-equivalence) on the
 elder-rule fixture (the tie-heavy, sign-discriminating one already used elsewhere) plus triangle/tetrahedron --
 this is the check advisor specifically flagged as necessary, since `dsigmaReduced`-shaped chains and the naive
 engine's `cycles`-map chains are homologous but not generally equal, and a homology-only check would have missed
@@ -154,7 +154,7 @@ isn't guaranteed by dimension).
 
 **What's still open, explicitly** (steps 2/3 from advisor's plan, not started): finite bars at dimension >= 1
 and every essential bar above dimension 0 still report `None`. Closing this needs the same `reductionLog` ->
-`coboundaries` -> `cycles` incremental mechanism `CellularHomologyContext`/`SimplicialHomologyByDimensionContext`
+`coboundaries` -> `cycles` incremental mechanism `CellularHomologyEngine`/`SimplicialHomologyByDimensionContext`
 already use, ported into the chunked local/global algorithm -- advisor flagged a real, not-yet-investigated
 blocker before attempting this: the chunked algorithm's local pass can defer a pair's resolution past the local
 `stop` window into a later global pass, so a substituted cell's `coboundaries` entry may not exist yet at

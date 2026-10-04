@@ -1,8 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
 
 import math.{pow, sqrt}
 import collection.immutable.Range
@@ -55,9 +51,9 @@ trait FiniteMetricSpace[VertexT]:
   */
 object FiniteMetricSpace:
 
-  /** Creates a filtration value partial function implementing the functionality of a [[SimplexFiltration]] for a
-    * filtration generated from a metric space, where the filtration value is the maximum distance between vertices (or
-    * the diameter) of a simplex.
+  /** Creates a filtration value partial function implementing the functionality of a [[Filtration]] for a filtration
+    * generated from a metric space, where the filtration value is the maximum distance between vertices (or the
+    * diameter) of a simplex.
     *
     * @param metricSpace
     *   An instance of a finite metric space.
@@ -81,12 +77,12 @@ object FiniteMetricSpace:
       * unavoidable math), but no snapshot collection at all -- an EARLIER version of this fix used
       * `spx.underlying.toIndexedSeq` for O(1) random access, avoiding `.toArray`'s `ClassTag` need the same way, but a
       * full `Vector`/`VectorBuilder` construction turned out to be real overhead of its own for what's almost always a
-      * tiny collection (a simplex has only `dim+1` vertices): a follow-up JFR profile on `RipserCohomologyContext`'s
+      * tiny collection (a simplex has only `dim+1` vertices): a follow-up JFR profile on `RipserCohomologyEngine`'s
       * `fractal-r` run found `VectorBuilder`/`Vector$.from` at ~43% of total allocation bytes, `apply` itself still
       * ~14% of CPU, immediately after that first fix landed -- iterators need no such backing collection, only two
       * small iterator objects.
       *
-      * Found via the `o3_1024` compute-server JFR profile on `RipserCohomologyContext`
+      * Found via the `o3_1024` compute-server JFR profile on `RipserCohomologyEngine`
       * (`.claude/WORKLOG-packed-ripser-engine.md`): this shared, generic method (used by 16 files across this codebase,
       * not just the Ripser engines -- `VietorisRips`, `WitnessStream`, `CechStream`, `DtmRipsStream`,
       * `SheehyRipsStream`, `DowkerStream`, `Cofacets`, `SimplexStream` among them) was the single largest remaining
@@ -179,7 +175,7 @@ class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricSpace[
   * `distance` gets called (every cofacet candidate of every simplex re-derives its own vertex-pair distances), so
   * caching trades a small, bounded amount of memory for eliminating that redundant recomputation -- bounded by point
   * count alone, NOT by complex size, unlike `memoizeFiltrationValue`
-  * (`RipserCohomologyContext`/`PackedRipserCohomologyContext`, `Homology.scala`/`PackedRipserCohomology.scala`), which
+  * (`RipserCohomologyEngine`/`PackedRipserCohomologyEngine`, `Homology.scala`/`PackedRipserCohomology.scala`), which
   * defaults `false` specifically because a per-SIMPLEX cache is unbounded as the complex grows. This cache is `O(n^2)`
   * `Double`s (8 bytes each): ~8MB at n=1024, ~128MB at n=4096 (this codebase's own `RipserPaperBenchmarkSpec` upper
   * end) -- trivial at that scale, but a genuinely large point cloud (tens of thousands of points, e.g. `torus4`,
@@ -236,17 +232,11 @@ class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistances: Bo
     vpt.getAllWithinDistance(qp, eps).asScala.toSeq.map(pts.indexOf(_))
 
 object EuclideanMetricSpace:
-  // Two overloads per parameter type (Seq/Array), not one with a default `cacheDistances` each -- Scala
-  // rejects two overloaded `apply`s both carrying a default argument (ambiguous which default resolves a
-  // single-arg call), so the default lives only on the class's own primary constructor.
-  def apply(points: Seq[Seq[Double]]): EuclideanMetricSpace =
-    new EuclideanMetricSpace(points.map(_.toArray).toArray)
-  def apply(points: Seq[Seq[Double]], cacheDistances: Boolean): EuclideanMetricSpace =
-    new EuclideanMetricSpace(points.map(_.toArray).toArray, cacheDistances)
-  def apply(points: Array[Array[Double]]): EuclideanMetricSpace =
-    new EuclideanMetricSpace(points)
-  def apply(points: Array[Array[Double]], cacheDistances: Boolean): EuclideanMetricSpace =
-    new EuclideanMetricSpace(points, cacheDistances)
+  // Two overloads, not one with a default `cacheDistances`: the class's own constructor carries that default. Every
+  // point shape (Array[Array[Double]], Seq[Seq[Double]], Seq[Array[Double]]) converts to a PointCloud here.
+  def apply(points: PointCloud): EuclideanMetricSpace = new EuclideanMetricSpace(points.points)
+  def apply(points: PointCloud, cacheDistances: Boolean): EuclideanMetricSpace =
+    new EuclideanMetricSpace(points.points, cacheDistances)
 
 /** ******* Efficient Spatial Queries *******
   */
@@ -256,7 +246,7 @@ trait SpatialQuery[VertexT]:
 
   /** The `k` nearest points to `v` (by `metricSpace.distance`), sorted ascending by distance, `v` itself included when
     * it belongs to the underlying metric space (a real metric always has `distance(v,v) = 0`, the smallest possible, so
-    * `v` is always its own nearest neighbour) -- this is the convention `streams.DistanceToMeasure` needs
+    * `v` is always its own nearest neighbour) -- this is the convention `DistanceToMeasure` needs
     * (Chazal-Cohen-Steiner-Merigot 2011's empirical DTM counts a point among its own `k` neighbours; verified against
     * GUDHI's own `DistanceToMeasure`/`KNearestNeighbors` docstring AND a worked numeric example, see
     * `.claude/WORKLOG-dtm-filtrations.md`). `require(1 <= k && k <= metricSpace.size)`: a `k` outside that range has no
@@ -278,7 +268,7 @@ class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQ
   // metric space in this codebase, but NOT of every FiniteMetricSpace instance (ExplicitMetricSpace enforces
   // nothing; a correlation-derived "distance" matrix, as GUDHI's own docs use, can violate it). A violated
   // triangle inequality means the tree can silently prune away a genuine nearest neighbour. Callers over an
-  // arbitrary/unverified FiniteMetricSpace should use BruteForce instead -- see streams.DistanceToMeasure, which
+  // arbitrary/unverified FiniteMetricSpace should use BruteForce instead -- see DistanceToMeasure, which
   // defaults to it for exactly this reason.
   override def nearestNeighbors(v: VertexT, k: Int): IndexedSeq[VertexT] =
     require(1 <= k && k <= metricSpace.size, s"k must be between 1 and ${metricSpace.size}, got $k")

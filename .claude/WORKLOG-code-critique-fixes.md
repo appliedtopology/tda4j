@@ -26,7 +26,7 @@ commented out), and the `kiama`/`kiama-extras`/`scala-graph` dependencies. Updat
 `APISpec.scala#full-vr-computation`) and CLAUDE.md to match.
 
 **Chunk C** — file/package placement: `RipserStream.scala`→`SimplexIndexing.scala`; `Cell`/`OrderedCell`/
-`OrderedBasis` moved out of `Chain.scala` into a new `algebra/Cell.scala`; `CubicalHomologyContext` moved from
+`OrderedBasis` moved out of `Chain.scala` into a new `algebra/Cell.scala`; `CubicalHomologyEngine` moved from
 `streams` to `homology`; `FiniteSimplicialSet`'s `product`/`coproduct`/`quotient`/`identify`/`elementsAtDim` moved
 onto its own companion object; `SimplicialSetStream.fromStream` moved onto its companion; `Alpha` renamed to
 `AlphaShapes.apply` with `Point` moved onto that companion too — **all four are public API renames**, see the

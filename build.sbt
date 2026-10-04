@@ -1,6 +1,9 @@
 name := "tda4j"
 organization := "org.appliedtopology"
-scalaVersion := "3.9.0"
+// Docs are built with 3.8.4 (scaladoc 3.9.0 ships broken JavaScript); the docs workflows set
+// TDA4J_SCALA_VERSION=3.8.4 for their `sbt doc` step. `sbt "++3.8.4 doc"` does NOT work in sbt 2: "no subprojects
+// list 3.8.4 ... in crossScalaVersions" (`++ 3.8.4!` would). TODO: delete the override when 3.9.1 is released.
+scalaVersion := sys.env.getOrElse("TDA4J_SCALA_VERSION", "3.9.0")
 
 versionScheme := Some("semver-spec")
 
@@ -16,19 +19,10 @@ libraryDependencies += "com.dreizak"        % "miniball"                      % 
 libraryDependencies +=
   "org.scala-lang.modules"              %% "scala-parallel-collections" % "1.0.4"
 libraryDependencies += "org.scalacheck" %% "scalacheck"                 % "1.17.0" % "test"
-// CLI argument parsing for the `cli` package -- chosen over decline specifically because it has zero transitive
-// dependencies (decline pulls in cats-core, which nothing else in this codebase uses) -- see
-// .claude/WORKLOG-cli-executable.md.
-libraryDependencies += "org.rogach" %% "scallop" % "6.0.0"
-
-import laika.helium.Helium
-import laika.helium.config.{Favicon, HeliumIcon, IconLink, ImageLink}
-import laika.theme.config.{Color, Font, FontStyle, FontWeight}
-import laika.ast.Image
-import laika.format.Markdown
-import laika.ast.Path.Root
-import laika.config.{ApiLinks, LinkConfig, SourceLinks, Version, Versions}
-import laika.helium.config.VersionMenu
+libraryDependencies += "org.rogach"     %% "scallop"                    % "6.0.0"
+libraryDependencies += "org.typelevel"  %% "cats-kernel"                % "2.13.0"
+libraryDependencies += "org.typelevel"  %% "cats-core"                  % "2.13.0"
+libraryDependencies += "org.typelevel"  %% "kittens"                    % "3.5.0"
 
 // Docs versioning (RELEASE.md step 5): `release.yml` sets TDA4J_DOCS_VERSION to the tag's version
 // (e.g. "0.1.3") when publishing a tagged release; `docs.yml`'s push-to-`scala` build leaves it unset, which
@@ -39,11 +33,42 @@ import laika.helium.config.VersionMenu
 // restore itself, would be lost on the next publish.
 val docsVersion = sys.env.getOrElse("TDA4J_DOCS_VERSION", "dev")
 
-// Older release tags, oldest-first exclusion of the one being (re)published -- drives Laika's version
-// switcher. Reads git tags directly rather than hand-maintaining a list; a tag with no matching docs
-// directory on `gh-pages` yet (or one from before docs versioning existed) just won't have a working link
-// until it's actually published once.
-def priorReleaseVersions(baseDir: File): Seq[String] = {
+Compile / doc / scalacOptions ++= Seq(
+  "-siteroot",
+  baseDirectory.value.toString,
+  "-project",
+  name.value,
+  "-project-version",
+  docsVersion,
+  "-source-links",
+  "github://appliedtopology/tda4j/scala",
+  "-Yapi-subdirectory",
+  "-project-logo",
+  "_assets/images/header-icon.svg",
+  "-doc-canonical-base-url",
+  "https://tda4j.appliedtopology.org",
+  "-social-links:github::https://github.com/appliedtopology/tda4j",
+  "-doc-footer",
+  "TDA4j is built by the TDA @ CUNY workgroup",
+  "-quick-links:Applied Topology::https://appliedtopology.org,Playground::https://scastie.scala-lang.org/?inputs=%7B%0A%20%20%22_isWorksheetMode%22%20%3A%20true%2C%0A%20%20%22code%22%20%3A%20%22import%20org.appliedtopology.tda4j.*%5Cn%E2%88%86(1%2C2%2C3)%5Cn%22%2C%0A%20%20%22target%22%20%3A%20%7B%0A%20%20%20%20%22scalaVersion%22%20%3A%20%223.9.0%22%2C%0A%20%20%20%20%22tpe%22%20%3A%20%22Scala3%22%0A%20%20%7D%2C%0A%20%20%22libraries%22%20%3A%20%5B%20%5D%2C%0A%20%20%22librariesFromList%22%20%3A%20%5B%20%5D%2C%0A%20%20%22sbtConfigExtra%22%3A%22%5CnscalacOptions%20%2B%2B%3D%20Seq(%5Cn%20%20%5C%22-deprecation%5C%22%2C%5Cn%20%20%5C%22-encoding%5C%22%2C%20%5C%22UTF-8%5C%22%2C%5Cn%20%20%5C%22-feature%5C%22%2C%5Cn%20%20%5C%22-unchecked%5C%22%2C%5Cn%20%20%5C%22-source%3Afuture%5C%22%2C%20%5Cn%20%20%5C%22-language%3Aexperimental.modularity%5C%22%5Cn)%5CnlibraryDependencies%20%2B%3D%20%5C%22org.appliedtopology%5C%22%20%25%25%20%5C%22tda4j%5C%22%20%25%20%5C%220.4.0%5C%22%5Cn%22%2C%0A%20%20%22sbtPluginsConfigExtra%22%20%3A%20%22%22%2C%0A%20%20%22isShowingInUserProfile%22%20%3A%20true%0A%7D%0A",
+  "-scastie-configuration",
+  """
+    |  scalacOptions ++= Seq(
+    |    "-deprecation",
+    |    "-encoding", "UTF-8",
+    |    "-feature", "-unchecked",
+    |    "-source:future", "-language:experimental.modularity",
+    |    "-language:implicitConversions", "-language:adhocExtensions"
+    |  ) ;
+    |  libraryDependencies += "org.appliedtopology" %% "tda4j" % "0.4.0"
+    |""".stripMargin.replace("\n", ""),
+  // Every Scala fence in the docs is compiled; mark a purely illustrative fence `scala sc:nocompile` instead.
+  "-snippet-compiler:compile"
+)
+Compile / doc / target := target.value / "api"
+
+// Release tags (`vX.Y.Z`), newest first, read straight from git rather than hand-maintained.
+def releaseTags(baseDir: File): Seq[String] = {
   import scala.sys.process._
   scala.util
     .Try(Process(Seq("git", "tag", "--list", "v*", "--sort=-v:refname"), baseDir).!!)
@@ -51,89 +76,83 @@ def priorReleaseVersions(baseDir: File): Seq[String] = {
     .linesIterator
     .toList
     .map(_.stripPrefix("v"))
-    .filterNot(_ == docsVersion)
 }
 
-lazy val root = (project in file("."))
-  .enablePlugins(
-    LaikaPlugin
-  )
-  .settings(
-    // Compiler options: language features (implicitConversions, adhocExtensions) and warning flags.
-    scalacOptions ++= List(
-      "-source:future",
-      "-language:experimental.modularity",
-      "-language:implicitConversions",
-      "-language:adhocExtensions",
-      "-feature",
-      "-deprecation",
-      "-unchecked"
-    ),
-    // ***** laika ******
-    Laika / sourceDirectories := Seq(sourceDirectory.value / "docs"),
-    laikaIncludeAPI := true,
-    laikaIncludePDF := true,
-    laikaTheme := SiteTheme.theme,
-    // Without this, fenced/inline code spans aren't recognized as code at all (plain CommonMark Markdown, the
-    // laika-sbt default, doesn't include GFM fences) -- their contents get parsed as ordinary prose, so any `[...]`
-    // in a code example (a Scala type param, a Java array type, a bracketed comment) is treated as a dangling
-    // Markdown link/reference and fails the build.
-    laikaExtensions += Markdown.GitHubFlavor,
-    // Also opt-in, like GitHubFlavor: without it every fenced code block renders as plain, unstyled text.
-    // (@:snip tokenizes its own extracted text separately -- see project/SnipDirective.scala.)
-    laikaExtensions += laika.config.SyntaxHighlighting,
-    laikaExtensions += new SnipDirective(baseDirectory.value),
-    laikaExtensions += Tda4jDirective,
-    laikaConfig := {
-      val older = priorReleaseVersions(baseDirectory.value).map(v => Version(v, v))
-      laika.sbt.LaikaConfig.defaults
-        .withConfigValue(
-          Versions.forCurrentVersion(Version(docsVersion, docsVersion)).withOlderVersions(older: _*)
-        )
-        .withConfigValue(
-          LinkConfig.empty
-            .addApiLinks(ApiLinks(baseUri = "https://tda4j.appliedtopology.org/dev"))
-            .addSourceLinks(SourceLinks(baseUri = "https://github.com/appliedtopology/tda4j/", suffix = "scala"))
-        )
-    },
-    // Scala 3.9.0's own bundled scaladoc ships a `ux.js` that intercepts every same-origin link click
-    // (sidebar navigation included) to do its own SPA-style AJAX page swap via `$.get(href, ...)` -- but
-    // no page anywhere loads jQuery, so `$` is undefined. The click's own `e.preventDefault()` already
-    // ran by the time that throws, so the click's default navigation is cancelled AND the replacement
-    // AJAX navigation never happens: clicking a class in the API nav does nothing (confirmed against a
-    // real browser: `ReferenceError: $ is not defined` at ux.js:180, `HTMLAnchorElement` click handler).
-    // A real upstream scaladoc bug, not a Laika/tda4j config issue -- `$.get(url, cb)` is a drop-in match
-    // for `fetch(url).then(r => r.text()).then(cb)` (the callback only ever receives raw HTML text here),
-    // so patch the one call site post-generation rather than vendoring scaladoc's bundled JS ourselves.
-    //
-    // Patches `Compile / doc`'s own output directory (confirmed via `show Compile/doc`:
-    // `target/scala-3.9.0/api`), not `laikaSite`'s copy of it -- `laikaPreview` runs a live preview
-    // server (`startPreviewServer`/`buildPreviewServer` in sbt-laika's `Tasks.scala`) that is a
-    // completely separate task graph from `laikaSite`/`generate`, so a `laikaSite`-only patch is invisible
-    // there (confirmed: `laikaPreview`'s served `ux.js` was still unpatched). Patching at the actual
-    // source once means every consumer of `Compile / doc`'s output -- `laikaSite`'s own API-copy step
-    // included -- sees the fix, with no need to patch each consumer separately. (An idiomatic sbt task
-    // augmentation, not a self-referential cycle: `key := f(key.value)` captures the plugin/sbt-provided
-    // task, same mechanism `+=`/`++=` desugar to.) See .claude/WORKLOG-docs-site-fixes.md.
-    Compile / doc := {
-      val apiDir = (Compile / doc).value
-      val uxJs = apiDir / "scripts" / "ux.js"
-      if (uxJs.exists()) {
-        val original = IO.read(uxJs)
-        val patched = original.replace(
-          "$.get(href, function (data) {",
-          "fetch(href).then((r) => r.text()).then(function (data) {"
-        )
-        if (patched != original) IO.write(uxJs, patched)
+// MiMa baseline: binary compatibility is enforced WITHIN a compatibility series and never across one. A series is
+// "0.Y" while the major version is 0 (semver-spec: a 0.x minor bump may break anything, as 0.5.0 deliberately does
+// from 0.4.x) and "X" from 1.0 on (a minor bump must stay compatible, a major bump may not). The baseline of a build is
+// every earlier plain release (no -alpha/-RC suffix) of its own series: `0.5.0-SNAPSHOT` therefore has none, `0.5.1-SNAPSHOT`
+// is checked against `0.5.0`, and the first `0.6.x` build starts a fresh, empty baseline. Needs the tags in the checkout
+// (CI fetches full history), and a tag with no published Maven artifact fails dependency resolution -- see RELEASE.md.
+// A deliberate break inside a series is allowed with a commented entry in `mimaBinaryIssueFilters`, reviewed in the PR.
+def mimaBaselineVersions(current: String, tags: Seq[String]): Seq[String] = {
+  val Release = """(\d+)\.(\d+)\.(\d+)""".r
+  val Versioned = """(\d+)\.(\d+)\.(\d+)(?:-.+)?""".r
+  def series(major: Int, minor: Int): String = if (major == 0) s"0.$minor" else s"$major"
+  current match {
+    case Versioned(major, minor, patch) =>
+      val here = (major.toInt, minor.toInt, patch.toInt)
+      tags.collect {
+        case v @ Release(ma, mi, pa)
+            if series(ma.toInt, mi.toInt) == series(here._1, here._2) &&
+              Ordering[(Int, Int, Int)].lt((ma.toInt, mi.toInt, pa.toInt), here) =>
+          v
       }
-      apiDir
-    },
-    // Both settings are needed, not just one: `Compile / mainClass` is what `sbt run` uses; `assembly /
-    // mainClass` is what sbt-assembly writes into the fat jar's manifest (`java -jar ... `). Neither is inferred
-    // from the other.
-    Compile / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI"),
-    assembly / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI")
-  )
+    case _ => Nil
+  }
+}
+
+// Compiler options: language features (implicitConversions, adhocExtensions) and warning flags.
+scalacOptions ++= List(
+  "-source:future",
+  "-language:experimental.modularity",
+  "-preview", // for `into` - remove once we're on Scala 3.9.x.
+  "-language:adhocExtensions",
+  "-feature",
+  "-deprecation",
+  "-unchecked"
+)
+
+// Patch the favicon generation
+Compile / doc := {
+  val docDir = (Compile / doc).value
+  val allHTML = (docDir ** "*.html").get()
+  allHTML.filter(_.isFile).foreach { file =>
+    val content = sbt.IO.read(file)
+    val patched = content.replace(
+      "<link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"favicon.ico\">",
+      """
+        |<link rel="shortcut icon" type="image/svg+xml" href="/images/header-icon.svg"/>
+        |<link rel="apple-touch-icon" sizes="180x180" href="/images/header-icon-180.png"/>
+        |<link rel="icon" sizes="16x16" type="image/png" href="/images/favicon-16.png"/>
+        |<link rel="icon" sizes="32x32" type="image/png" href="/images/favicon-32.png"/>
+        |<link rel="icon" sizes="48x48" type="image/png" href="/images/favicon-48.png"/>
+        |<link rel="icon" sizes="64x64" type="image/png" href="/images/favicon-64.png"/>
+        |<link rel="icon" sizes="128x128" type="image/png" href="/images/header-icon-128.png"/>
+        |<link rel="icon" sizes="256x256" type="image/png" href="/images/header-icon-256.png"/>
+        |<link rel="manifest" href="/images/manifest.json"/>
+        |<link rel="shortcut icon" type="image/svg+xml" href="/images/header-icon-dark.svg" media="(prefers-color-scheme: dark)" />
+        |<link rel="apple-touch-icon" sizes="180x180" href="/images/header-icon-dark-180.png" media="(prefers-color-scheme: dark)" />
+        |<link rel="icon" sizes="16x16" type="image/png" href="/images/favicon-16.png" media="(prefers-color-scheme: dark)" />
+        |<link rel="icon" sizes="32x32" type="image/png" href="/images/favicon-32.png" media="(prefers-color-scheme: dark)" />
+        |<link rel="icon" sizes="48x48" type="image/png" href="/images/favicon-48.png" media="(prefers-color-scheme: dark)" />
+        |<link rel="icon" sizes="64x64" type="image/png" href="/images/favicon-64.png" media="(prefers-color-scheme: dark)" />
+        |<link rel="icon" sizes="128x128" type="image/png" href="/images/header-icon-dark-128.png" media="(prefers-color-scheme: dark)" />
+        |<link rel="icon" sizes="256x256" type="image/png" href="/images/header-icon-dark-256.png" media="(prefers-color-scheme: dark)" />
+        |<link rel="manifest" href="/images/manifest-dark.json" media="(prefers-color-scheme: dark)" />
+        |        |""".stripMargin
+    )
+    if (patched != content) sbt.IO.write(file, patched)
+  }
+  val favicon = (docDir ** "favicon.ico").get().foreach(file => sbt.IO.delete(file))
+  docDir
+}
+
+// Both settings are needed, not just one: `Compile / mainClass` is what `sbt run` uses; `assembly /
+// mainClass` is what sbt-assembly writes into the fat jar's manifest (`java -jar ... `). Neither is inferred
+// from the other.
+Compile / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI")
+assembly / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI")
 
 // Workaround for XML versioning issues
 // See: https://github.com/scala/bug/issues/12632
@@ -141,7 +160,65 @@ libraryDependencySchemes ++= Seq(
   "org.scala-lang.modules" %% "scala-xml" % VersionScheme.Always
 )
 
-mimaPreviousArtifacts := priorReleaseVersions(baseDirectory.value)
-  .filter(v => !v.startsWith("0.1"))
+mimaPreviousArtifacts := mimaBaselineVersions(version.value, releaseTags(baseDirectory.value))
   .map(v => organization.value %% name.value % v)
   .toSet
+
+// Tutorial pages are tests: every `_docs/tutorials/*.md` with a "## The whole script" section has that section's first
+// `scala` fence copied into a generated `object <Page>Script` (package `tutorial`), which `src/test/.../tutorial/*Spec`
+// asserts on -- the page's code and the code the test runs are one and the same text. The page's narrative
+// (`scala sc:nocompile`) fences before that heading are joined into an `object <Page>Narrative` whose `narrative()`
+// is compiled but never called, so a narrative fence that drifts from the script fails `sbt Test/compile`, not just
+// a reader. See .claude/WORKLOG-tutorial-docs-as-tests.md.
+Test / sourceGenerators += Def.uncached(Def.task {
+  val docs = baseDirectory.value / "_docs" / "tutorials"
+  val outDir = (Test / sourceManaged).value / "tutorial"
+  def objectName(file: File): String =
+    file.getName.stripSuffix(".md").split("-").map(_.capitalize).mkString
+  // (info string, body) of every fenced block, in order
+  def fences(lines: List[String]): List[(String, String)] = {
+    val out = scala.collection.mutable.ListBuffer.empty[(String, String)]
+    var info: Option[String] = None
+    val body = new StringBuilder
+    lines.foreach { line =>
+      if (line.startsWith("```")) {
+        info match {
+          case None    => info = Some(line.stripPrefix("```").trim); body.clear()
+          case Some(i) => out += ((i, body.toString)); info = None
+        }
+      } else if (info.isDefined) body.append(line).append("\n")
+    }
+    out.toList
+  }
+  def indent(text: String, by: Int): String =
+    text.linesIterator.map(l => if (l.isEmpty) l else (" " * by) + l).mkString("\n")
+  val pages = (docs * "*.md").get().sortBy(_.getName)
+  pages.flatMap { page =>
+    val text = IO.read(page)
+    val marker = "## The whole script"
+    val at = text.indexOf(marker)
+    if (at < 0) Nil
+    else {
+      val narrative = fences(text.substring(0, at).linesIterator.toList).collect { case ("scala sc:nocompile", b) => b }
+      val script = fences(text.substring(at).linesIterator.toList)
+        .collectFirst { case ("scala", b) => b }
+        .getOrElse(sys.error(s"${page.getName}: no `scala` fence after '$marker'"))
+      val name = objectName(page)
+      val source =
+        s"""// GENERATED by build.sbt from _docs/tutorials/${page.getName}; do not edit.
+           |package org.appliedtopology.tda4j
+           |package tutorial
+           |
+           |object ${name}Script:
+           |${indent(script, 2)}
+           |
+           |object ${name}Narrative:
+           |  def narrative(): Unit =
+           |${indent(narrative.mkString("\n") + "\n()", 4)}
+           |""".stripMargin
+      val out = outDir / s"${name}Script.scala"
+      IO.write(out, source)
+      Seq(out)
+    }
+  }
+}.taskValue)

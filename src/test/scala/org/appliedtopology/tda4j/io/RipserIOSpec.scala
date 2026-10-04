@@ -1,7 +1,4 @@
 package org.appliedtopology.tda4j
-package io
-
-import org.appliedtopology.tda4j.streams.{given, *}
 
 import org.specs2.mutable
 import java.io.File

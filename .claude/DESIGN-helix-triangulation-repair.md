@@ -29,7 +29,7 @@ The request's own framing was: "instead of building up the full [cospherical] si
 interior of the sphere... putting in a cone with an arbitrary vertex as cone point" — i.e. the assumption that
 `HelixDelaunay`, on a cluster of `k > ambientDim+1` cospherical points, currently emits ONE big degenerate
 `(k-1)`-simplex (the way `AlphaShapeDQP`/the textbook alpha-complex definition does; CLAUDE.md's own "unit grid
-in R² → 3-simplices" example), and that this is the mechanism producing `FastAlphaHomologyContext`'s
+in R² → 3-simplices" example), and that this is the mechanism producing `FastAlphaHomologyEngine`'s
 facet-multiplicity violations.
 
 **This is not what the current code does, and it is not the actual failure mechanism.** Read
@@ -120,14 +120,14 @@ claimants no matter how discard sets overlap. This part of the argument held and
 **But loss-only is exactly the problem, and this was checked empirically, not just argued through.** Running
 `FastAlphaHomologySpec`'s new test (`requireValidTriangulation=true` on `facetMultiplicityViolationFixture`,
 barcode compared against the naive engine on the SAME repaired stream) failed:
-`FastAlphaHomologyContext`'s own barcode was missing an essential `H_1` bar `(1, 1.2622866810415936, Infinity)`
+`FastAlphaHomologyEngine`'s own barcode was missing an essential `H_1` bar `(1, 1.2622866810415936, Infinity)`
 that the naive engine correctly found on the identical repaired stream. A standalone diagnostic script
 (`Test/runMain`, reverted before finalizing) traced the cause precisely: pruning discarded exactly one top
 simplex, `{3,8,10}`, from the 12-point fixture's 17 total. Removing that single triangle without replacement
 does not just shrink the outer hull — it punches a genuine hole through the interior of the mesh, which the
 NAIVE engine correctly reports as a brand-new essential `H_1` class (confirmed: the naive engine's own barcode
 on the unrepaired 17-triangle complex has no such essential bar; on the repaired 16-triangle complex it does).
-`FastAlphaHomologyContext`'s dual-graph technique (Alexander duality via a single shared `∞` sentinel vertex,
+`FastAlphaHomologyEngine`'s dual-graph technique (Alexander duality via a single shared `∞` sentinel vertex,
 `homology/FastAlphaHomology.scala`) implicitly assumes the primal complex's complement has exactly one
 connected component (the true unbounded exterior) — a discard-without-replacement repair that creates an
 interior void breaks that assumption outright, and the engine silently drops the resulting class rather than
@@ -209,10 +209,10 @@ violations) at `d=3` in a 20000-trial sweep. The self-check this version relied 
 claimants" — is necessary but was NOT sufficient.
 
 **Root-caused via a direct challenge, not further guessing.** Presented with one traced `d=3` mismatch (naive
-engine reporting an extra essential `H_2` bar that `FastAlphaHomologyContext` missed on the identical repaired
+engine reporting an extra essential `H_2` bar that `FastAlphaHomologyEngine` missed on the identical repaired
 stream), the project lead pushed back immediately: "Delaunay should fully triangulate the convex hull — there
 shouldn't be a possibility of interior voids. Is the naive engine struggling here?" This was the right question,
-and checking it directly (rather than trusting the earlier working hypothesis that `FastAlphaHomologyContext`'s
+and checking it directly (rather than trusting the earlier working hypothesis that `FastAlphaHomologyEngine`'s
 own single-`∞`-vertex dual graph was again at fault, as it genuinely was for the second design) found: the
 repaired complex's own total tetrahedra volume was a measured ~33% SHORT of the (violation-inflated) unrepaired
 complex's — direct, independent confirmation of a real gap, not a disagreement about how to interpret the
@@ -221,13 +221,13 @@ second coface in some cases: a facet that ends up with exactly 1 claimant is ind
 claimant-count check alone, from a facet that is genuinely on the outer hull. But a genuine Delaunay
 triangulation's own convex hull is convex, hence contractible, so the FULL, unfiltered, all-cells-at-once
 complex must have trivial `H_{d-1}` — a nonzero `H_{d-1}` there is never a legitimate feature, only ever evidence
-of a missed simplex. So `naive`'s extra essential bar was correct, and `FastAlphaHomologyContext` was the one
+of a missed simplex. So `naive`'s extra essential bar was correct, and `FastAlphaHomologyEngine` was the one
 missing a real class — the SAME failure signature as the second design (a discard-created interior void the
 single-`∞`-vertex dual graph can't see), but this time the void was an unintended BUG in the repair's own output,
 not an inherent consequence of the repair's own strategy the way it was for discard-without-replacement.
 
 **Fix**: add a second, independent self-check — `HelixDelaunay.hasNoInteriorVoid` — alongside the facet-claimant
-check, built by running `SimplicialHomologyContext` on the full unfiltered candidate complex (every cell at a
+check, built by running `SimplicialHomologyEngine` on the full unfiltered candidate complex (every cell at a
 single filtration value) and confirming no essential bar at dimension `ambientDimension - 1`. On failure, widen
 the jitter set to the candidate's own current boundary vertices (facets with exactly 1 claimant — the specific
 vertices where a missed coface would be) and retry. Re-running the SAME two stress sweeps that found the
@@ -272,7 +272,7 @@ one; `requireValidTriangulation` does not special-case or refuse `d>=4`, it simp
    Not implemented past this point.
 2. **Pruning** (rejected): implemented, compiled, and run against `FastAlphaHomologySpec`'s agreement test.
    Failed: missing one essential `H_1` bar. Root cause traced via a standalone diagnostic script, confirmed
-   against both the naive engine's unrepaired-vs-repaired barcodes and `FastAlphaHomologyContext`'s own output.
+   against both the naive engine's unrepaired-vs-repaired barcodes and `FastAlphaHomologyEngine`'s own output.
    Reverted in full.
 3. **Jitter + global recompute, first version** (superseded, not separately shipped): validated clean at `d=2`
    (316/316); failed at `d=3` (656/6272 disagreements in a 20000-trial sweep) — caught by the same empirical

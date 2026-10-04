@@ -112,7 +112,7 @@ bound against an ALREADY-collapsed input is safe by construction too, not just w
   does NOT assert idempotence (an earlier assumption that it should, left over from the first design's own
   fixed-point framing, was itself wrong and had to be corrected) -- only that a second round removes no MORE
   than the first left behind, and the barcode still agrees with plain VR afterward.
-- **The real oracle throughout**: barcode agreement against plain, uncollapsed VR (`SimplicialHomologyContext`)
+- **The real oracle throughout**: barcode agreement against plain, uncollapsed VR (`SimplicialHomologyEngine`)
   -- a ScalaCheck property test across random point clouds (n=6-11, dims 2-3), a tie-heavy 3x3 integer grid
   (CLAUDE.md's own established discriminator for a new stream-adjacent construction), and the SAME comparison
   again under the DEFAULT (truncated) bound, not just the untruncated case. Zero-persistence (birth==death)
@@ -153,7 +153,7 @@ The originating worklog's own explicit instruction: "check whether `CofacetCurso
 scans all `n` vertices with a threshold test... measure construction and reduction separately... before
 claiming any speedup." Answered by reading source, not measuring first:
 
-- **`SimplexIndexing.CofacetCursor`** (backs `PackedRipserCohomologyContext`'s own internal enumeration, NOT
+- **`SimplexIndexing.CofacetCursor`** (backs `PackedRipserCohomologyEngine`'s own internal enumeration, NOT
   `RipserCofaceSimplexStream`): `step()` walks `j` from `vertexCount - 1` down to `0` unconditionally, testing
   membership via binary search -- a combinatorial, not neighbor-based, scan. Edge collapse never changes
   `vertexCount` (vertices are never removed -- see the correction above), so this scan's own cost is completely
@@ -168,7 +168,7 @@ claiming any speedup." Answered by reading source, not measuring first:
   enumeration work, proportionally.
 
 **Conclusion, stated plainly rather than inferred**: edge collapse gives NO enumeration speedup for
-`EnumeratingCofaceSimplexStream` or `PackedRipserCohomologyContext`'s own internal machinery -- both scan a
+`EnumeratingCofaceSimplexStream` or `PackedRipserCohomologyEngine`'s own internal machinery -- both scan a
 FIXED combinatorial range regardless of how sparse the resulting graph is. It gives a REAL, proportional
 enumeration speedup for `RipserCofaceSimplexStream` specifically (not currently `matlab.TDA4j`'s own default
 VR stream). REDUCTION cost is expected to improve for every engine (fewer real simplices means a smaller
@@ -178,7 +178,7 @@ below.
 ## Measurement (`EdgeCollapseBenchmarkSpec`, `-DrunBenchmarks=true`)
 
 Random point clouds, ambient dim 3, `maxDim=2`, 3 trials/size, median timings, construction
-(`EnumeratingCofaceSimplexStream.iterator.toVector`) and reduction (`SimplicialHomologyContext`, the naive
+(`EnumeratingCofaceSimplexStream.iterator.toVector`) and reduction (`SimplicialHomologyEngine`, the naive
 engine) timed separately, exactly as the originating worklog asked:
 
 | n | edges before | edges after | kept% | collapse(ms) | build plain (ms) | build collapsed (ms) | build speedup | reduce plain (ms) | reduce collapsed (ms) | reduce speedup |
@@ -216,7 +216,7 @@ the full, unqualified 1:1 CLI mirror the rest of `matlab.TDA4j`'s compute option
 EVERY engine (`ripser`/`naive`/`chunks`/`cohomology`) uniformly by construction (the same `metricSpace` swap
 feeds all four, exactly the "wire once, benefits every engine" shape the boundary-matrix work already
 established for a different property of the complex) — including `ripser`, even though the measurement above
-used the naive engine specifically and the source-level analysis found `PackedRipserCohomologyContext`'s own
+used the naive engine specifically and the source-level analysis found `PackedRipserCohomologyEngine`'s own
 internal enumeration (via `CofacetCursor`, not `EnumeratingCofaceSimplexStream`) is not expected to benefit
 from a sparser graph the way construction does elsewhere; its reduction phase should still benefit from fewer
 real simplices the same way `naive`'s does, and refusing the combination outright would need its own

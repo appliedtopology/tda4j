@@ -1,11 +1,6 @@
 package org.appliedtopology.tda4j.matlab
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
-import org.appliedtopology.tda4j.barcode.{given, *}
+import org.appliedtopology.tda4j.*
 
 /** The boundary matrix of the full complex a [[PersistenceResult]] was computed from, one column per cell in filtration
   * order (column `j`'s own dimension/vertices are `columnDims(j)`/`columnVertices(j)`) -- `TDA4j`'s own
@@ -44,26 +39,83 @@ private[matlab] case class BoundaryMatrixData(
   * which.
   */
 final class PersistenceResult private[matlab] (
-  private val dims: Array[Int],
-  private val births: Array[Double],
-  private val deaths: Array[Double],
+  private val allDims: Array[Int],
+  private val allBirths: Array[Double],
+  private val allDeaths: Array[Double],
   private val cycleProvider: Int => (Array[Array[Int]], Array[Double]),
-  private val boundaryMatrixProvider: () => BoundaryMatrixData
+  private val boundaryMatrixProvider: () => BoundaryMatrixData,
+  private val visible: Array[Int],
+  private val threshold: Double
 ):
-  def size(): Int = dims.length
+  /** A result that reports every bar -- what `fromBars` builds; `TDA4j`'s dispatch then narrows it with
+    * [[withPersistenceThreshold]].
+    */
+  private[matlab] def this(
+    dims: Array[Int],
+    births: Array[Double],
+    deaths: Array[Double],
+    cycleProvider: Int => (Array[Array[Int]], Array[Double]),
+    boundaryMatrixProvider: () => BoundaryMatrixData
+  ) = this(dims, births, deaths, cycleProvider, boundaryMatrixProvider, Array.range(0, dims.length), 0.0)
+
+  // The REPORTED bars: row `i` below is full-barcode index `visible(i)`.
+  private def dims: Array[Int] = visible.map(allDims)
+  private def births: Array[Double] = visible.map(allBirths)
+  private def deaths: Array[Double] = visible.map(allDeaths)
+
+  /** The persistence threshold this result was filtered with (`0` means nothing was hidden by a threshold): bars with
+    * `death - birth` at or below it are not among the `size()` reported bars. Essential bars are never hidden. See
+    * `PersistenceFilter` for how the default (1% of the minimum enclosing radius) is derived.
+    */
+  def persistenceThreshold(): Double = threshold
+
+  /** How many bars the threshold hid (the full barcode has `size() + hiddenCount()` bars). */
+  def hiddenCount(): Int = allDims.length - visible.length
+
+  /** The full, unfiltered barcode as an N-by-3 matrix (dimension, birth, death), same layout as [[toArray]]. */
+  def toArrayUnfiltered(): Array[Array[Double]] =
+    Array.tabulate(allDims.length)(i => Array(allDims(i).toDouble, allBirths(i), allDeaths(i)))
+
+  /** This same computation reporting only the bars that pass the threshold -- see `PersistenceFilter` for the rule
+    * (`minPersistence` absolute if given, otherwise `fraction` of `scale` -- the input's minimum enclosing radius, or a
+    * cubical image's value range; by-name, evaluated only when needed; `0` keeps everything). Computed from the FULL
+    * barcode, so it does not compound if applied twice.
+    */
+  private[matlab] def withPersistenceThreshold(
+    minPersistence: Option[Double],
+    fraction: Double,
+    scale: => Double
+  ): PersistenceResult =
+    val thr = PersistenceFilter.threshold(
+      minPersistence,
+      fraction,
+      scale,
+      PersistenceFilter.filtrationRange(allBirths, allDeaths)
+    )
+    new PersistenceResult(
+      allDims,
+      allBirths,
+      allDeaths,
+      cycleProvider,
+      boundaryMatrixProvider,
+      PersistenceFilter.keptIndices(allBirths, allDeaths, thr),
+      thr
+    )
+
+  def size(): Int = visible.length
 
   /** The whole barcode as one N-by-3 matrix: column 0 is dimension, column 1 is birth, column 2 is death (`+Inf` for an
     * essential class). This is the primary, MATLAB-idiomatic way to consume a result -- immediately plottable,
     * sortable, filterable with ordinary MATLAB matrix operations.
     */
   def toArray(): Array[Array[Double]] =
-    Array.tabulate(dims.length) { i =>
-      Array(dims(i).toDouble, births(i), deaths(i))
+    Array.tabulate(visible.length) { i =>
+      Array(allDims(visible(i)).toDouble, allBirths(visible(i)), allDeaths(visible(i)))
     }
 
-  def dimension(i: Int): Int = dims(i)
-  def birth(i: Int): Double = births(i)
-  def death(i: Int): Double = deaths(i)
+  def dimension(i: Int): Int = allDims(visible(i))
+  def birth(i: Int): Double = allBirths(visible(i))
+  def death(i: Int): Double = allDeaths(visible(i))
 
   /** The cells making up bar `i`'s representative chain, each as an `int[]` identifying that cell -- the array's own
     * meaning depends on which complex this result came from, since the underlying cell type differs:
@@ -80,26 +132,28 @@ final class PersistenceResult private[matlab] (
     * an expected gap -- see `.claude/CLAUDE.md`'s coefficients-and-representatives design principle for why this
     * matters.
     */
-  def cycleVertices(i: Int): Array[Array[Int]] = cycleProvider(i)._1
+  def cycleVertices(i: Int): Array[Array[Int]] = cycleProvider(visible(i))._1
 
   /** Coefficients parallel to `cycleVertices(i)`. Reported as `double` regardless of the underlying coefficient field
     * -- for a finite field `Z/pZ` this is the representative integer value cast to `double`, for the default
     * real-valued field it's the value itself. See `cycleVertices` for the exceptions this can throw.
     */
-  def cycleCoefficients(i: Int): Array[Double] = cycleProvider(i)._2
+  def cycleCoefficients(i: Int): Array[Double] = cycleProvider(visible(i))._2
 
-  /** This result's own bars of dimension `dim`, as plain `PersistenceBar[Double, Nothing]` (no representative chain --
-    * `barcode.BarcodeDistance`/`barcode.Vectorization` only ever look at `dim`/`lower`/`upper`) for feeding into those
-    * two objects. An essential class (`death(i) == Double.PositiveInfinity`) becomes a `PositiveInfinity` upper
-    * endpoint, exactly what both consume directly for the essential-bar handling documented on each.
+  /** This result's own bars of dimension `dim` -- ALL of them, including any the persistence threshold hides from
+    * `size()`/`toArray()` (a distance or vectorization between two results must not depend on each one's own threshold,
+    * which differs with each one's own scale) -- as plain `PersistenceBar[Double, Nothing]` (no representative chain --
+    * `BarcodeDistance`/`Vectorization` only ever look at `dim`/`lower`/`upper`) for feeding into those two objects. An
+    * essential class (`death(i) == Double.PositiveInfinity`) becomes a `PositiveInfinity` upper endpoint, exactly what
+    * both consume directly for the essential-bar handling documented on each.
     */
   private def barsOfDimension(dim: Int): IndexedSeq[PersistenceBar[Double, Nothing]] =
-    (0 until size())
-      .filter(dims(_) == dim)
+    (0 until allDims.length)
+      .filter(allDims(_) == dim)
       .map { i =>
         val upper: BarcodeEndpoint[Double] =
-          if deaths(i).isPosInfinity then PositiveInfinity[Double]() else OpenEndpoint(deaths(i))
-        PersistenceBar[Double, Nothing](dim, ClosedEndpoint(births(i)), upper)
+          if allDeaths(i).isPosInfinity then PositiveInfinity[Double]() else OpenEndpoint(allDeaths(i))
+        PersistenceBar[Double, Nothing](dim, ClosedEndpoint(allBirths(i)), upper)
       }
 
   /** `groundNorm` follows this facade's own existing `maxFiltrationValue` convention (`TDA4j`'s own doc: "pass a very
@@ -111,8 +165,8 @@ final class PersistenceResult private[matlab] (
     if groundNorm.isPosInfinity then BarcodeDistance.GroundNorm.LInfinity else BarcodeDistance.GroundNorm.LP(groundNorm)
 
   /** Bottleneck distance (`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 4) between this result's and
-    * `other`'s dimension-`dimension` bars, under the L-infinity ground norm -- see `barcode.BarcodeDistance` for the
-    * full matching/essential-bar policy this implements. `Double.PositiveInfinity` back means the two diagrams have
+    * `other`'s dimension-`dimension` bars, under the L-infinity ground norm -- see `BarcodeDistance` for the full
+    * matching/essential-bar policy this implements. `Double.PositiveInfinity` back means the two diagrams have
     * different numbers of essential (never-dying) classes in this dimension, so no finite matching exists; that is a
     * real answer, not a failure.
     */
@@ -129,8 +183,8 @@ final class PersistenceResult private[matlab] (
       toGroundNorm(groundNorm)
     )
 
-  /** Wasserstein distance, order `1.0`, L-infinity ground norm -- see [[bottleneckDistance]] and
-    * `barcode.BarcodeDistance` for the shared essential-bar policy and ground-norm convention.
+  /** Wasserstein distance, order `1.0`, L-infinity ground norm -- see [[bottleneckDistance]] and `BarcodeDistance` for
+    * the shared essential-bar policy and ground-norm convention.
     */
   def wassersteinDistance(other: PersistenceResult, dimension: Int): Double =
     wassersteinDistance(other, dimension, 1.0, Double.PositiveInfinity)
@@ -152,9 +206,9 @@ final class PersistenceResult private[matlab] (
 
   /** The first `numLevels` persistence landscape functions (Bubenik 2013, `.claude/WORKLOG-mainstream-feature-gap-
     * analysis.md` item 8) of this result's dimension-`dimension` bars, sampled at `resolution` evenly-spaced points
-    * across `[tMin, tMax]` -- see `barcode.Vectorization.landscape` for the exact sampling convention, the closed-form
-    * check it satisfies, and why an essential (never-dying) bar needs no special handling here. Returns `levels(k)(j)`:
-    * level `k` (`0` = the outer envelope) at the `j`-th sample point.
+    * across `[tMin, tMax]` -- see `Vectorization.landscape` for the exact sampling convention, the closed-form check it
+    * satisfies, and why an essential (never-dying) bar needs no special handling here. Returns `levels(k)(j)`: level
+    * `k` (`0` = the outer envelope) at the `j`-th sample point.
     */
   def landscape(dimension: Int, numLevels: Int, tMin: Double, tMax: Double, resolution: Int): Array[Array[Double]] =
     Vectorization.landscape(barsOfDimension(dimension), numLevels, tMin, tMax, resolution)
@@ -162,7 +216,7 @@ final class PersistenceResult private[matlab] (
   /** The persistence image (Adams et al. 2017, `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 8) of this
     * result's dimension-`dimension` bars, with the weight cap defaulted to that diagram's own maximum finite
     * persistence (the paper's suggested default) -- see the eight-argument overload to pass one explicitly, and
-    * `barcode.Vectorization.persistenceImage` for the exact construction (isotropic Gaussian bumps in birth-persistence
+    * `Vectorization.persistenceImage` for the exact construction (isotropic Gaussian bumps in birth-persistence
     * coordinates, exact per-pixel integration, piecewise-linear weighting) and why essential (never-dying) bars are
     * dropped rather than given a special-cased value. Returns `image(r)(c)`: `r` indexes `birthResolution` pixels
     * spanning `[birthMin, birthMax]`, `c` indexes `persistenceResolution` pixels spanning `[persistenceMin,
@@ -188,8 +242,8 @@ final class PersistenceResult private[matlab] (
     )
 
   /** As the eight-argument [[persistenceImage]], with an explicit weight cap (the persistence value at and beyond which
-    * `barcode.Vectorization`'s piecewise-linear weighting saturates to `1.0`) instead of the diagram's own maximum
-    * finite persistence.
+    * `Vectorization`'s piecewise-linear weighting saturates to `1.0`) instead of the diagram's own maximum finite
+    * persistence.
     */
   def persistenceImage(
     dimension: Int,

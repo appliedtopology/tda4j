@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.specs2.mutable
 import org.specs2.main.Arguments
@@ -14,11 +7,11 @@ import java.util.concurrent.{Executors, ThreadFactory}
 import scala.concurrent.{Await, ExecutionContext, Future, TimeoutException}
 import scala.concurrent.duration.*
 
-/** Naive (`CellularHomologyContext`) vs. chunks (`CellularPersistenceInChunksContext`) scaling on cubical complexes,
-  * run on the SAME generated grid at each size for a fair comparison -- the naive engine's own scaling (2D roughly flat
+/** Naive (`CellularHomologyEngine`) vs. chunks (`CellularPersistenceInChunksEngine`) scaling on cubical complexes, run
+  * on the SAME generated grid at each size for a fair comparison -- the naive engine's own scaling (2D roughly flat
   * per-cell cost, 3D per-cell cost GROWING with `n`, not yet root-caused) is documented in CLAUDE.md; this spec adds
   * chunks as a second engine to see whether it handles the 3D case differently.
-  * `CellularPersistenceInChunksContext[Cube, ...]` had never been exercised anywhere in this codebase before -- see
+  * `CellularPersistenceInChunksEngine[Cube, ...]` had never been exercised anywhere in this codebase before -- see
   * `CubicalStreamSpec`'s own cross-validation section (naive-vs-chunks agreement on the tie-heavy fixtures, plus
   * `HomologyFixtures.totalBarsAccountForAllCells` on chunks' own output independently) before trusting any timing here,
   * and `.claude/WORKLOG-cubical-chunks-benchmark.md` for the full derivation.
@@ -28,7 +21,7 @@ import scala.concurrent.duration.*
   * simply computes through the stream's actual top cube dimension, which for a `dims`-dimensional grid is `dims`
   * itself; pinning them to agree keeps a maxDim-semantics mismatch from masquerading as a timing or correctness
   * difference. Chunks runs under a timeout (default 30s, `-DtimeoutSeconds`) on a daemon-thread executor, matching
-  * `EngineComparisonBenchmarkSpec`'s established pattern -- `PersistenceInChunksContext` x alpha is a known stall/OOM
+  * `EngineComparisonBenchmarkSpec`'s established pattern -- `PersistenceInChunksEngine` x alpha is a known stall/OOM
   * risk at complex sizes far smaller than a 3D grid can reach (CLAUDE.md's "Cross-engine benchmark" section: 102k
   * simplices stalled/OOM'd), and a 32-cubed grid is 274,625 cells, so a timeout here is a real safety net, not
   * defensive boilerplate -- a stall prints `"timeout"` in the table rather than hanging the run. Like
@@ -57,7 +50,7 @@ class CubicalBenchmarkSpec(args: Arguments) extends mutable.Specification:
     val timeoutSeconds: Int = args.commandLine.intOr("timeoutSeconds", 30)
 
     given Double is Field = Field.DoubleApproximated(1e-9)
-    given chc: CubicalHomologyContext[Double, Double] = CubicalHomologyContext()
+    given chc: CubicalHomologyEngine[Double, Double] = CubicalHomologyEngine()
     import chc.{*, given}
 
     // No cooperative cancellation exists in either engine, so a "timeout" only stops waiting -- the body keeps
@@ -101,7 +94,7 @@ class CubicalBenchmarkSpec(args: Arguments) extends mutable.Specification:
 
       val chunksResult = withTimeout {
         val start = System.nanoTime()
-        CellularPersistenceInChunksContext[Cube, Double](dims)
+        CellularPersistenceInChunksEngine[Cube, Double](dims)
           .persistentHomology(stream)
           .diagramAt(Double.PositiveInfinity)
         (System.nanoTime() - start) / 1e6

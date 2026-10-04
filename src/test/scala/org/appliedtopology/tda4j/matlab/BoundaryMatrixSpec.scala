@@ -58,7 +58,7 @@ class BoundaryMatrixSpec extends Specification with ScalaCheck:
       // is LESS than its longest edge (the hypotenuse, sqrt(2)) -- the default truncation would otherwise drop
       // both the hypotenuse and the triangle itself, which is correct default behavior but not what this
       // particular test wants to exercise (the full, untruncated 7-cell complex).
-      val result = TDA4j.computeFromPoints(points, Array("maxDimension", "2", "maxFiltrationValue", "Infinity"))
+      val result = FullBarcode.computeFromPoints(points, Array("maxDimension", "2", "maxFiltrationValue", "Infinity"))
       result.numCells() must beEqualTo(7) // 3 vertices + 3 edges + 1 triangle
       reduceZ2(result) must beEqualTo(barsAsTriples(result))
     }
@@ -67,7 +67,7 @@ class BoundaryMatrixSpec extends Specification with ScalaCheck:
       val pointGen = Gen.listOfN(6, Gen.listOfN(2, Gen.choose(0.0, 3.0))).map(_.map(_.toArray).toArray)
       forAll(pointGen) { points =>
         val engines = Seq("ripser", "naive", "chunks", "cohomology")
-        val results = engines.map(e => TDA4j.computeFromPoints(points, Array("engine", e, "maxDimension", "1")))
+        val results = engines.map(e => FullBarcode.computeFromPoints(points, Array("engine", e, "maxDimension", "1")))
         val barSets = results.map(barsAsTriples)
         // The exported matrix intentionally includes the SAME "one cell-dimension higher" scaffolding
         // TDA4j.computeGeneric itself builds internally (H_k needs (k+1)-chains) and that fromBars drops from
@@ -83,21 +83,21 @@ class BoundaryMatrixSpec extends Specification with ScalaCheck:
 
     "on a cubical complex" >> {
       val values = Array(Array(0.0, 1.0, 0.0), Array(1.0, 2.0, 1.0), Array(0.0, 1.0, 0.0))
-      val result = TDA4j.computeFromImage(values, Array("maxDimension", "1"))
+      val result = FullBarcode.computeFromImage(values, Array("maxDimension", "1"))
       reduceZ2(result) must beEqualTo(barsAsTriples(result))
     }
 
     "on an alpha complex (no maxDimension truncation, exercises the Int.MaxValue keepDimensionsUpTo path)" >> {
       // A generic (non-symmetric, non-cospherical) point set deliberately -- unrelated pre-existing bug found
       // while writing this spec: a highly symmetric configuration (a unit square plus its own center) makes
-      // TDA4j.computeFromPoints(complex=alpha) throw IllegalStateException("reduction pivot ... was not a
-      // recorded open class") from CellularHomologyContext.advanceOne, reproducing with NO boundary-matrix code
+      // FullBarcode.computeFromPoints(complex=alpha) throw IllegalStateException("reduction pivot ... was not a
+      // recorded open class") from CellularHomologyEngine.advanceOne, reproducing with NO boundary-matrix code
       // involved at all -- confirmed by calling that exact one-line combination directly. Out of scope for this
       // arc (a real but separate ordering/tie-handling bug, the same failure signature CLAUDE.md's "Streams:
       // the ordering contract" section already documents five prior instances of); flagged in this session's
       // own worklog rather than chased down here.
       val points = Array(Array(0.0, 0.0), Array(1.1, 0.2), Array(0.3, 1.4), Array(2.1, 0.9), Array(1.5, 1.8))
-      val result = TDA4j.computeFromPoints(points, Array("complex", "alpha"))
+      val result = FullBarcode.computeFromPoints(points, Array("complex", "alpha"))
       reduceZ2(result) must beEqualTo(barsAsTriples(result))
     }
   }
@@ -105,7 +105,7 @@ class BoundaryMatrixSpec extends Specification with ScalaCheck:
   "boundary matrix structure" >> {
     "every column's own dimension is one more than every row it references, i.e. boundary strictly lowers dimension by exactly 1" >> {
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.9), Array(2.0, 0.3))
-      val result = TDA4j.computeFromPoints(points, Array("maxDimension", "2"))
+      val result = FullBarcode.computeFromPoints(points, Array("maxDimension", "2"))
       val rows = result.boundaryRows()
       val cols = result.boundaryCols()
       forall(rows.indices) { k =>
@@ -115,7 +115,7 @@ class BoundaryMatrixSpec extends Specification with ScalaCheck:
 
     "every entry is a face: its row's own column index is strictly less than its column index" >> {
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.9), Array(2.0, 0.3))
-      val result = TDA4j.computeFromPoints(points, Array("maxDimension", "2"))
+      val result = FullBarcode.computeFromPoints(points, Array("maxDimension", "2"))
       val rows = result.boundaryRows()
       val cols = result.boundaryCols()
       forall(rows.indices)(k => rows(k) must beLessThan(cols(k)))
@@ -128,13 +128,13 @@ class BoundaryMatrixSpec extends Specification with ScalaCheck:
       // representative. Confirmed directly (not assumed): every entry on this exact fixture is consistently
       // -1.0, never a mix, and cycleCoefficients elsewhere in this facade has the identical property already.
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.9))
-      val result = TDA4j.computeFromPoints(points, Array("maxDimension", "2"))
+      val result = FullBarcode.computeFromPoints(points, Array("maxDimension", "2"))
       result.boundaryValues().forall(v => math.abs(v) == 1.0) must beTrue
     }
 
     "columnVertices/columnDimension are self-consistent: a dimension-k column's vertex array has k+1 entries" >> {
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.9))
-      val result = TDA4j.computeFromPoints(points, Array("maxDimension", "2"))
+      val result = FullBarcode.computeFromPoints(points, Array("maxDimension", "2"))
       forall(0 until result.numCells()) { j =>
         result.columnVertices(j).length must beEqualTo(result.columnDimension(j) + 1)
       }

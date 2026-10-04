@@ -1,8 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
 
 import scala.collection.concurrent.TrieMap
 
@@ -30,7 +26,7 @@ import scala.collection.concurrent.TrieMap
   *
   * ==The construction==
   *
-  * Given a greedy permutation (`streams.GreedyPermutation`, computed by `LandmarkSelector.maxmin` run to
+  * Given a greedy permutation (`GreedyPermutation`, computed by `LandmarkSelector.maxmin` run to
   * `numLandmarks = ambientMetricSpace.size`) with insertion radii `lambda_p` (`lambda` of the very first point is
   * `Double.PositiveInfinity` by convention -- it must never be pruned away, since it anchors the whole construction),
   * and a sparsity parameter `epsilon in (0,1)`:
@@ -89,7 +85,7 @@ import scala.collection.concurrent.TrieMap
   * like any other `CofaceSimplexStream[Int, Double]`; `chunks` is cross-validated fresh against `naive`
   * (`SheehyRipsStreamSpec`), not assumed to carry over.
   */
-class SheehyRipsSimplexStream(
+private[tda4j] class SheehyRipsSimplexStream(
   val ambientMetricSpace: FiniteMetricSpace[Int],
   val permutation: GreedyPermutation,
   val epsilon: Double,
@@ -119,7 +115,7 @@ class SheehyRipsSimplexStream(
     "permutation must be a full greedy permutation of every point in ambientMetricSpace"
   )
 
-object SheehyRipsSimplexStream:
+private[tda4j] object SheehyRipsSimplexStream:
 
   /** Builds the greedy permutation itself (via `LandmarkSelector.maxmin` run to full size, see that method's own doc)
     * before delegating to the primary constructor -- the convenience entry point most callers want. Validates `epsilon`
@@ -233,8 +229,8 @@ object SheehyRipsSimplexStream:
     if finiteBirths.isEmpty then 0.0 else finiteBirths.max
 
 /** A full greedy permutation (farthest-point / "maxmin" sampling) of an ENTIRE finite metric space -- as opposed to
-  * `streams.LandmarkSelection`, which picks a SUBSET. `order` is every ambient index in selection order (`order(0)` is
-  * the seed point); `insertionRadius(p)` is `p`'s own `lambda_p = d(p, {points ordered before p})`, with
+  * `LandmarkSelection`, which picks a SUBSET. `order` is every ambient index in selection order (`order(0)` is the seed
+  * point); `insertionRadius(p)` is `p`'s own `lambda_p = d(p, {points ordered before p})`, with
   * `insertionRadius(order(0)) = Double.PositiveInfinity` by convention (there is no "distance to the empty set", and
   * the seed point must never be pruned away by any downstream sparsification). Built by `LandmarkSelector.maxmin` run
   * to `numLandmarks = metricSpace.size` (see that method's own doc) -- this type just names the result's intended use

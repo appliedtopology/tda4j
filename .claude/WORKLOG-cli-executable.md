@@ -147,7 +147,7 @@ this session). `sbt scalafmtAll`/`scalafmtCheckAll scalafmtSbtCheck` clean.
   represents "only some pairs are known," not attempted here.
 - `run`'s parse-level-error/`System.exit` limitation, described above -- accepted, not fixed, for the stated
   reason (the `throwError` escape hatch would require reimplementing Scallop's own help/version printing by hand).
-- Cubical persistent homology (`CubicalGridStream`/`CubicalHomologyContext`) is not exposed by this CLI at all --
+- Cubical persistent homology (`CubicalGridStream`/`CubicalHomologyEngine`) is not exposed by this CLI at all --
   matching the ask's own scope ("use the Matlab layer as a guide"): `Tda4j`/`PersistenceResult` themselves don't
   expose it either, so there was nothing to mirror. A future session wanting cubical-image persistence from the
   command line would need to either extend `Tda4j` itself first, or give the CLI its own separate code path (and

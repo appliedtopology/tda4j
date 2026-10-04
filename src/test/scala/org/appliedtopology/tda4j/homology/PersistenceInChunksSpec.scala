@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.specs2.mutable
 
@@ -31,7 +24,7 @@ class PersistenceInChunksSpec extends mutable.Specification:
     stream
 
   "Homology of a triangle" >> {
-    given shc: PersistenceInChunksContext[Int, Double] = PersistenceInChunksContext()
+    given shc: PersistenceInChunksEngine[Int, Double] = PersistenceInChunksEngine()
     import shc.{*, given}
 
     val streamBuilder = ExplicitStreamBuilder[Int, Double]
@@ -50,7 +43,7 @@ class PersistenceInChunksSpec extends mutable.Specification:
   }
 
   "Homology of a filled tetrahedron" >> {
-    given shc: PersistenceInChunksContext[Int, Double] = PersistenceInChunksContext()
+    given shc: PersistenceInChunksEngine[Int, Double] = PersistenceInChunksEngine()
     import shc.{*, given}
 
     val streamBuilder = ExplicitStreamBuilder[Int, Double]
@@ -95,7 +88,7 @@ class PersistenceInChunksSpec extends mutable.Specification:
   }
 
   "Homology of a triangulated torus" >> {
-    given shc: PersistenceInChunksContext[Int, Double] = PersistenceInChunksContext()
+    given shc: PersistenceInChunksEngine[Int, Double] = PersistenceInChunksEngine()
     import shc.{*, given}
 
     val streamBuilder = ExplicitStreamBuilder[Int, Double]
@@ -176,8 +169,8 @@ class PersistenceInChunksSpec extends mutable.Specification:
           case d if byDim.contains(d) => byDim(d).iterator
         }
 
-    val ccCtx: PersistenceInChunksContext[Int, Double] =
-      PersistenceInChunksContext()
+    val ccCtx: PersistenceInChunksEngine[Int, Double] =
+      PersistenceInChunksEngine()
     val ccDiagram =
       ccCtx.persistentHomology(stream).diagramAt(Double.PositiveInfinity)
 
@@ -222,10 +215,10 @@ class PersistenceInChunksSpec extends mutable.Specification:
   // invariant. This fixture -- the boundary of a tetrahedron (topologically S^2) with every cell tied at
   // the same filtration value -- is the minimal hand-verifiable case that actually exercises the tie
   // (HomologyFixtures.tetrahedronCells has the same shape but distinct values, and does NOT trigger it).
-  // Checks PersistenceInChunksContext directly against a hand-derived barcode, not against agreement with
+  // Checks PersistenceInChunksEngine directly against a hand-derived barcode, not against agreement with
   // another engine -- the two engines agreeing was exactly what this bug defeated for a while.
   "Homology of the tetrahedron boundary with every cell tied at the same value (degenerate S^2)" >> {
-    given shc: PersistenceInChunksContext[Int, Double] = PersistenceInChunksContext(2)
+    given shc: PersistenceInChunksEngine[Int, Double] = PersistenceInChunksEngine(2)
     import shc.{*, given}
 
     val streamBuilder = ExplicitStreamBuilder[Int, Double]
@@ -242,7 +235,7 @@ class PersistenceInChunksSpec extends mutable.Specification:
   // checked directly against a hand-derived barcode, the same reason as the fixture above: engines
   // agreeing with each other was exactly the check this session's bug defeated.
   "Homology of a 3-cycle graph (no filled triangle) has one essential H^1 class, not three" >> {
-    given shc: PersistenceInChunksContext[Int, Double] = PersistenceInChunksContext(1)
+    given shc: PersistenceInChunksEngine[Int, Double] = PersistenceInChunksEngine(1)
     import shc.{*, given}
 
     val threePointLine = EuclideanMetricSpace(Array(Array(0.0), Array(1.0), Array(3.0)))
@@ -265,7 +258,7 @@ class PersistenceInChunksSpec extends mutable.Specification:
   }
 
   "Homology of the filled triangle has zero essential H^1 classes (contractible)" >> {
-    given shc: PersistenceInChunksContext[Int, Double] = PersistenceInChunksContext(2)
+    given shc: PersistenceInChunksEngine[Int, Double] = PersistenceInChunksEngine(2)
     import shc.{*, given}
 
     val threePointLine = EuclideanMetricSpace(Array(Array(0.0), Array(1.0), Array(3.0)))
@@ -286,7 +279,7 @@ class PersistenceInChunksSpec extends mutable.Specification:
   }
 
   "Homology of the elder-rule fixture picks the filtration-order pivot, not the lexicographic one" >> {
-    given shc: PersistenceInChunksContext[Int, Double] = PersistenceInChunksContext()
+    given shc: PersistenceInChunksEngine[Int, Double] = PersistenceInChunksEngine()
     import shc.{*, given}
 
     val streamBuilder = ExplicitStreamBuilder[Int, Double]
@@ -318,14 +311,14 @@ class PersistenceInChunksSpec extends mutable.Specification:
     yield
       val metricSpace = EuclideanMetricSpace(Array.fill(n)(Array(0.0)))
 
-      val chunksCtx = PersistenceInChunksContext[Int, Double](maxDim)
+      val chunksCtx = PersistenceInChunksEngine[Int, Double](maxDim)
       val chunksState = chunksCtx.persistentHomology(
         EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(Double.PositiveInfinity))
       )
       val chunksBars = chunksState.diagramAt(Double.PositiveInfinity)
       val chunksReps = chunksState.barcodeAt(Double.PositiveInfinity)
 
-      given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+      given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
       val naiveBars = shc
         .persistentHomology(
           EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(Double.PositiveInfinity))

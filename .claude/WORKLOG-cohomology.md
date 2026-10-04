@@ -40,7 +40,7 @@ complex, same as homology's existing VR tests already accept (see `torusExpected
 
 ### The four things the advisor's first pass caught that a naive port of phase 1 would have missed
 
-1. **Zero-length bars.** The naive engine (`CellularHomologyContext`) emits `(pivot.dim, pivotFv,
+1. **Zero-length bars.** The naive engine (`CellularHomologyEngine`) emits `(pivot.dim, pivotFv,
    deathFv, rep)` unconditionally, including when `pivotFv == deathFv` (a tied face/coface pair, e.g.
    the square fixture's `∆(0,2)`/`∆(0,1,2)` both at √2). Ripser drops zero-persistence intervals, and
    apparent pairs (stage 4) *are* the zero-persistence pairs — a faithful apparent-pairs shortcut will
@@ -159,7 +159,7 @@ already flagged as unverified end-to-end — the one broader integration test th
 ## Correction found before writing any tests: clearing is required for correctness, not stage 3
 
 The original plan above staged clearing as a later, optional performance optimization on top of an
-already-correct "plain reduction" baseline (mirroring `PersistenceInChunksContext`'s framing and a loose
+already-correct "plain reduction" baseline (mirroring `PersistenceInChunksEngine`'s framing and a loose
 reading of the paper's own "clearing optimization" language). **This was wrong**, caught by hand-deriving
 a calibration example before writing the cross-validation test (per the advisor's suggestion to calibrate
 concretely rather than trust the derivation above in the abstract) -- specifically before, not after,
@@ -183,7 +183,7 @@ example, edges `e01` and `e12` get claimed as PIVOTS during dimension 0's reduct
 side of two of the three vertices' bars) -- so even though *their own* dimension-1 columns independently
 reduce to zero (nothing else in dimension 1 to reduce against), they must NOT be reported essential,
 because they're already accounted for as the image of `delta^0`. Confirmed via the advisor: this matches
-the standard "clear and compress" theorem this codebase's own `PersistenceInChunksContext` already
+the standard "clear and compress" theorem this codebase's own `PersistenceInChunksEngine` already
 implements for homology (Chen-Kerber) -- a simplex already claimed as a pivot one dimension down is
 *guaranteed* to reduce to zero if its own column were honestly computed, which is exactly why skipping it
 outright ("clearing") is valid, but the skip has to actually happen -- it is not optional bookkeeping on
@@ -220,7 +220,7 @@ claimed as a pivot.
 
 ## Bug found in phase-1 shipped code while building the cross-validation oracle (now fixed)
 
-While wiring up the cross-validation test against `CellularHomologyContext`, the hand-verified
+While wiring up the cross-validation test against `CellularHomologyEngine`, the hand-verified
 `threePointLine` calibration example (above) disagreed between the two engines -- and the *naive*
 engine's own output was the one that was garbled: three separate `(0,0.0,+inf)` essential bars for a
 3-point *connected* complex (impossible; there is exactly one connected component) and three
@@ -278,7 +278,7 @@ parts:
    `Chain`'s `leadingCell = min = youngest` convention), secondary key dimension, tertiary key
    **colexicographic** via `simplexIndexing`'s own combinatorial-number-system index -- deliberately
    colex, not `FilteredSimplexOrdering`'s plain lex, to match Ripser's own Definition 3.2/Proposition 3.9
-   "lexicographically refined" tie-break (the same convention `RipserCohomologyContext` already relies
+   "lexicographically refined" tie-break (the same convention `RipserCohomologyEngine` already relies
    on), keeping this stream internally consistent with the rest of the Ripser-flavored machinery rather
    than merely self-consistent.
 
@@ -332,12 +332,12 @@ afterward: 39 examples, 0 failures, 0 errors, 1 pending (pre-existing, unrelated
 (the third of the three "live" persistence engines) has zero test coverage anywhere in the repo -- not
 just missing from this regression run, `grep -rl SimplicialHomologyByDimensionContext src/` finds only its
 own definition in `Homology.scala`. It shares the same stream/pivot-ordering machinery as
-`CellularHomologyContext`, so it's plausible (not confirmed) that it would have the same class of ordering
+`CellularHomologyEngine`, so it's plausible (not confirmed) that it would have the same class of ordering
 sensitivity. Needs its own spec before that can be checked either way.
 
 ## Validation strategy (staged, per advisor)
 
-- **Cross-engine (new engine vs. `CellularHomologyContext`)**: multiset-equality of `(dim, birth,
+- **Cross-engine (new engine vs. `CellularHomologyEngine`)**: multiset-equality of `(dim, birth,
   death)` triples, filtered to `birth < death` only, on (a) hand-built small metric spaces built to be
   directly comparable to `HomologyFixtures`' existing hand-verified examples where a VR realization
   exists, and (b) randomized VR point clouds via the same `matrixGen`-based ScalaCheck property
@@ -361,17 +361,17 @@ sensitivity. Needs its own spec before that can be checked either way.
 - [x] Orientation, paper fetch, advisor consult, this worklog.
 - [x] Move `flattenToCellStream` to `HomologyFixtures.scala`; add `correctlyOrderedCellStream` next to it
       once the ordering bug (above) was found.
-- [x] Implement `RipserCohomologyContext` (plain reduction + clearing -- see correction above; no
+- [x] Implement `RipserCohomologyEngine` (plain reduction + clearing -- see correction above; no
   apparent pairs yet). `../src/main/scala/org/appliedtopology/tda4j/Homology.scala`.
 - [x] `RipserCohomologySpec.scala`: hand-verified 3-point calibration example (`threePointLine`, both
       `maxDimension=1` and `=2`) as the primary regression pin; cross-validated against
-      `CellularHomologyContext` on the calibration example AND 200 random VR point clouds (`birth <
+      `CellularHomologyEngine` on the calibration example AND 200 random VR point clouds (`birth <
       death` bars only, exact multiset equality -- passing); structural invariant (`finite*2 + essential
       == totalSimplices`, reusing `HomologyFixtures.totalBarsAccountForAllCells`, 200 random trials --
-      passing); essential-representative-is-a-genuine-cocycle check over `Fp(11)` (guarded to `dim <
+  passing); essential-representative-is-a-genuine-cocycle check over `Fp(11)` (guarded to `dim <
       maxDimension` AND `upper == +infinity` -- see below for why the second guard was also needed, 200
-      random trials -- passing). **All 6 examples / 603 expectations passing.**
-  - Found, in the course of writing this test's oracle (not in `RipserCohomologyContext` itself): the
+  random trials -- passing). **All 6 examples / 603 expectations passing.**
+  - Found, in the course of writing this test's oracle (not in `RipserCohomologyEngine` itself): the
     `EnumeratingCofaceSimplexStream`/`FilteredSimplexOrdering`-reversal bug documented above in full,
     plus my own test-writing mistake (asserting zero-coboundary for FINITE bars' representatives, not
     just essential ones -- `delta(V_j) = R_j` is only zero for essential bars by construction; a finite
@@ -402,7 +402,7 @@ sensitivity. Needs its own spec before that can be checked either way.
       IDEA's own background `idea-shell` SBT process, thinking it was a stray leftover of my own. It
       wasn't consuming meaningful resources and IDEA will simply respawn it when next needed, but flagging
       it since it wasn't mine to kill without checking first.)
-- [ ] Update `CLAUDE.md` with `RipserCohomologyContext`, once apparent pairs are also done, so the
+- [ ] Update `CLAUDE.md` with `RipserCohomologyEngine`, once apparent pairs are also done, so the
   write-up covers the finished engine rather than needing a second pass.
 
 ## Apparent pairs: negative result, two designs ruled out
@@ -431,7 +431,7 @@ notion at all. Reimplemented from Definition 3.2 directly, against the full (unr
 
 **The actual question, and how it was answered empirically rather than by proof**: knowing which pairs are
 apparent doesn't by itself tell you what's safe to skip. Two designs were tried, both against
-`RipserCohomologyContext`'s existing, cross-validated `persistentCohomology()` as the baseline oracle, on
+`RipserCohomologyEngine`'s existing, cross-validated `persistentCohomology()` as the baseline oracle, on
 300-500 random Vietoris-Rips point clouds (6-12 points, ambient dimension 2-3, seed 42, `maxDimension = 2`):
 
 1. **Inline identification** (find tau via the apparent check instead of the reduceBy head-check, but
@@ -463,7 +463,7 @@ supplies to sequence apparent-pair removal against the rest of the reduction saf
 resolution is not visible from Definition 3.2 alone). **Not attempted this session**: fetching
 arXiv:1908.02518 to read Proposition 3.9's proof and the surrounding algorithm text is the correct next
 step, deliberately deferred rather than rushed at the end of a long session -- this exact codebase has two
-prior "plausible-but-wrong draft" apparent-pairs-adjacent mistakes on record (see `RipserCohomologyContext`'s
+prior "plausible-but-wrong draft" apparent-pairs-adjacent mistakes on record (see `RipserCohomologyEngine`'s
 class doc), and reading the paper's actual resolution is now a targeted question ("how does Ripser avoid
 this specific collision") rather than an open-ended re-derivation.
 
@@ -503,8 +503,8 @@ the trail.
 
 After the `filtrationOrdering`/`iterateDimension` fix above landed, the project lead asked to also "fix
 the total order issue" before starting apparent pairs. This turned out to mean auditing whether
-`PersistenceInChunksContext` and `SimplicialHomologyByDimensionContext` share the *other* known ordering
-hazard already documented in `CellularHomologyContext`'s own class doc and flagged in CLAUDE.md as
+`PersistenceInChunksEngine` and `SimplicialHomologyByDimensionContext` share the *other* known ordering
+hazard already documented in `CellularHomologyEngine`'s own class doc and flagged in CLAUDE.md as
 "not yet audited": summoning `Chain[CellT, CoefficientT] is RingModule` (`chainRM`) before a
 stream-specific `given Ordering[CellT] = stream.filtrationOrdering` is in scope, which silently falls
 back to `Chain.scala:27`'s generic `Simplex[VertexT] is OrderedCell`-derived *lexicographic* ordering
@@ -516,9 +516,9 @@ searching for "the ordering bug" should find two, not conflate them into one fix
 Audited both by construction, using `HomologyFixtures.elderRuleCells` (vertex 1 born at 0.0, vertex 9 born
 at 10.0, edge `{1,9}` born at 20.0 -- lexicographic order and filtration order disagree about which vertex
 dies, so this fixture discriminates the two conventions directly, same as it does for
-`CellularHomologyContext`'s own already-fixed version of this bug):
+`CellularHomologyEngine`'s own already-fixed version of this bug):
 
-2. **`PersistenceInChunksContext`: audited, confirmed correct, not touched.** `chainRM` is summoned at
+2. **`PersistenceInChunksEngine`: audited, confirmed correct, not touched.** `chainRM` is summoned at
    class scope (`Homology.scala:184`), before any stream exists -- structurally identical to the bug
    pattern. But empirically, `persistentHomology(stream).diagramAt(...)` on `elderRuleCells` returns the
    correct answer (`(0, 10.0, 20.0)`, `(0, 0.0, +inf)`). Reading why: every place `HomologyState`'s
@@ -555,7 +555,7 @@ dies, so this fixture discriminates the two conventions directly, same as it doe
    as its own scoped task -- not attempted here, since it is feature-sized work on dead code, not "fix the
    ordering issue."
 
-CLAUDE.md updated to match: `PersistenceInChunksContext`'s entry now notes the audit outcome;
+CLAUDE.md updated to match: `PersistenceInChunksEngine`'s entry now notes the audit outcome;
 `SimplicialHomologyByDimensionContext`'s entry now says "non-functional," not merely "zero test coverage."
 
 ## Apparent pairs: resolved (2026-09-15 session)
@@ -727,6 +727,6 @@ Implemented, correct (full existing suite green -- `RipserCohomologySpec`, `Homo
 `VietorisRipsSpec`, `SimplexStreamSpec`, 39 examples total across the targeted run plus the pre-existing
 `RipserStreamSpec` pending-until-fixed case, unaffected), and a measured performance win. Not the full
 Ripser optimization -- see "Performance" above for exactly what's missing and why it's a separate project.
-`CLAUDE.md`'s `RipserCohomologyContext` entry should be updated to drop "Apparent pairs are NOT yet
+`CLAUDE.md`'s `RipserCohomologyEngine` entry should be updated to drop "Apparent pairs are NOT yet
 implemented" and reference this section instead (deferred to whoever does the next CLAUDE.md pass, per its
 own "update once apparent pairs are also done" note).

@@ -20,8 +20,8 @@ intentional, already-established patterns, not accidental risky conversions:
 - `implicitConversions`: almost entirely specs2's own matcher/prop DSL (`asResultToProp`, `matcherIsValueCheck`,
   `typedValueCheck`) firing on ordinary, idiomatic use of the test framework across ~15 spec files, plus this
   project's own deliberate `Simplex -> Chain` conversion (`TDAContext`, `package.scala`).
-- `adhocExtensions`: `TDAContext` (`package.scala`) extends `SimplicialHomologyContext`, and
-  `CubicalHomologyContext` (`streams/CubicalStream.scala`) extends `CellularHomologyContext` -- both genuine,
+- `adhocExtensions`: `TDAContext` (`package.scala`) extends `SimplicialHomologyEngine`, and
+  `CubicalHomologyEngine` (`streams/CubicalStream.scala`) extends `CellularHomologyEngine` -- both genuine,
   permanent, already-documented architectural relationships (CLAUDE.md's "Persistent homology"/"Cubical
   complexes" sections), not one-off test conveniences. Deliberately did NOT mark either parent class `open`
   instead (the more "principled" per-class fix): that's a real API-surface decision (declaring a class part of

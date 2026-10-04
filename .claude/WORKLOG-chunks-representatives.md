@@ -17,7 +17,7 @@ rather than re-deriving it; the project lead commits their own work, so nothing 
 
 ## The plan `advisor()` blessed, and the correction it made before any code was written
 
-Original idea (matching the blocker's own framing): port `CellularHomologyContext`'s V-column bookkeeping
+Original idea (matching the blocker's own framing): port `CellularHomologyEngine`'s V-column bookkeeping
 directly into `processCell`/`compress`/`globalReduce`'s own state. Before writing any of that, `advisor()` was
 consulted with the concrete design. Verdict: a *separate, sequential* representative pass (run only when
 `barcodeAt` -- not `diagramAt` -- is called) sidesteps the deferred-pair-resolution hazard entirely, since it
@@ -26,7 +26,7 @@ never touches the chunked algorithm's own local/global bookkeeping. Four correct
 1. **Validate the source formula first -- it had never been audited.** The plan's first draft intended to reuse
    `SimplicialHomologyByDimensionContext`'s `cycles`/`coboundaries` mechanism (CLAUDE.md already flagged its
    birth/death *values* as cross-validated, but its representative *chains* as never audited). Checked before
-   committing to it, not after: `SimplicialHomologyByDimensionContext` and `CellularHomologyContext` were run
+   committing to it, not after: `SimplicialHomologyByDimensionContext` and `CellularHomologyEngine` were run
    side by side on `elderRuleCells`/`triangleCells`/`tetrahedronCells` and their per-bar representatives
    compared directly, including a `boundary(rep) == 0` check.
 
@@ -48,7 +48,7 @@ never touches the chunked algorithm's own local/global bookkeeping. Four correct
    independent birth/death-value oracle only, and this doesn't change that role -- it changes what should NOT be
    trusted from it, which was already "nothing, since nothing reads it").
 
-   Given the audited formula failed, the plan pivoted to `CellularHomologyContext`'s own V-column formula (the
+   Given the audited formula failed, the plan pivoted to `CellularHomologyEngine`'s own V-column formula (the
    one actually used in production via `engine="naive"`), per advisor's own fallback suggestion.
 
 2. **Don't promise exact match in general -- representatives aren't unique.** Noted for the docs, though it
@@ -69,7 +69,7 @@ never touches the chunked algorithm's own local/global bookkeeping. Four correct
 
 ## What shipped: full delegation, not a hand-copied mechanism
 
-Rather than transcribing `CellularHomologyContext`'s V-column formula a second time into new fields on
+Rather than transcribing `CellularHomologyEngine`'s V-column formula a second time into new fields on
 `CellularPersistenceInChunksContext.HomologyState` (real risk of a second, independent transcription bug -- see
 finding #1 above for what that risk looks like when it isn't caught), `barcodeAt` now **delegates the entire
 representative computation** to a fresh, independent `CellularHomologyContext[CellT, CoefficientT, Double]`,
@@ -89,7 +89,7 @@ def barcodeAt(f: Double): List[PersistenceBar[Double, Chain[CellT, CoefficientT]
 This is correct, not just convenient, by the same canonical-reduced-matrix argument `unionFindDim01` already
 relies on: a fixed total order (`stream.filtrationOrdering`) over a fixed cell set determines a *unique* reduced
 boundary matrix, independent of which algorithm computes it. `dimCapped(internalMaxDim)` walks exactly the same
-cells `advanceAll`'s own `allCells` does, over the identical ordering -- so `CellularHomologyContext`'s
+cells `advanceAll`'s own `allCells` does, over the identical ordering -- so `CellularHomologyEngine`'s
 sequential single-pivot-table reduction and the chunked local/global algorithm are provably computing the same
 matrix, just via different traversals. This was **confirmed empirically, not just argued**: a new `HomologySpec`
 test cross-checks `barcodeAt`'s own `(dim, lower, upper)` triples (annotation stripped) against `diagramAt`'s
@@ -162,11 +162,11 @@ touches a widely-shared class with no scoped reason to touch it here).
 - `Chain`'s missing `hashCode` (finding #2 above) is real and unfixed -- flagged for whoever next needs to put
   `Chain` values in a `Set`/`Map` key position.
 - `barcodeAt`'s representative computation is a full, independent sequential pass with no caching across calls
-  -- calling it twice in a row pays twice. Not addressed here; matches `CellularHomologyContext` itself, which
+  -- calling it twice in a row pays twice. Not addressed here; matches `CellularHomologyEngine` itself, which
   is also freshly constructed on every `barcodeAt` call from this delegate.
 - No attempt was made to measure `barcodeAt`'s new wall-clock cost against the old (dimension-0-only) version,
   or against a hypothetical "port the mechanism into the chunked passes directly" alternative -- out of scope
   for a correctness-closing session, and the honest expectation (stated above and in the source doc) is that
-  this is exactly as expensive as running `CellularHomologyContext` from scratch, which was never going to be
+  this is exactly as expensive as running `CellularHomologyEngine` from scratch, which was never going to be
   cheaper than what porting the mechanism directly would have cost either, given dimension 0/1 must be
   re-derived either way.

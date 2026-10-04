@@ -1,18 +1,11 @@
 package org.appliedtopology.tda4j
-package alpha
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 /** Cross-validates `AlphaComplexDQP.dtm`'s `weight(i) = -f(i)^2` power weighting against
-  * `streams.DtmRipsSimplexStream(..., p = 2.0)` -- the two constructions are the SAME `p = 2` ball union (Anai et al.,
-  * "DTM-based filtrations", Def. 3.1/Prop. 3.5; see `alpha.AlphaComplexDQP.dtm`'s own doc for the exact
-  * correspondence), so by the persistent nerve lemma they must report the SAME number of path components at every
-  * threshold -- i.e. the same H0 barcode, once alpha's `alpha = t^2` (squared-radius) units are converted to Rips's
-  * `2*t` (doubled-diameter) units via `birth -> 2*sqrt(birth)`.
+  * `DtmRipsSimplexStream(..., p = 2.0)` -- the two constructions are the SAME `p = 2` ball union (Anai et al.,
+  * "DTM-based filtrations", Def. 3.1/Prop. 3.5; see `AlphaComplexDQP.dtm`'s own doc for the exact correspondence), so
+  * by the persistent nerve lemma they must report the SAME number of path components at every threshold -- i.e. the
+  * same H0 barcode, once alpha's `alpha = t^2` (squared-radius) units are converted to Rips's `2*t` (doubled-diameter)
+  * units via `birth -> 2*sqrt(birth)`.
   *
   * '''Zero-length bars are dropped before comparing''', deliberately: a vertex the alpha complex correctly DELAYS or
   * OMITS entirely (its own restricted power cell is not yet, or never, nonempty -- see
@@ -24,9 +17,9 @@ import org.appliedtopology.tda4j.alpha.{given, *}
   * not a discrepancy. `.claude/WORKLOG-dtm-filtrations.md` works out both fixtures below by hand, including this exact
   * phenomenon on the two-point one.
   *
-  * Fixtures use HAND-PICKED `f`, not `streams.DistanceToMeasure`-derived ones: a DTM-derived `f` on a fixture small
-  * enough to hand-verify tends to put every point inside its own restricted cell (no delay/omission at all), which
-  * would make this cross-check pass trivially without ever exercising the vertex-attachment fix it exists to guard.
+  * Fixtures use HAND-PICKED `f`, not `DistanceToMeasure`-derived ones: a DTM-derived `f` on a fixture small enough to
+  * hand-verify tends to put every point inside its own restricted cell (no delay/omission at all), which would make
+  * this cross-check pass trivially without ever exercising the vertex-attachment fix it exists to guard.
   */
 class AlphaComplexDQPDtmSpec extends org.specs2.mutable.Specification:
   given Double is Field = Field.DoubleApproximated(1e-9)
@@ -48,7 +41,7 @@ class AlphaComplexDQPDtmSpec extends org.specs2.mutable.Specification:
     val ac =
       AlphaComplexDQP.weighted(points, f.map(fi => -fi * fi).toArray, Double.PositiveInfinity, points.head.length)
     val stream = RawAlphaComplexStream(points, ac)
-    SimplicialHomologyContext[Int, Double, Double]()
+    SimplicialHomologyEngine[Int, Double, Double]()
       .persistentHomology(stream)
       .diagramAt(Double.PositiveInfinity)
       .collect { case (0, b, d) =>
@@ -59,7 +52,7 @@ class AlphaComplexDQPDtmSpec extends org.specs2.mutable.Specification:
 
   private def dtmRipsH0(ambient: FiniteMetricSpace[Int], f: IndexedSeq[Double]): Set[(Double, Double)] =
     val stream = DtmRipsSimplexStream(ambient, f, p = 2.0, maxFiltrationValue = Some(Double.PositiveInfinity))
-    SimplicialHomologyContext[Int, Double, Double]()
+    SimplicialHomologyEngine[Int, Double, Double]()
       .persistentHomology(stream)
       .diagramAt(Double.PositiveInfinity)
       .collect { case (0, b, d) => (b, d) }

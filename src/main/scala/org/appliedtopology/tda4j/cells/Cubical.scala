@@ -1,7 +1,4 @@
 package org.appliedtopology.tda4j
-package cells
-
-import org.appliedtopology.tda4j.algebra.{given, *}
 
 import scala.annotation.targetName
 
@@ -25,7 +22,7 @@ import scala.annotation.targetName
   */
 opaque type Cube = Vector[Int]
 
-object Cube:
+object Cube extends CubeInstances:
   /** The primitive constructor every other one below reduces to: direct doubled-coordinate encoding (`2*a` = degenerate
     * `{a}`, `2*a+1` = unit interval `[a,a+1]`), one entry per ambient axis.
     */

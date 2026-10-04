@@ -5,7 +5,7 @@ Direct continuation of `.claude/WORKLOG-packed-ripser-engine.md`/`WORKLOG-ripser
 `WORKLOG-ripser-comparison.md` — this session picks up from a fresh same-machine compute-server table
 (real `ripser.cpp` live-built, not the hardcoded snapshot) that showed two anomalies against the established
 15-45x packed-vs-SortedSet pattern: `o3_1024`'s S/pack ratio collapsed to 1.73x, and `fractal-r` timed out
-for the packed engine while `RipserCohomologyContext` (SortedSet) itself finished in ~89 minutes.
+for the packed engine while `RipserCohomologyEngine` (SortedSet) itself finished in ~89 minutes.
 
 ## Tooling added this session
 
@@ -51,7 +51,7 @@ calls), tracking a running best instead of stopping at the first match. Verified
 `FacetCursor.index` is strictly increasing across successive `advance()` calls, so the first candidate tied
 at the target diameter is already the extremal one either method searches for. Matches real `ripser.cpp`'s
 own `get_zero_pivot_cofacet`, which returns on first match for the same reason. Applied identically to
-`RipserCohomologyContext` (`Homology.scala`) and `PackedRipserCohomologyContext`.
+`RipserCohomologyEngine` (`Homology.scala`) and `PackedRipserCohomologyEngine`.
 
 **Fix 3 (`9461134`): `SimplexIndexing.apply`'s five-stage encode chain collapsed into a `while` loop.**
 Post-fix-2 profile showed `apply`'s `toSeq.sorted.reverse.zipWithIndex.map(...).sum` (plus its own uncached
@@ -182,9 +182,9 @@ multi-day run per attempt.
 3. **If pursuing the `Chain.reduceLoop` redesign**: re-read `WORKLOG-ripser-profiling.md`'s sixth follow-up
    "Target 3" section first — it already ruled out the obvious approach. A real fix needs either a hand-rolled
    red-black tree with a genuine single-descent upsert-or-delete primitive, or a different accumulator shape
-   (e.g. mutable `HashMap` for O(1) get/update/remove plus a separate lazy-deletion heap for `z.head`'s sorted
-   access) — both bigger, riskier jobs than anything in this worklog, touching `CellularHomologyContext`
-   (the reference oracle every other engine cross-validates against) and `PersistenceInChunksContext` too, not
+   (e.g. mutable `HashMap` for O (1) get/update/remove plus a separate lazy-deletion heap for `z.head`'s sorted
+   access) — both bigger, riskier jobs than anything in this worklog, touching `CellularHomologyEngine`
+   (the reference oracle every other engine cross-validates against) and `PersistenceInChunksEngine` too, not
    just the Ripser engines. Get explicit sign-off before starting, matching this session's own pattern of
    asking before any change with reach beyond the two Ripser engines.
 4. **The generic `Field`/boxing cost (~21% of `fractal-r`'s CPU)** is a separate lever from the tree

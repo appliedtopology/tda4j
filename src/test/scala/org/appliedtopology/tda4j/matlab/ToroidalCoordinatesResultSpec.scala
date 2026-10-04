@@ -1,19 +1,18 @@
 package org.appliedtopology.tda4j
 package matlab
 
-import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.*
 
 import org.specs2.mutable.Specification
 
 /** Tests the `TDA4j.toroidalCoordinates` MATLAB facade -- that it is a faithful, correctly-marshalled pass-through to
-  * `homology.CircularCoordinates.computeToroidal`, which already has its own thorough test suite
-  * (`ToroidalCoordinatesSpec`) -- not a re-test of the underlying math, mirroring `CircularCoordinatesResultSpec`'s own
-  * scope exactly.
+  * `CircularCoordinates.computeToroidal`, which already has its own thorough test suite (`ToroidalCoordinatesSpec`) --
+  * not a re-test of the underlying math, mirroring `CircularCoordinatesResultSpec`'s own scope exactly.
   */
 class ToroidalCoordinatesResultSpec extends Specification:
-  /** Same wedge-of-two-circles fixture as `homology.ToroidalCoordinatesSpec` -- see that file's own doc for why this
-    * particular construction (unequal radii, a single controlled near-touching point) reliably gives two
-    * simultaneously-alive, same-component H^1 classes with no randomness anywhere.
+  /** Same wedge-of-two-circles fixture as `ToroidalCoordinatesSpec` -- see that file's own doc for why this particular
+    * construction (unequal radii, a single controlled near-touching point) reliably gives two simultaneously-alive,
+    * same-component H^1 classes with no randomness anywhere.
     */
   private def wedgeOfTwoCircles(n: Int = 14): Array[Array[Double]] =
     val circleA = Array.tabulate(n) { i =>
@@ -27,14 +26,14 @@ class ToroidalCoordinatesResultSpec extends Specification:
     circleA ++ circleB
 
   "toroidalCoordinates" should {
-    "matches homology.CircularCoordinates.computeToroidal directly, point for point, coordinate for coordinate" >> {
+    "matches CircularCoordinates.computeToroidal directly, point for point, coordinate for coordinate" >> {
       val points = wedgeOfTwoCircles()
       val bars = TDA4j.h1Bars(points)
       val r = math.max(bars(0)(0), bars(1)(0)) + 1e-6
 
       val viaFacade = TDA4j.toroidalCoordinates(points, r, Array(0, 1), 47, true)
       val viaDirect =
-        homology.CircularCoordinates.computeToroidal(EuclideanMetricSpace(points), r, Seq(0, 1), 47, true)
+        CircularCoordinates.computeToroidal(EuclideanMetricSpace(points), r, Seq(0, 1), 47, true)
 
       (viaFacade.dimension() must beEqualTo(2)) and
         (viaFacade.cocycleIndices().toSeq must beEqualTo(Seq(0, 1))) and

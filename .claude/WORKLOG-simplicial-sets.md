@@ -56,7 +56,7 @@ approved before any code was written):
 - RP² (over F2 vs F3) is the sign-discriminating fixture: `2·e_1` vanishes over F2 (invisible sign bug) but is
   injective over F3 (any sign bug shows up as a wrong Betti number).
 
-**Pass 2** (after fixing pass 1's issues): found that `CellularHomologyContext` (`Homology.scala:39`) takes a
+**Pass 2** (after fixing pass 1's issues): found that `CellularHomologyEngine` (`Homology.scala:39`) takes a
 `stream: CellStream[CellT, FiltrationT]`, not a bare `OrderedCell` -- there is no engine entry point that skips
 the stream interface. This meant "ordinary homology only" (scope decision 2) still needed a `CellStream`
 adapter, just a trivial constant-filtration one (`FiltrationT = Int`, every generator at value `0`) -- a
@@ -127,7 +127,7 @@ over F3 (matches the known fact that odd-primary coefficients see even-dimension
 acyclic); RP³ gives an essential `H_3=F` over *every* field (a closed orientable 3-manifold) alongside the same
 F2-vs-F3 split at `H_1`/`H_2`; the torus gives Betti numbers `(1,2,1)` for every field (torsion-free). All
 hand-derived by direct chain-complex computation before writing any fixture code, then confirmed by running the
-real `CellularHomologyContext` engine through the `SimplicialSetStream` adapter -- agreement between the two is
+real `CellularHomologyEngine` engine through the `SimplicialSetStream` adapter -- agreement between the two is
 the actual evidence `faceOf`/`insertOuter` are correct, not merely self-consistent.
 
 ## Verification
@@ -143,7 +143,7 @@ the actual evidence `faceOf`/`insertOuter` are correct, not merely self-consiste
   appropriate, checked against the hand-derived answers above (exact bar lists for S¹/S²/S³/RP²/RP³, Betti-
   number counts for the torus since its specific tie-broken edge/triangle pairing is order-dependent while the
   Betti numbers are not); plus a bars-account-for-cells structural check on every fixture.
-- `SimplicialSetStreamSpec`: `fromStream` cross-validated (Betti numbers) against `SimplicialHomologyContext`
+- `SimplicialSetStreamSpec`: `fromStream` cross-validated (Betti numbers) against `SimplicialHomologyEngine`
   run directly on the same stream, on hand-built fixtures and on random Vietoris-Rips point clouds via
   `LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(...), 2)` -- exercising the real, non-`SimplexStream`
   VR stream type the signature-widening fix above was specifically for.
@@ -164,6 +164,6 @@ unaffected). `sbt scalafmtAll` run before this.
   this session. `SimplicialSetStream` could grow a real per-generator filtration value later without touching
   `SSetElement.scala`/`FiniteSimplicialSet`'s own structure at all -- the filtration lives entirely in the
   `CellStream` adapter layer.
-- **`PersistenceInChunksContext`/`SimplicialHomologyByDimensionContext` were not generalized** to consume
+- **`PersistenceInChunksEngine`/`SimplicialHomologyByDimensionContext` were not generalized** to consume
   `FiniteSimplicialSet` generators -- both remain hardcoded to `Simplex[VertexT]` (pre-existing, unrelated to
-  this session; the same scope boundary `CubicalHomologyContext` hit and documented).
+  this session; the same scope boundary `CubicalHomologyEngine` hit and documented).

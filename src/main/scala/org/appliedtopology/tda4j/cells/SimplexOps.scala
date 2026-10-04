@@ -1,10 +1,8 @@
 package org.appliedtopology.tda4j
-package cells
-
-import org.appliedtopology.tda4j.algebra.{given, *}
 
 import scala.collection.immutable.SortedSet
 import scala.reflect.ClassTag
+import cats.Show
 
 /** Inherit a selection of the SortedSet methods and add other utility methods
   *
@@ -17,7 +15,7 @@ import scala.reflect.ClassTag
 trait SimplexOps:
   extension [VertexT](spx: Simplex[VertexT])
     // ----- rendering & dimension
-    def show: String = spx.underlying.mkString(s"∆(", ",", ")")
+    // def show: String = spx.underlying.mkString(s"∆(", ",", ")")
     def dim: Int = spx.underlying.size - 1
     // ----- size and membership
     def contains(elem: VertexT): Boolean = spx.underlying.contains(elem)

@@ -8,7 +8,7 @@ commit after each numbered task, keep this worklog updated as I go (not just at 
    documented but never explained; sharpened by the same-day finding that the chunks engine does NOT have this
    problem on the same inputs).
 2. Build a real, validated raw-UnionFind fast path for dimension 0/1 and wire it into the actual production
-   engines (`CellularHomologyContext`/`PersistenceInChunksContext`), not just the correctness-only
+   engines (`CellularHomologyEngine`/`PersistenceInChunksEngine`), not just the correctness-only
    `SimplicialHomologyByDimensionContext`.
 3. Simplicial set quotients/attaching maps.
 
@@ -93,7 +93,7 @@ override val filtrationValue: PartialFunction[Cube, Double] = new PartialFunctio
 ```
 
 **Memory-frugality check, done explicitly rather than assumed** (this codebase has an established precedent,
-`RipserCohomologyContext`'s deliberately opt-in `memoizeFiltrationValue`, defaulting to `false` specifically
+`RipserCohomologyEngine`'s deliberately opt-in `memoizeFiltrationValue`, defaulting to `false` specifically
 because a global cache runs against Ripser's own memory-frugality design goal on potentially-huge VR
 complexes): that precedent does NOT apply here, on two independently-checked grounds.
 
@@ -149,7 +149,7 @@ Consulted before closing out the task. Verdict: fix is sound, measurement is cle
 items came back and were both acted on before committing:
 
 1. **Verify the memory-frugality argument holds for the chunks engine too, not just naive** (the doc comment
-   as first written only argued it for `CellularHomologyContext`). Checked directly (see above) —
+   as first written only argued it for `CellularHomologyEngine`). Checked directly (see above) —
    `CellularPersistenceInChunksContext.HomologyState.allCells` also eagerly materializes everything up front,
    so the argument holds for both; the doc comment references both classes now.
 2. **State the residual phase3 growth honestly** — "much flatter, with a residual ~1.5x over the same range
@@ -181,7 +181,7 @@ the same measurement in the file.
 ### Starting point
 
 `WORKLOG-mst-and-perf.md`'s own "Decision" section (an earlier session) explicitly deferred porting
-`SimplicialHomologyByDimensionContext`'s validated elder-rule logic into `CellularHomologyContext` as a raw
+`SimplicialHomologyByDimensionContext`'s validated elder-rule logic into `CellularHomologyEngine` as a raw
 `UnionFind`-based fast path, for two stated reasons: the benefit looked small for the `maxDim >= 2` case actually
 measured back then (dimension-0/1 is a small fraction of a complex once triangles exist), and the risk of
 introducing a new bug into the REFERENCE ORACLE every other engine is cross-validated against was real (that
@@ -193,7 +193,7 @@ benchmark before deciding, not an assumption either way.
 ### Measurement
 
 Built `VRLowDimProfileDriver.scala` (kept, mirroring `CubicalProfileDriver`'s phase-separated convention) to
-target exactly that scenario: `SimplicialHomologyContext` on a large (n=2000-20000), SPARSE (threshold scaled as
+target exactly that scenario: `SimplicialHomologyEngine` on a large (n=2000-20000), SPARSE (threshold scaled as
 `2.5/sqrt(n)`, same convention as `SparseRipsBenchmarkSpec`) Vietoris-Rips complex capped at `maxDim=1`.
 Phase-separated timing confirmed phase3 (the actual reduction) dominates (~85-90% of total wall-clock), with a
 mildly-growing but not pathological per-cell cost (~106-130 us/cell across n=2000-20000).
@@ -263,9 +263,9 @@ both extend `EnumeratingCofaceSimplexStream` and inherit this unchanged (confirm
 and was deliberately left alone, matching this codebase's existing precedent of excluding it from this stream
 family's shared changes.
 
-**Why this doesn't contradict `RipserCohomologyContext`'s own `memoizeFiltrationValue = false` default** (an
-explicit project-lead call, documented in CLAUDE.md): that decision protects a stream `RipserCohomologyContext`/
-`PackedRipserCohomologyContext` never fully materialize by design (genuinely large VR complexes), where
+**Why this doesn't contradict `RipserCohomologyEngine`'s own `memoizeFiltrationValue = false` default** (an
+explicit project-lead call, documented in CLAUDE.md): that decision protects a stream `RipserCohomologyEngine`/
+`PackedRipserCohomologyEngine` never fully materialize by design (genuinely large VR complexes), where
 `insertionDiameter` gives an O(d) incremental alternative that makes NOT caching viable in the first place.
 Neither condition holds for `EnumeratingCofaceSimplexStream`'s actual consumers: `CellularHomologyContext.
 HomologyState.CellIterator` and `CellularPersistenceInChunksContext.HomologyState.allCells` BOTH already eagerly
@@ -379,7 +379,7 @@ Also flagged and fixed: the RP² quotient map had been written out twice (once p
 
 ### Validation
 
-`SimplicialSetHomologySpec.scala` (homology cross-checks, via `CellularHomologyContext`):
+`SimplicialSetHomologySpec.scala` (homology cross-checks, via `CellularHomologyEngine`):
 - **Bigon** (`identify(coproduct(edge, edge), [(Left(V0),Right(V0)), (Left(V1),Right(V1))])`): `validate()`
   empty, generator counts `(2, 2)`, `H_0 = H_1 = F` -- hand-verifiable directly (both edges end up sharing the
   identical boundary `V1 - V0`, so the boundary map has rank 1, not 2).

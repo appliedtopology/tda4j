@@ -5,7 +5,7 @@ Date: 2026-09-17. Point-in-time record — not retroactively edited (see [[tda4j
 ## Ask
 
 Following the same-hardware Ripser comparison (`WORKLOG-ripser-comparison.md`), which found that
-`RipserCohomologyContext`'s `maxDimension` constructor parameter meant "top simplex dimension built" rather
+`RipserCohomologyEngine`'s `maxDimension` constructor parameter meant "top simplex dimension built" rather
 than "top homological degree reported" (already independently worked around at the MATLAB facade layer before
 this session), the project lead asked to make this correct *everywhere*, not just at the one facade that had
 patched around it.
@@ -17,19 +17,19 @@ memory entry cover the discovery; this worklog covers the fix itself.
 
 An inventory pass (an Explore agent, grepping every constructor call site across `src/main` and `src/test`)
 confirmed only two classes in `Homology.scala` have a `maxDim`/`maxDimension` constructor parameter with this
-exact ambiguity — every other engine (`SimplicialHomologyContext`, `CellularHomologyContext`,
+exact ambiguity — every other engine (`SimplicialHomologyEngine`, `CellularHomologyEngine`,
 `SimplicialHomologyByDimensionContext`) takes no such parameter at all; the dimension cap for those lives
 entirely in whatever stream the caller hands them:
 
-1. **`RipserCohomologyContext`** (cohomology) — `coboundaryOf`/`zeroPivotCofacet` refused to look past
+1. **`RipserCohomologyEngine`** (cohomology) — `coboundaryOf`/`zeroPivotCofacet` refused to look past
    `sigma.dim + 1 > maxDimension`, so `sigma.dim == maxDimension` always got a trivially-empty coboundary and
    came out essential by construction.
-2. **`PersistenceInChunksContext`** (homology) — `allCells` and both `advanceAll` loops walked `0.to(maxDim)`,
+2. **`PersistenceInChunksEngine`** (homology) — `allCells` and both `advanceAll` loops walked `0.to(maxDim)`,
    so no `(maxDim + 1)`-cell was ever considered that could kill a class born at `dim == maxDim`.
 
 ## The fix
 
-**`RipserCohomologyContext`** (`Homology.scala`): two guard changes, nothing else.
+**`RipserCohomologyEngine`** (`Homology.scala`): two guard changes, nothing else.
 - `coboundaryOf`: `sigma.dim + 1 > maxDimension` → `sigma.dim > maxDimension`.
 - `zeroPivotCofacet`: same change, so the apparent-pairs shortcut also sees real tied cofacets at the top
   dimension.
@@ -44,7 +44,7 @@ entirely in whatever stream the caller hands them:
   means `totalSimplexCount`'s value is genuinely unaffected by this fix — confirmed empirically afterward (see
   "Verification" below), not just reasoned through.
 
-**`PersistenceInChunksContext`** (`Homology.scala`): the mirror-image fact for homology (a class born at
+**`PersistenceInChunksEngine`** (`Homology.scala`): the mirror-image fact for homology (a class born at
 dimension `d` can only be killed by a `(d+1)`-dimensional cell's own boundary reducing to it) needed a
 different mechanism, since this class doesn't build its own complex — it consumes whatever `StratifiedCellStream`
 the caller hands it. Added `private val internalMaxDim: Int = maxDim + 1` and used it (instead of `maxDim`) in
@@ -99,10 +99,10 @@ bound.
   `ripser --dim 1` would also report on this same cloud, since Ripser always builds one dimension higher
   internally too. Retitled and re-commented rather than silently changed, so a future reader sees *why* the
   expected value moved. (`PersistenceInChunksSpec.scala`'s own same-named test was **not** affected: it feeds
-  `PersistenceInChunksContext` a `LimitedCofaceSimplexStream(..., 1)`-wrapped stream that itself has no
+  `PersistenceInChunksEngine` a `LimitedCofaceSimplexStream(..., 1)`-wrapped stream that itself has no
   dimension-2 cells at all — a genuinely different scenario, since that class consumes an externally-built
   stream rather than enumerating its own complex from a metric space, so a caller CAN construct a truly
-  triangle-free complex for it, unlike for `RipserCohomologyContext`.)
+  triangle-free complex for it, unlike for `RipserCohomologyEngine`.)
 - `matlab/Tda4jSpec.scala`'s "top-dimension truncation-artifact fix" test asserted that a direct
   `RipserCohomologyContext(ms, 2)` call disagreed with the facade's (then-corrected) output — the artifact's
   own discriminating regression. Once the engine itself absorbed the fix, the facade's `engine="ripser"` path
@@ -114,9 +114,9 @@ bound.
 ## Call sites updated to drop now-redundant `+1`-and-filter workarounds
 
 `matlab/Tda4j.scala` (`engine="ripser"` and `engine="chunks"` cases — `engine="naive"` still needs its own
-workaround, since `SimplicialHomologyContext` has no `maxDimension` of its own), `RipserPaperBenchmarkSpec.scala`,
+workaround, since `SimplicialHomologyEngine` has no `maxDimension` of its own), `RipserPaperBenchmarkSpec.scala`,
 `DimensionCeilingBenchmarkSpec.scala`'s `ripserAttempt` (its `vrEnumNaiveAttempt` sibling keeps the `+1`, for
-the same `SimplicialHomologyContext` reason). Each now passes the real requested degree directly; the
+the same `SimplicialHomologyEngine` reason). Each now passes the real requested degree directly; the
 `fromBars`/`fromDiagram` post-filters in the facade are harmless no-ops for these two engines now, left in
 place rather than removed (defensive, and consistent with how `RipserPaperBenchmarkSpec` was written before
 this fix landed).
@@ -128,7 +128,7 @@ this fix landed).
   genuine cocycles" check now exercised at `dim == maxDim` too (previously excluded as vacuous).
 - `matlab.Tda4jSpec`: 12/12, including the rewritten regression pin.
 - `PersistenceInChunksSpec`: 7/7, including its own "3-cycle graph, no filled triangle" test — confirmed by
-  hand that this one is NOT the same edge case as `RipserCohomologyContext`'s (see above), so its unchanged
+  hand that this one is NOT the same edge case as `RipserCohomologyEngine`'s (see above), so its unchanged
   expected value (`(1, 3.0, Infinity)`, essential) is still correct.
 - `HomologySpec`, `VietorisRipsSpec`, `AlphaComplexSpec`, `DimensionCeilingBenchmarkSpec`: all clean, no changes
   needed beyond `DimensionCeilingBenchmarkSpec`'s own `ripserAttempt`/doc updates.
@@ -145,7 +145,7 @@ this fix landed).
   deliberately sequenced after this fix so it can implement the correct semantics from the start rather than
   copying the bug into a new engine. Not started in this worklog's arc.
 - `matlab/Tda4jSpec.scala`'s "explicitly refuse... for engine=chunks" and "reject engine=chunks combined with
-  complex=alpha" tests were re-run but not specifically re-derived against the `PersistenceInChunksContext` fix
+  complex=alpha" tests were re-run but not specifically re-derived against the `PersistenceInChunksEngine` fix
   — they test option-parsing/error-handling behavior unrelated to `maxDim` semantics, so no change was expected
   or needed there, but it's worth naming explicitly that "chunks" doesn't yet have a dedicated
   facade-level agreement test the way "naive" does (`"engine=naive, through the facade" should "agree with the

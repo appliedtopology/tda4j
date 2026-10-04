@@ -1,11 +1,5 @@
 package org.appliedtopology.tda4j
-package streams
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 import SimplexIndexing.binomial
 
 import org.scalacheck.Gen
@@ -19,13 +13,6 @@ import scala.collection.immutable.{Seq, Set}
 import scala.collection.mutable
 import scala.math.{cos, sin}
 import scala.reflect.ClassTag
-
-def matrixGen[T: ClassTag](g: Gen[T], dimension: Gen[Int], size: Gen[Int]): Gen[Array[Array[T]]] =
-  for
-    dim <- dimension
-    sz <- size
-    values <- Gen.listOfN(dim * sz, g)
-  yield values.toArray.grouped(dim).toArray
 
 class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck with AllExpectations:
   "This is a specification of the Vietoris-Rips simplex stream implementation\n\n".txt
@@ -55,15 +42,15 @@ class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck with AllE
 
   // Regression test for a confirmed bug (found by EngineComparisonBenchmarkSpec, full writeup in CLAUDE.md's
   // "Cross-engine benchmark, and a bug it found on first run" section): filtrationOrdering used to be plain
-  // ascending here instead of reversed, which crashed SimplicialHomologyContext ("Naive" engine) at maxDim >= 2
+  // ascending here instead of reversed, which crashed SimplicialHomologyEngine ("Naive" engine) at maxDim >= 2
   // with `IllegalStateException: reduction pivot ... was not a recorded open class`, while leaving
-  // PersistenceInChunksContext ("Chunks") unaffected. Pins both halves: no exception, AND agreement between the
+  // PersistenceInChunksEngine ("Chunks") unaffected. Pins both halves: no exception, AND agreement between the
   // two engines -- the actual property that was broken, not just "doesn't crash".
   "RecursiveStackVietorisRipsSimplexStream's Naive-engine barcode agrees with Chunks at maxDim >= 2" >> {
     given Double is Field = Field.DoubleApproximated(1e-9)
     val maxDim = 2
 
-    def bounded(stream: StratifiedSimplexStream[Int, Double]): StratifiedCellStream[Simplex[Int], Double] =
+    def bounded(stream: LevelwiseSimplexStream[Int, Double]): StratifiedCellStream[Simplex[Int], Double] =
       val cells =
         (0 to maxDim).iterator.flatMap(d => stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty)).toVector
       val byDim = cells.groupBy(_.dim)
@@ -79,11 +66,11 @@ class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck with AllE
     forAll(matrixGen(Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { pts =>
       val metricSpace = EuclideanMetricSpace(pts)
       val naive =
-        SimplicialHomologyContext[Int, Double, Double]()
+        SimplicialHomologyEngine[Int, Double, Double]()
           .persistentHomology(bounded(RecursiveStackVietorisRipsSimplexStream(metricSpace)))
           .diagramAt(Double.PositiveInfinity)
       val chunks =
-        PersistenceInChunksContext[Int, Double](maxDim)
+        PersistenceInChunksEngine[Int, Double](maxDim)
           .persistentHomology(bounded(RecursiveStackVietorisRipsSimplexStream(metricSpace)))
           .diagramAt(Double.PositiveInfinity)
       naive must containTheSameElementsAs(chunks)

@@ -9,7 +9,7 @@ us/cell from n=8 to n=32) — the natural question is whether chunks handles tha
 ## Correctness first, since this combination had never been run
 
 `grep -rn "CellularPersistenceInChunksContext\[Cube"` across the whole `src/` tree returned nothing before this
-session — chunks had only ever been exercised on `Simplex[VertexT]` (via `PersistenceInChunksContext`) and
+session — chunks had only ever been exercised on `Simplex[VertexT]` (via `PersistenceInChunksEngine`) and
 `FiniteSimplicialSet` generators. Every prior first-contact between a generic engine and a new concrete cell
 type in this codebase's history found a real bug (the three filtrationOrdering direction/tie-break bugs, the
 chunks-specific multiple-tied-essential-classes bug — see CLAUDE.md's "Cross-engine benchmark" section), so
@@ -42,7 +42,7 @@ answers "does chunks change the 3D shape."
 
 Chunks runs under a timeout (`-DtimeoutSeconds`, default 30s) on a daemon-thread executor, copying
 `EngineComparisonBenchmarkSpec`'s established pattern — neither engine supports cooperative cancellation, and
-`PersistenceInChunksContext` x alpha is a documented stall/OOM risk at complex sizes (102k simplices) far
+`PersistenceInChunksEngine` x alpha is a documented stall/OOM risk at complex sizes (102k simplices) far
 smaller than a 3D cubical grid can reach (274,625 cells at n=32). Naive is left unguarded, matching the
 pre-existing spec (it's slow but has never stalled or OOM'd on cubical input).
 

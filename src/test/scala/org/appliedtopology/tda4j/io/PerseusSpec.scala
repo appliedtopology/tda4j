@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package io
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.barcode.{given, *}
 
 import org.specs2.mutable
 import java.io.File
@@ -13,7 +6,7 @@ import java.nio.file.Files
 
 class PerseusSpec extends mutable.Specification:
   given Double is Field = Field.DoubleApproximated(1e-9)
-  given chc: CubicalHomologyContext[Double, Double] = CubicalHomologyContext()
+  given chc: CubicalHomologyEngine[Double, Double] = CubicalHomologyEngine()
   import chc.{*, given}
 
   private def tempFile(suffix: String): String =

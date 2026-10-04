@@ -14,12 +14,12 @@ graph structure, valid only because VR membership is fully determined by pairwis
 complex (three balls can pairwise-overlap in three different places with no common triple intersection), so
 this pruning has no valid analogue for Cech.
 
-**Packed Ripser** (`PackedRipserCohomologyContext`) doesn't carry over either, but for a different reason: its
+**Packed Ripser** (`PackedRipserCohomologyEngine`) doesn't carry over either, but for a different reason: its
 headline optimizations (`insertionDiameter`'s O(d) incremental recurrence, the apparent-pairs shortcut) are
 proven specifically for the max-pairwise-distance functional. Nothing establishes they still hold for the
 circumradius functional, so a Cech-adapted packed engine would need those disabled (degrading to base
 clearing+reduction) or independently re-derived -- explicitly out of scope for this session; only the naive
-engine (`CellularHomologyContext`/`SimplicialHomologyContext`) is used here.
+engine (`CellularHomologyEngine`/`SimplicialHomologyEngine`) is used here.
 
 ## The actual construction: genericize, don't duplicate
 
@@ -28,7 +28,7 @@ every dimension -- exactly the "reject an entire pruned subtree one candidate at
 to avoid. Its subclass `RipserCofaceSimplexStream` already does the right thing: builds dimension `d+1`
 candidates only as cofaces of dimension-`d` survivors, and its coface loop touches `filtrationValue` only
 through the already-generic `keptByThresholdAndCriterion`/`sortedByFiltration` -- zero actual VR-specific logic,
-the same signature that justified genericizing `PersistenceInChunksContext` earlier.
+the same signature that justified genericizing `PersistenceInChunksEngine` earlier.
 
 **Genericized `filtrationValue` into a constructor parameter** on `EnumeratingCofaceSimplexStream`/
 `RipserCofaceSimplexStream` (`filtrationValueOverride: Option[PartialFunction[Simplex[Int], Double]] = None`,
@@ -55,7 +55,7 @@ default, so it sidesteps Scala 3's restriction on a default referencing an earli
 actual reason the NaN sentinel existed) without needing a curried parameter list (which would have forced a
 trailing `()` onto every existing call site). Fixed across `EnumeratingCofaceSimplexStream`,
 `RipserCofaceSimplexStream`, `InorderCofaceSimplexStream`, `IncrementalVietorisRipsSimplexStream`,
-`RipserCohomologyContext`, `PackedRipserCohomologyContext`, plus `Tda4j.scala`'s MATLAB-facing option parsing
+`RipserCohomologyEngine`, `PackedRipserCohomologyEngine`, plus `Tda4j.scala`'s MATLAB-facing option parsing
 (now threads a genuine `Option[Double]` instead of its own separate NaN default). ~25 call sites updated to
 `Some(...)`; callers relying on the default were unaffected. Committed separately (`a27d644`) before any Cech
 code was written, full `sbt test` clean throughout (238 examples, unchanged).
@@ -93,7 +93,7 @@ that Miniball's raw floating-point output can violate it by an ULP or two on nea
 random point cloud produced a facet radius of `0.3887884477377332` and its own coface's radius as
 `0.3887884477377331`, one ULP SMALLER -- not a hypothetical, a directly reproduced case.
 
-This is not merely a test-tolerance nuisance: `CellularHomologyContext`'s reduction requires this monotonicity
+This is not merely a test-tolerance nuisance: `CellularHomologyEngine`'s reduction requires this monotonicity
 to hold EXACTLY (its ascending-filtration processing order is the same invariant behind three prior
 "reduction pivot ... was not a recorded open class" crashes elsewhere in this codebase). Confirmed directly:
 before the fix below, the H0/structural-invariant property test reproduced that exact crash on a random cloud.

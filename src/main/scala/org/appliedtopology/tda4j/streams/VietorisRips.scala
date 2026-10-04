@@ -1,10 +1,6 @@
 package org.appliedtopology.tda4j
-package streams
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-
-import org.appliedtopology.tda4j.streams.FiniteMetricSpace.MaximumDistanceFiltrationValue
+import org.appliedtopology.tda4j.FiniteMetricSpace.MaximumDistanceFiltrationValue
 
 import scala.collection.immutable.{LazyList, SortedSet}
 import scala.math.Ordering.Implicits.*
@@ -117,8 +113,8 @@ class RecursiveStackSimplexEnumerator(val metricSpace: FiniteMetricSpace[Int], v
   * neighbor query rather than `SimplexIndexing`'s combinatorial-number-system enumeration. A cross-validation baseline
   * for the canonical VR streams, not a speed-competitive production engine in its own right.
   */
-class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace[Int])
-    extends StratifiedSimplexStream[Int, Double]
+private[tda4j] class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace[Int])
+    extends LevelwiseSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]:
   override def filtrationValue: PartialFunction[Simplex[Int], Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
@@ -142,8 +138,8 @@ class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace
   // VietorisRipsSpec's "have sorted layers" test). Neither of those matches filtrationOrdering's tie-break on
   // cells that tie exactly -- `edges` tie-breaks ascending via simplexOrdering, and the DFS walk's tie order
   // comes from SortedSet[Int] neighbor traversal (ascending vertex id), not any filtration-aware order at
-  // all. PersistenceInChunksContext's chunk-boundary logic (Homology.scala's
-  // PersistenceInChunksContext.allCells) relies on this bucket's own position standing in for
+  // all. PersistenceInChunksEngine's chunk-boundary logic (Homology.scala's
+  // PersistenceInChunksEngine.allCells) relies on this bucket's own position standing in for
   // filtrationOrdering position, so an inconsistent tie-break there silently breaks it even though this
   // class's own crash (the un-reversed filtrationOrdering primary key, fixed separately above) is gone --
   // found via EngineComparisonBenchmarkSpec / the regression test below.
@@ -154,3 +150,67 @@ class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace
     case d if d >= 2 && d < metricSpace.size =>
       RecursiveStackSimplexEnumerator(metricSpace, d - 1)().toVector.sorted(using filtrationOrdering.reverse).iterator
   }
+
+/** The one place to ask for a Vietoris-Rips filtration, whichever of the several constructions does the work.
+  *
+  * Unlike the constructions' own constructors -- where `maxDimension` is sometimes the top SIMPLEX dimension
+  * (`IncrementalVietorisRipsSimplexStream`) and sometimes absent (the coface streams are unbounded and wrapped in
+  * `LimitedCofaceSimplexStream`) -- `maxDimension` here is, as everywhere user-facing, the top HOMOLOGICAL degree: you
+  * get what is needed to compute `H_0 .. H_maxDimension` with ANY engine, so one dimension higher gets built internally
+  * -- so an engine run directly on the stream also reports incomplete classes in dimension `maxDimension + 1` (the
+  * stream stops there): drop them (`dim <= maxDimension`), as `matlab.TDA4j` does. Pass the stream to an engine that
+  * wants it as-is (`SimplicialHomologyEngine`, `PersistenceInChunksEngine`, `CellularCohomologyEngine`);
+  * `RipserCohomologyEngine`/`PackedRipserCohomologyEngine` take the metric space directly and do not need a stream at
+  * all.
+  *
+  * `maxFiltrationValue` defaults to `metricSpace.minimumEnclosingRadius` (Ripser's enclosing radius: beyond it nothing
+  * new is born); `Some(Double.PositiveInfinity)` for the untruncated complex.
+  *
+  * The default implementation is [[Implementation.Enumerating]], what `matlab.TDA4j` itself builds for the naive and
+  * chunks engines; the constructions agree cell for cell (they are cross-validated in the test suite) and differ in
+  * speed by factors of ~1-2 in the benchmarks (`WORKLOG-mst-and-perf.md`). `RecursiveStackVietorisRipsSimplexStream` is
+  * deliberately not offered: it cannot truncate by dimension or radius and times out beyond toy sizes.
+  */
+object VietorisRips extends PointCloudComplex:
+  def fromPoints(points: PointCloud, maxDimension: Int, maxFiltrationValue: Option[Double]) =
+    apply(points.metricSpace, maxDimension, maxFiltrationValue)
+
+  enum Implementation:
+    /** Breadth-first coface enumeration; the default. */
+    case Enumerating
+
+    /** Ripser's coface order, via its combinatorial number system indexing. */
+    case RipserCoface
+
+    /** Cofaces generated in filtration order. */
+    case Inorder
+
+    /** Rieser's New-VR (arXiv:2301.07191): a cross-validation baseline, not a fast construction. */
+    case Incremental
+
+  def apply(
+    metricSpace: FiniteMetricSpace[Int],
+    maxDimension: Int = 2,
+    maxFiltrationValue: Optional[Double] = Optional.empty,
+    implementation: Implementation = Implementation.Enumerating
+  ): LevelwiseSimplexStream[Int, Double] =
+    require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
+    val topSimplexDimension = maxDimension + 1
+    implementation match
+      case Implementation.Enumerating =>
+        LimitedCofaceSimplexStream(
+          EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
+          topSimplexDimension
+        )
+      case Implementation.RipserCoface =>
+        LimitedCofaceSimplexStream(
+          RipserCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
+          topSimplexDimension
+        )
+      case Implementation.Inorder =>
+        LimitedCofaceSimplexStream(
+          InorderCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
+          topSimplexDimension
+        )
+      case Implementation.Incremental =>
+        IncrementalVietorisRipsSimplexStream(metricSpace, topSimplexDimension, maxFiltrationValue.toOption)

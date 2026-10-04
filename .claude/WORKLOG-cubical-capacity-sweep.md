@@ -11,7 +11,7 @@ the sweep.
 ## Driver change
 
 `CubicalProfileDriver` gained an `engine` CLI argument (`naive` default, `chunks`) so the SAME random grid shape
-can be swept through both `CellularHomologyContext` (`CubicalHomologyContext`) and
+can be swept through both `CellularHomologyEngine` (`CubicalHomologyEngine`) and
 `CellularPersistenceInChunksContext[Cube, Double]` with one tool -- needed because CLAUDE.md's own cubical
 benchmark numbers already show chunks is the substantially faster engine on `Cube` (25/18/23 vs 84/48/109
 us/cell at n=8/16/24 in 3D), so a capacity question has to measure both, not just the one the driver originally
@@ -26,7 +26,7 @@ Same phase-separated timing the driver already did (coface-enumeration sort / gl
 reduction), plus `/usr/bin/time -l`'s peak RSS ("peak memory footprint") wrapped around each run, since capacity
 is a memory question as much as a time one. Each `n` is a fresh JVM process.
 
-## Naive engine (`CellularHomologyContext`/`CubicalHomologyContext`)
+## Naive engine (`CellularHomologyEngine`/`CubicalHomologyEngine`)
 
 | n  | cells   | total time | total us/cell | peak RSS |
 |----|---------|-----------:|---------------:|---------:|
@@ -90,7 +90,7 @@ daemon, ~17-18GB RSS already in use out of 32GB total) rather than a real, contr
 - Sweep stopped at n=96 (chunks) / n=48 (naive) -- both for genuine resource reasons (memory ceiling
   approaching, wall time crossing into many-minutes territory), not an arbitrary cutoff.
 - No code fix attempted here -- this was a capacity *measurement*, not a bug hunt. The memory-per-cell cost of
-  `CellularPersistenceInChunksContext`'s several parallel per-cell maps is a real, now-quantified target for a
+  `CellularPersistenceInChunksEngine`'s several parallel per-cell maps is a real, now-quantified target for a
   future memory-reduction pass, if a showcase application actually needs volumes in the multi-million-voxel
   range.
 - `.claude/SHOWCASE-APPLICATIONS.md`'s cubical "honest caveat" section is updated to cite these concrete

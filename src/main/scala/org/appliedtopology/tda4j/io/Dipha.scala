@@ -1,8 +1,4 @@
 package org.appliedtopology.tda4j
-package io
-
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.barcode.{given, *}
 
 /** DIPHA's own binary container format -- little-endian throughout, every file starting with the magic number
   * `8067171840` followed by an `Int64` file-type tag -- verified directly against `DIPHA/dipha`'s own

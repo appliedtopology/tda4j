@@ -1,0 +1,694 @@
+---
+layout: main
+title: Architecture: from algebra to a filtration stream
+---
+
+
+This page walks the two lower layers of the library: the algebraic core (what a "chain" and a
+"coefficient" actually are) and complex construction (how a sequence of cells in filtration order gets
+produced). [Persistence engines](persistence-engines.md) covers what consumes the stream this layer
+produces.
+
+If a piece of Scala 3 syntax below looks unfamiliar, see the [Scala 3 primer](scala3-primer.md) first.
+
+## Package layout
+
+The core is **one package**, `org.appliedtopology.tda4j`: `import org.appliedtopology.tda4j.*` brings in all of it.
+Its source directories are file organization only (they are not packages), and each is a layer:
+
+- **`algebra/`** — `RingModule`, `Field`, `FiniteField`, `Chain` (including the `Cell`/`OrderedCell`/`OrderedBasis`
+  contracts), `LinearAlgebra`. The typeclasses and formal-sum machinery everything else builds on.
+- **`cells/`** — `Simplex` and `Cube`, the concrete `OrderedCell` instances, with their default instances in their
+  companions.
+- **`streams/`** — everything that produces cells in filtration order: `SimplexStream`/`CellStream`, the
+  Vietoris-Rips family, `FiniteMetricSpace`, `CubicalStream`/`CubicalImage`, `CechStream`, `WitnessStream`,
+  `DowkerStream`, `UnionFind`, and the dispatchers (`VietorisRips`, `Cech`, `Witness`, `Dowker`, ...).
+- **`homology/`** — the persistence algorithms (`Homology.scala`, `PackedRipserCohomology.scala`, `Cohomology.scala`,
+  the fast cubical/alpha engines) and circular coordinates.
+- **`barcode/`** — `Barcode`, `PersistenceBar`, `BarcodeEndpoint`, distances and vectorizations.
+- **`alpha/`** — `AlphaShapes` (`HelixDelaunay`/`AlphaShapeDQP`), `AlphaComplexDQP`.
+- **`io/`** — file-format adaptors: `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
+- `package.scala` — `TDAlab`, the pylab-style user-facing Scala entry point.
+
+Outside the core:
+
+- **`sset`** (`org.appliedtopology.tda4j.sset`, an opt-in add-on) — simplicial sets (`SimplicialSet`,
+  `FiniteSimplicialSet`, `SSetElement`, `SSetMap`, `CupProduct`, `Steenrod`, `FundamentalGroup`, `BettiNumbers`, the
+  simplicial-set streams) and group classifying spaces (`FiniteGroup`, `ClassifyingSpace`). It depends on the core;
+  the core never uses it (except `TDAlab`, which re-exports it).
+- **`cli`** — the `tda4j` executable (`TDA4jConf`, `TDA4jCLI`), a thin translator over `matlab.TDA4j`.
+- **`matlab`** — `TDA4j`/`PersistenceResult`/`LandmarkSelectionResult`, the plain-primitives facade for MATLAB and
+  other Java callers.
+
+**Load-bearing rule for givens**: the core package has no top-level `given`s. Default instances live in the companion
+of the data type they serve (`object Simplex` holds `Simplex[V] is OrderedCell`, the `Ordering` derived from it and
+`Show`; likewise `Cube`, `Chain`, `BarcodeEndpoint`, `Fp`). That puts them in the type's *implicit scope*: they are
+found without any import, and are consulted only when no given is lexically visible, so a stream's or a user's own
+given always wins instead of tying with them. A top-level generic given would be visible everywhere in the flat
+package and would even decide type inference (an unconstrained `[V: Ordering]` once inferred `V =
+BarcodeEndpoint[Cube]` that way). Never put an instance in a *typeclass's* companion (`Field`, `OrderedCell`): that
+companion is searched whenever the instance type is still unknown. Generic code that holds only `CellT: OrderedCell`
+and wants the cell's intrinsic order opts in with `import OrderedCell.cellOrdering`.
+
+**Name-binding hazard of the flat package**: a wildcard import of an external library silently beats a same-named
+definition from another file of this package. Prefer named imports of external libraries in core files.
+
+## The algebraic core
+
+### `RingModule` and `Field`
+
+`algebra/RingModule.scala` defines what it means for a type `Self` to be a module over a ring-like type `R`:
+
+```scala sc:nocompile
+trait RingModule:
+  type Self
+  type R
+  def zero: Self
+  def plus(x: Self, y: Self): Self
+  def minus(x: Self, y: Self): Self = plus(x, negate(y))
+  def negate(x: Self): Self = minus(zero, x)
+  def scale(x: R, y: Self): Self
+  extension (t: Self)
+    def +(rhs: Self): Self = plus(t, rhs)
+    def -(rhs: Self): Self = minus(t, rhs)
+    def <*(rhs: R): Self = scale(rhs, t)
+    def unary_- : Self = negate(t)
+  extension (r: R)
+    def |*|(t: Self): Self = this.scale(r, t)
+    def ⊠(t: Self): Self = this.scale(r, t) // "boxed times" -- scalar action
+```
+
+A minimal instance only needs `zero`, `plus`, `scale`, and one of `minus`/`negate`. `⊠` (U+22A0, typed via
+a Unicode input method or copy-paste) is the scalar-multiplication operator used throughout: `2.0 ⊠ chain`.
+
+`algebra/Field.scala` is a separate, self-contained typeclass (not built on `RingModule`) for coefficient
+types themselves — `plus`/`minus`/`times`/`divide`/`negate`/`invert`/`zero`/`one`, with `+`/`-`/`*`/`/`/`eql`
+extension operators. **There is no default `given Double is Field` anywhere in `src/main`** — bring one in
+explicitly:
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+given Double is Field = Field.DoubleApproximated(1e-9)
+```
+
+`Field.DoubleApproximated(epsilon)` treats two doubles as equal within `epsilon` — necessary because exact
+floating-point equality is rarely what you want when an `isZero` check decides whether a chain entry
+survives a reduction step. `FiniteField.scala` gives exact, non-approximate coefficients instead:
+`FiniteField(p)`'s `Fp` is an opaque type *per instance* (so `Fp` from a mod-5 field and a mod-7 field are
+distinct, incompatible types), with exact arithmetic via a precomputed inverse table.
+
+### `Cell`, `OrderedCell`, and what `boundary` returns
+
+```scala sc:nocompile
+trait Cell extends HasDimension:
+  type Self
+  extension (self: Self) def boundary[CoefficientT: Field]: Seq[(Self, CoefficientT)]
+
+trait OrderedCell extends Cell:
+  type Self: Ordering as ordering
+```
+
+**`boundary` returns a plain `Seq[(Self, CoefficientT)]`, not a `Chain`.** Callers wrap the result in
+`Chain.from(...)` when they need actual `Chain` machinery.
+
+`Simplex[VertexT]`, `Cube`, and `FiniteSimplicialSet[G]`'s generators are the library's three concrete
+`OrderedCell` instances (`cells/SimplexOrderedCell.scala`, `cells/CubicalOrderedCell.scala`,
+`sset/SimplicialSet.scala`): `boundary` returns each codimension-1 face paired with alternating signs.
+
+There is no dual `Cocell`/`OrderedCocell` trait pair — an earlier version of this codebase had one, and it was
+removed: coboundary is *extrinsic* to a cell (it depends on which higher-dimensional cells actually exist in
+the ambient, possibly-truncated complex), not intrinsic the way `boundary` is, so a per-cell `coboundary`
+method with no complex to consult can only be correct when the complex is always the full
+combinatorially-possible one. `RipserCohomologyEngine`/`PackedRipserCohomologyEngine` compute coboundaries
+directly against `SimplexIndexing`'s cofacet iterator instead (see
+[Persistence engines](persistence-engines.md)).
+
+### `Chain`
+
+`Chain[CellT: Ordering, CoefficientT: Field]` (`algebra/Chain.scala`) is a formal sum of cells with field
+coefficients, backed by a mutable `PriorityQueue` ordered so the *smallest* cell under the ambient
+`Ordering[CellT]` sits at the head — cheap to peek, since "leading term" (the reduction pivot) is queried
+constantly.
+
+- `collapseHead()`/`collapseAll()` merge duplicate-cell entries, dropping exact zeros. Naive `+`/`-`/`⊠`
+  only lazily collapse the head, so a hand-rolled reduction loop built out of raw `Chain` arithmetic
+  accumulates an ever-growing backlog of uncollapsed duplicates — see
+  [Hard-won invariants](gotchas.md).
+- `Chain.reduceBy`/`Chain.reduceByUntil` are the actual matrix-reduction primitives every persistence
+  engine builds on: given a chain `z` and a `basis: Map[CellT, Chain[CellT, CoefficientT]]` of recorded
+  pivot columns, repeatedly subtract the appropriate multiple of `basis(pivot)` until `z`'s leading cell is
+  no longer a key in `basis`, returning both the reduced chain and a reduction-log chain (the multipliers
+  used) that lets a caller reconstruct a V-column. Internally these go through a `mutable.TreeMap`, not the
+  `PriorityQueue`-backed `Chain` type, so repeated updates collapse duplicates automatically.
+- `given [CellT: Ordering, CoefficientT: Field] => (Chain[CellT, CoefficientT] is RingModule)` is what makes
+  `+`, `-`, `⊠`, `unary_-` work on `Chain` values — the `given` whose summon *timing* matters, see
+  [Hard-won invariants](gotchas.md).
+
+## Complex construction: streams
+
+**Public entry points.** Ask for a complex through one object per kind: `VietorisRips`, `Cech`, `Witness`, `Dowker`,
+`DtmRips`, `SparseRips` (plus `Truncated` to cut any coface stream off), each taking `maxDimension` as the top
+homological degree you want and building one dimension higher internally. The sections below describe the implementation
+classes those objects choose between (`EnumeratingCofaceSimplexStream`, `CechCofaceSimplexStream`, ...); those are
+internal detail, kept for cross-validation, and not what a user should reach for. See
+`.claude/DESIGN-stream-naming.md`.
+
+A `CellStream[CellT, FiltrationT]` is the abstract interface every persistence engine consumes: an iterator
+over cells in filtration order, plus a `filtrationValue: PartialFunction[CellT, FiltrationT]` and a
+`Filterable` (smallest/largest sentinel values, `±Infinity` for `Double`). Trait hierarchy, most-general to
+least:
+
+```
+Filtration[CellT, FiltrationT]           -- has a filtrationValue partial function
+CellStream[CellT, FiltrationT]           -- Filtration + IterableOnce[CellT] + filtrationOrdering
+SimplexStream[VertexT, FiltrationT]      -- CellStream specialized to Simplex[VertexT]
+StratifiedCellStream[CellT, FiltrationT] -- adds iterateDimension: dimension-by-dimension access
+```
+
+**Two rules that hold for every stream in this codebase**, both explained in full in
+[Hard-won invariants](gotchas.md):
+
+- `filtrationOrdering` orders cells by filtration value **reversed** (so the *smallest*-under-this-ordering
+  cell is the *youngest*), because `Chain`'s pivot is always the ordering's minimum and the reduction
+  algorithms need "leading cell" to mean "youngest." A stream's iteration order and its `filtrationOrdering`
+  must be the *same* total order (one the consistent `.reverse` of the other), not merely two independently
+  valid orderings.
+- `StratifiedCellStream.iterateDimension`'s domain must be contiguous from `0` (defined for `0, ..., k` or
+  all of ℕ, never with a gap) — the default `.iterator` stops at the first dimension it's undefined for.
+
+### Vietoris-Rips: several independent generation strategies
+
+These are **alternate engines with the same output contract, not layers on one another** — check which
+`iterateDimension`/`iterator` implementation is actually in play before reasoning about a bug:
+
+- `EnumeratingCofaceSimplexStream` — generates each dimension explicitly via `SimplexIndexing`'s
+  combinatorial-number-system enumeration, filtered by an optional `keepCriterion`.
+- `RipserCofaceSimplexStream` — a coface-generation variant that only expands cofaces reachable from the
+  previous dimension's survivors rather than re-enumerating a whole dimension from scratch. `CechStream`'s
+  `CechCofaceSimplexStream` is built directly on top of this class (see below).
+- `InorderCofaceSimplexStream` — generates cofaces "in order" directly from the metric-space structure.
+- `IncrementalVietorisRipsSimplexStream` — a reference implementation of Antonio Rieser's New-VR algorithm
+  (arXiv:2301.07191), meant as a cross-validation baseline rather than a speed-competitive engine.
+- `RecursiveStackVietorisRipsSimplexStream` — a third, independent coface-enumeration strategy built on a
+  recursive stack and spatial query.
+
+`EnumeratingCofaceSimplexStream`/`RipserCofaceSimplexStream`/`InorderCofaceSimplexStream`/
+`IncrementalVietorisRipsSimplexStream` all default `maxFiltrationValue` to `metricSpace.minimumEnclosingRadius`,
+not `Double.PositiveInfinity` — past that radius every vertex is within range of a common apex, so the
+complex is a cone from there on and provably contributes no further homology (real `ripser.cpp` uses the
+same default). Pass `maxFiltrationValue = Some(Double.PositiveInfinity)` for the old always-unbounded
+behavior. `RecursiveStackVietorisRipsSimplexStream` and the alpha-complex backends keep their own,
+always-untruncated default (see [Alpha complex](alpha-complex.md)).
+
+`SimplexIndexing` (inside `SimplexIndexing.scala`) is the piece every Ripser-flavored part of this codebase
+depends on: it encodes/decodes a `d`-subset of `{0, ..., vertexCount-1}` to/from a single integer index via
+binomial-coefficient lookups, in `O(d)` either direction. Its `cofacetIterator`/`facetIterator` walk the
+*complete* `vertexCount`-point abstract simplex with no notion of `maxDimension` truncation at all — see
+[Hard-won invariants](gotchas.md) before building anything new directly on them.
+
+### Cubical complexes
+
+`Cube` (`cells/Cubical.scala`) is an elementary cube: a product of `n` (fixed ambient dimension) factors,
+each a degenerate point `[a,a]` or a unit interval `[a,a+1]`, via the standard "doubled coordinate"
+encoding (axis `k` is `2a` or `2a+1`). `opaque type Cube = Vector[Int]` — `Vector`, not `Array`, so
+structural equality works for `Chain`'s pivot tables. Boundary sign alternates over a non-degenerate axis's
+*rank among the other non-degenerate axes*, not its raw coordinate position — get this wrong and `d(d(x))`
+fails to vanish as soon as a cube has an interleaved degenerate axis, invisibly over a field of
+characteristic 2.
+
+`CubicalGridStream` (`streams/CubicalStream.scala`) is a dense cubical complex over a full rectangular grid
+(the standard T-construction): a caller-supplied `topCellValue` gives every top-dimensional cube its own
+value, and every lower-dimensional cube's value is the `min` over the top cells containing it — computed
+directly via the cartesian product over the cube's degenerate axes rather than a recursive coface walk.
+`CubicalImage` builds these from images/voxel grids (`fromFlatArray`/`fromBufferedImage`/`fromFile`/
+`fromVoxelGrid3D`); sublevel vs. superlevel filtration is handled by negating values on load, not as a flag
+on the stream itself. `CubicalHomologyEngine` is a one-line `Cube`-specialized wrapper around
+`CellularHomologyEngine` — cubical complexes needed no new engine code, only a new `OrderedCell` instance.
+
+#### Dual union-find cubical engine (Flash Cubical)
+
+`homology/FastCubicalHomology.scala` (`FastCubicalHomologyEngine`, `.claude/DESIGN-fast-cubical-engine.md`,
+`.claude/WORKLOG-fast-cubical-engine.md`) implements Flash Cubical (Le Breton-Szustakowski-Piraud,
+arXiv:2606.04801): top cells become vertices of a DUAL graph, codimension-1 cells become dual edges (a shared
+`∞` sentinel standing in for a facet's missing side on the grid's outer boundary), and primal `H_{d-1}` of the
+sublevel filtration is computed as ordinary `H_0` of that dual graph's own SUPERLEVEL filtration — Alexander
+duality, `H_{d-1}(X) ≅ H^0(S^d \ X)` — via the same elder-rule array union-find `CellularPersistenceInChunksEngine`'s
+own `unionFindDim01` uses, run in DESCENDING primal-value order with every resulting bar's endpoints swapped.
+Combined with an ordinary primal `H_0` union-find, this covers every nontrivial dimension a 2D grid has (`H_2`
+is identically zero for any subcomplex of a 2D grid) with no general `Chain` reduction at all — **valid at any
+ambient dimension `>= 2`** (`require`d, checked again with a clearer message at the `matlab.TDA4j`/`cli`
+layer). At `d >= 3`, the "middle" dimensions (`1 <= k <= d-2`, no duality shortcut) are handed to
+`CellularPersistenceInChunksEngine` run on a view that hides the real top-dimensional cells entirely, so the
+(often largest) top dimension never touches general `Chain` reduction — see
+`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
+
+`∞` must be the unconditional elder of any merge it takes part in — its own chain is deliberately never
+populated, since it never dies — which is NOT automatically guaranteed by comparing birth values alone: a real
+top cell can also carry `topValue = +Infinity` (this codebase's own "permanently missing cell" convention, the
+same one `Perseus`'s `-1` already maps to) and tie against `∞`'s own `birthOf`, so the young/old decision
+special-cases `∞` explicitly rather than relying on the birth-value comparison alone. Representatives: each
+active dual component tracks a running signed sum of top cells, oriented coherently as merges happen (the
+orientation flip is solved from the connecting facet's own `±1` boundary coefficients toward each side) so a
+dying component's boundary is exactly its bounding `H_{d-1}` cycle — this codebase's own extension beyond the
+source paper, which is F2-only and barcode-only. No paper access (network-blocked) and no existing
+implementation to port meant this was derived from Alexander duality directly, not translated from a reference
+source the way `EdgeCollapse` below could be from GUDHI's.
+
+### Simplicial sets (the `sset` add-on)
+
+Everything here is in `org.appliedtopology.tda4j.sset` (directory `sset/`). `SSetElement[G](word, generator)`
+(`SSetElement.scala`) plus `FiniteSimplicialSet[G]` (`SimplicialSet.scala`) implement finite simplicial sets in the
+classical Eilenberg-Zilber presentation: a finite set of non-degenerate generators per dimension, plus primitive face
+data `faces: G => IndexedSeq[SSetElement[G]]`. `word` is the degeneracy indices in normal form — **strictly
+decreasing**, not increasing, a direct consequence of the simplicial identity `s_i s_j = s_{j+1} s_i` (`i <= j`).
+`insertOuter`/`faceOf` implement the full operator algebra (`s_i`/`d_i` on arbitrary, possibly degenerate elements,
+exposed as `x.degeneracy(j, e)`/`x.face(i, e)`), which is what lets `validate()` check that hand-supplied face data
+actually satisfies the simplicial identities.
+
+The API has two halves. `object SimplicialSet` (the trait's companion; the catalog itself is in
+`SimplicialSetCatalog.scala`) *builds* spaces: `SimplicialSet(generatorsByDim, faces)`, `fromSimplicialComplex`,
+`fromStream`, and ready-made `simplex`/`horn`/`sphere`/`torus`/`realProjectiveSpace`/`kleinBottle`/
+`complexProjectivePlane`/`presentationComplex`/`hopfMap`/`classifyingSpace`. Methods of `FiniteSimplicialSet` do
+everything else: enumeration (`generators(n)`, `allGenerators`, `simplices(n)` with the degenerate ones, `fVector`,
+`eulerCharacteristic`, `bettiNumbers(p)`), and constructions (`product`/`coproduct`, `wedge`, `smash`, `join`, `cone`,
+`suspension`, `quotient`/`identify`, `subcomplex`), implemented in `Constructions.scala`. A product's non-degenerate
+simplices are pairs `(a, b)` with *disjoint* degeneracy words, not Eilenberg-Zilber shuffles, and its top dimension is
+`maxDim(x) + maxDim(y)`; `quotient` takes `G => SSetElement[G]` rather than `G => G` specifically so a cell can collapse
+down a dimension onto a degenerate point (the Δ-complex model of ℝP² needs exactly this for one of a triangle's three
+edges).
+
+`x.stream` (`SimplicialSetStream.scala`) adapts a set to `CellStream` for ordinary, unfiltered homology (every
+generator at filtration value `0`); `x.filtered(f)` (`FilteredSimplicialSetStream.scala`) is the genuine
+`StratifiedCellStream[G, Double]`, with `validateMonotoneFiltration` checking the one precondition every engine needs
+(a face's value never exceeds its coface's). Engines need the set's cell structure in scope: `import x.given`.
+
+`SSetMap.scala` has simplicial maps (with `mappingCone` and the induced rank on homology), `FundamentalGroup.scala` a
+presentation of the fundamental group, and `CupProduct.scala` and `Steenrod.scala` the Alexander-Whitney cup product
+and the Steenrod squares over F₂. `Nerve`/`ClassifyingSpace` (`ClassifyingSpace.scala`, with `FiniteGroup.scala`) use the
+lazy `SimplicialSet` trait for the infinite nerve of a finite group. None of this has a MATLAB or CLI entry point (a
+simplicial set needs its own input encoding), and every construction is checked against homology computed by hand
+over F₂ and F₃ rather than by `validate()` alone.
+
+### Cech complexes
+
+`streams/CechStream.scala` (`CechCofaceSimplexStream`/`CechFiltration`) builds Cech complexes over
+`Simplex[Int]`, reusing `RipserCofaceSimplexStream`'s generic coface-generation loop via its
+`filtrationValueOverride` hook rather than a from-scratch algorithm. The geometric primitive is
+minimum-enclosing-ball radius (`com.dreizak:miniball`), not the Delaunay/QP machinery alpha shapes use —
+Cech membership depends only on a simplex's own vertices, not on every other point in the cloud.
+`CechFiltration` caches each simplex's radius and clamps it to the max of its own facets' cached radii,
+since a raw Miniball call can violate monotonicity by a floating-point ULP on near-degenerate input.
+
+New-VR's Table-Lookup optimization and the packed Ripser engine's optimizations do **not** carry over to
+Cech: both are proven specifically for flag complexes / the max-pairwise-distance functional, and Cech is
+neither a flag complex nor governed by that functional. Cech complexes work with either generic engine
+(`CellularHomologyEngine`/`CellularPersistenceInChunksEngine`), cross-validated against each other; the
+packed and reference Ripser engines (specialized to the Vietoris-Rips functional) are not offered for it.
+
+### Witness complexes
+
+`streams/WitnessStream.scala` implements De Silva & Carlsson's witness complex (2004), checked directly
+against JavaPlex's own `LazyWitnessStream`/`WitnessStream` Java source (not just the paper's prose).
+`LandmarkSelector.maxmin`/`.random` pick a landmark subset of a `FiniteMetricSpace[Int]`; `WitnessGeometry`
+precomputes the landmark-to-witness distance matrix `D` and each witness's sorted landmark-distance row
+(`mDim(k, witness)`, the `(k+1)`-th nearest landmark — the one primitive both variants below are built from).
+
+Two independent implementations, both reusing `RipserCofaceSimplexStream`'s generic coface-generation loop
+(the same reuse `CechCofaceSimplexStream` makes) rather than a from-scratch enumeration:
+
+- **`LazyWitnessSimplexStream`** (JavaPlex's `LazyWitnessStream`): the lazy witness complex IS, by
+  definition, the flag/clique complex of a weighted graph, so `WitnessMetricSpace` reifies that graph as an
+  ordinary `FiniteMetricSpace[Int]` (`distance(a,b)` = the edge witness value at a fixed `nu` in `{0,1,2}`)
+  and hands it to `RipserCofaceSimplexStream` **unmodified** — no `filtrationValueOverride` at all; the
+  inherited "max pairwise distance" flag extension is exactly what a lazy witness complex wants. Because it
+  really is a flag complex, `PackedRipserCohomologyEngine` — proven only for genuine VR diameters — is
+  *also* valid here (any `FiniteMetricSpace[Int]`'s own diameter, not something VR-specific despite the
+  class's name), cross-validated directly in `WitnessStreamSpec` rather than assumed.
+- **`WitnessCofaceSimplexStream`** (JavaPlex's plain `WitnessStream`): NOT a flag complex — a `k`-dimensional
+  simplex's own witness value uses a dimension-specific threshold (`m_k`, JavaPlex's own per-dimension array)
+  that need not be monotone facet-to-coface on its own. `filtrationValueOverride` here is a genuinely
+  recursive function (`max(own_k(sigma), max over sigma's own facets)`, `TrieMap`-memoized, since the base
+  class doesn't memoize a caller-supplied override) — that recursive max is what makes "the complex at
+  threshold R" automatically downward-closed for every R, the same way VR's max-pairwise-distance does, and
+  it's also what makes JavaPlex's separate `containsElement(face)` gate redundant here (proof and empirical
+  check both in `WitnessStreamSpec`). `maxFiltrationValue` defaults to `+Infinity`, not the metric space's
+  enclosing radius — that shortcut is only valid for flag complexes.
+
+A fact used to cross-validate the two constructions against each other (`WitnessStreamSpec`): the general
+complex's own 1-skeleton is identical to the lazy complex's at `nu = 2` — both use the 2nd-nearest-landmark
+threshold for edges, just reached via different code paths.
+
+### Dowker complexes
+
+`streams/DowkerStream.scala` (`DowkerGeometry`/`DowkerFiltration`/`DowkerCofaceSimplexStream`) implements
+Dowker's complex (C.H. Dowker, "Homology groups of relations", 1952), generalized to a filtered, real-valued
+relation the way Chowdhury & Mémoli's "A functorial Dowker theorem and persistent homology of asymmetric
+networks" (2018) does. Given an arbitrary relation `R: L x W -> [0, Infinity]` — NOT derived from any metric,
+and `L`/`W` need not share an ambient space or even be the same size — a subset `sigma subseteq L` is a
+simplex at time `t` iff some witness `w in W` relates to every point of `sigma` by time `t`:
+`f(sigma) = min_{w in W} max_{x in sigma} R(x,w)`. `DowkerGeometry.fromBoolean` lifts a classical
+(unfiltered) boolean relation into this shape (`true -> 0.0`, `false -> +Infinity`).
+
+This directly generalizes the witness complex's own `nu = 0` case: `WitnessGeometry.witnessValue(sigma, m =
+_ => 0.0)` is exactly this formula with `R = D` (the landmark-to-witness distance matrix) — not implemented
+by delegating to `WitnessGeometry` (its own shape, an ambient metric space plus a landmark subset, doesn't
+fit an arbitrary relation with no shared ambient space at all), but the same formula, independently re-derived.
+Unlike witness's per-dimension threshold `m_k`, this single, dimension-independent formula is automatically
+monotone under face removal — `max` over a subset is `<=` `max` over its superset for every fixed `w`, so
+`min_w` preserves the inequality — so no recursive "max with facets" clamp (`WitnessCofaceSimplexStream`'s
+own `recursiveFiltrationValue`) is needed here. Like Cech/Witness/Sheehy above, `DowkerCofaceSimplexStream`
+reuses `RipserCofaceSimplexStream`'s generic coface-generation loop, since the Dowker complex is NOT a flag
+complex in general (a witness for a whole simplex need not witness any of its edges).
+
+> **Warning.** `+Infinity <= +Infinity` is true, so a stream whose `maxFiltrationValue` defaults to `+Infinity` — safe
+> everywhere else in this codebase — would silently collapse an untruncated Dowker relation to the complete
+> simplex on every vertex. `DowkerCofaceSimplexStream` is the one stream that can compute a genuinely infinite
+> filtration value on purpose (`DowkerGeometry.fromBoolean`'s "never witnessed" encoding), so it alone overrides
+> `keptByThresholdAndCriterion` to additionally require `.isFinite`.
+
+One real footgun this construction has that no earlier stream in this codebase did: `keptByThresholdAndCriterion`'s
+`<=` admits `+Infinity <= +Infinity`, and `DowkerGeometry.fromBoolean` deliberately produces a literal `+Infinity`
+to mean "never witnessed" — every other stream's own `maxFiltrationValue = +Infinity` default is safe only
+because none of them ever compute a genuinely infinite filtration value. `DowkerCofaceSimplexStream` overrides
+`keptByThresholdAndCriterion` to additionally require `.isFinite`, confirmed necessary empirically (a hand-built
+"5 arcs cover a circle" fixture collapsed to the complete graph on 5 vertices without the fix — see
+`.claude/WORKLOG-dowker-complex.md`).
+
+**Duality is the entire point of this construction, not an afterthought**: `DowkerGeometry.dual` (the transposed
+relation) gives the `W`-side complex, and the functorial Dowker duality theorem guarantees its persistence
+module is naturally isomorphic to the `L`-side one — so the two sides' barcodes agree exactly, but only AFTER
+dropping zero-persistence (birth == death) bars from both. A simplicial filtration records exactly one `H_0`
+birth event per vertex, so when `L` and `W` differ in size the raw barcodes cannot possibly match bar-for-bar
+even in principle; every "extra" birth turns out to be zero-persistence (confirmed on a hand-worked rectangular
+relation, not just asserted from the theorem — `DowkerStreamSpec.dropZeroPersistence`).
+
+Wired into `matlab.TDA4j`/`cli` as a dedicated entry point (`computeFromRelation`/`--input-format csv-relation`),
+separate from `computeFromPoints`/`computeFromDistanceMatrix`: a Dowker relation is neither a point cloud nor a
+square/symmetric distance matrix, so it doesn't fit the `complex=` dispatch those methods share. `engine`
+defaults to `naive` and refuses `ripser`/`chunks`, exactly like `complex=witness` with `witnessVariant=general` —
+same non-flag-complex reasoning. A `"dual"`/`--dual` option computes the `W`-side complex directly via
+`DowkerGeometry.dual`, without the caller having to transpose the relation by hand.
+
+### Sheehy's sparse/approximate Vietoris-Rips filtration
+
+`streams/SheehyRipsStream.scala` (`SheehyRipsSimplexStream`) implements Cavanna, Jahanseir & Sheehy's greedy-
+permutation reformulation (arXiv:1506.03797) of D.R. Sheehy's original net-tree construction (arXiv:1203.6786,
+DCG 49(4) 2013) — the two papers' own `epsilon` parameters are not comparable. Given a sparsity parameter
+`epsilon in (0,1)` and a full greedy permutation of the point set (`LandmarkSelector.maxmin` run to
+`numLandmarks = metricSpace.size`, extended to also expose each point's own insertion radius `lambda`), the
+resulting persistence barcode is a `(1+epsilon)`-multiplicative approximation to plain Vietoris-Rips's own
+barcode, from a complex whose size is linear in `n` for point sets of bounded doubling dimension — fewer
+simplices to *reduce* at the same scale range, in exchange for a controlled, quantified loss of precision.
+
+Like Cech/Witness above, this reuses `RipserCofaceSimplexStream`'s generic coface-generation loop rather than
+a from-scratch enumeration, but via a different shape: the ambient metric space is passed through UNMODIFIED
+(used only for combinatorial enumeration, never its own `.distance`), and one `filtrationValueOverride`
+computes every dimension `>= 1` directly from the greedy permutation's own `lambda` values — not a reified
+weighted `FiniteMetricSpace` the way `WitnessMetricSpace`/`DtmRipsSimplexStream`'s own reified space are. The
+reason is a genuine exclusion rule with no pairwise-only expression: a `k`-simplex's value is the `max` of its
+own edges' births, but ONLY if that value doesn't exceed the smallest of its OWN VERTICES' "vanish" times
+(`lambda_p * (1+epsilon)^2 / epsilon`) — a condition that has to see every vertex of the simplex at once, not
+just a pair, so a plain "flag complex over a weighted pairwise distance" shape can't carry it.
+
+A documented, verified gap in the source paper's own published algorithm: its `EdgeBirthTime` (Algorithm 3)
+computes an edge's birth from its two endpoints alone, with no check against either one's own vanish time —
+but the paper's own general `SimplexBirthTime` rule (Section 5.3) requires exactly that check, and an edge is
+simply that rule's `k=1` case, not a special one. Verified with two counterexamples, the second checked
+directly against the paper's own restricted neighbor-search bound (not just this implementation's own all-pairs
+enumeration) — see `.claude/WORKLOG-sheehy-rips.md` for both. This implementation applies the check uniformly
+from dimension 1 up.
+
+This construction is deliberately `O(n^2)` (every pairwise edge birth materialized directly), not the paper's
+own `O(n log n)` neighbor-search algorithm (Section 5, Algorithms 1-4, not implemented) — the payoff is a
+smaller complex to reduce, not a faster one to build, the same honest framing as Cech/Witness/alpha above.
+Refuses `engine="ripser"`: a simplex's value here is not simply the maximum ambient pairwise distance among
+its vertices (some pairs are sparsified to a smaller value, others excluded outright), so
+`PackedRipserCohomologyEngine`'s `insertionDiameter`/apparent-pairs optimizations — proven specifically for
+that functional — do not apply. `naive`/`chunks`/`cohomology` all consume it like any other
+`CofaceSimplexStream[Int, Double]`; `chunks` is cross-validated fresh against `naive`
+(`SheehyRipsStreamSpec`), not assumed to carry over from any other construction — see
+[Persistence engines](persistence-engines.md)'s own streams-vs-engines table for the full picture across every
+construction, not just this one.
+
+### Flag-complex edge collapse
+
+`streams/EdgeCollapseStream.scala` (`EdgeCollapse.collapse`, `.claude/WORKLOG-edge-collapse.md`) implements
+Boissonnat-Pritam's edge collapse (SoCG 2020) and Glisse-Pritam's own refinement (SoCG 2022): reduces a
+Vietoris-Rips filtration's 1-skeleton to a smaller weighted graph whose flag complex has the SAME persistent
+homology at every filtration level, using only the graph itself — no higher simplices are ever built to decide
+what to remove. An edge is **dominated** by a vertex `w` (not one of its own endpoints) iff every vertex
+adjacent to both endpoints is also adjacent to `w` — for a flag complex this depends only on the graph, verified
+directly against `GUDHI`'s own edge-collapse module (`Flag_complex_edge_collapser.h`, co-authored by Pritam and
+Glisse themselves; the actual papers were unreachable from this session's network policy — see the worklog).
+Across a whole filtration, a dominated edge's own entry time is pushed forward to the largest time it remains
+dominated (by, in general, a succession of different dominators as new common neighbors arrive), or removed
+outright if that domination never breaks. Reified as `EdgeCollapsedMetricSpace`, a `FiniteMetricSpace[Int]` over
+the same vertex ids — exactly the pattern `WitnessMetricSpace` already established for a non-metric,
+construction-derived weighted graph — so it slots directly into `EnumeratingCofaceSimplexStream`/
+`RipserCofaceSimplexStream` unmodified. Vertices are never removed (only GENUINELY correcting the originating
+worklog's own first-draft phrasing, "dominated-vertex removal" — that is a *different* construction, strong
+collapse, `arXiv:1809.10945`); `+Infinity` marks a collapsed-away pair, matching `SparseMetricSpace`'s own
+"+Infinity past the cutoff" convention; `minimumEnclosingRadius` is overridden to the bound the collapse itself
+used, not computed from the (now partly-infinite) collapsed graph — the same enclosing-radius hazard
+`SheehyRipsSimplexStream`'s own truncation clamp already had to close, for an unrelated reason.
+
+**Representatives transfer through inclusion, not a separate lifting step**: at every filtration level, the
+collapsed complex is a literal subcomplex of the original (a collapse only ever removes cells or defers their
+entry, never adds or identifies anything), so a cycle/cocycle representative computed on the smaller complex is
+automatically a valid representative of the same class in the bigger one — contrast the MST-based simplicial-set
+collapse the originating worklog also considered and declined, where the analogous complex is a *quotient*, and
+lifting a representative back is a genuine extra step.
+
+**This implementation is a faithful port of the reference algorithm's own single-pass, descending-filtration-
+value, live-mutating-state structure — not an independently-designed alternative**, after an independently-
+designed "iterate a definition-driven resolution to a whole-graph fixed point" first draft was tried and proven
+wrong by this class's own cross-validation (two distinct over-collapsing bugs, each one silently turning a real,
+finite bar essential — see the worklog for both). The processing order is load-bearing, not an implementation
+convenience: reconsider it directly from the reference source before ever touching this file's core loop, don't
+re-derive a substitute. Cross-validated by barcode agreement against plain, uncollapsed VR (property-tested
+random point clouds, a tie-heavy grid, hand-built fixtures pinning both the shift and the outright-removal
+outcome) — the real oracle throughout, not agreement with any external tool.
+
+**Enumeration cost is not reduced uniformly** (checked from source, not assumed): `EnumeratingCofaceSimplexStream`
+and `PackedRipserCohomologyEngine`'s own internal `CofacetCursor`-based enumeration both scan a fixed
+combinatorial range regardless of graph sparsity (vertices are never removed), though `EnumeratingCofaceSimplexStream`'s
+own downstream sort-and-cache pass over the *surviving* candidates does shrink; `RipserCofaceSimplexStream`'s
+own enumeration (built from the previous dimension's own survivors) benefits directly and proportionally.
+**Reduction cost benefits substantially regardless of engine** — measured 73-76% of edges removed and a 43-47x
+reduction-phase speedup on random point clouds (`EdgeCollapseBenchmarkSpec`, gated the same way
+`ApparentPairsBenchmarkSpec` is), against a far more modest 1.45-1.74x construction-phase speedup — see the
+worklog for the full table and the source-level reasoning behind the split.
+
+### Metric spaces
+
+`FiniteMetricSpace.scala` abstracts "distance + finite point set": `ExplicitMetricSpace` (raw distance
+matrix), `EuclideanMetricSpace` (coordinate array, on-demand Euclidean distance, VP-tree-backed `neighbors`
+query), `IntMetricSpace` (reindexes to contiguous `0 until size`), `SparseMetricSpace` (reports `+Infinity`
+beyond a fixed diameter cutoff, bounding Vietoris-Rips construction to a finite neighborhood per point).
+
+> **Warning.** `SparseMetricSpace` reports `+Infinity` past its cutoff rather than excluding those pairs — it is not a
+> thresholded neighbor oracle. Code that queries it expecting "unreachable" to mean "absent" will instead get
+> back a real (if unusable) `Double` value; check `.isFinite` explicitly rather than assuming exclusion.
+
+### Opt-in parallelism
+
+A few of the more expensive per-cell computations can run on the common `ForkJoinPool`, opt-in via a
+constructor flag defaulting to `false`, with output that is deterministic either way:
+`AlphaDQPSettings.parallel` (the per-vertex QP solve), `CubicalGridStream.parallelFiltrationValue`, and
+`CechCofaceSimplexStream.parallelFiltrationValue`. These are worth reaching for on large inputs where the
+per-cell cost is real (a QP solve, a Miniball radius) but shouldn't be assumed to give a large win — measured
+speedups range from a few percent (cubical, Cech — the per-cell cost there is small enough that scheduling
+overhead eats most of the gain) up to roughly 2-4x for the alpha-complex QP solve at a few hundred points and
+above, where each per-vertex solve is genuinely expensive.
+
+## `Barcode.scala`: representing the output
+
+`barcode/Barcode.scala` defines `BarcodeEndpoint` (`PositiveInfinity`/`NegativeInfinity`/
+`OpenEndpoint`/`ClosedEndpoint`, with a total order that correctly interleaves finite and infinite
+endpoints) and `PersistenceBar[FiltrationT, AnnotationT]` (dimension, lower/upper endpoint, an optional
+annotation — in practice always the representative `Chain`). `Barcode` additionally implements algebra on
+finitely-presented persistence modules: `image`/`kernel`/`cokernel` of a map between two barcodes
+represented as a matrix — useful for interleaving distances or persistence-module morphisms, not needed for
+ordinary persistent-homology computation.
+
+Two more objects in the same package compare/summarize already-computed diagrams rather than computing one
+(`.claude/WORKLOG-mainstream-feature-gap-analysis.md` items 4/8) — both specialized to `PersistenceBar[Double,
+_]` (unlike `Barcode`'s own `FiltrationT: Ordering` genericity: every real engine in this codebase already
+produces `Double` filtration values, and a metric distance needs real arithmetic, not just an `Ordering`):
+
+- **`BarcodeDistance`**: bottleneck and Wasserstein distance between two single-dimension diagrams
+  (`bottleneckDistance`/`wassersteinDistance`, plus `...ByDimension` convenience wrappers that group a
+  multi-dimensional barcode first). Ground metric and aggregation-order convention cross-checked against
+  Hera/GUDHI's own (`GroundNorm.LInfinity`/`LP(p)` is their `internal_p`, the `order` parameter is their
+  `order`/`wasserstein_power`). Essential (never-dying) bars are matched only to each other, by sorted birth
+  value; a mismatched essential-bar count between the two diagrams reports `Double.PositiveInfinity`, not an
+  exception — a real, meaningful answer ("no finite matching exists"), not a failure. Built on two
+  package-private combinatorial primitives in `BipartiteMatching.scala` (`HopcroftKarp` for the bottleneck
+  binary search, `Hungarian` for Wasserstein's assignment problem) — both independently unit-tested against
+  brute-force permutation search, not just exercised indirectly through `BarcodeDistance` itself.
+- **`Vectorization`**: persistence landscapes (Bubenik 2013) and persistence images (Adams et al. 2017),
+  turning a diagram into a fixed-size `Array[Array[Double]]` for downstream (e.g. ML) use. The two handle
+  essential bars differently, deliberately: a landscape's tent function `max(0, min(t - birth, death - t))`
+  degrades to the meaningful, finite ramp `t - birth` exactly at `death = Infinity`, so essential bars are
+  included with no special-casing; a persistence image's Gaussian bump is centered at `(birth, Infinity)` in
+  birth-persistence coordinates, which has no overlap with any finite pixel grid, so essential bars are
+  dropped outright rather than left to silently underflow to zero. Persistence images integrate each pixel's
+  weighted Gaussian mass *exactly* (a product of 1D normal-CDF differences, since an isotropic Gaussian's mass
+  over a rectangle factors along both axes), not by sampling the surface at the pixel center.
+
+**Which bars get reported** (`PersistenceFilter`, `.claude/WORKLOG-persistence-threshold.md`). Engines
+return EVERY bar — they are the cross-validation oracles, and a representative is recorded for each. Reading a
+real barcode is hopeless that way, so the *facade* (`matlab.TDA4j`, hence the CLI and MATLAB) applies a
+post-hoc filter by default: keep a bar iff it is essential or its persistence exceeds `0.01 * scale`, where the
+scale is a property of the INPUT, supplied by the facade: `metricSpace.minimumEnclosingRadius` for a point cloud or
+distance matrix (Ripser's enclosing radius, already the default VR truncation — every bar lives in `[0, scale]`;
+used as-is in the complex's reported units), or max − min of the values for a cubical image / Dowker relation
+(which have no metric). It is passed by-name and only evaluated when a fraction of it is needed (it is quadratic);
+a non-finite scale falls back to the span of the barcode's own finite endpoints. A
+threshold `<= 0` keeps everything, zero-persistence bars included. Design points worth knowing before changing
+it: (1) it is applied by thin `dispatch*` wrappers around the real dispatchers, after the full result exists, not
+inside `fromBars`; (2) `PersistenceResult` keeps the FULL arrays plus a `visible` index, and only
+`size`/`toArray`/`dimension`/`birth`/`death`/`cycle*` use the visible view — `barsOfDimension`, hence distances,
+landscapes and persistence images, always use the full barcode, because two results filtered at their own
+scales would otherwise be compared under different cuts; (3) every strict option allowlist
+(`recognizedKeys`, `witnessFromLandmarksKeys`, `dowkerKeys`) accepts `minPersistence`/`minPersistenceFraction`
+except `landmarkSelectionKeys`, since landmark selection produces no barcode; (4) existing tests that assert
+on complete barcodes call the test-only shims `FullBarcode`/`CliFull`, which switch the threshold off.
+
+`matlab.PersistenceResult` exposes both as instance methods (`bottleneckDistance`/`wassersteinDistance`
+against another `PersistenceResult`, `landscape`/`persistenceImage` on itself) — see that class's own doc.
+`cli.TDA4jCLI`'s `--distance-to` mirrors `BarcodeDistance` only (reading a second diagram via
+`io.{CSV,Gudhi,Dipha}.readPersistenceDiagram`); the vectorizations are deliberately not mirrored in the CLI,
+since they produce a matrix rather than a diagram, which does not fit this CLI's existing single-diagram
+output model — see `TDA4jConf.distanceTo`'s own doc.
+
+`matlab.PersistenceResult` also exports the **boundary matrix** of the full complex it was computed from
+(`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 1) — `numCells`/`boundaryRows`/`boundaryCols`/
+`boundaryValues`/`columnDimension`/`columnVertices`/`columnFiltrationValue`, rebuildable MATLAB-side as
+`sparse(rows()+1, cols()+1, values(), n, n)`. Built lazily (a caller who never asks never pays for it) by
+`TDA4j.buildBoundaryMatrix`, called once per `complex` branch in `computeGeneric`/`computeWitnessFromLandmarks`/
+`computeCubicalGeneric` from the SAME stream/metric-space construction `engine=naive` already consumes for that
+complex — **regardless of which engine actually computed this result's own bars**, since the boundary matrix is
+a property of the complex, not of which reduction algorithm ran over it (confirmed directly, not just designed
+that way: `naive`/`ripser`/`chunks`/`cohomology` all export byte-for-byte identical matrices for the same
+input). Like the vectorizations above, deliberately not mirrored on the CLI — a sparse matrix doesn't fit the
+CLI's diagram-in-diagram-out shape any better than a landscape/image array does.
+
+## `CircularCoordinates` (`CircularCoordinates.scala`)
+
+`homology/` also holds a standalone construction rather than a fifth persistence
+engine: circular coordinates (de Silva-Morozov-Vejdemo-Johansson 2011,
+`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 2), which turns one persistent H¹ class of a
+Vietoris-Rips complex into a map from (a connected subset of) the point cloud to the circle `R/Z`. `h1Bars`
+lists every persistent H¹ class's `(birth, death)`, sorted by persistence descending — the only way a caller
+can pick a meaningful threshold `r` for `compute` below, so it's the intended first call, not a diagnostic.
+
+**The reframing that makes this tractable** (the originating worklog's own contribution, not just a
+literature port): rather than asking whether a *finite* bar's already-computed representative happens to
+restrict to a nonzero cocycle on some sub-level complex — an open question about an existing artifact —
+`compute` fixes `r` inside the target bar's `[birth, death)` up front, builds the *static* truncated complex
+`K_r` (`maxFiltrationValue = Some(r)`, the same knob enclosing-radius truncation already uses), and computes
+`CellularCohomologyEngine`'s persistent cohomology of that fixed complex directly. The target class is
+essential at `K_r` *by construction* — nothing survives past `r` in a view that stops at `r` — so the
+verification question dissolves rather than needing an answer. Matching one of possibly several
+simultaneously-alive `K_r`-essential classes back to the specific full-filtration bar `h1Bars` reported turns
+out to need only a birth-value comparison: truncating the *end* of a filtration cannot change how early
+something is born, so `K_r`'s persistent cohomology (fed the same filtration values, just cut off at `r`)
+assigns every bar the same birth it has in the full computation.
+
+The chosen cocycle is computed over an odd prime field (`prime`, default `47` — not this library's usual `2`
+default, since an RP²-type class exists over `F_2` with no real/integer lift at all, making a mod-2 "cocycle"
+a mirage for coordinatization specifically), lifted to an integer cochain, and checked EXACTLY (not just mod
+`prime`, which the field computation already guarantees trivially) against every triangle of `K_r` —
+`NoIntegerCocycleException` (a `RuntimeException`, crossing the MATLAB bridge the same way
+`IllegalArgumentException` already does) if some triangle's integer boundary doesn't sum to zero, naming the
+offending triangle. Verified, not assumed: a class that fails this check is either genuinely torsion or needs
+a larger prime; `compute` does not silently coordinatize against a mod-`prime` mirage either way.
+
+The verified integer cocycle is then harmonically smoothed: `min_g ||z - d0 g||^2` for a real vertex function
+`g` (`d0` the 0-coboundary map), via the normal equations `d0^T d0 g = d0^T z` — a sparse SPD least-squares
+solve, not "optimization" in the LP/QP sense that `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 3
+(optimal cycles, deprioritized) actually needs. Solved matrix-free with the already-vendored
+`org.apache.commons.math3.linear.ConjugateGradient` against a `RealLinearOperator` built directly from
+`Simplex.boundary[Double]` — no dense matrix materialized, no new dependency — restricted to the connected
+component of `K_r`'s 1-skeleton containing the cocycle's own support (a class is only meaningful where a path
+exists to integrate it along; other components get no coordinate at all, not a sentinel), with one arbitrary
+vertex in that component anchored at `g = 0` to make the reduced system genuinely positive *definite* (the
+unreduced graph Laplacian is singular on constants, one null dimension per connected component). The output
+coordinate is then, directly, `theta(v) = frac(g(v))` — no separate path-integration step, confirmed against a
+real reference implementation (`scikit-tda/DREiMac`'s `toroidalcoords.py`, fetched and read directly) rather
+than derived from the paper's more abstract statement alone.
+
+`matlab.TDA4j.h1Bars`/`circularCoordinates` (returning `CircularCoordinatesResult`) mirror `h1Bars`/`compute`
+for a MATLAB caller — a genuinely different result *shape* (a per-point angle, `Double.NaN` for a point
+outside the relevant component) from `PersistenceResult`'s barcode, hence its own small entry points rather
+than a new `complex=circular` value on `computeFromPoints`. Like the vectorizations and boundary-matrix export
+above, deliberately not mirrored on the CLI: the natural output is a per-point angle array, not a diagram, and
+picking a meaningful `r` is an inherently interactive, data-dependent choice (`h1Bars` then `compute`) that
+doesn't reduce to a single flag the way `--distance-to` does for `BarcodeDistance`.
+
+## `LatticeReduction` and `CircularCoordinates.computeToroidal` (toroidal coordinates)
+
+`computeToroidal` (`.claude/WORKLOG-toroidal-coordinates.md`) generalizes `compute` from one persistent H¹
+class to `k` SIMULTANEOUSLY-alive ones, combined into a single torus-valued map `K_r`'s shared connected
+component → `(R/Z)^k` — Scoccola, Gakhar, Bush, Schonsheck, Rask, Zhou, Perea, "Toroidal Coordinates:
+Decorrelating Circular Coordinates With Lattice Reduction" (arXiv:2212.07201). It answers the ambiguity
+Edelsbrunner raised in the original circular-coordinates Q&A (per the project lead): given `k` independent H¹
+generators, ANY unimodular integer combination of them is an equally valid choice of generators for the same
+rank-`k` sublattice of `H^1(K_r; Z)`, so "the" `k` coordinates a cohomology computation hands back are
+arbitrary, not canonical.
+
+Mechanically, `computeToroidalGeneric` computes the full-filtration H¹ bars and `K_r`'s own persistent
+cohomology ONCE regardless of `k` (only the per-class birth-match/lift/harmonic-smoothing tail genuinely runs
+once per chosen index), reusing a `harmonicSmoothOnComponent` helper factored out of `compute`'s own body for
+exactly this sharing. Every chosen class's own `[birth, death)` must contain `r` (the intersection of all of
+them, generalizing `compute`'s single-class check), and — a real, checked requirement, not a formality — every
+chosen class must be supported on the SAME connected component of `K_r`'s 1-skeleton (two classes native to two
+different components of a disconnected `K_r` have no joint domain to be coordinatized on).
+
+The per-class harmonic 1-cochains `h_i = z_i - d0 g_i` (already computed for the ordinary circular-coordinates
+construction) are exactly the vectors the paper's own dSMV inner product acts on — the plain, unweighted
+sum-over-edges dot product — so their `k x k` Gram matrix is built directly, with no new geometric computation.
+`LatticeReduction.reduce` factors that Gram matrix via Cholesky, runs LLL (Lenstra-Lenstra-Lovász, `delta=3/4`
+by default) on the Cholesky factor's rows — a concrete `R^k` stand-in realizing the same inner products, so LLL
+has actual vectors to work with without ever touching the (possibly much larger) edge-indexed space the
+harmonic cochains actually live in — and returns a unimodular integer change of basis `U` plus the reduced
+Gram matrix `U^T G U`. Because harmonic smoothing is linear in the chosen cocycle, the SAME `U` applied
+directly to the already-computed per-class `theta`s (as `newTheta_c(v) = frac(sum_i U(i)(c) * theta_i(v))`)
+gives exactly the coordinates combining the cocycles first and re-smoothing once would have given — no second
+linear solve needed.
+
+**Deliberately not a port of `scikit-tda/DREiMac`'s own `toroidalcoords.py`** (the reference implementation of
+the same paper): its `_gram_schmidt` projects onto the ORIGINAL input basis vectors instead of the running
+orthogonalized ones — a real bug, invisible at exactly `k=2` (where there's only one projection step and both
+choices coincide) but corrupting the orthogonalization for `k>=3`, confirmed by direct numerical repro rather
+than by inspection alone. `LatticeReduction` is a textbook implementation instead, cross-checked against
+Wikipedia's own independently-stated algorithm and worked example. See `.claude/BUGS-IN-REFERENCES.md` for this
+and other defects found in external papers/reference implementations while validating tda4j features against
+them — logged there specifically so they stay easy to find across sessions.
+
+`matlab.TDA4j.toroidalCoordinates` (returning `ToroidalCoordinatesResult`, a new class rather than generalizing
+`CircularCoordinatesResult` — `mimaReportBinaryIssues` is in CI) mirrors `computeToroidal` for a MATLAB caller,
+same reasoning as `circularCoordinates` above; deliberately not mirrored on the CLI either, for the same
+reasons plus the fact that `cocycleIndices` is itself a small array, awkward to fit the CLI's existing
+single-value-flag conventions.
+
+```scala 3
+import language.experimental.modularity
+import org.appliedtopology.tda4j.TDAlab
+
+val tdalab = TDAlab(0)          // 0 = Double coefficients; a prime p = Z/p
+import tdalab.{*, given}
+val chain = Fp(1) ⊠ ∆(1, 2) - ∆(2, 3)       // a Chain
+```
+
+`TDAlab(characteristic, precision = 1e-9)` (root `package.scala`) is the pylab-style entry point: instantiate it
+once, then `import tdalab.{*, given}`. That brings into scope `Fp(...)` coefficients of the chosen field, the
+chain-arithmetic operators (`+`, `-`, `⊠`, ...), `∆`/`Simplex`/`Cube` literals, an implicit
+`Simplex -> Chain` conversion so `∆(1,2) - ∆(2,3)` works directly, and `cats` `Show` syntax (`.show`). Vertices are
+fixed to `Int`. It deliberately does **not** extend or wrap an engine: engines are constructed explicitly
+(e.g. `SimplicialHomologyEngine[Int, Double, Double]()`, see [Persistence engines](persistence-engines.md)). It
+is the basis for the [Tutorials](../tutorials/index.md) and the [User's Guide](../user-guide/index.md)'s Scala
+quick-start.

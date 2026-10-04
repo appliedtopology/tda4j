@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.{mutable, ScalaCheck, Specification}
@@ -75,7 +68,7 @@ class MetricSpaceSpec extends mutable.Specification with ScalaCheck:
           BruteForce(metricSpace).nearestNeighbors(x, 1) must be_==(IndexedSeq(x))
         }
       }
-    // streams.DistanceToMeasure defaults to BruteForce specifically because JVPTree's pruning assumes the
+    // DistanceToMeasure defaults to BruteForce specifically because JVPTree's pruning assumes the
     // triangle inequality, which coincident points don't violate but do stress (jvptree's own PartitionException
     // is a real, documented failure mode on degenerate configurations) -- this fixture duplicates a point so both
     // implementations have to agree on a genuinely tied nearest-neighbour set, not just a generic one.

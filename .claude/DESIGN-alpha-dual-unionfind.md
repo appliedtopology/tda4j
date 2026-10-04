@@ -115,7 +115,7 @@ the cubical engine's own convention):
    from these.
 
 Predicted dual-`H_1` bars: `{(1,2.010821,2.010821), (1,2.002120,2.002120), (1,2.0,2.002868), (1,2.0,2.009308)}`.
-Running `SimplicialHomologyContext` directly on this exact `HelixDelaunay` stream gives dimension-1 bars
+Running `SimplicialHomologyEngine` directly on this exact `HelixDelaunay` stream gives dimension-1 bars
 `{(1,2.0,2.002867841829993), (1,2.0,2.009308143335919), (1,2.002119721570461,2.002119721570461),
 (1,2.010821418668943,2.010821418668943)}` — an **exact match**, multiset-for-multiset, full precision (two of
 the four bars have genuine, if small, nonzero persistence — `2.0 -> 2.002868`/`2.0 -> 2.009308` — not zero-
@@ -169,7 +169,7 @@ additional, genuinely harder piece — general reduction for `H_1` on whatever t
 already resolve — deferred, not half-implemented). Input: a `HelixDelaunay` instance directly (not
 `AlphaShapes`/`AlphaComplexDQP` — the `require`d precondition is `ambientDimension == 2`, checked the same way
 cubical's `require`d `ambientDim == 2`, is, plus the new facet-multiplicity validation above). Validate against
-`SimplicialHomologyContext` on: this hand-derived fixture; a hand-built "ring stays open" fixture with a
+`SimplicialHomologyEngine` on: this hand-derived fixture; a hand-built "ring stays open" fixture with a
 genuine nonzero-persistence `H_1` bar; a hand-built fixture forcing a real merge between two non-`∞` dual
 components (to exercise the orientation-flip arithmetic and the two id/root-resolution fixes item 6 needed,
 which this session's own hand example did not); `Fp(3)` sign-genericity on all of the above; and a random-point

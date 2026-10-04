@@ -1,10 +1,5 @@
 package org.appliedtopology.tda4j
-package streams
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
 import SimplexIndexing.binomial
 
 import org.scalacheck.Gen
@@ -87,7 +82,7 @@ class SimplexIndexingSpec extends Specification with ScalaCheck:
     }
 
     /** Backs two later fixes' correctness (`.claude/WORKLOG-ripser-profiling.md`): `decodeToArray`'s array+sort rewrite
-      * of `apply`'s decode, and `RipserCohomologyContext.zeroPivotCofacet`/`zeroPivotFacet` reusing an iterator's own
+      * of `apply`'s decode, and `RipserCohomologyEngine.zeroPivotCofacet`/`zeroPivotFacet` reusing an iterator's own
       * already-known index instead of re-encoding the simplex it just decoded. Neither fix is exercised by the
       * hand-picked paper examples above (those never decode-then-encode the SAME simplex back).
       */
@@ -110,7 +105,7 @@ class SimplexIndexingSpec extends Specification with ScalaCheck:
       }
     }
 
-    /** Backs the incremental-insert/incremental-remove optimizations `RipserCohomologyContext.coboundaryOf`/
+    /** Backs the incremental-insert/incremental-remove optimizations `RipserCohomologyEngine.coboundaryOf`/
       * `zeroPivotCofacet`/`zeroPivotFacet` build on top of `CofacetCursor`/`FacetCursor` (`.claude/
       * WORKLOG-ripser-profiling.md`'s cursor-redesign session): those callers build a cofacet/facet's vertex set by
       * inserting/removing `cursor.vertex` from an already-materialized set instead of decoding `cursor.index` fresh --

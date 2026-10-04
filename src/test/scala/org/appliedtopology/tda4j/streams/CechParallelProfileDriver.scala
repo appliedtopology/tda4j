@@ -1,9 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
 
 import scala.util.Random
 
@@ -13,7 +8,7 @@ import scala.util.Random
   * `parallelFiltrationValue` on vs off -- see `.claude/WORKLOG-parallelization-survey.md` item 2. Invoked directly:
   *
   * {{{
-  * java -cp $CP org.appliedtopology.tda4j.streams.CechParallelProfileDriver <parallel> <n> <dim> <maxDimCap> [seed] [trials]
+  * java -cp $CP org.appliedtopology.tda4j.CechParallelProfileDriver <parallel> <n> <dim> <maxDimCap> [seed] [trials]
   * }}}
   *
   * `maxDimCap` bounds the top simplex dimension built (Cech's own complex, like VR, blows up combinatorially at
@@ -27,7 +22,7 @@ object CechParallelProfileDriver:
     val maxDimCap = args(3).toInt
     val seed = if args.length > 4 then args(4).toInt else 42
     val trials = if args.length > 5 then args(5).toInt else 5
-    // The naive SimplicialHomologyContext engine's own reduction phase scales badly with cell count (a
+    // The naive SimplicialHomologyEngine engine's own reduction phase scales badly with cell count (a
     // known, pre-existing property of the reference-grade baseline engine, unrelated to this driver's own
     // parallelFiltrationValue measurement) -- skip it at larger n so that phase's cost doesn't swamp the
     // measurement this driver actually cares about (stream construction / filtration-value computation).
@@ -66,7 +61,7 @@ object CechParallelProfileDriver:
     if !skipHomology then
       val homologyTimes = (1 to trials).map { _ =>
         val t0 = System.nanoTime()
-        val barcode = SimplicialHomologyContext[Int, Double, Double]()
+        val barcode = SimplicialHomologyEngine[Int, Double, Double]()
           .persistentHomology(freshStream())
           .diagramAt(Double.PositiveInfinity)
         val elapsedMs = (System.nanoTime() - t0) / 1e6

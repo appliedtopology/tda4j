@@ -1,18 +1,11 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.specs2.mutable
 import org.specs2.main.Arguments
 
 import scala.util.Random
 
-/** Benchmarks `RipserCohomologyContext`'s `maxFiltrationValue` threshold (Session 2's sparse-Rips enumeration, see
+/** Benchmarks `RipserCohomologyEngine`'s `maxFiltrationValue` threshold (Session 2's sparse-Rips enumeration, see
   * WORKLOG-lazy-enumeration.md) against the same engine run untruncated on the same point cloud. Timing the same
   * algorithm with one parameter toggled, rather than a different engine entirely, isolates this specific change's
   * effect from any unrelated difference between engines -- same rationale as `ApparentPairsBenchmarkSpec`.
@@ -60,7 +53,7 @@ class SparseRipsBenchmarkSpec(args: Arguments) extends mutable.Specification:
 
     def timeAndCount(metricSpace: FiniteMetricSpace[Int], maxFiltrationValue: Double): (Long, Int) =
       val ctx =
-        RipserCohomologyContext[Double](
+        RipserCohomologyEngine[Double](
           metricSpace,
           maxDim,
           maxFiltrationValue = Some(maxFiltrationValue),

@@ -1,14 +1,6 @@
 package org.appliedtopology.tda4j
-package homology
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
-
-import org.appliedtopology.tda4j.streams.StreamFixtures.explicitStream
-import org.appliedtopology.tda4j.barcode.*
+import org.appliedtopology.tda4j.StreamFixtures.explicitStream
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
 import org.specs2.mutable
@@ -18,7 +10,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-25)
 
   "Homology of a triangle" >> {
-    given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+    given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
     import shc.{*, given}
 
     val streamBuilder = ExplicitStreamBuilder[Int, Double]
@@ -36,7 +28,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
     )
   }
 
-  // Regression test for a confirmed bug: chain arithmetic inside CellularHomologyContext must pick
+  // Regression test for a confirmed bug: chain arithmetic inside CellularHomologyEngine must pick
   // pivots by filtration order (youngest cell), never by lexicographic vertex-label order. This
   // complex deliberately gives the two conventions DIFFERENT answers: vertex 1 (small label, born
   // EARLY) and vertex 9 (large label, born LATE) are connected by one edge. The "elder rule" says
@@ -45,7 +37,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
   // order bug would report the exact opposite pairing (vertex 1 dying, vertex 9 essential), since
   // 1 < 9 lexicographically. See WORKLOG-naive-homology.md for the full root-cause writeup.
   "Elder rule must follow filtration order, not lexicographic vertex order" >> {
-    given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+    given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
     import shc.{*, given}
 
     val streamBuilder = ExplicitStreamBuilder[Int, Double]
@@ -63,7 +55,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
 
   /** Wraps `explicitStream`'s output as a `StratifiedCellStream` with each dimension's bucket sorted by
     * `filtrationOrdering.reverse` -- the stream contract's own rule 2 (CLAUDE.md), needed here because
-    * `PersistenceInChunksContext` (unlike the naive engine) reads `iterateDimension` bucket order directly rather than
+    * `PersistenceInChunksEngine` (unlike the naive engine) reads `iterateDimension` bucket order directly rather than
     * re-sorting internally.
     */
   private def asStratified(cells: Seq[(Double, Simplex[Int])]): StratifiedCellStream[Simplex[Int], Double] =
@@ -81,7 +73,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
       }
 
   "Naive engine reproduces the hand-verified tetrahedron and torus barcodes" >> {
-    given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+    given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
     import shc.{*, given}
 
     persistentHomology(explicitStream(HomologyFixtures.tetrahedronCells))
@@ -92,7 +84,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
   }
 
   "Naive engine satisfies the bars-account-for-cells invariant" >> {
-    given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+    given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
     import shc.{*, given}
 
     val cases = List(
@@ -108,7 +100,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
   }
 
   "diagramAt uses a closed-birth/open-death convention at the exact query value" >> {
-    given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+    given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
     import shc.{*, given}
 
     // Querying exactly at the death value of a bar must include that bar (both its birth 0.0 and
@@ -121,7 +113,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
     // floating-point noise -- see WORKLOG-naive-homology.md.
     val f11 = new FiniteField(11)
     import f11.given
-    given shc: SimplicialHomologyContext[Int, f11.Fp, Double] = SimplicialHomologyContext()
+    given shc: SimplicialHomologyEngine[Int, f11.Fp, Double] = SimplicialHomologyEngine()
     import shc.{*, given}
 
     val allCells = List(
@@ -144,7 +136,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
   }
 
   "Representative cycle for the elder-rule fixture is exactly the birthing vertex" >> {
-    given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+    given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
     import shc.{*, given}
 
     val bars = persistentHomology(explicitStream(HomologyFixtures.elderRuleCells)).barcodeAt(Double.PositiveInfinity)
@@ -155,10 +147,10 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
   }
 
   "Naive engine agrees with the clear-and-compress engine on the same complexes" >> {
-    given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+    given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
     import shc.{*, given}
 
-    val cc = PersistenceInChunksContext[Int, Double](3)
+    val cc = PersistenceInChunksEngine[Int, Double](3)
     val cases = List(HomologyFixtures.triangleCells, HomologyFixtures.tetrahedronCells, HomologyFixtures.torusCells)
     forall(cases) { cells =>
       val naive = persistentHomology(explicitStream(cells)).diagramAt(Double.PositiveInfinity)
@@ -170,16 +162,16 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
   // Per .claude/CLAUDE.md's coefficients-and-representatives design principle: chunks' representatives must be
   // genuine cycles matching the naive engine's EXACTLY (not merely homologous), at EVERY dimension -- the
   // earlier, narrower dimension-0-only version of this test is superseded now that barcodeAt closes that gap.
-  // barcodeAt no longer delegates to a second CellularHomologyContext run (see
+  // barcodeAt no longer delegates to a second CellularHomologyEngine run (see
   // .claude/WORKLOG-chunks-representatives-incremental.md: that design was tried, then rejected by the project
   // lead as "nowhere near a reasonable request," and replaced with `vcolOf`, which reconstructs each
   // representative incrementally from chunks' own already-computed boundaries/cleared/paired/killer state).
   // Exact match still holds under the new design too, for the same reason it held under the old one: a fixed
   // total order over a fixed cell set determines a unique reduced boundary matrix regardless of which
   // algorithm computes it, and `vcolOf`'s fold-over-reduction-log logic is derived term-for-term from
-  // CellularHomologyContext.advanceOne's own audited V-column formula (see vcolOf's own doc).
+  // CellularHomologyEngine.advanceOne's own audited V-column formula (see vcolOf's own doc).
   "The clear-and-compress engine's representatives match the naive engine's exactly, at every dimension" >> {
-    given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+    given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
     import shc.{*, given}
 
     val cases =
@@ -187,7 +179,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
     forall(cases) { cells =>
       val fvByCell: Map[Simplex[Int], Double] = cells.map((f, c) => c -> f).toMap
       val naiveBars = persistentHomology(explicitStream(cells)).barcodeAt(Double.PositiveInfinity)
-      val chunksState = PersistenceInChunksContext[Int, Double](3).persistentHomology(asStratified(cells))
+      val chunksState = PersistenceInChunksEngine[Int, Double](3).persistentHomology(asStratified(cells))
       val chunksBars = chunksState.barcodeAt(Double.PositiveInfinity)
       val chunksDiagram = chunksState.diagramAt(Double.PositiveInfinity)
 
@@ -232,7 +224,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
     }
   }
 
-  // Broader fuzz for the dimension-0/1 raw-union-find fast path added to CellularPersistenceInChunksContext
+  // Broader fuzz for the dimension-0/1 raw-union-find fast path added to CellularPersistenceInChunksEngine
   // (.claude/WORKLOG-unionfind-in-chunks.md) -- the fixed-fixture check above (triangle/tetrahedron/torus) is
   // real coverage but far narrower than SimplicialHomologyByDimensionSpec's own 100+-random-cloud property for
   // the same kind of change, and this is exactly the class the new fast path was added to. Mirrors that
@@ -244,12 +236,12 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
       (points: Array[Array[Double]]) =>
         val metricSpace = EuclideanMetricSpace(points)
         val naiveStream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), boundedMaxDim)
-        val naive = SimplicialHomologyContext[Int, Double, Double]()
+        val naive = SimplicialHomologyEngine[Int, Double, Double]()
           .persistentHomology(naiveStream)
           .diagramAt(Double.PositiveInfinity)
 
         val chunksStream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), boundedMaxDim)
-        val chunks = PersistenceInChunksContext[Int, Double](boundedMaxDim)
+        val chunks = PersistenceInChunksEngine[Int, Double](boundedMaxDim)
           .persistentHomology(chunksStream)
           .diagramAt(Double.PositiveInfinity)
 
@@ -264,7 +256,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
     import f3.given
 
     def barcodeOverField[CoefficientT: Field](cells: Seq[(Double, Simplex[Int])]): List[(Int, Double, Double)] =
-      val ctx = SimplicialHomologyContext[Int, CoefficientT, Double]()
+      val ctx = SimplicialHomologyEngine[Int, CoefficientT, Double]()
       ctx.persistentHomology(explicitStream(cells)).diagramAt(Double.PositiveInfinity)
 
     val cases = List(
@@ -290,7 +282,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
     endpointValue(x) <= endpointValue(y)
 
   "Naive engine handles a real Vietoris-Rips stream: completes, and every bar has birth <= death" >> {
-    given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+    given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
     import shc.{*, given}
 
     forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 3), Gen.chooseNum(6, 12))) { points =>
@@ -311,7 +303,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
   // a triangle at the same diameter). A square has two pairs of tied edge lengths and two tied
   // diagonals by construction -- a cheap, deterministic way to actually exercise that path.
   "Naive engine handles tied filtration values (VR complex on a square) without exception" >> {
-    given shc: SimplicialHomologyContext[Int, Double, Double] = SimplicialHomologyContext()
+    given shc: SimplicialHomologyEngine[Int, Double, Double] = SimplicialHomologyEngine()
     import shc.{*, given}
 
     // Points 0=(0,0), 1=(1,0), 2=(1,1), 3=(0,1): a unit square with diagonal 0-2 of length sqrt(2).
@@ -341,17 +333,17 @@ class BarcodeRegressionSpec extends org.specs2.mutable.Specification with ScalaC
   // also sample large/high-dimensional clouds, and on at least one of those this OOMs with severe GC
   // thrashing (up to 515% GC time observed) well before completing, not a quick pass. Whether that's the
   // same pre-existing "stalls out" performance issue this skip always documented, or something this
-  // session's PersistenceInChunksContext fix made worse by doing more substitution work per cell, is NOT
+  // session's PersistenceInChunksEngine fix made worse by doing more substitution work per cell, is NOT
   // yet determined -- don't re-attempt un-skipping without measuring across the actual generator range,
   // not one sample. See WORKLOG-benchmark-and-chunks-bug.md.
   skipAll // currently stalls out - we need to figure out the speed issues here.
   given Double is Field = Field.DoubleApproximated(1e-25)
 
-  val shc = PersistenceInChunksContext[Int, Double](3)
+  val shc = PersistenceInChunksEngine[Int, Double](3)
 
-  val cases: Seq[(String, Array[Array[Double]] => StratifiedSimplexStream[Int, Double])] = Seq(
-    ("Alpha DQP", (pts: Array[Array[Double]]) => AlphaShapes(pts.toIndexedSeq, "DQP")),
-    ("Alpha Helix", (pts: Array[Array[Double]]) => AlphaShapes(pts.toIndexedSeq, "helix")),
+  val cases: Seq[(String, Array[Array[Double]] => LevelwiseSimplexStream[Int, Double])] = Seq(
+    ("Alpha DQP", (pts: Array[Array[Double]]) => AlphaShapes(pts.toIndexedSeq, AlphaBackend.DQP)),
+    ("Alpha Helix", (pts: Array[Array[Double]]) => AlphaShapes(pts.toIndexedSeq, AlphaBackend.Helix)),
     (
       "VR",
       (pts: Array[Array[Double]]) =>
@@ -361,7 +353,7 @@ class BarcodeRegressionSpec extends org.specs2.mutable.Specification with ScalaC
   val points = matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(25, 150)).sample.get
   for (name, streamBuilder) <- cases do
     s"$name complex should have births before deaths" >> {
-      // matrixGen is defined in VietorisRipsSpec.scala
+      // matrixGen is defined in streams/Generators.scala
       // forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(25, 250))) { (points: Array[Array[Double]]) =>
       val vrstream = streamBuilder(points)
       val homology = shc.persistentHomology(vrstream)

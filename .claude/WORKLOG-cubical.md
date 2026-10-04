@@ -19,10 +19,10 @@ edited later (per the project's worklog convention) -- see CLAUDE.md's final sum
 Read `Chain.scala`, `Simplex.scala`, `SimplexStream.scala`, `Homology.scala` (first ~260 lines),
 `SimplexOps.scala`, `FiniteField.scala`, `Field.scala`, and the `SimplexSpec`/`ChainSpec`/`FiniteFieldSpec`
 test files, plus `build.sbt`, before deciding anything. Key finding: `CellularHomologyContext[CellT:
-OrderedCell, CoefficientT: Field, FiltrationT: Ordering]` (the "naive" engine, aka `SimplicialHomologyContext`
+OrderedCell, CoefficientT: Field, FiltrationT: Ordering]` (the "naive" engine, aka `SimplicialHomologyEngine`
 when instantiated at `Simplex[VertexT]`) is *already* fully generic over `CellT: OrderedCell` --
 `persistentHomology(stream: => CellStream[CellT, FiltrationT])` needs nothing cubical-specific. By contrast
-`PersistenceInChunksContext` and `SimplicialHomologyByDimensionContext` are hardcoded to `Simplex[VertexT]`,
+`PersistenceInChunksEngine` and `SimplicialHomologyByDimensionContext` are hardcoded to `Simplex[VertexT]`,
 not generic -- confirming "slot in cleanly with [the cellular homology algorithm]" means the naive engine
 specifically, not a rewrite of the chunked/MST engines to be generic. That's the whole scope for tonight: a
 `Cube` cell type + `OrderedCell` instance, and a `CellStream`/`StratifiedCellStream[Cube, FiltrationT]`
@@ -64,15 +64,15 @@ Called `advisor()` after orientation, before design decisions. Corrections taken
    `totalBarsAccountForAllCells`-style structural invariant already used elsewhere in this codebase; hand-
    derived fixtures; independent H0 via union-find. Triangulation cross-check only as a later bonus.
 7. Build order: cell type + spec first (dd=0/monotonicity/structural), *then* the stream, *then* plug into
-   `CellularHomologyContext`, *then* image loading, *then* measure real scaling numbers (don't infer -- a
-   256x256 image is ~263k cells, and this repo's own history (`PersistenceInChunksContext`'s 100k-scale
+   `CellularHomologyEngine`, *then* image loading, *then* measure real scaling numbers (don't infer -- a
+   256x256 image is ~263k cells, and this repo's own history (`PersistenceInChunksEngine`'s 100k-scale
    stall, RipserCohomologyContext's ~20us/cell constant factor) says expect a real ceiling on the naive
    engine at that size).
 
 ## Status at end of session
 
 Shipped: `Cube` cell type + boundary + `OrderedCell` instance (`Cubical.scala`), `CubicalGridStream` +
-`ExplicitCubicalStream` + `CubicalHomologyContext` (`CubicalStream.scala`), greyscale image / voxel grid
+`ExplicitCubicalStream` + `CubicalHomologyEngine` (`CubicalStream.scala`), greyscale image / voxel grid
 loading (`CubicalImage.scala`), and four passing specs (`CubicalSpec` 9 examples, `CubicalStreamSpec` 8
 examples/331 expectations -- including `ExplicitCubicalStream` coverage added after the advisor's "done"
 review caught it missing, see below -- `CubicalImageSpec` 12 examples, `CubicalBenchmarkSpec` — a timing
@@ -128,7 +128,7 @@ Also hit: `Seq[Int]` and `Int*` overloads of the same method (`fromEncoded`, `ve
 the identical signature after varargs desugaring (`Seq`) -- fixed with `@targetName` on the varargs overload
 of each, rather than dropping the varargs convenience constructors.
 
-### `CubicalGridStream`/`ExplicitCubicalStream`/`CubicalHomologyContext` (`CubicalStream.scala`)
+### `CubicalGridStream`/`ExplicitCubicalStream`/`CubicalHomologyEngine` (`CubicalStream.scala`)
 
 T-construction dense grid stream: `topCellValue: IndexedSeq[Int] => Double` gives pixel/voxel values directly;
 every lower cell's value is `min` over ALL top cells containing it, computed DIRECTLY (cartesian product over
@@ -140,8 +140,8 @@ SUBSET of `{top cells containing c}` when `c` is a face of `D`, so a min over fe
 then dimension, then `cubeOrdering`) per the advisor's mandate -- NOT `.reverse` of an ascending-built
 ordering. `totalCellCount = prod_i (2*shape(i)+1)`, derived via the "sum over subsets of a product" identity,
 O(ambientDim), no enumeration needed (confirms the ~263k figure for a 256x256 image cited earlier).
-`ExplicitCubicalStream` (sparse/arbitrary cube sets, mirrors `ExplicitStream`) and `CubicalHomologyContext`
-(thin wrapper, mirrors `SimplicialHomologyContext`) came along for free -- `Cube` needed nothing new from the
+`ExplicitCubicalStream` (sparse/arbitrary cube sets, mirrors `ExplicitStream`) and `CubicalHomologyEngine`
+(thin wrapper, mirrors `SimplicialHomologyEngine`) came along for free -- `Cube` needed nothing new from the
 generic engine.
 
 **Third instance of the same same-named-top-level-extension collision, in a NEW shape**: `cell.boundary[Double]`
@@ -156,7 +156,7 @@ triggered by an ambiguous call site rather than a literal definition-site name c
 elimination: `CubicalSpec.scala`'s own successful `cube.boundary[CoefficientT]` call had EXPECTED-TYPE
 pressure from its enclosing `Chain.from[Cube, CoefficientT](...)` call; adding the same kind of pressure here
 (`val faces: Seq[(Cube, Double)] = cell.boundary[Double]` before pattern-matching its elements) fixed it.
-**Reassuring, and checked before trusting the rest of the session's design**: `CellularHomologyContext`'s own
+**Reassuring, and checked before trusting the rest of the session's design**: `CellularHomologyEngine`'s own
 production calls to `.boundary` (`Homology.scala`'s `sigma.boundary[CoefficientT]`) go through the GENERIC
 `CellT: OrderedCell` type parameter, not a concrete type -- Scala has no choice but to dispatch via the
 `OrderedCell`/`Cell` typeclass evidence there (no concrete-type ambiguity possible when the receiver's own
@@ -230,7 +230,7 @@ self-consistent in isolation. Passes (`CubicalStreamSpec`, now 8 examples / 331 
 
 Also added, a one-sentence doc note on `CubicalGridStream.iterateDimension` (advisor's second, minor point):
 it recomputes and fully re-sorts each dimension's bucket on EVERY call, no memoization -- fine for
-`CellularHomologyContext` (calls `.iterator` once per run) but worth flagging for a future caller that might
+`CellularHomologyEngine` (calls `.iterator` once per run) but worth flagging for a future caller that might
 iterate dimensions repeatedly and directly, the way some alpha-complex specs do for their own streams. Not
 measured as an actual problem; flagged rather than silently left unmentioned, per the advisor's framing.
 
@@ -255,7 +255,7 @@ regime.
 
 Roughly FLAT per-cell cost (~60-95us/cell once past JIT warmup) across a 900x range of complex sizes -- a real,
 usable result: a genuine 256x256 photo (263,169 cells, not 65,536 -- see `CubicalGridStream`'s own doc for why)
-processes in ~25 seconds on the naive engine. Not fast, but not the catastrophic blowup `PersistenceInChunksContext`
+processes in ~25 seconds on the naive engine. Not fast, but not the catastrophic blowup `PersistenceInChunksEngine`
 hits at comparable simplicial-complex scale (see CLAUDE.md's cross-engine-benchmark section) -- this is the
 single-pivot-table naive algorithm, deliberately the least-optimized of the three live persistence engines,
 handling a real image size in double-digit seconds without any cubical-specific optimization at all.
@@ -273,7 +273,7 @@ handling a real image size in double-digit seconds without any cubical-specific 
 rather than staying flat -- a 32-cubed voxel grid (274,625 cells, barely more than the 256x256 2D case's
 263,169) takes ~3.9 MINUTES, not ~25 seconds. Not yet root-caused (a genuine next-session profiling target, not
 guessed at here) -- plausible contributors, stated as hypotheses only: a 3D complex has cells up to dimension 3
-(vs. 2 for 2D), so `Cube.boundary` produces more terms per cell (`2*dim` each) and `CellularHomologyContext`'s
+(vs. 2 for 2D), so `Cube.boundary` produces more terms per cell (`2*dim` each) and `CellularHomologyEngine`'s
 single shared pivot table has more concurrent structure to reduce against; `containingTopCells`'s
 O(2^(ambientDim - dim(c))) per-call cost also grows with ambient dimension. This is EXACTLY the real, measured
 ceiling this session's CLAUDE.md notes predicted ("expect a real ceiling," not "if") -- and is the concrete,
@@ -290,10 +290,10 @@ modest 32^3 voxel grid already costs ~4 minutes on the naive engine, and the per
 in 3D specifically, not flat the way it is in 2D -- real volumetric data (medical imaging, materials science,
 the actual use case voxel support exists for) will commonly exceed 32^3. Recommended next step for a future
 session, in order: (1) profile the 3D case specifically to root-cause the growing per-cell cost (allocation
-profiler, not another timing table -- same lesson `RipserCohomologyContext`'s own ~20us/simplex tax learned
+profiler, not another timing table -- same lesson `RipserCohomologyEngine`'s own ~20us/simplex tax learned
 the hard way, see CLAUDE.md); (2) THEN decide whether a targeted fix within the generic engine closes the gap,
 or whether a genuinely specialized cubical algorithm (CubicalRipser-style clearing + apparent pairs, or
-Wagner-Chen-Vuçini's discrete Morse reduction) is warranted -- mirroring how `RipserCohomologyContext` was
+Wagner-Chen-Vuçini's discrete Morse reduction) is warranted -- mirroring how `RipserCohomologyEngine` was
 only built as its own dedicated engine after the naive one was fully validated and its limits understood, not
 before.
 
@@ -325,10 +325,10 @@ than silently dropped or rushed into this session's unrelated diff.
 A specialized, grid-structure-exploiting fast cubical persistence algorithm -- CubicalRipser
 (Kaji/Sudoh/Ahara/... ) or the Wagner-Chen-Vuçini "Efficient Computation of Persistent Homology for Cubical
 Data" approach -- is NOT attempted this session. Tonight's scope is deliberately limited to slotting `Cube`
-into the existing generic `CellularHomologyContext` (the naive reduction engine), matching "we have a cellular
+into the existing generic `CellularHomologyEngine` (the naive reduction engine), matching "we have a cellular
 homology algorithm, this should slot in cleanly with that." A specialized engine exploiting the grid's regular
 structure (union-find-based dimension-0/1 handling analogous to `SimplicialHomologyByDimensionContext`, or a
 fully cubical-specific reduction like real CubicalRipser) is a natural, real future direction once real image
 sizes are measured against the naive engine's ceiling (see the scaling-measurement task below) -- flagged here
-explicitly so it isn't forgotten, the same way `RipserCohomologyContext`'s emergent-pairs optimization was
+explicitly so it isn't forgotten, the same way `RipserCohomologyEngine`'s emergent-pairs optimization was
 flagged and deliberately deferred rather than silently dropped.
