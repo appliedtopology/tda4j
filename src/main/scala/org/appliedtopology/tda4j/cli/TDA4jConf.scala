@@ -46,12 +46,14 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "ripser, chunks, naive, cohomology, fast-cubical or fast-alpha. Default: ripser for vr and the lazy " +
         "witness complex, fast-cubical for images of dimension 2 and up, cohomology otherwise. ripser needs vr or " +
         "--witness-variant=lazy; fast-cubical is for images " +
-        "of dimension 2 and up; fast-alpha for --complex=alpha with the helix backend"
+        "of dimension 2 and up; fast-alpha for --complex=alpha with the bowyer-watson or helix backend"
     )
   val alphaBackend: ScallopOption[String] =
     opt[String](descr =
-      "default, helix or DQP, for --complex=alpha. default: helix, or with --max-filtration-value whichever of " +
-        "helix and DQP is expected to be faster for that radius (same result in general position)"
+      "default, bowyer-watson, helix or DQP, for --complex=alpha. bowyer-watson: points spanning at most 4 " +
+        "dimensions, exact predicates, fastest there. default: bowyer-watson up to 4 dimensions and helix above, " +
+        "or with --max-filtration-value DQP instead when it is expected to be faster for that radius (same result " +
+        "in general position)"
     )
   val requireValidTriangulation: ScallopOption[String] = opt[String](
     descr = "true or false (default), for --complex=alpha with the helix backend: also check the triangulation for " +

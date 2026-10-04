@@ -4,14 +4,23 @@ paths:
   - "src/**/*Alpha*.scala"
 ---
 
-# Alpha complexes: DQP versus Helix, and the fast alpha engine
+# Alpha complexes: Bowyer-Watson, Helix and DQP, and the fast alpha engine
 
 Loads when you work in `alpha/` or on an alpha file. Project-wide rules are in `.claude/CLAUDE.md`.
 
-## Alpha complex: DQP vs Helix
+## Alpha complex: Bowyer-Watson, Helix, DQP
 
-`WORKLOG-alpha-complex.md`, `HANDOFF-alpha-complex.md`. `AlphaShapes(points, dispatch)`: `"default"` → `"helix"`
-(`HelixDelaunay`); `"DQP"` must be explicit. Alpha and VR/Ripser are separate sections with minimal interaction
+**`BowyerWatsonDelaunay`** (`alpha/BowyerWatson.scala`, `WORKLOG-bowyer-watson.md`) is the default for points at most
+4 coordinates wide. Exact predicates (`DelaunayPredicates`: permutation-expansion determinants, float filter then
+`BigDecimal`; in-sphere ties broken by perturbing the lifted coordinate in descending point index), so the
+triangulation is valid on grids and the SAME for every insertion order (`BowyerWatsonSpec` pins both; don't weaken it to
+Betti numbers). Exactly repeated points: smallest index kept, others joined by a value-0 edge. Refuses an affine span
+above 4-D (n! expansion); never raise the cap without a different determinant. Equal to Helix within 1e-9 in general
+position. Both triangulators extend `DelaunayAlphaShapes` (faces/values/sort on flat arrays, Householder circumspheres:
+never the Gram system, it lost 5e-5 on a 4-D sliver).
+
+`WORKLOG-alpha-complex.md`, `HANDOFF-alpha-complex.md`. `AlphaShapes(points, backend)`: `Default` → BowyerWatson
+(width <= 4) or Helix; DQP only with a radius via `prefersDQP`, or explicitly. Alpha and VR/Ripser are separate sections with minimal interaction
 (project lead's standing call). Never resurrect the ripped-out Miniball-Delaunay backend.
 
 `AlphaComplexDQP` implements Carlsson & Carlsson (Sci. Rep. 14:19824, 2024), DAQP-style dual active-set QP;
@@ -50,12 +59,12 @@ structural check fails; on the PROJECTED points). Exact grids are valid by defau
 smaller epsilon (`1e-9`) a 3-D grid can still fail to repair (near-coplanar float predicates) and the raw walk is
 returned. Agreement with GUDHI at scale (bench harness): bottleneck <= 1e-8 at 1000/5000 3-D, 6e-7 at 10000 2-D.
 **Dispatch with a radius** (`AlphaShapes(points, maxRadius = r)`, the verb's and facade's `maxFiltrationValue`):
-`Default` = Helix without a radius, else `prefersDQP` (mean of `k^1.6`, k = neighbours within `2r`, 64 samples, vs a fitted cost model:
-DQP `0.004·2.35^(d-2)·k^1.6`, Helix `h_d (n/1000)^0.4`, h = 0.53/1.7/10/150 for d = 2..5, d >= 6 always DQP). Helix is
-filtered (`RadiusLimitedAlphaShapes`), DQP truncated (`AlphaComplexDQPStream`, top dim `maxDimension + 1`); the
+`Default` = the triangulation without a radius, else `prefersDQP` (mean of `k^1.6`, k = neighbours within `2r`, 64
+samples, vs a fitted cost model: DQP `0.004·2.35^(d-2)·k^1.6`, BowyerWatson `b_d (n/1000)^0.2`, b = 0.03/0.1/1.1 for
+d = 2..4, Helix 5-D `150 (n/1000)^0.4`, d >= 6 always DQP). Triangulations are filtered (`RadiusLimitedAlphaShapes`), DQP truncated (`AlphaComplexDQPStream`, top dim `maxDimension + 1`); the
 results must be identical in general position (`AlphaDispatchSpec`; cospherical: DQP keeps the spanned simplex, Helix
 triangulates). The facade passes no `Epsilon`: alpha uses `AlphaShapes`' default `1e-5` (the `epsilon` option is `field=R`). Untruncated DQP is ~100x slower than Helix. fast-alpha refuses a
-radius. Measurements: `WORKLOG-helix-construction-speed.md`.
+radius and takes either triangulation. Measurements: `WORKLOG-helix-construction-speed.md`.
 
 **One root mechanism (near-cospherical clusters, order-dependent facet-pivot choices) produces two DIFFERENT
 outcomes — don't conflate, a naive set-diff can't tell them apart**:
@@ -69,13 +78,13 @@ outcomes — don't conflate, a naive set-diff can't tell them apart**:
    check (not fixed, out-of-scope symbolic-perturbation redesign). Worked around at the repair layer:
    `requireValidTriangulation`'s jitter-and-recompute also triggers on a genuine void on the RAW output.
 
-**`FastAlphaHomologyEngine`** — `FastCubicalHomologyEngine`'s dual union-find ported to `HelixDelaunay`'s top
-simplices; valid any ambient dim≥2, Helix only (DQP builds no adjacency structure). The "every facet ≤2 cofaces"
-precondition is NOT guaranteed by construction (more likely violated at higher dim/more points) — validated
+**`FastAlphaHomologyEngine`** — `FastCubicalHomologyEngine`'s dual union-find ported to a `DelaunayAlphaShapes`'
+top simplices (BowyerWatson or Helix); valid any ambient dim≥2, never DQP (no adjacency structure). The "every facet ≤2
+cofaces" precondition is guaranteed by BowyerWatson, NOT by Helix (more likely violated at higher dim/more points) — validated
 explicitly, throws `FastAlphaTriangulationException` rather than a silently-wrong dual graph. Facet dual-edge
 value from `HelixDelaunay.filtrationValue` directly, never recomputed as min over top simplices. At dim≥3, same
 cohomology hybrid as cubical on `LimitedAlphaShapesStream`; cross-validated at d=3. Wired as
-`engine="fast-alpha"` (alpha+helix only, project lead signed off on the measured exception rate). Representatives
+`engine="fast-alpha"` (alpha with a triangulating backend, project lead signed off on the measured exception rate). Representatives
 share the cubical engine's `SignedUnionFind` bookkeeping (`WORKLOG-fast-cubical-representatives.md`).
 `WORKLOG-alpha-dual-unionfind.md`, `DESIGN-alpha-dual-unionfind.md`.
 
@@ -93,6 +102,6 @@ not a bug; truncating at ambient dimension gives the wrong homotopy type. Honest
 mixed vs Ripser/qhull; value is high ambient dimension + exact homology + small complexes, not raw speed.
 
 **Backend choice is typed** (`WORKLOG-cursor-and-verb.md`): `AlphaShapes(points: PointCloud, backend: AlphaBackend =
-Default)`, `AlphaBackend.Default | Helix | DQP` (Default resolves to Helix); the facade's `alphaBackend` string goes
+Default)`, `AlphaBackend.Default | Helix | DQP | BowyerWatson` (parse: `bowyer-watson`/`bowyerwatson`/`bw`); the facade's `alphaBackend` string goes
 through `AlphaBackend.parse`. `AlphaShapes` is also a `PointCloudComplex` (`Persistence(points, complex = AlphaShapes)`),
 which refuses `maxFiltrationValue` with a message pointing at `diagram.at(f)`.

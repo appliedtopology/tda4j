@@ -23,13 +23,32 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
     case PositiveInfinity() => Double.PositiveInfinity
     case NegativeInfinity() => Double.NegativeInfinity
 
-  def fastBars[C: Field](helix: HelixDelaunay): List[(Int, Double, Double)] =
+  def fastBars[C: Field](helix: DelaunayAlphaShapes): List[(Int, Double, Double)] =
     FastAlphaHomologyEngine[C]()
       .persistentHomology(helix)
       .map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
 
-  def naiveBars(helix: HelixDelaunay): List[(Int, Double, Double)] =
+  def naiveBars(helix: DelaunayAlphaShapes): List[(Int, Double, Double)] =
     SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(helix).diagramAt(Double.PositiveInfinity)
+
+  "On Bowyer-Watson triangulations (random clouds, and grids, where every cell is cospherical) it matches the naive " +
+    "engine" >> {
+      def grid(side: Int, dim: Int) =
+        Array.tabulate(math.pow(side, dim).toInt)(k => Array.tabulate(dim)(a => ((k / math.pow(side, a).toInt) % side).toDouble))
+      val rng = new scala.util.Random(11)
+      val inputs = Seq(
+        Array.fill(40)(Array.fill(2)(rng.nextDouble())),
+        Array.fill(25)(Array.fill(3)(rng.nextDouble())),
+        grid(5, 2),
+        grid(3, 3)
+      )
+      val problems = for
+        (pts, i) <- inputs.zipWithIndex
+        bw = BowyerWatsonDelaunay(pts)
+        if fastBars[Double](bw).sorted != naiveBars(bw).sorted
+      yield i
+      problems must beEmpty
+    }
 
   // ---------------------------------------------------------------------------------------------------------
   // Hand-verified fixture (see the design note for the full hand trace): 5 points, a fan triangulation of 4

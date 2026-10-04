@@ -26,20 +26,25 @@ radius at most that value (also `AlphaShapes(points, maxRadius = r)`), and for a
 
 ### Backends
 
-* **`AlphaBackend.Helix`** (`HelixDelaunay`): builds the whole Delaunay triangulation, then reads the alpha values off
-  it. It checks every triangulation it builds and repairs one that fails, so degenerate inputs such as grids come out
-  valid.
+* **`AlphaBackend.BowyerWatson`** (`BowyerWatsonDelaunay`): builds the whole Delaunay triangulation incrementally
+  with exact geometric predicates, then reads the alpha values off it. Degenerate inputs such as grids are triangulated
+  validly, and the result does not depend on the order of the points. For points spanning at most 4 dimensions; in 2-D
+  and 3-D it is the fastest backend by far.
+* **`AlphaBackend.Helix`** (`HelixDelaunay`): builds the whole Delaunay triangulation in any dimension, then reads the
+  alpha values off it. It checks every triangulation it builds and repairs one that fails, so degenerate inputs such
+  as grids come out valid.
 * **`AlphaBackend.DQP`** (`AlphaShapeDQP`): decides each simplex by a dual active-set quadratic program (Carlsson and
   Carlsson 2024), dimension by dimension, among points within twice the radius of each other. It never builds the
   whole triangulation, so a small radius makes it cheap, and in high ambient dimension it reaches the low-dimensional
-  simplices where a Delaunay triangulation is out of reach. Without a radius it is much slower than Helix.
-* **`AlphaBackend.Default`** (the default): Helix without a radius; with one, whichever of the two is expected to be
-  faster, judged from how many points lie within twice the radius of a point. In general position the result is the
-  same either way.
+  simplices where a Delaunay triangulation is out of reach. Without a radius it is much slower than a triangulation.
+* **`AlphaBackend.Default`** (the default): BowyerWatson for points in at most 4 dimensions, Helix above; with a radius,
+  DQP instead when it is expected to be faster, judged from how many points lie within twice the radius of a point. In
+  general position the result is the same whichever is used.
 
 In degenerate position the alpha complex contains higher-dimensional simplices than a triangulation would: four
-cospherical points span a 3-simplex, so a square grid in the plane produces 3-simplices with DQP. Helix triangulates
-such a cluster instead. The persistent homology is the same, up to zero-length bars.
+cospherical points span a 3-simplex, so a square grid in the plane produces 3-simplices with DQP. BowyerWatson and
+Helix triangulate such a cluster instead (not necessarily the same way). The persistent homology is the same, up to
+zero-length bars.
 
-For large planar point clouds, the [fast alpha engine](../homology-computation/fast-alpha-complexes.md) computes the
-diagram of the Helix complex without general matrix reduction.
+For large point clouds, the [fast alpha engine](../homology-computation/fast-alpha-complexes.md) computes the diagram
+of a triangulated (BowyerWatson or Helix) alpha complex without general matrix reduction.

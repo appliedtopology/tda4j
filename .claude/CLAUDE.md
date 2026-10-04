@@ -42,7 +42,7 @@ see "Givens" below). The core's source directories are **file organization only,
 - `homology/` — the engines (naive `CellularHomologyEngine`, chunks, cohomology, Ripser, fast cubical/alpha),
   `Persistence` (the verb), `CircularCoordinates`, `LatticeReduction`. Streams never use engines (convention only).
 - `barcode/` — `Barcode`, `PersistenceDiagram`, `PersistenceFilter`, distances, vectorizations. `alpha/` — `AlphaShapes`
-  (+ `AlphaBackend`), `AlphaComplexDQP`. `io/` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
+  (+ `AlphaBackend`), `BowyerWatsonDelaunay` (default up to 4-D), `HelixDelaunay`, `AlphaComplexDQP`. `io/` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
 - root `package.scala` — `TDAlab` (below).
 - **add-on `sset`** (`org.appliedtopology.tda4j.sset`, directory `sset/`; users opt in with
   `import org.appliedtopology.tda4j.sset.*`) — simplicial sets (the Sage-parity layer) AND group classifying spaces

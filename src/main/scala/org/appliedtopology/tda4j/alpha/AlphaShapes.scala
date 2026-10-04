@@ -20,20 +20,25 @@ import java.util.concurrent.*
   */
 final case class Epsilon(epsilon: Double)
 
-/** Which alpha-complex construction `AlphaShapes(points, backend)` uses: `Helix` (Delaunay by the Helix algorithm, the
-  * default), `DQP` (dual quadratic programs), or `Default` (whatever the library currently picks -- Helix).
+/** Which alpha-complex construction `AlphaShapes(points, backend)` uses: `BowyerWatson` (incremental Delaunay with
+  * exact predicates, points spanning at most 4 dimensions), `Helix` (Delaunay by the Helix algorithm, any dimension),
+  * `DQP` (dual quadratic programs, any dimension, built only up to a radius), or `Default` (whichever the library expects
+  * to be fastest: see `AlphaShapes.apply`).
   */
 enum AlphaBackend:
-  case Default, Helix, DQP
+  case Default, Helix, DQP, BowyerWatson
 
 object AlphaBackend:
-  /** The facade's string spelling (`"default"`, `"helix"`, `"dqp"`, any case). */
+  /** The facade's string spelling (`"default"`, `"helix"`, `"dqp"`, `"bowyer-watson"`, any case). */
   def parse(name: String): AlphaBackend = name.toLowerCase match
-    case "default" => Default
-    case "helix"   => Helix
-    case "dqp"     => DQP
-    case other     =>
-      throw IllegalArgumentException(s"Unknown alpha complex backend: '$other' (expected default/helix/DQP)")
+    case "default"                                       => Default
+    case "helix"                                         => Helix
+    case "dqp"                                           => DQP
+    case "bowyer-watson" | "bowyerwatson" | "bw" => BowyerWatson
+    case other                                           =>
+      throw IllegalArgumentException(
+        s"Unknown alpha complex backend: '$other' (expected default, bowyer-watson, helix or DQP)"
+      )
 
 abstract class AlphaShapes extends LevelwiseSimplexStream[Int, Double]() with DoubleFiltration[Simplex[Int]]():
   val metricSpace: FiniteMetricSpace[Int]
@@ -45,22 +50,26 @@ object AlphaShapes extends PointCloudComplex:
 
   /** The alpha complex of `points`, built by `backend` (see [[AlphaBackend]]).
     *
-    *   - `Helix` triangulates the whole point set (Delaunay) and reads the alpha values off the triangulation.
+    *   - `BowyerWatson` triangulates the whole point set (Delaunay, exact predicates: valid on grids and other
+    *     degenerate input, and the same whatever the point order) and reads the alpha values off the triangulation.
+    *     Points spanning at most 4 dimensions only; the fastest in 2-D and 3-D by far.
+    *   - `Helix` triangulates the whole point set too, in any dimension, with floating-point predicates.
     *   - `DQP` decides each simplex on its own, dimension by dimension, among points within `2 maxRadius` of each
     *     other: it never builds the whole triangulation, so a small `maxRadius` (or a low `maxDimension` in high
-    *     ambient dimension) makes it much cheaper, while without a radius it is far slower than Helix.
-    *   - `Default` picks between them: Helix without a `maxRadius`, otherwise whichever is expected to be faster for
-    *     this radius, from the average number of points within `2 maxRadius` of a point (`AlphaShapes.prefersDQP`).
+    *     ambient dimension) makes it much cheaper, while without a radius it is far slower than a triangulation.
+    *   - `Default` picks: without a `maxRadius`, BowyerWatson for points in at most 4 dimensions and Helix above;
+    *     with one, DQP instead when it is expected to be faster for this radius, from the average number of points
+    *     within `2 maxRadius` of a point (`AlphaShapes.prefersDQP`).
     *
     * In general position every backend gives the same complex: the simplices whose alpha value (radius) is at most
     * `maxRadius`, with the same values. On cospherical points DQP keeps the higher-dimensional simplex they span where
-    * Helix triangulates it; the barcode is the same up to zero-length bars.
+    * BowyerWatson and Helix triangulate it (each its own way); the barcode is the same up to zero-length bars.
     *
     * @param maxRadius
     *   keep only simplices with alpha value (radius) at most this. Default: no limit.
     * @param maxDimension
     *   the highest homological degree needed: `DQP` builds simplices up to dimension `maxDimension + 1` only. Default:
-    *   all dimensions. (Helix always builds every dimension; truncate the stream with [[Truncated]].)
+    *   all dimensions. (BowyerWatson and Helix always build every dimension; truncate the stream with [[Truncated]].)
     * @param requireValidTriangulation
     *   `Helix` only: raise an error rather than return a triangulation it could not repair (see [[HelixDelaunay]]).
     */
@@ -79,17 +88,22 @@ object AlphaShapes extends PointCloudComplex:
         val chosen =
           if points.size > 0 && radius.exists(r => !requireValidTriangulation && prefersDQP(points, r))
           then AlphaBackend.DQP
+          else if points.points.headOption.forall(_.length <= 4) then AlphaBackend.BowyerWatson
           else AlphaBackend.Helix
         apply(points, chosen, requireValidTriangulation, maxRadius, maxDimension)
       case AlphaBackend.Helix =>
         val helix = HelixDelaunay(points.points, requireValidTriangulation = requireValidTriangulation)
         radius.fold[AlphaShapes](helix)(r => RadiusLimitedAlphaShapes(helix, r))
+      case AlphaBackend.BowyerWatson =>
+        // Exact predicates: the triangulation is always valid, so requireValidTriangulation holds as it is.
+        val delaunay = BowyerWatsonDelaunay(points.points)
+        radius.fold[AlphaShapes](delaunay)(r => RadiusLimitedAlphaShapes(delaunay, r))
       case AlphaBackend.DQP =>
         require(
           !requireValidTriangulation,
           "requireValidTriangulation=true is not valid for backend = AlphaBackend.DQP: AlphaShapeDQP has no facet-" +
-            "multiplicity precondition to repair (FastAlphaHomologyEngine is specialized to HelixDelaunay's own " +
-            "triangulation and never consumes AlphaShapeDQP's output) -- this option would be a silent no-op there."
+            "multiplicity precondition to repair (FastAlphaHomologyEngine takes a Delaunay triangulation and never " +
+            "consumes AlphaShapeDQP's output) -- this option would be a silent no-op there."
         )
         val ambient = points.points.headOption.map(_.length).getOrElse(0)
         val topDimension = maxDimension.toOption.fold(ambient)(k => math.min(ambient, k + 1))
@@ -104,9 +118,9 @@ object AlphaShapes extends PointCloudComplex:
           case Some(r) =>
             AlphaComplexDQPStream(points.points, AlphaComplexDQP.euclidean(points.points, r, topDimension))
 
-  /** Whether `DQP` is expected to build the alpha complex truncated at radius `r` faster than `Helix` builds the whole
-    * one. DQP's cost grows with the number of points within `2r` of each point (its neighbour graph); Helix's with the
-    * point count and the ambient dimension. The thresholds are measured
+  /** Whether `DQP` is expected to build the alpha complex truncated at radius `r` faster than a triangulation
+    * (`BowyerWatson` up to 4 dimensions, `Helix` above) builds the whole one. DQP's cost grows with the number of points
+    * within `2r` of each point (its neighbour graph); a triangulation's with the point count and the ambient dimension. The thresholds are measured
     * (`.claude/WORKLOG-helix-construction-speed.md`): the largest average neighbour count at which DQP was still
     * faster, by point count and ambient dimension.
     */
@@ -143,21 +157,23 @@ object AlphaShapes extends PointCloudComplex:
       total += math.pow(count, 1.6)
     total / samples
 
-  /** The average neighbour count (within `2r`) up to which DQP is expected to be faster than Helix, for `n` points in
-    * ambient dimension `d`. Per point, DQP took about `c_d k^1.6` ms (`c_d = 0.004 * 2.35^(d-2)`, the constant from
-    * 1000-point clouds, the more expensive ones) and Helix about `h_d (n/1000)^0.4` ms, `h_d` = 0.53, 1.7, 10, 150 for
-    * `d` = 2..5 (uniform clouds of 500-10000 points, this library's own measurements). In dimension 6 and up Helix's
-    * triangulation grows so fast that DQP is preferred whenever a radius is given.
+  /** The average neighbour count (within `2r`) up to which DQP is expected to be faster than the triangulation `Default`
+    * would use, for `n` points in ambient dimension `d`. Per point, DQP took about `c_d k^1.6` ms (`c_d = 0.004 *
+    * 2.35^(d-2)`, the constant from 1000-point clouds, the more expensive ones); BowyerWatson about `b_d (n/1000)^0.2`
+    * ms, `b_d` = 0.03, 0.1, 1.1 for `d` = 2..4; Helix in 5-D about `150 (n/1000)^0.4` ms (uniform clouds of 1000-10000
+    * points, this library's own measurements). In dimension 6 and up Helix's triangulation grows so fast that DQP is
+    * preferred whenever a radius is given.
     */
   private[tda4j] def dqpNeighbourThreshold(n: Int, d: Int): Double =
-    val helixPerPoint = math.max(d, 2) match
-      case 2 => 0.53
-      case 3 => 1.7
-      case 4 => 10.0
-      case 5 => 150.0
+    val growth = n / 1000.0
+    val triangulationPerPoint = math.max(d, 2) match
+      case 2 => 0.03 * math.pow(growth, 0.2)
+      case 3 => 0.1 * math.pow(growth, 0.2)
+      case 4 => 1.1 * math.pow(growth, 0.2)
+      case 5 => 150.0 * math.pow(growth, 0.4)
       case _ => Double.PositiveInfinity
     val dqpConstant = 0.004 * math.pow(2.35, math.max(d, 2) - 2)
-    math.pow(helixPerPoint * math.pow(n / 1000.0, 0.4) / dqpConstant, 1 / 1.6)
+    math.pow(triangulationPerPoint / dqpConstant, 1 / 1.6)
 
   // utilities for Delaunay computations
   type Point = RealVector
