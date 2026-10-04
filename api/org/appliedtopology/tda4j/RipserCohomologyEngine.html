@@ -182,6 +182,41 @@ node3 -> node2;
          <button class="icon-button show-content expand"></button>
          <h4 class="groupHeader h200">Concrete methods</h4>
         </div>
+        <div class="documentableElement" id="apparentPairCount-0">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="RipserCohomologyEngine.html#apparentPairCount-0" t="n" class="documentableName ">apparentPairCount</a>: <span data-unresolved-link="" t="t">Int</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>How many simplices were resolved directly via the cheap <code>zeroApparentCofacet</code> skip-and-emit path (top of the main loop), i.e. never reached <code>coboundaryOf</code>/<code>Chain.reduceBy</code> at all -- distinct from <code>substitutionCount</code>, which only counts the much rarer LAZY FALLBACK firing when some OTHER column's reduction later needs an apparent pair's tau as a missing pivot. A low <code>substitutionCount</code> says nothing about this number (most apparent pairs, once found, are never looked up again -- <code>WORKLOG-lazy-enumeration.md</code>'s own point). Added specifically to test whether <code>PackedRipserCohomologyEngine</code>'s independently-reimplemented apparent-pairs check finds pairs at the same rate this engine's does on a given input -- see <code>fractal-r</code>'s own entry in <code>.claude/WORKLOG-o3-1024-fractal-r-session-2026-09-25.md</code> for why this matters there.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>How many simplices were resolved directly via the cheap <code>zeroApparentCofacet</code> skip-and-emit path (top of the main loop), i.e. never reached <code>coboundaryOf</code>/<code>Chain.reduceBy</code> at all -- distinct from <code>substitutionCount</code>, which only counts the much rarer LAZY FALLBACK firing when some OTHER column's reduction later needs an apparent pair's tau as a missing pivot. A low <code>substitutionCount</code> says nothing about this number (most apparent pairs, once found, are never looked up again -- <code>WORKLOG-lazy-enumeration.md</code>'s own point). Added specifically to test whether <code>PackedRipserCohomologyEngine</code>'s independently-reimplemented apparent-pairs check finds pairs at the same rate this engine's does on a given input -- see <code>fractal-r</code>'s own entry in <code>.claude/WORKLOG-o3-1024-fractal-r-session-2026-09-25.md</code> for why this matters there.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/RipserCohomology.scala#L419" target="_blank">RipserCohomology.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
         <div class="documentableElement" id="coboundaryOf-fffffffd">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
@@ -274,7 +309,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/RipserCohomology.scala#L408" target="_blank">RipserCohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/RipserCohomology.scala#L421" target="_blank">RipserCohomology.scala</a>
               </dd>
              </dl>
             </div>
