@@ -713,45 +713,100 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
     */
   protected def duplicates: Map[Int, Int] = Map.empty
 
-  lazy val simplicesMap: Map[Int, Seq[Simplex[Int]]] = Map.from(
-    (0 to ambientDimension).map { d =>
-      val faces = topSimplices.toSet
-        .flatMap((top: Simplex[Int]) => top.toSet.subsets(d + 1))
-        .map((s: Set[Int]) => Simplex.from(s.toSeq))
-        .toSeq
-      d -> (d match
-        case 0 => faces ++ duplicates.keys.map(Simplex(_))
-        case 1 => faces ++ duplicates.map((dup, kept) => Simplex(dup, kept))
-        case _ => faces)
+  // Every simplex once, per dimension, with its alpha value: built on flat arrays (a face table per dimension, faces
+  // found from their immediate cofaces), so the Simplex objects and the value map are made once at the end.
+  private lazy val built: (Map[Int, Seq[Simplex[Int]]], mutable.HashMap[Simplex[Int], Double]) =
+    val coords = points.map(_.toArray).toArray
+    val top = ambientDimension
+    val tops = topSimplices.toArray
+    // Level `top`: the (top + 1)-subsets of the top simplices (the top simplices themselves when they have that size).
+    val levels = new Array[DelaunayAlphaShapes.FaceTable](top + 1)
+    val values = new Array[Array[Double]](top + 1)
+    levels(top) = DelaunayAlphaShapes.FaceTable(top + 1, tops.length)
+    val topIndex = mutable.ArrayBuffer.empty[(Int, Simplex[Int])]
+    tops.foreach { t =>
+      val vs = t.toArray
+      if vs.length == top + 1 then
+        val (i, fresh) = levels(top).add(vs)
+        if fresh then topIndex += ((i, t))
+      else
+        vs.combinations(top + 1).foreach { c =>
+          val (i, fresh) = levels(top).add(c)
+          if fresh then topIndex += ((i, Simplex.from(c.toSeq)))
+        }
     }
-  )
+    values(top) = new Array[Double](levels(top).size)
+    topIndex.foreach((i, s) => values(top)(i) = topValue(s))
+    // Each lower level: its faces with the cofaces' values and the Gabriel test against their opposite vertices.
+    for k <- (top - 1) to 0 by -1 do
+      val upper = levels(k + 1)
+      val faces = DelaunayAlphaShapes.FaceTable(k + 1, upper.size * 2)
+      val face = new Array[Int](k + 1)
+      // (face, coface) pairs as indices, with the coface's vertex opposite the face.
+      val pairFace = mutable.ArrayBuilder.make[Int]
+      val pairCoface = mutable.ArrayBuilder.make[Int]
+      val pairVertex = mutable.ArrayBuilder.make[Int]
+      for t <- 0 until upper.size; drop <- 0 to k + 1 do
+        var j = 0
+        for i <- 0 to k + 1 if i != drop do
+          face(j) = upper.vertex(t, i)
+          j += 1
+        pairFace += faces.add(face)._1
+        pairCoface += t
+        pairVertex += upper.vertex(t, drop)
+      val (pf, pc, pv) = (pairFace.result(), pairCoface.result(), pairVertex.result())
+      val m = faces.size
+      val vals = new Array[Double](m)
+      if k == 0 then java.util.Arrays.fill(vals, 0.0)
+      else
+        val center = new Array[Double](m * coords.head.length)
+        val radius = new Array[Double](m)
+        val vs = new Array[Int](k + 1)
+        for f <- 0 until m do
+          for i <- 0 to k do vs(i) = faces.vertex(f, i)
+          radius(f) = DelaunayAlphaShapes.circumsphere(coords, vs, center, f * coords.head.length)
+        val cofaceMin = Array.fill(m)(Double.PositiveInfinity)
+        val gabriel = Array.fill(m)(true)
+        val dim = coords.head.length
+        for p <- pf.indices do
+          val f = pf(p)
+          cofaceMin(f) = math.min(cofaceMin(f), values(k + 1)(pc(p)))
+          val q = coords(pv(p))
+          var d2 = 0.0
+          for r <- 0 until dim do
+            val x = q(r) - center(f * dim + r)
+            d2 += x * x
+          if math.sqrt(d2) < radius(f) - epsilon.epsilon then gabriel(f) = false
+        for f <- 0 until m do vals(f) = if gabriel(f) then math.min(radius(f), cofaceMin(f)) else cofaceMin(f)
+      levels(k) = faces
+      values(k) = vals
+    val valueMap = mutable.HashMap.empty[Simplex[Int], Double]
+    val byDimension = (0 to top).map { k =>
+      val level = levels(k)
+      val simplices = Array.tabulate(level.size) { f =>
+        val s = Simplex.from(Seq.tabulate(k + 1)(i => level.vertex(f, i)))
+        valueMap(s) = values(k)(f)
+        s
+      }
+      val extra: Seq[Simplex[Int]] = k match
+        case 0 => duplicates.keys.toSeq.map(Simplex(_))
+        case 1 => duplicates.toSeq.map((dup, kept) => Simplex(dup, kept))
+        case _ => Nil
+      extra.foreach(s => valueMap(s) = 0.0)
+      k -> (simplices.toSeq ++ extra)
+    }
+    (byDimension.toMap, valueMap)
 
-  /** The smallest sphere through every vertex of `s`: its centre lies in `s`'s own affine hull. With `D` the matrix
-    * whose columns are the edge vectors `p_i - p0` and `D = Q R` its thin QR factorization, the centre is `p0 + Q y`
-    * with `R^T y = |p_i - p0|^2 / 2`. (The Gram system `D^T D` squares the condition number, which on slivers lost
-    * about half the digits; `Hypersphere.apply` is for full-dimensional simplices only.)
+  lazy val simplicesMap: Map[Int, Seq[Simplex[Int]]] = built._1
+
+  /** The smallest sphere through every vertex of `s`: its centre lies in `s`'s own affine hull (`Hypersphere.apply` is
+    * for full-dimensional simplices only).
     */
   def smallestCircumsphere(s: Simplex[Int]): (Point, Double) =
-    val vs = s.toSeq.toIndexedSeq
-    val p0 = points(vs.head).toArray
-    val k = vs.size - 1
-    if k == 0 then (points(vs.head), 0.0)
-    else
-      val dim = p0.length
-      val edges = Array.tabulate(dim, k)((r, c) => points(vs(c + 1)).getEntry(r) - p0(r))
-      val qr = new org.apache.commons.math3.linear.QRDecomposition(MatrixUtils.createRealMatrix(edges))
-      val q = qr.getQ // dim x dim; its first k columns span the edges
-      val rr = qr.getR // dim x k, upper triangular in its first k rows
-      val rhs = Array.tabulate(k)(c => (0 until dim).map(r => edges(r)(c) * edges(r)(c)).sum / 2)
-      // Forward substitution for R^T y = rhs (R^T is lower triangular).
-      val y = new Array[Double](k)
-      for i <- 0 until k do
-        var acc = rhs(i)
-        for j <- 0 until i do acc -= rr.getEntry(j, i) * y(j)
-        y(i) = acc / rr.getEntry(i, i)
-      val offset = Array.tabulate(dim)(r => (0 until k).map(c => q.getEntry(r, c) * y(c)).sum)
-      val center = Point(Array.tabulate(dim)(r => p0(r) + offset(r)))
-      (center, math.sqrt(offset.map(x => x * x).sum))
+    val coords = s.toSeq.map(points(_).toArray).toArray
+    val center = new Array[Double](coords.head.length)
+    val r = DelaunayAlphaShapes.circumsphere(coords, coords.indices.toArray, center, 0)
+    (Point(center), r)
 
   /** Alpha values, top dimension first:
     *   - a top-dimensional simplex: `topValue` (its circumradius);
@@ -760,24 +815,7 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
     *     already at most its cofaces' values; taking the minimum anyway keeps the filtration monotone to the last bit.
     *   - a vertex: 0.
     */
-  private lazy val alphaValues: Map[Simplex[Int], Double] =
-    val values = mutable.HashMap.empty[Simplex[Int], Double]
-    simplicesMap(ambientDimension).foreach(s => values(s) = topValue(s))
-    for k <- (ambientDimension - 1) to 1 by -1 do
-      val cofaces = mutable.HashMap.empty[Simplex[Int], mutable.ArrayBuffer[(Simplex[Int], Int)]]
-      simplicesMap(k + 1).foreach { t =>
-        t.toSeq.foreach(v => cofaces.getOrElseUpdate(t - v, mutable.ArrayBuffer.empty) += ((t, v)))
-      }
-      simplicesMap(k).foreach { s =>
-        val (center, r) = smallestCircumsphere(s)
-        val cs = cofaces.getOrElse(s, mutable.ArrayBuffer.empty)
-        val gabriel = cs.forall((_, v) => center.getDistance(points(v)) >= r - epsilon.epsilon)
-        val cofaceMin = cs.map((t, _) => values(t)).minOption.getOrElse(Double.PositiveInfinity)
-        values(s) = if gabriel then math.min(r, cofaceMin) else cofaceMin
-      }
-    simplicesMap(0).foreach(s => values(s) = 0.0)
-    duplicates.foreach((dup, kept) => values(Simplex(dup, kept)) = 0.0)
-    values.toMap
+  private def alphaValues: mutable.HashMap[Simplex[Int], Double] = built._2
 
   override def filtrationValue: PartialFunction[Simplex[Int], Double] = { case spx => alphaValues(spx) }
 
@@ -788,8 +826,20 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
   // whose chunk-boundary logic (Homology.scala's PersistenceInChunksEngine.allCells) relies on
   // iterateDimension's own emission order standing in for filtrationOrdering position -- found via
   // EngineComparisonBenchmarkSpec / AlphaFiltrationOrderingRegressionSpec (see CLAUDE.md).
+  // Values are looked up once per simplex; only equal values fall through to the full ordering.
   lazy val simplicesSortedMap: Map[Int, Seq[Simplex[Int]]] =
-    simplicesMap.map((d, v) => (d, v.sorted(using filtrationOrdering.reverse)))
+    val reverse = filtrationOrdering.reverse
+    simplicesMap.map { (d, v) =>
+      val keyed = v.map(s => (alphaValues(s), s)).toArray
+      java.util.Arrays.sort(
+        keyed,
+        (a: (Double, Simplex[Int]), b: (Double, Simplex[Int])) =>
+          java.lang.Double.compare(a._1, b._1) match
+            case 0 => reverse.compare(a._2, b._2)
+            case c => c
+      )
+      (d, keyed.toSeq.map(_._2))
+    }
 
   def simplicesInDimension(d: Int): Iterator[Simplex[Int]] = simplicesSortedMap(d).iterator
 
@@ -1058,3 +1108,104 @@ class LimitedAlphaShapesStream(helix: DelaunayAlphaShapes, maxDim: Int)
   override def filtrationValue: PartialFunction[Simplex[Int], Double] = helix.filtrationValue
   // Cells up to dimension maxDim: degrees above maxDim - 1 are truncation artifacts.
   override def homologyDegreeLimit: Option[Int] = Some(maxDim - 1)
+
+private[tda4j] object DelaunayAlphaShapes:
+  /** The simplices of one dimension, each a row of `width` sorted vertex indices, numbered as first added. */
+  final class FaceTable(val width: Int, expected: Int):
+    private var rows = new Array[Int](math.max(expected, 4) * width)
+    var size = 0
+    private var slots = Array.fill(Integer.highestOneBit(math.max(expected, 4) * 2) * 2)(-1)
+
+    def vertex(row: Int, i: Int): Int = rows(row * width + i)
+
+    private def hash(vs: Array[Int], at: Int): Int =
+      var h = 0x9e3779b9
+      for i <- 0 until width do h = (h ^ vs(at + i)) * 0x01000193 + (h >>> 15)
+      h ^ (h >>> 16)
+
+    private def sameRow(row: Int, vs: Array[Int]): Boolean =
+      var i = 0
+      while i < width && rows(row * width + i) == vs(i) do i += 1
+      i == width
+
+    /** The row of the sorted vertices `vs`, and whether it is new. */
+    def add(vs: Array[Int]): (Int, Boolean) =
+      if size * 2 >= slots.length then grow()
+      val mask = slots.length - 1
+      var s = hash(vs, 0) & mask
+      while slots(s) >= 0 && !sameRow(slots(s), vs) do s = (s + 1) & mask
+      if slots(s) >= 0 then (slots(s), false)
+      else
+        if (size + 1) * width > rows.length then rows = java.util.Arrays.copyOf(rows, rows.length * 2)
+        System.arraycopy(vs, 0, rows, size * width, width)
+        slots(s) = size
+        size += 1
+        (size - 1, true)
+
+    private def grow(): Unit =
+      slots = Array.fill(slots.length * 2)(-1)
+      val mask = slots.length - 1
+      for row <- 0 until size do
+        var s = hash(rows, row * width) & mask
+        while slots(s) >= 0 do s = (s + 1) & mask
+        slots(s) = row
+
+  /** The smallest sphere through the points `vs` (indices into `coords`): its centre, in their affine hull, is written
+    * to `center` from `at`, and its radius returned. With `D` the matrix whose columns are the edge vectors `p_i - p0`
+    * and `D = Q R` its Householder QR factorization, the centre is `p0 + Q y` with `R^T y = |p_i - p0|^2 / 2`. (The
+    * Gram system `D^T D` squares the condition number, which on slivers loses about half the digits.)
+    */
+  def circumsphere(coords: Array[Array[Double]], vs: Array[Int], center: Array[Double], at: Int): Double =
+    val p0 = coords(vs(0))
+    val dim = p0.length
+    val k = vs.length - 1
+    if k == 0 then
+      System.arraycopy(p0, 0, center, at, dim)
+      0.0
+    else
+      // a(c)(r): column c of D, overwritten by R above the diagonal and the reflector below.
+      val a = Array.tabulate(k)(c => Array.tabulate(dim)(r => coords(vs(c + 1))(r) - p0(r)))
+      val rhs = Array.tabulate(k)(c => a(c).map(x => x * x).sum / 2)
+      val diag = new Array[Double](k)
+      val reflectors = new Array[Array[Double]](k)
+      for c <- 0 until k do
+        val col = a(c)
+        var norm = 0.0
+        for r <- c until dim do norm += col(r) * col(r)
+        norm = math.sqrt(norm)
+        val alpha = if col(c) > 0 then -norm else norm
+        val v = new Array[Double](dim)
+        for r <- c until dim do v(r) = col(r)
+        v(c) -= alpha
+        var vn = 0.0
+        for r <- c until dim do vn += v(r) * v(r)
+        if vn > 0 then
+          for c2 <- c + 1 until k do
+            var dot = 0.0
+            for r <- c until dim do dot += v(r) * a(c2)(r)
+            val f = 2 * dot / vn
+            for r <- c until dim do a(c2)(r) -= f * v(r)
+        reflectors(c) = v
+        diag(c) = alpha
+      // Forward substitution for R^T y = rhs; R(j, i) = a(i)(j) for j < i, R(i, i) = diag(i).
+      val z = new Array[Double](dim)
+      for i <- 0 until k do
+        var acc = rhs(i)
+        for j <- 0 until i do acc -= a(i)(j) * z(j)
+        z(i) = acc / diag(i)
+      // offset = Q (y, 0): apply the reflectors in reverse order.
+      for c <- (k - 1) to 0 by -1 do
+        val v = reflectors(c)
+        var vn = 0.0
+        var dot = 0.0
+        for r <- c until dim do
+          vn += v(r) * v(r)
+          dot += v(r) * z(r)
+        if vn > 0 then
+          val f = 2 * dot / vn
+          for r <- c until dim do z(r) -= f * v(r)
+      var r2 = 0.0
+      for r <- 0 until dim do
+        center(at + r) = p0(r) + z(r)
+        r2 += z(r) * z(r)
+      math.sqrt(r2)
