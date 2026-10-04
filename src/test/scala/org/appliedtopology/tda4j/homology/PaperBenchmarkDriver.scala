@@ -10,7 +10,7 @@ import java.nio.{ByteBuffer, ByteOrder}
   * {{{
   * java -cp $CP org.appliedtopology.tda4j.PaperBenchmarkDriver task=vr input=sphere.txt format=points dim=2 \
   *   [threshold=1.8] [p=2] [engine=auto|ripser|cohomology|chunks|naive|fastcubical|fastalpha] \
-  *   [reps=cycles|cocycles] [warmup=2] [trials=5] [out=bars.tsv]
+  *   [reps=cycles|cocycles|none] [warmup=2] [trials=5] [out=bars.tsv]
   * }}}
   *
   *   - `task=vr`: points (`format=points`, one point per line) or a full distance matrix (`format=distance`).
@@ -35,10 +35,11 @@ object PaperBenchmarkDriver:
     val p = opts.getOrElse("p", "17").toInt
     val threshold: Option[Double] = opts.get("threshold").map(_.toDouble)
     val engineName = opts.getOrElse("engine", "auto").toLowerCase
-    val reps = opts.getOrElse("reps", "cycles").toLowerCase match
-      case "cycles"   => Representatives.Cycles
-      case "cocycles" => Representatives.Cocycles
-      case other      => throw IllegalArgumentException(s"reps=$other (cycles|cocycles)")
+    val repsName = opts.getOrElse("reps", "cycles").toLowerCase
+    val reps = repsName match
+      case "cycles" | "none" => Representatives.Cycles
+      case "cocycles"        => Representatives.Cocycles
+      case other             => throw IllegalArgumentException(s"reps=$other (cycles|cocycles|none)")
     val warmup = opts.getOrElse("warmup", "2").toInt
     val trials = opts.getOrElse("trials", "5").toInt
 
@@ -81,7 +82,18 @@ object PaperBenchmarkDriver:
       case "cubical" =>
         val (values, shape) = readNpy(input)
         val image = Image(scala.collection.immutable.ArraySeq.unsafeWrapArray(values), shape)
-        () =>
+        if repsName == "none" then
+          // fastcubical only: the same bars without the top degree's representatives, to measure what they cost.
+          require(engineName == "fastcubical", "reps=none is only for engine=fastcubical")
+          val grid = CubicalImage.fromFlatArray(shape, scala.collection.immutable.ArraySeq.unsafeWrapArray(values))
+          val ff = FiniteField(p)
+          import ff.given
+          () =>
+            FastCubicalHomologyEngine[ff.Fp]()
+              .barsWithoutTopRepresentatives(grid)
+              .filter(_.dim <= dim)
+              .map(_.toTriple)
+        else () =>
           Persistence(image, maxDimension = dim, characteristic = p, engine = engine, representatives = reps).triples
       case "alpha" =>
         val pts = readMatrix(input)

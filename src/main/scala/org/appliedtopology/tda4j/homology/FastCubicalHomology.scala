@@ -30,14 +30,32 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
     stream: CubicalGridStream,
     includeZeroLength: Boolean = false
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
+    compute(stream, includeZeroLength, representatives = true)
+
+  /** The same bars without the top degree's representatives (their annotation is `None`): only for measuring what
+    * representatives cost (`bench/`). Every public path computes them.
+    */
+  private[tda4j] def barsWithoutTopRepresentatives(
+    stream: CubicalGridStream,
+    includeZeroLength: Boolean = false
+  ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
+    compute(stream, includeZeroLength, representatives = false)
+
+  private def compute(
+    stream: CubicalGridStream,
+    includeZeroLength: Boolean,
+    representatives: Boolean
+  ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     require(
       stream.ambientDim >= 2,
       s"FastCubicalHomologyEngine requires ambient dimension >= 2, got ${stream.ambientDim}"
     )
     val bars =
       if stream.ambientDim == 2 then
-        computeH0(stream, includeZeroLength) ++ computeDualTopDimension(stream, includeZeroLength)
-      else computeMiddleDimensions(stream, includeZeroLength) ++ computeDualTopDimension(stream, includeZeroLength)
+        computeH0(stream, includeZeroLength) ++ computeDualTopDimension(stream, includeZeroLength, representatives)
+      else
+        computeMiddleDimensions(stream, includeZeroLength) ++
+          computeDualTopDimension(stream, includeZeroLength, representatives)
     bars
 
   // -------------------------------------------------------------------------------------------------------------
@@ -210,7 +228,8 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
   // -------------------------------------------------------------------------------------------------------------
   private def computeDualTopDimension(
     stream: CubicalGridStream,
-    includeZeroLength: Boolean
+    includeZeroLength: Boolean,
+    representatives: Boolean
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     // Flat arrays, as in computeH0: top cells (pixels) are numbered row-major, a facet is (degenerate axis, lower
     // corner) on the grid of facets, and cubes are built only for the representatives of reported bars. The events are
@@ -358,7 +377,7 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
               d - 1,
               endpoint(true)(v),
               endpoint(false)(birthOf(youngRoot)),
-              Some(regionBoundary(uf, youngRoot, flip))
+              Option.when(representatives)(regionBoundary(uf, youngRoot, flip))
             )
           uf.union(youngRoot, oldRoot, flip)
     bars.toList

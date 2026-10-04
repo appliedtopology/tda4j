@@ -238,3 +238,26 @@ Gates: `FastRepresentativesSpec` (equality plus validity), every `*Cubical*` spe
 
 **Consequence for the open "3-D `Auto` default" question:** fast cubical, now this hybrid, is the right default again.
 It beats plain cohomology at every size measured.
+
+## What representatives cost (2026-10-04, later)
+
+`FastCubicalHomologyEngine.barsWithoutTopRepresentatives` (`private[tda4j]`, for measurement only) skips the top
+degree's region boundaries. The driver reaches it with `reps=none`.
+
+Measured with `-Xms` = `-Xmx` = 8g and ParallelGC: pinning the heap brought the trial spread down from up to 3x to
+about ±10%, so the earlier sandbox noise was mostly GC. Median of 5:
+
+| image | with representatives | bars only | ratio |
+|---|---|---|---|
+| noise 512² | 1.35 s | 0.88 s | 1.54 |
+| blob 512² | 1.14 s | 0.74 s | 1.54 |
+| noise 1024² | 8.01 s | 4.80 s | 1.67 |
+| blob 1024² | 5.95 s | 3.90 s | 1.53 |
+| noise 32³ | 2.46 s | 2.59 s | about 1 |
+| blob 64³ | 19.2 s | 19.0 s | about 1 |
+
+- **In 2-D**, the top degree's representatives cost about a third of the time.
+- **In 3-D** they are negligible next to the middle degrees' cohomology, whose cycles are still computed in both
+  columns.
+- **For the paper:** report TDA4j against CubicalRipser and GUDHI both with and without representatives. The bars-only
+  figure is the like-for-like one.
