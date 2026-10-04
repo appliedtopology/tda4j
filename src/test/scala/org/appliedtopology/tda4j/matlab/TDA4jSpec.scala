@@ -268,6 +268,24 @@ class TDA4jSpec extends mutable.Specification:
       agree must beTrue
     }
 
+    "alphaBackend=bowyer-watson, with engine=cohomology or engine=fast-alpha, gives Helix's bars" in {
+      def bars(opts: String*) =
+        triples(FullBarcode.computeFromPoints(points, Array("complex", "alpha") ++ opts).toArray())
+          .sortBy(t => (t._1, t._2, t._3))
+      val helix = bars("alphaBackend", "helix", "engine", "cohomology")
+      val results = Seq(
+        bars("alphaBackend", "bowyer-watson", "engine", "cohomology"),
+        bars("alphaBackend", "bowyer-watson", "engine", "fast-alpha"),
+        bars("engine", "fast-alpha")
+      )
+      results.forall { r =>
+        r.length == helix.length && r.zip(helix).forall { case ((d1, b1, e1), (d2, b2, e2)) =>
+          d1 == d2 && math.abs(b1 - b2) < 1e-9 && (e1.isInfinite == e2.isInfinite) &&
+          (e1.isInfinite || math.abs(e1 - e2) < 1e-9)
+        }
+      } must beTrue
+    }
+
     "reject engine=fast-alpha combined with alphaBackend=DQP" in {
       FullBarcode.computeFromPoints(
         points,

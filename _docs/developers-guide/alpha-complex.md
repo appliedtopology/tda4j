@@ -1,10 +1,10 @@
 ---
 layout: main
-title: Alpha complex: DQP vs Helix
+title: "Alpha complex: Bowyer-Watson, Helix and DQP"
 ---
 
-Two independent backends compute alpha complexes; `AlphaShapes(points, backend)` (`alpha/AlphaShapes.scala`)
-chooses between them. This page is the developer-facing view. For the user-facing framing (which one to
+Three backends compute alpha complexes; `AlphaShapes(points, backend)` (`alpha/AlphaShapes.scala`) chooses between
+them. Two triangulate (`BowyerWatsonDelaunay`, `HelixDelaunay`, both `DelaunayAlphaShapes`); `AlphaComplexDQP` does not. This page is the developer-facing view. For the user-facing framing (which one to
 pick, and the honest tradeoffs), see the [User's Guide](../user-guide/index.md).
 
 ## Dispatch
@@ -21,16 +21,39 @@ object AlphaShapes:
 ```
 
 With a `maxRadius`, every backend returns the simplices of alpha value at most `maxRadius`, with the same values (in
-general position; on cospherical points DQP keeps the simplex they span where Helix triangulates): `Helix` builds the whole triangulation and filters it (`RadiusLimitedAlphaShapes`); `DQP` builds only up to the
+general position; on cospherical points DQP keeps the simplex they span where a triangulation splits it): `BowyerWatson`
+and `Helix` build the whole triangulation and filter it (`RadiusLimitedAlphaShapes`); `DQP` builds only up to the
 radius, dimension by dimension, up to `maxDimension + 1` (`AlphaComplexDQPStream`). `AlphaBackend.Default` resolves to
-`Helix` without a radius and otherwise to whichever `AlphaShapes.prefersDQP` expects to be faster: it estimates the
-mean number of points within `2 maxRadius` of a point (64 sample points) and compares a per-point cost model fitted to
-measurements (DQP about `c_d k^1.6`, Helix about `h_d (n/1000)^0.4`; in ambient dimension 6 and up DQP whenever a radius
-is given). `AlphaShapes.fromPoints` (the `Persistence` verb) and the MATLAB/CLI `maxFiltrationValue` pass the radius
-through; `engine=fast-alpha` needs the whole Helix triangulation and refuses a radius. The facade's `alphaBackend`
+`BowyerWatson` for points at most 4 coordinates wide and `Helix` above, unless a radius is given and
+`AlphaShapes.prefersDQP` expects DQP to be faster: it estimates the mean number of points within `2 maxRadius` of a
+point (64 sample points) and compares a per-point cost model fitted to measurements (DQP about `c_d k^1.6`,
+BowyerWatson about `b_d (n/1000)^0.2`, Helix in 5-D about `150 (n/1000)^0.4`; in ambient dimension 6 and up DQP
+whenever a radius is given). `AlphaShapes.fromPoints` (the `Persistence` verb) and the MATLAB/CLI `maxFiltrationValue`
+pass the radius through; `engine=fast-alpha` needs a whole triangulation and refuses a radius. The facade's `alphaBackend`
 string goes through `AlphaBackend.parse` (default `default`). All backends extend the common `AlphaShapes` abstract
 class, so they are interchangeable for any code consuming the stream: `AlphaComplexSpec` runs identical property
 checks against both, and `AlphaDispatchSpec` checks that the radius-limited complexes and the verb's bars agree.
+
+## `DelaunayAlphaShapes` — the alpha complex of a triangulation
+
+The shared base of the two triangulating backends: a subclass supplies the top simplices, their values and any exactly
+repeated points; the base enumerates the faces (a hash table of sorted vertex rows per dimension, each face found from
+its immediate cofaces), assigns values top-down by the Gabriel rule below, and sorts each dimension in the filtration
+order. Circumspheres come from a Householder QR of the edge vectors (the Gram system squares the condition number and
+lost digits on slivers).
+
+## `BowyerWatsonDelaunay` — incremental Delaunay with exact predicates, 1 to 4 dimensions
+
+`alpha/BowyerWatson.scala`, predicates in `alpha/DelaunayPredicates.scala`. Bowyer–Watson on flat arrays (cell
+vertices and neighbours, `d + 1` each, a free list), with a symbolic vertex at infinity so the hull needs no special
+case; points are inserted in BRIO order (random rounds, Z-order within a round) and located by a visibility walk from
+the last new cell. Orientation and in-sphere are determinants expanded over permutations, evaluated in floating point
+with a conservative error bound and redone in exact `BigDecimal` arithmetic when the bound does not settle the sign.
+An exact in-sphere tie is broken by a symbolic perturbation of the lifted coordinate in descending point index, so the
+result is the Delaunay triangulation of an infinitesimally perturbed point set: valid on grids and cospherical input,
+and identical for every insertion order (`BowyerWatsonSpec`). Exactly repeated points keep the smallest index in the
+triangulation and join it by an edge of value 0. The input is first projected onto its affine span; a span of more
+than 4 dimensions is refused (the determinant expansion is `n!` terms; Helix and DQP cover higher dimensions).
 
 ## `HelixDelaunay` — an actual Delaunay triangulation
 

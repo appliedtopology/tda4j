@@ -20,20 +20,25 @@ import java.util.concurrent.*
   */
 final case class Epsilon(epsilon: Double)
 
-/** Which alpha-complex construction `AlphaShapes(points, backend)` uses: `Helix` (Delaunay by the Helix algorithm, the
-  * default), `DQP` (dual quadratic programs), or `Default` (whatever the library currently picks -- Helix).
+/** Which alpha-complex construction `AlphaShapes(points, backend)` uses: `BowyerWatson` (incremental Delaunay with
+  * exact predicates, points spanning at most 4 dimensions), `Helix` (Delaunay by the Helix algorithm, any dimension),
+  * `DQP` (dual quadratic programs, any dimension, built only up to a radius), or `Default` (whichever the library
+  * expects to be fastest: see `AlphaShapes.apply`).
   */
 enum AlphaBackend:
-  case Default, Helix, DQP
+  case Default, Helix, DQP, BowyerWatson
 
 object AlphaBackend:
-  /** The facade's string spelling (`"default"`, `"helix"`, `"dqp"`, any case). */
+  /** The facade's string spelling (`"default"`, `"helix"`, `"dqp"`, `"bowyer-watson"`, any case). */
   def parse(name: String): AlphaBackend = name.toLowerCase match
-    case "default" => Default
-    case "helix"   => Helix
-    case "dqp"     => DQP
-    case other     =>
-      throw IllegalArgumentException(s"Unknown alpha complex backend: '$other' (expected default/helix/DQP)")
+    case "default"                               => Default
+    case "helix"                                 => Helix
+    case "dqp"                                   => DQP
+    case "bowyer-watson" | "bowyerwatson" | "bw" => BowyerWatson
+    case other                                   =>
+      throw IllegalArgumentException(
+        s"Unknown alpha complex backend: '$other' (expected default, bowyer-watson, helix or DQP)"
+      )
 
 abstract class AlphaShapes extends LevelwiseSimplexStream[Int, Double]() with DoubleFiltration[Simplex[Int]]():
   val metricSpace: FiniteMetricSpace[Int]
@@ -45,22 +50,26 @@ object AlphaShapes extends PointCloudComplex:
 
   /** The alpha complex of `points`, built by `backend` (see [[AlphaBackend]]).
     *
-    *   - `Helix` triangulates the whole point set (Delaunay) and reads the alpha values off the triangulation.
+    *   - `BowyerWatson` triangulates the whole point set (Delaunay, exact predicates: valid on grids and other
+    *     degenerate input, and the same whatever the point order) and reads the alpha values off the triangulation.
+    *     Points spanning at most 4 dimensions only; the fastest in 2-D and 3-D by far.
+    *   - `Helix` triangulates the whole point set too, in any dimension, with floating-point predicates.
     *   - `DQP` decides each simplex on its own, dimension by dimension, among points within `2 maxRadius` of each
     *     other: it never builds the whole triangulation, so a small `maxRadius` (or a low `maxDimension` in high
-    *     ambient dimension) makes it much cheaper, while without a radius it is far slower than Helix.
-    *   - `Default` picks between them: Helix without a `maxRadius`, otherwise whichever is expected to be faster for
-    *     this radius, from the average number of points within `2 maxRadius` of a point (`AlphaShapes.prefersDQP`).
+    *     ambient dimension) makes it much cheaper, while without a radius it is far slower than a triangulation.
+    *   - `Default` picks: without a `maxRadius`, BowyerWatson for points in at most 4 dimensions and Helix above; with
+    *     one, DQP instead when it is expected to be faster for this radius, from the average number of points within
+    *     `2 maxRadius` of a point (`AlphaShapes.prefersDQP`).
     *
     * In general position every backend gives the same complex: the simplices whose alpha value (radius) is at most
     * `maxRadius`, with the same values. On cospherical points DQP keeps the higher-dimensional simplex they span where
-    * Helix triangulates it; the barcode is the same up to zero-length bars.
+    * BowyerWatson and Helix triangulate it (each its own way); the barcode is the same up to zero-length bars.
     *
     * @param maxRadius
     *   keep only simplices with alpha value (radius) at most this. Default: no limit.
     * @param maxDimension
     *   the highest homological degree needed: `DQP` builds simplices up to dimension `maxDimension + 1` only. Default:
-    *   all dimensions. (Helix always builds every dimension; truncate the stream with [[Truncated]].)
+    *   all dimensions. (BowyerWatson and Helix always build every dimension; truncate the stream with [[Truncated]].)
     * @param requireValidTriangulation
     *   `Helix` only: raise an error rather than return a triangulation it could not repair (see [[HelixDelaunay]]).
     */
@@ -79,17 +88,22 @@ object AlphaShapes extends PointCloudComplex:
         val chosen =
           if points.size > 0 && radius.exists(r => !requireValidTriangulation && prefersDQP(points, r))
           then AlphaBackend.DQP
+          else if points.points.headOption.forall(_.length <= 4) then AlphaBackend.BowyerWatson
           else AlphaBackend.Helix
         apply(points, chosen, requireValidTriangulation, maxRadius, maxDimension)
       case AlphaBackend.Helix =>
         val helix = HelixDelaunay(points.points, requireValidTriangulation = requireValidTriangulation)
         radius.fold[AlphaShapes](helix)(r => RadiusLimitedAlphaShapes(helix, r))
+      case AlphaBackend.BowyerWatson =>
+        // Exact predicates: the triangulation is always valid, so requireValidTriangulation holds as it is.
+        val delaunay = BowyerWatsonDelaunay(points.points)
+        radius.fold[AlphaShapes](delaunay)(r => RadiusLimitedAlphaShapes(delaunay, r))
       case AlphaBackend.DQP =>
         require(
           !requireValidTriangulation,
           "requireValidTriangulation=true is not valid for backend = AlphaBackend.DQP: AlphaShapeDQP has no facet-" +
-            "multiplicity precondition to repair (FastAlphaHomologyEngine is specialized to HelixDelaunay's own " +
-            "triangulation and never consumes AlphaShapeDQP's output) -- this option would be a silent no-op there."
+            "multiplicity precondition to repair (FastAlphaHomologyEngine takes a Delaunay triangulation and never " +
+            "consumes AlphaShapeDQP's output) -- this option would be a silent no-op there."
         )
         val ambient = points.points.headOption.map(_.length).getOrElse(0)
         val topDimension = maxDimension.toOption.fold(ambient)(k => math.min(ambient, k + 1))
@@ -104,11 +118,11 @@ object AlphaShapes extends PointCloudComplex:
           case Some(r) =>
             AlphaComplexDQPStream(points.points, AlphaComplexDQP.euclidean(points.points, r, topDimension))
 
-  /** Whether `DQP` is expected to build the alpha complex truncated at radius `r` faster than `Helix` builds the whole
-    * one. DQP's cost grows with the number of points within `2r` of each point (its neighbour graph); Helix's with the
-    * point count and the ambient dimension. The thresholds are measured
-    * (`.claude/WORKLOG-helix-construction-speed.md`): the largest average neighbour count at which DQP was still
-    * faster, by point count and ambient dimension.
+  /** Whether `DQP` is expected to build the alpha complex truncated at radius `r` faster than a triangulation
+    * (`BowyerWatson` up to 4 dimensions, `Helix` above) builds the whole one. DQP's cost grows with the number of
+    * points within `2r` of each point (its neighbour graph); a triangulation's with the point count and the ambient
+    * dimension. The thresholds are measured (`.claude/WORKLOG-helix-construction-speed.md`): the largest average
+    * neighbour count at which DQP was still faster, by point count and ambient dimension.
     */
   def prefersDQP(points: PointCloud, r: Double): Boolean =
     val pts = points.points
@@ -143,21 +157,23 @@ object AlphaShapes extends PointCloudComplex:
       total += math.pow(count, 1.6)
     total / samples
 
-  /** The average neighbour count (within `2r`) up to which DQP is expected to be faster than Helix, for `n` points in
-    * ambient dimension `d`. Per point, DQP took about `c_d k^1.6` ms (`c_d = 0.004 * 2.35^(d-2)`, the constant from
-    * 1000-point clouds, the more expensive ones) and Helix about `h_d (n/1000)^0.4` ms, `h_d` = 0.53, 1.7, 10, 150 for
-    * `d` = 2..5 (uniform clouds of 500-10000 points, this library's own measurements). In dimension 6 and up Helix's
-    * triangulation grows so fast that DQP is preferred whenever a radius is given.
+  /** The average neighbour count (within `2r`) up to which DQP is expected to be faster than the triangulation
+    * `Default` would use, for `n` points in ambient dimension `d`. Per point, DQP took about `c_d k^1.6` ms (`c_d =
+    * 0.004 * 2.35^(d-2)`, the constant from 1000-point clouds, the more expensive ones); BowyerWatson about
+    * `b_d (n/1000)^0.2` ms, `b_d` = 0.03, 0.1, 1.1 for `d` = 2..4; Helix in 5-D about `150 (n/1000)^0.4` ms (uniform
+    * clouds of 1000-10000 points, this library's own measurements). In dimension 6 and up Helix's triangulation grows
+    * so fast that DQP is preferred whenever a radius is given.
     */
   private[tda4j] def dqpNeighbourThreshold(n: Int, d: Int): Double =
-    val helixPerPoint = math.max(d, 2) match
-      case 2 => 0.53
-      case 3 => 1.7
-      case 4 => 10.0
-      case 5 => 150.0
+    val growth = n / 1000.0
+    val triangulationPerPoint = math.max(d, 2) match
+      case 2 => 0.03 * math.pow(growth, 0.2)
+      case 3 => 0.1 * math.pow(growth, 0.2)
+      case 4 => 1.1 * math.pow(growth, 0.2)
+      case 5 => 150.0 * math.pow(growth, 0.4)
       case _ => Double.PositiveInfinity
     val dqpConstant = 0.004 * math.pow(2.35, math.max(d, 2) - 2)
-    math.pow(helixPerPoint * math.pow(n / 1000.0, 0.4) / dqpConstant, 1 / 1.6)
+    math.pow(triangulationPerPoint / dqpConstant, 1 / 1.6)
 
   // utilities for Delaunay computations
   type Point = RealVector
@@ -690,6 +706,183 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
 
     validated.toSet
 
+/** An alpha complex read off a Delaunay triangulation of `points`: the faces of the top-dimensional simplices, with
+  * alpha values computed top-down (see `alphaValues`). A subclass supplies the triangulation (`topSimplices`, distinct)
+  * and the value of each top simplex (`topValue`, its circumradius); [[HelixDelaunay]] is one.
+  * [[FastAlphaHomologyEngine]] works on any of them.
+  */
+abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
+  /** The dimension of the triangulation (of the points' affine span). */
+  def ambientDimension: Int
+
+  /** The points, in the coordinates the triangulation was built in. */
+  def points: Seq[Point]
+
+  /** The top-dimensional simplices, each once. */
+  protected def topSimplices: Iterable[Simplex[Int]]
+
+  /** The alpha value of a top-dimensional simplex. */
+  protected def topValue(s: Simplex[Int]): Double
+
+  /** Points that coincide exactly with another one (the key), which is the one in the triangulation. Each becomes a
+    * vertex joined to it by an edge of value 0, so every input point is in the complex and none adds an `H_0` class.
+    */
+  protected def duplicates: Map[Int, Int] = Map.empty
+
+  // Every simplex once, per dimension, with its alpha value: built on flat arrays (a face table per dimension, faces
+  // found from their immediate cofaces), so the Simplex objects and the value map are made once at the end.
+  private lazy val built: (Map[Int, Seq[Simplex[Int]]], mutable.HashMap[Simplex[Int], Double]) =
+    val coords = points.map(_.toArray).toArray
+    val top = ambientDimension
+    val tops = topSimplices.toArray
+    // Level `top`: the (top + 1)-subsets of the top simplices (the top simplices themselves when they have that size).
+    val levels = new Array[DelaunayAlphaShapes.FaceTable](top + 1)
+    val values = new Array[Array[Double]](top + 1)
+    levels(top) = DelaunayAlphaShapes.FaceTable(top + 1, tops.length)
+    val topIndex = mutable.ArrayBuffer.empty[(Int, Simplex[Int])]
+    tops.foreach { t =>
+      val vs = t.toArray
+      if vs.length == top + 1 then
+        val (i, fresh) = levels(top).add(vs)
+        if fresh then topIndex += ((i, t))
+      else
+        vs.combinations(top + 1).foreach { c =>
+          val (i, fresh) = levels(top).add(c)
+          if fresh then topIndex += ((i, Simplex.from(c.toSeq)))
+        }
+    }
+    values(top) = new Array[Double](levels(top).size)
+    topIndex.foreach((i, s) => values(top)(i) = topValue(s))
+    // Each lower level: its faces with the cofaces' values and the Gabriel test against their opposite vertices.
+    for k <- (top - 1) to 0 by -1 do
+      val upper = levels(k + 1)
+      val faces = DelaunayAlphaShapes.FaceTable(k + 1, upper.size * 2)
+      val face = new Array[Int](k + 1)
+      // (face, coface) pairs as indices, with the coface's vertex opposite the face.
+      val pairFace = mutable.ArrayBuilder.make[Int]
+      val pairCoface = mutable.ArrayBuilder.make[Int]
+      val pairVertex = mutable.ArrayBuilder.make[Int]
+      for t <- 0 until upper.size; drop <- 0 to k + 1 do
+        var j = 0
+        for i <- 0 to k + 1 if i != drop do
+          face(j) = upper.vertex(t, i)
+          j += 1
+        pairFace += faces.add(face)._1
+        pairCoface += t
+        pairVertex += upper.vertex(t, drop)
+      val (pf, pc, pv) = (pairFace.result(), pairCoface.result(), pairVertex.result())
+      val m = faces.size
+      val vals = new Array[Double](m)
+      if k == 0 then java.util.Arrays.fill(vals, 0.0)
+      else
+        val center = new Array[Double](m * coords.head.length)
+        val radius = new Array[Double](m)
+        val vs = new Array[Int](k + 1)
+        for f <- 0 until m do
+          for i <- 0 to k do vs(i) = faces.vertex(f, i)
+          radius(f) = DelaunayAlphaShapes.circumsphere(coords, vs, center, f * coords.head.length)
+        val cofaceMin = Array.fill(m)(Double.PositiveInfinity)
+        val gabriel = Array.fill(m)(true)
+        val dim = coords.head.length
+        for p <- pf.indices do
+          val f = pf(p)
+          cofaceMin(f) = math.min(cofaceMin(f), values(k + 1)(pc(p)))
+          val q = coords(pv(p))
+          var d2 = 0.0
+          for r <- 0 until dim do
+            val x = q(r) - center(f * dim + r)
+            d2 += x * x
+          if math.sqrt(d2) < radius(f) - epsilon.epsilon then gabriel(f) = false
+        // A Gabriel simplex with a coface vertex exactly on its sphere has exactly that coface's value (the same
+        // sphere); computed separately the two differ in the last bits and would leave a bar of length ~1e-16.
+        for f <- 0 until m do
+          vals(f) =
+            if gabriel(f) && radius(f) < cofaceMin(f) * (1 - 1e-12) then radius(f) else cofaceMin(f)
+      levels(k) = faces
+      values(k) = vals
+    val valueMap = mutable.HashMap.empty[Simplex[Int], Double]
+    // Dimension 1 exists even for points spanning nothing when some of them are repeated (their value-0 edges).
+    val highest = if duplicates.nonEmpty then math.max(top, 1) else top
+    val byDimension = (0 to highest).map { k =>
+      val level = if k <= top then levels(k) else DelaunayAlphaShapes.FaceTable(k + 1, 0)
+      val simplices = Array.tabulate(level.size) { f =>
+        val s = Simplex.from(Seq.tabulate(k + 1)(i => level.vertex(f, i)))
+        valueMap(s) = values(k)(f)
+        s
+      }
+      val extra: Seq[Simplex[Int]] = k match
+        case 0 => duplicates.keys.toSeq.map(Simplex(_))
+        case 1 => duplicates.toSeq.map((dup, kept) => Simplex(dup, kept))
+        case _ => Nil
+      extra.foreach(s => valueMap(s) = 0.0)
+      k -> (simplices.toSeq ++ extra)
+    }
+    (byDimension.toMap, valueMap)
+
+  lazy val simplicesMap: Map[Int, Seq[Simplex[Int]]] = built._1
+
+  /** The smallest sphere through every vertex of `s`: its centre lies in `s`'s own affine hull (`Hypersphere.apply` is
+    * for full-dimensional simplices only).
+    */
+  def smallestCircumsphere(s: Simplex[Int]): (Point, Double) =
+    val coords = s.toSeq.map(points(_).toArray).toArray
+    val center = new Array[Double](coords.head.length)
+    val r = DelaunayAlphaShapes.circumsphere(coords, coords.indices.toArray, center, 0)
+    (Point(center), r)
+
+  /** Alpha values, top dimension first:
+    *   - a top-dimensional simplex: `topValue` (its circumradius);
+    *   - a lower simplex `σ`: if `σ` is Gabriel -- no vertex of a coface strictly inside its smallest circumsphere --
+    *     that sphere's radius, otherwise the smallest value among its immediate cofaces. A Gabriel radius within a
+    *     relative `1e-12` of that smallest value is taken to be equal to it (a coface vertex on the sphere: the same
+    *     sphere, computed twice), which also keeps the filtration monotone to the last bit.
+    *   - a vertex: 0.
+    */
+  private def alphaValues: mutable.HashMap[Simplex[Int], Double] = built._2
+
+  override def filtrationValue: PartialFunction[Simplex[Int], Double] = { case spx => alphaValues(spx) }
+
+  // Must be the exact reverse of filtrationOrdering below, not merely "ascending by filtrationValue" --
+  // sortBy(filtrationValue) alone has no explicit tie-break (falls back to simplicesMap's own insertion
+  // order among ties), which doesn't match filtrationOrdering's simplexOrdering[Int] tie-break. This
+  // passes VietorisRipsSpec-style sortedness checks (value-only) but breaks PersistenceInChunksEngine,
+  // whose chunk-boundary logic (Homology.scala's PersistenceInChunksEngine.allCells) relies on
+  // iterateDimension's own emission order standing in for filtrationOrdering position -- found via
+  // EngineComparisonBenchmarkSpec / AlphaFiltrationOrderingRegressionSpec (see CLAUDE.md).
+  // Values are looked up once per simplex; only equal values fall through to the full ordering.
+  lazy val simplicesSortedMap: Map[Int, Seq[Simplex[Int]]] =
+    val reverse = filtrationOrdering.reverse
+    simplicesMap.map { (d, v) =>
+      val keyed = v.map(s => (alphaValues(s), s)).toArray
+      java.util.Arrays.sort(
+        keyed,
+        (a: (Double, Simplex[Int]), b: (Double, Simplex[Int])) =>
+          java.lang.Double.compare(a._1, b._1) match
+            case 0 => reverse.compare(a._2, b._2)
+            case c => c
+      )
+      (d, keyed.toSeq.map(_._2))
+    }
+
+  def simplicesInDimension(d: Int): Iterator[Simplex[Int]] = simplicesSortedMap(d).iterator
+
+  def simplices(): Iterator[Simplex[Int]] = simplicesSortedMap.keys.toSeq.sorted.iterator.flatMap(simplicesInDimension)
+
+  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+    case d if simplicesSortedMap.contains(d) => simplicesSortedMap(d).iterator
+  }
+
+  // The shared FiltrationOrdering.canonical shape: fv reversed, then dimension, then simplexOrdering.
+  // `simplicesSortedMap` (above) is built as `.sorted(using filtrationOrdering.reverse)` specifically so it
+  // stays the exact reverse of this ordering, tie-break included -- see RecursiveStackVietorisRipsSimplexStream's
+  // identical fix (VietorisRips.scala) and CLAUDE.md for the full root-cause writeup. This used to have no
+  // dimension key at all (`Ordering.by(filtrationValue).reverse.orElse(simplexOrdering[Int])`), which is wrong
+  // for the cross-dimension comparisons `Chain.reduceBy` performs during reduction (see the identical fix's own
+  // comment). Kept a `def`, not a `val`: `simplicesSortedMap` above uses it, and a `val` declared this late in the
+  // class body could be read before it is initialized (see CLAUDE.md's `ExplicitStreamBuilder` NPE note).
+  override def filtrationOrdering: Ordering[Simplex[Int]] =
+    FiltrationOrdering.canonical(filtrationValue, _.size, simplexOrdering[Int])
+
 /** The Delaunay triangulation of a point cloud, built by an incremental frontier walk
   * (https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10917453), filtered as an alpha complex.
   *
@@ -714,7 +907,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
   */
 class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTriangulation: Boolean = false)(using
   epsilon: Epsilon
-) extends AlphaShapes:
+) extends DelaunayAlphaShapes:
   // If `pts` is globally coplanar -- its own affine rank is strictly less than the declared ambient dimension
   // (the array width) -- there is no genuine full-ambient-dimensional Delaunay simplex to find at all: every
   // point lies in some lower-dimensional flat, so the bootstrap's search for a supporting hyperplane plus one
@@ -751,106 +944,21 @@ class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTria
       catch case _: IllegalStateException => raw // the repair did not converge; anything else is a bug and propagates
     else raw
 
-  val simplicesMap: Map[Int, Seq[Simplex[Int]]] = Map.from(
-    (0 to ambientDimension).map(d =>
-      d -> validated
-        .flatMap((ds: DelaunaySimplex) => ds.simplex.toSet.subsets(d + 1))
-        .map((s: Set[Int]) => Simplex.from(s.toSeq))
-        .toSeq
-    )
-  )
+  protected def topSimplices: Iterable[Simplex[Int]] = validated.map(_.simplex)
 
-  /** The smallest sphere through every vertex of `s`: its centre lies in `s`'s own affine hull, at `p0 + Σ λ_i (p_i -
-    * p0)` with `Σ_j 2 (p_i - p0)·(p_j - p0) λ_j = |p_i - p0|²`. (`Hypersphere.apply` is for full-dimensional simplices:
-    * below full dimension its least-squares centre is the minimum-norm one, off the affine hull.)
-    */
-  def smallestCircumsphere(s: Simplex[Int]): (Point, Double) =
-    val vs = s.toSeq.toIndexedSeq
-    val p0 = points(vs.head)
-    val k = vs.size - 1
-    if k == 0 then (p0, 0.0)
-    else
-      val diffs = vs.tail.map(v => points(v).subtract(p0))
-      val gram = MatrixUtils.createRealMatrix(k, k)
-      val rhs = new Array[Double](k)
-      for i <- 0 until k do
-        rhs(i) = diffs(i).dotProduct(diffs(i))
-        for j <- 0 until k do gram.setEntry(i, j, 2 * diffs(i).dotProduct(diffs(j)))
-      val lambda = SingularValueDecomposition(gram).getSolver.solve(createRealVector(rhs))
-      val center = (0 until k).foldLeft(p0)((c, i) => c.add(diffs(i).mapMultiply(lambda.getEntry(i))))
-      (center, center.getDistance(p0))
-
-  /** Alpha values, top dimension first:
-    *   - a top-dimensional simplex: the smallest circumradius among the Delaunay simplices containing it (its own,
-    *     unless a cospherical cluster was tiled as one larger cell);
-    *   - a lower simplex `σ`: if `σ` is Gabriel -- no vertex of a coface strictly inside its smallest circumsphere --
-    *     that sphere's radius, otherwise the smallest value among its immediate cofaces. A Gabriel simplex's radius is
-    *     already at most its cofaces' values; taking the minimum anyway keeps the filtration monotone to the last bit.
-    *   - a vertex: 0.
-    */
-  private lazy val alphaValues: Map[Simplex[Int], Double] =
-    val values = mutable.HashMap.empty[Simplex[Int], Double]
-    val containing: Map[Int, Seq[DelaunaySimplex]] =
-      validated.toSeq.flatMap(ds => ds.simplex.toSeq.map(v => (v, ds))).groupMap(_._1)(_._2)
-    simplicesMap(ambientDimension).foreach { s =>
-      values(s) = containing(s.toSeq.head)
-        .filter(ds => s.toSet.subsetOf(ds.simplex.toSet))
-        .map(_.circumsphere.radius)
-        .min
-    }
-    for k <- (ambientDimension - 1) to 1 by -1 do
-      val cofaces = mutable.HashMap.empty[Simplex[Int], mutable.ArrayBuffer[(Simplex[Int], Int)]]
-      simplicesMap(k + 1).foreach { t =>
-        t.toSeq.foreach(v => cofaces.getOrElseUpdate(t - v, mutable.ArrayBuffer.empty) += ((t, v)))
-      }
-      simplicesMap(k).foreach { s =>
-        val (center, r) = smallestCircumsphere(s)
-        val cs = cofaces.getOrElse(s, mutable.ArrayBuffer.empty)
-        val gabriel = cs.forall((_, v) => center.getDistance(points(v)) >= r - epsilon.epsilon)
-        val cofaceMin = cs.map((t, _) => values(t)).minOption.getOrElse(Double.PositiveInfinity)
-        values(s) = if gabriel then math.min(r, cofaceMin) else cofaceMin
-      }
-    simplicesMap(0).foreach(s => values(s) = 0.0)
-    values.toMap
-
-  override def filtrationValue: PartialFunction[Simplex[Int], Double] = { case spx => alphaValues(spx) }
-
-  // Must be the exact reverse of filtrationOrdering below, not merely "ascending by filtrationValue" --
-  // sortBy(filtrationValue) alone has no explicit tie-break (falls back to simplicesMap's own insertion
-  // order among ties), which doesn't match filtrationOrdering's simplexOrdering[Int] tie-break. This
-  // passes VietorisRipsSpec-style sortedness checks (value-only) but breaks PersistenceInChunksEngine,
-  // whose chunk-boundary logic (Homology.scala's PersistenceInChunksEngine.allCells) relies on
-  // iterateDimension's own emission order standing in for filtrationOrdering position -- found via
-  // EngineComparisonBenchmarkSpec / AlphaFiltrationOrderingRegressionSpec (see CLAUDE.md).
-  val simplicesSortedMap: Map[Int, Seq[Simplex[Int]]] =
-    simplicesMap.map((d, v) => (d, v.sorted(using filtrationOrdering.reverse)))
-
-  def simplicesInDimension(d: Int): Iterator[Simplex[Int]] = simplicesSortedMap(d).iterator
-
-  def simplices(): Iterator[Simplex[Int]] = (0 to ambientDimension).iterator.flatMap(simplicesInDimension)
-
-  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
-    case d if simplicesSortedMap.contains(d) => simplicesSortedMap(d).iterator
-  }
-
-  // The shared FiltrationOrdering.canonical shape: fv reversed, then dimension, then simplexOrdering.
-  // `simplicesSortedMap` (above) is built as `.sorted(using filtrationOrdering.reverse)` specifically so it
-  // stays the exact reverse of this ordering, tie-break included -- see RecursiveStackVietorisRipsSimplexStream's
-  // identical fix (VietorisRips.scala) and CLAUDE.md for the full root-cause writeup. This used to have no
-  // dimension key at all (`Ordering.by(filtrationValue).reverse.orElse(simplexOrdering[Int])`), which is wrong
-  // for the cross-dimension comparisons `Chain.reduceBy` performs during reduction (see the identical fix's own
-  // comment). Kept a `def`, not a `val`: `simplicesSortedMap` above uses it during construction, before a `val`
-  // declared this late in the class body would be initialized (see CLAUDE.md's `ExplicitStreamBuilder` NPE note
-  // for the general hazard).
-  override def filtrationOrdering: Ordering[Simplex[Int]] =
-    FiltrationOrdering.canonical(filtrationValue, _.size, simplexOrdering[Int])
+  // The smallest circumradius among the Delaunay simplices containing it: its own, unless a cospherical cluster was
+  // tiled as one larger cell.
+  private lazy val containing: Map[Int, Seq[DelaunaySimplex]] =
+    validated.toSeq.flatMap(ds => ds.simplex.toSeq.map(v => (v, ds))).groupMap(_._1)(_._2)
+  protected def topValue(s: Simplex[Int]): Double =
+    containing(s.toSeq.head).filter(ds => s.toSet.subsetOf(ds.simplex.toSet)).map(_.circumsphere.radius).min
 
 object HelixDelaunay:
 
   /** Points whose affine span has lower dimension than their coordinates, re-expressed in an orthonormal basis of that
     * span (distances are unchanged, so the triangulation is the true one); other point sets are returned as they are.
     */
-  private def projectToAffineRank(pts: Array[Array[Double]])(using epsilon: Epsilon): Array[Array[Double]] =
+  private[tda4j] def projectToAffineRank(pts: Array[Array[Double]])(using epsilon: Epsilon): Array[Array[Double]] =
     if pts.length < 2 then pts
     else
       val dim = pts.head.length
@@ -1013,7 +1121,7 @@ private[tda4j] final class RadiusLimitedAlphaShapes(full: AlphaShapes, maxRadius
 /** `helix` without its simplices of dimension greater than `maxDim`: what the fast alpha engine hands the chunks engine
   * for the degrees between 0 and the top. Filtration values and order are those of `helix`.
   */
-class LimitedAlphaShapesStream(helix: HelixDelaunay, maxDim: Int)
+class LimitedAlphaShapesStream(helix: DelaunayAlphaShapes, maxDim: Int)
     extends LevelwiseSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]():
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
@@ -1023,3 +1131,104 @@ class LimitedAlphaShapesStream(helix: HelixDelaunay, maxDim: Int)
   override def filtrationValue: PartialFunction[Simplex[Int], Double] = helix.filtrationValue
   // Cells up to dimension maxDim: degrees above maxDim - 1 are truncation artifacts.
   override def homologyDegreeLimit: Option[Int] = Some(maxDim - 1)
+
+private[tda4j] object DelaunayAlphaShapes:
+  /** The simplices of one dimension, each a row of `width` sorted vertex indices, numbered as first added. */
+  final class FaceTable(val width: Int, expected: Int):
+    private var rows = new Array[Int](math.max(expected, 4) * width)
+    var size = 0
+    private var slots = Array.fill(Integer.highestOneBit(math.max(expected, 4) * 2) * 2)(-1)
+
+    def vertex(row: Int, i: Int): Int = rows(row * width + i)
+
+    private def hash(vs: Array[Int], at: Int): Int =
+      var h = 0x9e3779b9
+      for i <- 0 until width do h = (h ^ vs(at + i)) * 0x01000193 + (h >>> 15)
+      h ^ (h >>> 16)
+
+    private def sameRow(row: Int, vs: Array[Int]): Boolean =
+      var i = 0
+      while i < width && rows(row * width + i) == vs(i) do i += 1
+      i == width
+
+    /** The row of the sorted vertices `vs`, and whether it is new. */
+    def add(vs: Array[Int]): (Int, Boolean) =
+      if size * 2 >= slots.length then grow()
+      val mask = slots.length - 1
+      var s = hash(vs, 0) & mask
+      while slots(s) >= 0 && !sameRow(slots(s), vs) do s = (s + 1) & mask
+      if slots(s) >= 0 then (slots(s), false)
+      else
+        if (size + 1) * width > rows.length then rows = java.util.Arrays.copyOf(rows, rows.length * 2)
+        System.arraycopy(vs, 0, rows, size * width, width)
+        slots(s) = size
+        size += 1
+        (size - 1, true)
+
+    private def grow(): Unit =
+      slots = Array.fill(slots.length * 2)(-1)
+      val mask = slots.length - 1
+      for row <- 0 until size do
+        var s = hash(rows, row * width) & mask
+        while slots(s) >= 0 do s = (s + 1) & mask
+        slots(s) = row
+
+  /** The smallest sphere through the points `vs` (indices into `coords`): its centre, in their affine hull, is written
+    * to `center` from `at`, and its radius returned. With `D` the matrix whose columns are the edge vectors `p_i - p0`
+    * and `D = Q R` its Householder QR factorization, the centre is `p0 + Q y` with `R^T y = |p_i - p0|^2 / 2`. (The
+    * Gram system `D^T D` squares the condition number, which on slivers loses about half the digits.)
+    */
+  def circumsphere(coords: Array[Array[Double]], vs: Array[Int], center: Array[Double], at: Int): Double =
+    val p0 = coords(vs(0))
+    val dim = p0.length
+    val k = vs.length - 1
+    if k == 0 then
+      System.arraycopy(p0, 0, center, at, dim)
+      0.0
+    else
+      // a(c)(r): column c of D, overwritten by R above the diagonal and the reflector below.
+      val a = Array.tabulate(k)(c => Array.tabulate(dim)(r => coords(vs(c + 1))(r) - p0(r)))
+      val rhs = Array.tabulate(k)(c => a(c).map(x => x * x).sum / 2)
+      val diag = new Array[Double](k)
+      val reflectors = new Array[Array[Double]](k)
+      for c <- 0 until k do
+        val col = a(c)
+        var norm = 0.0
+        for r <- c until dim do norm += col(r) * col(r)
+        norm = math.sqrt(norm)
+        val alpha = if col(c) > 0 then -norm else norm
+        val v = new Array[Double](dim)
+        for r <- c until dim do v(r) = col(r)
+        v(c) -= alpha
+        var vn = 0.0
+        for r <- c until dim do vn += v(r) * v(r)
+        if vn > 0 then
+          for c2 <- c + 1 until k do
+            var dot = 0.0
+            for r <- c until dim do dot += v(r) * a(c2)(r)
+            val f = 2 * dot / vn
+            for r <- c until dim do a(c2)(r) -= f * v(r)
+        reflectors(c) = v
+        diag(c) = alpha
+      // Forward substitution for R^T y = rhs; R(j, i) = a(i)(j) for j < i, R(i, i) = diag(i).
+      val z = new Array[Double](dim)
+      for i <- 0 until k do
+        var acc = rhs(i)
+        for j <- 0 until i do acc -= a(i)(j) * z(j)
+        z(i) = acc / diag(i)
+      // offset = Q (y, 0): apply the reflectors in reverse order.
+      for c <- (k - 1) to 0 by -1 do
+        val v = reflectors(c)
+        var vn = 0.0
+        var dot = 0.0
+        for r <- c until dim do
+          vn += v(r) * v(r)
+          dot += v(r) * z(r)
+        if vn > 0 then
+          val f = 2 * dot / vn
+          for r <- c until dim do z(r) -= f * v(r)
+      var r2 = 0.0
+      for r <- 0 until dim do
+        center(at + r) = p0(r) + z(r)
+        r2 += z(r) * z(r)
+      math.sqrt(r2)

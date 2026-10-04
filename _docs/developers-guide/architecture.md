@@ -26,7 +26,7 @@ Its source directories are file organization only (they are not packages), and e
 - **`homology/`** — the persistence algorithms (`Homology.scala`, `PackedRipserCohomology.scala`, `Cohomology.scala`,
   the fast cubical/alpha engines) and circular coordinates.
 - **`barcode/`** — `Barcode`, `PersistenceBar`, `BarcodeEndpoint`, distances and vectorizations.
-- **`alpha/`** — `AlphaShapes` (`HelixDelaunay`/`AlphaShapeDQP`), `AlphaComplexDQP`.
+- **`alpha/`** — `AlphaShapes` (`BowyerWatsonDelaunay`/`HelixDelaunay`, both `DelaunayAlphaShapes`; `AlphaShapeDQP`), `AlphaComplexDQP`, `DelaunayPredicates`.
 - **`io/`** — file-format adaptors: `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
 - `package.scala` — `TDAlab`, the pylab-style user-facing Scala entry point.
 

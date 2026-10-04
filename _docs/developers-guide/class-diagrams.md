@@ -153,7 +153,9 @@ classDiagram
     LevelwiseSimplexStream <|-- RecursiveStackVietorisRipsSimplexStream
     LevelwiseSimplexStream <|-- IncrementalVietorisRipsSimplexStream
     LevelwiseSimplexStream <|-- AlphaShapes
-    AlphaShapes <|-- HelixDelaunay
+    AlphaShapes <|-- DelaunayAlphaShapes
+    DelaunayAlphaShapes <|-- BowyerWatsonDelaunay
+    DelaunayAlphaShapes <|-- HelixDelaunay
     AlphaShapes <|-- AlphaShapeDQP
     StratifiedCellStream <|-- CubicalGridStream
     StratifiedCellStream <|-- ExplicitCubicalStream
@@ -173,7 +175,7 @@ place. See [Persistence engines](persistence-engines.md) for the full, current p
 `CellularHomologyEngine`/`SimplicialHomologyEngine`,
 `CellularPersistenceInChunksEngine`/`PersistenceInChunksEngine`,
 `RipserCohomologyEngine`, `PackedRipserCohomologyEngine`, `CellularCohomologyEngine`,
-`FastCubicalHomologyEngine` and `FastAlphaHomologyEngine` (`HelixDelaunay` alpha complexes) -- both valid at
+`FastCubicalHomologyEngine` and `FastAlphaHomologyEngine` (`DelaunayAlphaShapes` alpha complexes: Bowyer-Watson or Helix) -- both valid at
 any ambient dimension `>= 2`, both via a cohomology hybrid above 2D -- wired into `matlab`/`cli` as
 `engine="fast-cubical"`/`engine="fast-alpha"`.
 

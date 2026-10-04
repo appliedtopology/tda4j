@@ -57,7 +57,7 @@ Each `compute...` method also has an overload without options.
 | `minPersistenceFraction` | number | `0.01`: the threshold as a fraction of the input's scale |
 | `includeZeroLength` | `true`, `false` | `false` |
 | `sublevel` | `true`, `false` | `true` (images) |
-| `alphaBackend` | `default`, `helix`, `DQP` | `default`: `helix`, or with `maxFiltrationValue` whichever of the two is expected to be faster (same result in general position) |
+| `alphaBackend` | `default`, `bowyer-watson`, `helix`, `DQP` | `default`: `bowyer-watson` for points in at most 4 dimensions, `helix` above; with `maxFiltrationValue`, `DQP` instead when it is expected to be faster (same result in general position) |
 | `requireValidTriangulation` | `true`, `false` | `false` (alpha with `helix`: also check for cavities, and fail rather than return a triangulation that could not be repaired) |
 | `dtmK` | integer | required for `dtm-rips` and `dtm-alpha` |
 | `dtmQ`, `dtmP` | number | `2.0`, `1.0` (`dtmP` is `1.0` or `2.0`, for `dtm-rips`) |
@@ -71,7 +71,7 @@ Each `compute...` method also has an overload without options.
 
 Which engine goes with which complex: `ripser` needs `vr` or the lazy witness complex; `chunks` works with every
 complex except `alpha`, `dtm-alpha`, the general witness complex and relations; `naive` and `cohomology` work with all;
-`fast-cubical` is for images of dimension 2 and up, `fast-alpha` for `alpha` with the `helix` backend. A mismatch, an
+`fast-cubical` is for images of dimension 2 and up, `fast-alpha` for `alpha` with the `bowyer-watson` or `helix` backend. A mismatch, an
 unknown option or an unknown value throws an `IllegalArgumentException` that names it.
 
 ### Which bars are reported

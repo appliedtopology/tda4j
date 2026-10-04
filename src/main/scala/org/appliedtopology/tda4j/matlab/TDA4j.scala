@@ -471,7 +471,7 @@ object TDA4j:
     if engine == EngineKind.FastAlpha then
       throw new IllegalArgumentException(
         "engine=fast-alpha is not offered for complex=witness (either variant): FastAlphaHomologyEngine is " +
-          "specialized to HelixDelaunay and has no notion of a witness complex at all. Use complex=alpha for " +
+          "specialized to a Delaunay triangulation and has no notion of a witness complex at all. Use complex=alpha for " +
           "engine=fast-alpha."
       )
     if witnessVariant == WitnessVariantKind.General then
@@ -623,7 +623,7 @@ object TDA4j:
     if engine == EngineKind.FastAlpha && complex != ComplexKind.Alpha then
       throw new IllegalArgumentException(
         s"engine=fast-alpha is only valid for complex=alpha: FastAlphaHomologyEngine is specialized to " +
-          s"HelixDelaunay and has no notion of complex=${opts.getOrElse("complex", "vr")} at all."
+          s"a Delaunay triangulation and has no notion of complex=${opts.getOrElse("complex", "vr")} at all."
       )
     (complex, engine) match
       case (ComplexKind.Alpha, EngineKind.Ripser) =>
@@ -634,7 +634,7 @@ object TDA4j:
       case (ComplexKind.Alpha, EngineKind.Chunks) =>
         throw new IllegalArgumentException(
           "engine=chunks is not offered for complex=alpha: it can stall or run out of memory on alpha complexes. " +
-            "Use engine=naive, engine=cohomology or (with the helix backend) engine=fast-alpha."
+            "Use engine=naive, engine=cohomology or (with the bowyer-watson or helix backend) engine=fast-alpha."
         )
       case (ComplexKind.Cech, EngineKind.Ripser) =>
         throw new IllegalArgumentException(
@@ -675,7 +675,7 @@ object TDA4j:
     // No separate alphaBackend="dqp" check here -- AlphaShapes.apply's own `require` already rejects that
     // combination with an actionable message, the single place this is checked (mirroring how the fast-alpha
     // dispatch below pattern-matches the CONSTRUCTED type rather than re-comparing the raw alphaBackend string,
-    // since alphaBackend="default" is also a valid spelling that resolves to HelixDelaunay).
+    // since alphaBackend="default" is also a valid spelling that resolves to a Delaunay triangulation).
     val requireValidTriangulation =
       opts.get("requirevalidtriangulation").exists(v => parseBooleanOption("requireValidTriangulation", v))
     if requireValidTriangulation && complex != ComplexKind.Alpha then
@@ -925,8 +925,8 @@ object TDA4j:
             "engine=fast-alpha computes the whole alpha complex, so it does not take maxFiltrationValue: leave " +
               "maxFiltrationValue out, or use engine=cohomology or engine=naive for the complex up to that radius."
           )
-        // With maxFiltrationValue, alphaBackend=default builds the complex up to that radius with whichever of Helix
-        // and DQP is expected to be faster (AlphaShapes.prefersDQP); the same complex in general position.
+        // With maxFiltrationValue, alphaBackend=default builds the complex up to that radius with whichever of a
+        // triangulation and DQP is expected to be faster (AlphaShapes.prefersDQP); the same complex in general position.
         val alphaStream =
           AlphaShapes(pts.toIndexedSeq, AlphaBackend.parse(alphaBackend), requireValidTriangulation, maxFiltrationValue)
         val alphaCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
@@ -960,11 +960,10 @@ object TDA4j:
             )
           case EngineKind.FastAlpha =>
             // Pattern-matched, not a string check on alphaBackend directly: alphaBackend="default" ALSO
-            // currently resolves to HelixDelaunay (see AlphaShapes.apply's own dispatch), so checking the
-            // actual constructed type is what correctly accepts that case too, not just alphaBackend="helix"
-            // literally.
+            // resolves to a Delaunay triangulation without a radius (see AlphaShapes.apply's own dispatch), so
+            // checking the actual constructed type is what correctly accepts that case too.
             alphaStream match
-              case helix: HelixDelaunay =>
+              case helix: DelaunayAlphaShapes =>
                 if helix.ambientDimension < 2 then
                   throw new IllegalArgumentException(
                     s"engine=fast-alpha requires ambient dimension >= 2, got a " +
@@ -972,7 +971,7 @@ object TDA4j:
                       s"engine=cohomology instead."
                   )
                 // FastAlphaHomologyEngine's own FastAlphaTriangulationException (a rare, real HelixDelaunay
-                // triangulation limitation -- see that class's own doc) is deliberately NOT caught and
+                // triangulation limitation; never raised on BowyerWatsonDelaunay -- see that class's own doc) is deliberately NOT caught and
                 // rewrapped here: its own message is already written for an unsuspecting MATLAB/CLI caller,
                 // not just a Scala developer, the same way NoIntegerCocycleException's own message already is
                 // for circularCoordinates -- catching and re-throwing a DIFFERENT exception here would only
@@ -986,8 +985,8 @@ object TDA4j:
                 )
               case _ =>
                 throw new IllegalArgumentException(
-                  s"engine=fast-alpha requires alphaBackend=helix (FastAlphaHomologyEngine is specialized to " +
-                    "HelixDelaunay's own triangulation and cannot consume AlphaShapeDQP's output at all) -- got " +
+                  s"engine=fast-alpha requires a Delaunay triangulation (alphaBackend=default, bowyer-watson " +
+                    "or helix): FastAlphaHomologyEngine cannot consume DQP's output -- got " +
                     s"alphaBackend=$alphaBackend."
                 )
           case EngineKind.Ripser | EngineKind.Chunks | EngineKind.FastCubical =>
@@ -1386,7 +1385,7 @@ object TDA4j:
     if engine == EngineKind.FastAlpha then
       throw new IllegalArgumentException(
         "engine=fast-alpha is not offered for computeFromRelation: FastAlphaHomologyEngine is specialized to " +
-          "HelixDelaunay and has no notion of a Dowker complex at all."
+          "a Delaunay triangulation and has no notion of a Dowker complex at all."
       )
     if engine == EngineKind.Ripser then
       throw new IllegalArgumentException(
@@ -1489,7 +1488,7 @@ object TDA4j:
     if engine == EngineKind.FastAlpha then
       throw new IllegalArgumentException(
         "engine=fast-alpha cannot be used for a cubical complex: FastAlphaHomologyEngine is specialized to " +
-          "HelixDelaunay and has no notion of a cubical complex at all. Use engine=fast-cubical for a cubical " +
+          "a Delaunay triangulation and has no notion of a cubical complex at all. Use engine=fast-cubical for a cubical " +
           "grid's own fast engine, or engine=naive/chunks/cohomology otherwise."
       )
     // FastCubicalHomologyEngine's own `require` throws IllegalArgumentException too, but with a message written
