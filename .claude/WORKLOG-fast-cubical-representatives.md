@@ -148,3 +148,40 @@ The inputs are tie-heavy, noisy, blob, missing-pixel and 3-D images over F₃ an
 - **After:** all 31 tests in `FastRepresentativesSpec`, `FastCubicalHomologySpec` and `FastAlphaHomologySpec` pass.
 
 **The lesson:** an equality-with-reference gate must be paired with a validity check that a shared bug cannot pass.
+
+## Lever 1: the fast cubical engine on flat arrays (2026-10-04, later)
+
+What changed (`FastCubicalHomology.scala`, plus a new `SortIndices`, a boxing-free stable merge sort of indices):
+- **Both union-finds work on flat arrays:**
+  - pixels row-major;
+  - vertices and edges in mixed radix over the vertex grid;
+  - facets as (axis, lower corner).
+- **Values come straight from the pixels:** a cell's value is the minimum over its containing pixels.
+- **Orientation coefficients are closed-form**, from `cubeIsOrderedCell`'s rule: along axis `a` the upper face has sign
+  `+1` for even `a` and `−1` for odd `a`, the lower face the opposite.
+- **Region boundaries are summed by facet key** in a `LongMap`, so interior facets cancel; cubes are built only for the
+  facets that remain.
+- **The order is reproduced exactly:**
+  - `H_0` edges: value ascending, then encoding descending;
+  - dual events: value descending, top cells before facets, then coordinates or encoding ascending.
+
+  The doubled-coordinate encoding becomes a `Long` with weights `∏ (2 shape + 1)`.
+
+Gate: `FastRepresentativesSpec`'s equality with the eager reference passes term for term, as do its validity
+examples, `FastCubicalHomologySpec`, `CubicalStreamSpec` and `ImagesSpec`.
+
+Measured with `FastCubicalProfileDriver`, F₁₇, median of 3, same sandbox:
+
+| image | after the quadratic fix | `H_0` on arrays | both passes on arrays |
+|---|---|---|---|
+| noise 400² | 4.05 s | 2.78 s | 1.05 s |
+| noise 1000² | not run | not run | 13.9 s |
+| blob 400² | 6.03 s | 2.83 s | 0.83 s |
+| blob 1000² | not run | not run | 7.1 s |
+
+What remains, from a JFR profile of 700² noise taken before region boundaries moved to arrays:
+- representative assembly was then about half the time;
+- region boundaries now go through the `LongMap`, but each reported bar still walks its region.
+
+That is the price of a representative per bar, which CubicalRipser and GUDHI do not pay. 1000² noise has about 380k
+`H_1` bars.
