@@ -96,6 +96,16 @@ Vietoris-Rips/`SimplexIndexing` rather than a general engine.
 so "same simplex" is true by construction regardless of which floating-point path computed its diameter,
 sidestepping a real footgun (two carriers for the same simplex comparing unequal on floating-point noise).
 
+**Reduction internals.** The column being reduced is Ripser's working column: a binary heap of
+(diameter, index, coefficient) entries in primitive arrays, to which adding a column only pushes entries; equal
+cells are combined when they reach the top. Coboundaries and boundaries are pushed straight from the
+`SimplexIndexing` cursors, never built as `Chain`s. A stored reduced column keeps its pivot first and the
+remaining terms uncombined. Cocycles (the V-columns) are recorded as a reduction log per column and expanded only
+for the bars that are reported, so `persistentCohomology()` builds none for zero-length bars and
+`persistentHomology()` builds none at all. Cycles come from the engine's own specialization of `Involution.cycles`
+on the same heap, which returns exactly what the generic involution returns. The heap relies on a simplex having
+one diameter, true for a symmetric distance, as Vietoris-Rips assumes.
+
 ## 5. `CellularCohomologyEngine` — generic cohomology, for every cell type
 
 Persistent *co*homology, generic over `CellT: OrderedCell` — the cohomology counterpart to engine 1, filling

@@ -67,6 +67,116 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
 
   given packedOrdering: Ordering[DiameterIndex] = compareDiamThenIndex(_, _)
 
+  /** A reduced column: its pivot first, with its combined non-zero coefficient; the other terms in no particular order
+    * and not combined (equal cells may repeat, sums may cancel). Adding it to a working column combines them there.
+    */
+  private final class Column(val diameters: Array[Double], val indices: Array[Long], val coefficients: Array[Any]):
+    def leadingCoefficient: CoefficientT = coefficients(0).asInstanceOf[CoefficientT]
+    def isEmpty: Boolean = indices.isEmpty
+
+  // Replaces `Chain.reduceBy`'s `TreeMap` working column, whose lookups were most of the engine's time
+  // (`.claude/WORKLOG-vr-working-column.md`); `PackedWorkingColumnSpec` holds it to the old reduction term for term.
+  /** The column being reduced, as Ripser keeps it: a binary min-heap of (diameter, index, coefficient) entries in
+    * primitive arrays. Adding a column only pushes its entries; equal cells are combined lazily, when they reach the
+    * top. Ordered by `packedOrdering` (diameter ascending, then the larger index first) for the cohomology reduction,
+    * by its reverse for the cycles. Equal indices meet at the top together because a simplex has one diameter, which
+    * holds for a symmetric distance, as Vietoris-Rips assumes.
+    */
+  private final class WorkingColumn(youngestFirst: Boolean):
+    private var diam = new Array[Double](64)
+    private var idx = new Array[Long](64)
+    private var coef = new Array[Any](64)
+    private var size = 0
+    // The current pivot, valid after `pivot()` returned true.
+    var pivotDiameter: Double = 0.0
+    var pivotIndex: Long = 0L
+    var pivotCoefficient: CoefficientT = fr.zero
+
+    private def less(i: Int, j: Int): Boolean =
+      val c = java.lang.Double.compare(diam(i), diam(j))
+      if youngestFirst then if c != 0 then c > 0 else idx(i) < idx(j)
+      else if c != 0 then c < 0
+      else idx(i) > idx(j)
+    private def swap(i: Int, j: Int): Unit =
+      val d = diam(i); diam(i) = diam(j); diam(j) = d
+      val x = idx(i); idx(i) = idx(j); idx(j) = x
+      val c = coef(i); coef(i) = coef(j); coef(j) = c
+
+    def push(d: Double, i: Long, c: CoefficientT): Unit =
+      if size == diam.length then
+        diam = java.util.Arrays.copyOf(diam, 2 * size)
+        idx = java.util.Arrays.copyOf(idx, 2 * size)
+        coef = java.util.Arrays.copyOf(coef.asInstanceOf[Array[AnyRef]], 2 * size).asInstanceOf[Array[Any]]
+      diam(size) = d; idx(size) = i; coef(size) = c
+      var k = size
+      size += 1
+      while k > 0 && less(k, (k - 1) / 2) do
+        swap(k, (k - 1) / 2)
+        k = (k - 1) / 2
+
+    private def popTop(): Unit =
+      size -= 1
+      if size > 0 then
+        diam(0) = diam(size); idx(0) = idx(size); coef(0) = coef(size)
+        var k = 0
+        var done = false
+        while !done do
+          val l = 2 * k + 1
+          val r = l + 1
+          var m = k
+          if l < size && less(l, m) then m = l
+          if r < size && less(r, m) then m = r
+          if m == k then done = true
+          else
+            swap(k, m)
+            k = m
+
+    /** Finds the leading term, combining equal cells and dropping those that cancel; false if the column is zero. The
+      * pivot stays in the column.
+      */
+    def pivot(): Boolean =
+      var found = false
+      while !found && size > 0 do
+        val d = diam(0)
+        val i = idx(0)
+        var sum = coef(0).asInstanceOf[CoefficientT]
+        popTop()
+        while size > 0 && idx(0) == i do
+          sum = fr.plus(sum, coef(0).asInstanceOf[CoefficientT])
+          popTop()
+        if !fr.isEqual(sum, fr.zero) then
+          push(d, i, sum)
+          pivotDiameter = d
+          pivotIndex = i
+          pivotCoefficient = sum
+          found = true
+      found
+
+    def addScaled(column: Column, factor: CoefficientT): Unit =
+      var k = 0
+      while k < column.indices.length do
+        push(
+          column.diameters(k),
+          column.indices(k),
+          fr.times(factor, column.coefficients(k).asInstanceOf[CoefficientT])
+        )
+        k += 1
+
+    /** Empties the column into a reduced column: empty if it is zero, else the pivot (combined) first, the rest as they
+      * lie in the heap. No sorting: the order of the other terms never matters.
+      */
+    def drain(): Column =
+      if !pivot() then Column(Array.empty, Array.empty, Array.empty)
+      else
+        // `pivot()` left the combined pivot at the top of the heap, slot 0.
+        val column = Column(
+          java.util.Arrays.copyOf(diam, size),
+          java.util.Arrays.copyOf(idx, size),
+          java.util.Arrays.copyOf(coef.asInstanceOf[Array[AnyRef]], size).asInstanceOf[Array[Any]]
+        )
+        size = 0
+        column
+
   // The diameter of a decoded vertex array, O(d^2): for facets, where removing a vertex has no cheap update rule.
   private def maxPairwiseDistance(vertices: Array[Int]): Double =
     var maxD = 0.0
@@ -111,21 +221,25 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
     * [[RipserCohomologyEngine.coboundaryOf]]. Defined up to dimension `maxDimension`.
     */
   def coboundaryOf(sigma: DiameterIndex, size: Int): Chain[DiameterIndex, CoefficientT] =
-    if size - 1 > maxDimension then Chain.empty
-    else
+    val buffer = mutable.ArrayBuffer.empty[(DiameterIndex, CoefficientT)]
+    forEachCofacet(sigma, size)((diameter, index, sign) => buffer += ((DiameterIndex(diameter, index), sign)))
+    Chain.from(buffer.toSeq)
+
+  /** Each cofacet of `sigma` up to the threshold, as (diameter, index, sign); inlined, so no term is allocated. */
+  private inline def forEachCofacet(sigma: DiameterIndex, size: Int)(
+    inline f: (Double, Long, CoefficientT) => Unit
+  ): Unit =
+    if size - 1 <= maxDimension then
       val vertices = si.decodeToArray(sigma.index, size)
       val cur = si.cofacetCursor(sigma.index, size, allCofacets = true)
-      val buffer = mutable.ArrayBuffer.empty[(DiameterIndex, CoefficientT)]
       while cur.hasNext do
         val tauFv = insertionDiameter(metricSpace, vertices, sigma.diameter, cur.vertex)
         if tauFv <= resolvedMaxFiltrationValue then
           // `vertices` is sorted ascending: a plain scan counts the entries below `cur.vertex`.
           var position = 0
           while position < vertices.length && vertices(position) < cur.vertex do position += 1
-          val sign = if position % 2 == 0 then fr.one else fr.negate(fr.one)
-          buffer += ((DiameterIndex(tauFv, cur.index), sign))
+          f(tauFv, cur.index, if position % 2 == 0 then fr.one else fr.negate(fr.one))
         cur.advance()
-      Chain.from(buffer.toSeq)
 
   // The oldest same-diameter cofacet (largest index): the cursor's index decreases strictly, so the first tie is it.
   private def zeroPivotCofacet(sigma: DiameterIndex, size: Int): Option[DiameterIndex] =
@@ -191,7 +305,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
   def persistentCohomology(
     includeZeroLength: Boolean = false
   ): List[PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]]] =
-    PersistenceBar.dropZeroLength(pairedCohomology().map(_._1), includeZeroLength)
+    PersistenceBar.dropZeroLength(pairedCohomology(zeroLengthCocycles = includeZeroLength).map(_._1), includeZeroLength)
 
   /** The same bars with '''cycles''' as representatives (over [[DiameterIndex]] cells): the pairing comes from the
     * cohomology computation, and only the boundary columns of the death simplices are reduced ([[Involution]]).
@@ -199,16 +313,147 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
   def persistentHomology(
     includeZeroLength: Boolean = false
   ): List[PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]]] =
-    val paired = pairedCohomology()
-    val cycles = Involution.cycles[DiameterIndex, CoefficientT](
+    val paired = pairedCohomology(cocycles = false)
+    val cycles = involutedCycles(
       paired.map(_._2).toIndexedSeq,
-      packedOrdering.reverse,
-      boundaryOf
+      pair => includeZeroLength || !pair.death.exists(_.diameter == pair.birth.diameter)
     )
-    val bars = paired.zip(cycles).map { case ((bar, _), (cycle, _)) =>
+    val bars = paired.zip(cycles).map { case ((bar, _), cycle) =>
       new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(cycle))
     }
     PersistenceBar.dropZeroLength(bars, includeZeroLength)
+
+  /** Pushes `boundaryOf(tau, dim)` onto `working` without building it: the facets come from the facet cursor, the
+    * diameters from the same `maxPairwiseDistance`, and removing the vertex at (ascending) position `k` has sign
+    * `(-1)^k`.
+    */
+  private def pushBoundary(tau: DiameterIndex, dim: Int, working: WorkingColumn): Unit =
+    if dim > 0 then
+      val size = dim + 1
+      val vertices = si.decodeToArray(tau.index, size)
+      val facet = new Array[Int](dim)
+      val cur = si.facetCursor(tau.index, size)
+      var k = size - 1
+      while cur.hasNext do
+        var w = 0
+        var r = 0
+        while w < size do
+          if w != k then
+            facet(r) = vertices(w)
+            r += 1
+          w += 1
+        working.push(maxPairwiseDistance(facet), cur.index, if k % 2 == 0 then fr.one else fr.negate(fr.one))
+        k -= 1
+        cur.advance()
+
+  /** A reduction's V-column, `seed - Σ c V(pivot)` over its `log`, from the V-columns of earlier columns: each is
+    * recorded as its seed and log (keyed by pivot index) and expanded only when needed, depth-first without recursion,
+    * into `memo`. Equal to the eager fold over V-columns built for every column: the field is exact.
+    */
+  private def expandV(
+    seed: DiameterIndex,
+    log: Array[(DiameterIndex, CoefficientT)],
+    seeds: mutable.LongMap[DiameterIndex],
+    logs: mutable.LongMap[Array[(DiameterIndex, CoefficientT)]],
+    memo: mutable.LongMap[Chain[DiameterIndex, CoefficientT]]
+  ): Chain[DiameterIndex, CoefficientT] =
+    val chainRM = summon[Chain[DiameterIndex, CoefficientT] is RingModule]
+    import chainRM.*
+    def fold(seed: DiameterIndex, log: Array[(DiameterIndex, CoefficientT)]) =
+      val v = log.foldLeft(Chain(seed)) { case (acc, (pivot, coeff)) => acc - coeff ⊠ memo(pivot.index) }
+      v.collapseAll()
+      v
+    val stack = mutable.Stack.empty[Long]
+    log.foreach((pivot, _) => stack.push(pivot.index))
+    while stack.nonEmpty do
+      val s = stack.top
+      if memo.contains(s) then stack.pop()
+      else
+        val sLog = logs.getOrElse(s, throw new IllegalStateException(s"pivot $s has a basis entry but no V-column"))
+        val missing = sLog.iterator.map(_._1.index).filterNot(memo.contains).toList
+        if missing.nonEmpty then missing.foreach(stack.push)
+        else
+          memo(s) = fold(seeds(s), sLog)
+          stack.pop()
+    fold(seed, log)
+
+  // `Involution.cycles` specialised to packed cells; must return exactly what it returns (`PackedWorkingColumnSpec`).
+  /** One cycle per pair, as [[Involution.cycles]] computes them under `packedOrdering.reverse`: death columns reduced
+    * on a heap working column, oldest death first per dimension; a finite bar's cycle is its reduced column. The
+    * V-columns are needed only for essential bars, so only their reduction logs are kept, and a V-column is expanded
+    * when an essential bar refers to it. Cycles are built only for the `reported` pairs (the others stay empty).
+    */
+  private def involutedCycles(
+    pairs: IndexedSeq[Involution.Pair[DiameterIndex]],
+    reported: Involution.Pair[DiameterIndex] => Boolean
+  ): IndexedSeq[Chain[DiameterIndex, CoefficientT]] =
+    val result = Array.fill[Chain[DiameterIndex, CoefficientT]](pairs.size)(Chain.empty)
+    val working = WorkingColumn(youngestFirst = true)
+    // Per death dimension, keyed by the birth (pivot) index: the reduced column, the death cell, the reduction log.
+    val basisByDim = mutable.Map.empty[Int, mutable.LongMap[Column]]
+    val deathByDim = mutable.Map.empty[Int, mutable.LongMap[DiameterIndex]]
+    val logByDim = mutable.Map.empty[Int, mutable.LongMap[Array[(DiameterIndex, CoefficientT)]]]
+    val vByDim = mutable.Map.empty[Int, mutable.LongMap[Chain[DiameterIndex, CoefficientT]]]
+
+    def reduce(seed: DiameterIndex, deathDim: Int): Array[(DiameterIndex, CoefficientT)] =
+      val basis = basisByDim.getOrElseUpdate(deathDim, mutable.LongMap.empty)
+      pushBoundary(seed, deathDim, working)
+      val log = mutable.ArrayBuffer.empty[(DiameterIndex, CoefficientT)]
+      var reducing = working.pivot()
+      while reducing do
+        basis.get(working.pivotIndex) match
+          case None         => reducing = false
+          case Some(column) =>
+            val redCoeff = fr.divide(working.pivotCoefficient, column.leadingCoefficient)
+            working.addScaled(column, fr.negate(redCoeff))
+            log += ((DiameterIndex(working.pivotDiameter, working.pivotIndex), redCoeff))
+            reducing = working.pivot()
+      log.toArray
+
+    val finite = pairs.indices.filter(i => pairs(i).death.isDefined)
+    for (deathDim, idxs) <- finite.groupBy(i => pairs(i).dim + 1).toSeq.sortBy(_._1) do
+      val basis = basisByDim.getOrElseUpdate(deathDim, mutable.LongMap.empty)
+      val deaths = deathByDim.getOrElseUpdate(deathDim, mutable.LongMap.empty)
+      val logs = logByDim.getOrElseUpdate(deathDim, mutable.LongMap.empty)
+      for i <- idxs.sortBy(i => pairs(i).death.get)(using packedOrdering) do
+        val Involution.Pair(_, sigma, Some(tau)) = pairs(i): @unchecked
+        val log = reduce(tau, deathDim)
+        if !working.pivot() || working.pivotIndex != sigma.index then
+          throw new IllegalStateException(
+            s"Involution: the boundary of $tau does not reduce to its paired birth cell $sigma " +
+              "(the pairing and the order disagree)"
+          )
+        val column = working.drain()
+        basis(sigma.index) = column
+        deaths(sigma.index) = tau
+        logs(sigma.index) = log
+        if reported(pairs(i)) then
+          val cycle = Chain.from(
+            column.indices.indices.map(k =>
+              (DiameterIndex(column.diameters(k), column.indices(k)), column.coefficients(k).asInstanceOf[CoefficientT])
+            )
+          )
+          cycle.collapseAll()
+          result(i) = cycle
+
+    for i <- pairs.indices if pairs(i).death.isEmpty do
+      val Involution.Pair(dim, sigma, _) = pairs(i)
+      result(i) =
+        if dim == 0 then Chain(sigma)
+        else
+          val log = reduce(sigma, dim)
+          if working.pivot() then
+            throw new IllegalStateException(
+              s"Involution: the boundary of the essential cell $sigma does not reduce to zero"
+            )
+          expandV(
+            sigma,
+            log,
+            deathByDim.getOrElse(dim, mutable.LongMap.empty),
+            logByDim.getOrElse(dim, mutable.LongMap.empty),
+            vByDim.getOrElseUpdate(dim, mutable.LongMap.empty)
+          )
+    result.toIndexedSeq
 
   /** The boundary of a `dim`-simplex: the facet without its `i`-th smallest vertex, with sign `(-1)^i`. */
   private[tda4j] def boundaryOf(tau: DiameterIndex, dim: Int): Seq[(DiameterIndex, CoefficientT)] =
@@ -221,9 +466,14 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
         (cell, if i % 2 == 0 then fr.one else fr.negate(fr.one))
       }
 
-  /** Every bar, zero-length ones included, with the cells that open and close it. */
-  private[tda4j] def pairedCohomology()
-    : List[(PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]], Involution.Pair[DiameterIndex])] =
+  /** Every bar, zero-length ones included, with the cells that open and close it. Cocycles are built only where asked
+    * (`representative` is `None` elsewhere): with `cocycles = false` none, with `zeroLengthCocycles = false` none for
+    * zero-length bars. The pairing never depends on them.
+    */
+  private[tda4j] def pairedCohomology(
+    cocycles: Boolean = true,
+    zeroLengthCocycles: Boolean = true
+  ): List[(PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]], Involution.Pair[DiameterIndex])] =
     val chainRM = summon[Chain[DiameterIndex, CoefficientT] is RingModule]
     import chainRM.*
 
@@ -264,68 +514,88 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
       // (only `.get`/`.contains`/`+=`/`.getOrElse`, all point operations).
       val loadFactor = mutable.HashMap.defaultLoadFactor
       val capacity = (simplicesAtD.size / loadFactor).toInt + 1
-      val basis: mutable.Map[DiameterIndex, Chain[DiameterIndex, CoefficientT]] =
-        new mutable.HashMap(capacity, loadFactor)
-      val generators: mutable.Map[DiameterIndex, Chain[DiameterIndex, CoefficientT]] =
-        new mutable.HashMap(capacity, loadFactor)
+      val basis = new mutable.LongMap[Column](capacity)
+      // V-columns, as seed and reduction log per pivot index, expanded only for the bars that report a cocycle.
+      val seeds = new mutable.LongMap[DiameterIndex](capacity)
+      val logs = new mutable.LongMap[Array[(DiameterIndex, CoefficientT)]](capacity)
+      val pending = mutable.ArrayBuffer.empty[(Int, DiameterIndex, Array[(DiameterIndex, CoefficientT)])]
+      def report(
+        bar: PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]],
+        pair: Involution.Pair[DiameterIndex],
+        log: Array[(DiameterIndex, CoefficientT)]
+      ): Unit =
+        val zeroLength = pair.death.exists(_.diameter == pair.birth.diameter)
+        if cocycles && (zeroLengthCocycles || !zeroLength) then pending += ((bars.size, pair.birth, log))
+        bars.append((bar, pair))
       var nextCleared: mutable.Set[Long] = new mutable.HashSet(capacity, loadFactor)
 
       // tau's own size (one more than sigma's) -- captured here, per-dimension, because a bare DiameterIndex
       // doesn't know its own dimension the way a Simplex[Int] does; zeroApparentFacet needs it to decode tau's
       // facets correctly.
       val coboundarySize = size + 1
-      val basisFallback: DiameterIndex => Option[Chain[DiameterIndex, CoefficientT]] =
+      val fallbackColumn = WorkingColumn(youngestFirst = false)
+      val basisFallback: DiameterIndex => Option[Column] =
         if useApparentPairs then
           (tau: DiameterIndex) =>
             zeroApparentFacet(tau, coboundarySize).map { sigma =>
               _substitutionCount += 1
-              coboundaryOf(sigma, size)
+              forEachCofacet(sigma, size)(fallbackColumn.push)
+              fallbackColumn.drain()
             }
         else (_: DiameterIndex) => None
+      val working = WorkingColumn(youngestFirst = false)
 
       for sigma <- simplicesAtD if !activeCleared.contains(sigma.index) do
         val sigmaFv = sigma.diameter
         (if useApparentPairs then zeroApparentCofacet(sigma, size) else None) match
           case Some(tau) =>
             _apparentPairCount += 1
-            val vcol = Chain[DiameterIndex, CoefficientT](sigma)
-            generators(tau) = vcol
+            seeds(tau.index) = sigma
+            logs(tau.index) = Array.empty
             nextCleared += tau.index
-            bars.append(
-              (
-                PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(tau.diameter), Some(vcol)),
-                Involution.Pair(d, sigma, Some(tau))
-              )
+            report(
+              PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(tau.diameter), None),
+              Involution.Pair(d, sigma, Some(tau)),
+              Array.empty
             )
           case None =>
-            val z = coboundaryOf(sigma, size)
-            val (reduced, log) = Chain.reduceBy(z, basis, Chain.empty, basisFallback)
-            val vcol: Chain[DiameterIndex, CoefficientT] =
-              log.rawEntries.foldLeft(Chain(sigma)) { case (acc, (pivot, coeff)) =>
-                acc - coeff ⊠ generators.getOrElse(
-                  pivot,
-                  throw new IllegalStateException(s"pivot $pivot has a basis entry but no generators entry")
-                )
-              }
-            vcol.collapseAll()
-            if reduced.isZero() then
-              bars.append(
-                (
-                  PersistenceBar(d, ClosedEndpoint(sigmaFv), PositiveInfinity(), Some(vcol)),
-                  Involution.Pair(d, sigma, None)
-                )
+            forEachCofacet(sigma, size)(working.push)
+            // Reduce: while the pivot is some earlier column's pivot (or an apparent pair's), subtract that column.
+            val log = mutable.ArrayBuffer.empty[(DiameterIndex, CoefficientT)]
+            var reducing = working.pivot()
+            while reducing do
+              val pivotCell = DiameterIndex(working.pivotDiameter, working.pivotIndex)
+              basis.get(working.pivotIndex).orElse(basisFallback(pivotCell)) match
+                case None         => reducing = false
+                case Some(column) =>
+                  val redCoeff = fr.divide(working.pivotCoefficient, column.leadingCoefficient)
+                  working.addScaled(column, fr.negate(redCoeff))
+                  log += ((pivotCell, redCoeff))
+                  reducing = working.pivot()
+            val reduced = working.drain()
+            val reductionLog = log.toArray
+            if reduced.isEmpty then
+              report(
+                PersistenceBar(d, ClosedEndpoint(sigmaFv), PositiveInfinity(), None),
+                Involution.Pair(d, sigma, None),
+                reductionLog
               )
             else
-              val pivot = reduced.leadingCell.get
-              basis(pivot) = reduced
-              generators(pivot) = vcol
+              val pivot = DiameterIndex(reduced.diameters(0), reduced.indices(0))
+              basis(pivot.index) = reduced
+              seeds(pivot.index) = sigma
+              logs(pivot.index) = reductionLog
               nextCleared += pivot.index
-              bars.append(
-                (
-                  PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(pivot.diameter), Some(vcol)),
-                  Involution.Pair(d, sigma, Some(pivot))
-                )
+              report(
+                PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(pivot.diameter), None),
+                Involution.Pair(d, sigma, Some(pivot)),
+                reductionLog
               )
+
+      val memo = mutable.LongMap.empty[Chain[DiameterIndex, CoefficientT]]
+      for (k, seed, log) <- pending do
+        val (bar, pair) = bars(k)
+        bars(k) = (PersistenceBar(bar.dim, bar.lower, bar.upper, Some(expandV(seed, log, seeds, logs, memo))), pair)
 
       if d < maxDimension then currentLevel = simplicesAtD.iterator.flatMap(sparseCofacets(_, size)).toSeq
 
