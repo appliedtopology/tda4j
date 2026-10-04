@@ -34,7 +34,9 @@ class AlphaDispatchSpec extends mutable.Specification:
       problem <- Seq(
         Option.when(bw.keySet != dqp.keySet)(s"BowyerWatson: different simplices (${bw.size} vs ${dqp.size})"),
         Option
-          .when(bw.keySet == dqp.keySet && bw.exists((s, v) => math.abs(v - dqp(s)) > 1e-9))("BowyerWatson: different values"),
+          .when(bw.keySet == dqp.keySet && bw.exists((s, v) => math.abs(v - dqp(s)) > 1e-9))(
+            "BowyerWatson: different values"
+          ),
         Option.when(helix.keySet != dqp.keySet)(s"different simplices (${helix.size} vs ${dqp.size})"),
         Option
           .when(helix.keySet == dqp.keySet && helix.exists((s, v) => math.abs(v - dqp(s)) > 1e-9))("different values")

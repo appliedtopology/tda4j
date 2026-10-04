@@ -34,7 +34,9 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
   "On Bowyer-Watson triangulations (random clouds, and grids, where every cell is cospherical) it matches the naive " +
     "engine" >> {
       def grid(side: Int, dim: Int) =
-        Array.tabulate(math.pow(side, dim).toInt)(k => Array.tabulate(dim)(a => ((k / math.pow(side, a).toInt) % side).toDouble))
+        Array.tabulate(math.pow(side, dim).toInt)(k =>
+          Array.tabulate(dim)(a => ((k / math.pow(side, a).toInt) % side).toDouble)
+        )
       val rng = new scala.util.Random(11)
       val inputs = Seq(
         Array.fill(40)(Array.fill(2)(rng.nextDouble())),

@@ -19,6 +19,7 @@ abstract class Lab(characteristic: Int, precision: Double = 1e-9):
   // BEGIN generated re-exports
   // regenerate: python3 .claude/scripts/tdalab-exports.py (checked by TDAlabExportsSpec)
   export org.appliedtopology.tda4j.{
+    ∆,
     AlphaBackend,
     AlphaComplexDQP,
     AlphaComplexDQPBuilder,
@@ -137,8 +138,7 @@ abstract class Lab(characteristic: Int, precision: Double = 1e-9):
     VietorisRips,
     Witness,
     WitnessGeometry,
-    WitnessMetricSpace,
-    ∆
+    WitnessMetricSpace
   }
   export org.appliedtopology.tda4j.sset.{
     BettiNumbers,

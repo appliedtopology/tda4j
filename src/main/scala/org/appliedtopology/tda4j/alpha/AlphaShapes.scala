@@ -22,8 +22,8 @@ final case class Epsilon(epsilon: Double)
 
 /** Which alpha-complex construction `AlphaShapes(points, backend)` uses: `BowyerWatson` (incremental Delaunay with
   * exact predicates, points spanning at most 4 dimensions), `Helix` (Delaunay by the Helix algorithm, any dimension),
-  * `DQP` (dual quadratic programs, any dimension, built only up to a radius), or `Default` (whichever the library expects
-  * to be fastest: see `AlphaShapes.apply`).
+  * `DQP` (dual quadratic programs, any dimension, built only up to a radius), or `Default` (whichever the library
+  * expects to be fastest: see `AlphaShapes.apply`).
   */
 enum AlphaBackend:
   case Default, Helix, DQP, BowyerWatson
@@ -31,11 +31,11 @@ enum AlphaBackend:
 object AlphaBackend:
   /** The facade's string spelling (`"default"`, `"helix"`, `"dqp"`, `"bowyer-watson"`, any case). */
   def parse(name: String): AlphaBackend = name.toLowerCase match
-    case "default"                                       => Default
-    case "helix"                                         => Helix
-    case "dqp"                                           => DQP
+    case "default"                               => Default
+    case "helix"                                 => Helix
+    case "dqp"                                   => DQP
     case "bowyer-watson" | "bowyerwatson" | "bw" => BowyerWatson
-    case other                                           =>
+    case other                                   =>
       throw IllegalArgumentException(
         s"Unknown alpha complex backend: '$other' (expected default, bowyer-watson, helix or DQP)"
       )
@@ -57,9 +57,9 @@ object AlphaShapes extends PointCloudComplex:
     *   - `DQP` decides each simplex on its own, dimension by dimension, among points within `2 maxRadius` of each
     *     other: it never builds the whole triangulation, so a small `maxRadius` (or a low `maxDimension` in high
     *     ambient dimension) makes it much cheaper, while without a radius it is far slower than a triangulation.
-    *   - `Default` picks: without a `maxRadius`, BowyerWatson for points in at most 4 dimensions and Helix above;
-    *     with one, DQP instead when it is expected to be faster for this radius, from the average number of points
-    *     within `2 maxRadius` of a point (`AlphaShapes.prefersDQP`).
+    *   - `Default` picks: without a `maxRadius`, BowyerWatson for points in at most 4 dimensions and Helix above; with
+    *     one, DQP instead when it is expected to be faster for this radius, from the average number of points within
+    *     `2 maxRadius` of a point (`AlphaShapes.prefersDQP`).
     *
     * In general position every backend gives the same complex: the simplices whose alpha value (radius) is at most
     * `maxRadius`, with the same values. On cospherical points DQP keeps the higher-dimensional simplex they span where
@@ -119,10 +119,10 @@ object AlphaShapes extends PointCloudComplex:
             AlphaComplexDQPStream(points.points, AlphaComplexDQP.euclidean(points.points, r, topDimension))
 
   /** Whether `DQP` is expected to build the alpha complex truncated at radius `r` faster than a triangulation
-    * (`BowyerWatson` up to 4 dimensions, `Helix` above) builds the whole one. DQP's cost grows with the number of points
-    * within `2r` of each point (its neighbour graph); a triangulation's with the point count and the ambient dimension. The thresholds are measured
-    * (`.claude/WORKLOG-helix-construction-speed.md`): the largest average neighbour count at which DQP was still
-    * faster, by point count and ambient dimension.
+    * (`BowyerWatson` up to 4 dimensions, `Helix` above) builds the whole one. DQP's cost grows with the number of
+    * points within `2r` of each point (its neighbour graph); a triangulation's with the point count and the ambient
+    * dimension. The thresholds are measured (`.claude/WORKLOG-helix-construction-speed.md`): the largest average
+    * neighbour count at which DQP was still faster, by point count and ambient dimension.
     */
   def prefersDQP(points: PointCloud, r: Double): Boolean =
     val pts = points.points
@@ -157,12 +157,12 @@ object AlphaShapes extends PointCloudComplex:
       total += math.pow(count, 1.6)
     total / samples
 
-  /** The average neighbour count (within `2r`) up to which DQP is expected to be faster than the triangulation `Default`
-    * would use, for `n` points in ambient dimension `d`. Per point, DQP took about `c_d k^1.6` ms (`c_d = 0.004 *
-    * 2.35^(d-2)`, the constant from 1000-point clouds, the more expensive ones); BowyerWatson about `b_d (n/1000)^0.2`
-    * ms, `b_d` = 0.03, 0.1, 1.1 for `d` = 2..4; Helix in 5-D about `150 (n/1000)^0.4` ms (uniform clouds of 1000-10000
-    * points, this library's own measurements). In dimension 6 and up Helix's triangulation grows so fast that DQP is
-    * preferred whenever a radius is given.
+  /** The average neighbour count (within `2r`) up to which DQP is expected to be faster than the triangulation
+    * `Default` would use, for `n` points in ambient dimension `d`. Per point, DQP took about `c_d k^1.6` ms (`c_d =
+    * 0.004 * 2.35^(d-2)`, the constant from 1000-point clouds, the more expensive ones); BowyerWatson about
+    * `b_d (n/1000)^0.2` ms, `b_d` = 0.03, 0.1, 1.1 for `d` = 2..4; Helix in 5-D about `150 (n/1000)^0.4` ms (uniform
+    * clouds of 1000-10000 points, this library's own measurements). In dimension 6 and up Helix's triangulation grows
+    * so fast that DQP is preferred whenever a radius is given.
     */
   private[tda4j] def dqpNeighbourThreshold(n: Int, d: Int): Double =
     val growth = n / 1000.0
