@@ -242,19 +242,22 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
               else if rb == infinityId then (ra, rb)
               else if birthOf(ra) <= birthOf(rb) then (ra, rb)
               else (rb, ra)
-            val facetBoundary: Map[Simplex[Int], CoefficientT] = facet.boundary[CoefficientT].toMap
+            // The coefficient of `facet` in the boundary of a top cell containing it -- a coboundary entry, read from the
+            // top cell's boundary (the facet's own boundary holds only its faces, so looking a top cell up there gave 0).
+            def coeffToward(top: Simplex[Int]): CoefficientT =
+              top.boundary[CoefficientT].collectFirst { case (f, c) if f == facet => c }.getOrElse(fr.zero)
             val (youngTopId, oldTopId) = if youngRoot == ra then (a, b) else (b, a)
             require(
               youngTopId != infinityId,
               "an engine bug: the infinity dual vertex was treated as the younger side of a merge"
             )
             val youngCoeffAtTop = uf.orientation(youngTopId)
-            val coeffTowardYoung = facetBoundary.getOrElse(topSimplices(youngTopId), fr.zero)
+            val coeffTowardYoung = coeffToward(topSimplices(youngTopId))
             val flip: CoefficientT =
               if oldRoot == infinityId then fr.one
               else
                 val oldCoeffAtTop = uf.orientation(oldTopId)
-                val coeffTowardOld = facetBoundary.getOrElse(topSimplices(oldTopId), fr.zero)
+                val coeffTowardOld = coeffToward(topSimplices(oldTopId))
                 fr.negate(
                   fr.times(fr.times(oldCoeffAtTop, coeffTowardOld), fr.times(youngCoeffAtTop, coeffTowardYoung))
                 )

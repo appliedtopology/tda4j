@@ -91,3 +91,62 @@ class FastRepresentativesSpec extends mutable.Specification:
     yield Chain.from(bar.representative.boundary).isZero()
     checks.forall(identity) must beTrue
   }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // Validity, independent of the reference: a top-degree representative must be a NON-ZERO cycle, alive at the bar's
+  // birth (every cell present by then, one entering exactly then), on images whose dual merges mostly happen away
+  // from `∞` (a blob). Equality with the reference cannot catch a bug the reference shares: both once returned the
+  // zero chain whenever neither merging dual component was `∞`'s (the flip was read from the facet's own boundary,
+  // where no top cell occurs, so it was always zero).
+  // ---------------------------------------------------------------------------------------------------------
+  def validTopRepresentatives(field: FiniteField)(stream: CubicalGridStream): Seq[String] =
+    import field.given
+    given Ordering[Cube] = cubeOrdering
+    val top = stream.ambientDim - 1
+    FastCubicalHomologyEngine[field.Fp]().persistentHomology(stream).filter(_.dim == top).flatMap { bar =>
+      val birth = bar.lower match
+        case ClosedEndpoint(v) => v
+        case other             => Double.NaN
+      val rep = bar.representative
+      val cells = rep.cells
+      val problems = Seq(
+        Option.when(rep.isZero())("zero representative"),
+        Option.when(!Chain.from(rep.boundary).isZero())("not a cycle"),
+        Option.when(cells.exists(c => stream.filtrationValue(c) > birth))("a cell enters after the birth"),
+        Option.when(cells.nonEmpty && !cells.exists(c => stream.filtrationValue(c) == birth))("no cell enters at birth")
+      ).flatten
+      problems.map(p => s"$p: $bar")
+    }
+
+  "Every top-degree representative is a non-zero cycle born with its bar" >> {
+    val problems = for
+      seed <- 0L until 8L
+      stream <- images(seed)
+      field <- Seq(f3, f17)
+      problem <- validTopRepresentatives(field)(stream)
+    yield problem
+    problems.take(5) must beEmpty
+  }
+
+  "Every top-degree alpha representative is a non-zero cycle born with its bar" >> {
+    import f3.given
+    given Ordering[Simplex[Int]] = simplexOrdering[Int]
+    val problems = for
+      seed <- 0L until 10L
+      dim <- Seq(2, 3)
+      rng = new scala.util.Random(seed * 17 + dim)
+      helix = HelixDelaunay(Array.fill(12 + rng.nextInt(12))(Array.fill(dim)(rng.nextDouble())))
+      bar <- scala.util.Try(FastAlphaHomologyEngine[f3.Fp]().persistentHomology(helix)).getOrElse(Nil)
+      if bar.dim == dim - 1
+      birth = bar.lower match
+        case ClosedEndpoint(v) => v
+        case _                 => Double.NaN
+      rep = bar.representative
+      problem <- Seq(
+        Option.when(rep.isZero())("zero representative"),
+        Option.when(!Chain.from(rep.boundary).isZero())("not a cycle"),
+        Option.when(rep.cells.exists(c => helix.filtrationValue(c) > birth))("a cell enters after the birth")
+      ).flatten
+    yield s"$problem: $bar"
+    problems.take(5) must beEmpty
+  }

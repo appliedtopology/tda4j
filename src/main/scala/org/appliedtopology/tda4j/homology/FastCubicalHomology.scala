@@ -251,7 +251,10 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
             // Orientation: `facet`'s own boundary gives its coefficient toward EACH of its (up to two) cofaces
             // (cubeIsOrderedCell's alternating-rank sign rule). Solve for the flip that makes the two cancel once
             // the components are combined (both coefficients are always +-1, so "divide" is "multiply").
-            val facetBoundary: Map[Cube, CoefficientT] = facet.boundary[CoefficientT].toMap
+            // The coefficient of `facet` in the boundary of a top cell containing it -- a coboundary entry, read from the
+            // top cell's boundary (the facet's own boundary holds only its faces, so looking a top cell up there gave 0).
+            def coeffToward(top: Cube): CoefficientT =
+              top.boundary[CoefficientT].collectFirst { case (f, c) if f == facet => c }.getOrElse(fr.zero)
             val (youngTopId, oldTopId) = if youngRoot == ra then (a, b) else (b, a)
             require(
               youngTopId != infinityId,
@@ -259,7 +262,7 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
             )
             val youngTopCube: Cube = topCube(topCoords(youngTopId))
             val youngCoeffAtTop = uf.orientation(youngTopId)
-            val coeffTowardYoung = facetBoundary.getOrElse(youngTopCube, fr.zero)
+            val coeffTowardYoung = coeffToward(youngTopCube)
             // Test the RESOLVED root, not the raw id: `oldTopId` can be a real cell whose component already merged
             // into infinity's via an earlier tied-value edge this same pass. Infinity's component is never summed,
             // so there is nothing to cancel against.
@@ -267,7 +270,7 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
               if oldRoot == infinityId then fr.one
               else
                 val oldCoeffAtTop = uf.orientation(oldTopId)
-                val coeffTowardOld = facetBoundary.getOrElse(topCube(topCoords(oldTopId)), fr.zero)
+                val coeffTowardOld = coeffToward(topCube(topCoords(oldTopId)))
                 // Want: flip * youngCoeffAtTop * coeffTowardYoung + oldCoeffAtTop * coeffTowardOld = 0, i.e.
                 // flip = -(oldCoeffAtTop * coeffTowardOld) / (youngCoeffAtTop * coeffTowardYoung); every factor is
                 // +-1, so division is multiplication.

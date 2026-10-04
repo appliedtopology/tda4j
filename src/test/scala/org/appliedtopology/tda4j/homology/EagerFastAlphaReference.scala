@@ -3,7 +3,8 @@ package org.appliedtopology.tda4j
 import scala.collection.mutable
 
 /** Test oracle: the fast alpha engine as it was before its representative bookkeeping moved to a signed union-find
-  * (`.claude/WORKLOG-fast-cubical-representatives.md`), kept verbatim apart from the class name. It keeps a running
+  * (`.claude/WORKLOG-fast-cubical-representatives.md`), kept as it was apart from the class name and the coboundary-coefficient fix (the merge flip was
+  * read from the facet's own boundary, which made it zero). It keeps a running
   * coefficient map per dual component and copies the surviving component's map on every merge -- quadratic, but
   * obviously right. `FastRepresentativesSpec` checks that the production engine returns exactly the same bars and
   * representatives, in the same order.
@@ -243,7 +244,10 @@ class EagerFastAlphaReference[CoefficientT: Field]:
               else if rb == infinityId then (ra, rb)
               else if birthOf(ra) <= birthOf(rb) then (ra, rb)
               else (rb, ra)
-            val facetBoundary: Map[Simplex[Int], CoefficientT] = facet.boundary[CoefficientT].toMap
+            // The coefficient of `facet` in the boundary of a top cell containing it -- a coboundary entry, read from the
+            // top cell's boundary (the facet's own boundary holds only its faces, so looking a top cell up there gave 0).
+            def coeffToward(top: Simplex[Int]): CoefficientT =
+              top.boundary[CoefficientT].collectFirst { case (f, c) if f == facet => c }.getOrElse(fr.zero)
             val (youngTopId, oldTopId) = if youngRoot == ra then (a, b) else (b, a)
             require(
               youngTopId != infinityId,
@@ -258,7 +262,7 @@ class EagerFastAlphaReference[CoefficientT: Field]:
                 s"dual component missing its own boundary top simplex $youngTop -- an engine bug"
               )
             )
-            val coeffTowardYoung = facetBoundary.getOrElse(youngTop, fr.zero)
+            val coeffTowardYoung = coeffToward(youngTop)
             val flip: CoefficientT =
               oldTop match
                 case None             => fr.one
@@ -270,7 +274,7 @@ class EagerFastAlphaReference[CoefficientT: Field]:
                       s"dual component missing its own boundary top simplex $oldSimplex -- an engine bug"
                     )
                   )
-                  val coeffTowardOld = facetBoundary.getOrElse(oldSimplex, fr.zero)
+                  val coeffTowardOld = coeffToward(oldSimplex)
                   fr.negate(
                     fr.times(fr.times(oldCoeffAtTop, coeffTowardOld), fr.times(youngCoeffAtTop, coeffTowardYoung))
                   )

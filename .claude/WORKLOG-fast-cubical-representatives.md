@@ -113,3 +113,38 @@ CubicalRipser in the paper will show a large constant factor.
 - `homology/FastAlphaHomology.scala`
 - test: `EagerFastCubicalReference.scala`, `EagerFastAlphaReference.scala`, `FastRepresentativesSpec.scala`,
   `FastCubicalProfileDriver.scala`
+
+## Later the same day: the representatives were wrong whenever a merge missed `∞`
+
+While planning a flat-array rewrite, I re-read the merge code and found a bug that both the old code and the port
+above shared:
+- **The cause:** the orientation flip looked up `facet.boundary.getOrElse(topCell, zero)`. That is the coefficient of a
+  top cell in the **facet's own boundary**, which holds only the facet's faces, so the result was always 0.
+- **When `∞` is the surviving side**, the flip is defined as 1, so those bars were fine.
+- **On every other merge, the flip was 0:**
+  - the dying bar's representative was the zero chain;
+  - the absorbed region's coefficients became 0, so later representatives of that component lost their interior
+    cancellation and had cells from after the bar's birth.
+- **Why the tests missed it:**
+  - `FastRepresentativesSpec`'s equality check shares the bug with its reference;
+  - "closed over F₃" is true of the zero chain;
+  - the hand-built fixtures in `FastCubicalHomologySpec` mostly merge into `∞`.
+
+**The fix:** the coefficient is read from the **top cell's** boundary. It is the coboundary entry the derivation
+intended: `coeffToward(top)` finds `facet` in `top.boundary`. Applied in four places:
+- `FastCubicalHomologyEngine`;
+- `FastAlphaHomologyEngine`;
+- both test references, so the equality gate stays a correct oracle (their docs say so).
+
+**The new gate** (two examples in `FastRepresentativesSpec`, independent of any reference): every top-degree
+representative of the fast cubical and fast alpha engines must be:
+- non-zero;
+- closed;
+- made of cells present at the bar's birth;
+- for cubical, with one cell entering exactly at birth.
+
+The inputs are tie-heavy, noisy, blob, missing-pixel and 3-D images over F₃ and F₁₇, and 2-D and 3-D Helix clouds.
+- **Before the fix:** the gate failed with zero representatives, and with cells entering after birth.
+- **After:** all 31 tests in `FastRepresentativesSpec`, `FastCubicalHomologySpec` and `FastAlphaHomologySpec` pass.
+
+**The lesson:** an equality-with-reference gate must be paired with a validity check that a shared bug cannot pass.

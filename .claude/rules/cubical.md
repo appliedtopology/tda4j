@@ -35,7 +35,10 @@ Representatives: each top cell's sign relative to its dual component's root live
 compression composes signs; merges never touch members); a reported bar's cycle is the boundary of the dying region,
 read off the frozen merge-forest subtree. Never go back to per-component coefficient maps: copying them on every merge
 was quadratic on a bright object on a dark background (80 s at 200²). Any change must keep `FastRepresentativesSpec`
-(equality with `EagerFastCubicalReference`/`EagerFastAlphaReference`, term for term) green.
+green: equality with `EagerFastCubicalReference`/`EagerFastAlphaReference`, term for term, AND its validity examples
+(every top-degree representative non-zero, closed, born with its bar) -- equality alone once passed a shared bug that
+read the merge flip from the facet's own boundary (always 0), zeroing every representative of a merge away from `∞`.
+The flip's coefficients are coboundary entries: `facet` looked up in the TOP cell's boundary.
 `WORKLOG-fast-cubical-engine.md`, `WORKLOG-fast-cubical-representatives.md`.
 
 **At ambient dim `>= 3`**, `chunks` handles residual middle dimensions `1..d-2` (no duality shortcut) via
