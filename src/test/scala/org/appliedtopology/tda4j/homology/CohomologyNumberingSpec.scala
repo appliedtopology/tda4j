@@ -18,7 +18,23 @@ class CohomologyNumberingSpec extends Specification:
       val (bar, pair) = entry
       val rep = bar.representative
       (bar.dim, bar.lower, bar.upper, pair, rep.terms.toSet, rep.leadingCell)
-    dense.nonEmpty && dense.map(key) == keyed.map(key)
+    // Cycles: the engine's involution runs on cell numbers; the oracle runs it on the cells.
+    val engineCycles = CellularCohomologyEngine[CellT, C, F]().persistentHomology(stream, includeZeroLength = true)
+    val keyedCycles = Involution
+      .cycles[CellT, C](keyed.map(_._2).toIndexedSeq, denseOrder.reverse, (cell, _) => cell.boundary[C])
+      .map(_._1)
+    val limit = stream match
+      case s: StratifiedCellStream[?, ?] => s.homologyDegreeLimit.getOrElse(Int.MaxValue)
+      case _                             => Int.MaxValue
+    val expectedCycles = keyed.zip(keyedCycles).collect {
+      case ((bar, pair), z) if pair.dim <= limit =>
+        (bar.dim, bar.lower, bar.upper, z.terms.toSet, z.leadingCell)
+    }
+    val actualCycles = engineCycles.map { bar =>
+      val z = bar.representative
+      (bar.dim, bar.lower, bar.upper, z.terms.toSet, z.leadingCell)
+    }
+    dense.nonEmpty && dense.map(key) == keyed.map(key) && actualCycles == expectedCycles
 
   private val ff = FiniteField(17)
   import ff.given
@@ -39,9 +55,13 @@ class CohomologyNumberingSpec extends Specification:
       val cloud = Array.fill(25)(Array(rnd.nextDouble(), rnd.nextDouble(), rnd.nextDouble()))
       val pixels = Array.tabulate(9, 9)((i, j) => ((i * 7 + j * 3) % 5).toDouble)
       (same[Simplex[Int], ff.Fp, Double](VietorisRips(EuclideanMetricSpace(cloud), maxDimension = 2)) must beTrue)
-        .and(same[Simplex[Int], ff.Fp, Double](Cech(EuclideanMetricSpace(cloud.take(12)), maxDimension = 2)) must beTrue)
         .and(
-          same[Cube, ff.Fp, Double](CubicalImage.fromFlatArray(IndexedSeq(9, 9), pixels.flatten.toIndexedSeq)) must beTrue
+          same[Simplex[Int], ff.Fp, Double](Cech(EuclideanMetricSpace(cloud.take(12)), maxDimension = 2)) must beTrue
+        )
+        .and(
+          same[Cube, ff.Fp, Double](
+            CubicalImage.fromFlatArray(IndexedSeq(9, 9), pixels.flatten.toIndexedSeq)
+          ) must beTrue
         )
     }
     "match it on simplicial sets with Int filtration values, over F3 (RP^2 and RP^4 have 2-torsion)" in {
