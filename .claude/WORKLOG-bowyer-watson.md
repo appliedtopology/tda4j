@@ -73,3 +73,14 @@ within 2r, i.e. almost never). `fast-alpha` takes either triangulation; BW guara
 triangulations across insertion seeds on 2-D/3-D/4-D grids and small-integer clouds; brute-force empty spheres;
 repeats; collinear input in its 1-D span; the 4-D cap), `AlphaDispatchSpec` (three-way agreement with a radius; the
 default choice), `FastAlphaHomologySpec` (fast-alpha on BW = naive, grids included).
+
+## Before the PR: small inputs and a last-bit tie
+
+- `Default` routes tiny inputs to BW now, so probed (empty, 1 point, 5 copies of one point, 2 and 3 points in 3-D):
+  BW threw on 1 point (`None.get`, the affine projection) and gave 5 infinite H0 bars for 5 copies (the base only
+  emitted dimensions up to the affine rank 0, so the value-0 duplicate edges were dropped). Both fixed; Helix throws
+  on 0/1/5-copies inputs too (unchanged).
+- The CLI's square fixture (4 cocircular points + 2): Helix 10 bars, BW 9. Not a triangulation error: the two pick
+  different diagonals, and Helix's diagonal had a Thales-tied triangle, its own radius and the triangle's radius
+  differing by 2e-16, a bar of that length. Rule now in the base: a Gabriel value within relative 1e-12 of the
+  smallest coface value IS that value (same sphere). Both backends give the same 9 bars.

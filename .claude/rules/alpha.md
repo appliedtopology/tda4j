@@ -17,7 +17,8 @@ triangulation is valid on grids and the SAME for every insertion order (`BowyerW
 Betti numbers). Exactly repeated points: smallest index kept, others joined by a value-0 edge. Refuses an affine span
 above 4-D (n! expansion); never raise the cap without a different determinant. Equal to Helix within 1e-9 in general
 position. Both triangulators extend `DelaunayAlphaShapes` (faces/values/sort on flat arrays, Householder circumspheres:
-never the Gram system, it lost 5e-5 on a 4-D sliver).
+never the Gram system, it lost 5e-5 on a 4-D sliver). A Gabriel value within relative `1e-12` of its smallest coface value is set
+to it (a vertex on the sphere = the same sphere; otherwise a ~1e-16 bar that depends on the diagonal chosen).
 
 `WORKLOG-alpha-complex.md`, `HANDOFF-alpha-complex.md`. `AlphaShapes(points, backend)`: `Default` → BowyerWatson
 (width <= 4) or Helix; DQP only with a radius via `prefersDQP`, or explicitly. Alpha and VR/Ripser are separate sections with minimal interaction
