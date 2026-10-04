@@ -146,6 +146,12 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
   val points: Seq[Point] = pts.map(Point.apply).toIndexedSeq
   val ambientDimension: Int = points.head.getDimension
   private val validated: mutable.Set[DelaunaySimplex] = mutable.Set.empty
+  // The simplices of `validated`, for a hashed "already accepted?" test; a scan of `validated` comparing sorted sets
+  // was most of the construction time (`.claude/WORKLOG-helix-construction-speed.md`).
+  private val validatedSimplices: mutable.HashSet[Simplex[Int]] = mutable.HashSet.empty
+  private def accept(ds: DelaunaySimplex): Unit =
+    validated.add(ds)
+    validatedSimplices.add(ds.simplex)
 
   private case class FrontierCase(
     facet: Simplex[Int],
@@ -166,10 +172,39 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
   private val visitedFacets: mutable.Set[Simplex[Int]] = mutable.Set.empty
   private val cospherical: mutable.Set[Set[Int]] = mutable.Set.empty
 
+  // The queued, not cancelled, frontier cases by facet. Removing a case from the middle of `frontierCases` scanned the
+  // whole queue comparing sorted sets (`.claude/WORKLOG-helix-construction-speed.md`); instead a removed case is
+  // marked cancelled (by identity) and skipped when it is taken, which leaves the order of the others unchanged.
+  private val queuedByFacet: mutable.HashMap[Simplex[Int], mutable.ArrayBuffer[FrontierCase]] = mutable.HashMap.empty
+  private val cancelled: java.util.Set[FrontierCase] =
+    java.util.Collections.newSetFromMap(new java.util.IdentityHashMap[FrontierCase, java.lang.Boolean]())
+
+  private def enqueue(fc: FrontierCase): Unit =
+    frontierCases.put(fc)
+    queuedByFacet.getOrElseUpdate(fc.facet, mutable.ArrayBuffer.empty) += fc
+
+  private def cancel(facet: Simplex[Int]): Boolean =
+    queuedByFacet.remove(facet) match
+      case Some(cases) if cases.nonEmpty =>
+        cases.foreach(cancelled.add)
+        true
+      case _ => false
+
+  /** The next frontier case that was not cancelled, if any. */
+  private def nextFrontierCase(): Option[FrontierCase] =
+    var next: Option[FrontierCase] = None
+    while next.isEmpty && !frontierCases.isEmpty do
+      val fc = frontierCases.take()
+      if !cancelled.remove(fc) then
+        queuedByFacet.get(fc.facet).foreach { cases =>
+          cases.remove(cases.indexWhere(_ eq fc))
+          if cases.isEmpty then queuedByFacet.remove(fc.facet)
+        }
+        next = Some(fc)
+    next
+
   private def addFrontierCase(simplex: DelaunaySimplex, complement: Int): Unit =
-    val newFacet = simplex.simplex - complement
-    val removed = frontierCases.removeIf((fc: FrontierCase) => fc.facet.toSortedSet == newFacet.toSortedSet)
-    if !removed then frontierCases.put(FrontierCase(simplex, complement))
+    if !cancel(simplex.simplex - complement) then enqueue(FrontierCase(simplex, complement))
 
   private def handleCosphericalPoints(
     cosphericalPoints: Seq[Int],
@@ -181,7 +216,8 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
     // so we need to pick a tiling subset of them. We start a local version of this frontier walking algorithm
     // we also need to make sure we don't come back inside this cospherical point set in a later iteration
     cospherical.add(spherepoints.toSet)
-    frontierCases.removeIf((fc: FrontierCase) => fc.facet.toSet.subsetOf(cosphericalPoints.toSet))
+    val cosphericalSet = cosphericalPoints.toSet
+    queuedByFacet.keys.filter(_.toSet.subsetOf(cosphericalSet)).toList.foreach(cancel)
     spherepoints.subtractAll(newDelaunaySimplex.simplex.toSeq)
     // EVERY facet of `newDelaunaySimplex`, not just the ones built from `frontierCase.facet`'s own vertices.
     // `frontierCase.facet` is exactly `newDelaunaySimplex.simplex` minus the complement vertex (the one the
@@ -217,7 +253,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
       spherepoints.filter(hyperplane.isLight.compose(points)).headOption match
         case Some(pi) =>
           val nds = DelaunaySimplex(facet + pi, newDelaunaySimplex.circumsphere)
-          validated.add(nds)
+          accept(nds)
           facets.addAll(facet.toSeq.toSeq.map(pj => (Simplex.from(nds.simplex.toSet.diff(Set(pj)).toSeq), nds.simplex)))
           spherepoints.remove(pi)
         case None =>
@@ -336,7 +372,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
             if containedPoints.isEmpty then
               done = true
               startingSimplex = candidate
-              validated.add(DelaunaySimplex(Simplex.from((candidate + pi).toSeq), circumsphere))
+              accept(DelaunaySimplex(Simplex.from((candidate + pi).toSeq), circumsphere))
     assert(
       validated.nonEmpty,
       s"HelixDelaunayBuilder: no empty-circumsphere seed simplex found across ${candidateStartingSimplices.size} " +
@@ -358,11 +394,16 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
           FrontierCase(seedDelaunaySimplex, seedDelaunaySimplex.simplex.toSet.diff(startingSimplex).head),
           seedDelaunaySimplex
         )
-      case spherepoints => startingSimplex.foreach(pi => frontierCases.put(FrontierCase(seedDelaunaySimplex, pi)))
+      case spherepoints => startingSimplex.foreach(pi => enqueue(FrontierCase(seedDelaunaySimplex, pi)))
 
     // handle a frontier case
-    while !frontierCases.isEmpty do
-      val frontierCase = frontierCases.take()
+    // Taken only after the previous case is processed: processing can cancel queued cases.
+    var pending: Option[FrontierCase] = None
+    while
+      pending = nextFrontierCase()
+      pending.isDefined
+    do
+      val frontierCase = pending.get
       if !visitedFacets.contains(frontierCase.facet) then
         visitedFacets.add(frontierCase.facet)
         // "light points" (in front of the facet) split into inside and outside a small circumsphere of the facet
@@ -375,7 +416,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
             DelaunaySimplex(frontierCase.facet + pi, Hypersphere((frontierCase.facet + pi).toSeq.toSeq.map(points)))
           )
           .collectFirst { case ds if !points.exists(ds.circumsphere.contains) => ds } match
-          case Some(newDelaunaySimplex) if !validated.exists(ds => newDelaunaySimplex.simplex == ds.simplex) =>
+          case Some(newDelaunaySimplex) if !validatedSimplices.contains(newDelaunaySimplex.simplex) =>
             // check whether we have "too many" cospherical points; in that case we have to tile them on our own
             val spherepoints: mutable.SortedSet[Int] = points.indices
               .map(i => (i, newDelaunaySimplex.circumsphere.center.getDistance(points(i))))
@@ -384,10 +425,10 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
               .to(mutable.SortedSet)
             if spherepoints.size > ambientDimension + 1 then
               if !cospherical.contains(spherepoints.toSet) then
-                validated.add(newDelaunaySimplex)
+                accept(newDelaunaySimplex)
                 handleCosphericalPoints(spherepoints.toSeq, frontierCase, newDelaunaySimplex)
             else
-              validated.add(newDelaunaySimplex)
+              accept(newDelaunaySimplex)
               frontierCase.facet.toSeq.toSeq
                 .foreach(vi => addFrontierCase(newDelaunaySimplex, vi))
           case Some(newDelaunaySimplex) => ()

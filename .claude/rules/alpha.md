@@ -38,6 +38,12 @@ Gabriel rule once covered edges only, so 3-D lost most `H_2` (`WORKLOG-helix-alp
 Helix must equal DQP bar for bar** (`HelixDqpAgreementSpec`, a CI gate in 2-D/3-D/4-D); only degenerate inputs stay
 diagnostic.
 
+**Helix construction speed** (`WORKLOG-helix-construction-speed.md`): DQP is ~100x slower than Helix (2-D, 1000
+points), so Helix stays the default. The frontier walk is all of Helix's time; accepted simplices and queued facets are
+hash-indexed (cancelled frontier cases are skipped when taken, preserving queue order). The candidate order per facet
+(HashSet iteration, then a stable sort by distance) is the tie-break on cospherical input: changing it changes the
+tiling, so treat it as behaviour, not an optimization detail.
+
 **One root mechanism (near-cospherical clusters, order-dependent facet-pivot choices) produces two DIFFERENT
 outcomes — don't conflate, a naive set-diff can't tell them apart**:
 1. Order-dependent disagreement with DQP, **WONTFIX** (project lead) — the discarded side is reachable some
