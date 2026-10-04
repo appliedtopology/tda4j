@@ -31,11 +31,20 @@ cells → dual edges (`∞` sentinel for the outer boundary); primal `H_{d-1}` o
 endpoints swapped; combined with a primal `H_0` union-find, covers a 2D grid completely with no `Chain`
 reduction. **`∞` must be checked explicitly as unconditional elder of any merge, not inferred from `birthOf(∞)`
 being largest** — a real top cell can tie against it (see worklog before touching `computeDualTopDimension`).
-Representatives: running signed sum of top cells per dual component, oriented via each merge's facet boundary
-coefficients. `WORKLOG-fast-cubical-engine.md`.
+Representatives: each top cell's sign relative to its dual component's root lives in `SignedUnionFind` (path
+compression composes signs; merges never touch members); a reported bar's cycle is the boundary of the dying region,
+read off the frozen merge-forest subtree. Never go back to per-component coefficient maps: copying them on every merge
+was quadratic on a bright object on a dark background (80 s at 200²). Any change must keep `FastRepresentativesSpec`
+green: equality with `EagerFastCubicalReference`/`EagerFastAlphaReference`, term for term, AND its validity examples
+(every top-degree representative non-zero, closed, born with its bar) -- equality alone once passed a shared bug that
+read the merge flip from the facet's own boundary (always 0), zeroing every representative of a merge away from `∞`.
+The flip's coefficients are coboundary entries: `facet` looked up in the TOP cell's boundary.
+`WORKLOG-fast-cubical-engine.md`, `WORKLOG-fast-cubical-representatives.md`.
 
-**At ambient dim `>= 3`**, `chunks` handles residual middle dimensions `1..d-2` (no duality shortcut) via
-`CellularPersistenceInChunksEngine` on a `LimitedCubicalGridStream` hiding real top cells (`chunks`'s own
-`maxDim=d-2` already discards the incomplete bars this would otherwise wrongly leave open). Cross-validated at
+**At ambient dim `>= 3`**, the cohomology engine handles residual middle dimensions `1..d-2` (no duality shortcut)
+via `CellularCohomologyEngine.persistentHomology` on a `LimitedCubicalGridStream` hiding real top cells, keeping
+degrees `<= d-2` (chunks there made the 3-D hybrid 3-7x SLOWER than plain cohomology; with cohomology it is faster at
+every measured size -- `WORKLOG-fast-cubical-representatives.md`). The truncating views declare
+`homologyDegreeLimit = maxDim - 1`, so the involution skips the artificial top degree. Cross-validated at
 d=3 + one d=4 smoke test; not validated d≥5, win shrinks with d by design.
 `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.

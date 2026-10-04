@@ -5,8 +5,8 @@ import scala.collection.mutable
 /** Persistent homology of a cubical grid by union-find instead of matrix reduction (after Le Breton, Szustakowski and
   * Piraud, arXiv:2606.04801, extended here to any coefficient field and to representatives): degree 0 by union-find on
   * the vertices and edges, the top degree `d - 1` (`d` the grid's dimension) by union-find on the dual graph. In 2-D
-  * those cover everything; in dimension 3 and up the degrees in between are computed by the chunks engine on the grid
-  * without its top cells. Requires `d >= 2`.
+  * those cover everything; in dimension 3 and up the degrees in between are computed by the cohomology engine on the
+  * grid without its top cells. Requires `d >= 2`.
   *
   * The dual graph: the top cells (pixels) are vertices, the codimension-1 cells (facets) edges between the one or two
   * top cells containing them, with one extra vertex `∞`, at value `+Infinity`, on the far side of every facet on the
@@ -14,9 +14,10 @@ import scala.collection.mutable
   * graph's superlevel filtration: union-find in decreasing value with the elder rule, each merge giving the primal bar
   * with birth and death swapped. `∞`'s component never dies.
   *
-  * Representatives: each dual component keeps a signed sum of its top cells, oriented consistently as components merge
-  * (the sign flip is solved from the merging facet's two boundary coefficients, both `±1`), so that interior facets
-  * cancel; when a component dies, its representative is the boundary of that sum.
+  * Representatives: each top cell carries a sign in its dual component, kept consistent as components merge (the sign
+  * flip is solved from the merging facet's two boundary coefficients, both `±1`) so that interior facets cancel; when a
+  * component dies, its representative is the boundary of its signed sum of top cells. A merge costs nearly constant
+  * time; a representative costs time proportional to its region, and only reported bars get one.
   */
 class FastCubicalHomologyEngine[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
@@ -29,37 +30,50 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
     stream: CubicalGridStream,
     includeZeroLength: Boolean = false
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
+    compute(stream, includeZeroLength, representatives = true)
+
+  /** The same bars without the top degree's representatives (their annotation is `None`): only for measuring what
+    * representatives cost (`bench/`). Every public path computes them.
+    */
+  private[tda4j] def barsWithoutTopRepresentatives(
+    stream: CubicalGridStream,
+    includeZeroLength: Boolean = false
+  ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
+    compute(stream, includeZeroLength, representatives = false)
+
+  private def compute(
+    stream: CubicalGridStream,
+    includeZeroLength: Boolean,
+    representatives: Boolean
+  ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     require(
       stream.ambientDim >= 2,
       s"FastCubicalHomologyEngine requires ambient dimension >= 2, got ${stream.ambientDim}"
     )
     val bars =
       if stream.ambientDim == 2 then
-        computeH0(stream, includeZeroLength) ++ computeDualTopDimension(stream, includeZeroLength)
-      else computeMiddleDimensions(stream, includeZeroLength) ++ computeDualTopDimension(stream, includeZeroLength)
+        computeH0(stream, includeZeroLength) ++ computeDualTopDimension(stream, includeZeroLength, representatives)
+      else
+        computeMiddleDimensions(stream, includeZeroLength) ++
+          computeDualTopDimension(stream, includeZeroLength, representatives)
     bars
 
   // -------------------------------------------------------------------------------------------------------------
-  // d >= 3's "middle" dimensions (1 <= k <= d-2): no duality shortcut exists for these, so they're handed to
-  // chunks -- run on a view that hides the real top-dimensional cells entirely (never offered to `chunks` at
-  // all, not merely filtered out of its report), so that engine's own general Chain reduction never touches the
-  // (often largest) top dimension. `chunks`'s own maxDim = d-2 asks it to walk 0..d-1 (exactly what the
-  // truncated stream provides) and report <= d-2 -- its own pre-existing "drop the incomplete top bar" filtering
-  // already discards the bars a truncation would otherwise wrongly leave open, the same mechanism naive/
-  // cohomology already rely on for their own maxDim. This also yields H_0 as a side effect of chunks's own
-  // unionFindDim01 fast path, at no extra cost over what chunks was going to do anyway -- no need to separately
-  // call computeH0 here (unlike the d=2 path above, where computeH0 is the ONLY dimension-0 computation and
-  // invoking chunks at all would be pure overhead on an empty middle-dimension range).
-  // See .claude/DESIGN-fast-engines-hybrid-middle-dimensions.md for the full derivation.
+  // d >= 3's "middle" degrees (1 <= k <= d-2) have no duality shortcut. They go to the cohomology engine on a view
+  // that hides the top-dimensional cells (so the largest dimension never enters a reduction); the view declares
+  // homologyDegreeLimit = d - 2, so its artificial degree d-1 classes are skipped by the involution, and we keep
+  // degrees <= d-2. H_0 comes out of the same computation. Cohomology rather than chunks: with chunks the 3-D hybrid
+  // was slower than plain cohomology on the whole image (.claude/WORKLOG-fast-cubical-representatives.md).
+  // .claude/DESIGN-fast-engines-hybrid-middle-dimensions.md has the derivation of the hybrid itself.
   // -------------------------------------------------------------------------------------------------------------
   private def computeMiddleDimensions(
     stream: CubicalGridStream,
     includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     val truncated = LimitedCubicalGridStream(stream, stream.ambientDim - 1)
-    CellularPersistenceInChunksEngine[Cube, CoefficientT](stream.ambientDim - 2)
-      .persistentHomology(truncated)
-      .barcodeAt(Double.PositiveInfinity, includeZeroLength)
+    CellularCohomologyEngine[Cube, CoefficientT, Double]()
+      .persistentHomology(truncated, includeZeroLength)
+      .filter(_.dim <= stream.ambientDim - 2)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
     if !lower && v == Double.PositiveInfinity then PositiveInfinity()
@@ -71,14 +85,108 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
   // CellularPersistenceInChunksEngine.unionFindDim01's own already-validated pattern (no dimension-1
   // cycle-tracking needed here, since H_1 comes from the dual mechanism below instead).
   // -------------------------------------------------------------------------------------------------------------
+  // Row-major strides of `shape`.
+  private def strides(shape: Array[Int]): Array[Int] =
+    val s = new Array[Int](shape.length)
+    s(shape.length - 1) = 1
+    for i <- shape.length - 2 to 0 by -1 do s(i) = s(i + 1) * shape(i + 1)
+    s
+
+  // Weights turning a cube's doubled-coordinate encoding (coordinate i in 0 .. 2 shape(i)) into a Long ordered like
+  // the encoding itself, lexicographically.
+  private def encodingWeights(shape: Array[Int]): Array[Long] =
+    val w = new Array[Long](shape.length)
+    w(shape.length - 1) = 1L
+    for i <- shape.length - 2 to 0 by -1 do w(i) = w(i + 1) * (2L * shape(i + 1) + 1L)
+    w
+
+  // The top cells' values, row-major.
+  private def pixelValues(stream: CubicalGridStream): Array[Double] =
+    val shape = stream.shape.toArray
+    val pstride = strides(shape)
+    Array.tabulate(shape.product)(p =>
+      stream.topCellValue(IndexedSeq.tabulate(shape.length)(i => (p / pstride(i)) % shape(i)))
+    )
+
   private def computeH0(
     stream: CubicalGridStream,
     includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
-    val vertices: Vector[Cube] = stream.iterateDimension.applyOrElse(0, (_: Int) => Iterator.empty).toVector
-    val vertexIndex: Map[Cube, Int] = vertices.zipWithIndex.toMap
-    val parent: Array[Int] = Array.range(0, vertices.size)
+    // Flat arrays throughout: vertices are numbered in mixed radix over the (shape(i) + 1)-point grid, an edge is
+    // (axis, lower vertex), and values come straight from the pixels (in the T-construction a cell's value is the
+    // minimum over the pixels containing it). Cubes are built only for the bars' representatives. The edges are
+    // processed in exactly the stream's order -- value ascending, then the cube's doubled-coordinate encoding
+    // DESCENDING (`filtrationOrdering.reverse`) -- and essential classes are listed in the stream's vertex order, so
+    // the bars equal what a union-find over the stream's own cells gives, term for term.
+    val d = stream.ambientDim
+    val shape = stream.shape.toArray
+    val vdims = shape.map(_ + 1)
+    val vstride = new Array[Int](d)
+    vstride(d - 1) = 1
+    for i <- d - 2 to 0 by -1 do vstride(i) = vstride(i + 1) * vdims(i + 1)
+    val numVertices = vdims.foldLeft(1)(_ * _)
+    val encWeight = encodingWeights(shape)
+    val pixels = pixelValues(stream)
+    def pixel(coords: Array[Int]): Double =
+      var p = 0
+      for i <- 0 until d do p = p * shape(i) + coords(i)
+      pixels(p)
 
+    def vertexCoords(v: Int): Array[Int] =
+      val c = new Array[Int](d)
+      var rem = v
+      for i <- 0 until d do
+        c(i) = rem / vstride(i)
+        rem = rem % vstride(i)
+      c
+
+    // The minimum over the pixels containing the cell with lower corner `a` and non-degenerate axis `axis` (-1: none).
+    val choice = new Array[Int](d)
+    def cellValue(a: Array[Int], axis: Int): Double =
+      var best = Double.PositiveInfinity
+      val free = (0 until d).filter(_ != axis)
+      for mask <- 0 until (1 << free.size) do
+        var ok = true
+        for (i, b) <- free.zipWithIndex do
+          val v = a(i) - ((mask >> b) & 1)
+          choice(i) = v
+          if v < 0 || v >= shape(i) then ok = false
+        if axis >= 0 then choice(axis) = a(axis)
+        if ok then best = math.min(best, pixel(choice))
+      best
+
+    val vertexValue = new Array[Double](numVertices)
+    val vertexKey = new Array[Long](numVertices)
+    for v <- 0 until numVertices do
+      val a = vertexCoords(v)
+      vertexValue(v) = cellValue(a, -1)
+      var key = 0L
+      for i <- 0 until d do key += 2L * a(i) * encWeight(i)
+      vertexKey(v) = key
+
+    // Edges: id = axis * numVertices + lower vertex, kept only where the edge lies in the grid.
+    val edgeBuf = mutable.ArrayBuilder.make[Int]
+    for axis <- 0 until d; v <- 0 until numVertices do
+      if (v / vstride(axis)) % vdims(axis) < shape(axis) then edgeBuf += axis * numVertices + v
+    val edges = edgeBuf.result()
+    val edgeValue = new Array[Double](edges.length)
+    val edgeKey = new Array[Long](edges.length)
+    for k <- edges.indices do
+      val axis = edges(k) / numVertices
+      val v = edges(k) % numVertices
+      edgeValue(k) = cellValue(vertexCoords(v), axis)
+      edgeKey(k) = vertexKey(v) + encWeight(axis)
+
+    // Stream order: value ascending, then encoding descending.
+    def streamOrder(values: Array[Double], keys: Array[Long], n: Int): Array[Int] =
+      SortIndices.sort(
+        n,
+        (x, y) =>
+          val c = java.lang.Double.compare(values(x), values(y))
+          if c != 0 then c < 0 else keys(x) > keys(y)
+      )
+
+    val parent = Array.range(0, numVertices)
     def find(i: Int): Int =
       var root = i
       while parent(root) != root do root = parent(root)
@@ -89,36 +197,29 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
         cur = next
       root
 
+    def vertexCube(v: Int): Cube = Cube(vertexCoords(v).toIndexedSeq, Set.empty)
     val bars = mutable.ArrayBuffer.empty[PersistenceBar[Double, Chain[Cube, CoefficientT]]]
-    val edges: Vector[Cube] = stream.iterateDimension.applyOrElse(1, (_: Int) => Iterator.empty).toVector
-    // Ascending order (oldest first) via the stream's own filtrationOrdering, exactly like unionFindDim01 relies
-    // on the stream's own `.iterator`/`iterateDimension` ordering -- `filtrationOrdering.reverse` is "oldest
-    // first" per this codebase's universal convention (smaller-under-filtrationOrdering = younger).
-    val orderedEdges = edges.sorted(using stream.filtrationOrdering.reverse)
-    for edge <- orderedEdges do
-      val ends = edge.boundary[CoefficientT].map(_._1)
-      val r0 = find(vertexIndex(ends(0)))
-      val r1 = find(vertexIndex(ends(1)))
+    for k <- streamOrder(edgeValue, edgeKey, edges.length) do
+      val axis = edges(k) / numVertices
+      val lower = edges(k) % numVertices
+      val upper = lower + vstride(axis)
+      // The edge's boundary lists its upper endpoint first; the elder rule keeps that side on a tie.
+      val r0 = find(upper)
+      val r1 = find(lower)
       if r0 != r1 then
-        val v0Val = stream.filtrationValue(vertices(r0))
-        val v1Val = stream.filtrationValue(vertices(r1))
-        // Elder rule by ACTUAL value (ascending processing: smaller value = older): the larger-value root is
-        // younger and dies here.
-        val (youngRoot, oldRoot) = if v0Val <= v1Val then (r1, r0) else (r0, r1)
+        val (youngRoot, oldRoot) = if vertexValue(r0) <= vertexValue(r1) then (r1, r0) else (r0, r1)
         parent(youngRoot) = oldRoot
-        val dying = vertices(youngRoot)
-        val (birth, death) = (stream.filtrationValue(dying), stream.filtrationValue(edge))
+        val (birth, death) = (vertexValue(youngRoot), edgeValue(k))
         if includeZeroLength || birth != death then
-          bars += new PersistenceBar(0, endpoint(true)(birth), endpoint(false)(death), Some(Chain(dying)))
-    vertices.indices.foreach { i =>
-      if find(i) == i then
-        bars += new PersistenceBar(
-          0,
-          endpoint(true)(stream.filtrationValue(vertices(i))),
-          PositiveInfinity(),
-          Some(Chain(vertices(i)))
-        )
-    }
+          bars += new PersistenceBar(
+            0,
+            endpoint(true)(birth),
+            endpoint(false)(death),
+            Some(Chain(vertexCube(youngRoot)))
+          )
+    for v <- streamOrder(vertexValue, vertexKey, numVertices) do
+      if find(v) == v then
+        bars += new PersistenceBar(0, endpoint(true)(vertexValue(v)), PositiveInfinity(), Some(Chain(vertexCube(v))))
     bars.toList
 
   // -------------------------------------------------------------------------------------------------------------
@@ -127,210 +228,156 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
   // -------------------------------------------------------------------------------------------------------------
   private def computeDualTopDimension(
     stream: CubicalGridStream,
-    includeZeroLength: Boolean
+    includeZeroLength: Boolean,
+    representatives: Boolean
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
-    val shape = stream.shape
-    val ambientDim = stream.ambientDim
-
-    def topCoordsIterator: Iterator[IndexedSeq[Int]] =
-      shape.foldLeft(Iterator(IndexedSeq.empty[Int])) { (acc, n) =>
-        for prefix <- acc; v <- (0 until n).iterator yield prefix :+ v
-      }
-
-    val topCoords: Vector[IndexedSeq[Int]] = topCoordsIterator.toVector
-    val topIndex: Map[IndexedSeq[Int], Int] = topCoords.zipWithIndex.toMap
-    val numTop = topCoords.size
+    // Flat arrays, as in computeH0: top cells (pixels) are numbered row-major, a facet is (degenerate axis, lower
+    // corner) on the grid of facets, and cubes are built only for the representatives of reported bars. The events are
+    // processed in the same order as a sort of the cells themselves: value DESCENDING, top cells before facets at a
+    // tied value (load-bearing, see the design note), then top cells by coordinates and facets by their
+    // doubled-coordinate encoding, both lexicographically ascending.
+    val d = stream.ambientDim
+    val shape = stream.shape.toArray
+    val pixels = pixelValues(stream)
+    val numTop = pixels.length
     val infinityId = numTop // one past the last real top-cell id
+    val pstride = strides(shape)
+    val encWeight = encodingWeights(shape)
+    def topValue(id: Int): Double = if id == infinityId then Double.PositiveInfinity else pixels(id)
 
-    def topCube(coords: IndexedSeq[Int]): Cube = Cube.unitCube(coords)
-    def topValue(id: Int): Double =
-      if id == infinityId then Double.PositiveInfinity else stream.topCellValue(topCoords(id))
-
-    // Every codimension-1 cube (exactly one degenerate axis), with the 1 or 2 top-cell ids it borders (the
-    // missing side, for a boundary facet of the whole grid, is `infinityId`) -- computed directly from grid
-    // coordinates (the same "regular grid" exploit CubicalGridStream.containingTopCells already uses), not a
-    // generic coboundary walk.
-    case class FacetEvent(facet: Cube, value: Double, a: Int, b: Int)
-    val facetEvents: Vector[FacetEvent] =
-      (0 until ambientDim).flatMap { degenAxis =>
-        val axisRanges: IndexedSeq[Range] =
-          (0 until ambientDim).map(i => if i == degenAxis then 0 to shape(i) else 0 until shape(i))
-        axisRanges
-          .foldLeft(Iterator(IndexedSeq.empty[Int]))((acc, r) => for prefix <- acc; v <- r.iterator yield prefix :+ v)
-          .map { lower =>
-            val facet = Cube(lower, (0 until ambientDim).toSet - degenAxis)
-            val k = lower(degenAxis)
-            val candidates = Seq(k - 1, k).filter(v => v >= 0 && v < shape(degenAxis))
-            val topIds = candidates.map(v => topIndex(lower.updated(degenAxis, v)))
-            val ids = if topIds.size == 2 then topIds else topIds :+ infinityId
-            val value = ids.map(topValue).min
-            FacetEvent(facet, value, ids(0), ids(1))
-          }
-      }.toVector
-
-    // ONE combined descending pass: (value DESCENDING, isVertex DESCENDING [vertices before edges at a tied
-    // value -- see the design note for why this specific tie-break is load-bearing, not stylistic], then a
-    // deterministic tie-break so ties among same-kind-same-value items are still a total order).
-    sealed trait DualEvent:
-      def value: Double
-    case class VertexEv(id: Int, value: Double) extends DualEvent
-    case class EdgeEv(fe: FacetEvent) extends DualEvent:
-      def value: Double = fe.value
-
-    // Explicit comparator (not `.sortBy` into a tuple carrying an `IndexedSeq[Int]`, which drags in an unrelated
-    // `OrderedCell`-derived given-search path) -- (value DESCENDING, isVertex DESCENDING [0 for vertex, 1 for
-    // edge, so vertices sort first at a tied value], then lexicographic on the cell's own doubled-coordinate
-    // encoding for a deterministic tie-break among same-kind-same-value items).
-    def lexCompare(a: Seq[Int], b: Seq[Int]): Int =
-      val n = math.min(a.size, b.size)
-      var i = 0
-      var result = 0
-      while result == 0 && i < n do
-        result = Integer.compare(a(i), b(i))
-        i += 1
-      if result != 0 then result else Integer.compare(a.size, b.size)
-
-    val vertexEvents: Vector[VertexEv] = topCoords.indices.map(id => VertexEv(id, topValue(id))).toVector
-    val edgeEvents: Vector[EdgeEv] = facetEvents.map(EdgeEv.apply)
-    val eventOrdering: Ordering[DualEvent] = new Ordering[DualEvent]:
-      def compare(x: DualEvent, y: DualEvent): Int =
-        val byValue = -java.lang.Double.compare(x.value, y.value) // descending
-        if byValue != 0 then byValue
+    // Facets: for each axis, the grid of lower corners with that axis's coordinate in 0 .. shape and the others in
+    // 0 until shape. `facetA`/`facetB` are the top cells on the low and high side along the axis (`infinityId` past
+    // the grid's boundary).
+    val facetAxis = mutable.ArrayBuilder.make[Int]
+    val facetA = mutable.ArrayBuilder.make[Int]
+    val facetB = mutable.ArrayBuilder.make[Int]
+    val facetKey = mutable.ArrayBuilder.make[Long]
+    val facetLoneBelow = mutable.ArrayBuilder.make[Boolean] // a boundary facet's one top cell lies below it
+    val corner = new Array[Int](d)
+    for axis <- 0 until d do
+      val fdims = Array.tabulate(d)(i => if i == axis then shape(i) + 1 else shape(i))
+      val count = fdims.foldLeft(1)(_ * _)
+      for f <- 0 until count do
+        var rem = f
+        for i <- d - 1 to 0 by -1 do
+          corner(i) = rem % fdims(i)
+          rem = rem / fdims(i)
+        var base = 0 // the pixel with these coordinates, the axis coordinate set to 0
+        var key = 0L
+        for i <- 0 until d do
+          if i != axis then base += corner(i) * pstride(i)
+          key += (if i == axis then 2L * corner(i) else 2L * corner(i) + 1L) * encWeight(i)
+        val k = corner(axis)
+        val below = if k - 1 >= 0 then base + (k - 1) * pstride(axis) else -1
+        val above = if k < shape(axis) then base + k * pstride(axis) else -1
+        facetAxis += axis
+        // The same order as the cube-based construction: the lower pixel first, `∞` last.
+        if below >= 0 && above >= 0 then
+          facetA += below; facetB += above
         else
-          val xKind = x match
-            case _: VertexEv => 0;
-            case _: EdgeEv   => 1
-          val yKind = y match
-            case _: VertexEv => 0;
-            case _: EdgeEv   => 1
-          if xKind != yKind then Integer.compare(xKind, yKind)
-          else
-            val xKey = x match
-              case VertexEv(id, _) => topCoords(id);
-              case EdgeEv(fe)      => fe.facet.encoded
-            val yKey = y match
-              case VertexEv(id, _) => topCoords(id);
-              case EdgeEv(fe)      => fe.facet.encoded
-            lexCompare(xKey, yKey)
-    val allEvents: Vector[DualEvent] = (vertexEvents ++ edgeEvents).sorted(using eventOrdering)
+          facetA += (if below >= 0 then below else above); facetB += infinityId
+        facetKey += key
+        facetLoneBelow += (above < 0)
+    val fAxis = facetAxis.result()
+    val fA = facetA.result()
+    val fB = facetB.result()
+    val fKey = facetKey.result()
+    val fLoneBelow = facetLoneBelow.result()
+    val numFacets = fAxis.length
+    val facetValue = Array.tabulate(numFacets)(f => math.min(topValue(fA(f)), topValue(fB(f))))
 
-    // Union-find over `0 to numTop` (numTop itself = infinityId). `birthOf(root)` is the value at which the
-    // CURRENT root's own component was seeded (the root is always the OLDEST -- i.e. largest-value -- member,
-    // by the same "always attach younger under older" invariant unionFindDim01's own doc explains for the
-    // primal case). `chainOf(root)` is that component's own running signed top-cell sum.
-    val parent: Array[Int] = Array.range(0, numTop + 1)
+    // Events 0 until numTop are top cells, numTop until numTop + numFacets facets.
+    val order = SortIndices.sort(
+      numTop + numFacets,
+      (x, y) =>
+        val vx = if x < numTop then pixels(x) else facetValue(x - numTop)
+        val vy = if y < numTop then pixels(y) else facetValue(y - numTop)
+        val c = java.lang.Double.compare(vy, vx) // descending
+        if c != 0 then c < 0
+        else if (x < numTop) != (y < numTop) then x < numTop
+        else if x < numTop then x < y
+        else fKey(x - numTop) < fKey(y - numTop)
+    )
+
+    // The coefficient of a facet in the boundary of a top cell containing it (`cubeIsOrderedCell`'s rule: along axis
+    // `a`, the upper face carries +1 for even `a` and -1 for odd `a`, the lower face the opposite sign). The facet is
+    // the upper face of the top cell below it and the lower face of the one above.
+    val plus = fr.one
+    val minus = fr.negate(fr.one)
+    def upperSign(axis: Int): CoefficientT = if axis % 2 == 0 then plus else minus
+    def coeffToward(f: Int, top: Int): CoefficientT =
+      val axis = fAxis(f)
+      if top == fA(f) && fB(f) != infinityId then upperSign(axis) // `top` is below the facet
+      else if top == fB(f) then fr.negate(upperSign(axis)) // `top` is above the facet
+      else if fLoneBelow(f) then upperSign(axis) // a boundary facet at the top of the grid along `axis`
+      else fr.negate(upperSign(axis)) // a boundary facet at coordinate 0
+
+    // The boundary of `root`'s region, each top cell taken with `flip` times its orientation: the facets are summed by
+    // their encoding (interior ones cancel), and cubes are built only for the facets that remain. The same products
+    // as `cubeIsOrderedCell`'s boundary formula, so the coefficients are identical to summing the top cells' own
+    // boundaries.
+    val bases = shape.map(n => 2 * n + 1)
+    def cubeOfKey(key: Long): Cube =
+      Cube.fromVector(Vector.tabulate(d)(i => ((key / encWeight(i)) % bases(i)).toInt))
+    def regionBoundary(uf: SignedUnionFind[CoefficientT], root: Int, flip: CoefficientT): Chain[Cube, CoefficientT] =
+      val acc = mutable.LongMap.empty[CoefficientT]
+      def add(key: Long, x: CoefficientT): Unit =
+        acc.updateWith(key) {
+          case Some(y) => Some(fr.plus(y, x))
+          case None    => Some(x)
+        }
+      for (id, sign) <- uf.members(root) do
+        val c = fr.times(flip, sign)
+        var pixelKey = 0L
+        for i <- 0 until d do pixelKey += (2L * ((id / pstride(i)) % shape(i)) + 1L) * encWeight(i)
+        for a <- 0 until d do
+          add(pixelKey + encWeight(a), fr.times(c, upperSign(a)))
+          add(pixelKey - encWeight(a), fr.times(c, fr.negate(upperSign(a))))
+      Chain.from(acc.iterator.collect { case (k, x) if !fr.isEqual(x, fr.zero) => (cubeOfKey(k), x) }.toSeq)
+
+    // Union-find over `0 to numTop` (numTop itself = infinityId). `birthOf(root)` is the value at which the CURRENT
+    // root's own component was seeded (the root is always the OLDEST -- i.e. largest-value -- member). Orientations
+    // live in `uf`; a dying region is assembled from it only for a bar that is reported (see SignedUnionFind).
+    val uf = SignedUnionFind[CoefficientT](numTop + 1)
     val birthOf: Array[Double] = Array.fill(numTop + 1)(Double.NaN)
-    val chainOf: mutable.Map[Int, Map[Cube, CoefficientT]] = mutable.Map.empty
-
-    def find(i: Int): Int =
-      var root = i
-      while parent(root) != root do root = parent(root)
-      var cur = i
-      while parent(cur) != root do
-        val next = parent(cur)
-        parent(cur) = root
-        cur = next
-      root
-
+    birthOf(infinityId) = Double.PositiveInfinity
     val bars = mutable.ArrayBuffer.empty[PersistenceBar[Double, Chain[Cube, CoefficientT]]]
 
-    // `∞` is always active, born at +Infinity -- the unconditional elder of anything it ever merges with.
-    birthOf(infinityId) = Double.PositiveInfinity
-    chainOf(infinityId) = Map.empty // never used as a dying side's own chain, so its own content is irrelevant
-
-    for ev <- allEvents do
-      ev match
-        case VertexEv(id, v) =>
-          birthOf(id) = v
-          chainOf(id) = Map(topCube(topCoords(id)) -> fr.one)
-        case EdgeEv(FacetEvent(facet, v, a, b)) =>
-          val ra = find(a)
-          val rb = find(b)
-          if ra != rb then
-            // `infinityId` must be the unconditional elder of any merge it takes part in (its own chain is
-            // deliberately never populated, see below) -- ordinarily guaranteed because birthOf(infinityId) =
-            // +Infinity is the largest possible value, but a REAL top cell can ALSO have topValue = +Infinity
-            // (a permanently-missing cell, e.g. this codebase's own "Perseus missing-pixel" convention -- see
-            // CubicalImage/PerseusSpec), tying birthOf(ra) <= birthOf(rb) at +Infinity <= +Infinity and letting
-            // infinityId lose the comparison and be picked as the YOUNG/dying side -- caught by
-            // TDA4jSpec's own ring fixture (a permanently-missing center pixel), not the hand-derived finite-
-            // valued fixtures this class was first validated against. Special-case infinityId explicitly rather
-            // than relying on the birthOf comparison alone to break this specific tie correctly.
-            val (youngRoot, oldRoot) =
-              if ra == infinityId then (rb, ra)
-              else if rb == infinityId then (ra, rb)
-              else if birthOf(ra) <= birthOf(rb) then (ra, rb)
-              else (rb, ra)
-            // Orientation: `facet`'s own boundary gives its coefficient toward EACH of its (up to two) cofaces
-            // directly (cubeIsOrderedCell's alternating-rank sign rule) -- look up its coefficient toward
-            // whichever of a/b sits in the young (dying) component specifically, and toward whichever sits in
-            // the old (surviving) one; solve for the flip that makes the two cancel once combined (see the
-            // class doc's own derivation -- both coefficients are always +-1, so "divide" is "multiply").
-            val facetBoundary: Map[Cube, CoefficientT] = facet.boundary[CoefficientT].toMap
-            val (youngTopId, oldTopId) = if youngRoot == ra then (a, b) else (b, a)
-            // `infinityId` never sits on the YOUNG side -- it is always the eldest of any merge it takes part
-            // in (birthOf(infinityId) = +Infinity, the largest possible value), so it is never the smaller
-            // side of the `birthOf(ra) <= birthOf(rb)` comparison above.
-            require(
-              youngTopId != infinityId,
-              "an engine bug: the infinity dual vertex was treated as the younger side of a merge"
+    for ev <- order do
+      if ev < numTop then birthOf(ev) = pixels(ev)
+      else
+        val f = ev - numTop
+        val (a, b, v) = (fA(f), fB(f), facetValue(f))
+        val ra = uf.find(a)
+        val rb = uf.find(b)
+        if ra != rb then
+          // `infinityId` is the unconditional elder of any merge it takes part in: a real top cell can also have the
+          // value +Infinity (a permanently missing pixel) and tie against it, so it is special-cased rather than
+          // left to the birth comparison.
+          val (youngRoot, oldRoot) =
+            if ra == infinityId then (rb, ra)
+            else if rb == infinityId then (ra, rb)
+            else if birthOf(ra) <= birthOf(rb) then (ra, rb)
+            else (rb, ra)
+          val (youngTopId, oldTopId) = if youngRoot == ra then (a, b) else (b, a)
+          require(youngTopId != infinityId, "an engine bug: the infinity dual vertex was treated as the younger side")
+          // Solve flip * orient(young) * coeff(young) + orient(old) * coeff(old) = 0; every factor is +-1. Test the
+          // RESOLVED root: `oldTopId` can be a real cell already merged into infinity's component, which is never summed.
+          val flip: CoefficientT =
+            if oldRoot == infinityId then fr.one
+            else
+              fr.negate(
+                fr.times(
+                  fr.times(uf.orientation(oldTopId), coeffToward(f, oldTopId)),
+                  fr.times(uf.orientation(youngTopId), coeffToward(f, youngTopId))
+                )
+              )
+          if includeZeroLength || v != birthOf(youngRoot) then
+            bars += new PersistenceBar(
+              d - 1,
+              endpoint(true)(v),
+              endpoint(false)(birthOf(youngRoot)),
+              Option.when(representatives)(regionBoundary(uf, youngRoot, flip))
             )
-            val youngTopCube: Cube = topCube(topCoords(youngTopId))
-            // Test the RESOLVED root, not the raw id: `oldTopId` can be a real id whose component already
-            // merged into infinity's via an earlier tied-value edge this same pass, in which case
-            // `oldTopId == infinityId` is false but `chainOf(oldRoot) == chainOf(infinityId)`, which is
-            // deliberately never populated (infinity never dies, so its own chain content is never read) --
-            // looking up `oldCube` there throws. `oldRoot == infinityId` is the correct, order-independent test.
-            val oldTopCube: Option[Cube] = if oldRoot == infinityId then None else Some(topCube(topCoords(oldTopId)))
-            val youngChain = chainOf(youngRoot)
-            val youngCoeffAtTop = youngChain.getOrElse(
-              youngTopCube,
-              throw new IllegalStateException(
-                s"dual component missing its own boundary top cell $youngTopCube -- an engine bug"
-              )
-            )
-            val coeffTowardYoung = facetBoundary.getOrElse(youngTopCube, fr.zero)
-            val flip: CoefficientT =
-              oldTopCube match
-                case None          => fr.one // the surviving side is infinity -- nothing to cancel against
-                case Some(oldCube) =>
-                  val oldChain = chainOf(oldRoot)
-                  val oldCoeffAtTop = oldChain.getOrElse(
-                    oldCube,
-                    throw new IllegalStateException(
-                      s"dual component missing its own boundary top cell $oldCube -- an engine bug"
-                    )
-                  )
-                  val coeffTowardOld = facetBoundary.getOrElse(oldCube, fr.zero)
-                  // Want: flip * youngCoeffAtTop * coeffTowardYoung + oldCoeffAtTop * coeffTowardOld = 0, i.e.
-                  // flip = -(oldCoeffAtTop * coeffTowardOld) / (youngCoeffAtTop * coeffTowardYoung); every factor
-                  // is +-1 (facet coefficients from cubeIsOrderedCell; chain coefficients by this method's own
-                  // invariant, propagated from +-1 seeds), so division is multiplication.
-                  fr.negate(
-                    fr.times(fr.times(oldCoeffAtTop, coeffTowardOld), fr.times(youngCoeffAtTop, coeffTowardYoung))
-                  )
-            val flippedYoung: Map[Cube, CoefficientT] = youngChain.view.mapValues(c => fr.times(flip, c)).toMap
-            parent(youngRoot) = oldRoot
-            if oldRoot != infinityId then
-              val merged = mutable.Map.from(chainOf(oldRoot))
-              flippedYoung.foreach { case (cube, c) =>
-                merged.updateWith(cube) {
-                  case Some(existing) => Some(fr.plus(existing, c))
-                  case None           => Some(c)
-                }
-              }
-              chainOf(oldRoot) = merged.toMap
-            chainOf -= youngRoot
-
-            val rep: Chain[Cube, CoefficientT] =
-              Chain.from(
-                flippedYoung.toSeq.flatMap((cube, c) => cube.boundary[CoefficientT].map((f, s) => (f, fr.times(c, s))))
-              )
-            if includeZeroLength || v != birthOf(youngRoot) then
-              bars += new PersistenceBar(
-                ambientDim - 1,
-                endpoint(true)(v),
-                endpoint(false)(birthOf(youngRoot)),
-                Some(rep)
-              )
+          uf.union(youngRoot, oldRoot, flip)
     bars.toList

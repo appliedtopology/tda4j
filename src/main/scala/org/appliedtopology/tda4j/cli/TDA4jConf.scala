@@ -49,10 +49,14 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
         "of dimension 2 and up; fast-alpha for --complex=alpha with the helix backend"
     )
   val alphaBackend: ScallopOption[String] =
-    opt[String](descr = "helix (default) or DQP, for --complex=alpha")
+    opt[String](descr =
+      "default, helix or DQP, for --complex=alpha. default: helix, or with --max-filtration-value whichever of " +
+        "helix and DQP is expected to be faster for that radius (same result in general position)"
+    )
   val requireValidTriangulation: ScallopOption[String] = opt[String](
-    descr = "true or false (default), for --complex=alpha with the helix backend: repair a degenerate " +
-      "triangulation (needed by --engine=fast-alpha) instead of failing. Tested in dimensions 2 and 3"
+    descr = "true or false (default), for --complex=alpha with the helix backend: also check the triangulation for " +
+      "cavities, and fail rather than return one that could not be repaired (every triangulation is checked and " +
+      "repaired by default)"
   )
   val maxDimension: ScallopOption[Int] =
     opt[Int](descr = "the highest homological degree to compute (default: 2; for an image, its dimension)")

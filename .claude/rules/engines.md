@@ -33,6 +33,13 @@ barcodes coincide.
    apparent pairs with lazy substitution; emergent pairs (Def 3.11) not implemented; `memoizeFiltrationValue`
    defaults **false** (project lead: memory over speed). ~19-64x behind vanilla `ripser.cpp`, gap growing with n
    (`WORKLOG-ripser-profiling.md`, `WORKLOG-ripser-comparison.md`, `WORKLOG-packed-ripser-engine.md`).
+   The PACKED engine reduces on a primitive-array heap (Ripser's working column), expands cocycles lazily from
+   reduction logs (only for reported bars), and derives cycles with its own copy of `Involution.cycles`. It must
+   equal the `Chain`-based engine kept in the test tree (`ChainPackedRipserReference`) term for term, cocycles and
+   cycles, essentials included (`PackedWorkingColumnSpec`): re-run it after any change to the reduction
+   (`WORKLOG-vr-working-column.md`). The heap needs ONE diameter per simplex: non-trusted metrics are read as
+   `d(min, max)` (an asymmetric one otherwise grows the column until OOM); Euclidean/Explicit are read as given,
+   since `d(min, max)` costs ~15% there (it breaks the distance cache's row-wise walk).
 4. **`CellularCohomologyEngine`** (`Cohomology.scala`) — generic over `CellT: OrderedCell`, fully-materialized
    streams only, no `maxDim`/apparent pairs. Only essential bars' V-columns are cocycles; finite bars' V-columns
    are their reduced pivot chain. Representatives don't match Ripser term-for-term (tie direction differs) but
@@ -52,7 +59,7 @@ Dual direction (`Involution.cocycles`/`cocycleBars`): from a homology pairing (n
 youngest first; representative `V_σ` (as the cohomology engines report). Chunks' and naive's pairings are identical,
 union-find included (`InvolutionSpec`). Fast cubical's union-find ties by value, not the stream order: no dual path,
 image cocycles go through the cohomology engine. Native kind is faster: derived costs ~1.1-1.3x in degrees 0-1,
-~2.5x for VR cycles in degree 2. Different valid cycles from chunks/naive (they report `V_σ` after their own substitutions): never compare
+~2.5x for VR cycles in degree 2 through the generic involution (the packed engine's own: ~1.25x, 192 sphere points). Different valid cycles from chunks/naive (they report `V_σ` after their own substitutions): never compare
 representatives cell for cell across engines; `InvolutionSpec` checks validity on tie-heavy inputs. Cost: 2.5-3x
 cocycles (`WORKLOG-involution.md`).
 

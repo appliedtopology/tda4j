@@ -15,16 +15,8 @@ import scala.collection.parallel.CollectionConverters.*
 class CubicalGridStream(
   val shape: IndexedSeq[Int],
   val topCellValue: IndexedSeq[Int] => Double,
-  // Warm filtrationValueCache in parallel, per dimension, before iterateDimension's own sort -- see
-  // .claude/WORKLOG-parallelization-survey.md item 3 (cubical). Every cube's filtration value is
-  // independent of every other cube's -- unlike CechStream's Miniball radii, there is no facet
-  // dependency at all here (containingTopCells(c) reads only c's own coordinates and shape, never
-  // another Cube's cached value) -- so the only real precondition is that `topCellValue` itself is safe
-  // to call concurrently from multiple threads. True for every built-in constructor in
-  // CubicalImage.scala (each reads only immutable captured data -- a flat array, or a BufferedImage's
-  // pixels -- never mutates anything); a caller-supplied `topCellValue` with its own mutable state would
-  // need to be made safe first. Defaults to false, matching AlphaDQPSettings.parallel's own opt-in
-  // convention.
+  // Read every top cell's value in parallel when the values are first needed. `topCellValue` must then be safe to call
+  // from several threads; every constructor in CubicalImage.scala reads only immutable captured data.
   val parallelFiltrationValue: Boolean = false
 ) extends StratifiedCellStream[Cube, Double]
     with DoubleFiltration[Cube]():
@@ -47,41 +39,57 @@ class CubicalGridStream(
       coord >= 0 && coord <= 2 * shape(i)
     }
 
-  /** The grid indices of the top cells containing `c`: along an axis where `c` is a point `k`, index `k - 1` or `k`;
-    * along an axis where it is an interval, its own index. `O(2^(ambient dimension - dim c))` per call.
-    */
-  private def containingTopCells(c: Cube): Seq[IndexedSeq[Int]] =
-    val perAxisChoices: IndexedSeq[Seq[Int]] = (0 until ambientDim).map { i =>
-      if c.isNondegenerate(i) then Seq(c.lowerCoordinate(i))
-      else
-        val k = c.lowerCoordinate(i)
-        Seq(k - 1, k).filter(v => v >= 0 && v < shape(i))
-    }
-    cartesianProduct(perAxisChoices)
+  // Every cell's value, precomputed once into a flat array over the doubled-coordinate grid (cell with encoding `e` at
+  // index sum_i e(i) * weight(i)): engines consult `filtrationValue` on every comparison, so it must be an array lookup,
+  // not a hash of a `Cube` (`.claude/WORKLOG-fast-cubical-representatives.md`). The minimum over the top cells
+  // containing a cube is separable by axis: start from the top cells' values at their (all-odd) positions and +∞
+  // elsewhere, then along each axis give every even position the minimum of its odd neighbours.
+  private val doubledShape: Array[Int] = shape.map(n => 2 * n + 1).toArray
+  private val cellWeight: Array[Long] =
+    val w = new Array[Long](ambientDim)
+    w(ambientDim - 1) = 1L
+    for i <- ambientDim - 2 to 0 by -1 do w(i) = w(i + 1) * doubledShape(i + 1)
+    w
 
-  private def cartesianProduct(choices: IndexedSeq[Seq[Int]]): Seq[IndexedSeq[Int]] =
-    choices.foldLeft(Seq(IndexedSeq.empty[Int])) { (acc, opts) =>
-      for prefix <- acc; v <- opts yield prefix :+ v
-    }
+  private lazy val cellValues: Array[Double] =
+    val total = totalCellCount
+    require(total <= Int.MaxValue, s"CubicalGridStream: $total cells do not fit in one array")
+    val values = Array.fill(total.toInt)(Double.PositiveInfinity)
+    val pixelCount = shape.product
+    val pstride = shape.scanRight(1)(_ * _).tail
+    def place(p: Int): (Int, Double) =
+      val coords = IndexedSeq.tabulate(ambientDim)(i => (p / pstride(i)) % shape(i))
+      var index = 0L
+      for i <- 0 until ambientDim do index += (2L * coords(i) + 1L) * cellWeight(i)
+      (index.toInt, topCellValue(coords))
+    if parallelFiltrationValue then (0 until pixelCount).par.map(place).seq.foreach((i, v) => values(i) = v)
+    else
+      for p <- 0 until pixelCount do
+        val (i, v) = place(p)
+        values(i) = v
+    for axis <- 0 until ambientDim do
+      val w = cellWeight(axis).toInt
+      val len = doubledShape(axis)
+      for i <- values.indices do
+        val c = (i / w) % len
+        if c            % 2 == 0 then
+          val below = if c > 0 then values(i - w) else Double.PositiveInfinity
+          val above = if c < len - 1 then values(i + w) else Double.PositiveInfinity
+          values(i) = math.min(below, above)
+    values
 
-  // Memoized: `CellularHomologyEngine` re-derives `Ordering[CellT] = stream.filtrationOrdering` and consults it
-  // on every chain-arithmetic comparison during reduction (Chain's SortedMap/PriorityQueue accumulator), not
-  // just once per cell during the stream's own up-front sorts -- an UNCACHED filtrationValue means
-  // containingTopCells (already O(2^(ambientDim - dim(c))) per call) gets recomputed on every single one of
-  // those comparisons. Unlike RipserCohomologyEngine's `memoizeFiltrationValue` (opt-in, defaulting to false
-  // for memory frugality on potentially-huge VR complexes with a cheap incremental alternative,
-  // `insertionDiameter`), there is no equivalent incremental formula here, AND `CellularHomologyEngine.
-  // HomologyState.cellIterator` already materializes every cell of the stream into one in-memory Vector before
-  // reduction even starts -- so a cache bounded by the same already-resident cell count adds no new
-  // memory-frugality concern to weigh against. See `.claude/WORKLOG-autonomous-session-2026-09-19.md` for the
-  // phase-separated profiling that found this: per-cell cost was flat in both of the stream's own sort phases,
-  // and the entire 3D growth (231->678 us/cell, n=8->24) was isolated to the reduction phase alone.
-  private val filtrationValueCache = mutable.HashMap.empty[Cube, Double]
+  private def cellIndex(c: Cube): Int =
+    val e = c.encoded
+    var index = 0L
+    var i = 0
+    while i < ambientDim do
+      index += e(i) * cellWeight(i)
+      i += 1
+    index.toInt
 
   override val filtrationValue: PartialFunction[Cube, Double] = new PartialFunction[Cube, Double]:
     def isDefinedAt(c: Cube): Boolean = inGrid(c)
-    def apply(c: Cube): Double =
-      filtrationValueCache.getOrElseUpdate(c, containingTopCells(c).map(topCellValue).min)
+    def apply(c: Cube): Double = cellValues(cellIndex(c))
 
   /** `FiltrationOrdering.canonical` with `cubeOrdering` as tie-break. Ties are common here: a face shares its value
     * with at least one coface.
@@ -109,16 +117,6 @@ class CubicalGridStream(
   override def iterateDimension: PartialFunction[Int, Iterator[Cube]] = {
     case d if d >= 0 && d <= ambientDim =>
       val cubes = cubesOfDimension(d).toVector
-      if parallelFiltrationValue then
-        // Compute into a plain parallel collection first, THEN write into the shared
-        // filtrationValueCache sequentially -- mutable.HashMap.getOrElseUpdate is not safe to call
-        // concurrently (same hazard class as every other memoization cache in this codebase; see
-        // .claude/WORKLOG-parallelization-survey.md's "recurring hazard" note). `cubesOfDimension(d)`
-        // yields each cube exactly once (a distinct non-degenerate-axis-set + coordinate combination
-        // per cube), so the sequential merge below never redundantly recomputes or double-writes.
-        val computed: IndexedSeq[(Cube, Double)] =
-          cubes.par.map(c => c -> containingTopCells(c).map(topCellValue).min).toIndexedSeq
-        computed.foreach { case (c, v) => filtrationValueCache.getOrElseUpdate(c, v) }
       cubes.sorted(using filtrationOrdering.reverse).iterator
   }
 
@@ -131,6 +129,8 @@ class LimitedCubicalGridStream(stream: CubicalGridStream, maxDim: Int)
   }
   override def filtrationOrdering: Ordering[Cube] = stream.filtrationOrdering
   override def filtrationValue: PartialFunction[Cube, Double] = stream.filtrationValue
+  // Cells up to dimension maxDim: degrees above maxDim - 1 are truncation artifacts.
+  override def homologyDegreeLimit: Option[Int] = Some(maxDim - 1)
 
 /** A finite set of cubes with explicit filtration values, the cubical counterpart of `ExplicitStream`: for small
   * hand-built complexes and cubical complexes that are not a full grid.

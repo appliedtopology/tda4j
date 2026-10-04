@@ -2,24 +2,14 @@ package org.appliedtopology.tda4j
 
 import scala.collection.mutable
 
-/** Thrown by [[FastAlphaHomologyEngine]] when the Helix triangulation has a facet with more than two top-dimensional
-  * cofaces, which its dual graph cannot represent. Not expected on ordinary input (Helix checks and repairs its own
-  * triangulation), and never a problem with the data: the general engines handle the same points. The message says so.
+/** Test oracle: the fast alpha engine as it was before its representative bookkeeping moved to a signed union-find
+  * (`.claude/WORKLOG-fast-cubical-representatives.md`), kept as it was apart from the class name and the
+  * coboundary-coefficient fix (the merge flip was read from the facet's own boundary, which made it zero). It keeps a
+  * running coefficient map per dual component and copies the surviving component's map on every merge -- quadratic, but
+  * obviously right. `FastRepresentativesSpec` checks that the production engine returns exactly the same bars and
+  * representatives, in the same order.
   */
-class FastAlphaTriangulationException(message: String) extends RuntimeException(message)
-
-/** Persistent homology of a Helix alpha complex by union-find instead of matrix reduction: degree 0 on the vertices and
-  * edges, the top degree `d - 1` on the dual graph of the top-dimensional simplices, as in
-  * [[FastCubicalHomologyEngine]]. In the plane those cover everything; in dimension 3 and up the degrees in between are
-  * computed by the cohomology engine on the complex without its top simplices. Works in any ambient dimension from 2,
-  * with representatives for every bar.
-  *
-  * The dual graph needs every facet to have one or two top-dimensional cofaces. Unlike a grid, a triangulation does not
-  * guarantee it, so it is checked first, throwing [[FastAlphaTriangulationException]] when it fails (rare on random
-  * points). A facet's dual-edge value is its own filtration value, which can be smaller than its cofaces' circumradii
-  * (a Gabriel edge).
-  */
-class FastAlphaHomologyEngine[CoefficientT: Field]:
+class EagerFastAlphaReference[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
   given Ordering[Simplex[Int]] = simplexOrdering[Int]
 
@@ -39,9 +29,12 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
     bars
 
   // -------------------------------------------------------------------------------------------------------------
-  // d >= 3's "middle" degrees (1 <= k <= d-2): see FastCubicalHomologyEngine.computeMiddleDimensions, whose
-  // structure this mirrors exactly (the cohomology engine on a view hiding the top-dimensional simplices, which
-  // declares homologyDegreeLimit = d - 2; H_0 comes out of the same computation).
+  // d >= 3's "middle" dimensions (1 <= k <= d-2): see FastCubicalHomologyEngine.computeMiddleDimensions, whose
+  // structure this mirrors exactly (a stream truncated to hide the real top-dimensional cells, chunks's own
+  // maxDim = d-2 semantics discarding the resulting incomplete top-dimension bars for free, H_0 coming along as
+  // a side effect of chunks's own unionFindDim01). PersistenceInChunksEngine[Int, CoefficientT] is the
+  // Simplex[Int]-over-Ordering[Int] convenience wrapper for CellularPersistenceInChunksEngine -- the same class
+  // this codebase's naive/chunks/cohomology engines already use for alpha complexes elsewhere.
   // -------------------------------------------------------------------------------------------------------------
   private def computeMiddleDimensions(
     helix: HelixDelaunay,
@@ -136,7 +129,34 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
         .mapValues(_.toVector)
         .toMap
 
-    FastAlphaHomologyEngine.requireDualGraph(facetToTopIds, helix.ambientDimension)
+    // See the class doc's own note: unlike a cubical grid, this is a real precondition that can genuinely fail --
+    // measured at roughly 1-in-18700 on random points at ambient dimension 2, but NOTICEABLY MORE LIKELY at
+    // higher ambient dimension and with more points (roughly 1-in-1666 measured at ambient dimension 3 with
+    // 20-30 points -- see .claude/DESIGN-fast-engines-hybrid-middle-dimensions.md's own measurement) -- fail
+    // loudly and specifically, and (per the class's own doc) in language that doesn't assume the reader knows
+    // this engine's internals.
+    val badFacets = facetToTopIds.filter { case (_, ids) => ids.size < 1 || ids.size > 2 }
+    if badFacets.nonEmpty then
+      throw new FastAlphaTriangulationException(
+        "The fast alpha-complex engine (engine=\"fast-alpha\" / FastAlphaHomologyEngine) could not compute a " +
+          "result for this specific set of points.\n\n" +
+          "This is NOT an error in your data, and it does NOT mean this point cloud's persistent homology is " +
+          "unusual or unsupported. It is a known limitation of HelixDelaunay, the Delaunay triangulation this " +
+          s"engine's fast algorithm depends on, at ambient dimension ${helix.ambientDimension}: on a fraction of " +
+          "point sets, HelixDelaunay's own triangulation comes out subtly inconsistent in a way this engine can " +
+          "detect but cannot safely work around. This is rare at ambient dimension 2 (roughly 1-in-18700 on " +
+          "random points) but noticeably more likely at higher ambient dimension and with more points (roughly " +
+          "1-in-1666 measured at ambient dimension 3 with 20-30 points).\n\n" +
+          "TO GET YOUR RESULT: recompute the SAME point cloud with a different engine -- \"naive\", \"chunks\", " +
+          "or \"cohomology\" all give the exact same, fully correct persistent homology, via a completely " +
+          "different algorithm that this limitation does not affect at all. For example (MATLAB/Java):\n" +
+          "  TDA4j.computeFromPoints(points, new String[]{\"complex\", \"alpha\", \"engine\", \"naive\"})\n" +
+          "or on the command line: --complex alpha --engine naive\n\n" +
+          "(Technical detail, for developers investigating this class itself: " +
+          s"${badFacets.size} facet(s) had a containing-top-simplex count other than 1 or 2 " +
+          s"(${badFacets.map { case (f, ids) => s"$f -> ${ids.size} cofaces" }.mkString("; ")}), meaning the dual " +
+          "graph this engine needs is not well-defined for this triangulation.)"
+      )
 
     // Value from helix.filtrationValue(facet) directly, NOT ids.map(topValue).min -- see the class doc's own
     // note on why these can genuinely differ for an alpha complex (unlike a cubical grid).
@@ -189,22 +209,35 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
 
     // Union-find over `0 to numTop` (numTop itself = infinityId) -- identical mechanics to
     // FastCubicalHomologyEngine.computeDualTopDimension from here on, including both of that class's own
-    // once-found bugs' fixes (the resolved-root vs. raw-id check for the old side, and the explicit `infinityId`
-    // special-case in the young/old decision).
-    val uf = SignedUnionFind[CoefficientT](numTop + 1)
+    // once-found bugs' fixes (the resolved-root vs. raw-id check for `oldTopCube`, and the explicit `infinityId`
+    // special-case in the young/old decision) -- ported directly rather than risking rediscovering either.
+    val parent: Array[Int] = Array.range(0, numTop + 1)
     val birthOf: Array[Double] = Array.fill(numTop + 1)(Double.NaN)
+    val chainOf: mutable.Map[Int, Map[Simplex[Int], CoefficientT]] = mutable.Map.empty
+
+    def find(i: Int): Int =
+      var root = i
+      while parent(root) != root do root = parent(root)
+      var cur = i
+      while parent(cur) != root do
+        val next = parent(cur)
+        parent(cur) = root
+        cur = next
+      root
 
     val bars = mutable.ArrayBuffer.empty[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]]
 
     birthOf(infinityId) = Double.PositiveInfinity
+    chainOf(infinityId) = Map.empty
 
     for ev <- allEvents do
       ev match
         case VertexEv(id, v) =>
           birthOf(id) = v
+          chainOf(id) = Map(topSimplices(id) -> fr.one)
         case EdgeEv(FacetEvent(facet, v, a, b)) =>
-          val ra = uf.find(a)
-          val rb = uf.find(b)
+          val ra = find(a)
+          val rb = find(b)
           if ra != rb then
             val (youngRoot, oldRoot) =
               if ra == infinityId then (rb, ra)
@@ -220,58 +253,55 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
               youngTopId != infinityId,
               "an engine bug: the infinity dual vertex was treated as the younger side of a merge"
             )
-            val youngCoeffAtTop = uf.orientation(youngTopId)
-            val coeffTowardYoung = coeffToward(topSimplices(youngTopId))
+            val youngTop: Simplex[Int] = topSimplices(youngTopId)
+            val oldTop: Option[Simplex[Int]] = if oldRoot == infinityId then None else Some(topSimplices(oldTopId))
+            val youngChain = chainOf(youngRoot)
+            val youngCoeffAtTop = youngChain.getOrElse(
+              youngTop,
+              throw new IllegalStateException(
+                s"dual component missing its own boundary top simplex $youngTop -- an engine bug"
+              )
+            )
+            val coeffTowardYoung = coeffToward(youngTop)
             val flip: CoefficientT =
-              if oldRoot == infinityId then fr.one
-              else
-                val oldCoeffAtTop = uf.orientation(oldTopId)
-                val coeffTowardOld = coeffToward(topSimplices(oldTopId))
-                fr.negate(
-                  fr.times(fr.times(oldCoeffAtTop, coeffTowardOld), fr.times(youngCoeffAtTop, coeffTowardYoung))
+              oldTop match
+                case None             => fr.one
+                case Some(oldSimplex) =>
+                  val oldChain = chainOf(oldRoot)
+                  val oldCoeffAtTop = oldChain.getOrElse(
+                    oldSimplex,
+                    throw new IllegalStateException(
+                      s"dual component missing its own boundary top simplex $oldSimplex -- an engine bug"
+                    )
+                  )
+                  val coeffTowardOld = coeffToward(oldSimplex)
+                  fr.negate(
+                    fr.times(fr.times(oldCoeffAtTop, coeffTowardOld), fr.times(youngCoeffAtTop, coeffTowardYoung))
+                  )
+            val flippedYoung: Map[Simplex[Int], CoefficientT] = youngChain.view.mapValues(c => fr.times(flip, c)).toMap
+            parent(youngRoot) = oldRoot
+            if oldRoot != infinityId then
+              val merged = mutable.Map.from(chainOf(oldRoot))
+              flippedYoung.foreach { case (simplex, c) =>
+                merged.updateWith(simplex) {
+                  case Some(existing) => Some(fr.plus(existing, c))
+                  case None           => Some(c)
+                }
+              }
+              chainOf(oldRoot) = merged.toMap
+            chainOf -= youngRoot
+
+            val rep: Chain[Simplex[Int], CoefficientT] =
+              Chain.from(
+                flippedYoung.toSeq.flatMap((simplex, c) =>
+                  simplex.boundary[CoefficientT].map((f, s) => (f, fr.times(c, s)))
                 )
+              )
             if includeZeroLength || v != birthOf(youngRoot) then
-              val rep: Chain[Simplex[Int], CoefficientT] =
-                Chain.from(uf.members(youngRoot).toSeq.flatMap { (id, sign) =>
-                  val c = fr.times(flip, sign)
-                  topSimplices(id).boundary[CoefficientT].map((f, s) => (f, fr.times(c, s)))
-                })
               bars += new PersistenceBar(
                 ambientDim - 1,
                 endpoint(true)(v),
                 endpoint(false)(birthOf(youngRoot)),
                 Some(rep)
               )
-            uf.union(youngRoot, oldRoot, flip)
     bars.toList
-
-object FastAlphaHomologyEngine:
-  /** Throws [[FastAlphaTriangulationException]] unless every facet has one or two top-dimensional cofaces: the dual
-    * graph the engine walks is not defined otherwise.
-    */
-  private[tda4j] def requireDualGraph(facetToTopIds: Map[Simplex[Int], Vector[Int]], ambientDimension: Int): Unit =
-    // Unlike a cubical grid, this is a real precondition: HelixDelaunay does not guarantee it. With the frontier walk
-    // before its minimal-centre candidate search, roughly 1 in 18700 random 2-D clouds and 1 in 1666 3-D clouds of
-    // 20-30 points failed it (.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md); with the current walk none of
-    // 20000 2-D, 3000 3-D and 500 4-D random clouds did (.claude/WORKLOG-helix-construction-speed.md). Fail loudly,
-    // in language that doesn't assume the reader knows this engine's internals.
-    val badFacets = facetToTopIds.filter { case (_, ids) => ids.size < 1 || ids.size > 2 }
-    if badFacets.nonEmpty then
-      throw new FastAlphaTriangulationException(
-        "The fast alpha-complex engine (engine=\"fast-alpha\" / FastAlphaHomologyEngine) could not compute a " +
-          "result for this specific set of points.\n\n" +
-          "This is NOT an error in your data, and it does NOT mean this point cloud's persistent homology is " +
-          "unusual or unsupported. It is a known limitation of HelixDelaunay, the Delaunay triangulation this " +
-          s"engine's fast algorithm depends on, at ambient dimension ${ambientDimension}: on a fraction of " +
-          "point sets, HelixDelaunay's own triangulation comes out subtly inconsistent in a way this engine can " +
-          "detect but cannot safely work around. This is rare on random points.\n\n" +
-          "TO GET YOUR RESULT: recompute the SAME point cloud with a different engine -- \"naive\", \"chunks\", " +
-          "or \"cohomology\" all give the exact same, fully correct persistent homology, via a completely " +
-          "different algorithm that this limitation does not affect at all. For example (MATLAB/Java):\n" +
-          "  TDA4j.computeFromPoints(points, new String[]{\"complex\", \"alpha\", \"engine\", \"naive\"})\n" +
-          "or on the command line: --complex alpha --engine naive\n\n" +
-          "(Technical detail, for developers investigating this class itself: " +
-          s"${badFacets.size} facet(s) had a containing-top-simplex count other than 1 or 2 " +
-          s"(${badFacets.map { case (f, ids) => s"$f -> ${ids.size} cofaces" }.mkString("; ")}), meaning the dual " +
-          "graph this engine needs is not well-defined for this triangulation.)"
-      )

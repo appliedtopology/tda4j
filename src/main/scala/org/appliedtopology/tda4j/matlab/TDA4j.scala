@@ -670,7 +670,7 @@ object TDA4j:
     val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(2)
     val maxFiltrationValue: Option[Double] =
       opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
-    val alphaBackend = opts.getOrElse("alphabackend", "helix")
+    val alphaBackend = opts.getOrElse("alphabackend", "default")
 
     // No separate alphaBackend="dqp" check here -- AlphaShapes.apply's own `require` already rejects that
     // combination with an actionable message, the single place this is checked (mirroring how the fast-alpha
@@ -920,7 +920,15 @@ object TDA4j:
             "complex=alpha requires point coordinates -- use computeFromPoints, not computeFromDistanceMatrix"
           )
         )
-        val alphaStream = AlphaShapes(pts.toIndexedSeq, AlphaBackend.parse(alphaBackend), requireValidTriangulation)
+        if engine == EngineKind.FastAlpha && maxFiltrationValue.isDefined then
+          throw new IllegalArgumentException(
+            "engine=fast-alpha computes the whole alpha complex, so it does not take maxFiltrationValue: leave " +
+              "maxFiltrationValue out, or use engine=cohomology or engine=naive for the complex up to that radius."
+          )
+        // With maxFiltrationValue, alphaBackend=default builds the complex up to that radius with whichever of Helix
+        // and DQP is expected to be faster (AlphaShapes.prefersDQP); the same complex in general position.
+        val alphaStream =
+          AlphaShapes(pts.toIndexedSeq, AlphaBackend.parse(alphaBackend), requireValidTriangulation, maxFiltrationValue)
         val alphaCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
         val alphaBoundaryMatrixOf =
           () =>

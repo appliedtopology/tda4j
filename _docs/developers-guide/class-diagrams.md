@@ -174,7 +174,7 @@ place. See [Persistence engines](persistence-engines.md) for the full, current p
 `CellularPersistenceInChunksEngine`/`PersistenceInChunksEngine`,
 `RipserCohomologyEngine`, `PackedRipserCohomologyEngine`, `CellularCohomologyEngine`,
 `FastCubicalHomologyEngine` and `FastAlphaHomologyEngine` (`HelixDelaunay` alpha complexes) -- both valid at
-any ambient dimension `>= 2`, both via a `chunks` hybrid above 2D -- wired into `matlab`/`cli` as
+any ambient dimension `>= 2`, both via a cohomology hybrid above 2D -- wired into `matlab`/`cli` as
 `engine="fast-cubical"`/`engine="fast-alpha"`.
 
 ## Circular coordinates (`homology/CircularCoordinates.scala`)

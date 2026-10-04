@@ -31,11 +31,38 @@ routed through one shared `rankAtEpsilon` helper: retry every affinely-independe
 (smallest-span first); reject affinely-degenerate candidates outright; project a globally-coplanar cloud onto
 its true affine span first.
 
+**Helix alpha values are computed top-down** (`alphaValues`): top cells take the smallest containing circumradius;
+below that a simplex takes its own smallest circumradius (centre in its affine hull, `smallestCircumsphere`, never
+`Hypersphere.apply`) if Gabriel w.r.t. its cofaces' opposite vertices, else the min over its immediate cofaces. The
+Gabriel rule once covered edges only, so 3-D lost most `H_2` (`WORKLOG-helix-alpha-values.md`). **In general position
+Helix must equal DQP bar for bar** (`HelixDqpAgreementSpec`, a CI gate in 2-D/3-D/4-D); only degenerate inputs stay
+diagnostic.
+
+**Helix walk** (`WORKLOG-helix-construction-speed.md`): hull facet by gift wrapping (deterministic, no RNG); across
+each frontier facet the cofacet is the light point with the smallest centre parameter `t` (sphere centre `c0 + t n`),
+ties to the smallest index, its sphere taken from `t` (never re-solved from the vertices: ill-conditioned on slivers),
+then checked empty; the old candidate scan is only the fallback (`sphereScanFallbacks`, 0 on random clouds,
+`HelixWalkSpec`). Cospherical = within `1e-10 r`, NOT `epsilon` (at the default `1e-5` near-ties got tiled as clusters
+on a few thousand random points and tore the triangulation). EVERY result gets `looksValid` (each point a vertex, no
+facet in 3 tops, every boundary facet on the hull -- Euler characteristic is NOT enough: a partial contractible walk
+passes it); a failure goes to `repairByJitterRetriangulation` (jitter `1e-4` of the spacing, all points when the
+structural check fails; on the PROJECTED points). Exact grids are valid by default at the default epsilon; at a far
+smaller epsilon (`1e-9`) a 3-D grid can still fail to repair (near-coplanar float predicates) and the raw walk is
+returned. Agreement with GUDHI at scale (bench harness): bottleneck <= 1e-8 at 1000/5000 3-D, 6e-7 at 10000 2-D.
+**Dispatch with a radius** (`AlphaShapes(points, maxRadius = r)`, the verb's and facade's `maxFiltrationValue`):
+`Default` = Helix without a radius, else `prefersDQP` (mean of `k^1.6`, k = neighbours within `2r`, 64 samples, vs a fitted cost model:
+DQP `0.004·2.35^(d-2)·k^1.6`, Helix `h_d (n/1000)^0.4`, h = 0.53/1.7/10/150 for d = 2..5, d >= 6 always DQP). Helix is
+filtered (`RadiusLimitedAlphaShapes`), DQP truncated (`AlphaComplexDQPStream`, top dim `maxDimension + 1`); the
+results must be identical in general position (`AlphaDispatchSpec`; cospherical: DQP keeps the spanned simplex, Helix
+triangulates). The facade passes no `Epsilon`: alpha uses `AlphaShapes`' default `1e-5` (the `epsilon` option is `field=R`). Untruncated DQP is ~100x slower than Helix. fast-alpha refuses a
+radius. Measurements: `WORKLOG-helix-construction-speed.md`.
+
 **One root mechanism (near-cospherical clusters, order-dependent facet-pivot choices) produces two DIFFERENT
 outcomes — don't conflate, a naive set-diff can't tell them apart**:
 1. Order-dependent disagreement with DQP, **WONTFIX** (project lead) — the discarded side is reachable some
-   other way too, still a complete triangulation. Helix is not reliable ground truth for dim≥4 fuzzing;
-   `AlphaCrossValidationSpec` comparisons stay diagnostic (`unsafeCompare`/`unsafeFuzzCompare`).
+   other way too, still a complete triangulation. Helix is not reliable ground truth for dim≥4 fuzzing on
+   degenerate input; `AlphaCrossValidationSpec`'s degenerate comparisons stay diagnostic (`unsafeCompare`/
+   `unsafeFuzzCompare`).
 2. Genuine incomplete triangulation (real topological hole), **fixed**. Self-consistency (not diff-vs-DQP) is
    the discriminator. Two compounding bugs: (a) `handleCosphericalPoints`'s facet-queue excluded the originating
    facet (fixed — iterate every vertex of the new simplex); (b) its greedy point-pull has no empty-circumsphere
@@ -47,8 +74,9 @@ simplices; valid any ambient dim≥2, Helix only (DQP builds no adjacency struct
 precondition is NOT guaranteed by construction (more likely violated at higher dim/more points) — validated
 explicitly, throws `FastAlphaTriangulationException` rather than a silently-wrong dual graph. Facet dual-edge
 value from `HelixDelaunay.filtrationValue` directly, never recomputed as min over top simplices. At dim≥3, same
-chunks-hybrid as cubical on `LimitedAlphaShapesStream`; cross-validated at d=3. Wired as
-`engine="fast-alpha"` (alpha+helix only, project lead signed off on the measured exception rate).
+cohomology hybrid as cubical on `LimitedAlphaShapesStream`; cross-validated at d=3. Wired as
+`engine="fast-alpha"` (alpha+helix only, project lead signed off on the measured exception rate). Representatives
+share the cubical engine's `SignedUnionFind` bookkeeping (`WORKLOG-fast-cubical-representatives.md`).
 `WORKLOG-alpha-dual-unionfind.md`, `DESIGN-alpha-dual-unionfind.md`.
 
 **`HelixDelaunay(pts, seed, requireValidTriangulation = true)` repairs facet-multiplicity violations** (off by

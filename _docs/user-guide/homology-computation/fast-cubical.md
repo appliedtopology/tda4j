@@ -19,7 +19,7 @@ val bars = FastCubicalHomologyEngine[Double]().persistentHomology(stream)
 `FastCubicalHomologyEngine` gives the same bars, with representatives, as the general engines, by union-find instead of
 matrix reduction: on the pixels for degree 0, and on the dual graph of the top-dimensional cells for the top degree
 (Alexander duality). On a 2-D image those two cover everything. In 3-D and above, the degrees in between are computed
-by the chunks engine on the complex without its top cells. It needs an image of at least two dimensions.
+by the cohomology engine on the complex without its top cells. It needs an image of at least two dimensions.
 
 It is the default for images: `Persistence(Image(pixels))` and, from MATLAB and the command line, `computeFromImage`/
 `computeFromCubicalImage` or a cubical `--input-format` use it unless you choose another engine (`engine=fast-cubical`

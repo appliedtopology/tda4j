@@ -96,6 +96,17 @@ Vietoris-Rips/`SimplexIndexing` rather than a general engine.
 so "same simplex" is true by construction regardless of which floating-point path computed its diameter,
 sidestepping a real footgun (two carriers for the same simplex comparing unequal on floating-point noise).
 
+**Reduction internals.** The column being reduced is Ripser's working column: a binary heap of
+(diameter, index, coefficient) entries in primitive arrays, to which adding a column only pushes entries; equal
+cells are combined when they reach the top. Coboundaries and boundaries are pushed straight from the
+`SimplexIndexing` cursors, never built as `Chain`s. A stored reduced column keeps its pivot first and the
+remaining terms uncombined. Cocycles (the V-columns) are recorded as a reduction log per column and expanded only
+for the bars that are reported, so `persistentCohomology()` builds none for zero-length bars and
+`persistentHomology()` builds none at all. Cycles come from the engine's own specialization of `Involution.cycles`
+on the same heap, which returns exactly what the generic involution returns. The heap relies on a simplex having
+one diameter: a metric that is not symmetric by construction (anything but `EuclideanMetricSpace` and
+`ExplicitMetricSpace`) is read as `d(min(i, j), max(i, j))`.
+
 ## 5. `CellularCohomologyEngine` — generic cohomology, for every cell type
 
 Persistent *co*homology, generic over `CellT: OrderedCell` — the cohomology counterpart to engine 1, filling
@@ -156,10 +167,10 @@ union-find, ascending filtration order, elder rule) plus `H_1` (via the dual con
 account for every nontrivial cell dimension a 2D grid has — `H_2` is identically zero for any subcomplex of a
 2D grid (a bounded planar region has no 2-dimensional voids to detect), so nothing is being skipped. At `d >=
 3` there are `d-2` "middle" dimensions (`1 <= k <= d-2`) with no duality shortcut; these are handed to
-`CellularPersistenceInChunksEngine` run on a `LimitedCubicalGridStream` view that hides the real
-top-dimensional cells entirely, so the (often largest) top dimension never touches general `Chain` reduction —
-still a real, if shrinking-with-`d`, win, and no new hardcoded dimension ceiling (`chunks` is already fully
-general over `d`). See `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md` for the full derivation,
+`CellularCohomologyEngine` (cycles by the involution) run on a `LimitedCubicalGridStream` view that hides the real
+top-dimensional cells entirely, so the (often largest) top dimension never enters a reduction. Cohomology rather than
+chunks: in 3-D, chunks on the middle degrees made the hybrid slower than plain cohomology on the whole image, and with
+cohomology it is faster at every size measured. No hardcoded dimension ceiling. See `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md` for the full derivation,
 including why the dual union-find's own correctness doesn't depend on how the middle dimensions get resolved;
 cross-validated against the naive engine at `d=3` (hand fixtures, Fp(3) sign-genericity, a random property
 test) plus one `d=4` smoke test, not validated at `d >= 5`.
@@ -175,10 +186,12 @@ endpoints swapped. `∞` must be the unconditional elder of any merge it takes p
 also carry `topValue = +Infinity` (this codebase's own "permanently missing cell" convention, e.g. Perseus's
 `-1`) and tie against it.
 
-**Representatives**: each active dual component tracks its own running signed sum of top cells, oriented
-coherently as merges happen so a dying component's boundary is exactly the `H_{d-1}` cycle bounding it — the
-orientation flip needed at each merge is solved directly from the connecting facet's own boundary coefficients
-(always `±1`, `cubeIsOrderedCell`'s alternating-sign rule) and each side's own already-established sign,
+**Representatives**: every top cell carries a sign relative to the root of its dual component, kept in a signed
+union-find (`SignedUnionFind`: path compression composes the signs, a merge only re-links two roots), so a dying
+component's signed sum of top cells has exactly the `H_{d-1}` cycle bounding it as its boundary. The orientation flip
+at each merge is solved from the connecting facet's own boundary coefficients (always `±1`, `cubeIsOrderedCell`'s
+alternating-sign rule) and each side's sign; the dying region is read off the merge forest only for a bar that is
+reported, so a merge costs nearly constant time and a representative costs the size of its region,
 matching this codebase's design principle of representatives from every engine, not just this one's own
 speed. This is this codebase's *own* extension: the source paper is F2-only and barcode-only.
 
@@ -198,19 +211,17 @@ cospherical-degeneracy hazard can violate directly by emitting an oversized simp
 dimension `>= 2`, same as engine 6** (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): both
 union-finds were already dimension-generic before this extension (only the `require` gated them to `d=2`), so
 extending past 2D was purely a matter of handing the residual "middle" dimensions (`1 <= k <= d-2`) to
-`PersistenceInChunksEngine[Int, C]` run on a new `LimitedAlphaShapesStream` view (the `Simplex[Int]`
+`CellularCohomologyEngine` (cycles by the involution) run on a new `LimitedAlphaShapesStream` view (the `Simplex[Int]`
 analogue of engine 6's own `LimitedCubicalGridStream` — needed because `HelixDelaunay`/`AlphaShapes` is a
 `LevelwiseSimplexStream`, not a `CofaceSimplexStream`, so the existing `LimitedCofaceSimplexStream` doesn't fit
 it) that hides the real top-dimensional simplices. Sequenced AFTER engine 6's own hybrid was validated, not
 concurrently, because this engine ALSO carries the facet-multiplicity risk below, which needed its own fresh
 measurement at `d=3` rather than assuming the `d=2` rate carried over — it does not.
 
-**Unlike engine 6, this precondition is not guaranteed by construction**, and the rate is NOT flat across
-dimension or point count: roughly 1-in-18700 on random points at ambient dimension 2 (the original measurement)
-but roughly 1-in-1666 at ambient dimension 3 with 20-30 points (vs. zero violations in 20000 trials with only
-6-16 points at the same dimension) — see `alpha-complex.md` for the full measurement. A real `HelixDelaunay`
-limitation, not a flaw in this construction, but a materially bigger one at `d=3` than the `d=2` figure alone
-would suggest. Validates the precondition explicitly and throws the named `FastAlphaTriangulationException` on
+**Unlike engine 6, this precondition is not guaranteed by construction.** `HelixDelaunay` checks every
+triangulation it builds (each point a vertex, no facet in three top simplices, every boundary facet on the hull)
+and re-triangulates from perturbed points when the check fails; with its minimal-centre frontier walk no
+violation occurred in 20000 random 2-D, 3000 3-D and 500 4-D clouds. Validates the precondition explicitly and throws the named `FastAlphaTriangulationException` on
 violation rather than building a silently-wrong dual graph — its message is layered plain-language-first (for
 an unsuspecting MATLAB/CLI caller: "NOT an error in your data," naming the ambient dimension and the measured
 rates, the concrete retry) with the facet-count detail as a technical appendix, the same two-audience approach
@@ -271,7 +282,7 @@ has any notion of the OTHER constructions at all, so every other row's "no" is "
 `HelixDelaunay`" respectively, not a per-row special case. Both are additionally refused within their one
 "yes" row for a narrower reason: `fast-cubical` only for a degenerate 1-axis image (ambient dimension `< 2`);
 `fast-alpha` only for `alphaBackend=DQP` (this engine cannot consume `AlphaShapeDQP`'s output at all) — neither
-is refused for HIGH ambient dimension any more, now that both are extended past 2D via a `chunks` hybrid for
+is refused for HIGH ambient dimension any more, now that both are extended past 2D via a cohomology hybrid for
 the residual middle dimensions (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`); both name the
 actual mismatch in their own message rather than throwing a bare `IllegalArgumentException`.
 
@@ -302,7 +313,7 @@ Reading the "no" cells as one-line reasons, grouped by root cause:
   hardcoded to `Simplex[Int]`'s combinatorial-number-system indexing (`SimplexIndexing`); `Cube` has no
   equivalent encoding built for it. Engine 6 (`fast-cubical`) is a dedicated fast engine in this spirit, but
   not a drop-in replacement for `ripser` here: it's a different algorithm (dual-graph union-find plus, at
-  `d >= 3`, a hybrid with `chunks` for the residual middle dimensions — not `SimplexIndexing`-style
+  `d >= 3`, a hybrid with the cohomology engine for the residual middle dimensions — not `SimplexIndexing`-style
   enumeration). A grid-exploiting engine dedicated to 3D specifically (`CubicalRipser`, Wagner-Chen-Vuçini)
   remains a documented future direction, `DESIGN-fast-cubical-engine.md`.
 
@@ -320,5 +331,5 @@ tradeoff actually buys and costs.
 | Fast, memory-efficient cohomology on a Vietoris-Rips/clique complex over integer vertex labels | **`PackedRipserCohomologyEngine`** (what `engine="ripser"` uses) |
 | A `Simplex[Int]`-keyed reference implementation for hand-debugging engine 4 | `RipserCohomologyEngine` (test oracle, not a production choice) |
 | Cohomology (real cocycle representatives) on `Cube`/`FiniteSimplicialSet`/Cech/Alpha/general witness complex, or any `OrderedCell` type engines 3/4 can't serve | **`CellularCohomologyEngine`** (what `engine="cohomology"` uses) |
-| Fastest option for a cubical grid of any ambient dimension `>= 2` (no `Chain` reduction at all for `H_0`/`H_{d-1}`; a `chunks` hybrid for any residual middle dimensions at `d >= 3`) | **`FastCubicalHomologyEngine`** (what `engine="fast-cubical"` uses) |
+| Fastest option for a cubical grid of any ambient dimension `>= 2` (no `Chain` reduction at all for `H_0`/`H_{d-1}`; a cohomology hybrid for any residual middle dimensions at `d >= 3`) | **`FastCubicalHomologyEngine`** (what `engine="fast-cubical"` uses) |
 | Fastest option for an alpha complex via `HelixDelaunay`, any ambient dimension `>= 2` (same hybrid shape as `FastCubicalHomologyEngine`; noticeably more likely to throw `FastAlphaTriangulationException` at higher ambient dimension/point count) | **`FastAlphaHomologyEngine`** (what `engine="fast-alpha"` uses) |

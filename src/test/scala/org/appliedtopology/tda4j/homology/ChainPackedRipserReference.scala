@@ -1,0 +1,313 @@
+package org.appliedtopology.tda4j
+
+import scala.collection.mutable
+import scala.compiletime.asMatchable
+
+/** Test oracle: `PackedRipserCohomologyEngine` as it was while its columns were reduced through `Chain.reduceBy`'s
+  * `TreeMap` working column, kept as it was apart from the class name (`.claude/WORKLOG-vr-working-column.md`).
+  * `PackedWorkingColumnSpec` checks that the production engine, which reduces in a heap of primitive arrays, returns
+  * the same pairs and the same cocycles, term for term, in the same order.
+  */
+class ChainPackedRipserReference[CoefficientT: Field](
+  metricSpace: FiniteMetricSpace[Int],
+  maxDimension: Int,
+  useApparentPairs: Boolean = true,
+  // None: the minimum enclosing radius.
+  maxFiltrationValue: Option[Double] = None
+):
+
+  private val resolvedMaxFiltrationValue: Double =
+    maxFiltrationValue.getOrElse(metricSpace.minimumEnclosingRadius)
+
+  /** The combinatorial number system of this metric space's simplices, for decoding the cells of returned chains. */
+  val si: SimplexIndexing = SimplexIndexing(metricSpace.size)
+  private val fr = summon[CoefficientT is Field]
+
+  /** A simplex as its (diameter, combinatorial index): the cell type of the returned chains. Equality and hash use the
+    * index alone, so the same simplex reached by different floating-point paths is one key.
+    */
+  final case class DiameterIndex(diameter: Double, index: Long):
+    // `.asMatchable` only satisfies the Matchable check on an `Any` selector; no runtime cost.
+    override def equals(other: Any): Boolean = other.asMatchable match
+      case that: DiameterIndex => this.index == that.index
+      case _                   => false
+    override def hashCode(): Int = index.hashCode()
+
+  // Ascending by diameter; on a tie the larger index is older (as RipserCohomologyEngine.cohomologyOrdering).
+  // Same-index pairs compare equal before the diameter is looked at, so this agrees with `DiameterIndex.equals`
+  // (index only) even when a non-symmetric `distance` gives one index two diameters; otherwise `basis` (keyed by
+  // equals) and a chain's TreeMap (keyed by this order) disagree and `Chain.reduceLoop` never terminates
+  // (WORKLOG-o3-1024-fractal-r-session-2026-09-25.md).
+  private def compareDiamThenIndex(x: DiameterIndex, y: DiameterIndex): Int =
+    if x.index == y.index then 0
+    else
+      val fc = java.lang.Double.compare(x.diameter, y.diameter)
+      if fc != 0 then fc else java.lang.Long.compare(y.index, x.index)
+
+  given packedOrdering: Ordering[DiameterIndex] = compareDiamThenIndex(_, _)
+
+  // The diameter of a decoded vertex array, O(d^2): for facets, where removing a vertex has no cheap update rule.
+  private def maxPairwiseDistance(vertices: Array[Int]): Double =
+    var maxD = 0.0
+    var i = 0
+    while i < vertices.length do
+      var j = i + 1
+      while j < vertices.length do
+        val d = metricSpace.distance(vertices(i), vertices(j))
+        if d > maxD then maxD = d
+        j += 1
+      i += 1
+    maxD
+
+  // The canonical cofacets of `sigma` (insert a vertex above its largest) within `maxFiltrationValue`; `size` is sigma's
+  // vertex count (a DiameterIndex does not know its dimension). Lazy, so one source simplex's cofacets are live at a
+  // time.
+  private def sparseCofacets(sigma: DiameterIndex, size: Int): Iterator[DiameterIndex] =
+    if size > maxDimension then Iterator.empty
+    else
+      val vertices = si.decodeToArray(sigma.index, size)
+      val cur = si.cofacetCursor(sigma.index, size, allCofacets = false)
+      new Iterator[DiameterIndex]:
+        private var pending: DiameterIndex = DiameterIndex(0.0, 0L)
+        private var havePending: Boolean = false
+        private def step(): Unit =
+          havePending = false
+          while !havePending && cur.hasNext do
+            val tauFv = insertionDiameter(metricSpace, vertices, sigma.diameter, cur.vertex)
+            if tauFv <= resolvedMaxFiltrationValue then
+              pending = DiameterIndex(tauFv, cur.index)
+              havePending = true
+            cur.advance()
+        step()
+        def hasNext: Boolean = havePending
+        def next(): DiameterIndex =
+          if !havePending then throw new NoSuchElementException("next on empty iterator")
+          val result = pending
+          step()
+          result
+
+  /** The coboundary of `sigma` (with `size` vertices) in the complex truncated at `maxFiltrationValue`, as in
+    * [[RipserCohomologyEngine.coboundaryOf]]. Defined up to dimension `maxDimension`.
+    */
+  def coboundaryOf(sigma: DiameterIndex, size: Int): Chain[DiameterIndex, CoefficientT] =
+    if size - 1 > maxDimension then Chain.empty
+    else
+      val vertices = si.decodeToArray(sigma.index, size)
+      val cur = si.cofacetCursor(sigma.index, size, allCofacets = true)
+      val buffer = mutable.ArrayBuffer.empty[(DiameterIndex, CoefficientT)]
+      while cur.hasNext do
+        val tauFv = insertionDiameter(metricSpace, vertices, sigma.diameter, cur.vertex)
+        if tauFv <= resolvedMaxFiltrationValue then
+          // `vertices` is sorted ascending: a plain scan counts the entries below `cur.vertex`.
+          var position = 0
+          while position < vertices.length && vertices(position) < cur.vertex do position += 1
+          val sign = if position % 2 == 0 then fr.one else fr.negate(fr.one)
+          buffer += ((DiameterIndex(tauFv, cur.index), sign))
+        cur.advance()
+      Chain.from(buffer.toSeq)
+
+  // The oldest same-diameter cofacet (largest index): the cursor's index decreases strictly, so the first tie is it.
+  private def zeroPivotCofacet(sigma: DiameterIndex, size: Int): Option[DiameterIndex] =
+    if size - 1 > maxDimension then None
+    else
+      val vertices = si.decodeToArray(sigma.index, size)
+      val cur = si.cofacetCursor(sigma.index, size, allCofacets = true)
+      while cur.hasNext do
+        val tauFv = insertionDiameter(metricSpace, vertices, sigma.diameter, cur.vertex)
+        if tauFv == sigma.diameter then return Some(DiameterIndex(sigma.diameter, cur.index))
+        cur.advance()
+      None
+
+  // The youngest same-diameter facet (smallest index): the facet cursor's index increases strictly, so the first tie is
+  // it. Facet diameters are recomputed from the vertex array.
+  private def zeroPivotFacet(tau: DiameterIndex, size: Int): Option[DiameterIndex] =
+    val tauVertices = si.decodeToArray(tau.index, size)
+    val candidate = new Array[Int](size - 1)
+    val cur = si.facetCursor(tau.index, size)
+    while cur.hasNext do
+      var w = 0
+      var r = 0
+      while w < tauVertices.length do
+        if tauVertices(w) != cur.vertex then
+          candidate(r) = tauVertices(w)
+          r += 1
+        w += 1
+      val fv = maxPairwiseDistance(candidate)
+      if fv == tau.diameter then return Some(DiameterIndex(tau.diameter, cur.index))
+      cur.advance()
+    None
+
+  private def zeroApparentCofacet(sigma: DiameterIndex, size: Int): Option[DiameterIndex] =
+    for
+      tau <- zeroPivotCofacet(sigma, size)
+      partner <- zeroPivotFacet(tau, size + 1)
+      if partner == sigma
+    yield tau
+
+  private def zeroApparentFacet(tau: DiameterIndex, size: Int): Option[DiameterIndex] =
+    for
+      sigma <- zeroPivotFacet(tau, size)
+      partner <- zeroPivotCofacet(sigma, size - 1)
+      if partner == tau
+    yield sigma
+
+  private var _substitutionCount: Int = 0
+  def substitutionCount: Int = _substitutionCount
+
+  private var _totalSimplexCount: Int = 0
+  def totalSimplexCount: Int = _totalSimplexCount
+
+  private var _apparentPairCount: Int = 0
+
+  /** How many simplices the last run paired directly as apparent pairs, without reducing their coboundary. */
+  // Distinct from `substitutionCount`, which counts the lazy fallback when another column needs an apparent pair's
+  // column as a pivot (WORKLOG-o3-1024-fractal-r-session-2026-09-25.md).
+  def apparentPairCount: Int = _apparentPairCount
+
+  /** Every bar of degree `0 .. maxDimension`, each with its representative cocycle (over [[DiameterIndex]] cells;
+    * decode with `si`); zero-length bars only if `includeZeroLength`.
+    */
+  def persistentCohomology(
+    includeZeroLength: Boolean = false
+  ): List[PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]]] =
+    PersistenceBar.dropZeroLength(pairedCohomology().map(_._1), includeZeroLength)
+
+  /** The same bars with '''cycles''' as representatives (over [[DiameterIndex]] cells): the pairing comes from the
+    * cohomology computation, and only the boundary columns of the death simplices are reduced ([[Involution]]).
+    */
+  def persistentHomology(
+    includeZeroLength: Boolean = false
+  ): List[PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]]] =
+    val paired = pairedCohomology()
+    val cycles = Involution.cycles[DiameterIndex, CoefficientT](
+      paired.map(_._2).toIndexedSeq,
+      packedOrdering.reverse,
+      boundaryOf
+    )
+    val bars = paired.zip(cycles).map { case ((bar, _), (cycle, _)) =>
+      new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(cycle))
+    }
+    PersistenceBar.dropZeroLength(bars, includeZeroLength)
+
+  /** The boundary of a `dim`-simplex: the facet without its `i`-th smallest vertex, with sign `(-1)^i`. */
+  private[tda4j] def boundaryOf(tau: DiameterIndex, dim: Int): Seq[(DiameterIndex, CoefficientT)] =
+    if dim == 0 then Seq.empty
+    else
+      val vertices = si.decodeToArray(tau.index, dim + 1).sorted
+      vertices.indices.map { i =>
+        val facet = vertices.patch(i, Nil, 1)
+        val cell = DiameterIndex(maxPairwiseDistance(facet), si(Simplex(facet*)))
+        (cell, if i % 2 == 0 then fr.one else fr.negate(fr.one))
+      }
+
+  /** Every bar, zero-length ones included, with the cells that open and close it. */
+  private[tda4j] def pairedCohomology()
+    : List[(PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]], Involution.Pair[DiameterIndex])] =
+    val chainRM = summon[Chain[DiameterIndex, CoefficientT] is RingModule]
+    import chainRM.*
+
+    _substitutionCount = 0
+    _totalSimplexCount = 0
+    _apparentPairCount = 0
+    val bars =
+      mutable.ArrayDeque
+        .empty[(PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]], Involution.Pair[DiameterIndex])]
+
+    // Rotating per-dimension cleared set, keyed by bare Long index -- NOT a single set accumulated across all
+    // dimensions the way RipserCohomologyEngine's Simplex[Int]-keyed `cleared` safely is. A combinatorial-
+    // number-system index is only unique WITHIN one fixed size (index 5 at dimension 1 and index 5 at dimension
+    // 2 are different simplices), so a stale entry from two dimensions ago could otherwise cause a false-positive
+    // clear. `activeCleared` holds this iteration's dimension-d clears (populated during the PREVIOUS iteration);
+    // `nextCleared` (below, inside the loop) accumulates dimension-(d+1) clears as they're discovered THIS
+    // iteration, then rotates in.
+    var activeCleared: mutable.Set[Long] = mutable.Set.empty
+
+    // Dimension-0 candidates: every vertex, diameter 0.0 -- index IS the vertex id (SimplexIndexing.apply's own
+    // d==0 base case: a single vertex v decodes to/from index v directly).
+    var currentLevel: Seq[DiameterIndex] =
+      (0 until metricSpace.size).map(v => DiameterIndex(0.0, v.toLong))
+
+    for d <- 0 to maxDimension do
+      val size = d + 1
+      val simplicesAtD: Seq[DiameterIndex] = currentLevel.sorted(using packedOrdering.reverse)
+      _totalSimplexCount += simplicesAtD.size
+
+      // Capacity-hinted, not `mutable.Map.empty`/`mutable.Set.empty` (which default to `HashMap`/`HashSet` at
+      // their own built-in starting capacity regardless of how many entries this dimension will actually hold) --
+      // `basis`/`generators` each get AT MOST one entry per simplex in `simplicesAtD` (exactly one write per
+      // `sigma` processed below, to at most one of the two branches), and `nextCleared` likewise at most one
+      // entry per `sigma`, so `simplicesAtD.size` is a real upper bound on final size, not a guess. Sized to avoid
+      // `HashMap.growTable`/`HashSet.growTable` entirely for the common case, rather than the default capacity
+      // forcing one or more table-doubling rehashes as each dimension's collections fill up. Pure capacity hint,
+      // no behavior change: none of these three collections is ever iterated in an order-dependent way below
+      // (only `.get`/`.contains`/`+=`/`.getOrElse`, all point operations).
+      val loadFactor = mutable.HashMap.defaultLoadFactor
+      val capacity = (simplicesAtD.size / loadFactor).toInt + 1
+      val basis: mutable.Map[DiameterIndex, Chain[DiameterIndex, CoefficientT]] =
+        new mutable.HashMap(capacity, loadFactor)
+      val generators: mutable.Map[DiameterIndex, Chain[DiameterIndex, CoefficientT]] =
+        new mutable.HashMap(capacity, loadFactor)
+      var nextCleared: mutable.Set[Long] = new mutable.HashSet(capacity, loadFactor)
+
+      // tau's own size (one more than sigma's) -- captured here, per-dimension, because a bare DiameterIndex
+      // doesn't know its own dimension the way a Simplex[Int] does; zeroApparentFacet needs it to decode tau's
+      // facets correctly.
+      val coboundarySize = size + 1
+      val basisFallback: DiameterIndex => Option[Chain[DiameterIndex, CoefficientT]] =
+        if useApparentPairs then
+          (tau: DiameterIndex) =>
+            zeroApparentFacet(tau, coboundarySize).map { sigma =>
+              _substitutionCount += 1
+              coboundaryOf(sigma, size)
+            }
+        else (_: DiameterIndex) => None
+
+      for sigma <- simplicesAtD if !activeCleared.contains(sigma.index) do
+        val sigmaFv = sigma.diameter
+        (if useApparentPairs then zeroApparentCofacet(sigma, size) else None) match
+          case Some(tau) =>
+            _apparentPairCount += 1
+            val vcol = Chain[DiameterIndex, CoefficientT](sigma)
+            generators(tau) = vcol
+            nextCleared += tau.index
+            bars.append(
+              (
+                PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(tau.diameter), Some(vcol)),
+                Involution.Pair(d, sigma, Some(tau))
+              )
+            )
+          case None =>
+            val z = coboundaryOf(sigma, size)
+            val (reduced, log) = Chain.reduceBy(z, basis, Chain.empty, basisFallback)
+            val vcol: Chain[DiameterIndex, CoefficientT] =
+              log.rawEntries.foldLeft(Chain(sigma)) { case (acc, (pivot, coeff)) =>
+                acc - coeff ⊠ generators.getOrElse(
+                  pivot,
+                  throw new IllegalStateException(s"pivot $pivot has a basis entry but no generators entry")
+                )
+              }
+            vcol.collapseAll()
+            if reduced.isZero() then
+              bars.append(
+                (
+                  PersistenceBar(d, ClosedEndpoint(sigmaFv), PositiveInfinity(), Some(vcol)),
+                  Involution.Pair(d, sigma, None)
+                )
+              )
+            else
+              val pivot = reduced.leadingCell.get
+              basis(pivot) = reduced
+              generators(pivot) = vcol
+              nextCleared += pivot.index
+              bars.append(
+                (
+                  PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(pivot.diameter), Some(vcol)),
+                  Involution.Pair(d, sigma, Some(pivot))
+                )
+              )
+
+      if d < maxDimension then currentLevel = simplicesAtD.iterator.flatMap(sparseCofacets(_, size)).toSeq
+
+      activeCleared = nextCleared
+
+    bars.toList

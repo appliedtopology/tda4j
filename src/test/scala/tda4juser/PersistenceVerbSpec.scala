@@ -107,8 +107,9 @@ class PersistenceVerbSpec extends Specification:
       (cech.dim(1).longest must beSome)
         .and(alpha.dim(1).longest.map(_.persistence) must beSome(beGreaterThan(0.1)))
         .and(
-          Persistence(pts, complex = AlphaShapes, maxFiltrationValue = 1.0) must throwAn[IllegalArgumentException](
-            message = "diagram.at"
+          // Above every alpha value of this circle, the radius changes nothing.
+          Persistence(pts, complex = AlphaShapes, maxFiltrationValue = 3.0).triples.sorted must beEqualTo(
+            alpha.triples.sorted
           )
         )
     }

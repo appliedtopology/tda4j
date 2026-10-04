@@ -308,35 +308,58 @@ class TDA4jSpec extends mutable.Specification:
       agree must beTrue
     }
 
-    "engine=fast-alpha's own triangulation-limitation exception, on a real (pinned) failing point set, has a " +
-      "message an unsuspecting MATLAB/CLI caller can act on -- not swallowed or replaced by the facade" in {
-        // Same 12-point set FastAlphaHomologySpec pins as a deterministic facet-multiplicity-violation regression
-        // (found by a targeted search, not relied on a seed to rediscover) -- verifies the exception propagates
-        // through the MATLAB dispatch layer completely unchanged, own message and all, rather than being
-        // swallowed or replaced by a less specific one along the way.
-        val degeneratePoints = Array(
-          Array(0.25695462472920483, 0.05056259919533401),
-          Array(0.16861543461245865, 0.6584119575973783),
-          Array(0.04467548898740192, 0.34594140416504626),
-          Array(0.4001206924759393, 0.7492099413470164),
-          Array(0.9883782492738798, 0.31376350981292744),
-          Array(0.9160887469534176, 0.952687093337434),
-          Array(0.19808274564375272, 0.2756763438426806),
-          Array(0.6337671470530175, 0.4977740447848821),
-          Array(0.6906131750679769, 0.9538206186545584),
-          Array(0.4693304070850357, 0.4362857418234436),
-          Array(0.5483329515783447, 0.7788827446454716),
-          Array(0.8916378524720998, 0.4724706741593929)
-        )
-        try
-          FullBarcode.computeFromPoints(degeneratePoints, Array("complex", "alpha", "engine", "fast-alpha"))
-          ko("expected FastAlphaTriangulationException to propagate through the facade, but nothing was thrown")
-        catch
-          case e: FastAlphaTriangulationException =>
-            (e.getMessage must contain("NOT an error in your data")) and
-              (e.getMessage must contain("TO GET YOUR RESULT")) and
-              (e.getMessage must contain("\"naive\""))
-      }
+    "engine=fast-alpha on an exact 4x4x4 grid (cospherical cubes) agrees with engine=naive" in {
+      // fast-alpha needs a valid triangulation (it throws otherwise); the facade's default epsilon is AlphaShapes' own.
+      val grid =
+        (for i <- 0 until 4; j <- 0 until 4; k <- 0 until 4 yield Array(i.toDouble, j.toDouble, k.toDouble)).toArray
+      def nonTrivial(opts: Array[String]) =
+        triples(FullBarcode.computeFromPoints(grid, opts).toArray())
+          .filter(t => t._3 - t._2 > 1e-9)
+          .sortBy(t => (t._1, t._2, t._3))
+      val naive = nonTrivial(Array("complex", "alpha"))
+      val fastAlpha = nonTrivial(Array("complex", "alpha", "engine", "fast-alpha"))
+      (naive.length must be_==(fastAlpha.length)) and
+        naive
+          .zip(fastAlpha)
+          .forall { case ((d1, b1, e1), (d2, b2, e2)) =>
+            d1 == d2 && math
+              .abs(b1 - b2) < 1e-9 && (e1.isInfinite == e2.isInfinite) && (e1.isInfinite || math.abs(e1 - e2) < 1e-9)
+          }
+          .must(beTrue)
+    }
+
+    "engine=fast-alpha computes the point set whose triangulation once broke it, and agrees with engine=naive" in {
+      // The 12-point set FastAlphaHomologySpec pins: Helix's earlier candidate search gave one facet three cofaces
+      // here, and the engine threw FastAlphaTriangulationException. The facade has no catch on this path; the
+      // exception's message is tested on the engine's own check (FastAlphaHomologySpec).
+      val degeneratePoints = Array(
+        Array(0.25695462472920483, 0.05056259919533401),
+        Array(0.16861543461245865, 0.6584119575973783),
+        Array(0.04467548898740192, 0.34594140416504626),
+        Array(0.4001206924759393, 0.7492099413470164),
+        Array(0.9883782492738798, 0.31376350981292744),
+        Array(0.9160887469534176, 0.952687093337434),
+        Array(0.19808274564375272, 0.2756763438426806),
+        Array(0.6337671470530175, 0.4977740447848821),
+        Array(0.6906131750679769, 0.9538206186545584),
+        Array(0.4693304070850357, 0.4362857418234436),
+        Array(0.5483329515783447, 0.7788827446454716),
+        Array(0.8916378524720998, 0.4724706741593929)
+      )
+      val naive = triples(FullBarcode.computeFromPoints(degeneratePoints, Array("complex", "alpha")).toArray())
+        .sortBy(t => (t._1, t._2, t._3))
+      val fastAlpha = triples(
+        FullBarcode.computeFromPoints(degeneratePoints, Array("complex", "alpha", "engine", "fast-alpha")).toArray()
+      ).sortBy(t => (t._1, t._2, t._3))
+      (naive.length must be_==(fastAlpha.length)) and
+        naive
+          .zip(fastAlpha)
+          .forall { case ((d1, b1, e1), (d2, b2, e2)) =>
+            d1 == d2 && math.abs(b1 - b2) < 1e-9 &&
+            (e1.isInfinite == e2.isInfinite) && (e1.isInfinite || math.abs(e1 - e2) < 1e-9)
+          }
+          .must(beTrue)
+    }
 
     // requireValidTriangulation (.claude/DESIGN-helix-triangulation-repair.md), threaded through the facade.
     // Reuses the SAME pinned 12-point facet-multiplicity-violation fixture as the exception test above.

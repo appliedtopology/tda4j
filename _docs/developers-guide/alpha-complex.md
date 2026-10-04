@@ -11,34 +11,50 @@ pick, and the honest tradeoffs), see the [User's Guide](../user-guide/index.md).
 
 ```scala sc:nocompile
 object AlphaShapes:
-  def apply(points: PointCloud, backend: AlphaBackend = AlphaBackend.Default, requireValidTriangulation: Boolean = false)(
-    using epsilon: Epsilon = Epsilon(1e-5)
-  ): AlphaShapes
+  def apply(
+    points: PointCloud,
+    backend: AlphaBackend = AlphaBackend.Default,
+    requireValidTriangulation: Boolean = false,
+    maxRadius: Optional[Double] = Optional.empty,
+    maxDimension: Optional[Int] = Optional.empty
+  )(using epsilon: Epsilon = Epsilon(1e-5)): AlphaShapes
 ```
 
-`AlphaBackend.Default` **always resolves to `AlphaBackend.Helix` regardless of point-cloud shape** — `AlphaBackend.DQP`
-must be requested explicitly (the MATLAB/CLI facade's `alphaBackend` string goes through `AlphaBackend.parse`). Both backends extend the common `AlphaShapes` abstract class, so they're
-dispatch-interchangeable as far as any code consuming the resulting stream is concerned —
-`AlphaComplexSpec` runs identical property checks against both to enforce this.
+With a `maxRadius`, every backend returns the simplices of alpha value at most `maxRadius`, with the same values (in
+general position; on cospherical points DQP keeps the simplex they span where Helix triangulates): `Helix` builds the whole triangulation and filters it (`RadiusLimitedAlphaShapes`); `DQP` builds only up to the
+radius, dimension by dimension, up to `maxDimension + 1` (`AlphaComplexDQPStream`). `AlphaBackend.Default` resolves to
+`Helix` without a radius and otherwise to whichever `AlphaShapes.prefersDQP` expects to be faster: it estimates the
+mean number of points within `2 maxRadius` of a point (64 sample points) and compares a per-point cost model fitted to
+measurements (DQP about `c_d k^1.6`, Helix about `h_d (n/1000)^0.4`; in ambient dimension 6 and up DQP whenever a radius
+is given). `AlphaShapes.fromPoints` (the `Persistence` verb) and the MATLAB/CLI `maxFiltrationValue` pass the radius
+through; `engine=fast-alpha` needs the whole Helix triangulation and refuses a radius. The facade's `alphaBackend`
+string goes through `AlphaBackend.parse` (default `default`). All backends extend the common `AlphaShapes` abstract
+class, so they are interchangeable for any code consuming the stream: `AlphaComplexSpec` runs identical property
+checks against both, and `AlphaDispatchSpec` checks that the radius-limited complexes and the verb's bars agree.
 
 ## `HelixDelaunay` — an actual Delaunay triangulation
 
 Builds an actual Delaunay triangulation incrementally: finds a bootstrap simplex, then walks the frontier of
 facets, testing candidate points against each facet's supporting hyperplane and circumsphere.
-`filtrationValue` returns the unsquared circumradius, matching DQP's own units after `radiusOf`.
+`filtrationValue` returns unsquared radii, matching DQP's own units after `radiusOf`. Values are assigned top-down: a
+top-dimensional simplex gets its circumradius; a lower simplex gets the radius of its own smallest circumsphere (centre
+in its affine hull) if it is Gabriel -- no vertex of a coface strictly inside that sphere -- and otherwise the smallest
+value among its immediate cofaces. For points in general position this is the alpha filtration exactly, and
+`HelixDqpAgreementSpec` checks that Helix and DQP give the same barcode in dimensions 2, 3 and 4.
 
 **Known, quantified limitation**: on point clouds with a near-cospherical local cluster (competing
 candidate simplices' circumradii agreeing to 4-5 significant figures — closer than the tiling logic's own
 near-tie detection catches, since that logic only checks ties against one already-chosen candidate, not
 across competing candidates), the frontier walk's greedy search becomes order-dependent and can converge on
-a locally-consistent but globally wrong triangulation. Measured: zero failures across 20,000-trial fuzz
-sweeps at ambient dimension 2 and 5, but roughly 1-in-170 at ambient dimension 4 with 20-30 points —
-ordinary-looking inputs, not contrived counterexamples. A real fix needs joint near-tie detection across all
-competing candidates before committing to one; this is a genuine algorithm change, not a bounded bug fix.
+a locally-consistent but globally wrong triangulation. Measured for the earlier candidate search: roughly
+1-in-170 at ambient dimension 4 with 20-30 points. The current walk takes, across each frontier facet, the point
+whose sphere through the facet is met first (one pass, no candidate ordering), treats only exactly cospherical
+points as a cluster, and checks and repairs every result; no invalid triangulation occurred in 500 random 4-D
+clouds of 25 points.
 
-**Practical consequence**: Helix is not a fully reliable ground truth for automated cross-validation fuzzing
-at ambient dimension ≥ 4 without an assurance against near-cospherical local structure. Broad `forAll`-based
-DQP-vs-Helix comparisons in `AlphaCrossValidationSpec` are deliberately kept out of `sbt test` (available as
+**Practical consequence**: on degenerate (near-cospherical) input, Helix is not a fully reliable ground truth for
+automated cross-validation fuzzing at ambient dimension ≥ 4. Broad `forAll`-based DQP-vs-Helix comparisons on such
+input in `AlphaCrossValidationSpec` are deliberately kept out of `sbt test` (available as
 manually-invoked diagnostic methods instead) — a real Helix failure would otherwise masquerade as a DQP
 regression or vice versa.
 
@@ -70,11 +86,11 @@ and the concrete fix — retry with `engine="naive"`/`"chunks"`/`"cohomology"`, 
 with the facet-count technical detail kept as a secondary appendix for developers investigating this class
 itself.
 
-**At ambient dimension `>= 3`, the same hybrid-with-`chunks` extension as `FastCubicalHomologyEngine`**
+**At ambient dimension `>= 3`, the same hybrid extension as `FastCubicalHomologyEngine`**
 (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): both union-finds were ALREADY written generically
 in terms of `ambientDimension`, not hardcoded to 2 — the only thing gating this engine to `d=2` was the single
 `require` check, so extending it is purely a matter of handing the residual "middle" dimensions (`1 <= k <=
-d-2`) to `PersistenceInChunksEngine[Int, C]` run on a new `LimitedAlphaShapesStream` view (the
+d-2`) to `CellularCohomologyEngine` (cycles by the involution) run on a new `LimitedAlphaShapesStream` view (the
 `Simplex[Int]` analogue of `LimitedCubicalGridStream` — needed because `HelixDelaunay`/`AlphaShapes` is
 a `LevelwiseSimplexStream`, not a `CofaceSimplexStream`, so the existing `LimitedCofaceSimplexStream` doesn't
 fit it) that hides the real top-dimensional simplices. Deliberately sequenced AFTER the cubical extension, not
@@ -90,7 +106,7 @@ exactly as the `d=2` property test already does).
 **Wired into `matlab.TDA4j`/`cli` as `engine="fast-alpha"`/`--engine fast-alpha`**, same as the cubical engine
 — valid only for `complex=alpha` with `alphaBackend=helix` (the default; `alphaBackend=DQP` is refused, since
 this engine cannot consume `AlphaShapeDQP`'s output at all) and any ambient dimension `>= 2` (no artificial
-ceiling — `chunks`, which the hybrid path hands the middle dimensions to, is already fully general over `d`).
+ceiling — the cohomology engine, which the hybrid path hands the middle dimensions to, is fully general over `d`).
 The project lead reviewed the measured ~1-in-18700 rate at `d=2` and the resulting exception message and signed
 off on shipping it as a production option; the `d=3` extension's own materially higher measured rate
 (~1-in-1666 at 20-30 points) is documented explicitly here and in the exception message itself, on the same
