@@ -31,7 +31,8 @@ class DelaunayPredicatesSpec extends mutable.Specification:
       diff :+ diff.foldLeft(BD.ZERO)((s, x) => s.add(x.multiply(x)))
     }).signum
 
-  def ulps(x: Double, k: Int): Double = (0 until math.abs(k)).foldLeft(x)((y, _) => if k > 0 then math.nextUp(y) else math.nextDown(y))
+  def ulps(x: Double, k: Int): Double =
+    (0 until math.abs(k)).foldLeft(x)((y, _) => if k > 0 then math.nextUp(y) else math.nextDown(y))
 
   /** Points on a random affine flat of dimension `flatDim` in `d` dimensions, then nudged by a few ulps, offset far. */
   def nearFlat(rng: scala.util.Random, d: Int, n: Int, flatDim: Int, offset: Double): Array[Array[Double]] =

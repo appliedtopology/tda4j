@@ -32,7 +32,12 @@ private[tda4j] final class DelaunayPredicates(points: Array[Array[Double]]):
   /** `(sign, |sign| > 0 trusted)`: the floating-point determinant and whether its sign exceeds the error bound.
     * `entryError` bounds the relative error of each entry (computed with roundoff), in units of `u`.
     */
-  private def filteredDet(m: Array[Array[Double]], perms: Array[Array[Int]], signs: Array[Int], entryError: Double): Int =
+  private def filteredDet(
+    m: Array[Array[Double]],
+    perms: Array[Array[Int]],
+    signs: Array[Int],
+    entryError: Double
+  ): Int =
     val n = m.length
     var sum = 0.0
     var magnitude = 0.0
@@ -135,7 +140,7 @@ private[tda4j] final class DelaunayPredicates(points: Array[Array[Double]]):
       .map { r =>
         val m = Array.tabulate(n, n) { (i, j) =>
           if j < d then coords(i)(j)
-          else if j == d then (if i == r then BD.ONE else BD.ZERO)
+          else if j == d then if i == r then BD.ONE else BD.ZERO
           else BD.ONE
         }
         exactDet(m, perms, signs)
