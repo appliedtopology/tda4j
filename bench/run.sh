@@ -7,6 +7,7 @@
 #   bench/run.sh run [bench.py run options...]   e.g. --tasks vr --fields 2,17 --timeout 3600
 #   bench/run.sh all [options...]   setup + prepare + run
 #   bench/run.sh summarize RESULTS_DIR
+#   bench/run.sh sweep-cubical [--dims 2,3] [...]   size sweep of TDA4j's image engines (sweep_cubical.py)
 #
 # Environment (all optional):
 #   WORKDIR        scratch space for tools, data and results (default: ./bench-work)
@@ -147,10 +148,14 @@ case "$cmd" in
     "$VENV/bin/python" "$BENCH/bench.py" run --data "$DATA" --out "$RESULTS" --python "$VENV/bin/python" "$@"
     ;;
   summarize) "$VENV/bin/python" "$BENCH/bench.py" summarize "$@" ;;
+  sweep-cubical)
+    export_env
+    "$VENV/bin/python" "$BENCH/sweep_cubical.py" --data "$DATA" --python "$VENV/bin/python" "$@"
+    ;;
   all)
     "$0" setup
     "$0" prepare
     "$0" run "$@"
     ;;
-  *) echo "usage: $0 setup|prepare|run|all|summarize [options]"; exit 2 ;;
+  *) echo "usage: $0 setup|prepare|run|all|summarize|sweep-cubical [options]"; exit 2 ;;
 esac
