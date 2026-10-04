@@ -25,7 +25,7 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
 
   /** Every bar of the alpha filtration, with representatives; zero-length bars only if `includeZeroLength`. */
   def persistentHomology(
-    helix: HelixDelaunay,
+    helix: DelaunayAlphaShapes,
     includeZeroLength: Boolean = false
   ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     require(
@@ -44,7 +44,7 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
   // declares homologyDegreeLimit = d - 2; H_0 comes out of the same computation).
   // -------------------------------------------------------------------------------------------------------------
   private def computeMiddleDimensions(
-    helix: HelixDelaunay,
+    helix: DelaunayAlphaShapes,
     includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     val truncated = LimitedAlphaShapesStream(helix, helix.ambientDimension - 1)
@@ -62,7 +62,7 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
   // FastCubicalHomologyEngine.computeH0, just over Simplex[Int] vertices/edges instead of Cube ones.
   // -------------------------------------------------------------------------------------------------------------
   private def computeH0(
-    helix: HelixDelaunay,
+    helix: DelaunayAlphaShapes,
     includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     val vertices: Vector[Simplex[Int]] = helix.iterateDimension.applyOrElse(0, (_: Int) => Iterator.empty).toVector
@@ -114,7 +114,7 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
   // SAME generic dual-union-find/representative-tracking algorithm regardless of cell type).
   // -------------------------------------------------------------------------------------------------------------
   private def computeDualTopDimension(
-    helix: HelixDelaunay,
+    helix: DelaunayAlphaShapes,
     includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     val ambientDim = helix.ambientDimension

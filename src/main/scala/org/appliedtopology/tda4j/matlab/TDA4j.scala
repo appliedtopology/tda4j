@@ -964,7 +964,7 @@ object TDA4j:
             // actual constructed type is what correctly accepts that case too, not just alphaBackend="helix"
             // literally.
             alphaStream match
-              case helix: HelixDelaunay =>
+              case helix: DelaunayAlphaShapes =>
                 if helix.ambientDimension < 2 then
                   throw new IllegalArgumentException(
                     s"engine=fast-alpha requires ambient dimension >= 2, got a " +

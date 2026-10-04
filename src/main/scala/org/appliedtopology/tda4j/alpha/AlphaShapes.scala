@@ -690,6 +690,109 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
 
     validated.toSet
 
+/** An alpha complex read off a Delaunay triangulation of `points`: the faces of the top-dimensional simplices, with
+  * alpha values computed top-down (see `alphaValues`). A subclass supplies the triangulation (`topSimplices`, distinct)
+  * and the value of each top simplex (`topValue`, its circumradius); [[HelixDelaunay]] is one.
+  * [[FastAlphaHomologyEngine]] works on any of them.
+  */
+abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
+  /** The dimension of the triangulation (of the points' affine span). */
+  def ambientDimension: Int
+
+  /** The points, in the coordinates the triangulation was built in. */
+  def points: Seq[Point]
+
+  /** The top-dimensional simplices, each once. */
+  protected def topSimplices: Iterable[Simplex[Int]]
+
+  /** The alpha value of a top-dimensional simplex. */
+  protected def topValue(s: Simplex[Int]): Double
+
+  lazy val simplicesMap: Map[Int, Seq[Simplex[Int]]] = Map.from(
+    (0 to ambientDimension).map(d =>
+      d -> topSimplices.toSet
+        .flatMap((top: Simplex[Int]) => top.toSet.subsets(d + 1))
+        .map((s: Set[Int]) => Simplex.from(s.toSeq))
+        .toSeq
+    )
+  )
+
+  /** The smallest sphere through every vertex of `s`: its centre lies in `s`'s own affine hull, at `p0 + Σ λ_i (p_i -
+    * p0)` with `Σ_j 2 (p_i - p0)·(p_j - p0) λ_j = |p_i - p0|²`. (`Hypersphere.apply` is for full-dimensional simplices:
+    * below full dimension its least-squares centre is the minimum-norm one, off the affine hull.)
+    */
+  def smallestCircumsphere(s: Simplex[Int]): (Point, Double) =
+    val vs = s.toSeq.toIndexedSeq
+    val p0 = points(vs.head)
+    val k = vs.size - 1
+    if k == 0 then (p0, 0.0)
+    else
+      val diffs = vs.tail.map(v => points(v).subtract(p0))
+      val gram = MatrixUtils.createRealMatrix(k, k)
+      val rhs = new Array[Double](k)
+      for i <- 0 until k do
+        rhs(i) = diffs(i).dotProduct(diffs(i))
+        for j <- 0 until k do gram.setEntry(i, j, 2 * diffs(i).dotProduct(diffs(j)))
+      val lambda = SingularValueDecomposition(gram).getSolver.solve(createRealVector(rhs))
+      val center = (0 until k).foldLeft(p0)((c, i) => c.add(diffs(i).mapMultiply(lambda.getEntry(i))))
+      (center, center.getDistance(p0))
+
+  /** Alpha values, top dimension first:
+    *   - a top-dimensional simplex: `topValue` (its circumradius);
+    *   - a lower simplex `σ`: if `σ` is Gabriel -- no vertex of a coface strictly inside its smallest circumsphere --
+    *     that sphere's radius, otherwise the smallest value among its immediate cofaces. A Gabriel simplex's radius is
+    *     already at most its cofaces' values; taking the minimum anyway keeps the filtration monotone to the last bit.
+    *   - a vertex: 0.
+    */
+  private lazy val alphaValues: Map[Simplex[Int], Double] =
+    val values = mutable.HashMap.empty[Simplex[Int], Double]
+    simplicesMap(ambientDimension).foreach(s => values(s) = topValue(s))
+    for k <- (ambientDimension - 1) to 1 by -1 do
+      val cofaces = mutable.HashMap.empty[Simplex[Int], mutable.ArrayBuffer[(Simplex[Int], Int)]]
+      simplicesMap(k + 1).foreach { t =>
+        t.toSeq.foreach(v => cofaces.getOrElseUpdate(t - v, mutable.ArrayBuffer.empty) += ((t, v)))
+      }
+      simplicesMap(k).foreach { s =>
+        val (center, r) = smallestCircumsphere(s)
+        val cs = cofaces.getOrElse(s, mutable.ArrayBuffer.empty)
+        val gabriel = cs.forall((_, v) => center.getDistance(points(v)) >= r - epsilon.epsilon)
+        val cofaceMin = cs.map((t, _) => values(t)).minOption.getOrElse(Double.PositiveInfinity)
+        values(s) = if gabriel then math.min(r, cofaceMin) else cofaceMin
+      }
+    simplicesMap(0).foreach(s => values(s) = 0.0)
+    values.toMap
+
+  override def filtrationValue: PartialFunction[Simplex[Int], Double] = { case spx => alphaValues(spx) }
+
+  // Must be the exact reverse of filtrationOrdering below, not merely "ascending by filtrationValue" --
+  // sortBy(filtrationValue) alone has no explicit tie-break (falls back to simplicesMap's own insertion
+  // order among ties), which doesn't match filtrationOrdering's simplexOrdering[Int] tie-break. This
+  // passes VietorisRipsSpec-style sortedness checks (value-only) but breaks PersistenceInChunksEngine,
+  // whose chunk-boundary logic (Homology.scala's PersistenceInChunksEngine.allCells) relies on
+  // iterateDimension's own emission order standing in for filtrationOrdering position -- found via
+  // EngineComparisonBenchmarkSpec / AlphaFiltrationOrderingRegressionSpec (see CLAUDE.md).
+  lazy val simplicesSortedMap: Map[Int, Seq[Simplex[Int]]] =
+    simplicesMap.map((d, v) => (d, v.sorted(using filtrationOrdering.reverse)))
+
+  def simplicesInDimension(d: Int): Iterator[Simplex[Int]] = simplicesSortedMap(d).iterator
+
+  def simplices(): Iterator[Simplex[Int]] = (0 to ambientDimension).iterator.flatMap(simplicesInDimension)
+
+  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+    case d if simplicesSortedMap.contains(d) => simplicesSortedMap(d).iterator
+  }
+
+  // The shared FiltrationOrdering.canonical shape: fv reversed, then dimension, then simplexOrdering.
+  // `simplicesSortedMap` (above) is built as `.sorted(using filtrationOrdering.reverse)` specifically so it
+  // stays the exact reverse of this ordering, tie-break included -- see RecursiveStackVietorisRipsSimplexStream's
+  // identical fix (VietorisRips.scala) and CLAUDE.md for the full root-cause writeup. This used to have no
+  // dimension key at all (`Ordering.by(filtrationValue).reverse.orElse(simplexOrdering[Int])`), which is wrong
+  // for the cross-dimension comparisons `Chain.reduceBy` performs during reduction (see the identical fix's own
+  // comment). Kept a `def`, not a `val`: `simplicesSortedMap` above uses it, and a `val` declared this late in the
+  // class body could be read before it is initialized (see CLAUDE.md's `ExplicitStreamBuilder` NPE note).
+  override def filtrationOrdering: Ordering[Simplex[Int]] =
+    FiltrationOrdering.canonical(filtrationValue, _.size, simplexOrdering[Int])
+
 /** The Delaunay triangulation of a point cloud, built by an incremental frontier walk
   * (https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10917453), filtered as an alpha complex.
   *
@@ -714,7 +817,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
   */
 class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTriangulation: Boolean = false)(using
   epsilon: Epsilon
-) extends AlphaShapes:
+) extends DelaunayAlphaShapes:
   // If `pts` is globally coplanar -- its own affine rank is strictly less than the declared ambient dimension
   // (the array width) -- there is no genuine full-ambient-dimensional Delaunay simplex to find at all: every
   // point lies in some lower-dimensional flat, so the bootstrap's search for a supporting hyperplane plus one
@@ -751,99 +854,14 @@ class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTria
       catch case _: IllegalStateException => raw // the repair did not converge; anything else is a bug and propagates
     else raw
 
-  val simplicesMap: Map[Int, Seq[Simplex[Int]]] = Map.from(
-    (0 to ambientDimension).map(d =>
-      d -> validated
-        .flatMap((ds: DelaunaySimplex) => ds.simplex.toSet.subsets(d + 1))
-        .map((s: Set[Int]) => Simplex.from(s.toSeq))
-        .toSeq
-    )
-  )
+  protected def topSimplices: Iterable[Simplex[Int]] = validated.map(_.simplex)
 
-  /** The smallest sphere through every vertex of `s`: its centre lies in `s`'s own affine hull, at `p0 + Σ λ_i (p_i -
-    * p0)` with `Σ_j 2 (p_i - p0)·(p_j - p0) λ_j = |p_i - p0|²`. (`Hypersphere.apply` is for full-dimensional simplices:
-    * below full dimension its least-squares centre is the minimum-norm one, off the affine hull.)
-    */
-  def smallestCircumsphere(s: Simplex[Int]): (Point, Double) =
-    val vs = s.toSeq.toIndexedSeq
-    val p0 = points(vs.head)
-    val k = vs.size - 1
-    if k == 0 then (p0, 0.0)
-    else
-      val diffs = vs.tail.map(v => points(v).subtract(p0))
-      val gram = MatrixUtils.createRealMatrix(k, k)
-      val rhs = new Array[Double](k)
-      for i <- 0 until k do
-        rhs(i) = diffs(i).dotProduct(diffs(i))
-        for j <- 0 until k do gram.setEntry(i, j, 2 * diffs(i).dotProduct(diffs(j)))
-      val lambda = SingularValueDecomposition(gram).getSolver.solve(createRealVector(rhs))
-      val center = (0 until k).foldLeft(p0)((c, i) => c.add(diffs(i).mapMultiply(lambda.getEntry(i))))
-      (center, center.getDistance(p0))
-
-  /** Alpha values, top dimension first:
-    *   - a top-dimensional simplex: the smallest circumradius among the Delaunay simplices containing it (its own,
-    *     unless a cospherical cluster was tiled as one larger cell);
-    *   - a lower simplex `σ`: if `σ` is Gabriel -- no vertex of a coface strictly inside its smallest circumsphere --
-    *     that sphere's radius, otherwise the smallest value among its immediate cofaces. A Gabriel simplex's radius is
-    *     already at most its cofaces' values; taking the minimum anyway keeps the filtration monotone to the last bit.
-    *   - a vertex: 0.
-    */
-  private lazy val alphaValues: Map[Simplex[Int], Double] =
-    val values = mutable.HashMap.empty[Simplex[Int], Double]
-    val containing: Map[Int, Seq[DelaunaySimplex]] =
-      validated.toSeq.flatMap(ds => ds.simplex.toSeq.map(v => (v, ds))).groupMap(_._1)(_._2)
-    simplicesMap(ambientDimension).foreach { s =>
-      values(s) = containing(s.toSeq.head)
-        .filter(ds => s.toSet.subsetOf(ds.simplex.toSet))
-        .map(_.circumsphere.radius)
-        .min
-    }
-    for k <- (ambientDimension - 1) to 1 by -1 do
-      val cofaces = mutable.HashMap.empty[Simplex[Int], mutable.ArrayBuffer[(Simplex[Int], Int)]]
-      simplicesMap(k + 1).foreach { t =>
-        t.toSeq.foreach(v => cofaces.getOrElseUpdate(t - v, mutable.ArrayBuffer.empty) += ((t, v)))
-      }
-      simplicesMap(k).foreach { s =>
-        val (center, r) = smallestCircumsphere(s)
-        val cs = cofaces.getOrElse(s, mutable.ArrayBuffer.empty)
-        val gabriel = cs.forall((_, v) => center.getDistance(points(v)) >= r - epsilon.epsilon)
-        val cofaceMin = cs.map((t, _) => values(t)).minOption.getOrElse(Double.PositiveInfinity)
-        values(s) = if gabriel then math.min(r, cofaceMin) else cofaceMin
-      }
-    simplicesMap(0).foreach(s => values(s) = 0.0)
-    values.toMap
-
-  override def filtrationValue: PartialFunction[Simplex[Int], Double] = { case spx => alphaValues(spx) }
-
-  // Must be the exact reverse of filtrationOrdering below, not merely "ascending by filtrationValue" --
-  // sortBy(filtrationValue) alone has no explicit tie-break (falls back to simplicesMap's own insertion
-  // order among ties), which doesn't match filtrationOrdering's simplexOrdering[Int] tie-break. This
-  // passes VietorisRipsSpec-style sortedness checks (value-only) but breaks PersistenceInChunksEngine,
-  // whose chunk-boundary logic (Homology.scala's PersistenceInChunksEngine.allCells) relies on
-  // iterateDimension's own emission order standing in for filtrationOrdering position -- found via
-  // EngineComparisonBenchmarkSpec / AlphaFiltrationOrderingRegressionSpec (see CLAUDE.md).
-  val simplicesSortedMap: Map[Int, Seq[Simplex[Int]]] =
-    simplicesMap.map((d, v) => (d, v.sorted(using filtrationOrdering.reverse)))
-
-  def simplicesInDimension(d: Int): Iterator[Simplex[Int]] = simplicesSortedMap(d).iterator
-
-  def simplices(): Iterator[Simplex[Int]] = (0 to ambientDimension).iterator.flatMap(simplicesInDimension)
-
-  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
-    case d if simplicesSortedMap.contains(d) => simplicesSortedMap(d).iterator
-  }
-
-  // The shared FiltrationOrdering.canonical shape: fv reversed, then dimension, then simplexOrdering.
-  // `simplicesSortedMap` (above) is built as `.sorted(using filtrationOrdering.reverse)` specifically so it
-  // stays the exact reverse of this ordering, tie-break included -- see RecursiveStackVietorisRipsSimplexStream's
-  // identical fix (VietorisRips.scala) and CLAUDE.md for the full root-cause writeup. This used to have no
-  // dimension key at all (`Ordering.by(filtrationValue).reverse.orElse(simplexOrdering[Int])`), which is wrong
-  // for the cross-dimension comparisons `Chain.reduceBy` performs during reduction (see the identical fix's own
-  // comment). Kept a `def`, not a `val`: `simplicesSortedMap` above uses it during construction, before a `val`
-  // declared this late in the class body would be initialized (see CLAUDE.md's `ExplicitStreamBuilder` NPE note
-  // for the general hazard).
-  override def filtrationOrdering: Ordering[Simplex[Int]] =
-    FiltrationOrdering.canonical(filtrationValue, _.size, simplexOrdering[Int])
+  // The smallest circumradius among the Delaunay simplices containing it: its own, unless a cospherical cluster was
+  // tiled as one larger cell.
+  private lazy val containing: Map[Int, Seq[DelaunaySimplex]] =
+    validated.toSeq.flatMap(ds => ds.simplex.toSeq.map(v => (v, ds))).groupMap(_._1)(_._2)
+  protected def topValue(s: Simplex[Int]): Double =
+    containing(s.toSeq.head).filter(ds => s.toSet.subsetOf(ds.simplex.toSet)).map(_.circumsphere.radius).min
 
 object HelixDelaunay:
 
@@ -1013,7 +1031,7 @@ private[tda4j] final class RadiusLimitedAlphaShapes(full: AlphaShapes, maxRadius
 /** `helix` without its simplices of dimension greater than `maxDim`: what the fast alpha engine hands the chunks engine
   * for the degrees between 0 and the top. Filtration values and order are those of `helix`.
   */
-class LimitedAlphaShapesStream(helix: HelixDelaunay, maxDim: Int)
+class LimitedAlphaShapesStream(helix: DelaunayAlphaShapes, maxDim: Int)
     extends LevelwiseSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]():
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
