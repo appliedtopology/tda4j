@@ -2,25 +2,13 @@ package org.appliedtopology.tda4j
 
 import scala.collection.mutable
 
-/** Thrown by [[FastAlphaHomologyEngine]] when the Helix triangulation has a facet with more than two top-dimensional
-  * cofaces, which its dual graph cannot represent. A rare limitation of the triangulation (about 1 cloud in 18,700 in
-  * the plane, more often in higher dimension), not a problem with the data: the general engines handle the same points,
-  * and `requireValidTriangulation` repairs the triangulation. The message says so.
+/** Test oracle: the fast alpha engine as it was before its representative bookkeeping moved to a signed union-find
+  * (`.claude/WORKLOG-fast-cubical-representatives.md`),
+  * kept verbatim apart from the class name. It keeps a running coefficient map per dual component and copies the
+  * surviving component's map on every merge -- quadratic, but obviously right. `FastRepresentativesSpec` checks that
+  * the production engine returns exactly the same bars and representatives, in the same order.
   */
-class FastAlphaTriangulationException(message: String) extends RuntimeException(message)
-
-/** Persistent homology of a Helix alpha complex by union-find instead of matrix reduction: degree 0 on the vertices and
-  * edges, the top degree `d - 1` on the dual graph of the top-dimensional simplices, as in
-  * [[FastCubicalHomologyEngine]]. In the plane those cover everything; in dimension 3 and up the degrees in between are
-  * computed by the chunks engine on the complex without its top simplices. Works in any ambient dimension from 2, with
-  * representatives for every bar.
-  *
-  * The dual graph needs every facet to have one or two top-dimensional cofaces. Unlike a grid, a triangulation does not
-  * guarantee it, so it is checked first, throwing [[FastAlphaTriangulationException]] when it fails (about 1 cloud in
-  * 18,700 at dimension 2, 1 in 1,700 at dimension 3 with 20-30 points). A facet's dual-edge value is its own filtration
-  * value, which can be smaller than its cofaces' circumradii (a Gabriel edge).
-  */
-class FastAlphaHomologyEngine[CoefficientT: Field]:
+class EagerFastAlphaReference[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
   given Ordering[Simplex[Int]] = simplexOrdering[Int]
 
@@ -220,22 +208,35 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
 
     // Union-find over `0 to numTop` (numTop itself = infinityId) -- identical mechanics to
     // FastCubicalHomologyEngine.computeDualTopDimension from here on, including both of that class's own
-    // once-found bugs' fixes (the resolved-root vs. raw-id check for the old side, and the explicit `infinityId`
-    // special-case in the young/old decision).
-    val uf = SignedUnionFind[CoefficientT](numTop + 1)
+    // once-found bugs' fixes (the resolved-root vs. raw-id check for `oldTopCube`, and the explicit `infinityId`
+    // special-case in the young/old decision) -- ported directly rather than risking rediscovering either.
+    val parent: Array[Int] = Array.range(0, numTop + 1)
     val birthOf: Array[Double] = Array.fill(numTop + 1)(Double.NaN)
+    val chainOf: mutable.Map[Int, Map[Simplex[Int], CoefficientT]] = mutable.Map.empty
+
+    def find(i: Int): Int =
+      var root = i
+      while parent(root) != root do root = parent(root)
+      var cur = i
+      while parent(cur) != root do
+        val next = parent(cur)
+        parent(cur) = root
+        cur = next
+      root
 
     val bars = mutable.ArrayBuffer.empty[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]]
 
     birthOf(infinityId) = Double.PositiveInfinity
+    chainOf(infinityId) = Map.empty
 
     for ev <- allEvents do
       ev match
         case VertexEv(id, v) =>
           birthOf(id) = v
+          chainOf(id) = Map(topSimplices(id) -> fr.one)
         case EdgeEv(FacetEvent(facet, v, a, b)) =>
-          val ra = uf.find(a)
-          val rb = uf.find(b)
+          val ra = find(a)
+          val rb = find(b)
           if ra != rb then
             val (youngRoot, oldRoot) =
               if ra == infinityId then (rb, ra)
@@ -248,27 +249,55 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
               youngTopId != infinityId,
               "an engine bug: the infinity dual vertex was treated as the younger side of a merge"
             )
-            val youngCoeffAtTop = uf.orientation(youngTopId)
-            val coeffTowardYoung = facetBoundary.getOrElse(topSimplices(youngTopId), fr.zero)
+            val youngTop: Simplex[Int] = topSimplices(youngTopId)
+            val oldTop: Option[Simplex[Int]] = if oldRoot == infinityId then None else Some(topSimplices(oldTopId))
+            val youngChain = chainOf(youngRoot)
+            val youngCoeffAtTop = youngChain.getOrElse(
+              youngTop,
+              throw new IllegalStateException(
+                s"dual component missing its own boundary top simplex $youngTop -- an engine bug"
+              )
+            )
+            val coeffTowardYoung = facetBoundary.getOrElse(youngTop, fr.zero)
             val flip: CoefficientT =
-              if oldRoot == infinityId then fr.one
-              else
-                val oldCoeffAtTop = uf.orientation(oldTopId)
-                val coeffTowardOld = facetBoundary.getOrElse(topSimplices(oldTopId), fr.zero)
-                fr.negate(
-                  fr.times(fr.times(oldCoeffAtTop, coeffTowardOld), fr.times(youngCoeffAtTop, coeffTowardYoung))
+              oldTop match
+                case None             => fr.one
+                case Some(oldSimplex) =>
+                  val oldChain = chainOf(oldRoot)
+                  val oldCoeffAtTop = oldChain.getOrElse(
+                    oldSimplex,
+                    throw new IllegalStateException(
+                      s"dual component missing its own boundary top simplex $oldSimplex -- an engine bug"
+                    )
+                  )
+                  val coeffTowardOld = facetBoundary.getOrElse(oldSimplex, fr.zero)
+                  fr.negate(
+                    fr.times(fr.times(oldCoeffAtTop, coeffTowardOld), fr.times(youngCoeffAtTop, coeffTowardYoung))
+                  )
+            val flippedYoung: Map[Simplex[Int], CoefficientT] = youngChain.view.mapValues(c => fr.times(flip, c)).toMap
+            parent(youngRoot) = oldRoot
+            if oldRoot != infinityId then
+              val merged = mutable.Map.from(chainOf(oldRoot))
+              flippedYoung.foreach { case (simplex, c) =>
+                merged.updateWith(simplex) {
+                  case Some(existing) => Some(fr.plus(existing, c))
+                  case None           => Some(c)
+                }
+              }
+              chainOf(oldRoot) = merged.toMap
+            chainOf -= youngRoot
+
+            val rep: Chain[Simplex[Int], CoefficientT] =
+              Chain.from(
+                flippedYoung.toSeq.flatMap((simplex, c) =>
+                  simplex.boundary[CoefficientT].map((f, s) => (f, fr.times(c, s)))
                 )
+              )
             if includeZeroLength || v != birthOf(youngRoot) then
-              val rep: Chain[Simplex[Int], CoefficientT] =
-                Chain.from(uf.members(youngRoot).toSeq.flatMap { (id, sign) =>
-                  val c = fr.times(flip, sign)
-                  topSimplices(id).boundary[CoefficientT].map((f, s) => (f, fr.times(c, s)))
-                })
               bars += new PersistenceBar(
                 ambientDim - 1,
                 endpoint(true)(v),
                 endpoint(false)(birthOf(youngRoot)),
                 Some(rep)
               )
-            uf.union(youngRoot, oldRoot, flip)
     bars.toList

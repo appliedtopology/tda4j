@@ -2,24 +2,13 @@ package org.appliedtopology.tda4j
 
 import scala.collection.mutable
 
-/** Persistent homology of a cubical grid by union-find instead of matrix reduction (after Le Breton, Szustakowski and
-  * Piraud, arXiv:2606.04801, extended here to any coefficient field and to representatives): degree 0 by union-find on
-  * the vertices and edges, the top degree `d - 1` (`d` the grid's dimension) by union-find on the dual graph. In 2-D
-  * those cover everything; in dimension 3 and up the degrees in between are computed by the chunks engine on the grid
-  * without its top cells. Requires `d >= 2`.
-  *
-  * The dual graph: the top cells (pixels) are vertices, the codimension-1 cells (facets) edges between the one or two
-  * top cells containing them, with one extra vertex `∞`, at value `+Infinity`, on the far side of every facet on the
-  * boundary of the grid. By Alexander duality, degree `d - 1` of the sublevel filtration is degree 0 of the dual
-  * graph's superlevel filtration: union-find in decreasing value with the elder rule, each merge giving the primal bar
-  * with birth and death swapped. `∞`'s component never dies.
-  *
-  * Representatives: each top cell carries a sign in its dual component, kept consistent as components merge (the sign
-  * flip is solved from the merging facet's two boundary coefficients, both `±1`) so that interior facets cancel; when a
-  * component dies, its representative is the boundary of its signed sum of top cells. A merge costs nearly constant
-  * time; a representative costs time proportional to its region, and only reported bars get one.
+/** Test oracle: the fast cubical engine as it was before its representative bookkeeping moved to a signed union-find
+  * (`.claude/WORKLOG-fast-cubical-representatives.md`),
+  * kept verbatim apart from the class name. It keeps a running coefficient map per dual component and copies the
+  * surviving component's map on every merge -- quadratic, but obviously right. `FastRepresentativesSpec` checks that
+  * the production engine returns exactly the same bars and representatives, in the same order.
   */
-class FastCubicalHomologyEngine[CoefficientT: Field]:
+class EagerFastCubicalReference[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
   given Ordering[Cube] = cubeOrdering
 
@@ -215,78 +204,123 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
             lexCompare(xKey, yKey)
     val allEvents: Vector[DualEvent] = (vertexEvents ++ edgeEvents).sorted(using eventOrdering)
 
-    // Union-find over `0 to numTop` (numTop itself = infinityId). `birthOf(root)` is the value at which the CURRENT
-    // root's own component was seeded (the root is always the OLDEST -- i.e. largest-value -- member, by the same
-    // "always attach younger under older" invariant unionFindDim01's own doc explains for the primal case).
-    // `uf.orientation(c)` is top cell c's sign in its component's coherently oriented sum; the sum itself is only
-    // assembled, by `uf.members`, for a bar that is reported (see SignedUnionFind for why).
-    val uf = SignedUnionFind[CoefficientT](numTop + 1)
+    // Union-find over `0 to numTop` (numTop itself = infinityId). `birthOf(root)` is the value at which the
+    // CURRENT root's own component was seeded (the root is always the OLDEST -- i.e. largest-value -- member,
+    // by the same "always attach younger under older" invariant unionFindDim01's own doc explains for the
+    // primal case). `chainOf(root)` is that component's own running signed top-cell sum.
+    val parent: Array[Int] = Array.range(0, numTop + 1)
     val birthOf: Array[Double] = Array.fill(numTop + 1)(Double.NaN)
+    val chainOf: mutable.Map[Int, Map[Cube, CoefficientT]] = mutable.Map.empty
+
+    def find(i: Int): Int =
+      var root = i
+      while parent(root) != root do root = parent(root)
+      var cur = i
+      while parent(cur) != root do
+        val next = parent(cur)
+        parent(cur) = root
+        cur = next
+      root
 
     val bars = mutable.ArrayBuffer.empty[PersistenceBar[Double, Chain[Cube, CoefficientT]]]
 
     // `∞` is always active, born at +Infinity -- the unconditional elder of anything it ever merges with.
     birthOf(infinityId) = Double.PositiveInfinity
+    chainOf(infinityId) = Map.empty // never used as a dying side's own chain, so its own content is irrelevant
 
     for ev <- allEvents do
       ev match
         case VertexEv(id, v) =>
           birthOf(id) = v
+          chainOf(id) = Map(topCube(topCoords(id)) -> fr.one)
         case EdgeEv(FacetEvent(facet, v, a, b)) =>
-          val ra = uf.find(a)
-          val rb = uf.find(b)
+          val ra = find(a)
+          val rb = find(b)
           if ra != rb then
-            // `infinityId` must be the unconditional elder of any merge it takes part in -- ordinarily guaranteed
-            // because birthOf(infinityId) = +Infinity is the largest possible value, but a REAL top cell can ALSO
-            // have topValue = +Infinity (a permanently-missing cell, e.g. this codebase's own "Perseus
-            // missing-pixel" convention -- see CubicalImage/PerseusSpec), tying birthOf(ra) <= birthOf(rb) at
-            // +Infinity <= +Infinity and letting infinityId lose the comparison and be picked as the YOUNG/dying
-            // side -- caught by TDA4jSpec's own ring fixture (a permanently-missing center pixel). Special-case
-            // infinityId explicitly rather than relying on the birthOf comparison alone.
+            // `infinityId` must be the unconditional elder of any merge it takes part in (its own chain is
+            // deliberately never populated, see below) -- ordinarily guaranteed because birthOf(infinityId) =
+            // +Infinity is the largest possible value, but a REAL top cell can ALSO have topValue = +Infinity
+            // (a permanently-missing cell, e.g. this codebase's own "Perseus missing-pixel" convention -- see
+            // CubicalImage/PerseusSpec), tying birthOf(ra) <= birthOf(rb) at +Infinity <= +Infinity and letting
+            // infinityId lose the comparison and be picked as the YOUNG/dying side -- caught by
+            // TDA4jSpec's own ring fixture (a permanently-missing center pixel), not the hand-derived finite-
+            // valued fixtures this class was first validated against. Special-case infinityId explicitly rather
+            // than relying on the birthOf comparison alone to break this specific tie correctly.
             val (youngRoot, oldRoot) =
               if ra == infinityId then (rb, ra)
               else if rb == infinityId then (ra, rb)
               else if birthOf(ra) <= birthOf(rb) then (ra, rb)
               else (rb, ra)
             // Orientation: `facet`'s own boundary gives its coefficient toward EACH of its (up to two) cofaces
-            // (cubeIsOrderedCell's alternating-rank sign rule). Solve for the flip that makes the two cancel once
-            // the components are combined (both coefficients are always +-1, so "divide" is "multiply").
+            // directly (cubeIsOrderedCell's alternating-rank sign rule) -- look up its coefficient toward
+            // whichever of a/b sits in the young (dying) component specifically, and toward whichever sits in
+            // the old (surviving) one; solve for the flip that makes the two cancel once combined (see the
+            // class doc's own derivation -- both coefficients are always +-1, so "divide" is "multiply").
             val facetBoundary: Map[Cube, CoefficientT] = facet.boundary[CoefficientT].toMap
             val (youngTopId, oldTopId) = if youngRoot == ra then (a, b) else (b, a)
+            // `infinityId` never sits on the YOUNG side -- it is always the eldest of any merge it takes part
+            // in (birthOf(infinityId) = +Infinity, the largest possible value), so it is never the smaller
+            // side of the `birthOf(ra) <= birthOf(rb)` comparison above.
             require(
               youngTopId != infinityId,
               "an engine bug: the infinity dual vertex was treated as the younger side of a merge"
             )
             val youngTopCube: Cube = topCube(topCoords(youngTopId))
-            val youngCoeffAtTop = uf.orientation(youngTopId)
+            // Test the RESOLVED root, not the raw id: `oldTopId` can be a real id whose component already
+            // merged into infinity's via an earlier tied-value edge this same pass, in which case
+            // `oldTopId == infinityId` is false but `chainOf(oldRoot) == chainOf(infinityId)`, which is
+            // deliberately never populated (infinity never dies, so its own chain content is never read) --
+            // looking up `oldCube` there throws. `oldRoot == infinityId` is the correct, order-independent test.
+            val oldTopCube: Option[Cube] = if oldRoot == infinityId then None else Some(topCube(topCoords(oldTopId)))
+            val youngChain = chainOf(youngRoot)
+            val youngCoeffAtTop = youngChain.getOrElse(
+              youngTopCube,
+              throw new IllegalStateException(
+                s"dual component missing its own boundary top cell $youngTopCube -- an engine bug"
+              )
+            )
             val coeffTowardYoung = facetBoundary.getOrElse(youngTopCube, fr.zero)
-            // Test the RESOLVED root, not the raw id: `oldTopId` can be a real cell whose component already merged
-            // into infinity's via an earlier tied-value edge this same pass. Infinity's component is never summed,
-            // so there is nothing to cancel against.
             val flip: CoefficientT =
-              if oldRoot == infinityId then fr.one
-              else
-                val oldCoeffAtTop = uf.orientation(oldTopId)
-                val coeffTowardOld = facetBoundary.getOrElse(topCube(topCoords(oldTopId)), fr.zero)
-                // Want: flip * youngCoeffAtTop * coeffTowardYoung + oldCoeffAtTop * coeffTowardOld = 0, i.e.
-                // flip = -(oldCoeffAtTop * coeffTowardOld) / (youngCoeffAtTop * coeffTowardYoung); every factor is
-                // +-1, so division is multiplication.
-                fr.negate(
-                  fr.times(fr.times(oldCoeffAtTop, coeffTowardOld), fr.times(youngCoeffAtTop, coeffTowardYoung))
-                )
+              oldTopCube match
+                case None          => fr.one // the surviving side is infinity -- nothing to cancel against
+                case Some(oldCube) =>
+                  val oldChain = chainOf(oldRoot)
+                  val oldCoeffAtTop = oldChain.getOrElse(
+                    oldCube,
+                    throw new IllegalStateException(
+                      s"dual component missing its own boundary top cell $oldCube -- an engine bug"
+                    )
+                  )
+                  val coeffTowardOld = facetBoundary.getOrElse(oldCube, fr.zero)
+                  // Want: flip * youngCoeffAtTop * coeffTowardYoung + oldCoeffAtTop * coeffTowardOld = 0, i.e.
+                  // flip = -(oldCoeffAtTop * coeffTowardOld) / (youngCoeffAtTop * coeffTowardYoung); every factor
+                  // is +-1 (facet coefficients from cubeIsOrderedCell; chain coefficients by this method's own
+                  // invariant, propagated from +-1 seeds), so division is multiplication.
+                  fr.negate(
+                    fr.times(fr.times(oldCoeffAtTop, coeffTowardOld), fr.times(youngCoeffAtTop, coeffTowardYoung))
+                  )
+            val flippedYoung: Map[Cube, CoefficientT] = youngChain.view.mapValues(c => fr.times(flip, c)).toMap
+            parent(youngRoot) = oldRoot
+            if oldRoot != infinityId then
+              val merged = mutable.Map.from(chainOf(oldRoot))
+              flippedYoung.foreach { case (cube, c) =>
+                merged.updateWith(cube) {
+                  case Some(existing) => Some(fr.plus(existing, c))
+                  case None           => Some(c)
+                }
+              }
+              chainOf(oldRoot) = merged.toMap
+            chainOf -= youngRoot
+
+            val rep: Chain[Cube, CoefficientT] =
+              Chain.from(
+                flippedYoung.toSeq.flatMap((cube, c) => cube.boundary[CoefficientT].map((f, s) => (f, fr.times(c, s))))
+              )
             if includeZeroLength || v != birthOf(youngRoot) then
-              // The dying region, oriented as it will sit in the surviving component (hence `flip`); the bar's
-              // cycle is its boundary. Its members are fixed from here on: nothing merges into a dead root.
-              val rep: Chain[Cube, CoefficientT] =
-                Chain.from(uf.members(youngRoot).toSeq.flatMap { (id, sign) =>
-                  val c = fr.times(flip, sign)
-                  topCube(topCoords(id)).boundary[CoefficientT].map((f, s) => (f, fr.times(c, s)))
-                })
               bars += new PersistenceBar(
                 ambientDim - 1,
                 endpoint(true)(v),
                 endpoint(false)(birthOf(youngRoot)),
                 Some(rep)
               )
-            uf.union(youngRoot, oldRoot, flip)
     bars.toList

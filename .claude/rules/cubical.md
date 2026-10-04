@@ -31,8 +31,12 @@ cells → dual edges (`∞` sentinel for the outer boundary); primal `H_{d-1}` o
 endpoints swapped; combined with a primal `H_0` union-find, covers a 2D grid completely with no `Chain`
 reduction. **`∞` must be checked explicitly as unconditional elder of any merge, not inferred from `birthOf(∞)`
 being largest** — a real top cell can tie against it (see worklog before touching `computeDualTopDimension`).
-Representatives: running signed sum of top cells per dual component, oriented via each merge's facet boundary
-coefficients. `WORKLOG-fast-cubical-engine.md`.
+Representatives: each top cell's sign relative to its dual component's root lives in `SignedUnionFind` (path
+compression composes signs; merges never touch members); a reported bar's cycle is the boundary of the dying region,
+read off the frozen merge-forest subtree. Never go back to per-component coefficient maps: copying them on every merge
+was quadratic on a bright object on a dark background (80 s at 200²). Any change must keep `FastRepresentativesSpec`
+(equality with `EagerFastCubicalReference`/`EagerFastAlphaReference`, term for term) green.
+`WORKLOG-fast-cubical-engine.md`, `WORKLOG-fast-cubical-representatives.md`.
 
 **At ambient dim `>= 3`**, `chunks` handles residual middle dimensions `1..d-2` (no duality shortcut) via
 `CellularPersistenceInChunksEngine` on a `LimitedCubicalGridStream` hiding real top cells (`chunks`'s own
