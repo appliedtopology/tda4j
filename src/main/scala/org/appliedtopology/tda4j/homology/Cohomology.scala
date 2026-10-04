@@ -64,100 +64,111 @@ class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtrati
     stream: => CellStream[CellT, FiltrationT]
   ): (List[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])], Ordering[CellT]) =
     val theStream = stream
-    val cellsByDim: Map[Int, Vector[CellT]] = theStream.iterator.toVector.groupBy(_.dim)
+    val grouped: Map[Int, Vector[CellT]] = theStream.iterator.toVector.groupBy(_.dim)
 
-    if cellsByDim.isEmpty then (List.empty, Ordering.by[CellT, Int](_ => 0))
+    if grouped.isEmpty then (List.empty, Ordering.by[CellT, Int](_ => 0))
     else
       val fv: PartialFunction[CellT, FiltrationT] = theStream.filtrationValue
       def cellFv(c: CellT): FiltrationT = fv.applyOrElse(c, (_: CellT) => theStream.smallest)
 
       // Ascending filtration value, then the stream's tie-break. Not `filtrationOrdering.reverse`: that would also flip
-      // the tie-break. Only cells of one dimension are ever compared under it. Summoned before any `Chain` is built.
+      // the tie-break. Only cells of one dimension are ever compared under it.
       given cohomologyOrdering: Ordering[CellT] =
         Ordering.by[CellT, FiltrationT](cellFv).orElse(theStream.filtrationOrdering)
 
-      val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
-      import chainRM.*
-
-      val bars =
-        mutable.ArrayDeque.empty[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])]
-      // Accumulated across every dimension, not per-dimension-rotated -- unlike
-      // `PackedRipserCohomologyEngine.activeCleared`, whose rotation exists only to work around a bare `Long`
-      // combinatorial index colliding across differently-sized simplices. `CellT` values carry their own
-      // dimension intrinsically (a `Simplex`/`Cube`/`FiniteSimplicialSet` generator of one dimension can never
-      // structurally equal one of another), so a single flat set is safe -- the same reasoning
-      // `RipserCohomologyEngine.cleared` already relies on.
-      val cleared: mutable.Set[CellT] = mutable.Set.empty
-      val topDim = cellsByDim.keys.max
-      // Belt-and-braces, not a genuine defensive necessity -- structurally impossible for every stream this
-      // class targets (a `d`-cell forces its own faces, hence lower dimensions, to exist), unlike
-      // `coboundaryOfChain`'s own `require`s, which sit on a real public boundary a caller can actually violate.
-      // Kept anyway: a violation here would otherwise silently leave a whole dimension's coboundary block
-      // empty rather than fail loudly, since `cellsByDim.getOrElse(d + 1, Vector.empty)` below treats a
-      // missing dimension the same as a genuinely empty one.
+      val topDim = grouped.keys.max
+      // A d-cell forces its faces to exist, so a gap means a malformed stream; without this check a missing
+      // dimension would silently reduce as an empty one.
       require(
-        cellsByDim.keySet == (0 to topDim).toSet,
+        grouped.keySet == (0 to topDim).toSet,
         s"CellularCohomologyEngine requires a dimension-contiguous cell set (0..$topDim, no gaps), got " +
-          s"dimensions ${cellsByDim.keySet.toSeq.sorted.mkString(", ")}"
+          s"dimensions ${grouped.keySet.toSeq.sorted.mkString(", ")}"
       )
 
-      // Runs through `topDim` itself, not `topDim - 1`: at `d == topDim`, `cellsByDim.getOrElse(d + 1, ...)` is
-      // empty by construction (there is no higher dimension in the materialized stream), so every top-dimension
-      // cell's coboundary is trivially empty and it opens an essential class unless already claimed as some
-      // `topDim - 1` cell's pivot -- exactly `RipserCohomologyEngine`'s own behavior at its requested top
-      // dimension, reached here for free rather than via a separate post-loop special case.
+      // Dense numbering: each dimension's cells sorted oldest first under `cohomologyOrdering`, a cell's number its
+      // position. The reduction then compares and hashes `Int`s instead of cells, with the same pivots, bars and
+      // V-columns as reducing over the cells themselves (WORKLOG-dense-numbering.md, WORKLOG-dense-cohomology.md).
+      val cellsByDim: IndexedSeq[Vector[CellT]] = (0 to topDim).map(d => grouped(d).sorted(using cohomologyOrdering))
+      def numbering(cells: Vector[CellT]): mutable.HashMap[CellT, Int] =
+        val m = new mutable.HashMap[CellT, Int](cells.length * 2, mutable.HashMap.defaultLoadFactor)
+        var i = 0
+        while i < cells.length do
+          m(cells(i)) = i
+          i += 1
+        m
+
+      val idOrdering: Ordering[Int] = Ordering.Int // ascending number = oldest first = a column's leading term
+      val fr = summon[CoefficientT is Field]
+      val bars =
+        mutable.ArrayDeque.empty[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])]
+
+      var numberOf = numbering(cellsByDim(0))
+      var values: Vector[FiltrationT] = cellsByDim(0).map(cellFv)
+      // cleared(i): cell i of the current dimension is the death of a bar one dimension down, so it opens no class.
+      var cleared = new Array[Boolean](cellsByDim(0).length)
+
       for d <- 0 to topDim do
-        val coboundaryMap: mutable.Map[CellT, mutable.ArrayBuffer[(CellT, CoefficientT)]] = mutable.Map.empty
-        cellsByDim.getOrElse(d + 1, Vector.empty).foreach { cof =>
-          cof.boundary[CoefficientT].foreach { case (face, coeff) =>
-            coboundaryMap.getOrElseUpdate(face, mutable.ArrayBuffer.empty) += ((cof, coeff))
+        val cells = cellsByDim(d)
+        val up = if d < topDim then cellsByDim(d + 1) else Vector.empty
+        val upValues = up.map(cellFv)
+
+        // This dimension's coboundary block only: built here, dropped at the end of the iteration. Faces outside the
+        // stream are skipped; they would never be reduced.
+        val coboundary = Array.fill(cells.length)(mutable.ArrayBuffer.empty[(Int, CoefficientT)])
+        var j = 0
+        while j < up.length do
+          up(j).boundary[CoefficientT].foreach { case (face, c) =>
+            numberOf.get(face).foreach(i => coboundary(i) += ((j, c)))
           }
-        }
+          j += 1
 
-        // Youngest first: Algorithm 1 processes columns in increasing [matrix] order, which under the
-        // reversed coboundary matrix means decreasing real filtration order -- the same fact
-        // `RipserCohomologyEngine.persistentCohomology`'s own comment documents. `.reverse` here is safe: it's
-        // applied only to already-single-dimension data (`cellsByDim(d)`), never spanning dimensions.
-        val cellsAtD = cellsByDim.getOrElse(d, Vector.empty).sorted(using cohomologyOrdering.reverse)
+        val nextCleared = new Array[Boolean](up.length)
+        val basis = mutable.HashMap.empty[Int, Chain[Int, CoefficientT]]
+        val generators = mutable.HashMap.empty[Int, Seq[(Int, CoefficientT)]]
+        def toCells(terms: Seq[(Int, CoefficientT)]): Chain[CellT, CoefficientT] =
+          Chain.from(terms.map((i, c) => (cells(i), c)))(using cohomologyOrdering)
 
-        // Reset per dimension, mirroring both existing cohomology engines: dimension d's coboundary matrix
-        // delta: C^d -> C^{d+1} is reduced independently of every other dimension's.
-        val basis: mutable.Map[CellT, Chain[CellT, CoefficientT]] = mutable.Map.empty
-        val generators: mutable.Map[CellT, Chain[CellT, CoefficientT]] = mutable.Map.empty
-
-        for sigma <- cellsAtD if !cleared.contains(sigma) do
-          val sigmaFv = cellFv(sigma)
-          val z = Chain.from(coboundaryMap.getOrElse(sigma, mutable.ArrayBuffer.empty).toSeq)
-          // No `fallback` argument: its default (`_ => None`) is exactly right here, since there is no
-          // apparent-pairs substitution to wire in -- see this class's own doc.
-          val (reduced, log) = Chain.reduceBy(z, basis, Chain.empty)
-          val vcol: Chain[CellT, CoefficientT] = log.rawEntries.foldLeft(Chain(sigma)) { case (acc, (pivot, coeff)) =>
-            acc - coeff ⊠ generators.getOrElse(
-              pivot,
-              throw new IllegalStateException(s"pivot $pivot has a basis entry but no generators entry")
-            )
-          }
-          vcol.collapseAll()
-          if reduced.isZero() then
-            bars.append(
-              (
-                PersistenceBar(d, ClosedEndpoint(sigmaFv), PositiveInfinity(), Some(vcol)),
-                Involution.Pair(d, sigma, None)
+        var i = cells.length - 1
+        while i >= 0 do // youngest first
+          if !cleared(i) then
+            val z = Chain.from(coboundary(i).toSeq)(using idOrdering)
+            val (reduced, log) =
+              Chain.reduceBy(z, basis, Chain.empty[Int, CoefficientT](using idOrdering))(using idOrdering)
+            // V-column: i minus the V-columns of the pivots the reduction used, with their coefficients.
+            val acc = mutable.HashMap(i -> fr.one)
+            log.rawEntries.foreach { case (pivot, coeff) =>
+              generators
+                .getOrElse(
+                  pivot,
+                  throw new IllegalStateException(s"pivot $pivot has a basis entry but no generators entry")
+                )
+                .foreach { case (k, c) => acc(k) = fr.minus(acc.getOrElse(k, fr.zero), fr.times(coeff, c)) }
+            }
+            val vterms = acc.toSeq.filterNot((_, c) => fr.isEqual(c, fr.zero))
+            val sigma = cells(i)
+            if reduced.isZero() then
+              bars.append(
+                (
+                  PersistenceBar(d, ClosedEndpoint(values(i)), PositiveInfinity(), Some(toCells(vterms))),
+                  Involution.Pair(d, sigma, None)
+                )
               )
-            )
-          else
-            val pivot = reduced.leadingCell.get
-            basis(pivot) = reduced
-            generators(pivot) = vcol
-            cleared += pivot
-            bars.append(
-              (
-                PersistenceBar(d, ClosedEndpoint(sigmaFv), OpenEndpoint(cellFv(pivot)), Some(vcol)),
-                Involution.Pair(d, sigma, Some(pivot))
+            else
+              val pivot = reduced.leadingCell.get
+              basis(pivot) = reduced
+              generators(pivot) = vterms
+              nextCleared(pivot) = true
+              bars.append(
+                (
+                  PersistenceBar(d, ClosedEndpoint(values(i)), OpenEndpoint(upValues(pivot)), Some(toCells(vterms))),
+                  Involution.Pair(d, sigma, Some(up(pivot)))
+                )
               )
-            )
-        // `coboundaryMap` goes out of scope here, at the end of this dimension's own iteration -- nothing
-        // keeps it alive into the next one.
+          i -= 1
+
+        if d < topDim then numberOf = numbering(up)
+        values = upValues
+        cleared = nextCleared
 
       (bars.toList, cohomologyOrdering)
 
