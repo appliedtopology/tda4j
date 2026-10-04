@@ -383,6 +383,8 @@ def run_one(w, f, data, out, case, p, threshold, name, kind, opts, args):
             return
         walls, rss_max = [], 0.0
         for t in range(max(1, args.trials)):
+            if walls and walls[0] > args.warm_cap:
+                break  # one long run is enough; see --warm-cap
             status, wall, rss, text = run_proc(cmd, args.timeout, out / "logs" / f"{tag}__{t}")
             rss_max = max(rss_max, rss)
             if status != "ok":
@@ -400,6 +402,10 @@ def run_one(w, f, data, out, case, p, threshold, name, kind, opts, args):
     j = last_json(text) if status == "ok" else None
     record("cold", status, wall, rss, "", j["times_s"] if j else None, j["bars"] if j else None)
     if status != "ok" or args.trials <= 0:
+        return
+    if j and j["times_s"] and j["times_s"][0] > args.warm_cap:
+        # Warm-up is irrelevant at this scale, and warmup+trials repetitions could cost hours: reuse the cold run.
+        record("warm", "ok", wall, rss, f"cold computation > {args.warm_cap:g}s: warm = cold", j["times_s"], j["bars"])
         return
     cmd = command(kind, name, opts, case, data, p, threshold, args.warmup, args.trials, bars_path, args)
     status, wall, rss, text = run_proc(cmd, args.timeout * (args.warmup + args.trials), out / "logs" / f"{tag}__warm")
@@ -529,6 +535,8 @@ def main():
     p2.add_argument("--warmup", type=int, default=2)
     p2.add_argument("--trials", type=int, default=5)
     p2.add_argument("--timeout", type=float, default=1800, help="seconds per computation")
+    p2.add_argument("--warm-cap", type=float, default=60,
+                    help="if one cold computation takes longer (s), skip the warm repetitions and reuse it")
     p2.add_argument("--jvm-heap", default="16g")
     p2.add_argument("--jvm-opts", default="")
     p2.add_argument("--javaplex-divisions", type=int, default=1000)

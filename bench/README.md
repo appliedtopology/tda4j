@@ -36,6 +36,7 @@ Useful options of `run`:
 | `--fields 2,17` | coefficient primes; tools that only do Z/2 report `unsupported` at 17 |
 | `--warmup N --trials N` | warm runs: untimed and timed computations per process |
 | `--timeout S` | seconds per computation; a timeout is recorded, not dropped |
+| `--warm-cap S` | if one cold computation takes longer than this (default 60 s), the warm run reuses it instead of repeating |
 | `--jvm-heap 32g` | `-Xmx` for TDA4j and JavaPlex. fractal-r needs about 12g; clifford50000 more |
 
 ## What is measured
@@ -99,6 +100,9 @@ against `ripser.cpp` is the like-for-like comparison. `tda4j` against `ripserer-
 runs.
 
 ## Before quoting numbers
+
+- **Alpha (`--tasks alpha`) is not trustworthy yet.** The default Helix backend is wrong in 3-D: it loses most `H_2`
+  classes, while the DQP backend and Čech match GUDHI to 1e-15. Until that is fixed, start with `--tasks vr,cubical`.
 
 - Run on a quiet machine. Record it, and fix its frequency governor if you can.
 - Pin the pip versions for the final run (`setup_python` in `run.sh`). `env.json` records what was used either way.

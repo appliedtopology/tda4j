@@ -51,16 +51,25 @@ setup_julia() {
   if [ -z "$julia" ]; then echo "julia not found: Ripserer.jl will be reported as missing"; return; fi
   log "Ripserer.jl ($julia)"
   mkdir -p "$TOOLS/julia"
-  "$julia" --project="$TOOLS/julia" -e 'using Pkg; Pkg.add(["Ripserer", "DelimitedFiles"]); Pkg.precompile()'
-  echo "$julia" > "$TOOLS/julia.path"
+  if "$julia" --project="$TOOLS/julia" -e 'using Pkg; Pkg.add(["Ripserer", "DelimitedFiles"]); Pkg.precompile()'; then
+    echo "$julia" > "$TOOLS/julia.path"
+  else
+    echo "WARNING: Ripserer.jl setup failed; it will be reported as missing"; rm -f "$TOOLS/julia.path"
+  fi
 }
 
 setup_javaplex() {
   if [ -z "${JAVAPLEX_JAR:-}" ]; then echo "JAVAPLEX_JAR not set: JavaPlex will be reported as missing"; return; fi
   log "JavaPlex worker against $JAVAPLEX_JAR"
   mkdir -p "$TOOLS/javaplex-build"
-  javac -cp "$JAVAPLEX_JAR" -d "$TOOLS/javaplex-build" "$BENCH/workers/JavaPlexWorker.java"
-  echo "$JAVAPLEX_JAR" > "$TOOLS/javaplex.path"
+  # The worker was written against JavaPlex 4.x's documented API but never compiled against a real jar: a signature
+  # mismatch is a warning (fix bench/workers/JavaPlexWorker.java), not a reason to stop the other tools.
+  if javac -cp "$JAVAPLEX_JAR" -d "$TOOLS/javaplex-build" "$BENCH/workers/JavaPlexWorker.java"; then
+    echo "$JAVAPLEX_JAR" > "$TOOLS/javaplex.path"
+  else
+    echo "WARNING: JavaPlexWorker.java did not compile against $JAVAPLEX_JAR; JavaPlex will be reported as missing"
+    rm -f "$TOOLS/javaplex.path"
+  fi
 }
 
 setup_tda4j() {
@@ -128,7 +137,8 @@ export_env() {
 cmd="${1:-all}"
 shift || true
 case "$cmd" in
-  setup) setup_python; setup_ripser; setup_julia; setup_javaplex; setup_tda4j ;;
+  # TDA4j first: the optional tools after it only warn when they fail.
+  setup) setup_python; setup_tda4j; setup_ripser; setup_julia; setup_javaplex ;;
   prepare) "$VENV/bin/python" "$BENCH/bench.py" prepare --data "$DATA" ;;
   run)
     export_env
