@@ -174,6 +174,13 @@ class RipserCohomologyEngine[CoefficientT: Field](
   /** How many simplices the last `persistentCohomology()` assembled, over all dimensions (for tests). */
   def totalSimplexCount: Int = _totalSimplexCount
 
+  private var _apparentPairCount: Int = 0
+
+  /** How many simplices the last run paired directly as apparent pairs, without reducing their coboundary. */
+  // Distinct from `substitutionCount`, which counts the lazy fallback when another column needs an apparent pair's
+  // column as a pivot (WORKLOG-o3-1024-fractal-r-session-2026-09-25.md).
+  def apparentPairCount: Int = _apparentPairCount
+
   /** Every bar of degree `0 .. maxDimension`, each with its representative cocycle; zero-length bars only if
     * `includeZeroLength`.
     */
@@ -186,6 +193,7 @@ class RipserCohomologyEngine[CoefficientT: Field](
 
     _substitutionCount = 0
     _totalSimplexCount = 0
+    _apparentPairCount = 0
     val bars = mutable.ArrayDeque.empty[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]]
 
     // Clearing: a d-simplex that was already claimed as the PIVOT of some (d-1)-simplex's reduction
@@ -264,6 +272,7 @@ class RipserCohomologyEngine[CoefficientT: Field](
             // by ANY later column whose reduction log has a `tau` entry, whether tau was reached via
             // ordinary `basis` or via `basisFallback` -- omitting it reintroduces the "pivot has a basis
             // entry but no generators entry" throw below.
+            _apparentPairCount += 1
             val vcol = Chain[Simplex[Int], CoefficientT](sigma)
             generators(tau) = vcol
             cleared += tau

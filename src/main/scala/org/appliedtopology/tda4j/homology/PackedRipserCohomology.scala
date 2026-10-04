@@ -55,9 +55,15 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
     override def hashCode(): Int = index.hashCode()
 
   // Ascending by diameter; on a tie the larger index is older (as RipserCohomologyEngine.cohomologyOrdering).
+  // Same-index pairs compare equal before the diameter is looked at, so this agrees with `DiameterIndex.equals`
+  // (index only) even when a non-symmetric `distance` gives one index two diameters; otherwise `basis` (keyed by
+  // equals) and a chain's TreeMap (keyed by this order) disagree and `Chain.reduceLoop` never terminates
+  // (WORKLOG-o3-1024-fractal-r-session-2026-09-25.md).
   private def compareDiamThenIndex(x: DiameterIndex, y: DiameterIndex): Int =
-    val fc = java.lang.Double.compare(x.diameter, y.diameter)
-    if fc != 0 then fc else java.lang.Long.compare(y.index, x.index)
+    if x.index == y.index then 0
+    else
+      val fc = java.lang.Double.compare(x.diameter, y.diameter)
+      if fc != 0 then fc else java.lang.Long.compare(y.index, x.index)
 
   given packedOrdering: Ordering[DiameterIndex] = compareDiamThenIndex(_, _)
 
@@ -172,6 +178,13 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
   private var _totalSimplexCount: Int = 0
   def totalSimplexCount: Int = _totalSimplexCount
 
+  private var _apparentPairCount: Int = 0
+
+  /** How many simplices the last run paired directly as apparent pairs, without reducing their coboundary. */
+  // Distinct from `substitutionCount`, which counts the lazy fallback when another column needs an apparent pair's
+  // column as a pivot (WORKLOG-o3-1024-fractal-r-session-2026-09-25.md).
+  def apparentPairCount: Int = _apparentPairCount
+
   /** Every bar of degree `0 .. maxDimension`, each with its representative cocycle (over [[DiameterIndex]] cells;
     * decode with `si`); zero-length bars only if `includeZeroLength`.
     */
@@ -216,6 +229,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
 
     _substitutionCount = 0
     _totalSimplexCount = 0
+    _apparentPairCount = 0
     val bars =
       mutable.ArrayDeque
         .empty[(PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]], Involution.Pair[DiameterIndex])]
@@ -273,6 +287,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
         val sigmaFv = sigma.diameter
         (if useApparentPairs then zeroApparentCofacet(sigma, size) else None) match
           case Some(tau) =>
+            _apparentPairCount += 1
             val vcol = Chain[DiameterIndex, CoefficientT](sigma)
             generators(tau) = vcol
             nextCleared += tau.index
