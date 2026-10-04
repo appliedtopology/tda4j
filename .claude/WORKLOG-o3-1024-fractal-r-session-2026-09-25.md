@@ -246,8 +246,18 @@ submatrix: packed now finishes in ~530ms (median of 3, was a confirmed-infinite 
 `bars`/`apparentPairCount`/`substitutionCount`/`totalSimplexCount` all EXACTLY matching SortedSet's own numbers
 (`bars=Map(0->100, 1->4219, 2->112527)`, `apparentPairCount=115822`, `substitutionCount=940`,
 `totalSimplexCount=121164`) — packed is ~8.7x faster than SortedSet here, consistent with every other case in
-this file's table. Full-scale (n=512) `fractal-r` re-run with the fix is in progress as of this update; see
-whoever picks this up next for that result if it isn't recorded below yet.
+this file's table.
+
+**Full-scale (n=512) re-run, same sandbox:** `-Xmx6G` OOM'd (expected -- this sandbox has 15GB total RAM; the
+earlier entry above already notes SortedSet itself needed 32G on the real compute server for this exact case).
+At `-Xmx12G`, packed finished in **264.2s** (`medianMs=264183.4`) -- not a week, not a timeout. `totalSimplexCount
+=19224829` and `substitutionCount=24977` match this file's own earlier-recorded SortedSet numbers for the same
+case EXACTLY (`totalSimplexCount=19224829, substitutionCount=24977` from the "Sortedset on fractal-r" entry
+above), confirming the fix is correct at full scale, not just on the 100-point reproduction. Packed's own earlier
+17-minute SortedSet finish time (1,020,414ms) vs. packed's new 264,183ms is ~3.9x -- lower than this file's
+usual 15-45x range, plausibly because this specific dataset's dimension-2 reduction leans more on the genuine
+`Chain.reduceLoop` path than the apparent-pairs shortcut once the infinite loop stopped masking that; not
+investigated further, the week-long hang being gone is the result that mattered here.
 
 All temporary debug instrumentation (the `packedVerbose`-gated iteration counters in `Chain.reduceLoop` and
 `PackedRipserCohomologyContext`'s `basisFallback`, used only to pin this down) was reverted before committing
