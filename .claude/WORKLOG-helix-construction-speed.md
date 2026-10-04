@@ -118,3 +118,39 @@ is the next lever (per facet only points near the facet's sphere can win). Not d
 Inconsistent decisions between neighbouring facets on near-coplanar groups (five grid points on a cube face coplanar
 to 2e-3) remain possible with float predicates; exact/adaptive predicates (Shewchuk) or symbolic perturbation would
 remove it. The repair's larger jitter sidesteps it for grids at the default epsilon.
+
+## Option 3: radius-aware alpha dispatch (same day)
+
+Question (project lead): DQP builds partial skeleta, Helix the whole Delaunay first -- can that inform the dispatch?
+Yes. DQP grows the complex dimension by dimension (edges, then cofaces of accepted simplices), each candidate one QP,
+restricted to Cech neighbours within `2 maxRadius` (VP-tree); `AlphaShapeDQP` (what `AlphaBackend.DQP` meant until now)
+had no radius, so every pair was a neighbour: the 252 s for 1000 2-D points was its worst case.
+
+### Crossover measurements (throwaway driver; DQP truncated at r with top dimension = ambient; Helix full; one JVM per
+input, JIT warmed on 200 points; k = mean number of points within 2r over 200 samples)
+
+| input | Helix full | DQP at k ≈ ... | crossover k |
+|---|---|---|---|
+| 2-D 1000 | 0.53 s | 14.6: 0.37 s, 28.6: 1.05, 104.7: 5.7, 190.8: 9.3 | ~20 |
+| 2-D 10000 | 14.2 s | 6.1: 1.1 s, 17.9: 2.3, 35.3: 5.3, 75: 18.1, 144: 59.2 | ~60 |
+| 3-D 1000 | 1.7 s | 25.8: 0.96 s, 52.3: 2.3, 89.4: 7.9, 156: 17.6 | ~40 |
+| 3-D 5000 | 14.3 s | 13.6: 1.9 s, 31.2: 5.3, 70.8: 17.2, 129: 52.2 | ~60 |
+| 4-D 1000 | 10.1 s | 6: 0.31 s, 27.1: 2.0, 72.6: 9.8, 148: 30.3, 256: 86.7 | ~73 |
+| 5-D 500 | 57.0 s | 13.3: 0.47 s, 33.9: 2.5, 67.7: 10.2, 118: 25.4 | >150 |
+
+Model: DQP per point ≈ `c_d k^1.6` ms with `c_d` ≈ 2.35x per dimension (`c_2` ≈ 0.0018 at 10000 points, ≈ 0.004-0.005
+at 1000: the 1000-point constant is used, which errs towards Helix near the crossover -- past it DQP's cost climbs
+steeply, Helix's is fixed); Helix per point ≈ `h_d (n/1000)^0.4` ms, h = 0.53, 1.7, 10, 150 for d = 2..5. Predicted
+crossovers are 0.6-0.8x the measured ones (conservative). d >= 6: DQP whenever a radius is given (Helix's Delaunay
+complex there is far beyond these sizes).
+
+### Implementation
+
+- `AlphaShapes.apply(points, backend, requireValidTriangulation, maxRadius, maxDimension)`; `Default` = Helix without a
+  radius, else `prefersDQP`. Helix + radius = `RadiusLimitedAlphaShapes` (filter by value; a subcomplex since values do
+  not decrease to cofaces). DQP + radius = `AlphaComplexDQPStream(AlphaComplexDQP.euclidean(points, r, top))`, top =
+  `maxDimension + 1` capped at ambient.
+- `AlphaShapes.fromPoints` (the verb) no longer refuses `maxFiltrationValue`; MATLAB/CLI `maxFiltrationValue` now
+  reaches alpha (it was silently ignored), facade default `alphaBackend` is `default`; `fast-alpha` + radius refuses.
+- Gate `AlphaDispatchSpec`: Helix-filtered == DQP-truncated (simplices and values to 1e-9) on random 2-D/3-D/4-D clouds
+  at three radii; verb bars equal across backends and through `maxFiltrationValue`; the rule picks DQP at small r.

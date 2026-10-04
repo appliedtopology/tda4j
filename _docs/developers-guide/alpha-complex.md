@@ -11,15 +11,26 @@ pick, and the honest tradeoffs), see the [User's Guide](../user-guide/index.md).
 
 ```scala sc:nocompile
 object AlphaShapes:
-  def apply(points: PointCloud, backend: AlphaBackend = AlphaBackend.Default, requireValidTriangulation: Boolean = false)(
-    using epsilon: Epsilon = Epsilon(1e-5)
-  ): AlphaShapes
+  def apply(
+    points: PointCloud,
+    backend: AlphaBackend = AlphaBackend.Default,
+    requireValidTriangulation: Boolean = false,
+    maxRadius: Optional[Double] = Optional.empty,
+    maxDimension: Optional[Int] = Optional.empty
+  )(using epsilon: Epsilon = Epsilon(1e-5)): AlphaShapes
 ```
 
-`AlphaBackend.Default` **always resolves to `AlphaBackend.Helix` regardless of point-cloud shape** — `AlphaBackend.DQP`
-must be requested explicitly (the MATLAB/CLI facade's `alphaBackend` string goes through `AlphaBackend.parse`). Both backends extend the common `AlphaShapes` abstract class, so they're
-dispatch-interchangeable as far as any code consuming the resulting stream is concerned —
-`AlphaComplexSpec` runs identical property checks against both to enforce this.
+With a `maxRadius`, every backend returns exactly the simplices of alpha value at most `maxRadius`, with the same
+values: `Helix` builds the whole triangulation and filters it (`RadiusLimitedAlphaShapes`); `DQP` builds only up to the
+radius, dimension by dimension, up to `maxDimension + 1` (`AlphaComplexDQPStream`). `AlphaBackend.Default` resolves to
+`Helix` without a radius and otherwise to whichever `AlphaShapes.prefersDQP` expects to be faster: it estimates the
+mean number of points within `2 maxRadius` of a point (64 sample points) and compares a per-point cost model fitted to
+measurements (DQP about `c_d k^1.6`, Helix about `h_d (n/1000)^0.4`; in ambient dimension 6 and up DQP whenever a radius
+is given). `AlphaShapes.fromPoints` (the `Persistence` verb) and the MATLAB/CLI `maxFiltrationValue` pass the radius
+through; `engine=fast-alpha` needs the whole Helix triangulation and refuses a radius. The facade's `alphaBackend`
+string goes through `AlphaBackend.parse` (default `default`). All backends extend the common `AlphaShapes` abstract
+class, so they are interchangeable for any code consuming the stream: `AlphaComplexSpec` runs identical property
+checks against both, and `AlphaDispatchSpec` checks that the radius-limited complexes and the verb's bars agree.
 
 ## `HelixDelaunay` — an actual Delaunay triangulation
 

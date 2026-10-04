@@ -41,36 +41,48 @@ abstract class AlphaShapes extends LevelwiseSimplexStream[Int, Double]() with Do
 /** Alpha complexes of point clouds: `AlphaShapes(points)`, or `Persistence(points, complex = AlphaShapes)`. */
 object AlphaShapes extends PointCloudComplex:
   def fromPoints(points: PointCloud, maxDimension: Int, maxFiltrationValue: Option[Double]) =
-    require(
-      maxFiltrationValue.isEmpty,
-      "tda4j: AlphaShapes builds the whole alpha complex, so maxFiltrationValue is not supported for it -- read the " +
-        "result at a smaller parameter with diagram.at(f) instead"
-    )
-    Truncated(apply(points), maxDimension)
+    Truncated(apply(points, maxRadius = maxFiltrationValue, maxDimension = maxDimension), maxDimension)
 
-  /** The alpha complex of `points`, built by `backend` (`Helix`, the default, or `DQP`; see [[AlphaBackend]]).
+  /** The alpha complex of `points`, built by `backend` (see [[AlphaBackend]]).
     *
+    *   - `Helix` triangulates the whole point set (Delaunay) and reads the alpha values off the triangulation.
+    *   - `DQP` decides each simplex on its own, dimension by dimension, among points within `2 maxRadius` of each
+    *     other: it never builds the whole triangulation, so a small `maxRadius` (or a low `maxDimension` in high
+    *     ambient dimension) makes it much cheaper, while without a radius it is far slower than Helix.
+    *   - `Default` picks between them: Helix without a `maxRadius`, otherwise whichever is expected to be faster for
+    *     this radius, from the average number of points within `2 maxRadius` of a point (`AlphaShapes.prefersDQP`).
+    *
+    * Every backend gives the same complex: the simplices whose alpha value (radius) is at most `maxRadius`, with the
+    * same values.
+    *
+    * @param maxRadius
+    *   keep only simplices with alpha value (radius) at most this. Default: no limit.
+    * @param maxDimension
+    *   the highest homological degree needed: `DQP` builds simplices up to dimension `maxDimension + 1` only. Default:
+    *   all dimensions. (Helix always builds every dimension; truncate the stream with [[Truncated]].)
     * @param requireValidTriangulation
-    *   `Helix` only: repair an invalid triangulation instead of leaving it to `FastAlphaHomologyEngine` to reject (see
-    *   [[HelixDelaunay]]). Off by default.
+    *   `Helix` only: raise an error rather than return a triangulation it could not repair (see [[HelixDelaunay]]).
     */
   def apply(
     points: PointCloud,
     backend: AlphaBackend = AlphaBackend.Default,
-    requireValidTriangulation: Boolean = false
+    requireValidTriangulation: Boolean = false,
+    maxRadius: Optional[Double] = Optional.empty,
+    maxDimension: Optional[Int] = Optional.empty
   )(using
     epsilon: Epsilon = Epsilon(1e-5)
   ): AlphaShapes =
+    val radius = maxRadius.toOption.filter(_.isFinite)
     backend match
       case AlphaBackend.Default =>
-        // All three branches resolve to Helix today: no regime (point count / ambient dimension) has been measured yet
-        // to pick a backend by. They're placeholders for that dispatch, not dead code -- keep them distinct.
-        points match
-          case pc if pc.size == 0            => apply(pc, AlphaBackend.Helix, requireValidTriangulation)
-          case pc if pc.ambientDimension > 7 => apply(pc, AlphaBackend.Helix, requireValidTriangulation)
-          case pc                            => apply(pc, AlphaBackend.Helix, requireValidTriangulation)
+        val chosen =
+          if points.size > 0 && radius.exists(r => !requireValidTriangulation && prefersDQP(points, r))
+          then AlphaBackend.DQP
+          else AlphaBackend.Helix
+        apply(points, chosen, requireValidTriangulation, maxRadius, maxDimension)
       case AlphaBackend.Helix =>
-        HelixDelaunay(points.points, requireValidTriangulation = requireValidTriangulation)
+        val helix = HelixDelaunay(points.points, requireValidTriangulation = requireValidTriangulation)
+        radius.fold[AlphaShapes](helix)(r => RadiusLimitedAlphaShapes(helix, r))
       case AlphaBackend.DQP =>
         require(
           !requireValidTriangulation,
@@ -78,7 +90,67 @@ object AlphaShapes extends PointCloudComplex:
             "multiplicity precondition to repair (FastAlphaHomologyEngine is specialized to HelixDelaunay's own " +
             "triangulation and never consumes AlphaShapeDQP's output) -- this option would be a silent no-op there."
         )
-        AlphaShapeDQP(points.points)
+        val ambient = points.points.headOption.map(_.length).getOrElse(0)
+        val topDimension = maxDimension.toOption.fold(ambient)(k => math.min(ambient, k + 1))
+        radius match
+          case None =>
+            if topDimension == ambient then AlphaShapeDQP(points.points)
+            else
+              AlphaComplexDQPStream(
+                points.points,
+                AlphaComplexDQP.euclidean(points.points, Double.PositiveInfinity, topDimension)
+              )
+          case Some(r) =>
+            AlphaComplexDQPStream(points.points, AlphaComplexDQP.euclidean(points.points, r, topDimension))
+
+  /** Whether `DQP` is expected to build the alpha complex truncated at radius `r` faster than `Helix` builds the whole
+    * one. DQP's cost grows with the number of points within `2r` of each point (its neighbour graph); Helix's with the
+    * point count and the ambient dimension. The thresholds are measured
+    * (`.claude/WORKLOG-helix-construction-speed.md`): the largest average neighbour count at which DQP was still
+    * faster, by point count and ambient dimension.
+    */
+  def prefersDQP(points: PointCloud, r: Double): Boolean =
+    val pts = points.points
+    val n = pts.length
+    val d = pts.head.length
+    meanNeighbours(pts, 2 * r) <= dqpNeighbourThreshold(n, d)
+
+  /** The average number of other points within `distance` of a point, over up to 64 evenly spaced sample points. */
+  private[tda4j] def meanNeighbours(pts: Array[Array[Double]], distance: Double): Double =
+    val n = pts.length
+    val samples = math.min(n, 64)
+    val limit = distance * distance
+    var total = 0L
+    for s <- 0 until samples do
+      val i = (s.toLong * n / samples).toInt
+      var j = 0
+      while j < n do
+        if j != i then
+          var sq = 0.0
+          var a = 0
+          while a < pts(i).length do
+            val diff = pts(i)(a) - pts(j)(a)
+            sq += diff * diff
+            a += 1
+          if sq <= limit then total += 1
+        j += 1
+    total.toDouble / samples
+
+  /** The average neighbour count (within `2r`) up to which DQP is expected to be faster than Helix, for `n` points in
+    * ambient dimension `d`. Per point, DQP took about `c_d k^1.6` ms (`c_d = 0.004 * 2.35^(d-2)`, the constant from
+    * 1000-point clouds, the more expensive ones) and Helix about `h_d (n/1000)^0.4` ms, `h_d` = 0.53, 1.7, 10, 150 for
+    * `d` = 2..5 (uniform clouds of 500-10000 points, this library's own measurements). In dimension 6 and up Helix's
+    * triangulation grows so fast that DQP is preferred whenever a radius is given.
+    */
+  private[tda4j] def dqpNeighbourThreshold(n: Int, d: Int): Double =
+    val helixPerPoint = math.max(d, 2) match
+      case 2 => 0.53
+      case 3 => 1.7
+      case 4 => 10.0
+      case 5 => 150.0
+      case _ => Double.PositiveInfinity
+    val dqpConstant = 0.004 * math.pow(2.35, math.max(d, 2) - 2)
+    math.pow(helixPerPoint * math.pow(n / 1000.0, 0.4) / dqpConstant, 1 / 1.6)
 
   // utilities for Delaunay computations
   type Point = RealVector
@@ -917,6 +989,18 @@ object HelixDelaunay:
             "(AlphaBackend.DQP; alphaBackend=DQP in MATLAB, --alpha-backend DQP on the command line) avoids the problem."
         )
       )
+
+/** The simplices of `full` with alpha value at most `maxRadius`, in `full`'s order and with its values. Alpha values do
+  * not decrease from a face to a coface, so this is a subcomplex.
+  */
+private[tda4j] final class RadiusLimitedAlphaShapes(full: AlphaShapes, maxRadius: Double) extends AlphaShapes:
+  override val metricSpace: FiniteMetricSpace[Int] = full.metricSpace
+  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+    case d if full.iterateDimension.isDefinedAt(d) =>
+      full.iterateDimension(d).filter(full.filtrationValue(_) <= maxRadius)
+  }
+  override def filtrationOrdering: Ordering[Simplex[Int]] = full.filtrationOrdering
+  override def filtrationValue: PartialFunction[Simplex[Int], Double] = full.filtrationValue
 
 /** `helix` without its simplices of dimension greater than `maxDim`: what the fast alpha engine hands the chunks engine
   * for the degrees between 0 and the top. Filtration values and order are those of `helix`.

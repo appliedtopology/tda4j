@@ -49,7 +49,7 @@ Each `compute...` method also has an overload without options.
 | `engine` | `ripser`, `chunks`, `naive`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and the lazy witness complex, `fast-cubical` for images of dimension 2 and up, `cohomology` otherwise |
 | `representativeType` | `cycles`, `cocycles` | `cycles` (every engine gives both except `fast-cubical` and `fast-alpha`, which give cycles; `ripser` and `cohomology` compute cocycles natively and cycles a little more slowly, the others the other way round) |
 | `maxDimension` | integer | `2`: the top homological degree (for an image: its dimension) |
-| `maxFiltrationValue` | number | the minimum enclosing radius (`Infinity` for the general witness complex) |
+| `maxFiltrationValue` | number | the minimum enclosing radius (`Infinity` for the general witness complex and for `alpha`, which then builds the whole complex) |
 | `field` | `Z` (a prime field), `R` (floating point) | `Z` |
 | `prime` | prime | `17` |
 | `epsilon` | number | `1e-9`: the tolerance of `field=R` |
@@ -57,8 +57,8 @@ Each `compute...` method also has an overload without options.
 | `minPersistenceFraction` | number | `0.01`: the threshold as a fraction of the input's scale |
 | `includeZeroLength` | `true`, `false` | `false` |
 | `sublevel` | `true`, `false` | `true` (images) |
-| `alphaBackend` | `helix`, `DQP` | `helix` |
-| `requireValidTriangulation` | `true`, `false` | `false` (alpha with `helix`: repair the triangulation) |
+| `alphaBackend` | `default`, `helix`, `DQP` | `default`: `helix`, or with `maxFiltrationValue` whichever of the two is expected to be faster (same result) |
+| `requireValidTriangulation` | `true`, `false` | `false` (alpha with `helix`: also check for cavities, and fail rather than return a triangulation that could not be repaired) |
 | `dtmK` | integer | required for `dtm-rips` and `dtm-alpha` |
 | `dtmQ`, `dtmP` | number | `2.0`, `1.0` (`dtmP` is `1.0` or `2.0`, for `dtm-rips`) |
 | `sparseEpsilon` | number in `(0, 1)` | required for `sparse-rips` |
