@@ -156,10 +156,10 @@ union-find, ascending filtration order, elder rule) plus `H_1` (via the dual con
 account for every nontrivial cell dimension a 2D grid has — `H_2` is identically zero for any subcomplex of a
 2D grid (a bounded planar region has no 2-dimensional voids to detect), so nothing is being skipped. At `d >=
 3` there are `d-2` "middle" dimensions (`1 <= k <= d-2`) with no duality shortcut; these are handed to
-`CellularPersistenceInChunksEngine` run on a `LimitedCubicalGridStream` view that hides the real
-top-dimensional cells entirely, so the (often largest) top dimension never touches general `Chain` reduction —
-still a real, if shrinking-with-`d`, win, and no new hardcoded dimension ceiling (`chunks` is already fully
-general over `d`). See `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md` for the full derivation,
+`CellularCohomologyEngine` (cycles by the involution) run on a `LimitedCubicalGridStream` view that hides the real
+top-dimensional cells entirely, so the (often largest) top dimension never enters a reduction. Cohomology rather than
+chunks: in 3-D, chunks on the middle degrees made the hybrid slower than plain cohomology on the whole image, and with
+cohomology it is faster at every size measured. No hardcoded dimension ceiling. See `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md` for the full derivation,
 including why the dual union-find's own correctness doesn't depend on how the middle dimensions get resolved;
 cross-validated against the naive engine at `d=3` (hand fixtures, Fp(3) sign-genericity, a random property
 test) plus one `d=4` smoke test, not validated at `d >= 5`.
@@ -200,7 +200,7 @@ cospherical-degeneracy hazard can violate directly by emitting an oversized simp
 dimension `>= 2`, same as engine 6** (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): both
 union-finds were already dimension-generic before this extension (only the `require` gated them to `d=2`), so
 extending past 2D was purely a matter of handing the residual "middle" dimensions (`1 <= k <= d-2`) to
-`PersistenceInChunksEngine[Int, C]` run on a new `LimitedAlphaShapesStream` view (the `Simplex[Int]`
+`CellularCohomologyEngine` (cycles by the involution) run on a new `LimitedAlphaShapesStream` view (the `Simplex[Int]`
 analogue of engine 6's own `LimitedCubicalGridStream` — needed because `HelixDelaunay`/`AlphaShapes` is a
 `LevelwiseSimplexStream`, not a `CofaceSimplexStream`, so the existing `LimitedCofaceSimplexStream` doesn't fit
 it) that hides the real top-dimensional simplices. Sequenced AFTER engine 6's own hybrid was validated, not
@@ -273,7 +273,7 @@ has any notion of the OTHER constructions at all, so every other row's "no" is "
 `HelixDelaunay`" respectively, not a per-row special case. Both are additionally refused within their one
 "yes" row for a narrower reason: `fast-cubical` only for a degenerate 1-axis image (ambient dimension `< 2`);
 `fast-alpha` only for `alphaBackend=DQP` (this engine cannot consume `AlphaShapeDQP`'s output at all) — neither
-is refused for HIGH ambient dimension any more, now that both are extended past 2D via a `chunks` hybrid for
+is refused for HIGH ambient dimension any more, now that both are extended past 2D via a cohomology hybrid for
 the residual middle dimensions (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`); both name the
 actual mismatch in their own message rather than throwing a bare `IllegalArgumentException`.
 
@@ -304,7 +304,7 @@ Reading the "no" cells as one-line reasons, grouped by root cause:
   hardcoded to `Simplex[Int]`'s combinatorial-number-system indexing (`SimplexIndexing`); `Cube` has no
   equivalent encoding built for it. Engine 6 (`fast-cubical`) is a dedicated fast engine in this spirit, but
   not a drop-in replacement for `ripser` here: it's a different algorithm (dual-graph union-find plus, at
-  `d >= 3`, a hybrid with `chunks` for the residual middle dimensions — not `SimplexIndexing`-style
+  `d >= 3`, a hybrid with the cohomology engine for the residual middle dimensions — not `SimplexIndexing`-style
   enumeration). A grid-exploiting engine dedicated to 3D specifically (`CubicalRipser`, Wagner-Chen-Vuçini)
   remains a documented future direction, `DESIGN-fast-cubical-engine.md`.
 
@@ -322,5 +322,5 @@ tradeoff actually buys and costs.
 | Fast, memory-efficient cohomology on a Vietoris-Rips/clique complex over integer vertex labels | **`PackedRipserCohomologyEngine`** (what `engine="ripser"` uses) |
 | A `Simplex[Int]`-keyed reference implementation for hand-debugging engine 4 | `RipserCohomologyEngine` (test oracle, not a production choice) |
 | Cohomology (real cocycle representatives) on `Cube`/`FiniteSimplicialSet`/Cech/Alpha/general witness complex, or any `OrderedCell` type engines 3/4 can't serve | **`CellularCohomologyEngine`** (what `engine="cohomology"` uses) |
-| Fastest option for a cubical grid of any ambient dimension `>= 2` (no `Chain` reduction at all for `H_0`/`H_{d-1}`; a `chunks` hybrid for any residual middle dimensions at `d >= 3`) | **`FastCubicalHomologyEngine`** (what `engine="fast-cubical"` uses) |
+| Fastest option for a cubical grid of any ambient dimension `>= 2` (no `Chain` reduction at all for `H_0`/`H_{d-1}`; a cohomology hybrid for any residual middle dimensions at `d >= 3`) | **`FastCubicalHomologyEngine`** (what `engine="fast-cubical"` uses) |
 | Fastest option for an alpha complex via `HelixDelaunay`, any ambient dimension `>= 2` (same hybrid shape as `FastCubicalHomologyEngine`; noticeably more likely to throw `FastAlphaTriangulationException` at higher ambient dimension/point count) | **`FastAlphaHomologyEngine`** (what `engine="fast-alpha"` uses) |

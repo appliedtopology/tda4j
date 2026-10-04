@@ -5,8 +5,8 @@ import scala.collection.mutable
 /** Persistent homology of a cubical grid by union-find instead of matrix reduction (after Le Breton, Szustakowski and
   * Piraud, arXiv:2606.04801, extended here to any coefficient field and to representatives): degree 0 by union-find on
   * the vertices and edges, the top degree `d - 1` (`d` the grid's dimension) by union-find on the dual graph. In 2-D
-  * those cover everything; in dimension 3 and up the degrees in between are computed by the chunks engine on the grid
-  * without its top cells. Requires `d >= 2`.
+  * those cover everything; in dimension 3 and up the degrees in between are computed by the cohomology engine on the
+  * grid without its top cells. Requires `d >= 2`.
   *
   * The dual graph: the top cells (pixels) are vertices, the codimension-1 cells (facets) edges between the one or two
   * top cells containing them, with one extra vertex `∞`, at value `+Infinity`, on the far side of every facet on the
@@ -41,26 +41,21 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
     bars
 
   // -------------------------------------------------------------------------------------------------------------
-  // d >= 3's "middle" dimensions (1 <= k <= d-2): no duality shortcut exists for these, so they're handed to
-  // chunks -- run on a view that hides the real top-dimensional cells entirely (never offered to `chunks` at
-  // all, not merely filtered out of its report), so that engine's own general Chain reduction never touches the
-  // (often largest) top dimension. `chunks`'s own maxDim = d-2 asks it to walk 0..d-1 (exactly what the
-  // truncated stream provides) and report <= d-2 -- its own pre-existing "drop the incomplete top bar" filtering
-  // already discards the bars a truncation would otherwise wrongly leave open, the same mechanism naive/
-  // cohomology already rely on for their own maxDim. This also yields H_0 as a side effect of chunks's own
-  // unionFindDim01 fast path, at no extra cost over what chunks was going to do anyway -- no need to separately
-  // call computeH0 here (unlike the d=2 path above, where computeH0 is the ONLY dimension-0 computation and
-  // invoking chunks at all would be pure overhead on an empty middle-dimension range).
-  // See .claude/DESIGN-fast-engines-hybrid-middle-dimensions.md for the full derivation.
+  // d >= 3's "middle" degrees (1 <= k <= d-2) have no duality shortcut. They go to the cohomology engine on a view
+  // that hides the top-dimensional cells (so the largest dimension never enters a reduction); the view declares
+  // homologyDegreeLimit = d - 2, so its artificial degree d-1 classes are skipped by the involution, and we keep
+  // degrees <= d-2. H_0 comes out of the same computation. Cohomology rather than chunks: with chunks the 3-D hybrid
+  // was slower than plain cohomology on the whole image (.claude/WORKLOG-fast-cubical-representatives.md).
+  // .claude/DESIGN-fast-engines-hybrid-middle-dimensions.md has the derivation of the hybrid itself.
   // -------------------------------------------------------------------------------------------------------------
   private def computeMiddleDimensions(
     stream: CubicalGridStream,
     includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     val truncated = LimitedCubicalGridStream(stream, stream.ambientDim - 1)
-    CellularPersistenceInChunksEngine[Cube, CoefficientT](stream.ambientDim - 2)
-      .persistentHomology(truncated)
-      .barcodeAt(Double.PositiveInfinity, includeZeroLength)
+    CellularCohomologyEngine[Cube, CoefficientT, Double]()
+      .persistentHomology(truncated, includeZeroLength)
+      .filter(_.dim <= stream.ambientDim - 2)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
     if !lower && v == Double.PositiveInfinity then PositiveInfinity()

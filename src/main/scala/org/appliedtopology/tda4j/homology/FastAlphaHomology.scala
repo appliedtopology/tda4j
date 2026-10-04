@@ -12,8 +12,8 @@ class FastAlphaTriangulationException(message: String) extends RuntimeException(
 /** Persistent homology of a Helix alpha complex by union-find instead of matrix reduction: degree 0 on the vertices and
   * edges, the top degree `d - 1` on the dual graph of the top-dimensional simplices, as in
   * [[FastCubicalHomologyEngine]]. In the plane those cover everything; in dimension 3 and up the degrees in between are
-  * computed by the chunks engine on the complex without its top simplices. Works in any ambient dimension from 2, with
-  * representatives for every bar.
+  * computed by the cohomology engine on the complex without its top simplices. Works in any ambient dimension from 2,
+  * with representatives for every bar.
   *
   * The dual graph needs every facet to have one or two top-dimensional cofaces. Unlike a grid, a triangulation does not
   * guarantee it, so it is checked first, throwing [[FastAlphaTriangulationException]] when it fails (about 1 cloud in
@@ -40,21 +40,18 @@ class FastAlphaHomologyEngine[CoefficientT: Field]:
     bars
 
   // -------------------------------------------------------------------------------------------------------------
-  // d >= 3's "middle" dimensions (1 <= k <= d-2): see FastCubicalHomologyEngine.computeMiddleDimensions, whose
-  // structure this mirrors exactly (a stream truncated to hide the real top-dimensional cells, chunks's own
-  // maxDim = d-2 semantics discarding the resulting incomplete top-dimension bars for free, H_0 coming along as
-  // a side effect of chunks's own unionFindDim01). PersistenceInChunksEngine[Int, CoefficientT] is the
-  // Simplex[Int]-over-Ordering[Int] convenience wrapper for CellularPersistenceInChunksEngine -- the same class
-  // this codebase's naive/chunks/cohomology engines already use for alpha complexes elsewhere.
+  // d >= 3's "middle" degrees (1 <= k <= d-2): see FastCubicalHomologyEngine.computeMiddleDimensions, whose
+  // structure this mirrors exactly (the cohomology engine on a view hiding the top-dimensional simplices, which
+  // declares homologyDegreeLimit = d - 2; H_0 comes out of the same computation).
   // -------------------------------------------------------------------------------------------------------------
   private def computeMiddleDimensions(
     helix: HelixDelaunay,
     includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     val truncated = LimitedAlphaShapesStream(helix, helix.ambientDimension - 1)
-    PersistenceInChunksEngine[Int, CoefficientT](helix.ambientDimension - 2)
-      .persistentHomology(truncated)
-      .barcodeAt(Double.PositiveInfinity, includeZeroLength)
+    CellularCohomologyEngine[Simplex[Int], CoefficientT, Double]()
+      .persistentHomology(truncated, includeZeroLength)
+      .filter(_.dim <= helix.ambientDimension - 2)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
     if !lower && v == Double.PositiveInfinity then PositiveInfinity()

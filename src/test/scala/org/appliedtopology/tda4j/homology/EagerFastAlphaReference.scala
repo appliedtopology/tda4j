@@ -41,9 +41,9 @@ class EagerFastAlphaReference[CoefficientT: Field]:
     includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
     val truncated = LimitedAlphaShapesStream(helix, helix.ambientDimension - 1)
-    PersistenceInChunksEngine[Int, CoefficientT](helix.ambientDimension - 2)
-      .persistentHomology(truncated)
-      .barcodeAt(Double.PositiveInfinity, includeZeroLength)
+    CellularCohomologyEngine[Simplex[Int], CoefficientT, Double]()
+      .persistentHomology(truncated, includeZeroLength)
+      .filter(_.dim <= helix.ambientDimension - 2)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
     if !lower && v == Double.PositiveInfinity then PositiveInfinity()

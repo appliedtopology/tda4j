@@ -55,7 +55,7 @@ simplices; valid any ambient dim≥2, Helix only (DQP builds no adjacency struct
 precondition is NOT guaranteed by construction (more likely violated at higher dim/more points) — validated
 explicitly, throws `FastAlphaTriangulationException` rather than a silently-wrong dual graph. Facet dual-edge
 value from `HelixDelaunay.filtrationValue` directly, never recomputed as min over top simplices. At dim≥3, same
-chunks-hybrid as cubical on `LimitedAlphaShapesStream`; cross-validated at d=3. Wired as
+cohomology hybrid as cubical on `LimitedAlphaShapesStream`; cross-validated at d=3. Wired as
 `engine="fast-alpha"` (alpha+helix only, project lead signed off on the measured exception rate). Representatives
 share the cubical engine's `SignedUnionFind` bookkeeping (`WORKLOG-fast-cubical-representatives.md`).
 `WORKLOG-alpha-dual-unionfind.md`, `DESIGN-alpha-dual-unionfind.md`.

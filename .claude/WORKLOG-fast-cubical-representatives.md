@@ -185,3 +185,56 @@ What remains, from a JFR profile of 700² noise taken before region boundaries m
 
 That is the price of a representative per bar, which CubicalRipser and GUDHI do not pay. 1000² noise has about 380k
 `H_1` bars.
+
+## Combining the union-finds with cohomology in 3-D and up (2026-10-04, later)
+
+The project lead asked whether the union-finds should combine with the cohomology approach. They should; the 3-D
+hybrid had them combined with **chunks** for the middle degrees, which the size sweep (`bench/sweep_cubical.py`) showed
+losing badly:
+- on 32³ noise, the hybrid took 58.8 s against 8.7 s for plain cohomology on the whole image;
+- the hybrid's µs per voxel grew with size, from 582 at 16³ to 1795 at 32³.
+
+**Step 1 (done): the middle degrees go to the cohomology engine.**
+- `computeMiddleDimensions` in both fast engines runs `CellularCohomologyEngine.persistentHomology` on the truncated
+  view and keeps degrees `<= d-2`; the representatives are cycles by the involution.
+- The views, `LimitedCubicalGridStream` and `LimitedAlphaShapesStream`, now declare
+  `homologyDegreeLimit = maxDim - 1`, as the stream rules require of truncating wrappers. The involution therefore
+  skips the artificial top degree.
+- The equality references were switched identically; they check the dual union-find, and the middle degrees are
+  shared code.
+
+Same sweep images, warm median of 3 in the sandbox:
+
+| image | old hybrid | new hybrid | plain cohomology |
+|---|---|---|---|
+| noise 16³ | 2.38 s | 0.46 s | 0.62 s |
+| noise 24³ | 14.2 s | 1.55 s | 2.36 s |
+| noise 32³ | 58.8 s | 5.45 s | 5.90 s |
+| blob 32³ | 42.6 s | 2.85 s | 9.57 s |
+
+**Step 1b (done): `CubicalGridStream` values come from a flat array.**
+- A JFR profile of the new hybrid on 32³ noise: about 35% of the time was spent sorting cells through the generic
+  comparator, each comparison hashing a `Cube` into the value cache and walking `nondegenerateAxes`. The reduction was
+  about 14%, the involution about 14%.
+- `CubicalGridStream` now precomputes every cell's value once, into an array over the doubled-coordinate grid. The
+  minimum over containing pixels is separable: one min pass per axis over the even positions.
+- `filtrationValue` is an index computation. The `HashMap` cache, `containingTopCells` and the parallel warm-up are
+  gone; `parallelFiltrationValue` now parallelizes reading the pixels.
+- **Effect:**
+  - the fast hybrid at 32³: noise 5.45 → 4.03 s, blob 2.85 → 2.07 s;
+  - plain cohomology at 32³: inconclusive. Trials within one JVM ranged from 3.5 to 12.9 s, medians about 5.3 s with
+    the change against 5.7 s without, which this sandbox cannot resolve. Re-measure on a quiet machine.
+
+**Step 2, not done: union-find pairs as clearing and compression in the middle reduction.**
+- The primal union-find's killing edges are pivots of the degree-0 coboundaries, so they can be cleared from the
+  degree-1 columns.
+- The dual union-find's (d−1)-cell births are never pivots of the degree-(d−2) coboundaries, so they can be removed
+  as rows. This is the coboundary dual of Bauer–Kerber–Reininghaus compression.
+- With the reduction now at about 14% of the time, the expected gain is bounded by that share; the stream
+  materialization and the involution come first.
+
+Gates: `FastRepresentativesSpec` (equality plus validity), every `*Cubical*` spec, `ImagesSpec`, `TDA4jSpec` and
+`PersistenceVerbSpec` pass; `testFull`: 924 tests, 0 failures.
+
+**Consequence for the open "3-D `Auto` default" question:** fast cubical, now this hybrid, is the right default again.
+It beats plain cohomology at every size measured.

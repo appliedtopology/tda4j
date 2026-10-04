@@ -41,8 +41,10 @@ read the merge flip from the facet's own boundary (always 0), zeroing every repr
 The flip's coefficients are coboundary entries: `facet` looked up in the TOP cell's boundary.
 `WORKLOG-fast-cubical-engine.md`, `WORKLOG-fast-cubical-representatives.md`.
 
-**At ambient dim `>= 3`**, `chunks` handles residual middle dimensions `1..d-2` (no duality shortcut) via
-`CellularPersistenceInChunksEngine` on a `LimitedCubicalGridStream` hiding real top cells (`chunks`'s own
-`maxDim=d-2` already discards the incomplete bars this would otherwise wrongly leave open). Cross-validated at
+**At ambient dim `>= 3`**, the cohomology engine handles residual middle dimensions `1..d-2` (no duality shortcut)
+via `CellularCohomologyEngine.persistentHomology` on a `LimitedCubicalGridStream` hiding real top cells, keeping
+degrees `<= d-2` (chunks there made the 3-D hybrid 3-7x SLOWER than plain cohomology; with cohomology it is faster at
+every measured size -- `WORKLOG-fast-cubical-representatives.md`). The truncating views declare
+`homologyDegreeLimit = maxDim - 1`, so the involution skips the artificial top degree. Cross-validated at
 d=3 + one d=4 smoke test; not validated d≥5, win shrinks with d by design.
 `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.

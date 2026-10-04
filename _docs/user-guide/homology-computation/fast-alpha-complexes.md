@@ -19,8 +19,8 @@ val bars = FastAlphaHomologyEngine[Double]().persistentHomology(helix)
 
 `FastAlphaHomologyEngine` gives the same bars, with representatives, as the general engines on the alpha complex of the
 Helix backend, by union-find on the vertices (degree 0) and on the dual graph of the top-dimensional simplices (the top
-degree). In the plane those two cover everything; in 3-D and above, the degrees in between are computed by the chunks
-engine. It does not work with the DQP backend, which builds no triangulation.
+degree). In the plane those two cover everything; in 3-D and above, the degrees in between are computed by the
+cohomology engine. It does not work with the DQP backend, which builds no triangulation.
 
 It relies on the triangulation being valid. On some point clouds (about 1 in 18,700 in the plane, about 1 in 1,700 in
 3-D with 20-30 points) it is not, and the engine throws a `FastAlphaTriangulationException` saying so; any general

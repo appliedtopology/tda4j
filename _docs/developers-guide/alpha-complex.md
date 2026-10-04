@@ -74,11 +74,11 @@ and the concrete fix — retry with `engine="naive"`/`"chunks"`/`"cohomology"`, 
 with the facet-count technical detail kept as a secondary appendix for developers investigating this class
 itself.
 
-**At ambient dimension `>= 3`, the same hybrid-with-`chunks` extension as `FastCubicalHomologyEngine`**
+**At ambient dimension `>= 3`, the same hybrid extension as `FastCubicalHomologyEngine`**
 (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`): both union-finds were ALREADY written generically
 in terms of `ambientDimension`, not hardcoded to 2 — the only thing gating this engine to `d=2` was the single
 `require` check, so extending it is purely a matter of handing the residual "middle" dimensions (`1 <= k <=
-d-2`) to `PersistenceInChunksEngine[Int, C]` run on a new `LimitedAlphaShapesStream` view (the
+d-2`) to `CellularCohomologyEngine` (cycles by the involution) run on a new `LimitedAlphaShapesStream` view (the
 `Simplex[Int]` analogue of `LimitedCubicalGridStream` — needed because `HelixDelaunay`/`AlphaShapes` is
 a `LevelwiseSimplexStream`, not a `CofaceSimplexStream`, so the existing `LimitedCofaceSimplexStream` doesn't
 fit it) that hides the real top-dimensional simplices. Deliberately sequenced AFTER the cubical extension, not
@@ -94,7 +94,7 @@ exactly as the `d=2` property test already does).
 **Wired into `matlab.TDA4j`/`cli` as `engine="fast-alpha"`/`--engine fast-alpha`**, same as the cubical engine
 — valid only for `complex=alpha` with `alphaBackend=helix` (the default; `alphaBackend=DQP` is refused, since
 this engine cannot consume `AlphaShapeDQP`'s output at all) and any ambient dimension `>= 2` (no artificial
-ceiling — `chunks`, which the hybrid path hands the middle dimensions to, is already fully general over `d`).
+ceiling — the cohomology engine, which the hybrid path hands the middle dimensions to, is fully general over `d`).
 The project lead reviewed the measured ~1-in-18700 rate at `d=2` and the resulting exception message and signed
 off on shipping it as a production option; the `d=3` extension's own materially higher measured rate
 (~1-in-1666 at 20-30 points) is documented explicitly here and in the exception message itself, on the same

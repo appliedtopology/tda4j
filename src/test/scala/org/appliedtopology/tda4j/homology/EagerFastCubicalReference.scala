@@ -48,9 +48,9 @@ class EagerFastCubicalReference[CoefficientT: Field]:
     includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     val truncated = LimitedCubicalGridStream(stream, stream.ambientDim - 1)
-    CellularPersistenceInChunksEngine[Cube, CoefficientT](stream.ambientDim - 2)
-      .persistentHomology(truncated)
-      .barcodeAt(Double.PositiveInfinity, includeZeroLength)
+    CellularCohomologyEngine[Cube, CoefficientT, Double]()
+      .persistentHomology(truncated, includeZeroLength)
+      .filter(_.dim <= stream.ambientDim - 2)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
     if !lower && v == Double.PositiveInfinity then PositiveInfinity()

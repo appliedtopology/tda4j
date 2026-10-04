@@ -662,3 +662,5 @@ class LimitedAlphaShapesStream(helix: HelixDelaunay, maxDim: Int)
   }
   override def filtrationOrdering: Ordering[Simplex[Int]] = helix.filtrationOrdering
   override def filtrationValue: PartialFunction[Simplex[Int], Double] = helix.filtrationValue
+  // Cells up to dimension maxDim: degrees above maxDim - 1 are truncation artifacts.
+  override def homologyDegreeLimit: Option[Int] = Some(maxDim - 1)
