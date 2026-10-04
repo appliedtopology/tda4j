@@ -347,6 +347,19 @@ class CLISpec extends mutable.Specification:
         (exitCode must beEqualTo(0)) and (cliLineCount must beEqualTo(naiveBarCount))
       }
 
+    "runs --alpha-backend bowyer-watson end-to-end (a square: cocircular), with the same bar count as helix" >> {
+      val points =
+        Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0), Array(0.5, 2.0), Array(2.0, 0.5))
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, points)
+      def lines(backend: String) =
+        val buffer = new ByteArrayOutputStream()
+        val code = CliFull.run(Seq("--complex", "alpha", "--alpha-backend", backend, path), new PrintStream(buffer))
+        (code, buffer.toString.linesIterator.size)
+      val (bwCode, bwLines) = lines("bowyer-watson")
+      (bwCode must beEqualTo(0)) and (bwLines must beEqualTo(lines("helix")._2)) and (bwLines must beGreaterThan(0))
+    }
+
     "reject --complex combined with a cubical-image --input-format" >> {
       val path = tempFile(".txt")
       java.nio.file.Files.write(java.nio.file.Paths.get(path), "2\n2\n2\n0\n1\n2\n3\n".getBytes)

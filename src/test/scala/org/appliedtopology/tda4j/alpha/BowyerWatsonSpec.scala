@@ -109,6 +109,15 @@ class BowyerWatsonSpec extends mutable.Specification:
     (alpha.ambientDimension must be_==(1)) and (alpha.iterateDimension(1).size must be_==(9))
   }
 
+  "no points, one point, and one point repeated: an empty complex, a vertex, and one H_0 class" >> {
+    def h0(pts: Array[Array[Double]]) =
+      Persistence(Truncated(AlphaShapes(pts), 0), characteristic = 3).triples.count(_._1 == 0)
+    (AlphaShapes(Array.empty[Array[Double]]).iterator.size must be_==(0)) and
+      (h0(Array(Array(1.0, 2.0))) must be_==(1)) and
+      (h0(Array.fill(5)(Array(1.0, 2.0))) must be_==(1)) and
+      (AlphaShapes(Array.fill(5)(Array(1.0, 2.0))).iterateDimension(1).size must be_==(4))
+  }
+
   "refuses an input that spans more than 4 dimensions, saying what to use instead" >> {
     BowyerWatsonDelaunay(cloud(5, 10, 1)) must throwAn[IllegalArgumentException](message = "AlphaBackend.DQP")
   }

@@ -793,12 +793,18 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
             val x = q(r) - center(f * dim + r)
             d2 += x * x
           if math.sqrt(d2) < radius(f) - epsilon.epsilon then gabriel(f) = false
-        for f <- 0 until m do vals(f) = if gabriel(f) then math.min(radius(f), cofaceMin(f)) else cofaceMin(f)
+        // A Gabriel simplex with a coface vertex exactly on its sphere has exactly that coface's value (the same
+        // sphere); computed separately the two differ in the last bits and would leave a bar of length ~1e-16.
+        for f <- 0 until m do
+          vals(f) =
+            if gabriel(f) && radius(f) < cofaceMin(f) * (1 - 1e-12) then radius(f) else cofaceMin(f)
       levels(k) = faces
       values(k) = vals
     val valueMap = mutable.HashMap.empty[Simplex[Int], Double]
-    val byDimension = (0 to top).map { k =>
-      val level = levels(k)
+    // Dimension 1 exists even for points spanning nothing when some of them are repeated (their value-0 edges).
+    val highest = if duplicates.nonEmpty then math.max(top, 1) else top
+    val byDimension = (0 to highest).map { k =>
+      val level = if k <= top then levels(k) else DelaunayAlphaShapes.FaceTable(k + 1, 0)
       val simplices = Array.tabulate(level.size) { f =>
         val s = Simplex.from(Seq.tabulate(k + 1)(i => level.vertex(f, i)))
         valueMap(s) = values(k)(f)
@@ -827,8 +833,9 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
   /** Alpha values, top dimension first:
     *   - a top-dimensional simplex: `topValue` (its circumradius);
     *   - a lower simplex `σ`: if `σ` is Gabriel -- no vertex of a coface strictly inside its smallest circumsphere --
-    *     that sphere's radius, otherwise the smallest value among its immediate cofaces. A Gabriel simplex's radius is
-    *     already at most its cofaces' values; taking the minimum anyway keeps the filtration monotone to the last bit.
+    *     that sphere's radius, otherwise the smallest value among its immediate cofaces. A Gabriel radius within a
+    *     relative `1e-12` of that smallest value is taken to be equal to it (a coface vertex on the sphere: the same
+    *     sphere, computed twice), which also keeps the filtration monotone to the last bit.
     *   - a vertex: 0.
     */
   private def alphaValues: mutable.HashMap[Simplex[Int], Double] = built._2
@@ -859,7 +866,7 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
 
   def simplicesInDimension(d: Int): Iterator[Simplex[Int]] = simplicesSortedMap(d).iterator
 
-  def simplices(): Iterator[Simplex[Int]] = (0 to ambientDimension).iterator.flatMap(simplicesInDimension)
+  def simplices(): Iterator[Simplex[Int]] = simplicesSortedMap.keys.toSeq.sorted.iterator.flatMap(simplicesInDimension)
 
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case d if simplicesSortedMap.contains(d) => simplicesSortedMap(d).iterator

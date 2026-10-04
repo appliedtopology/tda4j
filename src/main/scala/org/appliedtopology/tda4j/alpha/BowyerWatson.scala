@@ -19,7 +19,9 @@ import scala.collection.mutable
   */
 class BowyerWatsonDelaunay(pts: Array[Array[Double]], seed: Long = 0L)(using epsilon: Epsilon)
     extends DelaunayAlphaShapes:
-  private val coordinates: Array[Array[Double]] = HelixDelaunay.projectToAffineRank(pts)
+  // A single point (or none) spans nothing: zero coordinates, a lone vertex.
+  private val coordinates: Array[Array[Double]] =
+    if pts.length <= 1 then pts.map(_ => Array.empty[Double]) else HelixDelaunay.projectToAffineRank(pts)
   val ambientDimension: Int = coordinates.headOption.map(_.length).getOrElse(0)
   require(
     ambientDimension <= 4,
@@ -310,7 +312,7 @@ private[tda4j] final class BowyerWatsonTriangulation(
 
   /** The finite cells, as simplices. */
   lazy val topSimplices: Seq[Simplex[Int]] =
-    if d == 0 then Seq(Simplex(0))
+    if d == 0 then if n > 0 then Seq(Simplex(0)) else Nil
     else (0 until cellCount).filter(c => alive(c) && !isInfinite(c)).map(c => Simplex.from(cellVertices(c).toSeq))
 
   lazy val duplicates: Map[Int, Int] =
