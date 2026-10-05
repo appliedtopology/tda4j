@@ -99,6 +99,9 @@ TOOLS = [
     ("cripser", "py", "cubical", {}),
     ("tda4j", "tda4j", "alpha", {"engine": "auto", "reps": "cycles"}),
     ("tda4j-fastalpha", "tda4j", "alpha", {"engine": "fastalpha", "reps": "cycles"}),
+    # The default above is Bowyer-Watson up to 4 dimensions (every alpha case here) and Helix above; these name each.
+    ("tda4j-bw", "tda4j", "alpha", {"engine": "auto", "reps": "cycles", "backend": "bowyer-watson"}),
+    ("tda4j-helix", "tda4j", "alpha", {"engine": "auto", "reps": "cycles", "backend": "helix"}),
     ("gudhi", "py", "alpha", {}),
 ]
 REFERENCE = {"vr": "ripser.cpp", "cubical": "gudhi", "alpha": "gudhi"}
@@ -248,7 +251,8 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
         cp = Path(os.environ["TDA4J_CP"]).read_text().strip()
         return (["java", f"-Xmx{args.jvm_heap}"] + args.jvm_opts.split() +
                 ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver",
-                 f"engine={opts['engine']}", f"reps={opts['reps']}"] + common)
+                 f"engine={opts['engine']}", f"reps={opts['reps']}"] +
+                ([f"backend={opts['backend']}"] if "backend" in opts else []) + common)
     if kind == "py":
         extra = [f"tool={opts['pytool']}"]
         if "variant" in opts:

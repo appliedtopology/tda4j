@@ -10,12 +10,13 @@ import java.nio.{ByteBuffer, ByteOrder}
   * {{{
   * java -cp $CP org.appliedtopology.tda4j.PaperBenchmarkDriver task=vr input=sphere.txt format=points dim=2 \
   *   [threshold=1.8] [p=2] [engine=auto|ripser|cohomology|chunks|naive|fastcubical|fastalpha] \
-  *   [reps=cycles|cocycles|none] [warmup=2] [trials=5] [out=bars.tsv]
+  *   [reps=cycles|cocycles|none] [backend=default|bowyer-watson|helix|dqp] [warmup=2] [trials=5] [out=bars.tsv]
   * }}}
   *
   *   - `task=vr`: points (`format=points`, one point per line) or a full distance matrix (`format=distance`).
   *   - `task=cubical`: a `.npy` array of float64 in C order (any dimension), sublevel filtration, T-construction.
-  *   - `task=alpha`: points; filtration values are circumradii. `backend=helix` (default) or `dqp`.
+  *   - `task=alpha`: points; filtration values are circumradii. `backend=default` (Bowyer-Watson up to 4 dimensions,
+  *     Helix above), `bowyer-watson`, `helix` or `dqp`. `engine=fastalpha` runs on the backend's triangulation.
   *   - `task=cech`: points; filtration values are radii (the same barcode as alpha in general position).
   *
   * Times cover the whole `Persistence(...)` call: building the complex, the reduction and the representatives.
@@ -99,8 +100,16 @@ object PaperBenchmarkDriver:
       case "alpha" =>
         val pts = readMatrix(input)
         val backend = AlphaBackend.parse(opts.getOrElse("backend", "default"))
-        if engineName == "fastalpha" then () => fastAlpha(pts, dim, p)
+        if engineName == "fastalpha" then () => fastAlpha(pts, backend, dim, p)
         else if backend == AlphaBackend.DQP then
+          () =>
+            Persistence(
+              Truncated(AlphaShapes(pts, backend), dim),
+              characteristic = p,
+              engine = engine,
+              representatives = reps
+            ).triples
+        else if backend != AlphaBackend.Default then
           () =>
             Persistence(
               Truncated(AlphaShapes(pts, backend), dim),
@@ -160,11 +169,19 @@ object PaperBenchmarkDriver:
 
   private def fmt(x: Double): String = if x.isPosInfinity then "inf" else x.toString
 
-  private def fastAlpha(pts: Array[Array[Double]], dim: Int, p: Int): List[(Int, Double, Double)] =
+  private def fastAlpha(
+    pts: Array[Array[Double]],
+    backend: AlphaBackend,
+    dim: Int,
+    p: Int
+  ): List[(Int, Double, Double)] =
     val ff = FiniteField(p)
     import ff.given
+    val delaunay = AlphaShapes(pts, backend) match
+      case d: DelaunayAlphaShapes => d
+      case _                      => throw IllegalArgumentException("engine=fastalpha needs a triangulation, not DQP")
     FastAlphaHomologyEngine[ff.Fp]()
-      .persistentHomology(HelixDelaunay(pts))
+      .persistentHomology(delaunay)
       .filter(_.dim <= dim)
       .map(_.toTriple)
 
