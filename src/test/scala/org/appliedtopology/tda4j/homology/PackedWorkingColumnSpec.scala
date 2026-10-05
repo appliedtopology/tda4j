@@ -97,7 +97,7 @@ class PackedWorkingColumnSpec extends mutable.Specification:
       def elements: Iterable[Int] = base.elements
       def contains(x: Int): Boolean = base.contains(x)
     def symmetrized(s: FiniteMetricSpace[Int]): FiniteMetricSpace[Int] = new FiniteMetricSpace[Int]:
-      def distance(x: Int, y: Int): Double = s.distance(math.min(x, y), math.max(x, y))
+      def distance(x: Int, y: Int): Double = s.distance(math.max(x, y), math.min(x, y)) // the lower triangle
       def size: Int = s.size
       def elements: Iterable[Int] = s.elements
       def contains(x: Int): Boolean = s.contains(x)

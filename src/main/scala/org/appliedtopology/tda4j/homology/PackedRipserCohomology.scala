@@ -45,7 +45,8 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
 
   // A simplex must get one diameter whichever path computes it: the heap working column combines equal cells only if
   // they carry the same diameter, and otherwise grows without end. Euclidean distances are exactly symmetric and
-  // `ExplicitMetricSpace` reads one triangle, so those are read as given; any other metric is read as d(min, max).
+  // `ExplicitMetricSpace` reads one triangle, so those are read as given; any other metric is read as d(max, min),
+  // the lower triangle, like `ExplicitMetricSpace`.
   // Reading every metric that way cost ~15% on o3_1024: the row-wise walk of the distance cache is lost
   // (`.claude/WORKLOG-vr-working-column.md`).
   private val symmetricByConstruction: Boolean = metricSpace match
@@ -53,7 +54,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
     case _                                                => false
   private inline def distance(x: Int, y: Int): Double =
     if symmetricByConstruction then metricSpace.distance(x, y)
-    else metricSpace.distance(math.min(x, y), math.max(x, y))
+    else metricSpace.distance(math.max(x, y), math.min(x, y))
 
   /** `insertionDiameter` with every distance read through `distance` above. */
   private def cofacetDiameter(vertices: Array[Int], sigmaFv: Double, v: Int): Double =

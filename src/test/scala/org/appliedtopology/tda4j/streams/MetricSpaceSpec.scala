@@ -85,3 +85,18 @@ class MetricSpaceSpec extends mutable.Specification with ScalaCheck:
       } must beTrue
     }
   }
+
+  "An explicit distance matrix is read from its lower triangle, as Ripser and GUDHI read it" >> {
+    // The lower triangle is a square with diagonals 2 (one loop, born at 1, dying at 2); the upper triangle has every
+    // distance 1 (no loop). Reading the upper triangle would report no H_1 bar.
+    val m = Seq(
+      Seq(0.0, 1.0, 1.0, 1.0),
+      Seq(1.0, 0.0, 1.0, 1.0),
+      Seq(2.0, 1.0, 0.0, 1.0),
+      Seq(1.0, 2.0, 1.0, 0.0)
+    )
+    val space = ExplicitMetricSpace(m)
+    val h1 = Persistence(space, maxDimension = 1, maxFiltrationValue = 3.0).triples.filter(_._1 == 1)
+    (space.distance(0, 2) must be_==(2.0)) and (space.distance(2, 0) must be_==(2.0)) and
+      (space.distance(1, 3) must be_==(2.0)) and (h1 must be_==(List((1, 1.0, 2.0))))
+  }

@@ -114,11 +114,14 @@ class IntMetricSpace[VertexT](val metricSpace: FiniteMetricSpace[VertexT]) exten
   *   - `dist(x)(x) == 0` for all `x`
   *   - `dist(x)(y) == dist(y)(x)` for all `x,y`
   *   - The triangle inequality
+  *
+  * Only the lower triangle is read: `distance(x, y)` is `dist(max(x, y))(min(x, y))`, as in Ripser and GUDHI, so a
+  * matrix that is not exactly symmetric gives the same results here as there.
   */
 class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricSpace[Int]:
   // Real-world distance-matrix files (e.g. the roadmap benchmark data's `fractal_9_5_2` set) can violate the
   // documented `dist(x)(y) == dist(y)(x)` expectation by ~1e-5/1e-6 (rounding in however the file was produced),
-  // not enforced at load time. Reading only ONE triangle's entry, always via the same (min, max) ordering
+  // not enforced at load time. Reading only ONE triangle's entry, always via the same (max, min) ordering
   // regardless of which argument order the caller used, makes `distance` self-consistent for a given pair
   // REGARDLESS of call-site argument order -- `PackedRipserCohomologyContext.insertionDiameter` queries
   // `distance(existingVertex, insertedVertex)` with an argument order that depends on which facet a simplex was
@@ -126,7 +129,8 @@ class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricSpace[
   // different diameters depending on path, corrupting its own basis/pivot bookkeeping (`.claude/
   // WORKLOG-o3-1024-fractal-r-session-2026-09-25.md`'s fractal-r investigation).
   def distance(x: Int, y: Int): Double =
-    if x <= y then dist(x)(y) else dist(y)(x)
+    // The lower triangle (row >= column), the triangle ripser.cpp and GUDHI read.
+    if x >= y then dist(x)(y) else dist(y)(x)
   def size: Int = dist.size
   def elements: Iterable[Int] = Range(0, size)
   override def contains(x: Int): Boolean = 0 <= x & x < size

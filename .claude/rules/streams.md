@@ -70,3 +70,8 @@ stream holds cells up to dimension `k + 1`, so its degree-`(k + 1)` "classes" ar
 looks essential). `Persistence(stream)` defaults to that `k` and throws for a larger `maxDimension`; complete complexes
 (`ExplicitStream`, cubical, alpha, simplicial sets) report `None`. A new truncating wrapper must override it (taking
 the min with the wrapped stream's). `PersistenceVerbSpec`, `WORKLOG-default-degree-2.md`.
+
+**Distance matrices are read from the lower triangle** (project lead, matching ripser.cpp and GUDHI):
+`ExplicitMetricSpace.distance(x, y)` is `dist(max)(min)`, and the packed Ripser engine reads any metric that is not
+symmetric by construction as `d(max, min)`. A non-symmetric file (fractal-r) then gives the same input to every tool.
+`MetricSpaceSpec` pins it with a matrix whose two triangles have different `H_1`.
