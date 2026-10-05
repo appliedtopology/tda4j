@@ -31,7 +31,9 @@ does not build a stream at all: it runs Ripser's algorithm on the metric space, 
 degree 2. A stream is for the other engines, such as the naive engine, whose computation can be followed step by step.
 
 Distance matrices: `ExplicitMetricSpace(rows)` wraps a full symmetric matrix (a `Seq[Seq[Double]]`), and the readers in
-[files](../input-output.md) produce one from Ripser, DIPHA and CSV formats.
+[files](../input-output.md) produce one from Ripser, DIPHA and CSV formats. Only the lower triangle is read (row index
+at least the column index), as Ripser and GUDHI do, so a matrix that is not exactly symmetric gives the same diagram in
+all three.
 
 ### Distance-to-measure weighting
 

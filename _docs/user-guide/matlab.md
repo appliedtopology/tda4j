@@ -32,7 +32,7 @@ in a MATLAB tab next to the Scala code.
 | method | input |
 |---|---|
 | `computeFromPoints(points, options)` | a point cloud, one row per point |
-| `computeFromDistanceMatrix(distances, options)` | a full distance matrix (no `alpha`, `cech` or `dtm-alpha`: they need coordinates) |
+| `computeFromDistanceMatrix(distances, options)` | a full distance matrix, of which the lower triangle is read (no `alpha`, `cech` or `dtm-alpha`: they need coordinates) |
 | `computeFromImage(pixels, options)` | a 2-D image |
 | `computeFromCubicalImage(shape, values, options)` | an image or voxel grid of any dimension, values in row-major order |
 | `computeFromRelation(relation, options)` | a relation, for the Dowker complex (options `engine`, `maxDimension`, `maxFiltrationValue`, `dual`, `field`, `prime`, `epsilon`, and the bar options) |

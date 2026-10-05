@@ -105,7 +105,7 @@ for the bars that are reported, so `persistentCohomology()` builds none for zero
 `persistentHomology()` builds none at all. Cycles come from the engine's own specialization of `Involution.cycles`
 on the same heap, which returns exactly what the generic involution returns. The heap relies on a simplex having
 one diameter: a metric that is not symmetric by construction (anything but `EuclideanMetricSpace` and
-`ExplicitMetricSpace`) is read as `d(min(i, j), max(i, j))`.
+`ExplicitMetricSpace`, which reads its lower triangle) is read as `d(max(i, j), min(i, j))`, the same triangle.
 
 ## 5. `CellularCohomologyEngine` — generic cohomology, for every cell type
 

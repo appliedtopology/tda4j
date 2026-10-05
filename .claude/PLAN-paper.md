@@ -716,7 +716,9 @@ update; they are marked **(checked)**. Everything else cites its worklog and sta
 - §2.4: the cursor engines are not on dense numbering;
 - §2.6 (release with a DOI) and §2.7 (HAP cross-check): not done;
 - §2.8 **(checked)**: `ExplicitMetricSpace.distance` still reads `dist(min)(max)`, the upper triangle. #40 only made the
-  packed engine read every metric in one fixed order (the infinite-loop fix);
+  packed engine read every metric in one fixed order (the infinite-loop fix). **Decided and done right after this
+  update (project lead): the lower triangle, `dist(max)(min)`, as ripser.cpp and GUDHI read it; the packed engine reads
+  other metrics as `d(max, min)` too. Decision 0.6 is closed;**
 - §2.5's Čech-against-alpha oracle: not a spec (the harness's smoke run compared them; the test suite does not);
 - §1d, §1e, the §3.0 methodology rules, and claim A's open checks (the volume-optimality proof, HomCloud, CubicalRipser
   and GUDHI).
