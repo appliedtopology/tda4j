@@ -2,11 +2,11 @@ package org.appliedtopology.tda4j
 
 import org.specs2.mutable
 
-/** `PackedRipserCohomologyEngine` with neighbour lists finds each simplex's cofacets by intersecting its vertices' lists
-  * of neighbours within the threshold, instead of trying every vertex. It must be the same computation: the same bars,
-  * in the same order, with the same cocycles and cycles term for term, as the all-vertex scan. Over F_3 and F_17, with
-  * and without apparent pairs, at thresholds that keep few or most pairs, on generic clouds, on integer grids (diameters
-  * tie everywhere), and on distances that are not exactly symmetric.
+/** `PackedRipserCohomologyEngine` with neighbour lists finds each simplex's cofacets by intersecting its vertices'
+  * lists of neighbours within the threshold, instead of trying every vertex. It must be the same computation: the same
+  * bars, in the same order, with the same cocycles and cycles term for term, as the all-vertex scan. Over F_3 and F_17,
+  * with and without apparent pairs, at thresholds that keep few or most pairs, on generic clouds, on integer grids
+  * (diameters tie everywhere), and on distances that are not exactly symmetric.
   */
 class NeighbourListsSpec extends mutable.Specification:
 
@@ -19,7 +19,7 @@ class NeighbourListsSpec extends mutable.Specification:
 
   def cell(c: Any): (Double, Long) = c match
     case x: PackedRipserCohomologyEngine[?]#DiameterIndex => (x.diameter, x.index)
-    case _                                                 => (Double.NaN, -1L)
+    case _                                                => (Double.NaN, -1L)
 
   def clouds(seed: Long): Seq[FiniteMetricSpace[Int]] =
     val rng = new scala.util.Random(seed)
@@ -35,7 +35,9 @@ class NeighbourListsSpec extends mutable.Specification:
       def elements: Iterable[Int] = base.elements
       def contains(x: Int): Boolean = base.contains(x)
     // An explicit matrix whose two triangles differ (it reads the lower one).
-    val matrix = ExplicitMetricSpace(Seq.tabulate(n, n)((i, j) => EuclideanMetricSpace(points).distance(i, j) * (if i < j then 1.01 else 1.0)))
+    val matrix = ExplicitMetricSpace(
+      Seq.tabulate(n, n)((i, j) => EuclideanMetricSpace(points).distance(i, j) * (if i < j then 1.01 else 1.0))
+    )
     Seq(EuclideanMetricSpace(points), EuclideanMetricSpace(grid), skewed, matrix)
 
   def same(field: FiniteField)(space: FiniteMetricSpace[Int], apparent: Boolean, threshold: Option[Double]): Boolean =
