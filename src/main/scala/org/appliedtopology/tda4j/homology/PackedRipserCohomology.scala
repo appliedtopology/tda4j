@@ -28,13 +28,20 @@ private[tda4j] def insertionDiameter(
   * cell of a degree-`k` bar with `si.decodeToArray(cell.index, k + 1)`. `maxFiltrationValue` defaults to the minimum
   * enclosing radius, past which nothing new is born. `useApparentPairs = false` turns off the apparent-pair shortcut,
   * which changes no output (for benchmarking).
+  *
+  * Under a threshold that keeps few of the pairs (a large point cloud with a small `maxFiltrationValue`), cofacets are
+  * found from each vertex's list of neighbours within the threshold instead of by trying every vertex, as Ripser does
+  * with a sparse distance matrix. The lists are built when at most a quarter of all pairs are within the threshold
+  * (`neighbourLists = Some(true)` or `Some(false)` decides it instead); the output is the same either way.
   */
 class PackedRipserCohomologyEngine[CoefficientT: Field](
   metricSpace: FiniteMetricSpace[Int],
   maxDimension: Int,
   useApparentPairs: Boolean = true,
   // None: the minimum enclosing radius.
-  maxFiltrationValue: Option[Double] = None
+  maxFiltrationValue: Option[Double] = None,
+  // None: decided by how many pairs are within the threshold.
+  neighbourLists: Option[Boolean] = None
 ):
 
   private val resolvedMaxFiltrationValue: Double =
@@ -55,6 +62,48 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
   private inline def distance(x: Int, y: Int): Double =
     if symmetricByConstruction then metricSpace.distance(x, y)
     else metricSpace.distance(math.max(x, y), math.min(x, y))
+
+  // Each vertex's neighbours within the threshold, when they are few enough to pay: at most a quarter of all ordered
+  // pairs (and at most 2^28 entries, 3 GB), so a dense threshold keeps the cheaper all-vertex scan. Every distance is
+  // the one `distance` above returns, so cofacet diameters are bit-identical to the scan's.
+  private val lists: Option[NeighbourLists] =
+    val n = metricSpace.size
+    val dense = n.toLong * (n - 1)
+    neighbourLists match
+      case Some(false) => None
+      case Some(true)  => NeighbourLists.within(n, resolvedMaxFiltrationValue, Long.MaxValue)(distance(_, _))
+      case None        =>
+        NeighbourLists.within(n, resolvedMaxFiltrationValue, math.min(dense / 4, 1L << 28))(distance(_, _))
+
+  /** Whether cofacets come from neighbour lists (diagnostics and tests). */
+  private[tda4j] def usesNeighbourLists: Boolean = lists.isDefined
+
+  // Every cofacet of `sigma` (with `size` vertices) within the threshold, vertex and index strictly decreasing, as
+  // (diameter, index, number of sigma's vertices below the added one); `f` returns whether to go on. Only the canonical
+  // ones (added vertex above sigma's largest) when `allCofacets` is false.
+  private inline def eachCofacet(sigma: DiameterIndex, size: Int, allCofacets: Boolean)(
+    inline f: (Double, Long, Int) => Boolean
+  ): Unit =
+    val vertices = si.decodeToArray(sigma.index, size)
+    lists match
+      case Some(nl) =>
+        val cur = si.sparseCofacetCursor(sigma.index, vertices, allCofacets, nl)
+        var go = true
+        while go && cur.hasNext do
+          val tauFv = if cur.maxDistance > sigma.diameter then cur.maxDistance else sigma.diameter
+          go = f(tauFv, cur.index, cur.position)
+          cur.advance()
+      case None =>
+        val cur = si.cofacetCursor(sigma.index, size, allCofacets)
+        var go = true
+        while go && cur.hasNext do
+          val tauFv = cofacetDiameter(vertices, sigma.diameter, cur.vertex)
+          if tauFv <= resolvedMaxFiltrationValue then
+            // `vertices` is sorted ascending: a plain scan counts the entries below `cur.vertex`.
+            var position = 0
+            while position < vertices.length && vertices(position) < cur.vertex do position += 1
+            go = f(tauFv, cur.index, position)
+          cur.advance()
 
   /** `insertionDiameter` with every distance read through `distance` above. */
   private def cofacetDiameter(vertices: Array[Int], sigmaFv: Double, v: Int): Double =
@@ -219,26 +268,12 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
   private def sparseCofacets(sigma: DiameterIndex, size: Int): Iterator[DiameterIndex] =
     if size > maxDimension then Iterator.empty
     else
-      val vertices = si.decodeToArray(sigma.index, size)
-      val cur = si.cofacetCursor(sigma.index, size, allCofacets = false)
-      new Iterator[DiameterIndex]:
-        private var pending: DiameterIndex = DiameterIndex(0.0, 0L)
-        private var havePending: Boolean = false
-        private def step(): Unit =
-          havePending = false
-          while !havePending && cur.hasNext do
-            val tauFv = cofacetDiameter(vertices, sigma.diameter, cur.vertex)
-            if tauFv <= resolvedMaxFiltrationValue then
-              pending = DiameterIndex(tauFv, cur.index)
-              havePending = true
-            cur.advance()
-        step()
-        def hasNext: Boolean = havePending
-        def next(): DiameterIndex =
-          if !havePending then throw new NoSuchElementException("next on empty iterator")
-          val result = pending
-          step()
-          result
+      val buffer = mutable.ArrayBuffer.empty[DiameterIndex]
+      eachCofacet(sigma, size, allCofacets = false) { (diameter, index, _) =>
+        buffer += DiameterIndex(diameter, index)
+        true
+      }
+      buffer.iterator
 
   /** The coboundary of `sigma` (with `size` vertices) in the complex truncated at `maxFiltrationValue`, as in
     * [[RipserCohomologyEngine.coboundaryOf]]. Defined up to dimension `maxDimension`.
@@ -253,28 +288,21 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
     inline f: (Double, Long, CoefficientT) => Unit
   ): Unit =
     if size - 1 <= maxDimension then
-      val vertices = si.decodeToArray(sigma.index, size)
-      val cur = si.cofacetCursor(sigma.index, size, allCofacets = true)
-      while cur.hasNext do
-        val tauFv = cofacetDiameter(vertices, sigma.diameter, cur.vertex)
-        if tauFv <= resolvedMaxFiltrationValue then
-          // `vertices` is sorted ascending: a plain scan counts the entries below `cur.vertex`.
-          var position = 0
-          while position < vertices.length && vertices(position) < cur.vertex do position += 1
-          f(tauFv, cur.index, if position % 2 == 0 then fr.one else fr.negate(fr.one))
-        cur.advance()
+      eachCofacet(sigma, size, allCofacets = true) { (tauFv, index, position) =>
+        f(tauFv, index, if position % 2 == 0 then fr.one else fr.negate(fr.one))
+        true
+      }
 
   // The oldest same-diameter cofacet (largest index): the cursor's index decreases strictly, so the first tie is it.
   private def zeroPivotCofacet(sigma: DiameterIndex, size: Int): Option[DiameterIndex] =
     if size - 1 > maxDimension then None
     else
-      val vertices = si.decodeToArray(sigma.index, size)
-      val cur = si.cofacetCursor(sigma.index, size, allCofacets = true)
-      while cur.hasNext do
-        val tauFv = cofacetDiameter(vertices, sigma.diameter, cur.vertex)
-        if tauFv == sigma.diameter then return Some(DiameterIndex(sigma.diameter, cur.index))
-        cur.advance()
-      None
+      var found: Option[DiameterIndex] = None
+      eachCofacet(sigma, size, allCofacets = true) { (tauFv, index, _) =>
+        if tauFv == sigma.diameter then found = Some(DiameterIndex(sigma.diameter, index))
+        found.isEmpty
+      }
+      found
 
   // The youngest same-diameter facet (smallest index): the facet cursor's index increases strictly, so the first tie is
   // it. Facet diameters are recomputed from the vertex array.
