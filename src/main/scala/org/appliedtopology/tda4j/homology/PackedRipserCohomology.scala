@@ -482,7 +482,8 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
           }
       )
       val basis = basisByDim.getOrElseUpdate(deathDim, mutable.LongMap.empty)
-      val byBirth = rowByDim.getOrElseUpdate(deathDim, LongIntMap())
+      val byBirth = LongIntMap(finite.length)
+      rowByDim(deathDim) = byBirth
       val logs = logByDim.getOrElseUpdate(deathDim, mutable.LongMap.empty)
       for o <- order do
         val row = finite(o)
@@ -558,15 +559,21 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
     // Cocycles, by row, only for the rows that asked for one.
     val cocycles: mutable.LongMap[Chain[DiameterIndex, CoefficientT]] = mutable.LongMap.empty
 
+    /** Room for `count` more rows in one allocation (a degree adds at most one row per simplex). */
+    def reserve(count: Int): Unit =
+      val needed = math.min(size.toLong + count, Int.MaxValue.toLong - 8).toInt
+      if needed > dims.length then resize(needed)
+
+    private def resize(grown: Int): Unit =
+      dims = java.util.Arrays.copyOf(dims, grown)
+      birthD = java.util.Arrays.copyOf(birthD, grown)
+      birthI = java.util.Arrays.copyOf(birthI, grown)
+      deathD = java.util.Arrays.copyOf(deathD, grown)
+      deathI = java.util.Arrays.copyOf(deathI, grown)
+      apparent = java.util.Arrays.copyOf(apparent, grown)
+
     def add(dim: Int, birth: DiameterIndex, deathDiameter: Double, deathIndex: Long, isApparent: Boolean): Int =
-      if size == dims.length then
-        val grown = math.min(2L * size, Int.MaxValue.toLong - 8).toInt
-        dims = java.util.Arrays.copyOf(dims, grown)
-        birthD = java.util.Arrays.copyOf(birthD, grown)
-        birthI = java.util.Arrays.copyOf(birthI, grown)
-        deathD = java.util.Arrays.copyOf(deathD, grown)
-        deathI = java.util.Arrays.copyOf(deathI, grown)
-        apparent = java.util.Arrays.copyOf(apparent, grown)
+      if size == dims.length then resize(math.min(2L * size + 16, Int.MaxValue.toLong - 8).toInt)
       dims(size) = dim
       birthD(size) = birth.diameter
       birthI(size) = birth.index
@@ -637,6 +644,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
           }
       )
       _totalSimplexCount += level.size
+      rows.reserve(level.size)
 
       // Capacity-hinted: `basis` gets at most one entry per simplex of this dimension.
       val loadFactor = mutable.HashMap.defaultLoadFactor
@@ -644,7 +652,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
       val basis = new mutable.LongMap[Column](capacity)
       // V-columns, for the bars that report a cocycle: a pivot's seed is the birth of the row it closes (`rowOfDeath`),
       // its reduction log is kept only when it is not empty.
-      val rowOfDeath = LongIntMap()
+      val rowOfDeath = if cocycles then LongIntMap(level.size) else LongIntMap()
       val logs = mutable.LongMap.empty[Array[(DiameterIndex, CoefficientT)]]
       val pending = mutable.ArrayBuffer.empty[(Int, Array[(DiameterIndex, CoefficientT)])]
       def report(
@@ -773,9 +781,11 @@ private[tda4j] final class Level(initialCapacity: Int):
     size += 1
 
 /** A map from non-negative `Long` keys to `Int` values, open addressing over primitive arrays (no boxing). */
-private[tda4j] final class LongIntMap:
-  private var keys: Array[Long] = Array.fill(16)(-1L)
-  private var values: Array[Int] = new Array[Int](16)
+private[tda4j] final class LongIntMap(expected: Int = 0):
+  // Capacity: a power of two at least 4/3 of the expected size (load at most 0.75 without growing).
+  private var keys: Array[Long] =
+    Array.fill(Integer.highestOneBit(math.max(16, (expected.toLong * 4 / 3 + 1).min(1L << 29).toInt)) * 2)(-1L)
+  private var values: Array[Int] = new Array[Int](keys.length)
   private var count: Int = 0
 
   private def slot(key: Long, ks: Array[Long]): Int =
@@ -786,7 +796,7 @@ private[tda4j] final class LongIntMap:
     s
 
   def update(key: Long, value: Int): Unit =
-    if 2 * (count + 1) > keys.length then grow()
+    if 4L * (count + 1) > 3L * keys.length then grow()
     val s = slot(key, keys)
     if keys(s) == -1L then count += 1
     keys(s) = key
