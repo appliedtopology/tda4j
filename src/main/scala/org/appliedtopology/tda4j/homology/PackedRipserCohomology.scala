@@ -614,7 +614,8 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
     // clear. `activeCleared` holds this iteration's dimension-d clears (populated during the PREVIOUS iteration);
     // `nextCleared` (below, inside the loop) accumulates dimension-(d+1) clears as they're discovered THIS
     // iteration, then rotates in.
-    var activeCleared: mutable.Set[Long] = mutable.Set.empty
+    // Collected while a degree is reduced, then sorted once: the next degree only asks `contains`.
+    var activeCleared: ClearedSet = ClearedSet()
 
     // Dimension-0 candidates: every vertex, diameter 0.0 -- index IS the vertex id (SimplexIndexing.apply's own
     // d==0 base case: a single vertex v decodes to/from index v directly). Each level is kept as primitive
@@ -637,7 +638,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
       )
       _totalSimplexCount += level.size
 
-      // Capacity-hinted: `basis` gets at most one entry per simplex of this dimension, `nextCleared` likewise.
+      // Capacity-hinted: `basis` gets at most one entry per simplex of this dimension.
       val loadFactor = mutable.HashMap.defaultLoadFactor
       val capacity = (level.size / loadFactor).toInt + 1
       val basis = new mutable.LongMap[Column](capacity)
@@ -659,7 +660,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
         if cocycles && deathIndex >= 0 then
           rowOfDeath(deathIndex) = row
           if log.nonEmpty then logs(deathIndex) = log
-      var nextCleared: mutable.Set[Long] = new mutable.HashSet(capacity, loadFactor)
+      val nextCleared = ClearedSet()
 
       // tau's own size (one more than sigma's) -- captured here, per-dimension, because a bare DiameterIndex
       // doesn't know its own dimension the way a Simplex[Int] does; zeroApparentFacet needs it to decode tau's
@@ -728,9 +729,32 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
           k += 1
         level = next
 
+      nextCleared.seal()
       activeCleared = nextCleared
 
     rows
+
+/** Indices added in any order, then `seal`ed (sorted once) and queried by binary search. */
+private[tda4j] final class ClearedSet:
+  private var values: Array[Long] = new Array[Long](16)
+  private var count: Int = 0
+  private var isSealed: Boolean = false
+
+  def +=(value: Long): Unit =
+    if count == values.length then
+      values = java.util.Arrays.copyOf(values, math.min(2L * count, Int.MaxValue.toLong - 8).toInt)
+    values(count) = value
+    count += 1
+
+  def seal(): Unit =
+    java.util.Arrays.sort(values, 0, count)
+    isSealed = true
+
+  def contains(value: Long): Boolean =
+    count > 0 && {
+      if !isSealed then throw new IllegalStateException("ClearedSet queried before seal()")
+      java.util.Arrays.binarySearch(values, 0, count, value) >= 0
+    }
 
 /** The simplices of one degree as parallel (diameter, index) arrays, growable. */
 private[tda4j] final class Level(initialCapacity: Int):
