@@ -56,11 +56,17 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
   // the lower triangle, like `ExplicitMetricSpace`.
   // Reading every metric that way cost ~15% on o3_1024: the row-wise walk of the distance cache is lost
   // (`.claude/WORKLOG-vr-working-column.md`).
-  private val symmetricByConstruction: Boolean = metricSpace match
-    case _: EuclideanMetricSpace | _: ExplicitMetricSpace => true
-    case _                                                => false
+  // Called through `FiniteMetricSpace[Int]`, `distance` erases to (Object, Object) and boxes both vertices on every
+  // call; the two concrete spaces are called through their own type, which takes `Int`s.
+  private val euclidean: EuclideanMetricSpace = metricSpace match
+    case e: EuclideanMetricSpace => e
+    case _                       => null
+  private val explicitMatrix: ExplicitMetricSpace = metricSpace match
+    case e: ExplicitMetricSpace => e
+    case _                      => null
   private inline def distance(x: Int, y: Int): Double =
-    if symmetricByConstruction then metricSpace.distance(x, y)
+    if euclidean != null then euclidean.distance(x, y)
+    else if explicitMatrix != null then explicitMatrix.distance(x, y)
     else metricSpace.distance(math.max(x, y), math.min(x, y))
 
   // Each vertex's neighbours within the threshold, when they are few enough to pay: at most a quarter of all ordered
