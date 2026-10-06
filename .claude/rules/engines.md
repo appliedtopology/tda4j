@@ -31,16 +31,22 @@ barcodes coincide.
 3. **`RipserCohomologyEngine`** — Bauer's Ripser (arXiv:1908.02518) on `Simplex[Int]` VR, one-shot. **Test/
    reference oracle only** — production uses `PackedRipserCohomologyEngine`. Clearing required for correctness;
    apparent pairs with lazy substitution; emergent pairs (Def 3.11) not implemented; `memoizeFiltrationValue`
-   defaults **false** (project lead: memory over speed). ~19-64x behind vanilla `ripser.cpp`, gap growing with n
-   (`WORKLOG-ripser-profiling.md`, `WORKLOG-ripser-comparison.md`, `WORKLOG-packed-ripser-engine.md`).
-   The PACKED engine reduces on a primitive-array heap (Ripser's working column), expands cocycles lazily from
+   defaults **false** (project lead: memory over speed) (`WORKLOG-ripser-profiling.md`,
+   `WORKLOG-packed-ripser-engine.md`).
+   The PACKED engine reduces on a primitive-array heap, expands cocycles lazily from
    reduction logs (only for reported bars), and derives cycles with its own copy of `Involution.cycles`. It must
    equal the `Chain`-based engine kept in the test tree (`ChainPackedRipserReference`) term for term, cocycles and
    cycles, essentials included (`PackedWorkingColumnSpec`): re-run it after any change to the reduction
    (`WORKLOG-vr-working-column.md`). The heap needs ONE diameter per simplex: non-trusted metrics are read as
-   `d(max, min)`, the lower triangle like `ExplicitMetricSpace` (an asymmetric one otherwise grows the column until
+   `d(max, min)`, the lower triangle like `ExplicitMetricSpace` (else an asymmetric one grows the column until
    OOM); Euclidean/Explicit are read as given, since canonicalizing costs ~15% there (it breaks the distance cache's
-   row-wise walk).
+   row-wise walk). Under a sparse threshold cofacets come from per-vertex NEIGHBOUR LISTS (`NeighbourLists`,
+   `SparseCofacetCursor`), which must give the all-vertex scan's cofacets in the same order with bit-identical
+   diameters (stored distances are the engine's own `distance`); `NeighbourListsSpec` pins it term for term
+   (`WORKLOG-neighbour-lists.md`). A uniform sign flip of every coboundary changes no output (a real symmetry): sign
+   mutations must be non-uniform to test anything. Per-simplex state is PRIMITIVE (`WORKLOG-packed-engine-memory.md`):
+   levels (`Level`), pairs (`Pairing` rows; bars built only when returned), cleared set (sorted `ClearedSet`), seeds
+   (`LongIntMap`); apparent pairs' involution columns are rebuilt, not stored. Never reintroduce a per-pair object.
 4. **`CellularCohomologyEngine`** (`Cohomology.scala`) — generic over `CellT: OrderedCell`, fully-materialized
    streams only, no `maxDim`/apparent pairs. Only essential bars' V-columns are cocycles; finite bars' V-columns
    are their reduced pivot chain. Representatives don't match Ripser term-for-term (tie direction differs) but

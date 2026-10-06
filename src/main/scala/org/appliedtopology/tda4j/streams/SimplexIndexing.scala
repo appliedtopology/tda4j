@@ -172,6 +172,91 @@ class SimplexIndexing(val vertexCount: Int):
   def cofacetCursor(index: Long, size: Int, allCofacets: Boolean = true): CofacetCursor =
     new CofacetCursor(index, size, allCofacets)
 
+  /** The cofacets of a simplex whose added vertex is a neighbour of every one of its vertices: the same cofacets, in
+    * the same order (vertex, and so index, strictly decreasing) and with the same indices as `CofacetCursor`, but found
+    * by intersecting the vertices' neighbour lists instead of trying every vertex. `maxDistance` is the largest
+    * distance from the added vertex to the simplex's vertices, read from the lists; `position` is the number of the
+    * simplex's vertices below the added one.
+    */
+  final class SparseCofacetCursor(
+    startIndex: Long,
+    vertices: Array[Int],
+    allCofacets: Boolean,
+    lists: NeighbourLists
+  ):
+    private val size = vertices.length
+    // One pointer per vertex into its neighbour list, from the largest neighbour down.
+    private val pointers: Array[Int] = Array.tabulate(size)(a => lists.offsets(vertices(a) + 1) - 1)
+    private var iB: Long = startIndex
+    private var iA: Long = 0L
+    private var k: Int = size
+    private var above: Int = size - 1 // the largest vertex of the simplex not yet passed
+    private var _vertex: Int = -1
+    private var _index: Long = -1L
+    private var _maxDistance: Double = 0.0
+    private var havePending: Boolean = false
+    private var done: Boolean = size == 0
+
+    private def step(): Unit =
+      havePending = false
+      while !havePending && !done do
+        // The candidate: the current entry of the first vertex's list.
+        val p0 = pointers(0)
+        if p0 < lists.offsets(vertices(0)) then done = true
+        else
+          var candidate = lists.targets(p0)
+          if !allCofacets && candidate < vertices(size - 1) then done = true
+          else
+            // Move every other list down to the candidate; a list whose next entry is below it rules it out, and
+            // the largest such entry becomes the next candidate to try.
+            var common = true
+            var a = 1
+            while a < size && !done do
+              val start = lists.offsets(vertices(a))
+              var p = pointers(a)
+              while p >= start && lists.targets(p) > candidate do p -= 1
+              pointers(a) = p
+              if p < start then done = true
+              else if lists.targets(p) < candidate then common = false
+              a += 1
+            if !done then
+              if common then
+                var maxD = lists.distances(p0)
+                a = 1
+                while a < size do
+                  val d = lists.distances(pointers(a))
+                  if d > maxD then maxD = d
+                  a += 1
+                // Pass the simplex's vertices above the candidate, exactly as CofacetCursor does.
+                while above >= 0 && vertices(above) > candidate do
+                  val j = vertices(above)
+                  iB -= binomialChoose(j, k)
+                  iA += binomialChoose(j, k + 1)
+                  k -= 1
+                  above -= 1
+                _vertex = candidate
+                _index = iB + binomialChoose(candidate, k + 1) + iA
+                _maxDistance = maxD
+                havePending = true
+              pointers(0) = p0 - 1
+
+    step()
+
+    def hasNext: Boolean = havePending
+    def vertex: Int = _vertex
+    def index: Long = _index
+    def maxDistance: Double = _maxDistance
+    def position: Int = k
+    def advance(): Unit = step()
+
+  def sparseCofacetCursor(
+    index: Long,
+    vertices: Array[Int],
+    allCofacets: Boolean,
+    lists: NeighbourLists
+  ): SparseCofacetCursor =
+    new SparseCofacetCursor(index, vertices, allCofacets, lists)
+
   /** Same enumeration as `cofacetIterator`, but also yields the INSERTED vertex alongside each cofacet index -- needed
     * by a packed (index-only) reduction that has no materialized `Simplex[Int]` to recover it from afterward
     * (`(tau.underlying diff sigma.underlying).head`, `coboundaryOf`'s own approach, requires decoding `tau`). Now a
@@ -269,3 +354,73 @@ object SimplexIndexing:
             s"binomial($n, $k) overflows Long -- this complex is too large to index",
             e
           )
+
+/** Each vertex's neighbours within a threshold, ascending, with their distances, in compressed rows: vertex `v`'s are
+  * `targets(offsets(v) until offsets(v + 1))`. Built by [[NeighbourLists.within]].
+  */
+private[tda4j] final class NeighbourLists(
+  val offsets: Array[Int],
+  val targets: Array[Int],
+  val distances: Array[Double]
+):
+  def entryCount: Int = targets.length
+
+private[tda4j] object NeighbourLists:
+  /** The pairs at distance at most `threshold`, each distance computed once (as `distance(i, j)`, `i < j`) and stored
+    * for both vertices. `None` when there are more than `maxEntries` directed pairs (capped at `Int.MaxValue`): the
+    * lists would not be sparse, or would not fit in arrays.
+    */
+  def within(n: Int, threshold: Double, maxEntries: Long)(distance: (Int, Int) => Double): Option[NeighbourLists] =
+    val limit = math.min(maxEntries, Int.MaxValue.toLong - 8)
+    // One pass over the pairs, i < j ascending, collecting the close ones with their distance.
+    var lo = new Array[Int](1024)
+    var hi = new Array[Int](1024)
+    var ds = new Array[Double](1024)
+    var pairs = 0
+    val counts = new Array[Int](n)
+    var tooMany = false
+    var i = 0
+    while i < n && !tooMany do
+      var j = i + 1
+      while j < n && !tooMany do
+        val d = distance(i, j)
+        if d <= threshold then
+          if 2L * (pairs + 1) > limit then tooMany = true
+          else
+            if pairs == lo.length then
+              val grown = math.min(lo.length.toLong * 2, Int.MaxValue.toLong - 8).toInt
+              lo = java.util.Arrays.copyOf(lo, grown)
+              hi = java.util.Arrays.copyOf(hi, grown)
+              ds = java.util.Arrays.copyOf(ds, grown)
+            lo(pairs) = i
+            hi(pairs) = j
+            ds(pairs) = d
+            pairs += 1
+            counts(i) += 1
+            counts(j) += 1
+        j += 1
+      i += 1
+    if tooMany then None
+    else
+      val offsets = new Array[Int](n + 1)
+      i = 0
+      while i < n do
+        offsets(i + 1) = offsets(i) + counts(i)
+        i += 1
+      val targets = new Array[Int](2 * pairs)
+      val distances = new Array[Double](2 * pairs)
+      val fill = java.util.Arrays.copyOf(offsets, n)
+      // Pairs come in increasing (i, j): vertex u receives first the i < u (as the larger end, i increasing), then the
+      // j > u (as the smaller end, j increasing), so every list comes out ascending.
+      var k = 0
+      while k < pairs do
+        val a = lo(k)
+        val b = hi(k)
+        targets(fill(a)) = b
+        distances(fill(a)) = ds(k)
+        fill(a) += 1
+        targets(fill(b)) = a
+        distances(fill(b)) = ds(k)
+        fill(b) += 1
+        k += 1
+      Some(NeighbourLists(offsets, targets, distances))

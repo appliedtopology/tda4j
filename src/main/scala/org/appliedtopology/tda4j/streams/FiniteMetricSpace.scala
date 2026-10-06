@@ -139,8 +139,10 @@ class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricSpace[
   *
   * @param cacheDistances
   *   compute all pairwise distances on first use and look them up afterwards (default `true`). That is `n^2` doubles,
-  *   about 8 MB at 1,000 points and 128 MB at 4,000; pass `false` for point clouds large enough for that to matter.
-  *   Distances are looked up many times per pair during a Vietoris-Rips computation, so the cache usually pays off.
+  *   about 8 MB at 1,000 points and 512 MB at 8,192, so the cache is only kept up to
+  *   [[EuclideanMetricSpace.MaxCachedPoints]] points; above that every distance is computed when asked for. Pass
+  *   `false` to compute every distance on demand at any size. Distances are looked up many times per pair during a
+  *   Vietoris-Rips computation, so the cache usually pays off where it fits.
   */
 
 class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistances: Boolean = true)
@@ -163,6 +165,8 @@ class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistances: Bo
   // computation per lookup rather than an extra array dereference. Filled via the full n x n range (not just
   // the upper triangle) -- doubling the fill cost of an already-cheap, one-time O(n^2 * ambientDim) pass in
   // exchange for a branch-free `distance` lookup afterward, which is the call this cache exists to make cheap.
+  private val useCache: Boolean = cacheDistances && size <= EuclideanMetricSpace.MaxCachedPoints
+
   private lazy val distanceCache: Array[Double] =
     val n = size
     val cache = new Array[Double](n * n)
@@ -178,7 +182,7 @@ class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistances: Bo
     cache
 
   def distance(x: Int, y: Int): Double =
-    if cacheDistances then distanceCache(x * size + y) else sqrt(pointSqDistance(pts(x), pts(y)))
+    if useCache then distanceCache(x * size + y) else sqrt(pointSqDistance(pts(x), pts(y)))
 
   lazy val vpdf: DistanceFunction[Array[Double]] =
     new DistanceFunction[Array[Double]]:
@@ -192,6 +196,9 @@ class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistances: Bo
     vpt.getAllWithinDistance(qp, eps).asScala.toSeq.map(pts.indexOf(_))
 
 object EuclideanMetricSpace:
+  /** The largest point count whose distances are cached: `8192^2` doubles is 512 MB. */
+  val MaxCachedPoints: Int = 8192
+
   // Two overloads, not one with a default `cacheDistances`: the class's own constructor carries that default. Every
   // point shape (Array[Array[Double]], Seq[Seq[Double]], Seq[Array[Double]]) converts to a PointCloud here.
   def apply(points: PointCloud): EuclideanMetricSpace = new EuclideanMetricSpace(points.points)

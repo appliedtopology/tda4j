@@ -100,3 +100,9 @@ class MetricSpaceSpec extends mutable.Specification with ScalaCheck:
     (space.distance(0, 2) must be_==(2.0)) and (space.distance(2, 0) must be_==(2.0)) and
       (space.distance(1, 3) must be_==(2.0)) and (h1 must be_==(List((1, 1.0, 2.0))))
   }
+
+  "A Euclidean metric space past the cache limit computes distances on demand (50,000 points: n^2 overflows Int)" >> {
+    val n = 50000
+    val space = EuclideanMetricSpace(Array.tabulate(n)(i => Array(i.toDouble, 0.0)))
+    (space.distance(0, n - 1) must be_==((n - 1).toDouble)) and (space.distance(n - 1, 2) must be_==((n - 3).toDouble))
+  }
