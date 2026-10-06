@@ -86,3 +86,13 @@ next harness run.
   the seed is recomputable (`zeroApparentFacet`), as the involution now does for columns; ~200 MB at clifford20k.
 - Building the lists is still O(n^2) distance evaluations (10-27 s at 50,000 points depending on JVM settings); a
   spatial grid for low-dimensional point clouds would avoid it.
+
+## The harness's own path (PaperBenchmarkDriver -> Persistence verb, p = 17), full clifford50000, -Xmx8g
+
+| row | wall | bars (H0 / H1 / H2) | heap used at end |
+|---|---|---|---|
+| `tda4j` (cycles) | 344 s | 50,000 / 14,006 / 136 | 4.9 GB |
+| `tda4j-cocycles` | 252 s | 50,000 / 14,006 / 136 | 4.0 GB |
+
+Same bar counts as the direct F_2 runs. Correctness at this size is checked only by tomorrow's agreement column
+(bottleneck distance against GUDHI and ripser.cpp); the gates use small inputs.
