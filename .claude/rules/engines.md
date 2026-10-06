@@ -40,7 +40,11 @@ barcodes coincide.
    (`WORKLOG-vr-working-column.md`). The heap needs ONE diameter per simplex: non-trusted metrics are read as
    `d(max, min)`, the lower triangle like `ExplicitMetricSpace` (an asymmetric one otherwise grows the column until
    OOM); Euclidean/Explicit are read as given, since canonicalizing costs ~15% there (it breaks the distance cache's
-   row-wise walk).
+   row-wise walk). Under a sparse threshold cofacets come from per-vertex NEIGHBOUR LISTS (`NeighbourLists`,
+   `SparseCofacetCursor`), which must give the all-vertex scan's cofacets in the same order with bit-identical
+   diameters (stored distances are the engine's own `distance`); `NeighbourListsSpec` pins it term for term
+   (`WORKLOG-neighbour-lists.md`). A uniform sign flip of every coboundary changes no output (a real symmetry): sign
+   mutations must be non-uniform to test anything.
 4. **`CellularCohomologyEngine`** (`Cohomology.scala`) — generic over `CellT: OrderedCell`, fully-materialized
    streams only, no `maxDim`/apparent pairs. Only essential bars' V-columns are cocycles; finite bars' V-columns
    are their reduced pivot chain. Representatives don't match Ripser term-for-term (tie direction differs) but

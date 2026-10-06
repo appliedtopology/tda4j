@@ -727,7 +727,9 @@ update; they are marked **(checked)**. Everything else cites its worklog and sta
 Euclidean distance cache sized `n^2` in `Int`, and the verb collected every pairwise distance. Both fixed. With that, the
 case runs but did not finish in 20 minutes here: the packed engine enumerates an edge's cofacets over all `n` points,
 where ripser.cpp keeps sparse neighbour lists under a threshold. Sparse neighbour lists are the next VR lever for
-large thresholded point clouds (§2.3). The same run: ripser.cpp's coefficient build aborted at p = 17 after 20 s with
+large thresholded point clouds (§2.3). **Done the same day** (`WORKLOG-neighbour-lists.md`): o3_1024 at 1.8 went from
+about 27 s to 9 s in the sandbox; clifford50000 then runs out of a 12 GB heap on degree-2 storage (39M triangles as boxed
+objects), which is the next lever. The same run: ripser.cpp's coefficient build aborted at p = 17 after 20 s with
 129 MB (consistent with its coefficient bits overflowing the simplex index at C(50000, 4); check its log before
 saying so), ripser.py aborted at 72 GB, JavaPlex timed out at 1 h with 104 GB, GUDHI finished in 660 s with 28.5 GB.
 

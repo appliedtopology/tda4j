@@ -99,7 +99,9 @@ sidestepping a real footgun (two carriers for the same simplex comparing unequal
 **Reduction internals.** The column being reduced is Ripser's working column: a binary heap of
 (diameter, index, coefficient) entries in primitive arrays, to which adding a column only pushes entries; equal
 cells are combined when they reach the top. Coboundaries and boundaries are pushed straight from the
-`SimplexIndexing` cursors, never built as `Chain`s. A stored reduced column keeps its pivot first and the
+`SimplexIndexing` cursors, never built as `Chain`s. Under a threshold that keeps few of the pairs, a simplex's
+cofacets are found by intersecting its vertices' lists of neighbours within the threshold (built once, with each
+distance stored) rather than by trying every vertex; the lists give the same cofacets in the same order. A stored reduced column keeps its pivot first and the
 remaining terms uncombined. Cocycles (the V-columns) are recorded as a reduction log per column and expanded only
 for the bars that are reported, so `persistentCohomology()` builds none for zero-length bars and
 `persistentHomology()` builds none at all. Cycles come from the engine's own specialization of `Involution.cycles`
