@@ -262,19 +262,6 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
       i += 1
     maxD
 
-  // The canonical cofacets of `sigma` (insert a vertex above its largest) within `maxFiltrationValue`; `size` is sigma's
-  // vertex count (a DiameterIndex does not know its dimension). Lazy, so one source simplex's cofacets are live at a
-  // time.
-  private def sparseCofacets(sigma: DiameterIndex, size: Int): Iterator[DiameterIndex] =
-    if size > maxDimension then Iterator.empty
-    else
-      val buffer = mutable.ArrayBuffer.empty[DiameterIndex]
-      eachCofacet(sigma, size, allCofacets = false) { (diameter, index, _) =>
-        buffer += DiameterIndex(diameter, index)
-        true
-      }
-      buffer.iterator
-
   /** The coboundary of `sigma` (with `size` vertices) in the complex truncated at `maxFiltrationValue`, as in
     * [[RipserCohomologyEngine.coboundaryOf]]. Defined up to dimension `maxDimension`.
     */
@@ -630,18 +617,29 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
     var activeCleared: mutable.Set[Long] = mutable.Set.empty
 
     // Dimension-0 candidates: every vertex, diameter 0.0 -- index IS the vertex id (SimplexIndexing.apply's own
-    // d==0 base case: a single vertex v decodes to/from index v directly).
-    var currentLevel: Seq[DiameterIndex] =
-      (0 until metricSpace.size).map(v => DiameterIndex(0.0, v.toLong))
+    // d==0 base case: a single vertex v decodes to/from index v directly). Each level is kept as primitive
+    // (diameter, index) arrays: a degree can have tens of millions of simplices.
+    var level = Level(metricSpace.size)
+    for v <- 0 until metricSpace.size do level.add(0.0, v.toLong)
 
     for d <- 0 to maxDimension do
       val size = d + 1
-      val simplicesAtD: Seq[DiameterIndex] = currentLevel.sorted(using packedOrdering.reverse)
-      _totalSimplexCount += simplicesAtD.size
+      // packedOrdering.reverse: diameter descending, then the smaller index first (indices are distinct in a level).
+      val levelD = level.diameters
+      val levelI = level.indices
+      val order = SortIndices.sort(
+        level.size,
+        (a, b) =>
+          levelI(a) != levelI(b) && {
+            val c = java.lang.Double.compare(levelD(a), levelD(b))
+            if c != 0 then c > 0 else levelI(a) < levelI(b)
+          }
+      )
+      _totalSimplexCount += level.size
 
       // Capacity-hinted: `basis` gets at most one entry per simplex of this dimension, `nextCleared` likewise.
       val loadFactor = mutable.HashMap.defaultLoadFactor
-      val capacity = (simplicesAtD.size / loadFactor).toInt + 1
+      val capacity = (level.size / loadFactor).toInt + 1
       val basis = new mutable.LongMap[Column](capacity)
       // V-columns, for the bars that report a cocycle: a pivot's seed is the birth of the row it closes (`rowOfDeath`),
       // its reduction log is kept only when it is not empty.
@@ -679,7 +677,8 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
         else (_: DiameterIndex) => None
       val working = WorkingColumn(youngestFirst = false)
 
-      for sigma <- simplicesAtD if !activeCleared.contains(sigma.index) do
+      for o <- order if !activeCleared.contains(levelI(o)) do
+        val sigma = DiameterIndex(levelD(o), levelI(o))
         val sigmaFv = sigma.diameter
         (if useApparentPairs then zeroApparentCofacet(sigma, size) else None) match
           case Some(tau) =>
@@ -717,11 +716,37 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
         logs.getOrElse(pivot, noLog)
       for (row, log) <- pending do rows.cocycles(row.toLong) = expandV(rows.birth(row), log, seedOf, logOf, memo)
 
-      if d < maxDimension then currentLevel = simplicesAtD.iterator.flatMap(sparseCofacets(_, size)).toSeq
+      // The next degree's simplices: the canonical cofacets (added vertex above the largest) within the threshold.
+      if d < maxDimension then
+        val next = Level(level.size)
+        var k = 0
+        while k < level.size do
+          eachCofacet(DiameterIndex(levelD(k), levelI(k)), size, allCofacets = false) { (diameter, index, _) =>
+            next.add(diameter, index)
+            true
+          }
+          k += 1
+        level = next
 
       activeCleared = nextCleared
 
     rows
+
+/** The simplices of one degree as parallel (diameter, index) arrays, growable. */
+private[tda4j] final class Level(initialCapacity: Int):
+  var diameters: Array[Double] = new Array[Double](math.max(initialCapacity, 16))
+  var indices: Array[Long] = new Array[Long](math.max(initialCapacity, 16))
+  var size: Int = 0
+
+  def add(diameter: Double, index: Long): Unit =
+    if size == indices.length then
+      val grown = math.min(2L * size, Int.MaxValue.toLong - 8).toInt
+      if grown <= size then throw new IllegalStateException(s"more than $size simplices in one degree")
+      diameters = java.util.Arrays.copyOf(diameters, grown)
+      indices = java.util.Arrays.copyOf(indices, grown)
+    diameters(size) = diameter
+    indices(size) = index
+    size += 1
 
 /** A map from non-negative `Long` keys to `Int` values, open addressing over primitive arrays (no boxing). */
 private[tda4j] final class LongIntMap:
