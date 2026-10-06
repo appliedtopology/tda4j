@@ -75,3 +75,7 @@ the min with the wrapped stream's). `PersistenceVerbSpec`, `WORKLOG-default-degr
 `ExplicitMetricSpace.distance(x, y)` is `dist(max)(min)`, and the packed Ripser engine reads any metric that is not
 symmetric by construction as `d(max, min)`. A non-symmetric file (fractal-r) then gives the same input to every tool.
 `MetricSpaceSpec` pins it with a matrix whose two triangles have different `H_1`.
+
+**`EuclideanMetricSpace` caches all n^2 distances only up to `MaxCachedPoints = 8192` (512 MB)**; above that, and with
+`cacheDistances = false`, distances are computed on demand. Before the cap, n^2 overflowed `Int` at 46,341 points
+(clifford50000 died at startup). Never collect all pairwise distances into a collection (the verb's scale is a loop).

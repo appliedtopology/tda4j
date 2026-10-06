@@ -142,12 +142,23 @@ object Persistence:
               (Simplex(engine.si.decodeToArray(cell.index, bar.dim + 1)*), c)
             })
             new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(chain))
-          val distances = for x <- ms.elements; y <- ms.elements if x < y yield ms.distance(x, y)
+          // The longest edge within the threshold, one pair at a time: collecting every pairwise distance first is
+          // n^2/2 values (1.25e9 at 50,000 points).
+          var longestEdge = 0.0
+          val n = ms.size
+          var x = 0
+          while x < n do
+            var y = x + 1
+            while y < n do
+              val d = ms.distance(x, y)
+              if d <= threshold && d > longestEdge then longestEdge = d
+              y += 1
+            x += 1
           PersistenceDiagram[Simplex[Int], coefficients.C](
             (if cycles then engine.persistentHomology(includeZeroLength)
              else engine.persistentCohomology(includeZeroLength)).map(decode),
             maxDimension,
-            distances.filter(_ <= threshold).maxOption.getOrElse(0.0),
+            longestEdge,
             scale
           )
 

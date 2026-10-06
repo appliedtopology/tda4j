@@ -723,6 +723,14 @@ update; they are marked **(checked)**. Everything else cites its worklog and sta
 - §1d, §1e, the §3.0 methodology rules, and claim A's open checks (the volume-optimality proof, HomCloud, CubicalRipser
   and GUDHI).
 
+**Found by the first full harness run (2026-10-06):** clifford50000 crashed TDA4j at startup (`error(1)` in 1.3 s): the
+Euclidean distance cache sized `n^2` in `Int`, and the verb collected every pairwise distance. Both fixed. With that, the
+case runs but did not finish in 20 minutes here: the packed engine enumerates an edge's cofacets over all `n` points,
+where ripser.cpp keeps sparse neighbour lists under a threshold. Sparse neighbour lists are the next VR lever for
+large thresholded point clouds (§2.3). The same run: ripser.cpp's coefficient build aborted at p = 17 after 20 s with
+129 MB (consistent with its coefficient bits overflowing the simplex index at C(50000, 4); check its log before
+saying so), ripser.py aborted at 72 GB, JavaPlex timed out at 1 h with 104 GB, GUDHI finished in 660 s with 28.5 GB.
+
 **New material:**
 - **§1c breadth:** Bowyer–Watson with exact predicates. Filtered floating-point determinants with an exact `BigDecimal`
   fallback, and a symbolic perturbation by point index, so the triangulation is the same for every insertion order.
