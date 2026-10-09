@@ -42,13 +42,21 @@ object CubicalImage:
       s"flatValues has ${flatValues.length} entries, expected ${shape.product} for shape $shape"
     )
     val sign = if sublevel then 1.0 else -1.0
-    // Row-major strides: shape.scanRight(1)(_*_) = (n0*n1*...*n_{k-1}, n1*...*n_{k-1}, ..., n_{k-1}, 1); dropping
-    // the first entry (the total size, not a per-axis stride) leaves exactly one stride per axis.
-    val strides: IndexedSeq[Int] = shape.scanRight(1)(_ * _).tail
-    val values: IndexedSeq[Int] => Double = idx =>
-      val flat = idx.zip(strides).map { case (i, s) => i * s }.sum
-      sign * flatValues(flat)
-    CubicalGridStream(shape, values, parallelFiltrationValue)
+    // One flat copy, read by the engines as an array (a closure call per pixel cost more than the union-finds).
+    val pixels = new Array[Double](flatValues.length)
+    flatValues match
+      case a: scala.collection.immutable.ArraySeq.ofDouble =>
+        val source = a.unsafeArray
+        var i = 0
+        while i < source.length do
+          pixels(i) = sign * source(i)
+          i += 1
+      case _ =>
+        var i = 0
+        while i < pixels.length do
+          pixels(i) = sign * flatValues(i)
+          i += 1
+    FlatCubicalGridStream(shape, pixels, parallelFiltrationValue)
 
   /** `pixels(i)(j)` as a dense 2D grid, shape `(pixels.length, pixels(0).length)`. */
   def fromGrayscale2D(

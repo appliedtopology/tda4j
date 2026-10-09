@@ -51,22 +51,33 @@ class CubicalGridStream(
     for i <- ambientDim - 2 to 0 by -1 do w(i) = w(i + 1) * doubledShape(i + 1)
     w
 
+  /** Every top cell's value in row-major order (the last axis fastest), read from `topCellValue` once: the flat array
+    * the grid engines and `cellValues` work from. In parallel when `parallelFiltrationValue`.
+    */
+  private[tda4j] lazy val topCellValues: Array[Double] =
+    val pixelCount = shape.foldLeft(1L)(_ * _)
+    require(pixelCount <= Int.MaxValue, s"CubicalGridStream: $pixelCount top cells do not fit in one array")
+    val values = new Array[Double](pixelCount.toInt)
+    val pstride = shape.scanRight(1)(_ * _).tail
+    def read(p: Int): Unit = values(p) = topCellValue(IndexedSeq.tabulate(ambientDim)(i => (p / pstride(i)) % shape(i)))
+    if parallelFiltrationValue then (0 until pixelCount.toInt).par.foreach(read)
+    else
+      var p = 0
+      while p < values.length do
+        read(p)
+        p += 1
+    values
+
   private lazy val cellValues: Array[Double] =
     val total = totalCellCount
     require(total <= Int.MaxValue, s"CubicalGridStream: $total cells do not fit in one array")
     val values = Array.fill(total.toInt)(Double.PositiveInfinity)
-    val pixelCount = shape.product
+    val pixels = topCellValues
     val pstride = shape.scanRight(1)(_ * _).tail
-    def place(p: Int): (Int, Double) =
-      val coords = IndexedSeq.tabulate(ambientDim)(i => (p / pstride(i)) % shape(i))
+    for p <- pixels.indices do
       var index = 0L
-      for i <- 0 until ambientDim do index += (2L * coords(i) + 1L) * cellWeight(i)
-      (index.toInt, topCellValue(coords))
-    if parallelFiltrationValue then (0 until pixelCount).par.map(place).seq.foreach((i, v) => values(i) = v)
-    else
-      for p <- 0 until pixelCount do
-        val (i, v) = place(p)
-        values(i) = v
+      for i <- 0 until ambientDim do index += (2L * ((p / pstride(i)) % shape(i)) + 1L) * cellWeight(i)
+      values(index.toInt) = pixels(p)
     for axis <- 0 until ambientDim do
       val w = cellWeight(axis).toInt
       val len = doubledShape(axis)
@@ -119,6 +130,28 @@ class CubicalGridStream(
       val cubes = cubesOfDimension(d).toVector
       cubes.sorted(using filtrationOrdering.reverse).iterator
   }
+
+/** A grid whose top-cell values are already one flat row-major array, as [[CubicalImage.fromFlatArray]] builds it: the
+  * engines read the array itself instead of calling `topCellValue` once per pixel.
+  */
+private[tda4j] final class FlatCubicalGridStream(
+  shape: IndexedSeq[Int],
+  pixels: Array[Double],
+  parallelFiltrationValue: Boolean = false
+) extends CubicalGridStream(shape, FlatCubicalGridStream.reader(shape, pixels), parallelFiltrationValue):
+  override private[tda4j] lazy val topCellValues: Array[Double] = pixels
+
+private[tda4j] object FlatCubicalGridStream:
+  /** `topCellValue` for a row-major array. */
+  def reader(shape: IndexedSeq[Int], pixels: Array[Double]): IndexedSeq[Int] => Double =
+    val strides = shape.scanRight(1)(_ * _).tail.toArray
+    idx =>
+      var flat = 0
+      var i = 0
+      while i < strides.length do
+        flat += idx(i) * strides(i)
+        i += 1
+      pixels(flat)
 
 /** `stream` without its cells of dimension above `maxDim`, with the same values and order. */
 class LimitedCubicalGridStream(stream: CubicalGridStream, maxDim: Int)

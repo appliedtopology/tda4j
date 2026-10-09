@@ -264,10 +264,9 @@ object Persistence:
     import coefficients.given
     val bars = FastCubicalHomologyEngine[coefficients.C]().persistentHomology(grid, includeZeroLength)
     // Every cell takes the smallest value of the top cells containing it, so the largest value is a top cell's.
-    val topCells = grid.shape.foldLeft(Iterator(IndexedSeq.empty[Int]))((acc, n) =>
-      acc.flatMap(prefix => (0 until n).iterator.map(prefix :+ _))
-    )
-    val last = topCells.map(grid.topCellValue).maxOption.getOrElse(0.0)
+    val pixels = grid.topCellValues
+    var last = pixels(0)
+    for v <- pixels do if java.lang.Double.compare(v, last) > 0 then last = v
     PersistenceDiagram[Cube, coefficients.C](bars.filter(_.dim <= maxDimension), maxDimension, last, None)
 
   private def compute[CellT: OrderedCell](

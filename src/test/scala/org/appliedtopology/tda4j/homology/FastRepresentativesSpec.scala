@@ -56,6 +56,61 @@ class FastRepresentativesSpec extends mutable.Specification:
     checks.forall(identity) must beTrue
   }
 
+  // The flat-array engine walks the grid by index arithmetic: degenerate shapes (an axis of size 1, a single pixel),
+  // non-cubic 3-D grids and a 4-D grid, with ties, +Infinity pixels, and both signed zeros (ordered -0.0 first, but
+  // equal under the elder rule's comparisons).
+  def oddShapes(seed: Long): Seq[CubicalGridStream] =
+    val rng = new scala.util.Random(seed)
+    val shapes = Seq(
+      IndexedSeq(1, 1),
+      IndexedSeq(1, 7),
+      IndexedSeq(7, 1),
+      IndexedSeq(2, 2),
+      IndexedSeq(2, 9),
+      IndexedSeq(1, 4, 3),
+      IndexedSeq(3, 1, 4),
+      IndexedSeq(2, 3, 4),
+      IndexedSeq(2, 2, 2, 2)
+    )
+    def value(): Double = rng.nextInt(9) match
+      case 0 => Double.PositiveInfinity
+      case 1 => -0.0
+      case 2 => 0.0
+      case k => (k % 3).toDouble
+    // Only signed zeros: the dual's elder rule then meets roots at -0.0 and 0.0 that it must treat as equal.
+    def zero(): Double = if rng.nextBoolean() then -0.0 else 0.0
+    shapes.map { shape =>
+      CubicalImage.fromFlatArray(shape, IndexedSeq.fill(shape.product)(value()))
+    } ++ Seq(IndexedSeq(4, 5), IndexedSeq(6, 6), IndexedSeq(3, 4, 3)).map { shape =>
+      CubicalImage.fromFlatArray(shape, IndexedSeq.fill(shape.product)(zero()))
+    }
+
+  // A 0.0 pixel whose first dual merge is with a lone -0.0 pixel to its right, everything else at -1.0: the elder rule
+  // must see equal births (-0.0 == 0.0) and let the left side die, as the reference does; ordering the two by rank
+  // (-0.0 first) would let the right side die instead. Random signed zeros rarely reach this merge before `∞` does.
+  val signedZeroMerge: CubicalGridStream =
+    CubicalImage.fromFlatArray(
+      IndexedSeq(5, 5),
+      IndexedSeq.tabulate(25)(k => if k == 12 then 0.0 else if k == 13 then -0.0 else -1.0)
+    )
+
+  "The fast cubical engine equals the eager reference on degenerate shapes, 3-D and 4-D grids, and signed zeros" >> {
+    val checks = for
+      stream <- (0L until 6L).flatMap(oddShapes) :+ signedZeroMerge
+      field <- Seq(f2, f3, f17)
+      zeroLength <- Seq(false, true)
+    yield (stream.shape, sameCubical(field)(stream, zeroLength))
+    checks.filterNot(_._2).map(_._1) must beEmpty
+  }
+
+  "The fast cubical engine refuses a NaN pixel, saying what to do" >> {
+    import f3.given
+    val image = CubicalImage.fromFlatArray(IndexedSeq(2, 3), IndexedSeq(0.0, 1.0, Double.NaN, 2.0, 3.0, 4.0))
+    FastCubicalHomologyEngine[f3.Fp]().persistentHomology(image) must throwA[IllegalArgumentException](
+      message = "NaN value at pixel \\(0, 2\\)"
+    )
+  }
+
   /** `Some(equal)` when both engines produced bars, `None` when both rejected the triangulation. */
   def sameAlpha(field: FiniteField)(helix: HelixDelaunay, zeroLength: Boolean): Option[Boolean] =
     import field.given

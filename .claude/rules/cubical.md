@@ -31,15 +31,27 @@ cells → dual edges (`∞` sentinel for the outer boundary); primal `H_{d-1}` o
 endpoints swapped; combined with a primal `H_0` union-find, covers a 2D grid completely with no `Chain`
 reduction. **`∞` must be checked explicitly as unconditional elder of any merge, not inferred from `birthOf(∞)`
 being largest** — a real top cell can tie against it (see worklog before touching `computeDualTopDimension`).
-Representatives: each top cell's sign relative to its dual component's root lives in `SignedUnionFind` (path
-compression composes signs; merges never touch members); a reported bar's cycle is the boundary of the dying region,
-read off the frozen merge-forest subtree. Never go back to per-component coefficient maps: copying them on every merge
+Representatives: each top cell's sign relative to its dual component's root lives in `UnitSignedUnionFind` (signs as
+bytes: every flip is a product of boundary coefficients ±1, so integer signs mapped to the field per output term are
+exact; path compression composes signs; merges never touch members); a reported bar's cycle is the boundary of the
+dying region, read off the frozen merge-forest subtree. (The alpha engine keeps the generic `SignedUnionFind[C]`.)
+Never go back to per-component coefficient maps: copying them on every merge
 was quadratic on a bright object on a dark background (80 s at 200²). Any change must keep `FastRepresentativesSpec`
 green: equality with `EagerFastCubicalReference`/`EagerFastAlphaReference`, term for term, AND its validity examples
 (every top-degree representative non-zero, closed, born with its bar) -- equality alone once passed a shared bug that
 read the merge flip from the facet's own boundary (always 0), zeroing every representative of a merge away from `∞`.
 The flip's coefficients are coboundary entries: `facet` looked up in the TOP cell's boundary.
 `WORKLOG-fast-cubical-engine.md`, `WORKLOG-fast-cubical-representatives.md`.
+
+**Order in rank space, compare on values** (`WORKLOG-cubical-performance.md`): both union-finds order cells by pixel
+RANK (`GridRanks`: dense ranks under `java.lang.Double.compare`; a cell's rank is the minimum over its containing
+pixels) with stable counting sorts fed in tie-break order (H₀ edges generated encoding-descending, sorted rank
+ascending; dual facets encoding-ascending, rank descending), but every elder-rule and zero-length test compares the
+VALUES `distinct(rank)` with IEEE `<=`/`!=` (-0.0 == 0.0), as the cube-based code did: comparing ranks changes outputs
+(mutation-checked; `FastRepresentativesSpec`'s `signedZeroMerge` is the case random images miss). NaN pixels are refused
+with a message (they made faces enter after cofaces). Images built by `CubicalImage.fromFlatArray` are
+`FlatCubicalGridStream`s; engines read `topCellValues`, never `topCellValue` per pixel. Quote benchmarks WITH
+representatives (project lead): `reps=none` is a cost breakdown, not a mode.
 
 **At ambient dim `>= 3`**, the cohomology engine handles residual middle dimensions `1..d-2` (no duality shortcut)
 via `CellularCohomologyEngine.persistentHomology` on a `LimitedCubicalGridStream` hiding real top cells, keeping
