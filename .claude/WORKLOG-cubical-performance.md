@@ -135,3 +135,76 @@ of each term: objects shared between representatives (a facet lies on ~2.2 repre
 fewer representatives. Deferring them until read (a lazily filled `Chain`; the merge forest that defines them is ~9
 bytes a pixel and frozen at the end of the run) would keep one for every bar, but it is the project lead's call and is
 not done: eager representatives everywhere come first.
+
+## Deliverable B: a packed grid cohomology engine (the 3-D middle degrees, `Engine.Cohomology` on images)
+
+`PackedCubicalCohomologyEngine` (`private[tda4j]`, `homology/PackedCubicalCohomology.scala`): Ripser's reduction on the
+grid's own index arithmetic, built to give exactly what `CellularCohomologyEngine` gives on the same cells, so it
+replaces it wherever the input is a grid without changing any output.
+- **Cells are doubled-grid indices**; a cell's rank (smallest pixel rank, separable passes like `CubicalGridStream`'s
+  values) and index pack into one `Long`, `(rank << 32) | index`, which orders exactly like the generic engine within a
+  dimension (value ascending, then the encoding ascending; NOT the stream's tie-break, which is the reverse).
+- **Coboundaries and boundaries by index arithmetic**, with `cubeIsOrderedCell`'s signs (the rank of the axis among the
+  cube's nondegenerate axes).
+- Cells of a dimension in order by a stable counting sort by rank of the cells taken in ascending index.
+- **Clearing** as in the generic engine (a `BitSet` over all cells: indices are unique across dimensions).
+- **Apparent pairs** (a cell whose oldest same-value cofacet has it as its youngest same-value facet): paired without a
+  reduction, column rebuilt when another column hits its pivot, as the packed Ripser engine does. Changes no output
+  (the spec runs with them on and off). Why the rebuild is safe: when pivot τ of an apparent pair (σ', τ) shows up in
+  σ's column, every cell processed so far that has τ in its coboundary is a facet of τ younger than σ', and there is
+  none, so σ is older than σ' and σ' was processed (as an apparent pair) already. A cleared σ' cannot be apparent: it
+  is a death, and apparent pairs are persistence pairs.
+- **Cocycles** (V-columns) recorded as seed and log, expanded only for reported bars, accumulated as the generic engine
+  does (`acc(k) -= c * v`) in a primitive table. The first version used `Chain` arithmetic as the packed Ripser engine
+  does: cocycles then cost 3-7x the cycles (48³ noise: 11.5 s against 1.7 s); now they cost the same.
+- **Cycles** by the packed involution (death columns youngest-first, oldest death first per dimension; apparent rows'
+  columns rebuilt, not stored; V-columns only for essential bars).
+- **Stored columns are combined on drain** (each cell once, zeros dropped). The first version kept the packed Ripser
+  engine's convention, a drained column holding its other terms "as they lie in the heap", uncombined: every later
+  reduction that used a stored column pushed its repeats and cancelling pairs again, and the 3-D times grew
+  superlinearly (64³ noise 40 s, 48³ 4.0 s). Combined: 64³ 3.9 s, 48³ 1.6 s.
+- **A reduction step must move the pivot on**: otherwise the column and the order disagree and the loop never ends
+  (`orderBug` throws). Found by mutation testing: reversing the index tie-break made the spec hang instead of fail;
+  with the check it fails in 155 ms.
+
+Wired in: `FastCubicalHomologyEngine.computeMiddleDimensions` (cells up to `d - 1`, degrees `<= d - 2`, the `GridRanks`
+of the dual pass reused), and `Persistence`'s `Engine.Cohomology` whenever the stream is a `CubicalGridStream` (cycles
+or cocycles; `Representatives.Cocycles` on an image goes there too). `LimitedCubicalGridStream` inputs still go to the
+generic engine.
+
+Gate: `PackedCubicalCohomologySpec`, equality with `CellularCohomologyEngine` (`==` on the bar lists: bars, order,
+cocycles and cycles term for term) on whole grids and on cells up to each lower dimension, shapes 1×1, 1×6, 5×1, 4×5,
+7×6, 3×4×3, 1×3×4, 2×2×2×2 with tied values, `+Infinity` and signed zeros, plus 6×5 and 3×3×4 noise; F₂, F₃, F₁₇;
+zero-length bars on and off; apparent pairs on and off. Plus closedness of every cycle and every essential cocycle on a
+7×8×6 tied volume over F₃ (a check the reference cannot share a bug with). `FastRepresentativesSpec`'s 3-D and 4-D
+cases now compare the packed middle degrees with the generic engine's (the eager reference still uses it). Mutations
+caught: a wrong boundary sign, the apparent check without its facet side, the reversed tie-break.
+
+Also routed to it: `PersistenceEngine.cohomology`/`cohomologyCycles` (what `matlab.TDA4j` and the CLI call for
+`engine=cohomology`) when the stream is a `CubicalGridStream`, with the same output.
+
+**Behaviour change (both deliverables):** an image with a NaN pixel is now refused by the fast engine and by cohomology
+on a grid, with a message saying what to use instead; before, it gave a meaningless barcode (see deliverable A).
+
+### 3-D results (warm medians, with representatives; same flags; before = the baseline above)
+
+`fast` is the default (`Auto`) path: union-find H₀/H₂ plus the packed engine for H₁, cycles. `cohomology` is
+`Engine.Cohomology` on the whole grid, cycles and cocycles.
+
+| image | fast before | fast after | cohomology before | cycles after | cocycles after | cripser | gudhi | fast / cripser |
+|---|---|---|---|---|---|---|---|---|
+| noise 16³ | 2.00 | 0.068 | 2.32 | 0.063 | 0.059 | 0.0054 | 0.016 | 13x (was 370x) |
+| noise 32³ | 2.47 | 0.388 | 3.44 | 0.404 | 0.395 | 0.061 | 0.167 | 6.4x (41x) |
+| noise 48³ | 11.8 | 1.57 | 15.5 | 1.70 | 1.68 | 0.336 | 0.664 | 4.7x (35x) |
+| noise 64³ | -- | 3.88 | -- | 4.37 | 4.18 | 0.879 | 2.01 | 4.4x |
+| noise 96³ | -- | 16.9 | -- | 19.3 | 18.4 | 3.45 | 8.39 | 4.9x |
+| blob 16³ | 0.390 | 0.061 | 0.583 | 0.050 | 0.045 | 0.0022 | 0.012 | 28x (177x) |
+| blob 32³ | 2.00 | 0.322 | 3.15 | 0.237 | 0.200 | 0.021 | 0.119 | 15x (97x) |
+| blob 48³ | 6.97 | 0.913 | 13.7 | 0.934 | 0.670 | 0.106 | 0.453 | 8.6x (66x) |
+| blob 64³ | -- | 2.10 | -- | 2.52 | 1.92 | 0.341 | 1.13 | 6.2x |
+| blob 96³ | -- | 7.43 | -- | 9.09 | 6.99 | 1.41 | 5.44 | 5.3x |
+
+- From 48³ on: 4.4-5x CubicalRipser on noise, 5-9x on the blob, and about 2x GUDHI (with a representative per bar;
+  neither of them returns one).
+- On the blob, cohomology with cocycles is now as fast as the default path, or faster.
+- These were measured before the apparent-pair shortcut in the involution (below); see the final runs.

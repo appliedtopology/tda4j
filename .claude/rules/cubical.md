@@ -53,10 +53,19 @@ with a message (they made faces enter after cofaces). Images built by `CubicalIm
 `FlatCubicalGridStream`s; engines read `topCellValues`, never `topCellValue` per pixel. Quote benchmarks WITH
 representatives (project lead): `reps=none` is a cost breakdown, not a mode.
 
-**At ambient dim `>= 3`**, the cohomology engine handles residual middle dimensions `1..d-2` (no duality shortcut)
-via `CellularCohomologyEngine.persistentHomology` on a `LimitedCubicalGridStream` hiding real top cells, keeping
-degrees `<= d-2` (chunks there made the 3-D hybrid 3-7x SLOWER than plain cohomology; with cohomology it is faster at
-every measured size -- `WORKLOG-fast-cubical-representatives.md`). The truncating views declare
-`homologyDegreeLimit = maxDim - 1`, so the involution skips the artificial top degree. Cross-validated at
-d=3 + one d=4 smoke test; not validated d≥5, win shrinks with d by design.
+**At ambient dim `>= 3`**, cohomology handles residual middle dimensions `1..d-2` (no duality shortcut): what
+`CellularCohomologyEngine.persistentHomology` gives on a `LimitedCubicalGridStream` hiding real top cells, degrees
+`<= d-2` (chunks there made the 3-D hybrid 3-7x SLOWER than plain cohomology -- `WORKLOG-fast-cubical-representatives.md`).
+The truncating views declare `homologyDegreeLimit = maxDim - 1`, so the involution skips the artificial top degree.
+Cross-validated at d=3 + one d=4 smoke test; not validated d≥5, win shrinks with d by design.
 `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
+
+**`PackedCubicalCohomologyEngine`** (`private[tda4j]`, `WORKLOG-cubical-performance.md`) computes that cohomology, and
+`Engine.Cohomology` on any `CubicalGridStream` (cocycles native, cycles by its own packed involution): Ripser's
+reduction on doubled-grid indices packed as `(rank << 32) | index` (the generic engine's order: value, then encoding
+ascending), clearing, apparent pairs rebuilt on demand. It must equal `CellularCohomologyEngine` on the same cells --
+whole grid or `LimitedCubicalGridStream` -- bar for bar, in list order, cocycles and cycles term for term, apparent
+pairs on or off (`PackedCubicalCohomologySpec`; `FastRepresentativesSpec`'s 3-D/4-D cases compare it with the
+generic engine through the eager reference): re-run both after any change. Stored columns are COMBINED on drain
+(each cell once): leaving repeats in made 64³ noise take 40 s instead of 4. Each reduction step must move the pivot
+on (`orderBug` throws otherwise): a column/order mismatch would loop forever, not fail.

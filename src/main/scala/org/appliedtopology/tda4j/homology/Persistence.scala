@@ -263,11 +263,14 @@ object Persistence:
     val coefficients = Coefficients(characteristic)
     import coefficients.given
     val bars = FastCubicalHomologyEngine[coefficients.C]().persistentHomology(grid, includeZeroLength)
-    // Every cell takes the smallest value of the top cells containing it, so the largest value is a top cell's.
+    PersistenceDiagram[Cube, coefficients.C](bars.filter(_.dim <= maxDimension), maxDimension, largestPixel(grid), None)
+
+  // Every cell takes the smallest value of the top cells containing it, so the largest value is a top cell's.
+  private def largestPixel(grid: CubicalGridStream): Double =
     val pixels = grid.topCellValues
     var last = pixels(0)
     for v <- pixels do if java.lang.Double.compare(v, last) > 0 then last = v
-    PersistenceDiagram[Cube, coefficients.C](bars.filter(_.dim <= maxDimension), maxDimension, last, None)
+    last
 
   private def compute[CellT: OrderedCell](
     stream: StratifiedCellStream[CellT, Double],
@@ -295,12 +298,21 @@ object Persistence:
           else Involution.cocycleBars(stream, state.pairing, stream.filtrationOrdering.reverse, includeZeroLength)
         (bars, state.lastFiltrationValue.getOrElse(Double.NegativeInfinity))
       case Engine.Cohomology =>
-        val engine = CellularCohomologyEngine[CellT, coefficients.C, Double]()
-        val bars =
-          if cycles then engine.persistentHomology(stream, includeZeroLength)
-          else engine.persistentCohomology(stream, includeZeroLength)
-        val fv = stream.filtrationValue
-        (bars, stream.iterator.map(c => fv.applyOrElse(c, _ => Double.NegativeInfinity)).maxOption.getOrElse(0.0))
+        stream match
+          case grid: CubicalGridStream =>
+            // The same bars and representatives as the generic engine on the grid, on primitive arrays.
+            val engine = PackedCubicalCohomologyEngine[coefficients.C](grid, grid.ambientDim)
+            val bars =
+              if cycles then engine.persistentHomology(includeZeroLength)
+              else engine.persistentCohomology(includeZeroLength)
+            (bars.asInstanceOf[List[PersistenceBar[Double, Chain[CellT, coefficients.C]]]], largestPixel(grid))
+          case _ =>
+            val engine = CellularCohomologyEngine[CellT, coefficients.C, Double]()
+            val bars =
+              if cycles then engine.persistentHomology(stream, includeZeroLength)
+              else engine.persistentCohomology(stream, includeZeroLength)
+            val fv = stream.filtrationValue
+            (bars, stream.iterator.map(c => fv.applyOrElse(c, _ => Double.NegativeInfinity)).maxOption.getOrElse(0.0))
       case Engine.Ripser | Engine.Auto | Engine.FastCubical =>
         throw new IllegalStateException("unreachable: resolved before compute")
     PersistenceDiagram[CellT, coefficients.C](bars.filter(_.dim <= maxDimension), maxDimension, last, scale)

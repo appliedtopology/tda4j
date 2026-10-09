@@ -8,7 +8,7 @@ kind and size, every engine runs in its own JVM, one warm-up plus `--trials` tim
 GUDHI run alongside for scale.
 
 Engines:
-  - fastcubical: union-find on the image and its dual grid; in 3-D and up, the chunks engine for the middle degrees.
+  - fastcubical: union-find on the image and its dual grid; in 3-D and up, grid cohomology for the middle degrees.
     This is what `Engine.Auto` picks today.
   - cohomology: the general cohomology engine (cocycles native, cycles by the involution; both are timed).
   - chunks: homology by clearing and compression (2-D only by default; slow in 3-D).

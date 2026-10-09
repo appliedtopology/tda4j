@@ -239,9 +239,10 @@ own `unionFindDim01` uses, run in DESCENDING primal-value order with every resul
 Combined with an ordinary primal `H_0` union-find, this covers every nontrivial dimension a 2D grid has (`H_2`
 is identically zero for any subcomplex of a 2D grid) with no general `Chain` reduction at all — **valid at any
 ambient dimension `>= 2`** (`require`d, checked again with a clearer message at the `matlab.TDA4j`/`cli`
-layer). At `d >= 3`, the "middle" dimensions (`1 <= k <= d-2`, no duality shortcut) are handed to
-`CellularPersistenceInChunksEngine` run on a view that hides the real top-dimensional cells entirely, so the
-(often largest) top dimension never touches general `Chain` reduction — see
+layer). At `d >= 3`, the "middle" dimensions (`1 <= k <= d-2`, no duality shortcut) are handed to cohomology on
+the grid's cells below the top dimension (`PackedCubicalCohomologyEngine`, equal term for term to
+`CellularCohomologyEngine` on a `LimitedCubicalGridStream`), so the (often largest) top dimension never enters a
+reduction — see
 `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
 
 `∞` must be the unconditional elder of any merge it takes part in — its own chain is deliberately never

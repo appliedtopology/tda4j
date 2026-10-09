@@ -56,25 +56,26 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
       if stream.ambientDim == 2 then
         computeH0(grid, includeZeroLength) ++ computeDualTopDimension(grid, includeZeroLength, representatives)
       else
-        computeMiddleDimensions(stream, includeZeroLength) ++
+        computeMiddleDimensions(stream, grid, includeZeroLength) ++
           computeDualTopDimension(grid, includeZeroLength, representatives)
     bars
 
   // -------------------------------------------------------------------------------------------------------------
-  // d >= 3's "middle" degrees (1 <= k <= d-2) have no duality shortcut. They go to the cohomology engine on a view
-  // that hides the top-dimensional cells (so the largest dimension never enters a reduction); the view declares
-  // homologyDegreeLimit = d - 2, so its artificial degree d-1 classes are skipped by the involution, and we keep
-  // degrees <= d-2. H_0 comes out of the same computation. Cohomology rather than chunks: with chunks the 3-D hybrid
+  // d >= 3's "middle" degrees (1 <= k <= d-2) have no duality shortcut. They go to cohomology on the grid without its
+  // top-dimensional cells (so the largest dimension never enters a reduction), degrees <= d-2, cycles by the
+  // involution; H_0 comes out of the same computation. The packed grid engine gives exactly what
+  // CellularCohomologyEngine gives on a LimitedCubicalGridStream (PackedCubicalCohomologySpec), which is what this
+  // used before (.claude/WORKLOG-cubical-performance.md). Cohomology rather than chunks: with chunks the 3-D hybrid
   // was slower than plain cohomology on the whole image (.claude/WORKLOG-fast-cubical-representatives.md).
   // .claude/DESIGN-fast-engines-hybrid-middle-dimensions.md has the derivation of the hybrid itself.
   // -------------------------------------------------------------------------------------------------------------
   private def computeMiddleDimensions(
     stream: CubicalGridStream,
+    grid: GridRanks,
     includeZeroLength: Boolean
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
-    val truncated = LimitedCubicalGridStream(stream, stream.ambientDim - 1)
-    CellularCohomologyEngine[Cube, CoefficientT, Double]()
-      .persistentHomology(truncated, includeZeroLength)
+    new PackedCubicalCohomologyEngine[CoefficientT](stream, stream.ambientDim - 1, grid)
+      .persistentHomology(includeZeroLength)
       .filter(_.dim <= stream.ambientDim - 2)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
@@ -382,10 +383,28 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
         val n = sums.sumAt(j)
         if n != 0 then
           val x = field(n)
-          if !fr.isEqual(x, fr.zero) then terms += ((cubeOfKey(sums.keyAt(j)), x))
+          if !fr.isEqual(x, fr.zero) then terms += term(sums.keyAt(j).toInt, n, x)
         j += 1
       sums.clear()
       Chain.from(ArraySeq.untagged.from(terms))
+
+    // A facet's term with coefficient 1 or -1 is made once per run and shared by every representative the facet lies
+    // on (a facet lies on ~2.2 of them at 2048² noise; cubes and tuples are immutable, so sharing is safe). Indexed by
+    // the facet's doubled-grid index, allocated only when representatives are asked for.
+    lazy val plusTerms = new Array[AnyRef](GridRanks.checkedProduct(bases, "FastCubicalHomologyEngine"))
+    lazy val minusTerms = new Array[AnyRef](plusTerms.length)
+    def term(key: Int, n: Int, x: CoefficientT): (Cube, CoefficientT) =
+      if n == 1 || n == -1 then
+        val (mine, other) = if n == 1 then (plusTerms, minusTerms) else (minusTerms, plusTerms)
+        val cached = mine(key)
+        if cached != null then cached.asInstanceOf[(Cube, CoefficientT)]
+        else
+          val twin = other(key)
+          val cube = if twin != null then twin.asInstanceOf[(Cube, CoefficientT)]._1 else cubeOfKey(key)
+          val made = (cube, x)
+          mine(key) = made
+          made
+      else (cubeOfKey(key), x)
 
     // Union-find over `0 to numTop` (numTop itself = infinityId). A root is always the OLDEST -- i.e. largest-value --
     // member of its component, so its value is the component's birth. Signs live in `uf`; a dying region is assembled
@@ -496,12 +515,13 @@ private final class FacetSums:
       used(i) = s
       i += 1
 
+// `Vector.tabulate`'s builder left a 32-slot array and one box per coordinate behind every cube: at 2048² noise the
+// representatives hold 18.5M facets (.claude/WORKLOG-cubical-performance.md).
 /** Cubes of one grid built cheaply: a `Vector[Int]` holds its coordinates boxed, so every coordinate's box is made once
   * per grid (doubled coordinates run up to `2 shape(i)`), and the vector is made directly at its size. The result is an
-  * ordinary `Vector[Int]` (equal to, and hashing like, `Vector.tabulate`'s); a cube costs a vector and an array, where
-  * the builder also left a 32-slot array and one box per coordinate behind.
+  * ordinary `Vector[Int]`, equal to and hashing like `Vector.tabulate`'s; a cube costs a vector and an array.
   */
-private final class CubeBoxes(shape: Array[Int]):
+private[tda4j] final class CubeBoxes(shape: Array[Int]):
   private val boxes: Array[AnyRef] = Array.tabulate(2 * shape.max + 1)(i => Integer.valueOf(i))
 
   /** The cube with doubled coordinates `coordinate(0 until d)`. */
