@@ -103,7 +103,7 @@ runs the check: format `build.sbt` before pushing it.
 
 **Docs are built with Scala 3.8.4, everything else with 3.9.0** (scaladoc 3.9.0's JavaScript is broken; this
 includes the `ux.js` `$.get` navigation bug). The pin is the `TDA4J_SCALA_VERSION` env var read by `scalaVersion`
-in `build.sbt`, set only on the docs steps of `test.yml` (`docs-build`), `docs.yml` and `release.yml` (not `++3.8.4`). sbt 2 puts output under
+in `build.sbt`, set only on the docs steps of `test.yml` (`docs-build`) and `docs.yml`. The env var reaches only a FRESH sbt server: sbt 2 is a thin client, so a later `sbt` call in the same job joins the running server and silently builds with 3.9.0 -- `release.yml` therefore switches inside its one invocation with `++3.8.4!` (`++3.8.4` without `!` is rejected). sbt 2 puts output under
 `target/out/jvm/scala-<ver>/tda4j/`. Remove the pin when 3.9.1 releases.
 
 **After `sbt package` or a 3.8.4 docs build, a test compile can see no main classes at all** ("Not found: TDAlab");
