@@ -11,7 +11,14 @@ paths:
 
 # The docs site, tutorial pages and language tabs
 
-Loads when you work on docs, the tutorial specs or `build.sbt`. Project-wide rules are in `.claude/CLAUDE.md` (the Scala 3.8.4 docs pin is under "Commands").
+Loads when you work on docs, the tutorial specs or `build.sbt`. Project-wide rules are in `.claude/CLAUDE.md`.
+
+**Docs are built with Scala 3.8.4, everything else with 3.9.0** (scaladoc 3.9.0's JavaScript is broken, the `ux.js`
+`$.get` navigation bug included). The pin is the `TDA4J_SCALA_VERSION` env var read by `scalaVersion` in `build.sbt`,
+set only on the docs steps of `test.yml` (`docs-build`) and `docs.yml`. It reaches only a FRESH sbt server: sbt 2 is a
+thin client, so a later `sbt` call in the same job joins the running server and silently builds with 3.9.0 (run `sbt
+shutdown` first) -- `release.yml` therefore switches inside its one invocation with `++3.8.4!` (`++3.8.4` without `!` is
+rejected). Remove the pin when 3.9.1 releases.
 
 **Docs site is pure scaladoc** (Laika/Paradox fully removed; `WORKLOG-laika-migration.md` and
 `WORKLOG-docs-site-fixes.md` are history only). Pages are Markdown in `_docs/` (front matter `layout: main`,

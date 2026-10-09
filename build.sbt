@@ -166,6 +166,18 @@ mimaPreviousArtifacts := mimaBaselineVersions(version.value, releaseTags(baseDir
   .map(v => organization.value %% name.value % v)
   .toSet
 
+// Deliberate breaks inside the series (see mimaBaselineVersions), each reviewed in its PR:
+// - `Chain` became an abstract class open to new storages: a subclass implements `entryIterator`, every other member
+//   defaults over it (the library's storages are `HeapChain` and `PackedChain`). In 0.5.0 its constructor was
+//   `private[tda4j]`, so no client could have extended or created a `Chain` directly.
+mimaBinaryIssueFilters ++= {
+  import com.typesafe.tools.mima.core.*
+  Seq(
+    ProblemFilters.exclude[AbstractClassProblem]("org.appliedtopology.tda4j.Chain"),
+    ProblemFilters.exclude[ReversedMissingMethodProblem]("org.appliedtopology.tda4j.Chain.entryIterator")
+  )
+}
+
 // Tutorial pages are tests: every `_docs/tutorials/*.md` with a "## The whole script" section has that section's first
 // `scala` fence copied into a generated `object <Page>Script` (package `tutorial`), which `src/test/.../tutorial/*Spec`
 // asserts on -- the page's code and the code the test runs are one and the same text. The page's narrative

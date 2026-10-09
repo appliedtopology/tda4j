@@ -63,6 +63,15 @@ The truncating views declare `homologyDegreeLimit = maxDim - 1`, so the involuti
 Cross-validated at d=3 + one d=4 smoke test; not validated d≥5, win shrinks with d by design.
 `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
 
+**Representatives are packed** (`PackedChain`, `WORKLOG-compact-representatives.md`): both grid engines return
+chains whose cells are doubled-grid keys, DISTINCT and SORTED under the chain's own `Ordering` (fast engine:
+`cubeOrdering`, which is the row-major key order; packed engine: `GridCellOrder`, rank then key, reversed for cycles),
+coefficients nonzero, decoded by `GridCubes`. Nothing checks the order at runtime, and equality is order-blind (formal
+sums), so `FastRepresentativesSpec`/`PackedCubicalCohomologySpec` check every representative's terms ascend under its
+own ordering (mutation-checked) and assert `isPacked` (else a silent fallback passes everything). A representative
+keeps its decoder and its `Ordering`: neither may capture an engine (the inner-class `olderFirst` once pinned the whole
+packed engine). Grids whose doubled grid exceeds `Int` fall back to heap chains (`GridCubes.fits`).
+
 **`PackedCubicalCohomologyEngine`** (`private[tda4j]`, `WORKLOG-cubical-performance.md`) computes that cohomology, and
 `Engine.Cohomology` on any `CubicalGridStream` (cocycles native, cycles by its own packed involution): Ripser's
 reduction on doubled-grid indices packed as `(rank << 32) | index` (the generic engine's order: value, then encoding

@@ -128,10 +128,23 @@ directly against `SimplexIndexing`'s cofacet iterator instead (see
 ### `Chain`
 
 `Chain[CellT: Ordering, CoefficientT: Field]` (`algebra/Chain.scala`) is a formal sum of cells with field
-coefficients, backed by a mutable `PriorityQueue` ordered so the *smallest* cell under the ambient
-`Ordering[CellT]` sits at the head — cheap to peek, since "leading term" (the reduction pivot) is queried
-constantly.
+coefficients, kept in an order on the cells: its leading term (the reduction pivot) is the *smallest* cell. The
+chain itself holds its `Ordering` and its `Field`. `Chain` is abstract and open to new storages: a subclass passes
+the order and the field to `Chain`'s constructor and implements `entryIterator` (its stored entries, a cell possibly
+repeated or with a zero total); every other member (`terms`, `isZero`, `leadingTerm`, `rawEntries`, the collapses) has
+a default built on it, which a storage may override for speed, and reductions, arithmetic, `boundary` and equality use
+nothing else. The library has two `private[tda4j]` storages:
 
+- `HeapChain`, what `Chain(...)`, `Chain.from` and all arithmetic make: a mutable `PriorityQueue` ordered so the
+  smallest cell sits at the head — cheap to peek, since the leading term is queried constantly.
+- `PackedChain`, how the grid engines (`FastCubicalHomologyEngine`, `PackedCubicalCohomologyEngine`) store their
+  representatives: the cells as integer keys (doubled-grid indices), distinct and sorted under the chain's order,
+  the nonzero coefficients in a parallel array, and a decoder (`GridCubes`) that turns a key into its cube. Reading
+  it (`terms`, `cells`, `leadingTerm`, `boundary`, equality) decodes the cells afresh and never changes it;
+  arithmetic on it returns a `HeapChain`.
+
+- Equality compares formal sums: the same cells, each with coefficients equal by the field's own `isEqual` (a
+  field element can have several representations), whatever the order or the storage.
 - `collapseHead()`/`collapseAll()` merge duplicate-cell entries, dropping exact zeros. Naive `+`/`-`/`⊠`
   only lazily collapse the head, so a hand-rolled reduction loop built out of raw `Chain` arithmetic
   accumulates an ever-growing backlog of uncollapsed duplicates — see
@@ -141,7 +154,9 @@ constantly.
   pivot columns, repeatedly subtract the appropriate multiple of `basis(pivot)` until `z`'s leading cell is
   no longer a key in `basis`, returning both the reduced chain and a reduction-log chain (the multipliers
   used) that lets a caller reconstruct a V-column. Internally these go through a `mutable.TreeMap`, not the
-  `PriorityQueue`-backed `Chain` type, so repeated updates collapse duplicates automatically.
+  `PriorityQueue`-backed `Chain` type, so repeated updates collapse duplicates automatically. Each step clears its
+  pivot, so the pivot never moves back; a column whose leading cell is not the key it is stored under makes it move
+  back (or stay put), and the reduction throws instead of looping forever.
 - `given [CellT: Ordering, CoefficientT: Field] => (Chain[CellT, CoefficientT] is RingModule)` is what makes
   `+`, `-`, `⊠`, `unary_-` work on `Chain` values — the `given` whose summon *timing* matters, see
   [Hard-won invariants](gotchas.md).

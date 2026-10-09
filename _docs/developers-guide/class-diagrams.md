@@ -73,12 +73,27 @@ this codebase's syntax.
 ```mermaid
 classDiagram
     class Chain {
-        -entries: PriorityQueue~Tuple2~
+        <<abstract>>
+        cellOrdering: Ordering~CellT~
+        coefficientField: Field~CoefficientT~
+        entryIterator()* Iterator~Tuple2~
         collapseHead() Unit
         collapseAll() Unit
         isZero() Boolean
-        items: Seq~Tuple2~
+        terms: Seq~Tuple2~
     }
+    class HeapChain {
+        <<private tda4j>>
+        queue: PriorityQueue~Tuple2~
+    }
+    class PackedChain {
+        <<private tda4j>>
+        keys: Array~Int~
+        coefficients: Array~AnyRef~
+        decoder: CellDecoder~CellT~
+    }
+    Chain <|-- HeapChain
+    Chain <|-- PackedChain
     class `Chain$` {
         <<companion object>>
         empty~CellT,CoefficientT~() Chain

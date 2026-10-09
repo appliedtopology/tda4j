@@ -179,3 +179,30 @@ private[tda4j] object DoubledGrid:
             i -= 1
           else carry = false
       if carry then done = true
+
+/** The cubes of one grid by their doubled-grid index, row-major with the last axis fastest: the decoder of the grid
+  * engines' packed representatives. Index order is `cubeOrdering`'s on the grid (lexicographic on the encoding, axis 0
+  * first). Holds only the strides and one box per coordinate value, since every representative it decodes keeps it.
+  */
+private[tda4j] final class GridCubes(shape: Array[Int]) extends CellDecoder[Cube]:
+  private val extent: Array[Int] = shape.map(n => 2 * n + 1)
+  private val weight: Array[Int] = GridRanks.strides(extent)
+  private val boxes = CubeBoxes(shape)
+
+  /** The number of cells, which must fit in an `Int`. */
+  val size: Int = GridRanks.checkedProduct(extent, "GridCubes")
+
+  def apply(key: Int): Cube = boxes.cube(i => (key / weight(i)) % extent(i))
+
+  def keyOf(c: Cube): Int =
+    val e = c.encoded
+    var key = 0
+    var i = 0
+    while i < weight.length do
+      key += e(i) * weight(i)
+      i += 1
+    key
+
+private[tda4j] object GridCubes:
+  /** Whether every cell of a grid of this shape has an `Int` index. */
+  def fits(shape: Array[Int]): Boolean = shape.foldLeft(1.0)((p, n) => p * (2.0 * n + 1.0)) <= Int.MaxValue

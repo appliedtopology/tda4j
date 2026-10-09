@@ -80,6 +80,10 @@ from an essential class). `ZeroLengthBarsSpec`.
 The opt-in pairing checks (`totalBarsAccountForAllCells` with `includeZeroLength = true`) stay in the engine specs
 (project lead, 2026-10-03): they test the pairing invariant on purpose; nothing else should count bars against cells.
 
+`Chain.reduceBy`/`reduceByUntil` throw (`IllegalStateException`) when the pivot moves back, or stays put for 64 steps
+(rounding over the reals may keep it for a step or two): a basis column whose leading cell is not its key, or an order
+mismatch, used to loop forever (`WORKLOG-compact-representatives.md`).
+
 Testing lessons for every engine: F2 hides sign errors; signed-field fixtures need ≥5 vertices (`Set1..Set4`
 hash-order past 4 elements, `SimplexBoundarySpec`/`SignedFieldBarcodeSpec`, `WORKLOG-code-critique.md` §1.1).
 F3-vs-F2 agreement is a cheap sign oracle. Two engines agreeing isn't proof if they share a truncation/code path
@@ -107,10 +111,9 @@ data-dependent). `WORKLOG-circular-coordinates.md`.
 arXiv:2212.07201): combines `k` *simultaneously*-alive H¹ classes (common `r`, same connected component of
 `K_r` — checked) into one torus-valued map, via `LatticeReduction` (hand-rolled LLL on the classes'
 harmonic-cochain Gram matrix's Cholesky factor, `delta=3/4`), applying the resulting unimodular `U` to the
-already-computed per-class `theta`s (linearity of harmonic smoothing). Not a port of `scikit-tda/DREiMac`'s
-`toroidalcoords.py`: its `_gram_schmidt` has a real orthogonalization bug (invisible at k=2, non-orthogonal
-intermediate result at k≥3), but an end-to-end search found no case degrading `_lll`'s final output — see
-`.claude/BUGS-IN-REFERENCES.md`, don't overclaim beyond what's checked there. MATLAB: `toroidalCoordinates`/
+already-computed per-class `theta`s (linearity of harmonic smoothing). Not a port of DREiMac's `toroidalcoords.py`
+(its `_gram_schmidt` bug: `.claude/BUGS-IN-REFERENCES.md`; claim no more than is checked there). MATLAB:
+`toroidalCoordinates`/
 `ToroidalCoordinatesResult` (separate class, MiMa); no CLI. `WORKLOG-toroidal-coordinates.md`.
 
 ## Cross-engine benchmark

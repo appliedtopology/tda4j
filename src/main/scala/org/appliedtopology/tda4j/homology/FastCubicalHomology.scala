@@ -52,12 +52,16 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
       s"FastCubicalHomologyEngine requires ambient dimension >= 2, got ${stream.ambientDim}"
     )
     val grid = GridRanks(stream.shape, stream.topCellValues)
+    // Representatives are packed on every grid whose cells have Int indices (every grid that fits in memory); one
+    // decoder per run, shared by all of them.
+    val cubes = Option.when(GridCubes.fits(grid.shape))(GridCubes(grid.shape))
     val bars =
       if stream.ambientDim == 2 then
-        computeH0(grid, includeZeroLength) ++ computeDualTopDimension(grid, includeZeroLength, representatives)
+        computeH0(grid, includeZeroLength, cubes) ++
+          computeDualTopDimension(grid, includeZeroLength, representatives, cubes)
       else
         computeMiddleDimensions(stream, grid, includeZeroLength) ++
-          computeDualTopDimension(grid, includeZeroLength, representatives)
+          computeDualTopDimension(grid, includeZeroLength, representatives, cubes)
     bars
 
   // -------------------------------------------------------------------------------------------------------------
@@ -99,7 +103,8 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
   // -------------------------------------------------------------------------------------------------------------
   private def computeH0(
     grid: GridRanks,
-    includeZeroLength: Boolean
+    includeZeroLength: Boolean,
+    cubes: Option[GridCubes]
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     // Vertices are numbered in mixed radix over the (shape(i) + 1)-point grid, an edge is (axis, lower vertex) with id
     // axis * numVertices + lower vertex. The edges are processed in exactly the stream's order -- value ascending, then
@@ -216,6 +221,19 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
     def vertexCube(v: Int): Cube =
       val lattice = GridRanks.coordinates(vdims, v)
       boxes.cube(i => 2 * lattice(i))
+    // A vertex as a one-term chain: packed by its doubled-grid index, or a heap chain when indices do not fit.
+    val oneBox = fr.one.asInstanceOf[AnyRef]
+    val cellWeight = if cubes.isDefined then GridRanks.strides(shape.map(n => 2 * n + 1)) else Array.empty[Int]
+    def vertexChain(v: Int): Chain[Cube, CoefficientT] = cubes match
+      case Some(decoder) =>
+        val lattice = GridRanks.coordinates(vdims, v)
+        var key = 0
+        var i = 0
+        while i < d do
+          key += 2 * lattice(i) * cellWeight(i)
+          i += 1
+        Chain.packed(Array(key), Array(oneBox), decoder)
+      case None => Chain(vertexCube(v))
     val bars = mutable.ArrayBuffer.empty[PersistenceBar[Double, Chain[Cube, CoefficientT]]]
     var rank = 0
     var k = 0
@@ -238,7 +256,7 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
             0,
             endpoint(true)(birth),
             endpoint(false)(death),
-            Some(Chain(vertexCube(youngRoot)))
+            Some(vertexChain(youngRoot))
           )
       k += 1
     // Every vertex and edge of the grid is in, so one component is left: the one essential class.
@@ -247,7 +265,7 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
       0,
       endpoint(true)(distinct(vertexRank(root))),
       PositiveInfinity(),
-      Some(Chain(vertexCube(root)))
+      Some(vertexChain(root))
     )
     bars.toList
 
@@ -258,7 +276,8 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
   private def computeDualTopDimension(
     grid: GridRanks,
     includeZeroLength: Boolean,
-    representatives: Boolean
+    representatives: Boolean,
+    cubes: Option[GridCubes]
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     // Top cells (pixels) are numbered row-major. A facet is coded (pixel * d + axis) * 3 + side: side 0 for an interior
     // facet, coded by the pixel above it along `axis`; side 1 for a facet on the grid's lower boundary, coded by its
@@ -360,6 +379,9 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
     val boxes = CubeBoxes(shape)
     def cubeOfKey(key: Long): Cube =
       boxes.cube(i => ((key / encWeight(i)) % bases(i)).toInt)
+    // A packed representative stores references to these: the field's images of -2 .. 2, made once.
+    val coefficientBox = Array.tabulate(5)(i => if i == 2 then null else field(i - 2).asInstanceOf[AnyRef])
+    val keepCoefficient = Array.tabulate(5)(i => i != 2 && !fr.isEqual(field(i - 2), fr.zero))
     val sums = FacetSums()
     def regionBoundary(uf: UnitSignedUnionFind, root: Int, flip: Int): Chain[Cube, CoefficientT] =
       uf.foreachMember(root) { (id, sign) =>
@@ -377,16 +399,43 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
           sums.add(pixelKey - encWeight(a), -c * upperSign(a))
           a += 1
       }
-      val terms = mutable.ArrayBuffer.empty[(Cube, CoefficientT)]
-      var j = 0
-      while j < sums.size do
-        val n = sums.sumAt(j)
-        if n != 0 then
-          val x = field(n)
-          if !fr.isEqual(x, fr.zero) then terms += ((cubeOfKey(sums.keyAt(j)), x))
-        j += 1
-      sums.clear()
-      Chain.from(ArraySeq.untagged.from(terms))
+      cubes match
+        case Some(decoder) =>
+          // Key in the high half, sum in the low: sorted by key, which is the cubes' order (`cubeOrdering` is the
+          // doubled grid's row-major order).
+          val sorted = new Array[Long](sums.size)
+          var count = 0
+          var j = 0
+          while j < sums.size do
+            val n = sums.sumAt(j)
+            if n != 0 then
+              if n < -2 || n > 2 then
+                throw new IllegalStateException(s"an engine bug: a facet of a region boundary has coefficient $n")
+              if keepCoefficient(n + 2) then
+                sorted(count) = (sums.keyAt(j) << 32) | (n & 0xffffffffL)
+                count += 1
+            j += 1
+          sums.clear()
+          java.util.Arrays.sort(sorted, 0, count)
+          val keys = new Array[Int](count)
+          val coefficients = new Array[AnyRef](count)
+          var i = 0
+          while i < count do
+            keys(i) = (sorted(i) >>> 32).toInt
+            coefficients(i) = coefficientBox(sorted(i).toInt + 2)
+            i += 1
+          Chain.packed(keys, coefficients, decoder)
+        case None =>
+          val terms = mutable.ArrayBuffer.empty[(Cube, CoefficientT)]
+          var j = 0
+          while j < sums.size do
+            val n = sums.sumAt(j)
+            if n != 0 then
+              val x = field(n)
+              if !fr.isEqual(x, fr.zero) then terms += ((cubeOfKey(sums.keyAt(j)), x))
+            j += 1
+          sums.clear()
+          Chain.from(ArraySeq.untagged.from(terms))
 
     // Union-find over `0 to numTop` (numTop itself = infinityId). A root is always the OLDEST -- i.e. largest-value --
     // member of its component, so its value is the component's birth. Signs live in `uf`; a dying region is assembled

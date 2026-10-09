@@ -70,20 +70,15 @@ private[tda4j] final class PackedCubicalCohomologyEngine[C: Field](
   private inline def keyOf(packedCell: Long): Int = (packedCell & 0xffffffffL).toInt
   private def valueOf(key: Int): Double = distinct(cellRank(key))
 
-  private val boxes = CubeBoxes(shape)
-  private def cubeOf(key: Int): Cube = boxes.cube(i => (key / weight(i)) % extent(i))
-  private def keyOfCube(c: Cube): Int =
-    val e = c.encoded
-    var key = 0
-    var i = 0
-    while i < d do
-      key += e(i) * weight(i)
-      i += 1
-    key
+  // The representatives' decoder: they keep it, so it holds only the strides and the coordinate boxes.
+  private val cubes = GridCubes(shape)
+  private def cubeOf(key: Int): Cube = cubes(key)
 
-  /** The generic engine's order on the cells of one dimension; its reverse for cycles. */
-  private val olderFirst: Ordering[Cube] = new Ordering[Cube]:
-    def compare(x: Cube, y: Cube): Int = java.lang.Long.compare(packed(keyOfCube(x)), packed(keyOfCube(y)))
+  /** The generic engine's order on the cells of one dimension; its reverse for cycles. Standalone (see
+    * [[GridCellOrder]]): every representative keeps its order.
+    */
+  private val olderFirst: Ordering[Cube] = GridCellOrder(cellRank, weight)
+  private val youngestFirstOrder: Ordering[Cube] = olderFirst.reverse
 
   // `cubeIsOrderedCell`'s boundary signs: along the nondegenerate axis of rank r (among the cube's nondegenerate axes),
   // the upper face carries `one` for even r and `-one` for odd r, the lower face the negation.
@@ -441,17 +436,34 @@ private[tda4j] final class PackedCubicalCohomologyEngine[C: Field](
           stack.pop()
     fold(seed, log)
 
-  /** `terms` (cells by index, possibly repeated) combined, without zeros, as a chain of cubes under `order`. */
-  private def cubeChain(terms: Iterator[(Int, C)], order: Ordering[Cube]): Chain[Cube, C] =
+  /** `terms` (cells by index, possibly repeated) combined, without zeros, as a packed chain of cubes: oldest first
+    * (`olderFirst`, cocycles) or youngest first (its reverse, cycles).
+    */
+  private def cubeChain(terms: Iterator[(Int, C)], youngestFirst: Boolean): Chain[Cube, C] =
     val sums = mutable.LongMap.empty[C]
     for (key, c) <- terms do
       sums.updateWith(key.toLong) {
         case Some(x) => Some(fr.plus(x, c))
         case None    => Some(c)
       }
-    Chain.from(sums.iterator.collect { case (key, c) if !fr.isEqual(c, fr.zero) => (cubeOf(key.toInt), c) }.toSeq)(using
-      order
-    )
+    // The packed cells (rank, then index) sort as `olderFirst` orders the cubes.
+    val order = new Array[Long](sums.size)
+    var n = 0
+    sums.foreachEntry { (key, c) =>
+      if !fr.isEqual(c, fr.zero) then
+        order(n) = packed(key.toInt)
+        n += 1
+    }
+    java.util.Arrays.sort(order, 0, n)
+    val keys = new Array[Int](n)
+    val coefficients = new Array[AnyRef](n)
+    var i = 0
+    while i < n do
+      val key = keyOf(order(if youngestFirst then n - 1 - i else i))
+      keys(i) = key
+      coefficients(i) = sums(key.toLong).asInstanceOf[AnyRef]
+      i += 1
+    Chain.packed[Cube, C](keys, coefficients, cubes)(using if youngestFirst then youngestFirstOrder else olderFirst, fr)
 
   /** The reduction: every pair of degree `0 .. lastDim` in report order. With `cocycles`, also the cocycle of every row
     * `wanted` accepts.
@@ -542,7 +554,7 @@ private[tda4j] final class PackedCubicalCohomologyEngine[C: Field](
         def logOf(pivot: Int): Array[(Int, C)] = logs.getOrElse(pivot.toLong, noLog)
         for (row, log) <- pending do
           val v = expandV(rows.births(row), log, seedOf, logOf, memo)
-          cocycleOf(row.toLong) = cubeChain(v.iterator, olderFirst)
+          cocycleOf(row.toLong) = cubeChain(v.iterator, youngestFirst = false)
     (rows, cocycleOf)
 
   /** Every bar with its cocycle, as `CellularCohomologyEngine.persistentCohomology` gives it on the stream. */
@@ -576,7 +588,6 @@ private[tda4j] final class PackedCubicalCohomologyEngine[C: Field](
   // another column needs it). V-columns are needed only for essential bars: only non-empty logs are kept.
   private def involutedCycles(rows: Rows, reported: Int => Boolean): mutable.LongMap[Chain[Cube, C]] =
     val result = mutable.LongMap.empty[Chain[Cube, C]]
-    val youngestFirst = olderFirst.reverse
     val working = WorkingColumn(youngestFirst = true)
     val rebuilt = WorkingColumn(youngestFirst = true)
     // Keyed by the birth (pivot) cell, which is unique across dimensions: the reduced column unless the row is an
@@ -642,7 +653,7 @@ private[tda4j] final class PackedCubicalCohomologyEngine[C: Field](
             val column = working.drain()
             result(row.toLong) = cubeChain(
               column.cells.indices.iterator.map(k => (keyOf(column.cells(k)), column.coefficients(k).asInstanceOf[C])),
-              youngestFirst
+              youngestFirst = true
             )
         else
           val log = reduce(keyOf(death))
@@ -657,7 +668,7 @@ private[tda4j] final class PackedCubicalCohomologyEngine[C: Field](
           if reported(row) then
             result(row.toLong) = cubeChain(
               column.cells.indices.iterator.map(k => (keyOf(column.cells(k)), column.coefficients(k).asInstanceOf[C])),
-              youngestFirst
+              youngestFirst = true
             )
       deathDim += 1
 
@@ -667,7 +678,7 @@ private[tda4j] final class PackedCubicalCohomologyEngine[C: Field](
     for row <- 0 until rows.size if rows.deaths(row) < 0 && reported(row) do
       val sigma = rows.births(row)
       result(row.toLong) =
-        if rows.dims(row) == 0 then Chain.from(Seq((cubeOf(sigma), fr.one)))(using youngestFirst)
+        if rows.dims(row) == 0 then cubeChain(Iterator.single((sigma, fr.one)), youngestFirst = true)
         else
           val log = reduce(sigma)
           if working.pivot() then
@@ -685,10 +696,30 @@ private[tda4j] final class PackedCubicalCohomologyEngine[C: Field](
             ,
             memo
           )
-          cubeChain(v.iterator, youngestFirst)
+          cubeChain(v.iterator, youngestFirst = true)
     result
 
 private[tda4j] object PackedCubicalCohomologyEngine:
   /** The engine on `grid`'s cells up to dimension `topDim` (the whole grid by default). */
   def apply[C: Field](grid: CubicalGridStream, topDim: Int): PackedCubicalCohomologyEngine[C] =
     new PackedCubicalCohomologyEngine[C](grid, topDim, GridRanks(grid.shape, grid.topCellValues))
+
+/** The packed engine's order on the cubes of one grid, the generic engine's within a dimension: the rank of a cell's
+  * value, then its doubled-grid index. Every representative keeps its order, so it holds only the rank table and the
+  * strides, never the engine.
+  */
+private[tda4j] final class GridCellOrder(cellRank: Array[Int], weight: Array[Int]) extends Ordering[Cube]:
+  private def key(c: Cube): Int =
+    val e = c.encoded
+    var k = 0
+    var i = 0
+    while i < weight.length do
+      k += e(i) * weight(i)
+      i += 1
+    k
+
+  def compare(x: Cube, y: Cube): Int =
+    val kx = key(x)
+    val ky = key(y)
+    val byRank = Integer.compare(cellRank(kx), cellRank(ky))
+    if byRank != 0 then byRank else Integer.compare(kx, ky)

@@ -46,6 +46,25 @@ class FastRepresentativesSpec extends mutable.Specification:
     FastCubicalHomologyEngine[field.Fp]().persistentHomology(stream, zeroLength) ==
       EagerFastCubicalReference[field.Fp]().persistentHomology(stream, zeroLength)
 
+  /** Whether a chain's terms come in its own order, strictly ascending: what a packed chain must store. */
+  def ascending[C](c: Chain[Cube, C]): Boolean =
+    c.terms.map(_._1).sliding(2).forall(w => w.size < 2 || c.cellOrdering.lt(w(0), w(1)))
+
+  // The representatives are stored packed (cells as grid indices, decoded when read), in their own order. Equality with
+  // the reference is order-blind (formal sums) and would also pass on heap chains, so both are checked here.
+  "The fast cubical engine stores every representative packed, in its order, 3-D middle degrees included" >> {
+    import f3.given
+    val unpacked = for
+      seed <- 0L until 3L
+      stream <- images(seed)
+      zeroLength <- Seq(false, true)
+      bar <- FastCubicalHomologyEngine[f3.Fp]().persistentHomology(stream, zeroLength)
+      if !bar.representative.isPacked || !ascending(bar.representative)
+    yield s"${stream.shape.mkString("x")} $bar"
+    val verb = Persistence(Image(IndexedSeq.tabulate(30)(k => (k * 7 % 11).toDouble), IndexedSeq(5, 6)))
+    (unpacked.take(3) must beEmpty) and (verb.bars.forall(_.representative.isPacked) must beTrue)
+  }
+
   "The fast cubical engine's bars and representatives equal the eager reference's" >> {
     val checks = for
       seed <- 0L until 12L

@@ -112,6 +112,27 @@ class PackedCubicalCohomologySpec extends mutable.Specification:
     problems.take(5) must beEmpty
   }
 
+  /** Whether a chain's terms come in its own order, strictly ascending: what a packed chain must store. */
+  def ascending[C](c: Chain[Cube, C]): Boolean =
+    c.terms.map(_._1).sliding(2).forall(w => w.size < 2 || c.cellOrdering.lt(w(0), w(1)))
+
+  // Equality with the generic engine is order-blind (formal sums) and would also pass on heap chains: the storage and
+  // its order are checked here.
+  "stores its cocycles and cycles packed, each in its own order" >> {
+    val f3 = FiniteField(3)
+    import f3.given
+    val unpacked = for
+      grid <- grids(0L)
+      topDim <- (1 until grid.ambientDim) :+ grid.ambientDim
+      engine = new PackedCubicalCohomologyEngine[f3.Fp](grid, topDim, GridRanks(grid.shape, grid.topCellValues))
+      bar <- engine.persistentCohomology(includeZeroLength = true) ++ engine.persistentHomology(includeZeroLength =
+        true
+      )
+      if !bar.representative.isPacked || !ascending(bar.representative)
+    yield s"${grid.shape.mkString("x")} topDim $topDim: $bar"
+    unpacked.take(3) must beEmpty
+  }
+
   // Equality cannot catch a bug the reference shares; closedness over a signed field can.
   "reports cycles that are closed, and cocycles that are closed on a whole grid, over F_3" >> {
     val f3 = FiniteField(3)

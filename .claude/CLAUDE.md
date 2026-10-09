@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **How this file works.** Each entry is a current rule, invariant, or known limitation, plus a pointer to the
 `.claude/WORKLOG-*.md`/`DESIGN-*.md` that holds its derivation (what was tried, measurements, repros). Derivations
-go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes"). Last condensed 2026-10-03; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md` (and the commits named there).
+go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes"). Last condensed 2026-10-09; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md` (and the commits named there).
 
 ## What this is
 
@@ -92,22 +92,22 @@ sbt assembly                    # fat jar for CLI/MATLAB
 sbt -DrunBenchmarks=true test   # also run benchmark/profiling specs — NOT what CI runs
 ```
 
-If `sbt` isn't on `PATH`, run `.claude/scripts/install-sbt.sh` (paces around Maven Central's cold-cache rate limits).
+If `sbt` isn't on `PATH`, run `.claude/scripts/install-sbt.sh` (paces around Maven Central's cold-cache rate limits); in
+the cloud environment's setup script it saves new sessions a 20-40 minute cold start.
 
 No linter beyond scalafmt. Tests are specs2 (`org.specs2.mutable.Specification`). CI: `test.yml` (three parallel jobs `test`, `docs-build`, `mima`),
-`lint.yml` (scalafmt: build files, main and test sources), both on every PR to `scala` and cancelled when the PR is pushed again; `docs.yml` (scaladoc → GitHub Pages, push to `scala` only). MiMa's baseline is every earlier plain release of the same compatibility series (`mimaBaselineVersions` in `build.sbt`), so it compares against nothing while only `0.5.0-SNAPSHOT` exists. The ~319 `-Wunused:all` warnings
+`lint.yml` (scalafmt: build files, main and test sources), both on every PR to `scala` and cancelled when the PR is
+pushed again; `docs.yml` (scaladoc → GitHub Pages, push to `scala` only). MiMa checks against every earlier plain release
+of the series (`mimaBaselineVersions`): 0.5.1 against 0.5.0. A deliberate break is a commented `mimaBinaryIssueFilters`
+entry (project lead: binary compatibility is not a strong requirement before 1.0). The ~319 `-Wunused:all` warnings
 (mostly unused wildcard imports) are deliberately left alone (`WORKLOG-compiler-warnings.md`).
 
 **`sbt scalafmtSbt`/`scalafmtSbtCheck` format the build definition** (`build.sbt`, `project/*.sbt`), and CI's lint job
 runs the check: format `build.sbt` before pushing it.
 
-**Docs are built with Scala 3.8.4, everything else with 3.9.0** (scaladoc 3.9.0's JavaScript is broken; this
-includes the `ux.js` `$.get` navigation bug). The pin is the `TDA4J_SCALA_VERSION` env var read by `scalaVersion`
-in `build.sbt`, set only on the docs steps of `test.yml` (`docs-build`) and `docs.yml`. The env var reaches only a FRESH sbt server: sbt 2 is a thin client, so a later `sbt` call in the same job joins the running server and silently builds with 3.9.0 -- `release.yml` therefore switches inside its one invocation with `++3.8.4!` (`++3.8.4` without `!` is rejected). sbt 2 puts output under
-`target/out/jvm/scala-<ver>/tda4j/`. Remove the pin when 3.9.1 releases.
-
-**After `sbt package` or a 3.8.4 docs build, a test compile can see no main classes at all** ("Not found: TDAlab");
-`sbt clean` fixes it -- stale incremental state, not code.
+**Docs build with Scala 3.8.4, everything else with 3.9.0**: the `TDA4J_SCALA_VERSION` env var, which only a FRESH sbt
+server sees (`rules/docs-and-tutorials.md`). After `sbt package` or a docs build, a test compile can see no main classes
+("Not found: TDAlab"): `sbt clean`. sbt 2 puts output under `target/out/jvm/scala-<ver>/tda4j/`.
 
 **Never run two `sbt` invocations against this checkout at once** — the incremental compiler's own class-file
 writes from one process can be read mid-update by the other, producing a `NoClassDefFoundError` that looks like a
@@ -218,7 +218,10 @@ records a representative for every bar.
 
 - `RingModule`/`Field`: minimal typeclasses built with `is` syntax; everything downstream is generic over `Field`.
   `FiniteField`: `Fp` opaque type per prime `p`.
-- `Chain[CellT, CoefficientT]`: formal sum backed by a `PriorityQueue` ordered by cell (leading term = cheap peek).
+- `Chain[CellT: Ordering, CoefficientT: Field]`: abstract and OPEN (project lead: a place for the community to
+  experiment): a storage passes order and field up (kept once) and implements `entryIterator`, all else defaults over it
+  (`tda4juser/ChainStorageSpec`, outside the package). Ours: `HeapChain` (a `PriorityQueue` ordered by cell), `PackedChain`
+  (`rules/cubical.md`). No nulls. Equality: formal sums by `field.isEqual` (an `Fp` has several `Int` forms), order-blind.
   Defines `reduceBy`/`reduceByUntil` (with an optional `fallback` for pivots needing on-the-fly substitution) and
   a `RingModule` instance. `reduceLoop` uses a `mutable.TreeMap` accumulator (use `z.head`, not `headOption`, which
   allocates an iterator on `mutable.TreeMap`). Known footgun, not fixed: `Chain` overrides `equals` without a
@@ -287,13 +290,8 @@ file before changing that subsystem; this table is the index, in case a rule did
 - A cloud session (working on its own `claude/...` branch) may commit and push its own work to that branch at
   will, without asking first — the branch is disposable/session-scoped, not shared history. A local/interactive
   session working directly on a shared branch still waits to be asked; the project lead commits that work.
-- **Found a bug in someone else's paper or reference implementation while validating a tda4j feature against
-  it?** Log it in `.claude/BUGS-IN-REFERENCES.md` (flat, never condensed away). State precisely what was verified
-  — don't extrapolate an isolated bug into an end-to-end correctness claim without a repro that actually shows
-  that (a real miss, corrected — `WORKLOG-toroidal-coordinates.md`). Two entries so far: CJS 2015 (Sheehy-Rips)
-  and DREiMac's `_gram_schmidt` (toroidal coordinates).
-- **No `sbt` or dependency cache at start?** `.claude/scripts/install-sbt.sh`; put it in the cloud environment's setup
-  script so new sessions skip the ~20-40 minute cold start.
+- **A bug found in a paper or reference implementation** goes in `.claude/BUGS-IN-REFERENCES.md` (flat, never condensed
+  away): state exactly what was verified, and claim nothing end-to-end without a repro that shows it.
 
 ## Collaboration preferences
 
