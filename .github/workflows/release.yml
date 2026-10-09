@@ -48,12 +48,19 @@ jobs:
       - name: Derive release version
         id: version
         run: |
-          VERSION="${{ github.event.inputs.tag || github.ref_name }}"
-          VERSION="${VERSION#v}"
-          # Fail here, before anything is pushed to gh-pages, if the ref is not a release tag.
+          # The release tag: the dispatch input on a manual run, else the pushed tag. Never `github.ref_name` alone: on a
+          # manual run that is the BRANCH the run was started from, and `gh release create <branch>` would create a tag
+          # named after the branch.
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          # Fail here, before anything is pushed to gh-pages, if the ref is not an existing release tag.
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-.+)?$ ]]; then
-            echo "::error::'$VERSION' is not a release version (expected a vX.Y.Z tag)"; exit 1
+            echo "::error::'$TAG' is not a release version (expected a vX.Y.Z tag)"; exit 1
           fi
+          if ! git rev-parse -q --verify "refs/tags/$TAG" > /dev/null; then
+            echo "::error::tag '$TAG' does not exist"; exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Build release artifacts
         env:
@@ -86,7 +93,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to publish."
           else
-            git commit -m "Publish docs for ${{ github.ref_name }}"
+            git commit -m "Publish docs for ${{ steps.version.outputs.tag }}"
             git push origin HEAD:gh-pages
           fi
           cd "$GITHUB_WORKSPACE"
@@ -110,7 +117,7 @@ jobs:
           # necessarily agree in case with each other or with `name`. Confirmed broken once for real: v0.4.0's
           # own run failed here after `name := "TDA4j"` became `name := "tda4j"` (matching the actual Maven
           # coordinate), because this glob still hardcoded the old capitalization.
-          gh release create "${{ github.ref_name }}" \
+          gh release create "${{ steps.version.outputs.tag }}" --verify-tag \
             --title "TDA4j ${VERSION}" \
             --generate-notes \
             $PRERELEASE_FLAG \
