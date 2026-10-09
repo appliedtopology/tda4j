@@ -107,10 +107,14 @@ Get Scala 3.9.0 on your computer.
 The following command will open a REPL (read-evaluate-print loop) interpreter of Scala where we can write code and see results. This command has added flags to pull the TDA4j library from Maven in the snapshot version.
 
 ```shell
-scala repl -r  https://central.sonatype.com/repository/maven-snapshots --dep org.appliedtopology::tda4j:0.5.0-SNAPSHOT
+scala repl
 ```
 
-Eventually, we will no longer need the `-r  https://central.sonatype.com/repository/maven-snapshots` part.
+And then load the library as a dependency:
+
+```scala 3
+:dep org.appliedtopology::tda4j:0.5.0
+```
 
 ---
 
