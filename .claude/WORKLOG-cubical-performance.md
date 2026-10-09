@@ -314,6 +314,10 @@ table, the 256² "before" of deliverable A) is void. Corrected, pinned heap, war
 
 At these sizes the ratios measure fixed costs (16³ blob: 47 ms against 2.2 ms).
 
+The titles of commits 06d5cb8 ("2.5-18x faster in 2-D") and ceefe80 ("7-30x faster" in 3-D) took their upper ends from
+those two rows. Against reproducible baselines the default path is 2.9-4.3x faster in 2-D (256² to 1024²) and 6-10x in
+3-D (16³ to 48³); `Engine.Cohomology` 8-16x in 3-D (32³, 48³) and 10-30x in 2-D (512², 1024²).
+
 The pinned heap does cost something while eden is fresh: the pre-change build at noise 256², heap pinned, no warm-up,
 took 1.12, 0.56, 0.52, 0.45 s; with `-XX:+AlwaysPreTouch` (the heap touched at JVM start, outside the timed region)
 1.06, 0.32, 0.29, 0.28 s. About 0.2 s a call at that size is first-touch page faults under the sweep's flags; the first
