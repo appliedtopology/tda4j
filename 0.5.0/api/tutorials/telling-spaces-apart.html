@@ -1,0 +1,224 @@
+<!DOCTYPE html><html data-githubContributorsUrl="https://api.github.com/repos/appliedtopology/tda4j" data-githubContributorsFilename="_docs/tutorials/telling-spaces-apart.md" data-pathToRoot="../" data-rawLocation="tutorials/telling-spaces-apart" data-dynamicSideMenu="false"><head><meta charset="utf-8"></meta><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"></meta><title>Telling spaces apart</title><link rel="canonical" href="https://tda4j.appliedtopology.org/tutorials/telling-spaces-apart.html"></link><link rel="shortcut icon" type="image/x-icon" href="../favicon.ico"></link><script type="text/javascript" src="../scripts/theme.js"></script><script type="text/javascript" src="../scripts/searchData.js" defer="true"></script><script type="text/javascript" src="../scripts/scastieConfiguration.js" defer="true"></script><link rel="stylesheet" href="../styles/theme/bundle.css"></link><link rel="stylesheet" href="../styles/theme/components/bundle.css"></link><link rel="stylesheet" href="../styles/theme/components/button/bundle.css"></link><link rel="stylesheet" href="../styles/theme/layout/bundle.css"></link><link rel="stylesheet" href="../styles/nord-light.css"></link><link rel="stylesheet" href="../styles/dotty-icons.css"></link><link rel="stylesheet" href="../styles/filter-bar.css"></link><link rel="stylesheet" href="../styles/code-snippets.css"></link><link rel="stylesheet" href="../styles/searchbar.css"></link><link rel="stylesheet" href="../styles/social-links.css"></link><link rel="stylesheet" href="../styles/versions-dropdown.css"></link><link rel="stylesheet" href="../styles/content-contributors.css"></link><link rel="stylesheet" href="../styles/fontawesome.css"></link><script type="text/javascript" src="../hljs/highlight.pack.js" defer="true"></script><script type="text/javascript" src="../scripts/hljs-scala3.js" defer="true"></script><script type="text/javascript" src="../scripts/ux.js" defer="true"></script><script type="text/javascript" src="../scripts/common/component.js" defer="true"></script><script type="text/javascript" src="../scripts/common/utils.js" defer="true"></script><script type="text/javascript" src="../scripts/components/FilterBar.js" defer="true"></script><script type="text/javascript" src="../scripts/components/DocumentableList.js" defer="true"></script><script type="text/javascript" src="../scripts/components/Input.js" defer="true"></script><script type="text/javascript" src="../scripts/components/FilterGroup.js" defer="true"></script><script type="text/javascript" src="../scripts/components/Filter.js" defer="true"></script><script type="text/javascript" src="../scripts/scaladoc-scalajs.js" defer="true"></script><script type="text/javascript" src="../scripts/contributors.js" defer="true"></script><script type="text/javascript" src="https://code.jquery.com/jquery-3.5.1.min.js" defer="true"></script><script type="text/javascript" src="https://d3js.org/d3.v6.min.js" defer="true"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/graphlib-dot@0.6.2/dist/graphlib-dot.min.js" defer="true"></script><script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dagre-d3/0.6.1/dagre-d3.min.js" defer="true"></script><script type="text/javascript" src="https://scastie.scala-lang.org/embedded.js" defer="true"></script><script type="text/javascript" src="../scripts/data.js" defer="true"></script><link rel="stylesheet" href="../styles/staticsitestyles.css"></link><script>var pathToRoot = "../";</script><style>
+     :root {
+          /* text */
+          --text-primary: #3c5a6b;
+          --text-secondary: #866504;
+          --text-text-tertiary: #206f6f;
+          --text-text-inverted: #eef3f5;
+
+          /* background */
+          --background-default: #f8f7f4;
+          --background-subtle: var(--grey2);
+          --background-neutral: var(--grey3);
+     }
+     :root.theme-dark {
+
+          /* text */
+          --text-primary: #8fb4c7;
+          --text-secondary: #f3d068;
+          --text-text-tertiary: #75c7c7;
+          --text-text-inverted: #1a262b;
+
+          /* background */
+          --background-default: #161b1e;
+          --background-subtle: var(--grey2);
+          --background-neutral: var(--grey3);
+
+
+     }
+     :is(#content h1, h2, h3, h4, h5, h6, .h50, .h100, .h200, .h300, .h400, .h500, .h600, .h700) {
+          color: var(--text-secondary);
+     }
+</style>
+<style>
+     /* Language tabsets: <div class="tabset"><div class="tab" data-lang="Scala">...</div>...</div>; see WORKLOG-tutorial-tabs.md */
+     .tabset { margin: 1em 0; }
+     .tabset > .tab-bar { display: flex; gap: 0.25em; border-bottom: 1px solid var(--text-primary); }
+     .tabset > .tab-bar > button { background: none; border: 1px solid transparent; border-bottom: none; padding: 0.3em 0.9em; cursor: pointer; color: var(--text-primary); font: inherit; }
+     .tabset > .tab-bar > button[aria-selected="true"] { border-color: var(--text-primary); background: var(--background-subtle); font-weight: bold; }
+     .tabset.js-ready > .tab:not(.active) { display: none; }
+     .tabset > .tab > *:first-child { margin-top: 0.5em; }
+</style>
+<script>
+     // Builds a tab bar for each .tabset from its .tab children's data-lang, and keeps every tabset on the page (and on later pages) on the same language.
+     document.addEventListener("DOMContentLoaded", function () {
+          var KEY = "tda4j-language";
+          var saved = null;
+          try { saved = localStorage.getItem(KEY); } catch (e) {}
+          var sets = Array.prototype.slice.call(document.querySelectorAll(".tabset"));
+          function show(lang) {
+               sets.forEach(function (set) {
+                    var tabs = Array.prototype.slice.call(set.children).filter(function (c) { return c.classList.contains("tab"); });
+                    var chosen = tabs.some(function (t) { return t.dataset.lang === lang; }) ? lang : tabs[0].dataset.lang;
+                    tabs.forEach(function (t) { t.classList.toggle("active", t.dataset.lang === chosen); });
+                    set.querySelectorAll(".tab-bar > button").forEach(function (b) { b.setAttribute("aria-selected", b.textContent === chosen ? "true" : "false"); });
+               });
+          }
+          sets.forEach(function (set) {
+               var bar = document.createElement("div");
+               bar.className = "tab-bar";
+               bar.setAttribute("role", "tablist");
+               Array.prototype.slice.call(set.children).filter(function (c) { return c.classList.contains("tab"); }).forEach(function (t) {
+                    var b = document.createElement("button");
+                    b.type = "button";
+                    b.setAttribute("role", "tab");
+                    b.textContent = t.dataset.lang;
+                    b.addEventListener("click", function () {
+                         try { localStorage.setItem(KEY, t.dataset.lang); } catch (e) {}
+                         show(t.dataset.lang);
+                    });
+                    bar.appendChild(b);
+               });
+               set.insertBefore(bar, set.firstChild);
+               set.classList.add("js-ready");
+          });
+          show(saved);
+     });
+</script></head><body><div id=""><div id="header" class="body-small"><div class="header-container-left"><a href="../" class="logo-container"><span id="project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span id="dark-project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span class="project-name h300">tda4j</span></a><span onclick="dropdownHandler(event)" class="text-button with-arrow" id="dropdown-trigger"><a><div class="projectVersion">0.5.0</div></a></span><div id="version-dropdown" class="dropdown-menu"></div></div><div class="header-container-right"><button id="search-toggle" class="icon-button"></button><a href="https://appliedtopology.org" class="text-button">Applied Topology</a><a href="https://scastie.scala-lang.org/?inputs=%7B%0A%20%20%22_isWorksheetMode%22%20%3A%20true%2C%0A%20%20%22code%22%20%3A%20%22import%20org.appliedtopology.tda4j.*%5Cn%E2%88%86(1%2C2%2C3)%5Cn%22%2C%0A%20%20%22target%22%20%3A%20%7B%0A%20%20%20%20%22scalaVersion%22%20%3A%20%223.9.0%22%2C%0A%20%20%20%20%22tpe%22%20%3A%20%22Scala3%22%0A%20%20%7D%2C%0A%20%20%22libraries%22%20%3A%20%5B%20%5D%2C%0A%20%20%22librariesFromList%22%20%3A%20%5B%20%5D%2C%0A%20%20%22sbtConfigExtra%22%3A%22%5CnscalacOptions%20%2B%2B%3D%20Seq(%5Cn%20%20%5C%22-deprecation%5C%22%2C%5Cn%20%20%5C%22-encoding%5C%22%2C%20%5C%22UTF-8%5C%22%2C%5Cn%20%20%5C%22-feature%5C%22%2C%5Cn%20%20%5C%22-unchecked%5C%22%2C%5Cn%20%20%5C%22-source%3Afuture%5C%22%2C%20%5Cn%20%20%5C%22-language%3Aexperimental.modularity%5C%22%5Cn)%5CnlibraryDependencies%20%2B%3D%20%5C%22org.appliedtopology%5C%22%20%25%25%20%5C%22tda4j%5C%22%20%25%20%5C%220.4.0%5C%22%5Cn%22%2C%0A%20%20%22sbtPluginsConfigExtra%22%20%3A%20%22%22%2C%0A%20%20%22isShowingInUserProfile%22%20%3A%20true%0A%7D%0A" class="text-button">Playground</a><span id="theme-toggle" class="icon-button"></span><span id="mobile-menu-toggle" class="icon-button hamburger"></span></div></div><div id="mobile-menu"><div class="mobile-menu-header body-small"><span class="mobile-menu-logo"><span id="project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span id="dark-project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span class="project-name h300">tda4j</span></span><button id="mobile-menu-close" class="icon-button close"></button></div><div class="mobile-menu-container body-medium"><input id="mobile-scaladoc-searchbar-input" class="scaladoc-searchbar-input" type="search" placeholder="Find anything"></input><a href="https://appliedtopology.org" class="mobile-menu-item">Applied Topology</a><a href="https://scastie.scala-lang.org/?inputs=%7B%0A%20%20%22_isWorksheetMode%22%20%3A%20true%2C%0A%20%20%22code%22%20%3A%20%22import%20org.appliedtopology.tda4j.*%5Cn%E2%88%86(1%2C2%2C3)%5Cn%22%2C%0A%20%20%22target%22%20%3A%20%7B%0A%20%20%20%20%22scalaVersion%22%20%3A%20%223.9.0%22%2C%0A%20%20%20%20%22tpe%22%20%3A%20%22Scala3%22%0A%20%20%7D%2C%0A%20%20%22libraries%22%20%3A%20%5B%20%5D%2C%0A%20%20%22librariesFromList%22%20%3A%20%5B%20%5D%2C%0A%20%20%22sbtConfigExtra%22%3A%22%5CnscalacOptions%20%2B%2B%3D%20Seq(%5Cn%20%20%5C%22-deprecation%5C%22%2C%5Cn%20%20%5C%22-encoding%5C%22%2C%20%5C%22UTF-8%5C%22%2C%5Cn%20%20%5C%22-feature%5C%22%2C%5Cn%20%20%5C%22-unchecked%5C%22%2C%5Cn%20%20%5C%22-source%3Afuture%5C%22%2C%20%5Cn%20%20%5C%22-language%3Aexperimental.modularity%5C%22%5Cn)%5CnlibraryDependencies%20%2B%3D%20%5C%22org.appliedtopology%5C%22%20%25%25%20%5C%22tda4j%5C%22%20%25%20%5C%220.4.0%5C%22%5Cn%22%2C%0A%20%20%22sbtPluginsConfigExtra%22%20%3A%20%22%22%2C%0A%20%20%22isShowingInUserProfile%22%20%3A%20true%0A%7D%0A" class="mobile-menu-item">Playground</a><span id="mobile-theme-toggle" class="mobile-menu-item mode"></span></div></div><span id="mobile-sidebar-toggle" class="floating-button"></span><div id="leftColumn" class="body-small"><div class="switcher-container"><a id="docs-nav-button" class="switcher h100 selected" href="../index.html">Docs</a><a id="api-nav-button" class="switcher h100 " href="../api/index.html">API</a></div><nav id="docs-nav" class="side-menu"><div class="ni n0 expanded"><span class="nh h100 expanded cs de"><button class="ar icon-button expanded"></button><a href="index.html"><span>Tutorials for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="all-ways-to-call.html"><span>All the ways to call TDA4j</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="find-a-loop.html"><span>Finding a loop in noisy data</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="choosing-a-complex.html"><span>Choosing a complex</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="noise-and-outliers.html"><span>Noise and outliers</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="circular-and-toroidal-coordinates.html"><span>Circular and toroidal coordinates</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="comparing-barcodes.html"><span>Comparing barcodes</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="images.html"><span>Topology of an image</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="networks-and-relations.html"><span>Networks and relations</span></a></span></div><div class="ni n1 expanded"><span class="nh h100 selected de"><a href="#"><span>Telling spaces apart</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="persistent-group-cohomology.html"><span>Persistent group cohomology</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="scaling-up.html"><span>Scaling up</span></a></span></div></div><div class="ni n0"><span class="nh de"><button class="ar icon-button "></button><a href="../developers-guide/index.html"><span>Developer&apos;s Guide for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="../developers-guide/scala3-primer.html"><span>A Scala 3.7+ primer for this codebase</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/architecture.html"><span>Architecture: from algebra to a filtration stream</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/persistence-engines.html"><span>Persistence engines: what to trust, and why</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/alpha-complex.html"><span>Alpha complex: Bowyer-Watson, Helix and DQP</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/degeneracies.html"><span>Degeneracy behaviors that look like bugs but aren&apos;t</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/gotchas.html"><span>Hard-won invariants you must not break</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/class-diagrams.html"><span>Mapping the library: class diagrams</span></a></span></div></div><div class="ni n0"><span class="nh de"><button class="ar icon-button "></button><a href="../user-guide/index.html"><span>User Guide for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="../user-guide/quickstart.html"><span>Quickstart</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/cli.html"><span>Command-line tool: `tda4j`</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/matlab.html"><span>Calling from MATLAB or Java</span></a></span></div><div class="ni n1"><span class="nh de"><button class="ar icon-button "></button><a href="../user-guide/user-guide/topological-spaces/index.html"><span>Complexes</span></a></span><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/vietoris-rips.html"><span>Vietoris-Rips complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/cech-complexes.html"><span>Čech complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/alpha-complexes.html"><span>Alpha complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/sparse-vietoris-rips.html"><span>Sparse Rips complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/witness-complexes.html"><span>Witness complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/dowker-complexes.html"><span>Dowker complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/cubical-complexes.html"><span>Cubical complexes and images</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/simplicial-sets.html"><span>Simplicial sets</span></a></span></div></div><div class="ni n1"><span class="nh de"><button class="ar icon-button "></button><a href="../user-guide/user-guide/homology-computation/index.html"><span>Homology computation</span></a></span><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/choosing-engine.html"><span>Which persistence engine?</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/fast-cubical.html"><span>The fast cubical engine</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/fast-alpha-complexes.html"><span>The fast alpha engine</span></a></span></div></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/boundary-matrix.html"><span>Boundary-matrix export</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/circular-coordinates.html"><span>Circular and toroidal coordinates</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/input-output.html"><span>Loading and saving data</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/vectorization.html"><span>Comparing diagrams and turning them into vectors</span></a></span></div></div></nav></div><div id="footer" class="body-small"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div><div id="scaladoc-searchBar"></div><div id="main"><div class="breadcrumbs container"><a href="../index.html">tda4j</a>/<a href="index.html">Tutorials for TDA4j</a>/<a href="telling-spaces-apart.html">Telling spaces apart</a></div><div id="content" class="body-medium"><div><main>
+ <p>Persistent homology is built to read <em>data</em>, but the same machinery works on spaces you construct yourself, and that is where you can ask pure questions: are these two spaces the same? What distinguishes them? The first tool is <strong>Betti numbers</strong>, the counts of holes in each dimension. This tutorial starts with what they can do and then shows where they run out, and what to reach for next: <strong>cup products</strong> and <strong>Steenrod squares</strong>, which detect structure the counting cannot see.</p>
+ <p>There is no data in this tutorial. Every space is built in a few lines, as a <em>simplicial set</em> (a space glued together from simplices, with the freedom to glue them to themselves, which keeps the models tiny).</p>
+ <div class="snippet mono-small-block" scala-snippet="">
+  <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+</span></code></pre>
+  <div class="buttons"></div>
+ </div>
+ <section id="betti-numbers-over-two-fields">
+  <h2 class="h500"><a href="#betti-numbers-over-two-fields" class="anchor"></a>Betti numbers over two fields</h2>
+  <p><code>space.bettiNumbers(p)</code> returns the dimensions of the homology groups of <code>space</code> with coefficients in the field with <code>p</code> elements, <code>Vector(b0, b1, b2, ...)</code>. We ask for two fields, <code>p = 2</code> and <code>p = 3</code>, because comparing them exposes a subtle kind of hole that counting over one field can hide:</p>
+  <div class="snippet mono-small-block" scala-snippet="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>def betti[G](x: FiniteSimplicialSet[G]) = (x.bettiNumbers(2), x.bettiNumbers(3))
+</span><span line-number="2" class=""><span class="tooltip-container"></span>
+</span><span line-number="3" class=""><span class="tooltip-container"></span>// A space can be described by a presentation: generators (loops), and relations (disks glued in along words in the loops).
+</span><span line-number="4" class=""><span class="tooltip-container"></span>// A letter is (generator number, +1 or -1). The torus is &lt;a, b | a b a^-1 b^-1&gt;: "going round a then b is the same as b then a".
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val torus = SimplicialSet.presentationComplex(2, Seq(List((0, 1), (1, 1), (0, -1), (1, -1))))
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val projectivePlane = SimplicialSet.presentationComplex(1, Seq(List((0, 1), (0, 1))))     // &lt;a | a^2&gt;
+</span><span line-number="7" class=""><span class="tooltip-container"></span>val kleinBottle = SimplicialSet.kleinBottle
+</span><span line-number="8" class=""><span class="tooltip-container"></span>
+</span><span line-number="9" class=""><span class="tooltip-container"></span>betti(torus)             // (Vector(1, 2, 1), Vector(1, 2, 1))
+</span><span line-number="10" class=""><span class="tooltip-container"></span>betti(projectivePlane)   // (Vector(1, 1, 1), Vector(1, 0, 0))
+</span><span line-number="11" class=""><span class="tooltip-container"></span>betti(kleinBottle)       // (Vector(1, 2, 1), Vector(1, 1, 0))
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>The torus has one piece, two independent loops and one enclosed surface (<code>1, 2, 1</code>), whichever field you count in. The other two have a twist and show it: the projective plane has <code>1, 1, 1</code> over the field with 2 elements but only <code>1, 0, 0</code> over the field with 3, so its extra loop is a "double loop" (going round twice is trivial), which does not exist in odd characteristic. The Klein bottle is <code>1, 2, 1</code> over 2 and <code>1, 1, 0</code> over 3, so the torus and the Klein bottle cannot be told apart by counting holes over the field with 2 elements, but can by comparing the two fields.</p>
+ </section>
+ <section id="where-counting-runs-out">
+  <h2 class="h500"><a href="#where-counting-runs-out" class="anchor"></a>Where counting runs out</h2>
+  <p>Now the interesting case. Glue a sphere to two circles at a single point:</p>
+  <div class="snippet mono-small-block" scala-snippet="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>val circle = SimplicialSet.sphere(1)
+</span><span line-number="2" class=""><span class="tooltip-container"></span>val twoCircles = circle.wedge(circle.generators(0).head, circle, circle.generators(0).head)
+</span><span line-number="3" class=""><span class="tooltip-container"></span>val sphere = SimplicialSet.sphere(2)
+</span><span line-number="4" class=""><span class="tooltip-container"></span>val notATorus = twoCircles.wedge(twoCircles.generators(0).head, sphere, sphere.generators(0).head)
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>betti(notATorus)         // (Vector(1, 2, 1), Vector(1, 2, 1))
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>It has exactly the same Betti numbers as the torus over both fields: one piece, two loops, one enclosed surface. And yet it is a different space: on the torus the two loops and the surface are tied together (the surface is bounded by the loops going round each other), while on the wedge the surface floats free of the loops. Betti numbers cannot see that. <strong>Cup products</strong> can. A cup product multiplies two cohomology classes: two classes in degree 1 give a class in degree 2. On the torus the product of the two loop classes is the generator of the enclosed surface; on the wedge, every product of loop classes is zero.</p>
+  <div class="snippet mono-small-block" scala-snippet="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>def basis[G](x: FiniteSimplicialSet[G], degree: Int) = CupProduct.cohomologyBasis[G, CoefficientT](x, degree)
+</span><span line-number="2" class=""><span class="tooltip-container"></span>def cup[G](x: FiniteSimplicialSet[G], p: Int, q: Int, a: Map[G, CoefficientT], b: Map[G, CoefficientT]) = CupProduct.cup(x, p, q, a, b)
+</span><span line-number="3" class=""><span class="tooltip-container"></span>def isNonzero[G](x: FiniteSimplicialSet[G], degree: Int, cochain: Map[G, CoefficientT]) = !CupProduct.isCoboundary(x, degree, cochain)
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span>def someProductOfOneClassesIsNonzero[G](x: FiniteSimplicialSet[G]): Boolean =
+</span><span line-number="6" class=""><span class="tooltip-container"></span>  val classes = basis(x, 1)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>  classes.exists(a =&gt; classes.exists(b =&gt; isNonzero(x, 2, cup(x, 1, 1, a, b))))
+</span><span line-number="8" class=""><span class="tooltip-container"></span>
+</span><span line-number="9" class=""><span class="tooltip-container"></span>someProductOfOneClassesIsNonzero(torus)       // true
+</span><span line-number="10" class=""><span class="tooltip-container"></span>someProductOfOneClassesIsNonzero(notATorus)   // false
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p><code>basis</code> finds cochains whose classes span the cohomology in a degree, <code>cup</code> multiplies cochains, and a product is nonzero as a class when it is not a coboundary (<code>isCoboundary</code> says whether it is the boundary-like kind that counts as zero). The torus has a nonzero product; the wedge does not. The two spaces have the same <em>numbers</em> of holes, but different <em>ring structure</em> on them.</p>
+ </section>
+ <section id="steenrod-squares">
+  <h2 class="h500"><a href="#steenrod-squares" class="anchor"></a>Steenrod squares</h2>
+  <p>Cup products are the first rung of a ladder of finer operations. Over the field with 2 elements, the <strong>Steenrod squares</strong> <code>Sq^i</code> send a class of degree <code>n</code> to one of degree <code>n + i</code>; the top one, <code>Sq^n x</code>, is the cup square <code>x ∪ x</code>, but the lower ones are genuinely new information. The next pair of spaces: the complex projective plane (the space of complex lines through the origin in complex 3-space, a four-dimensional manifold), and a sphere of dimension 2 glued to one of dimension 4.</p>
+  <div class="snippet mono-small-block" scala-snippet="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>val cp2 = SimplicialSet.complexProjectivePlaneKuhnel          // a 9-vertex triangulation of the complex projective plane
+</span><span line-number="2" class=""><span class="tooltip-container"></span>val sphere4 = SimplicialSet.sphere(4)
+</span><span line-number="3" class=""><span class="tooltip-container"></span>val s2s4 = sphere.wedge(sphere.generators(0).head, sphere4, sphere4.generators(0).head)
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span>betti(cp2)               // (Vector(1, 0, 1, 0, 1), Vector(1, 0, 1, 0, 1))
+</span><span line-number="6" class=""><span class="tooltip-container"></span>betti(s2s4)              // the same
+</span><span line-number="7" class=""><span class="tooltip-container"></span>
+</span><span line-number="8" class=""><span class="tooltip-container"></span>def squareOfTheTwoClassIsSq2[G](x: FiniteSimplicialSet[G]): Boolean = isNonzero(x, 4, Steenrod.sq(x, 2, 2, basis(x, 2).head))
+</span><span line-number="9" class=""><span class="tooltip-container"></span>squareOfTheTwoClassIsSq2(cp2)    // true
+</span><span line-number="10" class=""><span class="tooltip-container"></span>squareOfTheTwoClassIsSq2(s2s4)   // false
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>Again, equal Betti numbers: one piece, one surface class in degree 2, one in degree 4. On the complex projective plane the generator of degree 2 squares to the generator of degree 4, <code>Sq^2</code> of it is nonzero; on the sphere pair the two classes never meet and the square is zero. This is a classical fact, and here it is a one-line check.</p>
+  <p>On the real projective plane, <code>Sq^1</code> of the degree-1 class is nonzero. (For a class of degree 1, <code>Sq^1</code> is the cup square <code>x ∪ x</code>, so this says the generator of degree 1 squares to the generator of degree 2.)</p>
+  <div class="snippet mono-small-block" scala-snippet="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>val x = basis(projectivePlane, 1).head
+</span><span line-number="2" class=""><span class="tooltip-container"></span>isNonzero(projectivePlane, 2, Steenrod.sq(projectivePlane, 1, 1, x))    // true
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+ </section>
+ <section id="building-spaces-from-other-spaces">
+  <h2 class="h500"><a href="#building-spaces-from-other-spaces" class="anchor"></a>Building spaces from other spaces</h2>
+  <p>Constructions are what make this a calculator rather than a catalogue. The complex projective plane is not just something you can look up: it is what you get by gluing a four-dimensional disc onto a two-dimensional sphere along the <strong>Hopf map</strong> from the three-sphere, that is, the <em>mapping cone</em> of the Hopf map. <code>SimplicialSet.hopfMap</code> is a simplicial model of that map, and <code>SSetMap.mappingCone</code> does the gluing:</p>
+  <div class="snippet mono-small-block" scala-snippet="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>val hopfCone = SSetMap.mappingCone(SimplicialSet.hopfMap)
+</span><span line-number="2" class=""><span class="tooltip-container"></span>val hopfClass = basis(hopfCone, 2).head
+</span><span line-number="3" class=""><span class="tooltip-container"></span>isNonzero(hopfCone, 4, cup(hopfCone, 2, 2, hopfClass, hopfClass))    // true: it has the cohomology ring of the projective plane
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>So the construction really is the complex projective plane as far as cohomology is concerned: its degree-2 class squares to a nonzero class. A map with a <em>constant</em> image instead gives the sphere pair, with square zero. The Hopf map is exactly the map for which the square is nonzero.</p>
+  <p>The catalog <code>SimplicialSet</code> also has <code>torus</code>, <code>realProjectiveSpace(n)</code>, <code>horn</code>, <code>simplex</code> and <code>fromSimplicialComplex</code> (for a space given as a list of top-dimensional simplices, such as a triangulated surface); every space has the methods <code>cone</code>, <code>suspension</code>, <code>join</code>, <code>smash</code>, <code>wedge</code> and <code>product</code>; and <code>FundamentalGroup.presentation</code> reads a presentation of the fundamental group back off a connected space: the inverse of <code>presentationComplex</code>. The user guide's <a href="../user-guide/user-guide/topological-spaces/simplicial-sets.html">Simplicial sets</a> page tours all of it.</p>
+ </section>
+ <section id="limits">
+  <h2 class="h500"><a href="#limits" class="anchor"></a>Limits</h2>
+  <p>These are small, exact calculations on spaces with finitely many cells, over fields (the Betti numbers over <code>p = 2</code> and <code>p = 3</code> see torsion in the integer homology but do not compute it, and the Steenrod squares are implemented for <code>p = 2</code> only). They have no command-line or MATLAB entry point, since a simplicial set needs its own input format. For the persistent version of the same idea, a filtration of such a space by subspaces, see <a href="persistent-group-cohomology.html">persistent group cohomology</a>.</p>
+ </section>
+ <section id="the-whole-script">
+  <h2 class="h500"><a href="#the-whole-script" class="anchor"></a>The whole script</h2>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.TDAlab.F2.{*, given}  // a prebuilt lab: coefficients in Z/2
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>def betti[G](x: FiniteSimplicialSet[G]) = (x.bettiNumbers(2), x.bettiNumbers(3))
+</span><span line-number="5" class=""><span class="tooltip-container"></span>def basis[G](x: FiniteSimplicialSet[G], degree: Int) = CupProduct.cohomologyBasis[G, CoefficientT](x, degree)
+</span><span line-number="6" class=""><span class="tooltip-container"></span>def cup[G](x: FiniteSimplicialSet[G], p: Int, q: Int, a: Map[G, CoefficientT], b: Map[G, CoefficientT]) = CupProduct.cup(x, p, q, a, b)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>def isNonzero[G](x: FiniteSimplicialSet[G], degree: Int, cochain: Map[G, CoefficientT]) = !CupProduct.isCoboundary(x, degree, cochain)
+</span><span line-number="8" class=""><span class="tooltip-container"></span>
+</span><span line-number="9" class=""><span class="tooltip-container"></span>val torus = SimplicialSet.presentationComplex(2, Seq(List((0, 1), (1, 1), (0, -1), (1, -1))))
+</span><span line-number="10" class=""><span class="tooltip-container"></span>val projectivePlane = SimplicialSet.presentationComplex(1, Seq(List((0, 1), (0, 1))))
+</span><span line-number="11" class=""><span class="tooltip-container"></span>val kleinBottle = SimplicialSet.kleinBottle
+</span><span line-number="12" class=""><span class="tooltip-container"></span>
+</span><span line-number="13" class=""><span class="tooltip-container"></span>val circle = SimplicialSet.sphere(1)
+</span><span line-number="14" class=""><span class="tooltip-container"></span>val twoCircles = circle.wedge(circle.generators(0).head, circle, circle.generators(0).head)
+</span><span line-number="15" class=""><span class="tooltip-container"></span>val sphere = SimplicialSet.sphere(2)
+</span><span line-number="16" class=""><span class="tooltip-container"></span>val notATorus = twoCircles.wedge(twoCircles.generators(0).head, sphere, sphere.generators(0).head)
+</span><span line-number="17" class=""><span class="tooltip-container"></span>
+</span><span line-number="18" class=""><span class="tooltip-container"></span>def someProductOfOneClassesIsNonzero[G](x: FiniteSimplicialSet[G]): Boolean =
+</span><span line-number="19" class=""><span class="tooltip-container"></span>  val classes = basis(x, 1)
+</span><span line-number="20" class=""><span class="tooltip-container"></span>  classes.exists(a =&gt; classes.exists(b =&gt; isNonzero(x, 2, cup(x, 1, 1, a, b))))
+</span><span line-number="21" class=""><span class="tooltip-container"></span>
+</span><span line-number="22" class=""><span class="tooltip-container"></span>val cp2 = SimplicialSet.complexProjectivePlaneKuhnel
+</span><span line-number="23" class=""><span class="tooltip-container"></span>val sphere4 = SimplicialSet.sphere(4)
+</span><span line-number="24" class=""><span class="tooltip-container"></span>val s2s4 = sphere.wedge(sphere.generators(0).head, sphere4, sphere4.generators(0).head)
+</span><span line-number="25" class=""><span class="tooltip-container"></span>def squareOfTheTwoClassIsSq2[G](x: FiniteSimplicialSet[G]): Boolean = isNonzero(x, 4, Steenrod.sq(x, 2, 2, basis(x, 2).head))
+</span><span line-number="26" class=""><span class="tooltip-container"></span>
+</span><span line-number="27" class=""><span class="tooltip-container"></span>val x = basis(projectivePlane, 1).head
+</span><span line-number="28" class=""><span class="tooltip-container"></span>val sq1IsNonzero = isNonzero(projectivePlane, 2, Steenrod.sq(projectivePlane, 1, 1, x))
+</span><span line-number="29" class=""><span class="tooltip-container"></span>
+</span><span line-number="30" class=""><span class="tooltip-container"></span>val hopfCone = SSetMap.mappingCone(SimplicialSet.hopfMap)
+</span><span line-number="31" class=""><span class="tooltip-container"></span>val hopfClass = basis(hopfCone, 2).head
+</span><span line-number="32" class=""><span class="tooltip-container"></span>val hopfSquareIsNonzero = isNonzero(hopfCone, 4, cup(hopfCone, 2, 2, hopfClass, hopfClass))
+</span><span line-number="33" class=""><span class="tooltip-container"></span>
+</span><span line-number="34" class=""><span class="tooltip-container"></span>val results = (
+</span><span line-number="35" class=""><span class="tooltip-container"></span>  betti(torus), betti(notATorus), betti(projectivePlane), betti(kleinBottle), betti(cp2), betti(s2s4),
+</span><span line-number="36" class=""><span class="tooltip-container"></span>  someProductOfOneClassesIsNonzero(torus), someProductOfOneClassesIsNonzero(notATorus),
+</span><span line-number="37" class=""><span class="tooltip-container"></span>  squareOfTheTwoClassIsSq2(cp2), squareOfTheTwoClassIsSq2(s2s4), sq1IsNonzero, hopfSquareIsNonzero
+</span><span line-number="38" class=""><span class="tooltip-container"></span>)
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+ </section>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#betti-numbers-over-two-fields">Betti numbers over two fields</a></li><li><a href="#where-counting-runs-out">Where counting runs out</a></li><li><a href="#steenrod-squares">Steenrod squares</a></li><li><a href="#building-spaces-from-other-spaces">Building spaces from other spaces</a></li><li><a href="#limits">Limits</a></li><li><a href="#the-whole-script">The whole script</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
