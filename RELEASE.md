@@ -4,45 +4,12 @@ This document describes how to cut a release of TDA4j: publish to Maven Central,
 jar/docs bundle to a GitHub Release, and snapshot the docs site so old versions stay browsable as the site
 keeps changing.
 
-## Status
-
-All five gaps from the first pass at this document are closed:
-
-1. Publishing to Maven Central uses **sbt 2's built-in Central Portal support** (`sonaUpload`/`sonaRelease`, which
-   `release.sbt` calls); there is no `sbt-sonatype` plugin in `project/plugins.sbt`.
-2. `sonatype.sbt` sets `publishTo` to the Central snapshots repository for `-SNAPSHOT` versions and to
-   `localStaging` otherwise (the bundle that `sonaUpload` sends), and holds the POM metadata. No credentials or
-   passphrases are in the build files.
-3. `LICENSE.md`'s copyright line now names its holders (matching `build.sbt`'s own site footer).
-4. `.github/workflows/release.yml` now runs on every `vX.Y.Z` tag push.
-5. The docs site is plain scaladoc (the Laika/Paradox generators were removed): `build.sbt`'s
-   `Compile / doc / scalacOptions` configure scaladoc's static-site mode (`-siteroot`, with pages in `_docs/` and
-   navigation in `sidebar.yml`). `docs.yml` publishes by committing the generated `api` directory into a
-   `gh-pages` git worktree, and `release.yml` does the same under a per-version directory, so every
-   already-published version is left untouched by construction rather than by an explicit merge-forward step.
-   `TDA4J_DOCS_VERSION` (set by `release.yml`) becomes scaladoc's `-project-version`.
-
 **Docs are currently built with Scala 3.8.4 while everything else is 3.9.0** (a scaladoc 3.9.0 JavaScript bug);
 the docs steps set `TDA4J_SCALA_VERSION=3.8.4` (read by `scalaVersion` in `build.sbt`); see the TODOs there and in both workflows to remove this when 3.9.1 is released.
 
-**None of this has been exercised against the real Sonatype Central Portal or a real tag push yet** — it's
-wired up and locally verified as far as this sandbox allows, not proven end-to-end. The overall
-versioned-docs-publish *concept* has a real track record (`docs.yml` has run successfully dozens of times) —
-but the git-native publish mechanism described in [Docs site](#5-docs-site-versioned-publish) below,
-replacing `sbt-github-pages`, has only been dry-run locally against a scratch repo, not through a real
-`docs.yml`/`release.yml` run yet (that workflow only fires on push to `scala`, which a feature branch can't
-trigger). Treat its first real run as the actual first test, and treat the first tagged release as the first
-real test of the Maven/GitHub-Release half of this pipeline either way — watch every step, don't assume
-silence means success. In particular:
-
-- No secrets are configured yet — see [Credentials and secrets](#2-credentials-and-secrets).
-- `mimaPreviousArtifacts` is derived from git tags by `mimaBaselineVersions` in `build.sbt`: every earlier plain
-  release of the SAME compatibility series (`0.Y` while the major is 0, `X` from 1.0). So `0.5.0-SNAPSHOT` has no
-  baseline, `0.5.1-SNAPSHOT` is checked against `0.5.0`, and nothing is checked across a minor bump while we are 0.x.
-
 ## Versioning
 
-- `version.sbt` (`ThisBuild / version := "0.4.1-SNAPSHOT"`) is the single source of truth for the Scala/Maven
+- `version.sbt` is the single source of truth for the Scala/Maven
   artifact version. `versionScheme := Some("semver-spec")` in `build.sbt` means MiMa and Maven Central
   itself will hold later releases to semver compatibility rules against whatever the last non-SNAPSHOT
   version was — bump `MAJOR` for a binary-incompatible break, `MINOR` for additive-only, `PATCH` for
@@ -90,7 +57,7 @@ already-released coordinate.
 
 ### 1. Pre-flight
 
-- On `scala` (or whatever branch is being released from), working tree clean, `sbt clean test` and
+- On `scala` (or whatever branch is being released from), working tree clean, `sbt "clean ; test"` and
   `sbt mimaReportBinaryIssues` both green — same as CI (`test.yml`), run locally first so the interactive
   `sbt-release` sequence doesn't fail partway through.
 - `sbt scalafmtCheck scalafmtSbtCheck` clean (`lint.yml`'s own check).
