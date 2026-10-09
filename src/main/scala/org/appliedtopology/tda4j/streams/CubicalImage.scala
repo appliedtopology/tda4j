@@ -4,13 +4,13 @@ import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
 
-/** Cubical complexes of images and voxel grids. Every constructor reduces to [[fromFlatArray]]: values in row-major
-  * order (last axis fastest) and a `shape`.
+/** Cubical complexes of images and voxel grids. Every array constructor reduces to [[fromFlatArray]]: values in
+  * row-major order (last axis fastest) and a `shape`.
   *
   * `sublevel = true` (the default, as in GUDHI, DIPHA and Perseus) filters by the values; `sublevel = false` by the
   * negated values, so bars of a superlevel filtration are reported in negated units. Voxel data of any file format is
-  * loaded into an array first. A missing pixel is `Double.PositiveInfinity` (it enters last); the cubical engines
-  * refuse NaN values.
+  * loaded into an array first. A pixel of value `Double.PositiveInfinity` (`Double.NegativeInfinity` with `sublevel =
+  * false`) never enters (a mask, for missing data); a NaN value is refused, with a message naming the pixel.
   */
 object CubicalImage:
 
@@ -57,6 +57,11 @@ object CubicalImage:
         while i < pixels.length do
           pixels(i) = sign * flatValues(i)
           i += 1
+    // Refused here, whatever engine runs next: a NaN pixel would carry NaN to its faces, which then enter after it.
+    var p = 0
+    while p < pixels.length do
+      if pixels(p).isNaN then throw GridRanks.nanPixel(shape.toArray, p, sublevel)
+      p += 1
     FlatCubicalGridStream(shape, pixels, parallelFiltrationValue)
 
   /** `pixels(i)(j)` as a dense 2D grid, shape `(pixels.length, pixels(0).length)`. */

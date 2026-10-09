@@ -7,7 +7,8 @@ import scala.collection.parallel.CollectionConverters.*
 /** The cubical complex of a full rectangular grid, filtered by the values of its top cells (pixels, voxels): every
   * other cube gets the minimum value of the top cells containing it, the sublevel-set convention of GUDHI, DIPHA and
   * Perseus. A face is contained in every top cell its cofaces are, so the filtration is monotone. For superlevel sets,
-  * negate the values (what [[CubicalImage]]'s `sublevel = false` does).
+  * negate the values (what [[CubicalImage]]'s `sublevel = false` does). A top cell of value `Double.PositiveInfinity`
+  * never enters (a mask); a NaN value is refused, naming the pixel, when the values are first read.
   *
   * `shape(i)` is the number of pixels along axis `i`. The complex has `prod_i (2 shape(i) + 1)` cells
   * (`totalCellCount`): a 256x256 image has 513² = 263169.
@@ -66,6 +67,11 @@ class CubicalGridStream(
       while p < values.length do
         read(p)
         p += 1
+    // A NaN would reach every face of its pixel through `math.min`, and they would enter after it.
+    var p = 0
+    while p < values.length do
+      if values(p).isNaN then throw GridRanks.nanPixel(shape.toArray, p)
+      p += 1
     values
 
   private lazy val cellValues: Array[Double] =

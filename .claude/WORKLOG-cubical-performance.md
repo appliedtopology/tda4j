@@ -207,7 +207,7 @@ on a grid, with a message saying what to use instead; before, it gave a meaningl
 - From 48³ on: 4.4-5x CubicalRipser on noise, 5-9x on the blob, and about 2x GUDHI (with a representative per bar;
   neither of them returns one).
 - On the blob, cohomology with cocycles is now as fast as the default path, or faster.
-- These were measured before the apparent-pair shortcut in the involution (below); see the final runs.
+- These were measured before the apparent-pair shortcut in the involution; see "Final measurements" below.
 
 ### Tried and reverted: sharing a facet's representative term between representatives
 
@@ -218,3 +218,135 @@ against the same 2-D code without it (pinned heap, warm medians): noise 2048² 1
 same session; the 2-D path differs only by the cache). Not profiled; an unconfirmed guess is GC card scanning: two large
 old-generation reference arrays written with young objects, which every young collection must scan. The arrays
 also cost transient memory proportional to the doubled grid (~1 GB at 256³). Reverted in the follow-up commit.
+
+## Final measurements: the classes of commit 335dcb0
+
+Everything in this section ran on the classes compiled from 335dcb0: deliverables A and B, the involution's
+apparent-pair shortcut (an apparent pair's death column is neither reduced nor stored), the shared-term cache reverted.
+The commit after it only adds O(n) NaN scans (`fromFlatArray`, `topCellValues`) and was not re-measured. Same machine and
+session as above, F₂, a representative for every bar (cycles unless marked). cripser and GUDHI figures come from this
+session's earlier runs (their code did not change) unless a row says otherwise. These supersede the "after" columns of
+the 3-D table above, which predate the apparent-pair shortcut. All three tools report the same number of bars in every
+degree at every size measured (128³ noise: 79,516 / 384,642 / 285,633 in degrees 0 / 1 / 2).
+
+### 2-D, the default path (fast cubical), pinned heap, warm median of 3 after one warm-up
+
+| image | trials (s) | median | cripser | gudhi | / cripser | / gudhi |
+|---|---|---|---|---|---|---|
+| noise 1024² | 7.29, 2.24, 1.43 | 2.24 | 0.697 | 3.81 | 3.2x | 0.59x |
+| noise 2048² | 10.96, 10.71, 12.25 | 11.0 | 3.10 | 20.1 | 3.5x | 0.55x |
+| blob 1024² | 2.98, 1.37, 1.27 | 1.37 | 0.643 | 2.61 | 2.1x | 0.53x |
+| blob 2048² | 10.00, 10.18, 9.22 | 10.0 | 2.89 | 14.1 | 3.5x | 0.71x |
+
+Below 1 in the last column: faster than GUDHI. At 1024² one warm-up is not enough: the first trial is 2-5x the others,
+so a median of three is good to about ±50% there; the 2048² trials agree within 15%. The medians are within 11% of (and
+below) the A3 run of the same 2-D code before the cache (2.36, 11.5, 1.54, 10.5).
+
+### 3-D, pinned heap, warm median of 3
+
+| image | fast (default) | cohomology, cycles | cohomology, cocycles | cripser | gudhi | fast / cripser | fast / gudhi |
+|---|---|---|---|---|---|---|---|
+| noise 48³ | 1.70 | 2.00 | 1.71 | 0.336 | 0.664 | 5.1x | 2.6x |
+| noise 64³ | 3.55 | 3.68 | 3.99 | 0.879 | 2.01 | 4.0x | 1.8x |
+| noise 96³ | 15.7 | 17.1 | 17.9 | 3.45 | 8.39 | 4.5x | 1.9x |
+| blob 48³ | 0.667 | 0.829 | 0.718 | 0.106 | 0.453 | 6.3x | 1.5x |
+| blob 64³ | 2.08 | 2.08 | 1.87 | 0.341 | 1.13 | 6.1x | 1.8x |
+| blob 96³ | 6.62 | 7.89 | 6.40 | 1.41 | 5.44 | 4.7x | 1.2x |
+
+Against the baseline at 48³: fast 11.8 s (10.6 re-measured, below) -> 1.70 s (noise), 6.98 -> 0.667 s (blob);
+cohomology 15.5 -> 2.00 s, 13.7 -> 0.829 s. The noise 48³ and 64³ fast medians have one slow trial each (2.8 s, 7.2 s):
+same caveat as 1024².
+
+### `Engine.Cohomology` on 2-D images (the packed engine), pinned heap, warm median of 3
+
+| image | before (generic engine, cycles) | cycles | cocycles |
+|---|---|---|---|
+| noise 512² | 15.8 | 1.64 | 1.61 |
+| noise 1024² | 82.9 | 6.52 | 8.58 |
+| blob 512² | 38.9 | 1.32 | 1.31 |
+| blob 1024² | -- | 5.36 | 5.51 |
+
+10-30x faster than the generic engine where both were measured. The noise 1024² cocycle trials spread from 7.5 to 9.4 s.
+
+### Memory: peak RSS, heap not pinned (`-Xmx8g`, default `-Xms`)
+
+| input | before | after | cripser | gudhi |
+|---|---|---|---|---|
+| noise 1024² (fast) | 5.7 GB | 2.50 GB | 0.32 GB | 0.39 GB |
+| noise 64³ (fast) | 4.52 GB | 2.16 GB | 0.15 GB | 0.17 GB |
+| noise 128³ (fast, `-Xmx10g`) | -- | 5.53 GB | 0.65 GB | 1.01 GB |
+| blob 128³ (fast, `-Xmx10g`) | -- | 3.37 GB | 0.43 GB | 0.87 GB |
+
+"Before" at 64³ is one call (33.2 s); "after" at 1024² and 64³ is a warm-up plus three calls in one JVM (peak over all
+of them), at 128³ one call. The gap that is left is memory: 8-15x CubicalRipser's peak RSS, 4-13x GUDHI's.
+
+### One call in a fresh JVM (what a one-call or MATLAB user sees), heap not pinned
+
+| input | before | after | cripser | gudhi |
+|---|---|---|---|---|
+| noise 256² | 1.07 s, 347 MB | 0.378 s, 138 MB | 0.033 s | 0.139 s |
+| noise 16³ | 1.26 s, 224 MB | 0.271 s, 104 MB | 0.0054 s | 0.016 s |
+| noise 128³ | -- | 45.7 s | 9.37 s | 22.7 s |
+| blob 128³ | -- | 20.0 s | 4.27 s | 14.3 s |
+
+The Python tools have no warm-up to speak of, so their warm figures are their first-call figures. Ours at 256² is
+0.378 s cold against 0.157 s warm: on small inputs the remaining first-call gap is mostly JIT compilation.
+
+### Small inputs: two baseline rows did not reproduce
+
+Re-measured with the pre-change build under the baseline's own protocol (pinned heap, one warm-up, median of 3), every
+baseline row reproduces within 10% (noise 1024² 7.89 s against 8.17, noise 48³ 10.6 against 11.8, noise 32³ 2.28
+against 2.47, blob 256² 0.443 against 0.438, blob 16³ 0.407 against 0.390, blob 32³ 1.80 against 2.00) except the
+first point of each sweep: noise 256² (0.518 s against 2.81) and noise 16³ (0.441 against 2.00). Cause not found
+(something on the machine during those first runs; not profiled). So the baseline section's JIT explanation for those
+two rows is wrong as stated, and every ratio built on them above (85x and 400x in the baseline, "was 370x" in the 3-D
+table, the 256² "before" of deliverable A) is void. Corrected, pinned heap, warm median of 3 (after: the A3 run for
+256², the code of this section re-run alongside for 3-D):
+
+| image | before | after | cripser | before / cripser | after / cripser |
+|---|---|---|---|---|---|
+| noise 256² | 0.518 | 0.157 | 0.033 | 16x | 4.8x |
+| blob 256² | 0.443 | 0.128 | 0.029 | 15x | 4.4x |
+| noise 16³ | 0.441 | 0.062 | 0.0054 | 82x | 11x |
+| noise 32³ | 2.28 | 0.381 | 0.061 | 37x | 6.2x |
+| blob 16³ | 0.407 | 0.047 | 0.0022 | 185x | 21x |
+| blob 32³ | 1.80 | 0.230 | 0.021 | 86x | 11x |
+
+At these sizes the ratios measure fixed costs (16³ blob: 47 ms against 2.2 ms).
+
+The pinned heap does cost something while eden is fresh: the pre-change build at noise 256², heap pinned, no warm-up,
+took 1.12, 0.56, 0.52, 0.45 s; with `-XX:+AlwaysPreTouch` (the heap touched at JVM start, outside the timed region)
+1.06, 0.32, 0.29, 0.28 s. About 0.2 s a call at that size is first-touch page faults under the sweep's flags; the first
+call's ~1.1 s is JIT either way. A sweep that pins the heap could add `-XX:+AlwaysPreTouch` to its timing runs (RSS
+then reports the whole heap, so memory wants its own unpinned run).
+
+### NaN, follow-up: refused by every engine, mask advice in the user's units
+
+The refusal above lived in `GridRanks`, so only the fast engine and grid cohomology refused NaN; `Engine.Chunks`/`Naive`
+on the same image still returned a meaningless barcode, and the docs' "NaN is refused" was false for them. Now
+`CubicalImage.fromFlatArray` (every array image: `Image`, the MATLAB facade, the DIPHA/Perseus readers) checks when it
+builds the image, and `CubicalGridStream.topCellValues` when a grid built from a function is first read; `GridRanks`
+still checks. One message (`GridRanks.nanPixel`), naming the pixel. Behaviour change in public constructors: iterating a
+function-built grid with a NaN value now throws.
+
+The first version of the message advised `+Infinity` for a missing pixel everywhere. Wrong for superlevel images:
+`fromFlatArray` negates the values first, so a user's `+Infinity` becomes `-Infinity` and enters FIRST (the brightest
+pixel), the opposite of a mask, and following the advice gives a silently wrong barcode. The pre-existing user-guide line
+("a pixel with value `Infinity` never enters") had the same flaw. The message and every doc in user units now say
+`-Infinity` for a superlevel image; `TDA4jSpec` checks a ring around a masked pixel in both directions, and that `+Inf`
+in a superlevel image leaves no loop.
+
+### What is left
+
+- **Memory** is the real remaining gap (table above), and the representatives are most of it: at 2048² noise they are
+  18.5M facet terms held as `Chain[Cube, C]` objects (~70 bytes a term). A compact backing for grid representatives
+  (cells as primitive indices and coefficients, cubes made when read) would keep a representative for every bar, eager,
+  while cutting the objects and the GC that copies them. It changes what a `Chain` is underneath, so it is the project
+  lead's call; not started.
+- **3-D time**: the default path is within 10-20% of whole-grid cohomology from 64³ on, so most of it is presumably the
+  packed reduction of the middle degree (inferred from those timings; the final code was not profiled). Cycles and
+  cocycles cost about the same (cocycles / cycles 0.81-1.08 in 3-D, 0.98-1.32 in 2-D): the involution is no longer the
+  lever.
+- **First calls** on small inputs pay JIT warm-up (above). A class-data-sharing or AOT archive for the CLI/MATLAB jar
+  would be the lever; not tried.
+- **Not run:** 4096² (2048² already peaks near 7 GB with a pinned 8 GB heap); 3-D beyond 128³.

@@ -27,11 +27,7 @@ private[tda4j] object GridRanks:
     )
     var i = 0
     while i < pixels.length do
-      if pixels(i).isNaN then
-        throw new IllegalArgumentException(
-          s"the image has a NaN value at pixel ${coordinates(dims, i).mkString("(", ", ", ")")}: NaN has no place in a " +
-            "filtration. Replace it by a number, or by Double.PositiveInfinity for a missing pixel (it then enters last)."
-        )
+      if pixels(i).isNaN then throw nanPixel(dims, i)
       i += 1
     val (sortedKeys, order) = radixOrder(pixels)
     val n = pixels.length
@@ -46,6 +42,16 @@ private[tda4j] object GridRanks:
       rank(order(j)) = r
       j += 1
     new GridRanks(dims, pixels, java.util.Arrays.copyOf(distinctBuffer, r + 1), rank)
+
+  /** The error for a NaN value at pixel `p` (row-major): where it is, and what to use instead. In the user's units: an
+    * image filtered by superlevel sets (`sublevel = false`, values negated) is masked by `-Infinity`, not `+Infinity`.
+    */
+  def nanPixel(shape: Array[Int], p: Int, sublevel: Boolean = true): IllegalArgumentException =
+    val mask = if sublevel then "+Infinity" else "-Infinity (the filtration is superlevel)"
+    new IllegalArgumentException(
+      s"the image has a NaN value at pixel ${coordinates(shape, p).mkString("(", ", ", ")")}: NaN has no place in a " +
+        s"filtration. Replace it by a number, or by $mask for a missing pixel: it then never enters, like a mask."
+    )
 
   /** The lattice coordinates of pixel `p` (row-major, last axis fastest). */
   def coordinates(shape: Array[Int], p: Int): Array[Int] =

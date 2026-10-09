@@ -126,12 +126,32 @@ class FastRepresentativesSpec extends mutable.Specification:
     problems.take(5) must beEmpty
   }
 
-  "The fast cubical engine refuses a NaN pixel, saying what to do" >> {
+  // A NaN pixel is refused where an image is built from an array, and where a grid built from a function first reads its
+  // values: by every engine, the generic ones included.
+  "An image with a NaN pixel is refused, saying where and what to do" >> {
     import f3.given
-    val image = CubicalImage.fromFlatArray(IndexedSeq(2, 3), IndexedSeq(0.0, 1.0, Double.NaN, 2.0, 3.0, 4.0))
-    FastCubicalHomologyEngine[f3.Fp]().persistentHomology(image) must throwA[IllegalArgumentException](
-      message = "NaN value at pixel \\(0, 2\\)"
+    val values = IndexedSeq(0.0, 1.0, Double.NaN, 2.0, 3.0, 4.0)
+    val nanAt02 = "NaN value at pixel \\(0, 2\\).*\\+Infinity for a missing pixel"
+    // The values of a superlevel image are negated, so its mask is -Infinity in the user's units.
+    val superlevelNanAt02 = "NaN value at pixel \\(0, 2\\).*-Infinity \\(the filtration is superlevel\\) for a missing"
+    val fromFunction = CubicalGridStream(
+      IndexedSeq(2, 3),
+      index => if index == IndexedSeq(0, 2) then Double.NaN else index.sum.toDouble
     )
+    (CubicalImage.fromFlatArray(IndexedSeq(2, 3), values) must throwA[IllegalArgumentException](message = nanAt02)) and
+      (CubicalImage.fromFlatArray(IndexedSeq(2, 3), values, sublevel = false) must throwA[IllegalArgumentException](
+        message = superlevelNanAt02
+      )) and
+      (Persistence(Image(values, IndexedSeq(2, 3)), engine = Persistence.Engine.Chunks) must
+        throwA[IllegalArgumentException](message = nanAt02)) and
+      (FastCubicalHomologyEngine[f3.Fp]().persistentHomology(fromFunction) must throwA[IllegalArgumentException](
+        message = nanAt02
+      )) and
+      (PackedCubicalCohomologyEngine[f3.Fp](fromFunction, 2).persistentHomology() must
+        throwA[IllegalArgumentException](message = nanAt02)) and
+      (Persistence(fromFunction, engine = Persistence.Engine.Naive) must throwA[IllegalArgumentException](
+        message = nanAt02
+      ))
   }
 
   /** `Some(equal)` when both engines produced bars, `None` when both rejected the triangulation. */

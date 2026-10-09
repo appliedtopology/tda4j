@@ -49,7 +49,10 @@ pixels) with stable counting sorts fed in tie-break order (H₀ edges generated 
 ascending; dual facets encoding-ascending, rank descending), but every elder-rule and zero-length test compares the
 VALUES `distinct(rank)` with IEEE `<=`/`!=` (-0.0 == 0.0), as the cube-based code did: comparing ranks changes outputs
 (mutation-checked; `FastRepresentativesSpec`'s `signedZeroMerge` is the case random images miss). NaN pixels are refused
-with a message (they made faces enter after cofaces). Images built by `CubicalImage.fromFlatArray` are
+with a message naming the pixel (they made faces enter after cofaces), by EVERY engine: `CubicalImage.fromFlatArray`
+checks at construction, `CubicalGridStream.topCellValues` at first read (a grid built from a function), `GridRanks`
+again; one message, `GridRanks.nanPixel`. The mask (never enters) is `+Infinity` in grid values, so `-Infinity` in a
+superlevel image's own units (`fromFlatArray` negates first): docs and messages in user units must say both. Images built by `CubicalImage.fromFlatArray` are
 `FlatCubicalGridStream`s; engines read `topCellValues`, never `topCellValue` per pixel. Quote benchmarks WITH
 representatives (project lead): `reps=none` is a cost breakdown, not a mode.
 

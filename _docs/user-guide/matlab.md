@@ -39,7 +39,8 @@ in a MATLAB tab next to the Scala code.
 | `selectLandmarksFromPoints`, `computeFromPointsAndLandmarks`, `coveringRadiusFromPoints` (and `...FromDistanceMatrix`) | the witness complex in two steps, see [witness complexes](topological-spaces/witness-complexes.md) |
 | `h1Bars`, `circularCoordinates`, `toroidalCoordinates` | see [circular coordinates](circular-coordinates.md) |
 
-Each `compute...` method also has an overload without options.
+Each `compute...` method also has an overload without options. In an image, a pixel of value `Inf` (`-Inf` with
+`sublevel` `false`) never enters (a mask, for missing data); a `NaN` pixel is refused, with a message naming it.
 
 ### Options
 
