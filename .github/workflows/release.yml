@@ -53,9 +53,11 @@ jobs:
         env:
           TDA4J_DOCS_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          sbt "assembly ; packageSrc"
-          # Docs only are built with 3.8.4 (see build.sbt). TODO: remove this env var when 3.9.1 is released.
-          TDA4J_SCALA_VERSION=3.8.4 sbt "packageDoc ; doc"
+          # Docs only are built with 3.8.4 (see build.sbt), switched to with `++3.8.4!` inside ONE sbt invocation. Not
+          # `TDA4J_SCALA_VERSION=3.8.4 sbt ...` as a second call: sbt 2 runs as a thin client, so a second `sbt` connects
+          # to the server the first one started, which never sees the new env var, builds docs with 3.9.0, and leaves
+          # no scala-3.8.4/.../api for the steps below. TODO: drop `++3.8.4!` when 3.9.1 is released.
+          sbt "assembly ; packageSrc ; ++3.8.4! ; packageDoc ; doc"
       - name: Publish versioned docs
         env:
           VERSION: ${{ steps.version.outputs.version }}
