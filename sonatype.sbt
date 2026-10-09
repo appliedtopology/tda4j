@@ -31,3 +31,5 @@ publishTo := {
   if (isSnapshot.value) Some("central-snapshots" at centralSnapshots)
   else localStaging.value
 }
+
+credentials += Credentials(Path.userHome / ".sbt" / "sonatype_credentials")

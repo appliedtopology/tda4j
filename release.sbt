@@ -15,3 +15,5 @@ releaseProcess := Seq[ReleaseStep](
   commitNextVersion,
   pushChanges
 )
+
+releaseIgnoreUntrackedFiles := true
