@@ -13,9 +13,10 @@ on:
       tag:
         description: "Existing release tag to (re)publish"
         required: true
+  # Tags only, never branches: the version is derived from the ref name, so a branch push would publish docs under
+  # gh-pages/<branch>/ and try to create a GitHub Release (and tag) named after the branch. docs.yml already
+  # republishes the site on every push to `scala`.
   push:
-    branches:
-      - scala
     tags:
       - "v*"
 
@@ -48,7 +49,12 @@ jobs:
         id: version
         run: |
           VERSION="${{ github.event.inputs.tag || github.ref_name }}"
-          echo "version=${VERSION#v}" >> "$GITHUB_OUTPUT"
+          VERSION="${VERSION#v}"
+          # Fail here, before anything is pushed to gh-pages, if the ref is not a release tag.
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-.+)?$ ]]; then
+            echo "::error::'$VERSION' is not a release version (expected a vX.Y.Z tag)"; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Build release artifacts
         env:
           TDA4J_DOCS_VERSION: ${{ steps.version.outputs.version }}
