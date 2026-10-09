@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 192 192">
+    <style>
+        text { font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+    </style>
+    <!-- <rect x="0" y="0" width="192" height="192" rx="16" fill="#f8f7f4"/> -->
+    <g transform="translate(38,8) scale(0.9667)">
+        <circle cx="20" cy="60" r="48" fill="#456f87" fill-opacity="0.16" stroke="#456f87" stroke-width="5"/>
+        <circle cx="100" cy="60" r="48" fill="#a67f07" fill-opacity="0.18" stroke="#a67f07" stroke-width="5"/>
+        <line x1="20" y1="60" x2="100" y2="60" stroke="#456f87" stroke-width="4"/>
+        <circle cx="20" cy="60" r="6" fill="#456f87"/>
+        <circle cx="100" cy="60" r="6" fill="#a67f07"/>
+    </g>
+    <text x="96" y="175" font-size="56" text-anchor="middle" fill="#456f87">tda<tspan fill="#a67f07">4</tspan>j</text>
+</svg>

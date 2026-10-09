@@ -1,0 +1,187 @@
+<!DOCTYPE html><html data-githubContributorsUrl="https://api.github.com/repos/appliedtopology/tda4j" data-githubContributorsFilename="_docs/tutorials/scaling-up.md" data-pathToRoot="../" data-rawLocation="tutorials/scaling-up" data-dynamicSideMenu="false"><head><meta charset="utf-8"></meta><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"></meta><title>Scaling up</title><link rel="canonical" href="https://tda4j.appliedtopology.org/tutorials/scaling-up.html"></link><link rel="shortcut icon" type="image/x-icon" href="../favicon.ico"></link><script type="text/javascript" src="../scripts/theme.js"></script><script type="text/javascript" src="../scripts/searchData.js" defer="true"></script><script type="text/javascript" src="../scripts/scastieConfiguration.js" defer="true"></script><link rel="stylesheet" href="../styles/theme/bundle.css"></link><link rel="stylesheet" href="../styles/theme/components/bundle.css"></link><link rel="stylesheet" href="../styles/theme/components/button/bundle.css"></link><link rel="stylesheet" href="../styles/theme/layout/bundle.css"></link><link rel="stylesheet" href="../styles/nord-light.css"></link><link rel="stylesheet" href="../styles/dotty-icons.css"></link><link rel="stylesheet" href="../styles/filter-bar.css"></link><link rel="stylesheet" href="../styles/code-snippets.css"></link><link rel="stylesheet" href="../styles/searchbar.css"></link><link rel="stylesheet" href="../styles/social-links.css"></link><link rel="stylesheet" href="../styles/versions-dropdown.css"></link><link rel="stylesheet" href="../styles/content-contributors.css"></link><link rel="stylesheet" href="../styles/fontawesome.css"></link><script type="text/javascript" src="../hljs/highlight.pack.js" defer="true"></script><script type="text/javascript" src="../scripts/hljs-scala3.js" defer="true"></script><script type="text/javascript" src="../scripts/ux.js" defer="true"></script><script type="text/javascript" src="../scripts/common/component.js" defer="true"></script><script type="text/javascript" src="../scripts/common/utils.js" defer="true"></script><script type="text/javascript" src="../scripts/components/FilterBar.js" defer="true"></script><script type="text/javascript" src="../scripts/components/DocumentableList.js" defer="true"></script><script type="text/javascript" src="../scripts/components/Input.js" defer="true"></script><script type="text/javascript" src="../scripts/components/FilterGroup.js" defer="true"></script><script type="text/javascript" src="../scripts/components/Filter.js" defer="true"></script><script type="text/javascript" src="../scripts/scaladoc-scalajs.js" defer="true"></script><script type="text/javascript" src="../scripts/contributors.js" defer="true"></script><script type="text/javascript" src="https://code.jquery.com/jquery-3.5.1.min.js" defer="true"></script><script type="text/javascript" src="https://d3js.org/d3.v6.min.js" defer="true"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/graphlib-dot@0.6.2/dist/graphlib-dot.min.js" defer="true"></script><script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dagre-d3/0.6.1/dagre-d3.min.js" defer="true"></script><script type="text/javascript" src="https://scastie.scala-lang.org/embedded.js" defer="true"></script><script type="text/javascript" src="../scripts/data.js" defer="true"></script><link rel="stylesheet" href="../styles/staticsitestyles.css"></link><script>var pathToRoot = "../";</script><style>
+     :root {
+          /* text */
+          --text-primary: #3c5a6b;
+          --text-secondary: #866504;
+          --text-text-tertiary: #206f6f;
+          --text-text-inverted: #eef3f5;
+
+          /* background */
+          --background-default: #f8f7f4;
+          --background-subtle: var(--grey2);
+          --background-neutral: var(--grey3);
+     }
+     :root.theme-dark {
+
+          /* text */
+          --text-primary: #8fb4c7;
+          --text-secondary: #f3d068;
+          --text-text-tertiary: #75c7c7;
+          --text-text-inverted: #1a262b;
+
+          /* background */
+          --background-default: #161b1e;
+          --background-subtle: var(--grey2);
+          --background-neutral: var(--grey3);
+
+
+     }
+     :is(#content h1, h2, h3, h4, h5, h6, .h50, .h100, .h200, .h300, .h400, .h500, .h600, .h700) {
+          color: var(--text-secondary);
+     }
+</style>
+<style>
+     /* Language tabsets: <div class="tabset"><div class="tab" data-lang="Scala">...</div>...</div>; see WORKLOG-tutorial-tabs.md */
+     .tabset { margin: 1em 0; }
+     .tabset > .tab-bar { display: flex; gap: 0.25em; border-bottom: 1px solid var(--text-primary); }
+     .tabset > .tab-bar > button { background: none; border: 1px solid transparent; border-bottom: none; padding: 0.3em 0.9em; cursor: pointer; color: var(--text-primary); font: inherit; }
+     .tabset > .tab-bar > button[aria-selected="true"] { border-color: var(--text-primary); background: var(--background-subtle); font-weight: bold; }
+     .tabset.js-ready > .tab:not(.active) { display: none; }
+     .tabset > .tab > *:first-child { margin-top: 0.5em; }
+</style>
+<script>
+     // Builds a tab bar for each .tabset from its .tab children's data-lang, and keeps every tabset on the page (and on later pages) on the same language.
+     document.addEventListener("DOMContentLoaded", function () {
+          var KEY = "tda4j-language";
+          var saved = null;
+          try { saved = localStorage.getItem(KEY); } catch (e) {}
+          var sets = Array.prototype.slice.call(document.querySelectorAll(".tabset"));
+          function show(lang) {
+               sets.forEach(function (set) {
+                    var tabs = Array.prototype.slice.call(set.children).filter(function (c) { return c.classList.contains("tab"); });
+                    var chosen = tabs.some(function (t) { return t.dataset.lang === lang; }) ? lang : tabs[0].dataset.lang;
+                    tabs.forEach(function (t) { t.classList.toggle("active", t.dataset.lang === chosen); });
+                    set.querySelectorAll(".tab-bar > button").forEach(function (b) { b.setAttribute("aria-selected", b.textContent === chosen ? "true" : "false"); });
+               });
+          }
+          sets.forEach(function (set) {
+               var bar = document.createElement("div");
+               bar.className = "tab-bar";
+               bar.setAttribute("role", "tablist");
+               Array.prototype.slice.call(set.children).filter(function (c) { return c.classList.contains("tab"); }).forEach(function (t) {
+                    var b = document.createElement("button");
+                    b.type = "button";
+                    b.setAttribute("role", "tab");
+                    b.textContent = t.dataset.lang;
+                    b.addEventListener("click", function () {
+                         try { localStorage.setItem(KEY, t.dataset.lang); } catch (e) {}
+                         show(t.dataset.lang);
+                    });
+                    bar.appendChild(b);
+               });
+               set.insertBefore(bar, set.firstChild);
+               set.classList.add("js-ready");
+          });
+          show(saved);
+     });
+</script></head><body><div id=""><div id="header" class="body-small"><div class="header-container-left"><a href="../" class="logo-container"><span id="project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span id="dark-project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span class="project-name h300">tda4j</span></a><span onclick="dropdownHandler(event)" class="text-button with-arrow" id="dropdown-trigger"><a><div class="projectVersion">0.5.0</div></a></span><div id="version-dropdown" class="dropdown-menu"></div></div><div class="header-container-right"><button id="search-toggle" class="icon-button"></button><a href="https://appliedtopology.org" class="text-button">Applied Topology</a><a href="https://scastie.scala-lang.org/?inputs=%7B%0A%20%20%22_isWorksheetMode%22%20%3A%20true%2C%0A%20%20%22code%22%20%3A%20%22import%20org.appliedtopology.tda4j.*%5Cn%E2%88%86(1%2C2%2C3)%5Cn%22%2C%0A%20%20%22target%22%20%3A%20%7B%0A%20%20%20%20%22scalaVersion%22%20%3A%20%223.9.0%22%2C%0A%20%20%20%20%22tpe%22%20%3A%20%22Scala3%22%0A%20%20%7D%2C%0A%20%20%22libraries%22%20%3A%20%5B%20%5D%2C%0A%20%20%22librariesFromList%22%20%3A%20%5B%20%5D%2C%0A%20%20%22sbtConfigExtra%22%3A%22%5CnscalacOptions%20%2B%2B%3D%20Seq(%5Cn%20%20%5C%22-deprecation%5C%22%2C%5Cn%20%20%5C%22-encoding%5C%22%2C%20%5C%22UTF-8%5C%22%2C%5Cn%20%20%5C%22-feature%5C%22%2C%5Cn%20%20%5C%22-unchecked%5C%22%2C%5Cn%20%20%5C%22-source%3Afuture%5C%22%2C%20%5Cn%20%20%5C%22-language%3Aexperimental.modularity%5C%22%5Cn)%5CnlibraryDependencies%20%2B%3D%20%5C%22org.appliedtopology%5C%22%20%25%25%20%5C%22tda4j%5C%22%20%25%20%5C%220.4.0%5C%22%5Cn%22%2C%0A%20%20%22sbtPluginsConfigExtra%22%20%3A%20%22%22%2C%0A%20%20%22isShowingInUserProfile%22%20%3A%20true%0A%7D%0A" class="text-button">Playground</a><span id="theme-toggle" class="icon-button"></span><span id="mobile-menu-toggle" class="icon-button hamburger"></span></div></div><div id="mobile-menu"><div class="mobile-menu-header body-small"><span class="mobile-menu-logo"><span id="project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span id="dark-project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span class="project-name h300">tda4j</span></span><button id="mobile-menu-close" class="icon-button close"></button></div><div class="mobile-menu-container body-medium"><input id="mobile-scaladoc-searchbar-input" class="scaladoc-searchbar-input" type="search" placeholder="Find anything"></input><a href="https://appliedtopology.org" class="mobile-menu-item">Applied Topology</a><a href="https://scastie.scala-lang.org/?inputs=%7B%0A%20%20%22_isWorksheetMode%22%20%3A%20true%2C%0A%20%20%22code%22%20%3A%20%22import%20org.appliedtopology.tda4j.*%5Cn%E2%88%86(1%2C2%2C3)%5Cn%22%2C%0A%20%20%22target%22%20%3A%20%7B%0A%20%20%20%20%22scalaVersion%22%20%3A%20%223.9.0%22%2C%0A%20%20%20%20%22tpe%22%20%3A%20%22Scala3%22%0A%20%20%7D%2C%0A%20%20%22libraries%22%20%3A%20%5B%20%5D%2C%0A%20%20%22librariesFromList%22%20%3A%20%5B%20%5D%2C%0A%20%20%22sbtConfigExtra%22%3A%22%5CnscalacOptions%20%2B%2B%3D%20Seq(%5Cn%20%20%5C%22-deprecation%5C%22%2C%5Cn%20%20%5C%22-encoding%5C%22%2C%20%5C%22UTF-8%5C%22%2C%5Cn%20%20%5C%22-feature%5C%22%2C%5Cn%20%20%5C%22-unchecked%5C%22%2C%5Cn%20%20%5C%22-source%3Afuture%5C%22%2C%20%5Cn%20%20%5C%22-language%3Aexperimental.modularity%5C%22%5Cn)%5CnlibraryDependencies%20%2B%3D%20%5C%22org.appliedtopology%5C%22%20%25%25%20%5C%22tda4j%5C%22%20%25%20%5C%220.4.0%5C%22%5Cn%22%2C%0A%20%20%22sbtPluginsConfigExtra%22%20%3A%20%22%22%2C%0A%20%20%22isShowingInUserProfile%22%20%3A%20true%0A%7D%0A" class="mobile-menu-item">Playground</a><span id="mobile-theme-toggle" class="mobile-menu-item mode"></span></div></div><span id="mobile-sidebar-toggle" class="floating-button"></span><div id="leftColumn" class="body-small"><div class="switcher-container"><a id="docs-nav-button" class="switcher h100 selected" href="../index.html">Docs</a><a id="api-nav-button" class="switcher h100 " href="../api/index.html">API</a></div><nav id="docs-nav" class="side-menu"><div class="ni n0 expanded"><span class="nh h100 expanded cs de"><button class="ar icon-button expanded"></button><a href="index.html"><span>Tutorials for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="all-ways-to-call.html"><span>All the ways to call TDA4j</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="find-a-loop.html"><span>Finding a loop in noisy data</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="choosing-a-complex.html"><span>Choosing a complex</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="noise-and-outliers.html"><span>Noise and outliers</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="circular-and-toroidal-coordinates.html"><span>Circular and toroidal coordinates</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="comparing-barcodes.html"><span>Comparing barcodes</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="images.html"><span>Topology of an image</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="networks-and-relations.html"><span>Networks and relations</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="telling-spaces-apart.html"><span>Telling spaces apart</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="persistent-group-cohomology.html"><span>Persistent group cohomology</span></a></span></div><div class="ni n1 expanded"><span class="nh h100 selected de"><a href="#"><span>Scaling up</span></a></span></div></div><div class="ni n0"><span class="nh de"><button class="ar icon-button "></button><a href="../developers-guide/index.html"><span>Developer&apos;s Guide for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="../developers-guide/scala3-primer.html"><span>A Scala 3.7+ primer for this codebase</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/architecture.html"><span>Architecture: from algebra to a filtration stream</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/persistence-engines.html"><span>Persistence engines: what to trust, and why</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/alpha-complex.html"><span>Alpha complex: Bowyer-Watson, Helix and DQP</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/degeneracies.html"><span>Degeneracy behaviors that look like bugs but aren&apos;t</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/gotchas.html"><span>Hard-won invariants you must not break</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/class-diagrams.html"><span>Mapping the library: class diagrams</span></a></span></div></div><div class="ni n0"><span class="nh de"><button class="ar icon-button "></button><a href="../user-guide/index.html"><span>User Guide for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="../user-guide/quickstart.html"><span>Quickstart</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/cli.html"><span>Command-line tool: `tda4j`</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/matlab.html"><span>Calling from MATLAB or Java</span></a></span></div><div class="ni n1"><span class="nh de"><button class="ar icon-button "></button><a href="../user-guide/user-guide/topological-spaces/index.html"><span>Complexes</span></a></span><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/vietoris-rips.html"><span>Vietoris-Rips complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/cech-complexes.html"><span>Čech complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/alpha-complexes.html"><span>Alpha complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/sparse-vietoris-rips.html"><span>Sparse Rips complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/witness-complexes.html"><span>Witness complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/dowker-complexes.html"><span>Dowker complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/cubical-complexes.html"><span>Cubical complexes and images</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/simplicial-sets.html"><span>Simplicial sets</span></a></span></div></div><div class="ni n1"><span class="nh de"><button class="ar icon-button "></button><a href="../user-guide/user-guide/homology-computation/index.html"><span>Homology computation</span></a></span><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/choosing-engine.html"><span>Which persistence engine?</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/fast-cubical.html"><span>The fast cubical engine</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/fast-alpha-complexes.html"><span>The fast alpha engine</span></a></span></div></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/boundary-matrix.html"><span>Boundary-matrix export</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/circular-coordinates.html"><span>Circular and toroidal coordinates</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/input-output.html"><span>Loading and saving data</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/vectorization.html"><span>Comparing diagrams and turning them into vectors</span></a></span></div></div></nav></div><div id="footer" class="body-small"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div><div id="scaladoc-searchBar"></div><div id="main"><div class="breadcrumbs container"><a href="../index.html">tda4j</a>/<a href="index.html">Tutorials for TDA4j</a>/<a href="scaling-up.html">Scaling up</a></div><div id="content" class="body-medium"><div><main>
+ <section id="scaling-up-engines-and-edge-collapse">
+  <h1 class="h500"><a href="#scaling-up-engines-and-edge-collapse" class="anchor"></a>Scaling up: engines and edge collapse</h1>
+  <p>A Vietoris-Rips complex grows fast. The 60-point noisy circle from <a href="find-a-loop.html">Find a loop</a> has 24,711 simplices up to dimension 2, enough for degrees 0 and 1, and 231,961 tetrahedra more for degree 2. This page shows two ways to spend less on the same answer: pick the right engine, and shrink the graph before building the complex. Both are checked below to return exactly the same diagram. For what each engine supports, see the <a href="../user-guide/user-guide/homology-computation/choosing-engine.html">engine guide</a>.</p>
+  <p>The data is <a href="https://github.com/appliedtopology/tda4j/blob/scala/_docs/tutorials/data/noisy-circle.csv"><code>noisy-circle.csv</code></a>.</p>
+ </section>
+ <section id="four-engines-one-answer">
+  <h2 class="h500"><a href="#four-engines-one-answer" class="anchor"></a>Four engines, one answer</h2>
+  <p><code>Persistence</code> takes the engine as an option. In degrees 0 and 1 all four are quick on this data:</p>
+  <div class="snippet mono-small-block" scala-snippet="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val ripser = Persistence(points, maxDimension = 1)          // the default engine for Vietoris-Rips
+</span><span line-number="7" class=""><span class="tooltip-container"></span>val chunks = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Chunks)
+</span><span line-number="8" class=""><span class="tooltip-container"></span>val naive = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Naive)
+</span><span line-number="9" class=""><span class="tooltip-container"></span>val cohomology = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Cohomology)
+</span><span line-number="10" class=""><span class="tooltip-container"></span>List(ripser, chunks, naive, cohomology).map(_.size)        // List(61, 61, 61, 61)
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>Rounded to 1e-6, all four diagrams are equal, and all four give cycles as representatives: the chunks and naive engines compute homology, and the Ripser and cohomology engines compute cohomology and then the cycles from its pairing (they give cocycles instead with <code>representatives = Representatives.Cocycles</code>). The choice is about cost. Ripser works only for the Vietoris-Rips complex of points or a metric space, and is the fastest there; the others take any complex, and the naive engine can also be run step by step (see the <a href="../user-guide/quickstart.html">quickstart</a>).</p>
+ </section>
+ <section id="degree-2">
+  <h2 class="h500"><a href="#degree-2" class="anchor"></a>Degree 2</h2>
+  <p><code>Persistence(points)</code> computes degrees 0, 1 and 2, so it needs the tetrahedra too:</p>
+  <div class="snippet mono-small-block" scala-snippet="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>val diagram = Persistence(points)
+</span><span line-number="2" class=""><span class="tooltip-container"></span>diagram.size                                               // 64: the 61 bars above, and 3 in degree 2
+</span><span line-number="3" class=""><span class="tooltip-container"></span>VietorisRips(EuclideanMetricSpace(points), maxDimension = 2).iterateDimension(3).size   // 231,961 tetrahedra
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>Almost none of those tetrahedra matter: only 3 voids are born, and most tetrahedra just fill space that is already filled. Homology (the chunks and naive engines) still reduces a column for every one of them. Cohomology runs the reduction the other way round, so these columns are cleared without work, and Ripser's version of it never even builds most of them. That is why <code>Persistence</code> uses Ripser for Vietoris-Rips and the cohomology engine for every other complex by default, and computes cycles from their pairing by reducing only the 21,624 tetrahedra that end a bar's life, not all 231,961.</p>
+ </section>
+ <section id="edge-collapse">
+  <h2 class="h500"><a href="#edge-collapse" class="anchor"></a>Edge collapse</h2>
+  <p>Many edges of the Vietoris-Rips graph are dominated by another vertex and cannot change the persistent homology. <code>EdgeCollapse.collapse</code> removes them before any triangle is built, and returns a metric space that <code>Persistence</code> takes like any other:</p>
+  <div class="snippet mono-small-block" scala-snippet="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>val metricSpace = EuclideanMetricSpace(points)
+</span><span line-number="2" class=""><span class="tooltip-container"></span>val collapsed = EdgeCollapse.collapse(metricSpace)
+</span><span line-number="3" class=""><span class="tooltip-container"></span>val collapsedDiagram = Persistence(collapsed)     // the same 64 bars
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>On this data it keeps 321 of the 1,543 edges, and the complex drops from 24,711 to 1,547 simplices.</p>
+ </section>
+ <section id="the-whole-script">
+  <h2 class="h500"><a href="#the-whole-script" class="anchor"></a>The whole script</h2>
+  <div class="tabset">
+   <div class="tab" data-lang="Scala">
+    <div class="snippet mono-small-block" scala-snippet="" runnable="">
+     <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val ripser = Persistence(points, maxDimension = 1)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>val chunks = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Chunks)
+</span><span line-number="8" class=""><span class="tooltip-container"></span>val naive = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Naive)
+</span><span line-number="9" class=""><span class="tooltip-container"></span>val cohomology = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Cohomology)
+</span><span line-number="10" class=""><span class="tooltip-container"></span>
+</span><span line-number="11" class=""><span class="tooltip-container"></span>// Bars rounded to 1e-6, so diagrams from different engines can be compared
+</span><span line-number="12" class=""><span class="tooltip-container"></span>def rounded(diagram: PersistenceDiagram[Simplex[Int]]) =
+</span><span line-number="13" class=""><span class="tooltip-container"></span>  diagram.triples
+</span><span line-number="14" class=""><span class="tooltip-container"></span>    .map((dim, birth, death) =&gt; (dim, math.round(birth * 1e6), if death.isInfinite then Long.MaxValue else math.round(death * 1e6)))
+</span><span line-number="15" class=""><span class="tooltip-container"></span>    .sorted
+</span><span line-number="16" class=""><span class="tooltip-container"></span>
+</span><span line-number="17" class=""><span class="tooltip-container"></span>val diagram = Persistence(points)
+</span><span line-number="18" class=""><span class="tooltip-container"></span>val metricSpace = EuclideanMetricSpace(points)
+</span><span line-number="19" class=""><span class="tooltip-container"></span>val tetrahedra = VietorisRips(metricSpace, maxDimension = 2).iterateDimension(3).size
+</span><span line-number="20" class=""><span class="tooltip-container"></span>val collapsed = EdgeCollapse.collapse(metricSpace)
+</span><span line-number="21" class=""><span class="tooltip-container"></span>val collapsedDiagram = Persistence(collapsed)
+</span><span line-number="22" class=""><span class="tooltip-container"></span>
+</span><span line-number="23" class=""><span class="tooltip-container"></span>val complexSize = VietorisRips(metricSpace, maxDimension = 1).iterator.size
+</span><span line-number="24" class=""><span class="tooltip-container"></span>val collapsedSize = VietorisRips(collapsed, maxDimension = 1).iterator.size
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
+   <div class="tab" data-lang="MATLAB">
+    <div class="snippet mono-small-block">
+     <pre><code class="language-matlab"><span line-number="1" class=""><span class="tooltip-container"></span>javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.matlab.*;
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>% Four engines; minPersistence 0 reports every bar, like the Scala script
+</span><span line-number="7" class=""><span class="tooltip-container"></span>engines = {'naive', 'chunks', 'cohomology', 'ripser'};
+</span><span line-number="8" class=""><span class="tooltip-container"></span>answers = cell(1, 4);
+</span><span line-number="9" class=""><span class="tooltip-container"></span>for e = 1:4
+</span><span line-number="10" class=""><span class="tooltip-container"></span>    result = TDA4j.computeFromPoints(points, {'maxDimension', '1', 'minPersistence', '0', 'engine', engines{e}});
+</span><span line-number="11" class=""><span class="tooltip-container"></span>    answers{e} = sortrows(round(result.toArray() * 1e6));   % rounded to 1e-6 and sorted, so they can be compared
+</span><span line-number="12" class=""><span class="tooltip-container"></span>    size(answers{e}, 1)                                      % 61 bars from each
+</span><span line-number="13" class=""><span class="tooltip-container"></span>end
+</span><span line-number="14" class=""><span class="tooltip-container"></span>isequal(answers{:})                                          % true: the engines agree
+</span><span line-number="15" class=""><span class="tooltip-container"></span>
+</span><span line-number="16" class=""><span class="tooltip-container"></span>% Edge collapse: remove the edges of the Vietoris-Rips graph that cannot matter, before any triangle is built
+</span><span line-number="17" class=""><span class="tooltip-container"></span>collapsed = TDA4j.computeFromPoints(points, {'maxDimension', '1', 'minPersistence', '0', 'edgeCollapse', 'true'});
+</span><span line-number="18" class=""><span class="tooltip-container"></span>collapsed.numCells()                                         % 1547 simplices instead of 24711
+</span><span line-number="19" class=""><span class="tooltip-container"></span>isequal(sortrows(round(collapsed.toArray() * 1e6)), answers{1})   % true: the same barcode
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
+  </div>
+  <p>The <code>engine</code> option takes <code>naive</code>, <code>chunks</code>, <code>cohomology</code> and <code>ripser</code>, and <code>edgeCollapse</code> applies to the Vietoris-Rips complex only. <code>MatlabTabsSpec</code> makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.</p>
+ </section>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#scaling-up-engines-and-edge-collapse">Scaling up: engines and edge collapse</a><ul><li><a href="#four-engines-one-answer">Four engines, one answer</a></li><li><a href="#degree-2">Degree 2</a></li><li><a href="#edge-collapse">Edge collapse</a></li><li><a href="#the-whole-script">The whole script</a></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
