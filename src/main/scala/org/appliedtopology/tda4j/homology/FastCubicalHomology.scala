@@ -383,28 +383,10 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
         val n = sums.sumAt(j)
         if n != 0 then
           val x = field(n)
-          if !fr.isEqual(x, fr.zero) then terms += term(sums.keyAt(j).toInt, n, x)
+          if !fr.isEqual(x, fr.zero) then terms += ((cubeOfKey(sums.keyAt(j)), x))
         j += 1
       sums.clear()
       Chain.from(ArraySeq.untagged.from(terms))
-
-    // A facet's term with coefficient 1 or -1 is made once per run and shared by every representative the facet lies
-    // on (a facet lies on ~2.2 of them at 2048² noise; cubes and tuples are immutable, so sharing is safe). Indexed by
-    // the facet's doubled-grid index, allocated only when representatives are asked for.
-    lazy val plusTerms = new Array[AnyRef](GridRanks.checkedProduct(bases, "FastCubicalHomologyEngine"))
-    lazy val minusTerms = new Array[AnyRef](plusTerms.length)
-    def term(key: Int, n: Int, x: CoefficientT): (Cube, CoefficientT) =
-      if n == 1 || n == -1 then
-        val (mine, other) = if n == 1 then (plusTerms, minusTerms) else (minusTerms, plusTerms)
-        val cached = mine(key)
-        if cached != null then cached.asInstanceOf[(Cube, CoefficientT)]
-        else
-          val twin = other(key)
-          val cube = if twin != null then twin.asInstanceOf[(Cube, CoefficientT)]._1 else cubeOfKey(key)
-          val made = (cube, x)
-          mine(key) = made
-          made
-      else (cubeOfKey(key), x)
 
     // Union-find over `0 to numTop` (numTop itself = infinityId). A root is always the OLDEST -- i.e. largest-value --
     // member of its component, so its value is the component's birth. Signs live in `uf`; a dying region is assembled

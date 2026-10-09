@@ -9,7 +9,8 @@ import javax.imageio.ImageIO
   *
   * `sublevel = true` (the default, as in GUDHI, DIPHA and Perseus) filters by the values; `sublevel = false` by the
   * negated values, so bars of a superlevel filtration are reported in negated units. Voxel data of any file format is
-  * loaded into an array first.
+  * loaded into an array first. A missing pixel is `Double.PositiveInfinity` (it enters last); the cubical engines
+  * refuse NaN values.
   */
 object CubicalImage:
 

@@ -1,7 +1,8 @@
 package org.appliedtopology.tda4j
 
 /** A grayscale image (or voxel grid) for `Persistence(Image(...))`: `values` in row-major order, `shape` its size per
-  * axis. Sublevel filtration by default (dark regions first); `sublevel = false` for superlevel.
+  * axis. Sublevel filtration by default (dark regions first); `sublevel = false` for superlevel. A missing pixel is
+  * `Double.PositiveInfinity` (it enters last); NaN values are refused.
   */
 final case class Image(values: IndexedSeq[Double], shape: IndexedSeq[Int], sublevel: Boolean = true):
   require(

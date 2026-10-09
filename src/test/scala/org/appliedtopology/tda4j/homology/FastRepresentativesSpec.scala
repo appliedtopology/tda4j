@@ -103,6 +103,29 @@ class FastRepresentativesSpec extends mutable.Specification:
     checks.filterNot(_._2).map(_._1) must beEmpty
   }
 
+  // Over the reals (`characteristic = 0`) the hybrid's middle degrees run the packed grid engine with `Double`
+  // coefficients: the same bars as the eager reference, and every representative a cycle (checked approximately, as
+  // the field does; `Chain ==` would compare coefficients exactly).
+  "The fast cubical engine over the reals: the reference's bars, closed representatives" >> {
+    given Double is Field = Field.DoubleApproximated(1e-9)
+    given Ordering[Cube] = cubeOrdering
+    val problems = for
+      seed <- 0L until 4L
+      stream <- images(seed) ++ oddShapes(seed).filter(_.ambientDim >= 3)
+      zeroLength <- Seq(false, true)
+      problem <-
+        val fast = FastCubicalHomologyEngine[Double]().persistentHomology(stream, zeroLength)
+        val eager = EagerFastCubicalReference[Double]().persistentHomology(stream, zeroLength)
+        Seq(
+          Option.when(fast.map(b => (b.dim, b.lower, b.upper)) != eager.map(b => (b.dim, b.lower, b.upper)))("bars"),
+          Option.when(!fast.filter(_.dim > 0).forall(b => Chain.from(b.representative.boundary).isZero()))(
+            "a representative that does not close"
+          )
+        ).flatten.map(p => s"$p: shape ${stream.shape.mkString("x")} zeroLength=$zeroLength")
+    yield problem
+    problems.take(5) must beEmpty
+  }
+
   "The fast cubical engine refuses a NaN pixel, saying what to do" >> {
     import f3.given
     val image = CubicalImage.fromFlatArray(IndexedSeq(2, 3), IndexedSeq(0.0, 1.0, Double.NaN, 2.0, 3.0, 4.0))

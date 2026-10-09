@@ -11,9 +11,9 @@ import scala.collection.mutable
   * rank of their value ([[GridRanks]]) and then by index: the generic engine's order there, value ascending, then the
   * encoding ascending. Boundaries and coboundaries come from index arithmetic. Clearing as in the generic engine;
   * apparent pairs (a cell whose oldest same-value cofacet has it as its youngest same-value facet) are paired without a
-  * reduction and their columns rebuilt when another column needs them, which changes no output
-  * (`useApparentPairs = false` turns them off). Cycles come from the involution on the same pairs, specialised to packed
-  * cells as [[PackedRipserCohomologyEngine]] does it. Refuses an image with a NaN value (as [[GridRanks]] does).
+  * reduction and their columns rebuilt when another column needs them, which changes no output (`useApparentPairs =
+  * false` turns them off). Cycles come from the involution on the same pairs, specialised to packed cells as
+  * [[PackedRipserCohomologyEngine]] does it. Refuses an image with a NaN value (as [[GridRanks]] does).
   */
 private[tda4j] final class PackedCubicalCohomologyEngine[C: Field](
   grid: CubicalGridStream,
@@ -405,9 +405,9 @@ private[tda4j] final class PackedCubicalCohomologyEngine[C: Field](
 
   private val vSums = CellSums()
 
-  /** A V-column `seed - sum c V(pivot)` over `log`, accumulated as the generic engine does (`acc(k) -= c * v`), from the
-    * V-columns of earlier columns, each recorded as its seed and log and expanded only when needed, depth-first without
-    * recursion, into `memo`.
+  /** A V-column `seed - sum c V(pivot)` over `log`, accumulated as the generic engine does (`acc(k) -= c * v`), from
+    * the V-columns of earlier columns, each recorded as its seed and log and expanded only when needed, depth-first
+    * without recursion, into `memo`.
     */
   private def expandV(
     seed: Int,
@@ -547,8 +547,7 @@ private[tda4j] final class PackedCubicalCohomologyEngine[C: Field](
 
   /** Every bar with its cocycle, as `CellularCohomologyEngine.persistentCohomology` gives it on the stream. */
   def persistentCohomology(includeZeroLength: Boolean = false): List[PersistenceBar[Double, Chain[Cube, C]]] =
-    val keep = (_: Int, birth: Int, death: Int) =>
-      includeZeroLength || death < 0 || cellRank(birth) != cellRank(death)
+    val keep = (_: Int, birth: Int, death: Int) => includeZeroLength || death < 0 || cellRank(birth) != cellRank(death)
     val (rows, cocycleOf) = pairing(topDim, cocycles = true, keep)
     List.tabulate(rows.size)(identity).collect {
       case row if includeZeroLength || !rows.isZeroLength(row) => rows.bar(row, cocycleOf(row.toLong))

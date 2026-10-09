@@ -208,3 +208,13 @@ on a grid, with a message saying what to use instead; before, it gave a meaningl
   neither of them returns one).
 - On the blob, cohomology with cocycles is now as fast as the default path, or faster.
 - These were measured before the apparent-pair shortcut in the involution (below); see the final runs.
+
+### Tried and reverted: sharing a facet's representative term between representatives
+
+A facet lies on ~2.2 representatives on average at 2048² noise, so the first commit of deliverable B built each
+facet's `(cube, ±1)` term once per run and shared it (two reference arrays the size of the doubled grid). Measured
+against the same 2-D code without it (pinned heap, warm medians): noise 2048² 11.5 -> 14.1 s, noise 1024² 2.36 ->
+2.54 s, blob 2048² 10.5 -> 11.1 s, blob 1024² 1.54 -> 1.63 s: slower everywhere (A3 and B4 are different runs of the
+same session; the 2-D path differs only by the cache). Not profiled; an unconfirmed guess is GC card scanning: two large
+old-generation reference arrays written with young objects, which every young collection must scan. The arrays
+also cost transient memory proportional to the doubled grid (~1 GB at 256³). Reverted in the follow-up commit.
