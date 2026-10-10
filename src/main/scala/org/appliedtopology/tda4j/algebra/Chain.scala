@@ -182,9 +182,15 @@ final class PackedChain[CellT, CoefficientT](
     else (Some(decoder(keys(0))), coefficients(0).asInstanceOf[CoefficientT])
 
 object Chain:
-  given chainShow: [CellT: {OrderedCell, Show}, CoefficientT: Field as field] => Show[Chain[CellT, CoefficientT]] =
+  /** `c.show` for a chain whose cells have a `Show`: its terms, each cell once with its nonzero coefficient, in the
+    * chain's order (`"1 ⊠ ∆(0,1) + -1 ⊠ ∆(1,2)"`; the zero chain is `"0"`). Coefficients are shown by their field.
+    */
+  given chainShow: [CellT: Show, CoefficientT: Field as field] => Show[Chain[CellT, CoefficientT]] =
     given Show[CoefficientT] = field.showForSelf
-    Show.show(c => c.rawEntries.map((cell, coeff) => show"$coeff ⊠ $cell").mkString(" + "))
+    Show.show { c =>
+      val ts = c.terms
+      if ts.isEmpty then "0" else ts.map((cell, coeff) => show"$coeff ⊠ $cell").mkString(" + ")
+    }
 
   def empty[CellT: Ordering, CoefficientT: Field] = from(Seq())
 

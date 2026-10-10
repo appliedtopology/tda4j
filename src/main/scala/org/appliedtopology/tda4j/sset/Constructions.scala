@@ -3,6 +3,8 @@ package sset
 
 import org.appliedtopology.tda4j.*
 
+import cats.Show
+
 /* Implementations behind `FiniteSimplicialSet`'s construction methods (`x.product(y)`, `x.cone`, `x.wedge(...)`,
  * ...) and the orderings their generator types need. */
 
@@ -28,6 +30,10 @@ def isNonDegeneratePair[GX, GY](a: SSetElement[GX], b: SSetElement[GY]): Boolean
 case class ProductGenerator[GX, GY](x: SSetElement[GX], y: SSetElement[GY])
 
 object ProductGenerator:
+  /** `(x, y)`, each side a simplex in normal form by `SSetElement`'s `Show`. */
+  given productGeneratorShow: [GX: Show, GY: Show] => Show[ProductGenerator[GX, GY]] =
+    Show.show(p => s"(${summon[Show[SSetElement[GX]]].show(p.x)}, ${summon[Show[SSetElement[GY]]].show(p.y)})")
+
   given productGeneratorOrder: [GX: Ordering, GY: Ordering] => Ordering[ProductGenerator[GX, GY]] =
     productGeneratorOrdering[GX, GY]
 

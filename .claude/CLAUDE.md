@@ -71,7 +71,9 @@ forgotten `F_p` import into real coefficients and wrong torsion answers). A top-
 visible everywhere in the flat package, `[CellT: OrderedCell] => Ordering[CellT]` made `SimplicialHomologyEngine()`
 infer `VertexT = BarcodeEndpoint[Cube]`. Opt-in derivations are named givens imported by name: `import
 OrderedCell.cellOrdering` (generic code holding only `CellT: OrderedCell`), `Field.showFromField`. `UserImportsSpec`
-pins this from the user's side.
+pins this from the user's side. `Show` likewise: every user-facing data type has one in its companion; cats' `Show` is
+invariant, so a hierarchy's instance is typed `[..., D <: Base] => Show[D]` (`endpointShow`, `diagramShow`)
+(`WORKLOG-show-instances.md`).
 
 ## Commands
 
@@ -210,7 +212,8 @@ Plain `private` is for an algorithm's own scratch types, state and helpers (no c
 when a subclass needs it as a hook, to public when it computes something a caller wants (a pairing, a validity check).
 `sealed` only for a closed mathematical classification matched exhaustively (`BarcodeEndpoint`). `final` only on value
 types (case classes: subclassing breaks equality), where library fast paths match on the concrete class (`HeapChain`,
-`PackedChain`), and on `@tailrec` defs; never for speed (HotSpot devirtualizes a class with no loaded subclass).
+`PackedChain`), and on `@tailrec` defs; not for speed without an A/B (HotSpot's class-hierarchy analysis should
+devirtualize a class with no loaded subclass; expected, not measured here).
 Concrete public classes are `open`: users lack `-language:adhocExtensions`, so extending a non-`open` class warns under
 `-source:future -feature`. Not reasons: a small API surface, "users should not need it", "it might change" (pre-1.0,
 anything may). `WORKLOG-openness-audit.md`.

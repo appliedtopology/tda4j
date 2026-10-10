@@ -73,6 +73,10 @@ mean the class to be extended. So every concrete public class of the core and `s
 the two whose constructors are restricted (`GridRanks`, `EdgeCollapsedMetricSpace`). `open` is a TASTy flag only, no
 bytecode change.
 
+Re-run after adding `open` (same command, `-source:future -feature`): no output, `MyRips.class` and `MyGrid.class`
+written. Dropping `final` from the `SimplexIndexing` cursors (on the packed-Ripser cofacet path) was not A/B-timed: the
+expectation that HotSpot devirtualizes a class with no loaded subclass is the usual one, not measured here.
+
 ## Compatibility
 
 MiMa: opening a `private[tda4j]` declaration changes nothing in bytecode (Scala emits it public already); removing

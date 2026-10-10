@@ -3,6 +3,8 @@ package sset
 
 import org.appliedtopology.tda4j.*
 
+import cats.Show
+
 /** A generator of the cone on a simplicial set `X`: the apex, a copy of each generator of `X` (the base), or the cone
   * `Cone(g)` over a generator `g` (one dimension up).
   */
@@ -38,6 +40,8 @@ enum ComplexProjectivePlaneGenerator derives CanEqual:
   case V, Rho0, Rho1, Sigma0, Sigma1, Sigma2, Tau0, Tau1, Tau2
 
 object ComplexProjectivePlaneGenerator:
+  /** The generator's name, as `toString` writes it. */
+  given Show[ComplexProjectivePlaneGenerator] = Show.fromToString
   given Ordering[ComplexProjectivePlaneGenerator] = Ordering.by(_.ordinal)
 
 /** The two generators of the minimal `n`-sphere ([[SimplicialSet.sphere]]): its vertex and its single `n`-simplex. */
@@ -45,6 +49,8 @@ enum MinimalSphereGenerator derives CanEqual:
   case Vertex, Top
 
 object MinimalSphereGenerator:
+  /** The generator's name, as `toString` writes it. */
+  given Show[MinimalSphereGenerator] = Show.fromToString
   given Ordering[MinimalSphereGenerator] = Ordering.by(_.ordinal)
 
 /** The generators of Sage's simplicial model of `S^3` ([[SimplicialSet.hopfMap]]'s source). */
@@ -53,6 +59,8 @@ enum HopfSphereGenerator derives CanEqual:
     Alpha5, Alpha6
 
 object HopfSphereGenerator:
+  /** The generator's name, as `toString` writes it. */
+  given Show[HopfSphereGenerator] = Show.fromToString
   given Ordering[HopfSphereGenerator] = Ordering.by(_.ordinal)
 
 /** A non-degenerate simplex of the join `X ⋆ Y`: a simplex of `X` alone, of `Y` alone, or a pair `(a, b)` of
@@ -64,6 +72,9 @@ enum JoinGenerator[+GX, +GY]:
   case Both(x: GX, y: GY)
 
 object JoinGenerator:
+  /** `OfX(x = ...)`, `OfY(y = ...)`, `Both(x = ..., y = ...)`, each side by its own `Show` (derived by kittens). */
+  given joinGeneratorShow: [GX: Show, GY: Show] => Show[JoinGenerator[GX, GY]] = cats.derived.semiauto.show
+
   given joinGeneratorOrdering: [GX: Ordering as ox, GY: Ordering as oy] => Ordering[JoinGenerator[GX, GY]]:
     private def tag(j: JoinGenerator[GX, GY]): Int = j match
       case OfX(_)     => 0
@@ -78,6 +89,9 @@ object JoinGenerator:
       case _ => Ordering.Int.compare(tag(a), tag(b))
 
 object PresentationCell:
+  /** The cell's name, as `toString` writes it (`Gen(1)`). */
+  given Show[PresentationCell] = Show.fromToString
+
   private def key(c: PresentationCell): (Int, Int, Int) = c match
     case Vertex         => (0, 0, 0)
     case Gen(i)         => (1, i, 0)
@@ -92,6 +106,9 @@ object PresentationCell:
     )
 
 object ConeGenerator:
+  /** `Apex`, `Base(g = ...)`, `Cone(g = ...)`, with the base generator by its own `Show` (derived by kittens). */
+  given coneGeneratorShow: [G: Show] => Show[ConeGenerator[G]] = cats.derived.semiauto.show
+
   given coneGeneratorOrdering: [G: Ordering as ord] => Ordering[ConeGenerator[G]]:
     private def key(c: ConeGenerator[G]): (Int, Option[G]) = c match
       case ConeGenerator.Apex    => (0, None)
@@ -106,6 +123,8 @@ enum KleinGenerator derives CanEqual:
   case V, A, B, C, T1, T2
 
 object KleinGenerator:
+  /** The generator's name, as `toString` writes it. */
+  given Show[KleinGenerator] = Show.fromToString
   given Ordering[KleinGenerator] = Ordering.by(_.ordinal)
 
 /** The generators of [[SimplicialSet.torus]]: one vertex, loops `A, B` and diagonal `C`, triangles `U, L`. */
@@ -113,6 +132,8 @@ enum TorusGenerator derives CanEqual:
   case Vertex, A, B, C, U, L
 
 object TorusGenerator:
+  /** The generator's name, as `toString` writes it. */
+  given Show[TorusGenerator] = Show.fromToString
   given Ordering[TorusGenerator] = Ordering.by(_.ordinal)
 
 /** The generators of [[SimplicialSet.realProjectiveSpace]]: one cell `E(n)` per dimension. */
@@ -120,6 +141,8 @@ enum RealProjectiveGenerator derives CanEqual:
   case E(n: Int)
 
 object RealProjectiveGenerator:
+  /** The generator's name, as `toString` writes it. */
+  given Show[RealProjectiveGenerator] = Show.fromToString
   given Ordering[RealProjectiveGenerator] = Ordering.by { case E(n) => n }
 
 /** The catalog behind `object SimplicialSet` (every entry is `SimplicialSet.<name>`): ready-made finite simplicial

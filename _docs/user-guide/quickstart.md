@@ -59,6 +59,20 @@ val loop = diagram.dim(1).longest.get
 (loop.birth, loop.death, loop.persistence)
 ```
 
+`println(diagram)` gives a summary. To see every bar with its representative, use cats' `.show` (every diagram, bar,
+endpoint, chain, simplex and cube has a `Show`): a bar reads `1: [0.21, 1.04)  1 ⊠ ∆(0,1) + ...`, its degree, its
+interval and its representative.
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import cats.syntax.show.*
+
+val square = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+val d = Persistence(square, maxDimension = 1)
+println(d.dim(1).show)           // the header, then one line per bar
+```
+
 ### Short bars
 
 Zero-length bars are left out (pass `includeZeroLength = true` to see them). Short bars are usually sampling noise, and

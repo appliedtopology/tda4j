@@ -6,6 +6,7 @@ package org.appliedtopology.tda4j
   * operations on finitely presented persistence modules.
   */
 
+import cats.Show
 import org.apache.commons.math3.linear.*
 
 // Sealed on purpose: the four cases are the endpoints of an interval on the extended line, a closed classification that
@@ -30,6 +31,30 @@ case class ClosedEndpoint[FiltrationT: Ordering](value: FiltrationT) extends Bar
 
 import math.Ordered.orderingToOrdered
 object BarcodeEndpoint:
+  /** `e.show` for any endpoint whose values have a `Show`: `[v]` closed, `(v)` open, `+∞`, `-∞`. Typed for every
+    * subtype, so `ClosedEndpoint(1.0).show` works as well as an `e: BarcodeEndpoint[Double]`.
+    */
+  given endpointShow: [F: Show as sf, E <: BarcodeEndpoint[F]] => Show[E] = Show.show {
+    case ClosedEndpoint(v)  => s"[${sf.show(v)}]"
+    case OpenEndpoint(v)    => s"(${sf.show(v)})"
+    case PositiveInfinity() => "+∞"
+    case NegativeInfinity() => "-∞"
+  }
+
+  /** The endpoint written as the left end of an interval: `[v`, `(v` or `(-∞`. */
+  def showLower[F](e: BarcodeEndpoint[F])(using sf: Show[F]): String = e match
+    case ClosedEndpoint(v)  => s"[${sf.show(v)}"
+    case OpenEndpoint(v)    => s"(${sf.show(v)}"
+    case NegativeInfinity() => "(-∞"
+    case PositiveInfinity() => "(+∞"
+
+  /** The endpoint written as the right end of an interval: `v)`, `v]` or `∞)`. */
+  def showUpper[F](e: BarcodeEndpoint[F])(using sf: Show[F]): String = e match
+    case ClosedEndpoint(v)  => s"${sf.show(v)}]"
+    case OpenEndpoint(v)    => s"${sf.show(v)})"
+    case PositiveInfinity() => "∞)"
+    case NegativeInfinity() => "-∞)"
+
   given endpointOrdering: [FiltrationT: Ordering as ord] => Ordering[BarcodeEndpoint[FiltrationT]]:
     def compare(
       x: BarcodeEndpoint[FiltrationT],
@@ -114,6 +139,18 @@ case class PersistenceBar[FiltrationT: Ordering, AnnotationT](
   * [[PersistenceBar]] object.
   */
 object PersistenceBar:
+
+  /** `bar.show`: the degree, the interval and the representative, `1: [0.5, 1.2)  1 ⊠ ∆(0,1) + ...` (each part by its
+    * own `Show`; the representative is left out when the bar has none).
+    */
+  given barShow: [F: Show, A: Show as sa] => Show[PersistenceBar[F, A]] =
+    Show.show(bar => interval(bar) + bar.annotation.fold("")(a => "  " + sa.show(a)))
+
+  /** `bar.show` for a bar with no annotation type (`PersistenceBar[Double](1, 0.5, 1.2)`): `1: [0.5, 1.2)`. */
+  given unannotatedBarShow: [F: Show] => Show[PersistenceBar[F, Nothing]] = Show.show(interval)
+
+  private def interval[F: Show](bar: PersistenceBar[F, ?]): String =
+    s"${bar.dim}: ${BarcodeEndpoint.showLower(bar.lower)}, ${BarcodeEndpoint.showUpper(bar.upper)}"
 
   private def numeric(e: BarcodeEndpoint[Double]): Double = e match
     case ClosedEndpoint(v)  => v
