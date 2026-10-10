@@ -63,6 +63,53 @@ object FiniteMonoid:
     val index = residue.zipWithIndex.toMap
     FiniteMonoid(Array.tabulate(n, n)((a, b) => index((residue(a) * residue(b)) % n)), residue.map(r => s"$r"))
 
+  /** The `rows x columns` rectangular band, `(a, b)(c, d) = (a, d)`, with an identity adjoined (index 0); element `(a,
+    * b)` is index `1 + a * columns + b`. Its classifying space is a wedge of `(rows - 1)(columns - 1)` two-spheres: a
+    * finite monoid whose nerve has free homology in degree 2 and none above, which no finite group's has.
+    */
+  def rectangularBand(rows: Int, columns: Int): FiniteMonoid =
+    require(rows >= 1 && columns >= 1, s"a rectangular band needs rows, columns >= 1, got $rows x $columns")
+    val size = 1 + rows * columns
+    def row(x: Int) = (x - 1) / columns
+    def column(x: Int) = (x - 1) % columns
+    FiniteMonoid(
+      Array.tabulate(size, size)((x, y) =>
+        if x == 0 then y else if y == 0 then x else 1 + row(x) * columns + column(y)
+      ),
+      "1" +: IndexedSeq.tabulate(rows * columns)(i => s"(${i / columns},${i % columns})")
+    )
+
+  /** The Rees matrix semigroup `M[G; rows, columns; P]` with an identity adjoined (index 0): elements `(i, g, λ)` for
+    * `i < rows`, `g` in `group`, `λ < columns`, multiplied by `(i, g, λ)(j, h, μ) = (i, g·P(λ)(j)·h, μ)`, where the
+    * sandwich matrix `sandwich(λ)(i)` holds element indices of `group`. Element `(i, g, λ)` is index `1 + (i *
+    * |G| + g) * columns + λ`. Every finite completely simple semigroup is one of these; `group` trivial gives the
+    * rectangular band.
+    */
+  def reesMatrix(group: FiniteGroup, rows: Int, columns: Int, sandwich: IndexedSeq[IndexedSeq[Int]]): FiniteMonoid =
+    require(rows >= 1 && columns >= 1, s"a Rees matrix semigroup needs rows, columns >= 1, got $rows x $columns")
+    require(
+      sandwich.length == columns && sandwich.forall(r => r.length == rows && r.forall(g => g >= 0 && g < group.order)),
+      s"the sandwich matrix must be columns x rows ($columns x $rows) with entries in 0 until ${group.order}"
+    )
+    val n = group.order
+    val size = 1 + rows * n * columns
+    def index(i: Int, g: Int, l: Int) = 1 + (i * n + g) * columns + l
+    def decode(x: Int) = ((x - 1) / columns / n, ((x - 1) / columns) % n, (x - 1) % columns)
+    FiniteMonoid(
+      Array.tabulate(size, size) { (x, y) =>
+        if x == 0 then y
+        else if y == 0 then x
+        else
+          val (i, g, l) = decode(x)
+          val (j, h, mu) = decode(y)
+          index(i, group.multiply(group.multiply(g, sandwich(l)(j)), h), mu)
+      },
+      "1" +: (1 until size).map { x =>
+        val (i, g, l) = decode(x)
+        s"($i,${group.names(g)},$l)"
+      }
+    )
+
 object FiniteGroup:
 
   def cyclic(n: Int): FiniteGroup =

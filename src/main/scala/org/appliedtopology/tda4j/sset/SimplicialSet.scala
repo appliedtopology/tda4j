@@ -52,6 +52,30 @@ trait SimplicialSet[G]:
     require(n >= 0, s"skeleton dimension must be >= 0, got $n")
     new FiniteSimplicialSet(IndexedSeq.tabulate(n + 1)(d => generators(d).toSet), faces)(using ord)
 
+  /** The persistent homology over `F_p` of this set filtered by `filtrationValue` (when each generator enters), in
+    * degrees `0..maxDegree`, with a representative cycle for every bar. Computed on the `(maxDegree + 1)`-skeleton, so
+    * it is exact in every degree it reports, also for an infinite set (a nerve, a classifying space).
+    *
+    * `filtrationValue` must not let a generator enter before one of its non-degenerate faces; a filtration that does is
+    * rejected with the offending faces named. The chunks engine does the reduction.
+    */
+  def persistentHomology(filtrationValue: G => Double, maxDegree: Int, prime: Int): PersistenceDiagram[G] =
+    require(maxDegree >= 0, s"maxDegree must be >= 0, got $maxDegree")
+    require(prime > 1 && BigInt(prime).isProbablePrime(certainty = 100), s"$prime is not a prime")
+    val x = skeleton(maxDegree + 1)
+    val violations = validateMonotoneFiltration(x, filtrationValue)
+    require(
+      violations.isEmpty,
+      s"the filtration lets a generator enter before its face (${violations.size} cases; first: ${violations.head}). " +
+        "Give every generator a value at least as large as each of its faces'."
+    )
+    val field = new FiniteField(prime)
+    import field.given
+    given (G is OrderedCell) = x.cellInstance
+    val state = CellularPersistenceInChunksEngine[G, field.Fp](maxDegree)
+      .persistentHomology(FilteredSimplicialSetStream(x, PartialFunction.fromFunction(filtrationValue)))
+    PersistenceDiagram[G, field.Fp](state.barcodeAt(Double.PositiveInfinity), maxDegree, state.lastFiltrationValue)
+
 /** Every ready-made simplicial set and constructor is here: `SimplicialSet.sphere(2)`, `SimplicialSet.torus`,
   * `SimplicialSet.fromSimplicialComplex(facets)`, `SimplicialSet(generatorsByDim, faces)`, ... (see
   * [[SimplicialSetCatalog]]). Operations on a set you already have are methods of [[FiniteSimplicialSet]].

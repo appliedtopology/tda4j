@@ -100,3 +100,72 @@ class ClassifyingSpaceSpec extends Specification:
       Nerve(FiniteGroup.cyclic(4), Some(Set(0, 1))) must throwAn[IllegalArgumentException]
     }
   }
+
+  // Finite monoids whose nerves look like no finite group's: free homology, identical over F_2 and F_3, vanishing above
+  // degree 2 (a nontrivial finite group has torsion in infinitely many degrees). Values: Steinberg, "The homology of
+  // completely simple semigroups" (arXiv:2405.06594), Thm 3.1 (bands) and Thm A (Rees matrix semigroups).
+  "nerves of finite monoids that are not groups" should {
+    "rectangular band A x B with an identity: a wedge of (|A|-1)(|B|-1) two-spheres" in {
+      val cases = Seq((2, 2, 4, Vector(1, 0, 1, 0, 0)), (2, 3, 4, Vector(1, 0, 2, 0, 0)), (3, 3, 3, Vector(1, 0, 4, 0)))
+      cases.flatMap { (rows, columns, degree, expected) =>
+        val band = FiniteMonoid.rectangularBand(rows, columns)
+        val wrong = band.validateMonoid() ++ Nerve(band).skeleton(3).validate()
+        Seq(2, 3).map(p => (rows, columns, p, wrong, ClassifyingSpace.bettiNumbers(Nerve(band), degree, p)))
+      } must beEqualTo(cases.flatMap { (rows, columns, _, expected) =>
+        Seq(2, 3).map(p => (rows, columns, p, Seq.empty[String], expected))
+      })
+    }
+    "Rees matrix monoids over Z/2 told apart by one sandwich entry, over F_2 only" in {
+      // H_1 = coker ψ, H_2 = H_2(Z/2) ⊕ ker ψ, H_n = H_n(Z/2) for n >= 3, with ψ: Z -> Z/2 sending the generator to the
+      // normalized sandwich entry P(1)(1). Entry 0: H = Z, Z/2, Z, Z/2 (n = 0..3); entry g: H = Z, 0, Z, Z/2.
+      val z2 = FiniteGroup.cyclic(2)
+      def rees(entry: Int) = FiniteMonoid.reesMatrix(z2, 2, 2, IndexedSeq(IndexedSeq(0, 0), IndexedSeq(0, entry)))
+      val betti = for entry <- Seq(0, 1); p <- Seq(2, 3)
+      yield (rees(entry).validateMonoid(), ClassifyingSpace.bettiNumbers(Nerve(rees(entry)), 3, p))
+      betti must beEqualTo(
+        Seq(Vector(1, 1, 2, 1), Vector(1, 0, 1, 0), Vector(1, 0, 1, 1), Vector(1, 0, 1, 0)).map(b =>
+          (Seq.empty[String], b)
+        )
+      )
+    }
+    "rectangular band with trivial group: reesMatrix agrees with rectangularBand" in {
+      val trivial = FiniteGroup.cyclic(1)
+      val rees = FiniteMonoid.reesMatrix(trivial, 2, 3, IndexedSeq.fill(3)(IndexedSeq.fill(2)(0)))
+      rees.table.map(_.toSeq).toSeq must beEqualTo(FiniteMonoid.rectangularBand(2, 3).table.map(_.toSeq).toSeq)
+    }
+  }
+
+  "persistent homology of a monoid nerve along a chain of submonoids" should {
+    // Sub-bands 2x2 < 2x3 < 3x3 of the 3x3 band. Any retractions r of the rows and r' of the columns give a monoid
+    // retraction (a, b) |-> (r a, r' b) onto a sub-band, so every map in the chain is split injective on homology:
+    // no finite bars at all, and H_2's essential classes are born 1, 1, 2 at levels 0, 1, 2.
+    val band = FiniteMonoid.rectangularBand(3, 3)
+    def subBand(rows: Int, columns: Int): Set[Int] =
+      Set(0) ++ (for a <- 0 until rows; b <- 0 until columns yield 1 + a * 3 + b)
+    val chain = Seq(subBand(2, 2), subBand(2, 3), subBand(3, 3))
+    val nerve = Nerve(band)
+
+    "have no finite bars and H_2 born at levels 0, 1, 2, 2, over F_2 and F_3" in {
+      Seq(2, 3).map { p =>
+        val diagram = nerve.persistentHomology(ClassifyingSpace.filtrationBy(chain), 3, p)
+        (diagram.bars.count(!_.death.isPosInfinity), diagram.essential.map(b => (b.dim, b.birth)).sorted)
+      } must beEqualTo(Seq.fill(2)((0, List((0, 0.0), (2, 0.0), (2, 1.0), (2, 2.0), (2, 2.0)))))
+    }
+    "give every bar a representative cycle that exists at its birth" in {
+      val diagram = nerve.persistentHomology(ClassifyingSpace.filtrationBy(chain), 2, 3)
+      val x = nerve.skeleton(3)
+      import diagram.given
+      given (NerveSimplex is OrderedCell) = x.cellInstance
+      val level = ClassifyingSpace.filtrationBy(chain)
+      diagram.bars.forall { bar =>
+        bar.annotation.exists { rep =>
+          !rep.isZero() && Chain.from(rep.boundary).terms.isEmpty && rep.cells.forall(level(_) <= bar.birth)
+        }
+      } must beTrue
+    }
+    "reject a filtration that lets a simplex enter before its face" in {
+      nerve.persistentHomology(s => if s.dim == 0 then 1.0 else 0.0, 1, 2) must throwAn[IllegalArgumentException](
+        message = "enter before its face"
+      )
+    }
+  }
