@@ -194,8 +194,9 @@ proper nouns (external projects' own spellings), correctly titlecased.
 every homology implementation should (a) be generic over `Field` coefficients and (b) return representatives (a
 real chain witnessing each bar). An optimization that abandons representatives is probably not worth it. Every
 public interface (MATLAB facade included) should expose representatives; anywhere that doesn't is incomplete.
-**Current gaps**: none known — every engine, including `PackedRipserCohomologyEngine`'s apparent-pairs shortcut,
-records a representative for every bar.
+**Current gaps**: every engine records a representative for every bar (`PackedRipserCohomologyEngine`'s apparent pairs
+too); `ClassifyingSpace.persistentGroupHomology` returns triples only (`nerve.persistentHomology(filtrationBy(chain),..)`
+has them).
 
 **Openness principle (project lead, foundational: the library is a platform for experiments and research)**: public
 and extensible by default. Access modifiers are not documentation: "not the entry point" is said in scaladoc ("what

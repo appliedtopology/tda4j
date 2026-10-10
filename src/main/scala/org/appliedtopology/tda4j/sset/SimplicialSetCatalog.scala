@@ -203,9 +203,9 @@ trait SimplicialSetCatalog:
     */
   def classifyingSpace(group: FiniteGroup): Nerve = ClassifyingSpace.nerve(group)
 
-  /** The nerve (classifying space) of a finite category: a poset's order complex, a groupoid's `⊔ B(stabilizer)`, the
-    * Borel construction of a group action ([[FiniteCategory]] lists the constructors). Usually infinite -- take
-    * `.skeleton(n)` or call `.persistentHomology(...)`.
+  /** The nerve (classifying space) of a finite category: a poset's order complex; up to homotopy, a groupoid's disjoint
+    * union of `B(stabilizer)` over orbits, or the Borel construction of a group action ([[FiniteCategory]] lists the
+    * constructors). Usually infinite -- take `.skeleton(n)` or call `.persistentHomology(...)`.
     */
   def nerve(category: FiniteCategory): CategoryNerve = CategoryNerve(category)
 

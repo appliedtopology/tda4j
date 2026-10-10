@@ -446,10 +446,12 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
         val cycleEdges: mutable.ArrayBuffer[CellT] = mutable.ArrayBuffer.empty
         stream.iterateDimension.applyOrElse(1, (_: Int) => Iterator.empty).foreach { edge =>
           val endpoints = edge.boundary[CoefficientT]
-          // A loop may list no endpoints at all (a CW 1-cell on one vertex, boundary 0): it closes a cycle by itself.
-          lazy val r0 = find(vertexIndex(endpoints(0)._1))
-          lazy val r1 = find(vertexIndex(endpoints(1)._1))
-          if endpoints.isEmpty || r0 == r1 then
+          // A loop may list no endpoints at all (a CW 1-cell on one vertex, boundary 0): it closes a cycle by itself,
+          // so both roots read as -1 (plain vals: no per-edge allocation in this loop).
+          val listsNoEndpoints = endpoints.isEmpty
+          val r0 = if listsNoEndpoints then -1 else find(vertexIndex(endpoints(0)._1))
+          val r1 = if listsNoEndpoints then -1 else find(vertexIndex(endpoints(1)._1))
+          if r0 == r1 then
             essentialSimplices += edge
             cycleEdges += edge
           else

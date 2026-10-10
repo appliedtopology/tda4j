@@ -202,9 +202,10 @@ The nerve of any finite category is a simplicial set, and its homology is that o
   gives a wedge of `(m − 1)(n − 1)` two-spheres, and `FiniteMonoid.reesMatrix(...)` the other completely simple
   semigroups (with an identity adjoined).
 - `SimplicialSet.nerve(category)` for a `FiniteCategory`, built with `fromMonoid`, `fromPoset` (the nerve is the order
-  complex), `freeOnAcyclicQuiver`, `actionGroupoid` (the nerve is the disjoint union of the classifying spaces of the
-  stabilizers) or `homotopyOrbits`: a group acting on a simplicial complex, whose nerve is the Borel construction, so its
-  homology is equivariant homology. `validate()` checks the category laws.
+  complex), `freeOnAcyclicQuiver`, `actionGroupoid` (the nerve is homotopy equivalent to the disjoint union, one per
+  orbit, of the classifying spaces of the stabilizers) or `homotopyOrbits`: a group acting on a simplicial complex, whose
+  nerve is homotopy equivalent to the Borel construction, so its homology is equivariant homology. `validate()` checks
+  the category laws.
 - `FiniteGroup.pSubgroups(p)` and `isElementaryAbelian` give the posets of `p`-subgroups that Brown and Quillen studied.
 
 ```scala 3
