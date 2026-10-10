@@ -149,7 +149,8 @@ Peak RSS without a pinned heap (`-Xmx8g`): 2-D noise 2048² 8.25 -> 5.40 GB (tim
 
 - Generic engines, a third round: chunks 1.682 / 1.703 (+1.2%), naive 1.023 / 1.094 (+6.9%). Naive never compares
   chains with `==` (its loop uses `isZero()`, unchanged), so four more naive rounds: B / A = 1.002, 0.997, 1.032,
-  1.005. Round 3 was noise; no effect seen.
+  1.005. Round 3 was noise; no effect seen. No engine compares chains with `==` at all (a grep of the main sources):
+  the new equality costs only where tests and users call it.
 - 2-D noise 2048²: 7.21 s computing, 7.85 s with every representative read (the step-4 build: 6.75, 8.03): the same.
 - Peak RSS without a pinned heap, 2-D noise 1024²: 1.58 GB (2.50 GB for the same point before packing,
   `WORKLOG-cubical-performance.md`'s final runs).

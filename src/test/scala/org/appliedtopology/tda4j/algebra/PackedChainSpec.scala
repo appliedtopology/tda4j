@@ -87,8 +87,7 @@ class PackedChainSpec extends mutable.Specification:
       problem <- Seq(
         { import f2.given; differences[f2.Fp](seed, order, _ => f2.Fp(1)).map("F_2 " + _) },
         { import f3.given; differences[f3.Fp](seed, order, r => f3.Fp(1 + r.nextInt(2))).map("F_3 " + _) },
-        { import f17.given; differences[f17.Fp](seed, order, r => f17.Fp(1 + r.nextInt(16))).map("F_17 " + _) },
-        {
+        { import f17.given; differences[f17.Fp](seed, order, r => f17.Fp(1 + r.nextInt(16))).map("F_17 " + _) }, {
           given Double is Field = Field.DoubleApproximated(1e-9)
           differences[Double](seed, order, real).map("reals " + _)
         }

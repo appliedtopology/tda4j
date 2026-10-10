@@ -29,8 +29,10 @@ class ChainStorageSpec extends Specification:
       val problems = (0 until 80).flatMap { trial =>
         // A repeated cell whose entries cancel (1 + 2 = 0 in F_3), and one whose entries add up.
         val (gone, kept) = (triangle(), triangle())
-        val stored = rng.shuffle(entries(1 + rng.nextInt(8)) ++ List((gone, f3.Fp(1)), (gone, f3.Fp(2))) ++
-          List((kept, f3.Fp(1)), (kept, f3.Fp(1))))
+        val stored = rng.shuffle(
+          entries(1 + rng.nextInt(8)) ++ List((gone, f3.Fp(1)), (gone, f3.Fp(2))) ++
+            List((kept, f3.Fp(1)), (kept, f3.Fp(1)))
+        )
         val mine: C3 = ListChain(stored)
         val theirs: C3 = Chain.from(stored)
         val other: C3 = Chain.from(entries(4))

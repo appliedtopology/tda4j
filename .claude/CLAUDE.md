@@ -107,7 +107,8 @@ runs the check: format `build.sbt` before pushing it.
 
 **Docs build with Scala 3.8.4, everything else with 3.9.0**: the `TDA4J_SCALA_VERSION` env var, which only a FRESH sbt
 server sees (`rules/docs-and-tutorials.md`). After `sbt package` or a docs build, a test compile can see no main classes
-("Not found: TDAlab"): `sbt clean`. sbt 2 puts output under `target/out/jvm/scala-<ver>/tda4j/`.
+("Not found: TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files** (`project.git = true`): `git add` a new
+file before `scalafmtAll`, or CI's lint fails on it (it did once).
 
 **Never run two `sbt` invocations against this checkout at once** — the incremental compiler's own class-file
 writes from one process can be read mid-update by the other, producing a `NoClassDefFoundError` that looks like a
