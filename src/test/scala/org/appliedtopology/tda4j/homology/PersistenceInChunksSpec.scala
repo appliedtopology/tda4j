@@ -23,6 +23,52 @@ class PersistenceInChunksSpec extends mutable.Specification:
         }
     stream
 
+  /** The real projective plane as a CW complex, one cell per dimension: the loop `L` has boundary 0 (listed as no
+    * entries at all, as a CW or Morse complex may), and the disc `D` is attached by `2L`.
+    */
+  enum ProjectivePlaneCell:
+    case V, L, D
+
+  "A CW complex whose loop lists no boundary (RP², one cell per dimension)" >> {
+    import ProjectivePlaneCell.*
+    given (ProjectivePlaneCell is OrderedCell) = new (ProjectivePlaneCell is OrderedCell):
+      override lazy val ordering = Ordering.by[ProjectivePlaneCell, Int](_.ordinal)
+      extension (c: ProjectivePlaneCell)
+        override def dim = c.ordinal
+        override def boundary[F: Field as fr]: Seq[(ProjectivePlaneCell, F)] =
+          if c == D then Seq((L, fr.one + fr.one)) else Seq.empty
+    val values = Map(V -> 0.0, L -> 1.0, D -> 2.0)
+    val stream = new StratifiedCellStream[ProjectivePlaneCell, Double]:
+      def filtrationValue = PartialFunction.fromFunction(values)
+      def filtrationOrdering =
+        FiltrationOrdering.canonical(filtrationValue, _.ordinal, Ordering.by[ProjectivePlaneCell, Int](_.ordinal))
+      val smallest = Double.NegativeInfinity
+      var largest = Double.PositiveInfinity
+      def iterateDimension: PartialFunction[Int, Iterator[ProjectivePlaneCell]] = {
+        case d if d >= 0 && d <= 2 => Iterator(ProjectivePlaneCell.fromOrdinal(d))
+      }
+    val inf = Double.PositiveInfinity
+    def run(p: Int) =
+      val field = FiniteField(p)
+      import field.given
+      val chunks = CellularPersistenceInChunksEngine[ProjectivePlaneCell, field.Fp](2).persistentHomology(stream)
+      val naive = CellularHomologyEngine[ProjectivePlaneCell, field.Fp, Double]().persistentHomology(stream)
+      val loopRepresentatives = chunks.barcodeAt(inf).filter(_.dim == 1).flatMap(_.annotation).map(_.cells)
+      (chunks.diagramAt(inf).sorted, naive.diagramAt(inf).sorted, loopRepresentatives)
+    // F_3: 2L kills the loop. F_2: 2L = 0, so the loop and the disc are both classes.
+    (run(3) must beEqualTo(
+      (List((0, 0.0, inf), (1, 1.0, 2.0)), List((0, 0.0, inf), (1, 1.0, 2.0)), List(Seq(L)))
+    )).and(
+      run(2) must beEqualTo(
+        (
+          List((0, 0.0, inf), (1, 1.0, inf), (2, 2.0, inf)),
+          List((0, 0.0, inf), (1, 1.0, inf), (2, 2.0, inf)),
+          List(Seq(L))
+        )
+      )
+    )
+  }
+
   "Homology of a triangle" >> {
     given shc: PersistenceInChunksEngine[Int, Double] = PersistenceInChunksEngine()
     import shc.{*, given}
