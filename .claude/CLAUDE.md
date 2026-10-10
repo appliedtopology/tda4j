@@ -45,7 +45,8 @@ see "Givens" below). The core's source directories are **file organization only,
   (+ `AlphaBackend`), `BowyerWatsonDelaunay` (default up to 4-D), `HelixDelaunay`, `AlphaComplexDQP`. `io/` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
 - root `package.scala` — `TDAlab` (below).
 - **add-on `sset`** (`import org.appliedtopology.tda4j.sset.*`, directory `sset/`) — simplicial sets (the Sage-parity
-  layer), group classifying spaces (persistent group homology, library-only), `BettiNumbers`, simplicial-set streams.
+  layer), nerves of groups, monoids and finite categories (persistent group homology, library-only), `BettiNumbers`,
+  simplicial-set streams.
   Depends on the core; the core uses it only through `TDAlab`'s generated re-exports. `rules/simplicial-sets.md`.
 - subpackages `matlab` (MATLAB facade) and `cli` (`TDA4jConf`/`TDA4jCLI`, thin translator over `matlab.TDA4j`) — leaves.
 - **sbt project `plot`** (`tda4j-plot`, package `org.appliedtopology.tda4j.plot`, directory `plot/`): plots and a live

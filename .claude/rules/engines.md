@@ -22,7 +22,8 @@ barcodes coincide.
    the reference baseline. Incremental (`advanceOne`/`advanceTo`/`advanceAll`, `diagramAt`/`barcodeAt` via
    V-columns). A raw-UnionFind fast path was measured and rejected (`WORKLOG-autonomous-session-2026-09-19.md`).
 2. **Chunks** (`CellularPersistenceInChunksEngine`) — clear-and-compress chunked algorithm, walks `0..maxDim+1`,
-   filters essentials to `<=maxDim`. Dims 0/1 via raw union-find (`unionFindDim01`, `DESIGN-unionfind-in-chunks.md`).
+   filters essentials to `<=maxDim`. Dims 0/1 via raw union-find (`unionFindDim01`, `DESIGN-unionfind-in-chunks.md`); an edge listing
+   no boundary (a CW/Morse loop) is cycle-forming, its own representative (`WORKLOG-brown-collapse.md`).
    `barcodeAt` via memoized `vcolOf` (a second full naive engine was **rejected by the project lead**, don't
    revive — `WORKLOG-chunks-representatives-incremental.md`). Invariants: a paired cell never becomes a pivot;
    `compress` runs to a fixpoint; a reconciliation step resolves "in limbo" cells first
@@ -118,20 +119,18 @@ already-computed per-class `theta`s (linearity of harmonic smoothing). Not a por
 
 ## Cross-engine benchmark
 
-`EngineComparisonBenchmarkSpec` times every (construction x engine) pairing across point count/dimension/`maxDim`,
-construction and reduction timed separately, per-cell timeout on daemon threads. Alpha and VR bar counts are
-never compared (circumradius vs diameter).
+`EngineComparisonBenchmarkSpec` times every (construction x engine) pairing over point count/dimension/`maxDim`
+(construction and reduction apart, per-cell timeout). Alpha and VR bar counts are never compared (radius vs diameter).
 
 **Benchmark specs** (`ProfilingSpec`, `ApparentPairsBenchmarkSpec`, `CubicalBenchmarkSpec`, `SparseRipsBenchmarkSpec`,
 `DimensionCeilingBenchmarkSpec`, `EngineComparisonBenchmarkSpec`, `RipserPaperBenchmarkSpec`, `EdgeCollapseBenchmarkSpec`, all in
-`homology`) print timing tables rather than assert; only an exception counts as a failure. All of them `skipAll` unless
-`-DrunBenchmarks=true` (a JVM system property, not specs2 `--` syntax); scope with `testOnly`
-(`EngineComparisonBenchmarkSpec` can take 15+ min; `RipserPaperBenchmarkSpec` also needs `-DdataDir`, optionally
-`-DripserBin=<path>` — see `.claude/scripts/run-ripser-paper-benchmark.sh`).
+`homology`) print timing tables; only an exception fails. All `skipAll` unless `-DrunBenchmarks=true` (a JVM property, not
+specs2 `--` syntax); scope with `testOnly` (`EngineComparisonBenchmarkSpec`: 15+ min; `RipserPaperBenchmarkSpec` also needs
+`-DdataDir`, optionally `-DripserBin=<path>`: `.claude/scripts/run-ripser-paper-benchmark.sh`).
 
-**`HomologySpec`'s `BarcodeRegressionSpec` is `skipAll`'d unconditionally and NOT on this flag**: chunks x
-`AlphaShapeDQP` on its own generator range produces enormous complexes (40 points/dim 4 → 102,090 simplices) that
-stall/OOM. Don't un-skip without bounding the scale problem (`WORKLOG-benchmark-and-chunks-bug.md`).
+**`HomologySpec`'s `BarcodeRegressionSpec` is `skipAll`'d unconditionally** (not on this flag): its chunks x
+`AlphaShapeDQP` range stalls/OOMs (40 points/dim 4: 102,090 simplices); bound the scale before un-skipping
+(`WORKLOG-benchmark-and-chunks-bug.md`).
 
 **Query contract (naive + chunks, `DiagramQuerySpec`, `WORKLOG-cursor-and-verb.md`)**: `diagramAt(f)`/`barcodeAt(f)`/
 `diagramWithGeneratorsAt(f)` give the diagram truncated at `f` -- bars born `<= f`, deaths capped at `f`, a class alive
