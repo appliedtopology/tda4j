@@ -20,7 +20,8 @@ object BarcodeDistance:
     case LInfinity
     case LP(p: Double)
 
-    private[tda4j] def require1(): Unit = this match
+    /** Throws unless this is a norm: `LP(p)` needs `p >= 1`. */
+    def require1(): Unit = this match
       case LP(p) => require(p >= 1.0, s"GroundNorm.LP requires p >= 1.0, got $p")
       case _     => ()
 

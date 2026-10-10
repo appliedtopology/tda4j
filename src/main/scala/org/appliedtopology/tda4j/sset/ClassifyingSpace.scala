@@ -3,6 +3,8 @@ package sset
 
 import org.appliedtopology.tda4j.*
 
+import cats.Show
+
 /** A non-degenerate simplex of the nerve `BG` of a finite group: the tuple `(g_1, ..., g_n)` of NON-identity elements
   * (a tuple containing the identity is degenerate). The empty tuple is the single vertex.
   */
@@ -10,6 +12,9 @@ final case class NerveSimplex(entries: Vector[Int]):
   def dim: Int = entries.length
 
 object NerveSimplex:
+  /** The bar notation `[g1|g2|g3]` of the group elements' indices (`[]` for the vertex). */
+  given nerveSimplexShow: Show[NerveSimplex] = Show.show(_.entries.mkString("[", "|", "]"))
+
   given Ordering[NerveSimplex] =
     Ordering.by[NerveSimplex, Vector[Int]](_.entries)(using Ordering.Implicits.seqOrdering[Vector, Int])
 
@@ -20,7 +25,7 @@ object NerveSimplex:
   * Faces: `d_0` drops the first entry, `d_n` the last, and `d_i` for `0 < i < n` multiplies entries `i` and `i + 1`; if
   * that product is the identity, the result is degenerate -- `s_{i-1}` applied to the tuple with both entries removed.
   */
-final class Nerve(monoid: FiniteMonoid, subset: Option[Set[Int]] = None) extends SimplicialSet[NerveSimplex]:
+open class Nerve(monoid: FiniteMonoid, subset: Option[Set[Int]] = None) extends SimplicialSet[NerveSimplex]:
   private val members = subset.getOrElse((0 until monoid.order).toSet)
   require(members.contains(monoid.identity), "a submonoid contains the identity")
   require(

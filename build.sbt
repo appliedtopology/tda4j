@@ -5,7 +5,50 @@ organization := "org.appliedtopology"
 // list 3.8.4 ... in crossScalaVersions"; `++3.8.4!` does, and release.yml uses it because the env var only reaches a
 // FRESH sbt server: a second `sbt` call in the same job joins the running server (thin client) and ignores it.
 // TODO: delete the override when 3.9.1 is released.
-scalaVersion := sys.env.getOrElse("TDA4J_SCALA_VERSION", "3.9.0")
+ThisBuild / scalaVersion := sys.env.getOrElse("TDA4J_SCALA_VERSION", "3.9.0")
+
+// Two projects: the core library (root) and `plot` (the `tda4j-plot` add-on, `plot/`), which depends on the core and
+// adds no dependency to it. In sbt 2 every bare setting of the build's .sbt files applies to EVERY project, so `plot`
+// below replaces what is the core's alone (dependencies, compiler flags, the docs site, the CLI main class, the tutorial
+// generator) instead of adding to it. Root aggregates `plot`, so CI's `test`, lint, `doc` and `mima` commands cover it
+// too; `assembly` does not aggregate (the CLI/MATLAB fat jar is the core's alone). The two reference each other only
+// through `aggregate(plot)` and `LocalRootProject`: two lazy vals naming each other deadlock the build loader.
+lazy val root = (project in file(".")).aggregate(plot)
+assembly / aggregate := false
+
+lazy val plot = (project in file("plot"))
+  .dependsOn(LocalRootProject)
+  .settings(
+    name := "tda4j-plot",
+    organization := "org.appliedtopology",
+    description := "Plots for TDA4j: barcodes, persistence diagrams, images, complexes and representatives as SVG and " +
+      "3-D pages, with a live browser viewer. No dependencies beyond TDA4j.",
+    versionScheme := Some("semver-spec"),
+    scalacOptions := List(
+      "-source:future",
+      "-language:experimental.modularity",
+      "-preview",
+      "-feature",
+      "-deprecation",
+      "-unchecked"
+    ),
+    // `:=`, not `+=`: the core's dependencies reach `plot` through `dependsOn`, not as its own.
+    libraryDependencies := libraryDependencies.value.filter(_.organization == "org.scala-lang") :+
+      "org.specs2" %% "specs2-core" % "5.5.1" % "test",
+    Compile / doc / scalacOptions := Seq("-project", name.value, "-project-version", docsVersion),
+    Compile / mainClass := None,
+    Test / sourceGenerators := Nil,
+    // Published as its own artifact from 0.5.1 on, so its MiMa baseline is the earlier releases of its series from
+    // that version on (the same rule as the core's, below); empty, and allowed to be, until 0.5.1 is out.
+    mimaPreviousArtifacts := mimaBaselineVersions(version.value, releaseTags((LocalRootProject / baseDirectory).value))
+      .filter { v =>
+        val Array(major, minor, patch) = v.split('.').map(_.toInt)
+        Ordering[(Int, Int, Int)].gteq((major, minor, patch), firstPlotRelease)
+      }
+      .map(v => organization.value %% name.value % v)
+      .toSet,
+    mimaFailOnNoPrevious := false
+  )
 
 versionScheme := Some("semver-spec")
 
@@ -104,6 +147,9 @@ def mimaBaselineVersions(current: String, tags: Seq[String]): Seq[String] = {
   }
 }
 
+// The first release that published `tda4j-plot` (see the `plot` project's MiMa baseline).
+val firstPlotRelease: (Int, Int, Int) = (0, 5, 1)
+
 // Compiler options: language features (implicitConversions, adhocExtensions) and warning flags.
 scalacOptions ++= List(
   "-source:future",
@@ -165,6 +211,23 @@ libraryDependencySchemes ++= Seq(
 mimaPreviousArtifacts := mimaBaselineVersions(version.value, releaseTags(baseDirectory.value))
   .map(v => organization.value %% name.value % v)
   .toSet
+
+// Deliberate breaks inside the series (see mimaBaselineVersions), each reviewed in its PR:
+// - `Chain` became an abstract class open to new storages: a subclass implements `entryIterator`, every other member
+//   defaults over it (the library's storages are `HeapChain` and `PackedChain`). In 0.5.0 its constructor was
+//   `private[tda4j]`, so no client could have extended or created a `Chain` directly.
+// - `Chain.chainShow` needs only `Show` of the cells, not `OrderedCell` (chains over simplicial-set generators, which
+//   have no given `OrderedCell`, are showable now). A given, found by implicit search: no source change for callers.
+mimaBinaryIssueFilters ++= {
+  import com.typesafe.tools.mima.core.*
+  Seq(
+    ProblemFilters.exclude[AbstractClassProblem]("org.appliedtopology.tda4j.Chain"),
+    ProblemFilters.exclude[ReversedMissingMethodProblem]("org.appliedtopology.tda4j.Chain.entryIterator"),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.Chain.chainShow(org.appliedtopology.tda4j.OrderedCell,cats.Show,org.appliedtopology.tda4j.Field)cats.Show"
+    )
+  )
+}
 
 // Tutorial pages are tests: every `_docs/tutorials/*.md` with a "## The whole script" section has that section's first
 // `scala` fence copied into a generated `object <Page>Script` (package `tutorial`), which `src/test/.../tutorial/*Spec`

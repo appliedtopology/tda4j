@@ -12,8 +12,8 @@ object Truncated:
     require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
     new TruncatedSimplexStream(stream, maxDimension + 1)
 
-  /** Internal: the same cut for a coface stream, keeping the coface-cache members the engines' own wrappers expect. */
-  private[tda4j] def ofCofaces(
+  /** The same cut for a coface stream, keeping the coface-cache members ([[CofaceSimplexStream]]) the engines read. */
+  def ofCofaces(
     stream: CofaceSimplexStream[Int, Double],
     maxDimension: Int
   ): LevelwiseSimplexStream[Int, Double] =
@@ -23,7 +23,7 @@ object Truncated:
 /** A stratified simplex stream cut off above simplex dimension `maxSimplexDimension`; filtration order and values are
   * the wrapped stream's own. (Use [[Truncated]], whose argument is a homological degree.)
   */
-private final class TruncatedSimplexStream(stream: LevelwiseSimplexStream[Int, Double], maxSimplexDimension: Int)
+open class TruncatedSimplexStream(stream: LevelwiseSimplexStream[Int, Double], maxSimplexDimension: Int)
     extends LevelwiseSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]:
   override def homologyDegreeLimit: Option[Int] =

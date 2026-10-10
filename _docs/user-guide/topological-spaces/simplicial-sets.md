@@ -188,7 +188,61 @@ The tutorial [Telling spaces apart](../../tutorials/telling-spaces-apart.md) wor
 
 #### Groups
 
-`FiniteGroup` (`cyclic(n)`, `symmetric(n)`, `permutationGroup(...)`, `product(g, h)`) and `ClassifyingSpace` compute
-group homology as the homology of `BG`. Filtering `BG` by a chain of subgroups gives *persistent* group homology; see
-the tutorial [Persistent group cohomology](../../tutorials/persistent-group-cohomology.md). `BG` has `(|G| − 1)ⁿ`
-generators in dimension `n`, so this is for small groups and low degrees.
+`FiniteGroup` (`cyclic(n)`, `symmetric(n)`, `alternating(n)`, `generalLinear(n, p)`, `permutationGroup(...)`,
+`product(g, h)`) and `ClassifyingSpace` compute group homology as the homology of `BG`. Filtering `BG` by a chain of
+subgroups gives *persistent* group homology; see the tutorial
+[Persistent group cohomology](../../tutorials/persistent-group-cohomology.md). `BG` has `(|G| − 1)ⁿ` generators in
+dimension `n`, so this is for small groups and low degrees.
+
+#### Monoids and categories
+
+The nerve of any finite category is a simplicial set, and its homology is that of the category's classifying space:
+
+- `Nerve(monoid)` for a `FiniteMonoid`. A monoid's nerve can look like no group's: `FiniteMonoid.rectangularBand(m, n)`
+  gives a wedge of `(m − 1)(n − 1)` two-spheres, and `FiniteMonoid.reesMatrix(...)` the other completely simple
+  semigroups (with an identity adjoined).
+- `SimplicialSet.nerve(category)` for a `FiniteCategory`, built with `fromMonoid`, `fromPoset` (the nerve is the order
+  complex), `freeOnAcyclicQuiver`, `actionGroupoid` (the nerve is homotopy equivalent to the disjoint union, one per
+  orbit, of the classifying spaces of the stabilizers) or `homotopyOrbits`: a group acting on a simplicial complex, whose
+  nerve is homotopy equivalent to the Borel construction, so its homology is equivariant homology. `validate()` checks
+  the category laws.
+- `FiniteGroup.pSubgroups(p)` and `isElementaryAbelian` give the posets of `p`-subgroups that Brown and Quillen studied.
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.sset.*
+
+BettiNumbers(Nerve(FiniteMonoid.rectangularBand(2, 3)), 3, 2)   // Vector(1, 0, 2, 0): two 2-spheres
+
+// The nontrivial 2-subgroups of GL(3, 2) under inclusion: a wedge of 8 circles.
+val gl32 = FiniteGroup.generalLinear(3, 2)
+val subgroups = FiniteCategory.fromPoset(gl32.pSubgroups(2), (a: Set[Int], b: Set[Int]) => a.subsetOf(b))
+SimplicialSet.nerve(subgroups).skeleton(3).bettiNumbers(2)      // Vector(1, 8, 0, 0)
+
+// Z/2 reflecting the boundary of a square (fixing vertices 0 and 2): over F_2, RP^∞ ∨ RP^∞.
+val square = Seq(Simplex(0, 1), Simplex(1, 2), Simplex(2, 3), Simplex(0, 3))
+val reflection = FiniteCategory.homotopyOrbits(FiniteGroup.cyclic(2), square, (g, v) => if g == 0 then v else (4 - v) % 4)
+val borel = SimplicialSet.nerve(reflection)
+BettiNumbers(borel, 3, 2)                                       // Vector(1, 2, 2, 2)
+BettiNumbers(borel, 3, 3)                                       // Vector(1, 0, 0, 0)
+```
+
+Most nerves are infinite. `persistentHomology(filtration, maxDegree, prime)` works on any simplicial set, infinite ones
+included: it builds the `(maxDegree + 1)`-skeleton and returns a `PersistenceDiagram` with a representative cycle for
+every bar. `ClassifyingSpace.filtrationBy(chain)` filters a monoid's nerve by a chain of submonoids, and
+`nerve.filtrationBy(chain)` a category's nerve by a chain of subcategories (each a set of morphisms). Here the circle
+(the subcategory of the identity element) maps into the Borel construction:
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.sset.*
+
+val square = Seq(Simplex(0, 1), Simplex(1, 2), Simplex(2, 3), Simplex(0, 3))
+val rotation = FiniteCategory.homotopyOrbits(FiniteGroup.cyclic(2), square, (g, v) => if g == 0 then v else (v + 2) % 4)
+val nerve = SimplicialSet.nerve(rotation)
+val chain = Seq(rotation.morphismsOver(Set(0)), (0 until rotation.morphismCount).toSet)
+nerve.persistentHomology(nerve.filtrationBy(chain), 2, 2).dim(1).triples
+// (1, 0.0, 1.0) and (1, 1.0, Infinity): the half-turn is a double cover, zero on H_1 over F_2
+```

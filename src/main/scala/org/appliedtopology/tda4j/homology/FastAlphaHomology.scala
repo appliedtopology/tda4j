@@ -6,7 +6,7 @@ import scala.collection.mutable
   * cofaces, which its dual graph cannot represent. Not expected on ordinary input (Helix checks and repairs its own
   * triangulation), and never a problem with the data: the general engines handle the same points. The message says so.
   */
-class FastAlphaTriangulationException(message: String) extends RuntimeException(message)
+open class FastAlphaTriangulationException(message: String) extends RuntimeException(message)
 
 /** Persistent homology of a Helix alpha complex by union-find instead of matrix reduction: degree 0 on the vertices and
   * edges, the top degree `d - 1` on the dual graph of the top-dimensional simplices, as in
@@ -19,7 +19,7 @@ class FastAlphaTriangulationException(message: String) extends RuntimeException(
   * points). A facet's dual-edge value is its own filtration value, which can be smaller than its cofaces' circumradii
   * (a Gabriel edge).
   */
-class FastAlphaHomologyEngine[CoefficientT: Field]:
+open class FastAlphaHomologyEngine[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
   given Ordering[Simplex[Int]] = simplexOrdering[Int]
 
@@ -249,7 +249,7 @@ object FastAlphaHomologyEngine:
   /** Throws [[FastAlphaTriangulationException]] unless every facet has one or two top-dimensional cofaces: the dual
     * graph the engine walks is not defined otherwise.
     */
-  private[tda4j] def requireDualGraph(facetToTopIds: Map[Simplex[Int], Vector[Int]], ambientDimension: Int): Unit =
+  def requireDualGraph(facetToTopIds: Map[Simplex[Int], Vector[Int]], ambientDimension: Int): Unit =
     // Unlike a cubical grid, this is a real precondition: HelixDelaunay does not guarantee it. With the frontier walk
     // before its minimal-centre candidate search, roughly 1 in 18700 random 2-D clouds and 1 in 1666 3-D clouds of
     // 20-30 points failed it (.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md); with the current walk none of

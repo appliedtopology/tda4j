@@ -5,6 +5,7 @@ import scala.collection.concurrent.TrieMap
 import com.dreizak.miniball.model.PointSet
 import com.dreizak.miniball.highdim.Miniball
 
+// File-private: an adapter to the Miniball library's interface; the radii are public through `CechFiltration`.
 /** Miniball's `PointSet` over a coordinate array. */
 private class MiniballPointSet(points: Array[Array[Double]]) extends PointSet:
   override def size: Int = points.length
@@ -58,7 +59,7 @@ object CechFiltration:
   *
   * `maxFiltrationValue` is a radius.
   */
-private[tda4j] class CechCofaceSimplexStream(
+open class CechCofaceSimplexStream(
   val euclideanMetricSpace: EuclideanMetricSpace,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
   maxFiltrationValue: Option[Double] = None,

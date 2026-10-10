@@ -4,7 +4,7 @@ package org.appliedtopology.tda4j
   * persistence-diagram format in this package (`CSV`, `Gudhi`). `Dipha`'s binary persistence-diagram format uses its
   * own numeric essential-class convention instead (a negative dimension field) and doesn't need this.
   */
-private[tda4j] object Endpoints:
+object Endpoints:
   private def parseValue(s: String): Either[BarcodeEndpoint[Double], Double] =
     val t = s.trim.toLowerCase
     if t == "inf" || t == "+inf" || t == "infinity" || t == "+infinity" then Left(PositiveInfinity[Double]())

@@ -39,6 +39,9 @@ Outside the core:
 - **`cli`** — the `tda4j` executable (`TDA4jConf`, `TDA4jCLI`), a thin translator over `matlab.TDA4j`.
 - **`matlab`** — `TDA4j`/`PersistenceResult`/`LandmarkSelectionResult`, the plain-primitives facade for MATLAB and
   other Java callers.
+- **`plot`** (`org.appliedtopology.tda4j.plot`, its own sbt project in `plot/`, artifact `tda4j-plot`) — plots of
+  barcodes, diagrams, images, complexes and representatives as SVG and 3-D pages, and a live browser viewer. It depends
+  on the core's public API only and adds no dependency to it. See [Plotting](../user-guide/plotting.md).
 
 **Load-bearing rule for givens**: the core package has no top-level `given`s. Default instances live in the companion
 of the data type they serve (`object Simplex` holds `Simplex[V] is OrderedCell`, the `Ordering` derived from it and
@@ -128,10 +131,23 @@ directly against `SimplexIndexing`'s cofacet iterator instead (see
 ### `Chain`
 
 `Chain[CellT: Ordering, CoefficientT: Field]` (`algebra/Chain.scala`) is a formal sum of cells with field
-coefficients, backed by a mutable `PriorityQueue` ordered so the *smallest* cell under the ambient
-`Ordering[CellT]` sits at the head — cheap to peek, since "leading term" (the reduction pivot) is queried
-constantly.
+coefficients, kept in an order on the cells: its leading term (the reduction pivot) is the *smallest* cell. The
+chain itself holds its `Ordering` and its `Field`. `Chain` is abstract and open to new storages: a subclass passes
+the order and the field to `Chain`'s constructor and implements `entryIterator` (its stored entries, a cell possibly
+repeated or with a zero total); every other member (`terms`, `isZero`, `leadingTerm`, `rawEntries`, the collapses) has
+a default built on it, which a storage may override for speed, and reductions, arithmetic, `boundary` and equality use
+nothing else. The library has two storages (both `final`: the reductions match on them):
 
+- `HeapChain`, what `Chain(...)`, `Chain.from` and all arithmetic make: a mutable `PriorityQueue` ordered so the
+  smallest cell sits at the head — cheap to peek, since the leading term is queried constantly.
+- `PackedChain`, how the grid engines (`FastCubicalHomologyEngine`, `PackedCubicalCohomologyEngine`) store their
+  representatives: the cells as integer keys (doubled-grid indices), distinct and sorted under the chain's order,
+  the nonzero coefficients in a parallel array, and a decoder (`GridCubes`) that turns a key into its cube. Reading
+  it (`terms`, `cells`, `leadingTerm`, `boundary`, equality) decodes the cells afresh and never changes it;
+  arithmetic on it returns a `HeapChain`.
+
+- Equality compares formal sums: the same cells, each with coefficients equal by the field's own `isEqual` (a
+  field element can have several representations), whatever the order or the storage.
 - `collapseHead()`/`collapseAll()` merge duplicate-cell entries, dropping exact zeros. Naive `+`/`-`/`⊠`
   only lazily collapse the head, so a hand-rolled reduction loop built out of raw `Chain` arithmetic
   accumulates an ever-growing backlog of uncollapsed duplicates — see
@@ -141,7 +157,9 @@ constantly.
   pivot columns, repeatedly subtract the appropriate multiple of `basis(pivot)` until `z`'s leading cell is
   no longer a key in `basis`, returning both the reduced chain and a reduction-log chain (the multipliers
   used) that lets a caller reconstruct a V-column. Internally these go through a `mutable.TreeMap`, not the
-  `PriorityQueue`-backed `Chain` type, so repeated updates collapse duplicates automatically.
+  `PriorityQueue`-backed `Chain` type, so repeated updates collapse duplicates automatically. Each step clears its
+  pivot, so the pivot never moves back; a column whose leading cell is not the key it is stored under makes it move
+  back (or stay put), and the reduction throws instead of looping forever.
 - `given [CellT: Ordering, CoefficientT: Field] => (Chain[CellT, CoefficientT] is RingModule)` is what makes
   `+`, `-`, `⊠`, `unary_-` work on `Chain` values — the `given` whose summon *timing* matters, see
   [Hard-won invariants](gotchas.md).
@@ -151,8 +169,9 @@ constantly.
 **Public entry points.** Ask for a complex through one object per kind: `VietorisRips`, `Cech`, `Witness`, `Dowker`,
 `DtmRips`, `SparseRips` (plus `Truncated` to cut any coface stream off), each taking `maxDimension` as the top
 homological degree you want and building one dimension higher internally. The sections below describe the implementation
-classes those objects choose between (`EnumeratingCofaceSimplexStream`, `CechCofaceSimplexStream`, ...); those are
-internal detail, kept for cross-validation, and not what a user should reach for. See
+classes those objects choose between (`EnumeratingCofaceSimplexStream`, `CechCofaceSimplexStream`, ...). They are
+public: the objects are the documented entry, and the classes are what to extend when building a new filtered complex
+on the same machinery (most of them reuse `RipserCofaceSimplexStream`'s coface loop). See
 `.claude/DESIGN-stream-naming.md`.
 
 A `CellStream[CellT, FiltrationT]` is the abstract interface every persistence engine consumes: an iterator
@@ -239,9 +258,10 @@ own `unionFindDim01` uses, run in DESCENDING primal-value order with every resul
 Combined with an ordinary primal `H_0` union-find, this covers every nontrivial dimension a 2D grid has (`H_2`
 is identically zero for any subcomplex of a 2D grid) with no general `Chain` reduction at all — **valid at any
 ambient dimension `>= 2`** (`require`d, checked again with a clearer message at the `matlab.TDA4j`/`cli`
-layer). At `d >= 3`, the "middle" dimensions (`1 <= k <= d-2`, no duality shortcut) are handed to
-`CellularPersistenceInChunksEngine` run on a view that hides the real top-dimensional cells entirely, so the
-(often largest) top dimension never touches general `Chain` reduction — see
+layer). At `d >= 3`, the "middle" dimensions (`1 <= k <= d-2`, no duality shortcut) are handed to cohomology on
+the grid's cells below the top dimension (`PackedCubicalCohomologyEngine`, equal term for term to
+`CellularCohomologyEngine` on a `LimitedCubicalGridStream`), so the (often largest) top dimension never enters a
+reduction — see
 `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`.
 
 `∞` must be the unconditional elder of any merge it takes part in — its own chain is deliberately never
@@ -525,7 +545,7 @@ produces `Double` filtration values, and a metric distance needs real arithmetic
   `order`/`wasserstein_power`). Essential (never-dying) bars are matched only to each other, by sorted birth
   value; a mismatched essential-bar count between the two diagrams reports `Double.PositiveInfinity`, not an
   exception — a real, meaningful answer ("no finite matching exists"), not a failure. Built on two
-  package-private combinatorial primitives in `BipartiteMatching.scala` (`HopcroftKarp` for the bottleneck
+  public combinatorial primitives in `BipartiteMatching.scala` (`HopcroftKarp` for the bottleneck
   binary search, `Hungarian` for Wasserstein's assignment problem) — both independently unit-tested against
   brute-force permutation search, not just exercised indirectly through `BarcodeDistance` itself.
 - **`Vectorization`**: persistence landscapes (Bubenik 2013) and persistence images (Adams et al. 2017),

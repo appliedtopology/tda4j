@@ -5,7 +5,8 @@ import org.appliedtopology.tda4j.*
 import scala.collection.mutable
 
 // The "complex"/"engine"/"field" options, parsed once into enums before anything runs. The CLI passes its flags through
-// as strings and relies on this same parsing.
+// as strings and relies on this same parsing. Private: the facade's contract is its string options and Java arrays (a
+// leaf nothing builds on); every computation it dispatches to is public in the core.
 private enum ComplexKind:
   case VR, Alpha, Cech, Witness, DtmRips, DtmAlpha, SparseRips
 
@@ -263,9 +264,12 @@ object TDA4j:
     computeFromCubicalImage(shape, flatValues, Array.empty[String])
 
   /** Persistence of an image or voxel grid of any dimension: the values in row-major order (last axis fastest) and the
-    * size along each axis. Options: `engine` (`naive`, the default, `chunks`, `cohomology`, or `fast-cubical` for two
-    * dimensions and up), `maxDimension` (default: the grid's dimension), `sublevel` (`false` for superlevel sets, whose
-    * filtration values are negated intensities), `field`, `prime`, `epsilon`, and the bar options.
+    * size along each axis. Options: `engine` (`fast-cubical`, the default for two dimensions and up; `cohomology`, the
+    * default for one dimension and for `representativeType` `cocycles`; `naive`, `chunks`), `maxDimension` (default:
+    * the grid's dimension), `sublevel` (`false` for superlevel sets, whose filtration values are negated intensities),
+    * `representativeType`, `field`, `prime`, `epsilon`, and the bar options. A pixel of value `Inf` (`-Inf` with
+    * `sublevel` `false`) never enters (a mask, for missing data); a NaN value is refused, with a message naming the
+    * pixel.
     */
   def computeFromCubicalImage(
     shape: Array[Int],

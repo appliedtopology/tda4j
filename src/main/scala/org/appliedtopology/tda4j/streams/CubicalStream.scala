@@ -7,12 +7,13 @@ import scala.collection.parallel.CollectionConverters.*
 /** The cubical complex of a full rectangular grid, filtered by the values of its top cells (pixels, voxels): every
   * other cube gets the minimum value of the top cells containing it, the sublevel-set convention of GUDHI, DIPHA and
   * Perseus. A face is contained in every top cell its cofaces are, so the filtration is monotone. For superlevel sets,
-  * negate the values (what [[CubicalImage]]'s `sublevel = false` does).
+  * negate the values (what [[CubicalImage]]'s `sublevel = false` does). A top cell of value `Double.PositiveInfinity`
+  * never enters (a mask); a NaN value is refused, naming the pixel, when the values are first read.
   *
   * `shape(i)` is the number of pixels along axis `i`. The complex has `prod_i (2 shape(i) + 1)` cells
   * (`totalCellCount`): a 256x256 image has 513² = 263169.
   */
-class CubicalGridStream(
+open class CubicalGridStream(
   val shape: IndexedSeq[Int],
   val topCellValue: IndexedSeq[Int] => Double,
   // Read every top cell's value in parallel when the values are first needed. `topCellValue` must then be safe to call
@@ -51,22 +52,46 @@ class CubicalGridStream(
     for i <- ambientDim - 2 to 0 by -1 do w(i) = w(i + 1) * doubledShape(i + 1)
     w
 
+  /** Every top cell's value in row-major order (the last axis fastest), read from `topCellValue` once (in parallel when
+    * `parallelFiltrationValue`): the pixels of the image, as [[CubicalImage.fromFlatArray]] takes them. A read-only
+    * view of [[topCellValues]], which is not copied.
+    */
+  def topValues: IndexedSeq[Double] = scala.collection.immutable.ArraySeq.unsafeWrapArray(topCellValues)
+
+  // `protected[tda4j]`, not public: a caller writing into this array would change the grid behind `cellValues`, which
+  // is computed from it once. A subclass may override it (FlatCubicalGridStream hands its own pixel array over).
+  /** Every top cell's value in row-major order (the last axis fastest): the flat array the grid engines and
+    * `cellValues` work from.
+    */
+  protected[tda4j] lazy val topCellValues: Array[Double] =
+    val pixelCount = shape.foldLeft(1L)(_ * _)
+    require(pixelCount <= Int.MaxValue, s"CubicalGridStream: $pixelCount top cells do not fit in one array")
+    val values = new Array[Double](pixelCount.toInt)
+    val pstride = shape.scanRight(1)(_ * _).tail
+    def read(p: Int): Unit = values(p) = topCellValue(IndexedSeq.tabulate(ambientDim)(i => (p / pstride(i)) % shape(i)))
+    if parallelFiltrationValue then (0 until pixelCount.toInt).par.foreach(read)
+    else
+      var p = 0
+      while p < values.length do
+        read(p)
+        p += 1
+    // A NaN would reach every face of its pixel through `math.min`, and they would enter after it.
+    var p = 0
+    while p < values.length do
+      if values(p).isNaN then throw GridRanks.nanPixel(shape.toArray, p)
+      p += 1
+    values
+
   private lazy val cellValues: Array[Double] =
     val total = totalCellCount
     require(total <= Int.MaxValue, s"CubicalGridStream: $total cells do not fit in one array")
     val values = Array.fill(total.toInt)(Double.PositiveInfinity)
-    val pixelCount = shape.product
+    val pixels = topCellValues
     val pstride = shape.scanRight(1)(_ * _).tail
-    def place(p: Int): (Int, Double) =
-      val coords = IndexedSeq.tabulate(ambientDim)(i => (p / pstride(i)) % shape(i))
+    for p <- pixels.indices do
       var index = 0L
-      for i <- 0 until ambientDim do index += (2L * coords(i) + 1L) * cellWeight(i)
-      (index.toInt, topCellValue(coords))
-    if parallelFiltrationValue then (0 until pixelCount).par.map(place).seq.foreach((i, v) => values(i) = v)
-    else
-      for p <- 0 until pixelCount do
-        val (i, v) = place(p)
-        values(i) = v
+      for i <- 0 until ambientDim do index += (2L * ((p / pstride(i)) % shape(i)) + 1L) * cellWeight(i)
+      values(index.toInt) = pixels(p)
     for axis <- 0 until ambientDim do
       val w = cellWeight(axis).toInt
       val len = doubledShape(axis)
@@ -120,8 +145,30 @@ class CubicalGridStream(
       cubes.sorted(using filtrationOrdering.reverse).iterator
   }
 
+/** A grid whose top-cell values are already one flat row-major array, as [[CubicalImage.fromFlatArray]] builds it: the
+  * engines read the array itself instead of calling `topCellValue` once per pixel.
+  */
+open class FlatCubicalGridStream(
+  shape: IndexedSeq[Int],
+  pixels: Array[Double],
+  parallelFiltrationValue: Boolean = false
+) extends CubicalGridStream(shape, FlatCubicalGridStream.reader(shape, pixels), parallelFiltrationValue):
+  override protected[tda4j] lazy val topCellValues: Array[Double] = pixels
+
+object FlatCubicalGridStream:
+  /** `topCellValue` for a row-major array. */
+  def reader(shape: IndexedSeq[Int], pixels: Array[Double]): IndexedSeq[Int] => Double =
+    val strides = shape.scanRight(1)(_ * _).tail.toArray
+    idx =>
+      var flat = 0
+      var i = 0
+      while i < strides.length do
+        flat += idx(i) * strides(i)
+        i += 1
+      pixels(flat)
+
 /** `stream` without its cells of dimension above `maxDim`, with the same values and order. */
-class LimitedCubicalGridStream(stream: CubicalGridStream, maxDim: Int)
+open class LimitedCubicalGridStream(stream: CubicalGridStream, maxDim: Int)
     extends StratifiedCellStream[Cube, Double]
     with DoubleFiltration[Cube]():
   override def iterateDimension: PartialFunction[Int, Iterator[Cube]] = {
@@ -135,7 +182,7 @@ class LimitedCubicalGridStream(stream: CubicalGridStream, maxDim: Int)
 /** A finite set of cubes with explicit filtration values, the cubical counterpart of `ExplicitStream`: for small
   * hand-built complexes and cubical complexes that are not a full grid.
   */
-class ExplicitCubicalStream(
+open class ExplicitCubicalStream(
   protected val filtrationValues: Map[Cube, Double],
   protected val cubes: Seq[Cube]
 ) extends StratifiedCellStream[Cube, Double]

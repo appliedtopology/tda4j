@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **How this file works.** Each entry is a current rule, invariant, or known limitation, plus a pointer to the
 `.claude/WORKLOG-*.md`/`DESIGN-*.md` that holds its derivation (what was tried, measurements, repros). Derivations
-go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes"). Last condensed 2026-10-03; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md` (and the commits named there).
+go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes"). Last condensed 2026-10-10 (lab detail to `rules/labs.md`); 2026-10-09; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md` (and the commits named there).
 
 ## What this is
 
@@ -44,13 +44,13 @@ see "Givens" below). The core's source directories are **file organization only,
 - `barcode/` — `Barcode`, `PersistenceDiagram`, `PersistenceFilter`, distances, vectorizations. `alpha/` — `AlphaShapes`
   (+ `AlphaBackend`), `BowyerWatsonDelaunay` (default up to 4-D), `HelixDelaunay`, `AlphaComplexDQP`. `io/` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
 - root `package.scala` — `TDAlab` (below).
-- **add-on `sset`** (`org.appliedtopology.tda4j.sset`, directory `sset/`; users opt in with
-  `import org.appliedtopology.tda4j.sset.*`) — simplicial sets (the Sage-parity layer) AND group classifying spaces
-  (`FiniteGroup`, `ClassifyingSpace`: nerve `BG` filtered by a subgroup chain = persistent group homology; library-only,
-  no MATLAB/CLI; cost `(|G|-1)^n` cells, S₄ to H₂ ≈ 4 s, `DESIGN-persistent-group-cohomology.md`), `BettiNumbers`,
-  `SimplicialSetStream`/`FilteredSimplicialSetStream`. Depends on the core; nothing in the core uses it except `TDAlab`'s
-  generated re-exports. Detail: `rules/simplicial-sets.md`.
+- **add-on `sset`** (`import org.appliedtopology.tda4j.sset.*`, directory `sset/`) — simplicial sets (the Sage-parity
+  layer), nerves of groups, monoids and finite categories (persistent group homology, library-only), `BettiNumbers`,
+  simplicial-set streams.
+  Depends on the core; the core uses it only through `TDAlab`'s generated re-exports. `rules/simplicial-sets.md`.
 - subpackages `matlab` (MATLAB facade) and `cli` (`TDA4jConf`/`TDA4jCLI`, thin translator over `matlab.TDA4j`) — leaves.
+- **sbt project `plot`** (`tda4j-plot`, package `org.appliedtopology.tda4j.plot`, directory `plot/`): plots and a live
+  browser viewer, no dependencies; aggregated by root, not published yet. `rules/plotting.md`.
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
   sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
   `sbt doc` checks that doc fences resolve from outside.
@@ -74,7 +74,9 @@ forgotten `F_p` import into real coefficients and wrong torsion answers). A top-
 visible everywhere in the flat package, `[CellT: OrderedCell] => Ordering[CellT]` made `SimplicialHomologyEngine()`
 infer `VertexT = BarcodeEndpoint[Cube]`. Opt-in derivations are named givens imported by name: `import
 OrderedCell.cellOrdering` (generic code holding only `CellT: OrderedCell`), `Field.showFromField`. `UserImportsSpec`
-pins this from the user's side.
+pins this from the user's side. `Show` likewise: every user-facing data type has one in its companion; cats' `Show` is
+invariant, so a hierarchy's instance is typed `[..., D <: Base] => Show[D]` (`endpointShow`, `diagramShow`)
+(`WORKLOG-show-instances.md`).
 
 ## Commands
 
@@ -92,22 +94,17 @@ sbt assembly                    # fat jar for CLI/MATLAB
 sbt -DrunBenchmarks=true test   # also run benchmark/profiling specs — NOT what CI runs
 ```
 
-If `sbt` isn't on `PATH`, run `.claude/scripts/install-sbt.sh` (paces around Maven Central's cold-cache rate limits).
+If `sbt` isn't on `PATH`, run `.claude/scripts/install-sbt.sh` (paces around Maven Central's cold-cache rate limits); in
+the cloud environment's setup script it saves new sessions a 20-40 minute cold start.
 
-No linter beyond scalafmt. Tests are specs2 (`org.specs2.mutable.Specification`). CI: `test.yml` (three parallel jobs `test`, `docs-build`, `mima`),
-`lint.yml` (scalafmt: build files, main and test sources), both on every PR to `scala` and cancelled when the PR is pushed again; `docs.yml` (scaladoc → GitHub Pages, push to `scala` only). MiMa's baseline is every earlier plain release of the same compatibility series (`mimaBaselineVersions` in `build.sbt`), so it compares against nothing while only `0.5.0-SNAPSHOT` exists. The ~319 `-Wunused:all` warnings
-(mostly unused wildcard imports) are deliberately left alone (`WORKLOG-compiler-warnings.md`).
-
-**`sbt scalafmtSbt`/`scalafmtSbtCheck` format the build definition** (`build.sbt`, `project/*.sbt`), and CI's lint job
-runs the check: format `build.sbt` before pushing it.
-
-**Docs are built with Scala 3.8.4, everything else with 3.9.0** (scaladoc 3.9.0's JavaScript is broken; this
-includes the `ux.js` `$.get` navigation bug). The pin is the `TDA4J_SCALA_VERSION` env var read by `scalaVersion`
-in `build.sbt`, set only on the docs steps of `test.yml` (`docs-build`) and `docs.yml`. The env var reaches only a FRESH sbt server: sbt 2 is a thin client, so a later `sbt` call in the same job joins the running server and silently builds with 3.9.0 -- `release.yml` therefore switches inside its one invocation with `++3.8.4!` (`++3.8.4` without `!` is rejected). sbt 2 puts output under
-`target/out/jvm/scala-<ver>/tda4j/`. Remove the pin when 3.9.1 releases.
-
-**After `sbt package` or a 3.8.4 docs build, a test compile can see no main classes at all** ("Not found: TDAlab");
-`sbt clean` fixes it -- stale incremental state, not code.
+No linter beyond scalafmt; tests are specs2 (`org.specs2.mutable.Specification`). CI on every PR to `scala`: `test.yml`
+(jobs `test`, `docs-build`, `mima`) and `lint.yml` (`scalafmtSbtCheck` on `build.sbt` too: format it before pushing);
+`docs.yml` publishes on push to `scala`. MiMa checks against every earlier plain release of the series
+(`mimaBaselineVersions`); a deliberate break is a commented `mimaBinaryIssueFilters` entry (project lead: binary
+compatibility is not a strong requirement before 1.0). The ~319 `-Wunused:all` warnings are deliberately left alone
+(`WORKLOG-compiler-warnings.md`). Docs build with Scala 3.8.4 (`TDA4J_SCALA_VERSION`, seen only by a FRESH sbt server:
+`rules/docs-and-tutorials.md`). After `sbt package` or a docs build a test compile can miss main classes ("Not found:
+TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
 
 **Never run two `sbt` invocations against this checkout at once** — the incremental compiler's own class-file
 writes from one process can be read mid-update by the other, producing a `NoClassDefFoundError` that looks like a
@@ -115,12 +112,10 @@ real regression but disappears on a clean, sequential rerun.
 
 ## User-facing entry points: `Persistence`, labs, the cursor
 
-**Every user file needs `import scala.language.experimental.modularity`** (or `-experimental`): the library is
-compiled with that flag, so every definition in it is `@experimental` and Scala refuses to let non-experimental code
-use it. Removing the flag is not cheap -- the `Self`-member typeclass context bounds (`C: Field`) are the experimental
-part (~100 errors without it). With that one line, a plain downstream project needs nothing else (no `-preview`: the
-`into` conversions work), checked against the packaged jar (`WORKLOG-cursor-and-verb.md`). Doc fences must include the
-line even though the docs build (project flags) would compile them without it.
+**Every user file needs `import scala.language.experimental.modularity`** (or `-experimental`): every definition of the
+library is `@experimental` (the `Self`-member context bounds `C: Field` need the flag; ~100 errors without it). With
+that line a plain downstream project needs nothing else, `into` conversions included (packaged jar checked,
+`WORKLOG-cursor-and-verb.md`). Doc fences include the line although the docs build would not need it.
 
 **`Persistence(input, maxDimension = 2, maxFiltrationValue, complex = VietorisRips, characteristic = 17, engine = Auto)`**
 (`homology/Persistence.scala`) is the one-call verb: points/metric space/`Image`/any stream in, an immutable
@@ -148,23 +143,13 @@ Engines also have inferring companion forms: `SimplicialHomologyEngine.persisten
 `None`; point inputs take `Array[Array[Double]]`, `Seq[Seq[Double]]`, `Seq[Array[Double]]`. Use them for new public
 signatures instead of `Option[Double]` / a fixed collection type. `AlphaBackend` (enum) replaced string dispatch.
 
-### TDAlab and the other labs
+### TDAlab and the other labs (detail: `rules/labs.md`)
 
-`abstract class Lab(characteristic, precision = 1e-9)` (root `package.scala`) carries what every lab shares
-(coefficients via `Coefficients`, `Fp`, the re-exports, `.show`); `TDAlab` (simplicial) and `CubicalLab` extend it,
-with prebuilt objects `TDAlab.F2`/`F3`/`F17`/`Reals` (likewise `CubicalLab`): `import TDAlab.F17.{*, given}` must be the
-ONLY library import a lab user needs. It brings `CoefficientT`, `Fp(...)`, the
-field's given, chain arithmetic (`⊠`, `+`, `-`) on `Chain[Simplex[Int], CoefficientT]`, a `Simplex -> Chain` conversion,
-Cats `.show` syntax, and flat re-exports of every public top-level class/trait/object/type/enum of the core and the
-`sset` add-on, plus the `∆` val. The re-export block is GENERATED (`.claude/scripts/tdalab-exports.py`, between `BEGIN/END
-generated re-exports` markers) and guarded by `TDAlabExportsSpec` -- rerun the script after adding a public type. Only
-types and val aliases are re-exported (a re-exported def is ambiguous for users who import both). Hence `∆`
-is `val ∆ : Simplex.type = Simplex`, and top-level defs have companion spellings that ride along with the re-exported
-objects (`Simplex.fromSortedSet`/`ordering`/`isOrderedCell`, `Cube.fromVector`/`ordering`/`isOrderedCell`). No namespace objects (`tdalab.streams.X` is gone) and no given re-exports (defaults
-come from companions). `characteristic = 0` means `Double`, a prime `p` `Z/p`. `TDAlab` fixes `Int` vertices (opinionated by design). A lab is never consulted by an engine (no
-`TDAContext`-style context classes). Cats (`cats-core`,
-`kittens`) is a dependency for `Show`; `Chain` is declared `into class` (needs `-preview`; `// format: off` around it
-because scalafmt can't parse `into`) and implicit conversions are enabled in-source, not by a flag.
+`TDAlab`/`CubicalLab` extend `abstract class Lab(characteristic, precision)`; prebuilt `TDAlab.F2`/`F3`/`F17`/`Reals`.
+`import TDAlab.F17.{*, given}` must be the ONLY library import a lab user needs: coefficients, `Fp(...)`, chain
+arithmetic, `.show`, and GENERATED flat re-exports of every public top-level type of the core and `sset` -- rerun
+`.claude/scripts/tdalab-exports.py` after adding or opening one (`TDAlabExportsSpec` guards it). A lab is never
+consulted by an engine.
 
 ## Scala style used throughout
 
@@ -178,10 +163,8 @@ Uses Scala 3.7+'s newest context-abstraction syntax — don't "correct" it to ol
   is extension methods.
 - Optional parameters, never sentinels: `Optional[Double]` (below) for public ones, `None` + `.getOrElse(...)` inside
   (a default cannot reference an earlier parameter of the same list).
-- A method's own `[T: Ordering, C: Field]`-style context bounds desugar to a `using` clause appended AFTER every
-  explicit parameter list — so a default value earlier in that same signature cannot reference the given that
-  default itself needs. No workaround short of every caller passing the value explicitly, or restructuring the
-  signature so the context bound is a `using` clause of its own, ahead of that parameter (`Chain.reduceByUntil`).
+- A method's context bounds desugar to a `using` clause AFTER every explicit parameter list, so an earlier default
+  cannot use that given: make it a `using` clause of its own ahead of the parameter (`Chain.reduceByUntil`).
 
 **Opaque-type extension methods** live in the type's companion (`object Simplex`/`Cube`), found by implicit scope.
 Hazards: opaque transparency is file-scoped (so `simplexIsOrderedCell`/`cubeIsOrderedCell` live in their own files), and
@@ -211,14 +194,40 @@ proper nouns (external projects' own spellings), correctly titlecased.
 every homology implementation should (a) be generic over `Field` coefficients and (b) return representatives (a
 real chain witnessing each bar). An optimization that abandons representatives is probably not worth it. Every
 public interface (MATLAB facade included) should expose representatives; anywhere that doesn't is incomplete.
-**Current gaps**: none known — every engine, including `PackedRipserCohomologyEngine`'s apparent-pairs shortcut,
-records a representative for every bar.
+**Current gaps**: every engine records a representative for every bar (`PackedRipserCohomologyEngine`'s apparent pairs
+too); `ClassifyingSpace.persistentGroupHomology` returns triples only (`nerve.persistentHomology(filtrationBy(chain),..)`
+has them).
+
+**Openness principle (project lead, foundational: the library is a platform for experiments and research)**: public
+and extensible by default. Access modifiers are not documentation: "not the entry point" is said in scaladoc ("what
+`VietorisRips` builds"), never by hiding the class. A restriction (`private[tda4j]`, `sealed`, `final` on a class)
+carries a `//` comment naming one of these reasons:
+1. Invariant-bearing mutable state or an unchecked constructor: restrict it, and expose a read-only view or a checked
+   factory (`CubicalGridStream.topValues` over `protected[tda4j] topCellValues`; `EdgeCollapsedMetricSpace.edges`).
+2. A library-wide guarantee: nothing public drops representatives (`barsWithoutTopRepresentatives`).
+3. The flat namespace: a public top-level name joins every user's wildcard import and silently shadows their own
+   same-named definition, so generic helpers (`Level`, `LongIntMap`, top-level defs) stay restricted or move into a
+   companion object first.
+4. Facade leaves (`matlab`, `cli`): their contract is strings and Java arrays; what they dispatch to is public.
+5. Public another way (`sset.Constructions` behind `FiniteSimplicialSet`'s methods).
+Plain `private` is for an algorithm's own scratch types, state and helpers (no comment); promote a member to `protected`
+when a subclass needs it as a hook, to public when it computes something a caller wants (a pairing, a validity check).
+`sealed` only for a closed mathematical classification matched exhaustively (`BarcodeEndpoint`). `final` only on value
+types (case classes: subclassing breaks equality), where library fast paths match on the concrete class (`HeapChain`,
+`PackedChain`), and on `@tailrec` defs; not for speed without an A/B (HotSpot's class-hierarchy analysis should
+devirtualize a class with no loaded subclass; expected, not measured here).
+Concrete public classes are `open`: users lack `-language:adhocExtensions`, so extending a non-`open` class warns under
+`-source:future -feature`. Not reasons: a small API surface, "users should not need it", "it might change" (pre-1.0,
+anything may). `WORKLOG-openness-audit.md`.
 
 ### Algebraic core
 
 - `RingModule`/`Field`: minimal typeclasses built with `is` syntax; everything downstream is generic over `Field`.
   `FiniteField`: `Fp` opaque type per prime `p`.
-- `Chain[CellT, CoefficientT]`: formal sum backed by a `PriorityQueue` ordered by cell (leading term = cheap peek).
+- `Chain[CellT: Ordering, CoefficientT: Field]`: abstract and OPEN (project lead: a place for the community to
+  experiment): a storage passes order and field up (kept once) and implements `entryIterator`, all else defaults over it
+  (`tda4juser/ChainStorageSpec`, outside the package). Ours: `HeapChain` (a `PriorityQueue` ordered by cell), `PackedChain`
+  (`rules/cubical.md`). No nulls. Equality: formal sums by `field.isEqual` (an `Fp` has several `Int` forms), order-blind.
   Defines `reduceBy`/`reduceByUntil` (with an optional `fallback` for pivots needing on-the-fly substitution) and
   a `RingModule` instance. `reduceLoop` uses a `mutable.TreeMap` accumulator (use `z.head`, not `headOption`, which
   allocates an iterator on `mutable.TreeMap`). Known footgun, not fixed: `Chain` overrides `equals` without a
@@ -227,21 +236,18 @@ records a representative for every bar.
   instances: `Simplex`, `Cube`, `FiniteSimplicialSet` generators.
 - `Cocell`/`OrderedCocell` were **removed on purpose**: coboundary is extrinsic (depends on the ambient complex),
   so a per-cell `coboundary` is the wrong shape. Don't reintroduce (`DESIGN-generic-cohomology.md`).
-- **Generic-`given` capture gotcha**: a `given` like `chainRM` resolves its implicit `Ordering[CellT]` once, where
-  it's summoned. Summoned at class scope (before the stream's filtration ordering exists) it silently pivots on the
-  cell's intrinsic (lexicographic) order. Summon it where the per-stream ordering is in scope
-  (`WORKLOG-naive-homology.md`). The intrinsic order is now opt-in (`import OrderedCell.cellOrdering`), so a new
-  class-scope summon without it fails to compile instead of capturing silently -- but `Homology.scala`/`Cohomology.scala`
-  import it file-wide (behaviour-preserving), so the hazard is still live there. `TDAlab`'s class-scope
-  `chainIsRingModule` is user-arithmetic convenience only, never used by an engine.
+- **Generic-`given` capture gotcha**: a `given` like `chainRM` fixes its `Ordering[CellT]` where it is summoned; at
+  class scope (before the stream's ordering exists) it silently pivots on the cell's intrinsic order. Summon it where
+  the per-stream ordering is in scope (`WORKLOG-naive-homology.md`). The intrinsic order is opt-in (`import
+  OrderedCell.cellOrdering`), but `Homology.scala`/`Cohomology.scala` import it file-wide: the hazard is live there.
 
 ### Streams and complexes (ordering contract and constructions: `rules/streams.md`)
 
 **Public entry points** (`DESIGN-stream-naming.md`): `VietorisRips`, `Cech`, `Witness(variant = Lazy | General)`,
 `Dowker`, `DtmRips`, `SparseRips`, `Truncated`, plus `CubicalImage` and `AlphaShapes`; `maxDimension` is the top
 HOMOLOGICAL degree, the result a `LevelwiseSimplexStream[Int, Double]`. The construction classes (`...CofaceSimplexStream`,
-`Incremental...`, `LazyWitness...`, `SheehyRips...`, `LimitedCoface...`) are `private[tda4j]`: never in docs fences
-(they fail `sbt doc`). A new entry point is tested against the hand-wrapped class cell for cell AND value for value
+`Incremental...`, `LazyWitness...`, `SheehyRips...`, `LimitedCoface...`) are public machinery (build a new filtered
+complex on `RipserCofaceSimplexStream`'s coface loop); docs and tutorials use the objects. A new entry point is tested against the hand-wrapped class cell for cell AND value for value
 (`ComplexesSpec`) — Betti numbers would not catch a wrong `+1`.
 
 ## Subsystem notes (`.claude/rules/`)
@@ -259,6 +265,7 @@ file before changing that subsystem; this table is the index, in case a rule did
 | `rules/alpha.md` | alpha complexes (DQP, Helix, fast alpha) | `alpha/`, alpha files |
 | `rules/facade.md` | MATLAB facade, CLI, file I/O, the persistence threshold (which bars are reported) | `matlab/`, `cli/`, `io/` |
 | `rules/docs-and-tutorials.md` | docs site, tutorial pages (the docs are the tests), language tabs | `_docs/`, tutorial specs, `build.sbt` |
+| `rules/plotting.md` | the `tda4j-plot` add-on: scene model, palette and themes, live viewer, gallery screenshots | `plot/` |
 
 ## Session practices
 
@@ -277,7 +284,7 @@ file before changing that subsystem; this table is the index, in case a rule did
   fix facts.
 - **Never revert the formatter's output.** If `scalafmtAll` touches files outside your change, commit that in its OWN
   commit ("Format: ... formatter output only, no behavior change") and say so — reverting only hides the debt, and a
-  clean lint beats a minimal diff. CI lint also runs `scalafmtSbtCheck` (`build.sbt`) and `Test / scalafmtCheck`, so run all three before pushing (a pushed `build.sbt` edit once failed lint for this).
+  clean lint beats a minimal diff. Run all three lint checks (Commands) before pushing.
 - Performance claims need isolated A/B measurement (`git stash` A/B, median of trials, one engine per JVM);
   machine noise here often exceeds small effects — report unconfirmed effects as unconfirmed.
 - **Finalizing a user-visible capability** (new complex, engine, or option) means checking four surfaces each
@@ -287,13 +294,8 @@ file before changing that subsystem; this table is the index, in case a rule did
 - A cloud session (working on its own `claude/...` branch) may commit and push its own work to that branch at
   will, without asking first — the branch is disposable/session-scoped, not shared history. A local/interactive
   session working directly on a shared branch still waits to be asked; the project lead commits that work.
-- **Found a bug in someone else's paper or reference implementation while validating a tda4j feature against
-  it?** Log it in `.claude/BUGS-IN-REFERENCES.md` (flat, never condensed away). State precisely what was verified
-  — don't extrapolate an isolated bug into an end-to-end correctness claim without a repro that actually shows
-  that (a real miss, corrected — `WORKLOG-toroidal-coordinates.md`). Two entries so far: CJS 2015 (Sheehy-Rips)
-  and DREiMac's `_gram_schmidt` (toroidal coordinates).
-- **No `sbt` or dependency cache at start?** `.claude/scripts/install-sbt.sh`; put it in the cloud environment's setup
-  script so new sessions skip the ~20-40 minute cold start.
+- **A bug found in a paper or reference implementation** goes in `.claude/BUGS-IN-REFERENCES.md` (flat, never condensed
+  away): state exactly what was verified, and claim nothing end-to-end without a repro that shows it.
 
 ## Collaboration preferences
 

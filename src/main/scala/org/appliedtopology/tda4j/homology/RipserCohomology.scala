@@ -15,7 +15,7 @@ import scala.collection.mutable
   * born, so the barcode is the same as untruncated. `memoizeFiltrationValue` caches every diameter it computes (faster,
   * more memory); off by default.
   */
-class RipserCohomologyEngine[CoefficientT: Field](
+open class RipserCohomologyEngine[CoefficientT: Field](
   metricSpace: FiniteMetricSpace[Int],
   maxDimension: Int,
   useApparentPairs: Boolean = true,

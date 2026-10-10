@@ -4,7 +4,7 @@ import cats.Show
 
 import scala.collection.immutable.ArraySeq
 
-class FiniteField(val p: Int):
+open class FiniteField(val p: Int):
   opaque type Fp = Int
 
   object Fp:

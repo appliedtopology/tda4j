@@ -46,6 +46,25 @@ class FastRepresentativesSpec extends mutable.Specification:
     FastCubicalHomologyEngine[field.Fp]().persistentHomology(stream, zeroLength) ==
       EagerFastCubicalReference[field.Fp]().persistentHomology(stream, zeroLength)
 
+  /** Whether a chain's terms come in its own order, strictly ascending: what a packed chain must store. */
+  def ascending[C](c: Chain[Cube, C]): Boolean =
+    c.terms.map(_._1).sliding(2).forall(w => w.size < 2 || c.cellOrdering.lt(w(0), w(1)))
+
+  // The representatives are stored packed (cells as grid indices, decoded when read), in their own order. Equality with
+  // the reference is order-blind (formal sums) and would also pass on heap chains, so both are checked here.
+  "The fast cubical engine stores every representative packed, in its order, 3-D middle degrees included" >> {
+    import f3.given
+    val unpacked = for
+      seed <- 0L until 3L
+      stream <- images(seed)
+      zeroLength <- Seq(false, true)
+      bar <- FastCubicalHomologyEngine[f3.Fp]().persistentHomology(stream, zeroLength)
+      if !bar.representative.isPacked || !ascending(bar.representative)
+    yield s"${stream.shape.mkString("x")} $bar"
+    val verb = Persistence(Image(IndexedSeq.tabulate(30)(k => (k * 7 % 11).toDouble), IndexedSeq(5, 6)))
+    (unpacked.take(3) must beEmpty) and (verb.bars.forall(_.representative.isPacked) must beTrue)
+  }
+
   "The fast cubical engine's bars and representatives equal the eager reference's" >> {
     val checks = for
       seed <- 0L until 12L
@@ -54,6 +73,104 @@ class FastRepresentativesSpec extends mutable.Specification:
       zeroLength <- Seq(false, true)
     yield sameCubical(field)(stream, zeroLength)
     checks.forall(identity) must beTrue
+  }
+
+  // The flat-array engine walks the grid by index arithmetic: degenerate shapes (an axis of size 1, a single pixel),
+  // non-cubic 3-D grids and a 4-D grid, with ties, +Infinity pixels, and both signed zeros (ordered -0.0 first, but
+  // equal under the elder rule's comparisons).
+  def oddShapes(seed: Long): Seq[CubicalGridStream] =
+    val rng = new scala.util.Random(seed)
+    val shapes = Seq(
+      IndexedSeq(1, 1),
+      IndexedSeq(1, 7),
+      IndexedSeq(7, 1),
+      IndexedSeq(2, 2),
+      IndexedSeq(2, 9),
+      IndexedSeq(1, 4, 3),
+      IndexedSeq(3, 1, 4),
+      IndexedSeq(2, 3, 4),
+      IndexedSeq(2, 2, 2, 2)
+    )
+    def value(): Double = rng.nextInt(9) match
+      case 0 => Double.PositiveInfinity
+      case 1 => -0.0
+      case 2 => 0.0
+      case k => (k % 3).toDouble
+    // Only signed zeros: the dual's elder rule then meets roots at -0.0 and 0.0 that it must treat as equal.
+    def zero(): Double = if rng.nextBoolean() then -0.0 else 0.0
+    shapes.map { shape =>
+      CubicalImage.fromFlatArray(shape, IndexedSeq.fill(shape.product)(value()))
+    } ++ Seq(IndexedSeq(4, 5), IndexedSeq(6, 6), IndexedSeq(3, 4, 3)).map { shape =>
+      CubicalImage.fromFlatArray(shape, IndexedSeq.fill(shape.product)(zero()))
+    }
+
+  // A 0.0 pixel whose first dual merge is with a lone -0.0 pixel to its right, everything else at -1.0: the elder rule
+  // must see equal births (-0.0 == 0.0) and let the left side die, as the reference does; ordering the two by rank
+  // (-0.0 first) would let the right side die instead. Random signed zeros rarely reach this merge before `∞` does.
+  val signedZeroMerge: CubicalGridStream =
+    CubicalImage.fromFlatArray(
+      IndexedSeq(5, 5),
+      IndexedSeq.tabulate(25)(k => if k == 12 then 0.0 else if k == 13 then -0.0 else -1.0)
+    )
+
+  "The fast cubical engine equals the eager reference on degenerate shapes, 3-D and 4-D grids, and signed zeros" >> {
+    val checks = for
+      stream <- (0L until 6L).flatMap(oddShapes) :+ signedZeroMerge
+      field <- Seq(f2, f3, f17)
+      zeroLength <- Seq(false, true)
+    yield (stream.shape, sameCubical(field)(stream, zeroLength))
+    checks.filterNot(_._2).map(_._1) must beEmpty
+  }
+
+  // Over the reals (`characteristic = 0`) the hybrid's middle degrees run the packed grid engine with `Double`
+  // coefficients: the same bars as the eager reference, and every representative a cycle (checked approximately, as
+  // the field does; `Chain ==` would compare coefficients exactly).
+  "The fast cubical engine over the reals: the reference's bars, closed representatives" >> {
+    given Double is Field = Field.DoubleApproximated(1e-9)
+    given Ordering[Cube] = cubeOrdering
+    val problems = for
+      seed <- 0L until 4L
+      stream <- images(seed) ++ oddShapes(seed).filter(_.ambientDim >= 3)
+      zeroLength <- Seq(false, true)
+      problem <-
+        val fast = FastCubicalHomologyEngine[Double]().persistentHomology(stream, zeroLength)
+        val eager = EagerFastCubicalReference[Double]().persistentHomology(stream, zeroLength)
+        Seq(
+          Option.when(fast.map(b => (b.dim, b.lower, b.upper)) != eager.map(b => (b.dim, b.lower, b.upper)))("bars"),
+          Option.when(!fast.filter(_.dim > 0).forall(b => Chain.from(b.representative.boundary).isZero()))(
+            "a representative that does not close"
+          )
+        ).flatten.map(p => s"$p: shape ${stream.shape.mkString("x")} zeroLength=$zeroLength")
+    yield problem
+    problems.take(5) must beEmpty
+  }
+
+  // A NaN pixel is refused where an image is built from an array, and where a grid built from a function first reads its
+  // values: by every engine, the generic ones included.
+  "An image with a NaN pixel is refused, saying where and what to do" >> {
+    import f3.given
+    val values = IndexedSeq(0.0, 1.0, Double.NaN, 2.0, 3.0, 4.0)
+    val nanAt02 = "NaN value at pixel \\(0, 2\\).*\\+Infinity for a missing pixel"
+    // The values of a superlevel image are negated, so its mask is -Infinity in the user's units.
+    val superlevelNanAt02 = "NaN value at pixel \\(0, 2\\).*-Infinity \\(the filtration is superlevel\\) for a missing"
+    val fromFunction = CubicalGridStream(
+      IndexedSeq(2, 3),
+      index => if index == IndexedSeq(0, 2) then Double.NaN else index.sum.toDouble
+    )
+    (CubicalImage.fromFlatArray(IndexedSeq(2, 3), values) must throwA[IllegalArgumentException](message = nanAt02)) and
+      (CubicalImage.fromFlatArray(IndexedSeq(2, 3), values, sublevel = false) must throwA[IllegalArgumentException](
+        message = superlevelNanAt02
+      )) and
+      (Persistence(Image(values, IndexedSeq(2, 3)), engine = Persistence.Engine.Chunks) must
+        throwA[IllegalArgumentException](message = nanAt02)) and
+      (FastCubicalHomologyEngine[f3.Fp]().persistentHomology(fromFunction) must throwA[IllegalArgumentException](
+        message = nanAt02
+      )) and
+      (PackedCubicalCohomologyEngine[f3.Fp](fromFunction, 2).persistentHomology() must
+        throwA[IllegalArgumentException](message = nanAt02)) and
+      (Persistence(fromFunction, engine = Persistence.Engine.Naive) must throwA[IllegalArgumentException](
+        message = nanAt02
+      ))
   }
 
   /** `Some(equal)` when both engines produced bars, `None` when both rejected the triangulation. */

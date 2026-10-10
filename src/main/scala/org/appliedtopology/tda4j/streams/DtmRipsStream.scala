@@ -17,7 +17,7 @@ import scala.collection.immutable
   * the minimum enclosing radius of the weighted distances, which is at least every vertex's birth and beyond which the
   * complex is a cone. Vertices are born at nonzero values, so the Ripser engines do not apply.
   */
-private[tda4j] class DtmRipsSimplexStream(
+open class DtmRipsSimplexStream(
   val reified: DtmRipsSimplexStream.DtmMetricSpace,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
   maxFiltrationValue: Option[Double] = None,
@@ -47,7 +47,7 @@ private[tda4j] class DtmRipsSimplexStream(
     }
     dim0.orElse(super.iterateDimension)
 
-private[tda4j] object DtmRipsSimplexStream:
+object DtmRipsSimplexStream:
 
   def apply(
     ambientMetricSpace: FiniteMetricSpace[Int],

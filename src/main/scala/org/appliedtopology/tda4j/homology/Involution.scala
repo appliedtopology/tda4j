@@ -14,10 +14,14 @@ import scala.collection.mutable
   * The pairing must come from the same total order as `youngestFirst`; every pivot is checked against the paired birth
   * cell, and a mismatch throws.
   */
-private[tda4j] object Involution:
+object Involution:
 
   /** A bar's cells: `birth` of dimension `dim`, `death` (if finite) of dimension `dim + 1`. */
   final case class Pair[CellT](dim: Int, birth: CellT, death: Option[CellT])
+
+  object Pair:
+    /** `Pair(dim = 1, birth = ∆(1,2), death = Some(∆(0,1,2)))`, the cells by their own `Show` (derived by kittens). */
+    given pairShow: [CellT: cats.Show] => cats.Show[Pair[CellT]] = cats.derived.semiauto.show
 
   /** A cycle per pair, in the order of `pairs`; with `withChains`, also the chain each finite cycle bounds. Every pair
     * of the pairing must be present, zero-length ones included: their columns are pivots for the others.

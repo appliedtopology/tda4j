@@ -17,7 +17,7 @@ import scala.collection.mutable
   * @param seed
   *   seeds the insertion order, which affects only the running time
   */
-class BowyerWatsonDelaunay(pts: Array[Array[Double]], seed: Long = 0L)(using epsilon: Epsilon)
+open class BowyerWatsonDelaunay(pts: Array[Array[Double]], seed: Long = 0L)(using epsilon: Epsilon)
     extends DelaunayAlphaShapes:
   // A single point (or none) spans nothing: zero coordinates, a lone vertex.
   private val coordinates: Array[Array[Double]] =
@@ -42,7 +42,7 @@ class BowyerWatsonDelaunay(pts: Array[Array[Double]], seed: Long = 0L)(using eps
   * stored so that replacing the vertex at infinity by a point beyond its hull facet gives a positive orientation, which
   * makes "copy the cell and put the new point where the removed vertex was" correct for every cell.
   */
-private[tda4j] final class BowyerWatsonTriangulation(
+open class BowyerWatsonTriangulation(
   coordinates: Array[Array[Double]],
   seed: Long,
   checkEveryStep: Boolean = false
@@ -63,7 +63,10 @@ private[tda4j] final class BowyerWatsonTriangulation(
   private val duplicateOf = mutable.LinkedHashMap.empty[Int, Int]
   private val rng = new scala.util.Random(seed)
 
-  private[tda4j] var insertionErrors: List[String] = Nil
+  private var _insertionErrors: List[String] = Nil
+
+  /** With `checkEveryStep`, the structural problems found after each insertion, newest first (empty when valid). */
+  def insertionErrors: List[String] = _insertionErrors
 
   private def vertex(c: Int, i: Int): Int = vertices(c * width + i)
   private def neighbour(c: Int, i: Int): Int = neighbours(c * width + i)
@@ -182,7 +185,7 @@ private[tda4j] final class BowyerWatsonTriangulation(
       if checkEveryStep then
         val problems = invariantProblems()
         if problems.nonEmpty then
-          insertionErrors = s"after inserting point $p: ${problems.take(3).mkString("; ")}" :: insertionErrors
+          _insertionErrors = s"after inserting point $p: ${problems.take(3).mkString("; ")}" :: _insertionErrors
 
   /** Links every pair of the given cells that share a facet (used once, for the initial cells). */
   private def linkByFacets(cells: Seq[Int]): Unit =
@@ -321,7 +324,7 @@ private[tda4j] final class BowyerWatsonTriangulation(
   /** Structural problems of the current triangulation (empty when it is valid): orientation of finite cells, symmetric
     * neighbours sharing a facet, the hull orientation convention, and the empty-sphere property across every facet.
     */
-  private[tda4j] def invariantProblems(): Seq[String] =
+  def invariantProblems(): Seq[String] =
     val problems = mutable.ArrayBuffer.empty[String]
     for c <- 0 until cellCount if alive(c) do
       val vs = cellVertices(c)
