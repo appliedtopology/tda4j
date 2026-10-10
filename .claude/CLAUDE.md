@@ -48,6 +48,8 @@ see "Givens" below). The core's source directories are **file organization only,
   layer), group classifying spaces (persistent group homology, library-only), `BettiNumbers`, simplicial-set streams.
   Depends on the core; the core uses it only through `TDAlab`'s generated re-exports. `rules/simplicial-sets.md`.
 - subpackages `matlab` (MATLAB facade) and `cli` (`TDA4jConf`/`TDA4jCLI`, thin translator over `matlab.TDA4j`) — leaves.
+- **sbt project `plot`** (`tda4j-plot`, package `org.appliedtopology.tda4j.plot`, directory `plot/`): plots and a live
+  browser viewer, no dependencies; aggregated by root, not published yet. `rules/plotting.md`.
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
   sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
   `sbt doc` checks that doc fences resolve from outside.
@@ -160,10 +162,8 @@ Uses Scala 3.7+'s newest context-abstraction syntax — don't "correct" it to ol
   is extension methods.
 - Optional parameters, never sentinels: `Optional[Double]` (below) for public ones, `None` + `.getOrElse(...)` inside
   (a default cannot reference an earlier parameter of the same list).
-- A method's own `[T: Ordering, C: Field]`-style context bounds desugar to a `using` clause appended AFTER every
-  explicit parameter list — so a default value earlier in that same signature cannot reference the given that
-  default itself needs. No workaround short of every caller passing the value explicitly, or restructuring the
-  signature so the context bound is a `using` clause of its own, ahead of that parameter (`Chain.reduceByUntil`).
+- A method's context bounds desugar to a `using` clause AFTER every explicit parameter list, so an earlier default
+  cannot use that given: make it a `using` clause of its own ahead of the parameter (`Chain.reduceByUntil`).
 
 **Opaque-type extension methods** live in the type's companion (`object Simplex`/`Cube`), found by implicit scope.
 Hazards: opaque transparency is file-scoped (so `simplexIsOrderedCell`/`cubeIsOrderedCell` live in their own files), and
@@ -263,6 +263,7 @@ file before changing that subsystem; this table is the index, in case a rule did
 | `rules/alpha.md` | alpha complexes (DQP, Helix, fast alpha) | `alpha/`, alpha files |
 | `rules/facade.md` | MATLAB facade, CLI, file I/O, the persistence threshold (which bars are reported) | `matlab/`, `cli/`, `io/` |
 | `rules/docs-and-tutorials.md` | docs site, tutorial pages (the docs are the tests), language tabs | `_docs/`, tutorial specs, `build.sbt` |
+| `rules/plotting.md` | the `tda4j-plot` add-on: scene model, palette and themes, live viewer, gallery screenshots | `plot/` |
 
 ## Session practices
 

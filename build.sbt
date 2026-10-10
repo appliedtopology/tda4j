@@ -5,7 +5,33 @@ organization := "org.appliedtopology"
 // list 3.8.4 ... in crossScalaVersions"; `++3.8.4!` does, and release.yml uses it because the env var only reaches a
 // FRESH sbt server: a second `sbt` call in the same job joins the running server (thin client) and ignores it.
 // TODO: delete the override when 3.9.1 is released.
-scalaVersion := sys.env.getOrElse("TDA4J_SCALA_VERSION", "3.9.0")
+ThisBuild / scalaVersion := sys.env.getOrElse("TDA4J_SCALA_VERSION", "3.9.0")
+
+// The core library is the root project: every bare setting in this file is its own. `plot` (the `tda4j-plot` add-on,
+// `plot/`) depends on it and adds no dependency to it. Root aggregates `plot`, so CI's `test`, lint, `doc` and `mima`
+// commands cover it too; `assembly` does not aggregate (the CLI/MATLAB fat jar is the core's alone).
+lazy val root = (project in file(".")).aggregate(plot)
+assembly / aggregate := false
+
+lazy val plot = (project in file("plot"))
+  .dependsOn(LocalRootProject)
+  .settings(
+    name := "tda4j-plot",
+    organization := "org.appliedtopology",
+    scalacOptions ++= List(
+      "-source:future",
+      "-language:experimental.modularity",
+      "-preview",
+      "-feature",
+      "-deprecation",
+      "-unchecked"
+    ),
+    libraryDependencies += "org.specs2" %% "specs2-core" % "5.5.1" % "test",
+    // Not published yet: the add-on's API is a draft (DESIGN-plotting.md). Drop these two lines to release it.
+    publish / skip := true,
+    mimaPreviousArtifacts := Set.empty,
+    mimaFailOnNoPrevious := false
+  )
 
 versionScheme := Some("semver-spec")
 
