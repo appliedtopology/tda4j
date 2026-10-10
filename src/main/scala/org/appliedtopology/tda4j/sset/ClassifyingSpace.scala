@@ -20,7 +20,7 @@ object NerveSimplex:
   * Faces: `d_0` drops the first entry, `d_n` the last, and `d_i` for `0 < i < n` multiplies entries `i` and `i + 1`; if
   * that product is the identity, the result is degenerate -- `s_{i-1}` applied to the tuple with both entries removed.
   */
-final class Nerve(monoid: FiniteMonoid, subset: Option[Set[Int]] = None) extends SimplicialSet[NerveSimplex]:
+open class Nerve(monoid: FiniteMonoid, subset: Option[Set[Int]] = None) extends SimplicialSet[NerveSimplex]:
   private val members = subset.getOrElse((0 until monoid.order).toSet)
   require(members.contains(monoid.identity), "a submonoid contains the identity")
   require(

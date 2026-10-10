@@ -20,7 +20,7 @@ import scala.collection.mutable
   * component dies, its representative is the boundary of its signed sum of top cells. A merge costs nearly constant
   * time; a representative costs time proportional to its region, and only reported bars get one.
   */
-class FastCubicalHomologyEngine[CoefficientT: Field]:
+open class FastCubicalHomologyEngine[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
   given Ordering[Cube] = cubeOrdering
 
@@ -33,6 +33,8 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     compute(stream, includeZeroLength, representatives = true)
 
+  // `private[tda4j]` on purpose: every public way to compute persistence returns a representative with every bar (the
+  // library's design principle), and this measurement hook does not.
   /** The same bars without the top degree's representatives (their annotation is `None`): only for measuring what
     * representatives cost (`bench/`). Every public path computes them.
     */
@@ -496,6 +498,7 @@ class FastCubicalHomologyEngine[CoefficientT: Field]:
 /** Integer sums keyed by a facet's encoding, for one region boundary at a time: open addressing over primitive keys,
   * reused from one region to the next.
   */
+// File-private scratch of one method (`computeDualTopDimension`), with no meaning outside it.
 private final class FacetSums:
   private var keys: Array[Long] = Array.fill(64)(-1L)
   private var sums: Array[Int] = new Array[Int](64)
@@ -552,7 +555,7 @@ private final class FacetSums:
   * per grid (doubled coordinates run up to `2 shape(i)`), and the vector is made directly at its size. The result is an
   * ordinary `Vector[Int]`, equal to and hashing like `Vector.tabulate`'s; a cube costs a vector and an array.
   */
-private[tda4j] final class CubeBoxes(shape: Array[Int]):
+open class CubeBoxes(shape: Array[Int]):
   private val boxes: Array[AnyRef] = Array.tabulate(2 * shape.max + 1)(i => Integer.valueOf(i))
 
   /** The cube with doubled coordinates `coordinate(0 until d)`. */

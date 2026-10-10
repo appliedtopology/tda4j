@@ -88,18 +88,34 @@ object Persistence:
   enum Engine:
     case Auto, Chunks, Naive, Cohomology, Ripser, FastCubical
 
-  /** What `Persistence` can take; never written by hand -- each kind of input converts to one where it's expected. */
-  into sealed trait Input[CellT]:
-    private[tda4j] def stream(
+  /** What `Persistence` can take. Points, metric spaces, images and streams convert to one where it's expected; to
+    * teach `Persistence` a new kind of input, give a `Conversion[YourInput, Persistence.Input[CellT]]` that implements
+    * `stream`, `scale` and `cells` (the rest are shortcuts to faster engines, off by default).
+    */
+  into trait Input[CellT]:
+    /** The filtered complex to compute on, cut off at homological degree `maxDimension`. `complex` is the caller's
+      * choice of construction, meaningful for point clouds.
+      */
+    def stream(
       maxDimension: Int,
       maxFiltrationValue: Option[Double],
       complex: PointCloudComplex
     ): StratifiedCellStream[CellT, Double]
-    private[tda4j] def scale: Option[Double]
-    private[tda4j] def cells: CellT is OrderedCell
-    private[tda4j] def ripserApplies(complex: PointCloudComplex): Boolean = false
-    private[tda4j] def cubicalGrid: Option[CubicalGridStream] = None
-    private[tda4j] def ripser(
+
+    /** The scale `significant()` measures persistence against (a point cloud's minimum enclosing radius), if any. */
+    def scale: Option[Double]
+
+    /** The cell type's boundary and order. */
+    def cells: CellT is OrderedCell
+
+    /** Whether `ripser` computes the same diagram as the generic engines would on `stream` for this `complex`. */
+    def ripserApplies(complex: PointCloudComplex): Boolean = false
+
+    /** The grid, when the input is one: `Engine.FastCubical` and the packed cubical engine run on it directly. */
+    def cubicalGrid: Option[CubicalGridStream] = None
+
+    /** The diagram by the packed Ripser engine; only called when `ripserApplies(complex)`. */
+    def ripser(
       maxDimension: Int,
       maxFiltrationValue: Option[Double],
       complex: PointCloudComplex,

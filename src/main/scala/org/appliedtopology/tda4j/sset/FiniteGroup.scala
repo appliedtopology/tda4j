@@ -11,7 +11,7 @@ import scala.collection.mutable
   * and asks "is this the identity?", and a table makes both an array lookup. Fine up to a few hundred elements (S_5 has
   * 120: a 14,400-entry table).
   */
-class FiniteMonoid(val table: Array[Array[Int]], val names: IndexedSeq[String]):
+open class FiniteMonoid(val table: Array[Array[Int]], val names: IndexedSeq[String]):
   def order: Int = table.length
   def identity: Int = 0
   def multiply(a: Int, b: Int): Int = table(a)(b)
@@ -30,7 +30,7 @@ class FiniteMonoid(val table: Array[Array[Int]], val names: IndexedSeq[String]):
       range ++ unit ++ assoc
 
 /** A finite monoid whose every element has an inverse. */
-final class FiniteGroup(table: Array[Array[Int]], names: IndexedSeq[String]) extends FiniteMonoid(table, names):
+open class FiniteGroup(table: Array[Array[Int]], names: IndexedSeq[String]) extends FiniteMonoid(table, names):
 
   def inverse(a: Int): Int = table(a).indexOf(identity)
 

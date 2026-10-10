@@ -82,7 +82,7 @@ case class LandmarkSelection(
   * is point `landmarks(i)`; `D(l)(n)` is the distance from landmark `l` to witness `n`, an `L x N` matrix built once.
   * Assumes the metric space's elements are `0 until size`.
   */
-class WitnessGeometry(val ambientMetricSpace: FiniteMetricSpace[Int], val landmarks: IndexedSeq[Int]):
+open class WitnessGeometry(val ambientMetricSpace: FiniteMetricSpace[Int], val landmarks: IndexedSeq[Int]):
   val L: Int = landmarks.size
   val N: Int = ambientMetricSpace.size
 
@@ -135,7 +135,7 @@ class WitnessGeometry(val ambientMetricSpace: FiniteMetricSpace[Int], val landma
   * `nu` (0, 1 or 2, default 2) is JavaPlex's threshold: a witness sees a pair of landmarks at the distance to its
   * `nu`-th nearest landmark beyond its own (0: no threshold, the smallest complex).
   */
-class WitnessMetricSpace(val geometry: WitnessGeometry, val nu: Int = 2) extends FiniteMetricSpace[Int]:
+open class WitnessMetricSpace(val geometry: WitnessGeometry, val nu: Int = 2) extends FiniteMetricSpace[Int]:
   require(nu >= 0 && nu <= 2, s"nu must be 0, 1, or 2 (JavaPlex's own range); got $nu")
 
   def size: Int = geometry.L
@@ -160,7 +160,7 @@ class WitnessMetricSpace(val geometry: WitnessGeometry, val nu: Int = 2) extends
   * `maxFiltrationValue` defaults to the minimum enclosing radius of that metric space, which is a valid cutoff for any
   * flag complex. Vertices are landmark numbers.
   */
-private[tda4j] class LazyWitnessSimplexStream(
+open class LazyWitnessSimplexStream(
   ambientMetricSpace: FiniteMetricSpace[Int],
   val landmarks: IndexedSeq[Int],
   nu: Int = 2,
@@ -184,7 +184,7 @@ private[tda4j] class LazyWitnessSimplexStream(
   * complex. Without a finite value or a dimension cap, the stream enumerates every subset of the landmarks; `Witness`
   * caps the dimension. Built through the companion `apply`, which builds the [[WitnessGeometry]] once.
   */
-private[tda4j] class WitnessCofaceSimplexStream(
+open class WitnessCofaceSimplexStream(
   val geometry: WitnessGeometry,
   maxFiltrationValue: Double = Double.PositiveInfinity,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
@@ -196,7 +196,7 @@ private[tda4j] class WitnessCofaceSimplexStream(
     ):
   def landmarks: IndexedSeq[Int] = geometry.landmarks
 
-private[tda4j] object WitnessCofaceSimplexStream:
+object WitnessCofaceSimplexStream:
   def apply(
     ambientMetricSpace: FiniteMetricSpace[Int],
     landmarks: IndexedSeq[Int],

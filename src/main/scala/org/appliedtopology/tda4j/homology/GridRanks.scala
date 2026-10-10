@@ -9,7 +9,7 @@ package org.appliedtopology.tda4j
   * Pixels are row-major, the last axis fastest. NaN values are refused: a NaN pixel has no place in a filtration
   * (`Math.min` would carry it to every face of the pixel, so a face would enter after its coface).
   */
-private[tda4j] final class GridRanks private (
+class GridRanks private (
   val shape: Array[Int],
   val pixels: Array[Double],
   val distinct: Array[Double],
@@ -18,7 +18,7 @@ private[tda4j] final class GridRanks private (
   def d: Int = shape.length
   def size: Int = pixels.length
 
-private[tda4j] object GridRanks:
+object GridRanks:
   def apply(shape: IndexedSeq[Int], pixels: Array[Double]): GridRanks =
     val dims = shape.toArray
     require(
@@ -147,7 +147,7 @@ private[tda4j] object GridRanks:
   * interval `[a, a + 1]`), one prefix (the coordinates of every axis but the last) at a time, so a caller can walk the
   * last axis in a tight loop and skip the prefixes that hold none of the cells it wants.
   */
-private[tda4j] object DoubledGrid:
+object DoubledGrid:
   /** Calls `body` with the doubled coordinates of axes `0 .. d - 2` (a live array: read it, never keep it), for every
     * such prefix in ascending lexicographic order if `ascending`, else descending. For `d = 1` there is one, empty,
     * prefix.
@@ -184,7 +184,7 @@ private[tda4j] object DoubledGrid:
   * engines' packed representatives. Index order is `cubeOrdering`'s on the grid (lexicographic on the encoding, axis 0
   * first). Holds only the strides and one box per coordinate value, since every representative it decodes keeps it.
   */
-private[tda4j] final class GridCubes(shape: Array[Int]) extends CellDecoder[Cube]:
+open class GridCubes(shape: Array[Int]) extends CellDecoder[Cube]:
   private val extent: Array[Int] = shape.map(n => 2 * n + 1)
   private val weight: Array[Int] = GridRanks.strides(extent)
   private val boxes = CubeBoxes(shape)
@@ -203,6 +203,6 @@ private[tda4j] final class GridCubes(shape: Array[Int]) extends CellDecoder[Cube
       i += 1
     key
 
-private[tda4j] object GridCubes:
+object GridCubes:
   /** Whether every cell of a grid of this shape has an `Int` index. */
   def fits(shape: Array[Int]): Boolean = shape.foldLeft(1.0)((p, n) => p * (2.0 * n + 1.0)) <= Int.MaxValue

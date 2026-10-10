@@ -72,7 +72,7 @@ own ordering (mutation-checked) and assert `isPacked` (else a silent fallback pa
 keeps its decoder and its `Ordering`: neither may capture an engine (the inner-class `olderFirst` once pinned the whole
 packed engine). Grids whose doubled grid exceeds `Int` fall back to heap chains (`GridCubes.fits`).
 
-**`PackedCubicalCohomologyEngine`** (`private[tda4j]`, `WORKLOG-cubical-performance.md`) computes that cohomology, and
+**`PackedCubicalCohomologyEngine`** (public since `WORKLOG-openness-audit.md`; `WORKLOG-cubical-performance.md`) computes that cohomology, and
 `Engine.Cohomology` on any `CubicalGridStream` (cocycles native, cycles by its own packed involution): Ripser's
 reduction on doubled-grid indices packed as `(rank << 32) | index` (the generic engine's order: value, then encoding
 ascending), clearing, apparent pairs rebuilt on demand. It must equal `CellularCohomologyEngine` on the same cells --

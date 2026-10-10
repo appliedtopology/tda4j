@@ -18,7 +18,7 @@ import scala.collection.mutable
   * finite bar its coboundary is the bar's reduced column, which is born at or after the bar's death, so it is a cocycle
   * on the subcomplex before the death. `coboundaryOfChain` checks either.
   */
-class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]:
+open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]:
 
   /** Every bar of `stream`'s persistent cohomology with its representative (see the class doc); zero-length bars only
     * if `includeZeroLength`. Works one degree at a time, so memory is bounded by the largest coboundary block.
@@ -70,7 +70,7 @@ class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtrati
   /** Every bar, zero-length ones included, with the cells that open and close it, and the order (oldest first within a
     * dimension) the pairing was computed under.
     */
-  private[tda4j] def pairedCohomology(
+  def pairedCohomology(
     stream: => CellStream[CellT, FiltrationT]
   ): (List[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])], Ordering[CellT]) =
     reduction(stream) match

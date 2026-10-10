@@ -8,7 +8,7 @@ import scala.collection.mutable
   * circle-valued coordinate at all, or `prime` is too small for the integer cocycle's entries; in the second case a
   * larger prime helps.
   */
-class NoIntegerCocycleException(message: String) extends RuntimeException(message)
+open class NoIntegerCocycleException(message: String) extends RuntimeException(message)
 
 /** Circular coordinates (de Silva, Morozov, Vejdemo-Johansson, "Persistent Cohomology and Circular Coordinates",
   * Discrete & Computational Geometry 45:737-759, 2011): a map from the points to the circle `R/Z` that represents a
@@ -168,7 +168,7 @@ object CircularCoordinates:
     * [[LatticeReduction]]'s Gram matrix is built from (the paper's own dSMV inner product is the plain sum-over-edges
     * dot product of these).
     */
-  private[tda4j] def harmonicSmoothOnComponent(
+  def harmonicSmoothOnComponent(
     krStream: CellStream[Simplex[Int], Double],
     zInt: Map[Simplex[Int], Int]
   )(using Double is Field): (Map[Int, Double], Map[Simplex[Int], Double], Set[Simplex[Int]]) =

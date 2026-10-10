@@ -4,9 +4,10 @@ package sset
 import org.appliedtopology.tda4j.*
 
 /* Implementations behind `FiniteSimplicialSet`'s construction methods (`x.product(y)`, `x.cone`, `x.wedge(...)`,
- * ...) and the orderings their generator types need. Users never call `Constructions` directly. */
+ * ...) and the orderings their generator types need. */
 
-private[sset] def ssetElementOrdering[G](using ordG: Ordering[G]): Ordering[SSetElement[G]] =
+/** The order on simplices in normal form: by generator, then by degeneracy word. */
+def ssetElementOrdering[G](using ordG: Ordering[G]): Ordering[SSetElement[G]] =
   given Ordering[List[Int]] = scala.math.Ordering.Implicits.seqOrdering
   Ordering.by(e => (e.generator, e.word))
 
@@ -17,7 +18,7 @@ private[sset] def ssetElementOrdering[G](using ordG: Ordering[G]): Ordering[SSet
   * matching both entries of its word `[1, 0]`). So non-degeneracy of the pair is exactly disjointness of the two words.
   * Cross-checked against the definitional `degeneracy(j, face(j, a)) == a` test in `SimplicialSetConstructionsSpec`.
   */
-private[sset] def isNonDegeneratePair[GX, GY](a: SSetElement[GX], b: SSetElement[GY]): Boolean =
+def isNonDegeneratePair[GX, GY](a: SSetElement[GX], b: SSetElement[GY]): Boolean =
   a.word.toSet.intersect(b.word.toSet).isEmpty
 
 /** A non-degenerate `n`-simplex of `X x Y`: a pair of `n`-simplices of `X` and `Y`, each possibly degenerate, whose
@@ -30,7 +31,8 @@ object ProductGenerator:
   given productGeneratorOrder: [GX: Ordering, GY: Ordering] => Ordering[ProductGenerator[GX, GY]] =
     productGeneratorOrdering[GX, GY]
 
-private[sset] def productGeneratorOrdering[GX, GY](using
+/** The order on product generators: by the `X` side, then the `Y` side ([[ssetElementOrdering]] on each). */
+def productGeneratorOrdering[GX, GY](using
   ox: Ordering[GX],
   oy: Ordering[GY]
 ): Ordering[ProductGenerator[GX, GY]] =
@@ -38,7 +40,8 @@ private[sset] def productGeneratorOrdering[GX, GY](using
   given ordY: Ordering[SSetElement[GY]] = ssetElementOrdering[GY]
   Ordering.by(g => (g.x, g.y))
 
-private[sset] def eitherOrdering[GX, GY](using ox: Ordering[GX], oy: Ordering[GY]): Ordering[Either[GX, GY]] =
+/** The order on the generators of a coproduct: every `Left` before every `Right`, each side in its own order. */
+def eitherOrdering[GX, GY](using ox: Ordering[GX], oy: Ordering[GY]): Ordering[Either[GX, GY]] =
   new Ordering[Either[GX, GY]]:
     def compare(a: Either[GX, GY], b: Either[GX, GY]): Int = (a, b) match
       case (Left(x), Left(y))   => ox.compare(x, y)
@@ -46,6 +49,7 @@ private[sset] def eitherOrdering[GX, GY](using ox: Ordering[GX], oy: Ordering[GY
       case (Left(_), Right(_))  => -1
       case (Right(_), Left(_))  => 1
 
+// `private[sset]`: every member is public as a `FiniteSimplicialSet` method (`x.simplices(n)`, `x.product(y)`, ...).
 private[sset] object Constructions:
   import ConeGenerator.*
 

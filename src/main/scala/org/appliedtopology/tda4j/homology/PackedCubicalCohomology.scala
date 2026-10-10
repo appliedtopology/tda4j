@@ -15,7 +15,7 @@ import scala.collection.mutable
   * false` turns them off). Cycles come from the involution on the same pairs, specialised to packed cells as
   * [[PackedRipserCohomologyEngine]] does it. Refuses an image with a NaN value (as [[GridRanks]] does).
   */
-private[tda4j] final class PackedCubicalCohomologyEngine[C: Field](
+open class PackedCubicalCohomologyEngine[C: Field](
   grid: CubicalGridStream,
   topDim: Int,
   ranks: GridRanks,
@@ -699,7 +699,7 @@ private[tda4j] final class PackedCubicalCohomologyEngine[C: Field](
           cubeChain(v.iterator, youngestFirst = true)
     result
 
-private[tda4j] object PackedCubicalCohomologyEngine:
+object PackedCubicalCohomologyEngine:
   /** The engine on `grid`'s cells up to dimension `topDim` (the whole grid by default). */
   def apply[C: Field](grid: CubicalGridStream, topDim: Int): PackedCubicalCohomologyEngine[C] =
     new PackedCubicalCohomologyEngine[C](grid, topDim, GridRanks(grid.shape, grid.topCellValues))
@@ -708,7 +708,7 @@ private[tda4j] object PackedCubicalCohomologyEngine:
   * value, then its doubled-grid index. Every representative keeps its order, so it holds only the rank table and the
   * strides, never the engine.
   */
-private[tda4j] final class GridCellOrder(cellRank: Array[Int], weight: Array[Int]) extends Ordering[Cube]:
+open class GridCellOrder(cellRank: Array[Int], weight: Array[Int]) extends Ordering[Cube]:
   private def key(c: Cube): Int =
     val e = c.encoded
     var k = 0

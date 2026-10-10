@@ -20,7 +20,7 @@ def validateMonotoneFiltration[G](sset: FiniteSimplicialSet[G], filtrationValue:
   * (unlike [[SimplicialSetStream]], which puts everything at `0`). The filtration must be monotone
   * ([[validateMonotoneFiltration]]).
   */
-class FilteredSimplicialSetStream[G](
+open class FilteredSimplicialSetStream[G](
   sset: FiniteSimplicialSet[G],
   val filtrationValue: PartialFunction[G, Double]
 )(using G is OrderedCell)

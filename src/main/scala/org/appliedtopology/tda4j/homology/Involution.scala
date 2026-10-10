@@ -14,7 +14,7 @@ import scala.collection.mutable
   * The pairing must come from the same total order as `youngestFirst`; every pivot is checked against the paired birth
   * cell, and a mismatch throws.
   */
-private[tda4j] object Involution:
+object Involution:
 
   /** A bar's cells: `birth` of dimension `dim`, `death` (if finite) of dimension `dim + 1`. */
   final case class Pair[CellT](dim: Int, birth: CellT, death: Option[CellT])

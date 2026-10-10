@@ -71,7 +71,7 @@ abstract into class Chain[CellT: Ordering as order, CoefficientT: Field as field
       case None            => (None, field.zero)
 
   /** Whether the terms are stored packed (a [[PackedChain]]: decoded when read). */
-  private[tda4j] final def isPacked: Boolean = this.isInstanceOf[PackedChain[?, ?]]
+  final def isPacked: Boolean = this.isInstanceOf[PackedChain[?, ?]]
 
   /** Equality as formal sums: every cell has the same coefficient in both, by the field's own equality (a field element
     * can have several representations), whatever the order or the storage. Collapses both. Assumes `obj` has the same
@@ -97,7 +97,10 @@ abstract into class Chain[CellT: Ordering as order, CoefficientT: Field as field
   * several times, or with a zero total, until the chain is collapsed. Its order and field are `Chain`'s (taken as plain
   * parameters and passed up, so that they are stored once).
   */
-private[tda4j] final class HeapChain[CellT, CoefficientT](
+// `final`, its constructor and `queue` `private[tda4j]`: the reductions and the arithmetic match on `HeapChain` and read
+// `queue` directly, so a subclass overriding its reads would be bypassed, and a queue not ordered by the reversed cell
+// order would give wrong leading terms. `Chain(...)`/`Chain.from` make one; a new storage extends `Chain`.
+final class HeapChain[CellT, CoefficientT] private[tda4j] (
   private[tda4j] var queue: mutable.PriorityQueue[(CellT, CoefficientT)]
 )(order: Ordering[CellT], field: CoefficientT is Field)
     extends Chain[CellT, CoefficientT](using order, field):
@@ -147,9 +150,9 @@ private[tda4j] final class HeapChain[CellT, CoefficientT](
     (head.map(_._1), head.map(_._2).getOrElse(coefficientField.zero))
 
 /** Decodes the key of a packed cell (see [[PackedChain]]). A class rather than a function: an `Int => CellT` would box
-  * every key it is called with.
+  * every key it is called with. Implement it to store chains of your own cells packed ([[Chain.packed]]).
   */
-private[tda4j] abstract class CellDecoder[CellT]:
+abstract class CellDecoder[CellT]:
   def apply(key: Int): CellT
 
 /** A chain stored packed, as the grid engines store representatives: `keys(i)` is a cell's key, which `decoder` turns
@@ -158,7 +161,8 @@ private[tda4j] abstract class CellDecoder[CellT]:
   * (nothing is cached, so reading it does not make it bigger), and arithmetic on it gives a heap chain. The decoder and
   * the order are kept by every chain they serve, so they must hold only what they need, never an engine.
   */
-private[tda4j] final class PackedChain[CellT, CoefficientT](
+// `final`: `isPacked` and the engines' packed paths take a `PackedChain` to mean exactly this layout.
+final class PackedChain[CellT, CoefficientT](
   val keys: Array[Int],
   val coefficients: Array[AnyRef],
   val decoder: CellDecoder[CellT]
@@ -203,9 +207,10 @@ object Chain:
     )
 
   /** A [[PackedChain]]: `keys` decoded by `decoder`, distinct and ascending under `Ordering[CellT]`, with the matching
-    * nonzero `coefficients`. The caller guarantees the order; nothing checks it.
+    * nonzero `coefficients` (boxed coefficient values). The caller guarantees the order; nothing checks it, and a chain
+    * out of order gives wrong leading terms (so wrong reductions), not an error.
     */
-  private[tda4j] def packed[CellT: Ordering as ord, CoefficientT: Field as fld](
+  def packed[CellT: Ordering as ord, CoefficientT: Field as fld](
     keys: Array[Int],
     coefficients: Array[AnyRef],
     decoder: CellDecoder[CellT]

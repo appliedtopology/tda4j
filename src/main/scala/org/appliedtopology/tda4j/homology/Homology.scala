@@ -9,11 +9,11 @@ import math.Fractional.Implicits.infixFractionalOps
 import math.Ordering.Implicits.sortedSetOrdering
 
 /** The naive engine ([[CellularHomologyEngine]]) on simplices with vertices of type `VertexT`. */
-class SimplicialHomologyEngine[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]()
+open class SimplicialHomologyEngine[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]()
     extends CellularHomologyEngine[Simplex[VertexT], CoefficientT, FiltrationT] {}
 
 /** The naive engine ([[CellularHomologyEngine]]) on cubes. */
-class CubicalHomologyEngine[CoefficientT: Field, FiltrationT: Ordering]()
+open class CubicalHomologyEngine[CoefficientT: Field, FiltrationT: Ordering]()
     extends CellularHomologyEngine[Cube, CoefficientT, FiltrationT] {}
 
 /* Companion forms with every type argument inferred: cell and filtration types from the stream, the coefficient type
@@ -51,7 +51,7 @@ object CellularHomologyEngine:
   * Implementation note: chain arithmetic must order cells by the stream's filtration, so the `RingModule` instance is
   * summoned inside `HomologyState`, where that ordering exists (a given fixes its own context when it is constructed).
   */
-class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]:
+open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]:
 
   class HomologyState(
     boundaries: mutable.Map[CellT, Chain[CellT, CoefficientT]], // pivot cell -> reduced boundary column
@@ -73,7 +73,7 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
     /** The whole pairing (running the cursor to the end): every finite bar's birth and death cells, zero-length ones
       * included, and every essential bar's birth cell. Computed under `stream.filtrationOrdering`.
       */
-    private[tda4j] def pairing: IndexedSeq[Involution.Pair[CellT]] =
+    def pairing: IndexedSeq[Involution.Pair[CellT]] =
       advanceAll()
       pairedCells.toIndexedSeq.map((b, d) => Involution.Pair(b.dim, b, Some(d))) ++
         positives.keys.toIndexedSeq.map(b => Involution.Pair(b.dim, b, None))
@@ -325,7 +325,7 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
   * enough). The whole reduction runs on the first query; `diagramAt(f)`/`barcodeAt(f)` then give the diagram truncated
   * at any `f`, with a representative cycle for every bar.
   */
-class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field](maxDim: Int = 5):
+open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field](maxDim: Int = 5):
   val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
   import chainRM.*
 
@@ -405,7 +405,7 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
     /** The whole pairing (running the reduction): every finite bar's birth and death cells, zero-length ones included,
       * and every essential bar's birth cell of degree at most `maxDim`. Computed under `stream.filtrationOrdering`.
       */
-    private[tda4j] def pairing: IndexedSeq[Involution.Pair[CellT]] =
+    def pairing: IndexedSeq[Involution.Pair[CellT]] =
       advanceAll()
       killer.toIndexedSeq.map((b, d) => Involution.Pair(b.dim, b, Some(d))) ++
         essentialSimplices.toIndexedSeq.filter(_.dim <= maxDim).map(b => Involution.Pair(b.dim, b, None))
@@ -969,11 +969,11 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
     )
 
 /** The chunks engine ([[CellularPersistenceInChunksEngine]]) on simplices with vertices of type `VertexT`. */
-class PersistenceInChunksEngine[VertexT: Ordering, CoefficientT: Field](maxDim: Int = 5)
+open class PersistenceInChunksEngine[VertexT: Ordering, CoefficientT: Field](maxDim: Int = 5)
     extends CellularPersistenceInChunksEngine[Simplex[VertexT], CoefficientT](maxDim) {}
 
 /** The chunks engine ([[CellularPersistenceInChunksEngine]]) on cubes. */
-class CubicalPersistenceInChunksEngine[CoefficientT: Field](maxDim: Int = 5)
+open class CubicalPersistenceInChunksEngine[CoefficientT: Field](maxDim: Int = 5)
     extends CellularPersistenceInChunksEngine[Cube, CoefficientT](maxDim) {}
 
 object CellularPersistenceInChunksEngine:

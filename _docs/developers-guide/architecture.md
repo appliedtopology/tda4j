@@ -133,7 +133,7 @@ chain itself holds its `Ordering` and its `Field`. `Chain` is abstract and open 
 the order and the field to `Chain`'s constructor and implements `entryIterator` (its stored entries, a cell possibly
 repeated or with a zero total); every other member (`terms`, `isZero`, `leadingTerm`, `rawEntries`, the collapses) has
 a default built on it, which a storage may override for speed, and reductions, arithmetic, `boundary` and equality use
-nothing else. The library has two `private[tda4j]` storages:
+nothing else. The library has two storages (both `final`: the reductions match on them):
 
 - `HeapChain`, what `Chain(...)`, `Chain.from` and all arithmetic make: a mutable `PriorityQueue` ordered so the
   smallest cell sits at the head — cheap to peek, since the leading term is queried constantly.
@@ -166,8 +166,9 @@ nothing else. The library has two `private[tda4j]` storages:
 **Public entry points.** Ask for a complex through one object per kind: `VietorisRips`, `Cech`, `Witness`, `Dowker`,
 `DtmRips`, `SparseRips` (plus `Truncated` to cut any coface stream off), each taking `maxDimension` as the top
 homological degree you want and building one dimension higher internally. The sections below describe the implementation
-classes those objects choose between (`EnumeratingCofaceSimplexStream`, `CechCofaceSimplexStream`, ...); those are
-internal detail, kept for cross-validation, and not what a user should reach for. See
+classes those objects choose between (`EnumeratingCofaceSimplexStream`, `CechCofaceSimplexStream`, ...). They are
+public: the objects are the documented entry, and the classes are what to extend when building a new filtered complex
+on the same machinery (most of them reuse `RipserCofaceSimplexStream`'s coface loop). See
 `.claude/DESIGN-stream-naming.md`.
 
 A `CellStream[CellT, FiltrationT]` is the abstract interface every persistence engine consumes: an iterator
@@ -541,7 +542,7 @@ produces `Double` filtration values, and a metric distance needs real arithmetic
   `order`/`wasserstein_power`). Essential (never-dying) bars are matched only to each other, by sorted birth
   value; a mismatched essential-bar count between the two diagrams reports `Double.PositiveInfinity`, not an
   exception — a real, meaningful answer ("no finite matching exists"), not a failure. Built on two
-  package-private combinatorial primitives in `BipartiteMatching.scala` (`HopcroftKarp` for the bottleneck
+  public combinatorial primitives in `BipartiteMatching.scala` (`HopcroftKarp` for the bottleneck
   binary search, `Hungarian` for Wasserstein's assignment problem) — both independently unit-tested against
   brute-force permutation search, not just exercised indirectly through `BarcodeDistance` itself.
 - **`Vectorization`**: persistence landscapes (Bubenik 2013) and persistence images (Adams et al. 2017),

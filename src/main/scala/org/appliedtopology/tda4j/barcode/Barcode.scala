@@ -8,6 +8,8 @@ package org.appliedtopology.tda4j
 
 import org.apache.commons.math3.linear.*
 
+// Sealed on purpose: the four cases are the endpoints of an interval on the extended line, a closed classification that
+// `endpointOrdering` and every reader match on exhaustively.
 sealed trait BarcodeEndpoint[FiltrationT: Ordering]:
   // Exchange open and closed for finite barcode endpoints; do nothing for infinite ones.
   def flip: BarcodeEndpoint[FiltrationT]
@@ -182,7 +184,7 @@ object PersistenceBar:
       OpenEndpoint(upper)
     )
 
-class BarcodeBuilder[FiltrationT: Ordering]():
+open class BarcodeBuilder[FiltrationT: Ordering]():
   type Bar = PersistenceBar[FiltrationT, Nothing]
 
   /** Infix notation for hand-building explicit persistence bars: `lower <infix> upper` constructs a `BarAssembly`,

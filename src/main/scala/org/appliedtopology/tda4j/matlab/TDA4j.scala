@@ -5,7 +5,8 @@ import org.appliedtopology.tda4j.*
 import scala.collection.mutable
 
 // The "complex"/"engine"/"field" options, parsed once into enums before anything runs. The CLI passes its flags through
-// as strings and relies on this same parsing.
+// as strings and relies on this same parsing. Private: the facade's contract is its string options and Java arrays (a
+// leaf nothing builds on); every computation it dispatches to is public in the core.
 private enum ComplexKind:
   case VR, Alpha, Cech, Witness, DtmRips, DtmAlpha, SparseRips
 

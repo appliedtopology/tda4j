@@ -66,7 +66,7 @@ object SimplicialSet extends SimplicialSetCatalog
   * each (empty for `n = 0`) -- `validate()` checks this contract plus the simplicial identities at runtime, since it's
   * easy to get a hand-written presentation subtly wrong with no crash, just silently wrong homology.
   */
-class FiniteSimplicialSet[G](
+open class FiniteSimplicialSet[G](
   val generatorsByDim: IndexedSeq[Set[G]],
   val faces: G => IndexedSeq[SSetElement[G]]
 )(using val ord: Ordering[G])

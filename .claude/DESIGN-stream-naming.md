@@ -60,3 +60,7 @@ and TDAlab moved over. Deviations from the table above: `Witness` takes a `varia
 `private[tda4j]` (homology/matlab/tests use the classes), not `private[streams]`; no `Cubical`/`Alpha` objects (already
 dispatching: `CubicalImage`, `AlphaShapes`); `CofaceSimplexStream` is hidden rather than renamed (it carries cache state); MATLAB/CLI
 option strings (`sheehy-rips`, `--sheehy-epsilon`, ...) unchanged — say if they should follow (`sparse-rips`).
+
+## 2026-10-10: implementation classes public again
+The openness principle (`CLAUDE.md`, `WORKLOG-openness-audit.md`) reverses the hiding: the construction classes are
+public and `open`; the objects stay the documented entry, and docs fences keep using them.

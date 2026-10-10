@@ -106,7 +106,7 @@ object SimplexStream:
       stream.iterator
 
 /** A complex given cell by cell (built by [[ExplicitStreamBuilder]], e.g. `ExplicitStreamBuilder.fromFacets(...)`). */
-class ExplicitStream[VertexT: Ordering, FiltrationT](
+open class ExplicitStream[VertexT: Ordering, FiltrationT](
   protected val filtrationValues: Map[Simplex[VertexT], FiltrationT],
   protected val simplices: Seq[Simplex[VertexT]]
 )(using filterable: Filterable[FiltrationT])(using ordering: Ordering[FiltrationT])
@@ -129,7 +129,7 @@ class ExplicitStream[VertexT: Ordering, FiltrationT](
 
   def length: Int = simplices.length
 
-class ExplicitStreamBuilder[VertexT: Ordering, FiltrationT](using
+open class ExplicitStreamBuilder[VertexT: Ordering, FiltrationT](using
   ordering: Ordering[FiltrationT]
 )(using filterableO: Option[Filterable[FiltrationT]] = None)
     extends mutable.ReusableBuilder[
@@ -241,7 +241,7 @@ object ExplicitStreamBuilder:
     values.foreach((cell, value) => builder.addOne((value, cell)))
     builder.result()
 
-class FilteredSimplexOrdering[VertexT, FiltrationT](
+open class FilteredSimplexOrdering[VertexT, FiltrationT](
   val filtration: Filtration[Simplex[VertexT], FiltrationT]
 )(using vertexOrdering: Ordering[VertexT])(using
   filtrationOrdering: Ordering[FiltrationT]
@@ -287,7 +287,13 @@ trait StratifiedCellStream[CellT: OrderedCell, FiltrationT: Filterable] extends 
 trait LevelwiseSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
     extends StratifiedCellStream[Simplex[VertexT], FiltrationT] {}
 
-private[tda4j] trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
+/** A levelwise stream that builds dimension `d + 1` from the simplices it kept in dimension `d` (their cofaces),
+  * caching the two dimensions it is working between. The machinery behind [[VietorisRips]], [[Cech]], [[Witness]],
+  * [[Dowker]], [[DtmRips]] and [[SparseRips]]; extend it (usually through [[RipserCofaceSimplexStream]]'s
+  * `filtrationValueOverride`) to build a new filtered complex on the same coface loop. Any stream must keep the
+  * ordering contract of [[CellStream]].
+  */
+trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
     extends LevelwiseSimplexStream[VertexT, FiltrationT]:
 
   def currentDimension: Int
@@ -298,7 +304,10 @@ private[tda4j] trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filtera
 
   def keepCriterion: PartialFunction[Simplex[VertexT], Boolean]
 
-private[tda4j] class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDim: Int)
+/** `stream` with simplices up to dimension `maxDim` (a simplex dimension; [[Truncated.ofCofaces]] takes the homological
+  * degree instead).
+  */
+open class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDim: Int)
     extends CofaceSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]():
   override def homologyDegreeLimit: Option[Int] =
@@ -322,7 +331,11 @@ private[tda4j] class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int,
   override def filtrationOrdering: Ordering[Simplex[Int]] = stream.filtrationOrdering
   override def filtrationValue: PartialFunction[Simplex[Int], Double] = stream.filtrationValue
 
-private[tda4j] class EnumeratingCofaceSimplexStream(
+/** Vietoris-Rips (or, with `filtrationValueOverride`, any filtration on the same vertex set that is monotone along
+  * faces), each dimension enumerated in full by [[SimplexIndexing]]'s combinatorial number system and filtered by
+  * `keepCriterion` and `maxFiltrationValue`. What [[VietorisRips]] chooses between, with [[RipserCofaceSimplexStream]].
+  */
+open class EnumeratingCofaceSimplexStream(
   val metricSpace: FiniteMetricSpace[Int],
   var keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
   // None means "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below (a constant
@@ -444,7 +457,11 @@ private[tda4j] class EnumeratingCofaceSimplexStream(
       ).iterator
   }
 
-private[tda4j] class RipserCofaceSimplexStream(
+/** Vietoris-Rips, or any filtration monotone along faces given as `filtrationValueOverride`, built dimension by
+  * dimension from the cofaces of the simplices kept in the dimension below (the loop [[Cech]], [[Witness]], [[Dowker]],
+  * [[DtmRips]] and [[SparseRips]] reuse). `keepCriterion` and `maxFiltrationValue` decide what is kept.
+  */
+open class RipserCofaceSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ =>
     true
@@ -502,7 +519,7 @@ private[tda4j] class RipserCofaceSimplexStream(
   * structure. A cross-validation baseline for the canonical VR streams, not a speed-competitive production engine in
   * its own right.
   */
-private[tda4j] class InorderCofaceSimplexStream(
+open class InorderCofaceSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
   maxFiltrationValue: Option[Double] = None
@@ -587,7 +604,7 @@ private[tda4j] class InorderCofaceSimplexStream(
   * simplex is reached exactly once, so nothing needs deduplicating. Unlike Algorithm 4, which always includes the
   * edges, `maxDimension` is the top simplex dimension served, so `maxDimension = 0` gives the vertices only.
   */
-private[tda4j] class IncrementalVietorisRipsSimplexStream(
+open class IncrementalVietorisRipsSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
   val maxDimension: Int,
   // Same default as EnumeratingCofaceSimplexStream's identical parameter (see there): resolved to

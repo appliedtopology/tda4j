@@ -310,6 +310,5 @@ classDiagram
 bar, when an engine tracks one. `BarcodeDistance`/`Vectorization` only ever read a bar's `dim`/`lower`/`upper`
 (never `annotation`), and are specialized to `PersistenceBar[Double, _]` rather than sharing `Barcode`'s own
 `FiltrationT: Ordering` genericity — see [Architecture](architecture.md)'s "`Barcode.scala`" section
-for why, and for `BipartiteMatching.scala`'s two package-private combinatorial primitives
-(`HopcroftKarp`/`Hungarian`) `BarcodeDistance` is built on, omitted here as an implementation detail rather
-than part of this package's public shape.
+for why, and for `BipartiteMatching.scala`'s two combinatorial primitives (`HopcroftKarp`/`Hungarian`)
+`BarcodeDistance` is built on, omitted here from the diagram.

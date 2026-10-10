@@ -3,7 +3,7 @@ package org.appliedtopology.tda4j
 /** A stable merge sort of the indices `0 until n` by a strict "comes before" relation on indices, without boxing: the
   * fast engines order millions of cells by values and keys held in primitive arrays.
   */
-private[tda4j] object SortIndices:
+object SortIndices:
   def sort(n: Int, before: (Int, Int) => Boolean): Array[Int] =
     var src = Array.range(0, n)
     var dst = new Array[Int](n)

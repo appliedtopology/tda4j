@@ -19,7 +19,7 @@ import scala.collection.mutable
   * A merge therefore costs nearly constant time, and a representative costs time proportional to its region, paid only
   * for the bars that are reported.
   */
-private[tda4j] final class SignedUnionFind[C](size: Int)(using fr: C is Field):
+open class SignedUnionFind[C](size: Int)(using fr: C is Field):
   private val parent: Array[Int] = Array.range(0, size)
   // Orientation of i relative to parent(i), in the path-compressed tree.
   private val relative: mutable.ArrayBuffer[C] = mutable.ArrayBuffer.fill(size)(fr.one)
@@ -81,7 +81,7 @@ private[tda4j] final class SignedUnionFind[C](size: Int)(using fr: C is Field):
   * sign to its field once, when it writes a representative. Integers map to any field by a ring homomorphism, so this
   * gives the same coefficients as the field arithmetic, and none of its boxing.
   */
-private[tda4j] final class UnitSignedUnionFind(size: Int):
+open class UnitSignedUnionFind(size: Int):
   private val parent: Array[Int] = Array.range(0, size)
   // Sign of i relative to parent(i), in the path-compressed tree.
   private val relative: Array[Byte] = Array.fill[Byte](size)(1)

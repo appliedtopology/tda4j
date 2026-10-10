@@ -135,7 +135,7 @@ object AlphaShapes extends PointCloudComplex:
   /** The average of `k^1.6` over up to 64 evenly spaced sample points, `k` a point's number of other points within
     * `distance`.
     */
-  private[tda4j] def meanNeighbourCost(pts: Array[Array[Double]], distance: Double): Double =
+  def meanNeighbourCost(pts: Array[Array[Double]], distance: Double): Double =
     val n = pts.length
     val samples = math.min(n, 64)
     val limit = distance * distance
@@ -164,7 +164,7 @@ object AlphaShapes extends PointCloudComplex:
     * clouds of 1000-10000 points, this library's own measurements). In dimension 6 and up Helix's triangulation grows
     * so fast that DQP is preferred whenever a radius is given.
     */
-  private[tda4j] def dqpNeighbourThreshold(n: Int, d: Int): Double =
+  def dqpNeighbourThreshold(n: Int, d: Int): Double =
     val growth = n / 1000.0
     val triangulationPerPoint = math.max(d, 2) match
       case 2 => 0.03 * math.pow(growth, 0.2)
@@ -229,6 +229,7 @@ case class DelaunaySimplex(simplex: Simplex[Int], circumsphere: Hypersphere)
   * many affinely-independent directions does this set of points actually span," so all of them agree on where the line
   * is.
   */
+// File-private: a public top-level def would join every user's `import org.appliedtopology.tda4j.*`.
 private def rankAtEpsilon(matrix: org.apache.commons.math3.linear.RealMatrix)(using epsilon: Epsilon): Int =
   new SingularValueDecomposition(matrix).getSingularValues.count(_.abs > epsilon.epsilon)
 
@@ -237,6 +238,7 @@ private def rankAtEpsilon(matrix: org.apache.commons.math3.linear.RealMatrix)(us
   * `HelixDelaunay` itself only ever sees the finished, immutable result of `compute()` -- the same
   * mutable-builder/immutable-result split `AlphaComplexDQPBuilder`/`AlphaComplexDQP` use.
   */
+// File-private: the walk's mutable state, alive only during `HelixDelaunay`'s construction (its public face).
 private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using epsilon: Epsilon):
   // `seed` controls, not merely reproduces: measured directly (varying seed 0-9 on a 3x3 grid and on 6 cospherical
   // points), the bootstrap shuffle changes WHICH of several valid tilings the frontier walk produces whenever the
@@ -905,7 +907,7 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
   *   off by default. When on, the triangulation is also checked for cavities (a homology computation), and a result
   *   that cannot be repaired raises an exception instead of being returned as it is.
   */
-class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTriangulation: Boolean = false)(using
+open class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTriangulation: Boolean = false)(using
   epsilon: Epsilon
 ) extends DelaunayAlphaShapes:
   // If `pts` is globally coplanar -- its own affine rank is strictly less than the declared ambient dimension
@@ -926,7 +928,7 @@ class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTria
   private var _sphereScanFallbacks = 0
 
   /** Frontier facets where the walk fell back to its slow candidate search (diagnostics and tests). */
-  private[tda4j] def sphereScanFallbacks: Int = _sphereScanFallbacks
+  def sphereScanFallbacks: Int = _sphereScanFallbacks
   val points: Seq[Point] = builder.points
   override val metricSpace: EuclideanMetricSpace = EuclideanMetricSpace(reducedPts)
   val ambientDimension: Int = builder.ambientDimension
@@ -958,7 +960,7 @@ object HelixDelaunay:
   /** Points whose affine span has lower dimension than their coordinates, re-expressed in an orthonormal basis of that
     * span (distances are unchanged, so the triangulation is the true one); other point sets are returned as they are.
     */
-  private[tda4j] def projectToAffineRank(pts: Array[Array[Double]])(using epsilon: Epsilon): Array[Array[Double]] =
+  def projectToAffineRank(pts: Array[Array[Double]])(using epsilon: Epsilon): Array[Array[Double]] =
     if pts.length < 2 then pts
     else
       val dim = pts.head.length
@@ -987,7 +989,7 @@ object HelixDelaunay:
     * no facet lies in more than two top simplices, and every facet in exactly one lies on the hull (all points on one
     * side of it). One pass over the points per boundary facet. A torn or partial walk fails the last.
     */
-  private[tda4j] def looksValid(simps: Set[DelaunaySimplex], points: Seq[Point])(using epsilon: Epsilon): Boolean =
+  def looksValid(simps: Set[DelaunaySimplex], points: Seq[Point])(using epsilon: Epsilon): Boolean =
     val tops = simps.map(_.simplex)
     val vertices = tops.flatMap(_.toSeq)
     lazy val facetCounts = tops.toSeq.flatMap(t => t.toSeq.map(v => t - v)).groupMapReduce(identity)(_ => 1)(_ + _)
@@ -1005,7 +1007,8 @@ object HelixDelaunay:
     facetCounts.values.forall(_ <= 2) &&
     facetCounts.iterator.filter(_._2 == 1).forall((f, _) => onHull(f))
 
-  private[tda4j] def badFacetsOf(simps: Set[DelaunaySimplex]): Map[Simplex[Int], Vector[DelaunaySimplex]] =
+  /** The facets that more than two top simplices claim (a torn triangulation), with their claimants. */
+  def badFacetsOf(simps: Set[DelaunaySimplex]): Map[Simplex[Int], Vector[DelaunaySimplex]] =
     // Distinct simplices: a cospherical tiling can record a simplex the walk also found, with the cluster's sphere
     // instead of its own; that is one simplex, not a third claimant.
     facetToSimplices(simps).filter { case (_, claimants) => claimants.map(_.simplex).distinct.size > 2 }
@@ -1015,7 +1018,7 @@ object HelixDelaunay:
     * which seed the repair. (A facet with one coface can be a missing simplex rather than a hull facet; only this
     * global check sees it.)
     */
-  private[tda4j] def interiorVoidVertices(simps: Set[DelaunaySimplex], ambientDimension: Int): Option[Set[Int]] =
+  def interiorVoidVertices(simps: Set[DelaunaySimplex], ambientDimension: Int): Option[Set[Int]] =
     given Double is Field = Field.DoubleApproximated(1e-9)
     val builder = ExplicitStreamBuilder[Int, Double]()
     simps
@@ -1109,7 +1112,7 @@ object HelixDelaunay:
 /** The simplices of `full` with alpha value at most `maxRadius`, in `full`'s order and with its values. Alpha values do
   * not decrease from a face to a coface, so this is a subcomplex.
   */
-private[tda4j] final class RadiusLimitedAlphaShapes(full: AlphaShapes, maxRadius: Double) extends AlphaShapes:
+open class RadiusLimitedAlphaShapes(full: AlphaShapes, maxRadius: Double) extends AlphaShapes:
   override val metricSpace: FiniteMetricSpace[Int] = full.metricSpace
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case d if full.iterateDimension.isDefinedAt(d) =>
@@ -1121,7 +1124,7 @@ private[tda4j] final class RadiusLimitedAlphaShapes(full: AlphaShapes, maxRadius
 /** `helix` without its simplices of dimension greater than `maxDim`: what the fast alpha engine hands the chunks engine
   * for the degrees between 0 and the top. Filtration values and order are those of `helix`.
   */
-class LimitedAlphaShapesStream(helix: DelaunayAlphaShapes, maxDim: Int)
+open class LimitedAlphaShapesStream(helix: DelaunayAlphaShapes, maxDim: Int)
     extends LevelwiseSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]():
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
@@ -1132,9 +1135,9 @@ class LimitedAlphaShapesStream(helix: DelaunayAlphaShapes, maxDim: Int)
   // Cells up to dimension maxDim: degrees above maxDim - 1 are truncation artifacts.
   override def homologyDegreeLimit: Option[Int] = Some(maxDim - 1)
 
-private[tda4j] object DelaunayAlphaShapes:
+object DelaunayAlphaShapes:
   /** The simplices of one dimension, each a row of `width` sorted vertex indices, numbered as first added. */
-  final class FaceTable(val width: Int, expected: Int):
+  class FaceTable(val width: Int, expected: Int):
     private var rows = new Array[Int](math.max(expected, 4) * width)
     var size = 0
     private var slots = Array.fill(Integer.highestOneBit(math.max(expected, 4) * 2) * 2)(-1)
