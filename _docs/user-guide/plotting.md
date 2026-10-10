@@ -8,11 +8,14 @@ landscapes, images, complexes at a scale, cycles, cocycles and circular coordina
 module (`plot/` in the repository) that adds no dependency to the library and needs none itself: plots are SVG, or a page
 with a small built-in 3-D viewer, and they show up in your browser while you work in a REPL.
 
-The module is a draft and not published yet. Try it from a checkout of the repository:
+It is its own artifact, published with the library from version 0.5.1 on:
 
 ```
-sbt plot/console
+libraryDependencies += "org.appliedtopology" %% "tda4j-plot" % "0.5.1"
 ```
+
+(which brings `tda4j` with it). Its API is young and may still change between releases. From a checkout of the
+repository, `sbt plot/console` starts a REPL with it.
 
 ## In a REPL: `view()`
 
@@ -31,8 +34,8 @@ Plot.diagram(diagram).view()
 The first `view()` starts a small web server on your machine (`http://127.0.0.1:8337/`) and opens it in your browser:
 one tab that lists every plot you have viewed, newest first, and shows each new one as it arrives. Nothing to install,
 no windows to manage, and the REPL exits as usual. On a remote machine or in a container the address is printed instead;
-forward the port (`ssh -L 8337:localhost:8337 host`) and open it locally. Set `TDA4J_PLOT_BROWSER=none` to never open a
-browser, and the system property `tda4j.plot.port` (or `TDA4J_PLOT_PORT`) for another port.
+forward the port (`ssh -L 8337:localhost:8337 host`) and open it locally. Set `TDA4J_PLOT_BROWSER=none` (or the system property
+`tda4j.plot.browser=none`) to never open a browser, and the system property `tda4j.plot.port` (or `TDA4J_PLOT_PORT`) for another port.
 
 ## Into files: `save`
 

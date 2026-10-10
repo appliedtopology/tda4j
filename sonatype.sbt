@@ -1,16 +1,18 @@
-publishMavenStyle := true
+// Maven Central metadata. Build-wide (`ThisBuild`) so every published module (`tda4j`, `tda4j-plot`) carries the same
+// POM fields, stages into the same bundle and uses the same credentials; each module sets its own `description`.
+ThisBuild / publishMavenStyle := true
 
-organizationName := "Applied Topology"
-organizationHomepage := Some(uri("https://appliedtopology.org"))
+ThisBuild / organizationName := "Applied Topology"
+ThisBuild / organizationHomepage := Some(uri("https://appliedtopology.org"))
 
-scmInfo := Some(
+ThisBuild / scmInfo := Some(
   ScmInfo(
     uri("https://github.com/appliedtopology/tda4j"),
     "scl:git@github.com:appliedtopology/tda4j.git"
   )
 )
 
-developers := List(
+ThisBuild / developers := List(
   Developer(
     id = "michiexile",
     name = "Mikael Vejdemo-Johansson",
@@ -21,15 +23,15 @@ developers := List(
 
 description := "A Java Platform compatible library for topological data analysis (TDA)."
 
-licenses := List("MIT" -> uri("https://opensource.org/license/mit"))
-homepage := Some(uri("https://appliedtopology.github.io/tda4j"))
+ThisBuild / licenses := List("MIT" -> uri("https://opensource.org/license/mit"))
+ThisBuild / homepage := Some(uri("https://appliedtopology.github.io/tda4j"))
 
-pomIncludeRepository := { _ => false }
+ThisBuild / pomIncludeRepository := { _ => false }
 
-publishTo := {
+ThisBuild / publishTo := {
   val centralSnapshots = "https://central.sonatype.com/repository/maven-snapshots/"
   if (isSnapshot.value) Some("central-snapshots" at centralSnapshots)
   else localStaging.value
 }
 
-credentials += Credentials(Path.userHome / ".sbt" / "sonatype_credentials")
+ThisBuild / credentials += Credentials(Path.userHome / ".sbt" / "sonatype_credentials")

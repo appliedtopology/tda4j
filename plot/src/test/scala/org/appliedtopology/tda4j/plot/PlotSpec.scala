@@ -170,6 +170,7 @@ class PlotSpec extends Specification:
   "the live viewer" should {
     "serve, list and announce every plot, on daemon threads" in {
       sys.props("tda4j.plot.port") = "0"
+      sys.props("tda4j.plot.browser") = "none" // never open a tab on a developer's desktop
       Viewer.stop()
       val http = HttpClient.newHttpClient()
       def get(path: String) =
@@ -185,10 +186,14 @@ class PlotSpec extends Specification:
         HttpResponse.BodyHandlers.ofLines()
       )
       val lines = events.body().iterator()
+      // Read on another thread with a deadline: a lost event must fail the spec, not hang the build.
+      val firstEvent = scala.concurrent.Future {
+        var seen = ""
+        while !seen.startsWith("data:") do seen = lines.next()
+        seen
+      }(using scala.concurrent.ExecutionContext.global)
       Plot.diagram(circleDiagram).copy(title = "second plot").view()
-      var seen = ""
-      while !seen.startsWith("data:") do seen = lines.next()
-      seen must beEqualTo("data: 2")
+      scala.concurrent.Await.result(firstEvent, scala.concurrent.duration.Duration(10, "s")) must beEqualTo("data: 2")
       get("list") must contain("second plot")
 
       import scala.jdk.CollectionConverters.*

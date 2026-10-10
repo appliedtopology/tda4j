@@ -14,9 +14,8 @@ object Layer:
   final case class Triangles(corners: IndexedSeq[(XYZ, XYZ, XYZ)], paints: IndexedSeq[Paint], opacity: Double = 0.25)
       extends Layer
 
-/** A 3-D plot. In a page (`html`, the live viewer) it is drawn on a canvas you can turn (drag) and zoom (scroll or
-  * pinch), with no library to load; as an `.svg` file it is one view, from `azimuth`/`elevation` (degrees), drawn back
-  * to front.
+/** A 3-D plot. In a page (`html`, the live viewer) it is drawn on a canvas you can turn (drag) and zoom (scroll), with
+  * no library to load; as an `.svg` file it is one view, from `azimuth`/`elevation` (degrees), drawn back to front.
   */
 final case class Scene(
   layers: Vector[Layer] = Vector.empty,

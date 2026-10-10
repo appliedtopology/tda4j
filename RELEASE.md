@@ -25,7 +25,7 @@ the docs steps set `TDA4J_SCALA_VERSION=3.8.4` (read by `scalaVersion` in `build
 
 | Artifact | How | Where it goes |
 |---|---|---|
-| Library jar | `sbt package` (part of `publishSigned`) | Maven Central |
+| Library jar | `sbt package` (part of `publishSigned`), one per module: `tda4j` and, from 0.5.1, `tda4j-plot` (the `plot` project, which the root aggregates) | Maven Central |
 | Sources jar | `publishMavenStyle := true` + sbt's default `publishArtifact` behavior (`Compile / packageSrc`) | Maven Central + GitHub Release |
 | Scaladoc jar | sbt's default `Compile / packageDoc` | Maven Central + GitHub Release |
 | Fat jar (CLI/MATLAB) | `sbt assembly` → `target/out/jvm/scala-3.9.0/tda4j/tda4j-<version>-assembly.jar` (sbt 2 layout, verified) (name from `assembly / assemblyJarName` in `build.sbt`) | GitHub Release only (not published to Maven — fat jars with bundled deps are a poor Maven citizen) |
@@ -65,6 +65,10 @@ already-released coordinate.
   `release.yml`'s `gh release create --generate-notes` will produce a commit-based changelog automatically,
   but it's worth reading over and editing by hand for anything a commit-log summary won't convey (this repo's
   worklog discipline — `.claude/WORKLOG-*.md` — is the fastest way to reconstruct what actually happened).
+- Two artifacts go to Central under the `org.appliedtopology` namespace: `tda4j` and `tda4j-plot` (both get the POM
+  metadata of `sonatype.sbt`, build-wide; `sbt publishLocal` shows both POMs without publishing anything). `tda4j-plot`'s
+  MiMa baseline starts at its first release, `firstPlotRelease` in `build.sbt` (0.5.1): after that release, its later
+  versions are checked against it like the core.
 - Confirm `mimaPreviousArtifacts` (`sbt show mimaPreviousArtifacts`): `build.sbt` derives it from the `v*` git tags of
   the version's own compatibility series that are older than it. A tag with no published Maven artifact makes
   `mimaReportBinaryIssues` fail to resolve, so check that those tags really were published. A deliberate break inside a

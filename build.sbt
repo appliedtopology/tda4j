@@ -7,9 +7,12 @@ organization := "org.appliedtopology"
 // TODO: delete the override when 3.9.1 is released.
 ThisBuild / scalaVersion := sys.env.getOrElse("TDA4J_SCALA_VERSION", "3.9.0")
 
-// The core library is the root project: every bare setting in this file is its own. `plot` (the `tda4j-plot` add-on,
-// `plot/`) depends on it and adds no dependency to it. Root aggregates `plot`, so CI's `test`, lint, `doc` and `mima`
-// commands cover it too; `assembly` does not aggregate (the CLI/MATLAB fat jar is the core's alone).
+// Two projects: the core library (root) and `plot` (the `tda4j-plot` add-on, `plot/`), which depends on the core and
+// adds no dependency to it. In sbt 2 every bare setting of the build's .sbt files applies to EVERY project, so `plot`
+// below replaces what is the core's alone (dependencies, compiler flags, the docs site, the CLI main class, the tutorial
+// generator) instead of adding to it. Root aggregates `plot`, so CI's `test`, lint, `doc` and `mima` commands cover it
+// too; `assembly` does not aggregate (the CLI/MATLAB fat jar is the core's alone). The two reference each other only
+// through `aggregate(plot)` and `LocalRootProject`: two lazy vals naming each other deadlock the build loader.
 lazy val root = (project in file(".")).aggregate(plot)
 assembly / aggregate := false
 
@@ -18,7 +21,10 @@ lazy val plot = (project in file("plot"))
   .settings(
     name := "tda4j-plot",
     organization := "org.appliedtopology",
-    scalacOptions ++= List(
+    description := "Plots for TDA4j: barcodes, persistence diagrams, images, complexes and representatives as SVG and " +
+      "3-D pages, with a live browser viewer. No dependencies beyond TDA4j.",
+    versionScheme := Some("semver-spec"),
+    scalacOptions := List(
       "-source:future",
       "-language:experimental.modularity",
       "-preview",
@@ -26,10 +32,21 @@ lazy val plot = (project in file("plot"))
       "-deprecation",
       "-unchecked"
     ),
-    libraryDependencies += "org.specs2" %% "specs2-core" % "5.5.1" % "test",
-    // Not published yet: the add-on's API is a draft (DESIGN-plotting.md). Drop these two lines to release it.
-    publish / skip := true,
-    mimaPreviousArtifacts := Set.empty,
+    // `:=`, not `+=`: the core's dependencies reach `plot` through `dependsOn`, not as its own.
+    libraryDependencies := libraryDependencies.value.filter(_.organization == "org.scala-lang") :+
+      "org.specs2" %% "specs2-core" % "5.5.1" % "test",
+    Compile / doc / scalacOptions := Seq("-project", name.value, "-project-version", docsVersion),
+    Compile / mainClass := None,
+    Test / sourceGenerators := Nil,
+    // Published as its own artifact from 0.5.1 on, so its MiMa baseline is the earlier releases of its series from
+    // that version on (the same rule as the core's, below); empty, and allowed to be, until 0.5.1 is out.
+    mimaPreviousArtifacts := mimaBaselineVersions(version.value, releaseTags((LocalRootProject / baseDirectory).value))
+      .filter { v =>
+        val Array(major, minor, patch) = v.split('.').map(_.toInt)
+        Ordering[(Int, Int, Int)].gteq((major, minor, patch), firstPlotRelease)
+      }
+      .map(v => organization.value %% name.value % v)
+      .toSet,
     mimaFailOnNoPrevious := false
   )
 
@@ -129,6 +146,9 @@ def mimaBaselineVersions(current: String, tags: Seq[String]): Seq[String] = {
     case _ => Nil
   }
 }
+
+// The first release that published `tda4j-plot` (see the `plot` project's MiMa baseline).
+val firstPlotRelease: (Int, Int, Int) = (0, 5, 1)
 
 // Compiler options: language features (implicitConversions, adhocExtensions) and warning flags.
 scalacOptions ++= List(

@@ -81,9 +81,25 @@ daemon threads).
 
 ## Not done / next
 
-- Not published (`publish / skip`): the API is a draft. To release: drop the skip and the MiMa lines, add it to
-  RELEASE.md.
+- (Superseded below: the project lead asked for its own artifact.)
 - 3-D has no tooltips; the canvas viewer has no picking.
 - Barcodes of thousands of bars draw every bar (an SVG of a few MB): `longest = Some(n)` is the way out today.
 - No MATLAB/CLI surface (plots are for Scala users; MATLAB has its own plotting).
 - An option to depend on a charting library later stays open: the scene model would be the adapter's input.
+
+## Publishing as `tda4j-plot` (project lead, same day)
+
+The lead: publish it as its own artifact (they set it up on Maven Central). Done: `publish / skip` dropped; the Central
+metadata in `sonatype.sbt` made build-wide (`ThisBuild /`), `plot` has its own `description` and `versionScheme`; its MiMa
+baseline is `mimaBaselineVersions` filtered to versions >= `firstPlotRelease` (0.5.1), empty and non-failing until then.
+`sbt publishLocal` (local Ivy only) published `tda4j_3` and `tda4j-plot_3` with jars, sources, scaladoc and POMs; the
+plot POM has name, description, url, MIT license, scm, developer, and depends on `tda4j_3` (compile) and specs2 (test).
+A real `publishSigned` was not run (blocked here as a publishing action, and there is no key); `inspect` lists
+`publishSigned` among the readers of `publish / skip`, which no project sets now.
+
+Found on the way: **sbt 2 applies every bare setting of `build.sbt`/`sonatype.sbt` to every project**, so `plot`
+inherited the core's library dependencies (the first POM listed commons-math3, scallop, cats, ... as its own), its
+compiler flags twice, the docs-site scaladoc options, the CLI main class and the tutorial generator. `plot` now replaces
+those (`:=`). And a confusion: with `publish / skip := true` set on `plot`, `show root / publish / skip` printed `true`
+(the aggregated plot value, unlabelled; also "1 disk cache hit"); the old single-project build answers "No such
+setting/task" for the same query, and so does the current one now that `plot` no longer sets it -- root was never skipped.

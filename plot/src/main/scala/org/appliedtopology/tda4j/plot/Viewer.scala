@@ -13,8 +13,8 @@ import scala.collection.mutable
   * another with the system property `tda4j.plot.port` or the environment variable `TDA4J_PLOT_PORT`) and opens the page
   * in the default browser. Where there is no desktop to open it on (a remote machine, a container), it prints the
   * address instead: open it yourself, forwarding the port if needed (`ssh -L 8337:localhost:8337 host`). Set
-  * `TDA4J_PLOT_BROWSER=none` to never open a browser. The page keeps a list of every plot shown, and reconnects by
-  * itself when the JVM restarts on the same port.
+  * `TDA4J_PLOT_BROWSER=none` (or the system property `tda4j.plot.browser=none`) to never open a browser. The page keeps
+  * a list of every plot shown, and reconnects by itself when the JVM restarts on the same port.
   *
   * The server's threads are daemon threads: a REPL or script exits as usual, and the page then waits for a new one.
   * Nothing here uses Swing or AWT windows, so it works the same from `sbt console`, `scala` and scala-cli on any OS.
@@ -95,7 +95,7 @@ object Viewer:
     s
 
   private def announce(url: String): Unit =
-    val wanted = !sys.env.get("TDA4J_PLOT_BROWSER").contains("none")
+    val wanted = !sys.props.get("tda4j.plot.browser").orElse(sys.env.get("TDA4J_PLOT_BROWSER")).contains("none")
     val opened = wanted && scala.util
       .Try {
         import java.awt.{Desktop, GraphicsEnvironment}
