@@ -10,7 +10,7 @@ go in the worklog, not here. Detail that matters for one subsystem only is in `.
 
 TDA4j is a Scala 3 library for persistent homology and topological data analysis (a spiritual successor to
 JavaPlex/Ripser, from the Stanford Computational Topology workgroup lineage). Single sbt module, root package
-`org.appliedtopology.tda4j`, pre-1.0 (`0.5.0-SNAPSHOT`, see `version.sbt`), actively evolving API. **0.5.0 deliberately does not keep binary
+`org.appliedtopology.tda4j`, pre-1.0 (version in `version.sbt`), actively evolving API. **0.5.0 deliberately does not keep binary
 compatibility with 0.4.x** (project lead: still in flux) — no compat shims for renames/signature changes.
 
 ## Working stance
@@ -293,6 +293,7 @@ file before changing that subsystem; this table is the index, in case a rule did
 - A cloud session (working on its own `claude/...` branch) may commit and push its own work to that branch at
   will, without asking first — the branch is disposable/session-scoped, not shared history. A local/interactive
   session working directly on a shared branch still waits to be asked; the project lead commits that work.
+- **Driving a PR to green** (CI jobs and their local equivalents, how proactive to be): `.claude/skills/steward/SKILL.md`.
 - **A bug found in a paper or reference implementation** goes in `.claude/BUGS-IN-REFERENCES.md` (flat, never condensed
   away): state exactly what was verified, and claim nothing end-to-end without a repro that shows it.
 
