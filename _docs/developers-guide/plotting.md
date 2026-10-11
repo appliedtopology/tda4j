@@ -41,8 +41,10 @@ Every plot is an immutable value.
 `Scene` and `Board` (plots side by side). `object Plot` holds the TDA
 constructors (`barcode`, `diagram`, `persistenceImage`, `landscape`, `image`,
 `cubicalChain`, `complex`, `cycle`, `cocycle`, `circularCoordinates`, `torus`,
-the 3-D ones) and shares the trait's name on purpose. The constructors take a
-`PersistenceDiagram` or a list of bars (`Plot.Bars`).
+the 3-D ones) and shares the trait's name on purpose. The barcode, diagram,
+persistence-image and landscape constructors take a `PersistenceDiagram` or a
+list of bars (`Plot.Bars`). The others take what they draw: a `PointCloud`,
+an `Image` or a grid, with a chain or coordinates on top.
 
 To add a kind of plot, add a constructor to `object Plot` that builds a
 `Figure` or `Scene` out of existing marks. Add a new `Mark` only for a

@@ -304,14 +304,15 @@ A query past the cursor advances it as far as it needs. A query below the
 cursor gives what a fresh cursor would. `snapshotAt(f)` copies the answer into
 an immutable `PersistenceDiagram`.
 
-Engine 2 answers the same three queries with the same contract, but it runs the
-whole reduction on its first query and has no cursor. `DiagramQuerySpec` pins
+Engine 2 answers `diagramAt(f)` and `barcodeAt(f)` with the same contract, but
+it runs the whole reduction on its first query and has no cursor. `DiagramQuerySpec` pins
 the contract for both engines.
 
 ## Cycles and cocycles from one pairing: `Involution`
 
-Every engine but the fast ones gives both kinds of representative. It computes
-one kind natively and derives the other from its own pairing
+Every engine but the fast ones and the Ripser oracle (engine 3, cocycles
+only) gives both kinds of representative. It computes one kind natively and
+derives the other from its own pairing
 (`homology/Involution.scala`, after Čufar and Virk, arXiv:2105.03629).
 
 **Cycles from a cohomology pairing** (`Involution.cycles`). Only the boundary

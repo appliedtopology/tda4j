@@ -104,7 +104,8 @@ given Double is Field = Field.DoubleApproximated(1e-9)
 floating-point equality is rarely what you want when an `isZero` check decides whether a chain entry
 survives a reduction step. `FiniteField.scala` gives exact, non-approximate coefficients instead:
 `FiniteField(p)`'s `Fp` is an opaque type *per instance* (so `Fp` from a mod-5 field and a mod-7 field are
-distinct, incompatible types), with exact arithmetic via a precomputed inverse table.
+distinct, incompatible types), with exact arithmetic via a precomputed inverse table and products in `Long`,
+so large primes stay exact.
 
 ### `Cell`, `OrderedCell`, and what `boundary` returns
 
@@ -217,8 +218,8 @@ Sort each dimension's bucket with the same object,
 `ExplicitStreamBuilder` (`streams/SimplexStream.scala`) builds a finite stream
 from a list:
 - `fromFacets(facets)` puts every cell at `0`;
-- `fromFilteredFacets((value, facet)*)` closes a list of maximal cells under
-  faces, and an unlisted face enters with the earliest cell containing it.
+- `fromFilteredFacets(Seq((value, facet), ...))` closes a list of maximal
+  cells under faces, and an unlisted face enters with the earliest cell containing it.
 
 The result, an `ExplicitStream`, is stratified, so the verb and every engine
 take it. This is the tool for test fixtures and for complexes that come from

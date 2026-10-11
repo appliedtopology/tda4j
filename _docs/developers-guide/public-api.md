@@ -35,7 +35,11 @@ Each rule maps onto a piece of the API:
 - **Rule 4** gave the messages that name the engine or parameter to use
   instead, and `@implicitNotFound` texts on the typeclasses.
 - **Rule 5** kept the engines, streams and cursor public. It is also the
-  reason for the visibility policy below.
+  reason for the visibility policy below. The engines' companions have
+  inferring forms, such as `SimplicialHomologyEngine.persistentHomology(stream)`
+  and `CellularPersistenceInChunksEngine.persistentHomology(stream, maxDim)`:
+  the cell and filtration types come from the stream, and the coefficient type
+  from the one `Field` given in scope.
 - **The `into` parameter types and the prebuilt labs** remove the `Some(...)`
   wrappers and set-up lines.
 
