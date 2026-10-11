@@ -87,34 +87,23 @@ object ClassifyingSpace:
     s =>
       chain.indexWhere(h => s.entries.forall(h.contains)).toDouble.ensuring(_ >= 0, "chain does not cover the simplex")
 
-  /** The persistence diagram `(degree, birth, death)` of the group HOMOLOGY `H_n(H_i; F_p)` as `H_i` runs up a chain of
-    * subgroups `H_0 <= H_1 <= ... <= G` (birth/death are chain positions; `+Infinity` = survives to the top), for
-    * `n <= maxDegree`. Over a finite field, group cohomology has the same dimensions.
+  /** The persistent group HOMOLOGY `H_n(H_i; F_p)` as `H_i` runs up a chain of subgroups `H_0 <= H_1 <= ... <= G`, in
+    * degrees `n <= maxDegree`: birth and death are positions in the chain (`+Infinity` = survives to the top), and
+    * every bar carries a representative cycle of `BG`. Over a finite field, group cohomology has the same dimensions.
+    * `diagram.triples` lists the bars as `(degree, birth, death)`.
     */
   def persistentGroupHomology(
     g: FiniteGroup,
     chain: Seq[Set[Int]],
     maxDegree: Int,
     prime: Int
-  ): List[(Int, Double, Double)] =
+  ): PersistenceDiagram[NerveSimplex] =
     require(chain.nonEmpty && chain.zip(chain.drop(1)).forall((a, b) => a.subsetOf(b)), "chain must be increasing")
-    val top = chain.last
-    val sset = apply(g, maxDegree + 1, Some(top))
-    val field = new FiniteField(prime)
-    import field.given
-    given (NerveSimplex is OrderedCell) = sset.cellInstance
-    val stream = FilteredSimplicialSetStream(sset, PartialFunction.fromFunction(filtrationBy(chain)))
-    // Dimension maxDegree + 1 is present only so that degree maxDegree classes die correctly; its own bars are incomplete.
-    CellularPersistenceInChunksEngine[NerveSimplex, field.Fp]()
-      .persistentHomology(stream)
-      .diagramAt(Double.PositiveInfinity)
-      .filter((dim, birth, death) => dim <= maxDegree && death > birth)
-      .sorted
+    nerve(g, Some(chain.last)).persistentHomology(filtrationBy(chain), maxDegree, prime)
 
   /** Dimension of `H_n(X; F_p)` for `n = 0..maxDegree` of a nerve (group or monoid); see [[BettiNumbers]]. */
   def bettiNumbers(nerve: Nerve, maxDegree: Int, prime: Int): Vector[Int] = BettiNumbers(nerve, maxDegree, prime)
 
   /** Dimension of `H_n(G; F_p)` for `n = 0..maxDegree`: the classes that are never killed. */
   def bettiNumbers(g: FiniteGroup, maxDegree: Int, prime: Int): Vector[Int] =
-    val diagram = persistentGroupHomology(g, Seq((0 until g.order).toSet), maxDegree, prime)
-    Vector.tabulate(maxDegree + 1)(n => diagram.count((dim, _, death) => dim == n && death.isPosInfinity))
+    persistentGroupHomology(g, Seq((0 until g.order).toSet), maxDegree, prime).bettiNumbers

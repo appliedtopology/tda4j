@@ -71,10 +71,31 @@ class ClassifyingSpaceSpec extends Specification:
         (0 until s4.order).toSet
       )
       chain.map(_.size) must beEqualTo(Seq(2, 4, 8, 24))
-      val diagram = ClassifyingSpace.persistentGroupHomology(s4, chain, 2, 2)
+      val diagram = ClassifyingSpace.persistentGroupHomology(s4, chain, 2, 2).triples
       val essential = diagram.filter(_._3.isPosInfinity)
       (Vector.tabulate(3)(n => essential.count(_._1 == n)) must beEqualTo(Vector(1, 1, 2)))
         .and(essential.forall(_._2 < 3.0) must beTrue)
+    }
+  }
+
+  "persistent group homology's representatives" should {
+    "be cycles of BG made of simplices of the subgroup where each class is born (S_4 chain, F_2 and F_3)" in {
+      val (s4, gens) =
+        FiniteGroup.permutationGroup(4, Seq(Seq(1, 0, 2, 3), Seq(0, 1, 3, 2), Seq(2, 3, 0, 1), Seq(1, 2, 3, 0)))
+      val chain: Seq[Set[Int]] =
+        Seq(Seq(gens(0)), Seq(gens(0), gens(1)), gens.take(3)).map(s4.subgroupGeneratedBy) :+ (0 until s4.order).toSet
+      val bg = ClassifyingSpace(s4, 3)
+      val level = ClassifyingSpace.filtrationBy(chain)
+      Seq(2, 3).forall { p =>
+        val diagram: PersistenceDiagram[NerveSimplex] = ClassifyingSpace.persistentGroupHomology(s4, chain, 2, p)
+        import diagram.given
+        given (NerveSimplex is OrderedCell) = bg.cellInstance
+        diagram.bars.nonEmpty && diagram.bars.forall { bar =>
+          bar.annotation.exists { rep =>
+            !rep.isZero() && Chain.from(rep.boundary).terms.isEmpty && rep.cells.forall(level(_) <= bar.birth)
+          }
+        }
+      } must beTrue
     }
   }
 

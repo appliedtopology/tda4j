@@ -218,6 +218,8 @@ mimaPreviousArtifacts := mimaBaselineVersions(version.value, releaseTags(baseDir
 //   `private[tda4j]`, so no client could have extended or created a `Chain` directly.
 // - `Chain.chainShow` needs only `Show` of the cells, not `OrderedCell` (chains over simplicial-set generators, which
 //   have no given `OrderedCell`, are showable now). A given, found by implicit search: no source change for callers.
+// - `sset.ClassifyingSpace.persistentGroupHomology` returns a `PersistenceDiagram` (bars WITH representatives, as every
+//   public interface should) instead of a list of (degree, birth, death); `diagram.triples` is the old list.
 mimaBinaryIssueFilters ++= {
   import com.typesafe.tools.mima.core.*
   Seq(
@@ -225,6 +227,9 @@ mimaBinaryIssueFilters ++= {
     ProblemFilters.exclude[ReversedMissingMethodProblem]("org.appliedtopology.tda4j.Chain.entryIterator"),
     ProblemFilters.exclude[DirectMissingMethodProblem](
       "org.appliedtopology.tda4j.Chain.chainShow(org.appliedtopology.tda4j.OrderedCell,cats.Show,org.appliedtopology.tda4j.Field)cats.Show"
+    ),
+    ProblemFilters.exclude[IncompatibleResultTypeProblem](
+      "org.appliedtopology.tda4j.sset.ClassifyingSpace.persistentGroupHomology"
     )
   )
 }

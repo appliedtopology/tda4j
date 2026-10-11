@@ -69,14 +69,15 @@ the chain* of the first subgroup containing every element it uses, so the four s
 
 ```scala sc:nocompile
 def bars(prime: Int) =
-  ClassifyingSpace.persistentGroupHomology(s4, chain, maxDegree = 2, prime = prime).groupBy(identity).view.mapValues(_.size).toMap
+  ClassifyingSpace.persistentGroupHomology(s4, chain, maxDegree = 2, prime = prime).triples.groupBy(identity).view.mapValues(_.size).toMap
 
 bars(2)
 // (0, 0.0, Infinity), (1, 0.0, Infinity), (1, 1.0, 2.0), (1, 2.0, 3.0),
 // (2, 0.0, Infinity), (2, 1.0, 2.0), (2, 1.0, Infinity), (2, 2.0, 3.0)    each once
 ```
 
-A bar `(n, i, j)` says: a class of degree `n` first appears in the homology of the `i`-th subgroup and is gone from the `j`-th
+`persistentGroupHomology` returns a persistence diagram: `triples` lists its bars, and each bar also carries a representative,
+a cycle of `BG` built from the subgroup where its class is born. A bar `(n, i, j)` says: a class of degree `n` first appears in the homology of the `i`-th subgroup and is gone from the `j`-th
 (killed, or identified with another class, when you pass to the bigger group); `Infinity` means it is still there in `S_4` itself.
 Reading the degree-1 bars:
 
@@ -139,7 +140,7 @@ val chain = Seq(
 )
 
 def bars(prime: Int) =
-  ClassifyingSpace.persistentGroupHomology(s4, chain, maxDegree = 2, prime = prime).groupBy(identity).view.mapValues(_.size).toMap
+  ClassifyingSpace.persistentGroupHomology(s4, chain, maxDegree = 2, prime = prime).triples.groupBy(identity).view.mapValues(_.size).toMap
 
 val overF2 = bars(2)
 val overF3 = bars(3)
