@@ -460,3 +460,28 @@ class PersistenceInChunksSpec extends mutable.Specification:
     val bad = results.filterNot { case (_, _, a, b, c) => a && b && c }
     bad must beEmpty
   }
+
+  "Degree-1 representatives built on demand from union-find's spanning forest are cycles present at birth" >> {
+    // Seeded random points over F_17 (signs matter), zero-length bars included, so every cycle-closing edge's class is
+    // reported and every one of its tree-path representatives is built and checked, not only the long bars'.
+    val field = FiniteField(17)
+    import field.given
+    val inf = Double.PositiveInfinity
+    val rng = new scala.util.Random(5)
+    val results = for n <- Seq(6, 12, 20) yield
+      val vr = VietorisRips(EuclideanMetricSpace(Array.fill(n)(Array.fill(3)(rng.nextDouble()))), maxDimension = 1)
+      val state = PersistenceInChunksEngine[Int, field.Fp](1).persistentHomology(vr)
+      val degreeOne = state.barcodeAt(inf, includeZeroLength = true).filter(_.dim == 1)
+      val valid = degreeOne.forall { bar =>
+        bar.annotation.exists { rep =>
+          !rep.isZero() && Chain.from(rep.boundary).isZero() &&
+          rep.cells.forall(s => vr.filtrationValue(s) <= bar.birth)
+        }
+      }
+      val naive = SimplicialHomologyEngine[Int, field.Fp, Double]().persistentHomology(vr)
+      val sameDiagram = state.diagramAt(inf, includeZeroLength = true).sorted ==
+        naive.diagramAt(inf, includeZeroLength = true).filter(_._1 <= 1).sorted
+      (n, degreeOne.size, valid, sameDiagram)
+    (results.map(_._2).sum must beGreaterThan(100)) and
+      (results.filterNot((_, _, valid, same) => valid && same) must beEmpty)
+  }

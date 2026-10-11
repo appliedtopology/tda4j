@@ -155,3 +155,18 @@ memory that made 800 points fail at 512 MB. Everywhere else it is neutral. The r
 picks chunks for VR (it picks Ripser), so this matters only to callers who choose chunks.
 
 The worktree used for the A/B was removed afterwards.
+
+**Spec for the lazy path** (advisor review: no existing spec built many tree-path representatives over a signed field):
+- `PersistenceInChunksSpec` now has "Degree-1 representatives built on demand from union-find's spanning forest are
+  cycles present at birth". It runs seeded VR clouds of 6, 12 and 20 points over F_17, at `maxDim = 1`, with zero-length
+  bars included, so every cycle-closing edge's representative is built.
+- It asserts more than 100 degree-1 bars in total. Each one's representative must be nonzero, have zero boundary, and
+  consist of cells present at birth. The full diagram must equal the naive engine's.
+- **Mutation:** flipping the sign of the second tree path in `treePathCycle` (`- c1·path(v1)` to `+`) fails this example
+  and none of the other 15 in the spec. The source was then restored.
+
+A grep found nothing else reading `essentialRepresentatives`: it is a constructor parameter of `HomologyState`, read only
+by `barcodeAt` and `degreeOneRepresentative`. `vcolOf` never reads it. The claim that the representatives are the same
+chains as before follows from the unchanged construction; it was not compared cell for cell.
+
+`sbt clean testFull`: 1052 tests, 0 failed, 11 skipped (the gated benchmarks); `plot` 18 tests, 0 failed.
