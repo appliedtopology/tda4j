@@ -9,11 +9,11 @@ import math.Fractional.Implicits.infixFractionalOps
 import math.Ordering.Implicits.sortedSetOrdering
 
 /** The naive engine ([[CellularHomologyEngine]]) on simplices with vertices of type `VertexT`. */
-class SimplicialHomologyEngine[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]()
+open class SimplicialHomologyEngine[VertexT: Ordering, CoefficientT: Field, FiltrationT: Ordering]()
     extends CellularHomologyEngine[Simplex[VertexT], CoefficientT, FiltrationT] {}
 
 /** The naive engine ([[CellularHomologyEngine]]) on cubes. */
-class CubicalHomologyEngine[CoefficientT: Field, FiltrationT: Ordering]()
+open class CubicalHomologyEngine[CoefficientT: Field, FiltrationT: Ordering]()
     extends CellularHomologyEngine[Cube, CoefficientT, FiltrationT] {}
 
 /* Companion forms with every type argument inferred: cell and filtration types from the stream, the coefficient type
@@ -51,7 +51,7 @@ object CellularHomologyEngine:
   * Implementation note: chain arithmetic must order cells by the stream's filtration, so the `RingModule` instance is
   * summoned inside `HomologyState`, where that ordering exists (a given fixes its own context when it is constructed).
   */
-class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]:
+open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]:
 
   class HomologyState(
     boundaries: mutable.Map[CellT, Chain[CellT, CoefficientT]], // pivot cell -> reduced boundary column
@@ -73,7 +73,7 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
     /** The whole pairing (running the cursor to the end): every finite bar's birth and death cells, zero-length ones
       * included, and every essential bar's birth cell. Computed under `stream.filtrationOrdering`.
       */
-    private[tda4j] def pairing: IndexedSeq[Involution.Pair[CellT]] =
+    def pairing: IndexedSeq[Involution.Pair[CellT]] =
       advanceAll()
       pairedCells.toIndexedSeq.map((b, d) => Involution.Pair(b.dim, b, Some(d))) ++
         positives.keys.toIndexedSeq.map(b => Involution.Pair(b.dim, b, None))
@@ -325,7 +325,7 @@ class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtration
   * enough). The whole reduction runs on the first query; `diagramAt(f)`/`barcodeAt(f)` then give the diagram truncated
   * at any `f`, with a representative cycle for every bar.
   */
-class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field](maxDim: Int = 5):
+open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field](maxDim: Int = 5):
   val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
   import chainRM.*
 
@@ -339,9 +339,10 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
     stream: StratifiedCellStream[CellT, Double],
     barcode: mutable.Map[Int, immutable.Queue[(Double, Double, Chain[CellT, CoefficientT])]],
     // Representative cycle for a still-open (essential) class, keyed by the cell itself. Populated eagerly by
-    // unionFindDim01 for dimension 0 (root vertices, trivially `Chain(root)`) and dimension 1 (cycle-forming
-    // edges, via the spanning-forest-path construction in unionFindDim01's own doc) -- both cheap, bounded by
-    // the union-find pass itself. Dimension >= 2 essential cells are NOT populated here eagerly; barcodeAt
+    // unionFindDim01 only for dimension 0 (root vertices, trivially `Chain(root)`). Dimension 1 (cycle-forming
+    // edges) is filled on first request by degreeOneRepresentative, from union-find's spanning forest (building
+    // those tree paths for every edge up front dominated the edge pass). Dimension >= 2 essential cells are NOT
+    // populated here eagerly either; barcodeAt
     // fills this map lazily, on first request, via vcolOf (see its own doc) -- essential classes are typically
     // few (bounded by the Betti number at that dimension), so computing their representatives on demand,
     // reusing this class's own already-complete `boundaries`/`killer` state, costs only what each one's own
@@ -401,11 +402,39 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
     // own (it always re-derives the same pairs from scratch), so without this flag a second diagramAt call
     // would append a duplicate bar to barcode(0) for every dimension-0/1 pair, every time.
     private var dim01Resolved: Boolean = false
+    // False once union-find has met an edge it cannot express (see edgeShape): degrees 0 and 1 then go through the
+    // general reduction like every other degree.
+    private var dim01ByUnionFind: Boolean = true
+
+    // The shape of an edge's boundary, for union-find: ZeroBoundary (no entries, a loop's (v, c), (v, -c), or
+    // coefficients that vanish in this field), JoinsTwo (c·(v - u) with u ≠ v and c a unit, as entries 0 and 1), or
+    // Irregular (anything else, which an algebraic chain complex may have and union-find cannot express). Plain Ints
+    // and no allocation on the common two-entry path: this runs once per edge of the complex.
+    private val ZeroBoundary = 0
+    private val JoinsTwo = 1
+    private val Irregular = 2
+    private def edgeShape(endpoints: Seq[(CellT, CoefficientT)]): Int =
+      val fld = summon[CoefficientT is Field]
+      def isZero(x: CoefficientT): Boolean = fld.isEqual(x, fld.zero)
+      endpoints.length match
+        case 0 => ZeroBoundary
+        case 1 => if isZero(endpoints(0)._2) then ZeroBoundary else Irregular
+        case 2 =>
+          val (a, ca) = endpoints(0)
+          val (b, cb) = endpoints(1)
+          if a == b then if isZero(fld.plus(ca, cb)) then ZeroBoundary else Irregular
+          else if isZero(ca) then if isZero(cb) then ZeroBoundary else Irregular
+          else if isZero(cb) then Irregular
+          else if isZero(fld.plus(ca, cb)) then JoinsTwo
+          else Irregular
+        case _ =>
+          if endpoints.groupMapReduce(_._1)(_._2)(fld.plus).valuesIterator.forall(isZero) then ZeroBoundary
+          else Irregular
 
     /** The whole pairing (running the reduction): every finite bar's birth and death cells, zero-length ones included,
       * and every essential bar's birth cell of degree at most `maxDim`. Computed under `stream.filtrationOrdering`.
       */
-    private[tda4j] def pairing: IndexedSeq[Involution.Pair[CellT]] =
+    def pairing: IndexedSeq[Involution.Pair[CellT]] =
       advanceAll()
       killer.toIndexedSeq.map((b, d) => Involution.Pair(b.dim, b, Some(d))) ++
         essentialSimplices.toIndexedSeq.filter(_.dim <= maxDim).map(b => Involution.Pair(b.dim, b, None))
@@ -413,9 +442,12 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
     /** Degrees 0 and 1 by elder-rule union-find over the vertices and edges, in filtration order, instead of chain
       * reduction. The reduced boundary matrix in these two dimensions is determined by the cell order, so this gives
       * the same pairs. Of two roots being merged, the younger becomes the child and is the vertex recorded as dying.
-      * Works for any cell type whose edges have two boundary terms, including a simplicial-set loop whose two ends are
-      * the same vertex (it is read as closing a cycle). Records a representative for every bar: the dying vertex, the
-      * root, or the tree path that a cycle-closing edge closes.
+      * Works for any cell type whose edges have boundary `c·(v - u)` (`c` a unit) or zero -- a loop, listed as no
+      * entries or as `(v, c), (v, -c)`, or coefficients that vanish in this field -- which closes a cycle by itself. On
+      * any other edge (an algebraic chain complex may have one) it stops, undoes what it recorded, and leaves degrees 0
+      * and 1 to the general reduction. Records a representative for every degree-0 bar (the dying vertex or the root);
+      * a degree-1 representative, the tree path a cycle-closing edge closes, is built when `barcodeAt` first asks for
+      * it.
       */
     def unionFindDim01(): Unit =
       if dim01Resolved then ()
@@ -425,6 +457,8 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
           stream.iterateDimension.applyOrElse(0, (_: Int) => Iterator.empty).toVector
         val vertexIndex: Map[CellT, Int] = vertices.zipWithIndex.toMap
         val parent: Array[Int] = Array.range(0, vertices.size)
+        forestVertices = vertices
+        forestParent = parent
 
         def find(i: Int): Int =
           var root = i
@@ -442,88 +476,123 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
         // partial one, and needs it via an explicit, uncompressed parent-edge structure distinct from `parent`
         // above (which IS heavily path-compressed by the time this loop finishes, so it can no longer answer
         // "which edge actually connects v to its tree-parent" for an arbitrary non-root v).
-        val treeEdges: mutable.ArrayBuffer[CellT] = mutable.ArrayBuffer.empty
-        val cycleEdges: mutable.ArrayBuffer[CellT] = mutable.ArrayBuffer.empty
-        stream.iterateDimension.applyOrElse(1, (_: Int) => Iterator.empty).foreach { edge =>
-          val endpoints = edge.boundary[CoefficientT]
-          val r0 = find(vertexIndex(endpoints(0)._1))
-          val r1 = find(vertexIndex(endpoints(1)._1))
-          if r0 == r1 then
-            essentialSimplices += edge
-            cycleEdges += edge
-          else
-            val (youngRoot, oldRoot) =
-              if ord.lt(vertices(r0), vertices(r1)) then (r0, r1) else (r1, r0)
-            parent(youngRoot) = oldRoot
-            val dyingVertex = vertices(youngRoot)
-            cleared += dyingVertex
-            paired += edge
-            killer(dyingVertex) = edge
-            killerOf(edge) = dyingVertex
-            treeEdges += edge
-            val lower =
-              stream.filtrationValue.applyOrElse(dyingVertex, (_: CellT) => Double.NegativeInfinity)
-            val upper =
-              stream.filtrationValue.applyOrElse(edge, (_: CellT) => Double.PositiveInfinity)
-            // Chain(dyingVertex), not Chain.empty: a dimension-0 bar's representative is trivially the dying
-            // vertex itself (every 0-chain is automatically a cycle, no dimension -1 to map to) -- exactly what
-            // CellularHomologyEngine's own `cycles` map holds at dimension 0
-            // (`cycles.addAll(stream.iterateDimension(0).map(cell => cell -> Chain(cell)))`). Matching that
-            // exactly, not just storing SOME valid cycle, is what makes this trustworthy enough to expose via
-            // barcodeAt -- see .claude/CLAUDE.md's coefficients-and-representatives design principle and
-            // barcodeAt's own doc below for the current scope boundary (dimension 0 only, for now).
-            barcode(0) = barcode.getOrElse(0, immutable.Queue.empty).appended((lower, upper, Chain(dyingVertex)))
+        stream.iterateDimension.applyOrElse(1, (_: Int) => Iterator.empty).takeWhile(_ => dim01ByUnionFind).foreach {
+          edge =>
+            val endpoints = edge.boundary[CoefficientT]
+            val shape = edgeShape(endpoints)
+            // A zero boundary closes a cycle by itself, so both roots read as -1 (plain vals: no per-edge allocation in
+            // this loop). An irregular edge ends union-find.
+            val r0 = if shape == JoinsTwo then find(vertexIndex(endpoints(0)._1)) else -1
+            val r1 = if shape == JoinsTwo then find(vertexIndex(endpoints(1)._1)) else -1
+            if shape == Irregular then dim01ByUnionFind = false
+            else if r0 == r1 then essentialSimplices += edge
+            else
+              val (youngRoot, oldRoot) =
+                if ord.lt(vertices(r0), vertices(r1)) then (r0, r1) else (r1, r0)
+              parent(youngRoot) = oldRoot
+              val dyingVertex = vertices(youngRoot)
+              cleared += dyingVertex
+              paired += edge
+              killer(dyingVertex) = edge
+              killerOf(edge) = dyingVertex
+              treeEdges += edge
+              val lower =
+                stream.filtrationValue.applyOrElse(dyingVertex, (_: CellT) => Double.NegativeInfinity)
+              val upper =
+                stream.filtrationValue.applyOrElse(edge, (_: CellT) => Double.PositiveInfinity)
+              // Chain(dyingVertex), not Chain.empty: a dimension-0 bar's representative is trivially the dying
+              // vertex itself (every 0-chain is automatically a cycle, no dimension -1 to map to) -- exactly what
+              // CellularHomologyEngine's own `cycles` map holds at dimension 0
+              // (`cycles.addAll(stream.iterateDimension(0).map(cell => cell -> Chain(cell)))`). Matching that
+              // exactly, not just storing SOME valid cycle, is what makes this trustworthy enough to expose via
+              // barcodeAt -- see .claude/CLAUDE.md's coefficients-and-representatives design principle.
+              barcode(0) = barcode.getOrElse(0, immutable.Queue.empty).appended((lower, upper, Chain(dyingVertex)))
         }
+        if !dim01ByUnionFind then
+          // Union-find is the first thing advanceAll runs, so clearing what it recorded leaves the fresh state the
+          // general reduction starts from.
+          cleared.clear()
+          paired.clear()
+          killer.clear()
+          killerOf.clear()
+          essentialSimplices.clear()
+          barcode.clear()
+          treeEdges.clear()
+          return
         vertices.indices.foreach { i =>
           if find(i) == i then
             essentialSimplices += vertices(i)
             essentialRepresentatives(vertices(i)) = Chain(vertices(i))
         }
 
-        // Dimension-1 essential (cycle-forming) edge representatives: a real spanning-forest-path
-        // construction, NOT a trivial one -- a lone cycle-forming edge is not itself a cycle (its own
-        // boundary is generally nonzero), unlike the dimension-0 case above. Built from `treeEdges` alone
-        // (never touching `parent`'s path-compressed pointers, which have already lost the actual historical
-        // tree shape by this point): one plain BFS per component over an adjacency list assembled from tree
-        // edges only, computing `pathFromRoot(v)` incrementally so that `boundary(pathFromRoot(v)) ==
-        // Chain(v) - Chain(root)` always holds -- verified by `PersistenceInChunksSpec`/`HomologySpec`'s own dd=0
-        // checks over a signed field, not just asserted here. For a tree edge `e` with `e.boundary` terms
-        // `(u, cu)` (already resolved, i.e. `u`'s own path is known) and `(v, cv)` (the newly-reached vertex):
-        // `boundary(Chain(e)) = cu*u + cv*v`, and since `boundary(Chain(u)) = 0` trivially (dimension 0), the
-        // correction term `(1/cv) * Chain(e)` alone has `boundary = (cu/cv)*u + v`, which equals `v - u`
-        // exactly because every dimension-1 boundary in this codebase (Simplex, Cube, FiniteSimplicialSet
-        // alike) has its two coefficients as additive inverses (`cu = -cv`) -- so `pathFromRoot(v) =
-        // pathFromRoot(u) + (1/cv) ⊠ Chain(e)`, no `Chain(u)` term needed at all.
-        val adjacency: mutable.Map[CellT, mutable.ArrayBuffer[(CellT, CellT)]] = mutable.Map.empty
-        treeEdges.foreach { edge =>
-          val endpoints = edge.boundary[CoefficientT]
-          val v0 = endpoints(0)._1
-          val v1 = endpoints(1)._1
-          adjacency.getOrElseUpdate(v0, mutable.ArrayBuffer.empty) += ((v1, edge))
-          adjacency.getOrElseUpdate(v1, mutable.ArrayBuffer.empty) += ((v0, edge))
-        }
-        val fld = summon[CoefficientT is Field]
-        val pathFromRoot: mutable.Map[CellT, Chain[CellT, CoefficientT]] = mutable.Map.empty
-        vertices.indices.foreach { i =>
-          if find(i) == i then
-            val root = vertices(i)
-            pathFromRoot(root) = Chain.empty
-            val stack = mutable.Stack(root)
-            while stack.nonEmpty do
-              val u = stack.pop()
-              adjacency.getOrElse(u, mutable.ArrayBuffer.empty).foreach { case (v, edge) =>
-                if !pathFromRoot.contains(v) then
-                  val cv = edge.boundary[CoefficientT].find(_._1 == v).get._2
-                  pathFromRoot(v) = pathFromRoot(u) + (fld.invert(cv) ⊠ Chain(edge))
-                  stack.push(v)
-              }
-        }
-        cycleEdges.foreach { edge =>
-          val endpoints = edge.boundary[CoefficientT]
-          val (v0, c0) = endpoints(0)
-          val (v1, c1) = endpoints(1)
-          essentialRepresentatives(edge) = Chain(edge) - (c0 ⊠ pathFromRoot(v0)) - (c1 ⊠ pathFromRoot(v1))
-        }
+    // Union-find's spanning forest, kept for the degree-1 representatives built from it on demand (treePathCycle).
+    private var forestVertices: Vector[CellT] = Vector.empty
+    private var forestParent: Array[Int] = Array.empty
+    private val treeEdges: mutable.ArrayBuffer[CellT] = mutable.ArrayBuffer.empty
+    private def forestRoot(i: Int): Int =
+      var root = i
+      while forestParent(root) != root do root = forestParent(root)
+      root
+
+    // Dimension-1 essential (cycle-forming) edge representatives: a real spanning-forest-path
+    // construction, NOT a trivial one -- a lone cycle-forming edge is not itself a cycle (its own
+    // boundary is generally nonzero), unlike the dimension-0 case above. Built from `treeEdges` alone
+    // (never touching `parent`'s path-compressed pointers, which have already lost the actual historical
+    // tree shape by this point): one plain BFS per component over an adjacency list assembled from tree
+    // edges only, computing `pathFromRoot(v)` incrementally so that `boundary(pathFromRoot(v)) ==
+    // Chain(v) - Chain(root)` always holds -- verified by `PersistenceInChunksSpec`/`HomologySpec`'s own dd=0
+    // checks over a signed field, not just asserted here. For a tree edge `e` with `e.boundary` terms
+    // `(u, cu)` (already resolved, i.e. `u`'s own path is known) and `(v, cv)` (the newly-reached vertex):
+    // `boundary(Chain(e)) = cu*u + cv*v`, and since `boundary(Chain(u)) = 0` trivially (dimension 0), the
+    // correction term `(1/cv) * Chain(e)` alone has `boundary = (cu/cv)*u + v`, which equals `v - u`
+    // exactly because every dimension-1 boundary in this codebase (Simplex, Cube, FiniteSimplicialSet
+    // alike) has its two coefficients as additive inverses (`cu = -cv`) -- so `pathFromRoot(v) =
+    // pathFromRoot(u) + (1/cv) ⊠ Chain(e)`, no `Chain(u)` term needed at all.
+    // Built on the first degree-1 representative barcodeAt asks for, not by union-find itself: diagramAt never needs it,
+    // and building it eagerly was 97% of the edge pass on a Vietoris-Rips complex (WORKLOG-union-find-robustness.md).
+    private lazy val pathFromRoot: mutable.Map[CellT, Chain[CellT, CoefficientT]] =
+      val adjacency: mutable.Map[CellT, mutable.ArrayBuffer[(CellT, CellT)]] = mutable.Map.empty
+      treeEdges.foreach { edge =>
+        val endpoints = edge.boundary[CoefficientT]
+        val v0 = endpoints(0)._1
+        val v1 = endpoints(1)._1
+        adjacency.getOrElseUpdate(v0, mutable.ArrayBuffer.empty) += ((v1, edge))
+        adjacency.getOrElseUpdate(v1, mutable.ArrayBuffer.empty) += ((v0, edge))
+      }
+      val fld = summon[CoefficientT is Field]
+      val paths: mutable.Map[CellT, Chain[CellT, CoefficientT]] = mutable.Map.empty
+      forestVertices.indices.foreach { i =>
+        if forestRoot(i) == i then
+          val root = forestVertices(i)
+          paths(root) = Chain.empty
+          val stack = mutable.Stack(root)
+          while stack.nonEmpty do
+            val u = stack.pop()
+            adjacency.getOrElse(u, mutable.ArrayBuffer.empty).foreach { case (v, edge) =>
+              if !paths.contains(v) then
+                val cv = edge.boundary[CoefficientT].find(_._1 == v).get._2
+                paths(v) = paths(u) + (fld.invert(cv) ⊠ Chain(edge))
+                stack.push(v)
+            }
+      }
+      paths
+
+    /** The cycle that a cycle-closing edge closes in union-find's spanning forest: the edge minus the tree paths to its
+      * ends, or the edge itself when its boundary is zero.
+      */
+    private def treePathCycle(edge: CellT): Chain[CellT, CoefficientT] =
+      val endpoints = edge.boundary[CoefficientT]
+      if edgeShape(endpoints) == ZeroBoundary then Chain(edge)
+      else
+        val (v0, c0) = endpoints(0)
+        val (v1, c1) = endpoints(1)
+        Chain(edge) - (c0 ⊠ pathFromRoot(v0)) - (c1 ⊠ pathFromRoot(v1))
+
+    /** The representative of the degree-1 class a cycle-closing edge starts: union-find's tree path, or, after
+      * union-find gave degrees 0 and 1 to the general reduction, the V-column. Computed once, when first asked for.
+      */
+    private def degreeOneRepresentative(edge: CellT): Chain[CellT, CoefficientT] =
+      essentialRepresentatives.getOrElseUpdate(edge, if dim01ByUnionFind then treePathCycle(edge) else vcolOf(edge))
 
     lazy val lastFiltrationValue: Double =
       allCells.iterator
@@ -696,9 +765,9 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
                 if dim == 0 then chain
                 else
                   val pivot = chain.leadingCell.get
-                  if dim == 1 then essentialRepresentatives(pivot) // the tree-path cycle unionFindDim01 built
-                  // for this edge back when it was still cycle-forming/essential, before recordPair promoted
-                  // it out of essentialSimplices -- that promotion never removes the representative itself.
+                  // A degree-1 pivot was a cycle-closing edge before a 2-cell killed its class: the union-find tree
+                  // path it closes (or, after union-find's fallback, its V-column), built on first request.
+                  if dim == 1 then degreeOneRepresentative(pivot)
                   else vcolOf(pivot)
               new PersistenceBar(dim, endpoint(true)(lower), deathAt(upper), Some(rep))
           }
@@ -709,7 +778,9 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
           val lower =
             stream.filtrationValue.applyOrElse(sigma, (_: CellT) => Double.NegativeInfinity)
           Option.when(lower <= f) {
-            val rep = essentialRepresentatives.getOrElseUpdate(sigma, vcolOf(sigma))
+            val rep =
+              if sigma.dim == 1 then degreeOneRepresentative(sigma)
+              else essentialRepresentatives.getOrElseUpdate(sigma, vcolOf(sigma))
             val upper: BarcodeEndpoint[Double] =
               if essentialUpperAt(f).isPosInfinity then PositiveInfinity() else ClosedEndpoint(f)
             new PersistenceBar(sigma.dim, endpoint(true)(lower), upper, Some(rep))
@@ -883,6 +954,8 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
       // above dimension 1 reads any state this pre-pass leaves unpopulated (see unionFindDim01's doc for the
       // two specific facts checked before relying on that).
       unionFindDim01()
+      // Union-find resolved degrees 0 and 1, or gave them back to the general reduction (an irregular edge).
+      val lowest = if dim01ByUnionFind then 2 else 0
 
       val n: Int = allCells.size
       val m: Int = (n + chunkSize - 1) / chunkSize
@@ -892,7 +965,7 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
 
       // Algorithm 2: local_reduction from clear-and-compress paper. Walks to internalMaxDim (maxDim + 1), not
       // maxDim -- see the class doc above for why the extra dimension is needed.
-      for delta <- internalMaxDim.to(2, -1) do
+      for delta <- internalMaxDim.to(lowest, -1) do
         for r <- 1.to(2) do
           for b <- (r - 1).until(m) do // parallelizable!
             val floorIdx: Int = math.max(0, (b - r + 1) * chunkSize)
@@ -951,7 +1024,7 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
       // Algorithm 5 (Persistence in chunks): per dim top-down, compress unpaired
       // global columns then reduce them. Clearing keeps positives' columns at zero.
       // Walks to internalMaxDim (maxDim + 1), not maxDim -- see the class doc above for why.
-      for delta <- internalMaxDim.to(2, -1) do
+      for delta <- internalMaxDim.to(lowest, -1) do
         val cellsAtDim =
           stream.iterateDimension.applyOrElse(delta, (_: Int) => Iterator.empty).toVector
         // step 2: compress unpaired global columns
@@ -969,11 +1042,11 @@ class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field]
     )
 
 /** The chunks engine ([[CellularPersistenceInChunksEngine]]) on simplices with vertices of type `VertexT`. */
-class PersistenceInChunksEngine[VertexT: Ordering, CoefficientT: Field](maxDim: Int = 5)
+open class PersistenceInChunksEngine[VertexT: Ordering, CoefficientT: Field](maxDim: Int = 5)
     extends CellularPersistenceInChunksEngine[Simplex[VertexT], CoefficientT](maxDim) {}
 
 /** The chunks engine ([[CellularPersistenceInChunksEngine]]) on cubes. */
-class CubicalPersistenceInChunksEngine[CoefficientT: Field](maxDim: Int = 5)
+open class CubicalPersistenceInChunksEngine[CoefficientT: Field](maxDim: Int = 5)
     extends CellularPersistenceInChunksEngine[Cube, CoefficientT](maxDim) {}
 
 object CellularPersistenceInChunksEngine:

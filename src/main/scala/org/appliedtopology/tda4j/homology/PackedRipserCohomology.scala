@@ -5,7 +5,7 @@ import scala.compiletime.asMatchable
 
 // The diameter of `sigma` plus vertex `v`: max of sigma's diameter and the distances from `v` to sigma's vertices
 // (Ripser's cofacet recurrence, O(d)). `vertices` is sigma's vertex array, decoded once per enumeration by the caller.
-private[tda4j] def insertionDiameter(
+def insertionDiameter(
   metricSpace: FiniteMetricSpace[Int],
   vertices: Array[Int],
   sigmaFv: Double,
@@ -34,7 +34,7 @@ private[tda4j] def insertionDiameter(
   * with a sparse distance matrix. The lists are built when at most a quarter of all pairs are within the threshold
   * (`neighbourLists = Some(true)` or `Some(false)` decides it instead); the output is the same either way.
   */
-class PackedRipserCohomologyEngine[CoefficientT: Field](
+open class PackedRipserCohomologyEngine[CoefficientT: Field](
   metricSpace: FiniteMetricSpace[Int],
   maxDimension: Int,
   useApparentPairs: Boolean = true,
@@ -82,7 +82,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
         NeighbourLists.within(n, resolvedMaxFiltrationValue, math.min(dense / 4, 1L << 28))(distance(_, _))
 
   /** Whether cofacets come from neighbour lists (diagnostics and tests). */
-  private[tda4j] def usesNeighbourLists: Boolean = lists.isDefined
+  def usesNeighbourLists: Boolean = lists.isDefined
 
   // Every cofacet of `sigma` (with `size` vertices) within the threshold, vertex and index strictly decreasing, as
   // (diameter, index, number of sigma's vertices below the added one); `f` returns whether to go on. Only the canonical
@@ -541,7 +541,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
     result
 
   /** The boundary of a `dim`-simplex: the facet without its `i`-th smallest vertex, with sign `(-1)^i`. */
-  private[tda4j] def boundaryOf(tau: DiameterIndex, dim: Int): Seq[(DiameterIndex, CoefficientT)] =
+  def boundaryOf(tau: DiameterIndex, dim: Int): Seq[(DiameterIndex, CoefficientT)] =
     if dim == 0 then Seq.empty
     else
       val vertices = si.decodeToArray(tau.index, dim + 1).sorted
@@ -606,7 +606,7 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
     * (`representative` is `None` elsewhere): with `cocycles = false` none, with `zeroLengthCocycles = false` none for
     * zero-length bars. The pairing never depends on them.
     */
-  private[tda4j] def pairedCohomology(
+  def pairedCohomology(
     cocycles: Boolean = true,
     zeroLengthCocycles: Boolean = true
   ): List[(PersistenceBar[Double, Chain[DiameterIndex, CoefficientT]], Involution.Pair[DiameterIndex])] =
@@ -748,6 +748,9 @@ class PackedRipserCohomologyEngine[CoefficientT: Field](
 
     rows
 
+// ClearedSet, Level and LongIntMap stay `private[tda4j]`: they are primitive collections with generic names and no
+// topological meaning, and in the flat package a public `Level` would shadow a user's own `Level` through their
+// `import org.appliedtopology.tda4j.*` without a warning. Nest one in a companion object before opening it.
 /** Indices added in any order, then `seal`ed (sorted once) and queried by binary search. */
 private[tda4j] final class ClearedSet:
   private var values: Array[Long] = new Array[Long](16)

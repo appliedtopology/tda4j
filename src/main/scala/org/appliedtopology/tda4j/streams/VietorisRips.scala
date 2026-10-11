@@ -22,7 +22,7 @@ object SimplexEdge:
     val maxedge = edges.max
     SimplexEdge(simplex, Simplex(maxedge._2, maxedge._3), maxedge._1)
 
-class TopCofacetEnumerator(val simplex: SimplexEdge, val neighbors: SortedSet[Int])(using
+open class TopCofacetEnumerator(val simplex: SimplexEdge, val neighbors: SortedSet[Int])(using
   val metricSpace: FiniteMetricSpace[Int]
 ):
   val neighborIt: collection.BufferedIterator[Int] = neighbors.iterator.buffered
@@ -56,7 +56,7 @@ class TopCofacetEnumerator(val simplex: SimplexEdge, val neighbors: SortedSet[In
     neighborIt.hasNext
   def next(): Int = neighborIt.next()
 
-class RecursiveStackSimplexEnumerator(val metricSpace: FiniteMetricSpace[Int], val targetDimension: Int = 2)(
+open class RecursiveStackSimplexEnumerator(val metricSpace: FiniteMetricSpace[Int], val targetDimension: Int = 2)(
   val query: SpatialQuery[Int] = BruteForce(metricSpace)
 ) extends Iterator[Simplex[Int]]:
   given FiniteMetricSpace[Int] = metricSpace
@@ -113,7 +113,7 @@ class RecursiveStackSimplexEnumerator(val metricSpace: FiniteMetricSpace[Int], v
   * neighbor query rather than `SimplexIndexing`'s combinatorial-number-system enumeration. A cross-validation baseline
   * for the canonical VR streams, not a speed-competitive production engine in its own right.
   */
-private[tda4j] class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace[Int])
+open class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace[Int])
     extends LevelwiseSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]:
   override def filtrationValue: PartialFunction[Simplex[Int], Double] =

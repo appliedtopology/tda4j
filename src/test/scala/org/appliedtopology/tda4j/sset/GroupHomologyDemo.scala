@@ -20,6 +20,7 @@ object GroupHomologyDemo:
       val prime = args(1).toInt
       ClassifyingSpace
         .persistentGroupHomology(s4, chain, args(2).toInt, prime)
+        .triples
         .groupBy(identity)
         .toList
         .sortBy(_._1)

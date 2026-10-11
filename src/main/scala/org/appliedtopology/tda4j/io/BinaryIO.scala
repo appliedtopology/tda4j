@@ -10,7 +10,7 @@ import java.nio.file.{Files, Paths}
   * format" outright) -- so `ByteBuffer.order(LITTLE_ENDIAN)` is used unconditionally here rather than detecting host
   * order, matching both.
   */
-private[tda4j] object BinaryIO:
+object BinaryIO:
   def readAllLE(path: String): ByteBuffer =
     ByteBuffer.wrap(Files.readAllBytes(Paths.get(path))).order(ByteOrder.LITTLE_ENDIAN)
 

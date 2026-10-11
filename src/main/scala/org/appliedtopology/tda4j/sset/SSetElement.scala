@@ -3,6 +3,8 @@ package sset
 
 import org.appliedtopology.tda4j.*
 
+import cats.Show
+
 /** A simplex of a finitely-generated simplicial set, in Eilenberg–Zilber normal form: `word` is the strictly decreasing
   * list of degeneracy indices `[w1 > w2 > ... > wk]` such that this element is `s_w1 s_w2 ... s_wk (generator)`, read
   * outermost-first (`s_w1` is the last degeneracy applied). `word = Nil` means the element *is* `generator`, which must
@@ -13,6 +15,13 @@ import org.appliedtopology.tda4j.*
   * `[0, 1]`.
   */
 case class SSetElement[G](word: List[Int], generator: G)
+
+object SSetElement:
+  /** `s1 s0 g`: the degeneracies of the word, outermost first, then the generator by its own `Show` (`g` alone when the
+    * element is non-degenerate).
+    */
+  given ssetElementShow: [G: Show as sg] => Show[SSetElement[G]] =
+    Show.show(e => (e.word.map(i => s"s$i") :+ sg.show(e.generator)).mkString(" "))
 
 /** Composes a new outermost degeneracy `s_m` onto an already-normalized word, restoring the strictly-decreasing
   * invariant via `s_i s_j = s_{j+1} s_i` (`i <= j`): if `m` already exceeds the current outermost index the word is

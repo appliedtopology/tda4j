@@ -35,7 +35,7 @@ import scala.collection.concurrent.TrieMap
   * The value of a simplex is not its diameter, so the Ripser engines do not apply; the naive, chunks and cohomology
   * engines do.
   */
-private[tda4j] class SheehyRipsSimplexStream(
+open class SheehyRipsSimplexStream(
   val ambientMetricSpace: FiniteMetricSpace[Int],
   val permutation: GreedyPermutation,
   val epsilon: Double,
@@ -65,7 +65,7 @@ private[tda4j] class SheehyRipsSimplexStream(
     "permutation must be a full greedy permutation of every point in ambientMetricSpace"
   )
 
-private[tda4j] object SheehyRipsSimplexStream:
+object SheehyRipsSimplexStream:
 
   /** The sparse Rips filtration of `ambientMetricSpace`, computing the greedy permutation (with `epsilon` checked
     * first).

@@ -73,12 +73,27 @@ this codebase's syntax.
 ```mermaid
 classDiagram
     class Chain {
-        -entries: PriorityQueue~Tuple2~
+        <<abstract>>
+        cellOrdering: Ordering~CellT~
+        coefficientField: Field~CoefficientT~
+        entryIterator()* Iterator~Tuple2~
         collapseHead() Unit
         collapseAll() Unit
         isZero() Boolean
-        items: Seq~Tuple2~
+        terms: Seq~Tuple2~
     }
+    class HeapChain {
+        <<private tda4j>>
+        queue: PriorityQueue~Tuple2~
+    }
+    class PackedChain {
+        <<private tda4j>>
+        keys: Array~Int~
+        coefficients: Array~AnyRef~
+        decoder: CellDecoder~CellT~
+    }
+    Chain <|-- HeapChain
+    Chain <|-- PackedChain
     class `Chain$` {
         <<companion object>>
         empty~CellT,CoefficientT~() Chain
@@ -176,7 +191,8 @@ place. See [Persistence engines](persistence-engines.md) for the full, current p
 `CellularPersistenceInChunksEngine`/`PersistenceInChunksEngine`,
 `RipserCohomologyEngine`, `PackedRipserCohomologyEngine`, `CellularCohomologyEngine`,
 `FastCubicalHomologyEngine` and `FastAlphaHomologyEngine` (`DelaunayAlphaShapes` alpha complexes: Bowyer-Watson or Helix) -- both valid at
-any ambient dimension `>= 2`, both via a cohomology hybrid above 2D -- wired into `matlab`/`cli` as
+any ambient dimension `>= 2`, both via a cohomology hybrid above 2D (on a cubical grid that cohomology is
+`PackedCubicalCohomologyEngine`, which also runs `Engine.Cohomology` on images) -- wired into `matlab`/`cli` as
 `engine="fast-cubical"`/`engine="fast-alpha"`.
 
 ## Circular coordinates (`homology/CircularCoordinates.scala`)
@@ -294,6 +310,5 @@ classDiagram
 bar, when an engine tracks one. `BarcodeDistance`/`Vectorization` only ever read a bar's `dim`/`lower`/`upper`
 (never `annotation`), and are specialized to `PersistenceBar[Double, _]` rather than sharing `Barcode`'s own
 `FiltrationT: Ordering` genericity — see [Architecture](architecture.md)'s "`Barcode.scala`" section
-for why, and for `BipartiteMatching.scala`'s two package-private combinatorial primitives
-(`HopcroftKarp`/`Hungarian`) `BarcodeDistance` is built on, omitted here as an implementation detail rather
-than part of this package's public shape.
+for why, and for `BipartiteMatching.scala`'s two combinatorial primitives (`HopcroftKarp`/`Hungarian`)
+`BarcodeDistance` is built on, omitted here from the diagram.

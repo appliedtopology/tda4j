@@ -162,7 +162,7 @@ per-cell `coboundary` method with no complex to consult was never the right shap
 Flash Cubical (Le Breton-Szustakowski-Piraud, arXiv:2606.04801): a genuinely different algorithm from engines
 1/2 above, not a faster re-keying the way engine 4 is for engine 3. Specialized to `CubicalGridStream`
 directly (like engines 3/4 are specialized to `Simplex[Int]` Vietoris-Rips) rather than generic over
-`CellT: OrderedCell` — it reads the grid's own `shape`/`ambientDim`/`topCellValue` directly, so it does not
+`CellT: OrderedCell` — it reads the grid's own `shape`/`ambientDim` and its flat array of pixel values directly, so it does not
 implement `PersistenceEngine[CellT, C]` either, for the same "honest asymmetry" reason that trait's own doc
 comment already gives for engines 3/4.
 
@@ -172,8 +172,9 @@ union-find, ascending filtration order, elder rule) plus `H_1` (via the dual con
 account for every nontrivial cell dimension a 2D grid has — `H_2` is identically zero for any subcomplex of a
 2D grid (a bounded planar region has no 2-dimensional voids to detect), so nothing is being skipped. At `d >=
 3` there are `d-2` "middle" dimensions (`1 <= k <= d-2`) with no duality shortcut; these are handed to
-`CellularCohomologyEngine` (cycles by the involution) run on a `LimitedCubicalGridStream` view that hides the real
-top-dimensional cells entirely, so the (often largest) top dimension never enters a reduction. Cohomology rather than
+cohomology (cycles by the involution) on the grid's cells below the top dimension -- what `CellularCohomologyEngine`
+gives on a `LimitedCubicalGridStream` view, computed by `PackedCubicalCohomologyEngine` on the grid's own index
+arithmetic -- so the (often largest) top dimension never enters a reduction. Cohomology rather than
 chunks: in 3-D, chunks on the middle degrees made the hybrid slower than plain cohomology on the whole image, and with
 cohomology it is faster at every size measured. No hardcoded dimension ceiling. See `.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md` for the full derivation,
 including why the dual union-find's own correctness doesn't depend on how the middle dimensions get resolved;
@@ -192,7 +193,7 @@ also carry `topValue = +Infinity` (this codebase's own "permanently missing cell
 `-1`) and tie against it.
 
 **Representatives**: every top cell carries a sign relative to the root of its dual component, kept in a signed
-union-find (`SignedUnionFind`: path compression composes the signs, a merge only re-links two roots), so a dying
+union-find (`UnitSignedUnionFind`, signs as bytes: path compression composes the signs, a merge only re-links two roots), so a dying
 component's signed sum of top cells has exactly the `H_{d-1}` cycle bounding it as its boundary. The orientation flip
 at each merge is solved from the connecting facet's own boundary coefficients (always `±1`, `cubeIsOrderedCell`'s
 alternating-sign rule) and each side's sign; the dying region is read off the merge forest only for a bar that is

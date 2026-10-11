@@ -4,9 +4,9 @@ import scala.collection.mutable
 
 /** Maximum-cardinality bipartite matching (Hopcroft-Karp). Used by [[BarcodeDistance.bottleneckDistance]] as the
   * feasibility check inside a binary search over candidate distances: "does a perfect matching exist using only edges
-  * of cost <= threshold". Package-private -- [[BarcodeDistance]] is the public surface.
+  * of cost <= threshold".
   */
-private[tda4j] object HopcroftKarp:
+object HopcroftKarp:
 
   /** `nLeft`/`nRight` left/right vertices, numbered `0 until nLeft`/`0 until nRight`. `adjacency(u)` lists `u`'s
     * right-neighbours. Returns `matchLeft` where `matchLeft(u)` is `u`'s matched right-vertex, or `-1` if `u` is
@@ -58,7 +58,7 @@ private[tda4j] object HopcroftKarp:
 /** Minimum-cost perfect matching on a square matrix of finite costs (the Hungarian algorithm, `O(n³)`, by shortest
   * augmenting paths with potentials), for [[BarcodeDistance.wassersteinDistance]].
   */
-private[tda4j] object Hungarian:
+object Hungarian:
 
   /** `cost` must be square (`n x n`), all entries finite. Returns `(assignment, totalCost)` where `assignment(j)` is
     * the row matched to column `j`, and `totalCost = sum_j cost(assignment(j))(j)`.

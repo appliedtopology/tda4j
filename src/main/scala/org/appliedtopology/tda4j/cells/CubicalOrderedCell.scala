@@ -1,5 +1,7 @@
 package org.appliedtopology.tda4j
 
+import cats.Show
+
 /** `cubeOrdering`/`cubeIsOrderedCell` -- split into their own file from `Cubical.scala` (where the opaque type `Cube`
   * and its companion live), for the same file-scoped opaque-transparency reason as `SimplexOrderedCell.scala`'s split
   * from `Simplex.scala` (see that file's doc). One wrinkle specific to `Cube`: `boundary` below builds new cube values
@@ -62,6 +64,9 @@ trait CubeInstances:
 
   /** A `Cube is OrderedCell` instance with a chosen order (`cubeIsOrderedCell`). */
   def isOrderedCell(order: Ordering[Cube]): Cube is OrderedCell = cubeIsOrderedCell(order)
+
+  /** `cube.show`: the product of its intervals, `Cube([0,1]x{2})` (a degenerate axis `{a}`, an interval `[a,a+1]`). */
+  given cubeShow: Show[Cube] = Show.show(_.show)
 
   given defaultCubeIsOrderedCell: (Cube is OrderedCell) = cubeIsOrderedCell()
   given cubeOrderingFromCell: (cell: Cube is OrderedCell) => Ordering[Cube] = cell.ordering

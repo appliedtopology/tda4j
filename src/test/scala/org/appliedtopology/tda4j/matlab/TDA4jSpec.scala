@@ -166,6 +166,33 @@ class TDA4jSpec extends mutable.Specification:
         )
     }
 
+    "refuse an image with a NaN pixel under every engine, naming it; an Inf pixel never enters" in {
+      val engines = List("fast-cubical", "cohomology", "chunks", "naive")
+      val withNaN = Array(Array(0.0, 1.0, Double.NaN), Array(2.0, 3.0, 4.0))
+      val refusedBy = engines.filter { engine =>
+        scala.util.Try(TDA4j.computeFromImage(withNaN, Array("engine", engine))).failed.toOption.exists {
+          case e: IllegalArgumentException => e.getMessage.contains("NaN value at pixel (0, 2)")
+          case _                           => false
+        }
+      }
+      // A ring around a missing pixel: the hole is never filled, so the loop never dies. A superlevel image's values are
+      // negated, so its mask is -Inf; +Inf there is the brightest value, which enters first and leaves no loop.
+      val inf = Double.PositiveInfinity
+      def ring(centre: Double) = Array(Array(1.0, 1.0, 1.0), Array(1.0, centre, 1.0), Array(1.0, 1.0, 1.0))
+      def bars(centre: Double, options: String*) = engines.map { engine =>
+        engine -> triples(
+          FullBarcode.computeFromImage(ring(centre), Array("engine", engine) ++ options).toArray()
+        ).sorted
+      }
+      (refusedBy must beEqualTo(engines)) and
+        (TDA4j.computeFromImage(withNaN, Array("sublevel", "false")) must throwAn[IllegalArgumentException](
+          message = "-Infinity \\(the filtration is superlevel\\) for a missing pixel"
+        )) and
+        (bars(inf) must beEqualTo(engines.map(_ -> List((0, 1.0, inf), (1, 1.0, inf))))) and
+        (bars(-inf, "sublevel", "false") must beEqualTo(engines.map(_ -> List((0, -1.0, inf), (1, -1.0, inf))))) and
+        (bars(inf, "sublevel", "false") must beEqualTo(engines.map(_ -> List((0, -inf, inf)))))
+    }
+
     "have representative chains readable for every bar, with matching vertex/coefficient array lengths" in {
       val result = FullBarcode.computeFromPoints(points, Array("engine", "cohomology"))
       result.size() must be_>(0)

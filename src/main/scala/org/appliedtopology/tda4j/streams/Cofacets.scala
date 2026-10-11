@@ -8,7 +8,7 @@ import scala.util.chaining.scalaUtilChainingOps
 /** ******* Optimized Vietoris-Rips cofacet generation for fast coboundary computation *******
   */
 
-class CofacetIterator[VertexT: Ordering](
+open class CofacetIterator[VertexT: Ordering](
   val simplex: Simplex[VertexT],
   sparseMetricSpace: SparseMetricSpace[VertexT]
 ) extends Iterator[VertexT]:

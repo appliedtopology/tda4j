@@ -108,6 +108,8 @@ object EdgeCollapse:
   * constructions. Its `minimumEnclosingRadius` is the bound the collapse used, so the default cutoff downstream is the
   * same as for the original space.
   */
+// The constructor stays `private[tda4j]`: it takes the collapse's own mutable neighbour maps without copying, and
+// `validUpTo` is a claim about them only `EdgeCollapse` can make. The graph is readable through `edges`.
 class EdgeCollapsedMetricSpace private[tda4j] (
   val originalMetricSpace: FiniteMetricSpace[Int],
   private val neighbors: Array[mutable.TreeMap[Int, Double]],
@@ -120,5 +122,9 @@ class EdgeCollapsedMetricSpace private[tda4j] (
 
   def distance(x: Int, y: Int): Double =
     if x == y then 0.0 else neighbors(x).getOrElse(y, Double.PositiveInfinity)
+
+  /** The edges that survived the collapse, `(i, j, value)` with `i < j`, ascending by `i` then `j`. */
+  def edges: Iterator[(Int, Int, Double)] =
+    neighbors.iterator.zipWithIndex.flatMap((m, i) => m.iteratorFrom(i + 1).map((j, value) => (i, j, value)))
 
   override lazy val minimumEnclosingRadius: Double = validUpTo

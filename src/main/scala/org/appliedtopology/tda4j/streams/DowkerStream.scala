@@ -22,7 +22,7 @@ import scala.collection.immutable
   * barcodes without zero-length bars, the default: with `includeZeroLength = true` the two sides differ, since each
   * vertex contributes an H₀ birth and the sides have different numbers of vertices.
   */
-class DowkerGeometry(val relation: Array[Array[Double]]):
+open class DowkerGeometry(val relation: Array[Array[Double]]):
   val numLeft: Int = relation.length
   val numWitnesses: Int = if numLeft == 0 then 0 else relation(0).length
 
@@ -77,6 +77,7 @@ object DowkerFiltration:
   * situation). A relation is not a metric, so this is a dedicated placeholder rather than reusing/misusing
   * `ExplicitMetricSpace` with a throwaway matrix.
   */
+// File-private: it answers 0 for every distance, so it is only fit to fill the constructor slot explained above.
 private class DowkerPlaceholderMetricSpace(n: Int) extends FiniteMetricSpace[Int]:
   def distance(x: Int, y: Int): Double = 0.0
   def size: Int = n
@@ -86,7 +87,7 @@ private class DowkerPlaceholderMetricSpace(n: Int) extends FiniteMetricSpace[Int
 /** The filtered Dowker complex on the rows of `geometry.relation` (vertex `i` is row `i`); [[dual]] gives the one on
   * the columns. `maxFiltrationValue` defaults to `Infinity`: a relation has no enclosing radius to truncate at.
   */
-private[tda4j] class DowkerCofaceSimplexStream(
+open class DowkerCofaceSimplexStream(
   val geometry: DowkerGeometry,
   val maxFiltrationValue: Double = Double.PositiveInfinity,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
@@ -134,7 +135,7 @@ private[tda4j] class DowkerCofaceSimplexStream(
   def dual: DowkerCofaceSimplexStream =
     new DowkerCofaceSimplexStream(geometry.dual, maxFiltrationValue, keepCriterion)
 
-private[tda4j] object DowkerCofaceSimplexStream:
+object DowkerCofaceSimplexStream:
   def apply(
     relation: Array[Array[Double]],
     maxFiltrationValue: Double = Double.PositiveInfinity,

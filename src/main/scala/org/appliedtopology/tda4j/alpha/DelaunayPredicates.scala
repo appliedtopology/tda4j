@@ -11,7 +11,7 @@ import java.math.BigDecimal as BD
   *
   * Determinants are expanded over permutations, which is cheap up to 5x5 (in-sphere in 4-D) and grows as n! beyond.
   */
-private[tda4j] final class DelaunayPredicates(points: Array[Array[Double]]):
+open class DelaunayPredicates(points: Array[Array[Double]]):
   val dimension: Int = points.head.length
   require(dimension >= 1 && dimension <= 4, s"DelaunayPredicates: dimension $dimension is not supported (1 to 4)")
 
@@ -74,9 +74,16 @@ private[tda4j] final class DelaunayPredicates(points: Array[Array[Double]]):
 
   private def exact(x: Double): BD = new BD(x) // the exact binary value
 
-  private[tda4j] var exactOrientations = 0L
-  private[tda4j] var exactSpheres = 0L
-  private[tda4j] var perturbedSpheres = 0L
+  private var _exactOrientations = 0L
+  private var _exactSpheres = 0L
+  private var _perturbedSpheres = 0L
+
+  /** How often the floating-point filter was not enough: orientations and in-sphere tests decided exactly, and
+    * in-sphere ties broken by the symbolic perturbation.
+    */
+  def exactOrientations: Long = _exactOrientations
+  def exactSpheres: Long = _exactSpheres
+  def perturbedSpheres: Long = _perturbedSpheres
 
   /** The sign of the orientation of the simplex `v(0), ..., v(dimension)`: the determinant of the rows `p(v(i)) -
     * p(v(0))`, `i >= 1`. Zero exactly when the points are affinely dependent.
@@ -88,7 +95,7 @@ private[tda4j] final class DelaunayPredicates(points: Array[Array[Double]]):
     val s = filteredDet(m, orientPerms, orientSigns, 1)
     if s != 0 then s
     else
-      exactOrientations += 1
+      _exactOrientations += 1
       val e0 = p0.map(exact)
       exactDet(Array.tabulate(d, d)((i, j) => exact(points(v(i + 1))(j)).subtract(e0(j))), orientPerms, orientSigns)
 
@@ -104,7 +111,7 @@ private[tda4j] final class DelaunayPredicates(points: Array[Array[Double]]):
     }
 
   /** The unperturbed sign of the translated in-sphere determinant (exact). */
-  private[tda4j] def sphereDeterminantSign(cell: Array[Int], q: Int): Int =
+  def sphereDeterminantSign(cell: Array[Int], q: Int): Int =
     val d = dimension
     val pq = points(q)
     val m = Array.tabulate(d + 1) { i =>
@@ -122,14 +129,14 @@ private[tda4j] final class DelaunayPredicates(points: Array[Array[Double]]):
     val s = filteredDet(m, spherePerms, sphereSigns, d + 2)
     if s != 0 then s
     else
-      exactSpheres += 1
+      _exactSpheres += 1
       exactDet(sphereRowsExact(cell, q), spherePerms, sphereSigns)
 
   // The sign of the homogeneous determinant (rows (p, w, 1) over the cell, then q; w the lifted coordinate) when the
   // lifted coordinate of row r is perturbed: the cofactor of (r, lifted column), i.e. the determinant with the lifted
   // column replaced by the unit vector e_r. Rows are taken in descending point index, the first non-zero one decides.
   private def perturbedSign(cell: Array[Int], q: Int): Int =
-    perturbedSpheres += 1
+    _perturbedSpheres += 1
     val d = dimension
     val rows = cell :+ q // d + 2 rows
     val coords = rows.map(i => points(i).map(exact))

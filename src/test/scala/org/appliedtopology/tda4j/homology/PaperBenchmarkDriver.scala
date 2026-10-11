@@ -11,6 +11,7 @@ import java.nio.{ByteBuffer, ByteOrder}
   * java -cp $CP org.appliedtopology.tda4j.PaperBenchmarkDriver task=vr input=sphere.txt format=points dim=2 \
   *   [threshold=1.8] [p=2] [engine=auto|ripser|cohomology|chunks|naive|fastcubical|fastalpha] \
   *   [reps=cycles|cocycles|none] [backend=default|bowyer-watson|helix|dqp] [warmup=2] [trials=5] [out=bars.tsv]
+  *   [read=true] [hold=seconds]
   * }}}
   *
   *   - `task=vr`: points (`format=points`, one point per line) or a full distance matrix (`format=distance`).
@@ -19,7 +20,9 @@ import java.nio.{ByteBuffer, ByteOrder}
   *     Helix above), `bowyer-watson`, `helix` or `dqp`. `engine=fastalpha` runs on the backend's triangulation.
   *   - `task=cech`: points; filtration values are radii (the same barcode as alpha in general position).
   *
-  * Times cover the whole `Persistence(...)` call: building the complex, the reduction and the representatives.
+  * Times cover the whole `Persistence(...)` call: building the complex, the reduction and the representatives. For
+  * `task=cubical`, `read=true` also reads every representative's terms inside the timed region (the JSON line reports
+  * how many), and `hold=N` keeps the last diagram reachable for N seconds after the trials (for a heap histogram).
   */
 object PaperBenchmarkDriver:
   given Epsilon = Epsilon(1e-5)
@@ -43,6 +46,11 @@ object PaperBenchmarkDriver:
       case other             => throw IllegalArgumentException(s"reps=$other (cycles|cocycles|none)")
     val warmup = opts.getOrElse("warmup", "2").toInt
     val trials = opts.getOrElse("trials", "5").toInt
+    val readReps = opts.get("read").contains("true")
+    // hold=N (cubical): keep the last diagram reachable for N seconds after the trials, for a heap histogram.
+    val holdSeconds = opts.getOrElse("hold", "0").toInt
+    var termsRead = 0L
+    var held: AnyRef = null
 
     def engine: Persistence.Engine = engineName match
       case "auto"        => Persistence.Engine.Auto
@@ -96,7 +104,12 @@ object PaperBenchmarkDriver:
               .map(_.toTriple)
         else
           () =>
-            Persistence(image, maxDimension = dim, characteristic = p, engine = engine, representatives = reps).triples
+            val diagram =
+              Persistence(image, maxDimension = dim, characteristic = p, engine = engine, representatives = reps)
+            // read=true: every representative's terms once, inside the timed region, as a caller reading them all.
+            if readReps then termsRead = diagram.bars.iterator.map(_.representative.terms.size.toLong).sum
+            held = diagram
+            diagram.triples
       case "alpha" =>
         val pts = readMatrix(input)
         val backend = AlphaBackend.parse(opts.getOrElse("backend", "default"))
@@ -163,9 +176,14 @@ object PaperBenchmarkDriver:
         s""""load_s":$loadSeconds,"times_s":[${times.mkString(",")}],""" +
         s""""bars":{${counts.map((d, c) => s""""$d":$c""").mkString(",")}},""" +
         s""""heap_used_mb":${(rt.totalMemory - rt.freeMemory) / 1048576},""" +
+        s""""terms_read":$termsRead,""" +
         s""""java":"${System.getProperty("java.version")}"""" +
         "}"
     )
+    if holdSeconds > 0 then
+      System.out.flush()
+      Thread.sleep(holdSeconds * 1000L)
+      println(s"""{"held":${held != null}}""")
 
   private def fmt(x: Double): String = if x.isPosInfinity then "inf" else x.toString
 

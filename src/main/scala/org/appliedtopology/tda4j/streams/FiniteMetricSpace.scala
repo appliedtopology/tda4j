@@ -92,7 +92,7 @@ object FiniteMetricSpace:
   * @tparam VertexT
   *   Type of the vertex indices for the wrapped metric space
   */
-class IntMetricSpace[VertexT](val metricSpace: FiniteMetricSpace[VertexT]) extends FiniteMetricSpace[Int]:
+open class IntMetricSpace[VertexT](val metricSpace: FiniteMetricSpace[VertexT]) extends FiniteMetricSpace[Int]:
   override def distance(x: Int, y: Int): Double =
     metricSpace.distance(metricSpace.elements.toIndexedSeq(x), metricSpace.elements.toIndexedSeq(y))
 
@@ -118,7 +118,7 @@ class IntMetricSpace[VertexT](val metricSpace: FiniteMetricSpace[VertexT]) exten
   * Only the lower triangle is read: `distance(x, y)` is `dist(max(x, y))(min(x, y))`, as in Ripser and GUDHI, so a
   * matrix that is not exactly symmetric gives the same results here as there.
   */
-class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricSpace[Int]:
+open class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricSpace[Int]:
   // Real-world distance-matrix files (e.g. the roadmap benchmark data's `fractal_9_5_2` set) can violate the
   // documented `dist(x)(y) == dist(y)(x)` expectation by ~1e-5/1e-6 (rounding in however the file was produced),
   // not enforced at load time. Reading only ONE triangle's entry, always via the same (max, min) ordering
@@ -145,7 +145,7 @@ class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricSpace[
   *   Vietoris-Rips computation, so the cache usually pays off where it fits.
   */
 
-class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistances: Boolean = true)
+open class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistances: Boolean = true)
     extends FiniteMetricSpace[Int]:
   def pointSqDistance(x: Array[Double], y: Array[Double]): Double =
     var acc: Double = 0.0
@@ -216,7 +216,7 @@ trait SpatialQuery[VertexT]:
     */
   def nearestNeighbors(v: VertexT, k: Int): IndexedSeq[VertexT]
 
-class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
+open class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
   val distanceFunction: DistanceFunction[VertexT] = new DistanceFunction[VertexT]:
     override def getDistance(firstPoint: VertexT, secondPoint: VertexT): Double =
       metricSpace.distance(firstPoint, secondPoint)
@@ -235,7 +235,7 @@ class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQ
     require(1 <= k && k <= metricSpace.size, s"k must be between 1 and ${metricSpace.size}, got $k")
     vpTree.getNearestNeighbors(v, k).asScala.toIndexedSeq
 
-class BruteForce[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
+open class BruteForce[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
   override def nearestNeighbors(v: VertexT, k: Int): IndexedSeq[VertexT] =
     require(1 <= k && k <= metricSpace.size, s"k must be between 1 and ${metricSpace.size}, got $k")
     metricSpace.elements.toIndexedSeq.sortBy(metricSpace.distance(v, _)).take(k)
@@ -246,7 +246,7 @@ class BruteForce[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends Spati
 /** ****** Sparse Metric Spaces and the Dory storage *******
   */
 
-class SparseMetricSpace[VertexT: Ordering](metricSpace: FiniteMetricSpace[VertexT], diameter: Double)
+open class SparseMetricSpace[VertexT: Ordering](metricSpace: FiniteMetricSpace[VertexT], diameter: Double)
     extends FiniteMetricSpace[VertexT]():
   val spatialQuery: SpatialQuery[VertexT] = JVPTree(metricSpace)
 

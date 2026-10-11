@@ -65,13 +65,24 @@ object PersistenceEngine:
       def barcode(
         stream: StratifiedCellStream[CellT, Double],
         includeZeroLength: Boolean
-      ): List[PersistenceBar[Double, Chain[CellT, C]]] =
-        CellularCohomologyEngine[CellT, C, Double]().persistentHomology(stream, includeZeroLength)
+      ): List[PersistenceBar[Double, Chain[CellT, C]]] = stream match
+        case grid: CubicalGridStream =>
+          onGrid(PackedCubicalCohomologyEngine[C](grid, grid.ambientDim).persistentHomology(includeZeroLength))
+        case _ => CellularCohomologyEngine[CellT, C, Double]().persistentHomology(stream, includeZeroLength)
 
   def cohomology[CellT: OrderedCell, C: Field]: PersistenceEngine[CellT, C] =
     new PersistenceEngine[CellT, C]:
       def barcode(
         stream: StratifiedCellStream[CellT, Double],
         includeZeroLength: Boolean
-      ): List[PersistenceBar[Double, Chain[CellT, C]]] =
-        CellularCohomologyEngine[CellT, C, Double]().persistentCohomology(stream, includeZeroLength)
+      ): List[PersistenceBar[Double, Chain[CellT, C]]] = stream match
+        case grid: CubicalGridStream =>
+          onGrid(PackedCubicalCohomologyEngine[C](grid, grid.ambientDim).persistentCohomology(includeZeroLength))
+        case _ => CellularCohomologyEngine[CellT, C, Double]().persistentCohomology(stream, includeZeroLength)
+
+  // On a cubical grid the packed engine gives exactly the generic engine's bars and representatives
+  // (PackedCubicalCohomologySpec); the stream's cells are cubes, so its bars are the caller's.
+  private def onGrid[CellT, C](
+    bars: List[PersistenceBar[Double, Chain[Cube, C]]]
+  ): List[PersistenceBar[Double, Chain[CellT, C]]] =
+    bars.asInstanceOf[List[PersistenceBar[Double, Chain[CellT, C]]]]

@@ -5,7 +5,7 @@ package org.appliedtopology.tda4j
   * rather than two so the "which row has how many entries, in what order" convention can't silently drift apart between
   * the two call sites.
   */
-private[tda4j] object DistanceMatrices:
+object DistanceMatrices:
 
   /** The `n` with `n(n-1)/2 = count`: the number of points of a triangular distance list without diagonal. Throws if
     * there is none (a truncated file).

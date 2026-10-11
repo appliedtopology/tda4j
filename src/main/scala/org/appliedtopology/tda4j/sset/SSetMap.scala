@@ -7,7 +7,7 @@ import org.appliedtopology.tda4j.*
   * the non-degenerate simplex `g`, an element of `Y` of the same dimension, possibly degenerate. A degenerate simplex
   * `s_J g` goes to `s_J f(g)`. Injectivity and surjectivity refer to the map on all simplices.
   */
-final class SSetMap[GX, GY](
+open class SSetMap[GX, GY](
   val source: FiniteSimplicialSet[GX],
   val target: FiniteSimplicialSet[GY],
   val onGenerators: GX => SSetElement[GY]

@@ -76,7 +76,7 @@ import scala.collection.parallel.CollectionConverters.*
   * out (loosening [[AlphaDQPSettings]] may help). Building a complex catches it per candidate simplex and leaves that
   * candidate out, so it reaches callers only from `DualQP.solve` directly.
   */
-final class AlphaComplexDQPException(message: String) extends RuntimeException(message)
+open class AlphaComplexDQPException(message: String) extends RuntimeException(message)
 
 // ===========================================================================
 // Input abstraction
@@ -120,16 +120,16 @@ trait PowerDistance:
 
   /** B_ij for the quadratic program based at x -- Eq. (11) specialised in the paragraph after Eq. (13).
     */
-  final def gram(x: Int, i: Int, j: Int): Double =
+  def gram(x: Int, i: Int, j: Int): Double =
     0.5 * (squaredDistance(i, x) + squaredDistance(j, x) - squaredDistance(i, j))
 
   /** U_i for the quadratic program based at x, same paragraph. */
-  final def dualLinear(x: Int, i: Int): Double =
+  def dualLinear(x: Int, i: Int): Double =
     0.5 * (weight(i) - weight(x) - squaredDistance(i, x))
 
   /** Radius of the weighted ball U_i at power level a (Definition 7); negative if U_i is empty.
     */
-  final def ballRadius(i: Int, a: Double): Double =
+  def ballRadius(i: Int, a: Double): Double =
     val t = a + weight(i)
     if t < 0.0 then -1.0 else math.sqrt(t)
 
@@ -248,7 +248,7 @@ final case class AlphaDQPSettings(
   * Appending is the standard bordered update; deleting removes a row of L and rotates the resulting extra superdiagonal
   * away with Givens rotations, which is O(|W|²) rather than a refactorisation.
   */
-final class CholeskyWorkspace(capacity: Int):
+open class CholeskyWorkspace(capacity: Int):
   private val cap = math.max(capacity, 1)
   private val l = new Array[Double](cap * cap)
   private var nw = 0
@@ -364,7 +364,7 @@ end CholeskyWorkspace
   *
   * The instance is stateful and not thread safe; give each worker its own.
   */
-final class DualQP(val n: Int, workingSetCapacity: Int, settings: AlphaDQPSettings):
+open class DualQP(val n: Int, workingSetCapacity: Int, settings: AlphaDQPSettings):
   private val cap = math.max(1, math.min(workingSetCapacity, math.max(n, 1)))
   private val chol = new CholeskyWorkspace(cap)
   private val ws = new Array[Int](cap)
@@ -699,7 +699,7 @@ end DualQP
   * Simplices are `Simplex[Int]` of site indices in increasing order. `cells` is in a valid filtration order: faces
   * always precede cofaces.
   */
-final class AlphaComplexDQP(
+open class AlphaComplexDQP(
   val space: PowerDistance,
   val maxPower: Double,
   val maxDimension: Int,
@@ -816,7 +816,7 @@ end AlphaComplexDQP
   * Outer loop over dimension, inner loop over base vertex. B and U are built once per (dimension, vertex) rather than
   * once per simplex, which is the only place ambient dimension enters the cost at all.
   */
-class AlphaComplexDQPBuilder(
+open class AlphaComplexDQPBuilder(
   val space: PowerDistance,
   val maxPower: Double,
   val maxDimension: Int,
@@ -1161,7 +1161,7 @@ class AlphaComplexDQPBuilder(
   val SnapTolerance: Double = 1e-10
 end AlphaComplexDQPBuilder
 
-class AlphaShapeDQP(val points: Array[Array[Double]]) extends AlphaShapes:
+open class AlphaShapeDQP(val points: Array[Array[Double]]) extends AlphaShapes:
   override val metricSpace = EuclideanMetricSpace(points)
   // No radius cutoff: matches HelixDelaunay, which always returns the full,
   // untruncated Delaunay complex. A degenerate/near-collinear configuration
@@ -1216,7 +1216,8 @@ class AlphaShapeDQP(val points: Array[Array[Double]]) extends AlphaShapes:
   * `metricSpace` contract (unused by homology engines, see that trait's doc); it must be the SAME points
   * `alphaComplexDQP` was built from.
   */
-class AlphaComplexDQPStream(val points: Array[Array[Double]], val alphaComplexDQP: AlphaComplexDQP) extends AlphaShapes:
+open class AlphaComplexDQPStream(val points: Array[Array[Double]], val alphaComplexDQP: AlphaComplexDQP)
+    extends AlphaShapes:
   override val metricSpace = EuclideanMetricSpace(points)
 
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {

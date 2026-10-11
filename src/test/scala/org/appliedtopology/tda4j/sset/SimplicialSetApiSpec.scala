@@ -163,4 +163,23 @@ class SimplicialSetApiSpec extends Specification:
       (SimplicialSet.kleinBottle.bettiNumbers(2) must beEqualTo(Vector(1, 2, 1)))
         .and(SimplicialSet.kleinBottle.bettiNumbers(3) must beEqualTo(Vector(1, 1, 0)))
         .and(SimplicialSet.realProjectiveSpace(2).bettiNumbers(3) must beEqualTo(Vector(1, 0, 0)))
+    "hold for monoids and categories" in {
+      val gl32 = FiniteGroup.generalLinear(3, 2)
+      val subgroups = FiniteCategory.fromPoset(gl32.pSubgroups(2), (a: Set[Int], b: Set[Int]) => a.subsetOf(b))
+      val square = Seq(Simplex(0, 1), Simplex(1, 2), Simplex(2, 3), Simplex(0, 3))
+      val reflection =
+        FiniteCategory.homotopyOrbits(FiniteGroup.cyclic(2), square, (g, v) => if g == 0 then v else (4 - v) % 4)
+      val rotation =
+        FiniteCategory.homotopyOrbits(FiniteGroup.cyclic(2), square, (g, v) => if g == 0 then v else (v + 2) % 4)
+      val rotationNerve = SimplicialSet.nerve(rotation)
+      val chain: Seq[Set[Int]] = Seq(rotation.morphismsOver(Set(0)), (0 until rotation.morphismCount).toSet)
+      (BettiNumbers(Nerve(FiniteMonoid.rectangularBand(2, 3)), 3, 2) must beEqualTo(Vector(1, 0, 2, 0)))
+        .and(SimplicialSet.nerve(subgroups).skeleton(3).bettiNumbers(2) must beEqualTo(Vector(1, 8, 0, 0)))
+        .and(BettiNumbers(SimplicialSet.nerve(reflection), 3, 2) must beEqualTo(Vector(1, 2, 2, 2)))
+        .and(BettiNumbers(SimplicialSet.nerve(reflection), 3, 3) must beEqualTo(Vector(1, 0, 0, 0)))
+        .and(
+          rotationNerve.persistentHomology(rotationNerve.filtrationBy(chain), 2, 2).dim(1).triples.sorted must
+            beEqualTo(List((1, 0.0, 1.0), (1, 1.0, Double.PositiveInfinity)))
+        )
+    }
   }

@@ -86,7 +86,8 @@ explicitly, throws `FastAlphaTriangulationException` rather than a silently-wron
 value from `HelixDelaunay.filtrationValue` directly, never recomputed as min over top simplices. At dim≥3, same
 cohomology hybrid as cubical on `LimitedAlphaShapesStream`; cross-validated at d=3. Wired as
 `engine="fast-alpha"` (alpha with a triangulating backend, project lead signed off on the measured exception rate). Representatives
-share the cubical engine's `SignedUnionFind` bookkeeping (`WORKLOG-fast-cubical-representatives.md`).
+use `SignedUnionFind[C]` (`WORKLOG-fast-cubical-representatives.md`); the cubical engine moved to its byte-signed sibling
+`UnitSignedUnionFind` (`WORKLOG-cubical-performance.md`).
 `WORKLOG-alpha-dual-unionfind.md`, `DESIGN-alpha-dual-unionfind.md`.
 
 **`HelixDelaunay(pts, seed, requireValidTriangulation = true)` repairs facet-multiplicity violations** (off by

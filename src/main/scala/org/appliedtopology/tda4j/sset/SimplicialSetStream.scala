@@ -8,7 +8,7 @@ import org.appliedtopology.tda4j.*
   * `OrderedCell` instance comes from the simplicial set (its faces), so it is passed explicitly by the companion's
   * `apply`.
   */
-class SimplicialSetStream[G](sset: FiniteSimplicialSet[G])(using G is OrderedCell) extends CellStream[G, Int]:
+open class SimplicialSetStream[G](sset: FiniteSimplicialSet[G])(using G is OrderedCell) extends CellStream[G, Int]:
   def filtrationValue: PartialFunction[G, Int] = { case _ => 0 }
   def iterator: Iterator[G] = sset.generatorsByDim.iterator.flatten
   val filtrationOrdering: Ordering[G] = Ordering.by[G, Int](sset.dimOf).orElse(sset.ord)
@@ -19,6 +19,7 @@ object SimplicialSetStream:
     given (G is OrderedCell) = sset.cellInstance
     new SimplicialSetStream(sset)
 
+  // `private[sset]`: public as `SimplicialSetCatalog.fromStream`.
   /** The simplicial set of a stream of simplices. Every face of a simplex is a simplex, so no degeneracies occur. */
   private[sset] def fromStream[VertexT: Ordering](
     stream: CellStream[Simplex[VertexT], ?]

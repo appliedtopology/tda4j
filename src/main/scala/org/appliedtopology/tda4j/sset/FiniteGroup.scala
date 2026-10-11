@@ -11,7 +11,7 @@ import scala.collection.mutable
   * and asks "is this the identity?", and a table makes both an array lookup. Fine up to a few hundred elements (S_5 has
   * 120: a 14,400-entry table).
   */
-class FiniteMonoid(val table: Array[Array[Int]], val names: IndexedSeq[String]):
+open class FiniteMonoid(val table: Array[Array[Int]], val names: IndexedSeq[String]):
   def order: Int = table.length
   def identity: Int = 0
   def multiply(a: Int, b: Int): Int = table(a)(b)
@@ -30,7 +30,7 @@ class FiniteMonoid(val table: Array[Array[Int]], val names: IndexedSeq[String]):
       range ++ unit ++ assoc
 
 /** A finite monoid whose every element has an inverse. */
-final class FiniteGroup(table: Array[Array[Int]], names: IndexedSeq[String]) extends FiniteMonoid(table, names):
+open class FiniteGroup(table: Array[Array[Int]], names: IndexedSeq[String]) extends FiniteMonoid(table, names):
 
   def inverse(a: Int): Int = table(a).indexOf(identity)
 
@@ -51,6 +51,38 @@ final class FiniteGroup(table: Array[Array[Int]], names: IndexedSeq[String]) ext
         if members.add(y) then queue.enqueue(y)
     members.toSet
 
+  /** The order of element `a`. */
+  def elementOrder(a: Int): Int = Iterator.iterate(a)(multiply(_, a)).indexWhere(_ == identity) + 1
+
+  /** Every nontrivial `p`-subgroup (order a power of the prime `p`), smallest first: the Brown poset `S_p(G)` once
+    * ordered by inclusion (`FiniteCategory.fromPoset(g.pSubgroups(p), _ subsetOf _)`). Found by extending each
+    * `p`-subgroup `Q` by a `p`-element `x` that normalizes it with `x^p` in `Q` -- every `p`-group arises this way from
+    * a normal subgroup of index `p`.
+    */
+  def pSubgroups(p: Int): IndexedSeq[Set[Int]] =
+    require(p > 1 && BigInt(p).isProbablePrime(certainty = 100), s"$p is not a prime")
+    def isPowerOfP(k: Int): Boolean = k == 1 || (k % p == 0 && isPowerOfP(k / p))
+    val pElements = (0 until order).filter(a => a != identity && isPowerOfP(elementOrder(a)))
+    def power(a: Int, k: Int): Int = (1 until k).foldLeft(a)((x, _) => multiply(x, a))
+    val found = mutable.LinkedHashSet.empty[Set[Int]]
+    var frontier: Seq[Set[Int]] = Seq(Set(identity))
+    while frontier.nonEmpty do
+      val next = for
+        q <- frontier
+        x <- pElements
+        if !q.contains(x) && q.contains(power(x, p)) && q.forall(y => q.contains(multiply(multiply(x, y), inverse(x))))
+      yield subgroupGeneratedBy(q + x)
+      frontier = next.distinct.filterNot(found.contains)
+      found ++= frontier
+    found.toIndexedSeq.sortBy(_.toList.sorted)(using Ordering.Implicits.seqOrdering[List, Int]).sortBy(_.size)
+
+  /** Whether `subgroup` is elementary abelian of exponent `p`: abelian, with `x^p = 1` for every element. The
+    * nontrivial ones among [[pSubgroups]] form Quillen's poset `A_p(G)`, homotopy equivalent to `S_p(G)`.
+    */
+  def isElementaryAbelian(subgroup: Set[Int], p: Int): Boolean =
+    subgroup.forall(x => subgroup.forall(y => multiply(x, y) == multiply(y, x))) &&
+      subgroup.forall(x => elementOrder(x) == 1 || elementOrder(x) == p)
+
 object FiniteMonoid:
 
   /** The integers modulo `n` under multiplication (a monoid, not a group, unless `n <= 2`); element `k` is the residue
@@ -62,6 +94,53 @@ object FiniteMonoid:
     val residue = (1 +: 0 +: (2 until n)).take(n).toVector
     val index = residue.zipWithIndex.toMap
     FiniteMonoid(Array.tabulate(n, n)((a, b) => index((residue(a) * residue(b)) % n)), residue.map(r => s"$r"))
+
+  /** The `rows x columns` rectangular band, `(a, b)(c, d) = (a, d)`, with an identity adjoined (index 0); element `(a,
+    * b)` is index `1 + a * columns + b`. Its classifying space is a wedge of `(rows - 1)(columns - 1)` two-spheres: a
+    * finite monoid whose nerve has free homology in degree 2 and none above, which no finite group's has.
+    */
+  def rectangularBand(rows: Int, columns: Int): FiniteMonoid =
+    require(rows >= 1 && columns >= 1, s"a rectangular band needs rows, columns >= 1, got $rows x $columns")
+    val size = 1 + rows * columns
+    def row(x: Int) = (x - 1) / columns
+    def column(x: Int) = (x - 1) % columns
+    FiniteMonoid(
+      Array.tabulate(size, size)((x, y) =>
+        if x == 0 then y else if y == 0 then x else 1 + row(x) * columns + column(y)
+      ),
+      "1" +: IndexedSeq.tabulate(rows * columns)(i => s"(${i / columns},${i % columns})")
+    )
+
+  /** The Rees matrix semigroup `M[G; rows, columns; P]` with an identity adjoined (index 0): elements `(i, g, λ)` for
+    * `i < rows`, `g` in `group`, `λ < columns`, multiplied by `(i, g, λ)(j, h, μ) = (i, g·P(λ)(j)·h, μ)`, where the
+    * sandwich matrix `sandwich(λ)(i)` holds element indices of `group`. Element `(i, g, λ)` is index `1 + (i *
+    * |G| + g) * columns + λ`. Every finite completely simple semigroup is one of these; `group` trivial gives the
+    * rectangular band.
+    */
+  def reesMatrix(group: FiniteGroup, rows: Int, columns: Int, sandwich: IndexedSeq[IndexedSeq[Int]]): FiniteMonoid =
+    require(rows >= 1 && columns >= 1, s"a Rees matrix semigroup needs rows, columns >= 1, got $rows x $columns")
+    require(
+      sandwich.length == columns && sandwich.forall(r => r.length == rows && r.forall(g => g >= 0 && g < group.order)),
+      s"the sandwich matrix must be columns x rows ($columns x $rows) with entries in 0 until ${group.order}"
+    )
+    val n = group.order
+    val size = 1 + rows * n * columns
+    def index(i: Int, g: Int, l: Int) = 1 + (i * n + g) * columns + l
+    def decode(x: Int) = ((x - 1) / columns / n, ((x - 1) / columns) % n, (x - 1) % columns)
+    FiniteMonoid(
+      Array.tabulate(size, size) { (x, y) =>
+        if x == 0 then y
+        else if y == 0 then x
+        else
+          val (i, g, l) = decode(x)
+          val (j, h, mu) = decode(y)
+          index(i, group.multiply(group.multiply(g, sandwich(l)(j)), h), mu)
+      },
+      "1" +: (1 until size).map { x =>
+        val (i, g, l) = decode(x)
+        s"($i,${group.names(g)},$l)"
+      }
+    )
 
 object FiniteGroup:
 
@@ -104,6 +183,32 @@ object FiniteGroup:
     val transposition = Vector.range(0, n).updated(0, 1).updated(1, 0)
     val cycle = Vector.tabulate(n)(i => (i + 1) % n)
     permutationGroup(n, Seq(transposition, cycle))._1
+
+  /** The alternating group A_n (`n >= 3`), generated by the 3-cycles `(0 1 k)`. */
+  def alternating(n: Int): FiniteGroup =
+    require(n >= 3, s"the alternating group needs n >= 3, got $n")
+    val threeCycles = (2 until n).map(k => Vector.range(0, n).updated(0, 1).updated(1, k).updated(k, 0))
+    permutationGroup(n, threeCycles)._1
+
+  /** The general linear group GL(n, p) over the prime field `F_p`, as permutations of the `p^n - 1` nonzero vectors
+    * (vector `v_0 + v_1 p + ... + v_{n-1} p^{n-1}` is point `v - 1`); generated by the elementary transvections and,
+    * for `p > 2`, the diagonal matrix with a primitive root in the corner. Order
+    * `(p^n - 1)(p^n - p)...(p^n - p^{n-1})`: GL(3, 2) has 168 elements.
+    */
+  def generalLinear(n: Int, p: Int): FiniteGroup =
+    require(n >= 1, s"n must be >= 1, got $n")
+    require(p > 1 && BigInt(p).isProbablePrime(certainty = 100), s"$p is not a prime")
+    val size = BigInt(p).pow(n).toInt
+    def digits(v: Int): Vector[Int] = Vector.tabulate(n)(i => (v / BigInt(p).pow(i).toInt) % p)
+    def number(d: Vector[Int]): Int = d.zipWithIndex.map((x, i) => x * BigInt(p).pow(i).toInt).sum
+    def asPermutation(matrix: Vector[Int] => Vector[Int]): Seq[Int] =
+      (1 until size).map(v => number(matrix(digits(v))) - 1)
+    val transvections =
+      for i <- 0 until n; j <- 0 until n if i != j
+      yield asPermutation(d => d.updated(i, (d(i) + d(j)) % p))
+    val primitiveRoot = (1 until p).find(r => (1 until p - 1).forall(k => BigInt(r).modPow(k, p) != 1)).get
+    val diagonal = if p > 2 then Seq(asPermutation(d => d.updated(0, (d(0) * primitiveRoot) % p))) else Seq.empty
+    permutationGroup(size - 1, transvections ++ diagonal)._1
 
   /** The element of `g` (a permutation group built by [[permutationGroup]]) that has this image list. */
   def elementOfPermutation(g: FiniteGroup, p: Seq[Int]): Int =

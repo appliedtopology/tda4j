@@ -2,7 +2,7 @@ package org.appliedtopology.tda4j
 
 import collection.mutable
 
-class UnionFind[T](vertices: IterableOnce[T]):
+open class UnionFind[T](vertices: IterableOnce[T]):
   case class UFSet(label: T)
   val sets: mutable.Map[UFSet, UFSet] = mutable.Map.from(
     vertices.iterator.map(v => (UFSet(v), UFSet(v)))
@@ -38,7 +38,7 @@ class UnionFind[T](vertices: IterableOnce[T]):
   * Minimal Spanning Tree in increasing weight order, while the second iterator gives all the non-included
   */
 
-class Kruskal[T](elements: Seq[T], distance: (T, T) => Double, maxDistance: Double = Double.PositiveInfinity)(using
+open class Kruskal[T](elements: Seq[T], distance: (T, T) => Double, maxDistance: Double = Double.PositiveInfinity)(using
   orderingT: Ordering[T]
 ):
   val unionFind: UnionFind[T] = UnionFind(elements)

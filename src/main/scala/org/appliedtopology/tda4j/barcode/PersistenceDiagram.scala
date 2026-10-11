@@ -1,5 +1,7 @@
 package org.appliedtopology.tda4j
 
+import cats.Show
+
 /** A finished persistence computation as a plain, immutable value: the bars with their representative chains, plus what
   * is needed to read them at a smaller parameter. What `Persistence(...)` returns, and what
   * `HomologyState.snapshotAt(f)` takes from a cursor.
@@ -85,6 +87,18 @@ trait PersistenceDiagram[CellT]:
 
 object PersistenceDiagram:
   type Of[CellT, C] = PersistenceDiagram[CellT] { type Coefficient = C }
+
+  /** `diagram.show`: a header, then every bar with its representative, degree by degree (the bars' and chains' own
+    * `Show`s, the coefficients by the diagram's field). Typed for every diagram type, `PersistenceDiagram.Of[...]`
+    * (what `dim`, `at` and `significant` return) included. `toString` is the short summary.
+    */
+  given diagramShow: [CellT: Show, D <: PersistenceDiagram[CellT]] => Show[D] = Show.show { d =>
+    given (d.Coefficient is Field) = d.coefficientField
+    val barShow = summon[Show[PersistenceBar[Double, Chain[CellT, d.Coefficient]]]]
+    val bars = d.bars.sortBy(_.dim).map(b => "  " + barShow.show(b))
+    val count = if d.bars.size == 1 then "1 bar" else s"${d.bars.size} bars"
+    (s"PersistenceDiagram($count, degrees 0..${d.maxDimension})" :: bars).mkString("\n")
+  }
 
   def apply[CellT, C](
     bars: List[PersistenceBar[Double, Chain[CellT, C]]],

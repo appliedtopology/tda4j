@@ -4,10 +4,10 @@ package org.appliedtopology.tda4j
   * [[BarcodeDistance]] and [[Vectorization]] so both apply the same finite-birth requirement and essential-bar test
   * rather than two independently-drifting copies.
   */
-private[tda4j] case class DiagramPoint(birth: Double, death: Double):
+case class DiagramPoint(birth: Double, death: Double):
   def persistence: Double = death - birth
 
-private[tda4j] object DiagramPoint:
+object DiagramPoint:
   def endpointValue(e: BarcodeEndpoint[Double]): Double = e match
     case PositiveInfinity() => Double.PositiveInfinity
     case NegativeInfinity() => Double.NegativeInfinity

@@ -53,10 +53,10 @@ class ChainSpec extends mutable.Specification:
     // val z6 = Chain(Simplex(1, 2, 6, 7))
 
     "be the return type of Chain applied to a single simplex" >> {
-      z1 must haveClass[Chain[Simplex[Int], Double]]
+      z1 must beAnInstanceOf[Chain[Simplex[Int], Double]]
     }
     "be the return type of Chain applied to several simplex/coefficient pairs" >> {
-      z2 must haveClass[Chain[Simplex[Int], Double]]
+      z2 must beAnInstanceOf[Chain[Simplex[Int], Double]]
     }
     "maintain it's equality when its component simplex-coefficient pairs are permuted" >> {
       z2 must beEqualTo(z6)
@@ -129,6 +129,32 @@ class ChainSpec extends mutable.Specification:
 
   }
 
+  // Equality is that of formal sums: blind to the order the chains are kept in, and comparing coefficients by the
+  // field's own equality (an F_p element has several Int forms; reals are compared within the field's tolerance).
+  "Chain equality is equality of formal sums" >> {
+    val f3 = FiniteField(3)
+    import f3.given
+    val fp = summon[f3.Fp is Field]
+    val terms = Seq((1, f3.Fp(1)), (4, f3.Fp(2)), (7, f3.Fp(1)))
+    val up = Chain.from[Int, f3.Fp](terms)(using Ordering.Int, fp)
+    val down = Chain.from[Int, f3.Fp](terms)(using Ordering.Int.reverse, fp)
+    // 1 + 1 is the element Fp(2), normalised to another Int form.
+    val summed = Chain.from[Int, f3.Fp](Seq((1, f3.Fp(1)), (4, f3.Fp(1)), (4, f3.Fp(1)), (7, f3.Fp(1))))(using
+      Ordering.Int,
+      fp
+    )
+    val cancelled = Chain.from[Int, f3.Fp](terms ++ Seq((9, f3.Fp(1)), (9, f3.Fp(2))))(using Ordering.Int, fp)
+    val shorter = Chain.from[Int, f3.Fp](terms.take(2))(using Ordering.Int, fp)
+    val reals = Field.DoubleApproximated(1e-9)
+    def real(terms: (Int, Double)*) = Chain.from[Int, Double](terms)(using Ordering.Int, reals)
+    (up must beEqualTo(down)) and (down must beEqualTo(up)) and
+      (summed must beEqualTo(up)) and (up must beEqualTo(summed)) and
+      (cancelled must beEqualTo(up)) and
+      (shorter must not(beEqualTo(up))) and (up must not(beEqualTo(shorter))) and
+      (real((1, 1.0), (2, 0.5)) must beEqualTo(real((1, 1.0 + 1e-12), (2, 0.5)))) and
+      (real((1, 1.0), (2, 0.5)) must not(beEqualTo(real((1, 1.1), (2, 0.5)))))
+  }
+
   "The `Chain` type should be comfortable to write expressions with" >> {
     val z1 = Chain(∆(1, 2, 3))
     val z2: Chain[Simplex[Int], Double] = ∆(1, 2) - ∆(1, 3) + ∆(2, 3)
@@ -139,7 +165,7 @@ class ChainSpec extends mutable.Specification:
     val z7: Chain[Simplex[Int], Double] =
       ∆(1, 2) - ∆(1, 3) + ∆(2, 3) + (0.0 |*| ∆(3, 4))
 
-    z1 must haveClass[Chain[Simplex[Int], Double]]
+    z1 must beAnInstanceOf[Chain[Simplex[Int], Double]]
     z2 must beEqualTo(z6)
     z2 must beEqualTo(z7)
 

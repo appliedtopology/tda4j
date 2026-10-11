@@ -94,7 +94,7 @@ bench/run.sh sweep-cubical --dims 2,3 --jvm-heap 32g --timeout 1800
 |---|---|---|
 | `tda4j` | `PaperBenchmarkDriver` (test scope) through the `Persistence` verb | the defaults a user gets: cycle representatives, `Engine.Auto` |
 | `tda4j-cocycles` | the same with `Representatives.Cocycles` | the native kind of the Ripser engine; closest to bars-only |
-| `tda4j-cohomology`, `tda4j-fastalpha` | named engines | the general engine on images; the dual union-find on alpha (on the default triangulation) |
+| `tda4j-cohomology`, `tda4j-fastalpha` | named engines | cohomology on images (on a grid: the packed grid engine, the general engine's output); the dual union-find on alpha (on the default triangulation) |
 | `tda4j-bw`, `tda4j-helix` | named alpha backends | `tda4j` uses the default, Bowyer–Watson up to 4 dimensions (every alpha case here); these name each triangulation |
 | `ripser.cpp` | vanilla build for p = 2, `ripser-coeff` for other primes | the reference for Vietoris–Rips |
 | `ripser.py`, `giotto-ph-1t`, `giotto-ph-mt` | pip | giotto-ph multithreaded is reported, never the baseline |

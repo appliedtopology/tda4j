@@ -63,3 +63,32 @@ Loads when you work in the `sset` add-on (`org.appliedtopology.tda4j.sset`, dire
 - Fixtures (`SimplicialSetFixtures`): `minimalSphere(n)` (an independent model next to the catalog's `sphere(n)`), `edge`,
   `triangle`/`realProjectiveSpaceViaQuotient`. The verified `torus` and `realProjectiveSpace(n)` (F2 vs F3 sign
   discriminator) were PROMOTED to the catalog, so the specs that use them exercise the main-source versions. No MATLAB/CLI entry (needs its own encoding design).
+
+## Nerves of monoids and categories (`WORKLOG-category-nerves.md`)
+
+- `Nerve(monoid)` (one object) and `CategoryNerve(category)` (`SimplicialSet.nerve`): lazy; generators are chains of
+  composable NON-identity morphisms; a composite that is an identity makes `d_i` degenerate (`s_{i-1}` of the chain with
+  both removed). `FiniteCategory` is a trait (define one by functions); constructors `fromMonoid`, `fromPoset`,
+  `freeOnAcyclicQuiver`, `actionGroupoid`, `homotopyOrbits` (Grothendieck construction of G on a complex: nerve ≃ Borel
+  construction; `HomotopyOrbitCategory.morphismsOver(H)` is the restricted action's subcategory). `andThen(f, g)` is
+  diagrammatic (`f` first), matching `FiniteMonoid.multiply(a, b)`.
+- **B(M^op) ≃ BM**: a flipped composition order passes every Betti check. Test nerves cell for cell and face for face
+  against `Nerve` (`CategoryNerveSpec`; a mutation flipping it fails there), posets by exact f-vector against the order
+  complex, and actions with `validate()` (a right action fails the left-action `require`).
+- `SimplicialSet.persistentHomology(filtration, maxDegree, prime)`: any (infinite) set, via `skeleton(maxDegree + 1)` and
+  the chunks engine; returns a `PersistenceDiagram` with representatives; rejects a non-monotone filtration.
+  `ClassifyingSpace.persistentGroupHomology` returns one too (deliberate break, MiMa filter in `build.sbt`).
+- Examples with published answers (`ClassifyingSpaceSpec`): `rectangularBand` (∨ S², free H_2 over every prime),
+  `reesMatrix` (Steinberg arXiv:2405.06594 Thm A: one sandwich entry is seen over F_2 only), sub-band chains (split by
+  monoid retractions: no finite bars), `pSubgroups(p)` posets (GL(3,2): b_1 = 8; Brown's congruence χ ≡ 1 mod |G|_p).
+- **Brown's collapse** (`CollapsedNerve`, `RewritingSystem`; `WORKLOG-collapsed-nerve.md`, the experiment
+  `WORKLOG-brown-collapse.md`): critical cells are Anick chains generated directly (never enumerate the bar complex); the
+  Morse boundary and `lift` run a memoized flow over the matching's DAG (explicit stack; an in-progress set makes a
+  non-acyclic matching an error, never a hang; exact `Long`). Filter only by a chain the system `respects` (normal forms
+  of each subgroup use only its letters): a straddling matching gives a MONOTONE filtration with the WRONG barcode, so the
+  public entry takes a chain and checks. `refining(group, chain)` builds a prime-index polycyclic series through the chain
+  and `G`, ONE letter per level (powers as repeated letters: an odd prime's powers as letters cost exponentially); its
+  rules lengthen words, so `validate` uses the collection (wreath-of-shortlex) order, not shortlex.
+  `persistentGroupHomology`/`bettiNumbers` use the collapse when `refining` is `Right`, else the bar complex (same
+  barcode). Limits: S_4 degree 6 ~6 s, degree 8 runs out of 2 GB (the flow memo); no cup products on the collapse.
+  `CollapsedNerveSpec` compares term for term with `BrownCollapseReference` (test tree, unmemoized): keep both.

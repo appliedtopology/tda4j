@@ -4,7 +4,7 @@ import org.apache.commons.numbers.combinatorics
 
 import scala.annotation.tailrec
 
-class SimplexIndexing(val vertexCount: Int):
+open class SimplexIndexing(val vertexCount: Int):
 
   /** Memoized `binomial(d + s, s)` by row `d`, filled on demand: `d` is bounded by the size of a simplex, so rows stay
     * short. `-1L` marks an entry not yet computed.
@@ -121,7 +121,7 @@ class SimplexIndexing(val vertexCount: Int):
   /** A cursor over the cofacets of a simplex that allocates nothing per step: read `vertex` (the added vertex) and
     * `index` (the cofacet's index) as often as needed, then `advance()`.
     */
-  final class CofacetCursor(startIndex: Long, size: Int, allCofacets: Boolean):
+  class CofacetCursor(startIndex: Long, size: Int, allCofacets: Boolean):
     private val vertices: Array[Int] = decodeToArray(startIndex, size)
     private var iB: Long = startIndex
     private var iA: Long = 0L
@@ -178,7 +178,7 @@ class SimplexIndexing(val vertexCount: Int):
     * distance from the added vertex to the simplex's vertices, read from the lists; `position` is the number of the
     * simplex's vertices below the added one.
     */
-  final class SparseCofacetCursor(
+  class SparseCofacetCursor(
     startIndex: Long,
     vertices: Array[Int],
     allCofacets: Boolean,
@@ -284,7 +284,7 @@ class SimplexIndexing(val vertexCount: Int):
     * `apply(...).toSeq.sorted` (a `Simplex[Int]` decode followed by a redundant re-sort of an already-sorted
     * `SortedSet`).
     */
-  final class FacetCursor(startIndex: Long, size: Int):
+  class FacetCursor(startIndex: Long, size: Int):
     private val vertices: Array[Int] = decodeToArray(startIndex, size)
     private var iB: Long = startIndex
     private var iA: Long = 0L
@@ -358,14 +358,14 @@ object SimplexIndexing:
 /** Each vertex's neighbours within a threshold, ascending, with their distances, in compressed rows: vertex `v`'s are
   * `targets(offsets(v) until offsets(v + 1))`. Built by [[NeighbourLists.within]].
   */
-private[tda4j] final class NeighbourLists(
+open class NeighbourLists(
   val offsets: Array[Int],
   val targets: Array[Int],
   val distances: Array[Double]
 ):
   def entryCount: Int = targets.length
 
-private[tda4j] object NeighbourLists:
+object NeighbourLists:
   /** The pairs at distance at most `threshold`, each distance computed once (as `distance(i, j)`, `i < j`) and stored
     * for both vertices. `None` when there are more than `maxEntries` directed pairs (capped at `Int.MaxValue`): the
     * lists would not be sparse, or would not fit in arrays.
