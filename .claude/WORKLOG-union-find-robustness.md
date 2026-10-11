@@ -83,3 +83,19 @@ Even the cycle-free tree takes about 2.5 s for 200k edges, while union-find itse
 
 `diagramAt` never needs these, and with `maxDim = 0` they are never reported at all. A probe (below) measures their
 share.
+
+**The probe.** A copy of the robust variant with the eager degree-1 representative construction cut out: no
+`pathFromRoot`, no cycle-edge chains. This is a timing probe only, not a valid implementation: on the union-find path
+`vcolOf` cannot rebuild these cycles, because union-find never fills `boundaries`. Same driver, 3 JVMs:
+
+| workload | robust (eager representatives) | probe (none) |
+|---|---|---|
+| tree, 200k edges | 2561 ms | 1351, 1581, 1232 → 1351 ms |
+| VR, 500 points | 4856 ms | 134, 145, 181 → 145 ms |
+
+On VR, 97% of the edge pass is spent building representatives that `diagramAt` never reads; the cycle-edge chains alone
+make it about 33× slower. On the tree, half of the time is `pathFromRoot`. The rest is barcode bookkeeping for 200k bars.
+
+**Next step:** build these representatives lazily, only when `barcodeAt` asks for a degree-1 representative, memoized and
+with the same construction. Measure `diagramAt`, `barcodeAt`, and a `maxDim = 1` run end to end before deciding to keep
+it.
