@@ -52,7 +52,6 @@ jobs:
           for rate, n, name in rows[:20]:
               print(f"| `{name}` | {rate * 100:.1f}% | {n} |")
           EOF
-      # File paths in the report are relative to src/main/scala; codecov.yml's `fixes` maps them to the repository.
       - name: Upload to Codecov
         uses: codecov/codecov-action@v6
         with:

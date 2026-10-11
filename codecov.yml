@@ -10,6 +10,3 @@ coverage:
       default:
         informational: true
 comment: false
-# scoverage writes file paths relative to the source root; prefix them so they match the repository.
-fixes:
-  - "::src/main/scala/"
