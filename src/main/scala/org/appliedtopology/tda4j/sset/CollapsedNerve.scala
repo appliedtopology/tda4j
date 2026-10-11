@@ -357,9 +357,9 @@ open class CollapsedNerve(val rewriting: RewritingSystem):
         morseBoundary(c).toSeq.map((s, a) => (s, CollapsedNerve.fromLong[F](a)))
 
   /** The critical cells of dimension `0..maxDegree + 1` inside the chain's last subgroup, filtered by `chain` (a cell
-    * enters with the first subgroup containing its entries), as a stream every engine accepts with
-    * [[collapsedCellInstance]]. The rewriting system must respect the chain (checked), or the collapse would match
-    * cells of two levels and give a wrong barcode.
+    * enters with the first subgroup containing its entries), as a stream for the chunks engine or the `Persistence`
+    * verb, with [[collapsedCellInstance]] in scope (`import collapsed.given`). The rewriting system must respect the
+    * chain (checked), or the collapse would match cells of two levels and give a wrong barcode.
     */
   def stream(chain: Seq[Set[Int]], maxDegree: Int): StratifiedCellStream[NerveSimplex, Double] =
     require(maxDegree >= 0, s"maxDegree must be >= 0, got $maxDegree")

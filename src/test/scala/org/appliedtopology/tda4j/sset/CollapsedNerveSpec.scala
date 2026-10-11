@@ -187,6 +187,13 @@ class CollapsedNerveSpec extends Specification:
         )
       } must beTrue
     }
+    "run through the Persistence verb, with the collapse's cells in scope, to the same barcode" in {
+      val collapsed = CollapsedNerve(refined(s4, s4chain))
+      import collapsed.given
+      Persistence(collapsed.stream(s4chain, 2), characteristic = 2).triples.sorted must beEqualTo(
+        collapsed.persistentHomology(s4chain, 2, 2).triples.sorted
+      )
+    }
     "refuse a chain the rewriting system does not respect, and say what to do" in
       (z4oneGenerator.validate() must beEmpty)
         .and(z4oneGenerator.respects(z4chain) must not(beEmpty))

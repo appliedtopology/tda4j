@@ -122,3 +122,44 @@ The experiment file became `BrownCollapseReference.scala` (renamed with `git mv`
 - A non-subnormal chain (the tutorial's) still goes through the full bar complex. A coset-factorization rewriting system
   might handle some such chains; untested.
 - No MATLAB or CLI entry, following the sset precedent.
+
+## Addendum (same day, later): one letter per level; invariants on the built systems; the verb
+
+**One letter per level.** Advisor review pointed out that giving every power x_i^k its own letter served only the shortlex
+check. The collection order accepts one letter per level: a power rule `x^p -> lower` shortens the top level, and a
+conjugation rule keeps the top letter and shortens the segment before it. `refining` now emits `x_i` alone, with normal
+forms `x_m^(e_m)...x_1^(e_1)`.
+
+Critical cells, measured:
+- Z/3: 1 per dimension. It was 2^n, no better than the bar complex.
+- S_3: n + 1 (was 2^(n+1) - 1).
+- S_4: 1, 4, 10, 20, 35, 56, 84, 120 = C(n+3, 3) (was 1, 5, 16, ... 219).
+
+The flow, not the number of cells, sets the cost. It was re-measured on one JVM, warm, on this machine:
+
+| case | before | after |
+|---|---|---|
+| S_4, F_2, maxDegree 4 / 5 / 6 | about 0.2 / 1.2 / 8-10 s | 0.18 / 0.66 / 5.6 s |
+| S_4, F_2, redundant cells visited at maxDegree 4 / 5 / 6 | 3,766 / 21,103 / 116,727 | 3,612 / 29,025 / 264,199 |
+| S_4, F_2, maxDegree 8 | out of memory at 2 GB | still out of memory at 2 GB (killed after 11 min of GC thrash) |
+| S_4, F_3, degrees 0..6 | 13.6 s | 3.9 s |
+| S_3, F_3, degrees 0..10 | 31.5 s | 1.5 s |
+| GL(2,3), degrees 0..5 | 2.6-3.4 s | 2.3-2.6 s |
+
+Z/9 over F_3, degrees 0..12, took 23.5 s, with no earlier run to compare. These are single runs, not an A/B. The S_3
+factor of 20 is far outside the noise; the S_4 F_2 times are within a factor of two either way.
+
+**New specs**, all passing (72 examples across the collapse, reference, group and category specs):
+- the involution and ±1 incidence on `refining`'s own D_8 (up to dimension 4) and S_4 (up to 3);
+- ∂∂ = 0 on S_4's collapsed complex up to dimension 6;
+- chains that stop below G, compared with the bar complex of their last subgroup: Z/8 up to Z/4, and S_4 up to A_4 over
+  F_2 and F_3;
+- Z/3 with one critical cell per dimension.
+
+**The verb.** `Persistence(collapsed.stream(chain, 2), characteristic = 2)`, with `import collapsed.given`, equals the
+chunks barcode for S_4. That path is Cohomology with cycles derived through Involution, and here it handles the
+empty-boundary loop edges. There is now a spec for it. The `stream` scaladoc no longer says "every engine"; it says
+chunks or the verb.
+
+**Lint.** Commit fa3c8ac was pushed without scalafmt while sbt was busy, and CI lint failed on PR #49. The formatter
+output is its own commit, 44e54a8.

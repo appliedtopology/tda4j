@@ -87,7 +87,8 @@ Loads when you work in the `sset` add-on (`org.appliedtopology.tda4j.sset`, dire
   non-acyclic matching an error, never a hang; exact `Long`). Filter only by a chain the system `respects` (normal forms
   of each subgroup use only its letters): a straddling matching gives a MONOTONE filtration with the WRONG barcode, so the
   public entry takes a chain and checks. `refining(group, chain)` builds a prime-index polycyclic series through the chain
-  and `G`; its rules lengthen words, so `validate` uses the collection (wreath-of-shortlex) order, not shortlex.
+  and `G`, ONE letter per level (powers as repeated letters: an odd prime's powers as letters cost exponentially); its
+  rules lengthen words, so `validate` uses the collection (wreath-of-shortlex) order, not shortlex.
   `persistentGroupHomology`/`bettiNumbers` use the collapse when `refining` is `Right`, else the bar complex (same
-  barcode). Limits: S_4 degree 6 ~10 s, degree 8 runs out of 2 GB (the flow memo); no cup products on the collapse.
+  barcode). Limits: S_4 degree 6 ~6 s, degree 8 runs out of 2 GB (the flow memo); no cup products on the collapse.
   `CollapsedNerveSpec` compares term for term with `BrownCollapseReference` (test tree, unmemoized): keep both.
