@@ -3,23 +3,15 @@ layout: main
 title: Plotting
 ---
 
-`tda4j-plot` draws what a persistence computation returns: barcodes, persistence diagrams, persistence images and
-landscapes, images, complexes at a scale, cycles, cocycles and circular coordinates, in 2-D and in 3-D. It is a separate
-module (`plot/` in the repository) that adds no dependency to the library and needs none itself: plots are SVG, or a page
-with a small built-in 3-D viewer, and they show up in your browser while you work in a REPL.
-
-It is its own artifact, published with the library from version 0.5.1 on:
-
-```
-libraryDependencies += "org.appliedtopology" %% "tda4j-plot" % "0.5.1"
-```
-
-(which brings `tda4j` with it). Its API is young and may still change between releases. From a checkout of the
-repository, `sbt plot/console` starts a REPL with it.
+The plots draw what a persistence computation returns: barcodes, persistence diagrams, persistence images and
+landscapes, images, complexes at a scale, cycles, cocycles and circular coordinates, in 2-D and in 3-D. They are part of
+the library, in the package `org.appliedtopology.tda4j.plot`, and need no other dependency: plots are SVG, or a page with
+a small built-in 3-D viewer, and they show up in your browser while you work in a REPL. The API is young and may still
+change between releases.
 
 ## In a REPL: `view()`
 
-```scala sc:nocompile
+```scala
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.plot.*
@@ -39,7 +31,14 @@ forward the port (`ssh -L 8337:localhost:8337 host`) and open it locally. Set `T
 
 ## Into files: `save`
 
-```scala sc:nocompile
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = Array.tabulate(40)(i => Array(math.cos(i * 0.157), math.sin(i * 0.157)))
+val diagram = Persistence(points, maxDimension = 1)
+
 Plot.barcode(diagram).save("barcode.svg")            // plain light colors, for a paper
 Plot.diagram(diagram).save("diagram.svg", Some(Theme.Dark))
 Plot.diagram(diagram).save("diagram.html")           // follows the reader's light or dark setting
@@ -67,7 +66,12 @@ Plot.side(Plot.barcode(diagram), Plot.diagram(diagram)).save("both.svg")
 
 Anything that takes a diagram also takes a list of bars. A cycle reads best over the complex it lives in:
 
-```scala sc:nocompile
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = Array.tabulate(40)(i => Array(math.cos(i * 0.157), math.sin(i * 0.157)))
 val d = Persistence(points, maxDimension = 1, engine = Persistence.Engine.Chunks)
 import d.given
 val loop = d.dim(1).longest.get

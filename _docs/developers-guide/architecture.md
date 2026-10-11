@@ -42,10 +42,10 @@ Outside the core:
 - **`cli`** — the `tda4j` executable (`TDA4jConf`, `TDA4jCLI`), a thin translator over `matlab.TDA4j`.
 - **`matlab`** — `TDA4j`/`PersistenceResult`/`LandmarkSelectionResult`, the plain-primitives facade for MATLAB and
   other Java callers.
-- **`plot`** (`org.appliedtopology.tda4j.plot`, its own sbt project in `plot/`, artifact `tda4j-plot`) — plots of
-  barcodes, diagrams, images, complexes and representatives as SVG and 3-D pages, and a live browser viewer. It depends
-  on the core's public API only and adds no dependency to it. See [Plotting](../user-guide/plotting.md) for its use and
-  [The plot add-on](plotting.md) for its internals.
+- **`plot`** (`org.appliedtopology.tda4j.plot`, directory `plot/`) — plots of barcodes, diagrams, images, complexes
+  and representatives as SVG and 3-D pages, and a live browser viewer. A leaf like `matlab` and `cli`: it uses the
+  core's public API only and nothing in the core uses it. See [Plotting](../user-guide/plotting.md) for its use and
+  [Plotting internals](plotting.md) for how it is built.
 
 **Load-bearing rule for givens**: the core package has no top-level `given`s. Default instances live in the companion
 of the data type they serve (`object Simplex` holds `Simplex[V] is OrderedCell`, the `Ordering` derived from it and

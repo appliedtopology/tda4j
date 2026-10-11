@@ -1,19 +1,23 @@
 ---
 layout: main
-title: The plot add-on
+title: Plotting internals
 ---
 
-`tda4j-plot` (directory `plot/`, package `org.appliedtopology.tda4j.plot`) is
-a separate sbt project and a separate artifact. It depends on the core, and
-adds no dependency to it and none of its own: plots are SVG strings and HTML
-pages, and the live viewer is the JDK's own HTTP server. What a user calls is
-in the [Plotting](../user-guide/plotting.md) page of the user guide; this page
-is about how it is built.
+The plots are a leaf subpackage of the core, `org.appliedtopology.tda4j.plot`
+(directory `plot/` under the core's sources), like `matlab` and `cli`. Nothing
+in the core uses it, and it needs no dependency: plots are SVG strings and
+HTML pages, and the live viewer uses the JDK's own HTTP server. What a user
+calls is on the [Plotting](../user-guide/plotting.md) page of the user guide;
+this page is about how it is built.
+
+It stays in the core only while it needs nothing outside the JDK. A plotting
+feature that needs a library (PNG export, a native window) belongs in a
+separate module, so that the core does not take on the dependency.
 
 ## Public core API only
 
-The add-on shares the core's package prefix, so it could see
-`private[tda4j]` members. It must not use them: whatever a plot needs, a
+The plot package is inside the core, so it could see `private[tda4j]`
+members. It must not use them: whatever a plot needs, a
 user's own plotting code needs too. When a plot needs data the core hides,
 open the core instead. That is how `CubicalGridStream.topValues` became a
 public, read-only view.
@@ -88,21 +92,12 @@ it.
 inherits its creator's daemon status, and a non-daemon dispatcher keeps a REPL
 from exiting. `PlotSpec` checks the threads.
 
-## Build and tests
+## Tests
 
-sbt 2 applies every bare setting of the build's `.sbt` files to every
-project. So `plot` replaces, rather than adds to, the core's dependencies,
-compiler flags, docs-site options, main class and tutorial generator. After
-touching `build.sbt`, check `sbt "show plot/libraryDependencies"` and the
-published POM.
-
-The root project aggregates `plot`, so the CI test, lint, docs and MiMa jobs
-cover it. The fat jar (`assembly`) stays the core's.
-
-Specs check structure: one tooltip per bar or cell, well-formed XML, and
-theme colors. They do not check looks. `Gallery` in the test tree writes every
-kind of plot to a directory
-(`sbt "plot/Test/runMain org.appliedtopology.tda4j.plot.Gallery <dir>"`);
-open the files in a browser, or screenshot them headlessly, and look at them
-after any change to a renderer. The user guide's plotting fences are
-`scala sc:nocompile`, because the docs build compiles against the core alone.
+Specs (`PlotSpec`) check structure: one tooltip per bar or cell, well-formed
+XML, and theme colors. They do not check looks. `Gallery` in the test tree
+writes every kind of plot to a directory
+(`sbt "Test/runMain org.appliedtopology.tda4j.plot.Gallery <dir>"`). Open the
+files in a browser, or screenshot them headlessly, and look at them after any
+change to a renderer. The user guide's plotting fences are compiled by the
+docs build like every other fence.

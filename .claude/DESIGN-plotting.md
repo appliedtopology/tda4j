@@ -1,5 +1,9 @@
 # Plotting: platform choice and the `tda4j-plot` add-on (2026-10-10)
 
+> **Status (2026-10-11).** Folded into the core as the leaf subpackage `org.appliedtopology.tda4j.plot` (project lead:
+> with no dependency to isolate, a separate project only kept the docs build from compiling the plotting fences). The
+> decision below (own scene model, SVG and HTML, the JDK's HTTP server) stands. `WORKLOG-plot-into-core.md`.
+
 The project lead: the Scala plotting landscape is dreary; find a good platform, draft plotting routines in a separate
 project that adds no dependency to the core. Needed: barcodes, persistence diagrams, persistence images; low-dimensional
 Cech/VR/alpha complexes; cycles, cocycles and coordinates; and, if it can be made comfortable, showing plots on the fly

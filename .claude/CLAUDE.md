@@ -49,8 +49,8 @@ see "Givens" below). The core's source directories are **file organization only,
   simplicial-set streams.
   Depends on the core; the core uses it only through `TDAlab`'s generated re-exports. `rules/simplicial-sets.md`.
 - subpackages `matlab` (MATLAB facade) and `cli` (`TDA4jConf`/`TDA4jCLI`, thin translator over `matlab.TDA4j`) — leaves.
-- **sbt project `plot`** (`tda4j-plot`, package `org.appliedtopology.tda4j.plot`, directory `plot/`): plots and a live
-  browser viewer, no dependencies; aggregated by root, not published yet. `rules/plotting.md`.
+- subpackage `plot`: plots and a live browser viewer, no dependencies, a leaf like `matlab`/`cli` (was its own sbt
+  project; `WORKLOG-plot-into-core.md`). A plot feature needing a library goes in a new module. `rules/plotting.md`.
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
   sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
   `sbt doc` checks that doc fences resolve from outside.
@@ -264,7 +264,7 @@ file before changing that subsystem; this table is the index, in case a rule did
 | `rules/alpha.md` | alpha complexes (DQP, Helix, fast alpha) | `alpha/`, alpha files |
 | `rules/facade.md` | MATLAB facade, CLI, file I/O, the persistence threshold (which bars are reported) | `matlab/`, `cli/`, `io/` |
 | `rules/docs-and-tutorials.md` | docs site, tutorial pages (the docs are the tests), language tabs | `_docs/`, tutorial specs, `build.sbt` |
-| `rules/plotting.md` | the `tda4j-plot` add-on: scene model, palette and themes, live viewer, gallery screenshots | `plot/` |
+| `rules/plotting.md` | the `plot` subpackage: scene model, palette and themes, live viewer, gallery screenshots | `plot/` (main and test) |
 
 ## Session practices
 

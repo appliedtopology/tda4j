@@ -35,7 +35,7 @@ recent), is most of the actual gap.
 7. **The add-ons.** Nerves of monoids, groups and categories, persistent group
    homology and Brown's collapse are in
    [Nerves and group homology](nerves.md). Plots and the live viewer are in
-   [The plot add-on](plotting.md).
+   [Plotting internals](plotting.md).
 
 ## Naming convention: `tda4j`/`TDA4j`, never `Tda4j`
 
