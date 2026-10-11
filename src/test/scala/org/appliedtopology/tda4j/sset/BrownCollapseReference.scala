@@ -6,17 +6,13 @@ import org.appliedtopology.tda4j.*
 import org.specs2.mutable.Specification
 import scala.collection.mutable
 
-/** EXPERIMENT (`.claude/WORKLOG-brown-collapse.md`): can the bar complex of a group be compressed by a discrete Morse
-  * matching and still filter by a chain of subgroups? Brown's collapsing scheme ("The geometry of rewriting systems",
-  * 1992) matches the cells of the nerve of a monoid presented by a complete rewriting system, leaving one critical cell
-  * per Anick chain. A matched pair never straddles two filtration levels when the normal form of every element of each
-  * subgroup uses only that subgroup's letters (a polycyclic presentation refining the chain), so the Morse complex,
-  * filtered by its critical cells' own levels, should have the bar complex's barcode.
-  *
-  * Test-tree only: a rewriting system given by its normal forms, Brown's classification, and the Morse complex computed
-  * by the flow (eliminate redundant cells by their collapsible partners' boundaries).
+/** REFERENCE implementation of Brown's collapsing scheme, kept to check `CollapsedNerve` (the library's) term for term
+  * (`CollapsedNerveSpec`): it finds critical cells by classifying EVERY cell of the bar complex, and computes the Morse
+  * boundary by the unmemoized flow, eliminating redundant faces one at a time in whatever order a hash map gives. Slow
+  * on purpose: nothing here shares code with the library's direct Anick-chain generation or memoized flow. History:
+  * `.claude/WORKLOG-brown-collapse.md` (where this began as the experiment), `WORKLOG-collapsed-nerve.md`.
   */
-object BrownCollapse:
+object BrownCollapseReference:
 
   /** A finite monoid with a complete rewriting system, given by the normal form (a word in `letters`, which are element
     * indices) of every element; the rules are the minimal non-normal words, each rewritten to its normal form.
@@ -191,8 +187,8 @@ object BrownCollapse:
       }
       (bars.map(_.toTriple).sorted, repsValid)
 
-class BrownCollapseExperimentSpec extends Specification:
-  import BrownCollapse.*
+class BrownCollapseReferenceSpec extends Specification:
+  import BrownCollapseReference.*
   sequential
 
   private val inf = Double.PositiveInfinity

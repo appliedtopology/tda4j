@@ -91,6 +91,10 @@ object ClassifyingSpace:
     * degrees `n <= maxDegree`: birth and death are positions in the chain (`+Infinity` = survives to the top), and
     * every bar carries a representative cycle of `BG`. Over a finite field, group cohomology has the same dimensions.
     * `diagram.triples` lists the bars as `(degree, birth, death)`.
+    *
+    * When the chain refines to a polycyclic series ([[RewritingSystem.refining]]: always for a p-group, and for a chain
+    * of a solvable group in which each subgroup is subnormal in the next), this runs on Brown's collapse of `BG`
+    * ([[CollapsedNerve]]), which has far fewer cells; otherwise on `BG` itself. The barcode is the same either way.
     */
   def persistentGroupHomology(
     g: FiniteGroup,
@@ -99,7 +103,9 @@ object ClassifyingSpace:
     prime: Int
   ): PersistenceDiagram[NerveSimplex] =
     require(chain.nonEmpty && chain.zip(chain.drop(1)).forall((a, b) => a.subsetOf(b)), "chain must be increasing")
-    nerve(g, Some(chain.last)).persistentHomology(filtrationBy(chain), maxDegree, prime)
+    RewritingSystem.refining(g, chain) match
+      case Right(rewriting) => CollapsedNerve(rewriting).persistentHomology(chain, maxDegree, prime)
+      case Left(_)          => nerve(g, Some(chain.last)).persistentHomology(filtrationBy(chain), maxDegree, prime)
 
   /** Dimension of `H_n(X; F_p)` for `n = 0..maxDegree` of a nerve (group or monoid); see [[BettiNumbers]]. */
   def bettiNumbers(nerve: Nerve, maxDegree: Int, prime: Int): Vector[Int] = BettiNumbers(nerve, maxDegree, prime)
