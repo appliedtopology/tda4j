@@ -129,9 +129,10 @@ class CollapsedNerveSpec extends Specification:
         (0 to top).forall(n =>
           collapsed.nerve.generators(n).forall { s =>
             collapsed.role(s) match
-              case CollapseRole.Critical => true
+              case CollapseRole.Critical     => true
               case CollapseRole.Redundant(t) =>
-                collapsed.role(t) == CollapseRole.Collapsible(s) && math.abs(collapsed.barBoundary(t).getOrElse(s, 0L)) == 1
+                collapsed.role(t) == CollapseRole.Collapsible(s) && math
+                  .abs(collapsed.barBoundary(t).getOrElse(s, 0L)) == 1
               case CollapseRole.Collapsible(f) => collapsed.role(f) == CollapseRole.Redundant(s)
           }
         )
@@ -201,10 +202,15 @@ class CollapsedNerveSpec extends Specification:
         )
     "handle a chain that stops below the whole group, like the bar complex of its last subgroup" in {
       val cases =
-        Seq((z8, Seq(Set(0, 4), Set(0, 2, 4, 6)), 2, 3), (s4, s4chain.slice(1, 3), 2, 2), (s4, s4chain.slice(1, 3), 3, 2))
+        Seq(
+          (z8, Seq(Set(0, 4), Set(0, 2, 4, 6)), 2, 3),
+          (s4, s4chain.slice(1, 3), 2, 2),
+          (s4, s4chain.slice(1, 3), 3, 2)
+        )
       cases.map { (g, chain, p, degree) =>
         val dispatched = ClassifyingSpace.persistentGroupHomology(g, chain, degree, p).triples.sorted
-        val bar = Nerve(g, Some(chain.last)).persistentHomology(ClassifyingSpace.filtrationBy(chain), degree, p).triples.sorted
+        val bar =
+          Nerve(g, Some(chain.last)).persistentHomology(ClassifyingSpace.filtrationBy(chain), degree, p).triples.sorted
         (RewritingSystem.refining(g, chain).isRight, dispatched == bar, dispatched.nonEmpty)
       } must beEqualTo(cases.map(_ => (true, true, true)))
     }

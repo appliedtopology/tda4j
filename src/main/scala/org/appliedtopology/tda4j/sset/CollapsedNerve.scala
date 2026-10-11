@@ -95,10 +95,10 @@ object RewritingSystem:
 
   /** A complete rewriting system for `group` that respects `chain` (an increasing chain of subgroups): the polycyclic
     * presentation of a series `1 = K_0 < K_1 < ... < K_m = G` with each `K_{i-1}` normal in `K_i` of prime index that
-    * passes through every subgroup of the chain. Level `i` has the one letter `x_i`, and the normal form of an element is
-    * `x_m^(e_m) ... x_1^(e_1)` with `0 <= e_i < p_i`, top level first. Exists exactly when each subgroup of the chain (and its
-    * last, in `group`) is subnormal in the next with a solvable quotient -- always for a p-group; `Left` says which
-    * step fails.
+    * passes through every subgroup of the chain. Level `i` has the one letter `x_i`, and the normal form of an element
+    * is `x_m^(e_m) ... x_1^(e_1)` with `0 <= e_i < p_i`, top level first. Exists exactly when each subgroup of the
+    * chain (and its last, in `group`) is subnormal in the next with a solvable quotient -- always for a p-group; `Left`
+    * says which step fails.
     */
   def refining(group: FiniteGroup, chain: Seq[Set[Int]]): Either[String, RewritingSystem] =
     val e = group.identity
@@ -162,7 +162,8 @@ object RewritingSystem:
             .foldLeft((Vector.empty[Int], g)) { case ((word, rest), i) =>
               val (x, p) = steps(i)
               val k = (0 until p).find(k => ks(i).contains(group.multiply(group.inverse(power(x, k)), rest))).get
-              if k == 0 then (word, rest) else (word ++ Vector.fill(k)(x), group.multiply(group.inverse(power(x, k)), rest))
+              if k == 0 then (word, rest)
+              else (word ++ Vector.fill(k)(x), group.multiply(group.inverse(power(x, k)), rest))
             }
             ._1
         val levels = steps.zipWithIndex.map { case ((x, _), i) => x -> (i + 1) }
