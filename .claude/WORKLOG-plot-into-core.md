@@ -46,3 +46,13 @@ new module, so the core never takes on the dependency.
 - `sbt clean Test/compile` passes. `testOnly org.appliedtopology.tda4j.plot.* *TDAlabExportsSpec *UserImportsSpec` passes
   28 tests: the plot specs, the export check and the user-import check.
 - Further results are in the addendum below.
+
+## Addendum: verification
+
+- `sbt clean testFull`: 1071 tests, 0 failed, 11 skipped (the gated benchmarks), now in one project: the core's 1052,
+  the 18 former plot specs and the new chunks spec.
+- `scalafmtSbtCheck ; scalafmtCheck ; Test / scalafmtCheck` and `mimaReportBinaryIssues` pass against 0.5.0. Adding
+  classes is not a binary break.
+- `TDA4J_SCALA_VERSION=3.8.4 sbt doc` passes. Planting `save(42)` in a plotting fence fails it at `plotting.md:42` (the
+  fences are compiled), and the plot API pages (`api/org/appliedtopology/tda4j/plot/...`) are on the site.
+- Not checked: `sbt assembly`, which now includes the plot classes but no new dependency; and `view()` from MATLAB.
