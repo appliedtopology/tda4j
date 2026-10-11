@@ -139,6 +139,17 @@ on the same heap, which returns exactly what the generic involution returns. The
 one diameter: a metric that is not symmetric by construction (anything but `EuclideanMetricSpace` and
 `ExplicitMetricSpace`, which reads its lower triangle) is read as `d(max(i, j), min(i, j))`, the same triangle.
 
+**Counters.** Engines 3 and 4 report what their last run did:
+- `apparentPairCount`, the simplices paired as apparent pairs with no reduction
+  of their coboundary;
+- `substitutionCount`, how often another column needed an apparent pair's
+  column as a pivot and had it rebuilt;
+- `totalSimplexCount`, the simplices the run assembled over all dimensions.
+
+They explain a speed difference between two inputs of the same size: a high
+apparent-pair rate means little reduction work. They are diagnostics, not
+part of any result.
+
 ## 5. `CellularCohomologyEngine` — generic cohomology, for every cell type
 
 Persistent *co*homology, generic over `CellT: OrderedCell` — the cohomology counterpart to engine 1, filling
@@ -415,6 +426,20 @@ Reading the "no" cells as one-line reasons, grouped by root cause:
 reason: it's generic over `CellT: OrderedCell` with no per-construction speed assumptions baked in, at the cost
 of none of engines 3/4's Vietoris-Rips-specific optimizations — see engine 5's own section above for what that
 tradeoff actually buys and costs.
+
+**Representatives through the facades.** `matlab.TDA4j` takes the option
+`representativeType`, `cycles` (the default) or `cocycles`, and the CLI takes
+`--representative-type` with the same values. `fast-cubical` and `fast-alpha`
+give cycles only and refuse `cocycles` with a message that names `cohomology`.
+Every other engine gives both kinds, the second through `Involution`.
+
+`PersistenceResult.cycleVertices(i)` and `cycleCoefficients(i)` return bar
+`i`'s representative of either kind:
+- a simplex as its sorted vertices;
+- a cube as its doubled coordinates;
+- a coefficient of `Z/p` as an integer representative.
+
+The CLI prints representatives with `--representatives` (text output only).
 
 ## Choosing an engine
 

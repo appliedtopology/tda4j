@@ -36,6 +36,9 @@ recent), is most of the actual gap.
    homology and Brown's collapse are in
    [Nerves and group homology](nerves.md). Plots and the live viewer are in
    [Plotting internals](plotting.md).
+8. **How to measure a speed or memory claim.** The A/B method, the benchmark
+   specs, the profile drivers and the cross-library harness are in
+   [Measuring performance](performance.md).
 
 ## Naming convention: `tda4j`/`TDA4j`, never `Tda4j`
 

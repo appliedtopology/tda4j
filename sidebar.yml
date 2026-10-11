@@ -24,6 +24,7 @@ subsection:
       - page: developers-guide/alpha-complex.md
       - page: developers-guide/nerves.md
       - page: developers-guide/plotting.md
+      - page: developers-guide/performance.md
       - page: developers-guide/degeneracies.md
       - page: developers-guide/gotchas.md
       - page: developers-guide/class-diagrams.md

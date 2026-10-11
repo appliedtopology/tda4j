@@ -312,3 +312,194 @@ bar, when an engine tracks one. `BarcodeDistance`/`Vectorization` only ever read
 `FiltrationT: Ordering` genericity — see [Architecture](architecture.md)'s "`Barcode.scala`" section
 for why, and for `BipartiteMatching.scala`'s two combinatorial primitives (`HopcroftKarp`/`Hungarian`)
 `BarcodeDistance` is built on, omitted here from the diagram.
+
+## The public API layer (`homology/Persistence.scala`, `barcode/PersistenceDiagram.scala`, `package.scala`)
+
+```mermaid
+classDiagram
+    class Persistence {
+        <<object>>
+        apply(input, maxDimension, maxFiltrationValue, complex, characteristic, engine, includeZeroLength, representatives) PersistenceDiagram
+    }
+    class Input~CellT~ {
+        <<into trait>>
+        stream(maxDimension, maxFiltrationValue, complex) StratifiedCellStream
+        scale: Option~Double~
+        cells: CellT is OrderedCell
+        ripserApplies(complex) Boolean
+        cubicalGrid: Option~CubicalGridStream~
+    }
+    class Engine {
+        <<enum>>
+        Auto, Chunks, Naive, Cohomology, Ripser, FastCubical
+    }
+    class Representatives {
+        <<enum>>
+        Cycles, Cocycles
+    }
+    class PointCloudComplex {
+        <<trait>>
+        fromPoints(points, maxDimension, maxFiltrationValue) LevelwiseSimplexStream
+    }
+    class PersistenceDiagram~CellT~ {
+        <<trait>>
+        type Coefficient
+        bars: List~PersistenceBar~
+        dim(k) PersistenceDiagram
+        at(f) PersistenceDiagram
+        longerThan(x) PersistenceDiagram
+        significant() PersistenceDiagram
+        bettiNumbers: Vector~Int~
+    }
+    class Coefficients {
+        <<trait>>
+        type C
+        field: C is Field
+        fromInt(x) C
+    }
+    class Lab {
+        <<abstract>>
+        coefficients: Coefficients
+        Fp(x) CoefficientT
+    }
+    Persistence ..> Input : takes
+    Persistence ..> Engine : takes
+    Persistence ..> Representatives : takes
+    Persistence ..> PointCloudComplex : takes
+    Persistence ..> PersistenceDiagram : returns
+    Persistence ..> Coefficients : chooses the field
+    VietorisRips ..|> PointCloudComplex
+    Cech ..|> PointCloudComplex
+    AlphaShapes ..|> PointCloudComplex
+    Lab <|-- TDAlab
+    Lab <|-- CubicalLab
+    Lab ..> Coefficients : holds
+```
+
+`Input` is an `into` trait: points, metric spaces, images and streams convert
+to one at the call site. `Engine` and `Input` are nested in `object
+Persistence`. See [The public API](public-api.md).
+
+## Nerves and group homology (`sset/`)
+
+```mermaid
+classDiagram
+    class SimplicialSet~G~ {
+        <<trait: lazy, possibly infinite>>
+        generators(n) Iterable~G~
+        faces: G => IndexedSeq~SSetElement~
+        skeleton(n) FiniteSimplicialSet
+        persistentHomology(filtrationValue, maxDegree, prime) PersistenceDiagram
+    }
+    class FiniteMonoid {
+        table: Array~Array~Int~~
+        multiply(a, b) Int
+    }
+    class FiniteGroup {
+        inverse(a) Int
+        subgroupGeneratedBy(gens) Set~Int~
+        pSubgroups(p) IndexedSeq~Set~Int~~
+    }
+    class FiniteCategory {
+        <<trait>>
+        source(f) Int
+        target(f) Int
+        identityOf(x) Int
+        andThen(f, g) Int
+        validate() Seq~String~
+    }
+    class RewritingSystem {
+        <<case class>>
+        normalForms
+        levels
+        validate() Seq~String~
+        respects(chain) Seq~String~
+    }
+    class CollapsedNerve {
+        criticalCells(n) IndexedSeq~NerveSimplex~
+        morseBoundary(c) Map
+        lift(c) Map
+        stream(chain, maxDegree) StratifiedCellStream
+        persistentHomology(chain, maxDegree, prime) PersistenceDiagram
+    }
+    class ClassifyingSpace {
+        <<object>>
+        persistentGroupHomology(g, chain, maxDegree, prime) PersistenceDiagram
+        bettiNumbers(g, maxDegree, prime) Vector~Int~
+    }
+    SimplicialSet <|-- FiniteSimplicialSet
+    SimplicialSet <|-- Nerve
+    SimplicialSet <|-- CategoryNerve
+    FiniteMonoid <|-- FiniteGroup
+    FiniteCategory <|-- HomotopyOrbitCategory
+    Nerve ..> FiniteMonoid : nerve of
+    CategoryNerve ..> FiniteCategory : nerve of
+    RewritingSystem ..> FiniteMonoid : presents
+    CollapsedNerve ..> RewritingSystem : collapses by
+    CollapsedNerve ..> Nerve : lifts to
+    ClassifyingSpace ..> CollapsedNerve : when the chain refines
+    ClassifyingSpace ..> Nerve : otherwise
+```
+
+See [Nerves and group homology](nerves.md).
+
+## Plots (`plot/`)
+
+```mermaid
+classDiagram
+    class Plot {
+        <<trait>>
+        fragment(theme) String
+        html(theme) String
+        svgFile(theme) String
+        view() this
+        save(path, theme) Path
+    }
+    class Figure {
+        <<case class>>
+        marks: Vector~Mark~
+        axes, legend, colorbar
+        over(under) Figure
+        svg(theme) String
+    }
+    class Scene {
+        <<case class: 3-D>>
+        layers
+        over(under) Scene
+        staticSvg(theme) String
+    }
+    class Board {
+        <<case class>>
+        plots: Seq~Figure~
+    }
+    class Mark {
+        <<sealed trait>>
+        paints: IndexedSeq~Paint~
+        tips: IndexedSeq~String~
+    }
+    class Palette {
+        <<case class>>
+        hex(paint, theme) String
+        css(paint) String
+    }
+    class Paint {
+        <<enum>>
+        Series(k), Ink, Secondary, Muted, Grid, Axis, Surface, Fixed(hex)
+    }
+    class Theme {
+        <<enum>>
+        Auto, Light, Dark
+    }
+    Plot <|.. Figure
+    Plot <|.. Scene
+    Plot <|.. Board
+    Figure o-- Mark
+    Mark ..> Paint : colored by role
+    Palette ..> Paint : resolves
+    Palette ..> Theme : per
+    Svg ..> Figure : renders
+    Viewer ..> Plot : shows
+```
+
+`object Plot` (the TDA constructors: `barcode`, `diagram`, `complex`,
+`cycle`, ...) shares the trait's name. See [Plotting internals](plotting.md).
