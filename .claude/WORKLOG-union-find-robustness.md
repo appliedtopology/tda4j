@@ -59,4 +59,27 @@ Method:
   - **current**: 39c68e5 (an emptiness check);
   - **robust**: 2e137d5.
 
-(results below)
+Each cell lists the per-JVM medians in ms, then the median of those three:
+
+| workload | original | current | robust |
+|---|---|---|---|
+| tree, 200k edges, no cycles | 2532, 2508, 2482 → 2508 | 2546, 2686, 2707 → 2686 | 2576, 2561, 2494 → 2561 |
+| VR, 500 points, 93,642 edges | 4760, 4716, 4738 → 4738 | 5040, 4813, 4904 → 4904 | 4989, 4856, 4810 → 4856 |
+
+**No measurable effect.** The spread within each cell (±100–250 ms) covers the differences between cells. The ordering
+is not even monotone: `current`, which only adds an emptiness check, came out slowest on both workloads. A first,
+interrupted run of the original variant in the main checkout gave 2470–2604 ms (tree) and 4832 ms (VR), the same
+range. The edge-shape check is a few field operations per edge, far below everything else this path does.
+
+**Conclusion on robustness: it improves things and costs nothing measurable.** Six input shapes that threw or silently
+gave a wrong barcode now give the naive engine's answer, and speed is unchanged within ±5%. Keep it.
+
+## Finding: representative bookkeeping, not union-find, dominates this path
+
+Even the cycle-free tree takes about 2.5 s for 200k edges, while union-find itself is milliseconds at that size.
+800 VR points (228k edges) took 15 s per run. The union-find pass builds representatives eagerly:
+- a root-to-vertex path chain for every vertex (`pathFromRoot`);
+- a cycle chain for every cycle-closing edge (about 227k of them at 800 points).
+
+`diagramAt` never needs these, and with `maxDim = 0` they are never reported at all. A probe (below) measures their
+share.
