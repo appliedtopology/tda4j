@@ -317,21 +317,23 @@ for why, and for `BipartiteMatching.scala`'s two combinatorial primitives (`Hopc
 
 ```mermaid
 classDiagram
+    direction LR
     class Persistence {
         <<object>>
-        apply(input, maxDimension, maxFiltrationValue, complex, characteristic, engine, includeZeroLength, representatives) PersistenceDiagram
+        apply(input, options...) PersistenceDiagram
     }
     class Input~CellT~ {
         <<into trait>>
-        stream(maxDimension, maxFiltrationValue, complex) StratifiedCellStream
+        stream(maxDim, threshold, complex)
         scale: Option~Double~
-        cells: CellT is OrderedCell
+        cells: OrderedCell instance
         ripserApplies(complex) Boolean
-        cubicalGrid: Option~CubicalGridStream~
+        cubicalGrid: Option~Grid~
     }
     class Engine {
         <<enum>>
-        Auto, Chunks, Naive, Cohomology, Ripser, FastCubical
+        Auto, Chunks, Naive
+        Cohomology, Ripser, FastCubical
     }
     class Representatives {
         <<enum>>
@@ -339,17 +341,14 @@ classDiagram
     }
     class PointCloudComplex {
         <<trait>>
-        fromPoints(points, maxDimension, maxFiltrationValue) LevelwiseSimplexStream
+        fromPoints(points, maxDim, threshold)
     }
     class PersistenceDiagram~CellT~ {
         <<trait>>
         type Coefficient
         bars: List~PersistenceBar~
-        dim(k) PersistenceDiagram
-        at(f) PersistenceDiagram
-        longerThan(x) PersistenceDiagram
-        significant() PersistenceDiagram
-        bettiNumbers: Vector~Int~
+        dim(k), at(f), longerThan(x)
+        significant(), bettiNumbers
     }
     class Coefficients {
         <<trait>>
@@ -357,28 +356,38 @@ classDiagram
         field: C is Field
         fromInt(x) C
     }
+    Persistence ..> Input : takes
+    Persistence ..> Engine : takes
+    Persistence ..> Representatives : takes
+    Persistence ..> PointCloudComplex : takes
+    Persistence ..> Coefficients : picks the field
+    Persistence ..> PersistenceDiagram : returns
+```
+
+`Input` is an `into` trait: points, metric spaces, images and streams convert
+to one at the call site. `Engine` and `Input` are nested in `object
+Persistence`. `VietorisRips`, `Cech` and `AlphaShapes` implement
+`PointCloudComplex`. See [The public API](public-api.md).
+
+```mermaid
+classDiagram
     class Lab {
         <<abstract>>
         coefficients: Coefficients
         Fp(x) CoefficientT
     }
-    Persistence ..> Input : takes
-    Persistence ..> Engine : takes
-    Persistence ..> Representatives : takes
-    Persistence ..> PointCloudComplex : takes
-    Persistence ..> PersistenceDiagram : returns
-    Persistence ..> Coefficients : chooses the field
-    VietorisRips ..|> PointCloudComplex
-    Cech ..|> PointCloudComplex
-    AlphaShapes ..|> PointCloudComplex
+    class TDAlab {
+        chain arithmetic on simplices
+        F2, F3, F17, Reals
+    }
+    class CubicalLab {
+        chain arithmetic on cubes
+        F2, F3, F17, Reals
+    }
     Lab <|-- TDAlab
     Lab <|-- CubicalLab
     Lab ..> Coefficients : holds
 ```
-
-`Input` is an `into` trait: points, metric spaces, images and streams convert
-to one at the call site. `Engine` and `Input` are nested in `object
-Persistence`. See [The public API](public-api.md).
 
 ## Nerves and group homology (`sset/`)
 
