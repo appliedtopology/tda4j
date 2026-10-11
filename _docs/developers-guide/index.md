@@ -18,16 +18,35 @@ recent), is most of the actual gap.
    layers — algebra, then complex construction (streams), then the persistence engines that consume a
    stream — and each has its own source directory (one package; simplicial sets are the `sset` add-on). See
    [Architecture](architecture.md).
-3. **Which persistence algorithm, and which of its implementations, to build on.** `homology` ships four
-   independently-implemented algorithms across five concrete classes; they are not layers on one shared
-   core, and their intended roles (production vs. reference oracle) are not something you can infer just
-   because all five compile and share a file. See [Persistence engines](persistence-engines.md).
+3. **Which persistence algorithm, and which implementation, to build on.**
+   The persistence engines are independent implementations with different
+   assumptions and intended roles; they are not layers on one shared core.
+   See [Persistence engines](persistence-engines.md).
 4. **What traps look fine, compile fine, and only produce a wrong answer on specific inputs.** Ordering and
    reduction code in this codebase has a real history of exactly this failure mode. See
    [Hard-won invariants](gotchas.md) before you trust your own "this looks obviously correct" judgment
    on a change to reduction or ordering logic.
 5. **Whether a surprising result is a bug or the mathematically correct answer on a degenerate input.** See
    [Degeneracies](degeneracies.md) before "fixing" something that isn't broken.
+6. **What a user meets first, and the rules for new public API.** The
+   `Persistence` verb, the `PersistenceDiagram` it returns, the labs, and the
+   "easy, not simple" principles behind them. See
+   [The public API](public-api.md).
+7. **The add-ons.** Nerves of monoids, groups and categories, persistent group
+   homology and Brown's collapse are in
+   [Nerves and group homology](nerves.md). Plots and the live viewer are in
+   [Plotting internals](plotting.md).
+8. **How to measure a speed or memory claim.** The A/B method, the benchmark
+   specs, the profile drivers and the cross-library harness are in
+   [Measuring performance](performance.md).
+
+## Contributing
+
+How to set up, the commands, the path from an issue to a merged pull request,
+the changelog and the review principles are in the repository's
+[CONTRIBUTING.md](https://github.com/appliedtopology/tda4j/blob/scala/CONTRIBUTING.md).
+Open questions, known limitations and planned work are
+[issues](https://github.com/appliedtopology/tda4j/issues).
 
 ## Naming convention: `tda4j`/`TDA4j`, never `Tda4j`
 

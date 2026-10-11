@@ -1,0 +1,72 @@
+# Changelog
+
+What changed in each release of `tda4j`, newest first. Every pull request that changes what a user sees or calls adds a
+line under **Unreleased**; at a release the section is renamed to the version (`RELEASE.md`). Each section opens with
+the changes that break existing code. Before 1.0, a minor version may break the API, and every break inside a series
+is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
+
+## Unreleased
+
+### Breaking
+
+- `sset.ClassifyingSpace.persistentGroupHomology` returns a `PersistenceDiagram` (bars with representatives) instead of
+  a list of `(degree, birth, death)`; `diagram.triples` is the old list.
+- `Chain` is an abstract class open to new storages: a storage implements `entryIterator` and inherits every other
+  member (the library's are `HeapChain` and `PackedChain`). Its 0.5.0 constructor was `private[tda4j]`, so no
+  user code built a `Chain` directly. Binary break only.
+- `Chain.chainShow` needs only `Show` of the cells, not `OrderedCell`. A given found by implicit search, so
+  callers need no change. Binary break only.
+- `Chain` equality is equality of formal sums: the same cells, coefficients equal by the field's `isEqual`, in any
+  order. Before, one sum over `F_p` could compare unequal to itself.
+- Images with a `NaN` pixel are refused by every engine, with a message naming the pixel; mask with `+Infinity`
+  (sublevel) or `-Infinity` (superlevel).
+- `Chain.reduceBy` throws when its pivot moves back or stays put for 64 steps, instead of looping forever.
+
+### Added
+
+- `plot`: barcodes, persistence diagrams, images, landscapes, point clouds, complexes, cycles and cocycles, circular
+  coordinates and 3-D scenes as SVG, and `view()`, a live browser viewer. In the main artifact, with no dependencies
+  of its own.
+- `PackedCubicalCohomologyEngine`: Ripser's reduction on cubical grids. `Engine.Cohomology` on an image uses it.
+- `PackedChain`: compact representatives for the grid engines; a `Cube` is built only when read.
+- `Show` instances for diagrams, bars, endpoints, cubes, pairs and simplicial-set generators.
+- `Persistence.Input` takes new kinds of input through a `Conversion`.
+- `CubicalGridStream.topValues` and `EdgeCollapsedMetricSpace.edges`, read-only views of formerly private state.
+- `sset`:
+  - `FiniteCategory`, with `fromMonoid`, `fromPoset`, `freeOnAcyclicQuiver`, `actionGroupoid` and `homotopyOrbits`,
+    and `CategoryNerve` with `filtrationBy`;
+  - `FiniteMonoid.rectangularBand` and `reesMatrix`; `FiniteGroup.pSubgroups`, `alternating` and `generalLinear`;
+  - `SimplicialSet.persistentHomology(filtration, maxDegree, prime)` for any simplicial set, with representatives;
+  - `CollapsedNerve` (Brown's collapsing scheme) and `RewritingSystem.refining`.
+
+### Changed
+
+- Group homology (`persistentGroupHomology`, `bettiNumbers`) uses Brown's collapse whenever the subgroup chain refines
+  to a polycyclic presentation, and the bar complex otherwise. H_*(S_4) through degree 6 is now in reach.
+- The fast cubical engine and `Engine.Cohomology` on images are much faster.
+- The construction streams behind `VietorisRips`, `Cech`, `Witness`, `Dowker`, `DtmRips` and `SparseRips`, the
+  pairings, the involution, the signed union-finds, the Delaunay triangulation and its predicates, the matching
+  algorithms and the io helpers are public. Every concrete public class is `open`.
+- The chunks engine builds degree-1 representatives when they are first read.
+
+### Fixed
+
+- The chunks engine's dimension-0/1 union-find handles every edge a chain complex can contain. Six inputs used to throw
+  or return a wrong barcode, among them `a + b + c` over `F_3`.
+
+### Build, CI and documentation
+
+- CI builds the fat jar and runs the command line on a sample.
+- Contributor guides: `CONTRIBUTING.md` rewritten (setup, commands, issues and labels, review principles), issue and
+  pull request templates, and this changelog.
+- A coverage report, run by hand or weekly (`coverage.yml`).
+- Dependabot opens weekly update pull requests for the GitHub Actions and the sbt dependencies.
+- A format check before every commit, for anyone who opts in (`CONTRIBUTING.md`).
+- The developer's guide covers the public API and its principles, nerves and group homology, plotting and measuring
+  performance; the class diagrams render on the docs site.
+- The release workflow runs only for `v*` tags and attaches the release to the tag it was started for.
+
+## 0.5.0 (2026-10-09)
+
+The first release of the 0.5 series, with the `Persistence` verb, `PersistenceDiagram`, the labs and the MATLAB and
+command-line facades. It does not keep binary compatibility with 0.4.x.

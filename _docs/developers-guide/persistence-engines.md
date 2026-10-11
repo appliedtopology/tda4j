@@ -12,6 +12,13 @@ reduction primitives from [Architecture](architecture.md), but they are not vari
 fix or bug found in one does not imply anything about the others. Read this page before choosing which engine
 to build on.
 
+`PackedCubicalCohomologyEngine` (`homology/PackedCubicalCohomology.scala`) is
+an eighth class: engine 4's algorithm (clearing, apparent pairs, a packed
+involution) on a cubical grid's own cell indices, with no `Cube` or `Chain`
+inside the reduction. It must equal engine 5 on any `CubicalGridStream`, bar
+for bar and term for term. It is what `Engine.Cohomology` and engine 6's
+middle degrees run on a grid.
+
 Three of the five (`CellularHomologyEngine`, `CellularPersistenceInChunksEngine`, `CellularCohomologyEngine`)
 additionally implement the common `PersistenceEngine[CellT, C]` trait (`def barcode(stream): List[
 PersistenceBar[Double, Chain[CellT, C]]]`) via `PersistenceEngine.naive`/`.chunks`/`.cohomology` factories — a
@@ -52,6 +59,26 @@ essential classes — reconstructed incrementally from this class's own already-
 `boundaries`/`cleared`/`paired`/`killer` state (`vcolOf`, memoized) rather than by delegating to a second
 engine run. `advanceAll()` runs the whole pipeline in one shot; there is no incremental querying the way
 engine 1 has.
+
+**What the union-find takes.** `unionFindDim01` sorts each edge by its
+boundary over the engine's field (`edgeShape`):
+- **zero** (no entries, a loop's `(v, c), (v, -c)`, or coefficients that
+  vanish in the field): the edge closes a cycle by itself and is its own
+  representative;
+- **`c·(v - u)`** with `u ≠ v` and `c` a unit: the edge joins two components;
+- **anything else** (one vertex with a nonzero coefficient, three vertices,
+  coefficients that are not negatives of each other): union-find stops and
+  clears what it recorded, and the general reduction runs from dimension 0.
+
+Simplices, cubes and simplicial sets only produce the first two shapes. An
+algebraic chain complex, such as a Morse complex over `F_p`, may produce the
+third.
+
+**Degree-1 representatives are built on request.** A cycle-closing edge's
+representative is the edge minus the spanning-forest paths to its ends. It is
+built when `barcodeAt` first asks for it, then memoized; `diagramAt` never
+builds one. Keep the edge pass free of chains: a path chain per cycle-closing
+edge would cost more than the union-find itself on a Vietoris-Rips complex.
 
 ## 3. `RipserCohomologyEngine` — test/reference oracle for engine 4
 
@@ -111,6 +138,17 @@ for the bars that are reported, so `persistentCohomology()` builds none for zero
 on the same heap, which returns exactly what the generic involution returns. The heap relies on a simplex having
 one diameter: a metric that is not symmetric by construction (anything but `EuclideanMetricSpace` and
 `ExplicitMetricSpace`, which reads its lower triangle) is read as `d(max(i, j), min(i, j))`, the same triangle.
+
+**Counters.** Engines 3 and 4 report what their last run did:
+- `apparentPairCount`, the simplices paired as apparent pairs with no reduction
+  of their coboundary;
+- `substitutionCount`, how often another column needed an apparent pair's
+  column as a pivot and had it rebuilt;
+- `totalSimplexCount`, the simplices the run assembled over all dimensions.
+
+They explain a speed difference between two inputs of the same size: a high
+apparent-pair rate means little reduction work. They are diagnostics, not
+part of any result.
 
 ## 5. `CellularCohomologyEngine` — generic cohomology, for every cell type
 
@@ -256,6 +294,64 @@ itself), but its only practical effect on `engine="naive"`/`"chunks"`/`"cohomolo
 (rare, near-tied) triangulation gets built — those engines have no facet-multiplicity precondition of their own,
 so there is usually no reason to set this unless also using `engine="fast-alpha"`.
 
+## Querying a run: the cursor
+
+Engine 1's `HomologyState` is a cursor over the stream:
+- `advanceOne()`, `advanceTo(f)` and `advanceAll()` move it;
+- `advanceFor(budget)` runs it for a time-boxed slice;
+- `processedCells` and `totalCells` report progress.
+
+It exists so that a long run can be inspected while it runs, and keeps its
+output if it dies.
+
+**Queries do not depend on where the cursor is.** `diagramAt(f)`,
+`barcodeAt(f)` and `diagramWithGeneratorsAt(f)` give the diagram truncated at
+`f`:
+- bars born at or before `f`, with their deaths capped at `f`;
+- a class alive at `f` is reported as dying at `f`, or as essential when no
+  cell enters after `f`.
+
+A query past the cursor advances it as far as it needs. A query below the
+cursor gives what a fresh cursor would. `snapshotAt(f)` copies the answer into
+an immutable `PersistenceDiagram`.
+
+Engine 2 answers `diagramAt(f)` and `barcodeAt(f)` with the same contract, but
+it runs the whole reduction on its first query and has no cursor. `DiagramQuerySpec` pins
+the contract for both engines.
+
+## Cycles and cocycles from one pairing: `Involution`
+
+Every engine but the fast ones and the Ripser oracle (engine 3, cocycles
+only) gives both kinds of representative. It computes one kind natively and
+derives the other from its own pairing
+(`homology/Involution.scala`, after Čufar and Virk, arXiv:2105.03629).
+
+**Cycles from a cohomology pairing** (`Involution.cycles`). Only the boundary
+columns of death cells are reduced, youngest cell first:
+- a finite bar `(σ, τ)` gets `R_τ`, the reduced boundary of `τ`, a cycle whose
+  youngest cell is `σ`;
+- an essential bar gets the cycle the reduction of `∂σ` to zero produces.
+
+Engines 4, 5 and the packed cubical class expose this as `persistentHomology`.
+Engines 4 and 5 also return the bars with their birth and death cells through
+`pairedCohomology`.
+
+**Cocycles from a homology pairing** (`Involution.cocycles`, `cocycleBars`).
+Only the coboundary columns of birth cells are reduced, built from the stream
+by `coboundariesOf`; the representative is the V-column `V_σ`. Engines 1 and 2
+expose a `pairing` for this.
+
+The pairing must come from the same total order the involution reduces under,
+and every pivot is checked against the paired cell. A mismatch throws; it is a
+bug in the pairing or the order, so never fall back. Zero-length pairs must be
+present: their columns are pivots for the others.
+
+The engines give different, equally valid representatives. Never compare
+representatives cell for cell across engines; check that each one is a cycle
+(or cocycle) present at the bar's birth. The fast engines have no derived kind:
+their union-finds break ties by value rather than by the stream's order. Image
+cocycles go through `Engine.Cohomology`.
+
 ## Streams × engines: what works with what
 
 Every complex construction in this codebase produces a `CofaceSimplexStream`/`CellStream` that, in principle,
@@ -331,7 +427,27 @@ reason: it's generic over `CellT: OrderedCell` with no per-construction speed as
 of none of engines 3/4's Vietoris-Rips-specific optimizations — see engine 5's own section above for what that
 tradeoff actually buys and costs.
 
+**Representatives through the facades.** `matlab.TDA4j` takes the option
+`representativeType`, `cycles` (the default) or `cocycles`, and the CLI takes
+`--representative-type` with the same values. `fast-cubical` and `fast-alpha`
+give cycles only and refuse `cocycles` with a message that names `cohomology`.
+Every other engine gives both kinds, the second through `Involution`.
+
+`PersistenceResult.cycleVertices(i)` and `cycleCoefficients(i)` return bar
+`i`'s representative of either kind:
+- a simplex as its sorted vertices;
+- a cube as its doubled coordinates;
+- a coefficient of `Z/p` as an integer representative.
+
+The CLI prints representatives with `--representatives` (text output only).
+
 ## Choosing an engine
+
+Most callers should not choose: `Persistence(...)` with `Engine.Auto` picks
+packed Ripser for Vietoris-Rips on points, fast cubical for images (when cycles
+are asked for) and cohomology for everything else. See
+[The public API](public-api.md). The table is for building on an engine
+directly.
 
 | Need | Engine |
 |---|---|

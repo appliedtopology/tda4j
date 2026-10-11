@@ -18,17 +18,17 @@ the docs steps set `TDA4J_SCALA_VERSION=3.8.4` (read by `scalaVersion` in `build
 - `sbt-release` (`sbt-release` 1.5.0, wired via `release.sbt`) drives the version bump/tag/publish sequence —
   see [Release steps](#release-steps) below. It edits `version.sbt` itself (`setReleaseVersion`/
   `setNextVersion`); don't hand-edit that file as part of a release.
-- Tags: `sbt-release`'s `tagRelease` step creates a `v<version>` tag (matches the existing `v0.1.0-alpha` tag
-  already in the repo) and pushes it as part of `pushChanges`. That push is what triggers `release.yml`.
+- Tags: `sbt-release`'s `tagRelease` step creates a `v<version>` tag and pushes it as part of `pushChanges`. That push
+  is what triggers `release.yml`.
 
 ## What gets built
 
 | Artifact | How | Where it goes |
 |---|---|---|
-| Library jar | `sbt package` (part of `publishSigned`), one per module: `tda4j` and, from 0.5.1, `tda4j-plot` (the `plot` project, which the root aggregates) | Maven Central |
+| Library jar | `sbt package` (part of `publishSigned`): `tda4j`, plots included (`org.appliedtopology.tda4j.plot`) | Maven Central |
 | Sources jar | `publishMavenStyle := true` + sbt's default `publishArtifact` behavior (`Compile / packageSrc`) | Maven Central + GitHub Release |
 | Scaladoc jar | sbt's default `Compile / packageDoc` | Maven Central + GitHub Release |
-| Fat jar (CLI/MATLAB) | `sbt assembly` → `target/out/jvm/scala-3.9.0/tda4j/tda4j-<version>-assembly.jar` (sbt 2 layout, verified) (name from `assembly / assemblyJarName` in `build.sbt`) | GitHub Release only (not published to Maven — fat jars with bundled deps are a poor Maven citizen) |
+| Fat jar (CLI/MATLAB) | `sbt assembly` → `target/out/jvm/scala-3.9.0/tda4j/tda4j-<version>-assembly.jar` (name from `assembly / assemblyJarName` in `build.sbt`); CI's `test` job builds it and runs it on a sample for every pull request | GitHub Release only (not published to Maven — fat jars with bundled deps are a poor Maven citizen) |
 | Docs site | `sbt doc` → `target/out/jvm/scala-<docs scala version>/tda4j/api` (scaladoc static site built from `_docs/`) | GitHub Pages, under a per-version path (`/X.Y.Z/`, `/dev/` for in-progress docs) + a zipped copy on the GitHub Release |
 
 All four Maven-bound artifacts (jar, sources, scaladoc, POM) are produced and signed in one shot by
@@ -61,14 +61,14 @@ already-released coordinate.
   `sbt mimaReportBinaryIssues` both green — same as CI (`test.yml`), run locally first so the interactive
   `sbt-release` sequence doesn't fail partway through.
 - `sbt scalafmtCheck scalafmtSbtCheck` clean (`lint.yml`'s own check).
-- Skim `CONTRIBUTORS.md` and the worklogs since the last tag for anything release-notes-worthy.
-  `release.yml`'s `gh release create --generate-notes` will produce a commit-based changelog automatically,
-  but it's worth reading over and editing by hand for anything a commit-log summary won't convey (this repo's
-  worklog discipline — `.claude/WORKLOG-*.md` — is the fastest way to reconstruct what actually happened).
-- Two artifacts go to Central under the `org.appliedtopology` namespace: `tda4j` and `tda4j-plot` (both get the POM
-  metadata of `sonatype.sbt`, build-wide; `sbt publishLocal` shows both POMs without publishing anything). `tda4j-plot`'s
-  MiMa baseline starts at its first release, `firstPlotRelease` in `build.sbt` (0.5.1): after that release, its later
-  versions are checked against it like the core.
+- **The changelog.** In `CHANGELOG.md`, rename the `Unreleased` section to `X.Y.Z (YYYY-MM-DD)`, read it over
+  (breaking changes first, each with what to write instead), and commit that before `sbt release`. It is the release
+  notes: `release.yml`'s `gh release create --generate-notes` lists only the merged pull requests, so paste the
+  section into the GitHub Release's description once the workflow has created it.
+- **Open issues.** Skim the [issues](https://github.com/appliedtopology/tda4j/issues) for anything that should block
+  the release (a `bug` on a default path, an `unverified` claim the release notes would repeat).
+- One artifact goes to Central under the `org.appliedtopology` namespace: `tda4j` (POM metadata from `sonatype.sbt`;
+  `sbt publishLocal` shows the POM without publishing anything).
 - Confirm `mimaPreviousArtifacts` (`sbt show mimaPreviousArtifacts`): `build.sbt` derives it from the `v*` git tags of
   the version's own compatibility series that are older than it. A tag with no published Maven artifact makes
   `mimaReportBinaryIssues` fail to resolve, so check that those tags really were published. A deliberate break inside a
@@ -93,10 +93,7 @@ already-released coordinate.
   ```
   Nothing in this project's own build files references that path — sbt's built-in Central support and sbt-pgp pick it up through
   their own default credential discovery, the same way for every project on the machine, not something wired
-  up here. (An earlier version of `sonatype.sbt` added an explicit `credentials +=` pointing at this file,
-  reasoning from `SONATYPE_USERNAME`/`SONATYPE_PASSWORD` env vars as the primary mechanism — removed once it
-  became clear that framing didn't match how credentials actually get supplied here, which is entirely this
-  file, discovered by those defaults; no env vars involved.) `host` must say `central.sonatype.com`
+  up here; no environment variables are involved. `host` must say `central.sonatype.com`
   exactly (a file left over from before the Central Portal migration may still say the old OSSRH host, which
   won't match and leaves the build effectively uncredentialed). This is a different file and format from
   Maven's own `~/.m2/settings.xml` — sbt doesn't read that XML format, so a token stored only there isn't
@@ -132,12 +129,14 @@ whole sequence, per `sbt-release`'s own resume support.
 
 The tag push from step 3 triggers `.github/workflows/release.yml`, which:
 
-1. Builds `sbt assembly packageSrc`.
-2. Runs `TDA4J_SCALA_VERSION=3.8.4 sbt "packageDoc ; doc"` (pinning docs to Scala 3.8.4 because of a javascript 
-   rearrangement bug introduced in 3.9.0).
-3. Commits the freshly-built docs directly into a `gh-pages` worktree, at their own version path, alongside
-   whatever's already there (see [Docs versioning](#5-docs-site-versioned-publish) below), and pushes.
-4. Zips this version's docs (`target/docs/site`, the same build step 2 just published) into `docs-X.Y.Z.zip`.
+1. Checks that the ref is an existing `vX.Y.Z` tag, before anything is built or published.
+2. Runs `sbt "assembly ; packageSrc ; ++3.8.4! ; packageDoc ; doc"`: the fat jar and sources jar with Scala 3.9.0,
+   then the scaladoc jar and the docs site with 3.8.4 (scaladoc 3.9.0's JavaScript is broken), switched inside the
+   one invocation because a second `sbt` call would join the running server and keep 3.9.0.
+3. Commits the freshly-built docs directly into a `gh-pages` worktree, under `/X.Y.Z/`, alongside whatever's already
+   there (the site root is `docs.yml`'s build of `scala`), and pushes.
+4. Zips this version's docs (`target/out/jvm/scala-3.8.4/tda4j/api`, the site step 3 just published) into
+   `docs-X.Y.Z.zip`.
 5. Runs `gh release create` on the pushed tag, title `TDA4j X.Y.Z`, `--generate-notes`, `--prerelease` while
    the version is still `0.x`, with the fat jar, sources jar, scaladoc jar, and docs zip attached.
 
@@ -150,11 +149,12 @@ instead, replicate steps 1–4 locally; the commands are in the workflow file.
 
 - Verify the Central Portal listing (can take minutes to hours to become searchable after `sonaRelease`,
   even though the artifact is immediately resolvable by exact coordinates).
-- Verify a fresh `libraryDependencies += "org.appliedtopology" %% "TDA4j" % "X.Y.Z"` resolves in a scratch
+- Verify a fresh `libraryDependencies += "org.appliedtopology" %% "tda4j" % "X.Y.Z"` resolves in a scratch
   project.
 - Confirm `show mimaPreviousArtifacts` on the new `-SNAPSHOT` now includes the just-released version (same
   series only; a new minor starts with an empty baseline).
 - Skim the new `-SNAPSHOT` commit `sbt release` pushed — confirm it actually landed on `scala` and the version
   bump is sane before walking away.
 - Confirm `release.yml` finished green in the Actions tab and the GitHub Release looks right (all four files
-  attached, notes readable) before announcing the release anywhere.
+  attached, the changelog section pasted into its description) before announcing the release anywhere.
+- Add a new, empty `## Unreleased` section at the top of `CHANGELOG.md` if the release commit did not.

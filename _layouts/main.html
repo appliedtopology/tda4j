@@ -40,6 +40,7 @@
      .tabset > .tab-bar > button[aria-selected="true"] { border-color: var(--text-primary); background: var(--background-subtle); font-weight: bold; }
      .tabset.js-ready > .tab:not(.active) { display: none; }
      .tabset > .tab > *:first-child { margin-top: 0.5em; }
+     div.mermaid { overflow-x: auto; margin: 1em 0; }
 </style>
 <script>
      // Builds a tab bar for each .tabset from its .tab children's data-lang, and keeps every tabset on the page (and on later pages) on the same language.
@@ -75,6 +76,54 @@
                set.classList.add("js-ready");
           });
           show(saved);
+     });
+</script>
+<script>
+     // Mermaid diagrams. Scaladoc renders a ```mermaid fence as <pre><code class="language-mermaid">, which mermaid does not
+     // pick up by itself. On a page that has one, load mermaid (pinned; only there, it is 2.5 MB) and draw each block in
+     // the site's light or dark theme, redrawing when the reader switches. If the script cannot load, the source stays.
+     document.addEventListener("DOMContentLoaded", function () {
+          var codes = Array.prototype.slice.call(document.querySelectorAll("pre > code.language-mermaid"));
+          if (!codes.length) return;
+          var script = document.createElement("script");
+          script.src = "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js";
+          script.onload = function () {
+               var diagrams = codes.map(function (code) {
+                    var div = document.createElement("div");
+                    div.className = "mermaid";
+                    div.dataset.source = code.textContent;
+                    code.parentNode.replaceWith(div);
+                    return div;
+               });
+               var drawnDark = null;
+               function draw() {
+                    var dark = document.documentElement.classList.contains("theme-dark");
+                    if (dark === drawnDark) return;
+                    drawnDark = dark;
+                    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: dark ? "dark" : "default" });
+                    diagrams.forEach(function (d) {
+                         d.removeAttribute("data-processed");
+                         d.textContent = d.dataset.source;
+                    });
+                    // Mermaid scales a diagram down to the column, which makes a wide one unreadable (its useMaxWidth setting
+                    // does not reach class diagrams). Shrink to fit only down to 70% of natural size; wider than that, keep
+                    // 70% and scroll sideways.
+                    mermaid.run({ nodes: diagrams }).then(function () {
+                         diagrams.forEach(function (d) {
+                              var svg = d.querySelector("svg");
+                              var box = svg && svg.viewBox && svg.viewBox.baseVal;
+                              if (!box || !box.width) return;
+                              var width = Math.max(Math.min(box.width, d.clientWidth), 0.7 * box.width);
+                              svg.style.maxWidth = "none";
+                              svg.setAttribute("width", width);
+                              svg.setAttribute("height", box.height * width / box.width);
+                         });
+                    });
+               }
+               draw();
+               new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+          };
+          document.head.appendChild(script);
      });
 </script>
 <main>

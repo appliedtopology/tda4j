@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **How this file works.** Each entry is a current rule, invariant, or known limitation, plus a pointer to the
 `.claude/WORKLOG-*.md`/`DESIGN-*.md` that holds its derivation (what was tried, measurements, repros). Derivations
-go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes"). Last condensed 2026-10-10 (lab detail to `rules/labs.md`); 2026-10-09; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md` (and the commits named there).
+go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes"). Last condensed 2026-10-11 (CI detail to the steward skill, engine detail to `rules/engines.md`); 2026-10-10 (lab detail to `rules/labs.md`); 2026-10-09; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md` (and the commits named there).
 
 ## What this is
 
 TDA4j is a Scala 3 library for persistent homology and topological data analysis (a spiritual successor to
 JavaPlex/Ripser, from the Stanford Computational Topology workgroup lineage). Single sbt module, root package
-`org.appliedtopology.tda4j`, pre-1.0 (`0.5.0-SNAPSHOT`, see `version.sbt`), actively evolving API. **0.5.0 deliberately does not keep binary
+`org.appliedtopology.tda4j`, pre-1.0 (version in `version.sbt`), actively evolving API. **0.5.0 deliberately does not keep binary
 compatibility with 0.4.x** (project lead: still in flux) — no compat shims for renames/signature changes.
 
 ## Working stance
@@ -33,24 +33,18 @@ the 2026-09 subpackage split it replaced is `WORKLOG-package-reorg.md`). Everyth
 in `org.appliedtopology.tda4j` itself, so users write `import org.appliedtopology.tda4j.*` (no `given` selector needed,
 see "Givens" below). The core's source directories are **file organization only, not packages**:
 
-- `algebra/` — `RingModule`, `Field`, `FiniteField`, `Chain`, the `Cell`/`OrderedCell`/`OrderedBasis` contracts,
-  `LinearAlgebra` (dense, small complexes).
-- `cells/` — `Simplex`/`SimplexOps`/`SimplexOrderedCell` (+ `SimplexInstances`), `Cubical`/`CubicalOrderedCell`
-  (+ `CubeInstances`).
+- `algebra/` — `RingModule`, `Field`, `FiniteField`, `Chain`, `Cell`/`OrderedCell`/`OrderedBasis`, `LinearAlgebra`.
+- `cells/` — `Simplex`, `Cube` and their `OrderedCell` instances.
 - `streams/` — streams, metric spaces, `PointCloud`, the dispatchers (`VietorisRips`, `Cech`, `Witness`, `Dowker`,
-  `DtmRips`, `SparseRips`, `Truncated`; `DESIGN-stream-naming.md`), cubical streams/images, `UnionFind`/`Kruskal`.
-- `homology/` — the engines (naive `CellularHomologyEngine`, chunks, cohomology, Ripser, fast cubical/alpha),
-  `Persistence` (the verb), `CircularCoordinates`, `LatticeReduction`. Streams never use engines (convention only).
-- `barcode/` — `Barcode`, `PersistenceDiagram`, `PersistenceFilter`, distances, vectorizations. `alpha/` — `AlphaShapes`
-  (+ `AlphaBackend`), `BowyerWatsonDelaunay` (default up to 4-D), `HelixDelaunay`, `AlphaComplexDQP`. `io/` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
-- root `package.scala` — `TDAlab` (below).
-- **add-on `sset`** (`import org.appliedtopology.tda4j.sset.*`, directory `sset/`) — simplicial sets (the Sage-parity
-  layer), nerves of groups, monoids and finite categories (persistent group homology, library-only), `BettiNumbers`,
-  simplicial-set streams.
-  Depends on the core; the core uses it only through `TDAlab`'s generated re-exports. `rules/simplicial-sets.md`.
-- subpackages `matlab` (MATLAB facade) and `cli` (`TDA4jConf`/`TDA4jCLI`, thin translator over `matlab.TDA4j`) — leaves.
-- **sbt project `plot`** (`tda4j-plot`, package `org.appliedtopology.tda4j.plot`, directory `plot/`): plots and a live
-  browser viewer, no dependencies; aggregated by root, not published yet. `rules/plotting.md`.
+  `DtmRips`, `SparseRips`, `Truncated`; `DESIGN-stream-naming.md`), cubical images, `UnionFind`/`Kruskal`.
+- `homology/` — the engines, `Persistence` (the verb), `CircularCoordinates`, `LatticeReduction`. Streams never use
+  engines (convention only). `barcode/` — diagrams, filters, distances, vectorizations. `alpha/` — `AlphaShapes`
+  (+ `AlphaBackend`), the Delaunay backends, `AlphaComplexDQP`. `io/` — file formats. Root `package.scala` — `TDAlab`.
+- **add-on `sset`** (`import org.appliedtopology.tda4j.sset.*`) — simplicial sets (the Sage-parity layer), nerves of
+  groups, monoids and finite categories (persistent group homology, library-only). Depends on the core; the core uses
+  it only through `TDAlab`'s generated re-exports. `rules/simplicial-sets.md`.
+- leaf subpackages: `matlab` (facade), `cli` (thin translator over `matlab.TDA4j`), `plot` (plots and a live viewer,
+  no dependencies; a feature needing a library goes in a new module; `rules/plotting.md`, `WORKLOG-plot-into-core.md`).
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
   sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
   `sbt doc` checks that doc fences resolve from outside.
@@ -97,11 +91,9 @@ sbt -DrunBenchmarks=true test   # also run benchmark/profiling specs — NOT wha
 If `sbt` isn't on `PATH`, run `.claude/scripts/install-sbt.sh` (paces around Maven Central's cold-cache rate limits); in
 the cloud environment's setup script it saves new sessions a 20-40 minute cold start.
 
-No linter beyond scalafmt; tests are specs2 (`org.specs2.mutable.Specification`). CI on every PR to `scala`: `test.yml`
-(jobs `test`, `docs-build`, `mima`) and `lint.yml` (`scalafmtSbtCheck` on `build.sbt` too: format it before pushing);
-`docs.yml` publishes on push to `scala`. MiMa checks against every earlier plain release of the series
-(`mimaBaselineVersions`); a deliberate break is a commented `mimaBinaryIssueFilters` entry (project lead: binary
-compatibility is not a strong requirement before 1.0). The ~319 `-Wunused:all` warnings are deliberately left alone
+No linter beyond scalafmt; tests are specs2. CI jobs (`test` with a fat-jar smoke run, `docs-build`, `mima`, `lint`) and
+their local equivalents: steward skill; a weekly `coverage.yml` maps coverage, never gates. A deliberate binary break is
+a commented `mimaBinaryIssueFilters` entry (project lead: not a strong requirement before 1.0). The ~319 `-Wunused:all` warnings are deliberately left alone
 (`WORKLOG-compiler-warnings.md`). Docs build with Scala 3.8.4 (`TDA4J_SCALA_VERSION`, seen only by a FRESH sbt server:
 `rules/docs-and-tutorials.md`). After `sbt package` or a docs build a test compile can miss main classes ("Not found:
 TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
@@ -123,16 +115,14 @@ that line a plain downstream project needs nothing else, `into` conversions incl
 `longest`, `longerThan(x)`, `significant()`, `bettiNumbers`) out. **Default: degrees 0..2, cycles**;
 `representatives = Representatives.Cycles | Cocycles` (MATLAB `representativeType`, CLI `--representative-type`).
 `Auto` = Ripser for `VietorisRips` on points/metric space, `FastCubical` for images of dimension >= 2 (cycles only),
-`Cohomology` otherwise. Every engine but the fast ones gives both kinds: its native kind (cocycles for Ripser/
-Cohomology, cycles for Chunks/Naive/FastCubical) and the other derived from its pairing by `Involution` (reduce only
-death columns, or birth coboundaries; every pivot checked). `Chunks`/`Naive` reduce every top cell (VR/Cech H2 on
-~100 points: minutes or OOM). A truncated stream's own degree (`homologyDegreeLimit`) is the default for streams.
+`Cohomology` otherwise. Every engine but the fast ones gives both kinds, the non-native one derived from its pairing
+by `Involution` (`rules/engines.md`). `Chunks`/`Naive` reduce every top cell (#51). A truncated stream's own degree
+(`homologyDegreeLimit`) is the default for streams.
 `WORKLOG-default-degree-2.md`, `WORKLOG-involution.md`.
 
 **Zero-length bars are dropped by default** (project lead: seeing them is the opt-in, never hiding them): every engine,
-the verb, MATLAB and the CLI take `includeZeroLength` (default `false`); short bars are one call away
-(`longerThan(x)`, `significant()`, also on `List[PersistenceBar]` with no import). Tests must not use `#bars == #cells` as
-an oracle unless they opt in; check the ordering contract or the actual barcode (`rules/facade.md`, `rules/streams.md`). `Input` is an `into` type: one `apply` with defaults covers every input. `VietorisRips`/`Cech`/`AlphaShapes` implement
+the verb, MATLAB and the CLI take `includeZeroLength` (default `false`; `rules/engines.md`). Tests must not use
+`#bars == #cells` as an oracle unless they opt in; check the ordering contract or the actual barcode (`rules/facade.md`, `rules/streams.md`). `Input` is an `into` type: one `apply` with defaults covers every input. `VietorisRips`/`Cech`/`AlphaShapes` implement
 `PointCloudComplex` and double as the `complex` choice. **Default field: `FiniteField.DefaultPrime = 17`** (project
 lead: never F₂ by default -- it hides signs and odd torsion); also the MATLAB/CLI default. The verb runs to the end;
 long runs use an engine's **cursor**, which is kept on purpose: `advanceFor(budget)`, `processedCells`/`totalCells`,
@@ -229,8 +219,8 @@ anything may). `WORKLOG-openness-audit.md`.
   (`rules/cubical.md`). No nulls. Equality: formal sums by `field.isEqual` (an `Fp` has several `Int` forms), order-blind.
   Defines `reduceBy`/`reduceByUntil` (with an optional `fallback` for pivots needing on-the-fly substitution) and
   a `RingModule` instance. `reduceLoop` uses a `mutable.TreeMap` accumulator (use `z.head`, not `headOption`, which
-  allocates an iterator on `mutable.TreeMap`). Known footgun, not fixed: `Chain` overrides `equals` without a
-  matching `hashCode` — don't put `Chain`s in a `Set`/`Map` key.
+  allocates an iterator on `mutable.TreeMap`). `Chain` has `equals` without a matching `hashCode`
+  (#58): never a `Set`/`Map` key.
 - `Cell`/`OrderedCell`/`OrderedBasis`: anything with a `boundary` and a total order plugs into homology. Concrete
   instances: `Simplex`, `Cube`, `FiniteSimplicialSet` generators.
 - `Cocell`/`OrderedCocell` were **removed on purpose**: coboundary is extrinsic (depends on the ambient complex),
@@ -264,7 +254,7 @@ file before changing that subsystem; this table is the index, in case a rule did
 | `rules/alpha.md` | alpha complexes (DQP, Helix, fast alpha) | `alpha/`, alpha files |
 | `rules/facade.md` | MATLAB facade, CLI, file I/O, the persistence threshold (which bars are reported) | `matlab/`, `cli/`, `io/` |
 | `rules/docs-and-tutorials.md` | docs site, tutorial pages (the docs are the tests), language tabs | `_docs/`, tutorial specs, `build.sbt` |
-| `rules/plotting.md` | the `tda4j-plot` add-on: scene model, palette and themes, live viewer, gallery screenshots | `plot/` |
+| `rules/plotting.md` | the `plot` subpackage: scene model, palette and themes, live viewer, gallery screenshots | `plot/` (main and test) |
 
 ## Session practices
 
@@ -287,12 +277,15 @@ file before changing that subsystem; this table is the index, in case a rule did
 - Performance claims need isolated A/B measurement (`git stash` A/B, median of trials, one engine per JVM);
   machine noise here often exceeds small effects — report unconfirmed effects as unconfirmed.
 - **Finalizing a user-visible capability** (new complex, engine, or option) means checking four surfaces each
-  session that lands a chunk of it: (1) `matlab.TDA4j` dispatch, (2) `cli.TDA4jCLI`/`TDA4jConf` (1:1 mirror),
-  (3) `_docs/developers-guide/` (`persistence-engines.md`, `architecture.md`, `class-diagrams.md`),
-  (4) `_docs/user-guide/`. Internal refactors and bug fixes with no new surface are exempt.
+  session that lands a chunk of it: `matlab.TDA4j`, `cli.TDA4jConf` (1:1 mirror), `_docs/developers-guide/`,
+  `_docs/user-guide/`. Internal refactors and bug fixes with no new surface are exempt.
+- **Open items are GitHub issues** (project lead, 2026-10-11; labels and workflow in `CONTRIBUTING.md`): a question,
+  limitation or unverified claim a session leaves gets an issue, linked from its worklog and PR; a user-visible change
+  gets a `CHANGELOG.md` line under Unreleased.
 - A cloud session (working on its own `claude/...` branch) may commit and push its own work to that branch at
   will, without asking first — the branch is disposable/session-scoped, not shared history. A local/interactive
   session working directly on a shared branch still waits to be asked; the project lead commits that work.
+- **Driving a PR to green** (CI jobs and their local equivalents, how proactive to be): `.claude/skills/steward/SKILL.md`.
 - **A bug found in a paper or reference implementation** goes in `.claude/BUGS-IN-REFERENCES.md` (flat, never condensed
   away): state exactly what was verified, and claim nothing end-to-end without a repro that shows it.
 

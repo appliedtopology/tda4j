@@ -114,6 +114,33 @@ companion-object extension can still lose to a same-named stdlib extension reach
 at some call site (`min`/`max` deliberately stay top-level extensions on `Simplex` for exactly this reason,
 to avoid losing to `scala.math.Ordering.Implicits`).
 
+## 10. No top-level `object` or `class` with a non-ASCII name
+
+scaladoc writes one page file per top-level type, named after it (`∆$.html`).
+A JVM running under a POSIX locale cannot encode that file name, and `sbt doc`
+dies with an `InvalidPathException`. `∆` is therefore a `val` alias of
+`Simplex`'s companion, not an object of its own. Unicode extension methods and
+`val`s are fine.
+
+## 11. `Chain` equality has no matching `hashCode`
+
+Two chains are equal when they are the same formal sum: the same cells, with
+coefficients equal by the field's `isEqual`, in any order. `hashCode` is not
+consistent with this. Never use a `Chain` as a key of a `Set` or `Map`.
+
+## 12. Sign errors hide: test over a signed field, and mutate signs unevenly
+
+Over `F_2` every sign is `+1`, so a sign error cannot change any answer. Test
+boundaries, representatives and reductions over `F_3` or another odd prime as
+well; agreement between `F_2` and `F_3` is a cheap sign check.
+
+Signed fixtures need at least five vertices: Scala's small sets keep insertion
+order up to four elements, so a hash-ordered bug shows only from the fifth.
+
+Flipping the sign of every coboundary at once changes no output, since it is a
+real symmetry. A mutation test of sign handling must flip some signs and not
+others.
+
 ## Process: validate empirically, not by inspection
 
 Every substantive design decision in this codebase's persistence-engine work (pivot orientation, whether

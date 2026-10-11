@@ -31,6 +31,12 @@ rejected). Remove the pin when 3.9.1 releases.
 sc:nocompile`). A failing snippet fails `sbt doc` with page:line. `WORKLOG-doc-snippets-compile.md`. Cross-links use
 scaladoc's `[[org.appliedtopology.tda4j.Foo]]`/relative `.md` links.
 
+**Mermaid fences** (` ```mermaid `, the class diagrams) render on the site through `_layouts/main.html`: on a page that has
+one it loads mermaid (pinned version, jsdelivr; 2.5 MB, so only there), draws each `pre > code.language-mermaid` in the
+site's light or dark theme (redrawn when the reader switches), and sizes it to the column down to 70% of natural size
+(wider: 70% and a sideways scroll; mermaid's own `useMaxWidth` does not reach class diagrams). Offline, the source stays.
+`sbt doc` does not parse diagrams: check a new one with `mermaid.parse` (headless Chromium + the npm package).
+
 **Tutorial pages** (`_docs/tutorials/`, `WORKLOG-tutorial-pages.md`): compute first, write second — run the code, read the output, then write
 the prose around what you saw; if a dataset does not show the intended effect, change the dataset, never the claim. **The docs ARE the tests** (`WORKLOG-tutorial-docs-as-tests.md`): `build.sbt`'s `Test / sourceGenerators` copies each page's
 `## The whole script` fence (the first `scala` fence after that heading) into a generated `object <Page>Script` (package `tutorial`) and

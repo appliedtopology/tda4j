@@ -1,5 +1,4 @@
-// Maven Central metadata. Build-wide (`ThisBuild`) so every published module (`tda4j`, `tda4j-plot`) carries the same
-// POM fields, stages into the same bundle and uses the same credentials; each module sets its own `description`.
+// Maven Central metadata for the published `tda4j` artifact (build-wide, `ThisBuild`).
 ThisBuild / publishMavenStyle := true
 
 ThisBuild / organizationName := "Applied Topology"
