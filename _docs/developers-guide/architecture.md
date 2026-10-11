@@ -28,20 +28,24 @@ Its source directories are file organization only (they are not packages), and e
 - **`barcode/`** — `Barcode`, `PersistenceBar`, `BarcodeEndpoint`, distances and vectorizations.
 - **`alpha/`** — `AlphaShapes` (`BowyerWatsonDelaunay`/`HelixDelaunay`, both `DelaunayAlphaShapes`; `AlphaShapeDQP`), `AlphaComplexDQP`, `DelaunayPredicates`.
 - **`io/`** — file-format adaptors: `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
-- `package.scala` — `TDAlab`, the pylab-style user-facing Scala entry point.
+- `package.scala` — the labs (`Lab`, `TDAlab`, `CubicalLab`) for writing chain algebra by hand. The `Persistence`
+  verb is in `homology/Persistence.scala`; both are on [The public API](public-api.md).
 
 Outside the core:
 
 - **`sset`** (`org.appliedtopology.tda4j.sset`, an opt-in add-on) — simplicial sets (`SimplicialSet`,
   `FiniteSimplicialSet`, `SSetElement`, `SSetMap`, `CupProduct`, `Steenrod`, `FundamentalGroup`, `BettiNumbers`, the
-  simplicial-set streams) and group classifying spaces (`FiniteGroup`, `ClassifyingSpace`). It depends on the core;
+  simplicial-set streams), nerves of monoids and finite categories (`FiniteMonoid`, `FiniteCategory`, `CategoryNerve`),
+  and group classifying spaces (`FiniteGroup`, `ClassifyingSpace`, `CollapsedNerve`; see
+  [Nerves and group homology](nerves.md)). It depends on the core;
   the core never uses it (except `TDAlab`, which re-exports it).
 - **`cli`** — the `tda4j` executable (`TDA4jConf`, `TDA4jCLI`), a thin translator over `matlab.TDA4j`.
 - **`matlab`** — `TDA4j`/`PersistenceResult`/`LandmarkSelectionResult`, the plain-primitives facade for MATLAB and
   other Java callers.
 - **`plot`** (`org.appliedtopology.tda4j.plot`, its own sbt project in `plot/`, artifact `tda4j-plot`) — plots of
   barcodes, diagrams, images, complexes and representatives as SVG and 3-D pages, and a live browser viewer. It depends
-  on the core's public API only and adds no dependency to it. See [Plotting](../user-guide/plotting.md).
+  on the core's public API only and adds no dependency to it. See [Plotting](../user-guide/plotting.md) for its use and
+  [The plot add-on](plotting.md) for its internals.
 
 **Load-bearing rule for givens**: the core package has no top-level `given`s. Default instances live in the companion
 of the data type they serve (`object Simplex` holds `Simplex[V] is OrderedCell`, the `Ordering` derived from it and
@@ -197,6 +201,37 @@ StratifiedCellStream[CellT, FiltrationT] -- adds iterateDimension: dimension-by-
 - `StratifiedCellStream.iterateDimension`'s domain must be contiguous from `0` (defined for `0, ..., k` or
   all of ℕ, never with a gap) — the default `.iterator` stops at the first dimension it's undefined for.
 
+### Building a stream by hand
+
+`FiltrationOrdering.canonical(filtrationValue, dim, tieBreak)` builds the
+order every stream uses:
+- filtration value, reversed;
+- then dimension;
+- then the tie-break (colex for Vietoris-Rips).
+
+Use it rather than writing a comparator. Reverse only the filtration value:
+`.reverse` on a whole ascending ordering also flips the dimension tie-break.
+Sort each dimension's bucket with the same object,
+`.sorted(using filtrationOrdering.reverse)`.
+
+`ExplicitStreamBuilder` (`streams/SimplexStream.scala`) builds a finite stream
+from a list:
+- `fromFacets(facets)` puts every cell at `0`;
+- `fromFilteredFacets((value, facet)*)` closes a list of maximal cells under
+  faces, and an unlisted face enters with the earliest cell containing it.
+
+The result, an `ExplicitStream`, is stratified, so the verb and every engine
+take it. This is the tool for test fixtures and for complexes that come from
+outside the library.
+
+**A truncated stream says so.** `VietorisRips(..., maxDimension = k)`, the
+other dispatchers, `Truncated` and `LimitedCofaceSimplexStream` report
+`homologyDegreeLimit = Some(k)`. Such a stream holds cells up to dimension
+`k + 1`, so its unfilled top cells would look like essential classes of
+degree `k + 1`. The verb reads this limit, and complete complexes report
+`None`. A new truncating wrapper must override it, taking the minimum with the
+stream it wraps.
+
 ### Vietoris-Rips: several independent generation strategies
 
 These are **alternate engines with the same output contract, not layers on one another** — check which
@@ -243,7 +278,9 @@ value, and every lower-dimensional cube's value is the `min` over the top cells 
 directly via the cartesian product over the cube's degenerate axes rather than a recursive coface walk.
 `CubicalImage` builds these from images/voxel grids (`fromFlatArray`/`fromBufferedImage`/`fromFile`/
 `fromVoxelGrid3D`); sublevel vs. superlevel filtration is handled by negating values on load, not as a flag
-on the stream itself. `CubicalHomologyEngine` is a one-line `Cube`-specialized wrapper around
+on the stream itself. An image with a NaN value is refused, naming the pixel, when its values are first read:
+NaN has no place in the order. Mask a pixel with `+Infinity` (`-Infinity` for a superlevel image, which is negated
+on load). `CubicalHomologyEngine` is a one-line `Cube`-specialized wrapper around
 `CellularHomologyEngine` — cubical complexes needed no new engine code, only a new `OrderedCell` instance.
 
 #### Dual union-find cubical engine (Flash Cubical)
@@ -311,6 +348,9 @@ and the Steenrod squares over F₂. `Nerve`/`ClassifyingSpace` (`ClassifyingSpac
 lazy `SimplicialSet` trait for the infinite nerve of a finite group. None of this has a MATLAB or CLI entry point (a
 simplicial set needs its own input encoding), and every construction is checked against homology computed by hand
 over F₂ and F₃ rather than by `validate()` alone.
+
+Nerves of monoids and finite categories, persistent group homology and Brown's
+collapse are on their own page: [Nerves and group homology](nerves.md).
 
 ### Cech complexes
 
@@ -452,6 +492,29 @@ that functional — do not apply. `naive`/`chunks`/`cohomology` all consume it l
 [Persistence engines](persistence-engines.md)'s own streams-vs-engines table for the full picture across every
 construction, not just this one.
 
+### DTM filtrations
+
+`DistanceToMeasure` (`streams/DistanceToMeasure.scala`) gives each point a
+weight `f(x)`, the `q`-mean of its distances to its `k` nearest neighbours
+(`q = 2` by default; as in GUDHI, `x` counts among them). Two complexes use
+the weights.
+
+**`DtmRips`** (`DtmRipsSimplexStream`) is the weighted Rips filtration of Anai
+et al. (arXiv:1811.04757): a flag complex on weighted pairwise values, with
+vertex `x` born at `2 f(x)`. It reifies the weighted distances as a
+`FiniteMetricSpace` and reuses `RipserCofaceSimplexStream`'s coface loop.
+- **Exponents:** `p = 1` matches GUDHI's `DTMRipsComplex`, and `p = 2` is the
+  ball equation of the paper.
+- **Vertex order:** the vertices are not born at 0, so the stream sorts
+  dimension 0 itself; the inherited case would emit them unsorted.
+- **Engines:** for the same reason the packed Ripser engine does not apply, and
+  the generic engines consume it.
+
+**DTM alpha** (`AlphaComplexDQP.dtm`) is the weighted alpha complex with
+weights `-f(x)^2`, built by the DQP backend, which takes power weights. Its
+degree-0 bars agree with `DtmRips(..., p = 2.0)` once alpha values are
+converted to diameters.
+
 ### Flag-complex edge collapse
 
 `streams/EdgeCollapseStream.scala` (`EdgeCollapse.collapse`, `.claude/WORKLOG-edge-collapse.md`) implements
@@ -507,6 +570,11 @@ worklog for the full table and the source-level reasoning behind the split.
 matrix), `EuclideanMetricSpace` (coordinate array, on-demand Euclidean distance, VP-tree-backed `neighbors`
 query), `IntMetricSpace` (reindexes to contiguous `0 until size`), `SparseMetricSpace` (reports `+Infinity`
 beyond a fixed diameter cutoff, bounding Vietoris-Rips construction to a finite neighborhood per point).
+
+`EuclideanMetricSpace` caches every pairwise distance only up to 8192 points;
+above that, or with `cacheDistances = false`, it computes them on demand.
+Never collect every pairwise distance into a collection: at 50,000 points that
+is over a billion values.
 
 > **Warning.** `SparseMetricSpace` reports `+Infinity` past its cutoff rather than excluding those pairs — it is not a
 > thresholded neighbor oracle. Code that queries it expecting "unreachable" to mean "absent" will instead get
@@ -694,21 +762,3 @@ them — logged there specifically so they stay easy to find across sessions.
 same reasoning as `circularCoordinates` above; deliberately not mirrored on the CLI either, for the same
 reasons plus the fact that `cocycleIndices` is itself a small array, awkward to fit the CLI's existing
 single-value-flag conventions.
-
-```scala 3
-import language.experimental.modularity
-import org.appliedtopology.tda4j.TDAlab
-
-val tdalab = TDAlab(0)          // 0 = Double coefficients; a prime p = Z/p
-import tdalab.{*, given}
-val chain = Fp(1) ⊠ ∆(1, 2) - ∆(2, 3)       // a Chain
-```
-
-`TDAlab(characteristic, precision = 1e-9)` (root `package.scala`) is the pylab-style entry point: instantiate it
-once, then `import tdalab.{*, given}`. That brings into scope `Fp(...)` coefficients of the chosen field, the
-chain-arithmetic operators (`+`, `-`, `⊠`, ...), `∆`/`Simplex`/`Cube` literals, an implicit
-`Simplex -> Chain` conversion so `∆(1,2) - ∆(2,3)` works directly, and `cats` `Show` syntax (`.show`). Vertices are
-fixed to `Int`. It deliberately does **not** extend or wrap an engine: engines are constructed explicitly
-(e.g. `SimplicialHomologyEngine[Int, Double, Double]()`, see [Persistence engines](persistence-engines.md)). It
-is the basis for the [Tutorials](../tutorials/index.md) and the [User's Guide](../user-guide/index.md)'s Scala
-quick-start.

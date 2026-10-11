@@ -19,8 +19,11 @@ subsection:
     subsection:
       - page: developers-guide/scala3-primer.md
       - page: developers-guide/architecture.md
+      - page: developers-guide/public-api.md
       - page: developers-guide/persistence-engines.md
       - page: developers-guide/alpha-complex.md
+      - page: developers-guide/nerves.md
+      - page: developers-guide/plotting.md
       - page: developers-guide/degeneracies.md
       - page: developers-guide/gotchas.md
       - page: developers-guide/class-diagrams.md

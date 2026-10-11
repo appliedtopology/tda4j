@@ -148,7 +148,7 @@ on the next line — order matters, and it isn't stylistic.
 ## What to read next
 
 [Architecture](architecture.md) walks the algebraic core and complex-construction layers using the
-concepts above; [Persistence engines](persistence-engines.md) covers the four homology algorithms and
+concepts above; [Persistence engines](persistence-engines.md) covers the homology algorithms and
 their trust status; [Hard-won invariants](gotchas.md) is the concentrated list of non-obvious rules (like
 the `given`-timing one above) that this codebase depends on and that are easy to violate even once you
 know they exist.
