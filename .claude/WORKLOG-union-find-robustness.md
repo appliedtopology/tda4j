@@ -132,3 +132,26 @@ Each cell lists the per-JVM medians in ms, then the median of those three:
 | heap | robust | lazy |
 |---|---|---|
 | 256 MB | `OutOfMemoryError` | 675 ms |
+| 512 MB | `OutOfMemoryError` | 1014 ms (an sbt lint check was running at the same time) |
+| 1 GB | 16,355 ms | 667 ms |
+
+At 800 points the eager variant needs more than 512 MB just for representatives that `diagramAt` never reads. At 1 GB
+it is 25× slower than lazy, against 30× at 500 points. These are single cold runs, so the times are rough; the
+out-of-memory rows are the discriminating result.
+
+**Where it does not help.** On Vietoris-Rips with `maxDim = 1`, the general reduction of the triangles dominates:
+- 50 points take about 1.6 s and 70 points about 13 s, for `diagramAt` and `barcodeAt` alike.
+- The eager edge pass on 1–2k edges is milliseconds of that.
+
+When every degree-1 bar is reported (with `includeZeroLength`), lazy does the same work as eager plus one memo lookup per
+bar. There is no measured regression in any case.
+
+**Conclusion: keep it.** It helps exactly where union-find is the whole job: `maxDim = 0` (single linkage), `diagramAt`,
+and large edge counts with few reported degree-1 bars. There, it takes off about 30× on VR, 1.7× on a tree, and the
+memory that made 800 points fail at 512 MB. Everywhere else it is neutral. The representatives are the same chains.
+
+**Noticed, not pursued:** with `maxDim = 1`, chunks takes 13 s on 70 VR points (40,517 cells), which is superlinear from
+50 points (13,728 cells, 1.6 s). CLAUDE.md already records that Chunks and Naive reduce every top cell. `Auto` never
+picks chunks for VR (it picks Ripser), so this matters only to callers who choose chunks.
+
+The worktree used for the A/B was removed afterwards.
