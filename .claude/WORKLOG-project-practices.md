@@ -143,3 +143,25 @@ Not filed:
   - the "open items are issues" rule;
   - the CI paragraph condensed to a pointer at the steward skill, to stay roughly at its size;
   - it is still about 25.8k characters, over the ~25k budget, as before this arc.
+
+## Addendum: review fixes
+
+- **Dependabot's `sbt` ecosystem, confirmed from primary sources** rather than a summarized page:
+  - `sbt` is in SchemaStore's `package-ecosystem` enum (`json.schemastore.org/dependabot-2.0.json`);
+  - the raw docs page has an `id="sbt"` section;
+  - `dependabot.yml` validates against that schema with `jsonschema`.
+- **The hook skips merge commits** (`MERGE_HEAD` present). A merge stages everything the other branch changed, so a
+  misformatted base would block the merge-then-`Format:`-commit flow that CONTRIBUTING.md and the steward skill ask
+  for. Tested in a scratch clone: a conflicted merge with a misformatted base commits with a note, and an ordinary
+  commit of a misformatted file is still blocked.
+- **Issue fixes:**
+  - #51 named a non-existent `PersistenceInChunks.scala`; the engine is in `homology/Homology.scala`.
+  - #65 now states only what was observed: the tag on ed72777, and the release page.
+  - #66 now carries the stale-package facts and the expected conflicts, checked on the branch: `architecture.md` lines
+    16, 37–38 and 97–99 still teach subpackages and `{given, *}`.
+  - #68 named the right component (`HelixDelaunayBuilder`) but cited `requireValidTriangulation` (a flag) as the
+    repair; it now names `looksValid`, `interiorVoidVertices` and `repairByJitterRetriangulation`.
+- **CLAUDE.md is back to 25.0k characters:**
+  - the engine detail already in `rules/engines.md` became pointers;
+  - the `Chain` hashCode footgun points to #58;
+  - the package-layout list was trimmed of instance file names.

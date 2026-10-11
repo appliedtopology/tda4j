@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **How this file works.** Each entry is a current rule, invariant, or known limitation, plus a pointer to the
 `.claude/WORKLOG-*.md`/`DESIGN-*.md` that holds its derivation (what was tried, measurements, repros). Derivations
-go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes"). Last condensed 2026-10-11 (CI detail to the steward skill); 2026-10-10 (lab detail to `rules/labs.md`); 2026-10-09; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md` (and the commits named there).
+go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes"). Last condensed 2026-10-11 (CI detail to the steward skill, engine detail to `rules/engines.md`); 2026-10-10 (lab detail to `rules/labs.md`); 2026-10-09; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md` (and the commits named there).
 
 ## What this is
 
@@ -33,24 +33,18 @@ the 2026-09 subpackage split it replaced is `WORKLOG-package-reorg.md`). Everyth
 in `org.appliedtopology.tda4j` itself, so users write `import org.appliedtopology.tda4j.*` (no `given` selector needed,
 see "Givens" below). The core's source directories are **file organization only, not packages**:
 
-- `algebra/` — `RingModule`, `Field`, `FiniteField`, `Chain`, the `Cell`/`OrderedCell`/`OrderedBasis` contracts,
-  `LinearAlgebra` (dense, small complexes).
-- `cells/` — `Simplex`/`SimplexOps`/`SimplexOrderedCell` (+ `SimplexInstances`), `Cubical`/`CubicalOrderedCell`
-  (+ `CubeInstances`).
+- `algebra/` — `RingModule`, `Field`, `FiniteField`, `Chain`, `Cell`/`OrderedCell`/`OrderedBasis`, `LinearAlgebra`.
+- `cells/` — `Simplex`, `Cube` and their `OrderedCell` instances.
 - `streams/` — streams, metric spaces, `PointCloud`, the dispatchers (`VietorisRips`, `Cech`, `Witness`, `Dowker`,
-  `DtmRips`, `SparseRips`, `Truncated`; `DESIGN-stream-naming.md`), cubical streams/images, `UnionFind`/`Kruskal`.
-- `homology/` — the engines (naive `CellularHomologyEngine`, chunks, cohomology, Ripser, fast cubical/alpha),
-  `Persistence` (the verb), `CircularCoordinates`, `LatticeReduction`. Streams never use engines (convention only).
-- `barcode/` — `Barcode`, `PersistenceDiagram`, `PersistenceFilter`, distances, vectorizations. `alpha/` — `AlphaShapes`
-  (+ `AlphaBackend`), `BowyerWatsonDelaunay` (default up to 4-D), `HelixDelaunay`, `AlphaComplexDQP`. `io/` — `CSV`, `Ripser`, `Dipha`, `Gudhi`, `Perseus`.
-- root `package.scala` — `TDAlab` (below).
-- **add-on `sset`** (`import org.appliedtopology.tda4j.sset.*`, directory `sset/`) — simplicial sets (the Sage-parity
-  layer), nerves of groups, monoids and finite categories (persistent group homology, library-only), `BettiNumbers`,
-  simplicial-set streams.
-  Depends on the core; the core uses it only through `TDAlab`'s generated re-exports. `rules/simplicial-sets.md`.
-- subpackages `matlab` (MATLAB facade) and `cli` (`TDA4jConf`/`TDA4jCLI`, thin translator over `matlab.TDA4j`) — leaves.
-- subpackage `plot`: plots and a live browser viewer, no dependencies, a leaf like `matlab`/`cli` (was its own sbt
-  project; `WORKLOG-plot-into-core.md`). A plot feature needing a library goes in a new module. `rules/plotting.md`.
+  `DtmRips`, `SparseRips`, `Truncated`; `DESIGN-stream-naming.md`), cubical images, `UnionFind`/`Kruskal`.
+- `homology/` — the engines, `Persistence` (the verb), `CircularCoordinates`, `LatticeReduction`. Streams never use
+  engines (convention only). `barcode/` — diagrams, filters, distances, vectorizations. `alpha/` — `AlphaShapes`
+  (+ `AlphaBackend`), the Delaunay backends, `AlphaComplexDQP`. `io/` — file formats. Root `package.scala` — `TDAlab`.
+- **add-on `sset`** (`import org.appliedtopology.tda4j.sset.*`) — simplicial sets (the Sage-parity layer), nerves of
+  groups, monoids and finite categories (persistent group homology, library-only). Depends on the core; the core uses
+  it only through `TDAlab`'s generated re-exports. `rules/simplicial-sets.md`.
+- leaf subpackages: `matlab` (facade), `cli` (thin translator over `matlab.TDA4j`), `plot` (plots and a live viewer,
+  no dependencies; a feature needing a library goes in a new module; `rules/plotting.md`, `WORKLOG-plot-into-core.md`).
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
   sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
   `sbt doc` checks that doc fences resolve from outside.
@@ -121,16 +115,14 @@ that line a plain downstream project needs nothing else, `into` conversions incl
 `longest`, `longerThan(x)`, `significant()`, `bettiNumbers`) out. **Default: degrees 0..2, cycles**;
 `representatives = Representatives.Cycles | Cocycles` (MATLAB `representativeType`, CLI `--representative-type`).
 `Auto` = Ripser for `VietorisRips` on points/metric space, `FastCubical` for images of dimension >= 2 (cycles only),
-`Cohomology` otherwise. Every engine but the fast ones gives both kinds: its native kind (cocycles for Ripser/
-Cohomology, cycles for Chunks/Naive/FastCubical) and the other derived from its pairing by `Involution` (reduce only
-death columns, or birth coboundaries; every pivot checked). `Chunks`/`Naive` reduce every top cell (VR/Cech H2 on
-~100 points: minutes or OOM). A truncated stream's own degree (`homologyDegreeLimit`) is the default for streams.
+`Cohomology` otherwise. Every engine but the fast ones gives both kinds, the non-native one derived from its pairing
+by `Involution` (`rules/engines.md`). `Chunks`/`Naive` reduce every top cell (#51). A truncated stream's own degree
+(`homologyDegreeLimit`) is the default for streams.
 `WORKLOG-default-degree-2.md`, `WORKLOG-involution.md`.
 
 **Zero-length bars are dropped by default** (project lead: seeing them is the opt-in, never hiding them): every engine,
-the verb, MATLAB and the CLI take `includeZeroLength` (default `false`); short bars are one call away
-(`longerThan(x)`, `significant()`, also on `List[PersistenceBar]` with no import). Tests must not use `#bars == #cells` as
-an oracle unless they opt in; check the ordering contract or the actual barcode (`rules/facade.md`, `rules/streams.md`). `Input` is an `into` type: one `apply` with defaults covers every input. `VietorisRips`/`Cech`/`AlphaShapes` implement
+the verb, MATLAB and the CLI take `includeZeroLength` (default `false`; `rules/engines.md`). Tests must not use
+`#bars == #cells` as an oracle unless they opt in; check the ordering contract or the actual barcode (`rules/facade.md`, `rules/streams.md`). `Input` is an `into` type: one `apply` with defaults covers every input. `VietorisRips`/`Cech`/`AlphaShapes` implement
 `PointCloudComplex` and double as the `complex` choice. **Default field: `FiniteField.DefaultPrime = 17`** (project
 lead: never F₂ by default -- it hides signs and odd torsion); also the MATLAB/CLI default. The verb runs to the end;
 long runs use an engine's **cursor**, which is kept on purpose: `advanceFor(budget)`, `processedCells`/`totalCells`,
@@ -227,8 +219,8 @@ anything may). `WORKLOG-openness-audit.md`.
   (`rules/cubical.md`). No nulls. Equality: formal sums by `field.isEqual` (an `Fp` has several `Int` forms), order-blind.
   Defines `reduceBy`/`reduceByUntil` (with an optional `fallback` for pivots needing on-the-fly substitution) and
   a `RingModule` instance. `reduceLoop` uses a `mutable.TreeMap` accumulator (use `z.head`, not `headOption`, which
-  allocates an iterator on `mutable.TreeMap`). Known footgun, not fixed: `Chain` overrides `equals` without a
-  matching `hashCode` — don't put `Chain`s in a `Set`/`Map` key.
+  allocates an iterator on `mutable.TreeMap`). `Chain` has `equals` without a matching `hashCode`
+  (#58): never a `Set`/`Map` key.
 - `Cell`/`OrderedCell`/`OrderedBasis`: anything with a `boundary` and a total order plugs into homology. Concrete
   instances: `Simplex`, `Cube`, `FiniteSimplicialSet` generators.
 - `Cocell`/`OrderedCocell` were **removed on purpose**: coboundary is extrinsic (depends on the ambient complex),
