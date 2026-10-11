@@ -43,7 +43,7 @@ in every clone; CI's lint job checks every pull request either way. Editors that
 | `TDA4J_SCALA_VERSION=3.8.4 sbt doc` | the docs site, with every Scala fence compiled (run `sbt shutdown` first; see Documentation) |
 | `sbt mimaReportBinaryIssues` | binary compatibility against the earlier releases of the series |
 | `sbt assembly` | the fat jar the CLI and MATLAB use |
-| `sbt "set Global / cacheStores := Nil ; clean ; coverage ; testFull ; coverageReport"` | statement and branch coverage, a map of what no spec exercises (the report is in `target/out/jvm/scala-3.9.0/tda4j/scoverage-report`); then `sbt shutdown` and `sbt clean`. The disk cache must be off: sbt 2 would restore instrumented classes without the directory they record into |
+| `sbt "set Global / cacheStores := Nil ; clean ; coverage ; testFull ; coverageReport"` | statement and branch coverage, a map of what no spec exercises (the report is in `target/out/jvm/scala-3.9.0/tda4j/scoverage-report`; the weekly `coverage.yml` run sends it to [Codecov](https://app.codecov.io/gh/appliedtopology/tda4j)); then `sbt shutdown` and `sbt clean`. The disk cache must be off: sbt 2 would restore instrumented classes without the directory they record into |
 | `sbt -DrunBenchmarks=true "testOnly *BenchmarkSpec"` | the benchmark specs, which CI skips |
 
 **Never run two sbt processes against one checkout at once.** One can read the other's class files mid-write, and the

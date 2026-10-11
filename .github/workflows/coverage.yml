@@ -1,8 +1,9 @@
 name: Coverage
 
 # Statement and branch coverage of the test suite, as a map of what the specs never exercise, not a gate: no threshold
-# fails it. Weekly and on demand only, since instrumentation makes the test run slower; the HTML report is uploaded as
-# an artifact and the least-covered files are listed in the run's summary. The same command runs locally,
+# fails it. Weekly and on demand only, since instrumentation makes the test run slower; the report goes to Codecov
+# (https://app.codecov.io/gh/appliedtopology/tda4j, history and per-file views), the HTML report is uploaded as an
+# artifact, and the least-covered files are listed in the run's summary. The same command runs locally,
 # then `sbt shutdown` and `sbt clean`: instrumented classes must not reach a jar or the docs. The disk cache
 # is turned off for the run because sbt 2 restores instrumented classes from it without the scoverage-data directory
 # they write to, and every instrumented call then fails with FileNotFoundException (seen on a second local run).
@@ -18,6 +19,7 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    environment: codecov # holds the CODECOV_TOKEN secret
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -31,7 +33,9 @@ jobs:
       - name: Run the tests with coverage
         run: sbt "set Global / cacheStores := Nil ; clean ; coverage ; testFull ; coverageReport"
       - name: Summarize
+        id: report
         run: |
+          echo "cobertura=$(ls target/out/jvm/scala-*/tda4j/coverage-report/cobertura.xml)" >> "$GITHUB_OUTPUT"
           report=$(ls -d target/out/jvm/scala-*/tda4j/scoverage-report)
           python3 - "$report/scoverage.xml" >> "$GITHUB_STEP_SUMMARY" <<'EOF'
           import sys, xml.etree.ElementTree as ET
@@ -48,6 +52,14 @@ jobs:
           for rate, n, name in rows[:20]:
               print(f"| `{name}` | {rate * 100:.1f}% | {n} |")
           EOF
+      # File paths in the report are relative to src/main/scala; codecov.yml's `fixes` maps them to the repository.
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ steps.report.outputs.cobertura }}
+          disable_search: true
+          fail_ci_if_error: true
       - name: Upload the HTML report
         uses: actions/upload-artifact@v4
         with:
