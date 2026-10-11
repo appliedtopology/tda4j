@@ -99,3 +99,36 @@ make it about 33× slower. On the tree, half of the time is `pathFromRoot`. The 
 **Next step:** build these representatives lazily, only when `barcodeAt` asks for a degree-1 representative, memoized and
 with the same construction. Measure `diagramAt`, `barcodeAt`, and a `maxDim = 1` run end to end before deciding to keep
 it.
+
+## Addendum (same day, later): lazy degree-1 representatives (8ef85c6), measured
+
+**The change.** `unionFindDim01` now keeps the spanning forest: `forestVertices`, `forestParent`, and `treeEdges`, which
+moved from locals to fields. `pathFromRoot` is a `lazy val` with the same BFS as before. `degreeOneRepresentative(edge)`
+memoizes into `essentialRepresentatives`:
+- `treePathCycle(edge)`, the edge minus the tree paths to its ends (or the edge itself when its boundary is zero);
+- `vcolOf(edge)` after union-find's fallback.
+
+`barcodeAt` uses it for finite degree-1 pivots and for essential degree-1 cells. Union-find itself now records only
+degree-0 representatives. The construction is unchanged, so the representatives are the same chains. 170 engine and
+sset specs pass, including the irregular-edge examples and the involution and query-contract specs.
+
+**The A/B.**
+- The two jar sets are robust (2e137d5) and lazy (8ef85c6). They were built in the worktree and copied apart, so the JVM
+  runs could be interleaved, robust then lazy, workload by workload.
+- The driver is `UnionFindEdgeDriver`, extended with two arguments: `query` (`diagram` or `barcode`) and `maxDim`.
+- Each JVM does 2 warm-ups and 5 timed runs and reports the median; there are 3 JVMs per cell.
+
+Each cell lists the per-JVM medians in ms, then the median of those three:
+
+| workload | robust (eager) | lazy |
+|---|---|---|
+| tree, 200k edges, `diagramAt`, maxDim 0 | 2572, 2565, 2635 → 2572 | 1531, 1630, 1430 → 1531 |
+| VR, 500 points, `diagramAt`, maxDim 0 | 4702, 4838, 4789 → 4789 | 153, 177, 157 → 157 |
+| VR, 500 points, `barcodeAt`, maxDim 0 | 4737, 4956, 4769 → 4769 | 153, 151, 145 → 151 |
+| VR, 50 points, `barcodeAt`, maxDim 1 (13,728 cells, 60 bars) | 1823, 1627, 1628 → 1628 | 1614, 1663, 1785 → 1663 |
+
+**Memory.** VR on 800 points (228,028 edges), `diagramAt`, maxDim 0, one cold run per heap size:
+
+| heap | robust | lazy |
+|---|---|---|
+| 256 MB | `OutOfMemoryError` | 675 ms |

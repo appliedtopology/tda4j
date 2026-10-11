@@ -505,8 +505,7 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
               // CellularHomologyEngine's own `cycles` map holds at dimension 0
               // (`cycles.addAll(stream.iterateDimension(0).map(cell => cell -> Chain(cell)))`). Matching that
               // exactly, not just storing SOME valid cycle, is what makes this trustworthy enough to expose via
-              // barcodeAt -- see .claude/CLAUDE.md's coefficients-and-representatives design principle and
-              // barcodeAt's own doc below for the current scope boundary (dimension 0 only, for now).
+              // barcodeAt -- see .claude/CLAUDE.md's coefficients-and-representatives design principle.
               barcode(0) = barcode.getOrElse(0, immutable.Queue.empty).appended((lower, upper, Chain(dyingVertex)))
         }
         if !dim01ByUnionFind then

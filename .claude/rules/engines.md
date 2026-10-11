@@ -22,8 +22,10 @@ barcodes coincide.
    the reference baseline. Incremental (`advanceOne`/`advanceTo`/`advanceAll`, `diagramAt`/`barcodeAt` via
    V-columns). A raw-UnionFind fast path was measured and rejected (`WORKLOG-autonomous-session-2026-09-19.md`).
 2. **Chunks** (`CellularPersistenceInChunksEngine`) — clear-and-compress chunked algorithm, walks `0..maxDim+1`,
-   filters essentials to `<=maxDim`. Dims 0/1 via raw union-find (`unionFindDim01`, `DESIGN-unionfind-in-chunks.md`); an edge listing
-   no boundary (a CW/Morse loop) is cycle-forming, its own representative (`WORKLOG-brown-collapse.md`).
+   filters essentials to `<=maxDim`. Dims 0/1 via raw union-find (`unionFindDim01`, `DESIGN-unionfind-in-chunks.md`): an
+   edge zero in the field (no entries, a loop's `(v,c),(v,-c)`) closes a cycle, its own representative; an edge not
+   `c·(v-u)` (`edgeShape` Irregular) hands dims 0/1 to the general reduction. Degree-1 representatives (tree paths) are
+   built on `barcodeAt`'s first request, never in the edge pass (`WORKLOG-union-find-robustness.md`).
    `barcodeAt` via memoized `vcolOf` (a second full naive engine was **rejected by the project lead**, don't
    revive — `WORKLOG-chunks-representatives-incremental.md`). Invariants: a paired cell never becomes a pivot;
    `compress` runs to a fixpoint; a reconciliation step resolves "in limbo" cells first
@@ -40,8 +42,7 @@ barcodes coincide.
    cycles, essentials included (`PackedWorkingColumnSpec`): re-run it after any change to the reduction
    (`WORKLOG-vr-working-column.md`). The heap needs ONE diameter per simplex: non-trusted metrics are read as
    `d(max, min)`, the lower triangle like `ExplicitMetricSpace` (else an asymmetric one grows the column until
-   OOM); Euclidean/Explicit are read as given, since canonicalizing costs ~15% there (it breaks the distance cache's
-   row-wise walk). Under a sparse threshold cofacets come from per-vertex NEIGHBOUR LISTS (`NeighbourLists`,
+   OOM); Euclidean/Explicit are read as given (canonicalizing breaks the distance cache's row-wise walk). Under a sparse threshold cofacets come from per-vertex NEIGHBOUR LISTS (`NeighbourLists`,
    `SparseCofacetCursor`), which must give the all-vertex scan's cofacets in the same order with bit-identical
    diameters (stored distances are the engine's own `distance`); `NeighbourListsSpec` pins it term for term
    (`WORKLOG-neighbour-lists.md`). A uniform sign flip of every coboundary changes no output (a real symmetry): sign
@@ -67,10 +68,10 @@ Dual direction (`Involution.cocycles`/`cocycleBars`): from a homology pairing (n
 `stream.filtrationOrdering`), reduce only birth cells' coboundaries (built by `coboundariesOf` from the stream),
 youngest first; representative `V_σ` (as the cohomology engines report). Chunks' and naive's pairings are identical,
 union-find included (`InvolutionSpec`). Fast cubical's union-find ties by value, not the stream order: no dual path,
-image cocycles go through the cohomology engine. Native kind is faster: derived costs ~1.1-1.3x in degrees 0-1,
-~2.5x for VR cycles in degree 2 through the generic involution (the packed engine's own: ~1.25x, 192 sphere points). Different valid cycles from chunks/naive (they report `V_σ` after their own substitutions): never compare
-representatives cell for cell across engines; `InvolutionSpec` checks validity on tie-heavy inputs. Cost: 2.5-3x
-cocycles (`WORKLOG-involution.md`).
+image cocycles go through the cohomology engine. Native kind is faster (derived cycles ~1.1-2.5x,
+cocycles 2.5-3x; `WORKLOG-involution.md`). Different valid cycles from chunks/naive (they report `V_σ` after their own
+substitutions): never compare representatives cell for cell across engines; `InvolutionSpec` checks validity on
+tie-heavy inputs.
 
 Every engine takes `includeZeroLength` (default `false`) on its bar-returning methods and drops `birth == death` pairs
 from the pairing itself; `PersistenceBar.dropZeroLength` is the shared filter. The naive and chunks engines' `diagramAt(f)`
@@ -129,12 +130,11 @@ specs2 `--` syntax); scope with `testOnly` (`EngineComparisonBenchmarkSpec`: 15+
 `-DdataDir`, optionally `-DripserBin=<path>`: `.claude/scripts/run-ripser-paper-benchmark.sh`).
 
 **`HomologySpec`'s `BarcodeRegressionSpec` is `skipAll`'d unconditionally** (not on this flag): its chunks x
-`AlphaShapeDQP` range stalls/OOMs (40 points/dim 4: 102,090 simplices); bound the scale before un-skipping
+`AlphaShapeDQP` range stalls/OOMs; bound the scale before un-skipping
 (`WORKLOG-benchmark-and-chunks-bug.md`).
 
 **Query contract (naive + chunks, `DiagramQuerySpec`, `WORKLOG-cursor-and-verb.md`)**: `diagramAt(f)`/`barcodeAt(f)`/
 `diagramWithGeneratorsAt(f)` give the diagram truncated at `f` -- bars born `<= f`, deaths capped at `f`, a class alive
 at `f` reported as dying at `f` unless no cell enters after `f` (then essential) -- REGARDLESS of where the naive
-cursor is (it used to report a class as essential after the cursor had run past `f`; chunks used to include
-essentials born after `f`). The cursor is kept on purpose (project lead): long runs must be inspectable and keep their
+cursor is. The cursor is kept on purpose (project lead): long runs must be inspectable and keep their
 output if they die; `advanceFor(budget)` runs it in time slices, `processedCells`/`totalCells` report progress.
