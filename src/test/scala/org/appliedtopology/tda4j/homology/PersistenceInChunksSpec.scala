@@ -69,6 +69,80 @@ class PersistenceInChunksSpec extends mutable.Specification:
     )
   }
 
+  /** A cell of a chain complex given by hand: integer boundary coefficients, read in the field. */
+  final case class HandCell(name: String, dim: Int, value: Double, boundary: Seq[(HandCell, Int)] = Seq.empty)
+
+  /** The barcode of a hand-given complex from the chunks and the naive engines, and whether every chunks bar's
+    * representative is a cycle made of cells present at its birth.
+    */
+  def handBarcodes(cells: Seq[HandCell], p: Int, maxDim: Int = 2) =
+    given (HandCell is OrderedCell) = new (HandCell is OrderedCell):
+      override lazy val ordering = Ordering.by[HandCell, String](_.name)
+      extension (c: HandCell)
+        override def dim = c.dim
+        override def boundary[F: Field as fr]: Seq[(HandCell, F)] = c.boundary.map { (f, k) =>
+          val m = (1 to math.abs(k)).foldLeft(fr.zero)((acc, _) => acc + fr.one)
+          (f, if k < 0 then -m else m)
+        }
+    val stream = new StratifiedCellStream[HandCell, Double]:
+      def filtrationValue = PartialFunction.fromFunction((c: HandCell) => c.value)
+      def filtrationOrdering =
+        FiltrationOrdering.canonical(filtrationValue, _.dim, Ordering.by[HandCell, String](_.name))
+      val smallest = Double.NegativeInfinity
+      var largest = Double.PositiveInfinity
+      def iterateDimension: PartialFunction[Int, Iterator[HandCell]] = {
+        case d if d >= 0 && d <= cells.map(_.dim).max => cells.filter(_.dim == d).iterator
+      }
+    val field = FiniteField(p)
+    import field.given
+    val inf = Double.PositiveInfinity
+    val chunks = CellularPersistenceInChunksEngine[HandCell, field.Fp](maxDim).persistentHomology(stream)
+    val naive = CellularHomologyEngine[HandCell, field.Fp, Double]().persistentHomology(stream)
+    given Ordering[HandCell] = Ordering.by[HandCell, String](_.name)
+    val repsAreCycles = chunks.barcodeAt(inf).forall { bar =>
+      bar.annotation.exists { rep =>
+        !rep.isZero() && Chain.from(rep.boundary).terms.isEmpty && rep.cells.forall(_.value <= bar.birth)
+      }
+    }
+    (chunks.diagramAt(inf).sorted, naive.diagramAt(inf).filter(_._1 <= maxDim).sorted, repsAreCycles)
+
+  "Edges whose boundary is not 0 or c(v - u) with c a unit (algebraic complexes, mod-p coefficients)" >> {
+    val inf = Double.PositiveInfinity
+    val u = HandCell("u", 0, 0.0)
+    val v = HandCell("v", 0, 0.0)
+    // 2(v - u): zero over F_2 (so the edge is a cycle and u, v stay apart), u and v joined over F_3.
+    val doubled = HandCell("e", 1, 1.0, Seq(v -> 2, u -> -2))
+    // A disc on it (only a chain complex over F_2, where the edge's boundary vanishes): the cycle dies at 2.
+    val disc = HandCell("f", 2, 2.0, Seq(doubled -> 1))
+    val a = HandCell("a", 0, 0.0)
+    val b = HandCell("b", 0, 0.0)
+    val c = HandCell("c", 0, 1.0)
+    // Three vertices: the youngest, c, is the pivot -- not a union of the first two listed.
+    val threeEnds = HandCell("e", 1, 2.0, Seq(a -> 1, b -> 1, c -> 1))
+    // One vertex with a nonzero coefficient over F_3 (zero over F_2).
+    val oneEnd = HandCell("e", 1, 1.0, Seq(a -> 2))
+    def agree(expected: List[(Int, Double, Double)]) = beEqualTo((expected, expected, true))
+
+    "2(v - u) over F_2 is a cycle; u and v stay apart" >> {
+      handBarcodes(Seq(u, v, doubled), 2) must agree(List((0, 0.0, inf), (0, 0.0, inf), (1, 1.0, inf)))
+    }
+    "2(v - u) over F_3 joins u and v" >> {
+      handBarcodes(Seq(u, v, doubled), 3) must agree(List((0, 0.0, 1.0), (0, 0.0, inf)))
+    }
+    "2(v - u) over F_2 with a disc on it: the cycle dies" >> {
+      handBarcodes(Seq(u, v, doubled, disc), 2) must agree(List((0, 0.0, inf), (0, 0.0, inf), (1, 1.0, 2.0)))
+    }
+    "a + b + c over F_3 kills the youngest vertex, c" >> {
+      handBarcodes(Seq(a, b, c, threeEnds), 3) must agree(List((0, 0.0, inf), (0, 0.0, inf), (0, 1.0, 2.0)))
+    }
+    "2a over F_3 kills a" >> {
+      handBarcodes(Seq(a, oneEnd), 3) must agree(List((0, 0.0, 1.0)))
+    }
+    "2a over F_2 is zero: a survives and the edge is a cycle" >> {
+      handBarcodes(Seq(a, oneEnd), 2) must agree(List((0, 0.0, inf), (1, 1.0, inf)))
+    }
+  }
+
   "Homology of a triangle" >> {
     given shc: PersistenceInChunksEngine[Int, Double] = PersistenceInChunksEngine()
     import shc.{*, given}
