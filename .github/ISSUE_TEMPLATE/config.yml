@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://tda4j.appliedtopology.org/
+    about: The user guide, the tutorials and the developer's guide.

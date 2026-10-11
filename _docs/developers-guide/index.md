@@ -40,6 +40,14 @@ recent), is most of the actual gap.
    specs, the profile drivers and the cross-library harness are in
    [Measuring performance](performance.md).
 
+## Contributing
+
+How to set up, the commands, the path from an issue to a merged pull request,
+the changelog and the review principles are in the repository's
+[CONTRIBUTING.md](https://github.com/appliedtopology/tda4j/blob/scala/CONTRIBUTING.md).
+Open questions, known limitations and planned work are
+[issues](https://github.com/appliedtopology/tda4j/issues).
+
 ## Naming convention: `tda4j`/`TDA4j`, never `Tda4j`
 
 "TDA4j" is the acronym TDA ("topological data analysis") plus the conventional `4j` suffix (`log4j`,

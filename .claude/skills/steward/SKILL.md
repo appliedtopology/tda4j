@@ -25,12 +25,16 @@ after every job below passes locally.
 | CI job (workflow) | what CI runs | run locally | fix |
 |---|---|---|---|
 | `lint` (`lint.yml`) | `sbt "scalafmtSbtCheck ; scalafmtCheck ; Test / scalafmtCheck"` | the same | `sbt scalafmtAll scalafmtSbt` |
-| `test` (`test.yml`) | `sbt "clean ; test"` on a fresh runner | `sbt clean testFull` | root-cause it; never skip, disable or loosen a test |
+| `test` (`test.yml`) | `sbt "clean ; test"` on a fresh runner, then `sbt assembly` and the jar run on `noisy-circle.csv` (exactly one degree-1 bar) | `sbt clean testFull`; `sbt assembly` and the same run | root-cause it; never skip, disable or loosen a test |
 | `docs-build` (`test.yml`) | `TDA4J_SCALA_VERSION=3.8.4 sbt doc` | `sbt shutdown`, then the same | the error names `page.md:line` |
 | `mima` (`test.yml`) | `sbt mimaReportBinaryIssues` | the same | see below |
 
+`coverage.yml` (weekly and on demand) is a map, not a check: nothing fails on a coverage number.
+
 ### Lint
 
+- **The pre-commit hook** (`.githooks/pre-commit`, turned on in cloud sessions by `.claude/settings.json`) checks the
+  staged files with the native scalafmt and blocks a misformatted commit. Fix the files; never `--no-verify` past it.
 - **scalafmt only sees git-tracked files:** `git add` a new file before formatting.
 - **Formatter output on files the change did not otherwise touch** goes in its own commit:
   "Format: <files>, formatter output only, no behavior change".
@@ -76,6 +80,12 @@ after every job below passes locally.
 
 ## What a push carries
 
+- **A `CHANGELOG.md` line** under Unreleased for anything a user sees or calls; a break goes under Breaking, with what
+  to write instead.
+- **An issue for everything left open**: a question for the project lead (`question`), a limitation (`enhancement`,
+  `performance`), a claim nobody has checked (`unverified`). Search the issues first, open and closed. The body says
+  what, where (files, worklog) and what done looks like, and ends with the attribution footer. Link the issues from
+  the PR's "Left open" section and from the worklog, instead of keeping the list only there.
 - **A worklog** for any substantial investigation (`.claude/WORKLOG-<topic>.md`). It is never edited afterwards; later
   results go in an addendum.
 - **The resulting rule** goes in `CLAUDE.md` or the matching `.claude/rules/` file, with a pointer to the worklog and no

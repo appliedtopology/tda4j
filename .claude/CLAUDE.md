@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **How this file works.** Each entry is a current rule, invariant, or known limitation, plus a pointer to the
 `.claude/WORKLOG-*.md`/`DESIGN-*.md` that holds its derivation (what was tried, measurements, repros). Derivations
-go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes"). Last condensed 2026-10-10 (lab detail to `rules/labs.md`); 2026-10-09; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md` (and the commits named there).
+go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes"). Last condensed 2026-10-11 (CI detail to the steward skill); 2026-10-10 (lab detail to `rules/labs.md`); 2026-10-09; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md` (and the commits named there).
 
 ## What this is
 
@@ -97,11 +97,9 @@ sbt -DrunBenchmarks=true test   # also run benchmark/profiling specs — NOT wha
 If `sbt` isn't on `PATH`, run `.claude/scripts/install-sbt.sh` (paces around Maven Central's cold-cache rate limits); in
 the cloud environment's setup script it saves new sessions a 20-40 minute cold start.
 
-No linter beyond scalafmt; tests are specs2 (`org.specs2.mutable.Specification`). CI on every PR to `scala`: `test.yml`
-(jobs `test`, `docs-build`, `mima`) and `lint.yml` (`scalafmtSbtCheck` on `build.sbt` too: format it before pushing);
-`docs.yml` publishes on push to `scala`. MiMa checks against every earlier plain release of the series
-(`mimaBaselineVersions`); a deliberate break is a commented `mimaBinaryIssueFilters` entry (project lead: binary
-compatibility is not a strong requirement before 1.0). The ~319 `-Wunused:all` warnings are deliberately left alone
+No linter beyond scalafmt; tests are specs2. CI jobs (`test` with a fat-jar smoke run, `docs-build`, `mima`, `lint`) and
+their local equivalents: steward skill; a weekly `coverage.yml` maps coverage, never gates. A deliberate binary break is
+a commented `mimaBinaryIssueFilters` entry (project lead: not a strong requirement before 1.0). The ~319 `-Wunused:all` warnings are deliberately left alone
 (`WORKLOG-compiler-warnings.md`). Docs build with Scala 3.8.4 (`TDA4J_SCALA_VERSION`, seen only by a FRESH sbt server:
 `rules/docs-and-tutorials.md`). After `sbt package` or a docs build a test compile can miss main classes ("Not found:
 TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
@@ -287,9 +285,11 @@ file before changing that subsystem; this table is the index, in case a rule did
 - Performance claims need isolated A/B measurement (`git stash` A/B, median of trials, one engine per JVM);
   machine noise here often exceeds small effects — report unconfirmed effects as unconfirmed.
 - **Finalizing a user-visible capability** (new complex, engine, or option) means checking four surfaces each
-  session that lands a chunk of it: (1) `matlab.TDA4j` dispatch, (2) `cli.TDA4jCLI`/`TDA4jConf` (1:1 mirror),
-  (3) `_docs/developers-guide/` (`persistence-engines.md`, `architecture.md`, `class-diagrams.md`),
-  (4) `_docs/user-guide/`. Internal refactors and bug fixes with no new surface are exempt.
+  session that lands a chunk of it: `matlab.TDA4j`, `cli.TDA4jConf` (1:1 mirror), `_docs/developers-guide/`,
+  `_docs/user-guide/`. Internal refactors and bug fixes with no new surface are exempt.
+- **Open items are GitHub issues** (project lead, 2026-10-11; labels and workflow in `CONTRIBUTING.md`): a question,
+  limitation or unverified claim a session leaves gets an issue, linked from its worklog and PR; a user-visible change
+  gets a `CHANGELOG.md` line under Unreleased.
 - A cloud session (working on its own `claude/...` branch) may commit and push its own work to that branch at
   will, without asking first — the branch is disposable/session-scoped, not shared history. A local/interactive
   session working directly on a shared branch still waits to be asked; the project lead commits that work.
