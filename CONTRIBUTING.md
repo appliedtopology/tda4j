@@ -27,8 +27,8 @@ git config core.hooksPath .githooks
 
 It needs a `scalafmt` command: `cs install scalafmt` ([coursier](https://get-coursier.io/)), or
 `.claude/scripts/install-scalafmt.sh` for the native binary (Linux x86-64 and macOS). Without one, the hook says so
-and lets the commit through. It checks only the staged `.scala` and `.sbt` files, in well under a second, and never
-starts sbt. `git commit --no-verify` skips it once. Git never copies hooks from a repository, so this step is needed
+and lets the commit through. It checks only the staged `.scala` and `.sbt` files, in well under a second, skips merge
+commits, and never starts sbt. `git commit --no-verify` skips it once. Git never copies hooks from a repository, so this step is needed
 in every clone; CI's lint job checks every pull request either way. Editors that use Metals format with the same
 `.scalafmt.conf`; format on save is the easy way to never see the hook complain.
 

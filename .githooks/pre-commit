@@ -10,6 +10,14 @@
 # Skip it once with `git commit --no-verify`.
 
 set -u
+
+# A merge commit stages everything the other branch changed, formatted or not. Formatting files this branch did not
+# touch belongs in its own "Format:" commit after the merge (CONTRIBUTING.md), so a merge is not checked here.
+if git rev-parse -q --verify MERGE_HEAD > /dev/null; then
+  echo "pre-commit: a merge commit, so formatting is not checked here (CI's lint job checks it)." >&2
+  exit 0
+fi
+
 version=$(sed -n 's/^version *= *"\(.*\)".*/\1/p' .scalafmt.conf 2>/dev/null)
 fmt=${SCALAFMT:-}
 if [ -z "$fmt" ]; then

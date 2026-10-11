@@ -34,7 +34,8 @@ after every job below passes locally.
 ### Lint
 
 - **The pre-commit hook** (`.githooks/pre-commit`, turned on in cloud sessions by `.claude/settings.json`) checks the
-  staged files with the native scalafmt and blocks a misformatted commit. Fix the files; never `--no-verify` past it.
+  staged files with the native scalafmt and blocks a misformatted commit. It lets a merge commit through (the base's
+  unformatted files then get their own `Format:` commit); otherwise fix the files, never `--no-verify` past it.
 - **scalafmt only sees git-tracked files:** `git add` a new file before formatting.
 - **Formatter output on files the change did not otherwise touch** goes in its own commit:
   "Format: <files>, formatter output only, no behavior change".
