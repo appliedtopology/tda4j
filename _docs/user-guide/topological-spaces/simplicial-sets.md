@@ -190,9 +190,12 @@ The tutorial [Telling spaces apart](../../tutorials/telling-spaces-apart.md) wor
 
 `FiniteGroup` (`cyclic(n)`, `symmetric(n)`, `alternating(n)`, `generalLinear(n, p)`, `permutationGroup(...)`,
 `product(g, h)`) and `ClassifyingSpace` compute group homology as the homology of `BG`. Filtering `BG` by a chain of
-subgroups gives *persistent* group homology; see the tutorial
+subgroups gives *persistent* group homology, with a representative cycle for every bar; see the tutorial
 [Persistent group cohomology](../../tutorials/persistent-group-cohomology.md). `BG` has `(|G| − 1)ⁿ` generators in
-dimension `n`, so this is for small groups and low degrees.
+dimension `n`. When the chain refines to a series of subgroups, each normal in the next with prime index (always for a
+group of prime-power order), `ClassifyingSpace` computes instead on Brown's collapse of `BG` (`CollapsedNerve`, from
+`RewritingSystem.refining(group, chain)`), which has far fewer cells and the same barcode. Either way this is for small
+groups and low degrees.
 
 #### Monoids and categories
 

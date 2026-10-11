@@ -3,10 +3,10 @@ layout: main
 title: Persistent group cohomology
 ---
 
-> **Status: a proof of concept.** This is a library-only experiment: there is no command-line or MATLAB entry point for it, it is
-> only practical for small groups and low degrees (see [the cost](#the-cost)), and it is here because it shows an unusual use of the
-> machinery rather than because it is the best way to compute group cohomology. Real group-cohomology software uses far smaller
-> constructions.
+> **Status: library only.** There is no command-line or MATLAB entry point. It is practical for small groups and low degrees
+> (see [the cost](#the-cost)), and it is here because it shows an unusual use of the machinery rather than because it is the best
+> way to compute group cohomology: real group-cohomology software (HAP for GAP, for example) goes much further with algebraic
+> resolutions.
 
 Every finite group `G` has a **classifying space** `BG`, a space whose topology records the group's algebra: the homology of `BG` is
 the *homology of the group*, a central invariant in algebra. A chain of subgroups `H_0 ≤ H_1 ≤ ... ≤ G` gives a chain of classifying
@@ -111,11 +111,39 @@ up to dimension `k + 1`:
 | S₄ (24 elements) | 529 | 12,167 | 279,841 |
 | S₅ (120 elements) | 14,161 | 1,685,159 | 200,533,921 |
 
-The example above (`S_4`, degrees up to 2, so cells up to dimension 3) is the edge of comfortable. One degree higher for `S_4`
-(280 thousand cells) and the second degree for `S_5` (1.7 million) are out of reach for this implementation today, because
-the cost grows exponentially with the degree. That is why serious tools (HAP for GAP, for example) compute group cohomology from much smaller
-algebraic resolutions rather than from this "bar construction". What this construction has that those do not is the
-filtration: it is the natural way to ask the *persistent* question, and the machinery for it already existed.
+When the chain can be refined to a series of subgroups, each normal in the next with prime index (always possible for a group whose
+order is a prime power, and for chains like `1 < V_4 < A_4 < S_4` in a solvable group), the library computes on a much smaller complex
+with the same barcode: Brown's collapse of `BG` (`CollapsedNerve`), built from a rewriting system for the group
+(`RewritingSystem.refining(group, chain)`), whose representatives are mapped back to cycles of `BG`. For `S_4` it has 16, 42 and 99
+cells in dimensions 2, 3 and 4, instead of 529, 12,167 and 279,841:
+
+```scala sc:nocompile
+val kleinFour = s4.subgroupGeneratedBy(Seq(s4.multiply(swap01, swap23), doubleSwap))
+val alternating = s4.subgroupGeneratedBy(kleinFour + FiniteGroup.elementOfPermutation(s4, Seq(1, 2, 0, 3)))
+val collapsed = CollapsedNerve(RewritingSystem.refining(s4, Seq(kleinFour, alternating)).toOption.get)
+val collapsedCells = (2 to 4).map(n => collapsed.criticalCells(n).size)     // Vector(16, 42, 99)
+```
+
+`ClassifyingSpace.bettiNumbers` and `persistentGroupHomology` use the collapse by themselves whenever the chain refines, which puts
+higher degrees in reach:
+
+```scala sc:nocompile
+val s4Homology = Seq(2, 3).map(p => p -> ClassifyingSpace.bettiNumbers(s4, 4, p)).toMap
+// 2 -> Vector(1, 1, 2, 3, 3)     3 -> Vector(1, 0, 0, 1, 1)
+```
+
+Over `p = 2` these are the dimensions of the cohomology ring of `S_4`, polynomials in classes of degrees 1, 2 and 3 with one relation
+in degree 4; over `p = 3` they are those of `S_3` from the first section: at the prime 3, `S_4` looks like the normalizer of its
+subgroup of order 3, which is a copy of `S_3`. The chain of the
+previous section has no such refinement (the dihedral group of order 8 is not normal in `S_4`, and no subgroup lies strictly between
+them), so its barcode was computed on `BG` itself:
+
+```scala sc:nocompile
+val throughDihedral = RewritingSystem.refining(s4, chain).isLeft     // true
+```
+
+The collapse still grows exponentially with the degree, only much more slowly, and a group that is not solvable, such as `S_5`,
+always takes the full construction.
 
 ## The whole script
 
@@ -144,4 +172,12 @@ def bars(prime: Int) =
 
 val overF2 = bars(2)
 val overF3 = bars(3)
+
+val kleinFour = s4.subgroupGeneratedBy(Seq(s4.multiply(swap01, swap23), doubleSwap))
+val alternating = s4.subgroupGeneratedBy(kleinFour + FiniteGroup.elementOfPermutation(s4, Seq(1, 2, 0, 3)))
+val collapsed = CollapsedNerve(RewritingSystem.refining(s4, Seq(kleinFour, alternating)).toOption.get)
+val collapsedCells = (2 to 4).map(n => collapsed.criticalCells(n).size)
+
+val s4Homology = Seq(2, 3).map(p => p -> ClassifyingSpace.bettiNumbers(s4, 4, p)).toMap
+val throughDihedral = RewritingSystem.refining(s4, chain).isLeft
 ```

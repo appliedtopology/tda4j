@@ -33,6 +33,12 @@ class GroupHomologySpec extends Specification:
     "have nothing but the connected component over F_3 (every subgroup here is a 2-group)" in {
       page.overF3 must beEqualTo(Map((0, 0.0, Double.PositiveInfinity) -> 1))
     }
+    "collapse S_4 to 16, 42, 99 cells in dimensions 2..4, and compute H_0..H_4 of S_4 it quotes" in
+      (page.collapsedCells must beEqualTo(Vector(16, 42, 99)))
+        .and(page.alternating.size must beEqualTo(12))
+        .and(page.s4Homology(2) must beEqualTo(Vector(1, 1, 2, 3, 3)))
+        .and(page.s4Homology(3) must beEqualTo(Vector(1, 0, 0, 1, 1)))
+    "find no polycyclic refinement of the chain through the dihedral group" in { page.throughDihedral must beTrue }
     "count cells as (|G|-1)^n" in {
       val cells = for g <- Seq(6, 24, 120); n <- Seq(2, 3, 4) yield BigInt(g - 1).pow(n).toLong
       cells must beEqualTo(Seq(25L, 125L, 625L, 529L, 12167L, 279841L, 14161L, 1685159L, 200533921L))
