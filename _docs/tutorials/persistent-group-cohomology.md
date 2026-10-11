@@ -114,14 +114,14 @@ up to dimension `k + 1`:
 When the chain can be refined to a series of subgroups, each normal in the next with prime index (always possible for a group whose
 order is a prime power, and for chains like `1 < V_4 < A_4 < S_4` in a solvable group), the library computes on a much smaller complex
 with the same barcode: Brown's collapse of `BG` (`CollapsedNerve`), built from a rewriting system for the group
-(`RewritingSystem.refining(group, chain)`), whose representatives are mapped back to cycles of `BG`. For `S_4` it has 16, 42 and 99
+(`RewritingSystem.refining(group, chain)`), whose representatives are mapped back to cycles of `BG`. For `S_4` it has 10, 20 and 35
 cells in dimensions 2, 3 and 4, instead of 529, 12,167 and 279,841:
 
 ```scala sc:nocompile
 val kleinFour = s4.subgroupGeneratedBy(Seq(s4.multiply(swap01, swap23), doubleSwap))
 val alternating = s4.subgroupGeneratedBy(kleinFour + FiniteGroup.elementOfPermutation(s4, Seq(1, 2, 0, 3)))
 val collapsed = CollapsedNerve(RewritingSystem.refining(s4, Seq(kleinFour, alternating)).toOption.get)
-val collapsedCells = (2 to 4).map(n => collapsed.criticalCells(n).size)     // Vector(16, 42, 99)
+val collapsedCells = (2 to 4).map(n => collapsed.criticalCells(n).size)     // Vector(10, 20, 35)
 ```
 
 `ClassifyingSpace.bettiNumbers` and `persistentGroupHomology` use the collapse by themselves whenever the chain refines, which puts

@@ -114,9 +114,40 @@ class CollapsedNerveSpec extends Specification:
           .map(name -> _)
       } must beEmpty
     }
-    "leave S_4 with 1, 5, 16, 42, 99, 219 cells in dimensions 0..5 (the bar complex: 23^n)" in {
+    "leave S_4 with C(n+3, 3) = 1, 4, 10, 20, 35, 56 cells in dimensions 0..5 (the bar complex: 23^n), Z/3 one per dimension" in {
       val collapsed = CollapsedNerve(refined(s4, s4chain))
-      (0 to 5).map(collapsed.criticalCells(_).size) must beEqualTo(Seq(1, 5, 16, 42, 99, 219))
+      val z3 = CollapsedNerve(refined(FiniteGroup.cyclic(3), Seq(all(FiniteGroup.cyclic(3)))))
+      ((0 to 5).map(collapsed.criticalCells(_).size) must beEqualTo(Seq(1, 4, 10, 20, 35, 56)))
+        .and((0 to 5).map(z3.criticalCells(_).size) must beEqualTo(Seq.fill(6)(1)))
+    }
+  }
+
+  "the collapse on the systems refining builds" should {
+    "be an involution with incidence ±1 (D_8 up to dimension 4, S_4 up to 3)" in {
+      Seq(("D_8", 4), ("S_4", 3)).forall { (name, top) =>
+        val collapsed = CollapsedNerve(systems.find(_._1 == name).get._2)
+        (0 to top).forall(n =>
+          collapsed.nerve.generators(n).forall { s =>
+            collapsed.role(s) match
+              case CollapseRole.Critical => true
+              case CollapseRole.Redundant(t) =>
+                collapsed.role(t) == CollapseRole.Collapsible(s) && math.abs(collapsed.barBoundary(t).getOrElse(s, 0L)) == 1
+              case CollapseRole.Collapsible(f) => collapsed.role(f) == CollapseRole.Redundant(s)
+          }
+        )
+      } must beTrue
+    }
+    "square to zero, ∂∂ = 0, on S_4's collapsed complex up to dimension 6 (where the bar complex cannot check it)" in {
+      val collapsed = CollapsedNerve(refined(s4, s4chain))
+      (2 to 6).flatMap(collapsed.criticalCells).filterNot { c =>
+        collapsed
+          .morseBoundary(c)
+          .toSeq
+          .flatMap((s, a) => collapsed.morseBoundary(s).toSeq.map((t, b) => (t, a * b)))
+          .groupMapReduce(_._1)(_._2)(_ + _)
+          .values
+          .forall(_ == 0L)
+      } must beEmpty
     }
   }
 
@@ -168,6 +199,15 @@ class CollapsedNerveSpec extends Specification:
             Vector(1, 1, 1, 1)
           )
         )
+    "handle a chain that stops below the whole group, like the bar complex of its last subgroup" in {
+      val cases =
+        Seq((z8, Seq(Set(0, 4), Set(0, 2, 4, 6)), 2, 3), (s4, s4chain.slice(1, 3), 2, 2), (s4, s4chain.slice(1, 3), 3, 2))
+      cases.map { (g, chain, p, degree) =>
+        val dispatched = ClassifyingSpace.persistentGroupHomology(g, chain, degree, p).triples.sorted
+        val bar = Nerve(g, Some(chain.last)).persistentHomology(ClassifyingSpace.filtrationBy(chain), degree, p).triples.sorted
+        (RewritingSystem.refining(g, chain).isRight, dispatched == bar, dispatched.nonEmpty)
+      } must beEqualTo(cases.map(_ => (true, true, true)))
+    }
     "be what persistentGroupHomology uses for a chain that refines, and the bar complex otherwise" in
       // Both give the same barcode, so check the dispatch through what only the collapse can reach in this time:
       // degree 4 of S_4 (the bar complex needs 6.7 million cells for it).

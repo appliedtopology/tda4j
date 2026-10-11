@@ -33,8 +33,8 @@ class GroupHomologySpec extends Specification:
     "have nothing but the connected component over F_3 (every subgroup here is a 2-group)" in {
       page.overF3 must beEqualTo(Map((0, 0.0, Double.PositiveInfinity) -> 1))
     }
-    "collapse S_4 to 16, 42, 99 cells in dimensions 2..4, and compute H_0..H_4 of S_4 it quotes" in
-      (page.collapsedCells must beEqualTo(Vector(16, 42, 99)))
+    "collapse S_4 to 10, 20, 35 cells in dimensions 2..4, and compute H_0..H_4 of S_4 it quotes" in
+      (page.collapsedCells must beEqualTo(Vector(10, 20, 35)))
         .and(page.alternating.size must beEqualTo(12))
         .and(page.s4Homology(2) must beEqualTo(Vector(1, 1, 2, 3, 3)))
         .and(page.s4Homology(3) must beEqualTo(Vector(1, 0, 0, 1, 1)))
