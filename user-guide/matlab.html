@@ -185,7 +185,7 @@
     </tr>
    </tbody>
   </table>
-  <p>Each <code>compute...</code> method also has an overload without options. In an image, a pixel of value <code>Inf</code> (<code>-Inf</code> with <code>sublevel</code> <code>false</code>) never enters (a mask, for missing data); a <code>NaN</code> pixel is refused, with a message naming it.</p>
+  <p>Each <code>compute...</code> method also has an overload without options. In an image, a pixel of value <code>NaN</code> is masked (missing data): it is not in the complex, whatever <code>sublevel</code> is. <code>Inf</code> and <code>-Inf</code> are ordinary values: with <code>sublevel</code> <code>true</code>, <code>Inf</code> enters after every finite value and <code>-Inf</code> before them; with <code>sublevel</code> <code>false</code>, the reverse. With <code>nanMask</code> <code>false</code>, masks are off and a <code>NaN</code> pixel is an error naming the pixel, for data where a <code>NaN</code> can only be a bug.</p>
  </section>
  <section id="options">
   <h3 class="h400"><a href="#options" class="anchor"></a>Options</h3>
@@ -256,6 +256,11 @@
     <tr>
      <td><code>sublevel</code></td>
      <td><code>true</code>, <code>false</code></td>
+     <td><code>true</code> (images)</td>
+    </tr>
+    <tr>
+     <td><code>nanMask</code></td>
+     <td><code>true</code> (a <code>NaN</code> pixel is masked), <code>false</code> (a <code>NaN</code> pixel is an error)</td>
      <td><code>true</code> (images)</td>
     </tr>
     <tr>

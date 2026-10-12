@@ -169,5 +169,5 @@
 </span></code></pre>
   <div class="buttons"></div>
  </div>
- <p>Two details if you compare with another tool: Ripser's binary distance matrices are 32-bit floats, and DIPHA's and Perseus's grids list the first axis fastest (the readers and writers convert for you). A Perseus value of <code>-1</code> is a missing cell, read as <code>Infinity</code>.</p>
+ <p>Two details if you compare with another tool: Ripser's binary distance matrices are 32-bit floats, and DIPHA's and Perseus's grids list the first axis fastest (the readers and writers convert for you). A Perseus value of <code>-1</code> is a missing cell, read as <code>NaN</code>: masked, not in the complex, sublevel or superlevel. Writing a grid writes <code>NaN</code> as <code>-1</code> and refuses an infinite value (the format has none).</p>
 </main></div><div id="toc" class="body-small"></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
