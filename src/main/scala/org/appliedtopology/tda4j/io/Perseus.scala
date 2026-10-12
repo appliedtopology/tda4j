@@ -6,13 +6,13 @@ import java.io.PrintWriter
 /** Perseus's cubical toplex (dense grid) input format and its persistence-interval output format, as read by GUDHI.
   *
   * Perseus lists the first axis fastest, the opposite of [[CubicalImage.fromFlatArray]]; the readers and writers
-  * convert. A value of `-1` (a missing cube) is read as `Infinity`. Periodic boundaries (negative sizes, a GUDHI
-  * extension) are refused. Perseus's simplicial formats are not supported.
+  * convert. A value of `-1` (a missing cube) is read as `NaN`: masked, not in the complex, in either direction.
+  * Periodic boundaries (negative sizes, a GUDHI extension) are refused. Perseus's simplicial formats are not supported.
   */
 object Perseus:
 
   /** The shape and values of a cubical toplex file, converted to the axis order of [[CubicalImage.fromFlatArray]], with
-    * `-1` read as `Infinity`. Format: the dimension `d`, `d` positive sizes, then the values with the first axis
+    * `-1` read as `NaN` (masked). Format: the dimension `d`, `d` positive sizes, then the values with the first axis
     * fastest.
     */
   def readCubicalImageData(path: String): (IndexedSeq[Int], IndexedSeq[Double]) =
@@ -34,26 +34,32 @@ object Perseus:
       i = 0
       while i < n do
         val v = tokens.next().toDouble
-        raw(i) = if v == -1.0 then Double.PositiveInfinity else v
+        raw(i) = if v == -1.0 then Double.NaN else v
         i += 1
       (sizes.reverse.toIndexedSeq, raw.toIndexedSeq)
     finally src.close()
 
-  def readCubicalToplex(path: String, sublevel: Boolean = true): CubicalGridStream =
+  /** The toplex of `path` as a grid; with `nanMask = false` a missing cube (`-1`, read as NaN) is an error. */
+  def readCubicalToplex(path: String, sublevel: Boolean = true, nanMask: Boolean = true): CubicalGridStream =
     val (shape, flatValues) = readCubicalImageData(path)
-    CubicalImage.fromFlatArray(shape, flatValues, sublevel)
+    CubicalImage.fromFlatArray(shape, flatValues, sublevel, nanMask = nanMask)
 
   /** `shape`/`flatValues` in `CubicalImage.fromFlatArray`'s own last-axis-fastest convention -- reversed internally to
-    * Perseus's own first-axis-fastest convention before writing. `Double.PositiveInfinity` round-trips back to `-1`.
+    * Perseus's own first-axis-fastest convention before writing. `Double.NaN` (masked) is written as `-1`. An infinite
+    * value is refused: the format has none, and `-1` would read back as a mask.
     */
   def writeCubicalToplex(path: String, shape: IndexedSeq[Int], flatValues: IndexedSeq[Double]): Unit =
     require(flatValues.size == shape.product, "flatValues size must equal the product of shape")
+    require(
+      !flatValues.exists(_.isInfinite),
+      "Perseus's cubical format has no infinite value: write a missing cell as NaN (it becomes -1), or a finite value"
+    )
     val sizes = shape.reverse
     val out = new PrintWriter(path)
     try
       out.println(shape.size)
       sizes.foreach(out.println)
-      flatValues.foreach(v => out.println(if v == Double.PositiveInfinity then "-1" else v.toString))
+      flatValues.foreach(v => out.println(if v.isNaN then "-1" else v.toString))
     finally out.close()
 
   private def endpointToStep(e: BarcodeEndpoint[Double]): Long = e match

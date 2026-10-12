@@ -28,11 +28,19 @@ class PerseusSpec extends mutable.Specification:
         (stream.topCellValue(IndexedSeq(1, 2)) must beEqualTo(12.0))
     }
 
-    "map a -1 filtration value to +Infinity" >> {
+    "read a -1 filtration value as NaN, the mask" >> {
       val path = tempFile(".txt")
       Files.write(java.nio.file.Paths.get(path), "1\n3\n0\n-1\n2\n".getBytes)
-      val stream = Perseus.readCubicalToplex(path)
-      stream.topCellValue(IndexedSeq(1)) must beEqualTo(Double.PositiveInfinity)
+      (Perseus.readCubicalImageData(path)._2(1).isNaN must beTrue) and
+        (Perseus.readCubicalToplex(path).topCellValue(IndexedSeq(1)).isNaN must beTrue)
+    }
+
+    "refuse a -1 (missing) cube with nanMask = false, naming it" >> {
+      val path = tempFile(".txt")
+      Files.write(java.nio.file.Paths.get(path), "1\n3\n0\n-1\n2\n".getBytes)
+      Perseus.readCubicalToplex(path, nanMask = false) must throwAn[IllegalArgumentException](
+        message = "NaN value at pixel \\(1\\)"
+      )
     }
 
     "reject a negative grid size (periodic boundary, unsupported)" >> {
@@ -41,14 +49,17 @@ class PerseusSpec extends mutable.Specification:
       Perseus.readCubicalToplex(path) must throwA[IllegalArgumentException]
     }
 
-    "round-trip shape/values through writeCubicalToplex, -1 for +Infinity" >> {
+    "round-trip shape/values through writeCubicalToplex, -1 for NaN; refuse an infinite value" >> {
       val shape = IndexedSeq(2, 3)
-      val values = IndexedSeq(0.0, 1.0, Double.PositiveInfinity, 3.0, 4.0, 5.0)
+      val values = IndexedSeq(0.0, 1.0, 2.0, Double.NaN, 4.0, 5.0)
       val path = tempFile(".txt")
       Perseus.writeCubicalToplex(path, shape, values)
       val stream = Perseus.readCubicalToplex(path)
-      (stream.topCellValue(IndexedSeq(0, 2)) must beEqualTo(Double.PositiveInfinity)) and
-        (stream.topCellValue(IndexedSeq(1, 0)) must beEqualTo(3.0))
+      (stream.topCellValue(IndexedSeq(0, 2)) must beEqualTo(2.0)) and
+        (stream.topCellValue(IndexedSeq(1, 0)).isNaN must beTrue) and
+        (stream.topCellValue(IndexedSeq(1, 1)) must beEqualTo(4.0)) and
+        (Perseus.writeCubicalToplex(path, shape, values.updated(2, Double.PositiveInfinity)) must
+          throwAn[IllegalArgumentException](message = "no infinite value"))
     }
 
     "agree with Dipha's own image-data reader on the identical grid (cross-format oracle)" >> {
@@ -68,16 +79,19 @@ class PerseusSpec extends mutable.Specification:
       // A 3x3 grid of pixels, all present at value 0 except the center, which is missing (-1). The 8 present
       // pixels form a ring (a "square annulus"), homotopy equivalent to a circle: this must produce an
       // ESSENTIAL dimension-1 class -- not just "doesn't crash" -- since the missing top cell can never appear
-      // to fill in the hole its own boundary edges trace out at time 0. This is the actual point of mapping -1
-      // to +Infinity rather than, say, 0 or a negative sentinel: only +Infinity guarantees the missing cell's
-      // own 2-cell never enters the filtration at any finite threshold.
+      // to fill in the hole its own boundary edges trace out at time 0. This is the actual point of reading -1
+      // as the NaN mask rather than, say, 0 or +Infinity: the missing cell is not in the complex, in a superlevel
+      // reading too (+Infinity would be negated there and enter first, filling the hole).
       val path = tempFile(".txt")
       val values = Seq(0, 0, 0, 0, -1, 0, 0, 0, 0) // row-major 3x3, center missing
       val lines = ("2" +: "3" +: "3" +: values.map(_.toString)).mkString("\n")
       Files.write(java.nio.file.Paths.get(path), lines.getBytes)
       val stream = Perseus.readCubicalToplex(path)
       val bars = persistentHomology(stream).diagramAt(Double.PositiveInfinity)
-      bars.exists { case (dim, _, death) => dim == 1 && death.isPosInfinity } must beTrue
+      val superlevel = persistentHomology(Perseus.readCubicalToplex(path, sublevel = false))
+        .diagramAt(Double.PositiveInfinity)
+      (bars.exists { case (dim, _, death) => dim == 1 && death.isPosInfinity } must beTrue) and
+        (superlevel.exists { case (dim, _, death) => dim == 1 && death.isPosInfinity } must beTrue)
     }
   }
 

@@ -91,6 +91,13 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   val sublevel: ScallopOption[String] = opt[String](
     descr = "true (default) for the sublevel filtration of an image, false for the superlevel one"
   )
+  // No short flag: Scallop gives a letter to the first option declared with it, so taking `-n` here would move it
+  // from --num-landmarks (declared below), which had it first.
+  val nanMask: ScallopOption[String] = opt[String](
+    noshort = true,
+    descr = "true (default): a NaN pixel of an image is masked, left out of the complex (a Perseus -1 reads as NaN); " +
+      "false: a NaN pixel is an error"
+  )
 
   val numLandmarks: ScallopOption[Int] =
     opt[Int](descr = "the number of landmarks, required for --complex=witness")

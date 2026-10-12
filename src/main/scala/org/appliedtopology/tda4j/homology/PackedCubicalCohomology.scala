@@ -13,7 +13,8 @@ import scala.collection.mutable
   * apparent pairs (a cell whose oldest same-value cofacet has it as its youngest same-value facet) are paired without a
   * reduction and their columns rebuilt when another column needs them, which changes no output (`useApparentPairs =
   * false` turns them off). Cycles come from the involution on the same pairs, specialised to packed cells as
-  * [[PackedRipserCohomologyEngine]] does it. Refuses an image with a NaN value (as [[GridRanks]] does).
+  * [[PackedRipserCohomologyEngine]] does it. A cell every pixel around which is masked (NaN) is not in the complex: it
+  * has rank [[GridRanks.masked]], and is never listed nor met as a cofacet.
   */
 open class PackedCubicalCohomologyEngine[C: Field](
   grid: CubicalGridStream,
@@ -26,11 +27,14 @@ open class PackedCubicalCohomologyEngine[C: Field](
   require(topDim >= 0 && topDim <= d, s"PackedCubicalCohomologyEngine: topDim $topDim outside 0..$d")
   private val shape = ranks.shape
   private val distinct = ranks.distinct
+  private val masked = ranks.masked
   private val extent: Array[Int] = shape.map(n => 2 * n + 1)
   private val totalCells: Int = GridRanks.checkedProduct(extent, "PackedCubicalCohomologyEngine")
   private val weight: Array[Int] = GridRanks.strides(extent)
 
-  /** Every cell's rank: the smallest rank of the pixels containing it (separable, as `CubicalGridStream`'s values). */
+  /** Every cell's rank: the smallest rank of the pixels containing it (separable, as `CubicalGridStream`'s values);
+    * `masked` when they are all masked.
+    */
   private val cellRank: Array[Int] =
     val r = Array.fill(totalCells)(Int.MaxValue)
     var p = 0
@@ -94,8 +98,8 @@ open class PackedCubicalCohomologyEngine[C: Field](
       coords(i) = (key / weight(i)) % extent(i)
       i += 1
 
-  /** Each cofacet of `sigma` with the coefficient of `sigma` in its boundary. Only for `sigma` of dimension below
-    * `topDim`: the complex has no cell above it.
+  /** Each cofacet of `sigma` in the complex with the coefficient of `sigma` in its boundary. Only for `sigma` of
+    * dimension below `topDim`: the complex has no cell above it. (Every facet of a cell in the complex is in it.)
     */
   private inline def foreachCofacet(sigma: Int)(inline f: (Int, C) => Unit): Unit =
     decode(sigma)
@@ -104,8 +108,10 @@ open class PackedCubicalCohomologyEngine[C: Field](
     while a < d do
       val c = coords(a)
       if (c & 1) == 0 then
-        if c > 0 then f(sigma - weight(a), if (oddBefore & 1) == 0 then upperEven else upperOdd)
-        if c < extent(a) - 1 then f(sigma + weight(a), if (oddBefore & 1) == 0 then lowerEven else lowerOdd)
+        if c > 0 && cellRank(sigma - weight(a)) != masked then
+          f(sigma - weight(a), if (oddBefore & 1) == 0 then upperEven else upperOdd)
+        if c < extent(a) - 1 && cellRank(sigma + weight(a)) != masked then
+          f(sigma + weight(a), if (oddBefore & 1) == 0 then lowerEven else lowerOdd)
       else oddBefore += 1
       a += 1
 
@@ -143,13 +149,13 @@ open class PackedCubicalCohomologyEngine[C: Field](
     val sigma = zeroPivotFacet(tau)
     if sigma >= 0 && zeroPivotCofacet(sigma) == tau then sigma else -1
 
-  /** The cells of dimension `k`, oldest first (rank, then index): a stable counting sort by rank of the cells taken in
-    * ascending index.
+  /** The cells of dimension `k` in the complex, oldest first (rank, then index): a stable counting sort by rank of the
+    * cells taken in ascending index.
     */
   private def level(k: Int): Array[Int] =
     val m = distinct.length
     val start = new Array[Int](m + 1)
-    foreachCellAscending(k)(key => start(cellRank(key) + 1) += 1)
+    foreachCellAscending(k)(key => if cellRank(key) != masked then start(cellRank(key) + 1) += 1)
     var r = 1
     while r <= m do
       start(r) += start(r - 1)
@@ -157,8 +163,9 @@ open class PackedCubicalCohomologyEngine[C: Field](
     val out = new Array[Int](start(m))
     foreachCellAscending(k) { key =>
       val rank = cellRank(key)
-      out(start(rank)) = key
-      start(rank) += 1
+      if rank != masked then
+        out(start(rank)) = key
+        start(rank) += 1
     }
     out
 

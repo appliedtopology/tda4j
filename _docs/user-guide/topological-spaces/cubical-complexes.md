@@ -37,8 +37,15 @@ Persistence(stream)
 ```
 
 `CubicalImage` also has `fromGrayscale2D` and `fromVoxelGrid3D` (arrays), `fromBufferedImage` and `fromFile` (image
-files); [files](../input-output.md) reads Perseus and DIPHA grids. A pixel with value `Infinity` (`-Infinity` in a
-superlevel image) never enters (a mask, for missing data); a `NaN` value is refused, with a message naming the pixel.
+files); [files](../input-output.md) reads Perseus and DIPHA grids. A pixel with value `NaN` is masked (missing data): it is
+not in the complex, in a sublevel and a superlevel image alike (NaN has no sign). Its edges and corners are there when a
+neighbouring pixel is, with that pixel's value; a hole of masked pixels is a hole that never fills. Infinite values are
+ordinary values: `Infinity` enters after every finite value of a sublevel image and before them in a superlevel one,
+`-Infinity` the reverse.
+
+Where a `NaN` can only mean a bug upstream (a `0/0`), turn masks off: `Image(values, shape, nanMask = false)` (also
+`CubicalImage.fromFlatArray(..., nanMask = false)`, MATLAB option `nanMask`, `--nan-mask false` on the command line).
+A `NaN` pixel is then an error that names the pixel.
 
 `Persistence` computes the diagram of an image of two or more dimensions with the
 [fast cubical engine](../homology-computation/fast-cubical.md), which is much faster than matrix reduction and gives

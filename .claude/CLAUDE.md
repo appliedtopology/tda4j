@@ -88,8 +88,9 @@ sbt assembly                    # fat jar for CLI/MATLAB
 sbt -DrunBenchmarks=true test   # also run benchmark/profiling specs — NOT what CI runs
 ```
 
-If `sbt` isn't on `PATH`, run `.claude/scripts/install-sbt.sh` (paces around Maven Central's cold-cache rate limits); in
-the cloud environment's setup script it saves new sessions a 20-40 minute cold start.
+If `sbt` isn't on `PATH`, run `.claude/scripts/install-sbt.sh` (paces around Maven Central's cold-cache rate limits).
+The cloud environment's Setup script should hold `.claude/scripts/cloud-setup-script.sh`'s contents (it calls the
+installer and also warms test dependencies and scalafmt); without it a new session starts cold (~1 h on 2026-10-12).
 
 No linter beyond scalafmt; tests are specs2. CI jobs (`test` with a fat-jar smoke run, `docs-build`, `mima`, `lint`) and
 their local equivalents: steward skill; a weekly `coverage.yml` maps coverage, never gates. A deliberate binary break is

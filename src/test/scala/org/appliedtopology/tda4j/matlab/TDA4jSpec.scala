@@ -166,17 +166,11 @@ class TDA4jSpec extends mutable.Specification:
         )
     }
 
-    "refuse an image with a NaN pixel under every engine, naming it; an Inf pixel never enters" in {
+    "mask a NaN pixel under every engine, in either direction; an Inf pixel is an ordinary extreme" in {
       val engines = List("fast-cubical", "cohomology", "chunks", "naive")
-      val withNaN = Array(Array(0.0, 1.0, Double.NaN), Array(2.0, 3.0, 4.0))
-      val refusedBy = engines.filter { engine =>
-        scala.util.Try(TDA4j.computeFromImage(withNaN, Array("engine", engine))).failed.toOption.exists {
-          case e: IllegalArgumentException => e.getMessage.contains("NaN value at pixel (0, 2)")
-          case _                           => false
-        }
-      }
-      // A ring around a missing pixel: the hole is never filled, so the loop never dies. A superlevel image's values are
-      // negated, so its mask is -Inf; +Inf there is the brightest value, which enters first and leaves no loop.
+      // A ring around a missing pixel: the hole is never filled, so the loop never dies, sublevel or superlevel. A
+      // superlevel image's values are negated, so there -Inf never enters too, and +Inf is the brightest value, which
+      // enters first and leaves no loop.
       val inf = Double.PositiveInfinity
       def ring(centre: Double) = Array(Array(1.0, 1.0, 1.0), Array(1.0, centre, 1.0), Array(1.0, 1.0, 1.0))
       def bars(centre: Double, options: String*) = engines.map { engine =>
@@ -184,13 +178,36 @@ class TDA4jSpec extends mutable.Specification:
           FullBarcode.computeFromImage(ring(centre), Array("engine", engine) ++ options).toArray()
         ).sorted
       }
-      (refusedBy must beEqualTo(engines)) and
-        (TDA4j.computeFromImage(withNaN, Array("sublevel", "false")) must throwAn[IllegalArgumentException](
-          message = "-Infinity \\(the filtration is superlevel\\) for a missing pixel"
+      (bars(Double.NaN) must beEqualTo(engines.map(_ -> List((0, 1.0, inf), (1, 1.0, inf))))) and
+        (bars(Double.NaN, "sublevel", "false") must beEqualTo(
+          engines.map(_ -> List((0, -1.0, inf), (1, -1.0, inf)))
         )) and
         (bars(inf) must beEqualTo(engines.map(_ -> List((0, 1.0, inf), (1, 1.0, inf))))) and
         (bars(-inf, "sublevel", "false") must beEqualTo(engines.map(_ -> List((0, -1.0, inf), (1, -1.0, inf))))) and
         (bars(inf, "sublevel", "false") must beEqualTo(engines.map(_ -> List((0, -inf, inf)))))
+    }
+
+    "refuse an image with a NaN pixel under every engine with nanMask false, naming it" in {
+      val engines = List("fast-cubical", "cohomology", "chunks", "naive")
+      val withNaN = Array(Array(0.0, 1.0, Double.NaN), Array(2.0, 3.0, 4.0))
+      val refusedBy = engines.filter { engine =>
+        scala.util
+          .Try(TDA4j.computeFromImage(withNaN, Array("engine", engine, "nanMask", "false")))
+          .failed
+          .toOption
+          .exists {
+            case e: IllegalArgumentException =>
+              e.getMessage.contains("NaN value at pixel (0, 2)") && e.getMessage.contains("nanMask")
+            case _ => false
+          }
+      }
+      (refusedBy must beEqualTo(engines)) and
+        (TDA4j.computeFromImage(withNaN, Array("nanMask", "true")).size() must beEqualTo(
+          TDA4j.computeFromImage(withNaN).size()
+        )) and
+        (TDA4j.computeFromImage(withNaN, Array("nanMask", "maybe")) must throwAn[IllegalArgumentException](
+          message = "nanMask"
+        ))
     }
 
     "have representative chains readable for every bar, with matching vertex/coefficient array lengths" in {

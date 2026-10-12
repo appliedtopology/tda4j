@@ -227,8 +227,9 @@ filtration equals ordinary `H_0` of this dual graph's own SUPERLEVEL filtration 
 uses, processing dual vertices/edges together in DESCENDING order of primal value, with every resulting bar's
 endpoints swapped. `∞` must be the unconditional elder of any merge it takes part in — not just because
 `birthOf(∞) = +Infinity` is *usually* the largest value, but enforced explicitly, since a real top cell can
-also carry `topValue = +Infinity` (this codebase's own "permanently missing cell" convention, e.g. Perseus's
-`-1`) and tie against it.
+also carry `topValue = +Infinity` and tie against it. A masked (NaN) pixel is not in the complex, so it is in the
+dual's complement from the start: its component is elder to every real one but `∞`'s, and dying at a facet of value
+`v` it gives an essential primal bar born at `v`.
 
 **Representatives**: every top cell carries a sign relative to the root of its dual component, kept in a signed
 union-find (`UnitSignedUnionFind`, signs as bytes: path compression composes the signs, a merge only re-links two roots), so a dying

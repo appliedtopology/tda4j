@@ -14,16 +14,25 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - `Chain` is an abstract class open to new storages: a storage implements `entryIterator` and inherits every other
   member (the library's are `HeapChain` and `PackedChain`). Its 0.5.0 constructor was `private[tda4j]`, so no
   user code built a `Chain` directly. Binary break only.
+- `nanMask: Boolean = true` is a new last parameter of `CubicalGridStream`, `Image`, `CubicalImage.fromFlatArray`,
+  `fromGrayscale2D`, `fromVoxelGrid3D`, `Perseus.readCubicalToplex` and `Dipha.readCubicalGridStream` (see Added).
+  Defaulted, so callers need no change. Binary break only.
 - `Chain.chainShow` needs only `Show` of the cells, not `OrderedCell`. A given found by implicit search, so
   callers need no change. Binary break only.
 - `Chain` equality is equality of formal sums: the same cells, coefficients equal by the field's `isEqual`, in any
   order. Before, one sum over `F_p` could compare unequal to itself.
-- Images with a `NaN` pixel are refused by every engine, with a message naming the pixel; mask with `+Infinity`
-  (sublevel) or `-Infinity` (superlevel).
+- A `NaN` pixel is the mask of a cubical image (missing data): it is not in the complex, in a sublevel and a
+  superlevel image alike, under every engine (the verb, `CubicalImage`, `CubicalGridStream`, MATLAB, the CLI); before,
+  it was refused. `±Infinity` are ordinary values, entering last or first. Perseus's `-1` (a missing cube) now reads as
+  `NaN` (it was `+Infinity`, so a superlevel reading filled the hole first), and `Perseus.writeCubicalToplex` refuses
+  infinite values instead of writing them as `-1`.
 - `Chain.reduceBy` throws when its pivot moves back or stays put for 64 steps, instead of looping forever.
 
 ### Added
 
+- `nanMask = false` turns cubical masks off: a `NaN` pixel is then an error naming the pixel, for data where a `NaN`
+  can only be a bug. On `Image`, `CubicalGridStream`, the `CubicalImage` array constructors, the Perseus and DIPHA
+  grid readers, MATLAB option `nanMask` and CLI `--nan-mask`.
 - `plot`: barcodes, persistence diagrams, images, landscapes, point clouds, complexes, cycles and cocycles, circular
   coordinates and 3-D scenes as SVG, and `view()`, a live browser viewer. In the main artifact, with no dependencies
   of its own.

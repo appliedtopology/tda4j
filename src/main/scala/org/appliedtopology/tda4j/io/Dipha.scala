@@ -69,9 +69,10 @@ object Dipha:
       i += 1
     (g.reverse.toIndexedSeq, values.toIndexedSeq)
 
-  def readCubicalGridStream(path: String, sublevel: Boolean = true): CubicalGridStream =
+  /** The image data of `path` as a grid; `nanMask = false` makes a NaN value an error instead of a masked pixel. */
+  def readCubicalGridStream(path: String, sublevel: Boolean = true, nanMask: Boolean = true): CubicalGridStream =
     val (shape, flatValues) = readImageData(path)
-    CubicalImage.fromFlatArray(shape, flatValues, sublevel)
+    CubicalImage.fromFlatArray(shape, flatValues, sublevel, nanMask = nanMask)
 
   /** `shape`/`flatValues` in `CubicalImage.fromFlatArray`'s own last-axis-fastest convention -- reversed internally to
     * DIPHA's own `g(1)`-fastest convention before writing (the inverse of `readImageData`'s own reversal).

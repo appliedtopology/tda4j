@@ -44,7 +44,7 @@ complete barcode**; new facade option keys must go in every strict allowlist exc
 - DIPHA/Perseus cubical axis order is **first axis fastest** — opposite `fromFlatArray`; readers/writers reverse
   shape.
 - Diagram readers rebuild finite bars via `PersistenceBar.apply(dim, lower, upper)` so round trips compare equal.
-  Perseus `-1` → `+∞` (missing cell).
+  Perseus `-1` → `NaN` (the mask: missing in a superlevel reading too; `rules/cubical.md`).
 
 ## CLI executable
 
@@ -53,7 +53,10 @@ Scallop (zero deps). Every compute flag mirrors a `matlab.TDA4j` option key 1:1 
 omitted keys let `TDA4j` apply its own defaults (one source of truth). `--output-format=perseus` refused for
 non-integral filtrations. `TDA4jCLI.run(args, out): Int` is testable in-process, but Scallop's `onError` calls
 `System.exit` on any parse error or `--help`/`--version` — `CLISpec` must never pass malformed flags. Scallop
-`opt[Boolean]` has always-supplied toggle semantics (`WORKLOG-naming-and-dispatch-expansion.md`). `--distance-to`
+`opt[Boolean]` has always-supplied toggle semantics (`WORKLOG-naming-and-dispatch-expansion.md`). **Scallop gives a
+short flag to the FIRST declared option with that letter**: a new option declared earlier silently takes a letter users
+already type (`--nan-mask` took `-n` from `--num-landmarks`); new options take `noshort = true`, and `CLISpec` pins
+0.5.0's short flags (`WORKLOG-nan-mask.md`). `--distance-to`
 (+`--distance-format`/`-order`/`-ground-norm`) mirrors `BarcodeDistance` instead; only
 `--output-format=text` works with it.
 

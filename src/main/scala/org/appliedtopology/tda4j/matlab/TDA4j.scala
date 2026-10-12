@@ -79,9 +79,9 @@ private object CoefficientKind:
   * defaults are listed in the user guide's "Calling from MATLAB or Java" page: `complex`, `engine`, `maxDimension`,
   * `maxFiltrationValue`, `field`, `prime`, `epsilon`, `minPersistence`, `minPersistenceFraction`, `includeZeroLength`,
   * `alphaBackend`, `requireValidTriangulation`, `dtmK`, `dtmQ`, `dtmP`, `sparseEpsilon`, `numLandmarks`,
-  * `witnessVariant`, `landmarkSelector`, `landmarkSeed`, `nu`, `edgeCollapse`, `sublevel`, `dual`. An unknown option,
-  * an unknown value, or a combination that does not apply (an engine for a complex it cannot read) throws
-  * `IllegalArgumentException` naming it, before anything is computed.
+  * `witnessVariant`, `landmarkSelector`, `landmarkSeed`, `nu`, `edgeCollapse`, `sublevel`, `nanMask`, `dual`. An
+  * unknown option, an unknown value, or a combination that does not apply (an engine for a complex it cannot read)
+  * throws `IllegalArgumentException` naming it, before anything is computed.
   *
   * By default a result reports the essential bars and the bars longer than 1% of the input's scale (its minimum
   * enclosing radius, or the value range of an image or relation); zero-length bars are left out unless
@@ -267,9 +267,10 @@ object TDA4j:
     * size along each axis. Options: `engine` (`fast-cubical`, the default for two dimensions and up; `cohomology`, the
     * default for one dimension and for `representativeType` `cocycles`; `naive`, `chunks`), `maxDimension` (default:
     * the grid's dimension), `sublevel` (`false` for superlevel sets, whose filtration values are negated intensities),
-    * `representativeType`, `field`, `prime`, `epsilon`, and the bar options. A pixel of value `Inf` (`-Inf` with
-    * `sublevel` `false`) never enters (a mask, for missing data); a NaN value is refused, with a message naming the
-    * pixel.
+    * `representativeType`, `field`, `prime`, `epsilon`, and the bar options. A pixel of value `NaN` is masked (missing
+    * data): it is not in the complex, whatever `sublevel` is. `Inf` and `-Inf` are ordinary values: with `sublevel`
+    * `true`, `Inf` enters after every finite value and `-Inf` before them; with `sublevel` `false`, the reverse. Option
+    * `nanMask` `false` turns masks off: a NaN pixel is then an error, naming the pixel.
     */
   def computeFromCubicalImage(
     shape: Array[Int],
@@ -279,7 +280,8 @@ object TDA4j:
     validateShape(shape, flatValues)
     val opts = parseOptions(options)
     val sublevel = opts.get("sublevel").forall(v => parseBooleanOption("sublevel", v))
-    val stream = CubicalImage.fromFlatArray(shape.toIndexedSeq, flatValues.toIndexedSeq, sublevel)
+    val nanMask = opts.get("nanmask").forall(v => parseBooleanOption("nanMask", v))
+    val stream = CubicalImage.fromFlatArray(shape.toIndexedSeq, flatValues.toIndexedSeq, sublevel, nanMask = nanMask)
     // The range is the same under sublevel=false (values are negated, not rescaled).
     dispatchCubical(opts, stream, valueRange(flatValues.iterator))
 
@@ -307,6 +309,7 @@ object TDA4j:
     "prime",
     "epsilon",
     "sublevel",
+    "nanmask",
     "numlandmarks",
     "witnessvariant",
     "landmarkselector",

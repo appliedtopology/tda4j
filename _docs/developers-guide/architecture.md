@@ -279,9 +279,12 @@ value, and every lower-dimensional cube's value is the `min` over the top cells 
 directly via the cartesian product over the cube's degenerate axes rather than a recursive coface walk.
 `CubicalImage` builds these from images/voxel grids (`fromFlatArray`/`fromBufferedImage`/`fromFile`/
 `fromVoxelGrid3D`); sublevel vs. superlevel filtration is handled by negating values on load, not as a flag
-on the stream itself. An image with a NaN value is refused, naming the pixel, when its values are first read:
-NaN has no place in the order. Mask a pixel with `+Infinity` (`-Infinity` for a superlevel image, which is negated
-on load). `CubicalHomologyEngine` is a one-line `Cube`-specialized wrapper around
+on the stream itself. A NaN pixel is masked: not in the complex, in either direction (NaN has no sign, so
+negating a superlevel image keeps it). Every other cube takes the minimum over the UNMASKED pixels containing it and is
+absent when they are all masked, so the complex is the closure of the unmasked pixels; `filtrationValue` and
+`iterateDimension` leave masked cubes out. The grid engines rank a masked pixel `GridRanks.masked`, one past every real
+rank, so a minimum over ranks skips it and a cell of rank `masked` is skipped explicitly (reading its value would be out
+of bounds). Infinite values are ordinary values. `CubicalHomologyEngine` is a one-line `Cube`-specialized wrapper around
 `CellularHomologyEngine` — cubical complexes needed no new engine code, only a new `OrderedCell` instance.
 
 #### Dual union-find cubical engine (Flash Cubical)
@@ -304,9 +307,11 @@ reduction — see
 
 `∞` must be the unconditional elder of any merge it takes part in — its own chain is deliberately never
 populated, since it never dies — which is NOT automatically guaranteed by comparing birth values alone: a real
-top cell can also carry `topValue = +Infinity` (this codebase's own "permanently missing cell" convention, the
-same one `Perseus`'s `-1` already maps to) and tie against `∞`'s own `birthOf`, so the young/old decision
-special-cases `∞` explicitly rather than relying on the birth-value comparison alone. Representatives: each
+top cell can also carry `topValue = +Infinity` and tie against `∞`'s own `birthOf`, so the young/old decision
+special-cases `∞` explicitly rather than relying on the birth-value comparison alone. A masked (NaN) pixel is in the
+complement from the start, like `∞`: its component is elder to every real one and younger than `∞`'s, the facets
+outside the complex join such components before anything enters (no bar), and when one dies at a facet of value `v` it
+gives an essential bar born at `v`. Representatives: each
 top cell carries a sign relative to its dual component's root in a signed union-find (`SignedUnionFind`), so a dying
 component's signed sum of top cells -- read off the merge forest only for reported bars -- has exactly its bounding
 `H_{d-1}` cycle as boundary (the flip at each merge is solved from the connecting facet's own `±1` boundary

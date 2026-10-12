@@ -6,8 +6,8 @@ import org.specs2.mutable
   * same bars in the same order, the same cocycles (`persistentCohomology`) and the same cycles (`persistentHomology`,
   * essential ones included), term for term. On whole grids (`Engine.Cohomology` on an image) and on a grid's cells up
   * to a dimension (`LimitedCubicalGridStream`: the fast engine's middle degrees). Inputs: 1-D to 4-D grids, degenerate
-  * shapes, tied values (zero-length pairs everywhere), +Infinity pixels, both signed zeros, and noise; F_2, F_3, F_17;
-  * zero-length bars on and off; apparent pairs on and off (the shortcut must change nothing).
+  * shapes, tied values (zero-length pairs everywhere), +Infinity pixels, masked (NaN) pixels, both signed zeros, and
+  * noise; F_2, F_3, F_17; zero-length bars on and off; apparent pairs on and off (the shortcut must change nothing).
   */
 class PackedCubicalCohomologySpec extends mutable.Specification:
   val fields: Seq[FiniteField] = Seq(FiniteField(2), FiniteField(3), FiniteField(17))
@@ -32,7 +32,10 @@ class PackedCubicalCohomologySpec extends mutable.Specification:
       IndexedSeq(3, 4, 3),
       IndexedSeq(1, 3, 4),
       IndexedSeq(2, 2, 2, 2)
-    ).map(image(_, tied)) ++ Seq(IndexedSeq(6, 5), IndexedSeq(3, 3, 4)).map(image(_, () => rng.nextDouble()))
+    ).map(image(_, tied)) ++ Seq(IndexedSeq(6, 5), IndexedSeq(3, 3, 4)).map(image(_, () => rng.nextDouble())) ++
+      Seq(IndexedSeq(8), IndexedSeq(1, 5), IndexedSeq(5, 6), IndexedSeq(3, 4, 3), IndexedSeq(2, 2, 2, 2)).map(
+        image(_, () => if rng.nextInt(4) == 0 then Double.NaN else tied())
+      )
 
   // An essential class has no death cell; a pair whose death cell has value +Infinity (a missing pixel) also ends at
   // +Infinity, but its V-column is not a cocycle of the whole complex.

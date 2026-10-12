@@ -30,4 +30,5 @@ CSV.writePersistenceDiagram("diagram.csv", diagram.bars)
 
 Two details if you compare with another tool: Ripser's binary distance matrices are 32-bit floats, and DIPHA's and
 Perseus's grids list the first axis fastest (the readers and writers convert for you). A Perseus value of `-1` is a
-missing cell, read as `Infinity`.
+missing cell, read as `NaN`: masked, not in the complex, sublevel or superlevel. Writing a grid writes `NaN` as `-1` and
+refuses an infinite value (the format has none).

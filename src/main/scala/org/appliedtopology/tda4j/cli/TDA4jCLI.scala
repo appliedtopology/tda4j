@@ -195,6 +195,7 @@ object TDA4jCLI:
     add("prime", conf.prime)
     add("epsilon", conf.epsilon)
     add("sublevel", conf.sublevel)
+    add("nanMask", conf.nanMask)
     add("numLandmarks", conf.numLandmarks)
     add("witnessVariant", conf.witnessVariant)
     add("landmarkSelector", conf.landmarkSelector)

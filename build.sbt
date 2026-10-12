@@ -192,6 +192,35 @@ mimaBinaryIssueFilters ++= {
     ),
     ProblemFilters.exclude[IncompatibleResultTypeProblem](
       "org.appliedtopology.tda4j.sset.ClassifyingSpace.persistentGroupHomology"
+    ),
+    // `nanMask: Boolean = true` (#52: `false` turns NaN masks off, a NaN pixel is then an error) added as the LAST,
+    // defaulted parameter of the cubical-image entry points: source compatible, but each old signature is gone.
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.CubicalGridStream.this(scala.collection.immutable.IndexedSeq,scala.Function1,Boolean)Unit"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.CubicalImage.fromFlatArray(scala.collection.immutable.IndexedSeq,scala.collection.immutable.IndexedSeq,Boolean,Boolean)org.appliedtopology.tda4j.CubicalGridStream"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.CubicalImage.fromGrayscale2D(Array[Array[Double]],Boolean,Boolean)org.appliedtopology.tda4j.CubicalGridStream"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.CubicalImage.fromVoxelGrid3D(Array[Array[Array[Double]]],Boolean,Boolean)org.appliedtopology.tda4j.CubicalGridStream"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.Dipha.readCubicalGridStream(java.lang.String,Boolean)org.appliedtopology.tda4j.CubicalGridStream"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.Image.this(scala.collection.immutable.IndexedSeq,scala.collection.immutable.IndexedSeq,Boolean)Unit"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.Image.copy(scala.collection.immutable.IndexedSeq,scala.collection.immutable.IndexedSeq,Boolean)org.appliedtopology.tda4j.Image"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.Image.apply(scala.collection.immutable.IndexedSeq,scala.collection.immutable.IndexedSeq,Boolean)org.appliedtopology.tda4j.Image"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.Perseus.readCubicalToplex(java.lang.String,Boolean)org.appliedtopology.tda4j.CubicalGridStream"
     )
   )
 }
