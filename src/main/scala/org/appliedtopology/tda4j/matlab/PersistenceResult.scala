@@ -335,44 +335,48 @@ final class PersistenceResult private[matlab] (
     def persistence(i: Int) = if death(i) == birth(i) then 0.0 else death(i) - birth(i)
     candidates.maxBy(i => (persistence(i), -i))
 
-  private def noCoordinates(plot: String): Nothing =
+  // The refusals below name what cannot be drawn in words (`what`), not a method: the CLI shows them as they are.
+
+  private def noCoordinates(what: String): Nothing =
     throw new UnsupportedOperationException(
-      s"$plot needs coordinates to draw on, and this result was computed from ${src.input.words}; plotBarcode, " +
-        "plotDiagram, plotLandscape and plotPersistenceImage work for every result"
+      s"this result was computed from ${src.input.words}, which has no coordinates to draw $what on; the barcode, " +
+        "the diagram, the landscapes and the persistence image can be drawn for every result"
     )
 
-  private def points(plot: String): Array[Array[Double]] = src.input match
+  private def points(what: String): Array[Array[Double]] = src.input match
     case ResultInput.Points(ps)  => ps
     case ResultInput.Image(_, _) =>
-      throw new UnsupportedOperationException(s"$plot draws point clouds; this result was computed from an image")
-    case ResultInput.Abstract(_) => noCoordinates(plot)
+      throw new UnsupportedOperationException(
+        s"$what is drawn for point clouds, and this result was computed from an image"
+      )
+    case ResultInput.Abstract(_) => noCoordinates(what)
 
-  private def image2D(plot: String): org.appliedtopology.tda4j.Image = src.input match
+  private def image2D(what: String): org.appliedtopology.tda4j.Image = src.input match
     case ResultInput.Image(shape, values) =>
       if shape.length != 2 then
         throw new UnsupportedOperationException(
-          s"$plot draws 2-D images; this result's image has shape ${shape.mkString(" x ")}"
+          s"$what is drawn for 2-D images, and this result's image has shape ${shape.mkString(" x ")}"
         )
       org.appliedtopology.tda4j.Image(values.toIndexedSeq, shape.toIndexedSeq)
     case _ => throw new IllegalStateException("not an image")
 
-  private def complexKind(plot: String): PointCloudComplex = src.complex match
+  private def complexKind(what: String): PointCloudComplex = src.complex match
     case "vr"    => VietorisRips
     case "cech"  => Cech
     case "alpha" => AlphaShapes
     case other   =>
       throw new UnsupportedOperationException(
-        s"$plot draws the vr, cech and alpha complexes; this result's complex is $other"
+        s"$what is drawn for the vr, cech and alpha complexes, and this result's complex is $other"
       )
 
   /** The input: the points (their first two coordinates) or the 2-D image. */
   def plotInput(): Figure = src.input match
     case ResultInput.Points(ps)  => Plot.points(ps)
-    case ResultInput.Image(_, _) => Plot.image(image2D("plotInput"))
-    case ResultInput.Abstract(_) => noCoordinates("plotInput")
+    case ResultInput.Image(_, _) => Plot.image(image2D("the input"))
+    case ResultInput.Abstract(_) => noCoordinates("the input")
 
   /** The complex at scale `at` over the points (`vr`, `cech` or `alpha`), with the balls whose overlaps it records. */
-  def plotComplex(at: Double): Figure = Plot.complex(points("plotComplex"), at, complexKind("plotComplex"))
+  def plotComplex(at: Double): Figure = Plot.complex(points("the complex"), at, complexKind("the complex"))
 
   // The facade's own cells and coefficients, as `Plot` takes them: for `Z/p` the coefficients are already the balanced
   // integers `Plot.number` gives for a typed chain, so the plot is the same either way, and no field is invented.
@@ -382,10 +386,11 @@ final class PersistenceResult private[matlab] (
   private def cubicalTerms(i: Int): Seq[(Cube, Double)] =
     cycleVertices(i).toSeq.map(c => Cube.fromEncoded(c.toIndexedSeq)).zip(cycleCoefficients(i))
 
-  private def requireBar(i: Int, plot: String): Unit =
+  private def requireBar(i: Int): Unit =
     if i < 0 || i >= size() then
       throw new IllegalArgumentException(
-        s"$plot: there is no bar $i; this result reports ${size()} bars, numbered 0 to ${size() - 1}"
+        s"there is no bar $i: this result reports " +
+          (if size() == 0 then "no bars" else s"${size()} bars, numbered 0 to ${size() - 1}")
       )
 
   private def representativeTitle(i: Int): String =
@@ -411,7 +416,7 @@ final class PersistenceResult private[matlab] (
     stream.iterator.filter(c => c.dim <= dim && stream.filtrationValue(c) <= at).toSet
 
   private def representativeFigure(i: Int, at: Option[Double]): Figure =
-    requireBar(i, "plotRepresentative")
+    requireBar(i)
     src.input match
       case ResultInput.Points(ps) =>
         val terms = simplicialTerms(i)
@@ -419,35 +424,35 @@ final class PersistenceResult private[matlab] (
         (src.cocycles, at) match
           case (true, None)    => Plot.cocycle(ps, terms, Optional.empty, title)
           case (true, Some(r)) =>
-            val cells = complexAt(ps, r, dimension(i), "plotRepresentative at a scale")
+            val cells = complexAt(ps, r, dimension(i), "a representative at a scale")
             val kept = terms.filter((s, _) => cells.contains(s))
             Plot
               .cocycle(ps, kept, Optional.empty, title)
               .copy(subtitle = s"${kept.size} of its ${terms.size} cells: those in the complex at ${Svg.number(r)}")
           case (false, None)    => Plot.cycle(ps, terms, title)
           case (false, Some(r)) =>
-            Plot.cycle(ps, terms, title).over(Plot.complex(ps, r, complexKind("plotRepresentative at a scale")))
+            Plot.cycle(ps, terms, title).over(Plot.complex(ps, r, complexKind("a representative at a scale")))
       case ResultInput.Image(_, _) =>
         if at.isDefined then
           throw new UnsupportedOperationException(
-            "plotRepresentative at a scale is for point clouds; for an image, call plotRepresentative(i)"
+            "a representative at a scale is drawn for point clouds; draw an image's representative without a scale"
           )
-        Plot.cubicalChain(image2D("plotRepresentative"), cubicalTerms(i), representativeTitle(i))
-      case ResultInput.Abstract(_) => noCoordinates("plotRepresentative")
+        Plot.cubicalChain(image2D("a representative"), cubicalTerms(i), representativeTitle(i))
+      case ResultInput.Abstract(_) => noCoordinates("a representative")
 
   /** The points in 3-D (their first three coordinates), to turn and zoom. */
-  def plotInput3D(): Scene = Plot.points3D(points("plotInput3D"))
+  def plotInput3D(): Scene = Plot.points3D(points("a 3-D view"))
 
   /** The complex at scale `at` in 3-D (`vr`, `cech` or `alpha`). */
-  def plotComplex3D(at: Double): Scene = Plot.complex3D(points("plotComplex3D"), at, complexKind("plotComplex3D"))
+  def plotComplex3D(at: Double): Scene = Plot.complex3D(points("a 3-D view"), at, complexKind("the complex"))
 
   /** Bar `i`'s cycle in 3-D over the points: its edges and triangles in its dimension's color. */
   def plotRepresentative3D(i: Int): Scene =
-    requireBar(i, "plotRepresentative3D")
-    val ps = points("plotRepresentative3D")
+    requireBar(i)
+    val ps = points("a 3-D view")
     if src.cocycles then
       throw new UnsupportedOperationException(
-        "plotRepresentative3D draws cycles: a cocycle needs its values, which only plotRepresentative shows; " +
-          "compute with representativeType cycles for a 3-D view"
+        "a cocycle is drawn in 2-D, colored by its values, which a 3-D view would not show; for a 3-D view, " +
+          "compute cycles (representativeType cycles)"
       )
     Plot.cycle3D(ps, simplicialTerms(i), representativeTitle(i))

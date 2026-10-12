@@ -12,7 +12,9 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     """tda4j: persistent homology of a point cloud, distance matrix, image or relation.
       |
       |Reads the input (--input-format), builds a complex (--complex; a cubical complex for an image, the Dowker
-      |complex for a relation), computes its persistence and writes the diagram (--output-format).
+      |complex for a relation), computes its persistence and writes the diagram (--output-format), or draws it
+      |(--plot). --save-result keeps the whole result in a file, which is then an input itself: plot or print it
+      |later without computing again.
       |
       |Usage: tda4j [options] <input-file>
       |""".stripMargin
@@ -23,7 +25,8 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     descr = "input format. Point clouds and distance matrices: csv-points (default), csv-distances, " +
       "csv-lower, ripser-points, ripser-lower, ripser-upper, ripser-distance, ripser-binary, dipha-distance, off. " +
       "Images: perseus-cubical, dipha-image, image. Relations: csv-relation (one row per point, one column per " +
-      "witness), for the Dowker complex"
+      "witness), for the Dowker complex. A result saved with --save-result: result (chosen by itself when " +
+      "--input-format is not given)"
   )
 
   val output: ScallopOption[String] = opt[String](
@@ -166,6 +169,36 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   val distanceGroundNorm: ScallopOption[Double] = opt[Double](
     descr = "the ground norm on the birth-death plane: a finite p >= 1.0 (default: L-infinity), with " +
       "--distance-to"
+  )
+
+  // Plots and saved results. Declared last and without short flags: Scallop gives a letter to the first option declared
+  // with it, so an earlier declaration would take a short flag users already type.
+  val plot: ScallopOption[String] = opt[String](
+    noshort = true,
+    descr = "instead of writing the diagram, draw: barcode, diagram, representative (a bar's cycle or cocycle over " +
+      "the points or image), input, complex (at --at), landscape, persistence-image, or input-3d, complex-3d, " +
+      "representative-3d. Into --output (.svg in plain light colors, .html a page that follows the reader's light " +
+      "or dark setting), or without --output into a page opened in the browser"
+  )
+  val bar: ScallopOption[Int] = opt[Int](
+    noshort = true,
+    descr = "for --plot representative: the bar, by its 0-based line number in the text output (default: the most " +
+      "persistent bar of --dimension)"
+  )
+  val dimension: ScallopOption[Int] = opt[Int](
+    noshort = true,
+    descr = "for --plot representative (without --bar), landscape and persistence-image: the homological " +
+      "dimension (default: 1, the loops)"
+  )
+  val at: ScallopOption[Double] = opt[Double](
+    noshort = true,
+    descr = "the scale, in the units of the complex: required for --plot complex; for --plot representative, a " +
+      "cycle is drawn over the complex at this scale and a cocycle restricted to it"
+  )
+  val saveResult: ScallopOption[String] = opt[String](
+    noshort = true,
+    descr = "also save the whole result to this file (JSON): every bar, the reported bars' representatives, the " +
+      "input, and how it was computed. Give the file as the input of a later run to print or plot it"
   )
 
   val input: ScallopOption[String] = trailArg[String](name = "input-file", descr = "input file", required = true)

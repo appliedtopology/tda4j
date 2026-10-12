@@ -112,7 +112,7 @@ class PersistenceResultPlotSpec extends Specification:
       val fromDistances = TDA4j.computeFromDistanceMatrix(distances)
       val fromRelation = TDA4j.computeFromRelation(distances)
       (fromDistances.plotRepresentative(0) must throwA[UnsupportedOperationException](message = "distance matrix")) and
-        (fromDistances.plotInput() must throwA[UnsupportedOperationException](message = "plotBarcode")) and
+        (fromDistances.plotInput() must throwA[UnsupportedOperationException](message = "the barcode")) and
         (fromRelation.plotRepresentative(0) must throwA[UnsupportedOperationException](message = "a relation"))
     }
   }
