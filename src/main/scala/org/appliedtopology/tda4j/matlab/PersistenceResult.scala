@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j.matlab
 
 import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.{Figure, Plot, Scene, Svg}
 
 /** The boundary matrix of the complex a [[PersistenceResult]] was computed from, one column per cell in filtration
   * order; exposed only through `PersistenceResult`'s accessors.
@@ -19,8 +20,12 @@ private[matlab] case class BoundaryMatrixData(
   *
   * Bars are numbered `0 until size()`, in no guaranteed order; an essential bar has `death(i) == Infinity`. The bars
   * reported are those that pass the persistence threshold (see [[persistenceThreshold]]); [[toArrayUnfiltered]] has all
-  * of them. Each bar has a representative ([[cycleVertices]], [[cycleCoefficients]]): a cocycle for the `ripser` and
-  * `cohomology` engines, a cycle for the others.
+  * of them. Each bar has a representative ([[cycleVertices]], [[cycleCoefficients]]): a cycle, or a cocycle with option
+  * `representativeType` `cocycles`.
+  *
+  * The `plot...` methods draw the result (see the `plot` package): each returns a figure to `view()` in the browser or
+  * `save("name.svg")` (or `.html`). [[save]] writes the whole result to a file that `TDA4j.loadResult` reads back, from
+  * MATLAB, Java, Scala or the command line.
   */
 final class PersistenceResult private[matlab] (
   private val allDims: Array[Int],
@@ -29,7 +34,8 @@ final class PersistenceResult private[matlab] (
   private val cycleProvider: Int => (Array[Array[Int]], Array[Double]),
   private val boundaryMatrixProvider: () => BoundaryMatrixData,
   private val visible: Array[Int],
-  private val threshold: Double
+  private val threshold: Double,
+  private val source: Option[ResultSource] = None
 ):
   /** A result that reports every bar -- what `fromBars` builds; `TDA4j`'s dispatch then narrows it with
     * [[withPersistenceThreshold]].
@@ -78,7 +84,8 @@ final class PersistenceResult private[matlab] (
       cycleProvider,
       boundaryMatrixProvider,
       PersistenceFilter.keptIndices(allBirths, allDeaths, thr),
-      thr
+      thr,
+      source
     )
 
   /** This result without its zero-length bars (`birth == death`): what every entry point returns unless the
@@ -91,7 +98,10 @@ final class PersistenceResult private[matlab] (
       keep.map(allBirths),
       keep.map(allDeaths),
       i => cycleProvider(keep(i)),
-      boundaryMatrixProvider
+      boundaryMatrixProvider,
+      Array.range(0, keep.length),
+      0.0,
+      source
     )
 
   def size(): Int = visible.length
@@ -126,13 +136,7 @@ final class PersistenceResult private[matlab] (
     * compare (so they do not depend on each result's own threshold).
     */
   private def barsOfDimension(dim: Int): IndexedSeq[PersistenceBar[Double, Nothing]] =
-    (0 until allDims.length)
-      .filter(allDims(_) == dim)
-      .map { i =>
-        val upper: BarcodeEndpoint[Double] =
-          if allDeaths(i).isPosInfinity then PositiveInfinity[Double]() else OpenEndpoint(allDeaths(i))
-        PersistenceBar[Double, Nothing](dim, ClosedEndpoint(allBirths(i)), upper)
-      }
+    (0 until allDims.length).filter(allDims(_) == dim).map(barAt)
 
   /** `Infinity` is the L∞ ground norm, a finite `p >= 1` the Lp norm. */
   private def toGroundNorm(groundNorm: Double): BarcodeDistance.GroundNorm =
@@ -248,3 +252,175 @@ final class PersistenceResult private[matlab] (
 
   /** The filtration value of cell `j`: keep the cells with value at most `r` for the complex at scale `r`. */
   def columnFiltrationValue(j: Int): Double = boundaryMatrixData.columnFiltrationValues(j)
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // saving
+  // ---------------------------------------------------------------------------------------------------------------
+
+  /** Writes the result to `path` for `TDA4j.loadResult` (from MATLAB, Java, Scala or `tda4j --input-format result`):
+    * every bar, the threshold and which bars it reported, the reported bars' representatives (computed now if they were
+    * not yet), what it was computed with, and the points or image it was computed from. Not the boundary matrix. The
+    * file is JSON, readable from any language; non-finite numbers are the strings `"Infinity"`, `"-Infinity"` and
+    * `"NaN"`. Returns the file's absolute path.
+    */
+  def save(path: String): String =
+    def representative(k: Int) =
+      try Some(cycleProvider(visible(k)))
+      catch case _: UnsupportedOperationException => None
+    ResultFile.write(path, allDims, allBirths, allDeaths, visible, threshold, representative, source).toString
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // plots
+  // ---------------------------------------------------------------------------------------------------------------
+
+  /** Every facade entry point attaches its source; a result without one was built by hand inside this package. */
+  private def src: ResultSource =
+    source.getOrElse(throw new IllegalStateException("this result does not record what it was computed from"))
+
+  /** This result recording what it was computed from (what the plots draw on). */
+  private[matlab] def withSource(s: ResultSource): PersistenceResult =
+    new PersistenceResult(
+      allDims,
+      allBirths,
+      allDeaths,
+      cycleProvider,
+      boundaryMatrixProvider,
+      visible,
+      threshold,
+      Some(s)
+    )
+
+  private def barAt(k: Int): PersistenceBar[Double, Nothing] =
+    val upper: BarcodeEndpoint[Double] =
+      if allDeaths(k).isPosInfinity then PositiveInfinity[Double]() else OpenEndpoint(allDeaths(k))
+    PersistenceBar[Double, Nothing](allDims(k), ClosedEndpoint(allBirths(k)), upper)
+
+  private def reportedBars: IndexedSeq[PersistenceBar[Double, Nothing]] = visible.toIndexedSeq.map(barAt)
+  private def everyBar: IndexedSeq[PersistenceBar[Double, Nothing]] = allDims.indices.map(barAt)
+
+  /** The subtitle's note on the bars the threshold hid. */
+  private def withHiddenNote(f: Figure): Figure =
+    if hiddenCount() == 0 then f
+    else f.copy(subtitle = f.subtitle + s"; ${hiddenCount()} shorter than ${Svg.number(threshold)} not shown")
+
+  /** The reported bars as a barcode: one bar per class, grouped by dimension; hover a bar for its numbers. */
+  def plotBarcode(): Figure = withHiddenNote(Plot.barcode(reportedBars))
+
+  /** The barcode of the `longest` most persistent reported bars of each dimension. */
+  def plotBarcode(longest: Int): Figure = withHiddenNote(Plot.barcode(reportedBars, longest = Some(longest)))
+
+  /** The reported bars as a persistence diagram: a point `(birth, death)` per bar, essential bars on the `∞` line. */
+  def plotDiagram(): Figure = withHiddenNote(Plot.diagram(reportedBars))
+
+  /** The first three persistence landscapes of the dimension-`dimension` bars: every bar, as [[landscape]] uses. */
+  def plotLandscape(dimension: Int): Figure = Plot.landscape(everyBar, dimension)
+
+  /** The persistence image of the dimension-`dimension` bars: every finite bar, as [[persistenceImage]] uses. */
+  def plotPersistenceImage(dimension: Int): Figure = Plot.persistenceImage(everyBar, dimension)
+
+  /** The reported bar of dimension `dimension` with the largest persistence (an essential bar first; the lowest index
+    * among equals): the one to pass to [[plotRepresentative]] for the most prominent feature.
+    */
+  def mostPersistentBar(dimension: Int): Int =
+    val candidates = (0 until size()).filter(this.dimension(_) == dimension)
+    if candidates.isEmpty then
+      val present = (0 until size()).map(this.dimension).distinct.sorted
+      throw new IllegalArgumentException(
+        s"no reported bar has dimension $dimension" +
+          (if present.isEmpty then "; this result reports no bars"
+           else s"; reported dimensions: ${present.mkString(", ")}")
+      )
+    candidates.maxBy(i => (death(i) - birth(i), -i))
+
+  private def noCoordinates(plot: String): Nothing =
+    throw new UnsupportedOperationException(
+      s"$plot needs coordinates to draw on, and this result was computed from ${src.input.words}; plotBarcode, " +
+        "plotDiagram, plotLandscape and plotPersistenceImage work for every result"
+    )
+
+  private def points(plot: String): Array[Array[Double]] = src.input match
+    case ResultInput.Points(ps)  => ps
+    case ResultInput.Image(_, _) =>
+      throw new UnsupportedOperationException(s"$plot draws point clouds; this result was computed from an image")
+    case ResultInput.Abstract(_) => noCoordinates(plot)
+
+  private def image2D(plot: String): org.appliedtopology.tda4j.Image = src.input match
+    case ResultInput.Image(shape, values) =>
+      if shape.length != 2 then
+        throw new UnsupportedOperationException(
+          s"$plot draws 2-D images; this result's image has shape ${shape.mkString(" x ")}"
+        )
+      org.appliedtopology.tda4j.Image(values.toIndexedSeq, shape.toIndexedSeq)
+    case _ => throw new IllegalStateException("not an image")
+
+  private def complexKind(plot: String): PointCloudComplex = src.complex match
+    case "vr"    => VietorisRips
+    case "cech"  => Cech
+    case "alpha" => AlphaShapes
+    case other   =>
+      throw new UnsupportedOperationException(
+        s"$plot draws the vr, cech and alpha complexes; this result's complex is $other"
+      )
+
+  /** The input: the points (their first two coordinates) or the 2-D image. */
+  def plotInput(): Figure = src.input match
+    case ResultInput.Points(ps)  => Plot.points(ps)
+    case ResultInput.Image(_, _) => Plot.image(image2D("plotInput"))
+    case ResultInput.Abstract(_) => noCoordinates("plotInput")
+
+  /** The complex at scale `at` over the points (`vr`, `cech` or `alpha`), with the balls whose overlaps it records. */
+  def plotComplex(at: Double): Figure = Plot.complex(points("plotComplex"), at, complexKind("plotComplex"))
+
+  // The facade's coefficients as a chain over the reals: for `Z/p` they are already the balanced integers that
+  // `Plot.number` would give for the typed chain, so the plot is the same either way.
+  private def simplicialRepresentative(i: Int): Chain[Simplex[Int], Double] =
+    import OrderedCell.cellOrdering
+    given Double is Field = Field.DoubleApproximated(1e-9)
+    Chain.from(cycleVertices(i).toSeq.map(vs => Simplex.from(vs.toIndexedSeq)).zip(cycleCoefficients(i)))
+
+  private def cubicalRepresentative(i: Int): Chain[Cube, Double] =
+    import OrderedCell.cellOrdering
+    given Double is Field = Field.DoubleApproximated(1e-9)
+    Chain.from(cycleVertices(i).toSeq.map(c => Cube.fromEncoded(c.toSeq)).zip(cycleCoefficients(i)))
+
+  private def representativeTitle(i: Int): String =
+    val kind = if src.cocycles then "Cocycle" else "Cycle"
+    val d = if death(i).isPosInfinity then "∞" else Svg.number(death(i))
+    s"$kind of bar $i: H${dimension(i)} [${Svg.number(birth(i))}, $d)"
+
+  /** Bar `i`'s representative over the input: a cycle's cells in its dimension's color, a cocycle's colored by value
+    * (balanced integers for `Z/p`), or a cubical chain over its 2-D image; each cell's coefficient on hover.
+    */
+  def plotRepresentative(i: Int): Figure = representativeFigure(i, None)
+
+  /** [[plotRepresentative]] at scale `at`: a cycle drawn over the complex at `at` (`vr`, `cech` or `alpha`), a cocycle
+    * restricted to its cells of diameter at most `at` (`at = birth(i)` shows the edges that cut a loop as it closes).
+    */
+  def plotRepresentative(i: Int, at: Double): Figure = representativeFigure(i, Some(at))
+
+  private def representativeFigure(i: Int, at: Option[Double]): Figure = src.input match
+    case ResultInput.Points(ps) =>
+      val chain = simplicialRepresentative(i)
+      if src.cocycles then Plot.cocycle(ps, chain, Optional(at), representativeTitle(i))
+      else
+        val cycle = Plot.cycle(ps, chain, representativeTitle(i))
+        at.fold(cycle)(r => cycle.over(Plot.complex(ps, r, complexKind("plotRepresentative at a scale"))))
+    case ResultInput.Image(_, _) =>
+      if at.isDefined then
+        throw new UnsupportedOperationException(
+          "plotRepresentative at a scale is for point clouds; for an image, call plotRepresentative(i)"
+        )
+      Plot.cubicalChain(image2D("plotRepresentative"), cubicalRepresentative(i), representativeTitle(i))
+    case ResultInput.Abstract(_) => noCoordinates("plotRepresentative")
+
+  /** The points in 3-D (their first three coordinates), to turn and zoom. */
+  def plotInput3D(): Scene = Plot.points3D(points("plotInput3D"))
+
+  /** The complex at scale `at` in 3-D (`vr`, `cech` or `alpha`). */
+  def plotComplex3D(at: Double): Scene = Plot.complex3D(points("plotComplex3D"), at, complexKind("plotComplex3D"))
+
+  /** Bar `i`'s representative in 3-D over the points: its edges and triangles in its dimension's color (a cocycle's
+    * cells too, without their values).
+    */
+  def plotRepresentative3D(i: Int): Scene =
+    Plot.cycle3D(points("plotRepresentative3D"), simplicialRepresentative(i), representativeTitle(i))

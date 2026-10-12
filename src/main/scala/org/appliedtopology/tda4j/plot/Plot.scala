@@ -37,6 +37,11 @@ trait Plot:
     Option(p.getParent).foreach(Files.createDirectories(_))
     Files.write(p, text.getBytes(StandardCharsets.UTF_8))
 
+  /** [[save]] in the default theme for the file type, for callers that cannot use a default argument (Java, MATLAB:
+    * `fig.save('diagram.svg')`).
+    */
+  def save(path: String): Path = save(path, None)
+
 /** Plots side by side, in one row (small multiples: a barcode next to its diagram, a complex at several scales). */
 final case class Board(plots: Seq[Figure], title: String = "") extends Plot:
   def fragment(theme: Theme = Theme.Auto): String =

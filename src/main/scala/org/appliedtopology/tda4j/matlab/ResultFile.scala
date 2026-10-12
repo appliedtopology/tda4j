@@ -1,0 +1,259 @@
+package org.appliedtopology.tda4j.matlab
+
+import java.io.{BufferedWriter, OutputStreamWriter}
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Path, Paths}
+import scala.collection.mutable
+
+/** The saved form of a [[PersistenceResult]] (`result.save(path)`, `TDA4j.loadResult(path)`): one JSON object.
+  *
+  * {{{
+  * {
+  * "format": "tda4j-persistence-result", "formatVersion": 1, "tda4jVersion": "0.5.0",
+  * "method": "computeFromPoints", "options": ["maxDimension", "1"], "complex": "vr",
+  * "representativeType": "cycles", "field": "Z", "prime": 17, "persistenceThreshold": 0.0123,
+  * "dimensions": [0, 0, 1], "births": [0.0, 0.0, 0.5], "deaths": ["Infinity", 0.3, 1.2],
+  * "reported": [0, 2],
+  * "representatives": [{"cells": [[0]], "coefficients": [1.0]}, {"cells": [[0, 1], [1, 2], [0, 2]], ...}],
+  * "landmarks": [3, 17],
+  * "input": {"kind": "points", "points": [[1.0, 0.0], ...]}
+  * }
+  * }}}
+  *
+  *   - `dimensions`, `births`, `deaths`: every bar computed, the threshold's hidden ones too.
+  *   - `reported`: the bars the threshold let through, as indices into those arrays (default: all of them);
+  *     `representatives` is parallel to it (`cells` as in `cycleVertices`, `coefficients` as in `cycleCoefficients`;
+  *     `null` for a bar without one).
+  *   - `input`: `points` (one row per point), `image` (`shape`, and `values` in row-major order as given, before any
+  *     superlevel negation), or a `kind` with no coordinates (`distance-matrix`, `relation`).
+  *   - Non-finite numbers are the strings `"Infinity"`, `"-Infinity"`, `"NaN"`, so the file is standard JSON.
+  *
+  * Only `format`, `formatVersion` and the three bar arrays are required: a barcode from anywhere, written in this
+  * shape, loads and plots. Unknown keys are skipped.
+  */
+private[matlab] object ResultFile:
+  val Format = "tda4j-persistence-result"
+  val Version = 1
+
+  private def version: Option[String] =
+    Option(classOf[PersistenceResult].getPackage).flatMap(p => Option(p.getImplementationVersion))
+
+  /** Writes a result; `representative(k)` is reported bar `k`'s representative, `None` when it has none. */
+  def write(
+    path: String,
+    dims: Array[Int],
+    births: Array[Double],
+    deaths: Array[Double],
+    reported: Array[Int],
+    threshold: Double,
+    representative: Int => Option[(Array[Array[Int]], Array[Double])],
+    source: Option[ResultSource]
+  ): Path =
+    val p = Paths.get(path).toAbsolutePath
+    Option(p.getParent).foreach(Files.createDirectories(_))
+    val out = BufferedWriter(OutputStreamWriter(Files.newOutputStream(p), StandardCharsets.UTF_8), 1 << 16)
+    try
+      val w = JsonWriter(out)
+      def key(k: String): Unit =
+        w.raw(",\n")
+        w.string(k)
+        w.raw(": ")
+      w.raw("{\n")
+      w.string("format"); w.raw(": "); w.string(Format)
+      key("formatVersion"); w.int(Version)
+      version.foreach { v => key("tda4jVersion"); w.string(v) }
+      source.foreach { s =>
+        key("method"); w.string(s.method)
+        key("options"); w.strings(s.options)
+        key("complex"); w.string(s.complex)
+        key("representativeType"); w.string(if s.cocycles then "cocycles" else "cycles")
+        if s.field.nonEmpty then
+          key("field"); w.string(s.field)
+          if s.field == "Z" then
+            key("prime"); w.int(s.prime)
+        if s.landmarks.nonEmpty then
+          key("landmarks"); w.ints(s.landmarks)
+      }
+      key("persistenceThreshold"); w.double(threshold)
+      key("dimensions"); w.ints(dims)
+      key("births"); w.doubles(births)
+      key("deaths"); w.doubles(deaths)
+      key("reported"); w.ints(reported)
+      key("representatives")
+      w.raw("[")
+      for k <- reported.indices do
+        w.raw(if k == 0 then "\n" else ",\n")
+        representative(k) match
+          case None                        => w.raw("null")
+          case Some((cells, coefficients)) =>
+            w.raw("{\"cells\": ")
+            w.sequence(cells.length)(j => w.ints(cells(j)))
+            w.raw(", \"coefficients\": ")
+            w.doubles(coefficients)
+            w.raw("}")
+      w.raw("\n]")
+      source.foreach { s =>
+        key("input")
+        s.input match
+          case ResultInput.Points(points) =>
+            w.raw("{\"kind\": \"points\", \"points\": [")
+            for i <- points.indices do
+              w.raw(if i == 0 then "\n" else ",\n")
+              w.doubles(points(i))
+            w.raw("\n]}")
+          case ResultInput.Image(shape, values) =>
+            w.raw("{\"kind\": \"image\", \"shape\": ")
+            w.ints(shape)
+            w.raw(", \"values\": ")
+            w.doubles(values)
+            w.raw("}")
+          case ResultInput.Abstract(kind) =>
+            w.raw("{\"kind\": ")
+            w.string(kind)
+            w.raw("}")
+      }
+      w.raw("\n}\n")
+    finally out.close()
+    p
+
+  /** Reads a saved result, checking that its parts fit together. */
+  def read(path: String): PersistenceResult =
+    val p = Paths.get(path)
+    if !Files.isRegularFile(p) then throw new java.io.FileNotFoundException(s"$path: no such file")
+    val r = JsonReader(Files.readString(p, StandardCharsets.UTF_8), path)
+    var format: Option[String] = None
+    var formatVersion: Option[Int] = None
+    var method = ""
+    var options = Array.empty[String]
+    var complex = "unknown"
+    var cocycles = false
+    var field = ""
+    var prime = 0
+    var landmarks = Array.empty[Int]
+    var threshold = 0.0
+    var dims: Option[Array[Int]] = None
+    var births: Option[Array[Double]] = None
+    var deaths: Option[Array[Double]] = None
+    var reported: Option[Array[Int]] = None
+    var representatives: Option[Array[Option[(Array[Array[Int]], Array[Double])]]] = None
+    var input: ResultInput = ResultInput.Abstract("input that was not saved")
+
+    def representative(): Option[(Array[Array[Int]], Array[Double])] =
+      if r.isNull then None
+      else
+        var cells: Option[Array[Array[Int]]] = None
+        var coefficients: Option[Array[Double]] = None
+        r.obj {
+          case "cells" =>
+            val b = Array.newBuilder[Array[Int]]
+            r.arr(() => b += r.ints())
+            cells = Some(b.result())
+          case "coefficients" => coefficients = Some(r.doubles())
+          case _              => r.skip()
+        }
+        (cells, coefficients) match
+          case (Some(c), Some(x)) if c.length == x.length => Some((c, x))
+          case (Some(c), Some(x))                         =>
+            r.fail(s"a representative has ${c.length} cells and ${x.length} coefficients")
+          case _ => r.fail("a representative needs \"cells\" and \"coefficients\"")
+
+    def readInput(): ResultInput =
+      var kind: Option[String] = None
+      var points: Option[Array[Array[Double]]] = None
+      var shape: Option[Array[Int]] = None
+      var values: Option[Array[Double]] = None
+      r.obj {
+        case "kind"   => kind = Some(r.string())
+        case "points" =>
+          val b = Array.newBuilder[Array[Double]]
+          r.arr(() => b += r.doubles())
+          points = Some(b.result())
+        case "shape"  => shape = Some(r.ints())
+        case "values" => values = Some(r.doubles())
+        case _        => r.skip()
+      }
+      kind match
+        case Some("points") =>
+          ResultInput.Points(points.getOrElse(r.fail("input of kind \"points\" needs \"points\"")))
+        case Some("image") =>
+          (shape, values) match
+            case (Some(s), Some(v)) if s.map(_.toLong).product == v.length.toLong => ResultInput.Image(s, v)
+            case (Some(s), Some(v))                                               =>
+              r.fail(s"an image of shape ${s.mkString(" x ")} has ${v.length} values")
+            case _ => r.fail("input of kind \"image\" needs \"shape\" and \"values\"")
+        case Some(other) => ResultInput.Abstract(other)
+        case None        => r.fail("the input needs a \"kind\"")
+
+    r.obj {
+      case "format"               => format = Some(r.string())
+      case "formatVersion"        => formatVersion = Some(r.readInt())
+      case "method"               => method = r.string()
+      case "options"              => options = r.strings()
+      case "complex"              => complex = r.string()
+      case "representativeType"   => cocycles = r.string().equalsIgnoreCase("cocycles")
+      case "field"                => field = r.string()
+      case "prime"                => prime = r.readInt()
+      case "landmarks"            => landmarks = r.ints()
+      case "persistenceThreshold" => threshold = r.readDouble()
+      case "dimensions"           => dims = Some(r.ints())
+      case "births"               => births = Some(r.doubles())
+      case "deaths"               => deaths = Some(r.doubles())
+      case "reported"             => reported = Some(r.ints())
+      case "representatives"      =>
+        val b = Array.newBuilder[Option[(Array[Array[Int]], Array[Double])]]
+        r.arr(() => b += representative())
+        representatives = Some(b.result())
+      case "input" => input = readInput()
+      case _       => r.skip()
+    }
+    r.end()
+
+    if !format.contains(Format) then
+      throw new IllegalArgumentException(
+        s"$path is not a saved tda4j result: its \"format\" is ${format.fold("missing")(f => s"\"$f\"")}, " +
+          s"not \"$Format\""
+      )
+    formatVersion match
+      case Some(Version) => ()
+      case Some(v)       =>
+        throw new IllegalArgumentException(
+          s"$path has format version $v; this version of tda4j reads format version $Version" +
+            (if v > Version then ": read it with a newer tda4j" else "")
+        )
+      case None => throw new IllegalArgumentException(s"$path: \"formatVersion\" is missing")
+    def required[T](name: String, v: Option[T]): T =
+      v.getOrElse(throw new IllegalArgumentException(s"$path: \"$name\" is missing"))
+    val ds = required("dimensions", dims)
+    val bs = required("births", births)
+    val es = required("deaths", deaths)
+    if bs.length != ds.length || es.length != ds.length then
+      throw new IllegalArgumentException(
+        s"$path: ${ds.length} dimensions, ${bs.length} births and ${es.length} deaths: one of each per bar"
+      )
+    val visible = reported.getOrElse(Array.range(0, ds.length))
+    visible.find(k => k < 0 || k >= ds.length).foreach { k =>
+      throw new IllegalArgumentException(s"$path: \"reported\" names bar $k, and there are ${ds.length} bars")
+    }
+    if visible.distinct.length != visible.length then
+      throw new IllegalArgumentException(s"$path: \"reported\" names a bar twice")
+    representatives.foreach { reps =>
+      if reps.length != visible.length then
+        throw new IllegalArgumentException(
+          s"$path: ${reps.length} representatives for ${visible.length} reported bars: one per reported bar"
+        )
+    }
+    val byBar = mutable.HashMap.empty[Int, Option[(Array[Array[Int]], Array[Double])]]
+    representatives.foreach(reps => visible.indices.foreach(k => byBar(visible(k)) = reps(k)))
+    val cycleProvider: Int => (Array[Array[Int]], Array[Double]) = k =>
+      byBar.get(k) match
+        case Some(Some(rep)) => rep
+        case Some(None)      =>
+          throw new UnsupportedOperationException(s"$path records no representative for this bar")
+        case None =>
+          throw new UnsupportedOperationException(s"$path does not hold this bar's representative")
+    val boundaryMatrix: () => BoundaryMatrixData = () =>
+      throw new UnsupportedOperationException(
+        "a saved result does not keep its complex; compute the result again for its boundary matrix"
+      )
+    val source = ResultSource(method, options, complex, cocycles, field, prime, input, landmarks)
+    new PersistenceResult(ds, bs, es, cycleProvider, boundaryMatrix, visible, threshold, Some(source))
