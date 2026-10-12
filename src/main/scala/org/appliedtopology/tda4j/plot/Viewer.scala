@@ -94,16 +94,21 @@ object Viewer:
     http.start()
     s
 
-  private def announce(url: String): Unit =
+  /** Opens `uri` in the default browser, unless browsers are turned off (`TDA4J_PLOT_BROWSER=none`, or the system
+    * property `tda4j.plot.browser=none`) or there is no desktop to open it on. Returns whether it did.
+    */
+  def browse(uri: URI): Boolean =
     val wanted = !sys.props.get("tda4j.plot.browser").orElse(sys.env.get("TDA4J_PLOT_BROWSER")).contains("none")
-    val opened = wanted && scala.util
+    wanted && scala.util
       .Try {
         import java.awt.{Desktop, GraphicsEnvironment}
         !GraphicsEnvironment.isHeadless && Desktop.isDesktopSupported &&
-        Desktop.getDesktop.isSupported(Desktop.Action.BROWSE) && { Desktop.getDesktop.browse(URI(url)); true }
+        Desktop.getDesktop.isSupported(Desktop.Action.BROWSE) && { Desktop.getDesktop.browse(uri); true }
       }
       .getOrElse(false)
-    if opened then Console.err.println(s"TDA4j plots: $url (opened in your browser)")
+
+  private def announce(url: String): Unit =
+    if browse(URI(url)) then Console.err.println(s"TDA4j plots: $url (opened in your browser)")
     else Console.err.println(s"TDA4j plots: open $url in a browser (forward the port from a remote machine)")
 
   private def respond(ex: HttpExchange, contentType: String, body: String, status: Int = 200): Unit =

@@ -258,7 +258,7 @@ object TDA4j:
     val result = CircularCoordinates.compute(EuclideanMetricSpace(points), r, cocycleIndex, prime)
     val thetaArray = Array.fill(points.length)(Double.NaN)
     result.theta.foreach((i, t) => thetaArray(i) = t)
-    new CircularCoordinatesResult(thetaArray, result.birth, result.death, result.r, result.prime)
+    new CircularCoordinatesResult(points.map(_.clone()), thetaArray, result.birth, result.death, result.r, result.prime)
 
   def toroidalCoordinates(
     points: Array[Array[Double]],

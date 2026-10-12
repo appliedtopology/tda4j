@@ -45,8 +45,9 @@ no call needs MATLAB to build a parametrized type (or a Scala default argument, 
 - a distance matrix or a relation: none. Representative, input and complex plots then refuse with a message saying
   why (no coordinates) and what does work (barcode, diagram, landscape, persistence image).
 
-Attached by the thin `dispatch*` wrappers (which know the input) through a `private[matlab]` copy method, like
-`withPersistenceThreshold`; `fromBars` and the per-engine branches are untouched.
+Attached at the public entry points, which know the input (see the advisor review below: the `dispatch*` wrappers
+do not all see it), through a `private[matlab]` copy method, last, after the threshold; `fromBars` and the
+per-engine branches are untouched.
 
 ### 2. MATLAB: plot methods on the result, returning `plot.Figure`
 
@@ -115,6 +116,51 @@ One file format for MATLAB, the CLI and Scala: JSON, our own schema (`"format": 
 - `--plot` refuses `--distance-to`, `--select-landmarks`, `--representatives` and a supplied `--output-format`;
   `--bar`/`--dimension`/`--at` refuse to run without `--plot`.
 
-## Open questions put to the advisor
+## Advisor review (a Plan agent, read-only, given the draft above and the code) and what changed
 
-(Filled in below after the review.)
+Asked to push back on: JSON vs other formats, saving only reported representatives, where provenance attaches, the
+CLI surface, building chains from arrays, the `save(path)` overload, scope, and the tests. Verdicts and my decisions:
+
+- **Bugs it found in the in-progress code, all fixed:**
+  - Cocycle `at` restricted cells by Euclidean DIAMETER (`Plot.cocycle`'s own rule), which is the filtration only of
+    plain Vietoris-Rips: for Cech and alpha (radii) `at = birth` dropped every edge. Now `at` keeps the cocycle's cells
+    that are in the result's own complex (`vr`, `cech`, `alpha`, built by the `PointCloudComplex` at `at`), and refuses
+    other complexes, like `plotComplex`.
+  - Plot refusals are `UnsupportedOperationException`, which `TDA4jCLI.run` did not catch (stack trace instead of
+    `tda4j: ...`). The CLI now catches it.
+  - Building a `Chain[_, Double]` over `DoubleApproximated(1e-9)` invented a field: a `field=R` coefficient under
+    1e-9 vanished. `Plot.cycle`/`cocycle`/`cubicalChain`/`cycle3D` now take `Chain[C, ?] | Seq[(C, Double)]` (like
+    `Plot.Bars`): public, so users can draw their own real-valued cochains too; the facade passes its arrays.
+  - `save` swallowed a missing representative (the class doc calls that an engine bug). It now propagates.
+- **JSON: kept.** Reader now also accepts bare `Infinity`/`-Infinity`/`NaN` (Python's default `json.dump` writes them,
+  so a file filtered in Python reads back) and skips a UTF-8 BOM. The tda4j version is recorded from a generated
+  resource (the class files have no manifest version in tests or `sbt console`). Whole-file-in-memory reading stays;
+  documented. Docs give the Python/MATLAB recipes for the string-encoded non-finite numbers instead of "any language
+  reads it" unqualified.
+- **Reported-only representatives: kept.** Loaded representatives are handed out as copies (the live result builds
+  fresh arrays per call; a loaded one would otherwise expose its own). A hidden bar's representative says it was not
+  saved, not "engine bug". File size: `--min-persistence 0` with cocycles can still be large (an `H_0` cocycle is a
+  component); documented, as is that saving computes every reported representative.
+- **Provenance: attached at the public entry points** (the draft said the `dispatch*` wrappers; two of them see only a
+  stream or a metric space -- `dispatchCubical` sees negated values). The code already did this.
+- **CLI:** new flags declared last, `noshort`, and `CLISpec` pins EVERY 0.5.0 short flag (it pinned four). `--plot`
+  kind validated in `run` (Scallop's `choices`/`validate` call `System.exit`). `--output` must end in `.svg` or
+  `.html` (any case; `Plot.save` now checks the extension case-insensitively). A loaded result refuses every flag
+  `buildOptions` would pass (so a future computation flag is refused automatically) and the landmark flags, but
+  allows `--output-format`, `--representatives` and `--distance-to` (converting a saved result is free). The chosen
+  bar is printed on standard error (the listing has no index column). `--bar`/`--dimension`/`--at` are refused for
+  kinds that do not use them, not only without `--plot`. Browser opening is `Viewer.browse`, shared with the viewer.
+  Rejected: writing SVG to standard output when it is not a terminal (Java 21's `System.console()` cannot tell
+  stdout alone; fragile).
+- **Scope:** kept 2-D, `mostPersistentBar` (fixed: a zero-length `[Inf, Inf)` bar gave `Inf - Inf = NaN`, the
+  largest), circular/toroidal `.plot()`, 3-D for cycles. `plotRepresentative3D` REFUSES cocycles (one color, no
+  values: a cocycle's support would read as a loop).
+- **Tests it asked for**, added: bitwise array equality (SVG rounds to 4 digits and prints `-0` as `0`, so
+  byte-identical plots cannot see precision loss; a superlevel image gives `-0.0` births), a hidden bar before a
+  reported one, `includeZeroLength` surviving, alpha/Cech cocycles at their birth non-empty, witness tooltips within
+  the landmarks, a reader fuzz (every truncation is an `IllegalArgumentException`), a Python-style file (bare
+  `Infinity`, BOM, reordered and unknown keys), `getMethod("save", classOf[String])`, the CLI cases.
+- Noted, not changed: `Plot.complex(..., AlphaShapes)` draws the default alpha backend's triangulation, which can differ
+  from the result's `alphaBackend` on degenerate (cospherical, grid) points; `plotComplex(at)` above the result's
+  `maxFiltrationValue` draws cells the computation never built; image cocycles are drawn in one color
+  (`Plot.cubicalChain`).

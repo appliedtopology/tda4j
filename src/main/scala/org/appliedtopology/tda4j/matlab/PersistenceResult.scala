@@ -261,13 +261,14 @@ final class PersistenceResult private[matlab] (
     * every bar, the threshold and which bars it reported, the reported bars' representatives (computed now if they were
     * not yet), what it was computed with, and the points or image it was computed from. Not the boundary matrix. The
     * file is JSON, readable from any language; non-finite numbers are the strings `"Infinity"`, `"-Infinity"` and
-    * `"NaN"`. Returns the file's absolute path.
+    * `"NaN"` (Python's `float(x)` reads both kinds of entry). `loadResult` reads the whole file into memory. With
+    * `representativeType` `cocycles` and every bar reported, a dimension-0 cocycle is a whole connected component, so
+    * the file can grow with the square of the number of points. Returns the file's absolute path.
     */
   def save(path: String): String =
-    def representative(k: Int) =
-      try Some(cycleProvider(visible(k)))
-      catch case _: UnsupportedOperationException => None
-    ResultFile.write(path, allDims, allBirths, allDeaths, visible, threshold, representative, source).toString
+    ResultFile
+      .write(path, allDims, allBirths, allDeaths, visible, threshold, k => cycleProvider(visible(k)), source)
+      .toString
 
   // ---------------------------------------------------------------------------------------------------------------
   // plots
@@ -330,7 +331,9 @@ final class PersistenceResult private[matlab] (
           (if present.isEmpty then "; this result reports no bars"
            else s"; reported dimensions: ${present.mkString(", ")}")
       )
-    candidates.maxBy(i => (death(i) - birth(i), -i))
+    // a zero-length [Inf, Inf) bar would give Inf - Inf = NaN, which sorts above every number
+    def persistence(i: Int) = if death(i) == birth(i) then 0.0 else death(i) - birth(i)
+    candidates.maxBy(i => (persistence(i), -i))
 
   private def noCoordinates(plot: String): Nothing =
     throw new UnsupportedOperationException(
@@ -371,17 +374,19 @@ final class PersistenceResult private[matlab] (
   /** The complex at scale `at` over the points (`vr`, `cech` or `alpha`), with the balls whose overlaps it records. */
   def plotComplex(at: Double): Figure = Plot.complex(points("plotComplex"), at, complexKind("plotComplex"))
 
-  // The facade's coefficients as a chain over the reals: for `Z/p` they are already the balanced integers that
-  // `Plot.number` would give for the typed chain, so the plot is the same either way.
-  private def simplicialRepresentative(i: Int): Chain[Simplex[Int], Double] =
-    import OrderedCell.cellOrdering
-    given Double is Field = Field.DoubleApproximated(1e-9)
-    Chain.from(cycleVertices(i).toSeq.map(vs => Simplex.from(vs.toIndexedSeq)).zip(cycleCoefficients(i)))
+  // The facade's own cells and coefficients, as `Plot` takes them: for `Z/p` the coefficients are already the balanced
+  // integers `Plot.number` gives for a typed chain, so the plot is the same either way, and no field is invented.
+  private def simplicialTerms(i: Int): Seq[(Simplex[Int], Double)] =
+    cycleVertices(i).toSeq.map(vs => Simplex.from(vs.toIndexedSeq)).zip(cycleCoefficients(i))
 
-  private def cubicalRepresentative(i: Int): Chain[Cube, Double] =
-    import OrderedCell.cellOrdering
-    given Double is Field = Field.DoubleApproximated(1e-9)
-    Chain.from(cycleVertices(i).toSeq.map(c => Cube.fromEncoded(c.toSeq)).zip(cycleCoefficients(i)))
+  private def cubicalTerms(i: Int): Seq[(Cube, Double)] =
+    cycleVertices(i).toSeq.map(c => Cube.fromEncoded(c.toIndexedSeq)).zip(cycleCoefficients(i))
+
+  private def requireBar(i: Int, plot: String): Unit =
+    if i < 0 || i >= size() then
+      throw new IllegalArgumentException(
+        s"$plot: there is no bar $i; this result reports ${size()} bars, numbered 0 to ${size() - 1}"
+      )
 
   private def representativeTitle(i: Int): String =
     val kind = if src.cocycles then "Cocycle" else "Cycle"
@@ -393,25 +398,42 @@ final class PersistenceResult private[matlab] (
     */
   def plotRepresentative(i: Int): Figure = representativeFigure(i, None)
 
-  /** [[plotRepresentative]] at scale `at`: a cycle drawn over the complex at `at` (`vr`, `cech` or `alpha`), a cocycle
-    * restricted to its cells of diameter at most `at` (`at = birth(i)` shows the edges that cut a loop as it closes).
+  /** [[plotRepresentative]] at scale `at`, in the result's own complex (`vr`, `cech` or `alpha`, in its units): a cycle
+    * drawn over the complex at `at`; a cocycle restricted to its cells in the complex at `at` (at `birth(i)`, the cells
+    * that cut a loop as it closes: a bar's cocycle lives on the complex where the bar dies, across the data).
     */
   def plotRepresentative(i: Int, at: Double): Figure = representativeFigure(i, Some(at))
 
-  private def representativeFigure(i: Int, at: Option[Double]): Figure = src.input match
-    case ResultInput.Points(ps) =>
-      val chain = simplicialRepresentative(i)
-      if src.cocycles then Plot.cocycle(ps, chain, Optional(at), representativeTitle(i))
-      else
-        val cycle = Plot.cycle(ps, chain, representativeTitle(i))
-        at.fold(cycle)(r => cycle.over(Plot.complex(ps, r, complexKind("plotRepresentative at a scale"))))
-    case ResultInput.Image(_, _) =>
-      if at.isDefined then
-        throw new UnsupportedOperationException(
-          "plotRepresentative at a scale is for point clouds; for an image, call plotRepresentative(i)"
-        )
-      Plot.cubicalChain(image2D("plotRepresentative"), cubicalRepresentative(i), representativeTitle(i))
-    case ResultInput.Abstract(_) => noCoordinates("plotRepresentative")
+  /** The cells of the result's complex with value at most `at`, up to dimension `dim`. */
+  private def complexAt(ps: Array[Array[Double]], at: Double, dim: Int, plot: String): Set[Simplex[Int]] =
+    val kind = complexKind(plot)
+    val stream = if kind eq AlphaShapes then kind.fromPoints(ps, dim, None) else kind.fromPoints(ps, dim, Some(at))
+    stream.iterator.filter(c => c.dim <= dim && stream.filtrationValue(c) <= at).toSet
+
+  private def representativeFigure(i: Int, at: Option[Double]): Figure =
+    requireBar(i, "plotRepresentative")
+    src.input match
+      case ResultInput.Points(ps) =>
+        val terms = simplicialTerms(i)
+        val title = representativeTitle(i)
+        (src.cocycles, at) match
+          case (true, None)    => Plot.cocycle(ps, terms, Optional.empty, title)
+          case (true, Some(r)) =>
+            val cells = complexAt(ps, r, dimension(i), "plotRepresentative at a scale")
+            val kept = terms.filter((s, _) => cells.contains(s))
+            Plot
+              .cocycle(ps, kept, Optional.empty, title)
+              .copy(subtitle = s"${kept.size} of its ${terms.size} cells: those in the complex at ${Svg.number(r)}")
+          case (false, None)    => Plot.cycle(ps, terms, title)
+          case (false, Some(r)) =>
+            Plot.cycle(ps, terms, title).over(Plot.complex(ps, r, complexKind("plotRepresentative at a scale")))
+      case ResultInput.Image(_, _) =>
+        if at.isDefined then
+          throw new UnsupportedOperationException(
+            "plotRepresentative at a scale is for point clouds; for an image, call plotRepresentative(i)"
+          )
+        Plot.cubicalChain(image2D("plotRepresentative"), cubicalTerms(i), representativeTitle(i))
+      case ResultInput.Abstract(_) => noCoordinates("plotRepresentative")
 
   /** The points in 3-D (their first three coordinates), to turn and zoom. */
   def plotInput3D(): Scene = Plot.points3D(points("plotInput3D"))
@@ -419,8 +441,13 @@ final class PersistenceResult private[matlab] (
   /** The complex at scale `at` in 3-D (`vr`, `cech` or `alpha`). */
   def plotComplex3D(at: Double): Scene = Plot.complex3D(points("plotComplex3D"), at, complexKind("plotComplex3D"))
 
-  /** Bar `i`'s representative in 3-D over the points: its edges and triangles in its dimension's color (a cocycle's
-    * cells too, without their values).
-    */
+  /** Bar `i`'s cycle in 3-D over the points: its edges and triangles in its dimension's color. */
   def plotRepresentative3D(i: Int): Scene =
-    Plot.cycle3D(points("plotRepresentative3D"), simplicialRepresentative(i), representativeTitle(i))
+    requireBar(i, "plotRepresentative3D")
+    val ps = points("plotRepresentative3D")
+    if src.cocycles then
+      throw new UnsupportedOperationException(
+        "plotRepresentative3D draws cycles: a cocycle needs its values, which only plotRepresentative shows; " +
+          "compute with representativeType cycles for a 3-D view"
+      )
+    Plot.cycle3D(ps, simplicialTerms(i), representativeTitle(i))

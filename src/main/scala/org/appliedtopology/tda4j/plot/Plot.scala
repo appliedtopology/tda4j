@@ -32,7 +32,7 @@ trait Plot:
   def save(path: String, theme: Option[Theme] = None): Path =
     val p = Paths.get(path).toAbsolutePath
     val text =
-      if path.endsWith(".svg") then svgFile(theme.getOrElse(Theme.Light))
+      if path.toLowerCase.endsWith(".svg") then svgFile(theme.getOrElse(Theme.Light))
       else html(theme.getOrElse(Theme.Auto))
     Option(p.getParent).foreach(Files.createDirectories(_))
     Files.write(p, text.getBytes(StandardCharsets.UTF_8))
@@ -72,6 +72,15 @@ object Plot:
   private def barsOf(source: Bars): Seq[PersistenceBar[Double, ?]] = source match
     case d: PersistenceDiagram[?] => d.bars
     case s: Seq[?]                => s.asInstanceOf[Seq[PersistenceBar[Double, ?]]]
+
+  /** A representative: a chain, or its cells with their coefficients as numbers (any real cochain of your own, or the
+    * cells and coefficients of a saved result).
+    */
+  type Terms[CellT] = Chain[CellT, ?] | Seq[(CellT, Double)]
+
+  private def termsOf[CellT](t: Terms[CellT]): Seq[(CellT, Double)] = t match
+    case c: Chain[?, ?] => lifted(c.asInstanceOf[Chain[CellT, ?]])
+    case s: Seq[?]      => s.asInstanceOf[Seq[(CellT, Double)]]
 
   private def degreeLegend(degrees: Seq[Int], key: LegendItem.Key = LegendItem.Key.Dot): Vector[LegendItem] =
     degrees.distinct.sorted.map(k => LegendItem(s"H$k", Paint.Series(k), key, Shape.ofDegree(k))).toVector
@@ -322,9 +331,9 @@ object Plot:
     * vertices as dots, squares filled; coefficients in the tooltips. Its degree's color, gold on the slate ramp in the
     * brand palette.
     */
-  def cubicalChain(img: Image, chain: Chain[Cube, ?], title: String = "Representative"): Figure =
+  def cubicalChain(img: Image, chain: Terms[Cube], title: String = "Representative"): Figure =
     val base = image(img, title)
-    val terms = lifted(chain)
+    val terms = termsOf(chain)
     val color = Paint.Series(terms.headOption.fold(1)(_._1.dim))
     val (vertices, edges, squares) =
       (terms.filter(_._1.dim == 0), terms.filter(_._1.dim == 1), terms.filter(_._1.dim == 2))
@@ -479,9 +488,9 @@ object Plot:
     * color, its triangles filled, its vertices dotted; each cell's coefficient in its tooltip. Draw it over
     * `complex(...)` with `over` to see it in context.
     */
-  def cycle(points: PointCloud, chain: Chain[Simplex[Int], ?], title: String = "Cycle"): Figure =
+  def cycle(points: PointCloud, chain: Terms[Simplex[Int]], title: String = "Cycle"): Figure =
     val pts = xy(points)
-    val terms = lifted(chain)
+    val terms = termsOf(chain)
     val dim = terms.map(_._1.dim).maxOption.getOrElse(1)
     val color = Paint.Series(dim)
     def tip(s: Simplex[Int], c: Double) = s"${s.show}: ${Svg.number(c)}"
@@ -524,7 +533,7 @@ object Plot:
     */
   def cocycle(
     points: PointCloud,
-    chain: Chain[Simplex[Int], ?],
+    chain: Terms[Simplex[Int]],
     at: Optional[Double] = Optional.empty,
     title: String = "Cocycle"
   ): Figure =
@@ -535,7 +544,7 @@ object Plot:
       (for i <- vs; j <- vs if i < j
       yield math.sqrt(coords(i).indices.map(k => math.pow(coords(i)(k) - coords(j)(k), 2)).sum)).maxOption
         .getOrElse(0.0)
-    val terms = lifted(chain).filter((s, _) => at.toOption.forall(r => diameter(s) <= r + 1e-12))
+    val terms = termsOf(chain).filter((s, _) => at.toOption.forall(r => diameter(s) <= r + 1e-12))
     val m = terms.map(t => math.abs(t._2)).filter(_.isFinite).maxOption.getOrElse(1.0) max 1e-12
     val pal = Palette.default
     def paint(c: Double) = Paint.Fixed(pal.divergingAt(c / m))
@@ -657,9 +666,9 @@ object Plot:
     complex3D(points, stream, at)
 
   /** A simplicial representative in 3-D, over its point cloud: edges thick, triangles filled, in its degree's color. */
-  def cycle3D(points: PointCloud, chain: Chain[Simplex[Int], ?], title: String = "Cycle"): Scene =
+  def cycle3D(points: PointCloud, chain: Terms[Simplex[Int]], title: String = "Cycle"): Scene =
     val pts = xyz(points)
-    val terms = lifted(chain)
+    val terms = termsOf(chain)
     val dim = terms.map(_._1.dim).maxOption.getOrElse(1)
     val color = Paint.Series(dim)
     val tris = terms.map(_._1).filter(_.dim == 2)

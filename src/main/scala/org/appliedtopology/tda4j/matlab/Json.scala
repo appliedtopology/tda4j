@@ -53,7 +53,7 @@ private[matlab] final class JsonWriter(out: Writer):
   * position: a hand-edited or truncated file says where it went wrong.
   */
 private[matlab] final class JsonReader(text: String, source: String):
-  private var pos = 0
+  private var pos = if text.startsWith("\uFEFF") then 1 else 0 // a byte-order mark, as some Windows editors write
 
   def fail(message: String): Nothing =
     throw new IllegalArgumentException(s"$source: not a valid tda4j result file at character $pos: $message")
@@ -144,8 +144,9 @@ private[matlab] final class JsonReader(text: String, source: String):
     if pos == start then fail(s"expected a number, found '${peek}'")
     text.substring(start, pos)
 
-  /** A number, or one of the strings `"Infinity"`, `"-Infinity"`, `"NaN"`. */
+  /** A number, or `Infinity`, `-Infinity`, `NaN` as strings (as written here) or bare (as Python writes them). */
   def readDouble(): Double =
+    val bare = Seq("Infinity" -> Double.PositiveInfinity, "-Infinity" -> Double.NegativeInfinity, "NaN" -> Double.NaN)
     if peek == '"' then
       string() match
         case "Infinity"  => Double.PositiveInfinity
@@ -153,8 +154,13 @@ private[matlab] final class JsonReader(text: String, source: String):
         case "NaN"       => Double.NaN
         case other       => fail(s"expected a number, found the string \"$other\"")
     else
-      val token = numberToken()
-      token.toDoubleOption.getOrElse(fail(s"'$token' is not a number"))
+      bare.find((word, _) => text.startsWith(word, pos)) match
+        case Some((word, value)) =>
+          pos += word.length
+          value
+        case None =>
+          val token = numberToken()
+          token.toDoubleOption.getOrElse(fail(s"'$token' is not a number"))
 
   def readInt(): Int =
     val token = numberToken()
@@ -188,10 +194,10 @@ private[matlab] final class JsonReader(text: String, source: String):
 
   /** Any value, read and dropped: a key this version does not know. */
   def skip(): Unit = peek match
-    case '{'                                => obj(_ => skip())
-    case '['                                => arr(() => skip())
-    case '"'                                => string()
-    case 't' | 'f'                          => readBoolean()
-    case 'n' if isNull                      => ()
-    case c if "-0123456789".indexOf(c) >= 0 => numberToken()
-    case c                                  => fail(s"unexpected '$c'")
+    case '{'                                  => obj(_ => skip())
+    case '['                                  => arr(() => skip())
+    case '"'                                  => string()
+    case 't' | 'f'                            => readBoolean()
+    case 'n' if isNull                        => ()
+    case c if "-0123456789IN".indexOf(c) >= 0 => readDouble()
+    case c                                    => fail(s"unexpected '$c'")

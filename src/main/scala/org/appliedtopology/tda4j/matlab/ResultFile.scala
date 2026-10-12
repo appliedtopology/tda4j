@@ -35,10 +35,18 @@ private[matlab] object ResultFile:
   val Format = "tda4j-persistence-result"
   val Version = 1
 
-  private def version: Option[String] =
-    Option(classOf[PersistenceResult].getPackage).flatMap(p => Option(p.getImplementationVersion))
+  /** The version of tda4j writing the file, from the resource the build generates. */
+  private lazy val version: Option[String] =
+    Option(classOf[PersistenceResult].getResourceAsStream("/org/appliedtopology/tda4j/version.properties")).flatMap {
+      in =>
+        try
+          val props = java.util.Properties()
+          props.load(in)
+          Option(props.getProperty("version"))
+        finally in.close()
+    }
 
-  /** Writes a result; `representative(k)` is reported bar `k`'s representative, `None` when it has none. */
+  /** Writes a result; `representative(k)` is reported bar `k`'s representative. */
   def write(
     path: String,
     dims: Array[Int],
@@ -46,7 +54,7 @@ private[matlab] object ResultFile:
     deaths: Array[Double],
     reported: Array[Int],
     threshold: Double,
-    representative: Int => Option[(Array[Array[Int]], Array[Double])],
+    representative: Int => (Array[Array[Int]], Array[Double]),
     source: Option[ResultSource]
   ): Path =
     val p = Paths.get(path).toAbsolutePath
@@ -83,14 +91,12 @@ private[matlab] object ResultFile:
       w.raw("[")
       for k <- reported.indices do
         w.raw(if k == 0 then "\n" else ",\n")
-        representative(k) match
-          case None                        => w.raw("null")
-          case Some((cells, coefficients)) =>
-            w.raw("{\"cells\": ")
-            w.sequence(cells.length)(j => w.ints(cells(j)))
-            w.raw(", \"coefficients\": ")
-            w.doubles(coefficients)
-            w.raw("}")
+        val (cells, coefficients) = representative(k)
+        w.raw("{\"cells\": ")
+        w.sequence(cells.length)(j => w.ints(cells(j)))
+        w.raw(", \"coefficients\": ")
+        w.doubles(coefficients)
+        w.raw("}")
       w.raw("\n]")
       source.foreach { s =>
         key("input")
@@ -120,7 +126,11 @@ private[matlab] object ResultFile:
   def read(path: String): PersistenceResult =
     val p = Paths.get(path)
     if !Files.isRegularFile(p) then throw new java.io.FileNotFoundException(s"$path: no such file")
-    val r = JsonReader(Files.readString(p, StandardCharsets.UTF_8), path)
+    parse(Files.readString(p, StandardCharsets.UTF_8), path)
+
+  /** A saved result from its text; `path` names it in error messages. */
+  def parse(text: String, path: String): PersistenceResult =
+    val r = JsonReader(text, path)
     var format: Option[String] = None
     var formatVersion: Option[Int] = None
     var method = ""
@@ -244,13 +254,16 @@ private[matlab] object ResultFile:
     }
     val byBar = mutable.HashMap.empty[Int, Option[(Array[Array[Int]], Array[Double])]]
     representatives.foreach(reps => visible.indices.foreach(k => byBar(visible(k)) = reps(k)))
+    // Copies, as a computed result builds fresh arrays on every call: a caller may change what it gets.
     val cycleProvider: Int => (Array[Array[Int]], Array[Double]) = k =>
       byBar.get(k) match
-        case Some(Some(rep)) => rep
-        case Some(None)      =>
+        case Some(Some((cells, coefficients))) => (cells.map(_.clone()), coefficients.clone())
+        case Some(None)                        =>
           throw new UnsupportedOperationException(s"$path records no representative for this bar")
         case None =>
-          throw new UnsupportedOperationException(s"$path does not hold this bar's representative")
+          throw new UnsupportedOperationException(
+            s"$path does not hold this bar's representative: only the reported bars' representatives are saved"
+          )
     val boundaryMatrix: () => BoundaryMatrixData = () =>
       throw new UnsupportedOperationException(
         "a saved result does not keep its complex; compute the result again for its boundary matrix"

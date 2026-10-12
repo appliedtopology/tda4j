@@ -70,6 +70,28 @@ class PersistenceResultPlotSpec extends Specification:
         (atBirth.size must beGreaterThan(0)) and (atBirth.size must beLessThan(all.size)) and
         (r.plotRepresentative(loop).colorbar must beSome)
     }
+    "restrict a Cech or alpha cocycle in the complex's own units (radii): at its birth, the edges that close the loop" >>
+      forall(Seq("cech", "alpha")) { complex =>
+        val r = TDA4j.computeFromPoints(
+          circle,
+          Array("complex", complex, "maxDimension", "1", "representativeType", "cocycles")
+        )
+        val loop = r.mostPersistentBar(1)
+        tips(r.plotRepresentative(loop, r.birth(loop)).svg(), "∆(").size must beGreaterThan(0)
+      }
+    "draw a witness complex's representative on its landmarks" >> {
+      val landmarks = Array(6, 2, 10, 14, 0, 4, 8, 12)
+      val r = TDA4j.computeFromPointsAndLandmarks(circle, landmarks, Array("maxDimension", "1"))
+      val loop = r.mostPersistentBar(1)
+      val vertices = tips(r.plotRepresentative(loop).svg(), "∆(").flatMap(t =>
+        t.stripPrefix("∆(").takeWhile(_ != ')').split(",").map(_.trim.toInt)
+      )
+      (vertices must not(beEmpty)) and (vertices.forall(landmarks.contains) must beTrue)
+    }
+    "refuse a bar that is not there, saying how many there are" >> {
+      val r = TDA4j.computeFromPoints(circle, Array("maxDimension", "1"))
+      r.plotRepresentative(r.size()) must throwA[IllegalArgumentException](message = s"reports ${r.size()} bars")
+    }
     "draw a cubical representative over its image" >> {
       // a dark ring around a bright pixel: a loop born at 0 that dies at 1
       val pixels = Array(
@@ -114,7 +136,7 @@ class PersistenceResultPlotSpec extends Specification:
         (r.plotPersistenceImage(1).svg() must contain("<svg"))
     }
 
-  "3-D plots" should
+  "3-D plots" should {
     "draw a point cloud, a complex and a representative as scenes" >> {
       val torusLike = Array.tabulate(30)(i =>
         val t = 2 * math.Pi * i / 30
@@ -125,8 +147,16 @@ class PersistenceResultPlotSpec extends Specification:
         (r.plotComplex3D(0.5).svgFile(plot.Theme.Light) must contain("<svg")) and
         (r.plotRepresentative3D(r.mostPersistentBar(1)).title must startWith("Cycle of bar"))
     }
+    "refuse to draw a cocycle without its values" >> {
+      val r = TDA4j.computeFromPoints(circle, Array("maxDimension", "1", "representativeType", "cocycles"))
+      r.plotRepresentative3D(r.mostPersistentBar(1)) must throwA[UnsupportedOperationException](message = "cycles")
+    }
+  }
 
-  "a plot from MATLAB or Java" should
+  "a plot from MATLAB or Java" should {
+    "have a save method taking only the path" >> {
+      classOf[plot.Plot].getMethod("save", classOf[String]).getReturnType must beEqualTo(classOf[java.nio.file.Path])
+    }
     "save with the file type's default theme, with no default argument" >> {
       val path = java.io.File.createTempFile("plot-spec", ".svg")
       path.deleteOnExit()
@@ -134,3 +164,4 @@ class PersistenceResultPlotSpec extends Specification:
       val written = r.plotDiagram().save(path.getAbsolutePath)
       java.nio.file.Files.readString(written) must contain(plot.Palette.brand.seriesLight(0))
     }
+  }

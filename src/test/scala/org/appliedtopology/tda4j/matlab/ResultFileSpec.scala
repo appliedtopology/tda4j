@@ -38,16 +38,33 @@ class ResultFileSpec extends Specification:
       Array(r * math.cos(t), r * math.sin(t))
     }
 
+  /** Equal bit for bit: `-0.0` is not `0.0`, and a `NaN` equals itself. */
   private def sameArrays(a: Array[Array[Double]], b: Array[Array[Double]]): Boolean =
-    a.length == b.length && a.indices.forall(i => a(i).sameElements(b(i)))
+    def bits(x: Array[Array[Double]]) = x.toSeq.map(_.toSeq.map(java.lang.Double.doubleToRawLongBits))
+    bits(a) == bits(b)
+
+  /** The `"reported"` indices of a saved file. */
+  private def reportedOf(path: String): Seq[Int] =
+    "\"reported\": \\[([0-9,]*)\\]".r
+      .findFirstMatchIn(read(path))
+      .get
+      .group(1)
+      .split(",")
+      .filter(_.nonEmpty)
+      .map(_.toInt)
+      .toSeq
 
   "a saved point-cloud result" should {
     // A threshold of 10% of the enclosing radius hides the short H0 bars.
     val original = TDA4j.computeFromPoints(noisyCircle, Array("maxDimension", "1", "minPersistenceFraction", "0.1"))
     val loaded = roundTrip(original)
 
-    "have hidden bars to lose (or this spec would not test the threshold's split)" >> {
-      original.hiddenCount() must beGreaterThan(0)
+    "have hidden bars to lose, one before a reported bar (or this spec would not test the threshold's split)" >> {
+      val path = tempPath(".json")
+      original.save(path)
+      val reported = reportedOf(path)
+      (original.hiddenCount() must beGreaterThan(0)) and
+        (reported must not(beEqualTo(reported.indices.toSeq))) // some hidden bar comes before a reported one
     }
     "report the same bars, hide the same bars and keep the same threshold" >> {
       sameArrays(loaded.toArray(), original.toArray()) must beTrue
@@ -83,7 +100,21 @@ class ResultFileSpec extends Specification:
       read(second) must beEqualTo(read(first))
     }
     "not keep the boundary matrix, and say so" >> {
-      loaded.numCells() must throwA[UnsupportedOperationException](message = "compute the result again")
+      (loaded.numCells() must throwA[UnsupportedOperationException](message = "compute the result again")) and
+        (loaded.boundaryRows() must throwA[UnsupportedOperationException](message = "compute the result again"))
+    }
+    "hand out copies of its representatives, as a computed result does" >> {
+      val loop = loaded.mostPersistentBar(1)
+      val before = loaded.cycleVertices(loop)(0)(0)
+      loaded.cycleVertices(loop)(0)(0) = -7
+      loaded.cycleCoefficients(loop)(0) = 99.0
+      (loaded.cycleVertices(loop)(0)(0) must beEqualTo(before)) and
+        (loaded.cycleCoefficients(loop)(0) must not(beEqualTo(99.0)))
+    }
+    "record the version of tda4j that wrote it" >> {
+      val path = tempPath(".json")
+      original.save(path)
+      read(path) must beMatching("(?s).*\"tda4jVersion\": \"[0-9]+\\.[0-9]+\\.[0-9]+.*")
     }
   }
 
@@ -154,6 +185,25 @@ class ResultFileSpec extends Specification:
     }
   }
 
+  "a saved superlevel image peaking at 0" should
+    "keep its bars bit for bit: the birth at the 0 pixel is -0.0, not 0.0" >> {
+      val peak = Array(Array(-1.0, -1.0, -1.0), Array(-1.0, 0.0, -1.0), Array(-1.0, -1.0, -1.0))
+      val original = TDA4j.computeFromImage(peak, Array("sublevel", "false"))
+      val negativeZero = java.lang.Double.doubleToRawLongBits(-0.0)
+      (original.toArrayUnfiltered().exists(row => java.lang.Double.doubleToRawLongBits(row(1)) == negativeZero) must
+        beTrue) and
+        (sameArrays(roundTrip(original).toArrayUnfiltered(), original.toArrayUnfiltered()) must beTrue)
+    }
+
+  "a saved result with zero-length bars" should
+    "keep them" >> {
+      val original = TDA4j.computeFromPoints(noisyCircle, Array("maxDimension", "1", "includeZeroLength", "true"))
+      val loaded = roundTrip(original)
+      (original.toArrayUnfiltered().count(row => row(1) == row(2)) must beGreaterThan(0)) and
+        (sameArrays(loaded.toArrayUnfiltered(), original.toArrayUnfiltered()) must beTrue) and
+        (sameArrays(loaded.toArray(), original.toArray()) must beTrue)
+    }
+
   "a saved result with no coordinates" should {
     "plot its bars, and say why it cannot plot a representative" >> {
       val distances = Array.tabulate(6, 6)((i, j) => math.abs(i - j).toDouble)
@@ -208,6 +258,41 @@ class ResultFileSpec extends Specification:
             | "dimensions": [0, 1], "births": [0.0], "deaths": [1.0, 2.0]}""".stripMargin
         )
       ) must throwA[IllegalArgumentException](message = "one of each per bar")
+    }
+    "read a file as Python writes it: bare Infinity and NaN, a byte-order mark, keys in any order, keys it skips" >> {
+      val r = TDA4j.loadResult(
+        write(
+          "\uFEFF" +
+            """{
+              |  "deaths": [Infinity, 1.5, NaN],
+              |  "comment": {"written by": ["a script", 1, null, true]},
+              |  "births": [0.0, 0.5, 0.25],
+              |  "dimensions": [0, 1, 1],
+              |  "formatVersion": 1,
+              |  "reported": [1, 0],
+              |  "representatives": [{"cells": [[0, 1], [1, 2]], "coefficients": [1.0, -1.0]}, null],
+              |  "format": "tda4j-persistence-result"
+              |}""".stripMargin
+        )
+      )
+      (r.size() must beEqualTo(2)) and (r.dimension(0) must beEqualTo(1)) and (r.death(1).isPosInfinity must beTrue) and
+        (r.toArrayUnfiltered()(2)(2).isNaN must beTrue) and
+        (r.cycleCoefficients(0).toSeq must beEqualTo(Seq(1.0, -1.0))) and
+        (r.cycleVertices(1) must throwA[UnsupportedOperationException](message = "no representative"))
+    }
+    "fail with an IllegalArgumentException wherever a file is cut off" >> {
+      val path = tempPath(".json")
+      TDA4j.computeFromPoints(Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.9))).save(path)
+      val text = read(path)
+      val end = text.lastIndexOf('}')
+      (0 until end).filter { n =>
+        try
+          ResultFile.parse(text.substring(0, n), "cut")
+          true
+        catch
+          case _: IllegalArgumentException => false
+          case _: Throwable                => true
+      } must beEmpty
     }
     "refuse a missing file with a FileNotFoundException" >> {
       TDA4j.loadResult(tempPath(".json") + "-missing") must throwA[java.io.FileNotFoundException]

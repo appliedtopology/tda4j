@@ -85,3 +85,22 @@ class ToroidalCoordinatesResultSpec extends Specification:
         (og(0)(1) must beEqualTo(og(1)(0))) and (rg(0)(1) must beEqualTo(rg(1)(0)))
     }
   }
+
+  "plot" should {
+    "draw two coordinates against each other on the torus, one point per point with both" >> {
+      val points = wedgeOfTwoCircles()
+      val bars = TDA4j.h1Bars(points)
+      val result = TDA4j.toroidalCoordinates(points, math.max(bars(0)(0), bars(1)(0)) + 1e-6, Array(0, 1))
+      val withBoth = points.indices.count(result.hasCoordinate)
+      val svg = result.plot().svg()
+      ("<title>point ".r.findAllMatchIn(svg).size must beEqualTo(withBoth)) and
+        (result.plot(1, 0).title must contain("1 and 0")) and
+        (result.plot(0, 2) must throwA[IllegalArgumentException](message = "no coordinate 2"))
+    }
+    "refuse one coordinate, saying what draws it" >> {
+      val points = wedgeOfTwoCircles()
+      val bars = TDA4j.h1Bars(points)
+      TDA4j.toroidalCoordinates(points, bars(0)(0) + 1e-6, Array(0)).plot() must
+        throwA[IllegalArgumentException](message = "circularCoordinates")
+    }
+  }
