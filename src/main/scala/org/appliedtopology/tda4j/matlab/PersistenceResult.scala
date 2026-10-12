@@ -302,7 +302,7 @@ final class PersistenceResult private[matlab] (
   /** The subtitle's note on the bars the threshold hid. */
   private def withHiddenNote(f: Figure): Figure =
     if hiddenCount() == 0 then f
-    else f.copy(subtitle = f.subtitle + s"; ${hiddenCount()} shorter than ${Svg.number(threshold)} not shown")
+    else f.copy(subtitle = f.subtitle + s"; ${hiddenCount()} no longer than ${Svg.number(threshold)} not shown")
 
   /** The reported bars as a barcode: one bar per class, grouped by dimension; hover a bar for its numbers. */
   def plotBarcode(): Figure = withHiddenNote(Plot.barcode(reportedBars))

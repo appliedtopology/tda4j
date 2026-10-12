@@ -27,7 +27,7 @@ class PersistenceResultPlotSpec extends Specification:
       (r.hiddenCount() must beGreaterThan(0)) and
         (tips(r.plotBarcode().svg(), "H").size must beEqualTo(r.size())) and
         (tips(r.plotDiagram().svg(), "H").size must beEqualTo(r.size())) and
-        (r.plotBarcode().subtitle must contain(s"${r.hiddenCount()} shorter than"))
+        (r.plotBarcode().subtitle must contain(s"${r.hiddenCount()} no longer than"))
     }
     "keep the longest bars of each dimension when asked" >> {
       val r = FullBarcode.computeFromPoints(circle, Array("maxDimension", "1"))
