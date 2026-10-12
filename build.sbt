@@ -14,14 +14,14 @@ assembly / assemblyJarName := s"${name.value}-${version.value}-assembly.jar"
 libraryDependencies += "org.specs2"        %% "specs2-core"                   % "5.5.1" % "test"
 libraryDependencies += "org.specs2"        %% "specs2-matcher-extra"          % "5.5.1" % "test"
 libraryDependencies += "org.specs2"        %% "specs2-scalacheck"             % "5.5.1" % "test"
-libraryDependencies += "org.apache.commons" % "commons-numbers-combinatorics" % "1.1"
+libraryDependencies += "org.apache.commons" % "commons-numbers-combinatorics" % "1.3"
 libraryDependencies += "org.apache.commons" % "commons-math3"                 % "3.6.1"
-libraryDependencies += "com.eatthepath"     % "jvptree"                       % "0.2"
+libraryDependencies += "com.eatthepath"     % "jvptree"                       % "0.3.0"
 libraryDependencies += "com.dreizak"        % "miniball"                      % "1.0.3"
 libraryDependencies +=
-  "org.scala-lang.modules"              %% "scala-parallel-collections" % "1.0.4"
-libraryDependencies += "org.scalacheck" %% "scalacheck"                 % "1.17.0" % "test"
-libraryDependencies += "org.rogach"     %% "scallop"                    % "6.0.0"
+  "org.scala-lang.modules"              %% "scala-parallel-collections" % "1.2.0"
+libraryDependencies += "org.scalacheck" %% "scalacheck"                 % "1.20.0" % "test"
+libraryDependencies += "org.rogach"     %% "scallop"                    % "6.0.1"
 libraryDependencies += "org.typelevel"  %% "cats-kernel"                % "2.13.0"
 libraryDependencies += "org.typelevel"  %% "cats-core"                  % "2.13.0"
 libraryDependencies += "org.typelevel"  %% "kittens"                    % "3.5.0"
@@ -155,6 +155,14 @@ Compile / doc := {
 // from the other.
 Compile / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI")
 assembly / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI")
+
+// A fat jar is not a Java module, so module descriptors are dropped. sbt-assembly's default already discards a
+// top-level `module-info.class`, but not the multi-release copies under META-INF/versions/<n>/, which several jars
+// carry (each commons-numbers 1.3 jar has its own, so the default deduplication fails on them).
+assembly / assemblyMergeStrategy := {
+  case PathList("META-INF", "versions", _, "module-info.class") => MergeStrategy.discard
+  case other                                                    => (assembly / assemblyMergeStrategy).value(other)
+}
 
 // Workaround for XML versioning issues
 // See: https://github.com/scala/bug/issues/12632
