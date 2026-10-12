@@ -202,3 +202,25 @@ class MatlabTabsSpec extends Specification:
       (collapsed.numCells() must beEqualTo(1547)).and(cleaned(collapsed) must beEqualTo(cleaned(plain)))
     }
   }
+
+  "plotting.md (MATLAB tab)" should {
+    lazy val result = TDA4j.computeFromPoints(points, Array("maxDimension", "1"))
+    "draw the loop's 18 edges over the complex at its birth, and plot a saved copy the same" in {
+      val loop = result.mostPersistentBar(1)
+      def edges(f: plot.Figure) =
+        "<title>∆\\([0-9]+,[0-9]+\\): ".r.findAllMatchIn(f.svg()).size
+      val saved = java.io.File.createTempFile("matlab-tabs", ".json")
+      saved.deleteOnExit()
+      result.save(saved.getAbsolutePath)
+      val loaded = TDA4j.loadResult(saved.getAbsolutePath)
+      (result.dimension(loop) must beEqualTo(1))
+        .and(r3(result.birth(loop)) must beEqualTo(0.595))
+        .and(result.cycleVertices(loop).length must beEqualTo(18))
+        .and(edges(result.plotRepresentative(loop)) must beEqualTo(18))
+        .and(
+          loaded.plotRepresentative(loop).svg().replaceAll("tda4j[0-9]+", "") must beEqualTo(
+            result.plotRepresentative(loop).svg().replaceAll("tda4j[0-9]+", "")
+          )
+        )
+    }
+  }

@@ -8,7 +8,7 @@
 % back what breaks, if anything, before trusting the facade end to end.
 
 % Point the JVM MATLAB embeds at the library's fat jar (built via `sbt assembly`).
-javaaddpath('target/scala-3.9.0/TDA4j-0.1.3-SNAPSHOT-assembly.jar');
+javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.1-SNAPSHOT-assembly.jar');  % the version sbt assembly printed
 
 import org.appliedtopology.tda4j.matlab.TDA4j
 
@@ -16,10 +16,10 @@ import org.appliedtopology.tda4j.matlab.TDA4j
 % (if not hand-derived) topology.
 points = [0.0 0.0; 1.0 0.0; 1.0 1.0; 0.0 1.0; 0.5 2.0; 2.0 0.5];
 
-% Defaults: complex=vr, engine=ripser, field=Z (mod 2), maxDimension=2.
+% Defaults: complex=vr, engine=ripser, field=Z (mod 17), maxDimension=2.
 result = TDA4j.computeFromPoints(points);
 barcode = result.toArray();  % N-by-3: [dimension, birth, death]
-disp('Default (ripser, Z/2) barcode:');
+disp('Default (ripser, Z/17) barcode:');
 disp(barcode);
 
 % Same computation via the reference-grade "naive" engine -- should agree with the above.
@@ -62,3 +62,15 @@ try
 catch err
   fprintf('Got the expected error for complex=alpha + engine=ripser: %s\n', err.message);
 end
+
+% Plots: each plot... method returns a figure; view() shows it in the browser, save() writes an .svg or .html file.
+% Use dot syntax: save and view are MATLAB functions too.
+result.plotBarcode().view();
+loop = result.mostPersistentBar(1);              % the index of the most persistent loop (counting from 0)
+result.plotRepresentative(loop).save('loop.svg');
+
+% The whole result in one file, read back here or by the command line (tda4j --plot diagram result.json).
+result.save('result.json');
+again = TDA4j.loadResult('result.json');
+disp('Loaded result (should match the default barcode):');
+disp(again.toArray());

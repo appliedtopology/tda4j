@@ -36,6 +36,19 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - `plot`: barcodes, persistence diagrams, images, landscapes, point clouds, complexes, cycles and cocycles, circular
   coordinates and 3-D scenes as SVG, and `view()`, a live browser viewer. In the main artifact, with no dependencies
   of its own.
+- Plots from MATLAB, Java and the command line (#63): `PersistenceResult.plotBarcode`, `plotDiagram`,
+  `plotRepresentative` (over the points or image, optionally at a scale), `plotInput`, `plotComplex`, `plotLandscape`,
+  `plotPersistenceImage`, the 3-D `plotInput3D`/`plotComplex3D`/`plotRepresentative3D`, and `mostPersistentBar`;
+  `CircularCoordinatesResult.plot()`, `ToroidalCoordinatesResult.plot()`. Each returns a figure to `view()` or
+  `save(path)` (`Plot.save(path)` is the overload Java and MATLAB call). CLI: `--plot KIND` with `--bar`,
+  `--dimension`, `--at`, into `--output` or a page opened in the browser.
+- Saved results: `PersistenceResult.save(path)`, `TDA4j.loadResult(path)` and CLI `--save-result FILE` write and read a
+  whole result (every bar, the reported bars' representatives, the points or image, how it was computed) as JSON; a
+  saved file is a CLI input (`--input-format result`, chosen by itself for such a file), to print, convert or plot
+  without computing again.
+- `Plot.cycle`, `cocycle`, `cubicalChain` and `cycle3D` also take a representative as plain `(cell, coefficient)`
+  terms (`Plot.Terms`), so any real cochain can be drawn; `Viewer.browse` opens a page under the viewer's browser
+  rules.
 - `PackedCubicalCohomologyEngine`: Ripser's reduction on cubical grids. `Engine.Cohomology` on an image uses it.
 - `PackedChain`: compact representatives for the grid engines; a `Cube` is built only when read.
 - `Show` instances for diagrams, bars, endpoints, cubes, pairs and simplicial-set generators.

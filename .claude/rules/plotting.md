@@ -16,7 +16,9 @@ trees), like `matlab`/`cli`: nothing in the core uses it, and it adds NO depende
 `com.sun.net.httpserver` and `java.awt.Desktop`, loaded only on `view()`). It was its own sbt project and artifact
 (`tda4j-plot`, never released); the project lead folded it in because it isolated no dependency and kept the docs build
 from compiling its fences. **If a plot feature ever needs a library, it goes in a new module**, not in the core. Not
-re-exported by the labs (`tdalab-exports.py` scans only the root package and `sset`).
+re-exported by the labs (`tdalab-exports.py` scans only the root package and `sset`). `matlab.PersistenceResult`'s
+`plot...` methods (hence the CLI's `--plot`) draw through it: `matlab` -> `plot` is the one edge between leaves
+(`WORKLOG-facade-plots.md`).
 
 **Public core API only.** The subpackage could see `private[tda4j]` members; it must not -- what it
 needs, a user's own plotting code needs too (it needed `CubicalGridStream.topValues`, which the openness audit added).
@@ -25,7 +27,10 @@ needs, a user's own plotting code needs too (it needed `CubicalGridStream.topVal
 Text`, one paint or one per item, optional tooltip per item = SVG `<title>`), axes, legend, colorbar; `Svg.render` draws it.
 `Scene` = 3-D layers: a canvas viewer with inline JS (no CDN) for pages, a back-to-front orthographic SVG for files.
 `trait Plot` (`view`, `save`, `html`, `fragment`, `svgFile`) + `object Plot` (the TDA constructors) share the name on
-purpose. Every plot is an immutable value.
+purpose. Every plot is an immutable value. Representatives are `Plot.Terms` (`Chain[C, ?] | Seq[(C, Double)]`, like
+`Plot.Bars`): never build a `Chain` just to plot (an invented real field's epsilon drops small coefficients).
+`save(path)` exists without the default argument for Java/MATLAB. Each render numbers its `<svg>` id (`tda4jN`):
+compare two renders after replacing `tda4j[0-9]+`. `Viewer.browse` is the one place that opens a browser.
 
 **Colors are roles, resolved by `Palette` x `Theme`.** `Paint.Series(k)` for homological degree `k` (never by rank),
 chrome roles (`Ink`, `Muted`, `Grid`, ...), `Fixed(hex)` for data colors. `Theme.Auto` = CSS variables of the `<svg>` with a

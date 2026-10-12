@@ -164,3 +164,37 @@ CLI surface, building chains from arrays, the `save(path)` overload, scope, and 
   from the result's `alphaBackend` on degenerate (cospherical, grid) points; `plotComplex(at)` above the result's
   `maxFiltrationValue` draws cells the computation never built; image cocycles are drawn in one color
   (`Plot.cubicalChain`).
+
+## What was built (after the review)
+
+- `matlab`: `ResultSource`/`ResultInput` (provenance), `PersistenceResult.plot*`, `mostPersistentBar`, `save`;
+  `TDA4j.loadResult`; `ResultFile` (schema in its scaladoc) over `Json` (writer + pull reader); `.plot()` on the
+  circular and toroidal results. `plot`: `Plot.Terms`, `Plot.save(path)`, `Viewer.browse`, case-insensitive `.svg`.
+  `build.sbt`: a generated `version.properties` resource. CLI: `--plot`, `--bar`, `--dimension`, `--at`,
+  `--save-result`, `--input-format result` (+ sniffing).
+- Specs: `ResultFileSpec` (round trips, reader), `PersistenceResultPlotSpec` (facade plots), `PlotCLISpec` (CLI),
+  additions to `CLISpec` (all 0.5.0 short flags), `Circular/ToroidalCoordinatesResultSpec`, `MatlabTabsSpec`
+  (`plotting.md`'s new MATLAB tab: the noisy circle's loop, 18 edges, born at 0.595).
+
+## Looked at
+
+`java -jar` on the assembly jar, from `_docs/tutorials/data/noisy-circle.csv` and a saved copy of its result, and a
+14x14 Perseus ring image: barcode, diagram, cycle, cycle over the complex at 0.6, cocycle unrestricted and at 0.6,
+landscape, 3-D cycle, image and its cubical cycle, screenshotted with the pre-installed Chromium and read. All drew what
+they should. The unrestricted cocycle is the documented mess of edges across the data (`Plot.cocycle`'s own default);
+at 0.6, just after the loop's birth (0.5945), it is the single edge that closes the gap.
+
+## Decisions left to the project lead (also on #63)
+
+- A cocycle's default plot is unrestricted (as `Plot.cocycle`). Restricting at the bar's birth by default would be
+  the informative picture for `vr`/`cech`/`alpha`, but needs a default that refuses the other complexes, or switches
+  silently. Kept explicit (`plotRepresentative(i, at)`, `--at`).
+- No public provenance accessors on `PersistenceResult` (`options()`, `complex()`, ...): the JSON carries them; add
+  when a caller needs them.
+- 3-D cocycles are refused rather than drawn as an uncolored support.
+
+## Not verified
+
+- MATLAB itself (as for every facade method): `fig.view()` from MATLAB's JVM (it needs `java.awt.Desktop` there) and
+  `save` dispatch with dot syntax are expected to work, unrun.
+- Reading a saved file into numpy/MATLAB `jsondecode`: the recipes in the docs follow from the format, not run.

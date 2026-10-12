@@ -38,6 +38,7 @@ in a MATLAB tab next to the Scala code.
 | `computeFromRelation(relation, options)` | a relation, for the Dowker complex (options `engine`, `maxDimension`, `maxFiltrationValue`, `dual`, `field`, `prime`, `epsilon`, and the bar options) |
 | `selectLandmarksFromPoints`, `computeFromPointsAndLandmarks`, `coveringRadiusFromPoints` (and `...FromDistanceMatrix`) | the witness complex in two steps, see [witness complexes](topological-spaces/witness-complexes.md) |
 | `h1Bars`, `circularCoordinates`, `toroidalCoordinates` | see [circular coordinates](circular-coordinates.md) |
+| `loadResult(path)` | a result saved by `result.save(path)` or `tda4j --save-result` |
 
 Each `compute...` method also has an overload without options. In an image, a pixel of value `NaN` is masked (missing
 data): it is not in the complex, whatever `sublevel` is. `Inf` and `-Inf` are ordinary values: with `sublevel` `true`,
@@ -106,6 +107,14 @@ vertex numbers) and their coefficients: a cycle, or a cocycle with `representati
 For the witness complex the vertices are point numbers, not landmark numbers. For an image, a cell is given by its
 coordinates in the doubled grid (a pixel `(i, j)` is `(2i + 1, 2j + 1)`). The [boundary matrix](boundary-matrix.md) of
 the complex is also available.
+
+### Plots and saved results
+
+A result draws itself: `result.plotBarcode().view()`, `result.plotDiagram().save('diagram.svg')`,
+`result.plotRepresentative(result.mostPersistentBar(1)).view()`, and more (see [plotting](plotting.md#from-matlab-java-and-the-command-line)).
+Each `plot...` method returns a figure object; call `view()` on it for the browser, `save(path)` for an `.svg` or
+`.html` file. `result.save('result.json')` writes the whole result to a file, which `TDA4j.loadResult('result.json')`
+reads back (in MATLAB, Java, Scala or `tda4j --plot ...`); it is JSON, readable from other languages too.
 
 MATLAB itself is not part of the test suite: the tutorial MATLAB tabs are checked by making the same Java calls from
 Scala.
