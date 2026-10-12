@@ -44,6 +44,26 @@ class CLISpec extends mutable.Specification:
       )
     }
 
+    "keep every other 0.5.0 short flag" >> {
+      val conf = new TDA4jConf(
+        Seq("-i", "csv-distances", "-o", "out.txt", "-r", "-c", "vr", "-a", "helix", "-f", "R", "-p", "3") ++
+          Seq("-w", "lazy", "-l", "random", "-d", "4", "some-input-file")
+      )
+      (conf.inputFormat() must beEqualTo("csv-distances")) and (conf.output() must beEqualTo("out.txt")) and
+        (conf.representatives() must beTrue) and
+        (TDA4jCLI.buildOptions(conf).toSeq.grouped(2).map(p => p(0) -> p(1)).toMap must beEqualTo(
+          Map(
+            "complex" -> "vr",
+            "alphaBackend" -> "helix",
+            "field" -> "R",
+            "prime" -> "3",
+            "witnessVariant" -> "lazy",
+            "landmarkSelector" -> "random",
+            "dtmK" -> "4"
+          )
+        ))
+    }
+
     "pass --nan-mask through as nanMask" >> {
       TDA4jCLI.buildOptions(new TDA4jConf(Seq("--nan-mask", "false", "some-input-file"))).toSeq must beEqualTo(
         Seq("nanMask", "false")

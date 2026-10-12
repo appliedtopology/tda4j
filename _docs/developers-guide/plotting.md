@@ -48,7 +48,10 @@ constructors (`barcode`, `diagram`, `persistenceImage`, `landscape`, `image`,
 the 3-D ones) and shares the trait's name on purpose. The barcode, diagram,
 persistence-image and landscape constructors take a `PersistenceDiagram` or a
 list of bars (`Plot.Bars`). The others take what they draw: a `PointCloud`,
-an `Image` or a grid, with a chain or coordinates on top.
+an `Image` or a grid, with a chain (or its cells with coefficients as numbers,
+`Plot.Terms`) or coordinates on top. `matlab.PersistenceResult`'s `plot...`
+methods, and through them the CLI's `--plot`, call these constructors on the
+result's arrays.
 
 To add a kind of plot, add a constructor to `object Plot` that builds a
 `Figure` or `Scene` out of existing marks. Add a new `Mark` only for a

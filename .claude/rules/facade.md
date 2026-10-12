@@ -56,15 +56,24 @@ non-integral filtrations. `TDA4jCLI.run(args, out): Int` is testable in-process,
 `opt[Boolean]` has always-supplied toggle semantics (`WORKLOG-naming-and-dispatch-expansion.md`). **Scallop gives a
 short flag to the FIRST declared option with that letter**: a new option declared earlier silently takes a letter users
 already type (`--nan-mask` took `-n` from `--num-landmarks`); new options take `noshort = true`, and `CLISpec` pins
-0.5.0's short flags (`WORKLOG-nan-mask.md`). `--distance-to`
+every 0.5.0 short flag (`WORKLOG-nan-mask.md`).
+`--distance-to`
 (+`--distance-format`/`-order`/`-ground-norm`) mirrors `BarcodeDistance` instead; only
 `--output-format=text` works with it.
+**`--plot`/`--save-result`/`--input-format result`** (`WORKLOG-facade-plots.md`): a saved result (sniffed when the
+file starts with `{` and `--input-format` is not given) refuses every flag `buildOptions` passes, so a new computation
+flag is refused automatically; plot flags are checked in `run`, never with Scallop `choices`/`validate` (they exit the
+JVM); a plot flag a kind does not use is an error. `--plot` without `--output` writes a temporary page and
+`Viewer.browse`s it: specs set `tda4j.plot.browser=none` (`PlotCLISpec`). `CliFull` prepends `--min-persistence 0`,
+which a saved result refuses: call `TDA4jCLI.run` directly there.
 
 ## MATLAB API
 
 `matlab` (`TDA4j.scala`, `PersistenceResult.scala`), `WORKLOG-matlab-api.md`. Java-facing facade: public methods
-take/return only `double`, `int`, `String`, `double[][]`, `String[]` — no `Map`, generics, or Scala types
-(project lead rejected a `Map`-based design). Options are a flat key/value `String[]`; `dispatch` parses each
+TAKE only `double`, `int`, `String` and arrays of those — no `Map`, generics, `Option` or default arguments (project
+lead rejected a `Map`-based design) — and return those or a library object MATLAB calls methods on (project lead
+2026-10-12: MATLAB holds any library object, it cannot instantiate parametrized types): a result class, a
+`plot.Figure`/`Scene` (`view()`, `save(path)`, the no-default overload Java needs). Options are a flat key/value `String[]`; `dispatch` parses each
 once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before anything runs.
 - Error messages and `--help` text say what to do, in user terms: never point at `.claude/`, CLAUDE.md or a private
   class's doc.
@@ -97,4 +106,15 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
 - **Circular coordinates**: `h1Bars(points)`/`circularCoordinates(points, r[, cocycleIndex, prime])` →
   `CircularCoordinatesResult`. **Toroidal coordinates**: `toroidalCoordinates(points, r, cocycleIndices[, prime,
   reduce])` → `ToroidalCoordinatesResult` (separate class). Neither has a CLI mirror.
-- Unverified: MATLAB's bundled JVM version and actual marshalling.
+- **Plots and saved results** (#63, `WORKLOG-facade-plots.md`). A result records its `ResultSource` (method, options,
+  complex, cocycles, field, landmarks, points or ORIGINAL image values), attached LAST at the public entry points (the
+  `dispatch*` wrappers do not all see the input: `dispatchCubical` sees negated values). `plot...` methods draw the
+  result's ARRAYS (`Plot.Terms`), never typed chains, so a loaded result draws the same SVG. `plotRepresentative(i,
+  at)` uses the result's own complex (vr/cech/alpha) at `at`, in its units, never Euclidean diameter (wrong for radii).
+  Refusals are `UnsupportedOperationException` worded in user terms, no method names (the CLI prints them as they are).
+  The file (`ResultFile`, JSON, format version 1): every bar, `reported`, threshold, reported bars' representatives,
+  source; NOT hidden bars' representatives or the boundary matrix. Non-finite numbers as strings; bare `Infinity`/`NaN`
+  and a BOM read too; only format, version and the bar arrays are required; unknown keys are skipped (a new key needs
+  no version bump, a changed meaning does). `ResultFileSpec`: re-save byte-identical, bars bit for bit (`-0.0`), every
+  truncation an `IllegalArgumentException`.
+- Unverified: MATLAB's bundled JVM version and actual marshalling (plots and `view()` from MATLAB included).

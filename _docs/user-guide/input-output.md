@@ -32,3 +32,7 @@ Two details if you compare with another tool: Ripser's binary distance matrices 
 Perseus's grids list the first axis fastest (the readers and writers convert for you). A Perseus value of `-1` is a
 missing cell, read as `NaN`: masked, not in the complex, sublevel or superlevel. Writing a grid writes `NaN` as `-1` and
 refuses an infinite value (the format has none).
+
+A whole result of the [MATLAB interface](matlab.md) or the [command line](cli.md), with its representatives and the
+points or image it was computed from, is saved as one JSON file by `result.save(path)` (`--save-result`) and read back
+by `TDA4j.loadResult(path)`: see [saved results](plotting.md#saved-results).

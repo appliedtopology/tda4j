@@ -96,7 +96,9 @@ object TDA4j:
     validatePoints(points)
     val opts = parseOptions(options)
     val metricSpace = EuclideanMetricSpace(points)
-    dispatch(opts, metricSpace, Some(points))
+    dispatch(opts, metricSpace, Some(points)).withSource(
+      ResultSource("computeFromPoints", options, opts, complexName(opts), ResultInput.Points(points.map(_.clone())))
+    )
 
   def computeFromDistanceMatrix(distances: Array[Array[Double]]): PersistenceResult =
     computeFromDistanceMatrix(distances, Array.empty[String])
@@ -107,7 +109,15 @@ object TDA4j:
   def computeFromDistanceMatrix(distances: Array[Array[Double]], options: Array[String]): PersistenceResult =
     validateSquare(distances)
     val opts = parseOptions(options)
-    dispatch(opts, explicitMetricSpace(distances), None)
+    dispatch(opts, explicitMetricSpace(distances), None).withSource(
+      ResultSource(
+        "computeFromDistanceMatrix",
+        options,
+        opts,
+        complexName(opts),
+        ResultInput.Abstract("distance-matrix")
+      )
+    )
 
   def computeFromRelation(relation: Array[Array[Double]]): PersistenceResult =
     computeFromRelation(relation, Array.empty[String])
@@ -121,7 +131,14 @@ object TDA4j:
   def computeFromRelation(relation: Array[Array[Double]], options: Array[String]): PersistenceResult =
     validateRelation(relation)
     val opts = parseOptionsWithKeys(options, dowkerKeys)
-    dispatchDowker(opts, relation)
+    dispatchDowker(opts, relation).withSource(
+      ResultSource("computeFromRelation", options, opts, "dowker", ResultInput.Abstract("relation"))
+    )
+
+  /** A result saved by `PersistenceResult.save` (or `tda4j --save-result`), with its bars, threshold, reported
+    * representatives and input, so it plots like the result it was. Its boundary matrix is not saved.
+    */
+  def loadResult(path: String): PersistenceResult = ResultFile.read(path)
 
   // The witness complex in two steps: select landmarks (and read the covering radius R), then compute, e.g. with
   // maxFiltrationValue 2R as in the JavaPlex tutorials. The one-shot complex=witness path never reports R.
@@ -160,7 +177,16 @@ object TDA4j:
     val metricSpace = EuclideanMetricSpace(points)
     validateLandmarks(landmarks, metricSpace.size)
     val opts = parseOptionsWithKeys(options, witnessFromLandmarksKeys)
-    dispatchWitnessFromLandmarks(opts, metricSpace, landmarks.toIndexedSeq)
+    dispatchWitnessFromLandmarks(opts, metricSpace, landmarks.toIndexedSeq).withSource(
+      ResultSource(
+        "computeFromPointsAndLandmarks",
+        options,
+        opts,
+        "witness",
+        ResultInput.Points(points.map(_.clone())),
+        landmarks
+      )
+    )
 
   /** Step 2 of the two-step witness complex: its persistence for the given landmarks (0-based row numbers of `points`,
     * non-empty, distinct; a number equal to `points.length` is reported as a likely 1-based index). Options:
@@ -179,7 +205,16 @@ object TDA4j:
     val metricSpace = explicitMetricSpace(distances)
     validateLandmarks(landmarks, metricSpace.size)
     val opts = parseOptionsWithKeys(options, witnessFromLandmarksKeys)
-    dispatchWitnessFromLandmarks(opts, metricSpace, landmarks.toIndexedSeq)
+    dispatchWitnessFromLandmarks(opts, metricSpace, landmarks.toIndexedSeq).withSource(
+      ResultSource(
+        "computeFromDistanceMatrixAndLandmarks",
+        options,
+        opts,
+        "witness",
+        ResultInput.Abstract("distance-matrix"),
+        landmarks
+      )
+    )
 
   /** As [[computeFromPointsAndLandmarks]], from a distance matrix. */
   def computeFromDistanceMatrixAndLandmarks(distances: Array[Array[Double]], landmarks: Array[Int]): PersistenceResult =
@@ -223,7 +258,7 @@ object TDA4j:
     val result = CircularCoordinates.compute(EuclideanMetricSpace(points), r, cocycleIndex, prime)
     val thetaArray = Array.fill(points.length)(Double.NaN)
     result.theta.foreach((i, t) => thetaArray(i) = t)
-    new CircularCoordinatesResult(thetaArray, result.birth, result.death, result.r, result.prime)
+    new CircularCoordinatesResult(points.map(_.clone()), thetaArray, result.birth, result.death, result.r, result.prime)
 
   def toroidalCoordinates(
     points: Array[Array[Double]],
@@ -283,7 +318,15 @@ object TDA4j:
     val nanMask = opts.get("nanmask").forall(v => parseBooleanOption("nanMask", v))
     val stream = CubicalImage.fromFlatArray(shape.toIndexedSeq, flatValues.toIndexedSeq, sublevel, nanMask = nanMask)
     // The range is the same under sublevel=false (values are negated, not rescaled).
-    dispatchCubical(opts, stream, valueRange(flatValues.iterator))
+    dispatchCubical(opts, stream, valueRange(flatValues.iterator)).withSource(
+      ResultSource(
+        "computeFromCubicalImage",
+        options,
+        opts,
+        "cubical",
+        ResultInput.Image(shape.clone(), flatValues.clone())
+      )
+    )
 
   def computeFromImage(pixels: Array[Array[Double]]): PersistenceResult =
     computeFromImage(pixels, Array.empty[String])
@@ -386,6 +429,9 @@ object TDA4j:
 
   private def parseOptions(options: Array[String]): Map[String, String] =
     parseOptionsWithKeys(options, recognizedKeys)
+
+  /** Option `complex` as the facade spells it (validated by the computation before this is read). */
+  private def complexName(opts: Map[String, String]): String = opts.getOrElse("complex", "vr").toLowerCase
 
   private def parseWitnessComplexOption(opts: Map[String, String]): Unit =
     opts.get("complex").foreach { raw =>

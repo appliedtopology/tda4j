@@ -231,6 +231,14 @@ mimaBinaryIssueFilters ++= {
 // (`scala sc:nocompile`) fences before that heading are joined into an `object <Page>Narrative` whose `narrative()`
 // is compiled but never called, so a narrative fence that drifts from the script fails `sbt Test/compile`, not just
 // a reader. See .claude/WORKLOG-tutorial-docs-as-tests.md.
+// The library's version as a resource: `matlab.ResultFile` records which tda4j wrote a saved result (the class files
+// carry no manifest version outside a packaged jar).
+Compile / resourceGenerators += Def.uncached(Def.task {
+  val out = (Compile / resourceManaged).value / "org" / "appliedtopology" / "tda4j" / "version.properties"
+  IO.write(out, s"version=${version.value}\n")
+  Seq(out)
+}.taskValue)
+
 Test / sourceGenerators += Def.uncached(Def.task {
   val docs = baseDirectory.value / "_docs" / "tutorials"
   val outDir = (Test / sourceManaged).value / "tutorial"

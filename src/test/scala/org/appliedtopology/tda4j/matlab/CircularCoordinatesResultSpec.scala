@@ -56,3 +56,11 @@ class CircularCoordinatesResultSpec extends Specification:
         classOf[NoIntegerCocycleException].getSuperclass must beEqualTo(classOf[RuntimeException])
       }
   }
+
+  "plot" should
+    "draw every point of the circle at its angle" >> {
+      val points = circlePoints(16)
+      val bars = TDA4j.h1Bars(points)
+      val svg = TDA4j.circularCoordinates(points, (bars(0)(0) + bars(0)(1)) / 2).plot().svg()
+      "<title>point [0-9]+: θ = ".r.findAllMatchIn(svg).size must beEqualTo(16)
+    }

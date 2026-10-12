@@ -1,7 +1,10 @@
 package org.appliedtopology.tda4j.matlab
 
+import org.appliedtopology.tda4j.plot.{Figure, Plot}
+
 /** A circular coordinate from `TDA4j.circularCoordinates` (see `CircularCoordinates.compute`). */
 final class CircularCoordinatesResult private[matlab] (
+  private val points: Array[Array[Double]],
   private val thetaArray: Array[Double], // NaN for a point outside the relevant connected component
   private val birthValue: Double,
   private val deathValue: Double,
@@ -22,3 +25,7 @@ final class CircularCoordinatesResult private[matlab] (
   /** The `r` and `prime` this result was computed with. */
   def r(): Double = rValue
   def prime(): Int = primeValue
+
+  /** The points (their first two coordinates) on a cyclic color map by angle; points with no coordinate hollow-gray. */
+  def plot(): Figure =
+    Plot.circularCoordinates(points, thetaArray.indices.filter(hasCoordinate).map(i => i -> thetaArray(i)).toMap)

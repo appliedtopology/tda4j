@@ -24,11 +24,21 @@ one:
 * which bars: `--min-persistence`, `--min-persistence-fraction`, `--include-zero-length`; and which representatives:
   `--representative-type` (`cycles` or `cocycles`);
 * comparing: `--distance-to saved-diagram` (with `--distance-format`, `--distance-order`, `--distance-ground-norm`)
-  prints the bottleneck and Wasserstein distances per dimension to a diagram saved earlier, instead of a diagram.
+  prints the bottleneck and Wasserstein distances per dimension to a diagram saved earlier, instead of a diagram;
+* plots: `--plot` (`barcode`, `diagram`, `representative`, `input`, `complex`, `landscape`, `persistence-image`,
+  `input-3d`, `complex-3d`, `representative-3d`) draws the result instead of writing it, into `--output` (`.svg` or
+  `.html`) or a page opened in the browser; `--bar`, `--dimension` and `--at` choose what (see
+  [plotting](plotting.md#from-matlab-java-and-the-command-line));
+* saved results: `--save-result result.json` also saves the whole result (bars, representatives, input). The saved
+  file is an input of its own (`--input-format result`, chosen by itself for such a file): print, convert, compare or
+  plot it without computing again. Computation flags are refused for it.
 
 ```
 java -jar tda4j-assembly.jar --max-dimension 1 points.csv
 java -jar tda4j-assembly.jar --input-format csv-relation --dual true relation.csv
+java -jar tda4j-assembly.jar --max-dimension 1 --save-result circle.json points.csv
+java -jar tda4j-assembly.jar --plot representative --output loop.svg circle.json
+java -jar tda4j-assembly.jar --output-format gudhi --output circle.pers circle.json
 ```
 
 ### Which bars are reported
