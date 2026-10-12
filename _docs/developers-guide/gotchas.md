@@ -114,6 +114,29 @@ companion-object extension can still lose to a same-named stdlib extension reach
 at some call site (`min`/`max` deliberately stay top-level extensions on `Simplex` for exactly this reason,
 to avoid losing to `scala.math.Ordering.Implicits`).
 
+## 8. In specs2/ScalaCheck tests, explicitly type simplex sequences before calling `.forall`
+
+In a specs2 spec mixing in `ScalaCheck`, an un-ascribed `Seq[Simplex[_]]` can
+resolve `.forall` to a specs2 extension rather than the standard-library
+method, breaking type inference inside the predicate.
+
+Give the sequence an explicit type first:
+
+```scala sc:nocompile
+val xs: IndexedSeq[Simplex[Int]] = ...
+xs.forall(...)
+```
+
+## 9. Dowker streams must reject genuinely infinite filtration values
+
+`DowkerGeometry.fromBoolean` uses `+Infinity` to represent a relation that is
+never witnessed. Since `+Infinity <= +Infinity` is true, the usual
+`maxFiltrationValue = +Infinity` threshold check would otherwise admit those
+simplices and silently turn the relation into a larger complex.
+
+`DowkerCofaceSimplexStream` therefore requires the computed filtration value
+to be finite in addition to satisfying the normal threshold check.
+
 ## 10. No top-level `object` or `class` with a non-ASCII name
 
 scaladoc writes one page file per top-level type, named after it (`∆$.html`).
