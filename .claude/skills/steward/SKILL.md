@@ -29,7 +29,8 @@ after every job below passes locally.
 | `docs-build` (`test.yml`) | `TDA4J_SCALA_VERSION=3.8.4 sbt doc` | `sbt shutdown`, then the same | the error names `page.md:line` |
 | `mima` (`test.yml`) | `sbt mimaReportBinaryIssues` | the same | see below |
 
-`coverage.yml` (weekly and on demand) is a map, not a check: nothing fails on a coverage number.
+`coverage.yml` (weekly and on demand, uploaded to Codecov) is a map, not a check: nothing fails on a coverage number, and
+Codecov's commit statuses are informational (`codecov.yml`).
 
 ### Lint
 

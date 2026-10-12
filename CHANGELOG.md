@@ -59,7 +59,7 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - CI builds the fat jar and runs the command line on a sample.
 - Contributor guides: `CONTRIBUTING.md` rewritten (setup, commands, issues and labels, review principles), issue and
   pull request templates, and this changelog.
-- A coverage report, run by hand or weekly (`coverage.yml`).
+- A coverage report, run by hand or weekly (`coverage.yml`) and sent to Codecov, where it is informational only.
 - Dependabot opens weekly update pull requests for the GitHub Actions and the sbt dependencies.
 - A format check before every commit, for anyone who opts in (`CONTRIBUTING.md`).
 - The developer's guide covers the public API and its principles, nerves and group homology, plotting and measuring

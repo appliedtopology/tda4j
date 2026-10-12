@@ -165,3 +165,20 @@ Not filed:
   - the engine detail already in `rules/engines.md` became pointers;
   - the `Chain` hashCode footgun points to #58;
   - the package-layout list was trimmed of instance file names.
+
+## Addendum: Codecov (2026-10-11)
+
+- **Setup.** The project lead reactivated Codecov and stored its token as `CODECOV_TOKEN` in the `codecov` GitHub
+  environment. `coverage.yml` runs in that environment and uploads scoverage's Cobertura report with
+  `codecov/codecov-action@v6` (`disable_search`, `fail_ci_if_error`). `codecov.yml` keeps coverage a map: the
+  statuses are informational and there are no PR comments.
+- **First upload.** The upload was accepted ("queued for processing"), but Codecov never recorded the commit, because
+  the repository's Codecov activation was still in progress. Re-running after reactivation worked.
+- **Paths came out doubled.** With a `fixes: ["::src/main/scala/"]` prefix, the report listed every file as
+  `src/main/scala/src/main/scala/...`: Codecov resolves the Cobertura source root by itself. The prefix was removed.
+- **Result on e421205** (run 38180489875): 94 files, 9081 of 9987 lines covered (90.92%), and every path listed exists
+  in the repository.
+- **The checks behind this:**
+  - The first path check only tested for the `src/main/scala/` prefix, so it passed on the doubled paths. Check that
+    each path is an existing file instead.
+  - Codecov counts lines (Cobertura), while scoverage counts statements (89.4%), so the two numbers differ.
