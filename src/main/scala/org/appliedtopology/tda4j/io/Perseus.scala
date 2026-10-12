@@ -39,9 +39,10 @@ object Perseus:
       (sizes.reverse.toIndexedSeq, raw.toIndexedSeq)
     finally src.close()
 
-  def readCubicalToplex(path: String, sublevel: Boolean = true): CubicalGridStream =
+  /** The toplex of `path` as a grid; with `nanMask = false` a missing cube (`-1`, read as NaN) is an error. */
+  def readCubicalToplex(path: String, sublevel: Boolean = true, nanMask: Boolean = true): CubicalGridStream =
     val (shape, flatValues) = readCubicalImageData(path)
-    CubicalImage.fromFlatArray(shape, flatValues, sublevel)
+    CubicalImage.fromFlatArray(shape, flatValues, sublevel, nanMask = nanMask)
 
   /** `shape`/`flatValues` in `CubicalImage.fromFlatArray`'s own last-axis-fastest convention -- reversed internally to
     * Perseus's own first-axis-fastest convention before writing. `Double.NaN` (masked) is written as `-1`. An infinite

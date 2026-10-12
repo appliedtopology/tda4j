@@ -57,7 +57,10 @@ skip masks and a cell of rank `masked` is absent; every enumeration must skip it
 out of bounds, mutation-checked). Fast dual: a masked component is elder to all but `∞` (`seniority`), facets of rank
 `masked` merge first with no bar, a dying masked component is an essential bar born at the facet, never zero-length.
 `±Infinity` are ordinary values (a `+Infinity` cell enters at `+Infinity`). Perseus `-1` reads as NaN, the writer
-refuses infinities. A NaN from an upstream bug silently masks (known cost). Masked images are in the random
+refuses infinities. A NaN from an upstream bug silently masks (known cost), unless masks are OFF: `nanMask = false`
+(last parameter everywhere: `CubicalGridStream`, `Image`, `CubicalImage` array constructors, Perseus/DIPHA readers,
+MATLAB `nanMask`, CLI `--nan-mask`) makes a NaN an error naming the pixel (`CubicalGridStream.requireNoNaN`: eagerly
+for a flat array, at first read for a function-built grid). Masked images are in the random
 generators of `FastRepresentativesSpec`/`PackedCubicalCohomologySpec`, so every engine-equality check covers them
 (`WORKLOG-nan-mask.md`). Images built by `CubicalImage.fromFlatArray` are
 `FlatCubicalGridStream`s; engines read `topCellValues`, never `topCellValue` per pixel. Quote benchmarks WITH

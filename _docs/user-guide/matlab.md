@@ -41,7 +41,8 @@ in a MATLAB tab next to the Scala code.
 
 Each `compute...` method also has an overload without options. In an image, a pixel of value `NaN` is masked (missing
 data): it is not in the complex, whatever `sublevel` is. `Inf` and `-Inf` are ordinary values: with `sublevel` `true`,
-`Inf` enters after every finite value and `-Inf` before them; with `sublevel` `false`, the reverse.
+`Inf` enters after every finite value and `-Inf` before them; with `sublevel` `false`, the reverse. With `nanMask`
+`false`, masks are off and a `NaN` pixel is an error naming the pixel, for data where a `NaN` can only be a bug.
 
 ### Options
 
@@ -59,6 +60,7 @@ data): it is not in the complex, whatever `sublevel` is. `Inf` and `-Inf` are or
 | `minPersistenceFraction` | number | `0.01`: the threshold as a fraction of the input's scale |
 | `includeZeroLength` | `true`, `false` | `false` |
 | `sublevel` | `true`, `false` | `true` (images) |
+| `nanMask` | `true` (a `NaN` pixel is masked), `false` (a `NaN` pixel is an error) | `true` (images) |
 | `alphaBackend` | `default`, `bowyer-watson`, `helix`, `DQP` | `default`: `bowyer-watson` for points in at most 4 dimensions, `helix` above; with `maxFiltrationValue`, `DQP` instead when it is expected to be faster (same result in general position) |
 | `requireValidTriangulation` | `true`, `false` | `false` (alpha with `helix`: also check for cavities, and fail rather than return a triangulation that could not be repaired) |
 | `dtmK` | integer | required for `dtm-rips` and `dtm-alpha` |

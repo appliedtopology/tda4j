@@ -43,6 +43,10 @@ neighbouring pixel is, with that pixel's value; a hole of masked pixels is a hol
 ordinary values: `Infinity` enters after every finite value of a sublevel image and before them in a superlevel one,
 `-Infinity` the reverse.
 
+Where a `NaN` can only mean a bug upstream (a `0/0`), turn masks off: `Image(values, shape, nanMask = false)` (also
+`CubicalImage.fromFlatArray(..., nanMask = false)`, MATLAB option `nanMask`, `--nan-mask false` on the command line).
+A `NaN` pixel is then an error that names the pixel.
+
 `Persistence` computes the diagram of an image of two or more dimensions with the
 [fast cubical engine](../homology-computation/fast-cubical.md), which is much faster than matrix reduction and gives
 cycles as representatives. The [images tutorial](../../tutorials/images.md) works through an example. From MATLAB, `TDA4j.computeFromImage(pixels,

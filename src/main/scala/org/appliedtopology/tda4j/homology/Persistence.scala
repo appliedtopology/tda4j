@@ -4,9 +4,15 @@ package org.appliedtopology.tda4j
   * axis. Sublevel filtration by default (dark regions first); `sublevel = false` for superlevel. A pixel of value
   * `Double.NaN` is masked (missing data): it is not in the complex, in either direction (NaN has no sign). Infinite
   * values are ordinary values: `Double.PositiveInfinity` enters after every finite value of a sublevel image and before
-  * them in a superlevel one, `Double.NegativeInfinity` the reverse.
+  * them in a superlevel one, `Double.NegativeInfinity` the reverse. `nanMask = false` turns masks off, for data where a
+  * NaN can only be a bug: a NaN pixel is then an error, naming the pixel.
   */
-final case class Image(values: IndexedSeq[Double], shape: IndexedSeq[Int], sublevel: Boolean = true):
+final case class Image(
+  values: IndexedSeq[Double],
+  shape: IndexedSeq[Int],
+  sublevel: Boolean = true,
+  nanMask: Boolean = true
+):
   require(
     values.length == shape.product,
     s"Image: ${values.length} values for shape $shape (${shape.product} expected)"
@@ -190,7 +196,8 @@ object Persistence:
 
     given fromImage: Conversion[Image, Input[Cube]] = img =>
       new Input[Cube]:
-        private lazy val grid = CubicalImage.fromFlatArray(img.shape, img.values, img.sublevel)
+        private lazy val grid =
+          CubicalImage.fromFlatArray(img.shape, img.values, img.sublevel, nanMask = img.nanMask)
         def stream(maxDimension: Int, maxFiltrationValue: Option[Double], complex: PointCloudComplex) = grid
         override def cubicalGrid = Some(grid)
         def scale = None

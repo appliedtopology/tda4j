@@ -297,6 +297,16 @@ class CLISpec extends mutable.Specification:
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
     }
 
+    "pass --nan-mask false through: a missing Perseus cube is then an error (exit code 1)" >> {
+      val path = tempFile(".txt")
+      java.nio.file.Files.write(java.nio.file.Paths.get(path), "2\n3\n3\n0\n0\n0\n0\n-1\n0\n0\n0\n0\n".getBytes)
+      val buffer = new ByteArrayOutputStream()
+      (CliFull.run(Seq("--input-format", "perseus-cubical", "--nan-mask", "false", path), new PrintStream(buffer)) must
+        beEqualTo(1)) and
+        (CliFull.run(Seq("--input-format", "perseus-cubical", "--nan-mask", "true", path), new PrintStream(buffer)) must
+          beEqualTo(0))
+    }
+
     "produce the exact same barcode as calling TDA4j.computeFromCubicalImage directly with --engine fast-cubical" >> {
       val path = tempFile(".txt")
       // Same ring fixture as the default-engine test above.

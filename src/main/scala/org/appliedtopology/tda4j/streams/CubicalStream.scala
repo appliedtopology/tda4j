@@ -12,7 +12,8 @@ import scala.collection.parallel.CollectionConverters.*
   * A top cell of value `Double.NaN` is masked: it is not in the complex. NaN has no sign and compares to nothing, so it
   * means the same in a sublevel and a superlevel image. Every other cube takes the minimum over the UNMASKED top cells
   * containing it, and is not in the complex either when all of them are masked: the complex is the closure of the
-  * unmasked top cells. Infinite values are ordinary values: a top cell of value `+Infinity` enters at `+Infinity`.
+  * unmasked top cells. Infinite values are ordinary values: a top cell of value `+Infinity` enters at `+Infinity`. With
+  * `nanMask = false` masks are off: a NaN value is an error, naming the pixel, when the values are first read.
   *
   * `shape(i)` is the number of pixels along axis `i`. The complex has `prod_i (2 shape(i) + 1)` cells
   * (`totalCellCount`): a 256x256 image has 513² = 263169.
@@ -22,7 +23,10 @@ open class CubicalGridStream(
   val topCellValue: IndexedSeq[Int] => Double,
   // Read every top cell's value in parallel when the values are first needed. `topCellValue` must then be safe to call
   // from several threads; every constructor in CubicalImage.scala reads only immutable captured data.
-  val parallelFiltrationValue: Boolean = false
+  val parallelFiltrationValue: Boolean = false,
+  // `false` turns masks off: a NaN top cell is then an error instead of a cell left out (for data where a NaN can
+  // only be a bug upstream). Last, so no positional call to the Booleans before it can silently bind to it.
+  val nanMask: Boolean = true
 ) extends StratifiedCellStream[Cube, Double]
     with DoubleFiltration[Cube]():
 
@@ -80,6 +84,7 @@ open class CubicalGridStream(
       while p < values.length do
         read(p)
         p += 1
+    if !nanMask then CubicalGridStream.requireNoNaN(shape, values)
     values
 
   private lazy val cellValues: Array[Double] =
@@ -152,9 +157,27 @@ open class CubicalGridStream(
 open class FlatCubicalGridStream(
   shape: IndexedSeq[Int],
   pixels: Array[Double],
-  parallelFiltrationValue: Boolean = false
-) extends CubicalGridStream(shape, FlatCubicalGridStream.reader(shape, pixels), parallelFiltrationValue):
+  parallelFiltrationValue: Boolean = false,
+  nanMask: Boolean = true
+) extends CubicalGridStream(shape, FlatCubicalGridStream.reader(shape, pixels), parallelFiltrationValue, nanMask):
+  // The array is at hand, so masks off is checked now, where the image is built, not when an engine first reads it.
+  if !nanMask then CubicalGridStream.requireNoNaN(shape, pixels)
   override protected[tda4j] lazy val topCellValues: Array[Double] = pixels
+
+object CubicalGridStream:
+  /** Throws the error for masks off (`nanMask = false`) at the first NaN of `values` (row-major): where it is, and what
+    * to do.
+    */
+  def requireNoNaN(shape: IndexedSeq[Int], values: Array[Double]): Unit =
+    var p = 0
+    while p < values.length && !values(p).isNaN do p += 1
+    if p < values.length then
+      val at = GridRanks.coordinates(shape.toArray, p).mkString("(", ", ", ")")
+      throw new IllegalArgumentException(
+        s"the image has a NaN value at pixel $at, and NaN masks are off (option nanMask = false, --nan-mask false on " +
+          "the command line), so a NaN is an error rather than a missing pixel. Replace it by a number, or leave " +
+          "nanMask at its default (true): a NaN pixel is then masked, left out of the complex."
+      )
 
 object FlatCubicalGridStream:
   /** `topCellValue` for a row-major array. */

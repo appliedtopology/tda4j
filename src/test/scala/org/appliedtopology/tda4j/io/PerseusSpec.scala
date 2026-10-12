@@ -35,6 +35,14 @@ class PerseusSpec extends mutable.Specification:
         (Perseus.readCubicalToplex(path).topCellValue(IndexedSeq(1)).isNaN must beTrue)
     }
 
+    "refuse a -1 (missing) cube with nanMask = false, naming it" >> {
+      val path = tempFile(".txt")
+      Files.write(java.nio.file.Paths.get(path), "1\n3\n0\n-1\n2\n".getBytes)
+      Perseus.readCubicalToplex(path, nanMask = false) must throwAn[IllegalArgumentException](
+        message = "NaN value at pixel \\(1\\)"
+      )
+    }
+
     "reject a negative grid size (periodic boundary, unsupported)" >> {
       val path = tempFile(".txt")
       Files.write(java.nio.file.Paths.get(path), "1\n-3\n0\n1\n2\n".getBytes)

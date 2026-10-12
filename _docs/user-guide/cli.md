@@ -17,7 +17,8 @@ one:
   (`text`, `csv`, `gudhi`, `dipha`, `perseus`), `--output`, `--representatives` (also print each bar's representative);
 * the computation: `--complex`, `--engine`, `--max-dimension`, `--max-filtration-value`, `--field`, `--prime`,
   `--edge-collapse`, `--alpha-backend`, `--require-valid-triangulation`, `--dtm-k`, `--dtm-q`, `--dtm-p`,
-  `--sparse-epsilon`, `--dual` (relations);
+  `--sparse-epsilon`, `--dual` (relations), `--sublevel` and `--nan-mask` (images: `--nan-mask false` makes a `NaN`
+  pixel an error instead of a masked one);
 * the witness complex: `--num-landmarks`, `--witness-variant`, `--landmark-selector`, `--landmark-seed`, `--nu`, and the
   two-step `--select-landmarks` / `--landmarks-file` (see [witness complexes](topological-spaces/witness-complexes.md));
 * which bars: `--min-persistence`, `--min-persistence-fraction`, `--include-zero-length`; and which representatives:

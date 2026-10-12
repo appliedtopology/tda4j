@@ -91,6 +91,10 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   val sublevel: ScallopOption[String] = opt[String](
     descr = "true (default) for the sublevel filtration of an image, false for the superlevel one"
   )
+  val nanMask: ScallopOption[String] = opt[String](
+    descr = "true (default): a NaN pixel of an image is masked, left out of the complex (a Perseus -1 reads as NaN); " +
+      "false: a NaN pixel is an error"
+  )
 
   val numLandmarks: ScallopOption[Int] =
     opt[Int](descr = "the number of landmarks, required for --complex=witness")

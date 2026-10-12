@@ -11,7 +11,8 @@ import javax.imageio.ImageIO
   * negated values, so bars of a superlevel filtration are reported in negated units. Voxel data of any file format is
   * loaded into an array first. A pixel of value `Double.NaN` is masked (missing data): it is not in the complex, in a
   * sublevel and a superlevel image alike (NaN has no sign). Infinite values are ordinary values: `+Infinity` enters
-  * after every finite value in a sublevel image, and before them in a superlevel one (negated to `-Infinity`).
+  * after every finite value in a sublevel image, and before them in a superlevel one (negated to `-Infinity`). Every
+  * array constructor takes `nanMask = false` to turn masks off: a NaN pixel is then an error, naming the pixel.
   */
 object CubicalImage:
 
@@ -37,7 +38,8 @@ object CubicalImage:
     // Threaded straight through to CubicalGridStream's own constructor parameter of the same name -- see
     // its doc there. Safe with every value closure built in this object (all read only immutable captured
     // data), so this is the one place a caller of these convenience constructors can actually reach it.
-    parallelFiltrationValue: Boolean = false
+    parallelFiltrationValue: Boolean = false,
+    nanMask: Boolean = true
   ): CubicalGridStream =
     require(
       flatValues.length == shape.product,
@@ -58,24 +60,32 @@ object CubicalImage:
         while i < pixels.length do
           pixels(i) = sign * flatValues(i)
           i += 1
-    FlatCubicalGridStream(shape, pixels, parallelFiltrationValue)
+    FlatCubicalGridStream(shape, pixels, parallelFiltrationValue, nanMask)
 
   /** `pixels(i)(j)` as a dense 2D grid, shape `(pixels.length, pixels(0).length)`. */
   def fromGrayscale2D(
     pixels: Array[Array[Double]],
     sublevel: Boolean = true,
-    parallelFiltrationValue: Boolean = false
+    parallelFiltrationValue: Boolean = false,
+    nanMask: Boolean = true
   ): CubicalGridStream =
     require(pixels.nonEmpty, "pixels must be non-empty")
     val cols = pixels(0).length
     require(pixels.forall(_.length == cols), "every row of pixels must have the same length")
-    fromFlatArray(IndexedSeq(pixels.length, cols), pixels.flatten.toIndexedSeq, sublevel, parallelFiltrationValue)
+    fromFlatArray(
+      IndexedSeq(pixels.length, cols),
+      pixels.flatten.toIndexedSeq,
+      sublevel,
+      parallelFiltrationValue,
+      nanMask
+    )
 
   /** `voxels(i)(j)(k)` as a dense 3D grid, shape `(voxels.length, voxels(0).length, voxels(0)(0).length)`. */
   def fromVoxelGrid3D(
     voxels: Array[Array[Array[Double]]],
     sublevel: Boolean = true,
-    parallelFiltrationValue: Boolean = false
+    parallelFiltrationValue: Boolean = false,
+    nanMask: Boolean = true
   ): CubicalGridStream =
     require(voxels.nonEmpty, "voxels must be non-empty")
     require(voxels(0).nonEmpty, "voxels(0) must be non-empty")
@@ -89,7 +99,8 @@ object CubicalImage:
       IndexedSeq(voxels.length, d1, d2),
       voxels.flatten.flatten.toIndexedSeq,
       sublevel,
-      parallelFiltrationValue
+      parallelFiltrationValue,
+      nanMask
     )
 
   /** `img.getRGB(x, y)` grayscale (luma) values as a dense grid, shape `(width, height)` -- axis 0 is the image's own

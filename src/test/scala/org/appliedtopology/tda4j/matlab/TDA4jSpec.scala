@@ -187,6 +187,29 @@ class TDA4jSpec extends mutable.Specification:
         (bars(inf, "sublevel", "false") must beEqualTo(engines.map(_ -> List((0, -inf, inf)))))
     }
 
+    "refuse an image with a NaN pixel under every engine with nanMask false, naming it" in {
+      val engines = List("fast-cubical", "cohomology", "chunks", "naive")
+      val withNaN = Array(Array(0.0, 1.0, Double.NaN), Array(2.0, 3.0, 4.0))
+      val refusedBy = engines.filter { engine =>
+        scala.util
+          .Try(TDA4j.computeFromImage(withNaN, Array("engine", engine, "nanMask", "false")))
+          .failed
+          .toOption
+          .exists {
+            case e: IllegalArgumentException =>
+              e.getMessage.contains("NaN value at pixel (0, 2)") && e.getMessage.contains("nanMask")
+            case _ => false
+          }
+      }
+      (refusedBy must beEqualTo(engines)) and
+        (TDA4j.computeFromImage(withNaN, Array("nanMask", "true")).size() must beEqualTo(
+          TDA4j.computeFromImage(withNaN).size()
+        )) and
+        (TDA4j.computeFromImage(withNaN, Array("nanMask", "maybe")) must throwAn[IllegalArgumentException](
+          message = "nanMask"
+        ))
+    }
+
     "have representative chains readable for every bar, with matching vertex/coefficient array lengths" in {
       val result = FullBarcode.computeFromPoints(points, Array("engine", "cohomology"))
       result.size() must be_>(0)

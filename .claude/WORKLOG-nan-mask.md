@@ -59,9 +59,28 @@ all-NaN image gave an H0 bar born at `+Infinity`. Not what a mask should mean.
 - Mutation: dropping the masked seniority fails 3 examples (reference equality among them); not skipping masked
   cofacets in the packed engine fails 4 examples with `distinct(masked)` out of bounds (the intended loud failure).
 
+## Addendum: masks off (`nanMask = false`)
+
+Project lead, same session, after re-reading #52: not an option to ENABLE masks (#52's third choice), but one to
+DISABLE them, under which a NaN is a loud, explained failure. Default `true` (masks on).
+
+- `CubicalGridStream(..., nanMask = false)`: `topCellValues` calls `CubicalGridStream.requireNoNaN` after reading
+  (so a function-built grid fails when an engine first reads it); `FlatCubicalGridStream` checks in its constructor
+  (an array built by `fromFlatArray` fails at construction). One message: the pixel, that masks are off (naming the
+  option in both its Scala/MATLAB and CLI spellings), and what to do.
+- Threaded through `Image` (verb), `CubicalImage.fromFlatArray`/`fromGrayscale2D`/`fromVoxelGrid3D`,
+  `Perseus.readCubicalToplex`, `Dipha.readCubicalGridStream`, MATLAB option `nanMask` (allowlisted), CLI `--nan-mask`.
+  `fromBufferedImage`/`fromFile` have none: luma is never NaN.
+- `nanMask` is the LAST parameter everywhere: several signatures already end in a `Boolean`
+  (`parallelFiltrationValue`), and a new Boolean before it would silently rebind positional calls.
+- Specs: `FastRepresentativesSpec` (every engine, both construction routes, superlevel, no change without NaN),
+  `TDA4jSpec` (four engines, bad value), `PerseusSpec`, `CLISpec`. Mutation: dropping the function-built check fails
+  the engine spec.
+
 ## Known cost (from #52)
 
-A NaN produced by a bug upstream (0/0) silently masks pixels instead of failing.
+A NaN produced by a bug upstream (0/0) silently masks pixels instead of failing, unless the caller turns masks off
+(addendum above).
 
 ## Environment notes (this session)
 

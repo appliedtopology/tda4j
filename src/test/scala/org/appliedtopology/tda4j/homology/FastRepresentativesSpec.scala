@@ -227,6 +227,43 @@ class FastRepresentativesSpec extends mutable.Specification:
       (engines.map(e => Persistence(allMasked, engine = e).bars.size) must beEqualTo(engines.map(_ => 0)))
   }
 
+  // Masks off (`nanMask = false`): a NaN pixel is an error naming the pixel and saying what to do, under every engine,
+  // built from an array (refused at construction) or from a function (refused when an engine first reads the values);
+  // without a NaN, nothing changes.
+  "With nanMask = false a NaN pixel is an error that names it, under every engine" >> {
+    import f3.given
+    val shape = IndexedSeq(2, 3)
+    val values = IndexedSeq(0.0, 1.0, Double.NaN, 2.0, 3.0, 4.0)
+    val clean = values.updated(2, 5.0)
+    val message = "NaN value at pixel \\(0, 2\\), and NaN masks are off.*nanMask.*masked, left out of the complex"
+    val engines = Seq(
+      Persistence.Engine.FastCubical,
+      Persistence.Engine.Cohomology,
+      Persistence.Engine.Chunks,
+      Persistence.Engine.Naive
+    )
+    def fromFunction(vs: IndexedSeq[Double]) =
+      CubicalGridStream(shape, index => vs(index(0) * 3 + index(1)), nanMask = false)
+    (CubicalImage.fromFlatArray(shape, values, nanMask = false) must throwAn[IllegalArgumentException](message)) and
+      (CubicalImage.fromFlatArray(shape, values, sublevel = false, nanMask = false) must
+        throwAn[IllegalArgumentException](message)) and
+      (CubicalImage.fromGrayscale2D(Array(values.take(3).toArray, values.drop(3).toArray), nanMask = false) must
+        throwAn[IllegalArgumentException](message)) and
+      (engines.map(e => scala.util.Try(Persistence(Image(values, shape, nanMask = false), engine = e)).isFailure) must
+        beEqualTo(engines.map(_ => true))) and
+      (Persistence(Image(values, shape, nanMask = false)) must throwAn[IllegalArgumentException](message)) and
+      (FastCubicalHomologyEngine[f3.Fp]().persistentHomology(fromFunction(values)) must
+        throwAn[IllegalArgumentException](message)) and
+      (PackedCubicalCohomologyEngine[f3.Fp](fromFunction(values), 2).persistentHomology() must
+        throwAn[IllegalArgumentException](message)) and
+      (Persistence(fromFunction(values), engine = Persistence.Engine.Naive) must
+        throwAn[IllegalArgumentException](message)) and
+      (engines.map(e => Persistence(Image(clean, shape, nanMask = false), engine = e).triples) must beEqualTo(
+        engines.map(e => Persistence(Image(clean, shape), engine = e).triples)
+      )) and
+      (Persistence(fromFunction(clean)).triples must beEqualTo(Persistence(Image(clean, shape)).triples))
+  }
+
   /** `Some(equal)` when both engines produced bars, `None` when both rejected the triangulation. */
   def sameAlpha(field: FiniteField)(helix: HelixDelaunay, zeroLength: Boolean): Option[Boolean] =
     import field.given
