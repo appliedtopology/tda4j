@@ -14,6 +14,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - `Chain` is an abstract class open to new storages: a storage implements `entryIterator` and inherits every other
   member (the library's are `HeapChain` and `PackedChain`). Its 0.5.0 constructor was `private[tda4j]`, so no
   user code built a `Chain` directly. Binary break only.
+- `nanMask: Boolean = true` is a new last parameter of `CubicalGridStream`, `Image`, `CubicalImage.fromFlatArray`,
+  `fromGrayscale2D`, `fromVoxelGrid3D`, `Perseus.readCubicalToplex` and `Dipha.readCubicalGridStream` (see Added).
+  Defaulted, so callers need no change. Binary break only.
 - `Chain.chainShow` needs only `Show` of the cells, not `OrderedCell`. A given found by implicit search, so
   callers need no change. Binary break only.
 - `Chain` equality is equality of formal sums: the same cells, coefficients equal by the field's `isEqual`, in any

@@ -77,6 +77,11 @@ DISABLE them, under which a NaN is a loud, explained failure. Default `true` (ma
   `TDA4jSpec` (four engines, bad value), `PerseusSpec`, `CLISpec`. Mutation: dropping the function-built check fails
   the engine spec.
 
+- Before the PR: MiMa against 0.5.0 (tags fetched: the clone had none, which makes MiMa pass vacuously) found 9
+  binary breaks from the new defaulted parameter; named with a commented `mimaBinaryIssueFilters` entry and a
+  "Binary break only" changelog line. The jar's help showed `-n, --nan-mask`: Scallop gives each letter to the first
+  declared option, so `-n` had moved from `--num-landmarks`; fixed with `noshort = true`, pinned in `CLISpec`.
+
 ## Known cost (from #52)
 
 A NaN produced by a bug upstream (0/0) silently masks pixels instead of failing, unless the caller turns masks off

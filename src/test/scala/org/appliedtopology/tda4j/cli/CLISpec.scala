@@ -33,6 +33,22 @@ class CLISpec extends mutable.Specification:
       opts.toSeq must containAllOf(Seq("complex", "alpha", "maxDimension", "3", "field", "R"))
       opts.length must beEqualTo(6) // and nothing else -- engine/prime/epsilon/alphaBackend/maxFiltrationValue unset
     }
+
+    // Scallop gives a letter to the first option declared with it: a new option declared earlier can silently take a
+    // short flag users already type. These are the short flags as of 0.5.0. (Each flag once: a repeated option is a
+    // parse error, and Scallop's onError exits the JVM.)
+    "keep the 0.5.0 short flags" >> {
+      val conf = new TDA4jConf(Seq("-n", "7", "-s", "false", "-m", "1", "-e", "chunks", "some-input-file"))
+      TDA4jCLI.buildOptions(conf).toSeq.grouped(2).map(p => p(0) -> p(1)).toMap must beEqualTo(
+        Map("numLandmarks" -> "7", "sublevel" -> "false", "maxDimension" -> "1", "engine" -> "chunks")
+      )
+    }
+
+    "pass --nan-mask through as nanMask" >> {
+      TDA4jCLI.buildOptions(new TDA4jConf(Seq("--nan-mask", "false", "some-input-file"))).toSeq must beEqualTo(
+        Seq("nanMask", "false")
+      )
+    }
   }
 
   "resolveInput" should {
