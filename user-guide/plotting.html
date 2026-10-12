@@ -161,6 +161,110 @@
   </div>
   <p><code>figure.svg()</code> is the SVG as a string: a notebook cell that displays HTML, or any web page, shows it as it is.</p>
  </section>
+ <section id="from-matlab-java-and-the-command-line">
+  <h2 class="h500"><a href="#from-matlab-java-and-the-command-line" class="anchor"></a>From MATLAB, Java and the command line</h2>
+  <p>A result of the <a href="matlab.html">MATLAB interface</a> draws itself: each <code>plot...</code> method returns a figure, to <code>view()</code> or <code>save</code> as above. Here, the loop of a noisy circle and its cycle, drawn over the complex at the scale where the loop is born:</p>
+  <div class="tabset">
+   <div class="tab" data-lang="Scala">
+    <div class="snippet mono-small-block" scala-snippet="" runnable="">
+     <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.plot.*
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val d = Persistence(points, maxDimension = 1)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>import d.given
+</span><span line-number="8" class=""><span class="tooltip-container"></span>val loop = d.dim(1).longest.get
+</span><span line-number="9" class=""><span class="tooltip-container"></span>
+</span><span line-number="10" class=""><span class="tooltip-container"></span>Plot.barcode(d).view()
+</span><span line-number="11" class=""><span class="tooltip-container"></span>Plot.cycle(points, loop.representative).over(Plot.complex(points, loop.birth)).save("loop.svg")
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
+   <div class="tab" data-lang="MATLAB">
+    <div class="snippet mono-small-block">
+     <pre><code class="language-matlab"><span line-number="1" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.matlab.*;
+</span><span line-number="2" class=""><span class="tooltip-container"></span>
+</span><span line-number="3" class=""><span class="tooltip-container"></span>points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
+</span><span line-number="4" class=""><span class="tooltip-container"></span>result = TDA4j.computeFromPoints(points, {'maxDimension', '1'});
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>result.plotBarcode().view();
+</span><span line-number="7" class=""><span class="tooltip-container"></span>loop = result.mostPersistentBar(1);          % the index of the loop's bar (counting from 0)
+</span><span line-number="8" class=""><span class="tooltip-container"></span>result.plotRepresentative(loop, result.birth(loop)).save('loop.svg');   % its 18 edges over the complex
+</span><span line-number="9" class=""><span class="tooltip-container"></span>
+</span><span line-number="10" class=""><span class="tooltip-container"></span>result.save('circle.json');                  % everything, to plot again later
+</span><span line-number="11" class=""><span class="tooltip-container"></span>result = TDA4j.loadResult('circle.json');
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
+  </div>
+  <p>Call the methods with dot syntax (<code>fig.view()</code>, <code>fig.save('loop.svg')</code>): <code>save</code> and <code>view</code> are also MATLAB functions. MATLAB itself is not run by the test suite; the same calls are made from Scala.</p>
+  <table>
+   <thead>
+    <tr>
+     <th>method</th>
+     <th>draws</th>
+    </tr>
+   </thead>
+   <tbody>
+    <tr>
+     <td><code>plotBarcode()</code>, <code>plotBarcode(longest)</code>, <code>plotDiagram()</code></td>
+     <td>the reported bars; the subtitle says how many the threshold hid</td>
+    </tr>
+    <tr>
+     <td><code>plotRepresentative(i)</code></td>
+     <td>bar <code>i</code>'s cycle or cocycle over the points, or its cubical chain over a 2-D image</td>
+    </tr>
+    <tr>
+     <td><code>plotRepresentative(i, at)</code></td>
+     <td>a cycle over the complex at scale <code>at</code>, or a cocycle restricted to the complex at <code>at</code> (at the bar's birth: the edges that close the loop)</td>
+    </tr>
+    <tr>
+     <td><code>plotInput()</code>, <code>plotComplex(at)</code></td>
+     <td>the points or the image; the <code>vr</code>, <code>cech</code> or <code>alpha</code> complex at <code>at</code></td>
+    </tr>
+    <tr>
+     <td><code>plotLandscape(dimension)</code>, <code>plotPersistenceImage(dimension)</code></td>
+     <td>the vectorizations, of every bar (as <code>landscape</code> and <code>persistenceImage</code> compute them)</td>
+    </tr>
+    <tr>
+     <td><code>plotInput3D()</code>, <code>plotComplex3D(at)</code>, <code>plotRepresentative3D(i)</code></td>
+     <td>the same in 3-D (cycles only)</td>
+    </tr>
+    <tr>
+     <td><code>mostPersistentBar(dimension)</code></td>
+     <td>not a plot: the index of the most persistent reported bar of that dimension</td>
+    </tr>
+    <tr>
+     <td><code>circularCoordinates(...).plot()</code>, <code>toroidalCoordinates(...).plot()</code></td>
+     <td>circular and toroidal coordinates</td>
+    </tr>
+   </tbody>
+  </table>
+  <p>A result computed from a distance matrix or a relation has no coordinates: it draws its barcode, diagram, landscapes and persistence images, and says so for the rest. The command line draws the same figures with <code>--plot</code>:</p>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-"><span line-number="1" class=""><span class="tooltip-container"></span>java -jar tda4j-assembly.jar --max-dimension 1 --save-result circle.json noisy-circle.csv
+</span><span line-number="2" class=""><span class="tooltip-container"></span>java -jar tda4j-assembly.jar --plot diagram --output diagram.svg circle.json
+</span><span line-number="3" class=""><span class="tooltip-container"></span>java -jar tda4j-assembly.jar --plot representative circle.json
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>The first line computes and prints the bars, and saves the whole result; the others plot it without computing again. <code>--plot representative</code> draws the most persistent bar of <code>--dimension</code> (default 1), or <code>--bar N</code> (its line number in the listing, counting from 0); <code>--at</code> gives the scale. Without <code>--output</code> the plot opens in the browser. See the <a href="cli.html">command-line page</a>.</p>
+ </section>
+ <section id="saved-results">
+  <h3 class="h400"><a href="#saved-results" class="anchor"></a>Saved results</h3>
+  <p><code>result.save(path)</code> and <code>--save-result</code> write a JSON file that <code>TDA4j.loadResult(path)</code> and the command line read back, from MATLAB, Java or Scala: every bar, which bars the threshold reported, their representatives, the points or image, and how the result was computed (options, field, the version of tda4j). It is plain JSON, so other languages read it too: <code>dimensions</code>, <code>births</code>, <code>deaths</code> hold every bar, <code>reported</code> the indices of the reported ones, and <code>representatives</code> their <code>cells</code> and <code>coefficients</code>. Infinite and missing values are the strings <code>"Infinity"</code>, <code>"-Infinity"</code> and <code>"NaN"</code>:</p>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-python"><span line-number="1" class=""><span class="tooltip-container"></span>import json
+</span><span line-number="2" class=""><span class="tooltip-container"></span>r = json.load(open("circle.json"))
+</span><span line-number="3" class=""><span class="tooltip-container"></span>deaths = [float(d) for d in r["deaths"]]    # float() reads numbers and "Infinity" alike
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>The boundary matrix is not saved, nor are the representatives of bars the threshold hid. With cocycles and every bar reported, a dimension-0 cocycle is a whole connected component, so such a file grows quickly with the number of points.</p>
+ </section>
  <section id="what-there-is">
   <h2 class="h500"><a href="#what-there-is" class="anchor"></a>What there is</h2>
   <table>
@@ -205,7 +309,7 @@
     </tr>
     <tr>
      <td><code>Plot.cycle(points, bar.representative)</code></td>
-     <td>a simplicial cycle over its points</td>
+     <td>a simplicial cycle over its points (a chain, or its cells with coefficients as numbers)</td>
     </tr>
     <tr>
      <td><code>Plot.cocycle(points, bar.representative, at = bar.birth)</code></td>
@@ -242,4 +346,4 @@
   <p>Homological degree <code>k</code> always has the same color and marker shape: degree 0 slate, degree 1 gold, degree 2 brick, so <code>H1</code> looks the same in every plot whichever degrees are shown. The default palette is TDA4j's Slate &amp; Gold, stepped for charts and checked for color-vision deficiencies (the first three degrees stay distinguishable side by side for every common deficiency). <code>Palette.reference</code> is a neutral alternative, and any figure takes another: <code>Plot.diagram(d).copy(palette = Palette.reference)</code>. Heatmaps use a slate ramp (light for small values), cocycles a slate-to-gold diverging scale, and circular coordinates a cyclic map with no seam at <code>0 = 1</code>.</p>
   <p>Every plot is an immutable value: <code>copy(title = ...)</code>, <code>+ mark</code> and <code>over</code> adjust it, and <code>Figure</code>, <code>Mark</code> and <code>Scene</code> are there to build plots of your own.</p>
  </section>
-</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#in-a-repl-view">In a REPL: view()</a></li><li><a href="#into-files-save">Into files: save</a></li><li><a href="#what-there-is">What there is</a></li><li><a href="#colors">Colors</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#in-a-repl-view">In a REPL: view()</a></li><li><a href="#into-files-save">Into files: save</a></li><li><a href="#from-matlab-java-and-the-command-line">From MATLAB, Java and the command line</a><ul><li><a href="#saved-results">Saved results</a></li></ul></li><li><a href="#what-there-is">What there is</a></li><li><a href="#colors">Colors</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

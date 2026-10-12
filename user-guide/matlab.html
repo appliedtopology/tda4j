@@ -183,6 +183,10 @@
      <td><code>h1Bars</code>, <code>circularCoordinates</code>, <code>toroidalCoordinates</code></td>
      <td>see <a href="circular-coordinates.html">circular coordinates</a></td>
     </tr>
+    <tr>
+     <td><code>loadResult(path)</code></td>
+     <td>a result saved by <code>result.save(path)</code> or <code>tda4j --save-result</code></td>
+    </tr>
    </tbody>
   </table>
   <p>Each <code>compute...</code> method also has an overload without options. In an image, a pixel of value <code>NaN</code> is masked (missing data): it is not in the complex, whatever <code>sublevel</code> is. <code>Inf</code> and <code>-Inf</code> are ordinary values: with <code>sublevel</code> <code>true</code>, <code>Inf</code> enters after every finite value and <code>-Inf</code> before them; with <code>sublevel</code> <code>false</code>, the reverse. With <code>nanMask</code> <code>false</code>, masks are off and a <code>NaN</code> pixel is an error naming the pixel, for data where a <code>NaN</code> can only be a bug.</p>
@@ -341,6 +345,10 @@
  <section id="representatives">
   <h3 class="h400"><a href="#representatives" class="anchor"></a>Representatives</h3>
   <p><code>cycleVertices(i)</code> and <code>cycleCoefficients(i)</code> give the representative of bar <code>i</code>: the simplices (each as its sorted vertex numbers) and their coefficients: a cycle, or a cocycle with <code>representativeType=cocycles</code>. For the witness complex the vertices are point numbers, not landmark numbers. For an image, a cell is given by its coordinates in the doubled grid (a pixel <code>(i, j)</code> is <code>(2i + 1, 2j + 1)</code>). The <a href="boundary-matrix.html">boundary matrix</a> of the complex is also available.</p>
+ </section>
+ <section id="plots-and-saved-results">
+  <h3 class="h400"><a href="#plots-and-saved-results" class="anchor"></a>Plots and saved results</h3>
+  <p>A result draws itself: <code>result.plotBarcode().view()</code>, <code>result.plotDiagram().save('diagram.svg')</code>, <code>result.plotRepresentative(result.mostPersistentBar(1)).view()</code>, and more (see <a href="plotting.html#from-matlab-java-and-the-command-line">plotting</a>). Each <code>plot...</code> method returns a figure object; call <code>view()</code> on it for the browser, <code>save(path)</code> for an <code>.svg</code> or <code>.html</code> file. <code>result.save('result.json')</code> writes the whole result to a file, which <code>TDA4j.loadResult('result.json')</code> reads back (in MATLAB, Java, Scala or <code>tda4j --plot ...</code>); it is JSON, readable from other languages too.</p>
   <p>MATLAB itself is not part of the test suite: the tutorial MATLAB tabs are checked by making the same Java calls from Scala.</p>
  </section>
-</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#entry-points">Entry points</a></li><li><a href="#options">Options</a></li><li><a href="#which-bars-are-reported">Which bars are reported</a></li><li><a href="#representatives">Representatives</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#entry-points">Entry points</a></li><li><a href="#options">Options</a></li><li><a href="#which-bars-are-reported">Which bars are reported</a></li><li><a href="#representatives">Representatives</a></li><li><a href="#plots-and-saved-results">Plots and saved results</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

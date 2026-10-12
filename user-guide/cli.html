@@ -136,11 +136,16 @@
   <li>the computation: <code>--complex</code>, <code>--engine</code>, <code>--max-dimension</code>, <code>--max-filtration-value</code>, <code>--field</code>, <code>--prime</code>, <code>--edge-collapse</code>, <code>--alpha-backend</code>, <code>--require-valid-triangulation</code>, <code>--dtm-k</code>, <code>--dtm-q</code>, <code>--dtm-p</code>, <code>--sparse-epsilon</code>, <code>--dual</code> (relations), <code>--sublevel</code> and <code>--nan-mask</code> (images: <code>--nan-mask false</code> makes a <code>NaN</code> pixel an error instead of a masked one);</li>
   <li>the witness complex: <code>--num-landmarks</code>, <code>--witness-variant</code>, <code>--landmark-selector</code>, <code>--landmark-seed</code>, <code>--nu</code>, and the two-step <code>--select-landmarks</code> / <code>--landmarks-file</code> (see <a href="user-guide/topological-spaces/witness-complexes.html">witness complexes</a>);</li>
   <li>which bars: <code>--min-persistence</code>, <code>--min-persistence-fraction</code>, <code>--include-zero-length</code>; and which representatives: <code>--representative-type</code> (<code>cycles</code> or <code>cocycles</code>);</li>
-  <li>comparing: <code>--distance-to saved-diagram</code> (with <code>--distance-format</code>, <code>--distance-order</code>, <code>--distance-ground-norm</code>) prints the bottleneck and Wasserstein distances per dimension to a diagram saved earlier, instead of a diagram.</li>
+  <li>comparing: <code>--distance-to saved-diagram</code> (with <code>--distance-format</code>, <code>--distance-order</code>, <code>--distance-ground-norm</code>) prints the bottleneck and Wasserstein distances per dimension to a diagram saved earlier, instead of a diagram;</li>
+  <li>plots: <code>--plot</code> (<code>barcode</code>, <code>diagram</code>, <code>representative</code>, <code>input</code>, <code>complex</code>, <code>landscape</code>, <code>persistence-image</code>, <code>input-3d</code>, <code>complex-3d</code>, <code>representative-3d</code>) draws the result instead of writing it, into <code>--output</code> (<code>.svg</code> or <code>.html</code>) or a page opened in the browser; <code>--bar</code>, <code>--dimension</code> and <code>--at</code> choose what (see <a href="plotting.html#from-matlab-java-and-the-command-line">plotting</a>);</li>
+  <li>saved results: <code>--save-result result.json</code> also saves the whole result (bars, representatives, input). The saved file is an input of its own (<code>--input-format result</code>, chosen by itself for such a file): print, convert, compare or plot it without computing again. Computation flags are refused for it.</li>
  </ul>
  <div class="snippet mono-small-block">
   <pre><code class="language-"><span line-number="1" class=""><span class="tooltip-container"></span>java -jar tda4j-assembly.jar --max-dimension 1 points.csv
 </span><span line-number="2" class=""><span class="tooltip-container"></span>java -jar tda4j-assembly.jar --input-format csv-relation --dual true relation.csv
+</span><span line-number="3" class=""><span class="tooltip-container"></span>java -jar tda4j-assembly.jar --max-dimension 1 --save-result circle.json points.csv
+</span><span line-number="4" class=""><span class="tooltip-container"></span>java -jar tda4j-assembly.jar --plot representative --output loop.svg circle.json
+</span><span line-number="5" class=""><span class="tooltip-container"></span>java -jar tda4j-assembly.jar --output-format gudhi --output circle.pers circle.json
 </span></code></pre>
   <div class="buttons"></div>
  </div>

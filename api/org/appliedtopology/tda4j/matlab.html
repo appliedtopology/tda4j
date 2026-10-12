@@ -62,7 +62,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/CircularCoordinatesResult.scala#L4" target="_blank">CircularCoordinatesResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/CircularCoordinatesResult.scala#L6" target="_blank">CircularCoordinatesResult.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -163,7 +163,8 @@
             <div class="cover">
              <div class="doc">
               <p>A finished persistence computation, for MATLAB and Java: every method takes and returns only <code>int</code>, <code>double</code>, arrays of those, or another <code>PersistenceResult</code>.</p>
-              <p>Bars are numbered <code>0 until size()</code>, in no guaranteed order; an essential bar has <code>death(i) == Infinity</code>. The bars reported are those that pass the persistence threshold (see <a href="matlab/PersistenceResult.html#persistenceThreshold-999">persistenceThreshold</a>); <a href="matlab/PersistenceResult.html#toArrayUnfiltered-fffffb5d">toArrayUnfiltered</a> has all of them. Each bar has a representative (<a href="matlab/PersistenceResult.html#cycleVertices-224">cycleVertices</a>, <a href="matlab/PersistenceResult.html#cycleCoefficients-fffff1a2">cycleCoefficients</a>): a cocycle for the <code>ripser</code> and <code>cohomology</code> engines, a cycle for the others.</p>
+              <p>Bars are numbered <code>0 until size()</code>, in no guaranteed order; an essential bar has <code>death(i) == Infinity</code>. The bars reported are those that pass the persistence threshold (see <a href="matlab/PersistenceResult.html#persistenceThreshold-999">persistenceThreshold</a>); <a href="matlab/PersistenceResult.html#toArrayUnfiltered-fffffb5d">toArrayUnfiltered</a> has all of them. Each bar has a representative (<a href="matlab/PersistenceResult.html#cycleVertices-224">cycleVertices</a>, <a href="matlab/PersistenceResult.html#cycleCoefficients-fffff1a2">cycleCoefficients</a>): a cycle, or a cocycle with option <code>representativeType</code> <code>cocycles</code>.</p>
+              <p>The <code>plot...</code> methods draw the result (see the <code>plot</code> package): each returns a figure to <code>view()</code> in the browser or <code>save("name.svg")</code> (or <code>.html</code>). <a href="matlab/PersistenceResult.html#save-fffff2ca">save</a> writes the whole result to a file that <code>TDA4j.loadResult</code> reads back, from MATLAB, Java, Scala or the command line.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
@@ -177,7 +178,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L25" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L30" target="_blank">PersistenceResult.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -304,7 +305,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/ToroidalCoordinatesResult.scala#L6" target="_blank">ToroidalCoordinatesResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/ToroidalCoordinatesResult.scala#L8" target="_blank">ToroidalCoordinatesResult.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes

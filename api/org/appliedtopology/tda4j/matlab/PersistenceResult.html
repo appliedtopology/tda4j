@@ -13,7 +13,8 @@
 <div class="cover">
  <div class="doc">
   <p>A finished persistence computation, for MATLAB and Java: every method takes and returns only <code>int</code>, <code>double</code>, arrays of those, or another <code>PersistenceResult</code>.</p>
-  <p>Bars are numbered <code>0 until size()</code>, in no guaranteed order; an essential bar has <code>death(i) == Infinity</code>. The bars reported are those that pass the persistence threshold (see <a href="PersistenceResult.html#persistenceThreshold-999">persistenceThreshold</a>); <a href="PersistenceResult.html#toArrayUnfiltered-fffffb5d">toArrayUnfiltered</a> has all of them. Each bar has a representative (<a href="PersistenceResult.html#cycleVertices-224">cycleVertices</a>, <a href="PersistenceResult.html#cycleCoefficients-fffff1a2">cycleCoefficients</a>): a cocycle for the <code>ripser</code> and <code>cohomology</code> engines, a cycle for the others.</p>
+  <p>Bars are numbered <code>0 until size()</code>, in no guaranteed order; an essential bar has <code>death(i) == Infinity</code>. The bars reported are those that pass the persistence threshold (see <a href="PersistenceResult.html#persistenceThreshold-999">persistenceThreshold</a>); <a href="PersistenceResult.html#toArrayUnfiltered-fffffb5d">toArrayUnfiltered</a> has all of them. Each bar has a representative (<a href="PersistenceResult.html#cycleVertices-224">cycleVertices</a>, <a href="PersistenceResult.html#cycleCoefficients-fffff1a2">cycleCoefficients</a>): a cycle, or a cocycle with option <code>representativeType</code> <code>cocycles</code>.</p>
+  <p>The <code>plot...</code> methods draw the result (see the <code>plot</code> package): each returns a figure to <code>view()</code> in the browser or <code>save("name.svg")</code> (or <code>.html</code>). <a href="PersistenceResult.html#save-fffff2ca">save</a> writes the whole result to a file that <code>TDA4j.loadResult</code> reads back, from MATLAB, Java, Scala or the command line.</p>
  </div>
  <section id="attributes">
   <h2 class="h500">Attributes</h2>
@@ -28,7 +29,7 @@
     Source
    </dt>
    <dd class="body-medium">
-    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L25" target="_blank">PersistenceResult.scala</a>
+    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L30" target="_blank">PersistenceResult.scala</a>
    </dd>
    <dt class="body-small">
     Graph
@@ -113,7 +114,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L106" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L116" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -148,7 +149,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L144" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L148" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -183,7 +184,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L148" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L152" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -218,7 +219,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L238" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L242" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -253,7 +254,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L235" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L239" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -288,7 +289,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L241" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L245" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -323,7 +324,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L244" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L248" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -358,7 +359,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L250" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L254" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -393,7 +394,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L247" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L251" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -428,7 +429,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L123" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L133" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -468,7 +469,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L118" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L128" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -498,7 +499,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L107" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L117" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -528,7 +529,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L105" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L115" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -563,7 +564,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L54" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L60" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -598,7 +599,42 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L177" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L181" target="_blank">PersistenceResult.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="mostPersistentBar-fffffbe0">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="PersistenceResult.html#mostPersistentBar-fffffbe0" t="n" class="documentableName ">mostPersistentBar</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">dimension</span>: <span data-unresolved-link="" t="t">Int</span>): <span data-unresolved-link="" t="t">Int</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The reported bar of dimension <code>dimension</code> with the largest persistence (an essential bar first; the lowest index among equals): the one to pass to <a href="PersistenceResult.html#plotRepresentative-fffffd5e">plotRepresentative</a> for the most prominent feature.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The reported bar of dimension <code>dimension</code> with the largest persistence (an essential bar first; the lowest index among equals): the one to pass to <a href="PersistenceResult.html#plotRepresentative-fffffd5e">plotRepresentative</a> for the most prominent feature.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L325" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -633,7 +669,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L229" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L233" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -668,7 +704,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L184" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L188" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -703,7 +739,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L204" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L208" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -738,7 +774,462 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L51" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L57" target="_blank">PersistenceResult.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="plotBarcode-b9e">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="PersistenceResult.html#plotBarcode-b9e" t="n" class="documentableName ">plotBarcode</a>(<span t="k"></span>): <a href="../plot/Figure.html" t="t">Figure</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The reported bars as a barcode: one bar per class, grouped by dimension; hover a bar for its numbers.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The reported bars as a barcode: one bar per class, grouped by dimension; hover a bar for its numbers.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L308" target="_blank">PersistenceResult.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="plotBarcode-fffff8d7">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="PersistenceResult.html#plotBarcode-fffff8d7" t="n" class="documentableName ">plotBarcode</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">longest</span>: <span data-unresolved-link="" t="t">Int</span>): <a href="../plot/Figure.html" t="t">Figure</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The barcode of the <code>longest</code> most persistent reported bars of each dimension.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The barcode of the <code>longest</code> most persistent reported bars of each dimension.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L311" target="_blank">PersistenceResult.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="plotComplex-fffffda5">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="PersistenceResult.html#plotComplex-fffffda5" t="n" class="documentableName ">plotComplex</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">at</span>: <span data-unresolved-link="" t="t">Double</span>): <a href="../plot/Figure.html" t="t">Figure</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The complex at scale <code>at</code> over the points (<code>vr</code>, <code>cech</code> or <code>alpha</code>), with the balls whose overlaps it records.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The complex at scale <code>at</code> over the points (<code>vr</code>, <code>cech</code> or <code>alpha</code>), with the balls whose overlaps it records.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L379" target="_blank">PersistenceResult.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="plotComplex3D-9ab">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="PersistenceResult.html#plotComplex3D-9ab" t="n" class="documentableName ">plotComplex3D</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">at</span>: <span data-unresolved-link="" t="t">Double</span>): <a href="../plot/Scene.html" t="t">Scene</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The complex at scale <code>at</code> in 3-D (<code>vr</code>, <code>cech</code> or <code>alpha</code>).</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The complex at scale <code>at</code> in 3-D (<code>vr</code>, <code>cech</code> or <code>alpha</code>).</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L447" target="_blank">PersistenceResult.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="plotDiagram-b9e">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="PersistenceResult.html#plotDiagram-b9e" t="n" class="documentableName ">plotDiagram</a>(<span t="k"></span>): <a href="../plot/Figure.html" t="t">Figure</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The reported bars as a persistence diagram: a point <code>(birth, death)</code> per bar, essential bars on the <code>∞</code> line.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The reported bars as a persistence diagram: a point <code>(birth, death)</code> per bar, essential bars on the <code>∞</code> line.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L314" target="_blank">PersistenceResult.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="plotInput-b9e">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="PersistenceResult.html#plotInput-b9e" t="n" class="documentableName ">plotInput</a>(<span t="k"></span>): <a href="../plot/Figure.html" t="t">Figure</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The input: the points (their first two coordinates) or the 2-D image.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The input: the points (their first two coordinates) or the 2-D image.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L373" target="_blank">PersistenceResult.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="plotInput3D-fffff892">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="PersistenceResult.html#plotInput3D-fffff892" t="n" class="documentableName ">plotInput3D</a>(<span t="k"></span>): <a href="../plot/Scene.html" t="t">Scene</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The points in 3-D (their first three coordinates), to turn and zoom.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The points in 3-D (their first three coordinates), to turn and zoom.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L444" target="_blank">PersistenceResult.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="plotLandscape-fffff8d7">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="PersistenceResult.html#plotLandscape-fffff8d7" t="n" class="documentableName ">plotLandscape</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">dimension</span>: <span data-unresolved-link="" t="t">Int</span>): <a href="../plot/Figure.html" t="t">Figure</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The first three persistence landscapes of the dimension-<code>dimension</code> bars: every bar, as <a href="PersistenceResult.html#landscape-fffff332">landscape</a> uses.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The first three persistence landscapes of the dimension-<code>dimension</code> bars: every bar, as <a href="PersistenceResult.html#landscape-fffff332">landscape</a> uses.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L317" target="_blank">PersistenceResult.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="plotPersistenceImage-fffff8d7">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="PersistenceResult.html#plotPersistenceImage-fffff8d7" t="n" class="documentableName ">plotPersistenceImage</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">dimension</span>: <span data-unresolved-link="" t="t">Int</span>): <a href="../plot/Figure.html" t="t">Figure</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The persistence image of the dimension-<code>dimension</code> bars: every finite bar, as <a href="PersistenceResult.html#persistenceImage-fffffb7a">persistenceImage</a> uses.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The persistence image of the dimension-<code>dimension</code> bars: every finite bar, as <a href="PersistenceResult.html#persistenceImage-fffffb7a">persistenceImage</a> uses.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L320" target="_blank">PersistenceResult.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="plotRepresentative-fffff8d7">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="PersistenceResult.html#plotRepresentative-fffff8d7" t="n" class="documentableName ">plotRepresentative</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">i</span>: <span data-unresolved-link="" t="t">Int</span>): <a href="../plot/Figure.html" t="t">Figure</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>Bar <code>i</code>'s representative over the input: a cycle's cells in its dimension's color, a cocycle's colored by value (balanced integers for <code>Z/p</code>), or a cubical chain over its 2-D image; each cell's coefficient on hover.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>Bar <code>i</code>'s representative over the input: a cycle's cells in its dimension's color, a cocycle's colored by value (balanced integers for <code>Z/p</code>), or a cubical chain over its 2-D image; each cell's coefficient on hover.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L404" target="_blank">PersistenceResult.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="plotRepresentative-fffffd5e">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="PersistenceResult.html#plotRepresentative-fffffd5e" t="n" class="documentableName ">plotRepresentative</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">i</span>: <span data-unresolved-link="" t="t">Int</span>, <span t="k"></span><span data-unresolved-link="" t="n">at</span>: <span data-unresolved-link="" t="t">Double</span>): <a href="../plot/Figure.html" t="t">Figure</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p><a href="PersistenceResult.html#plotRepresentative-fffffd5e">plotRepresentative</a> at scale <code>at</code>, in the result's own complex (<code>vr</code>, <code>cech</code> or <code>alpha</code>, in its units): a cycle drawn over the complex at <code>at</code>; a cocycle restricted to its cells in the complex at <code>at</code> (at <code>birth(i)</code>, the cells that cut a loop as it closes: a bar's cocycle lives on the complex where the bar dies, across the data).</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p><a href="PersistenceResult.html#plotRepresentative-fffffd5e">plotRepresentative</a> at scale <code>at</code>, in the result's own complex (<code>vr</code>, <code>cech</code> or <code>alpha</code>, in its units): a cycle drawn over the complex at <code>at</code>; a cocycle restricted to its cells in the complex at <code>at</code> (at <code>birth(i)</code>, the cells that cut a loop as it closes: a bar's cocycle lives on the complex where the bar dies, across the data).</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L410" target="_blank">PersistenceResult.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="plotRepresentative3D-fffff039">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="PersistenceResult.html#plotRepresentative3D-fffff039" t="n" class="documentableName ">plotRepresentative3D</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">i</span>: <span data-unresolved-link="" t="t">Int</span>): <a href="../plot/Scene.html" t="t">Scene</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>Bar <code>i</code>'s cycle in 3-D over the points: its edges and triangles in its dimension's color.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>Bar <code>i</code>'s cycle in 3-D over the points: its edges and triangles in its dimension's color.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L450" target="_blank">PersistenceResult.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="save-fffff2ca">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="PersistenceResult.html#save-fffff2ca" t="n" class="documentableName ">save</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">path</span>: <span data-unresolved-link="" t="t">String</span>): <span data-unresolved-link="" t="t">String</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>Writes the result to <code>path</code> for <code>TDA4j.loadResult</code> (from MATLAB, Java, Scala or <code>tda4j --input-format result</code>): every bar, the threshold and which bars it reported, the reported bars' representatives (computed now if they were not yet), what it was computed with, and the points or image it was computed from. Not the boundary matrix. The file is JSON, readable from any language; non-finite numbers are the strings <code>"Infinity"</code>, <code>"-Infinity"</code> and <code>"NaN"</code> (Python's <code>float(x)</code> reads both kinds of entry). <code>loadResult</code> reads the whole file into memory. With <code>representativeType</code> <code>cocycles</code> and every bar reported, a dimension-0 cocycle is a whole connected component, so the file can grow with the square of the number of points. Returns the file's absolute path.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>Writes the result to <code>path</code> for <code>TDA4j.loadResult</code> (from MATLAB, Java, Scala or <code>tda4j --input-format result</code>): every bar, the threshold and which bars it reported, the reported bars' representatives (computed now if they were not yet), what it was computed with, and the points or image it was computed from. Not the boundary matrix. The file is JSON, readable from any language; non-finite numbers are the strings <code>"Infinity"</code>, <code>"-Infinity"</code> and <code>"NaN"</code> (Python's <code>float(x)</code> reads both kinds of entry). <code>loadResult</code> reads the whole file into memory. With <code>representativeType</code> <code>cocycles</code> and every bar reported, a dimension-0 cocycle is a whole connected component, so the file can grow with the square of the number of points. Returns the file's absolute path.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L268" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -768,7 +1259,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L97" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L107" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -803,7 +1294,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L100" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L110" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -838,7 +1329,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L57" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L63" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -873,7 +1364,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L158" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L162" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -908,7 +1399,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L162" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L166" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
@@ -943,7 +1434,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L166" target="_blank">PersistenceResult.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/matlab/PersistenceResult.scala#L170" target="_blank">PersistenceResult.scala</a>
               </dd>
              </dl>
             </div>
