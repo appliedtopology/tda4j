@@ -156,6 +156,14 @@ Compile / doc := {
 Compile / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI")
 assembly / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI")
 
+// A fat jar is not a Java module, so module descriptors are dropped. sbt-assembly's default already discards a
+// top-level `module-info.class`, but not the multi-release copies under META-INF/versions/<n>/, which several jars
+// carry (each commons-numbers 1.3 jar has its own, so the default deduplication fails on them).
+assembly / assemblyMergeStrategy := {
+  case PathList("META-INF", "versions", _, "module-info.class") => MergeStrategy.discard
+  case other                                                    => (assembly / assemblyMergeStrategy).value(other)
+}
+
 // Workaround for XML versioning issues
 // See: https://github.com/scala/bug/issues/12632
 libraryDependencySchemes ++= Seq(
