@@ -279,9 +279,10 @@ value, and every lower-dimensional cube's value is the `min` over the top cells 
 directly via the cartesian product over the cube's degenerate axes rather than a recursive coface walk.
 `CubicalImage` builds these from images/voxel grids (`fromFlatArray`/`fromBufferedImage`/`fromFile`/
 `fromVoxelGrid3D`); sublevel vs. superlevel filtration is handled by negating values on load, not as a flag
-on the stream itself. An image with a NaN value is refused, naming the pixel, when its values are first read:
-NaN has no place in the order. Mask a pixel with `+Infinity` (`-Infinity` for a superlevel image, which is negated
-on load). `CubicalHomologyEngine` is a one-line `Cube`-specialized wrapper around
+on the stream itself. A NaN pixel is the mask, in either direction: `CubicalGridStream.masked` turns it into
+`+Infinity` in grid values when they are first read (after the negation of a superlevel image), so it never enters;
+grid values never hold a NaN, which `min` would carry to every face, entering after its cofaces. Infinite user values
+are not special: they become `+Infinity` or `-Infinity` in grid values like any other value. `CubicalHomologyEngine` is a one-line `Cube`-specialized wrapper around
 `CellularHomologyEngine` — cubical complexes needed no new engine code, only a new `OrderedCell` instance.
 
 #### Dual union-find cubical engine (Flash Cubical)
@@ -304,8 +305,8 @@ reduction — see
 
 `∞` must be the unconditional elder of any merge it takes part in — its own chain is deliberately never
 populated, since it never dies — which is NOT automatically guaranteed by comparing birth values alone: a real
-top cell can also carry `topValue = +Infinity` (this codebase's own "permanently missing cell" convention, the
-same one `Perseus`'s `-1` already maps to) and tie against `∞`'s own `birthOf`, so the young/old decision
+top cell can also carry `topValue = +Infinity` (a masked pixel, `NaN` or `Perseus`'s `-1` in the input, is
+stored as `+Infinity`) and tie against `∞`'s own `birthOf`, so the young/old decision
 special-cases `∞` explicitly rather than relying on the birth-value comparison alone. Representatives: each
 top cell carries a sign relative to its dual component's root in a signed union-find (`SignedUnionFind`), so a dying
 component's signed sum of top cells -- read off the merge forest only for reported bars -- has exactly its bounding

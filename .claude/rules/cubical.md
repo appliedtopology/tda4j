@@ -48,11 +48,14 @@ RANK (`GridRanks`: dense ranks under `java.lang.Double.compare`; a cell's rank i
 pixels) with stable counting sorts fed in tie-break order (H₀ edges generated encoding-descending, sorted rank
 ascending; dual facets encoding-ascending, rank descending), but every elder-rule and zero-length test compares the
 VALUES `distinct(rank)` with IEEE `<=`/`!=` (-0.0 == 0.0), as the cube-based code did: comparing ranks changes outputs
-(mutation-checked; `FastRepresentativesSpec`'s `signedZeroMerge` is the case random images miss). NaN pixels are refused
-with a message naming the pixel (they made faces enter after cofaces), by EVERY engine: `CubicalImage.fromFlatArray`
-checks at construction, `CubicalGridStream.topCellValues` at first read (a grid built from a function), `GridRanks`
-again; one message, `GridRanks.nanPixel`. The mask (never enters) is `+Infinity` in grid values, so `-Infinity` in a
-superlevel image's own units (`fromFlatArray` negates first): docs and messages in user units must say both. Images built by `CubicalImage.fromFlatArray` are
+(mutation-checked; `FastRepresentativesSpec`'s `signedZeroMerge` is the case random images miss). **`NaN` is the mask** (project lead, 2026-10-12, #52): a NaN pixel never enters, in either direction.
+`CubicalGridStream.masked` turns it into `+Infinity` in GRID values wherever values come in (`fromFlatArray` after the
+superlevel negation, `topCellValues` of a grid built from a function or of a `FlatCubicalGridStream`, `GridRanks`), so
+the engines never see a NaN (`math.min` would carry one to every face, entering after its cofaces) and reuse the tested
+`+Infinity` path. `±Infinity` in user units are ordinary extremes (`-Infinity` never enters a superlevel image,
+`+Infinity` is there from the start); Perseus's `-1` reads as NaN. Known cost: a NaN from a bug upstream (0/0) silently
+masks pixels instead of failing. `FastRepresentativesSpec`'s NaN case checks NaN == `+Infinity` in grid units, bar and
+representative, under every engine (`WORKLOG-nan-mask.md`). Images built by `CubicalImage.fromFlatArray` are
 `FlatCubicalGridStream`s; engines read `topCellValues`, never `topCellValue` per pixel. Quote benchmarks WITH
 representatives (project lead): `reps=none` is a cost breakdown, not a mode.
 

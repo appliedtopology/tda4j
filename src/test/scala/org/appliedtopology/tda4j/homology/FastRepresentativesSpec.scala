@@ -145,31 +145,47 @@ class FastRepresentativesSpec extends mutable.Specification:
     problems.take(5) must beEmpty
   }
 
-  // A NaN pixel is refused where an image is built from an array, and where a grid built from a function first reads its
-  // values: by every engine, the generic ones included.
-  "An image with a NaN pixel is refused, saying where and what to do" >> {
+  // A NaN pixel is the mask in either direction, where an image is built from an array and where a grid built from a
+  // function first reads its values, by every engine: the same diagram, representatives included, as +Infinity in grid
+  // units (so -Infinity in a superlevel image's own units). The wrong answer this rules out: a NaN negated with the
+  // superlevel image, or ranked above +Infinity, or carried to its faces by `min`.
+  "A NaN pixel is masked: it never enters, sublevel or superlevel, under every engine" >> {
     import f3.given
-    val values = IndexedSeq(0.0, 1.0, Double.NaN, 2.0, 3.0, 4.0)
-    val nanAt02 = "NaN value at pixel \\(0, 2\\).*\\+Infinity for a missing pixel"
-    // The values of a superlevel image are negated, so its mask is -Infinity in the user's units.
-    val superlevelNanAt02 = "NaN value at pixel \\(0, 2\\).*-Infinity \\(the filtration is superlevel\\) for a missing"
-    val fromFunction = CubicalGridStream(
-      IndexedSeq(2, 3),
-      index => if index == IndexedSeq(0, 2) then Double.NaN else index.sum.toDouble
-    )
-    (CubicalImage.fromFlatArray(IndexedSeq(2, 3), values) must throwA[IllegalArgumentException](message = nanAt02)) and
-      (CubicalImage.fromFlatArray(IndexedSeq(2, 3), values, sublevel = false) must throwA[IllegalArgumentException](
-        message = superlevelNanAt02
+    val inf = Double.PositiveInfinity
+    // A 4x5 image with two masked pixels: one inside a ring of 1s (a loop that never dies) and one on the border.
+    def image(mask: Double): IndexedSeq[Double] = IndexedSeq(
+      IndexedSeq(1.0, 1.0, 1.0, 0.5, mask),
+      IndexedSeq(1.0, mask, 1.0, 0.2, 0.3),
+      IndexedSeq(1.0, 1.0, 1.0, 0.7, 0.1),
+      IndexedSeq(0.4, 0.6, 0.8, 0.9, 0.0)
+    ).flatten
+    val shape = IndexedSeq(4, 5)
+    val engines = Seq(Persistence.Engine.FastCubical, Persistence.Engine.Cohomology, Persistence.Engine.Chunks)
+    def diagram(values: IndexedSeq[Double], sublevel: Boolean, engine: Persistence.Engine) =
+      Persistence(Image(values, shape, sublevel), engine = engine, characteristic = 3)
+    def sameDiagrams(sublevel: Boolean, infinite: Double) = engines.map { engine =>
+      val masked = diagram(image(Double.NaN), sublevel, engine)
+      val infinity = diagram(image(infinite), sublevel, engine)
+      masked.triples.nonEmpty && masked.bars == infinity.bars
+    }
+    val fromFunction = CubicalGridStream(shape, index => image(Double.NaN)(index(0) * 5 + index(1)))
+    val fromInfinity = CubicalGridStream(shape, index => image(inf)(index(0) * 5 + index(1)))
+    def loopsThatNeverDie(sublevel: Boolean) =
+      diagram(image(Double.NaN), sublevel, Persistence.Engine.FastCubical).triples.filter(t => t._1 == 1 && t._3 == inf)
+    (sameDiagrams(sublevel = true, inf) must beEqualTo(Seq(true, true, true))) and
+      (sameDiagrams(sublevel = false, -inf) must beEqualTo(Seq(true, true, true))) and
+      (loopsThatNeverDie(sublevel = true) must beEqualTo(List((1, 1.0, inf)))) and
+      (loopsThatNeverDie(sublevel = false) must beEqualTo(List((1, -1.0, inf)))) and
+      (CubicalImage.fromFlatArray(shape, image(Double.NaN)).topValues must beEqualTo(image(inf))) and
+      (fromFunction.topValues must beEqualTo(image(inf))) and
+      (FastCubicalHomologyEngine[f3.Fp]().persistentHomology(fromFunction) must beEqualTo(
+        FastCubicalHomologyEngine[f3.Fp]().persistentHomology(fromInfinity)
       )) and
-      (Persistence(Image(values, IndexedSeq(2, 3)), engine = Persistence.Engine.Chunks) must
-        throwA[IllegalArgumentException](message = nanAt02)) and
-      (FastCubicalHomologyEngine[f3.Fp]().persistentHomology(fromFunction) must throwA[IllegalArgumentException](
-        message = nanAt02
+      (PackedCubicalCohomologyEngine[f3.Fp](fromFunction, 2).persistentHomology() must beEqualTo(
+        PackedCubicalCohomologyEngine[f3.Fp](fromInfinity, 2).persistentHomology()
       )) and
-      (PackedCubicalCohomologyEngine[f3.Fp](fromFunction, 2).persistentHomology() must
-        throwA[IllegalArgumentException](message = nanAt02)) and
-      (Persistence(fromFunction, engine = Persistence.Engine.Naive) must throwA[IllegalArgumentException](
-        message = nanAt02
+      (Persistence(fromFunction, engine = Persistence.Engine.Naive).triples must beEqualTo(
+        Persistence(fromInfinity, engine = Persistence.Engine.Naive).triples
       ))
   }
 

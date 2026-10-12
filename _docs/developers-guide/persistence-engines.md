@@ -227,8 +227,8 @@ filtration equals ordinary `H_0` of this dual graph's own SUPERLEVEL filtration 
 uses, processing dual vertices/edges together in DESCENDING order of primal value, with every resulting bar's
 endpoints swapped. `∞` must be the unconditional elder of any merge it takes part in — not just because
 `birthOf(∞) = +Infinity` is *usually* the largest value, but enforced explicitly, since a real top cell can
-also carry `topValue = +Infinity` (this codebase's own "permanently missing cell" convention, e.g. Perseus's
-`-1`) and tie against it.
+also carry `topValue = +Infinity` (a masked pixel: `NaN` in the input, or Perseus's `-1`, is stored
+as `+Infinity`) and tie against it.
 
 **Representatives**: every top cell carries a sign relative to the root of its dual component, kept in a signed
 union-find (`UnitSignedUnionFind`, signs as bytes: path compression composes the signs, a merge only re-links two roots), so a dying

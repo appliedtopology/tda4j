@@ -297,7 +297,7 @@ object Plot:
       palette = palette
     )
 
-  /** A 2-D image (row 0 on top) on the sequential ramp; masked (infinite) pixels left blank. */
+  /** A 2-D image (row 0 on top) on the sequential ramp; masked (NaN) and infinite pixels left blank. */
   def image(img: Image, title: String = "Image", palette: Palette = Palette.default): Figure =
     require(img.shape.size == 2, s"Plot.image: a 2-D image is needed, this one has shape ${img.shape.mkString("x")}")
     val cols = img.shape(1)

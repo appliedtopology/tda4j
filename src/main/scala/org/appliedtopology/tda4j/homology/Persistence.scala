@@ -2,8 +2,9 @@ package org.appliedtopology.tda4j
 
 /** A grayscale image (or voxel grid) for `Persistence(Image(...))`: `values` in row-major order, `shape` its size per
   * axis. Sublevel filtration by default (dark regions first); `sublevel = false` for superlevel. A pixel of value
-  * `Double.PositiveInfinity` (`Double.NegativeInfinity` with `sublevel = false`) never enters (a mask, for missing
-  * data); a NaN value is refused, with a message naming the pixel.
+  * `Double.NaN` is masked (missing data): it never enters, in either direction. Infinite values are ordinary extremes:
+  * `Double.PositiveInfinity` never enters a sublevel image and is present from the start of a superlevel one,
+  * `Double.NegativeInfinity` the reverse.
   */
 final case class Image(values: IndexedSeq[Double], shape: IndexedSeq[Int], sublevel: Boolean = true):
   require(

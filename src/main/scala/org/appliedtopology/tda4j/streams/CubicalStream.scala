@@ -7,8 +7,10 @@ import scala.collection.parallel.CollectionConverters.*
 /** The cubical complex of a full rectangular grid, filtered by the values of its top cells (pixels, voxels): every
   * other cube gets the minimum value of the top cells containing it, the sublevel-set convention of GUDHI, DIPHA and
   * Perseus. A face is contained in every top cell its cofaces are, so the filtration is monotone. For superlevel sets,
-  * negate the values (what [[CubicalImage]]'s `sublevel = false` does). A top cell of value `Double.PositiveInfinity`
-  * never enters (a mask); a NaN value is refused, naming the pixel, when the values are first read.
+  * negate the values (what [[CubicalImage]]'s `sublevel = false` does). A top cell of value `Double.NaN` is masked: it
+  * never enters, and its faces enter with the other top cells containing them (when the values are first read, a NaN
+  * becomes `Double.PositiveInfinity` in [[topValues]]). Infinite values are ordinary extremes: `+Infinity` never enters
+  * either, `-Infinity` is present from the start.
   *
   * `shape(i)` is the number of pixels along axis `i`. The complex has `prod_i (2 shape(i) + 1)` cells
   * (`totalCellCount`): a 256x256 image has 513² = 263169.
@@ -75,12 +77,7 @@ open class CubicalGridStream(
       while p < values.length do
         read(p)
         p += 1
-    // A NaN would reach every face of its pixel through `math.min`, and they would enter after it.
-    var p = 0
-    while p < values.length do
-      if values(p).isNaN then throw GridRanks.nanPixel(shape.toArray, p)
-      p += 1
-    values
+    CubicalGridStream.masked(values)
 
   private lazy val cellValues: Array[Double] =
     val total = totalCellCount
@@ -153,7 +150,23 @@ open class FlatCubicalGridStream(
   pixels: Array[Double],
   parallelFiltrationValue: Boolean = false
 ) extends CubicalGridStream(shape, FlatCubicalGridStream.reader(shape, pixels), parallelFiltrationValue):
-  override protected[tda4j] lazy val topCellValues: Array[Double] = pixels
+  override protected[tda4j] lazy val topCellValues: Array[Double] = CubicalGridStream.masked(pixels)
+
+object CubicalGridStream:
+  /** `values` with every NaN (a masked top cell) replaced by `+Infinity`, the value at which a cell never enters: the
+    * array itself when it has no NaN, else a copy. Grid values never hold a NaN: `math.min` would carry it to every
+    * face of the masked cell, and the face would then enter after its cofaces.
+    */
+  def masked(values: Array[Double]): Array[Double] =
+    var p = 0
+    while p < values.length && !values(p).isNaN do p += 1
+    if p == values.length then values
+    else
+      val copy = values.clone()
+      while p < copy.length do
+        if copy(p).isNaN then copy(p) = Double.PositiveInfinity
+        p += 1
+      copy
 
 object FlatCubicalGridStream:
   /** `topCellValue` for a row-major array. */

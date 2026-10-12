@@ -18,8 +18,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   callers need no change. Binary break only.
 - `Chain` equality is equality of formal sums: the same cells, coefficients equal by the field's `isEqual`, in any
   order. Before, one sum over `F_p` could compare unequal to itself.
-- Images with a `NaN` pixel are refused by every engine, with a message naming the pixel; mask with `+Infinity`
-  (sublevel) or `-Infinity` (superlevel).
+- A `NaN` pixel is the mask of a cubical image (missing data): it never enters, in a sublevel or a superlevel image
+  alike, under every engine (the verb, `CubicalImage`, `CubicalGridStream`, MATLAB, the CLI). `±Infinity` are ordinary
+  extreme values: in a superlevel image `-Infinity` never enters and `+Infinity` is there from the start. Perseus's
+  `-1` (a missing cube) now reads as `NaN`, so it stays missing in a superlevel image too.
 - `Chain.reduceBy` throws when its pivot moves back or stays put for 64 steps, instead of looping forever.
 
 ### Added

@@ -37,8 +37,10 @@ Persistence(stream)
 ```
 
 `CubicalImage` also has `fromGrayscale2D` and `fromVoxelGrid3D` (arrays), `fromBufferedImage` and `fromFile` (image
-files); [files](../input-output.md) reads Perseus and DIPHA grids. A pixel with value `Infinity` (`-Infinity` in a
-superlevel image) never enters (a mask, for missing data); a `NaN` value is refused, with a message naming the pixel.
+files); [files](../input-output.md) reads Perseus and DIPHA grids. A pixel with value `NaN` is masked (missing data): it
+never enters, in a sublevel or a superlevel image alike, and its edges and corners enter with the neighbouring pixels.
+Infinite values are ordinary extremes: `Infinity` never enters a sublevel image and is there from the start of a
+superlevel one, `-Infinity` the reverse.
 
 `Persistence` computes the diagram of an image of two or more dimensions with the
 [fast cubical engine](../homology-computation/fast-cubical.md), which is much faster than matrix reduction and gives

@@ -267,9 +267,9 @@ object TDA4j:
     * size along each axis. Options: `engine` (`fast-cubical`, the default for two dimensions and up; `cohomology`, the
     * default for one dimension and for `representativeType` `cocycles`; `naive`, `chunks`), `maxDimension` (default:
     * the grid's dimension), `sublevel` (`false` for superlevel sets, whose filtration values are negated intensities),
-    * `representativeType`, `field`, `prime`, `epsilon`, and the bar options. A pixel of value `Inf` (`-Inf` with
-    * `sublevel` `false`) never enters (a mask, for missing data); a NaN value is refused, with a message naming the
-    * pixel.
+    * `representativeType`, `field`, `prime`, `epsilon`, and the bar options. A pixel of value `NaN` is masked (missing
+    * data): it never enters, whatever `sublevel` is. `Inf` and `-Inf` are ordinary extremes: with `sublevel` `true`,
+    * `Inf` never enters and `-Inf` is there from the start; with `sublevel` `false`, the reverse.
     */
   def computeFromCubicalImage(
     shape: Array[Int],

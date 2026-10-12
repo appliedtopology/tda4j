@@ -6,8 +6,8 @@ package org.appliedtopology.tda4j
   * pixel's and its rank is the smallest rank among those pixels: the grid engines order cells by integer ranks and look
   * the values up only to report them or compare them.
   *
-  * Pixels are row-major, the last axis fastest. NaN values are refused: a NaN pixel has no place in a filtration
-  * (`Math.min` would carry it to every face of the pixel, so a face would enter after its coface).
+  * Pixels are row-major, the last axis fastest. A NaN pixel is masked: it is ranked and stored as `+Infinity`
+  * ([[CubicalGridStream.masked]]), so it never enters.
   */
 class GridRanks private (
   val shape: Array[Int],
@@ -19,16 +19,13 @@ class GridRanks private (
   def size: Int = pixels.length
 
 object GridRanks:
-  def apply(shape: IndexedSeq[Int], pixels: Array[Double]): GridRanks =
+  def apply(shape: IndexedSeq[Int], values: Array[Double]): GridRanks =
     val dims = shape.toArray
     require(
-      dims.foldLeft(1L)(_ * _) == pixels.length.toLong,
-      s"GridRanks: ${pixels.length} values for shape ${dims.mkString("x")}"
+      dims.foldLeft(1L)(_ * _) == values.length.toLong,
+      s"GridRanks: ${values.length} values for shape ${dims.mkString("x")}"
     )
-    var i = 0
-    while i < pixels.length do
-      if pixels(i).isNaN then throw nanPixel(dims, i)
-      i += 1
+    val pixels = CubicalGridStream.masked(values)
     val (sortedKeys, order) = radixOrder(pixels)
     val n = pixels.length
     val rank = new Array[Int](n)
@@ -42,16 +39,6 @@ object GridRanks:
       rank(order(j)) = r
       j += 1
     new GridRanks(dims, pixels, java.util.Arrays.copyOf(distinctBuffer, r + 1), rank)
-
-  /** The error for a NaN value at pixel `p` (row-major): where it is, and what to use instead. In the user's units: an
-    * image filtered by superlevel sets (`sublevel = false`, values negated) is masked by `-Infinity`, not `+Infinity`.
-    */
-  def nanPixel(shape: Array[Int], p: Int, sublevel: Boolean = true): IllegalArgumentException =
-    val mask = if sublevel then "+Infinity" else "-Infinity (the filtration is superlevel)"
-    new IllegalArgumentException(
-      s"the image has a NaN value at pixel ${coordinates(shape, p).mkString("(", ", ", ")")}: NaN has no place in a " +
-        s"filtration. Replace it by a number, or by $mask for a missing pixel: it then never enters, like a mask."
-    )
 
   /** The lattice coordinates of pixel `p` (row-major, last axis fastest). */
   def coordinates(shape: Array[Int], p: Int): Array[Int] =

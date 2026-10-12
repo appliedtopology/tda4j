@@ -44,7 +44,7 @@ complete barcode**; new facade option keys must go in every strict allowlist exc
 - DIPHA/Perseus cubical axis order is **first axis fastest** — opposite `fromFlatArray`; readers/writers reverse
   shape.
 - Diagram readers rebuild finite bars via `PersistenceBar.apply(dim, lower, upper)` so round trips compare equal.
-  Perseus `-1` → `+∞` (missing cell).
+  Perseus `-1` → `NaN` (the mask: missing in a superlevel reading too; `rules/cubical.md`).
 
 ## CLI executable
 

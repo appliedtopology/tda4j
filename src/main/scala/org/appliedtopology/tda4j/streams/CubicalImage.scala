@@ -9,8 +9,9 @@ import javax.imageio.ImageIO
   *
   * `sublevel = true` (the default, as in GUDHI, DIPHA and Perseus) filters by the values; `sublevel = false` by the
   * negated values, so bars of a superlevel filtration are reported in negated units. Voxel data of any file format is
-  * loaded into an array first. A pixel of value `Double.PositiveInfinity` (`Double.NegativeInfinity` with `sublevel =
-  * false`) never enters (a mask, for missing data); a NaN value is refused, with a message naming the pixel.
+  * loaded into an array first. A pixel of value `Double.NaN` is masked (missing data), in either direction: it never
+  * enters. Infinite values are ordinary extremes, so which one never enters depends on the direction: `+Infinity` in a
+  * sublevel image, `-Infinity` in a superlevel one; the other is present from the start.
   */
 object CubicalImage:
 
@@ -23,6 +24,10 @@ object CubicalImage:
     val g = (rgb >> 8) & 0xff
     val b = rgb & 0xff
     0.299 * r + 0.587 * g + 0.114 * b
+
+  // A NaN (masked) pixel becomes +Infinity in grid units whatever the direction (see CubicalGridStream.masked).
+  private inline def maskOrScale(sign: Double, v: Double): Double =
+    if v.isNaN then Double.PositiveInfinity else sign * v
 
   /** Dense n-dimensional grid from a flat, row-major array of values and an explicit `shape` -- e.g. for `shape =
     * IndexedSeq(n0, n1, n2)`, index `(i0, i1, i2)` reads `flatValues(i0*n1*n2 + i1*n2 + i2)`, the same convention
@@ -50,18 +55,13 @@ object CubicalImage:
         val source = a.unsafeArray
         var i = 0
         while i < source.length do
-          pixels(i) = sign * source(i)
+          pixels(i) = maskOrScale(sign, source(i))
           i += 1
       case _ =>
         var i = 0
         while i < pixels.length do
-          pixels(i) = sign * flatValues(i)
+          pixels(i) = maskOrScale(sign, flatValues(i))
           i += 1
-    // Refused here, whatever engine runs next: a NaN pixel would carry NaN to its faces, which then enter after it.
-    var p = 0
-    while p < pixels.length do
-      if pixels(p).isNaN then throw GridRanks.nanPixel(shape.toArray, p, sublevel)
-      p += 1
     FlatCubicalGridStream(shape, pixels, parallelFiltrationValue)
 
   /** `pixels(i)(j)` as a dense 2D grid, shape `(pixels.length, pixels(0).length)`. */
