@@ -184,16 +184,17 @@ landscape, 3-D cycle, image and its cubical cycle, screenshotted with the pre-in
 they should. The unrestricted cocycle is the documented mess of edges across the data (`Plot.cocycle`'s own default);
 at 0.6, just after the loop's birth (0.5945), it is the single edge that closes the gap.
 
-## Decisions left to the project lead (also on #63)
+## Decisions left to the project lead (issues #75, #76; design comment on #63)
 
 - A cocycle's default plot is unrestricted (as `Plot.cocycle`). Restricting at the bar's birth by default would be
   the informative picture for `vr`/`cech`/`alpha`, but needs a default that refuses the other complexes, or switches
-  silently. Kept explicit (`plotRepresentative(i, at)`, `--at`).
+  silently. Kept explicit (`plotRepresentative(i, at)`, `--at`). #75.
+- The plots draw only the `vr`, `cech` and `alpha` complexes, with the default alpha backend. #76.
 - No public provenance accessors on `PersistenceResult` (`options()`, `complex()`, ...): the JSON carries them; add
   when a caller needs them.
 - 3-D cocycles are refused rather than drawn as an uncolored support.
 
-## Not verified
+## Not verified (added to #61)
 
 - MATLAB itself (as for every facade method): `fig.view()` from MATLAB's JVM (it needs `java.awt.Desktop` there) and
   `save` dispatch with dot syntax are expected to work, unrun.
