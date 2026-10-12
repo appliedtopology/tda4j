@@ -9,9 +9,9 @@ import javax.imageio.ImageIO
   *
   * `sublevel = true` (the default, as in GUDHI, DIPHA and Perseus) filters by the values; `sublevel = false` by the
   * negated values, so bars of a superlevel filtration are reported in negated units. Voxel data of any file format is
-  * loaded into an array first. A pixel of value `Double.NaN` is masked (missing data), in either direction: it never
-  * enters. Infinite values are ordinary extremes, so which one never enters depends on the direction: `+Infinity` in a
-  * sublevel image, `-Infinity` in a superlevel one; the other is present from the start.
+  * loaded into an array first. A pixel of value `Double.NaN` is masked (missing data): it is not in the complex, in a
+  * sublevel and a superlevel image alike (NaN has no sign). Infinite values are ordinary values: `+Infinity` enters
+  * after every finite value in a sublevel image, and before them in a superlevel one (negated to `-Infinity`).
   */
 object CubicalImage:
 
@@ -24,10 +24,6 @@ object CubicalImage:
     val g = (rgb >> 8) & 0xff
     val b = rgb & 0xff
     0.299 * r + 0.587 * g + 0.114 * b
-
-  // A NaN (masked) pixel becomes +Infinity in grid units whatever the direction (see CubicalGridStream.masked).
-  private inline def maskOrScale(sign: Double, v: Double): Double =
-    if v.isNaN then Double.PositiveInfinity else sign * v
 
   /** Dense n-dimensional grid from a flat, row-major array of values and an explicit `shape` -- e.g. for `shape =
     * IndexedSeq(n0, n1, n2)`, index `(i0, i1, i2)` reads `flatValues(i0*n1*n2 + i1*n2 + i2)`, the same convention
@@ -55,12 +51,12 @@ object CubicalImage:
         val source = a.unsafeArray
         var i = 0
         while i < source.length do
-          pixels(i) = maskOrScale(sign, source(i))
+          pixels(i) = sign * source(i)
           i += 1
       case _ =>
         var i = 0
         while i < pixels.length do
-          pixels(i) = maskOrScale(sign, flatValues(i))
+          pixels(i) = sign * flatValues(i)
           i += 1
     FlatCubicalGridStream(shape, pixels, parallelFiltrationValue)
 

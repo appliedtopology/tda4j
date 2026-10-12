@@ -6,7 +6,7 @@ import java.io.PrintWriter
 /** Perseus's cubical toplex (dense grid) input format and its persistence-interval output format, as read by GUDHI.
   *
   * Perseus lists the first axis fastest, the opposite of [[CubicalImage.fromFlatArray]]; the readers and writers
-  * convert. A value of `-1` (a missing cube) is read as `NaN`, the mask, so it never enters in either direction.
+  * convert. A value of `-1` (a missing cube) is read as `NaN`: masked, not in the complex, in either direction.
   * Periodic boundaries (negative sizes, a GUDHI extension) are refused. Perseus's simplicial formats are not supported.
   */
 object Perseus:
@@ -44,17 +44,21 @@ object Perseus:
     CubicalImage.fromFlatArray(shape, flatValues, sublevel)
 
   /** `shape`/`flatValues` in `CubicalImage.fromFlatArray`'s own last-axis-fastest convention -- reversed internally to
-    * Perseus's own first-axis-fastest convention before writing. `Double.NaN` (masked) and `Double.PositiveInfinity`
-    * are written as `-1`, which reads back as `NaN`.
+    * Perseus's own first-axis-fastest convention before writing. `Double.NaN` (masked) is written as `-1`. An infinite
+    * value is refused: the format has none, and `-1` would read back as a mask.
     */
   def writeCubicalToplex(path: String, shape: IndexedSeq[Int], flatValues: IndexedSeq[Double]): Unit =
     require(flatValues.size == shape.product, "flatValues size must equal the product of shape")
+    require(
+      !flatValues.exists(_.isInfinite),
+      "Perseus's cubical format has no infinite value: write a missing cell as NaN (it becomes -1), or a finite value"
+    )
     val sizes = shape.reverse
     val out = new PrintWriter(path)
     try
       out.println(shape.size)
       sizes.foreach(out.println)
-      flatValues.foreach(v => out.println(if v.isNaN || v == Double.PositiveInfinity then "-1" else v.toString))
+      flatValues.foreach(v => out.println(if v.isNaN then "-1" else v.toString))
     finally out.close()
 
   private def endpointToStep(e: BarcodeEndpoint[Double]): Long = e match

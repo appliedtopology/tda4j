@@ -7,10 +7,12 @@ import scala.collection.parallel.CollectionConverters.*
 /** The cubical complex of a full rectangular grid, filtered by the values of its top cells (pixels, voxels): every
   * other cube gets the minimum value of the top cells containing it, the sublevel-set convention of GUDHI, DIPHA and
   * Perseus. A face is contained in every top cell its cofaces are, so the filtration is monotone. For superlevel sets,
-  * negate the values (what [[CubicalImage]]'s `sublevel = false` does). A top cell of value `Double.NaN` is masked: it
-  * never enters, and its faces enter with the other top cells containing them (when the values are first read, a NaN
-  * becomes `Double.PositiveInfinity` in [[topValues]]). Infinite values are ordinary extremes: `+Infinity` never enters
-  * either, `-Infinity` is present from the start.
+  * negate the values (what [[CubicalImage]]'s `sublevel = false` does).
+  *
+  * A top cell of value `Double.NaN` is masked: it is not in the complex. NaN has no sign and compares to nothing, so it
+  * means the same in a sublevel and a superlevel image. Every other cube takes the minimum over the UNMASKED top cells
+  * containing it, and is not in the complex either when all of them are masked: the complex is the closure of the
+  * unmasked top cells. Infinite values are ordinary values: a top cell of value `+Infinity` enters at `+Infinity`.
   *
   * `shape(i)` is the number of pixels along axis `i`. The complex has `prod_i (2 shape(i) + 1)` cells
   * (`totalCellCount`): a 256x256 image has 513² = 263169.
@@ -45,8 +47,9 @@ open class CubicalGridStream(
   // Every cell's value, precomputed once into a flat array over the doubled-coordinate grid (cell with encoding `e` at
   // index sum_i e(i) * weight(i)): engines consult `filtrationValue` on every comparison, so it must be an array lookup,
   // not a hash of a `Cube` (`.claude/WORKLOG-fast-cubical-representatives.md`). The minimum over the top cells
-  // containing a cube is separable by axis: start from the top cells' values at their (all-odd) positions and +∞
-  // elsewhere, then along each axis give every even position the minimum of its odd neighbours.
+  // containing a cube is separable by axis: start from the top cells' values at their (all-odd) positions, then along
+  // each axis give every even position the minimum of its odd neighbours. NaN (masked, or no neighbour) is skipped by
+  // the minimum, so a cell is NaN, and not in the complex, exactly when every top cell containing it is masked.
   private val doubledShape: Array[Int] = shape.map(n => 2 * n + 1).toArray
   private val cellWeight: Array[Long] =
     val w = new Array[Long](ambientDim)
@@ -77,12 +80,12 @@ open class CubicalGridStream(
       while p < values.length do
         read(p)
         p += 1
-    CubicalGridStream.masked(values)
+    values
 
   private lazy val cellValues: Array[Double] =
     val total = totalCellCount
     require(total <= Int.MaxValue, s"CubicalGridStream: $total cells do not fit in one array")
-    val values = Array.fill(total.toInt)(Double.PositiveInfinity)
+    val values = Array.fill(total.toInt)(Double.NaN)
     val pixels = topCellValues
     val pstride = shape.scanRight(1)(_ * _).tail
     for p <- pixels.indices do
@@ -95,9 +98,9 @@ open class CubicalGridStream(
       for i <- values.indices do
         val c = (i / w) % len
         if c            % 2 == 0 then
-          val below = if c > 0 then values(i - w) else Double.PositiveInfinity
-          val above = if c < len - 1 then values(i + w) else Double.PositiveInfinity
-          values(i) = math.min(below, above)
+          val below = if c > 0 then values(i - w) else Double.NaN
+          val above = if c < len - 1 then values(i + w) else Double.NaN
+          values(i) = if below.isNaN then above else if above.isNaN then below else math.min(below, above)
     values
 
   private def cellIndex(c: Cube): Int =
@@ -110,7 +113,7 @@ open class CubicalGridStream(
     index.toInt
 
   override val filtrationValue: PartialFunction[Cube, Double] = new PartialFunction[Cube, Double]:
-    def isDefinedAt(c: Cube): Boolean = inGrid(c)
+    def isDefinedAt(c: Cube): Boolean = inGrid(c) && !cellValues(cellIndex(c)).isNaN
     def apply(c: Cube): Double = cellValues(cellIndex(c))
 
   /** `FiltrationOrdering.canonical` with `cubeOrdering` as tie-break. Ties are common here: a face shares its value
@@ -134,11 +137,12 @@ open class CubicalGridStream(
       for prefix <- acc; v <- r.iterator yield prefix :+ v
     }
 
-  /** The cubes of dimension `d` (`0 <= d <= ambientDim`), oldest first. Each call builds and sorts the whole dimension.
+  /** The cubes of dimension `d` (`0 <= d <= ambientDim`) in the complex (masked ones left out), oldest first. Each call
+    * builds and sorts the whole dimension.
     */
   override def iterateDimension: PartialFunction[Int, Iterator[Cube]] = {
     case d if d >= 0 && d <= ambientDim =>
-      val cubes = cubesOfDimension(d).toVector
+      val cubes = cubesOfDimension(d).filter(c => !cellValues(cellIndex(c)).isNaN).toVector
       cubes.sorted(using filtrationOrdering.reverse).iterator
   }
 
@@ -150,23 +154,7 @@ open class FlatCubicalGridStream(
   pixels: Array[Double],
   parallelFiltrationValue: Boolean = false
 ) extends CubicalGridStream(shape, FlatCubicalGridStream.reader(shape, pixels), parallelFiltrationValue):
-  override protected[tda4j] lazy val topCellValues: Array[Double] = CubicalGridStream.masked(pixels)
-
-object CubicalGridStream:
-  /** `values` with every NaN (a masked top cell) replaced by `+Infinity`, the value at which a cell never enters: the
-    * array itself when it has no NaN, else a copy. Grid values never hold a NaN: `math.min` would carry it to every
-    * face of the masked cell, and the face would then enter after its cofaces.
-    */
-  def masked(values: Array[Double]): Array[Double] =
-    var p = 0
-    while p < values.length && !values(p).isNaN do p += 1
-    if p == values.length then values
-    else
-      val copy = values.clone()
-      while p < copy.length do
-        if copy(p).isNaN then copy(p) = Double.PositiveInfinity
-        p += 1
-      copy
+  override protected[tda4j] lazy val topCellValues: Array[Double] = pixels
 
 object FlatCubicalGridStream:
   /** `topCellValue` for a row-major array. */

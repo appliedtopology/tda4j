@@ -268,8 +268,8 @@ object TDA4j:
     * default for one dimension and for `representativeType` `cocycles`; `naive`, `chunks`), `maxDimension` (default:
     * the grid's dimension), `sublevel` (`false` for superlevel sets, whose filtration values are negated intensities),
     * `representativeType`, `field`, `prime`, `epsilon`, and the bar options. A pixel of value `NaN` is masked (missing
-    * data): it never enters, whatever `sublevel` is. `Inf` and `-Inf` are ordinary extremes: with `sublevel` `true`,
-    * `Inf` never enters and `-Inf` is there from the start; with `sublevel` `false`, the reverse.
+    * data): it is not in the complex, whatever `sublevel` is. `Inf` and `-Inf` are ordinary values: with `sublevel`
+    * `true`, `Inf` enters after every finite value and `-Inf` before them; with `sublevel` `false`, the reverse.
     */
   def computeFromCubicalImage(
     shape: Array[Int],

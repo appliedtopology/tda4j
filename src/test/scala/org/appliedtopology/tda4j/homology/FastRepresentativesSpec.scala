@@ -8,7 +8,7 @@ import org.specs2.mutable
   * `EagerFastAlphaReference`) return. Inputs cover:
   *   - ties everywhere (small integer values);
   *   - a bright blob on a dark background, the case that made the eager version quadratic;
-  *   - missing pixels at `+Infinity`, which tie against `∞`;
+  *   - pixels at `+Infinity`, which tie against `∞`, and masked (NaN) pixels, which are not in the complex;
   *   - 3-D grids (the chunks hybrid plus the dual union-find);
   *   - signed fields F_3 and F_17 as well as F_2, and zero-length bars on and off;
   *   - random Helix triangulations in 2-D and 3-D.
@@ -33,12 +33,23 @@ class FastRepresentativesSpec extends mutable.Specification:
     }
     val missing = ties.map(v => if rng.nextInt(7) == 0 then Double.PositiveInfinity else v)
     val ties3d = IndexedSeq.fill(4 * 5 * 4)(rng.nextInt(3).toDouble)
+    // Masks: scattered NaN pixels among ties (lone holes, masked runs, masked border pixels, +Infinity next to them),
+    // and a masked 3-D grid.
+    val masked = ties.map(v =>
+      rng.nextInt(6) match
+        case 0 => Double.NaN
+        case 1 => Double.PositiveInfinity
+        case _ => v
+    )
+    val masked3d = ties3d.map(v => if rng.nextInt(5) == 0 then Double.NaN else v)
     Seq(
       grid(IndexedSeq(n, m))(idx => ties(idx(0) * m + idx(1))),
       grid(IndexedSeq(n, m))(idx => noise(idx(0) * m + idx(1))),
       grid(IndexedSeq(n, m))(idx => blob(idx(0) * m + idx(1))),
       grid(IndexedSeq(n, m))(idx => missing(idx(0) * m + idx(1))),
-      grid(IndexedSeq(4, 5, 4))(idx => ties3d(idx(0) * 20 + idx(1) * 4 + idx(2)))
+      grid(IndexedSeq(4, 5, 4))(idx => ties3d(idx(0) * 20 + idx(1) * 4 + idx(2))),
+      grid(IndexedSeq(n, m))(idx => masked(idx(0) * m + idx(1))),
+      grid(IndexedSeq(4, 5, 4))(idx => masked3d(idx(0) * 20 + idx(1) * 4 + idx(2)))
     )
 
   def sameCubical(field: FiniteField)(stream: CubicalGridStream, zeroLength: Boolean): Boolean =
@@ -102,6 +113,12 @@ class FastRepresentativesSpec extends mutable.Specification:
       CubicalImage.fromFlatArray(shape, IndexedSeq.fill(shape.product)(value()))
     } ++ Seq(IndexedSeq(4, 5), IndexedSeq(6, 6), IndexedSeq(3, 4, 3)).map { shape =>
       CubicalImage.fromFlatArray(shape, IndexedSeq.fill(shape.product)(zero()))
+    } ++ shapes.map { shape =>
+      // Masked (NaN) pixels among the same values: on degenerate shapes, whole rows and the single pixel get masked.
+      CubicalImage.fromFlatArray(
+        shape,
+        IndexedSeq.fill(shape.product)(if rng.nextInt(3) == 0 then Double.NaN else value())
+      )
     }
 
   // A 0.0 pixel whose first dual merge is with a lone -0.0 pixel to its right, everything else at -1.0: the elder rule
@@ -145,14 +162,14 @@ class FastRepresentativesSpec extends mutable.Specification:
     problems.take(5) must beEmpty
   }
 
-  // A NaN pixel is the mask in either direction, where an image is built from an array and where a grid built from a
-  // function first reads its values, by every engine: the same diagram, representatives included, as +Infinity in grid
-  // units (so -Infinity in a superlevel image's own units). The wrong answer this rules out: a NaN negated with the
-  // superlevel image, or ranked above +Infinity, or carried to its faces by `min`.
-  "A NaN pixel is masked: it never enters, sublevel or superlevel, under every engine" >> {
-    import f3.given
+  // A NaN pixel is not in the complex, in either direction (NaN has no sign), where an image is built from an array and
+  // where a grid built from a function first reads its values. The wrong answers this rules out: a NaN negated with a
+  // superlevel image (then it would enter first and fill the hole), carried to its faces by `min` (faces entering after
+  // their cofaces), or treated as +Infinity (then the masked cells would enter at +Infinity: bars born there, and a
+  // complex that is the whole grid).
+  "A NaN pixel is not in the complex, sublevel or superlevel, under every engine" >> {
     val inf = Double.PositiveInfinity
-    // A 4x5 image with two masked pixels: one inside a ring of 1s (a loop that never dies) and one on the border.
+    // A 4x5 image with two masked pixels: one inside a ring of 1s (a loop that never dies) and one in a corner.
     def image(mask: Double): IndexedSeq[Double] = IndexedSeq(
       IndexedSeq(1.0, 1.0, 1.0, 0.5, mask),
       IndexedSeq(1.0, mask, 1.0, 0.2, 0.3),
@@ -160,33 +177,54 @@ class FastRepresentativesSpec extends mutable.Specification:
       IndexedSeq(0.4, 0.6, 0.8, 0.9, 0.0)
     ).flatten
     val shape = IndexedSeq(4, 5)
-    val engines = Seq(Persistence.Engine.FastCubical, Persistence.Engine.Cohomology, Persistence.Engine.Chunks)
-    def diagram(values: IndexedSeq[Double], sublevel: Boolean, engine: Persistence.Engine) =
-      Persistence(Image(values, shape, sublevel), engine = engine, characteristic = 3)
-    def sameDiagrams(sublevel: Boolean, infinite: Double) = engines.map { engine =>
-      val masked = diagram(image(Double.NaN), sublevel, engine)
-      val infinity = diagram(image(infinite), sublevel, engine)
-      masked.triples.nonEmpty && masked.bars == infinity.bars
-    }
+    val engines = Seq(
+      Persistence.Engine.FastCubical,
+      Persistence.Engine.Cohomology,
+      Persistence.Engine.Chunks,
+      Persistence.Engine.Naive
+    )
+    def triples(
+      values: IndexedSeq[Double],
+      sublevel: Boolean,
+      engine: Persistence.Engine,
+      zeroLength: Boolean = false
+    ) =
+      Persistence(
+        Image(values, shape, sublevel),
+        engine = engine,
+        characteristic = 3,
+        includeZeroLength = zeroLength
+      ).triples.sorted
+    def everyEngine(sublevel: Boolean, zeroLength: Boolean = false) =
+      engines.map(triples(image(Double.NaN), sublevel, _, zeroLength)).distinct
+    val masked = CubicalImage.fromFlatArray(shape, image(Double.NaN))
     val fromFunction = CubicalGridStream(shape, index => image(Double.NaN)(index(0) * 5 + index(1)))
-    val fromInfinity = CubicalGridStream(shape, index => image(inf)(index(0) * 5 + index(1)))
-    def loopsThatNeverDie(sublevel: Boolean) =
-      diagram(image(Double.NaN), sublevel, Persistence.Engine.FastCubical).triples.filter(t => t._1 == 1 && t._3 == inf)
-    (sameDiagrams(sublevel = true, inf) must beEqualTo(Seq(true, true, true))) and
-      (sameDiagrams(sublevel = false, -inf) must beEqualTo(Seq(true, true, true))) and
-      (loopsThatNeverDie(sublevel = true) must beEqualTo(List((1, 1.0, inf)))) and
-      (loopsThatNeverDie(sublevel = false) must beEqualTo(List((1, -1.0, inf)))) and
-      (CubicalImage.fromFlatArray(shape, image(Double.NaN)).topValues must beEqualTo(image(inf))) and
-      (fromFunction.topValues must beEqualTo(image(inf))) and
-      (FastCubicalHomologyEngine[f3.Fp]().persistentHomology(fromFunction) must beEqualTo(
-        FastCubicalHomologyEngine[f3.Fp]().persistentHomology(fromInfinity)
+    val allMasked = Image(IndexedSeq.fill(6)(Double.NaN), IndexedSeq(2, 3))
+    // The 9x11 doubled grid has 99 cells; the inner masked pixel takes only itself away, the corner one itself, its two
+    // outer edges and the corner vertex.
+    def cells(stream: CubicalGridStream) = (0 to 2).map(stream.iterateDimension(_).size).sum
+    (everyEngine(sublevel = true).size must beEqualTo(1)) and
+      (everyEngine(sublevel = false).size must beEqualTo(1)) and
+      (everyEngine(sublevel = true, zeroLength = true).size must beEqualTo(1)) and
+      (everyEngine(sublevel = true).head.filter(t => t._1 == 1 && t._3 == inf) must beEqualTo(List((1, 1.0, inf)))) and
+      (everyEngine(sublevel = false).head.filter(t => t._1 == 1 && t._3 == inf) must beEqualTo(
+        List((1, -1.0, inf))
       )) and
-      (PackedCubicalCohomologyEngine[f3.Fp](fromFunction, 2).persistentHomology() must beEqualTo(
-        PackedCubicalCohomologyEngine[f3.Fp](fromInfinity, 2).persistentHomology()
+      // Nothing is born at +Infinity, even with zero-length bars: a masked cell never enters. A +Infinity pixel does.
+      (everyEngine(sublevel = true, zeroLength = true).head.exists(_._2 == inf) must beFalse) and
+      (triples(image(inf), sublevel = true, Persistence.Engine.FastCubical, zeroLength = true).exists(_._2 == inf) must
+        beTrue) and
+      // At every finite value a masked pixel and a +Infinity one look the same.
+      (triples(image(Double.NaN), sublevel = true, Persistence.Engine.FastCubical).filter(_._3 != inf) must beEqualTo(
+        triples(image(inf), sublevel = true, Persistence.Engine.FastCubical).filter(_._3 != inf)
       )) and
-      (Persistence(fromFunction, engine = Persistence.Engine.Naive).triples must beEqualTo(
-        Persistence(fromInfinity, engine = Persistence.Engine.Naive).triples
-      ))
+      (cells(masked) must beEqualTo(94)) and (cells(fromFunction) must beEqualTo(94)) and
+      (HomologyFixtures.respectsOrderingContract(masked) must beTrue) and
+      (masked.topValues.count(_.isNaN) must beEqualTo(2)) and
+      (Persistence(fromFunction, engine = Persistence.Engine.FastCubical).triples.sorted must beEqualTo(
+        triples(image(Double.NaN), sublevel = true, Persistence.Engine.FastCubical)
+      )) and
+      (engines.map(e => Persistence(allMasked, engine = e).bars.size) must beEqualTo(engines.map(_ => 0)))
   }
 
   /** `Some(equal)` when both engines produced bars, `None` when both rejected the triangulation. */

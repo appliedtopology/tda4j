@@ -154,7 +154,13 @@ class EagerFastCubicalReference[CoefficientT: Field]:
             val candidates = Seq(k - 1, k).filter(v => v >= 0 && v < shape(degenAxis))
             val topIds = candidates.map(v => topIndex(lower.updated(degenAxis, v)))
             val ids = if topIds.size == 2 then topIds else topIds :+ infinityId
-            val value = ids.map(topValue).min
+            // The smallest value of the unmasked pixels containing it; NaN (not in the complex) when they are all
+            // masked. `∞` counts as an unmasked +Infinity here, so a boundary facet of a masked pixel is NaN.
+            val present = topIds.map(topValue).filterNot(_.isNaN)
+            val value =
+              if present.isEmpty then Double.NaN
+              else if topIds.size == 2 then present.min
+              else present.head
             FacetEvent(facet, value, ids(0), ids(1))
           }
       }.toVector
@@ -225,7 +231,12 @@ class EagerFastCubicalReference[CoefficientT: Field]:
 
     val bars = mutable.ArrayBuffer.empty[PersistenceBar[Double, Chain[Cube, CoefficientT]]]
 
-    // `∞` is always active, born at +Infinity -- the unconditional elder of anything it ever merges with.
+    // `∞` is always active, born at +Infinity -- the unconditional elder of anything it ever merges with. A masked
+    // (NaN) pixel is in the complement from the start too: its vertex event and those of the facets outside the complex
+    // sort first (java.lang.Double.compare puts NaN above +Infinity), and its component is elder to every real one.
+    // The root of a component is its eldest member, so a component holding a masked pixel has a masked root.
+    def seniority(root: Int): Int =
+      if root == infinityId then 2 else if topValue(root).isNaN then 1 else 0
     birthOf(infinityId) = Double.PositiveInfinity
     chainOf(infinityId) = Map.empty // never used as a dying side's own chain, so its own content is irrelevant
 
@@ -248,8 +259,8 @@ class EagerFastCubicalReference[CoefficientT: Field]:
             // valued fixtures this class was first validated against. Special-case infinityId explicitly rather
             // than relying on the birthOf comparison alone to break this specific tie correctly.
             val (youngRoot, oldRoot) =
-              if ra == infinityId then (rb, ra)
-              else if rb == infinityId then (ra, rb)
+              if seniority(ra) != seniority(rb) then if seniority(ra) < seniority(rb) then (ra, rb) else (rb, ra)
+              else if seniority(ra) == 1 then (ra, rb) // two masked regions: the facet's lower side dies
               else if birthOf(ra) <= birthOf(rb) then (ra, rb)
               else (rb, ra)
             // Orientation: `facet`'s own boundary gives its coefficient toward EACH of its (up to two) cofaces
@@ -320,7 +331,12 @@ class EagerFastCubicalReference[CoefficientT: Field]:
               Chain.from(
                 flippedYoung.toSeq.flatMap((cube, c) => cube.boundary[CoefficientT].map((f, s) => (f, fr.times(c, s))))
               )
-            if includeZeroLength || v != birthOf(youngRoot) then
+            // A facet outside the complex (NaN) only joins masked regions: no class. A masked region dying at a facet
+            // of the complex is a class born there that never dies.
+            if v.isNaN then ()
+            else if seniority(youngRoot) == 1 then
+              bars += new PersistenceBar(ambientDim - 1, endpoint(true)(v), PositiveInfinity(), Some(rep))
+            else if includeZeroLength || v != birthOf(youngRoot) then
               bars += new PersistenceBar(
                 ambientDim - 1,
                 endpoint(true)(v),

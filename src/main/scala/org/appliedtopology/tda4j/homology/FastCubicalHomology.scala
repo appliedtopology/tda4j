@@ -7,13 +7,16 @@ import scala.collection.mutable
   * Piraud, arXiv:2606.04801, extended here to any coefficient field and to representatives): degree 0 by union-find on
   * the vertices and edges, the top degree `d - 1` (`d` the grid's dimension) by union-find on the dual graph. In 2-D
   * those cover everything; in dimension 3 and up the degrees in between are computed by the cohomology engine on the
-  * grid without its top cells. Requires `d >= 2`, and refuses an image with a NaN value.
+  * grid without its top cells. Requires `d >= 2`. A NaN (masked) pixel is not in the complex (see
+  * [[CubicalGridStream]]).
   *
   * The dual graph: the top cells (pixels) are vertices, the codimension-1 cells (facets) edges between the one or two
   * top cells containing them, with one extra vertex `∞`, at value `+Infinity`, on the far side of every facet on the
   * boundary of the grid. By Alexander duality, degree `d - 1` of the sublevel filtration is degree 0 of the dual
   * graph's superlevel filtration: union-find in decreasing value with the elder rule, each merge giving the primal bar
-  * with birth and death swapped. `∞`'s component never dies.
+  * with birth and death swapped. `∞`'s component never dies. A masked pixel is in the complement from the start, as `∞`
+  * is, and so is a facet between two masked pixels or a masked pixel and the outside: a component holding one is elder
+  * to every other but `∞`'s, and when it dies at a facet of value `v` the primal class is born at `v` and never dies.
   *
   * Representatives: each top cell carries a sign in its dual component, kept consistent as components merge (the sign
   * flip is solved from the merging facet's two boundary coefficients, both `±1`) so that interior facets cancel; when a
@@ -115,6 +118,7 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
     val d = grid.d
     val shape = grid.shape
     val distinct = grid.distinct
+    val masked = grid.masked // the rank of a vertex or edge every pixel around which is masked: not in the complex
     val vdims = shape.map(_ + 1)
     val vstride = GridRanks.strides(vdims)
     val numVertices = GridRanks.checkedProduct(vdims, "FastCubicalHomologyEngine")
@@ -195,7 +199,10 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
     // Stable counting sort by rank of the edges taken in descending encoding order: value ascending, encoding
     // descending. Afterwards `bucketEnd(r)` is the end of rank r's run in `sorted`.
     val bucketEnd = new Array[Int](distinct.length + 1)
-    foreachEdgeDescending((axis, v) => bucketEnd(edgeRank(axis)(v) + 1) += 1)
+    foreachEdgeDescending { (axis, v) =>
+      val rank = edgeRank(axis)(v)
+      if rank != masked then bucketEnd(rank + 1) += 1
+    }
     var r = 1
     while r <= distinct.length do
       bucketEnd(r) += bucketEnd(r - 1)
@@ -204,8 +211,9 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
     val sorted = new Array[Int](numEdges)
     foreachEdgeDescending { (axis, v) =>
       val rank = edgeRank(axis)(v)
-      sorted(bucketEnd(rank)) = axis * numVertices + v
-      bucketEnd(rank) += 1
+      if rank != masked then
+        sorted(bucketEnd(rank)) = axis * numVertices + v
+        bucketEnd(rank) += 1
     }
 
     val parent = Array.range(0, numVertices)
@@ -261,14 +269,21 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
             Some(vertexChain(youngRoot))
           )
       k += 1
-    // Every vertex and edge of the grid is in, so one component is left: the one essential class.
-    val root = find(0)
-    bars += new PersistenceBar(
-      0,
-      endpoint(true)(distinct(vertexRank(root))),
-      PositiveInfinity(),
-      Some(vertexChain(root))
-    )
+    // One essential class per component left: one without a mask, several when masked pixels cut the image apart, none
+    // when every pixel is masked. Listed as the stream lists vertices, oldest first: value ascending, then the encoding
+    // (here the vertex number) descending.
+    val roots = mutable.ArrayBuffer.empty[Int]
+    var v = numVertices - 1
+    while v >= 0 do
+      if vertexRank(v) != masked && find(v) == v then roots += v
+      v -= 1
+    for root <- roots.sortBy(vertexRank(_)) do // a stable sort: the vertex number stays descending within a rank
+      bars += new PersistenceBar(
+        0,
+        endpoint(true)(distinct(vertexRank(root))),
+        PositiveInfinity(),
+        Some(vertexChain(root))
+      )
     bars.toList
 
   // -------------------------------------------------------------------------------------------------------------
@@ -294,6 +309,9 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
     val distinct = grid.distinct
     val numTop = pixels.length
     val infinityId = numTop // one past the last real top-cell id
+    // A masked pixel is not in the complex, so it is in the complement from the start, like `∞`; so is a facet every
+    // pixel of which is masked (rank `masked`, the largest, so the descending sweep takes these facets first).
+    val masked = grid.masked
     require(3L * d * numTop <= Int.MaxValue, s"FastCubicalHomologyEngine: ${3L * d * numTop} facet codes")
     val pstride = GridRanks.strides(shape)
     val encWeight = GridRanks.encodingWeights(shape)
@@ -342,10 +360,10 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
     // Stable counting sort by DESCENDING rank of the facets taken in ascending encoding order. Afterwards
     // `bucketEnd(r)` is the end of rank r's run in `sorted`, the runs from the largest rank down.
     val m = distinct.length
-    val bucketEnd = new Array[Int](m)
+    val bucketEnd = new Array[Int](m + 1)
     foreachFacetAscending((_, rank) => bucketEnd(rank) += 1)
     var acc = 0
-    var r = m - 1
+    var r = m
     while r >= 0 do
       val c = bucketEnd(r)
       bucketEnd(r) = acc
@@ -445,7 +463,11 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
     val uf = UnitSignedUnionFind(numTop + 1)
     val bars = mutable.ArrayBuffer.empty[PersistenceBar[Double, Chain[Cube, CoefficientT]]]
 
-    var rank = m - 1
+    // Which side of a merge is elder: `∞`, then a component holding a masked pixel (its root: a root is its component's
+    // eldest member), then by birth.
+    def seniority(root: Int): Int = if root == infinityId then 2 else if pixelRank(root) == masked then 1 else 0
+
+    var rank = m
     var k = 0
     while k < numFacets do
       while bucketEnd(rank) <= k do rank -= 1
@@ -457,16 +479,17 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
       val (a, b) = side match
         case 0 => (p - pstride(axis), p)
         case _ => (p, infinityId)
-      val v = distinct(rank)
+      val v = if rank == masked then Double.NaN else distinct(rank)
       val ra = uf.find(a)
       val rb = uf.find(b)
       if ra != rb then
-        // `infinityId` is the unconditional elder of any merge it takes part in: a real top cell can also have the
-        // value +Infinity (a permanently missing pixel) and tie against it, so it is special-cased rather than
-        // left to the birth comparison.
+        // `infinityId` is the unconditional elder of any merge it takes part in, and a masked component of any merge
+        // with a real one: a real top cell can also have the value +Infinity and tie against either, so they are
+        // special-cased rather than left to the birth comparison.
+        val (sa, sb) = (seniority(ra), seniority(rb))
         val (youngRoot, oldRoot) =
-          if ra == infinityId then (rb, ra)
-          else if rb == infinityId then (ra, rb)
+          if sa != sb then if sa < sb then (ra, rb) else (rb, ra)
+          else if sa == 1 then (ra, rb) // two masked regions, both there from the start: the facet's lower side dies
           else if birthOf(ra) <= birthOf(rb) then (ra, rb)
           else (rb, ra)
         val (youngTopId, oldTopId) = if youngRoot == ra then (a, b) else (b, a)
@@ -484,13 +507,23 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
           if oldRoot == infinityId then 1
           else
             -(uf.orientation(oldTopId) * coeffToward(oldTopId) * uf.orientation(youngTopId) * coeffToward(youngTopId))
-        if includeZeroLength || v != birthOf(youngRoot) then
-          bars += new PersistenceBar(
-            d - 1,
-            endpoint(true)(v),
-            endpoint(false)(birthOf(youngRoot)),
-            Option.when(representatives)(regionBoundary(uf, youngRoot, flip))
-          )
+        // A facet outside the complex joins masked regions (and `∞`) before anything enters: no class. A masked region
+        // that dies at a facet in the complex is a class born there that never dies, so never a zero-length one.
+        if rank != masked then
+          if seniority(youngRoot) == 1 then
+            bars += new PersistenceBar(
+              d - 1,
+              endpoint(true)(v),
+              PositiveInfinity(),
+              Option.when(representatives)(regionBoundary(uf, youngRoot, flip))
+            )
+          else if includeZeroLength || v != birthOf(youngRoot) then
+            bars += new PersistenceBar(
+              d - 1,
+              endpoint(true)(v),
+              endpoint(false)(birthOf(youngRoot)),
+              Option.when(representatives)(regionBoundary(uf, youngRoot, flip))
+            )
         uf.union(youngRoot, oldRoot, flip)
       k += 1
     bars.toList
