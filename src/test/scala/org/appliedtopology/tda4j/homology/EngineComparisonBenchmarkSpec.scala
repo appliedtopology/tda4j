@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.specs2.mutable
 import org.specs2.main.Arguments
@@ -124,8 +117,8 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
         case _: TimeoutException => Left("timeout")
         case e: Throwable        => Left(s"${e.getClass.getSimpleName}: ${Option(e.getMessage).getOrElse("")}".trim)
 
-    def bounded(stream: StratifiedSimplexStream[Int, Double], maxDim: Int): StratifiedSimplexStream[Int, Double] =
-      new StratifiedSimplexStream[Int, Double]:
+    def bounded(stream: LevelwiseSimplexStream[Int, Double], maxDim: Int): LevelwiseSimplexStream[Int, Double] =
+      new LevelwiseSimplexStream[Int, Double]:
         def filtrationValue = stream.filtrationValue
         def filtrationOrdering = stream.filtrationOrdering
         val smallest = stream.smallest
@@ -134,7 +127,7 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
           case d if d >= 0 && d <= maxDim => stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty)
         }
 
-    val constructions: Seq[(String, (Array[Array[Double]], Int) => StratifiedSimplexStream[Int, Double])] = Seq(
+    val constructions: Seq[(String, (Array[Array[Double]], Int) => LevelwiseSimplexStream[Int, Double])] = Seq(
       "VR-Enumerating" -> ((pts, maxDim) => bounded(EnumeratingCofaceSimplexStream(EuclideanMetricSpace(pts)), maxDim)),
       "VR-RipserCoface" -> ((pts, maxDim) => bounded(RipserCofaceSimplexStream(EuclideanMetricSpace(pts)), maxDim)),
       "VR-Inorder" -> ((pts, maxDim) => bounded(InorderCofaceSimplexStream(EuclideanMetricSpace(pts)), maxDim)),
@@ -142,8 +135,8 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
         bounded(RecursiveStackVietorisRipsSimplexStream(EuclideanMetricSpace(pts)), maxDim)
       ),
       "VR-NewVR" -> ((pts, maxDim) => IncrementalVietorisRipsSimplexStream(EuclideanMetricSpace(pts), maxDim)),
-      "Alpha-DQP" -> ((pts, maxDim) => bounded(AlphaShapes(pts.toIndexedSeq, "DQP"), maxDim)),
-      "Alpha-Helix" -> ((pts, maxDim) => bounded(AlphaShapes(pts.toIndexedSeq, "helix"), maxDim))
+      "Alpha-DQP" -> ((pts, maxDim) => bounded(AlphaShapes(pts.toIndexedSeq, AlphaBackend.DQP), maxDim)),
+      "Alpha-Helix" -> ((pts, maxDim) => bounded(AlphaShapes(pts.toIndexedSeq, AlphaBackend.Helix), maxDim))
     )
 
     val engines: Seq[(String, (StratifiedCellStream[Simplex[Int], Double], Int) => Int)] = Seq(
@@ -180,7 +173,7 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
     def materializeAndWrap(
       pts: Array[Array[Double]],
       maxDim: Int,
-      construct: (Array[Array[Double]], Int) => StratifiedSimplexStream[Int, Double]
+      construct: (Array[Array[Double]], Int) => LevelwiseSimplexStream[Int, Double]
     ): (StratifiedCellStream[Simplex[Int], Double], Int) =
       val source = construct(pts, maxDim)
       val cellVec = source.iterator.toVector
@@ -199,7 +192,7 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
       clouds: Seq[Array[Array[Double]]],
       maxDim: Int,
       cname: String,
-      construct: (Array[Array[Double]], Int) => StratifiedSimplexStream[Int, Double],
+      construct: (Array[Array[Double]], Int) => LevelwiseSimplexStream[Int, Double],
       ename: String,
       engine: (StratifiedCellStream[Simplex[Int], Double], Int) => Int
     ): Row =

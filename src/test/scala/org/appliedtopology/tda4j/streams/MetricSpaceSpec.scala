@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.{mutable, ScalaCheck, Specification}
@@ -75,7 +68,7 @@ class MetricSpaceSpec extends mutable.Specification with ScalaCheck:
           BruteForce(metricSpace).nearestNeighbors(x, 1) must be_==(IndexedSeq(x))
         }
       }
-    // streams.DistanceToMeasure defaults to BruteForce specifically because JVPTree's pruning assumes the
+    // DistanceToMeasure defaults to BruteForce specifically because JVPTree's pruning assumes the
     // triangle inequality, which coincident points don't violate but do stress (jvptree's own PartitionException
     // is a real, documented failure mode on degenerate configurations) -- this fixture duplicates a point so both
     // implementations have to agree on a genuinely tied nearest-neighbour set, not just a generic one.
@@ -91,4 +84,25 @@ class MetricSpaceSpec extends mutable.Specification with ScalaCheck:
         }
       } must beTrue
     }
+  }
+
+  "An explicit distance matrix is read from its lower triangle, as Ripser and GUDHI read it" >> {
+    // The lower triangle is a square with diagonals 2 (one loop, born at 1, dying at 2); the upper triangle has every
+    // distance 1 (no loop). Reading the upper triangle would report no H_1 bar.
+    val m = Seq(
+      Seq(0.0, 1.0, 1.0, 1.0),
+      Seq(1.0, 0.0, 1.0, 1.0),
+      Seq(2.0, 1.0, 0.0, 1.0),
+      Seq(1.0, 2.0, 1.0, 0.0)
+    )
+    val space = ExplicitMetricSpace(m)
+    val h1 = Persistence(space, maxDimension = 1, maxFiltrationValue = 3.0).triples.filter(_._1 == 1)
+    (space.distance(0, 2) must be_==(2.0)) and (space.distance(2, 0) must be_==(2.0)) and
+      (space.distance(1, 3) must be_==(2.0)) and (h1 must be_==(List((1, 1.0, 2.0))))
+  }
+
+  "A Euclidean metric space past the cache limit computes distances on demand (50,000 points: n^2 overflows Int)" >> {
+    val n = 50000
+    val space = EuclideanMetricSpace(Array.tabulate(n)(i => Array(i.toDouble, 0.0)))
+    (space.distance(0, n - 1) must be_==((n - 1).toDouble)) and (space.distance(n - 1, 2) must be_==((n - 3).toDouble))
   }

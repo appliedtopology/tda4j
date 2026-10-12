@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
-import org.appliedtopology.tda4j.barcode.*
-import org.appliedtopology.tda4j.streams.matrixGen
 
 import org.specs2.mutable
 import org.specs2.execute.{AsResult, Result}
@@ -30,13 +23,34 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
     case PositiveInfinity() => Double.PositiveInfinity
     case NegativeInfinity() => Double.NegativeInfinity
 
-  def fastBars[C: Field](helix: HelixDelaunay): List[(Int, Double, Double)] =
+  def fastBars[C: Field](helix: DelaunayAlphaShapes): List[(Int, Double, Double)] =
     FastAlphaHomologyEngine[C]()
       .persistentHomology(helix)
       .map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
 
-  def naiveBars(helix: HelixDelaunay): List[(Int, Double, Double)] =
+  def naiveBars(helix: DelaunayAlphaShapes): List[(Int, Double, Double)] =
     SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(helix).diagramAt(Double.PositiveInfinity)
+
+  "On Bowyer-Watson triangulations (random clouds, and grids, where every cell is cospherical) it matches the naive " +
+    "engine" >> {
+      def grid(side: Int, dim: Int) =
+        Array.tabulate(math.pow(side, dim).toInt)(k =>
+          Array.tabulate(dim)(a => ((k / math.pow(side, a).toInt) % side).toDouble)
+        )
+      val rng = new scala.util.Random(11)
+      val inputs = Seq(
+        Array.fill(40)(Array.fill(2)(rng.nextDouble())),
+        Array.fill(25)(Array.fill(3)(rng.nextDouble())),
+        grid(5, 2),
+        grid(3, 3)
+      )
+      val problems = for
+        (pts, i) <- inputs.zipWithIndex
+        bw = BowyerWatsonDelaunay(pts)
+        if fastBars[Double](bw).sorted != naiveBars(bw).sorted
+      yield i
+      problems must beEmpty
+    }
 
   // ---------------------------------------------------------------------------------------------------------
   // Hand-verified fixture (see the design note for the full hand trace): 5 points, a fan triangulation of 4
@@ -53,10 +67,18 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
 
   "The hand-verified 5-point fan fixture matches the naive engine exactly (see the design note for the full hand trace)" >> {
     val bars = fastBars[Double](fanFixture)
+    val all = FastAlphaHomologyEngine[Double]()
+      .persistentHomology(fanFixture, includeZeroLength = true)
+      .map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
+    val allNaive = SimplicialHomologyEngine[Int, Double, Double]()
+      .persistentHomology(fanFixture)
+      .diagramAt(Double.PositiveInfinity, includeZeroLength = true)
     (bars.count(_._1 == 0) must beEqualTo(5)) and
       (bars.count { case (0, _, d) => d.isInfinite; case _ => false } must beEqualTo(1)) and
-      (bars.count(_._1 == 1) must beEqualTo(4)) and
-      (bars.sorted must beEqualTo(naiveBars(fanFixture).sorted))
+      (bars.count(_._1 == 1) must beEqualTo(2)) and // and two zero-length H1 pairs, below
+      (all.count(_._1 == 1) must beEqualTo(4)) and
+      (bars.sorted must beEqualTo(naiveBars(fanFixture).sorted)) and
+      (all.sorted must beEqualTo(allNaive.sorted))
   }
 
   // ---------------------------------------------------------------------------------------------------------
@@ -189,10 +211,22 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
     )
   )
 
-  "throws the specific, named FastAlphaTriangulationException on a real facet-multiplicity violation, with a " +
+  "the frontier walk now triangulates the pinned facet-multiplicity fixture validly (its earlier candidate search " +
+    "gave one facet three cofaces here)" >> {
+      HelixDelaunay.badFacetsOf(facetMultiplicityViolationFixture.validated).isEmpty must beTrue
+    }
+
+  "throws the specific, named FastAlphaTriangulationException on a facet-multiplicity violation, with a " +
     "message an unsuspecting caller (not just this class's own developers) can act on" >> {
+      // Three triangles on one edge: no walk produces this any more on the inputs we know, so the check is tested on
+      // a hand-built facet map.
+      val threeCofaces = Map(
+        Simplex(0, 1) -> Vector(0, 1, 2),
+        Simplex(0, 2) -> Vector(0),
+        Simplex(1, 2) -> Vector(0)
+      )
       try
-        FastAlphaHomologyEngine[Double]().persistentHomology(facetMultiplicityViolationFixture)
+        FastAlphaHomologyEngine.requireDualGraph(threeCofaces, 2)
         ko("expected a FastAlphaTriangulationException naming the facet-multiplicity violation, but none was thrown")
       catch
         case e: FastAlphaTriangulationException =>

@@ -1,13 +1,8 @@
 package org.appliedtopology.tda4j.matlab
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
+import org.appliedtopology.tda4j.*
 
 import org.appliedtopology.tda4j.*
-import org.appliedtopology.tda4j.barcode.*
 import org.specs2.mutable
 
 /** Verifies the MATLAB-facing facade's *conversion layer*, not the underlying engines (those already have their own
@@ -115,6 +110,106 @@ class TDA4jSpec extends mutable.Specification:
     // Every bar carries a real annotation (this engine never resolves a bar via a shortcut that skips
     // recording one, unlike engine=ripser's apparent-pairs case) -- mirrors the equivalent engine=chunks
     // check below.
+    "be the default for every complex but vr (ripser) and images (fast-cubical): same bars and representatives" in {
+      def same(default: PersistenceResult, explicit: PersistenceResult) =
+        default.size() == explicit.size() &&
+          triples(default.toArray()) == triples(explicit.toArray()) &&
+          (0 until default.size()).forall(i =>
+            default.cycleVertices(i).map(_.toList).toList == explicit.cycleVertices(i).map(_.toList).toList
+          )
+      val cech = Array("complex", "cech", "maxDimension", "1")
+      val pixels = Array(Array(0.0, 1.0, 0.0), Array(1.0, 2.0, 1.0), Array(0.0, 1.0, 0.0))
+      val relation = Array(Array(0.0, 1.0, 2.0), Array(1.0, 0.0, 1.0), Array(2.0, 1.0, 0.0))
+      same(
+        FullBarcode.computeFromPoints(points, cech),
+        FullBarcode.computeFromPoints(points, cech ++ Array("engine", "cohomology"))
+      )
+        .must(beTrue)
+        .and(
+          same(
+            FullBarcode.computeFromImage(pixels),
+            FullBarcode.computeFromImage(pixels, Array("engine", "fast-cubical"))
+          ) must beTrue
+        )
+        .and(
+          same(
+            TDA4j.computeFromRelation(relation),
+            TDA4j.computeFromRelation(relation, Array("engine", "cohomology"))
+          ) must beTrue
+        )
+    }
+
+    "honour representativeType: cocycles from cohomology for an image, refused by homology engines and bad values" in {
+      val pixels = Array(Array(0.0, 1.0, 0.0), Array(1.0, 2.0, 1.0), Array(0.0, 1.0, 0.0))
+      val cocycles = FullBarcode.computeFromImage(pixels, Array("representativeType", "cocycles"))
+      val explicit =
+        FullBarcode.computeFromImage(pixels, Array("engine", "cohomology", "representativeType", "cocycles"))
+      (triples(cocycles.toArray()) must beEqualTo(triples(explicit.toArray())))
+        .and(
+          (0 until cocycles.size()).forall(i =>
+            cocycles.cycleVertices(i).map(_.toList).toList == explicit.cycleVertices(i).map(_.toList).toList
+          ) must beTrue
+        )
+        .and(
+          TDA4j.computeFromImage(pixels, Array("engine", "fast-cubical", "representativeType", "cocycles")) must
+            throwAn[IllegalArgumentException](message = "for cocycles use engine=cohomology")
+        )
+        .and(
+          triples(
+            FullBarcode.computeFromPoints(points, Array("engine", "chunks", "representativeType", "cocycles")).toArray()
+          ).sorted
+            must beEqualTo(triples(FullBarcode.computeFromPoints(points, Array("engine", "chunks")).toArray()).sorted)
+        )
+        .and(
+          TDA4j.computeFromPoints(points, Array("representativeType", "both")) must
+            throwAn[IllegalArgumentException](message = "must be cycles or cocycles")
+        )
+    }
+
+    "mask a NaN pixel under every engine, in either direction; an Inf pixel is an ordinary extreme" in {
+      val engines = List("fast-cubical", "cohomology", "chunks", "naive")
+      // A ring around a missing pixel: the hole is never filled, so the loop never dies, sublevel or superlevel. A
+      // superlevel image's values are negated, so there -Inf never enters too, and +Inf is the brightest value, which
+      // enters first and leaves no loop.
+      val inf = Double.PositiveInfinity
+      def ring(centre: Double) = Array(Array(1.0, 1.0, 1.0), Array(1.0, centre, 1.0), Array(1.0, 1.0, 1.0))
+      def bars(centre: Double, options: String*) = engines.map { engine =>
+        engine -> triples(
+          FullBarcode.computeFromImage(ring(centre), Array("engine", engine) ++ options).toArray()
+        ).sorted
+      }
+      (bars(Double.NaN) must beEqualTo(engines.map(_ -> List((0, 1.0, inf), (1, 1.0, inf))))) and
+        (bars(Double.NaN, "sublevel", "false") must beEqualTo(
+          engines.map(_ -> List((0, -1.0, inf), (1, -1.0, inf)))
+        )) and
+        (bars(inf) must beEqualTo(engines.map(_ -> List((0, 1.0, inf), (1, 1.0, inf))))) and
+        (bars(-inf, "sublevel", "false") must beEqualTo(engines.map(_ -> List((0, -1.0, inf), (1, -1.0, inf))))) and
+        (bars(inf, "sublevel", "false") must beEqualTo(engines.map(_ -> List((0, -inf, inf)))))
+    }
+
+    "refuse an image with a NaN pixel under every engine with nanMask false, naming it" in {
+      val engines = List("fast-cubical", "cohomology", "chunks", "naive")
+      val withNaN = Array(Array(0.0, 1.0, Double.NaN), Array(2.0, 3.0, 4.0))
+      val refusedBy = engines.filter { engine =>
+        scala.util
+          .Try(TDA4j.computeFromImage(withNaN, Array("engine", engine, "nanMask", "false")))
+          .failed
+          .toOption
+          .exists {
+            case e: IllegalArgumentException =>
+              e.getMessage.contains("NaN value at pixel (0, 2)") && e.getMessage.contains("nanMask")
+            case _ => false
+          }
+      }
+      (refusedBy must beEqualTo(engines)) and
+        (TDA4j.computeFromImage(withNaN, Array("nanMask", "true")).size() must beEqualTo(
+          TDA4j.computeFromImage(withNaN).size()
+        )) and
+        (TDA4j.computeFromImage(withNaN, Array("nanMask", "maybe")) must throwAn[IllegalArgumentException](
+          message = "nanMask"
+        ))
+    }
+
     "have representative chains readable for every bar, with matching vertex/coefficient array lengths" in {
       val result = FullBarcode.computeFromPoints(points, Array("engine", "cohomology"))
       result.size() must be_>(0)
@@ -137,14 +232,14 @@ class TDA4jSpec extends mutable.Specification:
   }
 
   "complex=vr with edgeCollapse=true, through the facade" should {
-    // The real oracle (streams.EdgeCollapse's own worklog): edge collapse preserves persistent homology exactly,
+    // The real oracle (EdgeCollapse's own worklog): edge collapse preserves persistent homology exactly,
     // so the collapsed complex's own barcode must match plain complex=vr's, bar for bar -- not just "doesn't
     // throw." A dropped edgeCollapse option, or one silently ignored inside computeGeneric, would still pass
     // every other test in this file (nothing else here ever asks for it) but would fail this one immediately if
     // it somehow changed the answer -- it should NOT change the answer at all, only how it's computed.
     "agree exactly with edgeCollapse=false (the default), across every engine" in {
       // Zero-persistence (birth == death) bars are dropped before comparing: edge collapse specifically
-      // eliminates exactly this kind of momentary flicker (see streams.EdgeCollapse's own worklog), so the
+      // eliminates exactly this kind of momentary flicker (see EdgeCollapse's own worklog), so the
       // uncollapsed baseline can have MORE of them while still agreeing with the collapsed result on every bar
       // that represents a genuine feature -- the same filter EdgeCollapseStreamSpec's own barcode comparisons
       // already need, for the identical reason.
@@ -217,6 +312,24 @@ class TDA4jSpec extends mutable.Specification:
       agree must beTrue
     }
 
+    "alphaBackend=bowyer-watson, with engine=cohomology or engine=fast-alpha, gives Helix's bars" in {
+      def bars(opts: String*) =
+        triples(FullBarcode.computeFromPoints(points, Array("complex", "alpha") ++ opts).toArray())
+          .sortBy(t => (t._1, t._2, t._3))
+      val helix = bars("alphaBackend", "helix", "engine", "cohomology")
+      val results = Seq(
+        bars("alphaBackend", "bowyer-watson", "engine", "cohomology"),
+        bars("alphaBackend", "bowyer-watson", "engine", "fast-alpha"),
+        bars("engine", "fast-alpha")
+      )
+      results.forall { r =>
+        r.length == helix.length && r.zip(helix).forall { case ((d1, b1, e1), (d2, b2, e2)) =>
+          d1 == d2 && math.abs(b1 - b2) < 1e-9 && (e1.isInfinite == e2.isInfinite) &&
+          (e1.isInfinite || math.abs(e1 - e2) < 1e-9)
+        }
+      } must beTrue
+    }
+
     "reject engine=fast-alpha combined with alphaBackend=DQP" in {
       FullBarcode.computeFromPoints(
         points,
@@ -257,35 +370,58 @@ class TDA4jSpec extends mutable.Specification:
       agree must beTrue
     }
 
-    "engine=fast-alpha's own triangulation-limitation exception, on a real (pinned) failing point set, has a " +
-      "message an unsuspecting MATLAB/CLI caller can act on -- not swallowed or replaced by the facade" in {
-        // Same 12-point set FastAlphaHomologySpec pins as a deterministic facet-multiplicity-violation regression
-        // (found by a targeted search, not relied on a seed to rediscover) -- verifies the exception propagates
-        // through the MATLAB dispatch layer completely unchanged, own message and all, rather than being
-        // swallowed or replaced by a less specific one along the way.
-        val degeneratePoints = Array(
-          Array(0.25695462472920483, 0.05056259919533401),
-          Array(0.16861543461245865, 0.6584119575973783),
-          Array(0.04467548898740192, 0.34594140416504626),
-          Array(0.4001206924759393, 0.7492099413470164),
-          Array(0.9883782492738798, 0.31376350981292744),
-          Array(0.9160887469534176, 0.952687093337434),
-          Array(0.19808274564375272, 0.2756763438426806),
-          Array(0.6337671470530175, 0.4977740447848821),
-          Array(0.6906131750679769, 0.9538206186545584),
-          Array(0.4693304070850357, 0.4362857418234436),
-          Array(0.5483329515783447, 0.7788827446454716),
-          Array(0.8916378524720998, 0.4724706741593929)
-        )
-        try
-          FullBarcode.computeFromPoints(degeneratePoints, Array("complex", "alpha", "engine", "fast-alpha"))
-          ko("expected FastAlphaTriangulationException to propagate through the facade, but nothing was thrown")
-        catch
-          case e: FastAlphaTriangulationException =>
-            (e.getMessage must contain("NOT an error in your data")) and
-              (e.getMessage must contain("TO GET YOUR RESULT")) and
-              (e.getMessage must contain("\"naive\""))
-      }
+    "engine=fast-alpha on an exact 4x4x4 grid (cospherical cubes) agrees with engine=naive" in {
+      // fast-alpha needs a valid triangulation (it throws otherwise); the facade's default epsilon is AlphaShapes' own.
+      val grid =
+        (for i <- 0 until 4; j <- 0 until 4; k <- 0 until 4 yield Array(i.toDouble, j.toDouble, k.toDouble)).toArray
+      def nonTrivial(opts: Array[String]) =
+        triples(FullBarcode.computeFromPoints(grid, opts).toArray())
+          .filter(t => t._3 - t._2 > 1e-9)
+          .sortBy(t => (t._1, t._2, t._3))
+      val naive = nonTrivial(Array("complex", "alpha"))
+      val fastAlpha = nonTrivial(Array("complex", "alpha", "engine", "fast-alpha"))
+      (naive.length must be_==(fastAlpha.length)) and
+        naive
+          .zip(fastAlpha)
+          .forall { case ((d1, b1, e1), (d2, b2, e2)) =>
+            d1 == d2 && math
+              .abs(b1 - b2) < 1e-9 && (e1.isInfinite == e2.isInfinite) && (e1.isInfinite || math.abs(e1 - e2) < 1e-9)
+          }
+          .must(beTrue)
+    }
+
+    "engine=fast-alpha computes the point set whose triangulation once broke it, and agrees with engine=naive" in {
+      // The 12-point set FastAlphaHomologySpec pins: Helix's earlier candidate search gave one facet three cofaces
+      // here, and the engine threw FastAlphaTriangulationException. The facade has no catch on this path; the
+      // exception's message is tested on the engine's own check (FastAlphaHomologySpec).
+      val degeneratePoints = Array(
+        Array(0.25695462472920483, 0.05056259919533401),
+        Array(0.16861543461245865, 0.6584119575973783),
+        Array(0.04467548898740192, 0.34594140416504626),
+        Array(0.4001206924759393, 0.7492099413470164),
+        Array(0.9883782492738798, 0.31376350981292744),
+        Array(0.9160887469534176, 0.952687093337434),
+        Array(0.19808274564375272, 0.2756763438426806),
+        Array(0.6337671470530175, 0.4977740447848821),
+        Array(0.6906131750679769, 0.9538206186545584),
+        Array(0.4693304070850357, 0.4362857418234436),
+        Array(0.5483329515783447, 0.7788827446454716),
+        Array(0.8916378524720998, 0.4724706741593929)
+      )
+      val naive = triples(FullBarcode.computeFromPoints(degeneratePoints, Array("complex", "alpha")).toArray())
+        .sortBy(t => (t._1, t._2, t._3))
+      val fastAlpha = triples(
+        FullBarcode.computeFromPoints(degeneratePoints, Array("complex", "alpha", "engine", "fast-alpha")).toArray()
+      ).sortBy(t => (t._1, t._2, t._3))
+      (naive.length must be_==(fastAlpha.length)) and
+        naive
+          .zip(fastAlpha)
+          .forall { case ((d1, b1, e1), (d2, b2, e2)) =>
+            d1 == d2 && math.abs(b1 - b2) < 1e-9 &&
+            (e1.isInfinite == e2.isInfinite) && (e1.isInfinite || math.abs(e1 - e2) < 1e-9)
+          }
+          .must(beTrue)
+    }
 
     // requireValidTriangulation (.claude/DESIGN-helix-triangulation-repair.md), threaded through the facade.
     // Reuses the SAME pinned 12-point facet-multiplicity-violation fixture as the exception test above.
@@ -485,7 +621,7 @@ class TDA4jSpec extends mutable.Specification:
   }
 
   "complex=dtm-rips, through the facade" should {
-    "match streams.DtmRipsSimplexStream/SimplicialHomologyEngine driven directly" in {
+    "match DtmRipsSimplexStream/SimplicialHomologyEngine driven directly" in {
       given Double is Field = Field.DoubleApproximated(1e-9)
       val viaFacade =
         triples(
@@ -503,7 +639,7 @@ class TDA4jSpec extends mutable.Specification:
       viaFacade must containTheSameElementsAs(direct)
     }
 
-    "works from a distance matrix too (streams.DistanceToMeasure needs no coordinates, unlike complex=cech/alpha)" in {
+    "works from a distance matrix too (DistanceToMeasure needs no coordinates, unlike complex=cech/alpha)" in {
       val viaPoints =
         triples(FullBarcode.computeFromPoints(points, Array("complex", "dtm-rips", "dtmK", "3")).toArray())
       val viaDistances = triples(
@@ -530,25 +666,32 @@ class TDA4jSpec extends mutable.Specification:
     }
   }
 
-  "complex=sheehy-rips, option validation" should {
-    "require sheehyEpsilon" in {
-      FullBarcode.computeFromPoints(points, Array("complex", "sheehy-rips")) must throwA[IllegalArgumentException]
+  "complex=sparse-rips, option validation" should {
+    "say so when the pre-0.5.0 name sheehy-rips is used" in {
+      FullBarcode.computeFromPoints(points, Array("complex", "sheehy-rips", "sparseEpsilon", "0.5")) must throwA[
+        IllegalArgumentException
+      ](
+        "renamed 'sparse-rips'"
+      )
     }
-    "reject engine=ripser combined with complex=sheehy-rips" in {
+    "require sparseEpsilon" in {
+      FullBarcode.computeFromPoints(points, Array("complex", "sparse-rips")) must throwA[IllegalArgumentException]
+    }
+    "reject engine=ripser combined with complex=sparse-rips" in {
       FullBarcode.computeFromPoints(
         points,
-        Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "engine", "ripser")
+        Array("complex", "sparse-rips", "sparseEpsilon", "0.5", "engine", "ripser")
       ) must
         throwA[IllegalArgumentException]
     }
   }
 
-  "complex=sheehy-rips, through the facade" should {
-    "match streams.SheehyRipsSimplexStream/SimplicialHomologyEngine driven directly" in {
+  "complex=sparse-rips, through the facade" should {
+    "match SheehyRipsSimplexStream/SimplicialHomologyEngine driven directly" in {
       given Double is Field = Field.DoubleApproximated(1e-9)
       val viaFacade = triples(
         FullBarcode
-          .computeFromPoints(points, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "field", "R"))
+          .computeFromPoints(points, Array("complex", "sparse-rips", "sparseEpsilon", "0.5", "field", "R"))
           .toArray()
       )
       val metricSpace = EuclideanMetricSpace(points)
@@ -565,13 +708,13 @@ class TDA4jSpec extends mutable.Specification:
     "works from a distance matrix too (SheehyRipsSimplexStream needs no coordinates, unlike complex=cech/alpha)" in {
       val viaPoints =
         triples(
-          FullBarcode.computeFromPoints(points, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5")).toArray()
+          FullBarcode.computeFromPoints(points, Array("complex", "sparse-rips", "sparseEpsilon", "0.5")).toArray()
         )
       val viaDistances = triples(
         FullBarcode
           .computeFromDistanceMatrix(
             euclideanDistanceMatrix(points),
-            Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5")
+            Array("complex", "sparse-rips", "sparseEpsilon", "0.5")
           )
           .toArray()
       )
@@ -581,11 +724,11 @@ class TDA4jSpec extends mutable.Specification:
     "default to engine=naive and agree with an explicit engine=chunks call" in {
       val naive =
         triples(
-          FullBarcode.computeFromPoints(points, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5")).toArray()
+          FullBarcode.computeFromPoints(points, Array("complex", "sparse-rips", "sparseEpsilon", "0.5")).toArray()
         )
       val chunks = triples(
         FullBarcode
-          .computeFromPoints(points, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "engine", "chunks"))
+          .computeFromPoints(points, Array("complex", "sparse-rips", "sparseEpsilon", "0.5", "engine", "chunks"))
           .toArray()
       )
       naive must containTheSameElementsAs(chunks)
@@ -593,7 +736,7 @@ class TDA4jSpec extends mutable.Specification:
 
     // The 6-point `points` fixture above almost certainly doesn't sparsify at all (SheehyRipsStreamSpec found
     // this needs either a wide scale spread or many more points) -- a dispatch bug that silently routed
-    // complex=sheehy-rips to plain VR, or dropped sheehyEpsilon entirely, could still pass every test above. The
+    // complex=sparse-rips to plain VR, or dropped sparseEpsilon entirely, could still pass every test above. The
     // three-cluster fixture (same construction, same seeds, as SheehyRipsStreamSpec's own deterministic
     // sparsification fixture -- 105 -> 26 edges at epsilon=0.5) is reused here specifically to close that gap.
     def clusterPoints: Array[Array[Double]] =
@@ -603,11 +746,11 @@ class TDA4jSpec extends mutable.Specification:
       cluster(0.0, 0.0, 1) ++ cluster(50.0, 0.0, 2) ++ cluster(25.0, 50.0, 3)
 
     "produce a genuinely different (sparser) barcode than complex=vr, on a point cloud where sparsification fires" in {
-      val sheehy = triples(
+      val sparse = triples(
         FullBarcode
           .computeFromPoints(
             clusterPoints,
-            Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "maxDimension", "1")
+            Array("complex", "sparse-rips", "sparseEpsilon", "0.5", "maxDimension", "1")
           )
           .toArray()
       )
@@ -616,21 +759,21 @@ class TDA4jSpec extends mutable.Specification:
           .computeFromPoints(clusterPoints, Array("maxFiltrationValue", "1000.0", "maxDimension", "1"))
           .toArray()
       )
-      sheehy must not(containTheSameElementsAs(vr))
+      sparse must not(containTheSameElementsAs(vr))
     }
 
     "engine=cohomology agrees with the default engine=naive, on the same sparsifying point cloud" in {
       val naive =
         triples(
           FullBarcode
-            .computeFromPoints(clusterPoints, Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5"))
+            .computeFromPoints(clusterPoints, Array("complex", "sparse-rips", "sparseEpsilon", "0.5"))
             .toArray()
         )
       val cohomology = triples(
         FullBarcode
           .computeFromPoints(
             clusterPoints,
-            Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "engine", "cohomology")
+            Array("complex", "sparse-rips", "sparseEpsilon", "0.5", "engine", "cohomology")
           )
           .toArray()
       )
@@ -639,7 +782,7 @@ class TDA4jSpec extends mutable.Specification:
   }
 
   "complex=dtm-alpha, through the facade" should {
-    "match alpha.AlphaComplexDQP.dtm driven directly, in radius (not squared-power) units" in {
+    "match AlphaComplexDQP.dtm driven directly, in radius (not squared-power) units" in {
       given Double is Field = Field.DoubleApproximated(1e-9)
       val viaFacade =
         triples(
@@ -818,7 +961,7 @@ class TDA4jSpec extends mutable.Specification:
 
   // ---------------------------------------------------------------------------------------------------------
   // complex=witness: only the facade's own conversion layer (option parsing, landmark-selector dispatch,
-  // local-to-ambient vertex remapping) -- streams.WitnessStreamSpec already cross-validates the underlying
+  // local-to-ambient vertex remapping) -- WitnessStreamSpec already cross-validates the underlying
   // construction itself (brute-force oracle, general-vs-lazy agreement, Ripser-on-lazy, downward closure).
   // ---------------------------------------------------------------------------------------------------------
 
@@ -887,7 +1030,7 @@ class TDA4jSpec extends mutable.Specification:
     }
 
     "default witnessVariant=lazy, engine=ripser: matches PackedRipserCohomologyEngine driven directly over " +
-      "streams.WitnessMetricSpace, via the SAME maxmin landmark selection" in {
+      "WitnessMetricSpace, via the SAME maxmin landmark selection" in {
         val numLandmarks = 4
         val viaFacade = triples(
           FullBarcode
@@ -982,7 +1125,17 @@ class TDA4jSpec extends mutable.Specification:
       val landmarks = LandmarkSelector.maxmin(EuclideanMetricSpace(points), numLandmarks).landmarks.toSet
       val result = FullBarcode.computeFromPoints(
         points,
-        Array("complex", "witness", "numLandmarks", numLandmarks.toString, "witnessVariant", "general")
+        // cocycles: they touch landmarks beyond the first numLandmarks point numbers, which the last check needs
+        Array(
+          "complex",
+          "witness",
+          "numLandmarks",
+          numLandmarks.toString,
+          "witnessVariant",
+          "general",
+          "representativeType",
+          "cocycles"
+        )
       )
       val vertices = (0 until result.size()).flatMap(i => result.cycleVertices(i).flatten).toSet
       (vertices.nonEmpty must beTrue) and
@@ -1065,7 +1218,8 @@ class TDA4jSpec extends mutable.Specification:
     // multiplicity), plus a direct cycleVertices check.
     "computeFromPointsAndLandmarks uses the landmarks it is GIVEN, not a freshly-selected set" in {
       val landmarks = Array(5, 2, 0)
-      val result = FullBarcode.computeFromPointsAndLandmarks(points, landmarks)
+      // cocycles: they touch landmarks beyond the first landmarks.length point numbers, which the last check needs
+      val result = FullBarcode.computeFromPointsAndLandmarks(points, landmarks, Array("representativeType", "cocycles"))
       val viaFacade = triples(result.toArray()).sorted
 
       val ff = new FiniteField(2)
@@ -1193,7 +1347,7 @@ class TDA4jSpec extends mutable.Specification:
   // ---------------------------------------------------------------------------------------------------------
   // computeFromRelation (Dowker complex) -- conversion-layer checks only, per this file's own stated purpose:
   // the underlying construction's own correctness (duality, monotonicity, the keptByThresholdAndCriterion
-  // infinity fix) is already cross-validated in streams.DowkerStreamSpec. A rectangular (numLeft != numWitnesses)
+  // infinity fix) is already cross-validated in DowkerStreamSpec. A rectangular (numLeft != numWitnesses)
   // relation is used deliberately, the same shape DowkerStreamSpec's own duality property test needed to expose
   // a real bug during development -- see .claude/WORKLOG-dowker-complex.md.
   // ---------------------------------------------------------------------------------------------------------
@@ -1205,7 +1359,7 @@ class TDA4jSpec extends mutable.Specification:
   )
 
   "TDA4j.computeFromRelation" should {
-    "default to engine=naive and match streams.DowkerCofaceSimplexStream driven directly" in {
+    "default to engine=naive and match DowkerCofaceSimplexStream driven directly" in {
       given Double is Field = Field.DoubleApproximated(1e-9)
       val direct = SimplicialHomologyEngine[Int, Double, Double]()
         .persistentHomology(DowkerCofaceSimplexStream(dowkerRelation))
@@ -1237,7 +1391,7 @@ class TDA4jSpec extends mutable.Specification:
       FullBarcode.computeFromRelation(dowkerRelation, Array("complex", "vr")) must throwA[IllegalArgumentException]
     }
 
-    "dual=true matches streams.DowkerCofaceSimplexStream(...).dual driven directly -- the functorial Dowker " +
+    "dual=true matches DowkerCofaceSimplexStream(...).dual driven directly -- the functorial Dowker " +
       "duality theorem, exercised through the facade" in {
         given Double is Field = Field.DoubleApproximated(1e-9)
         val direct = SimplicialHomologyEngine[Int, Double, Double]()

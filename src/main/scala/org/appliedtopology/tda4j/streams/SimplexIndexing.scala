@@ -1,22 +1,13 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
 
 import org.apache.commons.numbers.combinatorics
 
 import scala.annotation.tailrec
 
-class SimplexIndexing(val vertexCount: Int):
+open class SimplexIndexing(val vertexCount: Int):
 
-  /** Lazily-memoized `binomial(d + s, s)`, indexed by `d`-row/`s`-column `Array`s rather than an eagerly-computed full
-    * `(vertexCount+1) x (vertexCount+1)` table or a `Map[(Int, Int), Long]`. Eager: `d` is always bounded by the
-    * SIMPLEX SIZE being encoded/decoded (small), never by `vertexCount` itself, so filling every row out to
-    * `d = vertexCount` wastes work on astronomically large, never-read, potentially-overflowing entries (see
-    * `binomial`'s own doc). Map-keyed: a `(d, s)` tuple key boxes on every lookup, including cache hits. Rows grow
-    * lazily up to the largest `d` a real call reaches; `-1L` is the "not yet computed" sentinel (every real `binomial`
-    * result is `>= 0`, so it can never collide with one).
+  /** Memoized `binomial(d + s, s)` by row `d`, filled on demand: `d` is bounded by the size of a simplex, so rows stay
+    * short. `-1L` marks an entry not yet computed.
     */
   private var binomialRows: Array[Array[Long]] = Array.empty
   private def binomialEntry(d: Int, s: Int): Long =
@@ -29,14 +20,8 @@ class SimplexIndexing(val vertexCount: Int):
     if row(s) == -1L then row(s) = SimplexIndexing.binomial(d + s, s)
     row(s)
 
-  /** A SEPARATE lazily-memoized cache for `CofacetCursor`/`FacetCursor`'s own `binomial(n, k)` calls -- NOT a reuse of
-    * `binomialEntry` above via the `binomial(n, k) = binomialEntry(n - k, k)` reindexing, even though that identity
-    * holds: `binomialEntry`'s row axis (`d`) is only safe to grow lazily because every OTHER caller bounds `d` by
-    * simplex size (small); `CofacetCursor`/`FacetCursor` call `binomial(j, k)` with `j` a vertex id ranging up to
-    * `vertexCount - 1`, and reindexing that through `binomialEntry` would make ITS row axis scale with `vertexCount`
-    * instead, reintroducing the same unbounded-row-growth problem `binomialEntry`'s own doc describes. Here the roles
-    * are kept the right way round: `k` (bounded by simplex size) is the row index, `n` (bounded by `vertexCount`) is
-    * the column.
+  /** Memoized `binomial(n, k)` with the small `k` (at most the size of a simplex) as the row and `n` (a vertex) as the
+    * column, for [[CofacetCursor]], [[FacetCursor]] and `apply`.
     */
   private var binomialChooseRows: Array[Array[Long]] = Array.empty
   private def binomialChoose(n: Int, k: Int): Long =
@@ -51,13 +36,8 @@ class SimplexIndexing(val vertexCount: Int):
       if row(n) == -1L then row(n) = SimplexIndexing.binomial(n, k)
       row(n)
 
-  /** Binary search for the largest `s` in `[0, vertexCount]` with `binomialEntry(d, s) <= n` -- the same "`Found` or
-    * `insertionPoint - 1`" result `scala.collection.Searching.search` used to give against the (now-removed)
-    * eagerly-materialized table row, computed instead against the lazily-memoized entries above so the search never
-    * forces evaluation of the wasteful, potentially-overflowing high-`s` region the eager table used to build
-    * unconditionally. `binomialEntry(d, ·)` is strictly increasing in `s` for `d >= 0` (the standard
-    * combinatorial-number-system property this class's whole encode/decode relies on), so ordinary binary search
-    * applies.
+  /** The largest `s` in `[0, vertexCount]` with `binomialEntry(d, s) <= n`, by binary search (the entries increase in
+    * `s`), computing only the entries it visits.
     */
   private def searchRow(d: Int, n: Long): Int =
     var lo = 0
@@ -67,15 +47,8 @@ class SimplexIndexing(val vertexCount: Int):
       if binomialEntry(d, mid) <= n then lo = mid else hi = mid - 1
     lo
 
-  /** Uses the binomial numbering system to generate the `n`th simplex of dimension `d-1`, that is the `n`th subset of
-    * size `d` of the vertices.
-    *
-    * If `n` is greater than (`vertexCount` choose `d`) the result will not be a subset of size `d`.
-    *
-    * `n` is `Long`, not `Int` -- see `binomial`'s own doc: a combinatorial index can be astronomically larger than
-    * `vertexCount`/`d` themselves. The `d == 0` base case converts back to `Int` via `.toInt` safely: by this
-    * algorithm's own invariant, the residual `n` at `d == 0` is always a single vertex id, never a combinatorial index
-    * anymore.
+  /** The `n`th subset of size `d` of the vertices (a `(d-1)`-simplex) in the combinatorial number system. For `n`
+    * beyond `vertexCount` choose `d` the result is not a subset of size `d`.
     */
   @tailrec
   final def apply(n: Long, d: Int, upperAccum: Simplex[Int] = ∆()): Simplex[Int] =
@@ -145,20 +118,10 @@ class SimplexIndexing(val vertexCount: Int):
   ): Iterator[Long] =
     cofacetIteratorWithVertex(index, size, allCofacets).map((_, idx) => idx)
 
-  /** A `hasNext`/`vertex`/`index`/`advance()` cursor over `sigma`'s cofacets, factored out of what
-    * `cofacetIteratorWithVertex` used to do directly as a hand-rolled `Iterator[(Int, Long)]`, so a caller can read
-    * `vertex`/`index` as plain field accesses with zero per-step allocation -- not even the `(Int, Long)` tuple an
-    * `Iterator[(Int, Long)]` contract forces on every `next()` call. `hasNext`/`advance()` are deliberately split from
-    * a single `next()`: `vertex`/`index` stay valid to re-read as many times as a caller wants between one `advance()`
-    * and the next (both `PackedRipserCohomology.scala`'s `coboundaryOf` and `Homology.scala` read both fields off one
-    * candidate before advancing).
-    *
-    * Decodes `sigma` via `decodeToArray` (a plain sorted `Array[Int]`, binary-searched for membership), not `apply` (a
-    * `Simplex[Int]`/`SortedSet[Int]`, `O(log d)` tree lookup per membership check) -- the same array-over-tree
-    * substitution `decodeToArray`'s own doc motivates, folded in here since this cursor replaces
-    * `cofacetIteratorWithVertex`'s body outright rather than wrapping it.
+  /** A cursor over the cofacets of a simplex that allocates nothing per step: read `vertex` (the added vertex) and
+    * `index` (the cofacet's index) as often as needed, then `advance()`.
     */
-  final class CofacetCursor(startIndex: Long, size: Int, allCofacets: Boolean):
+  class CofacetCursor(startIndex: Long, size: Int, allCofacets: Boolean):
     private val vertices: Array[Int] = decodeToArray(startIndex, size)
     private var iB: Long = startIndex
     private var iA: Long = 0L
@@ -209,6 +172,91 @@ class SimplexIndexing(val vertexCount: Int):
   def cofacetCursor(index: Long, size: Int, allCofacets: Boolean = true): CofacetCursor =
     new CofacetCursor(index, size, allCofacets)
 
+  /** The cofacets of a simplex whose added vertex is a neighbour of every one of its vertices: the same cofacets, in
+    * the same order (vertex, and so index, strictly decreasing) and with the same indices as `CofacetCursor`, but found
+    * by intersecting the vertices' neighbour lists instead of trying every vertex. `maxDistance` is the largest
+    * distance from the added vertex to the simplex's vertices, read from the lists; `position` is the number of the
+    * simplex's vertices below the added one.
+    */
+  class SparseCofacetCursor(
+    startIndex: Long,
+    vertices: Array[Int],
+    allCofacets: Boolean,
+    lists: NeighbourLists
+  ):
+    private val size = vertices.length
+    // One pointer per vertex into its neighbour list, from the largest neighbour down.
+    private val pointers: Array[Int] = Array.tabulate(size)(a => lists.offsets(vertices(a) + 1) - 1)
+    private var iB: Long = startIndex
+    private var iA: Long = 0L
+    private var k: Int = size
+    private var above: Int = size - 1 // the largest vertex of the simplex not yet passed
+    private var _vertex: Int = -1
+    private var _index: Long = -1L
+    private var _maxDistance: Double = 0.0
+    private var havePending: Boolean = false
+    private var done: Boolean = size == 0
+
+    private def step(): Unit =
+      havePending = false
+      while !havePending && !done do
+        // The candidate: the current entry of the first vertex's list.
+        val p0 = pointers(0)
+        if p0 < lists.offsets(vertices(0)) then done = true
+        else
+          var candidate = lists.targets(p0)
+          if !allCofacets && candidate < vertices(size - 1) then done = true
+          else
+            // Move every other list down to the candidate; a list whose next entry is below it rules it out, and
+            // the largest such entry becomes the next candidate to try.
+            var common = true
+            var a = 1
+            while a < size && !done do
+              val start = lists.offsets(vertices(a))
+              var p = pointers(a)
+              while p >= start && lists.targets(p) > candidate do p -= 1
+              pointers(a) = p
+              if p < start then done = true
+              else if lists.targets(p) < candidate then common = false
+              a += 1
+            if !done then
+              if common then
+                var maxD = lists.distances(p0)
+                a = 1
+                while a < size do
+                  val d = lists.distances(pointers(a))
+                  if d > maxD then maxD = d
+                  a += 1
+                // Pass the simplex's vertices above the candidate, exactly as CofacetCursor does.
+                while above >= 0 && vertices(above) > candidate do
+                  val j = vertices(above)
+                  iB -= binomialChoose(j, k)
+                  iA += binomialChoose(j, k + 1)
+                  k -= 1
+                  above -= 1
+                _vertex = candidate
+                _index = iB + binomialChoose(candidate, k + 1) + iA
+                _maxDistance = maxD
+                havePending = true
+              pointers(0) = p0 - 1
+
+    step()
+
+    def hasNext: Boolean = havePending
+    def vertex: Int = _vertex
+    def index: Long = _index
+    def maxDistance: Double = _maxDistance
+    def position: Int = k
+    def advance(): Unit = step()
+
+  def sparseCofacetCursor(
+    index: Long,
+    vertices: Array[Int],
+    allCofacets: Boolean,
+    lists: NeighbourLists
+  ): SparseCofacetCursor =
+    new SparseCofacetCursor(index, vertices, allCofacets, lists)
+
   /** Same enumeration as `cofacetIterator`, but also yields the INSERTED vertex alongside each cofacet index -- needed
     * by a packed (index-only) reduction that has no materialized `Simplex[Int]` to recover it from afterward
     * (`(tau.underlying diff sigma.underlying).head`, `coboundaryOf`'s own approach, requires decoding `tau`). Now a
@@ -236,7 +284,7 @@ class SimplexIndexing(val vertexCount: Int):
     * `apply(...).toSeq.sorted` (a `Simplex[Int]` decode followed by a redundant re-sort of an already-sorted
     * `SortedSet`).
     */
-  final class FacetCursor(startIndex: Long, size: Int):
+  class FacetCursor(startIndex: Long, size: Int):
     private val vertices: Array[Int] = decodeToArray(startIndex, size)
     private var iB: Long = startIndex
     private var iA: Long = 0L
@@ -281,20 +329,7 @@ class SimplexIndexing(val vertexCount: Int):
         cur.advance()
         result
 
-  /** Hand-rolled `while` loop, not `simplex.toSeq.sorted.reverse.zipWithIndex.map(...).sum` -- five separate allocating
-    * collection stages (a fresh `Seq`, a sort, a reverse, a `zipWithIndex` pairing, a `map`) for what's structurally a
-    * single left-to-right reduction over an already-sorted set. `simplex.underlying` is already a `SortedSet[Int]` in
-    * ascending order, so `.toArray` gives the same vertices with zero re-sort, walked from the END (descending,
-    * matching the combinatorial-number-system convention every other encode/decode in this file uses). Also switched to
-    * the CACHED `binomialChoose(n, k)` (private, same class) instead of the free-standing `binomial`: this method's own
-    * access pattern -- `k` (the rank, `1..size`) small and bounded by simplex size, `n` (the vertex value) large and
-    * bounded by `vertexCount` -- is exactly what `binomialChoose`'s row/column layout was built for (see its own doc,
-    * added for `CofacetCursor`/`FacetCursor`'s stepping). Found via the `o3_1024` compute-server JFR profile on
-    * `RipserCohomologyEngine` (`.claude/WORKLOG-ripser-profiling.md`): this chain (this method is the ONLY caller of
-    * the encode direction from any per-simplex hot path) accounted for roughly 41% of that engine's remaining CPU time
-    * once the metric-space cache and the apparent-pairs early-exit fix cleared away what had been dominating before,
-    * with the un-cached `binomial`'s own `BinomialCoefficient`/`gcd` cost adding another ~18%.
-    */
+  /** The index of `simplex` in the combinatorial number system. */
   def apply(simplex: Simplex[Int]): Long =
     val vertices = simplex.underlying.toArray
     val size = vertices.length
@@ -306,20 +341,8 @@ class SimplexIndexing(val vertexCount: Int):
     acc
 
 object SimplexIndexing:
-  /** Returns `Long`, not `Int`: a combinatorial index can be astronomically larger than `n`/`k` themselves, and
-    * silently truncating it is a real bug, not a contrived edge case -- e.g. `C(229,5) = 5,022,337,545` truncates to
-    * `727,370,249` via `Int`, well within a realistic point-cloud size. `Long` matches `ripser.cpp`'s own
-    * `int64_t`/`long long` for this exact purpose and is dramatically cheaper than `BigInt`, which matters since this
-    * backs `Ordering[Simplex[Int]]`'s comparator, consulted on every `SortedMap`/`PriorityQueue` operation during
-    * reduction. `Long` is not infinite either, so this still asserts on overflow rather than repeating the same class
-    * of bug one order of magnitude further out.
-    *
-    * Delegates to `commons.numbers.combinatorics.BinomialCoefficient.value`, a `long`-only, GCD-guarded-for-large-`n`
-    * algorithm. `n < 0 || k < 0 || n < k` are special-cased to `0` BEFORE delegating: `BinomialCoefficient.value`
-    * throws `IllegalArgumentException` for those inputs instead, which would be a real behavior change for callers
-    * relying on the old "returns 0 outside the valid range" contract (`cofacetIteratorWithVertex`'s own `iA`/`iB`
-    * bookkeeping does hit `k > n`-shaped calls at the boundary of its sweep). Overflow (`ArithmeticException`) is
-    * caught and re-thrown as the same `IllegalArgumentException`-with-message shape `require` used to produce.
+  /** `n` choose `k` as a `Long` (an index can exceed `Int` long before `n` does: `C(229, 5) > 5·10⁹`), `0` when
+    * `k < 0`, `n < 0` or `k > n`. Throws `IllegalArgumentException` on `Long` overflow.
     */
   def binomial(n: Int, k: Int): Long =
     if k < 0 || n < 0 || n < k then 0L
@@ -331,3 +354,73 @@ object SimplexIndexing:
             s"binomial($n, $k) overflows Long -- this complex is too large to index",
             e
           )
+
+/** Each vertex's neighbours within a threshold, ascending, with their distances, in compressed rows: vertex `v`'s are
+  * `targets(offsets(v) until offsets(v + 1))`. Built by [[NeighbourLists.within]].
+  */
+open class NeighbourLists(
+  val offsets: Array[Int],
+  val targets: Array[Int],
+  val distances: Array[Double]
+):
+  def entryCount: Int = targets.length
+
+object NeighbourLists:
+  /** The pairs at distance at most `threshold`, each distance computed once (as `distance(i, j)`, `i < j`) and stored
+    * for both vertices. `None` when there are more than `maxEntries` directed pairs (capped at `Int.MaxValue`): the
+    * lists would not be sparse, or would not fit in arrays.
+    */
+  def within(n: Int, threshold: Double, maxEntries: Long)(distance: (Int, Int) => Double): Option[NeighbourLists] =
+    val limit = math.min(maxEntries, Int.MaxValue.toLong - 8)
+    // One pass over the pairs, i < j ascending, collecting the close ones with their distance.
+    var lo = new Array[Int](1024)
+    var hi = new Array[Int](1024)
+    var ds = new Array[Double](1024)
+    var pairs = 0
+    val counts = new Array[Int](n)
+    var tooMany = false
+    var i = 0
+    while i < n && !tooMany do
+      var j = i + 1
+      while j < n && !tooMany do
+        val d = distance(i, j)
+        if d <= threshold then
+          if 2L * (pairs + 1) > limit then tooMany = true
+          else
+            if pairs == lo.length then
+              val grown = math.min(lo.length.toLong * 2, Int.MaxValue.toLong - 8).toInt
+              lo = java.util.Arrays.copyOf(lo, grown)
+              hi = java.util.Arrays.copyOf(hi, grown)
+              ds = java.util.Arrays.copyOf(ds, grown)
+            lo(pairs) = i
+            hi(pairs) = j
+            ds(pairs) = d
+            pairs += 1
+            counts(i) += 1
+            counts(j) += 1
+        j += 1
+      i += 1
+    if tooMany then None
+    else
+      val offsets = new Array[Int](n + 1)
+      i = 0
+      while i < n do
+        offsets(i + 1) = offsets(i) + counts(i)
+        i += 1
+      val targets = new Array[Int](2 * pairs)
+      val distances = new Array[Double](2 * pairs)
+      val fill = java.util.Arrays.copyOf(offsets, n)
+      // Pairs come in increasing (i, j): vertex u receives first the i < u (as the larger end, i increasing), then the
+      // j > u (as the smaller end, j increasing), so every list comes out ascending.
+      var k = 0
+      while k < pairs do
+        val a = lo(k)
+        val b = hi(k)
+        targets(fill(a)) = b
+        distances(fill(a)) = ds(k)
+        fill(a) += 1
+        targets(fill(b)) = a
+        distances(fill(b)) = ds(k)
+        fill(b) += 1
+        k += 1
+      Some(NeighbourLists(offsets, targets, distances))

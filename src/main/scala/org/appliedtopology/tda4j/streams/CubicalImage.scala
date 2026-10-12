@@ -1,27 +1,18 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
 
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
 
-/** Converting greyscale images and dense voxel grids into `CubicalGridStream`s. Every constructor here reduces to
-  * `fromFlatArray`: a dense n-dimensional grid from a flat, row-major array of values plus an explicit `shape`.
+/** Cubical complexes of images and voxel grids. Every array constructor reduces to [[fromFlatArray]]: values in
+  * row-major order (last axis fastest) and a `shape`.
   *
-  * `sublevel = true` (the default, matching GUDHI/DIPHA/Perseus's own convention) treats pixel intensity directly as
-  * filtration value -- ascending intensity = later in the filtration. `sublevel = false` negates every value before
-  * handing it to `CubicalGridStream` -- the standard "sublevel of `-f` is superlevel of `f`, reparametrized" trick (see
-  * `CubicalStream.scala`'s own doc for why `CubicalGridStream` itself deliberately carries no direction flag). Reported
-  * birth/death values under `sublevel = false` are then in NEGATED-intensity units, not raw `0..255` -- documented,
-  * expected behavior of this trick, not a bug to "fix" by flipping signs back.
-  *
-  * No image-I/O dependency is added for voxel (3D+) data -- there is no single standard JDK-readable volumetric format,
-  * so voxel constructors here take an already-in-memory array; callers with a specific file format (NRRD, NIfTI, a raw
-  * slice stack, ...) are expected to load it into an array upstream, with whatever library that needs, and hand the
-  * result to `fromFlatArray`/`fromVoxelGrid3D` directly.
+  * `sublevel = true` (the default, as in GUDHI, DIPHA and Perseus) filters by the values; `sublevel = false` by the
+  * negated values, so bars of a superlevel filtration are reported in negated units. Voxel data of any file format is
+  * loaded into an array first. A pixel of value `Double.NaN` is masked (missing data): it is not in the complex, in a
+  * sublevel and a superlevel image alike (NaN has no sign). Infinite values are ordinary values: `+Infinity` enters
+  * after every finite value in a sublevel image, and before them in a superlevel one (negated to `-Infinity`). Every
+  * array constructor takes `nanMask = false` to turn masks off: a NaN pixel is then an error, naming the pixel.
   */
 object CubicalImage:
 
@@ -47,37 +38,54 @@ object CubicalImage:
     // Threaded straight through to CubicalGridStream's own constructor parameter of the same name -- see
     // its doc there. Safe with every value closure built in this object (all read only immutable captured
     // data), so this is the one place a caller of these convenience constructors can actually reach it.
-    parallelFiltrationValue: Boolean = false
+    parallelFiltrationValue: Boolean = false,
+    nanMask: Boolean = true
   ): CubicalGridStream =
     require(
       flatValues.length == shape.product,
       s"flatValues has ${flatValues.length} entries, expected ${shape.product} for shape $shape"
     )
     val sign = if sublevel then 1.0 else -1.0
-    // Row-major strides: shape.scanRight(1)(_*_) = (n0*n1*...*n_{k-1}, n1*...*n_{k-1}, ..., n_{k-1}, 1); dropping
-    // the first entry (the total size, not a per-axis stride) leaves exactly one stride per axis.
-    val strides: IndexedSeq[Int] = shape.scanRight(1)(_ * _).tail
-    val values: IndexedSeq[Int] => Double = idx =>
-      val flat = idx.zip(strides).map { case (i, s) => i * s }.sum
-      sign * flatValues(flat)
-    CubicalGridStream(shape, values, parallelFiltrationValue)
+    // One flat copy, read by the engines as an array (a closure call per pixel cost more than the union-finds).
+    val pixels = new Array[Double](flatValues.length)
+    flatValues match
+      case a: scala.collection.immutable.ArraySeq.ofDouble =>
+        val source = a.unsafeArray
+        var i = 0
+        while i < source.length do
+          pixels(i) = sign * source(i)
+          i += 1
+      case _ =>
+        var i = 0
+        while i < pixels.length do
+          pixels(i) = sign * flatValues(i)
+          i += 1
+    FlatCubicalGridStream(shape, pixels, parallelFiltrationValue, nanMask)
 
   /** `pixels(i)(j)` as a dense 2D grid, shape `(pixels.length, pixels(0).length)`. */
   def fromGrayscale2D(
     pixels: Array[Array[Double]],
     sublevel: Boolean = true,
-    parallelFiltrationValue: Boolean = false
+    parallelFiltrationValue: Boolean = false,
+    nanMask: Boolean = true
   ): CubicalGridStream =
     require(pixels.nonEmpty, "pixels must be non-empty")
     val cols = pixels(0).length
     require(pixels.forall(_.length == cols), "every row of pixels must have the same length")
-    fromFlatArray(IndexedSeq(pixels.length, cols), pixels.flatten.toIndexedSeq, sublevel, parallelFiltrationValue)
+    fromFlatArray(
+      IndexedSeq(pixels.length, cols),
+      pixels.flatten.toIndexedSeq,
+      sublevel,
+      parallelFiltrationValue,
+      nanMask
+    )
 
   /** `voxels(i)(j)(k)` as a dense 3D grid, shape `(voxels.length, voxels(0).length, voxels(0)(0).length)`. */
   def fromVoxelGrid3D(
     voxels: Array[Array[Array[Double]]],
     sublevel: Boolean = true,
-    parallelFiltrationValue: Boolean = false
+    parallelFiltrationValue: Boolean = false,
+    nanMask: Boolean = true
   ): CubicalGridStream =
     require(voxels.nonEmpty, "voxels must be non-empty")
     require(voxels(0).nonEmpty, "voxels(0) must be non-empty")
@@ -91,7 +99,8 @@ object CubicalImage:
       IndexedSeq(voxels.length, d1, d2),
       voxels.flatten.flatten.toIndexedSeq,
       sublevel,
-      parallelFiltrationValue
+      parallelFiltrationValue,
+      nanMask
     )
 
   /** `img.getRGB(x, y)` grayscale (luma) values as a dense grid, shape `(width, height)` -- axis 0 is the image's own

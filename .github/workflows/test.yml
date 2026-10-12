@@ -7,15 +7,28 @@ on:
   pull_request:
     branches:
       - scala
+  workflow_dispatch:
 
+permissions:
+  contents: read
+
+# A new push to a pull request cancels that PR's still-running checks; a push to `scala` itself is never cancelled,
+# so every commit on `scala` keeps a complete result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Three independent jobs (they run in parallel, and each shows up as its own check on a pull request): `test`, `docs-build`
+# (named to differ from the deploying job `docs` in docs.yml) and `mima`. A branch rule for `scala` can require any of them by job name.
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
       - name: Setup JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
@@ -23,5 +36,55 @@ jobs:
         uses: sbt/setup-sbt@v1
       - name: Run tests
         run: sbt "clean ; test"
+      # The fat jar is what the CLI and MATLAB users run; release.yml builds it, so a break (a merge strategy, a missing
+      # main class) would otherwise surface only at release. The smoke run checks the answer, not just the exit code:
+      # the noisy circle has exactly one degree-1 bar.
+      - name: Build the fat jar
+        run: sbt assembly
+      - name: Smoke-test the fat jar
+        run: |
+          jar=$(ls target/out/jvm/scala-*/tda4j/tda4j-*-assembly.jar)
+          java -jar "$jar" --help > /dev/null
+          bars=$(java -jar "$jar" --max-dimension 1 _docs/tutorials/data/noisy-circle.csv | grep -c '^1:')
+          test "$bars" = 1 || { echo "expected one degree-1 bar on the noisy circle, got $bars"; exit 1; }
+
+  # Compiles every Scala fence in `_docs`. The tutorial specs run the same fences inside `test`; this job is what catches a
+  # broken fence in a page that has no spec, and a broken site build.
+  docs-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Setup JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup sbt launcher
+        uses: sbt/setup-sbt@v1
+      - name: Build docs
+        env:
+          TDA4J_SCALA_VERSION: "3.8.4" # docs only; see build.sbt. TODO: remove when 3.9.1 is released.
+        run: sbt doc
+
+  # Binary compatibility is enforced within a compatibility series (0.5.x, later 1.x) and never across one; `build.sbt`
+  # (`mimaBaselineVersions`) derives the baseline from the `v*` git tags, so this job needs the full history and tags.
+  # While only 0.5.0-SNAPSHOT exists the baseline is empty and the job passes trivially.
+  mima:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the MiMa baseline is read from git tags
+      - name: Setup JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup sbt launcher
+        uses: sbt/setup-sbt@v1
       - name: Binary Compatibility Checks
         run: sbt mimaReportBinaryIssues

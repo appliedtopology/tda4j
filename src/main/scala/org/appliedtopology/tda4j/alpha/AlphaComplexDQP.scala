@@ -1,10 +1,4 @@
 package org.appliedtopology.tda4j
-package alpha
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
 
 import scala.collection.immutable.ArraySeq
 import scala.collection.mutable
@@ -78,14 +72,11 @@ import scala.collection.parallel.CollectionConverters.*
  * ===========================================================================
  */
 
-/** Thrown when the inner QP fails to converge. In practice this means a genuinely near-degenerate configuration (see
-  * the `rankTolerance` doc on `AlphaDQPSettings` and `WORKLOG.md` at the repo root for the full derivation) -- not
-  * simply "too tight a tolerance", since no fixed tolerance safely eliminates every such case. Loosening
-  * `AlphaDQPSettings` may help but isn't guaranteed to; `AlphaComplexDQPBuilder.solveAtVertex` already catches this
-  * per-candidate (excluding just that candidate, logged to stderr) so it should only reach a caller from a direct
-  * `DualQP.solve` call.
+/** Thrown when a quadratic program does not converge: a nearly degenerate configuration, which no fixed tolerance rules
+  * out (loosening [[AlphaDQPSettings]] may help). Building a complex catches it per candidate simplex and leaves that
+  * candidate out, so it reaches callers only from `DualQP.solve` directly.
   */
-final class AlphaComplexDQPException(message: String) extends RuntimeException(message)
+open class AlphaComplexDQPException(message: String) extends RuntimeException(message)
 
 // ===========================================================================
 // Input abstraction
@@ -129,16 +120,16 @@ trait PowerDistance:
 
   /** B_ij for the quadratic program based at x -- Eq. (11) specialised in the paragraph after Eq. (13).
     */
-  final def gram(x: Int, i: Int, j: Int): Double =
+  def gram(x: Int, i: Int, j: Int): Double =
     0.5 * (squaredDistance(i, x) + squaredDistance(j, x) - squaredDistance(i, j))
 
   /** U_i for the quadratic program based at x, same paragraph. */
-  final def dualLinear(x: Int, i: Int): Double =
+  def dualLinear(x: Int, i: Int): Double =
     0.5 * (weight(i) - weight(x) - squaredDistance(i, x))
 
   /** Radius of the weighted ball U_i at power level a (Definition 7); negative if U_i is empty.
     */
-  final def ballRadius(i: Int, a: Double): Double =
+  def ballRadius(i: Int, a: Double): Double =
     val t = a + weight(i)
     if t < 0.0 then -1.0 else math.sqrt(t)
 
@@ -207,17 +198,12 @@ end PowerDistance
 // Tolerances and options
 // ===========================================================================
 
-/** All tolerances are *relative*; absolute ones silently break when the point cloud is rescaled.
+/** Settings of the quadratic programs. All tolerances are relative, so they survive rescaling the points.
   *
   * @param rankTolerance
-  *   a candidate constraint is treated as linearly dependent on the working set when its Schur complement drops below
-  *   this fraction of B_jj. 1e-12 is too tight to be safe: a commit can clear that bar while still leaving a Cholesky
-  *   pivot many orders of magnitude below the problem's natural scale, which silently poisons the factorisation and
-  *   manifests later as either non-convergence (degenerate cycling between near-duplicate working sets) or, worse, a
-  *   garbage-but-finite answer. 1e-8 (the textbook sqrt-of-machine-epsilon rule of thumb) is *still* not always enough
-  *   margin in practice -- found a case where the poisoning commit's ratio was 1.03e-8, clearing that bar by a hair.
-  *   1e-6 sits in the middle of the empirically-verified safe range [1e-7, 1e-5]: 1e-4 starts rejecting genuinely
-  *   non-degenerate directions and gives a different (wrong) answer.
+  *   a constraint counts as linearly dependent on the working set when its Schur complement falls below this fraction
+  *   of `B_jj`. Values between 1e-7 and 1e-5 work; smaller lets nearly singular factorizations through (non-convergence
+  *   or wrong answers), larger rejects real directions.
   * @param feasibilityTolerance
   *   a constraint counts as violated when its slack exceeds this fraction of max|U|.
   * @param zeroTolerance
@@ -230,15 +216,12 @@ end PowerDistance
   *   max active set size; 0 means "ambient dimension + 2", which is a hard bound since the active rows live in R^m.
   *   Raise it only if you hit the corresponding exception.
   * @param enforceMonotonicity
-  *   clamp each w(sigma) up to the max over its facets. Mathematically a no-op (see below) but removes ~1e-16
-  *   violations that would upset a persistence algorithm.
+  *   make each value at least the largest of its facets', and equal to it within solver accuracy (see `clampMonotone`):
+  *   the values are monotone mathematically, and the persistence algorithms need it exactly.
   * @param parallel
   *   run the per-vertex loop on the common ForkJoinPool. Output is deterministic.
   * @param verbose
-  *   print a diagnostic to stderr each time a candidate is dropped for QP non-convergence (see `solveAtVertex`'s
-  *   "defense in depth" comment). Off by default: this is an accepted, recurring limitation of the active-set method on
-  *   near-degenerate configurations, not an actionable-every-time event, so a caller running many builds (e.g. a
-  *   property test) would otherwise get stderr spam proportional to trial count rather than a signal worth reading.
+  *   print a line to stderr whenever a candidate is left out because its QP did not converge.
   */
 final case class AlphaDQPSettings(
   rankTolerance: Double = 1e-6,
@@ -265,7 +248,7 @@ final case class AlphaDQPSettings(
   * Appending is the standard bordered update; deleting removes a row of L and rotates the resulting extra superdiagonal
   * away with Givens rotations, which is O(|W|²) rather than a refactorisation.
   */
-final class CholeskyWorkspace(capacity: Int):
+open class CholeskyWorkspace(capacity: Int):
   private val cap = math.max(capacity, 1)
   private val l = new Array[Double](cap * cap)
   private var nw = 0
@@ -381,7 +364,7 @@ end CholeskyWorkspace
   *
   * The instance is stateful and not thread safe; give each worker its own.
   */
-final class DualQP(val n: Int, workingSetCapacity: Int, settings: AlphaDQPSettings):
+open class DualQP(val n: Int, workingSetCapacity: Int, settings: AlphaDQPSettings):
   private val cap = math.max(1, math.min(workingSetCapacity, math.max(n, 1)))
   private val chol = new CholeskyWorkspace(cap)
   private val ws = new Array[Int](cap)
@@ -716,7 +699,7 @@ end DualQP
   * Simplices are `Simplex[Int]` of site indices in increasing order. `cells` is in a valid filtration order: faces
   * always precede cofaces.
   */
-final class AlphaComplexDQP(
+open class AlphaComplexDQP(
   val space: PowerDistance,
   val maxPower: Double,
   val maxDimension: Int,
@@ -757,10 +740,8 @@ final class AlphaComplexDQP(
       chi + (if (k % 2) == 0 then cells.size else -cells.size)
     }
 
-  /** Filtration order: increasing weight, breaking ties by dimension so that faces precede cofaces, then by
-    * `simplexOrdering[Int]` (the same colex/lex vertex-set order every other Ripser-flavored tie-break in this codebase
-    * uses) for determinism -- not a string comparison on `c.show`, which sorted "10" before "9" and gave no guarantee
-    * of agreeing with any other ordering in the codebase.
+  /** The cells in filtration order: increasing value, then dimension (faces before cofaces), then the vertex order of
+    * `simplexOrdering`.
     */
   lazy val cells: IndexedSeq[Simplex[Int]] =
     cellsByDim.flatten.sorted(using
@@ -802,28 +783,11 @@ object AlphaComplexDQP:
   ): AlphaComplexDQP =
     apply(PowerDistance.euclidean(points, Some(powerWeights)), maxPower, maxDimension, settings)
 
-  /** DTM-weighted alpha complex: `weight(i) = -f(i)^2`, where `f` is the empirical distance-to-measure
-    * (`streams.DistanceToMeasure`, Chazal-Cohen-Steiner-Merigot 2011) with `k` neighbours and exponent `q`.
-    *
-    * This is exactly the `p = 2` ball equation of Anai et al., "DTM-based filtrations" (arXiv:1811.04757, Def.
-    * 3.1/Prop. 3.5) -- `r_x(t)^2 = t^2 - f(x)^2` -- read against THIS class's own power-distance convention
-    * `pi_i(y) = ||y-x_i||^2 - weight(i)` (Definition 6/10 above): setting `weight(i) = -f(i)^2` makes
-    * `pi_i(y) = ||y-x_i||^2 + f(i)^2`, so `pi_i(y) <= alpha` iff `||y-x_i||^2 <= alpha - f(i)^2 = r_x(sqrt(alpha))^2`
-    * exactly. `alpha.PowerDistance`/`AlphaComplexDQP` already implement the general weighted-alpha/restricted- nerve
-    * machinery this needs -- DTM-alpha is that machinery fed these specific weights, not a new construction.
-    * Cross-checked (not merely asserted) against `streams.DtmRipsSimplexStream(..., p = 2.0)`: both are the SAME
-    * `p = 2` weighted-ball union, so their H0 barcodes agree once alpha's own `sqrt(alpha)` units are doubled to match
-    * Rips's -- `.claude/WORKLOG-dtm-filtrations.md` has the full derivation and the cross-check itself
-    * (`AlphaComplexDQPDtmSpec`).
-    *
-    * Uses `JVPTree` for the `k`-NN search (`DistanceToMeasure`'s own default is the safer-but-slower `BruteForce`,
-    * needed only when the triangle inequality isn't guaranteed -- not a concern here, `points` is always genuinely
-    * Euclidean).
-    *
-    * Depends on the vertex-attachment fix in `AlphaComplexDQPBuilder.compute()` (`.claude/WORKLOG-dtm-
-    * filtrations.md`): DTM weights make a point's own centre fall outside its own restricted power cell routinely (any
-    * point near an outlier), which the OLD unconditional `weight(f) = -space.weight(x)` got wrong -- this constructor
-    * would have produced spurious/missing H0 bars on essentially every real input before that fix landed.
+  /** The DTM-weighted alpha complex: `weight(i) = -f(i)^2`, where `f` is the empirical distance to measure
+    * (`DistanceToMeasure`, Chazal, Cohen-Steiner and Mérigot 2011) with `k` neighbours and exponent `q`. With this
+    * class's power distance `||y - x_i||^2 - weight(i)`, this is the `p = 2` ball equation `r_x(t)^2 = t^2 - f(x)^2` of
+    * Anai et al., "DTM-based filtrations" (arXiv:1811.04757). Its degree-0 bars agree with those of
+    * `DtmRips(..., p = 2.0)` once the alpha values are converted to diameters.
     */
   def dtm(
     points: Array[Array[Double]],
@@ -833,8 +797,8 @@ object AlphaComplexDQP:
     q: Double = 2.0,
     settings: AlphaDQPSettings = AlphaDQPSettings()
   ): AlphaComplexDQP =
-    val ambient = streams.EuclideanMetricSpace(points)
-    val f = streams.DistanceToMeasure(ambient, streams.JVPTree(ambient), k, q)
+    val ambient = EuclideanMetricSpace(points)
+    val f = DistanceToMeasure(ambient, JVPTree(ambient), k, q)
     weighted(points, f.toArray.map(fi => -fi * fi), maxRadius * maxRadius, maxDimension, settings)
 
   def apply(
@@ -852,7 +816,7 @@ end AlphaComplexDQP
   * Outer loop over dimension, inner loop over base vertex. B and U are built once per (dimension, vertex) rather than
   * once per simplex, which is the only place ambient dimension enters the cost at all.
   */
-class AlphaComplexDQPBuilder(
+open class AlphaComplexDQPBuilder(
   val space: PowerDistance,
   val maxPower: Double,
   val maxDimension: Int,
@@ -865,24 +829,10 @@ class AlphaComplexDQPBuilder(
   /** One record produced by a single successful QP solve. */
   final case class Found(cell: Simplex[Int], weight: Double, witness: Option[Array[Double]])
 
-  /** Line 1-2: the one-skeleton of the Cech complex of the weighted ball cover, Cech(S, p, a1).
-    *
-    * Only Cech neighbours can constrain the part of V_x that lies inside U_x: if U_x and U_z are disjoint then any y
-    * with pi_x(y) <= a1 already satisfies pi_x(y) <= pi_z(y). So restricting the QP's inequality constraints to N_G(x)
-    * is exact, not an approximation -- provided the optimum really is <= a1, which is precisely when we keep the
-    * simplex.
-    *
-    * Uses the VP-tree spatial index already in FiniteMetricSpace.scala (`JVPTree`, via `PowerDistance.toMetricSpace`)
-    * rather than the naive O(N^2) all-pairs scan, when maxPower is finite -- see WORKLOG.md for why this only helps a
-    * genuinely-truncated complex: AlphaShapeDQP's default (maxRadius = Infinity, to match HelixDelaunay) makes every
-    * alive point trivially everyone's neighbour, where a spatial index buys nothing, so that case is still handled
-    * directly rather than via a VP-tree query with an infinite radius.
-    *
-    * The per-point query radius radius(i) + maxRadiusOverAll is a *conservative superset* bound, not the exact pairwise
-    * one (weights make each point's true radius(i)+radius(j) threshold vary per pair) -- so every candidate the tree
-    * returns still goes through the same exact check as before. Correctness therefore doesn't depend on the spatial
-    * index at all, only its performance does; see AlphaComplexDQPSpatialIndexSpec for a brute-force cross-check across
-    * many random weighted and unweighted configurations.
+  /** Lines 1-2 of Algorithm 1: the 1-skeleton of the Čech complex of the weighted ball cover, Cech(S, p, a1). Only Čech
+    * neighbours can constrain the part of V_x inside U_x, so restricting the QP's inequality constraints to them is
+    * exact whenever the simplex is kept. For finite `maxPower` the neighbours are found with a VP-tree, querying a
+    * conservative radius and checking each candidate exactly; with no cutoff every point is a neighbour of every other.
     */
   def cechNeighbours(): IndexedSeq[IndexedSeq[Int]] =
     val radius = Array.tabulate(n)(space.ballRadius(_, maxPower))
@@ -937,18 +887,9 @@ class AlphaComplexDQPBuilder(
       else if space.ambientDimension > 0 then math.min(n, space.ambientDimension + 2)
       else n
 
-    /** Runs the QP solve for every candidate at dimension k >= 1 (line 8 of Algorithm 1), merging results into
-      * byDim(k)/weights/witnesses/present in vertex order, deterministic regardless of settings.parallel. Shared by the
-      * k=1 pre-step below (needed before dimension 0 can be resolved -- see that comment) and the k=2..maxDimension
-      * loop, so the two can't drift apart.
-      *
-      * Each (x, cs) entry is solved independently: solveAtVertex allocates its own DualQP/CholeskyWorkspace per call
-      * and touches no state shared across vertices (verified directly, not assumed -- see
-      * .claude/WORKLOG-parallelization-survey.md item 1), so the per-vertex solve itself is safe to run on
-      * settings.parallel's ForkJoinPool. `.par.map` preserves `vertices`' own positional order when materialized back
-      * via `.toIndexedSeq` (a documented scala-parallel-collections property), so `perVertex`'s order -- and hence the
-      * entire computation's output -- is identical whether or not settings.parallel is set, matching this method's own
-      * "Output is deterministic" contract.
+    /** Solves the QP of every candidate of dimension `k >= 1` (line 8 of Algorithm 1) and merges the results in vertex
+      * order. Each vertex's solves share no state with the others', so they can run in parallel; the merge order, and
+      * so the output, is the same either way.
       */
     def solveDimension(k: Int, candidates: mutable.Map[Int, mutable.IndexedBuffer[Simplex[Int]]]): Unit =
       val vertices: IndexedSeq[(Int, mutable.IndexedBuffer[Simplex[Int]])] =
@@ -1200,7 +1141,9 @@ class AlphaComplexDQPBuilder(
 
   /** w is monotone along faces by construction -- the QP for a face has strictly fewer equality constraints, hence a
     * larger feasible set and a smaller optimum -- but floating point can violate it by an ulp or two, which some
-    * persistence algorithms will not forgive.
+    * persistence algorithms will not forgive. So each w(sigma) is raised to the largest value of its facets, and set
+    * equal to it when the two agree to [[SnapTolerance]] (relative): a facet whose optimum is attained on sigma's power
+    * face has the same value as sigma, and the two QP solves only agree to solver accuracy.
     */
   def clampMonotone(
     byDim: IndexedSeq[mutable.IndexedBuffer[Simplex[Int]]],
@@ -1209,15 +1152,16 @@ class AlphaComplexDQPBuilder(
     for k <- 1 until byDim.length do
       val cells = byDim(k)
       cells.foreach { sigma =>
-        var w = weights(sigma)
-        sigma
-          .map(v => sigma - v)
-          .foreach(facet => weights.get(facet).foreach(fw => if fw > w then w = fw))
-        weights(sigma) = w
+        val w = weights(sigma)
+        val facetMax = sigma.iterator.flatMap(v => weights.get(sigma - v)).maxOption.getOrElse(w)
+        weights(sigma) = if facetMax >= w || w - facetMax <= SnapTolerance * math.abs(w) then facetMax else w
       }
+
+  /** Relative difference below which a simplex's value is taken to equal its largest facet's (see `clampMonotone`). */
+  val SnapTolerance: Double = 1e-10
 end AlphaComplexDQPBuilder
 
-class AlphaShapeDQP(val points: Array[Array[Double]]) extends AlphaShapes:
+open class AlphaShapeDQP(val points: Array[Array[Double]]) extends AlphaShapes:
   override val metricSpace = EuclideanMetricSpace(points)
   // No radius cutoff: matches HelixDelaunay, which always returns the full,
   // untruncated Delaunay complex. A degenerate/near-collinear configuration
@@ -1272,7 +1216,8 @@ class AlphaShapeDQP(val points: Array[Array[Double]]) extends AlphaShapes:
   * `metricSpace` contract (unused by homology engines, see that trait's doc); it must be the SAME points
   * `alphaComplexDQP` was built from.
   */
-class AlphaComplexDQPStream(val points: Array[Array[Double]], val alphaComplexDQP: AlphaComplexDQP) extends AlphaShapes:
+open class AlphaComplexDQPStream(val points: Array[Array[Double]], val alphaComplexDQP: AlphaComplexDQP)
+    extends AlphaShapes:
   override val metricSpace = EuclideanMetricSpace(points)
 
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {

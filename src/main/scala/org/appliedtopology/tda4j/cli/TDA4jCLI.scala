@@ -1,54 +1,42 @@
 package org.appliedtopology.tda4j
 package cli
 
-import org.appliedtopology.tda4j.barcode.{given, *}
-import org.appliedtopology.tda4j.io.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.matlab.{LandmarkSelectionResult, PersistenceResult, TDA4j}
+import org.appliedtopology.tda4j.plot.{Plot, Viewer}
 
 import org.rogach.scallop.ScallopOption
 
 import java.io.PrintWriter
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Paths}
 import scala.collection.mutable
 
-/** The `tda4j` executable: a command-line front end for `org.appliedtopology.tda4j.matlab.TDA4j`, the same facade the
-  * MATLAB bridge uses -- see that class's own doc for what every `--complex`/`--engine`/`--field`/etc. option actually
-  * means, and `.claude/WORKLOG-cli-executable.md` for why this file's own logic is split the way it is (`run` returns
-  * an exit code rather than calling `sys.exit` itself, specifically so `CLISpec` can call it in-process without killing
-  * the test JVM -- `main` is the only place that actually exits).
-  *
-  * Built via `sbt assembly` into a runnable fat jar (`java -jar target/scala-3.9.0/TDA4j-<version>-assembly.jar
-  * [options] <input-file>`) -- see `build.sbt`'s `assembly / mainClass` setting.
+/** The `tda4j` executable, a command-line front end for [[org.appliedtopology.tda4j.matlab.TDA4j]] (flags in
+  * [[TDA4jConf]]). Built by `sbt assembly`: `java -jar tda4j-<version>-assembly.jar [options] <input-file>`.
   */
 object TDA4jCLI:
   def main(args: Array[String]): Unit =
     val exitCode = run(args.toIndexedSeq, System.out)
     if exitCode != 0 then sys.exit(exitCode)
 
-  /** The whole CLI, minus process exit -- `main` is a two-line wrapper around this. Returns `0` on success, `1` on any
-    * recognized failure (a bad `TDA4j` option value, a malformed input file, an unsupported `--output-format`
-    * combination), printing a one-line `tda4j: <message>` to `System.err` in that case rather than a stack trace,
-    * matching `TDA4j`'s own convention of throwing `IllegalArgumentException` with an actionable message rather than
-    * silently falling back to a default.
+  /** The CLI without the process exit, so it can run in-process: returns `0` on success and `1` on a reported failure
+    * (a bad option, a malformed file), which is printed as one line `tda4j: <message>` on standard error.
     *
-    * '''Known, deliberate limitation, checked directly rather than assumed''': a PARSE-level error -- a malformed flag
-    * (`--max-dimension notanumber`), a missing required argument, or `--help`/`--version` themselves -- is NOT caught
-    * here at all. `new TDA4jConf(args)` (inside `Scallop`'s `verify()`) calls Scallop's own default `onError`, which
-    * prints directly to stdout/stderr and calls `System.exit` unconditionally, before this method ever gets control
-    * back -- confirmed by tracing Scallop's own `ScallopConfBase.onError`/`exitHandler` source, not assumed from the
-    * library's documentation. This is the normal, desired behavior for a real CLI invocation (`main`, a fresh process)
-    * and IS what a real user sees for e.g. `--help` -- but it means `run` is not safe to call from a long-lived
-    * embedding process (a test suite included) with input that could hit this path; Scallop does offer an escape hatch
-    * for exactly this (`org.rogach.scallop.throwError`, a `DynamicVariable[Boolean]` that makes `onError` re-throw
-    * instead of exiting), deliberately not used here since it would also have to reimplement `--help`/`--version`'s own
-    * printing by hand to keep working -- a real cost for a case `CLISpec` simply avoids exercising instead. See
-    * `.claude/WORKLOG-cli-executable.md`.
+    * Parse errors, `--help` and `--version` are handled by Scallop, which prints and calls `System.exit` before this
+    * method returns: do not call it with such arguments from a process that must keep running.
     */
   private[cli] def run(args: Seq[String], out: java.io.PrintStream): Int =
     try
       val conf = new TDA4jConf(args)
       val options = buildOptions(conf)
-      val resolved = resolveInput(conf.inputFormat(), conf.input())
+      val format = inputFormatOf(conf)
+      checkPlotFlags(conf)
+      if conf.saveResult.isSupplied && conf.selectLandmarks() then
+        throw new IllegalArgumentException(
+          "--save-result is meaningless with --select-landmarks: there is no result here, only a landmark set"
+        )
+      val resolved = resolveInput(format, conf.input())
 
       if conf.selectLandmarks() && conf.landmarksFile.isSupplied then
         throw new IllegalArgumentException(
@@ -70,6 +58,16 @@ object TDA4jCLI:
             "--min-persistence/--min-persistence-fraction are meaningless with --distance-to: the comparison " +
               "always uses the complete barcode"
           )
+
+      if conf.representativeType.isSupplied && conf.selectLandmarks() then
+        throw new IllegalArgumentException(
+          "--representative-type is meaningless with --select-landmarks: there is no barcode here, only a landmark set"
+        )
+
+      if conf.includeZeroLength.isSupplied && conf.selectLandmarks() then
+        throw new IllegalArgumentException(
+          "--include-zero-length is meaningless with --select-landmarks: there is no barcode here, only a landmark set"
+        )
 
       if conf.distanceTo.isSupplied then
         if conf.selectLandmarks() then
@@ -94,26 +92,35 @@ object TDA4jCLI:
       // supply, and --complex is equally meaningless for a Dowker relation (TDA4j.computeFromRelation has its
       // own, separate, much smaller option set -- see that method's own doc).
       resolved match
+        case ResolvedInput.Result(_) =>
+          val flags = options.grouped(2).map(pair => flagName(pair(0))).toSeq ++
+            (if conf.selectLandmarks() then Seq("--select-landmarks") else Nil) ++
+            conf.landmarksFile.toOption.map(_ => "--landmarks-file")
+          if flags.nonEmpty then
+            throw new IllegalArgumentException(
+              s"${conf.input()} is a saved result, computed already: ${flags.mkString(", ")} would change the " +
+                "computation, so they do not apply to it. Compute again from the original input to change it"
+            )
         case ResolvedInput.CubicalGrid(_, _) if conf.complex.isSupplied =>
           throw new IllegalArgumentException(
-            s"--complex is not meaningful with --input-format=${conf.inputFormat()}: a cubical grid has no " +
-              "'complex' option (see TDA4j.computeFromCubicalImage's own doc) -- remove --complex, or choose a " +
+            s"--complex is not meaningful with --input-format=$format: a cubical grid has no " +
+              "'complex' option. Remove --complex, or choose a " +
               "point-cloud/distance-matrix --input-format instead"
           )
         case ResolvedInput.CubicalGrid(_, _) if conf.selectLandmarks() || conf.landmarksFile.isSupplied =>
           throw new IllegalArgumentException(
-            s"--select-landmarks/--landmarks-file are not meaningful with --input-format=${conf.inputFormat()}: " +
+            s"--select-landmarks/--landmarks-file are not meaningful with --input-format=$format: " +
               "a cubical grid has no witness-complex landmarks to select or supply"
           )
         case ResolvedInput.Relation(_) if conf.complex.isSupplied =>
           throw new IllegalArgumentException(
-            s"--complex is not meaningful with --input-format=${conf.inputFormat()}: TDA4j.computeFromRelation " +
-              "has its own, separate option set (see that method's own doc) -- remove --complex, or choose a " +
+            s"--complex is not meaningful with --input-format=$format: TDA4j.computeFromRelation " +
+              "builds the Dowker complex and takes no --complex. Remove --complex, or choose a " +
               "point-cloud/distance-matrix --input-format instead"
           )
         case ResolvedInput.Relation(_) if conf.selectLandmarks() || conf.landmarksFile.isSupplied =>
           throw new IllegalArgumentException(
-            s"--select-landmarks/--landmarks-file are not meaningful with --input-format=${conf.inputFormat()}: " +
+            s"--select-landmarks/--landmarks-file are not meaningful with --input-format=$format: " +
               "a Dowker relation has no witness-complex landmarks to select or supply"
           )
         case _ => ()
@@ -136,6 +143,8 @@ object TDA4jCLI:
             throw new IllegalStateException("unreachable: rejected by the CubicalGrid guard above")
           case ResolvedInput.Relation(_) =>
             throw new IllegalStateException("unreachable: rejected by the Relation guard above")
+          case ResolvedInput.Result(_) =>
+            throw new IllegalStateException("unreachable: rejected by the Result guard above")
         writeLandmarkSelection(conf, selection, out)
         0
       else
@@ -150,19 +159,30 @@ object TDA4jCLI:
                 throw new IllegalStateException("unreachable: rejected by the CubicalGrid guard above")
               case ResolvedInput.Relation(_) =>
                 throw new IllegalStateException("unreachable: rejected by the Relation guard above")
+              case ResolvedInput.Result(_) =>
+                throw new IllegalStateException("unreachable: rejected by the Result guard above")
           case None =>
             resolved match
               case ResolvedInput.Points(points)               => TDA4j.computeFromPoints(points, options)
               case ResolvedInput.Distances(distances)         => TDA4j.computeFromDistanceMatrix(distances, options)
               case ResolvedInput.CubicalGrid(shape, flatVals) => TDA4j.computeFromCubicalImage(shape, flatVals, options)
               case ResolvedInput.Relation(relation)           => TDA4j.computeFromRelation(relation, options)
-        if conf.distanceTo.isSupplied then writeDistance(conf, result, out)
+              case ResolvedInput.Result(saved)                => saved
+        val loaded = resolved.isInstanceOf[ResolvedInput.Result]
+        // Saved first: a plot or output that fails must not lose a long computation.
+        conf.saveResult.foreach(result.save)
+        if conf.plot.isSupplied then writePlot(conf, result, loaded)
+        else if conf.distanceTo.isSupplied then writeDistance(conf, result, out)
         else
           writeOutput(conf, result, out)
-          noteHiddenBars(result)
+          noteHiddenBars(result, loaded)
         0
     catch
       case e: IllegalArgumentException =>
+        System.err.println(s"tda4j: ${e.getMessage}")
+        1
+      // what a result cannot draw (a representative with no coordinates, a complex the plots do not build)
+      case e: UnsupportedOperationException =>
         System.err.println(s"tda4j: ${e.getMessage}")
         1
       case e: java.io.IOException =>
@@ -194,16 +214,19 @@ object TDA4jCLI:
     add("dtmK", conf.dtmK)
     add("dtmQ", conf.dtmQ)
     add("dtmP", conf.dtmP)
-    add("sheehyEpsilon", conf.sheehyEpsilon)
+    add("sparseEpsilon", conf.sparseEpsilon)
     add("edgeCollapse", conf.edgeCollapse)
     add("maxDimension", conf.maxDimension)
     add("maxFiltrationValue", conf.maxFiltrationValue)
     add("minPersistence", conf.minPersistence)
     add("minPersistenceFraction", conf.minPersistenceFraction)
+    add("includeZeroLength", conf.includeZeroLength)
+    add("representativeType", conf.representativeType)
     add("field", conf.field)
     add("prime", conf.prime)
     add("epsilon", conf.epsilon)
     add("sublevel", conf.sublevel)
+    add("nanMask", conf.nanMask)
     add("numLandmarks", conf.numLandmarks)
     add("witnessVariant", conf.witnessVariant)
     add("landmarkSelector", conf.landmarkSelector)
@@ -224,6 +247,25 @@ object TDA4jCLI:
     case Distances(distances: Array[Array[Double]])
     case CubicalGrid(shape: Array[Int], flatValues: Array[Double])
     case Relation(relation: Array[Array[Double]])
+    case Result(result: PersistenceResult)
+
+  /** `--input-format`, or `result` when it is not given and the file starts with `{` (a saved result is a JSON object;
+    * no point cloud, matrix or image file starts so). A missing file is left to the reader, which says so.
+    */
+  private[cli] def inputFormatOf(conf: TDA4jConf): String =
+    if conf.inputFormat.isSupplied then conf.inputFormat()
+    else
+      val start =
+        try
+          val in = Files.newInputStream(Paths.get(conf.input()))
+          try String(in.readNBytes(256), StandardCharsets.UTF_8)
+          finally in.close()
+        catch case _: java.io.IOException => ""
+      if start.stripPrefix("\uFEFF").dropWhile(_.isWhitespace).startsWith("{") then "result" else conf.inputFormat()
+
+  /** The flag of a facade option key: `maxDimension` is `--max-dimension`. */
+  private[cli] def flagName(key: String): String =
+    "--" + key.flatMap(c => if c.isUpper then s"-${c.toLower}" else c.toString)
 
   /** Inverts `CubicalImage.fromFlatArray`'s own row-major, last-axis-fastest convention to recover a raw
     * `(shape, flatValues)` pair from an already-built `CubicalGridStream` -- used for `CubicalImage.fromFile` (a real
@@ -269,11 +311,12 @@ object TDA4jCLI:
       // difference is what TDA4j entry point the resulting matrix is routed to (see `run`'s own match below),
       // not how it's read off disk.
       case "csv-relation" => ResolvedInput.Relation(CSV.readPointCloud(path))
+      case "result"       => ResolvedInput.Result(TDA4j.loadResult(path))
       case other          =>
         throw new IllegalArgumentException(
           s"unrecognized --input-format '$other'; expected one of csv-points, csv-distances, csv-lower, " +
             "ripser-points, ripser-lower, ripser-upper, ripser-distance, ripser-binary, dipha-distance, off, " +
-            "perseus-cubical, dipha-image, image, csv-relation"
+            "perseus-cubical, dipha-image, image, csv-relation, result"
         )
 
   // -----------------------------------------------------------------------------------------------------------
@@ -349,12 +392,16 @@ object TDA4jCLI:
   private[cli] def toBarsUnfiltered(result: PersistenceResult): IndexedSeq[PersistenceBar[Double, Nothing]] =
     result.toArrayUnfiltered().toIndexedSeq.map(row => asBar(row(0).toInt, row(1), row(2)))
 
-  /** One stderr line when the threshold hid anything, so a user is never left wondering where bars went. */
-  private[cli] def noteHiddenBars(result: PersistenceResult): Unit =
+  /** One stderr line when the threshold hid anything, so a user is never left wondering where bars went. A saved result
+    * keeps the threshold it was saved with.
+    */
+  private[cli] def noteHiddenBars(result: PersistenceResult, loaded: Boolean = false): Unit =
     if result.hiddenCount() > 0 then
       System.err.println(
         s"tda4j: ${result.hiddenCount()} bar(s) with persistence <= ${result.persistenceThreshold()} not reported " +
-          s"(${result.size()} reported); pass --min-persistence 0 to report every bar"
+          s"(${result.size()} reported); " +
+          (if loaded then "the saved result keeps its threshold: compute again with --min-persistence 0 to report them"
+           else "pass --min-persistence 0 to report them")
       )
 
   // -----------------------------------------------------------------------------------------------------------
@@ -366,12 +413,8 @@ object TDA4jCLI:
       throw new IllegalArgumentException(s"--output is required for --output-format=$format")
     )
 
-  /** Perseus's own persistence-interval format stores INTEGER filtration-step indices, not raw filtration values (see
-    * `Perseus.writePersistenceIntervals`'s own doc) -- silently rounding a typical Vietoris-Rips barcode's real-valued
-    * birth/death (often well under 1.0) would collapse nearly every bar to `0 0` and produce output that LOOKS valid
-    * but reports no real information. Refused outright with an actionable message rather than shipped as an
-    * equal-looking output choice; a caller who genuinely has integer-valued bars (e.g. hand-built from an
-    * already-step-indexed source) can still use it.
+  /** Perseus's interval format stores integer filtration steps, so bars with non-integral values are refused rather
+    * than rounded.
     */
   private def requireIntegralForPerseus(bars: IndexedSeq[PersistenceBar[Double, Nothing]]): Unit =
     def isIntegral(v: Double): Boolean = v == math.round(v).toDouble
@@ -397,10 +440,7 @@ object TDA4jCLI:
         .mkString(" + ")
     catch case _: UnsupportedOperationException => "(no representative recorded)"
 
-  /** `--distance-format`'s three supported values -- NOT `--input-format`'s reader set: these read an ALREADY-COMPUTED
-    * multi-dimension diagram (`io.*.readPersistenceDiagram`), not raw point/distance/cubical data. `perseus` is
-    * deliberately excluded -- see `TDA4jConf.distanceFormat`'s own doc for why.
-    */
+  /** Reads the saved diagram of `--distance-to` in format `csv`, `gudhi` or `dipha`. */
   private[cli] def readComparisonDiagram(format: String, path: String): Seq[PersistenceBar[Double, Nothing]] =
     format match
       case "csv"   => CSV.readPersistenceDiagram(path)
@@ -449,4 +489,112 @@ object TDA4jCLI:
       case other =>
         throw new IllegalArgumentException(
           s"unrecognized --output-format '$other'; expected one of text, csv, gudhi, dipha, perseus"
+        )
+
+  // -----------------------------------------------------------------------------------------------------------
+  // plots: each --plot kind is one PersistenceResult method, so MATLAB and the CLI draw the same figure
+  // -----------------------------------------------------------------------------------------------------------
+
+  private val plotKinds = Seq(
+    "barcode",
+    "diagram",
+    "representative",
+    "input",
+    "complex",
+    "landscape",
+    "persistence-image",
+    "input-3d",
+    "complex-3d",
+    "representative-3d"
+  )
+
+  /** The plot flags, checked before anything is read or computed: a typo should not cost a long computation, and a flag
+    * is never silently ignored.
+    */
+  private[cli] def checkPlotFlags(conf: TDA4jConf): Unit =
+    val usedBy = Map(
+      "--bar" -> (conf.bar.isSupplied, Set("representative", "representative-3d")),
+      "--dimension" -> (
+        conf.dimension.isSupplied,
+        Set(
+          "representative",
+          "representative-3d",
+          "landscape",
+          "persistence-image"
+        )
+      ),
+      "--at" -> (conf.at.isSupplied, Set("representative", "complex", "complex-3d"))
+    )
+    conf.plot.toOption match
+      case None =>
+        usedBy.foreach { case (flag, (supplied, kinds)) =>
+          if supplied then
+            throw new IllegalArgumentException(s"$flag is for --plot ${kinds.toSeq.sorted.mkString(" or ")}")
+        }
+      case Some(kind) =>
+        if !plotKinds.contains(kind) then
+          throw new IllegalArgumentException(
+            s"unrecognized --plot '$kind'; expected one of ${plotKinds.mkString(", ")}"
+          )
+        usedBy.foreach { case (flag, (supplied, kinds)) =>
+          if supplied && !kinds.contains(kind) then
+            throw new IllegalArgumentException(
+              s"$flag is not used by --plot $kind, only by --plot ${kinds.toSeq.sorted.mkString(" or ")}"
+            )
+        }
+        if conf.bar.isSupplied && conf.dimension.isSupplied then
+          throw new IllegalArgumentException(
+            "give --bar (one bar) or --dimension (its most persistent bar), not both"
+          )
+        if (kind == "complex" || kind == "complex-3d") && !conf.at.isSupplied then
+          throw new IllegalArgumentException(s"--plot $kind needs --at, the scale of the complex to draw")
+        val others = Seq(
+          "--distance-to" -> conf.distanceTo.isSupplied,
+          "--select-landmarks" -> conf.selectLandmarks(),
+          "--representatives" -> conf.representatives(),
+          "--output-format" -> conf.outputFormat.isSupplied
+        ).collect { case (flag, true) => flag }
+        if others.nonEmpty then
+          throw new IllegalArgumentException(
+            s"--plot draws the result instead of writing it: ${others.mkString(", ")} cannot go with it"
+          )
+        conf.output.toOption.foreach { path =>
+          val lower = path.toLowerCase
+          if !(lower.endsWith(".svg") || lower.endsWith(".html") || lower.endsWith(".htm")) then
+            throw new IllegalArgumentException(
+              s"--plot writes an .svg file or an .html page; --output '$path' is neither"
+            )
+        }
+
+  /** Draws `--plot` into `--output`, or into a page in the temporary directory opened in the browser. */
+  private[cli] def writePlot(conf: TDA4jConf, result: PersistenceResult, loaded: Boolean): Unit =
+    def chosenBar(): Int =
+      val i = conf.bar.toOption.getOrElse(result.mostPersistentBar(conf.dimension.toOption.getOrElse(1)))
+      if i >= 0 && i < result.size() then System.err.println(s"tda4j: drawing bar $i: ${toBars(result)(i)}")
+      i
+    def dimension = conf.dimension.toOption.getOrElse(1)
+    val kind = conf.plot()
+    val figure: Plot = kind match
+      case "barcode"        => result.plotBarcode()
+      case "diagram"        => result.plotDiagram()
+      case "representative" =>
+        val i = chosenBar()
+        conf.at.toOption.fold(result.plotRepresentative(i))(result.plotRepresentative(i, _))
+      case "input"             => result.plotInput()
+      case "complex"           => result.plotComplex(conf.at())
+      case "landscape"         => result.plotLandscape(dimension)
+      case "persistence-image" => result.plotPersistenceImage(dimension)
+      case "input-3d"          => result.plotInput3D()
+      case "complex-3d"        => result.plotComplex3D(conf.at())
+      case "representative-3d" => result.plotRepresentative3D(chosenBar())
+      case other               => throw new IllegalStateException(s"unreachable: --plot $other was checked")
+    if kind == "barcode" || kind == "diagram" then noteHiddenBars(result, loaded)
+    conf.output.toOption match
+      case Some(path) => figure.save(path)
+      case None       =>
+        val page = Files.createTempFile(s"tda4j-$kind-", ".html")
+        Files.writeString(page, figure.html(), StandardCharsets.UTF_8)
+        val opened = Viewer.browse(page.toUri)
+        System.err.println(
+          s"tda4j: wrote $page" + (if opened then " (opened in your browser)" else "; open it in a browser")
         )

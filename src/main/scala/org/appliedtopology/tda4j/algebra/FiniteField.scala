@@ -1,16 +1,17 @@
 package org.appliedtopology.tda4j
-package algebra
 
 import cats.Show
 
 import scala.collection.immutable.ArraySeq
 
-class FiniteField(val p: Int):
+open class FiniteField(val p: Int):
   opaque type Fp = Int
 
   object Fp:
     def apply(a: Int): Fp = a % p
     def unapply(a: Fp): Some[Int] = Some(a)
+    // In the opaque type's companion = its implicit scope: `x.show` works with no import.
+    given showFp: Show[Fp] = Show.show(x => summon[Fp is Field].showForSelf.show(x))
 
   extension (fp: Fp)
     def norm: Fp =
@@ -19,12 +20,13 @@ class FiniteField(val p: Int):
 
       Fp(r match
         case rr: Int if rr < -(p - 1) / 2 => rr + p
-        case rr: Int if rr > (p - 1) / 2  => rr - p
-        case rr: Int                      => rr)
+        case rr: Int if rr > p / 2        =>
+          rr - p // p / 2, not (p - 1) / 2: identical for odd p, and stable at p = 2 (was 1 -> -1 -> 1)
+        case rr: Int => rr)
     def toInt: Int = fp.norm
     def toUInt: Int = ((fp % p) + p) % p // Have to get to the interval (0,p-1)
 
-  given (Fp is Field) = new (Fp is Field):
+  given fpField: (Fp is Field) = new (Fp is Field):
     override def showForSelf: Show[Fp] = Show.show[Fp] { fpx =>
       val Fp(x) = fpx.norm
       s"Fp(${x})"
@@ -47,7 +49,7 @@ class FiniteField(val p: Int):
         u = r
         x2 = x1
         x1 = x
-      Fp(x1 % p)
+      Fp(x1 % p).norm
 
     val inverses: ArraySeq[Fp] = ArraySeq.tabulate(p)(j =>
       if j == 0 then 0
@@ -71,4 +73,12 @@ class FiniteField(val p: Int):
     def minus(x: Fp, y: Fp): Fp = norm(Fp(x - y))
     def negate(x: Fp): Fp = norm(Fp(-x))
     def plus(x: Fp, y: Fp): Fp = norm(Fp(x + y))
-    def times(x: Fp, y: Fp): Fp = norm(Fp(x * y))
+    // Long product: inputs need not be normalized (`Fp(a)` and the inverse table are not), and for p > 46341 an Int
+    // product of two residues overflows.
+    def times(x: Fp, y: Fp): Fp = norm(Fp(((x.toLong * y.toLong) % p).toInt))
+
+object FiniteField:
+  /** The default characteristic of the library (the `Persistence` verb, the labs, MATLAB and the CLI): 17. Unlike F₂,
+    * it shows signs and odd torsion.
+    */
+  val DefaultPrime: Int = 17

@@ -1,14 +1,6 @@
 package org.appliedtopology.tda4j
-package homology
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.cells.SimplicialSetFixtures
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
-
-import org.appliedtopology.tda4j.barcode.*
+import org.appliedtopology.tda4j.sset.*
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
 import org.specs2.mutable
@@ -162,9 +154,8 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
   }
 
   "Every essential representative genuinely has zero coboundary: FiniteSimplicialSet (torus, non-dimension-aligned filtration)" >> {
-    import SimplicialSetFixtures.TorusGenerator
-    import SimplicialSetFixtures.TorusGenerator.*
-    given (TorusGenerator is OrderedCell) = SimplicialSetFixtures.torus.cellInstance
+    import TorusGenerator.*
+    given (TorusGenerator is OrderedCell) = SimplicialSet.torus.cellInstance
     val filtrationValue: PartialFunction[TorusGenerator, Double] =
       case Vertex => 0.0
       case A      => 1.0
@@ -172,7 +163,7 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
       case C      => 3.0
       case U      => 4.0
       case L      => 5.0
-    val stream = FilteredSimplicialSetStream(SimplicialSetFixtures.torus, filtrationValue)
+    val stream = FilteredSimplicialSetStream(SimplicialSet.torus, filtrationValue)
     essentialRepsAreCocycles(stream, CellularCohomologyEngine[TorusGenerator, Double, Double]()) must beTrue
   }
 
@@ -185,7 +176,8 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
 
   // ---------------------------------------------------------------------------------------------------------
   // 3 & 4. Barcode-value cross-validation against CellularHomologyEngine (already trusted, generic, and this
-  // codebase's own established oracle for exactly this purpose), plus the structural invariant, for the four
+  // codebase's own established oracle for exactly this purpose), plus the pairing invariant (so on every pair,
+  // the zero-length ones included), for the four
   // cell types/constructions that have never had a cohomology cross-check before this class existed.
   // ---------------------------------------------------------------------------------------------------------
 
@@ -193,17 +185,20 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
     val stream = CubicalGridStream(IndexedSeq(2, 2), (_: IndexedSeq[Int]) => 5.0)
     val totalCells = stream.iterator.size
     val cohomologyBars =
-      CellularCohomologyEngine[Cube, Double, Double]().persistentCohomology(stream).map(toTuple)
+      CellularCohomologyEngine[Cube, Double, Double]()
+        .persistentCohomology(stream, includeZeroLength = true)
+        .map(toTuple)
     val homologyBars =
-      CellularHomologyEngine[Cube, Double, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+      CellularHomologyEngine[Cube, Double, Double]()
+        .persistentHomology(stream)
+        .diagramAt(Double.PositiveInfinity, includeZeroLength = true)
     (cohomologyBars must containTheSameElementsAs(homologyBars)) and
       (HomologyFixtures.totalBarsAccountForAllCells(cohomologyBars, totalCells) must beTrue)
   }
 
   "FiniteSimplicialSet (torus): generic cohomology's barcode matches CellularHomologyEngine's, and accounts for every cell" >> {
-    import SimplicialSetFixtures.TorusGenerator
-    import SimplicialSetFixtures.TorusGenerator.*
-    given (TorusGenerator is OrderedCell) = SimplicialSetFixtures.torus.cellInstance
+    import TorusGenerator.*
+    given (TorusGenerator is OrderedCell) = SimplicialSet.torus.cellInstance
     val filtrationValue: PartialFunction[TorusGenerator, Double] =
       case Vertex => 0.0
       case A      => 1.0
@@ -211,13 +206,15 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
       case C      => 3.0
       case U      => 4.0
       case L      => 5.0
-    val stream = FilteredSimplicialSetStream(SimplicialSetFixtures.torus, filtrationValue)
+    val stream = FilteredSimplicialSetStream(SimplicialSet.torus, filtrationValue)
     val totalCells = stream.iterator.size
     val cohomologyBars =
-      CellularCohomologyEngine[TorusGenerator, Double, Double]().persistentCohomology(stream).map(toTuple)
+      CellularCohomologyEngine[TorusGenerator, Double, Double]()
+        .persistentCohomology(stream, includeZeroLength = true)
+        .map(toTuple)
     val homologyBars = CellularHomologyEngine[TorusGenerator, Double, Double]()
       .persistentHomology(stream)
-      .diagramAt(Double.PositiveInfinity)
+      .diagramAt(Double.PositiveInfinity, includeZeroLength = true)
     (cohomologyBars must containTheSameElementsAs(homologyBars)) and
       (HomologyFixtures.totalBarsAccountForAllCells(cohomologyBars, totalCells) must beTrue)
   }
@@ -227,9 +224,11 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
     val ms = EuclideanMetricSpace(Array(Array(0.0, 0.0), Array(s, 0.0), Array(s / 2, s * math.sqrt(3) / 2)))
     val stream = CechCofaceSimplexStream(ms, maxFiltrationValue = Some(Double.PositiveInfinity))
     val totalCells = stream.iterator.size
-    val cohomologyBars = vrCtx.persistentCohomology(stream).map(toTuple)
+    val cohomologyBars = vrCtx.persistentCohomology(stream, includeZeroLength = true).map(toTuple)
     val homologyBars =
-      SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+      SimplicialHomologyEngine[Int, Double, Double]()
+        .persistentHomology(stream)
+        .diagramAt(Double.PositiveInfinity, includeZeroLength = true)
     (cohomologyBars must containTheSameElementsAs(homologyBars)) and
       (HomologyFixtures.totalBarsAccountForAllCells(cohomologyBars, totalCells) must beTrue)
   }
@@ -237,11 +236,13 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
   "Alpha: generic cohomology's barcode matches CellularHomologyEngine's, and accounts for every cell" >> {
     val points: IndexedSeq[Array[Double]] =
       IndexedSeq(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.3, 0.9), Array(-0.4, 0.2), Array(0.6, -0.5))
-    val stream = AlphaShapes(points, "helix")
+    val stream = AlphaShapes(points, AlphaBackend.Helix)
     val totalCells = stream.iterator.size
-    val cohomologyBars = vrCtx.persistentCohomology(stream).map(toTuple)
+    val cohomologyBars = vrCtx.persistentCohomology(stream, includeZeroLength = true).map(toTuple)
     val homologyBars =
-      SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+      SimplicialHomologyEngine[Int, Double, Double]()
+        .persistentHomology(stream)
+        .diagramAt(Double.PositiveInfinity, includeZeroLength = true)
     (cohomologyBars must containTheSameElementsAs(homologyBars)) and
       (HomologyFixtures.totalBarsAccountForAllCells(cohomologyBars, totalCells) must beTrue)
   }
@@ -265,35 +266,31 @@ class CohomologySpec extends mutable.Specification with ScalaCheck:
   private def toTupleInt[CellT, CoefficientT](bar: PersistenceBar[Int, Chain[CellT, CoefficientT]]): (Int, Int, Int) =
     (bar.dim, endpointValueInt(bar.lower), endpointValueInt(bar.upper))
 
-  "RP^2 over F3: generic cohomology's barcode matches CellularHomologyEngine's, accounts for every cell, and " +
+  "RP^2 over F3: generic cohomology's barcode matches CellularHomologyEngine's and " +
     "matches the independently hand-derived F3 answer (no essential H_1/H_2, confirming signs are inherited " +
     "correctly through the coboundary-is-transpose-of-boundary construction, not just self-consistent)" >> {
-      import SimplicialSetFixtures.ProjectiveGenerator
-      val rp2 = SimplicialSetFixtures.realProjectiveSpace(2)
-      given (ProjectiveGenerator is OrderedCell) = rp2.cellInstance
+      val rp2 = SimplicialSet.realProjectiveSpace(2)
+      given (RealProjectiveGenerator is OrderedCell) = rp2.cellInstance
       val f3 = new FiniteField(3)
       import f3.given
 
       val stream = SimplicialSetStream(rp2)
       val cohomologyBars =
-        CellularCohomologyEngine[ProjectiveGenerator, f3.Fp, Int]().persistentCohomology(stream).map(toTupleInt)
+        CellularCohomologyEngine[RealProjectiveGenerator, f3.Fp, Int]().persistentCohomology(stream).map(toTupleInt)
       val homologyBars =
-        CellularHomologyEngine[ProjectiveGenerator, f3.Fp, Int]().persistentHomology(stream).diagramAt(0)
+        CellularHomologyEngine[RealProjectiveGenerator, f3.Fp, Int]().persistentHomology(stream).diagramAt(0)
 
-      // `HomologyFixtures.totalBarsAccountForAllCells` is `Double`-specific (`upper.isFinite`) -- not reused
-      // here; matching the independently hand-derived expected list already implies cell-accounting
-      // correctness for this one fixture.
+      // Over F3, RP^2 has the homology of a point: one essential class (the zero-length H_1 pair is left out).
       (cohomologyBars must containTheSameElementsAs(homologyBars)) and
-        (cohomologyBars must containTheSameElementsAs(List((0, 0, Int.MaxValue), (1, 0, 0))))
+        (cohomologyBars must containTheSameElementsAs(List((0, 0, Int.MaxValue))))
     }
 
   "RP^2 over F3: every essential representative genuinely has zero coboundary" >> {
-    import SimplicialSetFixtures.ProjectiveGenerator
-    val rp2 = SimplicialSetFixtures.realProjectiveSpace(2)
-    given (ProjectiveGenerator is OrderedCell) = rp2.cellInstance
+    val rp2 = SimplicialSet.realProjectiveSpace(2)
+    given (RealProjectiveGenerator is OrderedCell) = rp2.cellInstance
     val f3 = new FiniteField(3)
     import f3.given
 
     val stream = SimplicialSetStream(rp2)
-    essentialRepsAreCocycles(stream, CellularCohomologyEngine[ProjectiveGenerator, f3.Fp, Int]()) must beTrue
+    essentialRepsAreCocycles(stream, CellularCohomologyEngine[RealProjectiveGenerator, f3.Fp, Int]()) must beTrue
   }

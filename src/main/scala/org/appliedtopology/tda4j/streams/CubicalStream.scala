@@ -1,46 +1,32 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
 
 import scala.collection.immutable.Map
 import scala.collection.mutable
 import scala.collection.parallel.CollectionConverters.*
 
-/** Dense cubical complex over a full rectangular grid, filtration values assigned via the T-construction: a
-  * caller-supplied `topCellValue` gives every top-dimensional cube (pixel/voxel) its own value directly, and every
-  * lower-dimensional cube's value is the min over all top cells that contain it as a face -- exactly the "sublevel set
-  * of a piecewise-constant function on pixels" convention GUDHI/DIPHA/Perseus all use for image persistence (see
-  * `.claude/WORKLOG-cubical.md` for the monotonicity proof: since every top cell containing an immediate coface of `c`
-  * also contains `c`, `fv(coface) >= fv(c)` always holds by construction, which is exactly what
-  * `CellularHomologyEngine.processingOrder`'s ascending sort requires).
+/** The cubical complex of a full rectangular grid, filtered by the values of its top cells (pixels, voxels): every
+  * other cube gets the minimum value of the top cells containing it, the sublevel-set convention of GUDHI, DIPHA and
+  * Perseus. A face is contained in every top cell its cofaces are, so the filtration is monotone. For superlevel sets,
+  * negate the values (what [[CubicalImage]]'s `sublevel = false` does).
   *
-  * For a SUPERLEVEL-set convention instead, negate `topCellValue` before constructing (the standard trick -- see
-  * `CubicalImage.scala`'s `sublevel` parameter, which does exactly this): sublevel persistence of `-f` is superlevel
-  * persistence of `f`, reparametrized, so this type deliberately does not carry its own sign-direction flag -- one code
-  * path, always "min over cofaces," is easier to get right and to verify than baking a direction switch into the core
-  * stream.
+  * A top cell of value `Double.NaN` is masked: it is not in the complex. NaN has no sign and compares to nothing, so it
+  * means the same in a sublevel and a superlevel image. Every other cube takes the minimum over the UNMASKED top cells
+  * containing it, and is not in the complex either when all of them are masked: the complex is the closure of the
+  * unmasked top cells. Infinite values are ordinary values: a top cell of value `+Infinity` enters at `+Infinity`. With
+  * `nanMask = false` masks are off: a NaN value is an error, naming the pixel, when the values are first read.
   *
-  * `shape(i)` is the number of PIXELS along axis `i` (not lattice points -- there are `shape(i) + 1` of those). The
-  * full grid complex has `prod_i (2*shape(i)+1)` cells total (`totalCellCount`) -- e.g. a 256x256 image has 513*513 =
-  * 263169 cells, not 65536.
+  * `shape(i)` is the number of pixels along axis `i`. The complex has `prod_i (2 shape(i) + 1)` cells
+  * (`totalCellCount`): a 256x256 image has 513² = 263169.
   */
-class CubicalGridStream(
+open class CubicalGridStream(
   val shape: IndexedSeq[Int],
   val topCellValue: IndexedSeq[Int] => Double,
-  // Warm filtrationValueCache in parallel, per dimension, before iterateDimension's own sort -- see
-  // .claude/WORKLOG-parallelization-survey.md item 3 (cubical). Every cube's filtration value is
-  // independent of every other cube's -- unlike CechStream's Miniball radii, there is no facet
-  // dependency at all here (containingTopCells(c) reads only c's own coordinates and shape, never
-  // another Cube's cached value) -- so the only real precondition is that `topCellValue` itself is safe
-  // to call concurrently from multiple threads. True for every built-in constructor in
-  // CubicalImage.scala (each reads only immutable captured data -- a flat array, or a BufferedImage's
-  // pixels -- never mutates anything); a caller-supplied `topCellValue` with its own mutable state would
-  // need to be made safe first. Defaults to false, matching AlphaDQPSettings.parallel's own opt-in
-  // convention.
-  val parallelFiltrationValue: Boolean = false
+  // Read every top cell's value in parallel when the values are first needed. `topCellValue` must then be safe to call
+  // from several threads; every constructor in CubicalImage.scala reads only immutable captured data.
+  val parallelFiltrationValue: Boolean = false,
+  // `false` turns masks off: a NaN top cell is then an error instead of a cell left out (for data where a NaN can
+  // only be a bug upstream). Last, so no positional call to the Booleans before it can silently bind to it.
+  val nanMask: Boolean = true
 ) extends StratifiedCellStream[Cube, Double]
     with DoubleFiltration[Cube]():
 
@@ -62,50 +48,81 @@ class CubicalGridStream(
       coord >= 0 && coord <= 2 * shape(i)
     }
 
-  /** Every top-dimensional cell (grid index) containing `c` as a face, computed directly rather than via a recursive
-    * "immediate cofaces" walk -- mathematically equivalent (see class doc) and cheaper: for each degenerate axis of `c`
-    * at lattice point `k`, a containing top cell's own index along that axis is `k-1` or `k` (whichever lies in range);
-    * for each non-degenerate axis, it's forced to `c`'s own index there. Cost is O(2^(ambient dim - dim(c))) per call
-    * -- fine at the ambient dimensions cubical complexes are actually used at (2D/3D), not memoized here on purpose
-    * (see class doc's note on deferring optimization until measured).
+  // Every cell's value, precomputed once into a flat array over the doubled-coordinate grid (cell with encoding `e` at
+  // index sum_i e(i) * weight(i)): engines consult `filtrationValue` on every comparison, so it must be an array lookup,
+  // not a hash of a `Cube` (`.claude/WORKLOG-fast-cubical-representatives.md`). The minimum over the top cells
+  // containing a cube is separable by axis: start from the top cells' values at their (all-odd) positions, then along
+  // each axis give every even position the minimum of its odd neighbours. NaN (masked, or no neighbour) is skipped by
+  // the minimum, so a cell is NaN, and not in the complex, exactly when every top cell containing it is masked.
+  private val doubledShape: Array[Int] = shape.map(n => 2 * n + 1).toArray
+  private val cellWeight: Array[Long] =
+    val w = new Array[Long](ambientDim)
+    w(ambientDim - 1) = 1L
+    for i <- ambientDim - 2 to 0 by -1 do w(i) = w(i + 1) * doubledShape(i + 1)
+    w
+
+  /** Every top cell's value in row-major order (the last axis fastest), read from `topCellValue` once (in parallel when
+    * `parallelFiltrationValue`): the pixels of the image, as [[CubicalImage.fromFlatArray]] takes them. A read-only
+    * view of [[topCellValues]], which is not copied.
     */
-  private def containingTopCells(c: Cube): Seq[IndexedSeq[Int]] =
-    val perAxisChoices: IndexedSeq[Seq[Int]] = (0 until ambientDim).map { i =>
-      if c.isNondegenerate(i) then Seq(c.lowerCoordinate(i))
-      else
-        val k = c.lowerCoordinate(i)
-        Seq(k - 1, k).filter(v => v >= 0 && v < shape(i))
-    }
-    cartesianProduct(perAxisChoices)
+  def topValues: IndexedSeq[Double] = scala.collection.immutable.ArraySeq.unsafeWrapArray(topCellValues)
 
-  private def cartesianProduct(choices: IndexedSeq[Seq[Int]]): Seq[IndexedSeq[Int]] =
-    choices.foldLeft(Seq(IndexedSeq.empty[Int])) { (acc, opts) =>
-      for prefix <- acc; v <- opts yield prefix :+ v
-    }
+  // `protected[tda4j]`, not public: a caller writing into this array would change the grid behind `cellValues`, which
+  // is computed from it once. A subclass may override it (FlatCubicalGridStream hands its own pixel array over).
+  /** Every top cell's value in row-major order (the last axis fastest): the flat array the grid engines and
+    * `cellValues` work from.
+    */
+  protected[tda4j] lazy val topCellValues: Array[Double] =
+    val pixelCount = shape.foldLeft(1L)(_ * _)
+    require(pixelCount <= Int.MaxValue, s"CubicalGridStream: $pixelCount top cells do not fit in one array")
+    val values = new Array[Double](pixelCount.toInt)
+    val pstride = shape.scanRight(1)(_ * _).tail
+    def read(p: Int): Unit = values(p) = topCellValue(IndexedSeq.tabulate(ambientDim)(i => (p / pstride(i)) % shape(i)))
+    if parallelFiltrationValue then (0 until pixelCount.toInt).par.foreach(read)
+    else
+      var p = 0
+      while p < values.length do
+        read(p)
+        p += 1
+    if !nanMask then CubicalGridStream.requireNoNaN(shape, values)
+    values
 
-  // Memoized: `CellularHomologyEngine` re-derives `Ordering[CellT] = stream.filtrationOrdering` and consults it
-  // on every chain-arithmetic comparison during reduction (Chain's SortedMap/PriorityQueue accumulator), not
-  // just once per cell during the stream's own up-front sorts -- an UNCACHED filtrationValue means
-  // containingTopCells (already O(2^(ambientDim - dim(c))) per call) gets recomputed on every single one of
-  // those comparisons. Unlike RipserCohomologyEngine's `memoizeFiltrationValue` (opt-in, defaulting to false
-  // for memory frugality on potentially-huge VR complexes with a cheap incremental alternative,
-  // `insertionDiameter`), there is no equivalent incremental formula here, AND `CellularHomologyEngine.
-  // HomologyState.cellIterator` already materializes every cell of the stream into one in-memory Vector before
-  // reduction even starts -- so a cache bounded by the same already-resident cell count adds no new
-  // memory-frugality concern to weigh against. See `.claude/WORKLOG-autonomous-session-2026-09-19.md` for the
-  // phase-separated profiling that found this: per-cell cost was flat in both of the stream's own sort phases,
-  // and the entire 3D growth (231->678 us/cell, n=8->24) was isolated to the reduction phase alone.
-  private val filtrationValueCache = mutable.HashMap.empty[Cube, Double]
+  private lazy val cellValues: Array[Double] =
+    val total = totalCellCount
+    require(total <= Int.MaxValue, s"CubicalGridStream: $total cells do not fit in one array")
+    val values = Array.fill(total.toInt)(Double.NaN)
+    val pixels = topCellValues
+    val pstride = shape.scanRight(1)(_ * _).tail
+    for p <- pixels.indices do
+      var index = 0L
+      for i <- 0 until ambientDim do index += (2L * ((p / pstride(i)) % shape(i)) + 1L) * cellWeight(i)
+      values(index.toInt) = pixels(p)
+    for axis <- 0 until ambientDim do
+      val w = cellWeight(axis).toInt
+      val len = doubledShape(axis)
+      for i <- values.indices do
+        val c = (i / w) % len
+        if c            % 2 == 0 then
+          val below = if c > 0 then values(i - w) else Double.NaN
+          val above = if c < len - 1 then values(i + w) else Double.NaN
+          values(i) = if below.isNaN then above else if above.isNaN then below else math.min(below, above)
+    values
+
+  private def cellIndex(c: Cube): Int =
+    val e = c.encoded
+    var index = 0L
+    var i = 0
+    while i < ambientDim do
+      index += e(i) * cellWeight(i)
+      i += 1
+    index.toInt
 
   override val filtrationValue: PartialFunction[Cube, Double] = new PartialFunction[Cube, Double]:
-    def isDefinedAt(c: Cube): Boolean = inGrid(c)
-    def apply(c: Cube): Double =
-      filtrationValueCache.getOrElseUpdate(c, containingTopCells(c).map(topCellValue).min)
+    def isDefinedAt(c: Cube): Boolean = inGrid(c) && !cellValues(cellIndex(c)).isNaN
+    def apply(c: Cube): Double = cellValues(cellIndex(c))
 
-  /** The shared `FiltrationOrdering.canonical` shape (fv reversed, then dimension, then the canonical `cubeOrdering`
-    * tie-break). Ties on filtration value are the COMMON case here, not an edge case: every non-top face shares its
-    * value with at least one of its cofaces by construction (min-over-cofaces), so a broken tie-break would corrupt
-    * essentially every reduction, not just rare coincidences.
+  /** `FiltrationOrdering.canonical` with `cubeOrdering` as tie-break. Ties are common here: a face shares its value
+    * with at least one coface.
     */
   override val filtrationOrdering: Ordering[Cube] =
     FiltrationOrdering.canonical(filtrationValue, _.dim, cubeOrdering)
@@ -125,44 +142,57 @@ class CubicalGridStream(
       for prefix <- acc; v <- r.iterator yield prefix :+ v
     }
 
-  /** Bounded at `0 to ambientDim`, contiguous from 0 -- the contract `StratifiedCellStream.iterator`'s default
-    * implementation (and this class's own callers) rely on. Each dimension's bucket is fully materialized and sorted by
-    * `filtrationOrdering.reverse` (oldest-first, what `CellularHomologyEngine` -- via its own `processingOrder` re-sort
-    * -- and `iterateDimension`'s own established convention both expect); on a large grid this is the memory-heavy
-    * step, not `containingTopCells`. Recomputed and re-sorted from scratch on EVERY call, unlike
-    * `ExplicitCubicalStream.byDimension` below (a `lazy val`) -- fine for `CellularHomologyEngine`, which calls
-    * `.iterator` (hence this) exactly once per `persistentHomology` run, but a caller that repeatedly calls
-    * `iterateDimension(d)` directly (as some alpha-complex specs do for their own streams) would pay the full re-sort
-    * every time; not measured as an actual problem, just flagged rather than silently left unmentioned.
+  /** The cubes of dimension `d` (`0 <= d <= ambientDim`) in the complex (masked ones left out), oldest first. Each call
+    * builds and sorts the whole dimension.
     */
   override def iterateDimension: PartialFunction[Int, Iterator[Cube]] = {
     case d if d >= 0 && d <= ambientDim =>
-      val cubes = cubesOfDimension(d).toVector
-      if parallelFiltrationValue then
-        // Compute into a plain parallel collection first, THEN write into the shared
-        // filtrationValueCache sequentially -- mutable.HashMap.getOrElseUpdate is not safe to call
-        // concurrently (same hazard class as every other memoization cache in this codebase; see
-        // .claude/WORKLOG-parallelization-survey.md's "recurring hazard" note). `cubesOfDimension(d)`
-        // yields each cube exactly once (a distinct non-degenerate-axis-set + coordinate combination
-        // per cube), so the sequential merge below never redundantly recomputes or double-writes.
-        val computed: IndexedSeq[(Cube, Double)] =
-          cubes.par.map(c => c -> containingTopCells(c).map(topCellValue).min).toIndexedSeq
-        computed.foreach { case (c, v) => filtrationValueCache.getOrElseUpdate(c, v) }
+      val cubes = cubesOfDimension(d).filter(c => !cellValues(cellIndex(c)).isNaN).toVector
       cubes.sorted(using filtrationOrdering.reverse).iterator
   }
 
-/** Hides every cell of dimension `> maxDim` from `stream` -- the `Cube` analogue of `LimitedCofaceSimplexStream`
-  * (`SimplexStream.scala`), needed because that class is hardcoded to `CofaceSimplexStream[Int, Double]` and doesn't
-  * fit `Cube` at all. Used by `homology.FastCubicalHomologyEngine`'s own `d >= 3` path
-  * (`.claude/DESIGN-fast-engines-hybrid-middle-dimensions.md`) to hand `CellularPersistenceInChunksEngine` a view of
-  * the grid that never contains a real top-dimensional cell, so that engine's own general `Chain` reduction never
-  * touches them -- the whole point being to let the (cheaper) dual union-find handle the top dimension instead.
-  *
-  * Delegates `filtrationOrdering`/`filtrationValue` to `stream` unchanged (removing higher-dimensional cells from the
-  * DOMAIN doesn't change either), and preserves `StratifiedCellStream.iterator`'s own contiguous-from-0 contract for
-  * free: truncating a contiguous `0..stream.ambientDim` domain to `0..maxDim` is still contiguous from 0.
+/** A grid whose top-cell values are already one flat row-major array, as [[CubicalImage.fromFlatArray]] builds it: the
+  * engines read the array itself instead of calling `topCellValue` once per pixel.
   */
-class LimitedCubicalGridStream(stream: CubicalGridStream, maxDim: Int)
+open class FlatCubicalGridStream(
+  shape: IndexedSeq[Int],
+  pixels: Array[Double],
+  parallelFiltrationValue: Boolean = false,
+  nanMask: Boolean = true
+) extends CubicalGridStream(shape, FlatCubicalGridStream.reader(shape, pixels), parallelFiltrationValue, nanMask):
+  // The array is at hand, so masks off is checked now, where the image is built, not when an engine first reads it.
+  if !nanMask then CubicalGridStream.requireNoNaN(shape, pixels)
+  override protected[tda4j] lazy val topCellValues: Array[Double] = pixels
+
+object CubicalGridStream:
+  /** Throws the error for masks off (`nanMask = false`) at the first NaN of `values` (row-major): where it is, and what
+    * to do.
+    */
+  def requireNoNaN(shape: IndexedSeq[Int], values: Array[Double]): Unit =
+    var p = 0
+    while p < values.length && !values(p).isNaN do p += 1
+    if p < values.length then
+      val at = GridRanks.coordinates(shape.toArray, p).mkString("(", ", ", ")")
+      throw new IllegalArgumentException(
+        s"the image has a NaN value at pixel $at, and NaN masks are off (option nanMask = false, --nan-mask false on " +
+          "the command line), so a NaN is an error rather than a missing pixel. Replace it by a number, or leave " +
+          "nanMask at its default (true): a NaN pixel is then masked, left out of the complex."
+      )
+
+object FlatCubicalGridStream:
+  /** `topCellValue` for a row-major array. */
+  def reader(shape: IndexedSeq[Int], pixels: Array[Double]): IndexedSeq[Int] => Double =
+    val strides = shape.scanRight(1)(_ * _).tail.toArray
+    idx =>
+      var flat = 0
+      var i = 0
+      while i < strides.length do
+        flat += idx(i) * strides(i)
+        i += 1
+      pixels(flat)
+
+/** `stream` without its cells of dimension above `maxDim`, with the same values and order. */
+open class LimitedCubicalGridStream(stream: CubicalGridStream, maxDim: Int)
     extends StratifiedCellStream[Cube, Double]
     with DoubleFiltration[Cube]():
   override def iterateDimension: PartialFunction[Int, Iterator[Cube]] = {
@@ -170,13 +200,13 @@ class LimitedCubicalGridStream(stream: CubicalGridStream, maxDim: Int)
   }
   override def filtrationOrdering: Ordering[Cube] = stream.filtrationOrdering
   override def filtrationValue: PartialFunction[Cube, Double] = stream.filtrationValue
+  // Cells up to dimension maxDim: degrees above maxDim - 1 are truncation artifacts.
+  override def homologyDegreeLimit: Option[Int] = Some(maxDim - 1)
 
-/** A sparse/arbitrary finite set of cubes with explicit filtration values -- mirrors `ExplicitStream` for simplices.
-  * Useful for hand-built fixtures and for genuinely non-grid cubical complexes (arbitrary unions of products of
-  * intervals, per the original ask -- `CubicalGridStream` is the important special case for images, not the only shape
-  * a cubical complex can take).
+/** A finite set of cubes with explicit filtration values, the cubical counterpart of `ExplicitStream`: for small
+  * hand-built complexes and cubical complexes that are not a full grid.
   */
-class ExplicitCubicalStream(
+open class ExplicitCubicalStream(
   protected val filtrationValues: Map[Cube, Double],
   protected val cubes: Seq[Cube]
 ) extends StratifiedCellStream[Cube, Double]

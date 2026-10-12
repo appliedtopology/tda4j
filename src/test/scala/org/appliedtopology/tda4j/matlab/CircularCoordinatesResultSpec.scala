@@ -1,15 +1,13 @@
 package org.appliedtopology.tda4j
 package matlab
 
-import org.appliedtopology.tda4j.homology.NoIntegerCocycleException
-import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.*
 
 import org.specs2.mutable.Specification
 
 /** Tests the `TDA4j.h1Bars`/`circularCoordinates` MATLAB facade -- that it is a faithful, correctly-marshalled
-  * pass-through to `homology.CircularCoordinates`, which already has its own thorough test suite
-  * (`CircularCoordinatesSpec`, including the real oracle: recovering the true geometric angle on a circle) -- not a
-  * re-test of the underlying math.
+  * pass-through to `CircularCoordinates`, which already has its own thorough test suite (`CircularCoordinatesSpec`,
+  * including the real oracle: recovering the true geometric angle on a circle) -- not a re-test of the underlying math.
   */
 class CircularCoordinatesResultSpec extends Specification:
   private def circlePoints(n: Int): Array[Array[Double]] =
@@ -24,14 +22,14 @@ class CircularCoordinatesResultSpec extends Specification:
     }
 
   "circularCoordinates" should {
-    "recovers the true geometric angle on a clean circle, matching homology.CircularCoordinates directly" >> {
+    "recovers the true geometric angle on a clean circle, matching CircularCoordinates directly" >> {
       val points = circlePoints(16)
       val bars = TDA4j.h1Bars(points)
       val (birth, death) = (bars(0)(0), bars(0)(1))
       val r = birth + (death - birth) * 0.5
 
       val viaFacade = TDA4j.circularCoordinates(points, r, 0, 47)
-      val viaDirect = homology.CircularCoordinates.compute(EuclideanMetricSpace(points), r, 0, 47)
+      val viaDirect = CircularCoordinates.compute(EuclideanMetricSpace(points), r, 0, 47)
 
       viaFacade.birth() must beEqualTo(viaDirect.birth)
       viaFacade.death() must beEqualTo(viaDirect.death)
@@ -58,3 +56,11 @@ class CircularCoordinatesResultSpec extends Specification:
         classOf[NoIntegerCocycleException].getSuperclass must beEqualTo(classOf[RuntimeException])
       }
   }
+
+  "plot" should
+    "draw every point of the circle at its angle" >> {
+      val points = circlePoints(16)
+      val bars = TDA4j.h1Bars(points)
+      val svg = TDA4j.circularCoordinates(points, (bars(0)(0) + bars(0)(1)) / 2).plot().svg()
+      "<title>point [0-9]+: θ = ".r.findAllMatchIn(svg).size must beEqualTo(16)
+    }

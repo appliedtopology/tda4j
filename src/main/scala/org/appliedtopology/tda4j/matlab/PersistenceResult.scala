@@ -1,19 +1,10 @@
 package org.appliedtopology.tda4j.matlab
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
-import org.appliedtopology.tda4j.barcode.{given, *}
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.{Figure, Plot, Scene, Svg}
 
-/** The boundary matrix of the full complex a [[PersistenceResult]] was computed from, one column per cell in filtration
-  * order (column `j`'s own dimension/vertices are `columnDims(j)`/`columnVertices(j)`) -- `TDA4j`'s own
-  * `buildBoundaryMatrix` builds this from the same stream/metric-space construction `engine="naive"` would consume for
-  * that `complex`, REGARDLESS of which engine actually computed this result's own bars (the boundary matrix is a
-  * property of the complex, not of which reduction algorithm ran over it) -- see that method's own doc.
-  * `private[matlab]`: MATLAB never sees this type directly, only via `PersistenceResult`'s own `int[]`/`double[]`
-  * accessor methods below.
+/** The boundary matrix of the complex a [[PersistenceResult]] was computed from, one column per cell in filtration
+  * order; exposed only through `PersistenceResult`'s accessors.
   */
 private[matlab] case class BoundaryMatrixData(
   rows: Array[Int],
@@ -24,24 +15,17 @@ private[matlab] case class BoundaryMatrixData(
   columnFiltrationValues: Array[Double]
 )
 
-/** A finished persistence computation, in a shape callable directly from MATLAB (or any other plain-Java caller) via
-  * MATLAB's built-in Java interface: every public method here takes/returns only `int`, `double`, `double[][]`,
-  * `int[][]`, or another `PersistenceResult` handle (MATLAB's Java bridge holds and passes those around like any other
-  * Java object -- already established by `TDA4j.computeFrom*` itself returning one) -- no other Scala types, no
-  * generics, no `java.util.Map` -- since none of those marshal reliably across MATLAB's Java bridge. See `TDA4j` for
-  * how this gets constructed and `WORKLOG-matlab-api.md` for the design rationale, including what was deliberately left
-  * out of this first pass.
+/** A finished persistence computation, for MATLAB and Java: every method takes and returns only `int`, `double`, arrays
+  * of those, or another `PersistenceResult`.
   *
-  * Bars are indexed `0` until `size() - 1`, in no particular guaranteed order (the underlying engines don't sort their
-  * output beyond grouping by dimension). An essential (never-dying) class reports `death(i) ==
-  * Double.POSITIVE_INFINITY`.
+  * Bars are numbered `0 until size()`, in no guaranteed order; an essential bar has `death(i) == Infinity`. The bars
+  * reported are those that pass the persistence threshold (see [[persistenceThreshold]]); [[toArrayUnfiltered]] has all
+  * of them. Each bar has a representative ([[cycleVertices]], [[cycleCoefficients]]): a cycle, or a cocycle with option
+  * `representativeType` `cocycles`.
   *
-  * Representative-chain access (`cycleVertices`/`cycleCoefficients`) is engine-dependent in *what kind* of chain it
-  * returns, not in *whether* one is available -- every engine records one for every bar; see the per-method doc. For
-  * `engine="ripser"` the chain is a representative *cocycle*; for `engine="naive"` it is a representative *cycle*. Both
-  * are reported the same way here (a list of simplices, each given as its sorted vertex array, with a parallel
-  * coefficient array) because MATLAB-side code that only wants "the simplices spanning this bar" doesn't need to care
-  * which.
+  * The `plot...` methods draw the result (see the `plot` package): each returns a figure to `view()` in the browser or
+  * `save("name.svg")` (or `.html`). [[save]] writes the whole result to a file that `TDA4j.loadResult` reads back, from
+  * MATLAB, Java, Scala or the command line.
   */
 final class PersistenceResult private[matlab] (
   private val allDims: Array[Int],
@@ -50,7 +34,8 @@ final class PersistenceResult private[matlab] (
   private val cycleProvider: Int => (Array[Array[Int]], Array[Double]),
   private val boundaryMatrixProvider: () => BoundaryMatrixData,
   private val visible: Array[Int],
-  private val threshold: Double
+  private val threshold: Double,
+  private val source: Option[ResultSource] = None
 ):
   /** A result that reports every bar -- what `fromBars` builds; `TDA4j`'s dispatch then narrows it with
     * [[withPersistenceThreshold]].
@@ -68,23 +53,18 @@ final class PersistenceResult private[matlab] (
   private def births: Array[Double] = visible.map(allBirths)
   private def deaths: Array[Double] = visible.map(allDeaths)
 
-  /** The persistence threshold this result was filtered with (`0` means nothing was hidden by a threshold): bars with
-    * `death - birth` at or below it are not among the `size()` reported bars. Essential bars are never hidden. See
-    * `barcode.PersistenceFilter` for how the default (1% of the minimum enclosing radius) is derived.
-    */
+  /** The persistence a reported bar had to exceed (`0`: no threshold). Essential bars are always reported. */
   def persistenceThreshold(): Double = threshold
 
-  /** How many bars the threshold hid (the full barcode has `size() + hiddenCount()` bars). */
+  /** How many computed bars the threshold hid: there are `size() + hiddenCount()` in all. */
   def hiddenCount(): Int = allDims.length - visible.length
 
-  /** The full, unfiltered barcode as an N-by-3 matrix (dimension, birth, death), same layout as [[toArray]]. */
+  /** Every computed bar, threshold or not, as an N-by-3 matrix like [[toArray]]. */
   def toArrayUnfiltered(): Array[Array[Double]] =
     Array.tabulate(allDims.length)(i => Array(allDims(i).toDouble, allBirths(i), allDeaths(i)))
 
-  /** This same computation reporting only the bars that pass the threshold -- see `barcode.PersistenceFilter` for the
-    * rule (`minPersistence` absolute if given, otherwise `fraction` of `scale` -- the input's minimum enclosing radius,
-    * or a cubical image's value range; by-name, evaluated only when needed; `0` keeps everything). Computed from the
-    * FULL barcode, so it does not compound if applied twice.
+  /** This result reporting only the bars that pass the threshold (`PersistenceFilter.threshold`: `minPersistence` if
+    * given, else `fraction` of `scale`, evaluated only if needed). Computed from all the bars, so it does not compound.
     */
   private[matlab] def withPersistenceThreshold(
     minPersistence: Option[Double],
@@ -104,15 +84,29 @@ final class PersistenceResult private[matlab] (
       cycleProvider,
       boundaryMatrixProvider,
       PersistenceFilter.keptIndices(allBirths, allDeaths, thr),
-      thr
+      thr,
+      source
+    )
+
+  /** This result without its zero-length bars (`birth == death`): what every entry point returns unless the
+    * `includeZeroLength` option is set. Applied before [[withPersistenceThreshold]].
+    */
+  private[matlab] def withoutZeroLength: PersistenceResult =
+    val keep = allDims.indices.filter(i => allBirths(i) != allDeaths(i)).toArray
+    new PersistenceResult(
+      keep.map(allDims),
+      keep.map(allBirths),
+      keep.map(allDeaths),
+      i => cycleProvider(keep(i)),
+      boundaryMatrixProvider,
+      Array.range(0, keep.length),
+      0.0,
+      source
     )
 
   def size(): Int = visible.length
 
-  /** The whole barcode as one N-by-3 matrix: column 0 is dimension, column 1 is birth, column 2 is death (`+Inf` for an
-    * essential class). This is the primary, MATLAB-idiomatic way to consume a result -- immediately plottable,
-    * sortable, filterable with ordinary MATLAB matrix operations.
-    */
+  /** The reported bars as an N-by-3 matrix: dimension, birth, death (`Infinity` for an essential bar). */
   def toArray(): Array[Array[Double]] =
     Array.tabulate(visible.length) { i =>
       Array(allDims(visible(i)).toDouble, allBirths(visible(i)), allDeaths(visible(i)))
@@ -122,65 +116,39 @@ final class PersistenceResult private[matlab] (
   def birth(i: Int): Double = allBirths(visible(i))
   def death(i: Int): Double = allDeaths(visible(i))
 
-  /** The cells making up bar `i`'s representative chain, each as an `int[]` identifying that cell -- the array's own
-    * meaning depends on which complex this result came from, since the underlying cell type differs:
+  /** The cells of bar `i`'s representative, one row each:
     *
-    *   - `complex="vr"`/`"alpha"`/`"cech"` (a `Simplex[Int]`): the simplex's sorted vertex array (0-based, matching the
-    *     row indices of whatever point/distance matrix was passed to `TDA4j`).
-    *   - `complex="cubical"` (a `Cube`): the cell's own doubled-coordinate encoding (`Cube.encoded`, see
-    *     `Cubical.scala`) -- NOT vertex indices. Axis `k`'s entry is `2*a` for a degenerate (point) factor at lattice
-    *     coordinate `a`, or `2*a+1` for a non-degenerate (unit-interval) factor spanning `[a, a+1]`; decode coordinate
-    *     `k` as `a = v(k)/2` (integer division) plus, when `v(k)` is odd, a unit interval starting there.
+    *   - for a simplicial complex, the simplex's sorted vertices (0-based point numbers; for the witness complex, point
+    *     numbers, not landmark numbers);
+    *   - for an image, the cube's doubled coordinates: along each axis `2a` for a vertex coordinate `a`, `2a + 1` for
+    *     the unit interval `[a, a + 1]` (a pixel `(i, j)` is `(2i + 1, 2j + 1)`).
     *
-    * Throws `UnsupportedOperationException` if this specific bar has no recorded representative. Every engine records
-    * one for every bar, at every dimension, for every complex type above, so this indicates an engine bug rather than
-    * an expected gap -- see `.claude/CLAUDE.md`'s coefficients-and-representatives design principle for why this
-    * matters.
+    * Every engine records a representative for every bar; an `UnsupportedOperationException` here is an engine bug.
     */
   def cycleVertices(i: Int): Array[Array[Int]] = cycleProvider(visible(i))._1
 
-  /** Coefficients parallel to `cycleVertices(i)`. Reported as `double` regardless of the underlying coefficient field
-    * -- for a finite field `Z/pZ` this is the representative integer value cast to `double`, for the default
-    * real-valued field it's the value itself. See `cycleVertices` for the exceptions this can throw.
+  /** The coefficients of bar `i`'s representative, parallel to `cycleVertices(i)`: over `Z/p` an integer representative
+    * of the residue, over the reals the value.
     */
   def cycleCoefficients(i: Int): Array[Double] = cycleProvider(visible(i))._2
 
-  /** This result's own bars of dimension `dim` -- ALL of them, including any the persistence threshold hides from
-    * `size()`/`toArray()` (a distance or vectorization between two results must not depend on each one's own threshold,
-    * which differs with each one's own scale) -- as plain `PersistenceBar[Double, Nothing]` (no representative chain --
-    * `barcode.BarcodeDistance`/`barcode.Vectorization` only ever look at `dim`/`lower`/`upper`) for feeding into those
-    * two objects. An essential class (`death(i) == Double.PositiveInfinity`) becomes a `PositiveInfinity` upper
-    * endpoint, exactly what both consume directly for the essential-bar handling documented on each.
+  /** All the bars of dimension `dim`, threshold or not, without representatives: what the distances and vectorizations
+    * compare (so they do not depend on each result's own threshold).
     */
   private def barsOfDimension(dim: Int): IndexedSeq[PersistenceBar[Double, Nothing]] =
-    (0 until allDims.length)
-      .filter(allDims(_) == dim)
-      .map { i =>
-        val upper: BarcodeEndpoint[Double] =
-          if allDeaths(i).isPosInfinity then PositiveInfinity[Double]() else OpenEndpoint(allDeaths(i))
-        PersistenceBar[Double, Nothing](dim, ClosedEndpoint(allBirths(i)), upper)
-      }
+    (0 until allDims.length).filter(allDims(_) == dim).map(barAt)
 
-  /** `groundNorm` follows this facade's own existing `maxFiltrationValue` convention (`TDA4j`'s own doc: "pass a very
-    * large number for the old always-unbounded behavior") rather than introducing a new one: `Double.PositiveInfinity`
-    * means [[BarcodeDistance.GroundNorm.LInfinity]] (the usual TDA convention, and the default every method below
-    * without a `groundNorm` parameter uses), any finite value `p >= 1.0` means [[BarcodeDistance.GroundNorm.LP]].
-    */
+  /** `Infinity` is the L∞ ground norm, a finite `p >= 1` the Lp norm. */
   private def toGroundNorm(groundNorm: Double): BarcodeDistance.GroundNorm =
     if groundNorm.isPosInfinity then BarcodeDistance.GroundNorm.LInfinity else BarcodeDistance.GroundNorm.LP(groundNorm)
 
-  /** Bottleneck distance (`.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 4) between this result's and
-    * `other`'s dimension-`dimension` bars, under the L-infinity ground norm -- see `barcode.BarcodeDistance` for the
-    * full matching/essential-bar policy this implements. `Double.PositiveInfinity` back means the two diagrams have
-    * different numbers of essential (never-dying) classes in this dimension, so no finite matching exists; that is a
-    * real answer, not a failure.
+  /** The bottleneck distance between the dimension-`dimension` bars of this result and `other` (L∞ ground norm; see
+    * `BarcodeDistance`). `Infinity` when the numbers of essential bars differ: then no finite matching exists.
     */
   def bottleneckDistance(other: PersistenceResult, dimension: Int): Double =
     bottleneckDistance(other, dimension, Double.PositiveInfinity)
 
-  /** As the two-argument [[bottleneckDistance]], under an explicit ground norm (see `toGroundNorm`'s own doc for the
-    * `Double.PositiveInfinity`-means-L-infinity convention).
-    */
+  /** [[bottleneckDistance]] under the ground norm `groundNorm` (`Infinity` for L∞). */
   def bottleneckDistance(other: PersistenceResult, dimension: Int, groundNorm: Double): Double =
     BarcodeDistance.bottleneckDistance(
       barsOfDimension(dimension),
@@ -188,19 +156,17 @@ final class PersistenceResult private[matlab] (
       toGroundNorm(groundNorm)
     )
 
-  /** Wasserstein distance, order `1.0`, L-infinity ground norm -- see [[bottleneckDistance]] and
-    * `barcode.BarcodeDistance` for the shared essential-bar policy and ground-norm convention.
+  /** The Wasserstein distance of order 1 between the dimension-`dimension` bars of this result and `other` (L∞ ground
+    * norm; see `BarcodeDistance`).
     */
   def wassersteinDistance(other: PersistenceResult, dimension: Int): Double =
     wassersteinDistance(other, dimension, 1.0, Double.PositiveInfinity)
 
-  /** As the two-argument [[wassersteinDistance]], under an explicit order (must be finite and `>= 1.0` -- pass
-    * `Double.PositiveInfinity` to `bottleneckDistance` directly instead, rather than here).
-    */
+  /** [[wassersteinDistance]] of order `order` (finite, at least 1). */
   def wassersteinDistance(other: PersistenceResult, dimension: Int, order: Double): Double =
     wassersteinDistance(other, dimension, order, Double.PositiveInfinity)
 
-  /** As the two-argument [[wassersteinDistance]], under an explicit order and ground norm. */
+  /** [[wassersteinDistance]] of order `order` under the ground norm `groundNorm` (`Infinity` for L∞). */
   def wassersteinDistance(other: PersistenceResult, dimension: Int, order: Double, groundNorm: Double): Double =
     BarcodeDistance.wassersteinDistance(
       barsOfDimension(dimension),
@@ -209,23 +175,15 @@ final class PersistenceResult private[matlab] (
       toGroundNorm(groundNorm)
     )
 
-  /** The first `numLevels` persistence landscape functions (Bubenik 2013, `.claude/WORKLOG-mainstream-feature-gap-
-    * analysis.md` item 8) of this result's dimension-`dimension` bars, sampled at `resolution` evenly-spaced points
-    * across `[tMin, tMax]` -- see `barcode.Vectorization.landscape` for the exact sampling convention, the closed-form
-    * check it satisfies, and why an essential (never-dying) bar needs no special handling here. Returns `levels(k)(j)`:
-    * level `k` (`0` = the outer envelope) at the `j`-th sample point.
+  /** The first `numLevels` persistence landscapes of the dimension-`dimension` bars, sampled at `resolution` points of
+    * `[tMin, tMax]`: `levels(k)(j)` is level `k` (`0` the outermost) at point `j`. See `Vectorization.landscape`.
     */
   def landscape(dimension: Int, numLevels: Int, tMin: Double, tMax: Double, resolution: Int): Array[Array[Double]] =
     Vectorization.landscape(barsOfDimension(dimension), numLevels, tMin, tMax, resolution)
 
-  /** The persistence image (Adams et al. 2017, `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 8) of this
-    * result's dimension-`dimension` bars, with the weight cap defaulted to that diagram's own maximum finite
-    * persistence (the paper's suggested default) -- see the eight-argument overload to pass one explicitly, and
-    * `barcode.Vectorization.persistenceImage` for the exact construction (isotropic Gaussian bumps in birth-persistence
-    * coordinates, exact per-pixel integration, piecewise-linear weighting) and why essential (never-dying) bars are
-    * dropped rather than given a special-cased value. Returns `image(r)(c)`: `r` indexes `birthResolution` pixels
-    * spanning `[birthMin, birthMax]`, `c` indexes `persistenceResolution` pixels spanning `[persistenceMin,
-    * persistenceMax]`.
+  /** The persistence image of the dimension-`dimension` bars over `[birthMin, birthMax] x [persistenceMin,
+    * persistenceMax]`, `birthResolution` by `persistenceResolution` pixels, Gaussian width `sigma`, with the weight
+    * reaching 1 at the largest persistence. Essential bars are left out. See `Vectorization.persistenceImage`.
     */
   def persistenceImage(
     dimension: Int,
@@ -246,10 +204,7 @@ final class PersistenceResult private[matlab] (
       persistenceResolution
     )
 
-  /** As the eight-argument [[persistenceImage]], with an explicit weight cap (the persistence value at and beyond which
-    * `barcode.Vectorization`'s piecewise-linear weighting saturates to `1.0`) instead of the diagram's own maximum
-    * finite persistence.
-    */
+  /** [[persistenceImage]] with the weight reaching 1 at persistence `weightCap`. */
   def persistenceImage(
     dimension: Int,
     sigma: Double,
@@ -268,51 +223,236 @@ final class PersistenceResult private[matlab] (
       (persistenceMin, persistenceMax),
       birthResolution,
       persistenceResolution,
-      Some(weightCap)
+      weightCap
     )
 
-  /** Computed once, lazily (a caller who never asks for the boundary matrix never pays for it -- unlike `toArray()`/
-    * `cycleVertices`, this can mean materializing and re-deriving every cell of a possibly-large complex, not just this
-    * result's own bars), then memoized: every accessor below reads this same cached value.
-    */
+  /** Built on first use, then cached. */
   private lazy val boundaryMatrixData: BoundaryMatrixData = boundaryMatrixProvider()
 
-  /** The number of cells (matrix columns/rows) in the full complex this result was computed from -- pass this as `n` to
-    * MATLAB's own `sparse(rows()+1, cols()+1, values(), n, n)` (see `boundaryRows`'s own doc for the `+1`).
-    */
+  /** The number of cells of the complex: the size of the (square) boundary matrix. */
   def numCells(): Int = boundaryMatrixData.columnDims.length
 
-  /** Row indices of the boundary matrix's nonzero entries (0-based, parallel to [[boundaryCols]]/[[boundaryValues]]):
-    * row `i`/column `j` means cell `j`'s boundary includes cell `i` with coefficient `boundaryValues()(k)`. Every
-    * complex/engine combination `TDA4j` supports populates this (see that class's `buildBoundaryMatrix`) -- rebuild in
-    * MATLAB as `sparse(rows()+1, cols()+1, values(), n, n)` (MATLAB's `sparse` is 1-based; every index in this facade,
-    * including this one, is 0-based, matching `cycleVertices`'s own convention).
+  /** The row numbers of the boundary matrix's nonzero entries (0-based), parallel to [[boundaryCols]] and
+    * [[boundaryValues]]: cell `cols(k)` has cell `rows(k)` in its boundary with coefficient `values(k)`. In MATLAB:
+    * `sparse(rows + 1, cols + 1, values, n, n)`.
     */
   def boundaryRows(): Array[Int] = boundaryMatrixData.rows
 
-  /** Column indices parallel to [[boundaryRows]] -- see that method's own doc. */
+  /** The column numbers of the nonzero entries, parallel to [[boundaryRows]]. */
   def boundaryCols(): Array[Int] = boundaryMatrixData.cols
 
-  /** Coefficients parallel to [[boundaryRows]]/[[boundaryCols]], reported as `double` the same way
-    * [[cycleCoefficients]] is (the representative-integer value cast to `double` for a finite field, the value itself
-    * for the default real-valued field).
-    */
+  /** The nonzero entries, parallel to [[boundaryRows]], as in [[cycleCoefficients]]. */
   def boundaryValues(): Array[Double] = boundaryMatrixData.values
 
-  /** The homological dimension of boundary-matrix column `j` (`0` until [[numCells]]) -- the same cell ordering
-    * [[boundaryRows]]/[[boundaryCols]] index into, NOT a bar index (there are generally far more cells than bars).
-    */
+  /** The dimension of cell `j` (a column of the boundary matrix, not a bar). */
   def columnDimension(j: Int): Int = boundaryMatrixData.columnDims(j)
 
-  /** Column `j`'s own cell identity, in the same per-complex-type shape [[cycleVertices]] documents (a sorted vertex
-    * array for `Simplex[Int]`-based complexes, a doubled-coordinate `Cube` encoding for cubical ones) -- lets a MATLAB
-    * caller relate a solved linear-algebra result (e.g. a cocycle from `boundaryValues`-derived harmonic smoothing)
-    * back to actual cells.
-    */
+  /** Cell `j`, in the format of [[cycleVertices]]. */
   def columnVertices(j: Int): Array[Int] = boundaryMatrixData.columnVertices(j)
 
-  /** Column `j`'s own filtration value -- the same quantity `birth`/`death` above report per bar, but per CELL here.
-    * Needed for anything that truncates the complex to a sub-level set `K_r` (e.g. circular coordinates: pick `r` in a
-    * target bar's `[birth, death)`, keep only columns/rows with `columnFiltrationValue <= r`).
-    */
+  /** The filtration value of cell `j`: keep the cells with value at most `r` for the complex at scale `r`. */
   def columnFiltrationValue(j: Int): Double = boundaryMatrixData.columnFiltrationValues(j)
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // saving
+  // ---------------------------------------------------------------------------------------------------------------
+
+  /** Writes the result to `path` for `TDA4j.loadResult` (from MATLAB, Java, Scala or `tda4j --input-format result`):
+    * every bar, the threshold and which bars it reported, the reported bars' representatives (computed now if they were
+    * not yet), what it was computed with, and the points or image it was computed from. Not the boundary matrix. The
+    * file is JSON, readable from any language; non-finite numbers are the strings `"Infinity"`, `"-Infinity"` and
+    * `"NaN"` (Python's `float(x)` reads both kinds of entry). `loadResult` reads the whole file into memory. With
+    * `representativeType` `cocycles` and every bar reported, a dimension-0 cocycle is a whole connected component, so
+    * the file can grow with the square of the number of points. Returns the file's absolute path.
+    */
+  def save(path: String): String =
+    ResultFile
+      .write(path, allDims, allBirths, allDeaths, visible, threshold, k => cycleProvider(visible(k)), source)
+      .toString
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // plots
+  // ---------------------------------------------------------------------------------------------------------------
+
+  /** Every facade entry point attaches its source; a result without one was built by hand inside this package. */
+  private def src: ResultSource =
+    source.getOrElse(throw new IllegalStateException("this result does not record what it was computed from"))
+
+  /** This result recording what it was computed from (what the plots draw on). */
+  private[matlab] def withSource(s: ResultSource): PersistenceResult =
+    new PersistenceResult(
+      allDims,
+      allBirths,
+      allDeaths,
+      cycleProvider,
+      boundaryMatrixProvider,
+      visible,
+      threshold,
+      Some(s)
+    )
+
+  private def barAt(k: Int): PersistenceBar[Double, Nothing] =
+    val upper: BarcodeEndpoint[Double] =
+      if allDeaths(k).isPosInfinity then PositiveInfinity[Double]() else OpenEndpoint(allDeaths(k))
+    PersistenceBar[Double, Nothing](allDims(k), ClosedEndpoint(allBirths(k)), upper)
+
+  private def reportedBars: IndexedSeq[PersistenceBar[Double, Nothing]] = visible.toIndexedSeq.map(barAt)
+  private def everyBar: IndexedSeq[PersistenceBar[Double, Nothing]] = allDims.indices.map(barAt)
+
+  /** The subtitle's note on the bars the threshold hid. */
+  private def withHiddenNote(f: Figure): Figure =
+    if hiddenCount() == 0 then f
+    else f.copy(subtitle = f.subtitle + s"; ${hiddenCount()} no longer than ${Svg.number(threshold)} not shown")
+
+  /** The reported bars as a barcode: one bar per class, grouped by dimension; hover a bar for its numbers. */
+  def plotBarcode(): Figure = withHiddenNote(Plot.barcode(reportedBars))
+
+  /** The barcode of the `longest` most persistent reported bars of each dimension. */
+  def plotBarcode(longest: Int): Figure = withHiddenNote(Plot.barcode(reportedBars, longest = Some(longest)))
+
+  /** The reported bars as a persistence diagram: a point `(birth, death)` per bar, essential bars on the `∞` line. */
+  def plotDiagram(): Figure = withHiddenNote(Plot.diagram(reportedBars))
+
+  /** The first three persistence landscapes of the dimension-`dimension` bars: every bar, as [[landscape]] uses. */
+  def plotLandscape(dimension: Int): Figure = Plot.landscape(everyBar, dimension)
+
+  /** The persistence image of the dimension-`dimension` bars: every finite bar, as [[persistenceImage]] uses. */
+  def plotPersistenceImage(dimension: Int): Figure = Plot.persistenceImage(everyBar, dimension)
+
+  /** The reported bar of dimension `dimension` with the largest persistence (an essential bar first; the lowest index
+    * among equals): the one to pass to [[plotRepresentative]] for the most prominent feature.
+    */
+  def mostPersistentBar(dimension: Int): Int =
+    val candidates = (0 until size()).filter(this.dimension(_) == dimension)
+    if candidates.isEmpty then
+      val present = (0 until size()).map(this.dimension).distinct.sorted
+      throw new IllegalArgumentException(
+        s"no reported bar has dimension $dimension" +
+          (if present.isEmpty then "; this result reports no bars"
+           else s"; reported dimensions: ${present.mkString(", ")}")
+      )
+    // a zero-length [Inf, Inf) bar would give Inf - Inf = NaN, which sorts above every number
+    def persistence(i: Int) = if death(i) == birth(i) then 0.0 else death(i) - birth(i)
+    candidates.maxBy(i => (persistence(i), -i))
+
+  // The refusals below name what cannot be drawn in words (`what`), not a method: the CLI shows them as they are.
+
+  private def noCoordinates(what: String): Nothing =
+    throw new UnsupportedOperationException(
+      s"this result was computed from ${src.input.words}, which has no coordinates to draw $what on; the barcode, " +
+        "the diagram, the landscapes and the persistence image can be drawn for every result"
+    )
+
+  private def points(what: String): Array[Array[Double]] = src.input match
+    case ResultInput.Points(ps)  => ps
+    case ResultInput.Image(_, _) =>
+      throw new UnsupportedOperationException(
+        s"$what is drawn for point clouds, and this result was computed from an image"
+      )
+    case ResultInput.Abstract(_) => noCoordinates(what)
+
+  private def image2D(what: String): org.appliedtopology.tda4j.Image = src.input match
+    case ResultInput.Image(shape, values) =>
+      if shape.length != 2 then
+        throw new UnsupportedOperationException(
+          s"$what is drawn for 2-D images, and this result's image has shape ${shape.mkString(" x ")}"
+        )
+      org.appliedtopology.tda4j.Image(values.toIndexedSeq, shape.toIndexedSeq)
+    case _ => throw new IllegalStateException("not an image")
+
+  private def complexKind(what: String): PointCloudComplex = src.complex match
+    case "vr"    => VietorisRips
+    case "cech"  => Cech
+    case "alpha" => AlphaShapes
+    case other   =>
+      throw new UnsupportedOperationException(
+        s"$what is drawn for the vr, cech and alpha complexes, and this result's complex is $other"
+      )
+
+  /** The input: the points (their first two coordinates) or the 2-D image. */
+  def plotInput(): Figure = src.input match
+    case ResultInput.Points(ps)  => Plot.points(ps)
+    case ResultInput.Image(_, _) => Plot.image(image2D("the input"))
+    case ResultInput.Abstract(_) => noCoordinates("the input")
+
+  /** The complex at scale `at` over the points (`vr`, `cech` or `alpha`), with the balls whose overlaps it records. */
+  def plotComplex(at: Double): Figure = Plot.complex(points("the complex"), at, complexKind("the complex"))
+
+  // The facade's own cells and coefficients, as `Plot` takes them: for `Z/p` the coefficients are already the balanced
+  // integers `Plot.number` gives for a typed chain, so the plot is the same either way, and no field is invented.
+  private def simplicialTerms(i: Int): Seq[(Simplex[Int], Double)] =
+    cycleVertices(i).toSeq.map(vs => Simplex.from(vs.toIndexedSeq)).zip(cycleCoefficients(i))
+
+  private def cubicalTerms(i: Int): Seq[(Cube, Double)] =
+    cycleVertices(i).toSeq.map(c => Cube.fromEncoded(c.toIndexedSeq)).zip(cycleCoefficients(i))
+
+  private def requireBar(i: Int): Unit =
+    if i < 0 || i >= size() then
+      throw new IllegalArgumentException(
+        s"there is no bar $i: this result reports " +
+          (if size() == 0 then "no bars" else s"${size()} bars, numbered 0 to ${size() - 1}")
+      )
+
+  private def representativeTitle(i: Int): String =
+    val kind = if src.cocycles then "Cocycle" else "Cycle"
+    val d = if death(i).isPosInfinity then "∞" else Svg.number(death(i))
+    s"$kind of bar $i: H${dimension(i)} [${Svg.number(birth(i))}, $d)"
+
+  /** Bar `i`'s representative over the input: a cycle's cells in its dimension's color, a cocycle's colored by value
+    * (balanced integers for `Z/p`), or a cubical chain over its 2-D image; each cell's coefficient on hover.
+    */
+  def plotRepresentative(i: Int): Figure = representativeFigure(i, None)
+
+  /** [[plotRepresentative]] at scale `at`, in the result's own complex (`vr`, `cech` or `alpha`, in its units): a cycle
+    * drawn over the complex at `at`; a cocycle restricted to its cells in the complex at `at` (at `birth(i)`, the cells
+    * that cut a loop as it closes: a bar's cocycle lives on the complex where the bar dies, across the data).
+    */
+  def plotRepresentative(i: Int, at: Double): Figure = representativeFigure(i, Some(at))
+
+  /** The cells of the result's complex with value at most `at`, up to dimension `dim`. */
+  private def complexAt(ps: Array[Array[Double]], at: Double, dim: Int, plot: String): Set[Simplex[Int]] =
+    val kind = complexKind(plot)
+    val stream = if kind eq AlphaShapes then kind.fromPoints(ps, dim, None) else kind.fromPoints(ps, dim, Some(at))
+    stream.iterator.filter(c => c.dim <= dim && stream.filtrationValue(c) <= at).toSet
+
+  private def representativeFigure(i: Int, at: Option[Double]): Figure =
+    requireBar(i)
+    src.input match
+      case ResultInput.Points(ps) =>
+        val terms = simplicialTerms(i)
+        val title = representativeTitle(i)
+        (src.cocycles, at) match
+          case (true, None)    => Plot.cocycle(ps, terms, Optional.empty, title)
+          case (true, Some(r)) =>
+            val cells = complexAt(ps, r, dimension(i), "a representative at a scale")
+            val kept = terms.filter((s, _) => cells.contains(s))
+            Plot
+              .cocycle(ps, kept, Optional.empty, title)
+              .copy(subtitle = s"${kept.size} of its ${terms.size} cells: those in the complex at ${Svg.number(r)}")
+          case (false, None)    => Plot.cycle(ps, terms, title)
+          case (false, Some(r)) =>
+            Plot.cycle(ps, terms, title).over(Plot.complex(ps, r, complexKind("a representative at a scale")))
+      case ResultInput.Image(_, _) =>
+        if at.isDefined then
+          throw new UnsupportedOperationException(
+            "a representative at a scale is drawn for point clouds; draw an image's representative without a scale"
+          )
+        Plot.cubicalChain(image2D("a representative"), cubicalTerms(i), representativeTitle(i))
+      case ResultInput.Abstract(_) => noCoordinates("a representative")
+
+  /** The points in 3-D (their first three coordinates), to turn and zoom. */
+  def plotInput3D(): Scene = Plot.points3D(points("a 3-D view"))
+
+  /** The complex at scale `at` in 3-D (`vr`, `cech` or `alpha`). */
+  def plotComplex3D(at: Double): Scene = Plot.complex3D(points("a 3-D view"), at, complexKind("the complex"))
+
+  /** Bar `i`'s cycle in 3-D over the points: its edges and triangles in its dimension's color. */
+  def plotRepresentative3D(i: Int): Scene =
+    requireBar(i)
+    val ps = points("a 3-D view")
+    if src.cocycles then
+      throw new UnsupportedOperationException(
+        "a cocycle is drawn in 2-D, colored by its values, which a 3-D view would not show; for a 3-D view, " +
+          "compute cycles (representativeType cycles)"
+      )
+    Plot.cycle3D(ps, simplicialTerms(i), representativeTitle(i))

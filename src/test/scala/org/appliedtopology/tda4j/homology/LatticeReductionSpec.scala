@@ -1,5 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
 
 import org.specs2.mutable.Specification
 

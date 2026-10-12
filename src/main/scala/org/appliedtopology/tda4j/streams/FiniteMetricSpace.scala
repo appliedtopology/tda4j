@@ -1,8 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
 
 import math.{pow, sqrt}
 import collection.immutable.Range
@@ -70,30 +66,8 @@ object FiniteMetricSpace:
     def isDefinedAt(spx: Simplex[VertexT]): Boolean =
       spx.forall(v => metricSpace.contains(v))
 
-    /** Nested iterator walk, not `spx.flatMap(v => spx.toSeq.filter(_ > v).map(w => distance(v, w))).max` -- that chain
-      * allocates a fresh closure AND a filtered/mapped `Seq` per vertex, on top of the `SortedSet.flatMap` itself, for
-      * what's structurally a single pairwise-max reduction. Outer `spx.underlying.iterator`, inner
-      * `vertices.iteratorFrom(v)` (skipping `v` itself, since `iteratorFrom` is inclusive of its start element) --
-      * `SortedSet`'s own `iteratorFrom` gives "every remaining element greater than `v`" without re-scanning from the
-      * beginning or needing a `ClassTag[VertexT]` (this class's own type parameter doesn't carry one -- `VertexT` is
-      * fully generic here, unlike the `Simplex[Int]`-specialized hot-path methods elsewhere in this codebase, so
-      * `.toArray` isn't an option). Same O(d^2) distance-comparison count as before (that part is the actual,
-      * unavoidable math), but no snapshot collection at all -- an EARLIER version of this fix used
-      * `spx.underlying.toIndexedSeq` for O(1) random access, avoiding `.toArray`'s `ClassTag` need the same way, but a
-      * full `Vector`/`VectorBuilder` construction turned out to be real overhead of its own for what's almost always a
-      * tiny collection (a simplex has only `dim+1` vertices): a follow-up JFR profile on `RipserCohomologyEngine`'s
-      * `fractal-r` run found `VectorBuilder`/`Vector$.from` at ~43% of total allocation bytes, `apply` itself still
-      * ~14% of CPU, immediately after that first fix landed -- iterators need no such backing collection, only two
-      * small iterator objects.
-      *
-      * Found via the `o3_1024` compute-server JFR profile on `RipserCohomologyEngine`
-      * (`.claude/WORKLOG-packed-ripser-engine.md`): this shared, generic method (used by 16 files across this codebase,
-      * not just the Ripser engines -- `VietorisRips`, `WitnessStream`, `CechStream`, `DtmRipsStream`,
-      * `SheehyRipsStream`, `DowkerStream`, `Cofacets`, `SimplexStream` among them) was the single largest remaining
-      * cost once the earlier apparent-pairs and encode-chain fixes cleared away what had been dominating before -- most
-      * of its call volume comes from `cohomologyOrdering.compare` (consulted on every `Chain.reduceBy` comparison, by
-      * design, per `memoizeFiltrationValue`'s own doc comment), not just the smaller number of once-per-simplex
-      * lookups.
+    /** The largest distance between two vertices of `spx`. A plain nested iterator walk: this is called on every
+      * comparison during reduction, so it allocates nothing beyond two iterators.
       */
     def apply(spx: Simplex[VertexT]): Double =
       if spx.dim <= 0 then 0.0
@@ -118,7 +92,7 @@ object FiniteMetricSpace:
   * @tparam VertexT
   *   Type of the vertex indices for the wrapped metric space
   */
-class IntMetricSpace[VertexT](val metricSpace: FiniteMetricSpace[VertexT]) extends FiniteMetricSpace[Int]:
+open class IntMetricSpace[VertexT](val metricSpace: FiniteMetricSpace[VertexT]) extends FiniteMetricSpace[Int]:
   override def distance(x: Int, y: Int): Double =
     metricSpace.distance(metricSpace.elements.toIndexedSeq(x), metricSpace.elements.toIndexedSeq(y))
 
@@ -138,45 +112,40 @@ class IntMetricSpace[VertexT](val metricSpace: FiniteMetricSpace[VertexT]) exten
   *   - `dist(x1).size == dist(x2).size` for all `x1,x2`
   *   - `dist(x).size == dist.size` for all `x`
   *   - `dist(x)(x) == 0` for all `x`
+  *   - `dist(x)(y) == dist(y)(x)` for all `x,y`
   *   - The triangle inequality
+  *
+  * Only the lower triangle is read: `distance(x, y)` is `dist(max(x, y))(min(x, y))`, as in Ripser and GUDHI, so a
+  * matrix that is not exactly symmetric gives the same results here as there.
   */
-class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricSpace[Int]:
-  def distance(x: Int, y: Int): Double = dist(x)(y)
+open class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricSpace[Int]:
+  // Real-world distance-matrix files (e.g. the roadmap benchmark data's `fractal_9_5_2` set) can violate the
+  // documented `dist(x)(y) == dist(y)(x)` expectation by ~1e-5/1e-6 (rounding in however the file was produced),
+  // not enforced at load time. Reading only ONE triangle's entry, always via the same (max, min) ordering
+  // regardless of which argument order the caller used, makes `distance` self-consistent for a given pair
+  // REGARDLESS of call-site argument order -- `PackedRipserCohomologyContext.insertionDiameter` queries
+  // `distance(existingVertex, insertedVertex)` with an argument order that depends on which facet a simplex was
+  // reached from, so an unsymmetrized lookup could silently stamp the SAME combinatorial simplex with two
+  // different diameters depending on path, corrupting its own basis/pivot bookkeeping (`.claude/
+  // WORKLOG-o3-1024-fractal-r-session-2026-09-25.md`'s fractal-r investigation).
+  def distance(x: Int, y: Int): Double =
+    // The lower triangle (row >= column), the triangle ripser.cpp and GUDHI read.
+    if x >= y then dist(x)(y) else dist(y)(x)
   def size: Int = dist.size
   def elements: Iterable[Int] = Range(0, size)
   override def contains(x: Int): Boolean = 0 <= x & x < size
 
-/** Takes in an point cloud and computes the Euclidean distance on demand.
+/** The Euclidean distances between the rows of `pts` (all of the same length).
   *
-  * @param pts
-  *   Point cloud matrix represented as a `Seq[Seq[Double]]`. The class expects but does not enforce:
-  *
-  *   - `pts(x1).size == pts(x2).size` for all `x1,x2`
   * @param cacheDistances
-  *   Precompute every pairwise `distance(x, y)` once, in an `O(n^2 * ambientDim)` upfront pass (a `lazy val`, so the
-  *   cost is only paid the first time `distance` is actually called), and serve every subsequent `distance` call as an
-  *   `O(1)` array lookup. Default `true`.
-  *
-  * Found via a same-machine JFR profile (see `.claude/WORKLOG-packed-ripser-engine.md`'s compute-server session) on
-  * `o3_1024` (ambient dimension 9, not 3 like `sphere3`/`dragon`): `pointSqDistance` and `insertionDiameter` (the
-  * O(vertexCount)-per-simplex cofacet-diameter check every VR engine in this codebase does) together accounted for 82%
-  * of the PACKED Ripser engine's own CPU time and 43% of the SortedSet engine's -- on THIS case, unlike every earlier
-  * profiling session in that arc (all measured on ambient-dimension-3 data), raw geometry dominates over anything
-  * either engine's own representation touches, which is why the packed engine's usual 15-45x advantage over SortedSet
-  * collapsed to ~1.7x there: a large, engine-invariant cost sits on top of both, diluting a real ~5x representational
-  * win underneath. The number of DISTINCT point pairs (`C(n,2)`) is almost always far smaller than the number of times
-  * `distance` gets called (every cofacet candidate of every simplex re-derives its own vertex-pair distances), so
-  * caching trades a small, bounded amount of memory for eliminating that redundant recomputation -- bounded by point
-  * count alone, NOT by complex size, unlike `memoizeFiltrationValue`
-  * (`RipserCohomologyEngine`/`PackedRipserCohomologyEngine`, `Homology.scala`/`PackedRipserCohomology.scala`), which
-  * defaults `false` specifically because a per-SIMPLEX cache is unbounded as the complex grows. This cache is `O(n^2)`
-  * `Double`s (8 bytes each): ~8MB at n=1024, ~128MB at n=4096 (this codebase's own `RipserPaperBenchmarkSpec` upper
-  * end) -- trivial at that scale, but a genuinely large point cloud (tens of thousands of points, e.g. `torus4`,
-  * deliberately excluded from that same benchmark for a related reason) would make this cache itself gigabytes -- pass
-  * `cacheDistances = false` for a point count where that matters.
+  *   compute all pairwise distances on first use and look them up afterwards (default `true`). That is `n^2` doubles,
+  *   about 8 MB at 1,000 points and 512 MB at 8,192, so the cache is only kept up to
+  *   [[EuclideanMetricSpace.MaxCachedPoints]] points; above that every distance is computed when asked for. Pass
+  *   `false` to compute every distance on demand at any size. Distances are looked up many times per pair during a
+  *   Vietoris-Rips computation, so the cache usually pays off where it fits.
   */
 
-class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistances: Boolean = true)
+open class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistances: Boolean = true)
     extends FiniteMetricSpace[Int]:
   def pointSqDistance(x: Array[Double], y: Array[Double]): Double =
     var acc: Double = 0.0
@@ -196,6 +165,8 @@ class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistances: Bo
   // computation per lookup rather than an extra array dereference. Filled via the full n x n range (not just
   // the upper triangle) -- doubling the fill cost of an already-cheap, one-time O(n^2 * ambientDim) pass in
   // exchange for a branch-free `distance` lookup afterward, which is the call this cache exists to make cheap.
+  private val useCache: Boolean = cacheDistances && size <= EuclideanMetricSpace.MaxCachedPoints
+
   private lazy val distanceCache: Array[Double] =
     val n = size
     val cache = new Array[Double](n * n)
@@ -211,7 +182,7 @@ class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistances: Bo
     cache
 
   def distance(x: Int, y: Int): Double =
-    if cacheDistances then distanceCache(x * size + y) else sqrt(pointSqDistance(pts(x), pts(y)))
+    if useCache then distanceCache(x * size + y) else sqrt(pointSqDistance(pts(x), pts(y)))
 
   lazy val vpdf: DistanceFunction[Array[Double]] =
     new DistanceFunction[Array[Double]]:
@@ -225,17 +196,14 @@ class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistances: Bo
     vpt.getAllWithinDistance(qp, eps).asScala.toSeq.map(pts.indexOf(_))
 
 object EuclideanMetricSpace:
-  // Two overloads per parameter type (Seq/Array), not one with a default `cacheDistances` each -- Scala
-  // rejects two overloaded `apply`s both carrying a default argument (ambiguous which default resolves a
-  // single-arg call), so the default lives only on the class's own primary constructor.
-  def apply(points: Seq[Seq[Double]]): EuclideanMetricSpace =
-    new EuclideanMetricSpace(points.map(_.toArray).toArray)
-  def apply(points: Seq[Seq[Double]], cacheDistances: Boolean): EuclideanMetricSpace =
-    new EuclideanMetricSpace(points.map(_.toArray).toArray, cacheDistances)
-  def apply(points: Array[Array[Double]]): EuclideanMetricSpace =
-    new EuclideanMetricSpace(points)
-  def apply(points: Array[Array[Double]], cacheDistances: Boolean): EuclideanMetricSpace =
-    new EuclideanMetricSpace(points, cacheDistances)
+  /** The largest point count whose distances are cached: `8192^2` doubles is 512 MB. */
+  val MaxCachedPoints: Int = 8192
+
+  // Two overloads, not one with a default `cacheDistances`: the class's own constructor carries that default. Every
+  // point shape (Array[Array[Double]], Seq[Seq[Double]], Seq[Array[Double]]) converts to a PointCloud here.
+  def apply(points: PointCloud): EuclideanMetricSpace = new EuclideanMetricSpace(points.points)
+  def apply(points: PointCloud, cacheDistances: Boolean): EuclideanMetricSpace =
+    new EuclideanMetricSpace(points.points, cacheDistances)
 
 /** ******* Efficient Spatial Queries *******
   */
@@ -243,18 +211,12 @@ object EuclideanMetricSpace:
 trait SpatialQuery[VertexT]:
   def neighbors(v: VertexT, epsilon: Double): Set[VertexT]
 
-  /** The `k` nearest points to `v` (by `metricSpace.distance`), sorted ascending by distance, `v` itself included when
-    * it belongs to the underlying metric space (a real metric always has `distance(v,v) = 0`, the smallest possible, so
-    * `v` is always its own nearest neighbour) -- this is the convention `streams.DistanceToMeasure` needs
-    * (Chazal-Cohen-Steiner-Merigot 2011's empirical DTM counts a point among its own `k` neighbours; verified against
-    * GUDHI's own `DistanceToMeasure`/`KNearestNeighbors` docstring AND a worked numeric example, see
-    * `.claude/WORKLOG-dtm-filtrations.md`). `require(1 <= k && k <= metricSpace.size)`: a `k` outside that range has no
-    * sensible answer (jvptree's own `getNearestNeighbors` silently clamps to however many points exist, which would
-    * silently under-deliver rather than fail loudly).
+  /** The `k` points nearest to `v`, nearest first, `v` itself included when it is a point of the space (the convention
+    * of the distance to measure, as in GUDHI). Requires `1 <= k <= size`.
     */
   def nearestNeighbors(v: VertexT, k: Int): IndexedSeq[VertexT]
 
-class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
+open class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
   val distanceFunction: DistanceFunction[VertexT] = new DistanceFunction[VertexT]:
     override def getDistance(firstPoint: VertexT, secondPoint: VertexT): Double =
       metricSpace.distance(firstPoint, secondPoint)
@@ -267,13 +229,13 @@ class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQ
   // metric space in this codebase, but NOT of every FiniteMetricSpace instance (ExplicitMetricSpace enforces
   // nothing; a correlation-derived "distance" matrix, as GUDHI's own docs use, can violate it). A violated
   // triangle inequality means the tree can silently prune away a genuine nearest neighbour. Callers over an
-  // arbitrary/unverified FiniteMetricSpace should use BruteForce instead -- see streams.DistanceToMeasure, which
+  // arbitrary/unverified FiniteMetricSpace should use BruteForce instead -- see DistanceToMeasure, which
   // defaults to it for exactly this reason.
   override def nearestNeighbors(v: VertexT, k: Int): IndexedSeq[VertexT] =
     require(1 <= k && k <= metricSpace.size, s"k must be between 1 and ${metricSpace.size}, got $k")
     vpTree.getNearestNeighbors(v, k).asScala.toIndexedSeq
 
-class BruteForce[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
+open class BruteForce[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
   override def nearestNeighbors(v: VertexT, k: Int): IndexedSeq[VertexT] =
     require(1 <= k && k <= metricSpace.size, s"k must be between 1 and ${metricSpace.size}, got $k")
     metricSpace.elements.toIndexedSeq.sortBy(metricSpace.distance(v, _)).take(k)
@@ -284,7 +246,7 @@ class BruteForce[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends Spati
 /** ****** Sparse Metric Spaces and the Dory storage *******
   */
 
-class SparseMetricSpace[VertexT: Ordering](metricSpace: FiniteMetricSpace[VertexT], diameter: Double)
+open class SparseMetricSpace[VertexT: Ordering](metricSpace: FiniteMetricSpace[VertexT], diameter: Double)
     extends FiniteMetricSpace[VertexT]():
   val spatialQuery: SpatialQuery[VertexT] = JVPTree(metricSpace)
 

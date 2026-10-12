@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.specs2.mutable
 
@@ -29,6 +22,126 @@ class PersistenceInChunksSpec extends mutable.Specification:
           case d if byDim.contains(d) => byDim(d).iterator
         }
     stream
+
+  /** The real projective plane as a CW complex, one cell per dimension: the loop `L` has boundary 0 (listed as no
+    * entries at all, as a CW or Morse complex may), and the disc `D` is attached by `2L`.
+    */
+  enum ProjectivePlaneCell:
+    case V, L, D
+
+  "A CW complex whose loop lists no boundary (RP², one cell per dimension)" >> {
+    import ProjectivePlaneCell.*
+    given (ProjectivePlaneCell is OrderedCell) = new (ProjectivePlaneCell is OrderedCell):
+      override lazy val ordering = Ordering.by[ProjectivePlaneCell, Int](_.ordinal)
+      extension (c: ProjectivePlaneCell)
+        override def dim = c.ordinal
+        override def boundary[F: Field as fr]: Seq[(ProjectivePlaneCell, F)] =
+          if c == D then Seq((L, fr.one + fr.one)) else Seq.empty
+    val values = Map(V -> 0.0, L -> 1.0, D -> 2.0)
+    val stream = new StratifiedCellStream[ProjectivePlaneCell, Double]:
+      def filtrationValue = PartialFunction.fromFunction(values)
+      def filtrationOrdering =
+        FiltrationOrdering.canonical(filtrationValue, _.ordinal, Ordering.by[ProjectivePlaneCell, Int](_.ordinal))
+      val smallest = Double.NegativeInfinity
+      var largest = Double.PositiveInfinity
+      def iterateDimension: PartialFunction[Int, Iterator[ProjectivePlaneCell]] = {
+        case d if d >= 0 && d <= 2 => Iterator(ProjectivePlaneCell.fromOrdinal(d))
+      }
+    val inf = Double.PositiveInfinity
+    def run(p: Int) =
+      val field = FiniteField(p)
+      import field.given
+      val chunks = CellularPersistenceInChunksEngine[ProjectivePlaneCell, field.Fp](2).persistentHomology(stream)
+      val naive = CellularHomologyEngine[ProjectivePlaneCell, field.Fp, Double]().persistentHomology(stream)
+      val loopRepresentatives = chunks.barcodeAt(inf).filter(_.dim == 1).flatMap(_.annotation).map(_.cells)
+      (chunks.diagramAt(inf).sorted, naive.diagramAt(inf).sorted, loopRepresentatives)
+    // F_3: 2L kills the loop. F_2: 2L = 0, so the loop and the disc are both classes.
+    (run(3) must beEqualTo(
+      (List((0, 0.0, inf), (1, 1.0, 2.0)), List((0, 0.0, inf), (1, 1.0, 2.0)), List(Seq(L)))
+    )).and(
+      run(2) must beEqualTo(
+        (
+          List((0, 0.0, inf), (1, 1.0, inf), (2, 2.0, inf)),
+          List((0, 0.0, inf), (1, 1.0, inf), (2, 2.0, inf)),
+          List(Seq(L))
+        )
+      )
+    )
+  }
+
+  /** A cell of a chain complex given by hand: integer boundary coefficients, read in the field. */
+  final case class HandCell(name: String, dim: Int, value: Double, boundary: Seq[(HandCell, Int)] = Seq.empty)
+
+  /** The barcode of a hand-given complex from the chunks and the naive engines, and whether every chunks bar's
+    * representative is a cycle made of cells present at its birth.
+    */
+  def handBarcodes(cells: Seq[HandCell], p: Int, maxDim: Int = 2) =
+    given (HandCell is OrderedCell) = new (HandCell is OrderedCell):
+      override lazy val ordering = Ordering.by[HandCell, String](_.name)
+      extension (c: HandCell)
+        override def dim = c.dim
+        override def boundary[F: Field as fr]: Seq[(HandCell, F)] = c.boundary.map { (f, k) =>
+          val m = (1 to math.abs(k)).foldLeft(fr.zero)((acc, _) => acc + fr.one)
+          (f, if k < 0 then -m else m)
+        }
+    val stream = new StratifiedCellStream[HandCell, Double]:
+      def filtrationValue = PartialFunction.fromFunction((c: HandCell) => c.value)
+      def filtrationOrdering =
+        FiltrationOrdering.canonical(filtrationValue, _.dim, Ordering.by[HandCell, String](_.name))
+      val smallest = Double.NegativeInfinity
+      var largest = Double.PositiveInfinity
+      def iterateDimension: PartialFunction[Int, Iterator[HandCell]] = {
+        case d if d >= 0 && d <= cells.map(_.dim).max => cells.filter(_.dim == d).iterator
+      }
+    val field = FiniteField(p)
+    import field.given
+    val inf = Double.PositiveInfinity
+    val chunks = CellularPersistenceInChunksEngine[HandCell, field.Fp](maxDim).persistentHomology(stream)
+    val naive = CellularHomologyEngine[HandCell, field.Fp, Double]().persistentHomology(stream)
+    given Ordering[HandCell] = Ordering.by[HandCell, String](_.name)
+    val repsAreCycles = chunks.barcodeAt(inf).forall { bar =>
+      bar.annotation.exists { rep =>
+        !rep.isZero() && Chain.from(rep.boundary).terms.isEmpty && rep.cells.forall(_.value <= bar.birth)
+      }
+    }
+    (chunks.diagramAt(inf).sorted, naive.diagramAt(inf).filter(_._1 <= maxDim).sorted, repsAreCycles)
+
+  "Edges whose boundary is not 0 or c(v - u) with c a unit (algebraic complexes, mod-p coefficients)" >> {
+    val inf = Double.PositiveInfinity
+    val u = HandCell("u", 0, 0.0)
+    val v = HandCell("v", 0, 0.0)
+    // 2(v - u): zero over F_2 (so the edge is a cycle and u, v stay apart), u and v joined over F_3.
+    val doubled = HandCell("e", 1, 1.0, Seq(v -> 2, u -> -2))
+    // A disc on it (only a chain complex over F_2, where the edge's boundary vanishes): the cycle dies at 2.
+    val disc = HandCell("f", 2, 2.0, Seq(doubled -> 1))
+    val a = HandCell("a", 0, 0.0)
+    val b = HandCell("b", 0, 0.0)
+    val c = HandCell("c", 0, 1.0)
+    // Three vertices: the youngest, c, is the pivot -- not a union of the first two listed.
+    val threeEnds = HandCell("e", 1, 2.0, Seq(a -> 1, b -> 1, c -> 1))
+    // One vertex with a nonzero coefficient over F_3 (zero over F_2).
+    val oneEnd = HandCell("e", 1, 1.0, Seq(a -> 2))
+    def agree(expected: List[(Int, Double, Double)]) = beEqualTo((expected, expected, true))
+
+    "2(v - u) over F_2 is a cycle; u and v stay apart" >> {
+      handBarcodes(Seq(u, v, doubled), 2) must agree(List((0, 0.0, inf), (0, 0.0, inf), (1, 1.0, inf)))
+    }
+    "2(v - u) over F_3 joins u and v" >> {
+      handBarcodes(Seq(u, v, doubled), 3) must agree(List((0, 0.0, 1.0), (0, 0.0, inf)))
+    }
+    "2(v - u) over F_2 with a disc on it: the cycle dies" >> {
+      handBarcodes(Seq(u, v, doubled, disc), 2) must agree(List((0, 0.0, inf), (0, 0.0, inf), (1, 1.0, 2.0)))
+    }
+    "a + b + c over F_3 kills the youngest vertex, c" >> {
+      handBarcodes(Seq(a, b, c, threeEnds), 3) must agree(List((0, 0.0, inf), (0, 0.0, inf), (0, 1.0, 2.0)))
+    }
+    "2a over F_3 kills a" >> {
+      handBarcodes(Seq(a, oneEnd), 3) must agree(List((0, 0.0, 1.0)))
+    }
+    "2a over F_2 is zero: a survives and the edge is a cycle" >> {
+      handBarcodes(Seq(a, oneEnd), 2) must agree(List((0, 0.0, inf), (1, 1.0, inf)))
+    }
+  }
 
   "Homology of a triangle" >> {
     given shc: PersistenceInChunksEngine[Int, Double] = PersistenceInChunksEngine()
@@ -232,9 +345,12 @@ class PersistenceInChunksSpec extends mutable.Specification:
     streamBuilder.addAll(HomologyFixtures.tetrahedronBoundaryDegenerateCells)
     val stream = explicitToStratifiedCellStream(streamBuilder)
     val homology = persistentHomology(stream)
-    homology.diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(
+    // All pairs, the zero-length ones included: how the tied cells pair off is the point of this fixture.
+    (homology.diagramAt(Double.PositiveInfinity, includeZeroLength = true) must containTheSameElementsAs(
       HomologyFixtures.tetrahedronBoundaryDegenerateExpected
-    )
+    )) and (homology.diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(
+      HomologyFixtures.tetrahedronBoundaryDegenerateExpected.filter((_, b, d) => b != d)
+    ))
   }
 
   // Ground-truth checks reusing RipserCohomologySpec's hand-verified fixtures (threePointLine: 3 colinear
@@ -275,14 +391,12 @@ class PersistenceInChunksSpec extends mutable.Specification:
       EnumeratingCofaceSimplexStream(threePointLine, maxFiltrationValue = Some(Double.PositiveInfinity)),
       2
     )
-    persistentHomology(stream).diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(
-      List(
-        (0, 0.0, 1.0),
-        (0, 0.0, 2.0),
-        (0, 0.0, Double.PositiveInfinity),
-        (1, 3.0, 3.0) // zero-length: {0,2} paired with the triangle, both born at 3.0
-      )
-    )
+    val h0 = List((0, 0.0, 1.0), (0, 0.0, 2.0), (0, 0.0, Double.PositiveInfinity))
+    val state = persistentHomology(stream)
+    (state.diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(h0)) and
+      (state.diagramAt(Double.PositiveInfinity, includeZeroLength = true) must containTheSameElementsAs(
+        h0 :+ (1, 3.0, 3.0) // {0,2} paired with the triangle, both born at 3.0
+      ))
   }
 
   "Homology of the elder-rule fixture picks the filtration-order pivot, not the lexicographic one" >> {
@@ -345,4 +459,29 @@ class PersistenceInChunksSpec extends mutable.Specification:
 
     val bad = results.filterNot { case (_, _, a, b, c) => a && b && c }
     bad must beEmpty
+  }
+
+  "Degree-1 representatives built on demand from union-find's spanning forest are cycles present at birth" >> {
+    // Seeded random points over F_17 (signs matter), zero-length bars included, so every cycle-closing edge's class is
+    // reported and every one of its tree-path representatives is built and checked, not only the long bars'.
+    val field = FiniteField(17)
+    import field.given
+    val inf = Double.PositiveInfinity
+    val rng = new scala.util.Random(5)
+    val results = for n <- Seq(6, 12, 20) yield
+      val vr = VietorisRips(EuclideanMetricSpace(Array.fill(n)(Array.fill(3)(rng.nextDouble()))), maxDimension = 1)
+      val state = PersistenceInChunksEngine[Int, field.Fp](1).persistentHomology(vr)
+      val degreeOne = state.barcodeAt(inf, includeZeroLength = true).filter(_.dim == 1)
+      val valid = degreeOne.forall { bar =>
+        bar.annotation.exists { rep =>
+          !rep.isZero() && Chain.from(rep.boundary).isZero() &&
+          rep.cells.forall(s => vr.filtrationValue(s) <= bar.birth)
+        }
+      }
+      val naive = SimplicialHomologyEngine[Int, field.Fp, Double]().persistentHomology(vr)
+      val sameDiagram = state.diagramAt(inf, includeZeroLength = true).sorted ==
+        naive.diagramAt(inf, includeZeroLength = true).filter(_._1 <= 1).sorted
+      (n, degreeOne.size, valid, sameDiagram)
+    (results.map(_._2).sum must beGreaterThan(100)) and
+      (results.filterNot((_, _, valid, same) => valid && same) must beEmpty)
   }

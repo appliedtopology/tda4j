@@ -1,0 +1,12 @@
+# Codecov (https://app.codecov.io/gh/appliedtopology/tda4j). Coverage here is a map, never a gate: the statuses Codecov
+# posts on commits are informational and never fail, and it does not comment on pull requests. Uploads come from
+# .github/workflows/coverage.yml.
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+comment: false

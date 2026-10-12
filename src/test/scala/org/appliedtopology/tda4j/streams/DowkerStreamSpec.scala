@@ -1,13 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-
-import org.appliedtopology.tda4j.barcode.*
-import org.appliedtopology.tda4j.homology.HomologyFixtures
 
 import org.specs2.mutable
 import org.specs2.execute.AsResult
@@ -152,24 +143,13 @@ class DowkerStreamSpec extends mutable.Specification with ScalaCheck:
       }
     }
 
-  // ---------------------------------------------------------------------------------------------------------
-  // Structural invariant (bars account for cells) -- the standard ordering-contract sanity net every stream in
-  // this codebase gets (CLAUDE.md's "#1 historical bug source"), exercising `DowkerCofaceSimplexStream`'s own
-  // `case 0` override (vertices are NOT all tied at filtration 0 here, unlike plain VR).
-  // ---------------------------------------------------------------------------------------------------------
-
-  "the bars-account-for-cells structural invariant holds for the Dowker complex, on random relations" >>
+  // The stream ordering contract, including `DowkerCofaceSimplexStream`'s own `case 0` (vertices are not all
+  // tied at 0 here, unlike plain VR).
+  "the Dowker complex satisfies the stream ordering contract, on random relations" >>
     AsResult {
-      prop { (relation: Array[Array[Double]]) =>
-        val stream = DowkerCofaceSimplexStream(relation)
-        val barcode = SimplicialHomologyEngine[Int, Double, Double]()
-          .persistentHomology(stream)
-          .diagramAt(Double.PositiveInfinity)
-        val cellCount = (0 until stream.geometry.numLeft)
-          .flatMap(d => stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty))
-          .size
-        HomologyFixtures.totalBarsAccountForAllCells(barcode, cellCount)
-      }
+      prop((relation: Array[Array[Double]]) =>
+        HomologyFixtures.respectsOrderingContract(DowkerCofaceSimplexStream(relation))
+      )
     }
 
   // ---------------------------------------------------------------------------------------------------------

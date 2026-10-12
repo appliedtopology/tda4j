@@ -1,0 +1,29 @@
+# Weekly update pull requests, one per ecosystem with every minor and patch update grouped into it; a major update
+# comes in its own pull request. Each goes through the same CI as any other change.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "Deps"
+
+  # The libraries in build.sbt and the plugins in project/plugins.sbt.
+  - package-ecosystem: sbt
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      libraries-and-plugins:
+        update-types: [minor, patch]
+    ignore:
+      # Scala follows the LTS line (3.9.x): patch releases only. Moving to a new minor is a decision, not an update.
+      - dependency-name: "org.scala-lang:scala3*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    commit-message:
+      prefix: "Deps"

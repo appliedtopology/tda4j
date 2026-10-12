@@ -192,3 +192,73 @@ multi-day run per attempt.
    specializing away from `Field[CoefficientT]` genericity for at least one concrete coefficient type, which
    cuts against the project's own "everything generic over Field" design principle (CLAUDE.md's own
    foundational architecture note) — a tradeoff to raise with the project lead, not decide unilaterally.
+
+## Update 2026-10-03: `fractal-r` root-caused — a genuine infinite loop, not a slow reduction
+
+The "~92x slower, unexplained" framing above was wrong in kind: packed wasn't doing more work than SortedSet,
+it was stuck in a literal non-terminating loop. Reproduced locally (this session's sandbox, not the compute
+server) on a 100-point submatrix of the real `fractal_9_5_2` distance matrix — small enough to iterate on in
+seconds per attempt, confirming the "construct a smaller synthetic reproduction" suggestion above, except the
+reproduction needed to be the REAL data, not synthetic (see why below).
+
+**Root cause.** `ExplicitMetricSpace.distance(x, y) = dist(x)(y)` (`FiniteMetricSpace.scala`) was a raw,
+unsymmetrized matrix lookup. Checked `fractal_9_5_2`'s own distance-matrix text file directly: 168 of its
+100x100 submatrix's 10,000 entries have `dist(i)(j) != dist(j)(i)`, differing by ~1e-5/1e-6 (rounding in
+whatever produced the roadmap benchmark's file, not something tda4j did). `PackedRipserCohomologyContext.
+insertionDiameter` computes a cofacet's diameter incrementally via `distance(existingVertex, insertedVertex)`
+— and which vertex plays which role depends on which facet a simplex was reached from. So the SAME
+combinatorial simplex (same `SimplexIndexing` index) could get stamped with two slightly different `diameter`
+values depending on path: confirmed directly by instrumenting `Chain.reduceLoop` and `PackedRipserCohomology
+Context`'s own `basisFallback` — one specific tetrahedron (index 2795451) was seen stamped `0.045074` as a
+`z.head` entry and `0.045073` as a `basis` entry.
+
+That one-ULP-ish difference was fatal because of a second, independent inconsistency: `basis` is a
+`mutable.HashMap[DiameterIndex, Chain[...]]`, keyed by `DiameterIndex.equals` (index-only, by design — see the
+class's own doc on why). `z` is a `mutable.TreeMap[DiameterIndex, CoefficientT]`, keyed by `compareDiamThenIndex`
+(diameter THEN index). `basis.get(sigma)` found the stale entry (index matches), but eliminating it against `z`
+via `updateMap` touched the TreeMap key `(0.045073, 2795451)` — a DIFFERENT key from `z`'s own
+`(0.045074, 2795451)` entry under that Ordering. The intended cancellation silently never happened. `z.head`
+was unchanged on every iteration; `Chain.reduceLoop` cycled through the identical `(zSize=19141,
+lastSigma=DiameterIndex(0.045074,2795451))` state for 4,000,000+ iterations straight (confirmed by a temporary
+iteration counter, since reverted) with no sign of ever stopping on its own.
+
+`RipserCohomologyContext` (SortedSet) was never at risk from this mechanism, structurally: its `Simplex[Int]`
+IS the `Chain` cell type directly (no separate diameter-carrying wrapper), and `filtrationValue`/
+`cohomologyOrdering` recompute the diameter fresh from the vertex set every time, via one fixed canonical
+iteration order (ascending vertex pairs) — so the same simplex always gets the same diameter regardless of
+which code path asked for it. `o3_1024`'s own anomaly (fixed earlier in this file, 5 commits) is unrelated:
+it's a point cloud (`EuclideanMetricSpace`), whose `distance` is exactly symmetric by formula, so it can't
+trigger this at all.
+
+**Fix (two parts, per project-lead sign-off — asked first since `ExplicitMetricSpace` has ~20 referencing
+files):**
+1. `ExplicitMetricSpace.distance(x, y)` now reads `dist(min(x,y))(max(x,y))` — always the same matrix cell
+   regardless of which argument order a caller uses, so it's self-consistent by construction for every
+   consumer (`matlab.TDA4j`, the IO loaders, DTM/witness/Dowker streams), not just the two Ripser engines.
+   Picks one already-present value rather than averaging/fabricating a new one.
+2. `PackedRipserCohomologyContext.compareDiamThenIndex` now returns 0 unconditionally when `x.index == y.index`,
+   before ever consulting `diameter` — brings the Ordering back into agreement with `.equals`/`.hashCode` (both
+   already index-only), so a future `FiniteMetricSpace` implementation that isn't perfectly symmetric can't
+   reintroduce the same `basis`-vs-`z` key mismatch.
+
+**Verification.** Full suite (622 examples) green after both fixes + `scalafmtAll`. On the 100-point real-data
+submatrix: packed now finishes in ~530ms (median of 3, was a confirmed-infinite loop before) with
+`bars`/`apparentPairCount`/`substitutionCount`/`totalSimplexCount` all EXACTLY matching SortedSet's own numbers
+(`bars=Map(0->100, 1->4219, 2->112527)`, `apparentPairCount=115822`, `substitutionCount=940`,
+`totalSimplexCount=121164`) — packed is ~8.7x faster than SortedSet here, consistent with every other case in
+this file's table.
+
+**Full-scale (n=512) re-run, same sandbox:** `-Xmx6G` OOM'd (expected -- this sandbox has 15GB total RAM; the
+earlier entry above already notes SortedSet itself needed 32G on the real compute server for this exact case).
+At `-Xmx12G`, packed finished in **264.2s** (`medianMs=264183.4`) -- not a week, not a timeout. `totalSimplexCount
+=19224829` and `substitutionCount=24977` match this file's own earlier-recorded SortedSet numbers for the same
+case EXACTLY (`totalSimplexCount=19224829, substitutionCount=24977` from the "Sortedset on fractal-r" entry
+above), confirming the fix is correct at full scale, not just on the 100-point reproduction. Packed's own earlier
+17-minute SortedSet finish time (1,020,414ms) vs. packed's new 264,183ms is ~3.9x -- lower than this file's
+usual 15-45x range, plausibly because this specific dataset's dimension-2 reduction leans more on the genuine
+`Chain.reduceLoop` path than the apparent-pairs shortcut once the infinite loop stopped masking that; not
+investigated further, the week-long hang being gone is the result that mattered here.
+
+All temporary debug instrumentation (the `packedVerbose`-gated iteration counters in `Chain.reduceLoop` and
+`PackedRipserCohomologyContext`'s `basisFallback`, used only to pin this down) was reverted before committing
+the real fix — matching this file's own established practice of not shipping throwaway diagnostic code.

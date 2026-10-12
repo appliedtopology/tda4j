@@ -1,9 +1,7 @@
 package org.appliedtopology.tda4j
 package cli
 
-import org.appliedtopology.tda4j.barcode.{given, *}
-import org.appliedtopology.tda4j.io.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.matlab.{FullBarcode, TDA4j}
 
 import org.specs2.mutable
@@ -34,6 +32,42 @@ class CLISpec extends mutable.Specification:
       val opts = TDA4jCLI.buildOptions(conf)
       opts.toSeq must containAllOf(Seq("complex", "alpha", "maxDimension", "3", "field", "R"))
       opts.length must beEqualTo(6) // and nothing else -- engine/prime/epsilon/alphaBackend/maxFiltrationValue unset
+    }
+
+    // Scallop gives a letter to the first option declared with it: a new option declared earlier can silently take a
+    // short flag users already type. These are the short flags as of 0.5.0. (Each flag once: a repeated option is a
+    // parse error, and Scallop's onError exits the JVM.)
+    "keep the 0.5.0 short flags" >> {
+      val conf = new TDA4jConf(Seq("-n", "7", "-s", "false", "-m", "1", "-e", "chunks", "some-input-file"))
+      TDA4jCLI.buildOptions(conf).toSeq.grouped(2).map(p => p(0) -> p(1)).toMap must beEqualTo(
+        Map("numLandmarks" -> "7", "sublevel" -> "false", "maxDimension" -> "1", "engine" -> "chunks")
+      )
+    }
+
+    "keep every other 0.5.0 short flag" >> {
+      val conf = new TDA4jConf(
+        Seq("-i", "csv-distances", "-o", "out.txt", "-r", "-c", "vr", "-a", "helix", "-f", "R", "-p", "3") ++
+          Seq("-w", "lazy", "-l", "random", "-d", "4", "some-input-file")
+      )
+      (conf.inputFormat() must beEqualTo("csv-distances")) and (conf.output() must beEqualTo("out.txt")) and
+        (conf.representatives() must beTrue) and
+        (TDA4jCLI.buildOptions(conf).toSeq.grouped(2).map(p => p(0) -> p(1)).toMap must beEqualTo(
+          Map(
+            "complex" -> "vr",
+            "alphaBackend" -> "helix",
+            "field" -> "R",
+            "prime" -> "3",
+            "witnessVariant" -> "lazy",
+            "landmarkSelector" -> "random",
+            "dtmK" -> "4"
+          )
+        ))
+    }
+
+    "pass --nan-mask through as nanMask" >> {
+      TDA4jCLI.buildOptions(new TDA4jConf(Seq("--nan-mask", "false", "some-input-file"))).toSeq must beEqualTo(
+        Seq("nanMask", "false")
+      )
     }
   }
 
@@ -179,8 +213,8 @@ class CLISpec extends mutable.Specification:
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
     }
 
-    "produce the exact same barcode as calling TDA4j directly for --complex=sheehy-rips, via a real file on disk" >> {
-      // Same "no CLI-side code exists for this complex" argument as --complex=dtm-rips above -- --sheehy-epsilon
+    "produce the exact same barcode as calling TDA4j directly for --complex=sparse-rips, via a real file on disk" >> {
+      // Same "no CLI-side code exists for this complex" argument as --complex=dtm-rips above -- --sparse-epsilon
       // is just one more 1:1-mirrored flag.
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
       val path = tempFile(".csv")
@@ -188,14 +222,14 @@ class CLISpec extends mutable.Specification:
 
       val buffer = new ByteArrayOutputStream()
       val exitCode = CliFull.run(
-        Seq("--complex", "sheehy-rips", "--sheehy-epsilon", "0.5", "--max-dimension", "1", path),
+        Seq("--complex", "sparse-rips", "--sparse-epsilon", "0.5", "--max-dimension", "1", path),
         new PrintStream(buffer)
       )
       val cliLines = buffer.toString.linesIterator.toSeq
 
       val direct = FullBarcode.computeFromPoints(
         points,
-        Array("complex", "sheehy-rips", "sheehyEpsilon", "0.5", "maxDimension", "1")
+        Array("complex", "sparse-rips", "sparseEpsilon", "0.5", "maxDimension", "1")
       )
       val directLines = TDA4jCLI.toBars(direct).map(_.toString)
 
@@ -203,7 +237,7 @@ class CLISpec extends mutable.Specification:
     }
 
     "produce the exact same barcode as calling TDA4j directly for --edge-collapse=true, via a real file on disk" >> {
-      // Same 1:1-mirrored-flag argument as --sheehy-epsilon above -- --edge-collapse changes nothing about the
+      // Same 1:1-mirrored-flag argument as --sparse-epsilon above -- --edge-collapse changes nothing about the
       // OUTPUT shape (unlike --distance-to, which is the one CLI flag that does NOT mirror a compute option --
       // see TDA4jConf.distanceTo's own doc), so it needs no special CLI-side handling at all.
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0), Array(0.5, 2.0))
@@ -299,6 +333,16 @@ class CLISpec extends mutable.Specification:
       (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
     }
 
+    "pass --nan-mask false through: a missing Perseus cube is then an error (exit code 1)" >> {
+      val path = tempFile(".txt")
+      java.nio.file.Files.write(java.nio.file.Paths.get(path), "2\n3\n3\n0\n0\n0\n0\n-1\n0\n0\n0\n0\n".getBytes)
+      val buffer = new ByteArrayOutputStream()
+      (CliFull.run(Seq("--input-format", "perseus-cubical", "--nan-mask", "false", path), new PrintStream(buffer)) must
+        beEqualTo(1)) and
+        (CliFull.run(Seq("--input-format", "perseus-cubical", "--nan-mask", "true", path), new PrintStream(buffer)) must
+          beEqualTo(0))
+    }
+
     "produce the exact same barcode as calling TDA4j.computeFromCubicalImage directly with --engine fast-cubical" >> {
       val path = tempFile(".txt")
       // Same ring fixture as the default-engine test above.
@@ -348,6 +392,19 @@ class CLISpec extends mutable.Specification:
 
         (exitCode must beEqualTo(0)) and (cliLineCount must beEqualTo(naiveBarCount))
       }
+
+    "runs --alpha-backend bowyer-watson end-to-end (a square: cocircular), with the same bar count as helix" >> {
+      val points =
+        Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0), Array(0.5, 2.0), Array(2.0, 0.5))
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, points)
+      def lines(backend: String) =
+        val buffer = new ByteArrayOutputStream()
+        val code = CliFull.run(Seq("--complex", "alpha", "--alpha-backend", backend, path), new PrintStream(buffer))
+        (code, buffer.toString.linesIterator.size)
+      val (bwCode, bwLines) = lines("bowyer-watson")
+      (bwCode must beEqualTo(0)) and (bwLines must beEqualTo(lines("helix")._2)) and (bwLines must beGreaterThan(0))
+    }
 
     "reject --complex combined with a cubical-image --input-format" >> {
       val path = tempFile(".txt")
@@ -433,6 +490,19 @@ class CLISpec extends mutable.Specification:
       ) must beEqualTo(1)
     }
 
+    "carry --representative-type to the facade, and reject it with --select-landmarks" >> {
+      val conf = new TDA4jConf(Seq("--representative-type", "cocycles", "some-input-file"))
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, points)
+      def run(args: String*) = CliFull.run(args, new PrintStream(new ByteArrayOutputStream()))
+      (TDA4jCLI.buildOptions(conf).toSeq must beEqualTo(Seq("representativeType", "cocycles")))
+        .and(run("--representative-type", "cocycles", "--engine", "chunks", path) must beEqualTo(0))
+        .and(run("--representative-type", "cocycles", path) must beEqualTo(0))
+        .and(
+          run("--select-landmarks", "--num-landmarks", "3", "--representative-type", "cycles", path) must beEqualTo(1)
+        )
+    }
+
     "reject --select-landmarks combined with --representatives" >> {
       val path = tempFile(".csv")
       CSV.writePointCloud(path, points)
@@ -494,7 +564,7 @@ class CLISpec extends mutable.Specification:
       }
   }
 
-  "--distance-to (barcode.BarcodeDistance mirror)" should {
+  "--distance-to (BarcodeDistance mirror)" should {
     def writeComparisonDiagram(points: Array[Array[Double]]): String =
       val result = FullBarcode.computeFromPoints(points, Array("maxDimension", "1"))
       val path = tempFile(".csv")

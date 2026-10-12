@@ -1,5 +1,6 @@
 package org.appliedtopology.tda4j
-package algebra
+
+import scala.annotation.implicitNotFound
 
 trait HasDimension:
   type Self
@@ -9,16 +10,21 @@ trait Cell extends HasDimension:
   type Self
   extension (self: Self) def boundary[CoefficientT: Field]: Seq[(Self, CoefficientT)]
 
+// format: off
+@implicitNotFound("tda4j: no cell structure for ${Self}. Simplex and Cube have one built in; for the generators of a simplicial set `x`, write `import x.given` first; for your own cell type, provide a `given (${Self} is OrderedCell)`.")
+// format: on
 trait OrderedCell extends Cell:
   type Self: Ordering as ordering
 
-given [CellT: OrderedCell as oCell] => Ordering[CellT] = oCell.ordering
+object OrderedCell:
+  /** A cell type's intrinsic order (`Simplex`: lexicographic), for generic code that holds only `CellT: OrderedCell`
+    * and no stream: `import OrderedCell.cellOrdering`. It is not a top-level given because it would compete with every
+    * stream's filtration order and decide type inference.
+    */
+  given cellOrdering: [CellT: OrderedCell as oCell] => Ordering[CellT] = oCell.ordering
 
-/** The "leading term" (highest-priority cell and its coefficient, under `CellT`'s own order) a formal sum needs to
-  * support pivot-based reduction. Currently has exactly one instance in this codebase, `Chain`'s own
-  * `chainIsOrderedBasis` (`Chain.scala`) -- kept as a separate typeclass, in the same `is`-typeclass style as
-  * `Cell`/`OrderedCell`, rather than folded into `Chain` as ordinary methods, so `leadingCell`/`leadingCoefficient`
-  * read as a documented contract rather than incidental `Chain` API.
+/** A formal sum with a leading term (its first cell under `CellT`'s order, and that cell's coefficient), which pivot
+  * reduction needs. `Chain` is the instance.
   */
 trait OrderedBasis[CellT: Ordering, CoefficientT: Field]:
   type Self

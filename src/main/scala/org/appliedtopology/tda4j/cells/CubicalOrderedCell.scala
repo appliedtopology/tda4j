@@ -1,7 +1,6 @@
 package org.appliedtopology.tda4j
-package cells
 
-import org.appliedtopology.tda4j.algebra.{given, *}
+import cats.Show
 
 /** `cubeOrdering`/`cubeIsOrderedCell` -- split into their own file from `Cubical.scala` (where the opaque type `Cube`
   * and its companion live), for the same file-scoped opaque-transparency reason as `SimplexOrderedCell.scala`'s split
@@ -55,4 +54,19 @@ def cubeIsOrderedCell(setOrdering: Ordering[Cube] = cubeOrdering): Cube is Order
           Seq(upperCube -> upperSign, lowerCube -> lowerSign)
         }
 
-given defaultCubeIsOrderedCell: Cube is OrderedCell = cubeIsOrderedCell()
+/** `Cube`'s default instances, mixed into `object Cube` (implicit scope; see `SimplexInstances`). */
+trait CubeInstances:
+  /** The cube with these doubled coordinates (the companion spelling of `.asCube`). */
+  def fromVector(coords: Vector[Int]): Cube = coords.asCube
+
+  /** The default order on cubes (`cubeOrdering`). */
+  def ordering: Ordering[Cube] = cubeOrdering
+
+  /** A `Cube is OrderedCell` instance with a chosen order (`cubeIsOrderedCell`). */
+  def isOrderedCell(order: Ordering[Cube]): Cube is OrderedCell = cubeIsOrderedCell(order)
+
+  /** `cube.show`: the product of its intervals, `Cube([0,1]x{2})` (a degenerate axis `{a}`, an interval `[a,a+1]`). */
+  given cubeShow: Show[Cube] = Show.show(_.show)
+
+  given defaultCubeIsOrderedCell: (Cube is OrderedCell) = cubeIsOrderedCell()
+  given cubeOrderingFromCell: (cell: Cube is OrderedCell) => Ordering[Cube] = cell.ordering

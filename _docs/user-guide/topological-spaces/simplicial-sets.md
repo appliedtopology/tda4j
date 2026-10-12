@@ -1,44 +1,251 @@
 ---
 layout: main
+title: Simplicial sets
 ---
 
 ### Simplicial sets
 
-For homology of a space presented combinatorially (not as a metric-space complex), build a
-`FiniteSimplicialSet[G]` by giving each generator's faces directly. A minimal circle (one vertex, one loop
-edge):
+A simplicial set describes a space combinatorially, by its non-degenerate simplices (the *generators*) and their
+faces. Unlike a simplicial complex it can glue a simplex to itself: a circle is one vertex and one edge whose two ends
+are that same vertex. Small models like this make it practical to compute the homology, cup products and Steenrod
+squares of spheres, tori, projective spaces and classifying spaces of groups.
+
+Simplicial sets are an add-on to the core library. Import both:
 
 ```scala 3
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.sset.*
+```
 
-given Double is Field = Field.DoubleApproximated(1e-9)
+(A lab, such as `import org.appliedtopology.tda4j.TDAlab.F2.{*, given}`, covers both.)
 
-enum CircleGen { case V, E }
+Everything is in two places:
+
+- **`SimplicialSet.<name>`** builds a space: from the catalog, from a list of facets, or by hand.
+- **Methods of the space** do everything else: look inside it, build new spaces from it, compute its homology.
+
+#### Ready-made spaces
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.sset.*
+
+val s2 = SimplicialSet.sphere(2)                 // one vertex, one 2-simplex
+val t = SimplicialSet.torus                      // one vertex, three edges, two triangles
+val k = SimplicialSet.kleinBottle
+val rp3 = SimplicialSet.realProjectiveSpace(3)   // one cell per dimension
+val cp2 = SimplicialSet.complexProjectivePlane   // Sage's minimal model; complexProjectivePlaneKuhnel is the 9-vertex one
+val d3 = SimplicialSet.simplex(3)                // also: point, empty, horn(n, k)
+val octahedron = SimplicialSet.fromSimplicialComplex(
+  for a <- List(1, 2); b <- List(3, 4); c <- List(5, 6) yield Simplex(a, b, c)
+)
+val bz2 = SimplicialSet.classifyingSpace(FiniteGroup.cyclic(2))   // B(Z/2) = RP^∞: infinite, see below
+```
+
+`SimplicialSet.fromStream(stream)` turns any simplicial stream (a Vietoris–Rips complex, say) into a simplicial set,
+and `SimplicialSet.presentationComplex(...)` builds the presentation complex of a group presentation.
+
+#### Looking inside
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.sset.*
+
+val t = SimplicialSet.torus
+t.dimension              // 2
+t.fVector                // Vector(1, 3, 2): generators per dimension
+t.generators(1)          // Vector(A, B, C): the non-degenerate edges, in order -- the cells homology sees
+t.allGenerators          // Vector(Vertex, A, B, C, U, L)
+t.faces(TorusGenerator.U)   // its d_0, d_1, d_2: the edges B, C, A, each as SSetElement(Nil, edge)
+t.simplices(2).size      // 9: EVERY 2-simplex, degenerate ones (like s_0 A) included
+t.eulerCharacteristic    // 0
+t.isConnected            // true
+t.validate()             // Seq.empty: the face data satisfies the simplicial identities
+```
+
+A simplex of a simplicial set is a generator under a *degeneracy word*: `SSetElement(word, generator)`, where
+`word` lists the degeneracy indices in strictly decreasing order (`s_1 s_0 v` is `SSetElement(List(1, 0), v)`) and
+`Nil` means the generator itself. `t.face(i, e)` and `t.degeneracy(j, e)` apply `d_i` and `s_j` to any simplex and
+return it in that normal form.
+
+#### Building your own
+
+Give the generators per dimension and, for each generator of dimension `n > 0`, its `n + 1` faces:
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.sset.*
+
+enum CircleGen derives CanEqual { case V, E }
 import CircleGen.*
 given Ordering[CircleGen] = Ordering.by(_.ordinal)
 
-val circle = FiniteSimplicialSet[CircleGen](
-  generatorsByDim = IndexedSeq(Set(V), Set(E)),
-  faces = {
+val circle = SimplicialSet[CircleGen](
+  IndexedSeq(Set(V), Set(E)),
+  {
     case V => IndexedSeq.empty
-    case E => IndexedSeq(SSetElement(Nil, V), SSetElement(Nil, V)) // both faces of the loop are V
+    case E => IndexedSeq(SSetElement(Nil, V), SSetElement(Nil, V)) // both ends of the loop are V
   }
 )
-circle.validate()   // Seq.empty -- no errors
-
-given (CircleGen is OrderedCell) = circle.cellInstance
-val stream = FilteredSimplicialSetStream[CircleGen](circle, { case V => 0.0; case E => 1.0 })
-CellularHomologyEngine[CircleGen, Double, Double]()
-  .persistentHomology(stream)
-  .diagramAt(Double.PositiveInfinity)
-// List((1, 1.0, Infinity), (0, 0.0, Infinity)) -- H0 = H1 = one essential class each, as expected for S^1
+circle.validate()          // Seq.empty -- no errors
+circle.bettiNumbers(2)     // Vector(1, 1)
 ```
 
-`FiniteSimplicialSet`'s companion object builds new simplicial sets from existing ones instead of by hand:
-`FiniteSimplicialSet.product`/`.coproduct` (the categorical product/coproduct) and `.quotient`/`.identify`
-(attaching maps — glue generators together, or collapse one down onto a lower-dimensional target).
-`validate()` checks that hand-written or constructed face data actually satisfies the simplicial identities;
-it's a necessary sanity check, not proof the resulting space is the one you intended.
+`validate()` is a necessary check, not a sufficient one: it catches face data that breaks the simplicial identities,
+not face data that describes a different space than you meant. Check the homology too.
+
+#### New spaces from old
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.sset.*
+
+val circle = SimplicialSet.sphere(1)
+val v = MinimalSphereGenerator.Vertex
+
+val torus = circle.product(circle)            // fVector (1, 3, 2), Betti numbers (1, 2, 1)
+val figureEight = circle.wedge(v, circle, v)  // Betti numbers (1, 2)
+val s2 = circle.suspension                    // also: cone, join(other), smash(v, other, w)
+val both = circle.coproduct(circle)           // disjoint union
+```
+
+`quotient(f)` sends each generator to its image (a surviving generator or a degenerate simplex over one — collapsing an
+edge to a point needs the latter), `identify(pairs)` glues generators of equal dimension, and `subcomplex(keep)`
+restricts to a face-closed set of generators.
+
+#### Homology
+
+`x.bettiNumbers(p)` is `dim H_n(X; F_p)` for every `n` up to the dimension of `X`. Using two primes shows most small
+torsion: the Klein bottle has Betti numbers `(1, 2, 1)` over `F_2` but `(1, 1, 0)` over `F_3`, and `RP²` has
+`(1, 1, 1)` over `F_2` but `(1, 0, 0)` over `F_3`:
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.sset.*
+
+SimplicialSet.kleinBottle.bettiNumbers(2)             // Vector(1, 2, 1)
+SimplicialSet.kleinBottle.bettiNumbers(3)             // Vector(1, 1, 0)
+SimplicialSet.realProjectiveSpace(2).bettiNumbers(3)  // Vector(1, 0, 0)
+BettiNumbers(SimplicialSet.classifyingSpace(FiniteGroup.cyclic(2)), 3, 2)   // Vector(1, 1, 1, 1): an infinite set, up to degree 3
+```
+
+For persistent homology, give each generator a filtration value with `x.filtered(...)` (a generator may not appear
+before its faces; this is checked), bring the set's cell structure into scope with `import x.given`, and pass the
+result to `Persistence`:
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.sset.*
+
+enum CircleGen derives CanEqual { case V, E }
+import CircleGen.*
+given Ordering[CircleGen] = Ordering.by(_.ordinal)
+val circle = SimplicialSet[CircleGen](
+  IndexedSeq(Set(V), Set(E)),
+  { case V => IndexedSeq.empty; case E => IndexedSeq(SSetElement(Nil, V), SSetElement(Nil, V)) }
+)
+
+import circle.given
+Persistence(circle.filtered { case V => 0.0; case E => 1.0 }).triples
+// (0, 0.0, Infinity) and (1, 1.0, Infinity): H0 is born at 0, H1 when the loop closes at 1
+```
+
+#### Telling spaces apart: cup products, Steenrod squares, π₁
+
+Equal Betti numbers prove little. `CP²` and `S² ∨ S⁴` have the same Betti numbers, but only in `CP²` is the square of
+the degree-2 class nonzero:
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.sset.*
+
+val cp2 = SimplicialSet.complexProjectivePlaneKuhnel   // the 9-vertex triangulation of Kühnel and Banchoff
+val field = FiniteField(3)
+import field.given
+
+val x = CupProduct.cohomologyBasis[Simplex[Int], field.Fp](cp2, 2).head   // the generator of H^2
+val xSquared = CupProduct.cup(cp2, 2, 2, x, x)
+val nonzero = !CupProduct.isCoboundary(cp2, 4, xSquared)               // true: x^2 generates H^4
+```
+
+- `CupProduct` computes cup products of cochains (`Map[G, F]`): `cohomologyBasis`, `cup`, `isCocycle`, `isCoboundary`.
+  Compare cochains with `isCoboundary`, never `==`.
+- `Steenrod.sq(x, i, degree, c)` gives Steenrod squares over `F_2`.
+- `FundamentalGroup.presentation(x)` reads a presentation of π₁ off a connected set.
+- `SSetMap(source, target, onGenerators)` is a simplicial map, with `validate()`, `andThen`, `image`, `homologyRank` and
+  `SSetMap.mappingCone`. `SimplicialSet.hopfMap` is the Hopf map `S³ → S²`; its mapping cone has the cohomology ring of
+  `CP²`.
+
+The tutorial [Telling spaces apart](../../tutorials/telling-spaces-apart.md) works through these.
+
+#### Groups
+
+`FiniteGroup` (`cyclic(n)`, `symmetric(n)`, `alternating(n)`, `generalLinear(n, p)`, `permutationGroup(...)`,
+`product(g, h)`) and `ClassifyingSpace` compute group homology as the homology of `BG`. Filtering `BG` by a chain of
+subgroups gives *persistent* group homology, with a representative cycle for every bar; see the tutorial
+[Persistent group cohomology](../../tutorials/persistent-group-cohomology.md). `BG` has `(|G| − 1)ⁿ` generators in
+dimension `n`. When the chain refines to a series of subgroups, each normal in the next with prime index (always for a
+group of prime-power order), `ClassifyingSpace` computes instead on Brown's collapse of `BG` (`CollapsedNerve`, from
+`RewritingSystem.refining(group, chain)`), which has far fewer cells and the same barcode. Either way this is for small
+groups and low degrees.
+
+#### Monoids and categories
+
+The nerve of any finite category is a simplicial set, and its homology is that of the category's classifying space:
+
+- `Nerve(monoid)` for a `FiniteMonoid`. A monoid's nerve can look like no group's: `FiniteMonoid.rectangularBand(m, n)`
+  gives a wedge of `(m − 1)(n − 1)` two-spheres, and `FiniteMonoid.reesMatrix(...)` the other completely simple
+  semigroups (with an identity adjoined).
+- `SimplicialSet.nerve(category)` for a `FiniteCategory`, built with `fromMonoid`, `fromPoset` (the nerve is the order
+  complex), `freeOnAcyclicQuiver`, `actionGroupoid` (the nerve is homotopy equivalent to the disjoint union, one per
+  orbit, of the classifying spaces of the stabilizers) or `homotopyOrbits`: a group acting on a simplicial complex, whose
+  nerve is homotopy equivalent to the Borel construction, so its homology is equivariant homology. `validate()` checks
+  the category laws.
+- `FiniteGroup.pSubgroups(p)` and `isElementaryAbelian` give the posets of `p`-subgroups that Brown and Quillen studied.
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.sset.*
+
+BettiNumbers(Nerve(FiniteMonoid.rectangularBand(2, 3)), 3, 2)   // Vector(1, 0, 2, 0): two 2-spheres
+
+// The nontrivial 2-subgroups of GL(3, 2) under inclusion: a wedge of 8 circles.
+val gl32 = FiniteGroup.generalLinear(3, 2)
+val subgroups = FiniteCategory.fromPoset(gl32.pSubgroups(2), (a: Set[Int], b: Set[Int]) => a.subsetOf(b))
+SimplicialSet.nerve(subgroups).skeleton(3).bettiNumbers(2)      // Vector(1, 8, 0, 0)
+
+// Z/2 reflecting the boundary of a square (fixing vertices 0 and 2): over F_2, RP^∞ ∨ RP^∞.
+val square = Seq(Simplex(0, 1), Simplex(1, 2), Simplex(2, 3), Simplex(0, 3))
+val reflection = FiniteCategory.homotopyOrbits(FiniteGroup.cyclic(2), square, (g, v) => if g == 0 then v else (4 - v) % 4)
+val borel = SimplicialSet.nerve(reflection)
+BettiNumbers(borel, 3, 2)                                       // Vector(1, 2, 2, 2)
+BettiNumbers(borel, 3, 3)                                       // Vector(1, 0, 0, 0)
+```
+
+Most nerves are infinite. `persistentHomology(filtration, maxDegree, prime)` works on any simplicial set, infinite ones
+included: it builds the `(maxDegree + 1)`-skeleton and returns a `PersistenceDiagram` with a representative cycle for
+every bar. `ClassifyingSpace.filtrationBy(chain)` filters a monoid's nerve by a chain of submonoids, and
+`nerve.filtrationBy(chain)` a category's nerve by a chain of subcategories (each a set of morphisms). Here the circle
+(the subcategory of the identity element) maps into the Borel construction:
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.sset.*
+
+val square = Seq(Simplex(0, 1), Simplex(1, 2), Simplex(2, 3), Simplex(0, 3))
+val rotation = FiniteCategory.homotopyOrbits(FiniteGroup.cyclic(2), square, (g, v) => if g == 0 then v else (v + 2) % 4)
+val nerve = SimplicialSet.nerve(rotation)
+val chain = Seq(rotation.morphismsOver(Set(0)), (0 until rotation.morphismCount).toSet)
+nerve.persistentHomology(nerve.filtrationBy(chain), 2, 2).dim(1).triples
+// (1, 0.0, 1.0) and (1, 1.0, Infinity): the half-turn is a double cover, zero on H_1 over F_2
+```

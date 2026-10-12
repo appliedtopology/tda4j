@@ -1,19 +1,18 @@
 package org.appliedtopology.tda4j
 package matlab
 
-import org.appliedtopology.tda4j.streams.{given, *}
+import org.appliedtopology.tda4j.*
 
 import org.specs2.mutable.Specification
 
 /** Tests the `TDA4j.toroidalCoordinates` MATLAB facade -- that it is a faithful, correctly-marshalled pass-through to
-  * `homology.CircularCoordinates.computeToroidal`, which already has its own thorough test suite
-  * (`ToroidalCoordinatesSpec`) -- not a re-test of the underlying math, mirroring `CircularCoordinatesResultSpec`'s own
-  * scope exactly.
+  * `CircularCoordinates.computeToroidal`, which already has its own thorough test suite (`ToroidalCoordinatesSpec`) --
+  * not a re-test of the underlying math, mirroring `CircularCoordinatesResultSpec`'s own scope exactly.
   */
 class ToroidalCoordinatesResultSpec extends Specification:
-  /** Same wedge-of-two-circles fixture as `homology.ToroidalCoordinatesSpec` -- see that file's own doc for why this
-    * particular construction (unequal radii, a single controlled near-touching point) reliably gives two
-    * simultaneously-alive, same-component H^1 classes with no randomness anywhere.
+  /** Same wedge-of-two-circles fixture as `ToroidalCoordinatesSpec` -- see that file's own doc for why this particular
+    * construction (unequal radii, a single controlled near-touching point) reliably gives two simultaneously-alive,
+    * same-component H^1 classes with no randomness anywhere.
     */
   private def wedgeOfTwoCircles(n: Int = 14): Array[Array[Double]] =
     val circleA = Array.tabulate(n) { i =>
@@ -27,14 +26,14 @@ class ToroidalCoordinatesResultSpec extends Specification:
     circleA ++ circleB
 
   "toroidalCoordinates" should {
-    "matches homology.CircularCoordinates.computeToroidal directly, point for point, coordinate for coordinate" >> {
+    "matches CircularCoordinates.computeToroidal directly, point for point, coordinate for coordinate" >> {
       val points = wedgeOfTwoCircles()
       val bars = TDA4j.h1Bars(points)
       val r = math.max(bars(0)(0), bars(1)(0)) + 1e-6
 
       val viaFacade = TDA4j.toroidalCoordinates(points, r, Array(0, 1), 47, true)
       val viaDirect =
-        homology.CircularCoordinates.computeToroidal(EuclideanMetricSpace(points), r, Seq(0, 1), 47, true)
+        CircularCoordinates.computeToroidal(EuclideanMetricSpace(points), r, Seq(0, 1), 47, true)
 
       (viaFacade.dimension() must beEqualTo(2)) and
         (viaFacade.cocycleIndices().toSeq must beEqualTo(Seq(0, 1))) and
@@ -84,5 +83,24 @@ class ToroidalCoordinatesResultSpec extends Specification:
       (og.length must beEqualTo(2)) and (og(0).length must beEqualTo(2)) and
         (rg.length must beEqualTo(2)) and (rg(0).length must beEqualTo(2)) and
         (og(0)(1) must beEqualTo(og(1)(0))) and (rg(0)(1) must beEqualTo(rg(1)(0)))
+    }
+  }
+
+  "plot" should {
+    "draw two coordinates against each other on the torus, one point per point with both" >> {
+      val points = wedgeOfTwoCircles()
+      val bars = TDA4j.h1Bars(points)
+      val result = TDA4j.toroidalCoordinates(points, math.max(bars(0)(0), bars(1)(0)) + 1e-6, Array(0, 1))
+      val withBoth = points.indices.count(result.hasCoordinate)
+      val svg = result.plot().svg()
+      ("<title>point ".r.findAllMatchIn(svg).size must beEqualTo(withBoth)) and
+        (result.plot(1, 0).title must contain("1 and 0")) and
+        (result.plot(0, 2) must throwA[IllegalArgumentException](message = "no coordinate 2"))
+    }
+    "refuse one coordinate, saying what draws it" >> {
+      val points = wedgeOfTwoCircles()
+      val bars = TDA4j.h1Bars(points)
+      TDA4j.toroidalCoordinates(points, bars(0)(0) + 1e-6, Array(0)).plot() must
+        throwA[IllegalArgumentException](message = "circularCoordinates")
     }
   }

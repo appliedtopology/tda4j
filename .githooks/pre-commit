@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Checks that the staged Scala and sbt files are formatted, before the commit is made: the same check as CI's lint job,
+# in a fraction of a second. Opt in once per clone:
+#
+#   git config core.hooksPath .githooks
+#
+# It needs a scalafmt command (`cs install scalafmt`, or `.claude/scripts/install-scalafmt.sh` for the native binary);
+# without one it says so and lets the commit through, and CI's lint job still checks. It checks the staged content,
+# not the working tree, and never starts sbt (two sbt processes on one checkout corrupt each other's builds).
+# Skip it once with `git commit --no-verify`.
+
+set -u
+
+# A merge commit stages everything the other branch changed, formatted or not. Formatting files this branch did not
+# touch belongs in its own "Format:" commit after the merge (CONTRIBUTING.md), so a merge is not checked here.
+if git rev-parse -q --verify MERGE_HEAD > /dev/null; then
+  echo "pre-commit: a merge commit, so formatting is not checked here (CI's lint job checks it)." >&2
+  exit 0
+fi
+
+version=$(sed -n 's/^version *= *"\(.*\)".*/\1/p' .scalafmt.conf 2>/dev/null)
+fmt=${SCALAFMT:-}
+if [ -z "$fmt" ]; then
+  if command -v scalafmt > /dev/null 2>&1; then
+    fmt=scalafmt
+  elif [ -x "$HOME/.cache/tda4j/scalafmt-$version/scalafmt" ]; then
+    fmt="$HOME/.cache/tda4j/scalafmt-$version/scalafmt"
+  fi
+fi
+
+files=()
+while IFS= read -r -d '' f; do files+=("$f"); done \
+  < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.scala' '*.sbt')
+[ ${#files[@]} -eq 0 ] && exit 0
+
+if [ -z "$fmt" ]; then
+  echo "pre-commit: no scalafmt found, so formatting was not checked (CI's lint job will)." >&2
+  echo "pre-commit: install it with 'cs install scalafmt' or .claude/scripts/install-scalafmt.sh" >&2
+  exit 0
+fi
+
+unformatted=()
+for f in "${files[@]}"; do
+  git show ":$f" | "$fmt" --stdin --assume-filename "$f" --test > /dev/null 2>&1
+  case $? in
+    0) ;;
+    1) unformatted+=("$f") ;;
+    *)
+      echo "pre-commit: '$fmt' failed on $f (not a formatting difference), so formatting was not checked." >&2
+      echo "pre-commit: run '$fmt --test $f' to see why; CI's lint job will still check." >&2
+      exit 0
+      ;;
+  esac
+done
+
+if [ ${#unformatted[@]} -gt 0 ]; then
+  echo "pre-commit: these staged files are not formatted:" >&2
+  printf '  %s\n' "${unformatted[@]}" >&2
+  echo "pre-commit: format them ('sbt scalafmtAll scalafmtSbt', or '$fmt <file>...'), then 'git add' them again." >&2
+  echo "pre-commit: formatter changes to files this commit does not otherwise touch go in their own 'Format:' commit." >&2
+  exit 1
+fi
+exit 0

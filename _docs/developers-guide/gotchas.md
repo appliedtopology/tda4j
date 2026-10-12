@@ -18,8 +18,9 @@ summoned — every method built on it permanently closes over that one resolutio
 static (compile-time, lexical), not dynamic; calling those methods later, from a scope where a *different*
 `Ordering[CellT]` given is available, does not re-resolve anything.
 
-Concretely: `Simplex[VertexT] is OrderedCell`'s own `.ordering` is a fixed lexicographic order, and
-`Chain.scala`'s `given [CellT: OrderedCell] => Ordering[CellT] = oCell.ordering` fallback means any
+Concretely: `Simplex[VertexT] is OrderedCell`'s own `.ordering` is a fixed lexicographic order, and the
+default `Ordering[Simplex[VertexT]]` in `Simplex`'s companion (or, in generic code, the opt-in
+`import OrderedCell.cellOrdering` derivation) means any
 `chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]` written *before* a stream-specific
 `given Ordering[Simplex[VertexT]] = stream.filtrationOrdering` is in scope silently captures that
 lexicographic fallback instead — every chain built through `⊠`/`.scale` afterward pivots on vertex label
@@ -121,7 +122,7 @@ method, breaking type inference inside the predicate.
 
 Give the sequence an explicit type first:
 
-```scala
+```scala sc:nocompile
 val xs: IndexedSeq[Simplex[Int]] = ...
 xs.forall(...)
 ```
@@ -135,6 +136,33 @@ simplices and silently turn the relation into a larger complex.
 
 `DowkerCofaceSimplexStream` therefore requires the computed filtration value
 to be finite in addition to satisfying the normal threshold check.
+
+## 10. No top-level `object` or `class` with a non-ASCII name
+
+scaladoc writes one page file per top-level type, named after it (`∆$.html`).
+A JVM running under a POSIX locale cannot encode that file name, and `sbt doc`
+dies with an `InvalidPathException`. `∆` is therefore a `val` alias of
+`Simplex`'s companion, not an object of its own. Unicode extension methods and
+`val`s are fine.
+
+## 11. `Chain` equality has no matching `hashCode`
+
+Two chains are equal when they are the same formal sum: the same cells, with
+coefficients equal by the field's `isEqual`, in any order. `hashCode` is not
+consistent with this. Never use a `Chain` as a key of a `Set` or `Map`.
+
+## 12. Sign errors hide: test over a signed field, and mutate signs unevenly
+
+Over `F_2` every sign is `+1`, so a sign error cannot change any answer. Test
+boundaries, representatives and reductions over `F_3` or another odd prime as
+well; agreement between `F_2` and `F_3` is a cheap sign check.
+
+Signed fixtures need at least five vertices: Scala's small sets keep insertion
+order up to four elements, so a hash-ordered bug shows only from the fifth.
+
+Flipping the sign of every coboundary at once changes no output, since it is a
+real symmetry. A mutation test of sign handling must flip some signs and not
+others.
 
 ## Process: validate empirically, not by inspection
 

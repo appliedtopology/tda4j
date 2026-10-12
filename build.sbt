@@ -1,9 +1,11 @@
 name := "tda4j"
 organization := "org.appliedtopology"
-// Docs are built with 3.8.4 (scaladoc 3.9.0 ships broken JavaScript); the docs workflows set
+// Docs are built with 3.8.4 (scaladoc 3.9.0 ships broken JavaScript); docs.yml and test.yml set
 // TDA4J_SCALA_VERSION=3.8.4 for their `sbt doc` step. `sbt "++3.8.4 doc"` does NOT work in sbt 2: "no subprojects
-// list 3.8.4 ... in crossScalaVersions" (`++ 3.8.4!` would). TODO: delete the override when 3.9.1 is released.
-scalaVersion := sys.env.getOrElse("TDA4J_SCALA_VERSION", "3.9.0")
+// list 3.8.4 ... in crossScalaVersions"; `++3.8.4!` does, and release.yml uses it because the env var only reaches a
+// FRESH sbt server: a second `sbt` call in the same job joins the running server (thin client) and ignores it.
+// TODO: delete the override when 3.9.1 is released.
+ThisBuild / scalaVersion := sys.env.getOrElse("TDA4J_SCALA_VERSION", "3.9.0")
 
 versionScheme := Some("semver-spec")
 
@@ -12,14 +14,14 @@ assembly / assemblyJarName := s"${name.value}-${version.value}-assembly.jar"
 libraryDependencies += "org.specs2"        %% "specs2-core"                   % "5.5.1" % "test"
 libraryDependencies += "org.specs2"        %% "specs2-matcher-extra"          % "5.5.1" % "test"
 libraryDependencies += "org.specs2"        %% "specs2-scalacheck"             % "5.5.1" % "test"
-libraryDependencies += "org.apache.commons" % "commons-numbers-combinatorics" % "1.1"
+libraryDependencies += "org.apache.commons" % "commons-numbers-combinatorics" % "1.3"
 libraryDependencies += "org.apache.commons" % "commons-math3"                 % "3.6.1"
-libraryDependencies += "com.eatthepath"     % "jvptree"                       % "0.2"
+libraryDependencies += "com.eatthepath"     % "jvptree"                       % "0.3.0"
 libraryDependencies += "com.dreizak"        % "miniball"                      % "1.0.3"
 libraryDependencies +=
-  "org.scala-lang.modules"              %% "scala-parallel-collections" % "1.0.4"
-libraryDependencies += "org.scalacheck" %% "scalacheck"                 % "1.17.0" % "test"
-libraryDependencies += "org.rogach"     %% "scallop"                    % "6.0.0"
+  "org.scala-lang.modules"              %% "scala-parallel-collections" % "1.2.0"
+libraryDependencies += "org.scalacheck" %% "scalacheck"                 % "1.20.0" % "test"
+libraryDependencies += "org.rogach"     %% "scallop"                    % "6.0.1"
 libraryDependencies += "org.typelevel"  %% "cats-kernel"                % "2.13.0"
 libraryDependencies += "org.typelevel"  %% "cats-core"                  % "2.13.0"
 libraryDependencies += "org.typelevel"  %% "kittens"                    % "3.5.0"
@@ -67,11 +69,8 @@ Compile / doc / scalacOptions ++= Seq(
 )
 Compile / doc / target := target.value / "api"
 
-// Older release tags, oldest-first exclusion of the one being (re)published -- drives Laika's version
-// switcher. Reads git tags directly rather than hand-maintaining a list; a tag with no matching docs
-// directory on `gh-pages` yet (or one from before docs versioning existed) just won't have a working link
-// until it's actually published once.
-def priorReleaseVersions(baseDir: File): Seq[String] = {
+// Release tags (`vX.Y.Z`), newest first, read straight from git rather than hand-maintained.
+def releaseTags(baseDir: File): Seq[String] = {
   import scala.sys.process._
   scala.util
     .Try(Process(Seq("git", "tag", "--list", "v*", "--sort=-v:refname"), baseDir).!!)
@@ -79,7 +78,30 @@ def priorReleaseVersions(baseDir: File): Seq[String] = {
     .linesIterator
     .toList
     .map(_.stripPrefix("v"))
-    .filterNot(_ == docsVersion)
+}
+
+// MiMa baseline: binary compatibility is enforced WITHIN a compatibility series and never across one. A series is
+// "0.Y" while the major version is 0 (semver-spec: a 0.x minor bump may break anything, as 0.5.0 deliberately does
+// from 0.4.x) and "X" from 1.0 on (a minor bump must stay compatible, a major bump may not). The baseline of a build is
+// every earlier plain release (no -alpha/-RC suffix) of its own series: `0.5.0-SNAPSHOT` therefore has none, `0.5.1-SNAPSHOT`
+// is checked against `0.5.0`, and the first `0.6.x` build starts a fresh, empty baseline. Needs the tags in the checkout
+// (CI fetches full history), and a tag with no published Maven artifact fails dependency resolution -- see RELEASE.md.
+// A deliberate break inside a series is allowed with a commented entry in `mimaBinaryIssueFilters`, reviewed in the PR.
+def mimaBaselineVersions(current: String, tags: Seq[String]): Seq[String] = {
+  val Release = """(\d+)\.(\d+)\.(\d+)""".r
+  val Versioned = """(\d+)\.(\d+)\.(\d+)(?:-.+)?""".r
+  def series(major: Int, minor: Int): String = if (major == 0) s"0.$minor" else s"$major"
+  current match {
+    case Versioned(major, minor, patch) =>
+      val here = (major.toInt, minor.toInt, patch.toInt)
+      tags.collect {
+        case v @ Release(ma, mi, pa)
+            if series(ma.toInt, mi.toInt) == series(here._1, here._2) &&
+              Ordering[(Int, Int, Int)].lt((ma.toInt, mi.toInt, pa.toInt), here) =>
+          v
+      }
+    case _ => Nil
+  }
 }
 
 // Compiler options: language features (implicitConversions, adhocExtensions) and warning flags.
@@ -134,13 +156,138 @@ Compile / doc := {
 Compile / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI")
 assembly / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI")
 
+// A fat jar is not a Java module, so module descriptors are dropped. sbt-assembly's default already discards a
+// top-level `module-info.class`, but not the multi-release copies under META-INF/versions/<n>/, which several jars
+// carry (each commons-numbers 1.3 jar has its own, so the default deduplication fails on them).
+assembly / assemblyMergeStrategy := {
+  case PathList("META-INF", "versions", _, "module-info.class") => MergeStrategy.discard
+  case other                                                    => (assembly / assemblyMergeStrategy).value(other)
+}
+
 // Workaround for XML versioning issues
 // See: https://github.com/scala/bug/issues/12632
 libraryDependencySchemes ++= Seq(
   "org.scala-lang.modules" %% "scala-xml" % VersionScheme.Always
 )
 
-mimaPreviousArtifacts := priorReleaseVersions(baseDirectory.value)
-  .filter(v => !v.startsWith("0.1"))
+mimaPreviousArtifacts := mimaBaselineVersions(version.value, releaseTags(baseDirectory.value))
   .map(v => organization.value %% name.value % v)
   .toSet
+
+// Deliberate breaks inside the series (see mimaBaselineVersions), each reviewed in its PR:
+// - `Chain` became an abstract class open to new storages: a subclass implements `entryIterator`, every other member
+//   defaults over it (the library's storages are `HeapChain` and `PackedChain`). In 0.5.0 its constructor was
+//   `private[tda4j]`, so no client could have extended or created a `Chain` directly.
+// - `Chain.chainShow` needs only `Show` of the cells, not `OrderedCell` (chains over simplicial-set generators, which
+//   have no given `OrderedCell`, are showable now). A given, found by implicit search: no source change for callers.
+// - `sset.ClassifyingSpace.persistentGroupHomology` returns a `PersistenceDiagram` (bars WITH representatives, as every
+//   public interface should) instead of a list of (degree, birth, death); `diagram.triples` is the old list.
+mimaBinaryIssueFilters ++= {
+  import com.typesafe.tools.mima.core.*
+  Seq(
+    ProblemFilters.exclude[AbstractClassProblem]("org.appliedtopology.tda4j.Chain"),
+    ProblemFilters.exclude[ReversedMissingMethodProblem]("org.appliedtopology.tda4j.Chain.entryIterator"),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.Chain.chainShow(org.appliedtopology.tda4j.OrderedCell,cats.Show,org.appliedtopology.tda4j.Field)cats.Show"
+    ),
+    ProblemFilters.exclude[IncompatibleResultTypeProblem](
+      "org.appliedtopology.tda4j.sset.ClassifyingSpace.persistentGroupHomology"
+    ),
+    // `nanMask: Boolean = true` (#52: `false` turns NaN masks off, a NaN pixel is then an error) added as the LAST,
+    // defaulted parameter of the cubical-image entry points: source compatible, but each old signature is gone.
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.CubicalGridStream.this(scala.collection.immutable.IndexedSeq,scala.Function1,Boolean)Unit"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.CubicalImage.fromFlatArray(scala.collection.immutable.IndexedSeq,scala.collection.immutable.IndexedSeq,Boolean,Boolean)org.appliedtopology.tda4j.CubicalGridStream"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.CubicalImage.fromGrayscale2D(Array[Array[Double]],Boolean,Boolean)org.appliedtopology.tda4j.CubicalGridStream"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.CubicalImage.fromVoxelGrid3D(Array[Array[Array[Double]]],Boolean,Boolean)org.appliedtopology.tda4j.CubicalGridStream"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.Dipha.readCubicalGridStream(java.lang.String,Boolean)org.appliedtopology.tda4j.CubicalGridStream"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.Image.this(scala.collection.immutable.IndexedSeq,scala.collection.immutable.IndexedSeq,Boolean)Unit"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.Image.copy(scala.collection.immutable.IndexedSeq,scala.collection.immutable.IndexedSeq,Boolean)org.appliedtopology.tda4j.Image"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.Image.apply(scala.collection.immutable.IndexedSeq,scala.collection.immutable.IndexedSeq,Boolean)org.appliedtopology.tda4j.Image"
+    ),
+    ProblemFilters.exclude[DirectMissingMethodProblem](
+      "org.appliedtopology.tda4j.Perseus.readCubicalToplex(java.lang.String,Boolean)org.appliedtopology.tda4j.CubicalGridStream"
+    )
+  )
+}
+
+// Tutorial pages are tests: every `_docs/tutorials/*.md` with a "## The whole script" section has that section's first
+// `scala` fence copied into a generated `object <Page>Script` (package `tutorial`), which `src/test/.../tutorial/*Spec`
+// asserts on -- the page's code and the code the test runs are one and the same text. The page's narrative
+// (`scala sc:nocompile`) fences before that heading are joined into an `object <Page>Narrative` whose `narrative()`
+// is compiled but never called, so a narrative fence that drifts from the script fails `sbt Test/compile`, not just
+// a reader. See .claude/WORKLOG-tutorial-docs-as-tests.md.
+// The library's version as a resource: `matlab.ResultFile` records which tda4j wrote a saved result (the class files
+// carry no manifest version outside a packaged jar).
+Compile / resourceGenerators += Def.uncached(Def.task {
+  val out = (Compile / resourceManaged).value / "org" / "appliedtopology" / "tda4j" / "version.properties"
+  IO.write(out, s"version=${version.value}\n")
+  Seq(out)
+}.taskValue)
+
+Test / sourceGenerators += Def.uncached(Def.task {
+  val docs = baseDirectory.value / "_docs" / "tutorials"
+  val outDir = (Test / sourceManaged).value / "tutorial"
+  def objectName(file: File): String =
+    file.getName.stripSuffix(".md").split("-").map(_.capitalize).mkString
+  // (info string, body) of every fenced block, in order
+  def fences(lines: List[String]): List[(String, String)] = {
+    val out = scala.collection.mutable.ListBuffer.empty[(String, String)]
+    var info: Option[String] = None
+    val body = new StringBuilder
+    lines.foreach { line =>
+      if (line.startsWith("```")) {
+        info match {
+          case None    => info = Some(line.stripPrefix("```").trim); body.clear()
+          case Some(i) => out += ((i, body.toString)); info = None
+        }
+      } else if (info.isDefined) body.append(line).append("\n")
+    }
+    out.toList
+  }
+  def indent(text: String, by: Int): String =
+    text.linesIterator.map(l => if (l.isEmpty) l else (" " * by) + l).mkString("\n")
+  val pages = (docs * "*.md").get().sortBy(_.getName)
+  pages.flatMap { page =>
+    val text = IO.read(page)
+    val marker = "## The whole script"
+    val at = text.indexOf(marker)
+    if (at < 0) Nil
+    else {
+      val narrative = fences(text.substring(0, at).linesIterator.toList).collect { case ("scala sc:nocompile", b) => b }
+      val script = fences(text.substring(at).linesIterator.toList)
+        .collectFirst { case ("scala", b) => b }
+        .getOrElse(sys.error(s"${page.getName}: no `scala` fence after '$marker'"))
+      val name = objectName(page)
+      val source =
+        s"""// GENERATED by build.sbt from _docs/tutorials/${page.getName}; do not edit.
+           |package org.appliedtopology.tda4j
+           |package tutorial
+           |
+           |object ${name}Script:
+           |${indent(script, 2)}
+           |
+           |object ${name}Narrative:
+           |  def narrative(): Unit =
+           |${indent(narrative.mkString("\n") + "\n()", 4)}
+           |""".stripMargin
+      val out = outDir / s"${name}Script.scala"
+      IO.write(out, source)
+      Seq(out)
+    }
+  }
+}.taskValue)

@@ -1,10 +1,4 @@
 package org.appliedtopology.tda4j
-package homology
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.barcode.*
 
 import org.specs2.mutable.Specification
 
@@ -29,10 +23,10 @@ class CircularCoordinatesSpec extends Specification:
     val ctx = CellularCohomologyEngine[Simplex[Int], Double, Double]()
     val bars = ctx.persistentCohomology(stream).filter(_.dim == 1)
     def value(e: BarcodeEndpoint[Double]): Double = e match
-      case PositiveInfinity() => Double.PositiveInfinity
-      case NegativeInfinity() => Double.NegativeInfinity
-      case OpenEndpoint(v)    => v
-      case ClosedEndpoint(v)  => v
+      case PositiveInfinity[Double]() => Double.PositiveInfinity
+      case NegativeInfinity()         => Double.NegativeInfinity
+      case OpenEndpoint(v)            => v
+      case ClosedEndpoint(v)          => v
     val best = bars.maxBy(b => value(b.upper) - value(b.lower))
     (value(best.lower), value(best.upper))
 
@@ -168,7 +162,7 @@ class CircularCoordinatesSpec extends Specification:
       val cellularCtx = CellularCohomologyEngine[Simplex[Int], Double, Double]()
       val cellularEssential = cellularCtx
         .persistentCohomology(krStream)
-        .filter(b => b.dim == 1 && b.upper == PositiveInfinity())
+        .filter(b => b.dim == 1 && b.upper == PositiveInfinity[Double]())
       cellularEssential must not(beEmpty)
       forall(cellularEssential) { bar =>
         val rep = bar.annotation.get
@@ -177,6 +171,7 @@ class CircularCoordinatesSpec extends Specification:
       }
 
       val ripserCtx = PackedRipserCohomologyEngine[Double](metricSpace, 1, maxFiltrationValue = Some(r))
-      val ripserEssential = ripserCtx.persistentCohomology().filter(b => b.dim == 1 && b.upper == PositiveInfinity())
+      val ripserEssential =
+        ripserCtx.persistentCohomology().filter(b => b.dim == 1 && b.upper == PositiveInfinity[Double]())
       ripserEssential must not(beEmpty)
     }

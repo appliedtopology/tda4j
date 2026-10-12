@@ -1,14 +1,6 @@
 package org.appliedtopology.tda4j
-package homology
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
-
-import org.appliedtopology.tda4j.streams.StreamFixtures.explicitStream
-import org.appliedtopology.tda4j.barcode.*
+import org.appliedtopology.tda4j.StreamFixtures.explicitStream
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
 import org.specs2.mutable
@@ -349,9 +341,9 @@ class BarcodeRegressionSpec extends org.specs2.mutable.Specification with ScalaC
 
   val shc = PersistenceInChunksEngine[Int, Double](3)
 
-  val cases: Seq[(String, Array[Array[Double]] => StratifiedSimplexStream[Int, Double])] = Seq(
-    ("Alpha DQP", (pts: Array[Array[Double]]) => AlphaShapes(pts.toIndexedSeq, "DQP")),
-    ("Alpha Helix", (pts: Array[Array[Double]]) => AlphaShapes(pts.toIndexedSeq, "helix")),
+  val cases: Seq[(String, Array[Array[Double]] => LevelwiseSimplexStream[Int, Double])] = Seq(
+    ("Alpha DQP", (pts: Array[Array[Double]]) => AlphaShapes(pts.toIndexedSeq, AlphaBackend.DQP)),
+    ("Alpha Helix", (pts: Array[Array[Double]]) => AlphaShapes(pts.toIndexedSeq, AlphaBackend.Helix)),
     (
       "VR",
       (pts: Array[Array[Double]]) =>
@@ -361,7 +353,7 @@ class BarcodeRegressionSpec extends org.specs2.mutable.Specification with ScalaC
   val points = matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(25, 150)).sample.get
   for (name, streamBuilder) <- cases do
     s"$name complex should have births before deaths" >> {
-      // matrixGen is defined in VietorisRipsSpec.scala
+      // matrixGen is defined in streams/Generators.scala
       // forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(25, 250))) { (points: Array[Array[Double]]) =>
       val vrstream = streamBuilder(points)
       val homology = shc.persistentHomology(vrstream)

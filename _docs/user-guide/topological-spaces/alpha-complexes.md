@@ -1,34 +1,50 @@
 ---
 layout: main
+title: Alpha complexes
 ---
 
 ### Alpha complexes
 
+The alpha complex is the part of the Delaunay triangulation of the points that lies inside the union of balls of
+radius `r`. It has the same persistent homology as the [Čech complex](cech-complexes.md), with far fewer simplices: on
+the 60-point circle of the [tutorials](../../tutorials/choosing-a-complex.md), 325 against 36,050. It needs coordinates,
+in a low-dimensional space.
+
 ```scala 3
-import org.appliedtopology.tda4j.alpha.{given, *}
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
 
 val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
-val shape = AlphaShapes(points.toSeq, dispatch = "helix")   // or "DQP"
+val diagram = Persistence(points, complex = AlphaShapes)
+
+val stream = AlphaShapes(points, AlphaBackend.Helix)     // the complex itself
+val upTo = Persistence(points, complex = AlphaShapes, maxFiltrationValue = 0.4)  // only radii up to 0.4
 ```
 
-`AlphaShapes(points)` with no `dispatch`, or `dispatch = "default"`, always resolves to `"helix"` — ask for
-`"DQP"` explicitly if you want it. See "Which alpha-complex backend?" below for the tradeoffs.
+Filtration values are radii. Without `maxFiltrationValue` the whole complex is built; with it, only the simplices of
+radius at most that value (also `AlphaShapes(points, maxRadius = r)`), and for a small radius that is much cheaper.
 
-## Which alpha-complex backend?
+### Backends
 
-- **`"helix"`** (`HelixDelaunay`) — an actual Delaunay triangulation, computed incrementally. What
-  `dispatch = "default"` resolves to. Has a known, quantified failure mode on point clouds with a
-  near-cospherical local cluster: zero failures across 20,000-trial fuzz testing at ambient dimension 2 and
-  5, but roughly 1-in-170 at ambient dimension 4 with 20-30 points, on ordinary-looking input. Don't treat
-  its output as unconditionally reliable ground truth at ambient dimension 4 or higher.
-- **`"DQP"`** (`AlphaShapeDQP`) — a dual active-set quadratic-programming method (Carlsson & Carlsson 2024)
-  that never builds a Delaunay triangulation at all. Its real strength is high ambient dimension, where
-  Delaunay becomes infeasible, and exact homology rather than an approximate persistence diagram. The
-  paper's own published benchmarks are mixed — it loses to Ripser on 2 of 4 of its own persistence examples,
-  and to qhull-based Delaunay on some inputs. The honest value proposition is high-dimensional feasibility
-  and exactness, not raw speed.
+* **`AlphaBackend.BowyerWatson`** (`BowyerWatsonDelaunay`): builds the whole Delaunay triangulation incrementally
+  with exact geometric predicates, then reads the alpha values off it. Degenerate inputs such as grids are triangulated
+  validly, and the result does not depend on the order of the points. For points spanning at most 4 dimensions; in 2-D
+  and 3-D it is the fastest backend by far.
+* **`AlphaBackend.Helix`** (`HelixDelaunay`): builds the whole Delaunay triangulation in any dimension, then reads the
+  alpha values off it. It checks every triangulation it builds and repairs one that fails, so degenerate inputs such
+  as grids come out valid.
+* **`AlphaBackend.DQP`** (`AlphaShapeDQP`): decides each simplex by a dual active-set quadratic program (Carlsson and
+  Carlsson 2024), dimension by dimension, among points within twice the radius of each other. It never builds the
+  whole triangulation, so a small radius makes it cheap, and in high ambient dimension it reaches the low-dimensional
+  simplices where a Delaunay triangulation is out of reach. Without a radius it is much slower than a triangulation.
+* **`AlphaBackend.Default`** (the default): BowyerWatson for points in at most 4 dimensions, Helix above; with a radius,
+  DQP instead when it is expected to be faster, judged from how many points lie within twice the radius of a point. In
+  general position the result is the same whichever is used.
 
-Both backends agree that in degenerate (cospherical) point configurations — e.g. points on a regular grid —
-the alpha complex genuinely contains higher-dimensional simplices than a triangulation-based mental model
-would suggest (a unit grid in the plane produces 3-simplices, one per unit square, not just triangles). This
-is correct behavior, not a bug in either backend; users coming from CGAL or GUDHI may find it surprising.
+In degenerate position the alpha complex contains higher-dimensional simplices than a triangulation would: four
+cospherical points span a 3-simplex, so a square grid in the plane produces 3-simplices with DQP. BowyerWatson and
+Helix triangulate such a cluster instead (not necessarily the same way). The persistent homology is the same, up to
+zero-length bars.
+
+For large point clouds, the [fast alpha engine](../homology-computation/fast-alpha-complexes.md) computes the diagram
+of a triangulated (BowyerWatson or Helix) alpha complex without general matrix reduction.

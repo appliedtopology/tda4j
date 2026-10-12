@@ -1,11 +1,4 @@
 package org.appliedtopology.tda4j
-package alpha
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.streams.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
-import org.appliedtopology.tda4j.alpha.{given, *}
 
 import org.scalacheck.{Gen, Prop}
 import org.scalacheck.Prop.forAll

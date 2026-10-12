@@ -1,9 +1,4 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-import org.appliedtopology.tda4j.homology.{given, *}
 
 import scala.util.Random
 
@@ -13,7 +8,7 @@ import scala.util.Random
   * `parallelFiltrationValue` on vs off -- see `.claude/WORKLOG-parallelization-survey.md` item 2. Invoked directly:
   *
   * {{{
-  * java -cp $CP org.appliedtopology.tda4j.streams.CechParallelProfileDriver <parallel> <n> <dim> <maxDimCap> [seed] [trials]
+  * java -cp $CP org.appliedtopology.tda4j.CechParallelProfileDriver <parallel> <n> <dim> <maxDimCap> [seed] [trials]
   * }}}
   *
   * `maxDimCap` bounds the top simplex dimension built (Cech's own complex, like VR, blows up combinatorially at

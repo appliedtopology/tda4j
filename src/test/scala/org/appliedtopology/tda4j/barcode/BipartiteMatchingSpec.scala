@@ -1,10 +1,9 @@
 package org.appliedtopology.tda4j
-package barcode
 
 import org.specs2.mutable.Specification
 
 /** Direct, hand-verified checks on the two combinatorial primitives [[BarcodeDistance]] builds on, independent of any
-  * barcode/diagram framing. Both objects are `private[barcode]`, reachable here because this spec shares that package.
+  * barcode/diagram framing. Both objects are `private[tda4j]`, reachable here because this spec shares that package.
   */
 class BipartiteMatchingSpec extends Specification:
   "HopcroftKarp.maximumMatching" >> {

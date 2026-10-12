@@ -16,7 +16,8 @@ recent), is most of the actual gap.
    look familiar. Start with the [Scala 3 primer](scala3-primer.md).
 2. **Where a given piece of functionality lives, and what layer it's in.** The library is built in clear
    layers — algebra, then complex construction (streams), then the persistence engines that consume a
-   stream — and each has its own subpackage. See [Architecture](architecture.md).
+   stream — and each has its own source directory (one package; simplicial sets are the `sset` add-on). See
+   [Architecture](architecture.md).
 3. **Which persistence algorithm, and which implementation, to build on.**
    The persistence engines are independent implementations with different
    assumptions and intended roles; they are not layers on one shared core.
@@ -27,6 +28,25 @@ recent), is most of the actual gap.
    on a change to reduction or ordering logic.
 5. **Whether a surprising result is a bug or the mathematically correct answer on a degenerate input.** See
    [Degeneracies](degeneracies.md) before "fixing" something that isn't broken.
+6. **What a user meets first, and the rules for new public API.** The
+   `Persistence` verb, the `PersistenceDiagram` it returns, the labs, and the
+   "easy, not simple" principles behind them. See
+   [The public API](public-api.md).
+7. **The add-ons.** Nerves of monoids, groups and categories, persistent group
+   homology and Brown's collapse are in
+   [Nerves and group homology](nerves.md). Plots and the live viewer are in
+   [Plotting internals](plotting.md).
+8. **How to measure a speed or memory claim.** The A/B method, the benchmark
+   specs, the profile drivers and the cross-library harness are in
+   [Measuring performance](performance.md).
+
+## Contributing
+
+How to set up, the commands, the path from an issue to a merged pull request,
+the changelog and the review principles are in the repository's
+[CONTRIBUTING.md](https://github.com/appliedtopology/tda4j/blob/scala/CONTRIBUTING.md).
+Open questions, known limitations and planned work are
+[issues](https://github.com/appliedtopology/tda4j/issues).
 
 ## Naming convention: `tda4j`/`TDA4j`, never `Tda4j`
 
@@ -37,7 +57,7 @@ prose; use **`TDA4j`** (acronym preserved) for Scala identifiers that must start
 class/object/trait names such as `TDA4j` (the MATLAB/Java facade), `TDA4jConf`/`TDA4jCLI` (the CLI).
 `Tda4j` is never correct.
 
-The same rule applies to any identifier that's itself an acronym: `io.CSV` (comma-separated values) and
-`cli.TDA4jCLI` (command-line interface) are both fully capitalized for the same reason. `io.Gudhi`/`Dipha`/
+The same rule applies to any identifier that's itself an acronym: `CSV` (comma-separated values) and
+`cli.TDA4jCLI` (command-line interface) are both fully capitalized for the same reason. `Gudhi`/`Dipha`/
 `Ripser`/`Perseus` are ordinary proper nouns (the external projects those file formats belong to) and stay
 titlecased in their own conventional spelling instead.

@@ -5,11 +5,12 @@ package org.appliedtopology.tda4j
   * This sub-package implements both a useful representation for persistence bars and barcodes, and also algebraic
   * operations on finitely presented persistence modules.
   */
-package barcode
 
-import org.appliedtopology.tda4j.algebra.{given, *}
+import cats.Show
 import org.apache.commons.math3.linear.*
 
+// Sealed on purpose: the four cases are the endpoints of an interval on the extended line, a closed classification that
+// `endpointOrdering` and every reader match on exhaustively.
 sealed trait BarcodeEndpoint[FiltrationT: Ordering]:
   // Exchange open and closed for finite barcode endpoints; do nothing for infinite ones.
   def flip: BarcodeEndpoint[FiltrationT]
@@ -29,44 +30,71 @@ case class ClosedEndpoint[FiltrationT: Ordering](value: FiltrationT) extends Bar
   override val isFinite = true
 
 import math.Ordered.orderingToOrdered
-given [FiltrationT: Ordering as ord] => Ordering[BarcodeEndpoint[FiltrationT]]:
-  def compare(
-    x: BarcodeEndpoint[FiltrationT],
-    y: BarcodeEndpoint[FiltrationT]
-  ) = x match
-    case NegativeInfinity() =>
-      y match
-        case NegativeInfinity() => 0
-        case _                  => -1
-    case PositiveInfinity() =>
-      y match
-        case PositiveInfinity() => 0
-        case _                  => +1
-    case ClosedEndpoint(xvalue) =>
-      y match
-        case NegativeInfinity()     => +1
-        case PositiveInfinity()     => -1
-        case ClosedEndpoint(yvalue) => ord.compare(xvalue, yvalue)
-        case OpenEndpoint(yvalue)   =>
-          if ord.compare(xvalue, yvalue) == 0 then -1
-          else ord.compare(xvalue, yvalue)
-    case OpenEndpoint(xvalue) =>
-      y match
-        case NegativeInfinity()     => +1
-        case PositiveInfinity()     => -1
-        case ClosedEndpoint(yvalue) =>
-          if ord.compare(xvalue, yvalue) == 0 then +1
-          else ord.compare(xvalue, yvalue)
-        case OpenEndpoint(yvalue) => ord.compare(xvalue, yvalue)
+object BarcodeEndpoint:
+  /** `e.show` for any endpoint whose values have a `Show`: `[v]` closed, `(v)` open, `+∞`, `-∞`. Typed for every
+    * subtype, so `ClosedEndpoint(1.0).show` works as well as an `e: BarcodeEndpoint[Double]`.
+    */
+  given endpointShow: [F: Show as sf, E <: BarcodeEndpoint[F]] => Show[E] = Show.show {
+    case ClosedEndpoint(v)  => s"[${sf.show(v)}]"
+    case OpenEndpoint(v)    => s"(${sf.show(v)})"
+    case PositiveInfinity() => "+∞"
+    case NegativeInfinity() => "-∞"
+  }
 
-/** A persistence bar has a lower and upper endpoint, where we assume (but do not enforce) that `lower < upper` in the
-  * expected ordering on the filtration type; a dimension; and optionally some annotation (this will be used extensively
-  * to carry representative chains in homology computations)
+  /** The endpoint written as the left end of an interval: `[v`, `(v` or `(-∞`. */
+  def showLower[F](e: BarcodeEndpoint[F])(using sf: Show[F]): String = e match
+    case ClosedEndpoint(v)  => s"[${sf.show(v)}"
+    case OpenEndpoint(v)    => s"(${sf.show(v)}"
+    case NegativeInfinity() => "(-∞"
+    case PositiveInfinity() => "(+∞"
+
+  /** The endpoint written as the right end of an interval: `v)`, `v]` or `∞)`. */
+  def showUpper[F](e: BarcodeEndpoint[F])(using sf: Show[F]): String = e match
+    case ClosedEndpoint(v)  => s"${sf.show(v)}]"
+    case OpenEndpoint(v)    => s"${sf.show(v)})"
+    case PositiveInfinity() => "∞)"
+    case NegativeInfinity() => "-∞)"
+
+  given endpointOrdering: [FiltrationT: Ordering as ord] => Ordering[BarcodeEndpoint[FiltrationT]]:
+    def compare(
+      x: BarcodeEndpoint[FiltrationT],
+      y: BarcodeEndpoint[FiltrationT]
+    ) = x match
+      case NegativeInfinity() =>
+        y match
+          case NegativeInfinity() => 0
+          case _                  => -1
+      case PositiveInfinity() =>
+        y match
+          case PositiveInfinity() => 0
+          case _                  => +1
+      case ClosedEndpoint(xvalue) =>
+        y match
+          case NegativeInfinity()     => +1
+          case PositiveInfinity()     => -1
+          case ClosedEndpoint(yvalue) => ord.compare(xvalue, yvalue)
+          case OpenEndpoint(yvalue)   =>
+            if ord.compare(xvalue, yvalue) == 0 then -1
+            else ord.compare(xvalue, yvalue)
+      case OpenEndpoint(xvalue) =>
+        y match
+          case NegativeInfinity()     => +1
+          case PositiveInfinity()     => -1
+          case ClosedEndpoint(yvalue) =>
+            if ord.compare(xvalue, yvalue) == 0 then +1
+            else ord.compare(xvalue, yvalue)
+          case OpenEndpoint(yvalue) => ord.compare(xvalue, yvalue)
+
+/** One bar of a barcode: a degree `dim`, a `lower` and an `upper` endpoint, and optionally an annotation -- in every
+  * engine's output, the bar's representative chain.
+  *
+  * A finished bar is `[birth, death)`; a class still alive at the end of the filtration is `[birth, ∞)`; a class alive
+  * at the value a diagram was truncated at, `f`, is `[birth, f]` (closed: it exists at `f`).
   *
   * @tparam FiltrationT
   *   Type of the filtration parameter
   * @tparam AnnotationT
-  *   Type of the annotation (we would expect this to be [[algebra.Chain]]).
+  *   Type of the annotation (we would expect this to be [[Chain]]).
   */
 case class PersistenceBar[FiltrationT: Ordering, AnnotationT](
   dim: Int,
@@ -74,6 +102,21 @@ case class PersistenceBar[FiltrationT: Ordering, AnnotationT](
   upper: BarcodeEndpoint[FiltrationT],
   annotation: Option[AnnotationT] = None
 ):
+
+  /** True for `[v, v)`: a cell paired with one entering at the same filtration value, so no class ever exists. Engines
+    * leave these out unless asked (`includeZeroLength = true`).
+    */
+  def isZeroLength: Boolean = (lower, upper) match
+    case (ClosedEndpoint(a), OpenEndpoint(b)) => summon[Ordering[FiltrationT]].equiv(a, b)
+    case (OpenEndpoint(a), OpenEndpoint(b))   => summon[Ordering[FiltrationT]].equiv(a, b)
+    case _                                    => false
+
+  /** The representative recorded with this bar (every engine records one: a cycle, or a cocycle for the cohomology
+    * engines).
+    */
+  def representative: AnnotationT =
+    annotation.getOrElse(throw new NoSuchElementException(s"bar $this carries no representative"))
+
   override def toString: String =
     val open: String = lower match
       case PositiveInfinity()    => "(∞" // should never happen
@@ -96,6 +139,56 @@ case class PersistenceBar[FiltrationT: Ordering, AnnotationT](
   * [[PersistenceBar]] object.
   */
 object PersistenceBar:
+
+  /** `bar.show`: the degree, the interval and the representative, `1: [0.5, 1.2)  1 ⊠ ∆(0,1) + ...` (each part by its
+    * own `Show`; the representative is left out when the bar has none).
+    */
+  given barShow: [F: Show, A: Show as sa] => Show[PersistenceBar[F, A]] =
+    Show.show(bar => interval(bar) + bar.annotation.fold("")(a => "  " + sa.show(a)))
+
+  /** `bar.show` for a bar with no annotation type (`PersistenceBar[Double](1, 0.5, 1.2)`): `1: [0.5, 1.2)`. */
+  given unannotatedBarShow: [F: Show] => Show[PersistenceBar[F, Nothing]] = Show.show(interval)
+
+  private def interval[F: Show](bar: PersistenceBar[F, ?]): String =
+    s"${bar.dim}: ${BarcodeEndpoint.showLower(bar.lower)}, ${BarcodeEndpoint.showUpper(bar.upper)}"
+
+  private def numeric(e: BarcodeEndpoint[Double]): Double = e match
+    case ClosedEndpoint(v)  => v
+    case OpenEndpoint(v)    => v
+    case PositiveInfinity() => Double.PositiveInfinity
+    case NegativeInfinity() => Double.NegativeInfinity
+
+  /** Plain numbers for a bar over `Double` filtration values, so callers need not pattern-match on the endpoint types
+    * (open/closed makes no difference to the numbers): `birth` and `death` (`Infinity` for an essential class),
+    * `persistence = death - birth`, and `toTriple = (dim, birth, death)`, the same shape `diagramAt` returns.
+    */
+  extension [A](bar: PersistenceBar[Double, A])
+    def birth: Double = numeric(bar.lower)
+    def death: Double = numeric(bar.upper)
+    def persistence: Double = death - birth
+    def toTriple: (Int, Double, Double) = (bar.dim, birth, death)
+
+  /** Filtering a list of bars (no import needed: these are found through the bar type's companion).
+    *
+    *   - `bars.longerThan(0.1)`: essential bars and bars with persistence strictly greater than `0.1`.
+    *   - `bars.significant()`: the same, with the threshold 1% of the bars' own filtration range (the MATLAB/CLI
+    *     default policy; see [[PersistenceFilter]] for the scale to pass).
+    */
+  extension [A](bars: List[PersistenceBar[Double, A]])
+    def longerThan(minPersistence: Double): List[PersistenceBar[Double, A]] =
+      bars.filter(b => b.death.isPosInfinity || b.persistence > minPersistence)
+    def significant(
+      fraction: Double = PersistenceFilter.DefaultFraction,
+      scale: Optional[Double] = Optional.empty
+    ): List[PersistenceBar[Double, A]] =
+      PersistenceFilter.significant(bars, fraction = fraction, scale = scale)
+
+  /** `bars` without the zero-length ones, unless `includeZeroLength`: what every engine applies to its output. */
+  def dropZeroLength[F, A](
+    bars: Iterable[PersistenceBar[F, A]],
+    includeZeroLength: Boolean
+  ): List[PersistenceBar[F, A]] =
+    if includeZeroLength then bars.toList else bars.iterator.filterNot(_.isZeroLength).toList
 
   /** If we know nothing, assume the user is asking for $(-\infty,\infty)$.
     */
@@ -128,7 +221,7 @@ object PersistenceBar:
       OpenEndpoint(upper)
     )
 
-class BarcodeBuilder[FiltrationT: Ordering]():
+open class BarcodeBuilder[FiltrationT: Ordering]():
   type Bar = PersistenceBar[FiltrationT, Nothing]
 
   /** Infix notation for hand-building explicit persistence bars: `lower <infix> upper` constructs a `BarAssembly`,

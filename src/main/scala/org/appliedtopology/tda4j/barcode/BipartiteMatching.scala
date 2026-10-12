@@ -1,13 +1,12 @@
 package org.appliedtopology.tda4j
-package barcode
 
 import scala.collection.mutable
 
 /** Maximum-cardinality bipartite matching (Hopcroft-Karp). Used by [[BarcodeDistance.bottleneckDistance]] as the
   * feasibility check inside a binary search over candidate distances: "does a perfect matching exist using only edges
-  * of cost <= threshold". Package-private -- [[BarcodeDistance]] is the public surface.
+  * of cost <= threshold".
   */
-private[barcode] object HopcroftKarp:
+object HopcroftKarp:
 
   /** `nLeft`/`nRight` left/right vertices, numbered `0 until nLeft`/`0 until nRight`. `adjacency(u)` lists `u`'s
     * right-neighbours. Returns `matchLeft` where `matchLeft(u)` is `u`'s matched right-vertex, or `-1` if `u` is
@@ -56,13 +55,10 @@ private[barcode] object HopcroftKarp:
 
     matchLeft
 
-/** Minimum-cost perfect matching on a square cost matrix (the Hungarian / Kuhn-Munkres algorithm, O(n^3) via shortest
-  * augmenting paths with vertex potentials). Used by [[BarcodeDistance.wassersteinDistance]]. All matrix entries must
-  * be finite -- see `BarcodeDistance`'s essential/finite split for why the caller never has to hand this an `Infinity`
-  * entry (that would poison the potential-update arithmetic with `Infinity - Infinity = NaN`). Package-private --
-  * [[BarcodeDistance]] is the public surface.
+/** Minimum-cost perfect matching on a square matrix of finite costs (the Hungarian algorithm, `O(n³)`, by shortest
+  * augmenting paths with potentials), for [[BarcodeDistance.wassersteinDistance]].
   */
-private[barcode] object Hungarian:
+object Hungarian:
 
   /** `cost` must be square (`n x n`), all entries finite. Returns `(assignment, totalCost)` where `assignment(j)` is
     * the row matched to column `j`, and `totalCost = sum_j cost(assignment(j))(j)`.

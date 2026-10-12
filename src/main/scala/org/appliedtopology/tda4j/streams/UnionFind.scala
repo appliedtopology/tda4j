@@ -1,12 +1,8 @@
 package org.appliedtopology.tda4j
-package streams
-
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
 
 import collection.mutable
 
-class UnionFind[T](vertices: IterableOnce[T]):
+open class UnionFind[T](vertices: IterableOnce[T]):
   case class UFSet(label: T)
   val sets: mutable.Map[UFSet, UFSet] = mutable.Map.from(
     vertices.iterator.map(v => (UFSet(v), UFSet(v)))
@@ -42,7 +38,7 @@ class UnionFind[T](vertices: IterableOnce[T]):
   * Minimal Spanning Tree in increasing weight order, while the second iterator gives all the non-included
   */
 
-class Kruskal[T](elements: Seq[T], distance: (T, T) => Double, maxDistance: Double = Double.PositiveInfinity)(using
+open class Kruskal[T](elements: Seq[T], distance: (T, T) => Double, maxDistance: Double = Double.PositiveInfinity)(using
   orderingT: Ordering[T]
 ):
   val unionFind: UnionFind[T] = UnionFind(elements)
@@ -72,12 +68,8 @@ class Kruskal[T](elements: Seq[T], distance: (T, T) => Double, maxDistance: Doub
       acc.updated(a, (b, e) :: acc(a)).updated(b, (a, e) :: acc(b))
     }
 
-  /** The path-chain from `s` to every vertex reachable from it along Kruskal's own accepted tree edges
-    * (`mstIterator`/`lrList._1`) -- NOT `unionFind`'s own internal pointers, which no longer represent actual tree
-    * edges once a union links a root under a shorter tree rather than under the specific element that triggered it (see
-    * `UnionFind.union`'s own doc). `boundary(pathsFrom(s)(v)) = Simplex(v) - Simplex(s)` for every `v` in the result.
-    * Mirrors `CellularPersistenceInChunksEngine.unionFindDim01`'s BFS derivation (`Homology.scala`), specialized to
-    * `Simplex[T]`'s 1-skeleton.
+  /** For every vertex `v` reachable from `s` in the spanning forest, the path from `s` to `v` as a chain:
+    * `boundary(pathsFrom(s)(v)) = Simplex(v) - Simplex(s)`.
     */
   private def pathsFrom[CoefficientT: Field](s: T): Map[T, Chain[Simplex[T], CoefficientT]] =
     given Ordering[Simplex[T]] = simplexOrdering[T](using orderingT)

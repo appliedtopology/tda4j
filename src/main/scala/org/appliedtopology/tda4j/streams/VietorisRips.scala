@@ -1,10 +1,6 @@
 package org.appliedtopology.tda4j
-package streams
 
-import org.appliedtopology.tda4j.algebra.{given, *}
-import org.appliedtopology.tda4j.cells.{given, *}
-
-import org.appliedtopology.tda4j.streams.FiniteMetricSpace.MaximumDistanceFiltrationValue
+import org.appliedtopology.tda4j.FiniteMetricSpace.MaximumDistanceFiltrationValue
 
 import scala.collection.immutable.{LazyList, SortedSet}
 import scala.math.Ordering.Implicits.*
@@ -26,7 +22,7 @@ object SimplexEdge:
     val maxedge = edges.max
     SimplexEdge(simplex, Simplex(maxedge._2, maxedge._3), maxedge._1)
 
-class TopCofacetEnumerator(val simplex: SimplexEdge, val neighbors: SortedSet[Int])(using
+open class TopCofacetEnumerator(val simplex: SimplexEdge, val neighbors: SortedSet[Int])(using
   val metricSpace: FiniteMetricSpace[Int]
 ):
   val neighborIt: collection.BufferedIterator[Int] = neighbors.iterator.buffered
@@ -60,7 +56,7 @@ class TopCofacetEnumerator(val simplex: SimplexEdge, val neighbors: SortedSet[In
     neighborIt.hasNext
   def next(): Int = neighborIt.next()
 
-class RecursiveStackSimplexEnumerator(val metricSpace: FiniteMetricSpace[Int], val targetDimension: Int = 2)(
+open class RecursiveStackSimplexEnumerator(val metricSpace: FiniteMetricSpace[Int], val targetDimension: Int = 2)(
   val query: SpatialQuery[Int] = BruteForce(metricSpace)
 ) extends Iterator[Simplex[Int]]:
   given FiniteMetricSpace[Int] = metricSpace
@@ -117,8 +113,8 @@ class RecursiveStackSimplexEnumerator(val metricSpace: FiniteMetricSpace[Int], v
   * neighbor query rather than `SimplexIndexing`'s combinatorial-number-system enumeration. A cross-validation baseline
   * for the canonical VR streams, not a speed-competitive production engine in its own right.
   */
-class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace[Int])
-    extends StratifiedSimplexStream[Int, Double]
+open class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace[Int])
+    extends LevelwiseSimplexStream[Int, Double]
     with DoubleFiltration[Simplex[Int]]:
   override def filtrationValue: PartialFunction[Simplex[Int], Double] =
     FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
@@ -154,3 +150,56 @@ class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetricSpace
     case d if d >= 2 && d < metricSpace.size =>
       RecursiveStackSimplexEnumerator(metricSpace, d - 1)().toVector.sorted(using filtrationOrdering.reverse).iterator
   }
+
+/** The Vietoris-Rips complex, as a stream for any engine. (The `Persistence` verb is the shorter way to its diagram.)
+  *
+  * `maxDimension` is the top homological degree: the stream holds one dimension more, so an engine run on it also
+  * reports classes of degree `maxDimension + 1`, which are incomplete; drop them. `maxFiltrationValue` defaults to the
+  * minimum enclosing radius (beyond it nothing new is born); pass `Double.PositiveInfinity` for the whole complex.
+  *
+  * The constructions ([[Implementation]]) give the same complex, cell for cell, at different speeds;
+  * [[Implementation.Enumerating]] is the default.
+  */
+object VietorisRips extends PointCloudComplex:
+  def fromPoints(points: PointCloud, maxDimension: Int, maxFiltrationValue: Option[Double]) =
+    apply(points.metricSpace, maxDimension, maxFiltrationValue)
+
+  enum Implementation:
+    /** Breadth-first coface enumeration; the default. */
+    case Enumerating
+
+    /** Ripser's coface order, via its combinatorial number system indexing. */
+    case RipserCoface
+
+    /** Cofaces generated in filtration order. */
+    case Inorder
+
+    /** Rieser's New-VR (arXiv:2301.07191): a cross-validation baseline, not a fast construction. */
+    case Incremental
+
+  def apply(
+    metricSpace: FiniteMetricSpace[Int],
+    maxDimension: Int = 2,
+    maxFiltrationValue: Optional[Double] = Optional.empty,
+    implementation: Implementation = Implementation.Enumerating
+  ): LevelwiseSimplexStream[Int, Double] =
+    require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
+    val topSimplexDimension = maxDimension + 1
+    implementation match
+      case Implementation.Enumerating =>
+        LimitedCofaceSimplexStream(
+          EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
+          topSimplexDimension
+        )
+      case Implementation.RipserCoface =>
+        LimitedCofaceSimplexStream(
+          RipserCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
+          topSimplexDimension
+        )
+      case Implementation.Inorder =>
+        LimitedCofaceSimplexStream(
+          InorderCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
+          topSimplexDimension
+        )
+      case Implementation.Incremental =>
+        IncrementalVietorisRipsSimplexStream(metricSpace, topSimplexDimension, maxFiltrationValue.toOption)

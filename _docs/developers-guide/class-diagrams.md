@@ -70,12 +70,27 @@ See the [Scala 3 primer](scala3-primer.md) for the typeclass and `given` syntax.
 ```mermaid
 classDiagram
     class Chain {
-        -entries: PriorityQueue~Tuple2~
+        <<abstract>>
+        cellOrdering: Ordering~CellT~
+        coefficientField: Field~CoefficientT~
+        entryIterator()* Iterator~Tuple2~
         collapseHead() Unit
         collapseAll() Unit
         isZero() Boolean
-        items: Seq~Tuple2~
+        terms: Seq~Tuple2~
     }
+    class HeapChain {
+        <<private tda4j>>
+        queue: PriorityQueue~Tuple2~
+    }
+    class PackedChain {
+        <<private tda4j>>
+        keys: Array~Int~
+        coefficients: Array~AnyRef~
+        decoder: CellDecoder~CellT~
+    }
+    Chain <|-- HeapChain
+    Chain <|-- PackedChain
     class `Chain$` {
         <<companion object>>
         empty~CellT,CoefficientT~() Chain
@@ -135,9 +150,9 @@ classDiagram
     Filtration <|-- CellStream
     CellStream <|-- SimplexStream
     CellStream <|-- StratifiedCellStream
-    SimplexStream <|-- StratifiedSimplexStream
-    StratifiedCellStream <|-- StratifiedSimplexStream
-    StratifiedSimplexStream <|-- CofaceSimplexStream
+    SimplexStream <|-- LevelwiseSimplexStream
+    StratifiedCellStream <|-- LevelwiseSimplexStream
+    LevelwiseSimplexStream <|-- CofaceSimplexStream
     CofaceSimplexStream <|-- EnumeratingCofaceSimplexStream
     EnumeratingCofaceSimplexStream <|-- RipserCofaceSimplexStream
     RipserCofaceSimplexStream <|-- CechCofaceSimplexStream
@@ -147,10 +162,12 @@ classDiagram
     RipserCofaceSimplexStream <|-- DowkerCofaceSimplexStream
     EnumeratingCofaceSimplexStream <|-- InorderCofaceSimplexStream
     SimplexStream <|-- ExplicitStream
-    StratifiedSimplexStream <|-- RecursiveStackVietorisRipsSimplexStream
-    StratifiedSimplexStream <|-- IncrementalVietorisRipsSimplexStream
-    StratifiedSimplexStream <|-- AlphaShapes
-    AlphaShapes <|-- HelixDelaunay
+    LevelwiseSimplexStream <|-- RecursiveStackVietorisRipsSimplexStream
+    LevelwiseSimplexStream <|-- IncrementalVietorisRipsSimplexStream
+    LevelwiseSimplexStream <|-- AlphaShapes
+    AlphaShapes <|-- DelaunayAlphaShapes
+    DelaunayAlphaShapes <|-- BowyerWatsonDelaunay
+    DelaunayAlphaShapes <|-- HelixDelaunay
     AlphaShapes <|-- AlphaShapeDQP
     StratifiedCellStream <|-- CubicalGridStream
     StratifiedCellStream <|-- ExplicitCubicalStream
@@ -239,7 +256,7 @@ classDiagram
     SparseMetricSpace --> SpatialQuery : uses (JVPTree)
 ```
 
-## Barcode representation (`Barcode.scala`, package `org.appliedtopology.tda4j.barcode`)
+## Barcode representation (`barcode/Barcode.scala`)
 
 ```mermaid
 classDiagram
@@ -282,3 +299,203 @@ classDiagram
 `AnnotationT` is typically a representative `Chain`.
 `BarcodeDistance` and `Vectorization` operate only on persistence-bar endpoints
 and do not use annotations.
+
+## The public API layer (`homology/Persistence.scala`, `barcode/PersistenceDiagram.scala`, `package.scala`)
+
+```mermaid
+classDiagram
+    direction LR
+    class Persistence {
+        <<object>>
+        apply(input, options...) PersistenceDiagram
+    }
+    class Input~CellT~ {
+        <<into trait>>
+        stream(maxDim, threshold, complex)
+        scale: Option~Double~
+        cells: OrderedCell instance
+        ripserApplies(complex) Boolean
+        cubicalGrid: Option~Grid~
+    }
+    class Engine {
+        <<enum>>
+        Auto, Chunks, Naive
+        Cohomology, Ripser, FastCubical
+    }
+    class Representatives {
+        <<enum>>
+        Cycles, Cocycles
+    }
+    class PointCloudComplex {
+        <<trait>>
+        fromPoints(points, maxDim, threshold)
+    }
+    class PersistenceDiagram~CellT~ {
+        <<trait>>
+        type Coefficient
+        bars: List~PersistenceBar~
+        dim(k), at(f), longerThan(x)
+        significant(), bettiNumbers
+    }
+    class Coefficients {
+        <<trait>>
+        type C
+        field: C is Field
+        fromInt(x) C
+    }
+    Persistence ..> Input : takes
+    Persistence ..> Engine : takes
+    Persistence ..> Representatives : takes
+    Persistence ..> PointCloudComplex : takes
+    Persistence ..> Coefficients : picks the field
+    Persistence ..> PersistenceDiagram : returns
+```
+
+`Input` is an `into` trait: points, metric spaces, images and streams convert
+to one at the call site. `Engine` and `Input` are nested in `object
+Persistence`. `VietorisRips`, `Cech` and `AlphaShapes` implement
+`PointCloudComplex`. See [The public API](public-api.md).
+
+```mermaid
+classDiagram
+    class Lab {
+        <<abstract>>
+        coefficients: Coefficients
+        Fp(x) CoefficientT
+    }
+    class TDAlab {
+        chain arithmetic on simplices
+        F2, F3, F17, Reals
+    }
+    class CubicalLab {
+        chain arithmetic on cubes
+        F2, F3, F17, Reals
+    }
+    Lab <|-- TDAlab
+    Lab <|-- CubicalLab
+    Lab ..> Coefficients : holds
+```
+
+## Nerves and group homology (`sset/`)
+
+```mermaid
+classDiagram
+    class SimplicialSet~G~ {
+        <<trait: lazy, possibly infinite>>
+        generators(n) Iterable~G~
+        faces: G => IndexedSeq~SSetElement~
+        skeleton(n) FiniteSimplicialSet
+        persistentHomology(filtrationValue, maxDegree, prime) PersistenceDiagram
+    }
+    class FiniteMonoid {
+        table: Array~Array~Int~~
+        multiply(a, b) Int
+    }
+    class FiniteGroup {
+        inverse(a) Int
+        subgroupGeneratedBy(gens) Set~Int~
+        pSubgroups(p) IndexedSeq~Set~Int~~
+    }
+    class FiniteCategory {
+        <<trait>>
+        source(f) Int
+        target(f) Int
+        identityOf(x) Int
+        andThen(f, g) Int
+        validate() Seq~String~
+    }
+    class RewritingSystem {
+        <<case class>>
+        normalForms
+        levels
+        validate() Seq~String~
+        respects(chain) Seq~String~
+    }
+    class CollapsedNerve {
+        criticalCells(n) IndexedSeq~NerveSimplex~
+        morseBoundary(c) Map
+        lift(c) Map
+        stream(chain, maxDegree) StratifiedCellStream
+        persistentHomology(chain, maxDegree, prime) PersistenceDiagram
+    }
+    class ClassifyingSpace {
+        <<object>>
+        persistentGroupHomology(g, chain, maxDegree, prime) PersistenceDiagram
+        bettiNumbers(g, maxDegree, prime) Vector~Int~
+    }
+    SimplicialSet <|-- FiniteSimplicialSet
+    SimplicialSet <|-- Nerve
+    SimplicialSet <|-- CategoryNerve
+    FiniteMonoid <|-- FiniteGroup
+    FiniteCategory <|-- HomotopyOrbitCategory
+    Nerve ..> FiniteMonoid : nerve of
+    CategoryNerve ..> FiniteCategory : nerve of
+    RewritingSystem ..> FiniteMonoid : presents
+    CollapsedNerve ..> RewritingSystem : collapses by
+    CollapsedNerve ..> Nerve : lifts to
+    ClassifyingSpace ..> CollapsedNerve : when the chain refines
+    ClassifyingSpace ..> Nerve : otherwise
+```
+
+See [Nerves and group homology](nerves.md).
+
+## Plots (`plot/`)
+
+```mermaid
+classDiagram
+    class Plot {
+        <<trait>>
+        fragment(theme) String
+        html(theme) String
+        svgFile(theme) String
+        view() this
+        save(path, theme) Path
+    }
+    class Figure {
+        <<case class>>
+        marks: Vector~Mark~
+        axes, legend, colorbar
+        over(under) Figure
+        svg(theme) String
+    }
+    class Scene {
+        <<case class: 3-D>>
+        layers
+        over(under) Scene
+        staticSvg(theme) String
+    }
+    class Board {
+        <<case class>>
+        plots: Seq~Figure~
+    }
+    class Mark {
+        <<sealed trait>>
+        paints: IndexedSeq~Paint~
+        tips: IndexedSeq~String~
+    }
+    class Palette {
+        <<case class>>
+        hex(paint, theme) String
+        css(paint) String
+    }
+    class Paint {
+        <<enum>>
+        Series(k), Ink, Secondary, Muted, Grid, Axis, Surface, Fixed(hex)
+    }
+    class Theme {
+        <<enum>>
+        Auto, Light, Dark
+    }
+    Plot <|.. Figure
+    Plot <|.. Scene
+    Plot <|.. Board
+    Figure o-- Mark
+    Mark ..> Paint : colored by role
+    Palette ..> Paint : resolves
+    Palette ..> Theme : per
+    Svg ..> Figure : renders
+    Viewer ..> Plot : shows
+```
+
+`object Plot` (the TDA constructors: `barcode`, `diagram`, `complex`,
+`cycle`, ...) shares the trait's name. See [Plotting internals](plotting.md).
