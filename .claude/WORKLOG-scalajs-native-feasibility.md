@@ -125,8 +125,43 @@ sourceGenerators` block copied from `build.sbt`. sbt 2's launcher here rejects `
 parallel fetches (HTTP 429): retry `sbt "Test/dependencyClasspath"`, and after each failure `curl` every 429'd URL
 into `~/.cache/coursier/v1/https/...` (this converged in 1--2 attempts).
 
-## Open items
+## Follow-up (same session): the goals, and a Native speed measurement
 
-- `FiniteFieldSpec` "units" properties are vacuous (above). Fix independently of any port.
-- `Plot.number`'s runtime type test is platform-dependent. Fix it if JS is pursued.
-- Untested: running the test suite on Native, GraalVM `native-image` for the CLI, JS performance on large inputs.
+Project lead's goals: **JS** = persistence in the browser (no CLI, no MATLAB); **Native** = more speed by leaving
+the JVM, CLI important, MATLAB not needed.
+
+**Native throughput (measured).** The main path links on Native with one shim (`BinomialCoefficient`; `TrieMap`,
+`.par` and the rest are fine there). `BenchMain` = `Persistence(points, maxDimension = 2, representatives = ...)` on
+Ripser's `sphere_3_192_points.dat`, 5 repetitions in one process, one 4-core sandbox, ms:
+
+| build | cycles | cocycles |
+|---|---|---|
+| JVM 21 forked, `-Xms8g -Xmx8g -XX:+UseParallelGC` | 5639, 6881, 4813, 4603, 4615 | 3894, 4829, 3672, 3494, 3388 |
+| Native 0.5.12 `releaseFull` + thin LTO, Immix | 6291, 5947, 5768, 5504, 5398 | 4884, 5575, 5516, 5348, 5185 |
+| same, `GC_INITIAL_HEAP_SIZE=8G` | 16401, 22175, 5754, 5845, 5791 | 5205, 5028, 4966, 4750, 4924 |
+| same, Commix | 6253, 5573, 6076, 6150, 6284 | 6860, 10402, 13545, 5472, 4866 |
+
+The JVM is about 1.2× (cycles) and 1.45× (cocycles) faster at steady state, and faster even on its first, cold
+repetition. Bars are 192/53/1 everywhere. Native peak RSS was 2.4 GB. The release link takes about 77 s.
+
+**Startup (measured).** 30 points, whole-process wall time, 3 runs each: JVM 523/554/519 ms, Native 27/27/27 ms.
+
+**Reading.** Leaving the JVM buys startup, not throughput. The gap to ripser.cpp (about 6.7–8× on sphere3_192,
+`WORKLOG-vr-working-column.md`) lies in algorithm and representation (emergent pairs, boxed `Array[Any]`
+coefficients, apparent-pair memory), and those carry over to every platform. The reason Native is slower here is a
+hypothesis (allocation and boxing, where HotSpot's escape analysis and generational GC are strong); it was not
+profiled. Re-measure Native once the hot path is unboxed.
+
+Reproducing: `nativeConfig ~= { _.withMode(Mode.releaseFull).withLTO(LTO.thin).withGC(GC.immix) }`,
+`Compile / mainClass := Some("BenchMain")`, `sbt nativeLink`. sbt 2's `export Runtime/fullClasspath` prints virtual
+paths (`${OUT}`, `${CSR_CACHE}`, `>sha256-...` suffixes), which must be rewritten before `java -cp`.
+
+## Open items (filed 2026-10-13)
+
+- #79 `FiniteFieldSpec` "units" properties are vacuous.
+- #80 `Plot.number`'s runtime type test misreads `Fp` on Scala.js.
+- #81 Scala.js build: persistence in the browser (plan, measured blockers, unverified performance).
+- #82 Packed engines: boxed coefficients (`Array[Any]`), `performance` + `unverified`.
+- #83 Scala Native build: fast-starting CLI, no throughput gain yet (the table above; GraalVM `native-image`
+  unmeasured; the test suite never run on Native).
+- Already open and relevant: #57 emergent pairs.
