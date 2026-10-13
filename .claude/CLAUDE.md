@@ -95,7 +95,8 @@ installer and also warms test dependencies and scalafmt); without it a new sessi
 No linter beyond scalafmt; tests are specs2. CI jobs (`test` with a fat-jar smoke run, `docs-build`, `mima`, `lint`) and
 their local equivalents: steward skill; a weekly `coverage.yml` maps coverage, never gates. A deliberate binary break is
 a commented `mimaBinaryIssueFilters` entry (project lead: not a strong requirement before 1.0). The ~319 `-Wunused:all` warnings are deliberately left alone
-(`WORKLOG-compiler-warnings.md`). Docs build with Scala 3.8.4 (`TDA4J_SCALA_VERSION`, seen only by a FRESH sbt server:
+(`WORKLOG-compiler-warnings.md`). No `-opt`/`-opt-inline` (the bytecode optimizer): no measured gain from the only
+setting a published jar may use (own package), and it breaks incremental compilation (`WORKLOG-scala-optimizer.md`). Docs build with Scala 3.8.4 (`TDA4J_SCALA_VERSION`, seen only by a FRESH sbt server:
 `rules/docs-and-tutorials.md`). After `sbt package` or a docs build a test compile can miss main classes ("Not found:
 TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
 
