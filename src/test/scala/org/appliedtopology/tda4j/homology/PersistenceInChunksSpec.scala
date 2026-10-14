@@ -522,3 +522,35 @@ class PersistenceInChunksSpec extends mutable.Specification:
       (again must beEqualTo(diagram)) and
       (state.pairing must beEqualTo(pairing))
   }
+
+  "The engine's cell ranking answers as the stream's ordering does, also for cells that are not the stream's own objects (#51)" >> {
+    // The engine compares cells by a rank looked up by object identity. A stream that builds fresh equal cells on every
+    // iteration defeats the lookup for every cell but those of the first pass; the fallback to the stream's own ordering
+    // has to give the same pairing, bars and (valid) representatives. Tie-heavy input: a lattice of integer points.
+    val field = FiniteField(17)
+    import field.given
+    val inf = Double.PositiveInfinity
+    val grid = Array.tabulate(16)(i => Array((i % 4).toDouble, (i / 4).toDouble))
+    val vr = VietorisRips(EuclideanMetricSpace(grid), maxDimension = 1)
+    val fresh = new StratifiedCellStream[Simplex[Int], Double]:
+      def filtrationValue = vr.filtrationValue
+      def filtrationOrdering = vr.filtrationOrdering
+      val smallest = vr.smallest
+      var largest = vr.largest
+      def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+        case d if vr.iterateDimension.isDefinedAt(d) => vr.iterateDimension(d).map(s => ∆(s.toSeq*))
+      }
+    val own = PersistenceInChunksEngine[Int, field.Fp](1).persistentHomology(vr)
+    val copied = PersistenceInChunksEngine[Int, field.Fp](1).persistentHomology(fresh)
+    val naive = SimplicialHomologyEngine[Int, field.Fp, Double]().persistentHomology(vr)
+    val repsAreCycles = copied
+      .barcodeAt(inf, includeZeroLength = true)
+      .filter(_.dim == 1)
+      .forall(bar => bar.annotation.exists(rep => !rep.isZero() && Chain.from(rep.boundary).isZero()))
+    (copied.pairing.toSet must beEqualTo(own.pairing.toSet)) and
+      (copied.diagramAt(inf, includeZeroLength = true).sorted must beEqualTo(
+        naive.diagramAt(inf, includeZeroLength = true).filter(_._1 <= 1).sorted
+      )) and
+      (own.pairing.size must beGreaterThan(20)) and
+      repsAreCycles
+  }

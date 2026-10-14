@@ -350,7 +350,11 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
     essentialRepresentatives: mutable.Map[CellT, Chain[CellT, CoefficientT]]
   ):
 
-    given Ordering[CellT] = stream.filtrationOrdering
+    // The stream's ordering costs several hash lookups per comparison (a `TreeSet`-keyed map for the value of each
+    // side), and a reduction compares cells constantly. The cells of the stream are therefore ranked once, by that
+    // very ordering, and compared by rank through an identity map; a cell that is not one of the stream's own
+    // objects (or not in it) falls back to the stream's ordering, so every answer is the stream's answer.
+    given Ordering[CellT] = rankedOrdering
 
     // top-down state:
     //   cleared ------------- simplices paired as pivots (positive side); their column is implicitly zero
@@ -383,6 +387,34 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
         .toVector
     val cellIndex: Map[CellT, Int] = allCells.zipWithIndex.toMap
     val chunkSize: Int = math.max(1, math.sqrt(allCells.size.toDouble).floor.toInt)
+
+    // Dense ranks under the stream's ordering (cells it calls equal share a rank), keyed by object identity.
+    private lazy val rankedOrdering: Ordering[CellT] =
+      val streamOrdering: Ordering[CellT] = stream.filtrationOrdering
+      val ranks = new java.util.IdentityHashMap[CellT, Integer](2 * allCells.size + 1)
+      val sorted = allCells.sorted(using streamOrdering)
+      var rank = 0
+      var previous: Option[CellT] = None
+      sorted.foreach { cell =>
+        previous.foreach(prev => if streamOrdering.compare(prev, cell) != 0 then rank += 1)
+        ranks.put(cell, Integer.valueOf(rank))
+        previous = Some(cell)
+      }
+      new Ordering[CellT]:
+        def compare(x: CellT, y: CellT): Int =
+          val rx = ranks.get(x)
+          val ry = ranks.get(y)
+          if rx != null && ry != null then Integer.compare(rx.intValue, ry.intValue)
+          else streamOrdering.compare(x, y)
+
+    // The stream's own object for a cell equal to it (so that the identity-keyed ranks above apply), else the cell.
+    private def canonical(cell: CellT): CellT = cellIndex.get(cell) match
+      case Some(i) => allCells(i)
+      case None    => cell
+
+    /** `sigma`'s boundary as a chain over the stream's own cell objects. */
+    private def boundaryChain(sigma: CellT): Chain[CellT, CoefficientT] =
+      Chain.from(sigma.boundary[CoefficientT].map((cell, k) => (canonical(cell), k)))
 
     // killer column index for each local pivot
     val killer: mutable.Map[CellT, CellT] = mutable.Map.empty
@@ -696,7 +728,7 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
                 "invariant this relies on was violated"
             )
           vcolInProgress += sigma
-          val dsigma: Chain[CellT, CoefficientT] = Chain.from(sigma.boundary[CoefficientT])
+          val dsigma: Chain[CellT, CoefficientT] = boundaryChain(sigma)
           val stop: CellT => Boolean =
             if paired.contains(sigma) then
               val myPivot = pivotOf(sigma)
@@ -815,8 +847,7 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
         // rebuild the boundary chain under the local filtration ordering — the chain
         // returned by sigma.boundary is ordered by Simplex.scala's default (lex) ordering,
         // not stream.filtrationOrdering, which gives wrong pivots in top-down.
-        val dsigma: Chain[CellT, CoefficientT] =
-          Chain.from(sigma.boundary[CoefficientT])
+        val dsigma: Chain[CellT, CoefficientT] = boundaryChain(sigma)
         val (dsigmaReduced, _) =
           Chain.reduceByUntil(dsigma, boundaries, Chain.empty, stop)
         if dsigmaReduced.isZero() then
@@ -1014,7 +1045,7 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
       // eliminationFallback's own doc for why calling vcolOf here, before the global phase has run, is
       // safe.
       for sigma <- allCells if R.contains(sigma) && !cleared.contains(sigma) && !paired.contains(sigma) do
-        val dsigma: Chain[CellT, CoefficientT] = Chain.from(sigma.boundary[CoefficientT])
+        val dsigma: Chain[CellT, CoefficientT] = boundaryChain(sigma)
         val (dsigmaReduced, _) =
           Chain.reduceByUntil(dsigma, boundaries, Chain.empty, (_: CellT) => false, fallback = eliminationFallback)
         if dsigmaReduced.isZero() then
