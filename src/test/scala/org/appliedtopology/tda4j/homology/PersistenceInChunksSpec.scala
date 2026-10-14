@@ -485,3 +485,40 @@ class PersistenceInChunksSpec extends mutable.Specification:
     (results.map(_._2).sum must beGreaterThan(100)) and
       (results.filterNot((_, _, valid, same) => valid && same) must beEmpty)
   }
+
+  "The reduction runs once: later queries on the same state add no field operations (#51)" >> {
+    // A top cell that reduces to zero is neither cleared nor paired, so it used to be reduced again by every
+    // `diagramAt`/`barcodeAt`/`pairing`. A field that counts its operations sees that directly.
+    val ff = FiniteField(17)
+    var operations = 0L
+    given counting: (ff.Fp is Field) = new (ff.Fp is Field):
+      private val base = ff.fpField
+      def plus(x: ff.Fp, y: ff.Fp) =
+        operations += 1; base.plus(x, y)
+      def minus(x: ff.Fp, y: ff.Fp) =
+        operations += 1; base.minus(x, y)
+      def times(x: ff.Fp, y: ff.Fp) =
+        operations += 1; base.times(x, y)
+      def divide(x: ff.Fp, y: ff.Fp) =
+        operations += 1; base.divide(x, y)
+      def isEqual(x: ff.Fp, y: ff.Fp) = base.isEqual(x, y)
+      def negate(x: ff.Fp) = base.negate(x)
+      def invert(x: ff.Fp) = base.invert(x)
+      def zero = base.zero
+      def one = base.one
+      def showForSelf = base.showForSelf
+    val inf = Double.PositiveInfinity
+    val rng = new scala.util.Random(11)
+    val vr = VietorisRips(EuclideanMetricSpace(Array.fill(20)(Array.fill(3)(rng.nextDouble()))), maxDimension = 1)
+    val state = PersistenceInChunksEngine[Int, ff.Fp](1).persistentHomology(vr)
+    state.advanceAll()
+    val afterFirst = operations
+    val diagram = state.diagramAt(inf).sorted
+    val pairing = state.pairing
+    state.advanceAll()
+    val again = state.diagramAt(inf).sorted
+    (afterFirst must beGreaterThan(1000L)) and
+      (operations must beEqualTo(afterFirst)) and
+      (again must beEqualTo(diagram)) and
+      (state.pairing must beEqualTo(pairing))
+  }

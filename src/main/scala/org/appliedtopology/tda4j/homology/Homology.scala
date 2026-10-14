@@ -946,7 +946,13 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
             essentialSimplices += sigma
           else recordPair(sigma, dsigmaReduced)
 
+    // True once `advanceAll` has run to the end: the stream is fixed, so the pairing is final and a later call (every
+    // `diagramAt`/`barcodeAt`/`pairing` makes one) has nothing left to do. Without it a top cell that reduces to
+    // zero (neither cleared nor paired) was reduced again on every call.
+    private var advanced: Boolean = false
+
     def advanceAll(): Unit =
+      if advanced then return
       // Dimensions 0/1 are fully resolved by raw union-find (cleared/paired/killer/barcode(0)/
       // essentialSimplices all populated directly) -- see unionFindDim01's own doc. Both loops below
       // therefore start at delta=2, not delta=0: dimension 1 (edges) was the actually-expensive part of the
@@ -1032,6 +1038,7 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
           if !cleared.contains(sigma) && !paired.contains(sigma) && R.contains(sigma) then compress(sigma)
         // step 3: reduce the compressed global columns and record pairs
         for sigma <- cellsAtDim do globalReduce(sigma)
+      advanced = true
 
   def persistentHomology(stream: => StratifiedCellStream[CellT, Double]): HomologyState =
     HomologyState(
