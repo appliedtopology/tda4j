@@ -145,6 +145,23 @@ class PlotSpec extends Specification:
       given Double is Field = Field.DoubleApproximated(1e-9)
       Plot.number(0.25) must beEqualTo(0.25)
     }
+    "be decided by the field, not by the runtime class of the element" in {
+      // Z/5 with `Double` carriers. A test of the runtime class (`case d: Double`) takes the carrier itself, 4.0; on
+      // Scala.js that is what every `Fp` would give. The field's own view is the balanced representative, -1.
+      def m(x: Double): Double = ((x % 5) + 5) % 5
+      given z5: (Double is Field) = new (Double is Field):
+        def plus(x: Double, y: Double): Double = m(x + y)
+        def minus(x: Double, y: Double): Double = m(x - y)
+        def times(x: Double, y: Double): Double = m(x * y)
+        def invert(x: Double): Double = (1 to 4).map(_.toDouble).find(k => m(k * x) == 1.0).get
+        def divide(x: Double, y: Double): Double = times(x, invert(y))
+        def isEqual(x: Double, y: Double): Boolean = m(x) == m(y)
+        def negate(x: Double): Double = m(-x)
+        def zero: Double = 0.0
+        def one: Double = 1.0
+        def showForSelf = cats.Show.fromToString[Double]
+      (Plot.number(4.0) must beEqualTo(-1.0)).and(Plot.number(2.0) must beEqualTo(2.0))
+    }
   }
 
   "3-D scenes" should {

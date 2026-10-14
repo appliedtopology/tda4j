@@ -21,6 +21,24 @@ trait Field:
 
   def showForSelf: Show[Self]
 
+  /** `x` as a real number, for plots and printouts: the integer `k` (`|k| <= 64`, the smallest first) with `k * 1 == x`
+    * in the field, which is the balanced representative for `Z/p`; `NaN` when there is none. A field of real numbers
+    * overrides it with the value itself ([[Field.DoubleApproximated]] does). It is decided by the field, never by the
+    * runtime class of `x`: on Scala.js every boxed number is a `Double`, and an `Fp` would be taken for one.
+    */
+  def toDouble(x: Self): Double =
+    if isEqual(x, zero) then 0.0
+    else
+      var pos = zero
+      var k = 1
+      var found = Double.NaN
+      while found.isNaN && k <= 64 do
+        pos = plus(pos, one)
+        if isEqual(x, pos) then found = k
+        else if isEqual(x, negate(pos)) then found = -k
+        k += 1
+      found
+
   extension (x: Self)
     infix def +(y: Self): Self = plus(x, y)
     infix def -(y: Self): Self = minus(x, y)
@@ -53,6 +71,8 @@ object Field:
     override def one: Double = fr.one
 
     override def showForSelf = Show.fromToString[Double]
+
+    override def toDouble(x: Double): Double = x
 
   /** Opt-in (`import Field.showFromField`): `Show` for any coefficient type via its `Field`'s `showForSelf`. Not a
     * top-level given -- `Double` already has cats' `Show`, and `Fp` has its own in `FiniteField`.

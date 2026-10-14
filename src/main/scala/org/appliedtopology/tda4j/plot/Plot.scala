@@ -6,7 +6,6 @@ import cats.syntax.show.toShow
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
-import scala.compiletime.asMatchable
 
 /** Anything the viewer can show and `save` can write: a [[Figure]], a [[Scene]] (3-D), a side-by-side [[Board]]. */
 trait Plot:
@@ -466,23 +465,10 @@ object Plot:
     given f: (C is Field) = chain.coefficientField
     chain.terms.map((cell, c) => (cell, Plot.number(c)))
 
-  /** A field element as a number: itself for `Double`, else the integer `k` (`|k| <= 64`, the smallest first) with
-    * `k * 1 == x` in the field (the balanced representative for `Z/p`); `NaN` when there is none.
+  /** A field element as a number: the field's own view of it (`Field.toDouble`): the value for the reals, the balanced
+    * representative for `Z/p`, `NaN` when there is none.
     */
-  def number[C](x: C)(using f: C is Field): Double = x.asMatchable match
-    case d: Double => d
-    case _         =>
-      if f.isEqual(x, f.zero) then 0.0
-      else
-        var pos = f.zero
-        var k = 1
-        var found = Double.NaN
-        while found.isNaN && k <= 64 do
-          pos = f.plus(pos, f.one)
-          if f.isEqual(x, pos) then found = k
-          else if f.isEqual(x, f.negate(pos)) then found = -k
-          k += 1
-        found
+  def number[C](x: C)(using f: C is Field): Double = f.toDouble(x)
 
   /** A simplicial cycle (a bar's representative) over the point cloud it lives on: its edges thick in its degree's
     * color, its triangles filled, its vertices dotted; each cell's coefficient in its tooltip. Draw it over
