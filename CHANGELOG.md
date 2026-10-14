@@ -9,6 +9,19 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Breaking
 
+### Added
+
+### Changed
+
+### Fixed
+
+### Build, CI and Documentation
+
+
+## 0.6.0 (2026-10-14)
+
+### Breaking
+
 - `sset.ClassifyingSpace.persistentGroupHomology` returns a `PersistenceDiagram` (bars with representatives) instead of
   a list of `(degree, birth, death)`; `diagram.triples` is the old list.
 - `Chain` is an abstract class open to new storages: a storage implements `entryIterator` and inherits every other
