@@ -18,6 +18,8 @@ jobs:
     if: github.ref != 'refs/heads/gh-pages' && github.ref != 'gh-pages'
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the docs' Playground link reads the last release from the git tags
       - name: Setup JDK
         uses: actions/setup-java@v6
         with:

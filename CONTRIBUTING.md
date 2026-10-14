@@ -144,10 +144,11 @@ before the build, and `sbt shutdown` and `sbt clean` after it.
 <details>
 <summary>Making a Scastie link that loads tda4j</summary>
 
-The site's Playground link and its Scastie configuration are set in `build.sbt` (`-quick-links`,
-`-scastie-configuration`). A link that opens a snippet with the library loaded is
-`https://scastie.scala-lang.org/?inputs=` followed by URL-encoded JSON like this (replace `"code"`, and keep the
-version current):
+The site's Playground link and its Scastie configuration are generated in `build.sbt` (`scastieLink`,
+`scastieSettings`, used by `-quick-links` and `-scastie-configuration`) with the **last release** read from the `v*`
+git tags, so they need no edit at a release; the docs workflows fetch the tags. A link that opens a snippet with the
+library loaded is `https://scastie.scala-lang.org/?inputs=` followed by URL-encoded JSON like this (a space is `%20`,
+not `+`):
 
 ```json
 {

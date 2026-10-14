@@ -28,3 +28,19 @@ notes only (see the end).
 - Discriminating test (`PlotSpec`): Z/5 with `Double` carriers. The old `case d: Double` returns `4.0`; the field's view
   is `-1`. It reproduces on the JVM the failure the issue measured on Scala.js, so the fix needs no JS build to test.
 - Checked: `PlotSpec`, `FiniteFieldSpec` pass. NOT checked: an actual Scala.js run (no JS build in this repo).
+
+## #60: the Playground link loaded tda4j 0.4.0
+
+- `build.sbt` generates the Scastie link and the snippet configuration (`scastieLink`, `scastieSettings`) from the last
+  plain `v*` release tag (`releaseTags`, the function the MiMa baseline uses), so a release needs no edit. The example
+  is the 0.5 verb (`Persistence(points)`), with `import scala.language.experimental.modularity`. `ScastieFallback`
+  (`0.5.0`) applies only without tags; `docs.yml` now checks out with `fetch-depth: 0` (`release.yml` already did).
+- Verified: decoded the generated link from `show Compile / doc / scalacOptions`; compiled and ran its code and sbt
+  settings (Scala 3.9.0, the same `scalacOptions`, `tda4j % 0.5.0` from Maven Central) in a scratch project: prints the
+  four H0 bars (one essential) and the H1 bar `(1, 1.0, 1.4142...)` of a unit square.
+- NOT verified: opening the link in Scastie itself (no browser session to scastie.scala-lang.org from here). The
+  issue's "tried by hand" is therefore 30 seconds for the project lead after the release: click Playground on the docs
+  page. Note the link names the last RELEASE: right after tagging 0.6.0 (or 0.5.1) it points at that version, which
+  Scastie can resolve only once Maven Central has synced it (minutes to an hour).
+- Maven Central answered HTTP 429 twice during the probe (the cold-cache rate limit CLAUDE.md warns about); a retry
+  after the `Retry-After` window worked.
