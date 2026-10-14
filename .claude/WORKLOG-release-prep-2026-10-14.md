@@ -87,3 +87,49 @@ asks (next version `0.6.1-SNAPSHOT`), or `sbt "release release-version 0.6.0 nex
 `CHANGELOG.md` `Unreleased` heading to `0.6.0 (2026-10-xx)` first (RELEASE.md pre-flight). Nothing in the repo hard-codes
 `0.5.1` (checked `grep -rn "0\.5\.1"` over `*.md`, `*.sbt`, `*.yml`), and the docs Playground link follows the tag.
 This session changed neither `version.sbt` nor the `Unreleased` heading: both belong to the release step.
+
+## #51 (chunks/naive reduce every top cell): NOT attempted
+
+Cut for the release: it is neither short nor release-critical (`Auto` never picks these engines for Vietoris-Rips, and
+the tutorials' point sets are small). Notes for whoever takes it, from reading `rules/engines.md` and the issue only;
+nothing below was measured here:
+
+- **Profile before designing.** 13 s for 70 points at `maxDimension = 1` is ~54k triangles + 2.4k edges, i.e. ~240 us per
+  top cell. A column of a triangle has three entries; that is more like a constant-factor cost (stream construction,
+  `HeapChain` allocation, boxed coefficients, `Ordering` calls) than an intrinsic superlinear reduction. Split the
+  13 s into stream construction and reduction first (JFR, one engine per JVM, as CONTRIBUTING.md says).
+- **"Skip top cells" is not free in homology.** In the column reduction the top cells ARE the columns that kill the
+  `maxDimension` classes; which ones are negative is known only by reducing them. The sound shortcuts are Ripser's
+  apparent pairs for the top dimension (a column whose pivot's youngest coface is itself needs no reduction; `#57`
+  covers emergent pairs on the cohomology side) and stopping once no positive `maxDimension` cell is unpaired (rarely
+  true: essential classes keep it from happening).
+- **Scope.** `Naive` is the documented unoptimised reference baseline (`rules/engines.md`: "a fix in one doesn't imply
+  others need it"; a second engine for `barcodeAt` was rejected by the project lead). Suggest optimising Chunks only and
+  leaving Naive as the oracle. That is a decision for the project lead; not made here.
+- **`BarcodeRegressionSpec`**: the issue allows narrowing the range "with a measured reason". Still `skipAll`.
+
+## #82 (boxed coefficients in the packed engines): the question, answered; nothing implemented
+
+Question from the project lead: are a bunch of `inline` annotations, or custom code that uses `FiniteField`'s lookup table
+without boxing, effective? **This is an argument from reading `Field.scala` and `FiniteField.scala`, not a measurement.**
+
+- **Annotations alone: no.** `inline`/`@inline` remove call overhead, not the representation. The boxing is the
+  `Array[Any]` storage (an `Fp` is stored as `java.lang.Integer`) and the erased `Field` interface (`Object plus(Object,
+  Object)`), so every op returns a boxed value however much is inlined into the caller. Scala 3 has no working
+  `@specialized` for this. Inlining helps only once the storage is also `Array[Int]`.
+- **A separate `Int` path: the only real option.** An `Array[Int]`-coefficient `Column` for `Int`-backed fields that does
+  the arithmetic itself on raw `Int`s (`(a + b) % p`, products in `Long`, the inverse from the table) and never calls
+  through `Field`. It needs the modulus and the inverse table reachable as raw `Int`s: today `fpField.inverse` returns an
+  `Fp` through the generic interface (boxed at the boundary), so `FiniteField` would expose e.g. an `IntField` view
+  (`modulus`, `invInt(a: Int): Int`), and the engines would select the path on `f.isInstanceOf[IntField]` (a type test on
+  the *field*, not on an element: fine on Scala.js, cf. #80). Keep the generic path for everything else; the two must agree
+  term for term (`PackedWorkingColumnSpec` style).
+- **A hypothesis that should be tested first, because it may remove the JVM motivation:** for the default `p = 17` the
+  stored values lie in [-128, 127], where `Integer.valueOf` returns the JDK's cached `Integer` objects. If so, the packed
+  engine's coefficient "boxes" on the JVM are shared objects, not allocations: the cost left is a pointer chase and
+  8 bytes instead of 4 per entry, plus the interface call. That predicts a JFR `ObjectAllocationSample` on sphere3_192 shows
+  almost no `Integer` allocation at p = 17 and a visible one only for p > 127. If the profile agrees, the argument for the
+  `Int` path on the JVM is footprint and Scala Native only (whether Native's `Integer.valueOf` caches the same range is
+  unchecked); if not, my reading of the JIT is wrong and the share it shows is the answer. Either way: profile first
+  (issue's own first step), then A/B per CONTRIBUTING.md. Not run: the benchmark data (sphere3_192, o3_1024) are not in
+  the repo and a profile would have shared the machine with `sbt testFull`.
