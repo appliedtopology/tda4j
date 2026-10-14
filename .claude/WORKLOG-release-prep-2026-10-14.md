@@ -61,3 +61,29 @@ notes only (see the end).
 | sbt | 2.0.10 | not checked | |
 
 No library other than specs2 was behind, so nothing else changes in the runtime classpath.
+
+## 0.5.1 or 0.6.0? Recommendation: 0.6.0
+
+Evidence, all in the repo:
+
+1. **The project's own scheme says so.** `build.sbt` defines the compatibility series as `0.Y`, and checks every
+   `0.5.x` build against `0.5.0` (`mimaBaselineVersions`); `RELEASE.md`: PATCH is for bug fixes only, and pre-1.0 the
+   MINOR bump is the one allowed to break. The `Unreleased` section breaks in **seven** places (`CHANGELOG.md`
+   "Breaking"): `persistentGroupHomology`'s return type (source AND binary), `Chain` becoming an abstract class,
+   `nanMask` as a new last parameter of seven entry points, `Chain.chainShow`'s bounds (these three binary only),
+   `Chain` equality, the meaning of a `NaN` pixel and of Perseus's `-1`, and `Chain.reduceBy` throwing. Four of them
+   needed `mimaBinaryIssueFilters` entries whose comment reads "Deliberate breaks inside the series". Shipping those
+   as 0.5.1 would spend that exception on a release whose number promises none.
+2. **It is more than fixes.** New public API: `plot`, saved results, `PackedCubicalCohomologyEngine`, `PackedChain`,
+   the whole `sset` category/nerve layer, `Field.toDouble`; construction classes made public. That is a MINOR at least.
+3. **Behaviour changes a 0.5.0 user can see**: a `NaN` image pixel is now a mask where it used to be an error; Perseus
+   files with `-1` read differently; `Chain` values that compared unequal now compare equal.
+4. The cost of 0.6.0 is small: two minor series within a week (0.5.0 is dated 2026-10-09; pre-1.0, so harmless, and
+   the 0.5.0 GitHub release is itself marked pre-release); the MiMa filters become dead entries (delete them after the
+   release; the 0.6 series starts with an empty baseline, which is what the code in `build.sbt` already does).
+
+How: `version.sbt` says `0.5.1-SNAPSHOT` and `sbt release` PROPOSES `0.5.1` in `inquireVersions`; type `0.6.0` when it
+asks (next version `0.6.1-SNAPSHOT`), or `sbt "release release-version 0.6.0 next-version 0.6.1-SNAPSHOT"`. Rename the
+`CHANGELOG.md` `Unreleased` heading to `0.6.0 (2026-10-xx)` first (RELEASE.md pre-flight). Nothing in the repo hard-codes
+`0.5.1` (checked `grep -rn "0\.5\.1"` over `*.md`, `*.sbt`, `*.yml`), and the docs Playground link follows the tag.
+This session changed neither `version.sbt` nor the `Unreleased` heading: both belong to the release step.
