@@ -100,6 +100,15 @@ https://www.scala-lang.org/download/
 
 Get Scala 3.9.0 on your computer.
 
+Windows: follow link and follow instructions.
+
+Mac or Linux: https://sdkman.io/install/ (a package manager for java-related environments) and then
+
+```shell
+sdk install java 21.0.1-tem
+sdk install scala 3.9.0
+```
+
 ---
 
 # Open a Scala prompt and load in the library
