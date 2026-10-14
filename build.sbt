@@ -50,7 +50,7 @@ def scastieSettings(version: String): Seq[String] = Seq(
 )
 
 // https://scastie.scala-lang.org/?inputs=<URL-encoded JSON>; a space is %20 there (a `+` would stay a plus).
-def scastieLink(version: String): String =
+def scastieLink(version: String): String = {
   val code =
     "import scala.language.experimental.modularity\nimport org.appliedtopology.tda4j.*\n" +
       "val d = Persistence(Seq(Seq(0.0, 0.0), Seq(1.0, 0.0), Seq(1.0, 1.0), Seq(0.0, 1.0)))\n" +
@@ -63,9 +63,12 @@ def scastieLink(version: String): String =
   } + "\""
   val json =
     s"""{"_isWorksheetMode": true, "code": ${str(code)}, "target": {"scalaVersion": "3.9.0", "tpe": "Scala3"}, """ +
-      s""""libraries": [], "librariesFromList": [], "sbtConfigExtra": ${str(scastieSettings(version).mkString("", "\n", "\n"))}, """ +
+      s""""libraries": [], "librariesFromList": [], "sbtConfigExtra": ${str(
+          scastieSettings(version).mkString("", "\n", "\n")
+        )}, """ +
       """"sbtPluginsConfigExtra": "", "isShowingInUserProfile": true}"""
   "https://scastie.scala-lang.org/?inputs=" + java.net.URLEncoder.encode(json, "UTF-8").replace("+", "%20")
+}
 
 Compile / doc / scalacOptions ++= Seq(
   "-siteroot",
