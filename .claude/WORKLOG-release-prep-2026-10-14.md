@@ -147,5 +147,6 @@ CI's fat-jar smoke run. NOT run: `docs-build` (`sbt doc` with 3.8.4), so the cha
 ## Docs build (the check the advisor asked for)
 
 `TDA4J_SCALA_VERSION=3.8.4 sbt doc` on a fresh sbt server: exit 0, every doc fence compiled. The generated API index page
-carries the Playground link; decoded from the HTML it names `tda4j % 0.5.0` and the `Persistence(...)` example, and no page
-under the output still names 0.4.0. (`sbt clean` is needed before the next test compile, per CLAUDE.md.)
+carries the Playground link; decoded from the HTML it names `tda4j % 0.5.0` and the `Persistence(...)` example. No page
+grep-matches `tda4j ... % 0.4.0`. The `-scastie-configuration` option is accepted by scaladoc (exit 0), but where the doc
+snippets' own Scastie buttons carry it in the output was NOT located, so that half of #60 is unverified. (`sbt clean` is needed before the next test compile, per CLAUDE.md.)
