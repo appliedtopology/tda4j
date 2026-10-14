@@ -1,10 +1,12 @@
 package org.appliedtopology.tda4j.plot
 
-import com.sun.net.httpserver.{HttpExchange, HttpServer}
+import io.undertow.Undertow
+import org.xnio.{Xnio, XnioWorker}
 
-import java.net.{BindException, InetAddress, InetSocketAddress, URI}
+import java.io.OutputStream
+import java.net.{BindException, InetSocketAddress, URI}
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.{CopyOnWriteArrayList, Executors, LinkedBlockingQueue, ThreadFactory, TimeUnit}
+import java.util.concurrent.{CopyOnWriteArrayList, LinkedBlockingQueue, ThreadFactory, TimeUnit}
 import scala.collection.mutable
 
 /** The live viewer: one browser tab that shows every plot `view()`ed from this JVM, newest first, as it arrives.
@@ -19,13 +21,16 @@ import scala.collection.mutable
   * The server's threads are daemon threads: a REPL or script exits as usual, and the page then waits for a new one.
   * Nothing here uses Swing or AWT windows, so it works the same from `sbt console`, `scala` and scala-cli on any OS.
   */
-object Viewer:
+object Viewer extends cask.MainRoutes:
   private final class Entry(val id: Int, val title: String, val page: String)
 
-  private final class Server(val server: HttpServer):
+  private final class Server(val server: Undertow, val worker: XnioWorker, val port: Int):
     val entries: mutable.ArrayBuffer[Entry] = mutable.ArrayBuffer.empty
     val clients: CopyOnWriteArrayList[LinkedBlockingQueue[String]] = CopyOnWriteArrayList()
-    def url: String = s"http://127.0.0.1:${server.getAddress.getPort}/"
+    def url: String = s"http://127.0.0.1:$port/"
+    def stop(): Unit =
+      try server.stop()
+      finally worker.shutdown()
 
   @volatile private var running: Option[Server] = None
 
@@ -45,7 +50,7 @@ object Viewer:
 
   /** Stops the server; the next `view()` starts a new one. */
   def stop(): Unit = synchronized {
-    running.foreach(_.server.stop(0))
+    running.foreach(_.stop())
     running = None
   }
 
@@ -59,7 +64,7 @@ object Viewer:
 
   private def ensure(): Server =
     running.getOrElse {
-      // Started from a daemon thread: the JDK's HTTP dispatcher thread inherits its daemon status from its creator.
+      // Start Cask from a daemon thread so setup never keeps a REPL or script alive.
       var created: Either[Throwable, Server] = Left(IllegalStateException("viewer did not start"))
       val starter = daemons.newThread(() => created = scala.util.Try(start()).toEither)
       starter.start()
@@ -70,29 +75,80 @@ object Viewer:
       s
     }
 
-  private def bind(port: Int): HttpServer =
-    try HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress, port), 0)
-    catch
-      case _: BindException if port != 0 => HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress, 0), 0)
-
   private def start(): Server =
-    val http = bind(configuredPort)
-    val s = Server(http)
-    http.setExecutor(Executors.newCachedThreadPool(daemons))
-    http.createContext("/", ex => respond(ex, "text/html", indexPage))
-    http.createContext("/list", ex => respond(ex, "application/json", listJson(s)))
-    http.createContext(
-      "/plot/",
-      ex =>
-        val id = ex.getRequestURI.getPath.stripPrefix("/plot/").toIntOption
-        val page = s.entries.synchronized(id.flatMap(i => s.entries.find(_.id == i)).map(_.page))
-        page match
-          case Some(p) => respond(ex, "text/html", p)
-          case None    => respond(ex, "text/plain", "no such plot", 404)
-    )
-    http.createContext("/events", ex => events(s, ex))
-    http.start()
-    s
+    try start(configuredPort)
+    catch
+      case error: Throwable if configuredPort != 0 && causedByBindException(error) => start(0)
+
+  private def start(port: Int): Server =
+    val worker = Xnio.getInstance().createWorkerBuilder()
+      .setDaemon(true)
+      .setWorkerName("tda4j-plot-viewer")
+      .setWorkerIoThreads(2)
+      .setCoreWorkerPoolSize(1)
+      .setMaxWorkerPoolSize(8)
+      .build()
+    val http = Undertow.builder()
+      .setWorker(worker)
+      .addHttpListener(port, "127.0.0.1")
+      .setHandler(defaultHandler)
+      .build()
+    try
+      http.start()
+      val boundPort = http.getListenerInfo.get(0).getAddress.asInstanceOf[InetSocketAddress].getPort
+      Server(http, worker, boundPort)
+    catch
+      case error: Throwable =>
+        scala.util.Try(http.stop())
+        worker.shutdown()
+        throw error
+
+  private def causedByBindException(error: Throwable): Boolean =
+    var cause = error
+    while cause != null do
+      if cause.isInstanceOf[BindException] then return true
+      cause = cause.getCause
+    false
+
+  private def activeServer: Server = running.getOrElse(throw IllegalStateException("viewer is not running"))
+
+  @cask.get("/")
+  def index(): cask.Response[String] =
+    cask.Response(indexPage, headers = Seq("Content-Type" -> "text/html; charset=utf-8", "Cache-Control" -> "no-store"))
+
+  @cask.get("/list")
+  def list(): cask.Response[String] =
+    cask.Response(listJson(activeServer), headers = Seq("Content-Type" -> "application/json; charset=utf-8", "Cache-Control" -> "no-store"))
+
+  @cask.get("/plot/:id")
+  def plot(id: String): cask.Response[String] =
+    val page = activeServer.entries.synchronized {
+      id.toIntOption.flatMap(i => activeServer.entries.find(_.id == i)).map(_.page)
+    }
+    page match
+      case Some(html) => cask.Response(html, headers = Seq("Content-Type" -> "text/html; charset=utf-8", "Cache-Control" -> "no-store"))
+      case None       => cask.Response("no such plot", statusCode = 404, headers = Seq("Content-Type" -> "text/plain; charset=utf-8", "Cache-Control" -> "no-store"))
+
+  @cask.get("/events")
+  def events(): cask.Response[cask.Response.Data] =
+    val s = activeServer
+    val queue = LinkedBlockingQueue[String]()
+    s.clients.add(queue)
+    val data = new cask.Response.Data:
+      def headers: Seq[(String, String)] = Seq("Content-Type" -> "text/event-stream; charset=utf-8", "Cache-Control" -> "no-store")
+      def write(out: OutputStream): Unit =
+        try
+          out.write("retry: 1000\n\n".getBytes(StandardCharsets.UTF_8))
+          out.flush()
+          while true do
+            val msg = Option(queue.poll(15, TimeUnit.SECONDS))
+            out.write(msg.fold(": keep-alive\n\n")(m => s"data: $m\n\n").getBytes(StandardCharsets.UTF_8))
+            out.flush()
+        catch case _: java.io.IOException | _: InterruptedException => ()
+        finally
+          s.clients.remove(queue)
+          scala.util.Try(out.close())
+    cask.Response(data)
 
   /** Opens `uri` in the default browser, unless browsers are turned off (`TDA4J_PLOT_BROWSER=none`, or the system
     * property `tda4j.plot.browser=none`) or there is no desktop to open it on. Returns whether it did.
@@ -111,15 +167,6 @@ object Viewer:
     if browse(URI(url)) then Console.err.println(s"TDA4j plots: $url (opened in your browser)")
     else Console.err.println(s"TDA4j plots: open $url in a browser (forward the port from a remote machine)")
 
-  private def respond(ex: HttpExchange, contentType: String, body: String, status: Int = 200): Unit =
-    val bytes = body.getBytes(StandardCharsets.UTF_8)
-    ex.getResponseHeaders.set("Content-Type", s"$contentType; charset=utf-8")
-    ex.getResponseHeaders.set("Cache-Control", "no-store")
-    ex.sendResponseHeaders(status, bytes.length.toLong)
-    val out = ex.getResponseBody
-    try out.write(bytes)
-    finally out.close()
-
   private def listJson(s: Server): String =
     def str(t: String) = "\"" + t.flatMap {
       case '"'          => "\\\""
@@ -128,26 +175,6 @@ object Viewer:
       case c            => c.toString
     } + "\""
     s.entries.synchronized(s.entries.map(e => s"""{"id":${e.id},"title":${str(e.title)}}""").mkString("[", ",", "]"))
-
-  /** A server-sent event stream: one message per new plot (its id), a comment every 15 s to keep proxies awake. */
-  private def events(s: Server, ex: HttpExchange): Unit =
-    val queue = LinkedBlockingQueue[String]()
-    s.clients.add(queue)
-    ex.getResponseHeaders.set("Content-Type", "text/event-stream; charset=utf-8")
-    ex.getResponseHeaders.set("Cache-Control", "no-store")
-    ex.sendResponseHeaders(200, 0)
-    val out = ex.getResponseBody
-    try
-      out.write("retry: 1000\n\n".getBytes(StandardCharsets.UTF_8))
-      out.flush()
-      while true do
-        val msg = Option(queue.poll(15, TimeUnit.SECONDS))
-        out.write(msg.fold(": keep-alive\n\n")(m => s"data: $m\n\n").getBytes(StandardCharsets.UTF_8))
-        out.flush()
-    catch case _: java.io.IOException | _: InterruptedException => ()
-    finally
-      s.clients.remove(queue)
-      scala.util.Try(out.close())
 
   private val indexPage: String =
     """<!doctype html>
@@ -184,3 +211,5 @@ object Viewer:
       |const events=new EventSource('/events');events.onmessage=refresh;events.onopen=refresh;
       |</script></body></html>
       |""".stripMargin
+
+  initialize()
