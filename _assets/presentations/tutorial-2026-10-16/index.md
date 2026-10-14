@@ -100,6 +100,15 @@ https://www.scala-lang.org/download/
 
 Get Scala 3.9.0 on your computer.
 
+Windows: follow link and follow instructions.
+
+Mac or Linux: https://sdkman.io/install/ (a package manager for java-related environments) and then
+
+```shell
+sdk install java 21.0.1-tem
+sdk install scala 3.9.0
+```
+
 ---
 
 # Open a Scala prompt and load in the library
@@ -113,7 +122,7 @@ scala repl
 And then load the library as a dependency:
 
 ```scala 3
-:dep org.appliedtopology::tda4j:0.5.0
+:dep org.appliedtopology::tda4j:0.6.0
 ```
 
 ---
@@ -141,7 +150,7 @@ We start by accepting all default choices.
 
 ```scala 3
 val diagram = Persistence(points)
-val longbars = diagram.significant(25)
+val longbars = diagram.significant(0.10)
 ```
 
 The resulting object can be queried for more details:
@@ -155,41 +164,15 @@ longbars.bars(1).representative
 
 ---
 
-We could use the [Doodle](https://www.creativescala.org/doodle) library to visualize the results.
-You can pull the library into the REPL environment with the `:dep` command:
+There are several standardized plot types used in topological data analysis to describe the result of an analysis
+with persistent (co)homology. The most common ones are included in the `org.appliedtopology.tda4j.plot` package.
 
 ```scala 3
-:dep org.creativescala::doodle:0.34.0
+import org.appliedtopology.tda4j.plot.*
+Plot.barcode(diagram).view()
+Plot.diagram(diagram).view()
+Plot.cycle(points, longbars.bars(1).representative).over(Plot.complex(points, longbars.bars(1).birth)).view()
 ```
 
-Then we create a bunch of circles to mark the points.
-
-```scala 3
-val pointspic = points
-  .map(row => Picture.circle(1).at(row(0),row(1)).fillColor(Color.black))
-  .foldLeft(Picture.empty)((p,n) => p.on(n))
-```
-
-And we can write it out to file after creating a `frame` to hold size information:
-
-```scala 3
-val frame = Frame.default.withSize(225,225).withCenterAtOrigin
-pointspic.write[Png]("foo.png", frame)
-```
-
----
-
-We can extend the `pointspic` picture to show the edges that form the one significant cycle.
-
-```scala 3
-val rep = longbars.bars(1).representative
-val cycle = rep.rawEntries
-  .map(_._1.toSeq)
-  .foldLeft(OpenPath.empty)((p, st) => 
-      p.moveTo(points(st(0))(0), points(st(0))(1))
-       .lineTo(points(st(1))(0), points(st(1))(1)))
-pointspic
-  .on(Picture.path(cycle).strokeColor(Color.red))
-  .write[Png]("foo.png", frame)
-```
-
+The `.view()` method starts a local webserver and opens a browser window to display the plots.
+If you need them saved, use `.save([filename])` with the appropriate filename. The library currently supports saving to `.svg` and to `.html`.
