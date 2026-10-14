@@ -77,18 +77,20 @@ object Viewer extends cask.MainRoutes:
 
   private def start(): Server =
     try start(configuredPort)
-    catch
-      case error: Throwable if configuredPort != 0 && causedByBindException(error) => start(0)
+    catch case error: Throwable if configuredPort != 0 && causedByBindException(error) => start(0)
 
   private def start(port: Int): Server =
-    val worker = Xnio.getInstance().createWorkerBuilder()
+    val worker = Xnio
+      .getInstance()
+      .createWorkerBuilder()
       .setDaemon(true)
       .setWorkerName("tda4j-plot-viewer")
       .setWorkerIoThreads(2)
       .setCoreWorkerPoolSize(1)
       .setMaxWorkerPoolSize(8)
       .build()
-    val http = Undertow.builder()
+    val http = Undertow
+      .builder()
       .setWorker(worker)
       .addHttpListener(port, "127.0.0.1")
       .setHandler(defaultHandler)
@@ -118,7 +120,10 @@ object Viewer extends cask.MainRoutes:
 
   @cask.get("/list")
   def list(): cask.Response[String] =
-    cask.Response(listJson(activeServer), headers = Seq("Content-Type" -> "application/json; charset=utf-8", "Cache-Control" -> "no-store"))
+    cask.Response(
+      listJson(activeServer),
+      headers = Seq("Content-Type" -> "application/json; charset=utf-8", "Cache-Control" -> "no-store")
+    )
 
   @cask.get("/plot/:id")
   def plot(id: String): cask.Response[String] =
@@ -126,8 +131,14 @@ object Viewer extends cask.MainRoutes:
       id.toIntOption.flatMap(i => activeServer.entries.find(_.id == i)).map(_.page)
     }
     page match
-      case Some(html) => cask.Response(html, headers = Seq("Content-Type" -> "text/html; charset=utf-8", "Cache-Control" -> "no-store"))
-      case None       => cask.Response("no such plot", statusCode = 404, headers = Seq("Content-Type" -> "text/plain; charset=utf-8", "Cache-Control" -> "no-store"))
+      case Some(html) =>
+        cask.Response(html, headers = Seq("Content-Type" -> "text/html; charset=utf-8", "Cache-Control" -> "no-store"))
+      case None =>
+        cask.Response(
+          "no such plot",
+          statusCode = 404,
+          headers = Seq("Content-Type" -> "text/plain; charset=utf-8", "Cache-Control" -> "no-store")
+        )
 
   @cask.get("/events")
   def events(): cask.Response[cask.Response.Data] =
@@ -135,7 +146,8 @@ object Viewer extends cask.MainRoutes:
     val queue = LinkedBlockingQueue[String]()
     s.clients.add(queue)
     val data = new cask.Response.Data:
-      def headers: Seq[(String, String)] = Seq("Content-Type" -> "text/event-stream; charset=utf-8", "Cache-Control" -> "no-store")
+      def headers: Seq[(String, String)] =
+        Seq("Content-Type" -> "text/event-stream; charset=utf-8", "Cache-Control" -> "no-store")
       def write(out: OutputStream): Unit =
         try
           out.write("retry: 1000\n\n".getBytes(StandardCharsets.UTF_8))
