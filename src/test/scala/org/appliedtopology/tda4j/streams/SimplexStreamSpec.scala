@@ -148,7 +148,7 @@ class CofaceSimplexStreamSpec extends mutable.Specification with org.specs2.Scal
     // metricSpace.minimumEnclosingRadius, which would exclude some subsets (see CLAUDE.md/WORKLOG-mst-and-perf.md).
     val stream = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(Double.PositiveInfinity))
     val expectedTotal = (0 until metricSpace.size).map(d => binomial(metricSpace.size, d + 1)).sum
-    stream.iterator.size === expectedTotal
+    stream.iterator.size.toLong === expectedTotal
   }
 
   "EnumeratingCofaceSimplexStream.iterateDimension is defined exactly on [0, metricSpace.size)" >> {

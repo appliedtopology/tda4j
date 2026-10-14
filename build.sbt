@@ -11,9 +11,9 @@ versionScheme := Some("semver-spec")
 
 assembly / assemblyJarName := s"${name.value}-${version.value}-assembly.jar"
 
-libraryDependencies += "org.specs2"        %% "specs2-core"                   % "5.5.1" % "test"
-libraryDependencies += "org.specs2"        %% "specs2-matcher-extra"          % "5.5.1" % "test"
-libraryDependencies += "org.specs2"        %% "specs2-scalacheck"             % "5.5.1" % "test"
+libraryDependencies += "org.specs2"        %% "specs2-core"                   % "5.9.1" % "test"
+libraryDependencies += "org.specs2"        %% "specs2-matcher-extra"          % "5.9.1" % "test"
+libraryDependencies += "org.specs2"        %% "specs2-scalacheck"             % "5.9.1" % "test"
 libraryDependencies += "org.apache.commons" % "commons-numbers-combinatorics" % "1.3"
 libraryDependencies += "org.apache.commons" % "commons-math3"                 % "3.6.1"
 libraryDependencies += "com.eatthepath"     % "jvptree"                       % "0.3.0"
