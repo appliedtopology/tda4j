@@ -143,3 +143,9 @@ sbt-assembly 2.5.0): **1138 tests, 0 failed, 0 errors, 11 skipped** (the `skipAl
 before). Also green on the same head: `mimaReportBinaryIssues` against 0.5.0, the three scalafmt checks, `sbt assembly` and
 CI's fat-jar smoke run. NOT run: `docs-build` (`sbt doc` with 3.8.4), so the changed `-quick-links` /
 `-scastie-configuration` options have been printed (`show Compile / doc / scalacOptions`) but not fed through scaladoc.
+
+## Docs build (the check the advisor asked for)
+
+`TDA4J_SCALA_VERSION=3.8.4 sbt doc` on a fresh sbt server: exit 0, every doc fence compiled. The generated API index page
+carries the Playground link; decoded from the HTML it names `tda4j % 0.5.0` and the `Persistence(...)` example, and no page
+under the output still names 0.4.0. (`sbt clean` is needed before the next test compile, per CLAUDE.md.)
