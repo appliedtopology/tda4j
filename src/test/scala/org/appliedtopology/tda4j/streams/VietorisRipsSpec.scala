@@ -29,13 +29,13 @@ class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck with AllE
       val vrstream = RecursiveStackVietorisRipsSimplexStream(metricSpace)
       println(s"${pts.size} x ${pts(0).size}")
       var spxseq = vrstream.iterateDimension(0).toSeq
-      spxseq.size === binomial(pts.length, 1)
+      spxseq.size.toLong === binomial(pts.length, 1)
       spxseq.map(vrstream.filtrationValue) must beSorted
       spxseq = vrstream.iterateDimension(1).toSeq
-      spxseq.size === binomial(pts.length, 2)
+      spxseq.size.toLong === binomial(pts.length, 2)
       spxseq.map(vrstream.filtrationValue) must beSorted
       spxseq = vrstream.iterateDimension(2).toSeq
-      spxseq.size === binomial(pts.length, 3)
+      spxseq.size.toLong === binomial(pts.length, 3)
       spxseq.map(vrstream.filtrationValue) must beSorted
     }
   }
