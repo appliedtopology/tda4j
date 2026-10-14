@@ -60,6 +60,12 @@ jobs:
           if ! git rev-parse -q --verify "refs/tags/$TAG" > /dev/null; then
             echo "::error::tag '$TAG' does not exist"; exit 1
           fi
+          # Require that the tag's commit is reachable from the `scala` branch before releasing.
+          git fetch origin scala
+          TAG_COMMIT=$(git rev-parse "refs/tags/$TAG^{commit}")
+          if ! git merge-base --is-ancestor "$TAG_COMMIT" "origin/scala"; then
+            echo "::error::tag '$TAG' is not on the scala branch (commit not reachable from origin/scala)"; exit 1
+          fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Build release artifacts
