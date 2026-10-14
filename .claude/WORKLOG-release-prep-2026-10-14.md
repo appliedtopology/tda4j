@@ -125,10 +125,12 @@ without boxing, effective? **This is an argument from reading `Field.scala` and 
   the *field*, not on an element: fine on Scala.js, cf. #80). Keep the generic path for everything else; the two must agree
   term for term (`PackedWorkingColumnSpec` style).
 - **A hypothesis that should be tested first, because it may remove the JVM motivation:** for the default `p = 17` the
-  stored values lie in [-128, 127], where `Integer.valueOf` returns the JDK's cached `Integer` objects. If so, the packed
+  stored values lie in [-128, 127] (`norm` returns the balanced representative, within +-p/2, so this holds for every
+prime up to about 255; an un-normalized `Fp(a)` = `a % p` lies in (-p, p), safe up to about 127), where `Integer.valueOf`
+returns the JDK's cached `Integer` objects. If so, the packed
   engine's coefficient "boxes" on the JVM are shared objects, not allocations: the cost left is a pointer chase and
   8 bytes instead of 4 per entry, plus the interface call. That predicts a JFR `ObjectAllocationSample` on sphere3_192 shows
-  almost no `Integer` allocation at p = 17 and a visible one only for p > 127. If the profile agrees, the argument for the
+  almost no `Integer` allocation at p = 17 and a visible one only for primes above about 255. If the profile agrees, the argument for the
   `Int` path on the JVM is footprint and Scala Native only (whether Native's `Integer.valueOf` caches the same range is
   unchecked); if not, my reading of the JIT is wrong and the share it shows is the answer. Either way: profile first
   (issue's own first step), then A/B per CONTRIBUTING.md. Not run: the benchmark data (sphere3_192, o3_1024) are not in

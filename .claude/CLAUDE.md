@@ -169,6 +169,9 @@ Simplex.type = Simplex` (`WORKLOG-package-flatten.md`); unicode extension method
 **Shared test generators** (`matrixGen`) live in `src/test/.../streams/Generators.scala`, never in a spec. Before
 creating a test file, `ls` for its name: `Write` overwrites silently.
 
+**specs2 5.9 types `===`**: `Int === Long` or `Fp === Int` no longer compiles (5.5 compared with `==` and hid two
+always-true properties, #79). Fix the operands (`.toLong`, wrap in `Fp`), do not loosen the comparison.
+
 **specs2 gotcha**: in a class mixing `ScalaCheck`, give a `Seq[Simplex[_]]` an explicit type ascription before
 `.forall` — otherwise it can resolve to specs2's `ValueCheck` extension with confusing errors.
 
@@ -214,6 +217,8 @@ anything may). `WORKLOG-openness-audit.md`.
 
 - `RingModule`/`Field`: minimal typeclasses built with `is` syntax; everything downstream is generic over `Field`.
   `FiniteField`: `Fp` opaque type per prime `p`.
+  **Never test the runtime class of a generic coefficient** (`case d: Double`): on Scala.js every boxed number is a
+  `Double`, so an `Fp` matches. Ask the field (`Field.toDouble`, #80; `WORKLOG-release-prep-2026-10-14.md`).
 - `Chain[CellT: Ordering, CoefficientT: Field]`: abstract and OPEN (project lead: a place for the community to
   experiment): a storage passes order and field up (kept once) and implements `entryIterator`, all else defaults over it
   (`tda4juser/ChainStorageSpec`, outside the package). Ours: `HeapChain` (a `PriorityQueue` ordered by cell), `PackedChain`
