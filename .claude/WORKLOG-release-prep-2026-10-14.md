@@ -133,3 +133,11 @@ without boxing, effective? **This is an argument from reading `Field.scala` and 
   unchecked); if not, my reading of the JIT is wrong and the share it shows is the answer. Either way: profile first
   (issue's own first step), then A/B per CONTRIBUTING.md. Not run: the benchmark data (sphere3_192, o3_1024) are not in
   the repo and a profile would have shared the machine with `sbt testFull`.
+
+## Result of the whole arc
+
+`sbt testFull` on the branch head (specs2 5.9.1, `Field.toDouble`, the generated Scastie link, sbt-scalafmt 2.6.2,
+sbt-assembly 2.5.0): **1138 tests, 0 failed, 0 errors, 11 skipped** (the `skipAll` benchmark and regression specs, as
+before). Also green on the same head: `mimaReportBinaryIssues` against 0.5.0, the three scalafmt checks, `sbt assembly` and
+CI's fat-jar smoke run. NOT run: `docs-build` (`sbt doc` with 3.8.4), so the changed `-quick-links` /
+`-scastie-configuration` options have been printed (`show Compile / doc / scalacOptions`) but not fed through scaladoc.
