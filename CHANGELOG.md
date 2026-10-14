@@ -83,6 +83,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 ### Build, CI and documentation
 
 - CI builds the fat jar and runs the command line on a sample.
+- Test and build tooling: specs2 5.9.1 (its typed `===` exposed `FiniteFieldSpec`'s two always-true properties, #79),
+  sbt-scalafmt 2.6.2, sbt-assembly 2.5.0.
+- The docs site's Playground link and snippet configuration load the last release, read from the git tags (#60).
 - Contributor guides: `CONTRIBUTING.md` rewritten (setup, commands, issues and labels, review principles), issue and
   pull request templates, and this changelog.
 - A coverage report, run by hand or weekly (`coverage.yml`) and sent to Codecov, where it is informational only.
