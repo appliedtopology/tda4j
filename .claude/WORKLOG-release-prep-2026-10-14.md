@@ -17,3 +17,14 @@ notes only (see the end).
 - 57 new `implicitConversions` feature warnings from specs2 5.9.1 matchers (`matcherIsValueCheck`, `typedValueCheck`),
   in test code only. Left alone (CLAUDE.md: the warning count is deliberately not chased); they are warnings, not
   errors.
+
+## #80: `Plot.number` decided by the runtime class
+
+- Fix: a `Field.toDouble(x)` member, concrete (so a user's own `Field` compiles unchanged and stays binary compatible):
+  the old search for `k` with `k * 1 == x`, `|k| <= 64`, `NaN` if none. `Field.DoubleApproximated` overrides it with the
+  value itself. `Plot.number` is `f.toDouble(x)`; the `asMatchable` import is gone.
+- Why a member and not "is `f` the Double instance": a user's real-valued field (`Double`-backed or not) then plots
+  by its own definition, and `Z/p` over `Double` carriers no longer hits the raw-carrier branch.
+- Discriminating test (`PlotSpec`): Z/5 with `Double` carriers. The old `case d: Double` returns `4.0`; the field's view
+  is `-1`. It reproduces on the JVM the failure the issue measured on Scala.js, so the fix needs no JS build to test.
+- Checked: `PlotSpec`, `FiniteFieldSpec` pass. NOT checked: an actual Scala.js run (no JS build in this repo).

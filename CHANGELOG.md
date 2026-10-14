@@ -49,6 +49,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - `Plot.cycle`, `cocycle`, `cubicalChain` and `cycle3D` also take a representative as plain `(cell, coefficient)`
   terms (`Plot.Terms`), so any real cochain can be drawn; `Viewer.browse` opens a page under the viewer's browser
   rules.
+- `Field.toDouble(x)`: an element as a real number (the balanced integer for `Z/p`, the value for the reals), with a
+  default for any field, so a field of your own plots with no change. `Plot.number` uses it (#80).
 - `PackedCubicalCohomologyEngine`: Ripser's reduction on cubical grids. `Engine.Cohomology` on an image uses it.
 - `PackedChain`: compact representatives for the grid engines; a `Cube` is built only when read.
 - `Show` instances for diagrams, bars, endpoints, cubes, pairs and simplicial-set generators.
@@ -73,6 +75,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Fixed
 
+- `Plot.number` no longer decides by the element's runtime class: on Scala.js every `Fp` would have plotted as its raw
+  `Int` form instead of the balanced representative (#80).
 - The chunks engine's dimension-0/1 union-find handles every edge a chain complex can contain. Six inputs used to throw
   or return a wrong barcode, among them `a + b + c` over `F_3`.
 
