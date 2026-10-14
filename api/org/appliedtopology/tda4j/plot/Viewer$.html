@@ -7,7 +7,7 @@
 </div>
 <div class="main-signature mono-small-block">
  <div class="signature">
-  <span class="modifiers"></span><span class="kind"><span t="k">object </span></span><a href="Viewer$.html" t="n" class="documentableName ">Viewer</a>
+  <span class="signature-short"><span class="modifiers"></span><span class="kind"><span t="k">object </span></span><a href="Viewer$.html" t="n" class="documentableName ">Viewer</a><span t="k"> extends </span><span data-unresolved-link="" t="t">MainRoutes</span></span><span class="signature-long"></span>
  </div>
 </div>
 <div class="cover">
@@ -29,7 +29,7 @@
     Source
    </dt>
    <dd class="body-medium">
-    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Viewer.scala#L22" target="_blank">Viewer.scala</a>
+    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Viewer.scala#L24" target="_blank">Viewer.scala</a>
    </dd>
    <dt class="body-small">
     Graph
@@ -40,15 +40,22 @@
      <svg id="graph"></svg>
      <script type="text/dot" id="dot"> digraph g {
  node0 [id=node0, label="<span style=\"color: #FFFFFF;\">object <a href=\"Viewer$.html\" t=\"n\">Viewer</a></span>", class="object vertex"];
-node1 [id=node1, label="<span style=\"color: #FFFFFF;\">class <span data-unresolved-link=\"\" t=\"n\">Object</span></span>", class="class vertex"];
-node2 [id=node2, label="<span style=\"color: #FFFFFF;\">class <span data-unresolved-link=\"\" t=\"n\">Any</span></span>", class="class vertex"];
-node3 [id=node3, label="<span style=\"color: #FFFFFF;\">trait <span data-unresolved-link=\"\" t=\"n\">Matchable</span></span>", class="trait vertex"];
+node1 [id=node1, label="<span style=\"color: #FFFFFF;\">class <span data-unresolved-link=\"\" t=\"n\">MainRoutes</span></span>", class="class vertex"];
+node2 [id=node2, label="<span style=\"color: #FFFFFF;\">class <span data-unresolved-link=\"\" t=\"n\">Main</span></span>", class="class vertex"];
+node3 [id=node3, label="<span style=\"color: #FFFFFF;\">class <span data-unresolved-link=\"\" t=\"n\">Object</span></span>", class="class vertex"];
+node4 [id=node4, label="<span style=\"color: #FFFFFF;\">class <span data-unresolved-link=\"\" t=\"n\">Any</span></span>", class="class vertex"];
+node5 [id=node5, label="<span style=\"color: #FFFFFF;\">trait <span data-unresolved-link=\"\" t=\"n\">Matchable</span></span>", class="trait vertex"];
+node6 [id=node6, label="<span style=\"color: #FFFFFF;\">trait <span data-unresolved-link=\"\" t=\"n\">Routes</span></span>", class="trait vertex"];
 
 
  node0 -> node1;
 node1 -> node2;
-node1 -> node3;
-node3 -> node2;
+node2 -> node3;
+node3 -> node4;
+node3 -> node5;
+node5 -> node4;
+node1 -> node6;
+node6 -> node3;
 
 }
 </script>
@@ -60,6 +67,15 @@ node3 -> node2;
    <dd class="body-medium">
     <div class="mono-small-block supertypes">
      <div>
+      class <span data-unresolved-link="" t="n">MainRoutes</span>
+     </div>
+     <div>
+      trait <span data-unresolved-link="" t="n">Routes</span>
+     </div>
+     <div>
+      class <span data-unresolved-link="" t="n">Main</span>
+     </div>
+     <div>
       class <span data-unresolved-link="" t="n">Object</span>
      </div>
      <div>
@@ -67,7 +83,7 @@ node3 -> node2;
      </div>
      <div>
       class <span data-unresolved-link="" t="n">Any</span>
-     </div><span></span>
+     </div><span class="show-all-code show-content text-button h100">Show all</span>
     </div>
    </dd>
    <dt class="body-small">
@@ -130,7 +146,127 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Viewer.scala#L100" target="_blank">Viewer.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Viewer.scala#L168" target="_blank">Viewer.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="events-fffff73e">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#events-fffff73e" t="n" class="documentableName ">events</a>(<span t="k"></span>): <span data-unresolved-link="" t="t">Response</span>[<span data-unresolved-link="" t="t">Data</span>]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Viewer.scala#L144" target="_blank">Viewer.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="index-fffff73e">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#index-fffff73e" t="n" class="documentableName ">index</a>(<span t="k"></span>): <span data-unresolved-link="" t="t">Response</span>[<span data-unresolved-link="" t="t">String</span>]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Viewer.scala#L118" target="_blank">Viewer.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="list-fffff73e">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#list-fffff73e" t="n" class="documentableName ">list</a>(<span t="k"></span>): <span data-unresolved-link="" t="t">Response</span>[<span data-unresolved-link="" t="t">String</span>]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Viewer.scala#L122" target="_blank">Viewer.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="plot-4b9">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#plot-4b9" t="n" class="documentableName ">plot</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">id</span>: <span data-unresolved-link="" t="t">String</span>): <span data-unresolved-link="" t="t">Response</span>[<span data-unresolved-link="" t="t">String</span>]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Viewer.scala#L129" target="_blank">Viewer.scala</a>
               </dd>
              </dl>
             </div>
@@ -165,7 +301,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Viewer.scala#L36" target="_blank">Viewer.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Viewer.scala#L41" target="_blank">Viewer.scala</a>
               </dd>
              </dl>
             </div>
@@ -200,7 +336,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Viewer.scala#L47" target="_blank">Viewer.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Viewer.scala#L52" target="_blank">Viewer.scala</a>
               </dd>
              </dl>
             </div>
@@ -235,7 +371,722 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Viewer.scala#L33" target="_blank">Viewer.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Viewer.scala#L38" target="_blank">Viewer.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+       </div>
+      </section>
+      <section id="Inherited-methods">
+       <div class="documentableList expand">
+        <div class="documentableList-expander">
+         <button class="icon-button show-content expand"></button>
+         <h4 class="groupHeader h200">Inherited methods</h4>
+        </div>
+        <div class="documentableElement" id="allRoutes-0" data-f-inherited="MainRoutes">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#allRoutes-0" t="n" class="documentableName ">allRoutes</a>: <span data-unresolved-link="" t="t">Seq</span>[<span data-unresolved-link="" t="t">Routes</span>]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">MainRoutes</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L20" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="caskMetadata-0" data-f-inherited="Routes">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#caskMetadata-0" t="n" class="documentableName ">caskMetadata</a>: <span data-unresolved-link="" t="t">RoutesEndpointsMetadata</span>[<span t="k">this</span>.<span t="k">type</span>]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Routes</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src-3/cask/main/Routes.scala#L11" target="_blank">Routes.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="createActorContext-0" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#createActorContext-0" t="n" class="documentableName ">createActorContext</a>: <span data-unresolved-link="" t="t">Simple</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L39" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="createExecutionContext-0" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#createExecutionContext-0" t="n" class="documentableName ">createExecutionContext</a>: <span data-unresolved-link="" t="t">ExecutionContextExecutorService</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L38" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="debugMode-0" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#debugMode-0" t="n" class="documentableName ">debugMode</a>: <span data-unresolved-link="" t="t">Boolean</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L36" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="decorators-0" data-f-inherited="Routes">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#decorators-0" t="n" class="documentableName ">decorators</a>: <span data-unresolved-link="" t="t">Seq</span>[<span data-unresolved-link="" t="t">Decorator</span>[<span t="k">_</span>, <span t="k">_</span>, <span t="k">_</span>, <span t="k">_</span>]]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Routes</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src-3/cask/main/Routes.scala#L9" target="_blank">Routes.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="defaultHandler-0" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#defaultHandler-0" t="n" class="documentableName ">defaultHandler</a>: <span data-unresolved-link="" t="t">HttpHandler</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L66" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="dispatchTrie-0" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#dispatchTrie-0" t="n" class="documentableName ">dispatchTrie</a>: <span data-unresolved-link="" t="t">DispatchTrie</span>[<span data-unresolved-link="" t="t">Map</span>[<span data-unresolved-link="" t="t">String</span>, (<span data-unresolved-link="" t="t">Routes</span>, <span data-unresolved-link="" t="t">EndpointMetadata</span>[<span t="k">_</span>])]]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L48" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="handleEndpointError-fffff150" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#handleEndpointError-fffff150" t="n" class="documentableName ">handleEndpointError</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">routes</span>: <span data-unresolved-link="" t="t">Routes</span>, <span t="k"></span><span data-unresolved-link="" t="n">metadata</span>: <span data-unresolved-link="" t="t">EndpointMetadata</span>[<span t="k">_</span>], <span t="k"></span><span data-unresolved-link="" t="n">e</span>: <span data-unresolved-link="" t="t">Error</span>, <span t="k"></span><span data-unresolved-link="" t="n">req</span>: <span data-unresolved-link="" t="t">Request</span>): <span data-unresolved-link="" t="t">Raw</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L79" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="handleMethodNotAllowed-fffff20c" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#handleMethodNotAllowed-fffff20c" t="n" class="documentableName ">handleMethodNotAllowed</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">req</span>: <span data-unresolved-link="" t="t">Request</span>): <span data-unresolved-link="" t="t">Raw</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L77" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="handleNotFound-fffff20c" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#handleNotFound-fffff20c" t="n" class="documentableName ">handleNotFound</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">req</span>: <span data-unresolved-link="" t="t">Request</span>): <span data-unresolved-link="" t="t">Raw</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L75" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="host-0" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#host-0" t="n" class="documentableName ">host</a>: <span data-unresolved-link="" t="t">String</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L34" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="main-913" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#main-913" t="n" class="documentableName ">main</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">args</span>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">String</span>]): <span data-unresolved-link="" t="t">Unit</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L86" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="mainDecorators-0" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#mainDecorators-0" t="n" class="documentableName ">mainDecorators</a>: <span data-unresolved-link="" t="t">Seq</span>[<span data-unresolved-link="" t="t">Decorator</span>[<span t="k">_</span>, <span t="k">_</span>, <span t="k">_</span>, <span t="k">_</span>]]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L31" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="port-0" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#port-0" t="n" class="documentableName ">port</a>: <span data-unresolved-link="" t="t">Int</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L33" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="verbose-0" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#verbose-0" t="n" class="documentableName ">verbose</a>: <span data-unresolved-link="" t="t">Boolean</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L35" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+       </div>
+      </section>
+      <section id="Inherited-fields">
+       <div class="documentableList expand">
+        <div class="documentableList-expander">
+         <button class="icon-button show-content expand"></button>
+         <h4 class="groupHeader h200">Inherited fields</h4>
+        </div>
+        <div class="documentableElement" id="executionContext-0" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">val </span></span><a href="Viewer$.html#executionContext-0" t="n" class="documentableName ">executionContext</a>: <span data-unresolved-link="" t="t">ExecutionContextExecutorService</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L41" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+       </div>
+      </section>
+     </div>
+    </section>
+    <section id="Implicits">
+     <div data-togglable="Implicits" class="tab expand">
+      <div class="member-group-header">
+       <h3 data-togglable="Implicits" class="h400">Implicits</h3>
+      </div>
+      <section id="Inherited-implicits">
+       <div class="documentableList expand">
+        <div class="documentableList-expander">
+         <button class="icon-button show-content expand"></button>
+         <h4 class="groupHeader h200">Inherited implicits</h4>
+        </div>
+        <div class="documentableElement" id="actorContext-0" data-f-keywords="implicit" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"><span t="k">implicit </span></span><span class="kind"><span t="k">val </span></span><a href="Viewer$.html#actorContext-0" t="n" class="documentableName ">actorContext</a>: <span data-unresolved-link="" t="t">Context</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L42" target="_blank">Main.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="log-0" data-f-keywords="implicit" data-f-inherited="Main">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"><span t="k">implicit </span></span><span class="kind"><span t="k">def </span></span><a href="Viewer$.html#log-0" t="n" class="documentableName ">log</a>: <span data-unresolved-link="" t="t">Logger</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <span data-unresolved-link="">Main</span>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/home/runner/work/cask/cask/cask/src/cask/main/Main.scala#L44" target="_blank">Main.scala</a>
               </dd>
              </dl>
             </div>
@@ -250,4 +1101,4 @@ node3 -> node2;
    </div>
   </div>
  </div>
-</section></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#attributes">Attributes</a></li><li><a href="#members-list">Members list</a><ul><li><a href="#Value-members">Value members</a><ul><li><a href="#Concrete-methods">Concrete methods</a></li></ul></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+</section></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#attributes">Attributes</a></li><li><a href="#members-list">Members list</a><ul><li><a href="#Value-members">Value members</a><ul><li><a href="#Concrete-methods">Concrete methods</a></li><li><a href="#Inherited-methods">Inherited methods</a></li><li><a href="#Inherited-fields">Inherited fields</a></li></ul></li><li><a href="#Implicits">Implicits</a><ul><li><a href="#Inherited-implicits">Inherited implicits</a></li></ul></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
