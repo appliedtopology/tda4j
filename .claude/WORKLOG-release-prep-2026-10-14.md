@@ -44,3 +44,20 @@ notes only (see the end).
   Scastie can resolve only once Maven Central has synced it (minutes to an hour).
 - Maven Central answered HTTP 429 twice during the probe (the cold-cache rate limit CLAUDE.md warns about); a retry
   after the `Retry-After` window worked.
+
+## Dependencies and plugins (checked on Maven Central, 2026-10-14)
+
+| artifact | in the build | latest | action |
+|---|---|---|---|
+| specs2 (3 artifacts) | 5.5.1 | 5.9.1 | bumped (above) |
+| sbt-scalafmt | 2.6.1 | 2.6.2 | bumped; the formatter itself is pinned in `.scalafmt.conf` (3.11.1), so no reformatting; the three lint checks pass |
+| sbt-assembly | 2.3.1 | 2.5.0 | bumped; fat jar built and smoke-run exactly as CI does (`--help`, noisy circle: one degree-1 bar) |
+| sbt-pgp | 2.3.1 | 2.3.2 | NOT bumped: it signs the release, and nothing here can exercise signing (no credentials). Bump after the release |
+| sbt-release | 1.5.0 | 1.6.0-RC1 | NOT bumped: a release candidate, and it drives the release itself |
+| sbt-mima-plugin, sbt-scoverage | 1.2.1, 2.4.4 | same | current |
+| cats-core/kernel, kittens, scallop, scala-parallel-collections, commons-numbers, commons-math3, jvptree, miniball | | same as the build | current (parallel-collections is `1.2.0` in the build and on Central) |
+| scalacheck | 1.20.0 | not determined | the metadata lookup returned nothing (rate limit?); Dependabot will say |
+| Scala | 3.9.0 (LTS) | 3.10.0 | stay: Dependabot is set to patch releases of 3.9.x, and the docs workaround waits for 3.9.1, which does not exist yet (Central lists only 3.9.0) |
+| sbt | 2.0.10 | not checked | |
+
+No library other than specs2 was behind, so nothing else changes in the runtime classpath.
