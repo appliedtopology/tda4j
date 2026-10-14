@@ -9,6 +9,19 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Breaking
 
+### Added
+
+### Changed
+
+### Fixed
+
+### Build, CI and Documentation
+
+
+## 0.6.0 (2026-10-14)
+
+### Breaking
+
 - `sset.ClassifyingSpace.persistentGroupHomology` returns a `PersistenceDiagram` (bars with representatives) instead of
   a list of `(degree, birth, death)`; `diagram.triples` is the old list.
 - `Chain` is an abstract class open to new storages: a storage implements `entryIterator` and inherits every other
@@ -49,6 +62,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - `Plot.cycle`, `cocycle`, `cubicalChain` and `cycle3D` also take a representative as plain `(cell, coefficient)`
   terms (`Plot.Terms`), so any real cochain can be drawn; `Viewer.browse` opens a page under the viewer's browser
   rules.
+- `Field.toDouble(x)`: an element as a real number (the balanced integer for `Z/p`, the value for the reals), with a
+  default for any field, so a field of your own plots with no change. `Plot.number` uses it (#80).
 - `PackedCubicalCohomologyEngine`: Ripser's reduction on cubical grids. `Engine.Cohomology` on an image uses it.
 - `PackedChain`: compact representatives for the grid engines; a `Cube` is built only when read.
 - `Show` instances for diagrams, bars, endpoints, cubes, pairs and simplicial-set generators.
@@ -73,12 +88,17 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Fixed
 
+- `Plot.number` no longer decides by the element's runtime class: on Scala.js every `Fp` would have plotted as its raw
+  `Int` form instead of the balanced representative (#80).
 - The chunks engine's dimension-0/1 union-find handles every edge a chain complex can contain. Six inputs used to throw
   or return a wrong barcode, among them `a + b + c` over `F_3`.
 
 ### Build, CI and documentation
 
 - CI builds the fat jar and runs the command line on a sample.
+- Test and build tooling: specs2 5.9.1 (its typed `===` exposed `FiniteFieldSpec`'s two always-true properties, #79),
+  sbt-scalafmt 2.6.2, sbt-assembly 2.5.0.
+- The docs site's Playground link and snippet configuration load the last release, read from the git tags (#60).
 - Contributor guides: `CONTRIBUTING.md` rewritten (setup, commands, issues and labels, review principles), issue and
   pull request templates, and this changelog.
 - A coverage report, run by hand or weekly (`coverage.yml`) and sent to Codecov, where it is informational only.

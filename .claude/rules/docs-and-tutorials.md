@@ -62,3 +62,8 @@ fails `sbt doc`); no timings in prose. `Map[G, Fp]` equality compares raw repres
 (otherwise the strict markdown parser eats it). Every MATLAB tab needs a spec calling `matlab.TDA4j` directly (not `FullBarcode`)
 with the same options, asserting the numbers the tab quotes; the facade hides bars <= 1% of the enclosing radius, so quote
 `hiddenCount()` or pass `minPersistence 0`. MATLAB syntax/marshalling are never run here -- say so.
+
+**The Playground link and the doc snippets' Scastie configuration are generated** in `build.sbt` (`scastieLink`,
+`scastieSettings`) from the last plain `v*` tag, so a release edits nothing; the docs workflows must check out with tags
+(`fetch-depth: 0`), else `ScastieFallback` applies. Opening the link in Scastie is still a by-hand check (#60,
+`WORKLOG-release-prep-2026-10-14.md`).

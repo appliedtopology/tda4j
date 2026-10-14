@@ -485,3 +485,72 @@ class PersistenceInChunksSpec extends mutable.Specification:
     (results.map(_._2).sum must beGreaterThan(100)) and
       (results.filterNot((_, _, valid, same) => valid && same) must beEmpty)
   }
+
+  "The reduction runs once: later queries on the same state add no field operations (#51)" >> {
+    // A top cell that reduces to zero is neither cleared nor paired, so it used to be reduced again by every
+    // `diagramAt`/`barcodeAt`/`pairing`. A field that counts its operations sees that directly.
+    val ff = FiniteField(17)
+    var operations = 0L
+    given counting: (ff.Fp is Field) = new (ff.Fp is Field):
+      private val base = ff.fpField
+      def plus(x: ff.Fp, y: ff.Fp) =
+        operations += 1; base.plus(x, y)
+      def minus(x: ff.Fp, y: ff.Fp) =
+        operations += 1; base.minus(x, y)
+      def times(x: ff.Fp, y: ff.Fp) =
+        operations += 1; base.times(x, y)
+      def divide(x: ff.Fp, y: ff.Fp) =
+        operations += 1; base.divide(x, y)
+      def isEqual(x: ff.Fp, y: ff.Fp) = base.isEqual(x, y)
+      def negate(x: ff.Fp) = base.negate(x)
+      def invert(x: ff.Fp) = base.invert(x)
+      def zero = base.zero
+      def one = base.one
+      def showForSelf = base.showForSelf
+    val inf = Double.PositiveInfinity
+    val rng = new scala.util.Random(11)
+    val vr = VietorisRips(EuclideanMetricSpace(Array.fill(20)(Array.fill(3)(rng.nextDouble()))), maxDimension = 1)
+    val state = PersistenceInChunksEngine[Int, ff.Fp](1).persistentHomology(vr)
+    state.advanceAll()
+    val afterFirst = operations
+    val diagram = state.diagramAt(inf).sorted
+    val pairing = state.pairing
+    state.advanceAll()
+    val again = state.diagramAt(inf).sorted
+    (afterFirst must beGreaterThan(1000L)) and
+      (operations must beEqualTo(afterFirst)) and
+      (again must beEqualTo(diagram)) and
+      (state.pairing must beEqualTo(pairing))
+  }
+
+  "The engine's cell ranking answers as the stream's ordering does, also for cells that are not the stream's own objects (#51)" >> {
+    // The engine compares cells by a rank looked up by object identity. A stream that builds fresh equal cells on every
+    // iteration defeats the lookup for every cell but those of the first pass; the fallback to the stream's own ordering
+    // has to give the same pairing, bars and (valid) representatives. Tie-heavy input: a lattice of integer points.
+    val field = FiniteField(17)
+    import field.given
+    val inf = Double.PositiveInfinity
+    val grid = Array.tabulate(16)(i => Array((i % 4).toDouble, (i / 4).toDouble))
+    val vr = VietorisRips(EuclideanMetricSpace(grid), maxDimension = 1)
+    val fresh = new StratifiedCellStream[Simplex[Int], Double]:
+      def filtrationValue = vr.filtrationValue
+      def filtrationOrdering = vr.filtrationOrdering
+      val smallest = vr.smallest
+      var largest = vr.largest
+      def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+        case d if vr.iterateDimension.isDefinedAt(d) => vr.iterateDimension(d).map(s => ∆(s.toSeq*))
+      }
+    val own = PersistenceInChunksEngine[Int, field.Fp](1).persistentHomology(vr)
+    val copied = PersistenceInChunksEngine[Int, field.Fp](1).persistentHomology(fresh)
+    val naive = SimplicialHomologyEngine[Int, field.Fp, Double]().persistentHomology(vr)
+    val repsAreCycles = copied
+      .barcodeAt(inf, includeZeroLength = true)
+      .filter(_.dim == 1)
+      .forall(bar => bar.annotation.exists(rep => !rep.isZero() && Chain.from(rep.boundary).isZero()))
+    (copied.pairing.toSet must beEqualTo(own.pairing.toSet)) and
+      (copied.diagramAt(inf, includeZeroLength = true).sorted must beEqualTo(
+        naive.diagramAt(inf, includeZeroLength = true).filter(_._1 <= 1).sorted
+      )) and
+      (own.pairing.size must beGreaterThan(20)) and
+      repsAreCycles
+  }

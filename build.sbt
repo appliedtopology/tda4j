@@ -11,9 +11,9 @@ versionScheme := Some("semver-spec")
 
 assembly / assemblyJarName := s"${name.value}-${version.value}-assembly.jar"
 
-libraryDependencies += "org.specs2"        %% "specs2-core"                   % "5.5.1" % "test"
-libraryDependencies += "org.specs2"        %% "specs2-matcher-extra"          % "5.5.1" % "test"
-libraryDependencies += "org.specs2"        %% "specs2-scalacheck"             % "5.5.1" % "test"
+libraryDependencies += "org.specs2"        %% "specs2-core"                   % "5.9.1" % "test"
+libraryDependencies += "org.specs2"        %% "specs2-matcher-extra"          % "5.9.1" % "test"
+libraryDependencies += "org.specs2"        %% "specs2-scalacheck"             % "5.9.1" % "test"
 libraryDependencies += "org.apache.commons" % "commons-numbers-combinatorics" % "1.3"
 libraryDependencies += "org.apache.commons" % "commons-math3"                 % "3.6.1"
 libraryDependencies += "com.eatthepath"     % "jvptree"                       % "0.3.0"
@@ -35,6 +35,41 @@ libraryDependencies += "org.typelevel"  %% "kittens"                    % "3.5.0
 // restore itself, would be lost on the next publish.
 val docsVersion = sys.env.getOrElse("TDA4J_DOCS_VERSION", "dev")
 
+// The Playground link and the doc snippets' Scastie configuration load the LAST RELEASE of tda4j from Maven Central
+// (never the snapshot being built), read from the `v*` git tags like the MiMa baseline: `release.yml` and `docs.yml`
+// fetch the tags. `ScastieFallback` is used only when the checkout has none (a shallow clone).
+val ScastieFallback = "0.5.0"
+def scastieVersion: String =
+  releaseTags(file("."))
+    .find(_.matches("""\d+\.\d+\.\d+"""))
+    .getOrElse(ScastieFallback)
+
+def scastieSettings(version: String): Seq[String] = Seq(
+  """scalacOptions ++= Seq("-deprecation", "-encoding", "UTF-8", "-feature", "-unchecked", "-source:future", "-language:experimental.modularity", "-language:implicitConversions", "-language:adhocExtensions")""",
+  s"""libraryDependencies += "org.appliedtopology" %% "tda4j" % "$version""""
+)
+
+// https://scastie.scala-lang.org/?inputs=<URL-encoded JSON>; a space is %20 there (a `+` would stay a plus).
+def scastieLink(version: String): String = {
+  val code =
+    "import scala.language.experimental.modularity\nimport org.appliedtopology.tda4j.*\n" +
+      "val d = Persistence(Seq(Seq(0.0, 0.0), Seq(1.0, 0.0), Seq(1.0, 1.0), Seq(0.0, 1.0)))\n" +
+      "d.bars.map(b => (b.dim, b.birth, b.death))\n"
+  def str(x: String): String = "\"" + x.flatMap {
+    case '"'  => "\\\""
+    case '\\' => "\\\\"
+    case '\n' => "\\n"
+    case c    => c.toString
+  } + "\""
+  val json =
+    s"""{"_isWorksheetMode": true, "code": ${str(code)}, "target": {"scalaVersion": "3.9.0", "tpe": "Scala3"}, """ +
+      s""""libraries": [], "librariesFromList": [], "sbtConfigExtra": ${str(
+          scastieSettings(version).mkString("", "\n", "\n")
+        )}, """ +
+      """"sbtPluginsConfigExtra": "", "isShowingInUserProfile": true}"""
+  "https://scastie.scala-lang.org/?inputs=" + java.net.URLEncoder.encode(json, "UTF-8").replace("+", "%20")
+}
+
 Compile / doc / scalacOptions ++= Seq(
   "-siteroot",
   baseDirectory.value.toString,
@@ -52,18 +87,9 @@ Compile / doc / scalacOptions ++= Seq(
   "-social-links:github::https://github.com/appliedtopology/tda4j",
   "-doc-footer",
   "TDA4j is built by the TDA @ CUNY workgroup",
-  "-quick-links:Applied Topology::https://appliedtopology.org,Playground::https://scastie.scala-lang.org/?inputs=%7B%0A%20%20%22_isWorksheetMode%22%20%3A%20true%2C%0A%20%20%22code%22%20%3A%20%22import%20org.appliedtopology.tda4j.*%5Cn%E2%88%86(1%2C2%2C3)%5Cn%22%2C%0A%20%20%22target%22%20%3A%20%7B%0A%20%20%20%20%22scalaVersion%22%20%3A%20%223.9.0%22%2C%0A%20%20%20%20%22tpe%22%20%3A%20%22Scala3%22%0A%20%20%7D%2C%0A%20%20%22libraries%22%20%3A%20%5B%20%5D%2C%0A%20%20%22librariesFromList%22%20%3A%20%5B%20%5D%2C%0A%20%20%22sbtConfigExtra%22%3A%22%5CnscalacOptions%20%2B%2B%3D%20Seq(%5Cn%20%20%5C%22-deprecation%5C%22%2C%5Cn%20%20%5C%22-encoding%5C%22%2C%20%5C%22UTF-8%5C%22%2C%5Cn%20%20%5C%22-feature%5C%22%2C%5Cn%20%20%5C%22-unchecked%5C%22%2C%5Cn%20%20%5C%22-source%3Afuture%5C%22%2C%20%5Cn%20%20%5C%22-language%3Aexperimental.modularity%5C%22%5Cn)%5CnlibraryDependencies%20%2B%3D%20%5C%22org.appliedtopology%5C%22%20%25%25%20%5C%22tda4j%5C%22%20%25%20%5C%220.4.0%5C%22%5Cn%22%2C%0A%20%20%22sbtPluginsConfigExtra%22%20%3A%20%22%22%2C%0A%20%20%22isShowingInUserProfile%22%20%3A%20true%0A%7D%0A",
+  s"-quick-links:Applied Topology::https://appliedtopology.org,Playground::${scastieLink(scastieVersion)}",
   "-scastie-configuration",
-  """
-    |  scalacOptions ++= Seq(
-    |    "-deprecation",
-    |    "-encoding", "UTF-8",
-    |    "-feature", "-unchecked",
-    |    "-source:future", "-language:experimental.modularity",
-    |    "-language:implicitConversions", "-language:adhocExtensions"
-    |  ) ;
-    |  libraryDependencies += "org.appliedtopology" %% "tda4j" % "0.4.0"
-    |""".stripMargin.replace("\n", ""),
+  scastieSettings(scastieVersion).mkString(" ; "),
   // Every Scala fence in the docs is compiled; mark a purely illustrative fence `scala sc:nocompile` instead.
   "-snippet-compiler:compile"
 )

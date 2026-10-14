@@ -122,13 +122,14 @@ object FiniteFieldSpec extends mutable.Specification with ScalaCheck:
       "x-x" >>
         AsResult {
           prop { (x: Int) =>
-            x - x === Fp(0)
+            // Through the field's equality: an `Fp` has several `Int` forms.
+            (Fp(x) - Fp(x)) eql Fp(0)
           }
         }
       "x + (-x)" >>
         AsResult {
           prop { (x: Int) =>
-            x + (-x) === Fp(0)
+            (Fp(x) + (-Fp(x))) eql Fp(0)
           }
         }
       "x * (1/x)" >>
