@@ -12,7 +12,6 @@ try
   val msAll = EuclideanMetricSpace(all, false)
   val sel = timed(s"maxmin $nsub of ${all.length}")(LandmarkSelector.maxmin(msAll, nsub))
   val sub = sel.landmarks.map(all(_)).toArray
-  val ms = EuclideanMetricSpace(sub, true)
   println(
     f"=== CASE kind=$kind file=$file ${all.length} -> $nsub landmarks (covering radius ${sel.coveringRadius}%.4f) param=$param cap=$cap top=$top F_$p"
   )
@@ -26,6 +25,8 @@ try
       )
       report(s"vr n=$nsub", d.bars, top, cap)
     case _ =>
+      // cached distances only where they fit (the library caps its own cache at 8192 points)
+      val ms = EuclideanMetricSpace(sub, sub.length <= 8192)
       val stream = timed("stream") {
         kind match
           case "sparse" => SparseRips(ms, param, top, 0, cap)
