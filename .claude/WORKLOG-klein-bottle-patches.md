@@ -173,3 +173,30 @@ Klein bottle (1,2,1) over F_2 and (1,1,0) over F_17.
 | 1g | 27.4 s |
 
 4 cores, Linux, Java 21, nothing else running for the 2g and 1g runs. Correct output at every heap, 1 GB included.
+
+### 5b. Second and third sweeps: a different eps, larger sizes, all 15 000 points
+
+(`subsweep-sub2/sub3`; 6 GB heap, 240 s timeout, idle machine; top degree 1, F_2, cap in distance units.)
+
+| input | method | result |
+|---|---|---|
+| 400 landmarks, cap 1.2 | sparse eps **0.9** | 863 962 cells (the SAME count as eps 0.5), bars identical to plain Rips; 39 s count + 65 s reduce = 111 s |
+| 800 landmarks | sparse eps 0.9 | TIMEOUT at 240 s |
+| 2 000 landmarks | sparse eps 0.9 | `OutOfMemoryError` after a 0.9 s stream |
+| 2 000 landmarks | plain Rips | 28.1 s, (1,5) on [0.462, 1.038] (48%) |
+| 4 000 landmarks | plain Rips | 219.8 s, (1,5) on [0.387, 1.038] (54%) |
+| all 15 000 points, cap 0.5 | plain Rips (verb, packed Ripser) | **88.8 s**, (1,5) on [0.325, 0.5] (35% of the cap): the five loops of the real core with no landmarks at all |
+| all 15 000 points, cap 1.2 | plain Rips | `OutOfMemoryError` |
+| all 15 000 points, cap 0.5 | sparse eps 0.9 and eps 0.5 | stream built in 39.4 s / 33.5 s, then `OutOfMemoryError` in the enumeration |
+
+- **Sparse Rips on a maxmin subsample prunes nothing**: eps 0.5 and 0.9 give the same 863 962 cells and the same 822 bars as plain
+  Rips on the same 400 landmarks. A greedy-permutation subsample is already a net, so there is nothing left for the sparsification
+  to remove below the cap. The construction is meant for the DENSE cloud; there, in this checkout, it did not fit 6 GB (above).
+  Only a 6 GB heap and the cap/eps values above were tried; more memory might let the full-size sparse case finish (not tried).
+- **Plain Rips grows steeply with the landmark count** (1.2 s, 2.5 s, 28 s, 220 s at 400, 800, 2 000, 4 000 landmarks), but a
+  few hundred landmarks already show the five loops.
+- Artefact corrected: the first plain-Rips run on all 15 000 points (`sub2`) died of memory because the probe script allocated
+  a cached 15 000 x 15 000 distance matrix (1.8 GB) before choosing the method, not because of Rips. Fixed (`rips_sub.scala`),
+  rerun as `sub3`; the 1.2-cap out-of-memory above is from the fixed script.
+- Not tried: top degree 2 on the real core (the three-circle model has no H_2), eps between 0.5 and 0.9 or above 0.9,
+  `Engine.Ripser` on the sparse stream (the stream refuses it), more memory.
