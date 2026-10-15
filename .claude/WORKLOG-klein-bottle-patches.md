@@ -72,3 +72,26 @@ The DTM core (a smoothed density: the mean of squared distances to the k nearest
 1/rho_k core (96% overlap) but gives the same topology, and it removes the Python step: this is the tda4j-only demo
 pipeline. Witness stage 0.2 s (landmarks) + 0.1-1.0 s (stream) + 1.6-1.9 s (persistence). `JVPTree` is valid for
 Euclidean distances (not for an explicit matrix); the brute-force default would be O(n^2) here.
+
+### 3. The ideal Klein bottle and the torus control (5000 points each; witness, nu = 1, maxFiltrationValue = R)
+
+First attempt used R/3 (copied from the 1-D examples) and showed only noise for BOTH shapes (hundreds of short loops, no
+plateau) -- a wrong-scale artefact, not a result. JavaPlex's own recipe for the flat Klein bottle (tutorial exercise 22:
+1000 points, 50 sequential-maxmin landmarks, nu = 1, `max_filtration_value = R`) was adopted: a 2-manifold needs the full
+range. The criterion and the verdict function were NOT changed.
+
+`klein/ideal.scala`, F_2 and F_17 from one stream; widths are shares of [0, R]:
+
+| input | landmarks | R | verdict | interval (F_2 = (1,2,1)) | F_17 over it | persistence F_2 / F_17 |
+|---|---|---|---|---|---|---|
+| ideal Klein | 50 | 0.5620 | KLEIN-LIKE | [0.0773, 0.4187] (61%) | (1,1,0) | 1.5 s / 0.6 s |
+| ideal Klein | 100 | 0.3802 | KLEIN-LIKE | [0.1834, 0.3802] (52%) | (1,1,0) | 1.7 s / 1.2 s |
+| ideal Klein | 150 | 0.3166 | KLEIN-LIKE | [0.1837, 0.3166] (42%) | (1,1,0) | 7.9 s / 2.0 s |
+| flat torus | 50 | 0.6913 | TORUS-LIKE | [0.0881, 0.5617] (69%) | (1,2,1) | 1.4 s / 1.3 s |
+| flat torus | 100 | 0.4710 | TORUS-LIKE | [0.1307, 0.4710] (72%) | (1,2,1) | 1.9 s / 0.6 s |
+| flat torus | 150 | 0.3888 | TORUS-LIKE | [0.1614, 0.3888] (58%) | (1,2,1) | 5.6 s / 4.3 s |
+
+The criterion separates the two on every setting. The "ideal Klein bottle" is the paper's family (section 7) evaluated on
+the 3x3 grid, mean-subtracted and normalised, in raw pixel space with the Euclidean norm (9 coordinates), NOT the paper's
+D-norm DCT coordinates: a model of Klein-bottle patches, parametrised uniformly in (theta, phi), not on the surface.
+Timings are from runs that shared the machine with another job: indicative, not the final timing.
