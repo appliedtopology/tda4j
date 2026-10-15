@@ -53,6 +53,10 @@ sbt assembly                          # target/out/jvm/scala-3.9.0/tda4j-demo/td
 TDA4J_VERSION=0.6.1 sbt assembly      # the same from a RELEASE on Maven Central
 ```
 
+A release builds it: `release.yml` runs `sbt assembly` in `demo/` against the tag's own library sources (published to
+`~/.ivy2/local` in the same job, so it does not depend on Maven Central having served the new version yet), runs the jar
+on a small example, and attaches `tda4j-demo-<version>.jar` to the GitHub release.
+
 `DemoRepl.scala` is the whole program: the imports above, `-usejavacp` (the REPL compiles against the jar it runs
 from), the print height, and the logging of the viewer's web server turned down to warnings.
 

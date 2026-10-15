@@ -32,7 +32,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   in one file, imports already run), for talks and teaching. Not part of the library, its CI or its release.
 - `BarcodeRegressionSpec` runs again, on 25 - 30 points in 2 - 6 dimensions: the constructions cannot enumerate the
   original 25 - 150 points in 2 - 10 dimensions, whatever the engine (#51).
-
+- `release.yml` builds the demo REPL jar (`demo/`) against the tag's own sources, runs it on a small example and attaches
+  `tda4j-demo-<version>.jar` to the GitHub release.
 
 ## 0.6.0 (2026-10-14)
 

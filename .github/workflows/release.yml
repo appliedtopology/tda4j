@@ -4,8 +4,8 @@ name: Release
 # its own `tagRelease`/`pushChanges` steps. This workflow does NOT publish to Maven Central: `sbt release`
 # already does that locally (publishSigned/sonaUpload/sonaRelease), and re-running those here would be a
 # duplicate publish attempt against an already-released coordinate. This workflow only covers what `sbt
-# release` doesn't: building the fat jar, attaching every release artifact to a GitHub Release, and
-# publishing that version's docs snapshot under its own path on GitHub Pages.
+# release` doesn't: building the fat jar and the demo REPL jar, attaching every release artifact to a GitHub Release,
+# and publishing that version's docs snapshot under its own path on GitHub Pages.
 
 on:
   workflow_dispatch:
@@ -76,7 +76,33 @@ jobs:
           # `TDA4J_SCALA_VERSION=3.8.4 sbt ...` as a second call: sbt 2 runs as a thin client, so a second `sbt` connects
           # to the server the first one started, which never sees the new env var, builds docs with 3.9.0, and leaves
           # no scala-3.8.4/.../api for the steps below. TODO: drop `++3.8.4!` when 3.9.1 is released.
-          sbt "assembly ; packageSrc ; ++3.8.4! ; packageDoc ; doc"
+          #
+          # `publishLocal` (still on 3.9.0, before the switch) puts this checkout's library into ~/.ivy2/local for the demo jar
+          # below, which depends on a VERSION of the library: building it against the tag's own sources does not wait for
+          # Maven Central to serve the version `sbt release` has just published. Its scaladoc jar is left out of that
+          # publish (`packageDoc` below builds the one the release carries, with 3.8.4).
+          sbt "set Compile / packageDoc / publishArtifact := false ; assembly ; publishLocal ; packageSrc ; ++3.8.4! ; packageDoc ; doc"
+      - name: Build the demo REPL jar
+        # A separate sbt build (demo/README.md): its own server, so the env var below is seen by a fresh one. It resolves
+        # `tda4j % VERSION` from ~/.ivy2/local, where the step above just put it, and everything else from Maven Central.
+        working-directory: demo
+        env:
+          TDA4J_VERSION: ${{ steps.version.outputs.version }}
+        run: sbt assembly
+      - name: Smoke-test the demo REPL jar
+        # Checks the answer, not just the exit code: a REPL that starts and cannot run the library would still exit 0. The
+        # REPL evaluates the first piped line and ends, so the script is run with `:load`. The unit square has five bars,
+        # one of degree 1.
+        run: |
+          jar="demo/target/out/jvm/scala-3.9.0/tda4j-demo/tda4j-demo-${{ steps.version.outputs.version }}.jar"
+          test -f "$jar" || { echo "::error::$jar was not built"; exit 1; }
+          cat > /tmp/demo-smoke.scala <<'SCALA'
+          val d = Persistence(Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0)))
+          println("demo-smoke: bars=" + d.bars.size + " h1=" + d.bars.count(_.dim == 1))
+          SCALA
+          out=$(echo ":load /tmp/demo-smoke.scala" | timeout 300 java -jar "$jar" 2>&1)
+          echo "$out" | tail -5
+          echo "$out" | grep -q "demo-smoke: bars=5 h1=1" || { echo "::error::the demo jar did not compute the expected barcode"; exit 1; }
       - name: Publish versioned docs
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -130,4 +156,5 @@ jobs:
             target/out/jvm/scala-3.9.0/tda4j/*-${VERSION}-assembly.jar \
             target/out/jvm/scala-3.9.0/tda4j/*-sources.jar \
             target/out/jvm/scala-3.8.4/tda4j/*-javadoc.jar \
+            "demo/target/out/jvm/scala-3.9.0/tda4j-demo/tda4j-demo-${VERSION}.jar" \
             "docs-${VERSION}.zip"
