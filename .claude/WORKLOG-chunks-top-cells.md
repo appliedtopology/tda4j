@@ -193,3 +193,79 @@ is left in a capped run: the stream (0.4 - 1.1 s), the cursor's sort (0.35 - 0.6
   trick would apply to it as it did to Chunks.
 - `Chain.reduceBy` still builds a reduction log that `reduceTopCell` discards.
 - The facade path (see above).
+
+## Step 5 (2026-10-15): the rest of #51 — shared ranks, naive ranks, chunks triangles in filtration order
+
+State at the start: Steps 1-4 on the branch (guard, ranks inside the chunks engine, `BarcodeRegressionSpec` range, the capped
+naive engine and its facade path); #88 (rank table vs a stream with a value-less cell) and #89 (fallback sign not pinned) filed
+from the review.
+
+### What was done
+
+1. **`CellRanks`** (`homology/CellRanks.scala`, `private[tda4j]`): the rank table of Step 2 moved out of the chunks engine into
+   a class both engines use. Cells sorted once by `stream.filtrationOrdering`, equal cells sharing a rank, an
+   `IdentityHashMap` for the stream's own objects and the stream's ordering as the fallback for any other object;
+   `canonical(cell)` maps a cell fresh from `boundary` to the stream's own object. **#88**: ranks exist only if every cell has a
+   filtration value (`ranked`), because with a value-less cell `FiltrationOrdering` is not a weak order (the reviewers'
+   stream: `∆0 < ∆1 < ∆(0,1) < ∆2 < ∆0`) and sorting by it is undefined; a stream with such a cell keeps its own ordering and
+   `canonical` is the identity.
+2. **Naive engine** orders by `CellRanks` too (the cursor's `processingSequence`), and `reduceCell`/`reduceTopCell` go through
+   a `boundaryChain` that canonicalizes. The uncapped cursor gets the speed-up as well; the pairing is unchanged.
+3. **Chunks at `maxDimension = 1`**: once union-find has settled degrees 0 and 1, the positive edges (`essentialSimplices`
+   of dimension 1) are the births of degree-1 classes. `reduceTrianglesInOrder` takes the triangles in filtration order and
+   keeps `born` (positive edges with value `<=` the triangle's) and `closed` (triangles that reduced to non-zero). A triangle
+   entering with `born == closed` has no open class, so its boundary reduces to zero (the same argument as the capped naive
+   engine, Step 4) and is not reduced. The comparison is `<=`: a class born at the triangle's own value is open for it
+   (`ChunksTrianglesSpec`, last example). Falls back to the old clear-and-compress block when `maxDimension != 1`, when
+   union-find does not take dims 0/1 (`edgeShape` Irregular) or when `!ranks.ranked` (the values may not be there to compare).
+4. **#89**: the fallback example in `PersistenceInChunksSpec` now compares the pairing to the naive engine's, so a wrong sign in
+   the on-the-fly substitution fails it. The run-once example (reduction happens once per `advanceAll`) uses a ring input with a
+   threshold so that a class stays open and the in-order pass has something to skip, and bounds the field operations of a
+   second query at zero.
+
+### Specs
+
+- `CellRanksSpec` (4): ordering equal to the stream's for every pair of a sample, stream objects and fresh equal ones; `canonical`
+  returns the stream's object; `ranked` false on the #88 stream, ordering and `canonical` then the stream's own; both engines run
+  that stream to the end and agree.
+- `ChunksTrianglesSpec` (4): pairs, bars and representatives equal the naive engine's over F_2, F_3, F_17 x five inputs
+  (random clouds, a lattice with ties, a ring with an open class, the unit square), more than 200 degree-1 bars; the square's
+  fourth triangle is not reduced (`boundary` call count equal to a stream without it); a value-less triangle goes to the
+  ordinary path (degree-0 bars by hand); the class born at the triangle's own value counts as open.
+- Mutations of the triangle pass, run one at a time on the working tree and restored: never skip, always skip, `<=` to `<` in
+  the birth count, `closed` never incremented, and dropping the `ranked` precondition. The first four were caught by
+  `ChunksTrianglesSpec` as written; dropping `ranked` SURVIVED the first version (the #88 stream has no triangle to
+  compare), so the value-less-triangle example was added and catches it. Not mutated: `CellRanks.canonical` and the
+  `ranked` check inside `CellRanks` itself (their examples are written to fail without them, but that was not run).
+
+### A/B (cold JVM per run, F_17, 3 runs per cell, before = ad85b137 in a worktree, after = this tree, interleaved)
+
+Reduction time in ms (ranges of the three runs), `maxDimension` the degree.
+
+| input | engine | before | after |
+|---|---|---|---|
+| 70 points R^2, `maxDimension` 1 | chunks | 1163 - 1316 | 257 - 269 |
+| 70 points R^3, `maxDimension` 1 | chunks | 1050 - 1072 | 250 - 304 |
+| 30 points R^3, `maxDimension` 2 | chunks | 429 - 464 | 429 - 452 |
+| 70 points R^3, `maxDimension` 1 | naive, capped | 424 - 447 | 260 - 330 |
+| 70 points R^2, `maxDimension` 1 | naive, capped | 380 - 392 | 246 - 301 |
+| 30 points R^3, `maxDimension` 2 | naive, capped | 412 - 424 | 220 - 239 |
+| 70 points R^3, `maxDimension` 1 | naive, uncapped | 4068 - 4146 | 1000 - 1029 |
+| 30 points R^3, `maxDimension` 2 | naive, uncapped | 1064 - 1124 | 371 - 400 |
+
+Totals (stream + cursor/state + reduction + representatives): chunks `maxDimension` 1 1721 - 2204 ms -> 1008 - 1137 ms; capped
+naive within noise (1216 / 1190, 1345 / 1364, 1242 / 1202 on R^3: the rank build, 0.1 s on 25 000 cells, buys back what the
+reduction saved); uncapped naive 4888 - 4992 ms -> 1934 - 1980 ms (R^3, `maxDimension` 1) and 1469 - 1520 ms -> 795 - 886 ms.
+Pairs, essentials and bars are identical in every pair of runs. The chunks `maxDimension` 2 line is unchanged within noise
+(nothing changed there); capped naive ends where chunks does at 30 points `maxDimension` 2.
+
+### What is left (the issue filed for it is linked from the PR)
+
+- **Chunks from `maxDimension = 2`** still reduces every top cell (tetrahedra), by rank. The same argument applies (a top cell
+  entering while no class of degree `k` is open reduces to zero), but the open-class count needs the degree-`k` births, which
+  in the general path come out of the reduction of dimension `k`, so the order would be: reduce dimension `k` completely, then
+  the top cells in filtration order. Considered, not done: at 30 points `maxDimension` 2 chunks costs about what capped naive does.
+- **Memory**: every top cell is still materialized by the stream and sorted (`allCells`); at about 100 points in degree 2 that
+  is what runs out, not the reduction.
+- **`Chain.reduceBy` log**: `reduceTopCell` discards the log it builds. Not measured as a cost now that most top cells are skipped.
+- Not run: `release.yml` on GitHub; MATLAB code (never runnable here).

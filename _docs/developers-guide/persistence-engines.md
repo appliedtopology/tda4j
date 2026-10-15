@@ -88,6 +88,13 @@ built when `barcodeAt` first asks for it, then memoized; `diagramAt` never
 builds one. Keep the edge pass free of chains: a path chain per cycle-closing
 edge would cost more than the union-find itself on a Vietoris-Rips complex.
 
+**Top cells.** At `maxDim = 1`, once the union-find has taken degrees 0 and 1, the triangles are reduced in filtration
+order against the number of degree-1 classes still open (the positive edges born at or before the triangle, minus the
+triangles that have already closed one). A triangle that enters while none is open cannot close a class, so its boundary
+reduces to zero and the engine does not reduce it. From `maxDim = 2` every top cell is reduced. Cells are compared by
+rank: the stream's cells are sorted once by `filtrationOrdering`, which is cheaper than asking the stream's ordering at
+every comparison. A stream in which some cell has no filtration value keeps its own ordering.
+
 ## 3. `RipserCohomologyEngine` — test/reference oracle for engine 4
 
 Persistent *co*homology via Ulrich Bauer's Ripser algorithm (arXiv:1908.02518), specialized to
