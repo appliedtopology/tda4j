@@ -95,3 +95,26 @@ The criterion separates the two on every setting. The "ideal Klein bottle" is th
 the 3x3 grid, mean-subtracted and normalised, in raw pixel space with the Euclidean norm (9 coordinates), NOT the paper's
 D-norm DCT coordinates: a model of Klein-bottle patches, parametrised uniformly in (theta, phi), not on the surface.
 Timings are from runs that shared the machine with another job: indicative, not the final timing.
+
+### 4. Is there a Klein bottle in the 50 000-point sample? A fixed grid of local cores (no)
+
+Cores X(k,T): the densest T% of the sample by 1/rho_k (k-th neighbour, self not counted), k in {1,2,3,5,8}, T in {5,10,20}%
+(2 500 / 5 000 / 10 000 points). Fixed before looking: 100 maxmin landmarks, nu = 1, maxFiltrationValue = R, F_2 and F_17
+from one stream, the criterion above. One JVM per core (`klein/klein_grid.sh`). Nothing was tuned afterwards.
+
+**14 of the 15 cores: no interval of >= 10% with Betti (1,2,1) over F_2, so neither Klein-like nor torus-like. The 15th
+(k = 1, T = 20%, 10 000 points, the one whose density ranking starts with exact duplicates, rho_1 = 0) was still reducing
+after 410 s of persistence and is reported as undecided/too slow; k = 1 is degenerate anyway.** What the cores do show:
+
+- k = 8, T = 20%: (1,5,0) over 83% of [0, R] (R = 0.4776), identical over F_2 and F_17: the three-circle model, now at a
+  much more local density estimate than the shipped k = 15.
+- k = 5, T = 10%: (1,5,0) for 43% after a stretch with (2,4,0) -> (1,5,0) -> (1,4,0): same model, noisier.
+- k = 3 and k = 2 at T = 5%: fragmented (Betti_0 up to 15, Betti_1 of 3-5 in short runs): too sparse to say anything.
+- No core has any H_2 on a plateau.
+
+Reading: on this 5 x 10^4 sample the local cores give the three-circle model or noise, never a surface. That is what the
+paper warns about ("reducing k below 15 seems unreasonable due to noise issues") and why they went to 4 x 10^6 patches. Not
+shown by this experiment, and not claimed: that the Klein bottle is absent from the full space M.
+
+Parameter caveat: 100 landmarks, nu = 1, maxFiltrationValue = R for every core; a core with a genuine Klein bottle but
+needing more landmarks would be missed. The ideal Klein bottle needed only 50-150 landmarks at R (section 3).
