@@ -18,6 +18,28 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 ### Build, CI and Documentation
 
 
+## 0.6.1 (2026-10-15)
+
+### Breaking
+
+### Added
+
+* Slides for a tutorial seminar on 2026-10-16.
+* An extra-fat demo jar that launches its own REPL, allowing demos with only a modern JRE as installation requirements.
+
+### Changed
+
+* Replaced HTTP server for the plot viewer.
+
+### Fixed
+
+* #60 (Playground link versioning)
+* #79 (Bug in `FiniteFieldSpec`, comparing unwrapped integers instead of finite field elements)
+* #80 (Bug in `Plot.number` dispatching)
+
+### Build, CI and Documentation
+
+
 ## 0.6.0 (2026-10-14)
 
 ### Breaking
