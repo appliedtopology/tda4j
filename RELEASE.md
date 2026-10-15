@@ -29,6 +29,7 @@ the docs steps set `TDA4J_SCALA_VERSION=3.8.4` (read by `scalaVersion` in `build
 | Sources jar | `publishMavenStyle := true` + sbt's default `publishArtifact` behavior (`Compile / packageSrc`) | Maven Central + GitHub Release |
 | Scaladoc jar | sbt's default `Compile / packageDoc` | Maven Central + GitHub Release |
 | Fat jar (CLI/MATLAB) | `sbt assembly` → `target/out/jvm/scala-3.9.0/tda4j/tda4j-<version>-assembly.jar` (name from `assembly / assemblyJarName` in `build.sbt`); CI's `test` job builds it and runs it on a sample for every pull request | GitHub Release only (not published to Maven — fat jars with bundled deps are a poor Maven citizen) |
+| Demo REPL jar | `demo/` is a separate sbt build (`demo/README.md`) that bundles a *version* of the library with the Scala REPL: `TDA4J_VERSION=<version> sbt assembly` in `demo/` → `demo/target/out/jvm/scala-3.9.0/tda4j-demo/tda4j-demo-<version>.jar` (about 74 MB). `release.yml` builds it against the tag's own sources and smoke-runs it | GitHub Release only |
 | Docs site | `sbt doc` → `target/out/jvm/scala-<docs scala version>/tda4j/api` (scaladoc static site built from `_docs/`) | GitHub Pages, under a per-version path (`/X.Y.Z/`, `/dev/` for in-progress docs) + a zipped copy on the GitHub Release |
 
 All four Maven-bound artifacts (jar, sources, scaladoc, POM) are produced and signed in one shot by
@@ -130,15 +131,19 @@ whole sequence, per `sbt-release`'s own resume support.
 The tag push from step 3 triggers `.github/workflows/release.yml`, which:
 
 1. Checks that the ref is an existing `vX.Y.Z` tag, before anything is built or published.
-2. Runs `sbt "assembly ; packageSrc ; ++3.8.4! ; packageDoc ; doc"`: the fat jar and sources jar with Scala 3.9.0,
-   then the scaladoc jar and the docs site with 3.8.4 (scaladoc 3.9.0's JavaScript is broken), switched inside the
-   one invocation because a second `sbt` call would join the running server and keep 3.9.0.
+2. Runs `sbt "set Compile / packageDoc / publishArtifact := false ; assembly ; publishLocal ; packageSrc ; ++3.8.4! ;
+   packageDoc ; doc"`: the fat jar, the library published to `~/.ivy2/local` (for the demo jar, below) and the sources jar
+   with Scala 3.9.0, then the scaladoc jar and the docs site with 3.8.4 (scaladoc 3.9.0's JavaScript is broken), switched
+   inside the one invocation because a second `sbt` call would join the running server and keep 3.9.0.
+   Builds the demo REPL jar (`sbt assembly` in `demo/`, with `TDA4J_VERSION` the tag's version) against that local
+   publish, so it does not wait for Maven Central to serve the version `sbt release` has just published, and runs it on
+   a four-point square, checking for the five bars.
 3. Commits the freshly-built docs directly into a `gh-pages` worktree, under `/X.Y.Z/`, alongside whatever's already
    there (the site root is `docs.yml`'s build of `scala`), and pushes.
 4. Zips this version's docs (`target/out/jvm/scala-3.8.4/tda4j/api`, the site step 3 just published) into
    `docs-X.Y.Z.zip`.
 5. Runs `gh release create` on the pushed tag, title `TDA4j X.Y.Z`, `--generate-notes`, `--prerelease` while
-   the version is still `0.x`, with the fat jar, sources jar, scaladoc jar, and docs zip attached.
+   the version is still `0.x`, with the fat jar, sources jar, scaladoc jar, demo REPL jar, and docs zip attached.
 
 If it fails partway (e.g. a transient GitHub API error), it's safe to just re-run the workflow from the
 Actions tab — nothing it does touches Maven, and `gh release create`/the docs `git push` are both safe to
@@ -155,6 +160,6 @@ instead, replicate steps 1–4 locally; the commands are in the workflow file.
   series only; a new minor starts with an empty baseline).
 - Skim the new `-SNAPSHOT` commit `sbt release` pushed — confirm it actually landed on `scala` and the version
   bump is sane before walking away.
-- Confirm `release.yml` finished green in the Actions tab and the GitHub Release looks right (all four files
+- Confirm `release.yml` finished green in the Actions tab and the GitHub Release looks right (all five files
   attached, the changelog section pasted into its description) before announcing the release anywhere.
 - Add a new, empty `## Unreleased` section at the top of `CHANGELOG.md` if the release commit did not.

@@ -328,15 +328,13 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
   }
 
 class BarcodeRegressionSpec extends org.specs2.mutable.Specification with ScalaCheck:
-  // Re-skipped after a correctness-fix session initially un-skipped this on the strength of one fast,
-  // small-sample run -- wrong: matrixGen's own range here (25-150 points, dimension 2-10) can and does
-  // also sample large/high-dimensional clouds, and on at least one of those this OOMs with severe GC
-  // thrashing (up to 515% GC time observed) well before completing, not a quick pass. Whether that's the
-  // same pre-existing "stalls out" performance issue this skip always documented, or something this
-  // session's PersistenceInChunksEngine fix made worse by doing more substitution work per cell, is NOT
-  // yet determined -- don't re-attempt un-skipping without measuring across the actual generator range,
-  // not one sample. See WORKLOG-benchmark-and-chunks-bug.md.
-  skipAll // currently stalls out - we need to figure out the speed issues here.
+  // The cloud is bounded by what the constructions can enumerate, not by the engine (`WORKLOG-chunks-top-cells.md`,
+  // measured with the chunks engine, degrees 0..3, 2 GB heap, one case per JVM): the unthresholded Vietoris-Rips complex
+  // to dimension 4 takes 1 - 2 s at 25 points, 12 - 17 s at 40, over 90 s at 60 and runs out of memory at 100 and 150, in
+  // any ambient dimension; the alpha complexes take under 1.5 s at 150 points in the plane, but at ambient dimension 6
+  // 7 - 12 s at 60 points (4 - 5 s at 40) and over a minute at 150, and at ambient dimension 10 already 21 - 31 s at 25
+  // points. 25 - 30 points in 2 - 6 dimensions is the range every case finishes in about ten seconds (the corner, 30
+  // points in 6 dimensions: 3.5 - 6.8 s, 2 s and 2 - 3 s).
   given Double is Field = Field.DoubleApproximated(1e-25)
 
   val shc = PersistenceInChunksEngine[Int, Double](3)
@@ -350,7 +348,7 @@ class BarcodeRegressionSpec extends org.specs2.mutable.Specification with ScalaC
         LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(EuclideanMetricSpace(pts)), 4)
     )
   )
-  val points = matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(25, 150)).sample.get
+  val points = matrixGen[Double](Gen.double, Gen.chooseNum(2, 6), Gen.chooseNum(25, 30)).sample.get
   for (name, streamBuilder) <- cases do
     s"$name complex should have births before deaths" >> {
       // matrixGen is defined in streams/Generators.scala

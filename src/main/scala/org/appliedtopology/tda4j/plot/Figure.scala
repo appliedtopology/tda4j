@@ -133,6 +133,9 @@ final case class Figure(
   def +(mark: Mark): Figure = copy(marks = marks :+ mark)
   def ++(more: IterableOnce[Mark]): Figure = copy(marks = marks ++ more)
 
+  // One line, so that a REPL echoing the value of `fig.view()` does not print every coordinate of every mark.
+  override def toString: String = Plot.describe("Figure", title, s"${marks.size} marks")
+
   /** This figure's marks drawn over `under`'s (axes, title and legend from this one, legends merged). */
   def over(under: Figure): Figure = copy(marks = under.marks ++ marks, legend = under.legend ++ legend)
 

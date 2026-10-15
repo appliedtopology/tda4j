@@ -62,9 +62,21 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
     ], // open cell -> (birth, representative cycle)
     stream: CellStream[CellT, FiltrationT],
     var current: FiltrationT,
-    barcode: mutable.ArrayDeque[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT])]
+    barcode: mutable.ArrayDeque[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT])],
+    // The highest homological degree wanted, if the computation is capped (`persistentHomology(stream, maxDimension)`).
+    maxDegree: Option[Int]
   ):
-    given Ordering[CellT] = stream.filtrationOrdering
+    // The constructor of the engine before there was a cap.
+    def this(
+      boundaries: mutable.Map[CellT, Chain[CellT, CoefficientT]],
+      generators: mutable.Map[CellT, Chain[CellT, CoefficientT]],
+      positives: mutable.Map[CellT, (FiltrationT, Chain[CellT, CoefficientT])],
+      stream: CellStream[CellT, FiltrationT],
+      current: FiltrationT,
+      barcode: mutable.ArrayDeque[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT])]
+    ) = this(boundaries, generators, positives, stream, current, barcode, None)
+
+    given Ordering[CellT] = ranks.ordering
     import Ordering.Implicits.infixOrderingOps
     given filtration: Filtration[CellT, FiltrationT] = stream
 
@@ -77,10 +89,6 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
       advanceAll()
       pairedCells.toIndexedSeq.map((b, d) => Involution.Pair(b.dim, b, Some(d))) ++
         positives.keys.toIndexedSeq.map(b => Involution.Pair(b.dim, b, None))
-
-    // Summoned here, not at CellularHomologyEngine scope -- see class doc above.
-    val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
-    import chainRM.*
 
     // NOT stream.iterator directly: for any StratifiedCellStream, that default is DIMENSION-MAJOR (all of
     // dimension d before any of dimension d+1). That's correct only WITHIN each dimension's own bucket -- but
@@ -108,8 +116,34 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
         .by[CellT, FiltrationT](c => stream.filtrationValue.applyOrElse(c, (_: CellT) => stream.smallest))
         .orElse(Ordering.by[CellT, Int](_.dim))
         .orElse(stream.filtrationOrdering.reverse)
-    private val processingSequence: Vector[CellT] = stream.iterator.toVector.sorted(using processingOrder)
+    // A capped computation neither sorts nor reduces a cell above `maxDegree + 1` (the stream still enumerates them); the
+    // last cell of the whole stream still decides which classes are essential. `dim - 1 <= d`, not `dim <= d + 1`,
+    // which overflows for `d = Int.MaxValue`.
+    private val (processingSequence: Vector[CellT], lastCell: Option[CellT]) =
+      val all = stream.iterator.toVector
+      (
+        maxDegree.fold(all)(d => all.filter(_.dim - 1 <= d)).sorted(using processingOrder),
+        all.maxOption(using processingOrder)
+      )
     val cellIterator: collection.BufferedIterator[CellT] = processingSequence.iterator.buffered
+
+    // The chains order cells by `stream.filtrationOrdering`, which costs several hash lookups per comparison; the cells are
+    // ranked once by it (`CellRanks`) and the given at the top of the class compares ranks. A cell fresh from `boundary` is
+    // mapped to the stream's own object first (`boundaryChain`). Built here, before anything summons the given.
+    private val ranks: CellRanks[CellT] =
+      CellRanks(
+        processingSequence,
+        processingSequence.zipWithIndex.toMap,
+        stream.filtrationOrdering,
+        stream.filtrationValue.isDefinedAt
+      )
+
+    // Summoned here, not at CellularHomologyEngine scope -- see class doc above -- and after `ranks`: it fixes the given.
+    val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
+    import chainRM.*
+
+    private def boundaryChain(sigma: CellT): Chain[CellT, CoefficientT] =
+      Chain.from(sigma.boundary[CoefficientT].map((cell, k) => (ranks.canonical(cell), k)))
 
     /** How many cells the cursor has consumed, out of `totalCells`: progress of a long run. */
     var processedCells: Int = 0
@@ -119,7 +153,7 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
       * no cell enters after `f`, which is a property of the STREAM, not of how far the cursor happens to have run.
       */
     lazy val lastFiltrationValue: Option[FiltrationT] =
-      processingSequence.lastOption.map(c => cellFiltrationValue(c, filtration.smallest))
+      lastCell.map(c => cellFiltrationValue(c, filtration.smallest))
 
     private def cellFiltrationValue(cell: CellT, fallback: FiltrationT): FiltrationT =
       stream.filtrationValue.applyOrElse(cell, (_: CellT) => fallback)
@@ -137,75 +171,32 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
     // exactly as it already does past a positive one. See `.claude/WORKLOG-reference-engine-fix.md`.
     val negativeVCols: mutable.Map[CellT, Chain[CellT, CoefficientT]] = mutable.Map.empty
 
+    // How many classes of degree `maxDegree` are open (born, not yet killed) while a capped computation runs.
+    private var openAtDegree: Int = 0
+
     def advanceOne(): Unit =
       if cellIterator.hasNext then
         val sigma: CellT = cellIterator.next()
         processedCells += 1
-        val dsigma: Chain[CellT, CoefficientT] = Chain.from(sigma.boundary[CoefficientT])
-        // Chain.reduceBy (the SortedMap-based object-level primitive shared with
-        // PersistenceInChunksEngine), not a hand-rolled reduction over raw Chain arithmetic: `-`/`⊠`
-        // on Chain objects only collapse the *head* of their internal priority queue lazily, so a
-        // hand-rolled fold accumulating many raw subtractions builds up an ever-growing backlog of
-        // uncollapsed duplicate entries -- fine for tiny hand-built fixtures, but quadratic-to-worse
-        // blowup on a real Vietoris-Rips stream. Chain.reduceBy works through a SortedMap internally,
-        // which collapses duplicates by construction on every insertion. `fallback = negativeVCols.get`
-        // lets reduction substitute past an already-matched NEGATIVE cell too -- see the field's own doc.
-        val (reduced, log) = Chain.reduceBy(dsigma, boundaries, Chain.empty, fallback = negativeVCols.get)
-        // V-column: sigma minus, for every pivot the reduction subtracted off, that pivot's own
-        // producing cell's V-column. If ∂sigma reduced to zero this chain is itself the new cycle
-        // representative; either way it becomes the generator future cells reduce through if sigma
-        // itself goes on to become a pivot. Collapsed explicitly before use for the same reason as
-        // above: this fold also accumulates through raw Chain subtraction.
-        val vcol: Chain[CellT, CoefficientT] = log.rawEntries.foldLeft(Chain(sigma)) { case (acc, (pivot, coeff)) =>
-          // `log` now names two structurally different kinds of elimination (since reduceLoop's fallback
-          // was wired up above), and they need different treatment here:
-          //  - eliminated via `boundaries` (a POSITIVE, matched pivot): `boundaries(pivot) = d(generators
-          //    (pivot))` by construction (the killer's own V-column's boundary), so substituting it into
-          //    dsigma's reduction corresponds to a REAL change in sigma's own identity -- vcol must apply
-          //    the matching correction, or `d(vcol) = reduced` (the invariant every later generators/
-          //    negativeVCols lookup depends on) breaks.
-          //  - eliminated via `negativeVCols` (a NEGATIVE cell's own fallback substitution): this is a
-          //    PURE basis change WITHIN dsigma's own dimension (re-expressing one raw cell via earlier
-          //    same-dimension cells -- see negativeVCols' own doc) with no dimension shift and no relation
-          //    to sigma's identity at all. The underlying value of dsigma's reduction is unchanged by it,
-          //    only its expression is, so d(vcol) = reduced already holds without any vcol correction here
-          //    -- applying one anyway would be wrong, not merely redundant.
-          // `generators`/`negativeVCols` are disjoint keys (the persistence matching: a cell is never both
-          // positive-matched and negative), so checking negativeVCols first is unambiguous.
-          if negativeVCols.contains(pivot) then acc
-          else
-            acc - coeff ⊠ generators.getOrElse(
-              pivot,
-              throw new IllegalStateException(s"pivot $pivot has a boundaries entry but no generators entry")
-            )
-        }
-        // Collapse BEFORE either write below, not after: `generators`/`positives` entries are read
-        // back into future cells' own vcol folds (line ~86 above), so an uncollapsed value stored here
-        // would make every subsequent generation's fold re-accumulate this cell's own backlog on top
-        // of its own -- silently reintroducing the superlinear blowup this collapse call exists to
-        // prevent (see WORKLOG-naive-homology.md). Moving this call after the writes below is a
-        // regression, not a refactor.
-        vcol.collapseAll()
-        if reduced.isZero() then
-          // sigma's boundary was fully cancelled by already-recorded pivots: sigma is a new,
-          // as-yet-unpaired positive cell -- a class is born here, represented by vcol. A cell with
-          // no known filtration value is assumed to have happened as early as possible (smallest),
-          // matching the essential-bar convention in diagramWithGeneratorsAt below.
-          val birthFv = cellFiltrationValue(sigma, filtration.smallest)
-          positives(sigma) = (birthFv, vcol)
-          current = birthFv
-        else
-          // reduced is nonzero, so its leading cell is a pivot: by construction (reduction only
-          // stops at a cell no earlier column has claimed as a pivot) that pivot must be a
-          // currently-open positive cell -- the one sigma's arrival pairs off and kills.
+        if maxDegree.contains(sigma.dim - 1) then reduceTopCell(sigma) else reduceCell(sigma)
+
+    /** A cell of the top dimension of a capped computation, `maxDegree + 1`. A chain of that dimension can only do one
+      * thing that matters: bound a cycle of degree `maxDegree` that nothing has bounded yet, which closes that class.
+      * If its boundary reduces to zero it is a cycle of its own, a class of degree `maxDegree + 1` that nobody asked
+      * for, and it is dropped. So such a cell gets no V-column, no generator and no fallback entry (no cell above it
+      * would read them), and only the cells that do close a class leave a reduced column behind for the later ones to
+      * reduce by. While no class of degree `maxDegree` is open it is not even reduced: its boundary is a cycle, and a
+      * cycle that is not zero after reduction has an open cell as its pivot (the invariant `reduceCell` checks), so it
+      * would have reduced to zero.
+      */
+    private def reduceTopCell(sigma: CellT): Unit =
+      if openAtDegree == 0 then checkFacesSeen(sigma)
+      else
+        val dsigma: Chain[CellT, CoefficientT] = boundaryChain(sigma)
+        val (reduced, _) = Chain.reduceBy(dsigma, boundaries, Chain.empty, fallback = negativeVCols.get)
+        if !reduced.isZero() then
           val pivot = reduced.leadingCell.get
           boundaries(pivot) = reduced
-          generators(pivot) = vcol
-          // sigma itself is NEGATIVE (matched, as the destroyer of pivot's class) -- record its own
-          // V-column (leading term = sigma, see this map's own doc above) so a later, higher-dimension
-          // reduction that cascades onto sigma can substitute via Chain.reduceBy's fallback instead of
-          // wrongly treating it as an unrecorded, still-open pivot.
-          negativeVCols(sigma) = vcol
           val (pivotFv, representative) = positives
             .remove(pivot)
             .getOrElse(
@@ -213,13 +204,109 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
                 s"reduction pivot $pivot was not a recorded open class -- reduction invariant violated"
               )
             )
-          // A death cell with no known filtration value is assumed to have happened as late as
-          // possible (largest) -- the opposite fallback direction from a birth, so an unknown death
-          // is never silently placed before its own (already-recorded) birth.
+          if maxDegree.contains(pivot.dim) then openAtDegree -= 1
           val deathFv = cellFiltrationValue(sigma, filtration.largest)
           barcode.append((pivot.dim, pivotFv, deathFv, representative))
           pairedCells.append((pivot, sigma))
           current = deathFv
+
+    // The check `reduceCell` makes by throwing, for a skipped top cell: a stream that lists a cell before one of its faces
+    // (a non-monotone filtration built by hand) would otherwise get a silently different barcode. Every face has been
+    // processed, so it is an open class, a pivot, or a negative cell.
+    private def checkFacesSeen(sigma: CellT): Unit =
+      val faces = sigma.boundary[CoefficientT]
+      def seen(face: CellT): Boolean =
+        boundaries.contains(face) || negativeVCols.contains(face) || positives.contains(face)
+      if !faces.forall((face, _) => seen(face)) then
+        // Some face is not recorded; it matters only if it survives in the boundary (a face listed twice may cancel).
+        Chain.from(faces).cells.find(face => !seen(face)).foreach { face =>
+          throw new IllegalStateException(
+            s"reduction pivot $face was not a recorded open class -- reduction invariant violated"
+          )
+        }
+
+    private def reduceCell(sigma: CellT): Unit =
+      val dsigma: Chain[CellT, CoefficientT] = boundaryChain(sigma)
+      // Chain.reduceBy (the SortedMap-based object-level primitive shared with
+      // PersistenceInChunksEngine), not a hand-rolled reduction over raw Chain arithmetic: `-`/`⊠`
+      // on Chain objects only collapse the *head* of their internal priority queue lazily, so a
+      // hand-rolled fold accumulating many raw subtractions builds up an ever-growing backlog of
+      // uncollapsed duplicate entries -- fine for tiny hand-built fixtures, but quadratic-to-worse
+      // blowup on a real Vietoris-Rips stream. Chain.reduceBy works through a SortedMap internally,
+      // which collapses duplicates by construction on every insertion. `fallback = negativeVCols.get`
+      // lets reduction substitute past an already-matched NEGATIVE cell too -- see the field's own doc.
+      val (reduced, log) = Chain.reduceBy(dsigma, boundaries, Chain.empty, fallback = negativeVCols.get)
+      // V-column: sigma minus, for every pivot the reduction subtracted off, that pivot's own
+      // producing cell's V-column. If ∂sigma reduced to zero this chain is itself the new cycle
+      // representative; either way it becomes the generator future cells reduce through if sigma
+      // itself goes on to become a pivot. Collapsed explicitly before use for the same reason as
+      // above: this fold also accumulates through raw Chain subtraction.
+      val vcol: Chain[CellT, CoefficientT] = log.rawEntries.foldLeft(Chain(sigma)) { case (acc, (pivot, coeff)) =>
+        // `log` now names two structurally different kinds of elimination (since reduceLoop's fallback
+        // was wired up above), and they need different treatment here:
+        //  - eliminated via `boundaries` (a POSITIVE, matched pivot): `boundaries(pivot) = d(generators
+        //    (pivot))` by construction (the killer's own V-column's boundary), so substituting it into
+        //    dsigma's reduction corresponds to a REAL change in sigma's own identity -- vcol must apply
+        //    the matching correction, or `d(vcol) = reduced` (the invariant every later generators/
+        //    negativeVCols lookup depends on) breaks.
+        //  - eliminated via `negativeVCols` (a NEGATIVE cell's own fallback substitution): this is a
+        //    PURE basis change WITHIN dsigma's own dimension (re-expressing one raw cell via earlier
+        //    same-dimension cells -- see negativeVCols' own doc) with no dimension shift and no relation
+        //    to sigma's identity at all. The underlying value of dsigma's reduction is unchanged by it,
+        //    only its expression is, so d(vcol) = reduced already holds without any vcol correction here
+        //    -- applying one anyway would be wrong, not merely redundant.
+        // `generators`/`negativeVCols` are disjoint keys (the persistence matching: a cell is never both
+        // positive-matched and negative), so checking negativeVCols first is unambiguous.
+        if negativeVCols.contains(pivot) then acc
+        else
+          acc - coeff ⊠ generators.getOrElse(
+            pivot,
+            throw new IllegalStateException(s"pivot $pivot has a boundaries entry but no generators entry")
+          )
+      }
+      // Collapse BEFORE either write below, not after: `generators`/`positives` entries are read
+      // back into future cells' own vcol folds (line ~86 above), so an uncollapsed value stored here
+      // would make every subsequent generation's fold re-accumulate this cell's own backlog on top
+      // of its own -- silently reintroducing the superlinear blowup this collapse call exists to
+      // prevent (see WORKLOG-naive-homology.md). Moving this call after the writes below is a
+      // regression, not a refactor.
+      vcol.collapseAll()
+      if reduced.isZero() then
+        // sigma's boundary was fully cancelled by already-recorded pivots: sigma is a new,
+        // as-yet-unpaired positive cell -- a class is born here, represented by vcol. A cell with
+        // no known filtration value is assumed to have happened as early as possible (smallest),
+        // matching the essential-bar convention in diagramWithGeneratorsAt below.
+        val birthFv = cellFiltrationValue(sigma, filtration.smallest)
+        positives(sigma) = (birthFv, vcol)
+        if maxDegree.contains(sigma.dim) then openAtDegree += 1
+        current = birthFv
+      else
+        // reduced is nonzero, so its leading cell is a pivot: by construction (reduction only
+        // stops at a cell no earlier column has claimed as a pivot) that pivot must be a
+        // currently-open positive cell -- the one sigma's arrival pairs off and kills.
+        val pivot = reduced.leadingCell.get
+        boundaries(pivot) = reduced
+        generators(pivot) = vcol
+        // sigma itself is NEGATIVE (matched, as the destroyer of pivot's class) -- record its own
+        // V-column (leading term = sigma, see this map's own doc above) so a later, higher-dimension
+        // reduction that cascades onto sigma can substitute via Chain.reduceBy's fallback instead of
+        // wrongly treating it as an unrecorded, still-open pivot.
+        negativeVCols(sigma) = vcol
+        val (pivotFv, representative) = positives
+          .remove(pivot)
+          .getOrElse(
+            throw new IllegalStateException(
+              s"reduction pivot $pivot was not a recorded open class -- reduction invariant violated"
+            )
+          )
+        if maxDegree.contains(pivot.dim) then openAtDegree -= 1
+        // A death cell with no known filtration value is assumed to have happened as late as
+        // possible (largest) -- the opposite fallback direction from a birth, so an unknown death
+        // is never silently placed before its own (already-recorded) birth.
+        val deathFv = cellFiltrationValue(sigma, filtration.largest)
+        barcode.append((pivot.dim, pivotFv, deathFv, representative))
+        pairedCells.append((pivot, sigma))
+        current = deathFv
 
     def advanceTo(f: FiltrationT): Unit =
       // Closed-birth/open-death convention: a cell exactly at f has already occurred by the time we
@@ -310,13 +397,27 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
       }
 
   def persistentHomology(stream: => CellStream[CellT, FiltrationT]): HomologyState =
+    start(stream, None)
+
+  /** The cursor for the degrees `0 .. maxDimension` only. The cells above dimension `maxDimension + 1` are neither
+    * sorted nor reduced, and the cells of dimension `maxDimension + 1`, which can only close a class of degree
+    * `maxDimension`, leave nothing but the pairing: no V-column, no class of degree `maxDimension + 1`, and no
+    * reduction at all while no class of degree `maxDimension` is open. The bars of degree `0 .. maxDimension` and their
+    * representatives are those of the uncapped cursor; there are no bars above `maxDimension`.
+    */
+  def persistentHomology(stream: => CellStream[CellT, FiltrationT], maxDimension: Int): HomologyState =
+    require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
+    start(stream, Some(maxDimension))
+
+  private def start(stream: => CellStream[CellT, FiltrationT], maxDegree: Option[Int]): HomologyState =
     HomologyState(
       mutable.Map.empty, // boundaries: pivot -> reduced column
       mutable.Map.empty, // generators: pivot -> producing cell's V-column
       mutable.Map.empty, // positives: open cell -> (birth value, representative cycle)
       stream,
       stream.smallest: FiltrationT,
-      mutable.ArrayDeque.empty
+      mutable.ArrayDeque.empty,
+      maxDegree
     )
 
 /** The chunks persistence engine: the clear-and-compress algorithm of Bauer, Kerber and Reininghaus ("Clear and
@@ -350,11 +451,7 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
     essentialRepresentatives: mutable.Map[CellT, Chain[CellT, CoefficientT]]
   ):
 
-    // The stream's ordering costs several hash lookups per comparison (a `TreeSet`-keyed map for the value of each
-    // side), and a reduction compares cells constantly. The cells of the stream are therefore ranked once, by that
-    // very ordering, and compared by rank through an identity map; a cell that is not one of the stream's own
-    // objects (or not in it) falls back to the stream's ordering, so every answer is the stream's answer.
-    given Ordering[CellT] = rankedOrdering
+    given Ordering[CellT] = ranks.ordering
 
     // top-down state:
     //   cleared ------------- simplices paired as pivots (positive side); their column is implicitly zero
@@ -388,33 +485,15 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
     val cellIndex: Map[CellT, Int] = allCells.zipWithIndex.toMap
     val chunkSize: Int = math.max(1, math.sqrt(allCells.size.toDouble).floor.toInt)
 
-    // Dense ranks under the stream's ordering (cells it calls equal share a rank), keyed by object identity.
-    private lazy val rankedOrdering: Ordering[CellT] =
-      val streamOrdering: Ordering[CellT] = stream.filtrationOrdering
-      val ranks = new java.util.IdentityHashMap[CellT, Integer](2 * allCells.size + 1)
-      val sorted = allCells.sorted(using streamOrdering)
-      var rank = 0
-      var previous: Option[CellT] = None
-      sorted.foreach { cell =>
-        previous.foreach(prev => if streamOrdering.compare(prev, cell) != 0 then rank += 1)
-        ranks.put(cell, Integer.valueOf(rank))
-        previous = Some(cell)
-      }
-      new Ordering[CellT]:
-        def compare(x: CellT, y: CellT): Int =
-          val rx = ranks.get(x)
-          val ry = ranks.get(y)
-          if rx != null && ry != null then Integer.compare(rx.intValue, ry.intValue)
-          else streamOrdering.compare(x, y)
-
-    // The stream's own object for a cell equal to it (so that the identity-keyed ranks above apply), else the cell.
-    private def canonical(cell: CellT): CellT = cellIndex.get(cell) match
-      case Some(i) => allCells(i)
-      case None    => cell
+    // The stream's ordering costs several hash lookups per comparison, and a reduction compares cells constantly: the
+    // stream's cells are ranked once by it (`CellRanks`), and the given above compares ranks. A cell fresh from `boundary`
+    // is mapped to the stream's own object first (`boundaryChain`).
+    private lazy val ranks: CellRanks[CellT] =
+      CellRanks(allCells, cellIndex, stream.filtrationOrdering, stream.filtrationValue.isDefinedAt)
 
     /** `sigma`'s boundary as a chain over the stream's own cell objects. */
     private def boundaryChain(sigma: CellT): Chain[CellT, CoefficientT] =
-      Chain.from(sigma.boundary[CoefficientT].map((cell, k) => (canonical(cell), k)))
+      Chain.from(sigma.boundary[CoefficientT].map((cell, k) => (ranks.canonical(cell), k)))
 
     // killer column index for each local pivot
     val killer: mutable.Map[CellT, CellT] = mutable.Map.empty
@@ -982,6 +1061,31 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
     // zero (neither cleared nor paired) was reduced again on every call.
     private var advanced: Boolean = false
 
+    /** The top level of a computation to degree 1, when union-find has settled degrees 0 and 1: the triangles, one at a
+      * time in filtration order, each reduced against the columns of the earlier ones. A triangle can only close a
+      * class of degree 1, and union-find has already said which edges start one (`essentialSimplices` of dimension 1),
+      * so a triangle that enters while no such class is open (the edges that started one, at or before its value, are
+      * all closed) has a boundary that is a sum of earlier boundaries, and is not reduced at all. The chunk windows
+      * never resolve a triangle here (its pivot is an edge, in the first chunks), so nothing is lost by leaving them
+      * out. Needs every cell to have a value (`ranks.ranked`), which is what the comparison of values rests on.
+      */
+    private def reduceTrianglesInOrder(): Unit =
+      val value = stream.filtrationValue
+      val births: Array[Double] = essentialSimplices.iterator.filter(_.dim == 1).map(value(_)).toArray.sorted
+      var born = 0 // the edges that start a class of degree 1 and enter at or before the triangle in hand
+      var closed = 0 // the triangles so far that closed one
+      allCells.iterator.filter(_.dim == internalMaxDim).foreach { tau =>
+        val enters = value(tau)
+        while born < births.length && births(born) <= enters do born += 1
+        if born > closed then
+          val dtau: Chain[CellT, CoefficientT] = boundaryChain(tau)
+          val (reduced, _) =
+            Chain.reduceByUntil(dtau, boundaries, Chain.empty, (_: CellT) => false, fallback = eliminationFallback)
+          if !reduced.isZero() then
+            recordPair(tau, reduced)
+            closed += 1
+      }
+
     def advanceAll(): Unit =
       if advanced then return
       // Dimensions 0/1 are fully resolved by raw union-find (cleared/paired/killer/barcode(0)/
@@ -994,81 +1098,84 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
       // Union-find resolved degrees 0 and 1, or gave them back to the general reduction (an irregular edge).
       val lowest = if dim01ByUnionFind then 2 else 0
 
-      val n: Int = allCells.size
-      val m: Int = (n + chunkSize - 1) / chunkSize
+      // Degrees 0 and 1 settled by union-find, and the top level the triangles: see reduceTrianglesInOrder.
+      if dim01ByUnionFind && internalMaxDim == 2 && ranks.ranked then reduceTrianglesInOrder()
+      else
+        val n: Int = allCells.size
+        val m: Int = (n + chunkSize - 1) / chunkSize
 
-      val chunks: IndexedSeq[IndexedSeq[CellT]] =
-        allCells.grouped(chunkSize).toIndexedSeq
+        val chunks: IndexedSeq[IndexedSeq[CellT]] =
+          allCells.grouped(chunkSize).toIndexedSeq
 
-      // Algorithm 2: local_reduction from clear-and-compress paper. Walks to internalMaxDim (maxDim + 1), not
-      // maxDim -- see the class doc above for why the extra dimension is needed.
-      for delta <- internalMaxDim.to(lowest, -1) do
-        for r <- 1.to(2) do
-          for b <- (r - 1).until(m) do // parallelizable!
-            val floorIdx: Int = math.max(0, (b - r + 1) * chunkSize)
-            val stop: CellT => Boolean =
-              sigma => cellIndex.getOrElse(sigma, -1) < floorIdx
-            for sigma <- chunks(b) if sigma.dim == delta do processCell(sigma, stop)
+        // Algorithm 2: local_reduction from clear-and-compress paper. Walks to internalMaxDim (maxDim + 1), not
+        // maxDim -- see the class doc above for why the extra dimension is needed.
+        for delta <- internalMaxDim.to(lowest, -1) do
+          for r <- 1.to(2) do
+            for b <- (r - 1).until(m) do // parallelizable!
+              val floorIdx: Int = math.max(0, (b - r + 1) * chunkSize)
+              val stop: CellT => Boolean =
+                sigma => cellIndex.getOrElse(sigma, -1) < floorIdx
+              for sigma <- chunks(b) if sigma.dim == delta do processCell(sigma, stop)
 
-      // Resolve any cell left "in limbo" by the local phase above: processCell found a nonzero
-      // R value (this cell genuinely has unresolved content, i.e. is NOT locally essential) but
-      // deferred recordPair because its chosen pivot fell outside that round's local window
-      // (stop fired every time it was visited). Left unresolved, such a cell is neither cleared
-      // nor paired -- indistinguishable, to eliminationFallback's catch-all `else None` case,
-      // from a cell that's genuinely essential (R actively removed). That catch-all treats
-      // "else None" as "no content, safe for anyone to claim as their own pivot" -- true for a
-      // genuinely essential cell, false for one merely pending its own global resolution. Because
-      // the global phase below processes dimensions top-down (like the local phase), a HIGHER-
-      // dimension cell's globalReduce can reach a lower-dimension in-limbo cell as a substituted
-      // term *before* that lower cell's own compress/globalReduce ever runs -- wrongly claiming
-      // it as ITS OWN final pivot and stealing it from its rightful killer relationship (a real, traced
-      // bug: `.claude/WORKLOG-benchmark-and-chunks-bug.md` section 5 has the fixture).
-      //
-      // Fixed by re-reducing every in-limbo cell's raw boundary, with no local window, in filtration
-      // order -- exactly what the local phase itself would have done for it eventually, just without
-      // deferring. Re-deriving dsigma fresh and reducing against the current (accumulated) boundaries
-      // -- rather than recordPair-ing the stale stored R value directly -- matters when two in-limbo
-      // cells share a dimension: resolving the earlier one first can newly clear a pivot the later
-      // one's own raw boundary also contains, exactly the same sequential same-dimension resolution
-      // the ordinary (non-deferred) local pass already relies on.
-      //
-      // NOT a plain `processCell(sigma, stop)` call (which reduces against `boundaries` alone, no
-      // fallback): the ordinary local phase never needs a fallback, because it runs strictly
-      // dimension-descending, so a dimension-d cell's local reduction can never encounter an
-      // already-`paired` (dimension < d) term. This reconciliation step is different: it runs once,
-      // across ALL dimensions, AFTER the whole descending local phase -- so a higher-dimension in-limbo
-      // cell resolved here CAN cascade into an already-paired lower-dimension cell (a cleared pivot's own
-      // stored boundary can itself contain paired terms), and boundaries-only reduction has no way to
-      // eliminate one it stumbles into, wrongly stopping on it as a final pivot instead. Using
-      // eliminationFallback here (same as compress/globalReduce) closes that: a paired term now
-      // substitutes via its own V-column (vcolOf) instead of becoming an illegitimate terminus. See
-      // eliminationFallback's own doc for why calling vcolOf here, before the global phase has run, is
-      // safe.
-      for sigma <- allCells if R.contains(sigma) && !cleared.contains(sigma) && !paired.contains(sigma) do
-        val dsigma: Chain[CellT, CoefficientT] = boundaryChain(sigma)
-        val (dsigmaReduced, _) =
-          Chain.reduceByUntil(dsigma, boundaries, Chain.empty, (_: CellT) => false, fallback = eliminationFallback)
-        if dsigmaReduced.isZero() then
-          R -= sigma
-          essentialSimplices += sigma
-        else
-          R(sigma) = dsigmaReduced
-          recordPair(sigma, dsigmaReduced)
+        // Resolve any cell left "in limbo" by the local phase above: processCell found a nonzero
+        // R value (this cell genuinely has unresolved content, i.e. is NOT locally essential) but
+        // deferred recordPair because its chosen pivot fell outside that round's local window
+        // (stop fired every time it was visited). Left unresolved, such a cell is neither cleared
+        // nor paired -- indistinguishable, to eliminationFallback's catch-all `else None` case,
+        // from a cell that's genuinely essential (R actively removed). That catch-all treats
+        // "else None" as "no content, safe for anyone to claim as their own pivot" -- true for a
+        // genuinely essential cell, false for one merely pending its own global resolution. Because
+        // the global phase below processes dimensions top-down (like the local phase), a HIGHER-
+        // dimension cell's globalReduce can reach a lower-dimension in-limbo cell as a substituted
+        // term *before* that lower cell's own compress/globalReduce ever runs -- wrongly claiming
+        // it as ITS OWN final pivot and stealing it from its rightful killer relationship (a real, traced
+        // bug: `.claude/WORKLOG-benchmark-and-chunks-bug.md` section 5 has the fixture).
+        //
+        // Fixed by re-reducing every in-limbo cell's raw boundary, with no local window, in filtration
+        // order -- exactly what the local phase itself would have done for it eventually, just without
+        // deferring. Re-deriving dsigma fresh and reducing against the current (accumulated) boundaries
+        // -- rather than recordPair-ing the stale stored R value directly -- matters when two in-limbo
+        // cells share a dimension: resolving the earlier one first can newly clear a pivot the later
+        // one's own raw boundary also contains, exactly the same sequential same-dimension resolution
+        // the ordinary (non-deferred) local pass already relies on.
+        //
+        // NOT a plain `processCell(sigma, stop)` call (which reduces against `boundaries` alone, no
+        // fallback): the ordinary local phase never needs a fallback, because it runs strictly
+        // dimension-descending, so a dimension-d cell's local reduction can never encounter an
+        // already-`paired` (dimension < d) term. This reconciliation step is different: it runs once,
+        // across ALL dimensions, AFTER the whole descending local phase -- so a higher-dimension in-limbo
+        // cell resolved here CAN cascade into an already-paired lower-dimension cell (a cleared pivot's own
+        // stored boundary can itself contain paired terms), and boundaries-only reduction has no way to
+        // eliminate one it stumbles into, wrongly stopping on it as a final pivot instead. Using
+        // eliminationFallback here (same as compress/globalReduce) closes that: a paired term now
+        // substitutes via its own V-column (vcolOf) instead of becoming an illegitimate terminus. See
+        // eliminationFallback's own doc for why calling vcolOf here, before the global phase has run, is
+        // safe.
+        for sigma <- allCells if R.contains(sigma) && !cleared.contains(sigma) && !paired.contains(sigma) do
+          val dsigma: Chain[CellT, CoefficientT] = boundaryChain(sigma)
+          val (dsigmaReduced, _) =
+            Chain.reduceByUntil(dsigma, boundaries, Chain.empty, (_: CellT) => false, fallback = eliminationFallback)
+          if dsigmaReduced.isZero() then
+            R -= sigma
+            essentialSimplices += sigma
+          else
+            R(sigma) = dsigmaReduced
+            recordPair(sigma, dsigmaReduced)
 
-      // Algorithm 3: mark_active_entries from clear-and-compress paper
-      markActiveEntries()
+        // Algorithm 3: mark_active_entries from clear-and-compress paper
+        markActiveEntries()
 
-      // Algorithm 5 (Persistence in chunks): per dim top-down, compress unpaired
-      // global columns then reduce them. Clearing keeps positives' columns at zero.
-      // Walks to internalMaxDim (maxDim + 1), not maxDim -- see the class doc above for why.
-      for delta <- internalMaxDim.to(lowest, -1) do
-        val cellsAtDim =
-          stream.iterateDimension.applyOrElse(delta, (_: Int) => Iterator.empty).toVector
-        // step 2: compress unpaired global columns
-        for sigma <- cellsAtDim do
-          if !cleared.contains(sigma) && !paired.contains(sigma) && R.contains(sigma) then compress(sigma)
-        // step 3: reduce the compressed global columns and record pairs
-        for sigma <- cellsAtDim do globalReduce(sigma)
+        // Algorithm 5 (Persistence in chunks): per dim top-down, compress unpaired
+        // global columns then reduce them. Clearing keeps positives' columns at zero.
+        // Walks to internalMaxDim (maxDim + 1), not maxDim -- see the class doc above for why.
+        for delta <- internalMaxDim.to(lowest, -1) do
+          val cellsAtDim =
+            stream.iterateDimension.applyOrElse(delta, (_: Int) => Iterator.empty).toVector
+          // step 2: compress unpaired global columns
+          for sigma <- cellsAtDim do
+            if !cleared.contains(sigma) && !paired.contains(sigma) && R.contains(sigma) then compress(sigma)
+          // step 3: reduce the compressed global columns and record pairs
+          for sigma <- cellsAtDim do globalReduce(sigma)
       advanced = true
 
   def persistentHomology(stream: => StratifiedCellStream[CellT, Double]): HomologyState =

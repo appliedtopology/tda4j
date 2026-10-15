@@ -509,18 +509,28 @@ class PersistenceInChunksSpec extends mutable.Specification:
       def showForSelf = base.showForSelf
     val inf = Double.PositiveInfinity
     val rng = new scala.util.Random(11)
-    val vr = VietorisRips(EuclideanMetricSpace(Array.fill(20)(Array.fill(3)(rng.nextDouble()))), maxDimension = 1)
-    val state = PersistenceInChunksEngine[Int, ff.Fp](1).persistentHomology(vr)
-    state.advanceAll()
-    val afterFirst = operations
-    val diagram = state.diagramAt(inf).sorted
-    val pairing = state.pairing
-    state.advanceAll()
-    val again = state.diagramAt(inf).sorted
-    (afterFirst must beGreaterThan(1000L)) and
-      (operations must beEqualTo(afterFirst)) and
-      (again must beEqualTo(diagram)) and
-      (state.pairing must beEqualTo(pairing))
+    // A random cloud (every class of degree 1 is closed by the end, so a second pass would find nothing to reduce) and a
+    // ring of 16 points with a threshold below its closing value (one class stays open, so a second pass would reduce
+    // every triangle again).
+    val ring = Array.tabulate(16)(i => Array(math.cos(i * math.Pi / 8), math.sin(i * math.Pi / 8)))
+    val inputs = Seq(
+      ("cloud", VietorisRips(EuclideanMetricSpace(Array.fill(20)(Array.fill(3)(rng.nextDouble()))), maxDimension = 1)),
+      ("ring", VietorisRips(EuclideanMetricSpace(ring), 1, 0.9))
+    )
+    val results = for (name, vr) <- inputs yield
+      operations = 0L
+      val state = PersistenceInChunksEngine[Int, ff.Fp](1).persistentHomology(vr)
+      state.advanceAll()
+      val afterFirst = operations
+      val diagram = state.diagramAt(inf).sorted
+      val pairing = state.pairing
+      state.advanceAll()
+      val again = state.diagramAt(inf).sorted
+      (name, afterFirst, operations, again == diagram, state.pairing == pairing)
+    (results.filter(_._2 <= 0L).map(_._1) must beEmpty) and
+      (results.filter(r => r._3 != r._2).map(_._1) must beEmpty) and
+      (results.filterNot(_._4).map(_._1) must beEmpty) and
+      (results.filterNot(_._5).map(_._1) must beEmpty)
   }
 
   "The engine's cell ranking answers as the stream's ordering does, also for cells that are not the stream's own objects (#51)" >> {
@@ -547,7 +557,12 @@ class PersistenceInChunksSpec extends mutable.Specification:
       .barcodeAt(inf, includeZeroLength = true)
       .filter(_.dim == 1)
       .forall(bar => bar.annotation.exists(rep => !rep.isZero() && Chain.from(rep.boundary).isZero()))
+    // The pairing is compared with the NAIVE engine's, cell for cell, not only with another run of this one: in the lattice
+    // every vertex enters at the same value, so which vertex of a merging pair dies is decided by the ordering alone (the
+    // vertices union-find reads are fresh objects, compared by the fallback), and the bars would be the same either way.
     (copied.pairing.toSet must beEqualTo(own.pairing.toSet)) and
+      (copied.pairing.filter(_.dim <= 1).toSet must beEqualTo(naive.pairing.filter(_.dim <= 1).toSet)) and
+      (own.pairing.filter(_.dim <= 1).toSet must beEqualTo(naive.pairing.filter(_.dim <= 1).toSet)) and
       (copied.diagramAt(inf, includeZeroLength = true).sorted must beEqualTo(
         naive.diagramAt(inf, includeZeroLength = true).filter(_._1 <= 1).sorted
       )) and

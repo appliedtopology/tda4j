@@ -43,6 +43,14 @@ It's also the only engine with genuine incremental querying: `HomologyState.adva
 filtration value `f`. `barcodeAt` annotates every bar with a real representative cycle, tracked via a
 parallel V-column alongside the ordinary reduction.
 
+`persistentHomology(stream, maxDimension)` caps the cursor at a homological degree. Cells above dimension
+`maxDimension + 1` are neither sorted nor reduced. A cell of dimension `maxDimension + 1` can only close a class of
+degree `maxDimension`, so it is reduced only while such a class is open, and it leaves nothing but the pairing it makes
+(no V-column, no class of degree `maxDimension + 1`). The bars of degrees `0 .. maxDimension` and their representatives
+are those of the uncapped cursor, which the one-argument form stays. `Persistence` uses the capped cursor, and so does
+`PersistenceEngine.naive`, with the cap taken from the stream's `homologyDegreeLimit` (a complete complex has none and is
+read whole).
+
 ## 2. `CellularPersistenceInChunksEngine` / `PersistenceInChunksEngine` — chunked, generic
 
 `CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field](maxDim: Int = 5)` implements the
@@ -79,6 +87,13 @@ representative is the edge minus the spanning-forest paths to its ends. It is
 built when `barcodeAt` first asks for it, then memoized; `diagramAt` never
 builds one. Keep the edge pass free of chains: a path chain per cycle-closing
 edge would cost more than the union-find itself on a Vietoris-Rips complex.
+
+**Top cells.** At `maxDim = 1`, once the union-find has taken degrees 0 and 1, the triangles are reduced in filtration
+order against the number of degree-1 classes still open (the positive edges born at or before the triangle, minus the
+triangles that have already closed one). A triangle that enters while none is open cannot close a class, so its boundary
+reduces to zero and the engine does not reduce it. From `maxDim = 2` every top cell is reduced. Cells are compared by
+rank: the stream's cells are sorted once by `filtrationOrdering`, which is cheaper than asking the stream's ordering at
+every comparison. A stream in which some cell has no filtration value keeps its own ordering.
 
 ## 3. `RipserCohomologyEngine` — test/reference oracle for engine 4
 

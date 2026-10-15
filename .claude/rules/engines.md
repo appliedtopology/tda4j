@@ -21,6 +21,14 @@ barcodes coincide.
 1. **Naive** (`CellularHomologyEngine`/`SimplicialHomologyEngine`) — single-pivot-table reduction, no clearing;
    the reference baseline. Incremental (`advanceOne`/`advanceTo`/`advanceAll`, `diagramAt`/`barcodeAt` via
    V-columns). A raw-UnionFind fast path was measured and rejected (`WORKLOG-autonomous-session-2026-09-19.md`).
+   `persistentHomology(stream, k)` CAPS it at degree `k` (the verb does): cells above dimension `k + 1` are not read, and a
+   `k + 1` cell keeps only the pairing it makes (no V-column, generator, fallback entry or class of degree `k + 1`) and is
+   not reduced at all while no class of degree `k` is open (a cycle's reduced boundary has an open cell as pivot, so it
+   would reduce to zero; a skipped cell's faces must still have been seen, else it throws as `reduceCell` does). The verb
+   and `PersistenceEngine.naive`/`naiveCocycles` (MATLAB, CLI) cap at the stream's `homologyDegreeLimit`; a complete
+   complex is read whole. The uncapped cursor stays the reference: the opt-in pairing checks count every cell. Cells are
+   compared by rank (`CellRanks`, under Chunks) (`WORKLOG-chunks-top-cells.md` Steps 4-5,
+   `WORKLOG-naive-cap-review-2026-10-15.md`; `NaiveCappedSpec`).
 2. **Chunks** (`CellularPersistenceInChunksEngine`) — clear-and-compress chunked algorithm, walks `0..maxDim+1`,
    filters essentials to `<=maxDim`. Dims 0/1 via raw union-find (`unionFindDim01`, `DESIGN-unionfind-in-chunks.md`): an
    edge zero in the field (no entries, a loop's `(v,c),(v,-c)`) closes a cycle, its own representative; an edge not
@@ -31,6 +39,14 @@ barcodes coincide.
    `compress` runs to a fixpoint; a reconciliation step resolves "in limbo" cells first
    (`WORKLOG-benchmark-and-chunks-bug.md`, `WORKLOG-chunks-pairing-bug.md`). Parallel redesign attempted and
    invalidated by measurement (`WORKLOG-parallelization-survey.md`).
+   `advanceAll` runs the reduction ONCE (`advanced`). At `maxDimension = 1` (union-find has the edges) the triangles go in
+   filtration order against a count of open degree-1 classes (`reduceTrianglesInOrder`): one that enters while none is
+   open reduces to zero and is skipped, as in the capped naive engine; from `maxDimension = 2` every top cell is still
+   reduced (#51). Cells are compared by RANK (`CellRanks`, shared with the naive engine: the stream's cells sorted once by
+   `stream.filtrationOrdering`, an `IdentityHashMap`, falling back to that ordering for any other object); a cell fresh
+   from `boundary` must go through `boundaryChain` (`canonical`: the stream's own object) or it takes the slow path.
+   Ranks exist only if EVERY cell has a filtration value (`ranked`; #88): the ordering is a weak order on those, and a
+   stream with a value-less cell keeps its own ordering. `WORKLOG-chunks-top-cells.md`.
 3. **`RipserCohomologyEngine`** — Bauer's Ripser (arXiv:1908.02518) on `Simplex[Int]` VR, one-shot. **Test/
    reference oracle only** — production uses `PackedRipserCohomologyEngine`. Clearing required for correctness;
    apparent pairs with lazy substitution; emergent pairs (Def 3.11) not implemented; `memoizeFiltrationValue`
@@ -129,9 +145,10 @@ already-computed per-class `theta`s (linearity of harmonic smoothing). Not a por
 specs2 `--` syntax); scope with `testOnly` (`EngineComparisonBenchmarkSpec`: 15+ min; `RipserPaperBenchmarkSpec` also needs
 `-DdataDir`, optionally `-DripserBin=<path>`: `.claude/scripts/run-ripser-paper-benchmark.sh`).
 
-**`HomologySpec`'s `BarcodeRegressionSpec` is `skipAll`'d unconditionally** (not on this flag): its chunks x
-`AlphaShapeDQP` range stalls/OOMs; bound the scale before un-skipping
-(`WORKLOG-benchmark-and-chunks-bug.md`).
+**`HomologySpec`'s `BarcodeRegressionSpec` runs on 25 - 30 points in 2 - 6 dimensions.** The original 25 - 150 points in
+2 - 10 dimensions cannot be enumerated by the constructions (unthresholded Vietoris-Rips to dimension 4 is out of memory
+at 100 points, alpha at ambient dimension 10 takes 20+ s at 25 points), whatever the engine
+(`WORKLOG-chunks-top-cells.md` has the sweep).
 
 **Query contract (naive + chunks, `DiagramQuerySpec`, `WORKLOG-cursor-and-verb.md`)**: `diagramAt(f)`/`barcodeAt(f)`/
 `diagramWithGeneratorsAt(f)` give the diagram truncated at `f` -- bars born `<= f`, deaths capped at `f`, a class alive

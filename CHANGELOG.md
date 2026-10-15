@@ -13,10 +13,34 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- `Engine.Chunks` at `maxDimension = 1` reduces a triangle only while a class of degree 1 is open (the others cannot
+  close one), and compares cells by rank as the naive engine does: 70 points in the plane, the reduction about 1.2 s to
+  0.27 s. From `maxDimension = 2` it still reduces every top cell (#51).
+- `view()` serves its page with Undertow, through cask, instead of the JDK's built-in HTTP server, which crashed. The
+  main artifact now depends on cask (and through it on Undertow and XNIO).
+- A `Figure`, `Scene` or `Board` prints as one line (`Figure("Barcode", 50 marks)`), so a REPL that echoes the value of
+  `fig.view()` no longer prints every coordinate of every mark.
+- `Engine.Naive` is about ten times faster in the reduction on Vietoris-Rips input (70 points at `maxDimension = 1`: about
+  5 s to about 0.4 s). The engine can be capped at a degree, `persistentHomology(stream, maxDimension)`: cells above
+  dimension `maxDimension + 1` are neither sorted nor reduced, and a cell of that dimension is reduced only while a class of
+  degree `maxDimension` is open and keeps no V-column (#51); cells are compared by rank, as in chunks. `Persistence`,
+  MATLAB (`engine = 'naive'`) and the command line (`--engine naive`) use it, so `PersistenceEngine.naive` and
+  `naiveCocycles` give no bars above a stream's `homologyDegreeLimit`, as the cohomology engine already did. The uncapped
+  cursor is unchanged.
+
 ### Fixed
+
+- `Engine.Chunks` on a stream in which some cell has no filtration value ordered cells by a rank table that left
+  that cell out of the weak order; such a stream now keeps its own ordering (#88).
 
 ### Build, CI and Documentation
 
+- `demo/`: a separate sbt build for a self-contained REPL jar (`java -jar tda4j-demo-<version>.jar`: Scala 3 and TDA4j
+  in one file, imports already run), for talks and teaching. Not part of the library or its CI.
+- `BarcodeRegressionSpec` runs again, on 25 - 30 points in 2 - 6 dimensions: the constructions cannot enumerate the
+  original 25 - 150 points in 2 - 10 dimensions, whatever the engine (#51).
+- `release.yml` builds the demo REPL jar (`demo/`) against the tag's own sources, runs it on a small example and attaches
+  `tda4j-demo-<version>.jar` to the GitHub release.
 
 ## 0.6.1 (2026-10-15)
 
@@ -107,6 +131,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   pairings, the involution, the signed union-finds, the Delaunay triangulation and its predicates, the matching
   algorithms and the io helpers are public. Every concrete public class is `open`.
 - The chunks engine builds degree-1 representatives when they are first read.
+- `Engine.Chunks` is about six times faster on Vietoris-Rips input (70 points at `maxDimension = 1`: about 12 s to about
+  2 s): `diagramAt`, `barcodeAt` and `pairing` no longer repeat the reduction, and cells are compared by rank. Every top
+  cell is still reduced (#51).
 
 ### Fixed
 
