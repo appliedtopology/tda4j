@@ -130,3 +130,66 @@ DQP 1.9 and 3.1 s; the spec itself: 2 s of test time (3 examples), passing three
   Chunks no longer an independent homology engine; or an exact criterion for "no class of degree `maxDimension` is
   left alive", which exists for the default Vietoris-Rips threshold (the enclosing-radius complex is a cone, so
   beta_d = 0 for d >= 1) but not in general. Not attempted; project lead's call.
+
+## Step 4 (2026-10-15): the naive engine capped at a degree
+
+Request from the project lead: get the naive engine to track only the top-dimension chains that bound a cycle one degree
+down ("we shouldn't need to look very much at C_d for any calculation capped at d"). Issues filed from the review first:
+#88 (rank ordering vs a partial `filtrationValue`, by reading only) and #89 (the fallback's sign is not pinned; the
+mutation check was RUN: `-streamOrdering.compare(x, y)` passes all 18 examples of `PersistenceInChunksSpec`).
+
+**What it does.** `CellularHomologyEngine.persistentHomology(stream, k)` (new overload; the one-argument form is the
+uncapped reference, unchanged) caps the cursor at homological degree `k`; `Persistence` calls it for `Engine.Naive`.
+Cells above dimension `k + 1` are not read. A cell of dimension `k + 1` (`reduceTopCell`):
+
+- is not reduced while no class of degree `k` is open (`openAtDegree == 0`);
+- otherwise is reduced, and if its reduced boundary is zero it leaves NOTHING (a class of degree `k + 1`, which nobody
+  asked for: no `positives` entry, no V-column);
+- if it is nonzero it records `boundaries(pivot)` (later top cells reduce by it) and the pair (barcode entry, `pairing`),
+  and nothing else: no `generators`, no `negativeVCols`, no V-column fold.
+
+**Why it is exact.** The skip rule: the boundary of a `k + 1` cell is a `k`-cycle; reduction against `boundaries` and, past
+the negative `k`-cells, `negativeVCols` ends at a cell that is in neither. Every `k`-cell is positive or negative; a
+positive one is either open (in `positives`) or closed (a key of `boundaries`), so that cell is OPEN, which is the
+invariant `reduceCell` already checks by throwing. With no open class of degree `k` the reduction can only end at zero, and
+a zero result leaves nothing. The dropped bookkeeping is read only by cells of dimension `k + 2`, which are not read, and by
+the V-columns of other `k + 1` cells, which are dropped too. The representatives of degree-`k` bars are the V-columns of
+`k`-cells, computed as before.
+
+**What it does not do.** It still reduces every top cell that arrives while a class is open (a nonzero reduction must be
+done to know which class it closes). It is `maxDimension`-aware only through the explicit overload: the uncapped cursor, and
+`PersistenceEngine.naive`/`naiveCocycles` (so the MATLAB and CLI facade) are as before.
+
+**Binary compatibility.** The cap is a new trailing constructor parameter of `HomologyState`; the old six-argument
+constructor stays as an auxiliary one. `mimaReportBinaryIssues` against 0.6.0 passes with no filter.
+
+### Specs (`NaiveCappedSpec`)
+
+1. For F_2, F_3, F_17 x three inputs (two random clouds, a tie-heavy grid) x `k` in 0..2 x a stream built to `k + 1` and to
+   `k + 2`: the capped diagram (zero-length bars included), the pairing up to degree `k` and every representative equal the
+   uncapped engine's; no bar above `k`. (More than 1000 bars compared.)
+2. The exact count: on the unit square (4 vertices, 6 edges, 4 triangles) the uncapped engine calls `boundary` 14 times, the
+   capped one 13 (the fourth triangle finds no open class), through a counting `OrderedCell`; the bars are the same.
+3. A counting field: the capped run does strictly fewer field operations.
+
+Mutation checks, run: `if openAtDegree > 0` replaced by `if true` fails (14 != 13); by `if false` fails (10 != 13 and the
+bars differ).
+
+### A/B (cold JVM per run, 3 runs per cell, F_17; ALL uncapped runs and then ALL capped runs, not interleaved)
+
+| input | uncapped reduce | capped reduce | uncapped total | capped total |
+|---|---|---|---|---|
+| 70 points, R^3, `maxDimension` 1 (25 091 triangles) | 5014 ms (4887 - 5204) | 450 ms (401 - 452) | 6229 ms | 1295 ms |
+| 70 points, R^2, `maxDimension` 1 (29 279 triangles) | 5173 ms (4820 - 8065) | 418 ms (382 - 424) | 6032 ms | 1636 ms |
+| 30 points, R^3, `maxDimension` 2 (5 270 tetrahedra) | 1114 ms (1094 - 1233) | 440 ms (434 - 446) | 1500 ms | 852 ms |
+
+Pairs, essentials and bars up to degree `k` are identical in every pair of runs (1764 / 1 / 90; 1884 / 1 / 83; 1641 / 1 /
+35). The two effects (not reducing late top cells, not building V-columns for the others) are not separated. The cost that
+is left in a capped run: the stream (0.4 - 1.1 s), the cursor's sort (0.35 - 0.6 s), the reduction (0.4 s).
+
+### Not done
+
+- The naive engine still orders cells by `stream.filtrationOrdering` (the four `TreeSet`-keyed lookups of Step 2); the rank
+  trick would apply to it as it did to Chunks.
+- `Chain.reduceBy` still builds a reduction log that `reduceTopCell` discards.
+- The facade path (see above).

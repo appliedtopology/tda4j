@@ -120,7 +120,7 @@ that line a plain downstream project needs nothing else, `into` conversions incl
 `representatives = Representatives.Cycles | Cocycles` (MATLAB `representativeType`, CLI `--representative-type`).
 `Auto` = Ripser for `VietorisRips` on points/metric space, `FastCubical` for images of dimension >= 2 (cycles only),
 `Cohomology` otherwise. Every engine but the fast ones gives both kinds, the non-native one derived from its pairing
-by `Involution` (`rules/engines.md`). `Chunks`/`Naive` still reduce every top cell (#51); Chunks compares cells by rank, about 6x faster than before. A truncated stream's own degree
+by `Involution` (`rules/engines.md`). `Chunks` still reduces every top cell (#51), by rank, ~6x faster than before; `Naive`, capped at the degree (the verb does), reduces a top cell only while a class of that degree is open. A truncated stream's own degree
 (`homologyDegreeLimit`) is the default for streams.
 `WORKLOG-default-degree-2.md`, `WORKLOG-involution.md`.
 

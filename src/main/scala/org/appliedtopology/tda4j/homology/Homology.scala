@@ -62,8 +62,20 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
     ], // open cell -> (birth, representative cycle)
     stream: CellStream[CellT, FiltrationT],
     var current: FiltrationT,
-    barcode: mutable.ArrayDeque[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT])]
+    barcode: mutable.ArrayDeque[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT])],
+    // The highest homological degree wanted, if the computation is capped (`persistentHomology(stream, maxDimension)`).
+    maxDegree: Option[Int]
   ):
+    // The constructor of the engine before there was a cap.
+    def this(
+      boundaries: mutable.Map[CellT, Chain[CellT, CoefficientT]],
+      generators: mutable.Map[CellT, Chain[CellT, CoefficientT]],
+      positives: mutable.Map[CellT, (FiltrationT, Chain[CellT, CoefficientT])],
+      stream: CellStream[CellT, FiltrationT],
+      current: FiltrationT,
+      barcode: mutable.ArrayDeque[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT])]
+    ) = this(boundaries, generators, positives, stream, current, barcode, None)
+
     given Ordering[CellT] = stream.filtrationOrdering
     import Ordering.Implicits.infixOrderingOps
     given filtration: Filtration[CellT, FiltrationT] = stream
@@ -108,7 +120,11 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
         .by[CellT, FiltrationT](c => stream.filtrationValue.applyOrElse(c, (_: CellT) => stream.smallest))
         .orElse(Ordering.by[CellT, Int](_.dim))
         .orElse(stream.filtrationOrdering.reverse)
-    private val processingSequence: Vector[CellT] = stream.iterator.toVector.sorted(using processingOrder)
+    // A capped computation never looks at a cell above `maxDegree + 1`; the last cell of the whole stream still decides
+    // which classes are essential.
+    private val (processingSequence: Vector[CellT], lastCell: Option[CellT]) =
+      val sorted = stream.iterator.toVector.sorted(using processingOrder)
+      (maxDegree.fold(sorted)(d => sorted.filter(_.dim <= d + 1)), sorted.lastOption)
     val cellIterator: collection.BufferedIterator[CellT] = processingSequence.iterator.buffered
 
     /** How many cells the cursor has consumed, out of `totalCells`: progress of a long run. */
@@ -119,7 +135,7 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
       * no cell enters after `f`, which is a property of the STREAM, not of how far the cursor happens to have run.
       */
     lazy val lastFiltrationValue: Option[FiltrationT] =
-      processingSequence.lastOption.map(c => cellFiltrationValue(c, filtration.smallest))
+      lastCell.map(c => cellFiltrationValue(c, filtration.smallest))
 
     private def cellFiltrationValue(cell: CellT, fallback: FiltrationT): FiltrationT =
       stream.filtrationValue.applyOrElse(cell, (_: CellT) => fallback)
@@ -137,75 +153,31 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
     // exactly as it already does past a positive one. See `.claude/WORKLOG-reference-engine-fix.md`.
     val negativeVCols: mutable.Map[CellT, Chain[CellT, CoefficientT]] = mutable.Map.empty
 
+    // How many classes of degree `maxDegree` are open (born, not yet killed) while a capped computation runs.
+    private var openAtDegree: Int = 0
+
     def advanceOne(): Unit =
       if cellIterator.hasNext then
         val sigma: CellT = cellIterator.next()
         processedCells += 1
+        if maxDegree.contains(sigma.dim - 1) then reduceTopCell(sigma) else reduceCell(sigma)
+
+    /** A cell of the top dimension of a capped computation, `maxDegree + 1`. A chain of that dimension can only do one
+      * thing that matters: bound a cycle of degree `maxDegree` that nothing has bounded yet, which closes that class.
+      * If its boundary reduces to zero it is a cycle of its own, a class of degree `maxDegree + 1` that nobody asked
+      * for, and it is dropped. So such a cell gets no V-column, no generator and no fallback entry (no cell above it
+      * would read them), and only the cells that do close a class leave a reduced column behind for the later ones to
+      * reduce by. While no class of degree `maxDegree` is open it is not even reduced: its boundary is a cycle, and a
+      * cycle that is not zero after reduction has an open cell as its pivot (the invariant `reduceCell` checks), so it
+      * would have reduced to zero.
+      */
+    private def reduceTopCell(sigma: CellT): Unit =
+      if openAtDegree > 0 then
         val dsigma: Chain[CellT, CoefficientT] = Chain.from(sigma.boundary[CoefficientT])
-        // Chain.reduceBy (the SortedMap-based object-level primitive shared with
-        // PersistenceInChunksEngine), not a hand-rolled reduction over raw Chain arithmetic: `-`/`⊠`
-        // on Chain objects only collapse the *head* of their internal priority queue lazily, so a
-        // hand-rolled fold accumulating many raw subtractions builds up an ever-growing backlog of
-        // uncollapsed duplicate entries -- fine for tiny hand-built fixtures, but quadratic-to-worse
-        // blowup on a real Vietoris-Rips stream. Chain.reduceBy works through a SortedMap internally,
-        // which collapses duplicates by construction on every insertion. `fallback = negativeVCols.get`
-        // lets reduction substitute past an already-matched NEGATIVE cell too -- see the field's own doc.
-        val (reduced, log) = Chain.reduceBy(dsigma, boundaries, Chain.empty, fallback = negativeVCols.get)
-        // V-column: sigma minus, for every pivot the reduction subtracted off, that pivot's own
-        // producing cell's V-column. If ∂sigma reduced to zero this chain is itself the new cycle
-        // representative; either way it becomes the generator future cells reduce through if sigma
-        // itself goes on to become a pivot. Collapsed explicitly before use for the same reason as
-        // above: this fold also accumulates through raw Chain subtraction.
-        val vcol: Chain[CellT, CoefficientT] = log.rawEntries.foldLeft(Chain(sigma)) { case (acc, (pivot, coeff)) =>
-          // `log` now names two structurally different kinds of elimination (since reduceLoop's fallback
-          // was wired up above), and they need different treatment here:
-          //  - eliminated via `boundaries` (a POSITIVE, matched pivot): `boundaries(pivot) = d(generators
-          //    (pivot))` by construction (the killer's own V-column's boundary), so substituting it into
-          //    dsigma's reduction corresponds to a REAL change in sigma's own identity -- vcol must apply
-          //    the matching correction, or `d(vcol) = reduced` (the invariant every later generators/
-          //    negativeVCols lookup depends on) breaks.
-          //  - eliminated via `negativeVCols` (a NEGATIVE cell's own fallback substitution): this is a
-          //    PURE basis change WITHIN dsigma's own dimension (re-expressing one raw cell via earlier
-          //    same-dimension cells -- see negativeVCols' own doc) with no dimension shift and no relation
-          //    to sigma's identity at all. The underlying value of dsigma's reduction is unchanged by it,
-          //    only its expression is, so d(vcol) = reduced already holds without any vcol correction here
-          //    -- applying one anyway would be wrong, not merely redundant.
-          // `generators`/`negativeVCols` are disjoint keys (the persistence matching: a cell is never both
-          // positive-matched and negative), so checking negativeVCols first is unambiguous.
-          if negativeVCols.contains(pivot) then acc
-          else
-            acc - coeff ⊠ generators.getOrElse(
-              pivot,
-              throw new IllegalStateException(s"pivot $pivot has a boundaries entry but no generators entry")
-            )
-        }
-        // Collapse BEFORE either write below, not after: `generators`/`positives` entries are read
-        // back into future cells' own vcol folds (line ~86 above), so an uncollapsed value stored here
-        // would make every subsequent generation's fold re-accumulate this cell's own backlog on top
-        // of its own -- silently reintroducing the superlinear blowup this collapse call exists to
-        // prevent (see WORKLOG-naive-homology.md). Moving this call after the writes below is a
-        // regression, not a refactor.
-        vcol.collapseAll()
-        if reduced.isZero() then
-          // sigma's boundary was fully cancelled by already-recorded pivots: sigma is a new,
-          // as-yet-unpaired positive cell -- a class is born here, represented by vcol. A cell with
-          // no known filtration value is assumed to have happened as early as possible (smallest),
-          // matching the essential-bar convention in diagramWithGeneratorsAt below.
-          val birthFv = cellFiltrationValue(sigma, filtration.smallest)
-          positives(sigma) = (birthFv, vcol)
-          current = birthFv
-        else
-          // reduced is nonzero, so its leading cell is a pivot: by construction (reduction only
-          // stops at a cell no earlier column has claimed as a pivot) that pivot must be a
-          // currently-open positive cell -- the one sigma's arrival pairs off and kills.
+        val (reduced, _) = Chain.reduceBy(dsigma, boundaries, Chain.empty, fallback = negativeVCols.get)
+        if !reduced.isZero() then
           val pivot = reduced.leadingCell.get
           boundaries(pivot) = reduced
-          generators(pivot) = vcol
-          // sigma itself is NEGATIVE (matched, as the destroyer of pivot's class) -- record its own
-          // V-column (leading term = sigma, see this map's own doc above) so a later, higher-dimension
-          // reduction that cascades onto sigma can substitute via Chain.reduceBy's fallback instead of
-          // wrongly treating it as an unrecorded, still-open pivot.
-          negativeVCols(sigma) = vcol
           val (pivotFv, representative) = positives
             .remove(pivot)
             .getOrElse(
@@ -213,13 +185,94 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
                 s"reduction pivot $pivot was not a recorded open class -- reduction invariant violated"
               )
             )
-          // A death cell with no known filtration value is assumed to have happened as late as
-          // possible (largest) -- the opposite fallback direction from a birth, so an unknown death
-          // is never silently placed before its own (already-recorded) birth.
+          if maxDegree.contains(pivot.dim) then openAtDegree -= 1
           val deathFv = cellFiltrationValue(sigma, filtration.largest)
           barcode.append((pivot.dim, pivotFv, deathFv, representative))
           pairedCells.append((pivot, sigma))
           current = deathFv
+
+    private def reduceCell(sigma: CellT): Unit =
+      val dsigma: Chain[CellT, CoefficientT] = Chain.from(sigma.boundary[CoefficientT])
+      // Chain.reduceBy (the SortedMap-based object-level primitive shared with
+      // PersistenceInChunksEngine), not a hand-rolled reduction over raw Chain arithmetic: `-`/`⊠`
+      // on Chain objects only collapse the *head* of their internal priority queue lazily, so a
+      // hand-rolled fold accumulating many raw subtractions builds up an ever-growing backlog of
+      // uncollapsed duplicate entries -- fine for tiny hand-built fixtures, but quadratic-to-worse
+      // blowup on a real Vietoris-Rips stream. Chain.reduceBy works through a SortedMap internally,
+      // which collapses duplicates by construction on every insertion. `fallback = negativeVCols.get`
+      // lets reduction substitute past an already-matched NEGATIVE cell too -- see the field's own doc.
+      val (reduced, log) = Chain.reduceBy(dsigma, boundaries, Chain.empty, fallback = negativeVCols.get)
+      // V-column: sigma minus, for every pivot the reduction subtracted off, that pivot's own
+      // producing cell's V-column. If ∂sigma reduced to zero this chain is itself the new cycle
+      // representative; either way it becomes the generator future cells reduce through if sigma
+      // itself goes on to become a pivot. Collapsed explicitly before use for the same reason as
+      // above: this fold also accumulates through raw Chain subtraction.
+      val vcol: Chain[CellT, CoefficientT] = log.rawEntries.foldLeft(Chain(sigma)) { case (acc, (pivot, coeff)) =>
+        // `log` now names two structurally different kinds of elimination (since reduceLoop's fallback
+        // was wired up above), and they need different treatment here:
+        //  - eliminated via `boundaries` (a POSITIVE, matched pivot): `boundaries(pivot) = d(generators
+        //    (pivot))` by construction (the killer's own V-column's boundary), so substituting it into
+        //    dsigma's reduction corresponds to a REAL change in sigma's own identity -- vcol must apply
+        //    the matching correction, or `d(vcol) = reduced` (the invariant every later generators/
+        //    negativeVCols lookup depends on) breaks.
+        //  - eliminated via `negativeVCols` (a NEGATIVE cell's own fallback substitution): this is a
+        //    PURE basis change WITHIN dsigma's own dimension (re-expressing one raw cell via earlier
+        //    same-dimension cells -- see negativeVCols' own doc) with no dimension shift and no relation
+        //    to sigma's identity at all. The underlying value of dsigma's reduction is unchanged by it,
+        //    only its expression is, so d(vcol) = reduced already holds without any vcol correction here
+        //    -- applying one anyway would be wrong, not merely redundant.
+        // `generators`/`negativeVCols` are disjoint keys (the persistence matching: a cell is never both
+        // positive-matched and negative), so checking negativeVCols first is unambiguous.
+        if negativeVCols.contains(pivot) then acc
+        else
+          acc - coeff ⊠ generators.getOrElse(
+            pivot,
+            throw new IllegalStateException(s"pivot $pivot has a boundaries entry but no generators entry")
+          )
+      }
+      // Collapse BEFORE either write below, not after: `generators`/`positives` entries are read
+      // back into future cells' own vcol folds (line ~86 above), so an uncollapsed value stored here
+      // would make every subsequent generation's fold re-accumulate this cell's own backlog on top
+      // of its own -- silently reintroducing the superlinear blowup this collapse call exists to
+      // prevent (see WORKLOG-naive-homology.md). Moving this call after the writes below is a
+      // regression, not a refactor.
+      vcol.collapseAll()
+      if reduced.isZero() then
+        // sigma's boundary was fully cancelled by already-recorded pivots: sigma is a new,
+        // as-yet-unpaired positive cell -- a class is born here, represented by vcol. A cell with
+        // no known filtration value is assumed to have happened as early as possible (smallest),
+        // matching the essential-bar convention in diagramWithGeneratorsAt below.
+        val birthFv = cellFiltrationValue(sigma, filtration.smallest)
+        positives(sigma) = (birthFv, vcol)
+        if maxDegree.contains(sigma.dim) then openAtDegree += 1
+        current = birthFv
+      else
+        // reduced is nonzero, so its leading cell is a pivot: by construction (reduction only
+        // stops at a cell no earlier column has claimed as a pivot) that pivot must be a
+        // currently-open positive cell -- the one sigma's arrival pairs off and kills.
+        val pivot = reduced.leadingCell.get
+        boundaries(pivot) = reduced
+        generators(pivot) = vcol
+        // sigma itself is NEGATIVE (matched, as the destroyer of pivot's class) -- record its own
+        // V-column (leading term = sigma, see this map's own doc above) so a later, higher-dimension
+        // reduction that cascades onto sigma can substitute via Chain.reduceBy's fallback instead of
+        // wrongly treating it as an unrecorded, still-open pivot.
+        negativeVCols(sigma) = vcol
+        val (pivotFv, representative) = positives
+          .remove(pivot)
+          .getOrElse(
+            throw new IllegalStateException(
+              s"reduction pivot $pivot was not a recorded open class -- reduction invariant violated"
+            )
+          )
+        if maxDegree.contains(pivot.dim) then openAtDegree -= 1
+        // A death cell with no known filtration value is assumed to have happened as late as
+        // possible (largest) -- the opposite fallback direction from a birth, so an unknown death
+        // is never silently placed before its own (already-recorded) birth.
+        val deathFv = cellFiltrationValue(sigma, filtration.largest)
+        barcode.append((pivot.dim, pivotFv, deathFv, representative))
+        pairedCells.append((pivot, sigma))
+        current = deathFv
 
     def advanceTo(f: FiltrationT): Unit =
       // Closed-birth/open-death convention: a cell exactly at f has already occurred by the time we
@@ -310,13 +363,27 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
       }
 
   def persistentHomology(stream: => CellStream[CellT, FiltrationT]): HomologyState =
+    start(stream, None)
+
+  /** The cursor for the degrees `0 .. maxDimension` only. The cells above dimension `maxDimension + 1` are not read,
+    * and the cells of dimension `maxDimension + 1`, which can only close a class of degree `maxDimension`, leave
+    * nothing but the pairing: no V-column, no class of degree `maxDimension + 1`. The bars of degree
+    * `0 .. maxDimension` and their representatives are those of the uncapped cursor; there are no bars above
+    * `maxDimension`.
+    */
+  def persistentHomology(stream: => CellStream[CellT, FiltrationT], maxDimension: Int): HomologyState =
+    require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
+    start(stream, Some(maxDimension))
+
+  private def start(stream: => CellStream[CellT, FiltrationT], maxDegree: Option[Int]): HomologyState =
     HomologyState(
       mutable.Map.empty, // boundaries: pivot -> reduced column
       mutable.Map.empty, // generators: pivot -> producing cell's V-column
       mutable.Map.empty, // positives: open cell -> (birth value, representative cycle)
       stream,
       stream.smallest: FiltrationT,
-      mutable.ArrayDeque.empty
+      mutable.ArrayDeque.empty,
+      maxDegree
     )
 
 /** The chunks persistence engine: the clear-and-compress algorithm of Bauer, Kerber and Reininghaus ("Clear and

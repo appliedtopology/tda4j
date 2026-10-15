@@ -21,6 +21,11 @@ barcodes coincide.
 1. **Naive** (`CellularHomologyEngine`/`SimplicialHomologyEngine`) — single-pivot-table reduction, no clearing;
    the reference baseline. Incremental (`advanceOne`/`advanceTo`/`advanceAll`, `diagramAt`/`barcodeAt` via
    V-columns). A raw-UnionFind fast path was measured and rejected (`WORKLOG-autonomous-session-2026-09-19.md`).
+   `persistentHomology(stream, k)` CAPS it at degree `k` (the verb does): cells above dimension `k + 1` are not read, and a
+   `k + 1` cell keeps only the pairing it makes (no V-column, no generator, no fallback entry, no class of degree `k + 1`)
+   and is not reduced at all while no class of degree `k` is open (the reduced boundary of a cycle has an open cell as its
+   pivot, so it would reduce to zero). The uncapped cursor stays the reference: the opt-in pairing checks count every
+   cell (`WORKLOG-chunks-top-cells.md`, Step 4; `NaiveCappedSpec`).
 2. **Chunks** (`CellularPersistenceInChunksEngine`) — clear-and-compress chunked algorithm, walks `0..maxDim+1`,
    filters essentials to `<=maxDim`. Dims 0/1 via raw union-find (`unionFindDim01`, `DESIGN-unionfind-in-chunks.md`): an
    edge zero in the field (no entries, a loop's `(v,c),(v,-c)`) closes a cycle, its own representative; an edge not
