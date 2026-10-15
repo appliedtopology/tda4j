@@ -184,6 +184,18 @@ class PlotSpec extends Specification:
     }
   }
 
+  "printing a plot, as a REPL does with the value of `fig.view()`" should {
+    "give one short line naming the plot, not every mark" in {
+      val fig = Plot.barcode(circleDiagram)
+      // The default case-class text lists every coordinate of every mark: thousands of characters for a barcode.
+      fig.toString must beEqualTo(s"""Figure("Barcode", ${fig.marks.size} marks)""")
+      fig.toString.length must beLessThan(60)
+      fig.copy(title = "").toString must beEqualTo(s"Figure(untitled, ${fig.marks.size} marks)")
+      Plot.side(fig, fig).toString must beEqualTo("""Board("Barcode | Barcode", 2 plots)""")
+      Scene(title = "balls").toString must beEqualTo("""Scene("balls", 0 layers)""")
+    }
+  }
+
   "the live viewer" should {
     "serve, list and announce every plot, on daemon threads" in {
       sys.props("tda4j.plot.port") = "0"

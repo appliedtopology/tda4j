@@ -44,7 +44,11 @@ see "Givens" below). The core's source directories are **file organization only,
   groups, monoids and finite categories (persistent group homology, library-only). Depends on the core; the core uses
   it only through `TDAlab`'s generated re-exports. `rules/simplicial-sets.md`.
 - leaf subpackages: `matlab` (facade), `cli` (thin translator over `matlab.TDA4j`), `plot` (plots and a live viewer,
-  no dependencies; a feature needing a library goes in a new module; `rules/plotting.md`, `WORKLOG-plot-into-core.md`).
+  whose one dependency is cask; any other feature needing a library goes in a new module; `rules/plotting.md`,
+  `WORKLOG-plot-into-core.md`).
+- `demo/` (not a package): a SEPARATE sbt build for a REPL jar with the library inside, for talks (`demo/README.md`,
+  `WORKLOG-demo-jar.md`); the root build neither builds nor sees it, `release.yml` builds it and attaches it to the release
+  (`WORKLOG-demo-release.md`).
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
   sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
   `sbt doc` checks that doc fences resolve from outside.
@@ -117,7 +121,7 @@ that line a plain downstream project needs nothing else, `into` conversions incl
 `representatives = Representatives.Cycles | Cocycles` (MATLAB `representativeType`, CLI `--representative-type`).
 `Auto` = Ripser for `VietorisRips` on points/metric space, `FastCubical` for images of dimension >= 2 (cycles only),
 `Cohomology` otherwise. Every engine but the fast ones gives both kinds, the non-native one derived from its pairing
-by `Involution` (`rules/engines.md`). `Chunks`/`Naive` reduce every top cell (#51). A truncated stream's own degree
+by `Involution` (`rules/engines.md`). Capped at the degree (the verb does), `Naive` and `Chunks` (at `maxDimension = 1`) reduce a top cell only while a class of that degree is open; `Chunks` from `maxDimension = 2` still reduces every top cell (#51). A truncated stream's own degree
 (`homologyDegreeLimit`) is the default for streams.
 `WORKLOG-default-degree-2.md`, `WORKLOG-involution.md`.
 

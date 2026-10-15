@@ -43,6 +43,7 @@ trait Plot:
 
 /** Plots side by side, in one row (small multiples: a barcode next to its diagram, a complex at several scales). */
 final case class Board(plots: Seq[Figure], title: String = "") extends Plot:
+  override def toString: String = Plot.describe("Board", title, s"${plots.size} plots")
   def fragment(theme: Theme = Theme.Auto): String =
     plots.map(_.svg(theme)).mkString("""<div style="display:flex;flex-wrap:wrap;gap:12px">""", "", "</div>")
   def html(theme: Theme = Theme.Auto): String =
@@ -67,6 +68,10 @@ final case class Board(plots: Seq[Figure], title: String = "") extends Plot:
 object Plot:
   /** A diagram or a list of bars. */
   type Bars = PersistenceDiagram[?] | Seq[PersistenceBar[Double, ?]]
+
+  // Shared by the three plot kinds' one-line `toString`; scratch for this package, not part of the API.
+  private[plot] def describe(kind: String, title: String, size: String): String =
+    s"""$kind(${if title.isEmpty then "untitled" else "\"" + title + "\""}, $size)"""
 
   private def barsOf(source: Bars): Seq[PersistenceBar[Double, ?]] = source match
     case d: PersistenceDiagram[?] => d.bars

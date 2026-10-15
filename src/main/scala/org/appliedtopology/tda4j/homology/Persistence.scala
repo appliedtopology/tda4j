@@ -317,7 +317,7 @@ object Persistence:
           else Involution.cocycleBars(stream, state.pairing, stream.filtrationOrdering.reverse, includeZeroLength)
         (bars, state.lastFiltrationValue)
       case Engine.Naive =>
-        val state = CellularHomologyEngine[CellT, coefficients.C, Double]().persistentHomology(stream)
+        val state = CellularHomologyEngine[CellT, coefficients.C, Double]().persistentHomology(stream, maxDimension)
         state.advanceAll()
         val bars =
           if cycles then state.barcodeAt(Double.PositiveInfinity, includeZeroLength)

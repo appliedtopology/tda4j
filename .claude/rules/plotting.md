@@ -12,10 +12,12 @@ Loads when you work in the `plot` subpackage. Project-wide rules are in `.claude
 evidence: `DESIGN-plotting.md`; the build-out: `WORKLOG-plotting.md`; the move into the core: `WORKLOG-plot-into-core.md`.
 
 **A leaf subpackage of the core** (`org.appliedtopology.tda4j.plot`, directory `plot/` in the core's source and test
-trees), like `matlab`/`cli`: nothing in the core uses it, and it adds NO dependency (SVG strings, the JDK's
-`com.sun.net.httpserver` and `java.awt.Desktop`, loaded only on `view()`). It was its own sbt project and artifact
-(`tda4j-plot`, never released); the project lead folded it in because it isolated no dependency and kept the docs build
-from compiling its fences. **If a plot feature ever needs a library, it goes in a new module**, not in the core. Not
+trees), like `matlab`/`cli`: nothing in the core uses it. Its one dependency is cask (Undertow and XNIO, for `view()`
+only; SVG strings and `java.awt.Desktop` need none): the JDK's own HTTP server crashed (`be3f71a7`). It was its own sbt
+project and artifact (`tda4j-plot`, never released); the project lead folded it in because it isolated no dependency and
+kept the docs build from compiling its fences. **If a plot feature ever needs a library, it goes in a new module**, not
+in the core -- `view()`'s cask is the standing exception, and whether the viewer should move out is open
+(`WORKLOG-demo-jar.md`). Not
 re-exported by the labs (`tdalab-exports.py` scans only the root package and `sset`). `matlab.PersistenceResult`'s
 `plot...` methods (hence the CLI's `--plot`) draw through it: `matlab` -> `plot` is the one edge between leaves
 (`WORKLOG-facade-plots.md`).
@@ -42,9 +44,10 @@ adjacent pairs. Re-run the validator after changing any slot; never cycle hues p
 **Live viewer** (`Viewer`): one page listing every `view()`ed plot (iframe per plot, `/list`, `/plot/<n>`, server-sent
 events on `/events`), port 8337 or a free one, browser opened via `java.awt.Desktop` when there is a desktop, else the URL
 printed (`tda4j.plot.browser=none`/`TDA4J_PLOT_BROWSER=none`: never; `PlotSpec` sets the property, or `sbt testFull`
-would open a tab on a desktop machine). The server is started FROM a daemon thread so the JDK's HTTP dispatcher (which inherits daemon status) does not
-keep a REPL alive; `PlotSpec` checks the threads, the list, a page and an event (read with a 10 s deadline: a lost
-event must fail, not hang CI).
+would open a tab on a desktop machine). The server is started FROM a daemon thread and its XNIO worker is built daemon, so
+it never keeps a REPL alive; `PlotSpec` checks the threads, the list, a page and an event (read with a 10 s deadline: a
+lost event must fail, not hang CI). A plot prints as one line (`Figure("Barcode", 50 marks)`), because a REPL echoes the
+value of `fig.view()`; keep it so on a new plot kind.
 
 **Look at what you draw.** `src/test/.../plot/Gallery.scala` writes every kind of plot (`sbt "Test/runMain
 org.appliedtopology.tda4j.plot.Gallery <dir>"`); screenshot with the pre-installed Chromium through Playwright
