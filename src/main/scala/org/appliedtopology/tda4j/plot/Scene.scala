@@ -30,6 +30,9 @@ final case class Scene(
   def +(layer: Layer): Scene = copy(layers = layers :+ layer)
   def ++(more: IterableOnce[Layer]): Scene = copy(layers = layers ++ more)
 
+  // One line, so that a REPL echoing the value of `scene.view()` does not print every point.
+  override def toString: String = Plot.describe("Scene", title, s"${layers.size} layers")
+
   /** This scene's layers drawn over `under`'s. */
   def over(under: Scene): Scene = copy(layers = under.layers ++ layers)
 
