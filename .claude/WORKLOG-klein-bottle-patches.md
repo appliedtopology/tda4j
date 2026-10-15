@@ -103,8 +103,9 @@ Cores X(k,T): the densest T% of the sample by 1/rho_k (k-th neighbour, self not 
 from one stream, the criterion above. One JVM per core (`klein/klein_grid.sh`). Nothing was tuned afterwards.
 
 **14 of the 15 cores: no interval of >= 10% with Betti (1,2,1) over F_2, so neither Klein-like nor torus-like. The 15th
-(k = 1, T = 20%, 10 000 points, the one whose density ranking starts with exact duplicates, rho_1 = 0) was still reducing
-after 410 s of persistence and is reported as undecided/too slow; k = 1 is degenerate anyway.** What the cores do show:
+(k = 1, T = 20%, 10 000 points, the one whose density ranking starts with exact duplicates, rho_1 = 0) has no verdict: its
+F_2 persistence took 410.6 s and the F_17 run did not finish inside the 900 s limit of the grid driver. k = 1 is
+degenerate anyway.** What the cores do show:
 
 - k = 8, T = 20%: (1,5,0) over 83% of [0, R] (R = 0.4776), identical over F_2 and F_17: the three-circle model, now at a
   much more local density estimate than the shipped k = 15.
