@@ -2398,7 +2398,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L328" target="_blank">Homology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L429" target="_blank">Homology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -2469,7 +2469,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1090" target="_blank">Homology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1197" target="_blank">Homology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -3903,7 +3903,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1087" target="_blank">Homology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1194" target="_blank">Homology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -11923,7 +11923,7 @@
              <div class="doc">
               <p>"Run to the end and give me the barcode", for the engines that take a stream and work for any cell type: naive (<code>CellularHomologyEngine</code>), chunks (<code>CellularPersistenceInChunksEngine</code>) and cohomology (<code>CellularCohomologyEngine</code>). The engines themselves offer more (a cursor, queries at intermediate values); this is the common denominator, used where the engine is chosen at runtime.</p>
               <p>The Ripser engines are not instances: they take a metric space rather than a stream.</p>
-              <p>For <code>naive</code> and <code>cohomology</code> the stream decides the top degree: to get degrees <code>0 .. k</code>, hand them a stream with cells up to dimension <code>k + 1</code> and ignore the bars of degree <code>k + 1</code>. <code>chunks(maxDim)</code> takes the degree itself.</p>
+              <p>For <code>naive</code> and <code>cohomology</code> the stream decides the top degree: to get degrees <code>0 .. k</code>, hand them a stream with cells up to dimension <code>k + 1</code> (what <code>VietorisRips(points, maxDimension = k)</code> is). A stream that says it was cut off (<code>homologyDegreeLimit</code>) gets no bars above that degree from either; a complete complex is read whole. <code>chunks(maxDim)</code> takes the degree itself.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
@@ -11943,7 +11943,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PersistenceEngine.scala#L13" target="_blank">PersistenceEngine.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PersistenceEngine.scala#L15" target="_blank">PersistenceEngine.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -12001,7 +12001,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PersistenceEngine.scala#L20" target="_blank">PersistenceEngine.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PersistenceEngine.scala#L22" target="_blank">PersistenceEngine.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -12145,7 +12145,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1083" target="_blank">Homology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1190" target="_blank">Homology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -12206,7 +12206,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1098" target="_blank">Homology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1205" target="_blank">Homology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
