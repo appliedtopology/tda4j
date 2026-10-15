@@ -43,6 +43,14 @@ It's also the only engine with genuine incremental querying: `HomologyState.adva
 filtration value `f`. `barcodeAt` annotates every bar with a real representative cycle, tracked via a
 parallel V-column alongside the ordinary reduction.
 
+`persistentHomology(stream, maxDimension)` caps the cursor at a homological degree. Cells above dimension
+`maxDimension + 1` are neither sorted nor reduced. A cell of dimension `maxDimension + 1` can only close a class of
+degree `maxDimension`, so it is reduced only while such a class is open, and it leaves nothing but the pairing it makes
+(no V-column, no class of degree `maxDimension + 1`). The bars of degrees `0 .. maxDimension` and their representatives
+are those of the uncapped cursor, which the one-argument form stays. `Persistence` uses the capped cursor, and so does
+`PersistenceEngine.naive`, with the cap taken from the stream's `homologyDegreeLimit` (a complete complex has none and is
+read whole).
+
 ## 2. `CellularPersistenceInChunksEngine` / `PersistenceInChunksEngine` — chunked, generic
 
 `CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: Field](maxDim: Int = 5)` implements the

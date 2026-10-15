@@ -24,8 +24,11 @@ barcodes coincide.
    `persistentHomology(stream, k)` CAPS it at degree `k` (the verb does): cells above dimension `k + 1` are not read, and a
    `k + 1` cell keeps only the pairing it makes (no V-column, no generator, no fallback entry, no class of degree `k + 1`)
    and is not reduced at all while no class of degree `k` is open (the reduced boundary of a cycle has an open cell as its
-   pivot, so it would reduce to zero). The uncapped cursor stays the reference: the opt-in pairing checks count every
-   cell (`WORKLOG-chunks-top-cells.md`, Step 4; `NaiveCappedSpec`).
+   pivot, so it would reduce to zero; a skipped cell's faces must still have been seen, or it throws as `reduceCell` does
+   for a stream that lists a coface first). The verb and `PersistenceEngine.naive`/`naiveCocycles` (so MATLAB and the CLI)
+   cap at the stream's `homologyDegreeLimit`; a complete complex is read whole. The uncapped cursor stays the reference:
+   the opt-in pairing checks count every cell (`WORKLOG-chunks-top-cells.md` Step 4, `WORKLOG-naive-cap-review-2026-10-15.md`;
+   `NaiveCappedSpec`).
 2. **Chunks** (`CellularPersistenceInChunksEngine`) — clear-and-compress chunked algorithm, walks `0..maxDim+1`,
    filters essentials to `<=maxDim`. Dims 0/1 via raw union-find (`unionFindDim01`, `DESIGN-unionfind-in-chunks.md`): an
    edge zero in the field (no entries, a loop's `(v,c),(v,-c)`) closes a cycle, its own representative; an edge not

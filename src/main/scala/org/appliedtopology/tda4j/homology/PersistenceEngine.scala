@@ -8,7 +8,9 @@ package org.appliedtopology.tda4j
   * The Ripser engines are not instances: they take a metric space rather than a stream.
   *
   * For `naive` and `cohomology` the stream decides the top degree: to get degrees `0 .. k`, hand them a stream with
-  * cells up to dimension `k + 1` and ignore the bars of degree `k + 1`. `chunks(maxDim)` takes the degree itself.
+  * cells up to dimension `k + 1` (what `VietorisRips(points, maxDimension = k)` is). A stream that says it was cut off
+  * (`homologyDegreeLimit`) gets no bars above that degree from either; a complete complex is read whole.
+  * `chunks(maxDim)` takes the degree itself.
   */
 trait PersistenceEngine[CellT, C]:
   /** The finished barcode of `stream`; zero-length bars only if `includeZeroLength`. */
@@ -24,9 +26,20 @@ object PersistenceEngine:
         stream: StratifiedCellStream[CellT, Double],
         includeZeroLength: Boolean
       ): List[PersistenceBar[Double, Chain[CellT, C]]] =
-        val state = CellularHomologyEngine[CellT, C, Double]().persistentHomology(stream)
+        val state = naiveState[CellT, C](stream)
         state.advanceAll()
         state.barcodeAt(Double.PositiveInfinity, includeZeroLength)
+
+  // The naive cursor for `stream`: capped at the stream's `homologyDegreeLimit` when it has one (what `VietorisRips(..,
+  // maxDimension = k)` and the other truncated complexes report: the cells of dimension `k + 1` only close classes of
+  // degree `k`), the whole complex otherwise.
+  private def naiveState[CellT: OrderedCell, C: Field](
+    stream: StratifiedCellStream[CellT, Double]
+  ): CellularHomologyEngine[CellT, C, Double]#HomologyState =
+    val engine = CellularHomologyEngine[CellT, C, Double]()
+    stream.homologyDegreeLimit match
+      case Some(k) if k >= 0 => engine.persistentHomology(stream, k)
+      case _                 => engine.persistentHomology(stream)
 
   /** The chunks engine reporting degrees `0 .. maxDim`. */
   def chunks[CellT: OrderedCell, C: Field](maxDim: Int): PersistenceEngine[CellT, C] =
@@ -46,7 +59,7 @@ object PersistenceEngine:
         stream: StratifiedCellStream[CellT, Double],
         includeZeroLength: Boolean
       ): List[PersistenceBar[Double, Chain[CellT, C]]] =
-        val pairs = CellularHomologyEngine[CellT, C, Double]().persistentHomology(stream).pairing
+        val pairs = naiveState[CellT, C](stream).pairing
         Involution.cocycleBars[CellT, C](stream, pairs, stream.filtrationOrdering.reverse, includeZeroLength)
 
   /** The chunks engine's pairing (degrees `0 .. maxDim`), with cocycles as representatives. */

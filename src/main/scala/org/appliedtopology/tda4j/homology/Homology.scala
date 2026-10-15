@@ -120,11 +120,15 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
         .by[CellT, FiltrationT](c => stream.filtrationValue.applyOrElse(c, (_: CellT) => stream.smallest))
         .orElse(Ordering.by[CellT, Int](_.dim))
         .orElse(stream.filtrationOrdering.reverse)
-    // A capped computation never looks at a cell above `maxDegree + 1`; the last cell of the whole stream still decides
-    // which classes are essential.
+    // A capped computation neither sorts nor reduces a cell above `maxDegree + 1` (the stream still enumerates them); the
+    // last cell of the whole stream still decides which classes are essential. `dim - 1 <= d`, not `dim <= d + 1`,
+    // which overflows for `d = Int.MaxValue`.
     private val (processingSequence: Vector[CellT], lastCell: Option[CellT]) =
-      val sorted = stream.iterator.toVector.sorted(using processingOrder)
-      (maxDegree.fold(sorted)(d => sorted.filter(_.dim <= d + 1)), sorted.lastOption)
+      val all = stream.iterator.toVector
+      (
+        maxDegree.fold(all)(d => all.filter(_.dim - 1 <= d)).sorted(using processingOrder),
+        all.maxOption(using processingOrder)
+      )
     val cellIterator: collection.BufferedIterator[CellT] = processingSequence.iterator.buffered
 
     /** How many cells the cursor has consumed, out of `totalCells`: progress of a long run. */
@@ -172,7 +176,8 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
       * would have reduced to zero.
       */
     private def reduceTopCell(sigma: CellT): Unit =
-      if openAtDegree > 0 then
+      if openAtDegree == 0 then checkFacesSeen(sigma)
+      else
         val dsigma: Chain[CellT, CoefficientT] = Chain.from(sigma.boundary[CoefficientT])
         val (reduced, _) = Chain.reduceBy(dsigma, boundaries, Chain.empty, fallback = negativeVCols.get)
         if !reduced.isZero() then
@@ -190,6 +195,21 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
           barcode.append((pivot.dim, pivotFv, deathFv, representative))
           pairedCells.append((pivot, sigma))
           current = deathFv
+
+    // The check `reduceCell` makes by throwing, for a skipped top cell: a stream that lists a cell before one of its faces
+    // (a non-monotone filtration built by hand) would otherwise get a silently different barcode. Every face has been
+    // processed, so it is an open class, a pivot, or a negative cell.
+    private def checkFacesSeen(sigma: CellT): Unit =
+      val faces = sigma.boundary[CoefficientT]
+      def seen(face: CellT): Boolean =
+        boundaries.contains(face) || negativeVCols.contains(face) || positives.contains(face)
+      if !faces.forall((face, _) => seen(face)) then
+        // Some face is not recorded; it matters only if it survives in the boundary (a face listed twice may cancel).
+        Chain.from(faces).cells.find(face => !seen(face)).foreach { face =>
+          throw new IllegalStateException(
+            s"reduction pivot $face was not a recorded open class -- reduction invariant violated"
+          )
+        }
 
     private def reduceCell(sigma: CellT): Unit =
       val dsigma: Chain[CellT, CoefficientT] = Chain.from(sigma.boundary[CoefficientT])
@@ -365,11 +385,11 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
   def persistentHomology(stream: => CellStream[CellT, FiltrationT]): HomologyState =
     start(stream, None)
 
-  /** The cursor for the degrees `0 .. maxDimension` only. The cells above dimension `maxDimension + 1` are not read,
-    * and the cells of dimension `maxDimension + 1`, which can only close a class of degree `maxDimension`, leave
-    * nothing but the pairing: no V-column, no class of degree `maxDimension + 1`. The bars of degree
-    * `0 .. maxDimension` and their representatives are those of the uncapped cursor; there are no bars above
-    * `maxDimension`.
+  /** The cursor for the degrees `0 .. maxDimension` only. The cells above dimension `maxDimension + 1` are neither
+    * sorted nor reduced, and the cells of dimension `maxDimension + 1`, which can only close a class of degree
+    * `maxDimension`, leave nothing but the pairing: no V-column, no class of degree `maxDimension + 1`, and no
+    * reduction at all while no class of degree `maxDimension` is open. The bars of degree `0 .. maxDimension` and their
+    * representatives are those of the uncapped cursor; there are no bars above `maxDimension`.
     */
   def persistentHomology(stream: => CellStream[CellT, FiltrationT], maxDimension: Int): HomologyState =
     require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")

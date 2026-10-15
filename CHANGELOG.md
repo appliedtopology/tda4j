@@ -18,9 +18,11 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - A `Figure`, `Scene` or `Board` prints as one line (`Figure("Barcode", 50 marks)`), so a REPL that echoes the value of
   `fig.view()` no longer prints every coordinate of every mark.
 - `Engine.Naive` is about ten times faster in the reduction on Vietoris-Rips input (70 points at `maxDimension = 1`: about
-  5 s to about 0.4 s): the verb caps it at the degree asked for (`persistentHomology(stream, maxDimension)` on the engine), so
-  a cell one dimension above is reduced only while a class of that degree is open, and keeps no V-column (#51). The
-  uncapped cursor is unchanged.
+  5 s to about 0.4 s). The engine can be capped at a degree, `persistentHomology(stream, maxDimension)`: cells above
+  dimension `maxDimension + 1` are neither sorted nor reduced, and a cell of that dimension is reduced only while a class of
+  degree `maxDimension` is open and keeps no V-column (#51). `Persistence`, MATLAB (`engine = 'naive'`) and the command line
+  (`--engine naive`) use it, so `PersistenceEngine.naive` and `naiveCocycles` give no bars above a stream's
+  `homologyDegreeLimit`, as the cohomology engine already did. The uncapped cursor is unchanged.
 
 ### Fixed
 
