@@ -13,6 +13,21 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+### Fixed
+
+### Build, CI and Documentation
+
+
+## 0.6.2 (2026-10-15)
+
+Accidentally released 0.6.1 before everything was properly merged.
+
+### Breaking
+
+### Added
+
+### Changed
+
 - `Engine.Chunks` at `maxDimension = 1` reduces a triangle only while a class of degree 1 is open (the others cannot
   close one), and compares cells by rank as the naive engine does: 70 points in the plane, the reduction about 1.2 s to
   0.27 s. From `maxDimension = 2` it still reduces every top cell (#51).
