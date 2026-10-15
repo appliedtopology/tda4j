@@ -31,6 +31,11 @@ barcodes coincide.
    `compress` runs to a fixpoint; a reconciliation step resolves "in limbo" cells first
    (`WORKLOG-benchmark-and-chunks-bug.md`, `WORKLOG-chunks-pairing-bug.md`). Parallel redesign attempted and
    invalidated by measurement (`WORKLOG-parallelization-survey.md`).
+   `advanceAll` runs the reduction ONCE (`advanced`): a top cell reducing to zero is neither cleared nor paired and used to
+   be reduced again by every query. Cells are compared by RANK (an `IdentityHashMap` built by sorting the stream's cells with
+   `stream.filtrationOrdering`, falling back to that ordering for any other object); a cell fresh from `boundary` must go
+   through `boundaryChain` (the stream's own object) or it takes the slow path. The stream's ordering costs four
+   `TreeSet`-keyed lookups per comparison (`WORKLOG-chunks-top-cells.md`).
 3. **`RipserCohomologyEngine`** — Bauer's Ripser (arXiv:1908.02518) on `Simplex[Int]` VR, one-shot. **Test/
    reference oracle only** — production uses `PackedRipserCohomologyEngine`. Clearing required for correctness;
    apparent pairs with lazy substitution; emergent pairs (Def 3.11) not implemented; `memoizeFiltrationValue`
@@ -129,9 +134,10 @@ already-computed per-class `theta`s (linearity of harmonic smoothing). Not a por
 specs2 `--` syntax); scope with `testOnly` (`EngineComparisonBenchmarkSpec`: 15+ min; `RipserPaperBenchmarkSpec` also needs
 `-DdataDir`, optionally `-DripserBin=<path>`: `.claude/scripts/run-ripser-paper-benchmark.sh`).
 
-**`HomologySpec`'s `BarcodeRegressionSpec` is `skipAll`'d unconditionally** (not on this flag): its chunks x
-`AlphaShapeDQP` range stalls/OOMs; bound the scale before un-skipping
-(`WORKLOG-benchmark-and-chunks-bug.md`).
+**`HomologySpec`'s `BarcodeRegressionSpec` runs on 25 - 30 points in 2 - 6 dimensions.** The original 25 - 150 points in
+2 - 10 dimensions cannot be enumerated by the constructions (unthresholded Vietoris-Rips to dimension 4 is out of memory
+at 100 points, alpha at ambient dimension 10 takes 20+ s at 25 points), whatever the engine
+(`WORKLOG-chunks-top-cells.md` has the sweep).
 
 **Query contract (naive + chunks, `DiagramQuerySpec`, `WORKLOG-cursor-and-verb.md`)**: `diagramAt(f)`/`barcodeAt(f)`/
 `diagramWithGeneratorsAt(f)` give the diagram truncated at `f` -- bars born `<= f`, deaths capped at `f`, a class alive

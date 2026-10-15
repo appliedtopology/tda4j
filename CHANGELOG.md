@@ -85,6 +85,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   pairings, the involution, the signed union-finds, the Delaunay triangulation and its predicates, the matching
   algorithms and the io helpers are public. Every concrete public class is `open`.
 - The chunks engine builds degree-1 representatives when they are first read.
+- `Engine.Chunks` is about six times faster on Vietoris-Rips input (70 points at `maxDimension = 1`: about 12 s to about
+  2 s): `diagramAt`, `barcodeAt` and `pairing` no longer repeat the reduction, and cells are compared by rank. Every top
+  cell is still reduced (#51). `BarcodeRegressionSpec` runs again, on 25 - 30 points in 2 - 6 dimensions.
 
 ### Fixed
 

@@ -82,3 +82,51 @@ spread is large (A on 70/R^2: 5159 - 8600 ms total); the effect (3 - 4x on the r
 and bar counts are identical in A and B (1764 pairs, 90 bars; 1884 pairs, 83 bars).
 
 Against the issue's starting point (about 12 - 13 s for 70 points at maxDimension 1, same driver): about 2 s, i.e. ~6x.
+
+## Step 3 (2026-10-15, after 0.6.0): what shipped, `BarcodeRegressionSpec`, and what is not done
+
+Steps 1 and 2 were merged (#84, #86) and are in v0.6.0 (`git merge-base --is-ancestor` says so); the branch was restarted
+from `scala` (0.6.1-SNAPSHOT). 0.6.0's changelog had no line for them; added now.
+
+**The review did not happen.** The adversarial review workflow (three reviewers: ordering equivalence, run-once guard, test
+adequacy; two skeptics per finding) returned `confirmed: []` because every reviewer died on the account's usage limit
+before reading anything ("You've hit your weekly limit"). An empty result there means NOT REVIEWED, not "no findings".
+What stands behind steps 1 and 2 instead: the specs named in Steps 1 and 2 (the first fails without the guard), the full
+suite on the branch (1138 tests at the time of step 1; re-run at the end of this step), and my own reading of the
+invariant (the ranks are a sort by the stream's ordering and the fallback is that ordering). Re-run it with
+`Workflow({scriptPath, resumeFromRunId: "wf_9ed42f81-46d"})`, or with `/code-review`, when the limit allows.
+
+### `BarcodeRegressionSpec`: the generator range, measured
+
+Sweep (`RegressionRangeDriver`, chunks engine, degrees 0..3, `diagramAt(5.0)`, uniform points, 2 GB heap, one case per JVM,
+90 s timeout; "oom" = `OutOfMemoryError`), milliseconds:
+
+| case | ambient | 25 pts | 40 | 60 | 100 | 150 |
+|---|---|---|---|---|---|---|
+| VR (unthresholded, to dim 4) | 2 | 1145 | 13080 | >90 s | oom | oom |
+| VR | 6 | 1821 | 12421 | >90 s | oom | oom |
+| VR | 10 | 1062 | 16862 | >90 s | oom | oom |
+| Alpha Helix | 2 | 328 | 298 | 330 | 372 | 447 |
+| Alpha Helix | 6 | 1687 | 4323 | 12191 | 42535 | >90 s |
+| Alpha Helix | 10 | 30961 | >90 s | >90 s | >90 s | >90 s |
+| Alpha DQP | 2 | 324 | 366 | 419 | 733 | 1444 |
+| Alpha DQP | 6 | 1327 | 4586 | 7207 | 19482 | 60998 |
+| Alpha DQP | 10 | 21366 | oom | oom | >90 s | >90 s |
+
+The limit is the size of what the constructions enumerate (C(60, 5) = 5.4 million simplices for the VR case), not the
+engine: the original range (25 - 150 points, 2 - 10 dimensions) cannot run in CI whatever the engine does. New range:
+25 - 30 points, 2 - 6 dimensions. Corner (30 points, 6 dimensions, two seeds): VR 3.5 and 6.8 s, Helix 1.9 and 2.1 s,
+DQP 1.9 and 3.1 s; the spec itself: 2 s of test time (3 examples), passing three times in a row.
+
+### Not done (#51 stays open)
+
+- **The naive engine** (`CellularHomologyEngine`) has the same ordering cost (`given Ordering = stream.filtrationOrdering`,
+  `processingOrder` sorts with it) and is untouched. It is a cursor, so it has no repeated-reduction problem. Same rank
+  trick expected to apply; not measured.
+- **Every top cell is still reduced.** At `maxDimension = 1` the chunk windows never fire for triangles (their pivots are
+  edges, all in the first chunks), so everything runs in the reconciliation loop: plain column reduction, ~44 us per
+  column after step 2. Most columns (23k of 25k) reduce to zero. A sound way to skip them would need the cohomology
+  direction (Ripser reduces the positive `maxDimension` cells' coboundaries, never the top cells), which would make
+  Chunks no longer an independent homology engine; or an exact criterion for "no class of degree `maxDimension` is
+  left alive", which exists for the default Vietoris-Rips threshold (the enclosing-radius complex is a cone, so
+  beta_d = 0 for d >= 1) but not in general. Not attempted; project lead's call.
