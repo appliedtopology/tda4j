@@ -119,3 +119,57 @@ shown by this experiment, and not claimed: that the Klein bottle is absent from 
 
 Parameter caveat: 100 landmarks, nu = 1, maxFiltrationValue = R for every core; a core with a genuine Klein bottle but
 needing more landmarks would be missed. The ideal Klein bottle needed only 50-150 landmarks at R (section 3).
+
+### 5. Sparse Rips and DTM-Rips, and plain Rips as the baseline (maxmin landmark subsamples of the real core)
+
+Method (`experiments/rips_sub.scala`, `sub_sweep.sh`): `LandmarkSelector.maxmin` of the 15 000-point core (or the 5 000-point
+ideal Klein bottle) down to n landmarks; `vr` = `Persistence(points, maxDimension = top, maxFiltrationValue = cap)` (Auto:
+packed Ripser); `sparse` = `SparseRips(eps)` on the landmarks, reduced by the generic cohomology engine (Ripser refuses it);
+`dtm` = `DtmRips` with DTM(k = 15, q = 2) weights computed on ALL the points (JVPTree, 0.6-0.9 s) and restricted to the landmarks.
+Cell budget 5 000 000; 240 s timeout per case; one JVM per case, 6 GB heap; the machine was otherwise idle for these.
+
+**Units** (`experiments/units.scala`, 200 points): `VietorisRips` and `SparseRips` values are DISTANCES (an edge's value is
+its length; `SparseRips(eps = 0.02)` equals plain Rips on all 19 900 edges; at eps = 0.9 it keeps 3 137 of them). `DtmRips`
+(p = 1) values are `d(i,j) + w_i + w_j` for an edge and `2 w_i` for a vertex, so its scale sits higher by about twice the
+weights (about 0.12 each here). Caps below are in those units.
+
+| input (top degree) | landmarks | method | cells | time | Betti plateau (F_2) |
+|---|---|---|---|---|---|
+| three-circle core (1), cap 1.2 | 400 | plain Rips | - | 1.2 s | (1,5) on [0.642, 1.119] (40%) |
+| | 400 | sparse eps 0.5 | 863 962 | 48 s count + 103 s reduce = 163 s wall | (1,5) on [0.642, 1.119], bars identical to plain |
+| | 400 | DTM-Rips k 15, cap 1.5 | 464 415 | 20 s + 46 s = 76 s wall | (1,5) on [1.136, 1.5] (24%; the cap cuts it) |
+| | 800 | plain Rips | - | 2.5 s | (1,5) on [0.516, 1.038] (44%) |
+| | 800 | sparse eps 0.5 | not counted | TIMEOUT at 240 s (stream 0.2 s) | - |
+| | 800 | DTM-Rips k 15 | 4 040 821 | 215 s just to count; TIMEOUT | - |
+| ideal Klein (2), cap 0.9 | 300 | plain Rips | - | 1.0 s | (1,2,1) on [0.623, 0.9] (31%) |
+| | 300 | sparse eps 0.5 | 118 992 | 38 s + 71 s = 117 s wall | same plateau and bars |
+| | 300 | DTM-Rips k 15, cap 1.2 | 204 801 | 33 s + 96 s = 136 s wall | (1,2,1) on [0.96, 1.101] (12%); 4 loops at the cap |
+
+Reading, with what each number supports:
+- **Plain Rips through the verb is the winner at these sizes**: 1-2.5 s, and it shows both structures (five loops; the Klein
+  bottle's (1,2,1)). Nothing in this table needed a sparser or weighted complex.
+- **Sparse Rips at eps = 0.5 gives the same bars and costs 60-100x more**: the complex is not small for 8-dimensional data
+  (864 k cells at 400 landmarks), and it cannot use the packed Ripser engine, so every cell is materialised. Separately,
+  the O(n^2) build (issue #64) measured earlier on the full core: 48-51 s for 15 000 points (`nk15c30Dct`, `nk300c30Dct`).
+  One eps was tried; section 6 below varies it.
+- **DTM-Rips** is the noise-robust choice in principle (the weights come from all 15 000 points), but it is the heaviest here:
+  4.0 M cells at 800 landmarks. It does not need to be: on a core that is already the densest 30% the weights add little.
+- The REPL dies on `OutOfMemoryError`: the first run of this experiment (2 000 points, eps 0.5, cap 1.2, 6 GB) ended with the
+  REPL's own error printer throwing a `NullPointerException` (`fansi.Str` of a null stack-frame string), taking the session
+  down. Checked: `RuntimeException()` with no message, an NPE, `1/0` and a plain `Exception` are all printed and the session
+  continues. So it is out-of-memory specific. Start big examples with a stated `-Xmx`.
+
+### 6. The committed demo script, timed alone (`demo/examples/patches/patches.scala`)
+
+`:load patches.scala` in the demo jar, from the directory with `n50000Dct.csv`: raw 50 000 patches -> DTM(k = 15) via JVPTree ->
+densest 30% -> 50 landmarks -> lazy witness -> persistence over F_2 -> `view()`; then the ideal Klein bottle (5 000 points,
+100 landmarks, witness at R) over F_2 and F_17 with a side-by-side `view()`. Output: Betti (1,5,0) in the middle of the range;
+Klein bottle (1,2,1) over F_2 and (1,1,0) over F_17.
+
+| -Xmx | wall, JVM start to exit |
+|---|---|
+| 4g | 28.5 s (a finishing background job may have shared the machine) |
+| 2g | 24.1 s |
+| 1g | 27.4 s |
+
+4 cores, Linux, Java 21, nothing else running for the 2g and 1g runs. Correct output at every heap, 1 GB included.

@@ -29,6 +29,11 @@ scala> Plot.barcode(diagram).view()
 - **Long output.** The REPL echoes at most 20 lines of a value (its own default is 50). Anything after the jar's name is
   a compiler setting and wins: `java -jar tda4j-demo-0.6.1.jar -Xrepl-print-height:100`.
 - **Leaving.** `:quit`. The viewer's threads are daemons, so the JVM exits.
+- **Memory.** `java -jar` uses a quarter of the machine's RAM as its heap. A computation that outgrows the heap throws
+  `OutOfMemoryError`, and the REPL's own error printer fails on that one and ends the session (an ordinary exception, a
+  `null` message included, is printed and the prompt stays). For bigger examples say how much to use:
+  `java -Xmx4g -jar tda4j-demo-0.6.1.jar`.
+- **A real-sized example**, 50 000 natural-image patches, in `examples/patches/`.
 
 ## Requirements
 
