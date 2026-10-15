@@ -44,7 +44,10 @@ see "Givens" below). The core's source directories are **file organization only,
   groups, monoids and finite categories (persistent group homology, library-only). Depends on the core; the core uses
   it only through `TDAlab`'s generated re-exports. `rules/simplicial-sets.md`.
 - leaf subpackages: `matlab` (facade), `cli` (thin translator over `matlab.TDA4j`), `plot` (plots and a live viewer,
-  no dependencies; a feature needing a library goes in a new module; `rules/plotting.md`, `WORKLOG-plot-into-core.md`).
+  whose one dependency is cask; any other feature needing a library goes in a new module; `rules/plotting.md`,
+  `WORKLOG-plot-into-core.md`).
+- `demo/` (not a package): a SEPARATE sbt build for a REPL jar with the library inside, for talks (`demo/README.md`,
+  `WORKLOG-demo-jar.md`); the root build neither builds nor sees it.
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
   sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
   `sbt doc` checks that doc fences resolve from outside.

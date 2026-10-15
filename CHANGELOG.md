@@ -13,10 +13,17 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- `view()` serves its page with Undertow, through cask, instead of the JDK's built-in HTTP server, which crashed. The
+  main artifact now depends on cask (and through it on Undertow and XNIO).
+- A `Figure`, `Scene` or `Board` prints as one line (`Figure("Barcode", 50 marks)`), so a REPL that echoes the value of
+  `fig.view()` no longer prints every coordinate of every mark.
+
 ### Fixed
 
 ### Build, CI and Documentation
 
+- `demo/`: a separate sbt build for a self-contained REPL jar (`java -jar tda4j-demo-<version>.jar`: Scala 3 and TDA4j
+  in one file, imports already run), for talks and teaching. Not part of the library, its CI or its release.
 - `BarcodeRegressionSpec` runs again, on 25 - 30 points in 2 - 6 dimensions: the constructions cannot enumerate the
   original 25 - 150 points in 2 - 10 dimensions, whatever the engine (#51).
 
