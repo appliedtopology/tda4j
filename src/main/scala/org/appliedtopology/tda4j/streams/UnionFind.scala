@@ -83,7 +83,7 @@ open class Kruskal[T](elements: Seq[T], distance: (T, T) => Double, maxDistance:
         if !paths.contains(v) then
           val edgeCell = if orderingT.lt(a, b) then Simplex(a, b) else Simplex(b, a)
           val cv = edgeCell.boundary[CoefficientT].find(_._1 == Simplex(v)).get._2
-          paths(v) = rm.plus(paths(u), rm.scale(fld.invert(cv), Chain(edgeCell)))
+          paths(v) = rm.plus(paths(u), rm.scalarMultiply(fld.invert(cv), Chain(edgeCell)))
           stack.push(v)
       }
     paths.toMap
@@ -99,7 +99,7 @@ open class Kruskal[T](elements: Seq[T], distance: (T, T) => Double, maxDistance:
     val (s, t) = edge
     val edgeCell = if orderingT.lt(s, t) then Simplex(s, t) else Simplex(t, s)
     val ct = edgeCell.boundary[CoefficientT].find(_._1 == Simplex(t)).get._2
-    rm.minus(Chain[Simplex[T], CoefficientT](edgeCell), rm.scale(ct, pathsFrom[CoefficientT](s)(t)))
+    rm.minus(Chain[Simplex[T], CoefficientT](edgeCell), rm.scalarMultiply(ct, pathsFrom[CoefficientT](s)(t)))
 
 object Kruskal:
   def apply[T: Ordering](metricSpace: FiniteMetricSpace[T]): Kruskal[T] =

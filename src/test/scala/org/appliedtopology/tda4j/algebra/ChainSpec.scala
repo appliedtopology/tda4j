@@ -216,7 +216,7 @@ class HeapChainSpec extends mutable.Specification:
       val rm = summon[RingModule { type Self = Chain[Simplex[Int], Double]; type R = Double }]
       import rm.{given, *}
       val z1: Chain[Simplex[Int], Double] =
-        1.0 ⊠ ∆(1, 2) + (∆(1, 3).mul(2.0)) - (1.0 |*| ∆(2, 3)) + (5.2.scale(∆(1, 4)))
+        1.0 ⊠ ∆(1, 2) + (∆(1, 3).mul(2.0)) - (1.0 |*| ∆(2, 3)) + (5.2.scalarMultiply(∆(1, 4)))
       val z2: Chain[Simplex[Int], Double] = 1.0 ⊠ ∆(1, 2) + 1.0 ⊠ ∆(2, 3)
       val z3: Chain[Simplex[Int], Double] = z2 + (-1.0 ⊠ z2)
 

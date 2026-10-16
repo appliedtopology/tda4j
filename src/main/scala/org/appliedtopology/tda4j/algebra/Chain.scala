@@ -352,7 +352,7 @@ object Chain:
             fr
           )
 
-    override def scale(
+    override def scalarMultiply(
       x: CoefficientT,
       y: Chain[CellT, CoefficientT]
     ): Chain[CellT, CoefficientT] =
@@ -364,7 +364,7 @@ object Chain:
     override def negate(
       x: Chain[CellT, CoefficientT]
     ): Chain[CellT, CoefficientT] =
-      scale(-fr.one, x)
+      scalarMultiply(-fr.one, x)
 
   extension [CellT: OrderedCell, CoefficientT: Field](z: Chain[CellT, CoefficientT])
     def boundary: Seq[(CellT, CoefficientT)] =
