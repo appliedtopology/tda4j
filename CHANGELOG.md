@@ -13,6 +13,21 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+### Fixed
+
+### Build, CI and Documentation
+
+
+## 0.6.2 (2026-10-15)
+
+Accidentally released 0.6.1 before everything was properly merged.
+
+### Breaking
+
+### Added
+
+### Changed
+
 - `Engine.Chunks` at `maxDimension = 1` reduces a triangle only while a class of degree 1 is open (the others cannot
   close one), and compares cells by rank as the naive engine does: 70 points in the plane, the reduction about 1.2 s to
   0.27 s. From `maxDimension = 2` it still reduces every top cell (#51).
@@ -41,6 +56,28 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   original 25 - 150 points in 2 - 10 dimensions, whatever the engine (#51).
 - `release.yml` builds the demo REPL jar (`demo/`) against the tag's own sources, runs it on a small example and attaches
   `tda4j-demo-<version>.jar` to the GitHub release.
+
+## 0.6.1 (2026-10-15)
+
+### Breaking
+
+### Added
+
+* Slides for a tutorial seminar on 2026-10-16.
+* An extra-fat demo jar that launches its own REPL, allowing demos with only a modern JRE as installation requirements.
+
+### Changed
+
+* Replaced HTTP server for the plot viewer.
+
+### Fixed
+
+* #60 (Playground link versioning)
+* #79 (Bug in `FiniteFieldSpec`, comparing unwrapped integers instead of finite field elements)
+* #80 (Bug in `Plot.number` dispatching)
+
+### Build, CI and Documentation
+
 
 ## 0.6.0 (2026-10-14)
 
