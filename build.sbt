@@ -201,56 +201,9 @@ mimaPreviousArtifacts := mimaBaselineVersions(version.value, releaseTags(baseDir
   .map(v => organization.value %% name.value % v)
   .toSet
 
-// Deliberate breaks inside the series (see mimaBaselineVersions), each reviewed in its PR:
-// - `Chain` became an abstract class open to new storages: a subclass implements `entryIterator`, every other member
-//   defaults over it (the library's storages are `HeapChain` and `PackedChain`). In 0.5.0 its constructor was
-//   `private[tda4j]`, so no client could have extended or created a `Chain` directly.
-// - `Chain.chainShow` needs only `Show` of the cells, not `OrderedCell` (chains over simplicial-set generators, which
-//   have no given `OrderedCell`, are showable now). A given, found by implicit search: no source change for callers.
-// - `sset.ClassifyingSpace.persistentGroupHomology` returns a `PersistenceDiagram` (bars WITH representatives, as every
-//   public interface should) instead of a list of (degree, birth, death); `diagram.triples` is the old list.
-mimaBinaryIssueFilters ++= {
-  import com.typesafe.tools.mima.core.*
-  Seq(
-    ProblemFilters.exclude[AbstractClassProblem]("org.appliedtopology.tda4j.Chain"),
-    ProblemFilters.exclude[ReversedMissingMethodProblem]("org.appliedtopology.tda4j.Chain.entryIterator"),
-    ProblemFilters.exclude[DirectMissingMethodProblem](
-      "org.appliedtopology.tda4j.Chain.chainShow(org.appliedtopology.tda4j.OrderedCell,cats.Show,org.appliedtopology.tda4j.Field)cats.Show"
-    ),
-    ProblemFilters.exclude[IncompatibleResultTypeProblem](
-      "org.appliedtopology.tda4j.sset.ClassifyingSpace.persistentGroupHomology"
-    ),
-    // `nanMask: Boolean = true` (#52: `false` turns NaN masks off, a NaN pixel is then an error) added as the LAST,
-    // defaulted parameter of the cubical-image entry points: source compatible, but each old signature is gone.
-    ProblemFilters.exclude[DirectMissingMethodProblem](
-      "org.appliedtopology.tda4j.CubicalGridStream.this(scala.collection.immutable.IndexedSeq,scala.Function1,Boolean)Unit"
-    ),
-    ProblemFilters.exclude[DirectMissingMethodProblem](
-      "org.appliedtopology.tda4j.CubicalImage.fromFlatArray(scala.collection.immutable.IndexedSeq,scala.collection.immutable.IndexedSeq,Boolean,Boolean)org.appliedtopology.tda4j.CubicalGridStream"
-    ),
-    ProblemFilters.exclude[DirectMissingMethodProblem](
-      "org.appliedtopology.tda4j.CubicalImage.fromGrayscale2D(Array[Array[Double]],Boolean,Boolean)org.appliedtopology.tda4j.CubicalGridStream"
-    ),
-    ProblemFilters.exclude[DirectMissingMethodProblem](
-      "org.appliedtopology.tda4j.CubicalImage.fromVoxelGrid3D(Array[Array[Array[Double]]],Boolean,Boolean)org.appliedtopology.tda4j.CubicalGridStream"
-    ),
-    ProblemFilters.exclude[DirectMissingMethodProblem](
-      "org.appliedtopology.tda4j.Dipha.readCubicalGridStream(java.lang.String,Boolean)org.appliedtopology.tda4j.CubicalGridStream"
-    ),
-    ProblemFilters.exclude[DirectMissingMethodProblem](
-      "org.appliedtopology.tda4j.Image.this(scala.collection.immutable.IndexedSeq,scala.collection.immutable.IndexedSeq,Boolean)Unit"
-    ),
-    ProblemFilters.exclude[DirectMissingMethodProblem](
-      "org.appliedtopology.tda4j.Image.copy(scala.collection.immutable.IndexedSeq,scala.collection.immutable.IndexedSeq,Boolean)org.appliedtopology.tda4j.Image"
-    ),
-    ProblemFilters.exclude[DirectMissingMethodProblem](
-      "org.appliedtopology.tda4j.Image.apply(scala.collection.immutable.IndexedSeq,scala.collection.immutable.IndexedSeq,Boolean)org.appliedtopology.tda4j.Image"
-    ),
-    ProblemFilters.exclude[DirectMissingMethodProblem](
-      "org.appliedtopology.tda4j.Perseus.readCubicalToplex(java.lang.String,Boolean)org.appliedtopology.tda4j.CubicalGridStream"
-    )
-  )
-}
+// No `mimaBinaryIssueFilters`: 0.7.0 starts a fresh series, whose baseline is empty (see mimaBaselineVersions). A
+// deliberate break INSIDE a series is a commented `ProblemFilters.exclude` entry here, and a line under Breaking in the
+// changelog.
 
 // Tutorial pages are tests: every `_docs/tutorials/*.md` with a "## The whole script" section has that section's first
 // `scala` fence copied into a generated `object <Page>Script` (package `tutorial`), which `src/test/.../tutorial/*Spec`
