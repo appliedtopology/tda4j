@@ -65,20 +65,27 @@ object Style:
   /** For a projector or a slide: text and marks 30% larger. Pair it with a bigger `Size` for a full-slide figure. */
   val slides: Style = Style(textScale = 1.3, markScale = 1.3)
 
-  /** The font stack of [[print]]: families a converter or a publisher's pipeline knows by name. */
+  /** The font stack of [[print]] and [[clear]]: families a converter or a publisher's pipeline knows by name. */
   val PrintFont: String = "Helvetica, Arial, 'Liberation Sans', sans-serif"
 
-  /** For a paper: no background, so the figure takes the color of the page, and a font stack that names real families
+  /** For a paper, where the figure has a white background of its own: a font stack that names real families
     * (`system-ui`, the default's first choice, is a browser keyword that other SVG tools do not know). Pair it with
-    * [[Palette.print]] for black ink on white. The background assumes a light page. For a serif face to match the text,
-    * `Style.print.copy(font = "'Times New Roman', Times, serif")`.
+    * [[Palette.print]], whose surface is exactly white and whose elements are black. For a serif face to match the
+    * text, `Style.print.copy(font = "'Times New Roman', Times, serif")`.
     */
-  val print: Style = Style(font = PrintFont, transparent = true)
+  val print: Style = Style(font = PrintFont)
 
-  /** The style called `name`, in any case: `default`, `slides` or `print`. */
+  /** For a figure that goes onto a page, a slide or a plot of its own, with no background, so that it takes the color
+    * of what is behind it, and the fonts of [[print]]. Pair it with [[Palette.clear]], whose elements are black for a
+    * light page and white for a dark one: `Theme.Light` or `Theme.Dark` picks.
+    */
+  val clear: Style = Style(font = PrintFont, transparent = true)
+
+  /** The style called `name`, in any case: `default`, `slides`, `print` or `clear`. */
   def named(name: String): Style = name.trim.toLowerCase(java.util.Locale.ROOT) match
     case "default" => default
     case "slides"  => slides
     case "print"   => print
+    case "clear"   => clear
     case other     =>
-      throw IllegalArgumentException(s"unknown style '$other'; expected one of default, slides, print")
+      throw IllegalArgumentException(s"unknown style '$other'; expected one of default, slides, print, clear")

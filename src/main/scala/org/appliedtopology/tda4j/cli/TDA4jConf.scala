@@ -207,15 +207,15 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   val yLabel: ScallopOption[String] = opt[String](noshort = true, descr = "for --plot: the y axis label")
   val width: ScallopOption[Int] = opt[Int](noshort = true, descr = "for --plot: the width in pixels (100 to 20000)")
   val height: ScallopOption[Int] = opt[Int](noshort = true, descr = "for --plot: the height in pixels (100 to 20000)")
-  val palette: ScallopOption[String] =
-    opt[String](
-      noshort = true,
-      descr = "for --plot: the color palette, brand (default), reference, or print (black on pure white, for a paper)"
-    )
+  val palette: ScallopOption[String] = opt[String](
+    noshort = true,
+    descr = "for --plot: the color palette, brand (default), reference, print (black on pure white, for a paper), " +
+      "or clear (black for a light page, white for a dark one, with --theme; for --style clear)"
+  )
   val style: ScallopOption[String] = opt[String](
     noshort = true,
-    descr = "for --plot: the look apart from colors, default, slides (larger text and marks), or print (no " +
-      "background, portable fonts, for a paper)"
+    descr = "for --plot: the look apart from colors, default, slides (larger text and marks), print (portable " +
+      "fonts, for a paper) or clear (portable fonts and no background)"
   )
   val theme: ScallopOption[String] = opt[String](
     noshort = true,

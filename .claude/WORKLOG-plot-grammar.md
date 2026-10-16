@@ -89,25 +89,32 @@ The two real defects that made customizing hard (both found by reading, not by u
     `Persistence.scale`, `PersistenceDiagram.scale` and `PersistenceFilter`'s "scale" are another thing (the scale of the
     input) and stay.
 
-11. **A look for a paper** (project lead, after the PR was opened: "we definitely should have one with white or
+11. **Two looks for publication** (project lead, after the PR was opened: "we definitely should have one with white or
     transparent background, black foreground, since the cream background won't work in publications, where it will show
-    up as a grey background splotch"). `Palette.print` and `Style.print`, two values because they are two parts: the
-    palette is colors (surface `#ffffff`, ink `#000000`), the style is the non-color look (no background, named fonts).
-    Either works alone: the palette is an opaque white figure, the style a transparent one. Not a third `Theme` case:
-    `Theme` is light/dark/auto and the print look is a palette, whichever mode. (a) The surface is exactly `#ffffff`:
-    `Palette.reference`'s `#fcfcfb` is near white but still a rectangle in a converted PDF. (b) One look: dark chrome and
-    dark series equal the light ones, so `Theme.Dark` and `Theme.Auto` on a dark page still draw black on white; a
-    transparent print figure on a dark page is unreadable, which the scaladoc says (assume a light page). (c) Series are
-    Okabe-Ito blue, vermillion and bluish green, then violet, ochre, rose, olive and brown: the first three pass every
-    check of the dataviz validator on ALL pairs on `#ffffff` (CVD worst 11.0, normal-vision 18.7), all eight on adjacent
-    pairs. Okabe-Ito's own orange, sky blue and yellow fail the 3:1 contrast against white, which is why it was not taken
-    whole. Grayscale: blue, vermillion and green have close luminance (L* 46, 54, 58), so a grayscale printer separates
-    degrees by marker shape and legend, not by gray level; the sequential ramp (ColorBrewer Blues) does keep its order.
-    (d) `Style.print` names `Helvetica, Arial, 'Liberation Sans', sans-serif` because `system-ui` is a CSS keyword of
-    browsers; whether Inkscape, rsvg or a LaTeX pipeline resolves it was NOT tested here (no converter in the container
-    but ImageMagick), so that is the reason, not a measured failure. (e) `Style.named`, `withStyle(name)` and `--style`
-    exist so MATLAB and the CLI reach the preset; `--style` and `--text-scale` are one change in the CLI, because a
-    `Style` replaces the whole style and two tweaks would have lost the preset's font.
+    up as a grey background splotch"; then, on seeing the first cut: "the printer look needs to cope with white
+    background and is a different spec from a transparent look with both white and black element"). The first cut
+    made ONE look, `Palette.print` plus a transparent `Style.print`, which is neither: transparent black ink is
+    unreadable on a dark page, and a print look should keep its white. Now two, each a palette and a style, not a third
+    `Theme` case (`Theme` is light/dark/auto and these are palettes, whichever mode).
+    **Print** (`Palette.print`, `Style.print`): a figure with a white background of its own. Surface exactly `#ffffff`
+    (`Palette.reference`'s `#fcfcfb` is near white but still a rectangle in a converted PDF), ink `#000000`, one look (dark
+    chrome and series equal the light ones). Series: Okabe-Ito blue, vermillion and bluish green, then violet, ochre,
+    rose, olive and brown; the first three pass every check of the dataviz validator on ALL pairs on `#ffffff` (CVD worst
+    11.0, normal-vision 18.7), all eight on adjacent pairs. Okabe-Ito's own orange, sky blue and yellow fail 3:1 against
+    white, so it was not taken whole. Blue, vermillion and green are close in lightness (L* 46, 54, 58), so a grayscale
+    printer separates degrees by marker shape and legend, not gray level; the sequential ramp (ColorBrewer Blues) keeps its
+    order. **Clear** (`Palette.clear`, `Style.clear`): no background, and the project lead's "both white and black
+    elements" read as the two modes of one palette: black chrome on a light page (`Theme.Light`), white on a dark page
+    (`Theme.Dark`; `Theme.Auto` follows the reader's setting). Its light mode IS `Palette.print`'s; its dark series are the
+    brand's dark steps, which pass the validator on `#000000` (first three on all pairs, all eight adjacent; the first
+    Okabe-Ito dark guess failed the dark lightness band 0.48-0.67). The reading is an interpretation, not confirmed: the
+    other one is a halo (each text and mark drawn in both colors so that it reads on any page), which was not built.
+    `Style.print` and `Style.clear` both name `Helvetica, Arial, 'Liberation Sans', sans-serif` because `system-ui` is a
+    CSS keyword of browsers; whether Inkscape, rsvg or a LaTeX pipeline resolves it was NOT tested here (no converter in
+    the container but ImageMagick), so that is the reason, not a measured failure. `Style.named`, `withStyle(name)` and
+    `--style` exist so MATLAB and the CLI reach the presets; `--style` and `--text-scale` are one change in the CLI, because
+    a `Style` replaces the whole style and two tweaks would have lost the preset's font. Names: `print` and `clear`
+    (clear = no background); overturn cheaply, they are four vals and two `named` cases.
 
 ## What was verified
 

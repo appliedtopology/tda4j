@@ -194,8 +194,9 @@ object Palette:
     * on ALL pairs, all eight on adjacent pairs. The sequential ramp is ColorBrewer's Blues (lightness falls steadily,
     * so it survives a grayscale printer), the diverging pair is blue against vermillion.
     *
-    * Paper has one look: the dark mode is the light one, so `Theme.Dark` draws the same figure. For no background at
-    * all, add [[Style.print]].
+    * Paper has one look: the dark mode is the light one, so `Theme.Dark` draws the same figure. It is for a figure that
+    * has its own white background, [[Style.print]] being the fonts to go with it; for a figure that sits on a page of
+    * either color, see [[Palette.clear]].
     */
   val print: Palette =
     val chrome = Chrome("#ffffff", "#000000", "#333333", "#595959", "#dddddd", "#000000")
@@ -221,16 +222,38 @@ object Palette:
       divergingMidpoint = "#f7f7f7"
     )
 
+  /** For a figure with no background of its own ([[Style.clear]]) that goes onto a page of either color: pure black
+    * elements for a light page (`Theme.Light`) and pure white ones for a dark page (`Theme.Dark`, or `Theme.Auto`,
+    * which follows the reader's setting, so use it only where the page does too). The degree colors are [[print]]'s on
+    * a light page and the brand's dark steps on a dark one, each validated on its own surface (pure white, pure black:
+    * the first three on all pairs, all eight on adjacent pairs); the heatmap ramps are [[print]]'s.
+    *
+    * It is [[print]] with a dark mode of its own; with no [[Style.clear]], the figure has the white or the black
+    * background of its mode.
+    */
+  val clear: Palette =
+    Palette(
+      seriesLight = print.seriesLight,
+      seriesDark = brand.seriesDark,
+      light = print.light,
+      dark = Chrome("#000000", "#ffffff", "#cccccc", "#a6a6a6", "#2b2b2b", "#ffffff"),
+      sequential = print.sequential,
+      divergingNegative = print.divergingNegative,
+      divergingPositive = print.divergingPositive,
+      divergingMidpoint = print.divergingMidpoint
+    )
+
   /** The palette figures use unless given another. */
   val default: Palette = brand
 
-  /** The palette called `name`, in any case: `brand` (the default), `reference` or `print`. */
+  /** The palette called `name`, in any case: `brand` (the default), `reference`, `print` or `clear`. */
   def named(name: String): Palette = name.trim.toLowerCase(java.util.Locale.ROOT) match
     case "brand"     => brand
     case "reference" => reference
     case "print"     => print
+    case "clear"     => clear
     case other       =>
-      throw IllegalArgumentException(s"unknown palette '$other'; expected one of brand, reference, print")
+      throw IllegalArgumentException(s"unknown palette '$other'; expected one of brand, reference, print, clear")
 
   // ----- color arithmetic in OKLab (Björn Ottosson's matrices), so ramps interpolate perceptually
 

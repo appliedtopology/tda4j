@@ -116,11 +116,16 @@ object Gallery:
     val image1 = Plot.persistenceImage(d2, 1, resolution = 24, sigma = 0.08)
     (image1 + Scale.color(stops = ColorScale.viridis) + Labels(color = "density")).save(out("custom-image-viridis.svg"))
     (image1 + Palette.reference + Style(transparent = true)).save(out("custom-image-reference.svg"))
-    // for a paper: white and black, no background, fonts a converter knows
+    // for a paper: a white background, black elements, fonts a converter knows
     val paper = Palette.print + Style.print
     (Plot.barcode(d) + paper).save(out("custom-print-barcode.svg"))
     (Plot.diagram(loops) + paper + Size(326, 300)).save(out("custom-print-diagram.svg"))
     (image1 + paper).save(out("custom-print-image.svg"))
+    // for a page of either color: no background, black elements for a light page and white ones for a dark page
+    val clear = Palette.clear + Style.clear
+    (Plot.diagram(loops) + clear).save(out("custom-clear-diagram-light.svg"), Some(Theme.Light))
+    (Plot.diagram(loops) + clear).save(out("custom-clear-diagram-dark.svg"), Some(Theme.Dark))
+    (Plot.barcode(d) + clear).save(out("custom-clear-barcode-dark.svg"), Some(Theme.Dark))
     val before = Plot.barcode(Persistence(noisyCircle(30, 0.03, 4), maxDimension = 1)).copy(title = "tighter")
     val after = Plot.barcode(Persistence(noisyCircle(30, 0.2, 5), maxDimension = 1)).copy(title = "noisier")
     (Plot.side(before, after).shared(y = false) + Style(grid = false)).save(out("custom-board-shared.svg"))

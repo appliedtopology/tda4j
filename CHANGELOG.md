@@ -30,11 +30,14 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   apply. `Transform.Log10`, `Sqrt` and `SymLog(c)` place every value: what is at 0 on a log axis (an `H0` bar's birth)
   sits on a `-∞` line, as an essential bar ends at `∞`; a log axis with a negative value is a symmetric log and says so under
   the plot; the square root keeps the sign. Only a value that is not a number is left out, and counted. `Palette.withSeries` and `withSurface` make a palette of your own; `ColorScale.viridis` and `greys` are ramps.
-- A look for a paper: `Palette.print` (black on a surface of exactly white, not the default's cream, which prints as a
-  grey patch; degree colors that stay apart for every color vision and read on white; a heatmap ramp that keeps its
-  order in grayscale) and `Style.print` (no background, named fonts instead of `system-ui`), by name in MATLAB
-  (`withPalette('print')`, `withStyle('print')`) and on the command line (`--palette print --style print`).
-  `Style.named` and `withStyle(name)` take `default`, `slides` or `print`.
+- Two looks for publication, each a palette and a style. For a paper, `Palette.print` and `Style.print`: black on a
+  background of exactly white (not the default's cream, which prints as a grey patch), degree colors that stay apart for
+  every color vision and read on white, a heatmap ramp that keeps its order in grayscale, and named fonts instead of
+  `system-ui`. For a figure with no background that goes onto a page of either color, `Palette.clear` and
+  `Style.clear`: black elements in the light theme, white ones in the dark theme, each with colors checked on its own
+  page color. By name in MATLAB (`withPalette('print')`, `withStyle('clear')`) and on the command line (`--palette
+  print --style print`, `--palette clear --style clear --theme dark`); `Style.named` and `withStyle(name)` take
+  `default`, `slides`, `print` or `clear`.
 - `Board.shared()` puts the panels on one scale; `Mark.Rule` (a line across the plot at one value) and
   `Mark.Diagonal(offset)` (the line `y = x + offset`, drawn in the plot's own scales).
 - MATLAB: the figures returned by the `plot...` methods have the common tweaks as methods that take strings and numbers

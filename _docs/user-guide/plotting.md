@@ -251,7 +251,8 @@ Homological degree `k` always has the same color and marker shape: degree 0 slat
 `H1` looks the same in every plot whichever degrees are shown. The default palette is TDA4j's Slate & Gold, stepped for
 charts and checked for color-vision deficiencies (the first three degrees stay distinguishable side by side for every
 common deficiency). `Palette.reference` is a neutral alternative, and `Palette.print` is for a paper: black text on a
-background of exactly white, where the default's cream would print as a grey patch (see [For a paper](#for-a-paper)). A
+background of exactly white, where the default's cream would print as a grey patch, and `Palette.clear` is black or white
+for a figure with no background (see [For a paper](#for-a-paper-and-for-a-page-of-either-color)). A
 palette recolors the whole plot, heatmaps and cocycles included, and you can make your own:
 
 ```scala
@@ -311,7 +312,8 @@ val image = Plot.persistenceImage(d, 1)
 
 A `Style` holds what is not data: the font, a factor on the size of text and one on the size of markers and lines,
 the gridlines, where the legend goes (`LegendPosition.Right`, `Bottom` or `Hidden`) and whether there is a background at
-all. `Style.slides` is a projector-sized preset (text and marks 30% larger) and `Style.print` is for a paper. A style
+all. `Style.slides` is a projector-sized preset (text and marks 30% larger); `Style.print` and `Style.clear` are for a paper
+and for a page of either color. A style
 replaces the plot's whole style; to change one setting of a style, copy it. Keep everything that makes a look a `val`, with `+`, and add it to every plot, of
 any kind:
 
@@ -333,15 +335,22 @@ Plot.points3D(points) + house
 (`Theme`, which `save` and `html` take, is a different thing: whether the colors are light, dark, or follow the reader's
 own setting.)
 
-### For a paper
+### For a paper, and for a page of either color
 
-`Palette.print` and `Style.print` make a figure for a publication. The palette is black text and axes on a surface of
-exactly white; its degree colors stay apart for every common color vision and read on white (blue, vermillion and
-bluish green for degrees 0 to 2, checked on all pairs), and its heatmap ramp darkens steadily, so it keeps its order on
-a grayscale printer. It has one look: the dark theme draws the same figure. The style draws no background at all, so the
-figure takes the color of the page it is placed on (assume a light page), and names fonts that converters and
-publishers know (`Helvetica, Arial`) instead of the browser's own `system-ui`. Either works alone: the palette for an
-opaque white figure, the style for a transparent one.
+Two looks are ready-made, each a palette and a style, and they differ in what is behind the figure.
+
+`Palette.print` and `Style.print` are for a figure that has a white background of its own, as in a paper. The palette is
+black text and axes on a surface of exactly white (the default's cream would print as a grey patch); its degree colors
+stay apart for every common color vision and read on white (blue, vermillion and bluish green for degrees 0 to 2,
+checked on all pairs), and its heatmap ramp darkens steadily, so it keeps its order on a grayscale printer. It has one
+look: the dark theme draws the same figure. The style names fonts that converters and publishers know
+(`Helvetica, Arial`) instead of the browser's own `system-ui`.
+
+`Palette.clear` and `Style.clear` are for a figure with no background, that takes the color of what is behind it. The
+style draws none. The palette has two looks, which the theme picks: pure black elements for a light page
+(`Theme.Light`, what an `.svg` file gets) and pure white ones for a dark page (`Theme.Dark`), each with degree colors
+chosen to read on its own page color. `Theme.Auto` follows the reader's setting, which is right only where the page does
+too. Without the style the figure keeps the white or the black background of its mode.
 
 A size is in pixels of 1/96 inch, and text is 11 to 15 pixels. Give the figure the size it has on the page and place it
 at that size, and its text comes out at the size the journal asks for: a 3.4-inch column is 326 pixels, in which tick
@@ -357,9 +366,12 @@ val d = Persistence(points, maxDimension = 1)
 
 val paper = Palette.print + Style.print + Size(326, 260)
 val serif = Palette.print + Style.print.copy(font = "'Times New Roman', Times, serif") + Size(326, 260)
+val overlay = Palette.clear + Style.clear
 
 Plot.diagram(d).withLabels(x = "birth", y = "death") + paper
 Plot.barcode(d) + serif
+(Plot.diagram(d) + overlay).save("for-a-light-page.svg")
+(Plot.diagram(d) + overlay).save("for-a-dark-page.svg", Some(Theme.Dark))
 ```
 
 ### Comparing plots
@@ -406,8 +418,8 @@ MATLAB has no named or default arguments and cannot build a `Palette` or a `Tran
 common changes as methods that take only strings and numbers, and return the changed figure: `withTitle`, `withSubtitle`,
 `withXLabel`, `withYLabel`, `withLegendTitle`, `withColorLabel`, `withSize(width, height)`, `withXScale('log')`
 (`'linear'`, `'log'`, `'sqrt'` or `'symlog'`), `withYScale`, `withXRange(min, max)`, `withYRange`,
-`withPalette('print')` (`'brand'`, `'reference'` or `'print'`), `withStyle('print')` (`'default'`, `'slides'` or
-`'print'`), `withDegreeColor(k, '#c2185b')`, `withDegreeLabel(k, 'loops')`,
+`withPalette('print')` (`'brand'`, `'reference'`, `'print'` or `'clear'`), `withStyle('print')` (`'default'`,
+`'slides'`, `'print'` or `'clear'`), `withDegreeColor(k, '#c2185b')`, `withDegreeLabel(k, 'loops')`,
 `withTextScale(1.3)`, `withMarkScale`, `withLegend('bottom')` (`'right'`, `'bottom'` or `'none'`), `withoutGrid()` and
 `withTransparentBackground()`; a 3-D scene has the ones that need no axes. `save` takes the theme by name:
 `fig.save('diagram.svg', 'dark')`.
@@ -445,7 +457,7 @@ result.plotBarcode().withXScale('sqrt').withTextScale(1.3).save('barcode.svg');
 </div>
 
 The command line has a flag for the same changes of a `--plot`: `--title`, `--x-label`, `--y-label`, `--width`,
-`--height`, `--palette` (`brand`, `reference` or `print`), `--style` (`default`, `slides` or `print`), `--theme`
+`--height`, `--palette` (`brand`, `reference`, `print` or `clear`), `--style` (`default`, `slides`, `print` or `clear`), `--theme`
 (`light`, `dark` or `auto`), `--text-scale` (applied to the `--style`), `--x-scale` and
 `--y-scale` (`linear`, `log`, `sqrt` or `symlog`). A word that is not one, a size out of range and a flag a plot cannot
 use (an x scale for a 3-D scene) are errors, reported before anything is computed:

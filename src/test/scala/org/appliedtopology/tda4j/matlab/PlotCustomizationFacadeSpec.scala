@@ -41,6 +41,8 @@ class PlotCustomizationFacadeSpec extends Specification:
       fig.withPalette("print") must beEqualTo(fig + Palette.print)
       fig.withStyle("slides") must beEqualTo(fig + Style.slides)
       fig.withStyle("print") must beEqualTo(fig + Style.print)
+      fig.withPalette("clear") must beEqualTo(fig + Palette.clear)
+      fig.withStyle("clear") must beEqualTo(fig + Style.clear)
       fig.withDegreeColor(1, "#d62728") must beEqualTo(fig + Scale.degree(1, color = "#d62728"))
       fig.withDegreeLabel(1, "loops") must beEqualTo(fig + Scale.degree(1, label = "loops"))
       fig.withTextScale(1.5) must beEqualTo(fig + fig.style.copy(textScale = 1.5))
@@ -107,8 +109,8 @@ class PlotCustomizationFacadeSpec extends Specification:
       fig.withXScale("cubic") must throwAn[IllegalArgumentException](
         "unknown scale 'cubic'; expected one of linear, log, sqrt, symlog"
       )
-      fig.withPalette("neon") must throwAn[IllegalArgumentException]("expected one of brand, reference, print")
-      fig.withStyle("poster") must throwAn[IllegalArgumentException]("expected one of default, slides, print")
+      fig.withPalette("neon") must throwAn[IllegalArgumentException]("expected one of brand, reference, print, clear")
+      fig.withStyle("poster") must throwAn[IllegalArgumentException]("expected one of default, slides, print, clear")
       fig.withLegend("left") must throwAn[IllegalArgumentException]("expected one of right, bottom, none")
       fig.withSize(20, 20) must throwAn[IllegalArgumentException]("between 100 and 20000")
       fig.withTextScale(0) must throwAn[IllegalArgumentException]("textScale")

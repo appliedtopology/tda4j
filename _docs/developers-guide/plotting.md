@@ -91,10 +91,14 @@ Re-run the validation after changing a slot, and do not cycle hues past eight.
 `Palette.reference` is a neutral alternative. `Palette.print` has pure white and
 black chrome and a single look (its dark chrome and dark series are the light
 ones); its first three series pass every check of the validator on all pairs on
-`#ffffff`, all eight on adjacent pairs, and `PlotGrammarSpec` pins the contrast
-of its inks and series against its surface. `Style.print` is the transparent
-background and a font stack of named families, since `system-ui` is a browser
-keyword.
+`#ffffff`, all eight on adjacent pairs. `Palette.clear` is the same light mode
+with a dark mode of its own, pure black chrome with white inks, and the brand's
+dark series, which pass the validator on `#000000` the same way. `PlotGrammarSpec`
+pins the contrast of both palettes' inks and series against their surfaces.
+`Style.print` is a font stack of named families, since `system-ui` is a browser
+keyword; `Style.clear` is that and no background. The two looks are separate
+because a figure with a white background of its own and a figure that takes its
+page's color need different elements.
 
 ## The live viewer
 

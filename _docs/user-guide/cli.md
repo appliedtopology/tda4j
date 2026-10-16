@@ -30,7 +30,8 @@ one:
   `.html`) or a page opened in the browser; `--bar`, `--dimension` and `--at` choose what (see
   [plotting](plotting.md#from-matlab-java-and-the-command-line)); `--title`, `--x-label`, `--y-label`, `--width`,
   `--height`, `--palette`, `--style`, `--theme`, `--text-scale`, `--x-scale` and `--y-scale` change how it looks
-  (`--palette print --style print` is a figure for a paper; see
+  (`--palette print --style print` is a figure for a paper, `--palette clear --style clear` one with no background for
+  a page of either color, black or white by `--theme`; see
   [customizing a plot](plotting.md#from-matlab-and-the-command-line));
 * saved results: `--save-result result.json` also saves the whole result (bars, representatives, input). The saved
   file is an input of its own (`--input-format result`, chosen by itself for such a file): print, convert, compare or

@@ -170,6 +170,8 @@ class PlotCLISpec extends Specification:
       // a style replaces the whole style, so --style and --text-scale have to be one change, not two
       drawn("--style", "print", "--text-scale", "1.5") must beEqualTo(expected(_.withStyle("print").withTextScale(1.5)))
       drawn("--style", "slides") must beEqualTo(expected(_.withStyle("slides")))
+      drawn("--palette", "clear", "--style", "clear") must
+        beEqualTo(expected(_.withPalette("clear").withStyle("clear")))
       drawn("--style", "print") must contain("Helvetica")
       drawn("--x-scale", "log", "--y-scale", "sqrt") must beEqualTo(expected(_.withXScale("log").withYScale("sqrt")))
       drawn("--text-scale", "1.5") must beEqualTo(expected(_.withTextScale(1.5)))
@@ -190,6 +192,28 @@ class PlotCLISpec extends Specification:
       )._1 must beEqualTo(0)
       normalized(read(out)) must beEqualTo(normalized(direct.plotDiagram().svgFile(plot.Theme.Dark)))
       drawn() must beEqualTo(expected(identity))
+    }
+    "draw the clear look in white for a dark page" >> {
+      val out = tempPath(".svg")
+      run(
+        "--max-dimension",
+        "1",
+        "--plot",
+        "diagram",
+        "--palette",
+        "clear",
+        "--style",
+        "clear",
+        "--theme",
+        "dark",
+        "--output",
+        out,
+        circleFile
+      )._1 must beEqualTo(0)
+      val expectedDark =
+        direct.plotDiagram().withPalette("clear").withStyle("clear").svgFile(plot.Theme.Dark)
+      normalized(read(out)) must beEqualTo(normalized(expectedDark))
+      read(out) must contain("fill:#ffffff")
     }
     "reach a 3-D scene where a scene has the setting" >> {
       val out = tempPath(".svg")
@@ -229,8 +253,8 @@ class PlotCLISpec extends Specification:
         (c2 must beEqualTo(1)) and (e2 must contain(
           "unknown scale 'cubic'; expected one of linear, log, sqrt, symlog"
         )) and
-        (c3 must beEqualTo(1)) and (e3 must contain("expected one of brand, reference, print")) and
-        (c8 must beEqualTo(1)) and (e8 must contain("expected one of default, slides, print")) and
+        (c3 must beEqualTo(1)) and (e3 must contain("expected one of brand, reference, print, clear")) and
+        (c8 must beEqualTo(1)) and (e8 must contain("expected one of default, slides, print, clear")) and
         (c9 must beEqualTo(1)) and (e9 must contain("--style is for --plot")) and
         (c4 must beEqualTo(1)) and (e4 must contain("expected one of auto, light, dark")) and
         (c5 must beEqualTo(1)) and (e5 must contain("between 100 and 20000")) and
