@@ -72,8 +72,11 @@ final case class Scene(
   /** The size in pixels. */
   def withSize(width: Int, height: Int): Scene = this + Size(width, height)
 
-  /** The palette called `name`: `brand` or `reference`. */
+  /** The palette called `name`: `brand`, `reference` or `print`. */
   def withPalette(name: String): Scene = withPalette(Palette.named(name))
+
+  /** The style called `name`: `default`, `slides` or `print`. */
+  def withStyle(name: String): Scene = withStyle(Style.named(name))
 
   /** The color of homological degree `degree`, as a CSS color. */
   def withDegreeColor(degree: Int, color: String): Scene = withDegree(degree, color = color)

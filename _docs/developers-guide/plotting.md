@@ -88,7 +88,13 @@ A `Palette` resolves paints under a `Theme` (`Color.scala`):
 three slots are distinguishable in every pair in both modes, since a diagram
 puts any two degrees side by side, and the first eight in adjacent pairs.
 Re-run the validation after changing a slot, and do not cycle hues past eight.
-`Palette.reference` is a neutral alternative.
+`Palette.reference` is a neutral alternative. `Palette.print` has pure white and
+black chrome and a single look (its dark chrome and dark series are the light
+ones); its first three series pass every check of the validator on all pairs on
+`#ffffff`, all eight on adjacent pairs, and `PlotGrammarSpec` pins the contrast
+of its inks and series against its surface. `Style.print` is the transparent
+background and a font stack of named families, since `system-ui` is a browser
+keyword.
 
 ## The live viewer
 

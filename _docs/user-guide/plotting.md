@@ -250,8 +250,9 @@ diagram, and it starts where the numbers do, not at the `-∞` line.
 Homological degree `k` always has the same color and marker shape: degree 0 slate, degree 1 gold, degree 2 brick, so
 `H1` looks the same in every plot whichever degrees are shown. The default palette is TDA4j's Slate & Gold, stepped for
 charts and checked for color-vision deficiencies (the first three degrees stay distinguishable side by side for every
-common deficiency). `Palette.reference` is a neutral alternative. A palette recolors the whole plot, heatmaps and
-cocycles included, and you can make your own:
+common deficiency). `Palette.reference` is a neutral alternative, and `Palette.print` is for a paper: black text on a
+background of exactly white, where the default's cream would print as a grey patch (see [For a paper](#for-a-paper)). A
+palette recolors the whole plot, heatmaps and cocycles included, and you can make your own:
 
 ```scala
 import scala.language.experimental.modularity
@@ -310,8 +311,8 @@ val image = Plot.persistenceImage(d, 1)
 
 A `Style` holds what is not data: the font, a factor on the size of text and one on the size of markers and lines,
 the gridlines, where the legend goes (`LegendPosition.Right`, `Bottom` or `Hidden`) and whether there is a background at
-all. `Style.slides` is a projector-sized preset (text and marks 30% larger). A style replaces the plot's whole style; to
-change one setting of a style, copy it. Keep everything that makes a look a `val`, with `+`, and add it to every plot, of
+all. `Style.slides` is a projector-sized preset (text and marks 30% larger) and `Style.print` is for a paper. A style
+replaces the plot's whole style; to change one setting of a style, copy it. Keep everything that makes a look a `val`, with `+`, and add it to every plot, of
 any kind:
 
 ```scala
@@ -331,6 +332,35 @@ Plot.points3D(points) + house
 
 (`Theme`, which `save` and `html` take, is a different thing: whether the colors are light, dark, or follow the reader's
 own setting.)
+
+### For a paper
+
+`Palette.print` and `Style.print` make a figure for a publication. The palette is black text and axes on a surface of
+exactly white; its degree colors stay apart for every common color vision and read on white (blue, vermillion and
+bluish green for degrees 0 to 2, checked on all pairs), and its heatmap ramp darkens steadily, so it keeps its order on
+a grayscale printer. It has one look: the dark theme draws the same figure. The style draws no background at all, so the
+figure takes the color of the page it is placed on (assume a light page), and names fonts that converters and
+publishers know (`Helvetica, Arial`) instead of the browser's own `system-ui`. Either works alone: the palette for an
+opaque white figure, the style for a transparent one.
+
+A size is in pixels of 1/96 inch, and text is 11 to 15 pixels. Give the figure the size it has on the page and place it
+at that size, and its text comes out at the size the journal asks for: a 3.4-inch column is 326 pixels, in which tick
+labels are 8.25 pt. For a serif face to match the text of the paper, copy the style:
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+
+val paper = Palette.print + Style.print + Size(326, 260)
+val serif = Palette.print + Style.print.copy(font = "'Times New Roman', Times, serif") + Size(326, 260)
+
+Plot.diagram(d).withLabels(x = "birth", y = "death") + paper
+Plot.barcode(d) + serif
+```
 
 ### Comparing plots
 
@@ -376,7 +406,8 @@ MATLAB has no named or default arguments and cannot build a `Palette` or a `Tran
 common changes as methods that take only strings and numbers, and return the changed figure: `withTitle`, `withSubtitle`,
 `withXLabel`, `withYLabel`, `withLegendTitle`, `withColorLabel`, `withSize(width, height)`, `withXScale('log')`
 (`'linear'`, `'log'`, `'sqrt'` or `'symlog'`), `withYScale`, `withXRange(min, max)`, `withYRange`,
-`withPalette('reference')` (`'brand'` or `'reference'`), `withDegreeColor(k, '#c2185b')`, `withDegreeLabel(k, 'loops')`,
+`withPalette('print')` (`'brand'`, `'reference'` or `'print'`), `withStyle('print')` (`'default'`, `'slides'` or
+`'print'`), `withDegreeColor(k, '#c2185b')`, `withDegreeLabel(k, 'loops')`,
 `withTextScale(1.3)`, `withMarkScale`, `withLegend('bottom')` (`'right'`, `'bottom'` or `'none'`), `withoutGrid()` and
 `withTransparentBackground()`; a 3-D scene has the ones that need no axes. `save` takes the theme by name:
 `fig.save('diagram.svg', 'dark')`.
@@ -414,7 +445,8 @@ result.plotBarcode().withXScale('sqrt').withTextScale(1.3).save('barcode.svg');
 </div>
 
 The command line has a flag for the same changes of a `--plot`: `--title`, `--x-label`, `--y-label`, `--width`,
-`--height`, `--palette` (`brand` or `reference`), `--theme` (`light`, `dark` or `auto`), `--text-scale`, `--x-scale` and
+`--height`, `--palette` (`brand`, `reference` or `print`), `--style` (`default`, `slides` or `print`), `--theme`
+(`light`, `dark` or `auto`), `--text-scale` (applied to the `--style`), `--x-scale` and
 `--y-scale` (`linear`, `log`, `sqrt` or `symlog`). A word that is not one, a size out of range and a flag a plot cannot
 use (an x scale for a 3-D scene) are errors, reported before anything is computed:
 

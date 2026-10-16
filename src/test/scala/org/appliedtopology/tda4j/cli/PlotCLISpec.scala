@@ -165,6 +165,12 @@ class PlotCLISpec extends Specification:
     }
     "choose the palette, the scales and the text size" >> {
       drawn("--palette", "reference") must beEqualTo(expected(_.withPalette("reference")))
+      drawn("--palette", "print", "--style", "print") must
+        beEqualTo(expected(_.withPalette("print").withStyle("print")))
+      // a style replaces the whole style, so --style and --text-scale have to be one change, not two
+      drawn("--style", "print", "--text-scale", "1.5") must beEqualTo(expected(_.withStyle("print").withTextScale(1.5)))
+      drawn("--style", "slides") must beEqualTo(expected(_.withStyle("slides")))
+      drawn("--style", "print") must contain("Helvetica")
       drawn("--x-scale", "log", "--y-scale", "sqrt") must beEqualTo(expected(_.withXScale("log").withYScale("sqrt")))
       drawn("--text-scale", "1.5") must beEqualTo(expected(_.withTextScale(1.5)))
       drawn("--x-scale", "log") must not(beEqualTo(expected(identity)))
@@ -217,11 +223,15 @@ class PlotCLISpec extends Specification:
       val (c5, e5) = failure("--plot", "diagram", "--width", "20")
       val (c6, e6) = failure("--plot", "input-3d", "--x-scale", "log")
       val (c7, e7) = failure("--plot", "diagram", "--text-scale", "0")
+      val (c8, e8) = failure("--plot", "diagram", "--style", "poster")
+      val (c9, e9) = failure("--style", "print")
       (c1 must beEqualTo(1)) and (e1 must contain("--title is for --plot")) and
         (c2 must beEqualTo(1)) and (e2 must contain(
           "unknown scale 'cubic'; expected one of linear, log, sqrt, symlog"
         )) and
-        (c3 must beEqualTo(1)) and (e3 must contain("expected one of brand, reference")) and
+        (c3 must beEqualTo(1)) and (e3 must contain("expected one of brand, reference, print")) and
+        (c8 must beEqualTo(1)) and (e8 must contain("expected one of default, slides, print")) and
+        (c9 must beEqualTo(1)) and (e9 must contain("--style is for --plot")) and
         (c4 must beEqualTo(1)) and (e4 must contain("expected one of auto, light, dark")) and
         (c5 must beEqualTo(1)) and (e5 must contain("between 100 and 20000")) and
         (c6 must beEqualTo(1)) and (e6 must contain("--x-scale is for 2-D plots")) and

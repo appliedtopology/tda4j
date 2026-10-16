@@ -84,6 +84,11 @@ API). Rules:
   (`PlotCustomizationFacadeSpec` lists the names and requires an overload taking only `String`, `int`, `double`), and a CLI
   flag checked in `checkPlotFlags` before anything is computed. `Plot` (the trait) has no `+`: an abstract member would break
   anyone implementing it.
+- **A palette is validated on its OWN surface** (`validate_palette.py --surface <hex>`): the brand slots were checked on
+  cream, and `Palette.print` on `#ffffff` needed different ones. `Palette.print` (white, black, one look for both modes) and
+  `Style.print` (transparent, named fonts) are the look for a paper; `PlotGrammarSpec` pins the contrast of their inks and
+  series against the surface. A preset reachable from the Scala API is reachable by name from MATLAB and the CLI
+  (`Palette.named`, `Style.named`, `withPalette(name)`, `withStyle(name)`, `--palette`, `--style`).
 - Default output is a contract: look at `Gallery` before and after a renderer change and diff the SVGs against a
   `git worktree` build of the old commit (ids normalized: `tda4j[0-9]+`); every difference must be explained.
 

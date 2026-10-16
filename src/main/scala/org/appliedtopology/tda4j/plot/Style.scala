@@ -64,3 +64,21 @@ object Style:
 
   /** For a projector or a slide: text and marks 30% larger. Pair it with a bigger `Size` for a full-slide figure. */
   val slides: Style = Style(textScale = 1.3, markScale = 1.3)
+
+  /** The font stack of [[print]]: families a converter or a publisher's pipeline knows by name. */
+  val PrintFont: String = "Helvetica, Arial, 'Liberation Sans', sans-serif"
+
+  /** For a paper: no background, so the figure takes the color of the page, and a font stack that names real families
+    * (`system-ui`, the default's first choice, is a browser keyword that other SVG tools do not know). Pair it with
+    * [[Palette.print]] for black ink on white. The background assumes a light page. For a serif face to match the text,
+    * `Style.print.copy(font = "'Times New Roman', Times, serif")`.
+    */
+  val print: Style = Style(font = PrintFont, transparent = true)
+
+  /** The style called `name`, in any case: `default`, `slides` or `print`. */
+  def named(name: String): Style = name.trim.toLowerCase(java.util.Locale.ROOT) match
+    case "default" => default
+    case "slides"  => slides
+    case "print"   => print
+    case other     =>
+      throw IllegalArgumentException(s"unknown style '$other'; expected one of default, slides, print")

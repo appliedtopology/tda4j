@@ -38,6 +38,9 @@ class PlotCustomizationFacadeSpec extends Specification:
       fig.withXRange(0, 2) must beEqualTo(fig + Scale.x(min = 0, max = 2))
       fig.withYRange(0.5, 3) must beEqualTo(fig + Scale.y(min = 0.5, max = 3))
       fig.withPalette("reference") must beEqualTo(fig + Palette.reference)
+      fig.withPalette("print") must beEqualTo(fig + Palette.print)
+      fig.withStyle("slides") must beEqualTo(fig + Style.slides)
+      fig.withStyle("print") must beEqualTo(fig + Style.print)
       fig.withDegreeColor(1, "#d62728") must beEqualTo(fig + Scale.degree(1, color = "#d62728"))
       fig.withDegreeLabel(1, "loops") must beEqualTo(fig + Scale.degree(1, label = "loops"))
       fig.withTextScale(1.5) must beEqualTo(fig + fig.style.copy(textScale = 1.5))
@@ -63,6 +66,7 @@ class PlotCustomizationFacadeSpec extends Specification:
         "withXRange",
         "withYRange",
         "withPalette",
+        "withStyle",
         "withDegreeColor",
         "withDegreeLabel",
         "withTextScale",
@@ -76,6 +80,7 @@ class PlotCustomizationFacadeSpec extends Specification:
         "withSubtitle",
         "withSize",
         "withPalette",
+        "withStyle",
         "withDegreeColor",
         "withTextScale",
         "withMarkScale",
@@ -102,7 +107,8 @@ class PlotCustomizationFacadeSpec extends Specification:
       fig.withXScale("cubic") must throwAn[IllegalArgumentException](
         "unknown scale 'cubic'; expected one of linear, log, sqrt, symlog"
       )
-      fig.withPalette("neon") must throwAn[IllegalArgumentException]("expected one of brand, reference")
+      fig.withPalette("neon") must throwAn[IllegalArgumentException]("expected one of brand, reference, print")
+      fig.withStyle("poster") must throwAn[IllegalArgumentException]("expected one of default, slides, print")
       fig.withLegend("left") must throwAn[IllegalArgumentException]("expected one of right, bottom, none")
       fig.withSize(20, 20) must throwAn[IllegalArgumentException]("between 100 and 20000")
       fig.withTextScale(0) must throwAn[IllegalArgumentException]("textScale")
@@ -126,5 +132,6 @@ class PlotCustomizationFacadeSpec extends Specification:
       scene.withSize(300, 200).width must beEqualTo(300)
       scene.withMarkScale(2).style.markScale must beEqualTo(2.0)
       scene.withPalette("reference").palette must beEqualTo(Palette.reference)
+      scene.withStyle("print").style must beEqualTo(Style.print)
     }
   }

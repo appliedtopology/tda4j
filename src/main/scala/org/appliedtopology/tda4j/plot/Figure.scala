@@ -317,8 +317,11 @@ final case class Figure(
   /** The visible range of the y axis, in data units. */
   def withYRange(min: Double, max: Double): Figure = withYScale(min = min, max = max)
 
-  /** The palette called `name`: `brand` or `reference`. */
+  /** The palette called `name`: `brand`, `reference` or `print`. */
   def withPalette(name: String): Figure = withPalette(Palette.named(name))
+
+  /** The style called `name`: `default`, `slides` or `print`. */
+  def withStyle(name: String): Figure = withStyle(Style.named(name))
 
   /** The color of homological degree `degree`, as a CSS color (`#d62728`, `tomato`). */
   def withDegreeColor(degree: Int, color: String): Figure = withDegree(degree, color = color)

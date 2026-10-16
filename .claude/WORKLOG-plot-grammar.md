@@ -89,6 +89,26 @@ The two real defects that made customizing hard (both found by reading, not by u
     `Persistence.scale`, `PersistenceDiagram.scale` and `PersistenceFilter`'s "scale" are another thing (the scale of the
     input) and stay.
 
+11. **A look for a paper** (project lead, after the PR was opened: "we definitely should have one with white or
+    transparent background, black foreground, since the cream background won't work in publications, where it will show
+    up as a grey background splotch"). `Palette.print` and `Style.print`, two values because they are two parts: the
+    palette is colors (surface `#ffffff`, ink `#000000`), the style is the non-color look (no background, named fonts).
+    Either works alone: the palette is an opaque white figure, the style a transparent one. Not a third `Theme` case:
+    `Theme` is light/dark/auto and the print look is a palette, whichever mode. (a) The surface is exactly `#ffffff`:
+    `Palette.reference`'s `#fcfcfb` is near white but still a rectangle in a converted PDF. (b) One look: dark chrome and
+    dark series equal the light ones, so `Theme.Dark` and `Theme.Auto` on a dark page still draw black on white; a
+    transparent print figure on a dark page is unreadable, which the scaladoc says (assume a light page). (c) Series are
+    Okabe-Ito blue, vermillion and bluish green, then violet, ochre, rose, olive and brown: the first three pass every
+    check of the dataviz validator on ALL pairs on `#ffffff` (CVD worst 11.0, normal-vision 18.7), all eight on adjacent
+    pairs. Okabe-Ito's own orange, sky blue and yellow fail the 3:1 contrast against white, which is why it was not taken
+    whole. Grayscale: blue, vermillion and green have close luminance (L* 46, 54, 58), so a grayscale printer separates
+    degrees by marker shape and legend, not by gray level; the sequential ramp (ColorBrewer Blues) does keep its order.
+    (d) `Style.print` names `Helvetica, Arial, 'Liberation Sans', sans-serif` because `system-ui` is a CSS keyword of
+    browsers; whether Inkscape, rsvg or a LaTeX pipeline resolves it was NOT tested here (no converter in the container
+    but ImageMagick), so that is the reason, not a measured failure. (e) `Style.named`, `withStyle(name)` and `--style`
+    exist so MATLAB and the CLI reach the preset; `--style` and `--text-scale` are one change in the CLI, because a
+    `Style` replaces the whole style and two tweaks would have lost the preset's font.
+
 ## What was verified
 
 - **Default plots are unchanged**: `Gallery` run on the original commit (a `git worktree`) and on the new code, SVGs

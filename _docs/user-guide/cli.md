@@ -29,7 +29,8 @@ one:
   `input-3d`, `complex-3d`, `representative-3d`) draws the result instead of writing it, into `--output` (`.svg` or
   `.html`) or a page opened in the browser; `--bar`, `--dimension` and `--at` choose what (see
   [plotting](plotting.md#from-matlab-java-and-the-command-line)); `--title`, `--x-label`, `--y-label`, `--width`,
-  `--height`, `--palette`, `--theme`, `--text-scale`, `--x-scale` and `--y-scale` change how it looks (see
+  `--height`, `--palette`, `--style`, `--theme`, `--text-scale`, `--x-scale` and `--y-scale` change how it looks
+  (`--palette print --style print` is a figure for a paper; see
   [customizing a plot](plotting.md#from-matlab-and-the-command-line));
 * saved results: `--save-result result.json` also saves the whole result (bars, representatives, input). The saved
   file is an input of its own (`--input-format result`, chosen by itself for such a file): print, convert, compare or

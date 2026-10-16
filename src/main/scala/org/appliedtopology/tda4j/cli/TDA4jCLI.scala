@@ -532,6 +532,7 @@ object TDA4jCLI:
       "--width" -> conf.width.isSupplied,
       "--height" -> conf.height.isSupplied,
       "--palette" -> conf.palette.isSupplied,
+      "--style" -> conf.style.isSupplied,
       "--theme" -> conf.theme.isSupplied,
       "--text-scale" -> conf.textScale.isSupplied,
       "--x-scale" -> conf.xScale.isSupplied,
@@ -597,7 +598,11 @@ object TDA4jCLI:
         Size(width = conf.width.toOption, height = conf.height.toOption)
       ),
       conf.palette.toOption.map(Palette.named),
-      conf.textScale.toOption.map(factor => Style(textScale = factor)),
+      // a Style replaces the whole style, so --style and --text-scale are one change: the preset, then its text scale
+      Option.when(conf.style.isSupplied || conf.textScale.isSupplied) {
+        val preset = conf.style.toOption.map(Style.named).getOrElse(Style.default)
+        conf.textScale.toOption.fold(preset)(factor => preset.copy(textScale = factor))
+      },
       conf.xScale.toOption.map(name => Scale.x(Transform.named(name))),
       conf.yScale.toOption.map(name => Scale.y(Transform.named(name)))
     )

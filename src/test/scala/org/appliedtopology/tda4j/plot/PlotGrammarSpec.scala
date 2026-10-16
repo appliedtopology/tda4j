@@ -462,6 +462,83 @@ class PlotGrammarSpec extends Specification:
     }
   }
 
+  "the print look" should {
+    val fig = Plot.diagram(circleDiagram)
+    val paper = Palette.print
+    def luminance(hex: String): Double =
+      val v = Integer.parseInt(hex.stripPrefix("#"), 16)
+      def linear(c: Int): Double =
+        val s = c / 255.0
+        if s <= 0.04045 then s / 12.92 else math.pow((s + 0.055) / 1.055, 2.4)
+      0.2126 * linear((v >> 16) & 255) + 0.7152 * linear((v >> 8) & 255) + 0.0722 * linear(v & 255)
+    def contrast(a: String, b: String): Double =
+      (math.max(luminance(a), luminance(b)) + 0.05) / (math.min(luminance(a), luminance(b)) + 0.05)
+    def backgrounds(svg: String, f: Figure): Seq[Element] =
+      elements(svg, "rect").filter(r =>
+        r.getAttribute("width") == f.width.toString && r.getAttribute("height") == f.height.toString
+      )
+
+    "paint a background of exactly white, never the brand's cream that prints as a grey patch" in {
+      val svg = (fig + paper).svg(Theme.Light)
+      backgrounds(svg, fig).map(_.getAttribute("style")) must beEqualTo(Seq("fill:#ffffff"))
+      svg must not(contain(Palette.brand.light.surface))
+    }
+    "draw its text in black, and every other color so that it can be read on white" in {
+      val svg = (fig + paper).svg(Theme.Light)
+      elements(svg, "text").map(_.getAttribute("style")) must contain("fill:#000000")
+      val surface = paper.light.surface
+      contrast(paper.light.ink, surface) must beGreaterThanOrEqualTo(7.0)
+      contrast(paper.light.secondary, surface) must beGreaterThanOrEqualTo(7.0)
+      contrast(paper.light.muted, surface) must beGreaterThanOrEqualTo(4.5) // the tick labels
+      contrast(paper.light.axis, surface) must beGreaterThanOrEqualTo(3.0)
+      paper.seriesLight.map(contrast(_, surface)).min must beGreaterThanOrEqualTo(3.0) // a mark must show on paper
+    }
+    "have one look, so that the dark mode draws the same figure" in {
+      paper.dark must beEqualTo(paper.light)
+      paper.seriesDark must beEqualTo(paper.seriesLight)
+      sameUpToIds((fig + paper).svg(Theme.Dark), (fig + paper).svg(Theme.Light))
+    }
+    "color a heatmap and a signed one in ramps that print" in {
+      val lightnessFalls =
+        (0 to 10).map(i => luminance(paper.sequentialAt(i / 10.0))).sliding(2).forall(w => w(1) < w(0))
+      lightnessFalls must beTrue // darker for larger, so a grayscale printer keeps the order
+      val image = Plot.persistenceImage(circleDiagram, 0, resolution = 8, sigma = 0.05)
+      (image + paper).svg(Theme.Light) must contain(paper.sequentialAt(1.0))
+      (image + paper).svg(Theme.Light) must not(contain(Palette.brand.sequentialAt(1.0)))
+    }
+    "draw no background and name its fonts, in the style for a paper" in {
+      val svg = (fig + paper + Style.print).svg(Theme.Light)
+      backgrounds(svg, fig) must beEmpty
+      parse(svg).getDocumentElement.getAttribute("font-family") must contain("Helvetica")
+      parse(svg).getDocumentElement.getAttribute("font-family") must not(contain("system-ui"))
+      svg must not(contain(Palette.brand.light.surface))
+    }
+    "change nothing else about the style" in {
+      Style.print.copy(font = Style.DefaultFont, transparent = false) must beEqualTo(Style.default)
+    }
+    "be reached by name, in any case, and refuse a name it does not have" in {
+      Palette.named("Print") must beEqualTo(Palette.print)
+      Style.named(" print ") must beEqualTo(Style.print)
+      Style.named("slides") must beEqualTo(Style.slides)
+      Style.named("default") must beEqualTo(Style.default)
+      fig.withStyle("print") must beEqualTo(fig + Style.print)
+      fig.withPalette("print") must beEqualTo(fig + Palette.print)
+      Plot.points3D(circle).withStyle("slides").style must beEqualTo(Style.slides)
+      Style.named("poster") must throwAn[IllegalArgumentException]("expected one of default, slides, print")
+      Palette.named("poster") must throwAn[IllegalArgumentException]("expected one of brand, reference, print")
+    }
+    "reach a 3-D scene, which takes the white and the black as well" in {
+      val scene = Plot.points3D(circle)
+      def white(svg: String) = elements(svg, "rect").count(_.getAttribute("style").contains("fill:#ffffff"))
+      val opaque = (scene + paper).staticSvg(Theme.Light)
+      val clear = (scene + paper + Style.print).staticSvg(Theme.Light)
+      white(opaque) must beEqualTo(1)
+      white(clear) must beEqualTo(0)
+      clear must not(contain(Palette.brand.light.surface))
+      parse(clear).getDocumentElement.getAttribute("font-family") must contain("Helvetica")
+    }
+  }
+
   "labels and size" should {
     val fig = Plot.diagram(circleDiagram)
     "put the words given in the places they belong" in {
