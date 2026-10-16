@@ -58,10 +58,22 @@ The two real defects that made customizing hard (both found by reading, not by u
 4. **`Palette` is a `Tweak`**, so `fig + Palette.reference` works and a bundle can hold one.
 5. **Degree overrides sit beside the palette** (`Figure.degrees`), not inside it, so `fig + degree + palette` and
    `fig + palette + degree` agree (a spec checks both orders).
-6. **A mark with no place on a scale is left out and counted** ("2 marks not shown: outside the log scale"), never dropped
-   silently (the project lead's stance on zero-length bars) and never clamped (a clamped bar lies about its birth). The
-   consequence the docs state: a log diagram or barcode wants `d.dim(1)` or `Sqrt`/`SymLog`, because every `H0` bar is born
-   at 0. Open question #3 below.
+6. **Every value has a place on every scale** (first cut: a mark with no place was left out and counted; the project lead
+   rejected that twice). (a) What is at exactly 0 on a log axis sits on a `-∞` line below the lowest number, 34 px clear of
+   it and 10 px from the edge, labelled `-∞` as the `∞` tick is, with a line drawn across (the project lead: "a -infinity
+   line for H0 to be born at, similar to the +infinity for essential bars"). It is the renderer's, not a constructor's,
+   because a tweak adds the log scale after the plot was built. `Axis.minusInfinity`: `None` automatic, `Some(false)` never
+   (zeros left out and counted), `Some(true)` always (`Board.shared` sets it on every panel when one has the line, so the
+   numbers line up). (b) Negative values ("a negative filtration value is perfectly reasonable"): a log axis whose MARKS
+   have a negative value is drawn as `SymLog(c)`, `c` the smallest nonzero magnitude on the axis, and the small print says
+   so; two axes that were both log and both switched share the smaller `c`, so a diagram's diagonal stays a line and equal
+   aspect applies; `Board.shared` gives every panel the same `SymLog`. A LIMIT alone never switches: the barcode pads its
+   own lower bound below zero, and a first cut that switched on it drew a barcode of non-negative births as a symmetric
+   log. The alternative, a log of the magnitude mirrored about a zero line in the middle, is the more literal log but needs
+   a data-dependent piecewise layout (ticks, diagonal, shared panels); `SymLog` is the standard signed answer and
+   reuses everything. (c) The square root is `sign(v) sqrt|v|`. (d) A log color scale starting at 0 or below is a symmetric
+   log (`c` a thousandth of the largest magnitude). Only a value that is not a number is left out, and counted. Overturn
+   (b) by replacing `resolve` in `Svg.scala`.
 7. **The diagram's diagonal and `∞` line are marks drawn by the renderer** (`Mark.Diagonal`, `Mark.Rule`), sampled along each
    axis when the axes differ in scale, so `y = x` stays `y = x` on a log-log diagram (spec: it passes through `(v, v)` and is
    straight; with only x logarithmic it is bent and still passes through `(v, v)`). `Rule`/`Diagonal` also serve as
@@ -118,8 +130,7 @@ The two real defects that made customizing hard (both found by reading, not by u
 
 ## Not verified / open (filed as issues)
 
-- #96 (question): a log axis leaves out every `H0` bar, which is born at 0. Drop and count (as now), clamp, symmetric log
-  by default, or refuse?
+- #96 (question, answered by the project lead and closed): zeros on a log axis, see decision 6.
 - #97 (enhancement): PNG/PDF export (a new module), a session-wide default style, color bar ticks on a transformed
   scale, a visible board title, balls (`Mark.Discs`) on a curved axis, print palettes (Okabe-Ito fails the validator on the
   brand surface), an `aes` helper for the user's own tables.

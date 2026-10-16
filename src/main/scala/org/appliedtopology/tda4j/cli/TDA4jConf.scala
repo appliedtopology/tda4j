@@ -218,8 +218,8 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     opt[Double](noshort = true, descr = "for --plot: a factor on every text size (1.3 suits a slide)")
   val xScale: ScallopOption[String] = opt[String](
     noshort = true,
-    descr = "for 2-D --plot kinds: the x axis scale, linear (default), log, sqrt or symlog. A log axis leaves out " +
-      "values of 0 or less and says how many"
+    descr = "for 2-D --plot kinds: the x axis scale, linear (default), log, sqrt or symlog. On a log axis what is at " +
+      "0 sits on a -∞ line, and a negative value makes it a symmetric log, which the plot says"
   )
   val yScale: ScallopOption[String] =
     opt[String](noshort = true, descr = "for 2-D --plot kinds: the y axis scale, as --x-scale")

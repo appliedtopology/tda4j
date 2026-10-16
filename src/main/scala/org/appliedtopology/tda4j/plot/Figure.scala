@@ -143,7 +143,10 @@ enum Ticks:
 /** One axis. `min` and `max` fix the ends of the visible range in data units (otherwise the marks' extent, padded);
   * `transform` is the scale the data are drawn on; `ticks` chooses the tick positions and `extra` adds labelled ones
   * (the `∞` mark); `format` is a printf pattern for the numbers; `visible = false` drops ticks, labels and baseline (a
-  * point cloud's frame). Change an axis of a figure with `Scale.x(...)` and `Labels(x = ...)`.
+  * point cloud's frame). On a log axis what is at 0 (an `H0` bar's birth) sits on a `-∞` line below the lowest number,
+  * as an essential bar ends at `∞`: `minusInfinity = None` draws the line when something is there, `Some(true)` always
+  * (panels that must line up), `Some(false)` never, leaving what is at 0 out and counting it. Change an axis of a
+  * figure with `Scale.x(...)` and `Labels(x = ...)`.
   */
 final case class Axis(
   label: String = "",
@@ -154,7 +157,8 @@ final case class Axis(
   grid: Boolean = true,
   visible: Boolean = true,
   transform: Transform = Transform.Identity,
-  format: Option[String] = None
+  format: Option[String] = None,
+  minusInfinity: Option[Boolean] = None
 ):
   /** Both ends, when both are fixed. */
   def range: Option[(Double, Double)] = for l <- min; h <- max yield (l, h)
@@ -225,8 +229,9 @@ final case class Figure(
     breaks: Optional[Seq[Double]] = Optional.empty,
     format: Optional[String] = Optional.empty,
     grid: Optional[Boolean] = Optional.empty,
-    visible: Optional[Boolean] = Optional.empty
-  ): Figure = this + Scale.x(transform, min, max, breaks, format, grid, visible)
+    visible: Optional[Boolean] = Optional.empty,
+    minusInfinity: Optional[Boolean] = Optional.empty
+  ): Figure = this + Scale.x(transform, min, max, breaks, format, grid, visible, minusInfinity)
 
   /** The y axis; as [[withXScale]]. */
   def withYScale(
@@ -236,8 +241,9 @@ final case class Figure(
     breaks: Optional[Seq[Double]] = Optional.empty,
     format: Optional[String] = Optional.empty,
     grid: Optional[Boolean] = Optional.empty,
-    visible: Optional[Boolean] = Optional.empty
-  ): Figure = this + Scale.y(transform, min, max, breaks, format, grid, visible)
+    visible: Optional[Boolean] = Optional.empty,
+    minusInfinity: Optional[Boolean] = Optional.empty
+  ): Figure = this + Scale.y(transform, min, max, breaks, format, grid, visible, minusInfinity)
 
   /** Both axes alike: a log-log diagram is `withXYScale(Transform.Log10)`. */
   def withXYScale(
@@ -247,8 +253,9 @@ final case class Figure(
     breaks: Optional[Seq[Double]] = Optional.empty,
     format: Optional[String] = Optional.empty,
     grid: Optional[Boolean] = Optional.empty,
-    visible: Optional[Boolean] = Optional.empty
-  ): Figure = this + Scale.xy(transform, min, max, breaks, format, grid, visible)
+    visible: Optional[Boolean] = Optional.empty,
+    minusInfinity: Optional[Boolean] = Optional.empty
+  ): Figure = this + Scale.xy(transform, min, max, breaks, format, grid, visible, minusInfinity)
 
   /** The color scale of a heatmap or a cocycle, if the figure has one. See [[Scale.color]]. */
   def withColorScale(

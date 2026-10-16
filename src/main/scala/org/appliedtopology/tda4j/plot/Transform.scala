@@ -3,18 +3,23 @@ package org.appliedtopology.tda4j.plot
 /** How data values become positions along an axis (or steps along a color ramp). The plots hold data in its own units;
   * a transform is applied only when drawing, so the same figure can be shown on a linear or a log axis.
   *
-  * A value with no place under the transform (zero or a negative number on a log axis) comes out as `NaN`: the renderer
-  * leaves such marks out and says how many it left out.
+  * `apply` gives `NaN` for a value with no position of its own: zero or a negative number under `Log10`. The renderer
+  * does not leave such a value out: what is at 0 on a log axis sits on a `-∞` line below the lowest number, and a log
+  * axis with a negative value is drawn as a symmetric log ([[Transform.SymLog]]), which it says under the plot. Only
+  * what is not a number at all is left out, and counted.
   */
 enum Transform:
   /** The data as it is. */
   case Identity
 
-  /** Base-10 logarithm: equal steps are equal ratios. Needs positive values, so an `H0` bar born at `0` has no place.
+  /** Base-10 logarithm: equal steps are equal ratios. On an axis, what is at 0 (an `H0` bar's birth) sits on a `-∞`
+    * line below the lowest number, and an axis with a negative value is drawn as a symmetric log.
     */
   case Log10
 
-  /** Square root: spreads out small values and keeps zero. Needs non-negative values. */
+  /** Square root of the magnitude, with the sign kept (`sign(v) * sqrt(|v|)`): spreads out small values, keeps zero,
+    * and shows a negative value mirrored.
+    */
   case Sqrt
 
   /** Logarithmic away from zero, linear within `linear` of it: `sign(v) * log10(1 + |v| / linear)`. Keeps zero and
@@ -26,18 +31,18 @@ enum Transform:
   def apply(v: Double): Double = this match
     case Identity  => v
     case Log10     => if v > 0 then math.log10(v) else Double.NaN
-    case Sqrt      => if v >= 0 then math.sqrt(v) else Double.NaN
+    case Sqrt      => math.signum(v) * math.sqrt(math.abs(v))
     case SymLog(c) => math.signum(v) * math.log10(1 + math.abs(v) / c)
 
   /** The value at position `u`: `inverse(apply(v)) == v` wherever `apply(v)` is a number. */
   def inverse(u: Double): Double = this match
     case Identity  => u
     case Log10     => math.pow(10, u)
-    case Sqrt      => math.max(u, 0.0) * math.max(u, 0.0)
+    case Sqrt      => math.signum(u) * u * u
     case SymLog(c) => math.signum(u) * c * (math.pow(10, math.abs(u)) - 1)
 
-  /** The lowest position the transform can give (nothing is below zero on a square-root axis): an axis that widens its
-    * range to keep an aspect ratio stops a margin below it.
+  /** The lowest position for data that are not negative (zero on a square-root axis): an axis that widens its range to
+    * keep an aspect ratio stops a margin below it, unless it has a negative value.
     */
   def floor: Double = this match
     case Sqrt => 0.0
@@ -51,8 +56,9 @@ enum Transform:
     case SymLog(_) => "symmetric log"
 
   /** About `target` round tick values inside `[lo, hi]` (data units): 1, 2, 5 times a power of ten for a linear or
-    * square-root axis, powers of ten (with 2 and 5 between when there are few decades) for a log axis, zero and signed
-    * powers of ten beyond the linear stretch for a symmetric log axis.
+    * square-root axis, powers of ten (with 2 and 5 between when there are few decades) for a log axis, and for a
+    * symmetric log axis zero and those on both sides (round numbers throughout when the range is within a decade of the
+    * linear stretch).
     */
   def ticks(lo: Double, hi: Double, target: Int = 5): IndexedSeq[Double] = this match
     case Identity | Sqrt => Svg.niceTicks(lo, hi, target)
@@ -74,11 +80,11 @@ enum Transform:
         if found.size >= 2 then found.toIndexedSeq else Svg.niceTicks(lo, hi, target)
     case SymLog(c) =>
       val reach = math.max(math.abs(lo), math.abs(hi))
-      if reach <= c then Svg.niceTicks(lo, hi, target)
+      // within a decade of the linear stretch the axis is nearly linear: round numbers; beyond it, round powers of ten
+      // away from zero on both sides
+      if reach <= 10 * c then Svg.niceTicks(lo, hi, target)
       else
-        val kMax = math.ceil(math.log10(reach / c)).toInt
-        val stride = math.max(1, math.ceil((kMax + 1) / 3.0).toInt)
-        val magnitudes = (0 to kMax by stride).map(k => c * math.pow(10, k))
+        val magnitudes = Log10.ticks(c, reach, target)
         val all = (magnitudes.map(-_).reverse :+ 0.0) ++ magnitudes
         all.filter(t => t >= lo && t <= hi).toIndexedSeq
 

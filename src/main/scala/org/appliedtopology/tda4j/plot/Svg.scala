@@ -6,10 +6,11 @@ import java.util.Locale
   * a legend and a color bar. Under `Theme.Auto` every themed color is a CSS variable of the `<svg>` (both modes
   * declared, `prefers-color-scheme` choosing); under `Light`/`Dark` every color is a plain hex.
   *
-  * Positions go through the axes' [[Transform]]s here and nowhere else, so a figure holds data in its own units. A mark
-  * with no place on the axes (zero on a log axis, `NaN`) is left out, and a line of small print under the plot counts
-  * what was left out. The figure's [[Style]] sets the font, the size of text and marks, the gridlines, the legend's
-  * place and the background.
+  * Positions go through the axes' [[Transform]]s here and nowhere else, so a figure holds data in its own units. What
+  * is at exactly 0 on a log axis sits on a `-∞` line beside the lowest number, as an essential bar ends at `∞`. A mark
+  * with no other place on the axes (a negative value on a log axis, `NaN`) is left out, and a line of small print under
+  * the plot counts what was left out. The figure's [[Style]] sets the font, the size of text and marks, the gridlines,
+  * the legend's place and the background.
   */
 object Svg:
   private val counter = new java.util.concurrent.atomic.AtomicLong()
@@ -62,36 +63,103 @@ object Svg:
     left: Double,
     top: Double,
     w: Double,
-    h: Double
+    h: Double,
+    bandX: Option[Double],
+    bandY: Option[Double]
   ):
-    def px(x: Double): Double = left + (xt(x) - x0) / (x1 - x0) * w
-    def py(y: Double): Double = top + h - (yt(y) - y0) / (y1 - y0) * h
+    // 0 on a log axis has no position of its own: it is on the `-∞` line, `bandX`/`bandY` in transformed space
+    private def tx(x: Double): Double = if x == 0.0 && bandX.isDefined then bandX.get else xt(x)
+    private def ty(y: Double): Double = if y == 0.0 && bandY.isDefined then bandY.get else yt(y)
+    def px(x: Double): Double = left + (tx(x) - x0) / (x1 - x0) * w
+    def py(y: Double): Double = top + h - (ty(y) - y0) / (y1 - y0) * h
 
     /** Pixels per data unit along x: the radius of a disc on a linear axis. */
     def scale: Double = w / (x1 - x0)
 
-  /** The extent of the marks' positions in the axes' transformed space; marks without a place on the axes count for
-    * nothing.
+  /** The extent of the marks' positions along each axis, in the axes' transformed space, and whether anything sits at 0
+    * on a log axis (`zeroX`, `zeroY`: the `-∞` line). Marks without a place on the axes count for nothing.
     */
-  private def extent(marks: Seq[Mark], xt: Transform, yt: Transform): Option[(Double, Double, Double, Double)] =
+  private final case class Extent(
+    x: Option[(Double, Double)],
+    y: Option[(Double, Double)],
+    zeroX: Boolean,
+    zeroY: Boolean
+  )
+
+  /** The coordinates the marks sit at. With `balls`, a ball's extent (centre plus and minus its radius) rather than its
+    * centre.
+    */
+  private def foreachPoint(marks: Seq[Mark], balls: Boolean)(f: XY => Unit): Unit = marks.foreach {
+    case m: Mark.Points   => m.at.foreach(f)
+    case m: Mark.Segments => m.ends.foreach { (a, b) => f(a); f(b) }
+    case m: Mark.Polygons => m.corners.foreach(_.foreach(f))
+    case m: Mark.Discs    =>
+      m.centers.foreach { c =>
+        if balls then
+          f((c._1 - m.radius, c._2 - m.radius)); f((c._1 + m.radius, c._2 + m.radius))
+        else f(c)
+      }
+    case m: Mark.Boxes                   => m.boxes.foreach { b => f((b._1, b._2)); f((b._3, b._4)) }
+    case m: Mark.Line                    => m.at.foreach(f)
+    case m: Mark.Text                    => f(m.at)
+    case _: Mark.Diagonal | _: Mark.Rule => ()
+  }
+
+  /** What an axis has to place: whether any value is negative, and the smallest nonzero magnitude. */
+  private final case class Signs(negative: Boolean, magnitude: Option[Double])
+
+  private def signs(marks: Seq[Mark]): (Signs, Signs) =
+    var (negX, negY) = (false, false)
+    var (magX, magY) = (Double.PositiveInfinity, Double.PositiveInfinity)
+    foreachPoint(marks, balls = false) { p =>
+      if p._1 < 0 then negX = true
+      if p._1.isFinite && p._1 != 0.0 then magX = math.min(magX, math.abs(p._1))
+      if p._2 < 0 then negY = true
+      if p._2.isFinite && p._2 != 0.0 then magY = math.min(magY, math.abs(p._2))
+    }
+    (Signs(negX, Option.when(magX.isFinite)(magX)), Signs(negY, Option.when(magY.isFinite)(magY)))
+
+  /** The transform an axis is drawn with: its own, except that a log axis with a negative value in the marks has no
+    * place for it and is drawn as a symmetric log, linear within the smallest nonzero magnitude on the axis, so that
+    * nothing is left out. The plot says so. (A limit alone changes nothing: a plot pads its own lower bound below
+    * zero.)
+    */
+  private def resolve(a: Axis, sg: Signs): Transform = a.transform match
+    case Transform.Log10 if sg.negative => Transform.SymLog(sg.magnitude.getOrElse(1.0))
+    case other                          => other
+
+  /** The transforms the axes are drawn with (see `resolve`). */
+  private[plot] def resolved(fig: Figure): (Transform, Transform) =
+    val (sx, sy) = signs(fig.marks)
+    (resolve(fig.x, sx), resolve(fig.y, sy)) match
+      // two axes that were both log and both switched share a stretch, so one scale reads alike along both (and a
+      // diagram's diagonal stays a line)
+      case (Transform.SymLog(a), Transform.SymLog(b))
+          if fig.x.transform == Transform.Log10 && fig.y.transform == Transform.Log10 =>
+        val c = math.min(a, b)
+        (Transform.SymLog(c), Transform.SymLog(c))
+      case both => both
+
+  /** Zero is a place on this axis: the `-∞` line, unless the axis opted out. Only a log axis has one. */
+  private def zeroOk(a: Axis, tr: Transform): Boolean = tr == Transform.Log10 && !a.minusInfinity.contains(false)
+
+  private def extent(marks: Seq[Mark], xt: Transform, yt: Transform, zeroOkX: Boolean, zeroOkY: Boolean): Extent =
     val xs = scala.collection.mutable.ArrayBuffer.empty[Double]
     val ys = scala.collection.mutable.ArrayBuffer.empty[Double]
+    var (zx, zy) = (false, false)
     def add(p: XY): Unit =
       val (u, v) = (xt(p._1), yt(p._2))
-      if u.isFinite && v.isFinite then
-        xs += u; ys += v
-    marks.foreach {
-      case m: Mark.Points   => m.at.foreach(add)
-      case m: Mark.Segments => m.ends.foreach { (a, b) => add(a); add(b) }
-      case m: Mark.Polygons => m.corners.foreach(_.foreach(add))
-      case m: Mark.Discs    =>
-        m.centers.foreach { c => add((c._1 - m.radius, c._2 - m.radius)); add((c._1 + m.radius, c._2 + m.radius)) }
-      case m: Mark.Boxes                   => m.boxes.foreach { b => add((b._1, b._2)); add((b._3, b._4)) }
-      case m: Mark.Line                    => m.at.foreach(add)
-      case m: Mark.Text                    => add(m.at)
-      case _: Mark.Diagonal | _: Mark.Rule => ()
-    }
-    Option.when(xs.nonEmpty)((xs.min, xs.max, ys.min, ys.max))
+      val (atZeroX, atZeroY) = (zeroOkX && p._1 == 0.0, zeroOkY && p._2 == 0.0)
+      if (u.isFinite || atZeroX) && (v.isFinite || atZeroY) then
+        if u.isFinite then xs += u else zx = true
+        if v.isFinite then ys += v else zy = true
+    foreachPoint(marks, balls = true)(add)
+    Extent(
+      Option.when(xs.nonEmpty)((xs.min, xs.max)),
+      Option.when(ys.nonEmpty)((ys.min, ys.max)),
+      zx,
+      zy
+    )
 
   private def padded(lo: Double, hi: Double, fraction: Double): (Double, Double) =
     if hi > lo then (lo - (hi - lo) * fraction, hi + (hi - lo) * fraction)
@@ -100,29 +168,38 @@ object Svg:
   /** The visible range of an axis in transformed space: the ends the axis fixes (those the transform can place), the
     * rest from the marks' extent `lo..hi`, padded.
     */
-  private def spaceRange(a: Axis, lo: Double, hi: Double): (Double, Double) =
-    val fixedLo = a.min.map(a.transform(_)).filter(_.isFinite)
-    val fixedHi = a.max.map(a.transform(_)).filter(_.isFinite)
+  private def spaceRange(a: Axis, tr: Transform, seen: Option[(Double, Double)]): (Double, Double) =
+    val (lo, hi) = seen.getOrElse((0.0, 1.0))
+    val fixedLo = a.min.map(tr(_)).filter(_.isFinite)
+    val fixedHi = a.max.map(tr(_)).filter(_.isFinite)
     (fixedLo, fixedHi) match
       case (Some(l), Some(h)) => (l, h)
       case _                  =>
         val (pl, pu) = padded(lo, hi, 0.04)
         (fixedLo.getOrElse(pl), fixedHi.getOrElse(pu))
 
-  private def checkRange(name: String, a: Axis, lo: Double, hi: Double): Unit =
+  private def checkRange(name: String, tr: Transform, lo: Double, hi: Double): Unit =
     if !(hi > lo) then
       throw IllegalArgumentException(
-        s"the $name axis would run from ${number(a.transform.inverse(lo))} to ${number(a.transform.inverse(hi))}: " +
+        s"the $name axis would run from ${number(tr.inverse(lo))} to ${number(tr.inverse(hi))}: " +
           s"its minimum must be less than its maximum (see Scale.$name)"
       )
 
-  /** The ranges the axes show, in data units, before any adjustment for an equal aspect ratio. */
+  /** The ranges of numbers the axes show, in data units, before any adjustment for an equal aspect ratio and without
+    * the room for the `-∞` line.
+    */
   private[plot] def ranges(fig: Figure): ((Double, Double), (Double, Double)) =
-    val (xt, yt) = (fig.x.transform, fig.y.transform)
-    val (dx0, dx1, dy0, dy1) = extent(fig.marks, xt, yt).getOrElse((0.0, 1.0, 0.0, 1.0))
-    val (x0, x1) = spaceRange(fig.x, dx0, dx1)
-    val (y0, y1) = spaceRange(fig.y, dy0, dy1)
+    val (xt, yt) = resolved(fig)
+    val ext = extent(fig.marks, xt, yt, zeroOk(fig.x, xt), zeroOk(fig.y, yt))
+    val (x0, x1) = spaceRange(fig.x, xt, ext.x)
+    val (y0, y1) = spaceRange(fig.y, yt, ext.y)
     ((xt.inverse(x0), xt.inverse(x1)), (yt.inverse(y0), yt.inverse(y1)))
+
+  /** Whether the figure has marks at 0 on its x axis and on its y axis, which a log axis puts on a `-∞` line. */
+  private[plot] def atMinusInfinity(fig: Figure): (Boolean, Boolean) =
+    val (xt, yt) = resolved(fig)
+    val ext = extent(fig.marks, xt, yt, zeroOk(fig.x, xt), zeroOk(fig.y, yt))
+    (ext.zeroX, ext.zeroY)
 
   def render(fig: Figure, theme: Theme): String =
     val id = s"tda4j${counter.incrementAndGet()}"
@@ -130,7 +207,8 @@ object Svg:
     val ts = style.textScale
     val ink = style.markScale
     val pal = fig.palette.withDegrees(fig.degrees)
-    val (xt, yt) = (fig.x.transform, fig.y.transform)
+    val (xt, yt) = resolved(fig)
+    val (signsX, signsY) = signs(fig.marks)
     val sb = new StringBuilder
 
     def paint(p: Paint): String = p match
@@ -155,8 +233,10 @@ object Svg:
         case _ => item
     }
 
-    // the marks that cannot be placed on these axes are left out, and counted
-    def ok(p: XY): Boolean = xt(p._1).isFinite && yt(p._2).isFinite
+    // the marks that cannot be placed on these axes are left out, and counted; 0 on a log axis is on the `-∞` line
+    val (zeroOkX, zeroOkY) = (zeroOk(fig.x, xt), zeroOk(fig.y, yt))
+    def okAt(t: Transform, zero: Boolean)(v: Double): Boolean = t(v).isFinite || (zero && v == 0.0)
+    def ok(p: XY): Boolean = okAt(xt, zeroOkX)(p._1) && okAt(yt, zeroOkY)(p._2)
     val notShown = fig.marks.map {
       case m: Mark.Points                  => m.at.count(!ok(_))
       case m: Mark.Segments                => m.ends.count((a, b) => !(ok(a) && ok(b)))
@@ -199,34 +279,70 @@ object Svg:
         rows += row
         rows.result()
     val legendBand = if legendRows.isEmpty then 0.0 else (10.0 + 20.0 * legendRows.size) * ts
-    val noteBand = if notShown > 0 then 14.0 * ts else 0.0
+    // small print under the plot: what an axis did instead of what was asked, and what could not be drawn
+    val notes: Seq[String] =
+      Seq("x" -> (fig.x, xt), "y" -> (fig.y, yt))
+        .collect { case (name, (a, Transform.SymLog(c))) if a.transform == Transform.Log10 => (name, c) }
+        .groupMap(_._2)(_._1)
+        .toSeq
+        .sortBy(_._1)
+        .map { (c, names) =>
+          if names.size == 1 then
+            s"negative values: the ${names.head} axis is a symmetric log scale, linear within ±${number(c)}"
+          else
+            s"negative values: the ${names.mkString(" and ")} axes are symmetric log scales, linear within ±${number(c)}"
+        } ++ Option.when(notShown > 0) {
+        val withoutLine = (xt == Transform.Log10 && fig.x.minusInfinity.contains(false)) ||
+          (yt == Transform.Log10 && fig.y.minusInfinity.contains(false))
+        val why =
+          if withoutLine then "at 0 on a log axis drawn without a -∞ line" else "a position that is not a number"
+        s"$notShown ${if notShown == 1 then "mark" else "marks"} not shown: $why"
+      }
+    val noteBand = 14.0 * ts * notes.size
     val bottom = axisBand + legendBand + noteBand
     val h = math.max(40.0, fig.height - top - bottom)
 
     // the range shown
-    val (dx0, dx1, dy0, dy1) = extent(fig.marks, xt, yt).getOrElse((0.0, 1.0, 0.0, 1.0))
-    var (x0, x1) = spaceRange(fig.x, dx0, dx1)
-    var (y0, y1) = spaceRange(fig.y, dy0, dy1)
-    checkRange("x", fig.x, x0, x1)
-    checkRange("y", fig.y, y0, y1)
+    val ext = extent(fig.marks, xt, yt, zeroOkX, zeroOkY)
+    var (x0, x1) = spaceRange(fig.x, xt, ext.x)
+    var (y0, y1) = spaceRange(fig.y, yt, ext.y)
+    checkRange("x", xt, x0, x1)
+    checkRange("y", yt, y0, y1)
+    // What is at 0 on a log axis goes on a `-∞` line below the lowest number; the numbers keep the pixels the line and
+    // the room for a marker under it leave (`reserveX`, `reserveY`), which is also the length equal units are measured on.
+    val bandOnX = zeroOkX && (ext.zeroX || fig.x.minusInfinity.contains(true))
+    val bandOnY = zeroOkY && (ext.zeroY || fig.y.minusInfinity.contains(true))
+    val (reserveX, reserveY) = (if bandOnX then 44.0 * ts else 0.0, if bandOnY then 44.0 * ts else 0.0)
+    val (lengthX, lengthY) = (math.max(1.0, w - reserveX), math.max(1.0, h - reserveY))
     // Equal units on both axes mean something only when both are on one scale (log-log: a decade is as long either way).
     // Widening a range stops a margin below what the scale can place (nothing is below 0 on a square-root axis).
     if fig.equalAspect && xt == yt then
-      val sx = (x1 - x0) / w
-      val sy = (y1 - y0) / h
+      val sx = (x1 - x0) / lengthX
+      val sy = (y1 - y0) / lengthY
       if sx > sy then
         val c = (y0 + y1) / 2
-        y0 = c - sx * h / 2; y1 = c + sx * h / 2
+        y0 = c - sx * lengthY / 2; y1 = c + sx * lengthY / 2
       else
         val c = (x0 + x1) / 2
-        x0 = c - sy * w / 2; x1 = c + sy * w / 2
-      val lowestX = xt.floor - 0.04 * (x1 - x0)
+        x0 = c - sy * lengthX / 2; x1 = c + sy * lengthX / 2
+      val lowestX = (if signsX.negative then Double.NegativeInfinity else xt.floor) - 0.04 * (x1 - x0)
       if x0 < lowestX then
         x1 += lowestX - x0; x0 = lowestX
-      val lowestY = yt.floor - 0.04 * (y1 - y0)
+      val lowestY = (if signsY.negative then Double.NegativeInfinity else yt.floor) - 0.04 * (y1 - y0)
       if y0 < lowestY then
         y1 += lowestY - y0; y0 = lowestY
-    val f = Frame(xt, yt, x0, x1, y0, y1, left, top, w, h)
+    // where the numbers of an axis start, and the `-∞` line 34 pixels below that, with the room for a marker under it
+    val (startX, startY) = (x0, y0)
+    var (bandX, bandY) = (Option.empty[Double], Option.empty[Double])
+    if bandOnX then
+      val unit = (x1 - x0) / lengthX
+      bandX = Some(x0 - 34.0 * ts * unit)
+      x0 -= reserveX * unit
+    if bandOnY then
+      val unit = (y1 - y0) / lengthY
+      bandY = Some(y0 - 34.0 * ts * unit)
+      y0 -= reserveY * unit
+    val f = Frame(xt, yt, x0, x1, y0, y1, left, top, w, h, bandX, bandY)
 
     sb ++= s"""<svg xmlns="http://www.w3.org/2000/svg" id="$id" width="${fig.width}" height="${fig.height}" viewBox="0 0 ${fig.width} ${fig.height}" font-family="${escape(
         style.font
@@ -253,8 +369,7 @@ object Svg:
         )}">${escape(fig.subtitle)}</text>"""
 
     // grid, ticks, axes
-    def ticksOf(a: Axis, t0: Double, t1: Double): IndexedSeq[(Double, String)] =
-      val tr = a.transform
+    def ticksOf(a: Axis, tr: Transform, t0: Double, t1: Double): IndexedSeq[(Double, String)] =
       val text: Double => String = a.format match
         case Some(pattern) => v => String.format(Locale.ROOT, pattern, Double.box(v))
         case None          => tr.tickLabel
@@ -271,8 +386,8 @@ object Svg:
     def within(tr: Transform, t0: Double, t1: Double)(tick: (Double, String)): Boolean =
       val u = tr(tick._1)
       u >= math.min(t0, t1) && u <= math.max(t0, t1)
-    val inX = ticksOf(fig.x, x0, x1).filter(within(xt, x0, x1))
-    val inY = ticksOf(fig.y, y0, y1).filter(within(yt, y0, y1))
+    val inX = ticksOf(fig.x, xt, startX, x1).filter(within(xt, x0, x1))
+    val inY = ticksOf(fig.y, yt, startY, y1).filter(within(yt, y0, y1))
     val tickSize = fmt(11.0 * ts)
     if style.grid && fig.x.visible && fig.x.grid then
       inX.foreach((t, _) =>
@@ -322,6 +437,33 @@ object Svg:
           )})" text-anchor="middle" font-size="${fmt(12.0 * ts)}" style="fill:${paint(Paint.Secondary)}">${escape(
             fig.y.label
           )}</text>"""
+
+    // the `-∞` line, as the `∞` line of a diagram: where what is at 0 on a log axis sits
+    val minusInfinity = number(Double.NegativeInfinity)
+    bandX.foreach { _ =>
+      val bx = f.px(0.0)
+      sb ++= s"""<line x1="${fmt(bx)}" y1="${fmt(top)}" x2="${fmt(bx)}" y2="${fmt(top + h)}" style="stroke:${paint(
+          Paint.Axis
+        )}" stroke-width="1"/>"""
+      if fig.x.visible then
+        sb ++= s"""<text x="${fmt(bx)}" y="${fmt(
+            top + h + 16 * ts
+          )}" text-anchor="middle" font-size="$tickSize" style="fill:${paint(
+            Paint.Muted
+          )};font-variant-numeric:tabular-nums">$minusInfinity</text>"""
+    }
+    bandY.foreach { _ =>
+      val by = f.py(0.0)
+      sb ++= s"""<line x1="${fmt(left)}" y1="${fmt(by)}" x2="${fmt(left + w)}" y2="${fmt(by)}" style="stroke:${paint(
+          Paint.Axis
+        )}" stroke-width="1"/>"""
+      if fig.y.visible then
+        sb ++= s"""<text x="${fmt(left - 6 * ts)}" y="${fmt(
+            by + 4 * ts
+          )}" text-anchor="end" font-size="$tickSize" style="fill:${paint(
+            Paint.Muted
+          )};font-variant-numeric:tabular-nums">$minusInfinity</text>"""
+    }
 
     // marks
     sb ++= s"""<g clip-path="url(#$id-clip)">"""
@@ -423,8 +565,8 @@ object Svg:
               m.text
             )}</text>"""
       case m: Mark.Rule =>
-        val u = if m.vertical then xt(m.at) else yt(m.at)
-        if u.isFinite then
+        val placed = if m.vertical then okAt(xt, zeroOkX)(m.at) else okAt(yt, zeroOkY)(m.at)
+        if placed then
           val (x1p, y1p, x2p, y2p) =
             if m.vertical then (f.px(m.at), top, f.px(m.at), top + h)
             else (left, f.py(m.at), left + w, f.py(m.at))
@@ -433,8 +575,8 @@ object Svg:
             )}" stroke-width="${fmt(m.width * ink)}"${dash(m.dashed)}/>"""
       case m: Mark.Diagonal =>
         // t runs over the values for which both x = t and y = t + offset lie on the plot
-        val (xa, xb) = (xt.inverse(x0), xt.inverse(x1))
-        val (ya, yb) = (yt.inverse(y0), yt.inverse(y1))
+        val (xa, xb) = (xt.inverse(startX), xt.inverse(x1))
+        val (ya, yb) = (yt.inverse(startY), yt.inverse(y1))
         val (tLo, tHi) = (math.max(xa, ya - m.offset), math.min(xb, yb - m.offset))
         if tLo < tHi then
           // a straight line when both axes are linear; otherwise a curve, followed at even steps along each axis
@@ -453,7 +595,7 @@ object Svg:
               // the corners are far outside the plot, which the clip trims: the polygon is the region below the line
               val far = 4.0 * (fig.width + fig.height)
               val corners =
-                Seq((left + w + far, top - far), (left + w + far, top + h + far), (left - far, top + h + far))
+                Seq((left + w + far, top - far), (left + w + far, top + h + far), (line.head._1, top + h + far))
               val pts = (line ++ corners).map((px, py) => s"${fmt(px)},${fmt(py)}").mkString(" ")
               sb ++= s"""<polygon points="$pts" style="fill:${paint(shade)};fill-opacity:${m.shadeOpacity}"/>"""
             }
@@ -534,16 +676,13 @@ object Svg:
           )}">${escape(cb.label)}</text>"""
     }
 
-    // small print: what the axes could not show
-    if notShown > 0 then
-      val scales = Seq(xt, yt).filter(_ != Transform.Identity).map(_.label).distinct
-      val why =
-        if scales.isEmpty then "a position that is not a number" else s"outside the ${scales.mkString(" and ")} scale"
-      sb ++= s"""<text x="${fmt(left)}" y="${fmt(fig.height - 4 * ts)}" font-size="${fmt(
-          11.0 * ts
-        )}" style="fill:${paint(
+    // the small print, one line each, the last at the bottom edge
+    notes.zipWithIndex.foreach { (note, k) =>
+      val baseline = fig.height - 4 * ts - 14 * ts * (notes.size - 1 - k)
+      sb ++= s"""<text x="${fmt(left)}" y="${fmt(baseline)}" font-size="${fmt(11.0 * ts)}" style="fill:${paint(
           Paint.Muted
-        )}">${notShown} ${if notShown == 1 then "mark" else "marks"} not shown: $why</text>"""
+        )}">${escape(note)}</text>"""
+    }
     sb ++= "</svg>"
     sb.toString
 

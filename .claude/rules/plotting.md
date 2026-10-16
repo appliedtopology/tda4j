@@ -67,8 +67,12 @@ constructor parameter: `Labels`, `Size`, `Style`, `Palette` and `Scale.x/y/xy/co
 the chain of typed `with...` methods on `Figure` (and `Scene`), each `this + <tweak>`; the tweaks stay the values for a look
 shared by many plots, for boards and for scenes (project lead: chaining is close enough to the grammar, `+` need not be the
 API). Rules:
-- Positions pass through an axis's `Transform` in `Svg.render` ONLY; marks hold data in its own units. A mark with no place
-  on the scale (log of 0) is left out and COUNTED in small print under the plot, never dropped silently.
+- Positions pass through an axis's `Transform` in `Svg.render` ONLY; marks hold data in its own units. Every value has a
+  place (project lead: a negative filtration value is perfectly reasonable, and a limit of the log transform is not a reason
+  to refuse data): 0 on a log axis is a `-∞` line, a log axis with a negative value is drawn as a symmetric log and says so in
+  small print (only NEGATIVE DATA switches it, never a limit: plots pad their own lower bound below zero), the square root
+  is signed. Only a non-number is left out, and COUNTED in small print, never dropped silently. A tweak that needs a place on
+  the axis (`Board.shared`) must go through `Svg.resolved`, which is what an axis is actually drawn with.
 - Tweaks of different parts commute (a spec checks it); the same part, later wins; a `Style` replaces the whole style (copy
   a preset to change one setting); `Scale.degree` overrides live beside the palette, not in it, so palette order never
   matters. A tweak with nothing to change on a plot is a no-op; one that cannot apply (an axis of a `Scene`) throws a

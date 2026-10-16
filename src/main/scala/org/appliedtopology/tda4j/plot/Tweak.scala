@@ -121,7 +121,9 @@ final case class Size(width: Optional[Int] = Optional.empty, height: Optional[In
 object Scale:
   /** The x axis. `min` and `max` are the ends of the visible range in data units (give one to move one end); `breaks`
     * the tick positions; `format` a printf pattern for the tick numbers (`"%.1f"`, `"%.0f%%"`); `grid` and `visible`
-    * turn the gridlines and the whole axis (ticks, labels, line) on or off.
+    * turn the gridlines and the whole axis (ticks, labels, line) on or off. On a log axis what is at 0 (an `H0` bar's
+    * birth) sits on a `-∞` line below the lowest number: `minusInfinity = false` leaves it out and counts it instead,
+    * `true` keeps the line even with nothing on it (panels that must line up).
     */
   def x(
     transform: Optional[Transform] = Optional.empty,
@@ -130,8 +132,9 @@ object Scale:
     breaks: Optional[Seq[Double]] = Optional.empty,
     format: Optional[String] = Optional.empty,
     grid: Optional[Boolean] = Optional.empty,
-    visible: Optional[Boolean] = Optional.empty
-  ): Tweak = Position(true, false, transform, min, max, breaks, format, grid, visible)
+    visible: Optional[Boolean] = Optional.empty,
+    minusInfinity: Optional[Boolean] = Optional.empty
+  ): Tweak = Position(true, false, transform, min, max, breaks, format, grid, visible, minusInfinity)
 
   /** The y axis; as [[x]]. */
   def y(
@@ -141,8 +144,9 @@ object Scale:
     breaks: Optional[Seq[Double]] = Optional.empty,
     format: Optional[String] = Optional.empty,
     grid: Optional[Boolean] = Optional.empty,
-    visible: Optional[Boolean] = Optional.empty
-  ): Tweak = Position(false, true, transform, min, max, breaks, format, grid, visible)
+    visible: Optional[Boolean] = Optional.empty,
+    minusInfinity: Optional[Boolean] = Optional.empty
+  ): Tweak = Position(false, true, transform, min, max, breaks, format, grid, visible, minusInfinity)
 
   /** Both axes alike: a log-log persistence diagram is `Scale.xy(Transform.Log10)`. */
   def xy(
@@ -152,8 +156,9 @@ object Scale:
     breaks: Optional[Seq[Double]] = Optional.empty,
     format: Optional[String] = Optional.empty,
     grid: Optional[Boolean] = Optional.empty,
-    visible: Optional[Boolean] = Optional.empty
-  ): Tweak = Position(true, true, transform, min, max, breaks, format, grid, visible)
+    visible: Optional[Boolean] = Optional.empty,
+    minusInfinity: Optional[Boolean] = Optional.empty
+  ): Tweak = Position(true, true, transform, min, max, breaks, format, grid, visible, minusInfinity)
 
   /** The figure's color scale, if it has one (a heatmap, a persistence image, a cocycle, circular coordinates; any
     * other figure is left as it is). `min` and `max` set the values at the ends of the ramp, so that two figures can
@@ -199,7 +204,8 @@ object Scale:
     breaks: Optional[Seq[Double]],
     format: Optional[String],
     grid: Optional[Boolean],
-    visible: Optional[Boolean]
+    visible: Optional[Boolean],
+    minusInfinity: Optional[Boolean]
   ) extends Tweak:
     def onFigure(f: Figure): Figure =
       f.copy(x = if onX then update(f.x, "x") else f.x, y = if onY then update(f.y, "y") else f.y)
@@ -211,13 +217,7 @@ object Scale:
           require(c > 0 && c.isFinite, s"Scale.$which: a symmetric log axis needs a positive linear stretch, not $c")
         case _ => ()
       Seq("min" -> min, "max" -> max).foreach { (what, o) =>
-        o.toOption.foreach(v =>
-          require(
-            tr(v).isFinite,
-            s"Scale.$which: $what = ${Svg.number(v)} has no place on a ${tr.label} axis" +
-              (if tr == Transform.Identity then "" else "; choose a value the scale can show")
-          )
-        )
+        o.toOption.foreach(v => require(v.isFinite, s"Scale.$which: $what = ${Svg.number(v)} is not a number"))
       }
       val lo = min.toOption.orElse(a.min)
       val hi = max.toOption.orElse(a.max)
@@ -239,7 +239,8 @@ object Scale:
         ticks = breaks.toOption.fold(a.ticks)(bs => Ticks.At(bs.toIndexedSeq)),
         format = format.toOption.orElse(a.format),
         grid = grid.getOrElse(a.grid),
-        visible = visible.getOrElse(a.visible)
+        visible = visible.getOrElse(a.visible),
+        minusInfinity = minusInfinity.toOption.orElse(a.minusInfinity)
       )
 
   private final case class ColorChange(
@@ -258,11 +259,6 @@ object Scale:
           val lo = min.getOrElse(c.lo)
           val hi = max.getOrElse(c.hi)
           require(lo < hi, s"Scale.color: min (${Svg.number(lo)}) must be less than max (${Svg.number(hi)})")
-          require(
-            tr(lo).isFinite && tr(hi).isFinite,
-            s"Scale.color: a ${tr.label} color scale cannot show min = ${Svg.number(lo)}; give a min it can " +
-              "(a log scale needs min > 0)"
-          )
           c.copy(
             lo = lo,
             hi = hi,

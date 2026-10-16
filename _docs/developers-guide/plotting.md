@@ -34,8 +34,10 @@ Every plot is an immutable value.
   item, which becomes an SVG `<title>`.
 - `Svg.render` draws it. Positions go through each axis's `Transform`
   (identity, log, square root, symmetric log) there and nowhere else: a figure
-  holds data in its own units, and a mark with no place on an axis is left out
-  and counted under the plot.
+  holds data in its own units. What is at 0 on a log axis sits on a `-∞` line
+  beside the lowest number, a log axis with a negative value is drawn as a
+  symmetric log (and says so under the plot), and only a value that is not a
+  number is left out and counted.
 - `over` stacks one figure on another, such as a cycle on its complex.
 - A figure is changed with a `Tweak` (`Tweak.scala`): `fig + tweak`. `Labels`,
   `Size`, `Style`, `Palette` and the `Scale` constructors are tweaks; see the

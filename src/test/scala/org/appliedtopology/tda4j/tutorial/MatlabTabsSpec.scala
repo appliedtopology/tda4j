@@ -229,11 +229,12 @@ class MatlabTabsSpec extends Specification:
       val sqrtBarcode = result.plotBarcode().withXScale("sqrt").withTextScale(1.3)
       val logBarcode = result.plotBarcode().withXScale("log")
       val svg = diagram.svg()
-      // `sqrt` keeps the bars born at 0, which `log` has no place for and counts under the plot
+      // both keep the bars born at 0: `log` draws them from a `-∞` line
       (svg must contain("""width="800" height="600""""))
         .and(svg must contain(">A noisy circle</text>"))
         .and(sqrtBarcode.svg() must not(contain("not shown: outside")))
-        .and(logBarcode.svg() must contain("marks not shown: outside the log scale"))
+        .and(logBarcode.svg() must contain(">-∞</text>"))
+        .and(logBarcode.svg() must not(contain("not shown: ")))
         .and(sqrtBarcode.style.textScale must beEqualTo(1.3))
     }
   }

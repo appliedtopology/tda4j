@@ -69,14 +69,31 @@ final case class Board(plots: Seq[Figure], title: String = "") extends Plot:
     def shareTicks(t: Ticks): Ticks = t match
       case Ticks.Within(_, _) => Ticks.Auto
       case other              => other
-    def widen(a: Axis, range: Option[(Double, Double)]): Axis =
+    // a log axis that one panel had to draw as a symmetric log (it has a negative value) is that, alike, in every panel
+    def common(pick: Figure => Axis, drawn: Figure => Transform): Option[Transform] =
+      val stretches =
+        plots.filter(pick(_).transform == Transform.Log10).map(drawn).collect { case Transform.SymLog(c) => c }
+      Option.when(stretches.nonEmpty)(Transform.SymLog(stretches.min))
+    def widen(a: Axis, range: Option[(Double, Double)], reserve: Boolean, shared: Option[Transform]): Axis =
       range.fold(a) { (lo, hi) =>
         // a tick that marks the panel's own upper end (the `∞` of a barcode) marks the shared one
         val extra = a.extra.map((at, label) => if a.max.contains(at) then (hi, label) else (at, label))
-        a.copy(min = Some(lo), max = Some(hi), ticks = shareTicks(a.ticks), extra = extra)
+        // a log axis where one panel has a `-∞` line keeps room for it in every panel, so the numbers line up
+        val minusInfinity = if reserve && a.minusInfinity.isEmpty then Some(true) else a.minusInfinity
+        val transform = if a.transform == Transform.Log10 then shared.getOrElse(a.transform) else a.transform
+        a.copy(
+          min = Some(lo),
+          max = Some(hi),
+          ticks = shareTicks(a.ticks),
+          extra = extra,
+          minusInfinity = minusInfinity,
+          transform = transform
+        )
       }
     val (xr, yr) = (if x then one(_.x, "x") else None, if y then one(_.y, "y") else None)
-    copy(plots = plots.map(p => p.copy(x = widen(p.x, xr), y = widen(p.y, yr))))
+    val (xBand, yBand) = (plots.exists(p => Svg.atMinusInfinity(p)._1), plots.exists(p => Svg.atMinusInfinity(p)._2))
+    val (xCommon, yCommon) = (common(_.x, Svg.resolved(_)._1), common(_.y, Svg.resolved(_)._2))
+    copy(plots = plots.map(p => p.copy(x = widen(p.x, xr, xBand, xCommon), y = widen(p.y, yr, yBand, yCommon))))
   def fragment(theme: Theme = Theme.Auto): String =
     plots.map(_.svg(theme)).mkString("""<div style="display:flex;flex-wrap:wrap;gap:12px">""", "", "</div>")
   def html(theme: Theme = Theme.Auto): String =

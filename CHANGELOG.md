@@ -27,8 +27,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   transparent))`; the preset `Style.slides`. Each is also a value, a `Tweak` (`Labels`, `Size`, `Scale.x`, `Scale.color`,
   `Scale.degree`, `Palette`, `Style`), added with `+`: tweaks of different parts add in any order, `a + b` of tweaks is a
   tweak (a look kept in a `val`), `Tweak(f)` makes one from a function. Boards (`Plot.side`) and 3-D scenes take them too, where they
-  apply. `Transform.Log10`, `Sqrt` and `SymLog(c)`: a mark with no place on a scale is left out and counted under the
-  plot. `Palette.withSeries` and `withSurface` make a palette of your own; `ColorScale.viridis` and `greys` are ramps.
+  apply. `Transform.Log10`, `Sqrt` and `SymLog(c)` place every value: what is at 0 on a log axis (an `H0` bar's birth)
+  sits on a `-∞` line, as an essential bar ends at `∞`; a log axis with a negative value is a symmetric log and says so under
+  the plot; the square root keeps the sign. Only a value that is not a number is left out, and counted. `Palette.withSeries` and `withSurface` make a palette of your own; `ColorScale.viridis` and `greys` are ramps.
 - `Board.shared()` puts the panels on one scale; `Mark.Rule` (a line across the plot at one value) and
   `Mark.Diagonal(offset)` (the line `y = x + offset`, drawn in the plot's own scales).
 - MATLAB: the figures returned by the `plot...` methods have the common tweaks as methods that take strings and numbers

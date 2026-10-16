@@ -59,12 +59,20 @@ class PlotGrammarSpec extends Specification:
         .map(r => math.abs(r - 1) < 1e-9)
         .forall(identity) must beTrue
       Transform.SymLog(0.1).inverse(Transform.SymLog(0.1)(-3.0)) must beCloseTo(-3.0, 1e-9)
+      (for t <- Seq(Transform.Sqrt, Transform.SymLog(0.1)); v <- values.map(-_) yield t.inverse(t(v)) / v)
+        .map(r => math.abs(r - 1) < 1e-9)
+        .forall(identity) must beTrue
     }
-    "give no position to what the scale cannot show, instead of a wrong one" in {
-      Transform.Log10(0.0).isNaN must beTrue
+    "keep the sign of a square root, and give the log of zero and of a negative number no position of its own" in {
+      Transform.Sqrt(-4.0) must beEqualTo(-2.0)
+      Transform.Sqrt.inverse(Transform.Sqrt(-9.0)) must beCloseTo(-9.0, 1e-9)
+      Transform.Log10(0.0).isNaN must beTrue // the renderer gives these a place; the function does not invent one
       Transform.Log10(-1.0).isNaN must beTrue
-      Transform.Sqrt(-1.0).isNaN must beTrue
-      Transform.SymLog(1.0)(0.0) must beEqualTo(0.0) // zero and negative numbers are fine on a symmetric log axis
+      Transform.SymLog(1.0)(0.0) must beEqualTo(0.0)
+    }
+    "put round ticks on a symmetric log axis, whatever its stretch" in {
+      Transform.SymLog(1.351).ticks(-2.3, 2.3) must contain(allOf(-2.0, -1.0, 0.0, 1.0, 2.0))
+      Transform.SymLog(1.0).ticks(-1000, 1000) must contain(allOf(-1000.0, -100.0, -10.0, 0.0, 10.0, 100.0, 1000.0))
     }
     "put log ticks on powers of ten, with 2 and 5 between when there are few decades" in {
       Transform.Log10.ticks(1, 1e4) must beEqualTo(IndexedSeq(1.0, 10.0, 100.0, 1000.0, 10000.0))
@@ -87,20 +95,92 @@ class PlotGrammarSpec extends Specification:
       val labels = words((dots(1, 10, 100, 1000) + Scale.y(Transform.Log10)).svg())
       labels must contain(allOf("1", "10", "100", "1000"))
     }
-    "leave out what it cannot show, and say how much" in {
-      val fig = dots(1, 10, 0.0, 100)
-      count(fig.svg(), "circle") must beEqualTo(4)
-      val logged = (fig + Scale.y(Transform.Log10)).svg()
-      count(logged, "circle") must beEqualTo(3)
-      words(logged) must contain("1 mark not shown: outside the log scale")
-      words(fig.svg()).exists(_.contains("not shown")) must beFalse
+    val onePoint = (xs: Seq[Double]) =>
+      Figure(marks = Vector(Mark.Points(xs.map(x => (x, 1.0)).toIndexedSeq, IndexedSeq(Paint.Series(0)))))
+    "put what is at 0 on a -∞ line below the lowest number, and leave nothing out" in {
+      val svg = (onePoint(Seq(0.0, 1.0, 10.0, 100.0)) + Scale.x(Transform.Log10)).svg()
+      val xs = elements(svg, "circle").map(number(_, "cx"))
+      xs.size must beEqualTo(4)
+      words(svg) must contain("-∞")
+      words(svg).exists(_.contains("not shown")) must beFalse
+      (xs(1) - xs(0)) must beGreaterThan(30.0) // the line is a place of its own, clear of the lowest number
+      xs(0) must beGreaterThan(58.0 + 8) // and of the edge, so its marker is whole
+      (xs(3) - xs(2)) must beCloseTo(xs(2) - xs(1), 0.05) // the numbers keep equal steps for equal ratios
+      elements(svg, "line").exists { l =>
+        l.getAttribute("x1") == l.getAttribute("x2") && math.abs(number(l, "x1") - xs(0)) < 0.01
+      } must beTrue
     }
-    "show only the bars that have a place: an H0 bar born at 0 has none" in {
+    "show a bar born at 0 from the -∞ line, as an essential bar runs to ∞" in {
       val bars =
         List(PersistenceBar[Double](0, 0.0, 1.0), PersistenceBar[Double](1, 0.5, 2.0), PersistenceBar[Double](0, 0.0))
       val svg = (Plot.barcode(bars) + Scale.x(Transform.Log10)).svg()
-      elements(svg, "line").count(_.getAttribute("stroke-linecap") == "butt") must beEqualTo(1)
-      words(svg) must contain("2 marks not shown: outside the log scale")
+      val drawn = elements(svg, "line").filter(_.getAttribute("stroke-linecap") == "butt")
+      drawn.size must beEqualTo(3)
+      val label = elements(svg, "text").find(_.getTextContent == "-∞").get
+      val starts = drawn.filter(_.getElementsByTagName("title").item(0).getTextContent.startsWith("H0"))
+      starts.map(number(_, "x1")).foreach(x => x must beCloseTo(number(label, "x"), 0.01))
+      words(svg).exists(_.contains("not shown")) must beFalse
+    }
+    "plot a negative value: the axis is a symmetric log about zero, and says so" in {
+      val xs = Seq(-100.0, -10.0, -1.0, 0.0, 1.0, 10.0, 100.0)
+      val svg = (onePoint(xs) + Scale.x(Transform.Log10)).svg()
+      val cx = elements(svg, "circle").map(number(_, "cx"))
+      cx.size must beEqualTo(7)
+      cx must beEqualTo(cx.sorted)
+      (cx(4) - cx(3)) must beCloseTo(cx(3) - cx(2), 0.05) // mirrored about zero
+      (cx(6) - cx(3)) must beCloseTo(cx(3) - cx(0), 0.05)
+      words(svg) must contain("negative values: the x axis is a symmetric log scale, linear within ±1")
+      words(svg).exists(_.contains("not shown")) must beFalse
+      words(svg) must not(contain("-∞")) // zero has its own place here, there is no line
+    }
+    "give two axes that are both switched one stretch and one note, so that one scale reads alike along both" in {
+      val both = Figure(
+        marks = Vector(Mark.Points(IndexedSeq((-2.0, -0.2), (0.5, 4.0), (3.0, 1.0)), IndexedSeq(Paint.Series(0)))),
+        equalAspect = true
+      ) + Scale.xy(Transform.Log10)
+      val (xt, yt) = Svg.resolved(both)
+      xt must beEqualTo(yt)
+      xt must beEqualTo(Transform.SymLog(0.2)) // the smaller of x's 0.5 and y's 0.2
+      val notes = words(both.svg()).filter(_.contains("symmetric log"))
+      notes must beEqualTo(Seq("negative values: the x and y axes are symmetric log scales, linear within ±0.2"))
+    }
+    "not become a symmetric log for a limit alone, nor for the lower bound a plot pads below zero" in {
+      val bars = List(PersistenceBar[Double](0, 0.0, 1.0), PersistenceBar[Double](1, 0.5, 2.0))
+      words((Plot.barcode(bars) + Scale.x(Transform.Log10)).svg()).exists(_.contains("symmetric log")) must beFalse
+      val limited = onePoint(Seq(1.0, 10.0, 100.0)) + Scale.x(Transform.Log10, min = -5)
+      limited.x.min must beSome(-5.0) // a limit that no value reaches is allowed
+      words(limited.svg()).exists(_.contains("symmetric log")) must beFalse
+    }
+    "leave out only what is not a number, and say how much" in {
+      val fig = Figure(marks =
+        Vector(Mark.Points(IndexedSeq((1.0, 1.0), (2.0, Double.NaN), (3.0, 3.0)), IndexedSeq(Paint.Series(0))))
+      )
+      val svg = (fig + Scale.y(Transform.Log10)).svg()
+      count(svg, "circle") must beEqualTo(2)
+      words(svg) must contain("1 mark not shown: a position that is not a number")
+    }
+    "leave the line off when asked, counting what is at 0 instead, or keep it with nothing on it" in {
+      val withZero = onePoint(Seq(0.0, 1.0, 10.0))
+      val off = (withZero + Scale.x(Transform.Log10, minusInfinity = false)).svg()
+      count(off, "circle") must beEqualTo(2)
+      words(off) must contain("1 mark not shown: at 0 on a log axis drawn without a -∞ line")
+      words(off) must not(contain("-∞"))
+      words((onePoint(Seq(1.0, 10.0, 100.0)) + Scale.x(Transform.Log10, minusInfinity = true)).svg()) must contain("-∞")
+    }
+  }
+
+  "a square-root axis" should {
+    "show a negative value mirrored, and leave nothing out" in {
+      val xs = Seq(-9.0, -4.0, -1.0, 0.0, 1.0, 4.0, 9.0)
+      val fig = Figure(marks = Vector(Mark.Points(xs.map(x => (x, 1.0)).toIndexedSeq, IndexedSeq(Paint.Series(0))))) +
+        Scale.x(Transform.Sqrt)
+      val svg = fig.svg()
+      val cx = elements(svg, "circle").map(number(_, "cx"))
+      cx.size must beEqualTo(7)
+      cx must beEqualTo(cx.sorted)
+      (cx(5) - cx(3)) must beCloseTo(cx(3) - cx(1), 0.05) // -4 and 4 are as far from 0, on either side
+      (cx(5) - cx(3)) must beCloseTo(2 * (cx(4) - cx(3)), 0.05) // 2 and 1: the root of 4 and of 1
+      words(svg).exists(_.contains("not shown")) must beFalse
     }
   }
 
@@ -124,6 +204,14 @@ class PlotGrammarSpec extends Specification:
       val dot = elements(svg, "circle").head
       distanceToPolyline((number(dot, "cx"), number(dot, "cy")), line) must beLessThan(0.6)
       line.map(distanceToSegment(_, line.head, line.last)).max must beGreaterThan(5.0) // it is bent
+    }
+    "stop at the numbers when the x axis has a -∞ line" in {
+      val withLine = Figure(
+        marks = Vector(Mark.Diagonal(), Mark.Points(IndexedSeq((0.0, 0.01), (1.0, 2.0)), IndexedSeq(Paint.Series(0))))
+      ) + Scale.xy(Transform.Log10) // y reaches lower than the numbers of x, so x is what the diagonal stops at
+      val svg = withLine.svg()
+      val band = number(elements(svg, "circle").head, "cx")
+      polyline(svg).map(_._1).min must beGreaterThan(band + 20)
     }
     "be a line across the whole plot, however the range is set" in {
       val svg = (fig + Scale.xy(min = 1, max = 4)).svg()
@@ -149,7 +237,7 @@ class PlotGrammarSpec extends Specification:
       val onlyX = born + Scale.x(Transform.Sqrt)
       val zero = elements(onlyX.svg(), "circle").map(number(_, "cx")).min
       (zero must beGreaterThan(58.0)) and (zero must beLessThan(58.0 + 30))
-      onlyX.ranges._1._1 must beEqualTo(0.0)
+      onlyX.ranges._1._1 must beLessThanOrEqualTo(0.0)
       val both = (born + Scale.xy(Transform.Sqrt)).svg()
       val bothZero = elements(both, "circle").map(number(_, "cx")).min
       (bothZero must beGreaterThan(58.0)) and (bothZero must beLessThan(58.0 + 30))
@@ -180,9 +268,10 @@ class PlotGrammarSpec extends Specification:
       elements((plain + Scale.y(visible = false)).svg(), "text").size must beLessThan(count(plain.svg(), "text"))
     }
     "refuse limits the scale cannot show or that cross, saying what to do" in {
-      (dots(1, 2) + Scale.x(Transform.Log10, min = 0)) must throwAn[IllegalArgumentException](
-        "Scale.x: min = 0 has no place on a log axis"
+      (dots(1, 2) + Scale.x(min = Double.NaN)) must throwAn[IllegalArgumentException](
+        "Scale.x: min = NaN is not a number"
       )
+      (dots(1, 2) + Scale.x(Transform.Log10, min = 0, max = 5)).x.min must beSome(0.0) // zero and below are allowed
       (dots(1, 2) + Scale.x(min = 5, max = 3)) must throwAn[IllegalArgumentException]("min \\(5\\) must be less")
       (dots(1, 2) + Scale.y(format = "%d")) must throwAn[IllegalArgumentException]("printf pattern")
       (dots(1, 2) + Scale.x(Transform.SymLog(-1.0))) must throwAn[IllegalArgumentException]("positive linear")
@@ -241,14 +330,27 @@ class PlotGrammarSpec extends Specification:
     "refuse changes that mean nothing to its kind of ramp" in {
       val cyc = Plot.circularCoordinates(circle, circle.indices.map(i => i -> i / 16.0).toMap)
       (cyc + Scale.color(max = 2)) must throwAn[IllegalArgumentException]("one turn")
-      (image + Scale.color(transform = Transform.Log10, min = 0)) must throwAn[IllegalArgumentException](
-        "log color scale"
-      )
       val d = Persistence(circle, maxDimension = 1, representatives = Representatives.Cocycles)
       import d.given
       (Plot.cocycle(circle, d.dim(1).bars.head.representative) + Scale.color(min = -1)) must throwAn[
         IllegalArgumentException
       ]("symmetric")
+    }
+    "give every value a color on a log scale that starts at 0 or below" in {
+      val p = Palette.brand
+      val fromZero = ColorScale(Ramp.Sequential, 0.0, 10.0, transform = Transform.Log10)
+      val colors = Seq(0.0, 0.001, 0.1, 1.0, 10.0).map(fromZero.hex(_, p))
+      colors.forall(_.matches("#[0-9a-f]{6}")) must beTrue
+      colors.distinct.size must beEqualTo(5)
+      colors.head must beEqualTo(Palette.along(p.sequential, 0.0))
+      colors.last must beEqualTo(Palette.along(p.sequential, 1.0))
+      val signed = ColorScale(Ramp.Sequential, -5.0, 5.0, transform = Transform.Log10)
+      signed.hex(-5.0, p) must beEqualTo(Palette.along(p.sequential, 0.0))
+      signed.hex(5.0, p) must beEqualTo(Palette.along(p.sequential, 1.0))
+      signed.hex(0.0, p) must beEqualTo(Palette.along(p.sequential, 0.5))
+      (image + Scale.color(transform = Transform.Log10, min = 0)).colorScale.get.transform must beEqualTo(
+        Transform.Log10
+      )
     }
     "leave a figure without one as it is" in {
       val fig = Plot.barcode(circleDiagram)
@@ -529,6 +631,22 @@ class PlotGrammarSpec extends Specification:
       val same = board.shared(y = false)
       same.plots.map(p => p.x.extra.head._1 == p.x.max.get) must beEqualTo(Seq(true, true))
       same.plots.map(_.x.extra.head._1).distinct.size must beEqualTo(1)
+    }
+    "draw a log axis the same in every panel when one has to be a symmetric log" in {
+      def panel(xs: Double*) =
+        Figure(marks = Vector(Mark.Points(xs.map(x => (x, 1.0)).toIndexedSeq, IndexedSeq(Paint.Series(0))))) +
+          Scale.x(Transform.Log10)
+      val board = Plot.side(panel(1, 10), panel(-1, 5)).shared(y = false)
+      board.plots.map(_.x.transform).distinct must beEqualTo(Seq(Transform.SymLog(1.0)))
+    }
+    "keep room for the -∞ line in every panel when one panel has it, so the numbers line up" in {
+      def panel(xs: Double*) =
+        Figure(marks = Vector(Mark.Points(xs.map(x => (x, 1.0)).toIndexedSeq, IndexedSeq(Paint.Series(0))))) +
+          Scale.x(Transform.Log10)
+      val board = Plot.side(panel(0, 10), panel(1, 10)).shared(y = false)
+      board.plots.map(_.x.minusInfinity) must beEqualTo(Seq(Some(true), Some(true)))
+      val tens = board.plots.map(p => elements(p.svg(), "circle").map(number(_, "cx")).last)
+      tens(0) must beCloseTo(tens(1), 0.05)
     }
     "refuse axes that are not on the same scale" in {
       Plot.side(dots(1, 2, 3), dots(1, 2, 3) + Scale.y(Transform.Sqrt)).shared() must throwAn[IllegalArgumentException](

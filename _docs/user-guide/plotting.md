@@ -232,11 +232,18 @@ val barcode = Plot.barcode(d)
 barcode.save("barcode.svg")
 ```
 
-`min` and `max` move one end each, so `withXScale(max = 2)` keeps the plot's own lower end. A mark that has no place on a
-scale (a bar born at `0` on a log axis) is left out, and a line of small print under the plot says how many: a barcode
-or a diagram on a log axis therefore wants a degree whose births are positive (`d.dim(1)`), or `Transform.Sqrt` and
-`Transform.SymLog`, which keep zero. The diagonal of a diagram is drawn in the plot's own scales, so it is still the line
-`y = x` on a log-log diagram.
+`min` and `max` move one end each, so `withXScale(max = 2)` keeps the plot's own lower end.
+
+Every value has a place on every scale. On a log axis what is at exactly `0`, such as an `H0` bar's birth, sits on a
+`-∞` line just below the lowest number, labelled `-∞` as an essential bar's end is labelled `∞`; a bar born there starts
+from the line. A log axis with a negative value (a sublevel set of a function that goes below zero) is drawn as a
+symmetric log: logarithmic away from zero, linear within the smallest magnitude on the axis, zero in its place, and a
+line of small print under the plot says so. A square root keeps the sign, so a negative value is mirrored, and
+`Transform.SymLog(linear)` sets the linear stretch yourself. Only a value that is not a number at all is left out, and
+the small print counts it. `withXScale(minusInfinity = false)` leaves what is at 0 out of a log axis instead (counting
+it), and `minusInfinity = true` keeps the line with nothing on it, so that panels line up (`Board.shared()` does that
+for you). The diagonal of a diagram is drawn in the plot's own scales, so it is still the line `y = x` on a log-log
+diagram, and it starts where the numbers do, not at the `-∞` line.
 
 ### Colors
 

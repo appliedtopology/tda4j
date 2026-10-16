@@ -95,6 +95,15 @@ object Gallery:
     Plot.diagram(loops).save(out("custom-diagram-linear.svg"))
     (Plot.diagram(loops) + Scale.xy(Transform.Log10) + Labels(title = "Loops, log-log", x = "birth", y = "death") +
       Mark.Diagonal(offset = 0.0, paint = Paint.Muted, dashed = true)).save(out("custom-diagram-loglog.svg"))
+    Plot.barcode(d).withXScale(Transform.Log10).save(out("custom-barcode-log.svg"))
+    Plot.diagram(d).withXYScale(Transform.Log10).save(out("custom-diagram-loglog-h0.svg"))
+    Plot.diagram(rough).withXYScale(Transform.Log10).withLegend("bottom").save(out("custom-diagram-loglog-all.svg"))
+    // a signed filtration: an image with negative pixel values
+    val signedImg = Image(img.values.map(_ - 2.0), img.shape)
+    val signed = Persistence(signedImg)
+    Plot.barcode(signed).save(out("custom-signed-barcode-linear.svg"))
+    Plot.barcode(signed).withXScale(Transform.Log10).save(out("custom-signed-barcode-log.svg"))
+    Plot.diagram(signed).withXYScale(Transform.Log10).save(out("custom-signed-diagram-log.svg"))
     (Plot.barcode(d) + Style.slides + Size(960, 540) + Labels(
       title = "For a slide",
       subtitle = "bigger text and marks"

@@ -23,7 +23,8 @@ enum Ramp:
   *   the color bar's title
   * @param transform
   *   how values are spread along a `Sequential` ramp (`Transform.Sqrt` for a heavy-tailed image); the other ramps are
-  *   always linear
+  *   always linear. A `Log10` scale that starts at 0 or below is a symmetric log, linear within a thousandth of its
+  *   largest magnitude, so that every value has a color
   * @param stops
   *   the colors of a `Sequential` ramp, light to dark, instead of the palette's own (for example
   *   [[ColorScale.viridis]]); evenly spaced and mixed in OKLab
@@ -42,14 +43,20 @@ final case class ColorScale(
   /** The color for the value `v` (hex), as `palette` has it. */
   def hex(v: Double, palette: Palette): String = ramp match
     case Ramp.Sequential =>
+      val tr = spread
       val t =
-        if hi > lo then (transform(v) - transform(lo)) / (transform(hi) - transform(lo))
+        if hi > lo then (tr(v) - tr(lo)) / (tr(hi) - tr(lo))
         else 0.0
       Palette.along(stops.getOrElse(palette.sequential), t)
     case Ramp.Diverging =>
       val u = if hi > 0 then v / hi else 0.0
       palette.divergingAt(if u.isNaN then 0.0 else math.max(-1.0, math.min(1.0, u)))
     case Ramp.Cyclic => Palette.cyclicAt(v)
+
+  /** The transform the values are spread by: a log scale with no positive low end is a symmetric log. */
+  private def spread: Transform = transform match
+    case Transform.Log10 if lo <= 0 => Transform.SymLog(math.max(math.abs(lo), math.abs(hi)) / 1000.0)
+    case other                      => other
 
   /** The color a fraction `t` of the way along the ramp, `0` at the low end: what the color bar draws. */
   def barColor(t: Double, palette: Palette): String = ramp match
