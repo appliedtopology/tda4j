@@ -9,13 +9,46 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Breaking
 
+- `RingModule.scale` is `scalarMultiply`, and so is the infix extension (`r.scalarMultiply(x)`, was `r.scale(x)`). The
+  operators `⊠`, `|*|`, `<*` and `mul` are as they were. A `RingModule` instance of your own implements
+  `scalarMultiply(x, y)`; the labs (`TDAlab`, `CubicalLab`) lose `scale` and gain `scalarMultiply`.
+- The plot model follows the grammar of graphics (see Added). `plot.Axis` has `min` and `max` instead of `range`, a
+  `Ticks` choice instead of a list of ticks (`extra` ticks for the `∞` mark), a `Transform` and a number `format`;
+  `Figure.colorbar` and the `Colorbar` class are `Figure.colorScale` and `ColorScale`; `Figure` and `Scene` take a
+  `style` and per-degree `degrees` (a `Figure` also a `legendTitle`). The functions of `Plot`, which `matlab` and `cli`
+  call, keep their signatures.
+
 ### Added
+
+- Customizing a plot, by chaining: `Plot.diagram(d).withLabels(title = ..., x = ..., y = ...).withXYScale(Transform.Log10)
+  .withSize(960, 540)`, with `withXScale`/`withYScale` (scale, `min`, `max`, `breaks`, `format = "%.1f"`, gridlines),
+  `withColorScale(min, max, stops, transform)` for a heatmap's or a cocycle's colors, `withDegree(1, color = ..., label =
+  ..., shape = ...)`, `withPalette(Palette.reference)` and `withStyle(Style(font, textScale, markScale, grid, legend,
+  transparent))`; the preset `Style.slides`. Each is also a value, a `Tweak` (`Labels`, `Size`, `Scale.x`, `Scale.color`,
+  `Scale.degree`, `Palette`, `Style`), added with `+`: tweaks of different parts add in any order, `a + b` of tweaks is a
+  tweak (a look kept in a `val`), `Tweak(f)` makes one from a function. Boards (`Plot.side`) and 3-D scenes take them too, where they
+  apply. `Transform.Log10`, `Sqrt` and `SymLog(c)`: a mark with no place on a scale is left out and counted under the
+  plot. `Palette.withSeries` and `withSurface` make a palette of your own; `ColorScale.viridis` and `greys` are ramps.
+- `Board.shared()` puts the panels on one scale; `Mark.Rule` (a line across the plot at one value) and
+  `Mark.Diagonal(offset)` (the line `y = x + offset`, drawn in the plot's own scales).
+- MATLAB: the figures returned by the `plot...` methods have the common tweaks as methods that take strings and numbers
+  (`withTitle`, `withSize`, `withXScale('log')`, `withPalette`, `withDegreeColor`, `withTextScale`, `withLegend`, ...,
+  and `save(path, 'dark')`); command line: `--title`, `--x-label`, `--y-label`, `--width`, `--height`, `--palette`,
+  `--theme`, `--text-scale`, `--x-scale` and `--y-scale` for a `--plot`.
 
 ### Changed
 
+- A plot's colors for data follow its palette: a persistence image, an image, a cocycle and circular coordinates hold
+  their values (`Paint.Value`) and a `ColorScale` colors them when drawn.
+- The `∞` line of a persistence diagram and its diagonal run across the whole plot.
+
 ### Fixed
 
+- `fig.copy(palette = ...)` left heatmaps, cocycles' values and the color bar in the palette the plot was built with.
+
 ### Build, CI and Documentation
+
+- The user guide's plotting page has a "Customizing a plot" section; the CLI and MATLAB pages point to it.
 
 
 ## 0.6.2 (2026-10-15)

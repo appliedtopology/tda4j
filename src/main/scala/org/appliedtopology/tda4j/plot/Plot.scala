@@ -41,9 +41,42 @@ trait Plot:
     */
   def save(path: String): Path = save(path, None)
 
+  /** [[save]] in the theme called `theme` (`auto`, `light` or `dark`), for callers that have a word, not a `Theme`
+    * (MATLAB: `fig.save('diagram.svg', 'dark')`).
+    */
+  def save(path: String, theme: String): Path = save(path, Some(Theme.named(theme)))
+
 /** Plots side by side, in one row (small multiples: a barcode next to its diagram, a complex at several scales). */
 final case class Board(plots: Seq[Figure], title: String = "") extends Plot:
   override def toString: String = Plot.describe("Board", title, s"${plots.size} plots")
+
+  /** This board with the change `tweak` makes in every panel (`Labels(title = ...)` titles the board, the page). */
+  def +(tweak: Tweak): Board = tweak.onBoard(this)
+
+  /** The panels on one scale, so that what is drawn at the same height means the same in each: every panel takes the
+    * union of the panels' ranges on the axes asked for. The panels must draw those axes on the same [[Transform]].
+    */
+  def shared(x: Boolean = true, y: Boolean = true): Board =
+    def one(pick: Figure => Axis, name: String): Option[(Double, Double)] =
+      Option.when(plots.nonEmpty) {
+        require(
+          plots.map(p => pick(p).transform).distinct.size == 1,
+          s"Board.shared: the panels draw the $name axis on different scales (${plots.map(p => pick(p).transform.label).distinct.mkString(", ")})"
+        )
+        val ends = plots.map(p => if name == "x" then p.ranges._1 else p.ranges._2)
+        (ends.map(_._1).min, ends.map(_._2).max)
+      }
+    def shareTicks(t: Ticks): Ticks = t match
+      case Ticks.Within(_, _) => Ticks.Auto
+      case other              => other
+    def widen(a: Axis, range: Option[(Double, Double)]): Axis =
+      range.fold(a) { (lo, hi) =>
+        // a tick that marks the panel's own upper end (the `∞` of a barcode) marks the shared one
+        val extra = a.extra.map((at, label) => if a.max.contains(at) then (hi, label) else (at, label))
+        a.copy(min = Some(lo), max = Some(hi), ticks = shareTicks(a.ticks), extra = extra)
+      }
+    val (xr, yr) = (if x then one(_.x, "x") else None, if y then one(_.y, "y") else None)
+    copy(plots = plots.map(p => p.copy(x = widen(p.x, xr), y = widen(p.y, yr))))
   def fragment(theme: Theme = Theme.Auto): String =
     plots.map(_.svg(theme)).mkString("""<div style="display:flex;flex-wrap:wrap;gap:12px">""", "", "</div>")
   def html(theme: Theme = Theme.Auto): String =
@@ -144,14 +177,23 @@ object Plot:
       row += 2
     }
     val left = lo - 0.02 * span(lo, hi)
-    val xTicks = Svg.niceTicks(left, if essential then hi else right).map(t => (t, Svg.number(t))) ++
-      (if essential then IndexedSeq((right, "∞")) else IndexedSeq.empty)
     Figure(
       marks = marks.result(),
       title = title,
       subtitle = s"${all.size} bars" + longest.fold("")(n => s", the $n longest of each degree shown"),
-      x = Axis(label = "filtration value", range = Some((left, right)), ticks = Some(xTicks)),
-      y = Axis(range = Some((-(row - 2).toDouble - 0.5, 0.5)), ticks = Some(labels.result()), grid = false),
+      x = Axis(
+        label = "filtration value",
+        min = Some(left),
+        max = Some(right),
+        ticks = Ticks.Within(left, if essential then hi else right),
+        extra = if essential then IndexedSeq((right, "∞")) else IndexedSeq.empty
+      ),
+      y = Axis(
+        min = Some(-(row - 2).toDouble - 0.5),
+        max = Some(0.5),
+        ticks = Ticks.Labelled(labels.result()),
+        grid = false
+      ),
       legend = degreeLegend(byDegree.map(_._1), LegendItem.Key.Line),
       height = height,
       palette = palette
@@ -171,9 +213,8 @@ object Plot:
     val pad = 0.04 * span(lo, hi)
     val (a, z) = (lo - pad, top + pad)
     val marks = Vector.newBuilder[Mark]
-    marks += Mark.Polygons(IndexedSeq(IndexedSeq((a, a), (z * 2, z * 2), (z * 2, a - z))), IndexedSeq(Paint.Grid), 0.6)
-    marks += Mark.Segments(IndexedSeq(((a, a), (z * 2, z * 2))), IndexedSeq(Paint.Axis), width = 1)
-    if essential then marks += Mark.Segments(IndexedSeq(((a, top), (z * 2, top))), IndexedSeq(Paint.Axis), width = 1)
+    marks += Mark.Diagonal(shade = Some(Paint.Grid))
+    if essential then marks += Mark.Rule.horizontal(top)
     all.groupBy(_.dim).toSeq.sortBy(_._1).foreach { (k, bs) =>
       marks += Mark.Points(
         bs.map(b => (b.birth, if b.death.isPosInfinity then top else b.death)).toIndexedSeq,
@@ -183,16 +224,18 @@ object Plot:
         tips = bs.map(interval).toIndexedSeq
       )
     }
-    val ticks = Svg.niceTicks(a, if essential then hi else z).map(t => (t, Svg.number(t)))
+    val ticks = Ticks.Within(a, if essential then hi else z)
     Figure(
       marks = marks.result(),
       title = title,
       subtitle = s"${all.size} bars",
-      x = Axis(label = "birth", range = Some((a, z)), ticks = Some(ticks)),
+      x = Axis(label = "birth", min = Some(a), max = Some(z), ticks = ticks),
       y = Axis(
         label = "death",
-        range = Some((a, z)),
-        ticks = Some(ticks ++ (if essential then Seq((top, "∞")) else Nil))
+        min = Some(a),
+        max = Some(z),
+        ticks = ticks,
+        extra = if essential then IndexedSeq((top, "∞")) else IndexedSeq.empty
       ),
       legend = degreeLegend(all.map(_.dim)),
       width = 560,
@@ -228,14 +271,14 @@ object Plot:
       marks = Vector(
         Mark.Boxes(
           boxes,
-          values.map(v => Paint.Fixed(palette.sequentialAt(if maxValue > 0 then v / maxValue else 0))),
+          values.map(v => Paint.Value(v)),
           tips = values.map(v => s"value ${Svg.number(v)}")
         )
       ),
       title = title,
-      x = Axis(label = "birth", range = Some(birthRange), grid = false),
-      y = Axis(label = "persistence", range = Some(persistenceRange), grid = false),
-      colorbar = Some(Colorbar("weight", 0.0, maxValue, palette.sequentialAt)),
+      x = Axis(label = "birth", min = Some(b0), max = Some(b1), grid = false),
+      y = Axis(label = "persistence", min = Some(p0), max = Some(p1), grid = false),
+      colorScale = Some(ColorScale(Ramp.Sequential, 0.0, maxValue, "weight")),
       width = 520,
       height = 460,
       palette = palette
@@ -288,27 +331,26 @@ object Plot:
 
   private final case class Grid(rows: Int, cols: Int, value: (Int, Int) => Double)
 
-  private def heat(g: Grid, palette: Palette): (Mark, Colorbar) =
+  private def heat(g: Grid): (Mark, ColorScale) =
     val vs = for i <- 0 until g.rows; j <- 0 until g.cols yield g.value(i, j)
     val finite = vs.filter(_.isFinite)
     val lo = finite.minOption.getOrElse(0.0)
     val hi = finite.maxOption.getOrElse(1.0)
-    def t(v: Double) = if hi > lo then (v - lo) / (hi - lo) else 0.0
     val boxes = for i <- 0 until g.rows; j <- 0 until g.cols
     yield (j.toDouble, -(i + 1).toDouble, (j + 1).toDouble, -i.toDouble)
-    val paints = vs.map(v => if v.isFinite then Paint.Fixed(palette.sequentialAt(t(v))) else Paint.Surface)
+    val paints = vs.map(v => if v.isFinite then Paint.Value(v) else Paint.Surface)
     val tips = for i <- 0 until g.rows; j <- 0 until g.cols yield s"pixel ($i, $j): ${Svg.number(g.value(i, j))}"
-    (Mark.Boxes(boxes, paints, tips = tips), Colorbar("value", lo, hi, palette.sequentialAt))
+    (Mark.Boxes(boxes, paints, tips = tips), ColorScale(Ramp.Sequential, lo, hi, "value"))
 
   private def imageFigure(g: Grid, title: String, palette: Palette): Figure =
-    val (m, cb) = heat(g, palette)
+    val (heatmap, colors) = heat(g)
     val scale = math.max(1.0, math.min(14.0, 480.0 / math.max(g.rows, g.cols)))
     Figure(
-      marks = Vector(m),
+      marks = Vector(heatmap),
       title = title,
-      x = Axis(range = Some((0.0, g.cols.toDouble)), visible = false),
-      y = Axis(range = Some((-g.rows.toDouble, 0.0)), visible = false),
-      colorbar = Some(cb),
+      x = Axis(min = Some(0.0), max = Some(g.cols.toDouble), visible = false),
+      y = Axis(min = Some(-g.rows.toDouble), max = Some(0.0), visible = false),
+      colorScale = Some(colors),
       width = (g.cols * scale + 120).toInt.max(320),
       height = (g.rows * scale + 70).toInt.max(200),
       equalAspect = true,
@@ -537,13 +579,12 @@ object Plot:
         .getOrElse(0.0)
     val terms = termsOf(chain).filter((s, _) => at.toOption.forall(r => diameter(s) <= r + 1e-12))
     val m = terms.map(t => math.abs(t._2)).filter(_.isFinite).maxOption.getOrElse(1.0) max 1e-12
-    val pal = Palette.default
-    def paint(c: Double) = Paint.Fixed(pal.divergingAt(c / m))
+    def paint(c: Double) = Paint.Value(c)
     def tip(s: Simplex[Int], c: Double) = s"${s.show}: ${Svg.number(c)}"
     val tris = terms.filter(_._1.dim == 2)
     val edges = terms.filter(_._1.dim == 1)
     val vertices = terms.filter(_._1.dim == 0)
-    cloudFigure(points, title, pal) ++ Seq(
+    cloudFigure(points, title, Palette.default) ++ Seq(
       Mark.Polygons(
         tris.map((t, _) => t.toIndexedSeq.map(pts)).toIndexedSeq,
         tris.map((_, c) => paint(c)).toIndexedSeq,
@@ -566,7 +607,7 @@ object Plot:
       case f =>
         f.copy(
           subtitle = s"${terms.size} cells" + at.toOption.fold("")(r => s" of diameter at most ${Svg.number(r)}"),
-          colorbar = Some(Colorbar("value", -m, m, t => pal.divergingAt(2 * t - 1)))
+          colorScale = Some(ColorScale(Ramp.Diverging, -m, m, "value"))
         )
 
   /** Circular coordinates (`CircularCoordinates.compute(...).theta`, angles as fractions of a turn) on the points, on a
@@ -581,7 +622,7 @@ object Plot:
         Mark.Points(off.map(pts), IndexedSeq(Paint.Grid), radius = 3, tips = off.map(i => s"point $i: no coordinate")),
         Mark.Points(
           on.map(pts),
-          on.map(i => Paint.Fixed(Palette.cyclicAt(theta(i)))),
+          on.map(i => Paint.Value(theta(i))),
           radius = 4.5,
           tips = on.map(i => s"point $i: θ = ${Svg.number(theta(i))}")
         )
@@ -589,7 +630,7 @@ object Plot:
       title = title,
       x = Axis(grid = false),
       y = Axis(grid = false),
-      colorbar = Some(Colorbar("θ (turns)", 0.0, 1.0, Palette.cyclicAt)),
+      colorScale = Some(ColorScale(Ramp.Cyclic, 0.0, 1.0, "θ (turns)")),
       width = 600,
       height = 520,
       equalAspect = true
@@ -610,8 +651,8 @@ object Plot:
         )
       ),
       title = title,
-      x = Axis(label = "θ₁ (turns)", range = Some((0.0, 1.0))),
-      y = Axis(label = "θ₂ (turns)", range = Some((0.0, 1.0))),
+      x = Axis(label = "θ₁ (turns)", min = Some(0.0), max = Some(1.0)),
+      y = Axis(label = "θ₂ (turns)", min = Some(0.0), max = Some(1.0)),
       width = 520,
       height = 520,
       equalAspect = true

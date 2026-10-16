@@ -149,3 +149,82 @@ class PlotCLISpec extends Specification:
       fails("--plot", "representative", "--bar", "1000", "--output", tempPath(".svg")) must beEqualTo(1)
     }
   }
+
+  "the look flags" should {
+    def drawn(flags: String*): String =
+      val out = tempPath(".svg")
+      val (code, _) = run(Seq("--max-dimension", "1", "--plot", "diagram", "--output", out) ++ flags :+ circleFile*)
+      code must beEqualTo(0)
+      normalized(read(out))
+    def expected(f: plot.Figure => plot.Figure): String = normalized(f(direct.plotDiagram()).svgFile(plot.Theme.Light))
+
+    "title, label and size the plot, as the tweaks do" >> {
+      val got =
+        drawn("--title", "A circle", "--x-label", "born", "--y-label", "dies", "--width", "800", "--height", "300")
+      got must beEqualTo(expected(_.withTitle("A circle").withXLabel("born").withYLabel("dies").withSize(800, 300)))
+    }
+    "choose the palette, the scales and the text size" >> {
+      drawn("--palette", "reference") must beEqualTo(expected(_.withPalette("reference")))
+      drawn("--x-scale", "log", "--y-scale", "sqrt") must beEqualTo(expected(_.withXScale("log").withYScale("sqrt")))
+      drawn("--text-scale", "1.5") must beEqualTo(expected(_.withTextScale(1.5)))
+      drawn("--x-scale", "log") must not(beEqualTo(expected(identity)))
+    }
+    "draw in the theme asked for, light for an .svg file otherwise" >> {
+      val out = tempPath(".svg")
+      run(
+        "--max-dimension",
+        "1",
+        "--plot",
+        "diagram",
+        "--theme",
+        "dark",
+        "--output",
+        out,
+        circleFile
+      )._1 must beEqualTo(0)
+      normalized(read(out)) must beEqualTo(normalized(direct.plotDiagram().svgFile(plot.Theme.Dark)))
+      drawn() must beEqualTo(expected(identity))
+    }
+    "reach a 3-D scene where a scene has the setting" >> {
+      val out = tempPath(".svg")
+      val code = run(
+        "--max-dimension",
+        "1",
+        "--plot",
+        "input-3d",
+        "--title",
+        "A cloud",
+        "--width",
+        "300",
+        "--output",
+        out,
+        circleFile
+      )._1
+      (code must beEqualTo(0)) and (read(out) must contain("A cloud")) and (read(out) must contain("""width="300""""))
+    }
+  }
+
+  "a misused look flag" should {
+    def failure(args: String*): (Int, String) =
+      var code = -1
+      val err = stderrOf { code = run(args :+ circleFile*)._1 }
+      (code, err)
+    "be an error that says what to do, never ignored" >> {
+      val (c1, e1) = failure("--title", "A circle")
+      val (c2, e2) = failure("--plot", "diagram", "--x-scale", "cubic")
+      val (c3, e3) = failure("--plot", "diagram", "--palette", "neon")
+      val (c4, e4) = failure("--plot", "diagram", "--theme", "sepia")
+      val (c5, e5) = failure("--plot", "diagram", "--width", "20")
+      val (c6, e6) = failure("--plot", "input-3d", "--x-scale", "log")
+      val (c7, e7) = failure("--plot", "diagram", "--text-scale", "0")
+      (c1 must beEqualTo(1)) and (e1 must contain("--title is for --plot")) and
+        (c2 must beEqualTo(1)) and (e2 must contain(
+          "unknown scale 'cubic'; expected one of linear, log, sqrt, symlog"
+        )) and
+        (c3 must beEqualTo(1)) and (e3 must contain("expected one of brand, reference")) and
+        (c4 must beEqualTo(1)) and (e4 must contain("expected one of auto, light, dark")) and
+        (c5 must beEqualTo(1)) and (e5 must contain("between 100 and 20000")) and
+        (c6 must beEqualTo(1)) and (e6 must contain("--x-scale is for 2-D plots")) and
+        (c7 must beEqualTo(1)) and (e7 must contain("textScale"))
+    }
+  }

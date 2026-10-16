@@ -87,4 +87,31 @@ object Gallery:
     ds.dim(2)
       .longest
       .foreach(b => Plot.cycle3D(sphere, b.representative, "H2 representative").save(out("sphere-cycle.svg")))
+    // ----- customized: the tweaks of the grammar, one file each
+    val cloud = Random(7)
+    val scattered = Array.fill(70)(Array(cloud.nextDouble() * 4, cloud.nextDouble() * 4))
+    val rough = Persistence(scattered, maxDimension = 1)
+    val loops = rough.dim(1).bars
+    Plot.diagram(loops).save(out("custom-diagram-linear.svg"))
+    (Plot.diagram(loops) + Scale.xy(Transform.Log10) + Labels(title = "Loops, log-log", x = "birth", y = "death") +
+      Mark.Diagonal(offset = 0.0, paint = Paint.Muted, dashed = true)).save(out("custom-diagram-loglog.svg"))
+    (Plot.barcode(d) + Style.slides + Size(960, 540) + Labels(
+      title = "For a slide",
+      subtitle = "bigger text and marks"
+    ))
+      .save(out("custom-barcode-slides.svg"))
+    (Plot.diagram(d) + Style(legend = LegendPosition.Bottom) + Labels(legend = "Homology") +
+      Scale
+        .degree(0, label = "components") + Scale.degree(1, color = "#c2185b", label = "loops", shape = Shape.Diamond))
+      .save(out("custom-diagram-degrees.svg"))
+    val image1 = Plot.persistenceImage(d2, 1, resolution = 24, sigma = 0.08)
+    (image1 + Scale.color(stops = ColorScale.viridis) + Labels(color = "density")).save(out("custom-image-viridis.svg"))
+    (image1 + Palette.reference + Style(transparent = true)).save(out("custom-image-reference.svg"))
+    val before = Plot.barcode(Persistence(noisyCircle(30, 0.03, 4), maxDimension = 1)).copy(title = "tighter")
+    val after = Plot.barcode(Persistence(noisyCircle(30, 0.2, 5), maxDimension = 1)).copy(title = "noisier")
+    (Plot.side(before, after).shared(y = false) + Style(grid = false)).save(out("custom-board-shared.svg"))
+    (Plot.diagram(loops) + Mark.Diagonal(offset = 0.4, paint = Paint.Muted, dashed = true) +
+      Mark.Rule.vertical(0.6)).save(out("custom-diagram-threshold.svg"))
+    (scene + Style.slides + Palette.reference + Labels(subtitle = "slides style, reference palette"))
+      .save(out("custom-sphere.svg"))
     println(s"wrote the gallery to $dir")

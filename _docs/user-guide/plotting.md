@@ -171,14 +171,250 @@ Plot.cycle(points, loop.representative).over(Plot.complex(points, loop.birth)).v
 A cocycle of a bar lives on the complex where the bar dies, so it has edges right across the data; restricted to the
 complex at the bar's birth (`at = loop.birth`) it shows the edges that cut the loop as it closes.
 
-## Colors
+## Customizing a plot
+
+A plot is an immutable value, and each customization returns a new plot, so they chain:
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+
+val loops = Plot.diagram(d.dim(1))
+  .withLabels(title = "The loops of a noisy circle", x = "birth", y = "death")
+  .withXYScale(Transform.Log10)
+  .withSize(640, 640)
+loops.view()
+```
+
+The design follows the grammar of graphics: the plot constructors (`Plot.barcode`, `Plot.diagram`, ...) choose what is
+drawn, and the `with...` methods change the scales, the labels, the colors and the look, each independently of the others.
+Every argument is optional, and only what is given changes: `withLabels(x = "birth (cm)")` leaves the title as it is.
+Changes of different parts can come in any order; of the same part, the later one wins, keeping the rest of the earlier
+one (`.withLabels(title = "A").withLabels(title = "B")` titles the plot `B`).
+
+| to change | method | the same as a value |
+|---|---|---|
+| the words: title, subtitle, axis labels, legend heading, color bar title | `withLabels(title = ..., subtitle = ..., x = ..., y = ..., legend = ..., color = ...)` | `Labels(...)` |
+| the size in pixels | `withSize(960, 540)`, or `withSize(width = 900)` to keep the height | `Size(...)` |
+| an axis: scale, limits, ticks, number format, gridlines | `withXScale(...)`, `withYScale(...)`, `withXYScale(...)` | `Scale.x(...)`, `Scale.y(...)`, `Scale.xy(...)` |
+| the scale of a heatmap or a cocycle's values | `withColorScale(min = ..., max = ..., stops = ..., transform = ...)` | `Scale.color(...)` |
+| the color, legend label and marker of a homological degree | `withDegree(1, color = "#c2185b", label = "loops", shape = Shape.Diamond)` | `Scale.degree(...)` |
+| the color scheme | `withPalette(Palette.reference)` | the `Palette` itself |
+| fonts, size of text and marks, gridlines, the legend's place, the background | `withStyle(Style.slides)` | the `Style` itself |
+| what is drawn | `plot + mark`: `Mark.Rule.horizontal(0.1)`, `Mark.Diagonal(offset = 0.1)`, your own `Mark.Points(...)` | |
+
+The right-hand column matters when a look is shared. Each change is also a *tweak*, a value: you can keep it in a `val`,
+combine tweaks with `+` and add the result to any plot, of any kind, with `+`. The look of a paper or a talk is then one
+`val` (see [The look](#the-look) below). A tweak that means nothing for a plot (an axis of a 3-D scene) says so; one that
+merely has nothing to change (a color scale on a barcode) leaves the plot as it is, so one bundle fits every plot.
+
+### Labels, size and scales
+
+An axis takes a scale (`Transform.Log10`, `Transform.Sqrt`, or `Transform.SymLog(linear)`, logarithmic away from zero and
+linear within `linear` of it), the ends of the visible range, the tick positions and a printf pattern for the tick
+numbers, and can drop its gridlines or disappear altogether:
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+
+val barcode = Plot.barcode(d)
+  .withXScale(max = 2, breaks = Seq(0, 0.5, 1, 2), format = "%.1f")
+  .withYScale(grid = false)
+barcode.save("barcode.svg")
+```
+
+`min` and `max` move one end each, so `withXScale(max = 2)` keeps the plot's own lower end. A mark that has no place on a
+scale (a bar born at `0` on a log axis) is left out, and a line of small print under the plot says how many: a barcode
+or a diagram on a log axis therefore wants a degree whose births are positive (`d.dim(1)`), or `Transform.Sqrt` and
+`Transform.SymLog`, which keep zero. The diagonal of a diagram is drawn in the plot's own scales, so it is still the line
+`y = x` on a log-log diagram.
+
+### Colors
 
 Homological degree `k` always has the same color and marker shape: degree 0 slate, degree 1 gold, degree 2 brick, so
 `H1` looks the same in every plot whichever degrees are shown. The default palette is TDA4j's Slate & Gold, stepped for
 charts and checked for color-vision deficiencies (the first three degrees stay distinguishable side by side for every
-common deficiency). `Palette.reference` is a neutral alternative, and any figure takes another:
-`Plot.diagram(d).copy(palette = Palette.reference)`. Heatmaps use a slate ramp (light for small values), cocycles a
-slate-to-gold diverging scale, and circular coordinates a cyclic map with no seam at `0 = 1`.
+common deficiency). `Palette.reference` is a neutral alternative. A palette recolors the whole plot, heatmaps and
+cocycles included, and you can make your own:
 
-Every plot is an immutable value: `copy(title = ...)`, `+ mark` and `over` adjust it, and `Figure`, `Mark` and `Scene`
-are there to build plots of your own.
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+
+val onWhite = Palette.brand.withSurface("#ffffff") // a figure for a white page
+val bold = Palette.brand.withSeries(Seq("#222222", "#c2185b", "#00796b"))
+
+val diagram = Plot.diagram(d).withPalette(bold)
+val image = Plot.persistenceImage(d, 1).withPalette(Palette.reference)
+val paper = Plot.barcode(d).withPalette(onWhite)
+```
+
+One degree can be changed wherever it appears, in the marks, the legend and the dark mode alike, without touching the
+rest, and whichever palette the plot has:
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+
+val diagram = Plot.diagram(d)
+  .withDegree(0, label = "components")
+  .withDegree(1, color = "#c2185b", label = "loops", shape = Shape.Diamond)
+  .withLabels(legend = "Homology")
+```
+
+Heatmaps (persistence images, images, cubical grids), cocycles and circular coordinates have a *color scale*, which maps
+the values to colors: heatmaps and cocycles through the palette's sequential and diverging ramps, circular coordinates
+through a cyclic one. `withColorScale` sets its limits, so that two plots are read on one scale, and the colors of a
+sequential ramp (`ColorScale.viridis`, `ColorScale.greys`, or any list of colors, light to dark) and how values are
+spread along it (`Transform.Sqrt` for a heavy-tailed image). A cocycle's scale is symmetric about zero, so it takes only
+a `max`.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+
+val image = Plot.persistenceImage(d, 1)
+  .withColorScale(max = 0.05, stops = ColorScale.viridis, transform = Transform.Sqrt)
+  .withLabels(color = "density")
+```
+
+### The look
+
+A `Style` holds what is not data: the font, a factor on the size of text and one on the size of markers and lines,
+the gridlines, where the legend goes (`LegendPosition.Right`, `Bottom` or `Hidden`) and whether there is a background at
+all. `Style.slides` is a projector-sized preset (text and marks 30% larger). A style replaces the plot's whole style; to
+change one setting of a style, copy it. Keep everything that makes a look a `val`, with `+`, and add it to every plot, of
+any kind:
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+
+val house = Style.slides.copy(legend = LegendPosition.Bottom) + Palette.reference + Size(960, 540)
+
+Plot.barcode(d).withLabels(title = "Barcode") + house
+Plot.diagram(d).withLabels(title = "Diagram") + house
+Plot.points3D(points) + house
+```
+
+(`Theme`, which `save` and `html` take, is a different thing: whether the colors are light, dark, or follow the reader's
+own setting.)
+
+### Comparing plots
+
+Plots drawn side by side mean something only on the same scale. `shared()` gives every panel of a board the union of
+the panels' ranges, on both axes or on `shared(y = false)` the x axis only; a tweak added to a board with `+` changes
+every panel (`Labels(title = ...)` titles the board, the page it is saved as):
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val a = Persistence(CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv"), maxDimension = 1)
+val b = Persistence(CSV.readPointCloud("_docs/tutorials/data/noisy-circle-b.csv"), maxDimension = 1)
+
+val board = Plot.side(Plot.barcode(a).copy(title = "first"), Plot.barcode(b).copy(title = "second")).shared(y = false)
+(board + Style(grid = false)).save("compare.svg")
+```
+
+### Reference lines and marks of your own
+
+`Mark.Rule` draws a line across the plot at one value, and `Mark.Diagonal(offset)` the line `y = x + offset`: a threshold
+on a barcode, or the line above which a point of a diagram persists longer than `offset`. They take no part in choosing
+the visible range. Any other `Mark` can be added with `+` as well, in data coordinates:
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+
+val diagram = Plot.diagram(d) +
+  Mark.Diagonal(offset = 0.2, paint = Paint.Muted, dashed = true) +
+  Mark.Text((0.1, 1.2), "persistence 0.2", anchor = Anchor.Start)
+val barcode = Plot.barcode(d) + Mark.Rule.vertical(0.5)
+```
+
+### From MATLAB and the command line
+
+MATLAB has no named or default arguments and cannot build a `Palette` or a `Transform`, so every figure also has the
+common changes as methods that take only strings and numbers, and return the changed figure: `withTitle`, `withSubtitle`,
+`withXLabel`, `withYLabel`, `withLegendTitle`, `withColorLabel`, `withSize(width, height)`, `withXScale('log')`
+(`'linear'`, `'log'`, `'sqrt'` or `'symlog'`), `withYScale`, `withXRange(min, max)`, `withYRange`,
+`withPalette('reference')` (`'brand'` or `'reference'`), `withDegreeColor(k, '#c2185b')`, `withDegreeLabel(k, 'loops')`,
+`withTextScale(1.3)`, `withMarkScale`, `withLegend('bottom')` (`'right'`, `'bottom'` or `'none'`), `withoutGrid()` and
+`withTransparentBackground()`; a 3-D scene has the ones that need no axes. `save` takes the theme by name:
+`fig.save('diagram.svg', 'dark')`.
+
+<div class="tabset">
+<div class="tab" data-lang="Scala">
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+
+val diagram = Plot.diagram(d).withLabels(title = "A noisy circle", x = "birth", y = "death").withSize(800, 600)
+diagram.save("diagram.svg")
+Plot.barcode(d).withXScale(Transform.Sqrt).withStyle(Style(textScale = 1.3)).save("barcode.svg")
+```
+
+</div>
+<div class="tab" data-lang="MATLAB">
+
+```matlab
+import org.appliedtopology.tda4j.matlab.*;
+
+points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
+result = TDA4j.computeFromPoints(points, {'maxDimension', '1'});
+
+result.plotDiagram().withTitle('A noisy circle').withXLabel('birth').withYLabel('death').withSize(800, 600).save('diagram.svg');
+result.plotBarcode().withXScale('sqrt').withTextScale(1.3).save('barcode.svg');
+```
+
+</div>
+</div>
+
+The command line has a flag for the same changes of a `--plot`: `--title`, `--x-label`, `--y-label`, `--width`,
+`--height`, `--palette` (`brand` or `reference`), `--theme` (`light`, `dark` or `auto`), `--text-scale`, `--x-scale` and
+`--y-scale` (`linear`, `log`, `sqrt` or `symlog`). A word that is not one, a size out of range and a flag a plot cannot
+use (an x scale for a 3-D scene) are errors, reported before anything is computed:
+
+```
+java -jar tda4j-assembly.jar --plot diagram --title "A noisy circle" --x-scale sqrt --width 800 --output diagram.svg circle.json
+```
+
+Every plot is an immutable value, and `Figure`, `Mark` and `Scene` are there to build plots of your own: `copy(...)`
+changes any part directly, `Tweak(f)` makes a tweak of your own from a function on figures, and `over` draws one figure
+on another.

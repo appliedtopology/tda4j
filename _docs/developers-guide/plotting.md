@@ -27,13 +27,19 @@ public, read-only view.
 Every plot is an immutable value.
 
 **`Figure`** (`Figure.scala`) is a 2-D scene in data coordinates: a list of
-`Mark`s plus axes, a legend and an optional colorbar.
-- The marks are `Points`, `Segments`, `Polygons`, `Discs`, `Boxes`, `Line` and
-  `Text`.
+`Mark`s plus axes, a legend and an optional color scale.
+- The marks are `Points`, `Segments`, `Polygons`, `Discs`, `Boxes`, `Line`,
+  `Text`, and two that span the whole plot, `Diagonal` and `Rule`.
 - Each mark takes one paint, or one per item, and an optional tooltip per
   item, which becomes an SVG `<title>`.
-- `Svg.render` draws it.
+- `Svg.render` draws it. Positions go through each axis's `Transform`
+  (identity, log, square root, symmetric log) there and nowhere else: a figure
+  holds data in its own units, and a mark with no place on an axis is left out
+  and counted under the plot.
 - `over` stacks one figure on another, such as a cycle on its complex.
+- A figure is changed with a `Tweak` (`Tweak.scala`): `fig + tweak`. `Labels`,
+  `Size`, `Style`, `Palette` and the `Scale` constructors are tweaks; see the
+  user guide's "Customizing a plot".
 
 **`Scene`** (`Scene.scala`) is a 3-D scene made of layers. It renders two ways:
 - for a page, as an inline canvas viewer (drag to turn, scroll to zoom), with
@@ -63,7 +69,10 @@ A mark never holds a color, only a `Paint`:
 - `Series(k)`, a categorical slot; homological degree `k` is always slot `k`,
   never its rank among the degrees shown;
 - the chrome roles (`Ink`, `Secondary`, `Muted`, `Grid`, `Axis`, `Surface`);
-- `Fixed(hex)` for data colors, such as a coefficient on a diverging ramp.
+- `Value(v)` for a data value, such as a heatmap cell or a coefficient, which
+  the figure's `ColorScale` (a sequential, diverging or cyclic ramp, with limits)
+  turns into a color through the palette at render time;
+- `Fixed(hex)` for a color of your own.
 
 A `Palette` resolves paints under a `Theme` (`Color.scala`):
 - `Theme.Auto` writes CSS variables with a `prefers-color-scheme` block, so

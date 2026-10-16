@@ -201,6 +201,29 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "input, and how it was computed. Give the file as the input of a later run to print or plot it"
   )
 
+  // How a --plot looks: each flag is one change of the plot (see the plot package's `Tweak`), refused without --plot.
+  val title: ScallopOption[String] = opt[String](noshort = true, descr = "for --plot: the plot's title")
+  val xLabel: ScallopOption[String] = opt[String](noshort = true, descr = "for --plot: the x axis label")
+  val yLabel: ScallopOption[String] = opt[String](noshort = true, descr = "for --plot: the y axis label")
+  val width: ScallopOption[Int] = opt[Int](noshort = true, descr = "for --plot: the width in pixels (100 to 20000)")
+  val height: ScallopOption[Int] = opt[Int](noshort = true, descr = "for --plot: the height in pixels (100 to 20000)")
+  val palette: ScallopOption[String] =
+    opt[String](noshort = true, descr = "for --plot: the color palette, brand (default) or reference")
+  val theme: ScallopOption[String] = opt[String](
+    noshort = true,
+    descr = "for --plot: light, dark, or auto (follow the reader's setting). Default: light for an .svg file, auto " +
+      "for an .html page"
+  )
+  val textScale: ScallopOption[Double] =
+    opt[Double](noshort = true, descr = "for --plot: a factor on every text size (1.3 suits a slide)")
+  val xScale: ScallopOption[String] = opt[String](
+    noshort = true,
+    descr = "for 2-D --plot kinds: the x axis scale, linear (default), log, sqrt or symlog. A log axis leaves out " +
+      "values of 0 or less and says how many"
+  )
+  val yScale: ScallopOption[String] =
+    opt[String](noshort = true, descr = "for 2-D --plot kinds: the y axis scale, as --x-scale")
+
   val input: ScallopOption[String] = trailArg[String](name = "input-file", descr = "input file", required = true)
 
   verify()

@@ -68,7 +68,7 @@ class PersistenceResultPlotSpec extends Specification:
       val atBirth = tips(r.plotRepresentative(loop, r.birth(loop)).svg(), "∆(")
       (all.size must beEqualTo(r.cycleVertices(loop).length)) and
         (atBirth.size must beGreaterThan(0)) and (atBirth.size must beLessThan(all.size)) and
-        (r.plotRepresentative(loop).colorbar must beSome)
+        (r.plotRepresentative(loop).colorScale must beSome)
     }
     "restrict a Cech or alpha cocycle in the complex's own units (radii): at its birth, the edges that close the loop" >>
       forall(Seq("cech", "alpha")) { complex =>
