@@ -1,6 +1,7 @@
 ---
 theme: default
 style: |
+  section { align-content: start; }
   section[data-class*="invert"]::before {
       content: "";
       background-image: url('https://tda4j.appliedtopology.org/images/header-icon-dark.svg');
@@ -88,58 +89,58 @@ For a lightning fast summary:
 
 Plan for today:
 
-- Install Scala and TDA4j.
+- Get TDA4j.
 - Perform a few computations.
 - Tell me about what could be handled better (we can still change API pretty freely)
 
 ---
 
-# Install Scala
+# Get TDA4j
 
-https://www.scala-lang.org/download/
+We have two paths available today to get started with TDA:
 
-Get Scala 3.9.0 on your computer.
-
-Windows: follow link and follow instructions.
-
-Mac or Linux: https://sdkman.io/install/ (a package manager for java-related environments) and then
-
-```shell
-sdk install java 21.0.1-tem
-sdk install scala 3.9.0
-```
+1. Install Scala 3.9.0 (using https://www.scala-lang.org/download/ or SDKman or your preferred package manager)
+2. Go to https://github.com/appliedtopology/tda4j/releases/tag/v0.6.2 and download the file `tda4j-demo-0.6.2.jar`
 
 ---
 
 # Open a Scala prompt and load in the library
 
-The following command will open a REPL (read-evaluate-print loop) interpreter of Scala where we can write code and see results. This command has added flags to pull the TDA4j library from Maven in the snapshot version.
+## Path 1 - with Scala installed
 
+We will start a REPL interface to Scala, and use the `:dep` command to load the library and its dependencies.
 ```shell
-scala repl
+$ scala repl
+scala> :dep org.appliedtopology::tda4j:0.6.2
 ```
 
-And then load the library as a dependency:
+## Path 2 - with the demo JAR
 
-```scala 3
-:dep org.appliedtopology::tda4j:0.6.0
+Launch the demo JAR file with your local Java installation. On windows shell, include the flag `-Dstdout.encoding=UTF-8`
+
+```shell
+$ java -jar tda4j-demo-0.6.2.jar
 ```
 
 ---
 
-# Load the library 
+# First contact 
 
-(and also some required experimental Scala features)
+## Path 1 - with Scala installed
 
 ```scala 3
-import language.experimental.modularity // needed for some of the language features TDA4j uses
-import org.appliedtopology.tda4j.*
+scala> import language.experimental.modularity // needed for some language features
+scala> import org.appliedtopology.tda4j.*
+scala> import cats.syntax.all.*
 ```
+
+## Everyone
 
 And then let's create some points. For simplicity, let's just scatter a bunch of points on a circle.
 
 ```scala 3
-val points = Array.tabulate(50)(i => Array(100*math.cos(i * math.Pi / 25), 100*math.sin(i * math.Pi / 25)))
+scala> val points = Array.tabulate(50)(i => 
+  Array(100*math.cos(i * math.Pi / 25), 100*math.sin(i * math.Pi / 25)))
 ```
 
 ---
@@ -149,30 +150,178 @@ val points = Array.tabulate(50)(i => Array(100*math.cos(i * math.Pi / 25), 100*m
 We start by accepting all default choices.
 
 ```scala 3
-val diagram = Persistence(points)
-val longbars = diagram.significant(0.10)
+scala> val diagram = Persistence(points)
+scala> val longbars = diagram.significant(0.10)
 ```
 
 The resulting object can be queried for more details:
 
 ```scala 3
-longbars.bars
-longbars.triples
-diagram.longest(2)
-longbars.bars(1).representative
+scala> println(longbars.bars.show)
+scala> longbars.triples
+scala> diagram.longest(2)
+scala> longbars.bars(1).representative.show
 ```
 
 ---
 
-There are several standardized plot types used in topological data analysis to describe the result of an analysis
-with persistent (co)homology. The most common ones are included in the `org.appliedtopology.tda4j.plot` package.
+# Plots
+
+We can both visualize our data set, and plot some of the standard plot types used in topological data analysis to describe the results of an analysis with persistent (co)homology.
 
 ```scala 3
-import org.appliedtopology.tda4j.plot.*
-Plot.barcode(diagram).view()
-Plot.diagram(diagram).view()
-Plot.cycle(points, longbars.bars(1).representative).over(Plot.complex(points, longbars.bars(1).birth)).view()
+scala> import org.appliedtopology.tda4j.plot.*
+scala> Plot.points(points).view()
+scala> Plot.complex(points, at=45).view()
+scala> Plot.barcode(diagram).view()
+scala> Plot.diagram(diagram).view()
+scala> Plot.diagram(diagram).save("points-diagram.svg")
+scala> Plot.cycle(points, longbars.bars(1).representative).over(
+  Plot.complex(points, at=75)
+  ).save("cycle-on-complex.html")
 ```
 
 The `.view()` method starts a local webserver and opens a browser window to display the plots.
-If you need them saved, use `.save([filename])` with the appropriate filename. The library currently supports saving to `.svg` and to `.html`.
+
+---
+
+# Bigger Bites
+
+Let's get into some larger examples. A famous dataset in TDA is the Patches of Natural Images dataset. Pictures were collected by van Heteren for cognitive science research.
+
+Mumford et al. studied the dataset, sampling 3x3 pixel patches and using PCA to build a visualization of the high-density core sets of the data. They found a dominant circle structure, that could be explained as linear gradients in different orientations.
+
+Carlsson et al. continued with a more careful topological analysis of the same data: first finding a 3-circle structure, and then after wrangling, filtering, and increased sampling in undersampled regions recovered a Klein bottle structure.
+
+---
+
+# Recognizing Surfaces
+
+We would expect, for some of the simplest surfaces studied:
+
+| Betti number             | $\dim H_0$ | $\dim H_1$ | $\dim H_2$ |
+|--------------------------|------------|------------|------------|
+| 2-sphere                 | 1          | 0          | 1          |
+| 2-torus                  | 1          | 2          | 1          |
+| Klein Bottle (mod 2)     | 1          | 2          | 1          |
+| Klein Bottle (mod p)     | 1          | 1          | 0          |
+| Projective Plane (mod 2) | 1          | 1          | 1          |
+| Projective Plane (mod p) | 1          | 0          | 0          |
+
+---
+
+# Get the data
+
+50'000 points from the Mumford data can be found here: https://tda4j.appliedtopology.org/presentations/tutorial-2026-10-16/n50000Dct.csv.
+
+Download it, and we will try a calculation or two.
+
+TDA4j has an I/O module for reading and writing common data formats, including CSV.
+
+```scala 3
+scala> val imgpoints = CSV.readPointCloud("n50000Dct.csv")
+scala> val imgmetric = EuclideanMetricSpace(imgpoints, cacheDistances=false)
+```
+
+---
+
+# Shrink the data
+
+50'000 points is too much for most TDA implementations. The Carlsson et al. paper used a method called *Witness Complexes* to reduce the computation: only a few scattered points are used as vertices, and simplices are included if there are data points *witnessing* their presence.
+
+```scala 3
+scala> val landmarks = LandmarkSelector.maxmin(imgmetric, numLandmarks=75)
+scala> val range = landmarks.coveringRadius
+scala> val witness = Witness(imgmetric, landmarks.landmarks, maxDimension=2, nu=1, maxFiltrationValue = range)
+scala> val imgdiagram = Persistence(witness)
+scala> Plot.barcode(imgdiagram).view()
+```
+
+---
+
+# Zoom in on high density region
+
+Already in the Mumford et al. paper, there was an issue with too many points everywhere, and they filtered to get high-contrast pixel patches. We might have the same problem here, so let's estimate a density and filter for the highest density region.
+
+```scala 3
+scala> val density = DistanceToMeasure(imgmetric, JVPTree(imgmetric), k=15)
+scala> val core = density.zipWithIndex.sortBy(_._1).take(15_000).map(_._2).sorted.map(imgpoints(_))
+```
+
+We can see how this pipeline works by running the line defining `core` piece by piece.
+
+```scala 3
+scala> val coremetric = EuclideanMetricSpace(core, cacheDistances=false)
+scala> val corelandmarks = LandmarkSelector.maxmin(coremetric, numLandmarks=75)
+scala> val corrange = corelandmarks.coveringRadius
+scala> val corewitness = Witness(coremetric, corelandmarks.landmarks, maxDimension=2, nu=1, maxFiltrationValue = corrange)
+scala> val corediagram = Persistence(corewitness)
+scala> Plot.barcode(corediagram).view()
+```
+
+---
+
+# Not a Klein Bottle
+
+The signature here is **not** one of the ones we saw early on: $\dim H_0 = 1$ tells us there is 1 connected component. $\dim H_1 = 5$ turns out to fit the **three-circle model**.
+
+To get the Klein bottle proper out, we would need to be clever about sampling more points, and filtering to reach the middle-density regime -- higher density than pure noise, lower than these three circles.
+
+But the paper proposes a concrete model for *why* it should be a Klein bottle (derived *after* the authors had filtered for the middle-density regime and found the Klein bottle signature in the data):
+
+$$
+f_{a,b,c,d}(x,y) = c(ax+by)^2 + d(ax+by) \qquad (a,b)\in S^1, \quad (c,d)\in S^1
+$$
+
+Adjusted to mean 0 and $L^2$ norm 1.
+
+---
+
+# Generating Klein bottle points
+
+With this model, we then generate random points on the torus $S^1\times S^1$ and map them to the pixel grids that describe each parameter value pair.
+
+```scala 3
+scala> val pixelgrid = (for x <- -1 to 1; y <- -1 to 1 yield (x.toDouble, y.toDouble)).toArray
+scala> def kleinPatch(s: Double, t: Double): Array[Double] =
+  val (a,b,c,d) = (math.cos(2*math.Pi*s), math.sin(2*math.Pi*s), 
+                   math.cos(2*math.Pi*t), math.sin(2*math.Pi*t))
+  val f = pixelgrid.map((x,y) => c*(a*x+b*y)*(a*x+b*y) + d*(a*x+b*y))
+  val centered = f.map(_ - f.sum/f.length).tail
+  centered.map(_ / math.sqrt(centered.map(x => x*x).sum))
+val rnd = scala.util.Random(20261016)
+val klein = Array.fill(15000)(kleinPatch(rnd.nextDouble(), rnd.nextDouble()))
+```
+
+Or you can grab the file https://tda4j.appliedtopology.org/presentations/tutorial-2026-10-16/klein-15000.csv.
+
+---
+
+# Compute topology of this synthetic Klein bottle
+
+```scala 3
+scala> val kleinmetric = EuclideanMetricSpace(klein, cacheDistances=false)
+scala> val kleinlandmarks = LandmarkSelector.maxmin(kleinmetric, numLandmarks=75)
+scala> val kleinrange = kleinlandmarks.coveringRadius
+scala> val kleinwitness = Witness(kleinmetric, kleinlandmarks.landmarks, 
+    maxDimension=2, nu=1, maxFiltrationValue = kleinrange)
+scala> val kleindiagram = Persistence(kleinwitness)
+scala> Plot.barcode(kleindiagram).view()
+scala> val kleindiagram2 = Persistence(kleinwitness, characteristic=2)
+scala> Plot.barcode(kleindiagram2).view()
+```
+
+---
+
+# Check out the rest of the library
+
+https://tda4j.appliedtopology.org
+
+Thank you for your attention!
+
+TDA4j has been built with considerable assistance from Claude Code, the models Sonnet 5 and 5.5, and Opus 5 and 5.5.
+We are in the process of editing down AI-generated documentation and creating additional documentation pieces. 
+
+We are pushing towards a 1.0.0 release soon, and would appreciate all feedback we can get on how to make this a good and welcoming library.
+
+TDA4j team: Mikael Vejdemo-Johansson, Jordan Matuszewski, Daniel Hope; with help from Nico Stucki, Kei Kebreau and Trevor Gordon.
