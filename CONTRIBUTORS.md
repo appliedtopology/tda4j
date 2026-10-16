@@ -10,6 +10,7 @@
 
 * Nico Stucki, GitHub: @nstucki; Barcode Algebra implementations and test cases
 * Kei Kebreau
+* Trevor Gordon
 
 ## AI Statement
 
