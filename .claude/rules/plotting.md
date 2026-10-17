@@ -105,6 +105,12 @@ API). Rules:
   beats the equal-aspect default; numbers pass through `Elements.numbers` where they are written (never format a number
   with a symbol of your own); text is cut by `TextFace.fit` (an estimate of 0.6 em per character: say "estimated" in
   docs). `Settings.parse` trims values, so a blank symbol is `space` or kept raw.
+- **`Look` (session defaults)**: every public constructor of `Plot` that returns a `Figure` or `Scene` takes `(using look:
+  Look)`; one that builds the plot wraps its body in `look.figure(palette):` / `look.scene:`, one that delegates passes the
+  given on, and a call to a public constructor inside a wrapped body passes `Look.none` (applied once). A named `palette` is
+  an `Optional` and is re-applied after the look. Compiling cannot catch a constructor that drops the look (the companion
+  given is always found): add every new constructor to the table in `PlotLookSpec`. MATLAB's session look is per thread
+  (`TDA4j.setPlotDefaults`), read through a given that takes a context parameter, so that it is a method, not a cached value.
 - A plot's own default (a diagram's legend place) goes in the `Figure`, never in the `Style`, which a user replaces whole.
 - Default output is a contract: look at `Gallery` before and after a renderer change and diff the SVGs against a
   `git worktree` build of the old commit (ids normalized: `tda4j[0-9]+`); every difference must be explained.

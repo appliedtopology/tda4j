@@ -88,6 +88,24 @@ private object CoefficientKind:
   * `includeZeroLength` is `true`. See [[PersistenceResult]].
   */
 object TDA4j:
+  // The look every plot of a result starts from: MATLAB and Java have no `given`s, so this is the session's one. It is
+  // the calling thread's (MATLAB calls from one thread), so a script's defaults never reach another thread's plots.
+  private val plotLook: ThreadLocal[plot.Look] = ThreadLocal.withInitial(() => plot.Look.none)
+
+  /** The plots a result draws from now on start from these changes, written as `element.property=value`
+    * (`"palette=print"`, `"style=print"`, `"title.size=18"`, ...; see the plotting page of the user guide), until
+    * [[clearPlotDefaults]]. Whatever you chain onto a figure afterwards wins. A setting that is not one is an error
+    * that says what to write. They are the defaults of the calling thread, which for MATLAB is the whole session.
+    */
+  def setPlotDefaults(settings: Array[String]): Unit = plotLook.set(plot.Look.settings(settings.toSeq*))
+
+  /** The plots a result draws are as their constructors make them again. */
+  def clearPlotDefaults(): Unit = plotLook.remove()
+
+  // The plots of a result find this where the Scala API finds a `given Look`. A given that takes a context parameter
+  // is a method, so the session's look is read when a plot is made, not once when a result is created.
+  private[matlab] given sessionLook: DummyImplicit => plot.Look = plotLook.get
+
   def computeFromPoints(points: Array[Array[Double]]): PersistenceResult =
     computeFromPoints(points, Array.empty[String])
 

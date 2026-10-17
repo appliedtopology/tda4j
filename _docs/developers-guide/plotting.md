@@ -79,6 +79,17 @@ To add a kind of plot, add a constructor to `object Plot` that builds a
 `Figure` or `Scene` out of existing marks. Add a new `Mark` only for a
 primitive the renderers do not draw.
 
+## Defaults: `Look`
+
+A `Look` (`Look.scala`) is a list of tweaks that a plot constructor applies to what it builds, found as a `given` (the
+default one is in `Look`'s companion and does nothing). The constructors take `(using look: Look)`. A constructor that builds
+its figure itself wraps the body in `look.figure(palette):` (or `look.scene:`), which applies the look and then the `palette`
+the caller named, so that the call beats the look; one that only delegates to another public constructor just passes the
+`given` on; and a call to a public constructor from inside a wrapped body passes `Look.none`, so that the look is applied
+once. A tweak that raises `UnsupportedOperationException` for a kind of plot is skipped for it. Because there is always a
+`given Look` to find, a constructor that forgets to pass it on would silently use the empty one: `PlotLookSpec` builds every
+constructor under a look and checks each one, so a new constructor goes in its table.
+
 ## Colors are roles
 
 A mark never holds a color, only a `Paint`:

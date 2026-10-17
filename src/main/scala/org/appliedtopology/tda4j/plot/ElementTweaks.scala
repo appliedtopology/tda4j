@@ -428,8 +428,8 @@ object Guide:
   * with `color`, `dark-color`, `label` and the `marker` properties; `segments` (`width`, `opacity`), `polygons` and
   * `discs` (`opacity`), `lines` (`width`); `numbers` (`locale`, `decimal`, `grouping`, `minus`); `size` (`width`,
   * `height`, in pixels or with `in`, `cm`, `mm`, `pt`); `camera` (`azimuth`, `elevation`, `zoom`, of a 3-D scene);
-  * `aspect` (`1`, or `free`); and `x-axis` and `y-axis`, alone (`x-axis=top`) or with `side`, `reverse`, `padding`,
-  * `min`, `max`, `format`.
+  * `palette` and `style` alone (`palette=print`); `aspect` (`1`, or `free`); and `x-axis` and `y-axis`, alone
+  * (`x-axis=top`) or with `side`, `reverse`, `padding`, `min`, `max`, `format`.
   */
 object Settings:
   private val textProperties = Seq("size", "weight", "italic", "align", "angle", "font", "color", "limit")
@@ -452,6 +452,8 @@ object Settings:
         "polygons",
         "discs",
         "lines",
+        "palette",
+        "style",
         "numbers",
         "size",
         "camera",
@@ -584,9 +586,11 @@ object Settings:
     // a separator may be a space, which the trim would take away: `numbers.grouping= ` or `numbers.grouping=space`
     val symbol = if value.equalsIgnoreCase("space") then " " else if value.isEmpty && raw.nonEmpty then raw else value
     key match
-      case "x-axis" => Scale.x(position = Side.named(value))
-      case "y-axis" => Scale.y(position = Side.named(value))
-      case "aspect" =>
+      case "palette" => Palette.named(value)
+      case "style"   => Style.named(value)
+      case "x-axis"  => Scale.x(position = Side.named(value))
+      case "y-axis"  => Scale.y(position = Side.named(value))
+      case "aspect"  =>
         if value.equalsIgnoreCase("free") then Scale.aspect(free = true) else Scale.aspect(ratio = number(spec, value))
       case _ =>
         val dot = key.indexOf('.')

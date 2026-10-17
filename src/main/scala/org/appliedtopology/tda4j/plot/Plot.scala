@@ -287,120 +287,124 @@ object Plot:
     bars: Bars,
     title: String = "Barcode",
     longest: Option[Int] = None,
-    palette: Palette = Palette.default,
+    palette: Optional[Palette] = Optional.empty,
     order: BarOrder = BarOrder.Birth
-  ): Figure =
-    val all = barsOf(bars)
-    val byDegree = all.groupBy(_.dim).toSeq.sortBy(_._1).map { (k, bs) =>
-      val kept = longest.fold(bs)(n => bs.sortBy(b => -b.persistence).take(n))
-      k -> (order match
-        case BarOrder.Birth       => kept.sortBy(b => (b.birth, b.death))
-        case BarOrder.Persistence => kept.sortBy(b => (-b.persistence, b.birth))
-        case BarOrder.Death       => kept.sortBy(b => (b.death, b.birth)))
-    }
-    val finite = all.flatMap(b => Seq(b.birth, b.death)).filter(_.isFinite)
-    val lo = finite.minOption.getOrElse(0.0)
-    val hi = finite.maxOption.getOrElse(1.0)
-    val essential = all.exists(_.death.isPosInfinity)
-    val right = if essential then hi + 0.08 * span(lo, hi) else hi + 0.02 * span(lo, hi)
-    val rows = byDegree.map(_._2.size).sum + 2 * math.max(0, byDegree.size - 1)
-    val height = math.max(240, math.min(760, 110 + rows * 7))
-    val plotHeight = height - 100.0
-    val thickness = math.max(1.2, math.min(8.0, 0.7 * plotHeight / math.max(rows, 1)))
-    var row = 0
-    val marks = Vector.newBuilder[Mark]
-    val labels = IndexedSeq.newBuilder[(Double, String)]
-    byDegree.foreach { (k, bs) =>
-      val first = row
-      val ends = bs.zipWithIndex.map { (b, i) =>
-        val y = -(row + i).toDouble
-        ((b.birth, y), (if b.death.isPosInfinity then right * 1.5 else b.death, y))
+  )(using look: Look): Figure =
+    look.figure(palette):
+      val all = barsOf(bars)
+      val byDegree = all.groupBy(_.dim).toSeq.sortBy(_._1).map { (k, bs) =>
+        val kept = longest.fold(bs)(n => bs.sortBy(b => -b.persistence).take(n))
+        k -> (order match
+          case BarOrder.Birth       => kept.sortBy(b => (b.birth, b.death))
+          case BarOrder.Persistence => kept.sortBy(b => (-b.persistence, b.birth))
+          case BarOrder.Death       => kept.sortBy(b => (b.death, b.birth)))
       }
-      marks += Mark.Segments(
-        ends.toIndexedSeq,
-        IndexedSeq(Paint.Series(k)),
-        width = thickness,
-        roundCaps = false,
-        tips = bs.map(interval).toIndexedSeq
+      val finite = all.flatMap(b => Seq(b.birth, b.death)).filter(_.isFinite)
+      val lo = finite.minOption.getOrElse(0.0)
+      val hi = finite.maxOption.getOrElse(1.0)
+      val essential = all.exists(_.death.isPosInfinity)
+      val right = if essential then hi + 0.08 * span(lo, hi) else hi + 0.02 * span(lo, hi)
+      val rows = byDegree.map(_._2.size).sum + 2 * math.max(0, byDegree.size - 1)
+      val height = math.max(240, math.min(760, 110 + rows * 7))
+      val plotHeight = height - 100.0
+      val thickness = math.max(1.2, math.min(8.0, 0.7 * plotHeight / math.max(rows, 1)))
+      var row = 0
+      val marks = Vector.newBuilder[Mark]
+      val labels = IndexedSeq.newBuilder[(Double, String)]
+      byDegree.foreach { (k, bs) =>
+        val first = row
+        val ends = bs.zipWithIndex.map { (b, i) =>
+          val y = -(row + i).toDouble
+          ((b.birth, y), (if b.death.isPosInfinity then right * 1.5 else b.death, y))
+        }
+        marks += Mark.Segments(
+          ends.toIndexedSeq,
+          IndexedSeq(Paint.Series(k)),
+          width = thickness,
+          roundCaps = false,
+          tips = bs.map(interval).toIndexedSeq
+        )
+        row += bs.size
+        labels += ((-(first + row - 1) / 2.0, s"H$k"))
+        row += 2
+      }
+      val left = lo - 0.02 * span(lo, hi)
+      Figure(
+        marks = marks.result(),
+        title = title,
+        description =
+          s"$title: ${all.size} bars (${degreeCounts(all)}), each running from the birth to the death of a class " +
+            "along the filtration value" + (if essential then "; essential classes run to ∞" else ""),
+        subtitle = s"${all.size} bars" + longest.fold("")(n => s", the $n longest of each degree shown"),
+        x = Axis(
+          label = "filtration value",
+          min = Some(left),
+          max = Some(right),
+          ticks = Ticks.Within(left, if essential then hi else right),
+          extra = if essential then IndexedSeq((right, "∞")) else IndexedSeq.empty
+        ),
+        y = Axis(
+          min = Some(-(row - 2).toDouble - 0.5),
+          max = Some(0.5),
+          ticks = Ticks.Labelled(labels.result()),
+          grid = false
+        ),
+        legend = degreeLegend(byDegree.map(_._1), LegendItem.Key.Line),
+        height = height,
+        palette = palette.getOrElse(Palette.default)
       )
-      row += bs.size
-      labels += ((-(first + row - 1) / 2.0, s"H$k"))
-      row += 2
-    }
-    val left = lo - 0.02 * span(lo, hi)
-    Figure(
-      marks = marks.result(),
-      title = title,
-      description =
-        s"$title: ${all.size} bars (${degreeCounts(all)}), each running from the birth to the death of a class " +
-          "along the filtration value" + (if essential then "; essential classes run to ∞" else ""),
-      subtitle = s"${all.size} bars" + longest.fold("")(n => s", the $n longest of each degree shown"),
-      x = Axis(
-        label = "filtration value",
-        min = Some(left),
-        max = Some(right),
-        ticks = Ticks.Within(left, if essential then hi else right),
-        extra = if essential then IndexedSeq((right, "∞")) else IndexedSeq.empty
-      ),
-      y = Axis(
-        min = Some(-(row - 2).toDouble - 0.5),
-        max = Some(0.5),
-        ticks = Ticks.Labelled(labels.result()),
-        grid = false
-      ),
-      legend = degreeLegend(byDegree.map(_._1), LegendItem.Key.Line),
-      height = height,
-      palette = palette
-    )
 
   /** The persistence diagram: a point `(birth, death)` per bar, colored and shaped by degree, above the diagonal (which
     * is drawn, with the region below it shaded, where the legend sits at the lower right). Essential classes sit on the
     * line marked `∞` at the top. Points far from the diagonal are the persistent features.
     */
-  def diagram(bars: Bars, title: String = "Persistence diagram", palette: Palette = Palette.default): Figure =
-    val all = barsOf(bars)
-    val finite = all.flatMap(b => Seq(b.birth, b.death)).filter(_.isFinite)
-    val lo = math.min(0.0, finite.minOption.getOrElse(0.0))
-    val hi = finite.maxOption.getOrElse(1.0)
-    val essential = all.exists(_.death.isPosInfinity)
-    val top = if essential then hi + 0.1 * span(lo, hi) else hi + 0.04 * span(lo, hi)
-    val pad = 0.04 * span(lo, hi)
-    val (a, z) = (lo - pad, top + pad)
-    val marks = Vector.newBuilder[Mark]
-    marks += Mark.Diagonal(shade = Some(Paint.Grid))
-    if essential then marks += Mark.Rule.horizontal(top)
-    all.groupBy(_.dim).toSeq.sortBy(_._1).foreach { (k, bs) =>
-      marks += Mark.Points(
-        bs.map(b => (b.birth, if b.death.isPosInfinity then top else b.death)).toIndexedSeq,
-        IndexedSeq(Paint.Series(k)),
-        radius = 5,
-        shape = Shape.ofDegree(k),
-        tips = bs.map(interval).toIndexedSeq
+  def diagram(bars: Bars, title: String = "Persistence diagram", palette: Optional[Palette] = Optional.empty)(using
+    look: Look
+  ): Figure =
+    look.figure(palette):
+      val all = barsOf(bars)
+      val finite = all.flatMap(b => Seq(b.birth, b.death)).filter(_.isFinite)
+      val lo = math.min(0.0, finite.minOption.getOrElse(0.0))
+      val hi = finite.maxOption.getOrElse(1.0)
+      val essential = all.exists(_.death.isPosInfinity)
+      val top = if essential then hi + 0.1 * span(lo, hi) else hi + 0.04 * span(lo, hi)
+      val pad = 0.04 * span(lo, hi)
+      val (a, z) = (lo - pad, top + pad)
+      val marks = Vector.newBuilder[Mark]
+      marks += Mark.Diagonal(shade = Some(Paint.Grid))
+      if essential then marks += Mark.Rule.horizontal(top)
+      all.groupBy(_.dim).toSeq.sortBy(_._1).foreach { (k, bs) =>
+        marks += Mark.Points(
+          bs.map(b => (b.birth, if b.death.isPosInfinity then top else b.death)).toIndexedSeq,
+          IndexedSeq(Paint.Series(k)),
+          radius = 5,
+          shape = Shape.ofDegree(k),
+          tips = bs.map(interval).toIndexedSeq
+        )
+      }
+      val ticks = Ticks.Within(a, if essential then hi else z)
+      Figure(
+        marks = marks.result(),
+        title = title,
+        description =
+          s"$title: ${all.size} points (${degreeCounts(all)}), birth on the horizontal axis and death on the " +
+            "vertical, above the diagonal" + (if essential then "; essential classes on the line marked ∞" else ""),
+        subtitle = s"${all.size} bars",
+        x = Axis(label = "birth", min = Some(a), max = Some(z), ticks = ticks),
+        y = Axis(
+          label = "death",
+          min = Some(a),
+          max = Some(z),
+          ticks = ticks,
+          extra = if essential then IndexedSeq((top, "∞")) else IndexedSeq.empty
+        ),
+        legend = degreeLegend(all.map(_.dim)),
+        width = 560,
+        height = 520,
+        equalAspect = true,
+        palette = palette.getOrElse(Palette.default),
+        legendPlace = LegendPosition.LowerRight
       )
-    }
-    val ticks = Ticks.Within(a, if essential then hi else z)
-    Figure(
-      marks = marks.result(),
-      title = title,
-      description =
-        s"$title: ${all.size} points (${degreeCounts(all)}), birth on the horizontal axis and death on the " +
-          "vertical, above the diagonal" + (if essential then "; essential classes on the line marked ∞" else ""),
-      subtitle = s"${all.size} bars",
-      x = Axis(label = "birth", min = Some(a), max = Some(z), ticks = ticks),
-      y = Axis(
-        label = "death",
-        min = Some(a),
-        max = Some(z),
-        ticks = ticks,
-        extra = if essential then IndexedSeq((top, "∞")) else IndexedSeq.empty
-      ),
-      legend = degreeLegend(all.map(_.dim)),
-      width = 560,
-      height = 520,
-      equalAspect = true,
-      palette = palette,
-      legendPlace = LegendPosition.LowerRight
-    )
 
   /** A persistence image (`Vectorization.persistenceImage`'s `image(r)(c)`: `r` along `birthRange`, `c` along
     * `persistenceRange`) as a heatmap on the palette's sequential ramp.
@@ -410,46 +414,47 @@ object Plot:
     birthRange: (Double, Double),
     persistenceRange: (Double, Double),
     title: String = "Persistence image",
-    palette: Palette = Palette.default
-  ): Figure =
-    val (b0, b1) = birthRange
-    val (p0, p1) = persistenceRange
-    val nb = image.length
-    val np = image.headOption.fold(0)(_.length)
-    val maxValue = image.flatten.maxOption.getOrElse(0.0)
-    val boxes = for r <- 0 until nb; c <- 0 until np
-    yield (
-      b0 + r * (b1 - b0) / nb,
-      p0 + c * (p1 - p0) / np,
-      b0 + (r + 1) * (b1 - b0) / nb,
-      p0 + (c + 1) * (p1 - p0) / np
-    )
-    val values = for r <- 0 until nb; c <- 0 until np yield image(r)(c)
-    Figure(
-      marks = Vector(
-        Mark.Boxes(
-          boxes,
-          values.map(v => Paint.Value(v)),
-          tips = values.map(v => s"value ${Svg.number(v)}")
-        )
-      ),
-      title = title,
-      x = Axis(label = "birth", min = Some(b0), max = Some(b1), grid = false),
-      y = Axis(label = "persistence", min = Some(p0), max = Some(p1), grid = false),
-      colorScale = Some(ColorScale(Ramp.Sequential, 0.0, maxValue, "weight")),
-      width = 520,
-      height = 460,
-      palette = palette
-    )
+    palette: Optional[Palette] = Optional.empty
+  )(using look: Look): Figure =
+    look.figure(palette):
+      val (b0, b1) = birthRange
+      val (p0, p1) = persistenceRange
+      val nb = image.length
+      val np = image.headOption.fold(0)(_.length)
+      val maxValue = image.flatten.maxOption.getOrElse(0.0)
+      val boxes = for r <- 0 until nb; c <- 0 until np
+      yield (
+        b0 + r * (b1 - b0) / nb,
+        p0 + c * (p1 - p0) / np,
+        b0 + (r + 1) * (b1 - b0) / nb,
+        p0 + (c + 1) * (p1 - p0) / np
+      )
+      val values = for r <- 0 until nb; c <- 0 until np yield image(r)(c)
+      Figure(
+        marks = Vector(
+          Mark.Boxes(
+            boxes,
+            values.map(v => Paint.Value(v)),
+            tips = values.map(v => s"value ${Svg.number(v)}")
+          )
+        ),
+        title = title,
+        x = Axis(label = "birth", min = Some(b0), max = Some(b1), grid = false),
+        y = Axis(label = "persistence", min = Some(p0), max = Some(p1), grid = false),
+        colorScale = Some(ColorScale(Ramp.Sequential, 0.0, maxValue, "weight")),
+        width = 520,
+        height = 460,
+        palette = palette.getOrElse(Palette.default)
+      )
 
   /** The persistence image of the finite bars of degree `degree`, `resolution` pixels a side, `sigma` (default: a tenth
     * of the largest persistence) as `Vectorization.persistenceImage` computes it.
     */
-  def persistenceImage(bars: Bars, degree: Int): Figure =
+  def persistenceImage(bars: Bars, degree: Int)(using look: Look): Figure =
     persistenceImageOf(barsOf(bars).filter(_.dim == degree), 20, None, s"Persistence image, H$degree")
 
   /** As `persistenceImage(bars, degree)`, with the resolution and `sigma` chosen. */
-  def persistenceImage(bars: Bars, degree: Int, resolution: Int, sigma: Double): Figure =
+  def persistenceImage(bars: Bars, degree: Int, resolution: Int, sigma: Double)(using look: Look): Figure =
     persistenceImageOf(barsOf(bars).filter(_.dim == degree), resolution, Some(sigma), s"Persistence image, H$degree")
 
   private def persistenceImageOf(
@@ -457,7 +462,7 @@ object Plot:
     resolution: Int,
     sigma: Option[Double],
     title: String
-  ) =
+  )(using look: Look): Figure =
     val finite = bs.filter(_.death.isFinite)
     require(finite.nonEmpty, "Plot.persistenceImage: no finite bars in this degree")
     val bLo = finite.map(_.birth).min
@@ -470,20 +475,21 @@ object Plot:
     persistenceImage(img, birthRange, persistenceRange, title)
 
   /** The first `levels` persistence landscapes of the bars of degree `degree` (`Vectorization.landscape`). */
-  def landscape(bars: Bars, degree: Int, levels: Int = 3, resolution: Int = 200): Figure =
-    val bs = barsOf(bars).filter(b => b.dim == degree && b.death.isFinite)
-    require(bs.nonEmpty, "Plot.landscape: no finite bars in this degree")
-    val lo = bs.map(_.birth).min
-    val hi = bs.map(_.death).max
-    val values = Vectorization.landscape(bs, levels, lo, hi, resolution)
-    val ts = (0 until resolution).map(j => lo + j * (hi - lo) / (resolution - 1))
-    Figure(
-      marks = values.indices.map(k => Mark.Line(ts.zip(values(k)), Paint.Series(k), tip = s"λ${k + 1}")).toVector,
-      title = s"Persistence landscapes, H$degree",
-      x = Axis(label = "filtration value"),
-      y = Axis(label = "λ"),
-      legend = values.indices.map(k => LegendItem(s"λ${k + 1}", Paint.Series(k), LegendItem.Key.Line)).toVector
-    )
+  def landscape(bars: Bars, degree: Int, levels: Int = 3, resolution: Int = 200)(using look: Look): Figure =
+    look.figure():
+      val bs = barsOf(bars).filter(b => b.dim == degree && b.death.isFinite)
+      require(bs.nonEmpty, "Plot.landscape: no finite bars in this degree")
+      val lo = bs.map(_.birth).min
+      val hi = bs.map(_.death).max
+      val values = Vectorization.landscape(bs, levels, lo, hi, resolution)
+      val ts = (0 until resolution).map(j => lo + j * (hi - lo) / (resolution - 1))
+      Figure(
+        marks = values.indices.map(k => Mark.Line(ts.zip(values(k)), Paint.Series(k), tip = s"λ${k + 1}")).toVector,
+        title = s"Persistence landscapes, H$degree",
+        x = Axis(label = "filtration value"),
+        y = Axis(label = "λ"),
+        legend = values.indices.map(k => LegendItem(s"λ${k + 1}", Paint.Series(k), LegendItem.Key.Line)).toVector
+      )
 
   // ----- images and cubical representatives
 
@@ -516,17 +522,27 @@ object Plot:
     )
 
   /** A 2-D image (row 0 on top) on the sequential ramp; masked (NaN) and infinite pixels left blank. */
-  def image(img: Image, title: String = "Image", palette: Palette = Palette.default): Figure =
-    require(img.shape.size == 2, s"Plot.image: a 2-D image is needed, this one has shape ${img.shape.mkString("x")}")
-    val cols = img.shape(1)
-    imageFigure(Grid(img.shape(0), cols, (i, j) => img.values(i * cols + j)), title, palette)
+  def image(img: Image, title: String = "Image", palette: Optional[Palette] = Optional.empty)(using
+    look: Look
+  ): Figure =
+    look.figure(palette):
+      require(img.shape.size == 2, s"Plot.image: a 2-D image is needed, this one has shape ${img.shape.mkString("x")}")
+      val cols = img.shape(1)
+      imageFigure(
+        Grid(img.shape(0), cols, (i, j) => img.values(i * cols + j)),
+        title,
+        palette.getOrElse(Palette.default)
+      )
 
   /** A 2-D cubical grid's top-cell values, as [[image]] draws an image (in the grid's own, sublevel, units). */
-  def grid(grid: CubicalGridStream, title: String = "Cubical grid", palette: Palette = Palette.default): Figure =
-    require(grid.shape.size == 2, s"Plot.grid: a 2-D grid is needed, this one has shape ${grid.shape.mkString("x")}")
-    val vs = grid.topValues
-    val cols = grid.shape(1)
-    imageFigure(Grid(grid.shape(0), cols, (i, j) => vs(i * cols + j)), title, palette)
+  def grid(grid: CubicalGridStream, title: String = "Cubical grid", palette: Optional[Palette] = Optional.empty)(using
+    look: Look
+  ): Figure =
+    look.figure(palette):
+      require(grid.shape.size == 2, s"Plot.grid: a 2-D grid is needed, this one has shape ${grid.shape.mkString("x")}")
+      val vs = grid.topValues
+      val cols = grid.shape(1)
+      imageFigure(Grid(grid.shape(0), cols, (i, j) => vs(i * cols + j)), title, palette.getOrElse(Palette.default))
 
   /** The point of a 2-D grid's doubled coordinates in the image's plotting frame (column right, row down). */
   private def gridPoint(a0: Double, a1: Double): XY = (a1, -a0)
@@ -535,46 +551,47 @@ object Plot:
     * vertices as dots, squares filled; coefficients in the tooltips. Its degree's color, gold on the slate ramp in the
     * brand palette.
     */
-  def cubicalChain(img: Image, chain: Terms[Cube], title: String = "Representative"): Figure =
-    val base = image(img, title)
-    val terms = termsOf(chain)
-    val color = Paint.Series(terms.headOption.fold(1)(_._1.dim))
-    val (vertices, edges, squares) =
-      (terms.filter(_._1.dim == 0), terms.filter(_._1.dim == 1), terms.filter(_._1.dim == 2))
-    def corners(c: Cube): (Double, Double, Double, Double) =
-      val e = c.encoded
-      (
-        Math.floorDiv(e(0), 2).toDouble,
-        Math.floorDiv(e(1), 2).toDouble,
-        ((e(0) + 1) / 2).toDouble,
-        ((e(1) + 1) / 2).toDouble
+  def cubicalChain(img: Image, chain: Terms[Cube], title: String = "Representative")(using look: Look): Figure =
+    look.figure():
+      val base = image(img, title)(using Look.none) // this plot is looked at once, as a whole
+      val terms = termsOf(chain)
+      val color = Paint.Series(terms.headOption.fold(1)(_._1.dim))
+      val (vertices, edges, squares) =
+        (terms.filter(_._1.dim == 0), terms.filter(_._1.dim == 1), terms.filter(_._1.dim == 2))
+      def corners(c: Cube): (Double, Double, Double, Double) =
+        val e = c.encoded
+        (
+          Math.floorDiv(e(0), 2).toDouble,
+          Math.floorDiv(e(1), 2).toDouble,
+          ((e(0) + 1) / 2).toDouble,
+          ((e(1) + 1) / 2).toDouble
+        )
+      base ++ Seq(
+        Mark.Boxes(
+          squares.map { (c, _) =>
+            val (r0, c0, r1, c1) = corners(c); (c0, -r1, c1, -r0)
+          }.toIndexedSeq,
+          IndexedSeq(color),
+          opacity = 0.55,
+          tips = squares.map((c, x) => s"${c.show}: ${Svg.number(x)}").toIndexedSeq
+        ),
+        Mark.Segments(
+          edges.map { (c, _) =>
+            val (r0, c0, r1, c1) = corners(c); (gridPoint(r0, c0), gridPoint(r1, c1))
+          }.toIndexedSeq,
+          IndexedSeq(color),
+          width = 3,
+          tips = edges.map((c, x) => s"${c.show}: ${Svg.number(x)}").toIndexedSeq
+        ),
+        Mark.Points(
+          vertices.map { (c, _) =>
+            val (r0, c0, _, _) = corners(c); gridPoint(r0, c0)
+          }.toIndexedSeq,
+          IndexedSeq(color),
+          radius = 4,
+          tips = vertices.map((c, x) => s"${c.show}: ${Svg.number(x)}").toIndexedSeq
+        )
       )
-    base ++ Seq(
-      Mark.Boxes(
-        squares.map { (c, _) =>
-          val (r0, c0, r1, c1) = corners(c); (c0, -r1, c1, -r0)
-        }.toIndexedSeq,
-        IndexedSeq(color),
-        opacity = 0.55,
-        tips = squares.map((c, x) => s"${c.show}: ${Svg.number(x)}").toIndexedSeq
-      ),
-      Mark.Segments(
-        edges.map { (c, _) =>
-          val (r0, c0, r1, c1) = corners(c); (gridPoint(r0, c0), gridPoint(r1, c1))
-        }.toIndexedSeq,
-        IndexedSeq(color),
-        width = 3,
-        tips = edges.map((c, x) => s"${c.show}: ${Svg.number(x)}").toIndexedSeq
-      ),
-      Mark.Points(
-        vertices.map { (c, _) =>
-          val (r0, c0, _, _) = corners(c); gridPoint(r0, c0)
-        }.toIndexedSeq,
-        IndexedSeq(color),
-        radius = 4,
-        tips = vertices.map((c, x) => s"${c.show}: ${Svg.number(x)}").toIndexedSeq
-      )
-    )
 
   // ----- point clouds, complexes and simplicial representatives
 
@@ -600,8 +617,11 @@ object Plot:
     )
 
   /** A point cloud (its first two coordinates). */
-  def points(points: PointCloud, title: String = "Point cloud", palette: Palette = Palette.default): Figure =
-    cloudFigure(points, title, palette)
+  def points(points: PointCloud, title: String = "Point cloud", palette: Optional[Palette] = Optional.empty)(using
+    look: Look
+  ): Figure =
+    look.figure(palette):
+      cloudFigure(points, title, palette.getOrElse(Palette.default))
 
   /** The cells of `stream` with filtration value at most `at`, over the points they are built on: triangles filled,
     * edges and vertices drawn. With `ballRadius`, the balls around the points too (the union whose nerve the complex
@@ -613,44 +633,45 @@ object Plot:
     at: Double,
     ballRadius: Option[Double] = None,
     title: String = "",
-    palette: Palette = Palette.default
-  ): Figure =
-    val pts = xy(points)
-    val cells = stream.iterator.filter(c => c.dim <= 2 && stream.filtrationValue(c) <= at).toVector
-    val tris = cells.filter(_.dim == 2)
-    val edges = cells.filter(_.dim == 1)
-    val marks = Vector.newBuilder[Mark]
-    ballRadius.foreach(r => marks += Mark.Discs(pts, r, IndexedSeq(Paint.Series(0)), opacity = 0.09))
-    marks += Mark.Polygons(
-      tris.map(t => t.toIndexedSeq.map(pts)),
-      IndexedSeq(Paint.Series(0)),
-      opacity = 0.22,
-      tips = tris.map(t => s"${t.show} enters at ${Svg.number(stream.filtrationValue(t))}")
-    )
-    marks += Mark.Segments(
-      edges.map(e => (pts(e.first), pts(e.last))),
-      IndexedSeq(Paint.Secondary),
-      width = 1.2,
-      tips = edges.map(e => s"${e.show} enters at ${Svg.number(stream.filtrationValue(e))}")
-    )
-    marks += Mark.Points(pts, IndexedSeq(Paint.Ink), radius = 2.5, tips = pts.indices.map(i => s"point $i"))
-    Figure(
-      marks = marks.result(),
-      title = if title.nonEmpty then title else s"Complex at ${Svg.number(at)}",
-      subtitle = s"${edges.size} edges, ${tris.size} triangles",
-      x = Axis(grid = false),
-      y = Axis(grid = false),
-      width = 560,
-      height = 520,
-      equalAspect = true,
-      palette = palette
-    )
+    palette: Optional[Palette] = Optional.empty
+  )(using look: Look): Figure =
+    look.figure(palette):
+      val pts = xy(points)
+      val cells = stream.iterator.filter(c => c.dim <= 2 && stream.filtrationValue(c) <= at).toVector
+      val tris = cells.filter(_.dim == 2)
+      val edges = cells.filter(_.dim == 1)
+      val marks = Vector.newBuilder[Mark]
+      ballRadius.foreach(r => marks += Mark.Discs(pts, r, IndexedSeq(Paint.Series(0)), opacity = 0.09))
+      marks += Mark.Polygons(
+        tris.map(t => t.toIndexedSeq.map(pts)),
+        IndexedSeq(Paint.Series(0)),
+        opacity = 0.22,
+        tips = tris.map(t => s"${t.show} enters at ${Svg.number(stream.filtrationValue(t))}")
+      )
+      marks += Mark.Segments(
+        edges.map(e => (pts(e.first), pts(e.last))),
+        IndexedSeq(Paint.Secondary),
+        width = 1.2,
+        tips = edges.map(e => s"${e.show} enters at ${Svg.number(stream.filtrationValue(e))}")
+      )
+      marks += Mark.Points(pts, IndexedSeq(Paint.Ink), radius = 2.5, tips = pts.indices.map(i => s"point $i"))
+      Figure(
+        marks = marks.result(),
+        title = if title.nonEmpty then title else s"Complex at ${Svg.number(at)}",
+        subtitle = s"${edges.size} edges, ${tris.size} triangles",
+        x = Axis(grid = false),
+        y = Axis(grid = false),
+        width = 560,
+        height = 520,
+        equalAspect = true,
+        palette = palette.getOrElse(Palette.default)
+      )
 
   /** The complex `kind` (`VietorisRips`, `Cech` or `AlphaShapes`) of `points` at scale `at`, with the balls whose
     * overlaps it records: radius `at / 2` for Vietoris-Rips (an edge enters at the distance of its points), `at` for
     * Cech and alpha (values are radii).
     */
-  def complex(points: PointCloud, at: Double, kind: PointCloudComplex): Figure =
+  def complex(points: PointCloud, at: Double, kind: PointCloudComplex)(using look: Look): Figure =
     val stream =
       if kind eq AlphaShapes then kind.fromPoints(points, 1, None)
       else kind.fromPoints(points, 1, Some(at))
@@ -659,7 +680,7 @@ object Plot:
     complex(points, stream, at, Some(radius), s"$name complex at ${Svg.number(at)}")
 
   /** The Vietoris-Rips complex of `points` at `at`, with balls of radius `at / 2`. */
-  def complex(points: PointCloud, at: Double): Figure = complex(points, at, VietorisRips)
+  def complex(points: PointCloud, at: Double)(using look: Look): Figure = complex(points, at, VietorisRips)
 
   /** A simplicial chain's terms with their coefficients as numbers (exact small integers for `Z/p`, the value for the
     * reals).
@@ -679,40 +700,41 @@ object Plot:
     * color, its triangles filled, its vertices dotted; each cell's coefficient in its tooltip. Draw it over
     * `complex(...)` with `over` to see it in context.
     */
-  def cycle(points: PointCloud, chain: Terms[Simplex[Int]], title: String = "Cycle"): Figure =
-    val pts = xy(points)
-    val terms = termsOf(chain)
-    val dim = terms.map(_._1.dim).maxOption.getOrElse(1)
-    val color = Paint.Series(dim)
-    def tip(s: Simplex[Int], c: Double) = s"${s.show}: ${Svg.number(c)}"
-    val tris = terms.filter(_._1.dim == 2)
-    val edges = terms.filter(_._1.dim == 1)
-    val vertices = terms.filter(_._1.dim == 0)
-    cloudFigure(points, title, Palette.default) ++ Seq(
-      Mark.Polygons(
-        tris.map((t, _) => t.toIndexedSeq.map(pts)).toIndexedSeq,
-        IndexedSeq(color),
-        0.45,
-        tris.map(tip).toIndexedSeq
-      ),
-      Mark.Segments(
-        edges.map((e, _) => (pts(e.first), pts(e.last))).toIndexedSeq,
-        IndexedSeq(color),
-        width = 3,
-        tips = edges.map(tip).toIndexedSeq
-      ),
-      Mark.Points(
-        vertices.map((v, _) => pts(v.first)).toIndexedSeq,
-        IndexedSeq(color),
-        5,
-        tips = vertices.map(tip).toIndexedSeq
-      )
-    ) match
-      case f =>
-        f.copy(
-          subtitle = s"${terms.size} cells, degree $dim",
-          legend = Vector(LegendItem(s"H$dim representative", color, LegendItem.Key.Line))
+  def cycle(points: PointCloud, chain: Terms[Simplex[Int]], title: String = "Cycle")(using look: Look): Figure =
+    look.figure():
+      val pts = xy(points)
+      val terms = termsOf(chain)
+      val dim = terms.map(_._1.dim).maxOption.getOrElse(1)
+      val color = Paint.Series(dim)
+      def tip(s: Simplex[Int], c: Double) = s"${s.show}: ${Svg.number(c)}"
+      val tris = terms.filter(_._1.dim == 2)
+      val edges = terms.filter(_._1.dim == 1)
+      val vertices = terms.filter(_._1.dim == 0)
+      cloudFigure(points, title, Palette.default) ++ Seq(
+        Mark.Polygons(
+          tris.map((t, _) => t.toIndexedSeq.map(pts)).toIndexedSeq,
+          IndexedSeq(color),
+          0.45,
+          tris.map(tip).toIndexedSeq
+        ),
+        Mark.Segments(
+          edges.map((e, _) => (pts(e.first), pts(e.last))).toIndexedSeq,
+          IndexedSeq(color),
+          width = 3,
+          tips = edges.map(tip).toIndexedSeq
+        ),
+        Mark.Points(
+          vertices.map((v, _) => pts(v.first)).toIndexedSeq,
+          IndexedSeq(color),
+          5,
+          tips = vertices.map(tip).toIndexedSeq
         )
+      ) match
+        case f =>
+          f.copy(
+            subtitle = s"${terms.size} cells, degree $dim",
+            legend = Vector(LegendItem(s"H$dim representative", color, LegendItem.Key.Line))
+          )
 
   /** A simplicial cocycle over its point cloud: each edge (or vertex, triangle) with a nonzero value, colored by that
     * value on the palette's diverging pair (negative one way, positive the other; for `Z/p`, the balanced
@@ -727,94 +749,102 @@ object Plot:
     chain: Terms[Simplex[Int]],
     at: Optional[Double] = Optional.empty,
     title: String = "Cocycle"
-  ): Figure =
-    val pts = xy(points)
-    val coords = points.points
-    def diameter(s: Simplex[Int]): Double =
-      val vs = s.toIndexedSeq
-      (for i <- vs; j <- vs if i < j
-      yield math.sqrt(coords(i).indices.map(k => math.pow(coords(i)(k) - coords(j)(k), 2)).sum)).maxOption
-        .getOrElse(0.0)
-    val terms = termsOf(chain).filter((s, _) => at.toOption.forall(r => diameter(s) <= r + 1e-12))
-    val m = terms.map(t => math.abs(t._2)).filter(_.isFinite).maxOption.getOrElse(1.0) max 1e-12
-    def paint(c: Double) = Paint.Value(c)
-    def tip(s: Simplex[Int], c: Double) = s"${s.show}: ${Svg.number(c)}"
-    val tris = terms.filter(_._1.dim == 2)
-    val edges = terms.filter(_._1.dim == 1)
-    val vertices = terms.filter(_._1.dim == 0)
-    cloudFigure(points, title, Palette.default) ++ Seq(
-      Mark.Polygons(
-        tris.map((t, _) => t.toIndexedSeq.map(pts)).toIndexedSeq,
-        tris.map((_, c) => paint(c)).toIndexedSeq,
-        0.5,
-        tris.map(tip).toIndexedSeq
-      ),
-      Mark.Segments(
-        edges.map((e, _) => (pts(e.first), pts(e.last))).toIndexedSeq,
-        edges.map((_, c) => paint(c)).toIndexedSeq,
-        width = 3,
-        tips = edges.map(tip).toIndexedSeq
-      ),
-      Mark.Points(
-        vertices.map((v, _) => pts(v.first)).toIndexedSeq,
-        vertices.map((_, c) => paint(c)).toIndexedSeq,
-        5,
-        tips = vertices.map(tip).toIndexedSeq
-      )
-    ) match
-      case f =>
-        f.copy(
-          subtitle = s"${terms.size} cells" + at.toOption.fold("")(r => s" of diameter at most ${Svg.number(r)}"),
-          colorScale = Some(ColorScale(Ramp.Diverging, -m, m, "value"))
+  )(using look: Look): Figure =
+    look.figure():
+      val pts = xy(points)
+      val coords = points.points
+      def diameter(s: Simplex[Int]): Double =
+        val vs = s.toIndexedSeq
+        (for i <- vs; j <- vs if i < j
+        yield math.sqrt(coords(i).indices.map(k => math.pow(coords(i)(k) - coords(j)(k), 2)).sum)).maxOption
+          .getOrElse(0.0)
+      val terms = termsOf(chain).filter((s, _) => at.toOption.forall(r => diameter(s) <= r + 1e-12))
+      val m = terms.map(t => math.abs(t._2)).filter(_.isFinite).maxOption.getOrElse(1.0) max 1e-12
+      def paint(c: Double) = Paint.Value(c)
+      def tip(s: Simplex[Int], c: Double) = s"${s.show}: ${Svg.number(c)}"
+      val tris = terms.filter(_._1.dim == 2)
+      val edges = terms.filter(_._1.dim == 1)
+      val vertices = terms.filter(_._1.dim == 0)
+      cloudFigure(points, title, Palette.default) ++ Seq(
+        Mark.Polygons(
+          tris.map((t, _) => t.toIndexedSeq.map(pts)).toIndexedSeq,
+          tris.map((_, c) => paint(c)).toIndexedSeq,
+          0.5,
+          tris.map(tip).toIndexedSeq
+        ),
+        Mark.Segments(
+          edges.map((e, _) => (pts(e.first), pts(e.last))).toIndexedSeq,
+          edges.map((_, c) => paint(c)).toIndexedSeq,
+          width = 3,
+          tips = edges.map(tip).toIndexedSeq
+        ),
+        Mark.Points(
+          vertices.map((v, _) => pts(v.first)).toIndexedSeq,
+          vertices.map((_, c) => paint(c)).toIndexedSeq,
+          5,
+          tips = vertices.map(tip).toIndexedSeq
         )
+      ) match
+        case f =>
+          f.copy(
+            subtitle = s"${terms.size} cells" + at.toOption.fold("")(r => s" of diameter at most ${Svg.number(r)}"),
+            colorScale = Some(ColorScale(Ramp.Diverging, -m, m, "value"))
+          )
 
   /** Circular coordinates (`CircularCoordinates.compute(...).theta`, angles as fractions of a turn) on the points, on a
     * cyclic color map: points of one color are at one angle, and the colors go round once along the loop. Points with
     * no coordinate (another connected component) are drawn hollow-gray.
     */
-  def circularCoordinates(points: PointCloud, theta: Map[Int, Double], title: String = "Circular coordinates"): Figure =
-    val pts = xy(points)
-    val (on, off) = pts.indices.partition(theta.contains)
-    Figure(
-      marks = Vector(
-        Mark.Points(off.map(pts), IndexedSeq(Paint.Grid), radius = 3, tips = off.map(i => s"point $i: no coordinate")),
-        Mark.Points(
-          on.map(pts),
-          on.map(i => Paint.Value(theta(i))),
-          radius = 4.5,
-          tips = on.map(i => s"point $i: θ = ${Svg.number(theta(i))}")
-        )
-      ),
-      title = title,
-      x = Axis(grid = false),
-      y = Axis(grid = false),
-      colorScale = Some(ColorScale(Ramp.Cyclic, 0.0, 1.0, "θ (turns)")),
-      width = 600,
-      height = 520,
-      equalAspect = true
-    )
+  def circularCoordinates(points: PointCloud, theta: Map[Int, Double], title: String = "Circular coordinates")(using
+    look: Look
+  ): Figure =
+    look.figure():
+      val pts = xy(points)
+      val (on, off) = pts.indices.partition(theta.contains)
+      Figure(
+        marks = Vector(
+          Mark
+            .Points(off.map(pts), IndexedSeq(Paint.Grid), radius = 3, tips = off.map(i => s"point $i: no coordinate")),
+          Mark.Points(
+            on.map(pts),
+            on.map(i => Paint.Value(theta(i))),
+            radius = 4.5,
+            tips = on.map(i => s"point $i: θ = ${Svg.number(theta(i))}")
+          )
+        ),
+        title = title,
+        x = Axis(grid = false),
+        y = Axis(grid = false),
+        colorScale = Some(ColorScale(Ramp.Cyclic, 0.0, 1.0, "θ (turns)")),
+        width = 600,
+        height = 520,
+        equalAspect = true
+      )
 
   /** Two circular coordinates against each other, on the torus `[0, 1) x [0, 1)` (`CircularCoordinates.computeToroidal`
     * gives one map per class): points tracing a closed curve that wraps the square are a torus knot of the data.
     */
-  def torus(theta1: Map[Int, Double], theta2: Map[Int, Double], title: String = "Toroidal coordinates"): Figure =
-    val ids = theta1.keySet.intersect(theta2.keySet).toIndexedSeq.sorted
-    Figure(
-      marks = Vector(
-        Mark.Points(
-          ids.map(i => (theta1(i), theta2(i))),
-          IndexedSeq(Paint.Series(0)),
-          radius = 3.5,
-          tips = ids.map(i => s"point $i: (${Svg.number(theta1(i))}, ${Svg.number(theta2(i))})")
-        )
-      ),
-      title = title,
-      x = Axis(label = "θ₁ (turns)", min = Some(0.0), max = Some(1.0)),
-      y = Axis(label = "θ₂ (turns)", min = Some(0.0), max = Some(1.0)),
-      width = 520,
-      height = 520,
-      equalAspect = true
-    )
+  def torus(theta1: Map[Int, Double], theta2: Map[Int, Double], title: String = "Toroidal coordinates")(using
+    look: Look
+  ): Figure =
+    look.figure():
+      val ids = theta1.keySet.intersect(theta2.keySet).toIndexedSeq.sorted
+      Figure(
+        marks = Vector(
+          Mark.Points(
+            ids.map(i => (theta1(i), theta2(i))),
+            IndexedSeq(Paint.Series(0)),
+            radius = 3.5,
+            tips = ids.map(i => s"point $i: (${Svg.number(theta1(i))}, ${Svg.number(theta2(i))})")
+          )
+        ),
+        title = title,
+        x = Axis(label = "θ₁ (turns)", min = Some(0.0), max = Some(1.0)),
+        y = Axis(label = "θ₂ (turns)", min = Some(0.0), max = Some(1.0)),
+        width = 520,
+        height = 520,
+        equalAspect = true
+      )
 
   /** Figures side by side in one row. */
   def side(figures: Figure*): Board = Board(figures, figures.map(_.title).filter(_.nonEmpty).mkString(" | "))
@@ -861,66 +891,71 @@ object Plot:
     points.points.toIndexedSeq.map(p => (p(0), if p.length > 1 then p(1) else 0.0, if p.length > 2 then p(2) else 0.0))
 
   /** A point cloud in 3-D (its first three coordinates), to turn and zoom. */
-  def points3D(points: PointCloud, title: String = "Point cloud"): Scene =
-    Scene(Vector(Layer.Points(xyz(points), IndexedSeq(Paint.Secondary), radius = 3)), title = title)
+  def points3D(points: PointCloud, title: String = "Point cloud")(using look: Look): Scene =
+    look.scene:
+      Scene(Vector(Layer.Points(xyz(points), IndexedSeq(Paint.Secondary), radius = 3)), title = title)
 
   /** The cells of `stream` with value at most `at` in 3-D: triangles translucent, edges, vertices. */
-  def complex3D(points: PointCloud, stream: CellStream[Simplex[Int], Double], at: Double, title: String = ""): Scene =
-    val pts = xyz(points)
-    val cells = stream.iterator.filter(c => c.dim <= 2 && stream.filtrationValue(c) <= at).toVector
-    val tris = cells.filter(_.dim == 2)
-    val edges = cells.filter(_.dim == 1)
-    Scene(
-      Vector(
-        Layer.Triangles(
-          tris.map(t => (pts(t.first), pts(t.toIndexedSeq(1)), pts(t.last))),
-          IndexedSeq(Paint.Series(0)),
-          0.2
+  def complex3D(points: PointCloud, stream: CellStream[Simplex[Int], Double], at: Double, title: String = "")(using
+    look: Look
+  ): Scene =
+    look.scene:
+      val pts = xyz(points)
+      val cells = stream.iterator.filter(c => c.dim <= 2 && stream.filtrationValue(c) <= at).toVector
+      val tris = cells.filter(_.dim == 2)
+      val edges = cells.filter(_.dim == 1)
+      Scene(
+        Vector(
+          Layer.Triangles(
+            tris.map(t => (pts(t.first), pts(t.toIndexedSeq(1)), pts(t.last))),
+            IndexedSeq(Paint.Series(0)),
+            0.2
+          ),
+          Layer.Segments(edges.map(e => (pts(e.first), pts(e.last))), IndexedSeq(Paint.Secondary), 1),
+          Layer.Points(pts, IndexedSeq(Paint.Ink), 2.5)
         ),
-        Layer.Segments(edges.map(e => (pts(e.first), pts(e.last))), IndexedSeq(Paint.Secondary), 1),
-        Layer.Points(pts, IndexedSeq(Paint.Ink), 2.5)
-      ),
-      title = if title.nonEmpty then title else s"Complex at ${Svg.number(at)}",
-      subtitle = s"${edges.size} edges, ${tris.size} triangles"
-    )
+        title = if title.nonEmpty then title else s"Complex at ${Svg.number(at)}",
+        subtitle = s"${edges.size} edges, ${tris.size} triangles"
+      )
 
   /** The complex `kind` (`VietorisRips`, `Cech` or `AlphaShapes`) of `points` at `at`, in 3-D. */
-  def complex3D(points: PointCloud, at: Double, kind: PointCloudComplex): Scene =
+  def complex3D(points: PointCloud, at: Double, kind: PointCloudComplex)(using look: Look): Scene =
     val stream =
       if kind eq AlphaShapes then kind.fromPoints(points, 2, None)
       else kind.fromPoints(points, 1, Some(at))
     complex3D(points, stream, at)
 
   /** A simplicial representative in 3-D, over its point cloud: edges thick, triangles filled, in its degree's color. */
-  def cycle3D(points: PointCloud, chain: Terms[Simplex[Int]], title: String = "Cycle"): Scene =
-    val pts = xyz(points)
-    val terms = termsOf(chain)
-    val dim = terms.map(_._1.dim).maxOption.getOrElse(1)
-    val color = Paint.Series(dim)
-    val tris = terms.map(_._1).filter(_.dim == 2)
-    val edges = terms.map(_._1).filter(_.dim == 1)
-    Scene(
-      Vector(
-        Layer.Points(pts, IndexedSeq(Paint.Muted), 2),
-        Layer.Triangles(
-          tris.map(t => (pts(t.first), pts(t.toIndexedSeq(1)), pts(t.last))).toIndexedSeq,
-          IndexedSeq(color),
-          0.22
+  def cycle3D(points: PointCloud, chain: Terms[Simplex[Int]], title: String = "Cycle")(using look: Look): Scene =
+    look.scene:
+      val pts = xyz(points)
+      val terms = termsOf(chain)
+      val dim = terms.map(_._1.dim).maxOption.getOrElse(1)
+      val color = Paint.Series(dim)
+      val tris = terms.map(_._1).filter(_.dim == 2)
+      val edges = terms.map(_._1).filter(_.dim == 1)
+      Scene(
+        Vector(
+          Layer.Points(pts, IndexedSeq(Paint.Muted), 2),
+          Layer.Triangles(
+            tris.map(t => (pts(t.first), pts(t.toIndexedSeq(1)), pts(t.last))).toIndexedSeq,
+            IndexedSeq(color),
+            0.22
+          ),
+          // a 2-cycle's triangles outlined, so a closed surface reads as one, not as a solid blob
+          Layer.Segments(
+            tris
+              .flatMap { t =>
+                val v = t.toIndexedSeq; Seq((v(0), v(1)), (v(1), v(2)), (v(0), v(2)))
+              }
+              .distinct
+              .map((a, b) => (pts(a), pts(b)))
+              .toIndexedSeq,
+            IndexedSeq(color),
+            0.8
+          ),
+          Layer.Segments(edges.map(e => (pts(e.first), pts(e.last))).toIndexedSeq, IndexedSeq(color), 3)
         ),
-        // a 2-cycle's triangles outlined, so a closed surface reads as one, not as a solid blob
-        Layer.Segments(
-          tris
-            .flatMap { t =>
-              val v = t.toIndexedSeq; Seq((v(0), v(1)), (v(1), v(2)), (v(0), v(2)))
-            }
-            .distinct
-            .map((a, b) => (pts(a), pts(b)))
-            .toIndexedSeq,
-          IndexedSeq(color),
-          0.8
-        ),
-        Layer.Segments(edges.map(e => (pts(e.first), pts(e.last))).toIndexedSeq, IndexedSeq(color), 3)
-      ),
-      title = title,
-      subtitle = s"${terms.size} cells, degree $dim"
-    )
+        title = title,
+        subtitle = s"${terms.size} cells, degree $dim"
+      )

@@ -608,6 +608,47 @@ Plot.barcode(d) + serif
 (Plot.diagram(d) + overlay).save("for-a-dark-page.svg", Some(Theme.Dark))
 ```
 
+### Defaults for every plot: a `given Look`
+
+When all your plots should be in one house style, say so once. A `Look` is a list of the same tweaks a plot takes, and
+every plot constructor (`Plot.barcode`, `Plot.diagram`, `Plot.landscape`, the 3-D ones, ...) starts from the `given Look`
+it finds. Nothing is imported: a `given` in your file, or in the block where you draw, is found. Without one, a plot is as
+its constructor makes it.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val d = Persistence(CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv"), maxDimension = 1)
+
+given Look = Look.print + Text(TextRole.Title, size = 18) + Lines.grid(dash = Dash.Dotted)
+
+Plot.barcode(d).save("barcode.svg") // in the look
+Plot.diagram(d, palette = Palette.reference).save("diagram.svg") // a palette named in the call wins
+(Plot.barcode(d) + Style.slides).save("slides.svg") // and so does a tweak added afterwards
+```
+
+`Look.print` and `Look.clear` are the palette and style of the two looks for a paper (see above), `Look.none` is nothing,
+and `Look.named("print")` takes a word. Add tweaks with `+` and looks with `++`; the later one wins. A look serves figures
+and 3-D scenes alike: a tweak that a kind of plot cannot have (the tick labels of a scene) is left out for it, so the same
+look works for `Plot.barcode` and `Plot.points3D`. A `given` in a smaller scope replaces one in a larger.
+
+**From MATLAB and Java**, which have no `given`s, a session has defaults of its own: `TDA4j.setPlotDefaults` takes the
+same settings as text (`palette=print`, `style=print`, `title.size=18`, ...), and every plot a result draws afterwards
+starts from them until `TDA4j.clearPlotDefaults()`. They belong to the thread that set them, which for MATLAB is the
+whole session.
+
+```matlab
+import org.appliedtopology.tda4j.matlab.*;
+
+TDA4j.setPlotDefaults({'palette=print', 'style=print', 'title.size=18'});
+result = TDA4j.computeFromPoints(points, {'maxDimension', '1'});
+result.plotBarcode().save('barcode.svg');      % in the print look
+result.plotDiagram().withStyle('slides')       % what you chain on wins
+TDA4j.clearPlotDefaults();
+```
+
 ### Comparing plots
 
 Plots drawn side by side mean something only on the same scale. `shared()` gives every panel of a board the union of

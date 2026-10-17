@@ -67,6 +67,11 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   letters a board's panels `(a)`, `(b)`, ...; `Size.inches/cm/mm/pt` give a size in the units of a journal template.
   Settings: `x-axis.reverse`, `x-axis.padding`, `aspect`, `numbers.locale/decimal/grouping/minus`, `size.width=3.4in`,
   `caption.size`, `tag.weight`, `legend.limit`, ... (MATLAB `withSetting`, CLI `--set`).
+- Defaults for every plot: `given Look` (`Look.print`, `Look.clear`, `Look.none`, `Look.settings(...)`): every plot
+  constructor starts from the `given Look` in scope, then comes what the call names (a `palette`) and what you chain on, so a
+  house style is said once. The `palette` parameters of the seven constructors that have one are `Optional[Palette]` now, so that naming one
+  beats the look. MATLAB and Java have `TDA4j.setPlotDefaults(settings)` and `clearPlotDefaults()`; the settings `palette=`
+  and `style=` take a palette or style by name.
 - Panels on a grid: `Plot.layout(rows, cols, width, height, gap, widths, heights)` is an empty `Board` on a grid of cells,
   and `place(figure, row, col, rowSpan, colSpan)` puts a panel in it, spanning cells, so that one plot can run across a
   whole row or column. `Board.sharedColumns()` and `sharedRows()` put the panels over the same columns, or rows, on one

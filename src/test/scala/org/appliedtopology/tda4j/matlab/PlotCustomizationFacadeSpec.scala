@@ -120,6 +120,32 @@ class PlotCustomizationFacadeSpec extends Specification:
       sceneNames.filterNot(callable(classOf[Scene], _)) must beEmpty
       classOf[Plot].getMethod("save", classOf[String], classOf[String]) must not(beNull)
     }
+    "start from the session's defaults, until they are cleared, and give way to what is chained on" in {
+      try
+        TDA4j.setPlotDefaults(Array("palette=print", "style=print", "title.size=19"))
+        val plots = Seq(result.plotDiagram(), result.plotBarcode(), result.plotInput(), result.plotComplex(0.8))
+        plots.map(_.style).distinct must beEqualTo(Seq(Style.print))
+        plots.map(_.palette).distinct must beEqualTo(Seq(Palette.print))
+        plots.map(_.elements.face(TextRole.Title).size).distinct must beEqualTo(Seq(19.0))
+        result.plotDiagram().withStyle("slides").style must beEqualTo(Style.slides) // what is chained on wins
+        result.plotInput3D().style must beEqualTo(Style.print) // and a scene has them too
+        TDA4j.setPlotDefaults(Array("palette=neon")) must throwAn[IllegalArgumentException]("expected one of brand")
+        result.plotDiagram().style must beEqualTo(Style.print) // a refused setting changes nothing
+      finally TDA4j.clearPlotDefaults()
+      result.plotDiagram().style must beEqualTo(Style.default)
+      result.plotDiagram().palette must beEqualTo(Palette.default)
+    }
+    "belong to the thread that set them" in {
+      try
+        TDA4j.setPlotDefaults(Array("style=print"))
+        var elsewhere: Option[Style] = None
+        val worker = Thread(() => elsewhere = Some(result.plotDiagram().style))
+        worker.start()
+        worker.join()
+        elsewhere must beSome(Style.default)
+        result.plotDiagram().style must beEqualTo(Style.print)
+      finally TDA4j.clearPlotDefaults()
+    }
     "sort the bars of a barcode as asked, from a word" in {
       val longest = result.plotBarcode("persistence").marks.collectFirst { case m: Mark.Segments => m.ends }.get
       val lengths = longest.map((a, b) => b._1 - a._1)

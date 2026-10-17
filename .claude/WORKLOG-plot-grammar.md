@@ -184,6 +184,32 @@ The two real defects that made customizing hard (both found by reading, not by u
     `Settings` key for the caption's text (`withCaption`, `Labels(caption)` only). Gallery: 59 files byte-identical (ignoring
     the added `<desc>`) and 13 new.
 
+15. **Camera, layout grid, session defaults** (project lead: "3d-camera tweak, layout grid (preferably where axes can span
+    multiple cells in an abstract layout grid) and session defaults. The defaults seems like a perfect setting for Scala 3
+    given"; and, confirming decision 11: the clear look is black elements on a light page and white ones on a dark page, a
+    different spec from the white print look). (a) `Camera(azimuth, elevation, zoom)` rather than `View` (`scala.collection.View`
+    is a name users meet): a scene's own fields, so a saved `.svg` is that view and a page's canvas starts from it; zoom is
+    0.2 to 8, the canvas's own limits, round the middle of the plot; a 2-D plot refuses it, and the CLI says so before
+    computing. A first CLI spec could not tell early from late (the same message either way): it points the command at a
+    missing input. (b) A layout is a `Board` with a `Layout` (rows, columns, weights, gap, size) and a `Slot` per panel
+    (`Cell` is the algebra's name, in the flat core package). Tracks are whole pixels that add up exactly to the drawing
+    (rounded cumulative edges); a panel is sized to its slot when drawn, never stored resized, so tweaks and `shared` see the
+    figures as the user made them; a page gets a CSS grid, a file nested `<svg x y>`. `sharedColumns`/`sharedRows` group
+    panels over the same span (matplotlib's `sharex='col'`), and a panel alone in its group is left as drawn, because pinning
+    an axis to its own range drops its padding. A diagram keeps equal units, so in a wide cell it needs `aspect free`.
+    (c) Session defaults: `Look` is a vector of tweaks; constructors take `(using look: Look)` and the default given is in
+    `Look`'s companion (the rule of CLAUDE.md: a default instance lives in the data type's companion, found with nothing
+    imported and beaten by any given in scope). Not applied at `save`, which would let the look beat tweaks chained on
+    (a look is a starting point). Applied once: a wrapping constructor applies it, a delegating one
+    passes it on, an internal call passes `Look.none`. A palette named in the call must beat the look, and `palette:
+    Palette = Palette.default` cannot say "named", so the seven constructors that take a palette now take `Optional[Palette]` (nobody in the repo
+    passed one). A tweak a scene cannot have is skipped for it (`UnsupportedOperationException`), so one look fits both. The
+    thing that cannot be caught by the compiler is a constructor that drops the look, so `PlotLookSpec` builds every
+    constructor under a look. MATLAB has no `given`s: `TDA4j.setPlotDefaults(settings)`, per THREAD (specs run in parallel in
+    one JVM, and MATLAB calls from one thread), read through a conditional given (a method, not a lazy val, so it is read when
+    a plot is made). Settings got `palette` and `style`. Not done: the legend box and columns, an axis crossing at a
+    value, and a CLI flag for a named look (`--set palette=print --set style=print` does it).
+
 ## What was verified
 
 - **Default plots are unchanged**: `Gallery` run on the original commit (a `git worktree`) and on the new code, SVGs

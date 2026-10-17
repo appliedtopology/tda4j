@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j.matlab
 
 import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.matlab.TDA4j.sessionLook
 import org.appliedtopology.tda4j.plot.{BarOrder, Figure, Plot, Scene, Svg}
 
 /** The boundary matrix of the complex a [[PersistenceResult]] was computed from, one column per cell in filtration
