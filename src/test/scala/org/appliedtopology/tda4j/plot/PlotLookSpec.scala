@@ -115,6 +115,38 @@ class PlotLookSpec extends Specification:
       // the library's own given is the empty look, found only when none is in scope
       summon[Look](using Look.standard) must beEqualTo(Look.none)
     }
+    "be built on with summon[Look] + tweaks, in an inner scope: the look of the scope around, with one more tweak" in {
+      def titleSize(f: Figure) = f.elements.face(TextRole.Title).size
+      def legendSize(f: Figure) = f.elements.face(TextRole.Legend).size
+      val outerLook = Look.print + Text(TextRole.Legend, size = 9)
+      // a block inside a scope with a look
+      val nested =
+        given Look = outerLook
+        locally {
+          given Look = summon[Look] + Text(TextRole.Title, size = 21)
+          Plot.barcode(d)
+        }
+      (nested.style, legendSize(nested), titleSize(nested)) must beEqualTo((Style.print, 9.0, 21.0))
+      // with no look of the user's, it adds to the default, which is nothing
+      val fromDefault =
+        given Look = summon[Look] + Text(TextRole.Title, size = 21)
+        Plot.barcode(d)
+      (fromDefault.style, titleSize(fromDefault)) must beEqualTo((Style.default, 21.0))
+      // a method that takes the look as a parameter
+      def drawn(using Look): Figure =
+        given Look = summon[Look] + Text(TextRole.Title, size = 21)
+        Plot.barcode(d)
+      val viaMethod = drawn(using outerLook)
+      (viaMethod.style, legendSize(viaMethod), titleSize(viaMethod)) must beEqualTo((Style.print, 9.0, 21.0))
+      // a shared look imported from another object
+      val imported =
+        import PlotLookSpec.House.given
+        locally {
+          given Look = summon[Look] + Text(TextRole.Title, size = 21)
+          Plot.barcode(d)
+        }
+      (imported.style, legendSize(imported), titleSize(imported)) must beEqualTo((Style.print, 9.0, 21.0))
+    }
     "be nothing at all unless you give one, and a block's own look is its own" in {
       Plot.barcode(d).style must beEqualTo(Style.default)
       {
@@ -156,3 +188,8 @@ class PlotLookSpec extends Specification:
       Plot.barcode(d)(using look).palette must beEqualTo(Palette.print)
     }
   }
+
+object PlotLookSpec:
+  /** A shared look, as a project would keep it in one place. */
+  object House:
+    given look: Look = Look.print + Text(TextRole.Legend, size = 9)

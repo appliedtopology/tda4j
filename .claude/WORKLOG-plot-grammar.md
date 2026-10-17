@@ -200,7 +200,12 @@ The two real defects that made customizing hard (both found by reading, not by u
     (c) Session defaults: `Look` is a vector of tweaks; constructors take `(using look: Look)` and the default given is in
     `Look`'s companion (the rule of CLAUDE.md: a default instance lives in the data type's companion, found with nothing
     imported and beaten by any given in scope). Not applied at `save`, which would let the look beat tweaks chained on
-    (a look is a starting point). Applied once: a wrapping constructor applies it, a delegating one
+    (a look is a starting point). Extending the look in scope is `given Look = summon[Look] + tweaks` in an inner scope (project lead's idiom; probed on
+    Scala 3.9.0 with `-source:future`: the given is not eligible in its own right-hand side, so `summon[Look]` there is the
+    enclosing look, or the empty default; in the SAME scope as the look it extends it is an ambiguity error, or a name clash
+    for two anonymous givens, and capturing the look in a `val` above the given in one block is a forward-reference error: all
+    loud). I first expected a self-reference and offered a `Look.inherit`: not needed. `PlotLookSpec` pins it, because it
+    depends on the compiler's given resolution. Applied once: a wrapping constructor applies it, a delegating one
     passes it on, an internal call passes `Look.none`. A palette named in the call must beat the look, and `palette:
     Palette = Palette.default` cannot say "named", so the seven constructors that take a palette now take `Optional[Palette]` (nobody in the repo
     passed one). A tweak a scene cannot have is skipped for it (`UnsupportedOperationException`), so one look fits both. The

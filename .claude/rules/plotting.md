@@ -108,7 +108,8 @@ API). Rules:
 - **`Look` (session defaults)**: every public constructor of `Plot` that returns a `Figure` or `Scene` takes `(using look:
   Look)`; one that builds the plot wraps its body in `look.figure(palette):` / `look.scene:`, one that delegates passes the
   given on, and a call to a public constructor inside a wrapped body passes `Look.none` (applied once). A named `palette` is
-  an `Optional` and is re-applied after the look. Compiling cannot catch a constructor that drops the look (the companion
+  an `Optional` and is re-applied after the look. To extend the look in scope: `given Look = summon[Look] + tweaks` in an
+  INNER scope (same scope is an ambiguity error); pinned in `PlotLookSpec`. Compiling cannot catch a constructor that drops the look (the companion
   given is always found): add every new constructor to the table in `PlotLookSpec`. MATLAB's session look is per thread
   (`TDA4j.setPlotDefaults`), read through a given that takes a context parameter, so that it is a method, not a cached value.
 - A plot's own default (a diagram's legend place) goes in the `Figure`, never in the `Style`, which a user replaces whole.

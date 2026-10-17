@@ -17,6 +17,9 @@ import java.util.Locale
   * A look is made of the same tweaks as a plot (`Palette`, `Style`, `Text`, `Lines`, `Numbers`, ...). A tweak that a
   * kind of plot cannot have is left out for it, so one look serves figures and 3-D scenes alike (the tick labels of a
   * look do nothing to a scene). With no `given Look` the constructors use [[Look.none]], and a plot is as it was.
+  *
+  * The nearest `given Look` is used whole. To add to the look in scope, ask for it in an inner scope (a block, a
+  * method, or a file that imports a shared look): `given Look = summon[Look] + Text(TextRole.Title, size = 21)`.
   */
 final case class Look(tweaks: Vector[Tweak] = Vector.empty):
   /** This look, then `tweak`. */
