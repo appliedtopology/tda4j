@@ -203,6 +203,29 @@ class VantagePointTreeSpec extends Specification:
     problems.take(5) must beEmpty
   }
 
+  "A distance that obeys the triangle inequality only up to rounding still finds every point on the boundary" >> {
+    // Real distances come out of floating-point arithmetic, which breaks the triangle inequality in the last bits. Here
+    // every pairwise distance is |a - b| times a symmetric factor within 1e-14 of 1, so the triangle inequality fails by
+    // about that much; a radius equal to a computed distance puts a point exactly on the boundary and a pruning bound
+    // without slack would sometimes skip the subtree holding it.
+    def factor(a: Int, b: Int): Double =
+      val h = (math.min(a, b) * 73856093) ^ (math.max(a, b) * 19349663)
+      1.0 + 1e-14 * (((h & 0xffff) / 32768.0) - 1.0)
+    def noisy(a: Int, b: Int): Double = math.abs(a - b) * factor(a, b)
+    val elems = IndexedSeq.tabulate(400)(i => (i * 7) % 400)
+    val tree = VantagePointTree(elems, noisy, 3)
+    val rng = Random(13)
+    val misses = for
+      _ <- 1 to 4000
+      q = rng.nextInt(400)
+      target = elems(rng.nextInt(400))
+      eps = noisy(q, target)
+      expected = elems.indices.filter(i => noisy(q, elems(i)) <= eps)
+      if tree.indicesWithinDistance(q, eps) != expected
+    yield (q, target, eps)
+    misses must beEmpty
+  }
+
   "Coincident points are all found, in construction order, without any special handling" >> {
     val same = IndexedSeq.fill(100)(Array(0.25, 0.5))
     val tree = VantagePointTree(same, euclid, 4)

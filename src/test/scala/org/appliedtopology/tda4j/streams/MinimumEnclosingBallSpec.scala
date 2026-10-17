@@ -287,7 +287,7 @@ class MinimumEnclosingBallSpec extends Specification:
       worst = pts.map(p => dist(p, b.center)).max
       diam = diameter(pts)
       jung = diam * math.sqrt(d.toDouble / (2.0 * (d + 1)))
-      outside = worst > b.radius * (1 + 1e-12)
+      outside = worst > b.radius // exactly: the radius IS the largest distance to the returned centre
       tooSmall = b.radius < diam / 2 * (1 - 1e-12)
       tooLarge = b.radius > jung * (1 + 1e-12) + 1e-300
       selfConsistent = relative(b.radius * b.radius, b.squaredRadius) > 1e-14
