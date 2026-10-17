@@ -4,11 +4,11 @@ package org.appliedtopology.tda4j
   *
   * Computed by W. J. Cody's rational Chebyshev approximations ("Rational Chebyshev approximations for the error
   * function", Mathematics of Computation 23, 1969): one in `x` on `|x| <= 0.46875`, one in `exp(-x^2)` times a rational
-  * function of `x` up to 4, and one in `1/x^2` beyond. Measured against the C library's `erf` on random arguments in
-  * `[-6.5, 6.5]`, `erf` is within `3.4e-16` absolute (a few units in the last place near `0.5`, where the value is half
-  * of what its error scales with), `erfc` within a relative `1e-15` out to its underflow near 26.5. `erf` is odd,
-  * exactly, and is exactly `+-1` from `|x| = 6`.
+  * function of `x` up to 4, and one in `1/x^2` beyond. `erf` is accurate to 4e-16 absolute (a few units in the last
+  * place), `erfc` to a relative 2e-15 out to where it underflows (near `x = 26.5`). `erf` is exactly odd and exactly
+  * `+-1` from `|x| = 6`.
   */
+// Accuracy against the C library and commons-math3: .claude/WORKLOG-scalajs-numerics-linear-algebra.md
 object Erf:
 
   // Cody's coefficients: A, B for |x| <= 0.46875; C, D for 0.46875 < |x| <= 4; P, Q for |x| > 4.

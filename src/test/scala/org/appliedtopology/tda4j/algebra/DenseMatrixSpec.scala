@@ -7,7 +7,7 @@ import scala.util.Random
 
 /** The dense matrix type and its two decompositions. Every property here needs no reference implementation: the SVD is
   * checked as `A = U S V^T` with orthonormal `U`, `V` and descending `S`; the LU solver by residuals and by systems
-  * with a known answer. (`DenseMatrixOracleSpec`, JVM only, compares with commons-math3.)
+  * with a known answer. (`DenseLinearAlgebraOracleSpec`, JVM only, compares with commons-math3.)
   */
 class DenseMatrixSpec extends mutable.Specification:
 
