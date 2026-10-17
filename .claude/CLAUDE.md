@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **How this file works.** Each entry is a current rule, invariant, or known limitation, plus a pointer to the
 `.claude/WORKLOG-*.md`/`DESIGN-*.md` that holds its derivation (what was tried, measurements, repros). Derivations
-go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes"). Last condensed 2026-10-11 (CI detail to the steward skill, engine detail to `rules/engines.md`); 2026-10-10 (lab detail to `rules/labs.md`); 2026-10-09; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md` (and the commits named there).
+go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes").
+Last condensed 2026-10-17 (the algebraic core to `rules/algebra.md`, test conventions to `rules/testing.md`, style to
+`rules/scala-style.md`); 2026-10-11
+(CI detail to the steward skill, engine detail to `rules/engines.md`); 2026-10-10 (lab detail to `rules/labs.md`);
+2026-10-09. Earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md` (and the commits named there).
 
 ## What this is
 
@@ -41,9 +45,9 @@ compatibility with 0.4.x** (project lead: still in flux) — no compat shims for
 ## Package layout
 
 **One flat core package plus one add-on** (`DESIGN-package-structure.md`, derivation `WORKLOG-package-flatten.md`;
-the 2026-09 subpackage split it replaced is `WORKLOG-package-reorg.md`). Everything a persistent-homology user needs is
-in `org.appliedtopology.tda4j` itself, so users write `import org.appliedtopology.tda4j.*` (no `given` selector needed,
-see "Givens" below). The core's source directories are **file organization only, not packages**:
+the 2026-09 subpackage split it replaced: `WORKLOG-package-reorg.md`). Everything a persistent-homology user needs is
+in `org.appliedtopology.tda4j` itself, so users write `import org.appliedtopology.tda4j.*` (no `given` selector
+needed, see "Givens"). The core's source directories are **file organization only, not packages**:
 
 - `algebra/` — `RingModule`, `Field`, `FiniteField`, `Chain`, `Cell`/`OrderedCell`/`OrderedBasis`, `LinearAlgebra`.
 - `cells/` — `Simplex`, `Cube` and their `OrderedCell` instances.
@@ -58,9 +62,8 @@ see "Givens" below). The core's source directories are **file organization only,
 - leaf subpackages: `matlab` (facade), `cli` (thin translator over `matlab.TDA4j`), `plot` (plots and a live viewer,
   whose one dependency is cask; any other feature needing a library goes in a new module; `rules/plotting.md`,
   `WORKLOG-plot-into-core.md`).
-- `demo/` (not a package): a SEPARATE sbt build for a REPL jar with the library inside, for talks (`demo/README.md`,
-  `WORKLOG-demo-jar.md`); the root build neither builds nor sees it, `release.yml` builds it and attaches it to the release
-  (`WORKLOG-demo-release.md`).
+- `demo/` (not a package): a SEPARATE sbt build for a talk's REPL jar with the library inside (`demo/README.md`,
+  `WORKLOG-demo-jar.md`, `WORKLOG-demo-release.md`); the root build neither builds nor sees it, `release.yml` attaches it.
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
   sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
   `sbt doc` checks that doc fences resolve from outside.
@@ -68,24 +71,22 @@ see "Givens" below). The core's source directories are **file organization only,
 Every file in a subpackage (`sset`, `matlab`, `cli`, `tutorial`) starts with an explicit `import
 org.appliedtopology.tda4j.*`, not just the chained `package` clause. **Flat-package name-binding hazard**: a wildcard
 import of an external library (`import cats.syntax.all.*`) silently BEATS a same-named definition from another file of
-this package -- no error, no warning (under subpackages it was a loud ambiguity). Prefer importing external libraries by
-name in core files; when adding a top-level name to the core, re-run the audit (inject `import
-org.appliedtopology.tda4j.*` next to each file-level external wildcard and compile -- ambiguity errors are the hits;
-`WORKLOG-package-flatten.md`).
+this package (no error, no warning). Import external libraries by name in core files; when adding a top-level name to
+the core, re-run the audit (inject `import org.appliedtopology.tda4j.*` next to each file-level external wildcard and
+compile: ambiguity errors are the hits; `WORKLOG-package-flatten.md`).
 
 ### Givens: the rule the flat layout depends on
 
 **The core package has no top-level givens.** Default instances live in the companion of the DATA type they serve
-(`Simplex`, `Cube`, `Chain`, `BarcodeEndpoint`, `Fp`, generator enums) -- implicit scope: found with no import, consulted
-only when nothing lexical matches, so a user's or a stream's given always wins and never ties. Never put an instance in
-a TYPECLASS companion (`Field`, `OrderedCell`, `RingModule`): that companion is searched for `?T is Field` with `T`
-still unknown, so a lone instance there silently decides type inference (a default `Double is Field` would turn a
-forgotten `F_p` import into real coefficients and wrong torsion answers). A top-level generic given is worse still:
-visible everywhere in the flat package, `[CellT: OrderedCell] => Ordering[CellT]` made `SimplicialHomologyEngine()`
-infer `VertexT = BarcodeEndpoint[Cube]`. Opt-in derivations are named givens imported by name: `import
-OrderedCell.cellOrdering` (generic code holding only `CellT: OrderedCell`), `Field.showFromField`. `UserImportsSpec`
-pins this from the user's side. `Show` likewise: every user-facing data type has one in its companion; cats' `Show` is
-invariant, so a hierarchy's instance is typed `[..., D <: Base] => Show[D]` (`endpointShow`, `diagramShow`)
+(`Simplex`, `Cube`, `Chain`, `BarcodeEndpoint`, `Fp`, `Look`, generator enums): implicit scope, found with no import,
+consulted only when nothing lexical matches, so a user's or a stream's given always wins and never ties. Never put an
+instance in a TYPECLASS companion (`Field`, `OrderedCell`, `RingModule`): it is searched for `?T is Field` with `T` still
+unknown, so a lone instance there silently decides type inference (a default `Double is Field` would turn a forgotten
+`F_p` import into real coefficients and wrong torsion answers). A top-level generic given is worse: visible everywhere
+in the flat package (`[CellT: OrderedCell] => Ordering[CellT]` made `SimplicialHomologyEngine()` infer `VertexT =
+BarcodeEndpoint[Cube]`). Opt-in derivations are named givens imported by name (`import OrderedCell.cellOrdering`,
+`Field.showFromField`). `UserImportsSpec` pins this from the user's side. `Show` likewise: every user-facing data type
+has one in its companion; cats' `Show` is invariant, so a hierarchy's instance is typed `[..., D <: Base] => Show[D]`
 (`WORKLOG-show-instances.md`).
 
 ## Commands
@@ -105,8 +106,8 @@ sbt -DrunBenchmarks=true test   # also run benchmark/profiling specs — NOT wha
 ```
 
 If `sbt` isn't on `PATH`, run `.claude/scripts/install-sbt.sh` (paces around Maven Central's cold-cache rate limits).
-The cloud environment's Setup script should hold `.claude/scripts/cloud-setup-script.sh`'s contents (it calls the
-installer and also warms test dependencies and scalafmt); without it a new session starts cold (~1 h on 2026-10-12).
+A cloud environment's Setup script should hold `.claude/scripts/cloud-setup-script.sh` (the installer, plus warmed test
+dependencies and scalafmt); without it a session starts cold (~1 h on 2026-10-12).
 
 No linter beyond scalafmt; tests are specs2. CI jobs (`test` with a fat-jar smoke run, `docs-build`, `mima`, `lint`) and
 their local equivalents: steward skill; a weekly `coverage.yml` maps coverage, never gates. A deliberate binary break is
@@ -133,9 +134,8 @@ that line a plain downstream project needs nothing else, `into` conversions incl
 `representatives = Representatives.Cycles | Cocycles` (MATLAB `representativeType`, CLI `--representative-type`).
 `Auto` = Ripser for `VietorisRips` on points/metric space, `FastCubical` for images of dimension >= 2 (cycles only),
 `Cohomology` otherwise. Every engine but the fast ones gives both kinds, the non-native one derived from its pairing
-by `Involution` (`rules/engines.md`). Capped at the degree (the verb does), `Naive` and `Chunks` (at `maxDimension = 1`) reduce a top cell only while a class of that degree is open; `Chunks` from `maxDimension = 2` still reduces every top cell (#51). A truncated stream's own degree
-(`homologyDegreeLimit`) is the default for streams.
-`WORKLOG-default-degree-2.md`, `WORKLOG-involution.md`.
+by `Involution`. The verb caps the reduction at its degree, and a truncated stream's own degree (`homologyDegreeLimit`)
+is the default for streams (`rules/engines.md`, #51; `WORKLOG-default-degree-2.md`, `WORKLOG-involution.md`).
 
 **Zero-length bars are dropped by default** (project lead: seeing them is the opt-in, never hiding them): every engine,
 the verb, MATLAB and the CLI take `includeZeroLength` (default `false`; `rules/engines.md`). Tests must not use
@@ -153,43 +153,20 @@ signatures instead of `Option[Double]` / a fixed collection type. `AlphaBackend`
 ### TDAlab and the other labs (detail: `rules/labs.md`)
 
 `TDAlab`/`CubicalLab` extend `abstract class Lab(characteristic, precision)`; prebuilt `TDAlab.F2`/`F3`/`F17`/`Reals`.
-`import TDAlab.F17.{*, given}` must be the ONLY library import a lab user needs: coefficients, `Fp(...)`, chain
-arithmetic, `.show`, and GENERATED flat re-exports of every public top-level type of the core and `sset` -- rerun
-`.claude/scripts/tdalab-exports.py` after adding or opening one (`TDAlabExportsSpec` guards it). A lab is never
-consulted by an engine.
+`import TDAlab.F17.{*, given}` must be the ONLY library import a lab user needs. The flat re-exports of every public
+top-level type of the core and `sset` are GENERATED: rerun `.claude/scripts/tdalab-exports.py` after adding or opening
+one (`TDAlabExportsSpec` guards it). A lab is never consulted by an engine.
 
-## Scala style used throughout
+## Scala style used throughout (detail: `rules/scala-style.md`)
 
-Uses Scala 3.7+'s newest context-abstraction syntax — don't "correct" it to older idioms:
+Uses Scala 3.7+'s newest context-abstraction syntax (`Type is TypeClass`, `type Self: Ordering as ordering`, opaque types
+with their extension methods in the companion): don't "correct" it to older idioms. Optional parameters, never
+sentinels: `Optional[Double]` for public ones. **No top-level `object`/`class` with a non-ASCII name**: scaladoc writes
+one page FILE per type and `sbt doc` dies under a POSIX locale (`∆` is `val ∆ : Simplex.type = Simplex`,
+`WORKLOG-package-flatten.md`).
 
-- `Type is TypeClass` for context bounds/givens (`Chain[CellT, CoefficientT] is RingModule`).
-- `type Self: Ordering as ordering` — named context-bound aliasing inside trait bodies.
-- Unicode algebra operators: `⊠` (scalar action), `∆(...)` (simplex literal), `<*`, `|*|` (`RingModule.scala`/
-  `Field.scala`).
-- `opaque type Simplex[VertexT] = SortedSet[VertexT]` / `opaque type Cube = Vector[Int]` — no runtime wrapper; API
-  is extension methods.
-- Optional parameters, never sentinels: `Optional[Double]` (below) for public ones, `None` + `.getOrElse(...)` inside
-  (a default cannot reference an earlier parameter of the same list).
-- A method's context bounds desugar to a `using` clause AFTER every explicit parameter list, so an earlier default
-  cannot use that given: make it a `using` clause of its own ahead of the parameter (`Chain.reduceByUntil`).
-
-**Opaque-type extension methods** live in the type's companion (`object Simplex`/`Cube`), found by implicit scope.
-Hazards: opaque transparency is file-scoped (so `simplexIsOrderedCell`/`cubeIsOrderedCell` live in their own files), and
-a wildcard-imported stdlib extension of the same name wins (so `min`/`max` stay top-level).
-`WORKLOG-extension-companion-objects.md`.
-
-**No top-level `object`/`class` with a non-ASCII name**: scaladoc writes one page FILE per such type (`∆$.html`), and a
-JVM under a POSIX locale cannot encode it (`sbt doc` dies with `InvalidPathException`). `∆` is therefore `val ∆ :
-Simplex.type = Simplex` (`WORKLOG-package-flatten.md`); unicode extension methods and vals are fine.
-
-**Shared test generators** (`matrixGen`) live in `src/test/.../streams/Generators.scala`, never in a spec. Before
-creating a test file, `ls` for its name: `Write` overwrites silently.
-
-**specs2 5.9 types `===`**: `Int === Long` or `Fp === Int` no longer compiles (5.5 compared with `==` and hid two
-always-true properties, #79). Fix the operands (`.toLong`, wrap in `Fp`), do not loosen the comparison.
-
-**specs2 gotcha**: in a class mixing `ScalaCheck`, give a `Seq[Simplex[_]]` an explicit type ascription before
-`.forall` — otherwise it can resolve to specs2's `ValueCheck` extension with confusing errors.
+**Writing specs** (shared generators, `===` typing in specs2 5.9, the ScalaCheck `forall` ascription, `.and(` mid-body):
+`rules/testing.md`. Before creating a test file, `ls` for its name: `Write` overwrites silently.
 
 ## Naming convention: `tda4j`/`TDA4j`, never `Tda4j`
 
@@ -223,43 +200,31 @@ Plain `private` is for an algorithm's own scratch types, state and helpers (no c
 when a subclass needs it as a hook, to public when it computes something a caller wants (a pairing, a validity check).
 `sealed` only for a closed mathematical classification matched exhaustively (`BarcodeEndpoint`). `final` only on value
 types (case classes: subclassing breaks equality), where library fast paths match on the concrete class (`HeapChain`,
-`PackedChain`), and on `@tailrec` defs; not for speed without an A/B (HotSpot's class-hierarchy analysis should
-devirtualize a class with no loaded subclass; expected, not measured here).
+`PackedChain`), and on `@tailrec` defs; not for speed without an A/B (devirtualization is expected, not measured).
 Concrete public classes are `open`: users lack `-language:adhocExtensions`, so extending a non-`open` class warns under
 `-source:future -feature`. Not reasons: a small API surface, "users should not need it", "it might change" (pre-1.0,
 anything may). `WORKLOG-openness-audit.md`.
 
-### Algebraic core
+### Algebraic core (detail: `rules/algebra.md`)
 
-- `RingModule`/`Field`: minimal typeclasses built with `is` syntax; everything downstream is generic over `Field`.
-  `FiniteField`: `Fp` opaque type per prime `p`.
-  **Never test the runtime class of a generic coefficient** (`case d: Double`): on Scala.js every boxed number is a
-  `Double`, so an `Fp` matches. Ask the field (`Field.toDouble`, #80; `WORKLOG-release-prep-2026-10-14.md`).
-- `Chain[CellT: Ordering, CoefficientT: Field]`: abstract and OPEN (project lead: a place for the community to
-  experiment): a storage passes order and field up (kept once) and implements `entryIterator`, all else defaults over it
-  (`tda4juser/ChainStorageSpec`, outside the package). Ours: `HeapChain` (a `PriorityQueue` ordered by cell), `PackedChain`
-  (`rules/cubical.md`). No nulls. Equality: formal sums by `field.isEqual` (an `Fp` has several `Int` forms), order-blind.
-  Defines `reduceBy`/`reduceByUntil` (with an optional `fallback` for pivots needing on-the-fly substitution) and
-  a `RingModule` instance. `reduceLoop` uses a `mutable.TreeMap` accumulator (use `z.head`, not `headOption`, which
-  allocates an iterator on `mutable.TreeMap`). `Chain` has `equals` without a matching `hashCode`
-  (#58): never a `Set`/`Map` key.
-- `Cell`/`OrderedCell`/`OrderedBasis`: anything with a `boundary` and a total order plugs into homology. Concrete
-  instances: `Simplex`, `Cube`, `FiniteSimplicialSet` generators.
-- `Cocell`/`OrderedCocell` were **removed on purpose**: coboundary is extrinsic (depends on the ambient complex),
-  so a per-cell `coboundary` is the wrong shape. Don't reintroduce (`DESIGN-generic-cohomology.md`).
-- **Generic-`given` capture gotcha**: a `given` like `chainRM` fixes its `Ordering[CellT]` where it is summoned; at
-  class scope (before the stream's ordering exists) it silently pivots on the cell's intrinsic order. Summon it where
-  the per-stream ordering is in scope (`WORKLOG-naive-homology.md`). The intrinsic order is opt-in (`import
-  OrderedCell.cellOrdering`), but `Homology.scala`/`Cohomology.scala` import it file-wide: the hazard is live there.
+Everything downstream is generic over `Field` (`Fp` is an opaque type per prime). **Never test the runtime class of a
+generic coefficient** (`case d: Double`): on Scala.js every boxed number is a `Double`, so an `Fp` matches. Ask the field
+(`Field.toDouble`, #80; `WORKLOG-release-prep-2026-10-14.md`). `Chain` is abstract and OPEN (a place for the community to
+experiment) and has `equals` without a matching `hashCode` (#58): never a `Set`/`Map` key. `Cocell`/`OrderedCocell` were
+**removed on purpose**: don't reintroduce (`DESIGN-generic-cohomology.md`).
+**Generic-`given` capture gotcha**: a `given` like `chainRM` fixes its `Ordering[CellT]` where it is summoned; at
+class scope (before the stream's ordering exists) it silently pivots on the cell's intrinsic order. Summon it where
+the per-stream ordering is in scope (`WORKLOG-naive-homology.md`). The intrinsic order is opt-in (`import
+OrderedCell.cellOrdering`), but `Homology.scala`/`Cohomology.scala` import it file-wide: the hazard is live there.
 
 ### Streams and complexes (ordering contract and constructions: `rules/streams.md`)
 
 **Public entry points** (`DESIGN-stream-naming.md`): `VietorisRips`, `Cech`, `Witness(variant = Lazy | General)`,
 `Dowker`, `DtmRips`, `SparseRips`, `Truncated`, plus `CubicalImage` and `AlphaShapes`; `maxDimension` is the top
 HOMOLOGICAL degree, the result a `LevelwiseSimplexStream[Int, Double]`. The construction classes (`...CofaceSimplexStream`,
-`Incremental...`, `LazyWitness...`, `SheehyRips...`, `LimitedCoface...`) are public machinery (build a new filtered
-complex on `RipserCofaceSimplexStream`'s coface loop); docs and tutorials use the objects. A new entry point is tested against the hand-wrapped class cell for cell AND value for value
-(`ComplexesSpec`) — Betti numbers would not catch a wrong `+1`.
+`Incremental...`, `LazyWitness...`, `SheehyRips...`, `LimitedCoface...`) are public machinery; docs and tutorials use the
+objects. A new entry point is tested against the hand-wrapped class cell for cell AND value for value (`ComplexesSpec`):
+Betti numbers would not catch a wrong `+1`.
 
 ## Subsystem notes (`.claude/rules/`)
 
@@ -276,7 +241,10 @@ file before changing that subsystem; this table is the index, in case a rule did
 | `rules/alpha.md` | alpha complexes (DQP, Helix, fast alpha) | `alpha/`, alpha files |
 | `rules/facade.md` | MATLAB facade, CLI, file I/O, the persistence threshold (which bars are reported) | `matlab/`, `cli/`, `io/` |
 | `rules/docs-and-tutorials.md` | docs site, tutorial pages (the docs are the tests), language tabs | `_docs/`, tutorial specs, `build.sbt` |
-| `rules/plotting.md` | the `plot` subpackage: scene model, palette and themes, live viewer, gallery screenshots | `plot/` (main and test) |
+| `rules/plotting.md` | the `plot` subpackage: scene model, the tweak grammar, looks, live viewer, gallery screenshots | `plot/` (main and test) |
+| `rules/algebra.md` | fields, chains and cells: `RingModule`, `Field`, `Chain`, `Cell` | `algebra/`, `cells/` |
+| `rules/testing.md` | writing specs: shared generators, specs2 traps | `src/test/**` |
+| `rules/scala-style.md` | the Scala 3 idioms used throughout, opaque-type and extension-method hazards | `src/**/*.scala` |
 
 ## Session practices
 
@@ -290,11 +258,10 @@ file before changing that subsystem; this table is the index, in case a rule did
 - **Docs carry the contract, worklogs carry the history.** Scaladoc, user guide and tutorials say what the code does and
   what to call (Li Haoyi's "easy": one import, defaults, errors that say what to do); no "used to", "fixed in session
   X", "confirmed by", worklog pointers or measurements there -- those go in `.claude/`. `//` implementation comments
-  MAY carry history and worklog pointers (project lead, 2026-10-03), as long as none of it moves into scaladoc. Error messages and `--help`
-  never name `.claude/` files or private classes. **The Developer's Guide is kept current with the code like the other
-  docs** (project lead, 2026-10-17: it is no longer off limits): a change to a subsystem updates that subsystem's page
-  with what the code does now, under the same rule (contract, not history), and a fact the code contradicts is fixed in the
-  change that makes it false.
+  MAY carry history and worklog pointers (project lead, 2026-10-03), as long as none of it moves into scaladoc. Error
+  messages and `--help` never name `.claude/` files or private classes. **The Developer's Guide is kept current with the
+  code like the other docs** (project lead, 2026-10-17): a change to a subsystem updates that subsystem's page, under the
+  same rule, and a fact the code contradicts is fixed in the change that makes it false.
 - **Never revert the formatter's output.** If `scalafmtAll` touches files outside your change, commit that in its OWN
   commit ("Format: ... formatter output only, no behavior change") and say so — reverting only hides the debt, and a
   clean lint beats a minimal diff. Run all three lint checks (Commands) before pushing.
