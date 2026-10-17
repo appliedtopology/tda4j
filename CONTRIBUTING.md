@@ -18,6 +18,7 @@ and the principles a change is reviewed against. The rest of the map:
 You need Git, Java 21 (any distribution, for example [Temurin](https://adoptium.net/)) and
 [sbt](https://www.scala-sbt.org/) 2 (`.claude/scripts/install-sbt.sh` installs it). The build reads the Scala version
 (3.9.0) and the compiler flags from `build.sbt`; `.jvmopts` gives sbt 2 GB of heap, which the full test suite needs.
+The Scala.js build (below) also needs [Node.js](https://nodejs.org/) 20.16 or newer.
 
 Once per clone, turn on the format check before each commit:
 
@@ -36,15 +37,24 @@ in every clone; CI's lint job checks every pull request either way. Editors that
 
 | | |
 |---|---|
-| `sbt testFull` | every spec. Plain `sbt test` is incremental in sbt 2 and can run none |
-| `sbt "testOnly *SimplexSpec"` | one spec (a glob) |
+| `sbt tda4j/testFull` | every spec of the JVM build. Plain `sbt tda4j/test` is incremental in sbt 2 and can run none |
+| `sbt tda4jJS/test` | the specs of the Scala.js build, on Node.js |
+| `sbt "tda4j/testOnly *SimplexSpec"` | one spec (a glob); `tda4jJS/testOnly` likewise |
 | `sbt scalafmtAll scalafmtSbt` | format everything |
 | `sbt "scalafmtSbtCheck ; scalafmtCheck ; Test / scalafmtCheck"` | CI's lint job, exactly |
-| `TDA4J_SCALA_VERSION=3.8.4 sbt doc` | the docs site, with every Scala fence compiled (run `sbt shutdown` first; see Documentation) |
-| `sbt mimaReportBinaryIssues` | binary compatibility against the earlier releases of the series |
-| `sbt assembly` | the fat jar the CLI and MATLAB use |
-| `sbt "set Global / cacheStores := Nil ; clean ; coverage ; testFull ; coverageReport"` | statement and branch coverage, a map of what no spec exercises (the report is in `target/out/jvm/scala-3.9.0/tda4j/scoverage-report`; the weekly `coverage.yml` run sends it to [Codecov](https://app.codecov.io/gh/appliedtopology/tda4j)); then `sbt shutdown` and `sbt clean`. The disk cache must be off: sbt 2 would restore instrumented classes without the directory they record into |
+| `TDA4J_SCALA_VERSION=3.8.4 sbt tda4j/doc` | the docs site, with every Scala fence compiled (run `sbt shutdown` first; see Documentation) |
+| `sbt tda4j/mimaReportBinaryIssues` | binary compatibility against the earlier releases of the series |
+| `sbt tda4j/assembly` | the fat jar the CLI and MATLAB use |
+| `sbt tda4jJS/npmPack` | the npm package: `target/npm/tda4j-<version>.tgz` (the optimized Scala.js link, `npm/`'s `package.json`, typings and README) |
+| `sbt "set Global / cacheStores := Nil ; clean ; coverage ; tda4j/testFull ; tda4j/coverageReport"` | statement and branch coverage, a map of what no spec exercises (the report is in `target/out/jvm/scala-3.9.0/tda4j/scoverage-report`; the weekly `coverage.yml` run sends it to [Codecov](https://app.codecov.io/gh/appliedtopology/tda4j)); then `sbt shutdown` and `sbt clean`. The disk cache must be off: sbt 2 would restore instrumented classes without the directory they record into |
 | `sbt -DrunBenchmarks=true "testOnly *BenchmarkSpec"` | the benchmark specs, which CI skips |
+
+The sbt project `tda4j` is the JVM build and `tda4jJS` the Scala.js build; most commands name the one they are for, and
+`sbt test`, `sbt clean` and the formatting commands at the root reach both. **Where code goes:** `src/main/scala` and
+`src/test/scala` compile for both platforms (write there first; a Scala.js build that fails on shared code is the shared
+code's bug); what only one platform has lives in `src/main/scalajvm` or `src/main/scalajs` (and `src/test/...`), as
+sbt 2's project matrix lays it out. A name that exists on both platforms, like `FileAccess` or `Parallel`, is defined
+once in each of the two directories and never in the shared one.
 
 **Never run two sbt processes against one checkout at once.** One can read the other's class files mid-write, and the
 `NoClassDefFoundError` that follows looks like a real regression. For a side-by-side comparison, use a second

@@ -25,9 +25,11 @@ after every job below passes locally.
 | CI job (workflow) | what CI runs | run locally | fix |
 |---|---|---|---|
 | `lint` (`lint.yml`) | `sbt "scalafmtSbtCheck ; scalafmtCheck ; Test / scalafmtCheck"` | the same | `sbt scalafmtAll scalafmtSbt` |
-| `test` (`test.yml`) | `sbt "clean ; test"` on a fresh runner, then `sbt assembly` and the jar run on `noisy-circle.csv` (exactly one degree-1 bar) | `sbt clean testFull`; `sbt assembly` and the same run | root-cause it; never skip, disable or loosen a test |
-| `docs-build` (`test.yml`) | `TDA4J_SCALA_VERSION=3.8.4 sbt doc` | `sbt shutdown`, then the same | the error names `page.md:line` |
-| `mima` (`test.yml`) | `sbt mimaReportBinaryIssues` | the same | see below |
+| `test` (`test.yml`) | `sbt "clean ; tda4j/test"` on a fresh runner, then `sbt tda4j/assembly` and the jar run on `noisy-circle.csv` (exactly one degree-1 bar) | `sbt clean tda4j/testFull`; `sbt tda4j/assembly` and the same run | root-cause it; never skip, disable or loosen a test |
+| `test-js` (`test.yml`) | `sbt "clean ; tda4jJS/test"` with Node 22 | the same (Node 20.16 or newer) | root-cause it; a spec that needs a JVM moves to `src/test/scalajvm`, a failure on shared code is fixed in the shared code (`rules/scalajs.md`) |
+| `npm-package` (`test.yml`) | `sbt tda4jJS/npmPack`, then install the tarball into an empty project and run the library and `npx tda4j` | the same | the step that failed names it |
+| `docs-build` (`test.yml`) | `TDA4J_SCALA_VERSION=3.8.4 sbt tda4j/doc` | `sbt shutdown`, then the same | the error names `page.md:line` |
+| `mima` (`test.yml`) | `sbt tda4j/mimaReportBinaryIssues` | the same | see below |
 
 `coverage.yml` (weekly and on demand, uploaded to Codecov) is a map, not a check: nothing fails on a coverage number, and
 Codecov's commit statuses are informational (`codecov.yml`).
@@ -45,8 +47,8 @@ Codecov's commit statuses are informational (`codecov.yml`).
 
 ### Tests
 
-- **Plain `sbt test` can run 0 specs locally**, because sbt 2 caches incrementally; `testFull` runs every spec. Use
-  `testOnly *Spec` while iterating.
+- **Plain `sbt test` can run 0 specs locally**, because sbt 2 caches incrementally; `tda4j/testFull` runs every spec of
+  the JVM build. Use `tda4j/testOnly *Spec` while iterating.
 - **The tutorial specs run code from `_docs/tutorials/`:** a failing tutorial spec means fix the page and its numbers
   together (`rules/docs-and-tutorials.md`).
 

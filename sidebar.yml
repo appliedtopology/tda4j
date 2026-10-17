@@ -34,6 +34,7 @@ subsection:
       - page: user-guide/quickstart.md
       - page: user-guide/cli.md
       - page: user-guide/matlab.md
+      - page: user-guide/javascript.md
       - index: user-guide/topological-spaces/index.md
         directory: user-guide/topological-spaces
         subsection:
