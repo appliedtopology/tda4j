@@ -141,8 +141,8 @@ the existing alpha specs pass with the canonical one.
   matrices, no completion of null columns, a missing cutoff).
 - JVM runs: `sbt "tda4j/testOnly *Alpha* *Bowyer* *Helix* *Delaunay* *Barcode* *Circular* *Toroidal* *Vectoriz*
   *Distance*`: 136 examples green before (3 min 15 s) and, with the new specs matched by the same globs plus `*Dense*
-  *ConjugateGradient* *ErfSpec* *Hyperplane* *TDAlabExports* *UserImports* *APISpec* *Show*`, 276 green after; see the
-  report for the full-suite run.
+  *ConjugateGradient* *ErfSpec* *Hyperplane* *TDAlabExports* *UserImports* *APISpec* *Show*`, 276 green after. The whole JVM suite
+  (`sbt tda4j/testFull`, at the last code commit): 1462 examples, 0 failed, 8 skipped (the benchmark specs), 4 min 10 s.
 
 ## Open
 
