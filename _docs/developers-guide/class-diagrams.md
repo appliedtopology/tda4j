@@ -18,7 +18,7 @@ classDiagram
         plus(x, y) Self
         minus(x, y) Self
         negate(x) Self
-        scale(r, y) Self
+        scalarMultiply(r, y) Self
         +(rhs) Self
         -(rhs) Self
         unary_-() Self

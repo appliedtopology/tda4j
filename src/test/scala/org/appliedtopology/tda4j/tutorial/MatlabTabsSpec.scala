@@ -223,4 +223,18 @@ class MatlabTabsSpec extends Specification:
           )
         )
     }
+    "customize the diagram and the barcode with the with... methods, as the Customizing section's tab does" in {
+      val diagram =
+        result.plotDiagram().withTitle("A noisy circle").withXLabel("birth").withYLabel("death").withSize(800, 600)
+      val sqrtBarcode = result.plotBarcode().withXScale("sqrt").withTextScale(1.3)
+      val logBarcode = result.plotBarcode().withXScale("log")
+      val svg = diagram.svg()
+      // both keep the bars born at 0: `log` draws them from a `-∞` line
+      (svg must contain("""width="800" height="600""""))
+        .and(svg must contain(">A noisy circle</text>"))
+        .and(sqrtBarcode.svg() must not(contain("not shown: outside")))
+        .and(logBarcode.svg() must contain(">-∞</text>"))
+        .and(logBarcode.svg() must not(contain("not shown: ")))
+        .and(sqrtBarcode.style.textScale must beEqualTo(1.3))
+    }
   }

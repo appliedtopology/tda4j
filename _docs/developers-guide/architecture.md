@@ -94,18 +94,18 @@ trait RingModule:
   def plus(x: Self, y: Self): Self
   def minus(x: Self, y: Self): Self = plus(x, negate(y))
   def negate(x: Self): Self = minus(zero, x)
-  def scale(x: R, y: Self): Self
+  def scalarMultiply(x: R, y: Self): Self
   extension (t: Self)
     def +(rhs: Self): Self = plus(t, rhs)
     def -(rhs: Self): Self = minus(t, rhs)
-    def <*(rhs: R): Self = scale(rhs, t)
+    def <*(rhs: R): Self = scalarMultiply(rhs, t)
     def unary_- : Self = negate(t)
   extension (r: R)
-    def |*|(t: Self): Self = this.scale(r, t)
-    def ⊠(t: Self): Self = this.scale(r, t) // "boxed times" -- scalar action
+    def |*|(t: Self): Self = this.scalarMultiply(r, t)
+    def ⊠(t: Self): Self = this.scalarMultiply(r, t) // "boxed times" -- scalar action
 ```
 
-A minimal instance only needs `zero`, `plus`, `scale`, and one of `minus`/`negate`. `⊠` (U+22A0, typed via
+A minimal instance only needs `zero`, `plus`, `scalarMultiply`, and one of `minus`/`negate`. `⊠` (U+22A0, typed via
 a Unicode input method or copy-paste) is the scalar-multiplication operator used throughout: `2.0 ⊠ chain`.
 
 `algebra/Field.scala` is a separate, self-contained typeclass (not built on `RingModule`) for coefficient

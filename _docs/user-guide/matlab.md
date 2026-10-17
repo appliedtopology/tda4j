@@ -113,7 +113,9 @@ the complex is also available.
 A result draws itself: `result.plotBarcode().view()`, `result.plotDiagram().save('diagram.svg')`,
 `result.plotRepresentative(result.mostPersistentBar(1)).view()`, and more (see [plotting](plotting.md#from-matlab-java-and-the-command-line)).
 Each `plot...` method returns a figure object; call `view()` on it for the browser, `save(path)` for an `.svg` or
-`.html` file. `result.save('result.json')` writes the whole result to a file, which `TDA4j.loadResult('result.json')`
+`.html` file. Its look changes with methods that take strings and numbers and return the changed figure:
+`result.plotDiagram().withTitle('A circle').withXScale('log').withSize(800, 600).save('diagram.svg')` (the list is under
+[customizing a plot](plotting.md#from-matlab-and-the-command-line)). `result.save('result.json')` writes the whole result to a file, which `TDA4j.loadResult('result.json')`
 reads back (in MATLAB, Java, Scala or `tda4j --plot ...`); it is JSON, readable from other languages too.
 
 MATLAB itself is not part of the test suite: the tutorial MATLAB tabs are checked by making the same Java calls from

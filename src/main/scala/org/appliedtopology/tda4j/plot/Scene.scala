@@ -1,5 +1,7 @@
 package org.appliedtopology.tda4j.plot
 
+import org.appliedtopology.tda4j.*
+
 /** A point in 3-D data coordinates. */
 type XYZ = (Double, Double, Double)
 
@@ -25,10 +27,114 @@ final case class Scene(
   height: Int = 520,
   azimuth: Double = -35,
   elevation: Double = 25,
-  palette: Palette = Palette.default
+  palette: Palette = Palette.default,
+  style: Style = Style.default,
+  degrees: Map[Int, DegreeStyle] = Map.empty,
+  elements: Elements = Elements(),
+  zoom: Double = 1.0
 ) extends Plot:
   def +(layer: Layer): Scene = copy(layers = layers :+ layer)
   def ++(more: IterableOnce[Layer]): Scene = copy(layers = layers ++ more)
+
+  /** This scene with the change `tweak` makes. Only the tweaks that need no axes apply: a palette, a [[Style]], a
+    * [[Size]], the [[Camera]], the title and subtitle of [[Labels]] and the colors of `Scale.degree`.
+    */
+  def +(tweak: Tweak): Scene = tweak.onScene(this)
+
+  // The tweaks that apply to a scene, as methods to chain (as on [[Figure]]); the plain-argument ones are for MATLAB.
+
+  /** The title and subtitle: only what is given changes. A 3-D scene has no axes, legend or color bar to label. */
+  def withLabels(title: Optional[String] = Optional.empty, subtitle: Optional[String] = Optional.empty): Scene =
+    this + Labels(title = title, subtitle = subtitle)
+
+  /** The size in pixels; give one to keep the other. */
+  def withSize(width: Optional[Int] = Optional.empty, height: Optional[Int] = Optional.empty): Scene =
+    this + Size(width, height)
+
+  /** The color of homological degree `k` (and its dark-mode color). See [[Scale.degree]]. */
+  def withDegree(
+    k: Int,
+    color: Optional[String] = Optional.empty,
+    darkColor: Optional[String] = Optional.empty
+  ): Scene =
+    this + Scale.degree(k, color = color, darkColor = darkColor)
+
+  /** Where the camera looks from (`azimuth` and `elevation`, in degrees) and how close (`zoom`). See [[Camera]]. */
+  def withCamera(
+    azimuth: Optional[Double] = Optional.empty,
+    elevation: Optional[Double] = Optional.empty,
+    zoom: Optional[Double] = Optional.empty
+  ): Scene = this + Camera(azimuth, elevation, zoom)
+
+  /** The camera by plain numbers, for MATLAB and Java: `withCamera(-35, 25, 1)` is the default view. */
+  def withCamera(azimuth: Double, elevation: Double, zoom: Double): Scene = this + Camera(azimuth, elevation, zoom)
+
+  /** This palette. */
+  def withPalette(palette: Palette): Scene = this + palette
+
+  /** This style, in place of the scene's. */
+  def withStyle(style: Style): Scene = this + style
+
+  /** The heading. */
+  def withTitle(text: String): Scene = withLabels(title = text)
+
+  /** The line under the heading. */
+  def withSubtitle(text: String): Scene = withLabels(subtitle = text)
+
+  /** The size in pixels. */
+  def withSize(width: Int, height: Int): Scene = this + Size(width, height)
+
+  /** The look of the title, the subtitle or the hint (`TextRole.Note`): the text a scene has. See [[Text]]. */
+  def withText(
+    role: TextRole,
+    size: Optional[Double] = Optional.empty,
+    weight: Optional[Weight] = Optional.empty,
+    italic: Optional[Boolean] = Optional.empty,
+    align: Optional[Anchor] = Optional.empty,
+    font: Optional[String] = Optional.empty,
+    color: Optional[String] = Optional.empty,
+    paint: Optional[Paint] = Optional.empty
+  ): Scene = this + Text(role, size, weight, italic, align, Optional.empty, font, color, paint)
+
+  /** The markers of the points of a scene: `size`, `opacity` and the edge (`edgeWidth`, `edgeColor`, `edgeVisible`); a
+    * scene's points are round and filled. See [[Geom.points]].
+    */
+  def withPoints(
+    size: Optional[Double] = Optional.empty,
+    opacity: Optional[Double] = Optional.empty,
+    edgeWidth: Optional[Double] = Optional.empty,
+    edgeColor: Optional[String] = Optional.empty,
+    edgeVisible: Optional[Boolean] = Optional.empty
+  ): Scene = this + Geom.points(
+    size = size,
+    opacity = opacity,
+    edgeWidth = edgeWidth,
+    edgeColor = edgeColor,
+    edgeVisible = edgeVisible
+  )
+
+  /** One change written as text, `element.property=value`: `withSetting("title.size=18")`. See [[Settings]]; a scene
+    * has only the title, subtitle and note.
+    */
+  def withSetting(spec: String): Scene = this + Settings.parse(spec)
+
+  /** The palette called `name`: `brand`, `reference`, `print` or `clear`. */
+  def withPalette(name: String): Scene = withPalette(Palette.named(name))
+
+  /** The style called `name`: `default`, `slides`, `print` or `clear`. */
+  def withStyle(name: String): Scene = withStyle(Style.named(name))
+
+  /** The color of homological degree `degree`, as a CSS color. */
+  def withDegreeColor(degree: Int, color: String): Scene = withDegree(degree, color = color)
+
+  /** A factor on every text size. */
+  def withTextScale(factor: Double): Scene = withStyle(style.copy(textScale = factor))
+
+  /** A factor on the size of markers and the width of lines. */
+  def withMarkScale(factor: Double): Scene = withStyle(style.copy(markScale = factor))
+
+  /** Without a background. */
+  def withTransparentBackground(): Scene = withStyle(style.copy(transparent = true))
 
   // One line, so that a REPL echoing the value of `scene.view()` does not print every point.
   override def toString: String = Plot.describe("Scene", title, s"${layers.size} layers")
@@ -52,6 +158,17 @@ final case class Scene(
       val r = ps.map(p => math.sqrt(math.pow(p._1 - c._1, 2) + math.pow(p._2 - c._2, 2) + math.pow(p._3 - c._3, 2))).max
       (c, if r > 0 then r else 1.0)
 
+  /** A scene's point as it is drawn: round and filled, with a ring of 1.5 pixels in the surface color, then whatever
+    * the scene's marker changes (its size, opacity and edge).
+    */
+  private def sceneMarker(radius: Double, own: Paint): MarkerFace =
+    MarkerStyle.resolve(
+      Shape.Circle,
+      radius,
+      own,
+      Seq(MarkerStyle(edge = LineStyle(width = Some(1.5))), elements.marker)
+    )
+
   // ----- the static view (SVG)
 
   def svgFile(theme: Theme = Theme.Light): String =
@@ -59,7 +176,9 @@ final case class Scene(
 
   /** One view as an `<svg>`, primitives sorted back to front (orthographic projection). */
   def staticSvg(theme: Theme = Theme.Light): String =
-    def paint(p: Paint) = if theme == Theme.Auto then palette.css(p) else palette.hex(p, theme)
+    val pal = palette.withDegrees(degrees)
+    val (ts, ink) = (style.textScale, style.markScale)
+    def paint(p: Paint) = if theme == Theme.Auto then pal.css(p) else pal.hex(p, theme)
     val (c, r) = frame
     val az = math.toRadians(azimuth)
     val el = math.toRadians(elevation)
@@ -70,8 +189,8 @@ final case class Scene(
       val y2 = y1 * math.cos(el) - z * math.sin(el)
       val z2 = y1 * math.sin(el) + z * math.cos(el)
       (x1, z2, y2) // screen x, screen y (up), depth (away from the viewer)
-    val top = if title.nonEmpty then 40.0 else 12.0
-    val scale = 0.46 * math.min(width, height - top)
+    val top = if title.nonEmpty then 16.0 + 24.0 * ts * (elements.face(TextRole.Title).size / 15.0) else 12.0
+    val scale = 0.46 * math.min(width, height - top) * zoom
     val (cx, cy) = (width / 2.0, top + (height - top) / 2.0)
     def sx(v: (Double, Double, Double)) = f"${cx + v._1 * scale}%.2f"
     def sy(v: (Double, Double, Double)) = f"${cy - v._2 * scale}%.2f"
@@ -91,49 +210,93 @@ final case class Scene(
           val (va, vb) = (view(a), view(b))
           (va._3 + vb._3) / 2 - 1e-6 -> s"""<line x1="${sx(va)}" y1="${sy(va)}" x2="${sx(vb)}" y2="${sy(
               vb
-            )}" style="stroke:${paint(l.paintAt(i))}" stroke-width="${l.width}" stroke-linecap="round"/>"""
+            )}" style="stroke:${paint(l.paintAt(i))}" stroke-width="${l.width * ink}" stroke-linecap="round"/>"""
         }
       case l: Layer.Points =>
         l.at.indices.map { i =>
           val v = view(l.at(i))
-          v._3 - 2e-6 -> s"""<circle cx="${sx(v)}" cy="${sy(v)}" r="${l.radius}" style="fill:${paint(
-              l.paintAt(i)
-            )};stroke:${paint(Paint.Surface)}" stroke-width="1.5"/>"""
+          val face = sceneMarker(l.radius, l.paintAt(i))
+          val attrs =
+            MarkerStyle.attributes(face, paint(l.paintAt(i)), paint(face.edge.paint), _.toString.stripSuffix(".0"))
+          v._3 - 2e-6 -> s"""<circle cx="${sx(v)}" cy="${sy(v)}" r="${face.size * ink}" $attrs/>"""
         }
     }
     val body = items.sortBy(-_._1).map(_._2).mkString
     val id = s"tda4j3d${Scene.counter.incrementAndGet()}"
-    val style = if theme == Theme.Auto then s"<style>${palette.cssVariables(s"#$id")}</style>" else ""
+    val css = if theme == Theme.Auto then s"<style>${pal.cssVariables(s"#$id")}</style>" else ""
+    def num(v: Double) = if v == v.toLong then v.toLong.toString else f"$v%.2f"
+    // the title and the subtitle, as the style and the text roles have them
+    val (titleFace, subtitleFace) = (elements.face(TextRole.Title), elements.face(TextRole.Subtitle))
+    val (titlePx, subtitlePx) = (titleFace.size * ts, subtitleFace.size * ts)
+    val titleBase = 9.0 + titlePx
+    def at(f: TextFace): (Double, String) = f.align match
+      case Anchor.Start  => (14.0, "")
+      case Anchor.Middle => (width / 2.0, """ text-anchor="middle"""")
+      case Anchor.End    => (width - 14.0, """ text-anchor="end"""")
+    def extras(f: TextFace): String =
+      f.weight.fold("")(wt => s""" font-weight="${wt.css}"""") + (if f.italic then """ font-style="italic"""" else "") +
+        f.font.fold("")(ff => s""" font-family="${Svg.escape(ff)}"""")
     val heading =
       (if title.nonEmpty then
-         s"""<text x="14" y="24" font-size="15" font-weight="600" style="fill:${paint(Paint.Ink)}">${Svg.escape(
-             title
-           )}</text>"""
-       else "") +
+         val (tx, anchor) = at(titleFace)
+         s"""<text x="${num(tx)}" y="${num(titleBase)}"$anchor font-size="${num(titlePx)}"${extras(
+             titleFace
+           )} style="fill:${paint(
+             titleFace.paint
+           )}">${Svg.escape(title)}</text>"""
+       else "")
+      +
         (if subtitle.nonEmpty then
-           s"""<text x="14" y="${if title.nonEmpty then 40 else 24}" font-size="12" style="fill:${paint(
-               Paint.Secondary
+           val (sx, anchor) = at(subtitleFace)
+           val sy =
+             if title.nonEmpty then
+               titleBase + 16.0 * ts + 0.25 * (titlePx - 15.0 * ts) + 0.75 * (subtitlePx - 12.0 * ts)
+             else titleBase + (subtitlePx - 12.0 * ts)
+           s"""<text x="${num(sx)}" y="${num(sy)}"$anchor font-size="${num(subtitlePx)}"${extras(
+               subtitleFace
+             )} style="fill:${paint(
+               subtitleFace.paint
              )}">${Svg.escape(subtitle)}</text>"""
          else "")
-    s"""<svg xmlns="http://www.w3.org/2000/svg" id="$id" width="$width" height="$height" viewBox="0 0 $width $height" font-family="system-ui,-apple-system,'Segoe UI',sans-serif">$style<rect width="$width" height="$height" style="fill:${paint(
-        Paint.Surface
-      )}"/>$heading$body</svg>"""
+    val background =
+      if style.transparent then ""
+      else s"""<rect width="$width" height="$height" style="fill:${paint(Paint.Surface)}"/>"""
+    s"""<svg xmlns="http://www.w3.org/2000/svg" id="$id" width="$width" height="$height" viewBox="0 0 $width $height" font-family="${Svg
+        .escape(style.font)}">$css$background$heading$body</svg>"""
 
   // ----- the interactive view (canvas)
 
   def fragment(theme: Theme = Theme.Auto): String =
+    val pal = palette.withDegrees(degrees)
+    val (ts, ink) = (style.textScale, style.markScale)
+    def px(v: Double) = if v == v.toLong then v.toLong.toString else f"$v%.2f"
+    // a text's size, weight, slant, font and alignment as CSS, then its color
+    def css(role: TextRole, rest: String): String =
+      val f = elements.face(role)
+      val weight = f.weight.fold("")(wt => s"font-weight:${wt.css};")
+      val slant = if f.italic then "font-style:italic;" else ""
+      val family = f.font.fold("")(ff => s"font-family:${Svg.escape(ff)};")
+      val align = f.align match
+        case Anchor.Start  => ""
+        case Anchor.Middle => "text-align:center;"
+        case Anchor.End    => "text-align:right;"
+      s"font-size:${px(f.size * ts)}px;$weight$slant$family$align$rest"
     val (c, r) = frame
     def num(v: Double) = f"$v%.5f"
     def pos(p: XYZ) = s"[${num((p._1 - c._1) / r)},${num((p._2 - c._2) / r)},${num((p._3 - c._3) / r)}]"
-    def col(p: Paint) = "\"" + (if theme == Theme.Auto then palette.css(p) else palette.hex(p, theme)) + "\""
+    def col(p: Paint) = "\"" + (if theme == Theme.Auto then pal.css(p) else pal.hex(p, theme)) + "\""
     val json = layers
       .map {
         case l: Layer.Points =>
-          s"""{"kind":"p","r":${l.radius},"items":[${l.at.indices
+          val face = sceneMarker(l.radius, l.paints.headOption.getOrElse(Paint.Ink))
+          val edge = if face.edge.visible then face.edge.width else 0.0
+          s"""{"kind":"p","r":${face.size * ink},"op":${face.opacity},"ew":$edge,"ec":${col(
+              face.edge.paint
+            )},"items":[${l.at.indices
               .map(i => s"[${pos(l.at(i))},${col(l.paintAt(i))}]")
               .mkString(",")}]}"""
         case l: Layer.Segments =>
-          s"""{"kind":"s","w":${l.width},"items":[${l.ends.indices
+          s"""{"kind":"s","w":${l.width * ink},"items":[${l.ends.indices
               .map(i => s"[${pos(l.ends(i)._1)},${pos(l.ends(i)._2)},${col(l.paintAt(i))}]")
               .mkString(",")}]}"""
         case l: Layer.Triangles =>
@@ -146,32 +309,36 @@ final case class Scene(
       }
       .mkString("[", ",", "]")
     val id = s"tda4j3d${Scene.counter.incrementAndGet()}"
-    val vars = if theme == Theme.Auto then palette.cssVariables(s"#$id") else ""
-    s"""<div id="$id" style="position:relative;width:${width}px;max-width:100%;font-family:system-ui,-apple-system,'Segoe UI',sans-serif">
+    val vars = if theme == Theme.Auto then pal.cssVariables(s"#$id") else ""
+    s"""<div id="$id" style="position:relative;width:${width}px;max-width:100%;font-family:${Svg.escape(style.font)}">
        |<style>$vars #$id canvas{display:block;width:100%;touch-action:none;cursor:grab;border-radius:4px}</style>
        |${
         if title.nonEmpty then
-          s"""<div style="font:600 15px system-ui;margin:4px 0 2px;color:${col(Paint.Ink).replace("\"", "")}">${Svg
-              .escape(title)}</div>"""
+          s"""<div style="${css(
+              TextRole.Title,
+              s"margin:4px 0 2px;color:${col(elements.face(TextRole.Title).paint).replace("\"", "")}"
+            )}">${Svg.escape(title)}</div>"""
         else ""
       }
        |${
         if subtitle.nonEmpty then
-          s"""<div style="font:12px system-ui;margin:0 0 6px;color:${col(Paint.Secondary).replace("\"", "")}">${Svg
-              .escape(subtitle)}</div>"""
+          s"""<div style="${css(
+              TextRole.Subtitle,
+              s"margin:0 0 6px;color:${col(elements.face(TextRole.Subtitle).paint).replace("\"", "")}"
+            )}">${Svg.escape(subtitle)}</div>"""
         else ""
       }
        |<canvas width="$width" height="${height - 40}"></canvas>
-       |<div style="font:11px system-ui;color:${col(Paint.Muted).replace(
-        "\"",
-        ""
-      )};margin-top:4px">drag to turn, scroll to zoom</div>
+       |<div style="${css(
+        TextRole.Note,
+        s"color:${col(elements.face(TextRole.Note).paint).replace("\"", "")};margin-top:4px"
+      )}">drag to turn, scroll to zoom</div>
        |<script>(function(){
        |const root=document.getElementById('$id'),cv=root.querySelector('canvas'),g=cv.getContext('2d');
        |const layers=$json;
        |const css=getComputedStyle(root);
        |const color=s=>s.startsWith('var(')?css.getPropertyValue(s.slice(4,-1)).trim():s;
-       |let az=${math.toRadians(azimuth)},el=${math.toRadians(elevation)},zoom=1;
+       |let az=${math.toRadians(azimuth)},el=${math.toRadians(elevation)},zoom=${Svg.number(zoom)};
        |function proj(p){const x1=p[0]*Math.cos(az)-p[1]*Math.sin(az),y1=p[0]*Math.sin(az)+p[1]*Math.cos(az);
        |  return [x1,y1*Math.sin(el)+p[2]*Math.cos(el),y1*Math.cos(el)-p[2]*Math.sin(el)];}
        |function draw(){const dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=W*cv.height/cv.width;
@@ -187,7 +354,7 @@ final case class Scene(
        |  for(const [d,k,L,ps,col] of items){const c=color(col);
        |    if(k===0){g.globalAlpha=L.o;g.fillStyle=c;g.beginPath();g.moveTo(X(ps[0]),Y(ps[0]));g.lineTo(X(ps[1]),Y(ps[1]));g.lineTo(X(ps[2]),Y(ps[2]));g.closePath();g.fill();g.globalAlpha=1;}
        |    else if(k===1){g.strokeStyle=c;g.lineWidth=L.w;g.lineCap='round';g.beginPath();g.moveTo(X(ps[0]),Y(ps[0]));g.lineTo(X(ps[1]),Y(ps[1]));g.stroke();}
-       |    else{g.fillStyle=c;g.strokeStyle=surface;g.lineWidth=1.5;g.beginPath();g.arc(X(ps[0]),Y(ps[0]),L.r,0,2*Math.PI);g.fill();g.stroke();}}}
+       |    else{g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.arc(X(ps[0]),Y(ps[0]),L.r,0,2*Math.PI);g.fill();if(L.ew>0){g.strokeStyle=color(L.ec);g.lineWidth=L.ew;g.stroke();}g.globalAlpha=1;}}}
        |let drag=null;
        |cv.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY,az,el];cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';});
        |cv.addEventListener('pointermove',e=>{if(!drag)return;az=drag[2]+(e.clientX-drag[0])*0.01;el=Math.max(-1.55,Math.min(1.55,drag[3]+(e.clientY-drag[1])*0.01));draw();});

@@ -149,3 +149,152 @@ class PlotCLISpec extends Specification:
       fails("--plot", "representative", "--bar", "1000", "--output", tempPath(".svg")) must beEqualTo(1)
     }
   }
+
+  "the look flags" should {
+    def drawn(flags: String*): String =
+      val out = tempPath(".svg")
+      val (code, _) = run(Seq("--max-dimension", "1", "--plot", "diagram", "--output", out) ++ flags :+ circleFile*)
+      code must beEqualTo(0)
+      normalized(read(out))
+    def expected(f: plot.Figure => plot.Figure): String = normalized(f(direct.plotDiagram()).svgFile(plot.Theme.Light))
+
+    "title, label and size the plot, as the tweaks do" >> {
+      val got =
+        drawn("--title", "A circle", "--x-label", "born", "--y-label", "dies", "--width", "800", "--height", "300")
+      got must beEqualTo(expected(_.withTitle("A circle").withXLabel("born").withYLabel("dies").withSize(800, 300)))
+    }
+    "choose the palette, the scales and the text size" >> {
+      drawn("--palette", "reference") must beEqualTo(expected(_.withPalette("reference")))
+      drawn("--palette", "print", "--style", "print") must
+        beEqualTo(expected(_.withPalette("print").withStyle("print")))
+      // a style replaces the whole style, so --style and --text-scale have to be one change, not two
+      drawn("--style", "print", "--text-scale", "1.5") must beEqualTo(expected(_.withStyle("print").withTextScale(1.5)))
+      drawn("--style", "slides") must beEqualTo(expected(_.withStyle("slides")))
+      // one flag for each change of an element, repeated
+      drawn("--set", "title.size=18", "--set", "grid.dash=dotted", "--set", "x-axis=top") must
+        beEqualTo(expected(_.withSetting("title.size=18").withSetting("grid.dash=dotted").withSetting("x-axis=top")))
+      drawn("--set", "ticks.length=4") must not(beEqualTo(expected(identity)))
+      drawn("--style", "print", "--set", "title.size=18") must
+        beEqualTo(expected(_.withStyle("print").withSetting("title.size=18")))
+      drawn("--set", "x-axis.reverse=true", "--set", "size.width=4in", "--set", "numbers.decimal=,") must
+        beEqualTo(
+          expected(_.withSetting("x-axis.reverse=true").withSetting("size.width=4in").withSetting("numbers.decimal=,"))
+        )
+      drawn("--set", "size.width=4in") must contain("width=\"384\"")
+      drawn("--set", "numbers.decimal=,").contains("0,5") must beTrue
+      drawn("--palette", "clear", "--style", "clear") must
+        beEqualTo(expected(_.withPalette("clear").withStyle("clear")))
+      drawn("--style", "print") must contain("Helvetica")
+      drawn("--x-scale", "log", "--y-scale", "sqrt") must beEqualTo(expected(_.withXScale("log").withYScale("sqrt")))
+      drawn("--text-scale", "1.5") must beEqualTo(expected(_.withTextScale(1.5)))
+      drawn("--x-scale", "log") must not(beEqualTo(expected(identity)))
+    }
+    "draw in the theme asked for, light for an .svg file otherwise" >> {
+      val out = tempPath(".svg")
+      run(
+        "--max-dimension",
+        "1",
+        "--plot",
+        "diagram",
+        "--theme",
+        "dark",
+        "--output",
+        out,
+        circleFile
+      )._1 must beEqualTo(0)
+      normalized(read(out)) must beEqualTo(normalized(direct.plotDiagram().svgFile(plot.Theme.Dark)))
+      drawn() must beEqualTo(expected(identity))
+    }
+    "draw the clear look in white for a dark page" >> {
+      val out = tempPath(".svg")
+      run(
+        "--max-dimension",
+        "1",
+        "--plot",
+        "diagram",
+        "--palette",
+        "clear",
+        "--style",
+        "clear",
+        "--theme",
+        "dark",
+        "--output",
+        out,
+        circleFile
+      )._1 must beEqualTo(0)
+      val expectedDark =
+        direct.plotDiagram().withPalette("clear").withStyle("clear").svgFile(plot.Theme.Dark)
+      normalized(read(out)) must beEqualTo(normalized(expectedDark))
+      read(out) must contain("fill:#ffffff")
+    }
+    "reach a 3-D scene where a scene has the setting" >> {
+      val out = tempPath(".svg")
+      val code = run(
+        "--max-dimension",
+        "1",
+        "--plot",
+        "input-3d",
+        "--title",
+        "A cloud",
+        "--width",
+        "300",
+        "--output",
+        out,
+        circleFile
+      )._1
+      (code must beEqualTo(0)) and (read(out) must contain("A cloud")) and (read(out) must contain("""width="300""""))
+    }
+  }
+
+  "a misused look flag" should {
+    def failure(args: String*): (Int, String) =
+      var code = -1
+      val err = stderrOf { code = run(args :+ circleFile*)._1 }
+      (code, err)
+    "be refused before anything is computed, so a typo costs no wait" >> {
+      // the input does not exist: were the setting checked only when the plot is made, the missing file would be the error
+      def early(args: String*): String = stderrOf(run(args :+ "no-such-input.csv"*))
+      early("--plot", "diagram", "--set", "camera.zoom=2") must contain("a 2-D figure has none")
+      early("--plot", "input-3d", "--set", "tick-label.size=9") must contain("a 3-D scene has a title")
+      early("--plot", "input-3d", "--set", "camera.zoom=20") must contain("the zoom should be between 0.2 and 8")
+      early("--plot", "diagram", "--set", "title.size=big") must contain("'big' is not a number")
+    }
+    "be an error that says what to do, never ignored" >> {
+      val (c1, e1) = failure("--title", "A circle")
+      val (c2, e2) = failure("--plot", "diagram", "--x-scale", "cubic")
+      val (c3, e3) = failure("--plot", "diagram", "--palette", "neon")
+      val (c4, e4) = failure("--plot", "diagram", "--theme", "sepia")
+      val (c5, e5) = failure("--plot", "diagram", "--width", "20")
+      val (c6, e6) = failure("--plot", "input-3d", "--x-scale", "log")
+      val (c7, e7) = failure("--plot", "diagram", "--text-scale", "0")
+      val (c8, e8) = failure("--plot", "diagram", "--style", "poster")
+      val (c9, e9) = failure("--style", "print")
+      val (c10, e10) = failure("--plot", "diagram", "--set", "title.size=big")
+      val (c11, e11) = failure("--plot", "diagram", "--set", "x-axis=left")
+      val (c12, e12) = failure("--plot", "input-3d", "--set", "tick-label.size=9")
+      val (c13, e13) = failure("--set", "title.size=18")
+      val (c14, e14) = failure("--plot", "diagram", "--set", "numbers.separator=,")
+      val (c16, e16) = failure("--plot", "diagram", "--set", "camera.zoom=2")
+      val (c17, e17) = failure("--plot", "input-3d", "--set", "camera.zoom=20")
+      val (c15, e15) = failure("--plot", "diagram", "--set", "size.width=wide")
+      (c1 must beEqualTo(1)) and (e1 must contain("--title is for --plot")) and
+        (c2 must beEqualTo(1)) and (e2 must contain(
+          "unknown scale 'cubic'; expected one of linear, log, sqrt, symlog"
+        )) and
+        (c3 must beEqualTo(1)) and (e3 must contain("expected one of brand, reference, print, clear")) and
+        (c8 must beEqualTo(1)) and (e8 must contain("expected one of default, slides, print, clear")) and
+        (c9 must beEqualTo(1)) and (e9 must contain("--style is for --plot")) and
+        (c10 must beEqualTo(1)) and (e10 must contain("'big' is not a number")) and
+        (c11 must beEqualTo(1)) and (e11 must contain("the x axis is at the bottom or the top")) and
+        (c12 must beEqualTo(1)) and (e12 must contain("a 3-D scene has a title")) and
+        (c13 must beEqualTo(1)) and (e13 must contain("--set is for --plot")) and
+        (c14 must beEqualTo(1)) and (e14 must contain("expected one of locale, decimal, grouping, minus")) and
+        (c15 must beEqualTo(1)) and (e15 must contain("is not a number")) and
+        (c16 must beEqualTo(1)) and (e16 must contain("a 2-D figure has none")) and
+        (c17 must beEqualTo(1)) and (e17 must contain("the zoom should be between 0.2 and 8")) and
+        (c4 must beEqualTo(1)) and (e4 must contain("expected one of auto, light, dark")) and
+        (c5 must beEqualTo(1)) and (e5 must contain("between 100 and 20000")) and
+        (c6 must beEqualTo(1)) and (e6 must contain("--x-scale is for 2-D plots")) and
+        (c7 must beEqualTo(1)) and (e7 must contain("textScale"))
+    }
+  }

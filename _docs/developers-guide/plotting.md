@@ -27,18 +27,40 @@ public, read-only view.
 Every plot is an immutable value.
 
 **`Figure`** (`Figure.scala`) is a 2-D scene in data coordinates: a list of
-`Mark`s plus axes, a legend and an optional colorbar.
-- The marks are `Points`, `Segments`, `Polygons`, `Discs`, `Boxes`, `Line` and
-  `Text`.
+`Mark`s plus axes, a legend and an optional color scale.
+- The marks are `Points`, `Segments`, `Polygons`, `Discs`, `Boxes`, `Line`,
+  `Text`, and two that span the whole plot, `Diagonal` and `Rule`.
 - Each mark takes one paint, or one per item, and an optional tooltip per
   item, which becomes an SVG `<title>`.
-- `Svg.render` draws it.
+- `Svg.render` draws it. Positions go through each axis's `Transform`
+  (identity, log, square root, symmetric log) there and nowhere else: a figure
+  holds data in its own units. What is at 0 on a log axis sits on a `-∞` line
+  beside the lowest number, a log axis with a negative value is drawn as a
+  symmetric log (and says so under the plot), and only a value that is not a
+  number is left out and counted.
+- An axis can run backwards (`Axis.reverse`), keeps a margin of `padding` of the data's extent, and the plot area can hold
+  an aspect ratio (`Figure.aspect`, which wins over the diagram's default of equal units); the renderer builds a frame
+  whose `px`/`py` mirror the line, and draws the diagonal's shade in the usual frame and mirrors it back, so a new mark
+  that is clipped to a half plane does the same. `Transform.Custom` holds two functions: compare axes by them, so keep
+  them in a `val`.
+- Text that carries numbers goes through `Elements.numbers` (`NumberStyle`) at the point it is drawn: write a number into
+  a label with `Svg.number` and let the renderer localize it, never format it with a symbol of your own. A text longer than
+  its `TextStyle.limit` is cut by `TextFace.fit`, which estimates a character at 0.6 em.
 - `over` stacks one figure on another, such as a cycle on its complex.
+- A figure is changed with a `Tweak` (`Tweak.scala`): `fig + tweak`. `Labels`,
+  `Size`, `Style`, `Palette` and the `Scale` constructors are tweaks; see the
+  user guide's "Customizing a plot".
 
 **`Scene`** (`Scene.scala`) is a 3-D scene made of layers. It renders two ways:
 - for a page, as an inline canvas viewer (drag to turn, scroll to zoom), with
   its script in the page and no CDN;
-- for a file, as a static SVG: an orthographic view drawn back to front.
+- for a file, as a static SVG: an orthographic view drawn back to front. The view is the scene's `azimuth`, `elevation`
+  and `zoom` (set with the `Camera` tweak); the page's canvas starts from the same three numbers.
+
+A **`Board`** is a row of figures, or figures on a `Layout` (`Layout.scala`): a grid of rows and columns with weights, whose
+tracks are whole pixels that add up exactly to the drawing, and a `Slot` (row, column, spans) for each panel. A panel is
+sized to its slot when the board is drawn (`Layout.box`), never stored resized, so tweaks and `shared` see the figures
+the user placed. A page gets a CSS grid with the same tracks; a file gets nested `<svg x y>` at the same boxes.
 
 **`trait Plot`** is what the viewer shows and `save` writes. It has `view`,
 `save`, `html`, `fragment` and `svgFile`, and is implemented by `Figure`,
@@ -57,13 +79,27 @@ To add a kind of plot, add a constructor to `object Plot` that builds a
 `Figure` or `Scene` out of existing marks. Add a new `Mark` only for a
 primitive the renderers do not draw.
 
+## Defaults: `Look`
+
+A `Look` (`Look.scala`) is a list of tweaks that a plot constructor applies to what it builds, found as a `given` (the
+default one is in `Look`'s companion and does nothing). The constructors take `(using look: Look)`. A constructor that builds
+its figure itself wraps the body in `look.figure(palette):` (or `look.scene:`), which applies the look and then the `palette`
+the caller named, so that the call beats the look; one that only delegates to another public constructor just passes the
+`given` on; and a call to a public constructor from inside a wrapped body passes `Look.none`, so that the look is applied
+once. A tweak that raises `UnsupportedOperationException` for a kind of plot is skipped for it. Because there is always a
+`given Look` to find, a constructor that forgets to pass it on would silently use the empty one: `PlotLookSpec` builds every
+constructor under a look and checks each one, so a new constructor goes in its table.
+
 ## Colors are roles
 
 A mark never holds a color, only a `Paint`:
 - `Series(k)`, a categorical slot; homological degree `k` is always slot `k`,
   never its rank among the degrees shown;
 - the chrome roles (`Ink`, `Secondary`, `Muted`, `Grid`, `Axis`, `Surface`);
-- `Fixed(hex)` for data colors, such as a coefficient on a diverging ramp.
+- `Value(v)` for a data value, such as a heatmap cell or a coefficient, which
+  the figure's `ColorScale` (a sequential, diverging or cyclic ramp, with limits)
+  turns into a color through the palette at render time;
+- `Fixed(hex)` for a color of your own.
 
 A `Palette` resolves paints under a `Theme` (`Color.scala`):
 - `Theme.Auto` writes CSS variables with a `prefers-color-scheme` block, so
@@ -77,7 +113,17 @@ A `Palette` resolves paints under a `Theme` (`Color.scala`):
 three slots are distinguishable in every pair in both modes, since a diagram
 puts any two degrees side by side, and the first eight in adjacent pairs.
 Re-run the validation after changing a slot, and do not cycle hues past eight.
-`Palette.reference` is a neutral alternative.
+`Palette.reference` is a neutral alternative. `Palette.print` has pure white and
+black chrome and a single look (its dark chrome and dark series are the light
+ones); its first three series pass every check of the validator on all pairs on
+`#ffffff`, all eight on adjacent pairs. `Palette.clear` is the same light mode
+with a dark mode of its own, pure black chrome with white inks, and the brand's
+dark series, which pass the validator on `#000000` the same way. `PlotGrammarSpec`
+pins the contrast of both palettes' inks and series against their surfaces.
+`Style.print` is a font stack of named families, since `system-ui` is a browser
+keyword; `Style.clear` is that and no background. The two looks are separate
+because a figure with a white background of its own and a figure that takes its
+page's color need different elements.
 
 ## The live viewer
 

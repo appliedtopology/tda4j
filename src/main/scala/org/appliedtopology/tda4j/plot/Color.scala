@@ -1,13 +1,17 @@
 package org.appliedtopology.tda4j.plot
 
 /** What a mark is painted with. A `Series` slot or a role (`Ink`, `Muted`, ...) is resolved by the figure's [[Palette]]
-  * and [[Theme]], so the same figure renders light or dark and in another palette; `Fixed` is a color computed from
-  * data (a heatmap cell, an angle) and is the same everywhere.
+  * and [[Theme]], so the same figure renders light or dark and in another palette; `Value` is a data value (a heatmap
+  * cell, an angle, a coefficient) that the figure's [[ColorScale]] turns into a color, again through its palette;
+  * `Fixed` is a color of your own and is the same everywhere.
   */
 enum Paint:
   /** A categorical slot, `0` first: homological degree `k` is always `Series(k)`, whichever degrees are shown. */
   case Series(slot: Int)
   case Ink, Secondary, Muted, Grid, Axis, Surface
+
+  /** A data value, colored by the [[Figure]]'s [[ColorScale]]. */
+  case Value(v: Double)
   case Fixed(hex: String)
 
 /** Light, dark, or both through the viewer's `prefers-color-scheme` (`Auto`: colors are CSS variables, which every
@@ -16,12 +20,24 @@ enum Paint:
 enum Theme:
   case Auto, Light, Dark
 
+object Theme:
+  /** The theme called `name`, in any case: `auto`, `light` or `dark`. */
+  def named(name: String): Theme = name.trim.toLowerCase(java.util.Locale.ROOT) match
+    case "auto"  => Auto
+    case "light" => Light
+    case "dark"  => Dark
+    case other   => throw IllegalArgumentException(s"unknown theme '$other'; expected one of auto, light, dark")
+
 /** Chart chrome of one mode: the surface, three inks, gridline and axis. */
 final case class Chrome(surface: String, ink: String, secondary: String, muted: String, grid: String, axis: String)
 
 /** Everything a plot's colors come from: categorical slots (light and dark steps of the same hues), chrome for each
   * mode, a sequential ramp (light = small) and a diverging pair. [[Palette.brand]] (the default) is TDA4j's Slate &
-  * Gold; [[Palette.reference]] is the neutral palette of the dataviz method. Swap in your own with `copy`.
+  * Gold; [[Palette.reference]] is the neutral palette of the dataviz method. Make your own with `withSeries`,
+  * `withSurface` and `copy`.
+  *
+  * A palette is a [[Tweak]]: `fig + Palette.reference` recolors every part of the figure, heatmaps and cocycles
+  * included.
   */
 final case class Palette(
   seriesLight: IndexedSeq[String],
@@ -32,7 +48,13 @@ final case class Palette(
   divergingNegative: String,
   divergingPositive: String,
   divergingMidpoint: String
-):
+) extends Tweak:
+  def onFigure(f: Figure): Figure = f.copy(palette = this)
+  override def onScene(s: Scene): Scene = s.copy(palette = this)
+
+  /** The color of a paint that needs only the palette. A [[Paint.Value]] needs the figure's [[ColorScale]] as well, so
+    * it is colored by [[ColorScale.hex]] and has no color here.
+    */
   def hex(paint: Paint, theme: Theme): String =
     val isDark = theme == Theme.Dark
     val chrome = if isDark then dark else light
@@ -45,6 +67,7 @@ final case class Palette(
       case Paint.Axis      => chrome.axis
       case Paint.Surface   => chrome.surface
       case Paint.Fixed(h)  => h
+      case Paint.Value(_)  => throw valueNeedsScale
 
   /** The CSS variable a paint resolves through under `Theme.Auto`, or its hex for a fixed color. */
   def css(paint: Paint): String = paint match
@@ -56,6 +79,42 @@ final case class Palette(
     case Paint.Axis      => "var(--axis)"
     case Paint.Surface   => "var(--surface)"
     case Paint.Fixed(h)  => h
+    case Paint.Value(_)  => throw valueNeedsScale
+
+  private def valueNeedsScale: IllegalArgumentException =
+    IllegalArgumentException(
+      "Paint.Value is a data value that a ColorScale colors: draw it in a Figure with a colorScale, or use Paint.Fixed"
+    )
+
+  /** This palette with the categorical slots `colors` (light mode) and `dark` (dark mode, default: the same colors).
+    * Slot `k` colors homological degree `k`, so list them in degree order.
+    */
+  def withSeries(colors: Seq[String], dark: Seq[String] = Nil): Palette =
+    require(colors.nonEmpty, "Palette.withSeries: give at least one color")
+    val darkColors = if dark.isEmpty then colors else dark
+    require(
+      darkColors.size == colors.size,
+      s"Palette.withSeries: ${colors.size} light colors but ${darkColors.size} dark ones"
+    )
+    copy(seriesLight = colors.toIndexedSeq, seriesDark = darkColors.toIndexedSeq)
+
+  /** This palette on other surfaces (the figure's background): `light` in light mode, `dark` (default: unchanged) in
+    * dark mode. `withSurface("#ffffff")` for a figure that goes onto a white page.
+    */
+  def withSurface(light: String, dark: String = ""): Palette =
+    copy(
+      light = this.light.copy(surface = light),
+      dark = if dark.isEmpty then this.dark else this.dark.copy(surface = dark)
+    )
+
+  /** This palette with each degree's own color where a [[DegreeStyle]] gives one. */
+  def withDegrees(styles: Map[Int, DegreeStyle]): Palette =
+    styles.foldLeft(this) { case (p, (k, s)) =>
+      val slot = k % p.seriesLight.size
+      val lightSeries = s.color.fold(p.seriesLight)(c => p.seriesLight.updated(slot, c))
+      val darkSeries = s.darkColor.orElse(s.color).fold(p.seriesDark)(c => p.seriesDark.updated(slot, c))
+      p.copy(seriesLight = lightSeries, seriesDark = darkSeries)
+    }
 
   /** The CSS custom properties of both modes, scoped to `selector`. */
   def cssVariables(selector: String): String =
@@ -129,8 +188,72 @@ object Palette:
     divergingMidpoint = "#c3c2b7"
   )
 
+  /** For a paper: a pure white surface (the brand's cream prints as a grey patch), black ink, and colors that stay
+    * apart on paper. Degree colors are the Okabe-Ito blue, vermillion and bluish green first, so a persistence diagram
+    * keeps its degrees apart for every kind of color vision; the first three pass every check of the dataviz validator
+    * on ALL pairs, all eight on adjacent pairs. The sequential ramp is ColorBrewer's Blues (lightness falls steadily,
+    * so it survives a grayscale printer), the diverging pair is blue against vermillion.
+    *
+    * Paper has one look: the dark mode is the light one, so `Theme.Dark` draws the same figure. It is for a figure that
+    * has its own white background, [[Style.print]] being the fonts to go with it; for a figure that sits on a page of
+    * either color, see [[Palette.clear]].
+    */
+  val print: Palette =
+    val chrome = Chrome("#ffffff", "#000000", "#333333", "#595959", "#dddddd", "#000000")
+    val series = IndexedSeq("#0072b2", "#d55e00", "#009e73", "#7f5bb6", "#a68018", "#b5528a", "#5b7f1d", "#7b3f00")
+    Palette(
+      seriesLight = series,
+      seriesDark = series,
+      light = chrome,
+      dark = chrome,
+      sequential = IndexedSeq(
+        "#f7fbff",
+        "#deebf7",
+        "#c6dbef",
+        "#9ecae1",
+        "#6baed6",
+        "#4292c6",
+        "#2171b5",
+        "#08519c",
+        "#08306b"
+      ),
+      divergingNegative = "#0072b2",
+      divergingPositive = "#d55e00",
+      divergingMidpoint = "#f7f7f7"
+    )
+
+  /** For a figure with no background of its own ([[Style.clear]]) that goes onto a page of either color: pure black
+    * elements for a light page (`Theme.Light`) and pure white ones for a dark page (`Theme.Dark`, or `Theme.Auto`,
+    * which follows the reader's setting, so use it only where the page does too). The degree colors are [[print]]'s on
+    * a light page and the brand's dark steps on a dark one, each validated on its own surface (pure white, pure black:
+    * the first three on all pairs, all eight on adjacent pairs); the heatmap ramps are [[print]]'s.
+    *
+    * It is [[print]] with a dark mode of its own; with no [[Style.clear]], the figure has the white or the black
+    * background of its mode.
+    */
+  val clear: Palette =
+    Palette(
+      seriesLight = print.seriesLight,
+      seriesDark = brand.seriesDark,
+      light = print.light,
+      dark = Chrome("#000000", "#ffffff", "#cccccc", "#a6a6a6", "#2b2b2b", "#ffffff"),
+      sequential = print.sequential,
+      divergingNegative = print.divergingNegative,
+      divergingPositive = print.divergingPositive,
+      divergingMidpoint = print.divergingMidpoint
+    )
+
   /** The palette figures use unless given another. */
   val default: Palette = brand
+
+  /** The palette called `name`, in any case: `brand` (the default), `reference`, `print` or `clear`. */
+  def named(name: String): Palette = name.trim.toLowerCase(java.util.Locale.ROOT) match
+    case "brand"     => brand
+    case "reference" => reference
+    case "print"     => print
+    case "clear"     => clear
+    case other       =>
+      throw IllegalArgumentException(s"unknown palette '$other'; expected one of brand, reference, print, clear")
 
   // ----- color arithmetic in OKLab (Björn Ottosson's matrices), so ramps interpolate perceptually
 

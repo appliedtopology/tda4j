@@ -3,7 +3,21 @@ package cli
 
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.matlab.{LandmarkSelectionResult, PersistenceResult, TDA4j}
-import org.appliedtopology.tda4j.plot.{Plot, Viewer}
+import org.appliedtopology.tda4j.plot.{
+  Figure,
+  Labels,
+  Palette,
+  Plot,
+  Scale,
+  Scene,
+  Settings,
+  Size,
+  Style,
+  Theme,
+  Transform,
+  Tweak,
+  Viewer
+}
 
 import org.rogach.scallop.ScallopOption
 
@@ -525,12 +539,27 @@ object TDA4jCLI:
       ),
       "--at" -> (conf.at.isSupplied, Set("representative", "complex", "complex-3d"))
     )
+    val looks = Seq(
+      "--title" -> conf.title.isSupplied,
+      "--x-label" -> conf.xLabel.isSupplied,
+      "--y-label" -> conf.yLabel.isSupplied,
+      "--width" -> conf.width.isSupplied,
+      "--height" -> conf.height.isSupplied,
+      "--palette" -> conf.palette.isSupplied,
+      "--style" -> conf.style.isSupplied,
+      "--theme" -> conf.theme.isSupplied,
+      "--text-scale" -> conf.textScale.isSupplied,
+      "--set" -> conf.set.isSupplied,
+      "--x-scale" -> conf.xScale.isSupplied,
+      "--y-scale" -> conf.yScale.isSupplied
+    ).collect { case (flag, true) => flag }
     conf.plot.toOption match
       case None =>
         usedBy.foreach { case (flag, (supplied, kinds)) =>
           if supplied then
             throw new IllegalArgumentException(s"$flag is for --plot ${kinds.toSeq.sorted.mkString(" or ")}")
         }
+        if looks.nonEmpty then throw new IllegalArgumentException(s"${looks.head} is for --plot")
       case Some(kind) =>
         if !plotKinds.contains(kind) then
           throw new IllegalArgumentException(
@@ -548,6 +577,19 @@ object TDA4jCLI:
           )
         if (kind == "complex" || kind == "complex-3d") && !conf.at.isSupplied then
           throw new IllegalArgumentException(s"--plot $kind needs --at, the scale of the complex to draw")
+        // a typo or a number out of range should not cost a long computation: build the changes now
+        appearance(conf)
+        conf.theme.foreach(Theme.named)
+        if kind.endsWith("-3d") then
+          Seq("--x-label", "--y-label", "--x-scale", "--y-scale").foreach { flag =>
+            if looks.contains(flag) then
+              throw new IllegalArgumentException(s"$flag is for 2-D plots, and --plot $kind draws a 3-D scene")
+          }
+          // a setting of an element a scene has not (a tick label) is refused now, not after the computation
+          conf.set.toOption.foreach(specs => Settings.parseAll(specs).foreach(change => Scene() + change))
+        else
+          // and the camera of a 3-D scene is refused for a 2-D plot
+          conf.set.toOption.foreach(specs => Settings.parseAll(specs).foreach(change => Figure() + change))
         val others = Seq(
           "--distance-to" -> conf.distanceTo.isSupplied,
           "--select-landmarks" -> conf.selectLandmarks(),
@@ -565,6 +607,27 @@ object TDA4jCLI:
               s"--plot writes an .svg file or an .html page; --output '$path' is neither"
             )
         }
+
+  /** The changes the look flags ask for, in one tweak; `None` when none was given. */
+  private def appearance(conf: TDA4jConf): Option[Tweak] =
+    val asked: Seq[Option[Tweak]] = Seq(
+      Option.when(conf.title.isSupplied || conf.xLabel.isSupplied || conf.yLabel.isSupplied)(
+        Labels(title = conf.title.toOption, x = conf.xLabel.toOption, y = conf.yLabel.toOption)
+      ),
+      Option.when(conf.width.isSupplied || conf.height.isSupplied)(
+        Size(width = conf.width.toOption, height = conf.height.toOption)
+      ),
+      conf.palette.toOption.map(Palette.named),
+      // a Style replaces the whole style, so --style and --text-scale are one change: the preset, then its text scale
+      Option.when(conf.style.isSupplied || conf.textScale.isSupplied) {
+        val preset = conf.style.toOption.map(Style.named).getOrElse(Style.default)
+        conf.textScale.toOption.fold(preset)(factor => preset.copy(textScale = factor))
+      },
+      conf.xScale.toOption.map(name => Scale.x(Transform.named(name))),
+      conf.yScale.toOption.map(name => Scale.y(Transform.named(name))),
+      conf.set.toOption.flatMap(Settings.parseAll)
+    )
+    asked.flatten.reduceOption(_ + _)
 
   /** Draws `--plot` into `--output`, or into a page in the temporary directory opened in the browser. */
   private[cli] def writePlot(conf: TDA4jConf, result: PersistenceResult, loaded: Boolean): Unit =
@@ -589,11 +652,18 @@ object TDA4jCLI:
       case "representative-3d" => result.plotRepresentative3D(chosenBar())
       case other               => throw new IllegalStateException(s"unreachable: --plot $other was checked")
     if kind == "barcode" || kind == "diagram" then noteHiddenBars(result, loaded)
+    val drawn: Plot = appearance(conf).fold(figure) { tweak =>
+      figure match
+        case f: plot.Figure => f + tweak
+        case s: plot.Scene  => s + tweak
+        case other          => throw new IllegalStateException(s"unreachable: --plot $kind drew a $other")
+    }
+    val theme = conf.theme.toOption.map(Theme.named)
     conf.output.toOption match
-      case Some(path) => figure.save(path)
+      case Some(path) => drawn.save(path, theme)
       case None       =>
         val page = Files.createTempFile(s"tda4j-$kind-", ".html")
-        Files.writeString(page, figure.html(), StandardCharsets.UTF_8)
+        Files.writeString(page, drawn.html(theme.getOrElse(Theme.Auto)), StandardCharsets.UTF_8)
         val opened = Viewer.browse(page.toUri)
         System.err.println(
           s"tda4j: wrote $page" + (if opened then " (opened in your browser)" else "; open it in a browser")

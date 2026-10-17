@@ -9,13 +9,100 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Breaking
 
+- `RingModule.scale` is `scalarMultiply`, and so is the infix extension (`r.scalarMultiply(x)`, was `r.scale(x)`). The
+  operators `⊠`, `|*|`, `<*` and `mul` are as they were. A `RingModule` instance of your own implements
+  `scalarMultiply(x, y)`; the labs (`TDAlab`, `CubicalLab`) lose `scale` and gain `scalarMultiply`.
+- The plot model follows the grammar of graphics (see Added). `plot.Axis` has `min` and `max` instead of `range`, a
+  `Ticks` choice instead of a list of ticks (`extra` ticks for the `∞` mark), a `Transform` and a number `format`;
+  `Figure.colorbar` and the `Colorbar` class are `Figure.colorScale` and `ColorScale`; `Figure` and `Scene` take a
+  `style` and per-degree `degrees` (a `Figure` also a `legendTitle`). The functions of `Plot`, which `matlab` and `cli`
+  call, keep their signatures.
+
 ### Added
+
+- Customizing a plot, by chaining: `Plot.diagram(d).withLabels(title = ..., x = ..., y = ...).withXYScale(Transform.Log10)
+  .withSize(960, 540)`, with `withXScale`/`withYScale` (scale, `min`, `max`, `breaks`, `format = "%.1f"`, gridlines),
+  `withColorScale(min, max, stops, transform)` for a heatmap's or a cocycle's colors, `withDegree(1, color = ..., label =
+  ..., shape = ...)`, `withPalette(Palette.reference)` and `withStyle(Style(font, textScale, markScale, grid, legend,
+  transparent))`; the preset `Style.slides`. Each is also a value, a `Tweak` (`Labels`, `Size`, `Scale.x`, `Scale.color`,
+  `Scale.degree`, `Palette`, `Style`), added with `+`: tweaks of different parts add in any order, `a + b` of tweaks is a
+  tweak (a look kept in a `val`), `Tweak(f)` makes one from a function. Boards (`Plot.side`) and 3-D scenes take them too, where they
+  apply. `Transform.Log10`, `Sqrt` and `SymLog(c)` place every value: what is at 0 on a log axis (an `H0` bar's birth)
+  sits on a `-∞` line, as an essential bar ends at `∞`; a log axis with a negative value is a symmetric log and says so under
+  the plot; the square root keeps the sign. Only a value that is not a number is left out, and counted. `Palette.withSeries` and `withSurface` make a palette of your own; `ColorScale.viridis` and `greys` are ramps.
+- Two looks for publication, each a palette and a style. For a paper, `Palette.print` and `Style.print`: black on a
+  background of exactly white (not the default's cream, which prints as a grey patch), degree colors that stay apart for
+  every color vision and read on white, a heatmap ramp that keeps its order in grayscale, and named fonts instead of
+  `system-ui`. For a figure with no background that goes onto a page of either color, `Palette.clear` and
+  `Style.clear`: black elements in the light theme, white ones in the dark theme, each with colors checked on its own
+  page color. By name in MATLAB (`withPalette('print')`, `withStyle('clear')`) and on the command line (`--palette
+  print --style print`, `--palette clear --style clear --theme dark`); `Style.named` and `withStyle(name)` take
+  `default`, `slides`, `print` or `clear`.
+- Finer control of a plot's look, by element: `Text(role, size, weight, italic, align, angle, font, color)` for each of the
+  eight pieces of text (`Title`, `Subtitle`, `AxisLabel`, `TickLabel`, `Legend`, `LegendTitle`, `ColorTitle`, `Note`),
+  with the margins following the text; `Lines.grid`, `minorGrid`, `axis`, `ticks`, `minorTicks` and `frame` (width, color,
+  dash, opacity, tick-mark length and direction); `Guide.panel` (the plot area's fill) and `Guide.diagonal` (the shaded
+  half plane of a diagram); `Scale.x(position = Side.Top)` and `Scale.y(position = Side.Right)`. Chained as `withText`,
+  `withGridLines`, `withTickMarks`, `withFrame`, `withPanel`, `withDiagonal`, ...; written as text for MATLAB and Java
+  (`withSetting("title.size=18")`) and the command line (`--set title.size=18`, repeated). They sit beside the style, so a
+  `Style` added later does not undo them. Default output is unchanged.
+- Markers: `Geom.points` (`withPoints`) sets the shape, size, opacity, open or filled, and the **edge** of every point's
+  marker, which can be removed (`edgeWidth = 0`); `Scale.degree(k, marker = MarkerStyle(...))` does it for one degree.
+  Eleven more shapes (`TriangleDown`, `TriangleLeft`, `TriangleRight`, `Pentagon`, `Hexagon`, `Star`, `Dot`, strokes `Plus`,
+  `Cross`, `VLine`, `HLine`) and `Shape.Glyph("★")`, text as a marker. A shape is also a string for MATLAB, Java and the
+  command line: a name, a matplotlib code (`o s ^ v D + x *`), an R or ggplot `pch` number (`pch:1` is an open circle) or
+  `glyph:text` (`withSetting("marker.shape=pch:1")`, `--set degree-1.size=6`). `Geom.segments`, `polygons`, `discs` and
+  `lines` change a barcode's bars, a complex's triangles and balls. A 3-D scene's points take a size, an opacity and an edge.
+- The legend can go to the left, the top, or a corner inside the plot area (`LegendPosition.Left`, `Top`, `UpperLeft`,
+  `UpperRight`, `LowerLeft`, `LowerRight`); `Style.legend` is optional, so that a style that names no place leaves a plot its
+  own. `Plot.barcode(d, order = BarOrder.Persistence)` sorts the bars longest first (or by `Death`).
+- Axes and numbers: `Scale.x/y(reverse = true)` runs an axis backwards (a diagram's shaded half plane and a heatmap's boxes
+  follow), `padding` sets the room around the data, `Scale.aspect(ratio)` / `withAspect` the length of a y unit over an x unit
+  (`free = true` for none), `Transform.Custom(name, forward, backward)` is a scale of your own. `Numbers(decimal, grouping,
+  minus)` and `Numbers.locale("de")` (`withNumbers`, `withLocale`) write the numbers of the tick labels and the color bar
+  the way a locale or a journal does; `Text(role, limit = px)` cuts a text that is too long with an ellipsis, the whole text
+  its tooltip.
+- `Labels(caption, tag, description)` (`withCaption`, `withTag`, `withDescription`): a line under the plot, a panel letter in
+  the corner, and an SVG `<desc>` for a screen reader (a barcode and a diagram describe themselves); `Board.tagged()`
+  letters a board's panels `(a)`, `(b)`, ...; `Size.inches/cm/mm/pt` give a size in the units of a journal template.
+  Settings: `x-axis.reverse`, `x-axis.padding`, `aspect`, `numbers.locale/decimal/grouping/minus`, `size.width=3.4in`,
+  `caption.size`, `tag.weight`, `legend.limit`, ... (MATLAB `withSetting`, CLI `--set`).
+- Defaults for every plot: `given Look` (`Look.print`, `Look.clear`, `Look.none`, `Look.settings(...)`): every plot
+  constructor starts from the `given Look` in scope, then comes what the call names (a `palette`) and what you chain on, so a
+  house style is said once. The `palette` parameters of the seven constructors that have one are `Optional[Palette]` now, so that naming one
+  beats the look. MATLAB and Java have `TDA4j.setPlotDefaults(settings)` and `clearPlotDefaults()`; the settings `palette=`
+  and `style=` take a palette or style by name.
+- Panels on a grid: `Plot.layout(rows, cols, width, height, gap, widths, heights)` is an empty `Board` on a grid of cells,
+  and `place(figure, row, col, rowSpan, colSpan)` puts a panel in it, spanning cells, so that one plot can run across a
+  whole row or column. `Board.sharedColumns()` and `sharedRows()` put the panels over the same columns, or rows, on one
+  scale. A board is saved as an SVG with each panel at the size of its cells, and on a page as a CSS grid.
+- `Camera(azimuth, elevation, zoom)` (`Scene.withCamera`, settings `camera.azimuth/elevation/zoom`) sets the view of a 3-D
+  scene: the saved `.svg` is that view, a page's canvas starts from it; a 2-D plot refuses it, and the CLI says so before
+  computing.
+- `Board.shared()` puts the panels on one scale; `Mark.Rule` (a line across the plot at one value) and
+  `Mark.Diagonal(offset)` (the line `y = x + offset`, drawn in the plot's own scales).
+- MATLAB: the figures returned by the `plot...` methods have the common tweaks as methods that take strings and numbers
+  (`withTitle`, `withSize`, `withXScale('log')`, `withPalette`, `withDegreeColor`, `withTextScale`, `withLegend`, ...,
+  and `save(path, 'dark')`); command line: `--title`, `--x-label`, `--y-label`, `--width`, `--height`, `--palette`,
+  `--theme`, `--text-scale`, `--x-scale` and `--y-scale` for a `--plot`.
 
 ### Changed
 
+- A persistence diagram's legend is at its lower right, inside the shaded half plane, and the plot takes the room the legend
+  column had. (`withLegend("right")` puts it back.)
+- A barcode and a diagram carry a `<desc>` (their counts by degree) in the SVG.
+- A board of panels with no background (`Style.clear`) saved as an `.svg` has no background rectangle of its own either.
+- A plot's colors for data follow its palette: a persistence image, an image, a cocycle and circular coordinates hold
+  their values (`Paint.Value`) and a `ColorScale` colors them when drawn.
+- The `∞` line of a persistence diagram and its diagonal run across the whole plot.
+
 ### Fixed
 
+- `fig.copy(palette = ...)` left heatmaps, cocycles' values and the color bar in the palette the plot was built with.
+
 ### Build, CI and Documentation
+
+- The user guide's plotting page has a "Customizing a plot" section; the CLI and MATLAB pages point to it.
 
 
 ## 0.6.2 (2026-10-15)

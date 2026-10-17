@@ -1,5 +1,6 @@
 package org.appliedtopology.tda4j.matlab
 
+import org.appliedtopology.tda4j.matlab.TDA4j.sessionLook
 import org.appliedtopology.tda4j.plot.{Figure, Plot}
 
 /** A circular coordinate from `TDA4j.circularCoordinates` (see `CircularCoordinates.compute`). */
